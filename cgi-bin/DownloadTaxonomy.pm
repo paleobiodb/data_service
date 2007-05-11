@@ -10,6 +10,7 @@ use Person;
 use Opinion;
 use CGI::Carp;
 use Debug qw(dbg);
+use Constants qw($READ_URL);
 
 use strict;
 
@@ -65,7 +66,7 @@ sub displayITISDownload {
 
     if (@errors) {
         displayErrors(@errors);
-        print "<div align=\"center\"><h5><a href=\"bridge.pl?action=displayDownloadTaxonomyForm\">Please try again</a></h5></div><br>";
+        print "<div align=\"center\"><h5><a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Please try again</a></h5></div><br>";
         return;
     }
 
@@ -331,7 +332,7 @@ sub displayITISDownload {
     #print "$cmd -- $ot -- <BR>";
 
 
-    print "<div align=\"center\"><h5><a href='/paleodb/data/$dirname.tar.gz'>Download file</a> - <a href=\"bridge.pl?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
+    print "<div align=\"center\"><h5><a href='/paleodb/data/$dirname.tar.gz'>Download file</a> - <a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
     print "</td></tr></table></div>";
     #print "<a href='/paleodb/data/JSepkoski/taxonomic_units.dat'>taxonomic units</a><BR>";
     #print "<a href='/paleodb/data/JSepkoski/publications.dat'>publications</a><BR>";
@@ -403,7 +404,7 @@ sub displayPBDBDownload {
 
     if (@errors) {
         displayErrors(@errors);
-        print "<div align=\"center\"><h5><a href=\"bridge.pl?action=displayDownloadTaxonomyForm\">Please try again</a></h5></div><br>";
+        print "<div align=\"center\"><h5><a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Please try again</a></h5></div><br>";
         return;
     }
 
@@ -559,7 +560,7 @@ sub displayPBDBDownload {
 
 
 print '</td></tr></table></div>';
-  print "<div align=\"center\"><h5><a href=\"bridge.pl?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
+  print "<div align=\"center\"><h5><a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
 
 
     cleanOldGuestFiles();

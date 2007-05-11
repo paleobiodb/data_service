@@ -14,6 +14,7 @@ use CGI::Carp;
 use Person;
 use Measurement;
 use Text::CSV_XS;
+use Constants qw($READ_URL $WRITE_URL);
 
 use strict;
 
@@ -152,10 +153,10 @@ sub buildDownload {
         print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
     }
     print '</table>';
-    print '<p align="center" style="white-space: nowrap;"><b><a href="bridge.pl?action=displayDownloadForm">Do another download</a> - ';
-    print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a>';
-    #print '<a href="bridge.pl?action=displayCurveForm">Generate diversity curves</a> - ';
-    #print '<a href="bridge.pl?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>';
+    print '<p align="center" style="white-space: nowrap;"><b><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - ';
+    print '<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>';
+    #print '<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a> - ';
+    #print '<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>';
 }
 
 sub checkInput {
@@ -1355,7 +1356,7 @@ sub getCollectionsWhereClause {
             $day = "0".$q->param('date'); #prepend a zero if only one digit.
         }
         
-        # note, this should really be handled by a function?  maybe in bridge.pl.
+        # note, this should really be handled by a function?  
         my $created_date = $dbh->quote($q->param('year')."-".$month."-".$day." 00:00:00");
         # note, the version of mysql on flatpebble needs the 000000 at the end, but the
         # version on the linux box doesn't need it.  weird.                         

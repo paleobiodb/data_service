@@ -380,11 +380,11 @@ sub displayNeptuneDownloadResults {
     } 
 
     print "<p><div align=\"center\">";
-    print "<a href=\"bridge.pl?action=displayDownloadNeptuneForm\"><b>Do another download</b></a> - ";
+    print "<a href=\"$READ_URL?action=displayDownloadNeptuneForm\"><b>Do another download</b></a> - ";
     if ($q->param('data_source') =~ /both/i) {
-        print "<a href=\"bridge.pl?action=displayCurveForm&input_data=neptune_pbdb$yourname\"><b>Generate diversity curves</b></a>";
+        print "<a href=\"$READ_URL?action=displayCurveForm&input_data=neptune_pbdb$yourname\"><b>Generate diversity curves</b></a>";
     } else {
-        print "<a href=\"bridge.pl?action=displayCurveForm&input_data=neptune$yourname\"><b>Generate diversity curves</b></a>";
+        print "<a href=\"$READ_URL?action=displayCurveForm&input_data=neptune$yourname\"><b>Generate diversity curves</b></a>";
     }
     print "</div></p>";
 }

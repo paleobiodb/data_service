@@ -13,12 +13,11 @@ use URI::Escape;
 use Memoize;
 use Reference;
 use Debug qw(dbg);
+use Constants qw($READ_URL);
 
 memoize('chiSquaredDensity');
 memoize('factorial');
 memoize('gamma');
-
-
 
 # written 03.31.04 by Josh Madin as final product
 # Still doesn't allow choice of time scale when examining the conf ints of taxa
@@ -36,7 +35,7 @@ sub displayHomonymForm {
     my $pl1 = scalar(@homonym_names) > 1 ? "s" : "";
     my $pl2 = scalar(@homonym_names) > 1 ? "" : "s";
     print "<center><h3>The following taxonomic name$pl1 belong$pl2 to multiple taxonomic <br>hierarchies.  Please choose the one$pl1 you want.</h3>";
-    print "<form action=\"bridge.pl\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"buildListForm\">";
+    print "<form action=\"$READ_URL\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"buildListForm\">";
     print "<input type=\"hidden\" name=\"taxon_resolution\" value=\"".$q->param('taxon_resolution')."\">\n";
     print "<input type=\"hidden\" name=\"input_type\" value=\"taxon\">\n";
                        
@@ -136,11 +135,11 @@ sub displaySearchSectionResults{
         $place_str =~ s/^,//;
         my $link = '';
         if ($lastregion && $found_regionalbed) {
-            $link .= "<a href='bridge.pl?action=displayStratTaxaForm&amp;taxon_resolution=$taxon_resolution&amp;show_taxon_list=$show_taxon_list&amp;input=".uri_escape($lastregion)."&amp;input_type=regional'>$lastregion</a>";
+            $link .= "<a href='$READ_URL?action=displayStratTaxaForm&amp;taxon_resolution=$taxon_resolution&amp;show_taxon_list=$show_taxon_list&amp;input=".uri_escape($lastregion)."&amp;input_type=regional'>$lastregion</a>";
             if ($lastsection) { $link .= " / "};
         }    
         if ($lastsection && $found_localbed) {
-            $link .= "<a href='bridge.pl?action=displayStratTaxaForm&amp;taxon_resolution=$taxon_resolution&amp;show_taxon_list=$show_taxon_list&amp;input=".uri_escape($lastsection)."&amp;input_type=local'>$lastsection</a>";
+            $link .= "<a href='$READ_URL?action=displayStratTaxaForm&amp;taxon_resolution=$taxon_resolution&amp;show_taxon_list=$show_taxon_list&amp;input=".uri_escape($lastsection)."&amp;input_type=local'>$lastsection</a>";
         }    
             
         $link .= "<span class='tiny'> - $time_str - $place_str</span>";
@@ -270,9 +269,9 @@ sub displaySearchSectionResults{
         } else {
             $numLeft = "the next " . $limit;
         }
-        print "<a href='bridge.pl?$getString'><b>Get $numLeft sections</b></a> - ";
+        print "<a href='$READ_URL?$getString'><b>Get $numLeft sections</b></a> - ";
     }
-    print "<a href='bridge.pl?action=displaySearchSectionForm'><b>Do another search</b></a>";
+    print "<a href='$READ_URL?action=displaySearchSectionForm'><b>Do another search</b></a>";
 
     print "</center></p>";
     # End footer links
@@ -434,7 +433,7 @@ sub buildList    {
     } else {
         if ($q->param('taxon_resolution') =~/genus|species/) {
             print "<div align=\"center\"><h2>Confidence interval taxon list</h2></div><br>";
-            print "<form action=\"bridge.pl\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"showOptionsForm\">";
+            print "<form action=\"$READ_URL\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"showOptionsForm\">";
             print "<input type=\"hidden\" name=\"input_type\" value=\"taxon\">";
             print "<center>";
 
@@ -543,7 +542,7 @@ sub displayStratTaxa {
         optionsForm($q, $s, $dbt, \%occ_list);
     } else {
         print "<div align=\"center\"><h2>Stratigraphic section taxon list</h2></div><br>";
-        print "<form action=\"bridge.pl\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"showOptionsForm\">";
+        print "<form action=\"$READ_URL\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"showOptionsForm\">";
         print "<center><table cellpadding=5 border=0>";
         print "<tr><td><input type=checkbox checked=checked onClick=\"checkAll(this,'sp_checkbox');\"> Check all</td></tr>";
         print "<input type=\"hidden\" name=\"input\" value=\"".uri_escape($section_name)."\">";
@@ -563,7 +562,7 @@ sub displayStratTaxa {
         print "</center></table><br>";
         print "<center><span class=\"tiny\">(To remove taxon from list for analysis, uncheck before pressing 'Submit')</span><br><br>";
         print "<input type=\"submit\" value=\"Submit\">";
-        #print "<A HREF=\"/cgi-bin/bridge.pl?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\"></A>";
+        #print "<A HREF=\"/cgi-bin/$READ_URL?action=displayFirstForm\"><INPUT TYPE=\"button\" VALUE=\"Start again\"></A>";
         print "</center><br><br></form>";
     } 
     return;
@@ -613,9 +612,9 @@ sub optionsForm    {
 #------------------------------OPTIONS FORM----------------------------------
 
     if ($type eq 'taxon')   {
-        print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateTaxaInterval\">";
+        print "<FORM ACTION=\"$READ_URL\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateTaxaInterval\">";
     } else  {
-        print "<FORM ACTION=\"bridge.pl\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateStratInterval\">";
+        print "<FORM ACTION=\"$READ_URL\" METHOD=\"post\"><INPUT TYPE=\"hidden\" NAME=\"action\" VALUE=\"calculateStratInterval\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"input\" VALUE=\"".uri_escape($section_name)."\">";
         print "<INPUT TYPE=\"hidden\" NAME=\"taxon_resolution\" VALUE=\"".$q->param("taxon_resolution")."\">";
     }    
@@ -903,7 +902,7 @@ sub calculateTaxaInterval {
         }
         my $link;
         if (scalar keys %collections) {
-            $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
+            $link = "$READ_URL?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
         }
         my $short_interval_name = $interval_name;
         $short_interval_name =~ s/^early/e./;
@@ -928,7 +927,7 @@ sub calculateTaxaInterval {
         }
         my $link;
         if (scalar keys %collections) {
-            $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
+            $link = "$READ_URL?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
         }
         $cg->addBar($taxon_label,$taxon_data,$link,$taxon);
 
@@ -942,7 +941,7 @@ sub calculateTaxaInterval {
             }
             my $link;
             if (scalar keys %collections) {
-                $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
+                $link = "$READ_URL?action=displayCollResults&amp;collection_list=".join(",",keys %collections);
             }
             $cg->addPoint($taxon_label,[$max,$min],$link,"$taxon at $interval_name");
         }
@@ -953,7 +952,7 @@ sub calculateTaxaInterval {
     print printResultsPage($q,'Confidence interval results',$image_map,$image_name,\%taxa_hash,\@sortedTaxa,"Ma",\@not_in_scale);
 
     optionsForm($q, $s, $dbt, \%occ_list, 'small');
-    print " <b><a href=\"bridge.pl?action=displayTaxaInteralsForm\">Start again</a></b><p></center><br><br><br>";
+    print " <b><a href=\"$READ_URL?action=displayTaxaInteralsForm\">Start again</a></b><p></center><br><br><br>";
 
 }
 
@@ -1325,7 +1324,7 @@ sub calculateStratInterval	{
             }
         }
         if (@collections) {
-            $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",@collections);
+            $link = "$READ_URL?action=displayCollResults&amp;collection_list=".join(",",@collections);
         }
         $cg->addTick($bed,$bed,$link,$bed);
     }
@@ -1334,7 +1333,7 @@ sub calculateStratInterval	{
         my $taxon_label = $taxon;
         my $taxon_data = $taxa_hash{$taxon};
         my $collection_list = join(",",@{$taxon_data->{'collections'}});
-        my $link = "bridge.pl?action=displayCollResults&amp;collection_list=$collection_list";
+        my $link = "$READ_URL?action=displayCollResults&amp;collection_list=$collection_list";
         $cg->addBar($taxon_label,$taxon_data,$link,$taxon);
 
         foreach my $bed (@{$taxon_data->{beds}}){
@@ -1347,7 +1346,7 @@ sub calculateStratInterval	{
                 }
             }
             if (@collections) {
-                $link = "bridge.pl?action=displayCollResults&amp;collection_list=".join(",",@collections);
+                $link = "$READ_URL?action=displayCollResults&amp;collection_list=".join(",",@collections);
             }
             $cg->addPoint($taxon_label,$bed,$link,"$taxon at $bed");
         }
@@ -1358,7 +1357,7 @@ sub calculateStratInterval	{
     print printResultsPage($q,"<i>$section_name</i> stratigraphic section",$image_map,$image_name,\%taxa_hash,\@sortedTaxa,$common_unit,[]);
 
     optionsForm($q, $s, $dbt, \%occ_list, 'small');
-    print " <b><a href=\"bridge.pl?action=displaySearchSectionForm\">Start again</a><b><p></center><br><br><br>";
+    print " <b><a href=\"$READ_URL?action=displaySearchSectionForm\">Start again</a><b><p></center><br><br><br>";
 
     return;
 } 

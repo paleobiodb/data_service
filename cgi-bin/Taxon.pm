@@ -23,11 +23,12 @@ use Mail::Mailer;
 use TaxaCache;
 use Classification;
 use Debug qw(dbg);
+use Constants qw($READ_URL $WRITE_URL);
 
 use Reference;
 
 use fields qw(dbt DBrow);
-				
+
 # includes the following public methods
 # -------------------------------------
 # $var = $o->get('classFieldname') - i.e. $o->get('taxon_rank')
@@ -370,7 +371,7 @@ sub displayAuthorityForm {
 		} else {
 			# count = 0, so we need to warn them to enter the parent taxon first.
 #	        my $errors = Errors->new();
-#			$errors->add("The $parentRank '$parentName' for this $fields{'taxon_rank'} hasn't been entered yet.  Please <A HREF=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</A> before trying to add this $fields{'taxon_rank'}.");
+#			$errors->add("The $parentRank '$parentName' for this $fields{'taxon_rank'} hasn't been entered yet.  Please <A HREF=\"/cgi-bin/$WRITE_URL?action=displayAuthorityForm&taxon_name=$parentName\">create a new authority record for '$parentName'</A> before trying to add this $fields{'taxon_rank'}.");
 #            print $errors->errorMessage();
 #            return;
 		}
@@ -769,11 +770,11 @@ sub submitAuthorityForm {
     <table cellpadding="10" class="small"><tr><td valign="top">
       <p><b>Name functions</b></p>
       <ul>
-      <li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fields{taxon_name}</a></b></li>
-      <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fields{taxon_name}</a></b></li>   
-      <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
-      <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
-      <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
+      <li><b><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fields{taxon_name}</a></b></li>
+      <br><li><b><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fields{taxon_name}</a></b></li>   
+      <br><li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
+      <br><li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
+      <br><li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
       </ul>
     </td>
     <td valign=top>
@@ -794,12 +795,12 @@ sub submitAuthorityForm {
             my $sql = "SELECT opinion_no FROM opinions WHERE author1last='$cleanauth1' AND author2last='$cleanauth2' AND pubyr='" . $q->param('pubyr') . "' AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
             my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
             if ( $opinion_no > 0 )	{
-                $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this author's opinion about $fields{taxon_name}</a></b></li><br>|;
+                $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this author's opinion about $fields{taxon_name}</a></b></li><br>|;
             } elsif ( $q->param('author1last') )	{
             # if that didn't work, either this is not a species, or
             #   something is wrong because an implicit opinion of the
             #   author should have been created; regardless, create a link
-                  $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&author1init=|.$q->param('author1init').qq|&author1last=|.$q->param('author1last').qq|&author2init=|.$q->param('author2init').qq|&author2last=|.$q->param('author2last').qq|&otherauthors=|.$q->param('otherauthors').qq|&pubyr=|.$q->param('pubyr').qq|&reference_no=$resultReferenceNumber&opinion_no=-1">Add this author's opinion about $fields{taxon_name}</a></b></li><br>|;
+                  $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&author1init=|.$q->param('author1init').qq|&author1last=|.$q->param('author1last').qq|&author2init=|.$q->param('author2init').qq|&author2last=|.$q->param('author2last').qq|&otherauthors=|.$q->param('otherauthors').qq|&pubyr=|.$q->param('pubyr').qq|&reference_no=$resultReferenceNumber&opinion_no=-1">Add this author's opinion about $fields{taxon_name}</a></b></li><br>|;
             }
         }
         # one way or another, the current reference may have an opinion,
@@ -807,16 +808,16 @@ sub submitAuthorityForm {
         my $sql = "SELECT opinion_no FROM opinions WHERE ref_has_opinion='YES' AND reference_no=$resultReferenceNumber AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
         my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
         if ( $opinion_no > 0 )	{
-            $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
+            $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
         } else	{
-            $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=-1">Add this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
+            $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=-1">Add this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
         }
-        $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name}</a></b></li><br>|;
-        $end_message .= qq|<li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li><br>|;
+        $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name}</a></b></li><br>|;
+        $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li><br>|;
         $end_message .= qq|
-          <li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li><br>
-          <li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li><br>
-          <li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
+          <li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li><br>
+          <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li><br>
+          <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
           </ul>
         </td></tr></table>
         </div>|;
@@ -1137,7 +1138,7 @@ sub setOccurrencesTaxonNoByTaxon {
 
         while (my ($person_no,$email) = each %emails) {
             my $name = $names{$person_no};
-            my $link = "bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=$person_no";
+            my $link = "$WRITE_URL?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=$person_no";
             my %headers = ('Subject'=> 'Please reclassify your occurrences','From'=>'alroy');
             if ($ENV{'BRIDGE_HOST_URL'} =~ /paleodb\.org/) {
                 if ($email) {
@@ -1179,7 +1180,7 @@ END_OF_MESSAGE
 #        $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
 #        $dbt->getData($sql1);
 #        $dbt->getData($sql2);
-        push @warnings, "Since $taxon_name is a homonym, occurrences of it may be incorrectly classified using the wrong homonym.  Please go to \"<a target=\"_BLANK\" href=\"bridge.pl?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=".$authorizer_no."\">Reclassify occurrences</a>\" and manually classify <b>all</b> your  occurrences of this taxon.";
+        push @warnings, "Since $taxon_name is a homonym, occurrences of it may be incorrectly classified using the wrong homonym.  Please go to \"<a target=\"_BLANK\" href=\"$WRITE_URL?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=".$authorizer_no."\">Reclassify occurrences</a>\" and manually classify <b>all</b> your  occurrences of this taxon.";
     } elsif (scalar(@taxon_nos) == 1) {
         my @matchedOccs = ();
         my @matchedReids = ();
@@ -1296,7 +1297,7 @@ sub displayTypeTaxonSelectForm {
     if ($is_tt_form_value) {
         if (scalar(@parents) > 1) {
             print "<div align=\"center\">";
-            print "<form method=\"POST\" action=\"bridge.pl\">\n";
+            print "<form method=\"POST\" action=\"$WRITE_URL\">\n";
             print "<input type=\"hidden\" name=\"action\" value=\"submitTypeTaxonSelect\">\n";
             print "<input type=\"hidden\" name=\"reference_no\" value=\"$reference_no\">\n";
             print "<input type=\"hidden\" name=\"type_taxon_no\" value=\"$type_taxon_no\">\n";

@@ -3,6 +3,7 @@ package PrintHierarchy;
 use TaxonInfo;
 use TaxaCache;
 use Classification;
+use Constants qw($READ_URL $WRITE_URL);
 use strict;
 
 sub startPrintHierarchy	{
@@ -63,7 +64,7 @@ sub processPrintHierarchy	{
         } else {
 		    print "<center><h3>No query was entered</h3>\n";
         }
-		print "<p>You may want to <a href=\"bridge.pl?action=startStartPrintHierarchy\">try again</a></p></center>\n";
+		print "<p>You may want to <a href=\"$READ_URL?action=startStartPrintHierarchy\">try again</a></p></center>\n";
 		return;
 	}
 
@@ -237,7 +238,7 @@ sub processPrintHierarchy	{
                 $taxon_name = '"'.$taxon_name.'"';
             }
             
-            my $link = "<a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}\">$taxon_name</a>";
+            my $link = "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}\">$taxon_name</a>";
             if ( $record->{'taxon_rank'} =~ /species|genus/ ) {
                 $title .= "<i>".$link."</i>";
             } else {
@@ -265,7 +266,7 @@ sub processPrintHierarchy	{
             if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}}) {
                 my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$record->{'type_taxon_no'}});
                 if ($t) {
-                    my $link = "<a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$t->{taxon_no}\">$t->{taxon_name}</a>";
+                    my $link = "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$t->{taxon_no}\">$t->{taxon_name}</a>";
                     if ( $t->{'taxon_rank'} =~ /species|genus/ ) {
                         $link = "<i>".$link."</i>";
                     } 
@@ -294,7 +295,7 @@ sub processPrintHierarchy	{
 
 	print "<hr><div style=\"padding-left: 2em;\"><p><b><a href=\"$OUT_HTTP_DIR/classification.csv\">Download</a></b> this list of taxonomic names</p>";
     print '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download</a></b> authority and opinion data for these taxa</p>';
-    print '<form method="POST" action="bridge.pl" name="doDownloadTaxonomy">';
+    print qq|<form method="POST" action="$READ_URL" name="doDownloadTaxonomy">|;
     print '<input type="hidden" name="action" value="displayDownloadTaxonomyResults">';
     if ($taxon_no) {
         print qq|<input type="hidden" name="taxon_no" value="$taxon_no">|;
@@ -304,7 +305,7 @@ sub processPrintHierarchy	{
     }
     print '</form>'; 
 
-	print "<p><b><a href=\"bridge.pl?action=startStartPrintHierarchy\">See another classification</a></b></p>";
+	print "<p><b><a href=\"$READ_URL?action=startStartPrintHierarchy\">See another classification</a></b></p>";
 	print "</div>\n";
 
 	return;

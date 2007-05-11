@@ -1,7 +1,7 @@
+<center>
 <div align="center"><h2>Taxonomic confidence intervals form</h2></div>
 
-<div align="center">
-<form method=post action="bridge.pl">
+<form method=post action="%%read_url%%">
   <input id="action" type=hidden name="action" value="displayTaxaIntervalsResults">
   <table cellpadding=5 border=0>
 
@@ -10,8 +10,14 @@
       <td align="left"><textarea cols="40" rows="3" name="input"></textarea></td>
     </tr>
     <tr>
-      <th align="right">Analyze included species separately:</th>
-      <td align="left"><select name="split_taxon"><option>yes</option><option>no</option></select></td>
+      <th align="right">Break taxa into:</th>
+      <td align="left">
+        <select name="taxon_resolution">
+          <option value="species">species</option>
+          <option value="genus">genera</option>
+          <option value="as_is">as entered</option>
+        </select>
+      </td>
     </tr>
     <tr>
       <td></td>
@@ -19,5 +25,5 @@
     </tr>
   </table>
 </form>
-</div>
+</center>
 <br><br>

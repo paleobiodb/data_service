@@ -5,8 +5,8 @@ use Data::Dumper;
 use Collection;
 use Person;
 use PBDBUtil;
+use Constants qw($READ_URL $WRITE_URL);
 use strict;
-
 
 $TypoChecker::edit_distance = 3;
 
@@ -104,14 +104,14 @@ sub getNameData {
     $name{'reid_list'} = join(",",@reids);
     my @collections;
     foreach (sort{$a <=> $b} keys %collections) {
-        my $link = "<b><a target=\"_COLWINDOW\" href=\"bridge.pl?action=displayCollectionDetails&collection_no=$_\">$_</a></b>";
+        my $link = "<b><a target=\"_COLWINDOW\" href=\"$READ_URL?action=displayCollectionDetails&collection_no=$_\">$_</a></b>";
         push @collections, $link;
     }
     $name{'collections'} = join(", ",@collections);
 
     @collections = ();
     foreach (sort{$a <=> $b} keys %collections_no_edit) {
-        my $link = "<a target=\"_COLWINDOW\" href=\"bridge.pl?action=displayCollectionDetails&collection_no=$_\">$_</a>";
+        my $link = "<a target=\"_COLWINDOW\" href=\"$READ_URL?action=displayCollectionDetails&collection_no=$_\">$_</a>";
         push @collections, $link;
     }
     $name{'collections_no_edit'} = join(", ",@collections);
@@ -203,7 +203,7 @@ sub occurrenceMisspellingForm {
         } else {
             print '<h2>Possibly misspelled/partially classified occurrences</h2>';
         }
-        print '<form action="bridge.pl" method="POST">';
+        print '<form action="$WRITE_URL" method="POST">';
         print '<input type="hidden" name="action" value="submitOccurrenceMisspelling">';
         my $page_no = (int($q->param('page_no'))) ? int($q->param('page_no')) : 0;
         print '<input type="hidden" name="page_no" value="'.($page_no+1).'">';
@@ -262,7 +262,7 @@ sub occurrenceMisspellingForm {
             
             if ($genus_is_classified) {
                 if ($sp) {
-                    $row .= "<a target=\"ADDWINDOW\" href=\"bridge.pl?action=displayAuthorityForm&taxon_no=-1&taxon_name=$name\">Add an authority record</a>";
+                    $row .= "<a target=\"ADDWINDOW\" href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=$name\">Add an authority record</a>";
                 } else {
                     # Skipping because its a genus_name only, and the genus exists in teh authorities table
                         if (!@suggestions) {
@@ -274,7 +274,7 @@ sub occurrenceMisspellingForm {
                     }
                 }
             } else {
-                $row .= "<a target=\"ADDWINDOW\" href=\"bridge.pl?action=displayAuthorityForm&taxon_no=-1&taxon_name=$g\">Add an authority record</a>";
+                $row .= "<a target=\"ADDWINDOW\" href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=$g\">Add an authority record</a>";
             }
             $row .= "</small></td></tr>";
             $row .= "<tr $class><td>Suggestions: ";
@@ -286,7 +286,7 @@ sub occurrenceMisspellingForm {
                     foreach (@suggestions) {
                         my $radio = "<span style=\"white-space: nowrap\">"
                                   . "<input type=\"radio\" name=\"new_taxon_name_$i\" value=\"$_\">";
-                        $radio .= "<a target=\"_TAXONPOPUP\" href=\"bridge.pl?action=checkTaxonInfo&taxon_name=$_\">$_</a>";
+                        $radio .= "<a target=\"_TAXONPOPUP\" href=\"$READ_URL?action=checkTaxonInfo&taxon_name=$_\">$_</a>";
                         $radio .= "</span>&nbsp; ";
                         if ($suggest_hash->{$_}{'match_quality'} == 3) {
                             $radio = "<b>$radio</b>";
@@ -305,7 +305,7 @@ sub occurrenceMisspellingForm {
                     my @links; 
                     foreach (@suggestions) {
                         my $link = "<span style=\"white-space: nowrap\">"
-                                 . "<a target=\"_TAXONPOPUP\" href=\"bridge.pl?action=checkTaxonInfo&taxon_name=$_\">$_</a>"
+                                 . "<a target=\"_TAXONPOPUP\" href=\"$READ_URL?action=checkTaxonInfo&taxon_name=$_\">$_</a>"
                                  . "</span>&nbsp;";
                         if ($suggest_hash->{$_}{'match_quality'} == 3) {
                             $link= "<b>$link</b>";
@@ -515,7 +515,7 @@ sub submitOccurrenceMisspelling {
             print "<h4>No changes were made</h4>";
         }
         print "</div>";
-        print "<div align=\"center\"><b><a href=\"bridge.pl?action=searchOccurrenceMisspellingForm\">Search for more misspellings</a></b></div>";
+        print "<div align=\"center\"><b><a href=\"$WRITE_URL?action=searchOccurrenceMisspellingForm\">Search for more misspellings</a></b></div>";
     }
 }
 

@@ -1,4 +1,5 @@
 package Person;
+use Constants qw($READ_URL $WRITE_URL);
 use strict;
 
 # Poling code calved off from displayLoginPage by JA 13.4.04
@@ -161,7 +162,7 @@ sub displayAuthorizers {
     }
 
     $html .= '<div align="center"><h4>List of participants</h4></div>';
-    $html .= '<div align="center"><p class="medium">See also our list of <a href="/cgi-bin/bridge.pl?action=displayInstitutions">participating institutions</a></p></div>';
+    $html .= qq|<div align="center"><p class="medium">See also our list of <a href="$READ_URL?action=displayInstitutions">participating institutions</a></p></div>|;
     $html .= "\n<table><tr><td valign=\"top\">\n\n";
     $html .= formatAuthorizerTable(\@firsthalf);
     $html .= "\n</td><td valign=\"top\">\n";
@@ -218,7 +219,7 @@ sub displayInstitutions {
     }
 
     $html .= '<div align="center"><h4>List of participating institutions</h4></div>';
-    $html .= '<div align="center"><p class="medium">See also our list of <a href="/cgi-bin/bridge.pl?action=displayAuthorizers">participants</a></p></div>';
+    $html .= qq|<div align="center"><p class="medium">See also our list of <a href="$READ_URL?action=displayAuthorizers">participants</a></p></div>|;
 
     $html .= "\n<table><tr><td valign=\"top\" width=\"50%\">\n\n";
     $html .= formatInstitutionTable(\@firsthalf,\%institutions);

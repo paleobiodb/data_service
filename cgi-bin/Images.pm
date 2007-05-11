@@ -3,6 +3,7 @@ package Images;
 use Reference;
 use TaxaCache;
 use Debug qw(dbg);
+use Constants qw($READ_URL $WRITE_URL);
 
 ###
 # UPLOADING
@@ -15,7 +16,6 @@ sub displayLoadImageForm{
 
 	# Spit out upload html page
 	# list constraints: image size and image type
-    my $exec_url = $q->url();
     my ($taxon_no,$taxon_name);
     my @results = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$q->param('taxon_no')});
     if (@results) {
@@ -28,7 +28,7 @@ sub displayLoadImageForm{
 
 	print "<center><h2>Image upload form: $taxon_name</h2>";
 	print "<p>Files must be smaller than 1 MB and must either be of type jpg, gif or png.";
-	print "<p><form name=\"load_image_form\" action=\"$exec_url\" method=\"POST\" enctype=\"multipart/form-data\">";
+	print "<p><form name=\"load_image_form\" action=\"$WRITE_URL\" method=\"POST\" enctype=\"multipart/form-data\">";
 	print "<b>File to upload:</b>&nbsp;<input type=file name=\"image_file\" accept=\"image/*\">".
 		  "<input type=hidden name=\"taxon_no\" value=\"$taxon_no\">".
 		  "<input type=hidden name=\"taxon_name\" value=\"$taxon_name\">".
@@ -48,7 +48,6 @@ sub processLoadImage{
     $dbt->useRemote(1);
 	my $q = shift;
 	my $s = shift;
-    my $exec_url = $q->url();
 	my $MEGABYTE = 1048576;
 	my $file_name = $q->param('image_file');
 	my $taxon_name = $q->param('taxon_name');
@@ -72,7 +71,7 @@ sub processLoadImage{
 	my $type = $q->uploadInfo($file_name)->{'Content-Type'};
 	if($type !~ /image/){
 		print "<center><p>Image files of type jpg, png or gif only please!<br>";
-		print "<p><a href=\"$exec_url?action=startImage\">".
+		print "<p><a href=\"$WRITE_URL?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
 		return;
 	}
@@ -82,7 +81,7 @@ sub processLoadImage{
 	my $suffix = $1;
 	if($file_name !~ /(jpg|gif|png)/i){
 		print "<center><p>Please upload only images of type jpg, gif or png.<br>";
-		print "<p><a href=\"$exec_url?action=startImage\">".
+		print "<p><a href=\"$WRITE_URL?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
 		return;
 	}
@@ -96,7 +95,7 @@ sub processLoadImage{
 	if($bytes_read > $MEGABYTE-1){
 		print "<center><p>Image is too large.  Please only upload images ".
 			  "less than one megabyte in size<br>";
-		print "<p><a href=\"$exec_url?action=startImage\">".
+		print "<p><a href=\"$WRITE_URL?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
 		return;
 	}
@@ -120,7 +119,7 @@ sub processLoadImage{
 	if(@results){
 		print "<center><p>This image <a href=\"".$results[0]->{path_to_image}.
 			  "\">already exists</a> in the database<br>";
-		print "<p><a href=\"$exec_url?action=startImage\">".
+		print "<p><a href=\"$WRITE_URL?action=startImage\">".
 			  "<b>Enter another image</b></a></center>";
 		return; 
 	}
@@ -221,7 +220,7 @@ sub processLoadImage{
 		my $clean_name = $taxon_name;
 		$clean_name =~ s/_/ /g;
 		print "<center><p>The image of $clean_name was uploaded successfully</p>";
-		print "<p><a href=\"$exec_url?action=startImage\">".
+		print "<p><a href=\"$WRITE_URL?action=startImage\">".
 			  "<b>Enter another image</b></a></p></center>";
 	}
 }
@@ -268,10 +267,10 @@ sub displayImage {
         print "<br><table border=0 cellpadding=2 cellspacing=0>";
         print "<tr><td><b>Original name of image:</b></td><td>".$row->{'original_filename'}."</td></tr>\n";
         if ( $ss && $row->{'taxon_no'} != $ss->{'taxon_no'} ) {
-            print "<tr><td><b>Original identification:</b></td><td><a target=\"_blank\" href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
-            print "<tr><td><b>Current identification:</b></td><td><a target=\"_blank\" href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss->{taxon_no}\">".$ss->{'taxon_name'}."</a></td></tr>\n";
+            print "<tr><td><b>Original identification:</b></td><td><a target=\"_blank\" href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
+            print "<tr><td><b>Current identification:</b></td><td><a target=\"_blank\" href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$ss->{taxon_no}\">".$ss->{'taxon_name'}."</a></td></tr>\n";
         } else {
-            print "<tr><td><b>Current identification:</b></td><td><a target=\"_blank\" href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
+            print "<tr><td><b>Current identification:</b></td><td><a target=\"_blank\" href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
         }
         if ( $row->{reference_no} > 0 ) {
             my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$row->{reference_no}";

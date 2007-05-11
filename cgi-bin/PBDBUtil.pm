@@ -304,5 +304,13 @@ sub checkForBot {
     return 0;
 }
 
+sub getReadURL {
+    return "bridge.pl";
+}
+
+sub getWriteURL {
+    return "bridge.pl";
+}
+
 
 1;

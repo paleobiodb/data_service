@@ -66,6 +66,7 @@ use TimeLookup;
 use Text::CSV_XS;
 use PBDBUtil;
 use TaxaCache;
+use Constants qw($READ_URL);
 
 # FOO ##  # CGI::Carp qw(fatalsToBrowser);
 
@@ -272,9 +273,9 @@ sub assignGenera	{
 
 	if ( ! open OCCS,"<$occsfile" )	{
         if ($q->param("time_scale") =~ /neptune/i) {
-		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to check off this field in the form.</h3>\n";
+		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"$READ_URL?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to check off this field in the form.</h3>\n";
         } else {
-		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"/cgi-bin/bridge.pl?action=displayDownloadForm\">Download the data again</a> and make sure to check off the field you want in the \"Collection fields\" part of the form.</h3>\n";
+		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"$READ_URL?action=displayDownloadForm\">Download the data again</a> and make sure to check off the field you want in the \"Collection fields\" part of the form.</h3>\n";
         }
         return;
 	}
@@ -372,7 +373,7 @@ sub assignGenera	{
 		if ($q->param('time_scale') =~ /neptune/i)	{
 			$collection_field = "sample id";
 		} 
-		print "<h3>The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the form.</h3>\n";
+		print "<h3>The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the form.</h3>\n";
 		exit;
 	# this one is crucial and might be missing
 	} elsif ( ! $field_bin )	{
@@ -381,36 +382,36 @@ sub assignGenera	{
 		if ($time_scale_field =~ /neptune/i)	{
 			$time_scale_field = "sample_age_ma";
 		}
-		print "<h3>The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the \"Collection fields\" part of the form.</h3>\n";
+		print "<h3>The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the \"Collection fields\" part of the form.</h3>\n";
 		exit;
 	# this one also always should be present anyway, unless the user
 	#  screwed up and didn't download the ref numbers despite wanting
 	#  refs counted instead of genera
 	} elsif ( ! $field_genus_name && $q->param("taxonomic_level") ne "family" and $q->param("taxonomic_level") ne "order" )	{
 		if ( $q->param('count_refs') ne "yes" )	{
-			print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+			print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		} else	{
-			print "<h3>The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+			print "<h3>The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		}
 		exit;
 	} elsif ( $q->param("taxonomic_level") eq "species" && ! $field_species_name && $q->param('count_refs') ne "yes") {
-		print "<h3>The data can't be analyzed because the species name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the species name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	} elsif ( $q->param("taxonomic_level") eq "family" && ! $field_family_name && $q->param('count_refs') ne "yes") {
-		print "<h3>The data can't be analyzed because the family name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the family name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	} elsif ( $q->param("taxonomic_level") eq "order" && ! $field_order_name && $q->param('count_refs') ne "yes") {
-		print "<h3>The data can't be analyzed because the order name field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the order name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	# these two might be missing
 	} elsif ( ! $field_abund_value && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
-		print "<h3>The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	} elsif ( ! $field_abund_unit && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
-		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	} elsif ( ! $field_refno && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 || $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" ) )	{
-		print "<h3>The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<h3>The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
 		exit;
 	} elsif ( $q->param("time_scale") =~ /neptune/i ) {
         if ($q->param("neptune_bin_size") !~ /^(\d+(\.\d+)?|\.\d+)$/) {
@@ -2056,7 +2057,7 @@ sub printResults	{
         if ($q->param('time_scale') =~ /neptune/i) {
             $downloadForm = "displayDownloadNeptuneForm";
         }  
-		print "\nYou may wish to <a href=\"/cgi-bin/bridge.pl?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
+		print "\nYou may wish to <a href=\"$READ_URL?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
 
 
         if ($q->param('samplesize') ne '') {

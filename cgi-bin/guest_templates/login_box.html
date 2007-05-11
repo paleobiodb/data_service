@@ -9,7 +9,7 @@
 <p>If you are a data contributor, please log in</p>
 </div>
 
-<form method="POST" action="bridge.pl">
+<form method="POST" action="%%write_url%%">
 
 <input type=hidden name="action" value="processLogin">
 <input type=hidden name="destination">
@@ -38,7 +38,7 @@
 </table>
 </form>
 
-<p>If not, please <a href="/cgi-bin/bridge.pl?user=Guest&action=displayHomePage">return to the public area</a></p>
+<p>If not, please <a href="%%read_url%%?user=Guest&action=displayHomePage">return to the public area</a></p>
 
 </center>
 

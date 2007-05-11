@@ -8,19 +8,18 @@ use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
 use TimeLookup;
 use Digest::MD5;
+use Constants qw($READ_URL $WRITE_URL $DATAFILE_DIR);
 
 # Flags and constants
 my $dbt;    # The DBTransactionManager object
 my $q;	    # Reference to the parameters
 my $s;
 
-my $BRIDGE_HOME = "/cgi-bin/bridge.pl";
 my $GIF_HTTP_ADDR = "/public/maps";
 my $COAST_DIR = $ENV{MAP_COAST_DIR};
 my $GIF_DIR = $ENV{MAP_GIF_DIR};
 my $TILE_DIR = $GIF_DIR;
 $TILE_DIR =~ s/maps$/staticmaps/;
-my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
 my $FONT = "$DATAFILE_DIR/fonts/orangeki.ttf";
 my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
@@ -287,7 +286,7 @@ sub mapFinishImage {
     close AI;
 
     # make clickable background rectangles for repositioning the map
-    my $clickstring = "$BRIDGE_HOME?action=displayMapResults";
+    my $clickstring = "$READ_URL?action=displayMapResults";
     unless($q->param("simple_map") =~ /YES/i){
         my %param;
         foreach ($q->param(),keys %map_defaults) {
@@ -1824,7 +1823,7 @@ sub mapDrawPoints{
 			    } else	{
 				    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
 			    }
-			    print MAPOUT "\" href=\"$BRIDGE_HOME?action=displayCollResults";
+			    print MAPOUT "\" href=\"$READ_URL?action=displayCollResults";
                 print MAPOUT "&amp;collection_list=".join(",",@{$atCoord{$x1}{$y1}});
                 print MAPOUT "\">\n";
 

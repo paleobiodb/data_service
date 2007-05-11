@@ -13,6 +13,7 @@ use CGI::Carp;
 use Data::Dumper;
 use TaxaCache;
 use Debug qw(dbg);
+use Constants qw($READ_URL $WRITE_URL);
 
 # list of allowable data fields.
 use fields qw(opinion_no reference_no dbt DBrow);  
@@ -977,7 +978,7 @@ sub submitOpinionForm {
                 if (scalar(@parents) > 1) {
                     $errors->add("The taxon '$parentName' exists multiple times in the database. Please select the one you want");	
                 } elsif (scalar(@parents) == 0) {
-                    $errors->add("The taxon '$parentName' doesn't exist in our database.  Please <A HREF=\"bridge.pl?action=displayAuthorityForm&taxon_no=-1&taxon_name=$parentName\">create a new authority record for '$parentName'</a> <i>before</i> entering this opinion");	
+                    $errors->add("The taxon '$parentName' doesn't exist in our database.  Please <A HREF=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=$parentName\">create a new authority record for '$parentName'</a> <i>before</i> entering this opinion");	
                 } elsif (scalar(@parents) == 1) {
                     $fields{'parent_spelling_no'} = $parents[0]->{'taxon_no'};
                     $fields{'parent_no'} = TaxonInfo::getOriginalCombination($dbt,$fields{'parent_spelling_no'});
@@ -1095,10 +1096,10 @@ sub submitOpinionForm {
         dbg("MIGRATING:<PRE>".Dumper(\@opinions_to_migrate1)."</PRE><PRE>".Dumper(\@opinions_to_migrate2)."</PRE>"); 
         my $msg = "";
         if (@opinions_to_migrate1) {
-            $msg .= "The taxon <b>$childSpellingName</b> already exists with <a href=\"bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}\" target=\"_BLANK\"> opinions classifying it</a>."; 
+            $msg .= "The taxon <b>$childSpellingName</b> already exists with <a href=\"$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}\" target=\"_BLANK\"> opinions classifying it</a>."; 
         }
         if (@opinions_to_migrate2) {
-            $msg .= "The taxon <b>$childSpellingName</b> already exists with <a href=\"bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}\" target=\"_BLANK\"> opinions classifying it</a>."; 
+            $msg .= "The taxon <b>$childSpellingName</b> already exists with <a href=\"$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}\" target=\"_BLANK\"> opinions classifying it</a>."; 
         }
         $msg .= " If you hit submit again, this taxonomic name will be permanently combined with the existing taxon.  This means: <ul>";
         $msg .= " <li> '$childName' will be considered the 'original' name.  If another spelling is actually the original usage and '$childName' is actually a subsequent usage, please enter opinions based on that other taxon.</li>";
@@ -1442,22 +1443,22 @@ sub submitOpinionForm {
 <table cellpadding="10" class="small"><tr><td valign=top>
   <p><b>Name functions</b></p>
   <ul>
-  <li><b><a href="bridge.pl?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName</a></b></li>
-  <br><li><b><a href="bridge.pl?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></b></li>   
-  <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit names from the same reference</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
+  <li><b><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName</a></b></li>
+  <br><li><b><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></b></li>   
+  <br><li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit names from the same reference</a></b></li>
+  <br><li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
+  <br><li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
   </ul>
 </td>
 <td valign=top>
   <p><b>Opinion functions</b></p>
   <ul>
-  <li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Edit another opinion about $childSpellingName</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
-  <br><li><b><a href="bridge.pl?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
+  <li><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
+  <br><li><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Edit another opinion about $childSpellingName</a></b></li>
+  <br><li><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
+  <br><li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
+  <br><li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
+  <br><li><b><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
   </ul>
 </td></tr></table>
 </p>
@@ -1524,9 +1525,9 @@ sub displayOpinionChoiceForm {
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
             my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
-            print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
+            print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
         }
-        print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=-1">Create a <b>new</b> opinion record</a></li>|;
+        print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=-1">Create a <b>new</b> opinion record</a></li>|;
         print qq|</ul></div>\n|;
 #        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Submit"></p><br></td></tr>|;
     } else {
@@ -1584,7 +1585,7 @@ sub displayOpinionChoiceForm {
             foreach my $row (@results) {
                 my $o = Opinion->new($dbt,$row->{'opinion_no'});
                 my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
-                print qq|<li><a href="bridge.pl?action=displayOpinionForm&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
+                print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
             }
             print "</ul>";
             print "</div>";

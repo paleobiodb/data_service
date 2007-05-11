@@ -3,6 +3,7 @@ package Ecology;
 use TaxaCache;
 use Debug qw(dbg);
 
+my $WRITE_URL = $main::WRITE_URL;
 
 # written by JA 27-31.7,1.8.03
 
@@ -13,7 +14,6 @@ sub populateEcologyForm	{
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
-	my $exec_url = shift;
     $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
@@ -96,7 +96,6 @@ sub processEcologyForm	{
 	my $dbt = shift;
 	my $q = shift;
 	my $s = shift;
-	my $exec_url = shift;
     $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
@@ -151,8 +150,8 @@ sub processEcologyForm	{
 	}
 
     my $action = ($q->param('goal') eq 'ecovert') ? 'startStartEcologyVertebrateSearch' : 'startStartEcologyTaphonomySearch';
-	print "<center><p><a href=\"$exec_url?action=startPopulateEcologyForm&taxon_no=$taxon_no&goal=".$q->param('goal')."\">Edit data for this taxon</a> - \n";
-	print "<a href=\"$exec_url?action=$action\">Enter data for another taxon</a></p></center>\n";
+	print "<center><p><a href=\"$WRITE_URL?action=startPopulateEcologyForm&taxon_no=$taxon_no&goal=".$q->param('goal')."\">Edit data for this taxon</a> - \n";
+	print "<a href=\"$WRITE_URL?action=$action\">Enter data for another taxon</a></p></center>\n";
 	return;
 }
 

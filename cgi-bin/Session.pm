@@ -4,6 +4,8 @@ use Digest::MD5;
 use CGI::Cookie;
 use strict;
 
+my $WRITE_URL = $main::WRITE_URL;
+
 # Handles validation of the user
 sub new {
     my ($class,$dbt,$session_id) = @_;
@@ -605,10 +607,10 @@ sub setPreferences	{
      	my $sql = "UPDATE person SET preferences=".$dbh_r->quote($pref_sql)." WHERE person_no=$enterer_no";
         my $result = $dbh_r->do($sql);
 
-	    print "<p>\n<a href=\"bridge.pl?action=displayPreferencesPage\"><b>Set preferences</b></a></td></tr></table><p>\n";
+	    print "<p>\n<a href=\"$WRITE_URL?action=displayPreferencesPage\"><b>Set preferences</b></a></td></tr></table><p>\n";
     	my %continue = $s->unqueue();
 	    if($continue{action}){
-		    print "<center><p>\n<a href=\"bridge.pl?action=$continue{action}\"><b>Continue</b></a><p></center>\n";
+		    print "<center><p>\n<a href=\"$WRITE_URL?action=$continue{action}\"><b>Continue</b></a><p></center>\n";
 	    }
     }
 }

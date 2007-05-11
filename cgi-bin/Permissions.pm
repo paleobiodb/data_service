@@ -15,6 +15,7 @@ use Debug qw(dbg);
 use fields qw(s dbt);
 
 # Flags and constants
+my $WRITE_URL = $main::WRITE_URL;
 my $DEBUG = 0;
 
 # **Note: Must pass the session variable when creating this object.
@@ -343,7 +344,7 @@ sub displayPermissionListForm {
     print qq|<div class="displayPanel" align="left">\n|;
     print qq|<span class="displayPanelHeader"><b>Designated heir</b></span>\n|;
     print qq|<div class="displayPanelContent" align="center">\n|;
-    print qq|<form method="POST" action="bridge.pl">|;
+    print qq|<form method="POST" action="$WRITE_URL">|;
     print qq|<input type="hidden" name="action" value="submitHeir">|;
     print qq|<table cellpadding=0 cellspacing=3>|;
     print qq|<tr><td>Designate who will manage your data <br>if you leave the database: </td><td><input type="text" name="heir_reversed" value="$heir_reversed" onKeyUp="doComplete(event,this,authorizerNames())"> <input type="submit" name="submit_heir" value="Go"></td></tr>|;
@@ -392,7 +393,7 @@ sub displayPermissionListForm {
         print qq|</div>\n</div>\n\n<div class="displayPanel" align="left">\n|;
         print qq|<span class="displayPanelHeader"><b>Permitted modifiers</b></span>\n|;
         print qq|<div class="displayPanelContent" align="center">\n|;
-        print qq|<form method="POST" action="bridge.pl">|;
+        print qq|<form method="POST" action="$WRITE_URL">|;
         print qq|<input type="hidden" name="action" value="submitPermissionList">|;
         print qq|<input type="hidden" name="submit_type" value="add">|;
         print qq|<input type="hidden" name="action_for" value="$person_no">|;
@@ -402,7 +403,7 @@ sub displayPermissionListForm {
         print qq|</table>|;
         print qq|</form>|;
 
-        print qq|<form method="POST" action="bridge.pl">|;
+        print qq|<form method="POST" action="$WRITE_URL">|;
         print qq|<input type="hidden" name="action" value="submitPermissionList">|;
         print qq|<input type="hidden" name="action_for" value="$person_no">|;
         print qq|<input type="hidden" name="submit_type" value="delete">|;

@@ -3,7 +3,7 @@
 
 <div align="center"><h3>Opinion record for <span id="taxon_display_name"></span></h3></div>
 
-<form method="POST" action="bridge.pl" onSubmit="checkForm()">
+<form method="POST" action="%%write_url%%" onSubmit="checkForm()">
 
 <DIV class="displayPanel" style="padding-top: 1em;">
 
@@ -81,7 +81,7 @@ The primary reference argues for this opinion:
 <table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
   <tr>
   <td colspan="2">
-  <b><a href="#" onClick="popup = window.open('$exec_url?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">Classification quality</a>:</b> <select id="classification_quality" autofill="opinion_classification_quality"></select>
+  <b><a href="#" onClick="popup = window.open('%%write_url%%?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">Classification quality</a>:</b> <select id="classification_quality" autofill="opinion_classification_quality"></select>
   <span style="margin-left: 14em;"><input type="submit" value="Submit"></span>
   </td>
   </tr>

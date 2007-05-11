@@ -15,11 +15,7 @@ use Debug qw(dbg);
 use URI::Escape;
 use Debug;
 use Map;    
-
-my $HTML_DIR = $ENV{'BRIDGE_HTML_DIR'};
-my $OUTPUT_DIR = "public/data";
-my $HOST_URL = $ENV{'BRIDGE_HOST_URL'};
-
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR $OUTPUT_DIR $HOST_URL);
 
 # This function has been generalized to use by a number of different modules
 # as a generic way of getting back collection results, including maps, collection search, confidence, and taxon_info
@@ -600,13 +596,13 @@ IS NULL))";
 	if (@errors) {
         my $message = "<div align=\"center\">".Debug::printErrors(\@errors)."<br>";
         if ( $options{"calling_script"} eq "Map" )	{
-            $message .= "<a href=\"bridge.pl?action=displayMapForm\"><b>Try again</b></a>";
+            $message .= "<a href=\"$READ_URL?action=displayMapForm\"><b>Try again</b></a>";
         } elsif ( $options{"calling_script"} eq "Confidence" )	{
-            $message .= "<a href=\"bridge.pl?action=displaySearchSectionForm\"><b>Try again</b></a>";
+            $message .= "<a href=\"$READ_URL?action=displaySearchSectionForm\"><b>Try again</b></a>";
         } elsif ( $options{"type"} eq "add" )	{
-            $message .= "<a href=\"bridge.pl?action=displaySearchCollsForAdd&type=add\"><b>Try again</b></a>";
+            $message .= "<a href=\"$WRITE_URL?action=displaySearchCollsForAdd&type=add\"><b>Try again</b></a>";
         } else	{
-            $message .= "<a href=\"bridge.pl?action=displaySearchColls&type=$options{type}\"><b>Try again</b></a>";
+            $message .= "<a href=\"$READ_URL?action=displaySearchColls&type=$options{type}\"><b>Try again</b></a>";
         }
         $message .= "</div><br>";
         die($message);
@@ -738,7 +734,7 @@ sub displayCollectionForm {
     my $formatted_primary = Reference::formatLongRef($ref);
 
     $vars{'ref_string'} = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
-    "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$vars{reference_no}\">".$vars{'reference_no'}."</a></b>&nbsp;</td>".
+    "<td valign=\"top\"><a href=\"$READ_URL?action=displayReference&reference_no=$vars{reference_no}\">".$vars{'reference_no'}."</a></b>&nbsp;</td>".
     "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
     "<td>$formatted_primary</td>".
     "</tr></table>";      
@@ -1018,19 +1014,19 @@ sub processCollectionForm {
             $can_modify->{$s->get('authorizer_no')} = 1;
             
             if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {
-                print qq|<li><b><a href="bridge.pl?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b></li>|;
+                print qq|<li><b><a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b></li>|;
             }
-            print qq|<li><b><a href="bridge.pl?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b></li>|;
+            print qq|<li><b><a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b></li>|;
             if ($isNewEntry) {
-                print qq|<li><b><a href="bridge.pl?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></b></li>|;
+                print qq|<li><b><a href="$WRITE_URL?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></b></li>|;
             } else {
-                print qq|<li><b><a href="bridge.pl?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></b></li>|;
-                print qq|<li><b><a href="bridge.pl?action=displaySearchColls&type=edit">Edit another collection with the same reference</a></b></li>|;
-                print qq|<li><b><a href="bridge.pl?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</b></a></li>|;
+                print qq|<li><b><a href="$WRITE_URL?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></b></li>|;
+                print qq|<li><b><a href="$WRITE_URL?action=displaySearchColls&type=edit">Edit another collection with the same reference</a></b></li>|;
+                print qq|<li><b><a href="$WRITE_URL?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</b></a></li>|;
             }
-            print qq|<li><b><a href="bridge.pl?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
-            print qq|<li><b><a href="bridge.pl?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></b></li>|;
-            print qq|<li><b><a href="bridge.pl?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b></li>|;
+            print qq|<li><b><a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
+            print qq|<li><b><a href="$WRITE_URL?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></b></li>|;
+            print qq|<li><b><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b></li>|;
             print "</td></tr></table></div></p>";
         }   
     }
@@ -1162,9 +1158,9 @@ sub displayCollectionDetails {
         $can_modify->{$s->get('authorizer_no')} = 1;
 
         if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {  
-            print qq|<b><a href="bridge.pl?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b> - |;
+            print qq|<b><a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b> - |;
         }
-        print qq|<b><a href="bridge.pl?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b>|;  
+        print qq|<b><a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b>|;  
         print "</div></p>";
     }
 
@@ -1181,15 +1177,15 @@ sub displayCollectionDetails {
 	}
 
 	if ( $taxa_list =~ /Abundance/ && $hasabund > 2 )	{
-		print qq|<b><a href="bridge.pl?action=rarefyAbundances&collection_no=$collection_no">Analyze abundance data</a></b> - |;
+		print qq|<b><a href="$READ_URL?action=rarefyAbundances&collection_no=$collection_no">Analyze abundance data</a></b> - |;
 	}
 
-	print qq|<b><a href="bridge.pl?action=displayCollectionEcology&collection_no=$collection_no">Tabulate ecology data</a></b>|;
+	print qq|<b><a href="$READ_URL?action=displayCollectionEcology&collection_no=$collection_no">Tabulate ecology data</a></b>|;
 
     if ($s->isDBMember()) {
-    	print qq| - <b><a href="bridge.pl?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b>|;
+    	print qq| - <b><a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b>|;
         if($taxa_list ne "") {
-	        print qq| - <b><a href="bridge.pl?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b>|;
+	        print qq| - <b><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b>|;
 
         }
     }
@@ -1209,7 +1205,7 @@ sub displayCollectionDetailsPage {
         my $ref = Reference::getReference($dbt,$row->{'reference_no'});
         my $formatted_primary = Reference::formatLongRef($ref);
         $row->{'reference_string'} = '<table cellspacing="0" cellpadding="2" width="100%"><tr>'.
-            "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">".$row->{'reference_no'}."</a></td>".
+            "<td valign=\"top\"><a href=\"$READ_URL?action=displayReference&reference_no=$row->{reference_no}\">".$row->{'reference_no'}."</a></td>".
             "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
             "<td>$formatted_primary</td>".
             "</tr></table>";
@@ -1225,7 +1221,7 @@ sub displayCollectionDetailsPage {
                 my $formatted_secondary = Reference::formatLongRef($ref);
                 my $class = ($i % 2 == 0) ? 'class="darkList"' : '';
                 $table .= "<tr $class>".
-                    "<td valign=\"top\"><a href=\"bridge.pl?action=displayReference&reference_no=$sr\">$sr</a></td>".
+                    "<td valign=\"top\"><a href=\"$READ_URL?action=displayReference&reference_no=$sr\">$sr</a></td>".
                     "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
                     "<td>$formatted_secondary</td>".
                     "</tr>";
@@ -1243,7 +1239,7 @@ sub displayCollectionDetailsPage {
     $sth->finish();
     my @links = ();
     foreach my $ref (@subrowrefs)	{
-      push @links, "<a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$ref->[0]\">$ref->[0]</a>";
+      push @links, "<a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$ref->[0]\">$ref->[0]</a>";
     }
     my $subString = join(", ",@links);
     $row->{'subset_string'} = $subString;
@@ -1276,7 +1272,7 @@ sub displayCollectionDetailsPage {
 	if ( $row->{'max_interval_no'} ) {
 		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $row->{'max_interval_no'};
         my $max_row = ${$dbt->getData($sql)}[0];
-        $row->{'interval'} .= qq|<a href="bridge.pl?action=displayInterval&interval_no=$row->{max_interval_no}">|;
+        $row->{'interval'} .= qq|<a href="$READ_URL?action=displayInterval&interval_no=$row->{max_interval_no}">|;
         $row->{'interval'} .= $max_row->{'eml_interval'}." " if ($max_row->{'eml_interval'});
         $row->{'interval'} .= $max_row->{'interval_name'};
         $row->{'interval'} .= '</a>';
@@ -1286,7 +1282,7 @@ sub displayCollectionDetailsPage {
 		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $row->{'min_interval_no'};
         my $min_row = ${$dbt->getData($sql)}[0];
         $row->{'interval'} .= " - ";
-        $row->{'interval'} .= qq|<a href="bridge.pl?action=displayInterval&interval_no=$row->{min_interval_no}">|;
+        $row->{'interval'} .= qq|<a href="$READ_URL?action=displayInterval&interval_no=$row->{min_interval_no}">|;
         $row->{'interval'} .= $min_row->{'eml_interval'}." " if ($min_row->{'eml_interval'});
         $row->{'interval'} .= $min_row->{'interval_name'};
         $row->{'interval'} .= '</a>';
@@ -1429,24 +1425,24 @@ sub displayCollectionDetailsPage {
 
 
     if ($row->{'collection_subset'}) {
-        $row->{'collection_subset'} =  "<a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_subset}\">$row->{collection_subset}</a>";
+        $row->{'collection_subset'} =  "<a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_subset}\">$row->{collection_subset}</a>";
     }
 
     if ($row->{'regionalsection'}) {
-        $row->{'regionalsection'} = "<a href=\"bridge.pl?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=regional&input=".uri_escape($row->{'regionalsection'})."\">$row->{regionalsection}</a>";
+        $row->{'regionalsection'} = "<a href=\"$READ_URL?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=regional&input=".uri_escape($row->{'regionalsection'})."\">$row->{regionalsection}</a>";
     }
 
     if ($row->{'localsection'}) {
-        $row->{'localsection'} = "<a href=\"bridge.pl?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=local&input=".uri_escape($row->{'localsection'})."\">$row->{localsection}</a>";
+        $row->{'localsection'} = "<a href=\"$READ_URL?action=displayStratTaxaForm&taxon_resolution=species&skip_taxon_list=YES&input_type=local&input=".uri_escape($row->{'localsection'})."\">$row->{localsection}</a>";
     }
     if ($row->{'member'}) {
-        $row->{'member'} = "<a href=\"bridge.pl?action=displayStrata&group_hint=".uri_escape($row->{'geological_group'})."&formation_hint=".uri_escape($row->{'formation'})."&group_formation_member=".uri_escape($row->{'member'})."\">$row->{member}</a>";
+        $row->{'member'} = "<a href=\"$READ_URL?action=displayStrata&group_hint=".uri_escape($row->{'geological_group'})."&formation_hint=".uri_escape($row->{'formation'})."&group_formation_member=".uri_escape($row->{'member'})."\">$row->{member}</a>";
     }
     if ($row->{'formation'}) {
-        $row->{'formation'} = "<a href=\"bridge.pl?action=displayStrata&group_hint=".uri_escape($row->{'geological_group'})."&group_formation_member=".uri_escape($row->{'formation'})."\">$row->{formation}</a>";
+        $row->{'formation'} = "<a href=\"$READ_URL?action=displayStrata&group_hint=".uri_escape($row->{'geological_group'})."&group_formation_member=".uri_escape($row->{'formation'})."\">$row->{formation}</a>";
     }
     if ($row->{'geological_group'}) {
-        $row->{'geological_group'} = "<a href=\"bridge.pl?action=displayStrata&group_formation_member=".uri_escape($row->{'geological_group'})."\">$row->{geological_group}</a>";
+        $row->{'geological_group'} = "<a href=\"$READ_URL?action=displayStrata&group_formation_member=".uri_escape($row->{'geological_group'})."\">$row->{geological_group}</a>";
     }
 
     $row->{'modified'} = date($row->{'modified'});
@@ -1532,7 +1528,7 @@ sub buildTaxonomicList {
             my $specimens_measured = ${$dbt->getData($sql_s)}[0]->{'c'};
             if ($specimens_measured) {
                 my $s = ($specimens_measured > 1) ? 's' : '';
-                $rowref->{comments} .= " (<a href=\"bridge.pl?action=displaySpecimenList&occurrence_no=$rowref->{occurrence_no}\">$specimens_measured measurement$s</a>)";
+                $rowref->{comments} .= " (<a href=\"$READ_URL?action=displaySpecimenList&occurrence_no=$rowref->{occurrence_no}\">$specimens_measured measurement$s</a>)";
             }
 			
 			# if the user submitted a form such as adding a new occurrence or 
@@ -1731,7 +1727,7 @@ sub buildTaxonomicList {
         }
 
         if ($are_reclassifications) {
-            $return .= "<form action=\"bridge.pl\" method=\"post\">\n";
+            $return .= "<form action=\"$WRITE_URL\" method=\"post\">\n";
             $return .= "<input type=\"hidden\" name=\"action\" value=\"startProcessReclassifyForm\">\n"; 
             if ($options{'collection_no'}) {
                 $return .= "<input type=\"hidden\" name=\"collection_no\" value=\"$options{'collection_no'}\">\n"; 
@@ -1934,7 +1930,7 @@ sub formatOccurrenceTaxonName {
 
 
     if ($link_name) {
-        $taxon_name .= qq|<a href="bridge.pl?action=checkTaxonInfo&amp;taxon_name=|.uri_escape($link_name).qq|">|;
+        $taxon_name .= qq|<a href="$READ_URL?action=checkTaxonInfo&amp;taxon_name=|.uri_escape($link_name).qq|">|;
     }
 
     if ($row->{'species_name'} !~ /^indet/ && $row->{'genus_reso'} !~ /informal/) {
@@ -2055,9 +2051,9 @@ sub getSynonymName {
             $synonym_name = $taxon_name;
         }
         if ($is_synonym) {
-            $synonym_name = "synonym of <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$synonym_name</a>";
+            $synonym_name = "synonym of <a href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$synonym_name</a>";
         } else {
-            $synonym_name = "$spelling_reason <a href=\"bridge.pl?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$synonym_name</a>";
+            $synonym_name = "$spelling_reason <a href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$ss_taxon_no\">$synonym_name</a>";
         }
     }
     return $synonym_name;
@@ -2189,8 +2185,8 @@ sub rarefyAbundances	{
 		if ( $ntaxa == 1 )	{
 			$reason = "only one taxon has abundance data";
 		}	
-		print "<center><h4>Diversity statistics not available</h4>\n<p class=\"medium\">Statistics for $collection_name (PBDB collection <a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>) cannot<br>be computed because $reason</p></center>\n\n";
-    		print "<p><div align=\"center\"><b><a href=\"bridge.pl?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
+		print "<center><h4>Diversity statistics not available</h4>\n<p class=\"medium\">Statistics for $collection_name (PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>) cannot<br>be computed because $reason</p></center>\n\n";
+    		print "<p><div align=\"center\"><b><a href=\"$READ_URL?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
 		return;
 	}
 
@@ -2250,7 +2246,7 @@ sub rarefyAbundances	{
 		}
 	}
 
-	print "<center><h3>Diversity statistics for $collection_name</h3><h5>(PBDB collection <a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
+	print "<center><h3>Diversity statistics for $collection_name</h3><h5>(PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
 
 	print "<center><table><tr><td align=\"left\">\n";
 	printf "<p>Total richness: <b>%d taxa</b><br>\n",$ntaxa;
@@ -2303,7 +2299,7 @@ sub rarefyAbundances	{
 		$isalevel{$sl} = "Y";
 	}
 
-	print "<hr><center><h3>Rarefaction curve for $collection_name</h3><h5>(PBDB collection <a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
+	print "<hr><center><h3>Rarefaction curve for $collection_name</h3><h5>(PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
 
 	open OUT,">$HTML_DIR/$OUTPUT_DIR/rarefaction.csv";
 	print "<center><table>\n";
@@ -2321,7 +2317,7 @@ sub rarefyAbundances	{
 	print "<p><i>Results are based on 200 random sampling trials.\n";
 	print "The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
 
-    print "<p><div align=\"center\"><b><a href=\"bridge.pl?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
+    print "<p><div align=\"center\"><b><a href=\"$READ_URL?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
 }
 
 # JA 20,21,28.9.04
@@ -2369,7 +2365,7 @@ sub displayCollectionEcology	{
 
 	if (!%$ecology) {
 		print "<center><h3>Sorry, there are no ecological data for any of the taxa</h3></center>\n\n";
-		print "<center><p><b><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=" . $q->param('collection_no') . "\">Return to the collection record</a></b></p></center>\n\n";
+		print "<center><p><b><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=" . $q->param('collection_no') . "\">Return to the collection record</a></b></p></center>\n\n";
 		print $hbo->stdIncludes("std_page_bottom");
 		return;
 	} 
@@ -2534,8 +2530,8 @@ sub displayCollectionEcology	{
 	print "</table>\n";
     print "</div>";
 
-	print "<div align=\"center\"><p><b><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=".$q->param('collection_no')."\">Return to the collection record</a></b> - ";
-	print "<b><a href=\"bridge.pl?action=displaySearchColls&type=view\">Search for other collections</a></b></p></div>\n\n";
+	print "<div align=\"center\"><p><b><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=".$q->param('collection_no')."\">Return to the collection record</a></b> - ";
+	print "<b><a href=\"$READ_URL?action=displaySearchColls&type=view\">Search for other collections</a></b></p></div>\n\n";
 	print $hbo->stdIncludes("std_page_bottom");
 
 }

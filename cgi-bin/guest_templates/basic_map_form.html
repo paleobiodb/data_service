@@ -14,7 +14,7 @@ function checkMapBrowserVersion()	{
 
 <div align="center"><h2>Fossil collection map form</h2></div>
 
-<form method=post action="$exec_url" onSubmit="return checkForm();">
+<form method=post action="%%read_url%%" onSubmit="return checkForm();">
 <input type="hidden" name="action" value="displayMapResults">
 <input type="hidden" name="form_source" value="basic_map_form">
 <input type="hidden" name="user" value="Guest">
@@ -174,7 +174,7 @@ function checkMapBrowserVersion()	{
 <p class=small>
 <i>
 You can make a paleogeographic map by selecting a time interval.
-You can also use <a href="bridge.pl?action=displayMapForm">more advanced options</a>.
+You can also use <a href="%%read_url%%?action=displayMapForm">more advanced options</a>.
 For more information about the plate reconstructions visit the <a href="http://www.scotese.com/license.htm">PALEOMAP website</a>.<br>
 </i>
 </p>

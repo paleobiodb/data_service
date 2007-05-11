@@ -11,6 +11,7 @@ use Images;
 use Measurement;
 use Debug qw(dbg);
 use PBDBUtil;
+use Constants qw($READ_URL $WRITE_URL);
 
 use strict;
 
@@ -92,13 +93,13 @@ sub checkTaxonInfo {
                 # If nothing, print out an error message
                 searchForm($hbo, $q, 1); # param for not printing header with form
                 if($s->isDBMember()) {
-                    print "<center><p><a href=\"bridge.pl?action=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
+                    print "<center><p><a href=\"$WRITE_URL?action=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
                 }
             }
         } elsif(scalar @results < 1 && ! $q->param('taxon_name')){
             searchForm($hbo, $q, 1); # param for not printing header with form
             if($s->isDBMember()) {
-                print "<center><p><a href=\"bridge.pl?action=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
+                print "<center><p><a href=\"$WRITE_URL?action=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
             }
         } elsif(scalar @results == 1){
             $q->param('taxon_no'=>$results[0]->{'taxon_no'});
@@ -110,7 +111,7 @@ sub checkTaxonInfo {
 <div class="displayPanelContent">
 |;
 
-            print qq|<form method="POST" action="bridge.pl">|;
+            print qq|<form method="POST" action="$READ_URL">|;
             print qq|<input type="hidden" name="action" value="checkTaxonInfo">|;
             
             print "<table>\n";
@@ -302,25 +303,25 @@ sub displayTaxonInfoResults {
         if($s->isDBMember()) {
             # Entered Taxon
             if ($entered_no) {
-                print "<center><a href=\"/cgi-bin/bridge.pl?action=displayAuthorityForm&amp;taxon_no=$entered_no\">";
+                print "<center><a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_no=$entered_no\">";
                 print "<b>Edit taxonomic data for $entered_name</b></a> - ";
             } else {
-                print "<center><a href=\"/cgi-bin/bridge.pl?action=submitTaxonSearch&amp;goal=authority&amp;taxon_no=-1&amp;taxon_name=$entered_name\">";
+                print "<center><a href=\"$WRITE_URL?action=submitTaxonSearch&amp;goal=authority&amp;taxon_no=-1&amp;taxon_name=$entered_name\">";
                 print "<b>Enter taxonomic data for $entered_name</b></a> - ";
             }
 
             if ($entered_no) {
-                print "<a href=\"/cgi-bin/bridge.pl?action=displayOpinionChoiceForm&amp;taxon_no=$entered_no\"><b>Edit taxonomic opinions about $entered_name</b></a> - ";
-                print "<a href=\"bridge.pl?action=startPopulateEcologyForm&amp;taxon_no=$taxon_no\"><b>Add/edit ecological/taphonomic data</b></a> - ";
+                print "<a href=\"$WRITE_URL?action=displayOpinionChoiceForm&amp;taxon_no=$entered_no\"><b>Edit taxonomic opinions about $entered_name</b></a> - ";
+                print "<a href=\"$WRITE_URL.pl?action=startPopulateEcologyForm&amp;taxon_no=$taxon_no\"><b>Add/edit ecological/taphonomic data</b></a> - ";
             }
             
-            print "<a href=\"/cgi-bin/bridge.pl?action=startImage\">".
+            print "<a href=\"$WRITE_URL?action=startImage\">".
                   "<b>Enter an image</b></a> - \n";
         } else {
             print "<center>";
         }
 
-    	print "<a href=\"/cgi-bin/bridge.pl?action=beginTaxonInfo\">".
+    	print "<a href=\"$READ_URL?action=beginTaxonInfo\">".
 	    	  "<b>Get info on another taxon</b></a></center></div>\n";
         print "</p>";
         print "</div>\n";
@@ -348,7 +349,7 @@ sub displayTaxonInfoResults {
 		print "<div align=\"center\"><h3>Taxonomic history</h3></div>\n";
         print '<div align="center">';
         print displayTaxonHistory($dbt, $taxon_no, $is_real_user);
-        print "See something missing? <a href=\"/cgi-bin/bridge.pl?user=Guest&amp;action=displayPage&amp;page=join_us\">Join the Paleobiology Database</a>\n";
+        print "See something missing? <a href=\"$READ_URL?user=Guest&amp;action=displayPage&amp;page=join_us\">Join the Paleobiology Database</a>\n";
         print "</div>\n";
         print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
@@ -410,7 +411,7 @@ sub displayTaxonInfoResults {
         if ($is_real_user) {
             displayMap($dbt,$q,$s,$collectionsSet);
         } else {
-            print '<form method="POST" action="bridge.pl">';
+            print qq|<form method="POST" action="$READ_URL">|;
             foreach my $f ($q->param()) {
                 print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
             }
@@ -428,7 +429,7 @@ sub displayTaxonInfoResults {
 		    print doCollections($dbt, $s, $collectionsSet, $taxon_no,$in_list, '',$is_real_user);
         } else {
             print '<div align="center">';
-            print '<form method="POST" action="bridge.pl">';
+            print qq|<form method="POST" action="$READ_URL">|;
             foreach my $f ($q->param()) {
                 print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
             }
@@ -523,7 +524,7 @@ sub doThumbs {
                         }
                     }
 
-                    print "<a href=\"javascript: imagePopup('bridge.pl?action=displayImage&amp;image_no=$thumb->{image_no}&amp;maxheight=$maxheight&amp;maxwidth=$maxwidth&amp;display_header=NO',$width,$height)\">";
+                    print "<a href=\"javascript: imagePopup('$READ_URL?action=displayImage&amp;image_no=$thumb->{image_no}&amp;maxheight=$maxheight&amp;maxwidth=$maxwidth&amp;display_header=NO',$width,$height)\">";
                     print "<img src=\"$thumb_path\" border=1 vspace=3 width=$t_width height=$t_height alt=\"$caption\">";
                     print "</a>";
                 } else {
@@ -649,9 +650,9 @@ sub doCollections{
     $max = ($max_no) ? $interval_name->{$max_no} : "";
     $min = ($min_no) ? $interval_name->{$min_no} : ""; 
     if ($max ne $min) {
-        $range .= "<a href=\"bridge.pl?action=displayInterval&interval_no=$max_no\">$max</a> to <a href=\"bridge.pl?action=displayInterval&interval_no=$min_no\">$min</a>";
+        $range .= "<a href=\"$READ_URL?action=displayInterval&interval_no=$max_no\">$max</a> to <a href=\"$READ_URL?action=displayInterval&interval_no=$min_no\">$min</a>";
     } else {
-        $range .= "<a href=\"bridge.pl?action=displayInterval&interval_no=$max_no\">$max</a>";
+        $range .= "<a href=\"$READ_URL?action=displayInterval&interval_no=$max_no\">$max</a>";
     }
     $range .= " <i>or</i> $lb to $ub Ma";
 
@@ -757,9 +758,9 @@ sub doCollections{
         if (!$min) {
             $min = $max;
         }
-        my $res = "<span class=\"small\"><a href=\"bridge.pl?action=displayInterval&interval_no=$row->{max_interval_no}\">$interval_name->{$max}</a>";
+        my $res = "<span class=\"small\"><a href=\"$READ_URL?action=displayInterval&interval_no=$row->{max_interval_no}\">$interval_name->{$max}</a>";
         if ( $max != $min ) {
-            $res .= " - " . "<a href=\"bridge.pl?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_name->{$min}</a>";
+            $res .= " - " . "<a href=\"$READ_URL?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_name->{$min}</a>";
         }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
 	$res .= $lowerbound->{$max} . " - ";
@@ -906,7 +907,7 @@ sub doCollections{
 				if ( $iscrown{$collection_no} > 0 )	{
 					$formatted_no = "<b>".$formatted_no."</b>";
 				}
-				$output .= "<a href=\"bridge.pl?action=displayCollectionDetails&amp;collection_no=$collection_no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
+				$output .= "<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$collection_no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
 			}
 			$output .= "</span></td></tr>\n";
 			$row_color++;
@@ -1284,7 +1285,7 @@ sub displayTaxonClassification {
                 }
                 my $pub_info = Reference::formatShortRef($authority);
                 if ($authority->{'ref_is_authority'} =~ /yes/i) {
-                    $pub_info = "<a href=\"bridge.pl?action=displayReference&amp;reference_no=$authority->{reference_no}&amp;is_real_user=$is_real_user\">$pub_info</a>";
+                    $pub_info = "<a href=\"$READ_URL?action=displayReference&amp;reference_no=$authority->{reference_no}&amp;is_real_user=$is_real_user\">$pub_info</a>";
                 }
                 my $orig_no = getOriginalCombination($dbt,$taxon_no);
                 if ($orig_no != $taxon_no) {
@@ -1292,9 +1293,9 @@ sub displayTaxonClassification {
                 } 
                 my $link;
                 if ($taxon_no) {
-                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&amp;taxon_no=$taxon_no&amp;is_real_user=$is_real_user">$show_name</a>|;
+                    $link = qq|<a href="$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon_no&amp;is_real_user=$is_real_user">$show_name</a>|;
                 } else {
-                    $link = qq|<a href="/cgi-bin/bridge.pl?action=checkTaxonInfo&amp;taxon_name=$taxon_name&amp;is_real_user=$is_real_user">$show_name</a>|;
+                    $link = qq|<a href="$READ_URL?action=checkTaxonInfo&amp;taxon_name=$taxon_name&amp;is_real_user=$is_real_user">$show_name</a>|;
                 }
                 $output .= qq|<td align="center">$taxon_rank</td>|.
                            qq|<td align="center">$link</td>|.
@@ -1384,7 +1385,7 @@ sub displayRelatedTaxa {
 		my @syn_links;                                                         
 		my @synonyms = @{$record->{'synonyms'}};
 		push @syn_links, $_->{'taxon_name'} for @synonyms;
-		my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}&amp;is_real_user=$is_real_user">$record->{taxon_name}|;
+		my $link = qq|<a href="$READ_URL?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}&amp;is_real_user=$is_real_user">$record->{taxon_name}|;
 		$link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
 		$link .= "</a>";
 		if ($type_taxon_no && $type_taxon_no == $record->{'taxon_no'}) {
@@ -1411,7 +1412,7 @@ sub displayRelatedTaxa {
                     my @syn_links;
                     my @synonyms = @{$record->{'synonyms'}};
                     push @syn_links, $_->{'taxon_name'} for @synonyms;
-                    my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}&amp;is_real_user=$is_real_user">$record->{taxon_name}|;
+                    my $link = qq|<a href="$READ_URL?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}&amp;is_real_user=$is_real_user">$record->{taxon_name}|;
                     $link .= " (syn. ".join(", ",@syn_links).")" if @syn_links;
                     $link .= "</a>";
                     push @sister_taxa_links, $link;
@@ -1464,11 +1465,11 @@ sub displayRelatedTaxa {
                     $occ_name .= " ".$row->{'species_name'};
                     if ($species) {
                         if ($species ne $row->{'species_name'}) {
-                            my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&amp;taxon_name=$occ_name&amp;is_real_user=$is_real_user">$occ_name</a>|;
+                            my $link = qq|<a href="$READ_URL?action=checkTaxonInfo&amp;taxon_name=$occ_name&amp;is_real_user=$is_real_user">$occ_name</a>|;
                             push @possible_sister_taxa_links, $link;
                         }
                     } else {
-                        my $link = qq|<a href="bridge.pl?action=checkTaxonInfo&amp;taxon_name=$occ_name&amp;is_real_user=$is_real_user">$occ_name</a>|;
+                        my $link = qq|<a href="$READ_URL?action=checkTaxonInfo&amp;taxon_name=$occ_name&amp;is_real_user=$is_real_user">$occ_name</a>|;
                         push @possible_child_taxa_links, $link;
                     }
                 }
@@ -1510,11 +1511,11 @@ sub displayRelatedTaxa {
 
     if ($orig_no) {
         $output .= '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download authority and opinion data</a></b> - <b><a href=# onClick="javascript: document.doViewClassification.submit()">View classification of included taxa</a></b></br></p>';
-        $output .= '<form method="POST" action="bridge.pl" name="doDownloadTaxonomy">';
+        $output .= "<form method=\"POST\" action=\"$READ_URL\" name=\"doDownloadTaxonomy\">";
         $output .= '<input type="hidden" name="action" value="displayDownloadTaxonomyResults">';
         $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
         $output .= "</form>\n";
-        $output .= '<form method="POST" action="bridge.pl" name="doViewClassification">';
+        $output .= "<form method=\"POST\" action=\"$READ_URL\" name=\"doViewClassification\">";
         $output .= '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
         $output .= '<input type="hidden" name="maximum_levels" value="99">';
         $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
@@ -1654,9 +1655,9 @@ sub getSynonymyParagraph{
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if(! $taxon->{'author1last'}) {
-		$text .= "<li><i>The author of $taxon->{taxon_rank} <a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> has not been recorded in the Database yet</i>. ";
+		$text .= "<li><i>The author of $taxon->{taxon_rank} <a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> has not been recorded in the Database yet</i>. ";
     } else {
-		$text .= "<li><i><a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a></i> was named by ";
+		$text .= "<li><i><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a></i> was named by ";
         if ($taxon->{'ref_is_authority'}) {
             $text .= Reference::formatShortRef($taxon,'alt_pubyr'=>1,'show_comments'=>1,'link_id'=>1);
         } else {
@@ -1719,7 +1720,7 @@ sub getSynonymyParagraph{
             if ($type_taxon->{'taxon_rank'} =~ /genus|species/) {
                 $type_taxon_name = "<i>".$type_taxon_name."</i>";
             }
-            $text .= "Its type is <a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$type_taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$type_taxon_name</a>. ";  
+            $text .= "Its type is <a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$type_taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$type_taxon_name</a>. ";  
         }
     }
     
@@ -1732,7 +1733,7 @@ sub getSynonymyParagraph{
             if ($row->{'taxon_rank'} =~ /genus|species/) {
                 $taxon_name = "<i>".$taxon_name."</i>";
             }
-            $text .= "<a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$row->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon_name</a>, ";
+            $text .= "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$row->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon_name</a>, ";
         }
         $text =~ s/, $/. /;
     }
@@ -1904,7 +1905,7 @@ sub getSynonymyParagraph{
         #if ($taxon->{'taxon_rank'} =~ /genus|species/) {
         #    $taxon_name = "<i>$taxon_name</i>";
         #}
-        #$text .= "<a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon_name</a> was assigned ";
+        #$text .= "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon_name</a> was assigned ";
         $text .= "It was assigned";
         for(my $j=0;$j<@parents_ordered;$j++) {
             my $parent_no = $parents_ordered[$j];
@@ -1915,7 +1916,7 @@ sub getSynonymyParagraph{
             if ($parent->{'taxon_rank'} =~ /genus|species/) {
                 $parent_name = "<i>$parent_name</i>";
             }
-            $text .= " to <a href=\"bridge.pl?action=checkTaxonInfo&amp;taxon_no=$parent->{taxon_no}&amp;is_real_user=$is_real_user\">$parent_name</a> by ";
+            $text .= " to <a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$parent->{taxon_no}&amp;is_real_user=$is_real_user\">$parent_name</a> by ";
             $text .= printReferenceList(\@parent_array,$best_opinion);
             $text .= "; ";
         }
@@ -2442,7 +2443,7 @@ sub displaySynonymyList	{
 			} else	{
 				my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
 				my $refref = @{$dbt->getData($sql)}[0];
-				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $parent_name . "<a href=\"bridge.pl?action=displayReference&amp;reference_no=$useref->{reference_no}&amp;is_real_user=$is_real_user\"> " . $refref->{author1last};
+				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $parent_name . "<a href=\"$READ_URL?action=displayReference&amp;reference_no=$useref->{reference_no}&amp;is_real_user=$is_real_user\"> " . $refref->{author1last};
 				if ( $refref->{otherauthors} )	{
 					$synkey .= " et al.";
 				} elsif ( $refref->{author2last} )	{
@@ -2511,7 +2512,7 @@ sub displaySynonymyList	{
                 } else	{
                     my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
                     my $refref = @{$dbt->getData($sql)}[0];
-                    $synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . "<a href=\"bridge.pl?action=displayReference&amp;reference_no=$useref->{reference_no}&amp;is_real_user=$is_real_user\"> " . $refref->{author1last};
+                    $synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . "<a href=\"$READ_URL?action=displayReference&amp;reference_no=$useref->{reference_no}&amp;is_real_user=$is_real_user\"> " . $refref->{author1last};
                     if ( $refref->{otherauthors} )	{
                         $synkey .= " et al.";
                     } elsif ( $refref->{author2last} )	{

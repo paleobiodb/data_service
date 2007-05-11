@@ -1,4 +1,4 @@
-<form method="POST" action="bridge.pl" onSubmit='return checkForm();'>
+<form method="POST" action="%%write_url%%" onSubmit='return checkForm();'>
 <input type="hidden" name="action" value="processReferenceForm">
 <input type=hidden name="reference_no">
 
@@ -55,7 +55,7 @@ Initials and names of additional authors (separate the names with commas):<br><t
     <td>
       <select name="classification_quality"></select><br>
       <small>
-        &nbsp;<a href="#" onClick="popup = window.open('$exec_url?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">see tip sheet</a>
+        &nbsp;<a href="#" onClick="popup = window.open('%%write_url%%?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">see tip sheet</a>
       </small>
 </td>
   </tr>

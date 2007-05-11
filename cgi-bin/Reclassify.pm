@@ -4,8 +4,8 @@ use strict;
 use URI::Escape;
 use CGI qw(escapeHTML);
 use Debug qw(dbg);
+use Constants qw($READ_URL $WRITE_URL);
 
-# written by JA 31.3, 1.4.04
 # in memory of our dearly departed Ryan Poling
 
 # start the process to get to the reclassify occurrences page
@@ -111,7 +111,7 @@ sub displayOccurrenceReclassify	{
 	# tick through the occurrences
 	# NOTE: the list will be in data entry order, nothing fancy here
 	if ( @occrefs )	{
-		print "<form action=\"bridge.pl\" method=\"post\">\n";
+		print "<form action=\"$WRITE_URL\" method=\"post\">\n";
 		print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"startProcessReclassifyForm\">\n";
 		print "<input name=\"occurrences_authorizer_no\" type=\"hidden\" value=\"".$q->param('occurrences_authorizer_no')."\">\n";
         if (@collections) {
@@ -187,7 +187,7 @@ sub displayOccurrenceReclassify	{
                     $collection_string .= "</span>";
                     $collection_string .= " <span class=\"tiny\" style=\"white-space: nowrap;\">$authorizer</span>";
 
-                    print "<td style=\"padding-right: 1.5em; padding-left: 1.5em;\"><a href=\"bridge.pl?action=displayCollectionDetails&collection_no=$o->{collection_no}\">$o->{collection_no}</a></td><td>$collection_string</td>";
+                    print "<td style=\"padding-right: 1.5em; padding-left: 1.5em;\"><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$o->{collection_no}\">$o->{collection_no}</a></td><td>$collection_string</td>";
                 }
 				print "<td><span style=\"white-space:nowrap;\">&nbsp;&nbsp;\n";
 
@@ -299,7 +299,6 @@ sub processReclassifyForm	{
     my ($q,$s,$dbt,$hbo) = @_;
     $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
-	my $exec_url = 'bridge.pl';
 
     print "<BR>";
 	print $hbo->stdIncludes("std_page_top");
@@ -425,15 +424,15 @@ sub processReclassifyForm	{
         print uri_unescape($q->param("show_links"));
     } else { 
         if ($q->param('collection_no')) {
-            print "<a href=\"$exec_url?action=startStartReclassifyOccurrences&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&collection_no=";
+            print "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&collection_no=";
             print $q->param('collection_no');
             print "\"><b>Reclassify this collection</b></a> - ";
         } else {
-            print "<a href=\"$exec_url?action=displayCollResults&type=reclassify_occurrence&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&taxon_name=";
+            print "<a href=\"$WRITE_URL?action=displayCollResults&type=reclassify_occurrence&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&taxon_name=";
             print $q->param('taxon_name');
             print "\"><b>Reclassify ".$q->param('taxon_name')."</b></a> - ";
         }
-    	print "<a href=\"$exec_url?action=startStartReclassifyOccurrences\"><b>Reclassify another collection or taxon</b></a></p>\n\n";
+    	print "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences\"><b>Reclassify another collection or taxon</b></a></p>\n\n";
     }
 
 	print $hbo->stdIncludes("std_page_bottom");

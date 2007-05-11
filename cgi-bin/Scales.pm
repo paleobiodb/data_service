@@ -2,6 +2,7 @@ package Scales;
 
 use Data::Dumper;
 use TimeLookup;
+use Constants qw($READ_URL $WRITE_URL);
 use strict;
 
 # written by JA 7-20.7.03
@@ -53,7 +54,7 @@ sub startSearchScale {
 
 	print "<table cellpadding=5>\n";
 	print "<tr><td align=\"left\"> ";
-	print "<form name=\"scale_view_form\" id=\"scale_view_form\" action=\"bridge.pl\" method=\"POST\">\n";
+	print "<form name=\"scale_view_form\" id=\"scale_view_form\" action=\"$WRITE_URL\" method=\"POST\">\n";
 	print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processViewScale\">\n\n";
 
 	# WARNING: if African or Antarctic scales are ever entered, they need
@@ -93,7 +94,7 @@ sub startSearchScale {
 	if ( $s->get('enterer') eq "J. Alroy" || $s->get('enterer') eq "S. Holland" )	{
 
 		print qq|
-		<form name="scale_add_form" action="bridge.pl" method="POST">
+		<form name="scale_add_form" action="$WRITE_URL" method="POST">
 		<input id="action" type="hidden" name="action" value="processShowForm">
 		<input type="hidden" name="scale" value="add">
 		<input type="submit" value="Add scale">
@@ -178,7 +179,7 @@ sub processShowEditForm	{
 
 	print $hbo->populateHTML('js_enter_scale');
 
-	print "<form name=\"edit_scale_form\" action=\"bridge.pl\" method=\"POST\" onSubmit=\"return checkFields();\">\n";
+	print "<form name=\"edit_scale_form\" action=\"$WRITE_URL\" method=\"POST\" onSubmit=\"return checkFields();\">\n";
 	print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processEditScale\">\n\n";
 
 	# print out the time scale entry fields
@@ -362,19 +363,19 @@ sub processViewTimeScale	{
 		my @names = @{$dbt->getData($sql2)};
         my $interval = $names[0]->{interval_name};
 		$interval = $names[0]->{eml_interval}." ".$interval if ($names[0]->{eml_interval});
-		$interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{interval_no}\">$interval</a>";
+		$interval = "<a href=\"$READ_URL?action=displayInterval&interval_no=$time->{interval_no}\">$interval</a>";
 
 		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{max_interval_no};
 		@names = @{$dbt->getData($sql2)};
         my $max_interval = $names[0]->{interval_name};
 		$max_interval = $names[0]->{eml_interval}." ".$max_interval if ($names[0]->{eml_interval});
-		$max_interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{max_interval_no}\">$max_interval</a>";
+		$max_interval = "<a href=\"$READ_URL?action=displayInterval&interval_no=$time->{max_interval_no}\">$max_interval</a>";
 
 		$sql2 = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $time->{min_interval_no};
 		@names = @{$dbt->getData($sql2)};
         my $min_interval = $names[0]->{interval_name};
 		$min_interval = $names[0]->{eml_interval}." ".$min_interval if ($names[0]->{eml_interval});
-		$min_interval = "<a href=\"bridge.pl?action=displayInterval&interval_no=$time->{min_interval_no}\">$min_interval</a>";
+		$min_interval = "<a href=\"$READ_URL?action=displayInterval&interval_no=$time->{min_interval_no}\">$min_interval</a>";
 
 		my $lower_boundary = $time->{lower_boundary};
 		$lower_boundary =~ s/000$//;
@@ -398,11 +399,11 @@ sub processViewTimeScale	{
 	print $hbo->populateHTML('view_scale_top', $row);
 
 	if ( $stage eq "summary" )	{
-		print "<div align=\"center\"><p><b><a href=\"bridge.pl?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a></b> - ";
-		print "<b><a href=\"bridge.pl?action=processShowForm\">Create a new time scale</a></b> - ";
-		print "<b><a href=\"bridge.pl?action=startScale\">Edit another time scale</a></b></p></div>\n\n";
+		print "<div align=\"center\"><p><b><a href=\"$WRITE_URL?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a></b> - ";
+		print "<b><a href=\"$WRITE_URL?action=processShowForm\">Create a new time scale</a></b> - ";
+		print "<b><a href=\"$WRITE_URL?action=startScale\">Edit another time scale</a></b></p></div>\n\n";
 	} else	{
-		print "<div align=\"center\"><p><b><a href=\"bridge.pl?action=startScale\">View another time scale</a></b></p></div>\n\n";
+		print "<div align=\"center\"><p><b><a href=\"$WRITE_URL?action=startScale\">View another time scale</a></b></p></div>\n\n";
 	}
 
 	return;
@@ -712,7 +713,7 @@ sub displayTenMyBins	{
 
 	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
 
-	print "These bin definitions are used by the <a href=\"bridge.pl?action=displayCurveForm\">diversity curve generator</a>.\n\n";
+	print "These bin definitions are used by the <a href=\"$READ_URL?action=displayCurveForm\">diversity curve generator</a>.\n\n";
 
 	my @binnames = $t->getBins;
     my ($upperbin,$lowerbin) = $t->getBoundariesReal('bins');
@@ -755,7 +756,7 @@ sub displayTenMyBins	{
 			if ( $printed > 0 )	{
 				print ", ";
 			}
-			print "<a href=\"bridge.pl?action=displayInterval&interval_no=$int\">$intervalname{$int}</a>";
+			print "<a href=\"$READ_URL?action=displayInterval&interval_no=$int\">$intervalname{$int}</a>";
 			$printed++;
 		}
 		print "</td></tr>\n\n";
@@ -771,7 +772,7 @@ sub displayTenMyBinsDebug {
 
 	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
 
-	print "These bin definitions are used by the <a href=\"bridge.pl?action=displayCurveForm\">diversity curve generator</a>.\n\n";
+	print "These bin definitions are used by the <a href=\"$READ_URL?action=displayCurveForm\">diversity curve generator</a>.\n\n";
 
 	my @binnames = $t->getBins;
     my $binning = $t->getBinning;
@@ -945,7 +946,7 @@ sub displayInterval {
         my $itv = shift;
         my $type = shift;
         my $src = $itv->{$type.'_boundarysrc'};
-        my $src_link = "<a href=\"bridge.pl?action=displayInterval&interval_no=$src->{interval_no}\">$src->{interval_name}</a>";
+        my $src_link = "<a href=\"$READ_URL?action=displayInterval&interval_no=$src->{interval_no}\">$src->{interval_name}</a>";
         my $i = $src->{interval_no};
         if ($itv->{$type."_boundary"} eq "0" && $itv->{$type.'_estimate_type'} =~ /direct/) {
             return "direct";
@@ -994,20 +995,20 @@ sub displayInterval {
     }
     $general_html .= "<a href=# onClick=\"document.doColls.submit();\">See collections within this interval</a><br>";
     $general_html .= "<a href=# onClick=\"document.doMap.submit();\">See map of collections within this interval</a><br>";
-    $general_html .= qq|<form method="POST" action="bridge.pl" name="doColls"><input type="hidden" name="action" value="displayCollResults"><input type="hidden" name="max_interval_no" value="$i"></form>|;
-    $general_html .= qq|<form method="POST" action="bridge.pl" name="doMap"><input type="hidden" name="action" value="displaySimpleMap"><input type="hidden" name="max_interval_no" value="$i"></form>|;
+    $general_html .= qq|<form method="POST" action="$READ_URL" name="doColls"><input type="hidden" name="action" value="displayCollResults"><input type="hidden" name="max_interval_no" value="$i"></form>|;
+    $general_html .= qq|<form method="POST" action="$READ_URL" name="doMap"><input type="hidden" name="action" value="displaySimpleMap"><input type="hidden" name="max_interval_no" value="$i"></form>|;
 
     print $hbo->htmlBox("General",$general_html);
     
     my $corr_html; 
     if ($itv_hash->{'period_no'} && $itv_hash->{'period_no'} != $i) {
-        $corr_html .= "<b>Period</b>: <a href=\"bridge.pl?action=displayInterval&interval_no=$itv_hash->{period_no}\">$itv_hash->{period_name}</a><br>";
+        $corr_html .= "<b>Period</b>: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{period_no}\">$itv_hash->{period_name}</a><br>";
     }
     if ($itv_hash->{'epoch_no'} && $itv_hash->{'epoch_no'} != $i) {
-        $corr_html .= "<b>Epoch</b>: <a href=\"bridge.pl?action=displayInterval&interval_no=$itv_hash->{epoch_no}\">$itv_hash->{'epoch_name'}</a><br>";
+        $corr_html .= "<b>Epoch</b>: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{epoch_no}\">$itv_hash->{'epoch_name'}</a><br>";
     }
     if ($itv_hash->{'subepoch_no'} && $itv_hash->{'subepoch_no'} != $i) {
-        $corr_html .= "<b>Subepoch</b>: <a href=\"bridge.pl?action=displayInterval&interval_no=$itv_hash->{subepoch_no}\">$itv_hash->{'subepoch_name'}</a><br>";
+        $corr_html .= "<b>Subepoch</b>: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{subepoch_no}\">$itv_hash->{'subepoch_name'}</a><br>";
     }
     if ($itv_hash->{'ten_my_bin'}) {
         $corr_html .= "<b>10 million year bin</b>: $itv_hash->{ten_my_bin}<br>";
@@ -1017,7 +1018,7 @@ sub displayInterval {
         $itv->{'max_no'} != $itv_hash->{'period_no'} ) {
         my $shares = ($shared_upper{$itv->{'max_no'}}) ? " (shares upper boundary)"
                    : ($shared_lower{$itv->{'max_no'}}) ? " (shares lower boundary)" : "";
-        $corr_html .= "<b>Contained within</b>: <a href=\"bridge.pl?action=displayInterval&interval_no=$itv->{max_no}\">$itv->{max}->{interval_name}</a> $shares<br>";
+        $corr_html .= "<b>Contained within</b>: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{max_no}\">$itv->{max}->{interval_name}</a> $shares<br>";
     }
     if ($corr_html) {
         print $hbo->htmlBox("Correlations",$corr_html);
@@ -1027,7 +1028,7 @@ sub displayInterval {
         my $html = "";
         for(my $i=0;$i<@{$itv->{'all_prev'}};$i++) {
             my $prev = $itv->{'all_prev'}->[$i];     
-            $html .= "<li><a href=\"bridge.pl?action=displayInterval&interval_no=$prev->{interval_no}\">$prev->{interval_name}</a></li>";
+            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$prev->{interval_no}\">$prev->{interval_name}</a></li>";
         }
         my $s = (@{$itv->{'all_prev'}} > 1) ? "s" : "";
         print $hbo->htmlBox("Previous interval$s",$html);
@@ -1036,7 +1037,7 @@ sub displayInterval {
         my $html = "";
         for(my $i=0;$i<@{$itv->{'all_next'}};$i++) {
             my $next = $itv->{'all_next'}->[$i];     
-            $html .= "<li><a href=\"bridge.pl?action=displayInterval&interval_no=$next->{interval_no}\">$next->{interval_name}</a></li>";
+            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$next->{interval_no}\">$next->{interval_name}</a></li>";
         }
         my $s = (@{$itv->{'all_next'}} > 1) ? "s" : "";
         print $hbo->htmlBox("Next interval$s",$html);
@@ -1053,12 +1054,12 @@ sub displayInterval {
         my $html = "";
         my $range = "";
         foreach my $e (@direct_equiv) {
-            $html .= "<li><a href=\"bridge.pl?action=displayInterval&interval_no=$e->{interval_no}\">$e->{interval_name}</a> $range</li>";
+            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$e->{interval_no}\">$e->{interval_name}</a> $range</li>";
         }
         if (@equiv) {
             my @intervals = ();
             foreach my $e (@equiv) {
-                push @intervals, "<a href=\"bridge.pl?action=displayInterval&interval_no=$e->{interval_no}\">$e->{interval_name}</a>";
+                push @intervals, "<a href=\"$READ_URL?action=displayInterval&interval_no=$e->{interval_no}\">$e->{interval_name}</a>";
             }
             $html .= "<li>".join(" + ",@intervals)."</li>";
         }
@@ -1089,7 +1090,7 @@ sub displayInterval {
 #            if ($o->{'lower_boundary'}) {
 #                $range = "(".$o->{'lower_boundary'}." - ".$o->{'upper_boundary'}.")";
 #            }
-            $html .= "<li><a href=\"bridge.pl?action=displayInterval&interval_no=$o->{interval_no}\">$o->{interval_name}</a> $range</li>";
+            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$o->{interval_no}\">$o->{interval_name}</a> $range</li>";
         }
         print $hbo->htmlBox("Overlaps with",$html);
     }
@@ -1102,7 +1103,7 @@ sub displayInterval {
 #            }
             my $shares = ($shared_upper{$c->{'interval_no'}}) ? " (shares upper boundary)"
                        : ($shared_lower{$c->{'interval_no'}}) ? " (shares lower boundary)" : "";
-            $html .= "<li><a href=\"bridge.pl?action=displayInterval&interval_no=$c->{interval_no}\">$c->{interval_name}</a> $range $shares</li>";
+            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$c->{interval_no}\">$c->{interval_name}</a> $range $shares</li>";
         }
         print $hbo->htmlBox("Contains",$html);
     }
@@ -1123,7 +1124,7 @@ sub displayInterval {
                         $b->{'scale_no'} <=> $a->{'scale_no'}} @scales;
 
         foreach my $scale (@scales) {
-            $html .= "<li><a href=\"bridge.pl?action=processViewScale&scale_no=$scale->{scale_no}\">$scale->{scale_name}</a> ($scale->{pubyr})<br>";
+            $html .= "<li><a href=\"$READ_URL?action=processViewScale&scale_no=$scale->{scale_no}\">$scale->{scale_name}</a> ($scale->{pubyr})<br>";
         }
         my $s = (@scales  > 1) ? "s" : "";
         print $hbo->htmlBox("Appears in scale$s",$html);
@@ -1174,9 +1175,9 @@ sub displayIntervalDebug {
         my $from_scale = shift;
         my $txt = "";
         if ($itv) {
-            #$txt = "<a href=\"bridge.pl?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>: $itv->{lower_boundary} - $itv->{upper_boundary}";
-            $txt = "<a href=\"bridge.pl?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>";
-            #<a href=\"bridge.pl?action=processViewScale&scale=$bestscale{$i}\">scale:$bestscale{$i}</a><br>";
+            #$txt = "<a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>: $itv->{lower_boundary} - $itv->{upper_boundary}";
+            $txt = "<a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>";
+            #<a href=\"$READ_URL?action=processViewScale&scale=$bestscale{$i}\">scale:$bestscale{$i}</a><br>";
         }
         return $txt;
     };

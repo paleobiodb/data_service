@@ -7,6 +7,7 @@ use CGI::Carp;
 use Data::Dumper;
 use Class::Date qw(now date);
 use Debug qw(dbg);
+use Constants qw($READ_URL $WRITE_URL);
 
 
 # Paths from the Apache environment variables (in the httpd.conf file).
@@ -176,7 +177,7 @@ sub formatShortRef  {
     }
     if ($options{'link_id'}) {
         if ($refData->{'reference_no'}) {
-            $shortRef = qq|<a href="bridge.pl?action=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
+            $shortRef = qq|<a href="$READ_URL?action=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
         }
     }
 
@@ -325,6 +326,8 @@ sub displayRefResults {
         print "<div style=\"margin: 0.5em; border: 1px solid #E0E0E0;\">\n";
 		print "<table border=0 cellpadding=5 cellspacing=0>\n";
 
+        my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
+
 		# Only print the last 30 rows that were found JA 26.7.02
         for(my $i=$offset;$i < $offset + 30 && $i < scalar(@data); $i++) {
             my $row = $data[$i];
@@ -336,16 +339,16 @@ sub displayRefResults {
             print "<td valign=\"top\"><b>";
             if ($s->isDBMember()) {
                 if ($type eq 'add') {
-                    print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+                    print "<a href=\"$exec_url?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
                 } elsif ($type eq 'edit') {
-                    print "<a href=\"bridge.pl?action=displayRefResults&reference_no=$row->{reference_no}&type=edit\">$row->{reference_no}</a>";
+                    print "<a href=\"$exec_url?action=displayRefResults&reference_no=$row->{reference_no}&type=edit\">$row->{reference_no}</a>";
                 } elsif ($type eq 'view') {
-                    print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a><br>";
+                    print "<a href=\"$exec_url?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a><br>";
                 } else {
-                    print "<a href=\"bridge.pl?action=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
+                    print "<a href=\"$exec_url?action=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
                 }
             } else {
-                print "<a href=\"bridge.pl?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+                print "<a href=\"$READ_URL?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
             }
             print "</b></td>";
             my $formatted_reference = Reference::formatLongRef($row);
@@ -367,19 +370,19 @@ sub displayRefResults {
                 $old_query .= "&$k=$vars{$k}" if $vars{$k};
             }
             $old_query =~ s/^&//;
-            print qq|<a href="bridge.pl?$old_query"><b>Get the next 30 references</b></a> - |;
+            print qq|<a href="$exec_url?$old_query"><b>Get the next 30 references</b></a> - |;
         } 
 
         my $authname = $s->get('authorizer');
         $authname =~ s/\. //;
         printRefsCSV(\@data,$authname);
         print qq|<a href="/public/data/$authname.refs"><b>Download all the references</b></a> -\n|;
-	    print qq|<a href="bridge.pl?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
+	    print qq|<a href="$exec_url?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
 	    print "</p></center><br>\n";
         
         if ($type eq 'add') {
             print "<div align=\"center\">";
-            print "<form method=\"POST\" action=\"bridge.pl\">";
+            print "<form method=\"POST\" action=\"$WRITE_URL\">";
             print "<input type=\"hidden\" name=\"action\" value=\"displayReferenceForm\">";
             foreach my $f ("name","year","reftitle","project_name") {
                 print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">";
@@ -398,7 +401,7 @@ sub displayRefResults {
 			print "<center>\n<h3>$query_description produced no matches</h3>\n";
 			print "<p>Please try again with fewer search terms.</p>\n</center>\n";
 			print "<center>\n<p>";
-	        print qq|<a href="bridge.pl?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
+	        print qq|<a href="$READ_URL?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
 	        print "</p></center><br>\n";
 		}
 	}
@@ -485,16 +488,16 @@ sub displayReference {
         if ($authority_count < 100) {
             my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE reference_no=$reference_no ORDER BY taxon_name";
             my @results = 
-                map { qq'<a href="bridge.pl?action=checkTaxonInfo&taxon_no=$_->{taxon_no}">$_->{taxon_name}</a>' }
+                map { qq'<a href="$READ_URL?action=checkTaxonInfo&taxon_no=$_->{taxon_no}">$_->{taxon_name}</a>' }
                 @{$dbt->getData($sql)};
             $html = join(", ",@results);
         } else {
-            $html .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+            $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
             my $plural = ($authority_count == 1) ? "" : "s";
             $html .= "View taxonomic name$plural";
             $html .= qq|</a></b> |;
         }
-        print $box->(qq'Taxonomic names (<a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count</a>)',$html);
+        print $box->(qq'Taxonomic names (<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count</a>)',$html);
     }
     
     # Handle opinions box
@@ -518,7 +521,7 @@ sub displayReference {
                 @{$dbt->getData($sql)};
             $html = join("<br>",@results);
         } else {
-            $html .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+            $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
             if ($opinion_count) {
                 my $plural = ($opinion_count == 1) ? "" : "s";
                 $html .= "View taxonomic opinion$plural";
@@ -526,8 +529,8 @@ sub displayReference {
             $html .= qq|</a></b> |;
         }
     
-        my $class_link = qq| <b> - <a href="bridge.pl?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">View classification</a></b>|;
-        print $box->(qq'Taxonomic opinions (<a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
+        my $class_link = qq| <b> - <a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">View classification</a></b>|;
+        print $box->(qq'Taxonomic opinions (<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
     }      
 
     # Handle collections box
@@ -557,7 +560,7 @@ sub displayReference {
             }
 
             foreach my $row (@$results) {
-                my $coll_link = qq|<a href="bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
+                my $coll_link = qq|<a href="$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
                 if ($row->{'is_primary'}) {
                     $coll_link = "<b>".$coll_link."</b>";
                 }
@@ -566,10 +569,10 @@ sub displayReference {
             $html =~ s/, $//;
         } else {
             my $plural = ($collection_count == 1) ? "" : "s";
-            $html .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">View collection$plural</a> </b> |;
+            $html .= qq|<b><a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">View collection$plural</a> </b> |;
         }
         if ($html) {
-            print $box->(qq'Collections (<a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
+            print $box->(qq'Collections (<a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
         }
     }
 	print $hbo->stdIncludes("std_page_bottom");
@@ -783,13 +786,13 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         <span class="displayPanelHeader"><b>Please enter all the data</b></span>
         <div class="displayPanelContent">
         <ul class="small" style="text-align: left;">
-            <li>Add or edit all the <a href="#" onClick="popup = window.open('bridge.pl?action=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined
-            <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('bridge.pl?action=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy
-            <li>Edit <a href="#" onClick="popup = window.open('bridge.pl?action=displaySearchColls&type=edit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">existing collections</a> if new details are given
-            <li>Add all the <a href="#" onClick="popup = window.open('bridge.pl?action=displaySearchCollsForAdd', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">new collections</a>
-            <li>Add all new <a href="#" onClick="popup = window.open('bridge.pl?action=displayOccurrenceAddEdit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">occurrences</a> in existing or new collections
-            <li>Add all new <a href="#" onClick="popup = window.open('bridge.pl?action=displayReIDCollsAndOccsSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">reidentifications</a> of existing occurrences
-            <li>Add <a href="#" onClick="popup = window.open('bridge.pl?action=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('bridge.pl?action=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('bridge.pl?action=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>
+            <li>Add or edit all the <a href="#" onClick="popup = window.open('$WRITE_URL?action=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined
+            <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$WRITE_URL?action=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy
+            <li>Edit <a href="#" onClick="popup = window.open('$WRITE_URL?action=displaySearchColls&type=edit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">existing collections</a> if new details are given
+            <li>Add all the <a href="#" onClick="popup = window.open('$WRITE_URL?action=displaySearchCollsForAdd', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">new collections</a>
+            <li>Add all new <a href="#" onClick="popup = window.open('$WRITE_URL?action=displayOccurrenceAddEdit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">occurrences</a> in existing or new collections
+            <li>Add all new <a href="#" onClick="popup = window.open('$WRITE_URL?action=displayReIDCollsAndOccsSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">reidentifications</a> of existing occurrences
+            <li>Add <a href="#" onClick="popup = window.open('$WRITE_URL?action=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$WRITE_URL?action=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$WRITE_URL?action=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>
         <ul>
         </div>
         </div>
@@ -808,7 +811,7 @@ sub getReferenceLinkSummary {
     my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
 
     if ($authority_count) {
-        $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+        $retString .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
         my $plural = ($authority_count == 1) ? "" : "s";
         $retString .= "$authority_count taxonomic name$plural";
         $retString .= qq|</a></b>, |;
@@ -819,12 +822,12 @@ sub getReferenceLinkSummary {
     my $opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
 
     if ($opinion_count) {
-        $retString .= qq|<b><a href="bridge.pl?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+        $retString .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
         if ($opinion_count) {
             my $plural = ($opinion_count == 1) ? "" : "s";
             $retString .= "$opinion_count taxonomic opinion$plural";
         }
-        $retString .= qq|</a> (<a href="bridge.pl?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>)</b>, |;
+        $retString .= qq|</a> (<a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>)</b>, |;
     }      
 
     # Handle Collections
@@ -854,9 +857,9 @@ sub getReferenceLinkSummary {
         $retString .= "No collections";
     } else {
         my $plural = ($collection_count == 1) ? "" : "s";
-        $retString .= qq|<b><a href="bridge.pl?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a> </b> (|;
+        $retString .= qq|<b><a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a> </b> (|;
         foreach my $row (@$results) {
-			my $coll_link = qq|<a href="bridge.pl?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
+			my $coll_link = qq|<a href="$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
             if ($row->{'is_primary'}) {
                 $coll_link = "<b>".$coll_link."</b>";
             }
@@ -965,9 +968,11 @@ sub getReferences {
         my @data = @{$dbt->getData($sql)};
 	    return (\@data,$query_description);
 	} else {
+        my $type = $q->param('type');
+        my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
 		print $hbo->stdIncludes("std_page_top");
 		print "<center><h4>Sorry! You can't do a search without filling in at least one field</h4>\n";
-		print "<p><a href='bridge.pl?action=displaySearchRefs&type=".$q->param("type")."'><b>Do another search</b></a></p></center>\n";
+		print "<p><a href='$exec_url?action=displaySearchRefs&type=$type'><b>Do another search</b></a></p></center>\n";
 		print $hbo->stdIncludes("std_page_bottom");
 		exit(0);
 	}

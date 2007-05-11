@@ -7,9 +7,9 @@ use Data::Dumper;
 use Debug qw(dbg);
 use Person;
 use PBDBUtil;
+use Constants qw($READ_URL $WRITE_URL);
 
 # written by PS  12/01/2004
-
 
 # print out info for a geological group, formation, or member, including:
 #   * group/formation/member name
@@ -178,7 +178,7 @@ sub displayStrata {
             my $html = "<p><b>Group:</b> ";
             foreach my $g_lc (@groups) {
                 my $g = ($group_uc{$g_lc}) ? $group_uc{$g_lc} : $g_lc;
-                $html .=  qq|<a href="bridge.pl?action=displayStrata&geological_group=|.uri_escape($g)
+                $html .=  qq|<a href="$READ_URL?action=displayStrata&geological_group=|.uri_escape($g)
                       . "&group_formation_member=".uri_escape($g)."\">$g</a>, ";
             }
             $html =~ s/, $//;
@@ -192,7 +192,7 @@ sub displayStrata {
             my $html = "<p><b>Formation:</b> ";
             foreach my $fm_lc (@formations) {
                 my $fm = ($formation_uc{$fm_lc}) ? $formation_uc{$fm_lc} : $fm_lc;
-                $html .=  qq|<a href="bridge.pl?action=displayStrata&formation=|.uri_escape($fm)
+                $html .=  qq|<a href="$READ_URL?action=displayStrata&formation=|.uri_escape($fm)
                       . "&group_formation_member=".uri_escape($fm)."\">$fm</a>, ";
             }
             $html =~ s/, $//;
@@ -208,11 +208,11 @@ sub displayStrata {
             $coll_link = "";
             my $fm = ($formation_uc{$fm_lc}) ? $formation_uc{$fm_lc} : $fm_lc;
             if ($fm) {
-                $coll_link =  qq|<a href="bridge.pl?action=displayCollResults&geological_group=|
+                $coll_link =  qq|<a href="$READ_URL?action=displayCollResults&geological_group=|
                          . uri_escape($q->param('group_formation_member'))
                          . qq|&formation=|.uri_escape($fm).qq|">$fm</a>|;
             } else {
-                $coll_link =  qq|<a href="bridge.pl?action=displayCollResults&geological_group=|
+                $coll_link =  qq|<a href="$READ_URL?action=displayCollResults&geological_group=|
                          . uri_escape($q->param('group_formation_member'))
                          . qq|&formation=NULL_OR_EMPTY"><i>unknown</i></a>|;
             }
@@ -230,12 +230,12 @@ sub displayStrata {
             $coll_link = "";
             my $mbr = ($member_uc{$mbr_lc}) ? $member_uc{$mbr_lc} : $mbr_lc;
             if ($mbr) {
-                $coll_link =  qq|<a href="bridge.pl?action=displayCollResults&formation=|
+                $coll_link =  qq|<a href="$READ_URL?action=displayCollResults&formation=|
                            . uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
                 $coll_link .= qq|&member=|.uri_escape($mbr).qq|">$mbr</a>|;
             } else {
-                $coll_link =  qq|<a href="bridge.pl?action=displayCollResults&formation=|
+                $coll_link =  qq|<a href="$READ_URL?action=displayCollResults&formation=|
                            . uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
                 $coll_link .= qq|&member=NULL_OR_EMPTY"><i>unknown</i></a>|;
@@ -254,7 +254,7 @@ sub displayStrata {
         foreach my $lithology (@lith_list) {
             if ($lith_count{$lithology}) {
                 $cnt = $lith_count{$lithology};
-                $coll_link = qq|<a href="bridge.pl?action=displayCollResults| 
+                $coll_link = qq|<a href="$READ_URL?action=displayCollResults| 
                             . "&group_formation_member=".uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&formation=".uri_escape($q->param('formation')) if $q->param('formation');
                 $coll_link .= "&geological_group=".uri_escape($q->param('geological_group')) if $q->param('geological_group');
@@ -276,7 +276,7 @@ sub displayStrata {
     if (%environment_count) {
         foreach my $environment (@env_list) {
             if ($environment_count{$environment}) {
-                $coll_link = qq|<a href="bridge.pl?action=displayCollResults| 
+                $coll_link = qq|<a href="$READ_URL?action=displayCollResults| 
                               . "&group_formation_member=".uri_escape($q->param('group_formation_member'));
                 $coll_link .= "&formation=".uri_escape($q->param('formation')) if $q->param('formation');
                 $coll_link .= "&geological_group=".uri_escape($q->param('grup')) if $q->param('geological_group');
@@ -393,7 +393,7 @@ sub displayStrataChoice {
         print "The ".$q->param('group_formation_member')." formation belongs to multiple groups.  Please select the one you want: <p>";
         foreach my $grp (keys %group_links) {
             print " - " if ($count++) != 0;
-            print "<b><a href=\"bridge.pl?action=displayStrata"
+            print "<b><a href=\"$READ_URL?action=displayStrata"
                 . "&geological_group=".uri_escape($grp)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$grp</a></b>";
         }          
@@ -402,7 +402,7 @@ sub displayStrataChoice {
         print "The ".$q->param('group_formation_member')." member belongs to multiple formations.  Please select the one you want: <p>";
         foreach my $fm (sort keys %formation_links) {
             print " - " if ($count++) != 0;
-            print "<b><a href=\"bridge.pl?action=displayStrata"
+            print "<b><a href=\"$READ_URL?action=displayStrata"
                 . "&formation=".uri_escape($fm)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$fm</a></b> ";
         }          
@@ -411,13 +411,13 @@ sub displayStrataChoice {
         print "The term ".$q->param('group_formation_member')." is ambiguous and belongs to multiple formations or groups.  Please select the one you want: <p>";
         foreach my $fm (sort keys %formation_links) {
             print " - " if ($count++) != 0;
-            print "<b><a href=\"bridge.pl?action=displayStrata"
+            print "<b><a href=\"$READ_URL?action=displayStrata"
                 . "&formation=".uri_escape($fm)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$fm (formation)</a></b> ";
         }          
         foreach my $grp (sort keys %group_links) {
             print " - " if ($count++) != 0;
-            print "<b><a href=\"bridge.pl?action=displayStrata"
+            print "<b><a href=\"$READ_URL?action=displayStrata"
                 . "&geological_group=".uri_escape($grp)
                 . "&group_formation_member=".uri_escape($q->param('group_formation_member'))."\">$grp (group)</a></b><br> ";
         }          
@@ -507,7 +507,7 @@ sub displaySearchStrataResults {
                 my ($time_str, $place_str);
                 my $link;
                 if ($last_group) { 
-                    $link .= "<a href=\"bridge.pl?action=displayStrata"
+                    $link .= "<a href=\"$READ_URL?action=displayStrata"
                            . "&geological_group=".uri_escape($last_group)
                            . "&group_formation_member=".uri_escape($last_group)
                            . "\">$last_group</a>";
@@ -516,7 +516,7 @@ sub displaySearchStrataResults {
                     $link .= "/";
                 }
                 if ($last_formation) {
-                    $link .= "<a href=\"bridge.pl?action=displayStrata"
+                    $link .= "<a href=\"$READ_URL?action=displayStrata"
                            . "&geological_group=".uri_escape($last_group)
                            . "&formation=".uri_escape($last_formation)
                            . "&group_formation_member=".uri_escape($last_formation)
@@ -528,7 +528,7 @@ sub displaySearchStrataResults {
                 # Tack on members
                 $link .= "<small> - ";
                 foreach my $member (sort values %member_list) {
-                    $link .= "<a href=\"bridge.pl?action=displayStrata"
+                    $link .= "<a href=\"$READ_URL?action=displayStrata"
                            . "&geological_group=".uri_escape($last_group)
                            . "&formation=".uri_escape($last_formation)
                            . "&member=".uri_escape($member)
@@ -657,9 +657,9 @@ sub displaySearchStrataResults {
         } else {
             $numLeft = "the next " . $limit;
         }
-        print "<a href='bridge.pl?$getString'><b>Get $numLeft units</b></a> - ";
+        print "<a href='$READ_URL?$getString'><b>Get $numLeft units</b></a> - ";
     }
-    print "<a href='bridge.pl?action=displaySearchSectionForm'><b>Do another search</b></a>";
+    print "<a href='$READ_URL?action=displaySearchSectionForm'><b>Do another search</b></a>";
 
     print "</center></p>";
     # End footer links

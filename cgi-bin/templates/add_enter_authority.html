@@ -6,7 +6,7 @@
 <div align="center"><h3>Authority data for <span id="taxon_name"></span></h3></div>
 
 
-<form method="POST" action="bridge.pl">
+<form method="POST" action="%%write_url%%">
 
 <div class="displayPanel" style="padding-top: 1em;">
 
@@ -116,7 +116,7 @@
 
 <div show="show_type_specimen">
 <div show="hide_measurements">
-  <div class="small" style="width: 300px">Measurement data can not be edited here, please see the <a target="_new" href="bridge.pl?action=displaySpecimenList&amp;types_only=1&amp;taxon_no=%%taxon_no%%">measurements form</a>.</div>
+  <div class="small" style="width: 300px">Measurement data can not be edited here, please see the <a target="_new" href="%%write_url%%?action=displaySpecimenList&amp;types_only=1&amp;taxon_no=%%taxon_no%%">measurements form</a>.</div>
 </div>
 <div hide="hide_measurements">
 <input type="hidden" name="specimen_no">
@@ -209,7 +209,7 @@
 <center>
 <p class="tiny">
 Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Authority')">tip sheet</a>.
-If the name is misspelled, <a href="$exec_url?action=displayAuthorityTaxonSearchForm">try another search</a>.
+If the name is misspelled, <a href="%%write_url%%?action=displayAuthorityTaxonSearchForm">try another search</a>.
 </p>
 </center>
 
