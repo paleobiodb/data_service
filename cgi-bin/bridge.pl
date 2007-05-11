@@ -786,7 +786,7 @@ sub editCurrentRef {
 		displayReferenceForm();
 	} else {
 		$q->param("type"=>"edit");
-		Reference::displaySearchRefs( "Please choose a reference first" );
+		Reference::displaySearchRefs($dbt,$q,$s,$hbo,"Please choose a reference first" );
 	}
 }
 
