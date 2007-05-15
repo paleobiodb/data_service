@@ -83,15 +83,16 @@ sub getCollections {
     # We hit the tables separately instead of doing a join and group by so we can populate the old_id virtual field, which signifies
     # that a collection only containts old identifications, not new ones
     my %old_ids;
+    my %genera;
     if ($options{'taxon_list'} || $options{'taxon_name'} || $options{'taxon_no'}) {
         my %collections = (-1=>1); #default value, in case we don't find anything else, sql doesn't error out
         my ($sql1,$sql2,@results);
         if ($options{'include_old_ids'}) {
-            $sql1 = "SELECT DISTINCT o.collection_no, o.taxon_no, (re.reid_no IS NOT NULL) is_old_id FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE ";
-            $sql2 = "SELECT DISTINCT o.collection_no, re.taxon_no, (re.most_recent != 'YES') is_old_id  FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND ";
+            $sql1 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no , o.taxon_no, (re.reid_no IS NOT NULL) is_old_id FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE ";
+            $sql2 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no , re.taxon_no, (re.most_recent != 'YES') is_old_id  FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND ";
         } else {
-            $sql1 = "SELECT DISTINCT o.collection_no FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND ";
-            $sql2 = "SELECT DISTINCT o.collection_no FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent='YES' AND ";
+            $sql1 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND ";
+            $sql2 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent='YES' AND ";
         }
         # taxon_list an array reference to a list of taxon_no's
         my %all_taxon_nos;
@@ -203,6 +204,11 @@ sub getCollections {
         # we assume its a nomen dubium, so its considered an old id
         foreach my $row (@results) {
             $collections{$row->{'collection_no'}} = 1;
+            if ( ! $genera{$row->{'collection_no'}} )	{
+                $genera{$row->{'collection_no'}} = $row->{genus_name} . " " . $row->{species_name};
+            } else	{
+                $genera{$row->{'collection_no'}} .= ", " . $row->{genus_name} . " " . $row->{species_name};
+            }
             if ($options{'include_old_ids'}) {
                 if (($row->{'is_old_id'} || ($options{'taxon_name'} && %all_taxon_nos && ! exists $all_taxon_nos{$row->{'taxon_no'}})) && 
                     $old_ids{$row->{'collection_no'}} ne 'N') {
@@ -659,6 +665,11 @@ IS NULL))";
             if ($old_ids{$row->{'collection_no'}} eq 'Y') {
                 $row->{'old_id'} = 1;
             }
+        }
+    }
+    for my $row (@dataRows) {
+        if ( $genera{$row->{collection_no}} )	{
+            $row->{genera} = $genera{$row->{collection_no}};
         }
     }
     return (\@dataRows,$totalRows,\@warnings);
@@ -2194,8 +2205,8 @@ sub rarefyAbundances	{
 	my $bpd = $abundmax / $abundsum;
 	my $swh;
 	my $simpson;
-	for my $a ( @abund )	{
-		my $p = $a / $abundsum;
+	for my $ab ( @abund )	{
+		my $p = $ab / $abundsum;
 		$swh = $swh + ( $p * log($p) );
 		$simpson = $simpson + $p**2;
 	}
