@@ -188,7 +188,7 @@ sub displayTaxonInfoResults {
 	} 
 
     print "<div class=\"small\">";
-    my @modules_to_display = (1,2,3,4,5,6,7,8,9,10);
+    my @modules_to_display = (1,2,3,4,5,6,7,8);
 
     my $display_name = $taxon_name;
     if ( $common_name =~ /[A-Za-z]/ )	{
@@ -213,12 +213,10 @@ sub displayTaxonInfoResults {
         }
     }
 
-    print "<div align=\"center\"><h2>$display_name</h2></div>";
-
     print '
 <script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                                       
 <div align=center>
-  <table cellpadding=0 cellspacing=0 border=0 width=600>
+  <table cellpadding=0 cellspacing=0 border=0 width=700>
   <tr>
     <td id="tab1" class="tabOff" style="white-space: nowrap;"
       onClick="showPanel(1);" 
@@ -227,44 +225,39 @@ sub displayTaxonInfoResults {
     <td id="tab2" class="tabOff" style="white-space: nowrap;"
       onClick="showPanel(2);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(2)">Related taxa</td>
+      onMouseOut="setState(2)">Taxonomic history</td>
     <td id="tab3" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(3);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(3)">Taxonomic history</td>
+      onMouseOut="setState(3)">Synonymy</td>
     <td id="tab4" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(4);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(4)">Synonymy</td>
-    <td id="tab5" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(5);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(5)">Diagnosis</td>
+      onMouseOut="setState(4)">Morphology</td>
   </tr>
   <tr>
+    <td id="tab5" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(5);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(5)">Ecology and taphonomy</td>
     <td id="tab6" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(6);" 
+      onClick = "showPanel(6);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(6)">Ecology and taphonomy</td>
+      onMouseOut="setState(6)">Map</td>
     <td id="tab7" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(7);" 
+      onClick = "showPanel(7);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(7)">Measurements</td>
+      onMouseOut="setState(7)">Age range and collections</td>
     <td id="tab8" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(8);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(8)">Map</td>
-    <td id="tab9" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(9);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(9)">Age range and collections</td>
-    <td id="tab10" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(10);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(10)">Images</td>
+      onMouseOut="setState(8)">Images</td>
   </tr>
   </table>
-</div>';
+</div>
+';
+
+    print "<div align=\"center\" style=\"margin-bottom: -1.5em;\"><h2>$display_name</h2></div>\n";
 
     
     print '<script language="JavaScript" type="text/javascript">
@@ -275,18 +268,11 @@ sub displayTaxonInfoResults {
     hideTabText(6);
     hideTabText(7);
     hideTabText(8);
-    hideTabText(9);
-    hideTabText(10);
 </script>';
 
     my %modules = ();
     $modules{$_} = 1 foreach @modules_to_display;
 
-
-    # This weird "<HR>" pervents a display bug in firefox where a css styled HR line scrolls off the right of screen
-    # because of the navigation boxes floating on the left.  The HR incorrectly inherits its width from its parent DIV
-    # instead of scaling in down to take the floating box into account!
-    my $hr = '<table style="border-bottom-width: 1px; border-bottom-color: #AAAAAA; border-bottom-style: solid;" width="100%"><tr><td>&nbsp;</td></tr></table>';
 
 	# classification
 	if($modules{1}) {
@@ -300,13 +286,17 @@ sub displayTaxonInfoResults {
         my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
         print "<p>";
         print "<div>";
+        print "<center>";
+	print displayRelatedTaxa($dbt, $taxon_no, $taxon_name,$is_real_user);
+    	print "<a href=\"$READ_URL?action=beginTaxonInfo\">".
+	    	  "<b>Get info on another taxon</b></a></center>\n";
         if($s->isDBMember()) {
             # Entered Taxon
             if ($entered_no) {
-                print "<center><a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_no=$entered_no\">";
+                print "<a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_no=$entered_no\">";
                 print "<b>Edit taxonomic data for $entered_name</b></a> - ";
             } else {
-                print "<center><a href=\"$WRITE_URL?action=submitTaxonSearch&amp;goal=authority&amp;taxon_no=-1&amp;taxon_name=$entered_name\">";
+                print "<a href=\"$WRITE_URL?action=submitTaxonSearch&amp;goal=authority&amp;taxon_no=-1&amp;taxon_name=$entered_name\">";
                 print "<b>Enter taxonomic data for $entered_name</b></a> - ";
             }
 
@@ -316,66 +306,56 @@ sub displayTaxonInfoResults {
             }
             
             print "<a href=\"$WRITE_URL?action=startImage\">".
-                  "<b>Enter an image</b></a> - \n";
-        } else {
-            print "<center>";
+                  "<b>Enter an image</b></a>\n";
         }
 
-    	print "<a href=\"$READ_URL?action=beginTaxonInfo\">".
-	    	  "<b>Get info on another taxon</b></a></center></div>\n";
+        print "</div>\n";
         print "</p>";
         print "</div>\n";
         print "</div>\n";
 	}
-                                                                                                                                                                                
+
     print '<script language="JavaScript" type="text/javascript">
     showPanel(1);
 </script>';
-                                                                                                                                                                                
-    
-	# sister and child taxa
-    if($modules{2}) {
-        print '<div id="panel2" class="panel">';
-		print "<div align=\"center\"><h3>Related taxa</h3></div>\n";
-        print '<div align="center">';
-		print displayRelatedTaxa($dbt, $taxon_no, $taxon_name,$is_real_user);
-        print "</div>\n";
-        print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
-	}
+
 	# synonymy
-	if($modules{3}) {
-        print '<div id="panel3" class="panel">';
+	if($modules{2}) {
+        print '<div id="panel2" class="panel">';
 		print "<div align=\"center\"><h3>Taxonomic history</h3></div>\n";
         print '<div align="center">';
         print displayTaxonHistory($dbt, $taxon_no, $is_real_user);
         print "See something missing? <a href=\"$READ_URL?user=Guest&amp;action=displayPage&amp;page=join_us\">Join the Paleobiology Database</a>\n";
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
 	}
 
-	if ($modules{4}) {
-        print '<div id="panel4" class="panel">';
+	if ($modules{3}) {
+        print '<div id="panel3" class="panel">';
 		print "<div align=\"center\"><h3>Synonymy</h3></div>\n";
         print '<div align="center">';
     	print displaySynonymyList($dbt, $taxon_no);
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
 	}
     
-    if ($modules{5}) {
-        print '<div id="panel5" class="panel">';
-		print "<div align=\"center\"><h3>Diagnosis</h3></div>\n";
+    if ($modules{4}) {
+        print '<div id="panel4" class="panel">';
+		print "<div align=\"center\"><h3>Morphology</h3></div>\n";
         print '<div align="center">';
         print displayDiagnoses($dbt,$taxon_no);
+        print "<br>\n";
+        unless ($quick) {
+		    print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
+        }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(5); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
     }
-    if ($modules{6}) {
-        print '<div id="panel6" class="panel">';
+    if ($modules{5}) {
+        print '<div id="panel5" class="panel">';
 		print "<div align=\"center\"><h3>Ecology and taphonomy</h3></div>\n";
         print '<div align="center">';
         unless ($quick) {
@@ -383,19 +363,8 @@ sub displayTaxonInfoResults {
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(6); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(5); </script>';
     }
-    if ($modules{7}) {
-        print '<div id="panel7" class="panel">';
-		print "<div align=\"center\"><h3>Measurements</h3></div>\n";
-        print '<div align="center">';
-        unless ($quick) {
-		    print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
-        }
-        print "</div>\n";
-        print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
-	}
    
     my $collectionsSet;
     if ($is_real_user) {
@@ -403,8 +372,8 @@ sub displayTaxonInfoResults {
     }
 
 	# map
-    if ($modules{8}) {
-        print '<div id="panel8" class="panel">';
+    if ($modules{6}) {
+        print '<div id="panel6" class="panel">';
 		print "<div align=\"center\"><h3>Map</h3></div>\n";
         print '<div align="center">';
 
@@ -420,13 +389,13 @@ sub displayTaxonInfoResults {
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(8); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(6); </script>';
 	}
 	# collections
-    if ($modules{9}) {
-        print '<div id="panel9" class="panel">';
+    if ($modules{7}) {
+        print '<div id="panel7" class="panel">';
         if ($is_real_user) {
-		    print doCollections($dbt, $s, $collectionsSet, $taxon_no,$in_list, '',$is_real_user);
+		    print doCollections($dbt, $s, $collectionsSet, $display_name, $taxon_no, $in_list, '', $is_real_user);
         } else {
             print '<div align="center">';
             print qq|<form method="POST" action="$READ_URL">|;
@@ -438,17 +407,17 @@ sub displayTaxonInfoResults {
             print "</div>\n";
         }
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(9); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
 	}
 
-    if ($modules{10}) {
-        print '<div id="panel10" class="panel">';
+    if ($modules{8}) {
+        print '<div id="panel8" class="panel">';
 		print "<div align=\"center\"><h3>Images</h3></div>\n";
         print '<div align="center">';
         doThumbs($dbt,$in_list);
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(10); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(8); </script>';
     }
 
 
@@ -584,7 +553,7 @@ sub displayMap {
 
 # age_range_format changes appearance html formatting of age/range information, used by the strata module
 sub doCollections{
-    my ($dbt,$s,$colls,$taxon_no,$in_list,$age_range_format,$is_real_user) = @_;
+    my ($dbt,$s,$colls,$display_name,$taxon_no,$in_list,$age_range_format,$is_real_user) = @_;
     my $dbh = $dbt->dbh;
     
 	my $output = "";
@@ -735,9 +704,9 @@ sub doCollections{
     }
 
     if ($age_range_format eq 'for_strata_module') {
-        print "<b>Age range:</b> $range <br><br><hr><br>"; 
+        print "<b>Age range:</b> $range <br><hr><br>"; 
     } else {
-        print "<div align=\"center\"><h3><b>Age range</b></h3></div>\n $range<br><br><hr>";
+        print "<div align=\"center\"><h3><b>Age range</b></h3></div>\n $range<br><hr>";
     }
 
     
@@ -747,10 +716,15 @@ sub doCollections{
 	#  this one JA 26.1.05
     # Don't do it this way, not reliable
 
+    # sort the collections by taxon name so the names can be printed just once
+    #  per set of collections sharing the same taxon
+        @{$colls} = sort { $a->{genera} cmp $b->{genera} } @{$colls};
+
 	# Process the data:  group all the collection numbers with the same
 	# time-place string together as a hash.
 	my %time_place_coll = ();
     my (%max_interval_name,%min_interval_name,%bounds_coll,%max_interval_no);
+    my %lastgenus = ();
     my %intervals = ();
 	foreach my $row (@$colls) {
         my $max = $row->{'max_interval_no'};
@@ -783,13 +757,22 @@ sub doCollections{
         }
         $res .= "</span>\n";
 
-
-	    if(exists $time_place_coll{$res}){
-			push(@{$time_place_coll{$res}}, $row->{"collection_no"});
+            my @letts = split //,$display_name;
+            $row->{'genera'} =~ s/$display_name /$letts[0]\. /g;
+            $row->{'genera'} =~ s/[A-Z]\. indet/$display_name indet/g;
+	    if (exists $time_place_coll{$res})	{
+                if ( $lastgenus{$res} ne $row->{'genera'} )	{
+                    ${$time_place_coll{$res}}[$#{$time_place_coll{$res}}] .= ") ";
+                    push(@{$time_place_coll{$res}}, $row->{'genera'} . " (" . $row->{'collection_no'});
+                } else	{
+                    push(@{$time_place_coll{$res}}, " " . $row->{'collection_no'});
+                }
+                $lastgenus{$res} = $row->{'genera'};
 	    }
-	    else{
-			$time_place_coll{$res} = [$row->{"collection_no"}];
-			#push(@order,$res);
+	    else	{
+                $time_place_coll{$res}[0] = $row->{'genera'} . " (" . $row->{'collection_no'};
+                $lastgenus{$res} = $row->{'genera'};
+                #push(@order,$res);
             if ($interval_hash->{$min}->{'min_no'} == $max) {
                 $max = $min;
             }
@@ -902,13 +885,18 @@ sub doCollections{
 			}
 			$output .= "<td align=\"center\" valign=\"top\">$key</td>".
                        " <td align=\"left\"><span class=\"small\">";
-			foreach  my $collection_no (@{$time_place_coll{$key}}){
+			foreach my $collection_no (@{$time_place_coll{$key}}){
 				my $formatted_no = $collection_no;
 				if ( $iscrown{$collection_no} > 0 )	{
 					$formatted_no = "<b>".$formatted_no."</b>";
 				}
-				$output .= "<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$collection_no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
+                                my $no = $collection_no;
+                                $no =~ s/[^0-9]//g;
+				$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$1/;
+                                $output .= $formatted_no . "</a> ";
+				#$output .= "<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
 			}
+			$output =~ s/([0-9])(<\/a>)( )$/$1\)$2/g;
 			$output .= "</span></td></tr>\n";
 			$row_color++;
 			if ( $row_color == 10 && $output =~ /Oldest/ && $extant == 0 )	{
@@ -1510,7 +1498,7 @@ sub displayRelatedTaxa {
     } 
 
     if ($orig_no) {
-        $output .= '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download authority and opinion data</a></b> - <b><a href=# onClick="javascript: document.doViewClassification.submit()">View classification of included taxa</a></b></br></p>';
+        $output .= '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download authority and opinion data</a></b> - <b><a href=# onClick="javascript: document.doViewClassification.submit()">View classification of included taxa</a></b>';
         $output .= "<form method=\"POST\" action=\"$READ_URL\" name=\"doDownloadTaxonomy\">";
         $output .= '<input type="hidden" name="action" value="displayDownloadTaxonomyResults">';
         $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
