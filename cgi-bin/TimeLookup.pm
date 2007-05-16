@@ -184,7 +184,7 @@ sub getRange {
 
 # Boundaries are given in millions of years
 # Intervals must fall completely within the bounds, unless use_mid is passed, in which case
-# intervals midpoints must fall completley within the bounds
+# intervals midpoints must fall completely within the bounds
 sub getRangeByBoundary {
     my $self = shift;
     my $ig = $self->getIntervalGraph;
@@ -793,7 +793,7 @@ sub getBoundaries {
     my @results = @{$dbt->getData($sql)};
     foreach my $row (@results) {
         $ub{$row->{interval_no}} = $row->{upper_boundary};
-        $lb{$row->{interval_no}} = $row->{upper_boundary};
+        $lb{$row->{interval_no}} = $row->{lower_boundary};
     }
 
     return (\%ub,\%lb);
