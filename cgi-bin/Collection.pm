@@ -246,9 +246,13 @@ sub getCollections {
         push @errors, @$errors;
         push @warnings, @$warnings;
         my $val = join(",",@$intervals);
-        if (!$val) {
+        if ( ! $val )	{
             $val = "-1";
-		    push @errors, "Please enter a valid time term or broader time range";
+            if ( $options{'max_interval'} =~ /[^0-9.]/ || $options{'min_interval'} =~ /[^0-9.]/ ) {
+                push @errors, "Please enter a valid time term or broader time range";
+            }
+            # otherwise they must have entered numerical values, so there
+            #  are no worries
         }
 
         # need to know the boundaries of the interval to make use of the
@@ -265,6 +269,13 @@ sub getCollections {
             if ( $lowerbounds{$intvno} > $lower )   {
                 $lower = $lowerbounds{$intvno};
             }
+        }
+        # if the search terms were Ma values, you don't care what the
+        #  boundaries of what are for purposes of getting collections with
+        #  direct age estimates JA 15.5.07
+        if ( $options{'max_interval'} =~ /^[0-9.]+$/ || $options{'min_interval'} =~ /^[0-9.]+$/ )	{
+            $lower = $options{'max_interval'};
+            $upper = $options{'min_interval'};
         }
 
         # only use the interval names if there is no direct estimate
@@ -333,7 +344,7 @@ IS NULL))";
         my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($options{'person_reversed'}));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};
         if (!$person_no) {
-            push @errors, "$options{peson_reversed} is not a valid database member. Format like 'Sepkoski, J.'";
+            push @errors, "$options{person_reversed} is not a valid database member. Format like 'Sepkoski, J.'";
         } else {
             if ($options{'person_type'} eq 'any') {
                 push @where, "(c.authorizer_no=$person_no OR c.enterer_no=$person_no OR c.modifier_no=$person_no)";
