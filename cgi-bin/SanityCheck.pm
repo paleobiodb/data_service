@@ -10,7 +10,8 @@ sub processSanityCheck	{
 	my $sql;
 	my %plural = ('order' => 'orders', 'family' => 'families', 'genus' => 'genera');
 	my @ranks = ('order', 'family', 'genus');
-	my @grade = ('F','F','F','D','D','C','C','B','B','A','A');
+	my @grades = ('F','F','F','D','D','C','C','B','B','A','A');
+	my $grade;
 
 	$sql = "SELECT lft,rgt,taxon_rank rank FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name='" . $q->param('taxon_name') ."'";
 	my $row = @{$dbt->getData($sql)}[0];
@@ -99,9 +100,8 @@ sub processSanityCheck	{
 			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$withoccs{$rank}, $total{$rank}, 100 * $withoccs{$rank} / $total{$rank};
 		}
 	}
-	print "<p>\n";
-	printf "<b>Our grade: %s</b><br>",$grade[int(10 * $withoccs{'genus'} / $total{'genus'})];
-	printBoxBottom();
+	$grade = $grades[int(10 * $withoccs{'genus'} / $total{'genus'})];
+	printBoxBottom("Our",$grade);
 
 	printBoxTop("Valid subtaxa marked as extant or extinct");
 	my %unknownExtant;
@@ -111,14 +111,13 @@ sub processSanityCheck	{
 			printf "$plural{$rank}: %d extant, %d extinct, %d unknown (%.1f/%.1f/%.1f%%)<br>\n",$extant{$rank}{'YES'}, $extant{$rank}{'NO'}, $unknownExtant{$rank}, 100 * $extant{$rank}{'YES'} / $total{$rank}, 100 * $extant{$rank}{'NO'} / $total{$rank}, 100 * $unknownExtant{$rank} / $total{$rank};
 		}
 	}
-	print "<p>\n";
-	printf "<b>Our grade: %s</b><br>",$grade[int(10 * ( $total{'genus'} - $unknownExtant{'genus'} ) / $total{'genus'})];
-	printBoxBottom();
+	$grade = $grades[int(10 * ( $total{'genus'} - $unknownExtant{'genus'} ) / $total{'genus'})];
+	printBoxBottom("Our",$grade);
 
 	printBoxTop("Valid subtaxa with author and year data");
-	print "$authortext<p>\n";
-	printf "<b>Our grade: %s</b><br>",$grade[int(10 * $authorknown{'genus'} / $total{'genus'})];
-	printBoxBottom();
+	print "$authortext";
+	$grade = $grades[int(10 * $authorknown{'genus'} / $total{'genus'})];
+	printBoxBottom("Our",$grade);
 
 	# the only opinion comes from the Compendium, Carroll, or McKenna/Bell
 	# this is tricky because the NAFMSD data uploaded on 23.1.02 overlapped
@@ -153,13 +152,12 @@ sub processSanityCheck	{
 	if ( $incompilation == 0 )	{
 		print "We have no opinions about this group at all from compilations<br>\n";
 	}
-	print "<p>\n";
 	if ( $incompilation == 0 )	{
-		printf "<b>Our grade: A</b><br>\n";
+		$grade = "A";
 	} else	{
-		printf "<b>Our grade: %s</b><br>\n",$grade[int(10 * $uncompendium{'genus'} / $compendium{'genus'})];
+		$grade = $grades[int(10 * $uncompendium{'genus'} / $compendium{'genus'})];
 	}
-	printBoxBottom();
+	printBoxBottom("Our",$grade);
 
 	printBoxTop("Subtaxa not even recorded in a compilation");
 	for my $rank ( @ranks ) 	{
@@ -170,12 +168,11 @@ sub processSanityCheck	{
 	if ( $incompilation == 0 )	{
 		print "The compilations don't record this group at all<br>\n";
 	}
-	print "<p>\n";
-	printf "<b>Their grade: %s</b><br>",$grade[int(10 * $compendium{'genus'} / $total{'genus'})];
-	printBoxBottom();
+	my $grade = $grades[int(10 * $compendium{'genus'} / $total{'genus'})];
+	printBoxBottom("Their",$grade);
 
 	print qq|<form method="POST" action="bridge.pl">
-<input type="hidden" name="action" value="displaySanityForm">
+<input type="hidden" name="action" value="startProcessSanityCheck">
 <center><p>Next taxon to check: <input type="text" name="taxon_name" value=""  size="35"></p></center>
 </form>
 |;
@@ -186,16 +183,21 @@ sub processSanityCheck	{
 sub printBoxTop	{
 	my $headline = shift;
 
-	print qq|<div class="displayPanel" align=left>
+	print qq|<div class="displayPanel" align="left" style="margin-left: 1em; margin-right: 1em;">
   <span class="displayPanelHeader"><b>$headline</b></span>
   <div class="displayPanelContent small">
-  <p>
+  <p style="padding-left: 1em;">
 |;
 
 	return;
 }
 
 sub printBoxBottom	{
+	my $usthem = shift;
+	my $grade = shift;
+
+	print "  <p style=\"padding-left: 1em;\">\n";
+	printf "<b>$usthem grade: $grade</b><br>";
 
 	print qq|  </p>
   </div>
