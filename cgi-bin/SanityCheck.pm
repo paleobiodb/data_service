@@ -68,12 +68,16 @@ sub processSanityCheck	{
 	}
 
 	# author and year not known - don't group, we need the names
-	$sql = "SELECT taxon_name name,taxon_rank rank FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
+	$sql = "SELECT taxon_name name,taxon_rank rank,lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
 	my @rows2 = @{$dbt->getData($sql)};
 	my %authorunknown;
+	my %disused;
 	for my $r ( @rows2 )	{
 		$authorunknown{$r->{rank}}++;
 		$dataneeded{$r->{rank}}{$r->{name}}++;
+		if ( $r->{lft} + 1 == $r->{rgt} )	{
+			$disused{$r->{name}}++;
+		}
 	}
 	my %total;
 	my $authortext;
@@ -151,6 +155,11 @@ sub processSanityCheck	{
 			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$withoccs{$rank}, $total{$rank}, 100 * $withoccs{$rank} / $total{$rank};
 			if ( $total{$rank} - $withoccs{$rank} > 0 && $total{$rank} - $withoccs{$rank} <= 200 )	{
 				my @temp = keys %{$dataneeded{$rank}};
+				for my $i ( 0..$#temp )	{
+					if ( $rank ne "genus" && $disused{$temp[$i]} )	{
+						$temp[$i] .= " <i>(disused)</i>";
+					}
+				}
 				printMissing($rank,\@temp);
 			}
 			if ( $rank ne "genus" )	{
