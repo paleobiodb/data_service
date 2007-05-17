@@ -2376,10 +2376,10 @@ sub startProcessPrintHierarchy	{
 
 ##############
 ## SanityCheck stuff
-sub startStartSanityCheck	{
-	require SanityCheck;
+sub displaySanityForm	{
+	my $error_message = shift;
 	print $hbo->stdIncludes("std_page_top");
-	SanityCheck::startSanityCheck($hbo, $s);
+	print $hbo->populateHTML('sanity_check_form',$error_message);
 	print $hbo->stdIncludes("std_page_bottom");
 }
 sub startProcessSanityCheck	{
