@@ -4,15 +4,6 @@ use strict;
 
 # 15.5.07 JA
 
-sub startSanityCheck	{
-	my $hbo = shift;
-	my $s = shift;
-	my $error_message = shift;
-
-	print $hbo->populateHTML('sanity_check_form',$error_message);
-	return;
-}
-
 sub processSanityCheck	{
 	my ($q,$dbt,$hbo,$s) = @_;
 
@@ -35,7 +26,7 @@ sub processSanityCheck	{
 	}
 	if ( $error_message )	{
 		my $vars = {'error_message' => $error_message};
-		startSanityCheck($hbo,$s,$vars);
+		main::displaySanityForm($vars);
 		return;
 	}
 
@@ -184,7 +175,7 @@ sub processSanityCheck	{
 	printBoxBottom();
 
 	print qq|<form method="POST" action="bridge.pl">
-<input type="hidden" name="action" value="startProcessSanityCheck">
+<input type="hidden" name="action" value="displaySanityForm">
 <center><p>Next taxon to check: <input type="text" name="taxon_name" value=""  size="35"></p></center>
 </form>
 |;
