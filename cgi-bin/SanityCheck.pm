@@ -15,28 +15,52 @@ sub processSanityCheck	{
 	my %dataneeded;
 	my %dataneeded2;
 
-	$sql = "SELECT lft,rgt,taxon_rank rank FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name='" . $q->param('taxon_name') ."'";
-	my $row = @{$dbt->getData($sql)}[0];
-	my $lft = $row->{lft};
-	my $rgt = $row->{rgt};
+	my $lft;
+	my $rgt;
+	my $lftrgt2;
 	my $error_message;
-	if ( ! $lft )	{
-		$error_message = "<p><i>\"" . $q->param('taxon_name') . "\" is not in the Database. Please try again.</i></p>";
-	} elsif ( $lft + 1 == $rgt )	{
-		$error_message = "<p><i>" . $q->param('taxon_name') . " does not include any subtaxa. Please try again.</i></p>";
-	} elsif ( $row->{rank} =~ /genus|species/ )	{
-		$error_message = "<p><i>" . $q->param('taxon_name') . " is not a higher taxon. Please try again.</i></p>";
+	if ( ! $q->param('taxon_name') )	{
+		$error_message = "You must enter a taxon name.";
+	} else	{
+		$sql = "SELECT lft,rgt,taxon_rank rank FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name='" . $q->param('taxon_name') ."'";
+		my $row = @{$dbt->getData($sql)}[0];
+		$lft = $row->{lft};
+		$rgt = $row->{rgt};
+		if ( ! $lft )	{
+			$error_message = "\"" . $q->param('taxon_name') . "\" is not in the Database.";
+		} elsif ( $lft + 1 == $rgt )	{
+			$error_message = $q->param('taxon_name') . " does not include any subtaxa.";
+		} elsif ( $row->{rank} =~ /genus|species/ )	{
+			$error_message = $q->param('taxon_name') . " is not a higher taxon.";
+		}
+		if ( $q->param('excluded_taxon') )	{
+			$sql = "SELECT lft,rgt,taxon_rank rank FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name='" . $q->param('excluded_taxon') ."'";
+			$row = @{$dbt->getData($sql)}[0];
+			$lftrgt2 = "AND (lft<" . $row->{lft} . " OR rgt>" . $row->{rgt} . ")";
+			if ( ! $row->{lft} )	{
+				$error_message .= " \"" . $q->param('excluded_taxon') . "\" is not in the Database.";
+			} elsif ( $row->{lft} + 1 == $row->{rgt} )	{
+				$error_message .= " " . $q->param('excluded_taxon') . " does not include any subtaxa.";
+			} elsif ( $row->{rank} =~ /genus|species/ )	{
+				$error_message .= " " . $q->param('excluded_taxon') . " is not a higher taxon.";
+			}
+		}
 	}
 	if ( $error_message )	{
+		$error_message = "<p><i>" . $error_message . " Please try again.</i></p>\n";
 		my $vars = {'error_message' => $error_message};
 		main::displaySanityForm($vars);
 		return;
 	}
 
-	printf "<center><h3 style=\"margin-bottom: 2em;\">Progress report: %s</h3></center>\n\n",$q->param('taxon_name');
+	printf "<center><h3 style=\"margin-bottom: 2em;\">Progress report: %s",$q->param('taxon_name');
+	if ( $q->param('excluded_taxon') )	{
+		printf " minus %s",$q->param('excluded_taxon');
+	}
+	printf "</h3></center>\n\n",$q->param('taxon_name');
 
 	# author and year known
-	$sql = "SELECT taxon_rank rank,count(*) c FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority='YES' OR (author1last IS NOT NULL AND author1last!='')) GROUP BY taxon_rank";
+	$sql = "SELECT taxon_rank rank,count(*) c FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority='YES' OR (author1last IS NOT NULL AND author1last!='')) GROUP BY taxon_rank";
 	my @rows = @{$dbt->getData($sql)};
 	my %authorknown;
 	for my $r ( @rows )	{
@@ -44,7 +68,7 @@ sub processSanityCheck	{
 	}
 
 	# author and year not known - don't group, we need the names
-	$sql = "SELECT taxon_name name,taxon_rank rank FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
+	$sql = "SELECT taxon_name name,taxon_rank rank FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
 	my @rows2 = @{$dbt->getData($sql)};
 	my %authorunknown;
 	for my $r ( @rows2 )	{
@@ -81,7 +105,7 @@ sub processSanityCheck	{
 	#   primary key, and 0 and 1 columns are the left and right of the
 	#   genus spanning this position, if there is one
 	# this will fail if for some reason valid genera overlap
-	$sql = "SELECT lft,rgt,taxon_rank rank,taxon_name name,extant FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no and lft>$lft AND rgt<$rgt AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') GROUP BY t.taxon_no";
+	$sql = "SELECT lft,rgt,taxon_rank rank,taxon_name name,extant FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no and lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') GROUP BY t.taxon_no";
 	my @rows = @{$dbt->getData($sql)};
 	my %LR;
 	my %extant;
@@ -118,6 +142,8 @@ sub processSanityCheck	{
 		my @temp = keys %{$sampled{$rank}};
 		$withoccs{$rank} = $#temp + 1;
 	}
+
+	print "<p class=\"small\" style=\"margin-left: 2em; margin-right: 2em;\">Minimum percentages needed to earn grades: D > 30, C > 50, B > 70, A > 90. Percentages are based on data for genera.</p><br>\n\n";
 
 	printBoxTop("Valid subtaxa with occurrences");
 	for my $rank ( @ranks ) 	{
@@ -162,7 +188,7 @@ sub processSanityCheck	{
 	# this is tricky because the NAFMSD data uploaded on 23.1.02 overlapped
 	#  with Carroll, so we have to assume that names published before 1988
 	#  actually are in Carroll
-	$sql = "SELECT taxon_rank rank,taxon_name name,child_no no FROM refs r,opinions o,authorities a,taxa_tree_cache t WHERE r.reference_no=a.reference_no AND child_no=a.taxon_no AND a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (o.reference_no IN (6930,4783,7584) OR (a.created<20030124000000 AND ((a.pubyr<1988 AND a.pubyr>1700) OR (r.pubyr<1988 AND r.pubyr>1700)))) GROUP BY child_no";
+	$sql = "SELECT taxon_rank rank,taxon_name name,child_no no FROM refs r,opinions o,authorities a,taxa_tree_cache t WHERE r.reference_no=a.reference_no AND child_no=a.taxon_no AND a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (o.reference_no IN (6930,4783,7584) OR (a.created<20030124000000 AND ((a.pubyr<1988 AND a.pubyr>1700) OR (r.pubyr<1988 AND r.pubyr>1700)))) GROUP BY child_no";
 	@rows = @{$dbt->getData($sql)};
 	my %compendium;
 	my %uncompendium;
@@ -184,7 +210,7 @@ sub processSanityCheck	{
 		}
 	}
 
-	printBoxTop("Subtaxa with opinions from both a compilation and a primary source");
+	printBoxTop("Subtaxa in compilations also having opinions from a primary source");
 	my $incompilation = 0;
 	for my $rank ( @ranks ) 	{
 		if ( $compendium{$rank} > 1 )	{
@@ -209,7 +235,9 @@ sub processSanityCheck	{
 	}
 	printBoxBottom("Our",$grade);
 
-	printBoxTop("Subtaxa not even recorded in a compilation");
+	printBoxTop("Subtaxa in the Database not recorded in a compilation");
+	print "<i>Our system includes tetrapod names from Carroll (1988) and McKenna and Bell (1997), and marine animal names from Sepkoski (2002).</i></p>\n\n";
+	print "<p style=\"padding-left: 1em;\">\n";
 	for my $rank ( @ranks ) 	{
 		if ( $compendium{$rank} > 1 )	{
 			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$total{$rank} - $compendium{$rank}, $total{$rank}, 100 * ( $total{$rank} - $compendium{$rank} ) / $total{$rank};
@@ -226,7 +254,7 @@ sub processSanityCheck	{
 
 	print qq|<form method="POST" action="bridge.pl">
 <input type="hidden" name="action" value="startProcessSanityCheck">
-<center><p>Next taxon to check: <input type="text" name="taxon_name" value=""  size="35"></p></center>
+<center><p>Next taxon to check: <input type="text" name="taxon_name" value="" size="16"> excluding <input type="text" name="excluded_taxon" value="" size="16"></p></center>
 </form>
 |;
 
