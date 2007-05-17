@@ -78,7 +78,7 @@ sub processSanityCheck	{
 	my %total;
 	my $authortext;
 	for my $rank ( @ranks )	{
-		if ( $authorknown{$rank} + $authorunknown{$rank} > 1 )	{
+		if ( $authorknown{$rank} + $authorunknown{$rank} > 0 )	{
 			$total{$rank} = $authorknown{$rank} + $authorunknown{$rank};
 			$authortext .= sprintf "%d of %d $plural{$rank} ",$authorknown{$rank}, $authorknown{$rank} + $authorunknown{$rank};
 			$authortext .= sprintf " (%.1f%%)<br>\n",100 * $authorknown{$rank} / $total{$rank};
@@ -147,7 +147,7 @@ sub processSanityCheck	{
 
 	printBoxTop("Valid subtaxa with occurrences");
 	for my $rank ( @ranks ) 	{
-		if ( $total{$rank} > 1 )	{
+		if ( $total{$rank} > 0 )	{
 			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$withoccs{$rank}, $total{$rank}, 100 * $withoccs{$rank} / $total{$rank};
 			if ( $total{$rank} - $withoccs{$rank} > 0 && $total{$rank} - $withoccs{$rank} <= 200 )	{
 				my @temp = keys %{$dataneeded{$rank}};
@@ -164,7 +164,7 @@ sub processSanityCheck	{
 	printBoxTop("Valid subtaxa marked as extant or extinct");
 	my %unknownExtant;
 	for my $rank ( @ranks ) 	{
-		if ( $total{$rank} > 1 )	{
+		if ( $total{$rank} > 0 )	{
 			$unknownExtant{$rank} = ( $total{$rank} - $extant{$rank}{'YES'} - $extant{$rank}{'NO'} );
 			printf "$plural{$rank}: %d extant, %d extinct, %d unknown (%.1f/%.1f/%.1f%%)<br>\n",$extant{$rank}{'YES'}, $extant{$rank}{'NO'}, $unknownExtant{$rank}, 100 * $extant{$rank}{'YES'} / $total{$rank}, 100 * $extant{$rank}{'NO'} / $total{$rank}, 100 * $unknownExtant{$rank} / $total{$rank};
 			if ( $unknownExtant{$rank} > 0 && $unknownExtant{$rank} <= 200 )	{
@@ -213,7 +213,7 @@ sub processSanityCheck	{
 	printBoxTop("Subtaxa in compilations also having opinions from a primary source");
 	my $incompilation = 0;
 	for my $rank ( @ranks ) 	{
-		if ( $compendium{$rank} > 1 )	{
+		if ( $compendium{$rank} > 0 )	{
 			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$uncompendium{$rank}, $compendium{$rank}, 100 * $uncompendium{$rank} / $compendium{$rank};
 			$incompilation++;
 			if ( $compendium{$rank} - $uncompendium{$rank} > 0 && $compendium{$rank} - $uncompendium{$rank} <= 200 )	{
@@ -239,7 +239,7 @@ sub processSanityCheck	{
 	print "<i>Our system includes tetrapod names from Carroll (1988) and McKenna and Bell (1997), and marine animal names from Sepkoski (2002).</i></p>\n\n";
 	print "<p style=\"padding-left: 1em;\">\n";
 	for my $rank ( @ranks ) 	{
-		if ( $compendium{$rank} > 1 )	{
+		if ( $total{$rank} > 0 )	{
 			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$total{$rank} - $compendium{$rank}, $total{$rank}, 100 * ( $total{$rank} - $compendium{$rank} ) / $total{$rank};
 			if ( $rank ne "genus" )	{
 				print "<br>\n";
