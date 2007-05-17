@@ -2375,6 +2375,26 @@ sub startProcessPrintHierarchy	{
 ##############
 
 ##############
+## SanityCheck stuff
+sub startStartSanityCheck	{
+	require SanityCheck;
+	print $hbo->stdIncludes("std_page_top");
+	SanityCheck::startSanityCheck($hbo, $s);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+sub startProcessSanityCheck	{
+	return if PBDBUtil::checkForBot();
+	require SanityCheck;
+	logRequest($s,$q);
+    
+	print $hbo->stdIncludes("std_page_top");
+	SanityCheck::processSanityCheck($q, $dbt, $hbo, $s);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+## END SanityCheck stuff
+##############
+
+##############
 ## PAST stuff
 sub PASTQueryForm {
     require PAST;
