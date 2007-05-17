@@ -254,7 +254,7 @@ sub processSanityCheck	{
 
 	print qq|<form method="POST" action="bridge.pl">
 <input type="hidden" name="action" value="startProcessSanityCheck">
-<center><p>Next taxon to check: <input type="text" name="taxon_name" value="" size="16"> excluding <input type="text" name="excluded_taxon" value="" size="16"></p></center>
+<center><p>Next taxon to check: <input type="text" name="taxon_name" value="" size="16"> excluding <input type="text" name="excluded_taxon" value="" size="16"> <input type="submit" value="check"></p></center>
 </form>
 |;
 
