@@ -17,7 +17,7 @@ sub processSanityCheck	{
 
 	my $lft;
 	my $rgt;
-	my $lftrgt2;
+	my $lftrgt2 = "AND (lft+1<rgt OR taxon_rank='genus')";
 	my $error_message;
 	if ( ! $q->param('taxon_name') )	{
 		$error_message = "You must enter a taxon name.";
@@ -36,7 +36,7 @@ sub processSanityCheck	{
 		if ( $q->param('excluded_taxon') )	{
 			$sql = "SELECT lft,rgt,taxon_rank rank FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name='" . $q->param('excluded_taxon') ."'";
 			$row = @{$dbt->getData($sql)}[0];
-			$lftrgt2 = "AND (lft<" . $row->{lft} . " OR rgt>" . $row->{rgt} . ")";
+			$lftrgt2 .= " AND (lft<" . $row->{lft} . " OR rgt>" . $row->{rgt} . ")";
 			if ( ! $row->{lft} )	{
 				$error_message .= " \"" . $q->param('excluded_taxon') . "\" is not in the Database.";
 			} elsif ( $row->{lft} + 1 == $row->{rgt} )	{
@@ -71,13 +71,9 @@ sub processSanityCheck	{
 	$sql = "SELECT taxon_name name,taxon_rank rank,lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
 	my @rows2 = @{$dbt->getData($sql)};
 	my %authorunknown;
-	my %disused;
 	for my $r ( @rows2 )	{
 		$authorunknown{$r->{rank}}++;
 		$dataneeded{$r->{rank}}{$r->{name}}++;
-		if ( $r->{lft} + 1 == $r->{rgt} )	{
-			$disused{$r->{name}}++;
-		}
 	}
 	my %total;
 	my $authortext;
@@ -155,11 +151,6 @@ sub processSanityCheck	{
 			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$withoccs{$rank}, $total{$rank}, 100 * $withoccs{$rank} / $total{$rank};
 			if ( $total{$rank} - $withoccs{$rank} > 0 && $total{$rank} - $withoccs{$rank} <= 200 )	{
 				my @temp = keys %{$dataneeded{$rank}};
-				for my $i ( 0..$#temp )	{
-					if ( $rank ne "genus" && $disused{$temp[$i]} )	{
-						$temp[$i] .= " <i>(disused)</i>";
-					}
-				}
 				printMissing($rank,\@temp);
 			}
 			if ( $rank ne "genus" )	{
