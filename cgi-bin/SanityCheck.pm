@@ -56,7 +56,7 @@ sub processSanityCheck	{
 	for my $rank ( @ranks )	{
 		if ( $authorknown{$rank} + $authorunknown{$rank} > 1 )	{
 			$total{$rank} = $authorknown{$rank} + $authorunknown{$rank};
-			$authortext .= sprintf "%d of %d ",$authorknown{$rank}, $authorknown{$rank} + $authorunknown{$rank};
+			$authortext .= sprintf "%d of %d $plural{$rank} ",$authorknown{$rank}, $authorknown{$rank} + $authorunknown{$rank};
 			$authortext .= sprintf " (%.1f%%)<br>\n",100 * $authorknown{$rank} / $total{$rank};
 			if ( $authorunknown{$rank} > 0 && $authorunknown{$rank} <= 200 )	{
 				$authortext .= "<span class=\"small\">[missing data: ";
@@ -67,9 +67,9 @@ sub processSanityCheck	{
 					$authortext .= ", " . $temp[$i];
 				}
 				$authortext .= "]</span><br>\n";
-				if ( $rank ne "genus" )	{
-					$authortext .= "<br>\n";
-				}
+			}
+			if ( $rank ne "genus" )	{
+				$authortext .= "<br>\n";
 			}
 		}
 	}
@@ -100,6 +100,8 @@ sub processSanityCheck	{
 	}
 	$sql = "SELECT lft,rgt FROM occurrences o,taxa_tree_cache t WHERE o.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt GROUP BY t.taxon_no";
 	my @rows = @{$dbt->getData($sql)};
+	$sql = "SELECT lft,rgt FROM reidentifications r,taxa_tree_cache t WHERE r.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt GROUP BY t.taxon_no";
+	push @rows , @{$dbt->getData($sql)};
 	my %sampled;
 	for my $row ( @rows )	{
 		for my $rank ( @ranks )	{
