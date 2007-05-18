@@ -274,7 +274,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Country", $q->param("include_exclude_country") . " " . $q->param("country") );
     }
     else    {
-        if ( $q->param("Africa") )             { push ( @continents, "Africa" ); }
+        if ( $q->param("Africa"))             { push ( @continents, "Africa" ); }
         if ( $q->param("Antarctica") )         { push ( @continents, "Antarctica" ); }
         if ( $q->param("Asia") )             { push ( @continents, "Asia" ); }
         if ( $q->param("Australia") )         { push ( @continents, "Australia" ); }
@@ -3513,6 +3513,14 @@ sub setupQueryFields {
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
     $self->{'setup_query_fields_called'} = 1;
+
+    my @continents = ('North America','South America','Europe','Africa','Antarctica','Asia','Australia');
+    foreach my $c (@continents) {
+        if ($q->param('country') eq $c) {
+            $q->param($c=>"YES");
+            $q->param('country'=>"");
+        }
+    }
 
     # Setup default parameters
     $q->param('output_format'=>'csv') if ($q->param('output_format') !~ /csv|tab/i);
