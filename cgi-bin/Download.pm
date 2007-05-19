@@ -153,10 +153,10 @@ sub buildDownload {
         print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
     }
     print '</table>';
-    print '<p align="center" style="white-space: nowrap;"><b><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - ';
-    print '<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>';
-    #print '<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a> - ';
-    #print '<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>';
+    print qq|<p align="center" style="white-space: nowrap;"><b><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
+    print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
+    #print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a> - |;
+    #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>|;
 }
 
 sub checkInput {
