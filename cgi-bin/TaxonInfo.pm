@@ -33,7 +33,6 @@ sub searchForm {
         $page_title = "<p class=\"medium\">No results found (please search again)</p>";
     } 
 	print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,''], ['page_title','page_subtitle']);
-
 }
 
 # This is the front end for displayTaxonInfoResults - always use this instead if you want to 
@@ -631,7 +630,8 @@ sub doCollections{
     my $mincrownfirst;
     my %iscrown;
     if ( $in_list && @$in_list )	{
-        my $sql = "SELECT a.taxon_no taxon_no,lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no!=".$taxon_no." AND extant='YES' AND a.taxon_no in (" . join (',',@$in_list) . ") AND a.taxon_no=t.taxon_no";
+        my $taxon_lft = ${$dbt->getData("SELECT lft FROM taxa_tree_cache WHERE taxon_no=$taxon_no")}[0]->{'lft'};
+        my $sql = "SELECT a.taxon_no taxon_no,lft,rgt FROM authorities a,taxa_tree_cache t WHERE lft != $taxon_lft AND extant='YES' AND a.taxon_no in (" . join (',',@$in_list) . ") AND a.taxon_no=t.taxon_no";
         my @extantchildren = @{$dbt->getData($sql)};
         $extant = $#extantchildren + 1;
         # now for a big waste of time: the minimum age of the crown group
