@@ -28,7 +28,7 @@ hr {
 }
 
 /* how should the regular links look? */
-A:link	{ color : #0040FF; text-decoration:none; }
+A:link	{ color : #0030D0; text-decoration:none; }
 A:visited	{ color : #6E00FF; text-decoration:none; }
 A:active	{ color : #00AAFF; text-decoration:none; }
 A:hover	{ color : #C80078; text-decoration:none; }
@@ -59,7 +59,8 @@ A:hover.menu {
 }
 
 A:link.homeBodyLinks	{
-	color : #3080FF;
+	color : #0030D0;
+	#color : #3050B0;
 }       
 
 A:visited.homeBodyLinks	{
@@ -311,8 +312,8 @@ H6 {font-size: .9em;}
 
 .FeatureHeadline	{
     text-align: center;
-    background-color: #B8D0FF;
-    color: #303030;
+    background-color: #5080FF;
+    color: #FFFFFF;
     margin-left: -0.5em;
     margin-right: -0.5em;
     margin-bottom: -0.25em;
@@ -629,7 +630,7 @@ div.navbox {
 	
 	text-align: center;
 	
-	background-color: #64A8FF;
+	background-color: #5090FF;
 
 	width: 100%;
 	margin: 10px 20px 20px 20px;
@@ -640,7 +641,7 @@ table.navbox {
 	border-width: 1px;
 	border-color: #909090;
 
-	background-color: #64A8FF;
+	background-color: #5090FF;
 	margin-bottom: 20px;
 }
 
