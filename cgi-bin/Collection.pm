@@ -1538,20 +1538,20 @@ sub buildTaxonomicList {
 
 	if (@rowrefs) {
 		my @grand_master_list = ();
-        my $are_reclassifications = 0;
+		my $are_reclassifications = 0;
 
 		# loop through each row returned by the query
 		foreach my $rowref (@rowrefs) {
 			my $output = '';
 			my %classification = ();
 
-            # If we have specimens
-            my $sql_s = "SELECT count(*) c FROM specimens WHERE occurrence_no=$rowref->{occurrence_no}";
-            my $specimens_measured = ${$dbt->getData($sql_s)}[0]->{'c'};
-            if ($specimens_measured) {
-                my $s = ($specimens_measured > 1) ? 's' : '';
-                $rowref->{comments} .= " (<a href=\"$READ_URL?action=displaySpecimenList&occurrence_no=$rowref->{occurrence_no}\">$specimens_measured measurement$s</a>)";
-            }
+			# If we have specimens
+			my $sql_s = "SELECT count(*) c FROM specimens WHERE occurrence_no=$rowref->{occurrence_no}";
+			my $specimens_measured = ${$dbt->getData($sql_s)}[0]->{'c'};
+			if ($specimens_measured) {
+    				my $s = ($specimens_measured > 1) ? 's' : '';
+    				$rowref->{comments} .= " (<a href=\"$READ_URL?action=displaySpecimenList&occurrence_no=$rowref->{occurrence_no}\">$specimens_measured measurement$s</a>)";
+			}
 			
 			# if the user submitted a form such as adding a new occurrence or 
 			# editing an existing occurrence, then we'll bold face any of the
@@ -1587,7 +1587,7 @@ sub buildTaxonomicList {
 			# tack on the author and year if the taxon number exists
 			# JA 19.4.04
 			if ( $rowref->{taxon_no} )	{
-                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
+                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_no','taxon_name','common_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
 
                 if ($taxon->{'taxon_rank'} =~ /species/ || $rowref->{'species_name'} =~ /^indet\.|^sp\./) {
 
@@ -1629,12 +1629,13 @@ sub buildTaxonomicList {
 	
                 my $show_collection = '';
 				my ($table,$classification,$reid_are_reclassifications) = getReidHTMLTableByOccNum($dbt,$hbo,$rowref->{occurrence_no}, 0, $options{'do_reclassify'});
-                $are_reclassifications = 1 if ($reid_are_reclassifications);
-                $output .= $table;
+				$are_reclassifications = 1 if ($reid_are_reclassifications);
+				$output .= $table;
 				
 				$rowref->{'class_no'}  = ($classification->{'class'}{'taxon_no'} or 1000000);
 				$rowref->{'order_no'}  = ($classification->{'order'}{'taxon_no'} or 1000000);
 				$rowref->{'family_no'} = ($classification->{'family'}{'taxon_no'} or 1000000);
+				$rowref->{'common_name'} = ($classification->{'common_name'}{'taxon_no'});
 				$rowref->{'lft'} = ($classification->{'lft'}{'taxon_no'} or 1000000);
 				$rowref->{'rgt'} = ($classification->{'rgt'}{'taxon_no'} or 1000000);
 			}
@@ -1649,6 +1650,9 @@ sub buildTaxonomicList {
                     # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
                     foreach my $t ($taxon,@class_array) {
+                        if ( ! $rowref->{'common_name'} && $t->{'common_name'} )	{
+                            $rowref->{'common_name'} = $t->{'common_name'};
+                        }
                         if ($t->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
                             if ( ! $rowref->{$t->{'taxon_rank'}} )	{
                                 $rowref->{$t->{'taxon_rank'}} = $t->{'taxon_name'};
@@ -1686,7 +1690,7 @@ sub buildTaxonomicList {
 			#   here than in populateHTML) JA 10.6.02
 			$output =~ s/(>1 specimen)s|(>1 individual)s/$1$2/g;
 	
-            $rowref->{'html'} = $output;
+			$rowref->{'html'} = $output;
 			push(@grand_master_list, $rowref);
 		}
 
@@ -1694,12 +1698,13 @@ sub buildTaxonomicList {
 		# family_no,  reference_no, abundance_unit and comments. 
 		# If ALL records are missing any of those, don't print the header
 		# for it.
-		my ($class_nos, $order_nos, $family_nos, $lft_nos,
+		my ($class_nos, $order_nos, $family_nos, $common_names, $lft_nos,
 			$reference_nos, $abund_values, $comments) = (0,0,0,0,0,0,0);
 		foreach my $row (@grand_master_list) {
 			$class_nos++ if($row->{class_no} && $row->{class_no} != 1000000);
 			$order_nos++ if($row->{order_no} && $row->{order_no} != 1000000);
 			$family_nos++ if($row->{family_no} && $row->{family_no} != 1000000);
+			$common_names++ if($row->{common_name});
 			$lft_nos++ if($row->{lft} && $row->{lft} != 1000000);
 			$reference_nos++ if($row->{reference_no} && $row->{reference_no} != $options{'hide_reference_no'});
 			$abund_values++ if($row->{abund_value});
@@ -1764,14 +1769,14 @@ sub buildTaxonomicList {
             $return .= "<td nowrap></td>";
         }
 		if($class_nos == 0){
-			$return .= "<td nowrap></td>";
+		#	$return .= "<td nowrap></td>";
 		} else {
-			$return .= "<td nowrap><b>Class</b></td>";
+		#	$return .= "<td nowrap><b>Class</b></td>";
 		}
 		if($order_nos == 0){
-			$return .= "<td></td>";
+		#	$return .= "<td></td>";
 		} else {
-			$return .= "<td><b>Order</b></td>";
+		#	$return .= "<td><b>Order</b></td>";
 		}
 		if($family_nos == 0){
 			$return .= "<td></td>";
@@ -1792,6 +1797,11 @@ sub buildTaxonomicList {
 			$return .= "<td></td>";
 		} else {
 			$return .= "<td><b>Abundance</b></td>";
+		}
+		if($common_names == 0){
+			$return .= "<td nowrap></td>";
+		} else {
+			$return .= "<td nowrap><b>Common name</b></td>";
 		}
 
 		# Sort:
@@ -2111,7 +2121,7 @@ sub getReidHTMLTableByOccNum {
 		# get the taxonomic authority JA 19.4.04
         my $taxon;
 		if ($row->{'taxon_no'}) {
-            $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
+            $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_no','taxon_name','common_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
 
             if ($taxon->{'taxon_rank'} =~ /species/ || $row->{'species_name'} =~ /^indet\.|^sp\./) {
                 $row->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'});
@@ -2126,6 +2136,9 @@ sub getReidHTMLTableByOccNum {
                 my @class_array = @{$class_hash->{$row->{'taxon_no'}}};
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}});
                 foreach my $parent ($taxon,@class_array) {
+                    if ( ! $row->{'common_name'} && $parent->{'common_name'} )	{
+                        $row->{'common_name'} = $parent->{'common_name'};
+                    }
                     if ( ! $classification->{$parent->{'taxon_rank'}} )	{
                         $classification->{$parent->{'taxon_rank'}} = $parent;
                     }
@@ -2163,7 +2176,7 @@ sub getReidHTMLTableByOccNum {
             }
 		}
     
-        $row->{'hide_collection_no'} = 1;
+		$row->{'hide_collection_no'} = 1;
 		$html .= $hbo->populateHTML("taxa_display_row", $row);
 	}
 
