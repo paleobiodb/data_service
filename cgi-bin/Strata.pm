@@ -293,7 +293,7 @@ sub displayStrata {
 
     # Display age range/Show what collections are in it 
     # Set this q parameter so processCollectionsSearch (called from doCollections) builds correct SQL query
-    print TaxonInfo::doCollections($dbt, $s, $dataRows, '' ,'', 'for_strata_module');
+    print TaxonInfo::doCollections($dbt, $s, $dataRows, '' ,'', '','','for_strata_module');
 #    print TaxonInfo::doCollections($q, $dbt, $s, '', '', "for_strata_module");
 
     print "<p>&nbsp;</p>";
