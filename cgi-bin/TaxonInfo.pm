@@ -2665,7 +2665,7 @@ sub getTaxa {
             }
         }
     } else {
-        @fields = ('a.taxon_no','a.taxon_name','a.taxon_rank');
+        @fields = ('a.taxon_no','a.taxon_name','a.common_name','a.taxon_rank');
     }
     my $base_sql = "SELECT ".join(",",@fields)." FROM authorities a";
     if ($join_refs) {
