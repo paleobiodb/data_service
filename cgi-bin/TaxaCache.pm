@@ -784,7 +784,7 @@ sub getParents {
             my @results = @{$dbt->getData($sql)};
             $hash{$taxon_no} = $results[0];
         } elsif ($return_type eq 'array_full') {
-            my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC";
+            my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank,a.common_name FROM taxa_list_cache l, taxa_tree_cache t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC";
             $hash{$taxon_no} = $dbt->getData($sql);
         } else {
             my $sql = "SELECT l.parent_no FROM taxa_list_cache l, taxa_tree_cache t WHERE t.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC";
