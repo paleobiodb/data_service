@@ -3426,9 +3426,9 @@ sub processEditOccurrences {
     if ($q->param('list_collection_no')) {
         my $collection_no = $q->param("list_collection_no");
         my $coll = ${$dbt->getData("SELECT collection_no,reference_no FROM collections WHERE collection_no=$collection_no")}[0];
-    	print Collection::buildTaxonomicList($dbt,$hbo,{'collection_no'=>$collection_no, 'hide_reference_no'=>$coll->{'reference_no'},'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
+    	print Collection::buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$collection_no, 'hide_reference_no'=>$coll->{'reference_no'},'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
     } else {
-    	print Collection::buildTaxonomicList($dbt,$hbo,{'occurrence_list'=>\@occurrences, 'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
+    	print Collection::buildTaxonomicList($dbt,$hbo,$s,{'occurrence_list'=>\@occurrences, 'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
     }
 
     print "<br>".$links;
@@ -3598,7 +3598,7 @@ sub displayOccsForReID {
             # print other reids for the same occurrence
 
             $html .= "<tr><td colspan=100>";
-            my ($table,$classification) = Collection::getReidHTMLTableByOccNum($dbt,$hbo,$row->{'occurrence_no'}, 0);
+            my ($table,$classification) = Collection::getReidHTMLTableByOccNum($dbt,$hbo,$s,$row->{'occurrence_no'}, 0);
             $html .= "<table>".$table."</table>";
             $html .= "</td></tr>\n";
             #$sth2->finish();
