@@ -1169,7 +1169,7 @@ sub displayCollectionDetails {
     print $hbo->stdIncludes('std_page_top', $page_vars);
 
     # Handle display of taxonomic list now 
-    my $taxa_list = buildTaxonomicList($dbt,$hbo,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
+    my $taxa_list = buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
     $coll->{'taxa_list'} = $taxa_list;
 
     displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
@@ -1493,7 +1493,7 @@ sub displayCollectionDetailsPage {
 # subgnew_names	:	reference to array of new subgenus names the user is entering
 # snew_names	:	reference to array of new species names the user is entering
 sub buildTaxonomicList {
-    my ($dbt,$hbo,$options) = @_;
+    my ($dbt,$hbo,$s,$options) = @_;
     my %options = ();
     if ($options) {
         %options = %{$options};
@@ -1620,6 +1620,9 @@ sub buildTaxonomicList {
 			# if the occurrence has been reidentified at least once, then 
 			# display the original and reidentifications.
 			if ($mostRecentReID) {
+				if ( $s->isDBMember() )	{
+					$rowref->{common_name} = "";
+				}
 				$output = $hbo->populateHTML("taxa_display_row", $rowref);
 				
 				# rjp, 1/2004, change this so it displays *all* reidentifications, not just
@@ -1630,14 +1633,16 @@ sub buildTaxonomicList {
                 #  isReidNo = 0 instead of $mostRecentReID and isReidNo = 1
 	
                 my $show_collection = '';
-				my ($table,$classification,$reid_are_reclassifications) = getReidHTMLTableByOccNum($dbt,$hbo,$rowref->{occurrence_no}, 0, $options{'do_reclassify'});
+				my ($table,$classification,$reid_are_reclassifications) = getReidHTMLTableByOccNum($dbt,$hbo,$s,$rowref->{occurrence_no}, 0, $options{'do_reclassify'});
 				$are_reclassifications = 1 if ($reid_are_reclassifications);
 				$output .= $table;
 				
 				$rowref->{'class_no'}  = ($classification->{'class'}{'taxon_no'} or 1000000);
 				$rowref->{'order_no'}  = ($classification->{'order'}{'taxon_no'} or 1000000);
 				$rowref->{'family_no'} = ($classification->{'family'}{'taxon_no'} or 1000000);
-				$rowref->{'common_name'} = ($classification->{'common_name'}{'taxon_no'});
+				if ( ! $s->isDBMember() )	{
+					$rowref->{'common_name'} = ($classification->{'common_name'}{'taxon_no'});
+				}
 				$rowref->{'lft'} = ($classification->{'lft'}{'taxon_no'} or 1000000);
 				$rowref->{'rgt'} = ($classification->{'rgt'}{'taxon_no'} or 1000000);
 			}
@@ -1652,7 +1657,7 @@ sub buildTaxonomicList {
                     # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
                     foreach my $t ($taxon,@class_array) {
-                        if ( ! $rowref->{'common_name'} && $t->{'common_name'} )	{
+                        if ( ! $rowref->{'common_name'} && $t->{'common_name'} && ! $s->isDBMember() )	{
                             $rowref->{'common_name'} = $t->{'common_name'};
                         }
                         if ($t->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
@@ -1685,6 +1690,10 @@ sub buildTaxonomicList {
                 $rowref->{'family_no'} ||= 1000000;
                 $rowref->{'lft'} ||= 1000000;
 
+				if ( $s->isDBMember() )	{
+
+					$rowref->{common_name} = "";
+				}
 				$output = $hbo->populateHTML("taxa_display_row", $rowref);
 			}
 
@@ -1706,7 +1715,7 @@ sub buildTaxonomicList {
 			$class_nos++ if($row->{class_no} && $row->{class_no} != 1000000);
 			$order_nos++ if($row->{order_no} && $row->{order_no} != 1000000);
 			$family_nos++ if($row->{family_no} && $row->{family_no} != 1000000);
-			$common_names++ if($row->{common_name});
+			$common_names++ if($row->{common_name} && ! $s->isDBMember());
 			$lft_nos++ if($row->{lft} && $row->{lft} != 1000000);
 			$reference_nos++ if($row->{reference_no} && $row->{reference_no} != $options{'hide_reference_no'});
 			$abund_values++ if($row->{abund_value});
@@ -2098,7 +2107,7 @@ sub getSynonymName {
 # pass it an occurrence number or reid_no
 # the second parameter tells whether it's a reid_no (true) or occurrence_no (false).
 sub getReidHTMLTableByOccNum {
-    my ($dbt,$hbo,$occNum,$isReidNo,$doReclassify) = @_;
+    my ($dbt,$hbo,$s,$occNum,$isReidNo,$doReclassify) = @_;
 
 	my $sql = "SELECT genus_reso, genus_name, subgenus_reso, subgenus_name, species_reso, species_name, plant_organ, re.comments as comments, re.reference_no as reference_no,  pubyr, taxon_no, occurrence_no, reid_no, collection_no FROM reidentifications re"
             . " LEFT JOIN refs r ON re.reference_no=r.reference_no ";
@@ -2179,6 +2188,9 @@ sub getReidHTMLTableByOccNum {
 		}
     
 		$row->{'hide_collection_no'} = 1;
+		if ( $s->isDBMember() )	{
+			$row->{common_name} = "";
+		}
 		$html .= $hbo->populateHTML("taxa_display_row", $row);
 	}
 
