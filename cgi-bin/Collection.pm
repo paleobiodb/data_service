@@ -898,8 +898,10 @@ sub processCollectionForm {
 		} else	{
 			$sql .= " AND eml_interval=''";
 		}
-    	my $no = ${$dbt->getData($sql)}[0]->{interval_no};
+		my $no = ${$dbt->getData($sql)}[0]->{interval_no};
 		$q->param(min_interval_no => $no);
+	} else	{
+		$q->param(min_interval_no => 0);
 	}
 
 	# bomb out if no such interval exists JA 28.7.03
