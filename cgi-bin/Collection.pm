@@ -1789,7 +1789,7 @@ sub buildTaxonomicList {
 		# if ALL taxa have no genus or species, we have no list,
 		# so always print this.
 		if ( $common_names > 0 )	{
-			$return .= qq|<td><span onClick="showName();"><b>Taxon</b> (click for common names)</span>|;
+			$return .= qq|<td><span onClick="showName();"><b>Taxon</b><span id="commonClick"> (click for common names)</span></span>|;
 		} else	{
 			$return .= "<td><b>Taxon</b>";
 		}
@@ -1908,7 +1908,7 @@ sub buildTaxonomicList {
         }
 
 		my $sorted_html = '';
-my $rows = $#sorted + 1;
+my $rows = $#sorted + 2;
 $sorted_html .= qq|
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
@@ -1922,6 +1922,7 @@ function hideName()	{
 }
 
 function showName()	{
+	document.getElementById('commonClick').style.visibility = 'hidden';
 	for (var rowNum=0; rowNum<$rows; rowNum++)	{
 		document.getElementById('commonRow'+rowNum).style.visibility = 'visible';
 	}
