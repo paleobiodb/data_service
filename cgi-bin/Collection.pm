@@ -1620,9 +1620,6 @@ sub buildTaxonomicList {
 			# if the occurrence has been reidentified at least once, then 
 			# display the original and reidentifications.
 			if ($mostRecentReID) {
-				if ( $s->isDBMember() )	{
-					$rowref->{common_name} = "";
-				}
 				$output = $hbo->populateHTML("taxa_display_row", $rowref);
 				
 				# rjp, 1/2004, change this so it displays *all* reidentifications, not just
@@ -1640,9 +1637,7 @@ sub buildTaxonomicList {
 				$rowref->{'class_no'}  = ($classification->{'class'}{'taxon_no'} or 1000000);
 				$rowref->{'order_no'}  = ($classification->{'order'}{'taxon_no'} or 1000000);
 				$rowref->{'family_no'} = ($classification->{'family'}{'taxon_no'} or 1000000);
-				if ( ! $s->isDBMember() )	{
-					$rowref->{'common_name'} = ($classification->{'common_name'}{'taxon_no'});
-				}
+				$rowref->{'common_name'} = ($classification->{'common_name'}{'taxon_no'});
 				$rowref->{'lft'} = ($classification->{'lft'}{'taxon_no'} or 1000000);
 				$rowref->{'rgt'} = ($classification->{'rgt'}{'taxon_no'} or 1000000);
 			}
@@ -1657,7 +1652,7 @@ sub buildTaxonomicList {
                     # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
                     foreach my $t ($taxon,@class_array) {
-                        if ( ! $rowref->{'common_name'} && $t->{'common_name'} && ! $s->isDBMember() )	{
+                        if ( ! $rowref->{'common_name'} && $t->{'common_name'} )	{
                             $rowref->{'common_name'} = $t->{'common_name'};
                         }
                         if ($t->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
@@ -1690,10 +1685,6 @@ sub buildTaxonomicList {
                 $rowref->{'family_no'} ||= 1000000;
                 $rowref->{'lft'} ||= 1000000;
 
-				if ( $s->isDBMember() )	{
-
-					$rowref->{common_name} = "";
-				}
 				$output = $hbo->populateHTML("taxa_display_row", $rowref);
 			}
 
@@ -1715,7 +1706,7 @@ sub buildTaxonomicList {
 			$class_nos++ if($row->{class_no} && $row->{class_no} != 1000000);
 			$order_nos++ if($row->{order_no} && $row->{order_no} != 1000000);
 			$family_nos++ if($row->{family_no} && $row->{family_no} != 1000000);
-			$common_names++ if($row->{common_name} && ! $s->isDBMember());
+			$common_names++ if($row->{common_name});
 			$lft_nos++ if($row->{lft} && $row->{lft} != 1000000);
 			$reference_nos++ if($row->{reference_no} && $row->{reference_no} != $options{'hide_reference_no'});
 			$abund_values++ if($row->{abund_value});
@@ -1797,7 +1788,12 @@ sub buildTaxonomicList {
 
 		# if ALL taxa have no genus or species, we have no list,
 		# so always print this.
-		$return .= "<td><b>Taxon</b></td>";
+		if ( $common_names > 0 )	{
+			$return .= qq|<td><span onClick="showName();"><b>Taxon</b> (click for common names)</span>|;
+		} else	{
+			$return .= "<td><b>Taxon</b>";
+		}
+		$return .= "</td>";
 
 		if($reference_nos == 0){
 			$return .= "<td></td>";
@@ -1809,11 +1805,7 @@ sub buildTaxonomicList {
 		} else {
 			$return .= "<td><b>Abundance</b></td>";
 		}
-		if($common_names == 0){
-			$return .= "<td nowrap></td>";
-		} else {
-			$return .= "<td nowrap><b>Common name</b></td>";
-		}
+		$return .= qq|<td nowrap><span style="visibility: hidden;" id="commonRow0"><b>Common name</b></span></td>|;
 
 		# Sort:
         my @sorted = ();
@@ -1916,12 +1908,40 @@ sub buildTaxonomicList {
         }
 
 		my $sorted_html = '';
+my $rows = $#sorted + 1;
+$sorted_html .= qq|
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+window.onload = hideName;
+
+function hideName()	{
+	for (var rowNum=0; rowNum<$rows; rowNum++)	{
+		document.getElementById('commonRow'+rowNum).style.visibility = 'hidden';
+	}
+}
+
+function showName()	{
+	for (var rowNum=0; rowNum<$rows; rowNum++)	{
+		document.getElementById('commonRow'+rowNum).style.visibility = 'visible';
+	}
+}
+
+-->
+</script>
+|;
 		for(my $index = 0; $index < @sorted; $index++){
 			# Color the background of alternating rows gray JA 10.6.02
 			if($index % 2 == 0 && @sorted > 2){
 				#$sorted[$index]->{html} =~ s/<td/<td class='darkList'/g;
 				$sorted[$index]->{html} =~ s/<tr/<tr class='darkList'/g;
 			}
+			# only the last row needs to have the rowNum inserted
+			my $rowNum = $index + 1;
+			my @parts = split /commonRow/,$sorted[$index]->{html};
+			$parts[$#parts] = $rowNum . $parts[$#parts];
+			$sorted[$index]->{html} = join 'commonRow',@parts;
+
 #            $sorted[$index]->{html} =~ s/<td align="center"><\/td>/<td>$sorted[$index]->{occurrence_no}<\/td>/; DEBUG
 			$sorted_html .= $sorted[$index]->{html};
             
@@ -1950,7 +1970,8 @@ sub buildTaxonomicList {
     # This replaces blank cells with blank cells that have no padding, so the don't take up
     # space - this way the comments field lines is indented correctly if theres a bunch of empty
     # class/order/family columns sort of an hack but works - PS
-    $return =~ s/<td(.*?)>\s*<\/td>/<td$1 style=\"padding: 0\"><\/td>/g;
+    $return =~ s/<td([^>]*?)>\s*<\/td>/<td$1 style=\"padding: 0\"><\/td>/g;
+    #$return =~ s/<td(.*?)>\s*<\/td>/<td$1 style=\"padding: 0\"><\/td>/g;
 	return $return;
 } # end sub buildTaxonomicList()
 
@@ -2188,9 +2209,6 @@ sub getReidHTMLTableByOccNum {
 		}
     
 		$row->{'hide_collection_no'} = 1;
-		if ( $s->isDBMember() )	{
-			$row->{common_name} = "";
-		}
 		$html .= $hbo->populateHTML("taxa_display_row", $row);
 	}
 
