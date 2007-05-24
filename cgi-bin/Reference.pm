@@ -697,9 +697,13 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         return;
     }
 
-    my $dupe = $dbt->checkDuplicates('refs',\%vars);
+    my ($dupe,$matches);
+    
+    if ($isNewEntry) {
+        $dupe = $dbt->checkDuplicates('refs',\%vars);
 #    my $matches = $dbt->checkNearMatch('refs','reference_no',$q,5,"something=something?");
-    my $matches = 0;
+        $matches = 0;
+    }
 
     if ($dupe) {
         $reference_no = $dupe;
