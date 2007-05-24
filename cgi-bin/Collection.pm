@@ -1650,21 +1650,9 @@ sub buildTaxonomicList {
 				    my $class_hash = TaxaCache::getParents($dbt,[$rowref->{'taxon_no'}],'array_full');
                     my @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
                     # Get Self as well, in case we're a family indet.
-                    my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}});
-                    foreach my $t ($taxon,@class_array) {
-                        if ( ! $rowref->{'common_name'} && $t->{'common_name'} )	{
-                            $rowref->{'common_name'} = $t->{'common_name'};
-                        }
-                        if ($t->{'taxon_rank'} =~ /^(?:family|order|class)$/) {
-                            if ( ! $rowref->{$t->{'taxon_rank'}} )	{
-                                $rowref->{$t->{'taxon_rank'}} = $t->{'taxon_name'};
-                                $rowref->{$t->{'taxon_rank'}."_no"} = $t->{'taxon_no'};
-                            }
-                            if ( $rowref->{'class'} )	{
-                                last;
-                            }
-                        }
-                    }
+                    my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
+                    unshift @class_array , $taxon;
+                    $rowref = getClassOrderFamily(\$rowref,\@class_array);
                     $rowref->{'synonym_name'} = getSynonymName($dbt,$rowref->{'taxon_no'});
                 } else {
                     if ($options{'do_reclassify'}) {
@@ -1770,17 +1758,17 @@ sub buildTaxonomicList {
         } else {
             $return .= "<td nowrap></td>";
         }
-		if($class_nos == 0){
-		#	$return .= "<td nowrap></td>";
+		if ( $class_nos == 0 && $order_nos == 0 )	{
+			$return .= "<td nowrap colspan=\"2\"></td>";
 		} else {
-		#	$return .= "<td nowrap><b>Class</b></td>";
+			$return .= "<td nowrap colspan=\"2\"><b>Higher taxa</b></td>";
 		}
 		if($order_nos == 0){
 		#	$return .= "<td></td>";
 		} else {
 		#	$return .= "<td><b>Order</b></td>";
 		}
-		if($family_nos == 0){
+		if ( $family_nos == 0 )	{
 			$return .= "<td></td>";
 		} else {
 			$return .= "<td><b>Family</b></td>";
@@ -2167,23 +2155,19 @@ sub getReidHTMLTableByOccNum {
             if ($row->{'taxon_no'}) {
                 my $class_hash = TaxaCache::getParents($dbt,[$row->{'taxon_no'}],'array_full');
                 my @class_array = @{$class_hash->{$row->{'taxon_no'}}};
-                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}});
-                foreach my $parent ($taxon,@class_array) {
-                    if ( ! $row->{'common_name'} && $parent->{'common_name'} )	{
-                        $row->{'common_name'} = $parent->{'common_name'};
-                    }
-                    if ( ! $classification->{$parent->{'taxon_rank'}} )	{
-                        $classification->{$parent->{'taxon_rank'}} = $parent;
-                    }
-                    if ( $classification->{'class'} )	{
-                        last;
-                    }
-                }
+                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
+
+		unshift @class_array , $taxon;
+                $row = getClassOrderFamily(\$row,\@class_array);
+
+		# row has the classification now, so stash it
+		$classification->{'class'}{'taxon_name'} = $row->{'class'};
+		$classification->{'order'}{'taxon_name'} = $row->{'order'};
+		$classification->{'family'}{'taxon_name'} = $row->{'family'};
+
                 # Include the taxon as well, it my be a family and be an indet.
                 $classification->{$taxon->{'taxon_rank'}} = $taxon;
-                $row->{'class'} = $classification->{'class'}{'taxon_name'};
-                $row->{'order'} = $classification->{'order'}{'taxon_name'};
-                $row->{'family'}= $classification->{'family'}{'taxon_name'};
+
                 $row->{'synonym_name'} = getSynonymName($dbt,$row->{'taxon_no'});
                 # only $classification is being returned, so piggyback lft and
                 #  rgt on it
@@ -2216,6 +2200,59 @@ sub getReidHTMLTableByOccNum {
 	return ($html,$classification,$are_reclassifications);
 }
 
+
+sub getClassOrderFamily	{
+	my $rowref_ref = shift;
+	my $rowref = ${$rowref_ref};
+	my $class_array_ref = shift;
+	my @class_array = @{$class_array_ref};
+
+	my $maxyr1 = 3000;
+	my $maxyr2 = 3000;
+	my $maxname1 = "";
+	my $maxname2 = "";
+	my $maxno1 = "";
+	my $maxno2 = "";
+	for my $t ( @class_array ) {
+		if ( $t->{'taxon_rank'} =~ /superclass|phylum|kingdom/ )	{
+			last;
+		}
+		if ( ! $rowref->{'common_name'} && $t->{'common_name'} )	{
+			$rowref->{'common_name'} = $t->{'common_name'};
+		}
+		if ( $t->{'taxon_rank'} eq "family" && ! $t->{'family'} && ! $t->{'order'} && ! $t->{'class'} )	{
+			$rowref->{'family'} = $t->{'taxon_name'};
+			$rowref->{'family_no'} = $t->{'taxon_no'};
+		} elsif ( $t->{'taxon_rank'} eq "order" && ! $rowref->{'order'} && ! $rowref->{'class'} )	{
+			$rowref->{'order'} = $t->{'taxon_name'};
+			$rowref->{'order_no'} = $t->{'taxon_no'};
+		} elsif ( $t->{'taxon_rank'} eq "class" && ! $rowref->{'class'} )	{
+			$rowref->{'class'} = $t->{'taxon_name'};
+			$rowref->{'class_no'} = $t->{'taxon_no'};
+		}
+		if ( $t->{'pubyr'} && $t->{'pubyr'} < $maxyr2 && ! $rowref->{'order'} && ! $rowref->{'class'} && $t->{'taxon_rank'} !~ /family|genus|species/ )	{
+			$maxyr2 = $t->{'pubyr'};
+			$maxname2 = $t->{'taxon_name'};
+			$maxno2 = $t->{'taxon_no'};
+		} elsif ( $t->{'pubyr'} && $t->{'pubyr'} < $maxyr1 && $rowref->{'order'} && ! $rowref->{'class'} && $t->{'taxon_rank'} !~ /family|genus|species/ )	{
+			$maxyr1 = $t->{'pubyr'};
+			$maxname1 = $t->{'taxon_name'};
+			$maxno1 = $t->{'taxon_no'};
+		}
+		if ( $rowref->{'order'} && $rowref->{'class'} )	{
+			last;
+		}
+	}
+	if ( ! $rowref->{'order'} && $maxname2 )	{
+		$rowref->{'order'} = $maxname2;
+		$rowref->{'order_no'} = $maxno2;
+	}
+	if ( ! $rowref->{'class'} && $maxname1 )	{
+		$rowref->{'class'} = $maxname1;
+		$rowref->{'class_no'} = $maxno1;
+	}
+	return $rowref;
+}
 
 # JA 21.2.03
 sub rarefyAbundances	{
