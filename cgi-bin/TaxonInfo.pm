@@ -1644,16 +1644,33 @@ sub getSynonymyParagraph{
     my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','type_taxon_no','type_specimen','comments']);
 	
 	# Get ref info from refs if 'ref_is_authority' is set
-	if(! $taxon->{'author1last'}) {
-		$text .= "<li><i>The author of $taxon->{taxon_rank} <a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> has not been recorded in the Database yet</i>. ";
-    } else {
+	if ( ! $taxon->{'author1last'} )	{
+		my $rank = $taxon->{taxon_rank};
+		my $article = "a";
+		if ( $rank =~ /^[aeiou]/ )	{
+			$article = "an";
+		}
+		my $rankchanged;
+		for my $row ( @results )	{
+			if ( $row->{'spelling_reason'} =~ /rank/ )	{
+			# rank was changed at some point
+				$text .= "<li><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> was named as $article $rank. ";
+				$rankchanged++;
+				last;
+			}
+		}
+		# rank was never changed
+		if ( ! $rankchanged )	{
+			$text .= "<li><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> is $article $rank. ";
+		}
+	} else	{
 		$text .= "<li><i><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a></i> was named by ";
-        if ($taxon->{'ref_is_authority'}) {
-            $text .= Reference::formatShortRef($taxon,'alt_pubyr'=>1,'show_comments'=>1,'link_id'=>1);
-        } else {
-            $text .= Reference::formatShortRef($taxon,'alt_pubyr'=>1,'show_comments'=>1);
-        }
-        $text .= ". ";
+	        if ($taxon->{'ref_is_authority'}) {
+			$text .= Reference::formatShortRef($taxon,'alt_pubyr'=>1,'show_comments'=>1,'link_id'=>1);
+		} else {
+			$text .= Reference::formatShortRef($taxon,'alt_pubyr'=>1,'show_comments'=>1);
+		}
+		$text .= ". ";
 	}
 
     if ($taxon->{'extant'} =~ /YES/i) {
@@ -2011,12 +2028,14 @@ sub getMostRecentClassification {
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $reliability = 
         "(IF (o.classification_quality != '',".
-            "CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END,".
+            "CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 END,".
+            #"CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END,".
         # ELSE:
             "IF(r.reference_no = 6930,".
                 "0,".# is compendium, then 0 (lowest priority)
             # ELSE:
-                " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
+                " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 END".
+                #" CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
             ")".
          ")) AS reliability_index ";
     my $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
@@ -2076,12 +2095,14 @@ sub getMostRecentSpelling {
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $reliability = 
         "(IF (o.classification_quality != '',".
-            "CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END,".
+            "CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 END,".
+            #"CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END,".
         # ELSE:
             "IF(r.reference_no = 6930,".
                 "0,".# is compendium, then 0 (lowest priority)
             # ELSE:
-                " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
+                " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 END".
+                #" CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
             ")".
          ")) AS reliability_index ";
     $sql = "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, "
