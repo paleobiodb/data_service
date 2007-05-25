@@ -1566,7 +1566,7 @@ sub displayOpinionChoiceForm {
         }
 
         if (@where && !@errors) {
-            my $sql = "SELECT o.opinion_no FROM opinions o ".
+            my $sql = "SELECT o.opinion_no,o.reference_no,o.ref_has_opinion FROM opinions o ".
                       " LEFT JOIN authorities a ON a.taxon_no=o.child_no".
                       $join_refs.
                       " WHERE ".join(" AND ",@where).
@@ -1579,12 +1579,15 @@ sub displayOpinionChoiceForm {
             print "<div align=\"center\">";
             print "<h4>Select an opinion to edit</h4>";
 
-            print qq|<div class="displayPanel" style="padding: 1em;">\n|;
-            print qq|<div align="left">|;
+            print qq|<div class="displayPanel" style="padding: 1em; margin-left: 2em; margin-right: 2em;">\n|;
+            print qq|<div class="small" align="left">|;
             print qq|<ul>|;
             foreach my $row (@results) {
                 my $o = Opinion->new($dbt,$row->{'opinion_no'});
                 my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+                if ( $q->param('reference_no') == $row->{'reference_no'} && $row->{'ref_has_opinion'} eq "YES" )	{
+                    $authority = "";
+                }
                 print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
             }
             print "</ul>";
@@ -1608,10 +1611,10 @@ sub displayOpinionChoiceForm {
     } 
     
     if ($q->param("taxon_no")) {
-        print qq|<p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.</p>\n|;
+        print qq|<div class="tiny" style="margin-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.</p></div>\n|;
     } elsif ($q->param('reference_no')) {
-        print qq|<tr><td align="left" colspan=2><p><span class="tiny">An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
-        print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span></p>\n|;
+        print qq|<tr><td align="left" colspan=2><div class="tiny" style="padding-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
+        print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</p></div>\n|;
        # print "</span></p></td></tr>\n";
        # print "</table>\n";
         print "</td></tr></table>";
