@@ -1824,7 +1824,7 @@ sub processTaxonSearch {
         }
 
         # now create a table of choices
-		print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">";
+		print "<div class=\"displayPanel small\" style=\"padding: 1em;\">";
         print "<div align=\"left\"><ul>\n";
         my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
         foreach my $row (@results) {
