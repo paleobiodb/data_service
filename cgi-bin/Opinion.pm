@@ -581,14 +581,15 @@ sub displayOpinionForm {
                        " This is the type $childRank".
                        "</td>";
     }
-    my ($diag_keys,$diag_values) = $hbo->getKeysValues('diagnosis_given');
-    my $diagnosis_select = $hbo->htmlSelect('diagnosis_given',$diag_keys,$diag_values,$fields{'diagnosis_given'});
+    my ($phyl_keys,$phyl_values) = $hbo->getKeysValues('phylogenetic_status');
+    my $phyl_select = $hbo->htmlSelect('phylogenetic_status',$phyl_keys,$phyl_values,$fields{'phylogenetic_status'});
     
     $belongs_to_row .= "<tr><td></td><td>".
-                   "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr>".
-                   $type_select.
-                   "<td nowrap><b>Diagnosis given:</b> $diagnosis_select</td></tr></table>".
-                   "</td></tr>";
+                   "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr><td nowrap>";
+    if ( $childRank !~ /species/ )	{
+        $belongs_to_row .= "<b>Phylogenetic status:</b> $phyl_select";
+    }
+    $belongs_to_row .= "</td></tr></table></td></tr>";
 
 	# format the synonym section
 	# note: by now we already have a status pulldown ready to go; we're
@@ -1251,7 +1252,7 @@ sub submitOpinionForm {
 	}
 
     if ($q->param('diagnosis') && $q->param("diagnosis_given") =~ /^$|none/) {
-		$errors->add("When entering a diagnosis please select the type of diagnosis in the \"Diagnosis given\" pulldown");
+		$errors->add("When entering a diagnosis please select the type of diagnosis in the \"Diagnosis\" pulldown");
     }
 
     # Get the fields from the form and get them ready for insertion
