@@ -53,12 +53,6 @@ sub processSanityCheck	{
 		return;
 	}
 
-	printf "<center><h3 style=\"margin-bottom: 2em;\">Progress report: %s",$q->param('taxon_name');
-	if ( $q->param('excluded_taxon') )	{
-		printf " minus %s",$q->param('excluded_taxon');
-	}
-	printf "</h3></center>\n\n",$q->param('taxon_name');
-
 	# author and year known
 	$sql = "SELECT taxon_rank rank,count(*) c FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority='YES' OR (author1last IS NOT NULL AND author1last!='')) GROUP BY taxon_rank";
 	my @rows = @{$dbt->getData($sql)};
@@ -81,6 +75,12 @@ sub processSanityCheck	{
 		main::displaySanityForm($vars);
 		return;
 	}
+	printf "<center><h3 style=\"margin-bottom: 2em;\">Progress report: %s",$q->param('taxon_name');
+	if ( $q->param('excluded_taxon') )	{
+		printf " minus %s",$q->param('excluded_taxon');
+	}
+	printf "</h3></center>\n\n",$q->param('taxon_name');
+
 	my %total;
 	my $authortext;
 	for my $rank ( @ranks )	{
