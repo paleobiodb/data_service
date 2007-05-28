@@ -1438,7 +1438,7 @@ sub submitOpinionForm {
 
     $end_message .= qq|
 <div align="center">
-<p class="medium"><b>The opinion $opinionHTML has been $enterupdate the database</b></p>
+<p class="medium"><b>The opinion $opinionHTML has been $enterupdate</b></p>
 <div class="displayPanel">
 <p>
 <table cellpadding="10" class="small"><tr><td valign=top>
@@ -1455,11 +1455,12 @@ sub submitOpinionForm {
   <p><b>Opinion functions</b></p>
   <ul>
   <li><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Edit another opinion about $childSpellingName</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
+  <li style="padding-top: 0.7em;"><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Edit another opinion about $childSpellingName</a></b></li>
+  <li style="padding-top: 0.7em;"><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
+  <li style="padding-top: 0.7em;"><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit opinions from the same reference</a></b></li>
+  <li style="padding-top: 0.7em;"><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
+  <li style="padding-top: 0.7em;"><b><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
+  <li style="padding-top: 0.7em;"><b><a href="$WRITE_URL?action=startProcessPrintHierarchy&reference_no=$resultReferenceNumber&maximum_levels=100">Print this reference's classification</a></b></li>
   </ul>
 </td></tr></table>
 </p>
