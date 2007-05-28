@@ -75,6 +75,12 @@ sub processSanityCheck	{
 		$authorunknown{$r->{rank}}++;
 		$dataneeded{$r->{rank}}{$r->{name}}++;
 	}
+	if ( $authorknown{'genus'} + $authorunknown{'genus'} == 0 )	{
+		$error_message = "<p><i>No genera have been classified within this taxon yet. Please try again.</i></p>\n";
+		my $vars = {'error_message' => $error_message};
+		main::displaySanityForm($vars);
+		return;
+	}
 	my %total;
 	my $authortext;
 	for my $rank ( @ranks )	{
