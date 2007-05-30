@@ -142,7 +142,7 @@ sub processLoadImage{
 	my $enterer_name = $s->get('enterer');
 	$enterer_name =~ s/[^a-zA-Z]//g;
 	my $docroot = $ENV{DOCUMENT_ROOT};
-	my $subdirs = "/images/$enterer_name";
+	my $subdirs = "/upload_images/$enterer_name";
 	my $base = "${docroot}$subdirs";
 	my $number = 1; 
 	# open enterer's directory.  if it doesn't exist, create it.
