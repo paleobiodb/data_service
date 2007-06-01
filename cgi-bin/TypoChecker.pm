@@ -203,7 +203,7 @@ sub occurrenceMisspellingForm {
         } else {
             print '<h2>Possibly misspelled/partially classified occurrences</h2>';
         }
-        print '<form action="$WRITE_URL" method="POST">';
+        print qq|<form action="$WRITE_URL" method="POST">|;
         print '<input type="hidden" name="action" value="submitOccurrenceMisspelling">';
         my $page_no = (int($q->param('page_no'))) ? int($q->param('page_no')) : 0;
         print '<input type="hidden" name="page_no" value="'.($page_no+1).'">';

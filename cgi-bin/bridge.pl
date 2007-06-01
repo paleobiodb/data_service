@@ -2696,7 +2696,7 @@ html {overflow-x:auto; overflow-y:hidden;}
 <![endif]-->
 EOF
     print $hbo->populateHTML('blank_page_top',{'extra_header'=>$extra_header});
-    print '<form method="post" action="$WRITE_URL" onSubmit="return handleSubmit();">';
+    print qq|<form method="post" action="$WRITE_URL" onSubmit="return handleSubmit();">|;
     print '<input type="hidden" name="action" value="processOccurrenceTable" />';
     # this field is read by the javascript but not used otherwise
     print qq|<input type="hidden" name="reference_no" value="$reference_no" />|;
@@ -2908,7 +2908,7 @@ sub processOccurrenceTable {
 
     print $hbo->stdIncludes('std_page_top');
     print '<div align="center"><h3>Occurrence table entry results</h3></div>';
-    print '<form method="post" action="$WRITE_URL">';
+    print qq|<form method="post" action="$WRITE_URL">|;
     print '<input type="hidden" name="action" value="startProcessReclassifyForm">';
     print '<div align="center"><table cellpadding=3 cellspacing=0 border=0>';
     my $changed_rows = 0;
@@ -3104,7 +3104,7 @@ sub processOccurrenceTable {
     print "</div>";
     print "</form>";
     print '<div align="center"><p>';
-    print '<b><a href="$WRITE_URL?action=displaySearchColls&type=occurrence_table">Edit more occurrences</a></b>';
+    print qq|<b><a href="$WRITE_URL?action=displaySearchColls&type=occurrence_table">Edit more occurrences</a></b>|;
     if ($q->param('next_page_link')) {
         print " - ".uri_unescape($q->param("next_page_link"));
     }
