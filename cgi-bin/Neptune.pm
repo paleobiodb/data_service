@@ -1,5 +1,3 @@
-#!/usr/bin/perl
-
 # Connects to the (postgresql) database currently hosted by CHRONOS at
 # cdb0.geol.iastate.edu.  Provides forms to download their data as well, which may
 # then be fed into the Curve script for diversity analyses
@@ -8,6 +6,7 @@ package Neptune;
 use strict;
 use DBI;
 use Debug;
+use Constants qw($WRITE_URL $READ_URL);
 
 # Flags and constants
 my $DEBUG=0; # The debug level of the calling program
