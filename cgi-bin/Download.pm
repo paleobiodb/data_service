@@ -388,7 +388,7 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", "no") if ($q->param("compendium_ranges") eq 'NO');
         $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", "yes, require some kind of abundance data" ) if ($q->param("abundance_required") eq 'abundances');
         $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", "yes, require specimen or individual counts" ) if ($q->param("abundance_required") eq 'specimens');
-        $html .= $self->retellOptionsRow ( "Include abundances if some genera do not have them?", "yes" ) if ($q->param("incomplete_abundances") eq 'YES');
+        $html .= $self->retellOptionsRow ( "Include abundances if the taxonomic list omits some genera?", "yes" ) if ($q->param("incomplete_abundances") eq 'YES');
         $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") ) if ($q->param("classified" !~ /classified|unclassified/i));
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
         my @preservation = $q->param('preservation');
@@ -460,9 +460,6 @@ sub retellOptions {
     if ($q->param('output_data') =~ /occurrence|collections|specimens/) {
         # collection table fields
         my @collFields = ( "collection_no");
-        if ( $q->param('incomplete_abundances') eq "NO" )	{
-            $q->param('collections_collection_coverage' => "YES");
-        }
         foreach my $field ( @collectionsFieldNames ) {
             if ( $q->param ( 'collections_'.$field ) ) { push ( @collFields, 'collections_'.$field ); }
         }
@@ -1483,8 +1480,8 @@ sub queryDatabase {
     # Getting only collection data
     if ($q->param('output_data') =~ /specimens|occurrence|collections/) {
         my @collection_columns = $dbt->getTableColumns('collections');
-        if ( $q->param('incomplete_abundances') eq "NO" )	{
-            $q->param('collections_collection_coverage' => "YES");
+        if ( $q->param('incomplete_abundances') eq "NO" && ! $q->param('collections_collection_coverage') )	{
+            push @fields,"c.collection_coverage AS `c.collection_coverage`";
         }
         if ( $q->param('collections_pubyr') eq "YES" )	{
             $q->param('collections_reference_no' => "YES");
@@ -3278,7 +3275,7 @@ sub printAbundFile {
     my $q = $self->{'q'};
     my $csv = $self->{'csv'};
 
-    # Open the file handlea we're going to use or die
+    # Open the file handle we're going to use or die
     my $filename = $self->{'filename'};
     my $ext = ($q->param('output_format') =~ /tab/) ? "tab" : "csv";
     my $abundFile = "$filename-abund.$ext";
@@ -3798,6 +3795,7 @@ sub getTaxonString {
         $sql = $sql_or_bits[0];
     }
     $sql = join " AND ", $sql , @sql_and_bits;
+
     return $sql;
 }
 
