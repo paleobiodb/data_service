@@ -11,7 +11,7 @@ use strict;
 
 # Package wide variable, little messy but other modules need to access it
 %HTMLBuilder::hard_lists = (
-    abund_unit=>['', 'specimens', 'individuals', 'category', 'rank', 'grid-count', 'quadrats', '%-specimens', '%-individuals', '%-quadrats', '%-volume', '%-area'], 
+    abund_unit=>['', 'specimens', 'individuals', 'elements', 'fragments', 'category', 'rank', 'grid-count', 'quadrats', '%-specimens', '%-individuals', '%-elements', '%-fragments', '%-quadrats', '%-volume', '%-area'], 
 
     release_date=>['immediate','three months','six months','one year','two years','three years','four years','five years'],
     # Not for any drop down yet, used in DL
