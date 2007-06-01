@@ -1477,7 +1477,7 @@ sub queryDatabase {
         $q->param('get_global_specimens'=>1);
     }
  
-    # Getting only collection data
+    # Getting only specimens, occurrences, or collections
     if ($q->param('output_data') =~ /specimens|occurrence|collections/) {
         my @collection_columns = $dbt->getTableColumns('collections');
         if ( $q->param('incomplete_abundances') eq "NO" && ! $q->param('collections_collection_coverage') )	{
@@ -1542,9 +1542,16 @@ sub queryDatabase {
                        'o.genus_reso AS `o.genus_reso`', 
                        'o.genus_name AS `o.genus_name`',
                        'o.species_name AS `o.species_name`',
-                       'o.taxon_no AS `o.taxon_no`',
-                       'o.abund_value AS `o.abund_value`',
+                       'o.taxon_no AS `o.taxon_no`';
+       if ( $q->param('abundance_taxon_name') =~ /[A-Za-z]/ )	{
+            my $taxa = $self->getTaxonString($q->param('abundance_taxon_name'),'');
+            $taxa =~ s/table\.taxon/o.taxon/;
+            push @fields, "IF ($taxa,o.abund_value,NULL) `o.abund_value`";
+            push @fields, "IF ($taxa,o.abund_unit,NULL) `o.abund_unit`";
+       } else	{
+           push @fields, 'o.abund_value AS `o.abund_value`',
                        'o.abund_unit AS `o.abund_unit`';
+       }
                        
             if ( $q->param('replace_with_reid') ne 'NO' )   {
                 push @fields, 're.reid_no AS `re.reid_no`',
@@ -1561,14 +1568,14 @@ sub queryDatabase {
             my @occurrences_columns = $dbt->getTableColumns('occurrences');
             my @reid_columns = $dbt->getTableColumns('reidentifications');
             foreach my $c (@occurrences_columns) {
-                if ($q->param("occurrences_".$c)) {
+                if ($q->param("occurrences_".$c) && $c !~ /^abund/) {
                     push @fields,"o.$c AS `o.$c`";
                 }
             }
             if ( $q->param('replace_with_reid') ne 'NO' )   {
                 foreach my $c (@reid_columns) {
                     # Note we use occurrences_ fields
-                    if ($q->param("occurrences_".$c)) {
+                    if ($q->param("occurrences_".$c) && $c !~ /^abund/) {
                         push @fields,"re.$c AS `re.$c`";
                     }
                 }
@@ -1602,7 +1609,7 @@ sub queryDatabase {
         if ($q->param('taxon_name') || $q->param('exclude_taxon_name') || $q->param('occurrence_count') || $q->param('abundance_count')) {
             # Don't include $taxon_where in my () above, it needs to stay in scope
             # so it can be used much later in function
-            $taxon_where = $self->getTaxonString();
+            $taxon_where = $self->getTaxonString($q->param('taxon_name'),$q->param('exclude_taxon_name'));
             my $occ_sql = $taxon_where;
             my $reid_sql = $taxon_where;
             $occ_sql =~ s/table\./o\./g;
@@ -3728,6 +3735,8 @@ sub formatRow {
 # in the getChildren function by passing in stuff to exclude.   
 sub getTaxonString {
     my $self = shift;
+    my $taxon_name = shift;
+    my $exclude_taxon_name = shift;
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
@@ -3736,8 +3745,8 @@ sub getTaxonString {
     my $taxon_nos_string;
     my $genus_names_string;
 
-    my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
-    my @exclude_taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('exclude_taxon_name'));
+    my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$taxon_name);
+    my @exclude_taxa = split(/\s*[, \t\n-:;]{1}\s*/,$exclude_taxon_name);
 
     my (@sql_or_bits,@sql_and_bits);
     my %taxon_nos_unique = ();
