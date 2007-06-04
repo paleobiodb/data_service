@@ -115,10 +115,10 @@ sub reverseName {
 
 sub displayEnterers {
     my $dbt = shift;
-    my $html = "<div align=\"center\"><h3>List of data enterers</h3></div>";
-    $html .= "The following students and research assistants have entered data into the Database.
+    my $html = "<div align=\"center\"><h3>Data enterers</h3></div>";
+    $html .= "<p \"align=left\">The following students and research assistants have entered data into the Database.
     Institution names are placed in parentheses to indicate students who have since moved on.
-    <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify <a href=\"mailto:alroy\@nceas.ucsb.edu\">John Alroy.</a></i><br><br>";
+    <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify <a href=\"mailto:alroy\@nceas.ucsb.edu\">John Alroy.</a></i></p><br>";
 
     my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=0 ORDER BY last_name,first_name";
     my @results = @{$dbt->getData($sql)};
@@ -149,7 +149,7 @@ sub displayAuthorizers {
     my $dbt = shift;
     my $html = "";
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 ORDER BY last_name,first_name";
+    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 AND last_entry IS NOT NULL ORDER BY last_name,first_name";
     my @results = @{$dbt->getData($sql)};
 
     my @firsthalf;
@@ -161,8 +161,8 @@ sub displayAuthorizers {
         push @secondhalf , $results[$r];
     }
 
-    $html .= '<div align="center"><h4>List of participants</h4></div>';
-    $html .= qq|<div align="center"><p class="medium">See also our list of <a href="$READ_URL?action=displayInstitutions">participating institutions</a></p></div>|;
+    $html .= '<div align="center"><h4>Contributing researchers</h4></div>';
+    $html .= qq|<div align="center" style="text-align: left; padding-left: 1em; padding-right: 1em;"><p class="small">The following Database members have entered data and/or supervised data entry by their students. See also our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
     $html .= "\n<table><tr><td valign=\"top\">\n\n";
     $html .= formatAuthorizerTable(\@firsthalf);
     $html .= "\n</td><td valign=\"top\">\n";
@@ -197,7 +197,7 @@ sub displayInstitutions {
     my $dbt = shift;
     my $html = ""; 
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 ORDER BY last_name,first_name";
+    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 AND last_entry IS NOT NULL ORDER BY last_name,first_name";
     my @results = @{$dbt->getData($sql)};
 
     my %institutions;
@@ -218,8 +218,8 @@ sub displayInstitutions {
         push @secondhalf , $inst_names[$i];
     }
 
-    $html .= '<div align="center"><h4>List of participating institutions</h4></div>';
-    $html .= qq|<div align="center"><p class="medium">See also our list of <a href="$READ_URL?action=displayAuthorizers">participants</a></p></div>|;
+    $html .= '<div align="center"><h4>Contributing institutions</h4></div>';
+    $html .= qq|<div align="center" style="text-align: left; padding-left: 1em; padding-right: 1em;"><p class="small"><a href="$READ_URL?action=displayAuthorizers">Database members</a> who have contributed data or supervised data entry by students are affiliated with the following institutions.</p></div>|;
 
     $html .= "\n<table><tr><td valign=\"top\" width=\"50%\">\n\n";
     $html .= formatInstitutionTable(\@firsthalf,\%institutions);
