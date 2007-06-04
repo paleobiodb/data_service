@@ -1,4 +1,4 @@
-#!/usr/bin/perl 
+#!/usr/local/bin/perl 
 
 BEGIN {
 $ENV{DOWNLOAD_OUTFILE_DIR} = "/Volumes/pbdb_RAID/httpdocs/html/paleodb/data";
@@ -24,9 +24,9 @@ my $dbt = DBTransactionManager->new($dbh);
 my $doUpdate = 0;
 if ($ARGV[0] eq '--do_sql') {
     $doUpdate = 1;
-    print "RUNNING SQL\n";
+    print "RUNNING SQL\n" if ($DEBUG);
 } else {
-    print "DRY RUN\n";
+    print "DRY RUN\n" if ($DEBUG);
 }     
 
 $sql = "SELECT latdeg,latdir,latmin,latsec,latdec,lngdeg,lngdir,lngmin,lngsec,lngdec,collection_no,max_interval_no,min_interval_no,paleolat,paleolng FROM collections";
@@ -55,10 +55,10 @@ while ($row = $sth->fetchrow_hashref()) {
 
     my $collage = int(($lb+$ub)/2 + .5);
 
-    print "#$row->{collection_no} LAT:$lat LNG:$lng AGE:$collage\n";
-    printf ("%-20s%-20s\n","OLD PLAT:$row->{paleolat}","OLD PLNG:$row->{paleolng}");
+    print "#$row->{collection_no} LAT:$lat LNG:$lng AGE:$collage\n" if ($DEBUG);
+    printf ("%-20s%-20s\n","OLD PLAT:$row->{paleolat}","OLD PLNG:$row->{paleolng}") if ($DEBUG);
     if ($lat !~ /\d/|| $lng !~ /\d/) {
-        print "ERROR: No coord\n"; 
+        print "ERROR: No coord\n" if ($DEBUG); 
         next;
     }
 
@@ -75,19 +75,21 @@ while ($row = $sth->fetchrow_hashref()) {
         if ( $lngdeg !~ /NaN/ && $latdeg !~ /NaN/ )       {
             $plat = sprintf("%.2f",$plat);
             $plng = sprintf("%.2f",$plng);
-            printf ("%-20s%-20s\n","NEW PLAT:$plat","NEW PLNG:$plng");
+            printf ("%-20s%-20s\n","NEW PLAT:$plat","NEW PLNG:$plng") if ($DEBUG);
 
-            $sql = "UPDATE collections SET paleolng=$plng, paleolat=$plat,modified=modified WHERE collection_no=$row->{collection_no}";
-            print "$sql\n";
-            print "\n";
-            if ($doUpdate) {
-                $dbh->do($sql);
+            if ($row->{'paleolng'} ne $plng || $row->{'paleolat'} ne $plat) {
+                $sql = "UPDATE collections SET paleolng=$plng, paleolat=$plat,modified=modified WHERE collection_no=$row->{collection_no}";
+                print "$sql\n" if ($DEBUG);
+                print "\n" if ($DEBUG);
+                if ($doUpdate) {
+                    $dbh->do($sql);
+                }
             }
         } else {
-            print "NO paleocoord for COL $row->{collection_no} LAT $lat LNG $lng\n";
+            print "NO paleocoord for COL $row->{collection_no} LAT $lat LNG $lng\n" if ($DEBUG);
         }
     } else {
-        print "COLLAGE not valid for COL $row->{collection_no}: $collage\n";
+        print "COLLAGE not valid for COL $row->{collection_no}: $collage\n" if ($DEBUG);
     }
 }
 
@@ -114,14 +116,5 @@ sub getDec {
         $x *= -1;
     }
     return ($x,$y);
-}
-
-sub dbg {
-	my $self = shift;
-	my $message = shift;
-
-	if ( $DEBUG && $message ) { print "<font color='green'>$message</font><BR>\n"; }
-
-	return $DEBUG;					# Either way, return the current DEBUG value
 }
 
