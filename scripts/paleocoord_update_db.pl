@@ -18,20 +18,29 @@ use DBTransactionManager;
 # Flags and constants
 my $DEBUG = 0;			# The debug level of the calling program
 my $COAST_DIR = "../cgi-bin/data";
-my $dbh = DBConnection::connect();
-my $dbt = DBTransactionManager->new($dbh);
+my $dbt = DBTransactionManager->new();
+my $dbh = $dbt->dbh;
 
 my $doUpdate = 0;
-if ($ARGV[0] eq '--do_sql') {
-    $doUpdate = 1;
+foreach my $arg (@ARGV) {
+    if ($arg eq '--do_sql') {
+        $doUpdate = 1;
+    } elsif ($arg =~ /--debug=(\d)/) {
+        $DEBUG = $1;
+    } elsif ($arg =~ /--debug/) {
+        $DEBUG = 1;
+    }
+}
+
+if ($doUpdate) {
     print "RUNNING SQL\n" if ($DEBUG);
 } else {
     print "DRY RUN\n" if ($DEBUG);
 }     
 
 $sql = "SELECT latdeg,latdir,latmin,latsec,latdec,lngdeg,lngdir,lngmin,lngsec,lngdec,collection_no,max_interval_no,min_interval_no,paleolat,paleolng FROM collections";
-my $sth = $dbh->prepare($sql);
-$sth->execute();
+#my $sth = $dbh->prepare($sql);
+#$sth->execute();
 
 my @results = @{$dbt->getData($sql)};
 
@@ -44,7 +53,7 @@ my $map_o = new Map;
 $map_o->readPlateIDs();
 my %seen_age = ();
 
-while ($row = $sth->fetchrow_hashref()) {
+foreach my $row (@results) {
     my ($lng,$lat) = getDec($row);
 
     my $lb =  $lowerbound{$row->{'max_interval_no'}};
@@ -55,10 +64,12 @@ while ($row = $sth->fetchrow_hashref()) {
 
     my $collage = int(($lb+$ub)/2 + .5);
 
-    print "#$row->{collection_no} LAT:$lat LNG:$lng AGE:$collage\n" if ($DEBUG);
-    printf ("%-20s%-20s\n","OLD PLAT:$row->{paleolat}","OLD PLNG:$row->{paleolng}") if ($DEBUG);
+    print "#$row->{collection_no} LAT:$lat LNG:$lng AGE:$collage\n" if ($DEBUG > 1);
+    my $old_plat = sprintf("%.2f",$row->{'paleolat'});
+    my $old_plng = sprintf("%.2f",$row->{'paleolng'});
+    printf ("%-20s%-20s\n","OLD PLAT:$row->{paleolat}","OLD PLNG:$row->{paleolng}") if ($DEBUG > 1);
     if ($lat !~ /\d/|| $lng !~ /\d/) {
-        print "ERROR: No coord\n" if ($DEBUG); 
+        print "ERROR: No coord\n" if ($DEBUG > 1); 
         next;
     }
 
@@ -75,21 +86,21 @@ while ($row = $sth->fetchrow_hashref()) {
         if ( $lngdeg !~ /NaN/ && $latdeg !~ /NaN/ )       {
             $plat = sprintf("%.2f",$plat);
             $plng = sprintf("%.2f",$plng);
-            printf ("%-20s%-20s\n","NEW PLAT:$plat","NEW PLNG:$plng") if ($DEBUG);
-
-            if ($row->{'paleolng'} ne $plng || $row->{'paleolat'} ne $plat) {
+            printf ("%-20s%-20s\n","NEW PLAT:$plat","NEW PLNG:$plng") if ($DEBUG > 1);
+            
+            if ($old_plng ne $plng || $old_plat ne $plat) {
                 $sql = "UPDATE collections SET paleolng=$plng, paleolat=$plat,modified=modified WHERE collection_no=$row->{collection_no}";
                 print "$sql\n" if ($DEBUG);
-                print "\n" if ($DEBUG);
+                print "\n" if ($DEBUG > 1);
                 if ($doUpdate) {
                     $dbh->do($sql);
                 }
             }
         } else {
-            print "NO paleocoord for COL $row->{collection_no} LAT $lat LNG $lng\n" if ($DEBUG);
+            print "NO paleocoord for COL $row->{collection_no} LAT $lat LNG $lng\n" if ($DEBUG > 1);
         }
     } else {
-        print "COLLAGE not valid for COL $row->{collection_no}: $collage\n" if ($DEBUG);
+        print "COLLAGE not valid for COL $row->{collection_no}: $collage\n" if ($DEBUG > 1);
     }
 }
 
