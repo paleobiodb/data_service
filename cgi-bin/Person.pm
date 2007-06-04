@@ -163,9 +163,9 @@ sub displayAuthorizers {
 
     $html .= '<div align="center"><h4>Contributing researchers</h4></div>';
     $html .= qq|<div align="center" style="text-align: left; padding-left: 1em; padding-right: 1em;"><p class="small">The following Database members have entered data and/or supervised data entry by their students. See also our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
-    $html .= "\n<table><tr><td valign=\"top\">\n\n";
+    $html .= "\n<table><tr><td valign=\"top\" width=\"50%\">\n\n";
     $html .= formatAuthorizerTable(\@firsthalf);
-    $html .= "\n</td><td valign=\"top\">\n";
+    $html .= "\n</td><td valign=\"top\" width=\"50%\">\n";
     $html .= formatAuthorizerTable(\@secondhalf);
     $html .= "\n</td></tr></table>\n\n";
 
