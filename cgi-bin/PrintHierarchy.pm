@@ -9,16 +9,18 @@ use strict;
 sub startPrintHierarchy	{
 	my $hbo = shift;
 	my $s = shift;
+	my $error = shift;
 	my %refno;
 	$refno{'current_ref'} = $s->get('reference_no');
 	if ( $s->get('enterer_no') > 0 )	{
 		$refno{'not_guest'} = 1;
 	}
+	$refno{'error_message'} = $error;
 	print $hbo->populateHTML('print_hierarchy_form',\%refno);
 }
 
 sub processPrintHierarchy	{
-    my ($q,$dbt,$hbo) = @_;
+    my ($q,$s,$dbt,$hbo) = @_;
 
 	my $OUT_HTTP_DIR = "/paleodb/data";
 	my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
@@ -56,15 +58,17 @@ sub processPrintHierarchy	{
         @taxa = getRootTaxa($dbt,$reference_no);
     }
 
-	if (! @taxa) {
-        if (int($q->param('taxon_no')) || $q->param('taxon_name') =~ /^([A-Za-z -]+)$/) {
-		    print "<center><h3>No classification is available for this taxon</h3>\n";
-        } elsif ($reference_no) {
-		    print "<center><h3>This reference has no taxonomic opinions</h3>\n";
-        } else {
-		    print "<center><h3>No query was entered</h3>\n";
-        }
-		print "<p>You may want to <a href=\"$READ_URL?action=startStartPrintHierarchy\">try again</a></p></center>\n";
+	if (! @taxa)	{
+		my $error = qq|<p class="medium"><i>|;
+		if (int($q->param('taxon_no')) || $q->param('taxon_name') =~ /^([A-Za-z -]+)$/)	{
+			$error .= "No classification is available for this taxon";
+		} elsif ($reference_no)	{
+			$error .= "This reference has no taxonomic opinions";
+		} else	{
+			$error .= "No query was entered";
+		}
+		$error .= ". Please try again.</i></p>\n\n";
+		startPrintHierarchy($hbo,$s,$error);
 		return;
 	}
 
@@ -175,7 +179,13 @@ sub processPrintHierarchy	{
         } 
 
         my %disused = %{TaxonInfo::disusedNames($dbt,\@check_is_disused)};
-        my %nomen = %{TaxonInfo::nomenChildren($dbt,\@check_has_nomen)};
+        # we flat-out do not care about nomen children if the search is by
+        #  reference number, because they would only be tied in to the
+        #  classification by other reference's opinions
+        my %nomen = ();
+        if ( ! $reference_no )	{
+            %nomen = %{TaxonInfo::nomenChildren($dbt,\@check_has_nomen)};
+        }
 
         # Tricky part: integrate in synonyms and nomen dubiums seamlessly into tree so they
         # get printed out correctly below
@@ -249,7 +259,7 @@ sub processPrintHierarchy	{
             if ($disused{$record->{'taxon_no'}}) {
                 print " <small>(disused)</small>";
             }
-            if ($record->{'status'}) {
+            elsif ($record->{'status'}) {
                 print " <small>($record->{status})</small>";
             }
     #        my $type_taxon_for = $type_taxon_nos{$record->{'taxon_no'}};
@@ -322,7 +332,7 @@ sub getStatus {
             if ($mrpo->{'status'} =~ /subjective/) { $status = 'subjective synonym'; }
             elsif ($mrpo->{'status'} =~ /objective/) { $status = 'objective synonym'; }
             elsif ($mrpo->{'status'} =~ /subgroup/) { $status = 'invalid subgroup'; }
-            elsif ($mrpo->{'status'} =~ /replaced/) { $status = 'replacement'; }
+            elsif ($mrpo->{'status'} =~ /replaced/) { $status = 'replaced homonym'; }
             else { $status = "$mrpo->{status}";}
         } else {
             $status = 'synonym';
