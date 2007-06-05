@@ -2368,7 +2368,7 @@ sub startProcessPrintHierarchy	{
     logRequest($s,$q);
     
     print $hbo->stdIncludes("std_page_top");
-	PrintHierarchy::processPrintHierarchy($q, $dbt, $hbo);
+	PrintHierarchy::processPrintHierarchy($q, $s, $dbt, $hbo);
     print $hbo->stdIncludes("std_page_bottom");
 }
 ## END PrintHierarchy stuff
