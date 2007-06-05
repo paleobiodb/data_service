@@ -586,7 +586,8 @@ sub displayOpinionForm {
                    "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr><td nowrap>";
     if ( $childRank !~ /species/ )	{
         $belongs_to_row .= "<b>Phylogenetic status:</b> $phyl_select";
-    } elsif ( $childRank =~ /species|genus|tribe|family/ )	{
+    } 
+    if ( $childRank =~ /species|genus|tribe|family/ )	{
         $belongs_to_row .= $type_select;
     }
     $belongs_to_row .= "</td></tr></table></td></tr>";
