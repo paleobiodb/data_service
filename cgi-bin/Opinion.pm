@@ -576,10 +576,8 @@ sub displayOpinionForm {
     my $type_select = "";
     if ($childRank =~ /species|genus|tribe|family/) {
         my $checked = ($fields{'type_taxon'}) ? "CHECKED" : "";
-        $type_select = "<td width=\"40%\" nowrap>".
-                       "<input name=\"type_taxon\" type=\"checkbox\" $checked  value=\"1\">".
-                       " This is the type $childRank".
-                       "</td>";
+        $type_select = "<input name=\"type_taxon\" type=\"checkbox\" $checked  value=\"1\">".
+                       " This is the type $childRank";
     }
     my ($phyl_keys,$phyl_values) = $hbo->getKeysValues('phylogenetic_status');
     my $phyl_select = $hbo->htmlSelect('phylogenetic_status',$phyl_keys,$phyl_values,$fields{'phylogenetic_status'});
@@ -588,6 +586,8 @@ sub displayOpinionForm {
                    "<table border=0 cellpadding=0 cellspacing=0 width=\"100%\"><tr><td nowrap>";
     if ( $childRank !~ /species/ )	{
         $belongs_to_row .= "<b>Phylogenetic status:</b> $phyl_select";
+    } elsif ( $childRank =~ /species|genus|tribe|family/ )	{
+        $belongs_to_row .= $type_select;
     }
     $belongs_to_row .= "</td></tr></table></td></tr>";
 
@@ -1326,7 +1326,7 @@ sub submitOpinionForm {
 	} else {
 		# if it's an old entry, then we'll update.
         unless ($q->param('ref_has_opinion') =~ /CURRENT/) {
-            # Delete this field so its never updated unless we're swithing to current ref
+            # Delete this field so its never updated unless we're switching to current ref
             delete $fields{'reference_no'};
         }
 
@@ -1426,19 +1426,72 @@ sub submitOpinionForm {
     my $opinionHTML = $o->formatAsHTML();
     $opinionHTML =~ s/according to/of/i;
 
-	my $enterupdate = ($isNewEntry) ? 'entered into' : 'updated in';
+	my $enterupdate = ($isNewEntry) ? 'entered' : 'updated';
 
-    my $end_message = "";
+    # we need to warn about the nasty case in which the author has synonymized
+    #  genera X and Y, but we do not know the author's opinion on one or more
+    #  species placed at some point in X
+    if ( $childRank =~ /genus/ && $q->param('taxon_status') !~ /belongs to/ )	{
+        # first get every child ever assigned to this genus
+        my $sql = "SELECT child_no FROM opinions WHERE parent_spelling_no="  . $fields{child_spelling_no} . " GROUP BY child_no";
+        my @childrefs = @{$dbt->getData($sql)};
+        my @children;
+        for my $cr ( @childrefs )	{
+            push @children , $cr->{child_no};
+        }
+        # then get every opinion on every child ever assigned to this genus
+        my $sql = "SELECT child_no,ref_has_opinion,o.reference_no reference_no,o.author1last author1last,o.author2last author2last,o.pubyr pubyr FROM opinions o,authorities WHERE taxon_no=child_no AND child_no IN (" . join(',',@children) . ")";
+        my @childrefs = @{$dbt->getData($sql)};
+        my %authorHasOpinion;
+        my %speciesName;
+        for my $cr ( @childrefs )	{
+            $speciesName{$cr->{child_no}} = $cr->{taxon_name};
+            if ( ! $authorHasOpinion{$cr->{child_no}} )	{
+                $authorHasOpinion{$cr->{child_no}} = "NO";
+            }
+        # we test only on author1last, author2last, and pubyr to avoid
+        #  false mismatches due to typos
+print "$cr->{reference_no} / $resultReferenceNumber / $cr->{ref_has_opinion} / $fields{'ref_has_opinion'}<br>";
+            if ( $cr->{reference_no} == $resultReferenceNumber && $cr->{ref_has_opinion} eq "YES" && $fields{'ref_has_opinion'} eq "YES" )	{
+                $authorHasOpinion{$cr->{child_no}} = "YES";
+            } elsif ( $cr->{author1last} eq $fields{author1last} && $cr->{author2last} eq $fields{author2last} && $cr->{pubyr} eq $fields{pubyr} && $cr->{ref_has_opinion} ne "YES" && $fields{'ref_has_opinion'} ne "YES" )	{
+                $authorHasOpinion{$cr->{child_no}} = "YES";
+            }
+        }
+        @children = keys %authorHasOpinion;
+        @children = sort { $speciesName{$a} cmp $speciesName{$b} } @children;
+        my $needOpinion;
+        for my $ch ( @children )	{
+            if ( $authorHasOpinion{$ch} eq "NO" )	{
+                $needOpinion =~ s/ and / /;
+                $needOpinion .= ", and " . $speciesName{$ch};
+            }
+        }
+        $needOpinion =~ s/^, //;
+        if ( $needOpinion =~ / and / )	{
+            push @warnings , "This author's opinions on " . $needOpinion . " still may need to be entered";
+        } elsif ( $needOpinion )	{
+            push @warnings , "This author's opinion on " . $needOpinion . " still may need to be entered";
+        }
+    }
+
+    my $end_message .= qq|
+<div align="center">
+<p class="medium"><b>The opinion $opinionHTML has been $enterupdate</b></p>
+|;
+
     if (@warnings) {
         $end_message .= "<DIV class=\"warning\">";
-        $end_message .= "Warnings inserting/updating opinion:<BR>";
-        $end_message .= "<LI>$_</LI>" for (@warnings);
+        if ( $#warnings > 0 )	{
+            $end_message .= "Warnings:<BR>";
+            $end_message .= "<LI>$_</LI>" for (@warnings);
+        } else	{
+            $end_message .= "Warning: " . $warnings[0];
+        }
         $end_message .= "</DIV>";
     }  
 
     $end_message .= qq|
-<div align="center">
-<p class="medium"><b>The opinion $opinionHTML has been $enterupdate</b></p>
 <div class="displayPanel">
 <p>
 <table cellpadding="10" class="small"><tr><td valign=top>
