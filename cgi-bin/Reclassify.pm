@@ -397,7 +397,6 @@ sub processReclassifyForm	{
 				$sql .= " WHERE taxon_no=0";
 			}
 			$sql .= " AND reid_no=" . $reids[$i];
-			$dbt->getData($sql);
 			$dbh_r->do($sql);
 
 		# print the taxon's info
