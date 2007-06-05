@@ -346,7 +346,7 @@ sub processReclassifyForm	{
             $seen_reclassification++;
 
 		# update the occurrences table
-            my $dbh_r = $dbt->dbh_remote;
+			my $dbh_r = $dbt->dbh_remote;
 			my $sql = "UPDATE occurrences SET taxon_no=".$new_taxon_no.
                    ", modifier=".$dbh->quote($s->get('enterer')).
 			       ", modifier_no=".$s->get('enterer_no');
@@ -387,6 +387,7 @@ sub processReclassifyForm	{
             $seen_reclassification++;
 
 		# update the reidentifications table
+			my $dbh_r = $dbt->dbh_remote;
 			my $sql = "UPDATE reidentifications SET taxon_no=".$new_taxon_no.
                    ", modifier=".$dbh->quote($s->get('enterer')).
 			       ", modifier_no=".$s->get('enterer_no');
