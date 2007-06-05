@@ -355,17 +355,15 @@ sub processReclassifyForm	{
 			} else	{
 				$sql .= " WHERE taxon_no=0";
 			}
-            if ($occurrences[$i] =~ /^\d+$/) {
-			    $sql .= " AND occurrence_no=" . $occurrences[$i];
-                dbg($sql);
-                $dbh_r->do($sql);
-            } elsif ($occurrence_lists[$i] =~ /^[\d, ]+$/) {
-                $sql .= " AND occurrence_no IN (".$occurrence_lists[$i].")";
-                dbg($sql);
-                $dbh_r->do($sql);
-            } else {
-                die ("Error: No occurrence number found for $occurrence_description");
-            }
+			if ($occurrences[$i] =~ /^\d+$/) {
+				$sql .= " AND occurrence_no=" . $occurrences[$i];
+				$dbh_r->do($sql);
+			} elsif ($occurrence_lists[$i] =~ /^[\d, ]+$/) {
+				$sql .= " AND occurrence_no IN (".$occurrence_lists[$i].")";
+				$dbh_r->do($sql);
+			} else {
+				die ("Error: No occurrence number found for $occurrence_description");
+			}
 		# print the taxon's info
 			if ( $rowcolor % 2 )	{
 				print "<tr>";
@@ -398,8 +396,8 @@ sub processReclassifyForm	{
 				$sql .= " WHERE taxon_no=0";
 			}
 			$sql .= " AND reid_no=" . $reids[$i];
-            dbg($sql);
 			$dbt->getData($sql);
+			$dbh_r->do($sql);
 
 		# print the taxon's info
 			if ( $rowcolor % 2 )	{
