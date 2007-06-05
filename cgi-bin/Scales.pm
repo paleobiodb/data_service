@@ -22,7 +22,7 @@ sub startSearchScale {
 	my $dbt = shift;
 	my $s = shift;
 
-    my $dbh = $dbt->dbh;
+	my $dbh = $dbt->dbh;
 
 	# Print the form
 	print "<div align=\"center\"><h2>Select a time scale to view</h2>\n";
@@ -129,7 +129,7 @@ function unloadPage()	{
 #  because pulldown with scales has been dropped
 sub processShowEditForm	{
 	my $dbt = shift;
-    $dbt->useRemote(1);
+	$dbt->useRemote(1);
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
@@ -137,7 +137,7 @@ sub processShowEditForm	{
 
 	# Have to have a reference #
 	my $reference_no = $s->get("reference_no");
-    my $scale = int($q->param('scale'));
+	my $scale = int($q->param('scale'));
 	if ( ! $reference_no )	{
 		if ( $q->param('scale') )	{
 			$s->enqueue( "action=processShowForm&scale=$scale");
@@ -268,7 +268,7 @@ sub processViewTimeScale	{
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
-    my $stage = shift;
+	my $stage = shift;
 	my $bad = shift;
 
     my @badintervals;
@@ -411,20 +411,18 @@ sub processViewTimeScale	{
 
 sub processEditScaleForm	{
 	my $dbt = shift;
-    $dbt->useRemote(1);
+	$dbt->useRemote(1);
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
 
-    my $authorizer_no = $s->get('authorizer_no');
-    my $enterer_no = $s->get('enterer_no');
-    return unless $authorizer_no;
+	my $authorizer_no = $s->get('authorizer_no');
+	my $enterer_no = $s->get('enterer_no');
+	return unless $authorizer_no;
 
-    $dbt->editMode(1);
-    my $dbh_r = $dbt->dbh_remote;
+	my $dbh_r = $dbt->dbh_remote;
 
-    my $scale_no = int($q->param('scale_no'));
-    die unless ($scale_no && $scale_no =~ /^[0-9]+$/);
+	my $scale_no = int($q->param('scale_no'));
 
 	my $scale_name = $q->param('scale_name');
 
@@ -442,20 +440,21 @@ sub processEditScaleForm	{
 	my @lower_boundaries = $q->param('lower_boundary');
 	my @comments_fields = $q->param('corr_comments');
 
-    my %vars = (
-        scale_name  =>$scale_name,
-        continent   =>$q->param('continent'),
-        basis       =>$q->param('basis'),
-        scale_rank  =>$q->param('scale_rank'),
-        scale_comments=>$q->param('scale_comments')
-    );
-	if ($scale_no =~ /[0-9]/ )	{
+	my %vars = (
+		reference_no=>$s->get('reference_no'),
+		scale_name  =>$scale_name,
+		continent   =>$q->param('continent'),
+		basis       =>$q->param('basis'),
+		scale_rank  =>$q->param('scale_rank'),
+		scale_comments=>$q->param('scale_comments')
+	);
+	if ($scale_no > 0 )	{
 	    # update the scales table
-        $dbt->updateRecord($s,'scales','scale_no',$scale_no,\%vars);
+		$dbt->updateRecord($s,'scales','scale_no',$scale_no,\%vars);
 	} else	{
     	# add to the scales table
-        my ($result,$id) = $dbt->insertRecord($s,'scales',\%vars);
-        $scale_no = $id;
+		my ($result,$id) = $dbt->insertRecord($s,'scales',\%vars);
+		$scale_no = $id;
 	}
 
 	my %fieldused;
@@ -544,7 +543,7 @@ sub processEditScaleForm	{
 				$sql .= $eml_intervals[$i] . "', ";
 				$sql .= $s->get('reference_no') . ", '";
 				$sql .= $interval_names[$i] . "')";
-				$dbh_r->getData($sql);
+				$dbh_r->do($sql);
 
 				# set the interval no
 				$sql = "SELECT interval_no FROM intervals WHERE ";
@@ -559,7 +558,7 @@ sub processEditScaleForm	{
 				my @modifieds = @{$dbt->getData($sql)};
 				$sql = "UPDATE intervals SET modified=modified,created=";
 				$sql .= $modifieds[0]->{modified} . " WHERE interval_no=" . $interval_no;
-				$dbt->getData($sql);
+				$dbh_r->do($sql);
 
 			# now that the interval exists, put its number wherever
 			#  it belongs in the collections table
@@ -662,7 +661,7 @@ sub processEditScaleForm	{
 				$sql = "UPDATE correlations SET ";
 				$sql .= "interval_no=" . $interval_no;
 				$sql .= " WHERE correlation_no=" . $correlation_nos[$i];
-				$dbt->getData($sql);
+				$dbh_r->do($sql);
 			# otherwise, add to the correlations table
 			} else	{
 				$sql = "INSERT INTO correlations (authorizer_no, enterer_no, reference_no, scale_no, interval_no, next_interval_no, max_interval_no, min_interval_no, lower_boundary, corr_comments) VALUES (";
@@ -677,14 +676,14 @@ sub processEditScaleForm	{
 				$sql .= $lower_boundaries[$i] . "', '";
 				$sql .= $comments_fields[$i] . "')";
 
-				$dbt->getData($sql);
+				$dbh_r->do($sql);
 
 				# set the created date
 				$sql = "SELECT modified FROM correlations WHERE scale_no=" . $scale_no . " AND interval_no=" . $interval_no;
 				my @modifieds = @{$dbt->getData($sql)};
 				$sql = "UPDATE correlations SET modified=modified,created=";
 				$sql .= $modifieds[0]->{modified} . " WHERE scale_no=" . $scale_no . " AND interval_no=" . $interval_no;
-				$dbt->getData($sql);
+				$dbh_r->do($sql);
 			}
 
 			if ( $interval_no > 0 )	{
@@ -698,8 +697,6 @@ sub processEditScaleForm	{
 
 	$q->param('scale' => $scale_no);
 	processViewTimeScale($dbt, $hbo, $q, $s, 'summary', \@badintervals);
-
-    $dbt->editMode(0);
 
 	return;
 }
