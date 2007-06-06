@@ -771,6 +771,7 @@ sub submitOpinionForm {
 	my $childTaxon = Taxon->new($dbt,$fields{'child_no'});
 	my $childName = $childTaxon->get('taxon_name');
 	my $childRank = $childTaxon->get('taxon_rank');
+	my $ref = Reference->new($dbt,$fields{'reference_no'});
 
     # If a drop down is presented, do not use the parent_spelling_no from it if they switched radio buttons
     if (($q->param('orig_taxon_status') && $q->param('orig_taxon_status') ne $q->param('taxon_status'))) {
@@ -858,13 +859,6 @@ sub submitOpinionForm {
 			$errors->add("Don't enter other author names if you haven't entered a second author");
 		}
 
-        my $lookup_reference = "";
-        if ($q->param('ref_has_opinion') eq 'CURRENT') {
-            $lookup_reference = $s->get('reference_no');
-        } else {
-            $lookup_reference = $fields{'reference_no'};
-        }  
-
 		if ($q->param('pubyr')) {
             my $pubyr = $q->param('pubyr');
 			
@@ -874,7 +868,6 @@ sub submitOpinionForm {
 			
 			# make sure that the pubyr they entered (if they entered one)
 			# isn't more recent than the pubyr of the reference.  
-			my $ref = Reference->new($dbt,$lookup_reference);
 			if ($ref && $pubyr > $ref->get('pubyr')) {
 				$errors->add("The publication year ($pubyr) can't be more recent than that of the primary reference (" . $ref->get('pubyr') . ")");
 			}
@@ -882,18 +875,12 @@ sub submitOpinionForm {
             $errors->add("A publication year is required");
         }
 	} else {
-        my $lookup_reference = "";
-        if ($q->param('ref_has_opinion') eq 'CURRENT') {
-            $lookup_reference = $s->get('reference_no');
-        } else {
-            $lookup_reference = $fields{'reference_no'};
-        }
 		# if they chose ref_has_opinion, then we also need to make sure that there
 		# are no other opinions about the current taxon (child_no) which use 
 		# this as the reference.  
         my $sql = "SELECT count(*) c FROM opinions WHERE ref_has_opinion='YES'".
                   " AND child_no=".$dbh->quote($fields{'child_no'}).
-                  " AND reference_no=".$dbh->quote($lookup_reference).
+                  " AND reference_no=".$dbh->quote($fields{'reference_no'}).
                   " AND status NOT IN ('misspelling of')";
         if (! $isNewEntry) {
             $sql .= " AND opinion_no != ".$o->{'opinion_no'};
@@ -901,7 +888,7 @@ sub submitOpinionForm {
         my $row = ${$dbt->getData($sql)}[0];
         # also make sure there isn't a secondary report of this opinion
         #  JA 9.1.07
-        my $sql = "SELECT author1last,author2last,pubyr FROM refs WHERE reference_no=".$dbh->quote($lookup_reference);
+        my $sql = "SELECT author1last,author2last,pubyr FROM refs WHERE reference_no=".$dbh->quote($fields{'reference_no'});
         my $row2 = ${$dbt->getData($sql)}[0];
         my $row3;
         if ( $row2->{author1last} )	{
@@ -931,7 +918,6 @@ sub submitOpinionForm {
         
 		# also make sure that the pubyr of this opinion isn't older than
 		# the pubyr of the authority record the opinion is about
-		my $ref = Reference->new($dbt, $lookup_reference);
 		if ( $ref && $childTaxon->pubyr() > $ref->get('pubyr') ) {
 			$errors->add("The publication year (".$ref->get('pubyr').") for this opinion can't be earlier than the year the taxon was named (".$childTaxon->pubyr().")");	
         }
@@ -1433,46 +1419,54 @@ sub submitOpinionForm {
     #  genera X and Y, but we do not know the author's opinion on one or more
     #  species placed at some point in X
     if ( $childRank =~ /genus/ && $q->param('taxon_status') !~ /belongs to/ )	{
-        # first get every child ever assigned to this genus
-        my $sql = "SELECT child_no FROM opinions WHERE parent_spelling_no="  . $fields{child_spelling_no} . " GROUP BY child_no";
-        my @childrefs = @{$dbt->getData($sql)};
-        my @children;
-        for my $cr ( @childrefs )	{
-            push @children , $cr->{child_no};
-        }
-        # then get every opinion on every child ever assigned to this genus
-        my $sql = "SELECT child_no,ref_has_opinion,o.reference_no reference_no,o.author1last author1last,o.author2last author2last,o.pubyr pubyr FROM opinions o,authorities WHERE taxon_no=child_no AND child_no IN (" . join(',',@children) . ")";
+        # get every opinion on every child ever assigned to this genus
+        # we join on o2 to make sure that they have been
+        my $sql = "SELECT taxon_name,o.child_no,o.ref_has_opinion,o.reference_no reference_no,IF (o.ref_has_opinion='YES',r.author1last,o.author1last) author1last,IF (o.ref_has_opinion='YES',r.author2last,o.author2last) author2last,IF (o.ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr FROM refs r,opinions o,opinions o2,authorities WHERE r.reference_no=o.reference_no AND taxon_no=o.child_no AND taxon_no=o2.child_no AND o2.parent_spelling_no =" . $fields{child_spelling_no} . " ORDER BY pubyr";
         my @childrefs = @{$dbt->getData($sql)};
         my %authorHasOpinion;
         my %speciesName;
         for my $cr ( @childrefs )	{
-            $speciesName{$cr->{child_no}} = $cr->{taxon_name};
-            if ( ! $authorHasOpinion{$cr->{child_no}} )	{
-                $authorHasOpinion{$cr->{child_no}} = "NO";
-            }
+            if ( ( $fields{'ref_has_opinion'} ne "YES" && $cr->{'pubyr'} <= $fields{'pubyr'} ) || ( $fields{'ref_has_opinion'} eq "YES" && $cr->{'pubyr'} <= $ref->get('pubyr') ) )	{
+                $speciesName{$cr->{child_no}} = $cr->{taxon_name};
+                if ( ! $authorHasOpinion{$cr->{child_no}} )	{
+                    $authorHasOpinion{$cr->{child_no}} = "NO";
+                }
         # we test only on author1last, author2last, and pubyr to avoid
         #  false mismatches due to typos
-print "$cr->{reference_no} / $resultReferenceNumber / $cr->{ref_has_opinion} / $fields{'ref_has_opinion'}<br>";
-            if ( $cr->{reference_no} == $resultReferenceNumber && $cr->{ref_has_opinion} eq "YES" && $fields{'ref_has_opinion'} eq "YES" )	{
-                $authorHasOpinion{$cr->{child_no}} = "YES";
-            } elsif ( $cr->{author1last} eq $fields{author1last} && $cr->{author2last} eq $fields{author2last} && $cr->{pubyr} eq $fields{pubyr} && $cr->{ref_has_opinion} ne "YES" && $fields{'ref_has_opinion'} ne "YES" )	{
-                $authorHasOpinion{$cr->{child_no}} = "YES";
+                if ( $cr->{reference_no} == $resultReferenceNumber && $cr->{ref_has_opinion} eq "YES" && $fields{'ref_has_opinion'} eq "YES" )	{
+                    $authorHasOpinion{$cr->{child_no}} = "YES";
+                } elsif ( $cr->{author1last} eq $fields{author1last} && $cr->{author2last} eq $fields{author2last} && $cr->{pubyr} eq $fields{pubyr} && $cr->{ref_has_opinion} ne "YES" && $fields{'ref_has_opinion'} ne "YES" )	{
+                    $authorHasOpinion{$cr->{child_no}} = "YES";
+                }
             }
         }
-        @children = keys %authorHasOpinion;
-        @children = sort { $speciesName{$a} cmp $speciesName{$b} } @children;
+        my @children = sort { $speciesName{$a} cmp $speciesName{$b} } keys %authorHasOpinion;
         my $needOpinion;
         for my $ch ( @children )	{
             if ( $authorHasOpinion{$ch} eq "NO" )	{
-                $needOpinion =~ s/ and / /;
-                $needOpinion .= ", and " . $speciesName{$ch};
+                if ( ! $needOpinion )	{
+                    $needOpinion = $speciesName{$ch};
+                } else	{
+                    if ( $needOpinion !~ / and / )	{
+                        $needOpinion .= " and " . $speciesName{$ch};
+                    } else	{
+                        $needOpinion =~ s/ and /, /;
+                        $needOpinion .= " and " . $speciesName{$ch};
+                    }
+                }
             }
         }
         $needOpinion =~ s/^, //;
+        my $authors;
+        if ( $opinionHTML =~ / and | et al/ )	{
+            $authors = "These authors'";
+        } else	{
+            $authors = "This author's";
+        }
         if ( $needOpinion =~ / and / )	{
-            push @warnings , "This author's opinions on " . $needOpinion . " still may need to be entered";
+            push @warnings , $authors . " opinions on " . $needOpinion . " still may need to be entered";
         } elsif ( $needOpinion )	{
-            push @warnings , "This author's opinion on " . $needOpinion . " still may need to be entered";
+            push @warnings , $authors . " opinion on " . $needOpinion . " still may need to be entered";
         }
     }
 
