@@ -22,8 +22,8 @@ sub new {
 	if (! $dbh) {
 		# connect if needed
 		$dbh = DBConnection::connect();
-		$self->{'dbh'} = $dbh;
     } 
+    $self->{'dbh'} = $dbh;
     $self->{'table_definitions'} = {};
     $self->{'table_names'} = [];
 	
