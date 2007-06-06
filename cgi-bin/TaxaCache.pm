@@ -64,7 +64,7 @@ sub rebuildCache {
         # We're going to create a brand new table from scratch, then swap it
         # to be the normal table once its complete
         $result = $dbh->do("DROP TABLE IF EXISTS taxa_tree_cache_new");
-        $result = $dbh->do("CREATE TABLE taxa_tree_cache_new (taxon_no int(10) unsigned NOT NULL default '0',lft int(10) unsigned NOT NULL default '0',rgt int(10) unsigned NOT NULL default '0', spelling_no int(10) unsigned NOT NULL default '0', synonym_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (taxon_no), KEY lft (lft), KEY rgt (rgt), KEY synonym_no (synonym_no)) TYPE=MyISAM");
+        $result = $dbh->do("CREATE TABLE taxa_tree_cache_new (taxon_no int(10) unsigned NOT NULL default '0',lft int(10) unsigned NOT NULL default '0',rgt int(10) unsigned NOT NULL default '0', spelling_no int(10) unsigned NOT NULL default '0', synonym_no int(10) unsigned NOT NULL default '0', max_interval_no int(10) unsigned NOT NULL default '0',min_interval_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (taxon_no), KEY lft (lft), KEY rgt (rgt), KEY synonym_no (synonym_no)) TYPE=MyISAM");
 
         # Keep track of which nodes we've processed
         my $next_lft = 1;
@@ -92,6 +92,7 @@ sub rebuildCache {
         }
         $result = $dbh->do("RENAME TABLE taxa_tree_cache TO taxa_tree_cache_old, taxa_tree_cache_new TO taxa_tree_cache");
         $result = $dbh->do("DROP TABLE taxa_tree_cache_old");
+        setSyncTime($dbt,$time);
         undef %processed;
     }
     # Now build the taxa_list_cache - just edit it in place
@@ -188,14 +189,21 @@ sub rebuildCache {
             $dbh->do($sql_d);
         }
     }
+}
 
-    # Update things that might have changed while we creatd this
-    $sql = "SELECT DISTINCT child_no FROM opinions WHERE created >= ".$dbh->quote($time);
-    my @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        updateCache($dbt,$row->{'child_no'});
-    }
 
+sub getSyncTime {
+    my $dbt = shift;
+    my $sql = "SELECT sync_time FROM tc_sync WHERE sync_id=1";
+    my $time = ${$dbt->getData($sql)}[0]->{'sync_time'};
+    return $time;
+}
+
+sub setSyncTime {
+    my ($dbt,$time) = @_;
+    my $dbh = $dbt->dbh;
+    my $sql = "REPLACE INTO tc_sync (sync_id,sync_time) VALUES (1,'$time')";
+    $dbh->do($sql); 
 }
 
 
@@ -236,6 +244,7 @@ sub rebuildAddChild {
 
     # Now add all those children
     my $next_lft = $lft + 1;
+    my %all_intervals = ();
     foreach my $child_no (@children) {
         $next_lft = rebuildAddChild($dbt,$child_no,$next_lft,$processed);
         $next_lft++;
@@ -254,14 +263,25 @@ sub rebuildAddChild {
     } else {
         $synonym_no = TaxonInfo::getSeniorSynonym($dbt,$taxon_no);
     }
+    my $range_op = TaxonInfo::getMostRecentClassification($dbt,$synonym_no,{'strat_range'=>1});
+    my ($max_interval_no,$min_interval_no) = (0,0);
+    if ($range_op) {
+        $max_interval_no = $range_op->{'max_interval_no'};
+        $min_interval_no = $range_op->{'min_interval_no'};
+        if (!$min_interval_no) {
+            $min_interval_no=$max_interval_no;
+        }
+    }
+
     my $synonym_spelling = TaxonInfo::getMostRecentSpelling($dbt,$synonym_no);
     $synonym_no = $synonym_spelling->{'taxon_no'};
 
+
     # Now insert all the names
-    # This is insert ignore instead of inserto to deal with bad records
-    $sql = "INSERT IGNORE INTO taxa_tree_cache_new (taxon_no,lft,rgt,spelling_no,synonym_no) VALUES ";
+    # This is insert ignore instead of insert to to deal with bad records
+    $sql = "INSERT IGNORE INTO taxa_tree_cache_new (taxon_no,lft,rgt,spelling_no,synonym_no,max_interval_no,min_interval_no) VALUES ";
     foreach my $t (@all_taxa) {
-        $sql .= "($t,$lft,$rgt,$spelling_no,$synonym_no),";
+        $sql .= "($t,$lft,$rgt,$spelling_no,$synonym_no,$max_interval_no,$min_interval_no),";
         $processed->{$t} = 1;
     }    
     $sql =~ s/,$//;
@@ -270,7 +290,6 @@ sub rebuildAddChild {
 
     return $next_lft;
 }
-
 
 # This will add a new taxonomic name to the datbaase that doesn't currently 
 # belong anywhere.  Should be called when creating a new authority (Taxon.pm) 
@@ -286,7 +305,7 @@ sub addName {
     my $lft = $row->[0] + 1; 
     my $rgt = $row->[0] + 2; 
   
-    $sql = "INSERT IGNORE INTO taxa_tree_cache (taxon_no,lft,rgt,spelling_no,synonym_no) VALUES ($taxon_no,$lft,$rgt,$taxon_no,$taxon_no)";
+    $sql = "INSERT IGNORE INTO taxa_tree_cache (taxon_no,lft,rgt,spelling_no,synonym_no,max_interval_no,min_interval_no) VALUES ($taxon_no,$lft,$rgt,$taxon_no,$taxon_no,0,0)";
     print "Adding name: $taxon_no: $sql<BR>\n" if ($DEBUG);
     $dbh->do($sql); 
     $sql = "SELECT * FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
@@ -307,7 +326,6 @@ sub addName {
 #   $child_no is the taxon_no of the child to be updated (if necessary)
 sub updateCache {
     my ($dbt,$child_no) = @_;
-    $dbt->useRemote(1);
     my $dbh=$dbt->dbh;
     return if (!$child_no);
     $child_no = TaxonInfo::getOriginalCombination($dbt,$child_no);
@@ -392,9 +410,18 @@ sub updateCache {
     my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$child_no);
     my $spelling_no = $spelling->{'taxon_no'};
        
-    # Change the most current spelling_no
-    $sql = "UPDATE taxa_tree_cache SET spelling_no=$spelling_no WHERE lft=$cache_row->{lft}"; 
-    print "Updating spelling with $spelling_no: $sql\n" if ($DEBUG);
+    # Change the most current spelling_no and max and min
+    my $range_op = TaxonInfo::getMostRecentClassification($dbt,$child_no,{'strat_range'=>1});
+    my ($max_interval_no,$min_interval_no) = (0,0);
+    if ($range_op) {
+        $max_interval_no = $range_op->{'max_interval_no'};
+        $min_interval_no = $range_op->{'min_interval_no'};
+        if (!$min_interval_no) {
+            $min_interval_no=$max_interval_no;
+        }
+    }
+    $sql = "UPDATE taxa_tree_cache SET max_interval_no=$max_interval_no,min_interval_no=$min_interval_no,spelling_no=$spelling_no WHERE lft=$cache_row->{lft}"; 
+    print "Updating max,min,spelling with $max_interval_no,$min_interval_no,$spelling_no: $sql\n" if ($DEBUG);
     $dbh->do($sql);
 
     # Change it so the senior synonym no points to the senior synonym's most correct name
@@ -405,6 +432,8 @@ sub updateCache {
     $sql = "UPDATE taxa_tree_cache SET synonym_no=$senior_synonym_no WHERE lft=$cache_row->{lft} OR (lft >= $cache_row->{lft} AND rgt <= $cache_row->{rgt} AND synonym_no=$cache_row->{synonym_no})"; 
     print "Updating synonym with $senior_synonym_no: $sql\n" if ($DEBUG);
     $dbh->do($sql);
+
+    
 
     # Second section: Now we check if the parents have been chagned by a recent opinion, and only update
     # it if that is the case
@@ -550,7 +579,6 @@ sub moveChildren {
 # in - we don't want to mark a senior synonym as a "parent" so we filter those out
 sub updateListCache {
     my ($dbt,$taxon_no) = @_; 
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     # Get the row from the db
@@ -831,7 +859,7 @@ sub getMetaData {
     my $nomen_parent_no = 0;
     if ($synonym_no != $spelling_no || ($last_op && $last_op->{'status'} !~ /belongs to/)) {
         if ($last_op->{'status'} =~ /nomen/) {
-            my $last_parent_op = TaxonInfo::getMostRecentClassification($dbt,$orig_no,'',1); 
+            my $last_parent_op = TaxonInfo::getMostRecentClassification($dbt,$orig_no,{'exclude_nomen'=>1}); 
             $nomen_parent_no = $last_parent_op->{'parent_no'} || "0";
         } 
         $invalid_reason = $last_op->{'status'};

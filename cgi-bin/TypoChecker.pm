@@ -127,7 +127,6 @@ sub getNameData {
 # Also, much of the filtering options can't be applied until we get a list of suggesstions
 sub occurrenceMisspellingForm {
 	my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     my $show_detail = $q->param('show_detail');
@@ -406,7 +405,6 @@ sub occurrenceMisspellingForm {
 #
 sub submitOccurrenceMisspelling {
 	my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     if ($q->param('submit') =~ /get next/i) {

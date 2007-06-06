@@ -102,7 +102,7 @@ sub get_classification_hash{
         # Bug fix: prevent a senior synonym from being considered a parent
         $child_no = TaxonInfo::getSeniorSynonym($dbt,$child_no,$restrict_to_reference_no);
         # prime the pump 
-        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$child_no,$restrict_to_reference_no);
+        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$child_no,{'reference_no'=>$restrict_to_reference_no});
         if ($DEBUG) { print "Start:".Dumper($parent_row)."<br>"; }
         my $status = $parent_row->{'status'};
         $child_no = $parent_row->{'parent_no'};
@@ -127,7 +127,7 @@ sub get_classification_hash{
             }
 
             # Belongs to should always point to original combination
-            $parent_row = TaxonInfo::getMostRecentClassification($dbt,$child_no,$restrict_to_reference_no);
+            $parent_row = TaxonInfo::getMostRecentClassification($dbt,$child_no,{'reference_no'=>$restrict_to_reference_no});
             if ($DEBUG) { print "Loop:".Dumper($parent_row)."<br>"; }
        
             # No parent was found. This means we're at end of classification, althought
@@ -135,7 +135,7 @@ sub get_classification_hash{
             # need to add the current child still
             my ($taxon_rank);
             if ($parent_row) {
-                my $taxon= TaxonInfo::getMostRecentSpelling($dbt,$child_no,$restrict_to_reference_no);
+                my $taxon= TaxonInfo::getMostRecentSpelling($dbt,$child_no,{'reference_no'=>$restrict_to_reference_no});
                 $parent_no  = $parent_row->{'parent_no'};
                 $status = $parent_row->{'status'};
                 $child_spelling_no = $taxon->{'taxon_no'};
@@ -441,7 +441,7 @@ sub getChildrenRecurse {
         # (the taxon_nos will always be original combinations since orig. combs always have all the belongs to links)
         # go back up and check each child's parent(s)
         my $orig_no = $row->{'child_no'};
-        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$orig_no,$restrict_to_ref); 
+        my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$orig_no,{'reference_no'=>$restrict_to_ref});
         if ($parent_row->{'parent_no'}==$node->{'orig_no'}) {
 
             # Create the node for the new child - note its taxon_no is always the original combination,
@@ -477,7 +477,7 @@ sub getChildrenRecurse {
 
 sub createNode {
     my ($dbt,$orig_no,$restrict_to_ref,$depth) = @_;
-    my $taxon = TaxonInfo::getMostRecentSpelling($dbt,$orig_no,$restrict_to_ref);
+    my $taxon = TaxonInfo::getMostRecentSpelling($dbt,$orig_no,{'reference_no'=>$restrict_to_ref});
     my $new_node = {'orig_no'=>$orig_no,
                     'taxon_no'=>$taxon->{'taxon_no'},
                     'taxon_name'=>$taxon->{'taxon_name'},

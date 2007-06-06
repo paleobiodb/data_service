@@ -11,7 +11,7 @@ use Images;
 use Measurement;
 use Debug qw(dbg);
 use PBDBUtil;
-use Constants qw($READ_URL $WRITE_URL);
+use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR);
 
 use strict;
 
@@ -128,7 +128,6 @@ sub checkTaxonInfo {
 </div>
 </div>
 |;
-
         }
     }
 }
@@ -301,7 +300,7 @@ sub displayTaxonInfoResults {
 
             if ($entered_no) {
                 print "<a href=\"$WRITE_URL?action=displayOpinionChoiceForm&amp;taxon_no=$entered_no\"><b>Edit taxonomic opinions about $entered_name</b></a> - ";
-                print "<a href=\"$WRITE_URL.pl?action=startPopulateEcologyForm&amp;taxon_no=$taxon_no\"><b>Add/edit ecological/taphonomic data</b></a> - ";
+                print "<a href=\"$WRITE_URL?action=startPopulateEcologyForm&amp;taxon_no=$taxon_no\"><b>Add/edit ecological/taphonomic data</b></a> - ";
             }
             
             print "<a href=\"$WRITE_URL?action=startImage\">".
@@ -536,7 +535,7 @@ sub displayMap {
     if ( $map_html_path )	{
         if($map_html_path =~ /^\/public/){
             # reconstruct the full path the image.
-            $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+            $map_html_path = $HTML_DIR.$map_html_path;
         }
         open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
         while(<MAP>){
@@ -555,59 +554,20 @@ sub doCollections{
     my ($dbt,$s,$colls,$display_name,$taxon_no,$in_list,$age_range_format,$is_real_user) = @_;
     my $dbh = $dbt->dbh;
     
-	my $output = "";
-
-	# get a lookup of the boundary ages for all intervals JA 25.6.04
-	# the boundary age hashes are keyed by interval nos
-    my $t = new TimeLookup($dbt);
-#    my ($upperbound,$lowerbound) = $t->getBoundaries;
-  
-    my $interval_hash = {};
-    my $lowerbound = {};
-    my $upperbound = {};
-    my $interval_name = {};
-    my %seen_itv = ();
-    foreach my $c (@$colls) {
-        $seen_itv{$c->{'max_interval_no'}} = 1 if ($c->{max_interval_no});
-        $seen_itv{$c->{'min_interval_no'}} = 1 if ($c->{min_interval_no});
-    }
-  
-    # this look gets boundaries for all intervals the in the collection set, as 
-    # well as all parents (broader) of those intervals, which is used below
-    # in calculateAgeRange for pruning purposes
-    my @itvs = keys %seen_itv;
-    while (@itvs) {
-        %seen_itv = ();
-        my $sql = "SELECT i.interval_no,TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,il.interval_hash,il.lower_boundary,il.upper_boundary FROM interval_lookup il, intervals i WHERE il.interval_no=i.interval_no AND i.interval_no IN (".join(",",@itvs).")";
-        my @data = @{$dbt->getData($sql)};
-        foreach my $row (@data) {
-            $lowerbound->{$row->{interval_no}} = $row->{lower_boundary};
-            $upperbound->{$row->{interval_no}} = $row->{upper_boundary};
-            $interval_name->{$row->{interval_no}} = $row->{interval_name};
-            my $itv = $t->deserializeItv($row->{'interval_hash'});
-            if ($itv->{max_no} && !$interval_hash->{$itv->{'max_no'}}) {
-                $seen_itv{$itv->{'max_no'}} = 1 
-            }
-            if ($itv->{min_no} && !$interval_hash->{$itv->{'min_no'}}) {
-                $seen_itv{$itv->{'min_no'}} = 1 
-            }
-            $interval_hash->{$row->{interval_no}} = $itv; 
-        }
-        @itvs = keys %seen_itv;
-    }
-
-
 
     if (!@$colls) {
         print "<div align=\"center\"><h3>Collections</h3><i> No collection or age range data are available</i></div>";
         return;
     }
-    my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$interval_hash,$colls,$upperbound,$lowerbound);
+
+    my $interval_hash = getIntervalsData($dbt,$colls);
+    my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$colls,$interval_hash);
 
 
 #    print "MAX".Dumper($max);
 #    print "MIN".Dumper($min);
 
+	my $output = "";
     my $range = "";
     # simplified this because the users will understand the basic range,
     #  and it clutters the form JA 28.8.06
@@ -615,8 +575,8 @@ sub doCollections{
 #    my $min = join (" or ",map {$interval_name{$_}} @$min);
     my $max_no = $max->[0];
     my $min_no = $min->[0];
-    $max = ($max_no) ? $interval_name->{$max_no} : "";
-    $min = ($min_no) ? $interval_name->{$min_no} : ""; 
+    $max = ($max_no) ? $interval_hash->{$max_no}->{interval_name} : "";
+    $min = ($min_no) ? $interval_hash->{$min_no}->{interval_name} : ""; 
     if ($max ne $min) {
         $range .= "<a href=\"$READ_URL?action=displayInterval&interval_no=$max_no\">$max</a> to <a href=\"$READ_URL?action=displayInterval&interval_no=$min_no\">$min</a>";
     } else {
@@ -688,9 +648,8 @@ sub doCollections{
                 my $fields = ["country", "state", "max_interval_no", "min_interval_no"];
 
                 my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
-                my @data = @$dataRows;
-                my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$interval_hash,\@data,$upperbound,$lowerbound);
-                for my $coll ( @data )	{
+                my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$dataRows,$interval_hash);
+                for my $coll ( @$dataRows )	{
                     $iscrown{$coll->{'collection_no'}}++;
                 }
                 $mincrownfirst = $minfirst;
@@ -734,18 +693,18 @@ sub doCollections{
         if (!$min) {
             $min = $max;
         }
-        my $res = "<span class=\"small\"><a href=\"$READ_URL?action=displayInterval&interval_no=$row->{max_interval_no}\">$interval_name->{$max}</a>";
+        my $res = "<span class=\"small\"><a href=\"$READ_URL?action=displayInterval&interval_no=$row->{max_interval_no}\">$interval_hash->{$max}->{interval_name}</a>";
         if ( $max != $min ) {
-            $res .= " - " . "<a href=\"$READ_URL?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_name->{$min}</a>";
+            $res .= " - " . "<a href=\"$READ_URL?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_hash->{$min}->{interval_name}</a>";
         }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
-        $res .= $lowerbound->{$max} . " - ";
+        $res .= $interval_hash->{$max}->{lower_boundary} . " - ";
         $res =~ s/0+ / /;
         $res =~ s/\. /.0 /;
         if ( $max == $min )	{
-            $res .= $upperbound->{$max};
+            $res .= $interval_hash->{$max}->{upper_boundary};
         } else	{
-            $res .= $upperbound->{$min};
+            $res .= $interval_hash->{$min}->{upper_boundary};
         }
             $res .= "</nobr></span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
         $res =~ s/0+</</;
@@ -787,18 +746,18 @@ sub doCollections{
             # this is kind of tricky because we want bigger bins to come
             #  before the bins they include, so the second part of the
             #  number recording the upper boundary has to be reversed
-            my $upper = $upperbound->{$max};
+            my $upper = $interval_hash->{$max}->{upper_boundary};
             $max_interval_no{$res} = $max;
-            $max_interval_name{$res} = $interval_name->{$max};
+            $max_interval_name{$res} = $interval_hash->{$max}->{interval_name};
             $min_interval_name{$res} = $max_interval_name{$res};
             if ( $max != $min ) {
-                $upper = $upperbound->{$min};
-                $min_interval_name{$res} = $interval_name->{$min};
+                $upper = $interval_hash->{$min}->{upper_boundary};
+                $min_interval_name{$res} = $interval_hash->{$min}->{interval_name};
             }
             #if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	
             # WARNING: we're assuming upper boundary ages will never be
             #  greater than 999 million years
-            my $lower = int($lowerbound->{$max} * 1000);
+            my $lower = int($interval_hash->{$max}->{lower_boundary} * 1000);
             $upper = $upper * 1000;
             $upper = int(999000 - $upper);
             if ( $lower < 1000 )	{
@@ -919,6 +878,65 @@ sub doCollections{
 	return $output;
 }
 
+# Utility function.  This will get boundary information as well as max and min interval and next interval
+# all max interval and min interval nos (as well as higher order time terms) for use in passing
+# to calculateAgeRange
+sub getIntervalsData {
+    my ($dbt,$data) = @_;
+
+	# get a lookup of the boundary ages for all intervals JA 25.6.04
+	# the boundary age hashes are keyed by interval nos
+    my $t = new TimeLookup($dbt);
+ 
+    my $interval_hash = {};
+
+    my $get_all_data = 0;
+    my @itvs = ();
+    if (ref($data) eq 'ARRAY') {
+        my %seen_itv = ();
+        foreach my $row (@$data) {
+            $seen_itv{$row->{'max_interval_no'}} = 1 if ($row->{max_interval_no});
+            $seen_itv{$row->{'min_interval_no'}} = 1 if ($row->{min_interval_no});
+        }
+        @itvs = keys %seen_itv;
+    } elsif ($data eq 'all') {
+        $get_all_data = 1;
+    }
+  
+    # this look gets boundaries for all intervals the in the collection set, as 
+    # well as all parents (broader) of those intervals, which is used below
+    # in calculateAgeRange for pruning purposes
+    for(my $i=0;$i<20;$i++) {
+        my %get_itv = ();
+        my $where = "";
+        if (!$get_all_data) {
+            last if (!@itvs);
+            $where = " AND i.interval_no IN (".join(",",@itvs).")";
+        }
+        my $sql = "SELECT i.interval_no,TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,il.interval_hash,il.lower_boundary,il.upper_boundary FROM interval_lookup il, intervals i WHERE il.interval_no=i.interval_no$where";
+        my @data = @{$dbt->getData($sql)};
+        foreach my $row (@data) {
+            my $itv = $t->deserializeItv($row->{'interval_hash'});
+            $interval_hash->{$row->{interval_no}} = $itv; 
+            if ($itv->{'max_no'}) {
+                $get_itv{$itv->{'max_no'}} = 1 
+            }
+            if ($itv->{'min_no'}) {
+                $get_itv{$itv->{'min_no'}} = 1 
+            }
+        }
+        last if ($get_all_data);
+        my @not_yet_fetched = ();
+        foreach my $i (keys %get_itv) {
+            if (!$interval_hash->{$i}) {
+                push @not_yet_fetched, $i;
+            }
+        }
+        @itvs = @not_yet_fetched;
+    }
+    return $interval_hash;
+}
+
 sub getParentIntervals {
     my ($i,$hash) = @_;
     my @intervals = ();
@@ -956,7 +974,7 @@ sub getParentIntervals {
 #   No longer throw out intervals beforehand.  If we throw out A and B for being too vague, then 
 #   the cover will be from D --> C.  So don't throw anything out till the very end
 sub calculateAgeRange {
-    my ($dbt,$interval_hash,$data,$upperbound,$lowerbound) = @_;
+    my ($dbt,$data,$interval_hash)  = @_;
     my %all_ints = (); 
     my %seen_range = ();
 
@@ -970,14 +988,14 @@ sub calculateAgeRange {
         if (!$min) {
             $min = $max;
         }
-        my $lb_max = $lowerbound->{$max};
-        my $ub_max = $upperbound->{$max};
-        my $lb_min = $lowerbound->{$min};
-        my $ub_min = $upperbound->{$min};
+        my $lb_max = $interval_hash->{$max}->{lower_boundary};
+        my $ub_max = $interval_hash->{$max}->{upper_boundary};
+        my $lb_min = $interval_hash->{$min}->{lower_boundary};
+        my $ub_min = $interval_hash->{$min}->{upper_boundary};
         dbg("MAX $max MIN $min LB $lb_max $lb_min UB $ub_max $ub_min");
         if ($ub_min !~ /\d/) {
-            $lb_min = $lowerbound->{$max};
-            $ub_min = $upperbound->{$max};
+            $lb_min = $interval_hash->{$max}->{lower_boundary};
+            $ub_min = $interval_hash->{$max}->{upper_boundary};
         }
         my $range = "$max $min";
         if ($lb_max && $ub_max && $ub_max > $lb_max) {
@@ -1624,24 +1642,21 @@ sub getSynonymyParagraph{
     #  (2) this way you can identify the opinion actually used in the taxon's
     #   classification, so it can be bolded in the history paragraph JA 17.4.07
 
-        my $results_ref = getMostRecentClassification($dbt,$taxon_no,'','','all');
-
-        my @results;
-        my $best_opinion;
-        if ( $results_ref )	{
-            @results = @{$results_ref};
-    # save the best opinion no
-            $best_opinion = $results[0]->{opinion_no};
-    # getMostRecentClassification returns the opinions in reliability_index
-    #  order, so now they need to be resorted based on pubyr
-            @results = sort { $a->{pubyr} <=> $b->{pubyr} } @results;
-        }
+    my @results = getMostRecentClassification($dbt,$taxon_no);
+    my $best_opinion;
+    if (@results) {
+        # save the best opinion no
+        $best_opinion = $results[0]->{opinion_no};
+        # getMostRecentClassification returns the opinions in reliability_index
+        #  order, so now they need to be resorted based on pubyr
+        @results = sort { $a->{pubyr} <=> $b->{pubyr} } @results;
+    }
 
 	# "Named by" part first:
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
 
-    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','type_taxon_no','type_specimen','comments']);
+    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','type_taxon_no','type_specimen','comments','first_occurrence','last_occurrence']);
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if ( ! $taxon->{'author1last'} )	{
@@ -1770,6 +1785,7 @@ sub getSynonymyParagraph{
     }
 
     $text .= "<br><br>";
+
 
     # We want to group opinions together that have the same spelling/parent
     # We do this by creating a double array - $syns[$group_index][$child_index]
@@ -1930,6 +1946,14 @@ sub getSynonymyParagraph{
         $text =~ s/; $/\./;
     }
 
+    if ($taxon->{'first_occurrence'} && $IS_FOSSIL_RECORD) {
+        $text .= "<br><br>";
+        my $andlast = ($taxon->{'last_occurrence'} eq '') ? " and last" : "";
+        $text .= "First$andlast occurrence: ".$taxon->{'first_occurrence'}."<br>";
+        if ($taxon->{'last_occurrence'} ne '') {
+            $text .= "Last occurrence: ".$taxon->{'last_occurrence'}."<br>";
+        }
+    }
     
     $text .= "</li>";
 	return $text;
@@ -2015,11 +2039,10 @@ sub getOriginalCombination{
 sub getMostRecentClassification {
     my $dbt = shift;
     my $child_no = int(shift);
-    my $reference_no = shift;
-    my $exclude_nomen = shift;
-    my $return_rows = shift;
+    my $options = shift || {};
+
     return if (!$child_no);
-    return if ($reference_no eq '0');
+    return if ($options->{reference_no} eq '0');
 
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
@@ -2038,32 +2061,47 @@ sub getMostRecentClassification {
                 #" CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
             ")".
          ")) AS reliability_index ";
+    my $fossil_record_sort;
+    my $fossil_record_field;
+    if ($IS_FOSSIL_RECORD) {
+        $fossil_record_field = "FIND_IN_SET('fossil record',r.project_name) is_fossil_record, ";
+        $fossil_record_sort = "is_fossil_record DESC, ";
+    }
+    my $strat_fields;
+    if ($options->{strat_range}) {
+        $strat_fields = 'max_interval_no,min_interval_no,';
+    }
     my $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
             " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, "
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.author1last, r.author1last) as author1last, "
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.author2last, r.author2last) as author2last, "
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.otherauthors, r.otherauthors) as otherauthors, "
-            . "$reliability "
+            . $fossil_record_field
+            . $strat_fields
+            . $reliability
             . " FROM opinions o" 
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
             . " WHERE o.child_no=$child_no"
             . " AND o.child_no != o.parent_no AND o.status NOT IN ('misspelling of','homonym of')";
-    if ($reference_no) {
-        $sql .= " AND o.reference_no=$reference_no";
+    if ($options->{reference_no}) {
+        $sql .= " AND o.reference_no=$options->{reference_no}";
     }
-    if ($exclude_nomen) {
+    if ($options->{exclude_nomen}) {
         $sql .= " AND o.status NOT LIKE '%nomen%'";
     }
-    $sql .= ") ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC";
-    if ( $return_rows ne "all" )	{
+    if ($options->{strat_range}) {
+        $sql .= " AND o.max_interval_no IS NOT NULL and o.max_interval_no != 0";
+    }
+    $sql .= ") ORDER BY $fossil_record_sort reliability_index DESC, pubyr DESC, opinion_no DESC";
+    if ( ! wantarray ) {
         $sql .= " LIMIT 1";
     }
-#            print $sql;
+#   print $sql;
 
     my @rows = @{$dbt->getData($sql)};
     if (scalar(@rows)) {
-        if ( $return_rows eq "all" )	{
-            return \@rows;
+        if ( wantarray ) {
+            return @rows;
         } else	{
             return $rows[0];
         }
@@ -2075,9 +2113,9 @@ sub getMostRecentClassification {
 sub getMostRecentSpelling {
     my $dbt = shift;
     my $child_no = int(shift);
-    my $reference_no = shift;
+    my $options = shift || {};
     return if (!$child_no);
-    return if ($reference_no eq '0');
+    return if ($options->{reference_no} eq '0');
     my $dbh = $dbt->dbh;
 
     # Get a list of misspellings and exclude them - do this is a subselect in the future
@@ -2105,7 +2143,13 @@ sub getMostRecentSpelling {
                 #" CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
             ")".
          ")) AS reliability_index ";
-    $sql = "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, "
+    my $fossil_record_sort;
+    my $fossil_record_field;
+    if ($IS_FOSSIL_RECORD) {
+        $fossil_record_field = "FIND_IN_SET('fossil record',r.project_name) is_fossil_record, ";
+        $fossil_record_sort = "is_fossil_record DESC, ";
+    }
+    $sql = "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, $fossil_record_field"
          . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) AS pubyr"
          . " FROM opinions o" 
          . " LEFT JOIN authorities a ON o.child_spelling_no=a.taxon_no"
@@ -2113,8 +2157,8 @@ sub getMostRecentSpelling {
          . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
          . " WHERE o.child_no=$child_no"
          . " AND o.child_no != o.parent_no AND o.status != 'misspelling of'";
-    if ($reference_no) {
-        $sql .= " AND o.reference_no=$reference_no";
+    if ($options->{reference_no}) {
+        $sql .= " AND o.reference_no=$options->{reference_no}";
     }
     if (@misspellings) {
         $sql .= " AND o.child_spelling_no NOT IN (".join(",",@misspellings).")";
@@ -2122,7 +2166,7 @@ sub getMostRecentSpelling {
     $sql .= ") ";
     if (@misspellings) {
         $sql .= " UNION ";
-        $sql .= "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, "
+        $sql .= "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, $fossil_record_field"
               . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr"
               . " FROM opinions o" 
               . " LEFT JOIN authorities a ON o.parent_spelling_no=a.taxon_no"
@@ -2130,12 +2174,12 @@ sub getMostRecentSpelling {
               . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
               . " WHERE o.child_no=$child_no"
               . " AND o.status = 'misspelling of' AND o.child_no=o.parent_no";
-        if ($reference_no) {
-            $sql .= " AND o.reference_no=$reference_no";
+        if ($options->{reference_no}) {
+            $sql .= " AND o.reference_no=$options->{reference_no}";
         }
         $sql .= ") ";
     }
-    $sql .= " ORDER BY reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
+    $sql .= " ORDER BY $fossil_record_sort reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
     my @rows = @{$dbt->getData($sql)};
 
     if (scalar(@rows)) {
@@ -2769,8 +2813,12 @@ sub getSeniorSynonym {
 
     my %seen = ();
     # Limit this to 10 iterations, in case we a have some weird loop
+    my $options = {};
+    if ($restrict_to_reference_no =~ /\d/) {
+        $options->{'reference_no'} = $restrict_to_reference_no;
+    }
     for(my $i=0;$i<10;$i++) {
-        my $parent = getMostRecentClassification($dbt,$taxon_no,$restrict_to_reference_no);
+        my $parent = getMostRecentClassification($dbt,$taxon_no,$options);
         last if (!$parent || !$parent->{'child_no'});
         if ($seen{$parent->{'child_no'}}) {
             # If we have a loop, disambiguate using last entered
@@ -3052,7 +3100,7 @@ sub nomenChildren {
             if ($mrpo->{'status'} =~ /nomen/) {
                 #print "child $row->{child_no} IS NOMEN<BR>";
                 # This will get the most recent parent opinion where it is not classified as a %nomen%
-                my $mrpo_no_nomen = getMostRecentClassification($dbt,$row->{'child_no'},'',1);
+                my $mrpo_no_nomen = getMostRecentClassification($dbt,$row->{'child_no'},{'exclude_nomen'=>1});
                 if ($mrpo_no_nomen->{'parent_no'} == $row->{'parent_no'}) {
                     #print "child $row->{child_no} LAST PARENT IS PARENT $row->{parent_no} <BR>";
                     my $taxon = getTaxa($dbt,{'taxon_no'=>$row->{'child_no'}});

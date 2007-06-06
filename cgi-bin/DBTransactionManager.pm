@@ -11,7 +11,7 @@ use CGI::Carp;
 use CGI;
 use Debug qw(dbg);
 
-use fields qw(dbh_l dbh_r _id _err table_definitions table_names use_remote);
+use fields qw(dbh _id _err table_definitions table_names);
 
 # Just pass it a dbh object
 sub new {
@@ -22,14 +22,10 @@ sub new {
 	if (! $dbh) {
 		# connect if needed
 		$dbh = DBConnection::connect();
-		$self->{'dbh_l'} = $dbh;
-    } else {
-        $self->{'dbh_l'} = $dbh;
-    }
-    $self->{'dbh_r'} = undef;
+		$self->{'dbh'} = $dbh;
+    } 
     $self->{'table_definitions'} = {};
     $self->{'table_names'} = [];
-    $self->{'use_remote'} = 0;
 	
 	return $self;
 }
@@ -39,35 +35,8 @@ sub new {
 # since depending on flag dbh will return different handles
 sub dbh {
 	my $self = shift;
-    if ($self->{'use_remote'}) {
-	    return $self->dbh_remote;
-    } else {
-	    return $self->dbh_local;
-    }
+	return $self->{'dbh'};
 }
-sub dbh_local {
-	my $self = shift;
-	return $self->{'dbh_l'};
-}
-sub dbh_remote {
-	my $self = shift;
-	my $dbh_r = $self->{'dbh_r'};
-    if (!$dbh_r) {
-        $dbh_r = DBConnection::connect_paleodb();
-        $self->{'dbh_r'} = $dbh_r;
-    }
-    return $dbh_r;
-}
-
-# This turns on "edit mode".  Edit mode must be turned on when editing a database entry (most importantly in the displayCollectionForm and processCollectionForm).  What this does is makes sure that a connection to flatpebble is opened up when reading/writing when editing database entries, which is important for consistency purposes
-sub useRemote {
-    my ($self,$set) = @_;
-    if ($set ne '') {
-        $self->{'use_remote'} = $set;
-    }
-    return $self->{'use_remote'};
-}
-
 
 # for internal use only
 # Pass it a table name, and it returns a reference to an array of array refs, one per col.
@@ -120,13 +89,13 @@ sub getTableColumns {
 # second element is primary key value of the last insert.
 #
 sub insertRecord {
-	my DBTransactionManager $self = shift;
-    my $s = shift;
-	my $table_name = shift;
-	my $fields = shift;  # don't update this
-	
+    my ($self,$s,$table_name,$fields,$options) = @_;
+    my %options;
+    if ($options) {
+        %options = %$options;
+    }
+
 	my $dbh = $self->dbh;
-	my $dbh_r = $self->dbh_remote;
 	
 	# make sure they're allowed to insert data!
 	if (!$s || !$s->isDBMember()) { 
@@ -159,13 +128,13 @@ sub insertRecord {
 
         # we never insert these fields ourselves
         next if ($field =~ /^(modifier|modifier_no)$/);
-        next if ($is_primary);
+        next if ($is_primary && !$options{'no_autoincrement'});
 
         # handle these fields automatically
         if ($field =~ /^(authorizer_no|authorizer|enterer_no|enterer)$/) {
             # from the session object
             push @insertFields, $field;
-            push @insertValues, $dbh_r->quote($s->get($field));
+            push @insertValues, $dbh->quote($s->get($field));
         } elsif ($field eq 'modified') {
             push @insertFields, $field;
             push @insertValues, 'NOW()';
@@ -179,17 +148,22 @@ sub insertRecord {
             if (exists ($fields->{$field})) {
                 # Multi-valued keys (i.e. checkboxes with the same name) passed from the CGI ($q) object have their values
                 # separated by \0.  See CPAN CGI documentation about this
-                my @vals = split(/\0/,$fields->{$field});
                 my $value;
                 if ($type eq 'SET') {
-                    $value = $dbh_r->quote(join(",",@vals));
+                    my @vals = split(/\0/,$fields->{$field});
+                    $value = $dbh->quote(join(",",@vals));
                 } else {
-                    $value = $vals[0];
+                    if ($type =~ /TEXT|BLOB/i) {
+                        $value = $fields->{$field};
+                    } else {
+                        my @vals = split(/\0/,$fields->{$field});
+                        $value = $vals[0];
+                    }
                     if ($value =~ /^\s*$/ && $is_nullable) {
                         $value = 'NULL';
                     } else {
                         if (! defined $value) { $value = ''; }
-                        $value = $dbh_r->quote($value);
+                        $value = $dbh->quote($value);
                     }
                 }
                 push @insertFields, $field;
@@ -207,12 +181,12 @@ sub insertRecord {
         my $insertSQL = "INSERT INTO $table_name (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
         dbg("insertRecord in DBTransaction manager called: sql: $insertSQL");
         # actually insert into the database
-        my $insertResult = $dbh_r->do($insertSQL);
+        my $insertResult = $dbh->do($insertSQL);
 #       DON'T USE THIS VERY BUGGY!
 #        my $idNum = $dbh->last_insert_id(undef, undef, undef, undef);
         my $idNum = 0;
         if ($insertResult) {
-            my $sth = $dbh_r->prepare("SELECT LAST_INSERT_ID()");
+            my $sth = $dbh->prepare("SELECT LAST_INSERT_ID()");
             $sth->execute();
             my $row = $sth->fetchrow_arrayref;
             if ($row) {
@@ -223,7 +197,7 @@ sub insertRecord {
             # track the last time each person entered data because we're snoops
             #  JA 26.4.07
             my $sql = "UPDATE person SET last_action=last_action,last_entry=NOW() WHERE person_no=".$s->get('enterer_no');
-            $dbh_r->do($sql);
+            $dbh->do($sql);
         }
         # return the result code from the do() method.
 	    return ($insertResult, $idNum);
@@ -252,7 +226,6 @@ sub updateRecord {
 	my $data = shift;
 	
     my $dbh = $self->dbh;
-    my $dbh_r = $self->dbh_remote;
 	
 	# make sure they're allowed to update data!
 	if (!$s || !$s->isDBMember()) {
@@ -323,9 +296,9 @@ sub updateRecord {
         
         # if it's the modifier_no or modifier, then we'll update it regardless
         if ($field eq 'modifier_no') {
-            push @updateTerms, "modifier_no=".$dbh_r->quote($s->get('enterer_no'));
+            push @updateTerms, "modifier_no=".$dbh->quote($s->get('enterer_no'));
         } elsif ($field eq 'modifier') {
-            push @updateTerms, "modifier=".$dbh_r->quote($s->get('enterer'));
+            push @updateTerms, "modifier=".$dbh->quote($s->get('enterer'));
         } else {
             my $fieldIsEmpty = ($table_row->{$field} == 0 || $table_row->{$field} eq '' || !defined $table_row->{$field}) ? 1 : 0;
             if (exists($data->{$field})) {
@@ -337,16 +310,16 @@ sub updateRecord {
                     my $raw_value;
                     if ($type eq 'SET') {
                         $raw_value = join(",",@vals);
-                        $value = $dbh_r->quote($raw_value);
+                        $value = $dbh->quote($raw_value);
                     } else {
                         $raw_value = $vals[0];
                         if ($raw_value =~ /^\s*$/ && $is_nullable) {
                             $value = 'NULL';
                         } else {
                             if (! defined $raw_value) { 
-                                $value = $dbh_r->quote('');
+                                $value = $dbh->quote('');
                             } else {
-                                $value = $dbh_r->quote($raw_value);
+                                $value = $dbh->quote($raw_value);
                             }
                         }
                     }
@@ -364,7 +337,7 @@ sub updateRecord {
     if ($termCount) {
         my $updateSql = "UPDATE $table_name SET ".join(",",@updateTerms)." WHERE $primary_key_field=$primary_key_value";
         dbg("UPDATE SQL:".$updateSql);
-    	my $updateResult = $dbh_r->do($updateSql);
+    	my $updateResult = $dbh->do($updateSql);
                 
         # return the result code from the do() method.
     	return $updateResult;
@@ -391,7 +364,6 @@ sub deleteRecord {
     my $comments = (shift || "");
 	
     my $dbh = $self->dbh;
-    my $dbh_r = $self->dbh_remote;
 	
 	# make sure they're allowed to update data!
 	if (!$s || !$s->isDBMember()) {
@@ -467,7 +439,7 @@ sub deleteRecord {
                 $value = 'NULL';
             } else {
                 if (! defined $value) { $value = ''; }
-                $value = $dbh_r->quote($value);
+                $value = $dbh->quote($value);
             }
             push @insertFields, $field;
             push @insertValues, $value;
@@ -477,12 +449,12 @@ sub deleteRecord {
             my $insertSQL = "INSERT INTO $table_name (".join(",",@insertFields).") VALUES (".join(",",@insertValues).")";
             my $enterer_no = $s->get('enterer_no');
             my $authorizer_no = $s->get('authorizer_no');
-            my $deleteLogSQL = "INSERT INTO delete_log (delete_time,authorizer_no,enterer_no,comments,delete_sql) VALUES (NOW(),$authorizer_no,$enterer_no,".$dbh_r->quote($comments).",".$dbh_r->quote($insertSQL).")";
+            my $deleteLogSQL = "INSERT INTO delete_log (delete_time,authorizer_no,enterer_no,comments,delete_sql) VALUES (NOW(),$authorizer_no,$enterer_no,".$dbh->quote($comments).",".$dbh->quote($insertSQL).")";
             dbg("Delete log final SQL: $deleteLogSQL");
-            $dbh_r->do($deleteLogSQL);
+            $dbh->do($deleteLogSQL);
             my $deleteSQL = "DELETE FROM $table_name WHERE $primary_key_field=$primary_key_value LIMIT 1";
             dbg("Deletion SQL: $deleteSQL");
-            $dbh_r->do($deleteSQL);
+            $dbh->do($deleteSQL);
         }
     } else {
         dbg("User ".$s->get('authorizer_no')." does not have permission to delete $table_name $primary_key_value"); 
@@ -495,7 +467,7 @@ sub deleteRecord {
 
 ## getData
 #	description:	it executes the statement, and returns arrayref of hashrefs
-#                   now only works for selects, for writes use the dbh_remote method to
+#                   now only works for selects, for writes use the dbh method to
 #                   get a handle and check statements by hand
 #
 #	parameters:		$sql			The SQL statement to be executed
@@ -520,17 +492,26 @@ sub getData {
 	# First, check the sql for any obvious problems
 	my $is_select = $self->checkIsSelect($sql);
 	if ($is_select) {
-		my $sth = $dbh->prepare($sql) or die $dbh->errstr;
 		# execute returns the number of rows affected for non-select statements.
 		# SELECT:
-        my $return = eval { $sth->execute() };
+        my $sth = $dbh->prepare($sql);
+        my $return = $sth->execute();
+
         $self->{_err} = $sth->errstr;
         if ($sth->errstr) { 
+            my $stack = "";
+            for(my $i = 0;$i < 10;$i++) {
+                my ($package, $filename, $line, $subroutine, $hasargs) = caller($i);
+                last unless $subroutine;
+                $stack .= "$subroutine ";
+            }
+            $stack =~ s/ $//;
             my $errstr = "SQL error: sql($sql)";
             my $q2 = new CGI;
             $errstr .= " sth err (".$sth->errstr.")" if ($sth->errstr);
             $errstr .= " IP ($ENV{REMOTE_ADDR})";
             $errstr .= " script (".$q2->url().")";
+            $errstr .= " stack ($stack)";
             my $getpoststr; 
             my %params = $q2->Vars; 
             while(my ($k,$v)=each(%params)) { 

@@ -13,11 +13,13 @@ use URI::Escape;
 use Memoize;
 use Reference;
 use Debug qw(dbg);
-use Constants qw($READ_URL);
+use Constants qw($READ_URL $HTML_DIR);
 
 memoize('chiSquaredDensity');
 memoize('factorial');
 memoize('gamma');
+
+my $IMAGE_DIR = "$HTML_DIR/public/confidence";
 
 # written 03.31.04 by Josh Madin as final product
 # Still doesn't allow choice of time scale when examining the conf ints of taxa
@@ -1068,7 +1070,7 @@ sub printResultsPage {
         }
     }
 
-    my $file = "$ENV{BRIDGE_HTML_DIR}/public/confidence/confidence$image_count.csv";
+    my $file = "$IMAGE_DIR/confidence$image_count.csv";
     open CSV,">$file";
     print CSV $csv;
 
@@ -1866,10 +1868,11 @@ package ConfidenceGraph;
 
 use GD;
 use Debug qw(dbg);
+use Constants qw($READ_URL $HTML_DIR);
 
 my $AILEFT = 100;
 my $AITOP = 450;   
-my $IMAGE_DIR = $ENV{'BRIDGE_HTML_DIR'}."/public/confidence";
+my $IMAGE_DIR = "$HTML_DIR/public/confidence";
 
 sub new {
     my ($class,%options) = @_;
@@ -2413,6 +2416,7 @@ sub drawGraph {
     
 
     # Export and move on
+    PBDBUtil::autoCreateDir($IMAGE_DIR);
     my $image_count = getImageCount();
 
     my $image_name = "confimage$image_count";
@@ -2622,13 +2626,12 @@ sub getImageCount {
     }
     
     # get the next number for file creation.
-    if ( ! open IMAGECOUNT,"<$IMAGE_DIR/imagecount" ) {
-        die( "Couldn't open [$IMAGE_DIR/imagecount]: $!" );
+    my $image_count;
+    if ( open IMAGECOUNT,"<$IMAGE_DIR/imagecount" ) {
+        $image_count = <IMAGECOUNT>;
+        chomp($image_count);
+        close IMAGECOUNT;
     }
-    my $image_count = <IMAGECOUNT>;
-    chomp($image_count);
-    close IMAGECOUNT;
-                                                                                                                                                             
     $image_count++;
     if ( ! open IMAGECOUNT,">$IMAGE_DIR/imagecount" ) {
           die( "Couldn't open [$IMAGE_DIR/imagecount]: $!" );

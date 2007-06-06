@@ -10,12 +10,12 @@ use strict;
 use CGI::Carp;
 use Person;
 use Debug qw(dbg);
+use Constants qw($WRITE_URL);
 
 #session and date objcts
 use fields qw(s dbt);
 
 # Flags and constants
-my $WRITE_URL = $main::WRITE_URL;
 my $DEBUG = 0;
 
 # **Note: Must pass the session variable when creating this object.
@@ -311,7 +311,6 @@ sub getModifierList {
 # And give options to add and delete from the list
 sub displayPermissionListForm {
     my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
 
     # First make sure they're logged in
     my $authorizer_no = int($s->get('authorizer_no'));
@@ -460,7 +459,6 @@ sub displayPermissionListForm {
 # Both should be pretty straightforward
 sub submitPermissionList {
     my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     # First make sure they're logged in
     my $authorizer_no = int($s->get('authorizer_no'));
@@ -535,7 +533,6 @@ sub submitPermissionList {
 # Both should be pretty straightforward
 sub submitHeir {
     my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     # First make sure they're logged in
     my $authorizer_no = int($s->get('authorizer_no'));

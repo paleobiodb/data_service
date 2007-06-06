@@ -66,7 +66,7 @@ use TimeLookup;
 use Text::CSV_XS;
 use PBDBUtil;
 use TaxaCache;
-use Constants qw($READ_URL);
+use Constants qw($READ_URL $DATA_DIR $HTML_DIR);
 
 # FOO ##  # CGI::Carp qw(fatalsToBrowser);
 
@@ -93,6 +93,7 @@ sub buildCurve {
 	my $self = shift;
 
 	$self->setArrays;
+    PBDBUtil::autoCreateDir($OUTPUT_DIR);
 	print '<div align="center"><h2>Paleobiology Database diversity curve report</h2></div>';
 	# compute the sizes of intermediate steps to be reported in subsampling curves
 	if ($q->param('stepsize') ne "")	{
@@ -110,19 +111,13 @@ sub setArrays	{
 	my $self = shift;
 
 	# Setup the variables
-	$DDIR="./data";
-	$PUBLIC_DIR = $ENV{CURVE_PUBLIC_DIR};
-	$CURVE_HOST = $ENV{CURVE_HOST};
-	# this is the output directory used by Curve.pm, not this program
-	$DOWNLOAD_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
-	$CLASS_DATA_DIR = "$DDIR/classdata";
-					                                # the default working directory
-	$PRINTED_DIR = "/public/data";
-	
-	$OUTPUT_DIR = $PUBLIC_DIR;
+	# this is the output directory used by Download.pm, not this program
+	$DOWNLOAD_FILE_DIR = $HTML_DIR."/public/downloads";# the default working directory
+    
 	# customize the subdirectory holding the output files
 	# modified to retrieve authorizer automatically JA 4.10.02
 	# modified to use yourname JA 17.7.05
+    $PRINTED_DIR = "/public/curve";
 	if ( $s->get('enterer') ne "Guest" || $q->param('yourname') ne "" )	{
 		my $temp;
 		if ( $q->param('yourname') ne "" )	{
@@ -133,12 +128,11 @@ sub setArrays	{
 		$temp =~ s/ //g;
 		$temp =~ s/\.//g;
 		$temp =~ tr/[A-Z]/[a-z]/;
-		$OUTPUT_DIR .= "/" . $temp;
 		$PRINTED_DIR .= "/" . $temp;
-		mkdir $OUTPUT_DIR;
-		chmod 0777, $OUTPUT_DIR;
 	}
-	
+	$OUTPUT_DIR = $HTML_DIR.$PRINTED_DIR;
+    PBDBUtil::autoCreateDir($OUTPUT_DIR);
+
 	if ($q->param('samplingmethod') eq "classical rarefaction")	{
 		$samplingmethod = 1;
 	}
@@ -297,6 +291,7 @@ sub assignGenera	{
     if (!$status) { print "Warning, error parsing CSV line $count"; }
     my @fieldnames = $csv->fields();
     @OCCDATA = <OCCS>;
+    close OCCS;
 	#s/\n//;
 	#my @fieldnames;
 	## tab-delimited file
@@ -1731,7 +1726,7 @@ sub printResults	{
 		print TABLE "\n";
 
 	 # make sure all the files are read/writeable
-		chmod 0664, "$PRINTED_DIR/*";
+#		chmod 0664, "$OUTPUT_DIR/*";
 	
 		for $i (1..$chrons)	{
 			if ( $rangethrough[$i] > 0 || ( $listsinchron[$i] > 0 || ( $q->param('recent_genera') && $i == 1 ) ) )	{
@@ -2044,12 +2039,12 @@ sub printResults	{
 	
 		print "\nThe following data files have been created:<p>\n";
 		print "<ul>\n";
-		print "<li>The above diversity curve data (<a href=\"http://$CURVE_HOST$PRINTED_DIR/raw_curve_data.csv\">raw_curve_data.csv</a>)<p>\n";
+		print "<li>The above diversity curve data (<a href=\"$HOST_URL$PRINTED_DIR/raw_curve_data.csv\">raw_curve_data.csv</a>)<p>\n";
 	
 	
-		print "<li>A first-by-last occurrence count matrix (<a href=\"http://$CURVE_HOST$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
+		print "<li>A first-by-last occurrence count matrix (<a href=\"$HOST_URL$PRINTED_DIR/firstlast.txt\">firstlast.txt</a>)<p>\n";
 	
-		print "<li>A list of each ".$q->param('taxonomic_level').", the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"http://$CURVE_HOST$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
+		print "<li>A list of each ".$q->param('taxonomic_level').", the number of collections including it,  and the ID number of the intervals in which it was found (<a href=\"$HOST_URL$PRINTED_DIR/presences.txt\">presences.txt</a>)<p>\n";
 
 		print "</ul><p>\n";
 
@@ -2641,9 +2636,9 @@ sub printResults	{
 		        print "\nThe following data file has been created:<p>\n";
             }
 		    print "<ul>\n";
-		    print "<li>The subsampled diversity curve data (<a href=\"http://$CURVE_HOST$PRINTED_DIR/subsampled_curve_data.csv\">subsampled_curve_data.csv</a>)<p>\n";
+		    print "<li>The subsampled diversity curve data (<a href=\"$HOST_URL$PRINTED_DIR/subsampled_curve_data.csv\">subsampled_curve_data.csv</a>)<p>\n";
             if ($q->param('stepsize') ne "")	{
-                print "<li>The subsampling curves (<a href=\"http://$CURVE_HOST$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
+                print "<li>The subsampling curves (<a href=\"$HOST_URL$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
             }
     		print "</ul><p>\n";
 

@@ -6,11 +6,12 @@ package Neptune;
 use strict;
 use DBI;
 use Debug;
-use Constants qw($WRITE_URL $READ_URL);
+use Constants qw($WRITE_URL $READ_URL $HTML_DIR);
 
 # Flags and constants
 my $DEBUG=0; # The debug level of the calling program
-my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};                                                                                                                    
+my $OUT_FILE_DIR = $HTML_DIR."/public/downloads";
+
 $|=1; #free flowing data
 
 my @fields_summary = ('resolved_fossil_name','number of samples','number of samples (pacman)','FO','LO','FO (pacman)','LO (pacman)','FO (literature)','LO (literature)','FO (diff)','LO (diff)','Range','Range (pacman)');
@@ -66,6 +67,8 @@ sub setupOutput {
 
     my $name = ($s->get("enterer")) ? $s->get("enterer") : $q->param("yourname");
     my $filename = PBDBUtil::getFilename($name); 
+
+    PBDBUtil::autoCreateDir($OUT_FILE_DIR);
 
     my $summary_file = "$OUT_FILE_DIR/$filename-neptune_summary.$ext";
     my $results_file = "$OUT_FILE_DIR/$filename-neptune_pacman.$ext";

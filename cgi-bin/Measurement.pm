@@ -20,9 +20,6 @@ my @measurement_fields=('average','median','min','max','error','error_unit');
 #
 sub submitSpecimenSearch {
     my  ($dbt,$hbo,$q,$s) = @_;
-    if ($s->isDBMember()) {
-        $dbt->useRemote(1);
-    }
     my $dbh = $dbt->dbh;
 
     if (!$q->param('taxon_name') && !int($q->param('collection_no'))) {
@@ -156,9 +153,6 @@ sub submitSpecimenSearch {
 #
 sub displaySpecimenList {
     my ($dbt,$hbo,$q,$s) = @_;
-    if ($s->isDBMember()) {
-        $dbt->useRemote(1);
-    }
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
 	if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
@@ -318,7 +312,6 @@ sub displaySpecimenList {
 
 sub populateMeasurementForm {
     my ($dbt,$hbo,$q,$s) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
@@ -468,7 +461,6 @@ sub populateMeasurementForm {
 
 sub processMeasurementForm	{
     my ($dbt,$hbo,$q,$s) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
@@ -703,7 +695,6 @@ sub processMeasurementForm	{
 
 sub syncWithAuthorities {
     my ($dbt,$s,$hbo,$specimen_no) = @_;
-    $dbt->useRemote(1);
     my $sql = "SELECT taxon_no,magnification,specimen_part,specimen_id FROM specimens WHERE specimen_no=$specimen_no";
     my $row = ${$dbt->getData($sql)}[0];
     if ($row && $row->{'taxon_no'} =~ /\d/ && $row->{'magnification'} <= 1) {

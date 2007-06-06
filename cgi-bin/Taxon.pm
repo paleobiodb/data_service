@@ -23,11 +23,22 @@ use Mail::Mailer;
 use TaxaCache;
 use Classification;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL);
+use Constants qw($READ_URL $WRITE_URL $HOST_URL);
 
 use Reference;
 
 use fields qw(dbt DBrow);
+
+
+%Taxon::rankToNum = (  'subspecies' => 1, 'species' => 2, 'subgenus' => 3,
+		'genus' => 4, 'subtribe' => 5, 'tribe' => 6,
+		'subfamily' => 7, 'family' => 8, 'superfamily' => 9,
+		'infraorder' => 10, 'suborder' => 11,
+		'order' => 12, 'superorder' => 13, 'infraclass' => 14,
+		'subclass' => 15, 'class' => 16, 'superclass' => 17,
+		'subphylum' => 18, 'phylum' => 19, 'superphylum' => 20,
+		'subkingdom' => 21, 'kingdom' => 22, 'superkingdom' => 23,
+		'unranked clade' => 24, 'informal' => 25 );
 
 # includes the following public methods
 # -------------------------------------
@@ -144,8 +155,6 @@ sub displayAuthorityForm {
 	my $s = shift;
 	my $q = shift;
     my $error_message = shift;
-    
-    $dbt->useRemote(1);
     
     my $dbh = $dbt->dbh;
 	
@@ -426,8 +435,6 @@ sub displayAuthorityForm {
 sub submitAuthorityForm {
     my ($dbt,$hbo,$s,$q) = @_;
     
-    $dbt->useRemote(1);
-
     my $dbh = $dbt->dbh;
 
 	if ((!$dbt) || (!$hbo) || (!$s) || (!$q)) {
@@ -686,8 +693,6 @@ sub submitAuthorityForm {
 		
 		if ($parent_no) {
             addImplicitChildOpinion($dbt,$s,$resultTaxonNumber,$parent_no,\%fields);
-            #TaxaCache::updateCache($dbt,$resultTaxonNumber);
-            #TaxaCache::markForUpdate($dbt,$resultTaxonNumber);
 		}
 	} else {
 		# if it's an old entry, then we'll update.
@@ -702,40 +707,6 @@ sub submitAuthorityForm {
         }
         updateImplicitBelongsTo($dbt,$s,$t->get('taxon_no'),$parent_no,$t->get('taxon_name'),$fields{'taxon_name'},\%fields);
 	}
-
-    my $pid = fork();
-    if (!defined($pid)) {
-        carp "ERROR, could not fork";
-    }
-
-    if ($pid) {
-        $dbh = DBConnection::connect();
-        $dbt = DBTransactionManager->new($dbh);
-        # Child fork
-    } else {
-        # Make new dbh and dbt objects - for some reason one connection
-        # gets closed whent the other fork exits, so split them here
-        my $dbh2 = DBConnection::connect();
-        my $dbt2 = DBTransactionManager->new($dbh2);  
-
-        # This is the parent fork.  Have the parent fork
-        # Do the useful work, the child fork will be terminated
-        # when the parent is so don't have it do anything long running
-        # (just terminate). The defined thing is in case the work didn't work
-
-        # Close references to stdin and stdout so Apache
-        # can close the HTTP socket conneciton
-        if (defined $pid) {
-            open STDIN, "</dev/null";
-            open STDOUT, ">/dev/null";
-            #open STDOUT, ">>SOMEFILE";
-        }
-        TaxaCache::updateCache($dbt2,$resultTaxonNumber);
-        # The main connection gets closes when this fork exits (either fork exiting will kill it)
-        # so sleep for a while to give enough time for the other fork to finish up with the DB
-        sleep(4);
-        exit;
-    }
 
     # JA 2.4.04
     # if the taxon name is unique, find matches to it in the
@@ -834,8 +805,6 @@ sub submitAuthorityForm {
 sub processSpecimenMeasurement {
     my ($dbt,$s,$taxon_no,$reference_no,$fields) = @_;
     
-    $dbt->useRemote(1);
-
     my $dbh = $dbt->dbh;
     my $specimen_no = int($fields->{'specimen_no'});
 
@@ -890,8 +859,6 @@ sub processSpecimenMeasurement {
 sub updateChildNames {
     my ($dbt,$s,$old_taxon_no,$old_name,$new_name) = @_;
     
-    $dbt->useRemote(1);
-
     return if ($old_name eq $new_name || !$old_name);
     dbg("UPDATE CHILD NAMES CALLED WITH: $old_name --> $new_name");
 
@@ -923,7 +890,6 @@ sub updateChildNames {
 }
 sub updateImplicitBelongsTo {
     my ($dbt,$s,$taxon_no,$parent_no,$old_name,$new_name,$fields) = @_;
-    $dbt->useRemote(1);
     return if ($old_name eq $new_name);
 
     my @old_name = split(/ /,$old_name);
@@ -995,8 +961,6 @@ sub updateImplicitBelongsTo {
 sub addImplicitChildOpinion {
     my ($dbt,$s,$child_no,$parent_no,$fields) = @_;
     
-    $dbt->useRemote(1);
-
     return unless ($child_no && $parent_no);
     # Get original combination for parent no PS 04/22/2005
     my $orig_parent_no = TaxonInfo::getOriginalCombination($dbt,$parent_no);
@@ -1023,8 +987,6 @@ sub addImplicitChildOpinion {
 
 sub addSpellingAuthority {
     my ($dbt,$s,$taxon_no,$new_name,$new_rank,$reference_no) = @_;
-
-    $dbt->useRemote(1);
 
     my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
@@ -1071,9 +1033,9 @@ sub addSpellingAuthority {
 }
 
 
+
 sub setOccurrencesTaxonNoByTaxon {
     my $dbt = shift;
-    $dbt->useRemote(1);
     my $authorizer_no = shift;
     my $dbh = $dbt->dbh;
     my $taxon_no = shift;
@@ -1140,7 +1102,7 @@ sub setOccurrencesTaxonNoByTaxon {
             my $name = $names{$person_no};
             my $link = "$WRITE_URL?action=displayCollResults&type=reclassify_occurrence&taxon_name=$taxon_name&occurrences_authorizer_no=$person_no";
             my %headers = ('Subject'=> 'Please reclassify your occurrences','From'=>'alroy');
-            if ($ENV{'BRIDGE_HOST_URL'} =~ /paleodb\.org/) {
+            if ($HOST_URL =~ /paleodb\.org/) {
                 if ($email) {
                     $headers{'To'} = $email; 
                 } else {
@@ -1275,7 +1237,6 @@ END_OF_MESSAGE
 #  possible higher taxa must be linked by opinions from the same ref as this opinion
 sub displayTypeTaxonSelectForm {
     my ($dbt,$s,$is_tt_form_value,$type_taxon_no,$type_taxon_name,$type_taxon_rank,$reference_no,$end_message) = @_;
-    $dbt->useRemote(1);
 
     dbg("displayTypeTaxonSelectForm called with is_tt_form_value $is_tt_form_value tt_no $type_taxon_no tt_name $type_taxon_name tt_rank $type_taxon_rank ref_no $reference_no");
 
@@ -1360,7 +1321,6 @@ sub displayTypeTaxonSelectForm {
 
 sub submitTypeTaxonSelect {
     my ($dbt,$s,$q) = @_;
-    $dbt->useRemote(1);
 
     my $type_taxon_no = $q->param('type_taxon_no');
     my $reference_no = $q->param('reference_no');
@@ -1404,7 +1364,6 @@ sub submitTypeTaxonSelect {
 # The array is an array of hash refs with the following keys: taxon_no, taxon_name, taxon_rank, type_taxon_no, type_taxon_name, type_taxon_rank
 sub getTypeTaxonList {
     my $dbt = shift;
-    $dbt->useRemote(1);
     my $type_taxon_no = shift;   
     my $reference_no = shift;
             
@@ -1774,7 +1733,6 @@ sub getBestClassification{
 
 sub propagateAuthorityInfo {
     my $dbt = shift;
-    $dbt->useRemote(1);
     my $taxon_no = shift;
     my $this_is_best = shift;
     

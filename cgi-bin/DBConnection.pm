@@ -28,36 +28,6 @@ sub connect {
     }
 }
 
-sub connect_paleodb {
-    # Make sure a symbolic link to this file always exists;
-
-    my $connection;
-    if ($ENV{'SERVER_ADDR'} eq '128.111.220.138' ||
-        $ENV{'SERVER_ADDR'} eq '128.111.220.135') {
-        my $password = `cat /home/paleodbpasswd/passwd`;
-        chomp($password);
-        my $driver =   "mysql";
-        my $hostName = "localhost";
-        my $userName = "pbdbuser";
-        my $dbName =   "pbdb";
-        my $dsn = "DBI:$driver:database=$dbName;host=$hostName";
-	    $connection = DBI->connect($dsn, $userName, $password, {RaiseError=>1});
-    } else {
-        my $password = `cat /home/paleodbpasswd/remote_passwd`;
-        chomp($password);
-        my $driver =   "mysql";
-        my $hostName = "128.111.220.135";
-        my $userName = "pbdbuser";
-        my $dbName =   "pbdb";
-        my $dsn = "DBI:$driver:database=$dbName;host=$hostName";
-	    $connection = DBI->connect($dsn, $userName, $password, {RaiseError=>1});
-    }
-    if (!$connection) {
-        die("Could not connect to paleodb.org");
-    } else {
-        return $connection;
-    }
-}
 
 1;
 

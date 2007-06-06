@@ -1,21 +1,20 @@
 package Session;
 
+use strict;
 use Digest::MD5;
 use CGI::Cookie;
-use strict;
-
-my $WRITE_URL = $main::WRITE_URL;
+use Constants qw($WRITE_URL $IP_MAIN $IP_BACKUP);
 
 # Handles validation of the user
 sub new {
     my ($class,$dbt,$session_id) = @_;
-    my $dbh_l = $dbt->dbh_local;
+    my $dbh = $dbt->dbh;
     my $self;
 
 	if ($session_id) {
 		# Ensure their session_id corresponds to a valid database entry
-		my $sql = "SELECT * FROM session_data WHERE session_id=".$dbh_l->quote($session_id)." LIMIT 1";
-		my $sth = $dbh_l->prepare( $sql ) || die ( "$sql<hr>$!" );
+		my $sql = "SELECT * FROM session_data WHERE session_id=".$dbh->quote($session_id)." LIMIT 1";
+		my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 		# execute returns number of rows affected for NON-select statements
 		# and true/false (success) for select statements.
 		$sth->execute();
@@ -35,15 +34,15 @@ sub new {
 
             # Update the person data
             # We don't bother for bristol mirror 
-            if ($ENV{'SERVER_ADDR'} eq '128.111.220.138' ||
-                $ENV{'SERVER_ADDR'} eq '128.111.220.135') {
+            if ($ENV{'SERVER_ADDR'} eq $IP_MAIN ||
+                $ENV{'SERVER_ADDR'} eq $IP_BACKUP) {
                 my $sql = "UPDATE person SET last_action=NOW() WHERE person_no=$self->{enterer_no}";
-                $dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+                $dbh->do( $sql ) || die ( "$sql<HR>$!" );
             }
 
             # now update the session_data record to the current time
-            $sql = "UPDATE session_data SET record_date=NULL WHERE session_id=".$dbh_l->quote($session_id);
-            $dbh_l->do($sql);
+            $sql = "UPDATE session_data SET record_date=NULL WHERE session_id=".$dbh->quote($session_id);
+            $dbh->do($sql);
             $self->{'logged_in'} = 1;
         } else {
             $self->{'logged_in'} = 0;
@@ -68,14 +67,14 @@ sub processLogin {
     my $password = shift;
 
     my $dbt = $self->{'dbt'};
-    my $dbh_l = $dbt->dbh_local;
+    my $dbh = $dbt->dbh;
     
 	my $valid = 0;
 
 
 	# First do some housekeeping
 	# This cleans out ALL records in session_data older than 48 hours.
-	$self->houseCleaning( $dbh_l );
+	$self->houseCleaning( $dbh );
 
 
 	# We want them to specify both an authorizer and an enterer
@@ -91,12 +90,12 @@ sub processLogin {
 
     my ($sql,@results,$authorizer_row,$enterer_row);
 	# Get info from database on this authorizer.
-	$sql =	"SELECT * FROM person WHERE name=".$dbh_l->quote($authorizer);
+	$sql =	"SELECT * FROM person WHERE name=".$dbh->quote($authorizer);
     @results =@{$dbt->getData($sql)};
     $authorizer_row  = $results[0];
 
 	# Get info from database on this enterer.
-	$sql =	"SELECT * FROM person WHERE name=".$dbh_l->quote($enterer);
+	$sql =	"SELECT * FROM person WHERE name=".$dbh->quote($enterer);
     @results =@{$dbt->getData($sql)};
     $enterer_row  = $results[0];
 
@@ -113,7 +112,7 @@ sub processLogin {
 			#   JA 12.6.02
 			if ($db_password ne "")	{
 				$sql =	"UPDATE person SET password='' WHERE person_no = ".$authorizer_row->{'person_no'};
-				$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 			}
 		# If that didn't work and there is no plain text password,
 		#   try the old encrypted password
@@ -126,9 +125,9 @@ sub processLogin {
 			if ( $db_password eq $encryptedPassword ) {
 				$valid = 1; 
 				# Mysteriously collect their plaintext password
-				$sql =	"UPDATE person SET password='',plaintext=".$dbh_l->quote($password).
+				$sql =	"UPDATE person SET password='',plaintext=".$dbh->quote($password).
 						" WHERE person_no = ".$authorizer_row->{person_no};
-				$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+				$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 			}
 		}
 
@@ -174,10 +173,10 @@ sub processLogin {
             }
            
             my $keys = join(",",keys(%row));
-            my $values = join(",",map { $dbh_l->quote($_) } values(%row));
+            my $values = join(",",map { $dbh->quote($_) } values(%row));
             
 			$sql =	"INSERT INTO session_data ($keys) VALUES ($values)";
-			$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+			$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 	
 			return $cookie;
 		}
@@ -191,7 +190,7 @@ sub processLogin {
 sub processGuestLogin {
 	my $self = shift;
     my $dbt = $self->{'dbt'};
-    my $dbh_l = $dbt->dbh_local;
+    my $dbh = $dbt->dbh;
     my $name = shift;
 
     my $session_id = $self->buildSessionID();
@@ -223,10 +222,10 @@ sub processGuestLogin {
                'enterer_no'=>$self->{'enterer_no'});
    
     my $keys = join(",",keys(%row));
-    my $values = join(",",map { $dbh_l->quote($_) } values(%row));
+    my $values = join(",",map { $dbh->quote($_) } values(%row));
     
     my $sql = "INSERT INTO session_data ($keys) VALUES ($values)";
-    $dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+    $dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
     return $cookie;
 }
@@ -247,32 +246,32 @@ sub buildSessionID {
 # 48 hours is the current time considered
 sub houseCleaning {
 	my $self = shift;
-    my $dbh_l = $self->{'dbt'}->dbh_local;
+    my $dbh = $self->{'dbt'}->dbh;
 
 	# COULD ALSO USE 'DATE_SUB'
 	my $sql = 	"DELETE FROM session_data ".
 			" WHERE record_date < DATE_ADD( now(), INTERVAL -2 DAY)";
-	$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
 	# COULD ALSO USE 'DATE_SUB'
 	# Nix the Guest users @ 1 day
 	$sql = 	"DELETE FROM session_data ".
 			" WHERE record_date < DATE_ADD( now(), INTERVAL -1 DAY) ".
 			"	AND authorizer = 'Guest' ";
-	$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 	1;
 }
 
 # Sets the reference_no
 sub setReferenceNo {
     my ($self,$reference_no) = @_;
-	my $dbh_l = $self->{'dbt'}->dbh_local;
+	my $dbh = $self->{'dbt'}->dbh;
 
 	if ($reference_no =~ /^\d+$/) {
 		my $sql =	"UPDATE session_data ".
 				"	SET reference_no = $reference_no ".
-				" WHERE session_id = ".$dbh_l->quote($self->get("session_id"));
-		$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+				" WHERE session_id = ".$dbh->quote($self->get("session_id"));
+		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
 		# Update our reference_no
 		$self->{reference_no} = $reference_no;
@@ -284,14 +283,14 @@ sub setReferenceNo {
 # a reference first.
 sub enqueue {
     my ($self,$queue) = @_;
-    my $dbh_l = $self->{dbt}->dbh_local;
+    my $dbh = $self->{dbt}->dbh;
 	my $current_contents = "";
 
 	# Get the current contents
 	my $sql =	"SELECT queue ".
 			"  FROM session_data ".
-			" WHERE session_id = ".$dbh_l->quote($self->get("session_id"));
-    my $sth = $dbh_l->prepare( $sql ) || die ( "$sql<hr>$!" );
+			" WHERE session_id = ".$dbh->quote($self->get("session_id"));
+    my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
 
 	if ( $sth->rows ) {
@@ -304,20 +303,20 @@ sub enqueue {
 	if ( $current_contents ) { $queue = $queue."|".$current_contents; }
 
 	$sql =	"UPDATE session_data ".
-			" SET queue=".$dbh_l->quote($queue) .
-			" WHERE session_id=".$dbh_l->quote($self->get("session_id"));
-	$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+			" SET queue=".$dbh->quote($queue) .
+			" WHERE session_id=".$dbh->quote($self->get("session_id"));
+	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 }
 
 # Pulls an action off the queue
 sub unqueue {
 	my $self = shift;
-	my $dbh_l = $self->{'dbt'}->dbh_local;
+	my $dbh = $self->{'dbt'}->dbh;
 
 	my $sql =	"SELECT queue ".
 			"  FROM session_data ".
-			" WHERE session_id = ".$dbh_l->quote($self->get("session_id"));
-    my $sth = $dbh_l->prepare( $sql ) || die ( "$sql<hr>$!" );
+			" WHERE session_id = ".$dbh->quote($self->get("session_id"));
+    my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
     $sth->execute();
 	my $rs = $sth->fetchrow_hashref();
 	$sth->finish();
@@ -333,9 +332,9 @@ sub unqueue {
 		# Write the rest out
 		$queue = join ( "|", @entries );
 		$sql =	"UPDATE session_data ".
-				"	SET queue=".$dbh_l->quote($queue).
-				" WHERE session_id=".$dbh_l->quote($self->{'session_id'});
-		$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+				"	SET queue=".$dbh->quote($queue).
+				" WHERE session_id=".$dbh->quote($self->{'session_id'});
+		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 
 		# Parse the entry.  Since it is any valid URL, use the CGI routine.
 		my $cgi = CGI->new ( $entry );
@@ -354,12 +353,12 @@ sub unqueue {
 
 sub clearQueue {
 	my $self = shift;
-    my $dbh_l = $self->{dbt}->dbh_local;
+    my $dbh = $self->{dbt}->dbh;
 
 	my $sql =	"UPDATE session_data ".
 			"	SET queue = NULL ".
-			" WHERE session_id = ".$dbh_l->quote($self->{'session_id'});
-	$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+			" WHERE session_id = ".$dbh->quote($self->{'session_id'});
+	$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 }
 
 # Gets a variable from memory
@@ -524,7 +523,7 @@ sub getPrefFields	{
 # Set new preferences JA 25.6.02
 sub setPreferences	{
     my ($dbt,$q,$s,$hbo) = @_;
-    my $dbh_r = $dbt->dbh_remote;
+    my $dbh_r = $dbt->dbh;
 
 	print "<table width='100%'><tr><td colspan='2' align='center'><h3>Your current preferences</h3></td><tr><td align='center'>\n";
 	print "<table align=center cellpadding=4>\n";

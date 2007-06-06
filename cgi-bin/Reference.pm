@@ -7,12 +7,9 @@ use CGI::Carp;
 use Data::Dumper;
 use Class::Date qw(now date);
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL);
-
+use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR);
 
 # Paths from the Apache environment variables (in the httpd.conf file).
-my $HTML_DIR = $ENV{'BRIDGE_HTML_DIR'};
-my $OUTPUT_DIR = "public/data";
 
 use fields qw(reference_no
 				reftitle
@@ -376,7 +373,7 @@ sub displayRefResults {
         my $authname = $s->get('authorizer');
         $authname =~ s/\. //;
         printRefsCSV(\@data,$authname);
-        print qq|<a href="/public/data/$authname.refs"><b>Download all the references</b></a> -\n|;
+        print qq|<a href="/public/references/${authname}_refs.csv"><b>Download all the references</b></a> -\n|;
 	    print qq|<a href="$exec_url?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
 	    print "</p></center><br>\n";
         
@@ -473,6 +470,19 @@ sub displayReference {
     $html .= "</table>";
     if ($html) {
         print $box->("Metadata",$html);
+    }
+
+  
+    my @uploads = @{$dbt->getData("SELECT upload_id,file_name,comments FROM uploads WHERE reference_no=$reference_no AND finished=1")};
+    if (@uploads) {
+        my $html = "";
+        foreach my $row (@uploads) {
+            $html .= "<a href=\"download.pl?what=upload&download_id=$row->{upload_id}\">$row->{file_name}</a> <br>$row->{comments}<br>";
+            $html .= "<br>" if ($row->{comments}); 
+        }
+        $html =~ s/(<br>)*$//;
+
+        print $box->("Downloads",$html);
     }
 
 
@@ -603,7 +613,6 @@ sub displaySearchRefs {
 
 sub displayReferenceForm {
     my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
     my $reference_no = $q->param('reference_no');
 
     my $isNewEntry = ($reference_no > 0) ? 0 : 1;
@@ -648,6 +657,7 @@ sub displayReferenceForm {
     
     if ($isNewEntry) {
         $vars{"new_message"} = "<p>If the reference is <b>new</b>, please fill out the following form.</p>";
+        $vars{"project_name"} = "fossil record" if ($IS_FOSSIL_RECORD);
     }
 	print $hbo->populateHTML('js_reference_checkform');
 	print $hbo->populateHTML("enter_ref_form", \%vars);
@@ -656,7 +666,6 @@ sub displayReferenceForm {
 #  * Will either add or edit a referene in the database
 sub processReferenceForm {
     my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 	my $reference_no = int($q->param('reference_no'));
 
@@ -719,50 +728,6 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
             my $status = $dbt->updateRecord($s,'refs','reference_no',$reference_no,\%vars);
         }
 	}
-
-    if (@child_nos) {
-        my $pid = fork();
-        if (!defined($pid)) {
-            carp "ERROR, could not fork";
-        }
-
-        if ($pid) {
-            # Child fork
-            # Don't exit here, have child go on to print message
-            # Make new dbh and dbt objects - for some reason one connection
-            # gets closed whent the other fork exits, so split them here
-            $dbh = DBConnection::connect();
-            $dbt = DBTransactionManager->new($dbh);
-            $dbt->useRemote(1);
-        } else {
-            #my $session_id = POSIX::setsid();
-
-            # Make new dbh and dbt objects - for some reason one connection
-            # gets closed whent the other fork exits, so split them here
-            my $dbh2 = DBConnection::connect();
-            my $dbt2 = DBTransactionManager->new($dbh2);
-            $dbt2->useRemote(1);
-     
-            # This is the parent fork.  Have the parent fork
-            # Do the useful work, the child fork will be terminated
-            # when the parent is so don't have it do anything long running
-            # (just terminate). The defined thing is in case the work didn't work
-
-            # Close references to stdin and stdout so Apache
-            # can close the HTTP socket conneciton
-            if (defined $pid) {
-                open STDIN, "</dev/null";
-                open STDOUT, ">/dev/null";
-                #open STDOUT, ">>SOMEFILE";
-            }
-    
-            foreach my $child_no (@child_nos) {
-                TaxaCache::updateCache($dbt2,$child_no);
-            }                                                                                                          
-            sleep(4);
-            exit;
-        }
-    }
 
     my $verb = ($isNewEntry) ? "added" : "updated";
     if ($dupe) {
@@ -988,7 +953,8 @@ sub printRefsCSV {
     $authname =~ s/\. //;
     # Dump the refs to a flat file JA 1.7.02
     my $csv = Text::CSV_XS->new({'binary'=>1});
-    open REFOUTPUT,">$HTML_DIR/$OUTPUT_DIR/$authname.refs";
+    PBDBUtil::autoCreateDir("$HTML_DIR/public/references");
+    open REFOUTPUT,">$HTML_DIR/public/references/${authname}_refs.csv";
 
     my @fields = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage publication_type classification_quality comments language created modified); 
     if ($csv->combine(@fields)) {

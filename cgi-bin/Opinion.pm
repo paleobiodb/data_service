@@ -9,11 +9,13 @@ use strict;
 
 use DBConnection;
 use DBTransactionManager;
+use TypoChecker;
 use CGI::Carp;
 use Data::Dumper;
+use AuthorNames;
 use TaxaCache;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL);
+use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD);
 
 # list of allowable data fields.
 use fields qw(opinion_no reference_no dbt DBrow);  
@@ -27,7 +29,7 @@ sub new {
     $self->{'dbt'}=$dbt;
 
     my ($sql,@results);
-    if ($opinion_no =~ /^\d+$/) { 
+    if ($opinion_no =~ /^\d+$/) {
         $sql = "SELECT * FROM opinions WHERE opinion_no=$opinion_no";
         @results = @{$dbt->getData($sql)};
     }
@@ -41,7 +43,6 @@ sub new {
     }
 	return $self;
 }
-
 
 # Universal accessor
 sub get {
@@ -276,7 +277,6 @@ sub formatAsHTML {
 # rjp, 3/2004
 sub displayOpinionForm {
     my ($dbt,$hbo,$s,$q,$error_message) = @_;
-    $dbt->useRemote(1);
 	
     my $dbh = $dbt->dbh;
 	
@@ -350,6 +350,23 @@ sub displayOpinionForm {
             $fields{'spelling_reason'} = $reason;
         } else {
             %fields = %{$o->getRow()};
+
+            if ($fields{'max_interval_no'}) {
+                my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals WHERE interval_no=$fields{'max_interval_no'}";
+                my $row = ${$dbt->getData($sql)}[0];
+                $fields{'max_interval_name'} = $row->{'eml_interval'}." ".$row->{'interval_name'};
+                $fields{'max_interval_name'} =~ s/^\s*//;
+                $fields{'max_interval_name'} =~ s/Late\/Upper/Late/;
+                $fields{'max_interval_name'} =~ s/Early\/Lower/Early/;
+            }
+            if ($fields{'min_interval_no'}) {
+                my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals WHERE interval_no=$fields{'min_interval_no'}";
+                my $row = ${$dbt->getData($sql)}[0];
+                $fields{'min_interval_name'} = $row->{'eml_interval'}." ".$row->{'interval_name'};
+                $fields{'min_interval_name'} =~ s/^\s*//;
+                $fields{'min_interval_name'} =~ s/Late\/Upper/Late/;
+                $fields{'min_interval_name'} =~ s/Early\/Lower/Early/;
+            }
 
             if ($fields{'ref_has_opinion'} =~ /YES/i) {
                 $fields{'ref_has_opinion'} = 'PRIMARY';
@@ -725,17 +742,8 @@ sub displayOpinionForm {
 # sure the user didn't screw up, and to display an appropriate error message if they did.
 sub submitOpinionForm {
     my ($dbt,$hbo,$s,$q) = @_;
-    $dbt->useRemote(1);
 
-	my %rankToNum = (  'subspecies' => 1, 'species' => 2, 'subgenus' => 3,
-		'genus' => 4, 'subtribe' => 5, 'tribe' => 6,
-		'subfamily' => 7, 'family' => 8, 'superfamily' => 9,
-		'infraorder' => 10, 'suborder' => 11,
-		'order' => 12, 'superorder' => 13, 'infraclass' => 14,
-		'subclass' => 15, 'class' => 16, 'superclass' => 17,
-		'subphylum' => 18, 'phylum' => 19, 'superphylum' => 20,
-		'subkingdom' => 21, 'kingdom' => 22, 'superkingdom' => 23,
-		'unranked clade' => 24, 'informal' => 25 );
+	my %rankToNum = %Taxon::rankToNum;
   
     my @warnings = ();
 
@@ -1112,21 +1120,21 @@ sub submitOpinionForm {
     # Error checking related to ranks
     # Only bother if we're down to one parent
     if ($fields{'parent_spelling_no'}) {
-	if ($q->param('taxon_status') eq 'belongs to')	{ 
-	    # for belongs to, the parent rank should always be higher than the child rank.
-	    # unless either taxon is an unranked clade (JA)
-		if ($rankToNum{$parentRank} <= $rankToNum{$childSpellingRank}
-		  && $parentRank ne "unranked clade" && 
-		  $childSpellingRank ne "unranked clade")	{
-			$errors->add("The rank of the higher taxon '$parentName' ($parentRank) must be higher than the rank of '$childSpellingName' ($childSpellingRank)");	
-		}
-	# synonyms should be of the same rank, but invalid subgroups can be of
-	#  any rank because (for example) sometimes a taxon is considered
-	#  simultaneously to be of too high a rank, and an invalid subgroup of
-	#  a lower-ranked taxon JA 29.1.07
+        if ($q->param('taxon_status') eq 'belongs to')	{ 
+            # for belongs to, the parent rank should always be higher than the child rank.
+            # unless either taxon is an unranked clade (JA)
+            if ($rankToNum{$parentRank} <= $rankToNum{$childSpellingRank}
+                && $parentRank ne "unranked clade" 
+                && $childSpellingRank ne "unranked clade")	{
+                $errors->add("The rank of the higher taxon '$parentName' ($parentRank) must be higher than the rank of '$childSpellingName' ($childSpellingRank)");	
+            }
         } elsif ($q->param('taxon_status') eq 'invalid1' && $q->param('synonym') ne 'invalid subgroup of' && $parentRank ne $childSpellingRank)	{
-		$errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
-	} 
+            # synonyms should be of the same rank, but invalid subgroups can be of
+            #  any rank because (for example) sometimes a taxon is considered
+            #  simultaneously to be of too high a rank, and an invalid subgroup of
+            #  a lower-ranked taxon JA 29.1.07
+            $errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
+        } 
         if ($q->param('taxon_status') eq 'belongs to') {
             if ($childSpellingRank eq 'species' && $parentRank !~ /genus/) {
 		    	$errors->add("A species must be assigned to a genus or subgenus and not a higher order name");
@@ -1245,6 +1253,25 @@ sub submitOpinionForm {
 
     if ($q->param('diagnosis') && $q->param("diagnosis_given") =~ /^$|none/) {
 		$errors->add("When entering a diagnosis please select the type of diagnosis in the \"Diagnosis\" pulldown");
+    }
+
+    if ($IS_FOSSIL_RECORD) {
+        my @errors = ();
+        if ($q->param('max_interval_name')) {
+            my ($max_no,$err1) = FossilRecord::parseIntervalName($dbt,$q->param('max_interval_name'));
+            $fields{'max_interval_no'} = $max_no;
+            push @errors, @$err1;
+
+        }
+
+        if ($q->param('min_interval_name')) {
+            my ($min_no,$err2) = FossilRecord::parseIntervalName($dbt,$q->param('min_interval_name'));
+            $fields{'min_interval_no'} = $min_no;
+            push @errors, @$err2;
+        }
+        foreach my $err (@errors) {
+            $errors->add($err->{'message'});
+        }
     }
 
     # Get the fields from the form and get them ready for insertion
@@ -1374,46 +1401,7 @@ sub submitOpinionForm {
         # Remove any duplicates that may have been added as a result of the migration
         removeDuplicateOpinions($dbt,$s,$fields{'child_no'});
     }
-    my $pid = fork();
-    if (!defined($pid)) {
-        carp "ERROR, could not fork";
-    }
 
-    if ($pid) {
-        # Child fork
-        # Don't exit here, have child go on to print message
-
-        # Make new dbh and dbt objects - for some reason one connection
-        # gets closed whent the other fork exits, so split them here
-        $dbh = DBConnection::connect();
-        $dbt = DBTransactionManager->new($dbh);  
-    } else {
-        #my $session_id = POSIX::setsid();
-
-        # Make new dbh and dbt objects - for some reason one connection
-        # gets closed whent the other fork exits, so split them here
-        my $dbh2 = DBConnection::connect();
-        my $dbt2 = DBTransactionManager->new($dbh2); 
-
-        # This is the parent fork.  Have the parent fork
-        # Do the useful work, the child fork will be terminated
-        # when the parent is so don't have it do anything long running
-        # (just terminate). The defined thing is in case the work didn't work
-
-        # Close references to stdin and stdout so Apache
-        # can close the HTTP socket conneciton
-        if (defined $pid) {
-            open STDIN, "</dev/null";
-            open STDOUT, ">/dev/null";
-            #open STDOUT, ">>SOMEFILE";
-        }
-        TaxaCache::updateCache($dbt2,$fields{'child_no'});
-        sleep(4);
-        exit;
-    }         
-
-
-	
     $o = Opinion->new($dbt,$resultOpinionNumber); 
     my $opinionHTML = $o->formatAsHTML();
     $opinionHTML =~ s/according to/of/i;
@@ -1530,7 +1518,6 @@ sub submitOpinionForm {
 # current opinion in the migration, which will only happen on an edit
 sub getOpinionsToMigrate {
     my ($dbt,$child_no,$child_spelling_no,$exclude_opinion_no) = @_;
-    $dbt->useRemote(1);
  
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_spelling_no);
     my $sql = "SELECT * FROM opinions WHERE child_no=$orig_no";
@@ -1548,6 +1535,7 @@ sub getOpinionsToMigrate {
     return @opinions;
 }
 
+
 # Displays a form which lists all opinions that currently exist
 # for a reference no/taxon
 # Moved/Adapted from Taxon::displayOpinionChoiceForm PS 01/24/2004
@@ -1555,9 +1543,6 @@ sub displayOpinionChoiceForm {
     my $dbt = shift;
     my $s = shift;
     my $q = shift;
-    if ($s->isDBMember()) {
-        $dbt->useRemote(1);
-    }
     my $dbh = $dbt->dbh;
 
     print "<div align=\"center\">";
@@ -1685,7 +1670,6 @@ sub displayOpinionChoiceForm {
 # but just set all their key fields to zero and mark changes into the comments field
 sub removeDuplicateOpinions {
     my ($dbt,$s,$child_no,$debug_only) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     return if !($child_no);
     my $sql = "SELECT * FROM opinions WHERE child_no=$child_no AND child_no != parent_no AND status !='misspelling of'";
@@ -1715,7 +1699,6 @@ sub removeDuplicateOpinions {
         }
     }
 }
-
 
 
 1;

@@ -10,7 +10,7 @@ use Person;
 use Opinion;
 use CGI::Carp;
 use Debug qw(dbg);
-use Constants qw($READ_URL);
+use Constants qw($READ_URL $DATA_DIR $HTML_DIR);
 
 use strict;
 
@@ -323,7 +323,7 @@ sub displayITISDownload {
     $dirname =~ s/[^a-zA-Z0-9_\/]//g;
     umask '022';
 
-    my $datafile = $ENV{'DOWNLOAD_DATAFILE_DIR'}."/ITISCustomizedDwnld.doc";
+    my $datafile = $DATA_DIR."/ITISCustomizedDwnld.doc";
     my $cmd = "cp $datafile $filesystem_dir";
     my $ot = `$cmd`; 
     #print "$cmd -- $ot -- <BR>";
@@ -332,7 +332,7 @@ sub displayITISDownload {
     #print "$cmd -- $ot -- <BR>";
 
 
-    print "<div align=\"center\"><h5><a href='/paleodb/data/$dirname.tar.gz'>Download file</a> - <a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
+    print "<div align=\"center\"><h5><a href='/public/taxa_downloads/$dirname.tar.gz'>Download file</a> - <a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
     print "</td></tr></table></div>";
     #print "<a href='/paleodb/data/JSepkoski/taxonomic_units.dat'>taxonomic units</a><BR>";
     #print "<a href='/paleodb/data/JSepkoski/publications.dat'>publications</a><BR>";
@@ -937,8 +937,10 @@ sub makeDataFileDir {
 
     my $name = ($s->get("enterer")) ? $s->get("enterer") : "";
     my $filename = PBDBUtil::getFilename($name,1); 
-    my $filesystem_dir = $ENV{'DOWNLOAD_OUTFILE_DIR'}."/".$filename;
-    my $http_dir = "/paleodb/data/".$filename;
+    my $filesystem_dir = $HTML_DIR."/public/taxa_downloads/".$filename;
+    my $http_dir = "/public/taxa_downloads/".$filename;
+
+    PBDBUtil::autoCreateDir($filesystem_dir);
 
     umask '022';
     dbg("File dir is $filesystem_dir");
@@ -977,7 +979,7 @@ sub formatAuthors {
 sub cleanOldGuestFiles {
     # erase all files that haven't been accessed in more than a day
 
-    my $filedir = $ENV{'DOWNLOAD_OUTFILE_DIR'};
+    my $filedir = $HTML_DIR."/public/taxa_downloads/";
     opendir(DIR,$filedir) or die "couldn't open $filedir ($!)";
     # grab only guest files
     my @filenames = grep { /^guest/ } readdir(DIR);

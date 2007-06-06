@@ -35,19 +35,23 @@ Initials and names of additional authors (separate the names with commas):<br><t
 	
 	
 	</td>
-    <td align=right>Project code:
-    <input name="project_name" type="hidden" value="" replace="NO">
-    <input name="project_name" type=checkbox value="decapod">decapod
-    <input name="project_name" type=checkbox value="divergence">divergence
-	<input name="project_name" type=checkbox value="ETE">ETE<br>
-	<input name="project_name" type=checkbox value="5%">5%
-	<input name="project_name" type=checkbox value="1%">1%
-	<input name="project_name" type=checkbox value="PACED">PACED
-	<input name="project_name" type=checkbox value="PGAP">PGAP
+    <td align=right>
+        Project code:
+        <input name="project_name" type="hidden" value="" replace="NO">
+        <input name="project_name" type=checkbox value="decapod">decapod
+        <input name="project_name" type=checkbox value="divergence">divergence
+        <input name="project_name" type=checkbox value="ETE">ETE<br>
+        <input name="project_name" type=checkbox value="5%">5%
+        <input name="project_name" type=checkbox value="1%">1%
+        <input name="project_name" type=checkbox value="PACED">PACED
+        <input name="project_name" type=checkbox value="PGAP">PGAP
+        <input name="project_name" type=checkbox value="fossil record"> Fossil record
 	</td> <tr>
     <td><span class="required">Publication type:</span></td>
     <td><select name="publication_type"></select> </td>
+    <div hide="is_fossil_record">
     <td>Project ref number: <input name=project_ref_no size=5> </td>
+    </div>
   </tr>
   
   <tr>

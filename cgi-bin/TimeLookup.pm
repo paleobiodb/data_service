@@ -182,6 +182,85 @@ sub getRange {
     }
 }
 
+sub getCompleteRange {
+    my ($self,$intervals) = @_;
+    my (%pre,%range,%post,%unknown);
+
+    my $ig = $self->getIntervalGraph();
+    while (my ($i,$itv) = each %$ig) {
+        $itv->{'visited'} = 0;
+    }
+    my @q;
+    foreach my $i (@$intervals) {
+        my $itv = $ig->{$i};
+        $range{$i} = $itv;
+        push @q, $itv;
+        $itv->{'visited'} = 1;
+    }
+    my @orig_q = @q;
+
+    while (my $itv = shift @q) {
+        foreach my $v (@{$itv->{'all_prev'}}) {
+            #next if ($v->{'visited'});
+            if (!$range{$v->{'interval_no'}} &&
+                !$pre{$v->{'interval_no'}}) {
+                $pre{$v->{'interval_no'}} = $v;
+                push @q,$v;
+            #    $v->{'visited'} = 1;
+            }
+        }
+        if ($itv->{'max'} && 
+            !$range{$itv->{'max'}->{'interval_no'}} &&
+            !$pre{$itv->{'max'}->{'interval_no'}}) {
+            $pre{$itv->{'max'}->{'interval_no'}} = $itv->{'max'};
+            push @q,$itv->{'max'};
+        }
+        foreach my $c (@{$itv->{'children'}}) {
+            if ($c->{'min'} == $itv &&
+                $c->{'max'} != $c->{'min'} && 
+                !$range{$c->{'interval_no'}} &&
+                !$pre{$c->{'interval_no'}}) {
+                $pre{$c->{'interval_no'}} =  $c;
+                push @q,$c;
+            }
+        }
+    }
+    @q = @orig_q;
+    while (my $itv = shift @q) {
+        foreach my $v (@{$itv->{'all_next'}}) {
+            #next if ($v->{'visited'});
+            if (!$range{$v->{'interval_no'}} &&
+                !$post{$v->{'interval_no'}}) {
+                $post{$v->{'interval_no'}} = $v;
+                push @q,$v;
+            #    $v->{'visited'} = 1;
+            }
+        }
+        if ($itv->{'min'} && 
+            !$range{$itv->{'min'}->{'interval_no'}} &&
+            !$post{$itv->{'min'}->{'interval_no'}}) {
+            $post{$itv->{'min'}->{'interval_no'}} = $itv->{'min'};
+            push @q,$itv->{'min'};
+        }
+        foreach my $c (@{$itv->{'children'}}) {
+            if ($c->{'max'} == $itv &&
+                $c->{'max'} != $c->{'min'} && 
+                !$range{$c->{'interval_no'}} &&
+                !$post{$c->{'interval_no'}}) {
+                $post{$c->{'interval_no'}} =  $c;
+                push @q,$c;
+            }
+        }
+    }
+
+    while (my ($i,$itv) = each %$ig) {
+        if (!$range{$i} && !$pre{$i} && !$post{$i}) {
+            $unknown{$i} = $itv;
+        }
+    }
+    return (\%pre,\%range,\%post,\%unknown);
+}
+
 # Boundaries are given in millions of years
 # Intervals must fall completely within the bounds, unless use_mid is passed, in which case
 # intervals midpoints must fall completely within the bounds
@@ -534,6 +613,14 @@ sub mapIntervals {
     }
 }
 
+sub getPrecedingIntervals{
+    my ($dbt,$intervals) = @_;
+}
+
+sub getFollowingIntervals {
+    my ($self,$intervals) = @_;
+}
+
 
 # This basically implements Dijkstra's shortest path algorithm, but with some
 # tweaks:  
@@ -569,7 +656,6 @@ sub findPath {
     my $pq = PriorityQueue->new();
     $pq->insert($from,0);
     while (my $v = $pq->pop()) {
-
         if ($v == $to) {
             last;
         }
@@ -2032,7 +2118,12 @@ sub getParentIntervals {
 # A trivial function PS 04/08/2005
 sub getIntervalNo {
     my $self = shift;
-    my $dbt = $self->{'dbt'};
+    my $dbt;
+    if ($self->isa('DBTransactionManager')) {
+        $dbt = $self;
+    } else {
+        $dbt = $self->{'dbt'};
+    }
     my $dbh = $dbt->dbh;
 
     my $eml = shift;
@@ -2042,6 +2133,8 @@ sub getIntervalNo {
               " WHERE interval_name=".$dbh->quote($name);
     if ($eml) {
         $sql .= " AND eml_interval=".$dbh->quote($eml);
+    } else {
+        $sql .= " AND (eml_interval IS NULL or eml_interval='')";
     }
               
     my $row = ${$dbt->getData($sql)}[0];
@@ -2062,7 +2155,7 @@ sub splitInterval {
     my @eml_terms;
     my @interval_terms;
     foreach my $term (@terms) {
-        if ($term =~ /early|lower|middle|late|upper/i) {
+        if ($term =~ /e\.|l\.|m\.|early|lower|middle|late|upper/i) {
             push @eml_terms, $term;
         } else {
             push @interval_terms, $term;
@@ -2072,22 +2165,22 @@ sub splitInterval {
 
     my $eml;
     if (scalar(@eml_terms) == 1) {
-        $eml = 'Early/Lower' if ($eml_terms[0] =~ /lower|early/i);
-        $eml = 'Late/Upper' if ($eml_terms[0] =~ /late|upper/i);
-        $eml = 'Middle' if ($eml_terms[0] =~ /middle/i);
+        $eml = 'Early/Lower' if ($eml_terms[0] =~ /e\.|lower|early/i);
+        $eml = 'Late/Upper' if ($eml_terms[0] =~ /l\.|late|upper/i);
+        $eml = 'Middle' if ($eml_terms[0] =~ /m\.|middle/i);
     } elsif(scalar(@eml_terms) > 1) {
         my ($eml0, $eml1);
-        $eml0 = 'early'  if ($eml_terms[0] =~ /early|lower/i);
-        $eml0 = 'middle' if ($eml_terms[0] =~ /middle/i);
-        $eml0 = 'late'   if ($eml_terms[0] =~ /late|upper/i);
-        $eml1 = 'Early'  if ($eml_terms[1] =~ /early|lower/i);
-        $eml1 = 'Middle' if ($eml_terms[1] =~ /middle/i);
-        $eml1 = 'Late'   if ($eml_terms[1] =~ /late|upper/i);
+        $eml0 = 'early'  if ($eml_terms[0] =~ /e\.|early|lower/i);
+        $eml0 = 'middle' if ($eml_terms[0] =~ /m\.|middle/i);
+        $eml0 = 'late'   if ($eml_terms[0] =~ /l\.|late|upper/i);
+        $eml1 = 'Early'  if ($eml_terms[1] =~ /e\.|early|lower/i);
+        $eml1 = 'Middle' if ($eml_terms[1] =~ /m\.|middle/i);
+        $eml1 = 'Late'   if ($eml_terms[1] =~ /l\.|late|upper/i);
         if ($eml0 && $eml1) {
             $eml = $eml0.' '.$eml1;
         }
     }
-                                                                                                                                                             
+
     return ($eml,$interval);
 }
 

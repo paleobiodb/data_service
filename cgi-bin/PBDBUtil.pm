@@ -1,4 +1,5 @@
 package PBDBUtil;
+use File::Path;
 use strict;
 
 use Debug qw(dbg);
@@ -298,19 +299,17 @@ EOF
 }
 
 sub checkForBot {
-    if ($ENV{HTTP_USER_AGENT} =~ /slurp|bot|spider|ask jeeves|crawl|archive|holmes|findlinks|webcopier|cfetch|stackrambler/i) {
+    if ($ENV{'HTTP_USER_AGENT'} =~ /slurp|bot|spider|ask jeeves|crawl|archive|holmes|findlinks|webcopier|cfetch|stackrambler/i) {
         return 1;
     }
     return 0;
 }
 
-sub getReadURL {
-    return "bridge.pl";
+sub autoCreateDir {
+    my $dir = shift;
+    if (! -e $dir) {
+        mkpath($dir);
+    }
 }
-
-sub getWriteURL {
-    return "bridge.pl";
-}
-
 
 1;

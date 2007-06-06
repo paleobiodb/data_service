@@ -129,7 +129,6 @@ function unloadPage()	{
 #  because pulldown with scales has been dropped
 sub processShowEditForm	{
 	my $dbt = shift;
-	$dbt->useRemote(1);
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
@@ -411,7 +410,6 @@ sub processViewTimeScale	{
 
 sub processEditScaleForm	{
 	my $dbt = shift;
-	$dbt->useRemote(1);
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
@@ -420,7 +418,7 @@ sub processEditScaleForm	{
 	my $enterer_no = $s->get('enterer_no');
 	return unless $authorizer_no;
 
-	my $dbh_r = $dbt->dbh_remote;
+    my $dbh_r = $dbt->dbh;
 
 	my $scale_no = int($q->param('scale_no'));
 
@@ -698,7 +696,6 @@ sub processEditScaleForm	{
 	$q->param('scale' => $scale_no);
 	processViewTimeScale($dbt, $hbo, $q, $s, 'summary', \@badintervals);
 
-	return;
 }
 
 

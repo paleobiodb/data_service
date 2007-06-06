@@ -8,18 +8,16 @@ use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
 use TimeLookup;
 use Digest::MD5;
-use Constants qw($READ_URL $WRITE_URL $DATAFILE_DIR);
+use Constants qw($READ_URL $WRITE_URL $DATA_DIR $HTML_DIR);
 
 # Flags and constants
 my $dbt;    # The DBTransactionManager object
 my $q;	    # Reference to the parameters
 my $s;
 
-my $GIF_HTTP_ADDR = "/public/maps";
-my $COAST_DIR = $ENV{MAP_COAST_DIR};
-my $GIF_DIR = $ENV{MAP_GIF_DIR};
-my $TILE_DIR = $GIF_DIR;
-$TILE_DIR =~ s/maps$/staticmaps/;
+my $MAP_URL= "/public/maps";
+my $GIF_DIR = $HTML_DIR.$MAP_URL;
+my $TILE_DIR = $HTML_DIR."/public/staticmaps";
 my $FONT = "$DATAFILE_DIR/fonts/orangeki.ttf";
 my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
@@ -362,10 +360,10 @@ sub mapFinishImage {
 
         print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"tiny\">";
         print MAPOUT "You may download this map in ";
-        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">GIF</a></b>, ";
-        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
-        print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pngname\">PNG</a></b> format\n";
+        print MAPOUT "<b><a href=\"$MAP_URL/$ainame\">Adobe Illustrator</a></b>, ";
+        print MAPOUT "<b><a href=\"$MAP_URL/$gifname\">GIF</a></b>, ";
+        print MAPOUT "<b><a href=\"$MAP_URL/$jpgname\">JPEG</a></b>, ";
+        print MAPOUT "or <b><a href=\"$MAP_URL/$pngname\">PNG</a></b> format\n";
         print MAPOUT "</td></tr>\n";
 
         print MAPOUT "<tr><td width=100 valign=\"top\" bgcolor=\"white\" class=\"tiny\">";
@@ -406,16 +404,16 @@ sub mapFinishImage {
     print MAPOUT "</td></tr></table>\n";
     print MAPOUT "</td>\n";
 
-    print MAPOUT "<td align=\"center\"><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$GIF_HTTP_ADDR/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
+    print MAPOUT "<td align=\"center\"><img border=\"0\" alt=\"PBDB map\" height=\"$totalheight\" width=\"$width\" src=\"$MAP_URL/$gifname\" usemap=\"#PBDBmap\" ismap>\n\n";
     print MAPOUT "</table>\n";
 
     # JA 26.4.06
     if ($q->param("simple_map") =~ /YES/i){
         print MAPOUT "<p>You may download this map in ";
-        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$ainame\">Adobe Illustrator</a></b>, ";
-        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$gifname\">GIF</a></b>, ";
-        print MAPOUT "<b><a href=\"$GIF_HTTP_ADDR/$jpgname\">JPEG</a></b>, ";
-        print MAPOUT "or <b><a href=\"$GIF_HTTP_ADDR/$pngname\">PNG</a></b> format.</p>\n";
+        print MAPOUT "<b><a href=\"$MAP_URL/$ainame\">Adobe Illustrator</a></b>, ";
+        print MAPOUT "<b><a href=\"$MAP_URL/$gifname\">GIF</a></b>, ";
+        print MAPOUT "<b><a href=\"$MAP_URL/$jpgname\">JPEG</a></b>, ";
+        print MAPOUT "or <b><a href=\"$MAP_URL/$pngname\">PNG</a></b> format.</p>\n";
     }
 
     close MAPOUT;
@@ -636,8 +634,8 @@ sub snapToTile {
         
 sub readPlateIDs {
     my $self = shift;
-    if ( ! open IDS,"<$COAST_DIR/plateidsv2.lst" ) {
-        $self->htmlError ( "Couldn't open [$COAST_DIR/plateidsv2.lst]: $!" );
+    if ( ! open IDS,"<$DATA_DIR/plateidsv2.lst" ) {
+        $self->htmlError ( "Couldn't open [$DATA_DIR/plateidsv2.lst]: $!" );
     }
 
 
@@ -696,7 +694,7 @@ sub mapDefineOutlines	{
 	# read grid cell ages
 	if ( $self->{maptime} > 0 || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
 
-		open MASK,"<$COAST_DIR/agev7.txt";
+		open MASK,"<$DATA_DIR/agev7.txt";
 		my $lat = 90;
 		while (<MASK>)	{
 			s/\n//;
@@ -719,8 +717,8 @@ sub mapDefineOutlines	{
 
 	}
 
-	if ( ! open COAST,"<$COAST_DIR/noaa.coastlines.$resostem" ) {
-		$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.coastlines.$resostem]: $!" );
+	if ( ! open COAST,"<$DATA_DIR/noaa.coastlines.$resostem" ) {
+		$self->htmlError ( "Couldn't open [$DATA_DIR/noaa.coastlines.$resostem]: $!" );
 	}
 	while (<COAST>)	{
 		s/\n//;
@@ -746,8 +744,8 @@ sub mapDefineOutlines	{
 	close COAST;
 
 	if ( $q->param('borderlinecolor') ne "none" && $q->param('borderlinecolor') =~ /[A-Za-z]/ )	{
-		if ( ! open BORDER,"<$COAST_DIR/noaa.borders.$resostem" ) {
-			$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.borders.$resostem]: $!" );
+		if ( ! open BORDER,"<$DATA_DIR/noaa.borders.$resostem" ) {
+			$self->htmlError ( "Couldn't open [$DATA_DIR/noaa.borders.$resostem]: $!" );
 		}
 		while (<BORDER>)	{
 			s/\n//;
@@ -770,8 +768,8 @@ sub mapDefineOutlines	{
 		close BORDER;
 	}
 	if ( $q->param('usalinecolor') ne "none" && $q->param('usalinecolor') =~ /[A-Za-z]/ )	{
-		if ( ! open USA,"<$COAST_DIR/noaa.usa.$resostem" ) {
-			$self->htmlError ( "Couldn't open [$COAST_DIR/noaa.usa.$resostem]: $!" );
+		if ( ! open USA,"<$DATA_DIR/noaa.usa.$resostem" ) {
+			$self->htmlError ( "Couldn't open [$DATA_DIR/noaa.usa.$resostem]: $!" );
 		}
 		while (<USA>)	{
 			s/\n//;
@@ -795,8 +793,8 @@ sub mapDefineOutlines	{
 	}
 	if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
 		if ( $q->param('crustedgecolor') ne "none" && $q->param('crustedgecolor') =~ /[A-Za-z]/ )	{
-			if ( ! open EDGES,"<$COAST_DIR/platepolygons/edges.$self->{maptime}" ) {
-				$self->htmlError ( "Couldn't open [$COAST_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
+			if ( ! open EDGES,"<$DATA_DIR/platepolygons/edges.$self->{maptime}" ) {
+				$self->htmlError ( "Couldn't open [$DATA_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
 			}
 			while (<EDGES>)	{
 				s/\n//;
@@ -820,8 +818,8 @@ sub mapDefineOutlines	{
 			push @crustlng , "edge";
 			push @crustlat , "edge";
 		}
-		if ( ! open PLATES,"<$COAST_DIR/platepolygons/polygons.$self->{maptime}" ) {
-			$self->htmlError ( "Couldn't open [$COAST_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
+		if ( ! open PLATES,"<$DATA_DIR/platepolygons/polygons.$self->{maptime}" ) {
+			$self->htmlError ( "Couldn't open [$DATA_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
 		}
 		while (<PLATES>)	{
 			s/\n//;
@@ -850,8 +848,8 @@ sub mapGetRotations	{
 	my $self = shift;
 
     if (!@ALL_ROT) {
-	    if ( ! open ROT,"<$COAST_DIR/master01c.rot" ) {
-		    $self->htmlError ( "Couldn't open [$COAST_DIR/master01c.rot]: $!" );
+	    if ( ! open ROT,"<$DATA_DIR/master01c.rot" ) {
+		    $self->htmlError ( "Couldn't open [$DATA_DIR/master01c.rot]: $!" );
 	    }
 	    while (<ROT>)	{
 		    s/\n//;
@@ -1001,6 +999,7 @@ sub mapGetRotations	{
 sub mapSetupImage {
     my $self = shift;
 
+    PBDBUtil::autoCreateDir($GIF_DIR);
     # erase all files that haven't been accessed in more than a day
 	opendir(DIR,"$GIF_DIR") or die "couldn't open $GIF_DIR ($!)";
 	# grab only files with extensions;  not subdirs or . or ..
@@ -1015,12 +1014,11 @@ sub mapSetupImage {
 
     if ( $q->param('mapname') !~ /[A-Za-z]/ )	{
         # get the next number for file creation.
-        if ( ! open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
-            $self->htmlError ( "Couldn't open [$GIF_DIR/gifcount]: $!" );
+        if ( open GIFCOUNT,"<$GIF_DIR/gifcount" ) {
+            $gifcount = <GIFCOUNT>;
+            chomp($gifcount);
+            close GIFCOUNT;
         }
-        $gifcount = <GIFCOUNT>;
-        chomp($gifcount);
-        close GIFCOUNT;
 
         $gifcount++;
         if ( ! open GIFCOUNT,">$GIF_DIR/gifcount" ) {
@@ -1028,8 +1026,6 @@ sub mapSetupImage {
         }
         print GIFCOUNT "$gifcount";
         close GIFCOUNT;
-
-        $gifcount++;
     }
 
     # set up the filenames

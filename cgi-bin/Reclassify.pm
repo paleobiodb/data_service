@@ -44,7 +44,6 @@ sub startReclassifyOccurrences	{
 #  alternative classifications
 sub displayOccurrenceReclassify	{
     my ($q,$s,$dbt,$hbo,$collections_ref) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     my @collections = ();
     @collections = @$collections_ref if ($collections_ref);
@@ -297,7 +296,6 @@ sub displayOccurrenceReclassify	{
 
 sub processReclassifyForm	{
     my ($q,$s,$dbt,$hbo) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     print "<BR>";
@@ -346,7 +344,7 @@ sub processReclassifyForm	{
             $seen_reclassification++;
 
 		# update the occurrences table
-			my $dbh_r = $dbt->dbh_remote;
+            my $dbh_r = $dbt->dbh;
 			my $sql = "UPDATE occurrences SET taxon_no=".$new_taxon_no.
                    ", modifier=".$dbh->quote($s->get('enterer')).
 			       ", modifier_no=".$s->get('enterer_no');

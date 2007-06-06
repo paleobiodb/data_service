@@ -14,7 +14,7 @@ use CGI::Carp;
 use Person;
 use Measurement;
 use Text::CSV_XS;
-use Constants qw($READ_URL $WRITE_URL);
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR $DATA_DIR);
 
 use strict;
 
@@ -41,10 +41,8 @@ my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 my @ecoFields = (); # Note: generated at runtime in setupQueryFields
 my @pubyr = ();
 
-my $OUT_HTTP_DIR = "/paleodb/data";
-my $OUT_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
-my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
-my $COAST_DIR = $ENV{MAP_COAST_DIR};
+my $OUT_HTTP_DIR = "/public/downloads";
+my $OUT_FILE_DIR = $HTML_DIR.$OUT_HTTP_DIR;
 
 my (@form_errors,@form_warnings);
 my $matrix_limit = 5000;
@@ -100,6 +98,8 @@ sub buildDownload {
 
     my ($refsCount,$nameCount,$taxaCount,$scaleCount,$mainCount) = (0,0,0,0,scalar(@$lumpedResults));
     my ($refsFile,$taxaFile,$scaleFile,$mainFile) = ('','','','');
+
+    PBDBUtil::autoCreateDir($HTML_DIR."/public/downloads");
     
     if ( $q->param('time_scale') ) {
         ($scaleCount,$scaleFile) = $self->printScaleFile($allResults);
@@ -563,7 +563,7 @@ sub getCountryString {
         }
     } else {     
         # Get the regions
-        if ( ! open ( REGIONS, "$DATAFILE_DIR/PBDB.regions" ) ) {
+        if ( ! open ( REGIONS, "$DATA_DIR/PBDB.regions" ) ) {
             print "<font color='red'>Skipping regions.</font> Error message is $!<BR><BR>\n";
             return;
         }
@@ -654,7 +654,7 @@ sub getPlateString    {
         $platein{$p} = "Y";
     }
 
-    if ( ! open ( PLATES, "$COAST_DIR/plateidsv2.lst" ) ) {
+    if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
         print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
         return;
     }
@@ -1871,7 +1871,7 @@ sub queryDatabase {
     # Get the plate ids if those will be downloaded
     my %plate_ids;
     if ($q->param('collections_tectonic_plate_id') eq "YES" && $q->param("output_data") !~ /genera|species/) {
-        if ( ! open ( PLATES, "$COAST_DIR/plateidsv2.lst" ) ) {
+        if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
             print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
         } else {
             <PLATES>;
@@ -2814,7 +2814,7 @@ sub printCSV {
 
         if ( $q->param('collections_pubyr') eq "YES" )	{
             $row->{'c.pubyr'} = $pubyr[$row->{'c.reference_no'}];
-	}
+    	}
         foreach my $v (@header) {
             if ($row->{$v} =~ /^\s*$/) {
                 push @line, '';

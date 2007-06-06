@@ -1,5 +1,5 @@
 package Person;
-use Constants qw($READ_URL $WRITE_URL);
+use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD);
 use strict;
 
 # Poling code calved off from displayLoginPage by JA 13.4.04
@@ -47,11 +47,15 @@ sub makeAuthEntJavascript {
 # can pass it an optional argument, activeOnly
 # if true, then only return active authorizers.
 sub listOfAuthorizers {
-    my $dbt = shift;
-	my $activeOnly = shift;
+    my ($dbt,$active_only,$fossil_record_only) = @_;
 	
 	my $sql = "SELECT name, person_no FROM person WHERE is_authorizer=1";
-	if ($activeOnly) { $sql .= " AND active = 1 "; }
+	if ($active_only) { 
+        $sql .= " AND active=1 "; 
+    }
+    if ($fossil_record_only) {
+        $sql .= " AND fossil_record=1";
+    }
 	$sql .= " ORDER BY last_name,first_name";
 
     return $dbt->getData($sql);
@@ -62,11 +66,15 @@ sub listOfAuthorizers {
 # if true, then only return active enterers. all authorizers
 # are counted as enterers as well
 sub listOfEnterers {
-    my $dbt = shift;
-	my $activeOnly = shift;
+    my ($dbt,$active_only,$fossil_record_only) = @_;
 	
-	my $sql = "SELECT name, person_no FROM person ";
-	if ($activeOnly) { $sql .= " WHERE active = 1 "; }
+	my $sql = "SELECT name, person_no FROM person WHERE is_authorizer=1";
+	if ($active_only) { 
+        $sql .= " AND active=1 "; 
+    }
+    if ($fossil_record_only) {
+        $sql .= " AND fossil_record=1";
+    }
 	$sql .= " ORDER BY last_name,first_name";
 
     return $dbt->getData($sql);
@@ -114,13 +122,17 @@ sub reverseName {
 }
 
 sub displayEnterers {
-    my $dbt = shift;
+    my ($dbt,$fossil_record_only) = @_;
     my $html = "<div align=\"center\"><h3>Data enterers</h3></div>";
     $html .= "<p \"align=left\">The following students and research assistants have entered data into the Database.
     Institution names are placed in parentheses to indicate students who have since moved on.
     <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify <a href=\"mailto:alroy\@nceas.ucsb.edu\">John Alroy.</a></i></p><br>";
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=0 ORDER BY last_name,first_name";
+    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=0";
+    if ($fossil_record_only) {
+        $sql .= " AND fossil_record=1";
+    }
+    $sql .= " ORDER BY last_name,first_name";
     my @results = @{$dbt->getData($sql)};
 
     $html .= '<table cellpadding="3" cellspacing="0" border="0" width="100%">';
@@ -146,10 +158,14 @@ sub displayEnterers {
 }
 
 sub displayAuthorizers {
-    my $dbt = shift;
+    my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 AND last_entry IS NOT NULL ORDER BY last_name,first_name";
+    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 AND last_entry IS NOT NULL";
+    if ($fossil_record_only) {
+        $sql .= " AND fossil_record=1";
+    }
+    $sql .= " ORDER BY last_name,first_name";
     my @results = @{$dbt->getData($sql)};
 
     my @firsthalf;
@@ -194,10 +210,14 @@ sub formatAuthorizerTable	{
 }
 
 sub displayInstitutions {
-    my $dbt = shift;
-    my $html = ""; 
+    my ($dbt,$fossil_record_only) = @_;
+    my $html = "";
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 AND last_entry IS NOT NULL ORDER BY last_name,first_name";
+    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 AND last_entry IS NOT NULL";
+    if ($fossil_record_only) {
+        $sql .= " AND fossil_record=1";
+    }
+    $sql .= " ORDER BY last_name,first_name";
     my @results = @{$dbt->getData($sql)};
 
     my %institutions;

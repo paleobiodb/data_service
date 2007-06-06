@@ -35,12 +35,13 @@ use Ecology;
 use Measurement;
 use TaxaCache;
 use TypoChecker;
+use FossilRecord;
 # god awful Poling modules
 use Taxon;
 use Opinion;
 use Validation;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $OUTPUT_DIR $DATAFILE_DIR);
+use Constants qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD);
 
 #*************************************
 # some global variables 
@@ -58,7 +59,7 @@ use Constants qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $OUTPUT_DIR $DATAFILE_
 my $q = new CGI;
 
 # Make a Transaction Manager object
-my $dbt = new DBTransactionManager;
+my $dbt = new DBTransactionManager();
 
 # Make the session object
 my $s = new Session($dbt,$q->cookie('session_id'));
@@ -71,8 +72,7 @@ if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/
 
 # Make the HTMLBuilder object - it'll use whatever template dir is appropriate
 my $use_guest = ($q->param('user') =~ /^guest$/i) ? 1 : 0;
-my $use_fossil_record = 0;
-my $hbo = HTMLBuilder->new($dbt,$s,$use_guest,'',$use_fossil_record);
+my $hbo = HTMLBuilder->new($dbt,$s,$use_guest,'');
 
 # process the action
 processAction();
@@ -130,6 +130,15 @@ sub execAction {
     $action = \&{$action}; # Hack so use strict doesn't break
     # Run the action (ie, call the proper subroutine)
     &$action;
+    #if ($@) {
+    #    print $@."<br>";
+    #    foreach (my $i = 0;$i< 5;$i++) {
+    #        my ($package, $filename, $line, $subroutine) = caller($i);
+    #        if ($package) {
+    #            print "$line: $package:$subroutine<br>";
+    #        } 
+    #    }
+    #}
     exit;
 }
 
@@ -209,11 +218,11 @@ sub processLogin {
 # Clears the SESSION_DATA table of this session.
 sub logout {
 	my $session_id = $q->cookie("session_id");
-    my $dbh_l = $dbt->dbh_local;
+    my $dbh = $dbt->dbh;
 
 	if ( $session_id ) {
-		my $sql =	"DELETE FROM session_data WHERE session_id = ".$dbh_l->quote($session_id);
-		$dbh_l->do( $sql ) || die ( "$sql<HR>$!" );
+		my $sql =	"DELETE FROM session_data WHERE session_id = ".$dbh->quote($session_id);
+		$dbh->do( $sql ) || die ( "$sql<HR>$!" );
 	}
 
 	print $q->redirect( -url=>$WRITE_URL."?user=Contributor" );
@@ -535,7 +544,7 @@ sub displayMapOfCollection {
     if ( $map_html_path )   {
         if($map_html_path =~ /^\/public/){
             # reconstruct the full path the image.
-            $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+            $map_html_path = $HTML_DIR.$map_html_path;
         }
         open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
         while(<MAP>){
@@ -595,7 +604,7 @@ sub displaySimpleMap {
     if ($map_html_path)   {
         if($map_html_path =~ /^\/public/){
             # reconstruct the full path the image.
-            $map_html_path = $ENV{DOCUMENT_ROOT}.$map_html_path;
+            $map_html_path = $HTML_DIR.$map_html_path;
         }
         open(MAP, $map_html_path) or die "couldn't open $map_html_path ($!)";
         while(<MAP>){
@@ -1921,6 +1930,41 @@ sub submitAuthorityForm {
     print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub displayClassificationTableForm {
+    if (!$s->get('reference_no')) {
+        $s->enqueue('action=displayClassificationTableForm');
+		displaySearchRefs("You must choose a reference before adding new taxa" );
+		exit;
+	}
+    print $hbo->stdIncludes("std_page_top");
+	FossilRecord::displayClassificationTableForm($dbt, $hbo, $s, $q);	
+    print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub displayClassificationUploadForm {
+    if (!$s->get('reference_no')) {
+        $s->enqueue('action=displayClassificationUploadForm');
+		displaySearchRefs("You must choose a reference before adding new taxa" );
+		exit;
+	}
+    print $hbo->stdIncludes("std_page_top");
+	FossilRecord::displayClassificationUploadForm($dbt, $hbo, $s, $q);	
+    print $hbo->stdIncludes("std_page_bottom");
+}
+
+
+sub submitClassificationTableForm {
+    print $hbo->stdIncludes("std_page_top");
+	FossilRecord::submitClassificationTableForm($dbt,$hbo, $s, $q);
+    print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub submitClassificationUploadForm {
+    print $hbo->stdIncludes("std_page_top");
+	FossilRecord::submitClassificationUploadForm($dbt,$hbo, $s, $q);
+    print $hbo->stdIncludes("std_page_bottom");
+}
+
 ## END Authority stuff
 ##############
 
@@ -2106,11 +2150,15 @@ sub randomTaxonInfo{
 
 sub beginTaxonInfo{
     print $hbo->stdIncludes( "std_page_top" );
-    TaxonInfo::searchForm($hbo, $q);
+    if ($IS_FOSSIL_RECORD) {
+        FossilRecord::displaySearchTaxaForm($dbt,$q,$s,$hbo);
+    } else {
+        TaxonInfo::searchForm($hbo, $q);
+    }
     print $hbo->stdIncludes("std_page_bottom");
 }
 
-sub checkTaxonInfo{
+sub checkTaxonInfo {
     if ( $q->param('random') eq "YES" )	{
         # infinite loops are bad
         $q->param('random' => '');
@@ -2118,13 +2166,39 @@ sub checkTaxonInfo{
     }
     logRequest($s,$q);
     print $hbo->stdIncludes( "std_page_top" );
-    TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
+    if ($IS_FOSSIL_RECORD) {
+         FossilRecord::submitSearchTaxaForm($dbt,$q,$s,$hbo);
+    } else {
+        TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
+    }
     print $hbo->stdIncludes("std_page_bottom");
 }
 
 sub displayTaxonInfoResults {
     print $hbo->stdIncludes( "std_page_top" );
 	TaxonInfo::displayTaxonInfoResults($dbt,$s,$q);
+    print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub displaySearchFossilRecordTaxaForm {
+    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub submitSearchFossilRecordTaxa {
+    logRequest($s,$q);
+    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub displayFossilRecordCurveForm {
+    print $hbo->stdIncludes( "std_page_top" );
+	FossilRecord::displayFossilRecordCurveForm($dbt,$q,$s,$hbo);
+    print $hbo->stdIncludes("std_page_bottom");
+}
+sub submitFossilRecordCurveForm {
+    print $hbo->stdIncludes( "std_page_top" );
+	FossilRecord::submitFossilRecordCurveForm($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -2413,7 +2487,6 @@ sub PASTQuerySubmit {
 
 
 sub displayOccurrenceAddEdit {
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 	# 1. Need to ensure they have a ref
 	# 2. Need to get a collection
@@ -2592,7 +2665,6 @@ sub displayOccurrenceAddEdit {
 # Hit enter, capture and do addrow
 #
 sub displayOccurrenceTable {
-    $dbt->useRemote(1);
     my @all_collections = @{$_[0]};
 	# Have to be logged in
 	if (!$s->isDBMember()) {
@@ -2882,7 +2954,6 @@ EOF
 
 # Submission of all this,
 sub processOccurrenceTable {
-    $dbt->useRemote(1);
 
     if (!$s->isDBMember()) {
         displayLoginPage( "Please log in first." );
@@ -3126,10 +3197,11 @@ sub generateCollectionLabel {
     require GD;
     my $sql = "SELECT collection_name FROM collections WHERE collection_no=".int($collection_no);
     my $collection_name = ${$dbt->getData($sql)}[0]->{'collection_name'};
-    my $file = $ENV{'DOCUMENT_ROOT'}."/public/collection_labels/$collection_no.png";
+    PBDBUtil::autoCreateDir("$HTML_DIR/public/collection_labels");
+    my $file = $HTML_DIR."/public/collection_labels/$collection_no.png";
     my $txt = "#$collection_no: $collection_name";
 
-    my $font= "$DATAFILE_DIR/fonts/sapirsan.ttf";
+    my $font= "$DATA_DIR/fonts/sapirsan.ttf";
     my $font_size = 10;
     my $x = $font_size+2;
     my $height = 240;
@@ -3177,7 +3249,6 @@ sub generateCollectionLabel {
 # Rewritten PS to be a bit clearer, handle deleltions of occurrences, and use DBTransationManager
 # for consistency/simplicity.
 sub processEditOccurrences {
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     if (!$s->isDBMember()) {
         displayLoginPage( "Please log in first." );
@@ -3476,7 +3547,6 @@ sub displayReIDCollsAndOccsSearchForm {
 }
 
 sub displayOccsForReID {
-    $dbt->useRemote(1);
 
     my $dbh = $dbt->dbh;
 	my $collection_no = $q->param('collection_no');
@@ -3680,7 +3750,6 @@ sub displayOccsForReID {
 # PS 8/15/2005
 sub setMostRecentReID {
     my $dbt = shift;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
     my $occurrence_no = shift;
 
@@ -3717,21 +3786,21 @@ sub setMostRecentReID {
 sub displayEnterers {
     logRequest($s,$q);
     print $hbo->stdIncludes("std_page_top");
-    print Person::displayEnterers($dbt);
+    print Person::displayEnterers($dbt,$IS_FOSSIL_RECORD);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
 sub displayAuthorizers {
     logRequest($s,$q);
     print $hbo->stdIncludes("std_page_top");
-    print Person::displayAuthorizers($dbt);
+    print Person::displayAuthorizers($dbt,$IS_FOSSIL_RECORD);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
 sub displayInstitutions {
     logRequest($s,$q);
     print $hbo->stdIncludes("std_page_top");
-    print Person::displayInstitutions($dbt);
+    print Person::displayInstitutions($dbt,$IS_FOSSIL_RECORD);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -3843,6 +3912,7 @@ sub logRequest {
         my $date = now();
 
         my $ip = $ENV{'REMOTE_ADDR'};
+        $ip ||= 'localhost';
 
         my $user = $s->get('enterer');
         if (!$user) { $user = 'Guest'; }

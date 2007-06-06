@@ -6,6 +6,7 @@ use PBDBUtil;
 use Data::Dumper;
 use GD;
 use Debug qw(dbg);
+use Constants qw($HTML_DIR);
 
 # Various internal modules
 use PAST::Util;
@@ -14,8 +15,8 @@ use PAST::DCA;
 use strict;
 
 my $PAST_HTML_DIR = "/public/past";
-my $PAST_FILE_DIR = $ENV{DOCUMENT_ROOT}.'/public/past';
-my $DOWNLOAD_FILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
+my $PAST_FILE_DIR = $HTML_DIR.$PAST_HTML_DIR;
+my $DOWNLOAD_FILE_DIR = $HTML_DIR."/public/downloads";
 
 sub queryForm {
     my ($dbt,$q,$hbo,$s) = @_;

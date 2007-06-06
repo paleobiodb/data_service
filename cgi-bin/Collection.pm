@@ -15,7 +15,7 @@ use Debug qw(dbg);
 use URI::Escape;
 use Debug;
 use Map;    
-use Constants qw($READ_URL $WRITE_URL $HTML_DIR $OUTPUT_DIR $HOST_URL);
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR $HOST_URL);
 
 # This function has been generalized to use by a number of different modules
 # as a generic way of getting back collection results, including maps, collection search, confidence, and taxon_info
@@ -692,7 +692,6 @@ IS NULL))";
 # TBD CHeck for reerence no
 sub displayCollectionForm {
     my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     my $isNewEntry = ($q->param('collection_no') =~ /^\d+$/) ? 0 : 1;
@@ -865,7 +864,6 @@ sub displayCollectionForm {
 #    (or displays an error message if something goes terribly wrong)
 sub processCollectionForm {
     my ($dbt,$q,$s,$hbo) = @_;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
 	my $reference_no = $q->param("reference_no");
@@ -2406,7 +2404,8 @@ sub rarefyAbundances	{
 
 	print "<hr><center><h3>Rarefaction curve for $collection_name</h3><h5>(PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
 
-	open OUT,">$HTML_DIR/$OUTPUT_DIR/rarefaction.csv";
+    PBDBUtil::autoCreateDir("$HTML_DIR/public/rarefaction");
+	open OUT,">$HTML_DIR/public/rarefaction/rarefaction.csv";
 	print "<center><table>\n";
 	print "<tr><td><u>Specimens</u></td><td><u>Species (mean)</u></td><td><u>Species (median)</u></td><td><u>95% confidence limits</u></td></tr>\n";
 	print OUT "Specimens\tSpecies (mean)\tSpecies (median)\tLower CI\tUpper CI\n";
@@ -2420,7 +2419,7 @@ sub rarefyAbundances	{
 	close OUT;
 	print "</table></center>\n<p>\n\n";
 	print "<p><i>Results are based on 200 random sampling trials.\n";
-	print "The data can be downloaded from a <a href=\"$HOST_URL/$OUTPUT_DIR/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
+	print "The data can be downloaded from a <a href=\"$HOST_URL/public/rarefaction/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
 
     print "<p><div align=\"center\"><b><a href=\"$READ_URL?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
 }
@@ -2723,7 +2722,6 @@ sub setSecondaryRef{
 	my $dbt = shift;
 	my $collection_no = shift;
 	my $reference_no = shift;
-    $dbt->useRemote(1);
 
     unless ($collection_no =~ /^\d+$/ && $reference_no =~ /^\d+$/) {
         return;
@@ -2736,7 +2734,7 @@ sub setSecondaryRef{
 	my $sql = "INSERT IGNORE INTO secondary_refs (collection_no, reference_no) ".
 		   "VALUES ($collection_no, $reference_no)";	
 
-    my $dbh_r = $dbt->dbh_remote;
+    my $dbh_r = $dbt->dbh;
     my $return = $dbh_r->do($sql);
 	dbg("ref $reference_no added as secondary for collection $collection_no");
 	return 1;
@@ -2759,7 +2757,6 @@ sub refIsDeleteable {
 	my $dbt = shift;
 	my $collection_no = shift;
 	my $reference_no = shift;
-    $dbt->useRemote(1);
 
     unless ($collection_no =~ /^\d+$/ && $reference_no =~ /^\d+$/) {
         return;
@@ -2795,7 +2792,6 @@ sub deleteRefAssociation {
 	my $dbt = shift;
 	my $collection_no = shift;
 	my $reference_no = shift;
-    $dbt->useRemote(1);
 
     unless ($collection_no =~ /^\d+$/ && $reference_no =~ /^\d+$/) {
         return;
@@ -2803,7 +2799,7 @@ sub deleteRefAssociation {
 
 	my $sql = "DELETE FROM secondary_refs where collection_no=$collection_no AND reference_no=$reference_no";
     dbg("Deleting secondary ref association $reference_no from collection $collection_no");
-    my $dbh_r = $dbt->dbh_remote;
+    my $dbh_r = $dbt->dbh;
     my $return = $dbh_r->do($sql);
 	return 1;
 }

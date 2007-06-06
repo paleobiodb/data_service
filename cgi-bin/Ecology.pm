@@ -2,8 +2,7 @@ package Ecology;
 
 use TaxaCache;
 use Debug qw(dbg);
-
-my $WRITE_URL = $main::WRITE_URL;
+use Constants qw($WRITE_URL);
 
 # written by JA 27-31.7,1.8.03
 
@@ -14,7 +13,6 @@ sub populateEcologyForm	{
 	my $hbo = shift;
 	my $q = shift;
 	my $s = shift;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
@@ -96,7 +94,6 @@ sub processEcologyForm	{
 	my $dbt = shift;
 	my $q = shift;
 	my $s = shift;
-    $dbt->useRemote(1);
     my $dbh = $dbt->dbh;
 
 	# can't proceed without a taxon no

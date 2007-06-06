@@ -45,7 +45,6 @@ sub displayLoadImageForm{
 
 sub processLoadImage{
 	my $dbt = shift;
-    $dbt->useRemote(1);
 	my $q = shift;
 	my $s = shift;
 	my $MEGABYTE = 1048576;
@@ -141,9 +140,8 @@ sub processLoadImage{
 	#	write the image to the filesystem
 	my $enterer_name = $s->get('enterer');
 	$enterer_name =~ s/[^a-zA-Z]//g;
-	my $docroot = $ENV{DOCUMENT_ROOT};
-	my $subdirs = "/upload_images/$enterer_name";
-	my $base = "${docroot}$subdirs";
+    my $subdirs = "/upload_images/$enterer_name";
+	my $base = $HTML_DIR.$subdirs;
 	my $number = 1; 
 	# open enterer's directory.  if it doesn't exist, create it.
 
@@ -175,7 +173,7 @@ sub processLoadImage{
 
 	# Write the file out to the filesystem.
 	my $new_file = "${taxon_name}_$number.$suffix";
-	open(NEWFILE,">$docroot$subdirs/$new_file") or die "couldn't create $docroot$subdirs/$new_file ($!)\n";
+	open(NEWFILE,">$base/$new_file") or die "couldn't create $base/$new_file ($!)\n";
 	print NEWFILE $buffer;
 	close NEWFILE;
 
@@ -183,14 +181,14 @@ sub processLoadImage{
 	require Image::Magick;
 	my ($image, $x);
 	$image = Image::Magick->new;
-	$x = $image->Read(filename=>"$docroot$subdirs/$new_file");
+	$x = $image->Read(filename=>"$base/$new_file");
     my $width = $image->Get('width') || 0;
     my $height = $image->Get('height') || 0;
 	warn "$x" if "$x";
 	$x = $image->Scale('100x100');
 	warn "$x" if "$x";
 	my $new_thumb = "${taxon_name}_${number}_thumb.$suffix";
-	$x = $image->Write("$docroot$subdirs/$new_thumb");
+	$x = $image->Write("$base/$new_thumb");
 	warn "$x" if "$x";
 
 	my %vars = (

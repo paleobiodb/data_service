@@ -8,13 +8,8 @@ use PBDBUtil;
 use TimeLookup;
 use Data::Dumper;
 use Debug qw(dbg);
+use Constants qw($HOST_URL $DATA_DIR $HTML_DIR);
 use strict;
-
-# Flags and constants
-my $HOST_URL = $ENV{BRIDGE_HOST_URL};
-my $OUTFILE_DIR = $ENV{DOWNLOAD_OUTFILE_DIR};
-my $DATAFILE_DIR = $ENV{DOWNLOAD_DATAFILE_DIR};
-my $COAST_DIR = $ENV{MAP_COAST_DIR};
 
 sub new {
     my ($class,$dbt,$q,$s) = @_;
@@ -158,7 +153,7 @@ sub reportDisplayHTML {
     $authorizer =~ s/(\s|\.)//g;
     my $reportFileName = $authorizer . "-report.csv";
 
-	print qq|<p>The report data have been saved as "<a href="$HOST_URL/paleodb/data/$reportFileName">$reportFileName</a>"</p>|;
+	print qq|<p>The report data have been saved as "<a href="$HOST_URL/public/reports/$reportFileName">$reportFileName</a>"</p>|;
     print "</center>\n";
     print "<p>&nbsp;</p>";
 }
@@ -184,10 +179,11 @@ sub reportPrintOutfile{
     if ( ! $authorizer ) { $authorizer = "unknown"; }
     $authorizer =~ s/(\s|\.)//g;
     my $reportFileName = $authorizer . "-report.csv";
-    open(OUTFILE, ">$OUTFILE_DIR/$reportFileName") 
-        or die ( "Could not open output file: $OUTFILE_DIR/$reportFileName($!) <BR>\n" );
+    PBDBUtil::autoCreateDir("$HTML_DIR/public/reports");
+    open(OUTFILE, ">$HTML_DIR/public/reports/$reportFileName") 
+        or die ( "Could not open output file: $HTML_DIR/public/reports/$reportFileName($!) <BR>\n" );
 
-    chmod 0664, "$OUTFILE_DIR/$reportFileName";
+    chmod 0664, "$HTML_DIR/public/reports/$reportFileName";
 
     # Now print to file
     my @line;    
@@ -810,7 +806,7 @@ sub getTranslationTable {
             $table{$row->{'person_no'}} = $row->{'name'};
         }
     } elsif ($param eq 'tectonic plate ID') {
-        if ( ! open ( PLATES, "$COAST_DIR/plateidsv2.lst" ) ) {
+        if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
             print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
         } else {
             <PLATES>;
@@ -853,8 +849,8 @@ sub getRegions	{
 	my $self = shift;
     my %regions;
 
-	if ( ! open REGIONS,"<$DATAFILE_DIR/PBDB.regions" ) {
-		$self->htmlError ( "$0:Couldn't open $DATAFILE_DIR/PBDB.regions<BR>$!" );
+	if ( ! open REGIONS,"<$DATA_DIR/PBDB.regions" ) {
+		$self->htmlError ( "$0:Couldn't open $DATA_DIR/PBDB.regions<BR>$!" );
 	}
 	while (<REGIONS>)	{
 		s/\n//;
