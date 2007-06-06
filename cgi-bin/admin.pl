@@ -12,8 +12,8 @@ use DBTransactionManager;
 
 # Make standard objects
 my $q = CGI->new();
-my $dbh = DBConnection::connect();
-my $dbt = DBTransactionManager->new($dbh);
+my $dbt = new DBTransactionManager();
+my $dbh = $dbt->dbh;
 my $s = Session->new($dbt,$q->cookie('session_id'));
 
 my $hb = HTMLBuilder->new($dbt,$s,0,1);
