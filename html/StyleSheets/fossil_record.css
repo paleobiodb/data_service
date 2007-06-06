@@ -1,19 +1,77 @@
 /* Common style sheet to be used for all pages. 
    Created 1/2004 by rjp. */
-
    
 /*	note, this defines the defaults for the document unless 
 	they are overridden by something more specific */
+
 body {
-	background-color: white;
-	background-image: url(/public/PDbg.gif);
-	font-family: Verdana, Arial, Helvetica, sans-serif;
-	font-size: 0.85em;
-	margin-bottom: 0px;
-	margin-top: 0px;
-	margin-right: 0px;
-	margin-left: 0px;
+    font-family: Arial, Helvetica, sans-serif;
+/*    font-size: 12px;*/
+    color: #000000;
+    background-color: #FFFFFF;
+    background: white;
+    margin: 0px;
+    padding: 0px;
 }
+
+.header1 {
+    font-family: Arial, Helvetica, sans-serif;
+/*    font-size: 14px;*/
+    font-size: 1.1em;
+    color: #5e7925;
+    font-weight: bold;
+}
+
+.header2 {
+    font-family: Arial, Helvetica, sans-serif;
+/*    font-size: 10px;*/
+    font-size: .9em;
+    color: #000000;
+    font-weight: bold;
+}
+
+.footer {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: .9em;
+    color: #000000;
+}
+
+.linkmenutop, A:link.linkmenutop {color: #EEEEEE; letter-spacing: 1px; font-size: 13px; font-family: Times New Roman, Times, serif; }
+.linkmenutop, A:visited.linkmenutop {color: #EEEEEE; letter-spacing: 1px; font-size: 13px; font-family: Times New Roman, Times, serif;}
+.linkmenutop, A:active.linkmenutop {color: #9cB238; letter-spacing: 1px; font-size: 13px; font-family: Times New Roman, Times, serif;}
+.linkmenutop, A:hover.linkmenutop {color: #9cB238; letter-spacing: 1px; font-size: 13px; font-family: Times New Roman, Times, serif;}
+
+.linkmenuleft A:link {color: #556d21;}
+.linkmenuleft A:visited {color: #556d21;}
+.linkmenuleft A:active {color: #7ca228;}
+.linkmenuleft A:hover {color: #7ca228;}
+
+.linkbody A:link {color: #556d21;}
+.linkbody A:visited {color: #556d21;}
+.linkbody A:active {color: #7ca228;}
+.linkbody A:hover {color: #7ca228;}
+
+table.footertable {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: .9em;
+    color: #000000;
+    text-align: left;
+    vertical-align: top;
+}
+
+table.datasummary {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: .9em;
+    color: #000000;
+}
+
+tr.datasummaryheader {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: .95em;
+    color: #000000;
+    font-weight: bold;
+}
+
 
 table, tbody, tr, td, th { 
     font-size: 1em;
@@ -28,29 +86,36 @@ hr {
 }
 
 /* how should the regular links look? */
-A:link	{ color : #0030D0; text-decoration:none; }
+A:link	{ color : #0040FF; text-decoration:none; }
 A:visited	{ color : #6E00FF; text-decoration:none; }
 A:active	{ color : #00AAFF; text-decoration:none; }
 A:hover	{ color : #C80078; text-decoration:none; }
 
 /* how should the links look in the menu bar at the top?  */
 A:link.menu { 
-	color : white; font-size : 0.85em; text-decoration:none; 
+	color : white; 
+    font-size : 0.85em; 
+    text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:visited.menu { 
-	color : white; font-size : 0.85em; text-decoration:none; 
+	color: white; 
+    font-size : 0.85em; 
+    text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:active.menu { 
-	color : white; font-size : 0.85em; text-decoration:none; 
+	color: white; 
+    font-size: 0.85em; 
+    text-decoration:none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:hover.menu { 
-	color : black; font-size : 0.85em; 
+	color : black; 
+    font-size : 0.85em; 
     border: 0px solid white;
 	/* top, right, bottom, left*/
 	/*padding: 0px 4px 0px 4px;*/
@@ -58,43 +123,8 @@ A:hover.menu {
 	text-decoration:none; 
 }
 
-A:link.homeBodyLinks	{
-	color : #0030D0;
-	#color : #3050B0;
-}       
-
-A:visited.homeBodyLinks	{
-	color : #7070A0;
-}       
-
-A:active.homeBodyLinks	{
-	color : #00AAFF;
-}       
-
-A:hover.homeBodyLinks	{
-	color : #C80078;
-}       
-
-A:link.homeStats	{
-	color : #000000;
-}       
-
-A:visited.homeStats	{
-	color : #7070A0;
-}       
-
-A:active.homeStats	{
-	color : #808080;
-}       
-
-A:hover.homeStats	{
-	color : #C80078;
-}       
-
-
 H1, H2, H3, H4, H5, H6 { 
 	padding: 0px 0px 0px 0px;
-	/*margin: 0.1em 1em 0.5em 1em;*/
 }
 
 H1 {font-size: 2em;}
@@ -120,18 +150,6 @@ H6 {font-size: .9em;}
 	color: white;
 }
 
-.indentNext {
-    text-indent: -1em; 
-    margin-left: 1em; 
-    margin-top: 0.15em; 
-    margin-bottom: 0;
-}
-
-.readOnlyCheckBox,.readOnlyInput,.readOnlyTextarea,.readOnlySelect {
-/*    border: 1px darkgray solid;*/
-/*    background-color: #E0E0E0;*/
-}
-
 .mainBody	{
     padding-top: 1em;
     padding-left: 1em;
@@ -140,276 +158,17 @@ H6 {font-size: .9em;}
 }
 
 #mainBodyGuest {
- /* need align and width to roughly center the page contents below the banner */
     padding-top: 2em;
     padding-left: 1em;
     margin-left: 0em; 
     margin-right: 0em;
     text-align: left;
-    width: 52em;
-    position: absolute;
-    top: 52px;
-/*    bottom: 0;*/
 }
-
-#homeBanner	{
-    width: 100%;
-    background-image: url(/public/bannerimages/dcaloostBlue3.jpg);
-    min-width: 52em; /* needed because scrolling across when a window is small
-                          causes the image to be truncated */
-
-    position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    z-index: 9;
-}
-
-
-.homeLinksShadow	{
-    background: #E4E4E4;
-    position: relative;
-}
-
-.homeLinksShadow2	{
-    background: #D0D0D0;
-    width: 100%;
-    position: relative;
-    left: -0px;
-    top: -2px;
-}
-
-#homeLinks	{
-    width: 100%;
-    min-width: 52em; /* needed because scrolling down when a window is small
-                          causes the image to be truncated */
-    position: absolute;
-    top: 50px;
-    left: 0;
-    z-index: 9; 
-}
-
-#homeLinksMenu {
-    margin: 0 0 0 0;
-    padding: 0 0 0 0;
-    background-color: #64A8FF;
-    border-bottom: 1px #909090 solid;
-    left: 0;
-    right: 0;
-    top: 0;
-}
-
-#homeTotals	{
-    background-image: url(/public/PDbg-reversed.gif);
-    background-position: 13em 0em;
-    /*border-bottom: 1px #D0D0D0 solid;*/
-    text-align: center;
-    margin-left: 0.5em;
-    padding-top: 3em;
-    height: 45em;
-    width: 13.5em;
-    position: absolute;
-    float: left;
-    top: 52px;
-    bottom: 0px;
-    left: 1em;
-    z-index: 2;
-}
-
-#homeInfo	{
-    padding-top: 3em;
-    padding-bottom: 0em;
-    height: 38em;
-    width: 36em;
-    position: absolute;
-    top: 52px;
-    left: 15em;
-    right: 50em;
-    overflow: hidden;
-    z-index: 3;
-}
-
-#homeInfoSandbag	{
-    position: relative;
-    bottom: 0px;
-    right: 0px;
-    float: right;
-    clear: right;
-}
-
-#newCollectionLinks	{
-    position: absolute;
-    top: 42em;
-    bottom: 50em;
-    left: 12em;
-    height: 4.5em;
-    width: 30.5em;
-    margin-top: 51px;
-    padding: 0.75em;
-    overflow: hidden;
-    background-image: url('/public/PDbg.gif');
-    background-position: 0px 12px;
-    border-left: 1px solid #D0D0D0;
-    border-right: 1px solid #B0B0B0;
-    border-top: 1px solid #D0D0D0;
-    border-bottom: 1px solid #B0B0B0;
-    z-index: 9;
-}
-
-#homeBorder	{
-    background-image: url(/public/PDbg.gif);
-    padding-top: 2.5em;
-    border-left: 1px solid #D0D0D0;
-    border-right: 1px solid #B0B0B0;
-    border-bottom: 1px solid #B0B0B0;
-    height: 38.5em;
-    width: 100px;
-    position: absolute;
-    left: 45em;
-    top: 52px;
-    z-index: 2;
-    overflow: hidden;
-}
-
 
 .fixedWidth {
     width: 52em; 
 }
 
-
-.FeaturesShadow	{
-    background: #E4E4E4;
-    margin-left: 1.25em;
-    margin-right: 1.25em;
-    position: relative;
-}
-
-.FeaturesShadow2	{
-    background: #D0D0D0;
-    width: 100%;
-    position: relative;
-    left: -0px;
-    top: -1px;
-}
-
-.Features	{
-    background-color: #F8F8F8;
-    padding-left: 0.5em;
-    padding-right: 0.5em;
-    margin-left: 1.25em;
-    margin-right: 1.75em;
-    left: -1px;
-    top: -1px;
-    text-align: left;
-    font-family: Verdana, Arial, Helvetica, sans-serif;
-    border-left: 1px solid #D0D0D0;
-    border-right: 1px solid #B0B0B0;
-    border-top: 1px solid #D0D0D0;
-    border-bottom: 1px solid #B0B0B0;
-/* Explorer demands to know this - go figure */
-    position: relative;
-}
-
-.FeatureHeadline	{
-    text-align: center;
-    background-color: #5080FF;
-    color: #FFFFFF;
-    margin-left: -0.5em;
-    margin-right: -0.5em;
-    margin-bottom: -0.25em;
-    padding-top: 0.15em;
-    padding-bottom: 0.25em;
-}
-
-.FeatureText	{
-    padding-top: 0.75em;
-    padding-bottom: 0.75em;
-}
-
-.homeTextBoxes	{
-    text-decoration: none;
-    float: left;
-}
-
-#homeTextBoxShadow	{
-    background: #E4E4E4;
-    margin-left: 0.5em;
-    margin-right: 0.5em;
-    position: relative;
-}
-
-#homeTextBoxShadow2	{
-    background: #D0D0D0;
-    width: 100%;
-    position: relative;
-    left: -0px;
-    top: -2px;
-}
-
-#homeTextBox	{
-    background-image: url(/public/PDbg.gif);
-    color: 404040;
-    border: 1px solid #808080;
-    padding: 16px;
-    position: relative;
-    left: -2px;
-}
-
-/*
-html,body	{
-    height: 100%;
-}
-*/
-
-.questions	{
-    font-family: "Century Gothic", Verdana, Arial, Helvetica, sans-serif;
-    font-size: 1.25em;
-    color: #303030;
-    float: left;
-    padding-left: 0.5em;
-    padding-bottom: 0.5em;
-}
-
-#questionsShadow	{
-    position: absolute;
-    left: 1.8em;
-    color: #D0D0D0;
-}
-
-#questionsOverShadow	{
-    position: relative;
-    white-space: nowrap;
-    top: -2px;
-    left: -1px;
-}
-
-.homePageOnBullet	{
-    padding-top : 0.2em;
-    padding-left: 0.6em;
-    margin-top: -3px;
-    font-size : 1.0em;
-    text-decoration: none;
-    color : #303030;
-}
-
-.homePageOffBullet	{
-    padding-top : 0.2em;
-    padding-left: 0.6em;
-    margin-top: -3px;
-    font-size : 1.0em;
-    text-decoration: none;
-    color : #303030;
-}
-
-.homePageMSIEBullet	{
-    padding-top : 0.0em;
-    padding-left: 0.6em;
-    font-size : 1.33em; text-decoration: none;
-}
-
-.largeBullet	{
-   font-size : 2em;
-}
 
 /*	Meant to be a main section, for example, in an entry form. 
 	Used to help divide the page and make it easier to use.*/
@@ -456,6 +215,14 @@ div.emphasized {
 	font-weight: bold;
 	font-size: 1.2em;
 	text-align: center;
+}
+
+.error_text {
+    color: red;
+}
+
+.warning_text {
+    color: orange;
 }
 
 
@@ -560,20 +327,6 @@ div.emphasized {
 	background-color:#FFFFFF;
 }
 
-.padLeft {
-    padding-left: .5em;
-}
-.padRight {
-    padding-right: .5em;
-}
-.padTop {
-    padding-top: .5em;
-}
-.errorRow {
-    padding-left: 1em;
-    color: red;
-}
-
 /* relate to report formatting */
 .dataTable {
     border: 0px; 
@@ -644,7 +397,7 @@ div.navbox {
 	
 	text-align: center;
 	
-	background-color: #5090FF;
+	background-color: #5e7925;
 
 	width: 100%;
 	margin: 10px 20px 20px 20px;
@@ -655,7 +408,7 @@ table.navbox {
 	border-width: 1px;
 	border-color: #909090;
 
-	background-color: #5090FF;
+	background-color: #5e7925;
 	margin-bottom: 20px;
 }
 
@@ -723,7 +476,7 @@ table.navbox {
 }
 */
 
-.panel{
+.panel {
     position: absolute;
     left: 10px;
     width: 95%;
@@ -766,7 +519,7 @@ span.nonEditable {
 .displayPanel {      
     border: 1px solid #C8C8C8; 
     /*background-color: #EEEEEE;*/      
-    background-image: url(/public/PDbg.gif);    
+    background: white;
     /*margin-top: 20px;   */
     padding-top: 0.0em;
     padding-left: 0.3em;     
@@ -784,12 +537,12 @@ span.nonEditable {
     /*border: 1px solid black;*/    
 /*    border-bottom: 1px solid lightgray;*/
     /*padding-bottom: .3em; */
-    background-image: url(/public/PDbg.gif);    
+    background: white;
     white-space: nowrap;    
 }
 
 .displayPanelContent {
-    background-image: url(/public/PDbg.gif);    
+    background: white;
 }
 
 .displayPanelLabel {
@@ -801,7 +554,7 @@ span.nonEditable {
 /*.displayPanelText tbody,.displayPanelText {*/
 .displayPanelText {
     font-size: 0.9em;
-    background-image: url(/public/PDbg.gif);    
+    background:white;
 }
 
 .fixedColumn {
@@ -915,42 +668,5 @@ td.fixedLabel {
 /*    left: auto;*/
 /*    left: auto;*/
     display: block;
-}
-
-/* row and column headers in data tables */
-.PASTtable,.simpleTable{
-    text-align: center;
-    border: 1px solid gray;
-}
-
-/* cells in data tables */
-td.PASTheader,.simpleTableHeader{
-    padding-left: 4px; padding-right: 4px;
-}
-
-td.PASTcell,.simpleTableCell{
-    text-align: center;
-    border-right: 1px solid white;
-    border-top: 1px solid white;
-    background: #E0E0E0;
-}
-
-#PAST_point { padding: 0; margin: 0; }
-#PAST_point ul { position: absolute; left: -999em; list-style: none; }
-#PAST_point:hover ul { left: auto; margin-left: -30px; margin-top: -5px;}
-#PAST_point li { color: #000000; }
-
-.visiblePASTdata	{
-    visibility: visible;
-    clear: right;
-    height: 1.25em;
-    width: 99em;
-}
-
-.hiddenPASTdata	{
-    visibility: hidden;
-    clear: right;
-    height: 0em;
-    width: 99em;
 }
 
