@@ -1656,7 +1656,7 @@ sub getSynonymyParagraph{
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
 
-    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','type_taxon_no','type_specimen','comments','first_occurrence','last_occurrence']);
+    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','type_taxon_no','type_specimen','comments']);
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if ( ! $taxon->{'author1last'} )	{
