@@ -1,2 +1,0 @@
-ALTER TABLE `opinions` CHANGE `status` `status_old` ENUM( 'belongs to', 'recombined as', 'subjective synonym of', 'objective synonym of', 'homonym of', 'replaced by', 'corrected as', 'rank changed as', 'nomen dubium', 'nomen nudum', 'nomen oblitum', 'nomen vanum', 'revalidated' ) DEFAULT NULL;
-ALTER TABLE `opinions` CHANGE `status_new` `status` ENUM( 'belongs to', 'subjective synonym of', 'objective synonym of', 'homonym of', 'replaced by', 'nomen dubium', 'nomen nudum', 'nomen oblitum', 'nomen vanum' ) DEFAULT 'belongs to' NOT NULL; 

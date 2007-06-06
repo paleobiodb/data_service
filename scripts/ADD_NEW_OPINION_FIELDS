@@ -1,2 +1,0 @@
-ALTER TABLE `opinions` ADD `spelling_reason` ENUM( 'original spelling', 'recombination', 'reassignment', 'correction', 'rank change' ) DEFAULT 'original spelling' NOT NULL AFTER `status`;
-ALTER TABLE `opinions` ADD `status_new` ENUM( 'belongs to', 'subjective synonym of', 'objective synonym of', 'homonym of', 'replaced by', 'nomen dubium', 'nomen nudum', 'nomen oblitum', 'nomen vanum' ) DEFAULT 'belongs to' NOT NULL AFTER `status` ;
