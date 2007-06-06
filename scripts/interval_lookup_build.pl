@@ -1,12 +1,10 @@
-#!/usr/bin/perl
+#!/usr/local/bin/perl
 
-use lib "../cgi-bin";
-use DBConnection;
+use FindBin qw($Bin);
+use lib "$Bin/../cgi-bin";
 use DBTransactionManager;
 use TimeLookup;
 
-my $dbh = DBConnection::connect();
-my $dbt = new DBTransactionManager($dbh);
-
+my $dbt = new DBTransactionManager();
 my $t = new TimeLookup($dbt);
 $t->generateLookupTable($dbt,1);
