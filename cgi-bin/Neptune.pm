@@ -362,14 +362,14 @@ sub displayNeptuneDownloadResults {
     print "<p><div align=\"center\"><div style=\"width: 600;\" align=\"left\">";
     print "<h3 class=\"darkList\" style=\"margin-bottom: 0em;\">Results</h3>";
     if ($q->param('data_source') =~ /both/) {
-        print "<p>$neptune_taxa_count Neptune taxa were printed to the <a href=\"/paleodb/data/$filename-neptune_pbdb_summary.$ext\">summary file</a></p>";
+        print "<p>$neptune_taxa_count Neptune taxa were printed to the <a href=\"/public/downloads/$filename-neptune_pbdb_summary.$ext\">summary file</a></p>";
         print "<p>$pbdb_taxa_count additional Paleobiology Database taxa were downloaded</p>";
-        print "<p>$neptune_pacman_count Neptune occurrences and $pbdb_count Paleobiology Database occurrences were printed to the <a href=\"/paleodb/data/$filename-neptune_pbdb_pacman.$ext\">Pacman results file</a></p>";
-        print "<p>$neptune_count Neptune occurrences and $pbdb_count Paleobiology Database occurrences were printed to the <a href=\"/paleodb/data/$filename-neptune_pbdb.$ext\">results file</a></p>";
+        print "<p>$neptune_pacman_count Neptune occurrences and $pbdb_count Paleobiology Database occurrences were printed to the <a href=\"/public/downloads/data/$filename-neptune_pbdb_pacman.$ext\">Pacman results file</a></p>";
+        print "<p>$neptune_count Neptune occurrences and $pbdb_count Paleobiology Database occurrences were printed to the <a href=\"/public/downloads/data/$filename-neptune_pbdb.$ext\">results file</a></p>";
     } else {
-        print "<p>$neptune_taxa_count taxa were printed to the <a href=\"/paleodb/data/$filename-neptune_summary.$ext\">summary file</a></p>";
-        print "<p>$neptune_pacman_count occurrences were printed to the <a href=\"/paleodb/data/$filename-neptune_pacman.$ext\">Pacman results file</a></p>";
-        print "<p>$neptune_count occurrences were printed to the <a href=\"/paleodb/data/$filename-neptune.$ext\">results file</a></p>";
+        print "<p>$neptune_taxa_count taxa were printed to the <a href=\"/public/downloads/data/$filename-neptune_summary.$ext\">summary file</a></p>";
+        print "<p>$neptune_pacman_count occurrences were printed to the <a href=\"/public/downloads/data/$filename-neptune_pacman.$ext\">Pacman results file</a></p>";
+        print "<p>$neptune_count occurrences were printed to the <a href=\"/public/downloads/data/$filename-neptune.$ext\">results file</a></p>";
     }
     print "</div></div></p>";
 
