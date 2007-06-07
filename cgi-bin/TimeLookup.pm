@@ -731,142 +731,93 @@ sub findPath {
     return @path;
 }
 
+
+# This populates the $self->{precedes} hash ref.  The Hash is
+# of the form $self->{precedes}{interval_no1}{interval_no2}, and returns
+# true if interval_no1 logically comes before interval_no2
 sub makePrecedesHash {
     my $self = shift;
     my $ig = $self->getIntervalGraph;
+    $self->{precedes_ub} = {}; 
+    $self->{precedes_lb} = {};
+    $self->{precedes} = $self->{precedes_ub}; # alias
     while (my ($i,$itv) = each %$ig) {
         $itv->{'visited'} = 0;
     }
     while (my ($i,$itv) = each %$ig) {
-        $self->markFollowing($ig,$itv,0);
-        #foreach ($self->findFollowing($ig,$itv)) {
-        #    $self->{'precedes'}{$i}{$_} = 1;
-        #}
-    }
-}
-
-sub markFollowing {
-    my ($self,$ig,$itv,$depth) = @_;
-    return if ($itv->{'visited'});
-    $itv->{'visited'} = 1;
-    if ($itv->{'next'}) {
-        my @all_next = ($itv->{'next'});
-        my @q = ();
-        foreach my $c (@{$itv->{'next'}{'children'}}) {
-            #if ($c->{'max'} == $itv->{'next'}) {
-            push @q, [$c,$itv->{'next'}];
-            #}
+        my @mark = ();
+        # We first get a list of intervals that should logically come after the current interval
+        if ($itv->{'next'}) {
+            push @mark, $itv->{'next'};
         }
-        my %seen;
-        while (my $pair = shift @q) {
-            my ($c,$p) = @$pair;
-            next if ($seen{$c->{'interval_no'}}); 
-            $seen{$c->{'interval_no'}} = 1;
-            if ($c->{'max'} == $p) {
-                push @all_next, $c;
-                foreach my $gc (@{$c->{'children'}}) {
-                    push @q, [$gc,$c];
+        if ($itv->{'shared_upper'}) {
+            foreach my $s (@{$itv->{'shared_upper'}}) {
+                if ($s != $itv && $s->{'next'}) {
+                    push @mark, $s->{'next'};
                 }
             }
         }
-#        foreach my $c (@{$next->{'children'}}) {
-#            if ($c->{'max'} == $next) {
-#                push @all_next, $c;
-#            }
-#        }
-        my $next = $itv->{'next'};
-        my $max = $next->{'max'};
-        my $min = $next->{'min'};
-        %seen = ();
-        while ($max) {
-            next if ($seen{$max->{'interval_no'}}); $seen{$max->{'interval_no'}} = 1;
-            if ($next->{'shared_lower'} && $next->{'shared_lower'} == $max->{'shared_lower'}) {
-                push @all_next, $max;
-                push @all_next, $min if ($max != $min);
-                $next = $max;
-                $max = $next->{'max'};
-                $min = $next->{'min'};
-            } elsif ($next->{'max'} && $next->{'max'} != $next->{'min'}) {
-                push @all_next, $next->{'min'};
-                $next = $min;
-                $max = $next->{'max'};
-                $min = $next->{'min'};
-            } else {
-                $max = undef;
+        foreach my $itv_m (@mark) {
+            $self->markPrecedesLB($ig,$itv_m,0);
+            my $m = $itv_m->{interval_no};
+            my $i = $itv->{interval_no};
+            $self->{precedes_ub}{$i}{$m} = 1;
+            foreach my $post_no (keys %{$self->{precedes_lb}{$m}}) {
+                $self->{precedes_ub}{$i}{$post_no} = 1;
             }
         }
-        foreach my $next_itv (@all_next) {
-            $self->{'precedes'}{$itv->{'interval_no'}}{$next_itv->{'interval_no'}} = 1;
-#            $self->markFollowing($ig,$next_itv,$depth+1);
-#            foreach my $next_no (keys %{$self->{'precedes'}{$next_itv->{'interval_no'}}}) {
-#                $self->{'precedes'}{$itv->{'interval_no'}}{$next_no} = 1;
-#            }
+    }    
+    while (my ($i,$itv) = each %$ig) {
+        if ($self->{precedes}{$i}{$itv->{'max'}->{interval_no}}) {
+#            print "CONFLICT: $i SHOULD precede MAX $itv->{max}{interval_no}\n";
         }
     }
-    if ($itv->{'min'}) {
-        $self->markFollowing($ig,$itv->{'min'});
-        foreach my $next_no (keys %{$self->{'precedes'}{$itv->{'min'}{'interval_no'}}}) {
-            $self->{'precedes'}{$itv->{'interval_no'}}{$next_no} = 1;
-        }
+    
+}
+
+sub markPrecedesLB {
+    my ($self,$ig,$itv,$depth) = @_;
+    if ($itv->{'visited'}) {
+        return;
+    } else {
+        $itv->{'visited'} = 1;
+    }
+    my $i = $itv->{interval_no};
+   
+    my @to_mark = ();
+    if ($itv->{'next'}) {
+        push @to_mark, $itv->{'next'};
     }
     foreach my $c (@{$itv->{'children'}}) {
-        if (($c->{'shared_upper'} && $c->{'shared_upper'} == $itv->{'shared_upper'}) || ($c->{'max'} == $itv && $c->{'min'} != $itv)) {
-            $self->markFollowing($ig,$c);
-            foreach my $next_no (keys %{$self->{'precedes'}{$c->{'interval_no'}}}) {
-                $self->{'precedes'}{$itv->{'interval_no'}}{$next_no} = 1;
-            }
+        if ($c->{'max'} == $itv) {
+            push @to_mark,$c;
+        }
+    }
+    if ($itv->{'max'}) {
+        if ($itv->{'max'}->{'shared_lower'} && 
+            $itv->{'max'}->{'shared_lower'} == $itv->{'shared_lower'}) {
+            push @to_mark,$itv->{'max'};
+            push @to_mark,$itv->{'min'};
+        } elsif ($itv->{'max'} != $itv->{'min'}) {
+            push @to_mark,$itv->{'min'};
+        }
+    }
+#    print "mpLB direct I$i (".join(',',map {$_->{'interval_no'}.":".$_->{'name'}} @to_mark).")\n";
+    foreach my $m (@to_mark) {
+        my $m_no = $m->{'interval_no'};
+        $self->{'precedes_lb'}{$i}{$m_no} = 1;
+        unless ($m->{'visited'}) {
+            $self->markPrecedesLB($ig,$m,$depth+1);
+        }
+        my @all_post = keys %{$self->{precedes_lb}{$m_no}};
+#        print "P IS ".scalar(@all_post)." FOR $m_no and $i\n";
+        foreach my $p (@all_post) {
+            $self->{precedes_lb}{$i}{$p} = 1;
         }
     }
 }
 
 
-sub makePrecedesHashX {
-    my $self = shift;
-    my $ig = $self->getIntervalGraph;
-    while (my ($i,$itv) = each %$ig) {
-        my $next = $itv->{'next'};
-        my $j = 0;
-        my %seen = ();
-        while ($next) {
-            last if ($seen{$next->{'interval_no'}}); $seen{$next->{'interval_no'}} = 1;
-            $self->{precedes}{$i}{$next->{'interval_no'}} = 1;
-            $next = $next->{'next'};
-        }
-    }
-    while (my ($i,$itv) = each %$ig) {
-        my $min = $itv->{'min'};
-        my $j = 0;
-        my %seen;
-        while ($min) {
-            last if ($seen{$min->{'interval_no'}}); $seen{$min->{'interval_no'}} = 1;
-            foreach (keys %{$self->{precedes}{$min->{'interval_no'}}}) {
-#                last if ($self->{precedes}{$i}{$_});
-                $self->{precedes}{$i}{$_} = 1; 
-            }
-            $min = $min->{'min'};
-        }
-    }
-    while (my ($i,$itv) = each %$ig) {
-        my @q = ();
-        foreach my $c (@{$itv->{'children'}}) {
-            push @q, [$c,$itv];
-        }
-        my %seen;
-        while (my $pair = shift @q) {
-            my ($c,$p) = @$pair;
-            if ($c->{'shared_upper'} == $p->{'shared_upper'} || ($c->{'max'} == $p && $c->{'min'} != $p)) {
-                next if ($seen{$c->{'interval_no'}}); $seen{$c->{'interval_no'}} = 1;
-                foreach (keys %{$self->{precedes}{$c->{'interval_no'}}}) {
-#                    last if ($self->{precedes}{$i}{$_});
-                    $self->{precedes}{$i}{$_} = 1; 
-                }
-                foreach my $gc (@{$c->{'children'}}) {
-                    push @q, [$gc,$c];
-                }
-            }
-        }
-    }
-}
 
 sub getBoundaries {
     my $self = shift;
@@ -1453,6 +1404,13 @@ sub getFromChildren {
     }
 #    print "FROM CHILDREN: $itv->{name}\n";
     foreach my $c (@children) {
+        # This would indicate a conflict. Example: Ufimian used to be mapped
+        # into the Zechstein but the Zechstein got shortened so the Zechstein now
+        # logically follows the Ufimian
+        if ($self->{precedes}{$c->{interval_no}}{$itv->{interval_no}} || 
+            $self->{precedes}{$itv->{interval_no}}{$c->{interval_no}}) {
+            next;
+        }
 #        if ($itv->{'interval_no'} == 3) { print "CHILD $c->{name} $c->{lower_boundary} $c->{upper_boundary}\n"; }
         if ($defunct || $c->{'max'} == $itv && $c->{'min'} == $itv) {
             if ($c->{'lower_boundary'} > $max) {
@@ -1581,6 +1539,12 @@ sub getIntervalGraph {
     foreach (@intervals) {
         my $interval_no = $_->{'interval_no'};
         $self->_initInterval($ig,$ig->{$interval_no},$correlations{$interval_no},\%scales);
+    }
+
+    #  We now have to remove invalid correlations
+    foreach (@intervals) {
+        my $interval_no = $_->{'interval_no'};
+        $self->_removeInvalidCorrelations($ig->{$interval_no});
     }
 
     #  We have to do this after everything above has been set in place
@@ -1800,6 +1764,88 @@ sub _findEquivalentTerms {
 #    }
 }
 
+sub _removeInvalidCorrelations {
+    my ($self,$itv) = @_;
+
+    my ($switched_from_scale,$switched_from_max,$switched_from_min,$switch_date);
+    my $num_scales = scalar(@{$itv->{'all_max_scales'}});
+    for(my $i=$num_scales-2;$i>=0;$i--) {
+        my $this_max = $itv->{'all_max'}->[$i];
+        my $this_min = $itv->{'all_min'}->[$i];
+        my $last_max = $itv->{'all_max'}->[$i+1];
+        my $last_min = $itv->{'all_min'}->[$i+1];
+        my $this_scale = $itv->{'all_max_scales'}->[$i];
+        if (($this_max != $last_max && $this_max->{'best_scale'} == $last_max->{'best_scale'}) ||
+            ($this_min != $last_min && $this_min->{'best_scale'} == $last_min->{'best_scale'})) {
+            $switch_date = $this_scale->{'pubyr'};
+            #$switched_from_scale = $last_scale;
+            #$switched_from_max = $itv->{'all_max'}->[$i+1];
+            #$switched_from_min = $itv->{'all_min'}->[$i+1];
+#            print "CONFLICT FOUND FOR $itv->{interval_no}:$itv->{name}, switch from $last_max->{name}:$last_min->{name} to $this_max->{name}:$this_min->{name}\n";
+            my @new_c;
+            for(my $i=0;$i<@{$itv->{'children'}};$i++) {
+                my $c = $itv->{'children'}->[$i];
+                my $num_scales = scalar(@{$c->{'all_max_scales'}});
+                my $remove_c = 0;
+                for(my $j=0;$j<=$num_scales;$j++) {
+                    if ($c->{'all_max_scales'}->[$j]->{'pubyr'} < $switch_date) {
+#                        print "SPLICING AT $j FOR CHILD:$c->{interval_no}:$c->{name}\n";
+                        splice(@{$c->{'all_max_scales'}},$j);
+                        splice(@{$c->{'all_max'}},$j);
+                        splice(@{$c->{'all_min'}},$j);
+                        if ($j == 0) {
+#                            print "Removing child\n";
+                            $remove_c = 1;
+                        }
+                        last;
+                    }
+                }
+                if (!$remove_c) {
+                    push @new_c,$c;
+                }
+            }
+            $itv->{'children'} = \@new_c;
+        }
+    }
+    if ($switched_from_scale) {
+        my $switched_to_max = $itv->{'all_max'}->[0];
+        my $switched_to_min = $itv->{'all_min'}->[0];
+        my $switched_to_scale = $itv->{'all_max_scales'}->[0];
+        if ($switched_to_max != $switched_from_max ||
+            $switched_to_min != $switched_from_min) {
+            #print "CONFLICT FOUND FOR $itv->{interval_no}:$itv->{name}, switch from $switched_from_scale->{continent}:$switched_from_max->{name}:$switched_from_min->{name} to $switched_to_scale->{continent}:$switched_to_max->{name}:$switched_to_min->{name}\n";
+            my @new_c;
+            for(my $i=0;$i<@{$itv->{'children'}};$i++) {
+                my $c = $itv->{'children'}->[$i];
+                my $num_scales = scalar(@{$c->{'all_max_scales'}});
+                my $remove_c = 0;
+                for(my $j=0;$j<=$num_scales;$j++) {
+                    if ($c->{'all_max_scales'}->[$j]->{'pubyr'} < $switch_date) {
+                        print "SPLICING AT $j FOR CHILD:$c->{interval_no}:$c->{name}\n";
+                        splice(@{$c->{'all_max_scales'}},$j);
+                        splice(@{$c->{'all_max'}},$j);
+                        splice(@{$c->{'all_min'}},$j);
+                        if ($j == 0) {
+                            print "Removing child\n";
+                            $remove_c = 1;
+                        }
+                        last;
+                    }
+                }
+                if (!$remove_c) {
+                    push @new_c,$c;
+                }
+            }
+            $itv->{'children'} = \@new_c;
+            
+        }
+        # Get all that ref
+    
+    }
+
+    my $switched_mapping;
+}
+
 # Type should be either "shared_upper" or "shared_lower" for shared upper (younger) and lower (older_ boundaries respectively
 # This makres a special key ($type) to point to a shared array in memory. The array is conceptually like a set.
 # For example, Late Ordovician and Ordovican share an upper boundary (they are interval objects);
@@ -1887,7 +1933,6 @@ sub _initInterval {
         $seen_parents{$row->{'max_interval_no'}}++ if ($row->{'max_interval_no'});
         $seen_parents{$row->{'min_interval_no'}}++ if ($row->{'min_interval_no'});
     }
-
 
     # Catalog and store all scales - first turn the scale_no into
     # scale objects with the map, then just directly sort those
@@ -2048,6 +2093,8 @@ sub _dumpInterval {
             $txt .= "  $abbrev:lower:[$itv->{$lower_max}/$itv->{$lower_boundary}/$itv->{$lower_min}] - $abbrev:upper:[$itv->{$upper_max}/$itv->{$upper_boundary}/$itv->{$upper_min}]\n";
         }
     }
+    $txt .= "  lower_estimate_type: ".$itv->{lower_estimate_type}."\n";
+    $txt .= "  upper_estimate_type: ".$itv->{upper_estimate_type}."\n";
     foreach ('max_scale','best_scale','next_scale','boundary_scale') {
         if ($itv->{$_}) {
             $txt .= "  $_: $itv->{$_}->{scale_no},$itv->{$_}->{pubyr} $itv->{$_}->{continent} $itv->{$_}->{scale_rank}\n";
