@@ -212,8 +212,9 @@ function descram(part2r,part1r) {
 function checkAll(checkbox,the_class){
     var state = checkbox.checked;
     var frm = document.forms[0];
+    var like_class = new RegExp(the_class);
     for(var i=0; i < frm.elements.length; i++){
-        if(frm.elements[i].className == the_class) {
+        if (like_class.test(frm.elements[i].className)) {
             frm.elements[i].checked = state;
         }
     }
