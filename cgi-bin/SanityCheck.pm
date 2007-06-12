@@ -14,6 +14,7 @@ sub processSanityCheck	{
 	my $grade;
 	my %dataneeded;
 	my %dataneeded2;
+	my %dataneeded3;
 
 	my $lft;
 	my $rgt;
@@ -111,10 +112,13 @@ sub processSanityCheck	{
 	#   primary key, and 0 and 1 columns are the left and right of the
 	#   genus spanning this position, if there is one
 	# this will fail if for some reason valid genera overlap
-	$sql = "SELECT lft,rgt,taxon_rank rank,taxon_name name,extant FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no and lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') GROUP BY t.taxon_no";
+	# while we're at it, we count taxa missing extant data and taxa
+	#  where the primary ref is not the authority
+	$sql = "SELECT lft,rgt,taxon_rank rank,taxon_name name,extant,ref_is_authority FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no and lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') GROUP BY t.taxon_no";
 	my @rows = @{$dbt->getData($sql)};
 	my %LR;
 	my %extant;
+	my %refis;
 	%dataneeded = ();
 	for my $row ( @rows )	{
 		for my $i ( $row->{lft}..$row->{rgt} )	{
@@ -126,6 +130,11 @@ sub processSanityCheck	{
 		$extant{$row->{rank}}{$row->{extant}}++;
 		if ( $row->{extant} !~ /yes|no/i )	{
 			$dataneeded2{$row->{rank}}{$row->{name}}++;
+		}
+		if ( $row->{ref_is_authority} =~ /yes/i )	{
+			$refis{$row->{rank}}++;
+		} else	{
+			$dataneeded3{$row->{rank}}{$row->{name}}++;
 		}
 	}
 	$sql = "SELECT lft,rgt FROM occurrences o,taxa_tree_cache t WHERE o.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt GROUP BY t.taxon_no";
@@ -215,6 +224,22 @@ sub processSanityCheck	{
 			delete $dataneeded{$rows[$i]->{rank}}{$rows[$i]->{name}};
 		}
 	}
+
+	printBoxTop("Valid subtaxa with authority data from the original paper");
+	for my $rank ( @ranks ) 	{
+		if ( $total{$rank} > 0 )	{
+			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$refis{$rank}, $total{$rank}, 100 * $refis{$rank} / $total{$rank};
+			if ( $total{$rank} - $refis{$rank} > 0 && $total{$rank} - $refis{$rank} <= 200 )	{
+				my @temp = keys %{$dataneeded3{$rank}};
+				printMissing($rank,\@temp);
+			}
+			if ( $rank ne "genus" )	{
+				print "<br>\n";
+			}
+		}
+	}
+	$grade = $grades[int(10 * $refis{'genus'} / $total{'genus'})];
+	printBoxBottom("Our",$grade);
 
 	printBoxTop("Subtaxa in compilations also having opinions from a primary source");
 	my $incompilation = 0;
