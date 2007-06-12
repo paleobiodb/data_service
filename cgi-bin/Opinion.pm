@@ -708,13 +708,13 @@ sub displayOpinionForm {
     if ($childRank =~ /subgenus/) {
         my ($genusName,$subGenusName) = Taxon::splitTaxon($childName);
         @select_values = ('original spelling','correction','misspelling','rank change','reassignment');
-        @select_keys = ("is the original spelling and rank of this taxon", "is a correction of '$childName'","is a misspelling of this taxon","has had its rank changed from its original rank of $childRank","has been reassigned from its original genus '$genusName'");
+        @select_keys = ("is the original spelling and rank", "is a correction of '$childName'","is a misspelling","has had its rank changed from $childRank","has been reassigned from its original genus '$genusName'");
     } elsif ($childRank =~ /species/) {
         @select_values = ('original spelling','recombination','correction','misspelling');
-        @select_keys = ("is the original spelling and rank of this taxon","is a recombination or rank change of '$childName'","is a correction of '$childName'","is a misspelling of this taxon");
+        @select_keys = ("is the original spelling and rank","is a recombination or rank change of '$childName'","is a correction of '$childName'","is a misspelling");
     } else {
         @select_values = ('original spelling','correction','misspelling','rank change');
-        @select_keys = ("is the original spelling and rank of this taxon","is a correction of '$childName'","is a misspelling of this taxon","has had its rank changed from its original rank of $childRank");
+        @select_keys = ("is the original spelling and rank","is a correction of '$childName'","is a misspelling","has had its rank changed from its original rank of $childRank");
     }
     $spelling_row .= "<tr><td>&nbsp;</td></tr>";
     $spelling_row .= "<tr><td>Reason why this spelling and rank was used:<br>This ". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
@@ -1165,7 +1165,7 @@ sub submitOpinionForm {
     } else {
         if ($q->param('spelling_reason') =~ /original spelling/) {
             if ($childSpellingName ne $childName || $childSpellingRank ne $childRank) {
-                $errors->add("If \"This is the original spelling and rank of this taxon\" is selected, you must enter '$childName', '$childRank' in the \"How was it spelled?\" section");
+                $errors->add("If \"This is the original spelling and rank\" is selected, you must enter '$childName', '$childRank' in the \"How was it spelled?\" section");
             }
         } else {
             if ($childSpellingName eq $childName && $childSpellingRank eq $childRank) {
