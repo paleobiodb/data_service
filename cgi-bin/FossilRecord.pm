@@ -130,7 +130,7 @@ sub submitSearchTaxaForm {
             print qq|<div class="displayPanel" align="center" style="width: 30em; padding-top: 1.5em;">|;
 
             print qq|<form method="POST" action="$READ_URL">|;
-            print qq|<input type="hidden" name="action" value="displayFossilRecordTaxon">|;
+            print qq|<input type="hidden" name="action" value="checkTaxonInfo">|;
             
             print "<table>\n";
             print "<tr>";
