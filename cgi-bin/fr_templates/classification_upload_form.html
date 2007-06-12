@@ -1,0 +1,42 @@
+<div align="center"><h3>Fossil Record data upload form</h3></div>
+
+<b>Instructions</b>:
+<ul>
+  <li>Please "Save as" in Excel 95,Excel 97, or Excel 2000 format is the file is created with a newer version of Office.</li>
+  <li>The first line of the excel file must be a header.  The first column in the header must be the rank of the parent (taxon being assigned to), the second column must be the the rank of the child (taxon being classified).  Valid ranks are: order, class, family, genus.
+<li>The first 11 columns must be in the following format: [higher order taxon, lower order taxon, author, pub. year, first appearance, last appearance, phylogenetic status, habitat, first occurrence, last occurrence, comments]. <a href="javascript:tipsPopup('/public/tips/fossil_record_fields.html#columns')">See description of columns</a>.</li>
+  <li>First appearance and last can be time intervals from any scales entered in the system.  See <a href="%%READ_URL%%?action=startScale"> list of time scales</a>.</li>
+  <li>Previous uploads may be resumed by coming back to this page.</li>
+  <li>Please see <a href="/public/sample_upload.xls">sample upload</a>.</li>
+</ul>
+
+<p>
+<div align="center">
+<form method="POST" action="%%WRITE_URL%%" enctype="multipart/form-data">
+<div class="displayPanel" style="width: 800; text-align:left;">
+  <span class="displayPanelHeader"><b>Upload a new file</b></span>
+  <div class="displayPanelContent">
+    <input type="hidden" name="action" value="submitClassificationUploadForm">
+    <b>File:</b> <input type="file" name="upload_file"><br>
+    <input type="checkbox" name="download_available" value="1"> Make original file available for download<br>
+    <br>If additional taphonomic, ecological, or morphological data beyond the required fields is available, it may be included as additional sheets or columns in the spreadsheet.  If so, please check the box above and describe the data below.<br>
+    <textarea cols=80 rows=6 name="comments"></textarea>
+    <br><br>
+    <input type="submit" name="submit" value="Upload file">
+  </div>
+</div>
+</form>
+</div>
+</p>
+
+
+<p>
+<div align="center">
+<div class="displayPanel" style="width: 800; text-align:left;">
+  <span class="displayPanelHeader"><b>Resume a previous upload</b></span>
+  <div class="displayPanelContent">
+    %%in_progress%%
+  </div>
+</div>
+</div>
+</p>

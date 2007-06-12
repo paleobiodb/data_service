@@ -1,0 +1,45 @@
+<form method="POST" action="%%read_url%%">
+<input name="action" type="hidden" value="checkTaxonInfo">
+
+<div align="center">
+  <h3>%%page_title%%</h3>
+  <div class="displayPanel" align="center" style="width: 40em;">
+  <div class="displayPanelContent">
+    <table border=0 cellpadding=4 class="small" style="padding-top: 1em; padding-bottom: 1em; padding-left: -1em;">
+      <tr>
+        <td>Taxon name:</td>
+        <td colspan=2><input name="taxon_name" value="" size="35"></td>
+      </tr>
+      <tr>
+        <td>Author:</td>
+        <td align="left"><input name="author" value="" size="12"></td>
+        <td align="right">Publication year: <input name="pubyr" value="" size="4"></td>
+      </tr>
+      <tr>
+        <td>&nbsp;</td>
+      </tr>
+      <tr>
+        <td>Stratigraphic range:</td>
+        <td colspan=2><input type="text" name="max_interval_name"> - <input type="text" name="min_interval_range"></td>
+      </tr>
+      <tr>
+        <td>Show taxa which:</td>
+        <td>
+          <select name="range_through">
+            <option value="yes">exist anywhere in specified range</option>
+            <option value="no">are contained completely within specified range</option>
+          </select>
+        </td>
+        <td></td>
+      </tr>
+        
+      <tr>
+        <td colspan=3 align="center" style="padding-top: 2em;"><input type="submit" value="Search"></td>
+      </tr>
+      <tr>
+    </table>
+  </div>
+  </div>
+</div>
+</form>
+
