@@ -1397,7 +1397,6 @@ sub submitOpinionForm {
             push @opinions_to_migrate1 , @parents_to_migrate2;
             my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'child_no'} WHERE parent_no IN (".join(",",@parents_to_migrate1).")";
             dbg("Migrating parents: $sql");
-print "$sql";#FOO
             $dbh->do($sql);
         }
         
