@@ -214,7 +214,7 @@ sub displayActions	{
 	print $hb->populateHTML( "std_page_top" );
 	print $hb->populateHTML( "index" );
 
-	my $sql = "SELECT first_name, last_name, name, last_action, last_entry FROM person";
+	my $sql = "SELECT first_name, last_name, reversed_name, name, last_action, last_entry FROM person";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	
@@ -223,6 +223,7 @@ sub displayActions	{
 		$lastaction{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'last_action'};
 		$lastentry{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'last_entry'};
 		$shortname{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'name'};
+		$reversed{$row->{'first_name'}.' '.$row->{'last_name'}} = $row->{'reversed_name'};
 	}
 	$sth->finish();
 
@@ -238,8 +239,8 @@ sub displayActions	{
 		}
 	}
 	
-	@names = sort({ $lastaction{$b} <=> $lastaction{$a} } keys %lastaction);
-	
+	my @names = sort({ $lastaction{$b} <=> $lastaction{$a} } keys %lastaction);
+
 	print "<p><center><table cellpadding=3>\n";
 
 	print "<tr><td><b>rank</b></td><td><b>name</b></td><td><b>action</b>/entry</td>";
@@ -252,11 +253,12 @@ sub displayActions	{
 			$d =~ s/^2....//;
 			$d2 =~ s/^2....//;
 			printf "<tr><td align=\"center\" valign=\"top\">%d</td>",$i + 1;
-			print "<td valign=\"top\"><a href=\"bridge.pl?action=displayCollResults&enterer=$shortname{$names[$i]}&sortby=collection_no&sortorder=desc\">$names[$i]</a></td><td><span style=\"font-size: 0.8em;\"><b>$d</b><br>&nbsp;$d2</span></td>";
+			print "<td valign=\"top\"><a href=\"bridge.pl?action=displayRefResults&type=view&enterer_reversed=$reversed{$names[$i]}&refsortby=entry+date&refsortorder=descending\">$names[$i]</a></td><td><span style=\"font-size: 0.8em;\"><b>$d</b><br>&nbsp;$d2</span></td>";
 			for my $lag ( 1,7,30 )	{
+				my $lagdate = date(now) - [0,0,$lag];
 				print "<td align=\"center\" valign=\"top\">";
 				if ( $lastentries{'collections'}{$lag}{$names[$i]} || $lastentries{'opinions'}{$lag}{$names[$i]} )	{
-					print "$lastentries{'collections'}{$lag}{$names[$i]}/$lastentries{'opinions'}{$lag}{$names[$i]}";
+					printf "<a href=\"bridge.pl?action=displayCollResults&enterer=$shortname{$names[$i]}&sortby=collection_no&sortorder=desc\">$lastentries{'collections'}{$lag}{$names[$i]}</a>/<a href=\"bridge.pl?action=submitOpinionSearch&enterer_reversed=$reversed{$names[$i]}&created_month=%s&created_day=%s&created_year=%s\">$lastentries{'opinions'}{$lag}{$names[$i]}</a>",$lagdate->month,$lagdate->day,$lagdate->year;
 				}
 				print "</td>";
 			}
