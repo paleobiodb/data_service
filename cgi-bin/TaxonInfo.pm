@@ -1641,8 +1641,10 @@ sub getSynonymyParagraph{
     #  to getMostRecentClassification because (1) the code was redundant, and
     #  (2) this way you can identify the opinion actually used in the taxon's
     #   classification, so it can be bolded in the history paragraph JA 17.4.07
+    # whoops, need to get original combination first JA 12.6.07
+    my $orig = getOriginalCombination($dbt, $taxon_no);	
+    my @results = getMostRecentClassification($dbt,$orig);
 
-    my @results = getMostRecentClassification($dbt,$taxon_no);
     my $best_opinion;
     if (@results) {
         # save the best opinion no
