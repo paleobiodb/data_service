@@ -1614,6 +1614,15 @@ sub displayOpinionChoiceForm {
                 push @where, "o.authorizer_no=".$authorizer_no; 
             }
         }
+        if ($q->param("enterer_reversed")) {
+            my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('enterer_reversed')));
+            my $enterer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
+            if (!$enterer_no) {
+                push @errors, $q->param('enterer_reversed')." is not a valid enterer. Format like 'Sepkoski, J.'" if (!$enterer_no); 
+            } else {
+                push @where, "o.enterer_no=".$enterer_no; 
+            }
+        }
         if ($q->param('created_year')) {
             my ($yyyy,$mm,$dd) = ($q->param('created_year'),$q->param('created_month'),$q->param('created_day'));
             my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
