@@ -1536,7 +1536,7 @@ sub getOpinionsToMigrate {
     # there is a potential bizarre case where child_spelling_no has been
     #  used as a parent_no, but it completely unclassified itself, so we
     #  need to add it to the list of parents to be moved JA 12.6.07
-    if ( ! @results )	{
+    if ( ! @results && $child_no != $orig_no )	{
         $sql = "SELECT count(*) c FROM opinions WHERE parent_no=$orig_no";
         my $count = ${$dbt->getData($sql)}[0]->{c};
         if ( $count > 0 )	{
