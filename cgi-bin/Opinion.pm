@@ -1142,11 +1142,12 @@ sub submitOpinionForm {
                 && $childSpellingRank ne "unranked clade")	{
                 $errors->add("The rank of the higher taxon '$parentName' ($parentRank) must be higher than the rank of '$childSpellingName' ($childSpellingRank)");	
             }
-        } elsif ($q->param('taxon_status') eq 'invalid1' && $q->param('synonym') ne 'invalid subgroup of' && $parentRank ne $childSpellingRank)	{
-            # synonyms should be of the same rank, but invalid subgroups can be of
-            #  any rank because (for example) sometimes a taxon is considered
-            #  simultaneously to be of too high a rank, and an invalid subgroup of
-            #  a lower-ranked taxon JA 29.1.07
+        } elsif ($q->param('taxon_status') eq 'invalid1' && $q->param('synonym') ne 'invalid subgroup of' && $parentRank ne $childSpellingRank && $parentRank !~ /unranked/ && $childSpellingRank !~ /unranked/)	{
+            # synonyms should be of the same rank, but invalid subgroups can be
+            #  of any rank because (for example) sometimes a taxon is considered
+            #  simultaneously to be of too high a rank, and an invalid subgroup
+            #  of a lower-ranked taxon JA 29.1.07
+            # ranks are irrelevant if unranked clades are involved JA 14.6.07
             $errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
         } 
         if ($q->param('taxon_status') eq 'belongs to') {
