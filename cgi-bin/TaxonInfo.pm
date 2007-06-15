@@ -2066,7 +2066,7 @@ sub getMostRecentClassification {
     my $fossil_record_sort;
     my $fossil_record_field;
     if ($IS_FOSSIL_RECORD) {
-        $fossil_record_field = "FIND_IN_SET('fossil record',r.project_name) is_fossil_record, ";
+        $fossil_record_field = "IF(project_name IS NOT NULL,FIND_IN_SET('fossil record',r.project_name),0) is_fossil_record, ";
         $fossil_record_sort = "is_fossil_record DESC, ";
     }
     my $strat_fields;
@@ -2148,7 +2148,7 @@ sub getMostRecentSpelling {
     my $fossil_record_sort;
     my $fossil_record_field;
     if ($IS_FOSSIL_RECORD) {
-        $fossil_record_field = "FIND_IN_SET('fossil record',r.project_name) is_fossil_record, ";
+        $fossil_record_field = "IF(project_name IS NOT NULL,FIND_IN_SET('fossil record',r.project_name),0) is_fossil_record, ";
         $fossil_record_sort = "is_fossil_record DESC, ";
     }
     $sql = "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, $fossil_record_field"
