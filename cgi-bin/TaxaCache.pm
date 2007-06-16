@@ -324,6 +324,10 @@ sub addName {
 #
 # Arguments:
 #   $child_no is the taxon_no of the child to be updated (if necessary)
+
+# IMPORTANT
+# this function is only ever called by /../scripts/taxa_cached.pl, which
+#  runs continously, so you need to kill it and restart it to debug (JA)
 sub updateCache {
     my ($dbt,$child_no) = @_;
     my $dbh=$dbt->dbh;
@@ -420,6 +424,12 @@ sub updateCache {
             $min_interval_no=$max_interval_no;
         }
     }
+    if ( ! $max_interval_no )	{
+        $max_interval_no = 0;
+    }
+    if ( ! $min_interval_no )	{
+        $min_interval_no = 0;
+    }
     $sql = "UPDATE taxa_tree_cache SET max_interval_no=$max_interval_no,min_interval_no=$min_interval_no,spelling_no=$spelling_no WHERE lft=$cache_row->{lft}"; 
     print "Updating max,min,spelling with $max_interval_no,$min_interval_no,$spelling_no: $sql\n" if ($DEBUG);
     $dbh->do($sql);
@@ -433,9 +443,9 @@ sub updateCache {
     print "Updating synonym with $senior_synonym_no: $sql\n" if ($DEBUG);
     $dbh->do($sql);
 
-    
 
-    # Second section: Now we check if the parents have been chagned by a recent opinion, and only update
+
+    # Second section: Now we check if the parents have been changed by a recent opinion, and only update
     # it if that is the case
     $sql = "SELECT spelling_no parent_no FROM taxa_tree_cache WHERE lft < $cache_row->{lft} AND rgt > $cache_row->{rgt} ORDER BY lft DESC LIMIT 1";
     # BUG: may be multiple parents, compare most recent spelling:
@@ -510,9 +520,19 @@ sub moveChildren {
     # If a loop occurs (the insertion point where we're going to move the child is IN the child itself
     # then we have some special logic: Move to the end so it has no parents, then move the child to 
     # the parent, so we avoid loops
-    if ($parent_no && $p_row->{'rgt'} > $c_row->{'lft'} && $p_row->{'rgt'} < $c_row->{'rgt'}) {
+    # this is actually a little more complicated: once you move the parent
+    #  to outer space and the child into it, you have to move the parent back,
+    #  which you can set off by messing with the modified date of the parent's
+    #  most recent parent opinion
+    # this does not result in endless looping because getJuniorSynonyms,
+    #  getSeniorSynonym, and getMostRecentClassification are all now able
+    #  to resolve such conflicts JA 14-15.6.07
+    if ($parent_no && $p_row->{'lft'} > $c_row->{'lft'} && $p_row->{'rgt'} < $c_row->{'rgt'}) {
         print "Loop found, moving parent $parent_no to 0\n" if ($DEBUG);
         moveChildren($dbt,$parent_no,0);
+        my $popinion = TaxonInfo::getMostRecentClassification($dbt,$parent_no,{'use_synonyms'=>'no'});
+        $sql = "UPDATE opinions SET modified=now() WHERE opinion_no=" . $popinion->{'opinion_no'};
+        $dbh->do($sql);
         $sql = "SELECT lft,rgt,spelling_no FROM taxa_tree_cache WHERE taxon_no=$parent_no";
         $p_row = ${$dbt->getData($sql)}[0];
         if (!$p_row) { return; }
