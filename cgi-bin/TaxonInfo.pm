@@ -1486,31 +1486,56 @@ sub displayRelatedTaxa {
     }
    
     # Print em out
+    my @letts = split //,$taxon_name;
+    my $initial = $letts[0];
     if (@child_taxa_links) {
-        $output .= "<p><i>This taxon includes:</i><br>"; 
+        my $rank = ($focal_taxon_rank eq 'species') ? 'Subspecies' :
+                   ($focal_taxon_rank eq 'genus') ? 'Species' :
+                                                    'Subtaxa';
+$output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+  <span class="displayPanelHeader"><b>$rank</b></span>
+  <div class="displayPanelContent">
+|;
+        $_ =~ s/$taxon_name /$initial. /g foreach ( @child_taxa_links );
         $output .= join(", ",@child_taxa_links);
-        $output .= "</p>";
+        $output .= qq|  </div>
+</div>|;
     }
 
     if (@possible_child_taxa_links) {
-        $output .= "<p><i>This genus may include these species, but they have not been formally classified into it:</i><br>"; 
+$output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+  <span class="displayPanelHeader"><b>Species lacking formal opinion data</b></span>
+  <div class="displayPanelContent">
+|;
+        $_ =~ s/$taxon_name /$initial. /g foreach ( @possible_child_taxa_links );
         $output .= join(", ",@possible_child_taxa_links);
-        $output .= "</p>";
+        $output .= qq|  </div>
+</div>|;
     }
 
     if (@sister_taxa_links) {
         my $rank = ($focal_taxon_rank eq 'species') ? 'species' :
                    ($focal_taxon_rank eq 'genus') ? 'genera' :
                                                     'taxa';
-        $output .= "<p><i>Sister $rank include:</i><br>"; 
+$output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+  <span class="displayPanelHeader"><b>Sister $rank</b></span>
+  <div class="displayPanelContent">
+|;
+        $_ =~ s/$genus /$initial. /g foreach ( @sister_taxa_links );
         $output .= join(", ",@sister_taxa_links);
-        $output .= "</p>";
+        $output .= qq|  </div>
+</div>|;
     }
     
     if (@possible_sister_taxa_links) {
-        $output .= "<p><i>These species have not been formally classified into the genus:</i><br>"; 
+$output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+  <span class="displayPanelHeader"><b>Sister species lacking formal opinion data</b></span>
+  <div class="displayPanelContent">
+|;
+        $_ =~ s/$genus /$initial. /g foreach ( @possible_sister_taxa_links );
         $output .= join(", ",@possible_sister_taxa_links);
-        $output .= "</p>";
+        $output .= qq|  </div>
+</div>|;
     }
 
     if (!$output) {
@@ -1582,7 +1607,6 @@ sub displayTaxonHistory {
     @results_no_dupes{@synonyms} = ();
     @results_no_dupes{@more_orig} = ();
     @results = keys %results_no_dupes;
-
 	
 	
 	# Print the info for the original combination of the passed in taxon first.
@@ -2037,7 +2061,7 @@ sub getOriginalCombination{
     }
 }
 
-# See _getMostRecentParenetOpinion
+# See _getMostRecentParentOpinion
 sub getMostRecentClassification {
     my $dbt = shift;
     my $child_no = int(shift);
@@ -2045,6 +2069,16 @@ sub getMostRecentClassification {
 
     return if (!$child_no);
     return if ($options->{reference_no} eq '0');
+
+    # it is imperative that belongs-to opinions on junior synonyms also be
+    #  be considered, because they might actually be more reliable
+    # obviously, don't do this if we are looking to see if the taxon is a
+    #  a synonym itself
+    # JA 14-15.6.07
+    push my @synonyms , $child_no;
+    if ( $options->{'use_synonyms'} !~ /no/ )	{
+        push @synonyms , getJuniorSynonyms($dbt,$child_no);
+    }
 
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
@@ -2083,8 +2117,12 @@ sub getMostRecentClassification {
             . $reliability
             . " FROM opinions o" 
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
-            . " WHERE o.child_no=$child_no"
-            . " AND o.child_no != o.parent_no AND o.status NOT IN ('misspelling of','homonym of')";
+            . " WHERE o.child_no IN (" . join(',',@synonyms)
+            . ") AND o.parent_no NOT IN (" . join(',',@synonyms)
+            . ") AND o.status NOT IN ('misspelling of','homonym of')"
+        # we need this to guarantee that a synonymy opinion on a synonym is
+        #  not chosen JA 14.6.07
+            . " AND (o.child_no=$child_no OR o.status='belongs to')";
     if ($options->{reference_no}) {
         $sql .= " AND o.reference_no=$options->{reference_no}";
     }
@@ -2128,6 +2166,7 @@ sub getMostRecentSpelling {
     while (my @row = $sth->fetchrow_array()) {
         push @misspellings, $row[0];
     }
+
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
     # All values of the enum classification_quality get recast as integers for easy sorting
@@ -2469,7 +2508,7 @@ sub displaySynonymyList	{
 #  in a recombination or synonymy
 # so, we are getting the INSTANCES of opinions and not just the alternative names,
 #  which we already know
-    my %synline = ();
+	my %synline = ();
 	foreach my $syn (@syns)	{
 		my $sql = "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','invalid subgroup of','misspelling of') AND parent_spelling_no=$syn)";
         $sql .= " UNION ";
@@ -2478,7 +2517,7 @@ sub displaySynonymyList	{
 		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE child_spelling_no=$syn AND status IN ('belongs to','recombined as','rank changed as','corrected as'))";
 		my @userefs =  @{$dbt->getData($sql)};
 
-        my $parent = getTaxa($dbt,{'taxon_no'=>$syn});
+		my $parent = getTaxa($dbt,{'taxon_no'=>$syn});
 
 		my $parent_name = $parent->{'taxon_name'};
 		my $parent_rank = $parent->{'taxon_rank'};
@@ -2486,8 +2525,10 @@ sub displaySynonymyList	{
 			$parent_name = "<i>" . $parent_name . "</i>";
 		} 
 		foreach my $useref ( @userefs )	{
-            my $synkey = "";
-            my $mypubyr = "";
+			my $synkey = "";
+			my $mypubyr = "";
+			my $myauth = "";
+			my $mypages = $useref->{pages};
 			if ( $useref->{pubyr} )	{
 				$synkey = "<td>" . $useref->{pubyr} . "</td><td>" . $parent_name . " " . $useref->{author1last};
 				if ( $useref->{otherauthors} )	{
@@ -2496,6 +2537,7 @@ sub displaySynonymyList	{
 					$synkey .= " and " . $useref->{author2last};
 				}
 				$mypubyr = $useref->{pubyr};
+				$myauth = $useref->{author1last};
 		# no pub data, get it from the refs table
 			} else	{
 				my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
@@ -2508,6 +2550,7 @@ sub displaySynonymyList	{
 				}
                 $synkey .= "</a>";
 				$mypubyr = $refref->{pubyr};
+				$myauth = $refref->{author1last};
 			}
 			if ( $useref->{pages} )	{
 				if ( $useref->{pages} =~ /[ -]/ )	{
@@ -2523,7 +2566,10 @@ sub displaySynonymyList	{
 					$synkey .= " fig. " . $useref->{figures};
 				}
 			}
-			$synline{$synkey} = $mypubyr;
+			$synline{$synkey}->{TAXON} = $parent_name;
+			$synline{$synkey}->{YEAR} = $mypubyr;
+			$synline{$synkey}->{AUTH} = $myauth;
+			$synline{$synkey}->{PAGES} = $mypages;
 		}
 	}
 
@@ -2544,7 +2590,7 @@ sub displaySynonymyList	{
 # likewise appearances in the authority table
 	foreach my $syn (@syns)	{
         if ( $isoriginal{$syn} eq "YES" )	{
-            my $sql = "SELECT taxon_name,taxon_rank,author1last,author2last,otherauthors,pubyr,pages,figures,ref_is_authority,reference_no FROM authorities WHERE taxon_no=" . $syn;
+            my $sql = "SELECT taxon_name,taxon_rank,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,pages,figures,ref_is_authority,a.reference_no FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no=" . $syn;
             my @userefs = @{$dbt->getData($sql)};
         # save the instance as a key with pubyr as a value
         # note that @userefs only should have one value because taxon_no
@@ -2557,6 +2603,8 @@ sub displaySynonymyList	{
                 }
                 my $synkey = "";
                 my $mypubyr;
+                my $myauth;
+                my $mypages;
                 if ( $useref->{pubyr} )	{
                     $synkey = "<td>" . $useref->{pubyr} . "</td><td>" . $auth_taxon_name . " " . $useref->{author1last};
                     if ( $useref->{otherauthors} )	{
@@ -2565,18 +2613,7 @@ sub displaySynonymyList	{
                         $synkey .= " and " . $useref->{author2last};
                     }
                     $mypubyr = $useref->{pubyr};
-            # no pub data, get it from the refs table
-                } else	{
-                    my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
-                    my $refref = @{$dbt->getData($sql)}[0];
-                    $synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $auth_taxon_name . "<a href=\"$READ_URL?action=displayReference&amp;reference_no=$useref->{reference_no}&amp;is_real_user=$is_real_user\"> " . $refref->{author1last};
-                    if ( $refref->{otherauthors} )	{
-                        $synkey .= " et al.";
-                    } elsif ( $refref->{author2last} )	{
-                        $synkey .= " and " . $refref->{author2last};
-                    }
-                    $synkey .= "</a>";
-                    $mypubyr = $refref->{pubyr};
+                    $myauth = $useref->{author1last};
                 }
                 if ( $useref->{pages} )	{
                     if ( $useref->{pages} =~ /[ -]/ )	{
@@ -2584,6 +2621,7 @@ sub displaySynonymyList	{
                     } else	{
                         $synkey .= " p. " . $useref->{pages};
                     }
+                    $mypages = $useref->{pages};
                 }
                 if ( $useref->{figures} )	{
                     if ( $useref->{figures} =~ /[ -]/ )	{
@@ -2592,19 +2630,28 @@ sub displaySynonymyList	{
                         $synkey .= " fig. " . $useref->{figures};
                     }
                 }
-                $synline{$synkey} = $mypubyr;
+                $synline{$synkey}->{TAXON} = $auth_taxon_name;
+                $synline{$synkey}->{YEAR} = $mypubyr;
+                $synline{$synkey}->{AUTH} = $myauth;
+                $synline{$synkey}->{PAGES} = $mypages;
             }
         }
 	}
 
 # sort the synonymy list by pubyr
-	my @synlinekeys = sort { $synline{$a} <=> $synline{$b} } keys %synline;
+	my @synlinekeys = sort { $synline{$a}->{YEAR} <=> $synline{$b}->{YEAR} || $synline{$a}->{AUTH} cmp $synline{$b}->{AUTH} || $synline{$a}->{PAGES} <=> $synline{$b}->{PAGES} || $synline{$a}->{TAXON} cmp $synline{$b}->{TAXON} } keys %synline;
+
+# it is possible that the first two 
 
 # print each line of the synonymy list
 	$output .= "<table cellspacing=5>\n";
 	$output .= "<tr><td><b>Year</b></td><td><b>Name and author</b></td></tr>\n";
+	my $lastline;
 	foreach my $synline ( @synlinekeys )	{
-		$output .= "<tr>$synline</td></tr>\n";
+		if ( $synline{$synline}->{YEAR} . $synline{$synline}->{AUTH} . $synline{$synline}->{TAXON} ne $lastline )	{
+			$output .= "<tr>$synline</td></tr>\n";
+		}
+		$lastline = $synline{$synline}->{YEAR} . $synline{$synline}->{AUTH} . $synline{$synline}->{TAXON};
 	}
 	$output .= "</table>\n";
 
@@ -2819,15 +2866,20 @@ sub getSeniorSynonym {
     if ($restrict_to_reference_no =~ /\d/) {
         $options->{'reference_no'} = $restrict_to_reference_no;
     }
+    $options->{'use_synonyms'} = "no";
     for(my $i=0;$i<10;$i++) {
         my $parent = getMostRecentClassification($dbt,$taxon_no,$options);
         last if (!$parent || !$parent->{'child_no'});
         if ($seen{$parent->{'child_no'}}) {
             # If we have a loop, disambiguate using last entered
-            my @rows = sort {$b->{'opinion_no'} <=> $a->{'opinion_no'}} values %seen;
-            #my @rows = sort {$b->{'reliability_index'} <=> $a->{'reliability_index'} || 
-            #                 $b->{'pubyr'} <=> $a->{'pubyr'} || 
-            #                 $b->{'opinion_no'} <=> $a->{'opinion_no'}} values %seen;
+            # JA: the code to use the reliability/pubyr data instead was
+            #  written by PS and then commented out, possibly because of a
+            #  conflict elsewhere, but these data should be used instead
+            #  14.6.07
+            #my @rows = sort {$b->{'opinion_no'} <=> $a->{'opinion_no'}} values %seen;
+            my @rows = sort {$b->{'reliability_index'} <=> $a->{'reliability_index'} || 
+                             $b->{'pubyr'} <=> $a->{'pubyr'} || 
+                             $b->{'opinion_no'} <=> $a->{'opinion_no'}} values %seen;
             $taxon_no = $rows[0]->{'parent_no'};
             last;
         } else {
@@ -2850,25 +2902,39 @@ sub getJuniorSynonyms {
     my $dbt = shift;
     my @taxon_nos = @_;
 
-    my @queue = ();
-    push @queue, $_ for (@taxon_nos);
     my %seen_syn = ();
-    for(my $i = 0;$i<50;$i++) {
-        my $taxon_no;
-        if (@queue) {
-            $taxon_no = pop @queue;
-        } else {
-            last;
+    for my $t ( @taxon_nos )	{
+        my $senior;
+        my $recent = getMostRecentClassification($dbt,$t,{'use_synonyms'=>'no'});
+        if ( $recent->{'status'} =~ /synonym|replaced|subgroup/ )	{
+            $senior = $recent->{'parent_no'};
         }
-        my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$taxon_no AND child_no != parent_no";
-        my @results = @{$dbt->getData($sql)};
-        foreach my $row (@results) {
-            my $parent = getMostRecentClassification($dbt,$row->{'child_no'});
-            if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|replaced|subgroup/) {
-                if (!$seen_syn{$row->{'child_no'}}) {
-                    push @queue, $row->{'child_no'};
+        my @queue = ();
+        push @queue, $t;
+        for(my $i = 0;$i<50;$i++) {
+            my $taxon_no;
+            if (@queue) {
+                $taxon_no = pop @queue;
+            } else {
+                last;
+            }
+            my $sql = "SELECT DISTINCT child_no FROM opinions WHERE parent_no=$taxon_no AND child_no != parent_no";
+            my @results = @{$dbt->getData($sql)};
+            foreach my $row (@results) {
+                my $parent = getMostRecentClassification($dbt,$row->{'child_no'},{'use_synonyms'=>'no'});
+                if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|replaced|subgroup/ && $parent->{'child_no'} != $t) {
+                    if (!$seen_syn{$row->{'child_no'}}) {
+                # the most recent opinion on the focal taxon could be that
+                #  it is a synonym of its synonym
+                # if this opinion has priority, then the focal taxon is the
+                #  legitimate synonym
+                        if ( $row->{'child_no'} == $senior && $parent->{'parent_no'} == $t && $t != $senior && ( $recent->{'reliability_index'} > $parent->{'reliability_index'} || ( $recent->{'reliability_index'} == $parent->{'reliability_index'} && $recent->{'pubyr'} > $parent->{'pubyr'} ) ) )	{
+                            next;
+                        }
+                        push @queue, $row->{'child_no'};
+                    }
+                    $seen_syn{$row->{'child_no'}} = 1;
                 }
-                $seen_syn{$row->{'child_no'}} = 1;
             }
         }
     }
