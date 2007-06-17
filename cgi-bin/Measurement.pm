@@ -323,9 +323,11 @@ sub populateMeasurementForm {
     }   
     
 	# get the taxon's name
-    my ($taxon_name,$collection);
+    my ($taxon_name,$old_field,$old_no,$collection);
     if ($q->param('occurrence_no')) {
-        my $sql = "SELECT o.collection_no, o.genus_name, o.species_name, o.occurrence_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
+        $old_field = "occurrence_no";
+        $old_no = $q->param('occurrence_no');
+        my $sql = "SELECT o.collection_no, o.genus_name, o.species_name, o.occurrence_no, o.taxon_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
         my $row = ${$dbt->getData($sql)}[0];
 
         my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
@@ -344,6 +346,8 @@ sub populateMeasurementForm {
             return;
         }
     } else {
+        $old_field = "taxon_no";
+        $old_no = int($q->param('taxon_no'));
         my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
         if ($taxon->{'taxon_rank'} =~ /species/) {
             $taxon_name = $taxon->{'taxon_name'};
@@ -351,7 +355,7 @@ sub populateMeasurementForm {
             $taxon_name = $taxon->{'taxon_name'}." sp.";
         } else {
             $taxon_name = $taxon->{'taxon_name'}." indet.";
-        } 
+        }
     }
 
     #Prepare fields to be use in the form ahead
@@ -371,7 +375,7 @@ sub populateMeasurementForm {
                 #  JA 10.5.07
                 my $fieldstring = join(',',@specimen_fields);
                 $fieldstring =~ s/is_type/is_type AS specimen_is_type/;
-                $sql = "SELECT $fieldstring FROM specimens WHERE taxon_no=" . int($q->param('taxon_no')) . " ORDER BY specimen_no DESC";
+                $sql = "SELECT $fieldstring FROM specimens WHERE $old_field=$old_no ORDER BY specimen_no DESC";
                 $row = ${$dbt->getData($sql)}[0];
                 push @fields,$_ for @specimen_fields;
                 s/is_type/specimen_is_type/ foreach @fields;
@@ -580,7 +584,9 @@ sub processMeasurementForm	{
                                 $in_cgi{$type}{'real_'.$f}=$in_cgi{$type}{$f};
                             }
                         }
-                        $in_cgi{$type}{'error_unit'} = $fields{$type."_error_unit"};
+                        if ( $in_cgi{$type}{'real_error'} )	{
+                            $in_cgi{$type}{'error_unit'} = $fields{$type."_error_unit"};
+                        }
                         dbg("UPDATE, TYPE $type: ".Dumper($in_cgi{$type}));
 #                        $row->{'error_unit'} = $q->param($type."_error_unit");
                         #$dbt->insertRecord($s,'measurements',$row);
@@ -603,7 +609,9 @@ sub processMeasurementForm	{
 #                        $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
                         $in_cgi{$type}{'measurement_type'}=$type;
                         $in_cgi{$type}{'specimen_no'}= $fields{'specimen_no'};
-                        $in_cgi{$type}{'error_unit'}=$fields{$type."_error_unit"};
+                        if ( $in_cgi{$type}{'real_error'} )	{
+                            $in_cgi{$type}{'error_unit'}=$fields{$type."_error_unit"};
+                        }
                         $dbt->insertRecord($s,'measurements',$in_cgi{$type});
     #                    $in_cgi{$type}{'measurement_type'}=$type;
     #                    $in_cgi{$type}{'error_unit'}=$q->param($type."_error_unit");
