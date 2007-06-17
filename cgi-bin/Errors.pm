@@ -65,12 +65,14 @@ sub errorMessage {
 		$count .= " errors";	
 	}
 	
-	my $errString = "<DIV class=\"errorMessage\">
-				<UL STYLE=\"text-align:left;\"><DIV class=\"errorTitle\">Please fix the following $count and resubmit</DIV>" . 
-				$self->{errorString} . "</UL>
-				<SPAN class=\"tiny\">(hint: if you get a formatting error, check for extra spaces in the fields)</SPAN><BR><BR>";
-	$errString .= "</DIV>";
-	
+	my $errString = qq|<div class="errorMessage">
+<div class="errorTitle">Please fix the following $count and resubmit</div>
+<ul class="small" style="text-align: left;">
+$self->{errorString}
+</ul>
+</div>
+|;
+
     if ($self->{count} > 0) {
 	    return $errString;
     } else {
