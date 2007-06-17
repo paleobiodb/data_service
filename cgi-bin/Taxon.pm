@@ -751,7 +751,7 @@ sub submitAuthorityForm {
     <td valign=top>
       <p><b>Opinion functions</b></p>
         <ul>
-          <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li><br>
+          <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
 |;
         # user may want to immediately enter or edit either:
         # (1) the opinion of the taxon's author, if not ref is authority
@@ -760,7 +760,7 @@ sub submitAuthorityForm {
         # check everywhere for the author's opinion, because it could
         #  come from any reference
 
-        my $style = qq| style="padding-top: 0.75em;"|;
+        my $style = qq| style="padding-top: 0.65em;"|;
         if ( $q->param('ref_is_authority') !~ /PRIMARY/ )	{
             my $cleanauth1 = $q->param('author1last');
             $cleanauth1 =~ s/'/\\'/;
@@ -769,12 +769,14 @@ sub submitAuthorityForm {
             my $sql = "SELECT opinion_no FROM opinions WHERE author1last='$cleanauth1' AND author2last='$cleanauth2' AND pubyr='" . $q->param('pubyr') . "' AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
             my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
             if ( $opinion_no > 0 )	{
-                $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this author's opinion about $fields{taxon_name}</a></b></li><br>|;
+                $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this author's opinion about $fields{taxon_name}</a></b></li>
+|;
             } elsif ( $q->param('author1last') )	{
             # if that didn't work, either this is not a species, or
             #   something is wrong because an implicit opinion of the
             #   author should have been created; regardless, create a link
-                  $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&author1init=|.$q->param('author1init').qq|&author1last=|.$q->param('author1last').qq|&author2init=|.$q->param('author2init').qq|&author2last=|.$q->param('author2last').qq|&otherauthors=|.$q->param('otherauthors').qq|&pubyr=|.$q->param('pubyr').qq|&reference_no=$resultReferenceNumber&opinion_no=-1">Add this author's opinion about $fields{taxon_name}</a></b></li><br>|;
+                  $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&author1init=|.$q->param('author1init').qq|&author1last=|.$q->param('author1last').qq|&author2init=|.$q->param('author2init').qq|&author2last=|.$q->param('author2last').qq|&otherauthors=|.$q->param('otherauthors').qq|&pubyr=|.$q->param('pubyr').qq|&reference_no=$resultReferenceNumber&opinion_no=-1">Add this author's opinion about $fields{taxon_name}</a></b></li>
+|;
             }
         }
         # one way or another, the current reference may have an opinion,
@@ -782,14 +784,18 @@ sub submitAuthorityForm {
         my $sql = "SELECT opinion_no FROM opinions WHERE ref_has_opinion='YES' AND reference_no=$resultReferenceNumber AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
         my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
         if ( $opinion_no > 0 )	{
-            $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
+            $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this reference's opinion about $fields{taxon_name}</a></b></li>
+|;
         } else	{
-            $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=-1">Add this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
+            $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=-1">Add this reference's opinion about $fields{taxon_name}</a></b></li>
+|;
         }
-        $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name}</a></b></li><br>|;
-        $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li><br>|;
+        $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name}</a></b></li>
+|;
+        $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>
+|;
         $end_message .= qq|
-          <li$style><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li><br>
+          <li$style><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li>
           <li$style><b><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
           <li$style><b><a href="$WRITE_URL?action=startProcessPrintHierarchy&reference_no=$resultReferenceNumber&maximum_levels=100">Print this reference's classification</a></b></li>
           </ul>
