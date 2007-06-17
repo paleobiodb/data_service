@@ -2139,6 +2139,25 @@ sub getMostRecentClassification {
 #   print $sql;
 
     my @rows = @{$dbt->getData($sql)};
+
+    # one publication may have yielded two opinions if it classified two
+    #  taxa currently considered to be synonyms, and there is no way I can
+    #  figure out to deal with this in SQL, so we need to remove duplicates
+    #  after the fact JA 16.6.07
+    my %on_child_no = ();
+    for my $r ( @rows )	{
+        if ( $r->{'child_no'} == $child_no )	{
+            $on_child_no{$r->{'author1last'}." ".$r->{'author2last'}." ".$r->{'otherauthors'}." ".$r->{'pubyr'}}++;
+        }
+    }
+    my @cleanrows = ();
+    for my $r ( @rows )	{
+        if ( $r->{'child_no'} == $child_no || ! $on_child_no{$r->{'author1last'}." ".$r->{'author2last'}." ".$r->{'otherauthors'}." ".$r->{'pubyr'}} )	{
+            push @cleanrows , $r;
+        }
+    }
+    @rows = @cleanrows;
+
     if (scalar(@rows)) {
         if ( wantarray ) {
             return @rows;
@@ -2640,8 +2659,6 @@ sub displaySynonymyList	{
 
 # sort the synonymy list by pubyr
 	my @synlinekeys = sort { $synline{$a}->{YEAR} <=> $synline{$b}->{YEAR} || $synline{$a}->{AUTH} cmp $synline{$b}->{AUTH} || $synline{$a}->{PAGES} <=> $synline{$b}->{PAGES} || $synline{$a}->{TAXON} cmp $synline{$b}->{TAXON} } keys %synline;
-
-# it is possible that the first two 
 
 # print each line of the synonymy list
 	$output .= "<table cellspacing=5>\n";
