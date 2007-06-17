@@ -480,9 +480,21 @@ div.emphasized {
 .errorTitle {
 	color: #D00000;
 	font-weight: bold;
-	font-size: 120%;
-	text-align: center;	
-	margin: 0em 0em 1em 0em;
+	font-size: 1.0em;
+	text-align: center;
+	margin: 0.5em 0em 1em 1em;
+}
+
+.errorBox {
+	border: 1px #909090 solid;
+	background-color: #FFFF80;
+	width: 600px;
+    text-align: left;
+}
+
+.errorRow {
+    padding-left: 1em;
+    color: red;
 }
 
 .warning {
@@ -501,27 +513,11 @@ div.emphasized {
 }
 
 
-.errorTitle {
-	background-color: #FFFF60;
-    color: #D00000;
-    font-size: 1.2em;
-    font-weight: bold;
-	padding: 0.25em 0.25em 0.25em 0.25em;
-    text-align: left;
-}
-
-.errorBox {
-	border: 1px #909090 solid;
-	background-color: #FFFF80;
-	width: 600px;
-    text-align: left;
-}
 .warningTitle {
-	background-color: #DDDDEE;
-    font-size: 1.2em;
+    font-size: 1.0em;
     font-weight: bold;
-	padding: 0.25em 0.25em 0.25em 0.25em;
     text-align: left;
+	margin: 0em 0em 1em 1em;
 }
 
 .warningBox {
@@ -568,10 +564,6 @@ div.emphasized {
 }
 .padTop {
     padding-top: .5em;
-}
-.errorRow {
-    padding-left: 1em;
-    color: red;
 }
 
 /* relate to report formatting */
