@@ -1272,7 +1272,7 @@ sub displayTypeTaxonSelectForm {
             print "<input type=\"hidden\" name=\"reference_no\" value=\"$reference_no\">\n";
             print "<input type=\"hidden\" name=\"type_taxon_no\" value=\"$type_taxon_no\">\n";
             print "<input type=\"hidden\" name=\"end_message\" value=\"".uri_escape($end_message)."\">\n";
-            print "<table><tr><td style=\"border: 1px solid gray;\">\n";
+            print "<table><tr><td style=\"border: 1px solid lightgray; padding: 1em;\">\n";
             print "<h3>For which taxa is $type_taxon_name a type $type_taxon_rank?</h3>";
             foreach my $row (reverse @parents) {
                 my $checked = ($row->{'type_taxon_no'} == $type_taxon_no) ? 'CHECKED' : '';
@@ -1391,7 +1391,7 @@ sub getTypeTaxonList {
     for my $p ( @parents )	{
         push @parent_nos , $p->{'taxon_no'};
     }
-    my $sql = "SELECT taxon_no,taxon_rank,taxon_name FROM authorities a,opinions o WHERE child_no=". $focal_taxon->{taxon_no} ." AND parent_no=taxon_no";
+    my $sql = "SELECT taxon_no,taxon_rank,taxon_name FROM authorities a,opinions o WHERE child_no=". $focal_taxon->{taxon_no} ." AND taxon_rank!='". $focal_taxon->{'taxon_rank'} ."' AND parent_no=taxon_no";
     if ( $#parents > -1 )	{
         $sql .= " AND parent_no NOT IN (". join(',',@parent_nos) .")";
     }
