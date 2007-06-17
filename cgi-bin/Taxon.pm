@@ -1395,6 +1395,7 @@ sub getTypeTaxonList {
     if ( $#parents > -1 )	{
         $sql .= " AND parent_no NOT IN (". join(',',@parent_nos) .")";
     }
+    $sql .= " GROUP BY parent_no";
     push @parents , @{$dbt->getData($sql)};
 
     if ($focal_taxon->{'taxon_rank'} =~ /species/) {
