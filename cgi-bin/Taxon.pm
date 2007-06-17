@@ -741,16 +741,18 @@ sub submitAuthorityForm {
     <table cellpadding="10" class="small"><tr><td valign="top">
       <p><b>Name functions</b></p>
       <ul>
-      <li><b><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fields{taxon_name}</a></b></li>
-      <br><li><b><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fields{taxon_name}</a></b></li>   
+      <li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
+      <br><li><b><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fields{taxon_name}</a></b></li>
       <br><li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
-      <br><li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
       <br><li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
+      <br><li><b><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$resultTaxonNumber">Get general information about $fields{taxon_name}</a></b></li>   
       </ul>
     </td>
     <td valign=top>
       <p><b>Opinion functions</b></p>
-        <ul>|;
+        <ul>
+          <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li><br>
+|;
         # user may want to immediately enter or edit either:
         # (1) the opinion of the taxon's author, if not ref is authority
         #  and assuming that the actual reference is nowhere in the
@@ -758,6 +760,7 @@ sub submitAuthorityForm {
         # check everywhere for the author's opinion, because it could
         #  come from any reference
 
+        my $style = qq| style="padding-top: 0.75em;"|;
         if ( $q->param('ref_is_authority') !~ /PRIMARY/ )	{
             my $cleanauth1 = $q->param('author1last');
             $cleanauth1 =~ s/'/\\'/;
@@ -766,12 +769,12 @@ sub submitAuthorityForm {
             my $sql = "SELECT opinion_no FROM opinions WHERE author1last='$cleanauth1' AND author2last='$cleanauth2' AND pubyr='" . $q->param('pubyr') . "' AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
             my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
             if ( $opinion_no > 0 )	{
-                $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this author's opinion about $fields{taxon_name}</a></b></li><br>|;
+                $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this author's opinion about $fields{taxon_name}</a></b></li><br>|;
             } elsif ( $q->param('author1last') )	{
             # if that didn't work, either this is not a species, or
             #   something is wrong because an implicit opinion of the
             #   author should have been created; regardless, create a link
-                  $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&author1init=|.$q->param('author1init').qq|&author1last=|.$q->param('author1last').qq|&author2init=|.$q->param('author2init').qq|&author2last=|.$q->param('author2last').qq|&otherauthors=|.$q->param('otherauthors').qq|&pubyr=|.$q->param('pubyr').qq|&reference_no=$resultReferenceNumber&opinion_no=-1">Add this author's opinion about $fields{taxon_name}</a></b></li><br>|;
+                  $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&author1init=|.$q->param('author1init').qq|&author1last=|.$q->param('author1last').qq|&author2init=|.$q->param('author2init').qq|&author2last=|.$q->param('author2last').qq|&otherauthors=|.$q->param('otherauthors').qq|&pubyr=|.$q->param('pubyr').qq|&reference_no=$resultReferenceNumber&opinion_no=-1">Add this author's opinion about $fields{taxon_name}</a></b></li><br>|;
             }
         }
         # one way or another, the current reference may have an opinion,
@@ -779,16 +782,16 @@ sub submitAuthorityForm {
         my $sql = "SELECT opinion_no FROM opinions WHERE ref_has_opinion='YES' AND reference_no=$resultReferenceNumber AND child_spelling_no=$resultTaxonNumber AND child_no=$origResultTaxonNumber ORDER BY opinion_no DESC";
         my $opinion_no = ${$dbt->getData($sql)}[0]->{opinion_no};
         if ( $opinion_no > 0 )	{
-            $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
+            $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=$opinion_no">Edit this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
         } else	{
-            $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=-1">Add this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
+            $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=-1">Add this reference's opinion about $fields{taxon_name}</a></b></li><br>|;
         }
-        $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name}</a></b></li><br>|;
-        $end_message .= qq|<li><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li><br>|;
+        $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name}</a></b></li><br>|;
+        $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li><br>|;
         $end_message .= qq|
-          <li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li><br>
-          <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li><br>
-          <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
+          <li$style><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li><br>
+          <li$style><b><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
+          <li$style><b><a href="$WRITE_URL?action=startProcessPrintHierarchy&reference_no=$resultReferenceNumber&maximum_levels=100">Print this reference's classification</a></b></li>
           </ul>
         </td></tr></table>
         </div>|;
@@ -1263,8 +1266,8 @@ sub displayTypeTaxonSelectForm {
             print "<input type=\"hidden\" name=\"reference_no\" value=\"$reference_no\">\n";
             print "<input type=\"hidden\" name=\"type_taxon_no\" value=\"$type_taxon_no\">\n";
             print "<input type=\"hidden\" name=\"end_message\" value=\"".uri_escape($end_message)."\">\n";
-            print "<table><tr><td>\n";
-            print "<h2>For which taxa is $type_taxon_name a type $type_taxon_rank?</h2>";
+            print "<table><tr><td style=\"border: 1px solid gray;\">\n";
+            print "<h3>For which taxa is $type_taxon_name a type $type_taxon_rank?</h3>";
             foreach my $row (reverse @parents) {
                 my $checked = ($row->{'type_taxon_no'} == $type_taxon_no) ? 'CHECKED' : '';
                 print "<input type=\"checkbox\" name=\"taxon_no\" value=\"$row->{taxon_no}\" $checked> ";
@@ -1290,7 +1293,7 @@ sub displayTypeTaxonSelectForm {
         } else {
             my $sqlr = "SELECT author1init,author1last,author2init,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$reference_no";
             my $formatted_ref = Reference::formatShortRef(${$dbt->getData($sqlr)}[0]);
-            push @warnings, "Can't set this as the type taxon because no valid higher taxa were found.  There must be opinions linking this taxon to its higher taxa from the same reference ($formatted_ref). If this is a problem, email the admin (pbdbadmin\@nceas.ucsb.edu).";
+            push @warnings, "Can't set this taxon as the type because no valid higher taxa were found.  There must be opinions linking this taxon to its higher taxa from the same reference ($formatted_ref).";
             carp "Maybe something is wrong in the opinions script, got no parents for current taxon after adding an opinion.  (in section dealing with type taxon). Vars: tt_no $type_taxon_no ref $reference_no tt_name $type_taxon_name tt_rank $type_taxon_rank"; 
         }
     } else {
@@ -1366,6 +1369,7 @@ sub getTypeTaxonList {
     my $dbt = shift;
     my $type_taxon_no = shift;   
     my $reference_no = shift;
+    my $dbh = $dbt->dbh;
             
     my $focal_taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$type_taxon_no});
             
@@ -1374,7 +1378,19 @@ sub getTypeTaxonList {
     # Note the reference_no passed to get_classification_hash - parents must be linked by opinions from
     # the same reference as the reference_no of the opinion which is currently being inserted/edited
     my @parents = @{$parents->{$type_taxon_no}}; # is an array ref
-        
+
+# JA: we need not just potential parents, but all immediate parents that ever
+#  have been proposed, so also hit the opinion table directly 17.6.07
+    my @parent_nos;
+    for my $p ( @parents )	{
+        push @parent_nos , $p->{'taxon_no'};
+    }
+    my $sql = "SELECT taxon_no,taxon_rank,taxon_name FROM authorities a,opinions o WHERE child_no=". $focal_taxon->{taxon_no} ." AND parent_no=taxon_no";
+    if ( $#parents > -1 )	{
+        $sql .= " AND parent_no NOT IN (". join(',',@parent_nos) .")";
+    }
+    push @parents , @{$dbt->getData($sql)};
+
     if ($focal_taxon->{'taxon_rank'} =~ /species/) {
         # A species may be a type for genus/subgenus only
         my $i = 0;
@@ -1383,11 +1399,12 @@ sub getTypeTaxonList {
         }
         splice(@parents,$i);
     } else {
-        # A higher order taxon may be a type for subtribe/tribe/family/subfamily/superfamily
+        # A higher order taxon may be a type for subtribe/tribe/family/subfamily/superfamily only
         # Don't know about unranked clade, leave it for now
         my $i = 0;
         for($i=0;$i<scalar(@parents);$i++) {
-            last if ($parents[$i]->{'taxon_rank'} !~ /tribe|family|unranked clade/);        }   
+            last if ($parents[$i]->{'taxon_rank'} !~ /tribe|family|unranked clade/);
+        }
         splice(@parents,$i);
     }
     # This sets values in the hashes for the type_taxon_no, type_taxon_name, and type_taxon_rank
