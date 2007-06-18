@@ -224,20 +224,28 @@ sub rebuildAddChild {
     }
     
     # now get recombinations, and corrections for current child and insert at the same 
-    # place as the child.  $taxon_no should already be the senior synonyms if there are synonyms
+    # place as the child.  $taxon_no should already be the senior synonym if there are synonyms
     my @all_taxa = TaxonInfo::getAllSpellings($dbt,$taxon_no);
     my %all_hash; $all_hash{$_} = 1 for @all_taxa;
 
-    # get an list of children for the current node. second part to deal with lapsus records
+    # get a list of children for the current node. second part to deal with lapsus records
     my $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.parent_no IN (".join(",",@all_taxa).") AND o.child_no != o.parent_no";
     my @results = @{$dbt->getData($sql)};
     my @children = ();
     foreach my $row (@results) {
         next if ($processed->{$row->{'child_no'}});
         my $opinion = TaxonInfo::getMostRecentClassification($dbt,$row->{'child_no'});
-        # Note theres no distinction between synonyms and belongs to - both just considered children
+        # Note there's no distinction between synonyms and belongs to - both just considered children
         if ($opinion && $all_hash{$opinion->{'parent_no'}}) {
             push @children,$row->{'child_no'};
+        # rarely, the parent is not currently taxon_no, but the current parent
+        #  is a senior synonym classified into taxon_no on the basis of an
+        #  opinion on this child, so make that one a child JA 18.6.07
+        } elsif ( $opinion->{'status'} =~ /synonym|replaced|subgroup/ )	{
+            my $synopinion = TaxonInfo::getMostRecentClassification($dbt,$opinion->{'parent_no'});
+            if ($synopinion && $all_hash{$synopinion->{'parent_no'}}) {
+                push @children,$opinion->{'parent_no'};
+            }
         }
     }
     print "list of children for $taxon_no: ".join(",",@children)."<BR>\n" if ($DEBUG);
