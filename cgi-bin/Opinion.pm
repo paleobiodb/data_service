@@ -789,7 +789,13 @@ sub submitOpinionForm {
 	my $childTaxon = Taxon->new($dbt,$fields{'child_no'});
 	my $childName = $childTaxon->get('taxon_name');
 	my $childRank = $childTaxon->get('taxon_rank');
-	my $ref = Reference->new($dbt,$fields{'reference_no'});
+	my $lookup_reference = "";
+	if ( $q->param('ref_has_opinion') eq 'CURRENT' )	{
+		$lookup_reference = $s->get('reference_no');
+	} else	{
+		$lookup_reference = $fields{'reference_no'};
+	}
+	my $ref = Reference->new($dbt,$lookup_reference);
 
     # If a drop down is presented, do not use the parent_spelling_no from it if they switched radio buttons
     if (($q->param('orig_taxon_status') && $q->param('orig_taxon_status') ne $q->param('taxon_status'))) {
@@ -898,7 +904,7 @@ sub submitOpinionForm {
 		# this as the reference.  
         my $sql = "SELECT count(*) c FROM opinions WHERE ref_has_opinion='YES'".
                   " AND child_no=".$dbh->quote($fields{'child_no'}).
-                  " AND reference_no=".$dbh->quote($fields{'reference_no'}).
+                  " AND reference_no=".$dbh->quote($lookup_reference).
                   " AND status NOT IN ('misspelling of')";
         if (! $isNewEntry) {
             $sql .= " AND opinion_no != ".$o->{'opinion_no'};
@@ -906,7 +912,7 @@ sub submitOpinionForm {
         my $row = ${$dbt->getData($sql)}[0];
         # also make sure there isn't a secondary report of this opinion
         #  JA 9.1.07
-        my $sql = "SELECT author1last,author2last,pubyr FROM refs WHERE reference_no=".$dbh->quote($fields{'reference_no'});
+        my $sql = "SELECT author1last,author2last,pubyr FROM refs WHERE reference_no=".$dbh->quote($lookup_reference);
         my $row2 = ${$dbt->getData($sql)}[0];
         my $row3;
         if ( $row2->{author1last} )	{
