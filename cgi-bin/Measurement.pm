@@ -94,14 +94,14 @@ sub submitSpecimenSearch {
         print "<form method=\"POST\" action=\"$READ_URL\">";
         print "<input type=\"hidden\" name=\"action\" value=\"displaySpecimenList\">";
         print "<div align=\"center\">";
-        print "<table cellspacing=\"0\" cellpadding=\"6\">";
+        print "<table cellspacing=\"0\" cellpadding=\"6\" style=\"border: 1px solid lightgray;\">";
         print "<tr><th><span style=\"margin-right: 1em\">Taxon</span></th><th>Collection</th><th>Measurements</th></tr>";
 #        print "<tr><td>Collection name</td><td></td></tr>";
         my $last_collection_no = -1;
         my %coll_names = ();
         $coll_names{$_->{'collection_name'}} = 1 for (@results);
         my $coll_count = scalar(keys(%coll_names));
-        my $class = (scalar($coll_count) > 1) ? '' : 'class="darkList"';
+        my $class = (scalar($coll_count) > 0) ? '' : 'class="darkList"';
         foreach my $row (@results) {
             my $specimens = ($row->{'cnt'} >= 1) ? $row->{'cnt'} : 'none';
             my $taxon_name;
@@ -138,10 +138,10 @@ sub submitSpecimenSearch {
             print "<tr $class><td><a href=\"$READ_URL?action=displaySpecimenList&taxon_no=$row->{taxon_no}\">$taxon_name</a></td><td>unknown collection</td><td align=\"center\">$specimens</td></tr>";
 
         }
-        print "</table>";
-        print "</div>";
-        print "</form>";
-        print "<br>";
+        print qq|</table>
+</div>
+</form>
+|;
     }
 
 }
@@ -209,9 +209,12 @@ sub displaySpecimenList {
 
     }
     
-    print "<div align=\"center\">";
-    print "<h4>Specimen list for $taxon_name $collection</h4>\n";
-    print "<form method=\"POST\" action=\"$WRITE_URL\">\n";
+    print qq|<center>
+<div class="displayPanel" align="center" style="width: 30em; margin-top: 2em;">
+  <span class="displayPanelHeader"><b>$taxon_name $collection</b></span>
+  <div class="displayPanelContent">
+|;
+    print "<form name=\"specimenList\" method=\"POST\" action=\"$WRITE_URL\">\n";
     print "<input type=hidden name=\"action\" value=\"populateMeasurementForm\">\n";
     if ($q->param('types_only')) {
         print "<input type=hidden name=\"types_only\" value=\"".$q->param('types_only')."\">";
@@ -221,6 +224,18 @@ sub displaySpecimenList {
     } else {
         print "<input type=hidden name=\"taxon_no\" value=\"".$q->param('taxon_no')."\">";
     }
+    # default value
+    print "<input type=hidden name=\"specimen_no\" value=\"-2\">";
+    print qq|
+<script language="JavaScript" type="text/javascript">
+<!--
+function submitForm ( )
+{
+  document.specimenList.submit() ;
+}
+-->
+</script>
+|;
 
     # now create a table of choices
     print "<table>\n";
@@ -229,11 +244,15 @@ sub displaySpecimenList {
     %specimens = ();
     %types = ();
     %parts = ();
+    my $specimen_ids;
     foreach my $row (@results) {
         $specimens{$row->{specimen_no}}{$row->{measurement_type}} = $row->{real_average};
         $specimens{$row->{specimen_no}}{'specimens_measured'} = $row->{specimens_measured};
         $specimens{$row->{specimen_no}}{'specimen_part'} = $row->{specimen_part};
-        $specimens{$row->{specimen_no}}{'specimen_id'} = $row->{specimen_id};
+        if ( $row->{specimen_id} )	{
+            $specimens{$row->{specimen_no}}{'specimen_id'} = $row->{specimen_id};
+            $specimen_ids++;
+        }
         $types{$row->{measurement_type}}++;
         $parts{$row->{specimen_part}}++ if ($row->{specimen_part});
     }
@@ -241,7 +260,10 @@ sub displaySpecimenList {
     $specimen_count = scalar(keys(%specimens));
 
     if ($specimen_count > 0) {
-        print "<tr><th></th><th>specimen #</th>";
+        print "<tr><th></th>";
+        if ( $specimen_ids > 0 )	{
+            print "<th>specimen #</th>";
+        }
         print "<th>part</th>" if (%parts);
         print "<th>count</th>";
         foreach my $type (@measurement_types) {
@@ -260,27 +282,46 @@ sub displaySpecimenList {
 
     my $checked;
     $checked = "CHECKED" if ($specimen_count == 1);
-    foreach $specimen_no (sort {$a <=> $b} keys %specimens) {
+    my $types_only;
+    $types_only = "types_only=$q->param('types_only')" if ($q->param('types_only'));
+    # fixed order for mammal teeth
+    my @teeth = ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
+    my %tooth;
+    for my $t ( 0..$#teeth )	{
+        $tooth{$teeth[$t]} = $t;
+    }
+    foreach $specimen_no (sort {$tooth{$specimens{$a}->{specimen_part}} <=> $tooth{$specimens{$b}->{specimen_part}} || $a <=> $b} keys %specimens) {
         my $row = $specimens{$specimen_no};
         # Check the button if this is the first match, which forces
         #  users who want to create new measurement to check another button
-        print qq|<tr><td><input type="radio" name="specimen_no" value="$specimen_no" $checked></td>|;
-        print qq|<td>$row->{specimen_id}</td>|;
-        print qq|<td align=\"center\">$row->{specimen_part}</td>| if (%parts);
-        print qq|<td align=\"center\">$row->{specimens_measured}</td>|;
+        if ( $q->param('occurrence_no') )	{
+            print qq|<tr><td align="center"><a href="$WRITE_URL?action=populateMeasurementForm&occurrence_no=| . $q->param('occurrence_no') . qq|&specimen_no=$specimen_no"><span class="measurementBullet">&#149;</span></td>|;
+        } else	{
+            print qq|<tr><td align="center"><a href="$WRITE_URL?action=populateMeasurementForm&taxon_no=| . $q->param('taxon_no') . qq|&specimen_no=$specimen_no"><span class="measurementBullet">&#149;</span></td>|;
+        }
+        if ( $specimen_ids > 0 )	{
+            print qq|<td>$row->{specimen_id}</td>|;
+        }
+        print qq|<td align="center">$row->{specimen_part}</td>| if (%parts);
+        print qq|<td align="center">$row->{specimens_measured}</td>|;
         foreach my $type (@measurement_types) {
             if ($types{$type}) {
                 print "<td align=\"center\">$row->{$type}</td>";
             }
         }
+        print "</a>";
         print "</tr>";
     }
 
     # always give them an option to create a new measurement as well
-    print "<tr><td><input type=\"radio\" name=\"specimen_no\" value=\"-1\"></td>";
-    print "<td colspan=\"6\">Add a <b>new</b> average measurement</i></td></tr>\n";
-    print "<tr><td valign=\"top\"><input type=\"radio\" name=\"specimen_no\" value=\"-2\"></td>";
-    print "<td colspan=\"6\" valign=\"top\">Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3><b>new</b> individual measurements</i><br>";
+    if ( $q->param('occurrence_no') )	{
+            print qq|<tr><td align="center"><a href="$WRITE_URL?action=populateMeasurementForm&occurrence_no=| . $q->param('occurrence_no') . qq|&specimen_no=-1"><span class="measurementBullet">&#149;</span></td>|;
+        } else	{
+            print qq|<tr><td align="center"><a href="$WRITE_URL?action=populateMeasurementForm&taxon_no=| . $q->param('taxon_no') . qq|&specimen_no=-1"><span class="measurementBullet">&#149;</span></td>|;
+        }
+    print "<td colspan=\"6\">&nbsp;Add a <b>new</b> average measurement</i></td></tr>\n";
+    print qq|<tr><td align="center" valign="top"><a href="javascript:submitForm('')"><div class="measurementBullet" style="position: relative; margin-top: -0.1em;">&#149;</div></td>|;
+    print "<td colspan=\"6\" valign=\"top\">&nbsp;Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3><b>new</b> individual measurements</i><br>";
     print qq|
   &nbsp;&nbsp;default side:
   <select name="default_side">
@@ -302,12 +343,14 @@ sub displaySpecimenList {
   <option value="picture">picture</option>
   <option value="graph">graph</option>
   <option value="direct measurement">direct measurement</option>
-  </select>\n|;
-    print "</td></tr>\n";
+  </select>\n
+</td></tr>
+</table>
+</div>
+</div>
+</center>
+|;
 
-    print "<tr><td align=\"center\" colspan=7><br><input type=\"Submit\" name=\"Submit\" value=\"Submit\"></td></tr>";
-    print "</table></div>";
-    #}
 }
 
 sub populateMeasurementForm {
