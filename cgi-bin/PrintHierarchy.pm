@@ -327,6 +327,24 @@ sub htmlTaxaTree {
     #while (my ($type,$for) = each %found_type_taxon) {
     #    $type_taxon_nos{$for} = $type;
     #}
+    my @taxon_nos;
+    foreach my $record (@nodes_to_print)	{
+        push @taxon_nos , $record->{'taxon_no'};
+    }
+    my $sql = "SELECT taxon_no,ref_is_authority,";
+    for my $f ( 'reference_no','author1last','author2last','otherauthors','pubyr' )	{
+        $sql .= "IF (a.ref_is_authority='YES',r.$f,a.$f) $f,";
+    }
+    $sql =~ s/,$/ /;
+    $sql .= "FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no in (" . join(',',@taxon_nos) . ")";
+    my @results = @{$dbt->getData($sql)};
+    my %authority;
+    $authority{$_->{'taxon_no'}}->{IS} = $_->{'ref_is_authority'} foreach ( @results );
+    $authority{$_->{'taxon_no'}}->{REF} = $_->{'reference_no'} foreach ( @results );
+    $authority{$_->{'taxon_no'}}->{A1} = $_->{'author1last'} foreach ( @results );
+    $authority{$_->{'taxon_no'}}->{A2} = $_->{'author2last'} foreach ( @results );
+    $authority{$_->{'taxon_no'}}->{OTHER} = $_->{'otherauthors'} foreach ( @results );
+    $authority{$_->{'taxon_no'}}->{YR} = $_->{'pubyr'} foreach ( @results );
     foreach my $record (@nodes_to_print)	{
         $html .= "<tr>";
         for (my $i=0;$i<$record->{'depth'};$i++) {
@@ -348,6 +366,21 @@ sub htmlTaxaTree {
             $title .= $link;
         }
         $html .= $title;
+        if ( $authority{$record->{'taxon_no'}}->{A1} )	{
+            if ( $authority{$record->{'taxon_no'}}->{IS} =~ /Y/ )	{
+                $html .= qq|<a href="$READ_URL?action=displayReference&amp;reference_no=$authority{$record->{'taxon_no'}}->{REF}">|;
+            }
+            $html .= " <span class=\"small\">$authority{$record->{'taxon_no'}}->{A1}";
+            if ( $authority{$record->{'taxon_no'}}->{OTHER} )	{
+                $html .= " et al.";
+            } elsif ( $authority{$record->{'taxon_no'}}->{A2} )	{
+                $html .= " and " . $authority{$record->{'taxon_no'}}->{A2};
+            }
+            $html .= " $authority{$record->{'taxon_no'}}->{YR}</span>";
+            if ( $authority{$record->{'taxon_no'}}->{IS} =~ /Y/ )	{
+                $html .= "</a>";
+            }
+        }
 
         unless ($SIMPLE) {
             if ($disused{$record->{'taxon_no'}}) {
