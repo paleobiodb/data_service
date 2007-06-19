@@ -2119,7 +2119,8 @@ sub getMostRecentClassification {
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
             . " WHERE o.child_no IN (" . join(',',@synonyms)
             . ") AND o.parent_no NOT IN (" . join(',',@synonyms)
-            . ") AND o.status NOT IN ('misspelling of','homonym of')"
+            . ") AND o.parent_no >0"
+            . " AND o.status NOT IN ('misspelling of','homonym of')"
         # we need this to guarantee that a synonymy opinion on a synonym is
         #  not chosen JA 14.6.07
             . " AND (o.child_no=$child_no OR o.status='belongs to')";
@@ -2136,7 +2137,7 @@ sub getMostRecentClassification {
     if ( ! wantarray ) {
         $sql .= " LIMIT 1";
     }
-#   print $sql;
+#  print $sql,"<br><br>";
 
     my @rows = @{$dbt->getData($sql)};
 
@@ -2215,7 +2216,7 @@ sub getMostRecentSpelling {
          . " LEFT JOIN authorities a ON o.child_spelling_no=a.taxon_no"
          . " LEFT JOIN authorities a2 ON o.child_no=a2.taxon_no"
          . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
-         . " WHERE o.child_no=$child_no"
+         . " WHERE o.child_no=$child_no AND o.parent_no>0"
          . " AND o.child_no != o.parent_no AND o.status != 'misspelling of'";
     if ($options->{reference_no}) {
         $sql .= " AND o.reference_no=$options->{reference_no}";
