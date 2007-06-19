@@ -350,8 +350,11 @@ sub displayRefResults {
             print "</b></td>";
             my $formatted_reference = Reference::formatLongRef($row);
             print "<td>".$formatted_reference;
+            if ( $type eq 'view' && $s->isDBMember() ) {
+                print qq| <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$row->{reference_no}">edit</a></b></small>|;
+            }
             my $reference_summary = getReferenceLinkSummary($dbt,$s,$row->{'reference_no'});
-            print "<small><br><br>$reference_summary</small></td>";
+            print "<br><br><small>$reference_summary</small></td>";
             print "</tr>";
 		}
 		print "</table>\n";
@@ -629,26 +632,21 @@ sub displayReferenceForm {
         %db_row= %{$row};
     }
 
-    my %form_vars = $q->Vars();
-    delete $form_vars{'reftitle'};
-    delete $form_vars{'pubtitle'};
+    my %form_vars;
 
 	# Pre-populate the form with the search terms:
-	my %query_hash = ("name" => "author1last",
+	if ( $isNewEntry )	{
+		%form_vars = $q->Vars();
+		delete $form_vars{'reftitle'};
+		delete $form_vars{'pubtitle'};
+		my %query_hash = ("name" => "author1last",
 					  "year" => "pubyr",
 					  "project_name" => "project_name");
 
-	foreach my $s_param (keys %query_hash){
-		if($form_vars{$s_param}) {
-            $form_vars{$query_hash{$s_param}} = $form_vars{$s_param};
-		}
-	}
-
-	# form_vars may have some blank values that override db_row values with
-	#  the same keys, so delete them JA 8.5.07
-	for my $k ( keys %form_vars )	{
-		if ( $form_vars{$k} !~ /[A-Za-z0-9]/ )	{
-			delete $form_vars{$k};
+		foreach my $s_param (keys %query_hash){
+			if($form_vars{$s_param}) {
+				$form_vars{$query_hash{$s_param}} = $form_vars{$s_param};
+			}
 		}
 	}
 
@@ -733,7 +731,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     if ($dupe) {
         $verb = "";
     }
-    print "<center><h3><font color='red'>Reference number $reference_no $verb</font></h3></center>";
+    print "<center><h3>Reference number $reference_no $verb</h3></center>";
 
     # Set the reference_no
     if ($reference_no) {
@@ -747,7 +745,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         print qq|
         <div class="displayPanel" align="left">
         <span class="displayPanelHeader"><b>$box_header</b></span>
-        <table><tr><td valign=top><b>$reference_no</b></td><td>$formatted_ref</td></tr></table>
+        <table><tr><td valign=top><b>$reference_no</b></td><td>$formatted_ref <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$reference_no">edit</a></td></tr></table>
         </span>
         </div>
 
@@ -823,7 +821,7 @@ sub getReferenceLinkSummary {
 
     my $collection_count = scalar(@$results);
     if ($collection_count == 0) {
-        $retString .= "No collections";
+        $retString .= "no collections";
     } else {
         my $plural = ($collection_count == 1) ? "" : "s";
         $retString .= qq|<b><a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a> </b> (|;
