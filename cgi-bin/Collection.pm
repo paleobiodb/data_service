@@ -1676,7 +1676,7 @@ sub buildTaxonomicList {
 
 			# Clean up abundance values (somewhat messy, but works, and better
 			#   here than in populateHTML) JA 10.6.02
-			$output =~ s/(>1 specimen)s|(>1 individual)s|(>1 element)s|(>1 fragment)s/$1$2/g;
+			$output =~ s/(>1 specimen)s|(>1 individual)s|(>1 element)s|(>1 fragment)s/$1$2$3$4/g;
 	
 			$rowref->{'html'} = $output;
 			push(@grand_master_list, $rowref);
