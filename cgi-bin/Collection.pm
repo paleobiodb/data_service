@@ -1505,21 +1505,6 @@ sub buildTaxonomicList {
 	my $new_found = 0;		# have we found new taxa?  (ie, not in the database)
 	my $return = "";
 
-	# before we even start, we need a list of really high-level taxa
-	#  to make sure they are never printed in the Higher taxon part
-	#  of the taxonomic list
-	# the black list is not just of taxa currently at high ranks, but of
-	#  taxa that have ever been at a high rank or are synonyms of anything
-	#  that has ever been at a high rank, so we need the currently valid
-	#  spellings, which are used anyway in choosing higher taxa to list
-	# JA 25.5.07
-	my $sql = "SELECT spelling_no no FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_rank IN ('superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom') GROUP BY spelling_no";
-	my @highrefs = @{$dbt->getData($sql)};
-	my %isVeryHighTaxon;
-	for my $hr ( @highrefs )	{
-		$isVeryHighTaxon{$hr->{no}}++;
-	}
-
 	# This is the taxonomic list part
 	# join with taxa_tree_cache because lft and rgt will be used to
 	#  order the list JA 13.1.07
@@ -1643,7 +1628,7 @@ sub buildTaxonomicList {
                 #  isReidNo = 0 instead of $mostRecentReID and isReidNo = 1
 	
                 my $show_collection = '';
-				my ($table,$classification,$reid_are_reclassifications) = getReidHTMLTableByOccNum($dbt,$hbo,$s,$rowref->{occurrence_no}, 0, $options{'do_reclassify'},\%isVeryHighTaxon);
+				my ($table,$classification,$reid_are_reclassifications) = getReidHTMLTableByOccNum($dbt,$hbo,$s,$rowref->{occurrence_no}, 0, $options{'do_reclassify'});
 				$are_reclassifications = 1 if ($reid_are_reclassifications);
 				$output .= $table;
 				
@@ -1665,7 +1650,7 @@ sub buildTaxonomicList {
                     # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
                     unshift @class_array , $taxon;
-                    $rowref = getClassOrderFamily(\$rowref,\@class_array,\%isVeryHighTaxon);
+                    $rowref = getClassOrderFamily(\$rowref,\@class_array);
                     $rowref->{'synonym_name'} = getSynonymName($dbt,$rowref->{'taxon_no'});
                 } else {
                     if ($options{'do_reclassify'}) {
@@ -2130,8 +2115,7 @@ sub getSynonymName {
 # pass it an occurrence number or reid_no
 # the second parameter tells whether it's a reid_no (true) or occurrence_no (false).
 sub getReidHTMLTableByOccNum {
-	my ($dbt,$hbo,$s,$occNum,$isReidNo,$doReclassify,$isVeryHighTaxonRef) = @_;
-	my %isVeryHighTaxon = %{$isVeryHighTaxonRef};
+	my ($dbt,$hbo,$s,$occNum,$isReidNo,$doReclassify) = @_;
 
 	my $sql = "SELECT genus_reso, genus_name, subgenus_reso, subgenus_name, species_reso, species_name, plant_organ, re.comments as comments, re.reference_no as reference_no,  pubyr, taxon_no, occurrence_no, reid_no, collection_no FROM reidentifications re"
             . " LEFT JOIN refs r ON re.reference_no=r.reference_no ";
@@ -2172,7 +2156,7 @@ sub getReidHTMLTableByOccNum {
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
 
 		unshift @class_array , $taxon;
-                $row = getClassOrderFamily(\$row,\@class_array,\%isVeryHighTaxon);
+                $row = getClassOrderFamily(\$row,\@class_array);
 
 		# row has the classification now, so stash it
 		$classification->{'class'}{'taxon_name'} = $row->{'class'};
@@ -2219,8 +2203,6 @@ sub getClassOrderFamily	{
 	my $rowref_ref = shift;
 	my $rowref = ${$rowref_ref};
 	my $class_array_ref = shift;
-	my $isVeryHighTaxonRef = shift;
-	my %isVeryHighTaxon = %{$isVeryHighTaxonRef};
 	my @class_array = @{$class_array_ref};
 
 	my $maxyr1 = 3000;
@@ -2230,12 +2212,9 @@ sub getClassOrderFamily	{
 	my $maxno1 = "";
 	my $maxno2 = "";
 	for my $t ( @class_array ) {
-		# don't ever print class/phylum/kingdom-zone taxon names,
-		#  unless they are currently at the class or lower rank
-		if ( $isVeryHighTaxon{$t->{'taxon_no'}} && $t->{'taxon_rank'} !~ /^class|subclass|infraclass/ )	{
+		if ( $t->{'taxon_rank'} =~ /superclass|phylum|kingdom/ )	{
 			last;
 		}
-print "$t->{'taxon_rank'} / $t->{'taxon_name'} / $t->{'taxon_no'} = $isVeryHighTaxon{$t->{'taxon_no'}}<br>";
 		if ( ! $rowref->{'common_name'} && $t->{'common_name'} )	{
 			$rowref->{'common_name'} = $t->{'common_name'};
 		}
