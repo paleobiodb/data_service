@@ -2117,13 +2117,17 @@ sub getMostRecentClassification {
             . $reliability
             . " FROM opinions o" 
             . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
+            . " LEFT JOIN authorities a ON a.taxon_no=o.child_spelling_no" 
             . " WHERE o.child_no IN (" . join(',',@synonyms)
             . ") AND o.parent_no NOT IN (" . join(',',@synonyms)
             . ") AND o.parent_no >0"
             . " AND o.status NOT IN ('misspelling of','homonym of')"
         # we need this to guarantee that a synonymy opinion on a synonym is
         #  not chosen JA 14.6.07
-            . " AND (o.child_no=$child_no OR o.status='belongs to')";
+        # combinations of species are irrelevant because a species must be
+        #  directly assigned to its current genus regardless of what is said
+        #  about junior synonyms, or something is really wrong JA 19.6.07
+            . " AND (o.child_no=$child_no OR (o.status='belongs to' AND a.taxon_rank NOT IN ('species','subspecies')))";
     if ($options->{reference_no}) {
         $sql .= " AND o.reference_no=$options->{reference_no}";
     }
