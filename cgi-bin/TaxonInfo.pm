@@ -2076,7 +2076,7 @@ sub getMostRecentClassification {
     #  a synonym itself
     # JA 14-15.6.07
     push my @synonyms , $child_no;
-    if ( $options->{'use_synonyms'} !~ /no/ )	{
+    if ( $options->{'use_synonyms'} !~ /no/ && !$options->{reference_no})	{
         push @synonyms , getJuniorSynonyms($dbt,$child_no);
     }
 
@@ -2120,7 +2120,7 @@ sub getMostRecentClassification {
             . " LEFT JOIN authorities a ON a.taxon_no=o.child_spelling_no" 
             . " WHERE o.child_no IN (" . join(',',@synonyms)
             . ") AND o.parent_no NOT IN (" . join(',',@synonyms)
-            . ") AND o.parent_no >0"
+            . ") AND (o.status like '%nomen%' OR o.parent_no >0)"
             . " AND o.status NOT IN ('misspelling of','homonym of')"
         # we need this to guarantee that a synonymy opinion on a synonym is
         #  not chosen JA 14.6.07
