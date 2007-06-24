@@ -2129,7 +2129,7 @@ sub getMostRecentClassification {
         #  about junior synonyms, or something is really wrong JA 19.6.07
             . " AND (o.child_no=$child_no OR (o.status='belongs to' AND a.taxon_rank NOT IN ('species','subspecies')))";
     if ($options->{reference_no}) {
-        $sql .= " AND o.reference_no=$options->{reference_no}";
+        $sql .= " AND o.reference_no=$options->{reference_no} AND o.ref_has_opinion='YES'";
     }
     if ($options->{exclude_nomen}) {
         $sql .= " AND o.status NOT LIKE '%nomen%'";
