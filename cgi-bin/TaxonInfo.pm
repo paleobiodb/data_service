@@ -48,7 +48,7 @@ sub checkTaxonInfo {
         searchForm($hbo, $q, 1); # param for not printing header with form
         return;
     }
-	
+
     if ($q->param('taxon_no')) {
         # If we have is a taxon_no, use that:
         displayTaxonInfoResults($dbt,$s,$q);
@@ -323,7 +323,11 @@ sub displayTaxonInfoResults {
 		print "<div align=\"center\"><h3>Taxonomic history</h3></div>\n";
         print '<div align="center">';
         print displayTaxonHistory($dbt, $taxon_no, $is_real_user);
-        print "See something missing? <a href=\"$READ_URL?user=Guest&amp;action=displayPage&amp;page=join_us\">Join the Paleobiology Database</a>\n";
+        if ( $taxon_no )	{
+            print "<p>Is something missing? <a href=\"$READ_URL?user=Guest&amp;action=displayPage&amp;page=join_us\">Join the Paleobiology Database</a> and enter the data</p>\n";
+        } else	{
+            print "<p>Please <a href=\"$READ_URL?user=Guest&amp;action=displayPage&amp;page=join_us\">join the Paleobiology Database</a> and enter some data</p>\n";
+        }
         print "</div>\n";
         print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
@@ -1313,11 +1317,6 @@ sub displayTaxonClassification {
             $output .= "</table>";
             $output .= "</td></tr></table>";
            
-            if ($classification_no != $orig_no) {
-                $output .= "<div class=\"warning\" style=\"width: 600px;\">";
-                $output .= "A formal classification for '$taxon_name' could not be found.  An approximate match to '$classification_name' was used to create this classification.";
-                $output .= "</div>";
-            }
         } else {
             $output .= "<i>No classification data are available</i>";
         }
@@ -1507,7 +1506,10 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
   <span class="displayPanelHeader"><b>Species lacking formal opinion data</b></span>
   <div class="displayPanelContent">
 |;
-        $_ =~ s/$taxon_name /$initial. /g foreach ( @possible_child_taxa_links );
+        # the GROUP BY apparently fails if there are both occs and reIDs
+        @possible_child_taxa_links = sort { $a cmp $b } @possible_child_taxa_links;
+        $_ =~ s/>$taxon_name />$initial. /g foreach ( @possible_child_taxa_links );
+        $_ =~ s/=$taxon_name /=$taxon_name\+/g foreach ( @possible_child_taxa_links );
         $output .= join(", ",@possible_child_taxa_links);
         $output .= qq|  </div>
 </div>|;
@@ -1567,7 +1569,7 @@ sub displayTaxonHistory {
 	my $output = "";  # html output...
 	
 	unless($taxon_no) {
-		return "<i>No taxonomic history is available</i>";
+		return "<p><i>No taxonomic history is available</i></p>";
 	}
 
     # Surrounding able prevents display bug in firefox
