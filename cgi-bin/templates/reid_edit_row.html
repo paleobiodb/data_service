@@ -11,22 +11,9 @@
 <input id="reid_no" type="hidden">
 <input type=hidden name="row_token" value="row_token">
 
-<div show="genus_and_species_only">
-	<td nowrap> <b>reid=</b><input id="genus_name" size="20" maxlength="255" class="tiny"></td>
-</div>
-<div hide="genus_and_species_only">
-	<td align="right" nowrap><span class=tiny><b>reid=</b></span><select id="genus_reso" class="tiny"></select></td>
-	<td><input id="genus_name" size="20" maxlength="255" class="tiny"></td>
-</div>
+	<td nowrap> <b>&nbsp;=</b>
+	<input id="taxon_name" size="30" maxlength="255" class="tiny"></td>
 
-<div hide="genus_and_species_only">
-<div show="subgenera">
-	<td align="right"><select id="subgenus_reso" class="tiny"></select></td>
-	<td><input id="subgenus_name" size="20" maxlength="255" class="tiny"></td>
-</div>
-	<td align="right"><select id="species_reso" class="tiny"></select></td>
-</div>
-	<td><input id="species_name" size="20" maxlength="255" class="tiny"></td>
 <div hide="genus_and_species_only">
 <div show="abundances">
 	<td align="right"><input type="hidden" name="abund_value" value=""></td>
