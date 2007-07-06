@@ -2595,6 +2595,7 @@ sub displayOccurrenceAddEdit {
 		# its row in the form, and ALL rows (reids or not) will be processed
 		# properly by processEditOccurrences(), below.
         $occ_row->{'reid_no'} = '0';
+        $occ_row = formatTaxonNameInput($occ_row);
    
         # Copy over optional fields;
         $occ_row->{$_} = $pref{$_} for (@optional);
@@ -2608,6 +2609,7 @@ sub displayOccurrenceAddEdit {
         my $sql = "SELECT * FROM reidentifications WHERE occurrence_no=" .  $occ_row->{'occurrence_no'};
         my @reid_rows = @{$dbt->getData($sql)};
         foreach my $re_row (@reid_rows) {
+            $re_row = formatTaxonNameInput($re_row);
             # Copy over optional fields;
             $re_row->{$_} = $pref{$_} for (@optional);
 
@@ -2636,8 +2638,11 @@ sub displayOccurrenceAddEdit {
         'collection_no'=>$collection_no,
         'reference_no'=>$s->get('reference_no'),
         'occurrence_no'=>-1,
-        'species_name'=>$pref{'species_name'}
+        'taxon_name'=>$pref{'species_name'}
     };
+    if ( $blank->{'species_name'} eq " " )	{
+        $blank->{'species_name'} = "";
+    }
     
 
     # Copy over optional fields;
@@ -2659,6 +2664,57 @@ sub displayOccurrenceAddEdit {
 	print $hbo->stdIncludes("std_page_bottom");
 } 
 
+# JA 5.7.07
+sub formatTaxonNameInput	{
+    my $occ_row = shift;
+
+    if ( $occ_row->{'genus_reso'} )	{
+        if ( $occ_row->{'genus_reso'} =~ /"/ )	{
+            $occ_row->{'taxon_name'} = '"';
+        } elsif ( $occ_row->{'genus_reso'} =~ /informal/ )	{
+            $occ_row->{'taxon_name'} = '<';
+        } else	{
+            $occ_row->{'taxon_name'} = $occ_row->{'genus_reso'} . " ";
+        }
+    }
+    $occ_row->{'taxon_name'} .=  $occ_row->{'genus_name'};
+    if ( $occ_row->{'genus_reso'} =~ /"/ )	{
+        $occ_row->{'taxon_name'} .= '"';
+    } elsif ( $occ_row->{'genus_reso'} =~ /informal/ )	{
+        $occ_row->{'taxon_name'} .= '>';
+    }
+    if ( $occ_row->{'subgenus_name'} )	{
+        $occ_row->{'taxon_name'} .=  " ";
+        if ( $occ_row->{'subgenus_reso'} )	{
+            if ( $occ_row->{'subgenus_reso'} =~ /"/ )	{
+                $occ_row->{'subgenus_name'} = '"' . $occ_row->{'subgenus_name'} . '"';
+            } elsif ( $occ_row->{'subgenus_reso'} =~ /informal/ )	{
+                $occ_row->{'subgenus_name'} = '<' . $occ_row->{'subgenus_name'} . '>';
+            } else	{
+                $occ_row->{'taxon_name'} .= $occ_row->{'subgenus_reso'} . " ";
+            }
+        }
+        $occ_row->{'taxon_name'} .=  "(" . $occ_row->{'subgenus_name'} . ")";
+    }
+    $occ_row->{'taxon_name'} .=  " ";
+    if ( $occ_row->{'species_reso'} )	{
+        if ( $occ_row->{'species_reso'} =~ /"/ )	{
+            $occ_row->{'species_name'} = '"' . $occ_row->{'species_name'};
+        } elsif ( $occ_row->{'species_reso'} =~ /informal/ )	{
+            $occ_row->{'species_name'} = '<' . $occ_row->{'species_name'};
+        } else	{
+            $occ_row->{'taxon_name'} .= $occ_row->{'species_reso'} . " ";
+        }
+    }
+    $occ_row->{'taxon_name'} .=  $occ_row->{'species_name'};
+    if ( $occ_row->{'species_reso'} =~ /"/ )	{
+        $occ_row->{'taxon_name'} .= '"';
+    } elsif ( $occ_row->{'species_reso'} =~ /informal/ )	{
+        $occ_row->{'taxon_name'} .= '>';
+    }
+
+    return ($occ_row);
+}
 
 #
 # Sanity checks/error checks?
@@ -2952,7 +3008,6 @@ EOF
     print $hbo->stdIncludes('blank_page_bottom');
 }
 
-# Submission of all this,
 sub processOccurrenceTable {
 
     if (!$s->isDBMember()) {
@@ -3246,7 +3301,7 @@ sub generateCollectionLabel {
 
 
 # This function now handles inserting/updating occurrences, as well as inserting/updating reids
-# Rewritten PS to be a bit clearer, handle deleltions of occurrences, and use DBTransationManager
+# Rewritten PS to be a bit clearer, handle deletions of occurrences, and use DBTransationManager
 # for consistency/simplicity.
 sub processEditOccurrences {
     my $dbh = $dbt->dbh;
@@ -3261,20 +3316,15 @@ sub processEditOccurrences {
 	my @rowTokens = $q->param('row_token');
 
 	# list of required fields
-	my @required_fields = ("collection_no", "genus_name", "species_name", "reference_no");
-    my @warnings = ();
+	my @required_fields = ("collection_no", "taxon_name", "reference_no");
+	my @warnings = ();
 	my @occurrences = ();
-    my @occurrences_to_delete = ();
-    
-	# for identifying unrecognized (new to the db) genus/species names.
-	# these are the new taxa names that the user is trying to enter, do this before insert
-	my @genera = $q->param('genus_name');
-	my @subgenera = $q->param('subgenus_name');
-	my @species = $q->param('species_name');
-	# get all genus names in order to check for a new name
-	my @new_genera = TypoChecker::newTaxonNames($dbt,\@genera,'genus_name');
-	my @new_subgenera =  TypoChecker::newTaxonNames($dbt,\@subgenera,'subgenus_name');
-	my @new_species =  TypoChecker::newTaxonNames($dbt,\@species,'species_name');
+	my @occurrences_to_delete = ();
+
+        my @genera = ();
+        my @subgenera = ();
+        my @species = ();
+        my @resos = ("\\?","aff\\.","cf\\.","ex gr\\.","n\. gen\\.","n\. subgen\\.","n\. sp\\.","sensu lato");
 
 	# loop over all rows submitted from the form
 	for(my $i = 0;$i < @rowTokens; $i++) {
@@ -3288,7 +3338,102 @@ sub processEditOccurrences {
                 $fields{$param} = $vars[$i];
             }
         }
-        
+
+        # extract the genus, subgenus, and species names and resos
+        #  JA 5.7.07
+        if ( $fields{'taxon_name'} )	{
+            my $name = $fields{'taxon_name'};
+
+        # first some free passes for breaking the rules by putting stuff
+        #  at the end
+        # n. gen. n. sp. at the end
+            if ( $name =~ /n\. gen\. n\. sp\.$/ )	{
+                $name =~ s/n\. gen\. n\. sp\.$//;
+                $fields{'genus_reso'} = "n. gen.";
+                $fields{'species_reso'} = "n. sp.";
+            }
+        # n. sp. or sensu lato after a species name at the end
+            elsif ( $name =~ / [a-z]+ (n\. sp\.|sensu lato)$/ )	{
+                if ( $name =~ /sensu lato$/ )	{
+                    $fields{'species_reso'} = "sensu lato";
+                } else	{
+                    $fields{'species_reso'} = "n. sp.";
+                }
+                $name =~ s/ (n\. sp\.|sensu lato)$//;
+            }
+        # users may want to enter n. sp. as a qualifier for a sp., in which
+        #  case they will probably write out n. sp. followed by nothing
+        # this tests for a genus or subgenus name immediately beforehand
+            $name =~ s/([A-Z][a-z]+("|\)|"\)|))( n\. sp\.)$/$1 n. sp. sp./;
+
+        # hack: stash the informals and replace them with dummy values
+            my %informal;
+            my $foo;
+            if ( $name =~ /^</ )	{
+                ($informal{'genus'},$foo) = split />/,$name;
+                $informal{'genus'} =~ s/<//;
+                $name =~ s/^<[^>]*> /Genus /;
+            }
+            if ( $name =~ / <.*> / )	{
+                ($informal{'subgenus'},$foo) = split />/,$name;
+                ($foo,$informal{'subgenus'}) = split /</,$informal{'subgenus'};
+                $name =~ s/ <.*> / \(Subgenus\) /;
+            }
+            if ( $name =~ />$/ )	{
+                ($foo,$informal{'species'}) = split /</,$name;
+                $informal{'species'} =~ s/>//;
+                $name =~ s/ <.*>/ species/;
+            }
+            for my $reso ( @resos )	{
+                if ( $name =~ /^($reso)/ )	{
+                    $fields{'genus_reso'} = $reso;
+                    $name =~ s/^($reso)//;
+                    last;
+                }
+            }
+            $name =~ s/^ //;
+            my @words = split / /,$name;
+            $fields{'genus_name'} = shift @words;
+            $fields{'species_name'} = pop @words;
+            $name = join ' ',@words;
+            for my $reso ( @resos )	{
+                if ( $name =~ /($reso)$/ )	{
+                    $fields{'species_reso'} = $reso;
+                    $name =~ s/($reso)$//;
+                    last;
+                }
+            }
+            # there is either nothing left, or a subgenus
+            if ( $name && $name !~ / / )	{
+                $fields{'subgenus_name'} = $name;
+            } elsif ( $name )	{
+                for my $reso ( @resos )	{
+                    if ( $name =~ /^($reso)/ )	{
+                        $fields{'subgenus_reso'} = $reso;
+                        $name =~ s/^($reso)//;
+                        last;
+                    }
+                }
+                $fields{'subgenus_name'} = $name;
+            }
+            $fields{'subgenus_name'} =~ s/\(//;
+            $fields{'subgenus_name'} =~ s/\)//;
+            for my $f ( "genus","subgenus","species" )	{
+                if ( $fields{$f.'_name'} =~ /"/ )	{
+                    $fields{$f.'_reso'} = '"';
+                    $fields{$f.'_name'} =~ s/"//g;
+                }
+                if ( $informal{$f} )	{
+                    $fields{$f.'_name'} = $informal{$f};
+                    $fields{$f.'_reso'} = 'informal';
+                }
+                $fields{$f.'_reso'} =~ s/\\//;
+            }
+            push @genera , $fields{'genus'};
+            push @subgenera , $fields{'subgenus'};
+            push @species , $fields{'species'};
+        }
+
 		# check that all required fields have a non empty value
         if ($fields{'reference_no'} !~ /^\d+$/) {
             push @warnings, "There is no reference number for row $i, so it was skipped";
@@ -3492,7 +3637,13 @@ sub processEditOccurrences {
         $links .= "<a href=\"$WRITE_URL?action=displaySearchCollsForAdd&type=add\">Add&nbsp;another&nbsp;collection</a>";
     }
     $links .= "</b></div><br>";
-    
+
+
+	# for identifying unrecognized (new to the db) genus/species names.
+	# these are the new taxon names that the user is trying to enter, do this before insert
+	my @new_genera = TypoChecker::newTaxonNames($dbt,\@genera,'genus_name');
+	my @new_subgenera =  TypoChecker::newTaxonNames($dbt,\@subgenera,'subgenus_name');
+	my @new_species =  TypoChecker::newTaxonNames($dbt,\@species,'species_name');
 
     if ($q->param('list_collection_no')) {
         my $collection_no = $q->param("list_collection_no");
