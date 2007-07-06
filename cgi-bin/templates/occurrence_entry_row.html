@@ -1,25 +1,14 @@
 <!-- Begin occurrence entry row -->
 <tr>
+	<input type=hidden name="row_token" value="row_token">
 	<input id="collection_no" type="hidden">
 	<input name="occurrence_no" type="hidden" value="-1">
-    <input type=hidden name="row_token" value="row_token">
 
-<div hide="genus_and_species_only">
-	<td align="right"><select id="genus_reso" class="small"></select></td>
-</div>
-	<td><input name="genus_name" size="20" maxlength="255" class="small"></td>
-<div hide="genus_and_species_only">
-<div show="subgenera">
-	<td align="right"><select id="subgenus_reso" class="small"></select></td>
-	<td><input name="subgenus_name" size="20" maxlength="255" class="small"></td>
-</div>
-	<td align="right"><select id="species_reso" class="small"></select></td>
-</div>
-	<td><input id="species_name" name="species_name" size="20" maxlength="255" class="small"></td>
+	<td><input name="taxon_name" size="30" maxlength="255" class="small"></td>
 <div hide="genus_and_species_only">
 <div show="abundances">
 	<td><input name="abund_value" size="4" maxlength="255" class="small"></td>
-	<td><select id="abund_unit" class="small"></select></td>
+	<td><select id="abund_unit" class="verysmall"></select></td>
 </div>
 </div>
 	<td align="center"><input id="reference_no" type="hidden" class="small"><span style="color: lightgrey;"><span id="reference_no"></span></span></td>
