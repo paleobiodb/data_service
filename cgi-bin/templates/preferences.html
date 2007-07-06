@@ -2,24 +2,35 @@
 
 <input type=hidden name="action" value="setPreferences">
 
-<div align="center"><h2>Data entry preferences</h2></div>
+<div align="center"><h3>Data entry preferences</h3></div>
 
-<div align="center">
+<div align="center" style="padding-left: 1em; padding-right: 1em;">
+
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Displayed form sections</b></span>
+  <div class="displayPanelContent small">
+
 <table border=0 cellpadding=8>
 <table border=0 cellpadding=4>
-	<tr><td align="center" colspan=2><b>Displayed form sections</b></td></tr>
 	<tr><td valign="top"><table border=0>
 		<tr><td><input id="collection_search" type=checkbox value="yes"> Full collection search form</td></tr>
 		<tr><td><input id="taphonomy" type=checkbox value="yes"> Full taphonomy section in main form</td></tr>
 		<tr><td>Blank occurrence rows: <input id="blanks" size=5></td></tr>
-		<tr><td><input id="genus_and_species_only" type=checkbox value="yes"> Only genus and species in occurrence form</td></tr>
 	</table>
 	<td valign="top"><table border=0>
-		<tr><td><input id="subgenera" type=checkbox value="yes"> Subgenera in occurrence form</td></tr>
 		<tr><td><input id="abundances" type=checkbox value="yes"> Abundances in occurrence form</td></tr>
 		<tr><td><input id="plant_organs" type=checkbox value="yes"> Plant organs in occurrence form</td></tr>
 	</table>
-	<tr><td align="center" colspan=2><b>Prefilled checkboxes, pulldowns, and text fields</b></td></tr>
+</table>
+</table>
+</div>
+</div>
+
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Prefilled checkboxes, pulldowns, and text fields</b></span>
+  <div class="displayPanelContent small">
+<table border=0 cellpadding=8>
+<table border=0 cellpadding=4>
 	<tr><td valign="top">
 	<table border=0>
 		<tr><td>Research group: <select id="research_group"></select></td></tr>
@@ -46,6 +57,17 @@
 		Field collection? <input id="coll_meth" type=checkbox value="field collection"></td></tr>
 		<tr><td>Species name: <select id="species_name"></select></td></tr>
 	</table>
+</table>
+</table>
+</div>
+</div>
+
+
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Prefilled checkboxes, pulldowns, and text fields</b></span>
+  <div class="displayPanelContent small">
+<table border=0 cellpadding=8>
+<table border=0 cellpadding=4>
 	<tr><td align="center" colspan=2><b>Prefilled comments fields</b></td></tr>
 	<tr><td align="center" valign="top" colspan=2>
 	<table border=0>
@@ -54,6 +76,16 @@
 		<tr><td>Complete lithology description<br><textarea id="lithdescript" rows=2 wrap=virtual cols=100></textarea></td></tr>
 	</table>
 	</td></tr>
+</table>
+</table>
+</div>
+</div>
+
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader"><b>Prefilled checkboxes, pulldowns, and text fields</b></span>
+  <div class="displayPanelContent small">
+<table border=0 cellpadding=8>
+<table border=0 cellpadding=4>
 	<tr><td align="center" colspan=2><b>Map view options</b></td></tr>
 	<tr><td align="center">
 	<table border=0>
@@ -82,10 +114,13 @@
 	</table>
 	</td></tr>
 </td></tr>
-<tr>
-<td align="center" colspan=2><input type=submit value="Submit preferences"></td></tr>
 </table>
 </table>
+</div>
+</div>
+
+<p style="padding-left: 20em;"><input type=submit value="Submit preferences"></p>
+
 </div>
 </form>
 
