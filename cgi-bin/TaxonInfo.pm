@@ -702,17 +702,17 @@ sub doCollections{
             $res .= " - " . "<a href=\"$READ_URL?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_hash->{$min}->{interval_name}</a>";
         }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
-        $res .= $interval_hash->{$max}->{lower_boundary} . " - ";
-        $res =~ s/0+ / /;
-        $res =~ s/\. /.0 /;
+        my $maxmin .= $interval_hash->{$max}->{lower_boundary} . " - ";
+        $maxmin =~ s/0+ / /;
+        $maxmin =~ s/\. /.0 /;
         if ( $max == $min )	{
-            $res .= $interval_hash->{$max}->{upper_boundary};
+            $maxmin .= $interval_hash->{$max}->{upper_boundary};
         } else	{
-            $res .= $interval_hash->{$min}->{upper_boundary};
+            $maxmin .= $interval_hash->{$min}->{upper_boundary};
         }
-            $res .= "</nobr></span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
-        $res =~ s/0+</</;
-        $res =~ s/\.</.0</;
+        $maxmin =~ s/0+$//;
+        $maxmin =~ s/\.$/.0/;
+        $res .= $maxmin . "</nobr></span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
 
         $row->{"country"} =~ s/ /&nbsp;/;
         $res .= $row->{"country"};
