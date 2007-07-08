@@ -2521,7 +2521,7 @@ sub displayOccurrenceAddEdit {
 
 	# get the occurrences right away because we need to make sure there
 	#  aren't too many to be displayed
-	$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no";
+	$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no ORDER BY occurrence_no ASC";
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 
