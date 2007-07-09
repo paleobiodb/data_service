@@ -1318,10 +1318,10 @@ sub displayTaxonClassification {
             $output .= "</td></tr></table>";
            
         } else {
-            $output .= "<i>No classification data are available</i>";
+            $output .= "<p><i>No classification data are available</i></p>";
         }
     } else {
-        $output .= "<i>No classification data are available</i>";
+        $output .= "<p><i>No classification data are available</i></p>";
     }
 
     return $output;
@@ -1541,7 +1541,7 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
     }
 
     if (!$output) {
-        $output = "<i> No related taxa found </i>";
+        $output = "<p><i>No related taxa found</i></p>";
     } 
 
     if ($orig_no) {
