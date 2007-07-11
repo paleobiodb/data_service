@@ -20,11 +20,14 @@ function checkForm()	{
 
 			// check for dupes
 			for ( var j=0; j < i; j++ )	{
-				if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName && frm.reid_no[j].value == 0 )	{
-					errors += "* You can't enter exactly the same name twice";
+				if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName && frm.reid_no[i].value == 0 && frm.reid_no[j].value == 0 )	{
+					errors += "* You can't enter exactly the same name twice\n";
+				} else if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName && frm.occurrence_no[i].value == frm.occurrence_no[j].value )	{
+					errors += "* An occurrence and its reID can't have the same name\n";
 				}
 			}
 
+			lasterrors = errors;
 			if ( /^(((\?|aff\.|cf\.|ex gr\.|n\. gen\.|n\. sp\.|sensu lato)( ))|)[A-Z][a-z]+$/.test( taxonName ) )	{
 				errors += "* Enter sp. or indet. for indeterminate species or higher taxa";
 			} else if ( ! / /.test( taxonName ) )	{
@@ -143,7 +146,6 @@ function checkForm()	{
 			if ( errors != lasterrors )	{
 				errors += "\n    (" + frm.taxon_name[i].value + ")\n";
 			}
-			lasterrors = errors;
 		}
 	}
 
