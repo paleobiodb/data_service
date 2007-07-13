@@ -1624,12 +1624,14 @@ sub queryDatabase {
             # Don't include $taxon_where in my () above, it needs to stay in scope
             # so it can be used much later in function
             $taxon_where = $self->getTaxonString($q->param('taxon_name'),$q->param('exclude_taxon_name'));
-            my $occ_sql = $taxon_where;
-            my $reid_sql = $taxon_where;
-            $occ_sql =~ s/table\./o\./g;
-            $reid_sql =~ s/table\./re\./g;
-            push @occ_where, $occ_sql;
-            push @reid_where, $reid_sql;
+            if ( $taxon_where )	{
+                my $occ_sql = $taxon_where;
+                my $reid_sql = $taxon_where;
+                $occ_sql =~ s/table\./o\./g;
+                $reid_sql =~ s/table\./re\./g;
+                push @occ_where, $occ_sql;
+                push @reid_where, $reid_sql;
+            }
         }
 
         if ( $q->param('pubyr') > 0 ) {
