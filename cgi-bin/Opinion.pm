@@ -12,7 +12,6 @@ use DBTransactionManager;
 use TypoChecker;
 use CGI::Carp;
 use Data::Dumper;
-use AuthorNames;
 use TaxaCache;
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD);
@@ -1489,7 +1488,18 @@ sub submitOpinionForm {
             $end_message .= "Warning: " . $warnings[0];
         }
         $end_message .= "</DIV>";
-    }  
+    }
+
+    # the authority data are very useful for deciding whether to also edit them
+    #  JA 15.7.07
+    my $auth = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{child_spelling_no}},['author1last','author2last','otherauthors','pubyr']);
+    my $authors = $auth->{'author1last'};
+    if ( $auth->{'otherauthors'} )	{
+        $authors .= " et al.";
+    } elsif ( $auth->{'author2last'} )	{
+        $authors .= " and " . $auth->{'author2last'};
+    }
+    $authors .= " " . $auth->{'pubyr'};
 
     my $style = qq| style="padding-top: 0.75em;"|;
     $end_message .= qq|
@@ -1499,7 +1509,7 @@ sub submitOpinionForm {
   <p><b>Name functions</b></p>
   <ul>
   <li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName</a></b></li>
+  <br><li><b><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName $authors</a></b></li>
   <br><li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
   <br><li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
   <br><li><b><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></b></li>   
