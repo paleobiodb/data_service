@@ -16,9 +16,11 @@ sub processSanityCheck	{
 	my %dataneeded2;
 	my %dataneeded3;
 
+	$| = 1;
+
 	my $lft;
 	my $rgt;
-	my $lftrgt2 = "AND (lft+1<rgt OR taxon_rank='genus')";
+	my $lftrgt2;
 	my $error_message;
 	if ( ! $q->param('taxon_name') )	{
 		$error_message = "You must enter a taxon name.";
@@ -54,6 +56,38 @@ sub processSanityCheck	{
 		return;
 	}
 
+	# many disused names are not marked as invalid and still include higher
+	#  taxa not marked as valid, we need to identify them the hard way
+	$sql = "SELECT a.taxon_no no,taxon_rank,taxon_name,lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') ORDER BY taxon_rank";
+	my @rows = @{$dbt->getData($sql)};
+	# we need all taxa because we'll check occurrences later, so synonyms
+	#  and taxa at all ranks are okay here
+	$sql = "SELECT a.taxon_no no,taxon_rank,lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>=$lft AND rgt<=$rgt $lftrgt2";
+	my @rows2 = @{$dbt->getData($sql)};
+	my %disused;
+	my %belongsto;
+	my %ttposRanks;
+	for my $row ( @rows )	{
+		for my $ttpos ( $row->{lft}..$row->{rgt} )	{
+			$ttposRanks{$ttpos}{$row->{taxon_name}} = $row->{taxon_rank};
+		}
+		$disused{$row->{taxon_name}} = $row->{no};
+	}
+	for my $row2 ( @rows2 )	{
+		my $ttpos = $row2->{lft};
+		if ( $row2->{taxon_rank} =~ /genus|species/ )	{
+			for my $highername ( keys %{$ttposRanks{$ttpos}} )	{
+				delete $disused{$highername};
+			}
+		}
+		for my $highername ( keys %{$ttposRanks{$ttpos}} )	{
+			push @{$belongsto{$ttposRanks{$ttpos}{$highername}}{$row2->{no}}} , $highername;
+		}
+	}
+	if ( %disused )	{
+		$lftrgt2 .= " AND t.taxon_no NOT IN (" . join(',',values(%disused)) . ")";
+	}
+	
 	# author and year known
 	$sql = "SELECT taxon_rank rank,count(*) c FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority='YES' OR (author1last IS NOT NULL AND author1last!='')) GROUP BY taxon_rank";
 	my @rows = @{$dbt->getData($sql)};
@@ -105,13 +139,11 @@ sub processSanityCheck	{
 		}
 	}
 
-
+	# count taxa with occurrences
 	# joining taxa_list_cache and occurrences is incredibly slow, so
-	#  here's a two-step workaround
-	# the key tool is a matrix where the row index is the tree cache
-	#   primary key, and 0 and 1 columns are the left and right of the
-	#   genus spanning this position, if there is one
-	# this will fail if for some reason valid genera overlap
+	#  we need to go through all the occurrences manually and compare
+	#  them to the lists of higher taxa at each taxa_tree_cache
+	#  position saved earlier
 	# while we're at it, we count taxa missing extant data and taxa
 	#  where the primary ref is not the authority
 	$sql = "SELECT lft,rgt,taxon_rank rank,taxon_name name,extant,ref_is_authority FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no and lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') GROUP BY t.taxon_no";
@@ -121,12 +153,7 @@ sub processSanityCheck	{
 	my %refis;
 	%dataneeded = ();
 	for my $row ( @rows )	{
-		for my $i ( $row->{lft}..$row->{rgt} )	{
-			$LR{$row->{rank}}[$i][0] = $row->{lft};
-			$LR{$row->{rank}}[$i][1] = $row->{rgt};
-			$LR{$row->{rank}}[$i][2] = $row->{name};
-			$dataneeded{$row->{rank}}{$row->{name}}++;
-		}
+		$dataneeded{$row->{rank}}{$row->{name}}++;
 		$extant{$row->{rank}}{$row->{extant}}++;
 		if ( $row->{extant} !~ /yes|no/i )	{
 			$dataneeded2{$row->{rank}}{$row->{name}}++;
@@ -137,21 +164,23 @@ sub processSanityCheck	{
 			$dataneeded3{$row->{rank}}{$row->{name}}++;
 		}
 	}
-	$sql = "SELECT lft,rgt FROM occurrences o,taxa_tree_cache t WHERE o.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt GROUP BY t.taxon_no";
+	$sql = "SELECT lft,rgt,t.taxon_no no FROM occurrences o,taxa_tree_cache t WHERE o.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 GROUP BY t.taxon_no";
 	my @rows = @{$dbt->getData($sql)};
-	$sql = "SELECT lft,rgt FROM reidentifications r,taxa_tree_cache t WHERE r.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt GROUP BY t.taxon_no";
+	$sql = "SELECT lft,rgt,t.taxon_no no FROM reidentifications r,taxa_tree_cache t WHERE r.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 GROUP BY t.taxon_no";
 	push @rows , @{$dbt->getData($sql)};
 	my %sampled;
 	for my $row ( @rows )	{
 		for my $rank ( @ranks )	{
-			if ( $LR{$rank}[$row->{lft}][0] > 0 && $LR{$rank}[$row->{lft}][1] > 0 )	{
-				if ( $LR{$rank}[$row->{lft}][0] == $LR{$rank}[$row->{rgt}][0] && $LR{$rank}[$row->{lft}][1] == $LR{$rank}[$row->{rgt}][1] )	{
-					$sampled{$rank}{$LR{$rank}[$row->{lft}][0]." ".$LR{$rank}[$row->{lft}][1]}++;
-					delete $dataneeded{$rank}{$LR{$rank}[$row->{lft}][2]};
+			if ( $belongsto{$rank}{$row->{no}} )	{
+				my @highers = @{$belongsto{$rank}{$row->{no}}};
+				for my $h ( @highers )	{
+					$sampled{$rank}{$h}++;
+					delete $dataneeded{$rank}{$h};
 				}
 			}
 		}
 	}
+
 	my %withoccs;
 	for my $rank ( @ranks )	{
 		my @temp = keys %{$sampled{$rank}};
