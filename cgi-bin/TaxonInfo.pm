@@ -3085,8 +3085,8 @@ sub getDiagnoses {
 
 
 # Returns (higher) order taxonomic names that are no longer considered valid (disused)
-# These higher order names most be the most recent spelling of the most senior
-# synonym, since thats what the taxa_list_cache stores.  Taxonomic names
+# These higher order names must be the most recent spelling of the most senior
+# synonym, since that's what the taxa_list_cache stores.  Taxonomic names
 # that don't fall into this category aren't even valid in the first place
 # so there is no point in passing them in.
 # This is figured out algorithmically.  If a higher order name used to have
@@ -3105,8 +3105,8 @@ sub disusedNames {
         @taxon_nos = ($arg);
     }
 
-
     my %disused = ();
+
     if (@taxon_nos) {
         my %has_children = ();
         my %taxon_nos = ();
@@ -3114,8 +3114,27 @@ sub disusedNames {
         my %map_orig = ();
         my ($sql,@results);
 
-
         my $taxon_nos_sql = join(",",map{int($_)} @taxon_nos);
+
+        # first a very simple test: higher taxa with no children whatsoever
+        #  are disused by definition JA 16.7.07
+        $sql = "SELECT lft,rgt,a.taxon_no taxon_no FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND a.taxon_no IN ($taxon_nos_sql)";
+        @results = @{$dbt->getData($sql)};
+
+        @taxon_nos = ();
+        for my $row ( @results )	{
+            if ( $row->{lft} == $row->{rgt} - 1 )	{
+                $disused{$row->{taxon_no}} = 1;
+            } else	{
+                push @taxon_nos , $row->{taxon_no};
+            }
+        }
+
+        if ( ! @taxon_nos )	{
+            return \%disused;
+        }
+
+        $taxon_nos_sql = join(",",map{int($_)} @taxon_nos);
 
         # Since children will be linked to the original combination taxon no, get those and append them to the list
         # The map_orig array refers the original combinations 
