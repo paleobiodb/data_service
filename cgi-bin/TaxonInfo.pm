@@ -157,12 +157,13 @@ sub displayTaxonInfoResults {
 
 
     # Get most recently used name of taxon
-    my ($taxon_name,$common_name,$taxon_rank);
+    my ($spelling_no,$taxon_name,$common_name,$taxon_rank);
     if ($taxon_no) {
         my $orig_taxon_no = getOriginalCombination($dbt,$taxon_no);
         $taxon_no = getSeniorSynonym($dbt,$orig_taxon_no);
         # This actually gets the most correct name
         my $taxon = getMostRecentSpelling($dbt,$taxon_no);
+        $spelling_no = $taxon->{'taxon_no'};
         $taxon_name = $taxon->{'taxon_name'};
         $common_name = $taxon->{'common_name'};
         $taxon_rank = $taxon->{'taxon_rank'};
@@ -285,7 +286,7 @@ sub displayTaxonInfoResults {
         print "<p>";
         print "<div>";
         print "<center>";
-	print displayRelatedTaxa($dbt, $taxon_no, $taxon_name,$is_real_user);
+	print displayRelatedTaxa($dbt, $taxon_no, $spelling_no, $taxon_name,$is_real_user);
     	print "<a href=\"$READ_URL?action=beginTaxonInfo\">".
 	    	  "<b>Get info on another taxon</b></a></center>\n";
         if($s->isDBMember()) {
@@ -1330,11 +1331,12 @@ sub displayTaxonClassification {
 # Separated out from classification section PS 09/22/2005
 sub displayRelatedTaxa {
 	my $dbt = shift;
-    my $dbh = $dbt->dbh;
+	my $dbh = $dbt->dbh;
 	my $orig_no = (shift or ""); #Pass in original combination no
-    my $taxon_name = shift;
-    my $is_real_user = shift;
-    my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
+        my $spelling_no = (shift or "");
+	my $taxon_name = shift;
+	my $is_real_user = shift;
+	my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
 
     my $output = "";
 
@@ -1412,7 +1414,7 @@ sub displayRelatedTaxa {
         @sisters = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @sisters;
         if (@sisters) {
             foreach my $record (@sisters) {
-                next if ($record->{'taxon_no'} == $focal_taxon_no);
+                next if ($record->{'taxon_no'} == $spelling_no);
                 if ($focal_taxon_rank ne $record->{'taxon_rank'}) {
 #                    PBDBUtil::debug(1,"rank mismatch $focal_taxon_rank -- $record->{taxon_rank} for sister $record->{taxon_name}");
                 } else {
