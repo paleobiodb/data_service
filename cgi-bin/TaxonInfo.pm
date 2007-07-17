@@ -276,9 +276,7 @@ sub displayTaxonInfoResults {
 	# classification
 	if($modules{1}) {
         print '<div id="panel1" class="panel">';
-		print '<div align="center"><h3>Classification</h3></div>';
-        #print '<div align="center" style=\"border-bottom-width: 1px; border-bottom-color: red; border-bottom-style: solid;\">';
-        print '<div align="center">';
+        print '<div align="center" style="margin-top: 1em;">';
 		print displayTaxonClassification($dbt, $taxon_no, $taxon_name,$is_real_user);
 
         my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
@@ -320,23 +318,22 @@ sub displayTaxonInfoResults {
 
 	# synonymy
 	if($modules{2}) {
-        print '<div id="panel2" class="panel">';
-		print "<div align=\"center\"><h3>Taxonomic history</h3></div>\n";
-        print '<div align="center">';
+        print qq|<div id="panel2" class="panel";">
+<div class="displayPanel" style="margin-top: 1em; padding-top: 1em;">
+<div align="center" class="displayPanelContent">
+|;
         print displayTaxonHistory($dbt, $taxon_no, $is_real_user);
         if ( $taxon_no )	{
             print "<p>Is something missing? <a href=\"$READ_URL?user=Guest&amp;action=displayPage&amp;page=join_us\">Join the Paleobiology Database</a> and enter the data</p>\n";
         } else	{
             print "<p>Please <a href=\"$READ_URL?user=Guest&amp;action=displayPage&amp;page=join_us\">join the Paleobiology Database</a> and enter some data</p>\n";
         }
-        print "</div>\n";
-        print "</div>\n";
+        print "</div>\n</div>\n</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
 	}
 
 	if ($modules{3}) {
         print '<div id="panel3" class="panel">';
-		print "<div align=\"center\"><h3>Synonymy</h3></div>\n";
         print '<div align="center">';
     	print displaySynonymyList($dbt, $taxon_no);
         print "</div>\n";
@@ -346,7 +343,6 @@ sub displayTaxonInfoResults {
     
     if ($modules{4}) {
         print '<div id="panel4" class="panel">';
-		print "<div align=\"center\"><h3>Morphology</h3></div>\n";
         print '<div align="center">';
         print displayDiagnoses($dbt,$taxon_no);
         print "<br>\n";
@@ -359,7 +355,6 @@ sub displayTaxonInfoResults {
     }
     if ($modules{5}) {
         print '<div id="panel5" class="panel">';
-		print "<div align=\"center\"><h3>Ecology and taphonomy</h3></div>\n";
         print '<div align="center">';
         unless ($quick) {
 		    print displayEcology($dbt,$taxon_no,$in_list);
@@ -377,7 +372,6 @@ sub displayTaxonInfoResults {
 	# map
     if ($modules{6}) {
         print '<div id="panel6" class="panel">';
-		print "<div align=\"center\"><h3>Map</h3></div>\n";
         print '<div align="center">';
 
         if ($is_real_user) {
@@ -415,7 +409,6 @@ sub displayTaxonInfoResults {
 
     if ($modules{8}) {
         print '<div id="panel8" class="panel">';
-		print "<div align=\"center\"><h3>Images</h3></div>\n";
         print '<div align="center">';
         doThumbs($dbt,$in_list);
         print "</div>\n";
@@ -508,7 +501,7 @@ sub doThumbs {
         }
         print "</td></tr></table>";
     } else {
-        print "<i>No images are available</i>";
+        print "<p class=\"verylarge\"><i>No images are available</i></p>";
     }
 } 
 
@@ -2281,11 +2274,17 @@ sub displayEcology	{
 	my $dbt = shift;
 	my $taxon_no = shift;
 
-	unless ($taxon_no){
-		return "<i>No ecological data are available</i>";
-	}
+    my $output .= qq|<div class="displayPanel" align="left" style="width: 46em; margin-top: 2em; padding-top: 1em; padding-bottom: 1em;">
+<div align="center" class="displayPanelContent">
+|;
 
-    my $output = "";
+	unless ($taxon_no){
+                $output .= qq|<i>No ecological data are available</i>
+</div>
+</div>
+|;
+		return $output;
+	}
 
 	# get the field names from the ecotaph table
     my @ecotaphFields = $dbt->getTableColumns('ecotaph');
@@ -2294,10 +2293,12 @@ sub displayEcology	{
     my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields,'get_basis');
     my $ecotaphVals = $eco_hash->{$taxon_no};
 
-
-
 	if ( ! $ecotaphVals )	{
-		return "<i>No ecological data are available</i>";
+                $output .= qq|<i>No ecological data are available</i>
+</div>
+</div>
+|;
+		return $output;
 	} else	{
         # Convert units for display
         foreach ('minimum_body_mass','maximum_body_mass','body_mass_estimate') {
@@ -2331,19 +2332,6 @@ sub displayEcology	{
         my %all_ranks = ();
 
 		$output .= "<table cellpadding=4 width=600>";
-        $output .= "<tr><td colspan=2>";
-        if (scalar(@references) == 1) {
-            $output .= "<b>Reference:</b> ";
-        } elsif (scalar(@references) > 1) {
-            $output .= "<b>References:</b> ";
-        }
-        for(my $i=0;$i<scalar(@references);$i++) {
-            my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$references[$i]";
-            my $ref = ${$dbt->getData($sql)}[0];
-            $references[$i] = Reference::formatShortRef($ref,'link_id'=>1);
-        }
-        $output .= join(", ",@references);
-        $output .= "</td></tr>";
         $output .= "<tr>";
 		my $cols = 0;
 		foreach my $i (0..$#ecotaphFields)	{
@@ -2386,9 +2374,23 @@ sub displayEcology	{
         $html =~ s/, $//;
         $output .= $html;
         $output .= "</td></tr>"; 
+        $output .= "<tr><td colspan=2>";
+        if (scalar(@references) == 1) {
+            $output .= "<b>Reference:</b> ";
+        } elsif (scalar(@references) > 1) {
+            $output .= "<b>References:</b> ";
+        }
+        for(my $i=0;$i<scalar(@references);$i++) {
+            my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$references[$i]";
+            my $ref = ${$dbt->getData($sql)}[0];
+            $references[$i] = Reference::formatShortRef($ref,'link_id'=>1);
+        }
+        $output .= join(", ",@references);
+        $output .= "</td></tr>";
 		$output .= "</table>\n";
 	}
 
+        $output .= "\n</div>\n</div>\n";
 	return $output;
 
 }
@@ -2424,39 +2426,91 @@ sub displayMeasurements {
     my $p_table = Measurement::getMeasurementTable(\@specimens);
 
     my $str = "";
+
     if (@specimens) {
-        my $temp;
-        while (my($part,$m_table)=each %$p_table) {
-            $temp++;
-            my $part_str = ($part) ? "<p><b>Part: </b>$part</p>" : "";
-            if ( $temp > 1 )	{
-              $part_str = "<hr>\n" . $part_str;
+
+        my %distinct_parts = ();
+        my %errorSeen = ();
+        my $minHeader = "";
+        my $maxHeader = "";
+        my $medHeader = "";
+        my $defaultError = "";
+        while (my($part,$m_table)=each %$p_table)	{
+            if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
+                $distinct_parts{$part}++;
             }
-            $str .= "<table><tr><td colspan=6 style=\"padding-bottom: .75em;\">$part_str<b>Specimens measured:</b> $m_table->{specimens_measured}</td></tr>".
-                    "<tr><th></th><th>mean</th><th>minimum</th><th>maximum</th><th>median</th><th>error</th><th></th></tr>";
+            foreach my $type (('length','width','height','diagonal','inflation')) {
+                if ( $m_table->{$type}{'min'} )	{
+                    $minHeader = "minimum";
+                }
+                if ( $m_table->{$type}{'max'} )	{
+                    $maxHeader = "maximum";
+                }
+                if ( $m_table->{$type}{'median'} )	{
+                    $medHeader = "median";
+                }
+                if ( $m_table->{$type}{'error_unit'} )	{
+                    $errorSeen{$m_table->{$type}{'error_unit'}}++;
+                    my @errors = keys %errorSeen;
+                    if ( $#errors == 0 )	{
+                        $m_table->{$type}{'error_unit'} =~ s/^1 //;
+                        $defaultError = $m_table->{$type}{'error_unit'};
+                    } else	{
+                        $defaultError = "";
+                    }
+                }
+            }
+        }
+        my @part_list = keys %distinct_parts;
+        @part_list = sort { $a cmp $b } @part_list;
+        # mammal tooth measurements should always be listed in this fixed order
+        unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
+
+        my $temp;
+        $str .= qq|<div class="displayPanel" align="left" style="width: 36em;">
+<span class="displayPanelHeader"><b class="large">Measurements</b></span>
+<div align="center" class="displayPanelContent">
+|;
+        $str .= "<table cellspacing=\"2px;\"><tr><th>part</th><th align=\"left\">N</th><th>mean</th><th>$minHeader</th><th>$maxHeader</th><th>$medHeader</th><th>$defaultError</th><th></th></tr>";
+        for my $part ( @part_list )	{
+            my $m_table = %$p_table->{$part};
+            if ( ! $m_table )	{
+                next;
+            }
+            $temp++;
 
             foreach my $type (('length','width','height','diagonal','inflation')) {
                 if (exists ($m_table->{$type})) {
-                    $str .= "<tr><td><b>$type</b></td>";
+                    $str .= "<tr><td>$part $type</td>";
+                    $str .= "<td>$m_table->{specimens_measured}</td>";
                     foreach my $column (('average','min','max','median','error')) {
                         my $value = $m_table->{$type}{$column};
                         if ($value <= 0) {
                             $str .= "<td align=\"center\">-</td>";
                         } else {
-                            $value = sprintf("%.4f",$value);
-                            $value =~ s/0+$//;
-                            $value =~ s/\.$//;
+                            if ( $value < 1 )	{
+                                $value = sprintf("%.3f",$value);
+                            } elsif ( $value < 10 )	{
+                                $value = sprintf("%.2f",$value);
+                            } else	{
+                                $value = sprintf("%.1f",$value);
+                            }
                             $str .= "<td align=\"center\">$value</td>";
                         }
                     }
-                    if ($m_table->{$type}{'error'}) {
-                        $str .= "<td align=\"center\">($m_table->{$type}{error_unit})</td>";
+                    $str .= qq|<td align="center" style="white-space: nowrap;">|;
+                    if ( $m_table->{$type}{'error'} && ! $defaultError ) {
+                        $m_table->{$type}{error_unit} =~ s/^1 //;
+                        $str .= qq|$m_table->{$type}{error_unit}|;
                     }
-                    $str .= '</tr>';
+                    $str .= '</td></tr>';
                 }
             }
-            $str .= "</table><br>";
         }
+        $str .= qq|</table><br>
+</div>
+</div>
+|;
     } else {
         $str .= "<i>No measurement data are available</i>";
     }
@@ -2467,8 +2521,13 @@ sub displayMeasurements {
 sub displayDiagnoses {
     my ($dbt,$taxon_no) = @_;
     my $str = "";
+    $str .= qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+<span class="displayPanelHeader"><b class="large">Diagnosis</b></span>
+<div class="displayPanelContent">
+|;
+    my @diagnoses = ();
     if ($taxon_no) {
-        my @diagnoses = getDiagnoses($dbt,$taxon_no);
+        @diagnoses = getDiagnoses($dbt,$taxon_no);
 
         if (@diagnoses) {
             $str .= "<table cellspacing=5>\n";
@@ -2488,190 +2547,140 @@ sub displayDiagnoses {
             $str .= "</table>\n";
         } 
     } 
-    if (!$str) {
-        $str .= "<div align=\"center\"><i>No diagnosis data are available</i></div>";
+    if ( ! $taxon_no || ! @diagnoses ) {
+        $str .= "<div align=\"center\"><i>No diagnoses are available</i></div>";
     }
+    $str .= "\n</div>\n</div>\n";
     return $str;
 }
 
 
 # JA 11-12,14.9.03
+# rewritten and shortened 16.7.07 JA
+# new version assumes you only ever want to know who named or classified the
+#  taxon and its synonyms, and not who assigned something to one of them
 sub displaySynonymyList	{
 	my $dbt = shift;
     # taxon_no must be an original combination
 	my $taxon_no = (shift or "");
-    my $is_real_user = shift;
+	my $is_real_user = shift;
 	my $output = "";
 
-    unless ($taxon_no) {
-        return "<i>No synonymy data are available</i>";
-    }
-
-    # Find synonyms
-    my @syns = getJuniorSynonyms($dbt,$taxon_no);
-
-    # Push the focal taxon onto the list as well
-    push @syns, $taxon_no;
-
-    # go through list finding all "recombined as" something else cases for each
-    # need to do this because synonyms might have their own recombinations, and
-    #  the original combination might have alternative combinations
-    # don't do this if the parent is actually the focal taxon
-	my @synparents;
-	foreach my $syn (@syns)	{
-		my $sql = "SELECT child_spelling_no FROM opinions WHERE child_no=" . $syn . " AND child_spelling_no != " . $taxon_no;
-		my @synparentrefs = @{$dbt->getData($sql)};
-		foreach my $synparentref ( @synparentrefs )	{
-			push @synparents, $synparentref->{'child_spelling_no'};
-		}
+	unless ($taxon_no) {
+		return "<i>No synonymy data are available</i>";
 	}
 
-# save each "recombined as" taxon to the list
-	push @syns, @synparents;
+	# Find synonyms
+	my @syns = getJuniorSynonyms($dbt,$taxon_no);
 
+	# Push the focal taxon onto the list as well
+	push @syns, $taxon_no;
 
-# now we have a list of the focal taxon, its alternative combinations, its
-#  synonyms, and their alternative combinations
-# go through the list finding all instances of each name's use as a parent
-#  in a recombination or synonymy
-# so, we are getting the INSTANCES of opinions and not just the alternative names,
-#  which we already know
+	my $syn_list = join(',',@syns);
+
+	# get all opinions
+	my $sql = "SELECT child_no,child_spelling_no,status,IF (ref_has_opinion='YES',r.author1last,o.author1last) author1last,IF (ref_has_opinion='YES',r.author2last,o.author2last) author2last,IF (ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors,IF (ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,pages,figures,ref_has_opinion,o.reference_no FROM opinions o,refs r WHERE o.reference_no=r.reference_no AND child_no IN ($syn_list)";
+	my @opinionrefs = @{$dbt->getData($sql)};
+
+	# a list of all spellings used is needed to get the names from the
+	#  authorities table, which we have to hit anyway
+
+	my %spelling_nos = ();
+	my %orig_no = ();
+	for my $or ( @opinionrefs )	{
+		$spelling_nos{$or->{child_spelling_no}}++;
+		$orig_no{$or->{child_spelling_no}} = $or->{child_no};
+	}
+
+	my $spelling_list = join(',',keys %spelling_nos);
+
+	# get all authority records, including those of variant spellings
+	# recombinations will be used to format opinions, and will be
+	#  trimmed out themselves later
+	my $sql = "SELECT taxon_no,taxon_name,taxon_rank,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,pages,figures,ref_is_authority,a.reference_no FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN ($spelling_list)";
+	my @authorityrefs = @{$dbt->getData($sql)};
+
+	# do some initial formatting and create a name lookup hash
+	my %spelling = ();
+	my %rank = ();
 	my %synline = ();
-	foreach my $syn (@syns)	{
-		my $sql = "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','invalid subgroup of','misspelling of') AND parent_spelling_no=$syn)";
-        $sql .= " UNION ";
-		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE status IN ('subjective synonym of','objective synonym of','replaced by','invalid subgroup of','misspelling of') AND parent_no=$syn)";
-        $sql .= " UNION ";
-		$sql .= "(SELECT author1last,author2last,otherauthors,pubyr,pages,figures,ref_has_opinion,reference_no FROM opinions WHERE child_spelling_no=$syn AND status IN ('belongs to','recombined as','rank changed as','corrected as'))";
-		my @userefs =  @{$dbt->getData($sql)};
+	for my $ar ( @authorityrefs )	{
+		$spelling{$ar->{taxon_no}} = $ar->{taxon_name};
+		$rank{$ar->{taxon_no}} = $ar->{taxon_rank};
+		if ( $ar->{taxon_no} == $orig_no{$ar->{taxon_no}} )	{
+			my $synkey = buildSynLine($ar);
+			$synline{$synkey}->{TAXON} = $ar->{taxon_name};
+			$synline{$synkey}->{YEAR} = $ar->{pubyr};
+			$synline{$synkey}->{AUTH} = $ar->{author1last} . " " . $ar->{author2last};
+			$synline{$synkey}->{PAGES} = $ar->{pages};
+		}
+	}
+	# go through the opinions only now that you have the names
+	for my $or ( @opinionrefs )	{
+		if ( $or->{status} =~ /belongs to/ )	{
+			$or->{taxon_name} = $spelling{$or->{child_spelling_no}};
+			$or->{taxon_rank} = $rank{$or->{child_spelling_no}};
+			my $synkey = buildSynLine($or);
+			$synline{$synkey}->{TAXON} = $or->{taxon_name};
+			$synline{$synkey}->{YEAR} = $or->{pubyr};
+			$synline{$synkey}->{AUTH} = $or->{author1last} . " " . $or->{author2last};
+			$synline{$synkey}->{PAGES} = $or->{pages};
+		}
+	}
 
-		my $parent = getTaxa($dbt,{'taxon_no'=>$syn});
+	
+	sub buildSynLine	{
+		my $refdata = shift;
+		my $synkey = "";
 
-		my $parent_name = $parent->{'taxon_name'};
-		my $parent_rank = $parent->{'taxon_rank'};
-		if ( $parent_rank =~ /genus|species/ )	{
-			$parent_name = "<i>" . $parent_name . "</i>";
-		} 
-		foreach my $useref ( @userefs )	{
-			my $synkey = "";
-			my $mypubyr = "";
-			my $myauth = "";
-			my $mypages = $useref->{pages};
-			if ( $useref->{pubyr} )	{
-				$synkey = "<td>" . $useref->{pubyr} . "</td><td>" . $parent_name . " " . $useref->{author1last};
-				if ( $useref->{otherauthors} )	{
-					$synkey .= " et al.";
-				} elsif ( $useref->{author2last} )	{
-					$synkey .= " and " . $useref->{author2last};
-				}
-				$mypubyr = $useref->{pubyr};
-				$myauth = $useref->{author1last};
-		# no pub data, get it from the refs table
+		if ( $refdata->{pubyr} )	{
+			$synkey = "<td>" . $refdata->{pubyr} . "</d><td>";
+			if ( $refdata->{taxon_rank} =~ /genus|species/ )	{
+ 				$synkey .= "<i>";
+			}
+			$synkey .= $refdata->{taxon_name};
+			if ( $refdata->{taxon_rank} =~ /genus|species/ )	{
+ 				$synkey .= "</i>";
+			}
+			$synkey .= " ";
+			my $authorstring = $refdata->{author1last};;
+			if ( $refdata->{otherauthors} )	{
+				$authorstring .= " et al.";
+			} elsif ( $refdata->{author2last} )	{
+				$authorstring .= " and " . $refdata->{author2last};
+			}
+			if ( $refdata->{ref_is_authority} eq "YES" || $refdata->{ref_has_opinion} eq "YES" )	{
+				$authorstring = "<a href=\"$READ_URL?action=displayReference&amp;reference_no=$refdata->{reference_no}&amp;is_real_user=$is_real_user\">" . $authorstring . "</a>";
+			}
+			$synkey .= $authorstring;
+		}
+		if ( $refdata->{pages} )	{
+			if ( $refdata->{pages} =~ /[ -]/ )	{
+				$synkey .= " pp. " . $refdata->{pages};
 			} else	{
-				my $sql = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $useref->{reference_no};
-				my $refref = @{$dbt->getData($sql)}[0];
-				$synkey = "<td>" . $refref->{pubyr} . "</td><td>" . $parent_name . "<a href=\"$READ_URL?action=displayReference&amp;reference_no=$useref->{reference_no}&amp;is_real_user=$is_real_user\"> " . $refref->{author1last};
-				if ( $refref->{otherauthors} )	{
-					$synkey .= " et al.";
-				} elsif ( $refref->{author2last} )	{
-					$synkey .= " and " . $refref->{author2last};
-				}
-                $synkey .= "</a>";
-				$mypubyr = $refref->{pubyr};
-				$myauth = $refref->{author1last};
+				$synkey .= " p. " . $refdata->{pages};
 			}
-			if ( $useref->{pages} )	{
-				if ( $useref->{pages} =~ /[ -]/ )	{
-					$synkey .= " pp. " . $useref->{pages};
-				} else	{
-					$synkey .= " p. " . $useref->{pages};
-				}
-			}
-			if ( $useref->{figures} )	{
-				if ( $useref->{figures} =~ /[ -]/ )	{
-					$synkey .= " figs. " . $useref->{figures};
-				} else	{
-					$synkey .= " fig. " . $useref->{figures};
-				}
-			}
-			$synline{$synkey}->{TAXON} = $parent_name;
-			$synline{$synkey}->{YEAR} = $mypubyr;
-			$synline{$synkey}->{AUTH} = $myauth;
-			$synline{$synkey}->{PAGES} = $mypages;
 		}
-	}
-
-# go through all the alternative names and mark the original combinations
-#  (or really "never recombinations")
-# Authorities for later recombinations and corrections have the authority data for the original combination in them (some taxonomic rule or something)
-# Thus if we print out the use of an authority, it'll have the original combination author info, not its own. So only print out original combination
-# authorities, not recomined authorities, which are just duplicates of the original
-    my %isoriginal;
-	foreach my $syn (@syns)	{
-		my $sql = "SELECT count(*) AS c FROM opinions WHERE child_spelling_no=$syn AND child_no != child_spelling_no";
-		my $timesrecombined = ${$dbt->getData($sql)}[0]->{'c'};
-		if ( ! $timesrecombined )	{
-			$isoriginal{$syn} = "YES";
+		if ( $refdata->{figures} )	{
+			if ( $refdata->{figures} =~ /[ -]/ )	{
+				$synkey .= " figs. " . $refdata->{figures};
+			} else	{
+				$synkey .= " fig. " . $refdata->{figures};
+			}
 		}
-	}
 
-# likewise appearances in the authority table
-	foreach my $syn (@syns)	{
-        if ( $isoriginal{$syn} eq "YES" )	{
-            my $sql = "SELECT taxon_name,taxon_rank,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,pages,figures,ref_is_authority,a.reference_no FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no=" . $syn;
-            my @userefs = @{$dbt->getData($sql)};
-        # save the instance as a key with pubyr as a value
-        # note that @userefs only should have one value because taxon_no
-        #  is the primary key
-            foreach my $useref ( @userefs )	{
-                my $auth_taxon_name = $useref->{taxon_name};
-                my $auth_taxon_rank = $useref->{taxon_rank};
-                if ( $auth_taxon_rank =~ /genus|species/ )	{
-                    $auth_taxon_name = "<i>" . $auth_taxon_name . "</i>";
-                }
-                my $synkey = "";
-                my $mypubyr;
-                my $myauth;
-                my $mypages;
-                if ( $useref->{pubyr} )	{
-                    $synkey = "<td>" . $useref->{pubyr} . "</td><td>" . $auth_taxon_name . " " . $useref->{author1last};
-                    if ( $useref->{otherauthors} )	{
-                        $synkey .= " et al.";
-                    } elsif ( $useref->{author2last} )	{
-                        $synkey .= " and " . $useref->{author2last};
-                    }
-                    $mypubyr = $useref->{pubyr};
-                    $myauth = $useref->{author1last};
-                }
-                if ( $useref->{pages} )	{
-                    if ( $useref->{pages} =~ /[ -]/ )	{
-                        $synkey .= " pp. " . $useref->{pages};
-                    } else	{
-                        $synkey .= " p. " . $useref->{pages};
-                    }
-                    $mypages = $useref->{pages};
-                }
-                if ( $useref->{figures} )	{
-                    if ( $useref->{figures} =~ /[ -]/ )	{
-                        $synkey .= " figs. " . $useref->{figures};
-                    } else	{
-                        $synkey .= " fig. " . $useref->{figures};
-                    }
-                }
-                $synline{$synkey}->{TAXON} = $auth_taxon_name;
-                $synline{$synkey}->{YEAR} = $mypubyr;
-                $synline{$synkey}->{AUTH} = $myauth;
-                $synline{$synkey}->{PAGES} = $mypages;
-            }
-        }
+		return $synkey;
 	}
 
 # sort the synonymy list by pubyr
 	my @synlinekeys = sort { $synline{$a}->{YEAR} <=> $synline{$b}->{YEAR} || $synline{$a}->{AUTH} cmp $synline{$b}->{AUTH} || $synline{$a}->{PAGES} <=> $synline{$b}->{PAGES} || $synline{$a}->{TAXON} cmp $synline{$b}->{TAXON} } keys %synline;
 
 # print each line of the synonymy list
-	$output .= "<table cellspacing=5>\n";
-	$output .= "<tr><td><b>Year</b></td><td><b>Name and author</b></td></tr>\n";
+	$output .= qq|<div align="left" class="displayPanel" style="width: 32em; margin-top: 2em;">
+<div align="center" class="displayPanelContent" style="padding-top: 0.5em; padding-bottom: 1em;">
+<table cellspacing=5>
+<tr><td><b>Year</b></td><td><b>Name and author</b></td></tr>
+|;
 	my $lastline;
 	foreach my $synline ( @synlinekeys )	{
 		if ( $synline{$synline}->{YEAR} . $synline{$synline}->{AUTH} . $synline{$synline}->{TAXON} ne $lastline )	{
@@ -2679,7 +2688,7 @@ sub displaySynonymyList	{
 		}
 		$lastline = $synline{$synline}->{YEAR} . $synline{$synline}->{AUTH} . $synline{$synline}->{TAXON};
 	}
-	$output .= "</table>\n";
+	$output .= "</table>\n</div>\n</div>\n";
 
     return $output;
 }
