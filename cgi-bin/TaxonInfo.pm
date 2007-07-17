@@ -2425,7 +2425,10 @@ sub displayMeasurements {
     #   and whats measured can be average, min,max,median,error
     my $p_table = Measurement::getMeasurementTable(\@specimens);
 
-    my $str = "";
+    my $str .= qq|<div class="displayPanel" align="left" style="width: 36em;">
+<span class="displayPanelHeader"><b class="large">Measurements</b></span>
+<div align="center" class="displayPanelContent">
+|;
 
     if (@specimens) {
 
@@ -2469,10 +2472,6 @@ sub displayMeasurements {
         unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
 
         my $temp;
-        $str .= qq|<div class="displayPanel" align="left" style="width: 36em;">
-<span class="displayPanelHeader"><b class="large">Measurements</b></span>
-<div align="center" class="displayPanelContent">
-|;
         $str .= "<table cellspacing=\"5px;\"><tr><th>part</th><th align=\"left\">N</th><th>$partHeader{'average'}</th><th>$partHeader{'min'}</th><th>$partHeader{'max'}</th><th>$partHeader{'median'}</th><th>$defaultError</th><th></th></tr>";
         for my $part ( @part_list )	{
             my $m_table = %$p_table->{$part};
@@ -2511,13 +2510,13 @@ sub displayMeasurements {
                 }
             }
         }
-        $str .= qq|</table><br>
-</div>
+        $str .= "</table><br>\n";
+    } else {
+        $str .= "<div align=\"center\" style=\"padding-bottom: 1em;\"><i>No diagnoses are available</i></div>";
+    }
+    $str .= qq|</div>
 </div>
 |;
-    } else {
-        $str .= "<i>No measurement data are available</i>";
-    }
 
     return $str;
 }
@@ -2638,7 +2637,7 @@ sub displaySynonymyList	{
 		my $synkey = "";
 
 		if ( $refdata->{pubyr} )	{
-			$synkey = "<td>" . $refdata->{pubyr} . "</d><td>";
+			$synkey = "<td valign=\"top\">" . $refdata->{pubyr} . "</d><td valign=\"top\">";
 			if ( $refdata->{taxon_rank} =~ /genus|species/ )	{
  				$synkey .= "<i>";
 			}
