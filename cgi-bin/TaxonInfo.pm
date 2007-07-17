@@ -501,7 +501,7 @@ sub doThumbs {
         }
         print "</td></tr></table>";
     } else {
-        print "<p class=\"verylarge\"><i>No images are available</i></p>";
+        print "<p style=\"font-size: 1.5m; margin-top: 2em;\"><i>No images are available</i></p>";
     }
 } 
 
@@ -2431,32 +2431,34 @@ sub displayMeasurements {
 
         my %distinct_parts = ();
         my %errorSeen = ();
-        my $minHeader = "";
-        my $maxHeader = "";
-        my $medHeader = "";
+        my %partHeader = ();
+        $partHeader{'average'} = "mean";
         my $defaultError = "";
         while (my($part,$m_table)=each %$p_table)	{
             if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
                 $distinct_parts{$part}++;
             }
             foreach my $type (('length','width','height','diagonal','inflation')) {
-                if ( $m_table->{$type}{'min'} )	{
-                    $minHeader = "minimum";
-                }
-                if ( $m_table->{$type}{'max'} )	{
-                    $maxHeader = "maximum";
-                }
-                if ( $m_table->{$type}{'median'} )	{
-                    $medHeader = "median";
-                }
-                if ( $m_table->{$type}{'error_unit'} )	{
-                    $errorSeen{$m_table->{$type}{'error_unit'}}++;
-                    my @errors = keys %errorSeen;
-                    if ( $#errors == 0 )	{
-                        $m_table->{$type}{'error_unit'} =~ s/^1 //;
-                        $defaultError = $m_table->{$type}{'error_unit'};
-                    } else	{
-                        $defaultError = "";
+                if (exists ($m_table->{$type})) {
+                    if ( $m_table->{$type}{'min'} )	{
+                        $partHeader{'min'} = "minimum";
+                    }
+                    if ( $m_table->{$type}{'max'} )	{
+                        $partHeader{'max'} = "maximum";
+                    }
+                    if ( $m_table->{$type}{'median'} )	{
+                        $partHeader{'median'} = "median";
+                    }
+                    if ( $m_table->{$type}{'error_unit'} )	{
+                        $partHeader{'error'} = "error";
+                        $errorSeen{$m_table->{$type}{'error_unit'}}++;
+                        my @errors = keys %errorSeen;
+                        if ( $#errors == 0 )	{
+                            $m_table->{$type}{'error_unit'} =~ s/^1 //;
+                            $defaultError = $m_table->{$type}{'error_unit'};
+                        } else	{
+                            $defaultError = "";
+                        }
                     }
                 }
             }
@@ -2471,7 +2473,7 @@ sub displayMeasurements {
 <span class="displayPanelHeader"><b class="large">Measurements</b></span>
 <div align="center" class="displayPanelContent">
 |;
-        $str .= "<table cellspacing=\"2px;\"><tr><th>part</th><th align=\"left\">N</th><th>mean</th><th>$minHeader</th><th>$maxHeader</th><th>$medHeader</th><th>$defaultError</th><th></th></tr>";
+        $str .= "<table cellspacing=\"5px;\"><tr><th>part</th><th align=\"left\">N</th><th>$partHeader{'average'}</th><th>$partHeader{'min'}</th><th>$partHeader{'max'}</th><th>$partHeader{'median'}</th><th>$defaultError</th><th></th></tr>";
         for my $part ( @part_list )	{
             my $m_table = %$p_table->{$part};
             if ( ! $m_table )	{
@@ -2485,8 +2487,10 @@ sub displayMeasurements {
                     $str .= "<td>$m_table->{specimens_measured}</td>";
                     foreach my $column (('average','min','max','median','error')) {
                         my $value = $m_table->{$type}{$column};
-                        if ($value <= 0) {
+                        if ( $value <= 0 && $partHeader{$column} ) {
                             $str .= "<td align=\"center\">-</td>";
+                        } elsif ( ! $partHeader{$column} ) {
+                            $str .= "<td align=\"center\"></td>";
                         } else {
                             if ( $value < 1 )	{
                                 $value = sprintf("%.3f",$value);
