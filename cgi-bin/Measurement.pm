@@ -890,30 +890,36 @@ sub getMeasurementTable {
         $part_type->{'average'} += $row->{'specimens_measured'} * log($row->{'real_average'});
         if ($row->{'specimens_measured'} == 1) {
             unless ($part_type->{'average_only'}) {
-                if (!exists $part_type->{'min'} || $row->{'real_average'} < $part_type->{'min'}) {
+                if ( $part_type->{'min'} == 0  || ( $row->{'real_average'} > 0 && $row->{'real_average'} < $part_type->{'min'} ) )	{
                     $part_type->{'min'} = $row->{'real_average'};
                 }
-                if (!exists $part_type->{'max'} || $row->{'real_average'} > $part_type->{'max'}) {
+                if ( $row->{'real_average'} > $part_type->{'max'} )	{
                     $part_type->{'max'} = $row->{'real_average'};
                 }
             }
         } else {
-            if (!exists $part_type->{'min'} || $row->{'real_min'} < $part_type->{'min'}) {
+            if ( $part_type->{'min'} == 0 || ( $row->{'real_min'} > 0 && $row->{'real_min'} < $part_type->{'min'} ) )	{
                 $part_type->{'min'} = $row->{'real_min'};
             }
-            if (!exists $part_type->{'max'} || $row->{'real_max'} > $part_type->{'max'}) {
+            if ( $row->{'real_max'} > $part_type->{'max'} )	{
                 $part_type->{'max'} = $row->{'real_max'};
             }
             if ($row->{'real_average'} =~ /\d/ && $row->{'real_min'} !~ /\d/ && $row->{'real_max'} !~ /\d/) {
                 $part_type->{'average_only'} = 1;
             }
         }
-    }    
+    }
 
     while (my ($part,$m_table) = each %p_table) {
         foreach my $type (keys %types) {
             if ($m_table->{$type}{'specimens_measured'}) {
                 $m_table->{$type}{'average'} = exp($m_table->{$type}{'average'}/$m_table->{$type}{'specimens_measured'});
+                # if any averages were used in finding the min and max, the
+                #  values are statistically bogus and should be erased
+                if ( $m_table->{$type}{'average_only'} == 1 )	{
+                    $m_table->{$type}{'min'} = "";
+                    $m_table->{$type}{'max'} = "";
+                }
             }
         }
    
