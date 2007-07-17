@@ -744,7 +744,7 @@ sub getChildren {
             $sql .= " AND (tc.rgt NOT BETWEEN $exclude->[0] AND $exclude->[1])";
         }
         if ($return_type eq 'immediate_children') {
-             $sql .= " AND tc.taxon_no IN ($synonym_no,$child_nos)"
+             $sql .= " AND tc.synonym_no IN ($synonym_no,$child_nos)"
         }
         $sql .= " ORDER BY tc.lft, (tc.taxon_no != tc.spelling_no)";
         my @results = @{$dbt->getData($sql)};
