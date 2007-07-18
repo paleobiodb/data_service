@@ -2425,6 +2425,8 @@ sub displayMeasurements {
     #   and whats measured can be average, min,max,median,error
     my $p_table = Measurement::getMeasurementTable(\@specimens);
 
+    my $mass_string;
+
     my $str .= qq|<div class="displayPanel" align="left" style="width: 36em;">
 <span class="displayPanelHeader"><b class="large">Measurements</b></span>
 <div align="center" class="displayPanelContent">
@@ -2471,8 +2473,65 @@ sub displayMeasurements {
         # mammal tooth measurements should always be listed in this fixed order
         unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
 
+        # estimate body mass if possible JA 18.7.07
+        # code is here and not earlier because we need the parts list first
+        # need all the parents
+        my $sql = "SELECT parent_no FROM taxa_list_cache WHERE child_no=" . $taxon_no;
+        my @parent_refs = @{$dbt->getData($sql)};
+        # get equations
+        # join on taxa_tree_cache because we need to know which parents are
+        #  the least inclusive
+        # don't do this with a join on taxa_list_cache because that table
+        #  is nightmarishly large
+        $sql = "SELECT taxon_name,lft,rgt,e.reference_no reference_no,part,length,width,area,intercept FROM authorities a,equations e,taxa_tree_cache t WHERE a.taxon_no=e.taxon_no AND e.taxon_no=t.taxon_no AND e.taxon_no IN (" . join(',',map { $_->{parent_no} } @parent_refs) . ")";
+        my @eqn_refs = @{$dbt->getData($sql)};
+        @eqn_refs = sort { $a->{lft} <=> $b->{lft} || $a->{rgt} <=> $b->{rgt} } @eqn_refs;
+
+        for my $part ( @part_list )	{
+            my $m_table = %$p_table->{$part};
+            if ( ! $m_table )	{
+                next;
+            }
+            foreach my $type (('length','width','area')) {
+                if ( $type eq "area" && $m_table->{length}{average} && $m_table->{width}{average} )	{
+                    $m_table->{area}{average} = $m_table->{length}{average} * $m_table->{width}{average};
+                }
+                if (exists ($m_table->{$type})) {
+                    for my $eqn ( @eqn_refs )	{
+                        if ( $part eq $eqn->{part} && $eqn->{$type} )	{
+                            my $mass = exp( ( log($m_table->{$type}{average}) * $eqn->{$type} ) + $eqn->{intercept} );
+                            my $reference = Reference::formatShortRef($dbt,$eqn->{reference_no},'no_inits'=>1,'link_id'=>1);
+                            if ( $mass < 1000 )	{
+                                $mass_string .= sprintf "<p>%.1f g",$mass;
+                            } elsif ( $mass < 10000 )	{
+                                $mass_string .= sprintf "<p>%.2f kg",$mass / 1000;
+                            } else	{
+                                $mass_string .= sprintf "<p>%.1f kg",$mass / 1000;
+                            }
+                            $mass_string .= "  <span class=\"small\">($eqn->{taxon_name} $part $type equation of $reference)</span></p>";
+                            next;
+                        }
+                    }
+                }
+            }
+        }
+
+        if ( $mass_string )	{
+            $mass_string = qq|<div class="displayPanel" align="left" style="width: 36em;">
+<span class="displayPanelHeader"><b class="large">Body mass estimates</b></span>
+<div align="center" class="displayPanelContent">
+$mass_string
+</div>
+</div>
+|;
+        }
+
         my $temp;
-        $str .= "<table cellspacing=\"5px;\"><tr><th>part</th><th align=\"left\">N</th><th>$partHeader{'average'}</th><th>$partHeader{'min'}</th><th>$partHeader{'max'}</th><th>$partHeader{'median'}</th><th>$defaultError</th><th></th></tr>";
+        my $spacing = "5px";
+        if ( ! $partHeader{'min'} )	{
+            $spacing = "8px";
+        }
+        $str .= "<table cellspacing=\"$spacing;\"><tr><th>part</th><th align=\"left\">N</th><th>$partHeader{'average'}</th><th>$partHeader{'min'}</th><th>$partHeader{'max'}</th><th>$partHeader{'median'}</th><th>$defaultError</th><th></th></tr>";
         for my $part ( @part_list )	{
             my $m_table = %$p_table->{$part};
             if ( ! $m_table )	{
@@ -2512,11 +2571,15 @@ sub displayMeasurements {
         }
         $str .= "</table><br>\n";
     } else {
-        $str .= "<div align=\"center\" style=\"padding-bottom: 1em;\"><i>No diagnoses are available</i></div>";
+        $str .= "<div align=\"center\" style=\"padding-bottom: 1em;\"><i>No measurements are available</i></div>";
     }
     $str .= qq|</div>
 </div>
 |;
+
+    if ( $mass_string )	{
+        $str = $mass_string . $str;
+    }
 
     return $str;
 }
