@@ -819,7 +819,7 @@ sub doCollections{
 <th align="center">Time interval</th>
 <th align="center">Ma</th>
 <th align="center">Country or state</th>
-<th align="left">PBDB collection number</th></tr>
+<th align="left">Original ID and collection number</th></tr>
 |;
 
 	# overload rule: if there are more than 100 rows, print only the
@@ -2483,7 +2483,7 @@ sub displayMeasurements {
         #  the least inclusive
         # don't do this with a join on taxa_list_cache because that table
         #  is nightmarishly large
-        $sql = "SELECT taxon_name,lft,rgt,e.reference_no reference_no,part,length,width,area,intercept FROM authorities a,equations e,taxa_tree_cache t WHERE a.taxon_no=e.taxon_no AND e.taxon_no=t.taxon_no AND e.taxon_no IN (" . join(',',map { $_->{parent_no} } @parent_refs) . ")";
+        $sql = "SELECT taxon_name,lft,rgt,e.reference_no reference_no,part,length,width,area,intercept FROM authorities a,equations e,taxa_tree_cache t WHERE a.taxon_no=e.taxon_no AND e.taxon_no=t.taxon_no AND t.synonym_no IN (" . join(',',map { $_->{parent_no} } @parent_refs) . ")";
         my @eqn_refs = @{$dbt->getData($sql)};
         @eqn_refs = sort { $a->{lft} <=> $b->{lft} || $a->{rgt} <=> $b->{rgt} } @eqn_refs;
 
@@ -2501,14 +2501,15 @@ sub displayMeasurements {
                         if ( $part eq $eqn->{part} && $eqn->{$type} )	{
                             my $mass = exp( ( log($m_table->{$type}{average}) * $eqn->{$type} ) + $eqn->{intercept} );
                             my $reference = Reference::formatShortRef($dbt,$eqn->{reference_no},'no_inits'=>1,'link_id'=>1);
+                            $mass_string .= "<tr><td>&nbsp;";
                             if ( $mass < 1000 )	{
-                                $mass_string .= sprintf "<p>%.1f g",$mass;
+                                $mass_string .= sprintf "%.1f g",$mass;
                             } elsif ( $mass < 10000 )	{
-                                $mass_string .= sprintf "<p>%.2f kg",$mass / 1000;
+                                $mass_string .= sprintf "%.2f kg",$mass / 1000;
                             } else	{
-                                $mass_string .= sprintf "<p>%.1f kg",$mass / 1000;
+                                $mass_string .= sprintf "%.1f kg",$mass / 1000;
                             }
-                            $mass_string .= "  <span class=\"small\">($eqn->{taxon_name} $part $type equation of $reference)</span></p>";
+                            $mass_string .= "<td><span class=\"small\">&nbsp;$eqn->{taxon_name} $part $type</span></td><td><span class=\"small\">$reference</span></td></tr>";
                             next;
                         }
                     }
@@ -2520,7 +2521,9 @@ sub displayMeasurements {
             $mass_string = qq|<div class="displayPanel" align="left" style="width: 36em;">
 <span class="displayPanelHeader"><b class="large">Body mass estimates</b></span>
 <div align="center" class="displayPanelContent">
+<table cellspacing="6"><tr><td align="center"><b>estimate</b></td><td align="center"><b>equation</b></td><td align="center"><b>reference</b></td></tr>
 $mass_string
+</table>
 </div>
 </div>
 |;
