@@ -916,7 +916,8 @@ sub getMeasurementTable {
                 $m_table->{$type}{'average'} = exp($m_table->{$type}{'average'}/$m_table->{$type}{'specimens_measured'});
                 # if any averages were used in finding the min and max, the
                 #  values are statistically bogus and should be erased
-                if ( $m_table->{$type}{'average_only'} == 1 )	{
+                # likewise if the sample size is 1
+                if ( $m_table->{$type}{'average_only'} == 1 || $m_table->{$type}{'specimens_measured'} == 1 )	{
                     $m_table->{$type}{'min'} = "";
                     $m_table->{$type}{'max'} = "";
                 }
@@ -927,8 +928,8 @@ sub getMeasurementTable {
         my $can_compute = 0; # Can compute median, and error (std dev)
         my $is_group = 0; # Is it aggregate group data or a bunch of singles?
         if ($unique_specimen_nos{$part} == 1) {
-            $can_compute = 1;
             if ($m_table->{'specimens_measured'} > 1) {
+                $can_compute = 1;
                 $is_group = 1;
             }
         } elsif ($unique_specimen_nos{$part} >= 1 && $unique_specimen_nos{$part} == $m_table->{'specimens_measured'}) {
