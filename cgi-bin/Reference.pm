@@ -428,7 +428,7 @@ sub displayReference {
     
     # Create the thin line boxes
     my $box = sub { 
-        my $html = '<div class="displayPanel" align="left">'
+        my $html = '<div class="displayPanel" align="left" style="margin: 1em;">'
                  . qq'<span class="displayPanelHeader"><b>$_[0]</b></span>'
                  . qq'<div class="displayPanelContent">'
                  . qq'<div class="displayPanelText">$_[1]'
@@ -437,9 +437,12 @@ sub displayReference {
     };
 
 	print $hbo->stdIncludes("std_page_top");
-    print "<div align=\"center\"><h3>PBDB reference $ref->{reference_no}</h3></div>";
+    print "<div align=\"center\"><h3>" . Reference::formatShortRef($ref) . "</h3></div>";
 
     my $citation = Reference::formatLongRef($ref);
+    if ($s->isDBMember())	{
+        $citation .= qq| <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$ref->{reference_no}">edit</a></b></small>|;
+    }
     print $box->("Full reference",$citation);
    
     # Start Metadata box
@@ -661,7 +664,7 @@ sub displayReferenceForm {
 	print $hbo->populateHTML("enter_ref_form", \%vars);
 }
 
-#  * Will either add or edit a referene in the database
+#  * Will either add or edit a reference in the database
 sub processReferenceForm {
     my ($dbt,$q,$s,$hbo) = @_;
     my $dbh = $dbt->dbh;
@@ -741,15 +744,15 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
 
         # print a list of all the things the user should now do, with links to
         #  popup windows JA 28.7.06
-        my $box_header = ($dupe || !$isNewEntry) ? "Reference number $reference_no" : "New reference";
+        my $box_header = ($dupe || !$isNewEntry) ? "Full reference" : "New reference";
         print qq|
-        <div class="displayPanel" align="left">
+        <div class="displayPanel" align="left" style="margin: 1em;">
         <span class="displayPanelHeader"><b>$box_header</b></span>
-        <table><tr><td valign=top><b>$reference_no</b></td><td>$formatted_ref <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$reference_no">edit</a></td></tr></table>
+        <table><tr><td valign=top>$formatted_ref <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$reference_no">edit</a></td></tr></table>
         </span>
         </div>
 
-        <div class="displayPanel" align="left">
+        <div class="displayPanel" align="left" style="margin: 1em;">
         <span class="displayPanelHeader"><b>Please enter all the data</b></span>
         <div class="displayPanelContent">
         <ul class="small" style="text-align: left;">
