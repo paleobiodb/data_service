@@ -93,9 +93,9 @@ sub submitSpecimenSearch {
     } else {
         print "<form method=\"POST\" action=\"$READ_URL\">";
         print "<input type=\"hidden\" name=\"action\" value=\"displaySpecimenList\">";
-        print "<div align=\"center\">";
+        print qq|<div align="center" class="small" style="margin: 1em;">|;
         print "<table cellspacing=\"0\" cellpadding=\"6\" style=\"border: 1px solid lightgray;\">";
-        print "<tr><th><span style=\"margin-right: 1em\">Taxon</span></th><th>Collection</th><th>Measurements</th></tr>";
+        print "<tr><th><span style=\"margin-right: 1em\">Occurrence</span></th><th>Collection</th><th>Measurements</th></tr>";
 #        print "<tr><td>Collection name</td><td></td></tr>";
         my $last_collection_no = -1;
         my %coll_names = ();
@@ -115,7 +115,7 @@ sub submitSpecimenSearch {
                 $class = ($class eq '') ? $class='class="darkList"' : '';
             }
             #print "<td><input type=\"radio\" name=\"occurrence_no\" value=\"$row->{occurrence_no}\"> $row->{genus_name} $row->{species_name}</td><td>$measurements</td></tr>";
-            print "<tr $class><td><a href=\"$READ_URL?action=displaySpecimenList&occurrence_no=$row->{occurrence_no}\">$taxon_name</a></td>";
+            print "<tr $class><td><a href=\"$READ_URL?action=displaySpecimenList&occurrence_no=$row->{occurrence_no}\"><nobr>$taxon_name</nobr></a></td>";
             if ($last_collection_no != $row->{'collection_no'}) {
                 $last_collection_no = $row->{'collection_no'};
                 print "<td><span style=\"margin-right: 1em;\"><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}\">$row->{collection_name}</a></span></td>";
@@ -152,7 +152,7 @@ sub submitSpecimenSearch {
 # give them an option to edit an old one, or add a new set of measurements
 #
 sub displaySpecimenList {
-    my ($dbt,$hbo,$q,$s) = @_;
+    my ($dbt,$hbo,$q,$s,$called_from) = @_;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
 	if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
@@ -210,7 +210,7 @@ sub displaySpecimenList {
     }
     
     print qq|<center>
-<div class="displayPanel" align="center" style="width: 30em; margin-top: 2em;">
+<div class="displayPanel" align="center" style="width: 36em; margin-top: 2em;">
   <span class="displayPanelHeader"><b>$taxon_name $collection</b></span>
   <div class="displayPanelContent">
 |;
@@ -345,7 +345,13 @@ function submitForm ( )
   <option value="direct measurement">direct measurement</option>
   </select>\n
 </td></tr>
-</table>
+|;
+
+if ( $called_from eq "processMeasurementForm" )	{
+	return;
+}
+
+print qq|</table>
 </div>
 </div>
 </center>
@@ -663,7 +669,7 @@ sub processMeasurementForm	{
                     }
                 }
 
-                print "<center><h4>The measurement data for $taxon_name $collection have been updated</h4></center>\n";
+                print "<center><h4>Measurements for $taxon_name $collection have been updated</h4></center>\n";
             } else {
                 print "Error updating database table row, please contact support";
                 carp "Error updating row in Measurement.pm: ".$result;
@@ -720,27 +726,27 @@ sub processMeasurementForm	{
     }
 
     if ($inserted_row_count) {
-        print "<center><h4>Measurements for $taxon_name $collection has been added</h4></center>\n";
+        print "<center><h4>Measurements for $taxon_name $collection have been added</h4></center>\n";
     }
 
-    if ($q->param('occurrence_no')) {
-	my ($temp,$collection_no) = split / /,$collection;
-	$collection_no =~ s/\)//;
-	print "<div align=\"center\"><table><tr><td><ul>\n".
-		"<br><li><b><a href=\"$WRITE_URL?action=populateMeasurementForm&specimen_no=-1&occurrence_no=".$q->param('occurrence_no')."\">Add another average or individual measurement of this occurrence</a></b></li>\n".
-		"<br><li><b><a href=\"$WRITE_URL?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&occurrence_no=".$q->param('occurrence_no')."\">Add up to 10 new individual measurements of this occurrence</a></b></li>\n".
-		"<br><li><b><a href=\"$WRITE_URL?action=displaySpecimenList&occurrence_no=".$q->param('occurrence_no')."\">Edit another measurement of this occurrence</a></b></li>\n".
-    		"<br><li><b><a href=\"$WRITE_URL?action=submitSpecimenSearch&collection_no=$collection_no\">Add a measurement of another occurrence in this collection</a></b></li>\n";
-    } else {
-	    print "<div align=\"center\"><table><tr><td><ul>\n".
-		"<br><li><b><a href=\"$WRITE_URL?action=populateMeasurementForm&specimen_no=-1&taxon_no=".$q->param('taxon_no')."\">Add another average or individual measurement of $taxon_name</a></b></li>\n".
-		"<br><li><b><a href=\"$WRITE_URL?action=populateMeasurementForm&specimen_no=-2&specimens_measured=10&taxon_no=".$q->param('taxon_no')."\">Add up to 10 new individual measurements of $taxon_name</a></b></li>\n".
-		"<br><li><b><a href=\"$WRITE_URL?action=displaySpecimenList&taxon_no=".$q->param('taxon_no')."&types_only=".$q->param('types_only')."\">Edit another measurement of $taxon_name</a></b></li>\n";
-    }
-    print "<br><li><b><a href=\"$WRITE_URL?action=submitSpecimenSearch&taxon_name=$taxon_name\">Add a measurement of $taxon_name in another collection</a></b></li>\n".
-	"<br><li><b><a href=\"$READ_URL?action=checkTaxonInfo&taxon_name=$taxon_name\">Get general info about this taxon</a></b></li>\n".
-	"<br><li><b><a href=\"$WRITE_URL?action=displaySpecimenSearchForm\">Add a measurement of another taxon</a></b></li>\n".
-	"</ul></td></tr></table></div>\n";
+	displaySpecimenList($dbt,$hbo,$q,$s,'processMeasurementForm');
+	if ($q->param('occurrence_no')) {
+		my ($temp,$collection_no) = split / /,$collection;
+		$collection_no =~ s/\)//;
+    		print qq|<tr><td valign="top"><a href="$WRITE_URL?action=submitSpecimenSearch&collection_no=$collection_no"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Add a measurement of another occurrence in this collection</td></tr>
+|;
+	 } else {
+		print qq|<tr><td valign="top"><a href="$WRITE_URL?action=submitSpecimenSearch&taxon_name=$taxon_name"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Add a measurement of $taxon_name in another collection</td></tr>
+|;
+	}
+	print qq|<tr><td><a href="$READ_URL?action=checkTaxonInfo&taxon_name=$taxon_name"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Get general info about this taxon</td></tr>
+<tr><td><a href="$WRITE_URL?action=displaySpecimenSearchForm"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Add a measurement of another taxon</td></tr>
+</table>
+</div>
+</div>
+</center>
+|;
+
 }
 
 
