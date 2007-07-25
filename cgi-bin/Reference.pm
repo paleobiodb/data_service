@@ -443,10 +443,12 @@ sub displayReference {
     if ($s->isDBMember())	{
         $citation .= qq| <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$ref->{reference_no}">edit</a></b></small>|;
     }
+    $citation = "<div style=\"text-indent: -0.75em; margin-left: 1em;\">" . $citation . "</div>";
     print $box->("Full reference",$citation);
    
     # Start Metadata box
     my $html = "<table border=0 cellspacing=0 cellpadding=0\">";
+    $html .= "<tr><td class=\"displayPanelLabel\"><b>ID number:</b></td><td>$reference_no</td></tr>";
     if ($ref->{'created'}) {
         $html .= "<tr><td class=\"displayPanelLabel\"><b>Created:</b></td><td>$ref->{'created'}</td></tr>";
     }
@@ -510,7 +512,7 @@ sub displayReference {
         } else {
             $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
             my $plural = ($authority_count == 1) ? "" : "s";
-            $html .= "View taxonomic name$plural";
+            $html .= "view taxonomic name$plural";
             $html .= qq|</a></b> |;
         }
         print $box->(qq'Taxonomic names (<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count</a>)',$html);
@@ -540,12 +542,12 @@ sub displayReference {
             $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
             if ($opinion_count) {
                 my $plural = ($opinion_count == 1) ? "" : "s";
-                $html .= "View taxonomic opinion$plural";
+                $html .= "view taxonomic opinion$plural";
             }
             $html .= qq|</a></b> |;
         }
     
-        my $class_link = qq| <b> - <a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">View classification</a></b>|;
+        my $class_link = qq| <b> - <small><a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></b></small>|;
         print $box->(qq'Taxonomic opinions (<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
     }      
 
@@ -585,7 +587,7 @@ sub displayReference {
             $html =~ s/, $//;
         } else {
             my $plural = ($collection_count == 1) ? "" : "s";
-            $html .= qq|<b><a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">View collection$plural</a> </b> |;
+            $html .= qq|<b><a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a></b>|;
         }
         if ($html) {
             print $box->(qq'Collections (<a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
