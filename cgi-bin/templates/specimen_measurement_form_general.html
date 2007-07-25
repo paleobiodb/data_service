@@ -9,6 +9,11 @@ function checkForm() {
 //    var isFloat = /^([0-9]+(\.[0-9]+)*|\.[0-9]+)$/;
 
     var f = document.forms[0];
+
+    if ( ! /[A-Za-z]/.test( f.specimen_part.value ) )	{
+        errors.add("You must indicate the part");
+    }
+
     var specimens_measured = parseInt(f.specimens_measured.value);
     if (specimens_measured == 1) {
         if (f.length_median.value != '' ||
