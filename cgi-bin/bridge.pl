@@ -3339,6 +3339,8 @@ sub processEditOccurrences {
             }
         }
 
+        my $rowno = $i + 1;
+
         # extract the genus, subgenus, and species names and resos
         #  JA 5.7.07
         if ( $fields{'taxon_name'} )	{
@@ -3436,11 +3438,11 @@ sub processEditOccurrences {
 
 		# check that all required fields have a non empty value
         if ($fields{'reference_no'} !~ /^\d+$/) {
-            push @warnings, "There is no reference number for row $i, so it was skipped";
+            push @warnings, "There is no reference number for row $rowno, so it was skipped";
             next; 
         }
         if ($fields{'collection_no'} !~ /^\d+$/) {
-            push @warnings, "There is no collection number for row $i, so it was skipped";
+            push @warnings, "There is no collection number for row $rowno, so it was skipped";
             next; 
         }
 
@@ -3462,15 +3464,15 @@ sub processEditOccurrences {
             }
         } else {
             if (!Validation::validOccurrenceGenus($fields{'genus_reso'},$fields{'genus_name'})) {
-                push @warnings, "There genus ($fields{'genus_name'}) in row $i is blank or improperly formatted, so was skipped";
+                push @warnings, "The genus ($fields{'genus_name'}) in row $rowno is blank or improperly formatted, so it was skipped";
                 next; 
             }
             if ($fields{'subgenus_name'} !~ /^\s*$/ && !Validation::validOccurrenceGenus($fields{'subgenus_reso'},$fields{'subgenus_name'})) {
-                push @warnings, "The subgenus ($fields{'subgenus_name'}) in row $i is improperly formatted, so it was skipped";
+                push @warnings, "The subgenus ($fields{'subgenus_name'}) in row $rowno is improperly formatted, so it was skipped";
                 next; 
             }
             if ($fields{'species_name'} =~ /^\s*$/ || !Validation::validOccurrenceSpecies($fields{'species_reso'},$fields{'species_name'})) {
-                push @warnings, "The species ($fields{'species_name'}) in row $i is blank or improperly formatted, so it was skipped";
+                push @warnings, "The species ($fields{'species_name'}) in row $rowno is blank or improperly formatted, so it was skipped";
                 next; 
             }
         }
@@ -3481,8 +3483,21 @@ sub processEditOccurrences {
             my $sql = "SELECT reference_no FROM occurrences WHERE occurrence_no=$fields{'occurrence_no'}";
             my $occurrence_reference_no = ${$dbt->getData($sql)}[0]->{'reference_no'};
             if ($fields{'reference_no'} == $occurrence_reference_no) {
-                push @warnings, "The reidentification ($fields{reference_no}) cannot have  the same reference as the original occurrence for row $i, taxon $taxon_name";
+                push @warnings, "The occurrence of taxon $taxon_name in row $rowno and its reidentification have the same reference number";
                 next;
+            }
+            my $sql = "SELECT reference_no FROM reidentifications WHERE occurrence_no=$fields{'occurrence_no'}";
+            my @reidrows = @{$dbt->getData($sql)};
+            my $isduplicate;
+            for my $reidrow ( @reidrows )	{
+                if ($fields{'reference_no'} == $reidrow->{reference_no}) {
+                    push @warnings, "This reference already has been used to reidentify the occurrence of taxon $taxon_name in row $rowno";
+                   $isduplicate++;
+                   next;
+                }
+            }
+            if ( $isduplicate > 0 )	{
+               next;
             }
         }
         
@@ -3607,10 +3622,10 @@ sub processEditOccurrences {
         $sql = "SELECT COUNT(*) c FROM specimens WHERE occurrence_no=$occurrence_no";
         my $measure_cnt = ${$dbt->getData($sql)}[0]->{'c'};
         if ($reid_cnt) {
-            push @warnings, "Could not delete '$taxon_name' on line $line_no, there are reidentifications based on it";
+            push @warnings, "'$taxon_name' on line $line_no can't be deleted because there are reidentifications based on it";
         }
         if ($measure_cnt) {
-            push @warnings, "Could not delete '$taxon_name' on line $line_no, there are measurementments based on it";
+            push @warnings, "'$taxon_name' on line $line_no can't be deleted because there are measurements based on it";
         }
         if ($reid_cnt == 0 && $measure_cnt == 0) {
             $dbt->deleteRecord($s,'occurrences','occurrence_no',$occurrence_no);
