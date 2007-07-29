@@ -208,11 +208,17 @@ sub displaySpecimenList {
         } 
 
     }
-    
+
+    my $panelheader = "";
+    my $contentstyle = qq|style="padding-top: 1em;"|;
+    if ( $called_from ne "processMeasurementForm" )	{
+        $panelheader = $taxon_name . " " . $collection;
+        $contentstyle = "";
+    }
     print qq|<center>
 <div class="displayPanel" align="center" style="width: 36em; margin-top: 2em;">
-  <span class="displayPanelHeader"><b>$taxon_name $collection</b></span>
-  <div class="displayPanelContent">
+  <span class="displayPanelHeader"><b>$panelheader</b></span>
+  <div class="displayPanelContent" $contentstyle>
 |;
     print "<form name=\"specimenList\" method=\"POST\" action=\"$WRITE_URL\">\n";
     print "<input type=hidden name=\"action\" value=\"populateMeasurementForm\">\n";
