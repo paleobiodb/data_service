@@ -218,11 +218,11 @@ div.emphasized {
 }
 
 .error_text {
-    color: red;
+    color: #FF3333;
 }
 
 .warning_text {
-    color: orange;
+    color: #FF7733;
 }
 
 
