@@ -18,7 +18,7 @@ my $s;
 my $MAP_URL= "/public/maps";
 my $GIF_DIR = $HTML_DIR.$MAP_URL;
 my $TILE_DIR = $HTML_DIR."/public/staticmaps";
-my $FONT = "$DATAFILE_DIR/fonts/orangeki.ttf";
+my $FONT = "$DATA_DIR/fonts/orangeki.ttf";
 my $PI = 3.14159265;
 my $C72 = cos(72 * $PI / 180);
 my $AILEFT = 100;

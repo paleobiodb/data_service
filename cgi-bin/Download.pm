@@ -14,7 +14,7 @@ use CGI::Carp;
 use Person;
 use Measurement;
 use Text::CSV_XS;
-use Constants qw($READ_URL $WRITE_URL $HTML_DIR $DATA_DIR);
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
 
 use strict;
 
@@ -1950,7 +1950,7 @@ sub queryDatabase {
             # so that the array only gets filled with replacement names,
             # not cluttered up with taxa who don't have a senior synonym
             my $sql = "SELECT t.taxon_no,t.synonym_no,a.taxon_name ".
-                      "FROM taxa_tree_cache t, authorities a ".
+                      "FROM $TAXA_TREE_CACHE t, authorities a ".
                       "WHERE t.synonym_no=a.taxon_no ".
                       "AND t.taxon_no != t.synonym_no ".
                       "AND t.taxon_no IN (".join(",",keys %all_taxa).")";
@@ -2027,7 +2027,7 @@ sub queryDatabase {
                 push @all_nos , keys %all_genera;
             }
 
-            my $sql = "SELECT t1.taxon_no,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM taxa_tree_cache t1, taxa_tree_cache t2, authorities a WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",@all_nos).") AND t2.taxon_no=a.taxon_no";
+            my $sql = "SELECT t1.taxon_no,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2, authorities a WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",@all_nos).") AND t2.taxon_no=a.taxon_no";
             foreach my $row (@{$dbt->getData($sql)}) {
                 $type_specimen_lookup{$row->{'taxon_no'}} = $row->{'type_specimen'};
                 $body_part_lookup{$row->{'taxon_no'}} = $row->{'type_body_part'};

@@ -19,6 +19,7 @@ use fields qw(reference_no
 				pubno
 				firstpage
 				lastpage
+                project_name
 				
 				author1init
 				author1last
@@ -40,7 +41,7 @@ sub new {
         carp "Could not create Reference object with $reference_no";
         return undef; 
     }
-    my @fields = qw(reference_no reftitle pubtitle pubyr pubvol pubno firstpage lastpage author1init author1last author2init author2last otherauthors);
+    my @fields = qw(reference_no reftitle pubtitle pubyr pubvol pubno firstpage lastpage author1init author1last author2init author2last otherauthors project_name);
 	my $sql = "SELECT ".join(",",@fields)." FROM refs WHERE reference_no=".$dbt->dbh->quote($reference_no);
     my @results = @{$dbt->getData($sql)};
     if (@results) {
@@ -630,6 +631,10 @@ sub displayReferenceForm {
         'language'=>'English'
     );
 
+    if ($IS_FOSSIL_RECORD) {
+        $defaults{'pubtitle'} = "Fossil Record 3";
+    }
+
     my %db_row = ();
     if (!$isNewEntry) {
 	    my $sql = "SELECT * FROM refs WHERE reference_no=$reference_no";
@@ -659,8 +664,9 @@ sub displayReferenceForm {
     my %vars = (%defaults,%db_row,%form_vars);
     
     if ($isNewEntry) {
-        $vars{"new_message"} = "<p>If the reference is <b>new</b>, please fill out the following form.</p>";
-        $vars{"project_name"} = "fossil record" if ($IS_FOSSIL_RECORD);
+        $vars{"page_title"} = "New reference form";
+    } else {
+        $vars{"page_title"} = "Reference number $reference_no";
     }
 	print $hbo->populateHTML('js_reference_checkform');
 	print $hbo->populateHTML("enter_ref_form", \%vars);
@@ -696,6 +702,17 @@ sub processReferenceForm {
     $q->param(pubtitle => $q->param('pubtitle_pulldown')) unless $q->param("pubtitle");
     
     my %vars = $q->Vars();
+
+
+    if ($IS_FOSSIL_RECORD && $isNewEntry) {
+        $vars{'publication_type'} = 'book/book chapter';              
+        $vars{'language'} = 'English';
+        $vars{'classification_quality'} = 'compendium';
+        $vars{'project_name'} = 'fossil record';
+    } elsif ($IS_FOSSIL_RECORD) {
+        # do not edit this value
+        delete $vars{'project_name'};
+    }
     
     my $fraud = checkFraud($q);
     if ($fraud) {
@@ -752,8 +769,15 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         <span class="displayPanelHeader"><b>$box_header</b></span>
         <table><tr><td valign=top>$formatted_ref <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$reference_no">edit</a></td></tr></table>
         </span>
-        </div>
+        </div>|;
+        
 
+       
+       
+        if ($IS_FOSSIL_RECORD) {
+        } else {
+        print qq|</center>|;
+        print qq|
         <div class="displayPanel" align="left" style="margin: 1em;">
         <span class="displayPanelHeader"><b>Please enter all the data</b></span>
         <div class="displayPanelContent">
@@ -769,6 +793,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         </div>
         </div>
         </center>|;
+        }
     }
 }
 

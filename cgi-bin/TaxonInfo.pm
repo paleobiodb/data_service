@@ -11,7 +11,7 @@ use Images;
 use Measurement;
 use Debug qw(dbg);
 use PBDBUtil;
-use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR);
+use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
 
 use strict;
 
@@ -175,7 +175,7 @@ sub displayTaxonInfoResults {
 	my $in_list;
     my $quick = 0;;
 	if($taxon_no) {
-        my $sql = "SELECT (rgt-lft) diff FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
+        my $sql = "SELECT (rgt-lft) diff FROM $TAXA_TREE_CACHE WHERE taxon_no=$taxon_no";
         my $diff = ${$dbt->getData($sql)}[0]->{'diff'};
         if (!$is_real_user && $diff > 1000) {
             $quick = 1;
@@ -199,7 +199,7 @@ sub displayTaxonInfoResults {
         my $last_status = $mrpo->{'status'};
 
         my %disused;
-        my $sql = "SELECT synonym_no FROM taxa_tree_cache WHERE taxon_no=$taxon_no";
+        my $sql = "SELECT synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no=$taxon_no";
         my $ss_no = ${$dbt->getData($sql)}[0]->{'synonym_no'};
         if ($taxon_rank !~ /genus|species/) {
             %disused = %{disusedNames($dbt,$ss_no)};
@@ -284,7 +284,8 @@ sub displayTaxonInfoResults {
         print "<p>";
         print "<div>";
         print "<center>";
-	print displayRelatedTaxa($dbt, $taxon_no, $spelling_no, $taxon_name,$is_real_user);
+
+        print displayRelatedTaxa($dbt, $taxon_no, $spelling_no, $taxon_name,$is_real_user);
     	print "<a href=\"$READ_URL?action=beginTaxonInfo\">".
 	    	  "<b>Get info on another taxon</b></a></center>\n";
         if($s->isDBMember()) {
@@ -588,8 +589,8 @@ sub doCollections{
     my $mincrownfirst;
     my %iscrown;
     if ( $in_list && @$in_list )	{
-        my $taxon_row = ${$dbt->getData("SELECT lft,synonym_no FROM taxa_tree_cache WHERE taxon_no=$taxon_no")}[0];
-        my $sql = "SELECT a.taxon_no taxon_no,lft,rgt FROM authorities a,taxa_tree_cache t WHERE synonym_no != $taxon_row->{synonym_no} AND lft != $taxon_row->{lft} AND extant='YES' AND a.taxon_no in (" . join (',',@$in_list) . ") AND a.taxon_no=t.taxon_no";
+        my $taxon_row = ${$dbt->getData("SELECT lft,synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no=$taxon_no")}[0];
+        my $sql = "SELECT a.taxon_no taxon_no,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE synonym_no != $taxon_row->{synonym_no} AND lft != $taxon_row->{lft} AND extant='YES' AND a.taxon_no in (" . join (',',@$in_list) . ") AND a.taxon_no=t.taxon_no";
         my @extantchildren = @{$dbt->getData($sql)};
         # now for a big waste of time: the minimum age of the crown group
         #  must only involve extant, immediate children, so you need to know
@@ -613,11 +614,11 @@ sub doCollections{
             # get immediate children that include extant children
             if (@childnos && $lrsql) {
                 $extant = 1;
-                my $sql = "SELECT taxon_no,lft,rgt FROM taxa_tree_cache WHERE taxon_no IN (" . join (',',@childnos) . ") AND (" . $lrsql . ")";
+                my $sql = "SELECT taxon_no,lft,rgt FROM $TAXA_TREE_CACHE WHERE taxon_no IN (" . join (',',@childnos) . ") AND (" . $lrsql . ")";
                 my @extantimmediates = @{$dbt->getData($sql)};
 
                 # get children of immediate children that include extant children
-                my $sql = "SELECT taxon_no FROM taxa_tree_cache WHERE";
+                my $sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE WHERE";
                 for my $ei ( @extantimmediates )	{
                     $sql .= " (lft>=".$ei->{'lft'}." AND rgt<=".$ei->{'rgt'}.") OR ";
                 }
@@ -2072,7 +2073,9 @@ sub getMostRecentClassification {
     # obviously, don't do this if we are looking to see if the taxon is a
     #  a synonym itself
     # JA 14-15.6.07
-    push my @synonyms , $child_no;
+    my @synonyms;
+    push @synonyms, $child_no;
+    
     if ( $options->{'use_synonyms'} !~ /no/ && !$options->{reference_no})	{
         push @synonyms , getJuniorSynonyms($dbt,$child_no);
     }
@@ -2483,7 +2486,7 @@ sub displayMeasurements {
         #  the least inclusive
         # don't do this with a join on taxa_list_cache because that table
         #  is nightmarishly large
-        $sql = "SELECT taxon_name,lft,rgt,e.reference_no reference_no,part,length,width,area,intercept FROM authorities a,equations e,taxa_tree_cache t WHERE a.taxon_no=e.taxon_no AND e.taxon_no=t.taxon_no AND t.synonym_no IN (" . join(',',map { $_->{parent_no} } @parent_refs) . ")";
+        $sql = "SELECT taxon_name,lft,rgt,e.reference_no reference_no,part,length,width,area,intercept FROM authorities a,equations e,$TAXA_TREE_CACHE t WHERE a.taxon_no=e.taxon_no AND e.taxon_no=t.taxon_no AND t.synonym_no IN (" . join(',',map { $_->{parent_no} } @parent_refs) . ")";
         my @eqn_refs = @{$dbt->getData($sql)};
         @eqn_refs = sort { $a->{lft} <=> $b->{lft} || $a->{rgt} <=> $b->{rgt} } @eqn_refs;
 
@@ -2772,7 +2775,7 @@ sub getTaxonNos {
     my $lump_ranks = shift;
     my @taxon_nos = ();
     if ($dbt && $name)  {
-        my $sql = "SELECT a.taxon_no taxon_no FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbt->dbh->quote($name);
+        my $sql = "SELECT a.taxon_no taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbt->dbh->quote($name);
         if ($rank) {
             $sql .= " AND taxon_rank=".$dbt->dbh->quote($rank);
         }
@@ -3119,7 +3122,7 @@ sub getDiagnoses {
         # synonym (either junior or senior, doesn't make that distiction) or not.  The spelling_no is the
         # most recently uses spelling for the current taxon, so this will be a constant for all the different
         # spellings of the current synonym, and different for all its synonyms
-        my $sql = "SELECT t2.taxon_no,IF(t2.spelling_no = t1.spelling_no,0,1) is_synonym FROM taxa_tree_cache t1, taxa_tree_cache t2 WHERE t1.taxon_no=$taxon_no and t1.synonym_no=t2.synonym_no";
+        my $sql = "SELECT t2.taxon_no,IF(t2.spelling_no = t1.spelling_no,0,1) is_synonym FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2 WHERE t1.taxon_no=$taxon_no and t1.synonym_no=t2.synonym_no";
         my @results = @{$dbt->getData($sql)};
         my @children;
         foreach my $row (@results) {
@@ -3198,7 +3201,7 @@ sub disusedNames {
 
         # first a very simple test: higher taxa with no children whatsoever
         #  are disused by definition JA 16.7.07
-        $sql = "SELECT lft,rgt,a.taxon_no taxon_no FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND a.taxon_no IN ($taxon_nos_sql)";
+        $sql = "SELECT lft,rgt,a.taxon_no taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_no IN ($taxon_nos_sql)";
         @results = @{$dbt->getData($sql)};
 
         @taxon_nos = ();
@@ -3229,7 +3232,7 @@ sub disusedNames {
 
 
         # Parents with any children will be put into the array. Junior synonyms not counted
-        $sql = "SELECT parent_no FROM taxa_list_cache WHERE parent_no IN ($taxon_nos_sql) GROUP BY parent_no";
+        $sql = "SELECT parent_no FROM $TAXA_LIST_CACHE WHERE parent_no IN ($taxon_nos_sql) GROUP BY parent_no";
         @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
             $has_children{$row->{'parent_no'}} = 1;

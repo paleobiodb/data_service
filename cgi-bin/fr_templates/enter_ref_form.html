@@ -1,0 +1,68 @@
+<form method="POST" action="%%write_url%%" onSubmit='return checkForm();'>
+<input type="hidden" name="action" value="processReferenceForm">
+<input type=hidden name="reference_no">
+
+<div align="center"><h2>%%page_title%%</h2></div>
+
+<div>
+<center>
+<table class="mainSection" cellpadding=4><tr><td>
+<table>
+  <tr>
+    <p>Required fields are in <span class="required">red</span>. Consult the <a href="javascript:tipsPopup('/public/tips/ref_tips.html')">tip sheet</a> for help.</p>
+    <p class="tiny">Use this format:<br><i><b>Initials:</b> J. Q.<b> Last name:</b> Smith <b>Second author initials:</b> H. H. <b>Second author last name:</b> Brown, Jr. <b>Other authors:</b> W. O. White, I. O. Green, Y. N. O. Black<b> Year:</b> 1984 <b>Title:</b> A new species of ammonite from the North Horn Formation of Utah <b>Serial:</b> Bulletin of the Southern California Academy of Sciences </i></p>
+  </tr>
+
+  <tr>
+    <td><span class="required">First author:</span></td>
+    <td><span class="required">initials</span><input name=author1init size=8 value="" maxlength=10></td>
+    <td><span class="required">last name</span><input name=author1last size=20 value=""  maxlength=255></td>
+  </tr>
+  <tr>
+    <td>Second author: <td>initials <input name=author2init size=8 value="" maxlength=10></td>
+    <td>last name <input name=author2last size=20 value="" maxlength=255></td>
+  </tr>
+</table>
+Initials and names of additional authors (separate the names with commas):<br><textarea name=otherauthors rows=3 cols=80 wrap=virtual></textarea><p>
+<TABLE border=0>
+  <tr>
+    <td><span class="required">Publication year:</span> </td>
+    <td>
+	<input name=pubyr size=5 value="" maxlength=4><br> 
+	</td>
+  </tr>
+</table>
+<table>
+  <tr>
+    <td valign=top>
+      <span class="required">Title:</span><br>
+      <textarea name="reftitle" rows="3" cols="80" wrap="virtual"></textarea><br>
+     </td>
+  </tr>
+  <tr>
+    <td valign=top><span class="required">
+      <span class="require">Enter the full name of the book here:</span><br>
+      <textarea name="pubtitle" rows="3" cols="80" wrap="virtual"></textarea><br>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td valign=top>Comments:<br><textarea name="comments" rows="4" cols="80" wrap="virtual"></textarea></td>
+  </tr>
+</table>
+</table>
+
+</DIV>
+
+<BR>
+<CENTER>
+<input type=submit value="Submit">
+</center>
+<BR>
+</form>
+
+
+
+

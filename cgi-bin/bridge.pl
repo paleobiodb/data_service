@@ -41,7 +41,7 @@ use Taxon;
 use Opinion;
 use Validation;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD);
+use Constants qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAXA_TREE_CACHE);
 
 #*************************************
 # some global variables 
@@ -146,6 +146,9 @@ sub execAction {
 sub processLogin {
     my $authorizer = $q->param('authorizer_reversed');
     my $enterer = $q->param('enterer_reversed');
+    if ($IS_FOSSIL_RECORD) {
+        $enterer = $authorizer;
+    }
     my $password = $q->param('password');
     if ( $authorizer =~ /,/ )	{
         $authorizer = Person::reverseName($authorizer);
@@ -1931,6 +1934,10 @@ sub submitAuthorityForm {
 }
 
 sub displayClassificationTableForm {
+	if (!$s->isDBMember()) {
+		displayLoginPage( "Please log in first.");
+		exit;
+	} 
     if (!$s->get('reference_no')) {
         $s->enqueue('action=displayClassificationTableForm');
 		displaySearchRefs("You must choose a reference before adding new taxa" );
@@ -1942,6 +1949,10 @@ sub displayClassificationTableForm {
 }
 
 sub displayClassificationUploadForm {
+	if (!$s->isDBMember()) {
+		displayLoginPage( "Please log in first.");
+		exit;
+	} 
     if (!$s->get('reference_no')) {
         $s->enqueue('action=displayClassificationUploadForm');
 		displaySearchRefs("You must choose a reference before adding new taxa" );
@@ -1954,12 +1965,20 @@ sub displayClassificationUploadForm {
 
 
 sub submitClassificationTableForm {
+	if (!$s->isDBMember()) {
+		displayLoginPage( "Please log in first.");
+		exit;
+	} 
     print $hbo->stdIncludes("std_page_top");
 	FossilRecord::submitClassificationTableForm($dbt,$hbo, $s, $q);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
 sub submitClassificationUploadForm {
+	if (!$s->isDBMember()) {
+		displayLoginPage( "Please log in first.");
+		exit;
+	} 
     print $hbo->stdIncludes("std_page_top");
 	FossilRecord::submitClassificationUploadForm($dbt,$hbo, $s, $q);
     print $hbo->stdIncludes("std_page_bottom");
@@ -2115,14 +2134,14 @@ sub randomTaxonInfo{
     my $lft;
     my $rgt;
     if ( $q->param('taxon_name') =~ /^[A-Za-z]/ )	{
-        my $sql = "SELECT lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbh->quote($q->param('taxon_name'));
+        my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbh->quote($q->param('taxon_name'));
         my $taxref = ${$dbt->getData($sql)}[0];
         if ( $taxref )	{
             $lft = $taxref->{lft};
             $rgt = $taxref->{rgt};
         }
     } elsif ( $q->param('common_name') =~ /^[A-Za-z]/ )	{
-        my $sql = "SELECT lft,rgt FROM authorities a,taxa_tree_cache t WHERE a.taxon_no=t.taxon_no AND common_name=".$dbh->quote($q->param('common_name'));
+        my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND common_name=".$dbh->quote($q->param('common_name'));
         my $taxref = ${$dbt->getData($sql)}[0];
         if ( $taxref )	{
             $lft = $taxref->{lft};
@@ -2130,7 +2149,7 @@ sub randomTaxonInfo{
         }
     }
     if ( $lft > 0 && $rgt > 0 )	{
-        $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a,taxa_tree_cache t WHERE o.taxon_no=a.taxon_no AND taxon_rank='species' AND a.taxon_no=t.taxon_no AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt)";
+        $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a,$TAXA_TREE_CACHE t WHERE o.taxon_no=a.taxon_no AND taxon_rank='species' AND a.taxon_no=t.taxon_no AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt)";
     } else	{
         $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a WHERE o.taxon_no=a.taxon_no AND taxon_rank='species'";
     }

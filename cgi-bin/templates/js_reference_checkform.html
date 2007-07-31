@@ -92,22 +92,26 @@
 
 
 		// Language
-		var index = frm.language.selectedIndex;
-		if ( index == 0 ) {
-			errors += "The publication language must be selected.\n"; 
-		} 
+        if (frm.language && frm.language.selectedIndex != null) {
+            var index = frm.language.selectedIndex;
+            if ( index == 0 ) {
+                errors += "The publication language must be selected.\n"; 
+            } 
+        }
 
 		// Publication Type
-		var index = frm.publication_type.selectedIndex;
-		if ( index == 0 ) {
-			errors += "The publication type must be selected.\n"; 
-		} else {
-			if ( frm.publication_type.options[frm.publication_type.selectedIndex].text == "book/book chapter" ) {
-				if ( frm.pubtitle.value == "" ) {
-					errors += "If you select \"book/book chapter\", you are required to fill in its name.\n"; 
-				}
-			}
-		}
+        if (frm.publication_type && frm.publication_type.selectedIndex != null) {
+            var index = frm.publication_type.selectedIndex;
+            if ( index == 0 ) {
+                errors += "The publication type must be selected.\n"; 
+            } else {
+                if ( frm.publication_type.options[frm.publication_type.selectedIndex].text == "book/book chapter" ) {
+                    if ( frm.pubtitle.value == "" ) {
+                        errors += "If you select \"book/book chapter\", you are required to fill in its name.\n"; 
+                    }
+                }
+            }
+        }
 
 		// Report errors
 		if ( errors != "" ) {

@@ -24,7 +24,7 @@ if ($Constants::IS_FOSSIL_RECORD) {
     $Constants::READ_URL = 'bridge.pl';
     $Constants::WRITE_URL = 'bridge.pl';
 } else {
-    $Constants::TAXA_LIST_CACHE = 'taxa_list_cache';
+    $Constants::TAXA_TREE_CACHE = 'taxa_tree_cache';
     $Constants::TAXA_LIST_CACHE = 'taxa_list_cache';
     $Constants::READ_URL = 'bridge.pl';
     $Constants::WRITE_URL = 'bridge.pl';

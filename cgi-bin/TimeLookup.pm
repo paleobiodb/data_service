@@ -182,77 +182,47 @@ sub getRange {
     }
 }
 
+# Pass in a range of intervals and this populates and passes back four hashes
+# %pre hash has intervals that come before the range (including overlapping with part of the range)
+# %post has intervals that come after the range (including overlapping with part of the range)
+# %range has intervals in the range passed in
+# %unknown has intervals  we dont' know what to do with, which are mostly larger intervals
+#   that span both before and after the range of intervals
 sub getCompleteRange {
     my ($self,$intervals) = @_;
     my (%pre,%range,%post,%unknown);
 
     my $ig = $self->getIntervalGraph();
-    while (my ($i,$itv) = each %$ig) {
-        $itv->{'visited'} = 0;
-    }
-    my @q;
     foreach my $i (@$intervals) {
-        my $itv = $ig->{$i};
-        $range{$i} = $itv;
-        push @q, $itv;
-        $itv->{'visited'} = 1;
-    }
-    my @orig_q = @q;
-
-    while (my $itv = shift @q) {
-        foreach my $v (@{$itv->{'all_prev'}}) {
-            #next if ($v->{'visited'});
-            if (!$range{$v->{'interval_no'}} &&
-                !$pre{$v->{'interval_no'}}) {
-                $pre{$v->{'interval_no'}} = $v;
-                push @q,$v;
-            #    $v->{'visited'} = 1;
-            }
-        }
-        if ($itv->{'max'} && 
-            !$range{$itv->{'max'}->{'interval_no'}} &&
-            !$pre{$itv->{'max'}->{'interval_no'}}) {
-            $pre{$itv->{'max'}->{'interval_no'}} = $itv->{'max'};
-            push @q,$itv->{'max'};
-        }
-        foreach my $c (@{$itv->{'children'}}) {
-            if ($c->{'min'} == $itv &&
-                $c->{'max'} != $c->{'min'} && 
-                !$range{$c->{'interval_no'}} &&
-                !$pre{$c->{'interval_no'}}) {
-                $pre{$c->{'interval_no'}} =  $c;
-                push @q,$c;
-            }
-        }
-    }
-    @q = @orig_q;
-    while (my $itv = shift @q) {
-        foreach my $v (@{$itv->{'all_next'}}) {
-            #next if ($v->{'visited'});
-            if (!$range{$v->{'interval_no'}} &&
-                !$post{$v->{'interval_no'}}) {
-                $post{$v->{'interval_no'}} = $v;
-                push @q,$v;
-            #    $v->{'visited'} = 1;
-            }
-        }
-        if ($itv->{'min'} && 
-            !$range{$itv->{'min'}->{'interval_no'}} &&
-            !$post{$itv->{'min'}->{'interval_no'}}) {
-            $post{$itv->{'min'}->{'interval_no'}} = $itv->{'min'};
-            push @q,$itv->{'min'};
-        }
-        foreach my $c (@{$itv->{'children'}}) {
-            if ($c->{'max'} == $itv &&
-                $c->{'max'} != $c->{'min'} && 
-                !$range{$c->{'interval_no'}} &&
-                !$post{$c->{'interval_no'}}) {
-                $post{$c->{'interval_no'}} =  $c;
-                push @q,$c;
-            }
-        }
+        $range{$i} = $ig->{$i};
     }
 
+    my $i = $intervals->[0];
+    if ($i) {
+        my $first_itv = $ig->{$i};
+        while (my ($i,$itv) = each %$ig) {
+            $itv->{'visited'} = 0;
+        }
+        $self->{precedes_lb} = {}; 
+        $self->markPrecedesLB($ig,$first_itv,0);
+        
+        while (my ($i,$itv) = each %$ig) {
+            $itv->{'visited'} = 0;
+        }
+        $self->{follows_ub} = {};
+        $self->markFollowsUB($ig,$first_itv,0);
+
+        foreach my $post_no (keys %{$self->{precedes_lb}{$i}}) {
+            if (!$range{$post_no}) {
+                $post{$post_no} = $ig->{$post_no};
+            }
+        }
+        foreach my $pre_no (keys %{$self->{follows_ub}{$i}}) {
+            if (!$range{$pre_no} && !$post{$pre_no}) {
+                $pre{$pre_no} = $ig->{$pre_no};
+            }
+        }
+    }
     while (my ($i,$itv) = each %$ig) {
         if (!$range{$i} && !$pre{$i} && !$post{$i}) {
             $unknown{$i} = $itv;
@@ -813,6 +783,52 @@ sub markPrecedesLB {
 #        print "P IS ".scalar(@all_post)." FOR $m_no and $i\n";
         foreach my $p (@all_post) {
             $self->{precedes_lb}{$i}{$p} = 1;
+        }
+    }
+}
+
+sub markFollowsUB {
+    my ($self,$ig,$itv,$depth) = @_;
+    if ($itv->{'visited'}) {
+        return;
+    } else {
+        $itv->{'visited'} = 1;
+    }
+    my $i = $itv->{interval_no};
+   
+    my @to_mark = ();
+    if ($itv->{'all_prev'}) {
+        foreach my $prev (@{$itv->{'all_prev'}}) {
+            if ($prev->{'next'} == $itv) {
+                push @to_mark, $prev;
+            }
+        }
+    }
+    foreach my $c (@{$itv->{'children'}}) {
+        if ($c->{'min'} == $itv) {
+            push @to_mark,$c;
+        }
+    }
+    if ($itv->{'min'}) {
+        if ($itv->{'min'}->{'shared_upper'} && 
+            $itv->{'min'}->{'shared_upper'} == $itv->{'shared_upper'}) {
+            push @to_mark,$itv->{'max'};
+            push @to_mark,$itv->{'min'};
+        } elsif ($itv->{'max'} != $itv->{'min'}) {
+            push @to_mark,$itv->{'max'};
+        }
+    }
+#    print "mpLB direct I$i (".join(',',map {$_->{'interval_no'}.":".$_->{'name'}} @to_mark).")\n";
+    foreach my $m (@to_mark) {
+        my $m_no = $m->{'interval_no'};
+        $self->{'follows_ub'}{$i}{$m_no} = 1;
+        unless ($m->{'visited'}) {
+            $self->markFollowsUB($ig,$m,$depth+1);
+        }
+        my @all_pre = keys %{$self->{'follows_ub'}{$m_no}};
+#        print "P IS ".scalar(@all_post)." FOR $m_no and $i\n";
+        foreach my $p (@all_pre) {
+            $self->{'follows_ub'}{$i}{$p} = 1;
         }
     }
 }
@@ -2209,6 +2225,8 @@ sub splitInterval {
         }
     }
     my $interval = join(" ",@interval_terms);
+    $interval =~ s/^\s*//;
+    $interval =~ s/\s*$//;
 
     my $eml;
     if (scalar(@eml_terms) == 1) {

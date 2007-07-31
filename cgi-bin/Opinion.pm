@@ -1,14 +1,6 @@
-# created by rjp, 3/2004.
-# Represents information about a particular opinion
-
-# Reworked PS 04/30/2005 - reworked accessor methods to make sense.  Also, return undef
-# if the opinion isn't in the opinions table, since a Opinion object with a opinion_no is pointless 
-
 package Opinion;
 use strict;
 
-use DBConnection;
-use DBTransactionManager;
 use TypoChecker;
 use CGI::Carp;
 use Data::Dumper;
@@ -537,16 +529,18 @@ sub displayOpinionForm {
         $fields{'created'} = "<B>Created: </B>".$fields{'created'}; 
     }
 
+    my $fossil_record_ref = 0;
     if ($fields{'reference_no'}) {
         my $ref = Reference->new($dbt,$fields{'reference_no'}); 
+        if ($ref->{'project_name'} =~ /fossil record/) {
+            $fossil_record_ref = 1;
+        }
         $fields{formatted_primary_reference} = $ref->formatAsHTML() if ($ref);
     }
 
     if ($s->get('reference_no') && $s->get('reference_no') != $fields{'reference_no'}) {
-        if ($s->get('reference_no')) {
-            my $ref = Reference->new($dbt,$s->get('reference_no'));
-            $fields{formatted_current_reference} = $ref->formatAsHTML() if ($ref);
-        }
+        my $ref = Reference->new($dbt,$s->get('reference_no'));
+        $fields{formatted_current_reference} = $ref->formatAsHTML() if ($ref);
         $fields{'current_reference'} = 'yes';
     } 
 	
@@ -733,9 +727,11 @@ sub displayOpinionForm {
 	# print the form	
     $fields{'error_message'} = $error_message;
 
-	my $html = $hbo->populateHTML("add_enter_opinion", \%fields);
-
-	print $html;
+    if ($fossil_record_ref) {
+        print $hbo->populateHTML("fossil_record_opinion", \%fields);
+    } else {
+        print $hbo->populateHTML("add_enter_opinion", \%fields);
+    }
 }
 
 
@@ -1276,21 +1272,24 @@ sub submitOpinionForm {
     }
 
     if ($IS_FOSSIL_RECORD) {
-        my @errors = ();
         if ($q->param('max_interval_name')) {
             my ($max_no,$err1) = FossilRecord::parseIntervalName($dbt,$q->param('max_interval_name'));
             $fields{'max_interval_no'} = $max_no;
-            push @errors, @$err1;
-
+            foreach (@$err1) {
+                $errors->add($_->{'message'});
+            }
+        } elsif ($childRank =~ /genus/) {
+            $errors->add('First interval is required');
         }
 
         if ($q->param('min_interval_name')) {
             my ($min_no,$err2) = FossilRecord::parseIntervalName($dbt,$q->param('min_interval_name'));
             $fields{'min_interval_no'} = $min_no;
-            push @errors, @$err2;
-        }
-        foreach my $err (@errors) {
-            $errors->add($err->{'message'});
+            foreach (@$err2) {
+                $errors->add($_->{'message'});
+            }
+        } elsif ($childRank =~ /genus/) {
+            $errors->add('Last interval is required');
         }
     }
 

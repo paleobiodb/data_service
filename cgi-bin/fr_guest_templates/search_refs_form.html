@@ -1,0 +1,91 @@
+<form method=post action="$exec_url">
+<input type=hidden name="action" value="displayRefResults">
+<input id="type" type=hidden name="type" value="">
+<input id="goal" type=hidden name="goal" value="">
+
+<div hide="type=add">
+    <div align="center"><h3>Reference search form</h3></div>
+</div>
+<div show="type=add">
+    <div align="center"><h3>Duplicate reference search form</h3></div>
+</div>
+
+<center>
+<div style="color: red;"><h4>
+%%message%%
+</h4></div>
+
+<div class="displayPanel" align="center" style="width: 40em;">
+<div class="displayPanelContent">
+<table border=0 cellpadding=4 class="small" style="padding-top: 1em; padding-bottom: 1em; padding-left: -1em;">
+<tr>
+	<td align=right>Author's last name:</td>
+	<td><input id="name" name="name" type=text size=20>
+	</td>
+
+	<td align=right>Year:</td>
+	<td>
+	<input id="year" name="year" type=text size=5 maxlength=4>
+	</td>
+
+<tr>
+	<td align=right>Title includes: </td>
+	<td colspan=4>
+	<input id="reftitle" name="reftitle" type=text size=50>
+	</td> 
+</tr>
+
+<tr>
+	<td align=right>Name of book<br>or serial:</td>
+	<td colspan=4>
+	<input id="pubtitle" name="pubtitle" type=text size=50>
+	</td>
+</tr>
+<div hide="type=add">
+<tr>
+	<td align=right> Reference number: </td>
+	<td>
+	<input id="reference_no" name="reference_no" type=text size=7 maxlength=5>
+	</td>
+
+	<td align=right valign=top colspan=2>
+	<input type="checkbox" name="project_name">Fossil record refs
+    </td>
+</tr>
+
+<tr>
+	<td align=right>Authorizer:</td>
+	<td><input id="authorizer_reversed" name="authorizer_reversed" size=18 onKeyUp="doComplete(event, this, authorizerNames());"></td>
+</tr>
+</div>
+
+<tr>
+	<td align=right valign=top>Sort by:</td>
+	<td>
+	  <select name="refsortby" class="tiny">
+        <option>author</option>
+        <option>year</option>
+        <option>publication</option>
+        <option>authorizer</option>
+        <option>entry date</option>
+      </select>
+	  <select name="refsortorder" class="tiny">
+        <option>ascending</option>
+        <option>descending</option>
+      </select>
+	<br><br>
+	</td> 
+</tr>
+
+<tr>
+	<td colspan="4" align="right">
+	<input type=submit value="Search"> %%use_current%% %%use_primary%%
+	</td>
+</tr>
+</table>
+
+</form>
+
+</div>
+</div>
+

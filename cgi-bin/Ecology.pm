@@ -2,7 +2,7 @@ package Ecology;
 
 use TaxaCache;
 use Debug qw(dbg);
-use Constants qw($WRITE_URL);
+use Constants qw($WRITE_URL $TAXA_TREE_CACHE);
 
 # written by JA 27-31.7,1.8.03
 
@@ -200,7 +200,7 @@ sub getEcology {
     }
 
     # Get a list of alternative names of existing taxa as well
-    my $sql = "SELECT taxon_no,synonym_no FROM taxa_tree_cache WHERE taxon_no != synonym_no AND synonym_no IN (".join(",",keys %all_taxon_nos).")";
+    my $sql = "SELECT taxon_no,synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no != synonym_no AND synonym_no IN (".join(",",keys %all_taxon_nos).")";
     my @results = @{$dbt->getData($sql)};
     foreach my $row (@results) {
         # Synonym_no in this case means senior synonym_no. taxon_no is junior synonym or recombination to add

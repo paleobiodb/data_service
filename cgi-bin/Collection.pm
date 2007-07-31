@@ -15,7 +15,7 @@ use Debug qw(dbg);
 use URI::Escape;
 use Debug;
 use Map;    
-use Constants qw($READ_URL $WRITE_URL $HTML_DIR $HOST_URL);
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR $HOST_URL $TAXA_TREE_CACHE);
 
 # This function has been generalized to use by a number of different modules
 # as a generic way of getting back collection results, including maps, collection search, confidence, and taxon_info
@@ -1300,7 +1300,7 @@ sub displayCollectionDetailsPage {
         $row->{'interval'} .= '</a>';
 	} 
 
-	if ( $row->{'min_interval_no'}) { 
+	if ( $row->{'min_interval_no'}) {
 		$sql = "SELECT eml_interval,interval_name FROM intervals WHERE interval_no=" . $row->{'min_interval_no'};
         my $min_row = ${$dbt->getData($sql)}[0];
         $row->{'interval'} .= " - ";
@@ -1520,7 +1520,7 @@ sub buildTaxonomicList {
 	} else	{
 		$sqlend = "";
 	}
-	my $sql = $sqlstart . ", lft, rgt" . $sqlmiddle . ", taxa_tree_cache t WHERE o.taxon_no=t.taxon_no " . $sqlend;
+	my $sql = $sqlstart . ", lft, rgt" . $sqlmiddle . ", $TAXA_TREE_CACHE t WHERE o.taxon_no=t.taxon_no " . $sqlend;
 	my $sql2 = $sqlstart . $sqlmiddle . "WHERE taxon_no=0 " . $sqlend;
 
 	my @warnings;
@@ -2172,7 +2172,7 @@ sub getReidHTMLTableByOccNum {
                 # I hate having to hit taxa_tree_cache with a separate SELECT,
                 #  but you can't hit it until you already know there's a
                 #  taxon_no you can use JA 23.1.07
-                my $sql = "SELECT lft,rgt FROM taxa_tree_cache WHERE taxon_no=" . $row->{'taxon_no'};
+                my $sql = "SELECT lft,rgt FROM $TAXA_TREE_CACHE WHERE taxon_no=" . $row->{'taxon_no'};
                 my $lftrgtref = ${$dbt->getData($sql)}[0];
                 $classification->{'lft'}{'taxon_no'} = $lftrgtref->{'lft'};
                 $classification->{'rgt'}{'taxon_no'} = $lftrgtref->{'rgt'};

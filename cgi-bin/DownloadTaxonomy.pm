@@ -10,7 +10,7 @@ use Person;
 use Opinion;
 use CGI::Carp;
 use Debug qw(dbg);
-use Constants qw($READ_URL $DATA_DIR $HTML_DIR);
+use Constants qw($READ_URL $DATA_DIR $HTML_DIR $TAXA_TREE_CACHE);
 
 use strict;
 
@@ -672,7 +672,7 @@ sub getTaxonomicNames {
                 . " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,"
                 . " DATE_FORMAT(a.modified,'%Y-%m-%e %H:%i:%s') modified, "
                 . " DATE_FORMAT(a.modified,'%m/%e/%Y') modified_short "
-                . " FROM taxa_tree_cache t, authorities a"
+                . " FROM $TAXA_TREE_CACHE t, authorities a"
                 . " LEFT JOIN person p1 ON p1.person_no=a.authorizer_no"
                 . " LEFT JOIN person p2 ON p2.person_no=a.enterer_no"
                 . " LEFT JOIN person p3 ON p3.person_no=a.modifier_no"
@@ -695,7 +695,7 @@ sub getTaxonomicNames {
             my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'senior_synonym_no'});
             my $parent = TaxonInfo::getMostRecentClassification($dbt,$orig_no);
             if ($parent && $parent->{'parent_no'}) {
-                my $sql = "SELECT a.taxon_no, a.taxon_name FROM taxa_tree_cache t, authorities a WHERE a.taxon_no=t.synonym_no AND t.taxon_no=$parent->{parent_no}";
+                my $sql = "SELECT a.taxon_no, a.taxon_name FROM $TAXA_TREE_CACHE t, authorities a WHERE a.taxon_no=t.synonym_no AND t.taxon_no=$parent->{parent_no}";
                 my @r = @{$dbt->getData($sql)};
                 $row->{'parent_name'} = $r[0]->{'taxon_name'};
                 $row->{'parent_no'} = $r[0]->{'taxon_no'};

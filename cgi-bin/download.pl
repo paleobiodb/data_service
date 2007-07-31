@@ -15,9 +15,9 @@ my $q = new CGI;
 my $dbt = new DBTransactionManager;
 
 my $what = $q->param('what') || 'upload';
-my $id = int($q->param('download_id')) || die;
+my $id = int($q->param('download_id'));
 
-if ($what eq 'upload') {
+if ($id && $what eq 'upload') {
     my $sql = "SELECT file_name,file_data FROM uploads WHERE upload_id=$id";
     my $row = ${$dbt->getData($sql)}[0];
     if ($row) {
@@ -30,5 +30,6 @@ if ($what eq 'upload') {
         );
         print $row->{'file_data'};
     }
+} else {
+    print $q->header('-type'=> "text/html");
 }
-

@@ -689,7 +689,7 @@ sub radioSelect {
 	my $html = "";
 
     for(my $i=0;$i<scalar(@keys);$i++) {
-        my $selected = ($toSelect ne '' && $values[$i] eq $toSelect) ? " CHECKED" : "";
+        my $selected = ($toSelect ne '' && $values[$i] eq $toSelect) ? " checked default" : "";
         my $value = escapeHTML($values[$i]);
         my $key = $keys[$i];
 		$html .= qq|  <input type="radio" name="$name" value="$value"$selected />$key<br />|;
