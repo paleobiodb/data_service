@@ -1,0 +1,627 @@
+<html>
+<head>
+<link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css">
+<title id="title">Paleobiology Database</title>
+
+<!--javascript containing common functions-->
+<SCRIPT src="/JavaScripts/common.js" language="JavaScript" type="text/javascript
+">
+</SCRIPT>
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+function submitForm ( )	{
+	var inputs = document.phylogeny.clade.length;
+	for ( i = 0; i < inputs; i++ )	{
+		var id = 'terminalList' + i;
+		if ( /[A-Z]/.test( document.getElementById(id).innerHTML  ) )	{
+			document.phylogeny.submit() ;
+			return true;
+		}
+	}
+	drawCladogram();
+	alert("Please check the cladogram first");
+	return false;
+}
+
+function drawCladogram()	{
+	var inputs = document.phylogeny.clade.length;
+	var hasTaxa = / = [0-9A-Z]/;
+	var totalTerminals = 0;
+	var terminalName = new Array();
+	var terminalNameSeen = new Array();
+	var terminalParent = new Array();
+	var nodesup = new Array();
+	var inRow = new Array();
+	var totalHighers = 0;
+	var higherName = new Array();
+	var higherNameSeen = new Array();
+	var higherParent = new Array();
+	var firstChildRow = new Array();
+	var lastChildRow = new Array();
+	var parentDepth = new Array();
+
+	// simple check on bootstrap proportions
+	for ( i = 0; i < inputs; i++ )	{
+		if ( /[^0-9]/.test( document.forms[0].bootstrap[i].value ) )	{
+			alert("The bootstrap proportion must be an integer");
+			return false;
+		} else if ( /^0/.test( document.forms[0].bootstrap[i].value ) )	{
+			alert("The bootstrap proportion must be more than zero");
+			return false;
+		} else if ( document.forms[0].bootstrap[i].value > 100 )	{
+			alert("The bootstrap proportion can't be more than 100");
+			return false;
+		}
+	}
+
+	// find the available blank rows
+	blankRows = 0;
+	for ( i = 0; i < 100; i++ )	{
+		var id = 'terminalList' + i;
+		if ( document.getElementById(id) )	{
+			blankRows = i;
+		}
+	}
+	// the matrix of divs should be square
+	var maxCol = blankRows + 1;
+
+	// get the parent nodes; a list is needed later to process
+	//  their contents
+	for ( i = 0; i < inputs; i++ )	{
+		var thisClade = document.forms[0].clade[i].value;
+		if ( hasTaxa.test( thisClade ) )	{
+			var parts = thisClade.split(/ = /);
+			if ( /^(([0-9]+)|([A-Z][a-z]+))$/.test( parts[0] ) )	{
+				higherName[totalHighers] = parts[0];
+				if ( higherNameSeen[parts[0]] == 1 )	{
+					if ( /[0-9]/.test( parts[0] ) )	{
+						alert("The contents of clade " + parts[0] + " are listed twice");
+					}	{
+						alert("The contents of " + parts[0] + " are listed twice");
+					}
+					return false;
+				}
+				higherNameSeen[parts[0]] = 1;
+				higherParent[totalHighers] = -1;
+				firstChildRow[totalHighers] = -1;
+				lastChildRow[totalHighers] = -1;
+				totalHighers++;
+			}
+			else	{
+				alert("The clade name '" + parts[0] + "' is misformatted");
+				return false;
+			}
+		}
+	}
+	if ( totalHighers == 0 )	{
+		alert("Nothing has been assigned to the clades yet");
+		return false;
+	}
+
+	// parse the cladogram
+	var highers = 0;
+	for ( i = 0; i < inputs; i++ )	{
+		var thisClade = document.forms[0].clade[i].value;
+		// harmless to recompute this
+		if ( hasTaxa.test( thisClade ) )	{
+			var parts = thisClade.split(/ = /);
+			if ( /^[0-9A-Z]/.test( parts[0] ) )	{
+				if ( /[A-Z]\. [a-z]/.test( parts[1] ) )	{
+					alert("You can't abbreviate genus names");
+					return false;
+				}
+				var cleanParts = parts[1].replace(/[\.:;\-\+\&]/g,",");
+				cleanParts = cleanParts.replace(/  /g," ");
+				cleanParts = cleanParts.replace(/ ,/g,",");
+				cleanParts = cleanParts.replace(/, /g,",");
+				cleanParts = cleanParts.replace(/,,/g,",");
+				cleanParts = cleanParts.replace(/( )([0-9A-Z])/g,",$2");
+				var subtaxa = cleanParts.split(/,/g);
+				var ntaxa = subtaxa.length;
+				for ( j = 1; j < ntaxa; j++ )	{
+					for ( k = 0; k < j; k++ )	{
+						if ( subtaxa[j] == subtaxa[k] )	{
+							if ( /[0-9]/.test( subtaxa[j] ) )	{
+								alert("Clade " + subtaxa[j] + " is assigned twice to the same parent");
+							} else	{
+								alert(subtaxa[j] + " is assigned twice to the same clade");
+							}
+							return false;
+						}
+					}
+				}
+				for ( j = 0; j < ntaxa; j++ )	{
+					if ( ! /^(([0-9]+)|(([A-Z][a-z]+)(|\*|( [a-z]+)(|\*))))$/.test( subtaxa[j] ) )	{
+						alert("The name '" + subtaxa[j] + "' is misformatted");
+						return false;
+					}
+				// if a subtaxon is a previously listed parent,
+				//  record its assignment to the current one
+					if ( terminalNameSeen[subtaxa[j]] == 1 )	{
+						if ( /[0-9]/.test( subtaxa[j] ) )	{
+							alert("Clade " + subtaxa[j] + " is assigned to more than one parent");
+						} else	{
+							alert(subtaxa[j] + " is assigned to more than one clade");
+						}
+						return false;
+					}
+					terminalNameSeen[subtaxa[j]] = 1;
+					var isParent = 0;
+					for ( h = 0; h < totalHighers; h++ ){
+						if ( subtaxa[j] == higherName[h] )	{
+							higherParent[h] = highers;
+							isParent = 1;
+						}
+					}
+					if ( isParent == 0 )	{
+						terminalName[totalTerminals] = subtaxa[j];
+						terminalParent[totalTerminals] = highers;
+						totalTerminals++;
+					}
+				}
+				highers++;
+			}
+		}
+	}
+
+	if ( totalTerminals > blankRows + 1 )	{
+		alert("There are too many taxa to fit in the graph");
+		return false;
+	}
+
+	// everything should form one big clade with one root
+	var rootNode = -1;
+	for ( h = 0; h < totalHighers; h++ )	{
+		if ( higherParent[h] == -1 )	{
+			if ( rootNode == -1 )	{
+				rootNode = h;
+			} else	{
+				alert("There can be only one root node");
+				return false;
+			}
+		}
+	}
+	if ( rootNode == - 1 )	{
+		alert("There is no root node, because each clade is assigned to another one");
+		return false;
+	}
+
+	// reorder the rows
+	// this algorithm guarantees that the user's entry order will match
+	//  the reordering as closely as possible
+
+	// first get the distance of each terminal to each of its ancestors
+	for ( t = 0; t < totalTerminals; t++ )	{
+		nodesup[t] = new Array();
+		var z = terminalParent[t];
+		var depth = 1;
+		while ( z > -1 )	{
+			// paranoia check, should only be true if there is
+			//  no root node or clades are assigned twice
+			if ( nodesup[t][z] > 0 )	{
+				alert("There is a circle of assignments involving " + terminalName[t]);
+				return false;
+			}
+			nodesup[t][z] = depth;
+			depth++;
+			z = higherParent[z];
+		}
+	}
+
+	// find the new row position of each terminal
+	// the first terminal is still first
+	inRow[0] = 0;
+	var lastTerminal = 0;
+	var chosen = new Array();
+	// at each step, add the first terminal found that has the minimal
+	//  distance to any of the ancestors of the last terminal added
+	for ( i = 0; i < totalTerminals; i++ )	{
+		chosen[i] = 0;
+	}
+	for ( i = 1; i < totalTerminals; i++ )	{
+		var nextTerminal = 0;
+		var mindist = 9999;
+		for ( j = 1; j < totalTerminals; j++ )	{
+			for ( h = 0; h < totalHighers; h++ )	{
+				if ( nodesup[lastTerminal][h] >= 0 && nodesup[lastTerminal][h] < mindist && nodesup[j][h] > 0 && chosen[j] == 0 )	{
+					mindist = nodesup[lastTerminal][h];
+					nextTerminal = j;
+				}
+			}
+		}
+		inRow[i] = nextTerminal;
+		chosen[nextTerminal] = 1;
+		lastTerminal = nextTerminal;
+	}
+
+	for ( i = 0; i < totalTerminals; i++ )	{
+		if ( firstChildRow[terminalParent[inRow[i]]] == -1 )	{
+			firstChildRow[terminalParent[inRow[i]]] = i;
+		}
+		lastChildRow[terminalParent[inRow[i]]] = i;
+	}
+
+	// the parent node is placed no lower than the row of the first
+	//  terminal taxon it includes
+	var rowPosition = new Array();
+	for ( h = 0; h < totalHighers; h++ )	{
+		rowPosition[h] = totalTerminals - 1;
+		for ( t = 0; t < totalTerminals; t++ )	{
+			if ( terminalParent[inRow[t]] == h && t < rowPosition[h] )	{
+				rowPosition[h] = t;
+			}
+		}
+	}
+
+	for ( h = 0; h < totalHighers; h++ )	{
+		parentDepth[h] = 0;
+	}
+	for ( h = 0; h < totalHighers; h++ )	{
+		z = h;
+		var depth = 1;
+		// the depth of a parent is the maximum number of nodes
+		//  traversed by its child nodes
+		while ( higherParent[z] > -1 )	{
+			if ( depth > parentDepth[higherParent[z]] )	{
+				parentDepth[higherParent[z]] = depth;
+			}
+			depth++;
+			// the row position is the highest of any included
+			//  subclade, with an offset
+			if ( rowPosition[z] < rowPosition[higherParent[z]] )	{
+				rowPosition[higherParent[z]] = rowPosition[z] + 1;
+			}
+			z = higherParent[z];
+		}
+	}
+
+	// finalize the parent depths
+	for ( h = 0; h < totalHighers; h++ )	{
+		parentDepth[h] = maxCol - parentDepth[h];
+		// also, adjust the daughter levels if necessary
+		if ( rowPosition[h] < firstChildRow[higherParent[h]] || firstChildRow[higherParent[h]] == - 1 )	{
+			firstChildRow[higherParent[h]] = rowPosition[h];
+		}
+		if ( rowPosition[h] > lastChildRow[higherParent[h]] )	{
+			lastChildRow[higherParent[h]] = rowPosition[h];
+		}
+	}
+
+	// refresh the graph
+	for ( r = 0; r <= blankRows; r++ )	{
+		for ( c = 1; c <= maxCol; c++ )	{
+			document.getElementById('box' + r + '_' + c).innerHTML = '';
+		}
+		document.getElementById('terminalList' + r).innerHTML = '';
+	}
+
+
+	for ( h = 0; h < totalHighers; h++ )	{
+		if ( firstChildRow[h] == lastChildRow[h] )	{
+			alert("A clade must include more than one thing");
+			return false;
+		}
+		// "bracket" to the left of the entire clade
+		document.getElementById('box' + ( firstChildRow[h] + 1 ) + '_' + parentDepth[h]).innerHTML = '<div style="height: 100%; border-top: 1px solid black; border-left: 1px solid black;"></div>';
+		for ( r = firstChildRow[h] + 2; r < lastChildRow[h]; r++ )	{
+			document.getElementById('box' + r + '_' + parentDepth[h]).innerHTML = '<div style="height: 100%; border-left: 1px solid black;"></div>';
+		}
+		document.getElementById('box' + lastChildRow[h] + '_' + parentDepth[h]).innerHTML = '<div style="height: 100%; border-bottom: 1px solid black; border-left: 1px solid black;"></div>';
+		for ( t = 0; t < totalTerminals; t++ )	{
+			if ( terminalParent[inRow[t]] == h )	{
+				if ( firstChildRow[h] == t )	{
+					if ( lastChildRow[h] == t || firstChildRow[h] < t )	{
+						document.getElementById('box' + t + '_' + parentDepth[h]).innerHTML = '<div style="clear: none; float: right; height: 1em; width: 100%; border-bottom: 1px solid black; border-left: 1px solid black; background-color: none;"></div>';
+					} else	{
+						document.getElementById('box' + t + '_' + parentDepth[h]).innerHTML = '<div style="clear: none; float: right; height: 1em; width: 100%; border-bottom: 1px solid black; background-color: none;"></div>';
+					}
+				} else	{
+					document.getElementById('box' + t + '_' + parentDepth[h]).innerHTML = '<div style="clear: none; float: right; height: 1em; width: 100%; border-bottom: 1px solid black; border-left: 1px solid black; background-color: none;"></div>';
+				}
+				// lines going to terminals
+				for ( b = parentDepth[h] + 1; b <= maxCol; b++ )	{
+					document.getElementById('box' + t + '_' + b).innerHTML = '<div style="height: 100%; border-bottom: 1px solid black;"></div>';
+				}
+				document.getElementById('terminalList' + t).innerHTML = terminalName[inRow[t]];
+			}
+		}
+		// lines going up from level of this parent to that of
+		//  its own parent
+		if ( higherParent[h] > -1 )	{
+			for ( b = parentDepth[higherParent[h]]; b < parentDepth[h]; b++ )	{
+				if ( ! /border-left/.test( document.getElementById('box' + rowPosition[h] + '_' + b).innerHTML ) )	{
+					document.getElementById('box' + rowPosition[h] + '_' + b).innerHTML = '<div style="height: 100%; border-bottom: 1px solid black;"></div>';
+				} else	{
+					document.getElementById('box' + rowPosition[h] + '_' + b).innerHTML = '<div style="height: 100%; border-bottom: 1px solid black; border-left: 1px solid black;"></div>';
+				}
+			}
+		}
+	}
+	return true;
+}
+
+//  End -->
+</script>
+
+</head>
+
+<body>
+
+<div class="mainBody large">
+
+<STYLE type="text/css">
+<!--
+.treeCell	{
+	height: 1em; width: 2em; float: left; clear: none; margin-left: -1px; margin-right: 0; margin-top: 0px; margin-bottom: 0;
+}
+.firstTreeCell	{
+	height: 1em; width: 2em; float: left; clear: left; margin-left: -1px margin-right: 0; margin-top: 0px; margin-bottom: 0;
+}
+.terminalCell	{
+	 padding-left: 0.5em; position: relative; top: 0.4em; float: left; clear: right; height: 1em; margin: -1px;
+}
+-->
+</STYLE>
+
+<center><h3>Cladogram entry form</h3></center>
+
+<form name="phylogeny" method="POST" action="bridge.pl" onSubmit="return checkForm();">
+
+<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+<span class="displayPanelHeader"><b>Metadata</b></span>
+<div class="displayPanelContent">
+
+<p class="small">
+<b>Pages:</b>
+<input size="6" id="pages">
+
+&nbsp;
+<b>Figures:</b>
+<input size="6" id="figures">
+
+&nbsp;
+<b>Source:</b>
+<select>
+<option></option>
+<option>text</option>
+<option>supertree</option>
+<option>most parsimonious tree</option>
+<option>consensus tree</option>
+<option>likelihood tree</option>
+</select> 
+</p>
+
+<p class="small">
+<b>Comments:</b><br>
+<textarea rows="2" cols="60" id="comments"></textarea>
+</p>
+
+</div>
+</div>
+
+<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+<span class="displayPanelHeader"><b>Clades</b></span>
+<div class="displayPanelContent">
+
+<div style="float: left; clear: none;">
+
+<table class="small" cellpadding="0">
+<tr><td><b>&nbsp;out</b></td><td><b>&nbsp;BP</b></td><td><b>Contents</b></td></tr>
+<tr><td><input type=checkbox id="outgroup">yes</td><td><input size="4" id="bootstrap"></td><td><input size="40" id="clade" value="1 = "></td></tr>
+<tr><td><input type=checkbox id="outgroup">yes</td><td><input size="4" id="bootstrap"></td><td><input size="40" id="clade" value="2 = "></td></tr>
+<tr><td><input type=checkbox id="outgroup">yes</td><td><input size="4" id="bootstrap"></td><td><input size="40" id="clade" value="3 = "></td></tr>
+<tr><td><input type=checkbox id="outgroup">yes</td><td><input size="4" id="bootstrap"></td><td><input size="40" id="clade" value="4 = "></td></tr>
+<tr><td><input type=checkbox id="outgroup">yes</td><td><input size="4" id="bootstrap"></td><td><input size="40" id="clade" value="5 = "></td></tr>
+</table>
+
+</div>
+
+<div style="clear: right; float: right; padding-top: 0em;">
+
+<div style="margin: 1em; margin-top: 1.5em; background-color: #F0F0F0; border: 3px solid #F0F0F0;"><div style="height: 1.25em; width: 8em; padding: 0.4em; background-color: #E0E0E0; border: 1px solid #B0B0B0; font-size: 0.8em;" onClick="drawCladogram();">draw cladogram</div></div>
+<div style="width: 3.5em; margin: 1em; padding-right: 1px; background-color: #F0F0F0; border: 3px solid #F0F0F0;"><div style="height: 1.25em; width: 3.5em; padding: 0.4em; background-color: #E0E0E0; border: 1px solid #B0B0B0; font-size: 0.8em;" onClick="submitForm();">submit</div></div>
+
+</div>
+
+<!-- an unfortunate but necessary hack that expands the displayPanelContent div vertically -->
+<div style="clear:both;"></div>
+
+</div>
+
+</div>
+
+<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 2em;">
+<span class="displayPanelHeader"><b>Cladogram</b></span>
+<div class="displayPanelContent">
+
+<div style="width: 40em; clear: right;">
+
+<!-- demo matrix -->
+  <div class="firstTreeCell" id="box0_1"></div>
+  <div class="treeCell" id="box0_2"></div>
+  <div class="treeCell" id="box0_3"></div>
+  <div class="treeCell" id="box0_4"></div>
+  <div class="treeCell" id="box0_5"></div>
+  <div class="treeCell" id="box0_6"></div>
+  <div class="treeCell" id="box0_7"></div>
+  <div class="treeCell" id="box0_8"></div>
+  <div class="terminalCell" id="terminalList0" style="height: 1em; clear: right;"></div>
+
+  <div class="firstTreeCell" id="box1_1"></div>
+  <div class="treeCell" id="box1_2"></div>
+  <div class="treeCell" id="box1_3"></div>
+  <div class="treeCell" id="box1_4"></div>
+  <div class="treeCell" id="box1_5"></div>
+  <div class="treeCell" id="box1_6"></div>
+  <div class="treeCell" id="box1_7"></div>
+  <div class="treeCell" id="box1_8"></div>
+  <div class="terminalCell" id="terminalList1" style="height: 1em; clear: right;">&nbsp;</div>
+
+  <div class="firstTreeCell" id="box2_1"></div>
+  <div class="treeCell" id="box2_2"></div>
+  <div class="treeCell" id="box2_3"></div>
+  <div class="treeCell" id="box2_4"></div>
+  <div class="treeCell" id="box2_5"></div>
+  <div class="treeCell" id="box2_6"></div>
+  <div class="treeCell" id="box2_7"></div>
+  <div class="treeCell" id="box2_8"></div>
+  <div class="terminalCell" id="terminalList2" style="height: 1em; clear: right;">&nbsp;</div>
+
+  <div class="firstTreeCell" id="box3_1"></div>
+  <div class="treeCell" id="box3_2"></div>
+  <div class="treeCell" id="box3_3"></div>
+  <div class="treeCell" id="box3_4"></div>
+  <div class="treeCell" id="box3_5"></div>
+  <div class="treeCell" id="box3_6"></div>
+  <div class="treeCell" id="box3_7"></div>
+  <div class="treeCell" id="box3_8"></div>
+  <div class="terminalCell" id="terminalList3" style="height: 1em; clear: right;">&nbsp;</div>
+
+  <div class="firstTreeCell" id="box4_1"></div>
+  <div class="treeCell" id="box4_2"></div>
+  <div class="treeCell" id="box4_3"></div>
+  <div class="treeCell" id="box4_4"></div>
+  <div class="treeCell" id="box4_5"></div>
+  <div class="treeCell" id="box4_6"></div>
+  <div class="treeCell" id="box4_7"></div>
+  <div class="treeCell" id="box4_8"></div>
+  <div class="terminalCell" id="terminalList4" style="height: 1em; clear: right;">&nbsp;</div>
+
+  <div class="firstTreeCell" id="box5_1"></div>
+  <div class="treeCell" id="box5_2"></div>
+  <div class="treeCell" id="box5_3"></div>
+  <div class="treeCell" id="box5_4"></div>
+  <div class="treeCell" id="box5_5"></div>
+  <div class="treeCell" id="box5_6"></div>
+  <div class="treeCell" id="box5_7"></div>
+  <div class="treeCell" id="box5_8"></div>
+  <div class="terminalCell" id="terminalList5" style="height: 1em; clear: right;">&nbsp;</div>
+
+  <div class="firstTreeCell" id="box6_1"></div>
+  <div class="treeCell" id="box6_2"></div>
+  <div class="treeCell" id="box6_3"></div>
+  <div class="treeCell" id="box6_4"></div>
+  <div class="treeCell" id="box6_5"></div>
+  <div class="treeCell" id="box6_6"></div>
+  <div class="treeCell" id="box6_7"></div>
+  <div class="treeCell" id="box6_8"></div>
+  <div class="terminalCell" id="terminalList6" style="height: 1em; clear: right;">&nbsp;</div>
+
+  <div class="firstTreeCell" id="box7_1"></div>
+  <div class="treeCell" id="box7_2"></div>
+  <div class="treeCell" id="box7_3"></div>
+  <div class="treeCell" id="box7_4"></div>
+  <div class="treeCell" id="box7_5"></div>
+  <div class="treeCell" id="box7_6"></div>
+  <div class="treeCell" id="box7_7"></div>
+  <div class="treeCell" id="box7_8"></div>
+  <div class="terminalCell" id="terminalList7" style="height: 1em; clear: right;">&nbsp;</div>
+
+</div>
+
+</div>
+
+<!-- an unfortunate but necessary hack that expands the displayPanelContent div vertically -->
+<div style="clear:both;"></div>
+
+</div>
+
+</div>
+</div>
+
+</form>
+
+<div class="verysmall" style="padding-left: 2.5em; padding-right: 2em;">
+<p>
+Instructions: enter one cladogram per group per paper.
+The contents of a clade can be terminal taxa, subclades, or both.
+Order does not matter.
+Separators such as commas are optional.
+Replace clade numbers with Linnean names where possible.
+Clade names are not displayed, but will be saved when you submit.
+Place an asterisk after the name of any fully plesiomorphic terminal taxon, as in Hyracotherium*.
+out = outgroup; BP = bootstrap proportion.
+</p>
+
+<p>
+Example:
+</p>
+
+<div>
+
+<div style="float: left; clear: none;">
+
+<p>
+1 = Plesippus simplicidens* Equus<br>
+Equinae = Hipparionini Equini<br>
+2 = Dinohippus* 1<br>
+Equini = 2 Protohippus Calippus<br>
+</p>
+
+</div>
+
+<div style="float: right; clear: right; position: relative; top: 0em;">
+
+  <div class="firstTreeCell"></div>
+  <div class="treeCell"></div>
+  <div class="treeCell"></div>
+  <div class="treeCell"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="terminalCell">&nbsp;Plesippus simplicidens*</div>
+
+  <div class="firstTreeCell"></div>
+  <div class="treeCell"></div>
+  <div class="treeCell"></div>
+<!-- can't for the life of me figure out why the margin is needed -->
+  <div class="treeCell" style="border-bottom: 1px solid black; margin-left: 0px;margin-right: -1px;"></div>
+  <div class="treeCell" style="border-left: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black; border-left: 1px solid black;"></div>
+  <div class="terminalCell">&nbsp;Equus</div>
+
+  <div class="firstTreeCell"></div>
+  <div class="treeCell"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+<!-- another weird case -->
+  <div class="treeCell" style="border-left: 1px solid black; margin-left: 0px; margin-right: -2px;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black; border-left: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="terminalCell">&nbsp;Dinohippus*</div>
+
+  <div class="firstTreeCell"></div>
+  <div class="treeCell"></div>
+  <div class="treeCell" style="border-left: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black; border-left: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="terminalCell">&nbsp;Protohippus</div>
+
+  <div class="firstTreeCell"></div>
+  <div class="treeCell"></div>
+  <div class="treeCell" style="border-left: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black; border-left: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="terminalCell">&nbsp;Calippus</div>
+
+  <div class="firstTreeCell"></div>
+  <div class="treeCell"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black; border-left: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="treeCell" style="border-bottom: 1px solid black;"></div>
+  <div class="terminalCell">&nbsp;Hipparionini</div>
+
+</div>
+
+<div style="clear: both; padding-bottom: 2em;"></div>
+
+</div>
+
+</div>
+
+</div>
+
+</body>
+
