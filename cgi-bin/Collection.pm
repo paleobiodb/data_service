@@ -1648,7 +1648,7 @@ sub buildTaxonomicList {
 				    my $class_hash = TaxaCache::getParents($dbt,[$rowref->{'taxon_no'}],'array_full');
                     my @class_array = @{$class_hash->{$rowref->{'taxon_no'}}};
                     # Get Self as well, in case we're a family indet.
-                    my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
+                    my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','common_name','taxon_rank','pubyr']);
                     unshift @class_array , $taxon;
                     $rowref = getClassOrderFamily(\$rowref,\@class_array);
                     $rowref->{'synonym_name'} = getSynonymName($dbt,$rowref->{'taxon_no'},$taxon->{'taxon_name'});
