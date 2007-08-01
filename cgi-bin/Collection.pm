@@ -1651,7 +1651,7 @@ sub buildTaxonomicList {
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
                     unshift @class_array , $taxon;
                     $rowref = getClassOrderFamily(\$rowref,\@class_array);
-                    $rowref->{'synonym_name'} = getSynonymName($dbt,$rowref->{'taxon_no'});
+                    $rowref->{'synonym_name'} = getSynonymName($dbt,$rowref->{'taxon_no'},$taxon->{'taxon_name'});
                 } else {
                     if ($options{'do_reclassify'}) {
                         $rowref->{'show_classification_select'} = 1;
@@ -2072,7 +2072,7 @@ sub formatOccurrenceTaxonName {
 
 # This is pretty much just used in a couple places above
 sub getSynonymName {
-    my ($dbt,$taxon_no) = @_;
+    my ($dbt,$taxon_no,$current_taxon_name) = @_;
     return "" unless $taxon_no;
 
     my $synonym_name = "";
@@ -2084,7 +2084,7 @@ sub getSynonymName {
     my $spelling_reason = "";
 
     my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$ss_taxon_no);
-    if ($spelling->{'taxon_no'} != $taxon_no && $spelling->{'original_name'} ne $spelling->{'taxon_name'}) {
+    if ($spelling->{'taxon_no'} != $taxon_no && $current_taxon_name ne $spelling->{'taxon_name'}) {
         $is_spelling = 1;
         $spelling_reason = $spelling->{'spelling_reason'};
         $spelling_reason = 'original and current combination' if $spelling_reason eq 'original spelling';
@@ -2132,20 +2132,20 @@ sub getReidHTMLTableByOccNum {
 
     # We always get all of them PS
 	foreach my $row ( @results ) {
-        $row->{'taxon_name'} = "&nbsp;&nbsp;&nbsp;&nbsp;= ".formatOccurrenceTaxonName($row);
+		$row->{'taxon_name'} = "&nbsp;&nbsp;&nbsp;&nbsp;= ".formatOccurrenceTaxonName($row);
         
 		# format the reference (PM)
 		$row->{'reference_no'} = Reference::formatShortRef($dbt,$row->{'reference_no'},'link_id'=>1);
        
 		# get the taxonomic authority JA 19.4.04
-        my $taxon;
+		my $taxon;
 		if ($row->{'taxon_no'}) {
-            $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_no','taxon_name','common_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
+			$taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_no','taxon_name','common_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
 
-            if ($taxon->{'taxon_rank'} =~ /species/ || $row->{'species_name'} =~ /^indet\.|^sp\./) {
-                $row->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'});
-            }
-        }
+			if ($taxon->{'taxon_rank'} =~ /species/ || $row->{'species_name'} =~ /^indet\.|^sp\./) {
+				$row->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'});
+			}
+		}
 
         # Just a default value, so form looks correct
         # JA 2.4.04: changed this so it only works on the most recently published reID
@@ -2166,7 +2166,7 @@ sub getReidHTMLTableByOccNum {
                 # Include the taxon as well, it my be a family and be an indet.
                 $classification->{$taxon->{'taxon_rank'}} = $taxon;
 
-                $row->{'synonym_name'} = getSynonymName($dbt,$row->{'taxon_no'});
+                $row->{'synonym_name'} = getSynonymName($dbt,$row->{'taxon_no'},$taxon->{'taxon_name'});
                 # only $classification is being returned, so piggyback lft and
                 #  rgt on it
                 # I hate having to hit taxa_tree_cache with a separate SELECT,
