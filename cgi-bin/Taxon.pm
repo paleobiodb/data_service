@@ -206,7 +206,7 @@ sub displayAuthorityForm {
         $fields{'ref_is_authority'} = 'PRIMARY';
         # prefill some fields based on the last entry from the same ref
         #  JA 6.5.07
-        my $sql = "SELECT ref_is_authority,pages,preservation,extant FROM authorities WHERE ((pages!='' AND pages IS NOT NULL) OR (preservation!='' AND preservation IS NOT NULL) OR (extant!='' AND extant IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " AND taxon_no!=" . $q->param('taxon_no') . " ORDER BY taxon_no DESC LIMIT 1";
+        my $sql = "SELECT ref_is_authority,pages,preservation,extant FROM authorities WHERE ((pages!='' AND pages IS NOT NULL) OR (preservation!='' AND preservation IS NOT NULL) OR (extant!='' AND extant IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " ORDER BY taxon_no DESC LIMIT 1";
         my $lastauthority = @{$dbt->getData($sql)}[0];
         if ( $lastauthority )	{
             if ( $lastauthority ->{ref_is_authority} eq "YES" )	{
