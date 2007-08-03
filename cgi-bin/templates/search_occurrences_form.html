@@ -35,12 +35,10 @@ function checkForm ( ) {
 </script>
 
 <div align="center">
-  <h2>%%page_title%%</h2>
+  <h3>%%page_title%%</h3>
 </div>
 
-<div show="page_subtitle"><div align=center><div style="width: 640px"><h5>%%page_subtitle%%</h5></div></div></div>
-
-<div align=center>
+<div align="center" style="padding-left: 1em; padding-right: 1em;">
 <form method=post action="%%write_url%%" onSubmit="return checkForm();">
 <input type="hidden" name="action">
 <input type="hidden" name="type">
@@ -56,10 +54,8 @@ function checkForm ( ) {
   </div>
 </div>
 
-<h5> OR </h5>
-
 <div class="displayPanel" align=left>
-  <span class="displayPanelHeader"><b>Search by collection</b></span>
+  <span class="displayPanelHeader"><b>... <i>or</i> search by collection</b></span>
   <div class="displayPanelContent small">
     <table border=0 cellpadding=2 cellspacing=2>
       <tr>
@@ -79,11 +75,6 @@ function checkForm ( ) {
         <td>Youngest time interval/Ma: </td><td colspan=3><select id="eml_min_interval" class="small"></select><input name="min_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
       </tr>
       <tr>
-        <td colspan=4 align="center">
-          <div class="small" style="width: 640px;">
-            <i>Hints: the search engine is not case sensitive.  If you select "allow wildcards," then you can use "_" to match any single character or "%" for an open ended match.</i>
-          </div>
-        </td>
       </tr>
     </table>
 
