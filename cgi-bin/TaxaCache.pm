@@ -243,14 +243,6 @@ sub rebuildAddChild {
         # Note there's no distinction between synonyms and belongs to - both just considered children
         if ($opinion && $all_hash{$opinion->{'parent_no'}}) {
             push @children,$row->{'child_no'};
-        # rarely, the parent is not currently taxon_no, but the current parent
-        #  is a senior synonym classified into taxon_no on the basis of an
-        #  opinion on this child, so make that one a child JA 18.6.07
-        } elsif ( $opinion->{'status'} =~ /synonym|replaced|subgroup/ )	{
-            my $synopinion = TaxonInfo::getMostRecentClassification($dbt,$opinion->{'parent_no'});
-            if ($synopinion && $all_hash{$synopinion->{'parent_no'}}) {
-                push @children,$opinion->{'parent_no'};
-            }
         }
     }
     print "list of children for $taxon_no: ".join(",",@children)."<BR>\n" if ($DEBUG);
