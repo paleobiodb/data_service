@@ -1373,7 +1373,7 @@ sub displayRelatedTaxa {
     # This section generates links for children if we have a taxon_no (in authorities table)
     if ($focal_taxon_no) {
 	my $taxon_records = TaxaCache::getChildren($dbt,$focal_taxon_no,'immediate_children');
-	my @children = @{$taxon_records};
+	my @children = @{$taxon_records} if ref($taxon_records);
 #        my @syns = @{$tree->{'synonyms'}};
 #        foreach my $syn (@syns) {
 #            if ($syn->{'children'}) {

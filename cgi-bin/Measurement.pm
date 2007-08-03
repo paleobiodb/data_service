@@ -807,11 +807,14 @@ sub getMeasurements {
     $sql1 = "SELECT s.*,m.*,o.taxon_no FROM (specimens s, occurrences o, measurements m) LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.specimen_no=m.specimen_no AND re.reid_no IS NULL";
     $sql2 = "SELECT s.*,m.*,re.taxon_no FROM specimens s, occurrences o, measurements m, reidentifications re WHERE s.occurrence_no=o.occurrence_no AND s.specimen_no=m.specimen_no AND re.occurrence_no=o.occurrence_no AND re.most_recent='YES'";
     $sql3 = "SELECT s.*,m.*,a.taxon_no FROM specimens s, authorities a, measurements m WHERE a.taxon_no=s.taxon_no AND s.specimen_no=m.specimen_no";
+
+    my $clause_found = 0;
     if ($options{'taxon_list'}) {
         my $taxon_nos = join(",",@{$options{'taxon_list'}});
         $sql1 .= " AND o.taxon_no IN ($taxon_nos)";
         $sql2 .= " AND re.taxon_no IN ($taxon_nos)";
         $sql3 .= " AND a.taxon_no IN ($taxon_nos)";
+        $clause_found = 1;
     } elsif ($options{'taxon_name'} || $options{'taxon_no'}) {
         my @taxa;
         if ($options{'taxon_name'}) {
@@ -839,15 +842,19 @@ sub getMeasurements {
                 $sql2 .= "AND re.species_name LIKE ".$dbh->quote($taxon_bits[1]);
             }
         }
+        $clause_found = 1;
     } elsif ($options{'collection_no'}) {
         $sql1 .= " AND o.collection_no=".int($options{'collection_no'});
         $sql2 .= " AND o.collection_no=".int($options{'collection_no'});
+        $clause_found = 1;
     } elsif ($options{'occurrence_list'}) {
         $sql1 .= " AND o.occurrence_no IN (".join(",",@{$options{'occurrence_list'}}).")";
         $sql2 .= " AND o.occurrence_no IN (".join(",",@{$options{'occurrence_list'}}).")";
+        $clause_found = 1;
     } elsif ($options{'occurrence_no'}) {
         $sql1 .= " AND o.occurrence_no =".int($options{'occurrence_no'});
         $sql2 .= " AND o.occurrence_no =".int($options{'occurrence_no'});
+        $clause_found = 1;
     }
 
     if ($options{'get_global_specimens'} && $sql3 =~ /taxon_no IN/) {
@@ -859,8 +866,12 @@ sub getMeasurements {
     #}
     dbg("SQL is $sql");
 
-    my @results = @{$dbt->getData($sql)};
-    return @results;
+    if ($clause_found) {
+        my @results = @{$dbt->getData($sql)};
+        return @results;
+    } else {
+        return ();
+    }
 }
 
 # Pass in a joined specimen/measurement table, as returned by the getMeasurements function above.
