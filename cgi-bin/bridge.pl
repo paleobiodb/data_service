@@ -3331,6 +3331,7 @@ sub processEditOccurrences {
                                 
 	# Get the names of all the fields coming in from the form.
 	my @param_names = $q->param();
+
 	# list of the number of rows to possibly update.
 	my @rowTokens = $q->param('row_token');
 
@@ -3346,6 +3347,7 @@ sub processEditOccurrences {
         my @resos = ("\\?","aff\\.","cf\\.","ex gr\\.","n\. gen\\.","n\. subgen\\.","n\. sp\\.","sensu lato");
 
 	# loop over all rows submitted from the form
+
 	for(my $i = 0;$i < @rowTokens; $i++) {
         # Flatten the table into a single row, for easy manipulation
         my %fields = ();
@@ -3558,6 +3560,7 @@ sub processEditOccurrences {
             # Check for duplicates
             my @keys = ("genus_reso","genus_name","subgenus_reso","subgenus_name","species_reso","species_name","occurrence_no");
             my %vars = map{$_,$dbh->quote($_)} @fields{@keys};
+
             my $dupe_id = $dbt->checkDuplicates("reidentifications", \%vars);
 
             if ( $dupe_id ) {
@@ -3565,9 +3568,9 @@ sub processEditOccurrences {
             }
 #            } elsif ( $return ) {
             $dbt->insertRecord($s,'reidentifications',\%fields);
-  
+
             unless(Collection::isRefPrimaryOrSecondary($dbt, $fields{'collection_no'}, $fields{'reference_no'}))	{
-                   Collection::setSecondaryRef($dbt,$fields{'collection_no'}, $fields{'reference_no'});
+               Collection::setSecondaryRef($dbt,$fields{'collection_no'}, $fields{'reference_no'});
             }
 #            }
             setMostRecentReID($dbt,$fields{'occurrence_no'});
@@ -3657,8 +3660,13 @@ sub processEditOccurrences {
 	# Links to re-edit, etc
     my $links = "<div align=\"center\"><b>";
     if ($q->param('form_source') eq 'new_reids_form') {
-        $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">Reidentify&nbsp;more&nbsp;occurrences</a> - ";
-        $links .= "<a href=\"$WRITE_URL?action=displayCollResults&type=reid&taxon_name=".$q->param('taxon_name')."&collection_no=".$q->param("list_collection_no")."&last_occ_num=".$q->param('last_occ_num')."\">Edit&nbsp;next&nbsp;10&nbsp;occurrences</a>";
+        # suppress link if there is clearly nothing more to reidentify
+        #  JA 3.8.07
+        # this won't work if exactly ten occurrences have been displayed
+        if ( $#rowTokens < 9 )	{
+            $links .= "<a href=\"$WRITE_URL?action=displayCollResults&type=reid&taxon_name=".$q->param('search_taxon_name')."&collection_no=".$q->param("list_collection_no")."&last_occ_num=".$q->param('last_occ_num')."\">Reidentify&nbsp;next&nbsp;10&nbsp;occurrences</a> - ";
+        }
+        $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">Reidentify&nbsp;different&nbsp;occurrences</a>";
     } else {
         if ($q->param('list_collection_no')) {
             my $collection_no = $q->param("list_collection_no");
@@ -3679,6 +3687,8 @@ sub processEditOccurrences {
 	my @new_subgenera =  TypoChecker::newTaxonNames($dbt,\@subgenera,'subgenus_name');
 	my @new_species =  TypoChecker::newTaxonNames($dbt,\@species,'species_name');
 
+	print qq|<div style="padding-left: 1em; padding-right: 1em;"|;
+
     if ($q->param('list_collection_no')) {
         my $collection_no = $q->param("list_collection_no");
         my $coll = ${$dbt->getData("SELECT collection_no,reference_no FROM collections WHERE collection_no=$collection_no")}[0];
@@ -3687,7 +3697,7 @@ sub processEditOccurrences {
     	print Collection::buildTaxonomicList($dbt,$hbo,$s,{'occurrence_list'=>\@occurrences, 'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
     }
 
-    print "<br>".$links;
+    print "\n</div>\n<br>\n".$links;
 
 	print $hbo->stdIncludes("std_page_bottom");
 }
@@ -3721,7 +3731,6 @@ sub displayReIDCollsAndOccsSearchForm {
     $vars{'page_title'} = "Reidentifications search form";
     $vars{'action'} = "displayCollResults";
     $vars{'type'} = "reid";
-    $vars{'page_subtitle'} = "You may now reidentify either a set of occurrences matching a genus or higher taxon name, or all the occurrences in one collection.";
 
 	# Spit out the HTML
 	print $hbo->stdIncludes( "std_page_top" );
@@ -3809,8 +3818,8 @@ sub displayOccsForReID {
     my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs','species_name');
     if (@results) {
         my $header_vars = {
-            'ref_string'=>$refString, 
-            'taxon_name'=>$taxon_name, 
+            'ref_string'=>$refString,
+            'search_taxon_name'=>$taxon_name,
             'list_collection_no'=>$collection_no
         };
         $header_vars->{$_} = $pref{$_} for (@optional);
@@ -3824,15 +3833,15 @@ sub displayOccsForReID {
 
             # Print occurrence row and reid input row
             $html .= "<tr>\n";
-            $html .= "    <td align=right>".$row->{"genus_reso"}."</td>\n";
-            $html .= "    <td>".$row->{"genus_name"}."</td>\n";
+            $html .= "    <td align=\"left\" style=\"padding-top: 0.5em;\">".$row->{"genus_reso"};
+            $html .= " ".$row->{"genus_name"};
             if ($pref{'subgenera'} eq "yes")	{
-                $html .= "    <td align=right>".$row->{"subgenus_reso"}."</td>\n";
-                $html .= "    <td>".$row->{"subgenus_name"}."</td>\n";
+                $html .= " ".$row->{"subgenus_reso"};
+                $html .= " ".$row->{"subgenus_name"};
             }
-            $html .= "    <td align=right>".$row->{"species_reso"}."</td>\n";
-            $html .= "    <td>".$row->{"species_name"}."</td>\n";
-            $html .= "    <td>" . $row->{"comments"} . "</td>\n";
+            $html .= " " . $row->{"species_reso"};
+            $html .= " " . $row->{"species_name"} . "</td>\n";
+            $html .= " <td>". $row->{"comments"} . "</td>\n";
             if ($pref{'plant_organs'} eq "yes")	{
                 $html .= "    <td>" . $row->{"plant_organ"} . "</td>\n";
                 $html .= "    <td>" . $row->{"plant_organ2"} . "</td>\n";
@@ -3859,20 +3868,18 @@ sub displayOccsForReID {
             #$sth2->finish();
             
             my $ref = Reference::getReference($dbt,$row->{'reference_no'});
-            my $formatted_primary = Reference::formatLongRef($ref);
+            my $formatted_primary = Reference::formatShortRef($ref);
             my $refString = "<a href=\"$READ_URL?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a></b>&nbsp;$formatted_primary";
 
-            $html .= "<tr><td colspan=20><b>Original reference</b>:<br>$refString</td></tr>";
+            $html .= "<tr><td colspan=20 class=\"verysmall\" style=\"padding-bottom: 0.75em;\">Original reference: $refString<br>\n";
             # Print the collections details
             if ( $printCollectionDetails) {
                 my $sql = "SELECT collection_name,state,country,formation,period_max FROM collections WHERE collection_no=" . $row->{'collection_no'};
                 my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
                 $sth->execute();
                 my %collRow = %{$sth->fetchrow_hashref()};
-                $html .= "<tr>";
-                $html .= "  <td colspan=20>";
-                $html .= "<b>Collection</b>:<br>";
-                my $details = "<a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$row->{'collection_no'}\">$row->{'collection_no'}</a>"." ".$collRow{'collection_name'};
+                $html .= "Collection:";
+                my $details = " <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$row->{'collection_no'}\">$row->{'collection_no'}</a>"." ".$collRow{'collection_name'};
                 if ($collRow{'state'})	{
                      $details .= " - " . $collRow{'state'};
                 }
@@ -3893,6 +3900,8 @@ sub displayOccsForReID {
             #$html .= "<tr><td colspan=100><hr width=100%></td></tr>";
             if ($rowCount % 2 == 1) {
                 $html =~ s/<tr/<tr class=\"darkList\"/g;
+            } else	{
+                $html =~ s/<tr/<tr class=\"lightList\"/g;
             }
             print $html;
 
@@ -3919,7 +3928,7 @@ sub displayOccsForReID {
 		print qq|<b><a href="$WRITE_URL?action=displayCollResults&type=reid|;
 		print qq|&taxon_name=$taxon_name|;
 		print qq|&collection_no=$collection_no|;
-        print qq|&last_occ_num=$lastOccNum"> View next 10 occurrences</a></b>\n|;
+        print qq|&last_occ_num=$lastOccNum">Skip to the next 10 occurrences</a></b>\n|;
 		print "</td></tr>\n";
 		print "<tr><td class=small align=center><i>Warning: if you go to the next page without saving, your changes will be lost</i></td>\n";
 	}
