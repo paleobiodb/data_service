@@ -3507,18 +3507,22 @@ sub processEditOccurrences {
                 push @warnings, "The occurrence of taxon $taxon_name in row $rowno and its reidentification have the same reference number";
                 next;
             }
-            my $sql = "SELECT reference_no FROM reidentifications WHERE occurrence_no=$fields{'occurrence_no'}";
-            my @reidrows = @{$dbt->getData($sql)};
-            my $isduplicate;
-            for my $reidrow ( @reidrows )	{
-                if ($fields{'reference_no'} == $reidrow->{reference_no}) {
-                    push @warnings, "This reference already has been used to reidentify the occurrence of taxon $taxon_name in row $rowno";
-                   $isduplicate++;
+            # don't insert a new reID using a ref already used to reID
+            #   this occurrence
+            if ( $fields{'reid_no'} == -1 )	{
+                my $sql = "SELECT reference_no FROM reidentifications WHERE occurrence_no=$fields{'occurrence_no'}";
+                my @reidrows = @{$dbt->getData($sql)};
+                my $isduplicate;
+                for my $reidrow ( @reidrows )	{
+                    if ($fields{'reference_no'} == $reidrow->{reference_no}) {
+                        push @warnings, "This reference already has been used to reidentify the occurrence of taxon $taxon_name in row $rowno";
+                       $isduplicate++;
+                       next;
+                    }
+                }
+                if ( $isduplicate > 0 )	{
                    next;
                 }
-            }
-            if ( $isduplicate > 0 )	{
-               next;
             }
         }
         
