@@ -3458,11 +3458,11 @@ sub processEditOccurrences {
         }
 
 		# check that all required fields have a non empty value
-        if ($fields{'reference_no'} !~ /^\d+$/) {
+        if ( $fields{'reference_no'} !~ /^\d+$/ && $fields{'genus'} =~ /[A-Za-z]/ )	{
             push @warnings, "There is no reference number for row $rowno, so it was skipped";
             next; 
         }
-        if ($fields{'collection_no'} !~ /^\d+$/) {
+        if ( $fields{'collection_no'} !~ /^\d+$/ )	{
             push @warnings, "There is no collection number for row $rowno, so it was skipped";
             next; 
         }
