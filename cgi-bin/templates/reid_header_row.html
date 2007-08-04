@@ -1,28 +1,21 @@
 <!-- Begin reid_header_row.html -->
-<div align="center"><h2>Reidentification form</h2></div>
+<div align="center"><h3>Reidentification form</h3></div>
 
-<p><b>Current reference:</b> <span id="ref_string"></span></p>
+<p class="small" style="padding-left: 1em; padding-right: 1em;"><b>Current reference:</b> <span id="ref_string"></span></p>
 
 <form method=POST action="%%write_url%%" onSubmit="return checkForm();">
 <input type="hidden" name="form_source" value="new_reids_form">
 <input type="hidden" name="action" value="processEditOccurrences">
 <input id="list_collection_no" name="list_collection_no" type="hidden">
-<input id="taxon_name" name="taxon_name" type="hidden">
+<input id="search_taxon_name" name="search_taxon_name" type="hidden">
 
-<table border=0 class="small" cellpadding=1 cellspacing=0>
+<table border=0 class="small" cellpadding=1 cellspacing=0 style="margin-left: 1em; margin-right: 1em; border: 1px solid #E0E0E0;">
 <tr>
-	<th>Genus reso</th>
-	<th><span class="required">Genus name</span></th>
-<div show="subgenera">
-	<th>Subgenus reso</th>
-	<th>Subgenus name</th>
-</div>
-	<th>Species reso</th>
-	<th><span class="required">Species name</span></th>
-	<th>Comments</th>
+	<th align="left">Taxon name</th>
+	<th align="left">Comments</th>
 <div show="plant_organs">
-	<th>Plant organs</th>
-	<th>Plant organs 2</th>
+	<th align="left">Plant organs</th>
+	<th align="left">Plant organs 2</th>
 </div>
 </tr>
 
