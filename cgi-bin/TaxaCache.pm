@@ -244,6 +244,16 @@ sub rebuildAddChild {
         if ($opinion && $all_hash{$opinion->{'parent_no'}}) {
             push @children,$row->{'child_no'};
         }
+        # child of X may currently be a synonym of Y, but have more
+        #  authoritative belongs to opinions that are used for Y by
+        #  getMostRecentClassification, so add Y if is now placed in a
+        #  spelling of the focal taxon_no JA 4.8.07
+        elsif ( $opinion->{'status'} !~ /belongs|nomen/ && ! $processed->{$opinion->{'parent_no'}} )	{
+            my $parentopinion = TaxonInfo::getMostRecentClassification($dbt,$opinion->{'parent_no'});
+            if ($parentopinion && $all_hash{$parentopinion->{'parent_no'}}) {
+                push @children,$opinion->{'parent_no'};
+            }
+        }
     }
     print "list of children for $taxon_no: ".join(",",@children)."<BR>\n" if ($DEBUG);
 
