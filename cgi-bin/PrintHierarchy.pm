@@ -339,12 +339,23 @@ sub htmlTaxaTree {
     $sql .= "FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no in (" . join(',',@taxon_nos) . ")";
     my @results = @{$dbt->getData($sql)};
     my %authority;
-    $authority{$_->{'taxon_no'}}->{IS} = $_->{'ref_is_authority'} foreach ( @results );
-    $authority{$_->{'taxon_no'}}->{REF} = $_->{'reference_no'} foreach ( @results );
-    $authority{$_->{'taxon_no'}}->{A1} = $_->{'author1last'} foreach ( @results );
-    $authority{$_->{'taxon_no'}}->{A2} = $_->{'author2last'} foreach ( @results );
-    $authority{$_->{'taxon_no'}}->{OTHER} = $_->{'otherauthors'} foreach ( @results );
-    $authority{$_->{'taxon_no'}}->{YR} = $_->{'pubyr'} foreach ( @results );
+    if ( @results )	{
+        $authority{$_->{'taxon_no'}}->{IS} = $_->{'ref_is_authority'} foreach ( @results );
+        $authority{$_->{'taxon_no'}}->{REF} = $_->{'reference_no'} foreach ( @results );
+        $authority{$_->{'taxon_no'}}->{A1} = $_->{'author1last'} foreach ( @results );
+        $authority{$_->{'taxon_no'}}->{A2} = $_->{'author2last'} foreach ( @results );
+        $authority{$_->{'taxon_no'}}->{OTHER} = $_->{'otherauthors'} foreach ( @results );
+        $authority{$_->{'taxon_no'}}->{YR} = $_->{'pubyr'} foreach ( @results );
+        foreach ( @taxon_nos )	{
+            if ( $authority{$_}->{A1} )	{
+                my $orig_no = TaxonInfo::getOriginalCombination($dbt,$_);
+                if ( $_ !~ $orig_no )	{
+                    $authority{$_}->{ORIGINAL} = "NO";
+                }
+            }
+        }
+
+    }
     foreach my $record (@nodes_to_print)	{
         $html .= "<tr>";
         for (my $i=0;$i<$record->{'depth'};$i++) {
@@ -370,13 +381,20 @@ sub htmlTaxaTree {
             if ( $authority{$record->{'taxon_no'}}->{IS} =~ /Y/ )	{
                 $html .= qq|<a href="$READ_URL?action=displayReference&amp;reference_no=$authority{$record->{'taxon_no'}}->{REF}">|;
             }
-            $html .= " <span class=\"small\">$authority{$record->{'taxon_no'}}->{A1}";
+            $html .= " <span class=\"small\">";
+            if ( $authority{$record->{'taxon_no'}}->{ORIGINAL} eq "NO" )	{
+                $html .= "(";
+            }
+            $html .= $authority{$record->{'taxon_no'}}->{A1};
             if ( $authority{$record->{'taxon_no'}}->{OTHER} )	{
                 $html .= " et al.";
             } elsif ( $authority{$record->{'taxon_no'}}->{A2} )	{
                 $html .= " and " . $authority{$record->{'taxon_no'}}->{A2};
             }
             $html .= " $authority{$record->{'taxon_no'}}->{YR}</span>";
+            if ( $authority{$record->{'taxon_no'}}->{ORIGINAL} eq "NO" )	{
+                $html .= ")";
+            }
             if ( $authority{$record->{'taxon_no'}}->{IS} =~ /Y/ )	{
                 $html .= "</a>";
             }
