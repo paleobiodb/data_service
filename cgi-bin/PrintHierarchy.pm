@@ -77,7 +77,6 @@ sub processPrintHierarchy	{
     }
     print "</h3></div>";
 
-
     print "<div align=\"center\"><table>";
     @taxa = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @taxa;
     PBDBUtil::autoCreateDir("$HTML_DIR/public/classification");
@@ -94,13 +93,23 @@ sub processPrintHierarchy	{
             $tree = TaxaCache::getChildren($dbt,$orig_no,'tree');
         }
         $tree->{'taxon_no'}=>$orig_no;
-        print "<tr><td align=\"left\">";
         my $options = {
             'max_levels'=>$q->param('maximum_levels'),
             'outfile'=>$OUT,
             'reference_no'=>$reference_no
         };
-        print htmlTaxaTree($dbt,$tree,$options);
+        my $html = htmlTaxaTree($dbt,$tree,$options);
+        my @lines = split /<tr>/,$html;
+        my $sizeclass = "tiny";
+        if ( $#lines < 10 )	{
+            $sizeclass = "medium";
+        } elsif ( $#lines < 20 )	{
+            $sizeclass = "small";
+        } elsif ( $#lines < 30 )	{
+            $sizeclass = "verysmall";
+        }
+        print "<tr><td align=\"left\" class=\"$sizeclass\">";
+        print $html;
         print "</td></tr>";
         print $OUT "\n";
     }
