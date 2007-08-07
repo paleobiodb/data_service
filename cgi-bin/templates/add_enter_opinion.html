@@ -6,14 +6,14 @@
 
 <form method="POST" action="%%write_url%%" onSubmit="checkForm()">
 
-<DIV class="displayPanel" style="padding-top: 1em;">
+<div class="displayPanel" style="padding-top: 1em;">
 
 <input type="hidden" id="action" name="action" value="submitOpinionForm">
 <input type="hidden" id="reference_no" name="reference_no">
 
 <input type="hidden" id="child_no" name="child_no">
 <input type="hidden" id="opinion_no" name="opinion_no">
-<input type="hidden" id="orig_taxon_status" name="orig_taxon_status">
+<input type="hidden" id="orig_status" name="orig_status">
 <input type="hidden" id="confirm_migrate_opinions" name="confirm_migrate_opinions">
 <input type="hidden" id="confirm_create_misspelling" name="confirm_create_misspelling">
 <input type="hidden" id="confirm_create_spelling" name="confirm_create_spelling">
@@ -23,115 +23,97 @@
 <b>Whose opinion are you entering?</b>
 </div>
 
-<div align=left style="padding-left: 2em;">
+<div align="left" class="small" style="margin-left: 2em;">
+
 <input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="PRIMARY">
 The primary reference argues for this opinion:
-<div align="center" class="small"><span id="formatted_primary_reference"></span></div>
+<div align="left" class="small" style="margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_primary_reference"></span></div>
 <div show="current_reference" style="padding-left: 2em; padding-right: 2em;">
-<br>
+
 <input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="CURRENT">
  ... <i>or</i> the current reference argues for this opinion:
-<br><div align="center" class="small"><span id="formatted_current_reference"></span></div>
+<br><div align="left" class="small" style="margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_current_reference"></span></div>
 </div>
 
-</div>
-
-<center>
-<p class="tiny">
-<b>Pages*:</b> <input id="pages" name="pages" class="tiny" size=12>
-<b>Figures*:</b> <input id="figures" name="figures" class="tiny" size=12>
-</p>
-</center>
-
-
-<div align=left style="padding-left: 2em;">
 <input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="NO">
- ... <i>or</i> the opinion is repeated from an earlier authority, which is:</div>
+ ... <i>or</i> the opinion is repeated from an earlier authority, which is:
 
-<center>
 <table>
 
-<TR><td align="right" class="tiny"><b>First author:</b></td>
+<tr><td align="right" class="tiny"><b>First author:</b></td>
 <td><input id="author1init" name="author1init" class="tiny" size=4></td>
 <td><input id="author1last" name="author1last" class="tiny" size=10></td>
 <td align="left" class="tiny" style="padding-left: 0.5em";><b>Second author:</b></td>
 <td align="left"><input id="author2init" name="author2init" class="tiny" size=4></td>
 <td align="left"><input id="author2last" name="author2last" class="tiny" size=10></td>
-</TR>
+</tr>
 
-<TR><td valign="top" align="right" class="tiny"><b>Other authors:</b></td>
-<td colspan=5><textarea id="otherauthors" name="otherauthors" class="tiny" rows=1 cols=60></textarea></td>
-</TR>
+<tr><td valign="top" align="right" class="tiny" style="padding-left: 2em;"><b>Other authors:</b></td>
+<td colspan="3"><textarea id="otherauthors" name="otherauthors" class="tiny" rows=1 cols="30"></textarea></td>
+<td align="right" class="tiny"><b>Year:</b></td>
+<td colspan="1" class="tiny"><input id="pubyr" name="pubyr" class="tiny" size=5></td>
+</tr>
 
-<TR><td align=right class="tiny"><b>Year:</b></td>
-<td colspan=1 class="tiny"><input id="pubyr" name="pubyr" class="tiny" size=5></td>
-<td colspan=4 class="tiny"><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" class="tiny" size=12>
-<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" class="tiny" size=12></td>
-</TR>
+<tr>
+<td colspan="4" class="tiny" align="left" style="padding-top: 0.5em;"><b>Pages:</b> <input id="pages" name="pages" class="tiny" size=12>
+<b>Figures:</b> <input id="figures" name="figures" class="tiny" size=12></td>
+</tr>
 </table>
-</center>
 
-<center>
-<p><span class="tiny">* Enter numbers of pages and figures that describe and show the type specimen(s).</span></p>
-</center>
+</div>
 
-  
+<br>
+
 <div class="emphasized">
 <b>How was it classified?</b>
 </div>
 <table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
   <tr>
-  <td colspan="2">
+  <td colspan="2" class="small">
   <b><a href="#" onClick="popup = window.open('%%write_url%%?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">Classification quality</a>:</b> <select id="classification_quality" autofill="opinion_classification_quality"></select>
-  <span style="margin-left: 14em;"><input type="submit" value="Submit"></span>
+  <span style="margin-left: 12em;">
+    <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> 
+    &nbsp;<input type="submit" value="Submit">
+  </span>
   </td>
   </tr>
   <span id="belongs_to_row"></span>
   <tr>
-    <td valign="middle" align=left colspan=3 class="verysmall"><b>Diagnosis:</b> <select id="diagnosis_given"></select><br>
-      <textarea id="diagnosis" name="diagnosis" rows=3 cols=70></textarea>
+    <td valign="middle" align="left" colspan="3" class="small"><b>Diagnosis:</b> <select id="diagnosis_given"></select><br>
+      <textarea id="diagnosis" name="diagnosis" rows="3" cols="70"></textarea>
     </td>
   </tr>
-  <span id="zzz_misspelled_as_row"></span>
-  <span id="synonym_row"></span>
-<!--  <tr>
-    <td></td>
-    <td>
-      <small>When noting a misspelling, enter the correct name here and the correct name in the "How was it spelled?" section</small>
+
+  <div show="is_fossil_record">
+  <tr>
+    <td colspan="3" align="left" valign="top">
+      <table width="100%"><tr><td width="40%" class="small">
+        <b>First interval:</b> <input type="text" name="max_interval_name">
+      </td><td class="small">
+        <b>Last interval:</b> <input type="text" name="min_interval_name">
+      </td></tr></table>
     </td>
-  </tr>-->
-  <span id="nomen_row"></span>
-
-  <tr>
-    <td>&nbsp;</td>
   </tr>
-  
+  </div>
 
   <tr>
-    <td colspan=3 align=left valign=top>
-      <b>Comments:</b><BR>
-      <textarea id="comments" name="comments" rows=2 cols=70></textarea>
+    <td colspan="3" align="left" valign="top" class="small">
+      <b>Comments:</b><br>
+      <textarea id="comments" name="comments" rows="2" cols="70"></textarea>
     </td>
   </tr>
   
-  <tr>
-    <td></td>
-    <td align=center colspan=2>
-      <span class="tiny"><BR>Please check the 
-      <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> 
-      for an explanation of these terms. <BR>
-      </span>
-    </td>
-  </tr>
 </table>
+
 <br>
+
 <div class="emphasized">
 <b>How was it spelled?</b>
 </div>
 
 <table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
   <span id="spelling_row"></span>
-  <tr><td colspan=2>
+  <tr><td colspan="2">
     <small>Select a value regardless of whether this paper was the first to use this combination, spelling, or rank.<small>
   </td></tr>
 </table>
@@ -139,7 +121,12 @@ The primary reference argues for this opinion:
 
 <div align="center">
 
-<table BORDER=0 cellpadding=0 class="tiny" style="padding-bottom: 1em;">
+<p>
+<a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">Tip sheet</a> -
+<input type=submit value="Submit">
+</p>
+
+<table border="0" cellpadding="0" class="tiny" style="padding-bottom: 1em;">
 <tr>
 <td style="padding-right: 20px;"><span id="authorizer_name"></span></td>
 <td style="padding-right: 20px;"><span id="enterer_name"></span></td>
@@ -150,14 +137,6 @@ The primary reference argues for this opinion:
 <td><span id="modified"></span></td>
 </tr>
 </table> 
-
-<input type=submit value="Submit">
-
-<p>
-  <span class="tiny">
-    Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> before you press submit.
-  </span>
-</p>
 
 </div>
 
