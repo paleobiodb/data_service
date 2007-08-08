@@ -549,8 +549,6 @@ sub displayOpinionForm {
     my @statusArray;
     if ( $childRank =~ /species|genus/ )	{
 	@statusArray = ( 'belongs to', @synArray );
-        # remove last value, which should be "invalid subgroup of"
-        pop @statusArray;
         push @statusArray , @nomArray;
     } else	{
 	@statusArray = ( 'belongs to', @synArray );
