@@ -784,12 +784,7 @@ sub submitOpinionForm {
 		if (! $q->param('author1last')) {
 			$errors->add('You must enter at least the last name of the first author');	
 		}
-		
-		# make sure the pages/figures fields above this are empty.
-		if ($q->param('pages') || $q->param('figures')) {
-			$errors->add("Don't enter pages or figures for a primary reference if you chose the 'named in an earlier publication' radio button");	
-		}
-		
+
 		# make sure the format of the author names is proper
 		if  ($q->param('author1init') && ! Validation::properInitial($q->param('author1init'))) {
 			$errors->add("The first author's initials are improperly formatted");		
