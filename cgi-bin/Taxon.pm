@@ -228,8 +228,8 @@ sub displayAuthorityForm {
 	    . "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM specimens s, occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE o.occurrence_no=s.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND (specimen_part='".$fields{'type_body_part'}."' OR specimen_part='".$fields{'part_details'}."') AND o.taxon_no=$taxon_no AND re.reid_no IS NULL)"
 	    . " UNION "
             . "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM (specimens s, occurrences o, reidentifications re) LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE o.occurrence_no=re.occurrence_no AND o.occurrence_no=s.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND (specimen_part='".$fields{'type_body_part'}."' OR specimen_part='".$fields{'part_details'}."') AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
-print $sql;
         my @rows = @{$dbt->getData($sql)};
+
         if (@rows) {
             my %specimen_count = ();
             foreach my $row (@rows) {
@@ -820,10 +820,17 @@ sub processSpecimenMeasurement {
     my $dbh = $dbt->dbh;
     my $specimen_no = int($fields->{'specimen_no'});
 
-    my $sql = "(SELECT specimen_no FROM specimens s WHERE s.is_type='holotype' AND s.specimens_measured=1 AND s.taxon_no=$taxon_no) UNION (SELECT specimen_no FROM specimens s, occurrences o left join reidentifications re on o.occurrence_no=re.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND o.taxon_no=$taxon_no AND re.reid_no IS NULL) UNION (SELECT specimen_no FROM specimens s, occurrences o, reidentifications re WHERE o.occurrence_no=re.occurrence_no AND s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
-    my $cnt = scalar @{$dbt->getData($sql)};
+    my $sql = "(SELECT specimen_no,specimens_measured,specimen_id,specimen_part FROM specimens s WHERE s.is_type='holotype' AND s.specimens_measured=1 AND s.taxon_no=$taxon_no) UNION (SELECT specimen_no,specimens_measured,specimen_id,specimen_part FROM specimens s, occurrences o left join reidentifications re on o.occurrence_no=re.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND o.taxon_no=$taxon_no AND re.reid_no IS NULL) UNION (SELECT specimen_no,specimens_measured,specimen_id,specimen_part FROM specimens s, occurrences o, reidentifications re WHERE o.occurrence_no=re.occurrence_no AND s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
+    my @rows = @{$dbt->getData($sql)};
 
-    if ($cnt <= 1) {
+    if ( scalar @rows <= 1 ) {
+
+    # bomb out if there is a direct conflict, i.e., the parts are different or
+    #  the specimen record involves more than one specimen
+        if ( @rows && $rows[0]->{'specimens_measured'} > 1 || ( $rows[0]->{'specimen_part'} ne $fields->{'part_details'} && $rows[0]->{'specimen_part'} ne $fields->{'type_body_part'} ) )	{
+            return;
+        }
+
         if ($fields->{'length'} || $fields->{'width'}) {
             my $part = $fields->{'part_details'} || $fields->{'type_body_part'};
             my $sfields = {
