@@ -756,29 +756,38 @@ sub processMeasurementForm	{
 }
 
 
+# rewrote this heavily JA 10.8.07
+# all authorities data manually entered before that point are suspect
 sub syncWithAuthorities {
     my ($dbt,$s,$hbo,$specimen_no) = @_;
-    my $sql = "SELECT taxon_no,magnification,specimen_part,specimen_id FROM specimens WHERE specimen_no=$specimen_no";
+
+    my $sql = "SELECT s.taxon_no,specimens_measured,specimen_id,specimen_part,magnification,is_type,type_specimen,type_body_part,part_details FROM specimens s,authorities a WHERE specimen_no=$specimen_no AND s.taxon_no=a.taxon_no";
     my $row = ${$dbt->getData($sql)}[0];
-    if ($row && $row->{'taxon_no'} =~ /\d/ && $row->{'magnification'} <= 1) {
+
+    # bomb out if the specimens data don't clearly pertain to the type or
+    #  the authorities table has complete data already
+    # we don't want to mess around if there's conflict, because (for example)
+    #  the type specimen per se may include additional body parts on top of
+    #  the one that has been measured
+    if ( ! $row || $row->{'taxon_no'} < 1 || $row->{'specimens_measured'} != 1 || $row->{'is_type'} ne "holotype" || ( $row->{'magnification'} && $row->{'magnification'} != 1 ) || ( $row->{'type_specimen'} && $row->{'type_body_part'} && $row->{'part_details'} ) )	{
+        return;
+    } else	{
         my $taxon_no = $row->{'taxon_no'};
-        my $sql = "(SELECT specimen_no FROM specimens s WHERE s.is_type='holotype' AND s.taxon_no=$taxon_no) UNION (SELECT specimen_no FROM specimens s, occurrences o left join reidentifications re on o.occurrence_no=re.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND o.taxon_no=$taxon_no AND re.reid_no IS NULL) UNION (SELECT specimen_no FROM specimens s, occurrences o, reidentifications re WHERE o.occurrence_no=re.occurrence_no AND s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
-        my $cnt = scalar(@{$dbt->getData($sql)});
-        if ($cnt <= 1) {
-            my %generic_parts = ();
-            foreach my $p ($hbo->getList('type_body_part')) {
-                $generic_parts{$p} = 1;
-            }
-            if ($row->{'specimen_part'}) {
-                if ($generic_parts{$row->{'specimen_part'}}) {
-                    $fields{'type_body_part'} = $row->{'specimen_part'};
-                } else {
-                    $fields{'part_details'} = $row->{'specimen_part'};
-                }
-            }
-            $fields{'type_specimen'} = $row->{'specimen_id'};
-            $dbt->updateRecord($s,'authorities','taxon_no',$taxon_no,\%fields);
+        my %generic_parts = ();
+        foreach my $p ($hbo->getList('type_body_part'))	{
+            $generic_parts{$p} = 1;
         }
+        if ( $row->{'specimen_part'} )	{
+            if ( $generic_parts{$row->{'specimen_part'}} && ! $row{'type_body_part'} ) {
+                $fields{'type_body_part'} = $row->{'specimen_part'};
+            } elsif ( ! $row{'part_details'} )	{
+                $fields{'part_details'} = $row->{'specimen_part'};
+            }
+        }
+        if ( ! $row{'type_specimen'} )	{
+            $fields{'type_specimen'} = $row->{'specimen_id'};
+        }
+        $dbt->updateRecord($s,'authorities','taxon_no',$taxon_no,\%fields);
     }
 }
 
