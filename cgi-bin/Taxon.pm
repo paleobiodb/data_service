@@ -218,14 +218,17 @@ sub displayAuthorityForm {
     }    
 
     # Grab the measurement data if they exist
+    # added some sanity checks here: "holotype" record in specimens table has
+    #  to have measurements of exactly one specimen, and the part has to match
+    #  the type body part or part details fields JA 10.8.07
     if (!$isNewEntry) {
         my $taxon_no = $t->get('taxon_no');
-        my $sql = "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM specimens s LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE s.is_type='holotype' AND s.taxon_no=$taxon_no)"
+        my $sql = "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM specimens s LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE s.is_type='holotype' AND s.specimens_measured=1 AND (specimen_part='".$fields{'type_body_part'}."' OR specimen_part='".$fields{'part_details'}."') AND s.taxon_no=$taxon_no)"
             . " UNION "
-            . "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM specimens s, occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE o.occurrence_no=s.occurrence_no AND s.is_type='holotype' AND o.taxon_no=$taxon_no AND re.reid_no IS NULL)"
-            . " UNION "
-            . "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM (specimens s, occurrences o, reidentifications re) LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE o.occurrence_no=re.occurrence_no AND o.occurrence_no=s.occurrence_no AND s.is_type='holotype' AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
-       
+	    . "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM specimens s, occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE o.occurrence_no=s.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND (specimen_part='".$fields{'type_body_part'}."' OR specimen_part='".$fields{'part_details'}."') AND o.taxon_no=$taxon_no AND re.reid_no IS NULL)"
+	    . " UNION "
+            . "(SELECT m.measurement_type,s.magnification,s.specimen_part,s.specimen_no,m.average,m.real_average FROM (specimens s, occurrences o, reidentifications re) LEFT JOIN measurements m ON s.specimen_no=m.specimen_no WHERE o.occurrence_no=re.occurrence_no AND o.occurrence_no=s.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND (specimen_part='".$fields{'type_body_part'}."' OR specimen_part='".$fields{'part_details'}."') AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
+print $sql;
         my @rows = @{$dbt->getData($sql)};
         if (@rows) {
             my %specimen_count = ();
@@ -817,7 +820,7 @@ sub processSpecimenMeasurement {
     my $dbh = $dbt->dbh;
     my $specimen_no = int($fields->{'specimen_no'});
 
-    my $sql = "(SELECT specimen_no FROM specimens s WHERE s.is_type='holotype' AND s.taxon_no=$taxon_no) UNION (SELECT specimen_no FROM specimens s, occurrences o left join reidentifications re on o.occurrence_no=re.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND o.taxon_no=$taxon_no AND re.reid_no IS NULL) UNION (SELECT specimen_no FROM specimens s, occurrences o, reidentifications re WHERE o.occurrence_no=re.occurrence_no AND s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
+    my $sql = "(SELECT specimen_no FROM specimens s WHERE s.is_type='holotype' AND s.specimens_measured=1 AND s.taxon_no=$taxon_no) UNION (SELECT specimen_no FROM specimens s, occurrences o left join reidentifications re on o.occurrence_no=re.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND o.taxon_no=$taxon_no AND re.reid_no IS NULL) UNION (SELECT specimen_no FROM specimens s, occurrences o, reidentifications re WHERE o.occurrence_no=re.occurrence_no AND s.occurrence_no=o.occurrence_no AND s.is_type='holotype' AND s.specimens_measured=1 AND re.taxon_no=$taxon_no AND re.most_recent='YES')";
     my $cnt = scalar @{$dbt->getData($sql)};
 
     if ($cnt <= 1) {
