@@ -2337,7 +2337,7 @@ sub dumpAllIntervals {
 ## Images stuff
 sub startImage{
     my $goal='image';
-    my $page_title ='Please enter the full name of the taxon you want to add an image for';
+    my $page_title ='Search for the taxon with an image to be added';
 
     print $hbo->stdIncludes("std_page_top");
     print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
@@ -2352,7 +2352,7 @@ sub displayLoadImageForm{
 
 sub processLoadImage{
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.");
+		displayLoginPage( "Please log in first");
 		exit;
 	} 
     print $hbo->stdIncludes("std_page_top");
@@ -2388,7 +2388,7 @@ sub displayImage {
 ## Ecology stuff
 sub startStartEcologyTaphonomySearch{
     my $goal='ecotaph';
-    my $page_title ='Please enter the full name of the taxon you want to describe';
+    my $page_title ='Search for the taxon you want to describe';
 
     print $hbo->stdIncludes("std_page_top");
     print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
@@ -2396,7 +2396,7 @@ sub startStartEcologyTaphonomySearch{
 }
 sub startStartEcologyVertebrateSearch{
     my $goal='ecovert';
-    my $page_title ='Please enter the full name of the taxon you want to describe';
+    my $page_title ='Search for the taxon you want to describe';
 
     print $hbo->stdIncludes("std_page_top");
     print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
