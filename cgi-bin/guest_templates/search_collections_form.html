@@ -26,7 +26,7 @@ function checkForm ( ) {
 </script>
 
 <div align="center">
-  <h2>%%page_title%%</h2>
+  <p class="verylarge" style="margin-bottom: 1.5em;">%%page_title%%</p>
 </div>
 
 <div align=center>
@@ -36,7 +36,7 @@ function checkForm ( ) {
 <input type=hidden name="use_primary">
 
 <div class="displayPanel" align=left>
-  <span class="displayPanelHeader"><b>Search values</b></span>
+  <span class="displayPanelHeader">Search values</span>
   <div class="displayPanelContent small">
     <table border=0 cellpadding=2 cellspacing=2>
       <div show="action=displaySearchStrataResults">
@@ -52,34 +52,21 @@ function checkForm ( ) {
         </div>
         <tr>
           <td>Collection name or number(s): </td><td><input name=collection_names class="small" size=20></td>
-          <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
+          <td style="padding-left: 1em;">Taxon name:</td><td><input name=taxon_name class="small"></td>
         </tr>
       </div>
       <div show="action=displaySearchSectionResults">
         <tr>
           <td>Section name: </td><td><input name=section_name size=20 class="small"></td>
-          <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
         </tr>
       </div>
       <tr>
-        <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: 
-        </td>
-        <td>
-          <input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=16>
-          <div show="is_contributor">
-            <a href="#" onClick="document.forms[0].person_reversed.value='%%enterer_me%%'">Me</a>
-          </div>
-        </td>
-        <td style="padding-left: 1em;">Research group or project: </td>
-        <td><select id="research_group" class="small"></select>
+        <td>Country/continent: </td><td><input name=country class="small"></td>
+        <td style="padding-left: 1em;">State/province: </td><td><input name=state class="small"></td>
       </tr>
       <tr>
-        <td>Taxon name:</td><td><input name=taxon_name class="small"></td>
-        <td style="padding-left: 1em;">Country/continent: </td><td><input name=country class="small"></td>
-      </tr>
-      <tr>
-        <td>State/province: </td><td><input name=state class="small"></td>
-        <td style="padding-left: 1em;">County/parish: </td><td><input name=county class="small"></td>
+        <td>County/parish: </td><td><input name=county class="small"></td>
+        <td style="padding-left: 1em;">Reference number: </td><td><input name=reference_no class="small" size=6></td>
       </tr>
       <tr>
         <td>Oldest time interval (or age in Ma): </td><td colspan=3><select id="eml_max_interval" class="small" autofill="eml_interval"></select><input name="max_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
@@ -99,6 +86,16 @@ function checkForm ( ) {
         <td>Lithology:</td><td colspan=3><select id="lithadjs" autofill="lithadj" class="small"></select><select id="lithologies" autofill="lithology1" class="small"></select><br></td>
       </tr>
       <tr>
+        <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: 
+        </td>
+        <td>
+          <input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size="16">
+          <span show="is_contributor"><a href="#" onClick="document.forms[0].person_reversed.value='%%enterer_me%%'">me</a></span>
+        </td>
+        <td style="padding-left: 1em;">Group/project: </td>
+        <td><select id="research_group" class="small"></select>
+      </tr>
+      <tr>
         <td colspan=4 align="center">
           <div class="small" style="width: 640px;">
             <i>Hints: the search engine is not case sensitive and wildcards are allowed.  You can use "_" to match any single character or "%" for an open ended match. You may enter ranges and comma separated variables for collection numbers, i.e. 300, 400-405</i>
@@ -112,7 +109,7 @@ function checkForm ( ) {
 
 
 <div class="displayPanel" align=left>
-  <span class="displayPanelHeader"><b>Search and display options</b></span>
+  <span class="displayPanelHeader">Search and display options</span>
   <div class="displayPanelContent small">
 
     <table border=0 cellpadding=2 cellspacing=2>
