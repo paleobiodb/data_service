@@ -959,7 +959,7 @@ sub displayCollResults {
 		# you won't have an in list if you are adding
 		($dataRows,$ofRows) = processCollectionsSearchForAdd();
 	} else	{
-        my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no","collection_aka"];  
+        my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no","collection_aka","collectors","collection_dates"];
         if ($q->param('output_format') eq 'xml') {
             push @$fields, "latdeg","latmin","latsec","latdir","latdec","lngdeg","lngmin","lngsec","lngdir","lngdec";
         }
@@ -1015,30 +1015,30 @@ sub displayCollResults {
 
         print "<center>";
         if ($ofRows > 1) {
-            print "<h3>Your search produced $ofRows matches</h3>\n";
-            if ($ofRows > $limit) {
-                print "<h4>Here are";
-                if ($rowOffset > 0) {
-                    print " rows ".($rowOffset+1)." to ";
-                    my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
-                    print $printRows;
-                    print "</h4>\n";
-                } else {
-                    print " the first ";
-                    my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
-                    print $printRows;
-                    print " rows</h4>\n";
-                }
-            }
-		} elsif ( $ofRows == 1 ) {
-            print "<h3>Your search produced exactly one match</h3>\n";
-		} else	{
-            print "<h3>Your search produced no matches</h3>\n";
+		print "<h3>There are $ofRows matches\n";
+		if ($ofRows > $limit) {
+			print " - here are";
+			if ($rowOffset > 0) {
+				print " rows ".($rowOffset+1)." to ";
+				my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+				print $printRows;
+				print "</h4>\n";
+			} else {
+				print " the first ";
+				my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
+				print $printRows;
+				print " rows</h4>\n";
+			}
 		}
-		print "</center>\n";
-		print "<br>\n";
+		print "</h3>\n";
+	} elsif ( $ofRows == 1 ) {
+		print "<h3>There is exactly one match</h3>\n";
+	} else	{
+		print "<h3>There are no matches</h3>\n";
+	}
+	print "</center>\n";
 
-	  	print "<table width='100%' border=0 cellpadding=4 cellspacing=0>\n";
+	print qq|<table class="small" style="margin-left: 1em; margin-right: 1em; border: 1px solid lightgray;" border="0" cellpadding="4" cellspacing="0">|;
  
 		# print columns header
 		print "<tr>";
@@ -1098,7 +1098,7 @@ sub displayCollResults {
                     $timeplace .= "/".$min_lookup->{'interval_name'} 
                 }
                 if ($max_lookup->{'ten_my_bin'} && (!$min_lookup || $min_lookup->{'ten_my_bin'} eq $max_lookup->{'ten_my_bin'})) {
-                    $timeplace .= " ($max_lookup->{'ten_my_bin'}) ";
+                    $timeplace .= " - $max_lookup->{'ten_my_bin'} ";
                 }
             }
 
@@ -1143,17 +1143,44 @@ sub displayCollResults {
                 # Don't link it if if we're in edit mode and we don't have permission
                 print "<td align=center valign=top>$dataRow->{collection_no}</td>";
             }
-			
+
 
             my $collection_names = $dataRow->{'collection_name'};
+            if ($dataRow->{'collection_aka'} || $dataRow->{'collectors'} ||$dataRow->{'collection_dates'}) {
+                $collection_names .= " (";
+            }
             if ($dataRow->{'collection_aka'}) {
-                $collection_names .= " (aka $dataRow->{collection_aka})";
+                $collection_names .= "= $dataRow->{collection_aka}";
+                if ($dataRow->{'collectors'} ||$dataRow->{'collection_dates'}) {
+                    $collection_names .= " / ";
+                }
+            }
+            if ($dataRow->{'collectors'} ||$dataRow->{'collection_dates'}) {
+                $collection_names .= "coll.";
+            }
+            if ($dataRow->{'collectors'}) {
+                my $collectors = " ";
+                $collectors .= $dataRow->{'collectors'};
+                $collectors =~ s/ and / \& /g;
+                $collectors =~ s/(Dr\.)(Mr\.)(Prof\.)//g;
+                $collectors =~ s/\b[A-Za-z]([A-Za-z\.]|)\b//g;
+                $collection_names .= $collectors;
+            }
+            if ($dataRow->{'collection_dates'}) {
+                my $years = " ";
+                $years .= $dataRow->{'collection_dates'};
+                $years =~ s/[A-Za-z\.]//g;
+                $years =~ s/\b[0-9]([0-9]|)\b//g;
+                $collection_names .= $years;
+            }
+            if ($dataRow->{'collection_aka'} || $dataRow->{'collectors'} ||$dataRow->{'collection_dates'}) {
+                $collection_names .= ")";
             }
             if ($dataRow->{'old_id'}) {
                 $timeplace .= " - old id";
             }
             print "<td valign=top nowrap>$dataRow->{authorizer}</td>";
-            print "<td valign=top><b>${collection_names}</b> <span class=\"tiny\">${timeplace}</span></td>";
+            print qq|<td valign="top" style="padding-left: 0.5em; text-indent: -0.5em;">${collection_names} <span class="tiny" style="padding-left: 1em;"><i>${timeplace}</i></span></td>|;
             print "<td valign=top nowrap>$reference</td>";
             print "<td valign=top align=center>".int($dataRow->{distance})." km </td>" if ($type eq 'add');
             print "</tr>";
