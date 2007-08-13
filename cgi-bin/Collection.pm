@@ -1739,7 +1739,7 @@ sub buildTaxonomicList {
         } 
         # Taxonomic list header
         $return = "<div class=\"displayPanel\" align=\"left\">\n" .
-                  "  <span class=\"displayPanelHeader\"><b>Taxonomic list</b></span>\n" .
+                  "  <span class=\"displayPanelHeader\">Taxonomic list</span>\n" .
                   "  <div class=\"displayPanelContent\">\n" ;
 
 		if ($new_found) {
@@ -1774,7 +1774,7 @@ sub buildTaxonomicList {
 		if ( $class_nos == 0 && $order_nos == 0 )	{
 			$return .= "<td nowrap colspan=\"2\"></td>";
 		} else {
-			$return .= "<td nowrap colspan=\"2\"><b>Higher taxa</b></td>";
+			$return .= "<td nowrap colspan=\"2\"><span class=\"field_name\">Higher taxa</span></td>";
 		}
 		if($order_nos == 0){
 		#	$return .= "<td></td>";
@@ -1790,23 +1790,23 @@ sub buildTaxonomicList {
 		# if ALL taxa have no genus or species, we have no list,
 		# so always print this.
 		if ( $common_names > 0 )	{
-			$return .= qq|<td><span onClick="showName();"><b>Taxon</b><span id="commonClick"> (click for common names)</span></span>|;
+			$return .= qq|<td><span onClick="showName();"><span class="field_name">Taxon</span><span id="commonClick"> (click for common names)</span></span>|;
 		} else	{
-			$return .= "<td><b>Taxon</b>";
+			$return .= "<td><span class=\"field_name\">Taxon</<span>";
 		}
 		$return .= "</td>";
 
 		if($reference_nos == 0){
 			$return .= "<td></td>";
 		} else {
-			$return .= "<td><b>Reference</b></td>";
+			$return .= "<td><span class=\"field_name\">Reference</span></td>";
 		}
 		if($abund_values == 0){
 			$return .= "<td></td>";
 		} else {
-			$return .= "<td><b>Abundance</b></td>";
+			$return .= "<td><span class=\"field_name\">Abundance</span></td>";
 		}
-		$return .= qq|<td nowrap><span style="visibility: hidden;" id="commonRow0"><b>Common name</b></span></td>|;
+		$return .= qq|<td nowrap><span style="visibility: hidden;" id="commonRow0"><span class="field_name">Common name</span></span></td>|;
 
 		# Sort:
         my @sorted = ();
