@@ -1093,14 +1093,16 @@ sub displayCollResults {
                         $min_lookup = $lookup->{$dataRow->{'min_interval_no'}};
                     } 
                 }
-                $timeplace .= $max_lookup->{'interval_name'};
+                $timeplace .= "<nobr>" . $max_lookup->{'interval_name'} . "</nobr>";
                 if ($min_lookup) {
-                    $timeplace .= "/".$min_lookup->{'interval_name'} 
+                    $timeplace .= "/<nobr>" . $min_lookup->{'interval_name'} . "</nobr>"; 
                 }
                 if ($max_lookup->{'ten_my_bin'} && (!$min_lookup || $min_lookup->{'ten_my_bin'} eq $max_lookup->{'ten_my_bin'})) {
-                    $timeplace .= " - $max_lookup->{'ten_my_bin'} ";
+                    $timeplace .= " - <nobr>$max_lookup->{'ten_my_bin'}</nobr> ";
                 }
             }
+
+			$timeplace =~ s/\/(Lower|Upper)//g;
 
 			# rest of timeplace construction JA 20.8.02
 			$timeplace .= "</b> - ";
