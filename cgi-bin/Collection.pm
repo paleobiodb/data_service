@@ -768,7 +768,9 @@ sub displayCollectionForm {
         $can_modify->{$s->get('authorizer_no')} = 1;
         unless ($can_modify->{$row{'authorizer_no'}} || $s->isSuperUser) {
             my $authorizer = Person::getPersonName($dbt,$row{'authorizer_no'});
-            htmlError("You may not edit this record because it is owned by a different authorizer ($authorizer)");
+            print qq|<p class="warning">You may not edit this collection because you are not on the editing permission list of the authorizer ($authorizer)<br>
+<a href="$WRITE_URL?action=displaySearchColls&type=edit"><br>Edit another collection</b></a>
+|;
             exit;
         }
 
