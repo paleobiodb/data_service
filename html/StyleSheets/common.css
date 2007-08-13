@@ -115,6 +115,10 @@ H6 {font-size: .9em;}
 .cell {  font-size : 1.1em; text-decoration:none; }
 .blue {  font-size : .85em; color : #0040FF; text-decoration:none; }
 
+.field_name	{
+	color: #404040;
+}
+
 /* the menu at the top and bottom of each page. */
 .menu {
 	color: white;
@@ -755,19 +759,30 @@ span.nonEditable {
 }
 
 
-.displayPanel {      
+.displayPanel {
     border: 1px solid #C8C8C8; 
-    /*background-color: #EEEEEE;*/      
     background-image: url(/public/PDbg.gif);    
-    /*margin-top: 20px;   */
     padding-top: 0.0em;
-    padding-left: 0.3em;     
-    padding-right: 0.3em;    
-    padding-bottom: 0.3em;   
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    padding-bottom: 0.3em;
+    margin-left: 1em;
+    margin-right: 1em;
     margin-bottom: 1em;
-}   
-     
-.displayPanelHeader{    
+}
+
+.displayPanelRight {
+    border: 1px solid #C8C8C8; 
+    background-image: url(/public/PDbg.gif);    
+    padding-top: 0.0em;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    padding-bottom: 0.3em;
+    margin-right: 1em;
+    margin-bottom: 1em;
+}
+
+.displayPanelHeader {
     position: relative; 
     font-size: 1em;
     top: -0.6em;      
@@ -781,7 +796,7 @@ span.nonEditable {
 }
 
 .displayPanelContent {
-    background-image: url(/public/PDbg.gif);    
+    background-image: url(/public/PDbg.gif);
 }
 
 .displayPanelLabel {
