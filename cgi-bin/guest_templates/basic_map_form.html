@@ -12,7 +12,7 @@ function checkMapBrowserVersion()	{
 //  End -->
 </script>
 
-<div align="center"><h2>Fossil collection map form</h2></div>
+<div align="center"><p class="pageTitle">Fossil collection map form</p></div>
 
 <form method=post action="%%read_url%%" onSubmit="return checkForm();">
 <input type="hidden" name="action" value="displayMapResults">
@@ -22,7 +22,7 @@ function checkMapBrowserVersion()	{
 <script>checkMapBrowserVersion();</script>
 
 <div class="displayPanel" align=left>
-<span class="displayPanelHeader"><b>Options</b></span>
+<span class="displayPanelHeader">Options</span>
 <div class="displayPanelContent small">
 
 <table border=0 cellpadding=2 cellspacing=2 width="100%">
@@ -76,17 +76,17 @@ function checkMapBrowserVersion()	{
 
 <tr>
 <td valign=top><nobr><i>... or</i> taxon name:</nobr></td>
-<td valign=top><input name="taxon_name" size=25></td>
+<td valign=top><input name="taxon_name" size="25"></td>
 
 <tr>
 <td valign=top>Country:</td>
-<td valign=top><select id="country" class="tiny"></td>
+<td valign=top><input id="country" size="25">
 </select>
 
 
 <tr>
 <td valign="top">State/province:</td>
-<td valign=top><input name="state" size=25 class="small"></td>
+<td valign=top><input name="state" size="25" class="small"></td>
 
 <tr>
 <td valign=top>Projection:</td>
@@ -140,7 +140,7 @@ function checkMapBrowserVersion()	{
 
 <tr><td valign=top>Group, formation, or member:
 </td>
-<td valign=top><input name=group_formation_member size=25 class="small">
+<td valign=top><input name=group_formation_member size="25" class="small">
 </td>
 
 <tr><td valign=top>Lithology:
