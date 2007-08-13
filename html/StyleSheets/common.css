@@ -115,7 +115,12 @@ H6 {font-size: .9em;}
 .cell {  font-size : 1.1em; text-decoration:none; }
 .blue {  font-size : .85em; color : #0040FF; text-decoration:none; }
 
-.field_name	{
+.pageTitle	{
+	font-size: 1.3em;
+	margin-bottom: 1.5em;
+}
+
+.fieldName	{
 	color: #404040;
 }
 
