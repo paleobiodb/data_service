@@ -1164,6 +1164,7 @@ sub displayCollResults {
                 $collectors =~ s/ and / \& /g;
                 $collectors =~ s/(Dr\.)(Mr\.)(Prof\.)//g;
                 $collectors =~ s/\b[A-Za-z]([A-Za-z\.]|)\b//g;
+                $collectors =~ s/\.//g;
                 $collection_names .= $collectors;
             }
             if ($dataRow->{'collection_dates'}) {
@@ -1171,6 +1172,7 @@ sub displayCollResults {
                 $years .= $dataRow->{'collection_dates'};
                 $years =~ s/[A-Za-z\.]//g;
                 $years =~ s/\b[0-9]([0-9]|)\b//g;
+                $years =~ s/^( |),//;
                 $collection_names .= $years;
             }
             if ($dataRow->{'collection_aka'} || $dataRow->{'collectors'} ||$dataRow->{'collection_dates'}) {
@@ -1180,7 +1182,7 @@ sub displayCollResults {
                 $timeplace .= " - old id";
             }
             print "<td valign=top nowrap>$dataRow->{authorizer}</td>";
-            print qq|<td valign="top" style="padding-left: 0.5em; text-indent: -0.5em;">${collection_names} <span class="tiny" style="padding-left: 1em;"><i>${timeplace}</i></span></td>|;
+            print qq|<td valign="top" style="padding-left: 0.5em; text-indent: -0.5em;"><span style="padding-right: 1em;">${collection_names}</span> <span class="tiny"><i>${timeplace}</i></span></td>|;
             print "<td valign=top nowrap>$reference</td>";
             print "<td valign=top align=center>".int($dataRow->{distance})." km </td>" if ($type eq 'add');
             print "</tr>";
