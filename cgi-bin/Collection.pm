@@ -1324,8 +1324,6 @@ sub displayCollectionDetailsPage {
         $time_place .= "<br><small>collected ";
         if ( $row->{'collectors'} ) {
             my $collectors = $row->{'collectors'};
-            $collectors =~ s/(Dr\.)(Mr\.)(Prof\.)//g;
-            $collectors =~ s/\b[A-Za-z]([A-Za-z\.]|)\b//g;
             $time_place .= " by " .$collectors . " ";
         }
         if ( $row->{'collection_dates'} ) {
