@@ -22,25 +22,25 @@ sub displayLoadImageForm{
         $taxon_no = $results[0]->{'taxon_no'}; 
         $taxon_name = $results[0]->{'taxon_name'}; 
     } else {
-        print "<div align=center><h2>Could not find taxon in database</h2></div>";
+        print "<div align=center><p class=\"pageTitle\">Could not find taxon in database</p></div>";
         return;
     }
 
-	print "<center><h2>Image upload form: $taxon_name</h2>";
-	print "<p>Files must be smaller than 1 MB and must either be of type jpg, gif or png.";
-	print "<p><form name=\"load_image_form\" action=\"$WRITE_URL\" method=\"POST\" enctype=\"multipart/form-data\">";
-	print "<b>File to upload:</b>&nbsp;<input type=file name=\"image_file\" accept=\"image/*\">".
+	print "<div style=\"text-align: center;\"><p class=\"pageTitle\">Image upload form: $taxon_name</p>";
+	print "<div class=\"displayPanel\" style=\"width: 40em; margin-left: 6em; text-align: left; padding-top: 1em; padding-left: 2em;\"><p><form name=\"load_image_form\" action=\"$WRITE_URL\" method=\"POST\" enctype=\"multipart/form-data\">";
+	print "<p class=\"medium\">File to upload:&nbsp;<input type=file name=\"image_file\" accept=\"image/*\"><\p>".
 		  "<input type=hidden name=\"taxon_no\" value=\"$taxon_no\">".
 		  "<input type=hidden name=\"taxon_name\" value=\"$taxon_name\">".
 		  "<input type=hidden name=\"action\" value=\"processLoadImage\">";
-	print "<table><tr><td valign=top><p><b>Caption:</b></td><td>".
+	print "<table><tr><td valign=top><p class=\"medium\">Caption:</p></td><td>".
 		  "<textarea cols=60 rows 4 name=\"caption\">".
-		  "Optional image description here.</textarea></td></tr></table>";
+		  "Optional image description here</textarea></td></tr></table>";
 	my $reference_no = $s->get("reference_no");
 	if ( $reference_no )	{
-		print  "<input type=checkbox name=reference_no value=$reference_no> <b>Check if image is from the current reference</b><p>\n\n";
+		print  "<p class=\"medium\"><input type=checkbox name=reference_no value=$reference_no> Check if image is from the current reference</p>\n\n";
 	}
-	print "<br><input type=\"submit\"></form></center>";
+	print "<p class=\"verysmall\">Files must be smaller than 1 MB and must either be of type jpg, gif or png.</p>";
+	print "<br><span style=\"margin-left: 30em;\"><input type=\"submit\"></span></form></div></div>";
 }
 
 sub processLoadImage{
