@@ -44,9 +44,10 @@ function checkForm() {
           <input id="goal" type="hidden">
           <input id="use_reference" type="hidden">
 
-          <h2><span id="page_title"></span></h2><br>
+          <p class="pageTitle"><span id="page_title"></span></p>
 
-          <b><span style="margin: 0em 1em 0em 1em;">Taxon name:</span></b> <input name="taxon_name" value="" size="30">
+          <div class="displayPanel" style="padding-top: 2em; padding-bottom: 2em;">
+          <span style="margin: 0em 1em 0em 1em;">Taxon name:</span></b> <input name="taxon_name" value="" size="30">
           &nbsp;&nbsp;&nbsp;
           <input type="submit" value="Search">
           <br>
@@ -59,6 +60,7 @@ function checkForm() {
             <br>
             You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</span>
           </p>
+          </div>
         </form>
       </div>
     </td>
