@@ -1330,6 +1330,7 @@ sub displayCollectionDetailsPage {
             my $years = $row->{'collection_dates'};
             $years =~ s/[A-Za-z\.]//g;
             $years =~ s/\b[0-9]([0-9]|)\b//g;
+            $years =~ s/^( |),//;
             $time_place .= $years;
         }
         $time_place .= "</small>";
