@@ -1320,6 +1320,22 @@ sub displayCollectionDetailsPage {
     } elsif ($row->{'country'}) {
         $time_place .= ", $row->{country}";
     }
+    if ( $row->{'collectors'} || $row->{'collection_dates'} ) {
+        $time_place .= "<br><small>collected ";
+        if ( $row->{'collectors'} ) {
+            my $collectors = $row->{'collectors'};
+            $collectors =~ s/(Dr\.)(Mr\.)(Prof\.)//g;
+            $collectors =~ s/\b[A-Za-z]([A-Za-z\.]|)\b//g;
+            $time_place .= " by " .$collectors . " ";
+        }
+        if ( $row->{'collection_dates'} ) {
+            my $years = $row->{'collection_dates'};
+            $years =~ s/[A-Za-z\.]//g;
+            $years =~ s/\b[0-9]([0-9]|)\b//g;
+            $time_place .= $years;
+        }
+        $time_place .= "</small>";
+    }
     $row->{'collection_name'} = $time_place;
 
     my @intervals = ();
