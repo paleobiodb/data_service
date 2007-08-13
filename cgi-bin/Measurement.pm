@@ -12,7 +12,7 @@ use Constants qw($READ_URL $WRITE_URL);
 #my @specimen_fields= ('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','length_median','length_min','length_max','length_error','length_error_unit','width_median','width_min','width_max','width_error','width_error_unit','height_median','height_min','height_max','height_error','height_error_unit','diagonal_median','diagonal_min','diagonal_max','diagonal_error','diagonal_error_unit','inflation_median','inflation_min','inflation_max','inflation_error','inflation_error_unit','comments','length','width','height','diagonal','inflation');
 
 my @specimen_fields   =('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','magnification','is_type','comments');
-my @measurement_types =('length','width','height','diagonal','inflation');
+my @measurement_types =('mass','length','width','height','diagonal','inflation');
 my @measurement_fields=('average','median','min','max','error','error_unit');
 
 #
@@ -378,7 +378,7 @@ sub populateMeasurementForm {
     }   
     
 	# get the taxon's name
-    my ($taxon_name,$old_field,$old_no,$collection);
+    my ($taxon_name,$old_field,$old_no,$collection,$extant);
     if ($q->param('occurrence_no')) {
         $old_field = "occurrence_no";
         $old_no = $q->param('occurrence_no');
@@ -403,7 +403,7 @@ sub populateMeasurementForm {
     } else {
         $old_field = "taxon_no";
         $old_no = int($q->param('taxon_no'));
-        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
+        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))},['taxon_rank','taxon_name','extant']);
         if ($taxon->{'taxon_rank'} =~ /species/) {
             $taxon_name = $taxon->{'taxon_name'};
         } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
@@ -411,12 +411,17 @@ sub populateMeasurementForm {
         } else {
             $taxon_name = $taxon->{'taxon_name'}." indet.";
         }
+        # check for extant taxa only if there is no occurrence because
+        #  occurrences are only of fossils, in principle
+        if ($taxon->{'extant'} =~ /yes/i) {
+            $extant = "yes";
+        }
     }
 
     #Prepare fields to be use in the form ahead
     my @values = ();
     my @fields = ();
-   
+
     if ($q->param('specimen_no') < 0) {
         # This is a new entry
         if (!$s->get('reference_no')) {
@@ -450,9 +455,14 @@ sub populateMeasurementForm {
                         }
                     }
                 }
-	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','types_only');
-	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,int($q->param('types_only')));
-	            print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
+                if ( $extant eq "yes" )	{
+                    push @fields, "mass_unit";
+                    push @values , "g";
+                }
+
+	        push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','types_only');
+	        push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,int($q->param('types_only')));
+	        print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
             } elsif ($q->param('specimen_no') == -2) {
 	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage');
 	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'');
@@ -463,7 +473,7 @@ sub populateMeasurementForm {
                 }
                 push @fields,'table_rows';
                 push @values,$table_rows;
-	            my $html = $hbo->populateHTML('specimen_measurement_form_individual', \@values, \@fields);
+	        my $html = $hbo->populateHTML('specimen_measurement_form_individual', \@values, \@fields);
                 print $html;
             }
         }
@@ -479,6 +489,23 @@ sub populateMeasurementForm {
         # Get the measurement data. types can be "length","width",etc. fields can be "average","max","min",etc.
         my %m_table = (); # Measurement table, only used right below
         $m_table{$_->{'measurement_type'}} = $_ for @measurements;
+
+        # add mass_unit to force display of mass fields and convert
+        #  high g values to kg 
+        if ( $m_table{'mass'}{'average'} > 0 && $extant eq "yes" ) {
+            push @fields, "mass_unit";
+            if ( $m_table{'mass'}{'average'} >= 100 ) {
+                push @values , "kg";
+                foreach my $f (@measurement_fields) {
+                    if ( $m_table{'mass'}{$f} > 0) {
+                        $m_table{'mass'}{$f} /= 1000;
+                    } 
+                } 
+            } else {
+                push @values , "g";
+            }
+        }
+
         foreach my $type (@measurement_types) {
             foreach my $f (@measurement_fields) {
                 push @fields, $type."_".$f;
@@ -490,14 +517,14 @@ sub populateMeasurementForm {
             }
         }
         
-	    for my $field ( @specimen_fields )	{
-            push @fields,$field;
-			if ( $row->{$field} )	{
-	    	    push @values, $row->{$field};
-            } else {
-                push @values, '';
-            }
-        }
+	for my $field ( @specimen_fields )	{
+		push @fields,$field;
+		if ( $row->{$field} )	{
+			push @values, $row->{$field};
+		} else {
+			push @values, '';
+		}
+	}
         # This is an edit, use fields from the DB
         push @fields, 'specimen_is_type';
         if ($row->{'is_type'} eq 'holotype') {
@@ -586,7 +613,13 @@ sub processMeasurementForm	{
         if (! ($fields{'length_average'} || $fields{'width_average'} || $fields{'height_average'} || $fields{'diagonal_average'}) ) {
             next;
         }
-    
+
+        # kg values have to be rescaled as grams
+        if ($fields{'mass_average'} > 0 && $fields{'mass_unit'} eq "kg") {
+            for my $f ( @measurement_fields )	{
+                $fields{'mass_'.$f} *= 1000;
+            }
+        }
         # if ecotaph no exists, update the record
 
         if ($fields{'specimen_is_type'} =~ /holotype/) {
