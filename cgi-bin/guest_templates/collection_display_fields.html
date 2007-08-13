@@ -8,10 +8,10 @@
   <span class="displayPanelHeader">Geography</span>
   <div class="displayPanelContent">
   <table border="0" cellpadding="2" class="displayPanelText">
-  <div show="country"><tr><td valign=top nowrap><span class="field_name">Country:</span></td><td valign=top><span id="country"></span></td></tr></div>
-  <div show="state"><tr><td valign=top nowrap><span class="field_name">State/province:</span></td><td valign=top><span id="state"></span></td></tr></div>
-  <div show="county"><tr><td valign=top nowrap><span class="field_name">County:</span></td><td valign=top><span id="county"></span></td></tr></div>
-  <div show="latdeg"><tr><td valign=top nowrap><span class="field_name">Coordinates:</span></td><td valign=top>
+  <div show="country"><tr><td valign=top nowrap><span class="fieldName">Country:</span></td><td valign=top><span id="country"></span></td></tr></div>
+  <div show="state"><tr><td valign=top nowrap><span class="fieldName">State/province:</span></td><td valign=top><span id="state"></span></td></tr></div>
+  <div show="county"><tr><td valign=top nowrap><span class="fieldName">County:</span></td><td valign=top><span id="county"></span></td></tr></div>
+  <div show="latdeg"><tr><td valign=top nowrap><span class="fieldName">Coordinates:</span></td><td valign=top>
   <div show="is_contributor">
     <span style="white-space: nowrap;"><span id="latdeg"></span><span show="latdec">.</span><span id="latdec"></span><span show="latdec"></span>&deg; <span id="latmin"></span><span show="latmin">'</span>  <span id="latsec"></span><span show="latsec">&quot;</span> <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span><span show="lngdec">.</span><span id="lngdec"></span><span show="lngdec"></span>&deg; <span id="lngmin"></span><span show="lngmin">'</span>  <span id="lngsec"></span><span show="lngsec">&quot;</span> <span id="lngdir"></span></span> <a href="#" onClick="javascript: mapPopup('<span id="collection_no"></span>')">(View map)</a></td></tr>
   </div> <!-- is_contributor=true end-->
@@ -19,11 +19,11 @@
     <span style="white-space: nowrap;"><span id="latdeg"></span> <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span> <span id="lngdir"></span></span> <a href="javascript: mapPopup('<span id="collection_no"></span>')")>(View map)</a></td></tr>
   </div> <!-- is_contributor=false end-->
   </div> <!-- latdeg show end-->
-    <div show="latlng_basis"><tr><td valign=top nowrap><span class="field_name">Basis of coordinate:</span></td><td valign=top><span id="latlng_basis"></span></td></tr></div>
-    <div show="altitude_value"><tr><td valign=top nowrap><span class="field_name">Altitude:</span></td><td valign=top><span id="altitude_value"></span> <span id="altitude_unit"></span></td></div>
-  <div show="geogscale"><tr><td valign=top><span class="field_name">Scale of geographic resolution:</span></td><td valign=top><span id="geogscale"></span></td></tr></div>
+    <div show="latlng_basis"><tr><td valign=top nowrap><span class="fieldName">Basis of coordinate:</span></td><td valign=top><span id="latlng_basis"></span></td></tr></div>
+    <div show="altitude_value"><tr><td valign=top nowrap><span class="fieldName">Altitude:</span></td><td valign=top><span id="altitude_value"></span> <span id="altitude_unit"></span></td></div>
+  <div show="geogscale"><tr><td valign=top><span class="fieldName">Scale of geographic resolution:</span></td><td valign=top><span id="geogscale"></span></td></tr></div>
   <div show="is_contributor">
-    <div show="geogcomments"><tr><td valign=top colspan=2><span class="field_name">Geography comments:</span> <span id="geogcomments"></span></td></tr></div>
+    <div show="geogcomments"><tr><td valign=top colspan=2><span class="fieldName">Geography comments:</span> <span id="geogcomments"></span></td></tr></div>
   </div>
   </table>
   </div>
@@ -33,19 +33,19 @@
   <span class="displayPanelHeader">Time</span>
   <div class="displayPanelContent">
   <table border=0 cellpadding=2 class="displayPanelText">
-  <div show="period"><tr><td valign=top nowrap><span class="field_name">Period:</span></td><td valign=top><span id="period"></span> </td></tr></div>
-  <div show="legacy_period"><tr><td valign=top nowrap><span class="field_name">*Period:</span></td><td valign=top><span id="legacy_period"></span> </td></tr></div>
-  <div show="epoch"><tr><td valign=top nowrap><span class="field_name">Epoch:</span></td><td valign=top><span id="epoch"></span> </td></tr></div>
-  <div show="legacy_epoch"><tr><td valign=top nowrap><span class="field_name">*Epoch:</span></td><td valign=top><span id="legacy_epoch"></span> </td></tr></div>
-  <div show="stage"><tr><td valign=top nowrap><span class="field_name">Stage:</span></td><td valign=top><span id="stage"></span> </td></tr></div>
-  <div show="legacy_intage"><tr><td valign=top nowrap><span class="field_name">*International age/stage:</span></td><td valign=top><span id="legacy_intage"></span> </td></tr></div>
-  <div show="legacy_locage"><tr><td valign=top nowrap><span class="field_name">*Local age/stage:</span></td><td valign=top><span id="legacy_locage"></span> </td></tr></div>
-  <div show="ten_my_bin"><tr><td valign=top nowrap><span class="field_name">10 m.y. bin:</span></td><td valign=top><span id="ten_my_bin"></span> </td></tr></div>
-  <div show="zone"><tr><td valign=top nowrap><span class="field_name">Zone:</span></td><td valign=top><span id="zone"></span></td></tr></div>
-  <div show="interval"><tr><td valign=top nowrap><span class="field_name">Key time interval:</span></td><td valign=top><span id="interval"></span></td></tr></div>
-  <div show="age_range"><tr><td valign=top nowrap><span class="field_name">Age range of interval:</span></td><td valign=top><span id="age_range"></span> </td></tr></div>
-  <div show="age_estimate"><tr><td valign=top nowrap><span class="field_name">Age estimate:</span></td><td valign=top><span id="age_estimate"></span> </td></tr></div>
-  <div show="legacy_message"><tr><td valign=top nowrap colspan=2><span class="field_name"> * </span> legacy (obsolete) database fields</td></tr></div>
+  <div show="period"><tr><td valign=top nowrap><span class="fieldName">Period:</span></td><td valign=top><span id="period"></span> </td></tr></div>
+  <div show="legacy_period"><tr><td valign=top nowrap><span class="fieldName">*Period:</span></td><td valign=top><span id="legacy_period"></span> </td></tr></div>
+  <div show="epoch"><tr><td valign=top nowrap><span class="fieldName">Epoch:</span></td><td valign=top><span id="epoch"></span> </td></tr></div>
+  <div show="legacy_epoch"><tr><td valign=top nowrap><span class="fieldName">*Epoch:</span></td><td valign=top><span id="legacy_epoch"></span> </td></tr></div>
+  <div show="stage"><tr><td valign=top nowrap><span class="fieldName">Stage:</span></td><td valign=top><span id="stage"></span> </td></tr></div>
+  <div show="legacy_intage"><tr><td valign=top nowrap><span class="fieldName">*International age/stage:</span></td><td valign=top><span id="legacy_intage"></span> </td></tr></div>
+  <div show="legacy_locage"><tr><td valign=top nowrap><span class="fieldName">*Local age/stage:</span></td><td valign=top><span id="legacy_locage"></span> </td></tr></div>
+  <div show="ten_my_bin"><tr><td valign=top nowrap><span class="fieldName">10 m.y. bin:</span></td><td valign=top><span id="ten_my_bin"></span> </td></tr></div>
+  <div show="zone"><tr><td valign=top nowrap><span class="fieldName">Zone:</span></td><td valign=top><span id="zone"></span></td></tr></div>
+  <div show="interval"><tr><td valign=top nowrap><span class="fieldName">Key time interval:</span></td><td valign=top><span id="interval"></span></td></tr></div>
+  <div show="age_range"><tr><td valign=top nowrap><span class="fieldName">Age range of interval:</span></td><td valign=top><span id="age_range"></span> </td></tr></div>
+  <div show="age_estimate"><tr><td valign=top nowrap><span class="fieldName">Age estimate:</span></td><td valign=top><span id="age_estimate"></span> </td></tr></div>
+  <div show="legacy_message"><tr><td valign=top nowrap colspan=2><span class="fieldName"> * </span> legacy (obsolete) database fields</td></tr></div>
   </table>
   </div>
 </div>
@@ -54,17 +54,17 @@
   <span class="displayPanelHeader">Stratigraphy</span>
   <div class="displayPanelContent">
   <table border=0 cellpadding=2 class="displayPanelText">
-  <div show="geological_group"><tr><td valign=top nowrap><span class="field_name">Geological group:</span></td><td valign=top><span id="geological_group"></span></td></tr></div>
-  <div show="formation"><tr><td valign=top nowrap><span class="field_name">Formation:</span></td><td valign=top><span id="formation"></span></td></tr></div>
-  <div show="member"><tr><td valign=top nowrap><span class="field_name">Member:</span></td><td valign=top><span id="member"></span></td></tr></div>
-  <div show="localsection"><tr><td valign=top nowrap><span class="field_name">Local section:</span></td><td valign=top><span id="localsection"></span></td></tr></div>
-  <div show="localbed"><tr><td valign=top nowrap><span class="field_name">Local bed:</span></td><td valign=top><span id="localbed"></span> <span id="localbedunit"></span></td></tr></div>
-  <div show="localorder"><tr><td valign=top nowrap><span class="field_name">Local order:</span></td><td valign=top><span id="localorder"></span></td></tr></div>
-  <div show="regionalsection"><tr><td valign=top nowrap><span class="field_name">Regional section:</span></td><td valign=top><span id="regionalsection"></span></td></tr></div>
-  <div show="regionalbed"><tr><td valign=top nowrap><span class="field_name">Regional bed:</span></td><td valign=top><span id="regionalbed"></span> <span id="regionalbedunit"></span></td></tr></div>
-  <div show="regionalorder"><tr><td valign=top nowrap><span class="field_name">Regional order:</span></td><td valign=top><span id="regionalorder"></span></td></tr></div>
-  <div show="stratscale"><tr><td valign=top><span class="field_name">Scale of stratigraphic resolution:</span></td><td valign=top><span id="stratscale"></span></td></tr></div>
-  <div show="stratcomments"><tr><td valign=top colspan=2><span class="field_name">Stratigraphy comments:</span> <span id="stratcomments"></span></td></tr></div>
+  <div show="geological_group"><tr><td valign=top nowrap><span class="fieldName">Geological group:</span></td><td valign=top><span id="geological_group"></span></td></tr></div>
+  <div show="formation"><tr><td valign=top nowrap><span class="fieldName">Formation:</span></td><td valign=top><span id="formation"></span></td></tr></div>
+  <div show="member"><tr><td valign=top nowrap><span class="fieldName">Member:</span></td><td valign=top><span id="member"></span></td></tr></div>
+  <div show="localsection"><tr><td valign=top nowrap><span class="fieldName">Local section:</span></td><td valign=top><span id="localsection"></span></td></tr></div>
+  <div show="localbed"><tr><td valign=top nowrap><span class="fieldName">Local bed:</span></td><td valign=top><span id="localbed"></span> <span id="localbedunit"></span></td></tr></div>
+  <div show="localorder"><tr><td valign=top nowrap><span class="fieldName">Local order:</span></td><td valign=top><span id="localorder"></span></td></tr></div>
+  <div show="regionalsection"><tr><td valign=top nowrap><span class="fieldName">Regional section:</span></td><td valign=top><span id="regionalsection"></span></td></tr></div>
+  <div show="regionalbed"><tr><td valign=top nowrap><span class="fieldName">Regional bed:</span></td><td valign=top><span id="regionalbed"></span> <span id="regionalbedunit"></span></td></tr></div>
+  <div show="regionalorder"><tr><td valign=top nowrap><span class="fieldName">Regional order:</span></td><td valign=top><span id="regionalorder"></span></td></tr></div>
+  <div show="stratscale"><tr><td valign=top><span class="fieldName">Scale of stratigraphic resolution:</span></td><td valign=top><span id="stratscale"></span></td></tr></div>
+  <div show="stratcomments"><tr><td valign=top colspan=2><span class="fieldName">Stratigraphy comments:</span> <span id="stratcomments"></span></td></tr></div>
   </table>
   </div>
 </div>
@@ -73,15 +73,15 @@
   <span class="displayPanelHeader">Lithology</span>
   <div class="displayPanelContent">
   <table border=0 cellpadding=2 class="displayPanelText">
-  <div show="lithology1"><tr><td valign=top nowrap><span class="field_name">Primary lithology:</span></td><td valign=top><span id="lithadj"></span> <span id="lithification"></span> <span id="lithology1"></span></td></tr></div>
-  <div show="lithology2"><tr><td valign=top nowrap><span class="field_name">Secondary lithology:</span></td><td valign=top><span id="lithadj2"></span> <span id="lithification2"></span> <span id="lithology2"></span></td></tr></div>
-  <div show="fossilsfrom1"><tr><td valign=top><span class="field_name">Fossils collected from primary lithology:</span></td><td valign=top><span id="fossilsfrom1"></span></td></tr></div>
-  <div show="fossilsfrom2"><tr><td valign=top><span class="field_name">Fossils collected from secondary lithology:</span></td><td valign=top><span id="fossilsfrom2"></span></td></tr></div>
-  <div show="lithdescript"><tr><td valign=top colspan=2><span class="field_name">Lithology description:</span> <span id="lithdescript"></span></td></tr></div>
-  <div show="environment"><tr><td valign=top nowrap><span class="field_name">Environment:</span></td><td valign=top><span id="environment"></span></td></tr></div>
-  <div show="tectonic_setting"><tr><td valign=top nowrap><span class="field_name">Tectonic setting:</span></td><td valign=top><span id="tectonic_setting"></span></td></tr></div>
-  <div show="seq_strat"><tr><td valign=top nowrap><span class="field_name">Sequence stratigraphy:</span></td><td valign=top><span id="seq_strat"></span></td></tr></div>
-  <div show="geology_comments"><tr><td valign=top colspan=2><span class="field_name">Geology comments:</span> <span id="geology_comments"></span></td></tr></div>
+  <div show="lithology1"><tr><td valign=top nowrap><span class="fieldName">Primary lithology:</span></td><td valign=top><span id="lithadj"></span> <span id="lithification"></span> <span id="lithology1"></span></td></tr></div>
+  <div show="lithology2"><tr><td valign=top nowrap><span class="fieldName">Secondary lithology:</span></td><td valign=top><span id="lithadj2"></span> <span id="lithification2"></span> <span id="lithology2"></span></td></tr></div>
+  <div show="fossilsfrom1"><tr><td valign=top><span class="fieldName">Fossils collected from primary lithology:</span></td><td valign=top><span id="fossilsfrom1"></span></td></tr></div>
+  <div show="fossilsfrom2"><tr><td valign=top><span class="fieldName">Fossils collected from secondary lithology:</span></td><td valign=top><span id="fossilsfrom2"></span></td></tr></div>
+  <div show="lithdescript"><tr><td valign=top colspan=2><span class="fieldName">Lithology description:</span> <span id="lithdescript"></span></td></tr></div>
+  <div show="environment"><tr><td valign=top nowrap><span class="fieldName">Environment:</span></td><td valign=top><span id="environment"></span></td></tr></div>
+  <div show="tectonic_setting"><tr><td valign=top nowrap><span class="fieldName">Tectonic setting:</span></td><td valign=top><span id="tectonic_setting"></span></td></tr></div>
+  <div show="seq_strat"><tr><td valign=top nowrap><span class="fieldName">Sequence stratigraphy:</span></td><td valign=top><span id="seq_strat"></span></td></tr></div>
+  <div show="geology_comments"><tr><td valign=top colspan=2><span class="fieldName">Geology comments:</span> <span id="geology_comments"></span></td></tr></div>
   </table>
   </div>
 </div>
@@ -94,25 +94,25 @@
   <span class="displayPanelHeader">Taphonomy</span>
   <div class="displayPanelContent">
   <table border=0 cellpadding=2 class="displayPanelText">
-  <div show="pres_mode"><tr><td valign=top nowrap><span class="field_name">Modes of preservation:</span></td><td valign=top><span id="pres_mode"></span></td></tr></div>
-  <div show="lagerstatten"><tr><td valign=top nowrap><span class="field_name">Lagerstätten type:</span></td><td valign=top><span id="lagerstatten"></span></td></tr></div>
-  <div show="concentration"><tr><td valign=top nowrap><span class="field_name">Degree of concentration:</span></td><td valign=top><span id="concentration"></span></td></tr></div>
-  <div show="assembl_comps"><tr><td valign=top nowrap><span class="field_name">Assemblage components:</span></td><td valign=top><span id="assembl_comps"></span></td></tr></div>
-  <div show="orientation"><tr><td valign=top nowrap><span class="field_name">Spatial orientation:</span></td><td valign=top><span id="orientation"></span></td></tr></div>
-  <div show="preservation_quality"><tr><td valign=top><span class="field_name">Preservation of anatomical detail:</span></td><td valign=top><span id="preservation_quality"></span></td></tr></div>
-  <div show="abund_in_sediment"><tr><td valign=top nowrap><span class="field_name">Abundance in sediment:</span></td><td valign=top><span id="abund_in_sediment"></span></td></tr></div>
-  <div show="art_whole_bodies"><tr><td valign=top nowrap><span class="field_name">   Articulated whole bodies:</span></td><td valign=top><span id="art_whole_bodies"></span></td></tr></div>
-  <div show="disart_assoc_maj_elems"><tr><td valign=top nowrap><span class="field_name">Associated major elements:</span></td><td valign=top><span id="disart_assoc_maj_elems"></span></td></tr></div>
-  <div show="disassoc_maj_elems"><tr><td valign=top nowrap><span class="field_name">Disassociated major elements:</span></td><td valign=top><span id="disassoc_maj_elems"></span></td></tr></div>
-  <div show="disassoc_minor_elems"><tr><td valign=top nowrap><span class="field_name">Disassociated minor elements:</span></td><td valign=top><span id="disassoc_minor_elems"></span></td></tr></div>
-  <div show="sorting"><tr><td valign=top nowrap><span class="field_name">Size sorting:</span></td><td valign=top><span id="sorting"></span></td></tr></div>
-  <div show="fragmentation"><tr><td valign=top nowrap><span class="field_name">Fragmentation:</span></td><td valign=top><span id="fragmentation"></span></td></tr></div>
-  <div show="bioerosion"><tr><td valign=top nowrap><span class="field_name">Bioerosion:</span></td><td valign=top><span id="bioerosion"></span></td></tr></div>
-  <div show="encrustation"><tr><td valign=top nowrap><span class="field_name">Encrustation:</span></td><td valign=top><span id="encrustation"></span></td></tr></div>
-  <div show="feed_pred_traces"><tr><td valign=top nowrap><span class="field_name">Feeding/predation traces:</span></td><td valign=top><span id="feed_pred_traces"></span></td></tr></div>
-  <div show="temporal_resolution"><tr><td valign=top nowrap><span class="field_name">Temporal resolution:</span></td><td valign=top><span id="temporal_resolution"></span></td></tr></div>
-  <div show="spatial_resolution"><tr><td valign=top nowrap><span class="field_name">Spatial resolution:</span></td><td valign=top><span id="spatial_resolution"></span></td></tr></div>
-  <div show="taphonomy_comments"><tr><td valign=top colspan=2><span class="field_name">Taphonomy comments:</span> <span id="taphonomy_comments"></span></td></tr></div>
+  <div show="pres_mode"><tr><td valign=top nowrap><span class="fieldName">Modes of preservation:</span></td><td valign=top><span id="pres_mode"></span></td></tr></div>
+  <div show="lagerstatten"><tr><td valign=top nowrap><span class="fieldName">Lagerstätten type:</span></td><td valign=top><span id="lagerstatten"></span></td></tr></div>
+  <div show="concentration"><tr><td valign=top nowrap><span class="fieldName">Degree of concentration:</span></td><td valign=top><span id="concentration"></span></td></tr></div>
+  <div show="assembl_comps"><tr><td valign=top nowrap><span class="fieldName">Assemblage components:</span></td><td valign=top><span id="assembl_comps"></span></td></tr></div>
+  <div show="orientation"><tr><td valign=top nowrap><span class="fieldName">Spatial orientation:</span></td><td valign=top><span id="orientation"></span></td></tr></div>
+  <div show="preservation_quality"><tr><td valign=top><span class="fieldName">Preservation of anatomical detail:</span></td><td valign=top><span id="preservation_quality"></span></td></tr></div>
+  <div show="abund_in_sediment"><tr><td valign=top nowrap><span class="fieldName">Abundance in sediment:</span></td><td valign=top><span id="abund_in_sediment"></span></td></tr></div>
+  <div show="art_whole_bodies"><tr><td valign=top nowrap><span class="fieldName">   Articulated whole bodies:</span></td><td valign=top><span id="art_whole_bodies"></span></td></tr></div>
+  <div show="disart_assoc_maj_elems"><tr><td valign=top nowrap><span class="fieldName">Associated major elements:</span></td><td valign=top><span id="disart_assoc_maj_elems"></span></td></tr></div>
+  <div show="disassoc_maj_elems"><tr><td valign=top nowrap><span class="fieldName">Disassociated major elements:</span></td><td valign=top><span id="disassoc_maj_elems"></span></td></tr></div>
+  <div show="disassoc_minor_elems"><tr><td valign=top nowrap><span class="fieldName">Disassociated minor elements:</span></td><td valign=top><span id="disassoc_minor_elems"></span></td></tr></div>
+  <div show="sorting"><tr><td valign=top nowrap><span class="fieldName">Size sorting:</span></td><td valign=top><span id="sorting"></span></td></tr></div>
+  <div show="fragmentation"><tr><td valign=top nowrap><span class="fieldName">Fragmentation:</span></td><td valign=top><span id="fragmentation"></span></td></tr></div>
+  <div show="bioerosion"><tr><td valign=top nowrap><span class="fieldName">Bioerosion:</span></td><td valign=top><span id="bioerosion"></span></td></tr></div>
+  <div show="encrustation"><tr><td valign=top nowrap><span class="fieldName">Encrustation:</span></td><td valign=top><span id="encrustation"></span></td></tr></div>
+  <div show="feed_pred_traces"><tr><td valign=top nowrap><span class="fieldName">Feeding/predation traces:</span></td><td valign=top><span id="feed_pred_traces"></span></td></tr></div>
+  <div show="temporal_resolution"><tr><td valign=top nowrap><span class="fieldName">Temporal resolution:</span></td><td valign=top><span id="temporal_resolution"></span></td></tr></div>
+  <div show="spatial_resolution"><tr><td valign=top nowrap><span class="fieldName">Spatial resolution:</span></td><td valign=top><span id="spatial_resolution"></span></td></tr></div>
+  <div show="taphonomy_comments"><tr><td valign=top colspan=2><span class="fieldName">Taphonomy comments:</span> <span id="taphonomy_comments"></span></td></tr></div>
   </table>
   </div>
 </div>
@@ -121,19 +121,19 @@
   <span class="displayPanelHeader">Collection methods and comments</span>
   <div class="displayPanelContent">
   <table border=0 cellpadding=2 class="displayPanelText">
-  <div show="collection_coverage"><tr><td valign=top nowrap><span class="field_name">Collection excludes:</span></td><td valign=top><span id="collection_coverage"></span></td></tr></div>
-  <div show="coll_meth"><tr><td valign=top nowrap><span class="field_name">Collection methods:</span></td><td valign=top><span id="coll_meth"></span></td></tr></div>
-  <div show="sieve_size_min"><tr><td valign=top nowrap><span class="field_name">Minimum sieve size:</span></td><td valign=top><span id="sieve_size_min"></span></td></tr></div>
-  <div show="sieve_size_max"><tr><td valign=top nowrap><span class="field_name">Maximum sieve size:</span></td><td valign=top><span id="sieve_size_max"></span></td></tr></div>
-  <div show="collection_size"><tr><td valign=top nowrap><span class="field_name">Collection size:</span></td><td valign=top><span id="collection_size"></span></td></tr></div>
-  <div show="collection_size_unit"><tr><td valign=top nowrap><span class="field_name">Collection size unit:</span></td><td valign=top><span id="collection_size_unit"></span></td></tr></div>
-  <div show="rock_censused"><tr><td valign=top nowrap><span class="field_name">Rock censused:</span></td><td valign=top><span id="rock_censused"></span> <span id="rock_censused_unit"></span></td></tr></div>
-  <div show="collection_type"><tr><td valign=top nowrap><span class="field_name">Reason for describing collection:</span></td><td valign=top><span id="collection_type"></span> analysis</td></tr></div>
-  <div show="museum"><tr><td valign=top nowrap><span class="field_name">Museum repositories:</span></td><td valign=top><span id="museum"></span> </td></tr></div>
-  <div show="collectors"><tr><td valign=top nowrap><span class="field_name">Collectors:</span></td><td valign=top><span id="collectors"></span> </td></tr></div>
-  <div show="collection_dates"><tr><td valign=top nowrap><span class="field_name">Collection dates:</span></td><td valign=top><span id="collection_dates"></span> </td></tr></div>
-  <div show="collection_comments"><tr><td valign=top colspan=2><span class="field_name">Collection comments:</span> <span id="collection_comments"></span></td></tr></div>
-  <div show="taxonomy_comments"><tr><td valign=top colspan=2><span class="field_name">Taxonomy comments:</span> <span id="taxonomy_comments"></span></td></tr></div>
+  <div show="collection_coverage"><tr><td valign=top nowrap><span class="fieldName">Collection excludes:</span></td><td valign=top><span id="collection_coverage"></span></td></tr></div>
+  <div show="coll_meth"><tr><td valign=top nowrap><span class="fieldName">Collection methods:</span></td><td valign=top><span id="coll_meth"></span></td></tr></div>
+  <div show="sieve_size_min"><tr><td valign=top nowrap><span class="fieldName">Minimum sieve size:</span></td><td valign=top><span id="sieve_size_min"></span></td></tr></div>
+  <div show="sieve_size_max"><tr><td valign=top nowrap><span class="fieldName">Maximum sieve size:</span></td><td valign=top><span id="sieve_size_max"></span></td></tr></div>
+  <div show="collection_size"><tr><td valign=top nowrap><span class="fieldName">Collection size:</span></td><td valign=top><span id="collection_size"></span></td></tr></div>
+  <div show="collection_size_unit"><tr><td valign=top nowrap><span class="fieldName">Collection size unit:</span></td><td valign=top><span id="collection_size_unit"></span></td></tr></div>
+  <div show="rock_censused"><tr><td valign=top nowrap><span class="fieldName">Rock censused:</span></td><td valign=top><span id="rock_censused"></span> <span id="rock_censused_unit"></span></td></tr></div>
+  <div show="collection_type"><tr><td valign=top nowrap><span class="fieldName">Reason for describing collection:</span></td><td valign=top><span id="collection_type"></span> analysis</td></tr></div>
+  <div show="museum"><tr><td valign=top nowrap><span class="fieldName">Museum repositories:</span></td><td valign=top><span id="museum"></span> </td></tr></div>
+  <div show="collectors"><tr><td valign=top nowrap><span class="fieldName">Collectors:</span></td><td valign=top><span id="collectors"></span> </td></tr></div>
+  <div show="collection_dates"><tr><td valign=top nowrap><span class="fieldName">Collection dates:</span></td><td valign=top><span id="collection_dates"></span> </td></tr></div>
+  <div show="collection_comments"><tr><td valign=top colspan=2><span class="fieldName">Collection comments:</span> <span id="collection_comments"></span></td></tr></div>
+  <div show="taxonomy_comments"><tr><td valign=top colspan=2><span class="fieldName">Taxonomy comments:</span> <span id="taxonomy_comments"></span></td></tr></div>
   </table>
   </div>
 </div>
@@ -143,19 +143,19 @@
   <span class="displayPanelHeader">Metadata</span>
   <div class="displayPanelContent">
   <table border=0 cellpadding=2 class="displayPanelText">
-  <div show="collection_aka"><tr><td valign=top nowrap><span class="field_name">Also known as:</span></td><td valign=top><span id="collection_aka"></span></td></tr></div>
-  <div show="collection_no"><tr><td valign=top nowrap><span class="field_name">PBDB number:</span></td><td valign=top><span id="collection_no"></span></td></tr></div>
-  <div show="igsn"><tr><td valign=top nowrap><span class="field_name">IGSN (<a target="_BLANK" href="http://www.geosamples.org">SESAR</a>) number:</span></td><td valign=top><span id="igsn"></span></td></tr></div>
-  <div show="authorizer"><tr><td valign=top nowrap><span class="field_name">Authorizer:</span></td><td valign=top><span id="authorizer"></span></td></tr></div>
-  <div show="enterer"><tr><td valign=top nowrap><span class="field_name">Enterer:</span></td><td valign=top><span id="enterer"></span></td></tr></div>
-  <div show="modifier"><tr><td valign=top nowrap><span class="field_name">Modifier:</span></td><td valign=top><span id="modifier"></span></td></tr></div>
-  <div show="research_group"><tr><td valign=top nowrap><span class="field_name">Research group:</span></td><td valign=top><span id="research_group"></span></td></tr></div>
-  <div show="collection_subset"><tr><td valign=top nowrap><span class="field_name">Subset of collection #:</span></td><td valign=top><span id="collection_subset"></span></td></tr></div>
-  <div show="subset_string"><tr><td valign=top><span class="field_name">Collections that are a subset of this one:</span></td><td valign=top><table><span id="subset_string"></span></table></td></tr></div>
-  <div show="created"><tr><td valign=top nowrap><span class="field_name">Created:</span></td><td valign=top><span id="created"></span></td></tr></div>
-  <div show="modified"><tr><td valign=top nowrap><span class="field_name">Last modified:</span></td><td valign=top><span id="modified"></span></td></tr></div>
-  <div show="release_date"><tr><td valign=top nowrap><span class="field_name">Released:</span></td><td valign=top><span id="release_date"></span></td></tr></div>
-  <div show="access_level"><tr><td valign=top nowrap><span class="field_name">Access level:</span></td><td valign=top><span id="access_level"></span></td></tr></div>
+  <div show="collection_aka"><tr><td valign=top nowrap><span class="fieldName">Also known as:</span></td><td valign=top><span id="collection_aka"></span></td></tr></div>
+  <div show="collection_no"><tr><td valign=top nowrap><span class="fieldName">PBDB number:</span></td><td valign=top><span id="collection_no"></span></td></tr></div>
+  <div show="igsn"><tr><td valign=top nowrap><span class="fieldName">IGSN (<a target="_BLANK" href="http://www.geosamples.org">SESAR</a>) number:</span></td><td valign=top><span id="igsn"></span></td></tr></div>
+  <div show="authorizer"><tr><td valign=top nowrap><span class="fieldName">Authorizer:</span></td><td valign=top><span id="authorizer"></span></td></tr></div>
+  <div show="enterer"><tr><td valign=top nowrap><span class="fieldName">Enterer:</span></td><td valign=top><span id="enterer"></span></td></tr></div>
+  <div show="modifier"><tr><td valign=top nowrap><span class="fieldName">Modifier:</span></td><td valign=top><span id="modifier"></span></td></tr></div>
+  <div show="research_group"><tr><td valign=top nowrap><span class="fieldName">Research group:</span></td><td valign=top><span id="research_group"></span></td></tr></div>
+  <div show="collection_subset"><tr><td valign=top nowrap><span class="fieldName">Subset of collection #:</span></td><td valign=top><span id="collection_subset"></span></td></tr></div>
+  <div show="subset_string"><tr><td valign=top><span class="fieldName">Collections that are a subset of this one:</span></td><td valign=top><table><span id="subset_string"></span></table></td></tr></div>
+  <div show="created"><tr><td valign=top nowrap><span class="fieldName">Created:</span></td><td valign=top><span id="created"></span></td></tr></div>
+  <div show="modified"><tr><td valign=top nowrap><span class="fieldName">Last modified:</span></td><td valign=top><span id="modified"></span></td></tr></div>
+  <div show="release_date"><tr><td valign=top nowrap><span class="fieldName">Released:</span></td><td valign=top><span id="release_date"></span></td></tr></div>
+  <div show="access_level"><tr><td valign=top nowrap><span class="fieldName">Access level:</span></td><td valign=top><span id="access_level"></span></td></tr></div>
   </table>
   </div>
 </div>
@@ -168,8 +168,8 @@
   <span class="displayPanelHeader">Reference information</span>
   <div class="displayPanelContent">
   <table border=0 cellpadding=2 class="displayPanelText" width="100%">
-  <div show="reference_no"><tr><td valign=top nowrap width="1%"><span class="field_name">Primary reference:</span></td><td valign=top align=left><span id="reference_string"></span></td></tr></div>
-  <div show="secondary_reference_string"><tr><td valign=top nowrap><span class="field_name">Secondary references:</span></td><td valign=top><span id="secondary_reference_string"></span></td></tr></div>
+  <div show="reference_no"><tr><td valign=top nowrap width="1%"><span class="fieldName">Primary reference:</span></td><td valign=top align=left><span id="reference_string"></span></td></tr></div>
+  <div show="secondary_reference_string"><tr><td valign=top nowrap><span class="fieldName">Secondary references:</span></td><td valign=top><span id="secondary_reference_string"></span></td></tr></div>
   </table>
   </div>
 </div>
