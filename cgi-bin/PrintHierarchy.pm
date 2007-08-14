@@ -62,14 +62,15 @@ sub processPrintHierarchy	{
 		return;
 	}
 
+    print '<div align="center" style="margin-bottom: -2em;">';
     if ($taxon_name) {
-        print '<div align="center"><p class="pageTitle">Classification of ';
+        print '<p class="pageTitle">Classification of ';
         if ( $taxon_rank !~ /genus|species/) {
             print "the ";
         }
         print $taxon_name;
     } else {
-        print '<div align="center"><p class="pageTitle">Classification';
+        print '<p class="pageTitle">Classification';
     }
     if ($reference_no) {
         my $shortref = Reference::formatShortRef($dbt,$reference_no);
