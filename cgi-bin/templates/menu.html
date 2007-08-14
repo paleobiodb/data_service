@@ -1,52 +1,52 @@
-<table border=0 align=center>
-  <tr>
-    <td>
-      <table border=0>
-      <tr><td colspan=2><h2 align=center>Paleobiology Database Main Menu</h2></td></tr>
-	  <tr><td> </td></tr>
-	  <tr><td> </td></tr>
-        <tr>
-          <td valign=top class=small>
-          <h2>Data entry</h2>
 
-            <h3>Basic steps</h3>
+<table border="0 align="center">
+      <tr><td colspan="2"><p class="pageTitle" align="center" style="margin-bottom: 0.5em;">Paleobiology Database Main Menu</p></td></tr>
+        <tr>
+          <td valign="top" class="small">
+          <div style="margin-left: 4em;">
+          <p class="verylarge">Data entry</p>
+
+            <p class="large">Basic steps</p>
             <ul>
               <li><a href="%%write_url%%?action=displaySearchRefs&amp;type=add">Add a new reference</a></li>
               <li><a href="%%write_url%%?action=displayAuthorityTaxonSearchForm">Add/edit taxonomic name</A></li>
               <li><a href="%%write_url%%?action=displayOpinionSearchForm">Add/edit taxonomic opinion</A></li>
               <li><a href="%%write_url%%?action=displaySearchCollsForAdd">Add a new collection</a></li>
-              <li><a href="%%write_url%%?action=displayOccurrenceAddEdit">Add/edit occurrences for a collection</a>&nbsp;&nbsp;</li>
+              <li><a href="%%write_url%%?action=displayOccurrenceAddEdit">Add taxonomic occurrences</a>&nbsp;&nbsp;</li>
               <li><a href="%%write_url%%?action=displaySearchColls&type=occurrence_table">Add/edit table of occurrences</a>&nbsp;&nbsp;</li>
             </ul>
 
-            <h3>References</h3>
+            <p class="large">References</p>
             <ul>
               <li><a href="%%write_url%%?action=displaySearchRefs&amp;type=select">Change current reference</a></li>
               <li><a href="%%write_url%%?action=editCurrentRef">Edit current reference</a></li>
               <li><a href="%%write_url%%?action=displaySearchRefs&amp;type=edit">Edit a different reference</a></li>
             </ul>
 
-            <h3>Collections and occurrences</h3>
+            <p class="large">Collections and occurrences</p>
             <ul>
               <li><a href="%%write_url%%?action=displaySearchColls&amp;type=edit">Edit an old collection</a></li>
+              <li><a href="%%write_url%%?action=displayOccurrenceAddEdit">Edit old occurrences</a>&nbsp;&nbsp;</li>
               <li><a href="%%write_url%%?action=displayReIDCollsAndOccsSearchForm">Reidentify occurrences</a></li>
-              <li><a href="%%write_url%%?action=startStartReclassifyOccurrences">Reclassify occurrences</a></li>
+              <li><a href="%%write_url%%?action=startStartReclassifyOccurrences">Reclassify occurrences of homonyms</a></li>
               <li><a href="%%write_url%%?action=searchOccurrenceMisspellingForm">Correct misspellings</a></li>
             </ul>
 
-            <h3>Other data about taxa</h3>
+            <p class="large">Other data about taxa</p>
             <ul>
               <li><a href="%%write_url%%?action=startStartEcologyTaphonomySearch">Add/edit ecological/taphonomic data</a></li>
               <li><a href="%%write_url%%?action=startStartEcologyVertebrateSearch">Add/edit vertebrate ecology data</a></li>
               <li><a href="%%write_url%%?action=displaySpecimenSearchForm">Add/edit specimen measurement data</a></li>
               <li><a href="%%write_url%%?action=startImage">Add an image of a taxon</a></li>
             </ul>
+          </div>
           </td>
 
-          <td valign=top class=small>
-          <h2>Other</h2>
+          <td valign="top" class="small">
+          <div style="margin-left: 2em;">
+          <p class="verylarge">Other</p>
 
-            <h3>Search</h3>
+            <p class="large">Search</p>
             <ul>
               <li><a href="%%read_url%%?action=displaySearchRefs&amp;type=view">Search for a reference</a></li>
               <li><a href="%%read_url%%?action=displaySearchColls&amp;type=view">Search for collections</a></li>
@@ -58,7 +58,7 @@
               <li><a href="%%read_url%%?action=displayInterval&amp;interval_no=33">View a time interval</a></li>
             </ul>
 
-            <h3>Data analysis</h3>
+            <p class="large">Data analysis</p>
             <ul>
               <li><a href="%%read_url%%?action=displayReportForm">Generate data summary tables</a></li>
               <li><a href="%%read_url%%?action=displaySanityForm">Check progress on a group</a></li>
@@ -71,7 +71,7 @@
               <li><a href="%%read_url%%?action=displaySearchSectionForm">Analyze stratigraphic sections</a></li>
             </ul>
 
-            <h3>Account management</h3>
+            <p class="large">Account management</p>
             <ul>
               <li><a href="%%write_url%%?action=logout">Log out or change login</a></li>
               <li><a href="%%write_url%%?action=displayPreferencesPage">Set preferences</a></li>
@@ -79,10 +79,11 @@
               <li><a href="%%read_url%%?user=Guest&amp;action=displayHomePage">Go to the public web site</a></li>
             </ul>
           </td>
+          </div>
         </tr>
         <tr>
           <td colspan=2>
-<div style="align: left; padding-left: 2em; text-indent: -1em;">
+<div style="align: left; padding-left: 3em; text-indent: -1em;">
 <i><p class="tiny">Confused? Consult the <a href="javascript: tipsPopup('/public/tips/tutorial.html')">data entry tutorial</a> and tip sheets for entering
 <a href="javascript: tipsPopup('/public/tips/tips.html')">collection data</a>,
 <a href="javascript: tipsPopup('/public/tips/occurrence_tips.html')">occurrences</a>,
@@ -96,9 +97,6 @@
 Remember: enter all the data, don't enter lumped or mixed collections, and search carefully to avoid entering duplicates
 </i></p>
 </div>
-          </td>
-        </tr>
-      </table>
     </td>
   </tr>
 </table>
