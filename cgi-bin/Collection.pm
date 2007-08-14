@@ -433,31 +433,42 @@ IS NULL))";
 	
 	# Handle collection name (must also search collection_aka field) JA 7.3.02
 	if ($options{'collection_list'} && $options{'collection_list'} =~ /^[\d ,]+$/) {
-        push @where, "c.collection_no IN ($options{collection_list})";
-    }
+		push @where, "c.collection_no IN ($options{collection_list})";
+	}
 	if ( $options{'collection_names'} ) {
-		my $val = $dbh->quote('%'.$options{'collection_names'}.'%');
-        if ($options{'collection_names'} =~ /^\d+$/) {
-		    push @where, "(c.collection_name LIKE $val OR c.collection_aka LIKE $val OR c.collection_no=$options{collection_names})";
-        } elsif ($options{'collection_names'} =~ /^[0-9, \-]+$/) {
-            my @collection_nos;
-            my @ranges = split(/\s*,\s*/,$options{'collection_names'});
-            foreach my $range (@ranges) {
-                if ($range =~ /-/) {
-                    my ($min,$max) = split(/\s*-\s*/,$range);
-                    if ($min < $max) {
-                        push @collection_nos, ($min .. $max);
-                    } else {
-                        push @collection_nos, ($max .. $min);
-                    }
-                } else {
-                    push @collection_nos , $range;
-                }
-            }
-		    push @where, "c.collection_no IN (".join(",",@collection_nos).")";
-        } else {
-		    push @where, "(c.collection_name LIKE $val OR c.collection_aka LIKE $val)";
-        }
+		# only match entire numbers within names, not parts
+		my $word = $dbh->quote('%'.$options{'collection_names'}.'%');
+		my $integer = $dbh->quote('.*[^0-9]'.$options{'collection_names'}.'(([^0-9]+)|($))');
+		# interpret plain integers as either names, collection years,
+		#  or collection_nos
+		if ($options{'collection_names'} =~ /^\d+$/) {
+			push @where, "(c.collection_name REGEXP $integer OR c.collection_aka REGEXP $integer OR c.collection_dates REGEXP $integer OR c.collection_no=$options{collection_names})";
+		}
+		# comma-separated lists of numbers are collection_nos, period
+		elsif ($options{'collection_names'} =~ /^[0-9, \-]+$/) {
+			my @collection_nos;
+			my @ranges = split(/\s*,\s*/,$options{'collection_names'});
+			foreach my $range (@ranges) {
+				if ($range =~ /-/) {
+					my ($min,$max) = split(/\s*-\s*/,$range);
+					if ($min < $max) {
+						push @collection_nos, ($min .. $max);
+					} else {
+						push @collection_nos, ($max .. $min);
+					}
+				} else {
+					push @collection_nos , $range;
+				}
+			}
+			push @where, "c.collection_no IN (".join(",",@collection_nos).")";
+		}
+		# interpret non-integers/non-lists of integers as names or
+		#  collectors
+		# assume that collectors field has names and collection_dates
+		#  doesn't (because non-year values are not interesting)
+		else {
+			push @where, "(c.collection_name LIKE $word OR c.collection_aka LIKE $word OR c.collectors LIKE $word)";
+		}
 	}
 	
     # Handle localbed, regionalbed
@@ -1652,7 +1663,11 @@ sub buildTaxonomicList {
 				$rowref->{'family'} = $classification->{'family'}{'taxon_name'};
 				$rowref->{'common_name'} = ($classification->{'common_name'}{'taxon_no'});
 				if ( ! $rowref->{'class'} && ! $rowref->{'order'} && ! $rowref->{'family'} )	{
-					$rowref->{'class'} = "unclassified";
+					if ( $options{'do_reclassify'} )	{
+						$rowref->{'class'} = qq|<span style="color: red;">unclassified</span>|;
+					} else	{
+						$rowref->{'class'} = "unclassified";
+					}
 				}
 				if ( $rowref->{'class'} && $rowref->{'order'} )	{
 					$rowref->{'order'} = "- " . $rowref->{'order'};
@@ -1707,7 +1722,11 @@ sub buildTaxonomicList {
 				$rowref->{'lft'} ||= 1000000;
 
 				if ( ! $rowref->{'class'} && ! $rowref->{'order'} && ! $rowref->{'family'} )	{
-					$rowref->{'class'} = "unclassified";
+					if ( $options{'do_reclassify'} )	{
+						$rowref->{'class'} = qq|<span style="color: red;">unclassified</span>|;
+					} else	{
+						$rowref->{'class'} = "unclassified";
+					}
 				}
 				if ( $rowref->{'class'} && $rowref->{'order'} )	{
 					$rowref->{'order'} = "- " . $rowref->{'order'};
