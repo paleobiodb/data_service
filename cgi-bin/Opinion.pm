@@ -501,16 +501,16 @@ sub displayOpinionForm {
 
     if (!$isNewEntry) {
         if ($o->get('authorizer_no')) {
-            $fields{'authorizer_name'} = "<B>Authorizer:</B> " . Person::getPersonName($dbt,$o->get('authorizer_no')); 
+            $fields{'authorizer_name'} = "Authorizer: " . Person::getPersonName($dbt,$o->get('authorizer_no')); 
         }   
         if ($o->get('enterer_no')) { 
-            $fields{'enterer_name'} = " <B>Enterer:</B> " . Person::getPersonName($dbt,$o->get('enterer_no')); 
+            $fields{'enterer_name'} = " Enterer: " . Person::getPersonName($dbt,$o->get('enterer_no')); 
         }
         if ($o->get('modifier_no')) { 
-            $fields{'modifier_name'} = " <B>Modifier:</B> ".Person::getPersonName($dbt,$o->get('modifier_no'));
+            $fields{'modifier_name'} = " Modifier: ".Person::getPersonName($dbt,$o->get('modifier_no'));
         }
-        $fields{'modified'} = "<B>Modified: </B>".$fields{'modified'};
-        $fields{'created'} = "<B>Created: </B>".$fields{'created'}; 
+        $fields{'modified'} = "Modified: ".$fields{'modified'};
+        $fields{'created'} = "Created: ".$fields{'created'}; 
     }
 
     my $fossil_record_ref = 0;
@@ -545,7 +545,7 @@ sub displayOpinionForm {
         $higher_rank = 'higher taxon';
     }
     my $selected= "CHECKED";
-    $belongs_to_row .= "<tr>\n<td colspan=\"2\">\n<span class=\"small\"><b>Status and parent:</b>&nbsp;</span> ";
+    $belongs_to_row .= "<tr>\n<td colspan=\"2\">\n<span class=\"small\">Status and parent:&nbsp;</span> ";
     my @statusArray;
     if ( $childRank =~ /species|genus/ )	{
 	@statusArray = ( 'belongs to', @synArray );
@@ -585,7 +585,7 @@ sub displayOpinionForm {
     
     $belongs_to_row .= qq|<tr><td><div class="small">|;
     if ( $childRank !~ /species/ )	{
-        $belongs_to_row .= "<b>Phylogenetic status:</b> $phyl_select";
+        $belongs_to_row .= "Phylogenetic status: $phyl_select";
     } 
     if ( $childRank =~ /species|genus|tribe|family/ )	{
         $belongs_to_row .= $type_select;
@@ -1386,7 +1386,7 @@ sub submitOpinionForm {
 
     my $end_message .= qq|
 <div align="center">
-<p class="medium"><b>The opinion $opinionHTML has been $enterupdate</b></p>
+<p class="medium">The opinion $opinionHTML has been $enterupdate</p>
 |;
 
     if (@warnings) {
@@ -1415,26 +1415,26 @@ sub submitOpinionForm {
     $end_message .= qq|
 <div class="displayPanel">
 <p>
-<table cellpadding="10" class="small"><tr><td valign=top>
-  <p><b>Name functions</b></p>
+<table cellpadding="10"><tr><td valign="top" class="small">
+  <p class="large" style="margin-left: 2em;">Name functions</p>
   <ul>
-  <li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName $authors</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></b></li>
-  <br><li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></b></li>
-  <br><li><b><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></b></li>   
+  <li><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></li>
+  <br><li><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName $authors</a></li>
+  <br><li><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></li>
+  <br><li><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></li>
+  <br><li><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></li>   
   </ul>
 </td>
-<td valign=top>
-  <p><b>Opinion functions</b></p>
+<td valign="top" class="small">
+  <p class="large" style="margin-left: 2em;">Opinion functions</p>
   <ul>
-  <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
-  <li$style><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></b></li>
-  <li$style><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Edit another opinion about $childSpellingName</a></b></li>
-  <li$style><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></b></li>
-  <li$style><b><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></b></li>
-  <li$style><b><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></b></li>
-  <li$style><b><a href="$WRITE_URL?action=startProcessPrintHierarchy&reference_no=$resultReferenceNumber&maximum_levels=100">Print this reference's classification</a></b></li>
+  <li><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></li>
+  <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></li>
+  <li$style><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Edit another opinion about $childSpellingName</a></li>
+  <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></li>
+  <li$style><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></li>
+  <li$style><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></li>
+  <li$style><a href="$WRITE_URL?action=startProcessPrintHierarchy&reference_no=$resultReferenceNumber&maximum_levels=100">Print this reference's classification</a></li>
   </ul>
 </td></tr></table>
 </p>
@@ -1514,7 +1514,7 @@ sub displayOpinionChoiceForm {
         
         my $t = Taxon->new($dbt,$child_no);
         print "<div align=\"center\">";
-        print "<h4>Which opinion about ".$t->taxonNameHTML()." do you want to edit?</h4>\n";
+        print "<p class=\"pageTitle\">Which opinion about ".$t->taxonNameHTML()." do you want to edit?</p>\n";
         
 	    print qq|<div class="displayPanel" style="padding: 1em;">\n|;
         print qq|<div align="left"><ul>|;
@@ -1578,11 +1578,11 @@ sub displayOpinionChoiceForm {
                       " ORDER BY a.taxon_name ASC";
             my @results = @{$dbt->getData($sql)};
             if (scalar(@results) == 0) {
-                print "<div align=\"center\"<h3>No opinions found</h3></div><br><br>";
+                print "<div align=\"center\"<p class=\"pageTitle\">No opinions found</p></div><br><br>";
                 return;
             }
             print "<div align=\"center\">";
-            print "<h4>Select an opinion to edit</h4>";
+            print "<p class=\"pageTitle\">Select an opinion to edit</p>";
 
             print qq|<div class="displayPanel" style="padding: 1em; margin-left: 2em; margin-right: 2em;">\n|;
             print qq|<div class="small" align="left">|;
