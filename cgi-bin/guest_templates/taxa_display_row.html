@@ -1,21 +1,23 @@
-<tr valign="top">
-	<td align="center"><div hide="hide_collection_no"><a target="_BLANK" href="%%read_url%%?action=displayCollectionDetails&collection_no=%%collection_no%%">%%collection_no%%</a></div></td>
-	<div show="show_classification_select"><td class="small" colspan="3">%%classification_select%%</td></div>
-	<div hide="show_classification_select"><td class="small">%%class%%</td></div>
-	<div hide="show_classification_select"><td class="small">%%order%%</td></div>
-	<div hide="show_classification_select"><td class="small">%%family%%</td></div>
-	<td class="small" valign=top><span style="white-space: nowrap;">%%taxon_name%%</span> <span style="white-space: nowrap;">%%authority%%</span></td>
-	<td class="small" valign=top nowrap>%%reference_no%%</td>
-	<td class="small" valign=top nowrap>%%abund_value%% %%abund_unit%%</td>
-	<td class="small" valign=top nowrap><div style="visibility: hidden;" id="commonRow">%%common_name%%</div></td>
+<tr>
+	<td align="center" style="padding: 0.5em;"><div hide="hide_collection_no"><a target="_BLANK" href="%%read_url%%?action=displayCollectionDetails&collection_no=%%collection_no%%">%%collection_no%%</a></div></td>
+	<td class="small" valign="top" style="padding: 0.5em;">
+	<div style="margin-left: 2em; text-indent: -1em;">
+	<span style="white-space: nowrap;">%%taxon_name%%</span>
+	<span style="white-space: nowrap;">%%authority%%</span>
+	</div>
+	</td>
+	<td class="small" valign="top" nowrap style="padding: 0.5em; padding-left: 1em;">%%reference_no%%</td>
+	<td class="small" valign="top" nowrap style="padding: 0.5em; padding-left: 1em;">%%abund_value%% %%abund_unit%%</td>
+	<td class="small" valign="top" nowrap style="padding: 0.5em;"><div id="commonRow">%%common_name%%</div></td>
 </tr>
 <div show="synonym_name">
   <tr valign="top">
-	  <td colspan=4 class="small"></td><td nowrap style="padding-left: 2em">%%synonym_name%%</td><td colspan=3></td>
+	  <td colspan="1"></td><td class="small" nowrap style="padding: 0.5em; padding-left: 3em">%%synonym_name%%</td><td colspan="1"></td>
   </tr>	
 </div>
 <div show="comments">
   <tr valign="top">
-	  <td colspan=4></td><td class="small" valign="top" colspan="10" style="padding-left: 2em">%%comments%%</td>
+	  <td colspan="1"></td><td class="small" valign="top" colspan="10" style="padding: 0.5em; padding-left: 2em">%%comments%%</td>
   </tr>	
 </div>
+
