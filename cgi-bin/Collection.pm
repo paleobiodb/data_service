@@ -1581,7 +1581,7 @@ sub buildTaxonomicList {
 			foreach my $nn (@gnew_names){
 				if ($rowref->{genus_name} eq  $nn) {
 					$rowref->{new_genus_name} = 1;
-                    $new_found++;
+					$new_found++;
 				}
 			}
 
@@ -1589,7 +1589,7 @@ sub buildTaxonomicList {
 			foreach my $nn (@subgnew_names){
 				if($rowref->{subgenus_name} eq $nn){
 					$rowref->{new_subgenus_name} = 1;
-                    $new_found++;
+					$new_found++;
 				}
 			}
 
@@ -1597,21 +1597,21 @@ sub buildTaxonomicList {
 			foreach my $nn (@snew_names){
 				if($rowref->{species_name} eq $nn){
 					$rowref->{new_species_name} = 1;
-                    $new_found++;
+					$new_found++;
 				}
 			}
 
 			# tack on the author and year if the taxon number exists
 			# JA 19.4.04
 			if ( $rowref->{taxon_no} )	{
-                my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_no','taxon_name','common_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
+				my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_no','taxon_name','common_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
 
-                if ($taxon->{'taxon_rank'} =~ /species/ || $rowref->{'species_name'} =~ /^indet\.|^sp\./) {
+				if ($taxon->{'taxon_rank'} =~ /species/ || $rowref->{'species_name'} =~ /^indet\.|^sp\./) {
 
-                    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon->{'taxon_no'});
-                    my $is_recomb = ($orig_no == $taxon->{'taxon_no'}) ? 0 : 1;
-                    $rowref->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'},'is_recombination'=>$is_recomb);
-                }   
+					my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon->{'taxon_no'});
+					my $is_recomb = ($orig_no == $taxon->{'taxon_no'}) ? 0 : 1;
+					$rowref->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'},'is_recombination'=>$is_recomb);
+				}
 			}
 
 			my $formatted_reference = '';
@@ -1626,33 +1626,48 @@ sub buildTaxonomicList {
 			
 			# put all keys and values from the current occurrence
 			# into two separate arrays.
-            $rowref->{'taxon_name'} = formatOccurrenceTaxonName($rowref);
-            $rowref->{'hide_collection_no'} = $options{'collection_no'};
+			$rowref->{'taxon_name'} = formatOccurrenceTaxonName($rowref);
+			$rowref->{'hide_collection_no'} = $options{'collection_no'};
 	
-			# get the most recent reidentification of this occurrence.  
+			# get the most recent reidentification
 			my $mostRecentReID = PBDBUtil::getMostRecentReIDforOcc($dbt,$rowref->{occurrence_no},1);
 			
-			# if the occurrence has been reidentified at least once, then 
-			# display the original and reidentifications.
+			# if the occurrence has been reidentified at least once
+			#  display the original and reidentifications.
 			if ($mostRecentReID) {
-				$output = $hbo->populateHTML("taxa_display_row", $rowref);
 				
 				# rjp, 1/2004, change this so it displays *all* reidentifications, not just
 				# the last one.
-                # JA 2.4.04: this was never implemented by Poling, who instead went
-                #  renegade and wrote the entirely redundant HTMLFormattedTaxonomicList;
-                #  the correct way to do it was to pass in $rowref->{occurrence_no} and
-                #  isReidNo = 0 instead of $mostRecentReID and isReidNo = 1
+                # JA 2.4.04: this was never implemented by Poling, who instead
+                #  went renegade and wrote the entirely redundant
+		#  HTMLFormattedTaxonomicList; the correct way to do it was
+		#  to pass in $rowref->{occurrence_no} and isReidNo = 0
+                #  instead of $mostRecentReID and isReidNo = 1
 	
-                my $show_collection = '';
+				my $show_collection = '';
 				my ($table,$classification,$reid_are_reclassifications) = getReidHTMLTableByOccNum($dbt,$hbo,$s,$rowref->{occurrence_no}, 0, $options{'do_reclassify'});
 				$are_reclassifications = 1 if ($reid_are_reclassifications);
+				$rowref->{'class'} = $classification->{'class'}{'taxon_name'};
+				$rowref->{'order'} = $classification->{'order'}{'taxon_name'};
+				$rowref->{'family'} = $classification->{'family'}{'taxon_name'};
+				$rowref->{'common_name'} = ($classification->{'common_name'}{'taxon_no'});
+				if ( ! $rowref->{'class'} && ! $rowref->{'order'} && ! $rowref->{'family'} )	{
+					$rowref->{'class'} = "unclassified";
+				}
+				if ( $rowref->{'class'} && $rowref->{'order'} )	{
+					$rowref->{'order'} = "- " . $rowref->{'order'};
+				}
+				if ( $rowref->{'family'} && ( $rowref->{'class'} || $rowref->{'order'} ) )	{
+					$rowref->{'family'} = "- " . $rowref->{'family'};
+				}
+				$rowref->{'parents'} = $hbo->populateHTML("parent_display_row", $rowref);
+				$output = qq|<tr><td colspan="5" style="border-top: 1px solid #E0E0E0;"></td></tr>|;
+				$output .= $hbo->populateHTML("taxa_display_row", $rowref);
 				$output .= $table;
 				
 				$rowref->{'class_no'}  = ($classification->{'class'}{'taxon_no'} or 1000000);
 				$rowref->{'order_no'}  = ($classification->{'order'}{'taxon_no'} or 1000000);
 				$rowref->{'family_no'} = ($classification->{'family'}{'taxon_no'} or 1000000);
-				$rowref->{'common_name'} = ($classification->{'common_name'}{'taxon_no'});
 				$rowref->{'lft'} = ($classification->{'lft'}{'taxon_no'} or 1000000);
 				$rowref->{'rgt'} = ($classification->{'rgt'}{'taxon_no'} or 1000000);
 			}
@@ -1668,6 +1683,9 @@ sub buildTaxonomicList {
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','common_name','taxon_rank','pubyr']);
                     unshift @class_array , $taxon;
                     $rowref = getClassOrderFamily(\$rowref,\@class_array);
+                    if ( ! $rowref->{'class'} && ! $rowref->{'order'} && ! $rowref->{'family'} )	{
+                        $rowref->{'class'} = "unclassified";
+                    }
                     $rowref->{'synonym_name'} = getSynonymName($dbt,$rowref->{'taxon_no'},$taxon->{'taxon_name'});
                 } else {
                     if ($options{'do_reclassify'}) {
@@ -1683,16 +1701,27 @@ sub buildTaxonomicList {
                         }
                     }
                 }
-                $rowref->{'class_no'} ||= 1000000;
-                $rowref->{'order_no'} ||= 1000000;
-                $rowref->{'family_no'} ||= 1000000;
-                $rowref->{'lft'} ||= 1000000;
+				$rowref->{'class_no'} ||= 1000000;
+				$rowref->{'order_no'} ||= 1000000;
+				$rowref->{'family_no'} ||= 1000000;
+				$rowref->{'lft'} ||= 1000000;
 
-				$output = $hbo->populateHTML("taxa_display_row", $rowref);
+				if ( ! $rowref->{'class'} && ! $rowref->{'order'} && ! $rowref->{'family'} )	{
+					$rowref->{'class'} = "unclassified";
+				}
+				if ( $rowref->{'class'} && $rowref->{'order'} )	{
+					$rowref->{'order'} = "- " . $rowref->{'order'};
+				}
+				if ( $rowref->{'family'} && ( $rowref->{'class'} || $rowref->{'order'} ) )	{
+					$rowref->{'family'} = "- " . $rowref->{'family'};
+				}
+				$rowref->{'parents'} = $hbo->populateHTML("parent_display_row", $rowref);
+				$output = qq|<tr><td colspan="5" style="border-top: 1px solid #E0E0E0;"></td></tr>|;
+				$output .= $hbo->populateHTML("taxa_display_row", $rowref);
 			}
 
-			# Clean up abundance values (somewhat messy, but works, and better
-			#   here than in populateHTML) JA 10.6.02
+	# Clean up abundance values (somewhat messy, but works, and better
+	#   here than in populateHTML) JA 10.6.02
 			$output =~ s/(>1 specimen)s|(>1 individual)s|(>1 element)s|(>1 fragment)s/$1$2$3$4/g;
 	
 			$rowref->{'html'} = $output;
@@ -1766,49 +1795,7 @@ sub buildTaxonomicList {
             }
         }
 
-		$return .= "<table border=\"0\" cellpadding=\"3\" cellspacing=\"0\" class=\"tiny\"><tr>";
-
-        if (! $options{'collection_no'}) {
-            $return .= "<td nowrap><b>Collection</b></td>";
-        } else {
-            $return .= "<td nowrap></td>";
-        }
-		if ( $class_nos == 0 && $order_nos == 0 )	{
-			$return .= "<td nowrap colspan=\"2\"></td>";
-		} else {
-			$return .= "<td nowrap colspan=\"2\"><span class=\"field_name\">Higher taxa</span></td>";
-		}
-		if($order_nos == 0){
-		#	$return .= "<td></td>";
-		} else {
-		#	$return .= "<td><b>Order</b></td>";
-		}
-		if ( $family_nos == 0 )	{
-			$return .= "<td></td>";
-		} else {
-			$return .= "<td><b>Family</b></td>";
-		}
-
-		# if ALL taxa have no genus or species, we have no list,
-		# so always print this.
-		if ( $common_names > 0 )	{
-			$return .= qq|<td><span onClick="showName();"><span class="field_name">Taxon</span><span id="commonClick"> (click for common names)</span></span>|;
-		} else	{
-			$return .= "<td><span class=\"field_name\">Taxon</<span>";
-		}
-		$return .= "</td>";
-
-		if($reference_nos == 0){
-			$return .= "<td></td>";
-		} else {
-			$return .= "<td><span class=\"field_name\">Reference</span></td>";
-		}
-		if($abund_values == 0){
-			$return .= "<td></td>";
-		} else {
-			$return .= "<td><span class=\"field_name\">Abundance</span></td>";
-		}
-		$return .= qq|<td nowrap><span style="visibility: hidden;" id="commonRow0"><span class="field_name">Common name</span></span></td>|;
+		$return .= "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"tiny\"><tr>";
 
 		# Sort:
         my @sorted = ();
@@ -1831,17 +1818,14 @@ sub buildTaxonomicList {
                 # Now sort the ones that had no taxon_no by occ_no.
                 my @occs_to_sort = ();
                 while ( $sorted[-1]->{lft} == 1000000 )	{
-                #while($sorted[-1]->{class_no} == 1000000 &&
-                #      $sorted[-1]->{order_no} == 1000000 &&
-                #      $sorted[-1]->{family_no} == 1000000)
                     push(@occs_to_sort, pop @sorted);
                 }
 
-                # Put occs in order, AFTER the sorted occ with the closest smaller
-                # number.  First check if our occ number is one greater than any 
-                # existing sorted occ number.  If so, place after it.  If not, find
-                # the distance between it and all other occs less than it and then
-                # place it after the one with the smallest distance.
+            # Put occs in order, AFTER the sorted occ with the closest smaller
+            # number.  First check if our occ number is one greater than any 
+            # existing sorted occ number.  If so, place after it.  If not, find
+            # the distance between it and all other occs less than it and then
+            # place it after the one with the smallest distance.
                 while(my $single = pop @occs_to_sort){
                     my $slot_found = 0;
                     my @variances = ();
@@ -1911,22 +1895,22 @@ sub buildTaxonomicList {
         }
 
 		my $sorted_html = '';
-my $rows = $#sorted + 2;
-$sorted_html .= qq|
+		my $rows = $#sorted + 2;
+		$sorted_html .= qq|
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
 window.onload = hideName;
 
 function hideName()	{
-	for (var rowNum=0; rowNum<$rows; rowNum++)	{
+	for (var rowNum=1; rowNum<$rows; rowNum++)	{
 		document.getElementById('commonRow'+rowNum).style.visibility = 'hidden';
 	}
 }
 
 function showName()	{
 	document.getElementById('commonClick').style.visibility = 'hidden';
-	for (var rowNum=0; rowNum<$rows; rowNum++)	{
+	for (var rowNum=1; rowNum<$rows; rowNum++)	{
 		document.getElementById('commonRow'+rowNum).style.visibility = 'visible';
 	}
 }
@@ -1934,12 +1918,8 @@ function showName()	{
 -->
 </script>
 |;
+		my $lastparents;
 		for(my $index = 0; $index < @sorted; $index++){
-			# Color the background of alternating rows gray JA 10.6.02
-			if($index % 2 == 0 && @sorted > 2){
-				#$sorted[$index]->{html} =~ s/<td/<td class='darkList'/g;
-				$sorted[$index]->{html} =~ s/<tr/<tr class='darkList'/g;
-			}
 			# only the last row needs to have the rowNum inserted
 			my $rowNum = $index + 1;
 			my @parts = split /commonRow/,$sorted[$index]->{html};
@@ -1947,11 +1927,16 @@ function showName()	{
 			$sorted[$index]->{html} = join 'commonRow',@parts;
 
 #            $sorted[$index]->{html} =~ s/<td align="center"><\/td>/<td>$sorted[$index]->{occurrence_no}<\/td>/; DEBUG
+			if ( $sorted[$index]->{'class'} . $sorted[$index]->{'order'} . $sorted[$index]->{'family'} ne $lastparents )	{
+				$sorted_html .= $sorted[$index]->{'parents'};
+				$lastparents = $sorted[$index]->{'class'} . $sorted[$index]->{'order'} . $sorted[$index]->{'family'};
+			}
 			$sorted_html .= $sorted[$index]->{html};
             
 		}
 		$return .= $sorted_html;
 
+		$return .= qq|<tr><td colspan="5" align="right"><span onClick="showName();" id="commonClick" class="small">see common names</span></td>|;
 
 		$return .= "</table>";
         if ($options{'save_links'}) {
@@ -1971,6 +1956,8 @@ function showName()	{
             $return .= "</div>";
         }
     }
+
+
     # This replaces blank cells with blank cells that have no padding, so the don't take up
     # space - this way the comments field lines is indented correctly if theres a bunch of empty
     # class/order/family columns sort of an hack but works - PS
