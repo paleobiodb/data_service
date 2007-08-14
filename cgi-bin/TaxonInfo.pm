@@ -27,7 +27,7 @@ sub searchForm {
 	my $q = shift;
 	my $search_again = (shift or 0);
 
-    my $page_title = "Taxonomic name search form"; 
+	my $page_title = "Taxonomic name search form"; 
     
 	if ($search_again){
         $page_title = "<p class=\"medium\">No results found (please search again)</p>";
@@ -105,7 +105,7 @@ sub checkTaxonInfo {
             displayTaxonInfoResults($dbt,$s,$q);
         } else{
             # now create a table of choices and display that to the user
-            print "<div align=\"center\"><h3>Please select a taxon</h3><br>";
+            print "<div align=\"center\"><p class=\"pageTitle\">Please select a taxon</p><br>";
             print qq|<div class="displayPanel" align="center" style="width: 30em; padding-top: 1.5em;">
 <div class="displayPanelContent">
 |;
@@ -256,7 +256,23 @@ sub displayTaxonInfoResults {
 </div>
 ';
 
-    print "<div align=\"center\" style=\"margin-bottom: -1.5em;\"><h2>$display_name</h2></div>\n";
+    print qq|
+<script language="Javascript" type="text/javascript">
+<!--
+function textClear (input) { if ( input.value == input.defaultValue ) { input.value = ""; } }
+function textRestore (input) { if ( input.value == "" ) { input.value = input.defaultValue;	} }
+// -->
+</script>
+
+<form method="POST" action="$READ_URL">
+<div align="center" style="margin-bottom: -2.5em;">
+<p class="pageTitle" style="padding-left: 15em;">$display_name 
+<span style="padding-left: 8em;">
+<input type="hidden" name="action" value="checkTaxonInfo">
+<input type="text" name="taxon_name" value="Search again" size="14" onFocus="textClear(this);" onBlur="textRestore(this);" style="font-size: 0.7em;">
+</span></p></div>
+</form>
+|;
 
     
     print '<script language="JavaScript" type="text/javascript">
@@ -286,8 +302,7 @@ sub displayTaxonInfoResults {
         print "<center>";
 
         print displayRelatedTaxa($dbt, $taxon_no, $spelling_no, $taxon_name,$is_real_user);
-    	print "<a href=\"$READ_URL?action=beginTaxonInfo\">".
-	    	  "<b>Get info on another taxon</b></a></center>\n";
+	print "</center>\n";
         if($s->isDBMember()) {
             # Entered Taxon
             if ($entered_no) {
@@ -299,7 +314,7 @@ sub displayTaxonInfoResults {
             }
 
             if ($entered_no) {
-                print "<a href=\"$WRITE_URL?action=displayOpinionChoiceForm&amp;taxon_no=$entered_no\"><b>Edit taxonomic opinions about $entered_name</b></a> - ";
+                print "<a href=\"$WRITE_URL?action=displayOpinionChoiceForm&amp;taxon_no=$entered_no\"><b>Edit taxonomic opinions about $entered_name</b></a> -<br> ";
                 print "<a href=\"$WRITE_URL?action=startPopulateEcologyForm&amp;taxon_no=$taxon_no\"><b>Add/edit ecological/taphonomic data</b></a> - ";
             }
             
@@ -502,7 +517,13 @@ sub doThumbs {
         }
         print "</td></tr></table>";
     } else {
-        print "<p style=\"font-size: 1.5m; margin-top: 2em;\"><i>No images are available</i></p>";
+        print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+<span class="displayPanelHeader" class="large">Images</span>
+<div class="displayPanelContent">
+  <div align="center"><i>No images are available</i></div>
+</div>
+</div>
+|;
     }
 } 
 
@@ -555,7 +576,7 @@ sub doCollections{
     
 
     if (!@$colls) {
-        print "<div align=\"center\"><h3>Collections</h3><i> No collection or age range data are available</i></div>";
+        print "<div align=\"center\"><p class=\"large\">Collections</p><i> No collection or age range data are available</i></div>";
         return;
     }
 
@@ -664,9 +685,9 @@ sub doCollections{
     }
 
     if ($age_range_format eq 'for_strata_module') {
-        print "<b>Age range:</b> $range <br><hr><br>"; 
+        print "Age range: $range <br><hr><br>"; 
     } else {
-        print "<div align=\"center\"><h3><b>Age range</b></h3></div>\n $range<br><hr>";
+        print "<div align=\"center\"><p class=\"large\">Age range</p></div>\n $range<br><hr>";
     }
 
     
@@ -801,7 +822,8 @@ sub doCollections{
 #	my @sorted = sort (keys %time_place_coll);
 
 	if(scalar @sorted > 0){
-		$output .= "<div align=\"center\"><h3 style=\"margin-bottom: .4em;\">Collections</h3>\n";
+		$output .= qq|<div align="center"><p class="large" style="margin-bottom: .4em;">Collections</p>
+|;
         my $collTxt = (scalar(@$colls)== 0) ? "None found"
                     : (scalar(@$colls) == 1) ? "One found"
                     : scalar(@$colls)." total";
@@ -813,7 +835,7 @@ sub doCollections{
 		$output .= "<table>\n";
 		if ( $#sorted > 100 )	{
 			$output .= qq|<tr>
-<td colspan="3"><p class=\"large\"><b>Oldest occurrences</b></p>
+<td colspan="3"><p class=\"large\">Oldest occurrences</p>
 </tr>|;
 		}
 		$output .= qq|<tr>
@@ -862,7 +884,7 @@ sub doCollections{
 			if ( $row_color == 10 && $output =~ /Oldest/ && $extant == 0 )	{
 				$output .= qq|
 <tr>
-<td colspan="3"><p class="large" style="padding-top: 0.5em;"><b>Youngest occurrences</b></p></td>
+<td colspan="3"><p class="large" style="padding-top: 0.5em;">Youngest occurrences</p></td>
 </tr>
 <tr>
 <th align="center">Time interval</th>
@@ -1272,7 +1294,7 @@ sub displayTaxonClassification {
             # Print out the table in the reverse order that we initially made it
             #
             $output .= "<table><tr><td valign=\"top\">\n";
-            $output .= "<table><tr valign=top><th>Rank</th><th>Name</th><th>Author</th></tr>";
+            $output .= "<table><tr valign=\"top\" class=\"large\"><th>Rank</th><th>Name</th><th>Author</th></tr>";
             my $class = '';
             for(my $i = scalar(@table_rows)-1;$i>=0;$i--) {
                 if ( $i == int((scalar(@table_rows) - 2) / 2) )	{
@@ -1488,7 +1510,7 @@ sub displayRelatedTaxa {
                    ($focal_taxon_rank eq 'genus') ? 'Species' :
                                                     'Subtaxa';
 $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
-  <span class="displayPanelHeader"><b>$rank</b></span>
+  <span class="displayPanelHeader">$rank</span>
   <div class="displayPanelContent">
 |;
         $_ =~ s/$taxon_name /$initial. /g foreach ( @child_taxa_links );
@@ -1499,7 +1521,7 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
 
     if (@possible_child_taxa_links) {
 $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
-  <span class="displayPanelHeader"><b>Species lacking formal opinion data</b></span>
+  <span class="displayPanelHeader">Species lacking formal opinion data</span>
   <div class="displayPanelContent">
 |;
         # the GROUP BY apparently fails if there are both occs and reIDs
@@ -1516,7 +1538,7 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
                    ($focal_taxon_rank eq 'genus') ? 'genera' :
                                                     'taxa';
 $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
-  <span class="displayPanelHeader"><b>Sister $rank</b></span>
+  <span class="displayPanelHeader">Sister $rank</span>
   <div class="displayPanelContent">
 |;
         $_ =~ s/$genus /$initial. /g foreach ( @sister_taxa_links );
@@ -1527,7 +1549,7 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
     
     if (@possible_sister_taxa_links) {
 $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
-  <span class="displayPanelHeader"><b>Sister species lacking formal opinion data</b></span>
+  <span class="displayPanelHeader">Sister species lacking formal opinion data</span>
   <div class="displayPanelContent">
 |;
         $_ =~ s/$genus /$initial. /g foreach ( @possible_sister_taxa_links );
@@ -2362,13 +2384,13 @@ sub displayEcology	{
                 if ($name =~ /created|modified/) {
                     $rank_note = "";
                 }
-				$output .= "<td $colspan valign=\"top\"><table cellpadding=0 cellspacing=0 border=0><tr><td align=\"left\" valign=\"top\"><b>$n:</b>&nbsp;</td><td valign=\"top\">${v}${rank_note}</td></tr></table></td> \n";
+				$output .= "<td $colspan valign=\"top\"><table cellpadding=0 cellspacing=0 border=0><tr><td align=\"left\" valign=\"top\"><span class=\"fieldName\">$n:</span>&nbsp;</td><td valign=\"top\">${v}${rank_note}</td></tr></table></td> \n";
 			}
 		}
         $output .= "</tr>" if ( $cols > 0 );
         # now print out keys for superscripts above
         $output .= "<tr><td colspan=2>";
-        my $html = "<b>Source:</b> ";
+        my $html = "<span class=\"fieldName\">Source:</span> ";
         foreach my $rank (@ranks) {
             if ($all_ranks{$rank}) {
                 $html .= "$rankToKey{$rank} = $rank, ";
@@ -2377,12 +2399,13 @@ sub displayEcology	{
         $html =~ s/, $//;
         $output .= $html;
         $output .= "</td></tr>"; 
-        $output .= "<tr><td colspan=2>";
+        $output .= "<tr><td colspan=2><span class=\"fieldName\">";
         if (scalar(@references) == 1) {
-            $output .= "<b>Reference:</b> ";
+            $output .= "Reference: ";
         } elsif (scalar(@references) > 1) {
-            $output .= "<b>References:</b> ";
+            $output .= "References: ";
         }
+        $output .= "</span>";
         for(my $i=0;$i<scalar(@references);$i++) {
             my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$references[$i]";
             my $ref = ${$dbt->getData($sql)}[0];
@@ -2431,7 +2454,7 @@ sub displayMeasurements {
     my $mass_string;
 
     my $str .= qq|<div class="displayPanel" align="left" style="width: 36em;">
-<span class="displayPanelHeader"><b class="large">Measurements</b></span>
+<span class="displayPanelHeader" class="large">Measurements</span>
 <div align="center" class="displayPanelContent">
 |;
 
@@ -2522,9 +2545,9 @@ sub displayMeasurements {
 
         if ( $mass_string )	{
             $mass_string = qq|<div class="displayPanel" align="left" style="width: 36em;">
-<span class="displayPanelHeader"><b class="large">Body mass estimates</b></span>
+<span class="displayPanelHeader" class="large">Body mass estimates</span>
 <div align="center" class="displayPanelContent">
-<table cellspacing="6"><tr><td align="center"><b>estimate</b></td><td align="center"><b>equation</b></td><td align="center"><b>reference</b></td></tr>
+<table cellspacing="6"><tr><th align="center">estimate</th><th align="center">equation</th><th align="center">reference</th></tr>
 $mass_string
 </table>
 </div>
@@ -2594,7 +2617,7 @@ sub displayDiagnoses {
     my ($dbt,$taxon_no) = @_;
     my $str = "";
     $str .= qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
-<span class="displayPanelHeader"><b class="large">Diagnosis</b></span>
+<span class="displayPanelHeader" class="large">Diagnosis</span>
 <div class="displayPanelContent">
 |;
     my @diagnoses = ();
@@ -2603,7 +2626,7 @@ sub displayDiagnoses {
 
         if (@diagnoses) {
             $str .= "<table cellspacing=5>\n";
-            $str .= "<tr><td><b>Reference</b></td><td><b>Diagnosis</b></td></tr>\n";
+            $str .= "<tr><th>Reference</th><th>Diagnosis</th></tr>\n";
             foreach my $row (@diagnoses) {
                 $str .= "<tr><td valign=top><span style=\"white-space: nowrap\">$row->{reference}</span>";
                 if ($row->{'is_synonym'}) {
@@ -2751,7 +2774,7 @@ sub displaySynonymyList	{
 	$output .= qq|<div align="left" class="displayPanel" style="width: 32em; margin-top: 2em;">
 <div align="center" class="displayPanelContent" style="padding-top: 0.5em; padding-bottom: 1em;">
 <table cellspacing=5>
-<tr><td><b>Year</b></td><td><b>Name and author</b></td></tr>
+<tr><th>Year</th><td>Name and author</th></tr>
 |;
 	my $lastline;
 	foreach my $synline ( @synlinekeys )	{
