@@ -70,11 +70,11 @@ sub displayITISDownload {
         return;
     }
 
-    print "<div align=\"center\"><h2>Taxonomy download results</h2></div>";
+    print "<div align=\"center\"><p class=\"pageTitle\">Taxonomy download results</p></div>";
 
     print '<div align="center">
         <table border=0 width=600><tr><td>
-        <h3 class="darkList" style="margin-bottom: 0em;">Output data</h3>';
+        <p class="darkList" class="verylarge" style="padding-left: 0.5em; padding-top: 0.3em; padding-bottom: 0.3em; margin-bottom: 0em;">Output data</p>';
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
 
@@ -408,11 +408,11 @@ sub displayPBDBDownload {
         return;
     }
 
-    print "<div align=\"center\"><h2>Taxonomy download results</h2></div>";
+    print "<div align=\"center\"><p class=\"pageTitle\">Taxonomy download results</p></div>";
     
     print '<div align="center">
-        <table border=0 width=600><tr><td>
-        <h3 class="darkList" style="margin-bottom: 0em;">Output files</h3>';
+        <table border="0" width="600"><tr><td>
+        <p class="darkList" class="verylarge" style="padding-left: 0.5em; padding-top: 0.3em; padding-bottom: 0.3em; margin-bottom: 0em;">Output files</p>';
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
     my %references;
