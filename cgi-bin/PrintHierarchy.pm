@@ -63,19 +63,19 @@ sub processPrintHierarchy	{
 	}
 
     if ($taxon_name) {
-        print '<div align="center"><h3>Classification of ';
+        print '<div align="center"><p class="pageTitle">Classification of ';
         if ( $taxon_rank !~ /genus|species/) {
             print "the ";
         }
         print $taxon_name;
     } else {
-        print '<div align="center"><h3>Classification';
+        print '<div align="center"><p class="pageTitle">Classification';
     }
     if ($reference_no) {
         my $shortref = Reference::formatShortRef($dbt,$reference_no);
         print " of $shortref";
     }
-    print "</h3></div>";
+    print "</p></div>";
 
     print "<div align=\"center\"><table>";
     @taxa = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @taxa;
