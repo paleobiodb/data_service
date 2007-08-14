@@ -25,7 +25,7 @@ sub startSearchScale {
 	my $dbh = $dbt->dbh;
 
 	# Print the form
-	print "<div align=\"center\"><h2>Select a time scale to view</h2>\n";
+	print "<div align=\"center\"><p class=\"pageTitle\">Select a time scale to view</p>\n";
 
 	# Retrieve each scale's name from the database
 	my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no,continent,scale_rank FROM scales";
@@ -63,7 +63,7 @@ sub startSearchScale {
 		my $continent = $c;
 		$continent =~ s/global/Global/;
 		print qq|<div class="displayPanel" align="left" style="padding-left: 2em;">
-  <span class="displayPanelHeader"><b>$continent</b></span>
+  <span class="displayPanelHeader">$continent</span>
   <div class="displayPanelContent">\n|;
 		for my $r ( 'eon/eonothem','era/erathem','period/system','subperiod/system','epoch/series','subepoch/series','age/stage','subage/stage','chron/zone' )	{
 			my @sorted = sort keys %{$scale_strings{$c.$r}};
@@ -188,7 +188,7 @@ sub processShowEditForm	{
 
 	print "<div>\n<table>\n";
 
-	print "<tr><td align=\"center\" colspan=2><b><font color=\"red\">Interval</a></b> </td><td align=\"center\" colspan=2>Maximum correlate </td><td align=\"center\" colspan=2>Minimum correlate </td><td align=\"center\" valign=\"bottom\">Lower<br>boundary </td></tr>\n";
+	print "<tr><td align=\"center\" colspan=2><font color=\"red\">Interval</a> </td><td align=\"center\" colspan=2>Maximum correlate </td><td align=\"center\" colspan=2>Minimum correlate </td><td align=\"center\" valign=\"bottom\">Lower<br>boundary </td></tr>\n";
 
 	my $maxi = $#times;
 	if ( $maxi < 1 )	{
@@ -293,7 +293,7 @@ sub processViewTimeScale	{
     my $row = $results[0];
 
 
-	print "<h3 align=\"center\">",$row->{scale_name},"</h3>\n\n";
+	print "<p align=\"center\" class=\"pageTitle\">",$row->{scale_name},"</p>\n\n";
 
 	if ( @badintervals )	{
 		print "<div align=\"center\"><p><b><font color='red'>WARNING!</font></b> ";
@@ -338,18 +338,18 @@ sub processViewTimeScale	{
 	}
 
 	print "<tr>";
-	print "<td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">&nbsp;<b>Interval</b></td>\n";
+	print "<td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">&nbsp;Interval</td>\n";
 	print "<td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">";
 	if ( $nmax > 0 )	{
-		print "<b>Maximum&nbsp;correlate</b> ";
+		print "Maximum&nbsp;correlate ";
 	}
 	print "</td><td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">";
 	if ( $nmin > 0 )	{
-		print "&nbsp;&nbsp;<b>Minimum&nbsp;correlate</b> ";
+		print "&nbsp;&nbsp;Minimum&nbsp;correlate ";
 	}
 	print "</td><td align=\"center\" valign=\"bottom\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">";
 	if ( $nlower > 0 )	{
-		print "<b>Ma</b> ";
+		print "Ma ";
 	}
 	print "</td>\n";
 	print "</tr>\n";
@@ -735,7 +735,7 @@ sub displayTenMyBins	{
 	print "<hr>\n\n";
 
 	print "<table><tr>\n";
-	print "<td valign=top><b>Bin name</b></td>  <td valign=top><b>Age&nbsp;at&nbsp;base&nbsp;(Ma)</b></td>  <td valign=top><b>Included intervals</b></td></tr>\n";
+	print "<td valign=top>Bin name</td>  <td valign=top>Age&nbsp;at&nbsp;base&nbsp;(Ma)</td>  <td valign=top>Included intervals</td></tr>\n";
 
     foreach my $bin (@binnames) {
         my @intervals = $t->mapIntervals($bin);  
@@ -795,7 +795,7 @@ sub displayTenMyBinsDebug {
 	print "<hr>\n\n";
 
 	print "<table><tr>\n";
-	print "<td valign=top><b>Bin name</b></td>  <td valign=top><b>Age&nbsp;at&nbsp;base&nbsp;(Ma)</b></td>  <td valign=top><b>Included intervals</b></td></tr>\n";
+	print "<td valign=top>Bin name</td>  <td valign=top>Age&nbsp;at&nbsp;base&nbsp;(Ma)</td>  <td valign=top>Included intervals</td></tr>\n";
 
 
     foreach my $bin (@binnames) {
@@ -934,7 +934,7 @@ sub displayInterval {
         $shared_upper{$_->{'interval_no'}} = 1;
     }
 
-    print "<div align=\"center\"><h3>$itv->{interval_name} $type</h3></div>";
+    print "<div align=\"center\"><p class=\"pageTitle\">$itv->{interval_name} $type</p></div>";
 
     sub describeEstimate {
         my $itv = shift;
@@ -970,21 +970,21 @@ sub displayInterval {
     my $general_html = "";
     if ($itv->{'lower_boundary'} =~ /\d/) {
         my $lower = TimeLookup::printBoundary($itv->{'lower_boundary'}); 
-        $general_html .= "<b>Lower boundary</b>: $lower Ma<br>";
+        $general_html .= "Lower boundary: $lower Ma<br>";
         my $estimate = describeEstimate($itv,'lower');
         if ($estimate) {
-            $general_html .= "<b>Lower boundary source</b>: ".$estimate."<br>";
+            $general_html .= "Lower boundary source: ".$estimate."<br>";
         }
         
         my $upper = TimeLookup::printBoundary($itv->{'upper_boundary'}); 
-        $general_html .= "<b>Upper boundary</b>: $upper Ma<br>";
+        $general_html .= "Upper boundary: $upper Ma<br>";
         $estimate = describeEstimate($itv,'upper');
         if ($estimate) {
-            $general_html .= "<b>Upper boundary source</b>: ".$estimate."<br>";
+            $general_html .= "Upper boundary source: ".$estimate."<br>";
         }
 
         if ($itv->{best_scale}) {
-            $general_html .= "<b>Continent</b>: $itv->{best_scale}->{continent}<br>";
+            $general_html .= "Continent: $itv->{best_scale}->{continent}<br>";
         }
     }
     $general_html .= "<a href=# onClick=\"document.doColls.submit();\">See collections within this interval</a><br>";
@@ -996,23 +996,23 @@ sub displayInterval {
     
     my $corr_html; 
     if ($itv_hash->{'period_no'} && $itv_hash->{'period_no'} != $i) {
-        $corr_html .= "<b>Period</b>: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{period_no}\">$itv_hash->{period_name}</a><br>";
+        $corr_html .= "Period: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{period_no}\">$itv_hash->{period_name}</a><br>";
     }
     if ($itv_hash->{'epoch_no'} && $itv_hash->{'epoch_no'} != $i) {
-        $corr_html .= "<b>Epoch</b>: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{epoch_no}\">$itv_hash->{'epoch_name'}</a><br>";
+        $corr_html .= "Epoch: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{epoch_no}\">$itv_hash->{'epoch_name'}</a><br>";
     }
     if ($itv_hash->{'subepoch_no'} && $itv_hash->{'subepoch_no'} != $i) {
-        $corr_html .= "<b>Subepoch</b>: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{subepoch_no}\">$itv_hash->{'subepoch_name'}</a><br>";
+        $corr_html .= "Subepoch: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{subepoch_no}\">$itv_hash->{'subepoch_name'}</a><br>";
     }
     if ($itv_hash->{'ten_my_bin'}) {
-        $corr_html .= "<b>10 million year bin</b>: $itv_hash->{ten_my_bin}<br>";
+        $corr_html .= "10 million year bin: $itv_hash->{ten_my_bin}<br>";
     }
     if ($itv->{'max_no'} == $itv->{'min_no'} && 
         $itv->{'max_no'} != $itv_hash->{'epoch_no'} &&
         $itv->{'max_no'} != $itv_hash->{'period_no'} ) {
         my $shares = ($shared_upper{$itv->{'max_no'}}) ? " (shares upper boundary)"
                    : ($shared_lower{$itv->{'max_no'}}) ? " (shares lower boundary)" : "";
-        $corr_html .= "<b>Contained within</b>: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{max_no}\">$itv->{max}->{interval_name}</a> $shares<br>";
+        $corr_html .= "Contained within: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{max_no}\">$itv->{max}->{interval_name}</a> $shares<br>";
     }
     if ($corr_html) {
         print $hbo->htmlBox("Correlations",$corr_html);
@@ -1176,7 +1176,7 @@ sub displayIntervalDebug {
         return $txt;
     };
 
-    print "<div align=\"center\"><h3>".$printer->($itv)."</h3></div>";
+    print "<div align=\"center\"><p class=\"pageTitle\">".$printer->($itv)."</p></div>";
 
     if ($itv->{'max'}) {
         print "Maximum correlate: ".$printer->($itv->{'max'})."<br>";
