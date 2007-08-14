@@ -1,6 +1,6 @@
 <span id="message"></span>
 
-<div align="center"><h3>Opinion record for <span id="taxon_display_name"></span></h3></div>
+<div align="center"><p class="pageTitle">Opinion record for <span id="taxon_display_name"></span></p></div>
 
 <div show="error_message">%%error_message%%</div>
 
@@ -20,7 +20,7 @@
 <input type="hidden" id="confirm_create_rank" name="confirm_create_rank">
 
 <div class="emphasized">
-<b>Whose opinion are you entering?</b>
+Whose opinion are you entering?
 </div>
 
 <div align="left" class="small" style="margin-left: 2em;">
@@ -40,23 +40,23 @@ The primary reference argues for this opinion:
 
 <table>
 
-<tr><td align="right" class="tiny"><b>First author:</b></td>
-<td><input id="author1init" name="author1init" class="tiny" size=4></td>
-<td><input id="author1last" name="author1last" class="tiny" size=10></td>
-<td align="left" class="tiny" style="padding-left: 0.5em";><b>Second author:</b></td>
-<td align="left"><input id="author2init" name="author2init" class="tiny" size=4></td>
-<td align="left"><input id="author2last" name="author2last" class="tiny" size=10></td>
+<tr><td align="right" class="verysmall">First author:</td>
+<td><input id="author1init" name="author1init" class="verysmall" size=4></td>
+<td><input id="author1last" name="author1last" class="verysmall" size=10></td>
+<td align="left" class="verysmall" style="padding-left: 0.5em";>Second author:</td>
+<td align="left"><input id="author2init" name="author2init" class="verysmall" size=4></td>
+<td align="left"><input id="author2last" name="author2last" class="verysmall" size=10></td>
 </tr>
 
-<tr><td valign="top" align="right" class="tiny" style="padding-left: 2em;"><b>Other authors:</b></td>
-<td colspan="3"><textarea id="otherauthors" name="otherauthors" class="tiny" rows=1 cols="30"></textarea></td>
-<td align="right" class="tiny"><b>Year:</b></td>
-<td colspan="1" class="tiny"><input id="pubyr" name="pubyr" class="tiny" size=5></td>
+<tr><td valign="top" align="right" class="verysmall" style="padding-left: 2em;">Other authors:</td>
+<td colspan="3"><textarea id="otherauthors" name="otherauthors" class="verysmall" rows=1 cols="30"></textarea></td>
+<td align="right" class="verysmall">Year:</td>
+<td colspan="1" class="verysmall"><input id="pubyr" name="pubyr" class="verysmall" size=5></td>
 </tr>
 
 <tr>
-<td colspan="4" class="tiny" align="left" style="padding-top: 0.5em;"><b>Pages:</b> <input id="pages" name="pages" class="tiny" size=12>
-<b>Figures:</b> <input id="figures" name="figures" class="tiny" size=12></td>
+<td colspan="4" class="verysmall" align="left" style="padding-top: 0.5em;">Pages: <input id="pages" name="pages" class="verysmall" size=12>
+Figures: <input id="figures" name="figures" class="verysmall" size=12></td>
 </tr>
 </table>
 
@@ -65,12 +65,12 @@ The primary reference argues for this opinion:
 <br>
 
 <div class="emphasized">
-<b>How was it classified?</b>
+How was it classified?
 </div>
 <table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
   <tr>
   <td colspan="2" class="small">
-  <b><a href="#" onClick="popup = window.open('%%write_url%%?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">Classification quality</a>:</b> <select id="classification_quality" autofill="opinion_classification_quality"></select>
+  <a href="#" onClick="popup = window.open('%%write_url%%?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">Classification quality</a>: <select id="classification_quality" autofill="opinion_classification_quality"></select>
   <span style="margin-left: 12em;">
     <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html#Status')">tip sheet</a> 
     &nbsp;<input type="submit" value="Submit">
@@ -79,7 +79,7 @@ The primary reference argues for this opinion:
   </tr>
   <span id="belongs_to_row"></span>
   <tr>
-    <td valign="middle" align="left" colspan="3" class="small"><b>Diagnosis:</b> <select id="diagnosis_given"></select><br>
+    <td valign="middle" align="left" colspan="3" class="small">Diagnosis: <select id="diagnosis_given"></select><br>
       <textarea id="diagnosis" name="diagnosis" rows="3" cols="70"></textarea>
     </td>
   </tr>
@@ -88,9 +88,9 @@ The primary reference argues for this opinion:
   <tr>
     <td colspan="3" align="left" valign="top">
       <table width="100%"><tr><td width="40%" class="small">
-        <b>First interval:</b> <input type="text" name="max_interval_name">
+        First interval: <input type="text" name="max_interval_name">
       </td><td class="small">
-        <b>Last interval:</b> <input type="text" name="min_interval_name">
+        Last interval: <input type="text" name="min_interval_name">
       </td></tr></table>
     </td>
   </tr>
@@ -98,7 +98,7 @@ The primary reference argues for this opinion:
 
   <tr>
     <td colspan="3" align="left" valign="top" class="small">
-      <b>Comments:</b><br>
+      Comments:<br>
       <textarea id="comments" name="comments" rows="2" cols="70"></textarea>
     </td>
   </tr>
@@ -108,7 +108,7 @@ The primary reference argues for this opinion:
 <br>
 
 <div class="emphasized">
-<b>How was it spelled?</b>
+How was it spelled?
 </div>
 
 <table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
