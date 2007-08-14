@@ -705,7 +705,7 @@ sub radioSelect {
 sub htmlBox {
     shift if ref $_[0];
     my $html = '<div class="displayPanel" align="left">'
-             . qq'<span class="displayPanelHeader"><b>$_[0]</b></span>'
+             . qq'<span class="displayPanelHeader">$_[0]</span>'
              . qq'<div class="displayPanelContent">'
              . qq'<div class="displayPanelText">$_[1]'
              . '</div></div></div>';
