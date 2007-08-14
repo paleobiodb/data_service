@@ -1610,7 +1610,7 @@ sub buildTaxonomicList {
 
 					my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon->{'taxon_no'});
 					my $is_recomb = ($orig_no == $taxon->{'taxon_no'}) ? 0 : 1;
-					$rowref->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'},'is_recombination'=>$is_recomb);
+					$rowref->{'authority'} = Reference::formatShortRef($taxon,'no_inits'=>1,'link_id'=>$taxon->{'ref_is_authority'},'is_recombination'=>$is_recomb);
 				}
 			}
 
@@ -1619,7 +1619,7 @@ sub buildTaxonomicList {
 			# if the occurrence's reference differs from the collection's, print it
 			my $newrefno = $rowref->{'reference_no'};
 			if ($newrefno != $options{'hide_reference_no'})	{
-				$rowref->{reference_no} = Reference::formatShortRef($dbt,$newrefno,'link_id'=>1);
+				$rowref->{reference_no} = Reference::formatShortRef($dbt,$newrefno,'no_inits'=>1,'link_id'=>1);
 			} else {
 				$rowref->{reference_no} = '';
 			}
@@ -2139,7 +2139,7 @@ sub getReidHTMLTableByOccNum {
 		$row->{'taxon_name'} = "&nbsp;&nbsp;&nbsp;&nbsp;= ".formatOccurrenceTaxonName($row);
         
 		# format the reference (PM)
-		$row->{'reference_no'} = Reference::formatShortRef($dbt,$row->{'reference_no'},'link_id'=>1);
+		$row->{'reference_no'} = Reference::formatShortRef($dbt,$row->{'reference_no'},'no_inits'=>1,'link_id'=>1);
        
 		# get the taxonomic authority JA 19.4.04
 		my $taxon;
@@ -2147,7 +2147,7 @@ sub getReidHTMLTableByOccNum {
 			$taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_no','taxon_name','common_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority']);
 
 			if ($taxon->{'taxon_rank'} =~ /species/ || $row->{'species_name'} =~ /^indet\.|^sp\./) {
-				$row->{'authority'} = Reference::formatShortRef($taxon,'link_id'=>$taxon->{'ref_is_authority'});
+				$row->{'authority'} = Reference::formatShortRef($taxon,'no_inits'=>1,'link_id'=>$taxon->{'ref_is_authority'});
 			}
 		}
 
