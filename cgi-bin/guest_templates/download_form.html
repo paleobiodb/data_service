@@ -73,8 +73,6 @@ function countryChange() {
 </script>
 
 
-<div align="center"><h2>Download request form</h2></div>
-
 <form method=post action="%%read_url%%">
 <input id="action" type=hidden name="action" value="displayDownloadResults">
 
@@ -107,21 +105,12 @@ function countryChange() {
       onMouseOut="setState(6)">Specimen fields</td>
   </tr></table>
 </div>
-             
+
+<div align="center"><p class="pageTitle" style="margin-bottom: -0.75em;">Download request form</p></div>
 
 <div id="panel1" class="panel"> 
 
-<div style="width: 100%; clear: right;">
-<div class="verylarge" style="float: left; text-align: center; width: 90%;">
-<b>Basic options</b>
-</div>
-<div style="float: left; clear: right; top: 0px; right: 0px; width: 10%;">
-<input type=submit value="Create data set">
-<p></p>
-</div>
-</div>
-
-<p class="small" align="left">
+<p class="small" align="left" style="margin-left: 1em; margin-right: 1em;">
 This form allows you to download a file with data about taxonomic occurrences, genera or species, fossil collections, or specimens.
 Page through the six tabs to see all the options.
 Key fields are in <b>bold</b>.
@@ -273,17 +262,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 
 <div id="panel2" class="panel"> 
 
-<div style="width: 100%; clear: right;">
-<div class="verylarge" style="float: left; text-align: center; width: 90%;">
-<b>Included collections options</b>
-</div>
-<div style="float: left; clear: right; top: 0px; right: 0px; width: 10%;">
-<input type=submit value="Create data set">
-<p></p>
-</div>
-</div>
-
-<table style="clear: left;" width="100%" cellpadding="3" cellspacing="0">
+<table style="clear: left; padding-top: 1.5em;" width="100%" cellpadding="3" cellspacing="0">
 
 <tr class="lightGray">
 <td valign=top class="small">Lithification of primary lithology:</td>
@@ -523,17 +502,7 @@ strat unit:
 
 <div id="panel3" class="panel"> 
 
-<div style="width: 100%; clear: right;">
-<div class="verylarge" style="float: left; text-align: center; width: 90%;">
-<b>Included occurrences options</b>
-</div>
-<div style="float: left; clear: right; top: 0px; right: 0px; width: 10%;">
-<input type=submit value="Create data set">
-<p></p>
-</div>
-</div>
-
-<table style="clear: left;" width="100%" cellpadding="3" cellspacing="0">
+<table style="clear: left; padding-top: 1.5em;" width="100%" cellpadding="3" cellspacing="0">
 <tr class="lightGray">
 <td valign=top class="small">Lump occurrences of the same genus from the same collection?</td>
 <td valign=top class="small">
@@ -669,10 +638,10 @@ strat unit:
 
 <br>
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Include plants with the following organs</b></span></br>
+<span class="displayPanelHeader">Include plants with the following organs</span></br>
 <table width=100%>
   <tr>
-    <td class="small" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'po_basic');"><B>Check all</B></td>
+    <td class="small" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'po_basic');"><span class="medium">Check all</span></td>
   </tr>
   <tr>
   <td class="small" nowrap><input type=checkbox class="po_basic" name=plant_organ_unassigned value="YES">unassigned</td>
@@ -712,23 +681,11 @@ strat unit:
 
 <div id="panel4" class="panel"> 
 
-<div style="width: 100%; clear: right;">
-<div class="verylarge" style="float: left; text-align: center; width: 90%;">
-<b>Collection fields</b>
-</div>
-<div style="float: left; clear: right; top: 0px; right: 0px; width: 10%;">
-<input type=submit value="Create data set">
-<p></p>
-</div>
-</div>
-
-<p>Check the fields from the main collection data table that you want output.</p>
-
-<div class="displayPanel">
-<span class="displayPanelHeader"><b>Basic fields</b></span></br>
+<div class="displayPanel" style="margin-top: 1.5em;">
+<span class="displayPanelHeader">Basic fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_basic');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_basic');"><span class="medium">Check all</span></td>
   </tr>
   
   <tr>
@@ -756,10 +713,10 @@ strat unit:
 </div>
 
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Geography fields</b></span></br>
+<span class="displayPanelHeader">Geography fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_geography');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_geography');"><span class="medium">Check all</span></td>
   </tr>
   <tr>
   <td nowrap><input type=checkbox class="c_geography" name=collections_country value="YES">country</td>
@@ -793,10 +750,10 @@ strat unit:
 </div>
 
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Time fields</b></span></br>
+<span class="displayPanelHeader">Time fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_time');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_time');"><span class="medium">Check all</span></td>
   </tr>
 
   <tr>
@@ -822,14 +779,14 @@ strat unit:
 </table></div>
   
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Legacy time fields</b></span></br>
+<span class="displayPanelHeader">Legacy time fields</span></br>
 <table width="100%" class="tiny">
   <tr>
     <td nowrap colspan=4><i>The following 8 fields are obsolete, but you can still download the old data</i></td>
   </tr>
 
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_legacy');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_legacy');"><span class="medium">Check all</span></td>
   </tr>
   <tr>
   <td nowrap><input type=checkbox class="c_legacy" name=collections_epoch_max value="YES">epoch maximum</td>
@@ -848,10 +805,10 @@ strat unit:
 </div>
 
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Stratigraphy fields</b></span></br>
+<span class="displayPanelHeader">Stratigraphy fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_stratigraphy');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_stratigraphy');"><span class="medium">Check all</span></td>
   </tr>
   <tr>
   <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_zone value="YES">zone</td>
@@ -885,10 +842,10 @@ strat unit:
 
 
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Lithology fields</b></span></br>
+<span class="displayPanelHeader">Lithology fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_lithology');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_lithology');"><span class="medium">Check all</span></td>
   </tr>
   <tr>
   <td nowrap><input type=checkbox class="c_lithology" name=collections_lithadj value="YES">lithology adjective 1</td>
@@ -914,10 +871,10 @@ strat unit:
 </div>
   
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Taphonomy fields</b></span></br>
+<span class="displayPanelHeader">Taphonomy fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_taphonomy');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_taphonomy');"><span class="medium">Check all</span></td>
   </tr>
   <tr>
   <td nowrap><input type=checkbox class="c_taphonomy" name=collections_pres_mode value="YES">preservation</td>
@@ -957,10 +914,10 @@ strat unit:
 </div>
 
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Collection methods fields</b></span></br>
+<span class="displayPanelHeader">Collection methods fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_methods');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'c_methods');"><span class="medium">Check all</span></td>
   </tr>
 
   <tr>
@@ -997,24 +954,11 @@ strat unit:
 
 <div id="panel5" class="panel"> 
 
-<div style="width: 100%; clear: right;">
-<div class="verylarge" style="float: left; text-align: center; width: 90%;">
-<b>Occurrence fields options</b>
-</div>
-<div style="float: left; clear: right; top: 0px; right: 0px; width: 10%;">
-<input type=submit value="Create data set">
-<p></p>
-</div>
-</div>
-
-<p>Check the occurrence and ecology/taphonomy fields that you want output.
-Note that the collection ID and genus name fields are always output.</p>
-
-<div class="displayPanel">
-<span class="displayPanelHeader"><b>Basic fields</b></span></br>
+<div class="displayPanel" style="margin-top: 1.5em;">
+<span class="displayPanelHeader">Basic fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'o_basic');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'o_basic');"><span class="medium">Check all</span></td>
   </tr>
   <tr>
     <td><input type=checkbox class="o_basic" name=occurrences_authorizer value="YES">authorizer</td>
@@ -1057,10 +1001,12 @@ Note that the collection ID and genus name fields are always output.</p>
     <td><input type=checkbox class="o_basic" name=occurrences_common_name value="YES">common name</td>
   </tr>
 </table>
+<p class="verysmall">Note that the collection ID and genus name fields are always output.</p>
+
 </div>
 
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Ecology fields</b></span></br>
+<span class="displayPanelHeader">Ecology fields</span></br>
 <table width="100%" class="tiny">
   <tr>
     <td nowrap>
@@ -1085,30 +1031,17 @@ Note that the collection ID and genus name fields are always output.</p>
 </div>
 
 
-
-
-
 <div id="panel6" class="panel"> 
 
-<div style="width: 100%; clear: right;">
-<div class="verylarge" style="float: left; text-align: center; width: 90%;">
-<b>Specimen fields</b>
-</div>
-<div style="float: left; clear: right; top: 0px; right: 0px; width: 10%;">
-<input type=submit value="Create data set">
-<p></p>
-</div>
-</div>
+<p class="small" align="left" style="margin-left: 2em; margin-right: 2em;">
+Basic fields will only be downloaded when output type is "specimens".  Measurement fields will can be downloaded with any output type, but will be aggregate values for the occurrence, collection, or taxon if occurrences, collections, of taxonomic names are downloaded, respectively.
+</p>
 
-Basic fields will only be downloaded when output type is "specimens".  Measurement fields will can be downloaded with
-any output type, but will be aggregate values for the occurrence, collection, or taxon if occurrences, collections, of taxonomic names are downloaded, respectively.
-
-<br><br>
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Basic fields</b></span></br>
+<span class="displayPanelHeader">Basic fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_basic');"><B>Check all</B></td>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_basic');"><span class="medium">Check all</span></td>
   </tr>
   <tr>
     <td><input type=checkbox class="s_basic" name=specimens_authorizer value="YES">authorizer</td>
@@ -1138,10 +1071,10 @@ any output type, but will be aggregate values for the occurrence, collection, or
 <br><small>* Note that some records may be listed multiple times in the output file, once for each part, when downloading specimens, genera, or species</small>
 </div>
 <div class="displayPanel">
-<span class="displayPanelHeader"><b>Measurement fields</b></span></br>
+<span class="displayPanelHeader">Measurement fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td width="30%" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_measurements');"><B>Check all</B></td>
+    <td width="30%" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_measurements');"><span class="medium">Check all</span></td>
   </tr>
 
   <tr>
