@@ -19,6 +19,10 @@ table, tbody, tr, td, th {
     font-size: 1em;
 }
 
+th {
+    font-weight: normal;
+}
+
 hr { 
     color: #AAAAAA;
     background-color: #AAAAAA;
@@ -110,8 +114,9 @@ H6 {font-size: .9em;}
 .small {  font-size : 0.9em; text-decoration:none; }
 .medium {  font-size : 1.0em; text-decoration:none; }
 .large {  font-size : 1.1em; text-decoration:none; }
-.verylarge {  font-size : 1.3em; text-decoration:none; }
-.huge {  font-size : 1.5em; text-decoration:none; }
+.verylarge {  font-size : 1.2em; text-decoration:none; }
+.huge {  font-size : 1.3em; text-decoration:none; }
+.veryhuge {  font-size : 1.5em; text-decoration:none; }
 .cell {  font-size : 1.1em; text-decoration:none; }
 .blue {  font-size : .85em; color : #0040FF; text-decoration:none; }
 
