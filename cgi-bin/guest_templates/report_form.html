@@ -1,17 +1,17 @@
+
 <div align="center">
-<h2>Paleobiology Database report form</h2>
-<h4>This form generates tallies of fields in the Paleobiology Database main collection data table.</h4>
+<p class="pageTitle">Paleobiology Database tabular report form</p>
 </div>
 
 <form method="POST" action="%%read_url%%">
 <input id="action" type=hidden name="action" value="displayReportResults">
 
-<div align="center">
+<div align="center" class="displayPanel" style="margin-left: 3em; margin-right: 3em; padding: 1.5em;">
 <table cellpadding=3 cellspacing=0>
 
 <tr class="lightGrey">
 <td>
-Select the type of output:
+Items to count:
 </td>
 <td><select name=output>
 <option>collections</option>
@@ -21,7 +21,7 @@ Select the type of output:
 </td></tr>
 
 <tr><td>
-Select the name of the field you want tabulated (rows):
+Fields to tabulate (rows):
 </td>
 <td><select name=searchfield1>
 <option>authorizer</option>
@@ -57,7 +57,10 @@ Select the name of the field you want tabulated (rows):
 
 <tr>
 <td>
- ... list how many rows for this field?
+<div style="margin-left: 0.5em; text-indent: -0.5em;">
+Rows displayed for this field:
+</div>
+</div>
 </td>
 <td><select name=max_rows>
 <option value=10>the 10 most frequent</option>
@@ -72,7 +75,9 @@ Select the name of the field you want tabulated (rows):
 
 <tr class="lightGrey">
 <td>
-If you want to make a table that tallies combinations of two fields, select the name of the second field (columns):
+<div style="margin-left: 0.5em; text-indent: -0.5em;">
+Second field, if wanted (columns):
+</div>
 </td>
 <td><select name=searchfield2>
 <option value=""></option>
@@ -109,7 +114,9 @@ If you want to make a table that tallies combinations of two fields, select the 
 
 <tr class="lightGrey">
 <td>
- ... list how many columns for this field?
+<div style="margin-left: 0.5em; text-indent: -0.5em;">
+Columns displayed for this field:
+</div>
 </td>
 <td><select name=max_cols>
 <option value=5>the 5 most frequent</option>
@@ -124,7 +131,7 @@ If you want to make a table that tallies combinations of two fields, select the 
 
 
 <tr><td>
-If you want to limit the search to collections that include one or more <i>taxa,</i> enter their full names here:
+Taxon names:
 </td>
 <td>
 <textarea name="taxon_name" cols=40 rows=2></textarea>
@@ -132,14 +139,16 @@ If you want to limit the search to collections that include one or more <i>taxa,
 
 <tr class="lightGrey">
 <td>
+<div style="padding-left: 0.5em; text-indent: -0.5em;">
 Use only the marine genera in Sepkoski's Compendium?
+</div>
 </td>
 <td>
 <input type=checkbox name="Sepkoski" value="Yes">yes, use Sepkoski's genera only
 </td></tr>
 
 <tr><td>
-Select the research group or project:
+Research group or project:
 </td>
 <td>
 <select id="research_group">
@@ -147,7 +156,7 @@ Select the research group or project:
 
 <tr class="lightGrey">
 <td valign=top>
-Include collections/occurrences that fall between these dates:
+Dates of entry:
 </td>
 <td align="left">
 <table align="left">
@@ -184,10 +193,10 @@ To:
 
 
 <tr>
-<td>&nbsp;</td>
-<td><input type=submit value="Submit"></td>
+<td></td>
+<td><div style="padding-left: 7em; padding-top: 1.5em;"><input type=submit value="Submit"></div></td>
 </tr>
 </table>
 </form>
 
-<p>&nbsp;</p>
+<div>
