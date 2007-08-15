@@ -63,8 +63,7 @@ A:hover.menu {
 }
 
 A:link.homeBodyLinks	{
-	color : #0050A0;
-	#color : #0030D0;
+	color : #0040A0;
 }       
 
 A:visited.homeBodyLinks	{
@@ -888,8 +887,6 @@ td.fixedLabel {
     color : white; 
     text-decoration: none;
     font-size: .95em;
-    /*float: left;*/
-    /*width: 10em;*/
 }
 
 #dropDown td.dropDownBullet {
@@ -900,7 +897,7 @@ td.fixedLabel {
 
 #dropDown td ul {
     text-align: left;
-    background: #64A8FF;
+    background: #C0C0D0;
     border-top: 1px #88B2DF solid;
     position: absolute;
     padding: 0.15em;
@@ -908,13 +905,13 @@ td.fixedLabel {
     display: none;
 }
 #dropDown td ul a:link,#dropDown td ul a:visited, #dropDown td ul a:hover {
-    color: #EFEFEF;
+    color: #FFFFFF;
 }
 #dropDown td ul li:hover, #dropDown td ul li.sfhover {
-    background: #90A0A8;
+    background: #FFFFFF;
 }
 #dropDown td ul a:hover {
-    color: #FFFFFF;
+    color: #000000;
 }
 
 /* This makes the div a bit bigger so the UL below it 
