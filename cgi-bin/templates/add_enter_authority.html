@@ -1,14 +1,14 @@
 
 <span id="message"></span>
 
-<div align="center"><h3>Authority data for <span id="taxon_name"></span></h3></div>
+<div align="center"><p class="pageTitle">Authority data for <span id="taxon_name"></span></p></div>
 
 <span id="error_message"></span>
 <div show="error_message"></div>
 
 <form method="POST" action="%%write_url%%">
 
-<div class="displayPanel" style="padding-top: 1em;">
+<div class="displayPanel small" style="padding-top: 1em;">
 
 <input type="hidden" id="action" name="action" value="submitAuthorityForm">
 <input type="hidden" id="reference_no" name="reference_no">
@@ -16,83 +16,50 @@
 <input type="hidden" id="confirmed_taxon_name" name="confirmed_taxon_name">
 
 <div align="left">
-<div class="emphasized">
-<input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY">
-<input type="text" id="taxon_name" name="taxon_name" size="20"> was first named in the data record's primary reference:
-</div>
-<div align="center" class="small" style="padding-left: 3em; padding-right: 3em;"><span id="formatted_primary_reference"></span>
-</div>
+  <input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY">
+  <input type="text" id="taxon_name" name="taxon_name" size="20"> was first named in the data record's primary reference:
+  <div align="left" class="small" style="margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_primary_reference"></span></div>
 </div>
 
 <div show="current_reference">
-  <br>
-  <div class="emphasized">
   <input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT">
    ... <i>or</i> it was first named in the current reference:
-  </div>
-  <div align="center" class="small" style="padding-left: 3em; padding-right: 3em;"><span id="formatted_current_reference"></span>
-  </div>
+<div align="left" class="small" style="margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_current_reference"></span></div>
 </div>  
 
-<div>  
-<center>
-<p class="tiny">
-<b>Pages*:</b> <input id="pages" name="pages" class="tiny" size=12>
-<b>Figures*:</b> <input id="figures" name="figures" class="tiny" size=12>
-</p>
-</center>
-</div>  
+  <input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO">
+  ... <i>or</i> it was named in an earlier publication:
 
-<div class="emphasized" align=left>
-<input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO">
-
-... <i>or</i> it was named in an earlier publication:
-</div>
-<br>
-
-<div>
-<center>
-<table>
-
-<tr><td align="right" class="tiny"><b>First author:</b></td>
-<td><input id="author1init" name="author1init" class="tiny" size=4></td>
-<td><input id="author1last" name="author1last" class="tiny" size=10></td>
-<td align="right" class="tiny"><b>Second author:</b></td>
-<td><input id="author2init" name="author2init" class="tiny" size=4></td>
-<td><input id="author2last" name="author2last" class="tiny" size=10></td>
+<table><tr><td align="right" class="verysmall"><span class="prompt">First author:</span></td>
+<td><input id="author1init" name="author1init" class="verysmall" size=4></td>
+<td><input id="author1last" name="author1last" class="verysmall" size=10></td>
+<td align="left" class="verysmall" style="padding-left: 0.5em";><span class="prompt">Second author:</span></td>
+<td align="left"><input id="author2init" name="author2init" class="verysmall" size=4></td>
+<td align="left"><input id="author2last" name="author2last" class="verysmall" size=10></td>
+</tr>
+<tr><td valign="top" align="right" class="verysmall" style="padding-left: 2em;"><span class="prompt">Other authors:</span></td>
+<td colspan="3"><textarea id="otherauthors" name="otherauthors" class="verysmall" rows=1 cols="30"></textarea></td>
+<td align="right" class="verysmall"><span class="prompt">Year:</span></td>
+<td colspan="1" class="verysmall"><input id="pubyr" name="pubyr" class="verysmall" size=5></td>
 </tr>
 
-<tr><td valign="top" align="right" class="tiny"><b>Other authors:</b></td>
-<td colspan=5>
-<textarea id="otherauthors" name="otherauthors" rows="1" cols="60">
-</textarea>
-</td></tr>
-
-<tr><td align="right" class="tiny"><b>Year:</b></td>
-<td colspan=1 class="tiny"><input id="pubyr" name="pubyr" class="tiny" size=5></td>
-<td colspan=4 class="tiny"><b>Pages*:</b> <input id="2nd_pages" name="2nd_pages" class="tiny" size=12>
-<b>Figures*:</b> <input id="2nd_figures" name="2nd_figures" class="tiny" size=12></td>
-</tr>
+<tr>
+<td colspan="4" class="verysmall" align="left" style="padding-top: 0.5em;"><span class="prompt">Pages:</span> <input id="pages" name="pages" class="verysmall" size=12>
+<span class="prompt">Figures:</span> <input id="figures" name="figures" class="verysmall" size=12></td></tr>
 </table>
-</center>
 
-<center>
-<p><span class="tiny">* Enter numbers of pages and figures that describe and show the type specimen(s).</span></p>
-</center>
-
-</div>
 
 <div style="float: left; padding-left: 1em;">
 
 <div style="clear: right; padding-top: 1em; white-space: nowrap;">
-<b>Original rank:</b>
+<span class="prompt">Original rank:</span>
 <span id="taxon_rank_select"></span>
 </div>
 
 <div show="show_type_specimen">
 <div style="clear: right;">
 <div style="padding-top: 1em;">
-<b>Type specimen:</b>
+<span class="prompt">Type specimen:</span>
 <input id="type_specimen" name="type_specimen" size=20>
 </div>
 </div>
@@ -101,7 +68,7 @@
 <div show="show_type_specimen">
 <div style="clear: right;">
 <div style="padding-top: 1em;">
-<b>Body part of type:</b>
+<span class="prompt">Body part of type:</span>
 <select name="type_body_part"></select>
 </div>
 </div>
@@ -109,7 +76,7 @@
 
 <div show="show_type_specimen">
 <div style="clear: right;">
-<b>Specific body part:</b>
+<span class="prompt">Specific body part:</span>
 <input id="part_details" name="part_details" size=23>
 </div>
 </div>
@@ -121,9 +88,9 @@
 <div hide="hide_measurements">
 <input type="hidden" name="specimen_no">
 <div class="small" style="clear: right; white-space: nowrap;">
-<b>Length:</b>
+<span class="prompt">Length:</span>
 <input class="small" name="length" size="4"> mm
-&nbsp;<b>Width:</b>
+&nbsp;<span class="prompt">Width:</span>
 <input class="small" name="width" size="4"> mm
 </div>
 </div>
@@ -132,7 +99,7 @@
 
 <div>
 <div style="padding-top: 1em;">
-<b>Preservation category:</b>
+<span class="prompt">Preservation category:</span>
 <select id="preservation"></select>
 </div>
 </div>
@@ -150,17 +117,17 @@
 <div show="show_type_taxon">
   <div style="clear: left; padding-bottom: 1em; white-space: nowrap;">
     <span show="parent_taxon_select">&nbsp;&nbsp;&nbsp;&nbsp;</span>
-    <input type="checkbox" id="type_taxon" name="type_taxon" value="1">This is the type <span id="taxon_rank"></span>
+    <input type="checkbox" id="type_taxon" name="type_taxon" value="1"><span class="prompt">This is the type <span id="taxon_rank"></span></span>
   </div>
 </div>
 </div>
 
 <div style="clear: right;">
-<b>Is this an extant (living) taxon?</b> <span id="extant_select"></span>
+<span class="prompt">Is this an extant (living) taxon?</span> <span id="extant_select"></span>
 </div>
 
 <div style="clear: right; padding-top: 1em;">
-<b>Common name:</b>
+<span class="prompt">Common name:</span>
 <input type="text" id="common_name" name="common_name" size="20">
 </div>
 
@@ -169,7 +136,7 @@
 
 <div style="clear: left; padding: 1em; height: 3em;">
 <div style="float: left; position: relative; left: 0em; top: 0em;">
-<b>Comments:</b>
+<span class="prompt">Comments:</span>
 </div>
 <div style="float: left; position: relative; left: 0.5em; top: 0em;">
 <textarea id="comments" name="comments" rows="2" cols="70">
