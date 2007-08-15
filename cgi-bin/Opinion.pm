@@ -398,7 +398,7 @@ sub displayOpinionForm {
     my $childSpellingRank = "";
     if ($fields{'child_spelling_no'} > 0) {
         # This will happen on an edit (first submission) OR resubmission w/homonyms
-        # SQL trick: get not only the authoritiy data for child_spelling_no, but all its homonyms as well
+        # SQL trick: get not only the authority data for child_spelling_no, but all its homonyms as well
         my $sql = "SELECT a2.* FROM authorities a1, authorities a2 WHERE a1.taxon_name=a2.taxon_name AND a1.taxon_no=".$dbh->quote($fields{'child_spelling_no'});
         my @results= @{$dbt->getData($sql)}; 
         foreach my $row (@results) {
@@ -411,7 +411,7 @@ sub displayOpinionForm {
         $childSpellingRank = $q->param('child_spelling_rank') || $childRank;
         @child_spelling_nos = TaxonInfo::getTaxonNos($dbt,$childSpellingName,$childSpellingRank);
     }
-    # If the childSpellingName and childName are the same (and possibly amiguous)
+    # If the childSpellingName and childName are the same (and possibly ambiguous)
     # Use the child_no as the spelling_no so we unneccesarily don't get a radio select to select
     # among the different homonyms
     if ($childSpellingName eq $childName && $childSpellingRank eq $childRank) {
@@ -618,7 +618,7 @@ sub displayOpinionForm {
 
 	my $spelling_rank_pulldown = $hbo->htmlSelect('child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
 	if (scalar(@child_spelling_nos) > 1 || (scalar(@child_spelling_nos) == 1 && @opinions_to_migrate1)) {
-		$spelling_row .= "<tr><td nowrap width=\"100%\">";
+		$spelling_row .= "<tr><td nowrap width=\"100%\" class=\"small\">";
 		foreach my $child_spelling_no (@child_spelling_nos) {
 			my $parent = TaxaCache::getParent($dbt,$child_spelling_no);
 			my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$child_spelling_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
@@ -639,7 +639,7 @@ sub displayOpinionForm {
 		$spelling_row .= qq|<input type="radio" name="child_spelling_no" value="-1"> Create a new '$childSpellingName' based off '$childName' with rank $new_child_spelling_rank_pulldown<br>|;
 		$spelling_row .= "$spelling_note</td></tr>";
 	} else {
-		$spelling_row .= qq|<tr><td nowrap width="100%"><input id="child_spelling_name" name="child_spelling_name" size=30 value="$childSpellingName">$spelling_rank_pulldown<br>$spelling_note</td></tr>|;
+		$spelling_row .= qq|<tr><td nowrap width="100%" class="small"><input id="child_spelling_name" name="child_spelling_name" size=30 value="$childSpellingName">$spelling_rank_pulldown<br>$spelling_note</td></tr>|;
 	}
 
 
@@ -1582,7 +1582,11 @@ sub displayOpinionChoiceForm {
                 return;
             }
             print "<div align=\"center\">";
-            print "<p class=\"pageTitle\">Select an opinion to edit</p>";
+            if ($s->isDBMember())	{
+                print "<p class=\"pageTitle\">Select an opinion to edit</p>\n";
+            } else	{
+                print "<p class=\"pageTitle\">Opinions from ".Reference::formatShortRef($dbt,$q->param("reference_no"))."</p>\n";
+            }
 
             print qq|<div class="displayPanel" style="padding: 1em; margin-left: 2em; margin-right: 2em;">\n|;
             print qq|<div class="small" align="left">|;
@@ -1593,7 +1597,11 @@ sub displayOpinionChoiceForm {
                 if ( $q->param('reference_no') == $row->{'reference_no'} && $row->{'ref_has_opinion'} eq "YES" )	{
                     $authority = "";
                 }
-                print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
+                if ($s->isDBMember())	{
+                    print "<li><a href=\"$WRITE_URL?action=displayOpinionForm&amp;opinion_no=$row->{opinion_no}\">$opinion</a>$authority</li>\n";
+                } else	{
+                    print "<li>$opinion $authority</li>\n";
+                }
             }
             print "</ul>";
             print "</div>";
@@ -1617,7 +1625,7 @@ sub displayOpinionChoiceForm {
     
     if ($q->param("taxon_no")) {
         print qq|<div class="tiny" style="margin-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.</p></div>\n|;
-    } elsif ($q->param('reference_no')) {
+    } elsif ($q->param('reference_no') && $s->isDBMember())	{
         print qq|<tr><td align="left" colspan=2><div class="tiny" style="padding-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
         print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</p></div>\n|;
        # print "</span></p></td></tr>\n";
