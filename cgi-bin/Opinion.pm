@@ -492,7 +492,7 @@ sub displayOpinionForm {
             }
             $parent_pulldown .= qq|<br><nobr><input type="radio" name="parent_spelling_no" $selected value='$parent_no'> $parentName, $taxon->{taxon_rank}$pub_info [$higher_class]</nobr>\n|;
         }
-        $parent_pulldown .= qq|<br><input type="radio" name="parent_spelling_no" value=""> \nOther taxon: <input type="text" name="belongs_to_parent" value=""><br>\n|;
+        $parent_pulldown .= qq|<br><input type="radio" name="parent_spelling_no" value=""> \n<span class=\"prompt\">Other taxon:</span> <input type="text" name="belongs_to_parent" value=""><br>\n|;
         $parent_pulldown .= "\n</span>\n";
 	}
 
@@ -501,16 +501,16 @@ sub displayOpinionForm {
 
     if (!$isNewEntry) {
         if ($o->get('authorizer_no')) {
-            $fields{'authorizer_name'} = "Authorizer: " . Person::getPersonName($dbt,$o->get('authorizer_no')); 
+            $fields{'authorizer_name'} = "<span class=\"fieldName\">Authorizer:</span> " . Person::getPersonName($dbt,$o->get('authorizer_no')); 
         }   
         if ($o->get('enterer_no')) { 
-            $fields{'enterer_name'} = " Enterer: " . Person::getPersonName($dbt,$o->get('enterer_no')); 
+            $fields{'enterer_name'} = " <span class=\"fieldName\">Enterer:</span> " . Person::getPersonName($dbt,$o->get('enterer_no')); 
         }
         if ($o->get('modifier_no')) { 
-            $fields{'modifier_name'} = " Modifier: ".Person::getPersonName($dbt,$o->get('modifier_no'));
+            $fields{'modifier_name'} = " <span class=\"fieldName\">Modifier:</span> ".Person::getPersonName($dbt,$o->get('modifier_no'));
         }
-        $fields{'modified'} = "Modified: ".$fields{'modified'};
-        $fields{'created'} = "Created: ".$fields{'created'}; 
+        $fields{'modified'} = "<span class=\"fieldName\">Modified:</span> ".$fields{'modified'};
+        $fields{'created'} = "<span class=\"fieldName\">Created:</span> ".$fields{'created'}; 
     }
 
     my $fossil_record_ref = 0;
@@ -545,7 +545,7 @@ sub displayOpinionForm {
         $higher_rank = 'higher taxon';
     }
     my $selected= "CHECKED";
-    $belongs_to_row .= "<tr>\n<td colspan=\"2\">\n<span class=\"small\">Status and parent:&nbsp;</span> ";
+    $belongs_to_row .= "<tr>\n<td colspan=\"2\">\n<span class=\"small\"><span class=\"prompt\">Status and parent:</span>&nbsp;</span> ";
     my @statusArray;
     if ( $childRank =~ /species|genus/ )	{
 	@statusArray = ( 'belongs to', @synArray );
@@ -585,7 +585,7 @@ sub displayOpinionForm {
     
     $belongs_to_row .= qq|<tr><td><div class="small">|;
     if ( $childRank !~ /species/ )	{
-        $belongs_to_row .= "Phylogenetic status: $phyl_select";
+        $belongs_to_row .= "<span class=\"prompt\">Phylogenetic status:</span> $phyl_select";
     } 
     if ( $childRank =~ /species|genus|tribe|family/ )	{
         $belongs_to_row .= $type_select;
@@ -614,7 +614,7 @@ sub displayOpinionForm {
     }
 
     my $spelling_note = "<small>If the name is invalid, enter the invalid name and not its senior synonym, replacement, etc.</small>";
-    $spelling_row .= "<tr><td colspan=\"2\" class=\"small\">Full name and rank of the taxon used in the reference:</td></tr>";
+    $spelling_row .= "<tr><td colspan=\"2\" class=\"small\"><span class=\"prompt\">Full name and rank of the taxon used in the reference:</span></td></tr>";
 
 	my $spelling_rank_pulldown = $hbo->htmlSelect('child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
 	if (scalar(@child_spelling_nos) > 1 || (scalar(@child_spelling_nos) == 1 && @opinions_to_migrate1)) {
@@ -657,7 +657,7 @@ sub displayOpinionForm {
         @select_keys = ("is the original spelling and rank","is a correction of '$childName'","is a misspelling","has had its rank changed from its original rank of $childRank");
     }
     $spelling_row .= "<tr><td>&nbsp;</td></tr>";
-    $spelling_row .= "<tr><td class=\"small\">Reason why this spelling and rank was used:<br>This ". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
+    $spelling_row .= "<tr><td class=\"small\"><span class=\"prompt\">Reason why this spelling and rank was used:</span><br>This ". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
 
     dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
 
@@ -1420,7 +1420,7 @@ sub submitOpinionForm {
   <ul>
   <li><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></li>
   <br><li><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName $authors</a></li>
-  <br><li><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></li>
+  <br><li><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&display=authorities&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></li>
   <br><li><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></li>
   <br><li><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></li>   
   </ul>
@@ -1430,9 +1430,9 @@ sub submitOpinionForm {
   <ul>
   <li><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></li>
   <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}&use_reference=new">Edit another opinion about $childSpellingName</a></li>
+  <li$style><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">Edit another opinion about $childSpellingName</a></li>
   <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></li>
-  <li$style><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></li>
+  <li$style><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&display=opinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></li>
   <li$style><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></li>
   <li$style><a href="$WRITE_URL?action=startProcessPrintHierarchy&reference_no=$resultReferenceNumber&maximum_levels=100">Print this reference's classification</a></li>
   </ul>
