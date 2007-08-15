@@ -192,10 +192,6 @@ sub displayAuthorityForm {
             $fields{'ref_is_authority'} = 'PRIMARY';
         } else {
             $fields{'ref_is_authority'} = 'NO';
-            $fields{'2nd_pages'} = $fields{'pages'};
-            $fields{'2nd_figures'} = $fields{'figures'};
-            $fields{'pages'} = '';
-            $fields{'figures'} = '';
         }  
 
     } else { # brand new, first submission
@@ -266,16 +262,16 @@ sub displayAuthorityForm {
 	# fill out the authorizer/enterer/modifier info at the bottom of the page
 	if (!$isNewEntry) {
 		if ($fields{'authorizer_no'}) { 
-            $fields{'authorizer_name'} = " <B>Authorizer:</B> " . Person::getPersonName($dbt,$fields{'authorizer_no'}); 
+            $fields{'authorizer_name'} = " <span class=\"fieldName\">Authorizer:</span> " . Person::getPersonName($dbt,$fields{'authorizer_no'}); 
         }
 		if ($fields{'enterer_no'}) { 
-            $fields{'enterer_name'} = " <B>Enterer:</B> " . Person::getPersonName($dbt,$fields{'enterer_no'}); 
+            $fields{'enterer_name'} = " <span class=\"fieldName\">Enterer:</span> " . Person::getPersonName($dbt,$fields{'enterer_no'}); 
         }
 		if ($fields{'modifier_no'}) { 
-            $fields{'modifier_name'} = " <B>Modifier:</B> ".Person::getPersonName($dbt,$fields{'modifier_no'}); 
+            $fields{'modifier_name'} = " <span class=\"fieldName\">Modifier:</span> ".Person::getPersonName($dbt,$fields{'modifier_no'}); 
         }
-        $fields{'modified'} = "<B>Modified: </B>".$fields{'modified'};
-        $fields{'created'} = "<B>Created: </B>".$fields{'created'};
+        $fields{'modified'} = "<span class=\"fieldName\">Modified: </span>".$fields{'modified'};
+        $fields{'created'} = "<span class=\"fieldName\">Created: </span>".$fields{'created'};
 	}
 
     if ($fields{'reference_no'}) {
@@ -378,7 +374,7 @@ sub displayAuthorityForm {
                 }
             }
 			
-			$fields{'parent_taxon_select'} = "<b>Belongs to:</b>&nbsp;".
+			$fields{'parent_taxon_select'} = "<span class=\"prompt\">Belongs to:</span>&nbsp;".
                 $hbo->htmlSelect('parent_taxon_no',\@parent_descs,\@parent_nos,$parent_no);
 		} else {
 			# count = 0, so we need to warn them to enter the parent taxon first.
@@ -478,10 +474,6 @@ sub submitAuthorityForm {
 		($q->param('ref_is_authority') ne 'NO')) {
 		$errors->add("You must choose one of the reference radio buttons");
 	} elsif ($q->param('ref_is_authority') eq 'NO') {
-        # merge the pages and 2nd_pages, figures and 2nd_figures fields together
-        # since they are one field in the database.
-		$fields{'pages'} = $q->param('2nd_pages');
-		$fields{'figures'} = $q->param('2nd_figures');
 
 	# commented out 10.5.04 by JA because we often need to add (say) genera
 	#  without any data when we create and classify species for which we
@@ -490,11 +482,6 @@ sub submitAuthorityForm {
 #			$errors->add('You must enter at least the last name of a first author');	
 #		}
 		
-		# make sure the pages/figures fields above this are empty.
-		if ($q->param('pages') || $q->param('figures')) {
-			$errors->add("Don't enter pages or figures for a primary reference if you chose the 'named in an earlier publication' radio button");	
-		}
-	
         # make sure the format of the author names is proper
         if  ($q->param('author1init') && ! Validation::properInitial($q->param('author1init'))) {
             $errors->add("The first author's initials are improperly formatted");
@@ -542,15 +529,6 @@ sub submitAuthorityForm {
                 $errors->add("If entering a subgenus, species, or subspecies, the publication year is required");
             }
         }
-	} else {
-		# ref_is_authority is YES
-		# so make sure the other publication info is empty.
-		if ($q->param('author1init') || $q->param('author1last') || 
-            $q->param('author2init') || $q->param('author2last') || 
-            $q->param('otherauthors')|| $q->param('pubyr') || 
-            $q->param('2nd_pages')   || $q->param('2nd_figures')) {
-			$errors->add("Don't enter other publication information if you chose the 'first named in primary reference' radio button");	
-		}
 	}
 	
 	# check and make sure the taxon_name field in the form makes sense
@@ -735,14 +713,14 @@ sub submitAuthorityForm {
         if (@warnings) {
             $end_message .= Debug::printWarnings(\@warnings);
         }
-        $end_message .= "<div align=\"center\"><p><b>" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</b></p></div>";
+        $end_message .= "<div align=\"center\"><p class=\"large\">" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</p></div>";
 
         my $origResultTaxonNumber = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
         
         $end_message .= qq|
     <div align="center" class="displayPanel">
     <table cellpadding="10" class="small"><tr><td valign="top">
-      <p><b>Name functions</b></p>
+      <p class="large" style="margin-left: 2em;">Name functions</p>
       <ul>
       <li><b><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></b></li>
       <br><li><b><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$resultTaxonNumber">Edit $fields{taxon_name}</a></b></li>
@@ -752,7 +730,7 @@ sub submitAuthorityForm {
       </ul>
     </td>
     <td valign=top>
-      <p><b>Opinion functions</b></p>
+      <p class="large" style="margin-left: 2em;">Opinion functions</p>
         <ul>
           <li><b><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></b></li>
 |;
@@ -793,7 +771,7 @@ sub submitAuthorityForm {
             $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&opinion_no=-1">Add this reference's opinion about $fields{taxon_name}</a></b></li>
 |;
         }
-        $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber&use_reference=new">Add an opinion about $fields{taxon_name}</a></b></li>
+        $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$resultTaxonNumber&child_no=$origResultTaxonNumber">Add an opinion about $fields{taxon_name}</a></b></li>
 |;
         $end_message .= qq|<li$style><b><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$resultTaxonNumber">Edit an opinion about $fields{taxon_name}</a></b></li>
 |;
@@ -1283,7 +1261,7 @@ sub displayTypeTaxonSelectForm {
             print "<input type=\"hidden\" name=\"type_taxon_no\" value=\"$type_taxon_no\">\n";
             print "<input type=\"hidden\" name=\"end_message\" value=\"".uri_escape($end_message)."\">\n";
             print "<table><tr><td style=\"border: 1px solid lightgray; padding: 1em;\">\n";
-            print "<h3>For which taxa is $type_taxon_name a type $type_taxon_rank?</h3>";
+            print "<p class=\"large\">For which taxa is $type_taxon_name a type $type_taxon_rank?</p>";
             foreach my $row (reverse @parents) {
                 my $checked = ($row->{'type_taxon_no'} == $type_taxon_no) ? 'CHECKED' : '';
                 print "<input type=\"checkbox\" name=\"taxon_no\" value=\"$row->{taxon_no}\" $checked> ";
