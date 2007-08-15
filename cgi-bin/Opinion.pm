@@ -578,7 +578,7 @@ sub displayOpinionForm {
     if ($childRank =~ /species|genus|tribe|family/) {
         my $checked = ($fields{'type_taxon'}) ? "CHECKED" : "";
         $type_select = "&nbsp;&nbsp;<input name=\"type_taxon\" type=\"checkbox\" $checked  value=\"1\">".
-                       " This is the type $childRank";
+                       " <span class=\"prompt\">This is the type $childRank</span>";
     }
     my ($phyl_keys,$phyl_values) = $hbo->getKeysValues('phylogenetic_status');
     my $phyl_select = $hbo->htmlSelect('phylogenetic_status',$phyl_keys,$phyl_values,$fields{'phylogenetic_status'});
