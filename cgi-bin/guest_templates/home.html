@@ -9,19 +9,7 @@ var oldTableHeightStr;
 
 var detect = navigator.userAgent.toLowerCase();
 
-var lastbullet = "bullet1";
-
-// Explorer has no unicode value for medium down triangles and uses a
-//  different unicode value for down triangles (!), so I'm using circles
-if ( checkBrowser('msie') )	{
-	var onbullet = '<div class="homePageMSIEBullet">&#9679;<\/div>';
-	var offbullet = '<div class="homePageMSIEBullet">&#9675;<\/div>';
-} else	{
-	var onbullet = '<div class="homePageOnBullet">&#9660;<\/div>';
-	var offbullet = '<div class="homePageOffBullet">&#9655;<\/div>';
-}
-
-var corners = '<div><img src="/public/homeTextBox_corner_TL.png" style="position: relative; top: -19px; left: -19px;"><\/div><div><img src="/public/homeTextBox_corner_TR.png" style="float: left; position: absolute; top: -3px; right: -4px;"><\/div><div><img src="/public/homeTextBox_corner_BL.png" style="position: absolute; bottom: -3px; left: -4px;"><\/div><img src="/public/homeTextBox_corner_BR.png" style="position: absolute; bottom: -4px; right: -5px; clear: right;"><\/div>' +
+var corners = '<div><div><img src="/public/homeTextBox_corner_TR.png" style="float: left; position: absolute; top: -3px; right: -4px;"><\/div><div><img src="/public/homeTextBox_corner_BL.png" style="position: absolute; bottom: -3px; left: -4px;"><\/div><img src="/public/homeTextBox_corner_BR.png" style="position: absolute; bottom: -4px; right: -5px; clear: right;"><\/div>' +
 '<p style="margin-top: -16px;">';
 
 var lastpar = '<p style="margin-bottom: -2px;">';
@@ -85,25 +73,25 @@ var GetInvolved = corners +
 'We have many <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=publications">official publications<\/a> that have resulted from analyses of our data and activities of our groups.' +
 '<\/p>' +
 '<p>' +
+'<div><img style="position: relative; float: right; clear: right; padding-left: 1em; padding-top: 1em; bottom: 0.5em; right: 0.5em;" height="92" width="70" src="/public/PAlogo_blu_txt.gif"></div>' +
+'We offer an <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=summer_course_2007">intensive summer course<\/a>, which was most recently sponsored by <a class="homeBodyLinks" href="http://palass.org">the Palaeontological Association<\/a>.<br>' +
 'If you are interested in <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=join_us">joining the Database<\/a>, you may want to see how we enter data. ' +
 'You can view examples of forms for entering <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=reference_form">references<\/a>, <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=collection_form">fossil collections<\/a>, <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?user=Guest&amp;action=displayPage&amp;page=occurrence_form">taxonomic occurrences<\/a>, <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=authority_form">taxonomic names<\/a>, and <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?user=Guest&amp;action=displayPage&amp;page=opinion_form">classifications of plants and animals<\/a>.' +
 '<\/p>' +
 lastpar +
-'<div><img style="position: relative; float: right; clear: right; padding-left: 1em; padding-top: 1em; bottom: 0.5em; right: 0.5em;" height="92" width="70" src="/public/PAlogo_blu_txt.gif"></div>' +
-'We offer an <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=summer_course_2007">intensive summer course<\/a>, which is sponsored this year by <a class="homeBodyLinks" href="http://palass.org">the Palaeontological Association<\/a>.<br>' +
 '<\/p>';
 
 
 var OtherInfo = corners +
-'Most of the Database\'s <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">personnel<\/a> are at the <a class="homeBodyLinks" href="http://www.ucsb.edu">University of California, Santa Barbara<\/a>.  We also maintain a <a class="homeBodyLinks" href="http://paleodb.jcu.edu.au">mirror site in Australia<\/a> and are setting up more in Berlin, Chicago, and London.<\/p>' +
+'Most of the Database\'s <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">personnel<\/a> are at the <a class="homeBodyLinks" href="http://www.ucsb.edu">University of California, Santa Barbara<\/a>.' +
 '<p>' +
 'We coordinate our activities with many other <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=links">paleontological databases<\/a>, provide data to <a class="homeBodyLinks" href="http://www.gbif.org">GBIF<\/a>, and share data with <a class="homeBodyLinks" href="http://chronos.org">CHRONOS<\/a>. ' +
-'We will soon exchange data with the <a class="homeBodyLinks" href="http://data.gns.cri.nz/fred/">Fossil Record File</a>, <a class="homeBodyLinks" href="http://www.geo.arizona.edu/~rees/itdetails.html">GEON</a>, <a class="homeBodyLinks" href="http://www.morphobank.org/">MorphoBank</a>, <a class="homeBodyLinks" href="http://porites.geology.uiowa.edu/">NMITA</a>, <a class="homeBodyLinks" href="http://www.helsinki.fi/science/now/index.html">NOW</a>, and the <a class="homeBodyLinks" href="http://www.paleoportal.org/">Paleontology Portal</a>.' +
+'We plan to exchange data with the <a class="homeBodyLinks" href="http://data.gns.cri.nz/fred/">Fossil Record File</a>, <a class="homeBodyLinks" href="http://www.geo.arizona.edu/~rees/itdetails.html">GEON</a>, <a class="homeBodyLinks" href="http://www.morphobank.org/">MorphoBank</a>, <a class="homeBodyLinks" href="http://porites.geology.uiowa.edu/">NMITA</a>, <a class="homeBodyLinks" href="http://www.helsinki.fi/science/now/index.html">NOW</a>, and the <a class="homeBodyLinks" href="http://www.paleoportal.org/">Paleontology Portal</a>.' +
 '<\/p>' +
 '<p>' +
 'The Database has been featured in a <a class="homeBodyLinks" href="http://www.nature.com/cgi-taf/DynaPage.taf?file=/nature/journal/v424/n6948/full/424482a_fs.html"><i>Nature<\/i> article<\/a>.' +
 '<p>' +
-'Database source code may be viewed <a class="homeBodyLinks" href="http://paleodb.org/trac/">online<\/a>.'+
+'We use Perl/CGI scripts to enter and access the data in our highly relational MySQL database. All of the website\'s source code may be viewed <a class="homeBodyLinks" href="http://paleodb.org/trac/">online<\/a>.'+
 '<p>' + 
 lastpar +
 'Current funding is by an <a class="homeBodyLinks" href="http://nsf.gov/funding/pgm_summ.jsp?pims_id=13413&amp;org=EAR">NSF Sedimentary Geology and Paleobiology<\/a> grant to <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>. ' +
@@ -113,20 +101,18 @@ lastpar +
 window.onload = startPage;
 
 function startPage()	{
+	changeBackground('question1');
 	changeText('homeTextBox',WhatIs);
-	changeText('bullet1',onbullet);
-	changeText('bullet2',offbullet);
-	changeText('bullet3',offbullet);
-	changeText('bullet4',offbullet);
-	changeText('bullet5',offbullet);
 	//loadFrames('first_homepage',1);
 	animsrc = "/public/animations/homepage/homepage.gif";
 	document["homepage_anim"].src = animsrc;
 }
 
-function changeBullet(what,text)	{
-	document.getElementById(what).innerHTML = text;
-	lastbullet = what;
+function changeBackground(what)	{
+	for ( i = 1; i <= 5; i++ )	{
+		document.getElementById('question'+i).style.backgroundColor = "#C0C0D0";
+	}
+	document.getElementById(what).style.backgroundColor = "#FFFFFF";
 }
 
 function changeText(what,text)	{
@@ -142,25 +128,70 @@ function checkBrowser(string)	{
 //-->
 </script>
 
-<!-- </div> end mainSpacer (terminated immediately to allow correct positioning of gray box) -->
-</div> <!-- end mainBody (ditto) -->
+<!-- gray box outside of main area -->
 
-<!-- gray box outside of main area
-it's really to have a second body tag, but whatever -->
+<div style="background-image: url('/public/PDbg-reversed.gif'); background-position: 12.5em 52px; height: 36em; width: 50em; margin-top: 0.5em; margin-left: 0.2em; padding-bottom: 1em; border: 1px solid #B0B0B0;">
 
-<body style="background-image: url('/public/PDbg-reversed.gif'); background-position: 12em 52px;">
+<!-- navigation bar at left, first row -->
 
-<!--
-<div class="mainBody">
+<div style="float: left; clear: none; margin-top: 1.5em; margin-left: 1em; width: 3em; text-align: left; border: 1px solid white;">
 
-<div class="mainSpacer">
--->
-<div id="homeTotals">
-  <div style="padding-top: 0.3em;"></div>
- 
+  <div class="questions" id="question1" style="margin-top: -3px; border-top: 1px solid gray;">
+  <span id="questionsShadow">Intro</span>
+  <span onClick="changeBackground('question1'); changeText('homeTextBox',WhatIs);" id="questionsOverShadow">Intro</span>
+  </div>
+
+  <div class="questions" id="question2">
+  <span id="questionsShadow">Data</span>
+  <span onClick="changeBackground('question2'); changeText('homeTextBox',Contents);" id="questionsOverShadow">Data</span>
+  </div>
+
+  <div class="questions" id="question3">
+  <span id="questionsShadow">Tools</span>
+  <span onClick="changeBackground('question3'); changeText('homeTextBox',Tools);" id="questionsOverShadow">Tools</span>
+  </div>
+
+  <div class="questions" id="question4">
+  <span id="questionsShadow">Join</span>
+  <span onClick="changeBackground('question4'); changeText('homeTextBox',GetInvolved);" id="questionsOverShadow">Join</span>
+  </div>
+
+  <div class="questions" id="question5">
+  <span id="questionsShadow">etc.</span>
+  <span onClick="changeBackground('question5'); changeText('homeTextBox',OtherInfo);" id="questionsOverShadow">etc.</span>
+  </div>
+
+  <div style="clear: both; padding-bottom: 0.2em;"></div>
+
+</div>
+
+<!-- info at middle, first row -->
+
+  <div style="float: left; clear: none; width: 32em; margin-top: 1.5em; padding-left: 0.75em; padding-right: 0.5em;">
+  <div class="homeTextBoxes" id="homeTextBoxShadow">
+  <div class="homeTextBoxes" id="homeTextBoxShadow2">
+  <div class="homeTextBoxes small" id="homeTextBox">
+  </div>
+  </div>
+  </div>
+  </div>
+
+<!-- globe at right, first row -->
+
+  <div style="float: right; position: absolute; right: 2.5em; top: 4em;">
+  <img src="/public/animations/homepage_shadow.png" border="0" style="margin-right: 0.5em;">
+  <span style="position: absolute; left: -2px; top: 0px;">
+  <img name="homepage_anim" alt="animation" src="/public/animations/homepage/homepage_firstframe.gif" height="153" width="129" border="0">
+  </span>
+  </div>
+
+<!-- totals at right, underneath globe -->
+
+<div style="position: absolute; top: 16em; right: 2em;">
+
   <div class="Features">
 
-  <div class="FeatureHeadline">
+  <div class="FeatureHeadline" style="width: 10em;">
   <div class="tiny">
   <i>This hour's totals</i>
   </div>
@@ -171,33 +202,37 @@ it's really to have a second body tag, but whatever -->
   <table cellpadding="0" cellspacing="4">
   <tr><td align="right" valign="top">
 
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats"><span id="reference_total"></span></a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?user=Guest&amp;action=beginTaxonInfo" class="homeStats"><span id="taxon_total"></span></a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="collection_total"></span></a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats"><span id="occurrence_total"></span></a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?action=displayAuthorizers" class="homeStats"><span id="enterer_total"></span></a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?action=displayInstitutions" class="homeStats"><span id="institution_total"></span></a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?action=displayAuthorizers" class="homeStats"><span id="country_total"></span></a></span></span>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">25008</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">105278</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">74396</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">684632</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayAuthorizers" class="homeStats">194</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayInstitutions" class="homeStats">133</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayAuthorizers" class="homeStats">22</a></span></span>
   </td>
 
   <td align="left" valign="top">
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">references</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?user=Guest&amp;action=beginTaxonInfo" class="homeStats">taxa</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">collections</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">occurrences</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?action=displayAuthorizers" class="homeStats">contributors</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?action=displayInstitutions" class="homeStats">institutions</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="%%read_url%%?action=displayAuthorizers" class="homeStats">countries</a></span></span>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">references</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">taxa</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">collections</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">occurrences</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayAuthorizers" class="homeStats">contributors</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayInstitutions" class="homeStats">institutions</a></span></span><br>
+      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayAuthorizers" class="homeStats">countries</a></span></span>
   </td></tr>
   </table>
 
   </div>
+
   </div>
 
-  <div style="padding: 0.8em;">
-  </div>
+</div>
 
-  <div class="Features">
+<!-- features, second row -->
+
+<div style="clear: both; position: absolute; bottom: 1em; left: 1.5em; height: 10.5em; width: 50em;">
+
+  <div class="Features" style="width: 10em;">
   <div class="FeatureHeadline">
   <div class="tiny">
    <i>Featured paper</i>
@@ -208,15 +243,12 @@ it's really to have a second body tag, but whatever -->
   <div class="tiny">
 P. J. Wagner et al. 2007. The effects of taxonomic standardization on occurrence-based estimates of diversity. <i>Proc. Roy. Soc Lond. B</i> 274:439-444.</a>
 <!--
-<a href="%%read_url%%?action=PASTQueryForm">Detrended Correspondence Analysis</a>, adapted by &Oslash;yvind Hammer from the <a href="http://folk.uio.no/ohammer/past/index.html">PAST</a> statistics package -->
+<a href="bridge.pl?action=PASTQueryForm">Detrended Correspondence Analysis</a>, adapted by &Oslash;yvind Hammer from the <a href="http://folk.uio.no/ohammer/past/index.html">PAST</a> statistics package -->
   </div>
   </div>
   </div>
 
-  <div style="padding: 0.8em;">
-  </div>
-
-  <div class="Features">
+  <div class="Features" style="width: 8em; margin-right: 0em;">
   <div class="FeatureHeadline">
   <div class="tiny">
   <i>New feature</i>
@@ -225,15 +257,12 @@ P. J. Wagner et al. 2007. The effects of taxonomic standardization on occurrence
 
   <div class="FeatureText">
   <div class="tiny">
-    Find the minimum age of <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=beginTaxonInfo">extant taxon crown groups</a>
+    Find the minimum age of <a class="homeBodyLinks" href="bridge.pl?user=Guest&amp;action=beginTaxonInfo">extant taxon crown groups</a>
   </div>
   </div>
   </div>
 
-  <div style="padding: 0.8em;">
-  </div>
-
-  <div class="Features">
+  <div class="Features" style="float: right; width: 8em; margin-left: 0em; margin-right: 1.5em;">
   <div class="FeatureHeadline">
   <div class="tiny">
   <i>Newest members</i>
@@ -248,41 +277,9 @@ P. J. Wagner et al. 2007. The effects of taxonomic standardization on occurrence
   </div>
   </div>
 
-<!--
-  <div style="padding: 0.8em;">
-  </div>
-
-  <div class="Features">
-  <div class="FeatureHeadline">
-  <div class="tiny">
-  <i>Enterer of the month</i>
-  </div>
-  </div>
-
-feature retired, kept here in a comment to retain the list below
-  <div class="FeatureText">
-  <div class="tiny">
-  Austin Hendy,<br>
-  <a class="homeBodyLinks" href="http://www.uc.edu/geology">University of Cincinatti</a><br>
-  <i>4700 data records</i>
-
-4/07 Hendy
-3/07 whoops!
-2/07 Merkel
-1/07 Alroy
-12/06 Carrano
-11/06 Visaggi
-10/06 Merkel
-9/06 Hendy
-  </div>
-  </div>
-  </div>
--->
-
-  <div style="padding: 0.8em;">
-  </div>
-
-  <div class="Features">
+<!-- use of a float: none causes disagreements between Firefox and Safari
+     that only can be resolved with a lot of explicit tagging -->
+  <div class="Features" style="float: none; left: 2em; margin-left: 0em; margin-right: 4em;">
   <div class="FeatureHeadline">
   <div class="tiny">
   <i>New collections</i>
@@ -291,100 +288,23 @@ feature retired, kept here in a comment to retain the list below
 
   <div class="FeatureText">
   <div class="tiny">
+aklsjdflkajsldkfjakls dddddddd ffffffffj ffffffff ffffffff fffffff 
+aklsjdflkajsldkfjakls dddddddd ffffffffj ffffffff ffffffff fffffff 
+aklsjdflkajsldkfjakls dddddddd ffffffffj ffffffff ffffffff fffffff 
+aklsjdflkajsldkfjakls dddddddd ffffffffj ffffffff ffffffff fffffff 
   <span id="collection_links"></span>
   </div>
   </div>
   </div>
 
-
-</div> <!-- end homeTotals -->
-
-<!-- wraps around all the questions and the rotating text -->
-
-<div id="homeInfo">
-
-  <div style="padding-top: 0.3em;"></div>
- 
-  <div align="right" valign="top" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);" style="float: left; clear: left; padding-top: 0.3em;">
-  <div id="bullet1">
-  </div>
-  </div>
-
-  <div class="questions" style="padding-top: 0.3em;">
-  <span id="questionsShadow">What is the Database?</span>
-  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet1',onbullet); changeText('homeTextBox',WhatIs);" id="questionsOverShadow">What is the Database?</span>
-  </div>
-
-<!--
-  <a href="#" onClick="startAnimation('first_homepage',1)" onDblClick="startAnimation('first_homepage',1,'reverse')">
--->
-  <div style="float: right; position: absolute; right: 0.5em;">
-  <img src="/public/animations/homepage_shadow.png" border="0" style="margin-right: 0.5em;">
-  <span style="position: absolute; left: -2px; top: 0px;">
-  <img name="homepage_anim" alt="animation" src="/public/animations/homepage/homepage_firstframe.gif" height="153" width="129" border="0">
-  </span>
-  </div>
-  <!--
-  </a>
-  -->
-
-  &nbsp;
-  &nbsp;
-
-  <div align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);" style="float: left; clear: left;">
-  <div id="bullet2">
-  </div>
-  </div>
-
-  <div class="questions">
-  <span id="questionsShadow">What kinds of data can you see?</span>
-  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet2',onbullet); changeText('homeTextBox',Contents);" id="questionsOverShadow">What kinds of data can you see?</span>
-  </div>
-
-  <div align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);" style="float: left; clear: left;">
-  <div id="bullet3">
-  </div>
-  </div>
-
-  <div class="questions">
-  <span id="questionsShadow">What can you do with the data?</span>
-  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet3',onbullet); changeText('homeTextBox',Tools);" id="questionsOverShadow">What can you do with the data?</span>
-  </div>
-
-  <div align="right" valign="top" height="2%" onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);" style="float: left; clear: left;">
-  <div id="bullet4">
-  </div>
-  </div>
-
-  <div class="questions">
-  <span id="questionsShadow">How can you get involved?</span>
-  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet4',onbullet); changeText('homeTextBox',GetInvolved);" id="questionsOverShadow">How can you get involved?</span>
-  </div>
-
-  <div onMouseOver="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);" style="float: left; clear: left;">
-  <div id="bullet5">
-  </div>
-  </div>
-
-  <div class="questions">
-  <span id="questionsShadow">Other information...</span>
-  <span onClick="changeBullet(lastbullet,offbullet); changeBullet('bullet5',onbullet); changeText('homeTextBox',OtherInfo);" id="questionsOverShadow">Other information...</span>
-  </div>
-
-
-  <div style="padding-top: 11em; padding-left: 0.75em; padding-right: 0.5em;">
-  <div class="homeTextBoxes" id="homeTextBoxShadow">
-  <div class="homeTextBoxes" id="homeTextBoxShadow2">
-  <div class="homeTextBoxes small" id="homeTextBox">
-  </div>
-  </div>
-  </div>
-  </div>
-
-</div> <!-- end homeInfo -->
-
-<div style="position: absolute; bottom: 0; right: 0;">
-<a href="%%read_url%%?action=listCollections"><span style="font-size: .25em; color: #E0E0E0;">list collections</span></a>
-<a href="%%read_url%%?action=listTaxa"><span style="font-size: .25em; color: #E0E0E0;">list taxa</span></a>
 </div>
+
+
+<!-- needed to extend gray box below other stuff -->
+
+  <div style="clear: both;"></div>
+
+</div>
+
+</body>
 
