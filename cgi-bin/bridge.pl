@@ -1022,12 +1022,11 @@ sub displayCollResults {
 				print " rows ".($rowOffset+1)." to ";
 				my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
 				print $printRows;
-				print "</h4>\n";
 			} else {
 				print " the first ";
 				my $printRows = ($ofRows < $rowOffset + $limit) ? $ofRows : $rowOffset + $limit;
 				print $printRows;
-				print " rows</h4>\n";
+				print " rows";
 			}
 		}
 		print "</p>\n";
@@ -1769,7 +1768,7 @@ sub processTaxonSearch {
 
                 if (@typoResults) {
                     print "<div align=\"center\"><table><tr><td align=\"center\">";
-    		        print "<h4>'<i>" . $q->param('taxon_name') . "</i>' was not found</h4>\n<br>\n";
+    		        print "<p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">'<i>" . $q->param('taxon_name') . "</i>' was not found</p>\n<br>\n";
                     print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
                     print "<p><div align=\"left\"><ul>";
                     foreach my $name (@typoResults) {
@@ -1812,7 +1811,7 @@ sub processTaxonSearch {
 
             if (@typoResults) {
                 print "<div align=\"center\"><table><tr><td align=\"center\">";
-    		    print "<h4>'<i>" . $q->param('taxon_name') . "</i>' was not found</h4>\n<br>\n";
+    		    print "<p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">'<i>" . $q->param('taxon_name') . "</i>' was not found</p>\n<br>\n";
                 print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
                 print "<p><div align=\"left\"><ul>";
                 foreach my $row (@typoResults) {
@@ -1861,9 +1860,9 @@ sub processTaxonSearch {
 		print "<div align=\"center\">\n";
         print "<table><tr><td align=\"center\">";
         if ($q->param("taxon_name")) { 
-    		print "<h4>Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</h4>\n<br>\n";
+    		print "<p class=\"pageTitle\">Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</p>\n<br>\n";
         } else {
-    		print "<h4>Select a taxon to edit</h4>\n";
+    		print "<p class=\"pageTitle\">Select a taxon to edit</p>\n";
         }
 
         # now create a table of choices
