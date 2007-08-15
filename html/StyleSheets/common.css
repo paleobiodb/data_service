@@ -128,6 +128,10 @@ H6 {font-size: .9em;}
 	color: #404040;
 }
 
+.prompt	{
+	color: #404040;
+}
+
 /* the menu at the top and bottom of each page. */
 .menu {
 	color: white;
