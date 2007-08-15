@@ -63,8 +63,8 @@ A:hover.menu {
 }
 
 A:link.homeBodyLinks	{
-	color : #0030D0;
-	#color : #3050B0;
+	color : #0050A0;
+	#color : #0030D0;
 }       
 
 A:visited.homeBodyLinks	{
@@ -216,7 +216,6 @@ H6 {font-size: .9em;}
 #homeTotals	{
     background-image: url(/public/PDbg-reversed.gif);
     background-position: 13em 0em;
-    /*border-bottom: 1px #D0D0D0 solid;*/
     text-align: center;
     margin-left: 0.5em;
     padding-top: 3em;
@@ -307,27 +306,28 @@ H6 {font-size: .9em;}
 }
 
 .Features	{
-    background-color: #F8F8F8;
+    background-color: white;
+    float: left;
+    clear: none;
+    height: 10em;
+    margin-left: 1em;
+    margin-right: 1em;
     padding-left: 0.5em;
     padding-right: 0.5em;
-    margin-left: 1.25em;
-    margin-right: 1.75em;
-    left: -1px;
-    top: -1px;
     text-align: left;
     font-family: Verdana, Arial, Helvetica, sans-serif;
     border-left: 1px solid #D0D0D0;
     border-right: 1px solid #B0B0B0;
     border-top: 1px solid #D0D0D0;
     border-bottom: 1px solid #B0B0B0;
+    overflow: hidden;
 /* Explorer demands to know this - go figure */
     position: relative;
 }
 
 .FeatureHeadline	{
     text-align: center;
-    background-color: #5080FF;
-    color: #FFFFFF;
+    background-color: #C0C0D0;
     margin-left: -0.5em;
     margin-right: -0.5em;
     margin-bottom: -0.25em;
@@ -364,7 +364,9 @@ H6 {font-size: .9em;}
     background-image: url(/public/PDbg.gif);
     color: 404040;
     border: 1px solid #808080;
+    height: 21em;
     padding: 16px;
+    padding-top: 30px;
     position: relative;
     left: -2px;
 }
@@ -377,16 +379,21 @@ html,body	{
 
 .questions	{
     font-family: "Century Gothic", Verdana, Arial, Helvetica, sans-serif;
-    font-size: 1.25em;
+    font-size: 1em;
     color: #303030;
     float: left;
-    padding-left: 0.5em;
-    padding-bottom: 0.5em;
+    clear: both;
+    padding: 0.5em;
+    padding-left: 0.9em;
+    width: 3.5em;
+    background-color: white;
+    border-left: 1px solid gray;
+    border-bottom: 1px solid gray;
 }
 
 #questionsShadow	{
     position: absolute;
-    left: 1.8em;
+    left: 3.1em;
     color: #D0D0D0;
 }
 
