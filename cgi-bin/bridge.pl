@@ -540,7 +540,7 @@ sub displayMapOfCollection {
         } elsif ($coll->{'country'}) {
             $time_place .= ", $coll->{country}";
         }
-        print '<div align="center"><h3>'.$time_place.'</h3></div>';
+        print '<div align="center"><p class="pageTitle">'.$time_place.'</p></div>';
     }
     print '<div align="center">';
     # MAP USES $q->param("taxon_name") to determine what it's doing.
@@ -590,7 +590,7 @@ sub displaySimpleMap {
 	
     # now actually draw the map
     require Map;
-    print '<div align="center"><h3>Map</h3></div>';
+    print '<div align="center"><p class="pageTitle">Map</p></div>';
     print '<div align="center">';
 
     # we need to get the number of collections out of dataRowsRef
@@ -1015,7 +1015,7 @@ sub displayCollResults {
 
         print "<center>";
         if ($ofRows > 1) {
-		print "<h3>There are $ofRows matches\n";
+		print "<p class=\"pageTitle\">There are $ofRows matches\n";
 		if ($ofRows > $limit) {
 			print " - here are";
 			if ($rowOffset > 0) {
@@ -1030,11 +1030,11 @@ sub displayCollResults {
 				print " rows</h4>\n";
 			}
 		}
-		print "</h3>\n";
+		print "</p>\n";
 	} elsif ( $ofRows == 1 ) {
-		print "<h3>There is exactly one match</h3>\n";
+		print "<p class=\"pageTitle\">There is exactly one match</p>\n";
 	} else	{
-		print "<h3>There are no matches</h3>\n";
+		print "<p class=\"pageTitle\">There are no matches</p>\n";
 	}
 	print "</center>\n";
 
@@ -1202,7 +1202,7 @@ sub displayCollResults {
 			return;
 		} else {
 			print $hbo->stdIncludes( "std_page_top" );
-			print "<center>\n<h3>Your search produced no matches</h3>";
+			print "<center>\n<p class=\"pageTitle\">Your search produced no matches</p>";
 			print "<p>Please try again with fewer search terms.</p>\n</center>\n";
 		}
     }
@@ -1801,7 +1801,7 @@ sub processTaxonSearch {
                     Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);
                 }
             } else {
-                print "<div align=\"center\"><h3>No taxonomic names found</h3></div>";
+                print "<div align=\"center\"><p class=\"pageTitle\">No taxonomic names found</p></div>";
             }
         } else {
             # Try to see if theres any near matches already existing in the DB
@@ -2584,7 +2584,7 @@ sub displayOccurrenceAddEdit {
 	# don't do this if the user already has gone through one of those
 	#  links, so rows_to_display has a useable value
 	if ( $#all_data > 49 && $q->param("rows_to_display") !~ / to / )	{
-		print "<center><h3>Please select the rows you wish to edit</h3></center>\n\n";
+		print "<center><p class=\"pageTitle\">Please select the rows you wish to edit</p></center>\n\n";
 		print "<center>\n";
 		print "<table><tr><td>\n";
 		print "<ul>\n";
@@ -3083,7 +3083,7 @@ sub processOccurrenceTable {
     $can_modify->{$s->get('authorizer_no')} = 1;
 
     print $hbo->stdIncludes('std_page_top');
-    print '<div align="center"><h3>Occurrence table entry results</h3></div>';
+    print '<div align="center"><p class="pageTitle">Occurrence table entry results</p></div>';
     print qq|<form method="post" action="$WRITE_URL">|;
     print '<input type="hidden" name="action" value="startProcessReclassifyForm">';
     print '<div align="center"><table cellpadding=3 cellspacing=0 border=0>';
@@ -3949,7 +3949,7 @@ sub displayOccsForReID {
 		print qq|<center><p><input type=submit value="Save reidentifications"></center></p>\n|;
 		print qq|<input type="hidden" name="last_occ_num" value="$lastOccNum">\n|;
 	} else	{
-		print "<center><h3>Sorry! No matches were found</h3></center>\n";
+		print "<center><p class=\"pageTitle\">Sorry! No matches were found</p></center>\n";
 		print "<p align=center><b>Please <a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">try again</a> with different search terms</b></p>\n";
 	}
 	print "</form>\n";
@@ -4118,8 +4118,12 @@ sub displayTaxonomicNamesAndOpinions {
     my $ref = Reference->new($dbt,$q->param('reference_no'));
     if ($ref) {
         $q->param('goal'=>'authority');
-        processTaxonSearch($dbt, $hbo, $q, $s);
-        Opinion::displayOpinionChoiceForm($dbt,$s,$q);
+        if ( $q->param('display') ne "opinions" )	{
+            processTaxonSearch($dbt, $hbo, $q, $s);
+        }
+        if ( $q->param('display') ne "authorities" )	{
+            Opinion::displayOpinionChoiceForm($dbt,$s,$q);
+        }
     } else {
         print "<div align=\"center\">".Debug::printErrors(["No valid reference supplied"])."</div>";
     }
