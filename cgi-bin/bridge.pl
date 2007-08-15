@@ -778,8 +778,9 @@ sub displayPage {
 }
 
 sub displaySearchRefs {
+    my $error = shift;
     print $hbo->stdIncludes( "std_page_top" );
-    Reference::displaySearchRefs($dbt,$q,$s,$hbo);
+    Reference::displaySearchRefs($dbt,$q,$s,$hbo,$error);
     print $hbo->stdIncludes( "std_page_bottom" );
 }
 
@@ -1862,7 +1863,11 @@ sub processTaxonSearch {
         if ($q->param("taxon_name")) { 
     		print "<p class=\"pageTitle\">Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</p>\n<br>\n";
         } else {
-    		print "<p class=\"pageTitle\">Select a taxon to edit</p>\n";
+		if ( $s->isDBMember() )	{
+    			print "<p class=\"pageTitle\">Select a taxon to edit</p>\n";
+		} else	{
+    			print "<p class=\"pageTitle\">Taxonomic names from ".Reference::formatShortRef($dbt,$q->param("reference_no"))."</p>\n";
+        	}
         }
 
         # now create a table of choices
@@ -1873,8 +1878,12 @@ sub processTaxonSearch {
             # Check the button if this is the first match, which forces
             #  users who want to create new taxa to check another button
             my ($name,$authority) = Taxon::formatTaxon($dbt, $row,'return_array'=>1);
-            print qq|<li><a href=\"$WRITE_URL?action=$next_action&amp;goal=$goal&amp;taxon_name=$taxon_name&amp;taxon_no=$row->{taxon_no}\">|;
-            print "$name</a>$authority</li>";
+            if ( $s->isDBMember() )	{
+                print qq|<li><a href=\"$WRITE_URL?action=$next_action&amp;goal=$goal&amp;taxon_name=$taxon_name&amp;taxon_no=$row->{taxon_no}\">|;
+                print "$name</a>$authority</li>\n";
+            } else	{
+                print "<li>$name$authority</li>\n";
+            }
         }
 
         # always give them an option to create a new taxon as well
