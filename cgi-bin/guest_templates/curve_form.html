@@ -1,7 +1,7 @@
 <script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                   
 
 <div align="center">
-<h2>Paleobiology Database diversity curve request form</h2>
+<p class="pageTitle">Paleobiology Database diversity curve request form</p>
 </div>
 
 
@@ -32,7 +32,6 @@
 <input type=hidden name="action" value="displayCurveResults">
 
 <div id="panel1" class="panel">
-<center><h3>Basic options</h3></center> 
 
 <table cellpadding=4>
 <tr>
@@ -148,7 +147,6 @@ This form allows you to request a diversity curve with assorted statistics.
 
 
 <div id="panel2" class="panel">
-<center><h3>Subsampling options</h3></center> 
 
 <table cellpadding=4>
 <tr>
@@ -303,12 +301,12 @@ This form allows you to request a diversity curve with assorted statistics.
 
 
 <div id="panel3" class="panel">
-<center><h3>Raw data columns</h3></center> 
 
 <table cellpadding=4>
 
 <tr><td class="small" valign="top">
 <b><input type="checkbox" onClick="checkAll(this,'raw');"> Check all</b>
+&nbsp;&nbsp;<b><input type="checkbox" onClick="checkAll(this,'r_estimate');"> Check estimates</b>
 </td></tr>   
 
 <tr><td class="small" valign="top" nowrap>
@@ -334,19 +332,19 @@ This form allows you to request a diversity curve with assorted statistics.
 
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="raw" name="print_gap_analysis_stat_raw" value="YES"> Gap analysis sampling stat
-<input type="checkbox" class="raw" name="print_gap_analysis_estimate_raw" value="YES"> Gap analysis diversity estimate
+<input type="checkbox" class="raw r_estimate" name="print_gap_analysis_estimate_raw" value="YES"> Gap analysis diversity estimate
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="raw" name="print_three_timer_stat_raw" value="YES"> Three timer sampling stat
-<input type="checkbox" class="raw" name="print_three_timer_estimate_raw" value="YES"> Three timer diversity estimate
+<input type="checkbox" class="raw r_estimate" name="print_three_timer_estimate_raw" value="YES"> Three timer diversity estimate
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="raw" name="print_chao-2_raw" value="YES"> Chao-2 estimate
-<input type="checkbox" class="raw" name="print_ice_raw" value="YES"> Incidence-based coverage estimate
-<input type="checkbox" class="raw" name="print_jolly-seber_raw" value="YES"> Jolly-Seber estimate
-<input type="checkbox" class="raw" name="print_pie" value="YES"> Evenness of occurrences (PIE)
+<input type="checkbox" class="raw r_estimate" name="print_chao-2_raw" value="YES"> Chao-2 estimate
+<input type="checkbox" class="raw r_estimate" name="print_ice_raw" value="YES"> Incidence-based coverage estimate
+<input type="checkbox" class="raw r_estimate" name="print_jolly-seber_raw" value="YES"> Jolly-Seber estimate
+<input type="checkbox" class="raw r_estimate" name="print_pie" value="YES"> Evenness of occurrences (PIE)
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
@@ -369,28 +367,28 @@ This form allows you to request a diversity curve with assorted statistics.
 
 
 <div id="panel4" class="panel">
-<center><h3>Subsampling columns</h3></center> 
 
 <table cellpadding=4>
 
 <tr><td class="small" valign="top">
 <b><input type="checkbox" onClick="checkAll(this,'subsampling');"> Check all</b>
+&nbsp;&nbsp;<b><input type="checkbox" onClick="checkAll(this,'s_estimate');"> Check estimates</b>
 </td></tr>   
 
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="subsampling" name="print_base_ss" value="YES" checked> Base (Ma)
 <input type="checkbox" class="subsampling" name="print_midpoint_ss" value="YES" checked> Midpoint (Ma)
 <input type="checkbox" class="subsampling" name="print_items" value="YES" checked> Items sampled
-<input type="checkbox" class="subsampling" name="print_median" value="YES"> Median diversity
-<input type="checkbox" class="subsampling" name="print_ci" value="YES"> 1-sigma CI
+<input type="checkbox" class="subsampling s_estimate" name="print_median" value="YES"> Median diversity
+<input type="checkbox" class="subsampling s_estimate" name="print_ci" value="YES"> 1-sigma CI
 <input type="checkbox" class="subsampling" name="print_mean" value="YES" checked> Mean diversity
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="subsampling" name="print_three_timers_ss" value="YES"> Mean three timers
-<input type="checkbox" class="subsampling" name="print_corrected_bc" value="YES"> Corrected BC diversity
-<input type="checkbox" class="subsampling" name="print_estimated_midpoint" value="YES"> Estimated midpoint diversity
-<input type="checkbox" class="subsampling" name="print_estimated_mesa" value="YES"> Estimated mesa diversity
+<input type="checkbox" class="subsampling s_estimate" name="print_corrected_bc" value="YES"> Corrected BC diversity
+<input type="checkbox" class="subsampling s_estimate" name="print_estimated_midpoint" value="YES"> Estimated midpoint diversity
+<input type="checkbox" class="subsampling s_estimate" name="print_estimated_mesa" value="YES"> Estimated mesa diversity
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
@@ -413,19 +411,19 @@ This form allows you to request a diversity curve with assorted statistics.
 
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="subsampling" name="print_gap_analysis_stat_ss" value="YES"> Gap analysis sampling stat
-<input type="checkbox" class="subsampling" name="print_gap_analysis_estimate_ss" value="YES"> Gap analysis diversity estimate
+<input type="checkbox" class="subsampling s_estimate" name="print_gap_analysis_estimate_ss" value="YES"> Gap analysis diversity estimate
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="subsampling" name="print_three_timer_stat_ss" value="YES"> Three timer sampling stat
-<input type="checkbox" class="subsampling" name="print_three_timer_estimate_ss" value="YES"> Three timer diversity estimate
+<input type="checkbox" class="subsampling s_estimate" name="print_three_timer_estimate_ss" value="YES"> Three timer diversity estimate
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="subsampling" name="print_chao-2_ss" value="YES"> Chao-2 estimate
-<input type="checkbox" class="subsampling" name="print_ice_ss" value="YES"> Incidence-based coverage estimate
-<input type="checkbox" class="subsampling" name="print_jolly-seber_ss" value="YES"> Jolly-Seber estimate
-<input type="checkbox" class="subsampling" name="print_michaelis-menten" value="YES"> Michaelis-Menten estimate
+<input type="checkbox" class="subsampling s_estimate" name="print_chao-2_ss" value="YES"> Chao-2 estimate
+<input type="checkbox" class="subsampling s_estimate" name="print_ice_ss" value="YES"> Incidence-based coverage estimate
+<input type="checkbox" class="subsampling s_estimate" name="print_jolly-seber_ss" value="YES"> Jolly-Seber estimate
+<input type="checkbox" class="subsampling s_estimate" name="print_michaelis-menten" value="YES"> Michaelis-Menten estimate
 </td></tr>
 
 </table>
