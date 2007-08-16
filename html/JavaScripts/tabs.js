@@ -95,5 +95,21 @@ function hideTabText(tabNum) {
     } else {
         document.getElementById('tab'+tabNum).className = "tabLoadingOff";
     }
-} 
+}
+
+// neeeded because of a Firefox bug
+function showCommonNameLink() {
+    if ( navigator.appName == "Netscape" && navigator.userAgent.indexOf("Safari") == -1  ){
+        document.getElementById("commonClick").style.visibility = "visible";
+    }
+}
+function hideCommonNames() {
+    if ( navigator.appName == "Netscape" && navigator.userAgent.indexOf("Safari") == -1  ){
+        var commonName = document.getElementsByName("commonName");
+        for ( i = 0; i<= commonName.length; i++ )	{
+            commonName[i].style.visibility = "hidden";
+        }
+    }
+}
+
 
