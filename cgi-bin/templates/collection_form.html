@@ -4,6 +4,22 @@
 
 var bad_info = ""; // Global variable
 
+window.onload = changeName;
+
+function changeName()	{
+
+    var collname = document.forms[0].collection_name.value;
+
+    for ( i = 1; i <= 6; i++ )	{
+	if ( ! collname )	{
+        	document.getElementById('panelHeader'+i).innerHTML = '<span class="large">New collection</span>';
+	} else	{
+        	document.getElementById('panelHeader'+i).innerHTML = '<span class="large">' + collname + '</span>';
+	}
+    }
+
+}
+
 function checkFields() {
     doCheckFieldsBasicInfo();
     doCheckFieldsGeography();
@@ -304,10 +320,6 @@ function doCheckFieldsTaphonomy() {
 // End -->
 </script>
 
-<div align="center"><h2>
-<span id="page_title"></span>
-</h2></div>
-
    <div align=center>
    <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
    <td id="tab1" class="tabOff" style="white-space: nowrap;"
@@ -344,18 +356,20 @@ function doCheckFieldsTaphonomy() {
   <input id="collection_no" type="hidden">
 
 <div id="panel1" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em; padding-top: 1em; padding-bottom: 1em;">
+  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <span class="displayPanelHeader" id="panelHeader1"></span>
+  <div class="displayPanelContents" style="padding-top: 0.75em;">
 
   <table border=0 cellpadding=0 cellspacing=0><tr><td>
 
-  <p style="margin-bottom: 2em;">
+  <p class="small" style="margin-bottom: 1.5em;">
     <span class="required">Required fields are in red.</span> 
-	Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
+    Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
   </p>
   
   <table border=0 width=620>
     <tr>
-      <td valign="top" colspan="2"><b>Research group(s):</b></td>
+      <td valign="top" colspan="2">Research group(s):</td>
       <td colspan="2">
         <input id="research_group" type="hidden" value="" replace="NO">
         <span class="verysmall" style="white-space: nowrap;"><input id="research_group" type="checkbox" value="decapod"> decapod</span>
@@ -388,14 +402,14 @@ function doCheckFieldsTaphonomy() {
     <tr>
       <td>
         <span class="required">Collection name</span>:<br>
-        <input id="collection_name" size=50 maxlength=255><br>
+        <input id="collection_name" size="50" maxlength="255" onBlur="changeName();"><br>
         <i><span class="tiny">Keep it short: do not include the stratigraphic age, location details, or the name of the formation, country, state, etc. unless you have to</i></span>
       </td>
     </tr>
     <tr>
       <td>
         Also known as:<br>
-        <textarea id="collection_aka" rows=1 wrap=virtual cols=80></textarea>
+        <textarea id="collection_aka" rows=1 wrap="virtual" cols="80"></textarea>
       </td>
     </tr>
     <tr>
@@ -428,9 +442,12 @@ function doCheckFieldsTaphonomy() {
   <span id="page_footer"></span>
   </td></tr></table></div>
 </div>
+</div>
 
 <div id="panel2" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em; padding-top: 1em; padding-bottom: 1em;">
+  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <span class="displayPanelHeader" id="panelHeader2"></span>
+  <div class="displayPanelContents" style="padding-top: 0.75em;">
 
   <table border=0 cellpadding=0 cellspacing=0><tr><td>
 
@@ -479,7 +496,7 @@ function doCheckFieldsTaphonomy() {
   </table>
 
   <p class="small"><i>*Enter either minutes-seconds or decimal value, but not both.<br>
-   See the <A HREF="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</A>
+   See the <a href="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</a>
   for web sites that provide coordinate data.</i></p>
   <p>
 
@@ -506,7 +523,7 @@ function doCheckFieldsTaphonomy() {
   <p>
   Location details (quadrangle, township and range, etc.):
   <br>
-  <textarea id="geogcomments" name=geogcomments rows=4 wrap=virtual cols=80></textarea>
+  <textarea id="geogcomments" name=geogcomments rows=4 wrap="virtual" cols="80"></textarea>
 
   <p>
      <div align="center"><span id="page_submit_button"></span></div>
@@ -514,9 +531,12 @@ function doCheckFieldsTaphonomy() {
   <span id="page_footer"></span>
     </td></tr></table></div>
 </div>
+</div>
 
 <div id="panel3" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em; padding-top: 1em; padding-bottom: 1em;">
+  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <span class="displayPanelHeader" id="panelHeader3"></span>
+  <div class="displayPanelContents" style="padding-top: 0.75em;">
 
   <table border=0 cellpadding=0 cellspacing=0><tr><td>
 
@@ -592,10 +612,10 @@ function doCheckFieldsTaphonomy() {
   </table>
   
   <p>
-    Scale of stratigraphic resolution:<span class="verysmall"><select class="verysmall" id="stratscale"></select></span>
+    Scale of stratigraphic resolution: <span class="verysmall"><select class="verysmall" id="stratscale"></select></span>
   </p>
   <p>
-    Comments about stratigraphy:<br><textarea id="stratcomments" rows=4 wrap=virtual cols=80></textarea>
+    Comments about stratigraphy:<br><textarea id="stratcomments" rows=4 wrap="virtual" cols="80"></textarea>
   </p>
 
   <p>
@@ -604,31 +624,37 @@ function doCheckFieldsTaphonomy() {
   <span id="page_footer"></span>
   </td></tr></table></div>   
 </div>
+</div>
 
 <div id="panel4" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em; padding-top: 1em; padding-bottom: 1em;">
+  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <span class="displayPanelHeader" id="panelHeader4"></span>
+  <div class="displayPanelContents" style="padding-top: 0.75em;">
 
 <table border=0 cellpadding=0 cellspacing=0><tr><td>
 
-  <h4>Primary lithology</h4>
+  <p class="large">Primary lithology</p>
   <span class="verysmall"><select class="verysmall" id="lithification"></select></span>
     <span class="verysmall"><select class="verysmall" id="lithology1"></select></span>
   &nbsp;Fossils collected from this lithology?&nbsp;<input name="fossilsfrom1" type="checkbox" value="Y">
   <br>
   <i><p class="small">See the 
-  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</A>
+  <a href="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</a>
   for instructions.</i></p>
-  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</A>:
-  <br>
   
-  <table border=0>
-    <tr>
+  <table border="0" cellspacing="2px" cellpadding="2px" width="6em">
+    <tr valign="bottom">
       <td>
+        <div style="margin-bottom: 0.3em;">
+        <a href="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</a>:
+        </div>
+        <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
+        <span class="verysmall""><select class="verysmall" id="lithadj"></select></span>
+      </td><td>
         <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
         <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
         <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
-        <span class="verysmall"><select class="verysmall" id="lithadj"></select></span><br>
-        <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
+      </td><td>
         <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
         <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
         <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
@@ -636,22 +662,25 @@ function doCheckFieldsTaphonomy() {
     </tr>
   </table>
 
-  <H4>Secondary lithology</H4>
+  <p class="medium>Secondary lithology</p>
   <span class="verysmall"><select class="verysmall" id="lithification2"></select></span>
 	<span class="verysmall"><select class="verysmall" id="lithology2"></select></span>
   &nbsp;Fossils collected from this lithology?&nbsp;<input name="fossilsfrom2" type="checkbox" value="Y">
   <p>
-  <A HREF="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</A>:
-  <br>
   
-  <table border=0>
-    <tr>
+  <table border="0" cellspacing="2px" cellpadding="2px" width="6em">
+    <tr valign="bottom">
       <td>
+        <div style="margin-bottom: 0.3em;">
+        <a href="javascript:tipsPopup('/public/tips/lithtips.html')">Lithology adjectives</a>:
+        </div>
+        <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
+        <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
+      </td><td>
         <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
         <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
         <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
-        <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span><br>
-        <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
+      </td><td>
         <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
         <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
         <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
@@ -660,10 +689,10 @@ function doCheckFieldsTaphonomy() {
   </table>
   
   <p>
-  Original, complete description of lithology:<br><textarea id="lithdescript" rows=4 wrap=virtual cols=80></textarea>
+  Original, complete description of lithology:<br><textarea id="lithdescript" rows="3" wrap="virtual" cols="80"></textarea>
   </p>
  
-  <h4>Environment and setting</h4>
+  <p class="large">Environment and setting</p>
   
   <table border=0>
     <tr>
@@ -673,15 +702,15 @@ function doCheckFieldsTaphonomy() {
 	<span class="tiny">
 	<br>
         Read about
-  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">carbonate</A>,
-  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">siliciclastic</A> or
-  		<A HREF="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">terrestial</A> environments.&nbsp;&nbsp;
+  		<a href="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">carbonate</a>,
+  		<a href="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">siliciclastic</a> or
+  		<a href="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">terrestial</a> environments.&nbsp;&nbsp;
 	</span>
         <p>
       </td>
 
       <td valign=top>
-  	<A HREF="javascript:tipsPopup('/public/tips/environtips.html#TectonicSetting')">Tectonic setting</a>:<br>
+  	<a href="javascript:tipsPopup('/public/tips/environtips.html#TectonicSetting')">Tectonic setting</a>:<br>
         <span class="verysmall"><select class="verysmall" id="tectonic_setting"></select></span>
       </td>
     </tr>
@@ -701,7 +730,7 @@ function doCheckFieldsTaphonomy() {
   <p>
     Comments on environment and setting:
     <br>
-    <textarea id="geology_comments" rows=4 wrap=virtual cols=80></textarea>
+    <textarea id="geology_comments" rows="3" wrap="virtual" cols="80"></textarea>
   </p>
   
   <p>
@@ -710,9 +739,12 @@ function doCheckFieldsTaphonomy() {
   <span id="page_footer"></span>
   </td></tr></table></div>  
 </div>
+</div>
 
 <div id="panel5" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em; padding-top: 1em; padding-bottom: 1em;">
+  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <span class="displayPanelHeader" id="panelHeader5"></span>
+  <div class="displayPanelContents" style="padding-top: 0.75em;">
 
 <table border=0 cellpadding=0 cellspacing=0><tr><td>
 
@@ -904,7 +936,7 @@ original material is preserved!</i></p>
   <p>
 </div> <!-- div show=taphonomy end -->
 
-	  <A HREF="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</A>:
+    <a href="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</a>:
       <span class="tiny">
       <input id="assembl_comps" type="hidden" value="" replace="NO">
       <input id="assembl_comps" type=checkbox value="macrofossils"> macrofossils
@@ -1061,7 +1093,7 @@ original material is preserved!</i></p>
   <p>
     Comments on taphonomy:
     <br>
-    <textarea id="taphonomy_comments" rows=4 wrap=virtual cols=80></textarea>
+    <textarea id="taphonomy_comments" rows=4 wrap="virtual" cols="80"></textarea>
   </p>
   <p>
      <div align="center"><span id="page_submit_button"></span></div>
@@ -1069,9 +1101,12 @@ original material is preserved!</i></p>
   <span id="page_footer"></span>
   </td></tr></table></div>
 </div>
+</div>
 
 <div id="panel6" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em; padding-top: 1em; padding-bottom: 1em;">
+  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <span class="displayPanelHeader" class="tiny" id="panelHeader6"></span>
+  <div class="displayPanelContents" style="padding-top: 0.75em;">
 
 <table border=0 cellpadding=0 cellspacing=0><tr><td>
 
@@ -1261,10 +1296,10 @@ original material is preserved!</i></p>
     Collectors: <input name="collectors" value="" size="30"> &nbsp;&nbsp; Collection dates: <input name="collection_dates" value="" size="16">
   </p>
   <p>
-    Comments about collecting methods:<br><textarea id="collection_comments" rows=4 wrap=virtual cols=80></textarea>
+    Comments about collecting methods:<br><textarea id="collection_comments" rows="3" wrap="virtual" cols="80"></textarea>
   </p>
   <p>
-    Comments on the taxonomic list:<br><textarea id="taxonomy_comments" rows=4 wrap=virtual cols=80></textarea>
+    Comments on the taxonomic list:<br><textarea id="taxonomy_comments" rows="3" wrap="virtual" cols="80"></textarea>
   </p>
 
   <p>
@@ -1272,6 +1307,7 @@ original material is preserved!</i></p>
   </p>
   <span id="page_footer"></span>
   </td></tr></table></div>
+</div>
 </div>
   
 </form>
