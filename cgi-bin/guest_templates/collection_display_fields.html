@@ -8,10 +8,14 @@
 
 <div align="left" class="verysmall" style="float: left; clear: none; margin-left: 1em; margin-bottom: 3em;">
 
+   <span show="taxa_list">
    <div id="tab1" class="tabOff" style="width: 7em;"
       onClick = "showPanel(1); showCommonNameLink();"
       onMouseOver="hover(this);"
       onMouseOut="setState(1)">Taxa</div>
+   </span>
+   <!-- needed to fool tabs.js into working -->
+   <span hide="taxa_list" id="tab1" name="commonName"></span>
    <div id="tab2" class="tabOff" style="width: 7em;"
       onClick = "showPanel(2); hideCommonNames();"
       onMouseOver="hover(this);"
@@ -265,6 +269,12 @@
 </div>
 
 <script language="JavaScript" type="text/javascript">
-    showPanel(1);
+<!-- Begin
+if ( /[A-Za-z]/.test( document.getElementById("panel1").innerHTML ) )	{
+   	showPanel(1);
+} else	{
+	showPanel(2);
+}
+// End -->
 </script> 
 
