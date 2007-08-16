@@ -55,7 +55,7 @@ A:active.menu {
 
 A:hover.menu { 
 	color : black; font-size : 0.85em; 
-    border: 0px solid white;
+	border: 0px solid white;
 	/* top, right, bottom, left*/
 	/*padding: 0px 4px 0px 4px;*/
 	padding: 2px 5px 2px 5px;
@@ -94,6 +94,13 @@ A:hover.homeStats	{
 	color : #C80078;
 }       
 
+A:link.boring	{
+	color : #7070FF;
+}       
+
+A:hover.boring	{
+	color : #C80078;
+}       
 
 H1, H2, H3, H4, H5, H6 { 
 	padding: 0px 0px 0px 0px;
@@ -817,12 +824,6 @@ span.nonEditable {
 
 .displayPanelContent {
     background-image: url(/public/PDbg.gif);
-}
-
-.displayPanelLabel {
-    padding-right: 1em;
-    width: 1%;
-    white-space: nowrap;
 }
 
 /*.displayPanelText tbody,.displayPanelText {*/
