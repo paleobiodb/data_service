@@ -106,7 +106,7 @@ function showCommonNameLink() {
 function hideCommonNames() {
     if ( navigator.appName == "Netscape" && navigator.userAgent.indexOf("Safari") == -1  ){
         var commonName = document.getElementsByName("commonName");
-        for ( i = 0; i<= commonName.length; i++ )	{
+        for ( i = 1; i<= commonName.length; i++ )	{
             commonName[i].style.visibility = "hidden";
         }
     }
