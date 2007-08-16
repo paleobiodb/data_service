@@ -1965,6 +1965,7 @@ function showName()	{
 	if ($s->isDBMember()) {
 		$return .= qq| - <a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$options{'collection_no'}">Edit taxonomic list</a>|;
 		$return .= qq| - <a href="$WRITE_URL?action=displayOccsForReID&collection_no=$options{'collection_no'}">Reidentify taxa</a>|;
+ 		$return .= $options{'save_links'};
 	}
 	$return .= "</div></p>\n</div>\n";
 
