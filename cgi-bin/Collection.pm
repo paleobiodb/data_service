@@ -1201,33 +1201,7 @@ sub displayCollectionDetails {
         $links .=  qq|<a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a>|;  
         $links .= "</div></p>";
     }
-
-
-    # More links at bottom
-	$links .= '<p><div align="center">';
-	# have to have at least three taxa
-	my @occrows = split /\n/,$taxa_list;
-	my $hasabund;
-	for my $or ( @occrows )	{
-		if ( $or =~ /specimen|individual/ && $or !~ /%-/ )	{
-			$hasabund++;
-		}
-	}
-
-	if ( $hasabund > 2 )	{
-		$links .= qq|<a href="$READ_URL?action=rarefyAbundances&collection_no=$collection_no">Analyze abundance data</a> - |;
-	}
-
-	$links .= qq|<a href="$READ_URL?action=displayCollectionEcology&collection_no=$collection_no">Tabulate ecology data</a>|;
-
-    if ($s->isDBMember()) {
-    	$links .= qq| - <a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a>|;
-        if($taxa_list ne "") {
-	        $links .= qq| - <a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a>|;
-
-        }
-    }
-    $links .= "</div></p>\n</div>\n";
+    $links .= "</div>\n";
 
     $coll->{'collection_links'} = $links;
 
@@ -1977,6 +1951,23 @@ function showName()	{
             $return .= "<br><input type=\"submit\" name=\"submit\" value=\"Classify taxa\">";
             $return .= "</form>"; 
         }
+
+	$return .= "<div class=\"verysmall\">";
+	$return .= '<p><div align="center">';
+
+	# have to have at least three taxa
+	if ( $abund_values > 2 )	{
+		$return .= qq|<a href="$READ_URL?action=rarefyAbundances&collection_no=$options{'collection_no'}">Analyze abundance data</a> - |;
+	}
+
+	$return .= qq|<a href="$READ_URL?action=displayCollectionEcology&collection_no=$options{'collection_no'}">Tabulate ecology data</a>|;
+
+	if ($s->isDBMember()) {
+		$return .= qq| - <a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$options{'collection_no'}">Edit taxonomic list</a>|;
+		$return .= qq| - <a href="$WRITE_URL?action=displayOccsForReID&collection_no=$options{'collection_no'}">Reidentify taxa</a>|;
+	}
+	$return .= "</div></p>\n</div>\n";
+
         $return .= "</div>";
         $return .= "</div>";
 	} else {
