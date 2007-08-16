@@ -1040,29 +1040,32 @@ sub processCollectionForm {
         my ($colls_ref) = getCollections($dbt,$s,{'collection_no'=>$collection_no},['authorizer','enterer','modifier','*']);
         my $coll = $colls_ref->[0];
         if ($coll) {
-            displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
             
             # If the viewer is the authorizer (or it's me), display the record with edit buttons
-            print '<p><div align="center"><table><tr><td>';
+            my $links = '<p><div align="center"><table><tr><td>';
             my $p = Permissions->new($s,$dbt);
             my $can_modify = $p->getModifierList();
             $can_modify->{$s->get('authorizer_no')} = 1;
             
             if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {
-                print qq|<li><b><a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b></li>|;
+                $links .= qq|<li><a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></li>|;
             }
-            print qq|<li><b><a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b></li>|;
+            $links .= qq|<li><a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></li>|;
             if ($isNewEntry) {
-                print qq|<li><b><a href="$WRITE_URL?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></b></li>|;
+                $links .= qq|<li><a href="$WRITE_URL?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></li>|;
             } else {
-                print qq|<li><b><a href="$WRITE_URL?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></b></li>|;
-                print qq|<li><b><a href="$WRITE_URL?action=displaySearchColls&type=edit">Edit another collection with the same reference</a></b></li>|;
-                print qq|<li><b><a href="$WRITE_URL?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</b></a></li>|;
+                $links .= qq|<li><a href="$WRITE_URL?action=displaySearchCollsForAdd&type=add">Add a collection with the same reference</a></li>|;
+                $links .= qq|<li><a href="$WRITE_URL?action=displaySearchColls&type=edit">Edit another collection with the same reference</a></li>|;
+                $links .= qq|<li><a href="$WRITE_URL?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></li>|;
             }
-            print qq|<li><b><a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b></li>|;
-            print qq|<li><b><a href="$WRITE_URL?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></b></li>|;
-            print qq|<li><b><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b></li>|;
-            print "</td></tr></table></div></p>";
+            $links .= qq|<li><a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></li>|;
+            $links .= qq|<li><a href="$WRITE_URL?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></li>|;
+            $links .= qq|<li><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></li>|;
+            $links .= "</td></tr></table></div></p>";
+
+            $coll->{'collection_links'} = $links;
+
+            displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
         }   
     }
 }
@@ -1183,48 +1186,53 @@ sub displayCollectionDetails {
     my $taxa_list = buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
     $coll->{'taxa_list'} = $taxa_list;
 
-    displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
+    my $links = "<div class=\"verysmall\">";
 
     # Links at bottom
     if ($s->isDBMember()) {
-        print '<p><div align="center">';
+        $links .= '<p><div align="center">';
         my $p = Permissions->new($s,$dbt);
         my $can_modify = $p->getModifierList();
         $can_modify->{$s->get('authorizer_no')} = 1;
 
         if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {  
-            print qq|<b><a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></b> - |;
+            $links .= qq|<a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a> - |;
         }
-        print qq|<b><a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></b>|;  
-        print "</div></p>";
+        $links .=  qq|<a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a>|;  
+        $links .= "</div></p>";
     }
 
 
     # More links at bottom
-	print '<p><div align="center">';
+	$links .= '<p><div align="center">';
 	# have to have at least three taxa
 	my @occrows = split /\n/,$taxa_list;
 	my $hasabund;
 	for my $or ( @occrows )	{
-		if ( $or =~ /specimen|individual/ && $or !~ /-|%/ )	{
+		if ( $or =~ /specimen|individual/ && $or !~ /%-/ )	{
 			$hasabund++;
 		}
 	}
 
-	if ( $taxa_list =~ /Abundance/ && $hasabund > 2 )	{
-		print qq|<b><a href="$READ_URL?action=rarefyAbundances&collection_no=$collection_no">Analyze abundance data</a></b> - |;
+	if ( $hasabund > 2 )	{
+		$links .= qq|<a href="$READ_URL?action=rarefyAbundances&collection_no=$collection_no">Analyze abundance data</a> - |;
 	}
 
-	print qq|<b><a href="$READ_URL?action=displayCollectionEcology&collection_no=$collection_no">Tabulate ecology data</a></b>|;
+	$links .= qq|<a href="$READ_URL?action=displayCollectionEcology&collection_no=$collection_no">Tabulate ecology data</a>|;
 
     if ($s->isDBMember()) {
-    	print qq| - <b><a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></b>|;
+    	$links .= qq| - <a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a>|;
         if($taxa_list ne "") {
-	        print qq| - <b><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></b>|;
+	        $links .= qq| - <a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a>|;
 
         }
     }
-    print "</div></p>";
+    $links .= "</div></p>\n</div>\n";
+
+    $coll->{'collection_links'} = $links;
+
+    displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
+
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -1500,7 +1508,7 @@ sub displayCollectionDetailsPage {
     # textarea values often have returns that need to be rendered
     #  as <br>s JA 20.8.06
     for my $r ( keys %$row )	{
-        if ( $r !~ /taxa_list/ )	{
+        if ( $r !~ /taxa_list/ && $r =~ /comment/ )	{
             $row->{$r} =~ s/\n/<br>/g;
         }
     }
@@ -1929,6 +1937,10 @@ function hideName()	{
 
 function showName()	{
 	document.getElementById('commonClick').style.visibility = 'hidden';
+	var commonName = document.getElementsByName("commonName");
+	for ( i = 0; i<= commonName.length; i++ )       {
+		commonName[i].style.visibility = "visible";
+	}
 	for (var rowNum=1; rowNum<$rows; rowNum++)	{
 		document.getElementById('commonRow'+rowNum).style.visibility = 'visible';
 	}
