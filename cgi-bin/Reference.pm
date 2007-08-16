@@ -255,7 +255,7 @@ sub displayRefResults {
 	unless($q->param('use_primary')) {
 		($data,$query_description) = getReferences($dbt,$q,$s,$hbo);
 	} 
-    my @data = @$data;
+	my @data = @$data;
 
 	if ((scalar(@data) == 1 && $type ne 'add') || $q->param('use_primary')) {
 		# Do the action, don't show results...
@@ -294,9 +294,9 @@ sub displayRefResults {
         # Print the sub header
         my $offset = (int($q->param('refsSeen')) || 0);
         my $limit = 30;
-        print "<div align=\"center\"><h3>$query_description matched ";
+        print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 1em;\">$query_description matched ";
         if (scalar(@data) > 1 && scalar(@data) > $limit) {
-            print scalar(@data)." references</h3><h4>Here are ";
+            print scalar(@data)." references</p><p class=\"medium\">Here are ";
             if ($offset == 0)	{
                 print "the first $limit";
             } elsif ($offset + $limit > scalar(@data)) {
@@ -304,11 +304,11 @@ sub displayRefResults {
             } else	{
                 print "references ",($offset + 1), " through ".($offset + $limit);
             }
-            print "</h4>";
+            print "</p>";
         } elsif ( scalar(@data) == 1) {
-            print "exactly one match</h3>";
+            print "exactly one reference</p>";
         } else	{
-            print scalar(@data)." matches</h3>";
+            print scalar(@data)." references</p>";
         }
         print "</div>\n";
 #        if ($type eq 'add') {
@@ -334,7 +334,7 @@ sub displayRefResults {
             } else {
                 print "<tr>";
             }
-            print "<td valign=\"top\"><b>";
+            print "<td valign=\"top\">";
             if ($s->isDBMember()) {
                 if ($type eq 'add') {
                     print "<a href=\"$exec_url?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
@@ -348,14 +348,14 @@ sub displayRefResults {
             } else {
                 print "<a href=\"$READ_URL?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
             }
-            print "</b></td>";
+            print "</td>";
             my $formatted_reference = Reference::formatLongRef($row);
             print "<td>".$formatted_reference;
             if ( $type eq 'view' && $s->isDBMember() ) {
                 print qq| <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$row->{reference_no}">edit</a></b></small>|;
             }
             my $reference_summary = getReferenceLinkSummary($dbt,$s,$row->{'reference_no'});
-            print "<br><br><small>$reference_summary</small></td>";
+            print "<br><small>$reference_summary</small></td>";
             print "</tr>";
 		}
 		print "</table>\n";
@@ -398,12 +398,9 @@ sub displayRefResults {
 			displayReferenceForm($dbt,$q,$s,$hbo);
 			return;
 		} else	{
-			print $hbo->stdIncludes( "std_page_top" );
-			print "<center>\n<h3>$query_description produced no matches</h3>\n";
-			print "<p>Please try again with fewer search terms.</p>\n</center>\n";
-			print "<center>\n<p>";
-	        print qq|<a href="$READ_URL?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
-	        print "</p></center><br>\n";
+			my $error = "<center><p class=\"medium\">Nothing matches $query_description</p>\n";
+			displaySearchRefs($dbt,$q,$s,$hbo,$error);
+			exit(0);
 		}
 	}
 
@@ -430,7 +427,7 @@ sub displayReference {
     # Create the thin line boxes
     my $box = sub { 
         my $html = '<div class="displayPanel" align="left" style="margin: 1em;">'
-                 . qq'<span class="displayPanelHeader"><b>$_[0]</b></span>'
+                 . qq'<span class="displayPanelHeader">$_[0]</span>'
                  . qq'<div class="displayPanelContent">'
                  . qq'<div class="displayPanelText">$_[1]'
                  . '</div></div></div>';
@@ -438,7 +435,7 @@ sub displayReference {
     };
 
 	print $hbo->stdIncludes("std_page_top");
-    print "<div align=\"center\"><h3>" . Reference::formatShortRef($ref) . "</h3></div>";
+    print "<div align=\"center\"><p class=\"pageTitle\">" . Reference::formatShortRef($ref) . "</p></div>";
 
     my $citation = Reference::formatLongRef($ref);
     if ($s->isDBMember())	{
@@ -449,32 +446,32 @@ sub displayReference {
    
     # Start Metadata box
     my $html = "<table border=0 cellspacing=0 cellpadding=0\">";
-    $html .= "<tr><td class=\"displayPanelLabel\"><b>ID number:</b></td><td>$reference_no</td></tr>";
+    $html .= "<tr><td class=\"fieldName\">ID number: </td><td>$reference_no</td></tr>";
     if ($ref->{'created'}) {
-        $html .= "<tr><td class=\"displayPanelLabel\"><b>Created:</b></td><td>$ref->{'created'}</td></tr>";
+        $html .= "<tr><td class=\"fieldName\">Created: </td><td>$ref->{'created'}</td></tr>";
     }
     if ($ref->{'modified'}) {
         my $modified = date($ref->{'modified'});
-        $html .= "<tr><td class=\"displayPanelLabel\"><b>Modified:</b></td><td> $modified</td></tr>" unless ($modified eq $ref->{'created'});
+        $html .= "<tr><td class=\"fieldName\">Modified: </td><td> $modified</td></tr>" unless ($modified eq $ref->{'created'});
     }
     if($ref->{'project_name'}) {
-        $html .= "<tr><td class=\"displayPanelLabel\"><b>Project name:</b></td><td>$ref->{'project_name'}";
+        $html .= "<tr><td class=\"fieldName\">Project name: </td><td>$ref->{'project_name'}";
         if ($ref->{'project_ref_no'}) {
             $html .= " $ref->{'project_ref_no'}";
         }
         $html .= "</td></tr>";
     }
     if($ref->{'language'}) {
-        $html .= "<tr><td class=\"displayPanelLabel\"><b>Language:</b></td><td>$ref->{'language'} </td></tr>";
+        $html .= "<tr><td class=\"fieldName\">Language: </td><td>$ref->{'language'} </td></tr>";
     }
     if($ref->{'classification_quality'}) {
-        $html .= "<tr><td class=\"displayPanelLabel\"><b>Taxonomic classification quality:</b></td><td>$ref->{'classification_quality'}</td></tr>";
+        $html .= "<tr><td class=\"fieldName\">Taxonomic classification quality: </td><td>$ref->{'classification_quality'}</td></tr>";
     }
     if($ref->{'publication_type'}) {
-        $html .= "<tr><td class=\"displayPanelLabel\"><b>Publication type:</b></td><td>$ref->{'publication_type'}</td></tr>";
+        $html .= "<tr><td class=\"fieldName\">Publication type: </td><td>$ref->{'publication_type'}</td></tr>";
     }
     if($ref->{'comments'}) {
-        $html .= "<tr><td colspan=2><b>Comments:</b> $ref->{'comments'}</td></tr>";
+        $html .= "<tr><td colspan=2><span class=\"fieldName\">Comments: </span> $ref->{'comments'}</td></tr>";
     }
     $html .= "</table>";
     if ($html) {
@@ -511,7 +508,7 @@ sub displayReference {
                 @{$dbt->getData($sql)};
             $html = join(", ",@results);
         } else {
-            $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+            $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
             my $plural = ($authority_count == 1) ? "" : "s";
             $html .= "view taxonomic name$plural";
             $html .= qq|</a></b> |;
@@ -540,7 +537,7 @@ sub displayReference {
                 @{$dbt->getData($sql)};
             $html = join("<br>",@results);
         } else {
-            $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+            $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
             if ($opinion_count) {
                 my $plural = ($opinion_count == 1) ? "" : "s";
                 $html .= "view taxonomic opinion$plural";
@@ -548,7 +545,7 @@ sub displayReference {
             $html .= qq|</a></b> |;
         }
     
-        my $class_link = qq| <b> - <small><a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></b></small>|;
+        my $class_link = qq| - <small><a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></small>|;
         print $box->(qq'Taxonomic opinions (<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
     }      
 
@@ -579,10 +576,11 @@ sub displayReference {
             }
 
             foreach my $row (@$results) {
-                my $coll_link = qq|<a href="$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
-                if ($row->{'is_primary'}) {
-                    $coll_link = "<b>".$coll_link."</b>";
+                my $style;
+                if (! $row->{'is_primary'}) {
+                    $style = " class=\"boring\"";
                 }
+                my $coll_link = qq|<a href="$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
                 $html .= $coll_link . ", ";
             }
             $html =~ s/, $//;
@@ -717,11 +715,11 @@ sub processReferenceForm {
     my $fraud = checkFraud($q);
     if ($fraud) {
         if ($fraud eq 'Gupta') {
-            print qq|<center><h3><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter
+            print qq|<center><p class="medium"><font color='red'>WARNING: Data published by V. J. Gupta have been called into question by Talent et al. 1990, Webster et al. 1991, Webster et al. 1993, and Talent 1995. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter
 any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
-            print "</font></h3></center>\n";
+            print "</font></p></center>\n";
         } else {
-            print qq|<center><h3><font color='red'>WARNING: Data published by M. M. Imam have been called into question by <a href='http://www.up.ac.za/organizations/societies/psana/Plagiarism_in_Palaeontology-A_New_Threat_Within_The_Scientific_Community.pdf'>J. Aguirre 2004</a>. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
+            print qq|<center><p class="medium"><font color='red'>WARNING: Data published by M. M. Imam have been called into question by <a href='http://www.up.ac.za/organizations/societies/psana/Plagiarism_in_Palaeontology-A_New_Threat_Within_The_Scientific_Community.pdf'>J. Aguirre 2004</a>. Please hit the back button, copy the comment below to the reference title, and resubmit.  Do NOT enter any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('authorizer').qq| FOR DETAILS"|;
         }
         return;
     }
@@ -753,7 +751,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     if ($dupe) {
         $verb = "";
     }
-    print "<center><h3>Reference number $reference_no $verb</h3></center>";
+    print "<center><p class=\"pageTitle\">Reference number $reference_no $verb</p></center>";
 
     # Set the reference_no
     if ($reference_no) {
@@ -767,7 +765,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         print qq|
         <div class="displayPanel" align="left" style="margin: 1em;">
         <span class="displayPanelHeader"><b>$box_header</b></span>
-        <table><tr><td valign=top>$formatted_ref <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$reference_no">edit</a></td></tr></table>
+        <table><tr><td valign=top>$formatted_ref <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$reference_no">edit</a></b></small></td></tr></table>
         </span>
         </div>|;
         
@@ -808,10 +806,10 @@ sub getReferenceLinkSummary {
     my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
 
     if ($authority_count) {
-        $retString .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+        $retString .= qq|<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
         my $plural = ($authority_count == 1) ? "" : "s";
         $retString .= "$authority_count taxonomic name$plural";
-        $retString .= qq|</a></b>, |;
+        $retString .= qq|</a>, |;
     }
     
     # Handle Opinions
@@ -819,12 +817,12 @@ sub getReferenceLinkSummary {
     my $opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
 
     if ($opinion_count) {
-        $retString .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+        $retString .= qq|<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
         if ($opinion_count) {
             my $plural = ($opinion_count == 1) ? "" : "s";
             $retString .= "$opinion_count taxonomic opinion$plural";
         }
-        $retString .= qq|</a> (<a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>)</b>, |;
+        $retString .= qq|</a> (<a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>), |;
     }      
 
     # Handle Collections
@@ -854,12 +852,13 @@ sub getReferenceLinkSummary {
         $retString .= "no collections";
     } else {
         my $plural = ($collection_count == 1) ? "" : "s";
-        $retString .= qq|<b><a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a> </b> (|;
+        $retString .= qq|<a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a>  (|;
         foreach my $row (@$results) {
-			my $coll_link = qq|<a href="$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}">$row->{collection_no}</a>|;
-            if ($row->{'is_primary'}) {
-                $coll_link = "<b>".$coll_link."</b>";
+            my $style;
+            if (! $row->{'is_primary'}) {
+                $style = " class=\"boring\"";
             }
+            my $coll_link = qq|<a href="$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
             $retString .= $coll_link . " ";
         }
         $retString .= ")";
@@ -967,10 +966,8 @@ sub getReferences {
 	} else {
         my $type = $q->param('type');
         my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
-		print $hbo->stdIncludes("std_page_top");
-		print "<center><h4>Sorry! You can't do a search without filling in at least one field</h4>\n";
-		print "<p><a href='$exec_url?action=displaySearchRefs&type=$type'><b>Do another search</b></a></p></center>\n";
-		print $hbo->stdIncludes("std_page_bottom");
+		my $error = "<center><p class=\"medium\">Please fill out at least one field</p>\n";
+		displaySearchRefs($dbt,$q,$s,$hbo,$error);
 		exit(0);
 	}
 }
