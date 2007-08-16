@@ -1,9 +1,59 @@
 <div align="center"><p class="large" style="margin-bottom: 1.5em;"><span id="collection_name"></span></p></div>
 
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+
+<!-- encloses both boxes -->
+
+<div>
+
+<div align="left" class="verysmall" style="float: left; clear: none; margin-left: 1em; margin-bottom: 3em;">
+
+   <div id="tab1" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(1); showCommonNameLink();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(1)">Taxa</div>
+   <div id="tab2" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(2); hideCommonNames();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(2)">Geography</div>
+   <div id="tab3" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(3); hideCommonNames();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(3)">Time</div>
+   <div id="tab4" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(4); hideCommonNames();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(4)">Stratigraphy</div>
+   <div id="tab5" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(5); hideCommonNames();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(5)">Lithology</div>
+   <div id="tab6" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(6); hideCommonNames();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(6)">Taphonomy</div>
+   <div id="tab7" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(7); hideCommonNames();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(7)">Methods</div>
+   <div id="tab8" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(8); hideCommonNames();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(8)">Metadata</div>
+   <div id="tab9" class="tabOff" style="width: 7em;"
+      onClick = "showPanel(9); hideCommonNames();"
+      onMouseOver="hover(this);"
+      onMouseOut="setState(9)">References</div>
+   <div style="clear: both;"></div>
+</div>
+
+<div style="float: none; clear: none; position: relative; align: left; top: 0em; left: 6em; width: 46em;">
+
+<div id="panel1" class="collectionPanel">
 %%taxa_list%%
+</div>
 
-<table cellspacing="0"><tr><td valign="top" width="50%">
-
+<div id="panel2" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Geography</span>
   <div class="displayPanelContent">
@@ -27,8 +77,13 @@
   </div>
   </table>
   </div>
+
+%%collection_links%%
+
+</div>
 </div>
 
+<div  id="panel3" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Time</span>
   <div class="displayPanelContent">
@@ -48,8 +103,13 @@
   <div show="legacy_message"><tr><td valign=top nowrap colspan=2><span class="fieldName"> * </span> legacy (obsolete) database fields</td></tr></div>
   </table>
   </div>
+
+%%collection_links%%
+
+</div>
 </div>
 
+<div id="panel4" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Stratigraphy</span>
   <div class="displayPanelContent">
@@ -67,8 +127,13 @@
   <div show="stratcomments"><tr><td valign=top colspan=2><span class="fieldName">Stratigraphy comments:</span> <span id="stratcomments"></span></td></tr></div>
   </table>
   </div>
+
+%%collection_links%%
+
+</div>
 </div>
 
+<div id="panel5" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Lithology</span>
   <div class="displayPanelContent">
@@ -84,12 +149,15 @@
   <div show="geology_comments"><tr><td valign=top colspan=2><span class="fieldName">Geology comments:</span> <span id="geology_comments"></span></td></tr></div>
   </table>
   </div>
+
+%%collection_links%%
+
+</div>
 </div>
 
 
-</td><td valign=top width="50%">
 
-
+<div id="panel6" class="collectionPanel">
 <div class="displayPanelRight" align="left">
   <span class="displayPanelHeader">Taphonomy</span>
   <div class="displayPanelContent">
@@ -115,8 +183,13 @@
   <div show="taphonomy_comments"><tr><td valign=top colspan=2><span class="fieldName">Taphonomy comments:</span> <span id="taphonomy_comments"></span></td></tr></div>
   </table>
   </div>
+
+%%collection_links%%
+
+</div>
 </div>
 
+<div id="panel7" class="collectionPanel">
 <div class="displayPanelRight" align="left">
   <span class="displayPanelHeader">Collection methods and comments</span>
   <div class="displayPanelContent">
@@ -136,9 +209,14 @@
   <div show="taxonomy_comments"><tr><td valign=top colspan=2><span class="fieldName">Taxonomy comments:</span> <span id="taxonomy_comments"></span></td></tr></div>
   </table>
   </div>
+
+%%collection_links%%
+
+</div>
 </div>
 
 
+<div id="panel8" class="collectionPanel">
 <div class="displayPanelRight" align="left">
   <span class="displayPanelHeader">Metadata</span>
   <div class="displayPanelContent">
@@ -158,12 +236,14 @@
   <div show="access_level"><tr><td valign=top nowrap><span class="fieldName">Access level:</span></td><td valign=top><span id="access_level"></span></td></tr></div>
   </table>
   </div>
+
+%%collection_links%%
+
+</div>
 </div>
 
 
-<td></tr></table>
-
-
+<div id="panel9" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Reference information</span>
   <div class="displayPanelContent">
@@ -172,4 +252,19 @@
   <div show="secondary_reference_string"><tr><td valign=top nowrap><span class="fieldName">Secondary references:</span></td><td valign=top><span id="secondary_reference_string"></span></td></tr></div>
   </table>
   </div>
+
+%%collection_links%%
+
 </div>
+</div>
+
+<div style="clear: both;"></div>
+
+</div>
+
+</div>
+
+<script language="JavaScript" type="text/javascript">
+    showPanel(1);
+</script> 
+
