@@ -3701,27 +3701,27 @@ sub processEditOccurrences {
 	print $hbo->stdIncludes( "std_page_top" );
 
 	# Links to re-edit, etc
-    my $links = "<div align=\"center\"><b>";
+    my $links = "<div align=\"center\">";
     if ($q->param('form_source') eq 'new_reids_form') {
         # suppress link if there is clearly nothing more to reidentify
         #  JA 3.8.07
         # this won't work if exactly ten occurrences have been displayed
         if ( $#rowTokens < 9 )	{
-            $links .= "<a href=\"$WRITE_URL?action=displayCollResults&type=reid&taxon_name=".$q->param('search_taxon_name')."&collection_no=".$q->param("list_collection_no")."&last_occ_num=".$q->param('last_occ_num')."\">Reidentify&nbsp;next&nbsp;10&nbsp;occurrences</a> - ";
+            $links .= "<a href=\"$WRITE_URL?action=displayCollResults&type=reid&taxon_name=".$q->param('search_taxon_name')."&collection_no=".$q->param("list_collection_no")."&last_occ_num=".$q->param('last_occ_num')."\"><nobr>Reidentify next 10 occurrences</nobr></a> - ";
         }
-        $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">Reidentify&nbsp;different&nbsp;occurrences</a>";
+        $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\"><nobr>Reidentify different occurrences</nobr></a>";
     } else {
         if ($q->param('list_collection_no')) {
             my $collection_no = $q->param("list_collection_no");
-            $links .= "<a href=\"$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no\">Add/edit&nbsp;this&nbsp;collection's&nbsp;occurrences</a> - ";
-            $links .= "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences&collection_no=$collection_no\"><b>Reclassify&nbsp;this&nbsp;collection's&nbsp;occurrences</b></a> - ";
-            $links .= "<a href=\"$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no\">Edit&nbsp;the&nbsp;main&nbsp;collection&nbsp;record</a> - ";
+            $links .= "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences&collection_no=$collection_no\"><nobr>Reclassify these occurrences</nobr></a> - ";
+            $links .= "<a href=\"$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no\"><nobr>Edit the collection record</nobr></a><br>";
         }
-        $links .= "<a href=\"$WRITE_URL?action=displaySearchColls&type=edit_occurrence\">Add/edit&nbsp;occurrences&nbsp;for&nbsp;a&nbsp;different&nbsp;collection</a> - ";
-        $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">Reidentify&nbsp;more&nbsp;occurrences</a> - ";
-        $links .= "<a href=\"$WRITE_URL?action=displaySearchCollsForAdd&type=add\">Add&nbsp;another&nbsp;collection</a>";
+        $links .= "<nobr><a href=\"$WRITE_URL?action=displaySearchCollsForAdd&type=add\">Add</a> or ";
+        $links .= "<a href=\"$WRITE_URL?action=displaySearchColls&type=edit\">edit another collection</a> - </nobr>";
+        $links .= "<nobr><a href=\"$WRITE_URL?action=displaySearchColls&type=edit_occurrence\">Add/edit</a> or ";
+        $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">reidentify different occurrences</a></nobr>";
     }
-    $links .= "</b></div><br>";
+    $links .= "</div><br>";
 
 
 	# for identifying unrecognized (new to the db) genus/species names.
@@ -3740,7 +3740,7 @@ sub processEditOccurrences {
     	print Collection::buildTaxonomicList($dbt,$hbo,$s,{'occurrence_list'=>\@occurrences, 'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
     }
 
-    print "\n</div>\n<br>\n".$links;
+    print "\n</div>\n<br>\n";
 
 	print $hbo->stdIncludes("std_page_bottom");
 }
