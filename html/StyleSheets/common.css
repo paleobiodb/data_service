@@ -745,13 +745,22 @@ table.navbox {
 }
 */
 
-.panel{
+.panel {
     position: absolute;
     left: 10px;
     width: 95%;
     z-index: 1;
     visibility: hidden;
     padding: 10px;
+}
+
+.collectionPanel {
+    position: absolute;
+    left: 1em;
+    width: 42em;
+    padding-left: -2em;
+    z-index: 1;
+    visibility: hidden;
 }
 
 /*
