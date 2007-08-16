@@ -103,9 +103,9 @@ sub displayNeptuneDownloadResults {
     my @form_notes;
 
     if ($q->param('data_source') =~ /both/) {
-        print "<div align=\"center\"><h2>Neptune/Paleobiology Database download results</h2></div>";
+        print "<div align=\"center\"><p class=\"pageTitle\">Neptune/Paleobiology Database download results</p></div>";
     } else {
-        print "<div align=\"center\"><h2>Neptune download results</h2></div>";
+        print "<div align=\"center\"><p class=\"pageTitle\">Neptune download results</p></div>";
     }
 
     my $pbdb_results;
@@ -239,7 +239,7 @@ sub displayNeptuneDownloadResults {
     my @sorted_taxa = sort {$all_names{$a} cmp $all_names{$b}} keys %all_names;
     
     if ($DEBUG) {
-        print "TAXA: ".join(", ",@sorted_taxa)."<BR>";
+        print "TAXA: ".join(", ",@sorted_taxa)."<br>";
     }
 
     my $top_removal_percent = ($q->param("top_removal_percent") || 0);
@@ -282,7 +282,7 @@ sub displayNeptuneDownloadResults {
 
             $pacman_top_index  = int(scalar(@samples) - .0000001 - scalar(@samples)*$top_removal_percent/100);
             $pacman_base_index = int(scalar(@samples)*$base_removal_percent/100);
-            print "PACMAN INDEXES: $pacman_top_index AND $pacman_base_index<BR>" if ($DEBUG);
+            print "PACMAN INDEXES: $pacman_top_index AND $pacman_base_index<br>" if ($DEBUG);
             my $pacman_fo = $samples[$pacman_top_index]->{'sample_age_ma'};
             my $pacman_lo = $samples[$pacman_base_index]->{'sample_age_ma'};
 
@@ -360,7 +360,7 @@ sub displayNeptuneDownloadResults {
 
 
     print "<p><div align=\"center\"><div style=\"width: 600;\" align=\"left\">";
-    print "<h3 class=\"darkList\" style=\"margin-bottom: 0em;\">Results</h3>";
+    print "<p class=\"medium darkList\" style=\"margin-bottom: 0em;\">Results</p>";
     if ($q->param('data_source') =~ /both/) {
         print "<p>$neptune_taxa_count Neptune taxa were printed to the <a href=\"/public/downloads/$filename-neptune_pbdb_summary.$ext\">summary file</a></p>";
         print "<p>$pbdb_taxa_count additional Paleobiology Database taxa were downloaded</p>";
@@ -376,7 +376,7 @@ sub displayNeptuneDownloadResults {
     if (@form_notes) {
         my $plural = (scalar(@form_notes) > 1) ? "s" : "";
         print "<p><br><div align=\"center\"><div style=\"width: 600;\" align=\"left\">";
-        print "<h3 class=\"darkList\" style=\"margin-bottom: 0em;\">Note$plural</h3>";
+        print "<p class=\"medium darkList\" style=\"margin-bottom: 0em;\">Note$plural</p>";
         print "<p><li class=\"medium\">$_</li></p>" for (@form_notes);
         print "</div></div></p>";
     } 
