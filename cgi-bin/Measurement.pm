@@ -217,7 +217,7 @@ sub displaySpecimenList {
     }
     print qq|<center>
 <div class="displayPanel" align="center" style="width: 36em; margin-top: 2em;">
-  <span class="displayPanelHeader"><b>$panelheader</b></span>
+  <span class="displayPanelHeader">$panelheader</span>
   <div class="displayPanelContent" $contentstyle>
 |;
     print "<form name=\"specimenList\" method=\"POST\" action=\"$WRITE_URL\">\n";
@@ -325,9 +325,9 @@ function submitForm ( )
         } else	{
             print qq|<tr><td align="center"><a href="$WRITE_URL?action=populateMeasurementForm&taxon_no=| . $q->param('taxon_no') . qq|&specimen_no=-1"><span class="measurementBullet">&#149;</span></td>|;
         }
-    print "<td colspan=\"6\">&nbsp;Add a <b>new</b> average measurement</i></td></tr>\n";
+    print "<td colspan=\"6\">&nbsp;Add a new average measurement</i></td></tr>\n";
     print qq|<tr><td align="center" valign="top"><a href="javascript:submitForm('')"><div class="measurementBullet" style="position: relative; margin-top: -0.1em;">&#149;</div></td>|;
-    print "<td colspan=\"6\" valign=\"top\">&nbsp;Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3><b>new</b> individual measurements</i><br>";
+    print "<td colspan=\"6\" valign=\"top\">&nbsp;Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3>new individual measurements</i><br>";
     print qq|
   &nbsp;&nbsp;default side:
   <select name="default_side">
@@ -570,7 +570,7 @@ sub processMeasurementForm	{
             $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
         }
 
-        $collection = "(collection $row->{'collection_no'})";
+        $collection = " in collection $row->{'collection_no'}";
 
         if (!$row || !$taxon_name || !$collection) {
             push my @error , "The occurrence of this taxon could not be found";
@@ -708,7 +708,7 @@ sub processMeasurementForm	{
                     }
                 }
 
-                print "<center><h4>Measurements for $taxon_name $collection have been updated</h4></center>\n";
+                print "<center><p class=\"pageTitle\">$taxon_name $collection (revised data)</p></center>\n";
             } else {
                 print "Error updating database table row, please contact support";
                 carp "Error updating row in Measurement.pm: ".$result;
@@ -765,7 +765,7 @@ sub processMeasurementForm	{
     }
 
     if ($inserted_row_count) {
-        print "<center><h4>Measurements for $taxon_name $collection have been added</h4></center>\n";
+        print "<center><p class=\"pageTitle\">$taxon_name $collection (new data)</p></center>\n";
     }
 
 	displaySpecimenList($dbt,$hbo,$q,$s,'processMeasurementForm');
