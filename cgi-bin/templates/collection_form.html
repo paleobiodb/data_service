@@ -426,11 +426,11 @@ function doCheckFieldsTaphonomy() {
     </tr>
   </table>
 
-  <p>Current primary reference:<br>
+  <p class="small">Current primary reference:<br>
   <span id="ref_string"></span>
   </p>
-  <div show="secondary_reference_string"> <p>Secondary references <span class=tiny>(select to make primary):</span><br><span id="secondary_reference_string"></span></div>
-  <div show="session_reference_string"> <p>Current session reference <span class=tiny>(select to make primary):</span><br> <span id="session_reference_string"></span></div>
+  <div show="secondary_reference_string"> <p class="small">Secondary references <span class="tiny">(select to make primary):</span><br><span id="secondary_reference_string"></span></div>
+  <div show="session_reference_string"> <p class="small">Current session reference <span class="tiny">(select to make primary):</span><br> <span id="session_reference_string"></span></div>
 
   <p>
     <span class="required">Author's main reason for describing collection:</span> <span class="verysmall"><select class="verysmall" id="collection_type"></select></span> analysis
@@ -514,7 +514,7 @@ function doCheckFieldsTaphonomy() {
   Scale of geographic resolution: <span class="verysmall"><select class="verysmall" id="geogscale"></select>&nbsp;&nbsp;</span>
       </td>
       <td>
-  Altitude: <span class="tiny"><input class="verysmall" id="altitude_value" size=10 maxlength=11></span>
+  Altitude: <span class="verysmall"><input class="verysmall" id="altitude_value" size=10 maxlength=11></span>
   <span class="verysmall"><select class="verysmall" id="altitude_unit"></select></span>
       </td>
     </tr>
@@ -699,7 +699,7 @@ function doCheckFieldsTaphonomy() {
       <td>
 	<span class="required">Environment:</span>
         <span class="verysmall"><select class="verysmall" id="environment"></select></span>
-	<span class="tiny">
+	<span class="verysmall">
 	<br>
         Read about
   		<a href="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">carbonate</a>,
