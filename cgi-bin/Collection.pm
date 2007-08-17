@@ -803,18 +803,13 @@ sub displayCollectionForm {
                 my $formatted_secondary = Reference::formatLongRef($ref);
                 my $class = ($i % 2 == 0) ? 'class="darkList"' : '';
                 $table .= "<tr $class>".
-                    "<td valign=\"top\"><input type=\"radio\" name=\"secondary_reference_no\" value=\"$sr\"></td>".
-                    "<td valign=\"top\"><b>$sr</b></th>".
-                    "<td valign=\"top\"><span class=red>$ref->{project_name} $ref->{project_ref_no}</span></td>".
-                    "<td>$formatted_secondary</td>".
-                    "</tr>";
+                  "<td valign=\"top\"><input type=\"radio\" name=\"secondary_reference_no\" value=\"$sr\">".
+                  "</td><td valign=\"top\" style=\"text-indent: -1em; padding-left: 2em;\"><b>$sr</b> ".
+                  "$formatted_secondary <span style=\"color: red;\">$ref->{project_name} $ref->{project_ref_no}</span>";
                 if(refIsDeleteable($dbt,$collection_no,$sr)) {
-                    $table .= "<tr $class>"
-                        . "<td style=\"background-color:red;\">"
-                        . "<input type=checkbox name=delete_ref value=$sr>"
-                        . "</td>"
-                        . "<td colspan=\"3\">remove</td></tr>";
+                    $table .= " <nobr>&nbsp;<input type=\"checkbox\" name=\"delete_ref\" value=$sr> remove<nobr>";
                 }
+                $table .= "</td></tr>";
             }
             $table .= "</table>";
             $vars{'secondary_reference_string'} = $table;
