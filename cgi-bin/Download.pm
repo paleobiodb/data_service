@@ -88,7 +88,10 @@ sub buildDownload {
     my $self = shift;
     my $q = $self->{'q'};
 
-    print '<div align="center"><h2>The Paleobiology Database: Download Results</h2></div>';
+    print qq|<div align="center"><p class="pageTitle">Download results</p></div>
+
+<div class="displayPanel" style="padding-top: 1em; padding-left: 1em; margin-left: 3em; margin-right: 3em; overflow: hidden;">
+|;
     my $inputIsOK = $self->checkInput($q);
     return unless $inputIsOK;
 
@@ -137,7 +140,7 @@ sub buildDownload {
     # Tell what happened
     print '<div align="center">';
     print '<table border=0 width=600><tr><td>';
-    print '<h3 class="darkList" style="margin-bottom: 0em;">Output files</h3>'; 
+    print '<p class="large darkList" style="padding: 2px; lmargin-bottom: 0.5em;">Output files</p>'; 
     if ( $q->param("output_data") =~ /matrix/ ) {
         print "$mainCount collections and $nameCount taxa were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
     }  else {
@@ -153,10 +156,12 @@ sub buildDownload {
         print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
     }
     print '</table>';
-    print qq|<p align="center" style="white-space: nowrap;"><b><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
+    print qq|<p align="center" style="white-space: nowrap;"><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
     print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
     #print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a> - |;
-    #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></b></p></div>|;
+    #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
+
+    print qq|</div>|;
 }
 
 sub checkInput {
@@ -191,7 +196,7 @@ sub retellOptions {
     $self->setupQueryFields() if (! $self->{'setup_query_fields_called'});
 
     my $html = '<div align="center"><table border=0 width=600>';
-    $html .= '<tr><td colspan=2 class="darkList"><h3 style="margin-bottom: 0em;">Download criteria</h3></td></tr>';
+    $html .= '<tr><td colspan=2><p class="large darkList" style="padding: 2px; margin-bottom: 0.5em;">Download criteria</p></td></tr>';
 
     # authorizer added 30.6.04 JA (left out by mistake?) 
     if ( $q->param("output_data") =~ /conjunct/i )	{
@@ -461,7 +466,7 @@ sub retellOptions {
         
         # Ecology fields
         if (@ecoFields) {
-            $html .= $self->retellOptionsRow ( "Ecology output fields", join ( "<BR>", @ecoFields) );
+            $html .= $self->retellOptionsRow ( "Ecology output fields", join ( "<br>", @ecoFields) );
         }
         
     } 
@@ -499,7 +504,7 @@ sub retellOptions {
             }   
         }
     }
-    $html .= $self->retellOptionsRow ( "Specimen output fields", join ( "<BR>", @specimenFields) ) if (@specimenFields);
+    $html .= $self->retellOptionsRow ( "Specimen output fields", join ( "<br>", @specimenFields) ) if (@specimenFields);
 
     $html .= "</table></div>";
 
@@ -564,7 +569,7 @@ sub getCountryString {
     } else {     
         # Get the regions
         if ( ! open ( REGIONS, "$DATA_DIR/PBDB.regions" ) ) {
-            print "<font color='red'>Skipping regions.</font> Error message is $!<BR><BR>\n";
+            print "<font color='red'>Skipping regions.</font> Error message is $!<br><BR>\n";
             return;
         }
 
@@ -655,7 +660,7 @@ sub getPlateString    {
     }
 
     if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
-        print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
+        print "<font color='red'>Skipping plates.</font> Error message is $!<br><BR>\n";
         return;
     }
 
@@ -1816,7 +1821,7 @@ sub queryDatabase {
         $sql .= " ORDER BY collection_no";
     }
 
-    $self->dbg("<b>Occurrences query:</b><br>\n$sql<BR>");
+    $self->dbg("<b>Occurrences query:</b><br>\n$sql<br>");
 
 
     if (@form_errors) {
@@ -1860,7 +1865,7 @@ sub queryDatabase {
     my %incompendium = ();
     if ( $q->param('compendium_ranges') eq 'NO' )    {
         if (!open IN,"<./data/compendium.ranges") {
-            die "Could not open Sepkoski compendium ranges file<BR>";
+            die "Could not open Sepkoski compendium ranges file<br>";
         }
         while (<IN>) {
             chomp;
@@ -1874,7 +1879,7 @@ sub queryDatabase {
     my %plate_ids;
     if ($q->param('collections_tectonic_plate_id') eq "YES" && $q->param("output_data") !~ /genera|species/) {
         if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
-            print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
+            print "<font color='red'>Skipping plates.</font> Error message is $!<br><BR>\n";
         } else {
             <PLATES>;
 
@@ -2131,7 +2136,7 @@ sub queryDatabase {
             if ($replace_with_ss) {
                 if ($ss_taxon_nos{$row->{'o.taxon_no'}}) {
                     my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
-                    #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{o.genus_name}/$row->{o.subgenus_name}/$row->{o.species_name}/$row->{o.subspecies_name} IS $genus/$subgenus/$species/$subspecies<BR>";
+                    #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{o.genus_name}/$row->{o.subgenus_name}/$row->{o.species_name}/$row->{o.subspecies_name} IS $genus/$subgenus/$species/$subspecies<br>";
 
                     $row->{'or.taxon_no'} = $row->{'o.taxon_no'};
                     $row->{'o.taxon_no'} = $ss_taxon_nos{$row->{'o.taxon_no'}};
@@ -2594,7 +2599,7 @@ sub createSpecimenPartsRows {
                 # Note: will run into homonym issues till we figure out how to pass taxon_no(s)
                 @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
             } else {
-                #print "OCC_LIST for $genus_string: ".join(", ",@{$occs_by_taxa->{$genus_string}})."<BR>";
+                #print "OCC_LIST for $genus_string: ".join(", ",@{$occs_by_taxa->{$genus_string}})."<br>";
                 @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$occs_by_taxa->{$genus_string});
             }
         }
@@ -2680,7 +2685,7 @@ sub printCSV {
     }
 
     if (! open(OUTFILE, ">$OUT_FILE_DIR/$mainFile") ) {
-        die ( "Could not open output file: $mainFile ($!)<BR>\n" );
+        die ( "Could not open output file: $mainFile ($!)<br>\n" );
     }
 
     #
@@ -2874,7 +2879,7 @@ sub printMatrix {
     my $mainFile = "$self->{filename}-matrix.$ext";
 
     if (! open(OUTFILE, ">$OUT_FILE_DIR/$mainFile") ) {
-        die ( "Could not open output file: $mainFile ($!)<BR>\n" );
+        die ( "Could not open output file: $mainFile ($!)<br>\n" );
     }
 
     #
@@ -3105,7 +3110,7 @@ sub printCONJUNCT {
     my $mainFile = "$filename.conjunct";
 
     if (! open(OUTFILE, ">$OUT_FILE_DIR/$mainFile") ) {
-        die ( "Could not open output file: $mainFile ($!)<BR>\n" );
+        die ( "Could not open output file: $mainFile ($!)<br>\n" );
     } 
 
     my $lastcoll;
@@ -3828,7 +3833,7 @@ sub dbg {
     my $self = shift;
     my $message = shift;
 
-    if ( $DEBUG && $message ) { print "<font color='green'>$message</font><BR>\n"; }
+    if ( $DEBUG && $message ) { print "<font color='green'>$message</font><br>\n"; }
 
     return $DEBUG;                    # Either way, return the current DEBUG value
 }
