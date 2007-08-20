@@ -94,7 +94,6 @@ sub buildCurve {
 
 	$self->setArrays;
     PBDBUtil::autoCreateDir($OUTPUT_DIR);
-	print '<div align="center"><h2>Paleobiology Database diversity curve report</h2></div>';
 	# compute the sizes of intermediate steps to be reported in subsampling curves
 	if ($q->param('stepsize') ne "")	{
 	  $self->setSteps;
@@ -267,15 +266,15 @@ sub assignGenera	{
 
 	if ( ! open OCCS,"<$occsfile" )	{
         if ($q->param("time_scale") =~ /neptune/i) {
-		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"$READ_URL?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to check off this field in the form.</h3>\n";
+		    print "<p class=\"warning\">The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"$READ_URL?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to check off this field in the form.</p>\n";
         } else {
-		    print "<h3>The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"$READ_URL?action=displayDownloadForm\">Download the data again</a> and make sure to check off the field you want in the \"Collection fields\" part of the form.</h3>\n";
+		    print "<p class=\"warning\">The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"$READ_URL?action=displayDownloadForm\">Download the data again</a> and make sure to check off the field you want in the \"Collection fields\" part of the form.</p>\n";
         }
         return;
 	}
 
 	if ( $q->param('weight_by_ref') eq "yes" && $q->param('ref_quota') > 0 )	{
-		print "<h3>The data can't be analyzed because you can't set a reference quota and avoid collections from references with many collections at the same time.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because you can't set a reference quota and avoid collections from references with many collections at the same time.</p>\n";
 		exit;
 	}
 
@@ -368,7 +367,7 @@ sub assignGenera	{
 		if ($q->param('time_scale') =~ /neptune/i)	{
 			$collection_field = "sample id";
 		} 
-		print "<h3>The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the form.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the form.</p>\n";
 		exit;
 	# this one is crucial and might be missing
 	} elsif ( ! $field_bin )	{
@@ -377,43 +376,43 @@ sub assignGenera	{
 		if ($time_scale_field =~ /neptune/i)	{
 			$time_scale_field = "sample_age_ma";
 		}
-		print "<h3>The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the \"Collection fields\" part of the form.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the \"Collection fields\" part of the form.</p>\n";
 		exit;
 	# this one also always should be present anyway, unless the user
 	#  screwed up and didn't download the ref numbers despite wanting
 	#  refs counted instead of genera
 	} elsif ( ! $field_genus_name && $q->param("taxonomic_level") ne "family" and $q->param("taxonomic_level") ne "order" )	{
 		if ( $q->param('count_refs') ne "yes" )	{
-			print "<h3>The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+			print "<p class=\"warning\">The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		} else	{
-			print "<h3>The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+			print "<p class=\"warning\">The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		}
 		exit;
 	} elsif ( $q->param("taxonomic_level") eq "species" && ! $field_species_name && $q->param('count_refs') ne "yes") {
-		print "<h3>The data can't be analyzed because the species name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because the species name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	} elsif ( $q->param("taxonomic_level") eq "family" && ! $field_family_name && $q->param('count_refs') ne "yes") {
-		print "<h3>The data can't be analyzed because the family name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because the family name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	} elsif ( $q->param("taxonomic_level") eq "order" && ! $field_order_name && $q->param('count_refs') ne "yes") {
-		print "<h3>The data can't be analyzed because the order name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because the order name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	# these two might be missing
 	} elsif ( ! $field_abund_value && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
-		print "<h3>The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	} elsif ( ! $field_abund_unit && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
-		print "<h3>The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	} elsif ( ! $field_refno && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 || $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" ) )	{
-		print "<h3>The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</h3>\n";
+		print "<p class=\"warning\">The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	} elsif ( $q->param("time_scale") =~ /neptune/i ) {
         if ($q->param("neptune_bin_size") !~ /^(\d+(\.\d+)?|\.\d+)$/) {
-            print "<h3>Please enter a positive decimal number for the bin size to use if you are analyzing data from the Neptune database</h3>";
+            print "<p class=\"warning\">Please enter a positive decimal number for the bin size to use if you are analyzing data from the Neptune database</p>";
             exit;
         } elsif ($q->param("neptune_bin_size") < .1 || $q->param("neptune_bin_size") > 100) {
-            print "<h3>Bin size must be between .1 and 100</h3>";
+            print "<p class=\"warning\">Bin size must be between .1 and 100</p>";
             exit;
         }
     }
@@ -864,15 +863,17 @@ $| = 1;
 				}
 			}
 			my $cice = 1 - ( $q1[$i] / $ninf[$i] );
-			my $sum = 0;
-			for $j (1..10)	{
-				$sum += $j * ( $j - 1 ) * $q[$j][$i];
+			if ( $cice > 0 && $minf > 0 )	{
+				my $sum = 0;
+				for $j (1..10)	{
+					$sum += $j * ( $j - 1 ) * $q[$j][$i];
+				}
+				my $g2 = ( ( $sinf[$i] / $cice ) * ( $minf / ( $mimf - 1 ) ) * ( sum / $ninf[$i]**2 ) ) - 1;
+				if ( $g2 < 0 )	{
+					$g2 = 0;
+				}
+				$ice[$i] = $sfreq[$i] + ( $sinf[$i] / $cice ) + ( $q1[$i] / $cice * $g2 );
 			}
-			my $g2 = ( ( $sinf[$i] / $cice ) * ( $minf / ( $mimf - 1 ) ) * ( sum / $ninf[$i]**2 ) ) - 1;
-			if ( $g2 < 0 )	{
-				$g2 = 0;
-			}
-			$ice[$i] = $sfreq[$i] + ( $sinf[$i] / $cice ) + ( $q1[$i] / $cice * $g2 );
 		}
 	}
 	for $i (1..$chrons)	{
@@ -1535,21 +1536,24 @@ sub printResults	{
                      onMouseOut="setState(2)">Subsampled data </td>
                  </tr></table>
                </div>';
-        print '<div id="panel1" class="panel">';               
     }
 
+	print '<div align="center"><p class="pageTitle" style="margin-bottom: 0.5em;">Diversity curve report</p></div>';
+
+	if ($q->param('samplesize')) {
+		print '<div id="panel1" class="panel">';
+	}
 
 		if ( $q->param('count_refs') eq "yes" )	{
 			$generaorrefs = "references";
-		}
-		if ($q->param('samplesize') ne "")	{
-			print "<h3>Raw data</h3>\n\n";
 		}
 		# need this diversity value for origination rates to make sense
 		#  when ranging through taxa to the Recent in Pull of the
 		#  Recent analyses
 		$bcrich[0] = $rangethrough[0];
-		print "<table cellpadding=4>\n";
+		print qq|<div class="displayPanel" style="padding-top: 1em;">
+<table cellpadding="4">
+|;
 		print "<tr><td class=tiny valign=top><b>Interval</b>\n";
 		if ( $q->param('print_base_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Base (Ma)</b>";
@@ -2029,7 +2033,11 @@ sub printResults	{
 				print TABLE "\n";
 			}
 		}
-		print "</table><p>\n";
+		print qq|</table>
+</div>
+
+<div class="small" style="padding-left: 2em; padding-right: 2em;">
+|;
 
 		if ( $refsread == 0 )	{
 			print "\n<b>$listsread</b> collections and <b>$occsread</b> occurrences met the search criteria.<p>\n";
@@ -2053,6 +2061,7 @@ sub printResults	{
             $downloadForm = "displayDownloadNeptuneForm";
         }  
 		print "\nYou may wish to <a href=\"$READ_URL?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
+		print "</div>\n";
 
 
         if ($q->param('samplesize') ne '') {
@@ -2060,8 +2069,9 @@ sub printResults	{
             print '<div id="panel2" class="panel">';
 
 
-			print "<h3>Results of subsampling analysis</h3>\n\n";
-			print "<table cellpadding=4>\n";
+			print qq|<div class="displayPanel" style="padding-top: 1em;">
+<table cellpadding="4">
+|;
 			print "<tr><td class=tiny valign=top><b>Interval</b>\n";
 			if ( $q->param('print_base_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Base (Ma)</b> ";
@@ -2617,7 +2627,11 @@ sub printResults	{
 					print SUB_TABLE "\n";
 				}
 			}
-			print "</table><p>\n\n";
+			print qq|</table>
+</div>
+
+<div class="small" style="padding-left: 2em; padding-right: 2em;">
+|;
 			print "The selected method was <b>".$q->param('samplingmethod')."</b>.<p>\n";
 			print "The number of items selected per temporal bin was <b>".$q->param('samplesize')."</b>.<p>\n";
 			if ( $q->param('ref_quota') > 0 )	{
@@ -2641,6 +2655,7 @@ sub printResults	{
                 print "<li>The subsampling curves (<a href=\"$HOST_URL$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
             }
     		print "</ul><p>\n";
+		print "</div>\n";
 
             print '</div>'; # End PANEL2 div
             print '<script language="JavaScript" type="text/javascript">
