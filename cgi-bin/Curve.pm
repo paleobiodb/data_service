@@ -629,10 +629,9 @@ sub assignGenera	{
 
 	# declare Recent genera present in bin 1
 		if ( $q->param('recent_genera') )	{
-			for my $taxon ( keys %isRecent )	{
+			for my $taxon ( keys %extantbyname )	{
 				if ( $genid{$taxon} =~ /[0-9]/ )	{
-					$present[$genid{$taxon}][1]--;
-					$recentbyid[$genid{$taxon}] = 1;
+					$extantbyid[$genid{$taxon}][1] = 1;
 				}
 			}
 		}
@@ -654,7 +653,7 @@ sub assignGenera	{
 					$occsbychron[$chid[$collno]][$qq] = $occs[$xx];
 				}
 				$occsinchron[$chid[$collno]] = $occsinchron[$chid[$collno]] + $nsp;
-				$present[$occs[$xx]][$chid[$collno]]--;
+				$present[$occs[$xx]][$chid[$collno]]++;
 				$occsinlist[$collno] = $occsinlist[$collno] + $nsp;
 				if ($occsinlist[$collno] == $nsp)	{
 					$listsread++;
@@ -750,42 +749,40 @@ sub assignGenera	{
 		$first = 0;
 		$last = 0;
 		for $j (1..$chrons)	{
-			if ($present[$i][$j] < 0)	{
-				if ( $j > 1 || ! $q->param('recent_genera') || $present[$i][$j] + $recentbyid[$i] < 0 )	{
-					$richness[$j]++;
-				}
+			if ($present[$i][$j] > 0)	{
+				$richness[$j]++;
 				if ($last == 0)	{
 					$last = $j;
 				}
 				$first = $j;
 			}
-			if ( $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
+			if ( $present[$i][$j] > 0 && $present[$i][$j+1] > 0 )	{
 				$twotimers[$j]++;
 			}
-			if ( $present[$i][$j-1] < 0 && $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
+		if ( $present[$i][$j-1] > 0 && $present[$i][$j] > 0 && $present[$i][$j+1] > 0 )	{
 				$threetimers[$j]++;
 			}
-			if ( $present[$i][$j-1] < 0 && $present[$i][$j] >= 0 && $present[$i][$j+1] < 0 )	{
+			if ( $present[$i][$j-1] > 0 && $present[$i][$j] == 0 && $present[$i][$j+1] > 0 )	{
 				$parttimers[$j]++;
 			}
-			if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] < 0 || $present[$i][$j] < 0 ) && ( $present[$i][$j+1] < 0 || $present[$i][$j+2] < 0 ) )	{
+			if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] > 0 || $present[$i][$j] > 0 ) && ( $present[$i][$j+1] > 0 || $present[$i][$j+2] > 0 ) )	{
 				$localbc[$j]++;
 			}
-			if ( ( $present[$i][$j-1] < 0 && $present[$i][$j+1] < 0 ) || $present[$i][$j] < 0 )	{
+			if ( ( $present[$i][$j-1] > 0 && $present[$i][$j+1] > 0 ) || $present[$i][$j] > 0 )	{
 				$localrt[$j]++;
 			}
 			# chaom is the notation for Chao-2, q1 for ICE
-			if ($present[$i][$j] == -1)	{
+			if ($present[$i][$j] == 1)	{
 				$chaol[$j]++;
 				$q1[$j]++;
 			}
-			elsif ($present[$i][$j] == -2)	{
+			elsif ($present[$i][$j] == 2)	{
 				$chaom[$j]++;
 			}
 			# stats needed for ICE
-			if ( abs($present[$i][$j]) > 10 )	{
+			if ( $present[$i][$j] > 10 )	{
 				$sfreq[$j]++;
-			} elsif ( $present[$i][$j] < 0 )	{
+			} elsif ( $present[$i][$j] > 0 )	{
 				$q[abs($present[$i][$j])][$j]++;
 				$ninf[$j] += abs($present[$i][$j]);
 				$sinf[$j]++;
@@ -794,24 +791,15 @@ sub assignGenera	{
 		if ($first > 0)	{
 			print PADATA "$genus[$i]\t$occsoftax[$i]";
 			for $j (reverse 1..$chrons)	{
-			# if ($present[$i][$j] < 0)	{
-					$fx = abs($present[$i][$j]);
-				# need to clean up the data in the first bin
-				#  for Recent taxa
-					if ( $j == 1 )	{
-						$fx = $fx - $recentbyid[$i];
-					}
-			#   print PADATA " ",$chrons-$j+1," ($fx)";
-					print PADATA "\t$fx";
-			# }
+				print PADATA "\t$present[$i][$j]";
 			}
 			if ( $q->param('recent_genera') )	{
-				printf PADATA "\t%d",$recentbyid[$i];
+				printf PADATA "\t%d",$extantbyid[$i][1];
 			}
 			print PADATA "\n";
 		}
 		if (($first > 0) && ($last > 0))	{
-			if ( $recentbyid[$i] == 1 )	{
+			if ( $extantbyid[$i][1] == 1 )	{
 				$last = 0;
 			}
 			for $j ($last..$first)	{
@@ -827,7 +815,7 @@ sub assignGenera	{
 		# note that "first" is bigger than "last" because time bins
 		#  are numbered from youngest to oldest
 			for $j ($last..$first)	{
-				if ( abs($present[$i][$j]) > 0 )	{
+				if ( $present[$i][$j] + $extantbyid[$i][1] > 0 )	{
 					if ( $first > $j )	{
 						$earlier[$j]++;
 					}
@@ -838,8 +826,8 @@ sub assignGenera	{
 			}
 		# Hurlbert's PIE
 			for $j ($last..$first)	{
-				if ( abs( $present[$i][$j] ) > 0 && $occsinchron[$j] > 1 )	{
-					$pie[$j] = $pie[$j] + ( abs ( $present[$i][$j] ) / $occsinchron[$j] )**2;
+				if ( $present[$i][$j] > 0 && $occsinchron[$j] > 1 )	{
+					$pie[$j] = $pie[$j] + ( $present[$i][$j] / $occsinchron[$j] )**2;
 				}
 			}
 		}
@@ -854,7 +842,7 @@ $| = 1;
 			for my $j ( 1..$listsinchron[$i] )	{
 				my $xx = $lastocc[$listsbychron[$i][$j]];
 				while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
-					if ( abs($present[$occs[$xx]][$i]) <= 10 )	{
+					if ( $present[$occs[$xx]][$i] <= 10 )	{
 						$minf++;
 						$xx = -1;
 					} else	{
@@ -937,16 +925,16 @@ sub findRecentGenera	{
 	my @taxon_nos= map {$_->{taxon_no}} @arefs;
 
 	my $parents = TaxaCache::getParents($dbt,\@taxon_nos,'array_full');
-	# isRecent must be global!
+	# extantbyname must be global!
 	for my $aref ( @arefs )	{
-		$isRecent{$aref->{taxon_name}}++;
+		$extantbyname{$aref->{taxon_name}}++;
 		# genera are extant if their species are, families if their
 		#  genera are, etc. (important for family or order level
 		#  analyses) JA 28.9.06
 		if ($parents->{$aref->{taxon_no}}) {
 			my @parent_list = @{$parents->{$aref->{taxon_no}}};
 			for my $p (@parent_list) {
-				$isRecent{$p->{taxon_name}}++;
+				$extantbyname{$p->{taxon_name}}++;
 			}
 		}
 	}
@@ -959,20 +947,13 @@ sub subsample	{
 
 	if ($q->param('samplingtrials') > 0)	{
 		for ($trials = 1; $trials <= $q->param('samplingtrials'); $trials++)	{
-			@sampled = ();
-			@lastsampled = ();
-			@subsrichness = ();
-			@lastsubsrichness = ();
-			@present = ();
-			@refsampled = ();
-		# declare Recent genera present in bin 1
-			if ( $q->param('recent_genera') )	{
-				for my $taxon ( keys %isRecent )	{
-					if ( $genid{$taxon} =~ /[0-9]/ )	{
-						$present[$genid{$taxon}][1]--;
-					}
-				}
-			}
+			my @sampled = ();
+			my @lastsampled = ();
+			my @subsrichness = ();
+			my @lastsubsrichness = ();
+			my @present = ();
+			my @refsampled = ();
+
 			for $i (1..$chrons)	{
 				if (($q->param('printall') eq "yes" && $listsinchron[$i] > 0)||
 					  (($usedoccsinchron[$i] >= $q->param('samplesize') &&
@@ -1123,14 +1104,14 @@ $| = 1;
 					    if ($present[$occid[$j]][$i] == 0)	{
 					      $subsrichness[$i]++;
 					    }
-					    $present[$occid[$j]][$i]--;
+					    $present[$occid[$j]][$i]++;
 					  }
 					  else	{
 					    for $k ($baseocc[$listid[$j]]..$topocc[$listid[$j]])	{
 					      if ($present[$occsbychron[$i][$k]][$i] == 0)	{
 					        $subsrichness[$i]++;
 					      }
-					      $present[$occsbychron[$i][$k]][$i]--;
+					      $present[$occsbychron[$i][$k]][$i]++;
 					    }
 					  }
 	
@@ -1154,7 +1135,7 @@ $| = 1;
 					  if (($samplingmethod != 1) && ($samplingmethod != 5))	{
 						my $xx = $lastocc[$listid[$j]];
 						while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
-							if ( abs($present[$occs[$xx]][$i]) <= 10 )	{
+							if ( $present[$occs[$xx]][$i] <= 10 )	{
 								$msubsminf[$i]++;
 							$xx = -1;
 						} else	{
@@ -1202,30 +1183,33 @@ $| = 1;
 				$first = 0;
 				$last = 0;
 				for $j (1..$chrons)	{
-					if ($present[$i][$j] < 0)	{
-					  if ($last == 0)	{
-					    $last = $j;
-					  }
-					  $first = $j;
+					if ($present[$i][$j] > 0)	{
+						if ($last == 0)	{
+							$last = $j;
+						}
+						$first = $j;
 					}
-					if ( $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
+					if ( $present[$i][$j] > 0 && $present[$i][$j+1] > 0 )	{
 						$ttwotimers[$j]++;
 						$mtwotimers[$j]++;
 					}
-					if ( $present[$i][$j-1] < 0 && $present[$i][$j] < 0 && $present[$i][$j+1] < 0 )	{
+					if ( $present[$i][$j-1] > 0 && $present[$i][$j] > 0 && $present[$i][$j+1] > 0 )	{
 						$mthreetimers[$j]++;
 						$sumthreetimers++;
 					}
-					if ( $present[$i][$j-1] < 0 && $present[$i][$j] >= 0 && $present[$i][$j+1] < 0 )	{
+					if ( $present[$i][$j-1] > 0 && $present[$i][$j] == 0 && $present[$i][$j+1] > 0 )	{
 						$mparttimers[$j]++;
 						$sumparttimers++;
 					}
-					if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] < 0 || $present[$i][$j] < 0 ) && ( $present[$i][$j+1] < 0 || $present[$i][$j+2] < 0 ) )	{
+					if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] > 0 || $present[$i][$j] > 0 ) && ( $present[$i][$j+1] > 0 || $present[$i][$j+2] > 0 ) )	{
 						$tlocalbc[$j]++;
 					}
-					if ( ( $present[$i][$j-1] < 0 && $present[$i][$j+1] < 0 ) || $present[$i][$j] < 0 )	{
+					if ( ( $present[$i][$j-1] > 0 && $present[$i][$j+1] > 0 ) || $present[$i][$j] > 0 )	{
 						$tlocalrt[$j]++;
 					}
+				}
+				if ( $extantbyid[$i][1] == 1 )	{
+					$last = 0;
 				}
 				for $j ($last..$first)	{
 					$msubsrangethrough[$j]++;
@@ -1240,20 +1224,20 @@ $| = 1;
 				$toriginate[$first]++;
 				$textinct[$last]++;
 				for $j ($last..$first)	{
-					if ( abs($present[$i][$j]) > 0 )	{
-						if ($present[$i][$j] == -1)	{
+					if ( $present[$i][$j] > 0 )	{
+						if ($present[$i][$j] == 1)	{
 							$msubschaol[$j]++;
 							$msubsq1[$j]++;
 						}
-						elsif ($present[$i][$j] == -2)	{
+						elsif ($present[$i][$j] == 2)	{
 							$msubschaom[$j]++;
 						}
 					# stats needed for ICE
-						if ( abs($present[$i][$j]) > 10 )	{
+						if ( $present[$i][$j] > 10 )	{
 							$msubssfreq[$j]++;
 						} elsif ( $present[$i][$j] < 0 )	{
-							$msubsq[abs($present[$i][$j])][$j]++;
-							$msubsninf[$j] += abs($present[$i][$j]);
+							$msubsq[$present[$i][$j]][$j]++;
+							$msubsninf[$j] += $present[$i][$j];
 							$msubssinf[$j]++;
 						}
 						if ( $first > $j )	{
@@ -1265,6 +1249,7 @@ $| = 1;
 					}
 				}
 			}
+
 			for $i (1..$chrons)	{
 				if ($msubsrangethrough[$i] > 0)	{
 					$msubsrichness[$i] = $msubsrichness[$i] + $subsrichness[$i];
@@ -1349,7 +1334,7 @@ $| = 1;
 	#  interval is i - 1, not i + 1; also, mnewsib i is the estimate for
 	#  the bin between boundaries i and i - 1
 
-	if ($q->param('diversity') =~ /two timers/)	{
+	if ($q->param('diversity') =~ /two timers/ && $threetimerp > 0)	{
 
 		# get the turnover rates
 		# note that the rates are offset by the sampling probability,
