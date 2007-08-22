@@ -469,6 +469,11 @@ sub submitAuthorityForm {
         $fields{'type_taxon'} = ($q->param('type_taxon')) ? 1 : 0;
 	} 
 	
+	if ($q->param('ref_is_authority') =~ /PRIMARY|CURRENT/ && ( $q->param('author1init') || $q->param('author1last') || $q->param('author2init') || $q->param('author2last') || $q->param('pubyr') || $q->param('otherauthors') ) ) {
+		$errors->add("You entered author and year data but did not check 'named in an earlier publication,' so it has now been checked for you");
+		$q->param('ref_is_authority' => 'NO');
+	}
+
 	if (($q->param('ref_is_authority') ne 'PRIMARY') && 
 	    ($q->param('ref_is_authority') ne 'CURRENT') && 
 		($q->param('ref_is_authority') ne 'NO')) {
@@ -523,10 +528,10 @@ sub submitAuthorityForm {
 		}
         if ($q->param('taxon_rank') =~ /species|subgenus/) {
             if (!$q->param('author1last')) {
-                $errors->add("If entering a subgenus, species, or subspecies, enter at least the last name of the first author");
+                $errors->add("If you enter a subgenus, species, or subspecies, enter at least the last name of the first author");
             }
             if (!$q->param('pubyr')) {
-                $errors->add("If entering a subgenus, species, or subspecies, the publication year is required");
+                $errors->add("If you enter a subgenus, species, or subspecies, the publication year is required");
             }
         }
 	}
