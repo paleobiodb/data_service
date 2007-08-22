@@ -574,7 +574,6 @@ sub doCollections{
     my ($dbt,$s,$colls,$display_name,$taxon_no,$in_list,$age_range_format,$is_real_user) = @_;
     my $dbh = $dbt->dbh;
     
-
     if (!@$colls) {
         print "<div align=\"center\"><p class=\"large\">Collections</p><i> No collection or age range data are available</i></div>";
         return;
@@ -611,69 +610,51 @@ sub doCollections{
     my %iscrown;
     if ( $in_list && @$in_list )	{
         my $taxon_row = ${$dbt->getData("SELECT lft,synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no=$taxon_no")}[0];
-        my $sql = "SELECT a.taxon_no taxon_no,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE synonym_no != $taxon_row->{synonym_no} AND lft != $taxon_row->{lft} AND extant='YES' AND a.taxon_no in (" . join (',',@$in_list) . ") AND a.taxon_no=t.taxon_no";
-        my @extantchildren = @{$dbt->getData($sql)};
-        # now for a big waste of time: the minimum age of the crown group
-        #  must only involve extant, immediate children, so you need to know
-        #  which of the children are extant JA 2.3.07
-        if ( @extantchildren )	{
-            # build some SQL that will be needed below
-            my $lrsql;
-            for my $ec ( @extantchildren )	{
-                $lrsql .= " OR (lft<=".$ec->{'lft'}." AND rgt>=".$ec->{'rgt'}.")";
-            }
-            $lrsql =~ s/^ OR//;
-
-            # get immediate child taxa
-            my $taxon_records = TaxaCache::getChildren($dbt,$taxon_no,'immediate_children');
-            my @children = @{$taxon_records};
-            my @childnos;
-            for my $c ( @children )	{
-                push @childnos, $c->{'taxon_no'};
-            }
-
-            # get immediate children that include extant children
-            if (@childnos && $lrsql) {
-                $extant = 1;
-                my $sql = "SELECT taxon_no,lft,rgt FROM $TAXA_TREE_CACHE WHERE taxon_no IN (" . join (',',@childnos) . ") AND (" . $lrsql . ")";
-                my @extantimmediates = @{$dbt->getData($sql)};
-
-                # get children of immediate children that include extant children
-                my $sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE WHERE";
-                for my $ei ( @extantimmediates )	{
-                    $sql .= " (lft>=".$ei->{'lft'}." AND rgt<=".$ei->{'rgt'}.") OR ";
+        my $sql = "SELECT a.taxon_no taxon_no,extant,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE synonym_no != $taxon_row->{synonym_no} AND lft != $taxon_row->{lft} AND a.taxon_no in (" . join (',',@$in_list) . ") AND a.taxon_no=t.taxon_no";
+        my @children = @{$dbt->getData($sql)};
+        my %maxlft;
+        my %minrgt;
+        for my $ch ( @children )	{
+            if ( $ch->{'extant'} eq "YES" )	{
+                for my $i ( $ch->{'lft'}..$ch->{'rgt'} )	{
+                    if ( $ch->{'lft'} > $maxlft{$i} )	{
+                        $maxlft{$i} = $ch->{'lft'};
+                    }
+                    if ( $ch->{'rgt'} < $minrgt{$i} || ! $minrgt{$i} )	{
+                        $minrgt{$i} = $ch->{'rgt'};
+                    }
                 }
-                $sql =~ s/ OR $//;
-                my @extantcladechildren = @{$dbt->getData($sql)};
-
-                # get collections including the living immediate children
-                # another annoying table hit!
-                my $extant_list;
-                for my $ecc ( @extantcladechildren )	{
-                    $extant_list .= "$ecc->{'taxon_no'},";
-                }
-                $extant_list =~ s/,$//;
-
-                # Pull the colls from the DB;
-                my %options = ();
-                $options{'permission_type'} = 'read';
-                $options{'calling_script'} = "TaxonInfo";
-                $options{'taxon_list'} = $extant_list;
-                # These fields passed from strata module,etc 
-                #foreach ('group_formation_member','formation','geological_group','member','taxon_name') {
-                #    if (defined($q->param($_))) {
-                #        $options{$_} = $q->param($_);                                                                               
-                #    }                                                                                                               
-                #}                                                                                                                   
-                my $fields = ["country", "state", "max_interval_no", "min_interval_no"];
-
-                my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
-                my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$dataRows,$interval_hash);
-                for my $coll ( @$dataRows )	{
-                    $iscrown{$coll->{'collection_no'}}++;
-                }
-                $mincrownfirst = $minfirst;
             }
+        }
+        my $extant_list;
+        for my $ch ( @children )	{
+            for my $i ( $ch->{'lft'}..$ch->{'rgt'} )	{
+                if ( $ch->{'lft'} <= $maxlft{$i} && $ch->{'rgt'} >= $minrgt{$i} )	{
+                    $extant_list .= "$ch->{'taxon_no'},";
+                    last;
+                }
+            }
+        }
+        $extant_list =~ s/,$//;
+
+        if ( $extant_list =~ /[0-9]/ )	{
+            $extant = 1;
+            # get collections including the living immediate children
+            # another annoying table hit!
+
+            # Pull the colls from the DB;
+            my %options = ();
+            $options{'permission_type'} = 'read';
+            $options{'calling_script'} = "TaxonInfo";
+            $options{'taxon_list'} = $extant_list;
+            my $fields = ["country", "state", "max_interval_no", "min_interval_no"];
+
+            my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
+            my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$dataRows,$interval_hash);
+            for my $coll ( @$dataRows )	{
+                $iscrown{$coll->{'collection_no'}}++;
+            }
+            $mincrownfirst = $minfirst;
         }
     }
 
@@ -869,16 +850,18 @@ sub doCollections{
                        " <td align=\"left\"><span class=\"small\">";
 			foreach my $collection_no (@{$time_place_coll{$key}}){
 				my $formatted_no = $collection_no;
-				if ( $iscrown{$collection_no} > 0 )	{
-					$formatted_no = "<b>".$formatted_no."</b>";
-				}
                                 my $no = $collection_no;
                                 $no =~ s/[^0-9]//g;
-				$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$1/;
+				if ( $iscrown{$no} > 0 )	{
+					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\"><b>$1/;
+                                	$formatted_no .= "</b>";
+				} else	{
+					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$1/;
+				}
                                 $output .= $formatted_no . "</a> ";
 				#$output .= "<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
 			}
-			$output =~ s/([0-9])(<\/a>)( )$/$1\)$2/g;
+			$output =~ s/([0-9])(<\/b>|)(<\/a>)( )$/$1\)$2/g;
 			$output .= "</span></td></tr>\n";
 			$row_color++;
 			if ( $row_color == 10 && $output =~ /Oldest/ && $extant == 0 )	{
