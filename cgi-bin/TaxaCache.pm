@@ -761,9 +761,11 @@ sub getChildren {
         $root->{'synonyms'}  = [];
         $root->{'spellings'} = [];
         my @parents = ($root);
-        my %p_lookup = ();
+        my %p_lookup = ($root->{taxon_no}=>$root);
         foreach my $row (@results) {
-            last if (!@parents);
+            if (!@parents) {
+                last;
+            }
             my $p = $parents[0];
 
             if ($row->{synonym_no} == $row->{taxon_no}) {
@@ -807,7 +809,12 @@ sub getChildren {
             unshift @nodes_to_sort,@children;
         }
         if ($return_type eq 'immediate_children') {
-            return $root->{children};
+            my @all_children = ();
+            push @all_children, @{$root->{children}};
+            foreach my $row (@{$root->{synonyms}}) {
+                push @all_children, @{$row->{'children'}};
+            }
+            return \@all_children;
         } else {
             return $root;
         }
