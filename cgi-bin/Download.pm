@@ -452,6 +452,10 @@ sub retellOptions {
             push @occFields, 'species_name';
         }
 
+        push @occFields, ('author1init','author1last') if ($q->param('occurrences_first_author'));
+        push @occFields, ('author2init','author2last') if ($q->param('occurrences_second_author'));
+        push @occFields, 'other_authors' if ($q->param('occurrences_other_authors'));
+        push @occFields, 'pubyr' if ($q->param('occurrences_year_named'));
         push @occFields, 'preservation' if ($q->param('occurrences_preservation'));
         push @occFields, 'type_specimen' if ($q->param('occurrences_type_specimen'));
         push @occFields, 'type_body_part' if ($q->param('occurrences_type_body_part'));
@@ -1988,7 +1992,11 @@ sub queryDatabase {
         if (@ecoFields || $get_preservation || $q->param('occurrences_extant') ||
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
-            $q->param("occurrences_family_name") eq "YES"){
+            $q->param("occurrences_family_name") eq "YES" ||
+            $q->param("occurrences_first_author") eq "YES" ||
+            $q->param("occurrences_second_author") eq "YES" ||
+            $q->param("occurrences_other_authors") eq "YES" ||
+            $q->param("occurrences_year_named") eq "YES")	{
             %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
         # will need the genus number for figuring out "extant"
             for my $no ( @taxon_nos )	{
@@ -2011,11 +2019,19 @@ sub queryDatabase {
     }
 
     # Type specimen numbers, body part, extant, and common name data
+    my %first_author_lookup;
+    my %second_author_lookup;
+    my %other_authors_lookup;
+    my %year_named_lookup;
     my %type_specimen_lookup;
     my %body_part_lookup;
     my %extant_lookup;
     my %common_name_lookup;
-    if (($q->param("occurrences_type_body_part") ||
+    if (($q->param("occurrences_first_author") ||
+        $q->param("occurrences_second_author") ||
+        $q->param("occurrences_other_authors") ||
+        $q->param("occurrences_year_named") ||
+        $q->param("occurrences_type_body_part") ||
         $q->param("occurrences_type_specimen") ||
         $q->param("occurrences_extant") ||
         $q->param("occurrences_common_name")) &&
@@ -2028,16 +2044,44 @@ sub queryDatabase {
             # associate with that.
 
             my @all_nos = keys %all_taxa;
-            if ( %all_genera )	{
+            my %parent_hash;
+            if ( $q->param('occurrences_species_name') ne "YES" )	{
+                %parent_hash = TaxaCache::getParentHash($dbt,\@all_nos,'genus');
+                push @all_nos , values %parent_hash;
+            } elsif ( %all_genera )	{
                 push @all_nos , keys %all_genera;
             }
 
-            my $sql = "SELECT t1.taxon_no,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2, authorities a WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",@all_nos).") AND t2.taxon_no=a.taxon_no";
+            my $sql = "SELECT t1.taxon_no,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2, authorities a,refs r WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",@all_nos).") AND t2.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
             foreach my $row (@{$dbt->getData($sql)}) {
+                if ( $row->{'a1i'} )	{
+                    $first_author_lookup{$row->{'taxon_no'}} = $row->{'a1i'} . " " .$row->{'a1l'};
+                } else	{
+                    $first_author_lookup{$row->{'taxon_no'}} = $row->{'a1l'};
+                }
+                if ( $row->{'a2i'} )	{
+                    $second_author_lookup{$row->{'taxon_no'}} = $row->{'a2i'} . " " .$row->{'a2l'};
+                } else	{
+                    $second_author_lookup{$row->{'taxon_no'}} = $row->{'a2l'};
+                }
+                $other_authors_lookup{$row->{'taxon_no'}} = $row->{'others'};
+                $year_named_lookup{$row->{'taxon_no'}} = $row->{'pubyr'};
                 $type_specimen_lookup{$row->{'taxon_no'}} = $row->{'type_specimen'};
                 $body_part_lookup{$row->{'taxon_no'}} = $row->{'type_body_part'};
                 $extant_lookup{$row->{'taxon_no'}} = $row->{'extant'};
                 $common_name_lookup{$row->{'taxon_no'}} = $row->{'common_name'};
+            }
+            if ( $q->param('occurrences_species_name') ne "YES" )	{
+                for my $species_no ( keys %parent_hash )	{
+                    $first_author_lookup{$species_no} = $first_author_lookup{$parent_hash{$species_no}};
+                    $second_author_lookup{$species_no} = $second_author_lookup{$parent_hash{$species_no}};
+                    $other_authors_lookup{$species_no} = $other_authors_lookup{$parent_hash{$species_no}};
+                    $year_named_lookup{$species_no} = $year_named_lookup{$parent_hash{$species_no}};
+                    $type_specimen_lookup{$species_no} = $type_specimen_lookup{$parent_hash{$species_no}};
+                    $body_part_lookup{$species_no} = $body_part_lookup{$parent_hash{$species_no}};
+                    $extant_lookup{$species_no} = $extant_lookup{$parent_hash{$species_no}};
+                    $common_name_lookup{$species_no} = $common_name_lookup{$parent_hash{$species_no}};
+                }
             }
         }
     }
@@ -2456,11 +2500,15 @@ sub queryDatabase {
                 }
             }
 
-            if ($q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_common_name')) {
+            if ($q->param('occurrences_first_author') || $q->param('occurrences_second_author') || $q->param('occurrences_other_authors') || $q->param('occurrences_year_named') || $q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_common_name')) {
                 my $taxon_no = $row->{'o.taxon_no'};
                 if ($ss_taxon_nos{$taxon_no}) {
                     $taxon_no = $ss_taxon_nos{$taxon_no};
-                } 
+                }
+                $row->{'first_author'} = $first_author_lookup{$taxon_no};
+                $row->{'second_author'} = $second_author_lookup{$taxon_no};
+                $row->{'other_authors'} = $other_authors_lookup{$taxon_no};
+                $row->{'year_named'} = $year_named_lookup{$taxon_no};
                 $row->{'type_specimen'} = $type_specimen_lookup{$taxon_no};
                 $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
                 $row->{'common_name'} = $common_name_lookup{$taxon_no};
@@ -2738,8 +2786,12 @@ sub printCSV {
         }
     }
 
-    if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+    if ($q->param('output_data') =~ /first_author|second_author|other_authors|year_named|occurrence|specimens|genera|species/) {
         push @header,@ecoFields;
+        push @header,'first_author' if ($q->param("occurrences_first_author"));
+        push @header,'second_author' if ($q->param("occurrences_second_author"));
+        push @header,'other_authors' if ($q->param("occurrences_other_authors"));
+        push @header,'year_named' if ($q->param("occurrences_year_named"));
         push @header,'preservation' if ($q->param("occurrences_preservation"));
         push @header,'type_specimen' if ($q->param("occurrences_type_specimen"));
         push @header,'type_body_part' if ($q->param("occurrences_type_body_part"));
@@ -2931,12 +2983,20 @@ sub printMatrix {
     }
 
     push @occHeader,@ecoFields;
+    push @occHeader,'first_author' if ($q->param("occurrences_first_author"));
+    push @occHeader,'second_author' if ($q->param("occurrences_second_author"));
+    push @occHeader,'other_authors' if ($q->param("occurrences_other_authors"));
+    push @occHeader,'year_named' if ($q->param("occurrences_year_named"));
     push @occHeader,'preservation' if ($q->param("occurrences_preservation"));
     push @occHeader,'type_specimen' if ($q->param("occurrences_type_specimen"));
     push @occHeader,'type_body_part' if ($q->param("occurrences_type_body_part"));
     push @occHeader,'extant' if ($q->param("occurrences_extant"));
     push @occHeader,'common_name' if ($q->param("occurrences_common_name"));
     push @printedOccHeader,@ecoFields;
+    push @printedOccHeader,'first_author' if ($q->param("occurrences_first_author"));
+    push @printedOccHeader,'second_author' if ($q->param("occurrences_second_author"));
+    push @printedOccHeader,'other_authors' if ($q->param("occurrences_other_authors"));
+    push @printedOccHeader,'year_named' if ($q->param("occurrences_year_named"));
     push @printedOccHeader,'preservation' if ($q->param("occurrences_preservation"));
     push @printedOccHeader,'type_specimen' if ($q->param("occurrences_type_specimen"));
     push @printedOccHeader,'type_body_part' if ($q->param("occurrences_type_body_part"));
