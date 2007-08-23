@@ -877,6 +877,24 @@ sub getParent {
     return ${$dbt->getData($sql)}[0];
 }
 
+# made from a copy of the above JA 23.8.07
+# returns a hash where keys are the taxon nos that have been passed in,
+#   and values are parent nos at the specified rank
+sub getParentHash {
+    my $dbt = shift;
+    my $taxon_nos_ref = shift;
+    my $taxon_rank = shift;
+
+    my $sql = "SELECT l.child_no,a.taxon_no FROM $TAXA_LIST_CACHE l, authorities a WHERE a.taxon_no=l.parent_no AND l.child_no IN (" . join(',',@$taxon_nos_ref) . ") AND a.taxon_rank='" . $taxon_rank . "'";
+    my @parent_rows = @{$dbt->getData($sql)};
+    my %parent_hash;
+    for my $p ( @parent_rows )	{
+        $parent_hash{$p->{'child_no'}} =  $p->{'taxon_no'};
+    }
+
+    return %parent_hash;
+}
+
 sub getSeniorSynonym {
     my $dbt = shift;
     my $taxon_no = shift;
