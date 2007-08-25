@@ -605,9 +605,9 @@ sub doCollections{
 
     # I hate to hit another table, but we need to know whether ANY of the
     #  included taxa are extant JA 15.12.06
-    my $extant;
     my $mincrownfirst;
     my %iscrown;
+    my $extant;
     if ( $in_list && @$in_list )	{
         my $taxon_row = ${$dbt->getData("SELECT lft,synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no=$taxon_no")}[0];
         my $sql = "SELECT a.taxon_no taxon_no,extant,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE synonym_no != $taxon_row->{synonym_no} AND lft != $taxon_row->{lft} AND a.taxon_no in (" . join (',',@$in_list) . ") AND a.taxon_no=t.taxon_no";
@@ -631,6 +631,9 @@ sub doCollections{
             for my $i ( $ch->{'lft'}..$ch->{'rgt'} )	{
                 if ( $ch->{'lft'} <= $maxlft{$i} && $ch->{'rgt'} >= $minrgt{$i} )	{
                     $extant_list .= "$ch->{'taxon_no'},";
+                    # taxon actually is extant regardless of how it was
+                    #  marked, so make sure it is now marked correctly
+                    $ch->{'extant'} = "YES";
                     last;
                 }
             }
@@ -638,7 +641,27 @@ sub doCollections{
         $extant_list =~ s/,$//;
 
         if ( $extant_list =~ /[0-9]/ )	{
+
             $extant = 1;
+
+            # extinct taxa also can be in the crown group, so figure out
+            #  which taxa are subtaxa of extant groups
+            my %has_extant_parent;
+            for my $ch ( @children )	{
+                if ( $ch->{'extant'} eq "YES" )	{
+                    for my $i ( $ch->{'lft'}..$ch->{'rgt'} )	{
+                        $has_extant_parent{$i}++;
+                    }
+                }
+            }
+            my $crown_list;
+            for my $ch ( @children )	{
+                if ( $ch->{'extant'} eq "YES" || $has_extant_parent{$ch->{'lft'}} && $has_extant_parent{$ch->{'rgt'}} )	{
+                    $crown_list .= "$ch->{'taxon_no'},";
+                }
+            }
+            $crown_list =~ s/,$//;
+
             # get collections including the living immediate children
             # another annoying table hit!
 
@@ -646,7 +669,7 @@ sub doCollections{
             my %options = ();
             $options{'permission_type'} = 'read';
             $options{'calling_script'} = "TaxonInfo";
-            $options{'taxon_list'} = $extant_list;
+            $options{'taxon_list'} = $crown_list;
             my $fields = ["country", "state", "max_interval_no", "min_interval_no"];
 
             my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
