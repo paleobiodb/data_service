@@ -262,7 +262,11 @@ sub retellOptions {
     } else {
         my @environment_group = ('carbonate','unknown','siliciclastic','terrestrial');
         $html .= $self->retellOptionsGroup('Environments','environment_',\@environment_group);
-    }    
+    }
+
+    # Onshore-offshore zones
+    my @zone_group = ('shallow','reef','deep','offshore','basinal');
+$html .= $self->retellOptionsGroup('Onshore-offshore zones:','zone_',\@zone_group);
 
     # Preservation mode
     my @pres_mode_group= ('cast','adpression','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
@@ -1044,11 +1048,11 @@ sub getEnvironmentString{
             return qq| c.environment IN ($environment)|;
         }
     } else {
-        my $carbonate_str = join(",", map {"'".$_."'"} $hbo->getList('environment_carbonate'));
-        my $siliciclastic_str = join(",", map {"'".$_."'"} $hbo->getList('environment_siliciclastic'));
-        my $terrestrial_str = join(",", map {"'".$_."'"} $hbo->getList('environment_terrestrial'));
         if (! $q->param("environment_carbonate") || ! $q->param("environment_siliciclastic") || 
-            ! $q->param("environment_terrestrial") || ! $q->param("environment_unknown")) {
+        ! $q->param("environment_terrestrial") || ! $q->param("environment_unknown") )	{
+            my $carbonate_str = join(",", map {"'".$_."'"} $hbo->getList('environment_carbonate'));
+            my $siliciclastic_str = join(",", map {"'".$_."'"} $hbo->getList('environment_siliciclastic'));
+            my $terrestrial_str = join(",", map {"'".$_."'"} $hbo->getList('environment_terrestrial'));
             if ( $q->param("environment_carbonate") ) {
                 $env_sql .= " OR c.environment IN ($carbonate_str)";
             }
@@ -1067,6 +1071,41 @@ sub getEnvironmentString{
             $env_sql =~ s/^ OR//;
             if ($env_sql) {
                 $env_sql = '('.$env_sql.')';
+            }
+        }
+        if ( ! $q->param("zone_shallow") || ! $q->param("zone_reef") ||
+            ! $q->param("zone_deep") || ! $q->param("zone_offshore") ||
+            ! $q->param("zone_basinal") ) {
+            my $shallow_str = join(",", map {"'".$_."'"} $hbo->getList('zone_shallow'));
+            my $reef_str = join(",", map {"'".$_."'"} $hbo->getList('zone_reef'));
+            my $deep_str = join(",", map {"'".$_."'"} $hbo->getList('zone_deep'));
+            my $offshore_str = join(",", map {"'".$_."'"} $hbo->getList('zone_offshore'));
+            my $basinal_str = join(",", map {"'".$_."'"} $hbo->getList('zone_basinal'));
+            my $zone_sql;
+            if ( $q->param("zone_shallow") )	{
+                $zone_sql .= " OR c.environment IN ($shallow_str)";
+            }
+            if ( $q->param("zone_reef") )	{
+                $zone_sql .= " OR c.environment IN ($reef_str)";
+            }
+            if ( $q->param("zone_deep") )	{
+                $zone_sql .= " OR c.environment IN ($deep_str)";
+            }
+            if ( $q->param("zone_offshore") )	{
+                $zone_sql .= " OR c.environment IN ($offshore_str)";
+            }
+            if ( $q->param("zone_basinal") )	{
+                $zone_sql .= " OR c.environment IN ($basinal_str)";
+            }
+            $zone_sql =~ s/^ OR//;
+#print "/",$q->param("zone_shallow"),"/"; exit;
+            if ($zone_sql) {
+                $zone_sql = '('.$zone_sql.')';
+                if ($env_sql) {
+                    $env_sql = '('.$env_sql.' AND '.$zone_sql.')';
+                } else	{
+                    $env_sql = $zone_sql;
+                }
             }
         }
    }
