@@ -745,6 +745,17 @@ table.navbox {
 }
 */
 
+.tabHotspot	{
+    float: left;
+    clear: none;
+    position: relative;
+    left: -3px;
+    top: -3px;
+    height: 0.5em;
+    width: 0.5em;
+    background-color: white;
+}
+
 .panel {
     position: absolute;
     left: 10px;
