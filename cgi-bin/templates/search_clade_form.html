@@ -1,0 +1,82 @@
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+function checkForm() {
+	var frm = document.forms[0];
+	var errors = new Error();
+
+	var taxon = frm.taxon_name.value;
+	
+    var isSpecies = /^[A-Z][a-z]+[ ][a-z]+\n?$/;
+    var isSubspecies = /^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/;
+    var isHigher = /^[A-Z][a-z]+\n?$/;
+
+    var isValid;
+    if (isSubspecies.test(taxon) ||
+        isSpecies.test(taxon) ||
+        ishigher.test(taxon)) {
+        isValid = 1;
+    } else {
+        isValid = 0;
+    }
+
+    if (!isValid) {
+		errors.add("Ill-formed taxon.  Check capitalization and spacing.");
+	}
+	
+	if (errors.count() > 0) {
+		errors.showAlert()
+		return false;
+	}
+	
+	return true;
+}
+
+// End -->
+</script>
+
+
+<table border=0 align=center>
+  <tr>
+    <td>
+      <div align="center">
+        <form method="POST" action="%%write_url%%" onSubmit="return checkForm();">
+          <input name="action" type="hidden" value="submitTaxonSearch">
+          <input name="goal" type="hidden" value="cladogram">
+
+          <p class="pageTitle">Enter a clade for a taxon</p>
+
+          <div class="displayPanel" style="padding-top: 2em; padding-bottom: 2em; text-align:left;">
+          <table>
+            <tr>
+              <td><span style="margin: 0em 1em 0em 1em;">Taxon name:</span></td>
+              <td><input name="taxon_name" value="" size="30"></td>
+            </tr>
+            <tr>
+              <td><span style="margin: 0em 1em 0em 1em;">Number of nodes:</span></td>
+              <td><input name="blank_rows" value="15" size="4"></td>
+            </tr>
+            <tr>
+              <td colspan="2" align="center">
+                <input type="submit" value="Search">
+              </td>
+            </tr>
+            <tr>
+              <td colspan="2">
+                <p style="text-align:left; margin: 2em 0em 0em 5%;">
+                  <span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<br>
+                </p>
+              </td>
+            </tr>
+           </table>
+          </div>
+        </form>
+      </div>
+    </td>
+  </tr>
+</table>
+
+
+
+
+
+
