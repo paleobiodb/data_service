@@ -265,7 +265,7 @@ sub retellOptions {
     }
 
     # Onshore-offshore zones
-    my @zone_group = ('shallow','reef','deep','offshore','basinal');
+    my @zone_group = ('marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin');
 $html .= $self->retellOptionsGroup('Onshore-offshore zones:','zone_',\@zone_group);
 
     # Preservation mode
@@ -1073,32 +1073,35 @@ sub getEnvironmentString{
                 $env_sql = '('.$env_sql.')';
             }
         }
-        if ( ! $q->param("zone_shallow") || ! $q->param("zone_reef") ||
-            ! $q->param("zone_deep") || ! $q->param("zone_offshore") ||
-            ! $q->param("zone_basinal") ) {
-            my $shallow_str = join(",", map {"'".$_."'"} $hbo->getList('zone_shallow'));
+        if ( ! $q->param("zone_marginal_marine") || ! $q->param("zone_reef") ||
+            ! $q->param("zone_shallow_subtidal") || ! $q->param("zone_deep_subtidal") ||
+            $q->param("zone_offshore") || ! $q->param("zone_slope_basin") ) {
+            my $marginal_str = join(",", map {"'".$_."'"} $hbo->getList('zone_marginal_marine'));
             my $reef_str = join(",", map {"'".$_."'"} $hbo->getList('zone_reef'));
-            my $deep_str = join(",", map {"'".$_."'"} $hbo->getList('zone_deep'));
+            my $shallow_str = join(",", map {"'".$_."'"} $hbo->getList('zone_shallow_subtidal'));
+            my $deep_str = join(",", map {"'".$_."'"} $hbo->getList('zone_deep_subtidal'));
             my $offshore_str = join(",", map {"'".$_."'"} $hbo->getList('zone_offshore'));
-            my $basinal_str = join(",", map {"'".$_."'"} $hbo->getList('zone_basinal'));
+            my $basinal_str = join(",", map {"'".$_."'"} $hbo->getList('zone_slope_basin'));
             my $zone_sql;
-            if ( $q->param("zone_shallow") )	{
-                $zone_sql .= " OR c.environment IN ($shallow_str)";
+            if ( $q->param("zone_marginal_marine") )	{
+                $zone_sql .= " OR c.environment IN ($marginal_str)";
             }
             if ( $q->param("zone_reef") )	{
                 $zone_sql .= " OR c.environment IN ($reef_str)";
             }
-            if ( $q->param("zone_deep") )	{
+            if ( $q->param("zone_shallow_subtidal") )	{
+                $zone_sql .= " OR c.environment IN ($shallow_str)";
+            }
+            if ( $q->param("zone_deep_subtidal") )	{
                 $zone_sql .= " OR c.environment IN ($deep_str)";
             }
             if ( $q->param("zone_offshore") )	{
                 $zone_sql .= " OR c.environment IN ($offshore_str)";
             }
-            if ( $q->param("zone_basinal") )	{
+            if ( $q->param("zone_slope_basin") )	{
                 $zone_sql .= " OR c.environment IN ($basinal_str)";
             }
             $zone_sql =~ s/^ OR//;
-#print "/",$q->param("zone_shallow"),"/"; exit;
             if ($zone_sql) {
                 $zone_sql = '('.$zone_sql.')';
                 if ($env_sql) {
