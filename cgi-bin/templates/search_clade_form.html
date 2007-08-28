@@ -20,7 +20,7 @@ function checkForm() {
     }
 
     if (!isValid) {
-		errors.add("Ill-formed taxon.  Check capitalization and spacing.");
+		errors.add("The taxon name is ill-formed.  Check capitalization and spacing.");
 	}
 	
 	if (errors.count() > 0) {
@@ -43,7 +43,7 @@ function checkForm() {
           <input name="action" type="hidden" value="submitTaxonSearch">
           <input name="goal" type="hidden" value="cladogram">
 
-          <p class="pageTitle">Enter a clade for a taxon</p>
+          <p class="pageTitle">Search for the clade's taxonomic name</p>
 
           <div class="displayPanel" style="padding-top: 2em; padding-bottom: 2em; text-align:left;">
           <table>
