@@ -455,14 +455,14 @@ sub submitCladogramForm {
 
     my $verb = ($isNewEntry) ? "entered" : "edited";
     print "<div align=\"center\">";
-    print "<h4>The cladogram for $taxon_name was sucessfully $verb</h4>";
+    print "<p class=\"pageTitle\">The cladogram for $taxon_name was successfully $verb</p>";
     print "<br>";
 
     print "<img src=\"/public/cladograms/$pngname\"><br>";
     print "$caption";
-    print "<br><br>";
-    print "<b><a href=\"$WRITE_URL?action=displayCladogramForm&cladogram_no=$cladogram_no\">Edit this cladogram</a></b> - ";
-    print "<b><a href=\"$WRITE_URL?action=displayCladeSearchForm\">Enter another cladogram</a></b>";
+    print "<br>";
+    print "<a href=\"$WRITE_URL?action=displayCladogramForm&cladogram_no=$cladogram_no\">Edit this cladogram</a> - ";
+    print "<a href=\"$WRITE_URL?action=displayCladeSearchForm\">Enter another cladogram</a>";
 
     print "</div>";
 
@@ -929,8 +929,7 @@ sub generateCladogram	{
 
 	# draw node numbers and write caption
 	my $printednodes = 0;
-	my $caption = "<b>Reference</b>: ".Reference::formatShortRef($dbt,$cladogram->{reference_no},'no_inits'=>1,'link_id'=>1) . " &nbsp;&nbsp;";
-    $caption .= "<b>Download as</b>: <a href=\"/public/cladograms/cladogram_$cladogram_no.nhx\">NHX</a>, <a href=\"/public/cladograms/cladogram_$cladogram_no.png\">PNG</a><br>";
+	my $caption;
 	# debugging line
     for(my $i=$num_nodes-1;$i>=0;$i--) {
 		my $nodex = $imgwidth - $border - ( $depth[$i] * $width_scale );
@@ -976,7 +975,13 @@ sub generateCladogram	{
 		}
 	}
 
-	$caption =~ s/, $//;
+	if ( $caption )	{
+		$caption =~ s/, $//;
+		$caption = "<nobr>Key: " . $caption;
+	}
+	$caption = "\n<div style=\"width: 20em; text-align: center;\"><p style=\"text-align: left;\">\n" . $caption . "</nobr>";
+	$caption .= "<br>\n<nobr>Reference: ".Reference::formatShortRef($dbt,$cladogram->{reference_no},'no_inits'=>1,'link_id'=>1) . "</nobr><br>\n";
+	$caption .= "<nobr>Download as: <a href=\"/public/cladograms/cladogram_$cladogram_no.nhx\">NHX</a>, <a href=\"/public/cladograms/cladogram_$cladogram_no.png\">PNG</a></nobr></p></div>";
 
     my $dbh = $dbt->dbh;
     $sql = "UPDATE cladograms SET modified=modified,caption=".$dbh->quote($caption)." WHERE cladogram_no=$cladogram_no";
