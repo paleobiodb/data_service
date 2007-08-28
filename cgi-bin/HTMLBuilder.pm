@@ -117,6 +117,7 @@ sub new {
    
     # This block 'installs' a code reference in $select_lists to generate the list on the fly when its needed
     my %table_enums = (
+        'cladograms' => ['source'],
         'authorities' => ['taxon_rank','preservation'],
         'opinions' => ['phylogenetic_status','diagnosis_given'],
         'refs'=> ['project_name','publication_type','classification_quality','language'],

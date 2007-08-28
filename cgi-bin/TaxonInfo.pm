@@ -232,25 +232,25 @@ sub displayTaxonInfoResults {
     <td id="tab4" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(4);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(4)">Morphology</td>
+      onMouseOut="setState(4)">Phylogeny</td>
   </tr>
   <tr>
     <td id="tab5" class="tabOff" style="white-space: nowrap;"
       onClick="showPanel(5);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(5)">Ecology and taphonomy</td>
+      onMouseOut="setState(5)">Morphology</td>
     <td id="tab6" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(6);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(6)">Map</td>
+      onMouseOut="setState(6)">Ecology and taphonomy</td>
     <td id="tab7" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(7);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(7)">Age range and collections</td>
+      onMouseOut="setState(7)">Map</td>
     <td id="tab8" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(8);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(8)">Images</td>
+      onMouseOut="setState(8)">Age range and collections</td>
   </tr>
   </table>
 </div>
@@ -356,9 +356,18 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
         print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
 	}
-    
+
     if ($modules{4}) {
         print '<div id="panel4" class="panel">';
+        print '<div align="center">';
+    	doCladograms($dbt, $taxon_no);
+        print "</div>\n";
+        print "</div>\n";
+        print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
+    }
+    
+    if ($modules{5}) {
+        print '<div id="panel5" class="panel">';
         print '<div align="center">';
         print displayDiagnoses($dbt,$taxon_no);
         print "<br>\n";
@@ -366,18 +375,23 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 		    print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
         }
         print "</div>\n";
+        
+        print '<div align="center">';
+        doThumbs($dbt,$in_list);
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
+
+        print "</div>\n";
+        print '<script language="JavaScript" type="text/javascript"> showTabText(5); </script>';
     }
-    if ($modules{5}) {
-        print '<div id="panel5" class="panel">';
+    if ($modules{6}) {
+        print '<div id="panel6" class="panel">';
         print '<div align="center">';
         unless ($quick) {
 		    print displayEcology($dbt,$taxon_no,$in_list);
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(5); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(6); </script>';
     }
    
     my $collectionsSet;
@@ -386,8 +400,8 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
     }
 
 	# map
-    if ($modules{6}) {
-        print '<div id="panel6" class="panel">';
+    if ($modules{7}) {
+        print '<div id="panel7" class="panel">';
         print '<div align="center">';
 
         if ($is_real_user) {
@@ -402,11 +416,11 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(6); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
 	}
 	# collections
     if ($modules{7}) {
-        print '<div id="panel7" class="panel">';
+        print '<div id="panel8" class="panel">';
         if ($is_real_user) {
 		    print doCollections($dbt, $s, $collectionsSet, $display_name, $taxon_no, $in_list, '', $is_real_user);
         } else {
@@ -420,17 +434,8 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
             print "</div>\n";
         }
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
-	}
-
-    if ($modules{8}) {
-        print '<div id="panel8" class="panel">';
-        print '<div align="center">';
-        doThumbs($dbt,$in_list);
-        print "</div>\n";
-        print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(8); </script>';
-    }
+	}
 
 
     print "</div>"; # Ends div class="small" declared at start
@@ -461,6 +466,49 @@ sub getCollectionsSet {
     my ($dataRows) = Collection::getCollections($dbt,$s,\%options,$fields);
     return $dataRows;
 }
+
+sub doCladograms {
+    my ($dbt,$taxon_no) = @_;
+#    my $p = TaxaCache::getParents($dbt,[$taxon_no]);
+#    my @parents = @{$p->{$taxon_no}};
+
+#    my $nos = join(",",@parents, $taxon_no);
+
+    my $sql = "SELECT t2.taxon_no FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2 WHERE t1.taxon_no IN ($taxon_no) AND t2.synonym_no=t1.synonym_no";
+#    print $sql,"\n";
+    my @results = @{$dbt->getData($sql)};
+    my $parent_list = join(',',map {$_->{'taxon_no'}} @results);
+
+    my $sql = "(SELECT DISTINCT cladogram_no FROM cladograms c WHERE c.taxon_no IN ($parent_list))".
+              " UNION ".
+              "(SELECT DISTINCT cladogram_no FROM cladogram_nodes cn WHERE cn.taxon_no IN ($parent_list))";
+#    print $sql,"\n";
+	my @cladograms = @{$dbt->getData($sql)};
+
+    if (@cladograms) {
+        #print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+        #         <span class="displayPanelHeader" class="large">Cladograms</span>
+        #         <div class="displayPanelContent">|;
+        print "<div align=\"center\" style=\"margin-top: 1em;\">";
+        foreach my $row (@cladograms) {
+            my $cladogram_no = $row->{cladogram_no};
+            my ($pngname, $caption, $taxon_name) = Cladogram::drawCladogram($dbt,$cladogram_no);
+            if ($pngname) {
+                print qq|<img src="/public/cladograms/$pngname"><br>$caption<br><br>|;
+            }
+        }
+        print "</div>";
+        #print qq|</div></div>|;
+    } else {
+        print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+                <span class="displayPanelHeader" class="large">Cladograms</span>
+                <div class="displayPanelContent">
+                  <div align="center"><i>No cladograms are available</i></div>
+                </div>
+                </div>
+                |;
+    }
+} 
 
 sub doThumbs {
     my ($dbt,$in_list) = @_;

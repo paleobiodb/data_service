@@ -36,6 +36,8 @@ use Measurement;
 use TaxaCache;
 use TypoChecker;
 use FossilRecord;
+use Cladogram;
+
 # god awful Poling modules
 use Taxon;
 use Opinion;
@@ -1730,6 +1732,7 @@ sub processTaxonSearch {
     my $next_action = 
           ($goal eq 'authority')  ? 'displayAuthorityForm' 
         : ($goal eq 'opinion')    ? 'displayOpinionChoiceForm'
+        : ($goal eq 'cladogram')  ? 'displayCladogramChoiceForm'
         : ($goal eq 'image')      ? 'displayLoadImageForm'
         : ($goal eq 'ecotaph')    ? 'startPopulateEcologyForm'
         : ($goal eq 'ecovert')    ? 'startPopulateEcologyForm'
@@ -1842,6 +1845,9 @@ sub processTaxonSearch {
             return;
         }
     # One match - good enough for most of these forms
+    } elsif (scalar(@results) == 1 && $q->param('goal') eq 'cladogram') {
+        $q->param("taxon_no"=>$results[0]->{'taxon_no'});
+        Cladogram::displayCladogramChoiceForm($dbt,$q,$s,$hbo);
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'opinion') {
         $q->param("taxon_no"=>$results[0]->{'taxon_no'});
         Opinion::displayOpinionChoiceForm($dbt,$s,$q);
@@ -4119,6 +4125,51 @@ sub calculateStratInterval {
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+## Cladogram stuff
+
+sub displayCladeSearchForm	{
+    print $hbo->stdIncludes("std_page_top");
+    print $hbo->populateHTML('search_clade_form');
+    print $hbo->stdIncludes("std_page_bottom");
+
+	#print $hbo->stdIncludes("std_page_top");
+    #Cladogram::displayCladeSearchForm($dbt,$q,$s,$hbo);
+	#print $hbo->stdIncludes("std_page_bottom");
+}
+#sub processCladeSearch	{
+#	print $hbo->stdIncludes("std_page_top");
+#    Cladogram::processCladeSearch($dbt,$q,$s,$hbo);
+#	print $hbo->stdIncludes("std_page_bottom");
+#}
+sub displayCladogramChoiceForm	{
+	print $hbo->stdIncludes("std_page_top");
+    Cladogram::displayCladogramChoiceForm($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+sub displayCladogramForm	{
+	print $hbo->stdIncludes("std_page_top");
+    Cladogram::displayCladogramForm($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+sub submitCladogramForm {
+	print $hbo->stdIncludes("std_page_top");
+    Cladogram::submitCladogramForm($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+sub drawCladogram	{
+	print $hbo->stdIncludes("std_page_top");
+    my $cladogram_no = $q->param('cladogram_no');
+    my $force_redraw = $q->param('force_redraw');
+    my ($pngname, $caption, $taxon_name) = Cladogram::drawCladogram($dbt,$cladogram_no,$force_redraw);
+    if ($pngname) {
+        print qq|<div align="center"><h3>$taxon_name</h3>|;
+        print qq|<img src="/public/cladograms/$pngname"><br>$caption|;
+        print qq|</div>|;
+    }
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+
 # Displays taxonomic opinions and names associated with a reference_no
 # PS 10/25/2004
 sub displayTaxonomicNamesAndOpinions {
@@ -4233,6 +4284,4 @@ sub listTaxa {
 
 	print $hbo->stdIncludes ("std_page_bottom");
 }
-
-
 
