@@ -72,6 +72,11 @@ function drawCladogram()	{
 	var lastChildRow = new Array();
 	var parentDepth = new Array();
 
+	if ( document.phylogeny.source.selectedIndex == 0 )	{
+		alert("Please specify the cladogram's source");
+		return false;
+	}
+
 	// get the parent nodes; a list is needed later to process
 	//  their contents
 	for ( i = 0; i < inputs; i++ )	{
@@ -389,7 +394,7 @@ function drawCladogram()	{
 -->
 </STYLE>
 
-<center><h3>%%page_title%%</h3></center>
+<center><p class="pageTitle">%%page_title%%</p></center>
 
 
 <form name="phylogeny" method="POST" action="bridge.pl" onSubmit="return checkForm();">
@@ -402,32 +407,32 @@ function drawCladogram()	{
 <input name="action" type="hidden" value="submitCladogramForm">
 
 <div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
-<span class="displayPanelHeader"><b>Metadata</b></span>
+<span class="displayPanelHeader">Metadata</span>
 <div class="displayPanelContent">
 
 <p class="small">
-<b>Taxon:</b> %%taxon_name%%
+Taxon: %%taxon_name%%
 &nbsp;
-<b>Reference:</b> %%short_reference%%
+Reference: %%short_reference%%
 </p>
 
 
 <p class="small">
-<b>Pages:</b>
+Pages:
 <input name="pages" size="6">
 
 &nbsp;
-<b>Figures:</b>
+Figures:
 <input name="figures" size="6">
 
 &nbsp;
-<b>Source:</b>
-<select name="source">
+Source:
+<select id="source" name="source">
 </select> 
 </p>
 
 <p class="small">
-<b>Comments:</b><br>
+Comments:<br>
 <textarea name="comments" rows="2" cols="60"></textarea>
 </p>
 
@@ -435,7 +440,7 @@ function drawCladogram()	{
 </div>
 
 <div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
-<span class="displayPanelHeader"><b>Clades</b></span>
+<span class="displayPanelHeader">Clades</span>
 <div class="displayPanelContent">
 
 <div style="float: left; clear: none;">
@@ -462,7 +467,7 @@ function drawCladogram()	{
 </div>
 
 <div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 2em;">
-<span class="displayPanelHeader"><b>Cladogram</b></span>
+<span class="displayPanelHeader">Cladogram</span>
 <div class="displayPanelContent">
 
 <div style="width: 40em; clear: right;" id="matrixDiv">
