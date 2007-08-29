@@ -1075,7 +1075,7 @@ sub getEnvironmentString{
         }
         if ( ! $q->param("zone_marginal_marine") || ! $q->param("zone_reef") ||
             ! $q->param("zone_shallow_subtidal") || ! $q->param("zone_deep_subtidal") ||
-            $q->param("zone_offshore") || ! $q->param("zone_slope_basin") ) {
+            ! $q->param("zone_offshore") || ! $q->param("zone_slope_basin") ) {
             my $marginal_str = join(",", map {"'".$_."'"} $hbo->getList('zone_marginal_marine'));
             my $reef_str = join(",", map {"'".$_."'"} $hbo->getList('zone_reef'));
             my $shallow_str = join(",", map {"'".$_."'"} $hbo->getList('zone_shallow_subtidal'));
