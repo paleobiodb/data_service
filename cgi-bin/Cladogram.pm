@@ -56,14 +56,14 @@ sub displayCladogramChoiceForm {
         # Gives the users a choice to edit an old cladogram or enter a new one
         my $blank_rows = $q->param('blank_rows');
         my $html = qq|<div align="center">|;
-        $html .= qq|<h4>Edit or enter a new cladogram</h4><br>|;
+        $html .= qq|<p class="pageTitle">Edit or enter a new cladogram</p>|;
         $html .= qq|<table><tr><td>|;
-        $html .= qq|<div class="displayPanel small" style="padding: 1em;"><div align="left"><ul style="padding-left: 1em;">|;
+        $html .= qq|<div class="displayPanel" style="padding: 1em;"><div align="left"><ul style="padding-left: 1em;">|;
         foreach my $row (@results) {
             my $short_ref = Reference::formatShortRef($dbt,$row->{'reference_no'});
-            $html .= qq|<li><a href="$WRITE_URL?action=displayCladogramForm&blank_rows=$blank_rows&cladogram_no=$row->{cladogram_no}">$row->{taxon_name}</a>, $short_ref</li>|;
+            $html .= qq|<li style="padding-bottom: 0.75em;"><a href="$WRITE_URL?action=displayCladogramForm&blank_rows=$blank_rows&cladogram_no=$row->{cladogram_no}">$row->{taxon_name}</a>, $short_ref</li>|;
         }
-        $html .= qq|<li><a href="$WRITE_URL?action=displayCladogramForm&blank_rows=$blank_rows&cladogram_no=-1&taxon_no=$taxon_no">Create a new cladogram of $taxon->{taxon_name}</a></li>|;
+        $html .= qq|<li><a href="$WRITE_URL?action=displayCladogramForm&blank_rows=$blank_rows&cladogram_no=-1&taxon_no=$taxon_no">Create a new cladogram for $taxon->{taxon_name}</a></li>|;
         $html .= qq|</ul></div></div>|;
         $html .= qq|</td></tr></table></div>|;
 
@@ -739,20 +739,20 @@ sub generateCladogram	{
 #    print "NODE: ".Dumper(\@nodes)."<BR>";
 
 	my @depth;
-    for(my $i=0;$i<$num_nodes;$i++) {
+	for my $i ( 0..$num_nodes-1 )	{
 		$depth[$i] = 0;
 	}
 
-	# the depth of each node is the maximum number of nodes traversed by
-	#  each subnode
-	foreach my $n ( @nodes )	{
-        my $z = $node_index{$n};
+	# the depth of each node is one more than the number of resolved nodes
+	#  it includes
+	my %depth_to;
+	for my $i ( 0..$#nodes )	{
+		my $z = $node_index{$nodes[$i]};
 		my $d = 1;
 		while ( $parent[$z] > 0 )	{
-            my $parent_index = $node_index{$parent[$z]};
-			if ( $d > $depth[$parent_index] )	{
-				$depth[$parent_index] = $d;
-			}
+			my $parent_index = $node_index{$parent[$z]};
+			$depth_to{$i}{$parent_index} = $d;
+			$depth[$parent_index]++;
 			$d++;
 			$z = $parent_index;
 		}
@@ -762,9 +762,9 @@ sub generateCladogram	{
 	my $terminals = 0;
 	my @terminal_no;
 	my $maxdepth = 0;
-    my @clade_no;
-    my $clades;
-    for(my $i=0;$i<$num_nodes;$i++) {
+	my @clade_no;
+	my $clades;
+	for my $i ( 0..$num_nodes-1 )	{
 		if ( $depth[$i] == 0 )	{
 			$terminals++;
 			$terminal_no[$i] = $terminals;
@@ -776,38 +776,38 @@ sub generateCladogram	{
 			}
 		}
 	}
-    for(my $i=0;$i<$num_nodes;$i++) {
+	for my $i ( 0..$num_nodes-1 )	{
 		if ( $clade_no[$i] )	{
 			$clade_no[$i] = $clades - $clade_no[$i] + 1;
 		}
 	}
 
 
-    my %depth_to;
-    for(my $i=0;$i<$num_nodes;$i++) {
-        if ($depth[$i] == 0) {
-            my $z = $i;
-            my $d = 1;
-            while ( $parent[$z] > 0 )	{
-                my $parent_index = $node_index{$parent[$z]};
-                if ( $d > $depth[$parent_index] )	{
-                    $depth[$parent_index] = $d;
-                }
-                $depth_to{$i}{$parent_index} = $d;
-                $d++;
-                $z = $parent_index;
-            }
-        }
-    }
+#    my %depth_to;
+#    for my $i ( 0..$num_nodes-1 )	{
+#        if ($depth[$i] == 0) {
+#            my $z = $i;
+#            my $d = 1;
+#            while ( $parent[$z] > 0 )	{
+#                my $parent_index = $node_index{$parent[$z]};
+#                if ( $d > $depth[$parent_index] )	{
+#                    $depth[$parent_index] = $d;
+#                }
+#                $depth_to{$i}{$parent_index} = $d;
+#                $d++;
+#                $z = $parent_index;
+#            }
+#        }
+#    }
 
     # Reorder the terminals
     # the first terminal is still first
-    #at each step, add the first terminal found that has the minimal
-    #distance to any of the ancestors of the last terminal added
+    # at each step, add the first terminal found that has the minimal
+    #  distance to any of the ancestors of the last terminal added
 
     my @terminal_indices;
     my @clade_indices;
-    for(my $i=0;$i<$num_nodes;$i++) {
+    for my $i ( 0..$num_nodes-1 )	{
         if ($terminal_no[$i] > 0) {
             push @terminal_indices, $i;
         } else {
@@ -844,20 +844,20 @@ sub generateCladogram	{
 	#  mean of all its terminals' terminal numbers
 	my @subterminals;
 	my @sumterminalnos;
-    my @height;
+	my @height;
 
-    for(my $i=0;$i<$num_nodes;$i++) {
+	for my $i ( 0..$num_nodes-1 )	{
 		if ( $terminal_no[$i] > 0 )	{
-            my $z = $i;
+			my $z = $i;
 			while ( $parent[$z] > 0 )	{
-                my $pi = $node_index{$parent[$z]};
+				my $pi = $node_index{$parent[$z]};
 				$subterminals[$pi]++;
 				$sumterminalnos[$pi] += $terminal_no[$i];
 				$z = $pi;
 			}
 		}
 	}
-    for(my $i=0;$i<$num_nodes;$i++) {
+	for my $i ( 0..$num_nodes-1 )	{
 		if ( $subterminals[$i] > 0 )	{
 			$height[$i] = $sumterminalnos[$i] / $subterminals[$i];
 		} else	{
@@ -867,12 +867,12 @@ sub generateCladogram	{
 
 	# the cladograms look "right" when the scaling numbers are equal
 	#  because the lines branch from each other at 90 degrees
-	my $height_scale = 23;
-	my $width_scale = 23;
+	my $height_scale = 24;
+	my $width_scale = 12;
 	my $maxletts = 1;
 	foreach my $t ( @taxon_name ) {
-        my $num_letts = length($t);
-        if ($num_letts > $maxletts) {
+		my $num_letts = length($t);
+		if ($num_letts > $maxletts) {
 			$maxletts = $num_letts;
 		}
 	}
@@ -881,7 +881,7 @@ sub generateCladogram	{
 	# the multiplier constant is specific to the font
 	my $border = int( $maxletts * 8.25 );
 	my $imgheight = $height_scale * ( $terminals + 1 );
-	my $imgwidth = ( $width_scale * ( $maxdepth + 1 ) ) + $border;
+	my $imgwidth = ( $width_scale * ( $maxdepth + 1 ) ) + $border + 10;
 	my $im = GD::Image->new($imgwidth,$imgheight,1);
 	
 	my $unantialiased = $im->colorAllocate(-1,-1,-1);
@@ -901,9 +901,8 @@ sub generateCladogram	{
 	# might want to mess with this sometime
 	#$im->setThickness(1);
 	$im->setAntiAliased($black);
-    for(my $i=0;$i<$num_nodes;$i++) {
-
-        my $pi = $node_index{$parent[$i]};
+	for my $i ( 0..$num_nodes-1 )	{
+		my $pi = $node_index{$parent[$i]};
 		if ( $terminal_no[$i] > 0 )	{
 			# focal taxon's name is bold orange
 			if ( $taxon_no[$i] == $focal_taxon_no )	{
@@ -931,7 +930,7 @@ sub generateCladogram	{
 	my $printednodes = 0;
 	my $caption;
 	# debugging line
-    for(my $i=$num_nodes-1;$i>=0;$i--) {
+	for my $i ( reverse 0..$num_nodes-1 )	{
 		my $nodex = $imgwidth - $border - ( $depth[$i] * $width_scale );
 		my $nodey = $height[$i] * $height_scale;
 		if ( $terminal_no[$i] == 0 && $taxon_name[$i] ne "" )	{
@@ -996,13 +995,13 @@ sub generateCladogram	{
 	close PNG;
 	chmod 0664, "$png_file";
 
-    my $nhx_text = _formatTreeData(\@rows);
-    my $txtname = "cladogram_$cladogram_no.nhx";
+	my $nhx_text = _formatTreeData(\@rows);
+	my $txtname = "cladogram_$cladogram_no.nhx";
 	my $txt_file = $HTML_DIR."/public/cladograms/$txtname";
-    open TXT, ">$txt_file";
-    print TXT $nhx_text;
-    close TXT;
-    chmod 0664, "$txt_file";
+	open TXT, ">$txt_file";
+	print TXT $nhx_text;
+	close TXT;
+	chmod 0664, "$txt_file";
 }
 
 
