@@ -769,6 +769,9 @@ sub generateCladogram	{
 			$terminals++;
 			$terminal_no[$i] = $terminals;
 		} else	{
+			# this line squeezes the cladogram a bit for
+			#  aesthetic reasons
+			$depth[$i] = $depth[$i]**0.9;
 			$clades++;
 			$clade_no[$i] = $clades;
 			if ( $depth[$i] > $maxdepth )	{
@@ -781,24 +784,6 @@ sub generateCladogram	{
 			$clade_no[$i] = $clades - $clade_no[$i] + 1;
 		}
 	}
-
-
-#    my %depth_to;
-#    for my $i ( 0..$num_nodes-1 )	{
-#        if ($depth[$i] == 0) {
-#            my $z = $i;
-#            my $d = 1;
-#            while ( $parent[$z] > 0 )	{
-#                my $parent_index = $node_index{$parent[$z]};
-#                if ( $d > $depth[$parent_index] )	{
-#                    $depth[$parent_index] = $d;
-#                }
-#                $depth_to{$i}{$parent_index} = $d;
-#                $d++;
-#                $z = $parent_index;
-#            }
-#        }
-#    }
 
     # Reorder the terminals
     # the first terminal is still first
@@ -914,7 +899,7 @@ sub generateCladogram	{
 			# small circle indicates an automorphic
 			#  (=  non-plesiomorphic) taxon
 			if ( ! $plesiomorphic[$i] )	{
-				$im->filledArc($imgwidth - $border,( $terminal_no[$i] * $height_scale ),6,6,0,360,"$black");
+				$im->filledArc($imgwidth - $border,( $terminal_no[$i] * $height_scale ),5,5,0,360,gdAntiAliased);
 			}
 
 		}
