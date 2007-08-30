@@ -751,10 +751,10 @@ table.navbox {
     position: relative;
     right: -3px;
     top: -3px;
-    height: 0.5em;
-    width: 0.5em;
+    height: 2px;
+    width: 1em;
     z-index: 9;
-    background-color: white;
+    background-color: #909090;
 }
 
 .panel {
