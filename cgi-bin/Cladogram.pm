@@ -864,7 +864,7 @@ sub generateCladogram	{
     
     
 	# the multiplier constant is specific to the font
-	my $border = int( $maxletts * 8.25 );
+	my $border = int( $maxletts * 8.75 );
 	my $imgheight = $height_scale * ( $terminals + 1 );
 	my $imgwidth = ( $width_scale * ( $maxdepth + 1 ) ) + $border + 10;
 	my $im = GD::Image->new($imgwidth,$imgheight,1);
