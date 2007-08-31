@@ -2,11 +2,9 @@
 
 <script>checkBrowserVersion();</script>
 
+
 <div show="message">
 <p>%%message%%</p>
-</div>
-<div hide="message">
-<p>If you are a data contributor, please log in</p>
 </div>
 
 <form method="POST" action="%%write_url%%">
@@ -38,7 +36,11 @@
 </table>
 </form>
 
-<p>If not, please <a href="%%read_url%%?user=Guest&action=displayHomePage">return to the public area</a></p>
+<div show="message">
+<div style="margin-left: 16em; margin-right: 15em; text-align: left;">
+<p class="small">The contributor's area is only used for data entry, so only contributors (authorizers) and their students (enterers) need to log in.</p>
+</div>
+</div>
 
 </center>
 
