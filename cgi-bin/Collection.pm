@@ -2250,11 +2250,11 @@ sub getClassOrderFamily	{
 			$rowref->{'class'} = $t->{'taxon_name'};
 			$rowref->{'class_no'} = $t->{'taxon_no'};
 		}
-		if ( $t->{'pubyr'} && $t->{'pubyr'} < $maxyr2 && ! $rowref->{'order'} && ! $rowref->{'class'} && $t->{'taxon_rank'} !~ /family|genus|species/ )	{
+		if ( $t->{'pubyr'} && $t->{'pubyr'} < $maxyr2 && ! $rowref->{'order'} && ! $rowref->{'class'} && $t->{'taxon_rank'} !~ /family|tribe|genus|species/ )	{
 			$maxyr2 = $t->{'pubyr'};
 			$maxname2 = $t->{'taxon_name'};
 			$maxno2 = $t->{'taxon_no'};
-		} elsif ( $t->{'pubyr'} && $t->{'pubyr'} < $maxyr1 && $rowref->{'order'} && ! $rowref->{'class'} && $t->{'taxon_rank'} !~ /family|genus|species/ )	{
+		} elsif ( $t->{'pubyr'} && $t->{'pubyr'} < $maxyr1 && $rowref->{'order'} && ! $rowref->{'class'} && $t->{'taxon_rank'} !~ /family|tribe|genus|species/ )	{
 			$maxyr1 = $t->{'pubyr'};
 			$maxname1 = $t->{'taxon_name'};
 			$maxno1 = $t->{'taxon_no'};
