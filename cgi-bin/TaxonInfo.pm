@@ -3352,6 +3352,8 @@ sub disusedNames {
 # returns a hash reference where the keys are parent_nos and the values are arrays of child taxon objects
 # The child taxon objects are just hashrefs where the hashes have the following keys:
 # taxon_no,taxon_name,taxon_rank,status.  Status is nomen dubium etc, and rest of the fields are standard.
+# JA: this function eventually will become obsolete because nomen ... opinions
+#  are supposed to record parent_no from now on 31.8.07
 sub nomenChildren {
     my $dbt = shift;
     my $arg = shift;
@@ -3364,7 +3366,7 @@ sub nomenChildren {
 
     my %nomen = ();
     if (@taxon_nos) {
-        my $sql = "SELECT DISTINCT o2.child_no,o1.parent_no FROM opinions o1, opinions o2 WHERE o1.child_no=o2.child_no AND o2.status LIKE '%nomen%' AND o1.parent_no IN (".join(",",@taxon_nos).")";
+        my $sql = "SELECT DISTINCT o2.child_no,o1.parent_no FROM opinions o1, opinions o2 WHERE o1.child_no=o2.child_no AND o2.parent_no=0 AND o2.status LIKE '%nomen%' AND o1.parent_no IN (".join(",",@taxon_nos).")";
         my @results = @{$dbt->getData($sql)};
         foreach my $row (@results) {
             my $mrpo = getMostRecentClassification($dbt,$row->{'child_no'});
