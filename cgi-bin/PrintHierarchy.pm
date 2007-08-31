@@ -146,6 +146,7 @@ sub getStatus {
             elsif ($mrpo->{'status'} =~ /objective/) { $status = 'objective synonym'; }
             elsif ($mrpo->{'status'} =~ /subgroup/) { $status = 'invalid subgroup'; }
             elsif ($mrpo->{'status'} =~ /replaced/) { $status = 'replaced homonym'; }
+            elsif ($mrpo->{'status'} =~ /belongs/) { $status = ''; }
             else { $status = "$mrpo->{status}";}
         } else {
             $status = 'synonym';
@@ -305,6 +306,7 @@ sub htmlTaxaTree {
                 if ($child->{'depth'} > $MAX_SEEN) {
                     $MAX_SEEN = $child->{'depth'};
                 }
+                $child->{'status'} = getStatus($dbt,$child->{'taxon_no'},$reference_no);
             }
             my @children = @{$node->{'children'}};
             
