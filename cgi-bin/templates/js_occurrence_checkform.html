@@ -21,9 +21,9 @@ function checkForm()	{
 			// check for dupes
 			for ( var j=0; j < i; j++ )	{
 				if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName && frm.reid_no[i].value == 0 && frm.reid_no[j].value == 0 )	{
-					errors += "* You can't enter exactly the same name twice\n";
+					errors += "* " + taxonName + " is listed twice\n";
 				} else if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName && frm.occurrence_no[i].value == frm.occurrence_no[j].value )	{
-					errors += "* An occurrence and its reID can't have the same name\n";
+					errors += "* " + taxonName + " and its reID have the same name\n";
 				}
 			}
 
