@@ -474,16 +474,19 @@ sub doCladograms {
 
 #    my $nos = join(",",@parents, $taxon_no);
 
-    my $sql = "SELECT t2.taxon_no FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2 WHERE t1.taxon_no IN ($taxon_no) AND t2.synonym_no=t1.synonym_no";
+    my @cladograms;
+    if ( $taxon_no )	{
+        my $sql = "SELECT t2.taxon_no FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2 WHERE t1.taxon_no IN ($taxon_no) AND t2.synonym_no=t1.synonym_no";
 #    print $sql,"\n";
-    my @results = @{$dbt->getData($sql)};
-    my $parent_list = join(',',map {$_->{'taxon_no'}} @results);
+        my @results = @{$dbt->getData($sql)};
+        my $parent_list = join(',',map {$_->{'taxon_no'}} @results);
 
-    my $sql = "(SELECT DISTINCT cladogram_no FROM cladograms c WHERE c.taxon_no IN ($parent_list))".
+        my $sql = "(SELECT DISTINCT cladogram_no FROM cladograms c WHERE c.taxon_no IN ($parent_list))".
               " UNION ".
               "(SELECT DISTINCT cladogram_no FROM cladogram_nodes cn WHERE cn.taxon_no IN ($parent_list))";
 #    print $sql,"\n";
-	my @cladograms = @{$dbt->getData($sql)};
+    	@cladograms = @{$dbt->getData($sql)};
+    }
 
     if (@cladograms) {
         #print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
