@@ -469,7 +469,6 @@ The more boxes you check, the less will be lumped, and vice versa
 
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_ref' value="YES"> reference</span>
-<span style="white-space: nowrap"><input type=checkbox name='lump_by_coord' value="YES"> exact coordinate</span>
 <span style="white-space: nowrap"><input type=checkbox name='lump_by_interval' value="YES"> time interval</span>
 &nbsp;
 <span style="white-space: nowrap">
@@ -479,6 +478,15 @@ strat unit:
 <option>group
 <option>formation
 <option>member
+</select>
+</span>
+<span style="white-space: nowrap">
+location:
+<select name="lump_by_location">
+<option selected>
+<option>exact coordinate
+<option>county
+<option>state
 </select>
 </span>
 </td></tr>
