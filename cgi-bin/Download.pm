@@ -375,7 +375,7 @@ $html .= $self->retellOptionsGroup('Onshore-offshore zones:','zone_',\@zone_grou
     my @stratscale_group = ('bed','group_of_beds','member','formation','group','unknown');
     $html .= $self->retellOptionsGroup("Stratigraphic scale of collections", 'stratscale_',\@stratscale_group);
 
-    $html .= $self->retellOptionsRow ( "Lump by exact geographic coordinate?", $q->param("lump_by_coord") );
+    $html .= $self->retellOptionsRow ( "Lump by location??", $q->param("lump_by_location") );
     $html .= $self->retellOptionsRow ( "Lump by stratigraphic unit?", $q->param("lump_by_strat_unit") );
     $html .= $self->retellOptionsRow ( "Lump by published reference?", $q->param("lump_by_ref") );
     $html .= $self->retellOptionsRow ( "Lump by time interval?", $q->param("lump_by_interval") );
@@ -2390,7 +2390,7 @@ sub queryDatabase {
                 if ( $row->{'o.abund_unit'} =~ /(^specimens$)|(^individuals$)/ && $row->{'o.abund_value'} > 0 )	{
             # don't need to do this if you're lumping by other things, because
             #  that lumps the genus occurrences anyway
-                  unless ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' )    {
+                  unless ( $q->param('lump_by_location') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' )    {
                     $lumpgenusref{$genus_string}->{'o.abund_value'} += $row->{'o.abund_value'};
                     $lumpgenusref{$genus_string}->{'o.abund_unit'} = $row->{'o.abund_unit'};
                     $row->{'o.abund_value'} = "";
@@ -2403,15 +2403,34 @@ sub queryDatabase {
         }
         # lump bed/group of beds scale collections with the exact same
         #  formation/member and geographic coordinate JA 21.8.04
-        if ( $q->param('lump_by_coord') eq 'YES' || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' )    {
+        if ( $q->param('lump_by_location') || $q->param('lump_by_interval') eq 'YES' || $q->param('lump_by_strat_unit') =~ /(group)|(formation)|(member)/i || $q->param('lump_by_ref') eq 'YES' )    {
 
             my $lump_string;
 
-            if ( $q->param('lump_by_coord') eq 'YES' )    {
+            if ( $q->param('lump_by_location') =~ /coordinate/ )    {
                 $lump_string .= $row->{'c.latdeg'}."|".$row->{'c.latmin'}."|".$row->{'c.latsec'}."|".$row->{'c.latdec'}."|".$row->{'c.latdir'}."|".$row->{'c.lngdeg'}."|".$row->{'c.lngmin'}."|".$row->{'c.lngsec'}."|".$row->{'c.lngdec'}."|".$row->{'c.lngdir'};
+            } elsif ( $q->param('lump_by_location') =~ /county/ )    {
+            # don't lump by county if there's no state, that would be nonsense
+                if ( $row->{'c.state'} && $row->{'c.county'} )	{
+                    $lump_string .= $row->{'c.state'}."|".$row->{'c.county'};
+                } else	{
+                    $lump_string .= $row->{'collection_no'};
+                }
+            } elsif ( $q->param('lump_by_location') =~ /state/ )    {
+                if ( $row->{'c.state'} )	{
+                    $lump_string .= $row->{'c.state'};
+                } else	{
+                    $lump_string .= $row->{'collection_no'};
+                }
             }
             if ( $q->param('lump_by_interval') eq 'YES' )    {
-                $lump_string .= $row->{'c.max_interval_no'}."|".$row->{'c.min_interval_no'};
+            # the user has to ask for this field specifically or the lumping
+            #  will always be by interval no
+                if ( ! $row->{'c.max_ma'} )	{
+                    $lump_string .= $row->{'c.max_interval_no'}."|".$row->{'c.min_interval_no'};
+                } else	{
+                    $lump_string .= $row->{'c.max_ma'}."|".$row->{'c.min_ma'};
+                }
             }
             if ( $q->param('lump_by_strat_unit') eq 'group' )    {
                 if ( $row->{'c.geological_group'} )	{
@@ -3697,9 +3716,14 @@ sub setupQueryFields {
         }
     }
 
-    if ($q->param('lump_by_coord')) {
-        if (!$q->param("collections_coords")) {
+    if ($q->param('lump_by_location')) {
+        if (!$q->param("collections_coords") && $q->param('lump_by_location') =~ /coordinate/) {
             $q->param("collections_coords"=>"YES");
+        } elsif (!$q->param("collections_county") && $q->param('lump_by_location') =~ /county/) {
+            $q->param("collections_county"=>"YES");
+            $q->param("collections_state"=>"YES");
+        } elsif (!$q->param("collections_state") && $q->param('lump_by_location') =~ /state/) {
+            $q->param("collections_state"=>"YES");
         }
     }
     if ($q->param('lump_by_strat_unit')) {
