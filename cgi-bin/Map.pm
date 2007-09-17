@@ -488,6 +488,7 @@ sub calculateBounds {
     my ($midlat,$midlng,$scale);
 
     my $first_point = 1;
+    my $second_point = 1;
     foreach my $coll_set (@dataSets) {
         if (ref $coll_set) {
             foreach my $coll (@$coll_set) {
@@ -505,6 +506,22 @@ sub calculateBounds {
                     $lng1 = $lng;
                     $lng2 = $lng;
                     $first_point = 0;
+                } elsif ($second_point) {
+                    if ( $lat < $lat1 )	{
+                        my $temp = $lat1;
+                        $lat1 = $lat;
+                        $lat2 = $temp;
+                    } else	{
+                        $lat2 = $lat;
+                    }
+                    if ( $lng < $lng1 )	{
+                        my $temp = $lng1;
+                        $lng1 = $lng;
+                        $lng2 = $temp;
+                    } else	{
+                        $lng2 = $lng;
+                    }
+                    $second_point = 0;
                 } else {
                     my $in_lat_box = 0;
                     if ($lat1 <= $lat2) {
@@ -565,20 +582,37 @@ sub calculateBounds {
         $lng_dist = 360 + $lng2 - $lng1;
     }
 #        print "LNG DIST $lng_dist LAT_DIST $lat_dist<BR>";
-    if ($lat_dist >= 90 || $lng_dist >= 180) {
-        # If we cover more than 1/2 of the glove in either direction
+    $midlat = $lat_dist/2 + $lat1;
+    my $lowlat = abs( $lat1 );
+    if ( $lat1 <= 0 && $lat2 >= 0 )	{
+        $lowlat = 0;
+    } elsif ( abs( $lat2 ) < abs ( $lat1 ) )	{
+        $lowlat = abs( $lat2 );
+    }
+    if ($lat_dist >= 90 || cos( $lowlat * $PI / 180 ) * $lng_dist >= 180) {
+        # If we cover more than 1/2 of the globe in either direction
         # Then just display the whole globe 
-        $midlat = 0;
+        $midlat /= 2;
         $midlng = 0;
         $scale = 1;
+        $q->param('projection' => "Eckert IV");
     } else {
         $lat_ratio = 999;
         if ($lat2 != $lat1) {
             $lat_ratio = 180/$lat_dist;
-        } 
+        }
         $lng_ratio = 999;
         if ($lng2 != $lng1) {
             $lng_ratio = 360/$lng_dist;
+        }
+        # heuristic corrections that zoom in a bit and move the midpoint
+        #  toward the poles when the bounding square is at a high latitude
+        #  high latitude JA 16.9.07
+        $lng_ratio /= cos( ( abs( $midlat ) / 1.5 ) * $PI / 180 );
+        if ( $midlat > 0 && $lng_dist > 0 )	{
+            $midlat += ( 90 - $midlat ) * sin( $lng_dist / 8 * $PI / 180 );
+        } elsif ( $midlat < 0 && $lng_dist > 0 )	{
+            $midlat -= ( 90 + $midlat ) * sin( $lng_dist / 8 * $PI / 180 );
         }
 
         if ($lat_ratio < $lng_ratio) {
@@ -587,19 +621,20 @@ sub calculateBounds {
             $raw_scale = $lng_ratio;
         }
         # This adds a (minimum) %12.5 padding layer around each side, important to made things look good
-        # and allow the tiling aglorithm to work. 
-        $raw_scale *= .75;
+        # and allow the tiling algorithm to work. 
+        $raw_scale *= 0.8;
         if ($raw_scale > 8) {
             $raw_scale = 8;
         } 
-        if ($raw_scale < 1.5) {
+        if ($raw_scale < 1.25) {
             $scale = 1;
+        } elsif ($raw_scale < 1.5) {
+            $scale = 1.25;
         } elsif ($raw_scale < 2) {
             $scale = 1.5;
         } else {
             $scale = int($raw_scale);
         }
-        $midlat = $lat_dist/2 + $lat1;
         if ($midlat > 90) {
             $midlat -= 180;
         }
