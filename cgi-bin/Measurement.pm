@@ -492,7 +492,7 @@ sub populateMeasurementForm {
 
         # add mass_unit to force display of mass fields and convert
         #  high g values to kg 
-        if ( $m_table{'mass'}{'average'} > 0 && $extant eq "yes" ) {
+        if ( $extant eq "yes" ) {
             push @fields, "mass_unit";
             if ( $m_table{'mass'}{'average'} >= 100 ) {
                 push @values , "kg";
