@@ -445,7 +445,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 sub getCollectionsSet {
     my ($dbt,$q,$s,$in_list,$taxon_name) = @_;
 
-    my $fields = ['country', 'state', 'max_interval_no', 'min_interval_no','latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir'];
+    my $fields = ['country','state','max_interval_no','min_interval_no','latdeg','latdec','latmin','latsec','latdir','lngdeg','lngdec','lngmin','lngsec','lngdir','seq_strat'];
 
     # Pull the colls from the DB;
     my %options = ();
@@ -759,7 +759,7 @@ sub doCollections{
 	# Process the data:  group all the collection numbers with the same
 	# time-place string together as a hash.
 	my %time_place_coll = ();
-    my (%max_interval_name,%min_interval_name,%bounds_coll,%max_interval_no);
+    my (%bounds_coll,%max_interval_no);
     my %lastgenus = ();
     my %intervals = ();
 	foreach my $row (@$colls) {
@@ -772,6 +772,9 @@ sub doCollections{
         if ( $max != $min ) {
             $res .= " - " . "<a href=\"$READ_URL?action=displayInterval&interval_no=$row->{min_interval_no}\">$interval_hash->{$min}->{interval_name}</a>";
         }
+        if ( $row->{"seq_strat"} =~ /glacial/ )	{
+            $res .= " <span class=\"verysmall\">($row->{'seq_strat'})</span>";
+        }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
         my $maxmin .= $interval_hash->{$max}->{lower_boundary} . " - ";
         $maxmin =~ s/0+ / /;
@@ -781,10 +784,11 @@ sub doCollections{
         } else	{
             $maxmin .= $interval_hash->{$min}->{upper_boundary};
         }
-        $maxmin =~ s/0+$//;
+        $maxmin =~ s/([0-9])(0+$)/$1/;
         $maxmin =~ s/\.$/.0/;
         $res .= $maxmin . "</nobr></span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
 
+        $row->{"country"} =~ s/United States/USA/;
         $row->{"country"} =~ s/ /&nbsp;/;
         $res .= $row->{"country"};
         if($row->{"state"}){
@@ -823,11 +827,8 @@ sub doCollections{
             #  number recording the upper boundary has to be reversed
             my $upper = $interval_hash->{$max}->{upper_boundary};
             $max_interval_no{$res} = $max;
-            $max_interval_name{$res} = $interval_hash->{$max}->{interval_name};
-            $min_interval_name{$res} = $max_interval_name{$res};
             if ( $max != $min ) {
                 $upper = $interval_hash->{$min}->{upper_boundary};
-                $min_interval_name{$res} = $interval_hash->{$min}->{interval_name};
             }
             #if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	
             # WARNING: we're assuming upper boundary ages will never be
@@ -843,6 +844,13 @@ sub doCollections{
             }
             elsif ( $lower < 100000 )	{
                 $lower = "0" . $lower;
+            }
+            my @glacials = ( "interglacial","glacial","early glacial","high glacial","late glacial" );
+            for my $gl ( 0..$#glacials )	{
+                if ( $row->{"seq_strat"} eq $glacials[$gl] )	{
+                    $upper -= ( 1 + $gl );
+                    last;
+                }
             }
             $bounds_coll{$res} = $lower . $upper;
             $intervals{$max} = 1 if ($max);
@@ -1002,6 +1010,8 @@ sub getIntervalsData {
             if ($itv->{'min_no'}) {
                 $get_itv{$itv->{'min_no'}} = 1 
             }
+            $interval_hash->{$row->{interval_no}}->{'interval_name'} =~ s/\/lower//i;
+            $interval_hash->{$row->{interval_no}}->{'interval_name'} =~ s/\/upper//i;
         }
         last if ($get_all_data);
         my @not_yet_fetched = ();
