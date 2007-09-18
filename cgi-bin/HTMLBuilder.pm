@@ -83,6 +83,7 @@ sub new {
         lithadj2=>[\&_listFromEnum,'collections','lithadj2','space_after'=>'pedogenic,lag,pebbly,very coarse,volcaniclastic,shelly/skeletal'],
         lithology1=>[\&_listFromEnum,'collections','lithology1','space_after'=>'conglomerate,marl,"carbonate",tar,siderite,quartzite'],
         lithology2=>[\&_listFromEnum,'collections','lithology2','space_after'=>'conglomerate,marl,"carbonate",tar,siderite,quartzite'],
+        seq_strat=>[\&_listFromEnum,'collections','seq_strat','space_after'=>'late glacial'],
         type_body_part=>[\&_listFromEnum,'authorities','type_body_part','space_after'=>'other,egg,valve,appendages,stem ossicles'],
         ecotaph=>[\&_listFromTable,'ecotaph'],
         eml_interval=>[\&_listFromEnum,'intervals','eml_interval'],
@@ -122,7 +123,7 @@ sub new {
         'authorities' => ['taxon_rank','preservation'],
         'opinions' => ['phylogenetic_status','diagnosis_given'],
         'refs'=> ['project_name','publication_type','classification_quality','language'],
-        'collections'=> ['access_level', 'latdir', 'lngdir', 'latlng_basis', 'gps_datum', 'altitude_unit', 'geogscale', 'localbedunit', 'localorder', 'regionalbedunit', 'regionalorder', 'stratscale', 'lithification', 'lithification2',  'tectonic_setting', 'seq_strat', 'lagerstatten', 'concentration', 'orientation', 'preservation_quality', 'abund_in_sediment', 'art_whole_bodies', 'disart_assoc_maj_elems', 'disassoc_maj_elems', 'disassoc_minor_elems', 'sorting', 'fragmentation', 'bioerosion', 'encrustation', 'temporal_resolution', 'spatial_resolution', 'collection_type', 'collection_size_unit', 'rock_censused_unit', 'museum'],
+        'collections'=> ['access_level', 'latdir', 'lngdir', 'latlng_basis', 'gps_datum', 'altitude_unit', 'geogscale', 'localbedunit', 'localorder', 'regionalbedunit', 'regionalorder', 'stratscale', 'lithification', 'lithification2',  'tectonic_setting', 'lagerstatten', 'concentration', 'orientation', 'preservation_quality', 'abund_in_sediment', 'art_whole_bodies', 'disart_assoc_maj_elems', 'disassoc_maj_elems', 'disassoc_minor_elems', 'sorting', 'fragmentation', 'bioerosion', 'encrustation', 'temporal_resolution', 'spatial_resolution', 'collection_type', 'collection_size_unit', 'rock_censused_unit', 'museum'],
         'ecotaph'=>['composition1', 'composition2', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'ontogeny', 'grouping', 'taxon_environment', 'locomotion', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'reproduction', 'dispersal1', 'dispersal2','body_mass_source','body_mass_type'],
         'occurrences'=>['genus_reso', 'subgenus_reso', 'species_reso', 'plant_organ', 'plant_organ2'],
         'scales'=>['continent','basis','scale_rank']
