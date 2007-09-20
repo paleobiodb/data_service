@@ -607,12 +607,12 @@ sub calculateBounds {
         }
         # heuristic corrections that zoom in a bit and move the midpoint
         #  toward the poles when the bounding square is at a high latitude
-        #  high latitude JA 16.9.07
+        #  JA 16.9.07
         $lng_ratio /= cos( ( abs( $midlat ) / 1.5 ) * $PI / 180 );
         if ( $midlat > 0 && $lng_dist > 0 )	{
-            $midlat += ( 90 - $midlat ) * sin( $lng_dist / 8 * $PI / 180 );
+            $midlat += ( 90 - $midlat ) * sin( $lng_dist / 10 * $PI / 180 );
         } elsif ( $midlat < 0 && $lng_dist > 0 )	{
-            $midlat -= ( 90 + $midlat ) * sin( $lng_dist / 8 * $PI / 180 );
+            $midlat -= ( 90 + $midlat ) * sin( $lng_dist / 10 * $PI / 180 );
         }
 
         if ($lat_ratio < $lng_ratio) {
