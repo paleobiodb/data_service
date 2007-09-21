@@ -37,6 +37,10 @@ A:visited	{ color : #6E00FF; text-decoration:none; }
 A:active	{ color : #00AAFF; text-decoration:none; }
 A:hover	{ color : #C80078; text-decoration:none; }
 
+.mockLink	{
+	color : #0030D0; text-decoration:none;
+}
+
 /* how should the links look in the menu bar at the top?  */
 A:link.menu { 
 	color : white; font-size : 0.85em; text-decoration:none; 
