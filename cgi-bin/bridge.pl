@@ -1165,6 +1165,7 @@ sub displayCollResults {
             if ($dataRow->{'collectors'}) {
                 my $collectors = " ";
                 $collectors .= $dataRow->{'collectors'};
+                $collectors =~ s/ \(.*\)//g;
                 $collectors =~ s/ and / \& /g;
                 $collectors =~ s/(Dr\.)(Mr\.)(Prof\.)//g;
                 $collectors =~ s/\b[A-Za-z]([A-Za-z\.]|)\b//g;
@@ -1175,7 +1176,7 @@ sub displayCollResults {
                 my $years = " ";
                 $years .= $dataRow->{'collection_dates'};
                 $years =~ s/[A-Za-z\.]//g;
-                $years =~ s/\b[0-9]([0-9]|)\b//g;
+                $years =~ s/([^\-]) \b[0-9]([0-9]|)\b/$1/g;
                 $years =~ s/^( |),//;
                 $collection_names .= $years;
             }
