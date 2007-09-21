@@ -105,7 +105,7 @@ sub getReference {
     my $reference_no = int(shift);
 
     if ($reference_no) {
-        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.classification_quality,r.language,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
+        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.classification_quality,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
         my $ref = ${$dbt->getData($sql)}[0];
         return $ref;
     } else {
@@ -461,14 +461,17 @@ sub displayReference {
         }
         $html .= "</td></tr>";
     }
-    if($ref->{'language'}) {
-        $html .= "<tr><td class=\"fieldName\">Language: </td><td>$ref->{'language'} </td></tr>";
+    if($ref->{'publication_type'}) {
+        $html .= "<tr><td class=\"fieldName\">Publication type: </td><td>$ref->{'publication_type'}</td></tr>";
     }
     if($ref->{'classification_quality'}) {
         $html .= "<tr><td class=\"fieldName\">Taxonomic classification quality: </td><td>$ref->{'classification_quality'}</td></tr>";
     }
-    if($ref->{'publication_type'}) {
-        $html .= "<tr><td class=\"fieldName\">Publication type: </td><td>$ref->{'publication_type'}</td></tr>";
+    if($ref->{'language'}) {
+        $html .= "<tr><td class=\"fieldName\">Language: </td><td>$ref->{'language'} </td></tr>";
+    }
+    if($ref->{'doi'}) {
+        $html .= "<tr><td class=\"fieldName\">DOI: </td><td>$ref->{'doi'}</td></tr>";
     }
     if($ref->{'comments'}) {
         $html .= "<tr><td colspan=2><span class=\"fieldName\">Comments: </span> $ref->{'comments'}</td></tr>";
@@ -924,7 +927,7 @@ sub getReferences {
         my $tables = "(refs r, person p1, person p2)".
                      " LEFT JOIN person p3 ON p3.person_no=r.modifier_no";
         # This exact order is very important due to work around with inflexible earlier code
-        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.classification_quality,r.comments,r.language,r.created,r.modified";
+        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.classification_quality,r.doi,r.comments,r.language,r.created,r.modified";
         my @join_conditions = ("r.authorizer_no=p1.person_no","r.enterer_no=p2.person_no");
         my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@join_conditions,@where);
         my $orderBy = " ORDER BY ";
@@ -981,7 +984,7 @@ sub printRefsCSV {
     PBDBUtil::autoCreateDir("$HTML_DIR/public/references");
     open REFOUTPUT,">$HTML_DIR/public/references/${authname}_refs.csv";
 
-    my @fields = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage publication_type classification_quality comments language created modified); 
+    my @fields = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage publication_type classification_quality language doi comments created modified); 
     if ($csv->combine(@fields)) {
         print REFOUTPUT $csv->string(),"\n";
     }
