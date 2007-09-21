@@ -1899,7 +1899,9 @@ sub buildTaxonomicList {
 window.onload = hideName;
 
 function addLink(link_id,link_action,taxon_name)	{
-	document.getElementById(link_id).innerHTML = '<a href="$READ_URL?action=checkTaxonInfo' + link_action + '&amp;is_real_user=1">' + taxon_name + '</a>';
+	if ( ! /href/.test( document.getElementById(link_id).innerHTML ) )	{
+		document.getElementById(link_id).innerHTML = '<a href="$READ_URL?action=checkTaxonInfo' + link_action + '&amp;is_real_user=1">' + taxon_name + '</a>';
+	}
 }
 
 function hideName()	{
@@ -1993,21 +1995,24 @@ sub formatOccurrenceTaxonName {
     my $taxon_name = "";
 
     # Generate the link first
-    my $link_id;
+    my $link_id = $row->{'occurrence_no'};
+    if ( $row->{'reid_no'} )	{
+        $link_id = "R" . $row->{'reid_no'};
+    }
     my $link_action;
     if ( $row->{'taxon_no'} > 0 )	{
-        $link_id = $row->{'taxon_no'};
-        $link_action = "&amp;taxon_no=" . uri_escape($link_id);
+        $link_action = $row->{'taxon_no'};
+        $link_action = "&amp;taxon_no=" . uri_escape($link_action);
     } elsif ($row->{'genus_name'} && $row->{'genus_reso'} !~ /informal/) {
-        $link_id = $row->{'genus_name'};
+        $link_action = $row->{'genus_name'};
 
         if ($row->{'subgenus_name'} && $row->{'subgenus_reso'} !~ /informal/) {
-            $link_id .= " ($row->{'subgenus_name'})";
+            $link_action .= " ($row->{'subgenus_name'})";
         }
         if ($row->{'species_name'} && $row->{'species_reso'} !~ /informal/ && $row->{'species_name'} !~ /^indet\.|^sp\./) {
-            $link_id .= " $row->{'species_name'}";
+            $link_action .= " $row->{'species_name'}";
         }
-        $link_action = "&amp;taxon_name=" . uri_escape($link_id);
+        $link_action = "&amp;taxon_name=" . uri_escape($link_action);
     }
 
 
@@ -2074,7 +2079,7 @@ sub formatOccurrenceTaxonName {
         $taxon_name .= "</i>";
     }
     if ($link_id) {
-        $taxon_name = qq|<span class="mockLink" id="$link_id" onMouseOver="addLink('$link_id','$link_action','$taxon_name')">$taxon_name</a>|;
+        $taxon_name = qq|<span class="mockLink" id="$link_id" onMouseOver="addLink('$link_id','$link_action','$taxon_name')">$taxon_name</span>|;
     }
     
     if ($row->{'genus_reso'} eq 'sensu lato' || $row->{'species_reso'} eq 'sensu lato') {
@@ -2129,9 +2134,9 @@ sub getSynonymName {
             $synonym_name = $taxon_name;
         }
         if ($is_synonym) {
-            $synonym_name = "synonym of <span class=\"mockLink\" id=\"$ss_taxon_no\" onMouseOver=\"addLink('$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span></a>";
+            $synonym_name = "synonym of <span class=\"mockLink\" id=\"$ss_taxon_no\" onMouseOver=\"addLink('syn$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span>";
         } else {
-            $synonym_name = "$spelling_reason <span class=\"mockLink\" id=\"$ss_taxon_no\" onMouseOver=\"addLink('$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span></a>";
+            $synonym_name = "$spelling_reason <span class=\"mockLink\" id=\"$ss_taxon_no\" onMouseOver=\"addLink('syn$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span>";
         }
     }
     return $synonym_name;
