@@ -2134,9 +2134,9 @@ sub getSynonymName {
             $synonym_name = $taxon_name;
         }
         if ($is_synonym) {
-            $synonym_name = "synonym of <span class=\"mockLink\" id=\"$ss_taxon_no\" onMouseOver=\"addLink('syn$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span>";
+            $synonym_name = "synonym of <span class=\"mockLink\" id=\"syn$ss_taxon_no\" onMouseOver=\"addLink('syn$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span>";
         } else {
-            $synonym_name = "$spelling_reason <span class=\"mockLink\" id=\"$ss_taxon_no\" onMouseOver=\"addLink('syn$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span>";
+            $synonym_name = "$spelling_reason <span class=\"mockLink\" id=\"syn$ss_taxon_no\" onMouseOver=\"addLink('syn$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span>";
         }
     }
     return $synonym_name;
