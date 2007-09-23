@@ -2079,6 +2079,7 @@ sub formatOccurrenceTaxonName {
         $taxon_name .= "</i>";
     }
     if ($link_id) {
+        $taxon_name =~ s/"/&quot;/g;
         $taxon_name = qq|<span class="mockLink" id="$link_id" onMouseOver="addLink('$link_id','$link_action','$taxon_name')">$taxon_name</span>|;
     }
     
@@ -2133,6 +2134,7 @@ sub getSynonymName {
         } else { 
             $synonym_name = $taxon_name;
         }
+        $synonym_name =~ s/"/&quot;/g;
         if ($is_synonym) {
             $synonym_name = "synonym of <span class=\"mockLink\" id=\"syn$ss_taxon_no\" onMouseOver=\"addLink('syn$ss_taxon_no','&amp;taxon_no=$ss_taxon_no','$synonym_name')\">$synonym_name</span>";
         } else {
