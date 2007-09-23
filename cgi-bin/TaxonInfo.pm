@@ -734,7 +734,9 @@ sub doCollections{
 
     if ( $minfirst && $extant && $age_range_format ne 'for_strata_module' )	{
         $range = "<div style=\"width: 40em; margin-left: auto; margin-right: auto; text-align: left; white-space: nowrap;\">Maximum range based only on fossils: " . $range . "<br>\n";
+        $minfirst =~ s/([0-9])0+$/$1/;
         $range .= "Minimum age of oldest fossil (stem group age): $minfirst Ma<br>\n";
+        $mincrownfirst =~ s/([0-9])0+$/$1/;
         $range .= "Minimum age of oldest fossil in any extant subgroup (crown group age): $mincrownfirst Ma<br>";
         $range .= "<span class=\"verysmall\" style=\"padding-left: 2em;\"><i>Collections with crown group taxa are in <b>bold</b>.</i></span></div><br>\n";
     }
