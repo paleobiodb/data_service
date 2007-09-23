@@ -742,7 +742,10 @@ sub doCollections{
     }
 
     if ($age_range_format eq 'for_strata_module') {
-        print "Age range: $range <br><hr><br>"; 
+        print qq|Age range: $range<br>
+</div>
+</div>
+|;
     } else {
         print "<div align=\"center\"><p class=\"large\">Age range</p></div>\n $range<br><hr>";
     }
@@ -887,12 +890,23 @@ sub doCollections{
 #	my @sorted = sort (keys %time_place_coll);
 
 	if(scalar @sorted > 0){
+	if ($age_range_format ne 'for_strata_module') {
 		$output .= qq|<div align="center"><p class="large" style="margin-bottom: .4em;">Collections</p>
 |;
-        my $collTxt = (scalar(@$colls)== 0) ? "None found"
-                    : (scalar(@$colls) == 1) ? "One found"
-                    : scalar(@$colls)." total";
-        $output .= "($collTxt)</div>\n";
+	} else	{
+		$output .= qq|
+</div>
+<div align="left" class="displayPanel">
+<span class="displayPanelHeader">Collections</span>
+<div class="displayPanelContent">
+|;
+	}
+		my $collTxt = (scalar(@$colls)== 0) ? "None found"
+			: (scalar(@$colls) == 1) ? "One found"
+			: scalar(@$colls)." total";
+		if ($age_range_format ne 'for_strata_module') {
+			$output .= "($collTxt)</div>\n";
+		}
 		if ( $#sorted <= 100 )	{
 			$output .= "<br>\n";
 		}
@@ -963,6 +977,14 @@ sub doCollections{
 		}
 		$output .= "</table>";
 	} 
+
+	if ($age_range_format eq 'for_strata_module') {
+		$output .= qq|
+</div>
+</div>
+|;
+	}
+
 	return $output;
 }
 
