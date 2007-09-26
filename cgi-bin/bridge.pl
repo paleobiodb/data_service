@@ -786,12 +786,10 @@ sub displaySearchRefs {
     print $hbo->stdIncludes( "std_page_bottom" );
 }
 
-
 sub selectReference {
 	$s->setReferenceNo($q->param("reference_no") );
 	displayMenuPage( );
 }
-
 
 # Wrapper to displayRefEdit
 sub editCurrentRef {
@@ -813,6 +811,11 @@ sub displayRefResults {
     Reference::displayRefResults($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes("std_page_bottom");
 				
+}
+
+sub getReferencesXML {
+    logRequest($s,$q);
+    Reference::getReferencesXML($dbt,$q,$s,$hbo);
 }
 
 sub displayReferenceForm {
@@ -1430,6 +1433,7 @@ sub getOccurrencesXML {
         print "</occurrences>\n";
     }
 }
+
 
 
 # JA 5-6.4.04

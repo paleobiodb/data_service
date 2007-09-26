@@ -182,7 +182,7 @@ sub formatShortRef  {
     return $shortRef;
 }
 
-sub formatLongRef {
+sub FormatLongRef {
     my $ref;
     if (UNIVERSAL::isa($_[0],'DBTransactionManager')) {
         $ref = getReference(@_);
@@ -973,6 +973,44 @@ sub getReferences {
 		displaySearchRefs($dbt,$q,$s,$hbo,$error);
 		exit(0);
 	}
+}
+
+sub getReferencesXML {
+    my ($dbt,$q,$s,$hbo) = @_;
+    require XML::Generator;
+
+    my ($data,$query_description) = Reference::getReferences($dbt,$q,$s,$hbo);
+    my @data = @$data;
+    my $dataRowsSize = scalar(@data);
+
+    my $g = XML::Generator->new(escape=>'always',conformance=>'strict',empty=>'args',pretty=>2);
+
+    print "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" standalone=\"yes\"?>\n";
+    print "<references total=\"$dataRowsSize\">\n";
+    foreach my $row (@data) {
+        my $an = AuthorNames->new($row);
+        my $authors = $an->toString();
+
+        my $pages = $row->{'firstpage'};
+        if ($row->{'lastpage'} ne "") {
+            $pages .= " - $row->{lastpage}";
+        }
+
+        # left out: authorizer/enterer, class. quality, language, doi, comments, project_name
+        print $g->reference(
+            $g->reference_no($row->{reference_no}),
+            $g->authors($authors),
+            $g->year($row->{pubyr}),
+            $g->title($row->{reftitle}),
+            $g->publication($row->{pubtitle}),
+            $g->publication_volume($row->{pubvol}),
+            $g->publication_no($row->{pubno}),
+            $g->pages($pages),
+            $g->publication_type($row->{publication_type})
+        );
+        print "\n";
+    }
+    print "</references>";
 }
    
 sub printRefsCSV {
