@@ -182,7 +182,7 @@ sub formatShortRef  {
     return $shortRef;
 }
 
-sub FormatLongRef {
+sub formatLongRef {
     my $ref;
     if (UNIVERSAL::isa($_[0],'DBTransactionManager')) {
         $ref = getReference(@_);
