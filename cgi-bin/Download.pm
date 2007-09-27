@@ -1319,7 +1319,7 @@ sub getOccurrencesWhereClause {
     my (@all_where,@occ_where,@reid_where);
 
     if ( $q->param('pubyr') > 0 && $q->param('output_data') !~ /collections/i )    {
-        my $pubyrrelation = ">";
+        my $pubyrrelation = ">=";
         if ( $q->param('published_before_after') eq "before" )    {
             $pubyrrelation = "<";
         } 
@@ -1384,7 +1384,7 @@ sub getCollectionsWhereClause {
     my @where = ();
     
     if ( $q->param('pubyr') > 0 && $q->param('output_data') =~ /collections/i )    {
-        my $pubyrrelation = ">";
+        my $pubyrrelation = ">=";
         if ( $q->param('published_before_after') eq "before" )    {
             $pubyrrelation = "<";
         } 
@@ -1405,20 +1405,9 @@ sub getCollectionsWhereClause {
     # added by rjp on 12/30/2003, some code copied from Curve.pm.
     # (filter it if they enter a year at the minimum.
     if ($q->param('year')) {
-        
-        my $month = ($q->param('month') || "01");
-        my $day = ($q->param('day_of_month') || "01");
 
-        if ( length $day == 1 )    {
-            $day = "0".$q->param('date'); #prepend a zero if only one digit.
-        }
-        
-        # note, this should really be handled by a function?  
-        my $created_date = $dbh->quote($q->param('year')."-".$month."-".$day." 00:00:00");
-        # note, the version of mysql on flatpebble needs the 000000 at the end, but the
-        # version on the linux box doesn't need it.  weird.                         
-    
         my $created_string;
+        my $created_date = $self->formCreatedDate(); 
         # if so, did they want to look before or after?
         if ($q->param('created_before_after') eq "before") {
             if ( $q->param('output_data') eq 'collections' )    {
@@ -1428,25 +1417,23 @@ sub getCollectionsWhereClause {
             }
         } elsif ($q->param('created_before_after') eq "after") {
             if ( $q->param('output_data') eq 'collections' )    {
-                $created_string = " c.created > $created_date ";
+                $created_string = " c.created >= $created_date ";
             } else    {
-                $created_string = " o.created > $created_date ";
+                $created_string = " o.created >= $created_date ";
             }
         }
     
+    # from 6.2.07 through 27.9.07 I had some code at about this point
+    #  that also sifted the reIDs by creation date if created_before_after
+    #  was used; this was a really bad idea because:
+    #  (1) it is impossible to sort out which reID is the "most recent"
+    #    if the most recent was entered after a created-before date but
+    #    the occurrence itself was created before it
+    #  (2) in such cases the occurrence got knocked out completely anyway
+    #  (3) similar manipulations cannot be done on the synonymy mask
+
         push @where,$created_string;
 
-        # the reIDs also need to be sifted, and not having done so has totally
-        #  screwed up every analysis using this option up to now JA 6.2.07
-        # duh, only do this if reIDs are being used JA 27.4.07
-        if ( $q->param('output_data') ne 'collections' && $q->param('replace_with_reid') ne 'NO' )    {
-            if ($q->param('created_before_after') eq "before") {
-                $created_string = " (re.created < $created_date OR re.created IS NULL) ";
-            } elsif ($q->param('created_before_after') eq "after") {
-                $created_string = " (re.created > $created_date OR re.created IS NULL) ";
-            }
-            push @where,$created_string;
-        }
     }
 
     if ($q->param("collection_no") =~ /\d/) {
@@ -1476,6 +1463,23 @@ sub getCollectionsWhereClause {
     return @where;
 }
 
+sub formCreatedDate	{
+    my $self = shift;
+    my $q = $self->{'q'};
+    my $dbh = $self->{'dbh'};
+
+    my $month = ($q->param('month') || "01");
+    my $day = ($q->param('day_of_month') || "01");
+
+    if ( length $month == 1 )    {
+       $month = "0" . $month;
+    }
+    if ( length $day == 1 )    {
+       $day = "0" . $day;
+    }
+
+    return $dbh->quote($q->param('year')."-".$month."-".$day." 00:00:00");
+}
 
 sub getSubsetString {
     my $self = shift;
