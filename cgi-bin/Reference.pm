@@ -349,7 +349,7 @@ sub displayRefResults {
                 print "<a href=\"$READ_URL?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
             }
             print "</td>";
-            my $formatted_reference = Reference::formatLongRef($row);
+            my $formatted_reference = formatLongRef($row);
             print "<td>".$formatted_reference;
             if ( $type eq 'view' && $s->isDBMember() ) {
                 print qq| <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$row->{reference_no}">edit</a></b></small>|;
@@ -435,9 +435,9 @@ sub displayReference {
     };
 
 	print $hbo->stdIncludes("std_page_top");
-    print "<div align=\"center\"><p class=\"pageTitle\">" . Reference::formatShortRef($ref) . "</p></div>";
+    print "<div align=\"center\"><p class=\"pageTitle\">" . formatShortRef($ref) . "</p></div>";
 
-    my $citation = Reference::formatLongRef($ref);
+    my $citation = formatLongRef($ref);
     if ($s->isDBMember())	{
         $citation .= qq| <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$ref->{reference_no}">edit</a></b></small>|;
     }
@@ -759,8 +759,8 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     # Set the reference_no
     if ($reference_no) {
         $s->setReferenceNo($reference_no);
-        my $ref = Reference::getReference($dbt,$reference_no);
-        my $formatted_ref = Reference::formatLongRef($ref);
+        my $ref = getReference($dbt,$reference_no);
+        my $formatted_ref = formatLongRef($ref);
 
         # print a list of all the things the user should now do, with links to
         #  popup windows JA 28.7.06
@@ -979,7 +979,7 @@ sub getReferencesXML {
     my ($dbt,$q,$s,$hbo) = @_;
     require XML::Generator;
 
-    my ($data,$query_description) = Reference::getReferences($dbt,$q,$s,$hbo);
+    my ($data,$query_description) = getReferences($dbt,$q,$s,$hbo);
     my @data = @$data;
     my $dataRowsSize = scalar(@data);
 
