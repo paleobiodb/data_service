@@ -487,84 +487,50 @@ sub calculateBounds {
     my ($lat_size,$lng_size) = (0,0);
     my ($midlat,$midlng,$scale);
 
-    my $first_point = 1;
-    my $second_point = 1;
+    # rewrote this with a much shorter algorithm because I needed to figure
+    #  out a way to center the rectangle reliably if it needed to straddle
+    #  the Pacific instead of the Atlantic JA 28.9.07
     foreach my $coll_set (@dataSets) {
         if (ref $coll_set) {
-            foreach my $coll (@$coll_set) {
-                my ($lat,$lng) = ($coll->{'latdeg'},$coll->{'lngdeg'});
-                if ($lat !~ /\d/ || $lng !~ /\d/) {
-                    next;
+            my @temp = @$coll_set;
+            if ( $#temp == 0 )	{
+                $lat1 = $temp[0]->{'latdeg'};
+                $lat2 = $temp[0]->{'latdeg'};
+                $lng1 = $temp[0]->{'lngdeg'};
+                $lng2 = $temp[0]->{'lngdeg'};
+            } else	{
+            # this needs to be undone later
+                foreach my $coll ( @temp )	{
+                    $coll->{'latdeg'} *= -1 if ($coll->{'latdir'} eq 'South');
+                    $coll->{'lngdeg'} *= -1 if ($coll->{'lngdir'} eq 'West');
                 }
-                $lat *= -1 if ($coll->{'latdir'} eq 'South');
-                $lng *= -1 if ($coll->{'lngdir'} eq 'West');
-#                print "SEE LAT $lat, $lng LATB $lat1 to $lat2 LNGB $lng1 to $lng2<br>";
-               
-                if ($first_point) {
-                    $lat1 = $lat;
-                    $lat2 = $lat;
-                    $lng1 = $lng;
-                    $lng2 = $lng;
-                    $first_point = 0;
-                } elsif ($second_point) {
-                    if ( $lat < $lat1 )	{
-                        my $temp = $lat1;
-                        $lat1 = $lat;
-                        $lat2 = $temp;
-                    } else	{
-                        $lat2 = $lat;
+                @temp = sort { $a->{'lngdeg'} <=> $b->{'lngdeg'} } @temp;
+                foreach my $coll ( @temp )	{
+                    if ( $coll->{'latdeg'} < $lat1 || ! $lat1 )	{
+                        $lat1 = $coll->{'latdeg'};
                     }
-                    if ( $lng < $lng1 )	{
-                        my $temp = $lng1;
-                        $lng1 = $lng;
-                        $lng2 = $temp;
-                    } else	{
-                        $lng2 = $lng;
+                    if ( $coll->{'latdeg'} > $lat2 || ! $lat2 )	{
+                        $lat2 = $coll->{'latdeg'};
                     }
-                    $second_point = 0;
-                } else {
-                    my $in_lat_box = 0;
-                    if ($lat1 <= $lat2) {
-                        if ($lat >= $lat1 && $lat <= $lat2) {
-                            $in_lat_box = 1;
-                        }
-                    } else {
-                        if (!($lat >= $lat1 && $lat <= $lat2)) {
-                            $in_lat_box = 1;
-                        }
+                }
+                @temp = sort { $a->{'lngdeg'} <=> $b->{'lngdeg'} } @temp;
+            # here's the trick: center the rectangle longitudinally to split
+            #  the two adjacent points separated by the biggest gap, which is
+            #  often but not always between the first and last points because
+            #  they are often separated by the Pacific Ocean
+                my $last_lng = $temp[$#temp]->{'lngdeg'} - 360;
+                my $maxgap = 0;
+                foreach my $coll ( @temp )	{
+                    if ( $coll->{'lngdeg'} - $last_lng > $maxgap )	{
+                        $maxgap = $coll->{'lngdeg'} - $last_lng;
+                        $lng1 = $coll->{'lngdeg'};
+                        $lng2 = $last_lng;
                     }
-                    my $in_lng_box = 0;
-                    if ($lng1 <= $lng2) {
-                        if ($lng >= $lng1 && $lng <= $lng2) {
-                            $in_lng_box = 1;
-                        }
-                    } else {
-                        if (!($lng >= $lng1 && $lng <= $lng2)) {
-                            $in_lng_box = 1;
-                        }
-                    }
-                    unless ($in_lat_box) {
-                        $d1 = $lat1 - $lat;
-                        if ($d1 < 0) { $d1 += 180; }
-                        $d2 = $lat - $lat2;
-                        if ($d2 < 0) { $d2 += 180; }
-                        if ($d1 < $d2) {
-                            $lat1 = $lat;
-                        } else {
-                            $lat2 = $lat;
-                        }
-                    }
-                    unless ($in_lng_box) {
-                        $d1 = $lng1 - $lng;
-                        if ($d1 < 0) { $d1 += 360; }
-                        $d2 = $lng - $lng2;
-                        if ($d2 < 0) { $d2 += 360; }
-                        if ($d1 < $d2) {
-                            $lng1 = $lng;
-                        } else {
-                            $lng2 = $lng;
-                        }
-                    }
+                $last_lng = $coll->{'lngdeg'};
+                }
+                foreach my $coll ( @temp )	{
+                    $coll->{'latdeg'} *= -1 if ($coll->{'latdir'} eq 'South');
+                    $coll->{'lngdeg'} *= -1 if ($coll->{'lngdir'} eq 'West');
                 }
             }
         }
@@ -572,8 +538,10 @@ sub calculateBounds {
     my $lat_dist;
     if ($lat1 <= $lat2) {
         $lat_dist = $lat2 - $lat1;
+        $midlat = $lat_dist/2 + $lat1;
     } else {
-        $lat_dist = 180 + $lat2 - $lat1;
+        $lat_dist = $lat1 - $lat2;
+        $midlat = $lat_dist/2 + $lat2;
     }
     my $lng_dist;
     if ($lng1 <= $lng2) {
@@ -582,7 +550,6 @@ sub calculateBounds {
         $lng_dist = 360 + $lng2 - $lng1;
     }
 #        print "LNG DIST $lng_dist LAT_DIST $lat_dist<BR>";
-    $midlat = $lat_dist/2 + $lat1;
     my $lowlat = abs( $lat1 );
     if ( $lat1 <= 0 && $lat2 >= 0 )	{
         $lowlat = 0;
@@ -610,9 +577,9 @@ sub calculateBounds {
         #  JA 16.9.07
         $lng_ratio /= cos( ( abs( $midlat ) / 1.5 ) * $PI / 180 );
         if ( $midlat > 0 && $lng_dist > 0 )	{
-            $midlat += ( 90 - $midlat ) * sin( $lng_dist / 10 * $PI / 180 );
+            $midlat += ( 90 - $midlat ) * sin( $lng_dist / 12 * $PI / 180 );
         } elsif ( $midlat < 0 && $lng_dist > 0 )	{
-            $midlat -= ( 90 + $midlat ) * sin( $lng_dist / 10 * $PI / 180 );
+            $midlat -= ( 90 + $midlat ) * sin( $lng_dist / 12 * $PI / 180 );
         }
 
         if ($lat_ratio < $lng_ratio) {
@@ -643,7 +610,7 @@ sub calculateBounds {
             $midlng -= 360;
         }
     }
-#    print "MID LAT $midlat MDLNG $midlng SCALE $scale<BR>";
+    print "MIDLAT $midlat MIDLNG $midlng SCALE $scale<BR>";
     return ($midlat,$midlng,$scale);
 }
 
