@@ -525,6 +525,9 @@ sub calculateBounds {
                         $maxgap = $coll->{'lngdeg'} - $last_lng;
                         $lng1 = $coll->{'lngdeg'};
                         $lng2 = $last_lng;
+                        if ( $lng2 < -180 )	{
+                            $lng2 += 360;
+                        }
                     }
                 $last_lng = $coll->{'lngdeg'};
                 }
@@ -610,7 +613,7 @@ sub calculateBounds {
             $midlng -= 360;
         }
     }
-    print "MIDLAT $midlat MIDLNG $midlng SCALE $scale<BR>";
+#    print "MIDLAT $midlat MIDLNG $midlng SCALE $scale<BR>";
     return ($midlat,$midlng,$scale);
 }
 
