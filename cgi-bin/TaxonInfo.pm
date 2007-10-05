@@ -2890,12 +2890,18 @@ sub getTaxonNos {
     my $lump_ranks = shift;
     my @taxon_nos = ();
     if ($dbt && $name)  {
-        my $sql = "SELECT a.taxon_no taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbt->dbh->quote($name);
+        my $dbh = $dbt->dbh;
+        my $sql;
+        if ($lump_ranks) {
+            $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_name=".$dbh->quote($name);
+        } else {
+            $sql = "SELECT a.taxon_no FROM authorities a WHERE a.taxon_name=".$dbh->quote($name);
+        }
         if ($rank) {
-            $sql .= " AND taxon_rank=".$dbt->dbh->quote($rank);
+            $sql .= " AND taxon_rank=".$dbh->quote($rank);
         }
         if ($lump_ranks) {
-            $sql .= " GROUP BY lft,rgt";
+            $sql .= " GROUP BY t.lft,t.rgt";
         }
         my @results = @{$dbt->getData($sql)};
         push @taxon_nos, $_->{'taxon_no'} for @results;
