@@ -2771,8 +2771,9 @@ sub displaySynonymyList	{
 	# a list of all spellings used is needed to get the names from the
 	#  authorities table, which we have to hit anyway
 
-	my %spelling_nos = ();
-	my %orig_no = ();
+	my %spelling_nos = ($taxon_no=>1);
+    # This is merely so the script won't crash if there are no opinions -- will get overwritten with correct data if there are
+	my %orig_no = ($taxon_no=>$taxon_no); 
 	for my $or ( @opinionrefs )	{
 		$spelling_nos{$or->{child_spelling_no}}++;
 		$orig_no{$or->{child_spelling_no}} = $or->{child_no};
