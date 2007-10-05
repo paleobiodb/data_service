@@ -37,21 +37,36 @@ sub new {
     my $reference_no = shift;
 	my Reference $self = fields::new($class);
 
+    my $error_msg = "";
+
     if (!$reference_no) { 
-        carp "Could not create Reference object with $reference_no";
-        return undef; 
-    }
-    my @fields = qw(reference_no reftitle pubtitle pubyr pubvol pubno firstpage lastpage author1init author1last author2init author2last otherauthors project_name);
-	my $sql = "SELECT ".join(",",@fields)." FROM refs WHERE reference_no=".$dbt->dbh->quote($reference_no);
-    my @results = @{$dbt->getData($sql)};
-    if (@results) {
-        foreach $_ (@fields) {
-            $self->{$_}=$results[0]->{$_};
-        }
-        return $self;
+        $error_msg = "Could not create Reference object with reference_no=undef."
     } else {
-        carp "Could not create Reference object with $reference_no";
-        return undef; 
+        my @fields = qw(reference_no reftitle pubtitle pubyr pubvol pubno firstpage lastpage author1init author1last author2init author2last otherauthors project_name);
+        my $sql = "SELECT ".join(",",@fields)." FROM refs WHERE reference_no=".$dbt->dbh->quote($reference_no);
+        my @results = @{$dbt->getData($sql)};
+        if (@results) {
+            foreach $_ (@fields) {
+                $self->{$_}=$results[0]->{$_};
+            }
+        } else {
+            $error_msg = "Could not create Reference object with reference_no=$reference_no."
+        }
+    }
+
+    if ($error_msg) {
+        my $cs = "";
+        for(my $i=0;$i<10;$i++) {
+            my ($package, $filename, $line, $subroutine) = caller($i);
+            last if (!$package);
+            $cs .= "$package:$line:$subroutine ";
+        }
+        $cs =~ s/\s*$//;
+        $error_msg .= " Call stack is $cs.";
+        carp $error_msg;
+        return undef;
+    } else {
+        return $self;
     }
 }
 

@@ -495,15 +495,16 @@ sub getData {
 		# execute returns the number of rows affected for non-select statements.
 		# SELECT:
         my $sth = $dbh->prepare($sql);
-        my $return = $sth->execute();
 
-        $self->{_err} = $sth->errstr;
-        if ($sth->errstr) { 
+        my $return = eval {$sth->execute();};
+
+        if ($sth->errstr || $@ ne "") {
+            $self->{_err} = $sth->errstr;
             my $stack = "";
             for(my $i = 0;$i < 10;$i++) {
                 my ($package, $filename, $line, $subroutine, $hasargs) = caller($i);
                 last unless $subroutine;
-                $stack .= "$subroutine ";
+                $stack .= "$subroutine:$line ";
             }
             $stack =~ s/ $//;
             my $errstr = "SQL error: sql($sql)";
@@ -520,7 +521,9 @@ sub getData {
             $getpoststr =~ s/\n//;
             $errstr .= " GET,POST ($getpoststr)";
             croak $errstr;
-        }    
+        } else {
+            $self->{_err} = "";
+        }
         my $data = $sth->fetchall_arrayref({});
         $sth->finish();
         return $data;
