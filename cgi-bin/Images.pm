@@ -3,7 +3,8 @@ package Images;
 use Reference;
 use TaxaCache;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL);
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR);
+use strict;
 
 ###
 # UPLOADING
@@ -28,7 +29,7 @@ sub displayLoadImageForm{
 
 	print "<div style=\"text-align: center;\"><p class=\"pageTitle\">Image upload form: $taxon_name</p>";
 	print "<div class=\"displayPanel\" style=\"width: 40em; margin-left: 6em; text-align: left; padding-top: 1em; padding-left: 2em;\"><p><form name=\"load_image_form\" action=\"$WRITE_URL\" method=\"POST\" enctype=\"multipart/form-data\">";
-	print "<p class=\"medium\">File to upload:&nbsp;<input type=file name=\"image_file\" accept=\"image/*\"><\p>".
+	print "<p class=\"medium\">File to upload:&nbsp;<input type=file name=\"image_file\" accept=\"image/*\"></p>".
 		  "<input type=hidden name=\"taxon_no\" value=\"$taxon_no\">".
 		  "<input type=hidden name=\"taxon_name\" value=\"$taxon_name\">".
 		  "<input type=hidden name=\"action\" value=\"processLoadImage\">";
@@ -56,7 +57,7 @@ sub processLoadImage{
 	dbg("FILE NAME: $file_name");
 
 	my $caption = $q->param('caption');
-	if($caption eq "Optional image description here."){
+	if($caption =~ /Optional image description/i){
 		$caption = "";
 	}
 
@@ -192,8 +193,8 @@ sub processLoadImage{
 	warn "$x" if "$x";
 
 	my %vars = (
-        authorizer_no   => $authorizer,
-        enterer_no      => $enterer, 
+        authorizer_no   => $s->get('authorizer_no'),
+        enterer_no      => $s->get('enterer_no'), 
         reference_no    => $reference_no, 
         taxon_no        => $taxon_no, 
         host            => $ENV{PRIMARY_HOST},
@@ -232,8 +233,8 @@ sub getImageList {
 	my $taxa_list = shift;
     
 	my @results = ();
-
-    foreach $taxon_no (@$taxa_list) {
+    my @taxon_no_list = ();
+    foreach my $taxon_no (@$taxa_list) {
         if ($taxon_no =~ /^\d+$/) {
             push @taxon_no_list,$taxon_no;
         }
@@ -273,7 +274,7 @@ sub displayImage {
         if ( $row->{reference_no} > 0 ) {
             my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$row->{reference_no}";
             my $ref = ${$dbt->getData($sql)}[0];
-            $ref_string = Reference::formatShortRef($ref,'link_id'=>1);  
+            my $ref_string = Reference::formatShortRef($ref,'link_id'=>1);  
             $ref_string =~ s/<a /<a target="_blank" /;
             print "<tr><td><b>Reference:</b></td><td> $ref_string</td></tr>\n";
         }
