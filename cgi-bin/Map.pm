@@ -498,6 +498,10 @@ sub calculateBounds {
                 $lat2 = $temp[0]->{'latdeg'};
                 $lng1 = $temp[0]->{'lngdeg'};
                 $lng2 = $temp[0]->{'lngdeg'};
+                $lat1 *= -1 if ($temp[0]->{'latdir'} eq 'South');
+                $lat2 *= -1 if ($temp[0]->{'latdir'} eq 'South');
+                $lng1 *= -1 if ($temp[0]->{'lngdir'} eq 'West');
+                $lng2 *= -1 if ($temp[0]->{'lngdir'} eq 'West');
             } else	{
             # this needs to be undone later
                 foreach my $coll ( @temp )	{
@@ -529,7 +533,7 @@ sub calculateBounds {
                             $lng2 += 360;
                         }
                     }
-                $last_lng = $coll->{'lngdeg'};
+                    $last_lng = $coll->{'lngdeg'};
                 }
                 foreach my $coll ( @temp )	{
                     $coll->{'latdeg'} *= -1 if ($coll->{'latdir'} eq 'South');
