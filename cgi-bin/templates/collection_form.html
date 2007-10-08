@@ -75,6 +75,12 @@ function doCheckFieldsBasicInfo() {
         bad_info += "\no Collection name is required";
     }
 
+    if ( /immediate/.test( frm.release_date.value ) && ! /public/.test( frm.access_level.value ) ) {
+        bad_info += "\no The release date is immediate";
+    } else if ( ! /immediate/.test( frm.release_date.value ) && /public/.test( frm.access_level.value ) ) {
+        bad_info += "\no The access level is public";
+    }
+
     var IGSNre = /^[a-zA-Z]{3}[0-9a-zA-Z]{6}$/i;
     if (frm.igsn.value != '' && IGSNre.test(frm.igsn.value) == false) {
         bad_info += "\no The IGSN number doesn't appear to be valid";
