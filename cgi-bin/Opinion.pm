@@ -1287,30 +1287,13 @@ sub submitOpinionForm {
     if ( @opinions_to_migrate1 || @opinions_to_migrate2 || @parents_to_migrate1 || @parents_to_migrate2 )	{
         dbg("Migrating ".(scalar(@opinions_to_migrate1)+scalar(@opinions_to_migrate2))." opinions");
         foreach my $row  (@opinions_to_migrate1,@opinions_to_migrate2) {
-            my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$fields{'child_no'}});
-            my $spelling;
-            if ($row->{'status'} eq 'misspelling of') {
-                $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
-            } else {
-                $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
-            }
-            my $is_misspelling = TaxonInfo::isMisspelling($dbt,$row->{'child_spelling_no'});
-            $is_misspelling = 1 if ($row->{'spelling_reason'} eq 'misspelling');
-            my $newSpellingReason;
-            if ($is_misspelling) {
-                $newSpellingReason = 'misspelling';
-            } else {
-                $newSpellingReason = guessSpellingReason($child,$spelling);
-            }
-            my $sql = "UPDATE opinions SET modified=modified,spelling_reason='$newSpellingReason',child_no=$fields{child_no} WHERE opinion_no=$row->{opinion_no}";
-            dbg("Migrating child: $sql");
-            $dbh->do($sql);
+            resetOriginalNo($dbt,$fields{'child_no'},$row);
         }
 
         # We also have to modify the parent_no so it points to the original
         #  combination of any taxa classified into any migrated opinion
         if ( @parents_to_migrate1 || @parents_to_migrate2 ) {
-            push @opinions_to_migrate1 , @parents_to_migrate2;
+            push @parents_to_migrate1, @parents_to_migrate2;
             my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'child_no'} WHERE parent_no IN (".join(",",@parents_to_migrate1).")";
             dbg("Migrating parents: $sql");
             $dbh->do($sql);
@@ -1445,6 +1428,33 @@ sub submitOpinionForm {
     Taxon::displayTypeTaxonSelectForm($dbt,$s,$fields{'type_taxon'},$fields{'child_no'},$childName,$childRank,$resultReferenceNumber,$end_message);
 }
 
+# row is an opinion database row and must contain the following fields:
+#   child_no,status,child_spelling_no,parent_spelling_no,opinion_no
+sub resetOriginalNo{
+    my ($dbt,$new_orig_no,$row) = @_;
+    my $dbh = $dbt->dbh;
+    return unless $new_orig_no;
+    
+    my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$new_orig_no});
+    my $spelling;
+    if ($row->{'status'} eq 'misspelling of') {
+        $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'parent_spelling_no'}});
+    } else {
+        $spelling = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'child_spelling_no'}});
+    }
+    my $is_misspelling = TaxonInfo::isMisspelling($dbt,$row->{'child_spelling_no'});
+    $is_misspelling = 1 if ($row->{'spelling_reason'} eq 'misspelling');
+    my $newSpellingReason;
+    if ($is_misspelling) {
+        $newSpellingReason = 'misspelling';
+    } else {
+        $newSpellingReason = guessSpellingReason($child,$spelling);
+    }
+    my $sql = "UPDATE opinions SET modified=modified,spelling_reason='$newSpellingReason',child_no=$new_orig_no  WHERE opinion_no=$row->{opinion_no}";
+    dbg("Migrating child: $sql");
+    $dbh->do($sql);
+}
+
 # Gets a list of opinions that will be moved from a spelling to an original name.  Made into
 # its own function so we can prompt the user before the move actually happens to make
 # sure they're not making a mistake. The exclude_opinion_no is passed so we exclude the
@@ -1477,7 +1487,9 @@ sub getOpinionsToMigrate {
         if ($row->{'child_no'} != $child_no) {
             push @opinions, $row;
             if ($row->{'status'} eq 'misspelling of') {
-                push @parents,$row->{'parent_spelling_no'};
+                if ($row->{'parent_spelling_no'} =~ /^\d+$/) {
+                    push @parents,$row->{'parent_spelling_no'};
+                }
             }
             if ($row->{'child_spelling_no'} =~ /^\d+$/) {
                 push @parents,$row->{'child_spelling_no'};

@@ -1140,8 +1140,10 @@ sub submitSearchInterval {
         $row = ${$dbt->getData($sql)}[0];
     }
     if (!$row) {
+        $eml = PBDBUtil::stripTags($eml);
+        $name = PBDBUtil::stripTags($name);
         print "<div align=\"center\">";
-        print "<h3>Could not find ".$q->param('eml')." ".$q->param('interval_name')."</h3>";
+        print "<h3>Could not find $eml $name</h3>";
         print "<h4>(Please try again)</h4>";
         print PBDBUtil::printIntervalsJava($dbt,1);
         print $hbo->populateHTML("search_intervals_form");

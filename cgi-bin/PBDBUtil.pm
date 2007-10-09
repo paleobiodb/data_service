@@ -298,6 +298,14 @@ EOF
     return;
 }
 
+sub stripTags {
+    my $s = shift;
+    $s =~ s/<(?:[^>'"]*|(['"]).*?\1)*>//gs;
+    $s =~ s/\[.*?\]//gs;
+    $s =~ s/http:\/\/.*?(\s|$)//gs;
+    return $s;
+}
+
 sub checkForBot {
     if ($ENV{'HTTP_USER_AGENT'} =~ /slurp|bot|spider|ask jeeves|crawl|archive|holmes|findlinks|webcopier|cfetch|stackrambler/i) {
         return 1;

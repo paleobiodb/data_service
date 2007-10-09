@@ -396,6 +396,34 @@ sub displayAuthorityForm {
     }
     $fields{'taxon_rank_select'} = $hbo->htmlSelect('taxon_rank',\@taxon_ranks,\@taxon_ranks,$fields{'taxon_rank'}); 
 
+    # Build original name select
+    if ($fields{taxon_no}) {
+        my $orig_no = TaxonInfo::getOriginalCombination($dbt,$fields{taxon_no});
+        my @spellings = TaxonInfo::getAllSpellings($dbt,$orig_no);
+        my @taxa = ();
+        my %seen_name = ();
+        my $duplicate_names = 0;
+        foreach my $spelling_no (@spellings) {
+            my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$spelling_no});
+            push @taxa, [$spelling_no,$taxon->{taxon_name},$taxon->{taxon_rank}];
+            if ($seen_name{$taxon->{taxon_name}}) {
+                $duplicate_names++;
+            }
+            $seen_name{$taxon->{taxon_name}} = 1;
+        }
+        if ($duplicate_names) {
+            foreach my $t (@taxa) {
+                $t->[1] .= ", $t->[2]";
+            }
+        }
+        @taxa = sort {$a->[1] cmp $b->[1]} @taxa;
+        my @names = map {$_->[1]} @taxa;
+        my @nos =   map {$_->[0]} @taxa;
+        if (scalar(@names) > 1) {
+            my $original_no_select = HTMLBuilder::htmlSelect('original_no',\@names,\@nos,$orig_no);
+            $fields{'original_no_select'} = $original_no_select;
+        }
+    }
     
 
     # Build extant select
@@ -504,12 +532,7 @@ sub submitAuthorityForm {
             $errors->add("Don't enter other author names if you haven't entered a second author");
         }	
        
-        my $lookup_reference = "";
-        if ($q->param('ref_is_authority') eq 'CURRENT') {
-            $lookup_reference = $s->get('reference_no');
-        } else {
-            $lookup_reference = $fields{'reference_no'};
-        }  
+        my $lookup_reference = $fields{'reference_no'};
 			
 		if ($q->param('pubyr')) {
             my $pubyr = $q->param('pubyr');
@@ -520,11 +543,13 @@ sub submitAuthorityForm {
 			
 			# make sure that the pubyr they entered (if they entered one)
 			# isn't more recent than the pubyr of the reference.  
-			my $ref = Reference->new($dbt,$lookup_reference);
-			if ($ref && $pubyr > $ref->get('pubyr')) {
-				$errors->add("The publication year ($pubyr) can't be more 
-				recent than that of the primary reference (" . $ref->get('pubyr') . ")");
-			}
+            if ($lookup_reference) {
+                my $ref = Reference->new($dbt,$lookup_reference);
+                if ($ref && $pubyr > $ref->get('pubyr')) {
+                    $errors->add("The publication year ($pubyr) can't be more 
+                    recent than that of the primary reference (" . $ref->get('pubyr') . ")");
+                }
+            }
 		}
         if ($q->param('taxon_rank') =~ /species|subgenus/) {
             if (!$q->param('author1last')) {
@@ -685,12 +710,51 @@ sub submitAuthorityForm {
 		$resultTaxonNumber = $t->get('taxon_no');
 		$status = $dbt->updateRecord($s,'authorities','taxon_no',$resultTaxonNumber, \%fields);
         propagateAuthorityInfo($dbt,$resultTaxonNumber,1);
+
+        my $db_orig_no = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
+
+        if ($fields{'original_no'} =~ /^\d+$/ && $fields{'original_no'} != $db_orig_no) {
+            my $sql = "SELECT * FROM opinions WHERE child_no=$db_orig_no"; 
+            my @results = @{$dbt->getData($sql)};
+            my @parents = ();
+            foreach my $row (@results) {
+                Opinion::resetOriginalNo($dbt,$fields{'original_no'},$row);
+#                if ($row->{'child_no'} != $fields{original_no}) {
+                    if ($row->{'status'} eq 'misspelling of') {
+                        if ($row->{'parent_spelling_no'} =~ /^\d+$/) {
+                            push @parents,$row->{'parent_spelling_no'};
+                        }
+                    }
+                    if ($row->{'child_spelling_no'} =~ /^\d+$/) {
+                        push @parents,$row->{'child_spelling_no'};
+                    }
+                    if ($row->{'child_no'} =~ /^\d+$/) {
+                        push @parents,$row->{'child_no'};
+                    }
+#                }
+            }
+            # We also have to modify the parent_no so it points to the original
+            #  combination of any taxa classified into any migrated opinion
+            if ( @parents ) {
+                my %unique_parents = ();
+                foreach my $p (@parents) {
+                    $unique_parents{$p} = 1;
+                }
+                my @unique_parents = keys %unique_parents;
+                my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'original_no'} WHERE parent_no IN (".join(",",@unique_parents).")";
+                dbg("Migrating parents: $sql");
+                $dbh->do($sql);
+            }
+
+        }
         # Changing a genus|subgenus|species|subspecies is tricky since we have to change
         # other related opinions and authorities
         if ($t->get('taxon_name') ne $fields{'taxon_name'} &&
             $t->get('taxon_rank') =~ /^genus|^subgenus|^species/){
             updateChildNames($dbt,$s,$t->get('taxon_no'),$t->get('taxon_name'),$fields{'taxon_name'});
         }
+
+        
         updateImplicitBelongsTo($dbt,$s,$t->get('taxon_no'),$parent_no,$t->get('taxon_name'),$fields{'taxon_name'},\%fields);
 	}
 
@@ -858,6 +922,9 @@ sub processSpecimenMeasurement {
     }
 }
 
+# When a genus is changed becaues of a typo (i.e. Equuus -> Equus) and theres
+# children assigned to that genus, the children will be found and changed to match
+# the genus.  Doesn't come up too often
 sub updateChildNames {
     my ($dbt,$s,$old_taxon_no,$old_name,$new_name) = @_;
     
@@ -881,6 +948,7 @@ sub updateChildNames {
             $to_change{$row->{'child_spelling_no'}} = 1;
         }
     }
+    # this quotes parentheses (in subgenera) and any other weirdness
     my $quoted_old_name = quotemeta $old_name;
     foreach my $t (keys %to_change) {
         my $child = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$t});
@@ -890,6 +958,13 @@ sub updateChildNames {
         $dbt->updateRecord($s,'authorities','taxon_no',$child->{'taxon_no'},{'taxon_name'=>$taxon_name});
     }
 }
+
+
+# This happens when we change the name of a species, but change the genus part so
+# the species gets assigned to a different genus with some very similar spelling.  We 
+# have to find the name, find the opinion from the same reference, and then change
+# the parent_no of that opinion.  This can also happen when change from a Genus A species B
+# combo to a Subgenus C (Subgenus A) species B type scenario
 sub updateImplicitBelongsTo {
     my ($dbt,$s,$taxon_no,$parent_no,$old_name,$new_name,$fields) = @_;
     return if ($old_name eq $new_name);
@@ -1443,7 +1518,7 @@ sub formatTaxon{
 	# italicize if genus or species.
 	if ( $taxon->{'taxon_rank'} =~ /subspecies|species|genus/) {
         if ($options{'no_html'}) {
-            $nameLine .= ", $taxon->{taxon_rank}";
+            $nameLine .= "$taxon->{taxon_name}, $taxon->{taxon_rank}";
         } else {
 		    $nameLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
         }
