@@ -158,15 +158,10 @@ sub setSteps	{
 	my $self = shift;
 
 	my $i = 1;
-	if ($q->param('stepsize') eq "100, 200, 300..." ||
-			$q->param('stepsize') eq "50, 100, 150..." ||
-			$q->param('stepsize') eq "20, 40, 60...")	{
-		$i = 0;
-	}
 	$atstep[0] = 0;
 	$atstep[1] = 1;
 	$wink = 0;
-	while ($i <= $q->param('samplesize') * 5)	{
+	while ($i <= $q->param('samplesize') * 11)	{
 		push @samplesteps,$i;
 		$x = $i;
 		if ($q->param('stepsize') eq "1, 10, 100...")	{
@@ -203,15 +198,19 @@ sub setSteps	{
 		}
 		elsif ($q->param('stepsize') eq "1000, 2000, 3000...")	{
 			$i = $i + 1000;
+			if ( $x == 1 ) { $i--; }
 		}
 		elsif ($q->param('stepsize') eq "100, 200, 300...")	{
 			$i = $i + 100;
+			if ( $x == 1 ) { $i--; }
 		}
 		elsif ($q->param('stepsize') eq "50, 100, 150...")	{
 			$i = $i + 50;
+			if ( $x == 1 ) { $i--; }
 		}
 		elsif ($q->param('stepsize') eq "20, 40, 60...")	{
 			$i = $i + 20;
+			if ( $x == 1 ) { $i--; }
 		}
 		for $j ($x..$i-1)	{
 			$atstep[$j] = $#samplesteps + 1;
@@ -1117,10 +1116,10 @@ $| = 1;
 	
 		 # record data in the complete subsampling curve
 		 # (but only at intermediate step sizes requested by the user)
-					  if ($atstep[$sampled[$i]] > $atstep[$lastsampled[$i]])	{
+					  if ($atstep[int($sampled[$i])] > $atstep[int($lastsampled[$i])])	{
 					    $z = $sampled[$i] - $lastsampled[$i];
 					    $y = $subsrichness[$i] - $lastsubsrichness[$i];
-					    for $k ($atstep[$lastsampled[$i]]..$atstep[$sampled[$i]]-1)	{
+					    for $k ($atstep[int($lastsampled[$i])]..$atstep[int($sampled[$i])]-1)	{
 					      $x = $stepback[$k] - $lastsampled[$i];
 					      $sampcurve[$i][$k] = $sampcurve[$i][$k] + ($x * $y / $z) + $lastsubsrichness[$i];
 					    }
@@ -1152,7 +1151,7 @@ $| = 1;
 		 # end of while loop
 				}
 			# finish off recording data in complete subsampling curve
-				if ($atstep[$q->param('samplesize')]+1 > $atstep[$sampled[$i]] &&
+				if ($atstep[$q->param('samplesize')]+1 > $atstep[int($sampled[$i])] &&
 					  $inbin > $sampled[$i])	{
 					$w = $inbin;
 					if ($inbin > $q->param('samplesize'))	{
@@ -1161,7 +1160,7 @@ $| = 1;
 					$z = $w - $sampled[$i];
 					$y = $subsrichness[$i] - $lastsubsrichness[$i];
 					if ($z > 0)	{
-					  for $k ($atstep[$sampled[$i]]..$atstep[$w])	{
+					  for $k ($atstep[int($sampled[$i])]..$atstep[int($w)])	{
 					    $x = $stepback[$k] - $sampled[$i];
 					    $sampcurve[$i][$k] = $sampcurve[$i][$k] + ($x * $y / $z) + $lastsubsrichness[$i];
 					  }
