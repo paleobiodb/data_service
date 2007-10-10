@@ -155,10 +155,19 @@ sub displayTaxonInfoResults {
         $is_real_user = 0;
     }
 
+    
+
 
     # Get most recently used name of taxon
     my ($spelling_no,$taxon_name,$common_name,$taxon_rank);
     if ($taxon_no) {
+        my $sql = "SELECT count(*) c FROM authorities WHERE taxon_no=$taxon_no";
+        my $row = ${$dbt->getData($sql)}[0];
+        my $c = $row->{'c'};
+        if ($c < 1) {
+            print "<div align=\"center\">".Debug::printErrors(["taxon number $taxon_no doesn't exist in the database"])."</div>";
+            return;
+        }
         my $orig_taxon_no = getOriginalCombination($dbt,$taxon_no);
         $taxon_no = getSeniorSynonym($dbt,$orig_taxon_no);
         # This actually gets the most correct name
