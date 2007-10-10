@@ -1213,8 +1213,8 @@ END_OF_MESSAGE
         }
         
         # Deal with homonym issue
-        # Default behavior changed: leave occurrences classified by default, since whoever entered them in thet first
-        # place probably wants them to be classifeid to the exiting taxa in the datbaase.
+        # Default behavior changed: leave occurrences classified by default, since whoever entered them in the first
+        # place probably wants them to be classified in the existing taxa in the database.
 #        $sql1 = "UPDATE occurrences SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
 #        $sql2 = "UPDATE reidentifications SET modified=modified,taxon_no=0 WHERE taxon_no IN (".join(",",@taxon_nos).")";
 #        $dbt->getData($sql1);
