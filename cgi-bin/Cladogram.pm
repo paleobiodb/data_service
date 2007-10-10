@@ -210,7 +210,7 @@ sub displayCladogramForm {
     if ($isNewEntry) {
         $vars->{'page_title'} = "Cladogram entry form";
     } else {
-        $vars->{'page_title'} = "Cladogram edit form";
+        $vars->{'page_title'} = "Cladogram editing form";
     }
 
     print $hbo->populateHTML('enter_cladogram_form',$vars);
