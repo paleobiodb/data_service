@@ -1540,6 +1540,7 @@ sub queryDatabase {
     } else {
         $q->param('get_global_specimens'=>1);
     }
+
  
     # Getting only specimens, occurrences, or collections
     if ($q->param('output_data') =~ /specimens|occurrence|collections/) {
@@ -1759,6 +1760,15 @@ sub queryDatabase {
     }
 
 
+    # filters out things like o.collection_no=c.collection_no
+    # last two conditions are default terms
+    my @conditions = grep {!/^\s*\w{1,2}\.\w+\s*=\s*\w{1,2}\.\w+\s*$/} @where,@occ_where;
+    @conditions = grep {!/o.species_name NOT LIKE '%indet.%'/} @conditions;
+    @conditions = grep {!/(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)/} @conditions;
+    if (!@conditions) {
+        push @form_errors, "No search terms entered.";
+    }
+
     
     # Assemble the final SQL
     my $sql;
@@ -1875,7 +1885,7 @@ sub queryDatabase {
 
 
     if (@form_errors) {
-        print Debug::printErrors(\@form_errors);
+#        print Debug::printErrors(\@form_errors);
         return ([],[]);
     } 
 
