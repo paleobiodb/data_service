@@ -2593,15 +2593,32 @@ sub displayMeasurements {
         # estimate body mass if possible JA 18.7.07
         # code is here and not earlier because we need the parts list first
         # need all the parents
-        my $sql = "SELECT parent_no FROM taxa_list_cache WHERE child_no=" . $taxon_no;
-        my @parent_refs = @{$dbt->getData($sql)};
+        my @parent_refs;
+        if ($taxon_no) {
+            my $sql = "SELECT parent_no FROM taxa_list_cache WHERE child_no=" . $taxon_no;
+            @parent_refs = @{$dbt->getData($sql)};
+        } else {
+            # Code from getTaxonClassification
+            # get alleged parents
+            my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
+            my $is_species = ($species) ? 1 : 0;
+            my $classification_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
+            if ($classification_no) {
+                my $taxon = getTaxa($dbt,{'taxon_no'=>$classification_no});
+                my $sql = "SELECT parent_no FROM taxa_list_cache WHERE child_no=" . $taxon->{taxon_no};
+                @parent_refs = @{$dbt->getData($sql)};
+                if ($taxon->{taxon_rank} =~ /genus/ && $is_species) {
+                    unshift @parent_refs, {'parent_no'=>$classification_no};
+                }
+            }
+        }
         # get equations
         # join on taxa_tree_cache because we need to know which parents are
         #  the least inclusive
         # don't do this with a join on taxa_list_cache because that table
         #  is nightmarishly large
         if (@parent_refs) {
-            $sql = "SELECT taxon_name,lft,rgt,e.reference_no reference_no,part,length,width,area,intercept FROM authorities a,equations e,$TAXA_TREE_CACHE t WHERE a.taxon_no=e.taxon_no AND e.taxon_no=t.taxon_no AND t.synonym_no IN (" . join(',',map { $_->{parent_no} } @parent_refs) . ")";
+            my $sql = "SELECT taxon_name,lft,rgt,e.reference_no reference_no,part,length,width,area,intercept FROM authorities a,equations e,$TAXA_TREE_CACHE t WHERE a.taxon_no=e.taxon_no AND e.taxon_no=t.taxon_no AND t.synonym_no IN (" . join(',',map { $_->{parent_no} } @parent_refs) . ")";
             my @eqn_refs = @{$dbt->getData($sql)};
             @eqn_refs = sort { $a->{lft} <=> $b->{lft} || $a->{rgt} <=> $b->{rgt} } @eqn_refs;
 
@@ -2615,7 +2632,7 @@ sub displayMeasurements {
                         $m_table->{area}{average} = $m_table->{length}{average} * $m_table->{width}{average};
                     }
                     if (exists ($m_table->{$type})) {
-                        for my $eqn ( @eqn_refs )	{
+                        foreach my $eqn ( @eqn_refs )	{
                             if ( $part eq $eqn->{part} && $eqn->{$type} )	{
                                 my $mass = exp( ( log($m_table->{$type}{average}) * $eqn->{$type} ) + $eqn->{intercept} );
                                 my $reference = Reference::formatShortRef($dbt,$eqn->{reference_no},'no_inits'=>1,'link_id'=>1);
@@ -2627,6 +2644,7 @@ sub displayMeasurements {
                                 } else	{
                                     $mass_string .= sprintf "%.1f kg",$mass / 1000;
                                 }
+                                $mass_string .= '</td>';
                                 $mass_string .= "<td><span class=\"small\">&nbsp;$eqn->{taxon_name} $part $type</span></td><td><span class=\"small\">$reference</span></td></tr>";
                                 next;
                             }
