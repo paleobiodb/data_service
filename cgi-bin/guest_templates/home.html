@@ -1,313 +1,275 @@
 <!--
 <script src="/JavaScripts/animations.js" language="JavaScript" type="text/javascript"></script>
 -->
+
 <script language="JavaScript" type="text/javascript">
-<!--
+  <!--
 
-var tableHeightStr;
-var oldTableHeightStr;
+  var tableHeightStr;
+  var oldTableHeightStr;
 
-var detect = navigator.userAgent.toLowerCase();
+  var detect = navigator.userAgent.toLowerCase();
 
-var corners = '<div><div><img src="/public/homeTextBox_corner_TR.png" style="float: left; position: absolute; top: -3px; right: -4px;"><\/div><div><img src="/public/homeTextBox_corner_BL.png" style="position: absolute; bottom: -3px; left: -4px;"><\/div><img src="/public/homeTextBox_corner_BR.png" style="position: absolute; bottom: -4px; right: -5px; clear: right;"><\/div>' +
-'<p style="margin-top: -16px;">';
+  var corners = '<div><div><img src="/public/homeTextBox_corner_TR.png" style="float: left; position: absolute; top: -3px; right: -4px;"><\/div><div><img src="/public/homeTextBox_corner_BL.png" style="position: absolute; bottom: -3px; left: -4px;"><\/div><img src="/public/homeTextBox_corner_BR.png" style="position: absolute; bottom: -4px; right: -5px; clear: right;"><\/div>' +
+  '<p style="margin-top: -16px;">';
 
-var lastpar = '<p style="margin-bottom: -2px;">';
+  var lastpar = '<p style="margin-bottom: -2px;">';
 
-var WhatIs = 
-'<div id="homeInfoSandbag" style="height: 25px; width: 10px;"><\/div>' +
-'<div id="homeInfoSandbag" style="height: 20px; width: 60px;"><\/div>' +
-'<div id="homeInfoSandbag" style="height: 40px; width: 110px;"><\/div>' +
-'<div id="homeInfoSandbag" style="height: 30px; width: 130px;"><\/div>' +
-'<div id="homeInfoSandbag" style="height: 30px; width: 180px;"><\/div>' +
-'<div id="homeInfoSandbag" style="height: 15px; width: 160px;"><\/div>' +
-'<div id="homeInfoSandbag" style="height: 30px; width: 140px;"><\/div>' +
-'<div id="homeInfoSandbag" style="height: 30px; width: 120px;"><\/div>' +
-'<div id="homeInfoSandbag" style="height: 20px; width: 20px;"><\/div>' +
-'<div style="position: absolute; top: 0px; right: 0px; margin-top: 50px; float: right; clear: right;"><img alt="Eocene trionychid" src="/public/trionychidBGshadow.png"><\/div>' +
-corners +
-'<p style="margin-top: -28px; font-size: 1.1em;">' +
-'The Paleobiology Database is an international scientific organization run by paleontological <a class="homeBodyLinks" href="%%read_url%%?action=displayAuthorizers">researchers<\/a> from many <a class="homeBodyLinks" href="%%read_url%%?action=displayInstitutions">institutions<\/a>.<\/p> ' +
-'<p style="font-size: 1.1em;">We are bringing together taxonomic and distributional information about the entire fossil record of plants and animals.<\/p>' +
-'<p style="font-size: 1.1em;">Our goal is to educate the public, summarize the literature for professionals, and foster statistical analyses of mass extinctions and other aspects of biodiversity.' +
-'<\/p>';
-<!-- '<div style="padding-top: 10px; padding-bottom: 0px; padding-right: 10px; text-align: center"><img alt="This hour\'s fossil image" height="180" src="/public/images/fossil.jpg"><\/div>'; -->
-
-
-var Contents = corners +
-'Data <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=beginTaxonInfo">about fossil plants and animals<\/a> include systematic classifications, ecological categories, measurements, age ranges, spatial distributions, and digital images. ' +
-'Major data sets comprise <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a>. ' +
-'You can also view the <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=startStartPrintHierarchy">classification of everything in a group<\/a> all at once.' +
-'<\/p>' +
-'<p>' +
-'<a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view">Collection records<\/a> show what rock units and locations include the fossils. ' +
-'They are shown on our <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=animations">paleogeographic animations<\/a> and <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a>. ' +
-'<\/p>' +
-'<p>' +
-'You can read about the <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displaySearchStrataForm">stratigraphic units</a> (rock layers) that include the fossils, or see the <a class="homeBodyLinks" href="%%read_url%%?action=startScale">time scales<\/a> and <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?action=displayInterval&amp;interval_no=33">time intervals</a> we use to date them.' +
-'<\/p>' +
-lastpar +
-'All of our data are tied to <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displaySearchRefs&amp;type=view">published scientific references<\/a>. All of our data can be downloaded by ' +
-'filling out forms for <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayDownloadForm">collection, occurrence, or specimen data<\/a>, or <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayDownloadTaxonomyForm">taxonomic names and opinions<\/a>. ' +
-'There\'s also a form for <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data<\/a> housed by <a class="homeBodyLinks" href="http://chronos.org">CHRONOS<\/a>.' +
-'<\/p>';
-
-var Tools = corners +
-'You can <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">draw maps<\/a> showing the distribution of our fossil collections, including paleomaps like the ones shown on this page. ' +
-'We have several <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=animations">additional animations<\/a> and <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a > of different geological periods that you can view. ' +
-'Stop or reverse the animations by clicking on them. ' +
-'We also have 11 rotatable  <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a> representing each of the geological periods. ' +
-'You can <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayReportForm">generate data summary tables<\/a> that will show you how much data we have in different categories. ' +
-'And don\'t miss our <a class="homeBodyLinks" href="%%read_url%%?action=displayPage&amp;page=dinosaurs">dinosaur facts and figures</a> or pick a <a class="homeBodyLinks" href="%%read_url%%?action=randomTaxonInfo">random species</a>.' +
-'<\/p>' +
-lastpar +
-'Scientists can compute <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=analyze_abundance">ecological statistics</a> using abundance data, generate <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayCurveForm">diversity curve data<\/a> showing changes in the number of species or genera through time, or compute stratigraphic confidence intervals on taxonomic ranges across <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?action=displayTaxaIntervalsForm">time scales<\/a> or <a class="homeBodyLinks" href="%%read_url%%?action=displaySearchSectionForm">stratigraphic sections<\/a>.' +
-'<\/p>';
+  var WhatIs = corners +
+  //'<div id="homeInfoSandbag" style="height: 25px; width: 10px;"><\/div>' +
+  //'<div id="homeInfoSandbag" style="height: 20px; width: 60px;"><\/div>' +
+  //'<div id="homeInfoSandbag" style="height: 40px; width: 110px;"><\/div>' +
+  //'<div id="homeInfoSandbag" style="height: 30px; width: 130px;"><\/div>' +
+  //'<div id="homeInfoSandbag" style="height: 30px; width: 180px;"><\/div>' +
+  //'<div id="homeInfoSandbag" style="height: 15px; width: 160px;"><\/div>' +
+  //'<div id="homeInfoSandbag" style="height: 30px; width: 140px;"><\/div>' +
+  //'<div id="homeInfoSandbag" style="height: 30px; width: 120px;"><\/div>' +
+  //'<div id="homeInfoSandbag" style="height: 20px; width: 20px;"><\/div>' +
+  '<div style="float: right;"><img alt="Eocene trionychid" src="/public/trionychidBGshadow.png"><\/div>' +
+  '<p style="margin-top: -28px; font-size: 1.1em;">' +
+  'The Paleobiology Database is an international scientific organization run by paleontological <a class="homeBodyLinks" href="%%read_url%%?action=displayAuthorizers">researchers<\/a> from many <a class="homeBodyLinks" href="%%read_url%%?action=displayInstitutions">institutions<\/a>.<\/p> ' +
+  '<p style="font-size: 1.1em;">We are bringing together taxonomic and distributional information about the entire fossil record of plants and animals.<\/p>' +
+  '<p style="font-size: 1.1em;">Our goal is to educate the public, summarize the literature for professionals, and foster statistical analyses of mass extinctions and other aspects of biodiversity.' +
+  '<\/p>';
+  <!-- '<div style="padding-top: 10px; padding-bottom: 0px; padding-right: 10px; text-align: center"><img alt="This hour\'s fossil image" height="180" src="/public/images/fossil.jpg"><\/div>'; -->
 
 
-var GetInvolved = corners +
-'As explained on our <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">FAQ<\/a> page, any professional paleontologist may <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=join_us">join the Database<\/a>. ' +
-'New members, meetings, and script features are listed on our <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=newsindex">news<\/a> page. ' +
-'Experts on taxonomic groups may create <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a> to house their classifications. ' +
-'Contributors form <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=working_groups">working groups<\/a> that collaborate on projects. ' +
-'We have many <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=publications">official publications<\/a> that have resulted from analyses of our data and activities of our groups.' +
-'<\/p>' +
-'<p>' +
-'<div><img style="position: relative; float: right; clear: right; padding-left: 1em; padding-top: 1em; bottom: 0.5em; right: 0.5em;" height="92" width="70" src="/public/PAlogo_blu_txt.gif"></div>' +
-'We offer an <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=summer_course_2007">intensive summer course<\/a>, which was most recently sponsored by <a class="homeBodyLinks" href="http://palass.org">the Palaeontological Association<\/a>.<br>' +
-'If you are interested in <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=join_us">joining the Database<\/a>, you may want to see how we enter data. ' +
-'You can view examples of forms for entering <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=reference_form">references<\/a>, <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=collection_form">fossil collections<\/a>, <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?user=Guest&amp;action=displayPage&amp;page=occurrence_form">taxonomic occurrences<\/a>, <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=authority_form">taxonomic names<\/a>, and <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?user=Guest&amp;action=displayPage&amp;page=opinion_form">classifications of plants and animals<\/a>.' +
-'<\/p>' +
-lastpar +
-'<\/p>';
+  var Contents = corners +
+  'Data <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=beginTaxonInfo">about fossil plants and animals<\/a> include systematic classifications, ecological categories, measurements, age ranges, spatial distributions, and digital images. ' +
+  'Major data sets comprise <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a>. ' +
+  'You can also view the <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=startStartPrintHierarchy">classification of everything in a group<\/a> all at once.' +
+  '<\/p>' +
+  '<p>' +
+  '<a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view">Collection records<\/a> show what rock units and locations include the fossils. ' +
+  'They are shown on our <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=animations">paleogeographic animations<\/a> and <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a>. ' +
+  '<\/p>' +
+  '<p>' +
+  'You can read about the <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displaySearchStrataForm">stratigraphic units<\/a> (rock layers) that include the fossils, or see the <a class="homeBodyLinks" href="%%read_url%%?action=startScale">time scales<\/a> and <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?action=displayInterval&amp;interval_no=33">time intervals<\/a> we use to date them.' +
+  '<\/p>' +
+  lastpar +
+  'All of our data are tied to <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displaySearchRefs&amp;type=view">published scientific references<\/a>. All of our data can be downloaded by ' +
+  'filling out forms for <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayDownloadForm">collection, occurrence, or specimen data<\/a>, or <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayDownloadTaxonomyForm">taxonomic names and opinions<\/a>. ' +
+  'There\'s also a form for <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data<\/a> housed by <a class="homeBodyLinks" href="http://chronos.org">CHRONOS<\/a>.' +
+  '<\/p>';
+
+  var Tools = corners +
+  'You can <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">draw maps<\/a> showing the distribution of our fossil collections, including paleomaps like the ones shown on this page. ' +
+  'We have several <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=animations">additional animations<\/a> and <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a > of different geological periods that you can view. ' +
+  'Stop or reverse the animations by clicking on them. ' +
+  'We also have 11 rotatable  <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes<\/a> representing each of the geological periods. ' +
+  'You can <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayReportForm">generate data summary tables<\/a> that will show you how much data we have in different categories. ' +
+  'And don\'t miss our <a class="homeBodyLinks" href="%%read_url%%?action=displayPage&amp;page=dinosaurs">dinosaur facts and figures<\/a> or pick a <a class="homeBodyLinks" href="%%read_url%%?action=randomTaxonInfo">random species<\/a>.' +
+  '<\/p>' +
+  lastpar +
+  'Scientists can compute <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=analyze_abundance">ecological statistics<\/a> using abundance data, generate <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayCurveForm">diversity curve data<\/a> showing changes in the number of species or genera through time, or compute stratigraphic confidence intervals on taxonomic ranges across <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?action=displayTaxaIntervalsForm">time scales<\/a> or <a class="homeBodyLinks" href="%%read_url%%?action=displaySearchSectionForm">stratigraphic sections<\/a>.' +
+  '<\/p>';
 
 
-var OtherInfo = corners +
-'Most of the Database\'s <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">personnel<\/a> are at the <a class="homeBodyLinks" href="http://www.ucsb.edu">University of California, Santa Barbara<\/a>.' +
-'<p>' +
-'We coordinate our activities with many other <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=links">paleontological databases<\/a>, provide data to <a class="homeBodyLinks" href="http://www.gbif.org">GBIF<\/a>, and share data with <a class="homeBodyLinks" href="http://chronos.org">CHRONOS<\/a>. ' +
-'We plan to exchange data with the <a class="homeBodyLinks" href="http://data.gns.cri.nz/fred/">Fossil Record File</a>, <a class="homeBodyLinks" href="http://www.geo.arizona.edu/~rees/itdetails.html">GEON</a>, <a class="homeBodyLinks" href="http://www.morphobank.org/">MorphoBank</a>, <a class="homeBodyLinks" href="http://porites.geology.uiowa.edu/">NMITA</a>, <a class="homeBodyLinks" href="http://www.helsinki.fi/science/now/index.html">NOW</a>, and the <a class="homeBodyLinks" href="http://www.paleoportal.org/">Paleontology Portal</a>.' +
-'<\/p>' +
-'<p>' +
-'The Database has been featured in a <a class="homeBodyLinks" href="http://www.nature.com/cgi-taf/DynaPage.taf?file=/nature/journal/v424/n6948/full/424482a_fs.html"><i>Nature<\/i> article<\/a>.' +
-'<p>' +
-'We use Perl/CGI scripts to enter and access the data in our highly relational MySQL database. All of the website\'s source code may be viewed <a class="homeBodyLinks" href="http://paleodb.org/trac/">online<\/a>.'+
-'<p>' + 
-lastpar +
-'Current funding is by an <a class="homeBodyLinks" href="http://nsf.gov/funding/pgm_summ.jsp?pims_id=13413&amp;org=EAR">NSF Sedimentary Geology and Paleobiology<\/a> grant to <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>. ' +
-'Earlier funding was by <a class="homeBodyLinks" href="http://www.nceas.ucsb.edu">NCEAS<\/a> and the <a class="homeBodyLinks" href="http://www.nsf.gov/geo/ere/ereweb/fund-biocomplex.cfm">NSF Biocomplexity<\/a> program. ' +
-'<\/p>';
+  var GetInvolved = corners +
+  'As explained on our <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">FAQ<\/a> page, any professional paleontologist may <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=join_us">join the Database<\/a>. ' +
+  'New members, meetings, and script features are listed on our <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=newsindex">news<\/a> page. ' +
+  'Experts on taxonomic groups may create <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives<\/a> to house their classifications. ' +
+  'Contributors form <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=working_groups">working groups<\/a> that collaborate on projects. ' +
+  'We have many <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=publications">official publications<\/a> that have resulted from analyses of our data and activities of our groups.' +
+  '<\/p>' +
+  '<p>' +
+  '<div><img style="position: relative; float: right; clear: right; padding-left: 1em; padding-top: 1em; bottom: 0.5em; right: 0.5em;" height="92" width="70" src="/public/PAlogo_blu_txt.gif"><\/div>' +
+  'We offer an <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=summer_course_2007">intensive summer course<\/a>, which was most recently sponsored by <a class="homeBodyLinks" href="http://palass.org">the Palaeontological Association<\/a>.<br>' +
+  'If you are interested in <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=join_us">joining the Database<\/a>, you may want to see how we enter data. ' +
+  'You can view examples of forms for entering <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=reference_form">references<\/a>, <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=collection_form">fossil collections<\/a>, <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?user=Guest&amp;action=displayPage&amp;page=occurrence_form">taxonomic occurrences<\/a>, <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=authority_form">taxonomic names<\/a>, and <a class="homeBodyLinks" href="/cgi-bin/%%read_url%%?user=Guest&amp;action=displayPage&amp;page=opinion_form">classifications of plants and animals<\/a>.' +
+  '<\/p>' +
+  lastpar +
+  '<\/p>';
 
-window.onload = startPage;
 
-function startPage()	{
-	changeBackground('question1');
-	changeText('homeTextBox',WhatIs);
-	//loadFrames('first_homepage',1);
-	animsrc = "/public/animations/homepage/homepage.gif";
-	document["homepage_anim"].src = animsrc;
-}
+  var OtherInfo = corners +
+  'Most of the Database\'s <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">personnel<\/a> are at the <a class="homeBodyLinks" href="http://www.ucsb.edu">University of California, Santa Barbara<\/a>.' +
+  '<p>' +
+  'We coordinate our activities with many other <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=links">paleontological databases<\/a>, provide data to <a class="homeBodyLinks" href="http://www.gbif.org">GBIF<\/a>, and share data with <a class="homeBodyLinks" href="http://chronos.org">CHRONOS<\/a>. ' +
+  'We plan to exchange data with the <a class="homeBodyLinks" href="http://data.gns.cri.nz/fred/">Fossil Record File<\/a>, <a class="homeBodyLinks" href="http://www.geo.arizona.edu/~rees/itdetails.html">GEON<\/a>, <a class="homeBodyLinks" href="http://www.morphobank.org/">MorphoBank<\/a>, <a class="homeBodyLinks" href="http://porites.geology.uiowa.edu/">NMITA<\/a>, <a class="homeBodyLinks" href="http://www.helsinki.fi/science/now/index.html">NOW<\/a>, and the <a class="homeBodyLinks" href="http://www.paleoportal.org/">Paleontology Portal<\/a>.' +
+  '<\/p>' +
+  '<p>' +
+  'The Database has been featured in a <a class="homeBodyLinks" href="http://www.nature.com/cgi-taf/DynaPage.taf?file=/nature/journal/v424/n6948/full/424482a_fs.html"><i>Nature<\/i> article<\/a>.' +
+  '<p>' +
+  'We use Perl/CGI scripts to enter and access the data in our highly relational MySQL database. All of the website\'s source code may be viewed <a class="homeBodyLinks" href="http://paleodb.org/trac/">online<\/a>.'+
+  '<p>' + 
+  lastpar +
+  'Current funding is by an <a class="homeBodyLinks" href="http://nsf.gov/funding/pgm_summ.jsp?pims_id=13413&amp;org=EAR">NSF Sedimentary Geology and Paleobiology<\/a> grant to <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">John Alroy<\/a>. ' +
+  'Earlier funding was by <a class="homeBodyLinks" href="http://www.nceas.ucsb.edu">NCEAS<\/a> and the <a class="homeBodyLinks" href="http://www.nsf.gov/geo/ere/ereweb/fund-biocomplex.cfm">NSF Biocomplexity<\/a> program. ' +
+  '<\/p>';
 
-function changeBackground(what)	{
-	for ( i = 1; i <= 5; i++ )	{
-		document.getElementById('question'+i).style.backgroundColor = "#C0C0D0";
-	}
-	document.getElementById(what).style.backgroundColor = "#FFFFFF";
-}
+  window.onload = startPage;
 
-function changeText(what,text)	{
-	document.getElementById(what).innerHTML = text;
-}
+  function startPage()    {
+        changeBackground('question1');
+        changeText('homeTextBox',WhatIs);
+        //loadFrames('first_homepage',1);
+        animsrc = "/public/animations/homepage/homepage.gif";
+        document["homepage_anim"].src = animsrc;
+  }
 
-function checkBrowser(string)	{
-	place = detect.indexOf(string) + 1;
-	thestring = string;
-	return place;
-}
+  function changeBackground(what) {
+        for ( i = 1; i <= 5; i++ )      {
+                document.getElementById('question'+i).style.backgroundColor = "#C0C0D0";
+        }
+        document.getElementById(what).style.backgroundColor = "#FFFFFF";
+  }
 
-//-->
-</script>
+  function changeText(what,text)  {
+        document.getElementById(what).innerHTML = text;
+  }
 
-<!-- gray box outside of main area -->
+  function checkBrowser(string)   {
+        place = detect.indexOf(string) + 1;
+        thestring = string;
+        return place;
+  }
 
-<div style="background-image: url('/public/PDbg-reversed.gif'); background-position: 12.5em 52px; height: 36em; width: 50em; margin-top: 0.5em; margin-left: 0.2em; padding-bottom: 1em; border: 1px solid #B0B0B0;">
+  //-->
+</script><!-- gray box outside of main area -->
 
-<!-- navigation bar at left, first row -->
+<div style="background-image: url('/public/PDbg-reversed.gif'); background-position: 12.5em 52px; width: 50em; margin-top: 0.5em; margin-left: 0.2em; padding-bottom: 1em; border: 1px solid #B0B0B0;">
 
-<div style="float: left; clear: none; margin-top: 1.5em; margin-left: 1em; width: 3em; text-align: left; border: 1px solid white;">
+  <!-- navigation bar at left, first row -->
+  <div style="width: 50em; border: 1px white solid;">
+    <div style="float: left; clear: none; margin-top: 1.4em; padding-left:0em; padding-right:0em; margin-left: 1em; margin-right:0em; width: 4.5em; text-align: left; ">
+      <div class="questions" id="question1" onclick="changeBackground('question1'); changeText('homeTextBox',WhatIs);" style="border-top: 1px solid gray;">
+        <div class="questionsOverShadow">Intro</div>
+      </div>
 
-  <div class="questions" id="question1" style="margin-top: -3px; border-top: 1px solid gray;">
-  <span id="questionsShadow">Intro</span>
-  <span onClick="changeBackground('question1'); changeText('homeTextBox',WhatIs);" id="questionsOverShadow">Intro</span>
+      <div class="questions" id="question2" onclick="changeBackground('question2'); changeText('homeTextBox',Contents);">
+        <div class="questionsOverShadow">Data</div>
+      </div>
+
+      <div class="questions" id="question3" onclick="changeBackground('question3'); changeText('homeTextBox',Tools);">
+        <div class="questionsOverShadow">Tools</div>
+      </div>
+
+      <div class="questions" id="question4" onclick="changeBackground('question4'); changeText('homeTextBox',GetInvolved);">
+        <div class="questionsOverShadow">Join</div>
+      </div>
+
+      <div class="questions" id="question5" onclick="changeBackground('question5'); changeText('homeTextBox',OtherInfo);">
+        <div class="questionsOverShadow">etc.</div>
+      </div>
+    </div>
+    
+    <!-- info at middle, first row -->
+    <div style="float: left; clear: none; width: 32em; margin-left: 0em; margin-top: 1.5em; padding-left: 0em; padding-right: 0.5em;">
+      <div class="homeTextBoxes" id="homeTextBoxShadow">
+        <div class="homeTextBoxes" id="homeTextBoxShadow2">
+          <div class="homeTextBoxes small" id="homeTextBox"></div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- globe at right, first row -->
+    <div style="float: right; position: absolute; right: 2.5em; top: 4em;">
+      <img src="/public/animations/homepage_shadow.png" border="0" style="margin-right: 0.5em;"> <span style="position: absolute; left: -2px; top: 0px;"><img name="homepage_anim" alt="animation" src="/public/animations/homepage/homepage_firstframe.gif" height="153" width="129" border="0"></span>
+    </div>
+    
+    <!-- totals at right, underneath globe -->
+    <div style="position: absolute; top: 16em; right: 2em;">
+      <div class="Features">
+        <div class="FeatureHeadline" style="width: 10em;">
+          <div class="tiny">
+            <i>This hour's totals</i>
+          </div>
+        </div>
+
+        <div class="FeatureText">
+          <!-- seems ok : style="width: 9.5em;" the width needs to be given exactly or Explorer will freak out (of course) -->
+
+          <table cellpadding="0" cellspacing="4">
+            <tr>
+              <td align="right" valign="top"><span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">25008</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">105278</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">74396</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">684632</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?action=displayAuthorizers" class="homeStats">194</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?action=displayInstitutions" class="homeStats">133</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?action=displayAuthorizers" class="homeStats">22</a></span></span></td>
+
+              <td align="left" valign="top"><span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">references</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">taxa</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">collections</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">occurrences</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?action=displayAuthorizers" class="homeStats">contributors</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?action=displayInstitutions" class="homeStats">institutions</a></span></span><br>
+              <span style="white-space: nowrap;"><span class="tiny"><a href="bridge.pl?action=displayAuthorizers" class="homeStats">countries</a></span></span></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div><!-- features, second row -->
   </div>
 
-  <div class="questions" id="question2">
-  <span id="questionsShadow">Data</span>
-  <span onClick="changeBackground('question2'); changeText('homeTextBox',Contents);" id="questionsOverShadow">Data</span>
+  <div style="clear: both;">
+    &nbsp;
   </div>
 
-  <div class="questions" id="question3">
-  <span id="questionsShadow">Tools</span>
-  <span onClick="changeBackground('question3'); changeText('homeTextBox',Tools);" id="questionsOverShadow">Tools</span>
-  </div>
+  <div style="clear: both; height: 10.5em; width: 50em;">
+    <div class="Features" style="width: 11.5em; margin-right: 0em;">
+      <div class="FeatureHeadline">
+        <div class="tiny">
+          <i>Featured paper</i>
+        </div>
+      </div>
 
-  <div class="questions" id="question4">
-  <span id="questionsShadow">Join</span>
-  <span onClick="changeBackground('question4'); changeText('homeTextBox',GetInvolved);" id="questionsOverShadow">Join</span>
-  </div>
+      <div class="FeatureText">
+        <div class="tiny">
+          W. Kiessling and M. Aberhan. 2007. Environmental determinants of marine benthic biodiversity dynamics through Triassic-Jurassic times. <i>Paleobiology</i> 33:414-434. <!--
+                  <a href="bridge.pl?action=PASTQueryForm">Detrended Correspondence Analysis</a>, adapted by &Oslash;yvind Hammer from the <a href="http://folk.uio.no/ohammer/past/index.html">PAST</a> statistics package -->
+        </div>
+      </div>
+    </div>
 
-  <div class="questions" id="question5">
-  <span id="questionsShadow">etc.</span>
-  <span onClick="changeBackground('question5'); changeText('homeTextBox',OtherInfo);" id="questionsOverShadow">etc.</span>
-  </div>
+    <div class="Features" style="width: 8em; margin-right: 0em; margin-left: 1.5em;">
+      <div class="FeatureHeadline">
+        <div class="tiny">
+          <i>New feature</i>
+        </div>
+      </div>
 
-  <div style="clear: both; padding-bottom: 0.2em;"></div>
+      <div class="FeatureText">
+        <div class="tiny">
+          See Mark Uhen's new <a class="homeBodyLinks" href="bridge.pl?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives</a> for sirenians, desmostylians, pinnipeds, and penguins
+        </div>
+      </div>
+    </div>
 
-</div>
+    <div class="Features" style="width: 10em; margin-left: 1.5em; margin-right: 0em;">
+      <div class="FeatureHeadline">
+        <div class="tiny">
+          <i>New collections</i>
+        </div>
+      </div>
 
-<!-- info at middle, first row -->
+      <div class="FeatureText">
+        <div class="tiny">
+          <span id="collection_links"></span>
+        </div>
+      </div>
+    </div>
 
-  <div style="float: left; clear: none; width: 32em; margin-top: 1.5em; padding-left: 0.75em; padding-right: 0.5em;">
-  <div class="homeTextBoxes" id="homeTextBoxShadow">
-  <div class="homeTextBoxes" id="homeTextBoxShadow2">
-  <div class="homeTextBoxes small" id="homeTextBox">
-  </div>
-  </div>
-  </div>
-  </div>
+    <div class="Features" style="width: 8em; margin-left: 1.5em; margin-right: 0em;">
+      <div class="FeatureHeadline">
+        <div class="tiny">
+          <i>Newest members</i>
+        </div>
+      </div>
 
-<!-- globe at right, first row -->
-
-  <div style="float: right; position: absolute; right: 2.5em; top: 4em;">
-  <img src="/public/animations/homepage_shadow.png" border="0" style="margin-right: 0.5em;">
-  <span style="position: absolute; left: -2px; top: 0px;">
-  <img name="homepage_anim" alt="animation" src="/public/animations/homepage/homepage_firstframe.gif" height="153" width="129" border="0">
-  </span>
-  </div>
-
-<!-- totals at right, underneath globe -->
-
-<div style="position: absolute; top: 16em; right: 2em;">
-
-  <div class="Features">
-
-  <div class="FeatureHeadline" style="width: 10em;">
-  <div class="tiny">
-  <i>This hour's totals</i>
-  </div>
-  </div>
-
-  <div class="FeatureText">
-  <!-- seems ok : style="width: 9.5em;" the width needs to be given exactly or Explorer will freak out (of course) -->
-  <table cellpadding="0" cellspacing="4">
-  <tr><td align="right" valign="top">
-
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">25008</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">105278</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">74396</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">684632</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayAuthorizers" class="homeStats">194</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayInstitutions" class="homeStats">133</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayAuthorizers" class="homeStats">22</a></span></span>
-  </td>
-
-  <td align="left" valign="top">
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchRefs&amp;type=view" class="homeStats">references</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=beginTaxonInfo" class="homeStats">taxa</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">collections</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?user=Guest&amp;action=displaySearchColls&amp;type=view" class="homeStats">occurrences</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayAuthorizers" class="homeStats">contributors</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayInstitutions" class="homeStats">institutions</a></span></span><br>
-      <span style="white-space: nowrap;"><span class="tiny"> <a href="bridge.pl?action=displayAuthorizers" class="homeStats">countries</a></span></span>
-  </td></tr>
-  </table>
-
-  </div>
-
-  </div>
-
-</div>
-
-<!-- features, second row -->
-
-<div style="clear: both; position: absolute; bottom: 1em; left: 1.5em; height: 10.5em; width: 50em;">
-
-  <div class="Features" style="width: 10.75em;">
-  <div class="FeatureHeadline">
-  <div class="tiny">
-   <i>Featured paper</i>
-  </div>
-  </div>
-
-  <div class="FeatureText">
-  <div class="tiny">
-W. Kiessling and M. Aberhan. 2007. Environmental determinants of marine benthic biodiversity dynamics through Triassic-Jurassic times. <i>Paleobiology</i> 33:414-434.
-<!--
-<a href="bridge.pl?action=PASTQueryForm">Detrended Correspondence Analysis</a>, adapted by &Oslash;yvind Hammer from the <a href="http://folk.uio.no/ohammer/past/index.html">PAST</a> statistics package -->
-  </div>
-  </div>
-  </div>
-
-  <div class="Features" style="width: 7.25em; margin-right: 0em;">
-  <div class="FeatureHeadline">
-  <div class="tiny">
-  <i>New feature</i>
-  </div>
-  </div>
-
-  <div class="FeatureText">
-  <div class="tiny">
-    See Mark Uhen's new <a class="homeBodyLinks" href="bridge.pl?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives</a> for sirenians, desmostylians, pinnipeds, and penguins
-  </div>
-  </div>
-  </div>
-
-  <div class="Features" style="float: right; width: 8em; margin-left: 0em; margin-right: 1.5em;">
-  <div class="FeatureHeadline">
-  <div class="tiny">
-  <i>Newest members</i>
-  </div>
-  </div>
-
-  <div class="FeatureText">
-  <div class="tiny">
-  <a class="homeBodyLinks" href="http://www.icrea.es/pag.asp?id=Florent.Rivals">Florent Rivals</a>,
-  Universitat Rovira i Virgili
-  </div>
-  </div>
-  </div>
-
-<!-- use of a float: none causes disagreements between Firefox and Safari
-     that only can be resolved with a lot of explicit tagging -->
-  <div class="Features" style="float: none; left: 2em; margin-left: 0em; margin-right: 4em;">
-  <div class="FeatureHeadline">
-  <div class="tiny">
-  <i>New collections</i>
-  </div>
-  </div>
-
-  <div class="FeatureText">
-  <div class="tiny">
-  <span id="collection_links"></span>
-  </div>
-  </div>
-  </div>
-
-</div>
-
-
-<!-- needed to extend gray box below other stuff -->
+      <div class="FeatureText">
+        <div class="tiny">
+          <a class="homeBodyLinks" href="http://www.icrea.es/pag.asp?id=Florent.Rivals">Florent Rivals</a>, Universitat Rovira i Virgili
+        </div>
+      </div>
+    </div>
+  </div><!-- needed to extend gray box below other stuff -->
 
   <div style="clear: both;"></div>
-
-</div>
-
 </div>
 
 <div style="position: absolute; bottom: 0; right: 0;">
-<a href="%%read_url%%?action=listCollections"><span style="font-size: 0.25em; color: white;">list collections</span></a>
-<a href="%%read_url%%?action=listTaxa"><span style="font-size: 0.25em; color: white;">list taxa</span></a>
+  <a href="%%read_url%%?action=listCollections"><span style="font-size: 0.25em; color: white;">list collections</span></a> <a href="%%read_url%%?action=listTaxa"><span style="font-size: 0.25em; color: white;">list taxa</span></a>
 </div>
-
-</body>
-
