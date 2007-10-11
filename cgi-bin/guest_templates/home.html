@@ -132,7 +132,7 @@
 
   <!-- navigation bar at left, first row -->
   <div style="width: 50em; border: 1px white solid;">
-    <div style="float: left; clear: none; margin-top: 1.4em; padding-left:0em; padding-right:0em; margin-left: 1em; margin-right:0em; width: 4.5em; text-align: left; ">
+    <div style="display: inline; float: left; clear: none; margin-top: 1.4em; padding-left:0em; padding-right:0em; margin-left: 1em; margin-right:0em; width: 4.5em; text-align: left; ">
       <div class="questions" id="question1" onclick="changeBackground('question1'); changeText('homeTextBox',WhatIs);" style="border-top: 1px solid gray;">
         <div class="questionsOverShadow">Intro</div>
       </div>
@@ -164,13 +164,13 @@
     </div>
     
     <!-- globe at right, first row -->
-    <div style="float: right; position: absolute; right: 2.5em; top: 4em;">
+    <div style="display: inline; float: right; position: absolute; right: 2em; top: 4em;">
       <img src="/public/animations/homepage_shadow.png" border="0" style="margin-right: 0.5em;"> <span style="position: absolute; left: -2px; top: 0px;"><img name="homepage_anim" alt="animation" src="/public/animations/homepage/homepage_firstframe.gif" height="153" width="129" border="0"></span>
     </div>
     
     <!-- totals at right, underneath globe -->
-    <div style="position: absolute; top: 16em; right: 2em;">
-      <div class="Features">
+    <div id="homeTotals">
+      <div class="Features" style="display: inline; margin-left; 0em; margin-right: 1em;">
         <div class="FeatureHeadline" style="width: 10em;">
           <div class="tiny">
             <i>This hour's totals</i>
