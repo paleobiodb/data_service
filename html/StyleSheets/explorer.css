@@ -1,0 +1,11 @@
+
+/* internet explorer specific hacks */
+
+body {
+/*    font-size: .85em;*/
+}
+
+#homeTextBox	{
+    height: 26em;
+}
+
