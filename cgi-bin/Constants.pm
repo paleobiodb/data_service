@@ -33,7 +33,7 @@ if ($Constants::IS_FOSSIL_RECORD) {
 
 sub read_conf {
     my $base_dir = $FindBin::RealBin;
-    $base_dir =~ s/\/(cgi-bin|scripts|html)(\/.*)*$/\/config/;
+    $base_dir =~ s/\/(upload|cgi-bin|scripts|html)(\/.*)*$/\/config/;
     my $filename = "$base_dir/pbdb.conf";
     my $cf;
     open $cf, "<$filename" or die "Can not open $filename\n";
