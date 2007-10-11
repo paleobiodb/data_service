@@ -16,7 +16,7 @@ body {
 }
 
 table, tbody, tr, td, th { 
-    font-size: 1em;
+	font-size: 1em;
 }
 
 th {
@@ -228,19 +228,9 @@ H6 {font-size: .9em;}
 }
 
 #homeTotals	{
-    background-image: url(/public/PDbg-reversed.gif);
-    background-position: 13em 0em;
-    text-align: center;
-    margin-left: 0.5em;
-    padding-top: 3em;
-    height: 45em;
-    width: 13.5em;
-    position: absolute;
-    float: left;
-    top: 52px;
-    bottom: 0px;
-    left: 1em;
-    z-index: 2;
+ position: absolute; 
+ top: 16em; 
+ right: 2em; 
 }
 
 #homeInfo	{
@@ -361,8 +351,8 @@ H6 {font-size: .9em;}
 
 #homeTextBoxShadow	{
     background: #E4E4E4;
-    margin-left: 0.5em;
-    margin-right: 0.5em;
+ /*   margin-left: 0.5em;
+    margin-right: 0.5em;*/
     position: relative;
 }
 
@@ -380,6 +370,7 @@ H6 {font-size: .9em;}
     border: 1px solid #808080;
     height: 21em;
     padding: 16px;
+    padding: 16px;
     padding-top: 30px;
     position: relative;
     left: -2px;
@@ -395,27 +386,25 @@ html,body	{
     font-family: "Century Gothic", Verdana, Arial, Helvetica, sans-serif;
     font-size: 1em;
     color: #303030;
-    float: left;
-    clear: both;
     padding: 0.5em;
     padding-left: 0.9em;
-    width: 3.5em;
+    width: 100%;
     background-color: white;
     border-left: 1px solid gray;
     border-bottom: 1px solid gray;
 }
 
-#questionsShadow	{
+.questionsShadow	{
     position: absolute;
-    left: 3.1em;
+    top: -2px;
+    left: -2px;
+    white-space: nowrap;
     color: #D0D0D0;
+    background:red;
 }
 
-#questionsOverShadow	{
-    position: relative;
+.questionsOverShadow	{
     white-space: nowrap;
-    top: -2px;
-    left: -1px;
 }
 
 .homePageOnBullet	{
