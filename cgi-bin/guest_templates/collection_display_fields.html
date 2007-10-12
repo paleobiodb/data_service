@@ -1,15 +1,15 @@
-<div align="center"><p class="large" style="margin-bottom: 1.5em;"><span id="collection_name"></span></p></div>
+<div align="center"><p class="large" style="margin-bottom: 1.5em;">%%collection_name%%</p></div>
 
 <script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
 
 <!-- encloses both boxes -->
 
-<div>
+<div style="white-space: nowrap; width:60em; align: left;">
 
-<div align="left" class="verysmall" style="float: left; clear: none; margin-left: 1em; margin-bottom: 3em;">
+<div align="left" class="verysmall" style="display: inline; float: left; clear: none; margin-left: .5em; margin-right: 0em; padding: 0; width:9.5em;">
 
    <span show="taxa_list">
-   <div id="tab1" class="tabOff" style="width: 7em;"
+   <div id="tab1" class="tabOff" style="width: 100%;"
       onClick = "showPanel(1); showCommonNameLink();"
       onMouseOver="hover(this);"
       onMouseOut="setState(1)">
@@ -18,49 +18,49 @@
    </span>
    <!-- needed to fool tabs.js into working -->
    <span hide="taxa_list" id="tab1" name="commonName"></span>
-   <div id="tab2" class="tabOff" style="width: 7em;"
+   <div id="tab2" class="tabOff" style="width: 100%;"
       onClick = "showPanel(2); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(2)">
       <div class="tabHotspot" onMouseOver = "showPanel(2); hideCommonNames();"></div><div style="margin-top: -1px;">
       Geography</div><div style="clear: both;"></div></div>
-   <div id="tab3" class="tabOff" style="width: 7em;"
+   <div id="tab3" class="tabOff" style="width: 100%;"
       onClick = "showPanel(3); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(3)">
       <div class="tabHotspot" onMouseOver = "showPanel(3); hideCommonNames();"></div><div style="margin-top: -1px;">
       Time</div><div style="clear: both;"></div></div>
-   <div id="tab4" class="tabOff" style="width: 7em;"
+   <div id="tab4" class="tabOff" style="width: 100%;"
       onClick = "showPanel(4); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(4)">
       <div class="tabHotspot" onMouseOver = "showPanel(4); hideCommonNames();"></div><div style="margin-top: -1px;">
       Stratigraphy</div><div style="clear: both;"></div></div>
-   <div id="tab5" class="tabOff" style="width: 7em;"
+   <div id="tab5" class="tabOff" style="width: 100%;"
       onClick = "showPanel(5); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(5)">
       <div class="tabHotspot" onMouseOver = "showPanel(5); hideCommonNames();"></div><div style="margin-top: -1px;">
       Lithology</div><div style="clear: both;"></div></div>
-   <div id="tab6" class="tabOff" style="width: 7em;"
+   <div id="tab6" class="tabOff" style="width: 100%;"
       onClick = "showPanel(6); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(6)">
       <div class="tabHotspot" onMouseOver = "showPanel(6); hideCommonNames();"></div><div style="margin-top: -1px;">
       Taphonomy</div><div style="clear: both;"></div></div>
-   <div id="tab7" class="tabOff" style="width: 7em;"
+   <div id="tab7" class="tabOff" style="width: 100%;"
       onClick = "showPanel(7); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(7)">
       <div class="tabHotspot" onMouseOver = "showPanel(7); hideCommonNames();"></div><div style="margin-top: -1px;">
       Methods</div><div style="clear: both;"></div></div>
-   <div id="tab8" class="tabOff" style="width: 7em;"
+   <div id="tab8" class="tabOff" style="width: 100%;"
       onClick = "showPanel(8); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(8)">
       <div class="tabHotspot" onMouseOver = "showPanel(8); hideCommonNames();"></div><div style="margin-top: -1px;">
       Metadata</div><div style="clear: both;"></div></div>
-   <div id="tab9" class="tabOff" style="width: 7em;"
+   <div id="tab9" class="tabOff" style="width: 100%;"
       onClick = "showPanel(9); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(9)">
@@ -69,8 +69,7 @@
    <div style="clear: both;"></div>
 </div>
 
-<div style="float: none; clear: none; position: relative; align: left; top: 0em; left: 6em; width: 46em;">
-
+<div style="float: left; clear: none; position: relative; align: left; top: 0em; margin-left: 0em; margin-right: 0em;  left: 0em; width: 43em; padding: 0;">
 <div id="panel1" class="collectionPanel">
 %%taxa_list%%
 </div>
