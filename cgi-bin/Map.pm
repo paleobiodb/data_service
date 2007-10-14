@@ -62,7 +62,7 @@ sub new {
 			$GIF_DIR =~ s/maps$//;
 			$GIF_DIR .= "animations";
 		}
-	    $self->{'maptime'} = $q->param('maptime');
+	    $self->{'maptime'} = int($q->param('maptime'));
 	    $self->{rotatemapfocus} = $q->param('rotatemapfocus');
 	}
 
