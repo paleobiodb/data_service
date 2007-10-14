@@ -1461,9 +1461,7 @@ sub mapDrawCoasts {
         }
         $ai .=  "u\n";  # start the group
         my $tempcolor = $aicol{$crustcolor};
-        if ( ! $q->param('crustedgecolor') )	{
-            $tempcolor =~ s/ XA/ Xa/;
-        }
+        $tempcolor =~ s/ XA/ Xa/;
         $ai .=  "$tempcolor\n";
         $ai .=  "$thickness w\n";
         my $lastsep = 1;
