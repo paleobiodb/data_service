@@ -145,7 +145,7 @@ sub displayTaxonInfoResults {
 
     my $dbh = $dbt->dbh;
 
-    my $taxon_no = $q->param('taxon_no');
+    my $taxon_no = int($q->param('taxon_no'));
 
     my $is_real_user = 0;
     if ($q->request_method() eq 'POST' || $q->param('is_real_user') || $s->isDBMember()) {
