@@ -1216,6 +1216,7 @@ sub getBoundariesReal {
             }
         }
 
+        # Now just approximate guesses at the rest of the boundaries that are not yet set.
         my %set = (); my %unset = ();
         foreach my $itv (values %$ig) {
 #            if ($self->isObsolete($itv)) {
@@ -1356,34 +1357,50 @@ sub getBoundariesReal {
         }
 #        print "3SET: ".scalar(values(%set))."\n";
 #        print "3UNSET: ".scalar(values(%unset))."\n";
-        # Fix for cases like the edicaran/sinian/poundian
+        # Fix for cases like the edicaran/sinian/poundian - get boundary from next or previous interval
         foreach my $itv (values %unset) {
-            if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} =~ /\d/) {
-                if ($itv->{'upper_boundary'} !~ /\d/) {
+            if ($itv->{'upper_boundary'} !~ /\d/) {
+                if ($itv->{'next'} && $itv->{'next'}->{'lower_boundary'} =~ /\d/) {
                     $itv->{'upper_boundary'} = $itv->{'next'}->{'lower_boundary'};
                     $itv->{'upper_boundarysrc'} = $itv->{'next'};
                     $itv->{'upper_estimate_type'} = 'next';
-                }
-            } elsif (!$itv->{'next'} && $itv->{'all_next'} && 
-                $itv->{'all_next'}->[0]->{'lower_boundary'} =~ /\d/) {
-                if ($itv->{'upper_boundary'} !~ /\d/) {
+                } elsif (!$itv->{'next'} && $itv->{'all_next'} && 
+                          $itv->{'all_next'}->[0]->{'lower_boundary'} =~ /\d/) {
                     $itv->{'upper_boundary'} = $itv->{'all_next'}->[0]->{'lower_boundary'};
                     $itv->{'upper_boundarysrc'} = $itv->{'all_next'}->[0];
                     $itv->{'upper_estimate_type'} = 'next';
-                }
+                } 
             }
-            if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} =~ /\d/) {
-                if ($itv->{'lower_boundary'} !~ /\d/) {
+            if ($itv->{'lower_boundary'} !~ /\d/) {
+                if ($itv->{'prev'} && $itv->{'prev'}->{'upper_boundary'} =~ /\d/) {
                     $itv->{'lower_boundary'} = $itv->{'prev'}->{'upper_boundary'};
                     $itv->{'lower_boundarysrc'} = $itv->{'prev'};
                     $itv->{'lower_estimate_type'} = 'previous';
-                }
-            } elsif (!$itv->{'prev'} && $itv->{'all_prev'} && 
-                $itv->{'all_prev'}->[0]->{'upper_boundary'} =~ /\d/) {
-                if ($itv->{'lower_boundary'} !~ /\d/) {
+                } elsif (!$itv->{'prev'} && $itv->{'all_prev'} && 
+                         $itv->{'all_prev'}->[0]->{'upper_boundary'} =~ /\d/) {
                     $itv->{'lower_boundary'} = $itv->{'all_prev'}->[0]->{'upper_boundary'};
                     $itv->{'lower_boundarysrc'} = $itv->{'all_prev'}->[0];
                     $itv->{'lower_estimate_type'} = 'previous';
+                } 
+            }
+            if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
+                $set{$itv} = $itv;
+                delete $unset{$itv};
+            }
+        }
+
+        # last ditch - get boundaries from parent - fix for Voznesian case
+        foreach my $itv (values %unset) {
+            if ($itv->{'upper_boundary'} !~ /\d/) {
+                if ($itv->{'min'} && $itv->{'min'}->{'upper_boundary'} =~ /\d/) {
+                    $itv->{'upper_boundary'} = $itv->{'min'}->{'upper_boundary'};
+                    $itv->{'upper_estimate_type'} = 'parent';
+                }
+            }
+            if ($itv->{'lower_boundary'} !~ /\d/) {
+                if ($itv->{'max'} && $itv->{'max'}->{'lower_boundary'} =~ /\d/) {
+                    $itv->{'lower_boundary'} = $itv->{'max'}->{'lower_boundary'};
+                    $itv->{'lower_estimate_type'} = 'parent';
                 }
             }
             if ($itv->{'lower_boundary'} =~ /\d/ && $itv->{'upper_boundary'} =~ /\d/) {
@@ -1391,8 +1408,8 @@ sub getBoundariesReal {
                 delete $unset{$itv};
             }
         }
-#        print "4SET: ".scalar(values(%set))."\n";
-#        print "4UNSET: ".scalar(values(%unset))."\n";
+#        print "5SET: ".scalar(values(%set))."\n";
+#        print "5UNSET: ".scalar(values(%unset))."\n";
     }
     if ($return_type ne 'bins') {
         # Finally finished, return
