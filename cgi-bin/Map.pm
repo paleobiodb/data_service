@@ -569,7 +569,9 @@ sub calculateBounds {
         $midlat /= 2;
         $midlng = 0;
         $scale = 1;
-        $q->param('projection' => "Eckert IV");
+        if ($q->param('form_source') !~ /basic/)	{
+            $q->param('projection' => "Eckert IV");
+        }
     } else {
         $lat_ratio = 999;
         if ($lat2 != $lat1) {
