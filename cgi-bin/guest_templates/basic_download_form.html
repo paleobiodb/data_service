@@ -1,0 +1,454 @@
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                   
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+function globalClick ( ) {
+
+	var frm = document.forms[0];
+
+	if ( frm.global.checked ) {
+		// Uncheck all continents
+		frm.Africa.checked = false;
+		frm.Antarctica.checked = false;
+		frm.Asia.checked = false;
+		frm.Australia.checked = false;
+		frm.Europe.checked = false;
+		frm.elements['North America'].checked = false;
+		frm.elements['South America'].checked = false;
+
+		frm.elements['paleo Australia'].checked = false;
+		frm.Avalonia.checked = false;
+		frm.Baltoscandia.checked = false;
+		frm.Kazakhstania.checked = false;
+		frm.Laurentia.checked = false;
+		frm.Mediterranean.checked = false;
+		frm.elements['North China'].checked = false;
+		frm.Precordillera.checked = false;
+		frm.Siberia.checked = false;
+		frm.elements['paleo South America'].checked = false;
+		frm.elements['South China'].checked = false;
+	}
+}
+
+function continentClick ( ) {
+
+	var frm = document.forms[0];
+
+	if (	frm.Africa.checked || 
+			frm.Antarctica.checked || 
+			frm.Asia.checked || 
+			frm.Australia.checked || 
+			frm.Europe.checked || 
+			frm.elements['North America'].checked || 
+			frm.elements['South America'].checked ||
+
+			frm.elements['paleo Australia'].checked || 
+			frm.Avalonia.checked || 
+			frm.Baltoscandia.checked || 
+			frm.Kazakhstania.checked || 
+			frm.Laurentia.checked || 
+			frm.Mediterranean.checked || 
+			frm.elements['North China'].checked || 
+			frm.Precordillera.checked || 
+			frm.Siberia.checked || 
+			frm.elements['paleo South America'].checked ||
+			frm.elements['South China'].checked  ) {
+		frm.global.checked = false;
+	} else {
+		// At least one must be checked, or hit the global
+		frm.global.checked = true;
+	}
+}
+
+function countryChange() {
+	var frm = document.forms[0];
+
+	if (frm.country.value != "") {
+		frm.global.checked = true;
+		globalClick();
+	}
+}
+
+//  End -->
+</script>
+
+
+<form method=post action="%%read_url%%">
+<input id="action" type=hidden name="action" value="displayDownloadResults">
+
+
+<div align=center>
+  <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
+    <td id="tab1" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(1);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(1)">Basic options</td>
+    <td id="tab2" class="tabOff" style="white-space: nowrap;"
+      onClick="showPanel(2);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(2)">Included collections</td>
+    <td id="tab3" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(3);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(3)">Collection fields</td>
+    <td id="tab4" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(4);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(4)">Occurrence fields</td>
+  </tr></table>
+</div>
+
+<div align="center"><p class="pageTitle" style="margin-bottom: -0.75em;">Download request form</p></div>
+
+<div id="panel1" class="panel"> 
+
+<p class="small" align="left" style="margin-left: 1em; margin-right: 1em;">
+This form allows you to download taxonomic occurrences, genera or species, or fossil collections.
+The <a href="%%read_url%%?user=Guest&amp;action=displayDownloadForm">full form</a> includes extra options and fields.
+To compute a diversity curve, you need to check off either "period," "epoch," "Cenozoic subepoch," or "10 m.y. bin" in the "Collection fields" part of the form.</p> 
+
+<div class="displayPanel" style="margin-top: 1.5em; padding-top: 1em; padding-bottom: 1em;">
+<table width="100%" cellpadding="3" cellspacing="0">
+
+<div hide="is_contributor">
+<tr%%row_class_1a%%>
+  <td valign=top class="small">
+    Your name (optional):
+  </td>
+  <td>
+    <input name="yourname" size=20>
+  </td>
+</tr>
+</div>
+
+<tr%%row_class_1b%%>
+  <td valign=top class="small">
+    Output data:
+  </td>
+  <td>
+    <select name="output_data">
+      <option value="occurrence list">occurrence list</option>
+      <option value="occurrence matrix">occurrence matrix</option>
+      <option value="occurrence CONJUNCT">CONJUNCT</option>
+      <option value="genera">genera</option>
+      <option value="species">species</option>
+      <option value="collections">collections</option>
+      <option value="specimens">specimens</option>
+    </select>
+  </td>
+</tr>  
+
+<tr%%row_class_1a%%>
+<td valign=top class="small">Output delimiter:</td>
+<td valign=top class="small"><select name=output_format>
+<option selected value="csv">comma-delimited text</option>
+<option value="tab">tab-delimited text</option>
+</select>
+</td></tr>
+
+<tr%%row_class_1b%%>
+<td valign=top class="small">Taxon or taxa to include:<br>
+<small><i>Genus level or above</i></small>
+</td>
+<td valign=top class="small">
+<textarea name=taxon_name rows=2 cols=40></textarea></td></tr>
+
+<tr%%row_class_1a%%>
+<td valign=top class="small">Oldest and youngest intervals <small><i>(by name or by age in Ma)</i></small>:</td>
+<td valign=top class="small">
+<input name=max_interval_name size=20> - <input name=min_interval_name size=20>
+</td></tr>
+
+<tr%%row_class_1a%%>
+<td valign=top class="small">Research group or project
+    <select name="research_group_restricted_to">
+        <option value="0">includes</option>
+        <option value="1">is restricted to</option>
+    </select>:
+</td>  
+<td valign=top class="small">
+<select id="research_group">
+</select>
+</td></tr>
+
+</table>
+</div>
+
+<p align=center>
+<input type=submit value="Create data set">
+</p>
+
+</div>
+
+<div id="panel2" class="panel"> 
+
+<div class="displayPanel" style="margin-top: 1.5em;">
+<table style="clear: left; padding-top: 1.5em;" width="100%" cellpadding="3" cellspacing="0">
+
+<tr>
+<td valign=top class="small">Lithologies:</td>
+<td valign=top class="small" colspan=3>
+<input type=checkbox name="lithology_carbonate" value="YES" checked>carbonate
+<input type=checkbox name="lithology_mixed" value="YES" checked>mixed
+<input type=checkbox name="lithology_siliciclastic" value="YES" checked>siliciclastic
+<input type=checkbox name="lithology_unknown" value="YES" checked>unknown
+</td></tr>
+
+<tr>
+<td valign=middle class="small">Environments:</td>
+<td valign=top class="small" colspan=3>
+<input type=checkbox name="environment_carbonate" value="YES" checked>carbonate
+<input type=checkbox name="environment_siliciclastic" value="YES" checked>siliciclastic
+<input type=checkbox name="environment_terrestrial" value="YES" checked>terrestrial
+<input type=checkbox name="environment_unknown" value="YES" checked>unknown
+</td></tr>
+
+<tr>
+<td valign=middle class="small">Onshore-offshore zones:</td>
+<td valign=top class="small" colspan=3>
+<nobr><input type=checkbox name="zone_marginal_marine" value="YES" checked>marginal marine</nobr>
+<nobr><input type=checkbox name="zone_reef" value="YES" checked>reef</nobr>
+<nobr><input type=checkbox name="zone_shallow_subtidal" value="YES" checked>shallow subtidal</nobr>
+<nobr><input type=checkbox name="zone_deep_subtidal" value="YES" checked>deep subtidal</nobr>
+<nobr><input type=checkbox name="zone_offshore" value="YES" checked>offshore</nobr>
+<nobr><input type=checkbox name="zone_slope_basin" value="YES" checked>slope/basin</nobr>
+</td></tr>
+
+<tr>
+<td valign=top class="small">Continents or paleocontinents:</td>
+
+<td valign=top class="small" colspan=3>
+<table><tr><td class="small">
+<p><input type=checkbox name="global" value="YES" checked onClick="globalClick();"><i>global</i></p>
+
+<p>
+<span style="white-space: nowrap"><input type=checkbox name="Africa" value="YES" onClick="continentClick();">Africa</span>
+<span style="white-space: nowrap"><input type=checkbox name="Antarctica" value="YES" onClick="continentClick();">Antarctica</span>
+<span style="white-space: nowrap"><input type=checkbox name="Asia" value="YES" onClick="continentClick();">Asia</span>
+<span style="white-space: nowrap"><input type=checkbox name="Australia" value="YES" onClick="continentClick();">Australia</span>
+<span style="white-space: nowrap"><input type=checkbox name="Europe" value="YES" onClick="continentClick();">Europe</span>
+<span style="white-space: nowrap"><input type=checkbox name="North America" value="YES" onClick="continentClick();">North America</span>
+<span style="white-space: nowrap"><input type=checkbox name="South America" value="YES" onClick="continentClick();">South America</span>
+</p>
+
+<p>
+<span style="white-space: nowrap"><input type=checkbox name="paleo Australia" value="YES" onClick="continentClick();">Australia (paleocontinent)</span>
+<span style="white-space: nowrap"><input type=checkbox name="Avalonia" value="YES" onClick="continentClick();">Avalonia</span>
+<span style="white-space: nowrap"><input type=checkbox name="Baltoscandia" value="YES" onClick="continentClick();">Baltoscandia</span>
+<span style="white-space: nowrap"><input type=checkbox name="Kazakhstania" value="YES" onClick="continentClick();">Kazakhstania</span>
+<span style="white-space: nowrap"><input type=checkbox name="Laurentia" value="YES" onClick="continentClick();">Laurentia</span>
+<span style="white-space: nowrap"><input type=checkbox name="Mediterranean" value="YES" onClick="continentClick();">Mediterranean</span>
+<span style="white-space: nowrap"><input type=checkbox name="North China" value="YES" onClick="continentClick();">North China</span>
+<span style="white-space: nowrap"><input type=checkbox name="Precordillera" value="YES" onClick="continentClick();">Precordillera</span>
+<span style="white-space: nowrap"><input type=checkbox name="Siberia" value="YES" onClick="continentClick();">Siberia</span>
+<span style="white-space: nowrap"><input type=checkbox name="paleo South America" value="YES" onClick="continentClick();">South America (paleocontinent)</span>
+<span style="white-space: nowrap"><input type=checkbox name="South China" value="YES" onClick="continentClick();">South China</span>
+</p>
+</td></tr></table>
+</td></tr>
+
+<tr>
+<td valign=top class="small">Collection number(s): </td>
+<td valign=top class="small" colspan=3><input name=collection_no type="text" size="50"></td></tr>
+
+</table>
+</div>
+
+<p align=center>
+<input type=submit value="Create data set">
+</p>
+</div>
+
+
+
+<div id="panel3" class="panel"> 
+
+<div class="displayPanel" style="margin-top: 1.5em;">
+<span class="displayPanelHeader">Basic fields</span></br>
+<table width="100%" class="tiny">
+  <tr>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_collection_name value="YES">collection name</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_collection_aka value="YES">collection aka</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_reference_no value="YES">reference number</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_pubyr value="YES">publication year</td>
+  </tr>
+
+  <tr>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_authorizer value="YES">authorizer</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_enterer value="YES">enterer</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_modifier value="YES">modifier</td>
+  <td nowrap><input type=checkbox class="c_basic" name=collections_research_group value="YES">research group</td>
+  </tr>
+ 
+</table>
+</div>
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Geography fields</span></br>
+<table width="100%" class="tiny">
+  <tr>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_country value="YES">country</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_state value="YES">state</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_county value="YES">county</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_geogscale value="YES">geographic scale</td>
+  <td nowrap><input type=checkbox class="c_geography" name=collections_tectonic_plate_id value="YES">tectonic plate id</td>
+  </tr>
+
+  <tr>
+  <td nowrap colspan="3"><input type=checkbox class="c_geography" name=collections_coords value="YES">latitude/longitude in
+  <select name="collections_coords_format" class="small">
+    <option value="decimal">decimal</option>
+    <option value="DMS">DMS+dir</option>
+  </select>  
+  </td>
+  <td nowrap colspan="2"><input type=checkbox class="c_geography" name=collections_paleocoords value="YES">paleolatitude/longitude in 
+  <select name="collections_paleocoords_format" class="small">
+    <option value="decimal">decimal</option>
+    <option value="DMS">DMS+dir</option>
+  </select>
+  </td>
+  </tr>  
+
+</table>
+</div>
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Time fields</span></br>
+<table width="100%" class="tiny">
+  <tr>
+  <td nowrap><input type=checkbox class="c_time" name=collections_period value="YES">period</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_epoch value="YES">epoch</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_subepoch value="YES">Cenozoic subepoch</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_stage value="YES">stage</td>
+  </tr>
+
+  <tr>
+  <td nowrap><input type=checkbox class="c_time" name=collections_10mybin value="YES" CHECKED>10 m.y. bin</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_max_interval value="YES">maximum interval</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_min_interval value="YES">minimum interval</td>
+  <td nowrap>&nbsp;</td>
+  </tr>
+
+  <tr>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_max value="YES">maximum age (Ma)</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_min value="YES">minimum age (Ma)</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_mid value="YES">midpoint age (Ma)</td>
+  <td nowrap>&nbsp;</td>
+  </tr>
+</table></div>
+  
+<div class="displayPanel">
+<span class="displayPanelHeader">Stratigraphy fields</span></br>
+<table width="100%" class="tiny">
+  <tr>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_formation value="YES">formation</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_member value="YES">member</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_stratscale value="YES">stratigraphic scale</td>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_stratcomments value="YES">stratigraphic comments</td>
+  <td nowrap>&nbsp;</td>
+  </tr>
+</table>
+</div>
+
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Lithology fields</span></br>
+<table width="100%" class="tiny">
+  <tr>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithification value="YES">lithification 1</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithology1 value="YES">lithology 1</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithification2 value="YES">lithification 2</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_lithology2 value="YES">lithology 2</td>
+  </tr>
+
+  <tr>
+  <td nowrap><input type=checkbox class="c_stratigraphy" name=collections_lithdescript value="YES">lithological description</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_environment value="YES">environment</td>
+  <td nowrap><input type=checkbox class="c_lithology" name=collections_geology_comments value="YES">geology comments</td>
+  <td nowrap>&nbsp;</td>
+  </tr>
+</table>
+</div>
+  
+<p align=center>
+<input type=submit value="Create data set">
+</p>
+</div>
+
+<div id="panel4" class="panel"> 
+
+<div class="displayPanel" style="margin-top: 1.5em;">
+<span class="displayPanelHeader">Basic fields</span></br>
+<table width="100%" class="tiny">
+  <tr>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'o_basic');"><span class="medium">Check all</span></td>
+  </tr>
+
+  <tr>
+    <td><input type=checkbox class="o_basic" name=occurrences_reference_no value="YES">reference number</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_authorizer value="YES">authorizer</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_enterer value="YES">enterer</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_modifier value="YES">modifier</td>
+  </tr>
+
+  <tr>
+    <td><input type=checkbox class="o_basic" name=occurrences_class_name value="YES">class name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_order_name value="YES">order name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_family_name value="YES">family name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_subgenus_name value="YES">subgenus name</td>
+  </tr>
+
+  <tr>
+    <td><input type=checkbox class="o_basic" name=occurrences_species_name value="YES">species name</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_abund_value value="YES">abundance value</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_abund_unit value="YES">abundance unit</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_comments value="YES">comments</td>
+  </tr>
+
+  <tr>
+    <td><input type=checkbox class="o_basic" name=occurrences_plant_organ value="YES">plant organ</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_plant_organ2 value="YES">plant organ 2</td>
+    <td><input type=checkbox class="o_basic" name=occurrences_preservation value="YES">preservation category</td>
+  </tr>
+</table>
+
+</div>
+
+<div class="displayPanel" style="margin-top: 1.5em;">
+<span class="displayPanelHeader">Taxonomic fields</span></br>
+<table width="100%" class="tiny">
+  <tr>
+    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'o_taxonomy');"><span class="medium">Check all</span></td>
+  </tr>
+
+  <tr>
+    <td><input type=checkbox class="o_taxonomy" name=occurrences_first_author value="YES">first author</td>
+    <td><input type=checkbox class="o_taxonomy" name=occurrences_second_author value="YES">second author</td>
+    <td><input type=checkbox class="o_taxonomy" name=occurrences_other_authors value="YES">other authors</td>
+    <td><input type=checkbox class="o_taxonomy" name=occurrences_year_named value="YES">year named</td>
+  </tr>
+
+  <tr>
+    <td><input type=checkbox class="o_taxonomy" name=occurrences_type_specimen value="YES">type specimen</td>
+    <td><input type=checkbox class="o_taxonomy" name=occurrences_type_body_part value="YES">body part of type</td>
+    <td><input type=checkbox class="o_taxonomy" name=occurrences_extant value="YES">extant</td>
+    <td><input type=checkbox class="o_taxonomy" name=occurrences_common_name value="YES">common name</td>
+  </tr>
+
+</table>
+<p class="verysmall">Note that the collection ID and genus name fields are always output.</p>
+
+</div>
+
+<p align=center>
+<input type=submit value="Create data set">
+</p>
+</div>
+
+</form>
+
+
+<script language="JavaScript" type="text/javascript">
+    showPanel(1);
+</script> 
+
