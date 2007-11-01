@@ -363,8 +363,8 @@ sub displayHomePage {
 
 # Shows the form for requesting a map
 sub displayBasicMapForm {
-	print $hbo->stdIncludes("std_page_top" );
-    print $hbo->populateHTML('basic_map_form');
+	print $hbo->stdIncludes("std_page_top");
+	print $hbo->populateHTML('basic_map_form');
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -637,10 +637,16 @@ sub displayDownloadForm {
         $vars{'row_class_1a'} = ' class="lightGray"';
         $vars{'row_class_1b'} = '';
     }
-    
-    print $hbo->stdIncludes("std_page_top");
-    print Person::makeAuthEntJavascript($dbt);
+
+	print $hbo->stdIncludes("std_page_top");
+	print Person::makeAuthEntJavascript($dbt);
 	print $hbo->populateHTML('download_form',\%vars);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub displayBasicDownloadForm {
+	print $hbo->stdIncludes("std_page_top" );
+	print $hbo->populateHTML('basic_download_form');
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
