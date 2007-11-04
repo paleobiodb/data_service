@@ -3119,15 +3119,14 @@ sub getSeniorSynonym {
     my $return_status = shift;
 
     my %seen = ();
-    # Limit this to 10 iterations, in case we a have some weird loop
+    # Limit this to 10 iterations, in case we have some weird loop
     my $options = {};
     if ($restrict_to_reference_no =~ /\d/) {
         $options->{'reference_no'} = $restrict_to_reference_no;
     }
     $options->{'use_synonyms'} = "no";
-    my $parent;
     for(my $i=0;$i<10;$i++) {
-        $parent = getMostRecentClassification($dbt,$taxon_no,$options);
+        my $parent = getMostRecentClassification($dbt,$taxon_no,$options);
         last if (!$parent || !$parent->{'child_no'});
         if ($seen{$parent->{'child_no'}}) {
             # If we have a loop, disambiguate using last entered
@@ -3152,7 +3151,7 @@ sub getSeniorSynonym {
         } 
     }
 
-    if ( $return_status =~ /A-Za-z/ )	{
+    if ( $return_status =~ /[A-Za-z]/ )	{
         return ($taxon_no,$return_status);
     } else	{
         return $taxon_no;
