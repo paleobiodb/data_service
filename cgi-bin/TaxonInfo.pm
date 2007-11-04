@@ -3110,12 +3110,13 @@ sub getTaxa {
     }
 }
 
-# Keep going until we hit a belongs to, recombined, corrected as, or nome *
-# relationship. Note that invalid subgroup is technically not a synoym, but treated computationally the same
+# Keep going until we hit a belongs to, recombined, corrected as, or nomen *
+# relationship. Note that invalid subgroup is technically not a synonym, but treated computationally the same
 sub getSeniorSynonym {
     my $dbt = shift;
     my $taxon_no = shift;
     my $restrict_to_reference_no = shift;
+    my $return_status = shift;
 
     my %seen = ();
     # Limit this to 10 iterations, in case we a have some weird loop
@@ -3124,8 +3125,9 @@ sub getSeniorSynonym {
         $options->{'reference_no'} = $restrict_to_reference_no;
     }
     $options->{'use_synonyms'} = "no";
+    my $parent;
     for(my $i=0;$i<10;$i++) {
-        my $parent = getMostRecentClassification($dbt,$taxon_no,$options);
+        $parent = getMostRecentClassification($dbt,$taxon_no,$options);
         last if (!$parent || !$parent->{'child_no'});
         if ($seen{$parent->{'child_no'}}) {
             # If we have a loop, disambiguate using last entered
@@ -3141,15 +3143,20 @@ sub getSeniorSynonym {
             last;
         } else {
             $seen{$parent->{'child_no'}} = $parent;
-            if ($parent->{'status'} =~ /synonym|replaced|subgroup/) {
+            if ($parent->{'status'} =~ /synonym|replaced|subgroup|nomen/ && $parent->{'parent_no'} > 0)	{
                 $taxon_no = $parent->{'parent_no'};
+                $return_status = $parent->{'status'};
             } else {
                 last;
             }
         } 
     }
 
-    return $taxon_no;
+    if ( $return_status =~ /A-Za-z/ )	{
+        return ($taxon_no,$return_status);
+    } else	{
+        return $taxon_no;
+    }
 }
 
 # They may potentialy be chained, so keep going till we're done. Use a queue isntead of recursion to simplify things slightly
@@ -3163,7 +3170,7 @@ sub getJuniorSynonyms {
     for my $t ( @taxon_nos )	{
         my $senior;
         my $recent = getMostRecentClassification($dbt,$t,{'use_synonyms'=>'no'});
-        if ( $recent->{'status'} =~ /synonym|replaced|subgroup/ )	{
+        if ( $recent->{'status'} =~ /synonym|replaced|subgroup|nomen/ && $recent->{'parent_no'} > 0 )	{
             $senior = $recent->{'parent_no'};
         }
         my @queue = ();
@@ -3179,7 +3186,7 @@ sub getJuniorSynonyms {
             my @results = @{$dbt->getData($sql)};
             foreach my $row (@results) {
                 my $parent = getMostRecentClassification($dbt,$row->{'child_no'},{'use_synonyms'=>'no'});
-                if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|replaced|subgroup/ && $parent->{'child_no'} != $t) {
+                if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|replaced|subgroup|nomen/ && $parent->{'child_no'} != $t) {
                     if (!$seen_syn{$row->{'child_no'}}) {
                 # the most recent opinion on the focal taxon could be that
                 #  it is a synonym of its synonym
