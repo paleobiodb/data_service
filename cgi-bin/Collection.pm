@@ -2111,8 +2111,8 @@ sub getSynonymName {
     my $synonym_name = "";
 
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
-    my $ss_taxon_no = TaxonInfo::getSeniorSynonym($dbt,$orig_no);
-    my $is_synonym = ($ss_taxon_no != $orig_no) ? 1 : 0;
+    my ($ss_taxon_no,$status) = TaxonInfo::getSeniorSynonym($dbt,$orig_no,'','yes');
+    my $is_synonym = ($ss_taxon_no != $orig_no && $status =~ /synonym/) ? 1 : 0;
     my $is_spelling = 0;
     my $spelling_reason = "";
 
@@ -2125,6 +2125,12 @@ sub getSynonymName {
         $spelling_reason = 'corrected as' if $spelling_reason eq 'correction';
         $spelling_reason = 'spelled with current rank as' if $spelling_reason eq 'rank change';
         $spelling_reason = 'reassigned as' if $spelling_reason eq 'reassignment';
+        if ( $status =~ /replaced|subgroup|nomen/ )	{
+            $spelling_reason = $status;
+            if ( $status =~ /nomen/ )	{
+                $spelling_reason .= ' belonging to';
+            }
+        }
     }
     my $taxon_name = $spelling->{'taxon_name'};
     my $taxon_rank = $spelling->{'taxon_rank'};
