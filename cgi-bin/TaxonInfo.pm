@@ -275,8 +275,8 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 
 <form method="POST" action="$READ_URL">
 <div align="center" style="margin-bottom: -2.5em;">
-<p class="pageTitle" style="padding-left: 15em;">$display_name 
-<span style="padding-left: 8em;">
+<p class="pageTitle" style="padding-left: 14em; white-space: nowrap;">$display_name 
+<span style="padding-left: 8em; padding-right: 0em;">
 <input type="hidden" name="action" value="checkTaxonInfo">
 <input type="text" name="taxon_name" value="Search again" size="14" onFocus="textClear(this);" onBlur="textRestore(this);" style="font-size: 0.7em;">
 </span></p></div>
@@ -3119,6 +3119,7 @@ sub getSeniorSynonym {
     my $return_status = shift;
 
     my %seen = ();
+    my $status;
     # Limit this to 10 iterations, in case we have some weird loop
     my $options = {};
     if ($restrict_to_reference_no =~ /\d/) {
@@ -3144,7 +3145,7 @@ sub getSeniorSynonym {
             $seen{$parent->{'child_no'}} = $parent;
             if ($parent->{'status'} =~ /synonym|replaced|subgroup|nomen/ && $parent->{'parent_no'} > 0)	{
                 $taxon_no = $parent->{'parent_no'};
-                $return_status = $parent->{'status'};
+                $status = $parent->{'status'};
             } else {
                 last;
             }
@@ -3152,7 +3153,7 @@ sub getSeniorSynonym {
     }
 
     if ( $return_status =~ /[A-Za-z]/ )	{
-        return ($taxon_no,$return_status);
+        return ($taxon_no,$status);
     } else	{
         return $taxon_no;
     }
