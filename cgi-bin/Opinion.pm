@@ -1056,8 +1056,10 @@ sub submitOpinionForm {
             #  of a lower-ranked taxon JA 29.1.07
             # ranks are irrelevant if unranked clades are involved JA 14.6.07
             $errors->add("The rank of a taxon and the rank of its synonym, homonym, or replacement name must be the same");
-        } elsif ($q->param('status') =~ /nomen/ && $parentRank eq $childSpellingRank && $parentRank !~ /unranked/ && $childSpellingRank !~ /unranked/)	{
-            $errors->add("A ".$q->param('status')." cannot be identifiable as another taxon of the same rank");
+        # nomina dubia can belong to anything as long as they are not species
+        #  JA 11.11.07
+        } elsif ($q->param('status') =~ /nomen/ && $parentRank eq $childSpellingRank && $parentRank =~ /species/ && $childSpellingRank =~ /species/)	{
+            $errors->add("A ".$q->param('status')." cannot be identifiable as a species");
         } 
         if ($q->param('status') eq 'belongs to') {
             if ($childSpellingRank eq 'species' && $parentRank !~ /genus/) {
