@@ -2007,6 +2007,7 @@ sub queryDatabase {
     # Replace with senior synonym data
     my %ss_taxon_nos = ();
     my %ss_taxon_names = ();
+    my %ss_taxon_rank = ();
     if ($q->param("replace_with_ss") ne 'NO' &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         if (%all_taxa) {
@@ -2014,7 +2015,7 @@ sub queryDatabase {
             # Note the t.taxon_no != t.synonym_no clause - this is here
             # so that the array only gets filled with replacement names,
             # not cluttered up with taxa who don't have a senior synonym
-            my $sql = "SELECT t.taxon_no,t.synonym_no,a.taxon_name ".
+            my $sql = "SELECT t.taxon_no,t.synonym_no,a.taxon_name,a.taxon_rank ".
                       "FROM $TAXA_TREE_CACHE t, authorities a ".
                       "WHERE t.synonym_no=a.taxon_no ".
                       "AND t.taxon_no != t.synonym_no ".
@@ -2027,6 +2028,7 @@ sub queryDatabase {
                 # Split it into bits here and store that, optimization
                 my @name_bits = Taxon::splitTaxon($row->{'taxon_name'});
                 $ss_taxon_names{$row->{'taxon_no'}} = \@name_bits;
+                $ss_taxon_rank{$row->{'taxon_no'}} = $row->{'taxon_rank'};
             }
         }
     }
@@ -2075,6 +2077,7 @@ sub queryDatabase {
     }
 
     # Type specimen numbers, body part, extant, and common name data
+    my %taxon_rank_lookup;
     my %first_author_lookup;
     my %second_author_lookup;
     my %other_authors_lookup;
@@ -2108,8 +2111,9 @@ sub queryDatabase {
                 push @all_nos , keys %all_genera;
             }
 
-            my $sql = "SELECT t1.taxon_no,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2, authorities a,refs r WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",@all_nos).") AND t2.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
+            my $sql = "SELECT t1.taxon_no,a.taxon_rank,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2, authorities a,refs r WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",@all_nos).") AND t2.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
             foreach my $row (@{$dbt->getData($sql)}) {
+                $taxon_rank_lookup{$row->{'taxon_no'}} = $row->{'taxon_rank'};
                 if ( $row->{'a1i'} )	{
                     $first_author_lookup{$row->{'taxon_no'}} = $row->{'a1i'} . " " .$row->{'a1l'};
                 } else	{
@@ -2127,8 +2131,12 @@ sub queryDatabase {
                 $extant_lookup{$row->{'taxon_no'}} = $row->{'extant'};
                 $common_name_lookup{$row->{'taxon_no'}} = $row->{'common_name'};
             }
+            # if the user does not want species names, the occurrence species
+            #  name is irrelevant and the occurrence should inherit values for
+            #  the genus name
             if ( $q->param('occurrences_species_name') ne "YES" )	{
                 for my $species_no ( keys %parent_hash )	{
+                    $taxon_rank_lookup{$species_no} = $taxon_rank_lookup{$parent_hash{$species_no}};
                     $first_author_lookup{$species_no} = $first_author_lookup{$parent_hash{$species_no}};
                     $second_author_lookup{$species_no} = $second_author_lookup{$parent_hash{$species_no}};
                     $other_authors_lookup{$species_no} = $other_authors_lookup{$parent_hash{$species_no}};
@@ -2249,6 +2257,11 @@ sub queryDatabase {
                         $row->{'o.subgenus_name'} = $subgenus;
                         $row->{'o.species_name'} = $species;
                         $row->{'o.subspecies_name'} = $subspecies;
+                    } elsif ( $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus/ )	{
+FOO
+                        $row->{'o.species_name'} = "sp.";
+                    } else	{
+                        $row->{'o.species_name'} = "indet.";
                     }
                 }
             }
@@ -2304,15 +2317,20 @@ sub queryDatabase {
             # "extant" calculations must be done here to allow correct
             #   lumping below
             if ( $q->param('occurrences_extant') && $row->{'o.taxon_no'} > 0 )	{
-                $row->{'extant'} = $extant_lookup{$row->{'o.taxon_no'}};
+                # don't inherit the extant value if the taxon_no is for a
+                #  non-species but the record is of a species and the user
+                #  wants species names JA 6.11.07
+                if ( $taxon_rank_lookup{$row->{'o.taxon_no'}} eq "species" || $row->{'o.species_name'} =~ /indet\.|sp\.|spp\.|[^a-z]/ )	{
+                    $row->{'extant'} = $extant_lookup{$row->{'o.taxon_no'}};
                 # if output is a list of genera and a genus is marked as
                 #  extant explicitly, the "occurrence" must be extant
-                if ( $q->param('output_data') eq "genera" )	{
-                    my @parents = @{$master_class{$row->{'o.taxon_no'}}};
-                    foreach my $parent (@parents) {
-                        if ( $parent->{'taxon_rank'} eq 'genus' && $extant_lookup{$parent->{'taxon_no'}} eq "YES" )	{
-                            $row->{'extant'} = "YES";
-                            last;
+                    if ( $q->param('output_data') eq "genera" )	{
+                        my @parents = @{$master_class{$row->{'o.taxon_no'}}};
+                        foreach my $parent (@parents) {
+                            if ( $parent->{'taxon_rank'} eq 'genus' && $extant_lookup{$parent->{'taxon_no'}} eq "YES" )	{
+                                $row->{'extant'} = "YES";
+                                last;
+                            }
                         }
                     }
                 }
@@ -2580,12 +2598,20 @@ sub queryDatabase {
                 if ($ss_taxon_nos{$taxon_no}) {
                     $taxon_no = $ss_taxon_nos{$taxon_no};
                 }
-                $row->{'first_author'} = $first_author_lookup{$taxon_no};
-                $row->{'second_author'} = $second_author_lookup{$taxon_no};
-                $row->{'other_authors'} = $other_authors_lookup{$taxon_no};
-                $row->{'year_named'} = $year_named_lookup{$taxon_no};
-                $row->{'type_specimen'} = $type_specimen_lookup{$taxon_no};
-                $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
+            # none of this should be inherited if the taxon_no is for a
+            #  non-species but the record is of a species and the user
+            #  wants species names JA 6.11.07
+            # this check is a little loose because it will prevent inheritance
+            #  for some informal names, but that's no tragedy
+                if ( $taxon_rank_lookup{$taxon_no} eq "species" || $row->{'o.species_name'} =~ /indet\.|sp\.|spp\.|[^a-z]/ )	{
+                    $row->{'first_author'} = $first_author_lookup{$taxon_no};
+                    $row->{'second_author'} = $second_author_lookup{$taxon_no};
+                    $row->{'other_authors'} = $other_authors_lookup{$taxon_no};
+                    $row->{'year_named'} = $year_named_lookup{$taxon_no};
+                    $row->{'type_specimen'} = $type_specimen_lookup{$taxon_no};
+                    $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
+                }
+            # common names are never a problem
                 $row->{'common_name'} = $common_name_lookup{$taxon_no};
             }
 
