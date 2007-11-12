@@ -2256,7 +2256,6 @@ sub queryDatabase {
                         $row->{'o.species_name'} = $species;
                         $row->{'o.subspecies_name'} = $subspecies;
                     } elsif ( $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus/ )	{
-FOO
                         $row->{'o.species_name'} = "sp.";
                     } else	{
                         $row->{'o.species_name'} = "indet.";
