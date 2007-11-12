@@ -2246,8 +2246,6 @@ sub queryDatabase {
                     my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
                     #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{o.genus_name}/$row->{o.subgenus_name}/$row->{o.species_name}/$row->{o.subspecies_name} IS $genus/$subgenus/$species/$subspecies<br>";
 
-                    $row->{'or.taxon_no'} = $row->{'o.taxon_no'};
-                    $row->{'o.taxon_no'} = $ss_taxon_nos{$row->{'o.taxon_no'}};
                     $row->{'or.genus_name'} = $row->{'o.genus_name'};
                     $row->{'o.genus_name'} = $genus;
                     $row->{'or.subgenus_name'} = $row->{'o.subgenus_name'};
@@ -2263,6 +2261,8 @@ FOO
                     } else	{
                         $row->{'o.species_name'} = "indet.";
                     }
+                    $row->{'or.taxon_no'} = $row->{'o.taxon_no'};
+                    $row->{'o.taxon_no'} = $ss_taxon_nos{$row->{'o.taxon_no'}};
                 }
             }
             # raise subgenera to genus level JA 18.8.04
