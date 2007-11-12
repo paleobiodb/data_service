@@ -882,7 +882,6 @@ sub getIntervalString    {
         }
 
 
-
         @form_errors = @$errors;
         @form_warnings = @$warnings;
         my $intervals_sql = join(", ",@$intervals);
@@ -2245,6 +2244,12 @@ sub queryDatabase {
                 if ($ss_taxon_nos{$row->{'o.taxon_no'}}) {
                     my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
                     #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{o.genus_name}/$row->{o.subgenus_name}/$row->{o.species_name}/$row->{o.subspecies_name} IS $genus/$subgenus/$species/$subspecies<br>";
+                    if ( $q->param('indet') ne 'YES' && ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus/ )	{
+                        next;
+                    }
+                    if ( $q->param('sp') ne 'YES' && ! $species )	{
+                        next;
+                    }
 
                     $row->{'or.genus_name'} = $row->{'o.genus_name'};
                     $row->{'o.genus_name'} = $genus;
