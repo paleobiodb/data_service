@@ -356,9 +356,13 @@ sub updateCache {
     # will be serialized, which is important to prevent corruption.  Note reads can still happen
     # concurrently with the writes, but any additional writes beyond the first will block on this mutex
     # Don't respect mutexes more than a 2 minutes old, this script shouldn't execute for more than about 15 seconds
+# JA: there's a horrible bug somewhere in the system causing taxa_tree_cache
+#  to be corrupted, possibly when a user is entering opinions rapidly and
+#  (maybe) when the load average is high, so for lack of any better ideas
+#  I am pushing up the "respect" period to 20 minutes 28.11.07
     while(1) {
         $dbh->do("LOCK TABLES tc_mutex WRITE");
-        my @results = @{$dbt->getData("SELECT * FROM tc_mutex WHERE created > DATE_ADD(NOW(), INTERVAL -2 MINUTE)")};
+        my @results = @{$dbt->getData("SELECT * FROM tc_mutex WHERE created > DATE_ADD(NOW(), INTERVAL -20 MINUTE)")};
         if (@results) {
             print "$$: Failed to get lock, trying again in 5 seconds\n" if ($DEBUG);
             $dbh->do("UNLOCK TABLES");
