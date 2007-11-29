@@ -34,7 +34,7 @@ use strict;
     mapsize=>[ '50%', '75%', '100%', '125%', '150%' ],
     projection=>[ 'Eckert IV', 'equirectangular', 'Mollweide', 'orthographic' ],
     mapfocus=>['standard (0,0)', 'Africa (10,20)', 'Antarctica (-90,0)', 'Arctic (90,0)', 'Asia (20,100)', 'Australia (-28,135)', 'Europe (50,10)', 'North America (35,-100)', 'Pacific (0,150)', 'South America (-20,-60)'],
-    mapscale=>['X 1', 'X 1.2', 'X 1.5', 'X 2', 'X 2.5', 'X 3', 'X 4', 'X 5', 'X 6',  'X 7', 'X 8', 'X 9', 'X 10'],
+    mapscale=>['X 1', 'X 1.2', 'X 1.5', 'X 2', 'X 2.5', 'X 3', 'X 4', 'X 5', 'X 6',  'X 7', 'X 8', 'X 9', 'X 10', 'X 12', 'X 15', 'X 20', 'X 30', 'X 40'],
 mapwidth=>['100%','90%','80%','75%','70%','60%','50%'],
     mapresolution=>[ 'coarse', 'medium', 'fine', 'very fine' ],
     gridsize=>['none', '45 degrees', '30 degrees', '22.5 degrees', '15 degrees', '10 degrees'],
