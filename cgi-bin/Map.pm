@@ -1726,39 +1726,33 @@ sub mapDrawPoints{
             # in addition to degrees, so the resolution is a bit higher
             if ($scale > 6)  {
                 $lngoff = $coll{'lngdeg'};
-                $lnghalf = ".00";
-                # doubles the number of points longitudinally
-                if ( $coll{'lngmin'} >= 30 || ($coll{'lngdec'} =~ /^(5|6|7|8|9)/))	{
-                  $lngoff = $lngoff + 0.5;
-                  $lnghalf = ".50";
+                if ( $coll{'lngmin'} =~ /^[0-9]/ )	{
+                    $lngoff += $coll{'lngmin'} / 60;
+                } elsif ( $coll{'lngdec'} =~ /^[0-9]/)	{
+                    $lngoff .= "." . $coll{'lngdec'};
                 }
 
-                # E/W modification appears unnecessary, but code is here just in case
-                if ( $coll{'lngdir'} eq "East" )	{
-                  $lngoff = $lngoff + 0.0;
-                } elsif ( $coll{'lngdir'} eq "West" )	{
-                  $lngoff = $lngoff - 0.0;
-                }
-                
                 $latoff = $coll{'latdeg'};
-                $lathalf = ".00";
-                # quadruples the number of point rows latitudinally
-                if ( $coll{'latmin'} >= 45 || ($coll{'latdec'} =~ /^(9|8|7(9|8|7|6|5))/))	{
-                  $latoff = $latoff + 0.75;
-                  $lathalf = ".75";
-                } elsif ( $coll{'latmin'} >= 30 || ($coll{'latdec'} =~ /^(5|6|7)/ ))	{
-                  $latoff = $latoff + 0.5;
-                  $lathalf = ".50";
-                } elsif ( $coll{'latmin'} >= 15 || ($coll{'latdec'} =~ /^(4|3|2(9|8|7|6|5))/ ))	{
-                  $latoff = $latoff + 0.25;
-                  $lathalf = ".25";
+                if ( $coll{'latmin'} =~ /^[0-9]/ )	{
+                    $latoff += $coll{'latmin'} / 60;
+                } elsif ( $coll{'latdec'} =~ /^[0-9]/)	{
+                    $latoff .= "." . $coll{'latdec'};
                 }
-                
-                if ( $coll{'latdir'} eq "North" )	{
-                  $latoff = $latoff + 0.25;
-                } elsif ( $coll{'latdir'} eq "South" )	{
-                  $latoff = $latoff - 0.25;
+
+                if ($scale >= 10)  {
+                    $lngoff = int(4 * $lngoff) / 4;
+                    $lnghalf = $lngoff - $coll{'lngdeg'};
+                    $latoff = int(8 * $latoff) / 8;
+                    $lathalf = $latoff - $coll{'latdeg'};
+                } else	{
+                    # doubles the number of points longitudinally
+                    $lngoff = int(2 * $lngoff) / 2;
+                    $lnghalf = $lngoff - $coll{'lngdeg'};
+                    # quadruples the number of point rows latitudinally
+                    $latoff = int(4 * $latoff) / 4;
+                    $lathalf = $latoff - $coll{'latdeg'};
                 }
+
                 $coordres = 'half';
             } else {
                 $lngoff = $coll{'lngdeg'};
