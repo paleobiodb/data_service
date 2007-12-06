@@ -7,6 +7,7 @@ use strict;
 use DBI;
 use Debug;
 use Constants qw($WRITE_URL $READ_URL $HTML_DIR);
+use Download;
 
 # Flags and constants
 my $DEBUG=0; # The debug level of the calling program
