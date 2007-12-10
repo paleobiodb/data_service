@@ -75,6 +75,10 @@
 	<td bgcolor="White"><input id="reversed_name" type="text" value="" maxlength="64"></td>
 </tr>
 <tr>
+	<td bgcolor="White" nowrap>Gender:</td>
+	<td bgcolor="White"><select name="gender"><option>F</option><option>M</option></select></td>
+</tr>
+<tr>
 	<td bgcolor="White">Password: </td>
 	<td bgcolor="White"><input id="plaintext" type="text" value="" maxlength="20"></td>
 </tr>
@@ -97,14 +101,14 @@
 <tr>
 	<td bgcolor="White" nowrap>Is authorizer?</td>
 	<td bgcolor="White">
-		<input id="is_authorizer" type="radio" name="is_authorizer" value="1"> Yes
-		<input id="is_authorizer" type="radio" name="is_authorizer" value="0" checked> No
+		<input id="is_authorizer" type="radio" name="is_authorizer" value="1" checked> Yes
+		<input id="is_authorizer" type="radio" name="is_authorizer" value="0"> No
 	</td>
 </tr>
 <tr>
 	<td bgcolor="White" nowrap>Is active?</td>
 	<td bgcolor="White">
-		<input id="active" type="radio" name="active" value="1" checked> Yes
+		<input id="active" type="radio" checked name="active" value="1"> Yes
 		<input id="active" type="radio" name="active" value="0"> No
 	</td>
 </tr>
@@ -113,7 +117,7 @@
 	<td bgcolor="White" rowspan="9" valign="top">Groups:</td>
 </tr>
 <tr><td bgcolor="White"><input id="divergence" type="checkbox" name="divergence" value="1"> Divergence times</td></tr>
-<tr><td bgcolor="White"><input id="marine_invertebrate" type="checkbox" name="marine_invertebrate" value="1"> Marine Invertebrate</td></tr>
+<tr><td bgcolor="White"><input id="marine_invertebrate" type="checkbox" name="marine_invertebrate" value="1"> Marine invertebrate</td></tr>
 <tr><td bgcolor="White"><input id="micropaleontology" type="checkbox" name="micropaleontology" value="1"> Micropaleontology</td></tr>
 <tr><td bgcolor="White"><input id="PACED" type="checkbox" name="PACED" value="1"> PACED</td></tr>
 <tr><td bgcolor="White"><input id="paleobotany" type="checkbox" name="paleobotany" value="1"> Paleobotany</td></tr>
