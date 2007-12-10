@@ -485,9 +485,12 @@ sub writeBlock {
     } elsif ($block->{'type'} =~ /^(?:radio|checkbox)/) {
         my $value = $attribs->{'value'};
         my $checked = "";
-        if (exists $vars->{$block->{'name'}}) {
+        if ($vars->{$block->{'name'}}) {
             $attribs->{'other'} =~ s/\s*checked\s*/ /;
             my @all_v = split(/\s*,\s*/,$vars->{$block->{'name'}});
+            if (! @all_v && $vars->{$block->{'name'}} ne "")	{
+                push @all_v , $vars->{$block->{'name'}};
+            }
 
             foreach (@all_v) {
                 if ($value eq $_) {
@@ -503,6 +506,8 @@ sub writeBlock {
         $html .= " ".$checked if $checked;
         $html .= " ".$attribs->{'other'} if ($attribs->{'other'});
         $html .= " />";
+if ($checked){
+print "H $html ";}
         if ($read_only->{'all'} || $read_only->{$block->{'name'}}) {
             my $checked_symbol = ($checked) ? "X" : "&nbsp; ";
             $html = "<span class=\"readOnlyCheckBox\">$checked_symbol</span>";
