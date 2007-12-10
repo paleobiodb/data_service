@@ -506,8 +506,6 @@ sub writeBlock {
         $html .= " ".$checked if $checked;
         $html .= " ".$attribs->{'other'} if ($attribs->{'other'});
         $html .= " />";
-if ($checked){
-print "H $html ";}
         if ($read_only->{'all'} || $read_only->{$block->{'name'}}) {
             my $checked_symbol = ($checked) ? "X" : "&nbsp; ";
             $html = "<span class=\"readOnlyCheckBox\">$checked_symbol</span>";
