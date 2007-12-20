@@ -55,7 +55,7 @@ sub displayOccurrenceReclassify	{
 
     my @occrefs;
     if (@collections) {
-	    print "<center><h3>Classification of ".$q->param('taxon_name')."</h3>";
+	    print "<center><p class=\"pageTitle\">Classification of \"".$q->param('taxon_name')."\" occurrences</p>";
         my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($q->param('taxon_name'));
         my @names = ($dbh->quote($genus));
         if ($subgenus) {
@@ -90,7 +90,7 @@ sub displayOccurrenceReclassify	{
     } else {
 	    my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
 	    my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
-	    print "<center><h3>Classification of taxa in collection ",$q->param('collection_no')," ($coll_name)</h3>";
+	    print "<center><p class=\"pageTitle\">Classification of taxa in collection ",$q->param('collection_no')," ($coll_name)</p>";
        
         my $authorizer_where = "";
         if ($q->param('occurrences_authorizer_no') =~ /^[\d,]+$/) {
@@ -115,12 +115,12 @@ sub displayOccurrenceReclassify	{
 		print "<input name=\"occurrences_authorizer_no\" type=\"hidden\" value=\"".$q->param('occurrences_authorizer_no')."\">\n";
         if (@collections) {
             print "<input type=\"hidden\" name=\"taxon_name\" value=\"".$q->param('taxon_name')."\">";
-		    print "<table border=0 cellpadding=0 cellspacing=0>\n";
-            print "<tr><th colspan=2>Collection</th><th>Classificaton based on</th></tr>";
+		    print "<table border=0 cellpadding=0 cellspacing=0 class=\"small\">\n";
+            print "<tr><th class=\"large\" colspan=2>Collection</th><th class=\"large\" colspan=2 style=\"text-align: left; padding-left: 2em;\">Classification based on</th></tr>";
         } else {
             print "<input type=\"hidden\" name=\"collection_no\" value=\"".$q->param('collection_no')."\">";
-		    print "<table border=0 cellpadding=0 cellspacing=0>\n";
-            print "<tr><th>Taxon name</th><th>Classification based on</th></tr>";
+		    print "<table border=0 cellpadding=0 cellspacing=0 class=\"small\">\n";
+            print "<tr><th class=\"large\">Taxon name</th><th colspan=2 class=\"large\" style=\"text-align: left; padding-left: 2em;\">Classification based on</th></tr>";
         }
 	}
 
@@ -134,7 +134,7 @@ sub displayOccurrenceReclassify	{
     my $nonExact = 0;
 	for my $o ( @occrefs )	{
         my $editable = ($s->get("superuser") || $is_modifier_for{$o->{'authorizer_no'}} || $o->{'authorizer_no'} == $s->get('authorizer_no')) ? 1 : 0;
-        my $authorizer = ($editable) ? '' : '(<b>Authorizer:</b> '.Person::getPersonName($dbt,$o->{'authorizer_no'}).')';
+        my $authorizer = ($editable) ? '' : '(Authorizer: '.Person::getPersonName($dbt,$o->{'authorizer_no'}).')';
         $nonEditableCount++ if (!$editable);
 
 		# if the name is informal, add it to the list of
@@ -168,7 +168,7 @@ sub displayOccurrenceReclassify	{
                 if ($o->{'collection_no'}) {
                     my $tsql = "SELECT interval_name FROM intervals WHERE interval_no=" . $o->{max_interval_no};
                     my $maxintname = @{$dbt->getData($tsql)}[0];
-                    $collection_string = "<b>".$o->{'collection_name'}."</b> ";
+                    $collection_string = $o->{'collection_name'}." ";
                     $collection_string .= "<span class=\"tiny\">"; 
                     $collection_string .= $maxintname->{interval_name};
                     if ( $o->{min_interval_no} > 0 )  {
@@ -212,7 +212,7 @@ sub displayOccurrenceReclassify	{
                 $collection_string .= ": " if ($collection_string);
                  
 				if ( $o->{reid_no} )	{
-					print "&nbsp;&nbsp;<span class='small'><b>reID =</b></span>&nbsp;";
+					print "&nbsp;&nbsp;<span class='small'>reID: </span>&nbsp;";
                 }
 
                 my $description = "$collection_string $formatted";
@@ -257,9 +257,9 @@ sub displayOccurrenceReclassify	{
 	# print the informal and otherwise unclassifiable names
 	if ( @badoccrefs )	{
 		print "<hr>\n";
-		print "<h4>Taxa that cannot be classified</h4>";
+		print "<p class=\"large\">Occurrences that cannot be classified</p>";
 		print "<p><i>Check these names for typos and/or create new taxonomic authority records for them</i></p>\n";
-		print "<table border=0 cellpadding=0 cellspacing=0>\n";
+		print "<table border=0 cellpadding=0 cellspacing=0 class=\"small\">\n";
 	}
 	$rowcolor = 0;
 	for my $b ( @badoccrefs )	{
@@ -306,17 +306,17 @@ sub processReclassifyForm	{
     if ($q->param('collection_no')) {
         my $sql = "SELECT collection_name FROM collections WHERE collection_no=" . $q->param('collection_no');
         my $coll_name = ${$dbt->getData($sql)}[0]->{collection_name};
-        print "<h3>Taxa reclassified in collection " , $q->param('collection_no') ," (" , $coll_name , ")</h3>\n\n";
-	    print "<table border=0 cellpadding=2 cellspacing=0>\n";
-        print "<tr><th>Taxon</th><th>Classification based on</th></tr>";
+        print "<p class=\"pageTitle\">Reclassified taxa in collection " , $q->param('collection_no') ," (" , $coll_name , ")</p>\n\n";
+	    print "<table border=0 cellpadding=2 cellspacing=0 class=\"small\">\n";
+        print "<tr><th class=\"large\">Taxon</th><th class=\"large\">Classification based on</th></tr>";
     } elsif ($q->param('taxon_name')) {
-        print "<h3>Taxa reclassified for " , $q->param('taxon_name') ,"</h3>\n\n";
-	    print "<table border=0 cellpadding=2 cellspacing=0>\n";
-        print "<tr><th>Collection</th><th>Classification based on</th></tr>";
+        print "<p class=\"pageTitle\">Taxa reclassified for " , $q->param('taxon_name') ,"</p>\n\n";
+	    print "<table border=0 cellpadding=2 cellspacing=0 class=\"small\">\n";
+        print "<tr><th class=\"large\">Collection</th><th class=\"large\">Classification based on</th></tr>";
     } else {
-        print "<h3>Taxa reclassified</h3>";
-	    print "<table border=0 cellpadding=2 cellspacing=0>\n";
-        print "<tr><th>Taxon</th><th>Classification based on</th></tr>";
+        print "<p class=\"pageTitle\">Taxa reclassified</p>";
+	    print "<table border=0 cellpadding=2 cellspacing=0 class=\"small\">\n";
+        print "<tr><th class=\"large\">Taxon</th><th class=\"large\">Classification based on</th></tr>";
     }
 
 	# get lists of old and new taxon numbers
