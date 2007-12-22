@@ -4051,6 +4051,13 @@ sub displayAuthorizers {
     print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub displayFeaturedAuthorizers {
+    logRequest($s,$q);
+    print $hbo->stdIncludes("std_page_top");
+    print Person::displayFeaturedAuthorizers($dbt,$IS_FOSSIL_RECORD);
+    print $hbo->stdIncludes("std_page_bottom");
+}
+
 sub displayInstitutions {
     logRequest($s,$q);
     print $hbo->stdIncludes("std_page_top");
