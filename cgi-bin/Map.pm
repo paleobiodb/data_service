@@ -1843,6 +1843,18 @@ sub mapDrawPoints{
                 if ($dotshape =~ /^circles$/)	{
                   if ( $x1+($dotsize*1.5)+1 < $width && $x1-($dotsize*1.5)-1 > 0 &&
                        $y1+($dotsize*1.5)+1 < $height && $y1-($dotsize*1.5)-1 > 0 )	{
+                    my $shadow= new GD::Polygon;
+                    $shadow->addPt($x1+1,$y1+($dotsize*2)+2);
+                    $shadow->addPt($x1+($dotsize*1.414)+1,$y1+($dotsize*1.414)+2);
+                    $shadow->addPt($x1+($dotsize*2)+1,$y1+2);
+                    $shadow->addPt($x1+($dotsize*1.414)+1,$y1-($dotsize*1.414)+2);
+                    $shadow->addPt($x1+1,$y1-($dotsize*2)+2);
+                    $shadow->addPt($x1-($dotsize*1.414)+1,$y1-($dotsize*1.414)+2);
+                    $shadow->addPt($x1-($dotsize*2)+1,$y1+2);
+                    $shadow->addPt($x1-($dotsize*1.414)+1,$y1+($dotsize*1.414)+2);
+                    $im->setAntiAliased($col{'gray'});
+                    $im->filledPolygon($shadow,gdAntiAliased);
+                    $im->setAntiAliased($col{$dotcolor});
                     my $poly = new GD::Polygon;
                     $poly->addPt($x1,$y1+($dotsize*2));
                     $poly->addPt($x1+($dotsize*1.414),$y1+($dotsize*1.414));
@@ -1853,18 +1865,18 @@ sub mapDrawPoints{
                     $poly->addPt($x1-($dotsize*2),$y1);
                     $poly->addPt($x1-($dotsize*1.414),$y1+($dotsize*1.414));
                     $im->filledPolygon($poly,gdAntiAliased);
-                my $diam = $dotsize * 3;
-                my $rad = $diam / 2;
-                my $aix = $AILEFT+$x1+$rad;
-                my $aiy = $AITOP-$y1;
-                my $obl = $diam * 0.27612;
-                $ai .=  "$mycolor\n";
-                $ai .=  "0 G\n";
-                $ai .= sprintf("%.1f %.1f m\n",$aix,$aiy);
-                $ai .= sprintf("%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad);
-                $ai .= sprintf("%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy);
-                $ai .= sprintf("%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad);
-                $ai .= sprintf("%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy);
+                    my $diam = $dotsize * 3;
+                    my $rad = $diam / 2;
+                    my $aix = $AILEFT+$x1+$rad;
+                    my $aiy = $AITOP-$y1;
+                    my $obl = $diam * 0.27612;
+                    $ai .=  "$mycolor\n";
+                    $ai .=  "0 G\n";
+                    $ai .= sprintf("%.1f %.1f m\n",$aix,$aiy);
+                    $ai .= sprintf("%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix,$aiy-$obl,$aix-$rad+$obl,$aiy-$rad,$aix-$rad,$aiy-$rad);
+                    $ai .= sprintf("%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad-$obl,$aiy-$rad,$aix-$diam,$aiy-$obl,$aix-$diam,$aiy);
+                    $ai .= sprintf("%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$diam,$aiy+$obl,$aix-$rad-$obl,$aiy+$rad,$aix-$rad,$aiy+$rad);
+                    $ai .= sprintf("%.1f %.1f %.1f %.1f %.1f %.1f c\n",$aix-$rad+$obl,$aiy+$rad,$aix,$aiy+$obl,$aix,$aiy);
                 if ( $bordercolor !~ "borderblack" )	{
                     $ai .=  "f\n";
                 } else	{
@@ -1894,10 +1906,16 @@ sub mapDrawPoints{
                   $ai .=  "S\n";
                 } elsif ($dotshape =~ /^diamonds$/)	{
                   my $poly = new GD::Polygon;
+                  my $shadow = new GD::Polygon;
                   $poly->addPt($x1,$y1+($dotsize*2));
                   $poly->addPt($x1+($dotsize*2),$y1);
                   $poly->addPt($x1,$y1-($dotsize*2));
                   $poly->addPt($x1-($dotsize*2),$y1);
+                  $shadow->addPt($x1+1,$y1+($dotsize*2)+2);
+                  $shadow->addPt($x1+($dotsize*2)+1,$y1+2);
+                  $shadow->addPt($x1+1,$y1-($dotsize*2)+2);
+                  $shadow->addPt($x1-($dotsize*2)+1,$y1+2);
+                  $im->filledPolygon($shadow,$col{'gray'});
                   $im->filledPolygon($poly,$col{$dotcolor});
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1-($dotsize*2));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1);
@@ -1907,27 +1925,36 @@ sub mapDrawPoints{
                 }
                 elsif ($dotshape =~ /^stars$/)	{
                   my $poly = new GD::Polygon;
+                  my $shadow = new GD::Polygon;
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1+($dotsize*sin(9*36*$PI/180)),$AITOP-$y1+($dotsize*cos(9*36*$PI/180)));
                   for $p (0..9)	{
                     if ( $p % 2 == 1 )	{
                       $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
+                      $shadow->addPt($x1+($dotsize*sin($p*36*$PI/180))+1,$y1-($dotsize*cos($p*36*$PI/180))+1);
                       $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize*cos($p*36*$PI/180)));
                     } else	{
                       $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
+                      $shadow->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180))+2,$y1-($dotsize/$C72*cos($p*36*$PI/180))+2);
                       $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize/$C72*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize/$C72*cos($p*36*$PI/180)));
                     }
                   }
+                  $im->filledPolygon($shadow,$col{'gray'});
                   $im->filledPolygon($poly,$col{$dotcolor});
                 }
             # or draw a triangle
                 elsif ($dotshape =~ /^triangles$/)	{
                   my $poly = new GD::Polygon;
+                  my $shadow = new GD::Polygon;
                # lower left vertex
                   $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+                  $shadow->addPt($x1+($dotsize*2)+1,$y1+($dotsize*2*sin(60*$PI/180))+2);
                # top middle vertex
-                  $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
+                  $poly->addPt($x1+1,$y1-($dotsize*2*sin(60*$PI/180))+2);
+                  $shadow->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
                # lower right vertex
                   $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+                  $shadow->addPt($x1-($dotsize*2)+1,$y1+($dotsize*2*sin(60*$PI/180))+2);
+                  $im->filledPolygon($shadow,$col{'gray'});
                   $im->filledPolygon($poly,$col{$dotcolor});
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180)));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1+($dotsize*2*sin(60*$PI/180)));
@@ -1936,6 +1963,7 @@ sub mapDrawPoints{
                 }
             # or draw a square
                 else	{
+                  $im->filledRectangle($x1-($dotsize*1.5)+1,$y1-($dotsize*1.5)+2,$x1+($dotsize*1.5)+1,$y1+($dotsize*1.5)+2,$col{'gray'});
                   $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$dotcolor});
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1+($dotsize*1.5));
