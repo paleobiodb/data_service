@@ -1,6 +1,7 @@
 package Person;
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD);
 use strict;
+use Reference;
 
 # Poling code calved off from displayLoginPage by JA 13.4.04
 sub makeAuthEntJavascript {
@@ -123,7 +124,7 @@ sub reverseName {
 
 sub displayEnterers {
     my ($dbt,$fossil_record_only) = @_;
-    my $html = "<div align=\"center\"><h3>Data enterers</h3></div>";
+    my $html = "<div align=\"center\"><div class=\"pageTitle\">Data enterers</div></div>";
     $html .= "<p \"align=left\">The following students and research assistants have entered data into the Database.
     Institution names are placed in parentheses to indicate students who have since moved on.
     <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify <a href=\"mailto:alroy\@nceas.ucsb.edu\">John Alroy.</a></i></p><br>";
@@ -177,7 +178,7 @@ sub displayAuthorizers {
         push @secondhalf , $results[$r];
     }
 
-    $html .= '<div align="center"><h4>Contributing researchers</h4></div>';
+    $html .= '<div align="center"><div class="pageTitle">Contributing researchers</div></div>';
     $html .= qq|<div align="center" style="text-align: left; padding-left: 1em; padding-right: 1em;"><p class="small">The following Database members have entered data and/or supervised data entry by their students. See also our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
     $html .= "\n<table><tr><td valign=\"top\" width=\"50%\">\n\n";
     $html .= formatAuthorizerTable(\@firsthalf);
@@ -209,6 +210,47 @@ sub formatAuthorizerTable	{
 
 }
 
+sub displayFeaturedAuthorizers	{
+    my ($dbt,$fossil_record_only) = @_;
+    my $html = "";
+
+    my $sql = "SELECT first_name,last_name,institution,country,homepage,photo,r.* FROM person p,refs r WHERE is_authorizer=1 AND last_entry IS NOT NULL AND person_no=authorizer_no GROUP BY authorizer_no";
+    if ($fossil_record_only) {
+        $sql .= " AND fossil_record=1";
+    }
+    $sql .= " ORDER BY last_action DESC LIMIT 20";
+    my @results = @{$dbt->getData($sql)};
+    @results = sort { $a->{'last_name'} cmp $b->{'last_name'} || $a->{'first_name'} cmp $b->{'first_name'} } @results;
+
+    $html .= '<div align="center"><div class="pageTitle">Featured contributors</div></div>';
+    $html .= qq|<div align="center" style="text-align: left; padding-left: 2.1em; padding-right: 2em; padding-bottom: 0em;"><p class="small">Here are some Database members who have entered data and/or supervised data entry recently. See also our full list of <a href="$READ_URL?action=displayAuthorizer">contributors</a> and our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
+    $html .= "<div class=\"small\" style=\"padding-left: 1em;\">\n";
+    $html .= "<table><tr><td width=\"50%\">\n";
+    for(my $i=0;$i<@results;$i++) {
+        my $row = $results[$i];
+        $html .= "<div class=\"displayPanel\" style=\"padding: 0.75em;\">";
+        if ( $row->{'photo'} )	{
+            $html .= '<div style="float: right; position: relative; top: 0px; right: 0px;"><img src="/public/mugshots/' . $row->{'photo'} . '"></div>';
+        }
+        my $name = "$row->{first_name} $row->{last_name}";
+        if ( $row->{'homepage'} )	{
+            $name = '<a href="http://' . $row->{'homepage'} . '">' . $name . '</a>';
+        }
+        $html .= "$name<br>\n";
+        $html .= "$row->{'institution'}, $row->{'country'}<br>\n";
+        my $longref = Reference::formatLongRef($row);
+        # authorizer/enterer not needed
+        $longref =~ s/ \[.*//;
+        $html .= "<div class=\"verysmall\" style=\"padding-top: 0.3em;\"><i>Latest reference:</i> " . $longref. "</div>";
+        $html .= "<div style=\"clear: both;\"></div></div>\n";
+        if ( $i == int( $#results / 2 ) )	{
+            $html .= "</td><td width=\"50%\" valign=\"top\">\n";
+        }
+    }
+    $html .= "</td></tr></table></div><br>\n";
+    return $html;
+}
+
 sub displayInstitutions {
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
@@ -238,7 +280,7 @@ sub displayInstitutions {
         push @secondhalf , $inst_names[$i];
     }
 
-    $html .= '<div align="center"><h4>Contributing institutions</h4></div>';
+    $html .= '<div align="center"><div class="pageTitle">Contributing institutions</div></div>';
     $html .= qq|<div align="center" style="text-align: left; padding-left: 1em; padding-right: 1em;"><p class="small"><a href="$READ_URL?action=displayAuthorizers">Database members</a> who have contributed data or supervised data entry by students are affiliated with the following institutions.</p></div>|;
 
     $html .= "\n<table><tr><td valign=\"top\" width=\"50%\">\n\n";
