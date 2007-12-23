@@ -210,17 +210,29 @@ sub formatAuthorizerTable	{
 
 }
 
+# JA 22.12.07
 sub displayFeaturedAuthorizers	{
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
-    my $sql = "SELECT first_name,last_name,institution,country,homepage,photo,r.* FROM person p,refs r WHERE is_authorizer=1 AND last_entry IS NOT NULL AND person_no=authorizer_no GROUP BY authorizer_no";
+    my $sql = "SELECT first_name,last_name,institution,country,homepage,photo,max(reference_no) AS max_ref FROM person p,refs r WHERE is_authorizer=1 AND last_entry IS NOT NULL AND person_no=authorizer_no GROUP BY authorizer_no";
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
-    $sql .= " ORDER BY last_action DESC LIMIT 20";
+    $sql .= " ORDER BY last_entry DESC LIMIT 12";
     my @results = @{$dbt->getData($sql)};
     @results = sort { $a->{'last_name'} cmp $b->{'last_name'} || $a->{'first_name'} cmp $b->{'first_name'} } @results;
+    my @refnos;
+    for my $r ( @results )	{
+        push @refnos , $r->{'max_ref'};
+    }
+
+    $sql = "SELECT * FROM refs WHERE reference_no IN (" . join(',',@refnos) . ")";
+    my @refrefs = @{$dbt->getData($sql)};
+    my %refdata;
+    for my $r ( @refrefs )	{
+        $refdata{$r->{'reference_no'}} = $r;
+    }
 
     $html .= '<div align="center"><div class="pageTitle">Featured contributors</div></div>';
     $html .= qq|<div align="center" style="text-align: left; padding-left: 2.1em; padding-right: 2em; padding-bottom: 0em;"><p class="small">Here are some Database members who have entered data and/or supervised data entry recently. See also our full list of <a href="$READ_URL?action=displayAuthorizer">contributors</a> and our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
@@ -238,10 +250,10 @@ sub displayFeaturedAuthorizers	{
         }
         $html .= "$name<br>\n";
         $html .= "$row->{'institution'}, $row->{'country'}<br>\n";
-        my $longref = Reference::formatLongRef($row);
+        my $longref = Reference::formatLongRef($refdata{$row->{'max_ref'}});
         # authorizer/enterer not needed
         $longref =~ s/ \[.*//;
-        $html .= "<div class=\"verysmall\" style=\"padding-top: 0.3em;\"><i>Latest reference:</i> " . $longref. "</div>";
+        $html .= "<div class=\"verysmall\" style=\"padding-top: 0.3em;\"><i><a href=\"$READ_URL?action=displayReference&reference_no=$row->{'max_ref'}\">Latest reference:</a></i> " . $longref. "</div>";
         $html .= "<div style=\"clear: both;\"></div></div>\n";
         if ( $i == int( $#results / 2 ) )	{
             $html .= "</td><td width=\"50%\" valign=\"top\">\n";
