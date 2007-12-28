@@ -215,16 +215,19 @@ sub displayFeaturedAuthorizers	{
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
-    my $sql = "SELECT first_name,last_name,institution,country,homepage,photo,max(reference_no) AS max_ref FROM person p,refs r WHERE is_authorizer=1 AND last_entry IS NOT NULL AND person_no=authorizer_no GROUP BY authorizer_no";
+    my $sql = "SELECT p.first_name,p.last_name,p.institution,p.country,p.homepage,p.photo,max(reference_no) AS max_ref FROM person p,person p2,refs r WHERE p.is_authorizer=1 AND p2.last_entry IS NOT NULL AND p.person_no=authorizer_no AND p2.person_no=enterer_no GROUP BY authorizer_no,enterer_no";
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
-    $sql .= " ORDER BY last_entry DESC LIMIT 12";
+    $sql .= " ORDER BY p2.last_entry DESC LIMIT 12";
     my @results = @{$dbt->getData($sql)};
     @results = sort { $a->{'last_name'} cmp $b->{'last_name'} || $a->{'first_name'} cmp $b->{'first_name'} } @results;
     my @refnos;
+    my %seen = ();
     for my $r ( @results )	{
-        push @refnos , $r->{'max_ref'};
+        if ( ! $seen{$r->{'first_name'.'last_name'}} )	{
+            push @refnos , $r->{'max_ref'};
+        }
     }
 
     $sql = "SELECT * FROM refs WHERE reference_no IN (" . join(',',@refnos) . ")";
