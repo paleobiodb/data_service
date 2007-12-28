@@ -215,20 +215,24 @@ sub displayFeaturedAuthorizers	{
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
-    my $sql = "SELECT p.first_name,p.last_name,p.institution,p.country,p.homepage,p.photo,max(reference_no) AS max_ref FROM person p,person p2,refs r WHERE p.is_authorizer=1 AND p2.last_entry IS NOT NULL AND p.person_no=authorizer_no AND p2.person_no=enterer_no GROUP BY authorizer_no,enterer_no";
+    my $sql = "SELECT p.first_name,p.last_name,p.institution,p.country,p.homepage,p.photo,max(reference_no) AS max_ref FROM person p,person p2,refs r WHERE p.is_authorizer=1 AND p2.last_entry IS NOT NULL AND r.created>DATE_SUB( now(), INTERVAL 1 YEAR) AND p.person_no=authorizer_no AND p2.person_no=enterer_no GROUP BY enterer_no";
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
-    $sql .= " ORDER BY p2.last_entry DESC LIMIT 12";
+    $sql .= " ORDER BY p2.last_entry DESC LIMIT 20";
     my @results = @{$dbt->getData($sql)};
     @results = sort { $a->{'last_name'} cmp $b->{'last_name'} || $a->{'first_name'} cmp $b->{'first_name'} } @results;
     my @refnos;
     my %seen = ();
+    my @newresults;
     for my $r ( @results )	{
-        if ( ! $seen{$r->{'first_name'.'last_name'}} )	{
+        if ( ! $seen{$r->{'first_name'}." ".$r->{'last_name'}} && $#newresults < 11 )	{
             push @refnos , $r->{'max_ref'};
+            $seen{$r->{'first_name'}." ".$r->{'last_name'}}++;
+            push @newresults , $r;
         }
     }
+    @results = @newresults;
 
     $sql = "SELECT * FROM refs WHERE reference_no IN (" . join(',',@refnos) . ")";
     my @refrefs = @{$dbt->getData($sql)};
