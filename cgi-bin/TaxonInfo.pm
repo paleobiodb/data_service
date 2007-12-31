@@ -2781,8 +2781,14 @@ sub displaySynonymyList	{
 	my $is_real_user = shift;
 	my $output = "";
 
+	$output .= qq|<div align="left" class="displayPanel" style="width: 32em; margin-top: 2em;">
+<div align="center" class="displayPanelContent" style="padding-top: 0.5em; padding-bottom: 1em;">
+|;
+
 	unless ($taxon_no) {
-		return "<i>No synonymy data are available</i>";
+		$output .= "<div align=\"center\" style=\"padding-top: 0.75em;\"><i>No taxonomic opinions are available</i></div>";
+		$output .= "</table>\n</div>\n</div>\n";
+		return $output;
 	}
 
 	# Find synonyms
@@ -2800,15 +2806,19 @@ sub displaySynonymyList	{
 	# a list of all spellings used is needed to get the names from the
 	#  authorities table, which we have to hit anyway
 
-	my %spelling_nos = ($taxon_no=>1);
-    # This is merely so the script won't crash if there are no opinions -- will get overwritten with correct data if there are
-	my %orig_no = ($taxon_no=>$taxon_no); 
+	my %spelling_nos = ();
+	my %orig_no = ();
 	for my $or ( @opinionrefs )	{
 		$spelling_nos{$or->{child_spelling_no}}++;
 		$orig_no{$or->{child_spelling_no}} = $or->{child_no};
 	}
 
 	my $spelling_list = join(',',keys %spelling_nos);
+	if ( ! $spelling_list )	{
+		$output .= "<div align=\"center\" style=\"padding-top: 0.75em;\"><i>No taxonomic opinions are available</i></div>";
+		$output .= "</table>\n</div>\n</div>\n";
+		return $output;
+	}
 
 	# get all authority records, including those of variant spellings
 	# recombinations will be used to format opinions, and will be
@@ -2892,9 +2902,7 @@ sub displaySynonymyList	{
 	my @synlinekeys = sort { $synline{$a}->{YEAR} <=> $synline{$b}->{YEAR} || $synline{$a}->{AUTH} cmp $synline{$b}->{AUTH} || $synline{$a}->{PAGES} <=> $synline{$b}->{PAGES} || $synline{$a}->{TAXON} cmp $synline{$b}->{TAXON} } keys %synline;
 
 # print each line of the synonymy list
-	$output .= qq|<div align="left" class="displayPanel" style="width: 32em; margin-top: 2em;">
-<div align="center" class="displayPanelContent" style="padding-top: 0.5em; padding-bottom: 1em;">
-<table cellspacing=5>
+	$output .= qq|<table cellspacing=5>
 <tr><th>Year</th><td>Name and author</th></tr>
 |;
 	my $lastline;
