@@ -67,14 +67,14 @@ $sth->execute();
 my $enterer_total = $stats[0];
 $sth->finish();
 
-$sql = "SELECT count(distinct institution) FROM person WHERE institution IS NOT NULL";
+$sql = "SELECT count(distinct institution) FROM person,refs WHERE institution IS NOT NULL AND person_no=enterer_no";
 $sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
 $sth->execute();
 @stats = $sth->fetchrow_array();
 my $institution_total = $stats[0];
 $sth->finish();
 
-$sql = "SELECT count(distinct country) FROM person WHERE country IS NOT NULL";
+$sql = "SELECT count(distinct country) FROM person,refs WHERE country IS NOT NULL AND person_no=enterer_no";
 $sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
 $sth->execute();
 @stats = $sth->fetchrow_array();
