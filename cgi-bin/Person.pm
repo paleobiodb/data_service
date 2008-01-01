@@ -242,7 +242,7 @@ sub displayFeaturedAuthorizers	{
     }
 
     $html .= '<div align="center"><div class="pageTitle">Featured contributors</div></div>';
-    $html .= qq|<div align="center" style="text-align: left; padding-left: 2.1em; padding-right: 2em; padding-bottom: 0em;"><p class="small">Here are some Database members who have entered data and/or supervised data entry recently. See also our full list of <a href="$READ_URL?action=displayAuthorizer">contributors</a> and our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
+    $html .= qq|<div align="center" style="text-align: left; padding-left: 2.1em; padding-right: 2em; padding-bottom: 0em;"><p class="small">Here are some Database members who have entered data and/or supervised data entry recently. See also our full list of <a href="$READ_URL?action=displayAuthorizers">contributors</a> and our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
     $html .= "<div class=\"small\" style=\"padding-left: 1em;\">\n";
     $html .= "<table><tr><td width=\"50%\" valign=\"top\">\n";
     for(my $i=0;$i<@results;$i++) {
