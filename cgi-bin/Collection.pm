@@ -713,7 +713,7 @@ sub displayCollectionForm {
     if ($isNewEntry) {
         if (!$session_ref) {
             $s->enqueue($q->query_string() );
-            displaySearchRefs( "Please choose a reference first" );
+            main::displaySearchRefs( "Please choose a reference first" );
             exit;
         }  
     }
