@@ -873,6 +873,7 @@ sub displaySearchCollsForAdd	{
 
 
 sub displaySearchColls {
+	my $error = shift;
 	# Get the type, passed or on queue
 	my $type = $q->param("type");
 	if ( ! $type ) {
@@ -897,6 +898,7 @@ sub displaySearchColls {
     $vars{'action'} = "displayCollResults";
     $vars{'type'} = $type;
     $vars{'submit'} = "Search collections";
+    $vars{'error'} = $error;
 
     if ($type eq 'occurrence_table') {
         $vars{'reference_no'} = $reference_no;
@@ -1213,9 +1215,8 @@ sub displayCollResults {
 			displayCollectionForm();
 			return;
 		} else {
-			print $hbo->stdIncludes( "std_page_top" );
-			print "<center>\n<p class=\"pageTitle\">Your search produced no matches</p>";
-			print "<p>Please try again with fewer search terms.</p>\n</center>\n";
+			my $error = "<center>\n<p style=\"margin-top: -1em;\">Your search produced no matches: please try again</p>";
+			displaySearchColls($error);
 		}
     }
 
