@@ -2321,18 +2321,28 @@ sub queryDatabase {
             # "extant" calculations must be done here to allow correct
             #   lumping below
             if ( $q->param('occurrences_extant') && $row->{'o.taxon_no'} > 0 )	{
-                # don't inherit the extant value if the taxon_no is for a
-                #  non-species but the record is of a species and the user
-                #  wants species names JA 6.11.07
-                if ( $taxon_rank_lookup{$row->{'o.taxon_no'}} eq "species" || $row->{'o.species_name'} =~ /indet\.|sp\.|spp\.|[^a-z]/ )	{
+                # confusing logic here, badly screwed up before JA 9.1.08
+                # record extant values only in two cases:
+                #  (1) output is species, rank is species, and extant is
+                #   marked for this species name
+                if ( $q->param('occurrences_species_name') =~ /yes/i && $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" &&  $extant_lookup{$row->{'o.taxon_no'}} =~ /[A-Z]/ )	{
                     $row->{'extant'} = $extant_lookup{$row->{'o.taxon_no'}};
-                # if output is a list of genera and a genus is marked as
-                #  extant explicitly, the "occurrence" must be extant
-                    if ( $q->param('output_data') eq "genera" )	{
+                #  (2) output is not species, and rank is marked for the
+                #   taxon_no or the parent genus of a species
+                } elsif ( $q->param('occurrences_species_name') !~ /yes/i )	{
+                    $row->{'extant'} = $extant_lookup{$row->{'o.taxon_no'}};
+                    # the genus value needs to override any species value if
+                    #  the species is extinct or unknown but the genus is known,
+                    #   because (1) the occurrence is always "extant" if the
+                    #   genus is, and (2) any genus value should override a
+                    #   missing value
+                    if ( $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" && $row->{'extant'} ne "YES" )	{
                         my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                         foreach my $parent (@parents) {
-                            if ( $parent->{'taxon_rank'} eq 'genus' && $extant_lookup{$parent->{'taxon_no'}} eq "YES" )	{
-                                $row->{'extant'} = "YES";
+                            if ( $parent->{'taxon_rank'} eq 'genus' )	{
+                                if ( $extant_lookup{$parent->{'taxon_no'}} )	{
+                                    $row->{'extant'} = $extant_lookup{$parent->{'taxon_no'}};
+                                }
                                 last;
                             }
                         }
