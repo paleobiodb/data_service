@@ -2467,23 +2467,27 @@ sub displayEcology	{
 			$letts[0] =~ tr/[a-z]/[A-Z]/;
 			$n = join '',@letts;
 			$n =~ s/_/ /g;
+			$n =~ s/Taxon e/E/;
+			if ( $n =~ /1/ && $ecotaphVals->{$nextname} !~ /2/ )	{
+				$n =~ s/1//;
+			}
 			$n =~ s/1$/&nbsp;1/g;
 			$n =~ s/2$/&nbsp;2/g;
 			if ( $ecotaphVals->{$name} && $name !~ /_no$/ )	{
 				my $v = $ecotaphVals->{$name};
-                my $rank = $ecotaphVals->{$name."basis"};
-                $all_ranks{$rank} = 1; 
+				my $rank = $ecotaphVals->{$name."basis"};
+				$all_ranks{$rank} = 1; 
 				$v =~ s/,/, /g;
-                if ( $cols == 2 || $name =~ /^comments$/ || $name =~ /^created$/ || $name =~ /^size_value$/ || $name =~ /1$/ )	{
-                    $output .= "</tr>\n<tr>\n";
-                    $cols = 0;
-                }
+				if ( $cols == 2 || $name =~ /^comments$/ || $name =~ /^created$/ || $name =~ /^size_value$/ || $name =~ /1$/ )	{
+				 	$output .= "</tr>\n<tr>\n";
+					$cols = 0;
+				}
 				$cols++;
-                my $colspan = ($name =~ /comments/) ? "colspan=2" : "";
-                my $rank_note = "<span class=\"superscript\">$rankToKey{$rank}</span>";
-                if ($name =~ /created|modified/) {
-                    $rank_note = "";
-                }
+				my $colspan = ($name =~ /comments/) ? "colspan=2" : "";
+				my $rank_note = "<span class=\"superscript\">$rankToKey{$rank}</span>";
+				if ($name =~ /created|modified/) {
+					$rank_note = "";
+				}
 				$output .= "<td $colspan valign=\"top\"><table cellpadding=0 cellspacing=0 border=0><tr><td align=\"left\" valign=\"top\"><span class=\"fieldName\">$n:</span>&nbsp;</td><td valign=\"top\">${v}${rank_note}</td></tr></table></td> \n";
 			}
 		}
