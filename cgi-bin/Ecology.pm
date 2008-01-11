@@ -299,6 +299,10 @@ sub getEcology {
         foreach my $use_taxon_no (@exec_order) {
             my $taxon = $taxon_metadata{$use_taxon_no};
             foreach my $field (@fields) {
+                # never get comments for anything other than the focal taxon
+                # maybe a little extreme, but it can save major embarassment
+                #  JA 11.1.08
+                next if ($field eq "comments" && $use_taxon_no != $exec_order[0]);
                 if ($taxon->{$field} && !$ecotaph{$taxon_no}{$field}) {
                     # The following three next's deal with linked fields. We can't mix and match
                     # diet1/diet2 from different family/classes, so if one of them is set, skip messing with the whole group
