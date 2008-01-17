@@ -61,13 +61,18 @@ sub getCollections {
     }
 
 
+    # the next two are mutually exclusive FOO
+    if ($options{'count_occurrences'})	{
+        #push @from, "taxon_no,count(*) AS c";
+        #push @tables, "occurrences o";
+        #push @where, "o.collection_no=c.collection_no";
     # Handle specimen count for analyze abundance function
     # The groupby is added separately below
-    if (int($options{'specimen_count'})) {
+    } elsif (int($options{'specimen_count'})) {
         my $specimen_count = int($options{'specimen_count'});
         push @from, "sum(abund_value) as specimen_count";
-        push @tables, "occurrences o";
-        push @where, "o.collection_no=c.collection_no AND abund_unit IN ('specimens','individuals')";
+        #push @tables, "occurrences o";
+        #push @where, "o.collection_no=c.collection_no AND abund_unit IN ('specimens','individuals')";
         push @having, "sum(abund_value)>=$specimen_count";
     }
 
@@ -84,15 +89,16 @@ sub getCollections {
     # that a collection only containts old identifications, not new ones
     my %old_ids;
     my %genera;
+    my @results;
     if ($options{'taxon_list'} || $options{'taxon_name'} || $options{'taxon_no'}) {
         my %collections = (-1=>1); #default value, in case we don't find anything else, sql doesn't error out
-        my ($sql1,$sql2,@results);
+        my ($sql1,$sql2);
         if ($options{'include_old_ids'}) {
-            $sql1 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no , o.taxon_no, (re.reid_no IS NOT NULL) is_old_id FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE ";
-            $sql2 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no , re.taxon_no, (re.most_recent != 'YES') is_old_id  FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND ";
+            $sql1 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no , o.taxon_no, re.taxon_no re_taxon_no, (re.reid_no IS NOT NULL) is_old_id FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE ";
+            $sql2 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no , o.taxon_no, re.taxon_no re_taxon_no, (re.most_recent != 'YES') is_old_id  FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND ";
         } else {
-            $sql1 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND ";
-            $sql2 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent='YES' AND ";
+            $sql1 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no, o.taxon_no, re.taxon_no re_taxon_no FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE re.reid_no IS NULL AND ";
+            $sql2 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no, o.taxon_no, re.taxon_no re_taxon_no FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent='YES' AND ";
         }
         # taxon_list an array reference to a list of taxon_no's
         my %all_taxon_nos;
@@ -622,22 +628,26 @@ IS NULL))";
     }
     
 	if (@errors) {
-        my $message = "<div align=\"center\">".Debug::printErrors(\@errors)."<br>";
-        if ( $options{"calling_script"} eq "Map" )	{
-            $message .= "<a href=\"$READ_URL?action=displayMapForm\"><b>Try again</b></a>";
-        } elsif ( $options{"calling_script"} eq "Confidence" )	{
-            $message .= "<a href=\"$READ_URL?action=displaySearchSectionForm\"><b>Try again</b></a>";
-        } elsif ( $options{"type"} eq "add" )	{
-            $message .= "<a href=\"$WRITE_URL?action=displaySearchCollsForAdd&type=add\"><b>Try again</b></a>";
-        } else	{
-            $message .= "<a href=\"$READ_URL?action=displaySearchColls&type=$options{type}\"><b>Try again</b></a>";
-        }
-        $message .= "</div><br>";
-        die($message);
+		my $message = "<div align=\"center\">".Debug::printErrors(\@errors)."<br>";
+		if ( $options{"calling_script"} eq "Map" )	{
+			$message .= "<a href=\"$READ_URL?action=displayMapForm\"><b>Try again</b></a>";
+		} elsif ( $options{"calling_script"} eq "Confidence" )	{
+			$message .= "<a href=\"$READ_URL?action=displaySearchSectionForm\"><b>Try again</b></a>";
+		} elsif ( $options{"type"} eq "add" )	{
+			$message .= "<a href=\"$WRITE_URL?action=displaySearchCollsForAdd&type=add\"><b>Try again</b></a>";
+		} else	{
+			$message .= "<a href=\"$READ_URL?action=displaySearchColls&type=$options{type}\"><b>Try again</b></a>";
+		}
+		$message .= "</div><br>";
+		main::displayCollectionForm($message);
+		exit;
+		die($message);
 	}
 
+    if ($options{'count_occurrences'})	{
+        #push @groupby,"taxon_no"; FOO
     # Cover all our bases
-    if (scalar(@left_joins) || scalar(@tables) > 1 || $options{'taxon_list'} || $options{'taxon_name'}) {
+    } elsif (scalar(@left_joins) || scalar(@tables) > 1 || $options{'taxon_list'} || $options{'taxon_name'}) {
         push @groupby,"c.collection_no";
     }
 
@@ -694,7 +704,11 @@ IS NULL))";
             $row->{genera} = $genera{$row->{collection_no}};
         }
     }
-    return (\@dataRows,$totalRows,\@warnings);
+    if ($options{'count_occurrences'})	{
+        return (\@dataRows,$totalRows,\@warnings,\@results);
+    } else	{
+        return (\@dataRows,$totalRows,\@warnings);
+    }
 } # end sub processCollectionsSearch
 
 
@@ -1305,7 +1319,7 @@ sub displayCollectionDetailsPage {
 	} 
     my $time_place = $row->{'collection_name'}.": ";
     $time_place .= "$row->{interval}";
-    if ($row->{'state'}) {
+    if ($row->{'state'} && $row->{country} eq "United States") {
         $time_place .= ", $row->{state}";
     } elsif ($row->{'country'}) {
         $time_place .= ", $row->{country}";
@@ -1757,7 +1771,7 @@ sub buildTaxonomicList {
             } else {
                 $time_place .= "$coll->{max_interval}";
             } 
-            if ($coll->{'state'}) {
+            if ($coll->{'state'} && $coll->{country} eq "United States") {
                 $time_place .= ", $coll->{state}";
             } elsif ($coll->{'country'}) {
                 $time_place .= ", $coll->{country}";
@@ -2462,6 +2476,93 @@ sub rarefyAbundances	{
 	print "The data can be downloaded from a <a href=\"$HOST_URL/public/rarefaction/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
 
     print "<p><div align=\"center\"><b><a href=\"$READ_URL?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
+}
+
+# JA 6.1.08
+# WARNING: clumsy pseudo-join of coll and occ lists is needed because
+#  getCollections separately finds useable colls and occs
+# WARNING: this just will not work if taxon name is not queried
+# WARNING: this is a very slow algorithm
+sub countOccurrences	{
+	my ($dbt,$hbo,$collRowsRef,$occRowsRef) = @_;
+	my @colls = @{$collRowsRef};
+	my @occs = @{$occRowsRef};
+	my %lookup = ();
+	my @coll_nos = map {$_->{'collection_no'}} @colls;
+
+	print $hbo->stdIncludes("std_page_top");
+	print "<div class=\"pageTitle\" style=\"margin-left: 4em;\">Occurrence counts</div>\n\n";
+
+	for my $c ( @coll_nos )	{
+		$lookup{$c} = 1;
+	}
+	my %count = ();
+	for  my $o ( @occs )	{
+		if ( $lookup{$o->{'collection_no'}} )	{
+			if ( $o->{'re_taxon_no'} )	{
+				$count{$o->{'re_taxon_no'}}++;
+			} elsif ( $o->{'taxon_no'} )	{
+				$count{$o->{'taxon_no'}}++;
+			}
+		}
+	}
+	my @taxon_nos = keys %count;
+
+	my $sql = "SELECT t.taxon_no,parent_no,taxon_name,common_name,t2.lft,t2.rgt FROM authorities a,taxa_tree_cache t,taxa_list_cache l,taxa_tree_cache t2 WHERE t.synonym_no=child_no AND parent_no=a.taxon_no AND a.taxon_no=t2.taxon_no AND t.taxon_no IN (" . join(',',@taxon_nos) . ") AND common_name IS NOT NULL ORDER BY lft,rgt";
+	my @taxa = @{$dbt->getData($sql)};
+	my %higher = ();
+	for my $t ( @taxa )	{
+		$higher{$t->{'parent_no'}}->{'count'} += $count{$t->{'taxon_no'}};
+		if ( $higher{$t->{'parent_no'}}->{'count'} > 1 )	{
+			if ( $t->{'common_name'} =~ /mouse$/ )	{
+				$t->{'common_name'} =~ s/mouse$/mice/;
+			} elsif ( $t->{'common_name'} =~ /y$/ )	{
+				$t->{'common_name'} =~ s/y$/ies/;
+			} elsif ( $t->{'common_name'} !~ /s$/ )	{
+				$t->{'common_name'} .= "s";
+			}
+		}
+		$higher{$t->{'parent_no'}}->{'lft'} = $t->{'lft'};
+		$higher{$t->{'parent_no'}}->{'rgt'} = $t->{'rgt'};
+		$higher{$t->{'parent_no'}}->{'taxon_name'} = $t->{'taxon_name'};
+		$higher{$t->{'parent_no'}}->{'common_name'} = $t->{'common_name'};
+	}
+
+	print "<div class=\"displayPanel\" style=\"margin-left: 2em; margin-bottom: 2em; padding: 1em;\">\n";
+	my @higher_nos = keys %higher;
+	@higher_nos = sort { $higher{$a}->{'lft'} <=> $higher{$b}->{'lft'} || $higher{$a}->{'rgt'} <=> $higher{$b}->{'rgt'} } @higher_nos;
+	my $total =  0;
+	for my $i ( 0..$#higher_nos )	{
+		if ( $total < $higher{$higher_nos[$i]}->{'count'} )	{
+			$total = $higher{$higher_nos[$i]}->{'count'};
+		}
+	}
+	print "<div style=\"float: none; clear: none; position: relative;\">\n";
+
+	for my $i ( 0..$#higher_nos )	{
+		my $h = $higher_nos[$i];
+		if ( $total > $higher{$h}->{'count'} )	{
+			my $depth = 0;
+			for my $j ( 0..$i-1 )	{
+				if ( $higher{$h}->{'lft'} > $higher{$higher_nos[$j]}->{'lft'} && $higher{$h}->{'rgt'} < $higher{$higher_nos[$j]}->{'rgt'} && $total > $higher{$higher_nos[$j]}->{'count'} )	{
+					$depth++;
+				}
+			}
+			if ( $depth == 1)	{
+				print "<div style=\"height: 0.1em; width: 100%; background-color: #C0C0C0; margin-top: 0.5em; margin-bottom: 0.5em;\"></div>\n";
+			}
+			print "<div style=\"clear: right; padding-left: $depth em;\">$higher{$h}->{'count'} $higher{$h}->{taxon_name}";
+			if ( $higher{$h}->{'common_name'} )	{
+				print " ($higher{$h}->{'common_name'})";
+			}
+			print "</div>\n";
+		}
+	}
+	print "</div>\n";
+	print "</div>\n";
+
+	print $hbo->stdIncludes("std_page_bottom");
+
 }
 
 # JA 20,21,28.9.04
