@@ -537,7 +537,7 @@ sub displayMapOfCollection {
         } else {
             $time_place .= "$coll->{max_interval}";
         }
-        if ($coll->{'state'}) {
+        if ($coll->{'state'} && $coll->{'country'} eq "United States") {
             $time_place .= ", $coll->{state}";
         } elsif ($coll->{'country'}) {
             $time_place .= ", $coll->{country}";
@@ -884,7 +884,7 @@ sub displaySearchColls {
 
 	# Have to have a reference #, unless we are just searching
 	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no && $type !~ /^(?:analyze_abundance|view|edit|reclassify_occurrence)$/) {
+	if ( ! $reference_no && $type !~ /^(?:analyze_abundance|view|edit|reclassify_occurrence|count_occurrences)$/) {
 		# Come back here... requeue our option
 		$s->enqueue("action=displaySearchColls&type=$type" );
 		displaySearchRefs( "Please choose a reference first" );
@@ -918,30 +918,30 @@ sub displaySearchColls {
 # System displays matching collection results
 # Called during collections search, and by displayReIDForm() routine.
 sub displayCollResults {
-    return if PBDBUtil::checkForBot();
-    logRequest($s,$q);
+	return if PBDBUtil::checkForBot();
+	logRequest($s,$q);
 	my $limit = $q->param('limit') || 30 ;
-    my $rowOffset = $q->param('rowOffset') || 0;
+	my $rowOffset = $q->param('rowOffset') || 0;
 
-    # limit passed to permissions module
-    my $perm_limit;
+	# limit passed to permissions module
+	my $perm_limit;
 
 
 	# effectively don't limit the number of collections put into the
 	#  initial set to examine when adding a new one
 	if ( $q->param('type') eq "add" )	{
 #		$perm_limit = 1000000;
-        $perm_limit = $limit + $rowOffset;
+		$perm_limit = $limit + $rowOffset;
 	} else {
-		if ($q->param("type") eq 'occurrence_table' ||
+		if ($q->param("type") =~ /occurrence_table|count_occurrences/ ||
             $q->param('taxon_name') && ($q->param('type') eq "reid" ||
                                         $q->param('type') eq "reclassify_occurrence")) {
             # We're passing the collection_nos directly to the functions, so pass all of them                                            
-            $perm_limit = 1000000000;
-        } else {
-            $perm_limit = $limit + $rowOffset;
-        }
-    }
+			$perm_limit = 1000000000;
+		} else {
+			$perm_limit = $limit + $rowOffset;
+		}
+	}
 
     my $type;
 	if ( $q->param('type') ) {
@@ -968,7 +968,7 @@ sub displayCollResults {
 	# which function to use depends on whether the user is adding a collection
 	my $sql;
     
-    my ($dataRows,$ofRows,$warnings) = ([],'',[]);
+    my ($dataRows,$ofRows,$warnings,$occRows) = ([],'',[],[]);
 	if ( $q->param('type') eq "add" )	{
 		# you won't have an in list if you are adding
 		($dataRows,$ofRows) = processCollectionsSearchForAdd();
@@ -994,17 +994,24 @@ sub displayCollResults {
             my @in_list = split(/,/,$q->param('taxon_list'));
             $options{'taxon_list'} = \@in_list if (@in_list);
         }
-		($dataRows,$ofRows,$warnings) = Collection::getCollections($dbt,$s,\%options,$fields);
+        if ($type eq "count_occurrences")	{
+            $options{'count_occurrences'} = 1;
+        }
+
+		($dataRows,$ofRows,$warnings,$occRows) = Collection::getCollections($dbt,$s,\%options,$fields);
 	}
 
-    my @dataRows = @$dataRows;
-    my $displayRows = scalar(@dataRows);	# get number of rows to display
+	my @dataRows = @$dataRows;
+	my $displayRows = scalar(@dataRows);	# get number of rows to display
 
-    if ( $type eq 'occurrence_table' && @dataRows) {
-        my @colls = map {$_->{'collection_no'}} @dataRows;
-        displayOccurrenceTable(\@colls);
-        exit;
-    } elsif ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
+	if ( $type eq 'occurrence_table' && @dataRows) {
+		my @colls = map {$_->{'collection_no'}} @dataRows;
+		displayOccurrenceTable(\@colls);
+		exit;
+	} elsif ( $type eq 'count_occurrences' && @dataRows) {
+		Collection::countOccurrences($dbt,$hbo,\@dataRows,$occRows);
+		exit;
+	} elsif ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
 		if ($q->param('taxon_name') && ($q->param('type') eq "reid" ||
                                         $q->param('type') eq "reclassify_occurrence")) {
@@ -1119,7 +1126,7 @@ sub displayCollResults {
 
 			# rest of timeplace construction JA 20.8.02
 			$timeplace .= "</b> - ";
-			if ( $dataRow->{"state"} )	{
+			if ( $dataRow->{"state"} && $dataRow->{"country"} eq "United States" )	{
 				$timeplace .= $dataRow->{"state"};
 			} else	{
 				$timeplace .= $dataRow->{"country"};
@@ -1634,6 +1641,13 @@ sub displayCollectionDetails {
     logRequest($s,$q);
     Collection::displayCollectionDetails($dbt,$q,$s,$hbo);
 }
+
+#sub FOO 
+#    print $hbo->stdIncludes("std_page_top");
+#    $q->param('type') = "";
+#    displaySearchColls();
+#    print $hbo->stdIncludes("std_page_bottom");
+#}
 
 sub rarefyAbundances {
     return if PBDBUtil::checkForBot();
@@ -3941,7 +3955,7 @@ sub displayOccsForReID {
                 my %collRow = %{$sth->fetchrow_hashref()};
                 $html .= "Collection:";
                 my $details = " <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$row->{'collection_no'}\">$row->{'collection_no'}</a>"." ".$collRow{'collection_name'};
-                if ($collRow{'state'})	{
+                if ($collRow{'state'} && $collRow{'country'} eq "United States")	{
                      $details .= " - " . $collRow{'state'};
                 }
                 if ($collRow{'country'})	{
