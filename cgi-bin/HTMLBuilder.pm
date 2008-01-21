@@ -81,7 +81,7 @@ sub new {
             '', '-- Terrestrial --','',@{$HTMLBuilder::hard_lists{'environment_terrestrial'}}], 
         lithadj=> [\&_listFromEnum,'collections','lithadj' ,'space_after'=>'pedogenic,lag,pebbly,very coarse,volcaniclastic,shelly/skeletal'],
         lithadj2=>[\&_listFromEnum,'collections','lithadj2','space_after'=>'pedogenic,lag,pebbly,very coarse,volcaniclastic,shelly/skeletal'],
-        lithology1=>[\&_listFromEnum,'collections','lithology1','space_after'=>'conglomerate,marl,"carbonate",tar,siderite,quartzite'],
+        lithology1=>[\&_listFromEnum,'collections','lithology1','space_after'=>'not reported,conglomerate,marl,"carbonate",tar,siderite,quartzite'],
         lithology2=>[\&_listFromEnum,'collections','lithology2','space_after'=>'conglomerate,marl,"carbonate",tar,siderite,quartzite'],
         seq_strat=>[\&_listFromEnum,'collections','seq_strat','space_after'=>'late glacial'],
         type_body_part=>[\&_listFromEnum,'authorities','type_body_part','space_after'=>'other,egg,valve,appendages,stem ossicles'],
