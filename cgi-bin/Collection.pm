@@ -61,18 +61,18 @@ sub getCollections {
     }
 
 
-    # the next two are mutually exclusive FOO
+    # the next two are mutually exclusive
     if ($options{'count_occurrences'})	{
-        #push @from, "taxon_no,count(*) AS c";
-        #push @tables, "occurrences o";
-        #push @where, "o.collection_no=c.collection_no";
+        push @from, "taxon_no,count(*) AS c";
+        push @tables, "occurrences o";
+        push @where, "o.collection_no=c.collection_no";
     # Handle specimen count for analyze abundance function
     # The groupby is added separately below
     } elsif (int($options{'specimen_count'})) {
         my $specimen_count = int($options{'specimen_count'});
         push @from, "sum(abund_value) as specimen_count";
-        #push @tables, "occurrences o";
-        #push @where, "o.collection_no=c.collection_no AND abund_unit IN ('specimens','individuals')";
+        push @tables, "occurrences o";
+        push @where, "o.collection_no=c.collection_no AND abund_unit IN ('specimens','individuals')";
         push @having, "sum(abund_value)>=$specimen_count";
     }
 
@@ -645,7 +645,7 @@ IS NULL))";
 	}
 
     if ($options{'count_occurrences'})	{
-        #push @groupby,"taxon_no"; FOO
+        push @groupby,"taxon_no";
     # Cover all our bases
     } elsif (scalar(@left_joins) || scalar(@tables) > 1 || $options{'taxon_list'} || $options{'taxon_name'}) {
         push @groupby,"c.collection_no";
@@ -926,7 +926,7 @@ sub processCollectionForm {
 
 	# bomb out if no such interval exists JA 28.7.03
 	if ( $q->param('max_interval_no') < 1 )	{
-		print "<center><h3>You can't enter an unknown time interval name</h3>\n<p>Please go back, check the time scales, and enter a valid name</p></center>";
+		print "<center><p>You can't enter an unknown time interval name</p>\n<p>Please go back, check the time scales, and enter a valid name</p></center>";
 		return;
 	}
 
@@ -1044,7 +1044,7 @@ sub processCollectionForm {
         }
 
         my $verb = ($isNewEntry) ? "added" : "updated";
-        print "<center><h3><font color='red'>Collection record $verb</font></h3></center>";
+        print "<center><p class=\"pageTitle\"><font color='red'>Collection record $verb</font></p></center>";
 
         my ($colls_ref) = getCollections($dbt,$s,{'collection_no'=>$collection_no},['authorizer','enterer','modifier','*']);
         my $coll = $colls_ref->[0];
@@ -1134,7 +1134,7 @@ sub validateCollectionForm {
     my ($dbt,$q,$s) = @_;
     my $is_valid = 1;
 	unless($q->param('max_interval'))	{
-		print "<center><h3>The time interval field is required!</h3>\n<p>Please go back and specify the time interval for this collection</p></center>";
+		print "<center><p>The time interval field is required!</p>\n<p>Please go back and specify the time interval for this collection</p></center>";
 		print "<br><br>";
 
         $is_valid = 0;
@@ -2342,7 +2342,7 @@ sub rarefyAbundances	{
 		if ( $ntaxa == 1 )	{
 			$reason = "only one taxon has abundance data";
 		}	
-		print "<center><h4>Diversity statistics not available</h4>\n<p class=\"medium\">Statistics for $collection_name (PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>) cannot<br>be computed because $reason</p></center>\n\n";
+		print "<center><p>Diversity statistics not available</p>\n<p class=\"medium\">Statistics for $collection_name (PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>) cannot<br>be computed because $reason</p></center>\n\n";
     		print "<p><div align=\"center\"><b><a href=\"$READ_URL?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
 		return;
 	}
@@ -2403,15 +2403,18 @@ sub rarefyAbundances	{
 		}
 	}
 
-	print "<center><h3>Diversity statistics for $collection_name</h3><h5>(PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
 
-	print "<center><table><tr><td align=\"left\">\n";
-	printf "<p>Total richness: <b>%d taxa</b><br>\n",$ntaxa;
-	printf "Shannon-Wiener <i>H</i>: <b>%.3f</b><br>\n",$swh;
-	printf "Simpson's <i>D</i>*: <b>%.3f</b><br>\n",$simpson;
-	printf "Berger-Parker <i>d</i>: <b>%.3f</b><br>\n",$bpd;
-	printf "Fisher's <i>alpha</i>**: <b>%.2f</b><br>\n",$alpha;
-	printf "Kolmogorov-Smirnov <i>D</i>, data vs. log series***: <b>%.3f</b>",$logseriesksd;
+	print "<center>\n";
+	print "<div class=\"displayPanel\" style=\"width: 32em; margin-top: 2em;\">\n";
+	print "<span class=\"displayPanelHeader\"><span class=\"large\">Diversity statistics for <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_name</a></span></span>\n\n";
+	print "<div class=\"displayPanelContent\" style=\"width: 32em; padding-top: 1em;\">\n";
+	print "<table><tr><td align=\"left\">\n";
+	printf "<p>Total richness: %d taxa<br>\n",$ntaxa;
+	printf "Shannon-Wiener <i>H</i>: %.3f<br>\n",$swh;
+	printf "Simpson's <i>D</i>*: %.3f<br>\n",$simpson;
+	printf "Berger-Parker <i>d</i>: %.3f<br>\n",$bpd;
+	printf "Fisher's <i>alpha</i>**: %.2f<br>\n",$alpha;
+	printf "Kolmogorov-Smirnov <i>D</i>, data vs. log series***: %.3f",$logseriesksd;
 	if ( $logseriesksd > 1.031 / $ntaxa**0.5 )	{
 		print " (<i>p</i> < 0.01)<br>\n";
 	} elsif ( $logseriesksd > 0.886 / $ntaxa**0.5 )	{
@@ -2419,10 +2422,10 @@ sub rarefyAbundances	{
 	} else	{
 		print " (not significant)<br>\n";
 	}
-	printf "Pielou's <i>J</i> (evenness): <b>%.3f</b><br>\n",$pj;
-	printf "Buzas-Gibson <i>E</i> (evenness): <b>%.3f</b></p>\n",$bge;
+	printf "Pielou's <i>J</i> (evenness): %.3f<br>\n",$pj;
+	printf "Buzas-Gibson <i>E</i> (evenness): %.3f</p>\n",$bge;
 	print "<div class=small><p>* = with Lande 1996 correction<br>\n** = solved recursively based on richness and total abundance<br>\n*** = test of whether the distribution differs from a log series</p></div></center>\n";
-	print "</td></tr></table>\n";
+	print "</td></tr></table>\n</div>\n</div>\n\n";
 
 	# rarefy the abundances
 	my $maxtrials = 200;
@@ -2456,23 +2459,25 @@ sub rarefyAbundances	{
 		$isalevel{$sl} = "Y";
 	}
 
-	print "<hr><center><h3>Rarefaction curve for $collection_name</h3><h5>(PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>)</h5></center>\n\n";
+	print "<div class=\"displayPanel\" style=\"width: 32em; margin-top: 2em;\">\n";
+	print "<span class=\"displayPanelHeader\"><span class=\"large\" >Rarefaction curve for <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_name</a></span></span>\n\n";
+	print "<div class=\"displayPanelContent\">\n";
 
     PBDBUtil::autoCreateDir("$HTML_DIR/public/rarefaction");
 	open OUT,">$HTML_DIR/public/rarefaction/rarefaction.csv";
 	print "<center><table>\n";
-	print "<tr><td><u>Specimens</u></td><td><u>Species (mean)</u></td><td><u>Species (median)</u></td><td><u>95% confidence limits</u></td></tr>\n";
+	print "<tr class=\"small\"><td><u>Specimens</u></td><td><u>Species (mean)</u></td><td><u>Species (median)</u></td><td><u>95% confidence limits</u></td></tr>\n";
 	print OUT "Specimens\tSpecies (mean)\tSpecies (median)\tLower CI\tUpper CI\n";
 	for my $n (0..$#ids)	{
 		if ( $n == $#ids || $isalevel{$n+1} eq "Y" )	{
 			my @distrib = sort { $a <=> $b } @{$richnesses[$n]};
-			printf "<tr><td align=center>%d</td> <td align=center>%.1f</td> <td align=center>%d</td> <td align=center>%d - %d</td></tr>\n",$n + 1,$sampledTaxa[$n] / $maxtrials,$distrib[99],$distrib[4],$distrib[195];
+			printf "<tr class=\"small\"><td align=center>%d</td> <td align=center>%.1f</td> <td align=center>%d</td> <td align=center>%d - %d</td></tr>\n",$n + 1,$sampledTaxa[$n] / $maxtrials,$distrib[99],$distrib[4],$distrib[195];
 			printf OUT "%d\t%.1f\t%d\t%d\t%d\n",$n + 1,$sampledTaxa[$n] / $maxtrials,$distrib[99],$distrib[4],$distrib[195];
 		}
 	}
 	close OUT;
-	print "</table></center>\n<p>\n\n";
-	print "<p><i>Results are based on 200 random sampling trials.\n";
+	print "</table></center>\n</div>\n</div>\n<p>\n\n";
+	print "<p><i>Results are based on 200 random sampling trials.<br>\n";
 	print "The data can be downloaded from a <a href=\"$HOST_URL/public/rarefaction/rarefaction.csv\">tab-delimited text file</a>.</i></p></center>\n\n";
 
     print "<p><div align=\"center\"><b><a href=\"$READ_URL?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
@@ -2593,7 +2598,7 @@ sub displayCollectionEcology	{
     my $collection_no = int($q->param('collection_no'));
     my $collection_name = $q->param('collection_name');
 
-    print "<div align=center><h3>$collection_name (PBDB collection number $collection_no)</h3></div>";
+    print "<div align=center><p class=\"pageTitle\">$collection_name (collection number $collection_no)</p></div>";
 
 	my $sql = "(SELECT o.genus_name,o.species_name,o.taxon_no FROM occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE o.collection_no=$collection_no AND re.reid_no IS NULL)".
            " UNION ".
@@ -2609,7 +2614,7 @@ sub displayCollectionEcology	{
     my $ecology = Ecology::getEcology($dbt,$parents,\@categories,'get_basis');
 
 	if (!%$ecology) {
-		print "<center><h3>Sorry, there are no ecological data for any of the taxa</h3></center>\n\n";
+		print "<center><p>Sorry, there are no ecological data for any of the taxa</p></center>\n\n";
 		print "<center><p><b><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=" . $q->param('collection_no') . "\">Return to the collection record</a></b></p></center>\n\n";
 		print $hbo->stdIncludes("std_page_bottom");
 		return;
@@ -2652,7 +2657,7 @@ sub displayCollectionEcology	{
         $rowsum{$row_key}++;
 	}
 
-	print "<div align=\"center\"><h3>Assignments of taxa to categories</h3>";
+	print "<div align=\"center\"><p class=\"pageTitle\">Assignments of taxa to categories</p>";
 	print "<table cellspacing=0 border=0 cellpadding=4 class=dataTable>";
 
     # Header generation
@@ -2737,7 +2742,7 @@ sub displayCollectionEcology	{
 
     # Summary information
 	print "<p>";
-	print "<div align=\"center\"><h3>Counts within categories</h3>";
+	print "<div align=\"center\"><p class=\"pageTitle\">Counts within categories</p>";
 	print "<table border=0 cellspacing=0 cellpadding=4 class=dataTable>";
     print "<tr><td class=dataTableTopULCorner>&nbsp;</td><th class=dataTableTop colspan=".scalar(keys %colsum).">Life Habit</th></tr>";
     print "<tr><th class=dataTableULCorner>Diet</th>";
