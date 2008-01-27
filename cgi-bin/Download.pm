@@ -390,7 +390,7 @@ $html .= $self->retellOptionsGroup('Onshore-offshore zones:','zone_',\@zone_grou
         $html .= $self->retellOptionsRow ( "Replace names with reidentifications?","no") if ($q->param('repace_with_reid') eq 'NO');
         $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?","no") if ($q->param("replace_with_ss") eq 'NO');
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", "yes") if ($q->param('indet') eq 'YES');
-        $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", "yes") if ($q->param('sp') eq 'YES');
+        $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", "yes") if ($q->param('sp') eq 'NO');
         my @genus_reso_types_group = ('aff.','cf.','ex gr.','n. gen.','sensu lato','?','"');
         $html .= $self->retellOptionsGroup('Include occurrences qualified by','genus_reso_',\@genus_reso_types_group);
         $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", "yes") if ( $q->param("informal") eq 'YES');
@@ -1358,13 +1358,13 @@ sub getOccurrencesWhereClause {
     push @all_where, "o.abund_unit IN ('individuals','specimens') AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'specimens';
 
     push @occ_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
-    push @occ_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
+    push @occ_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') eq 'NO';
     my $genusResoString = $self->getGenusResoString();
     push @occ_where, $genusResoString if $genusResoString;
     push @occ_where, "(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
 
     push @reid_where, "re.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
-    push @reid_where, "re.species_name NOT LIKE '%sp.%'" if $q->param('sp') ne 'YES';
+    push @reid_where, "re.species_name NOT LIKE '%sp.%'" if $q->param('sp') eq 'NO';
 
     # this is kind of a hack, I admit it JA 31.7.05
     $genusResoString =~ s/o\.genus_reso/re.genus_reso/g;
@@ -2247,7 +2247,7 @@ sub queryDatabase {
                     if ( $q->param('indet') ne 'YES' && ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus/ )	{
                         next;
                     }
-                    if ( $q->param('sp') ne 'YES' && ! $species )	{
+                    if ( $q->param('sp') eq 'NO' && ! $species )	{
                         next;
                     }
 
@@ -2612,12 +2612,12 @@ sub queryDatabase {
                 if ($ss_taxon_nos{$taxon_no}) {
                     $taxon_no = $ss_taxon_nos{$taxon_no};
                 }
-            # none of this should be inherited if the taxon_no is for a
-            #  non-species but the record is of a species and the user
-            #  wants species names JA 6.11.07
+            # get these data only if (1) the record is of a species and the
+            #  user wants species names, or (2) the user does not want species
+            #  names JA 27.1.08 (screwed this up on a first pass 6.11.07)
             # this check is a little loose because it will prevent inheritance
             #  for some informal names, but that's no tragedy
-                if ( $taxon_rank_lookup{$taxon_no} eq "species" || $row->{'o.species_name'} =~ /indet\.|sp\.|spp\.|[^a-z]/ )	{
+                if ( ( $taxon_rank_lookup{$taxon_no} eq "species" || $row->{'o.species_name'} =~ /indet\.|sp\.|spp\.|[^a-z]/ ) || $q->param('occurrences_species_name') ne "YES" )	{
                     $row->{'first_author'} = $first_author_lookup{$taxon_no};
                     $row->{'second_author'} = $second_author_lookup{$taxon_no};
                     $row->{'other_authors'} = $other_authors_lookup{$taxon_no};
