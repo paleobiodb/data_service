@@ -659,6 +659,11 @@ sub readPlateIDs {
     while (<IDS>)	{
         s/\n//;
         my ($x,$y,$z) = split /,/,$_;
+        # Cinqua (coll 18717) correction: plate 198 has bogus rotation data,
+        #  but fortunately spans just one cell that is adjacent to 205
+        if ( $z == 198 )	{
+            $z = 205;
+        }
         $plate{$x}{$y} = $z;
         # Andes correction: Scotese sometimes assigned 254 Ma ages to
         #  oceanic crust cells that are much younger, so those need to
