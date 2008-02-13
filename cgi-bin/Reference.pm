@@ -897,6 +897,9 @@ sub getReferences {
     if ($options{'use_current'}) {
         $options{'reference_no'} = $s->get('reference_no');
     }
+    if ($options{'author'} && ! $options{'name'})	{
+        $options{'name'} = $options{'author'};
+    }
 
 	# build a string that will tell the user what they asked for
 	my $query_description = '';
