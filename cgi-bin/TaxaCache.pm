@@ -65,7 +65,7 @@ sub rebuildCache {
         # We're going to create a brand new table from scratch, then swap it
         # to be the normal table once its complete
         $result = $dbh->do("DROP TABLE IF EXISTS ${TAXA_TREE_CACHE}_new");
-        $result = $dbh->do("CREATE TABLE ${TAXA_TREE_CACHE}_new (taxon_no int(10) unsigned NOT NULL default '0',lft int(10) unsigned NOT NULL default '0',rgt int(10) unsigned NOT NULL default '0', spelling_no int(10) unsigned NOT NULL default '0', synonym_no int(10) unsigned NOT NULL default '0', max_interval_no int(10) unsigned NOT NULL default '0',min_interval_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (taxon_no), KEY lft (lft), KEY rgt (rgt), KEY synonym_no (synonym_no)) TYPE=MyISAM");
+        $result = $dbh->do("CREATE TABLE ${TAXA_TREE_CACHE}_new (taxon_no int(10) unsigned NOT NULL default '0',lft int(10) unsigned NOT NULL default '0',rgt int(10) unsigned NOT NULL default '0', spelling_no int(10) unsigned NOT NULL default '0', synonym_no int(10) unsigned NOT NULL default '0', opinion_no int(10) unsigned NOT NULL default '0', max_interval_no int(10) unsigned NOT NULL default '0',min_interval_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (taxon_no), KEY lft (lft), KEY rgt (rgt), KEY synonym_no (synonym_no), KEY opinion_no (opinion_no)) TYPE=MyISAM");
 
         # Keep track of which nodes we've processed
         my $next_lft = 1;
