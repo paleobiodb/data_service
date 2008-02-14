@@ -1705,15 +1705,9 @@ sub displayTaxonHistory {
     foreach my $rec (@results) {
         push(@parent_list,$rec->{'child_spelling_no'});
     }
-    # don't forget the original (verified) here, either: the focal taxon	
+    # don't forget th/ original (verified) here, either: the focal taxon	
     # should be one of its children so it will be included below.
     push(@parent_list, $original_combination_no);
-	my @synonyms = getJuniorSynonyms($dbt,@parent_list);
-
-	# Reduce these results to original combinations: shouldn't be necessary to do this
-	#foreach my $rec (@synonyms) {
-#		$rec = getOriginalCombination($dbt, $rec->{child_no});	
-	#}
 
 	# Get alternate "original" combinations, usually lapsus calami type cases.  Shouldn't exist, 
     # exists cause of sort of buggy data.
@@ -1724,6 +1718,7 @@ sub displayTaxonHistory {
 
     # Remove duplicates
     my %results_no_dupes;
+    my @synonyms = getJuniorSynonyms($dbt,$original_combination_no);
     @results_no_dupes{@synonyms} = ();
     @results_no_dupes{@more_orig} = ();
     @results = keys %results_no_dupes;
@@ -1909,7 +1904,7 @@ sub getSynonymyParagraph{
    my %phyly = ();
     foreach my $row (@results) {
         if ($row->{'phylogenetic_status'}) {
-            push @{$phyly{$row->{'phylogenetic_status'}}},$row
+            push @{$phyly{$row->{'phylogenetic_status'}}},$row;
         }
     }
     my @phyly_list = keys %phyly;
@@ -2190,18 +2185,6 @@ sub getMostRecentClassification {
     return if (!$child_no);
     return if ($options->{reference_no} eq '0');
 
-    # it is imperative that belongs-to opinions on junior synonyms also be
-    #  be considered, because they might actually be more reliable
-    # obviously, don't do this if we are looking to see if the taxon is a
-    #  a synonym itself
-    # JA 14-15.6.07
-    my @synonyms;
-    push @synonyms, $child_no;
-    
-    if ( $options->{'use_synonyms'} !~ /no/ && !$options->{reference_no})	{
-        push @synonyms , getJuniorSynonyms($dbt,$child_no);
-    }
-
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
     # All values of the enum classification_quality get recast as integers for easy sorting
@@ -2219,6 +2202,49 @@ sub getMostRecentClassification {
                 #" CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
             ")".
          ")) AS reliability_index ";
+
+    # previously, the most recent opinion wasn't stored in a table and had
+    #  to be recomputed constantly; now, the default behavior is to retrieve
+    #  opinions marked as most recent, unless this function is called for
+    #  the purpose of updating the tree and list caches
+    # JA 12-13.2.08
+    if ( $options->{'recompute'} !~ /yes/ && ! $options->{'reference_no'} && ! wantarray )	{
+        my $strat_fields;
+        if ($options->{strat_range}) {
+            $strat_fields = 'max_interval_no,min_interval_no, ';
+        }
+        my $sql = "SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
+            " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, "
+            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.author1last, r.author1last) as author1last, "
+            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.author2last, r.author2last) as author2last, "
+            . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.otherauthors, r.otherauthors) as otherauthors, "
+            . $strat_fields
+            . $reliability
+            . " FROM opinions o, refs r, $TAXA_TREE_CACHE t" 
+            . " WHERE r.reference_no=o.reference_no"
+        # it's a drag that we are joining on taxa_tree_cache, but actually
+        #  the older code joined on authorities, so we're not paying more
+            . " AND o.opinion_no=t.opinion_no AND t.taxon_no=$child_no"; 
+        my @rows = @{$dbt->getData($sql)};
+        # the beauty here is that if the opinion_no has not been stored,
+        #  it will be figured out and stored later in the function
+        if (scalar(@rows)) {
+            return $rows[0];
+        }
+    }
+
+    # it is imperative that belongs-to opinions on junior synonyms also be
+    #  be considered, because they might actually be more reliable
+    # obviously, don't do this if we are looking to see if the taxon is a
+    #  a synonym itself
+    # JA 14-15.6.07
+    my @synonyms;
+    push @synonyms, $child_no;
+    
+    if ( $options->{'use_synonyms'} !~ /no/ && !$options->{reference_no})	{
+        push @synonyms , getJuniorSynonyms($dbt,$child_no);
+    }
+
     my $fossil_record_sort;
     my $fossil_record_field;
     if ($IS_FOSSIL_RECORD) {
@@ -2286,6 +2312,11 @@ sub getMostRecentClassification {
     @rows = @cleanrows;
 
     if (scalar(@rows)) {
+        if ( $options->{'recompute'} !~ /yes/ && ! $options->{'reference_no'} && ! wantarray )	{
+            my $sql = "UPDATE taxa_tree_cache SET opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no=$child_no";
+            my $dbh = $dbt->dbh;
+            $dbh->do($sql);
+        }
         if ( wantarray ) {
             return @rows;
         } else	{
