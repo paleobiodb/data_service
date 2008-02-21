@@ -7,7 +7,21 @@ function checkForm()	{
 	var rows = frm.row_token.length;
 	var errors = "";
 	var lasterrors = "";
+	var lastocc = 0;
+	var hasreid = new Array();
 
+	// need to know which occurrences are reidentified
+	// some strong assumptions: the reid is of the last occurrence
+	for ( var i=0; i < rows; i++ )	{
+		if ( frm.taxon_name[i].value != "" && frm.reid_no[i].value > 0 && lastocc > 0 && lastocc == frm.occurrence_no[i].value )	{
+			hasreid[lastocc] = 1;
+		} else if ( frm.taxon_name[i].value != "" && frm.reid_no[i].value == 0 )	{
+			lastocc = frm.occurrence_no[i].value;
+			hasreid[lastocc] = 0;
+		}
+	}
+
+	// main pass
 	for ( var i=0; i < rows; i++ )	{
 		if ( frm.taxon_name[i].value != "" )	{
 			var taxonName = frm.taxon_name[i].value;
@@ -19,11 +33,30 @@ function checkForm()	{
 			taxonName = taxonName.replace(/ <.*>$/,' species');
 
 			// check for dupes
+			// revised 20.2.08 so only current IDs are matched,
+			//  as opposed to occurrences since reIDed
 			for ( var j=0; j < i; j++ )	{
-				if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName && frm.reid_no[i].value == 0 && frm.reid_no[j].value == 0 )	{
-					errors += "* " + taxonName + " is listed twice\n";
-				} else if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName && frm.occurrence_no[i].value == frm.occurrence_no[j].value )	{
-					errors += "* " + taxonName + " and its reID have the same name\n";
+				if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName )	{
+			// case 1: identical occurrence and its own reID
+					if ( frm.occurrence_no[i].value == frm.occurrence_no[j].value )	{
+						errors += "* " + taxonName + " and its reID have the same name\n";
+					}
+			// case 2: identical occurrences with no reIDs
+					else if ( hasreid[frm.occurrence_no[i].value] == 0 && hasreid[frm.occurrence_no[j].value] == 0 )	{
+						errors += "* " + taxonName + " is listed twice\n";
+					}
+			// case 3: identical reIDs
+					if ( frm.reid_no[i].value > 0 && frm.reid_no[j].value > 0 )	{
+						errors += "* " + taxonName + " is listed twice\n";
+					}
+			// case 4: first is a reID and second has no reID
+					if ( frm.reid_no[i].value > 0 && hasreid[frm.occurrence_no[j].value] == 0 )	{
+						errors += "* " + taxonName + " is listed twice\n";
+					}
+			// case 5: first has no reID and second is a reID
+					if ( hasreid[frm.occurrence_no[i].value] == 0 && frm.reid_no[j].value > 0 )	{
+						errors += "* " + taxonName + " is listed twice\n";
+					}
 				}
 			}
 
