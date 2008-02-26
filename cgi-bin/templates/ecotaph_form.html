@@ -46,12 +46,11 @@ function checkFields() {
 
 
 <center>
-<h2>Ecology and taphonomy form: <span id="taxon_name"></span></h2>
+<p class="pageTitle">Ecology and taphonomy form: <span id="taxon_name"></span></p>
 </center>
 
-<hr>
 
-<p><i>Note: this form is intended for adult morphologies only... Please see the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p>
+<p style="margin-left: 2em;"><i>Note: this form is intended for adult morphologies only... Please see the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p>
 
 <form method="POST" action="%%write_url%%" onSubmit="return checkFields();">
 
@@ -61,37 +60,110 @@ function checkFields() {
 <input type="hidden" name="goal" value="ecotaph">
 
 
-<h3>Morphology and development</h3>
+<div class="displayPanel">
+<span class="displayPanelHeader">Morphology and development</span>
+<div class="displayPanelContent">
 
-<table cellpadding=10>
+<table class="small" cellpadding="8">
   <tr>
     <td valign="top">
-      <b>Skeletal composition 1</b>
+      <span class="fieldName">Skeletal composition 1</span>
       <select id="composition1"></select><br>
     </td>
     <td valign="top">
-      <b>Skeletal composition 2</b>
+      <span class="fieldName">Skeletal composition 2</span>
       <select id="composition2"></select><br>
     </td>
   </tr>
+
+  <tr>
+    <td>
+      <span class="fieldName">Relative thickness</span>
+      <select id="thickness"></select>
+    </td>
+    <td>
+      <span class="fieldName">Internal skeletal architecture</span>
+      <select id="architecture"></select>
+    </td>
+  </tr>
+  <tr>
+    <td valign=top>
+      <span class="fieldName">3-d form</span>
+      <select id="form"></select>
+    </td>
+    <td valign="top">
+      <span class="fieldName">Skeletal reinforcement</span><br>
+      <input id="reinforcement" type=checkbox value="no">none (smooth) <i>or...</i><br>
+      <nobr>
+        folds: <select id="folds"></select>
+      </nobr>
+
+      <nobr>
+        ribbing: <select id="ribbing"></select>
+      </nobr>
+      <br>
+
+      <nobr>
+        spines: <select id="spines"></select>
+      </nobr>
+
+      <nobr>
+        internal reinforcement: <select id="internal_reinforcement"></select>
+      </nobr>
+    </td>
+  </tr>
+  <tr>
+    <td valign=top>
+      <span class="fieldName">Adult polymorphism/dimorphism?</span>
+      <select id="polymorph"><option value="">no</option><option value="yes">yes</option></select>
+      <br>
+    </td>
+    <td>
+      <span class="fieldName">Ontogeny</span><br>
+      <!-- new values based on Raup and Stanley? -->
+      <input id="ontogeny" type=hidden value="" replace="NO">
+      <input id="ontogeny" type=checkbox value="accretion">accretion
+      <input id="ontogeny" type=checkbox value="molting">molting
+      <input id="ontogeny" type=checkbox value="addition of parts">addition of parts<br>
+      <input id="ontogeny" type=checkbox value="modification of parts">modification of parts
+      <input id="ontogeny" type=checkbox value="replacement of parts">replacement of parts
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <span class="fieldName">Social grouping</span>
+      <select id="grouping"></select>
+    </td>
+    <td>
+      <span class="fieldName">Clonal?</span>
+      <select id="clonal"><option value="">no</option><option value="yes">yes</option></select>
+    </td>
+  </tr>
+</table>
+
+</div>
+</div>
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Adult size</span>
+<div class="displayPanelContent">
+
+<table class="small" cellpadding="8">
   <tr><td colspan=3>
     <table>
-      <tr><td>
-        <b>Adult size</b>
-      </td></tr>
       <tr>
         <td>
           <span class="tiny">May refer to pollen, seeds,<br> leaves, etc. for plants but only<br>to entire bodies for animals</span>
         </td>
-        <td colspan=2>
-          Measurements are of the entire body? 
-          <select id="entire_body"><option value="">no</option><option value="yes">yes</option></select>
+        <td colspan=2 valign="top">
+          <p class="small">Measurements are of the entire body?
+          <select id="entire_body"><option value="">no</option><option value="yes">yes</option></select></p>
         </td>
       </tr>
       <tr>
         <td></td>
         <td colspan=3>
-          If no, name of body part: <input id="body_part" size=20>
+          <p class="small">If no, name of body part: <input id="body_part" size=20></p>
       </tr>
       <tr>
         <td></td>
@@ -122,107 +194,49 @@ function checkFields() {
 
   <tr>
     <td colspan=2>
-      <b>Body mass range: minimum </b>
+      <span class="fieldName">Body mass range: minimum </span>
       <input id="minimum_body_mass" type="text" size=6>
       <select id="minimum_body_mass_unit" autofill="mass_units"></select>
-      <b>to maximum</b>
+      <span class="fieldName">to maximum</span>
       <input id="maximum_body_mass" type="text" size=6>
       <select id="maximum_body_mass_unit" autofill="mass_units"></select>
     </td>
   </tr>
   <tr>
     <td colspan=2>
-      &nbsp;&nbsp;<i> ... or </i><b>body mass estimate: </b>
+      &nbsp;&nbsp;<i> ... or </i><span class="fieldName">body mass estimate: </span>
       <input id="body_mass_estimate" name="body_mass_estimate" size="8">
       <select id="body_mass_estimate_unit" autofill="mass_units"></select>
     </td>
   </tr>
   <tr>
     <td valign=top>
-      <b>Body mass source</b>
-      <select id="body_mass_source" name="body_mass_source">
+      <span class="fieldName">Body mass source</span>
+      <select id="body_mass_source" name="body_mass_source"></select>
     </td>
     <td>
-      <b>Body mass estimate type</b>
-      <select id="body_mass_type" name="body_mass_type">
+      <span class="fieldName">Body mass estimate type</span>
+      <select id="body_mass_type" name="body_mass_type"></select>
     </td>
   </tr>
   <tr>
     <td colspan=2>
-      <b>Body mass comment: </b>
+      <span class="fieldName">Body mass comment: </span>
       <input id="body_mass_comment" type="text" name="body_mass_comment" size="40">
     </td>
   </tr>   
-
-  <tr>
-    <td>
-      <b>Relative thickness</b>
-      <select id="thickness"></select>
-    </td>
-    <td>
-      <b>Internal skeletal architecture</b>
-      <select id="architecture"></select>
-    </td>
-  </tr>
-  <tr>
-    <td valign=top>
-      <b>3-d form</b>
-      <select id="form"></select>
-    </td>
-    <td valign="top">
-      <b>Skeletal reinforcement</b><br>
-      <input id="reinforcement" type=checkbox value="no">none (smooth) <i>or...</i><br>
-      <nobr>
-        folds: <select id="folds"></select>
-      </nobr>
-
-      <nobr>
-        ribbing: <select id="ribbing"></select>
-      </nobr>
-
-      <nobr>
-        spines: <select id="spines"></select>
-      </nobr>
-
-      <nobr>
-        internal reinforcement: <select id="internal_reinforcement"></select>
-      </nobr>
-    </td>
-  </tr>
-  <tr>
-    <td valign=top>
-      <b>Adult polymorphism/dimorphism?</b>
-      <select id="polymorph"><option value="">no</option><option value="yes">yes</option></select>
-      <br>
-    </td>
-    <td>
-      <b>Ontogeny</b><br>
-      <!-- new values based on Raup and Stanley? -->
-      <input id="ontogeny" type=hidden value="" replace="NO">
-      <input id="ontogeny" type=checkbox value="accretion">accretion
-      <input id="ontogeny" type=checkbox value="molting">molting
-      <input id="ontogeny" type=checkbox value="addition of parts">addition of parts<br>
-      <input id="ontogeny" type=checkbox value="modification of parts">modification of parts
-      <input id="ontogeny" type=checkbox value="replacement of parts">replacement of parts
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <b>Social grouping</b>
-      <select id="grouping"></select>
-    </td>
-    <td>
-      <b>Clonal?</b>
-      <select id="clonal"><option value="">no</option><option value="yes">yes</option></select>
-    </td>
-  </tr>
 </table>
 
-<hr>
-<h3>Life history and behavior</h3>
-<table cellpadding=10>
+</div>
+</div>
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Life history and behavior</span>
+<div class="displayPanelContent">
+
+<table class="small" cellpadding="8">
   <tr>
-    <td valign=top><b>General environment</b></td>
+    <td valign=top><span class="fieldName">General environment</span></td>
     <td>
       <input id="taxon_environment" type=hidden value="" replace="NO">
       <input id="taxon_environment" type=checkbox value="hypersaline">hypersaline
@@ -245,82 +259,83 @@ function checkFields() {
   </tr>
 </table>
 
-<table cellpadding=10>
+<table class="small" cellpadding="8">
   <tr>
     <td>
-      <b>Locomotion</b>
+      <span class="fieldName">Locomotion</span>
       <select id="locomotion"></select><br>
     </td>
     <td>
-      <b>Attached?</b>
+      <span class="fieldName">Attached?</span>
       <select id="attached"><option value="">no</option><option value="yes">yes</option></select>
       &nbsp;
       &nbsp;
-      <b>Epibiont?</b>
+      <span class="fieldName">Epibiont?</span>
       <select id="epibiont"><option value="">no</option><option value="yes">yes</option></select>
     </td>
   </tr>
   <tr>
     <td>
-      <b>Life habit</b>
+      <span class="fieldName">Life habit</span>
       <select id="life_habit"></select><br>
     </td>
     <td>
-    <b>Depth habitat</b>
+    <span class="fieldName">Depth habitat</span>
       <select id="depth_habitat"></select><br>
     </td>
   </tr>
   <tr>
     <td>
-      <b>Diet/feeding mode 1</b>
+      <span class="fieldName">Diet/feeding mode 1</span>
       <select id="diet1"></select><br>
     </td>
     <td>
-      <b>Diet/feeding mode 2</b>
+      <span class="fieldName">Diet/feeding mode 2</span>
       <select id="diet2"></select><br>
     </td>
   </tr>
   <tr>
     <td>
-      <b>Reproduction</b>
+      <span class="fieldName">Reproduction</span>
       <select id="reproduction"></select><br>
     </td>
     <td>
-      <b>Asexual?</b>
+      <span class="fieldName">Asexual?</span>
       <select id="asexual"><option value="">no</option><option value="yes">yes</option></select>
       &nbsp;
       &nbsp;
-      <b>Brooding?</b>
+      <span class="fieldName">Brooding?</span>
       <select id="brooding"><option value="">no</option><option value="yes">yes</option></select>
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <b>Dispersal (gametes)</b><br>
+      <span class="fieldName">Dispersal (gametes)</span><br>
       <span class="tiny">What carries the gametes?</span>
       <!-- does NOT include clones -->
       <select id="dispersal1"></select><br>
     </td>
     <td valign="top">
-      <b>Dispersal (larvae/seeds/juveniles)</b>
+      <span class="fieldName">Dispersal (larvae/seeds/juveniles)</span>
       <!-- does NOT include clones -->
       <select id="dispersal2"></select><br>
     </td>
   </tr>
 </table>
 
-<hr>
+</div>
+</div>
+</div>
+</div>
 
-<table>
-  <tr>
-    <td valign="top">
-      <b>Comments:</b>
-    </td> 
-    <td>
-      <textarea id="comments" rows=3 wrap="virtual" cols=80></textarea>
-    </td>
-  </tr>
-</table>
+<div class="displayPanel">
+<span class="displayPanelHeader">Comments</span>
+<div class="displayPanelContent" style="padding-bottom: 1em;">
+  <textarea id="comments" rows=3 wrap="virtual" cols=80></textarea>
+
+</div>
+</div>
+
 
 <table width=100%><tr><td align="center">
   <input type=submit value="Submit">
