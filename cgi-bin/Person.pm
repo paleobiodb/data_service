@@ -247,9 +247,9 @@ sub displayFeaturedAuthorizers	{
     $html .= "<table><tr><td width=\"50%\" valign=\"top\">\n";
     for(my $i=0;$i<@results;$i++) {
         my $row = $results[$i];
-        $html .= "<div class=\"displayPanel\" style=\"padding: 0.75em;\">";
+        $html .= "<div class=\"displayPanel\" style=\"padding: 0.75em; border-right: 1px solid #909090; border-bottom: 1px solid #808080;\">";
         if ( $row->{'photo'} )	{
-            $html .= '<div style="float: right; position: relative; top: 0px; right: 0px;"><img src="/public/mugshots/' . $row->{'photo'} . '"></div>';
+            $html .= '<div style="float: right; position: relative; top: 0px; right: 0px; padding-left: 1em; padding-bottom: 0.5em;"><img src="/public/mugshots/' . $row->{'photo'} . '"></div>';
         }
         my $name = "$row->{first_name} $row->{last_name}";
         if ( $row->{'homepage'} )	{
