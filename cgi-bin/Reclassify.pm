@@ -125,15 +125,18 @@ sub displayOccurrenceReclassify	{
 	}
 
     # Make non-editable links not changeable
-    my $p = Permissions->new($s,$dbt);
-    my %is_modifier_for = %{$p->getModifierList()};
+# knocked this out 28.2.08 because it's unclear why anyone would care if
+#  someone else fixed the classification of their occurrence JA
+#    my $p = Permissions->new($s,$dbt);
+#    my %is_modifier_for = %{$p->getModifierList()};
 
 	my $rowcolor = 0;
     my $nonEditableCount = 0;
     my @badoccrefs;
     my $nonExact = 0;
 	for my $o ( @occrefs )	{
-        my $editable = ($s->get("superuser") || $is_modifier_for{$o->{'authorizer_no'}} || $o->{'authorizer_no'} == $s->get('authorizer_no')) ? 1 : 0;
+#        my $editable = ($s->get("superuser") || $is_modifier_for{$o->{'authorizer_no'}} || $o->{'authorizer_no'} == $s->get('authorizer_no')) ? 1 : 0;
+my $editable = 1;
         my $authorizer = ($editable) ? '' : '(Authorizer: '.Person::getPersonName($dbt,$o->{'authorizer_no'}).')';
         $nonEditableCount++ if (!$editable);
 
