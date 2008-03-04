@@ -14,6 +14,8 @@ use CGI::Carp;
 use Person;
 use Measurement;
 use Text::CSV_XS;
+use URI::Escape;
+use Mail::Mailer;
 use Constants qw($READ_URL $WRITE_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
 
 use strict;
@@ -152,10 +154,13 @@ sub buildDownload {
         print "$taxaCount taxonomic names were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
     }
     print "$refsCount references were printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
+    my $fileNames = $mainFile."/".$taxaFile."/".$refsFile;
     if ( $q->param('time_scale') )    {
         print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
+        $fileNames .= "/".$scaleFile;
     }
     print '</table>';
+    print "<p>You can also e-mail the files.<br>\n<nobr><form method=\"post\" action=$READ_URL>Address: <input type=\"hidden\" name=\"action\" value=\"emailDownloadFiles\"><input type=\"hidden\" name=\"filenames\" value=\"$fileNames\"><input name=\"email\" size=\"20\"> <input type=\"submit\" value=\"e-mail\"></form></nobr></p>\n\n";
     print qq|<p align="center" style="white-space: nowrap;"><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
     print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
     #print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a> - |;
@@ -3701,6 +3706,44 @@ sub printScaleFile {
     }
     close SCALEFILE;
     return (scalar(@intervalnames),$scaleFile);
+}
+
+sub emailDownloadFiles	{
+	my $self = shift;
+	my $q = $self->{'q'};
+
+	my %headers = ('Subject'=> 'Paleobiology Database download files','From'=>'alroy');
+	$headers{'To'} = $q->param('email');
+	$headers{'Content-Transfer-Encoding'} = "7bit";
+	$headers{'Content-Type'} = 'multipart/mixed; boundary=Apple-Mail-81-601985459';
+	$headers{'MIME-Version'} = "1.0";
+	my $mailer = new Mail::Mailer;
+	$mailer->open(\%headers);
+	my @files = split /\//,$q->param('filenames');
+	# this is a total hack that avoids having to install an extra package
+	my $body = qq|This is a multi-part message in MIME format.
+
+--Apple-Mail-81-601985459
+Content-Transfer-Encoding: 7bit
+Content-Type: text/plain; charset=US-ASCII; format=flowed
+
+Here are the data files you downloaded from the Paleobiology Database web site.
+
+|;
+	for my $file ( @files )	{
+		$body .= qq|
+--Apple-Mail-81-601985459
+Content-Transfer-Encoding: quoted-printable
+Content-Type: application/octet-stream; x-unix-mode=0644; name=$file
+Content-Disposition: attachment; filename=$file
+
+|;
+		$body .= `cat $OUT_FILE_DIR/$file`;
+	}
+	print $mailer $body;
+	$mailer->close;
+
+	print "<center>\n<p class=\"pageTitle\">Download sent</p>\n\nYour download files have been mailed to:</p>\n\n<p><b>".$q->param('email')."</b></p></center>";
 }
 
 
