@@ -662,6 +662,18 @@ sub displayDownloadResults {
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub emailDownloadFiles	{
+	require Download;
+
+	print $hbo->stdIncludes( "std_page_top" );
+
+	my $m = Download->new($dbt,$q,$s,$hbo);
+	$m->emailDownloadFiles();
+
+	print $hbo->stdIncludes("std_page_bottom");
+
+}
+
 sub displayDownloadNeptuneForm {
     my %vars;
     if ($s->isDBMember()) {
