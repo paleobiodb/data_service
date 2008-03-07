@@ -46,6 +46,13 @@ function checkFields() {
 function doCheckFieldsBasicInfo() {
     var frm = document.forms[0];
 
+    if (frm.collection_name.value.match(frm.country.value) != null)	{
+        bad_info += "\no Don't include the country name in the collection name";
+    }
+    if (frm.collection_name.value.match(frm.state.value) != null)	{
+        bad_info += "\no Don't include the state name in the collection name";
+    }
+
     // Deleting the primary reference is not allowed.
     // Note that the length of the radio group (or checkbox group) equals 
     // the number of radio buttons regardless of their checked status.
@@ -408,7 +415,7 @@ function doCheckFieldsTaphonomy() {
     <tr>
       <td>
         <span class="required">Collection name</span>:<br>
-        <input id="collection_name" size="50" maxlength="255" onBlur="changeName();"><br>
+        <input id="collection_name" size="50" maxlength="80" onBlur="changeName();"><br>
         <i><span class="tiny">Keep it short: do not include the stratigraphic age, location details, or the name of the formation, country, state, etc. unless you have to</i></span>
       </td>
     </tr>
@@ -463,10 +470,10 @@ function doCheckFieldsTaphonomy() {
         <span class="required">Country*</span>: <br><span class="verysmall"><select class="verysmall" id="country"></select></span>
       </td>
       <td>
-        <span class="required">State*</span>/province: <br><input id="state" maxlength=255>
+        <span class="required">State*</span>/province: <br><input id="state" maxlength="60">
       </td>
       <td>
-        County/parish/etc.: <br><input id="county" maxlength=255>
+        County/parish/etc.: <br><input id="county" maxlength="60">
       </td>
     </tr>
   </table>
@@ -550,10 +557,10 @@ function doCheckFieldsTaphonomy() {
      <tr>
       <td><span class="required"><nobr>Maximum (oldest) time interval:</nobr></span>&nbsp;&nbsp;&nbsp;&nbsp;<br>
       <span class="verysmall"><select class="verysmall" id="eml_max_interval"></select></span>
-      <input id="max_interval" maxlength=255 onKeyUp="doComplete(event, this, intervalNames(),0);">
+      <input id="max_interval" maxlength="80" onKeyUp="doComplete(event, this, intervalNames(),0);">
       </td>
       <td>Minimum (youngest) time interval:<br><span class="verysmall"><select class="verysmall" id="eml_min_interval"></select></span>
-                        <input id="min_interval" maxlength=255 onKeyUp="doComplete(event, this, intervalNames(),0);">
+                        <input id="min_interval" maxlength="80" onKeyUp="doComplete(event, this, intervalNames(),0);">
       </td>
     </tr>
 
@@ -599,19 +606,19 @@ function doCheckFieldsTaphonomy() {
  
   <table border=0>
     <tr>
-      <td>Group:<br><input id="geological_group" maxlength=255></td>
-      <td>Formation:<br><input id="formation" maxlength=255></td>
-      <td>Member:<br><input id="member" maxlength=255></td>
+      <td>Group:<br><input id="geological_group" maxlength="60"></td>
+      <td>Formation:<br><input id="formation" maxlength="60"></td>
+      <td>Member:<br><input id="member" maxlength="60"></td>
     </tr>
     <tr>
-      <td>Local section name:<br><input id="localsection" maxlength=255></td>
-      <td valign="bottom">Bed/horizon:<br><input id="localbed" maxlength=255>
+      <td>Local section name:<br><input id="localsection" maxlength="60"></td>
+      <td valign="bottom">Bed/horizon:<br><input id="localbed" maxlength="60">
       <span class="verysmall"><select class="verysmall" id="localbedunit"></select></span></td>
       <td>Numbered from:<br><span class="verysmall"><select class="verysmall" id="localorder"></select></span></td>
     </tr>
     <tr>
-      <td>Basinal/regional section name:&nbsp;&nbsp;<br><input id="regionalsection" maxlength=255></td>
-      <td valign="bottom">Bed/horizon:<br><input id="regionalbed" maxlength=255>
+      <td>Basinal/regional section name:&nbsp;&nbsp;<br><input id="regionalsection" maxlength="60"></td>
+      <td valign="bottom">Bed/horizon:<br><input id="regionalbed" maxlength="60">
       <span class="verysmall"><select class="verysmall" id="regionalbedunit"></select></span>&nbsp;&nbsp;</td>
       <td>Numbered from:<br><span class="verysmall"><select class="verysmall" id="regionalorder"></select></span></td>
   	</tr>
