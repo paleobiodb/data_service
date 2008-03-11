@@ -46,10 +46,10 @@ function checkFields() {
 function doCheckFieldsBasicInfo() {
     var frm = document.forms[0];
 
-    if (frm.collection_name.value.match(frm.country.value) != null)	{
+    if (frm.collection_name.value.match(frm.country.value) != null && frm.country.value != "")	{
         bad_info += "\no Don't include the country name in the collection name";
     }
-    if (frm.collection_name.value.match(frm.state.value) != null)	{
+    if (frm.collection_name.value.match(frm.state.value) != null && frm.state.value != "")	{
         bad_info += "\no Don't include the state name in the collection name";
     }
 
