@@ -299,10 +299,23 @@ function doCheckFieldsStratigraphy() {
 
 function doCheckFieldsGeology() {
     var frm = document.forms[0];
-    var index = frm.environment.selectedIndex;
+    var indexology1 = frm.lithology1.selectedIndex;
+    var indexology2 = frm.lithology2.selectedIndex;
+    var indexadj = frm.lithadj[0].selectedIndex;
+    var indexification = frm.lithification.selectedIndex;
+    var indexenv = frm.environment.selectedIndex;
     var hasdashes = /--/i;
 
-    if ( frm.environment.options[index].text == "" || hasdashes.test ( frm.environment.value ) == true ) {
+    if ( frm.lithology1.options[indexology1].text == "" && frm.lithology2.options[indexology2].text != "" ) {
+        bad_info += "\no You entered a secondary lithology but not a primary lithology";
+    } else if ( frm.lithology1.options[indexology1].text == "" && frm.lithadj[0].options[indexadj].text != "" ) {
+        bad_info += "\no You entered lithology adjectives but not a lithology";
+    } else if ( frm.lithology1.options[indexology1].text == "" && frm.lithification.options[indexification].text != "" ) {
+        bad_info += "\no You entered a lithification value but not a lithology";
+    } else if ( frm.lithology1.options[indexology1].text == "" ) {
+        bad_info += "\no Lithology is required";
+    }
+    if ( frm.environment.options[indexenv].text == "" || hasdashes.test ( frm.environment.value ) == true ) {
         bad_info += "\no Environment is required";
     }
 }
