@@ -1112,19 +1112,19 @@ Basic fields will only be downloaded when output type is "specimens".  Measureme
     <td>&nbsp;</td>
   </tr>
   <tr>
-    <td><input type=checkbox class="s_measurements" name=specimens_length value="YES">length</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_width value="YES">width</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_height value="YES">height</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_diagonal value="YES">diagonal</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_inflation value="YES">inflation</td>
+    <td><input type=checkbox class="length_width s_measurements" name=specimens_length onClick="checkAll(this,'average');" value="YES">length</td>
+    <td><input type=checkbox class="length_width s_measurements" name=specimens_width onClick="checkAll(this,'average');" value="YES">width</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_height onClick="checkAll(this,'average');" value="YES">height</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_diagonal onClick="checkAll(this,'average');" value="YES">diagonal</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_inflation onClick="checkAll(this,'average');" value="YES">inflation</td>
   </tr>
 
   <tr>
-    <td><input type=checkbox class="s_measurements" name=specimens_average value="YES">average (geometric mean)</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_min value="YES">min</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_max value="YES">max</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_median value="YES">median</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_error value="YES">error</td>
+    <td><input type=checkbox class="average s_measurements" name=specimens_average onClick="checkAll(this,'length_width');" value="YES">average (geometric mean)</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_min onClick="checkAll(this,'length_width');" value="YES">min</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_max onClick="checkAll(this,'length_width');" value="YES">max</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_median onClick="checkAll(this,'length_width');" value="YES">median</td>
+    <td><input type=checkbox class="s_measurements" name=specimens_error onClick="checkAll(this,'length_width');" value="YES">error</td>
   </tr>
 </table>
 </div>
