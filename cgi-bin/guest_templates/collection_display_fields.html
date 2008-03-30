@@ -6,10 +6,10 @@
 
 <div style="white-space: nowrap; width:60em; align: left;">
 
-<div align="left" class="verysmall" style="display: inline; float: left; clear: none; margin-left: .5em; margin-right: 0em; padding: 0; width:9.5em;">
+<div align="left" class="verysmall" style="float: left; clear: right; margin-left: 3em; margin-bottom: 2em;">
 
    <span show="taxa_list">
-   <div id="tab1" class="tabOff" style="width: 100%;"
+   <div id="tab1" class="tabOff" style="width: 6em; float: left; clear: none;"
       onClick = "showPanel(1); showCommonNameLink();"
       onMouseOver="hover(this);"
       onMouseOut="setState(1)">
@@ -18,58 +18,35 @@
    </span>
    <!-- needed to fool tabs.js into working -->
    <span hide="taxa_list" id="tab1" name="commonName"></span>
-   <div id="tab2" class="tabOff" style="width: 100%;"
+   <div id="tab2" class="tabOff" style="width: 11em; float: left; clear: none;"
       onClick = "showPanel(2); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(2)">
       <div class="tabHotspot" onMouseOver = "showPanel(2); hideCommonNames();"></div><div style="margin-top: -1px;">
-      Geography</div><div style="clear: both;"></div></div>
-   <div id="tab3" class="tabOff" style="width: 100%;"
+      Where and when</div><div style="clear: both;"></div></div>
+   <div id="tab3" class="tabOff" style="width: 6em; float: left; clear: none;"
       onClick = "showPanel(3); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(3)">
       <div class="tabHotspot" onMouseOver = "showPanel(3); hideCommonNames();"></div><div style="margin-top: -1px;">
-      Time</div><div style="clear: both;"></div></div>
-   <div id="tab4" class="tabOff" style="width: 100%;"
+      Geology</div><div style="clear: both;"></div></div>
+   <div id="tab4" class="tabOff" style="width: 16em; float: left; clear: none;"
       onClick = "showPanel(4); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(4)">
       <div class="tabHotspot" onMouseOver = "showPanel(4); hideCommonNames();"></div><div style="margin-top: -1px;">
-      Stratigraphy</div><div style="clear: both;"></div></div>
-   <div id="tab5" class="tabOff" style="width: 100%;"
+      Preservation and collection</div><div style="clear: both;"></div></div>
+   <div id="tab5" class="tabOff" style="width: 15em; float: left; clear: none;"
       onClick = "showPanel(5); hideCommonNames();"
       onMouseOver="hover(this);"
       onMouseOut="setState(5)">
       <div class="tabHotspot" onMouseOver = "showPanel(5); hideCommonNames();"></div><div style="margin-top: -1px;">
-      Lithology</div><div style="clear: both;"></div></div>
-   <div id="tab6" class="tabOff" style="width: 100%;"
-      onClick = "showPanel(6); hideCommonNames();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(6)">
-      <div class="tabHotspot" onMouseOver = "showPanel(6); hideCommonNames();"></div><div style="margin-top: -1px;">
-      Taphonomy</div><div style="clear: both;"></div></div>
-   <div id="tab7" class="tabOff" style="width: 100%;"
-      onClick = "showPanel(7); hideCommonNames();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(7)">
-      <div class="tabHotspot" onMouseOver = "showPanel(7); hideCommonNames();"></div><div style="margin-top: -1px;">
-      Methods</div><div style="clear: both;"></div></div>
-   <div id="tab8" class="tabOff" style="width: 100%;"
-      onClick = "showPanel(8); hideCommonNames();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(8)">
-      <div class="tabHotspot" onMouseOver = "showPanel(8); hideCommonNames();"></div><div style="margin-top: -1px;">
-      Metadata</div><div style="clear: both;"></div></div>
-   <div id="tab9" class="tabOff" style="width: 100%;"
-      onClick = "showPanel(9); hideCommonNames();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(9)">
-      <div class="tabHotspot" onMouseOver = "showPanel(9); hideCommonNames();"></div><div style="margin-top: -1px;">
-      References</div><div style="clear: both;"></div></div>
+      Metadata and references</div><div style="clear: both;"></div></div>
    <div style="clear: both;"></div>
 </div>
 
-<div style="float: left; clear: none; position: relative; align: left; top: 0em; margin-left: 0em; margin-right: 0em;  left: 0em; width: 43em; padding: 0;">
+<div style="float: none; clear: left; position: relative; align: left; width: 51.5em;">
+
 <div id="panel1" class="collectionPanel">
 %%taxa_list%%
 </div>
@@ -79,46 +56,44 @@
   <span class="displayPanelHeader">Geography</span>
   <div class="displayPanelContent">
   <table border="0" cellpadding="2" class="displayPanelText">
-  <div show="country"><tr><td valign=top nowrap><span class="fieldName">Country:</span></td><td valign=top><span id="country"></span></td></tr></div>
-  <div show="state"><tr><td valign=top nowrap><span class="fieldName">State/province:</span></td><td valign=top><span id="state"></span></td></tr></div>
-  <div show="county"><tr><td valign=top nowrap><span class="fieldName">County:</span></td><td valign=top><span id="county"></span></td></tr></div>
+  <div show="country"><tr><td valign=top nowrap><span class="fieldName">Country:</span></td><td valign=top><span id="country"></span></td></div>
+  <div show="state"><td valign=top nowrap><span class="fieldName">State/province:</span></td><td valign=top><span id="state"></span></td></div>
+  <div show="county"><td valign=top nowrap><span class="fieldName" style="margin-left: 2em;">County:</span></td><td valign=top><span id="county"></span></td></tr></div>
   <div show="latdeg"><tr><td valign=top nowrap><span class="fieldName">Coordinates:</span></td><td valign=top>
   <div show="is_contributor">
-    <span style="white-space: nowrap;"><span id="latdeg"></span><span show="latdec">.</span><span id="latdec"></span><span show="latdec"></span>&deg; <span id="latmin"></span><span show="latmin">'</span>  <span id="latsec"></span><span show="latsec">&quot;</span> <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span><span show="lngdec">.</span><span id="lngdec"></span><span show="lngdec"></span>&deg; <span id="lngmin"></span><span show="lngmin">'</span>  <span id="lngsec"></span><span show="lngsec">&quot;</span> <span id="lngdir"></span></span> <a href="#" onClick="javascript: mapPopup('<span id="collection_no"></span>')">(View map)</a></td></tr>
+    <span style="white-space: nowrap;"><span id="latdeg"></span><span show="latdec">.</span><span id="latdec"></span><span show="latdec"></span>&deg; <span id="latmin"></span><span show="latmin">'</span>  <span id="latsec"></span><span show="latsec">&quot;</span> <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span><span show="lngdec">.</span><span id="lngdec"></span><span show="lngdec"></span>&deg; <span id="lngmin"></span><span show="lngmin">'</span>  <span id="lngsec"></span><span show="lngsec">&quot;</span> <span id="lngdir"></span></span> <a href="#" onClick="javascript: mapPopup('<span id="collection_no"></span>')">(view map)</a></td></tr>
   </div> <!-- is_contributor=true end-->
   <div hide="is_contributor">
-    <span style="white-space: nowrap;"><span id="latdeg"></span> <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span> <span id="lngdir"></span></span> <a href="javascript: mapPopup('<span id="collection_no"></span>')")>(View map)</a></td></tr>
+    <span style="white-space: nowrap;"><span id="latdeg"></span> <span id="latdir"></span></span>, <span style="white-space: nowrap;"><span id="lngdeg"></span> <span id="lngdir"></span></span> <a href="javascript: mapPopup('<span id="collection_no"></span>')")>(view map)</a></td></tr>
   </div> <!-- is_contributor=false end-->
   </div> <!-- latdeg show end-->
     <div show="latlng_basis"><tr><td valign=top nowrap><span class="fieldName">Basis of coordinate:</span></td><td valign=top><span id="latlng_basis"></span></td></tr></div>
     <div show="altitude_value"><tr><td valign=top nowrap><span class="fieldName">Altitude:</span></td><td valign=top><span id="altitude_value"></span> <span id="altitude_unit"></span></td></div>
-  <div show="geogscale"><tr><td valign=top><span class="fieldName">Scale of geographic resolution:</span></td><td valign=top><span id="geogscale"></span></td></tr></div>
+  <div show="geogscale"><tr><td valign=top><span class="fieldName">Geographic resolution:</span></td><td valign=top><span id="geogscale"></span></td></tr></div>
   <div show="is_contributor">
     <div show="geogcomments"><tr><td valign=top colspan=2><span class="fieldName">Geography comments:</span> <span id="geogcomments"></span></td></tr></div>
   </div>
   </table>
   </div>
 
-%%collection_links%%
-
-</div>
 </div>
 
-<div  id="panel3" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Time</span>
   <div class="displayPanelContent">
   <table border="0" cellpadding="2" class="displayPanelText">
-  <div show="period"><tr><td valign=top nowrap><span class="fieldName">Period:</span></td><td valign=top><span id="period"></span> </td></tr></div>
-  <div show="legacy_period"><tr><td valign=top nowrap><span class="fieldName">*Period:</span></td><td valign=top><span id="legacy_period"></span> </td></tr></div>
-  <div show="epoch"><tr><td valign=top nowrap><span class="fieldName">Epoch:</span></td><td valign=top><span id="epoch"></span> </td></tr></div>
-  <div show="legacy_epoch"><tr><td valign=top nowrap><span class="fieldName">*Epoch:</span></td><td valign=top><span id="legacy_epoch"></span> </td></tr></div>
-  <div show="stage"><tr><td valign=top nowrap><span class="fieldName">Stage:</span></td><td valign=top><span id="stage"></span> </td></tr></div>
-  <div show="legacy_intage"><tr><td valign=top nowrap><span class="fieldName">*International age/stage:</span></td><td valign=top><span id="legacy_intage"></span> </td></tr></div>
-  <div show="legacy_locage"><tr><td valign=top nowrap><span class="fieldName">*Local age/stage:</span></td><td valign=top><span id="legacy_locage"></span> </td></tr></div>
-  <div show="ten_my_bin"><tr><td valign=top nowrap><span class="fieldName">10 m.y. bin:</span></td><td valign=top><span id="ten_my_bin"></span> </td></tr></div>
-  <div show="zone"><tr><td valign=top nowrap><span class="fieldName">Zone:</span></td><td valign=top><span id="zone"></span></td></tr></div>
-  <div show="interval"><tr><td valign=top nowrap><span class="fieldName">Key time interval:</span></td><td valign=top><span id="interval"></span></td></tr></div>
+  <tr><td valign=top nowrap><div show="period"><span class="fieldName">Period:</span></td><td valign=top><span id="period"></span> </td></div>
+  <div show="epoch"><td valign=top nowrap><span class="fieldName">Epoch:</span></td><td valign=top><span id="epoch"></span> </div> </td></tr>
+  <tr><td valign=top nowrap><div show="stage"><span class="fieldName">Stage:</span></td><td valign=top><span id="stage"></span> </td> <td valign=top nowrap></div>
+  <div show="ten_my_bin"><span class="fieldName">10 m.y. bin:</span></td><td valign=top><span id="ten_my_bin"></span> </div> </td></tr>
+
+  <div show="legacy_period"><tr><td valign=top nowrap><span class="fieldName">*Period:</span></td><td valign=top><span id="legacy_period"></span> </td></div>
+  <div show="legacy_epoch"><td valign=top nowrap><span class="fieldName">*Epoch:</span></td><td valign=top><span id="legacy_epoch"></span> </td></tr></div>
+  <div show="legacy_intage"><tr><td valign=top nowrap><span class="fieldName">*International age/stage:</span></td><td valign=top><span id="legacy_intage"></span> </td></div>
+  <div show="legacy_locage"><td valign=top nowrap><span class="fieldName">*Local age/stage:</span></td><td valign=top><span id="legacy_locage"></span> </td></tr></div>
+
+  <div show="interval"><tr><td valign=top nowrap><span class="fieldName">Key time interval:</span></td><td valign=top><span id="interval"></span></td></div>
+  <div show="zone"><td valign=top nowrap><span class="fieldName">Zone:</span></td><td valign=top><span id="zone"></span></td></tr></div>
   <div show="age_range"><tr><td valign=top nowrap><span class="fieldName">Age range of interval:</span></td><td valign=top><span id="age_range"></span> </td></tr></div>
   <div show="age_estimate"><tr><td valign=top nowrap><span class="fieldName">Age estimate:</span></td><td valign=top><span id="age_estimate"></span> </td></tr></div>
   <div show="legacy_message"><tr><td valign=top nowrap colspan=2><span class="fieldName"> * </span> legacy (obsolete) database fields</td></tr></div>
@@ -130,42 +105,39 @@
 </div>
 </div>
 
-<div id="panel4" class="collectionPanel">
+<div id="panel3" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Stratigraphy</span>
   <div class="displayPanelContent">
   <table border="0" cellpadding="2" class="displayPanelText">
-  <div show="geological_group"><tr><td valign=top nowrap><span class="fieldName">Geological group:</span></td><td valign=top><span id="geological_group"></span></td></tr></div>
-  <div show="formation"><tr><td valign=top nowrap><span class="fieldName">Formation:</span></td><td valign=top><span id="formation"></span></td></tr></div>
-  <div show="member"><tr><td valign=top nowrap><span class="fieldName">Member:</span></td><td valign=top><span id="member"></span></td></tr></div>
-  <div show="localsection"><tr><td valign=top nowrap><span class="fieldName">Local section:</span></td><td valign=top><span id="localsection"></span></td></tr></div>
-  <div show="localbed"><tr><td valign=top nowrap><span class="fieldName">Local bed:</span></td><td valign=top><span id="localbed"></span> <span id="localbedunit"></span></td></tr></div>
+  <div show="geological_group"><tr><td valign=top nowrap><span class="fieldName">Geological group:</span></td><td valign=top><span id="geological_group"></span></td></div>
+  <div show="formation"><td valign=top width="8em" nowrap><span class="fieldName">Formation:</span></td><td valign=top><span id="formation"></span></td></div>
+  <div show="member"><td valign=top nowrap><span class="fieldName">Member:</span></td><td valign=top><span id="member"></span></td></tr></div>
+  <div show="localsection"><tr><td valign=top nowrap><span class="fieldName">Local section:</span></td><td valign=top><span id="localsection"></span></td></div>
+  <div show="localbed"><td valign=top nowrap><span class="fieldName">Local bed:</span></td><td valign=top><span id="localbed"></span> <span id="localbedunit"></span></td></tr></div>
   <div show="localorder"><tr><td valign=top nowrap><span class="fieldName">Local order:</span></td><td valign=top><span id="localorder"></span></td></tr></div>
-  <div show="regionalsection"><tr><td valign=top nowrap><span class="fieldName">Regional section:</span></td><td valign=top><span id="regionalsection"></span></td></tr></div>
-  <div show="regionalbed"><tr><td valign=top nowrap><span class="fieldName">Regional bed:</span></td><td valign=top><span id="regionalbed"></span> <span id="regionalbedunit"></span></td></tr></div>
+  <div show="regionalsection"><tr><td valign=top nowrap><span class="fieldName">Regional section:</span></td><td valign=top><span id="regionalsection"></span></td></div>
+  <div show="regionalbed"><td valign=top nowrap><span class="fieldName">Regional bed:</span></td><td valign=top><span id="regionalbed"></span> <span id="regionalbedunit"></span></td></tr></div>
   <div show="regionalorder"><tr><td valign=top nowrap><span class="fieldName">Regional order:</span></td><td valign=top><span id="regionalorder"></span></td></tr></div>
-  <div show="stratscale"><tr><td valign=top><span class="fieldName">Scale of stratigraphic resolution:</span></td><td valign=top><span id="stratscale"></span></td></tr></div>
-  <div show="stratcomments"><tr><td valign=top colspan=2><span class="fieldName">Stratigraphy comments:</span> <span id="stratcomments"></span></td></tr></div>
+  <div show="stratscale"><tr><td valign=top width="10em"><span class="fieldName">Stratigraphic resolution:</span></td><td valign=top><span id="stratscale"></span></td></tr></div>
+  <div show="stratcomments"><tr><td valign=top colspan=4><span class="fieldName">Stratigraphy comments:</span> <span id="stratcomments"></span></td></tr></div>
   </table>
   </div>
 
-%%collection_links%%
-
-</div>
 </div>
 
-<div id="panel5" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Lithology and environment</span>
   <div class="displayPanelContent">
   <table border="0" cellpadding="2" class="displayPanelText">
-  <div show="lithology1"><tr><td valign=top nowrap><span class="fieldName">Primary lithology:</span></td><td valign=top><span id="lithadj"></span> <span id="lithification"></span> <span id="lithology1"></span></td></tr></div>
+  <div show="lithology1"><tr><td valign=top width="20%" nowrap><span class="fieldName">Primary lithology:</span></td><td valign=top><span id="lithadj"></span> <span id="lithification"></span> <span id="lithology1"></span></td>
+  </tr></div>
   <div show="lithology2"><tr><td valign=top nowrap><span class="fieldName">Secondary lithology:</span></td><td valign=top><span id="lithadj2"></span> <span id="lithification2"></span> <span id="lithology2"></span></td></tr></div>
-  <div show="fossilsfrom1"><tr><td valign=top><span class="fieldName">Fossils collected from primary lithology:</span></td><td valign=top><span id="fossilsfrom1"></span></td></tr></div>
-  <div show="fossilsfrom2"><tr><td valign=top><span class="fieldName">Fossils collected from secondary lithology:</span></td><td valign=top><span id="fossilsfrom2"></span></td></tr></div>
+  <div show="fossilsfrom1"><tr><td valign=top><span class="fieldName">Includes fossils?</span></td><td valign=top><span id="fossilsfrom1"></span></td></tr></div>
+  <div show="fossilsfrom2"><tr><td valign=top><span class="fieldName">Includes fossils?</span></td><td valign=top><span id="fossilsfrom2"></span></td></tr></div>
   <div show="lithdescript"><tr><td valign=top colspan=2><span class="fieldName">Lithology description:</span> <span id="lithdescript"></span></td></tr></div>
-  <div show="environment"><tr><td valign=top nowrap><span class="fieldName">Environment:</span></td><td valign=top><span id="environment"></span></td></tr></div>
-  <div show="tectonic_setting"><tr><td valign=top nowrap><span class="fieldName">Tectonic setting:</span></td><td valign=top><span id="tectonic_setting"></span></td></tr></div>
+  <div show="environment"><tr><td valign=top width="20%" nowrap><span class="fieldName">Environment:</span></td><td valign=top><span id="environment"></span></td></div>
+  <div show="tectonic_setting"><td valign=top nowrap><span class="fieldName">Tectonic setting:</span></td><td valign=top><span id="tectonic_setting"></span></td></tr></div>
   <div show="seq_strat"><tr><td valign=top nowrap><span class="fieldName">Glacial or sequence phase:</span></td><td valign=top><span id="seq_strat"></span></td></tr></div>
   <div show="geology_comments"><tr><td valign=top colspan=2><span class="fieldName">Geology comments:</span> <span id="geology_comments"></span></td></tr></div>
   </table>
@@ -178,15 +150,16 @@
 
 
 
-<div id="panel6" class="collectionPanel">
+<div id="panel4" class="collectionPanel">
+
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Taphonomy</span>
   <div class="displayPanelContent">
   <table border="0" cellpadding="2" class="displayPanelText">
-  <div show="pres_mode"><tr><td valign=top nowrap><span class="fieldName">Modes of preservation:</span></td><td valign=top><span id="pres_mode"></span></td></tr></div>
+  <div show="pres_mode"><tr><td valign=top width="20%" nowrap><span class="fieldName">Modes of preservation:</span></td><td valign=top><span id="pres_mode"></span></td></tr></div>
   <div show="lagerstatten"><tr><td valign=top nowrap><span class="fieldName">Lagerstätten type:</span></td><td valign=top><span id="lagerstatten"></span></td></tr></div>
   <div show="concentration"><tr><td valign=top nowrap><span class="fieldName">Degree of concentration:</span></td><td valign=top><span id="concentration"></span></td></tr></div>
-  <div show="assembl_comps"><tr><td valign=top nowrap><span class="fieldName">Assemblage components:</span></td><td valign=top><span id="assembl_comps"></span></td></tr></div>
+  <div show="assembl_comps"><tr><td valign=top width="20%" nowrap><span class="fieldName">Assemblage components:</span></td><td valign=top><span id="assembl_comps"></span></td></tr></div>
   <div show="orientation"><tr><td valign=top nowrap><span class="fieldName">Spatial orientation:</span></td><td valign=top><span id="orientation"></span></td></tr></div>
   <div show="preservation_quality"><tr><td valign=top><span class="fieldName">Preservation of anatomical detail:</span></td><td valign=top><span id="preservation_quality"></span></td></tr></div>
   <div show="abund_in_sediment"><tr><td valign=top nowrap><span class="fieldName">Abundance in sediment:</span></td><td valign=top><span id="abund_in_sediment"></span></td></tr></div>
@@ -205,27 +178,22 @@
   </table>
   </div>
 
-%%collection_links%%
-
-</div>
 </div>
 
-<div id="panel7" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Collection methods and comments</span>
   <div class="displayPanelContent">
   <table border="0" cellpadding="2" class="displayPanelText">
-  <div show="collection_coverage"><tr><td valign=top nowrap><span class="fieldName">Collection excludes:</span></td><td valign=top><span id="collection_coverage"></span></td></tr></div>
-  <div show="coll_meth"><tr><td valign=top nowrap><span class="fieldName">Collection methods:</span></td><td valign=top><span id="coll_meth"></span></td></tr></div>
-  <div show="sieve_size_min"><tr><td valign=top nowrap><span class="fieldName">Minimum sieve size:</span></td><td valign=top><span id="sieve_size_min"></span></td></tr></div>
-  <div show="sieve_size_max"><tr><td valign=top nowrap><span class="fieldName">Maximum sieve size:</span></td><td valign=top><span id="sieve_size_max"></span></td></tr></div>
-  <div show="collection_size"><tr><td valign=top nowrap><span class="fieldName">Collection size:</span></td><td valign=top><span id="collection_size"></span></td></tr></div>
-  <div show="collection_size_unit"><tr><td valign=top nowrap><span class="fieldName">Collection size unit:</span></td><td valign=top><span id="collection_size_unit"></span></td></tr></div>
+  <div show="collection_coverage"><tr><td valign=top width="20%" nowrap><span class="fieldName">Collection excludes:</span></td><td valign=top><span id="collection_coverage"></span></td></tr></div>
+  <div show="coll_meth"><tr><td valign=top width="20%" nowrap><span class="fieldName">Collection methods:</span></td><td valign=top><span id="coll_meth"></span></td></tr></div>
+  <div show="sieve_size_min"><tr><td valign=top nowrap><span class="fieldName">Minimum sieve size:</span></td><td valign=top><span id="sieve_size_min"></span></td></div>
+  <div show="sieve_size_max"><td valign=top nowrap><span class="fieldName">Maximum sieve size:</span></td><td valign=top><span id="sieve_size_max"></span></td></tr></div>
+  <div show="collection_size"><tr><td valign=top nowrap><span class="fieldName">Collection size:</span></td><td valign=top><span id="collection_size"></span> <span id="collection_size_unit"></span></td></div>
   <div show="rock_censused"><tr><td valign=top nowrap><span class="fieldName">Rock censused:</span></td><td valign=top><span id="rock_censused"></span> <span id="rock_censused_unit"></span></td></tr></div>
-  <div show="collection_type"><tr><td valign=top nowrap><span class="fieldName">Reason for describing collection:</span></td><td valign=top><span id="collection_type"></span> analysis</td></tr></div>
+  <div show="collection_type"><tr><td valign=top width="20%" nowrap><span class="fieldName">Reason for describing collection:</span></td><td valign=top><span id="collection_type"></span> analysis</td></tr></div>
   <div show="museum"><tr><td valign=top nowrap><span class="fieldName">Museum repositories:</span></td><td valign=top><span id="museum"></span> </td></tr></div>
-  <div show="collectors"><tr><td valign=top nowrap><span class="fieldName">Collectors:</span></td><td valign=top><span id="collectors"></span> </td></tr></div>
-  <div show="collection_dates"><tr><td valign=top nowrap><span class="fieldName">Collection dates:</span></td><td valign=top><span id="collection_dates"></span> </td></tr></div>
+  <div show="collectors"><tr><td valign=top nowrap><span class="fieldName">Collectors:</span></td><td valign=top><span id="collectors"></span> </td></div>
+  <div show="collection_dates"><td valign=top nowrap><span class="fieldName">Collection dates:</span></td><td valign=top><span id="collection_dates"></span> </td></tr></div>
   <div show="collection_comments"><tr><td valign=top colspan=2><span class="fieldName">Collection comments:</span> <span id="collection_comments"></span></td></tr></div>
   <div show="taxonomy_comments"><tr><td valign=top colspan=2><span class="fieldName">Taxonomy comments:</span> <span id="taxonomy_comments"></span></td></tr></div>
   </table>
@@ -237,34 +205,29 @@
 </div>
 
 
-<div id="panel8" class="collectionPanel">
+<div id="panel5" class="collectionPanel">
+
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Metadata</span>
   <div class="displayPanelContent">
   <table border="0" cellpadding="2" class="displayPanelText">
-  <div show="collection_aka"><tr><td valign=top nowrap><span class="fieldName">Also known as:</span></td><td valign=top><span id="collection_aka"></span></td></tr></div>
-  <div show="collection_no"><tr><td valign=top nowrap><span class="fieldName">Database number:</span></td><td valign=top><span id="collection_no"></span></td></tr></div>
-  <div show="igsn"><tr><td valign=top nowrap><span class="fieldName">IGSN (<a target="_BLANK" href="http://www.geosamples.org">SESAR</a>) number:</span></td><td valign=top><span id="igsn"></span></td></tr></div>
-  <div show="authorizer"><tr><td valign=top nowrap><span class="fieldName">Authorizer:</span></td><td valign=top><span id="authorizer"></span></td></tr></div>
-  <div show="enterer"><tr><td valign=top nowrap><span class="fieldName">Enterer:</span></td><td valign=top><span id="enterer"></span></td></tr></div>
-  <div show="modifier"><tr><td valign=top nowrap><span class="fieldName">Modifier:</span></td><td valign=top><span id="modifier"></span></td></tr></div>
-  <div show="research_group"><tr><td valign=top nowrap><span class="fieldName">Research group:</span></td><td valign=top><span id="research_group"></span></td></tr></div>
+  <div show="collection_aka"><tr><td valign=top nowrap><span class="fieldName">Also known as:</span></td><td valign=top colspan="3"><span id="collection_aka"></span></td></tr></div>
+  <div show="collection_no"><tr><td valign=top nowrap><span class="fieldName">Database number:</span></td><td valign=top><span id="collection_no"></span></td></div>
+  <div show="igsn"><td valign=top nowrap><span class="fieldName">IGSN (<a target="_BLANK" href="http://www.geosamples.org">SESAR</a>) number:</span></td><td valign=top><span id="igsn"></span></td></tr></div>
+  <div show="authorizer"><tr><td valign=top nowrap><span class="fieldName">Authorizer:</span></td><td valign=top><span id="authorizer"></span></td></div>
+  <div show="enterer"><td valign=top nowrap><span class="fieldName">Enterer:</span></td><td valign=top><span id="enterer"></span></td></tr></div>
+  <div show="modifier"><tr><td valign=top nowrap><span class="fieldName">Modifier:</span></td><td valign=top><span id="modifier"></span></td></div>
+  <div show="research_group"><td valign=top nowrap><span class="fieldName">Research group:</span></td><td valign=top><span id="research_group"></span></td></tr></div>
   <div show="collection_subset"><tr><td valign=top nowrap><span class="fieldName">Subset of collection #:</span></td><td valign=top><span id="collection_subset"></span></td></tr></div>
   <div show="subset_string"><tr><td valign=top><span class="fieldName">Collections that are a subset of this one:</span></td><td valign=top><table><span id="subset_string"></span></table></td></tr></div>
-  <div show="created"><tr><td valign=top nowrap><span class="fieldName">Created:</span></td><td valign=top><span id="created"></span></td></tr></div>
-  <div show="modified"><tr><td valign=top nowrap><span class="fieldName">Last modified:</span></td><td valign=top><span id="modified"></span></td></tr></div>
-  <div show="release_date"><tr><td valign=top nowrap><span class="fieldName">Released:</span></td><td valign=top><span id="release_date"></span></td></tr></div>
-  <div show="access_level"><tr><td valign=top nowrap><span class="fieldName">Access level:</span></td><td valign=top><span id="access_level"></span></td></tr></div>
+  <div show="created"><tr><td valign=top nowrap><span class="fieldName">Created:</span></td><td valign=top style="padding-right: 2em;"><span id="created"></span></td></div>
+  <div show="modified"><td valign=top nowrap><span class="fieldName">Last modified:</span></td><td valign=top><span id="modified"></span></td></tr></div>
+  <div show="access_level"><tr><td valign=top nowrap><span class="fieldName">Access level:</span></td><td valign=top><span id="access_level"></span></td></div>
+  <div show="release_date"><td valign=top nowrap><span class="fieldName">Released:</span></td><td valign=top><span id="release_date"></span></td></tr></div>
   </table>
   </div>
-
-%%collection_links%%
-
-</div>
 </div>
 
-
-<div id="panel9" class="collectionPanel">
 <div class="displayPanel" align="left">
   <span class="displayPanelHeader">Reference information</span>
   <div class="displayPanelContent">
