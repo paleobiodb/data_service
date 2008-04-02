@@ -3427,11 +3427,15 @@ sub processEditOccurrences {
         my @genera = ();
         my @subgenera = ();
         my @species = ();
+        my @latin_names = ();
         my @resos = ("\\?","aff\\.","cf\\.","ex gr\\.","n\. gen\\.","n\. subgen\\.","n\. sp\\.","sensu lato");
+
+	my @matrix;
+	my $collection_no;
 
 	# loop over all rows submitted from the form
 
-	for(my $i = 0;$i < @rowTokens; $i++) {
+	for (my $i = 0;$i < @rowTokens; $i++)	{
         # Flatten the table into a single row, for easy manipulation
         my %fields = ();
         foreach my $param (@param_names) {
@@ -3535,10 +3539,85 @@ sub processEditOccurrences {
                 }
                 $fields{$f.'_reso'} =~ s/\\//;
             }
-            push @genera , $fields{'genus'};
-            push @subgenera , $fields{'subgenus'};
-            push @species , $fields{'species'};
+            push @genera , $fields{'genus_name'};
+            push @subgenera , $fields{'subgenus_name'};
+            push @species , $fields{'species_name'};
+            if ( $fields{'species_name'} =~ /^[a-z]*$/ )	{
+                if ( $fields{'subgenus_name'} =~ /^[A-Z][a-z]*$/ )	{
+                    push @latin_names , $fields{'genus_name'} ." ". $fields{'subgenus_name'} ." ". $fields{'species_name'};
+                } else	{
+                    push @latin_names , $fields{'genus_name'} ." ". $fields{'species_name'};
+                }
+            } else	{
+                if ( $fields{'subgenus_name'} =~ /^[A-Z][a-z]*$/ )	{
+                    push @latin_names , $fields{'genus_name'} ." ". $fields{'subgenus_name'};
+                } else	{
+                    push @latin_names , $fields{'genus_name'};
+                }
+            }
+            $fields{'latin_name'} = $latin_names[$#latin_names];
         }
+
+
+        if ( $fields{'collection_no'} > 0 )	{
+            $collection_no = $fields{'collection_no'}
+        }
+
+	%{$matrix[$i]} = %fields;
+
+	# end of first pass
+	}
+
+	# check for duplicates JA 2.4.08
+	# this section replaces the old occurrence-by-occurrence check that
+	#  used checkDuplicates; it's much faster and uses more lenient
+	#  criteria because isolated duplicates are handled by the JavaScript
+	my $sql ="SELECT genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name FROM occurrences WHERE collection_no=" . $collection_no;
+	my @occrefs = @{$dbt->getData($sql)};
+	if ( $#occrefs > 0 )	{
+		my $newrows;
+		my %newtaxon;
+		for (my $i = 0;$i < @rowTokens; $i++)	{
+			if ( $matrix[$i]{'genus_name'} =~ /^[A-Z][a-z]*$/ && $matrix[$i]{'occurrence_no'} == -1 )	{
+				$newtaxon{ $matrix[$i]{'genus_reso'} ." ". $matrix[$i]{'genus_name'} ." ". $matrix[$i]{'subgenus_reso'} ." ". $matrix[$i]{'subgenus_name'} ." ". $matrix[$i]{'species_reso'} ." ". $matrix[$i]{'species_name'} }++;
+				$newrows++;
+			}
+		}
+		if ( $newrows > 0 )	{
+			my $dupes;
+			for my $or ( @occrefs )	{
+				if ( $newtaxon{ $or->{'genus_reso'} ." ". $or->{'genus_name'} ." ". $or->{'subgenus_reso'} ." ". $or->{'subgenus_name'} ." ". $or->{'species_reso'} ." ". $or->{'species_name'} } > 0 )	{
+					$dupes++;
+				}
+			}
+			if ( $newrows == $dupes && $newrows == 1 )	{
+				push @warnings , "Nothing was entered or updated because the new occurrence was a duplicate";
+				@rowTokens = ();
+			} elsif ( $newrows == $dupes )	{
+				push @warnings , "Nothing was entered or updated because all the new occurrences were duplicates";
+				@rowTokens = ();
+			} elsif ( $dupes >= 3 )	{
+				push @warnings , "Nothing was entered or updated because there were too many duplicate entries";
+				@rowTokens = ();
+			}
+		}
+	}
+
+	# get as many taxon numbers as possible at once JA 2.4.08
+	# this greatly speeds things up because we now only need to use
+	#  getBestClassification as a last resort
+	my $sql = "SELECT taxon_name,taxon_no FROM authorities WHERE taxon_name IN ('" . join('\',\'',@latin_names) . "')";
+	my @taxonrefs = @{$dbt->getData($sql)};
+	my %taxon_no;
+	for my $tr ( @taxonrefs )	{
+		$taxon_no{$tr->{'taxon_name'}} = $tr->{'taxon_no'};
+	}
+
+	# second pass, update/insert loop
+	for (my $i = 0;$i < @rowTokens; $i++)	{
+
+	my %fields = %{$matrix[$i]};
+	my $rowno = $i + 1;
 
 		# check that all required fields have a non empty value
         if ( $fields{'reference_no'} !~ /^\d+$/ && $fields{'genus'} =~ /[A-Za-z]/ )	{
@@ -3554,7 +3633,12 @@ sub processEditOccurrences {
         #  in the authorities table JA 1.4.04
         # see Reclassify.pm for a similar operation
         # only do this for non-informal taxa
-        my $best_taxon_no = Taxon::getBestClassification($dbt,\%fields);
+        my $best_taxon_no;
+        if ( $taxon_no{$fields{'latin_name'}} )	{
+            $best_taxon_no = $taxon_no{$fields{'latin_name'}};
+        } else	{
+            $best_taxon_no = Taxon::getBestClassification($dbt,\%fields);
+        }
         $fields{'taxon_no'} = $best_taxon_no;
         my $taxon_name = Collection::formatOccurrenceTaxonName(\%fields);
 
@@ -3698,19 +3782,10 @@ sub processEditOccurrences {
 		} 
         # CASE 4: NEW OCCURRENCE
         elsif ($fields{'occurrence_no'} == -1) {
-            # Check for duplicates
-            # Check for duplicates
-            my @keys = ("genus_reso","genus_name","subgenus_reso","subgenus_name","species_reso","species_name","collection_no");
-            my %vars = map{$_,$dbh->quote($_)} @fields{@keys};
-            my $dupe_id = $dbt->checkDuplicates("occurrences", \%vars);
+            # previously, a check here for duplicates generated error
+            #  messages but (1) was incredibly slow and (2) apparently
+            #  didn't work, so there is now a batch check above instead
 
-            if ( $dupe_id ) {
-                push @warnings, "Row ". ($i + 1) ." may be a duplicate";
-#                if ($record_id =~ /^\d+$/) {
-#                    push @occurrences, $record_id;
-#                }
-            }
-#            } elsif ($return) {
             my ($result, $occurrence_no) = $dbt->insertRecord($s,'occurrences',\%fields);
             if ($result && $occurrence_no =~ /^\d+$/) {
                 push @occurrences, $occurrence_no;
@@ -3719,7 +3794,6 @@ sub processEditOccurrences {
             unless(Collection::isRefPrimaryOrSecondary($dbt, $fields{'collection_no'}, $fields{'reference_no'}))	{
                    Collection::setSecondaryRef($dbt,$fields{'collection_no'}, $fields{'reference_no'});
             }
-#            }
         }
     }
 
