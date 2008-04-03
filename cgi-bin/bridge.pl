@@ -3606,11 +3606,15 @@ sub processEditOccurrences {
 	# get as many taxon numbers as possible at once JA 2.4.08
 	# this greatly speeds things up because we now only need to use
 	#  getBestClassification as a last resort
-	my $sql = "SELECT taxon_name,taxon_no FROM authorities WHERE taxon_name IN ('" . join('\',\'',@latin_names) . "')";
+	my $sql = "SELECT taxon_name,taxon_no,count(*) c FROM authorities WHERE taxon_name IN ('" . join('\',\'',@latin_names) . "') GROUP BY taxon_name";
 	my @taxonrefs = @{$dbt->getData($sql)};
 	my %taxon_no;
 	for my $tr ( @taxonrefs )	{
-		$taxon_no{$tr->{'taxon_name'}} = $tr->{'taxon_no'};
+		if ( $tr->{'c'} == 1 )	{
+			$taxon_no{$tr->{'taxon_name'}} = $tr->{'taxon_no'};
+		} elsif ( $tr->{'c'} > 1 )	{
+			$taxon_no{$tr->{'taxon_name'}} = -1;
+		}
 	}
 
 	# second pass, update/insert loop
@@ -3618,6 +3622,10 @@ sub processEditOccurrences {
 
 	my %fields = %{$matrix[$i]};
 	my $rowno = $i + 1;
+
+	if ( $fields{'genus_name'} eq "" )	{
+		next;
+	}
 
 		# check that all required fields have a non empty value
         if ( $fields{'reference_no'} !~ /^\d+$/ && $fields{'genus'} =~ /[A-Za-z]/ )	{
@@ -3633,13 +3641,13 @@ sub processEditOccurrences {
         #  in the authorities table JA 1.4.04
         # see Reclassify.pm for a similar operation
         # only do this for non-informal taxa
-        my $best_taxon_no;
-        if ( $taxon_no{$fields{'latin_name'}} )	{
-            $best_taxon_no = $taxon_no{$fields{'latin_name'}};
+        if ( $taxon_no{$fields{'latin_name'}} > 0 )	{
+            $fields{'taxon_no'} = $taxon_no{$fields{'latin_name'}};
+        } elsif ( $taxon_no{$fields{'latin_name'}} eq "" )	{
+            $fields{'taxon_no'} = Taxon::getBestClassification($dbt,\%fields);
         } else	{
-            $best_taxon_no = Taxon::getBestClassification($dbt,\%fields);
+            $fields{'taxon_no'} = 0;
         }
-        $fields{'taxon_no'} = $best_taxon_no;
         my $taxon_name = Collection::formatOccurrenceTaxonName(\%fields);
 
         if ($fields{'genus_name'} =~ /^\s*$/) {
@@ -3818,6 +3826,11 @@ sub processEditOccurrences {
 
 	print $hbo->stdIncludes( "std_page_top" );
 
+	print qq|<div align="center"><p class="large" style="margin-bottom: 1.5em;">|;
+	my $sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
+	print ${$dbt->getData($sql)}[0]->{'collection_name'};
+	print "</p></div>\n\n";
+
 	# Links to re-edit, etc
     my $links = "<div align=\"center\">";
     if ($q->param('form_source') eq 'new_reids_form') {
@@ -3840,7 +3853,6 @@ sub processEditOccurrences {
         $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">reidentify different occurrences</a></nobr>";
     }
     $links .= "</div><br>";
-
 
 	# for identifying unrecognized (new to the db) genus/species names.
 	# these are the new taxon names that the user is trying to enter, do this before insert
