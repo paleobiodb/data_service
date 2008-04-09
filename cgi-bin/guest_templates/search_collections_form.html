@@ -11,10 +11,13 @@ function checkForm ( ) {
         return false;
     }
 
-    var fields = new Array('collection_names','section_name','reference_no','person_reversed','research_group','taxon_name','country','state','county','max_interval','min_interval','group_formation_member','environment','lithologies');
+    var fields = new Array('collection_names','section_name','reference_no','person_reversed','research_group','taxon_name','country','state','county','max_interval','min_interval','group_formation_member','environment','lithologies','field_includes');
 
     if (checkAllEmpty(frm,fields)) {
         alert ("Please enter a search term");
+        return false;
+    } else if (frm.field_name.selectedIndex == 0 && frm.field_includes.value != '')	{
+        alert ("Please select a field to search");
         return false;
     } else {
         return true;
@@ -52,32 +55,30 @@ function checkForm ( ) {
           </tr>
         </div>
         <tr>
-          <td>Collection name or number(s): </td><td><input name=collection_names class="small" size=20></td>
-          <td style="padding-left: 1em;">Taxon name:</td><td><input name=taxon_name class="small"></td>
+          <td>Collection name or number(s): </td><td><input name=collection_names class="small" size="20"></td>
+          <td style="padding-left: 1em;">Taxon name:</td><td><input name=taxon_name class="small" size="20"></td>
         </tr>
       </div>
       <div show="action=displaySearchSectionResults">
         <tr>
-          <td>Section name: </td><td><input name=section_name size=20 class="small"></td>
+          <td>Section name: </td><td><input name=section_name size="20" class="small"></td>
         </tr>
       </div>
       <tr>
-        <td>Country/continent: </td><td><input name=country class="small"></td>
+        <td>Country/continent: </td><td><input name=country class="small" size="20"></td>
         <td style="padding-left: 1em;">State/province: </td><td><input name=state class="small"></td>
       </tr>
       <tr>
-        <td>County/parish: </td><td><input name=county class="small"></td>
-        <td style="padding-left: 1em;">Reference number: </td><td><input name=reference_no class="small" size=6></td>
+        <td>County/parish: </td><td><input name=county class="small" size="20"></td>
+        <td style="padding-left: 1em;">Reference number: </td><td><input name=reference_no class="small" size="6"></td>
       </tr>
       <tr>
-        <td>Oldest time interval (or age in Ma): </td><td colspan=3><select id="eml_max_interval" class="small" autofill="eml_interval"></select><input name="max_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
-      </tr>
-      <tr>
-        <td>Youngest time interval/Ma: </td><td colspan=3><select id="eml_min_interval" class="small" autofill="eml_interval"></select><input name="min_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+        <td>Time interval (or age in Ma): </td><td colspan="3"><select name="eml_max_interval" class="small"><option></option><option value="Late/Upper">late</option><option value="Middle">middle</option><option value="Early/Lower">early</option></select><input name="max_interval" class="small" size="16" onKeyUp="doComplete(event, this, intervalNames(),1);">
+        to <select name="eml_min_interval" class="small"><option></option><option value="Late/Upper">late</option><option value="Middle">middle</option><option value="Early/Lower">early</option></select><input name="min_interval" class="small" size="16" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
       </tr>
       <div hide="action=displaySearchStrataResults">
         <tr>
-          <td>Group, formation, or member:</td><td><input name="group_formation_member" class="small"></td>
+          <td>Group, formation, or member:</td><td><input name="group_formation_member" class="small" size="20"></td>
         </tr>
       </div>
       <tr>
@@ -97,8 +98,38 @@ function checkForm ( ) {
         <td><select id="research_group" class="small"></select>
       </tr>
       <tr>
-        <td colspan=4 align="center">
-          <div class="small" style="width: 640px;">
+        <td>
+          <select name="field_name">
+          <option value=""></option>
+          <option value="collection_comments">collection comments</option>
+          <option value="collection_dates">collection dates</option>
+          <option value="collection_coverage">collection excludes</option>
+          <option value="coll_meth">collection methods</option>
+          <option value="collection_type">collection reason</option>
+          <option value="collectors">collectors</option>
+          <option value="geogcomments">geography comments</option>
+          <option value="geology_comments">geology comments</option>
+          <option value="taxonomy_comments">list comments</option>
+          <option value="lithdescript">lithology description</option>
+          <option value="localsection">local section</option>
+          <option value="museum">museum</option>
+          <option value="seq_strat">sequence stratigraphy<seq_strat/option>
+          <option value="assembl_comps">size of fossils</option>
+          <option value="spatial_resolution">spatial resolution</option>
+          <option value="stratcomments">stratigraphy comments</option>
+          <option value="taphonomy_comments">taphonomy comments</option>
+          <option value="temporal_resolution">temporal resolution</option>
+          <option value="regionalsection">regional section</option>
+          <option value="zone">zone</option>
+          </select>
+          includes:
+        </td>
+        <td><input name="field_includes" class="small" size="20">
+        </td>
+      </tr>
+      <tr>
+        <td colspan=4 align="left">
+          <div class="small" style="width: 640px; margin-left: 2em; text-indent: -1em;">
             <i>Hints: the search engine is not case sensitive and wildcards are allowed.  You can use "_" to match any single character or "%" for an open ended match. You may enter ranges and comma separated variables for collection numbers, i.e. 300, 400-405</i>
           </div>
         </td>
