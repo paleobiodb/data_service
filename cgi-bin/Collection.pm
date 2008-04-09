@@ -229,6 +229,7 @@ sub getCollections {
 
     # Handle time terms
 	if ( $options{'max_interval'} || $options{'min_interval'} || $options{'max_interval_no'} || $options{'min_interval_no'}) {
+
         #These seeminly pointless four lines are necessary if this script is called from Download or whatever.
         # if the $q->param($var) is not set (undef), the parameters array passed into processLookup doesn't get
         # set properly, so make sure they can't be undef PS 04/10/2005
@@ -582,6 +583,11 @@ IS NULL))";
             push @where, "c.country LIKE ".$dbh->quote($options{'country'});
         }
     }
+
+	# 9.4.08
+	if ( $options{'field_name'} =~ /[a-z]/ && $options{'field_includes'} =~ /[A-Za-z0-9]/ )	{
+		$options{$options{'field_name'}} = $options{'field_includes'};
+	}
 
     # get the column info from the table
     my $sth = $dbh->column_info(undef,'pbdb','collections','%');
