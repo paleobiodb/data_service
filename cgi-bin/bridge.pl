@@ -3623,7 +3623,7 @@ sub processEditOccurrences {
 	my %fields = %{$matrix[$i]};
 	my $rowno = $i + 1;
 
-	if ( $fields{'genus_name'} eq "" )	{
+	if ( $fields{'genus_name'} eq "" && $fields{'occurrence_no'} < 1 )	{
 		next;
 	}
 
