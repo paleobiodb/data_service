@@ -61,6 +61,11 @@ sub getCollections {
     }
 
 
+	# 9.4.08
+	if ( $options{'field_name'} =~ /[a-z]/ && $options{'field_includes'} =~ /[A-Za-z0-9]/ )	{
+		$options{$options{'field_name'}} = $options{'field_includes'};
+	}
+
     # the next two are mutually exclusive
     if ($options{'count_occurrences'})	{
         push @from, "taxon_no,count(*) AS c";
@@ -548,12 +553,12 @@ IS NULL))";
 
     # This field is only passed by links created in the Strata module PS 12/01/2004
 	if ($options{"lithologies"}) {
-        my $val = $dbh->quote($options{"lithologies"});
+		my $val = $dbh->quote($options{"lithologies"});
 		push @where, "(c.lithology1=$val OR c.lithology2=$val)"; 
 	}
 	if ($options{"lithadjs"}) {
-        my $val = $dbh->quote($options{"lithadjs"});
-		push @where, "(FIND_IN_SET($val,c.lithadj) OR FIND_IN_SET($val,c.lithadj2))"; 
+		my $val = $dbh->quote('%'.$options{"lithadjs"}.'%');
+		push @where, "(c.lithadj LIKE $val OR c.lithadj2 LIKE $val)";
     }
 
     # This can be country or continent. If its country just treat it like normal, else
@@ -584,11 +589,6 @@ IS NULL))";
         }
     }
 
-	# 9.4.08
-	if ( $options{'field_name'} =~ /[a-z]/ && $options{'field_includes'} =~ /[A-Za-z0-9]/ )	{
-		$options{$options{'field_name'}} = $options{'field_includes'};
-	}
-
     # get the column info from the table
     my $sth = $dbh->column_info(undef,'pbdb','collections','%');
     
@@ -606,20 +606,20 @@ IS NULL))";
         next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country)$/);
 
 		if (exists $options{$field} && $options{$field} ne '') {
-            my $value = $options{$field};
-            if ($value eq "NOT_NULL_OR_EMPTY") {
-                push @where, "(c.$field IS NOT NULL AND c.$field !='')";
-            } elsif ($value eq "NULL_OR_EMPTY") {
-                push @where, "(c.$field IS NULL OR c.$field ='')";
+			my $value = $options{$field};
+			if ($value eq "NOT_NULL_OR_EMPTY") {
+				push @where, "(c.$field IS NOT NULL AND c.$field !='')";
+			} elsif ($value eq "NULL_OR_EMPTY") {
+				push @where, "(c.$field IS NULL OR c.$field ='')";
 			} elsif ( $type =~ /ENUM/i) {
 				# It is in a pulldown... no wildcards
 				push @where, "c.$field=".$dbh->quote($value);
 			} elsif ( $type =~ /SET/i) {
                 # Its a set, use the special set syntax
-		        push @where, "FIND_IN_SET(".$dbh->quote($value).", c.$field)";
+				push @where, "FIND_IN_SET(".$dbh->quote($value).", c.$field)";
 			} elsif ( $type =~ /INT/i) {
                 # Don't need to quote ints, however cast them to int a security measure
-                push @where, "c.$field=".int($value);
+				push @where, "c.$field=".int($value);
 			} else {
                 # Assuming character, datetime, etc. 
 				push @where, "c.$field LIKE ".$dbh->quote('%'.$value.'%');
