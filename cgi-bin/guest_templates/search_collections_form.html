@@ -70,7 +70,7 @@ function checkForm ( ) {
       </tr>
       <tr>
         <td>County/parish: </td><td><input name=county class="small" size="20"></td>
-        <td style="padding-left: 1em;">Reference number: </td><td><input name=reference_no class="small" size="6"></td>
+        <td style="padding-left: 1em;">Reference #: </td><td><input name=reference_no class="small" size="6"></td>
       </tr>
       <tr>
         <td>Time interval (or age in Ma): </td><td colspan="3"><select name="eml_max_interval" class="small"><option></option><option value="Late/Upper">late</option><option value="Middle">middle</option><option value="Early/Lower">early</option></select><input name="max_interval" class="small" size="16" onKeyUp="doComplete(event, this, intervalNames(),1);">
@@ -85,7 +85,7 @@ function checkForm ( ) {
         <td>Paleoenvironment: </td><td colspan=3><select id="environment" class="small"></select></td>
       </tr>
       <tr>
-        <td>Lithology:</td><td colspan=3><select id="lithadjs" autofill="lithadj" class="small"></select><select id="lithologies" autofill="lithology1" class="small"></select><br></td>
+        <td>Lithology:</td><td colspan=3><select id="lithification" autofill="lithification" class="small"></select><select id="lithologies" autofill="lithology1" class="small"></select><br></td>
       </tr>
       <tr>
         <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: 
@@ -110,6 +110,7 @@ function checkForm ( ) {
           <option value="geogcomments">geography comments</option>
           <option value="geology_comments">geology comments</option>
           <option value="taxonomy_comments">list comments</option>
+          <option value="lithadjs">lithology adjective</option>
           <option value="lithdescript">lithology description</option>
           <option value="localsection">local section</option>
           <option value="museum">museum</option>
@@ -121,8 +122,7 @@ function checkForm ( ) {
           <option value="temporal_resolution">temporal resolution</option>
           <option value="regionalsection">regional section</option>
           <option value="zone">zone</option>
-          </select>
-          includes:
+          </select>:
         </td>
         <td><input name="field_includes" class="small" size="20">
         </td>
