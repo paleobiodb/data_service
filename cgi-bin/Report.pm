@@ -61,15 +61,15 @@ sub reportDisplayHTML {
 
     # Print Title of Page
 	print "<center>\n";
-	print "<h2>Paleobiology Database report";
+	print "<p class=\"pageTitle\">Paleobiology Database report";
 	if ($q->param('taxon_name')){
 		print ": ".$q->param('taxon_name');
 	}
-	print "</h2>\n";
+	print "</p>\n";
 
     # Print Warnings
     my $msg = Debug::printWarnings($self->{'warnings'});
-    if ($msg) { print $msg. "<BR>"; }
+    if ($msg) { print $msg. "<br>"; }
     
     # Print Header
     my $isDoubleArray = scalar @{$self->{'sortKeys2'}};
@@ -80,14 +80,18 @@ sub reportDisplayHTML {
     if ($isDoubleArray) {
         my $numCols = scalar(@{$self->{'sortKeys2'}});
         print "<tr><td class=dataTableTopULCorner>&nbsp;</td>";
-        print "<td class=dataTableTop colspan=$numCols align=center><b>$header2</b></td>";
+        print "<td class=dataTableTop colspan=$numCols align=center>$header2</td>";
         print "<td>&nbsp;</td></tr>";
     }
     print "<tr>";
-    print "<td class=dataTableULCorner align=center><b>$header1</b></td>";
+    print "<td class=dataTableULCorner align=center>$header1</td>";
     if ($isDoubleArray) { 
         foreach my $key2 (@{$self->{'sortKeys2'}}) {
-            print "<td class=dataTableColumn>$key2</td>";
+            my $cleankey2 = $key2;
+            if ($key2 =~ /,[^ ]/)	{
+                $cleankey2 =~ s/,/, /g;
+            }
+            print "<td class=dataTableColumn>$cleankey2</td>";
         }
         print "<td class=dataTableColumnTotal>$totalKeyword</td>";
     } else {
@@ -101,8 +105,12 @@ sub reportDisplayHTML {
     # Print Table
     my $grandTotal = ($q->param('output') eq 'collections') ? $self->{'grandTotalCollections'} : $self->{'grandTotalOccurrences'};
     foreach my $key1 (@{$self->{'sortKeys1'}}) {
+        my $cleankey1 = $key1;
+        if ($key1 =~ /,[^ ]/)	{
+            $cleankey1 =~ s/,/, /g;
+        }
         print "<tr>";
-        print "<td class=dataTableRow>$key1</td>";
+        print "<td class=dataTableRow>$cleankey1</td>";
         if ($isDoubleArray) { 
             foreach my $key2 (@{$self->{'sortKeys2'}}) {
                 print "<td class=dataTableCell align=right>".$self->{'dataTable'}{$key1}{$key2}."</td>";
@@ -142,9 +150,9 @@ sub reportDisplayHTML {
     #        print "<b>".$self->{'grandTotal1'} . "</b> entries in "
     #    }
     #}
-    print "<b>".$self->{'grandTotalOccurrences'} . "</b> occurrences and " if ($q->param('output') ne 'collections');
-    print "<b>".$self->{'grandTotalCollections'} . "</b> collections";
-    print ", <b>".sprintf("%.1f",$self->{'grandTotalOccurrences'}/$self->{'grandTotalCollections'}) . "</b> occurrences per collection" if ($q->param('output') eq 'average occurrences');
+    print $self->{'grandTotalOccurrences'} . " occurrences and " if ($q->param('output') ne 'collections');
+    print "".$self->{'grandTotalCollections'} . " collections";
+    print ", ".sprintf("%.1f",$self->{'grandTotalOccurrences'}/$self->{'grandTotalCollections'}) . " occurrences per collection" if ($q->param('output') eq 'average occurrences');
     print " were tabulated</p>";
 
     # Link to report
@@ -181,7 +189,7 @@ sub reportPrintOutfile{
     my $reportFileName = $authorizer . "-report.csv";
     PBDBUtil::autoCreateDir("$HTML_DIR/public/reports");
     open(OUTFILE, ">$HTML_DIR/public/reports/$reportFileName") 
-        or die ( "Could not open output file: $HTML_DIR/public/reports/$reportFileName($!) <BR>\n" );
+        or die ( "Could not open output file: $HTML_DIR/public/reports/$reportFileName($!) <br>\n" );
 
     chmod 0664, "$HTML_DIR/public/reports/$reportFileName";
 
@@ -265,7 +273,9 @@ sub reportBuildDataTables {
     # Translations tables to tranlate country -> continent, interval_no->period,etc
     my %t1TranslationTable = %{$self->getTranslationTable($q->param('searchfield1'))};
     my %t2TranslationTable = %{$self->getTranslationTable($q->param('searchfield2'))};
-    my $setFields = 'research group|tectonic setting|preservation mode|list coverage|assemblage components';
+# removed assemblage components from set list because there are few combinations
+#   11.4.08 JA
+    my $setFields = 'research group|tectonic setting|preservation mode|list coverage';
     my $weightedFields = 'lithology - weighted|lithification';
     my $t1Type = ($q->param('searchfield1') =~ /$weightedFields/) ? 'weighted' 
                : ($q->param('searchfield1') =~ /$setFields/)      ? 'set' 
@@ -807,7 +817,7 @@ sub getTranslationTable {
         }
     } elsif ($param eq 'tectonic plate ID') {
         if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
-            print "<font color='red'>Skipping plates.</font> Error message is $!<BR><BR>\n";
+            print "<font color='red'>Skipping plates.</font> Error message is $!<br><br>\n";
         } else {
             <PLATES>;
 
@@ -850,7 +860,7 @@ sub getRegions	{
     my %regions;
 
 	if ( ! open REGIONS,"<$DATA_DIR/PBDB.regions" ) {
-		$self->htmlError ( "$0:Couldn't open $DATA_DIR/PBDB.regions<BR>$!" );
+		$self->htmlError ( "$0:Couldn't open $DATA_DIR/PBDB.regions<br>$!" );
 	}
 	while (<REGIONS>)	{
 		s/\n//;
