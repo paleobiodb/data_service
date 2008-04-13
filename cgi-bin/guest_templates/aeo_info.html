@@ -1,0 +1,119 @@
+
+<div style="padding: 2em;">
+
+<center><p class="pageTitle" style="margin-top: -0.5em;">About this collection's AEO age estimate</p></center>
+
+<p class="medium">Where does the age estimate come from?</p>
+
+<p class="small">This collection's age estimate of %%collection_age%% Ma is based on an appearance event ordination carried out on 11 November 2007 by John Alroy.
+The analysis employed all of the Paleobiology Database's Cretaceous and Cenozoic occurrences of North American terrestrial turtles, crocodylians, non-avian dinosaurs, and mammals. The collection's maximum age estimate equals the youngest first appearance of any genus or species it includes. Likewise, the minimum equals the oldest last appearance of any taxon it includes.
+</p>
+
+<p class="medium">What are the age ranges?</p>
+
+<p class="small">The values in <b>bold</b> determined the age of the collection on the basis of these criteria.</p>
+
+%%taxon_ages%%
+
+<p class="small">%%note%%.</p>
+
+<p class="medium">How reliable is the estimate?</p>
+
+<p class="small">
+It depends.
+There are at least four things you have to consider.
+</p>
+
+<p class="small">
+First, there is the spread of the dates itself, which is directly based on the age ranges of the taxa found in this individual collection.
+The spread is an absolute minimum figure for the estimate's accuracy.
+</p>
+
+<p class="small">
+Second, there is the overall average error of the estimates across all collections.
+This figure is 1.34 standard deviations based on the residual standard error of the geochronological calibration of the appearance event sequence (see below).
+Based on a separate bootstrap analysis, 64% of collections have been assigned to the right 1.0 Myr-long time interval, and 84% to the right 3.0 Myr-long interval (Alroy 2008).
+All of these numbers have to do with accuracy and not precision because they involve independently derived geochronological age estimates (see below).
+Obviously, not all collections are the same, so the figures are only general guides.
+</p>
+
+<p class="small">
+Third, the estimates are better for large (diverse) collections.
+If there are a dozen species or more, the estimate is about as good as it's going to get.
+If there are one or two, all bets are off: the estimate could easily be off by 5 Myr.
+For collections of an intermediate size, may the buyer beware.
+</p>
+
+<p class="small">
+Fourth, the estimates are more reliable in parts of the time scale with numerous fossil collections, stratigraphic sections, and geochronological age estimates.
+Specifically, there are big problems with the late Oligocene (Geringian and Monroecreekian) estimates, and sampling is pretty poor in the early late Eocene (Duchesenan) and earliest Miocene (Harrisonian).
+</p>
+
+<p class="small">
+Finally, the estimates are only as good as the taxonomy and taphonomy.
+Error will be introduced if the identifications are flat-out wrong, or if they are over-resolved (meaning, species names were put on generically determinate but specifically indeterminate fossils).
+There will also be problems if the collection is time averaged at the scale of several hundred thousand years or more, but I included it in the analysis because I wasn't aware of that fact.
+</p>
+
+</p>
+
+<p class="medium">How does AEO work?</p>
+
+<p class="small">
+AEO uses faunal overlap and stratigraphic superposition to derive a best-fit sequence of first and last appearance events.
+</p>
+
+<p class="small">
+The first step is to translate patterns of overlap and superposition into pairwise "first-before-last statements."
+Each statement means that taxon i must have first appeared before taxon j last appeared.
+You know this is true whenever either (1) i and j have been found together in at least one non-time averaged fossil collection, or (2) i is found lower in at least one lithostratigraphic section than j.
+</p>
+
+<p class="small">
+AEO then uses a multivariate ordination algorithm to derive a first-pass hypothesized sequence of first and last appearances.
+The minimal constraint on this sequence is that if there is an observed, real-world "i before j" statement for any pair of taxa, the hypothesized event sequence must replicate it.
+Then the program shuffles the events using a maximum likelihood criterion.
+The criterion basically seeks to pull apart as many hypothesized age range overlaps as possible, especially if they involve common taxa.
+Taxa are defined as "common" if they are known to overlap with a large fraction of the taxa they are implied to overlap with.
+</p>
+
+<p class="small">
+Once the (relative) event sequence is ready, it is converted into numerical time with a non-linear interpolation algorithm that compares event sequence positions and geochronological age estimates for collections that have them.
+The calibration only uses <sup>40</sup>Ar/<sup>39</sup>Ar dates; Ur-Th dates (for some Pleistocene collections); and paleomagnetic dates that derive from unambiguous, narrow correlations inferred using non-faunal tie points such as the position in the section of the K-T boundary, P-E boundary, or Recent.
+</p>
+
+<p class="small">
+The method is described in the following papers:
+</p>
+
+<ul class="verysmall">
+<li>J. Alroy. 1992.  Conjunction among taxonomic distributions and the Miocene mammalian biochronology of the Great Plains. <i>Paleobiology</i> 18(3):326-343.
+<li>--------.  1994.  Appearance event ordination: a new biochronologic method.  <i>Paleobiology</i> 20(2):191-207.
+<li>--------.  1996.  Constant extinction, constrained diversification, and uncoordinated stasis in North American mammals. <i>Palaeogeography, Palaeoclimatology, Palaeoecology</i> 127(1/4):285-311.
+<li>--------.  1998.  Equilibrial diversity dynamics in North American mammals. Pp. 232-287 in M. L. McKinney and J. A. Drake (eds.), <i>Biodiversity dynamics: turnover of populations, taxa, and communities.</i> Columbia University Press, New York.
+<li>--------.  2000.  New methods for quantifying macroevolutionary patterns and processes. <i>Paleobiology</i> 26(4):707-733.
+<li>--------.  2008.  Speciation and extinction in the fossil record of North American mammals. <i>Ecological Reviews</i>.
+</ul>
+
+<p class="medium">What about the land mammal age assignments?</p>
+
+<p class="small">
+Assignments to North American land mammal ages also are provided for comparison.
+They may disagree with the AEO estimates because they are taken straight from published sources.
+So, the assignments reflect the subjective opinions of the authors who described the fossils, and they are not based on quantitative analyses of faunal and biostratigraphic data.
+</p>
+
+<p class="medium">Do you really think AEO estimates are better?</p>
+
+<p class="small">
+Yes. The rank-order correlation between relative age and geochronological age is better for AEO than for the traditional NALMA assignments, even if you take the latter down to the zone level.
+The residual standard error (see above) is also better.
+This is really the bottom line.
+</p>
+
+<p class="small">
+More philosophically, AEO age estimates are preferable because they are objective, repeatable, and quantitative. That's because AEO uses uses explicitly recorded and clearly defined numerical data, and because it uses algorithmic search and optimization criteria instead of verbal argumentation.
+</p>
+
+</div>
+
