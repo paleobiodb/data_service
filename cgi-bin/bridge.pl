@@ -1671,10 +1671,16 @@ sub rarefyAbundances {
 }
 
 sub displayCollectionEcology	{
-    logRequest($s,$q);
+	logRequest($s,$q);
 	print $hbo->stdIncludes("std_page_top");
-    Collection::displayCollectionEcology($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+	Collection::displayCollectionEcology($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub explainAEOestimate	{
+	print $hbo->stdIncludes("std_page_top");
+	Collection::explainAEOestimate($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_top");
 }
 
 # PS 11/7/2005
