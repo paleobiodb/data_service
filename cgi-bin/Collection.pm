@@ -1379,6 +1379,8 @@ sub displayCollectionDetailsPage {
         }
         $row->{'age_estimate'} .= " m.y. ago (" . $row->{'direct_ma_method'} . ")";
     }
+    my $link;
+    my $endlink;
     if ( $row->{'max_ma'} )	{
         if ( ! $row->{'min_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
             $row->{'age_estimate'} .= "maximum ";
@@ -1387,8 +1389,12 @@ sub displayCollectionDetailsPage {
         if ( $row->{'max_ma_error'} )	{
             $row->{'age_estimate'} .= " +/- " . $row->{'max_ma_error'};
         }
+	if ( $row->{'max_ma_method'} eq "AEO" )	{
+            $link = qq|<a href="$READ_URL?action=explainAEOestimate&amp;user=Guest&amp;collection_no=$row->{'collection_no'}">|;
+            $endlink = "</a>";
+        }
         if ( ! $row->{'min_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
-            $row->{'age_estimate'} .= " m.y. ago (" . $row->{'max_ma_method'} . ")";
+            $row->{'age_estimate'} .= " m.y. ago ($link" . $row->{'max_ma_method'} . "$endlink)";
         }
     }
     if ( $row->{'min_ma'} && ( ! $row->{'max_ma'} || $row->{'min_ma'} ne $row->{'max_ma'} || $row->{'min_ma_method'} ne $row->{'max_ma_method'} ) )	{
@@ -1401,9 +1407,9 @@ sub displayCollectionDetailsPage {
         if ( $row->{'min_ma_error'} )	{
             $row->{'age_estimate'} .= " +/- " . $row->{'min_ma_error'};
         }
-        $row->{'age_estimate'} .= " m.y. ago (" . $row->{'min_ma_method'} . ")";
+        $row->{'age_estimate'} .= " m.y. ago ($link" . $row->{'min_ma_method'} . "$endlink)";
     } elsif ( $row->{'age_estimate'} )	{
-        $row->{'age_estimate'} .= " m.y. ago (" . $row->{'max_ma_method'} . ")";
+        $row->{'age_estimate'} .= " m.y. ago ($link" . $row->{'max_ma_method'} . "$endlink)";
     }
     foreach my $term ("period","epoch","stage") {
         $row->{$term} = "";
@@ -2853,6 +2859,175 @@ sub getPaleoCoords {
     dbg("Paleolng: $paleolng Paleolat $paleolat fx $f_lngdeg fy $f_latdeg plat $plat plng $plng pid $pid");
     return ($paleolng, $paleolat);
 }
+
+# prints AEO age ranges of taxa in a collection so users can understand the
+#  collection's age estimate 13.4.08 JA
+sub explainAEOestimate	{
+	my ($dbt,$q,$s,$hbo) = @_;
+	my $proj = "11Nov07_tcdm";
+	my $maxevent = 999;
+
+	# get age ranges
+	my $taxa = 0;
+	my @range = ();
+	my %no;
+	open IN,"<./data/$proj.ageranges";
+	while (<IN>)	{
+		$taxa++;
+		s/\n//;
+		my @data = split /\t/,$_;
+		$no{$data[0]} = $taxa;
+		$range[$taxa]->{'name'} = $data[0];
+		$range[$taxa]->{'occs'} = $data[1];
+		(my $a,$range[$taxa]->{'max'}) = split / \(/,$data[3];
+		$range[$taxa]->{'max'} =~ s/[^0-9\.]//g;
+		$range[$taxa]->{'max'} = sprintf("%.1f",$range[$taxa]->{'max'});
+		(my $a,$range[$taxa]->{'min'}) = split / \(/,$data[4];
+		$range[$taxa]->{'min'} =~ s/[^0-9\.]//g;
+		$range[$taxa]->{'min'} = sprintf("%.1f",$range[$taxa]->{'min'});
+		# weird Equus alaskae/crinidens cases
+		if ( $range[$taxa]->{'max'} - $range[$taxa]->{'min'} > 40 )	{
+			$range[$taxa]->{'max'} = "";
+			$range[$taxa]->{'min'} = "";
+		}
+		# WARNING: there is an error in the computation of .ageranges
+		#  files that causes genera to have infinite age ranges if
+		#  any of their included species do, so fix the data if you can
+		# this works only because genera always come before species
+		if ( $data[0] =~ / / && $range[$taxa]->{'max'} ne "" && $range[$taxa]->{'max'} < $maxevent )	{
+			my ($g,$s) = split / /,$data[0];
+			if ( $range[$no{$g}]->{'max'} > $maxevent )	{
+				$range[$no{$g}]->{'max'} = $range[$taxa]->{'max'};
+				$range[$no{$g}]->{'min'} = $range[$taxa]->{'min'};
+			}
+			if ( $range[$taxa]->{'max'} > $range[$no{$g}]->{'max'} )	{
+				$range[$no{$g}]->{'max'} = $range[$taxa]->{'max'};
+			}
+			if ( $range[$taxa]->{'min'} < $range[$no{$g}]->{'min'} || $range[$no{$g}]->{'min'} eq "" )	{
+				$range[$no{$g}]->{'min'} = $range[$taxa]->{'min'};
+			}
+		}
+	}
+	close IN;
+
+	my $max;
+	my $min;
+	my $name;
+	my $colls = 0;
+	my $collno;
+	open IN,"<./data/$proj.collnoages";
+	while (<IN>)	{
+		s/\n//;
+		$colls++;
+		my @data = split /\t/,$_;
+		if ( $data[0] == $q->param('collection_no') )	{
+			$max = $data[1];
+			$min = $data[2];
+			$name = $data[3];
+			$collno = $colls;
+		}
+	}
+	close IN;
+
+	open IN,"<./data/$proj.nam";
+	# skip the collection names
+	for my $i ( 1..$colls )	{
+		$_ = <IN>;
+		s/\n//;
+	}
+	$taxa = 0;
+	my @taxon;
+	while (<IN>)	{
+		s/\n//;
+		# stop once the section names are encountered
+		# this won't work 100%, but close to it
+		if ( $_ !~ /^[A-Z]([a-z]*)|([a-z]* [a-z]*)$/ )	{
+			last;
+		}
+		$taxa++;
+		$taxon[$taxa] = $_;
+	}
+	close IN;
+
+	# get the list of taxon numbers for this collection
+	open IN,"<./data/$proj.mat";
+	for my $i ( 1..$collno )	{
+		$_ = <IN>;
+	}
+	close IN;
+	s/ \.\n//;
+	my @nos = split / /,$_;
+	# delete redundant genus names
+	# the genus names are always before the species names
+	my %seen;
+	for my $n ( @nos )	{
+		if ( $range[$n]->{'name'} =~ / / )	{
+			my ($g,$s) = split / /,$range[$n]->{'name'};
+			$seen{$g}++;
+		}
+	}
+	my @cleannos;
+	my $collmax;
+	my $collmin = 0;
+	for my $n ( @nos )	{
+		if ( ! $seen{$range[$n]->{'name'}} )	{
+			push @cleannos , $n;
+		}
+		if ( ! $seen{$range[$n]->{'name'}} && $range[$n]->{'occs'} > 1 )	{
+			if ( $range[$n]->{'max'} < $collmax || ! $collmax )	{
+				$collmax = $range[$n]->{'max'};
+			}
+			if ( $range[$n]->{'min'} > $collmin )	{
+				$collmin = $range[$n]->{'min'};
+			}
+		}
+	}
+	@nos = @cleannos;
+	@nos = sort { $range[$b]->{'max'} <=> $range[$a]->{'max'} || $range[$b]->{'min'} <=> $range[$a]->{'min'} || $range[$a]->{'name'} cmp $range[$b]->{'name'} } @nos;
+	my %ages;
+	$ages{'collection_age'} = $collmax;
+	if ( $collmax != $collmin )	{
+		$ages{'collection_age'} .= " to " . $collmin;
+	}
+
+	$ages{'taxon_ages'} = "<table class=\"small\" style=\"border: 1px solid #909090; padding: 0.75em; margin-left: 1em;\">\n";
+	$ages{'taxon_ages'} .= "<tr>\n<td>Genus or species</td>\n<td colspan=\"2\">Age range in Ma</td>\n</tr>\n";
+	my @singletons;
+	for my $n ( @nos )	{
+		if ( $range[$n]->{'occs'} > 1 && $range[$n]->{'max'} ne "" )	{
+			$ages{'taxon_ages'} .= "<tr>\n";
+			$ages{'taxon_ages'} .= "<td>$range[$n]->{'name'}</td>\n";
+			if ( $collmax != $range[$n]->{'max'} )	{
+				$ages{'taxon_ages'} .= "<td align=\"right\" style=\"padding-left: 0.75em;\">$range[$n]->{'max'}</td>\n";
+			} else	{
+				$ages{'taxon_ages'} .= "<td align=\"right\" style=\"padding-left: 0.75em;\"><b>$range[$n]->{'max'}</b></td>\n";
+			}
+			if ( $collmin != $range[$n]->{'min'} )	{
+				$ages{'taxon_ages'} .= "<td align=\"left\">to $range[$n]->{'min'}</td>\n";
+			} else	{
+				$ages{'taxon_ages'} .= "<td align=\"left\">to <b>$range[$n]->{'min'}</b></td>\n";
+			}
+			$ages{'taxon_ages'} .= "</tr>\n";
+		} elsif ( $range[$n]->{'occs'} == 1 )	{
+			push @singletons , $range[$n]->{'name'};
+		}
+	}
+	$ages{'taxon_ages'} .= "</table>\n";
+	if ( $#singletons == 0 )	{
+		$ages{'note'} = "$singletons[0] is also present, but is not biochronologically informative because it is only found in this collection";
+	} elsif ( $#singletons == 1 )	{
+		$ages{'note'} = "$singletons[0] and $singletons[1] are also present, but are not biochronologically informative because they are only found in this collection";
+	} elsif ( $#singletons > 1 )	{
+		$singletons[$#singletons] = "and " . $singletons[$#singletons];
+		my $temp = join ', ',@singletons;
+		$ages{'note'} = "$temp are also present, but are not biochronologically informative because they are only found in this collection";
+	}
+	if ( $ages{'note'} )	{
+		$ages{'note'} = "<p class=\"small\">" . $ages{'note'} . ".</p>";
+	}
+	print $hbo->populateHTML('aeo_info', \%ages);
+}
+
 
 ## setSecondaryRef($dbt, $collection_no, $reference_no)
 # 	Description:	Checks if reference_no is the primary reference or a 
