@@ -2055,7 +2055,6 @@ sub queryDatabase {
          
         if (@ecoFields || $get_preservation ||
             $q->param("replace_with_ss") ne 'NO' ||
-            $q->param('occurrences_extant') ||
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES" ||
@@ -2067,15 +2066,14 @@ sub queryDatabase {
             $q->param("occurrences_second_author") eq "YES" ||
             $q->param("occurrences_other_authors") eq "YES" ||
             $q->param("occurrences_year_named") eq "YES")	{
-#            %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
-            %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'rank genus')};
+            my %genus_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'rank genus')};
         # will need the genus number for figuring out "extant"
             my @temp_nos = @taxon_nos;
             for my $no ( @taxon_nos )	{
-                if ( $master_class{$no}->{'taxon_no'} )	{
-                    push @temp_nos , $master_class{$no}->{'taxon_no'};
-                    $genus_no{$no} = $master_class{$no}->{'taxon_no'};
-                    $senior_genus_name{$no} = $master_class{$no}->{'taxon_name'};
+                if ( $genus_class{$no}->{'taxon_no'} )	{
+                    push @temp_nos , $genus_class{$no}->{'taxon_no'};
+                    $genus_no{$no} = $genus_class{$no}->{'taxon_no'};
+                    $senior_genus_name{$no} = $genus_class{$no}->{'taxon_name'};
                 }
             }
             @taxon_nos = @temp_nos;
@@ -2084,8 +2082,15 @@ sub queryDatabase {
 
         # get the higher order names associated with each genus name,
         #   then set the ecotaph values by running up the hierarchy
-        if (@ecoFields || $get_preservation) {
-            %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields,0,$get_preservation)};
+        if ( @ecoFields || $get_preservation ||
+            $q->param("occurrences_class_name") eq "YES" || 
+            $q->param("occurrences_order_name") eq "YES" || 
+            $q->param("occurrences_family_name") eq "YES" ||
+            $q->param('occurrences_extant') eq "YES" ) {
+            %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
+            if ( @ecoFields || $get_preservation )	{
+                %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields,0,$get_preservation)};
+            }
         }
     }
 
@@ -2266,8 +2271,6 @@ sub queryDatabase {
                         $species = "sp.";
                         $no = $genus_no{$row->{'o.taxon_no'}};
                     }
-print "$row->{'o.genus_name'} $row->{'o.species_name'} / $senior_genus_name{$row->{'o.taxon_no'}} = $genus $species<br>\n";
-                    #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{o.genus_name}/$row->{o.subgenus_name}/$row->{o.species_name}/$row->{o.subspecies_name} IS $genus/$subgenus/$species/$subspecies<br>";
                     if ( $q->param('indet') ne 'YES' && ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus/ )	{
                         next;
                     }
