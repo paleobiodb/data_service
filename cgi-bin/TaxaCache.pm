@@ -76,7 +76,7 @@ sub rebuildCache {
                 my $ancestor_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
                 # Get the topmost ancestor     
                 for(my $i=0;$i<100;$i++) { # max out at 100;
-                    my $opinion = TaxonInfo::getMostRecentClassification($dbt,$ancestor_no);
+                    my $opinion = TaxonInfo::getMostRecentClassification($dbt,$ancestor_no,{'recompute'=>'yes'});
                     if ($opinion && $opinion->{'parent_no'}) {
                         $ancestor_no=$opinion->{'parent_no'};
                     } else {
@@ -239,7 +239,7 @@ sub rebuildAddChild {
     my @children = ();
     foreach my $row (@results) {
         next if ($processed->{$row->{'child_no'}});
-        my $opinion = TaxonInfo::getMostRecentClassification($dbt,$row->{'child_no'});
+        my $opinion = TaxonInfo::getMostRecentClassification($dbt,$row->{'child_no'},{'recompute'=>'yes'});
         # Note there's no distinction between synonyms and belongs to - both just considered children
         if ($opinion && $all_hash{$opinion->{'parent_no'}}) {
             push @children,$row->{'child_no'};
@@ -249,7 +249,7 @@ sub rebuildAddChild {
         #  getMostRecentClassification, so add Y if is now placed in a
         #  spelling of the focal taxon_no JA 4.8.07
         elsif ( $opinion->{'status'} !~ /belongs|nomen/ && ! $processed->{$opinion->{'parent_no'}} )	{
-            my $parentopinion = TaxonInfo::getMostRecentClassification($dbt,$opinion->{'parent_no'});
+            my $parentopinion = TaxonInfo::getMostRecentClassification($dbt,$opinion->{'parent_no'},{'recompute'=>'yes'});
             if ($parentopinion && $all_hash{$parentopinion->{'parent_no'}}) {
                 push @children,$opinion->{'parent_no'};
             }
@@ -469,7 +469,7 @@ sub updateCache {
     $sql = "SELECT spelling_no parent_no FROM $TAXA_TREE_CACHE WHERE lft < $cache_row->{lft} AND rgt > $cache_row->{rgt} ORDER BY lft DESC LIMIT 1";
     # BUG: may be multiple parents, compare most recent spelling:
     my $row = ${$dbt->getData($sql)}[0];
-    my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$child_no);
+    my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$child_no,{'recompute'=>'yes'});
     my $new_parent_no = ($mrpo && $mrpo->{'parent_no'}) ? $mrpo->{'parent_no'} : 0;
     if ($new_parent_no) {
         # Compare most recent spellings of the names, for consistency
