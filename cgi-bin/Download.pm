@@ -2038,6 +2038,8 @@ sub queryDatabase {
     }
 
     my @taxon_nos = keys %all_taxa;
+    my %genus_no;
+    my %senior_genus_name;
 
     # Ecotaph/preservation/parent data
     my %master_class;
@@ -2051,25 +2053,32 @@ sub queryDatabase {
             $get_preservation = 1;
         }
          
-        if (@ecoFields || $get_preservation || $q->param('occurrences_extant') ||
+        if (@ecoFields || $get_preservation ||
+            $q->param("replace_with_ss") ne 'NO' ||
+            $q->param('occurrences_extant') ||
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES" ||
+            $q->param("occurrences_type_body_part") ||
+            $q->param("occurrences_type_specimen") ||
+            $q->param("occurrences_extant") ||
+            $q->param("occurrences_common_name") ||
             $q->param("occurrences_first_author") eq "YES" ||
             $q->param("occurrences_second_author") eq "YES" ||
             $q->param("occurrences_other_authors") eq "YES" ||
             $q->param("occurrences_year_named") eq "YES")	{
-            %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
+#            %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
+            %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'rank genus')};
         # will need the genus number for figuring out "extant"
+            my @temp_nos = @taxon_nos;
             for my $no ( @taxon_nos )	{
-                my @parents = @{$master_class{$no}};
-                foreach my $parent (@parents) {
-                    if ($parent->{'taxon_rank'} eq 'genus') {
-                        $all_genera{$parent->{'taxon_no'}} = 1;
-                        last;
-                    }
+                if ( $master_class{$no}->{'taxon_no'} )	{
+                    push @temp_nos , $master_class{$no}->{'taxon_no'};
+                    $genus_no{$no} = $master_class{$no}->{'taxon_no'};
+                    $senior_genus_name{$no} = $master_class{$no}->{'taxon_name'};
                 }
             }
+            @taxon_nos = @temp_nos;
         
         }
 
@@ -2106,16 +2115,7 @@ sub queryDatabase {
             # I.E. you say the type_body_part for Calippus ansae is a skull or something, and Astrohippus ansae will automatically
             # associate with that.
 
-            my @all_nos = keys %all_taxa;
-            my %parent_hash;
-            if ( $q->param('occurrences_species_name') ne "YES" )	{
-                %parent_hash = TaxaCache::getParentHash($dbt,\@all_nos,'genus');
-                push @all_nos , values %parent_hash;
-            } elsif ( %all_genera )	{
-                push @all_nos , keys %all_genera;
-            }
-
-            my $sql = "SELECT t1.taxon_no,a.taxon_rank,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2, authorities a,refs r WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(",",@all_nos).") AND t2.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
+            my $sql = "SELECT t1.taxon_no,a.taxon_rank,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2, authorities a,refs r WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(',',@taxon_nos).") AND t2.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
             foreach my $row (@{$dbt->getData($sql)}) {
                 $taxon_rank_lookup{$row->{'taxon_no'}} = $row->{'taxon_rank'};
                 if ( $row->{'a1i'} )	{
@@ -2139,16 +2139,16 @@ sub queryDatabase {
             #  name is irrelevant and the occurrence should inherit values for
             #  the genus name
             if ( $q->param('occurrences_species_name') ne "YES" )	{
-                for my $species_no ( keys %parent_hash )	{
-                    $taxon_rank_lookup{$species_no} = $taxon_rank_lookup{$parent_hash{$species_no}};
-                    $first_author_lookup{$species_no} = $first_author_lookup{$parent_hash{$species_no}};
-                    $second_author_lookup{$species_no} = $second_author_lookup{$parent_hash{$species_no}};
-                    $other_authors_lookup{$species_no} = $other_authors_lookup{$parent_hash{$species_no}};
-                    $year_named_lookup{$species_no} = $year_named_lookup{$parent_hash{$species_no}};
-                    $type_specimen_lookup{$species_no} = $type_specimen_lookup{$parent_hash{$species_no}};
-                    $body_part_lookup{$species_no} = $body_part_lookup{$parent_hash{$species_no}};
-                    $extant_lookup{$species_no} = $extant_lookup{$parent_hash{$species_no}};
-                    $common_name_lookup{$species_no} = $common_name_lookup{$parent_hash{$species_no}};
+                for my $species_no ( keys %genus_no )	{
+                    $taxon_rank_lookup{$species_no} = $taxon_rank_lookup{$genus_no{$species_no}};
+                    $first_author_lookup{$species_no} = $first_author_lookup{$genus_no{$species_no}};
+                    $second_author_lookup{$species_no} = $second_author_lookup{$genus_no{$species_no}};
+                    $other_authors_lookup{$species_no} = $other_authors_lookup{$genus_no{$species_no}};
+                    $year_named_lookup{$species_no} = $year_named_lookup{$genus_no{$species_no}};
+                    $type_specimen_lookup{$species_no} = $type_specimen_lookup{$genus_no{$species_no}};
+                    $body_part_lookup{$species_no} = $body_part_lookup{$genus_no{$species_no}};
+                    $extant_lookup{$species_no} = $extant_lookup{$genus_no{$species_no}};
+                    $common_name_lookup{$species_no} = $common_name_lookup{$genus_no{$species_no}};
                 }
             }
         }
@@ -2246,8 +2246,27 @@ sub queryDatabase {
             # this is ugly because the "original name" is actually a reID
             #  whenever a reID exists
             if ($replace_with_ss) {
-                if ($ss_taxon_nos{$row->{'o.taxon_no'}}) {
-                    my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
+                if ($ss_taxon_nos{$row->{'o.taxon_no'}} || ($row->{'o.genus_name'} ne $senior_genus_name{$row->{'o.taxon_no'}} && $senior_genus_name{$row->{'o.taxon_no'}}))	{
+                    my ($genus,$subgenus,$species,$subspecies);
+                    my $no = $ss_taxon_nos{$row->{'o.taxon_no'}};
+                    if ($ss_taxon_nos{$row->{'o.taxon_no'}})	{
+                        ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
+                        if ($genus ne $senior_genus_name{$no} && $senior_genus_name{$no})	{
+                          $genus = $senior_genus_name{$no};
+                          $subgenus = "";
+                          $species = "sp.";
+                          $subspecies = "";
+                          $no = $genus_no{$no};
+                        }
+            # weird case in which a species currently belongs to a genus that
+            #  is a synonym of another genus, so the species' status is unclear
+            #  and the only thing to do is use the senior name
+                    } else	{
+                        $genus = $senior_genus_name{$row->{'o.taxon_no'}};
+                        $species = "sp.";
+                        $no = $genus_no{$row->{'o.taxon_no'}};
+                    }
+print "$row->{'o.genus_name'} $row->{'o.species_name'} / $senior_genus_name{$row->{'o.taxon_no'}} = $genus $species<br>\n";
                     #print "$row->{occurrence_no}, SENIOR SYN FOR $row->{o.genus_name}/$row->{o.subgenus_name}/$row->{o.species_name}/$row->{o.subspecies_name} IS $genus/$subgenus/$species/$subspecies<br>";
                     if ( $q->param('indet') ne 'YES' && ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus/ )	{
                         next;
@@ -2265,13 +2284,19 @@ sub queryDatabase {
                         $row->{'o.subgenus_name'} = $subgenus;
                         $row->{'o.species_name'} = $species;
                         $row->{'o.subspecies_name'} = $subspecies;
-                    } elsif ( $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus/ )	{
+                    } elsif ( $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus|species/ )	{
                         $row->{'o.species_name'} = "sp.";
                     } else	{
                         $row->{'o.species_name'} = "indet.";
                     }
+                    $row->{'or.genus_reso'} = $row->{'o.genus_reso'};
+                    $row->{'or.subgenus_reso'} = $row->{'o.subgenus_reso'};
+                    $row->{'or.species_reso'} = $row->{'o.species_reso'};
+                    $row->{'o.genus_reso'} = "";
+                    $row->{'o.subgenus_reso'} = "";
+                    $row->{'o.species_reso'} = "";
                     $row->{'or.taxon_no'} = $row->{'o.taxon_no'};
-                    $row->{'o.taxon_no'} = $ss_taxon_nos{$row->{'o.taxon_no'}};
+                    $row->{'o.taxon_no'} = $no;
                 }
             }
             # raise subgenera to genus level JA 18.8.04
