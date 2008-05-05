@@ -284,11 +284,13 @@ sub htmlTaxaTree {
         }
     } 
 
-    my %disused = (); 
-    my %nomen = (); 
+    my %disused = ();
+# commented out everything related to nomens here because we now record
+#  parents for nomens, so nomenChildren is obsolete JA 5.5.08
+#    my %nomen = (); 
     unless ($reference_no || $SIMPLE) {
         %disused = %{TaxonInfo::disusedNames($dbt,\@check_is_disused)};
-        %nomen = %{TaxonInfo::nomenChildren($dbt,\@check_has_nomen)};
+#        %nomen = %{TaxonInfo::nomenChildren($dbt,\@check_has_nomen)};
     }
 
     # Tricky part: integrate in synonyms and nomen dubiums seamlessly into tree so they
@@ -310,11 +312,11 @@ sub htmlTaxaTree {
             }
             my @children = @{$node->{'children'}};
             
-            foreach (@{$nomen{$node->{'taxon_no'}}}) {
-                $_->{'status'} = getStatus($dbt,$_->{'taxon_no'},$reference_no);
-                $_->{'depth'} = $node->{'depth'} + 1;
-            }
-            push @children, @{$nomen{$node->{'taxon_no'}}};
+#            foreach (@{$nomen{$node->{'taxon_no'}}}) {
+#                $_->{'status'} = getStatus($dbt,$_->{'taxon_no'},$reference_no);
+#                $_->{'depth'} = $node->{'depth'} + 1;
+#            }
+#            push @children, @{$nomen{$node->{'taxon_no'}}};
 
             foreach (@{$node->{'synonyms'}}) {
                 $_->{'status'} = getStatus($dbt,$_->{'taxon_no'},$reference_no);
