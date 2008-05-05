@@ -990,10 +990,7 @@ sub submitOpinionForm {
 	if (!$fields{'spelling_reason'}) {
 		$errors->add("No option was selected in the \"Enter the reason why this spelling was used\" pulldown");
 	} 
-    
-	if ($q->param('status') ne 'belongs to' && $q->param('type_taxon')) {
-		$errors->add("A type taxon must be valid and must belong to something");
-	} 
+
 
     my @opinions_to_migrate1;
     my @opinions_to_migrate2;
