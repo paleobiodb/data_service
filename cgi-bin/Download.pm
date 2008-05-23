@@ -2115,30 +2115,37 @@ sub queryDatabase {
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         if (%all_taxa) {
 
-            # This SQL is nice in the fact that even if the type_body_part field has been filled in for a previous correction or recombination
-            # it'll still look that up and associate it with all other combinations automatically
-            # I.E. you say the type_body_part for Calippus ansae is a skull or something, and Astrohippus ansae will automatically
-            # associate with that.
-
-            my $sql = "SELECT t1.taxon_no,a.taxon_rank,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2, authorities a,refs r WHERE t1.spelling_no=t2.spelling_no AND t1.taxon_no IN (".join(',',@taxon_nos).") AND t2.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
+        # you need the data for all taxa with the same current spelling as any
+        #  taxon in the current data set, i.e., all variant combinations etc.
+        # previously done by joining taxa_tree_cache to itself in the call
+        #  below, but this is incredibly inefficient and two hits is faster
+        #  JA 22.5.08
+            my @spelling_nos = ();
+            my $sql = "SELECT DISTINCT spelling_no FROM taxa_tree_cache WHERE taxon_no IN (".join(',',@taxon_nos).")";
             foreach my $row (@{$dbt->getData($sql)}) {
-                $taxon_rank_lookup{$row->{'taxon_no'}} = $row->{'taxon_rank'};
+                push @spelling_nos, $row->{'spelling_no'};
+            }
+
+            my $sql = "SELECT t.taxon_no,a.taxon_rank,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t, authorities a, refs r WHERE t.spelling_no IN (".join(',',@spelling_nos).") AND t.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
+            foreach my $row (@{$dbt->getData($sql)}) {
+                my $no = $row->{'taxon_no'};
+                $taxon_rank_lookup{$no} = $row->{'taxon_rank'};
                 if ( $row->{'a1i'} )	{
-                    $first_author_lookup{$row->{'taxon_no'}} = $row->{'a1i'} . " " .$row->{'a1l'};
+                    $first_author_lookup{$no} = $row->{'a1i'} . " " .$row->{'a1l'};
                 } else	{
-                    $first_author_lookup{$row->{'taxon_no'}} = $row->{'a1l'};
+                    $first_author_lookup{$no} = $row->{'a1l'};
                 }
                 if ( $row->{'a2i'} )	{
-                    $second_author_lookup{$row->{'taxon_no'}} = $row->{'a2i'} . " " .$row->{'a2l'};
+                    $second_author_lookup{$no} = $row->{'a2i'} . " " .$row->{'a2l'};
                 } else	{
-                    $second_author_lookup{$row->{'taxon_no'}} = $row->{'a2l'};
+                    $second_author_lookup{$no} = $row->{'a2l'};
                 }
-                $other_authors_lookup{$row->{'taxon_no'}} = $row->{'others'};
-                $year_named_lookup{$row->{'taxon_no'}} = $row->{'pubyr'};
-                $type_specimen_lookup{$row->{'taxon_no'}} = $row->{'type_specimen'};
-                $body_part_lookup{$row->{'taxon_no'}} = $row->{'type_body_part'};
-                $extant_lookup{$row->{'taxon_no'}} = $row->{'extant'};
-                $common_name_lookup{$row->{'taxon_no'}} = $row->{'common_name'};
+                $other_authors_lookup{$no} = $row->{'others'};
+                $year_named_lookup{$no} = $row->{'pubyr'};
+                $type_specimen_lookup{$no} = $row->{'type_specimen'};
+                $body_part_lookup{$no} = $row->{'type_body_part'};
+                $extant_lookup{$no} = $row->{'extant'};
+                $common_name_lookup{$no} = $row->{'common_name'};
             }
             # if the user does not want species names, the occurrence species
             #  name is irrelevant and the occurrence should inherit values for
