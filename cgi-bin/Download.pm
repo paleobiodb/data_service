@@ -1242,7 +1242,7 @@ sub getCollMethString {
     my $sql2 = "";
     # bulk + sieve excluded
     if ( $q->param('coll_meth_hard') eq 'YES' )	{
-        $sql = "(coll_meth NOT LIKE '%sieve%' OR coll_meth LIKE '%chemical%' OR coll_meth LIKE '%mechanical%')";
+        $sql = "(coll_meth IS NULL OR coll_meth NOT LIKE '%sieve%' OR coll_meth LIKE '%chemical%' OR coll_meth LIKE '%mechanical%')";
     }
     return $sql;
 
