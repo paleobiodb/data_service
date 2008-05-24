@@ -277,6 +277,11 @@ $html .= $self->retellOptionsGroup('Onshore-offshore zones:','zone_',\@zone_grou
     my @pres_mode_group= ('cast','adpression','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
     $html .= $self->retellOptionsGroup('Preservation modes:','pres_mode_',\@pres_mode_group);
 
+    # Collection methods
+    if ( $q->param('coll_meth_hard') eq 'YES' )	{
+        $html .= $self->retellOptionsRow('Collection methods:','no easy sieving');
+    }
+
     # Collection types
     my @collection_types_group = ('archaeological','biostratigraphic','paleoecologic','taphonomic','taxonomic','general_faunal/floral','unknown');
     $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type_',\@collection_types_group);
@@ -1227,6 +1232,22 @@ sub getPreservationModeString {
 
 }
 
+# JA 23.5.08
+sub getCollMethString {
+    my $self = shift;
+    my $q = $self->{'q'};
+    my $dbh = $self->{'dbh'};
+
+    my $sql = "";
+    my $sql2 = "";
+    # bulk + sieve excluded
+    if ( $q->param('coll_meth_hard') eq 'YES' )	{
+        $sql = "(coll_meth NOT LIKE '%sieve%' OR coll_meth LIKE '%chemical%' OR coll_meth LIKE '%mechanical%')";
+    }
+    return $sql;
+
+}
+
 sub getCollectionTypeString{
     my $self = shift;
     my $q = $self->{'q'};
@@ -1460,6 +1481,7 @@ sub getCollectionsWhereClause {
         $self->getStratscaleString(),
         $self->getCollectionTypeString(),
         $self->getPreservationModeString(),
+        $self->getCollMethString(),
         $self->getSubsetString()) {
         push @where,$whereItem if ($whereItem);
     }
