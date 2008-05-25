@@ -1,4 +1,4 @@
-<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                   
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
@@ -177,7 +177,7 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 <tr%%row_class_1a%%>
 <td valign=top class="small">... or if you want to get counts of occurrences and genera by temporal bin, select a time scale:</td>
 <td valign=top class="small">
-<select name="time_scale"></select>                                                                                                                         
+<select name="time_scale"></select>
 </td></tr>
 
 <tr%%row_class_1b%%>
@@ -200,6 +200,17 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 <option value="temporal_resolution">temporal resolution
 <option value="spatial_resolution">spatial resolution
 <option value="collection_type">collection purpose
+</select>
+</td></tr>
+
+<tr%%row_class_1a%%>
+<td valign=top class="small">
+Include late Pleistocene and undifferentiated Pleistocene collections in the late Neogene 10 m.y. bin?
+</td>
+<td valign=top class="small">
+<select name="late_pleistocene">
+<option>yes, include them
+<option>no, exclude them
 </select>
 </td></tr>
 
@@ -446,7 +457,7 @@ and
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_coalified' value="YES" checked>coalified</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_other' value="YES" checked>unknown preservation</span>
 <span style="white-space: nowrap"><input type=checkbox name='coll_meth_hard' value="YES">no easy sieving</span><br>
-<span class="small">"easy" means sieve but not chemical or mechanical</span>
+<span class="small">"easy" means sieved and unlithified or poorly lithified</span>
 </td></tr>
 
 <tr>
