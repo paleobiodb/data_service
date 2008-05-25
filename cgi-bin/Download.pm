@@ -250,6 +250,10 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Youngest interval", $q->param("min_eml_interval") . " " .$q->param("min_interval_name") );
     }
 
+    if ( $q->param('late_pleistocene') =~ /no/i ) {
+        $html .= $self->retellOptionsRow ( "Late Neogene bin excludes", "Late Pleistocene/undifferentiated Pleistocene" );
+    }
+
     my @lithification_group = ('lithified','poorly_lithified','unlithified','unknown');
     $html .= $self->retellOptionsGroup('Lithification','lithification_',\@lithification_group);
    
@@ -2211,7 +2215,7 @@ sub queryDatabase {
             my $max_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
             my $min_lookup = ($row->{'c.min_interval_no'}) ? $time_lookup->{$row->{'c.min_interval_no'}} : $max_lookup;
             
-            if ($max_lookup->{'ten_my_bin'} && $max_lookup->{'ten_my_bin'} eq $min_lookup->{'ten_my_bin'}) {
+            if ($max_lookup->{'ten_my_bin'} && $max_lookup->{'ten_my_bin'} eq $min_lookup->{'ten_my_bin'} && ($q->param('late_pleistocene') !~ /no/i || ($row->{'c.max_interval_no'} != 33 && $row->{'c.max_interval_no'} != 922))) {
                 $row->{'c.10mybin'} = $max_lookup->{'ten_my_bin'};
             }
             
