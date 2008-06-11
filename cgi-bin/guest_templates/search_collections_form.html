@@ -203,8 +203,17 @@ function checkForm ( ) {
 
       <div show="type=most_common">
         <tr>
+          <td nowrap>Taxonomic rank:
+            <select name="rank" class="small">
+              <option>class</option>
+              <option>order</option>
+              <option>family</option>
+              <option selected>genus</option>
+              <option>species</option>
+            </select>
+          </td>
           <td nowrap style="padding-left: 2em;">
-            Number of genera listed: <input name="rows" size="10" value="30" class="small">
+            Number of taxa to list: <input name="rows" size="10" value="30" class="small">
           </td>
         </tr>
       </div>
