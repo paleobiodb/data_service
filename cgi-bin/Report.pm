@@ -10,7 +10,8 @@ use PBDBUtil;
 use TimeLookup;
 use Data::Dumper;
 use Debug qw(dbg);
-use Constants qw($HOST_URL $DATA_DIR $HTML_DIR);
+use Constants qw($READ_URL $WRITE_URL $HOST_URL $IS_FOSSIL_RECORD $DATA_DIR $HTML_DIR $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
+
 use strict;
 
 sub new {
@@ -906,62 +907,125 @@ sub findMostCommonTaxa	{
 	my @dataRows = @{$dataRowsRef};
 	my @collection_nos = map {$_->{'collection_no'}} @dataRows;
 
-	print "<center><p class=\"pageTitle\">Thirty most common genera</p></center>\n";
+	print "<center><p class=\"pageTitle\">Most common genera in these collections</p></center>\n\n";
 
+	my $sql = "SELECT genus_name,taxon_no,occurrence_no FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
+	my $sql2 = "SELECT genus_name,taxon_no,occurrence_no FROM reidentifications WHERE most_recent='YES' AND taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
+	# WARNING: will fail if there are homonyms
+	if ( $q->param('taxon_name') )	{
+		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."'";
+		my $row = ${$dbt->getData($sql)}[0];
+		$sql = "SELECT t.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>=".$row->{'lft'}." AND rgt<=".$row->{'rgt'};
+		my @rows = @{$dbt->getData($sql)};
+		my $taxon_list;
+		for my $r ( @rows )	{
+			$taxon_list .= "," . $r->{'taxon_no'};
+		}
+		$taxon_list =~ s/^,//;
+		$sql = "SELECT genus_name,taxon_no,occurrence_no FROM occurrences WHERE taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
+		$sql2 = "SELECT genus_name,taxon_no,occurrence_no FROM reidentifications WHERE most_recent='YES' AND taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
+	}
  
-
-	my $sql = "SELECT genus_name FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
 	my @rows = @{$dbt->getData($sql)};
+	my @rows2 = @{$dbt->getData($sql2)};
 
-	# we count here instead of grouping because it's incredibly slow
-
-	my %count;
+	my %hasno;
+	my %seen;
+	for my $r ( @rows2 )	{
+		$hasno{$r->{'taxon_no'}}++;
+		$seen{$r->{'occurrence_no'}}++;
+	}
 	for my $r ( @rows )	{
-		$count{$r->{'genus_name'}}++;
+		if ( ! $seen{$r->{'occurrence_no'}} )	{
+			$hasno{$r->{'taxon_no'}}++;
+		}
 	}
+	%seen = ();
 
-	my @taxa = keys %count;
-	@taxa = sort { $count{$b} <=> $count{$a} } @taxa;
+	my @nos = keys %hasno;
+	%hasno = ();
 
-	my @common;
-	for my $i ( 0..99 )	{
-		push @common , $taxa[$i];
-	}
-
-	$sql = "SELECT a.taxon_rank child_rank,a.taxon_name child,a2.taxon_rank parent_rank,a2.taxon_name parent FROM authorities a,authorities a2,taxa_list_cache t WHERE a.taxon_name IN ('". join("','",@common) . "') AND a.taxon_no=t.child_no AND t.parent_no=a2.taxon_no AND a2.taxon_rank IN ('class','order','family')";
-	my @rows = @{$dbt->getData($sql)};
+	# get the name and rank of each taxon's synonym
+	$sql = "SELECT t.taxon_no,taxon_rank,taxon_name,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=synonym_no AND t.taxon_no IN (". join(',',@nos) .")";
+	my @norows = @{$dbt->getData($sql)};
 
 	my %parent;
-	for my $r ( @rows )	{
-		if ( $r->{'child_rank'} eq "genus" )	{
-			$parent{$r->{'child'}}{$r->{'parent_rank'}} = $r->{'parent'};
+	my %genus_no;
+	for my $r ( @norows )	{
+		if ( $r->{'taxon_rank'} eq "genus" )	{
+			$parent{$r->{'taxon_no'}}{'genus'} = $r->{'taxon_name'};
+			$genus_no{$r->{'taxon_name'}} = $r->{'taxon_no'};
 		}
 	}
 
-	print "<div class=\"displayPanel\" style=\"width: 44em; margin-left: 4em;\">\n";
-	print "<div class=\"displayPanelContent\">\n";
-	printf "<p class=\"medium\" style=\"padding-left: 1em;\">Total number of collections: %d</p>\n",$#dataRows+1;
-	print "<table class=\"small\" style=\"margin-left: 1em; margin-bottom: 1em;\">\n";
-	print "<tr><td style=\"font-size: 1.15em;\">class</td><td style=\"font-size: 1.15em;\">order</td><td style=\"font-size: 1.15em;\">family</td><td style=\"font-size: 1.15em;\">genus</td><td style=\"font-size: 1.15em;\">count</td></tr>\n";
-	my $printed = 0;
-	for my $g ( @common )	{
-		if ( $parent{$g}{'class'} || $parent{$g}{'order'} || $parent{$g}{'family'} )	{
-			print "<tr>\n";
-			for my $rank ( 'class','order','family' )	{
-				print "<td style=\"padding-right: 2em;\">$parent{$g}{$rank}</td>\n";
-			}
-			print "<td><i>$g</i></td>\n";
-			print "<td>&nbsp;&nbsp;$count{$g}</td>\n";
-			print "</tr>\n";
-			$printed++;
+	@norows = ();
+
+	$sql = "SELECT child_no,taxon_rank parent_rank,taxon_name parent FROM authorities a,$TAXA_TREE_CACHE t,$TAXA_LIST_CACHE l WHERE child_no IN (". join(',',@nos) . ") AND parent_no=a.taxon_no AND a.taxon_rank IN ('class','order','family','genus') AND a.taxon_no=t.taxon_no ORDER BY lft";
+	my @parentrows = @{$dbt->getData($sql)};
+
+	for my $r ( @parentrows )	{
+		$parent{$r->{'child_no'}}{$r->{'parent_rank'}} = $r->{'parent'};
+		if ( $r->{'parent_rank'} eq "genus" )	{
+			$genus_no{$r->{'parent'}} = $r->{'child_no'};
 		}
-		if ( $printed == 30 )	{
+	}
+	@parentrows = ();
+
+	my %count;
+	for my $r ( @rows2 )	{
+		if ( $parent{$r->{'taxon_no'}}{'genus'} )	{
+			$count{$parent{$r->{'taxon_no'}}{'genus'}}++;
+			$seen{$r->{'occurrence_no'}}++;
+		}
+	}
+	for my $r ( @rows )	{
+		if ( $parent{$r->{'taxon_no'}}{'genus'} && ! $seen{$r->{'occurrence_no'}} )	{
+			$count{$parent{$r->{'taxon_no'}}{'genus'}}++;
+		}
+	}
+	%seen = ();
+
+	my @genera = keys %count;
+	@genera = sort { $count{$b} <=> $count{$a} } @genera;
+
+	print "<div class=\"displayPanel\" style=\"width: 50em; margin-left: 1em;\">\n";
+	print "<div class=\"displayPanelContent\">\n";
+	print "<table class=\"small\" style=\"margin-left: 1em; margin-top: 1em; margin-bottom: 1em;\">\n";
+	print "<tr align=\"center\"><td style=\"font-size: 1.15em;\">rank</td><td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">class</td><td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">order</td><td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">family</td><td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">genus</td><td style=\"font-size: 1.15em;\">count</td><td style=\"font-size: 1.15em;\">&nbsp;%</td></tr>\n";
+	my $sum = 0;
+	for my $g ( @genera )	{
+		my $n = $genus_no{$g};
+		if ( $parent{$n}{'class'} || $parent{$n}{'order'} ||  $parent{$n}{'family'} )	{
+			$sum += $count{$g};
+		}
+	}
+	my $printed = 0;
+	for my $g ( @genera )	{
+		my $n = $genus_no{$g};
+		if ( $parent{$n}{'class'} || $parent{$n}{'order'} ||  $parent{$n}{'family'} )	{
+			$printed++;
+			my $class = "";
+			if ( $printed % 2 == 1 )	{
+				$class = qq|class="darkList"|;
+			}
+			print "<tr $class>\n";
+			print "<td align=\"center\" style=\"padding-left: 1em; padding-right: 1em;\">&nbsp;$printed</td>\n";
+			for my $rank ( 'class','order','family' )	{
+				print "<td style=\"font-size: 0.9em; padding-left: 1em; padding-right: 1em;\">$parent{$n}{$rank}</td>\n";
+			}
+			print qq|<td style=\"padding-left: 1em; padding-right: 1em;\"><i><a href="$READ_URL?action=checkTaxonInfo&amp;taxon_name=$g&amp;is_real_user=1">$g</a></i></td>|;
+			print "\n<td align=\"center\" style=\"padding-left: 1em; padding-right: 1em;\">&nbsp;&nbsp;$count{$g}</td>\n";
+			printf "<td align=\"center\" style=\"padding-left: 1em; padding-right: 1em;\">%.1f</td>\n",$count{$g}/$sum*100;
+			print "</tr>\n";
+		}
+		if ( $printed == $q->param('rows') )	{
 			last;
 		}
 	}
-	print "</table>\n";
+	print "</table>\n\n";
 	print "</div>\n";
 	print "</div>\n";
+	print "<center><p class=\"large\">Total number of occurrences: $sum</p></center>\n";
 
 }
 
