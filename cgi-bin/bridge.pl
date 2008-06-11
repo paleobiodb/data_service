@@ -728,14 +728,28 @@ sub displayReportForm {
 }
 
 sub displayReportResults {
-    require Report;
+	require Report;
 
-    logRequest($s,$q);
+	logRequest($s,$q);
 
 	print $hbo->stdIncludes( "std_page_top" );
 
 	my $r = Report->new($dbt,$q,$s);
 	$r->buildReport();
+
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub displayMostCommonTaxa	{
+	my $dataRowsRef = shift;
+	require Report;
+
+	logRequest($s,$q);
+
+	print $hbo->stdIncludes( "std_page_top" );
+
+	my $r = Report->new($dbt,$q,$s);
+	$r->findMostCommonTaxa($dataRowsRef);
 
 	print $hbo->stdIncludes("std_page_bottom");
 }
@@ -896,7 +910,7 @@ sub displaySearchColls {
 
 	# Have to have a reference #, unless we are just searching
 	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no && $type !~ /^(?:analyze_abundance|view|edit|reclassify_occurrence|count_occurrences)$/) {
+	if ( ! $reference_no && $type !~ /^(?:analyze_abundance|view|edit|reclassify_occurrence|count_occurrences|most_common)$/) {
 		# Come back here... requeue our option
 		$s->enqueue("action=displaySearchColls&type=$type" );
 		displaySearchRefs( "Please choose a reference first" );
@@ -912,16 +926,16 @@ sub displaySearchColls {
     $vars{'submit'} = "Search collections";
     $vars{'error'} = $error;
 
-    if ($type eq 'occurrence_table') {
-        $vars{'reference_no'} = $reference_no;
-        $vars{'limit'} = 20;
-    }
+	if ($type eq 'occurrence_table') {
+		$vars{'reference_no'} = $reference_no;
+		$vars{'limit'} = 20;
+	}
 
 	# Spit out the HTML
 	print $hbo->stdIncludes( "std_page_top" );
-    print Person::makeAuthEntJavascript($dbt);
-    print PBDBUtil::printIntervalsJava($dbt,1);
-    print $hbo->populateHTML('search_collections_form', \%vars);
+	print Person::makeAuthEntJavascript($dbt);
+	print PBDBUtil::printIntervalsJava($dbt,1);
+	print $hbo->populateHTML('search_collections_form', \%vars);
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -945,7 +959,7 @@ sub displayCollResults {
 #		$perm_limit = 1000000;
 		$perm_limit = $limit + $rowOffset;
 	} else {
-		if ($q->param("type") =~ /occurrence_table|count_occurrences/ ||
+		if ($q->param("type") =~ /occurrence_table|count_occurrences|most_common/ ||
             $q->param('taxon_name') && ($q->param('type') eq "reid" ||
                                         $q->param('type') eq "reclassify_occurrence")) {
             # We're passing the collection_nos directly to the functions, so pass all of them                                            
@@ -974,6 +988,7 @@ sub displayCollResults {
         : ($type eq "analyze_abundance") ? "rarefyAbundances"
         : ($type eq "reid") ? "displayOccsForReID"
         : ($type eq "reclassify_occurrence") ?  "startDisplayOccurrenceReclassify"
+        : ($type eq "most_common") ? "displayMostCommonTaxa"
         : "displayCollectionDetails";
 	
 	# Build the SQL
@@ -1022,6 +1037,9 @@ sub displayCollResults {
 		exit;
 	} elsif ( $type eq 'count_occurrences' && @dataRows) {
 		Collection::countOccurrences($dbt,$hbo,\@dataRows,$occRows);
+		exit;
+	} elsif ( $type eq 'most_common' && @dataRows) {
+		displayMostCommonTaxa(\@dataRows);
 		exit;
 	} elsif ( $displayRows > 1  || ($displayRows == 1 && $type eq "add")) {
 		# go right to the chase with ReIDs if a taxon_rank was specified
