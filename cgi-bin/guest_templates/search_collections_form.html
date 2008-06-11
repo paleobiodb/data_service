@@ -140,7 +140,6 @@ function checkForm ( ) {
 </div>
 
 
-<div hide="type=most_common">
 <div class="displayPanel" align=left>
   <span class="displayPanelHeader">Search and display options</span>
   <div class="displayPanelContent small">
@@ -170,6 +169,7 @@ function checkForm ( ) {
         </tr>
       </div>
       <div hide="type=occurrence_table">
+      <div hide="type=most_common">
       <div show="action=displayCollResults">
         <tr valign=top>
           <td nowrap>Sort by:
@@ -187,6 +187,7 @@ function checkForm ( ) {
         </tr>
       </div>
       </div>
+      </div>
 
       <div show="action=displaySearchSectionResults">
         <tr>
@@ -199,10 +200,17 @@ function checkForm ( ) {
           </td>
         </tr>
       </div>
+
+      <div show="type=most_common">
+        <tr>
+          <td nowrap style="padding-left: 2em;">
+            Number of genera listed: <input name="rows" size="10" value="30" class="small">
+          </td>
+        </tr>
+      </div>
     </table>
 
   </div>
-</div>
 </div>
 
 <p><input type="submit" name="submit"></p>
