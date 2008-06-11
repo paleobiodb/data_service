@@ -907,10 +907,27 @@ sub findMostCommonTaxa	{
 	my @dataRows = @{$dataRowsRef};
 	my @collection_nos = map {$_->{'collection_no'}} @dataRows;
 
-	print "<center><p class=\"pageTitle\">Most common genera in these collections</p></center>\n\n";
+	my $atrank = $q->param('rank');
+	my $plural;
+	if ( $atrank eq "class" )	{
+		$plural = "classes";
+	} elsif ( $atrank eq "order" )	{
+		$plural = "orders";
+	} elsif ( $atrank eq "family" )	{
+		$plural = "families";
+	} elsif ( $atrank eq "genus" )	{
+		$plural = "genera";
+	} elsif ( $atrank eq "species" )	{
+		$plural = "species";
+	}
+	print "<center><p class=\"pageTitle\">Most common $plural in these collections</p></center>\n\n";
 
-	my $sql = "SELECT genus_name,taxon_no,occurrence_no FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
-	my $sql2 = "SELECT genus_name,taxon_no,occurrence_no FROM reidentifications WHERE most_recent='YES' AND taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
+	my $names;
+	if ( $atrank eq "species" )	{
+		$names = "genus_name,species_name,";
+	}
+	my $sql = "SELECT $names taxon_no,occurrence_no FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
+	my $sql2 = "SELECT $names taxon_no,occurrence_no FROM reidentifications WHERE most_recent='YES' AND taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
 	# WARNING: will fail if there are homonyms
 	if ( $q->param('taxon_name') )	{
 		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."'";
@@ -922,8 +939,8 @@ sub findMostCommonTaxa	{
 			$taxon_list .= "," . $r->{'taxon_no'};
 		}
 		$taxon_list =~ s/^,//;
-		$sql = "SELECT genus_name,taxon_no,occurrence_no FROM occurrences WHERE taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
-		$sql2 = "SELECT genus_name,taxon_no,occurrence_no FROM reidentifications WHERE most_recent='YES' AND taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
+		$sql = "SELECT $names taxon_no,occurrence_no FROM occurrences WHERE taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
+		$sql2 = "SELECT $names taxon_no,occurrence_no FROM reidentifications WHERE most_recent='YES' AND taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
 	}
  
 	my @rows = @{$dbt->getData($sql)};
@@ -945,63 +962,108 @@ sub findMostCommonTaxa	{
 	my @nos = keys %hasno;
 	%hasno = ();
 
-	# get the name and rank of each taxon's synonym
+	# get the name and rank of each taxon's synonym or (if valid)
+	#  current spelling
 	$sql = "SELECT t.taxon_no,taxon_rank,taxon_name,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=synonym_no AND t.taxon_no IN (". join(',',@nos) .")";
 	my @norows = @{$dbt->getData($sql)};
 
-	my %parent;
-	my %genus_no;
+	my %synonym;
 	for my $r ( @norows )	{
-		if ( $r->{'taxon_rank'} eq "genus" )	{
-			$parent{$r->{'taxon_no'}}{'genus'} = $r->{'taxon_name'};
-			$genus_no{$r->{'taxon_name'}} = $r->{'taxon_no'};
-		}
+		$synonym{$r->{'taxon_no'}} = $r->{'synonym_no'};
 	}
 
-	@norows = ();
-
-	$sql = "SELECT child_no,taxon_rank parent_rank,taxon_name parent FROM authorities a,$TAXA_TREE_CACHE t,$TAXA_LIST_CACHE l WHERE child_no IN (". join(',',@nos) . ") AND parent_no=a.taxon_no AND a.taxon_rank IN ('class','order','family','genus') AND a.taxon_no=t.taxon_no ORDER BY lft";
+	# get parents at higher ranks
+	my @ranks = "class";
+	if ( $atrank =~ /order|family|genus|species/ )	{
+		push @ranks , "order";
+	}
+	if ( $atrank =~ /family|genus|species/ )	{
+		push @ranks , "family";
+	}
+	if ( $atrank =~ /genus|species/ )	{
+		push @ranks , "genus";
+	}
+	if ( $atrank =~ /species/ )	{
+		push @ranks , "species";
+	}
+	$sql = "SELECT child_no,taxon_rank parent_rank,taxon_name parent FROM authorities a,$TAXA_TREE_CACHE t,$TAXA_LIST_CACHE l WHERE child_no IN (". join(',',@nos) . ") AND parent_no=a.taxon_no AND a.taxon_rank IN ('". join("','",@ranks) ."') AND a.taxon_no=t.taxon_no ORDER BY lft";
 	my @parentrows = @{$dbt->getData($sql)};
 
+	my %parent;
 	for my $r ( @parentrows )	{
 		$parent{$r->{'child_no'}}{$r->{'parent_rank'}} = $r->{'parent'};
-		if ( $r->{'parent_rank'} eq "genus" )	{
-			$genus_no{$r->{'parent'}} = $r->{'child_no'};
-		}
 	}
 	@parentrows = ();
 
-	my %count;
-	for my $r ( @rows2 )	{
-		if ( $parent{$r->{'taxon_no'}}{'genus'} )	{
-			$count{$parent{$r->{'taxon_no'}}{'genus'}}++;
-			$seen{$r->{'occurrence_no'}}++;
+	for my $r ( @norows )	{
+		if ( $r->{'taxon_rank'} eq $atrank )	{
+			$parent{$r->{'synonym_no'}}{$atrank} = $r->{'taxon_name'};
+		} elsif ( $atrank eq "species" && $r->{'taxon_rank'} eq "genus" )	{
+			$parent{$r->{'synonym_no'}}{$atrank} = $r->{'taxon_name'};
 		}
 	}
+	@norows = ();
+
+	# count occurrences
+	my %count;
+	my %child_no;
+	for my $r ( @rows2 )	{
+		my $name = $parent{$synonym{$r->{'taxon_no'}}}{$atrank};
+		if ( $atrank eq "species" && $r->{'species_name'} =~ /^[a-z]*$/ && $name !~ / / )	{
+			$name = '"'.$name." ".$r->{'species_name'}.'"';
+		}
+		if ( ( $atrank ne "species" && $name =~ /^[A-Z][a-z]*$/ ) || ( $atrank eq "species" && $name =~ /[A-Z][a-z]* [a-z]*/ ) )	{
+			$count{$name}++;
+			$child_no{$name} = $synonym{$r->{'taxon_no'}};
+		}
+		$seen{$r->{'occurrence_no'}}++;
+	}
 	for my $r ( @rows )	{
-		if ( $parent{$r->{'taxon_no'}}{'genus'} && ! $seen{$r->{'occurrence_no'}} )	{
-			$count{$parent{$r->{'taxon_no'}}{'genus'}}++;
+		if ( ! $seen{$r->{'occurrence_no'}} )	{
+			my $name = $parent{$synonym{$r->{'taxon_no'}}}{$atrank};
+			if ( $atrank eq "species" && $r->{'species_name'} =~ /^[a-z]*$/ && $name !~ / / )	{
+				$name = '"'.$name." ".$r->{'species_name'}.'"';
+			}
+			if ( ( $atrank ne "species" && $name =~ /^[A-Z][a-z]*$/ ) || ( $atrank eq "species" && $name =~ /[A-Z][a-z]* [a-z]*/ ) )	{
+				$count{$name}++;
+				$child_no{$name} = $synonym{$r->{'taxon_no'}};
+			}
 		}
 	}
 	%seen = ();
 
-	my @genera = keys %count;
-	@genera = sort { $count{$b} <=> $count{$a} } @genera;
+	my @taxa = keys %count;
+	@taxa = sort { $count{$b} <=> $count{$a} } @taxa;
 
 	print "<div class=\"displayPanel\" style=\"width: 50em; margin-left: 1em;\">\n";
 	print "<div class=\"displayPanelContent\">\n";
 	print "<table class=\"small\" style=\"margin-left: 1em; margin-top: 1em; margin-bottom: 1em;\">\n";
-	print "<tr align=\"center\"><td style=\"font-size: 1.15em;\">rank</td><td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">class</td><td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">order</td><td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">family</td><td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">genus</td><td style=\"font-size: 1.15em;\">count</td><td style=\"font-size: 1.15em;\">&nbsp;%</td></tr>\n";
+	print "<tr align=\"center\"><td style=\"font-size: 1.15em;\">rank</td>";
+	print "<td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">class</td>";
+	if ( $atrank =~ /family|genus|species/ )	{
+		print "<td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">order</td>";
+	}
+	if ( $atrank =~ /genus|species/ )	{
+		print "<td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">family</td>";
+	}
+	print "<td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">$atrank</td>";
+	print "<td style=\"font-size: 1.15em;\">count</td>";
+	print "<td style=\"font-size: 1.15em;\">&nbsp;%</td></tr>\n";
 	my $sum = 0;
-	for my $g ( @genera )	{
-		my $n = $genus_no{$g};
+	for my $t ( @taxa )	{
+		my $n = $child_no{$t};
 		if ( $parent{$n}{'class'} || $parent{$n}{'order'} ||  $parent{$n}{'family'} )	{
-			$sum += $count{$g};
+			$sum += $count{$t};
 		}
 	}
 	my $printed = 0;
-	for my $g ( @genera )	{
-		my $n = $genus_no{$g};
+	if ( $atrank eq "species" )	{
+		pop @ranks;
+	}
+	pop @ranks;
+	my $quoted;
+	for my $t ( @taxa )	{
+		my $n = $child_no{$t};
 		if ( $parent{$n}{'class'} || $parent{$n}{'order'} ||  $parent{$n}{'family'} )	{
 			$printed++;
 			my $class = "";
@@ -1010,12 +1072,21 @@ sub findMostCommonTaxa	{
 			}
 			print "<tr $class>\n";
 			print "<td align=\"center\" style=\"padding-left: 1em; padding-right: 1em;\">&nbsp;$printed</td>\n";
-			for my $rank ( 'class','order','family' )	{
+			for my $rank ( @ranks )	{
 				print "<td style=\"font-size: 0.9em; padding-left: 1em; padding-right: 1em;\">$parent{$n}{$rank}</td>\n";
 			}
-			print qq|<td style=\"padding-left: 1em; padding-right: 1em;\"><i><a href="$READ_URL?action=checkTaxonInfo&amp;taxon_name=$g&amp;is_real_user=1">$g</a></i></td>|;
-			print "\n<td align=\"center\" style=\"padding-left: 1em; padding-right: 1em;\">&nbsp;&nbsp;$count{$g}</td>\n";
-			printf "<td align=\"center\" style=\"padding-left: 1em; padding-right: 1em;\">%.1f</td>\n",$count{$g}/$sum*100;
+			my $linkname = $t;
+			if ( $t =~ /"/ )	{
+				$linkname =~ s/"//g;
+				$quoted++;
+			}
+			my $displayname = $t;
+			if ( $atrank =~ /genus|species/ )	{
+				$displayname = "<i>" . $t . "</i>";
+			}
+			print qq|<td style=\"padding-left: 1em; padding-right: 1em;\"><a href="$READ_URL?action=checkTaxonInfo&amp;taxon_name=$linkname&amp;is_real_user=1">$displayname</a></td>|;
+			print "\n<td align=\"center\" style=\"padding-left: 1em; padding-right: 1em;\">&nbsp;&nbsp;$count{$t}</td>\n";
+			printf "<td align=\"center\" style=\"padding-left: 1em; padding-right: 1em;\">%.1f</td>\n",$count{$t}/$sum*100;
 			print "</tr>\n";
 		}
 		if ( $printed == $q->param('rows') )	{
@@ -1025,7 +1096,10 @@ sub findMostCommonTaxa	{
 	print "</table>\n\n";
 	print "</div>\n";
 	print "</div>\n";
-	print "<center><p class=\"large\">Total number of occurrences: $sum</p></center>\n";
+	printf "<center><p class=\"large\">There are $sum occurrences of %d $plural overall.</p></center>\n",$#taxa+1;
+	if ( $quoted > 0 )	{
+		print "<center><p class=\"small\">We have no formal taxonomic data for names in quotes, so they may be invalid.</p></center>\n";
+	}
 
 }
 
