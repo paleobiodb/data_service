@@ -3,6 +3,8 @@
 
 package Report;
 
+use Class::Date qw(date localdate gmdate now);
+
 use Text::CSV_XS;
 use PBDBUtil;
 use TimeLookup;
@@ -12,7 +14,7 @@ use Constants qw($HOST_URL $DATA_DIR $HTML_DIR);
 use strict;
 
 sub new {
-    my ($class,$dbt,$q,$s) = @_;
+	my ($class,$dbt,$q,$s) = @_;
 	my $self = {dbt=>$dbt,q=>$q,s=>$s};
 	bless $self, $class;
 }
@@ -164,6 +166,8 @@ sub reportDisplayHTML {
 	print qq|<p>The report data have been saved as "<a href="$HOST_URL/public/reports/$reportFileName">$reportFileName</a>"</p>|;
     print "</center>\n";
     print "<p>&nbsp;</p>";
+my $date = now();
+print "GOT HTML $date ";
 }
 
 ##
@@ -603,6 +607,8 @@ sub reportBuildDataTables {
             }
         }    
     } 
+my $date = now();
+print "GOT TABLE $date ";
     #    print "<pre>".Dumper($self->{'dataTable'}) . "</pre>";
 }
 
@@ -740,11 +746,15 @@ sub reportQueryDB{
     }
     $sql .= " GROUP BY ".$groupSQL;
 
+my $date = now();
+print "$date ";
     if ($groupSQL) {
         dbg("SQL:".$sql);
        
         my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
         $sth->execute() || die "Execute query failed\n";
+$date = now();
+print "GOT DATA $date ";
         return $sth;
     } else {
         return undef;
@@ -881,6 +891,78 @@ sub htmlError {
 
     print $message;
     exit 1;
+}
+
+
+# JA 10.6.08
+# stuck this module here for lack of any better ideas
+sub findMostCommonTaxa	{
+
+	my $self = shift;
+	my $dataRowsRef = shift;
+	my $q = $self->{q};
+	my $dbt = $self->{dbt};
+
+	my @dataRows = @{$dataRowsRef};
+	my @collection_nos = map {$_->{'collection_no'}} @dataRows;
+
+	print "<center><p class=\"pageTitle\">Thirty most common genera</p></center>\n";
+
+ 
+
+	my $sql = "SELECT genus_name FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
+	my @rows = @{$dbt->getData($sql)};
+
+	# we count here instead of grouping because it's incredibly slow
+
+	my %count;
+	for my $r ( @rows )	{
+		$count{$r->{'genus_name'}}++;
+	}
+
+	my @taxa = keys %count;
+	@taxa = sort { $count{$b} <=> $count{$a} } @taxa;
+
+	my @common;
+	for my $i ( 0..99 )	{
+		push @common , $taxa[$i];
+	}
+
+	$sql = "SELECT a.taxon_rank child_rank,a.taxon_name child,a2.taxon_rank parent_rank,a2.taxon_name parent FROM authorities a,authorities a2,taxa_list_cache t WHERE a.taxon_name IN ('". join("','",@common) . "') AND a.taxon_no=t.child_no AND t.parent_no=a2.taxon_no AND a2.taxon_rank IN ('class','order','family')";
+	my @rows = @{$dbt->getData($sql)};
+
+	my %parent;
+	for my $r ( @rows )	{
+		if ( $r->{'child_rank'} eq "genus" )	{
+			$parent{$r->{'child'}}{$r->{'parent_rank'}} = $r->{'parent'};
+		}
+	}
+
+	print "<div class=\"displayPanel\" style=\"width: 44em; margin-left: 4em;\">\n";
+	print "<div class=\"displayPanelContent\">\n";
+	printf "<p class=\"medium\" style=\"padding-left: 1em;\">Total number of collections: %d</p>\n",$#dataRows+1;
+	print "<table class=\"small\" style=\"margin-left: 1em; margin-bottom: 1em;\">\n";
+	print "<tr><td style=\"font-size: 1.15em;\">class</td><td style=\"font-size: 1.15em;\">order</td><td style=\"font-size: 1.15em;\">family</td><td style=\"font-size: 1.15em;\">genus</td><td style=\"font-size: 1.15em;\">count</td></tr>\n";
+	my $printed = 0;
+	for my $g ( @common )	{
+		if ( $parent{$g}{'class'} || $parent{$g}{'order'} || $parent{$g}{'family'} )	{
+			print "<tr>\n";
+			for my $rank ( 'class','order','family' )	{
+				print "<td style=\"padding-right: 2em;\">$parent{$g}{$rank}</td>\n";
+			}
+			print "<td><i>$g</i></td>\n";
+			print "<td>&nbsp;&nbsp;$count{$g}</td>\n";
+			print "</tr>\n";
+			$printed++;
+		}
+		if ( $printed == 30 )	{
+			last;
+		}
+	}
+	print "</table>\n";
+	print "</div>\n";
+	print "</div>\n";
+
 }
 
 1;
