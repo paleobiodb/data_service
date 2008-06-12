@@ -902,6 +902,7 @@ sub findMostCommonTaxa	{
 	my $self = shift;
 	my $dataRowsRef = shift;
 	my $q = $self->{q};
+	my $s = $self->{s};
 	my $dbt = $self->{dbt};
 
 	my @dataRows = @{$dataRowsRef};
@@ -920,14 +921,14 @@ sub findMostCommonTaxa	{
 	} elsif ( $atrank eq "species" )	{
 		$plural = "species";
 	}
-	print "<center><p class=\"pageTitle\">Most common $plural in these collections</p></center>\n\n";
+	print "<center><p class=\"pageTitle\">The most common $plural in these collections</p></center>\n\n";
 
 	my $names;
 	if ( $atrank eq "species" )	{
 		$names = "genus_name,species_name,";
 	}
-	my $sql = "SELECT $names taxon_no,occurrence_no FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
-	my $sql2 = "SELECT $names taxon_no,occurrence_no FROM reidentifications WHERE most_recent='YES' AND taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
+	my $sql = "SELECT $names taxon_no,occurrence_no,collection_no FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
+	my $sql2 = "SELECT $names taxon_no,occurrence_no,collection_no FROM reidentifications WHERE most_recent='YES' AND taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
 	# WARNING: will fail if there are homonyms
 	if ( $q->param('taxon_name') )	{
 		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."'";
@@ -939,8 +940,8 @@ sub findMostCommonTaxa	{
 			$taxon_list .= "," . $r->{'taxon_no'};
 		}
 		$taxon_list =~ s/^,//;
-		$sql = "SELECT $names taxon_no,occurrence_no FROM occurrences WHERE taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
-		$sql2 = "SELECT $names taxon_no,occurrence_no FROM reidentifications WHERE most_recent='YES' AND taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
+		$sql = "SELECT $names taxon_no,occurrence_no,collection_no FROM occurrences WHERE taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
+		$sql2 = "SELECT $names taxon_no,occurrence_no,collection_no FROM reidentifications WHERE most_recent='YES' AND taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
 	}
  
 	my @rows = @{$dbt->getData($sql)};
@@ -1007,6 +1008,7 @@ sub findMostCommonTaxa	{
 	# count occurrences
 	my %count;
 	my %child_no;
+	my %collseen;
 	for my $r ( @rows2 )	{
 		my $name = $parent{$synonym{$r->{'taxon_no'}}}{$atrank};
 		if ( $atrank eq "species" && $r->{'species_name'} =~ /^[a-z]*$/ && $name !~ / / )	{
@@ -1015,6 +1017,7 @@ sub findMostCommonTaxa	{
 		if ( ( $atrank ne "species" && $name =~ /^[A-Z][a-z]*$/ ) || ( $atrank eq "species" && $name =~ /[A-Z][a-z]* [a-z]*/ ) )	{
 			$count{$name}++;
 			$child_no{$name} = $synonym{$r->{'taxon_no'}};
+			$collseen{$r->{'collection_no'}}++;
 		}
 		$seen{$r->{'occurrence_no'}}++;
 	}
@@ -1027,28 +1030,48 @@ sub findMostCommonTaxa	{
 			if ( ( $atrank ne "species" && $name =~ /^[A-Z][a-z]*$/ ) || ( $atrank eq "species" && $name =~ /[A-Z][a-z]* [a-z]*/ ) )	{
 				$count{$name}++;
 				$child_no{$name} = $synonym{$r->{'taxon_no'}};
+				$collseen{$r->{'collection_no'}}++;
 			}
 		}
 	}
 	%seen = ();
+	my @temp = keys %collseen;
+	my $collections = $#temp + 1;
+	@temp = ();
+	%collseen = ();
 
 	my @taxa = keys %count;
 	@taxa = sort { $count{$b} <=> $count{$a} } @taxa;
+
+	my $username = ($s->get("enterer")) ? $s->get("enterer") : "";
+	my $filename = PBDBUtil::getFilename($username);
+
+
+	my $csv = Text::CSV_XS->new({'binary'=>1});
+	PBDBUtil::autoCreateDir("$HTML_DIR/public/taxa");
+	open OUT,">$HTML_DIR/public/taxa/${filename}_taxa.csv";
 
 	print "<div class=\"displayPanel\" style=\"width: 50em; margin-left: 1em;\">\n";
 	print "<div class=\"displayPanelContent\">\n";
 	print "<table class=\"small\" style=\"margin-left: 1em; margin-top: 1em; margin-bottom: 1em;\">\n";
 	print "<tr align=\"center\"><td style=\"font-size: 1.15em;\">rank</td>";
+	print OUT "rank,";
 	print "<td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">class</td>";
+	print OUT "class,";
 	if ( $atrank =~ /family|genus|species/ )	{
 		print "<td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">order</td>";
+		print OUT "order,";
 	}
 	if ( $atrank =~ /genus|species/ )	{
 		print "<td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">family</td>";
+		print OUT "family,";
 	}
 	print "<td align=\"left\" style=\"font-size: 1.15em; padding-left: 1em;\">$atrank</td>";
+	print OUT "$atrank,";
 	print "<td style=\"font-size: 1.15em;\">count</td>";
+	print OUT "count,";
 	print "<td style=\"font-size: 1.15em;\">&nbsp;%</td></tr>\n";
+	print OUT "percent\n";
 	my $sum = 0;
 	for my $t ( @taxa )	{
 		my $n = $child_no{$t};
@@ -1093,13 +1116,36 @@ sub findMostCommonTaxa	{
 			last;
 		}
 	}
+	$printed = 0;
+	for my $t ( @taxa )	{
+		my $n = $child_no{$t};
+		if ( $parent{$n}{'class'} || $parent{$n}{'order'} ||  $parent{$n}{'family'} )	{
+			$printed++;
+			print OUT "$printed,";
+			for my $rank ( @ranks )	{
+				print OUT "$parent{$n}{$rank},";
+			}
+			my $printedname = $t;
+			if ( $printedname =~ / / && $printedname !~ /"/ )	{
+				$printedname = '"'.$printedname.'"';
+			}
+			print OUT "$printedname,";
+			print OUT "$count{$t},";
+			printf OUT "%.2f\n",$count{$t}/$sum*100;
+		}
+	}
 	print "</table>\n\n";
 	print "</div>\n";
 	print "</div>\n";
-	printf "<center><p class=\"large\">There are $sum occurrences of %d $plural overall.</p></center>\n",$#taxa+1;
+	if ( $printed == 1 )	{
+		$plural = $atrank;
+	}
+	printf "<center><p class=\"large\">In total there are $sum occurrences of %d $plural that come from $collections collections.</p></center>\n",$printed;
+	print "<center><p class=\"large\">You can <a href=\"/public/taxa/${filename}_taxa.csv\">download</a> a comma-delimited version of this table listing all of the $plural.</p>\n";
 	if ( $quoted > 0 )	{
 		print "<center><p class=\"small\">We have no formal taxonomic data for names in quotes, so they may be invalid.</p></center>\n";
 	}
+	close OUT;
 
 }
 
