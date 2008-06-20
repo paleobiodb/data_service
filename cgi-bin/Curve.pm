@@ -212,6 +212,14 @@ sub setSteps	{
 			$i = $i + 20;
 			if ( $x == 1 ) { $i--; }
 		}
+		elsif ($q->param('stepsize') eq "10, 20, 30...")	{
+			$i = $i + 10;
+			if ( $x == 1 ) { $i--; }
+		}
+		elsif ($q->param('stepsize') eq "5, 10, 15...")	{
+			$i = $i + 5;
+			if ( $x == 1 ) { $i--; }
+		}
 		for $j ($x..$i-1)	{
 			$atstep[$j] = $#samplesteps + 1;
 		}
