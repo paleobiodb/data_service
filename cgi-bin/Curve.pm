@@ -225,8 +225,7 @@ sub setSteps	{
 			if ( $x == 1 ) { $i--; }
 		}
 		elsif ($q->param('stepsize') eq "1, 2, 3...")	{
-			$i = $i++;
-			if ( $x == 1 ) { $i--; }
+			$i++;
 		}
 		for $j ($x..$i-1)	{
 			$atstep[$j] = $#samplesteps + 1;
@@ -1115,6 +1114,9 @@ $| = 1;
 	
 		 # declare the genus (or all genera in a list) present in this chron
 					  $lastsubsrichness[$i] = $subsrichness[$i];
+					  if ( ! $lastsubsrichness[$i] )	{
+						$lastsubsrichness[$i] = 1;
+					  }
 					  if (($samplingmethod == 1) || ($samplingmethod == 5))	{
 					    if ($present[$occid[$j]][$i] == 0)	{
 					      $subsrichness[$i]++;
@@ -1125,6 +1127,9 @@ $| = 1;
 					    for $k ($baseocc[$listid[$j]]..$topocc[$listid[$j]])	{
 					      if ($present[$occsbychron[$i][$k]][$i] == 0)	{
 					        $subsrichness[$i]++;
+					      }
+					      if ( $sampled[$i] == 1 && $samplingmethod == 2 )	{
+					        $lastsubsrichness[$i] = $subsrichness[$i];
 					      }
 					      $present[$occsbychron[$i][$k]][$i]++;
 					    }
@@ -1167,8 +1172,7 @@ $| = 1;
 		 # end of while loop
 				}
 			# finish off recording data in complete subsampling curve
-				if ($atstep[$q->param('samplesize')]+1 > $atstep[int($sampled[$i])] &&
-					  $inbin > $sampled[$i])	{
+				if ($atstep[$q->param('samplesize')]+1 > $atstep[int($sampled[$i])] && $inbin > $sampled[$i])	{
 					$w = $inbin;
 					if ($inbin > $q->param('samplesize'))	{
 					  $w = $q->param('samplesize');
@@ -1324,7 +1328,7 @@ $| = 1;
 				$msubschaom[$i] = $msubschaom[$i]/$trials;
 				$msubsearlier[$i] = $msubsearlier[$i]/$trials;
 				$msubslater[$i] = $msubslater[$i]/$trials;
-				for $j (1..$atstep[$q->param('samplesize')])	{
+				for $j (0..$atstep[$q->param('samplesize')])	{
 					$sampcurve[$i][$j] = $sampcurve[$i][$j]/$trials;
 				}
 			}
@@ -1430,7 +1434,7 @@ $| = 1;
 	#  equation (Colwell and Coddington 1994, p. 106) 13.7.04
 	# do this only for method 2 (UW) because the method assumes you are
 	#  making a UW curve
-	if ( $samplingmethod == 2)	{
+	if ( $samplingmethod == 2 && $q->param('printall') eq "no")	{
 		for $i (1..$chrons)	{
 			if ($msubsrichness[$i] > 0)	{
 				# get means
@@ -1482,16 +1486,20 @@ sub printResults	{
 			}
 		}
 		print CURVES "\n";
-		for $i (1..$atstep[$q->param('samplesize')])	{
+		for $i (0..$atstep[$q->param('samplesize')])	{
 			print CURVES "$samplesteps[$i]\t";
-			$foo = 0;
+			$temp = 0;
 			for $j (reverse 1..$chrons)	{
 				if ($sampcurve[$j][1] > 0)	{
-					if ($foo > 0)	{
-					  print CURVES "\t";
+					if ($temp > 0)	{
+						print CURVES "\t";
 					}
-					$foo++;
-					printf CURVES "%.1f",$sampcurve[$j][$i];
+					$temp++;
+					if ( $sampcurve[$j][$i] > 0 )	{
+						printf CURVES "%.1f",$sampcurve[$j][$i];
+					} else	{
+						print CURVES "NaN";
+					}
 				}
 			}
 			print CURVES "\n";
