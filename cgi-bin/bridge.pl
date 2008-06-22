@@ -1024,6 +1024,9 @@ sub displayCollResults {
         if ($type eq "count_occurrences")	{
             $options{'count_occurrences'} = 1;
         }
+        if ($type eq "most_common")	{
+            $options{'include_old_ids'} = 0;
+        }
 
 		($dataRows,$ofRows,$warnings,$occRows) = Collection::getCollections($dbt,$s,\%options,$fields);
 	}
@@ -1929,7 +1932,7 @@ sub processTaxonSearch {
 		print "<div align=\"center\">\n";
         print "<table><tr><td align=\"center\">";
         if ($q->param("taxon_name")) { 
-    		print "<p class=\"pageTitle\">Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</p>\n<br>\n";
+    		print "<p class=\"pageTitle\" style=\"margin-top: 1em;\">Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</p>\n<br>\n";
         } else {
 		if ( $s->isDBMember() )	{
     			print "<p class=\"pageTitle\">Select a taxon to edit</p>\n";
@@ -1939,7 +1942,7 @@ sub processTaxonSearch {
         }
 
         # now create a table of choices
-		print "<div class=\"displayPanel small\" style=\"padding: 1em;\">";
+		print "<div class=\"displayPanel medium\" style=\"padding: 1em; padding-right: 2em; margin-top: -1em;\">";
         print "<div align=\"left\"><ul>\n";
         my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
         foreach my $row (@results) {
@@ -1973,18 +1976,18 @@ sub processTaxonSearch {
         #  2: this is from a reference_no. No option to add a new taxon, so button is Edit
         if ($q->param('goal') eq 'authority') {
             if ($q->param('taxon_name')) {
-		        print "<p align=\"left\"><span class=\"tiny\">";
+		        print "<p align=\"left\"><div class=\"verysmall\" style=\"margin-left: 2em; text-align: left;\">";
                 print "You have a choice because there may be multiple biological species<br>&nbsp;&nbsp;(e.g., a plant and an animal) with identical names.<br>\n";
-		        print "Create a new taxon only if the old ones were named by different people in different papers.<br></span></p>\n";
+		        print "Create a new taxon only if the old ones were named by different people in different papers.<br></div></p>\n";
             } else {
             }
         } else {
-            print "<p align=\"left\"><span class=\"tiny\">";
-            print "You have a choice because there may be multiple biological species<br>&nbsp;&nbsp;(e.g., a plant and an animal) with identical names.<br></span></p>\n";
+            print "<p align=\"left\"><div class=\"verysmall\" style=\"margin-left: 2em; text-align: left;\">";
+            print "You have a choice because there may be multiple biological species<br>&nbsp;&nbsp;(e.g., a plant and an animal) with identical names.<br></div></p>\n";
         }
-		print "<p align=\"left\"><span class=\"tiny\">";
+		print "<p align=\"left\"><div class=\"verysmall\" style=\"margin-left: 2em; text-align: left;\">";
         if (!$q->param('reference_no')) {
-		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</span></p>\n";
+		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</div></p>\n";
         }
 
         print "</div>";
