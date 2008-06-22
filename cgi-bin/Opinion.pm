@@ -1514,6 +1514,7 @@ sub displayOpinionChoiceForm {
 
     print "<div align=\"center\">";
     print "<table><tr><td>";
+    my $sepkoski;
     if ($q->param('taxon_no')) {
         my $child_no = $q->param('taxon_no');
         my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_no);
@@ -1532,7 +1533,12 @@ sub displayOpinionChoiceForm {
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
             my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
-            print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
+            if ( $o->{'reference_no'} != 6930 )	{
+                print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
+            } else	{
+                print qq|<li>$opinion $authority*</li>|;
+                $sepkoski = qq|<br>\n*Opinions from Sepkoski's Compendium cannot be edited.|;
+            }
         }
         print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=-1">Create a <b>new</b> opinion record</a></li>|;
         print qq|</ul></div>\n|;
@@ -1635,7 +1641,7 @@ sub displayOpinionChoiceForm {
     } 
     
     if ($q->param("taxon_no")) {
-        print qq|<div class="tiny" style="margin-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>\nSelect an old opinion if it was entered incorrectly or incompletely.<br>\nCreate a new one if the author whose opinion you are looking at right now is not in the above list.</p></div>\n|;
+        print qq|<div class="verysmall" style="margin-left: 4em; text-align: left;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>\nCreate a new opinion if your author's name is not in the above list.<br>\nDo not select an old opinion unless it was entered incorrectly or incompletely.$sepkoski</p></div>\n|;
     } elsif ($q->param('reference_no') && $s->isDBMember())	{
         print qq|<tr><td align="left" colspan=2><div class="tiny" style="padding-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
         print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_tips.html')">tip sheet</a>.</p></div>\n|;
