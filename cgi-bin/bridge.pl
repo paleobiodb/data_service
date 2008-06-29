@@ -945,6 +945,14 @@ sub displaySearchColls {
 # Called during collections search, and by displayReIDForm() routine.
 sub displayCollResults {
 	return if PBDBUtil::checkForBot();
+	if ( ! $s->get('enterer') && $q->param('type') eq "reclassify_occurrence" )    {
+		print $hbo->stdIncludes( "std_page_top" );
+		print "<center>\n<p class=\"pageTitle\">Sorry!</p>\n\n";
+		print "<p>You can't reclassify occurrences unless you <a href=\"$WRITE_URL?action=displayMenuPage&amp;user=Contributor\">log in</a> first.</p>\n</center>\n";
+		print $hbo->stdIncludes("std_page_bottom");
+		exit;
+	}
+
 	logRequest($s,$q);
 	my $limit = $q->param('limit') || 30 ;
 	my $rowOffset = $q->param('rowOffset') || 0;
