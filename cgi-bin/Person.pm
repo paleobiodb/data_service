@@ -48,18 +48,18 @@ sub makeAuthEntJavascript {
 # can pass it an optional argument, activeOnly
 # if true, then only return active authorizers.
 sub listOfAuthorizers {
-    my ($dbt,$active_only,$fossil_record_only) = @_;
+	my ($dbt,$active_only,$fossil_record_only) = @_;
 	
 	my $sql = "SELECT name, person_no FROM person WHERE is_authorizer=1";
 	if ($active_only) { 
-        $sql .= " AND active=1 "; 
-    }
-    if ($fossil_record_only) {
-        $sql .= " AND fossil_record=1";
-    }
+		$sql .= " AND active=1 "; 
+	} 
+	if ($fossil_record_only) {
+		$sql .= " AND fossil_record=1";
+	} 
 	$sql .= " ORDER BY last_name,first_name";
 
-    return $dbt->getData($sql);
+	return $dbt->getData($sql);
 }
 
 
@@ -67,18 +67,20 @@ sub listOfAuthorizers {
 # if true, then only return active enterers. all authorizers
 # are counted as enterers as well
 sub listOfEnterers {
-    my ($dbt,$active_only,$fossil_record_only) = @_;
+	my ($dbt,$active_only,$fossil_record_only) = @_;
 	
-	my $sql = "SELECT name, person_no FROM person WHERE is_authorizer=1";
+	my $sql = "SELECT name, person_no FROM person";
 	if ($active_only) { 
-        $sql .= " AND active=1 "; 
-    }
-    if ($fossil_record_only) {
-        $sql .= " AND fossil_record=1";
-    }
+		$sql .= " WHERE active=1 "; 
+	}
+	if ($active_only && $fossil_record_only) {
+		$sql .= " AND fossil_record=1";
+	} elsif ($fossil_record_only) {
+		$sql .= " WHERE fossil_record=1";
+	}
 	$sql .= " ORDER BY last_name,first_name";
 
-    return $dbt->getData($sql);
+	return $dbt->getData($sql);
 	
 }
 
