@@ -76,6 +76,7 @@ my $dbh;
 my $q;					# Reference to the parameters
 my $s;
 my $dbt;
+my @genus;
 
 sub new {
 	my $class = shift;
@@ -97,9 +98,6 @@ sub buildCurve {
 	# compute the sizes of intermediate steps to be reported in subsampling curves
 	if ($q->param('stepsize') ne "")	{
 	  $self->setSteps;
-	}
-	if ( $q->param('recent_genera') =~ /yes/i )	{
-		$self->findRecentGenera;
 	}
 	$self->assignGenera;
 	$self->subsample;
@@ -641,8 +639,9 @@ sub assignGenera	{
 		}
 	# END of input file parsing routine
 
+		if ( $q->param('recent_genera') =~ /yes/i )	{
+			$self->findRecentGenera;
 	# declare Recent genera present in bin 1
-		if ( $q->param('recent_genera') )	{
 			for my $taxon ( keys %extantbyname )	{
 				if ( $genid{$taxon} =~ /[0-9]/ )	{
 					$extantbyid[$genid{$taxon}][1] = 1;
@@ -934,7 +933,7 @@ sub findRecentGenera	{
 	my $self = shift;
 
 	# draw all comments pertaining to Jack's genera
-	my $asql = "SELECT taxon_no,taxon_name FROM authorities WHERE extant='YES'";
+	my $asql = "SELECT taxon_no,taxon_name FROM authorities WHERE extant='YES' AND taxon_name IN ('" . join("','",@genus) . "')";
 	my @arefs = @{$dbt->getData($asql)};
 	my @taxon_nos= map {$_->{taxon_no}} @arefs;
 
