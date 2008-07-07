@@ -748,10 +748,29 @@ sub assignGenera	{
         #print "last $i";
     }
 
+	my $firstdata;
+	for $j (1..$chrons)	{
+		for $i (1..$ngen)	{
+			if ($present[$i][$j] > 0)	{
+				$firstdata = $j;
+				last;
+			}
+		}
+	}
+	my $lastdata;
+	for $j (reverse 1..$chrons)	{
+		for $i (1..$ngen)	{
+			if ($present[$i][$j] > 0)	{
+				$lastdata = $j;
+				last;
+			}
+		}
+	}
+print "$chname[$firstdata]/$chname[$lastdata]";
 	# compute sampled diversity, range through diversity, originations,
 	#  extinctions, singletons and doubletons (Chao l and m)
 	print PADATA $q->param("taxonomic_level")."\t"."total occs";
-	for $i (reverse 1..$chrons)	{
+	for $i (reverse $lastdata..$firstdata)	{
 		print PADATA "\t$chname[$i]";
 	}
 	if ( $q->param('recent_genera') )	{
@@ -761,7 +780,7 @@ sub assignGenera	{
 	for $i (1..$ngen)	{
 		$first = 0;
 		$last = 0;
-		for $j (1..$chrons)	{
+		for $j ($1..$chrons)	{
 			if ($present[$i][$j] > 0)	{
 				$richness[$j]++;
 				if ($last == 0)	{
@@ -803,7 +822,7 @@ sub assignGenera	{
 		}
 		if ($first > 0)	{
 			print PADATA "$genus[$i]\t$occsoftax[$i]";
-			for $j (reverse 1..$chrons)	{
+			for $j (reverse $lastdata..$firstdata)	{
 				print PADATA "\t$present[$i][$j]";
 			}
 			if ( $q->param('recent_genera') )	{
