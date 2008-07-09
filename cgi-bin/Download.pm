@@ -102,7 +102,7 @@ sub buildDownload {
     my ($lumpedResults,$allResults) = $self->queryDatabase();
 
     my ($refsCount,$nameCount,$taxaCount,$scaleCount,$mainCount) = (0,0,0,0,scalar(@$lumpedResults));
-    my ($refsFile,$taxaFile,$scaleFile,$mainFile) = ('','','','');
+    my ($refsFile,$taxaFile,$scaleFile,$mainFile,$collFile,$colls) = ('','','','','',0);
 
     PBDBUtil::autoCreateDir($HTML_DIR."/public/downloads");
     
@@ -122,7 +122,7 @@ sub buildDownload {
             push @form_errors, "The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the admins (pbdbadmin\@nceas.ucsb.edu) if this is a problem";
         }
     } elsif ($q->param('output_data') =~ /conjunct/i) {
-        ($mainCount,$mainFile) = $self->printCONJUNCT($lumpedResults);
+        ($mainCount,$mainFile,$collFile,$colls) = $self->printCONJUNCT($lumpedResults);
     } else {
         ($mainCount,$mainFile) = $self->printCSV($lumpedResults);
     }
@@ -149,6 +149,9 @@ sub buildDownload {
         my $things = ($q->param("output_data") =~ /occurrence/) 
             ? "occurrences" : $q->param("output_data");
         print "$mainCount $things were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
+        if ( $q->param("output_data") =~ /conjunct/i ) {
+            print "$colls collections were printed to <a href=\"$OUT_HTTP_DIR/$collFile\">$collFile</a><br>\n";
+        }
     }
     if ( $q->param("output_data") =~ /occurrence|specimens/ ) {
         print "$taxaCount taxonomic names were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
@@ -2902,7 +2905,7 @@ sub printCSV {
     my $mainFile = "";
     my $filename = $self->{'filename'};
     if ( $q->param("output_data") eq 'collections') {
-        $mainFile = "$filename-cols.$ext";
+        $mainFile = "$filename-collections.$ext";
     } elsif ($q->param("output_data") eq 'specimens') {
         $mainFile = "$filename-specimens.".$ext;
     } elsif ( $q->param("output_data") eq 'genera') {
@@ -3348,24 +3351,45 @@ sub printCONJUNCT {
 
     my $filename = $self->{'filename'};
     # Conjunct is expecting an "occurrences" type or it might screw up, so keep this short
-    my $mainFile = "$filename.conjunct";
+    my $mainFile = "$filename-conjunct";
 
     if (! open(OUTFILE, ">$OUT_FILE_DIR/$mainFile") ) {
         die ( "Could not open output file: $mainFile ($!)<br>\n" );
-    } 
+    }
 
+    my $ext = 'csv';
+    if ($q->param('output_format') =~ /tab/i) {
+        $ext = 'tab';
+    }
+    my $collFile = "$filename-collections.$ext";
+    if (! open(COLLS, ">$OUT_FILE_DIR/$collFile") ) {
+        die ( "Could not open output file: $collFile($!)<br>\n" );
+    }
+    my @outfields = ("collection");
+    foreach (@collectionsFieldNames) {
+        if ($q->param("collections_".$_) eq 'YES') {
+            push @outfields , $_;
+        }
+    }
+    print COLLS $self->formatRow(@outfields)."\n";
+
+    my $colls = 0;
     my $lastcoll;
     my %indetseen;
     foreach my $row (@$results) {
         if ($lastcoll != $row->{'collection_no'}) {
+            $colls++;
             if ( $lastcoll )    {
                 print OUTFILE ".\n\n";
             }
             %indetseen = ();
+            my @data = ();
             if ( $row->{'c.collection_name'} )    {
                 $row->{'c.collection_name'} =~ s/ /_/g;
+                push @data , $row->{'c.collection_name'};
                 printf OUTFILE "%s\n",$row->{'c.collection_name'};
             } else    {
+                push @data , $row->{'collection_no'};
                 print OUTFILE "Collection_$row->{'collection_no'}\n";
             }
 
@@ -3373,6 +3397,7 @@ sub printCONJUNCT {
 
             foreach (@collectionsFieldNames) {
                 if ($q->param("collections_".$_) eq 'YES') {
+                    push @data , $row->{'c.'.$_};
                     if ($row->{'c.'.$_}) {
                         # these three will be printed anyway
                         if ( $_ !~ /collection_name|localsection|localbed/ )	{
@@ -3381,6 +3406,7 @@ sub printCONJUNCT {
                     }
                 }
             } 
+            print COLLS $self->formatRow(@data)."\n";
 
             if (@comments) {
                 print OUTFILE "[".join("\n",@comments)."]\n";
@@ -3456,8 +3482,9 @@ sub printCONJUNCT {
 
     print OUTFILE ".\n\n";
     close OUTFILE;
+    close COLLS;
 
-    return (scalar(@$results),$mainFile);
+    return (scalar(@$results),$mainFile,$collFile,$colls);
 }
 
 
