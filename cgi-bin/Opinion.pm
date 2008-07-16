@@ -1302,7 +1302,7 @@ sub submitOpinionForm {
         Taxon::propagateAuthorityInfo($dbt,$fields{'child_no'});
 
         # Remove any duplicates that may have been added as a result of the migration
-        removeDuplicateOpinions($dbt,$s,$fields{'child_no'});
+        $resultOpinionNumber = removeDuplicateOpinions($dbt,$s,$fields{'child_no'},$resultOpinionNumber);
     }
 
     $o = Opinion->new($dbt,$resultOpinionNumber); 
@@ -1659,7 +1659,7 @@ sub displayOpinionChoiceForm {
 # migrated when its actually the same opinion.  Find these opinions.  Don't delete them,
 # but just set all their key fields to zero and mark changes into the comments field
 sub removeDuplicateOpinions {
-    my ($dbt,$s,$child_no,$debug_only) = @_;
+    my ($dbt,$s,$child_no,$resultOpinionNumber,$debug_only) = @_;
     my $dbh = $dbt->dbh;
     return if !($child_no);
     my $sql = "SELECT * FROM opinions WHERE child_no=$child_no AND child_no != parent_no AND status !='misspelling of'";
@@ -1678,6 +1678,7 @@ sub removeDuplicateOpinions {
             }
         }
     }
+    my $newNo = $resultOpinionNumber;
     while (my ($key,$array_ref) = each %dupe_hash) {
         my @opinions = @$array_ref;
         if (scalar(@opinions) > 1) {
@@ -1685,9 +1686,13 @@ sub removeDuplicateOpinions {
             foreach my $row (@opinions) {
                 dbg("Found duplicate row for $orig_row->{opinion_no} in $row->{opinion_no}");
                 $dbt->deleteRecord($s,'opinions','opinion_no',$row->{'opinion_no'},"Deleted by Opinion::removeDuplicateOpinion, duplicates $orig_row->{opinion_no}");
+                if ( $orig_row->{'opinion_no'} != $resultOpinionNumber )	{
+                    $newNo = $orig_row->{'opinion_no'};
+                }
             }
         }
     }
+    return($newNo);
 }
 
 
