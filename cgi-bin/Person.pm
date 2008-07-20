@@ -164,11 +164,11 @@ sub displayAuthorizers {
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 AND last_entry IS NOT NULL";
+    my $sql = "SELECT first_name,last_name,institution,email FROM person,refs WHERE person_no=authorizer_no";
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
-    $sql .= " ORDER BY last_name,first_name";
+    $sql .= " GROUP BY authorizer_no ORDER BY last_name,first_name";
     my @results = @{$dbt->getData($sql)};
 
     my @firsthalf;
