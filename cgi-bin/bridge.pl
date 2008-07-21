@@ -1822,23 +1822,48 @@ sub processTaxonSearch {
                 my @typoResults = ();
                 unless ($q->param("skip_typo_check")) {
                     my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
-                    my $sql = "SELECT count(*) c FROM occurrences WHERE genus_name LIKE ".$dbh->quote($g);
-                    if ($sg) {
-                        $sql .= " AND subgenus_name LIKE ".$dbh->quote($sg);
+                # give a free pass if the name is "plausible" because its
+                #  parts all exist in the authorities table JA 21.7.08
+                # disaster could ensue if the parts are actually typos,
+                #  but let's cross our fingers
+                # perhaps getTaxa could be adapted for this purpose, but
+                #  it's a pretty simple piece of code
+                    my $sql = "SELECT taxon_name tn FROM authorities WHERE taxon_name='$g' OR taxon_name LIKE '$g %' OR taxon_name LIKE '% ($sg) %' OR taxon_name LIKE '% $sp'";
+                    my @partials = @{$dbt->getData($sql)};
+                    my ($oldg,$oldsg,$oldsp);
+                    for my $p ( @partials )	{
+                        if ( $p->{tn} eq $g )	{
+                            $oldg++;
+                        }
+                        if ( $p->{tn} =~ /^$g / )	{
+                            $oldg++;
+                        }
+                        if ( $p->{tn} =~ / \($sg\) / )	{
+                            $oldsg++;
+                        }
+                        if ( $p->{tn} =~ / $sp$/ )	{
+                            $oldsp++;
+                        }
                     }
-                    if ($sp) {
-                        $sql .= " AND species_name LIKE ".$dbh->quote($sp);
-                    }
-                    my $exists_in_occ = ${$dbt->getData($sql)}[0]->{c};
-                    unless ($exists_in_occ) {
-                        my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$q->param('taxon_name'))};
-                        my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
-                        foreach my $typo (@results) {
-                            my ($t_g,$t_sg,$t_sp) = Taxon::splitTaxon($typo);
-                            if ($sp && !$t_sp) {
-                                $typo .= " $sp";
+                    if ( $oldg == 0 || ( $sg && $oldsg == 0 ) || $oldsp == 0 )	{
+                        $sql = "SELECT count(*) c FROM occurrences WHERE genus_name LIKE ".$dbh->quote($g);
+                        if ($sg) {
+                            $sql .= " AND subgenus_name LIKE ".$dbh->quote($sg);
+                        }
+                        if ($sp) {
+                            $sql .= " AND species_name LIKE ".$dbh->quote($sp);
+                        }
+                        my $exists_in_occ = ${$dbt->getData($sql)}[0]->{c};
+                        unless ($exists_in_occ) {
+                            my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$q->param('taxon_name'))};
+                            my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
+                            foreach my $typo (@results) {
+                                my ($t_g,$t_sg,$t_sp) = Taxon::splitTaxon($typo);
+                                if ($sp && !$t_sp) {
+                                    $typo .= " $sp";
+                                }
+                                push @typoResults, $typo;
                             }
-                            push @typoResults, $typo;
                         }
                     }
                 }
