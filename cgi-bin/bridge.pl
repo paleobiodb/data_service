@@ -3624,7 +3624,7 @@ sub processEditOccurrences {
 
 	# end of first pass
 	}
-exit;
+
 	# check for duplicates JA 2.4.08
 	# this section replaces the old occurrence-by-occurrence check that
 	#  used checkDuplicates; it's much faster and uses more lenient
