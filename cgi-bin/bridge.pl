@@ -3466,11 +3466,11 @@ sub generateCollectionLabel {
 # Rewritten PS to be a bit clearer, handle deletions of occurrences, and use DBTransationManager
 # for consistency/simplicity.
 sub processEditOccurrences {
-    my $dbh = $dbt->dbh;
-    if (!$s->isDBMember()) {
-        displayLoginPage( "Please log in first." );
-        exit;
-    }
+	my $dbh = $dbt->dbh;
+	if (!$s->isDBMember()) {
+		displayLoginPage( "Please log in first." );
+		exit;
+	}
                                 
 	# Get the names of all the fields coming in from the form.
 	my @param_names = $q->param();
@@ -3563,7 +3563,10 @@ sub processEditOccurrences {
             $name =~ s/ $//;
             my @words = split / /,$name;
             for my $reso ( @resos )	{
-                if ( $words[0] eq $reso )	{
+                if ( $words[0]." ".$words[1] eq $reso )	{
+                    $fields{'genus_reso'} = $reso;
+                    splice @words , 0 , 2;
+                } elsif ( $words[0] eq $reso )	{
                     $fields{'genus_reso'} = shift @words;
                     last;
                 }
@@ -3571,7 +3574,10 @@ sub processEditOccurrences {
             $fields{'genus_name'} = shift @words;
             $fields{'species_name'} = pop @words;
             for my $reso ( @resos )	{
-                if ( $words[$#words] eq $reso )	{
+                if ( $words[$#words-1]." ".$words[$#words] eq $reso )	{
+                    $fields{'species_reso'} = $reso;
+                    splice @words , 0 , 2;
+                }  elsif ( $words[$#words] eq $reso )	{
                     $fields{'species_reso'} = pop @words;
                     last;
                 }
@@ -3580,8 +3586,16 @@ sub processEditOccurrences {
             if ( $#words > -1 )	{
                 $fields{'subgenus_name'} = pop @words;
             }
-            if ( $#words == 0 )	{
-                $fields{'subgenus_reso'} = shift @words;
+            if ( $#words > -1 )	{
+                for my $reso ( @resos )	{
+                    if ( $words[0]." ".$words[1] eq $reso )	{
+                        $fields{'subgenus_reso'} = $reso;
+                        shift @words , 2;
+                    } elsif ( $words[0] eq $reso )	{
+                        $fields{'subgenus_reso'} = shift @words;
+                        last;
+                    }
+                }
             }
             $fields{'subgenus_name'} =~ s/\(//;
             $fields{'subgenus_name'} =~ s/\)//;
