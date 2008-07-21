@@ -3540,26 +3540,18 @@ sub processEditOccurrences {
             my @words = split / /,$name;
             $fields{'genus_name'} = shift @words;
             $fields{'species_name'} = pop @words;
-            $name = join ' ',@words;
             for my $reso ( @resos )	{
-                if ( $name =~ /($reso)$/ )	{
-                    $fields{'species_reso'} = $reso;
-                    $name =~ s/($reso)$//;
+                if ( $words[$#words] =~ /^($reso)$/ )	{
+                    $fields{'species_reso'} = pop @words;
                     last;
                 }
             }
             # there is either nothing left, or a subgenus
-            if ( $name && $name !~ / / )	{
-                $fields{'subgenus_name'} = $name;
-            } elsif ( $name )	{
-                for my $reso ( @resos )	{
-                    if ( $name =~ /^($reso)/ )	{
-                        $fields{'subgenus_reso'} = $reso;
-                        $name =~ s/^($reso)//;
-                        last;
-                    }
-                }
-                $fields{'subgenus_name'} = $name;
+            if ( $#words > -1 )	{
+                $fields{'subgenus_name'} = pop @words;
+            }
+            if ( $#words == 0 )	{
+                $fields{'subgenus_reso'} = shift @words;
             }
             $fields{'subgenus_name'} =~ s/\(//;
             $fields{'subgenus_name'} =~ s/\)//;
@@ -3579,13 +3571,13 @@ sub processEditOccurrences {
             push @species , $fields{'species_name'};
             if ( $fields{'species_name'} =~ /^[a-z]*$/ )	{
                 if ( $fields{'subgenus_name'} =~ /^[A-Z][a-z]*$/ )	{
-                    push @latin_names , $fields{'genus_name'} ." ". $fields{'subgenus_name'} ." ". $fields{'species_name'};
+                    push @latin_names , $fields{'genus_name'} ." (". $fields{'subgenus_name'} .") ". $fields{'species_name'};
                 } else	{
                     push @latin_names , $fields{'genus_name'} ." ". $fields{'species_name'};
                 }
             } else	{
                 if ( $fields{'subgenus_name'} =~ /^[A-Z][a-z]*$/ )	{
-                    push @latin_names , $fields{'genus_name'} ." ". $fields{'subgenus_name'};
+                    push @latin_names , $fields{'genus_name'} ." (". $fields{'subgenus_name'} . ")";
                 } else	{
                     push @latin_names , $fields{'genus_name'};
                 }
@@ -3607,21 +3599,22 @@ sub processEditOccurrences {
 	# this section replaces the old occurrence-by-occurrence check that
 	#  used checkDuplicates; it's much faster and uses more lenient
 	#  criteria because isolated duplicates are handled by the JavaScript
-	my $sql ="SELECT genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name FROM occurrences WHERE collection_no=" . $collection_no;
+	my $sql ="SELECT genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name,taxon_no FROM occurrences WHERE collection_no=" . $collection_no;
 	my @occrefs = @{$dbt->getData($sql)};
+	my %taxon_no;
 	if ( $#occrefs > 0 )	{
 		my $newrows;
-		my %newtaxon;
+		my %newrow;
 		for (my $i = 0;$i < @rowTokens; $i++)	{
 			if ( $matrix[$i]{'genus_name'} =~ /^[A-Z][a-z]*$/ && $matrix[$i]{'occurrence_no'} == -1 )	{
-				$newtaxon{ $matrix[$i]{'genus_reso'} ." ". $matrix[$i]{'genus_name'} ." ". $matrix[$i]{'subgenus_reso'} ." ". $matrix[$i]{'subgenus_name'} ." ". $matrix[$i]{'species_reso'} ." ". $matrix[$i]{'species_name'} }++;
+				$newrow{ $matrix[$i]{'genus_reso'} ." ". $matrix[$i]{'genus_name'} ." ". $matrix[$i]{'subgenus_reso'} ." ". $matrix[$i]{'subgenus_name'} ." ". $matrix[$i]{'species_reso'} ." ". $matrix[$i]{'species_name'} }++;
 				$newrows++;
 			}
 		}
 		if ( $newrows > 0 )	{
 			my $dupes;
 			for my $or ( @occrefs )	{
-				if ( $newtaxon{ $or->{'genus_reso'} ." ". $or->{'genus_name'} ." ". $or->{'subgenus_reso'} ." ". $or->{'subgenus_name'} ." ". $or->{'species_reso'} ." ". $or->{'species_name'} } > 0 )	{
+				if ( $newrow{ $or->{'genus_reso'} ." ". $or->{'genus_name'} ." ". $or->{'subgenus_reso'} ." ". $or->{'subgenus_name'} ." ". $or->{'species_reso'} ." ". $or->{'species_name'} } > 0 )	{
 					$dupes++;
 				}
 			}
@@ -3636,6 +3629,28 @@ sub processEditOccurrences {
 				@rowTokens = ();
 			}
 		}
+		# while we're at it, store the taxon_no JA 20.7.08
+		# do this here and not earlier because taxon_no is not
+		#  stored in the entry form
+		for my $or ( @occrefs )	{
+			if ( $or->{'taxon_no'} > 0 && $or->{'genus_reso'} !~ /informal/ )	{
+				my $latin_name;
+				if ( $or->{'species_name'} =~ /^[a-z]*$/ && $or->{'species_reso'} !~ /informal/ )	{
+					if ( $or->{'subgenus_name'} =~ /^[A-Z][a-z]*$/ && $or->{'subgenus_reso'} !~ /informal/ )	{
+						$latin_name = $or->{'genus_name'} ." (". $or->{'subgenus_name'} .") ". $or->{'species_name'};
+					} else	{
+						$latin_name = $or->{'genus_name'} ." ". $or->{'species_name'};
+					}
+				} else	{
+					if ( $or->{'subgenus_name'} =~ /^[A-Z][a-z]*$/ && $or->{'subgenus_reso'} !~ /informal/ )	{
+						$latin_name = $or->{'genus_name'} ." (". $or->{'subgenus_name'} . ")";
+					} else	{
+						$latin_name = $or->{'genus_name'};
+					}
+				}
+				$taxon_no{$latin_name} = $or->{'taxon_no'};
+			}
+		}
 	}
 
 	# get as many taxon numbers as possible at once JA 2.4.08
@@ -3643,7 +3658,6 @@ sub processEditOccurrences {
 	#  getBestClassification as a last resort
 	my $sql = "SELECT taxon_name,taxon_no,count(*) c FROM authorities WHERE taxon_name IN ('" . join('\',\'',@latin_names) . "') GROUP BY taxon_name";
 	my @taxonrefs = @{$dbt->getData($sql)};
-	my %taxon_no;
 	for my $tr ( @taxonrefs )	{
 		if ( $tr->{'c'} == 1 )	{
 			$taxon_no{$tr->{'taxon_name'}} = $tr->{'taxon_no'};
