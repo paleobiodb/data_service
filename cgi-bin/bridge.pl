@@ -3463,7 +3463,7 @@ sub processEditOccurrences {
         my @subgenera = ();
         my @species = ();
         my @latin_names = ();
-        my @resos = ("\\?","aff\\.","cf\\.","ex gr\\.","n\. gen\\.","n\. subgen\\.","n\. sp\\.","sensu lato");
+        my @resos = ("\?","aff\.","cf\.","ex gr\.","n\. gen\.","n\. subgen\.","n\. sp\.","sensu lato");
 
 	my @matrix;
 	my $collection_no;
@@ -3506,6 +3506,11 @@ sub processEditOccurrences {
                 }
                 $name =~ s/ (n\. sp\.|sensu lato)$//;
             }
+        # a bad idea, but some users may put n. sp. before the species name
+            elsif ( $name =~ / n\. sp\./ )	{
+                $fields{'species_reso'} = "n. sp.";
+                $name =~ s/ n\. sp\.//;
+            }
         # users may want to enter n. sp. as a qualifier for a sp., in which
         #  case they will probably write out n. sp. followed by nothing
         # this tests for a genus or subgenus name immediately beforehand
@@ -3529,19 +3534,19 @@ sub processEditOccurrences {
                 $informal{'species'} =~ s/>//;
                 $name =~ s/ <.*>/ species/;
             }
+            $name =~ s/^ //;
+            $name =~ s/ $//;
+            my @words = split / /,$name;
             for my $reso ( @resos )	{
-                if ( $name =~ /^($reso)/ )	{
-                    $fields{'genus_reso'} = $reso;
-                    $name =~ s/^($reso)//;
+                if ( $words[0] eq $reso )	{
+                    $fields{'genus_reso'} = shift @words;
                     last;
                 }
             }
-            $name =~ s/^ //;
-            my @words = split / /,$name;
             $fields{'genus_name'} = shift @words;
             $fields{'species_name'} = pop @words;
             for my $reso ( @resos )	{
-                if ( $words[$#words] =~ /^($reso)$/ )	{
+                if ( $words[$#words] eq $reso )	{
                     $fields{'species_reso'} = pop @words;
                     last;
                 }
@@ -3594,7 +3599,7 @@ sub processEditOccurrences {
 
 	# end of first pass
 	}
-
+exit;
 	# check for duplicates JA 2.4.08
 	# this section replaces the old occurrence-by-occurrence check that
 	#  used checkDuplicates; it's much faster and uses more lenient
