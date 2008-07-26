@@ -98,10 +98,10 @@ sub getFilename {
             $filename = "guest_".$date."_".$$;
         } else {
             my $ip = $ENV{'REMOTE_ADDR'}; 
-            $ip =~ s/\./_/g;
+            $ip =~ s/\.//g;
             #my @bits = split(/\./,$ip);
             #my $longip = ($bits[0] << 24) | ($bits[1] << 16) | ($bits[2] << 8) | ($bits[3]);
-            $filename = "guest_".$ip;
+            $filename = $ip;
         }
     } else {
         #$enterer =~ s/['-]+/_/g;
