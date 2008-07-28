@@ -151,6 +151,14 @@ sub properInitial {
 	if ($input !~ m/^[A-Z][A-Za-z .-]*$/) {
 		return 0;
 	}
+	# boy, am I sorry we didn't have this one before JA 28.7.08
+	if ($input =~ m/([A-Za-z])(\.| | \.)([A-Za-z])|([A-Z][A-Z])/ )	{
+		return 0;
+	}
+	# while we're at it
+	if ($input =~ m/([A-Za-z])(| )$/) {
+		return 0;
+	}
 	
 	return 1;
 }
