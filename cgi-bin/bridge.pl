@@ -674,6 +674,25 @@ sub emailDownloadFiles	{
 
 }
 
+# JA 28.7.08
+sub displayDownloadMeasurementsForm	{
+	my %vars;
+	$vars{'error_message'} = shift;
+	print $hbo->stdIncludes("std_page_top");
+	print PBDBUtil::printIntervalsJava($dbt,1);
+	print $hbo->populateHTML('download_measurements_form',\%vars);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub displayDownloadMeasurementsResults	{
+	return if PBDBUtil::checkForBot();
+	require Download;
+	logRequest($s,$q);
+	print $hbo->stdIncludes("std_page_top");
+	Measurement::displayDownloadMeasurementsResults($q,$s,$dbt);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
 sub displayDownloadNeptuneForm {
     my %vars;
     if ($s->isDBMember()) {
