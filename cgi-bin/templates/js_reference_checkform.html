@@ -14,6 +14,8 @@
     function checkForm() {
 		var year = /^[1-2][0-9]{3}$/;
 		var capital = /[A-Z]/;
+		var period = /[A-Za-z]\.$/;
+		var space = /([A-Za-z])(\.| | \.)([A-Za-z])|([A-Z][A-Z])/;
 		var all_caps = /^[A-Z][A-Z]/;
 		var frm = document.forms[0];
 		var errors = "";
@@ -33,8 +35,14 @@
 			}
 		} else {
 			// Check for a capital letter
-			if ( capital.test ( frm.author1init.value ) == false) {
+			if ( capital.test ( frm.author1init.value ) == false ) {
 			    errors += "First author initials should have a capital letter\n"; 
+			}
+			if ( period.test ( frm.author1init.value ) == false ) {
+			    errors += "The first author's initials must end with a period.\n"; 
+			}
+			if ( space.test ( frm.author1init.value ) == true ) {
+			    errors += "There must be a period and a space between the first author's two initials.\n"; 
 			}
 		}
 
@@ -48,7 +56,7 @@
 				    errors += "First author last name should have a capital letter\n"; 
                 }
 			} else if ( all_caps.test ( frm.author1last.value ) == true && frm.author1last.value.length > 3) {
-			    errors += "First author name can not consist of all capital letters\n"; 
+			    errors += "First author name can't all consist of capital letters\n"; 
             }
 		}
 
@@ -58,6 +66,12 @@
 			if ( capital.test ( frm.author2init.value ) == false ) {
 				errors += "Second author initials should have a capital letter.\n"; 
 			} 
+			if ( period.test ( frm.author2init.value ) == false ) {
+			    errors += "The second author's initials must end with a period.\n"; 
+			}
+			if ( space.test ( frm.author2init.value ) == true ) {
+			    errors += "There must be a period and a space between the second author's two initials.\n"; 
+			}
 		}
 
 		// Second Author Last
