@@ -1,0 +1,148 @@
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                   
+
+<div align="center"><p class="pageTitle">Measurement download request form</p></div>
+
+<form method=post action="%%read_url%%">
+<input id="action" type=hidden name="action" value="displayDownloadMeasurementsResults">
+
+
+%%error_message%%
+
+<div style="margin: 2em;">
+
+<div class="displayPanel" style="margin-bottom: 2em;">
+<span class="displayPanelHeader">Options</span></br>
+<div class="displayPanelContent">
+<table width="100%" cellpadding="3" cellspacing="0">
+
+<tr>
+<td valign=top class="small" nowrap>Taxonomic group (required):
+</td>
+<td>
+<input type="text" name="taxon_name" value="">
+</td>
+</tr>
+
+<tr>
+<td valign=top class="small" nowrap>Group records by senior synonym?
+</td>
+<td>
+<select name="replace_with_ss">
+<option value="yes">yes, group by currently valid name</option>
+<option value="no">no, list synonyms separately</option>
+</select>
+</td>
+</tr> 
+
+<td valign=top class="small" nowrap>Collection name or number(s):
+</td>
+<td><input type="text" name="collection_names" value="" class="small" size="20" />
+</td>
+
+<tr>
+<td valign=top class="small" nowrap>Continent:
+</td>
+<td>
+<p class="small">
+<input type="checkbox" name="Africa" value="YES" checked>Africa
+<input type="checkbox" name="Antarctica" value="YES" checked>Antarctica
+<input type="checkbox" name="Asia" value="YES" checked>Asia
+<input type="checkbox" name="Australia" value="YES" checked>Australia<br>
+<input type="checkbox" name="Europe" value="YES" checked>Europe
+<input type="checkbox" name="North America" value="YES" checked>North America
+<input type="checkbox" name="South America" value="YES" checked>South America
+</p>
+</td>
+</tr>
+
+<tr>
+<td valign=top class="small" nowrap>Time span:
+</td>
+<td>
+<input type="text" name="max_interval" value="" onKeyUp="doComplete(event, this, intervalNames(),1);"> to
+<input type="text" name="min_interval" value="" onKeyUp="doComplete(event, this, intervalNames(),1);">
+</td>
+</tr>
+
+<tr>
+<td valign=top class="small" nowrap>Group, formation, or member:
+</td>
+<td>
+<input type="text" name="group_formation_member" value="" class="small" size="20" />
+</td>
+</tr>
+
+<tr>
+<td valign=top class="small" nowrap>Output format
+</td>
+<td>
+<select name="output_format">
+<option value="tab" selected>tab-delimited text</option>
+<option value="csv">comma-delimited text</option>
+</select>
+</td>
+</tr>
+
+</table>
+</div>
+</div>
+
+<div class="displayPanel" style="margin-bottom: 2em;">
+<span class="displayPanelHeader">Taxonomic fields</span></br>
+<div class="displayPanelContent">
+
+<table width="100%" class="tiny">
+  <tr>
+    <td><input type="checkbox" name="authors" value="YES" />authors</td>
+    <td><input type="checkbox" name="year" value="YES" />year published</td>
+    <td><input type="checkbox" name="type_body_part" value="YES" />type body part</td>
+    <td><input type="checkbox" name="extant" value="YES" />extant</td>
+  </tr>
+</table>
+
+</div>
+</div>
+
+<div class="displayPanel" style="margin-bottom: 2em;">
+<span class="displayPanelHeader">Measurement fields</span></br>
+<div class="displayPanelContent">
+
+<p class="small">The geometric mean is always reported.</p>
+
+<table width="100%" class="tiny">
+  <tr>
+    <td width="30%" nowrap><input type="checkbox" value=""  title="Check all" onClick="checkAll(this,'s_measurements');" /><span class="medium">Check all</span></td>
+  </tr>
+
+  <tr>
+    <td><input type="checkbox" name="length" value="YES"  class="length_width s_measurements" onClick="checkAll(this,'average');" checked />length</td>
+    <td><input type="checkbox" name="width" value="YES"  class="length_width s_measurements" onClick="checkAll(this,'average');" checked />width</td>
+    <td><input type="checkbox" name="height" value="YES"  class="s_measurements" onClick="checkAll(this,'average');" />height</td>
+    <td><input type="checkbox" name="diagonal" value="YES"  class="s_measurements" onClick="checkAll(this,'average');" />diagonal</td>
+    <td><input type="checkbox" name="inflation" value="YES"  class="s_measurements" onClick="checkAll(this,'average');" />inflation</td>
+  </tr>
+
+  <tr>
+    <td><input type="checkbox" name="specimens_measured" value="YES"  class="s_measurements" checked />specimens measured</td>
+    <td><input type="checkbox" name="min" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');" />min</td>
+    <td><input type="checkbox" name="max" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');" />max</td>
+    <td><input type="checkbox" name="median" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');" />median</td>
+    <td><input type="checkbox" name="error" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');" />error</td>
+  </tr>
+</table>
+</div>
+</div>
+
+
+
+<p align=center>
+<input type=submit value="Create data set">
+</p>
+</form>
+
+<p class="small" style="width:600; margin-left: 3em; margin-top: 3em;">This form allows you to download average measurements of fossil specimens grouped by species.
+To download occurrences of taxa within fossil collections, use the form for <a href="%%read_url%%?action=displayBasicDownloadForm&input_data=neptune">collection and occurrence data</a>.
+To download taxonomic classification data, use the form for <a href="%%read_url%%?action=displayDownloadTaxonomyForm&input_data=neptune">names and opinions</a>.</p>
+
+</div>
+
