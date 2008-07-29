@@ -3,7 +3,7 @@ use Data::Dumper;
 use CGI::Carp;
 use TaxaCache;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL);
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR $TAXA_TREE_CACHE);
 
 
 # written by PS 6/22/2005 - 6/24/2005
@@ -1067,6 +1067,403 @@ sub avg {
     $sum += $_ for @set;
     $sum = $sum/(scalar(@set));
     return $sum;
-}  
+}
+
+# JA 25-29.7.08
+sub displayDownloadMeasurementsResults  {
+	my $q = shift;
+	my $s = shift;
+	my $dbt = shift; 
+	my $dbh = $dbt->dbh;
+
+	if ( ! $q->param('taxon_name') ) 	{
+		my $errorMessage = '<center><p class="medium"><i>You must enter the name of a taxonomic group.</i></p></center>';
+		print PBDBUtil::printIntervalsJava($dbt,1);
+		main::displayDownloadMeasurementsForm($errorMessage);
+		return;
+	}
+
+	my $sep;
+	if ( $q->param('output_format') eq "csv" )	{
+		$sep = ",";
+	} else	{
+		$sep = "\t";
+	}
+
+	my $sql = "SELECT t.taxon_no,lft,rgt,rgt-lft width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (taxon_name='".$q->param('taxon_name')."' OR common_name ='".$q->param('taxon_name')."') ORDER BY width DESC"; 
+	# if there are multiple matches, we hope to get the right one by
+	#  assuming the larger taxon is the legitimate one
+	my @taxa = @{$dbt->getData($sql)};
+	if ( ! @taxa ) 	{
+		my $errorMessage = '<center><p class="medium"><i>The taxon '.$q->param('taxon_name').' is not in our database. Please try another name.</i></p></center>';
+		print PBDBUtil::printIntervalsJava($dbt,1);
+		main::displayDownloadMeasurementsForm($errorMessage);
+		return;
+	}
+
+	my @fields = ('synonym_no','spelling_no','a.taxon_no','taxon_name');;
+	if ( $q->param('authors') =~ /y/i )	{
+		push @fields , "IF(ref_is_authority='YES',r.author1last,a.author1last) a1";
+		push @fields , "IF(ref_is_authority='YES',r.author2last,a.author2last) a2";
+		push @fields , "IF(ref_is_authority='YES',r.otherauthors,a.otherauthors) oa";
+	}
+	if ( $q->param('year') =~ /y/i )	{
+		push @fields , "IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr";
+	}
+	for my $f ( 'authorizer','type_body_part','extant')	{
+		if ( $q->param($f) =~ /y/i )	{
+			push @fields , $f;
+		}
+	}
+
+	# now extract and average the measurements as follows:
+	#  (1) find species in the taxonomic group
+	#  (2) get measurements of these species (getMeasurements)
+	#  (3) save measurements of species found in a subset of collections
+	#  (4) take averages (getMeasurementTable)
+
+	# step 1
+
+	# the query will get valid species only
+	$sql = "SELECT ".join(',',@fields)." FROM authorities a,$TAXA_TREE_CACHE t WHERE taxon_rank='species' AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY lft ASC";
+	if ( $q->param('authors') =~ /y/i || $q->param('year') =~ /y/i )	{
+		$sql = "SELECT ".join(',',@fields)." FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE taxon_rank='species' AND a.reference_no=r.reference_no AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY lft ASC";
+	}
+
+	my @refs = @{$dbt->getData($sql)};
+
+	# group synonyms for each valid species
+	my %valid_no;
+	if ( $q->param('replace_with_ss') =~ /y/i )	{
+		$valid_no{$_->{taxon_no}} = $_->{synonym_no} foreach @refs;
+	# or else don't, but make sure only one spelling is used per synonym
+	} else	{
+		$valid_no{$_->{taxon_no}} = $_->{spelling_no} foreach @refs;
+	}
+	my @taxon_list = keys %valid_no;
+
+	# step 2
+
+	my @measurements = getMeasurements($dbt,'taxon_list'=>\@taxon_list,'get_global_specimens'=>1);
+	if ( ! @measurements ) 	{
+		my $errorMessage = '<center><p class="medium"><i>We have no measurement data for species belonging to '.$q->param('taxon_name').'. Please try another taxon.</i></p></center>';
+		print PBDBUtil::printIntervalsJava($dbt,1);
+		main::displayDownloadMeasurementsForm($errorMessage);
+		return;
+	}
+
+	# step 3
+
+	my $collections;
+	if ( $q->param('collection_names') =~ /^[A-Za-z0-9]/i )	{
+		$collections = $q->param('collection_names');
+		if ( $q->param('collections') =~ /^[0-9 \t\n]+$/ )	{
+			$collections =~ s/[ \t\n]/,/g;
+			$collections = "collection_no IN (".$collections.")";
+		} else	{
+			$collections =~ s/[ \t\n]/','/g;
+			$collections = "(collection_name LIKE ('%".$collections."%') OR collection_aka LIKE ('%".$collections."%') )";
+		}
+	}
+	my $countries;
+	for my $continent ( 'Africa','Antarctica','Asia','Australia','Europe','North America','South America' )	{
+		if ( $q->param($continent) !~ /y/i )	{
+			my $d = Download->new($dbt,$q,$s,$hbo);
+			$countries = $d->getCountryString();
+			last;
+		}
+	}
+	my $continents;
+	for my $continent ( 'Africa','Antarctica','Asia','Australia','Europe','North America','South America' )	{
+		if ( $q->param($continent) =~ /y/i )	{
+			$continents .= ", ".$continent;
+		}
+	}
+	$continents =~ s/^, //;
+	my $interval_nos;
+	if ( $q->param('max_interval') =~ /^[A-Z][a-z]/i )	{
+		require TimeLookup;
+		my $t = new TimeLookup($dbt);
+	# eml_max and min aren't on the form yet
+		my ($intervals,$errors,$warnings) = $t->getRange('',$q->param('max_interval'),'',$q->param('min_interval'));
+		$interval_nos = join(',',@$intervals);
+	}
+	my $strat_unit;
+	if ( $q->param('group_formation_member') =~ /^[A-Z]/i )	{
+		$strat_unit = $q->param('group_formation_member');
+		$strat_unit = "(geological_group='".$strat_unit."' OR formation='".$strat_unit."' OR member='".$strat_unit."')";
+	}
+
+# need an or here
+	my %by_valid;
+	if ( $collections || $countries || $interval_nos || $strat_unit )	{
+	# it's actually faster to get the occurrences and reIDs separately
+	#  from the measurements instead of doing a nightmare five-table
+	#  join in getMeasurements
+	# it's also faster get the reIDs and then hit occurrences with an out
+	#  list instead of using a left join to get only the occurrences without
+	#  reIDs, as done by getCollections
+	# thank goodness we store collection_no in reidentifications, even
+	#  though technically it's redundant
+		my $sql1 = "SELECT occurrence_no,taxon_no FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@taxon_list).")";
+		my $sql2;
+		if ( $collections )	{
+			$sql2 .= " AND ".$collections;
+		}
+		if ( $interval_nos )	{
+			$sql2 .= " AND max_interval_no IN (".$interval_nos.") AND min_interval_no IN (".$interval_nos.",0)";
+		}
+		if ( $countries )	{
+			$sql2 .= " AND ".$countries;
+		}
+		if ( $strat_unit )	{
+			$sql2 .= " AND ".$strat_unit;
+		}
+		my @occrefs = @{$dbt->getData($sql1.$sql2)};
+		my $sql1 = "SELECT occurrence_no,taxon_no FROM collections c,occurrences o WHERE c.collection_no=o.collection_no AND taxon_no IN (".join(',',@taxon_list).")";
+		my %temp;
+		$temp{$_->{'occurrence_no'}}++ foreach @occrefs;
+		if ( %temp )	{
+			$sql1 .= "AND occurrence_no NOT IN (".join(',',keys %temp).")";
+		}
+		push @occrefs , @{$dbt->getData($sql1.$sql2)};
+		if ( ! @occrefs )	{
+			my $errorMessage = '<center><p class="medium"><i>None of the collections include data for '.$q->param('taxon_name').'. Please try another name or broaden your search criteria.</i></p></center>';
+			print PBDBUtil::printIntervalsJava($dbt,1);
+			main::displayDownloadMeasurementsForm($errorMessage);
+			return;
+		}
+		my %avail;
+		$avail{$_->{'taxon_no'}}++ foreach @occrefs;
+		undef @occrefs;
+		my %sampled;
+	# which measured species are sampled anywhere in this collection set?
+		for my $m ( @measurements )	{
+			if ( $avail{$m->{'taxon_no'}} )	{
+				$sampled{$valid_no{$m->{'taxon_no'}}}++;
+			}
+		}
+		undef %avail;
+	# go through it again because many measurements are not tied to any
+	#  collection at all
+	# we end up with all measurements grouped by valid species name
+		for my $m ( @measurements )	{
+			if ( $sampled{$valid_no{$m->{'taxon_no'}}} )	{
+				push @{$by_valid{$valid_no{$m->{'taxon_no'}}}} , $m;
+			}
+		}
+	} else	{
+		for my $m ( @measurements )	{
+			push @{$by_valid{$valid_no{$m->{'taxon_no'}}}} , $m;
+		}
+	}
+
+
+	my @header_fields = ('species');
+	my %name;
+	$name{$_->{'taxon_no'}} = $_->{'taxon_name'} foreach @refs;
+	my %type_part;
+	if ( $q->param('type_body_part') =~ /y/i )	{
+		$type_part{$_->{'taxon_no'}} = $_->{'type_body_part'} foreach @refs;
+		push @header_fields , "type_body_part";
+	}
+	my %authors;
+	if ( $q->param('authors') =~ /y/i )	{
+		for my $r ( @refs )	{
+			$r->{'a1'} =~ s/,.*//;
+			$r->{'a2'} =~ s/,.*//;
+			if ( $r->{'oa'} ) { $r->{a2} = " et al."; }
+			else { $r->{'a2'} =~ s/^([A-Za-z])/ and $1/; }
+			$authors{$r->{'taxon_no'}} = $r->{'a1'}.$r->{'a2'};
+		}
+		push @header_fields , "authors";
+	}
+	my %year;
+	if ( $q->param('year') =~ /y/i )	{
+		$year{$_->{'taxon_no'}} = $_->{'pubyr'} foreach @refs;
+		push @header_fields , "year_published";
+	}
+	my %extant;
+	if ( $q->param('extant') =~ /y/i )	{
+		$extant{$_->{'taxon_no'}} = $_->{'extant'} foreach @refs;
+		push @header_fields , "extant";
+	}
+	push @header_fields , ('part','measurement');
+	if ( $q->param('specimens_measured') =~ /y/i )	{
+		push @header_fields , "specimens_measured";
+		push @columns , "specimens_measured";
+	}
+	push @header_fields , "mean";
+	my @columns = ('average');
+	for my $c ('min','max','median','error')	{
+		if ( $q->param($c) =~ /y/i )	{
+			push @header_fields , $c;
+			push @columns , $c;
+		}
+	}
+	if ( $q->param('error') =~ /y/i )	{
+		push @header_fields , "error_unit";
+		push @columns , "error_unit";
+	}
+
+	# step 4
+
+	my $OUT_HTTP_DIR = "/public/downloads";
+	my $OUT_FILE_DIR = $HTML_DIR.$OUT_HTTP_DIR;
+	my $name = ($s->get("enterer")) ? $s->get("enterer") : $q->param("yourname");
+	my $outfile = PBDBUtil::getFilename($name)."-size.txt";
+	open OUT,">$OUT_FILE_DIR/$outfile";
+	my $header = join($sep,@header_fields);
+	print OUT $header,"\n";
+
+	my %tables;
+	my @with_data;
+	foreach my $t ( @refs )	{
+		if ( ( $q->param('replace_with_ss') =~ /y/i && $t->{taxon_no} == $t->{synonym_no} ) || ( $q->param('replace_with_ss') !~ /y/i && $t->{taxon_no} == $t->{spelling_no} ) )	{
+			my $vn = $valid_no{$t->{taxon_no}};
+			if ( ! $by_valid{$vn} )	{
+				next;
+			}
+			my $p_table = getMeasurementTable(\@{$by_valid{$vn}});
+			$tables{$vn} = $p_table;
+			push @with_data , $vn;
+		}
+	}
+
+
+	# much of this section is lifted from TaxonInfo::displayMeasurements
+	# however, rewriting it would be a pain because that version focuses on
+	#  creating an HTML table for exactly one taxon at a time
+	my %records;
+	my %specimens;
+	my $rows;
+	my @part_list;
+	my %distinct_parts = ();
+	for my $taxon_no ( @with_data )	{
+		my $p_table = $tables{$taxon_no};
+		while (my($part,$m_table)=each %$p_table)	{
+			if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
+				$distinct_parts{$part}++;
+			}
+		}
+	}
+	@part_list = keys %distinct_parts;
+	@part_list = sort { $a cmp $b } @part_list;
+	unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
+	for my $taxon_no ( @with_data )	{
+		my $p_table = $tables{$taxon_no};
+		for my $part ( @part_list )	{
+			my $m_table = %$p_table->{$part};
+			if ( $m_table )	{
+				$printed_part = $part;
+				if ( $part eq "" )	{
+					$printed_part = "unknown";
+				}
+				$records{$part}++;
+				$specimens{$part} += $m_table->{'specimens_measured'};
+				$rows++;
+				foreach my $type (('length','width','height','diagonal','inflation'))	{
+					if ( exists ($m_table->{$type}) && $q->param($type) =~ /y/i )	{
+						if ( $sep =~ /,/ )	{
+							print OUT "\"$name{$taxon_no}\"",$sep;
+						} else	{
+							print OUT $name{$taxon_no},$sep;
+						}
+						if ( $q->param('type_body_part') =~ /y/i && $type_part{$taxon_no} =~ / / && $sep =~ /,/ )	{
+							print OUT '"',$type_part{$taxon_no},'"',$sep;
+						} elsif ( $q->param('type_body_part') =~ /y/i )	{
+							print OUT $type_part{$taxon_no},$sep;
+						}
+						if ( $q->param('authors') =~ /y/i && $authors{$taxon_no} =~ / / && $sep =~ /,/ )	{
+							print OUT '"',$authors{$taxon_no},'"',$sep;
+						} elsif ( $q->param('authors') =~ /y/i )	{
+							print OUT $authors{$taxon_no},$sep;
+						}
+						if ( $q->param('year') =~ /y/i )	{
+							print OUT $year{$taxon_no},$sep;
+						}
+						if ( $q->param('extant') =~ /y/i )	{
+							print OUT $extant{$taxon_no},$sep;
+						}
+						print OUT $printed_part,$sep,$type,$sep,$m_table->{'specimens_measured'};
+						foreach my $column ( @columns )	{
+							my $value = $m_table->{$type}{$column};
+							print OUT $sep;
+							if ( $column eq "error_unit" )	{
+								print OUT $value;
+							} elsif ( $value <= 0 )	{
+								print OUT "NaN";
+							} elsif ( $value < 1 )	{
+								printf OUT "%.3f",$value;
+							} elsif ( $value < 10 )	{
+								printf OUT "%.2f",$value;
+							} else	{
+								printf OUT "%.1f",$value;
+							}
+		
+						}
+						print OUT "\n";
+					}
+				}
+			}
+		}
+	}
+	close OUT;
+	print "<div style=\"margin-left: 10em; margin-bottom: 5em;\">\n\n";
+	print "<p class=\"pageTitle\" style=\"margin-left: 8em;\">Download results</p>\n";
+	print "<p class=\"darkList\" style=\"width: 30em; padding: 0.1em; padding-left: 3em;\">Summary</p>\n";
+	print "<div style=\"margin-left: 4em;\">\n\n";
+	print "<p style=\"width: 26em; margin-left: 1em; text-indent: -1em;\">Search: taxon = ",$q->param('taxon_name');
+	if ( $q->param('collection_names') )	{
+		print "; collection = ",$q->param('collection_names');
+	}
+	if ( $countries )	{
+		if ( $continents =~ /, / )	{
+			print "; continents = ",$continents;
+		} else	{
+			print "; continent = ",$continents;
+		}
+	}
+	if ( $q->param('max_interval') )	{
+		print "; interval = ",$q->param('max_interval');
+	}
+	if ( $q->param('min_interval') )	{
+		print " to ",$q->param('min_interval');
+	}
+	if ( $q->param('group_formation_member') )	{
+		print "; strat unit = ",$q->param('group_formation_member');
+	}
+	print "</p>\n";
+	my @temp = keys %records;
+	if ( $#temp == 0 )	{
+		printf "<p>%d kind of body part</p>\n",$#temp+1;
+	} else	{
+		printf "<p>%d kinds of body parts</p>\n",$#temp+1;
+	}
+	printf "<p>%d species</p>\n",$#with_data+1;
+	if ( $rows == 1 )	{
+		print "<p>$rows data record</p>\n";
+	} else	{
+		print "<p>$rows data records</p>\n";
+	}
+	print "<p>The data were saved to <a href=\"$OUT_HTTP_DIR/$outfile\">$outfile</a></p>\n";
+	print "</div>\n\n";
+	print "<p class=\"darkList\" style=\"width: 30em; margin-top: 3em; padding: 0.1em; padding-left: 3em;\">Data totals for each body part</p>\n";
+	print "<table cellpadding=\"4\" style=\"margin-left: 6em;\">\n";
+	print "<tr><td align=\"center\">part</td><td>species</td><td>specimens</td></tr>\n";
+	for my $part ( @part_list )	{
+		if ( $records{$part} )	{
+			my $printed_part = $part;
+			if ( $part eq "" )	{
+				$printed_part = "unknown";
+			}
+			print "<tr><td style=\"padding-left: 1em;\">$printed_part</td> <td align=\"center\">$records{$part}</td> <td align=\"center\">$specimens{$part}</td></tr>\n";
+		}
+	}
+	print "</table>\n";
+	print "</div>\n";
+
+}   
+
 
 1;
