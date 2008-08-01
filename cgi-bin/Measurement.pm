@@ -1194,7 +1194,6 @@ sub displayDownloadMeasurementsResults  {
 		$strat_unit = "(geological_group='".$strat_unit."' OR formation='".$strat_unit."' OR member='".$strat_unit."')";
 	}
 
-# need an or here
 	my %by_valid;
 	if ( $collections || $countries || $interval_nos || $strat_unit )	{
 	# it's actually faster to get the occurrences and reIDs separately
@@ -1363,7 +1362,7 @@ sub displayDownloadMeasurementsResults  {
 				$specimens{$part} += $m_table->{'specimens_measured'};
 				$rows++;
 				foreach my $type (('length','width','height','diagonal','inflation'))	{
-					if ( exists ($m_table->{$type}) && $q->param($type) =~ /y/i )	{
+					if ( exists ($m_table->{$type}) && $q->param($type) =~ /y/i && $m_table->{$type}{'average'} > 0 )	{
 						if ( $sep =~ /,/ )	{
 							print OUT "\"$name{$taxon_no}\"",$sep;
 						} else	{
