@@ -14,7 +14,7 @@ function checkForm()	{
 	// some strong assumptions: the reid is of the last occurrence
 	for ( var i=0; i < rows; i++ )	{
 		if ( frm.taxon_name[i].value != "" && frm.reid_no[i].value > 0 && lastocc > 0 && lastocc == frm.occurrence_no[i].value )	{
-			hasreid[lastocc] = 1;
+			hasreid[lastocc] = hasreid[lastocc] + 1;
 		} else if ( frm.taxon_name[i].value != "" && frm.reid_no[i].value == 0 )	{
 			lastocc = frm.occurrence_no[i].value;
 			hasreid[lastocc] = 0;
@@ -38,7 +38,7 @@ function checkForm()	{
 			for ( var j=0; j < i; j++ )	{
 				if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName )	{
 			// case 1: identical occurrence and its own reID
-					if ( frm.occurrence_no[i].value == frm.occurrence_no[j].value )	{
+					if ( frm.occurrence_no[i].value == frm.occurrence_no[j].value && hasreid[frm.occurrence_no[i].value] == 1 )	{
 						errors += "* " + taxonName + " and its reID have the same name\n";
 					}
 			// case 2: identical occurrences with no reIDs
