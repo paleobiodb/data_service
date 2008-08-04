@@ -1702,13 +1702,6 @@ sub displayCollectionDetails {
     Collection::displayCollectionDetails($dbt,$q,$s,$hbo);
 }
 
-#sub FOO 
-#    print $hbo->stdIncludes("std_page_top");
-#    $q->param('type') = "";
-#    displaySearchColls();
-#    print $hbo->stdIncludes("std_page_bottom");
-#}
-
 sub rarefyAbundances {
     return if PBDBUtil::checkForBot();
     logRequest($s,$q);
@@ -1719,6 +1712,7 @@ sub rarefyAbundances {
 }
 
 sub displayCollectionEcology	{
+	return if PBDBUtil::checkForBot();
 	logRequest($s,$q);
 	print $hbo->stdIncludes("std_page_top");
 	Collection::displayCollectionEcology($dbt,$q,$s,$hbo);
@@ -1726,6 +1720,7 @@ sub displayCollectionEcology	{
 }
 
 sub explainAEOestimate	{
+	return if PBDBUtil::checkForBot();
 	print $hbo->stdIncludes("std_page_top");
 	Collection::explainAEOestimate($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes("std_page_top");
