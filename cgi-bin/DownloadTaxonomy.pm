@@ -206,12 +206,11 @@ sub displayITISDownload {
     open FH_P, ">$filesystem_dir/publications.dat";
     my $ref_count = 0;
     if (@references) {
-        my $sql = 'SELECT p1.name authorizer, p2.name enterer, p3.name modifier, DATE_FORMAT(r.modified,\'%m/%e/%Y\') modified_short, r.*'.
-                  ' FROM refs r '.
-                  ' LEFT JOIN person p1 ON p1.person_no=r.authorizer_no'.
-                  ' LEFT JOIN person p2 ON p2.person_no=r.enterer_no'.
-                  ' LEFT JOIN person p3 ON p3.person_no=r.modifier_no'.
-                  ' WHERE r.reference_no IN ('.join(',',@references).')';
+        # originally written by PS with an extremely tedious triple join on
+        #  person meant to avoid using the authorizer/enterer/modifier fields,
+        #  which might be space-intensive but do speed up this kind of thing
+        #  JA 5.8.08
+        my $sql = 'SELECT authorizer, enterer, modifier, DATE_FORMAT(r.modified,\'%m/%e/%Y\') modified_short, r.* FROM refs r  WHERE r.reference_no IN ('.join(',',@references).')';
         my $sth = $dbh->prepare($sql);
         $sth->execute();
         
