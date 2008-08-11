@@ -1613,16 +1613,13 @@ sub queryDatabase {
             push @fields,"c.latdir AS `c.latdir`";
         }
         if ($q->param('collections_authorizer') eq 'YES') {
-            push @left_joins, "LEFT JOIN person pc1 ON c.authorizer_no=pc1.person_no";
-            push @fields, 'pc1.name AS `c.authorizer`';
+            push @fields, 'c.authorizer';
         }
         if ($q->param('collections_enterer') eq 'YES') {
-            push @left_joins, "LEFT JOIN person pc2 ON c.enterer_no=pc2.person_no";
-            push @fields, 'pc2.name AS `c.enterer`';
+            push @fields, 'c.enterer';
         }
         if ($q->param('collections_modifier') eq 'YES') {
-            push @left_joins, "LEFT JOIN person pc3 ON c.modifier_no=pc3.person_no";
-            push @fields, 'pc3.name AS `c.modifier`';
+            push @fields, 'c.modifier';
         }
     }
 
@@ -1684,27 +1681,21 @@ sub queryDatabase {
                 }
             }
             if ($q->param('occurrences_authorizer') eq 'YES') {
-                push @left_joins, "LEFT JOIN person po1 ON o.authorizer_no=po1.person_no";
-                push @fields, 'po1.name AS `o.authorizer`';
+                push @fields, 'o.authorizer';
                 if ( $q->param('replace_with_reid') ne 'NO' )   {
-                    push @left_joins, "LEFT JOIN person pre1 ON re.authorizer_no=pre1.person_no";
-                    push @fields, 'pre1.name AS `re.authorizer`';
+                    push @fields, 're.authorizer';
                 }
             }
             if ($q->param('occurrences_enterer') eq 'YES') {
-                push @left_joins, "LEFT JOIN person po2 ON o.enterer_no=po2.person_no";
-                push @fields, 'po2.name AS `o.enterer`';
+                push @fields, 'o.enterer';
                 if ( $q->param('replace_with_reid') ne 'NO' )   {
-                    push @left_joins, "LEFT JOIN person pre2 ON re.enterer_no=pre2.person_no";
-                    push @fields, 'pre2.name AS `re.enterer`';
+                    push @fields, 're.enterer';
                 }
             }
             if ($q->param('occurrences_modifier') eq 'YES') {
-                push @left_joins, "LEFT JOIN person po3 ON o.modifier_no=po3.person_no";
-                push @fields, 'po3.name AS `o.modifier`';
+                push @fields, 'o.modifier';
                 if ( $q->param('replace_with_reid') ne 'NO' )   {
-                    push @left_joins, "LEFT JOIN person pre3 ON re.modifier_no=pre3.person_no";
-                    push @fields, 'pre3.name AS `re.modifier`';
+                    push @fields, 're.modifier';
                 }
             }
         } 
@@ -4147,6 +4138,60 @@ sub dbg {
     if ( $DEBUG && $message ) { print "<font color='green'>$message</font><br>\n"; }
 
     return $DEBUG;                    # Either way, return the current DEBUG value
+}
+
+# JA 28.7.08
+# stuck in this module for convenience, could be put somewhere else later
+sub displayDownloadMeasurementsResults	{
+	my $self = shift;
+	my $q = $self->{'q'};
+	my $dbt = $self->{'dbt'};
+	my $dbh = $self->{'dbh'};
+
+	my $sql = "SELECT lft,rgt,rgt-lft width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."' ORDER BY width";
+print "$sql";
+	# if there are multiple matches, we hope to get the right one by
+	#  assuming the larger taxon is the legitimate one
+	my @taxa = @{$dbt->getData($sql)};
+	my $t;
+	if ( ! @taxa )	{
+		my $errorMessage = '<p class="medium">We have no data for the taxon '.$q->param('taxon_name').'. Please try another name.</p>';
+		main::displayDownloadMeasurementsForm($errorMessage);
+		return;
+	} else	{
+		$t = $taxa[0];
+	}
+
+	# the taxon_no is only stored in specimens if there is no occurrence_no,
+	#  so we need to tediously extract the taxon_nos from the reID and
+	#  occurrences tables
+	# do this in separate hits to avoid a massive table join
+	$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE WHERE lft>=".$t->{lft}." AND rgt<=".$t->{rgt};
+	my @norefs = @{$dbt->getData($sql)};
+	my @nos;
+	push @nos , $_->{taxon_no} foreach @norefs;
+
+	my %id;
+	$sql = "SELECT occurrence_no,taxon_no FROM occurrences WHERE taxon_no IN (".join(',',@nos).")";
+#print "$sql";
+	my @occs = @{$dbt->getData($sql)};
+printf "O ",$#occs,"<br>";
+	$id{$_->{occurrence_no}} = $_->{taxon_no} foreach @occs;
+	# by doing this over again afterwards with the reIDs table we wipe
+	#  out any bad original IDs
+	$sql = "SELECT occurrence_no,taxon_no FROM reidentifications WHERE taxon_no IN (".join(',',@nos).")";
+	@occs = @{$dbt->getData($sql)};
+printf "R ",$#occs,"<br>";
+	$id{$_->{occurrence_no}} = $_->{taxon_no} foreach @occs;
+#print join(' ',keys %id);exit;
+
+	$sql = "SELECT * FROM authorities a,$TAXA_TREE_CACHE t,specimens s,measurements m WHERE a.taxon_no=t.synonym_no AND t.taxon_no=s.taxon_no AND s.specimen_no=m.specimen_no AND lft>=".$t->{lft}." AND rgt<=".$t->{rgt}." GROUP BY a.taxon_no,specimen_part,measurement_type";
+	my @measures = @{$dbt->getData($sql)};
+	for my $m ( @measures )	{
+print "$m->{taxon_name} $m->{specimen_part} $m->{measurement_type} $m->{average}<br>\n";
+	}
+
+
 }
 
 
