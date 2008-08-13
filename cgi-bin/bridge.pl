@@ -2034,7 +2034,7 @@ sub processTaxonSearch {
         }
 		print "<p align=\"left\"><div class=\"verysmall\" style=\"margin-left: 2em; text-align: left;\">";
         if (!$q->param('reference_no')) {
-		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_tips.html')\">tip sheet</a>.</div></p>\n";
+		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')\">FAQ</a>.</div></p>\n";
         }
 
         print "</div>";
