@@ -1,0 +1,708 @@
+<html>
+<head>
+
+<meta http-equiv="content-type" content="text/html; charset=iso-8859-1">
+<link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css">
+<link REL="icon" HREF="/public/favicon.ico" type="image/x-icon">
+<link REL="shortcut icon" HREF="/public/favicon.ico" type="image/x-icon">
+
+<title>Paleobiology Database Taxonomy FAQ</title>
+
+</head>
+
+<body>
+<div style="margin: 1em;">
+<center><div class="pageTitle">Taxonomy Data Entry FAQ</div></center>
+
+<p class="small">Contents:
+<a href="#General">General questions</a> - 
+<a href="#AuthorityRecords">Creating authority records</a> - 
+<a href="#AuthorityForm">Filling out the authority form</a> - 
+<a href="#SpeciesAuthorities">Authority records for species</a> - 
+<a href="#OpinionRecords">Creating opinion records</a> - 
+<a href="#OpinionForm">About the opinion form</a> - 
+<a href="#Basis">The "basis of opinion" field</a> - 
+<a href="#Taxa">Opinions about higher taxa</a> -
+<a href="#Species">Opinions about species</a>
+</p>
+
+<hr>
+<center>
+<a name="General"></a>
+<p class="large">General questions</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>What is a "taxon"?</i><br>
+Any set of organisms that collectively have a Latinized name formed according to the rules of naming (nomenclature) established by Linnaeus.
+</p>
+
+<p>
+<i>Is a taxon a clade?</i><br>
+Currently, it's not a universally accepted nomenclatural requirement that the species comprising a taxon are all more closely related to each other than to any others (i.e., form a "clade").
+It is necessarily the case that named taxa form full terminological (not biological) subsets or supersets of each other.
+So, a taxon cannot belong to two other taxa unless one of these "parents" falls entirely within the other.
+</p>
+
+<p>
+<i>What do you mean by "taxonomic data"?</i><br>
+We store two kinds of information about taxonomy.
+The "authorities" table lists the taxa we know about, who named them, and when.
+For example, "<i>Homo sapiens</i> Linnaeus 1758" is an authority record.
+The "opinions" table stores all the different opinions about the classification of these names.
+Each record corresponds to one opinion from one paper about one taxon.
+For example, "<i>Homo sapiens</i> belongs to the genus <i>Homo</i> according to Linnaeus 1758" is an opinion record.
+</p>
+
+<p>
+<i>I don't need taxonomic data for what I'm doing, so can't I just skip entering it?</i><br>
+We strongly prefer that you enter the taxonomic data regardless of whether you are a taxonomist or whether it matters if your occurrences are classified correctly and precisely, because you will then save other people a lot of trouble later on.
+Your colleagues shouldn't be forced to track down the paper again to figure it out what data you skipped and enter them.
+And you don't want your occurrences to be taxonomically vague or unreliable anyway.
+</p>
+
+<p>
+<i>Should I enter the taxonomic data before or after the occurrence data?</i><br>
+You may want to enter the taxonomic data first because you can then confirm that your occurrences are classified correctly as you enter them.
+However, if a collection includes type specimens, you may want to enter the occurrences first so you can enter the type locality number when you create taxonomic records for those species.
+</p>
+
+<p>
+<i>How do I get started?</i><br>
+Most papers have a "systematic paleontology" section.
+Go to this part of the paper and start entering names and opinions as you encounter them.
+To enter names, click on the "Add/edit taxonomic name" link on the main menu.
+To enter opinions, click on "Add/edit taxonomic opinion."
+You will want to start with opinions more often than names because we already have so many names in the system, and you don't want to waste time confirming that we have yours already.
+If some of the names are missing, you will be prompted to enter them anyway as you go along.
+</p>
+
+<p>
+<i>What should I enter first from a paper?</i><br>
+First enter the paper's opinions on the higher taxa.
+Start with the largest taxon and work your way down.
+These opinions are usually mentioned going highest to lowest anyway.
+</p>
+
+<p>
+<i>What's the fastest way to enter the data?</i><br>
+Most of the time, after you enter an opinion you should move right on to the next one by clicking the "Add/edit opinion about another taxon" link at the top right of the results page.
+All of the other links are used in special cases.
+</p>
+
+<p>
+<i>What's the last step in entering a paper's taxonomy?</i><br>
+You might want to try the "Print this reference's classification" link on the results page just to make sure that paper's overall classification has been entered fully and correctly.
+</p>
+
+</div>
+
+<hr>
+<center>
+<a name="AuthorityRecords"></a>
+<p class="large">Creating authority records</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>What's in the authorities table?</i><br>
+The table stores a separate record for every combination of a rank and spelling that has been used for each taxon.
+For example, we have one record for <i>Mustela gulo</i> and another for <i>Gulo gulo</i> because Linneaus originally thought that the wolverine was just a big weasel (more or less).
+It also has different records for suborder Dinosauria, order Dinosauria, superorder Dinosauria, subclass Dinosauria, and unranked clade Dinosauria because different authors disagree about the group's rank.
+And it stores multiple, seemingly identical rank-spelling combinations when there are homonyms (see below.
+</p>
+
+<p>
+<i>But what is a "rank"?</i><br>
+Unfortunately, Linnaeus and all other taxonomists up until the last couple of decades used "rank" names such as genus, family, order, and class to indicate the relative inclusiveness of different taxa.
+The basic rule is that a taxon can only belong to a parent of a "higher" rank.
+The ranks are ordered from lowest to highest in the same way that they appear in our rank pulldown menu.
+</p>
+
+<p>
+<i>What else is in the authorities table?</i><br>
+In addition to the name and rank, the name of the author, the year the taxon was named, page and figure numbers, and many other things you'll see on the data entry form.
+</p>
+
+<p>
+<i>If someone else has already entered a name, should I enter it again?</i><br>
+No, never, unless the names are homonyms (i.e., they are different biological entities that happen to be spelt the same way).
+If the names are not homonyms, always click on the existing name on the screen that says "Which ... do you mean?"
+It doesn't matter if a species' genus-species combination is different or if a taxon's rank is different.
+</p>
+
+<p>
+<i>Can I enter names of subgenera or subspecies?</i><br>
+Yes, but they have to be entered correctly.
+A subgenus name must go in parentheses after the genus name; a subspecies name must follow the genus and species names.
+</p>
+
+<p>
+<i>Should I make a new record for a subgenus?</i><br>
+It depends.
+<i>Xus (Xus)</i> is definitely distinct from <i>Xus</i> because it definitely includes fewer species, so it must have its own record.
+<i>Xus (Yus)</i> needs a new record if and only if there is no <i>Yus</i> in the system yet.
+Otherwise, create an opinion saying that the author thinks <i>Yus</i> belongs to <i>Xus</i> and spells it <i>Xus (Yus)</i>.
+</p>
+
+<p>
+<i>Should I make a new record if a family (say, Hominidae) becomes a subfamily (say, Homininae)?</i><br>
+It depends.
+(A) If the author recognizes <i>both</i> Hominidae and Homininae, they need different records.
+(B) If we only have a record for Hominidae and the author only recognizes Homininae, then do not create a new authority record.
+Create an opinion about Hominidae and say the author reranked it and spelled it Homininae.
+(C) If we already have Hominidae and Homininae, but the author only recognizes one for them, you of course won't create a new authority record.
+But you must figure out whether the author's taxon corresponds to the "Hominidae" or "Homininae" of other authors, which means you must compare the genera assigned to these taxa by the different authors.
+</p>
+
+<p>
+<i>Can I create records for informal names or English names?</i><br>
+No.
+Only ever enter Latin (Linnean) names.
+If you want to record a common Engish name, you can do that on the form for the equivalent formal name.
+</p>
+
+<p>
+<i>I created an authority record by mistake. How can I delete it?</i><br>
+Write to the <a href="mailto:alroy@nceas.ucsb.edu">Database coordinator</a> and explain the situation.
+We do not allow users to delete authority records because so many steps are involved, which makes it difficult to carry out a deletion without causing even more problems.
+</p>
+
+</div>
+
+<hr>
+<center>
+<a name="AuthorityForm"></a>
+<p class="large">Filling out the authority form</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>What if I type in the wrong name?</i><br>
+We have checks to make sure you don't even get to the form if you have spelt the name incorrectly, but if you do, you can still edit the name in the first text entry box on the form.
+</p>
+
+<p>
+<i>What if the taxon was not first named in the "primary reference" (the paper I am entering)?</i><br>
+Enter the author, year, pages, etc. of the earlier paper in the fields that follow "it was named in an earlier publication."
+Make sure to check the radio button to the left of that sentence.
+</p>
+
+<p>
+<i>When I edit an old record I see listings for both the "primary reference" and my "current reference." What's the difference?</i><br>
+The primary reference is the paper used by the person who originally entered the opinion.
+It may have expressed the opinion, or may have just supplied information about an opinion "repeated from an earlier authority."
+The current reference is the one you are using.
+</p>
+
+<p>
+<i>But why would I select the "current reference" button?</i><br>
+Normally, switch to "current reference" only if you are editing an old opinion that treated your current paper as "an earlier authority."
+For example, say you are entering data from Smith (1980) and someone using a more recently published paper has already entered "Smith" and "1980" under "earlier authority."
+You should check "current reference" and erase the words "Smith" and "1980."
+</p>
+
+<p>
+<i>When should I record the page and figure numbers?</i><br>
+Always record them if you can figure them out, regardless of whether the opinion comes from the "primary reference."
+For example, Jones (1990) may report that Smith (1980) had some opinion and gave that opinion on p. 111 of the 1980 paper.
+So, put Smith, 1980, and 111 in the appropriate boxes in the "repeated from an earlier authority" section.
+</p>
+
+<p>
+<i>Which page number should I enter?</i><br>
+The page on which the taxon is formally named, i.e., at the start of a section listing the type specimen, type locality, diagnosis, etc.
+That page is often not the one where the name first appears, because the name might be mentioned (say) in the abstract or introduction.
+</p>
+
+<p>
+<i>Which figure numbers should I enter?</i><br>
+You should list all the figures that illustrate the type specimen.
+Normally, you only ever do this for a species or subspecies.
+</p>
+
+<p>
+<i>What is the "original rank"?</i><br>
+The rank used in the paper that first described the taxon.
+</p>
+
+<p>
+<i>That seems simple, so why do we have an original rank pulldown?</i><br>
+Because after someone enters the taxon at one rank, someone else may discover that the original rank was different.
+</p>
+
+<p>
+<i>What if I can't figure out the original rank?</i><br>
+If secondary sources use different ranks and you don't have the original paper, assume that the oldest paper you have used the original rank.
+It's okay if you guess wrong because we can fix it later.
+</p>
+
+<p>
+<i>What should I do if the pulldown does not yet list the rank used in my current reference?</i><br>
+You can create the name-rank combination using the opinion form, not the authority form.
+When you add your current paper's opinion, go to the spelling section and pull down the rank value it uses.
+You will then be asked to confirm that this name-rank combination is correct before we create an entry for it.
+</p>
+
+<p>
+<i>What does "unranked clade" mean?</i><br>
+It means that the author recognizes the group based on a cladistic analysis and has named it, but does not use ranks for taxa above the family level (many cladists don't).
+</p>
+
+<p>
+<i>Why are parvorder and mirorder not in the list?</i><br>
+Because we have restricted the list to commonly used ranks.
+If the author uses an unusual term such as these, just use the "unranked clade" value.
+</p>
+
+<p>
+<i>What do the preservation categories mean?</i><br>
+For species, the value depends on the nature of the type specimen.
+Briefly, regular taxon = the type is a fully diagnostic body fossil; form taxon = the type is a single organ and different organs have different names in this group; and ichnofossil = the type is a trace fossil and not a body fossil.
+For taxa above the species rank, the value should be entered only if all the included species fit into one of these categories.
+</p>
+
+<p>
+<i>What are some examples of form taxa?</i><br>
+Many plant macrofossils are form taxa, including many leaves, fruits, flowers, and especially pieces of wood.
+Most animal groups such as tetrapods, molluscs, brachiopods, trilobites include few or no form taxa.
+Exceptions include eggshells, otoliths, and ammonoid aptychi.
+A single organ is otherwise most often a "regular taxon" because that organ is diagnostic enough to tell all the real biological species apart in that group.
+A nomen dubium (<a href="#Species">see below</a>) is not the same as a form taxon, because a nomen dubium is invalid but a form taxon is accepted as valid (and useful) by the people who work on the group.
+</p>
+
+<p>
+<i>Should I always try to enter something in the "common name" field?</i><br>
+Normally, you don't have to enter a common name if the taxon is extinct.
+If the taxon is alive, this information can be very useful.
+</p>
+
+<p>
+<i>What should I put in the "common name" field?</i><br>
+Always enter an English name that applies to most or all members of the group.
+You don't have to enter a broad term such as "turtle" for every taxon in the relevant group (say, every species of turtle), because the system knows that a common name applies to all taxa in the group.
+Be careful to use the singular form instead of the plural form, and not to capitalize the name unless it includes proper nouns such as place or person names.
+</p>
+
+<p>
+<i>What should go in the comments field?</i><br>
+Most often you will use it to note problems.
+For example, make a note if: you are not sure you have the taxon's authority right; different sources say the taxon was named in different years; a technical error was made by the authority, such as not designating or figuring a type specimen; or the type specimen's fossil collection cannot be recorded because the type locality data are inadequate.
+</p>
+
+</div>
+
+<hr>
+<center>
+<a name="SpeciesAuthorities"></a>
+<p class="large">Authority records for species</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>What's the difference between a species and any other kind of taxon?</i><br>
+Putting aside the actual biology, there are several.
+A species name must be formed from two words.
+The first is called the genus name and pertains to a group of species.
+The second, "trivial" name is a modifier that tells the reader which species in particular you are talking about.
+Trivial names are not capitalized, unlike names of genera and all higher taxa.
+The endings of trivial names can change depending on the Latin gender of the genus they belong to, which can change depending on the opinion of the author.
+Finally, species have "type specimens" and higher taxa do not.
+</p>
+
+<p>
+<i>What is a "type specimen"?</i><br>
+The one single museum specimen that is the "name bearer" for a species.
+So, if you want to use that name, you must agree to include that one specimen in that species.
+Likewise, if you believe that more than one type specimen belongs to the same species, then you can only use the oldest name that any of them bears.
+The others are synonyms (invalid).
+</p>
+
+<p>
+<i>Why is there an "original name" pulldown, not just an "original rank" pulldown?</i><br>
+Because there may be different spellings even if the rank is the same (say, if there are different combinations of a species name, but it is always a species).
+</p>
+
+<p>
+<i>What is the difference between "type specimen" and "specific body part"?</i><br>
+Both things refer to the type specimen.
+Always put the museum catalog number, such as "AMNH 9999," in the type specimen field.
+Put a verbal description of the specimen, such as "mandible with p4, m1, and m2," in the body part field.
+</p>
+
+<p>
+<i>Why is there also a "body part of type" pulldown?</i><br>
+So we can do easy computations that involve body parts.
+For example, we can count the number of types that are mandibles without trying to parse the "specific body part" field, which could have all sorts of things in it.
+</p>
+
+<p>
+<i>What if I want to enter more measurements than just the length and width of the type specimen?</i><br>
+Use the "Add/edit specimen measurement data" tool on the main menu.
+This tool also allows you to add more details about type specimen measurements, such as whether the specimen is from the left or right side, or whether you got the data from a table or the text.
+</p>
+
+<p>
+<i>What does "this is the type species" mean?</i><br>
+Higher taxa have "types," just like species.
+However, the type of a species is always a physical specimen (<a href="#SpeciesAuthorities">see above</a>).
+The type of a higher taxon is a lower taxon it includes.
+We allow you to record that a lower taxon is the type of a higher taxon simply by checking this box exactly because you don't need to type in a specimen number.
+</p>
+
+<p>
+<i>Why is there a "this is the type species" checkbox on both the authority and opinion forms?</i><br>
+Just to make data entry easier.
+It makes no difference which one you use.
+</p>
+
+</div>
+
+<hr>
+<center>
+<a name="OpinionRecords"></a>
+<p class="large">Creating opinion records</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>What's in the opinions table?</i><br>
+Basically, it records who placed what taxon where and when.
+So, it includes the author, year, pages, and figures, as with the authorities table.
+It stores the "parent" taxon (the larger taxon that includes the "child" taxon that the author classified).
+It stores master ID numbers for the child and parent, plus ID numbers for the particular rank-spelling combinations used in this paper for the child and parent.
+</p>
+
+<p>
+<i>Why did you call it the "opinions" table and not the "classification" table?</i><br>
+Because it records the particular opinions of particular people expressed in particular papers, as opposed to a single, static master classification.
+Unlike other databases, our goal is not merely to present one big classification with each taxon assigned to exactly one other taxon, but to capture all of the disagreeing opinions about how to classify each taxon.
+</p>
+
+<p>
+<i>Can I skip entering any of the opinions?</i><br>
+The only opinions you should skip are the implied opinions about very high-level taxa that you can infer from the simple classification given at the top of a systematic paleontology section.
+For example, suppose you see something like this:
+</p>
+
+<p style="margin-left: 1em; font-family: Georgia, Times, serif;">
+Class Mammalia<br>
+Order Primates<br>
+Family Hominidae<br>
+Genus Homo</p>
+
+<p>
+It's really not useful to enter opinions saying "Primates belongs to Mammalia" or "Hominidae belongs to Primates" because this information is entirely vague and almost certainly not supported by evidence and not the point of the paper.
+You can often tell because so many intermediate ranks have been skipped.
+</p>
+
+<p>
+<i>What if someone has already entered an opinion about a taxon?</i><br>
+No problem.
+Enter an opinion for each and every paper that gives one, even if lots of papers said the same thing or if the same author said the same thing in different papers.
+</p>
+
+<p>
+<i>Shouldn't I just overwrite old opinions?</i><br>
+No.
+Never overwrite any data record with data from a different paper.
+</p>
+
+<p>
+<i>But old opinions are useless.</i><br>
+No. Database users want to know about all the opinions that have been expressed about each taxon.
+It doesn't matter which opinions are "right."
+</p>
+
+<p>
+<i>I know I should enter all the opinions I can, but what if my paper doesn't say what the original classification was?</i><br>
+No problem. Just enter the opinion of the paper you are reading.
+We will get the original author's opinion when the original paper goes in.
+</p>
+
+<p>
+<i>What if the same paper says a taxon originally belonged to A but now belongs to B?</i><br>
+Submit two opinion forms.
+First enter the original opinion, check the "opinion is repeated" radio button, and enter the author's name and the year in the name and year fields.
+Then enter the current reference's opinion.
+Of course, these opinions may disagree.
+</p>
+
+<p>
+<i>How do I handle incertae sedis taxa?</i><br>
+Enter the narrowest higher taxon you can in the parent taxon field.
+For example, if a genus cannot be assigned to a family but the author knows what order it belongs to, enter the name of the order.
+</p>
+
+<p>
+<i>Why can't I edit Sepkoski's opinions?</i><br>
+You should only ever edit opinions that were entered incorrectly.
+Sepkoski's opinions were uploaded directly, and correctly, from a digital copy of his Compendium.
+His assignments cannot be changed regardless of whether they are "correct"; there are no page numbers, figure numbers, phylogenetic status values, or diagnoses to enter; and his opinions' "basis" is always "second hand."
+</p>
+
+<p>
+<i>I created an opinion record by mistake. How can I delete it?</i><br>
+Write to the <a href="mailto:alroy@nceas.ucsb.edu">Database coordinator</a> and explain the situation.
+We do not allow users to delete opinion records for the same reason we do not allow them to delete authority records.
+</p>
+
+</div>
+
+<hr>
+<center>
+<a name="OpinionForm"></a>
+<p class="large">About the opinion form</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>What is the "basis of opinion" pulldown?</i><br>
+<a href="Basis">See below</a>.
+</p>
+
+<p>
+<i>What does "belongs to" mean?</i><br>
+It means that the author thinks the taxon is valid and falls within a higher taxon.
+For example, a species "belongs to" a genus, so if you pull down this value you must put a genus name in the "parent" field.
+All of the other "status" values mean that the child name is invalid for some reason, but all of them still require that you enter a parent name.
+</p>
+
+<p>
+<i>What is a synonym?</i><br>
+That one taxon is biologically the same as another one that was named previously, even though the names are different (<a href="#SpeciesAuthorities">see above</a>).
+By the rules of nomenclature, the oldest name must be used (i.e., is "valid" and has "priority" and is "senior" to the other name).
+</p>
+ 
+<p>
+<i>How do I enter a synonymy?</i><br>
+Synonymies are easy.
+Just enter the senior synonym in the parent field and pull down "subjective" or "objective" synonym in the status field.
+The only trick is that the junior and senior synonyms must be of the same rank.
+So, for example, a species can be a synonym of another species but not of a genus.
+</p>
+
+<p>
+<i>But what's an "objective" synonym?</i><br>
+A synonym is objective if the type specimen is exactly the same.
+For example, Cope (1882) named A.M. 3038 <i>Taeniolabis sulcatus</i>, and Cope (1884) renamed it <i>Taeniolabis scalper.</i> So, <i>scalper</i> is a junior objective synonym.
+Most synonymies are "subjective" because the type specimens are different.
+</p>
+
+<p>
+<i>Can't I just skip entering a taxon if it's a synonym or otherwise invalid?</i><br>
+No. Make sure to create an authority record for it and enter the opinion saying it is invalid.
+If possible, also record the classification that was favored by the person who named it.
+</p>
+
+<p>
+<i>What does "replaced by" mean?</i><br>
+It means that this taxon is spelt exactly the same way as a different taxon that was named earlier (i.e., it is a homonym), and that the current author has proposed a new, different name to replace it.
+For example, <i>Cryptolestes</i> Novacek 1976 is spelled exactly the same way as at least two other genera that were named earlier by other people.
+So, Novacek (1980) proposed <i>Crypholestes</i> as the replacement name.
+To enter his opinion, you would therefore pull down "replaced by" and enter <i>Crypholestes</i> in the "parent" field.
+</p>
+
+<p>
+<i>But if the taxon is a homonym, shouldn't I record that somewhere? There's no "homonym of" status value.</i><br>
+For homonyms, you only need to record the replacement name.
+The system will then know that the species if a homonym of something.
+It doesn't really matter what.
+For example, because <i>Cryptolestes</i> has been replaced by <i>Crypholestes</i>, we can be certain it is a homonym.
+</p>
+
+<p>
+<i>What does "this is the type ..." mean?</i><br>
+<a href="#SpeciesAuthorities">See above</a>.
+</p>
+
+<p>
+<i>What is a diagnosis?</i><br>
+A formal list of features that distinguish a taxon from related taxa.
+If the author does not say that the diagnosis is a "diagnosis," do not treat it a diagnosis.
+</p>
+
+<p>
+<i>Why is there a diagnosis pulldown and also a diagnosis text entry box?</i><br>
+The pulldown records where the diagnosis came from.
+The text box records the actual diagnosis.
+If you don't have time to type in the diagnosis, it would still really be helpful (and easy) to pull down one of the values.
+</p>
+
+<p>
+<i>What do the diagnosis values mean?</i><br>
+Briefly, none = no formal diagnosis, even if some or even many characters are described; new = completely new to this paper; emended = based on an earlier paper's diagnosis, but modified; repeated = repeated word for word from an earlier paper.
+</p>
+
+<p>
+<i>What's the difference between "correction" and a "misspelling"?</i><br>
+Pull down one of these values if the original spelling does not agree with the current (later) paper's spelling, but there has been no rank change or recombination.
+If the original spelling was correct, the later spelling is wrong, so pull down "misspelling."
+If the original spelling was illegal for some reason, the later spelling is a "correction."
+This happens most often when the gender of a Latin species name disagrees with the gender of its genus name.
+</p>
+
+<p>
+<i>How can I link a correct spelling and its misspelling if they are both in the system already?</i><br>
+You can "merge" the spellings by entering an additional opinion that misspells the taxon's name.
+Just make sure that you enter the correct spelling when you start to enter the opinion (i.e., on the page you get after you click the "Add/edit taxonomic opinion" link), but then enter the misspelling in the spelling section on the actual opinion form.
+</p>
+
+</div>
+
+<hr>
+<center>
+<a name="Basis"></a>
+<p class="large">The "basis of opinion" field</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>The system only uses the most recent opinion. What if it's wrong?</i><br>
+Actually it doesn't. It uses the most recent opinion that is <i>stated with evidence</i>, and if there is no such opinion, it uses the most recent opinion that is <i>stated without evidence</i> or <i>implied</i>, and likewise with <i>second hand</i> opinions.
+</p>
+
+<p>
+<i>What does "stated with evidence" mean?</i><br>
+Briefly, stated with evidence = based on a discussion of morphology or a quantitative analysis of relationships; stated without evidence = explicitly stated, but without any discussion of morphology or quantitative analysis; implied = not specifically stated, but can be deduced easily from other stated opinions; second hand = no stated evidence, the author does not work on the taxonomic group, and the opinion is based strictly on earlier research by other people.
+More details are given in the <a href="/cgi-bin/bridge.pl?action=displayPage&page=classification_quality">basis of opinions tip sheet</a>.
+</p>
+
+<p>
+<i>But a classification is only based on "evidence" if it is based on a modern cladistic analysis.</i><br>
+You're certainly entitled to think that, but in our data entry system "with evidence" does not mean "really good" or "the one I like."
+It means "based on [any] stated evidence."
+</p>
+
+<p>
+<i>What's wrong with only ranking opinions as "with evidence" if I agree with them?</i><br>
+The PaleoDB is intended to reposit data that are as objective as possible.
+We do not enter data based on whether we agree with an author, whether we think an author is competent, or what we think an author should have said.
+We can objectively record that evidence was or wasn't stated but not whether the evidence was "good."
+If you personally favor a different classification, create a reference to record your personal opinions.
+</p>
+
+<p>
+<i>What is "stated evidence"?</i><br>
+Usually, this means mentioning at least one morphological character that supports the opinion.
+Even such a statement as "it belongs to this genus based on its size" counts.
+Showing where the taxon falls in a scatter plot, multivariate analysis, or cladistic analysis also counts as giving evidence, even if there is no verbal discussion of characters.
+</p>
+
+<p>
+<i>Can "stated evidence" include biogeography or stratigraphy?</i><br>
+This is a matter of dispute, but if morphology is not mentioned at all, most data enterers will consider an opinion to be "stated without evidence."
+</p>
+
+<p>
+<i>What happens if I don't record the basis of the opinion?</i><br>
+Then the opinion will be rated based on the overall "basis of opinions" value for the paper it came from.
+See the <a href="/cgi-bin/bridge.pl?action=displayPage&page=classification_quality">basis of opinions tip sheet</a>.
+It would make more sense for you to just enter the basis value on the opinion page, which is easy to do.
+</p>
+
+</div>
+
+<hr>
+<center>
+<a name="Taxa"></a>
+<p class="large">Opinions on higher taxa</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>What is an "invalid subgroup"?</i><br>
+X is an invalid subgroup of Y if the author thinks all of X's genera do belong to Y, but they do not form a coherent group.
+X and Y could be, say, a subfamily and family.
+</p>
+
+<p>
+<i>What do the "phylogenetic status" values mean?</i><br>
+Briefly, monophyletic = an entire, complete branch of an evolutionary tree (a clade); paraphyletic = a single branch missing some twigs (species); polyphyletic = several distinct branches; unknown = the author does not know.
+</p>
+
+<p>
+<i>Should I always enter the phylogenetic status?</i><br>
+No. Pull down a value only if the author makes a very specific statement about how the classification reflects the phylogeny.
+</p>
+
+<p>
+<i>What do I do if a subgenus was later elevated to a genus?</i><br>
+First enter the original author's opinion that the subgenus belonged to the genus.
+The opinion would be that subgenus S belonged to genus G and therefore was spelt G (S).
+Next, enter the later opinion saying that S is a genus and belongs to some higher taxon (say, a subfamily or family).
+Just make sure to say it is now spelt S in the spelling section.
+</p>
+
+</div>
+
+<hr>
+<center>
+<a name="Species"></a>
+<p class="large">Opinions on species</p>
+</center>
+
+<div class="small">
+
+<p>
+<i>What are "objective" and "subjective" synonyms, and what does "replaced by" mean?</i><br>
+<a href="#OpinionForm">See above</a>.
+</p>
+
+<p>
+<i>What does "recombined" mean?</i><br>
+That a species originally was placed in one genus, but now belongs to another.
+So, the species is still valid, but its name has been combined with a different genus name.
+</p>
+
+<p>
+<i>What should I do if a species has been recombined?</i><br>
+First enter an authority record using the original combination.
+The system will automatically create an opinion saying that the original author placed the species in the original genus.
+Then enter an opinion saying that the species now belongs to the other genus.
+Just make sure to enter the new combination in the spelling section and pull down the "recombined" spelling reason value.
+</p>
+
+<p>
+<i>What if a species has never been recombined or synonymized?</i><br>
+You could skip entering more opinions saying that the species belongs to its original genus if you want to, but it's a bad idea because someone may later enter a paper giving a contrary opinion that will need to be overridden by an even more recent one.
+Make a habit of entering all opininions regardless of whether they are boring.
+</p>
+
+<p>
+<i>What do terms like nomen dubium and nomen nudum mean?</i><br>
+They mean that a species is unclassifiable or was illegally named, and is not merely a synonym.
+The difference usually is that a synonym's type is specifically determinate (you know which species it really is), whereas the types of invalid names cannot be equated with a particular species.
+The terms can be defined this way:
+
+<ul>
+<li><i>nomen dubium</i> means that the type is poor, its identity is currently unclear, and it deserves further study.
+<li><i>nomen nudum</i> means that the species' name has no scientific meaning because the author did not follow the rules of nomenclature (usually, because the type specimen was not designated, illustrated, or described).
+<li><i>nomen oblitum</i> means that the species is probably identical to and senior to another one, but has not been mentioned in the literature at all for decades, so it can be ignored.
+<li><i>nomen vanum</i> means that the type is so poor that it is certainly indeterminate at the species level.
+</ul>
+
+</p>
+
+<p>
+<i>For something like a nomen dubium, what do I put in the parent field?</i><br>
+Enter the most specific thing possible in the parent field.
+For example, if <i>Equus validus</i> is a nomen dubium but still definitely a horse, you can enter Equidae in the parent field.
+It <i>is</i> possible for a species to be a nomen dubium falling within a recognizeable genus!
+</p>
+
+</div>
+
+</div>
+
+</body>
+
