@@ -39,8 +39,8 @@
 
 <table border="0" class="small">
   <tr>
-    <td>Publication year: </td>
-    <td>
+    <td valign="top">Publication year: </td>
+    <td valign="top">
 	<input name=pubyr size=5 value="" maxlength=4><br> 
     </td>
     <td style="text-indent: -0.5em; margin-left: 0.5em; padding-left: 1em;">
@@ -57,17 +57,17 @@
     </td>
    </tr>
    <tr>
-    <td>Publication type:</td>
-    <td><select name="publication_type"></select> </td>
+    <td valign="top">Publication type:</td>
+    <td valign="top"><select name="publication_type"></select> </td>
     <div hide="is_fossil_record">
     <td>&nbsp;Project ref number: <input name=project_ref_no size=5> </td>
     </div>
   </tr>
   
   <tr>
-    <td>Classification quality:</td>
-    <td>
-      <select name="classification_quality"></select><br>
+    <td valign="top">Taxonomy:</td>
+    <td valign="top">
+      <select name="basis" autofill="reference_basis"></select><br>
       <small>
         &nbsp;<a href="#" onClick="popup = window.open('%%write_url%%?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">see tip sheet</a>
       </small>
