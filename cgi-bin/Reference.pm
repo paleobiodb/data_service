@@ -120,7 +120,7 @@ sub getReference {
     my $reference_no = int(shift);
 
     if ($reference_no) {
-        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.classification_quality,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
+        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
         my $ref = ${$dbt->getData($sql)}[0];
         return $ref;
     } else {
@@ -479,8 +479,8 @@ sub displayReference {
     if($ref->{'publication_type'}) {
         $html .= "<tr><td class=\"fieldName\">Publication type: </td><td>$ref->{'publication_type'}</td></tr>";
     }
-    if($ref->{'classification_quality'}) {
-        $html .= "<tr><td class=\"fieldName\">Taxonomic classification quality: </td><td>$ref->{'classification_quality'}</td></tr>";
+    if($ref->{'basis'}) {
+        $html .= "<tr><td class=\"fieldName\">Taxonomy: </td><td>$ref->{'basis'}</td></tr>";
     }
     if($ref->{'language'}) {
         $html .= "<tr><td class=\"fieldName\">Language: </td><td>$ref->{'language'} </td></tr>";
@@ -643,7 +643,7 @@ sub displayReferenceForm {
     my $isNewEntry = ($reference_no > 0) ? 0 : 1;
     
     my %defaults = (
-        'classification_quality'=>'standard',
+        'basis'=>'stated without evidence',
         'language'=>'English'
     );
 
@@ -697,13 +697,13 @@ sub processReferenceForm {
     my $isNewEntry = ($reference_no > 0) ? 0 : 1;
 
     my @child_nos = ();
-    # If classification quality is changed on an edit, the classifications that refer to that ref
+    # If taxonomy basis is changed on an edit, the classifications that refer to that ref
     # may also change, so we may have to update the taxa cache in that case
     if ($reference_no) {
-        my $sql = "SELECT classification_quality FROM refs WHERE reference_no=$reference_no";
+        my $sql = "SELECT basis FROM refs WHERE reference_no=$reference_no";
         my $row = ${$dbt->getData($sql)}[0];
         if ($row) {
-            if ($row->{'classification_quality'} ne $q->param('classification_quality')) {
+            if ($row->{'basis'} ne $q->param('basis')) {
                 my $sql = "SELECT DISTINCT child_no FROM opinions WHERE reference_no=$reference_no";
                 my @results = @{$dbt->getData($sql)};
                 foreach my $row (@results) {
@@ -723,7 +723,7 @@ sub processReferenceForm {
     if ($IS_FOSSIL_RECORD && $isNewEntry) {
         $vars{'publication_type'} = 'book/book chapter';              
         $vars{'language'} = 'English';
-        $vars{'classification_quality'} = 'compendium';
+        $vars{'basis'} = 'second hand';
         $vars{'project_name'} = 'fossil record';
     } elsif ($IS_FOSSIL_RECORD) {
         # do not edit this value
@@ -945,7 +945,7 @@ sub getReferences {
         my $tables = "(refs r, person p1, person p2)".
                      " LEFT JOIN person p3 ON p3.person_no=r.modifier_no";
         # This exact order is very important due to work around with inflexible earlier code
-        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.classification_quality,r.doi,r.comments,r.language,r.created,r.modified";
+        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.basis,r.doi,r.comments,r.language,r.created,r.modified";
         my @join_conditions = ("r.authorizer_no=p1.person_no","r.enterer_no=p2.person_no");
         my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@join_conditions,@where);
         my $orderBy = " ORDER BY ";
@@ -1014,7 +1014,7 @@ sub getReferencesXML {
             $pages .= " - $row->{lastpage}";
         }
 
-        # left out: authorizer/enterer, class. quality, language, doi, comments, project_name
+        # left out: authorizer/enterer, basis, language, doi, comments, project_name
         print $g->reference(
             $g->reference_no($row->{reference_no}),
             $g->authors($authors),
@@ -1040,7 +1040,7 @@ sub printRefsCSV {
     PBDBUtil::autoCreateDir("$HTML_DIR/public/references");
     open REFOUTPUT,">$HTML_DIR/public/references/${authname}_refs.csv";
 
-    my @fields = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage publication_type classification_quality language doi comments created modified); 
+    my @fields = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle pubvol pubno firstpage lastpage publication_type basis language doi comments created modified); 
     if ($csv->combine(@fields)) {
         print REFOUTPUT $csv->string(),"\n";
     }
