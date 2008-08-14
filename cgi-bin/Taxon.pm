@@ -295,7 +295,7 @@ sub displayAuthorityForm {
             $lookup_reference = $s->get('reference_no');
         } else {
             $lookup_reference = $fields{'reference_no'};
-        } 
+        }
         my @taxa = getTypeTaxonList($dbt,$fields{'taxon_no'},$lookup_reference);
         $fields{'type_taxon'} = 0;
         foreach my $row (@taxa) {
@@ -532,25 +532,7 @@ sub submitAuthorityForm {
             $errors->add("Don't enter other author names if you haven't entered a second author");
         }	
        
-        my $lookup_reference = $fields{'reference_no'};
-			
-		if ($q->param('pubyr')) {
-            my $pubyr = $q->param('pubyr');
 
-			if (! Validation::properYear( $pubyr ) ) {
-				$errors->add("The year is improperly formatted");
-			}
-			
-			# make sure that the pubyr they entered (if they entered one)
-			# isn't more recent than the pubyr of the reference.  
-            if ($lookup_reference) {
-                my $ref = Reference->new($dbt,$lookup_reference);
-                if ($ref && $pubyr > $ref->get('pubyr')) {
-                    $errors->add("The publication year ($pubyr) can't be more 
-                    recent than that of the primary reference (" . $ref->get('pubyr') . ")");
-                }
-            }
-		}
         if ($q->param('taxon_rank') =~ /species|subgenus/) {
             if (!$q->param('author1last')) {
                 $errors->add("If you enter a subgenus, species, or subspecies, enter at least the last name of the first author");
@@ -560,7 +542,28 @@ sub submitAuthorityForm {
             }
         }
 	}
-	
+
+        my $lookup_reference = $fields{'reference_no'};
+        my $pubyr;
+        my $ref = Reference->new($dbt,$lookup_reference);
+        if ($q->param('pubyr')) {
+            $pubyr = $q->param('pubyr');
+            if ($lookup_reference) {
+                if ($ref && $pubyr > $ref->get('pubyr')) {
+                    $errors->add("The publication year ($pubyr) can't be more recent than that of the primary reference (" . $ref->get('pubyr') . ")");
+                }
+            }
+        } elsif ($lookup_reference) {
+            $pubyr = $ref->get('pubyr');
+        } else	{
+        # paranoia check, should never happen
+            $errors->add("The publication year can't be determined");
+        }
+
+        if (! Validation::properYear( $pubyr ) ) {
+            $errors->add("The year is improperly formatted");
+        }
+
 	# check and make sure the taxon_name field in the form makes sense
 	if (!($q->param('taxon_name'))) {
 		$errors->add("You can't submit the form with an empty taxon name!");	
@@ -700,10 +703,10 @@ sub submitAuthorityForm {
 	
 	if ($isNewEntry) {
 		($status, $resultTaxonNumber) = $dbt->insertRecord($s,'authorities', \%fields);
-        TaxaCache::addName($dbt,$resultTaxonNumber);
+		TaxaCache::addName($dbt,$resultTaxonNumber);
 		
 		if ($parent_no) {
-            addImplicitChildOpinion($dbt,$s,$resultTaxonNumber,$parent_no,\%fields);
+			addImplicitChildOpinion($dbt,$s,$resultTaxonNumber,$parent_no,\%fields,$pubyr);
 		}
 	} else {
 		# if it's an old entry, then we'll update.
@@ -990,7 +993,7 @@ sub updateImplicitBelongsTo {
     if ($new_higher && !$old_higher) {
         # Insert a new opinion, switch from genus --> subgenus
         dbg("Inserting belongs to since taxa changed from genus $old_name to subgenus $new_name");
-        addImplicitChildOpinion($dbt,$s,$taxon_no,$parent_no,$fields);
+        addImplicitChildOpinion($dbt,$s,$taxon_no,$parent_no,$fields,0);
         if (@old_opinions) {
             my $subgenus = $new_last;
             $subgenus =~ s/\(|\)//g;
@@ -1030,25 +1033,24 @@ sub updateImplicitBelongsTo {
         if (!$found_old_parent) {
             # Insert new opinion
             dbg("Inserting belongs to since taxa changed from $old_name to $new_name");
-            addImplicitChildOpinion($dbt,$s,$taxon_no,$parent_no,$fields);
+            addImplicitChildOpinion($dbt,$s,$taxon_no,$parent_no,$fields,0);
         }
     } 
 }
 
 sub addImplicitChildOpinion {
-    my ($dbt,$s,$child_no,$parent_no,$fields) = @_;
+    my ($dbt,$s,$child_no,$parent_no,$fields,$pubyr) = @_;
     
     return unless ($child_no && $parent_no);
     # Get original combination for parent no PS 04/22/2005
     my $orig_parent_no = TaxonInfo::getOriginalCombination($dbt,$parent_no);
    
     # several things are always true by definition of the original author's
-    #  opinion on a name: it is authoritative, gives a new diagnosis, and
+    #  opinion on a name: it provides evidence, gives a new diagnosis, and
     #  uses the original spelling
     my %opinionHash = (
         'status'=>'belongs to',
         'spelling_reason'=>'original spelling',
-        'classification_quality'=>'authoritative',
         'diagnosis_given'=>'new',
         'child_no'=>$child_no,
         'child_spelling_no'=>$child_no,
@@ -1056,6 +1058,17 @@ sub addImplicitChildOpinion {
         'parent_spelling_no'=>$parent_no,
         'ref_has_opinion'=>$fields->{'ref_is_authority'}
     );
+    # evidence can be assumed only for opinions postdating the
+    #  Règles internationales de la Nomenclature zoologique of 1905 JA 13.8.8
+    # only do this for opinions that represent original assignments of species,
+    #  which we also check with pubyr because other calls of this function
+    #  do not pass one in
+    # note that we use pubyr and not fields->{pubyr} because the latter only
+    #  exists if ref_is_authority is false
+    if ( $pubyr >= 1905 )	{
+        $opinionHash{'diagnosis_given'} = 'new';
+        $opinionHash{'basis'} = 'stated with evidence';
+    }
     my @fields = ('reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures');
     $opinionHash{$_} = $fields->{$_} for @fields;
 
