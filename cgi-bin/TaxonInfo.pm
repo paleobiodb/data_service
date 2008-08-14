@@ -29,9 +29,9 @@ sub searchForm {
 
 	my $page_title = "Taxonomic name search form"; 
     
-	if ($search_again){
-        $page_title = "<p class=\"medium\">No results found (please search again)</p>";
-    } 
+	if ($search_again)	{
+		$page_title = "<p class=\"medium\">No results found (please search again)</p>";
+	}
 	print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,''], ['page_title','page_subtitle']);
 }
 
@@ -2187,19 +2187,18 @@ sub getMostRecentClassification {
 
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
-    # All values of the enum classification_quality get recast as integers for easy sorting
-    # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort DESC
+    # All values of the enum basis get recast as integers for easy sorting
+    # Lowest should appear at top of list (stated with evidence) and highest at bottom (second hand) so sort DESC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $reliability = 
-        "(IF (o.classification_quality != '',".
-            "CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 END,".
-            #"CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END,".
+        "(IF (o.basis != '',".
+            "CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 END,".
+            #"CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 0 END,".
         # ELSE:
             "IF(r.reference_no = 6930,".
-                "0,".# is compendium, then 0 (lowest priority)
+                "0,".# is second hand, then 0 (lowest priority)
             # ELSE:
-                " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 END".
-                #" CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
+                " CASE r.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 2 END".
             ")".
          ")) AS reliability_index ";
 
@@ -2208,10 +2207,10 @@ sub getMostRecentClassification {
     #  opinions marked as most recent, unless this function is called for
     #  the purpose of updating the tree and list caches
     # JA 12-13.2.08
-    if ( $options->{'recompute'} !~ /yes/ && ! $options->{'reference_no'} && ! wantarray )	{
+    if ( $options->{'rebuild'} !~ /yes/ && $options->{'recompute'} !~ /yes/ && ! $options->{'reference_no'} && ! wantarray )	{
         my $strat_fields;
         if ($options->{strat_range}) {
-            $strat_fields = 'max_interval_no,min_interval_no, ';
+            $strat_fields = 'o.max_interval_no,o.min_interval_no, ';
         }
         my $sql = "SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
             " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, "
@@ -2253,7 +2252,7 @@ sub getMostRecentClassification {
     }
     my $strat_fields;
     if ($options->{strat_range}) {
-        $strat_fields = 'max_interval_no,min_interval_no,';
+        $strat_fields = 'o.max_interval_no,o.min_interval_no,';
     }
     my $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
             " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, "
@@ -2312,8 +2311,10 @@ sub getMostRecentClassification {
     @rows = @cleanrows;
 
     if (scalar(@rows)) {
-        if ( $options->{'recompute'} !~ /yes/ && ! $options->{'reference_no'} && ! wantarray )	{
-            my $sql = "UPDATE taxa_tree_cache SET opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no=$child_no";
+    # don't bother with this if TaxaCache is rebuilding taxa_tree_cache,
+    #  because that function does the update itself JA 17-18.4.08
+        if ( $options->{'rebuild'} !~ /yes/ && $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} && ! wantarray )	{
+            my $sql = "UPDATE taxa_tree_cache SET opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE spelling_no=" . $rows[0]->{'child_spelling_no'};
             my $dbh = $dbt->dbh;
             $dbh->do($sql);
         }
@@ -2346,19 +2347,18 @@ sub getMostRecentSpelling {
 
     # This will return the most recent parent opinions. its a bit tricky cause: 
     # we're sorting by aliased fields. So surround the query in parens () to do this:
-    # All values of the enum classification_quality get recast as integers for easy sorting
-    # Lowest should appear at top of list (authoritative) and highest at bottom (compendium) so sort ASC
+    # All values of the enum basis get recast as integers for easy sorting
+    # Lowest should appear at top of list (stated with evidence) and highest at bottom (second hand) so sort ASC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $reliability = 
-        "(IF (o.classification_quality != '',".
-            "CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 END,".
-            #"CASE o.classification_quality WHEN 'second hand' THEN 1 WHEN 'standard' THEN 2 WHEN 'implied' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END,".
+        "(IF (o.basis != '',".
+            "CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 END,".
+            #"CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 0 END,".
         # ELSE:
             "IF(r.reference_no = 6930,".
-                "0,".# is compendium, then 0 (lowest priority)
+                "0,".# is second hand, then 0 (lowest priority)
             # ELSE:
-                " CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 END".
-                #" CASE r.classification_quality WHEN 'compendium' THEN 1 WHEN 'standard' THEN 2 WHEN 'authoritative' THEN 3 ELSE 0 END".
+                " CASE r.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 2 END".
             ")".
          ")) AS reliability_index ";
     my $fossil_record_sort;
@@ -3477,6 +3477,7 @@ sub disusedNames {
 # taxon_no,taxon_name,taxon_rank,status.  Status is nomen dubium etc, and rest of the fields are standard.
 # JA: this function eventually will become obsolete because nomen ... opinions
 #  are supposed to record parent_no from now on 31.8.07
+# JA: it is currently used only in DownloadTaxonomy.pm
 sub nomenChildren {
     my $dbt = shift;
     my $arg = shift;
