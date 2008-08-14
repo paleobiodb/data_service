@@ -102,7 +102,8 @@ sub new {
         dotcolor=>[\&_listFromHardList,'mapcolors'],
         country=>[\&_countryList],
         time_scale=>[\&_timeScaleList],
-        opinion_classification_quality=>[\&_listFromEnum,'opinions','classification_quality'],
+        opinion_basis=>[\&_listFromEnum,'opinions','basis'],
+        reference_basis=>[\&_listFromEnum,'refs','basis'],
         month=>[$months], day_of_month=>[$day_of_month], year=>[$years],
 
         # Specimen measurement form 
@@ -122,7 +123,7 @@ sub new {
         'cladograms' => ['source'],
         'authorities' => ['taxon_rank','preservation'],
         'opinions' => ['phylogenetic_status','diagnosis_given'],
-        'refs'=> ['project_name','publication_type','classification_quality','language'],
+        'refs'=> ['project_name','publication_type','basis','language'],
         'collections'=> ['access_level', 'latdir', 'lngdir', 'latlng_basis', 'gps_datum', 'altitude_unit', 'geogscale', 'localbedunit', 'localorder', 'regionalbedunit', 'regionalorder', 'stratscale', 'lithification', 'lithification2',  'tectonic_setting', 'lagerstatten', 'concentration', 'orientation', 'preservation_quality', 'abund_in_sediment', 'art_whole_bodies', 'disart_assoc_maj_elems', 'disassoc_maj_elems', 'disassoc_minor_elems', 'sorting', 'fragmentation', 'bioerosion', 'encrustation', 'temporal_resolution', 'spatial_resolution', 'collection_type', 'collection_size_unit', 'rock_censused_unit', 'museum'],
         'ecotaph'=>['composition1', 'composition2', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'ontogeny', 'grouping', 'taxon_environment', 'locomotion', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'reproduction', 'dispersal1', 'dispersal2','body_mass_source','body_mass_type'],
         'occurrences'=>['genus_reso', 'subgenus_reso', 'species_reso', 'plant_organ', 'plant_organ2'],
