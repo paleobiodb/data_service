@@ -353,7 +353,7 @@ sub displayITISDownload {
 #   taxonomic_names, not current
 #     same as above but has valid name and reason for this name being invalid
 #   opinions
-#     raw dump of opinions with author fields and taxon fields denormalized, also classification quality
+#     raw dump of opinions with author fields and taxon fields denormalized, also basis
 #   references
 #     raw dump of references used
 sub displayPBDBDownload {
@@ -428,7 +428,7 @@ sub displayPBDBDownload {
     if ( $q->param('output_data') =~ /basic/ )	{
         @header = ("child_name","status","parent_name","author1init","author1last","author2init","author2last","otherauthors","pubyr");
     } else	{
-        @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","phylogenetic_status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","classification_quality","comments","created","modified");
+        @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","phylogenetic_status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","basis","comments","created","modified");
     }
     $csv->combine(@header);
     print FH_OP $csv->string()."\n";
@@ -524,7 +524,7 @@ sub displayPBDBDownload {
     if ( $q->param('output_data') =~ /basic/ )	{
         @header = ('author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage');
     } else	{
-        @header = ('authorizer','enterer','modifier','reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage','publication_type','classification_quality','comments','created','modified');
+        @header = ('authorizer','enterer','modifier','reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage','publication_type','basis','comments','created','modified');
     }
     $csv->combine(@header);
     print FH_REF $csv->string()."\n";
@@ -881,7 +881,7 @@ sub getTaxonomicOpinions {
                 . "a1.taxon_name child_name, a2.taxon_name child_spelling_name, "
                 . "a3.taxon_name parent_name, a4.taxon_name parent_spelling_name,"
                 . "o.opinion_no,o.reference_no,o.status,o.phylogenetic_status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
-                . "o.pages,o.figures,o.created,o.comments,IF(o.classification_quality != '', o.classification_quality, r.classification_quality) classification_quality,"
+                . "o.pages,o.figures,o.created,o.comments,IF(o.basis != '', o.basis, r.basis) basis,"
                 . " IF (o.ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,"
                 . " IF (o.ref_has_opinion='YES',r.author1init,o.author1init) author1init,"
                 . " IF (o.ref_has_opinion='YES',r.author1last,o.author1last) author1last,"
