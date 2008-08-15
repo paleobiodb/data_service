@@ -543,7 +543,12 @@ sub submitAuthorityForm {
         }
 	}
 
-        my $lookup_reference = $fields{'reference_no'};
+        my $lookup_reference;
+        if ($q->param('ref_is_authority') eq 'CURRENT') {
+            $lookup_reference = $s->get('reference_no');
+        } else {
+            $lookup_reference = $fields{'reference_no'};
+        }
         my $pubyr;
         my $ref = Reference->new($dbt,$lookup_reference);
         if ($q->param('pubyr')) {
