@@ -612,9 +612,12 @@ sub typoCheck {
     my $first = substr($value,0,1);
     my $second = substr($value,1,1);
     my $next = substr($value,2);
-    if ($second !~ /^[aieoul]$/) {
+    # disabled this conditional because (1) doing so dramatically speeds up
+    #  the query; and (2) this function is a major choke point for all
+    #  kinds of users, especially those entering taxonomy JA 14.8.08
+#    if ($second !~ /^[aieoul]$/) {
         $first .= $second;
-    }
+#    }
     if ($next =~ /([^aeiouylvwbmn])/) { # skip these since  they're most prevalent in typos
         $next = $1;
     } else {
