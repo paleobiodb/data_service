@@ -465,7 +465,8 @@ sub displayOpinionForm {
     my @parents_to_migrate2;
     if ($fields{'status_category'} eq 'invalid1' && $fields{'synonym'} eq 'misspelling of') {
         if (scalar(@parent_nos) == 1) {
-            my ($ref1,$ref2) = getOpinionsToMigrate($dbt,$fields{'child_no'},$parent_nos[0],$fields{'opinion_no'});
+            # errors are ignored because the form is only being displayed
+            my ($ref1,$ref2,$error) = getOpinionsToMigrate($dbt,$fields{'child_no'},$parent_nos[0],$fields{'opinion_no'});
             @opinions_to_migrate2 = @{$ref1};
             @parents_to_migrate2 = @{$ref2};
         }
@@ -608,7 +609,8 @@ sub displayOpinionForm {
     my @opinions_to_migrate1;
     my @parents_to_migrate1;
     if (scalar(@child_spelling_nos) == 1) {
-        my ($ref1,$ref2) = getOpinionsToMigrate($dbt,$fields{'child_no'},$child_spelling_nos[0],$fields{'opinion_no'});
+        # errors are ignored because the form is only being displayed
+        my ($ref1,$ref2,$error) = getOpinionsToMigrate($dbt,$fields{'child_no'},$child_spelling_nos[0],$fields{'opinion_no'});
         @opinions_to_migrate1 = @{$ref1};
         @parents_to_migrate1 = @{$ref2};
     }
@@ -998,17 +1000,25 @@ sub submitOpinionForm {
     my @parents_to_migrate2;
     if ($fields{'status'} eq 'misspelling of') {
         if ($fields{'parent_spelling_no'}) {
-            my ($ref1,$ref2) = getOpinionsToMigrate($dbt,$fields{'parent_no'},$fields{'child_no'},$fields{'opinion_no'});
-            @opinions_to_migrate2 = @{$ref1};
-            @parents_to_migrate2 = @{$ref2};
+            my ($ref1,$ref2,$error) = getOpinionsToMigrate($dbt,$fields{'parent_no'},$fields{'child_no'},$fields{'opinion_no'});
+            if ( $error )	{
+                $errors->add("$childSpellingName can't be a misspelling of $parentName because there is already a '$error' opinion linking them, so they must be biologically distinct");
+            } else	{
+                @opinions_to_migrate2 = @{$ref1};
+                @parents_to_migrate2 = @{$ref2};
+            }
         }
     }
     if ($fields{'child_spelling_no'}) {
-        my ($ref1,$ref2) = getOpinionsToMigrate($dbt,$fields{'child_no'},$fields{'child_spelling_no'},$fields{'opinion_no'});
-        @opinions_to_migrate1 = @{$ref1};
-        @parents_to_migrate1 = @{$ref2};
+        my ($ref1,$ref2,$error) = getOpinionsToMigrate($dbt,$fields{'child_no'},$fields{'child_spelling_no'},$fields{'opinion_no'});
+        if ( $error )	{
+            $errors->add("$childSpellingName can't be an alternate spelling of $childName because there is already a '$error' opinion linking them, so they must be biologically distinct");
+        } else	{
+            @opinions_to_migrate1 = @{$ref1};
+            @parents_to_migrate1 = @{$ref2};
+        }
     }
-    if ((@opinions_to_migrate1 || @opinions_to_migrate2 || @parents_to_migrate1 || @parents_to_migrate2) && $q->param("confirm_migrate_opinions") !~ /YES/i) {
+    if ((@opinions_to_migrate1 || @opinions_to_migrate2 || @parents_to_migrate1 || @parents_to_migrate2) && $q->param("confirm_migrate_opinions") !~ /YES/i && $errors->count() == 0) {
         dbg("MIGRATING:<PRE>".Dumper(\@opinions_to_migrate1)."</PRE><PRE>".Dumper(\@opinions_to_migrate2)."</PRE>"); 
         my $msg = "";
         if (@opinions_to_migrate1) {
@@ -1060,7 +1070,7 @@ sub submitOpinionForm {
         } 
         if ($q->param('status') eq 'belongs to') {
             if ($childSpellingRank eq 'species' && $parentRank !~ /genus/) {
-		    	$errors->add("A species must be assigned to a genus or subgenus and not a higher order name");
+                $errors->add("A species must be assigned to a genus or subgenus and not a higher order name");
             }
         }
     }
@@ -1070,6 +1080,18 @@ sub submitOpinionForm {
         # JA: ... except if the status is "rank changed as," which is actually the opposite case
         if ( $childSpellingRank eq $childRank) {
             $errors->add("If you change a taxon's rank, its old and new ranks must be different");
+        } elsif ($childRank eq "subgenus" && $childSpellingRank eq "genus") {
+            my ($g,$childEnding) = split / /,$childName;
+            $childEnding =~ s/[\(\)]//g;
+            if ($childSpellingName eq $childEnding)	{
+                $errors->add("If the two parts of a subgenus name are identical, the genus and subgenus must be biologically different, so you can't treat them as alternate spellings");
+            }
+        } elsif ($childRank eq "genus" && $childSpellingRank eq "subgenus") {
+            my ($g,$childEnding) = split / /,$childSpellingName;
+            $childEnding =~ s/[\(\)]//g;
+            if ($childName eq $childEnding)	{
+                $errors->add("If the two parts of a subgenus name are identical, the genus and subgenus must be biologically different, so you can't treat them as alternate spellings");
+            }
         }
     } else {
         if ($childSpellingRank ne $childRank && $q->param('spelling_reason') !~ /recombination|misspelling/) {
@@ -1134,7 +1156,7 @@ sub submitOpinionForm {
             }
         }
         if ($q->param('spelling_reason') eq 'original spelling' && $spellingParent ne $childParent) {
-            $errors->add("The genus and subgenus in the \"How was it classified?\" and the \"How was it spelled?\" sections must be the same is this is marked as the original spelling");
+            $errors->add("The genus and subgenus in the \"How was it classified?\" and the \"How was it spelled?\" sections must be the same if the latter is marked as the original spelling");
         }
     } else {
         if ($q->param('spelling_reason') eq 'reassignment') {
@@ -1238,7 +1260,8 @@ sub submitOpinionForm {
     if ($q->param('ref_has_opinion') =~ /CURRENT/ && $s->get('reference_no')) {
         $fields{'reference_no'} = $s->get('reference_no');
     }
-	
+
+exit;
 	# now we'll actually insert or update into the database.
 
 	# first step is to create the parent taxon if a species is being
@@ -1460,13 +1483,19 @@ sub resetOriginalNo{
 # current opinion in the migration, which will only happen on an edit
 sub getOpinionsToMigrate {
     my ($dbt,$child_no,$child_spelling_no,$exclude_opinion_no) = @_;
+
+    my $sql = "SELECT * FROM opinions WHERE (child_no=".$child_no." AND (parent_no=".$child_spelling_no." OR parent_spelling_no=".$child_spelling_no.")) OR (child_no=".$child_no." AND (parent_no=".$child_spelling_no." OR parent_spelling_no=".$child_spelling_no."))";
+    my @results = @{$dbt->getData($sql)};
+    if ( @results )	{
+        return ([],[],$results[0]->{'status'});
+    }
  
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_spelling_no);
-    my $sql = "SELECT * FROM opinions WHERE child_no=$orig_no";
+    $sql = "SELECT * FROM opinions WHERE child_no=$orig_no";
     if ($exclude_opinion_no =~ /^\d+$/) {
         $sql .= " AND opinion_no != $exclude_opinion_no";
     }
-    my @results = @{$dbt->getData($sql)};
+    @results = @{$dbt->getData($sql)};
   
     my @parents = ();
 
