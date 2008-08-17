@@ -881,7 +881,7 @@ sub getTaxonomicOpinions {
                 . "a1.taxon_name child_name, a2.taxon_name child_spelling_name, "
                 . "a3.taxon_name parent_name, a4.taxon_name parent_spelling_name,"
                 . "o.opinion_no,o.reference_no,o.status,o.phylogenetic_status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
-                . "o.pages,o.figures,o.created,o.comments,IF(o.basis != '', o.basis, r.basis) basis,"
+                . "o.pages,o.figures,o.created,o.comments,IF((o.basis != '' && o.basis IS NOT NULL), o.basis, r.basis) basis,"
                 . " IF (o.ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,"
                 . " IF (o.ref_has_opinion='YES',r.author1init,o.author1init) author1init,"
                 . " IF (o.ref_has_opinion='YES',r.author1last,o.author1last) author1last,"
