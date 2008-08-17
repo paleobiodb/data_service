@@ -1261,7 +1261,6 @@ sub submitOpinionForm {
         $fields{'reference_no'} = $s->get('reference_no');
     }
 
-exit;
 	# now we'll actually insert or update into the database.
 
 	# first step is to create the parent taxon if a species is being
