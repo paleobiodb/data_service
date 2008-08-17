@@ -711,6 +711,7 @@ sub submitOpinionForm {
             carp "Could not create opinion object in displayOpinionForm for opinion_no ".$q->param('opinion_no');
             return;
         }
+        $fields{'opinion_no'} = $o->get('opinion_no');
         $fields{'child_no'} = $o->get('child_no');
         $fields{'reference_no'} = $o->get('reference_no');
     } else {	
@@ -1483,7 +1484,11 @@ sub resetOriginalNo{
 sub getOpinionsToMigrate {
     my ($dbt,$child_no,$child_spelling_no,$exclude_opinion_no) = @_;
 
-    my $sql = "SELECT * FROM opinions WHERE (child_no=".$child_no." AND (parent_no=".$child_spelling_no." OR parent_spelling_no=".$child_spelling_no.")) OR (child_no=".$child_no." AND (parent_no=".$child_spelling_no." OR parent_spelling_no=".$child_spelling_no."))";
+
+    my $sql = "SELECT * FROM opinions WHERE ((child_no=".$child_no." AND (parent_no=".$child_spelling_no." OR parent_spelling_no=".$child_spelling_no.")) OR (child_no=".$child_no." AND (parent_no=".$child_spelling_no." OR parent_spelling_no=".$child_spelling_no."))) AND status!='misspelling of'";
+    if ($exclude_opinion_no =~ /^\d+$/) {
+        $sql .= " AND opinion_no != $exclude_opinion_no";
+    }
     my @results = @{$dbt->getData($sql)};
     if ( @results )	{
         return ([],[],$results[0]->{'status'});
