@@ -276,6 +276,10 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <table style="clear: left; padding-top: 1.5em;" width="100%" cellpadding="3" cellspacing="0">
 
 <tr class="lightGray">
+<td valign=top class="small">Download only the following<br>&nbsp;&nbsp;<select name="restrict_to_field"><option</option><option></option><option value="collection_no">collection number</option><option value="collection_name">collection name</option><option value="reference_no">reference number</option><option value="strat_unit">stratigraphic unit</option></select>(s): </td>
+<td valign=top class="small" colspan=3><input name="restrict_to_list" type="text" size="50"></td></tr>
+
+<tr class=>
 <td valign=top class="small">Lithification of primary lithology:</td>
 <td valign=top class="small" colspan=3>
 <input type=checkbox name="lithification_lithified" value="YES" checked>lithified
@@ -284,7 +288,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <input type=checkbox name="lithification_unknown" value="YES" checked>unknown
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Select <b>lithologies</b>:</td>
 <td valign=top class="small" colspan=3>
 <input type=checkbox name="lithology_carbonate" value="YES" checked>carbonate
@@ -293,7 +297,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <input type=checkbox name="lithology_unknown" value="YES" checked>unknown
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small" nowrap> ... or 
 <select name="include_exclude_lithology1">
 <option>include</option>
@@ -304,7 +308,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </td></tr>
 
 
-<tr class="lightGray">
+<tr>
 <td valign=middle class="small">Select <b>environments</b>:</td>
 <td valign=top class="small" colspan=3>
 <input type=checkbox name="environment_carbonate" value="YES" checked>carbonate
@@ -313,7 +317,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <input type=checkbox name="environment_unknown" value="YES" checked>unknown
 </td></tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=middle class="small">... and/or onshore-offshore zones:</td>
 <td valign=top class="small" colspan=3>
 <nobr><input type=checkbox name="zone_marginal_marine" value="YES" checked>marginal marine</nobr>
@@ -324,7 +328,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <nobr><input type=checkbox name="zone_slope_basin" value="YES" checked>slope/basin</nobr>
 </td></tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small" nowrap> ... or 
 <select name="include_exclude_environment">
 <option>include</option>
@@ -334,7 +338,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <select id="environment"></select>
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Select <b>continents</b> or paleocontinents:</td>
 
 <td valign=top class="small" colspan=3>
@@ -367,7 +371,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </td></tr></table>
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small" nowrap>... or 
 <select name="include_exclude_country">
 <option>include</option>
@@ -378,7 +382,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </td>
 </tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small"><span style="white-space: nowrap">Latitudinal range:</span></td>
 <td valign=top class="small">
 <input name="latmin1" size="4" value="-90">&deg; to
@@ -389,7 +393,7 @@ and
 </td>
 </tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small"><span style="white-space: nowrap">Longitudinal range:</span></td>
 <td valign=top class="small">
 <input name="lngmin1" size="4" value="-180">&deg; to
@@ -400,7 +404,7 @@ and
 </td>
 </tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small"><span style="white-space: nowrap">Paleolatitudinal range:</span></td>
 <td valign=top class="small">
 <input name="paleolatmin1" size="4" value="-90">&deg; to
@@ -411,7 +415,7 @@ and
 </td>
 </tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small"><span style="white-space: nowrap">Paleolongitudinal range:</span></td>
 <td valign=top class="small">
 <input name="paleolngmin1" size="4" value="-180">&deg; to
@@ -422,7 +426,7 @@ and
 </td>
 </tr> 
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small">Geographic scale of collections:</td>
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name="geogscale_hand_sample" value="YES" checked>hand sample</span>
@@ -433,7 +437,7 @@ and
 <span style="white-space: nowrap"><input type=checkbox name="geogscale_unknown" value="YES" checked>unknown</span>
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Stratigraphic scale of collections:</td>
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name="stratscale_bed" value="YES" checked>bed</span>
@@ -444,7 +448,7 @@ and
 <span style="white-space: nowrap"><input type=checkbox name="stratscale_unknown" value="YES" CHECKED>unknown</span>
 </td></tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small">Modes of preservation and collection:</td>
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_cast' value="YES" checked>cast</span>
@@ -460,7 +464,7 @@ and
 <span class="small">"easy" means sieved and unlithified or poorly lithified</span>
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Reason for describing collection:</td>
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_archaeological' value="YES" checked> archaeological</span>
@@ -472,7 +476,7 @@ and
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_unknown' value="YES" checked> unknown</span>
 </td></tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small">Lump collections by:<br>
 <small><i>
 Occurrences of the same species will be lumped if the species name field is downloaded; otherwise lumping is by genus<br>
@@ -503,10 +507,6 @@ location:
 </select>
 </span>
 </td></tr>
-
-<tr>
-<td valign=top class="small">Download only the following collection number(s): </td>
-<td valign=top class="small" colspan=3><input name=collection_no type="text" size="30"></td></tr>
 
 <tr class="lightGray">
 <td valign=top class="small" nowrap>Exclude collections with
