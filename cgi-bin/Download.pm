@@ -257,6 +257,8 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Late Neogene bin excludes", "Late Pleistocene/undifferentiated Pleistocene" );
     }
 
+    $html .= $self->retellOptionsRow ( "Restrict to ".$q->param("restrict_to_field")."(s): ",$q->param("restrict_to_list"));
+
     my @lithification_group = ('lithified','poorly_lithified','unlithified','unknown');
     $html .= $self->retellOptionsGroup('Lithification','lithification_',\@lithification_group);
    
@@ -396,7 +398,6 @@ $html .= $self->retellOptionsGroup('Onshore-offshore zones:','zone_',\@zone_grou
     $html .= $self->retellOptionsRow ( "Lump by stratigraphic unit?", $q->param("lump_by_strat_unit") );
     $html .= $self->retellOptionsRow ( "Lump by published reference?", $q->param("lump_by_ref") );
     $html .= $self->retellOptionsRow ( "Lump by time interval?", $q->param("lump_by_interval") );
-    $html .= $self->retellOptionsRow ( "Restrict to collection(s): ",$q->param("collection_no"));
     $html .= $self->retellOptionsRow ( "Exclude collections with subset collections? ","yes" ) if ($q->param("exclude_superset") eq 'YES');
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("occurrence_count_qualifier")." than",$q->param("occurrence_count")." occurrences") if (int($q->param("occurrence_count")));
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("abundance_count_qualifier")." than",$q->param("abundance_count")." specimens/individuals") if (int($q->param("abundance_count")));
@@ -1468,11 +1469,22 @@ sub getCollectionsWhereClause {
 
     }
 
-    if ($q->param("collection_no") =~ /\d/) {
+    if ($q->param("restrict_to_field") =~ /[a-z]*/ && $q->param("restrict_to_list") =~ /[A-Za-z0-9]/) {
+        # treat it as a name with a wildcard if there are letters
+        # won't work if the user actually wants reference or collection nos
+        #  JA 17.8.08
+        if ($q->param("restrict_to_list") =~ /[A-Za-z]/)	{
+            if ($q->param("restrict_to_field") eq "strat_unit")	{
+                push @where, "(c.geological_group LIKE '".$q->param('restrict_to_list')."%' OR c.formation LIKE '".$q->param('restrict_to_list')."%' OR c.member LIKE '".$q->param('restrict_to_list')."%')"
+            } else	{
+                push @where, "c.".$q->param('restrict_to_field')." LIKE '".$q->param('restrict_to_list')."%'";
+            }
+        } elsif ($q->param("restrict_to_field") =~ /_no$/)	{
         # Clean it up
-        my @collection_nos = split(/[^0-9]/,$q->param('collection_no'));
-        @collection_nos = map {int($_)} @collection_nos;
-        push @where, "c.collection_no IN (".join(",",@collection_nos).")";
+            my @nos = split(/[^0-9]/,$q->param('restrict_to_list'));
+            @nos = map {int($_)} @nos;
+            push @where, "c.".$q->param('restrict_to_field')." IN (".join(",",@nos).")";
+        }
     }
 
     foreach my $whereItem (
@@ -1790,7 +1802,7 @@ sub queryDatabase {
     @conditions = grep {!/o.species_name NOT LIKE '%indet.%'/} @conditions;
     @conditions = grep {!/(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)/} @conditions;
     if (!@conditions) {
-        push @form_errors, "No search terms entered.";
+        push @form_errors, "No valid search terms were entered.";
     }
 
     
