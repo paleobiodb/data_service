@@ -2191,7 +2191,7 @@ sub getMostRecentClassification {
     # Lowest should appear at top of list (stated with evidence) and highest at bottom (second hand) so sort DESC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $reliability = 
-        "(IF (o.basis != '',".
+        "(IF ((o.basis != '' AND o.basis IS NOT NULL),".
             "CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 END,".
             #"CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 0 END,".
         # ELSE:
@@ -2351,7 +2351,7 @@ sub getMostRecentSpelling {
     # Lowest should appear at top of list (stated with evidence) and highest at bottom (second hand) so sort ASC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $reliability = 
-        "(IF (o.basis != '',".
+        "(IF ((o.basis != '' AND o.basis IS NOT NULL),".
             "CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 END,".
             #"CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 0 END,".
         # ELSE:
