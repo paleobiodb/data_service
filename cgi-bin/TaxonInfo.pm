@@ -2205,8 +2205,7 @@ sub getMostRecentClassification {
     # previously, the most recent opinion wasn't stored in a table and had
     #  to be recomputed constantly; now, the default behavior is to retrieve
     #  opinions marked as most recent, unless this function is called for
-    #  the purpose of updating the tree and list caches
-    # JA 12-13.2.08
+    #  the purpose of updating the tree and list caches JA 12-13.2.08
     if ( $options->{'rebuild'} !~ /yes/ && $options->{'recompute'} !~ /yes/ && ! $options->{'reference_no'} && ! wantarray )	{
         my $strat_fields;
         if ($options->{strat_range}) {
@@ -2314,7 +2313,7 @@ sub getMostRecentClassification {
     # don't bother with this if TaxaCache is rebuilding taxa_tree_cache,
     #  because that function does the update itself JA 17-18.4.08
         if ( $options->{'rebuild'} !~ /yes/ && $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} && ! wantarray )	{
-            my $sql = "UPDATE taxa_tree_cache SET opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE spelling_no=" . $rows[0]->{'child_spelling_no'};
+            my $sql = "UPDATE taxa_tree_cache SET opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE spelling_no=" . $child_no;
             my $dbh = $dbt->dbh;
             $dbh->do($sql);
         }
