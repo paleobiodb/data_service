@@ -12,19 +12,34 @@ my $dbh = DBConnection::connect();
 my $dbt = new DBTransactionManager($dbh);
 
 $file = $ARGV[0];
-open IN,"<./$file";
-$t = <IN>;
-close IN;
-s/\n//;
+my $t;
+if ($ARGV[0] eq "all")	{
+	my $sql = "SELECT taxon_no FROM authorities";
+	my @rows = @{$dbt->getData($sql)};
+	$t .= ",".$_->{'taxon_no'} foreach @rows;
+	$t =~ s/^,//;
+} else	{
+	open IN,"<./$file";
+	$t = <IN>;
+	close IN;
+	s/\n//;
+}
 
+$| = 1;
 if ($t =~ /^[\d,]+$/) {
 	if ( $t =~ /,/ )	{
 		@taxa = split /,/,$t;
 	} else	{
 		push @taxa , $t;
 	}
-	print "Running TaxaCache::updateCache\n";
 	for $taxon ( @taxa )	{
-		TaxonInfo::getMostRecentClassification($dbt,$taxon,{'recompute'=>'yes'});
+		if ( $taxon/1000 == int($taxon/1000) )	{
+			print "$taxon = ";
+		}
+		$orig = TaxonInfo::getOriginalCombination($dbt,$taxon);
+		if ( $taxon/1000 == int($taxon/1000) )	{
+			print "$orig\n";
+		}
+		TaxonInfo::getMostRecentClassification($dbt,$orig,{'recompute'=>'yes'});
 	}
 }
