@@ -32,34 +32,99 @@ use Constants qw($TAXA_TREE_CACHE $TAXA_LIST_CACHE $IS_FOSSIL_RECORD);
 use strict;
 
 my $DEBUG = 0;
+my %opinions;
+my %allchildren;
+my %spellings;
+my %processed;
 
 # This function rebuilds the entire cache from scratch, meant to 
 # first use, when the cache gets screwed up, or perhaps weekly to be safe
 # (at a time when no opinions are likely to be entered, opinions/authorities entered
 # concurrently when this is running might be left out)
+# rewritten by JA 7-8.08
 sub rebuildCache {
     my $dbt = shift;
     my $list_only = shift;
     my $dbh = $dbt->dbh;
     my $result;
 
-    my $sql = "SELECT taxon_no FROM authorities";
-    my $sth = $dbh->prepare($sql);
-    $sth->execute();
-
-    # Now do the main loop
-    my @rows = ();
-    while (my $row = $sth->fetchrow_hashref()) {
-        push @rows,$row;
-    }
+    $| = 1;
 
     # Save the time. since this whole process takes a while, we'll
-    # want to reudate anything that might have changed during the process as the end
-    $sql = "SELECT now() t";
-    $sth = $dbh->prepare($sql);
+    # want to reupdate anything that might have changed during the process as the end
+    my $sql = "SELECT now() t";
+    my $sth = $dbh->prepare($sql);
     $sth->execute();
     my $time_row = $sth->fetchrow_hashref();
     my $time = $time_row->{'t'};
+
+    # grab the entire current classification 11.7.08 JA
+    # previously we didn't store the most recent parent opinions anywhere,
+    #  but now we can just grab them from taxa_tree_cache on the assumption
+    #  that those values at least are not corrupted (the values can be
+    #  cleaned by running /scripts/update_opinion.pl all)
+
+    my $sql = "SELECT taxon_no,spelling_no,synonym_no,opinion_no FROM $TAXA_TREE_CACHE";
+    my @cache = @{$dbt->getData($sql)};
+    push @{$spellings{$_->{'spelling_no'}}} , $_->{'taxon_no'} foreach @cache;
+
+    # now grab original combinations and their current opinions, valid or not
+    # the first SELECT works for standard cases, and the second works for
+    #  cases where a taxon is classified using an opinion on a junior synonym
+    # child_no!=parent_no is somewhat paranoid because no most recent parent
+    #  opinions have this problem as of this edit, although "misspelling of"
+    #  opinions have child_no=parent_no, and there are also corrupted
+    #  child_no=parent_no opinions that resulted from ill-considered merges of
+    #  biologically distinct taxa
+    my $sql = "(SELECT child_spelling_no,taxon_no,spelling_no,synonym_no,o.opinion_no,parent_no,status,spelling_reason FROM opinions o,$TAXA_TREE_CACHE t WHERE o.opinion_no=t.opinion_no AND child_no!=parent_no AND child_no=taxon_no) UNION (SELECT spelling_no AS child_spelling_no,taxon_no,spelling_no,synonym_no,o.opinion_no,parent_no,status,spelling_reason FROM opinions o,$TAXA_TREE_CACHE t WHERE o.opinion_no=t.opinion_no AND child_no!=parent_no AND child_no!=taxon_no AND child_spelling_no!=spelling_no AND taxon_no=synonym_no)";
+    my @rows = @{$dbt->getData($sql)};
+    for my $row ( @rows )	{
+        if ( $row->{'spelling_reason'} eq "misspelling" && $row->{'taxon_no'} ne $row->{'child_spelling_no'} )	{
+            $row->{'child_spelling_no'} = $row->{'spelling_no'};
+        }
+        # spellings is keyed by current spelling, so rekey by original
+        #  spelling if necessary
+        if ( $row->{'spelling_no'} != $row->{'taxon_no'} )	{
+            push @{$spellings{$row->{'taxon_no'}}} , @{$spellings{$row->{'spelling_no'}}};
+            delete $spellings{$row->{'spelling_no'}};
+        }
+        $opinions{$row->{'taxon_no'}} = $row;
+        if ( $row->{'parent_no'} > 0 )	{ 
+            push @{$allchildren{$row->{'parent_no'}}} , $row->{'taxon_no'};
+        }
+    }
+
+    # scala naturae algorithm 17.8.08 JA
+    # make sure Homo sapiens (taxon 83088) and all taxa including it have the
+    #  highest possible lft/rgt numbers
+    my $rung = $opinions{83088}->{'parent_no'};
+    my $lastrung = 83088;
+    while ( $rung > 0 )	{
+        my @temp = ();
+        for my $c ( @{$allchildren{$rung}} )	{
+            if ( $c != $lastrung )	{
+                push @temp , $c;
+            }
+        }
+        push @temp , $lastrung;
+        @{$allchildren{$rung}} = @temp;
+        $lastrung = $rung;
+        $rung = $opinions{$rung}->{'parent_no'};
+    }
+
+    # completely unclassified taxa need to have dummy @rows entries
+    for my $c ( @cache )	{
+        if ( $c->{'opinion_no'} == 0 )	{
+            my $taxon_no = $c->{'taxon_no'};
+            @{$spellings{$taxon_no}} = ($taxon_no);
+            $opinions{$taxon_no}->{'opinion_no'} = 0;
+            $opinions{$taxon_no}->{'parent_no'} = 0;
+            $opinions{$taxon_no}->{'taxon_no'} = $taxon_no;
+            $opinions{$taxon_no}->{'spelling_no'} = $taxon_no;
+            $opinions{$taxon_no}->{'synonym_no'} = $taxon_no;
+            push @rows , $opinions{$taxon_no};
+        }
+    }
 
     if (!$list_only)  {
         # We're going to create a brand new table from scratch, then swap it
@@ -69,42 +134,62 @@ sub rebuildCache {
 
         # Keep track of which nodes we've processed
         my $next_lft = 1;
-        my %processed;
 
         foreach my $row (@rows) {
-            if (!$processed{$row->{'taxon_no'}}) {
-                my $ancestor_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
-                # Get the topmost ancestor     
+            if ( ! $processed{$row->{'taxon_no'}} && $spellings{$row->{'taxon_no'}} )	{
+            #if ( ! $processed{$row->{'taxon_no'}} && $opinions{$row->{'taxon_no'}} )	{
+                my $ancestor_no = $row->{'taxon_no'};
+                my $opinion_no = $row->{'opinion_no'};
+                # Get the topmost ancestor
                 for(my $i=0;$i<100;$i++) { # max out at 100;
-                    my $opinion = TaxonInfo::getMostRecentClassification($dbt,$ancestor_no,{'recompute'=>'yes'});
-                    if ($opinion && $opinion->{'parent_no'}) {
-                        $ancestor_no=$opinion->{'parent_no'};
+                # it is possible for a top-level taxon to have a most recent
+                #  parent opinion because there are many corrupted old opinions
+                #  (especially regarding nomens) that lack parents JA 4.8.08
+                # so, this test fails either if there is a corrupted opinion
+                #  with no parent or just no opinion
+                    if ( $opinions{$ancestor_no}->{'parent_no'} > 0 ) {
+                        $ancestor_no = $opinions{$ancestor_no}->{'parent_no'};
+                # save the opinion_no for a corrupted record
+                    } elsif ( $opinions{$ancestor_no}->{'opinion_no'} > 0 )	{
+                        $opinion_no = $opinions{$ancestor_no}->{'opinion_no'};
+                        last;
+                # normally, however, a top-level taxon has no opinion at all
                     } else {
+                        $opinion_no = 0;
                         last;
                     }
+                }
+                if ( $processed{$ancestor_no} )	{
+                    print $ancestor_no." is the top-level ancestor of taxon ".$row->{'taxon_no'}." and has already been processed\n";
                 }
                 print "found ancestor $ancestor_no for $row->{taxon_no}<BR>\n" if ($DEBUG);
 
                 # Now insert that topmost ancestor, which will recursively insert all its children as well
                 # marking them as processed to boot, so we won't readd them later
-                $next_lft = rebuildAddChild($dbt,$ancestor_no,$next_lft,\%processed);
+                $next_lft = rebuildAddChild($dbt,$ancestor_no,$next_lft,$opinion_no);
                 $next_lft++;
             }
         }
+
         $result = $dbh->do("RENAME TABLE $TAXA_TREE_CACHE TO ${TAXA_TREE_CACHE}_old, ${TAXA_TREE_CACHE}_new TO $TAXA_TREE_CACHE");
-        $result = $dbh->do("DROP TABLE ${TAXA_TREE_CACHE}_old");
+#        $result = $dbh->do("DROP TABLE ${TAXA_TREE_CACHE}_old");
         setSyncTime($dbt,$time);
         undef %processed;
+        undef %spellings;
     }
+
+
     # Now build the taxa_list_cache - just edit it in place
     #$result = $dbh->do("CREATE TABLE $TAXA_LIST_CACHE (parent_no int(10) unsigned NOT NULL default '0',child_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (child_no,parent_no), KEY parent_no (parent_no)) TYPE=MyISAM");
     my %link_cache = ();
-    my %spellings = ();
+    # not the same as %spellings
+    my %spelling = ();
     my %syns = ();
     my %syn_done = ();
     foreach my $row (@rows) {
-        my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
-        my $child_no = ($orig_no) ? $orig_no : $row->{'taxon_no'};
+	# we assume taxa_tree_cache had the original combination right
+        my $child_no = $row->{'taxon_no'};
+        my $orig_no = $child_no;
         my %visits = ();
         for(my $i=0;$child_no;$i++) {
             if ($i > 100) {
@@ -117,12 +202,13 @@ sub rebuildCache {
             $visits{$child_no} = 1; 
 
             # Belongs to should always point to original combination
-            my $parent_row = TaxonInfo::getMostRecentClassification($dbt,$child_no);
+            # assume again that the old taxa_tree_cache was accurate
+            my $parent_row = $opinions{$child_no};
 
             my ($parent_no,$status);
             if ($parent_row) {
-                if ($parent_row->{'child_spelling_no'} != $parent_row->{'child_no'}) {
-                    $spellings{$parent_row->{'child_no'}} = $parent_row->{'child_spelling_no'};
+                if ($parent_row->{'child_spelling_no'} != $parent_row->{'taxon_no'})	{
+                    $spelling{$parent_row->{'taxon_no'}} = $parent_row->{'child_spelling_no'};
                 }
                 $parent_no  = $parent_row->{'parent_no'};
                 $status = $parent_row->{'status'};
@@ -152,7 +238,7 @@ sub rebuildCache {
                 $link_cache{$junior} = $link_cache{$senior};
             } 
         }
-    
+
         if ($orig_no && $row->{'taxon_no'} != $orig_no) {
             $link_cache{$row->{'taxon_no'}} = $link_cache{$orig_no};
         }
@@ -169,7 +255,7 @@ sub rebuildCache {
                 $next_parent = $syns{$next_parent};
                 $i++;
             }
-            my $parent_spelling = ($spellings{$next_parent}) ? $spellings{$next_parent} : $next_parent;
+            my $parent_spelling = ($spelling{$next_parent}) ? $spelling{$next_parent} : $next_parent;
             push @parents, $parent_spelling;
             $taxon_no = $next_parent;
         }
@@ -217,87 +303,68 @@ sub setSyncTime {
 # a hash which keeps track of which taxon_nos have been processed already, so we don't reprocess them
 # Note that spelling_no is the taxon_no of the most recent spelling of the SENIOR synonym
 sub rebuildAddChild {
-    my ($dbt,$taxon_no,$lft,$processed) = @_;
+    my ($dbt,$taxon_no,$lft,$opinion_no) = @_;
     my $dbh = $dbt->dbh;
 
     # Loop prevention
-    if ($processed->{$taxon_no}) {
-        print "Seemed to encounter a loop with $taxon_no, skipping<BR>\n" if ($DEBUG);
+    if ($processed{$taxon_no}) {
+        print "Seemed to encounter a loop with taxon $taxon_no and opinion $opinion_no at lft=$lft, skipping<br>\n";
         return $lft;
     } else {
-        $processed->{$taxon_no} = 1;
+        $processed{$taxon_no} = 1;
     }
-    
-    # now get recombinations, and corrections for current child and insert at the same 
-    # place as the child.  $taxon_no should already be the senior synonym if there are synonyms
-    my @all_taxa = TaxonInfo::getAllSpellings($dbt,$taxon_no);
-    my %all_hash; $all_hash{$_} = 1 for @all_taxa;
 
     # get a list of children for the current node. second part to deal with lapsus records
-    my $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.parent_no IN (".join(",",@all_taxa).") AND o.child_no != o.parent_no";
-    my @results = @{$dbt->getData($sql)};
     my @children = ();
-    foreach my $row (@results) {
-        next if ($processed->{$row->{'child_no'}});
-        my $opinion = TaxonInfo::getMostRecentClassification($dbt,$row->{'child_no'},{'recompute'=>'yes'});
-        # Note there's no distinction between synonyms and belongs to - both just considered children
-        if ($opinion && $all_hash{$opinion->{'parent_no'}}) {
-            push @children,$row->{'child_no'};
+    my @opinion_nos = ();
+    if ( $allchildren{$taxon_no} )	{
+        my @temp = @{$allchildren{$taxon_no}};
+        for my $child_no ( @temp )	{
+            next if ($processed{$child_no});
+            push @children , $child_no;
+            push @opinion_nos , $opinions{$child_no}->{'opinion_no'};
         }
-        # child of X may currently be a synonym of Y, but have more
-        #  authoritative belongs to opinions that are used for Y by
-        #  getMostRecentClassification, so add Y if is now placed in a
-        #  spelling of the focal taxon_no JA 4.8.07
-        elsif ( $opinion->{'status'} !~ /belongs|nomen/ && ! $processed->{$opinion->{'parent_no'}} )	{
-            my $parentopinion = TaxonInfo::getMostRecentClassification($dbt,$opinion->{'parent_no'},{'recompute'=>'yes'});
-            if ($parentopinion && $all_hash{$parentopinion->{'parent_no'}}) {
-                push @children,$opinion->{'parent_no'};
-            }
-        }
-    }
     print "list of children for $taxon_no: ".join(",",@children)."<BR>\n" if ($DEBUG);
+    }
 
     # Now add all those children
     my $next_lft = $lft + 1;
     my %all_intervals = ();
-    foreach my $child_no (@children) {
-        $next_lft = rebuildAddChild($dbt,$child_no,$next_lft,$processed);
+    foreach my $child_no (0..$#children) {
+        $next_lft = rebuildAddChild($dbt,$children[$child_no],$next_lft,$opinion_nos[$child_no]);
         $next_lft++;
     }
     my $rgt=$next_lft;
 
     print "rebuildAddChild: $taxon_no $lft $rgt<BR>\n" if ($DEBUG);
 
-    # Find the name that was last used so we can mark it
-    my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$taxon_no);
-    my $spelling_no = $spelling->{'taxon_no'};
+    my $spelling_no = $opinions{$taxon_no}->{'spelling_no'} ? $opinions{$taxon_no}->{'spelling_no'} : $taxon_no;
+    my $synonym_no = $opinions{$taxon_no}->{'synonym_no'} ? $opinions{$taxon_no}->{'synonym_no'} : $taxon_no;
 
-    my $synonym_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
-    if ($synonym_no) {
-        $synonym_no = TaxonInfo::getSeniorSynonym($dbt,$synonym_no);
-    } else {
-        $synonym_no = TaxonInfo::getSeniorSynonym($dbt,$taxon_no);
-    }
-    my $range_op = TaxonInfo::getMostRecentClassification($dbt,$synonym_no,{'strat_range'=>1});
-    my ($max_interval_no,$min_interval_no) = (0,0);
-    if ($range_op) {
-        $max_interval_no = $range_op->{'max_interval_no'};
-        $min_interval_no = $range_op->{'min_interval_no'};
-        if (!$min_interval_no) {
-            $min_interval_no=$max_interval_no;
-        }
-    }
+# this will all have to be rewritten later...
+#    my $range_op = TaxonInfo::getMostRecentClassification($dbt,$synonym_no,{'strat_range'=>1});
+#    my ($max_interval_no,$min_interval_no) = (0,0);
+#    if ($range_op && $range_op->{'max_interval_no'}) {
+#        $max_interval_no = $range_op->{'max_interval_no'};
+#        $min_interval_no = $range_op->{'min_interval_no'};
+#        if (!$min_interval_no) {
+#            $min_interval_no=$max_interval_no;
+#        }
+#    }
+my $max_interval_no = 0;
+my $min_interval_no = 0;
 
-    my $synonym_spelling = TaxonInfo::getMostRecentSpelling($dbt,$synonym_no);
-    $synonym_no = $synonym_spelling->{'taxon_no'};
 
+    # now get recombinations, and corrections for current child and insert at the same 
+    # place as the child.  $taxon_no should already be the senior synonym if there are synonyms
+    my @all_taxa = @{$spellings{$taxon_no}};
 
     # Now insert all the names
     # This is insert ignore instead of insert to to deal with bad records
-    $sql = "INSERT IGNORE INTO ${TAXA_TREE_CACHE}_new (taxon_no,lft,rgt,spelling_no,synonym_no,max_interval_no,min_interval_no) VALUES ";
+    my $sql = "INSERT IGNORE INTO ${TAXA_TREE_CACHE}_new (taxon_no,lft,rgt,spelling_no,synonym_no,opinion_no,max_interval_no,min_interval_no) VALUES ";
     foreach my $t (@all_taxa) {
-        $sql .= "($t,$lft,$rgt,$spelling_no,$synonym_no,$max_interval_no,$min_interval_no),";
-        $processed->{$t} = 1;
+        $sql .= "($t,$lft,$rgt,$spelling_no,$synonym_no,$opinion_no,$max_interval_no,$min_interval_no),";
+        $processed{$t} = 1;
     }    
     $sql =~ s/,$//;
     print "$sql<BR>\n" if ($DEBUG);
@@ -329,7 +396,7 @@ sub addName {
     return $row;
 }
 
-# This wil do its best to synchronize the two taxa_cache tables with the opinions table
+# This will do its best to synchronize the two taxa_cache tables with the opinions table
 # This function should be called whenever a new opinion is added into the database, whether
 # its from Taxon.pm or Opinion.pm.  Its smart enough not to move stuff around if it doesn't have
 # to.  The code is broken into two main sections.  The first section combines any alternate
