@@ -2206,7 +2206,7 @@ sub getMostRecentClassification {
     #  to be recomputed constantly; now, the default behavior is to retrieve
     #  opinions marked as most recent, unless this function is called for
     #  the purpose of updating the tree and list caches JA 12-13.2.08
-    if ( $options->{'rebuild'} !~ /yes/ && $options->{'recompute'} !~ /yes/ && ! $options->{'reference_no'} && ! wantarray )	{
+    if ( $options->{'recompute'} !~ /yes/ && ! $options->{'reference_no'} && ! wantarray )	{
         my $strat_fields;
         if ($options->{strat_range}) {
             $strat_fields = 'o.max_interval_no,o.min_interval_no, ';
@@ -2238,7 +2238,6 @@ sub getMostRecentClassification {
     # JA 14-15.6.07
     my @synonyms;
     push @synonyms, $child_no;
-    
     if ( $options->{'use_synonyms'} !~ /no/ && !$options->{reference_no})	{
         push @synonyms , getJuniorSynonyms($dbt,$child_no);
     }
@@ -2287,7 +2286,6 @@ sub getMostRecentClassification {
     if ( ! wantarray ) {
         $sql .= " LIMIT 1";
     }
-#  print $sql,"<br><br>";
 
     my @rows = @{$dbt->getData($sql)};
 
@@ -2310,10 +2308,25 @@ sub getMostRecentClassification {
     @rows = @cleanrows;
 
     if (scalar(@rows)) {
-    # don't bother with this if TaxaCache is rebuilding taxa_tree_cache,
-    #  because that function does the update itself JA 17-18.4.08
-        if ( $options->{'rebuild'} !~ /yes/ && $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} && ! wantarray )	{
-            my $sql = "UPDATE taxa_tree_cache SET opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE spelling_no=" . $child_no;
+    # recompute alternate spellings instead of assuming taxa_tree_cache has
+    #  them right JA 21.8.08
+        if ( $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} && ! wantarray )	{
+            my $sql = "(SELECT distinct(child_spelling_no) spelling FROM opinions WHERE child_no=$child_no) UNION (SELECT distinct(parent_spelling_no) spelling FROM opinions WHERE parent_no=$child_no)";
+            my @spellingRows = @{$dbt->getData($sql)};
+            my @spellings = ($child_no);
+            push @spellings, $_->{'spelling'} foreach @spellingRows;
+            my $synonym_no = $child_no;
+            if ( $rows[0]->{'status'} ne "belongs to" && $rows[0]->{'parent_no'} > 0 )	{
+                $synonym_no = $rows[0]->{'parent_no'};
+            }
+            my $spelling_no = $rows[0]->{'child_spelling_no'};
+            # if the belongs to opinion has been borrowed from a junior
+            #  synonym, we need to figure out the correct spelling
+            if ( $rows[0]->{'child_no'} ne $child_no )	{
+                my $taxon = getMostRecentSpelling($dbt,$child_no);
+                $spelling_no = $taxon->{'taxon_no'};
+            }
+            $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$spelling_no,synonym_no=$synonym_no,opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no IN (" . join(',',@spellings) . ")";
             my $dbh = $dbt->dbh;
             $dbh->do($sql);
         }
@@ -2323,6 +2336,11 @@ sub getMostRecentClassification {
             return $rows[0];
         }
     } else {
+        if ( $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} && ! wantarray )	{
+            $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$child_no,synonym_no=$child_no,opinion_no=0 WHERE taxon_no=$child_no";
+            my $dbh = $dbt->dbh;
+            $dbh->do($sql);
+        }
         return undef;
     }
 }
