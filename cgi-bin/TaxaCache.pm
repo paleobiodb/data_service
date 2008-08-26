@@ -41,7 +41,9 @@ my %processed;
 # first use, when the cache gets screwed up, or perhaps weekly to be safe
 # (at a time when no opinions are likely to be entered, opinions/authorities entered
 # concurrently when this is running might be left out)
-# rewritten by JA 7-8.08
+# rewritten by JA 7-8.08 to (1) only rebuild taxa_tree_cache, not
+#  taxa_list_cache, which is now handled by cleanListCache and rebuildListCache;
+#  and (2) use opinions stored in the existing copy of taxa_tree_cache
 sub rebuildCache {
     my $dbt = shift;
     my $list_only = shift;
@@ -174,108 +176,8 @@ sub rebuildCache {
         $result = $dbh->do("RENAME TABLE $TAXA_TREE_CACHE TO ${TAXA_TREE_CACHE}_old, ${TAXA_TREE_CACHE}_new TO $TAXA_TREE_CACHE");
 #        $result = $dbh->do("DROP TABLE ${TAXA_TREE_CACHE}_old");
         setSyncTime($dbt,$time);
-        undef %processed;
-        undef %spellings;
     }
 
-
-    # Now build the taxa_list_cache - just edit it in place
-    #$result = $dbh->do("CREATE TABLE $TAXA_LIST_CACHE (parent_no int(10) unsigned NOT NULL default '0',child_no int(10) unsigned NOT NULL default '0', PRIMARY KEY  (child_no,parent_no), KEY parent_no (parent_no)) TYPE=MyISAM");
-    my %link_cache = ();
-    # not the same as %spellings
-    my %spelling = ();
-    my %syns = ();
-    my %syn_done = ();
-    foreach my $row (@rows) {
-	# we assume taxa_tree_cache had the original combination right
-        my $child_no = $row->{'taxon_no'};
-        my $orig_no = $child_no;
-        my %visits = ();
-        for(my $i=0;$child_no;$i++) {
-            if ($i > 100) {
-                print STDERR "i > 100 for $child_no\n"; last;
-            }
-            # bail if we've already gotten this hiearchy on a previous run
-            last if (exists $link_cache{$child_no});
-            # bail if we have a loop due to circular synonyms
-            last if ($visits{$child_no});
-            $visits{$child_no} = 1; 
-
-            # Belongs to should always point to original combination
-            # assume again that the old taxa_tree_cache was accurate
-            my $parent_row = $opinions{$child_no};
-
-            my ($parent_no,$status);
-            if ($parent_row) {
-                if ($parent_row->{'child_spelling_no'} != $parent_row->{'taxon_no'})	{
-                    $spelling{$parent_row->{'taxon_no'}} = $parent_row->{'child_spelling_no'};
-                }
-                $parent_no  = $parent_row->{'parent_no'};
-                $status = $parent_row->{'status'};
-            } else {
-                # No parent was found. This means we're at end of classification, 
-                $parent_no=0;
-                $status = "";
-            }
-
-            if ($status =~ /^(?:replaced|subjective|objective|invalid subgroup)/o) {
-                $syns{$child_no} = $parent_no;
-            } else {
-                $link_cache{$child_no} = $parent_no;
-            }
-            # Already climbed this part
-            last if (exists $link_cache{$parent_no});
-            $child_no = $parent_no;
-        }
-        while (my ($junior,$senior) = each %syns) {
-            if (!$syn_done{$junior}) {
-                $syn_done{$junior} = 1;
-                my $i = 0;
-                while ($syns{$senior} && $i < 10) {
-                    $senior = $syns{$senior};
-                    $i++;
-                }
-                $link_cache{$junior} = $link_cache{$senior};
-            } 
-        }
-
-        if ($orig_no && $row->{'taxon_no'} != $orig_no) {
-            $link_cache{$row->{'taxon_no'}} = $link_cache{$orig_no};
-        }
-
-        my $taxon_no = $row->{'taxon_no'};
-        my @parents = ();
-        %visits = ();
-        while ($link_cache{$taxon_no}) {
-            last if ($visits{$taxon_no});
-            $visits{$taxon_no} = 1; 
-            my $next_parent = $link_cache{$taxon_no};
-            my $i = 0;
-            while ($syns{$next_parent} && $i < 10) {
-                $next_parent = $syns{$next_parent};
-                $i++;
-            }
-            my $parent_spelling = ($spelling{$next_parent}) ? $spelling{$next_parent} : $next_parent;
-            push @parents, $parent_spelling;
-            $taxon_no = $next_parent;
-        }
-        if (@parents) {
-            my $sql_i = "INSERT IGNORE INTO $TAXA_LIST_CACHE (parent_no,child_no) VALUES ";
-            foreach my $parent_no (@parents) {
-                $sql_i .= "($parent_no,$row->{taxon_no}),";
-            }
-            $sql_i =~ s/,$//;
-            print $sql_i."<BR>\n" if ($DEBUG);
-            $dbh->do($sql_i);
-            my $sql_d = "DELETE FROM $TAXA_LIST_CACHE WHERE child_no=$row->{taxon_no} AND parent_no NOT IN (".join(",",@parents).")";
-            print $sql_d."<BR>\n" if ($DEBUG);
-            $dbh->do($sql_d);
-        } else {
-            my $sql_d = "DELETE FROM $TAXA_LIST_CACHE WHERE child_no=$row->{taxon_no}";
-            print $sql_d."<BR>\n" if ($DEBUG);
-            $dbh->do($sql_d);
-        }
-    }
 }
 
 
@@ -371,6 +273,89 @@ my $min_interval_no = 0;
     $dbh->do($sql);
 
     return $next_lft;
+}
+
+# JA 25.8.08
+# removes taxa from taxa_list_cache that shouldn't be there at all, regardless
+#  of what the opinions say, and most likely are present because of bugs in
+#  updateCache or poorly thought out command line fixes
+# previously rebuildCache cleaned up taxa_list_cache as it ran, but cleaning
+#  up the entire thing at once is more efficient
+sub cleanListCache	{
+
+	my $dbt = shift;
+	my $dbh = $dbt->dbh;
+
+	my $sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE";
+	my @rows = @{$dbt->getData($sql)};
+	printf "%d total rows selected from $TAXA_TREE_CACHE\n",$#rows + 1;
+	my @inlist;
+	push @inlist , $_->{'taxon_no'} foreach @rows;
+	$sql = "DELETE FROM $TAXA_LIST_CACHE WHERE child_no NOT IN (".join(',',@inlist).")";
+	$dbh->do($sql);
+
+	# we obtain spelling_no because we only want currently used spellings,
+	#  and require taxon_no=synonym_no to make sure spelling_no is valid
+	my $sql = "SELECT distinct(spelling_no) AS spelling FROM $TAXA_TREE_CACHE WHERE taxon_no=synonym_no";
+	@rows = @{$dbt->getData($sql)};
+	printf "%d valid spelling rows selected from $TAXA_TREE_CACHE\n",$#rows + 1;
+	@inlist = ();
+	push @inlist , $_->{'spelling'} foreach @rows;
+	$sql = "DELETE FROM $TAXA_LIST_CACHE WHERE parent_no NOT IN (".join(',',@inlist).")";
+	$dbh->do($sql);
+
+}
+
+# JA 25.8.08
+# also useful for fixing any and all errors that might have crept into the table
+# cleanListCache should be run first because a smaller table is faster to update
+sub rebuildListCache	{
+
+	my $dbt = shift;
+	my $dbh = $dbt->dbh;
+
+	my $sql = "SELECT taxon_no,spelling_no,synonym_no,lft,rgt FROM $TAXA_TREE_CACHE ORDER BY lft";
+	my @rows = @{$dbt->getData($sql)};
+
+	my @parents;
+	my @parent_nos;
+	my $lastr = $rows[0];
+	for my $r ( @rows )	{
+
+		# remove parents that have been processed fully and do not
+		#  include the current taxon
+		until ( ! @parents || $parents[$#parents]->{'rgt'} > $r->{'lft'} )	{
+			pop @parents;
+			pop @parent_nos;
+		}
+
+		# clean and update cache
+		if ( @parent_nos )	{
+			$sql = "DELETE FROM $TAXA_LIST_CACHE WHERE child_no=$r->{'taxon_no'} AND parent_no NOT IN (".join(",",@parent_nos).")";
+			$dbh->do($sql);
+			$sql = "INSERT IGNORE INTO $TAXA_LIST_CACHE (parent_no,child_no) VALUES ";
+			for my $p ( @parent_nos )	{
+				$sql .= "($p,$r->{'taxon_no'}),";
+			}
+			$sql =~ s/,$//;
+			$dbh->do($sql);
+		} else	{
+			$sql = "DELETE FROM $TAXA_LIST_CACHE WHERE child_no=$r->{'taxon_no'}";
+			$dbh->do($sql);
+		}
+		if ( $r->{'lft'} > $lastr->{'lft'} + 10000 )	{
+			print "up to lft=",$r->{'lft'},"\n";
+			$lastr=$r;
+		}
+
+		# add this taxon to the list if it's valid
+		if ( $r->{'taxon_no'} == $r->{'synonym_no'} )	{
+			push @parents , $r;
+			push @parent_nos , $r->{'spelling_no'};
+		}
+
+	}
+
 }
 
 # This will add a new taxonomic name to the datbaase that doesn't currently 
@@ -951,6 +936,7 @@ sub getParent {
 # made from a copy of the above JA 23.8.07
 # returns a hash where keys are the taxon nos that have been passed in,
 #   and values are parent nos at the specified rank
+# NOTE: apparently deprecated at some time before 25.8.08
 sub getParentHash {
     my $dbt = shift;
     my $taxon_nos_ref = shift;
