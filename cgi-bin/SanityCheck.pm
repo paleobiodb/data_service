@@ -60,7 +60,7 @@ sub processSanityCheck	{
 
 	# many disused names are not marked as invalid and still include higher
 	#  taxa not marked as valid, we need to identify them the hard way
-	$sql = "SELECT a.taxon_no no,taxon_rank,taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') ORDER BY taxon_rank";
+	$sql = "SELECT a.taxon_no no,taxon_rank,taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') ORDER BY taxon_rank";
 	my @rows = @{$dbt->getData($sql)};
 	# we need all taxa because we'll check occurrences later, so synonyms
 	#  and taxa at all ranks are okay here
@@ -91,7 +91,7 @@ sub processSanityCheck	{
 	}
 	
 	# author and year known
-	$sql = "SELECT taxon_rank rank,count(*) c FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority='YES' OR (author1last IS NOT NULL AND author1last!='')) GROUP BY taxon_rank";
+	$sql = "SELECT taxon_rank rank,count(*) c FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority='YES' OR (author1last IS NOT NULL AND author1last!='')) GROUP BY taxon_rank";
 	my @rows = @{$dbt->getData($sql)};
 	my %authorknown;
 	for my $r ( @rows )	{
@@ -99,7 +99,7 @@ sub processSanityCheck	{
 	}
 
 	# author and year not known - don't group, we need the names
-	$sql = "SELECT taxon_name name,taxon_rank rank,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=spelling_no AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
+	$sql = "SELECT taxon_name name,taxon_rank rank,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
 	my @rows2 = @{$dbt->getData($sql)};
 	my %authorunknown;
 	for my $r ( @rows2 )	{
