@@ -9,5 +9,8 @@ my $dbh = DBConnection::connect();
 my $dbt = new DBTransactionManager($dbh);
 
 TaxaCache::rebuildCache($dbt);
+TaxaCache::cleanListCache($dbt);
+TaxaCache::rebuildListCache($dbt);
 
-print "Done";
+print "done rebuilding caches\n";
+
