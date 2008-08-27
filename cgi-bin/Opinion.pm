@@ -1082,23 +1082,23 @@ sub submitOpinionForm {
         if ( $childSpellingRank eq $childRank) {
             $errors->add("If you change a taxon's rank, its old and new ranks must be different");
         } elsif ($childRank eq "subgenus" && $childSpellingRank eq "genus") {
-            my ($g,$childEnding) = split / /,$childName;
-            $childEnding =~ s/[\(\)]//g;
-            if ($childSpellingName eq $childEnding)	{
-                $errors->add("If the two parts of a subgenus name are identical, the genus and subgenus must be biologically different, so you can't treat them as alternate spellings");
+            my ($childStart,$g) = split / /,$childName;
+            $childStart =~ s/[\(\)]//g;
+            if ($childSpellingName eq $childStart)	{
+                $errors->add("If the two parts of a subgenus name are identical, the genus and subgenus must be biologically different, so you can't make $childSpellingName a new spelling of $childName");
             }
         } elsif ($childRank eq "genus" && $childSpellingRank eq "subgenus") {
-            my ($g,$childEnding) = split / /,$childSpellingName;
-            $childEnding =~ s/[\(\)]//g;
-            if ($childName eq $childEnding)	{
-                $errors->add("If the two parts of a subgenus name are identical, the genus and subgenus must be biologically different, so you can't treat them as alternate spellings");
+            my ($childStart,$g) = split / /,$childSpellingName;
+            $childStart =~ s/[\(\)]//g;
+            if ($childName eq $childStart)	{
+                $errors->add("If the two parts of a subgenus name are identical, the genus and subgenus must be biologically different, so you can't make $childSpellingName a new spelling of $childName");
             }
         }
     } else {
         if ($childSpellingRank ne $childRank && $q->param('spelling_reason') !~ /recombination|misspelling/) {
             $errors->add("Unless a taxon has its rank changed or is recombined, the rank entered in the \"How was it spelled?\" section must match the taxon's original rank (if the rank has changed, select \"rank change\" even if the spelling remains the same)");
         }
-    }    
+    }
 
     # error checks related to naming
     # If something is marked as a corrected/recombination/rank change, its spellingName should be differenct from its childName
@@ -1172,14 +1172,13 @@ sub submitOpinionForm {
     # Misc error checking 
     if ($fields{'status'} eq 'misspelling of') {
         if ($parentName eq $childSpellingName) {
-            $errors->add("The names entered in the \"How was it spelled\" and \"How was it classified\" sections must be different when noting a misspelling");
+            $errors->add("The name entered in the \"How was it spelled\" section must be different from the name of the parent");
         }
     } else {
         if ($parentName eq $childName || $parentName eq $childSpellingName) {
-            $errors->add("The taxon you are entering and the one it belongs to can't have the same name");	
-        } 
-        if ($fields{'child_no'} == $fields{'parent_no'}) {
-            $errors->add("The taxon you are entering and the one it belongs to can't be the same");	
+            $errors->add("The taxon you enter and the one it belongs to can't have the same name");	
+        } elsif ($fields{'child_no'} == $fields{'parent_no'}) {
+            $errors->add("A taxon can't belong to itself");	
         }
     }
 
