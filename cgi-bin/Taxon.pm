@@ -543,6 +543,24 @@ sub submitAuthorityForm {
         }
 	}
 
+	foreach my $formField ($q->param()) {
+	# if the value isn't already in our fields to enter
+		if (! $fields{$formField}) {
+			$fields{$formField} = $q->param($formField);
+		}
+	}
+
+
+	$fields{'taxon_name'} = $q->param('taxon_name');
+
+	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
+	# but in the database, it should be "YES" or "" (empty).
+	if ($q->param('ref_is_authority') =~ /PRIMARY|CURRENT/) {
+		$fields{'ref_is_authority'} = 'YES';
+	} elsif ($q->param('ref_is_authority') eq 'NO') {
+		$fields{'ref_is_authority'} = '';
+	}
+
         my $lookup_reference;
         if ($q->param('ref_is_authority') eq 'CURRENT') {
             $lookup_reference = $s->get('reference_no');
@@ -604,25 +622,7 @@ sub submitAuthorityForm {
     if ($q->param('width') && $q->param('width') !~ /^[0-9]*\.?[0-9]+$/) {
         $errors->add("Width must be a decimal number");
     }
-	
-	foreach my $formField ($q->param()) {
-        # if the value isn't already in our fields to enter
-        if (! $fields{$formField}) {
-            $fields{$formField} = $q->param($formField);
-        }
-	}
 
-
-	$fields{'taxon_name'} = $q->param('taxon_name');
-	
-	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
-	# but in the database, it should be "YES" or "" (empty).
-    if ($q->param('ref_is_authority') =~ /PRIMARY|CURRENT/) {
-        $fields{'ref_is_authority'} = 'YES';
-    } elsif ($q->param('ref_is_authority') eq 'NO') {
-        $fields{'ref_is_authority'} = '';
-    }
-       
 	# If the rank was species or subspecies, then we also need to insert
 	# an opinion record automatically which has the state of "belongs to"
 	# For example, if the child taxon is "Equus blah" then we need to 
