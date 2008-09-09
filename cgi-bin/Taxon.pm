@@ -623,6 +623,49 @@ sub submitAuthorityForm {
         $errors->add("Width must be a decimal number");
     }
 
+	# type locality handling JA 8.9.08
+	if ( $q->param('type_locality') && $q->param('type_locality') !~ /^[0-9]*$/ )	{
+		$errors->add("You must enter a number in the type locality field");
+	# lazy check, the widget should really be excluded from the page if the
+	#  taxon is a subspecies
+	} elsif ( $q->param('type_locality') && $rankFromSpaces eq "subspecies" )	{
+		$errors->add("We currently do not store type locality data for subspecies");
+	# paranoia check, this widget should only appear on species forms
+	} elsif ( $q->param('type_locality') && $rankFromSpaces ne "species" )	{
+		$errors->add("You can't enter type locality data for a $rankFromSpaces");
+	} elsif ( $q->param('type_locality') )	{
+	# check very narrowly to see if the species has an apparent type
+	#  locality in the system: there must be an exact match between the
+	#  spellings on this form and in the occurrences/reIDs table
+		my $coll;
+		if ( ! $isNewEntry )	{
+			$coll = $t->get('type_locality');
+		}
+		if ( $coll != $q->param('type_locality') )	{
+			my ($g,$s) = split / /,$q->param('taxon_name');
+			my $sql = "(SELECT collection_no FROM occurrences WHERE genus_name='$g' AND species_name='$s' and species_reso='n. sp.') UNION (SELECT collection_no FROM reidentifications WHERE genus_name='$g' AND species_name='$s' AND species_reso='n. sp.')";
+			my @locs = @{$dbt->getData($sql)};
+			my $nlocs = $#locs + 1;
+			if ( $nlocs > 2 )	{
+				my $collnos = join ', ',map {$_->{collection_no}} @locs;
+				$collnos =~ s/(, )([0-9]*$)/, and $2/;
+				$errors->add("Collections $collnos are all marked as the type locality of ".$q->param('taxon_name').", so it's not clear what should go in the authorities table");
+			} elsif ( $nlocs == 2 )	{
+				my $collnos = join ' and ',map {$_->{collection_no}} @locs;
+				$errors->add("Collections $collnos are both marked as the type locality of ".$q->param('taxon_name').", so it's not clear what should go in the authorities table");
+			} elsif ( $nlocs == 0 )	{
+				$errors->add("No occurrences of ".$q->param('taxon_name')." that are spelt this way have been marked 'n. sp.'");
+			} else	{
+				$coll = $locs[0]->{'collection_no'};
+				if ( $coll != $q->param('type_locality') )	{
+					$errors->add("You entered ".$q->param('type_locality')." as the type locality, but the only occurrence of this species marked with an 'n. sp.' is in collection $coll");
+				} else	{
+					$fields{'type_locality'} = $coll;
+				}
+			}
+		}
+	}
+
 	# If the rank was species or subspecies, then we also need to insert
 	# an opinion record automatically which has the state of "belongs to"
 	# For example, if the child taxon is "Equus blah" then we need to 
@@ -1860,7 +1903,7 @@ sub propagateAuthorityInfo {
     my $me = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
-    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','extant','preservation');
+    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','preservation');
 
     # Two steps: find best authority info, then propagate to all spelling variants
     my @spellings;
