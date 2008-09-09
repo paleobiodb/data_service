@@ -63,11 +63,18 @@
 </div>
 </div>
 
+<div hide="show_type_specimen">
+<div style="clear: right; padding-top: 1em;">
+<span class="prompt">Preservation category:</span>
+<select id="preservation"></select>
+</div>
+</div>
+
 <div show="show_type_specimen">
 <div style="clear: right;">
 <div style="padding-top: 1em;">
 <span class="prompt">Type specimen:</span>
-<input id="type_specimen" name="type_specimen" size=20>
+<input id="type_specimen" name="type_specimen" size="20">
 </div>
 </div>
 </div>
@@ -84,7 +91,7 @@
 <div show="show_type_specimen">
 <div style="clear: right;">
 <span class="prompt">Specific body part:</span>
-<input id="part_details" name="part_details" size=23>
+<input id="part_details" name="part_details" size="23">
 </div>
 </div>
 
@@ -104,10 +111,10 @@
 </div>
 
 
-<div>
+<div show="show_type_specimen">
 <div style="padding-top: 1em;">
-<span class="prompt">Preservation category:</span>
-<select id="preservation"></select>
+<span class="prompt">Type locality (PaleoDB number):</span>
+<input id="type_locality" name="type_locality" size="8">
 </div>
 </div>
 
@@ -126,6 +133,14 @@
     <span show="parent_taxon_select">&nbsp;&nbsp;&nbsp;&nbsp;</span>
     <input type="checkbox" id="type_taxon" name="type_taxon" value="1"><span class="prompt">This is the type <span id="taxon_rank"></span></span>
   </div>
+</div>
+
+</div>
+
+<div show="show_type_specimen">
+<div style="clear: right; padding-bottom: 1em;">
+<span class="prompt">Preservation category:</span>
+<select id="preservation"></select>
 </div>
 </div>
 
