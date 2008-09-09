@@ -1857,22 +1857,34 @@ sub getSynonymyParagraph{
     my @spellings = getAllSpellings($dbt,$taxon->{'taxon_no'});
 
     if ($taxon->{'taxon_rank'} =~ /species/) {
-        my $sql = "SELECT taxon_no,type_specimen,type_body_part,part_details FROM authorities WHERE ((type_specimen IS NOT NULL and type_specimen != '') OR (type_body_part IS NOT NULL AND type_body_part != '') OR (part_details IS NOT NULL AND part_details != '')) AND taxon_no IN (".join(",",@spellings).")";
+        my $sql = "SELECT taxon_no,type_specimen,type_body_part,part_details,type_locality FROM authorities WHERE ((type_specimen IS NOT NULL and type_specimen != '') OR (type_body_part IS NOT NULL AND type_body_part != '') OR (part_details IS NOT NULL AND part_details != '') OR (type_locality>0)) AND taxon_no IN (".join(",",@spellings).")";
         my $specimen_row = ${$dbt->getData($sql)}[0];
         if ($specimen_row) {
-            $text .= "Its type is $specimen_row->{type_specimen}";
-            if ($specimen_row->{'type_body_part'}) {
-                my $an = ($specimen_row->{'type_body_part'} =~ /^[aeiou]/) ? "an" : "a";
-                $text .= ", " if ($specimen_row->{'type_specimen'});
-                if ( $specimen_row->{type_body_part} =~ /teeth|postcrania|vertebrae|limb elements|appendages|ossicles/ )	{
-                    $an = "a set of";
+            if ($specimen_row->{'type_specimen'})	{
+                $text .= "Its type is $specimen_row->{type_specimen}";
+                if ($specimen_row->{'type_body_part'}) {
+                    my $an = ($specimen_row->{'type_body_part'} =~ /^[aeiou]/) ? "an" : "a";
+                    $text .= ", " if ($specimen_row->{'type_specimen'});
+                    if ( $specimen_row->{type_body_part} =~ /teeth|postcrania|vertebrae|limb elements|appendages|ossicles/ )	{
+                        $an = "a set of";
+                    }
+                    $text .= "$an $specimen_row->{type_body_part}";
                 }
-                $text .= "$an $specimen_row->{type_body_part}";
+                if ($specimen_row->{'part_details'}) {
+                    $text .= " ($specimen_row->{part_details})";
+                }
+                $text .= ". ";
             }
-            if ($specimen_row->{'part_details'}) {
-                $text .= " ($specimen_row->{part_details})";
+            if ($specimen_row->{'type_locality'} > 0)	{
+                my $sql = "SELECT i.interval_name AS max,IF (min_interval_no>0,i2.interval_name,'') AS min,IF (country='United States',state,country) AS place,collection_name FROM collections c,intervals i,intervals i2 WHERE collection_no=".$specimen_row->{'type_locality'}." AND i.interval_no=max_interval_no AND (min_interval_no=0 OR i2.interval_no=min_interval_no)";
+                my $coll_row = ${$dbt->getData($sql)}[0];
+                my $strat = $coll_row->{'max'};
+                if ( $coll_row->{'min'} )	{
+                    $strat .= "/".$coll_row->{'min'};
+                }
+                $coll_row->{'place'} =~ s/United Kingdom/the United Kingdom/;
+                $text .= "Its type locality is <a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=".$specimen_row->{'type_locality'}."&amp;is_real_user=$is_real_user\">".$coll_row->{'collection_name'}."</a> (".$strat." of ".$coll_row->{'place'}."). ";
             }
-            $text .= ". ";
         }
     } else {
         my $sql = "SELECT taxon_no,type_taxon_no FROM authorities WHERE type_taxon_no != 0 AND taxon_no IN (".join(",",@spellings).")";
