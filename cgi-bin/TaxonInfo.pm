@@ -3085,7 +3085,7 @@ sub getTaxa {
     if ($fields) {
         @fields = @$fields;
         if  ($fields[0] =~ /\*|all/) {
-            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','type_body_part','part_details','extant','preservation','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments');
+            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','type_body_part','part_details','type_locality','extant','preservation','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments');
         }
         foreach my $f (@fields) {
             if ($f =~ /^author(1|2)(last|init)$|otherauthors|pubyr$/) {
