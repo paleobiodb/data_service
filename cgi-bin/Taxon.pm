@@ -642,8 +642,8 @@ sub submitAuthorityForm {
 			$coll = $t->get('type_locality');
 		}
 		if ( $coll != $q->param('type_locality') )	{
-			my ($g,$s) = split / /,$q->param('taxon_name');
-			my $sql = "(SELECT collection_no FROM occurrences WHERE genus_name='$g' AND species_name='$s' and species_reso='n. sp.') UNION (SELECT collection_no FROM reidentifications WHERE genus_name='$g' AND species_name='$s' AND species_reso='n. sp.')";
+			my($g,$sg,$s,$ss) = splitTaxon($q->param('taxon_name'));
+			my $sql = "(SELECT collection_no FROM occurrences WHERE genus_name='$g' AND (subgenus_name='$sg' OR subgenus_name IS NULL OR subgenus_name='') AND species_name='$s' and species_reso='n. sp.') UNION (SELECT collection_no FROM reidentifications WHERE genus_name='$g' AND (subgenus_name='$sg' OR subgenus_name IS NULL OR subgenus_name='') AND species_name='$s' AND species_reso='n. sp.')";
 			my @locs = @{$dbt->getData($sql)};
 			my $nlocs = $#locs + 1;
 			if ( $nlocs > 2 )	{
@@ -689,7 +689,7 @@ sub submitAuthorityForm {
             } elsif (@parents == 1) {
                 $parent_no = $parents[0]->{'taxon_no'};
             } else {
-                $errors->add("The name '$parent_name' isn't in the database yet.  Please add an authority record for this '$parent_name' before continuing.");
+                $errors->add("The name '$parent_name' isn't in the database yet.  Please add an authority record for it before continuing.");
             }
         } 
 	}
