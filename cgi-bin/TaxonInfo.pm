@@ -159,7 +159,7 @@ sub displayTaxonInfoResults {
 
 
     # Get most recently used name of taxon
-    my ($spelling_no,$taxon_name,$common_name,$taxon_rank);
+    my ($spelling_no,$taxon_name,$common_name,$taxon_rank,$type_locality);
     if ($taxon_no) {
         my $sql = "SELECT count(*) c FROM authorities WHERE taxon_no=$taxon_no";
         my $row = ${$dbt->getData($sql)}[0];
@@ -176,6 +176,7 @@ sub displayTaxonInfoResults {
         $taxon_name = $taxon->{'taxon_name'};
         $common_name = $taxon->{'common_name'};
         $taxon_rank = $taxon->{'taxon_rank'};
+        $type_locality = $taxon->{'type_locality'};
     } else {
         $taxon_name = $q->param('taxon_name');
     }
@@ -431,7 +432,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
     if ($modules{7}) {
         print '<div id="panel8" class="panel">';
         if ($is_real_user) {
-		    print doCollections($dbt, $s, $collectionsSet, $display_name, $taxon_no, $in_list, '', $is_real_user);
+		    print doCollections($dbt, $s, $collectionsSet, $display_name, $taxon_no, $in_list, '', $is_real_user, $type_locality);
         } else {
             print '<div align="center">';
             print qq|<form method="POST" action="$READ_URL">|;
@@ -631,7 +632,7 @@ sub displayMap {
 
 # age_range_format changes appearance html formatting of age/range information, used by the strata module
 sub doCollections{
-    my ($dbt,$s,$colls,$display_name,$taxon_no,$in_list,$age_range_format,$is_real_user) = @_;
+    my ($dbt,$s,$colls,$display_name,$taxon_no,$in_list,$age_range_format,$is_real_user,$type_locality) = @_;
     my $dbh = $dbt->dbh;
     
     if (!@$colls) {
@@ -817,14 +818,14 @@ sub doCollections{
 	    if (exists $time_place_coll{$res})	{
                 if ( $lastgenus{$res} ne $row->{'genera'} )	{
                     ${$time_place_coll{$res}}[$#{$time_place_coll{$res}}] .= ") ";
-                    push(@{$time_place_coll{$res}}, $row->{'genera'} . " (" . $row->{'collection_no'});
+                    push(@{$time_place_coll{$res}}, $row->{'genera'} . " (" . $row->{'collection_no'} . "</a>");
                 } else	{
-                    push(@{$time_place_coll{$res}}, " " . $row->{'collection_no'});
+                    push(@{$time_place_coll{$res}}, " " . $row->{'collection_no'} . "</a>");
                 }
                 $lastgenus{$res} = $row->{'genera'};
 	    }
 	    else	{
-                $time_place_coll{$res}[0] = $row->{'genera'} . " (" . $row->{'collection_no'};
+                $time_place_coll{$res}[0] = $row->{'genera'} . " (" . $row->{'collection_no'} . "</a>";
                 $lastgenus{$res} = $row->{'genera'};
                 #push(@order,$res);
             if ($interval_hash->{$min}->{'min_no'} == $max) {
@@ -959,16 +960,19 @@ sub doCollections{
 				my $formatted_no = $collection_no;
                                 my $no = $collection_no;
                                 $no =~ s/[^0-9]//g;
+				if ( $type_locality == $no )	{
+					$formatted_no =~ s/([0-9])/type locality: $1/;
+				}
 				if ( $iscrown{$no} > 0 )	{
 					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\"><b>$1/;
                                 	$formatted_no .= "</b>";
 				} else	{
 					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$1/;
 				}
-                                $output .= $formatted_no . "</a> ";
-				#$output .= "<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$formatted_no</a> ";
+				$output .= $formatted_no;
 			}
-			$output =~ s/([0-9])(<\/b>|)(<\/a>)( )$/$1\)$2/g;
+			$output .= ")";
+			$output =~ s/([>\]]) \)/$1\)/;
 			$output .= "</span></td></tr>\n";
 			$row_color++;
 			if ( $row_color == 10 && $output =~ /Oldest/ && $extant == 0 )	{
@@ -2396,7 +2400,7 @@ sub getMostRecentSpelling {
         $fossil_record_field = "IF(project_name IS NOT NULL,FIND_IN_SET('fossil record',r.project_name),0) is_fossil_record, ";
         $fossil_record_sort = "is_fossil_record DESC, ";
     }
-    $sql = "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, $fossil_record_field"
+    $sql = "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.type_locality, o.opinion_no, $reliability, $fossil_record_field"
          . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) AS pubyr"
          . " FROM opinions o" 
          . " LEFT JOIN authorities a ON o.child_spelling_no=a.taxon_no"
@@ -2413,7 +2417,7 @@ sub getMostRecentSpelling {
     $sql .= ") ";
     if (@misspellings) {
         $sql .= " UNION ";
-        $sql .= "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, o.opinion_no, $reliability, $fossil_record_field"
+        $sql .= "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.type_locality, o.opinion_no, $reliability, $fossil_record_field"
               . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr"
               . " FROM opinions o" 
               . " LEFT JOIN authorities a ON o.parent_spelling_no=a.taxon_no"
