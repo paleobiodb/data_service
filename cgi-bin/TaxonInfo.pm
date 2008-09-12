@@ -3432,7 +3432,6 @@ sub disusedNames {
         my %taxon_nos = ();
         my ($sql,@results,%used);
 
-
         my $taxon_nos_sql = join(",",map{int($_)} @taxon_nos);
 
         $sql = "SELECT lft,rgt,a.taxon_no taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_no IN ($taxon_nos_sql)";
@@ -3459,9 +3458,10 @@ sub disusedNames {
             }
         }
 
-        return \%disused;
-
     }
+
+    return \%disused;
+
 }
 
 # This will get orphaned nomen * children for a list of a taxon_nos or a single taxon_no passed in.
