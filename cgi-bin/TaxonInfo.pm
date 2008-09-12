@@ -3411,6 +3411,11 @@ sub getDiagnoses {
 # as the sole argument and the program will figure out what you're doing
 # Returns a hash reference where they keys are equal all the taxon_nos that 
 # it considered no longer valid
+
+# PS wrote this function to return higher taxa that had ever had any subtaxa
+#  at any rank but no longer do, but we only need higher taxa that don't
+#  currently include genera or species of any kind, so I have rewritten
+#  it drastically JA 12.9.08
 sub disusedNames {
     my $dbt = shift;
     my $arg = shift;
@@ -3424,16 +3429,12 @@ sub disusedNames {
     my %disused = ();
 
     if (@taxon_nos) {
-        my %has_children = ();
         my %taxon_nos = ();
-        my %had_children = ();
-        my %map_orig = ();
-        my ($sql,@results);
+        my ($sql,@results,%used);
+
 
         my $taxon_nos_sql = join(",",map{int($_)} @taxon_nos);
 
-        # first a very simple test: higher taxa with no children whatsoever
-        #  are disused by definition JA 16.7.07
         $sql = "SELECT lft,rgt,a.taxon_no taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_no IN ($taxon_nos_sql)";
         @results = @{$dbt->getData($sql)};
 
@@ -3445,63 +3446,22 @@ sub disusedNames {
                 push @taxon_nos , $row->{taxon_no};
             }
         }
-
         if ( ! @taxon_nos )	{
             return \%disused;
         }
 
-        $taxon_nos_sql = join(",",map{int($_)} @taxon_nos);
-
-        # Since children will be linked to the original combination taxon no, get those and append them to the list
-        # The map_orig array refers the original combinations 
-        $sql = "SELECT DISTINCT child_no,child_spelling_no FROM opinions WHERE child_spelling_no IN ($taxon_nos_sql) AND child_no != child_spelling_no";
+        $sql = "SELECT distinct(parent_no) parent FROM authorities a,$TAXA_LIST_CACHE t WHERE taxon_rank in ('genus','subgenus','species') AND a.taxon_no=child_no AND parent_no IN (" . join(',',@taxon_nos) . ")";
         @results = @{$dbt->getData($sql)};
-        foreach my $row (@results) {
-            $map_orig{$row->{'child_no'}} = $row->{'child_spelling_no'};
-#            print "MAP SP. $row->{child_spelling_no} TO ORIG. $row->{child_no}<BR>";
-#            push @taxon_nos, $row->{'child_no'};
-            $taxon_nos_sql .= ",$row->{child_no}";
-        }
-
-
-        # Parents with any children will be put into the array. Junior synonyms not counted
-        $sql = "SELECT parent_no FROM $TAXA_LIST_CACHE WHERE parent_no IN ($taxon_nos_sql) GROUP BY parent_no";
-        @results = @{$dbt->getData($sql)};
-        foreach my $row (@results) {
-            $has_children{$row->{'parent_no'}} = 1;
-#            print "$row->{parent_no} HAS children<BR>\n";
-        }
-
-        $sql = "SELECT parent_no FROM opinions WHERE status IN ('belongs to','recombined as','corrected as','rank changed as') AND parent_no IN ($taxon_nos_sql) GROUP BY parent_no";
-        @results = @{$dbt->getData($sql)};
-        foreach my $row (@results) {
-            my $parent_no = $row->{'parent_no'};
-            if ($map_orig{$parent_no}) {
-                $parent_no = $map_orig{$parent_no};
-            }
-            $had_children{$parent_no} = 1;
-#            print "$row->{parent_no} (spelled $parent_no) HAD children<BR>\n";
-        }
-
-#        $sql = "SELECT parent_spelling_no FROM opinions WHERE status IN ('belongs to','recombined as','corrected as','rank changed as') AND parent_spelling_no IN ($taxon_nos_sql) GROUP BY parent_spelling_no";
-#        @results = @{$dbt->getData($sql)};
-#        foreach my $row (@results) {
-#            $had_children{$row->{'parent_spelling_no'}} = 1;
-#            print "$row->{parent_spelling_no} HAD children<BR>\n";
-#        }
-
-        foreach my $taxon_no (@taxon_nos) {
-            if ($had_children{$taxon_no} && !$has_children{$taxon_no}) {
-                #if ($map_orig{$taxon_no}) {
-                #    print "Map $taxon_no to $map_orig{$taxon_no}<BR>";
-                #    $disused{$map_orig{$taxon_no}} = 1;
-                #} else {
-                $disused{$taxon_no} = 1;
-                #}
+        $used{$_->{parent}} = 1 foreach @results;
+        for my $t ( @taxon_nos )	{
+            if ( ! $used{$t} )	{
+                $disused{$t} = 1;
             }
         }
+
+        return \%disused;
+
     }
-    return \%disused;
 }
 
 # This will get orphaned nomen * children for a list of a taxon_nos or a single taxon_no passed in.
