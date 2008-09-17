@@ -102,10 +102,20 @@ function countryChange() {
 
 <div id="panel1" class="panel"> 
 
+<div show="error_message">
+<div style="border: 1px solid #909090; background-color: #FFFF80; padding: -1em; margin-top: 1em; margin-bottom: 1em; margin-left: 5em; margin-right: 5em;">
+<center><p class="medium">Please try again</p></center>
+<ul class="small">%%error_message%%
+</ul>
+</div>
+</div>
+
+<div hide="error_message">
 <p class="small" align="left" style="margin-left: 1em; margin-right: 1em;">
 This form allows you to download taxonomic occurrences, genera or species, or fossil collections.
 The <a href="%%read_url%%?user=Guest&amp;action=displayDownloadForm">full form</a> includes extra options and fields.
-To compute a diversity curve, you need to check off either "period," "epoch," "Cenozoic subepoch," or "10 m.y. bin" in the "Collection fields" part of the form.</p> 
+To compute a diversity curve, you need to check off either "period," "epoch," "Cenozoic subepoch," or "10 m.y. bin" in the "Collection fields" part of the form.</p>
+</div>
 
 <div class="displayPanel" style="margin-top: 1.5em; padding-top: 1em; padding-bottom: 1em;">
 <table width="100%" cellpadding="3" cellspacing="0">
