@@ -76,6 +76,7 @@ function countryChange() {
 <form method=post action="%%read_url%%">
 <input id="action" type=hidden name="action" value="displayDownloadResults">
 
+<input id="form_type" type=hidden name="form_type" value="full">
 
 <div align=center>
   <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
@@ -110,11 +111,22 @@ function countryChange() {
 
 <div id="panel1" class="panel"> 
 
+<div show="error_message">
+<div style="border: 1px solid #909090; background-color: #FFFF80; padding: -1em; margin-top: 1em; margin-bottom: 1em; margin-left: 5em; margin-right: 5em;">
+<center><p class="medium">Please try again</p></center>
+<ul class="small">
+%%error_message%%
+</ul>
+</div>
+</div>          
+                
+<div hide="error_message">
 <p class="small" align="left" style="margin-left: 1em; margin-right: 1em;">
 This form allows you to download a file with data about taxonomic occurrences, genera or species, fossil collections, or specimens.
 Page through the six tabs to see all the options.
 Key fields are in <b>bold</b>.
-To compute a diversity curve, you need to check off either "period," "epoch," "Cenozoic subepoch," or "10 m.y. bin" in the "Collection fields" part of the form.</p> 
+To compute a diversity curve, you need to check off either "period," "epoch," "Cenozoic subepoch," or "10 m.y. bin" in the "Collection fields" part of the form.</p>
+</div>
 
 <table width="100%" cellpadding="3" cellspacing="0">
 
