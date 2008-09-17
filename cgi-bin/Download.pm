@@ -90,14 +90,8 @@ sub buildDownload {
     my $self = shift;
     my $q = $self->{'q'};
 
-    print qq|<div align="center"><p class="pageTitle">Download results</p></div>
-
-<div class="displayPanel" style="padding-top: 1em; padding-left: 1em; margin-left: 3em; margin-right: 3em; overflow: hidden;">
-|;
     my $inputIsOK = $self->checkInput($q);
     return unless $inputIsOK;
-
-    print $self->retellOptions();
 
     my ($lumpedResults,$allResults) = $self->queryDatabase();
 
@@ -127,16 +121,26 @@ sub buildDownload {
         ($mainCount,$mainFile) = $self->printCSV($lumpedResults);
     }
 
+    if (@form_errors) {
+        my $errorString = "<li>" . join('<li>',@form_errors);
+        $q->param('error_message' => $errorString );
+        if ( $q->param('form_type') eq "full" )	{
+            main::displayDownloadForm;
+        } else	{
+            main::displayBasicDownloadForm;
+        }
+        return;
+    } 
+
+    print qq|<div align="center"><p class="pageTitle">Download results</p></div>
+
+<div class="displayPanel" style="padding-top: 1em; padding-left: 1em; margin-left: 3em; margin-right: 3em; overflow: hidden;">
+|;
+    print $self->retellOptions();
     if (@form_warnings) {
         print '<div align="center">';
         print Debug::printWarnings(\@form_warnings);
         print '</div>';
-    } 
-    if (@form_errors) {
-        print '<div align="center">';
-        print Debug::printErrors(\@form_errors);
-        print '</div>';
-        return;
     } 
 
     # Tell what happened
@@ -187,9 +191,29 @@ sub checkInput {
             }
         }
     }
+
+    my $required = 0;
+    for my $r ( 'taxon_name','max_interval_name','authorizer_reversed','research_group' )	{
+        if ( $q->param($r) ne "" )	{
+            $required++;
+        }
+    }
+    if ( $required == 0 )	{
+        push @errors , "You must specify a taxonomic group, time interval, authorizer, or research group";
+    } elsif ( $required == 1 && $q->param('max_interval_name') eq "Phanerozoic" )	{
+        push @errors , "If you want data for the entire Phanerozoic, you must also specify a taxonomic group, authorizer, or research group";
+    } elsif ( $required == 1 && $q->param('taxon_name') =~ /(Metazoa|Animalia)/ )	{
+        push @errors , "If you want data for all animals, you must also specify a time interval, authorizer, or research group";
+    }
     
     if (@errors) {
-        print "<div align=\"center\">".Debug::printErrors(\@errors)."<div>";
+        my $errorString = "<li>" . join('<li>',@errors);
+        $q->param('error_message' => $errorString );
+        if ( $q->param('form_type') eq "full" )	{
+            main::displayDownloadForm;
+        } else	{
+            main::displayBasicDownloadForm;
+        }
         return 0;
     } 
     return 1;
@@ -428,7 +452,7 @@ $html .= $self->retellOptionsGroup('Onshore-offshore zones:','zone_',\@zone_grou
         $html .= $self->retellOptionsRow ( "Exclude classified occurrences?", $q->param("classified") ) if ($q->param("classified" !~ /classified|unclassified/i));
         $html .= $self->retellOptionsRow ( "Minimum # of specimens to compute mean abundance", $q->param("min_mean_abundance") ) if ($q->param("min_mean_abundance"));
         my @preservation = $q->param('preservation');
-        $html .= $self->retellOptionsRow ( "Include preservation categories:", join(", ",@preservation)) if scalar(@preservation) < 3;
+        $html .= $self->retellOptionsRow ( "Include preservation categories", join(", ",@preservation)) if scalar(@preservation) < 3;
 
         my $plantOrganFieldCount = 0;
         foreach my $plantOrganField (@plantOrganFieldNames) {
@@ -1306,15 +1330,9 @@ sub getGenusResoString{
     if ( !$q->param('genus_reso_n. gen.') || ! $q->param('genus_reso_aff.') || ! $q->param('genus_reso_cf.') || ! $q->param('genus_reso_ex gr.') || ! $q->param('genus_reso_sensu lato') || ! $q->param('genus_reso_?') || ! $q->param('genus_reso_"') ) { 
         if ( $q->param('genus_reso_aff.') )    {
             $resos .= ",'aff.'";
-            if ($q->param('informal') eq 'YES') {
-                $resos .= ",'informal aff.'";
-            }
         }
         if ( $q->param('genus_reso_cf.') )    {
             $resos .= ",'cf.'";
-            if ($q->param('informal') eq 'YES') {
-                $resos .= ",'informal cf.'";
-            }
         }
         if ( $q->param('genus_reso_ex gr.') )    {
             $resos .= ",'ex gr.'";
@@ -1391,19 +1409,19 @@ sub getOccurrencesWhereClause {
     push @all_where, "o.abund_unit NOT LIKE \"\" AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'abundances';
     push @all_where, "o.abund_unit IN ('individuals','specimens') AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'specimens';
 
-    push @occ_where, "o.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
-    push @occ_where, "o.species_name NOT LIKE '%sp.%'" if $q->param('sp') eq 'NO';
+    push @occ_where, "o.species_name!='indet.'" if $q->param('indet') ne 'YES';
+    push @occ_where, "o.species_name!='sp.'" if $q->param('sp') eq 'NO';
     my $genusResoString = $self->getGenusResoString();
     push @occ_where, $genusResoString if $genusResoString;
-    push @occ_where, "(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
+    push @occ_where, "(o.genus_reso!='informal' OR o.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
 
-    push @reid_where, "re.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
-    push @reid_where, "re.species_name NOT LIKE '%sp.%'" if $q->param('sp') eq 'NO';
+    push @reid_where, "re.species_name!='indet.'" if $q->param('indet') ne 'YES';
+    push @reid_where, "re.species_name!='sp.'" if $q->param('sp') eq 'NO';
 
     # this is kind of a hack, I admit it JA 31.7.05
     $genusResoString =~ s/o\.genus_reso/re.genus_reso/g;
     push @reid_where, $genusResoString if $genusResoString;
-    push @reid_where, "(re.genus_reso NOT LIKE '%informal%' OR re.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
+    push @reid_where, "(re.genus_reso!='informal' OR re.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
 
     return (\@all_where,\@occ_where,\@reid_where);
 }
@@ -1799,8 +1817,8 @@ sub queryDatabase {
     # filters out things like o.collection_no=c.collection_no
     # last two conditions are default terms
     my @conditions = grep {!/^\s*\w{1,2}\.\w+\s*=\s*\w{1,2}\.\w+\s*$/} @where,@occ_where;
-    @conditions = grep {!/o.species_name NOT LIKE '%indet.%'/} @conditions;
-    @conditions = grep {!/(o.genus_reso NOT LIKE '%informal%' OR o.genus_reso IS NULL)/} @conditions;
+    @conditions = grep {!/o.species_name!='indet.'/} @conditions;
+    @conditions = grep {!/(o.genus_reso!='informal' OR o.genus_reso IS NULL)/} @conditions;
     if (!@conditions) {
         push @form_errors, "No valid search terms were entered.";
     }
