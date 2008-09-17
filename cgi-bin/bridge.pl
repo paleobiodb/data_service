@@ -645,8 +645,9 @@ sub displayDownloadForm {
 }
 
 sub displayBasicDownloadForm {
+	my %vars = $q->Vars();
 	print $hbo->stdIncludes("std_page_top" );
-	print $hbo->populateHTML('basic_download_form');
+	print $hbo->populateHTML('basic_download_form',\%vars);
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
