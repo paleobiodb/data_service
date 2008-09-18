@@ -1183,10 +1183,18 @@ sub displayCollectionDetails {
     #  able to locate a collection in the field and pillage it
     # JA 10.5.07
     if ( ! $s->isDBMember() )	{
-        $coll->{'lngdec'} = ( $coll->{'lngmin'} / 60 ) + ( $coll->{'lngsec'}  / 3600 ) + $coll->{'lngdec'};
-        $coll->{'latdec'} = ( $coll->{'latmin'} / 60 ) + ( $coll->{'latsec'}  / 3600 ) + $coll->{'latdec'};
-        $coll->{'lngdec'} = 10 * ( int ( ( $coll->{'lngdec'} + 0.05 ) * 10 ) );
-        $coll->{'latdec'} = 10 * ( int ( ( $coll->{'latdec'} + 0.05 ) * 10 ) );
+        if ( ! $coll->{'lngdec'} && $coll->{'lngmin'} )	{
+            $coll->{'lngdec'} = ( $coll->{'lngmin'} / 60 ) + ( $coll->{'lngsec'}  / 3600 );
+        } else	{
+            $coll->{'lngdec'} = "0." . $coll->{'lngdec'};
+        }
+        if ( ! $coll->{'latdec'} && $coll->{'latmin'} )	{
+            $coll->{'latdec'} = ( $coll->{'latmin'} / 60 ) + ( $coll->{'latsec'}  / 3600 );
+        } else	{
+            $coll->{'latdec'} = "0." . $coll->{'latdec'};
+        }
+        $coll->{'lngdec'} = int ( ( $coll->{'lngdec'} + 0.05 ) * 10 );
+        $coll->{'latdec'} = int ( ( $coll->{'latdec'} + 0.05 ) * 10 );
         $coll->{'lngdec'} =~ s/0$//;
         $coll->{'latdec'} =~ s/0$//;
         $coll->{'lngmin'} = '';
