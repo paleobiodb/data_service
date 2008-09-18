@@ -1195,8 +1195,14 @@ sub displayCollectionDetails {
         }
         $coll->{'lngdec'} = int ( ( $coll->{'lngdec'} + 0.05 ) * 10 );
         $coll->{'latdec'} = int ( ( $coll->{'latdec'} + 0.05 ) * 10 );
-        $coll->{'lngdec'} =~ s/0$//;
-        $coll->{'latdec'} =~ s/0$//;
+        if ( $coll->{'lngdec'} == 10 )	{
+            $coll->{'lngdeg'}++;
+            $coll->{'lngdec'} = 0;
+        }
+        if ( $coll->{'latdec'} == 10 )	{
+            $coll->{'latdeg'}++;
+            $coll->{'latdec'} = 0;
+        }
         $coll->{'lngmin'} = '';
         $coll->{'lngsec'} = '';
         $coll->{'latmin'} = '';
