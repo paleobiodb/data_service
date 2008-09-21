@@ -7,6 +7,7 @@
 package DBConnection;
 use strict;
 use DBI;
+use Constants qw($DB_SOCKET $DB_PASSWD);
 # return a handle to the database (often called $dbh)
 
 sub connect {
@@ -15,12 +16,21 @@ sub connect {
     my $userName = "pbdbuser";
     my $dbName =   "pbdb";
 
-    # Make sure a symbolic link to this file always exists;
-    my $password = `cat /home/paleodbpasswd/passwd`;
-    chomp($password);  #remove the newline!  Very important!
-    my $dsn = "DBI:$driver:database=$dbName;host=$hostName";
+    my $dsn;
+    if ( $DB_SOCKET )	{
+        $dsn = "DBI:$driver:database=$dbName;host=$hostName;mysql_socket=$DB_SOCKET";
+    } else	{
+        $dsn = "DBI:$driver:database=$dbName;host=$hostName";
+    }
 
-    my $connection = DBI->connect($dsn, $userName, $password, {RaiseError=>1});
+    my $connection;
+    if ( $DB_PASSWD )	{
+        $connection = DBI->connect($dsn, $userName, $DB_PASSWD, {RaiseError=>1});
+    } else	{
+        my $password = `cat /home/paleodbpasswd/passwd`;
+        chomp($password);  #remove the newline!  Very important!
+        $connection = DBI->connect($dsn, $userName, $password, {RaiseError=>1});
+    }
     if (!$connection) {
         die("Could not connect to database");
     } else {
