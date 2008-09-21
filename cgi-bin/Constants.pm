@@ -3,7 +3,7 @@ require Exporter;
 use FindBin;
 
 @ISA = qw(Exporter);
-@EXPORT_OK = qw($conf $READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $TAXA_LIST_CACHE $IP_MAIN $IP_BACKUP);  # symbols to export on request
+@EXPORT_OK = qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $DB_SOCKET $DB_PASSWD $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $TAXA_LIST_CACHE $IP_MAIN $IP_BACKUP);  # symbols to export on request
 use strict;
 
 # general constants
@@ -13,6 +13,8 @@ my $conf = $Constants::conf;
 $Constants::HOST_URL        = $conf->{'HOST_URL'};
 $Constants::HTML_DIR        = $conf->{'HTML_DIR'};
 $Constants::DATA_DIR        = $conf->{'DATA_DIR'};
+$Constants::DB_SOCKET       = $conf->{'DB_SOCKET'};
+$Constants::DB_PASSWD          = $conf->{'DB_PASSWD'};
 $Constants::IP_MAIN         = '128.111.220.135';
 $Constants::IP_BACKUP       = '128.111.220.138';
 
