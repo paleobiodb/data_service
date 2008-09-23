@@ -725,7 +725,14 @@ sub displayDownloadTaxonomyForm {
     print $hbo->populateHTML('download_taxonomy_form',\%vars);
     print $hbo->stdIncludes("std_page_bottom");
 }       
-    
+
+sub getTaxonomyXML {
+    return if PBDBUtil::checkForBot();
+    logRequest($s,$q);
+    require DownloadTaxonomy;
+    DownloadTaxonomy::getTaxonomyXML($dbt,$q,$s,$hbo);
+}
+
 sub displayDownloadTaxonomyResults {
     return if PBDBUtil::checkForBot();
     require DownloadTaxonomy;
