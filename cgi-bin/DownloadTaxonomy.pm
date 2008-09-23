@@ -10,9 +10,265 @@ use Person;
 use Opinion;
 use CGI::Carp;
 use Debug qw(dbg);
-use Constants qw($READ_URL $DATA_DIR $HTML_DIR $TAXA_TREE_CACHE);
+use Constants qw($READ_URL $DATA_DIR $HTML_DIR $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
 
 use strict;
+
+# JA 19-21,23.9.08
+# provides XML formatted taxonomic data for taxa matching a string search
+# uses the same format as the Catalogue of Life Annual Checklist Web Service:
+#  http://webservice.catalogueoflife.org/annual-checklist/
+# doesn't relate to other subroutines here, but has to go somewhere...
+sub getTaxonomyXML	{
+	my ($dbt,$q,$s,$hbo) = @_;
+
+	print "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" ?>\n";
+
+	# we'll do this with simple table hits instead of recycling
+	#  getTaxonomicNames or getTaxonomicOpinions because the allowed query
+	#  parameters and output are both really simple
+
+	# request is assumed to go through an HTTP GET
+
+	my $searchString = $q->param('name');
+	$searchString =~ s/\+/ /g;
+	$searchString =~ s/\*/%/g;
+	if ( $searchString !~ /^(|% )[A-Za-z]/ || $searchString =~ /[^A-Za-z %]/ )	{
+		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="Search string is formatted incorrectly" version="1.0">'."\n</results>\n";
+		return;
+	}
+	if ( $searchString !~ /[A-Za-z]{3,}/ )	{
+		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The taxonomic name is too short" version="1.0">'."\n</results>\n";
+		return;
+	}
+
+	# find senior synonyms of names matching query
+	my $sql;
+	if ( $searchString =~ /\%/ )	{
+		$sql = "SELECT t.taxon_no,spelling_no,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name LIKE '" . $searchString . "' AND taxon_rank IN ('genus','species')";
+	} else	{
+		$sql = "SELECT t.taxon_no,spelling_no,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='$searchString' AND taxon_rank IN ('genus','species')";
+	}
+
+	# for each senior name, find all junior names
+	my @matches = @{$dbt->getData($sql)};
+	my $results = $#matches + 1;
+	if ( $results == 0 )	{
+		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="No names found" version="1.0">'."\n</results>\n";
+		return;
+	}
+	print '<results id="" name="' . $q->param('name') . '" total_number_of_results="' . $results . '" start="0" number_of_results_returned="' . $results . '" error_message="" version="1.0">' . "\n";
+	for my $m ( @matches )	{
+		print "<result>\n";
+		$sql = "SELECT a.taxon_no,spelling_no,synonym_no,taxon_name,taxon_rank,common_name,DATE_FORMAT(a.modified,'%Y-%m-%d %T') modified,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.comments FROM authorities a,$TAXA_TREE_CACHE t,refs r WHERE a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no AND synonym_no=" . $m->{synonym_no} . " ORDER BY spelling_no,taxon_name";
+		my @variants = @{$dbt->getData($sql)};
+		# needed to recover references
+		my @nos = ();
+		push @nos , $_->{taxon_no} foreach @variants;
+		$sql = "SELECT child_spelling_no AS taxon_no,r.* FROM refs r,opinions o WHERE r.reference_no=o.reference_no AND ref_has_opinion='YES' AND child_spelling_no IN (" . join(',',@nos) . ") ORDER BY author1last,author2last,pubyr";
+		my @refs = @{$dbt->getData($sql)};
+
+		my $acno = $m->{synonym_no};
+		my $matched;
+		my $accepted;
+
+		for my $v ( @variants )	{
+			if ( $v->{taxon_no} == $m->{taxon_no} )	{
+				$matched = $v;
+				last;
+			}
+		}
+
+		# MATCHED BUT INVALID NAME BLOCK
+		if ( $m->{taxon_no} == $acno )	{
+			$accepted = $matched;
+		} else	{
+			for my $v ( @variants )	{
+				if ( $v->{taxon_no} == $acno )	{
+					$accepted = $v;
+					last;
+				}
+			}
+			formatNameXML($q,$matched,$acno,@refs);
+			print "<accepted_name>\n";
+		}
+
+		# ACCEPTED NAME BLOCK
+		formatNameXML($q,$accepted,$acno,@refs);
+
+		if ( $q->param('response') eq "full" )  	{
+			# CLASSIFICATION BLOCK
+			$sql = "SELECT a.taxon_no,taxon_rank,taxon_name FROM authorities a,$TAXA_TREE_CACHE t,$TAXA_LIST_CACHE l WHERE a.taxon_no=t.taxon_no AND a.taxon_no=parent_no AND taxon_rank IN ('kingdom','phylum','class','order','family') AND taxon_name NOT IN ('Therapsida','Cetacea','Avetheropoda') AND child_no=" . $accepted->{taxon_no} . " ORDER BY lft";
+			my @parents = @{$dbt->getData($sql)};
+			print "<classification>\n";
+			for my $p ( @parents )	{
+				print "<taxon>\n<id>$p->{taxon_no}</id>\n";
+				print "<name>$p->{taxon_name}</name>\n";
+				my @letts = split(//,$p->{taxon_rank});
+				$letts[0] =~ tr/[a-z]/[A-Z]/;
+				print "<rank>".join('',@letts)."</rank>\n";
+				print "<name_html>$p->{taxon_name}</name_html>\n";
+				print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=checkTaxonInfo&amp;taxon_no=$p->{taxon_no}&amp;is_real_user=0</url>\n";
+				print "</taxon>\n";
+			}
+			print "</classification>\n";
+
+			# INFRASPECIES BLOCK
+			# only list accepted names of current subspecies
+			if ( $accepted->{taxon_rank} eq "species" )	{
+				$sql = "SELECT a.taxon_no,spelling_no,taxon_name,taxon_rank,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,$TAXA_TREE_CACHE t,refs r,opinions o WHERE a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no AND t.taxon_no=synonym_no AND t.taxon_no=child_no AND t.opinion_no=o.opinion_no AND parent_no=" . $accepted->{taxon_no} . " AND taxon_rank='subspecies' ORDER BY spelling_no,taxon_name";
+				my @infras = @{$dbt->getData($sql)};
+				if ( @infras )	{
+					print "<infraspecies_for_this_species>\n";
+					for my $i ( @infras )	{
+						print "<infraspecies>\n";
+						print "<id>$i->{taxon_no}</id>\n";
+						print "<name>$i->{taxon_name}</name>\n";
+						my ($auth,$name_html) = formatAuthXML($i);
+						print "<name_html>$name_html</name_html>\n";
+						my ($genus,$species,$infraspecies);
+						($genus,$species,$infraspecies) = split / /,$i->{taxon_name};
+						print "<genus>$genus</genus>\n";
+						print "<species>$species</species>\n";
+						print "<infraspecies_marker></infraspecies_marker>\n";
+						print "<infraspecies>$infraspecies</infraspecies>\n";
+						print "<author>$auth</author>\n";
+						print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=checkTaxonInfo&amp;taxon_no=$i->{taxon_no}&amp;is_real_user=0</url>\n";
+						print "</infraspecies>\n";
+					}
+					print "</infraspecies_for_this_species>\n";
+				}
+			}
+
+			# SYNONYMS BLOCK
+			if ( $#variants > 0 )	{
+				print "<synonyms>\n";
+				for my $v ( @variants )	{
+					if ( $v->{taxon_no} != $m->{synonym_no} )	{
+						print "<synonym>\n";
+						formatNameXML($q,$v,$acno,@refs);
+						print "</synonym>\n";
+					}
+				}
+				print "</synonyms>\n";
+			}
+
+			# COMMON NAMES BLOCK
+			if ( $accepted->{common_name} )	{
+				print "<common_names>\n<common_name>\n";
+				print "<name>".$accepted->{common_name}."</name>\n";
+				print "<language>English</language>\n";
+				print "<country>United States</country>\n";
+				print "</common_name>\n</common_names>\n";
+				# could include a real reference here, but it's
+				#  optional and overkill
+				print "<references>\n</references>\n";
+			}
+		}
+
+		if ( $m->{taxon_no} != $m->{synonym_no} )	{
+			print "</accepted_name>\n";
+		}
+		print "</result>\n";
+	}
+	print "</results>";
+	return;
+}
+
+sub formatNameXML	{
+
+	my ($q,$n,$acno,@refs) = @_;
+
+	# id = our primary key number
+	print "<id>".$n->{taxon_no}."</id>\n";
+	print "<name>".$n->{taxon_name}."</name>\n";
+	my @letts = split(//,$n->{taxon_rank});
+	$letts[0] =~ tr/[a-z]/[A-Z]/;
+	print "<rank>".join('',@letts)."</rank>\n";
+	if ( $n->{taxon_no} == $acno )	{
+		print "<name_status>accepted name</name_status>\n";
+	} else	{
+		print "<name_status>synonym</name_status>\n";
+	}
+	my ($auth,$name_html) = formatAuthXML($n);
+	print "<name_html>$name_html</name_html>\n";
+	if ( $q->param('response') eq "full" )  	{
+		my ($genus,$species,$infraspecies);
+		if ( $n->{taxon_name} =~ / / )	{
+			($genus,$species,$infraspecies) = split / /,$n->{taxon_name};
+		} else	{
+			$genus = $n->{taxon_name};
+			$species = "";
+		}
+		print "<genus>".$genus."</genus>\n";
+		print "<species>".$species."</species>\n";
+		if ( $infraspecies )	{
+			print "<infraspecies_marker>\n<infraspecies>".$species."</infraspecies>\n</infraspecies_marker>\n";
+		}
+		print "<author>$auth</author>\n";
+		$n->{comments} =~ s/\& /&amp; /g;
+		print "<additional_comments>".$n->{comments}."</additional_comments>\n";
+	}
+	# call to taxon info using taxon_no
+	print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=checkTaxonInfo&amp;taxon_no=$n->{taxon_no}&amp;is_real_user=0</url>\n";
+	if ( $q->param('response') ne "full" )  	{
+		print "<online_resource></online_resource>\n";
+	}
+	print "<source_database>The Paleobiology Database</source_database>\n";
+	print "<source_database_url>http://paleodb.org</source_database_url>\n";
+	# another URL if URL went to a portal, not source_database
+	# REFERENCES BLOCK
+	# format is not constrained
+	if ( $q->param('response') eq "full" )  	{
+		print "<record_scrutiny_date>".$n->{modified}."</record_scrutiny_date>\n";
+		print "<online_resource></online_resource>\n";
+		print "<references>\n";
+		for my $r ( @refs )	{
+			if ( $r->{taxon_no} == $n->{taxon_no} )	{
+				$r->{reftitle} =~ s/\&/&amp;/g;
+				$r->{pubtitle} =~ s/\&/&amp;/g;
+				$r->{pubvol} =~ s/\&/&amp;/g;
+				print "<reference>\n";
+				my $auth = $r->{author1init} . " " . $r->{author1last};
+				if ( $r->{otherauthors} ) { $auth .= " <i>et al.</i>"; }
+				elsif ( $r->{author2last} ) { $auth .= " and " . $r->{author2init} . " " . $r->{author2last} }
+				my $source = $r->{pubtitle};
+				if ( $r->{pubvol} ) { $source .= " " . $r->{pubvol}; }
+				if ( $r->{pubvol} && $r->{firstpage} ) { $source .= ":" . $r->{firstpage}; }
+				elsif ( $r->{firstpage} ) { $source .= ", pp. " . $r->{firstpage}; }
+				if ( $r->{lastpage} ) { $source .= "-" . $r->{lastpage}; }
+				print "<author>$auth</author>\n";
+				print "<year>$r->{pubyr}</year>\n";
+				print "<title>$r->{reftitle}</title>\n";
+				print "<source>$source</source>\n";
+				print "</reference>\n";
+			}
+		}
+		print "</references>\n";
+	}
+
+	return;
+}
+
+sub formatAuthXML	{
+
+	my $n = shift;
+	my $auth = $n->{author1last};
+	if ( $n->{otherauthors} )	{
+		$auth .= " et al.";
+	} elsif ( $n->{author2last} )	{
+		$auth .= " and ".$n->{author2last};
+	}
+	if ( $n->{pubyr} > 1500 ) { $auth .= " " . $n->{pubyr}; }
+	my $name_html;
+	if ( $n->{taxon_no} == $n->{spelling_no} )	{
+		$name_html = "<i>".$n->{taxon_name}."</i> $auth";
+	} else	{
+		$name_html = "<i>".$n->{taxon_name}."</i> ($auth)";
+	}
+	return($auth,$name_html);
+
+}
 
 # Builds the itis format. files output are:
 #   taxonomic_units.dat - authorities table
