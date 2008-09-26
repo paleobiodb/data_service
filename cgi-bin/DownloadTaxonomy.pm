@@ -65,7 +65,7 @@ sub getTaxonomyXML	{
 		# needed to recover references
 		my @nos = ();
 		push @nos , $_->{taxon_no} foreach @variants;
-		$sql = "SELECT child_spelling_no AS taxon_no,r.* FROM refs r,opinions o WHERE r.reference_no=o.reference_no AND ref_has_opinion='YES' AND child_spelling_no IN (" . join(',',@nos) . ") ORDER BY author1last,author2last,pubyr";
+		$sql = "SELECT child_spelling_no AS taxon_no,r.* FROM refs r,opinions o WHERE r.reference_no=o.reference_no AND child_spelling_no IN (" . join(',',@nos) . ") GROUP BY child_spelling_no,r.reference_no ORDER BY author1last,author2last,pubyr";
 		my @refs = @{$dbt->getData($sql)};
 
 		my $acno = $m->{synonym_no};
