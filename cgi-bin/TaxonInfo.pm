@@ -3429,32 +3429,37 @@ sub disusedNames {
     my %disused = ();
 
     if (@taxon_nos) {
-        my %taxon_nos = ();
-        my ($sql,@results,%used);
+        my ($sql,@parents,@children,@ranges,%used);
 
         my $taxon_nos_sql = join(",",map{int($_)} @taxon_nos);
 
         $sql = "SELECT lft,rgt,a.taxon_no taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_no IN ($taxon_nos_sql)";
-        @results = @{$dbt->getData($sql)};
+        @parents = @{$dbt->getData($sql)};
 
-        @taxon_nos = ();
-        for my $row ( @results )	{
-            if ( $row->{lft} == $row->{rgt} - 1 )	{
-                $disused{$row->{taxon_no}} = 1;
+        for my $p ( @parents )	{
+            if ( $p->{lft} == $p->{rgt} - 1 )	{
+                $disused{$p->{taxon_no}} = 1;
             } else	{
-                push @taxon_nos , $row->{taxon_no};
+                push @ranges , "(lft>".$p->{lft}." AND rgt<".$p->{rgt}.")";
             }
         }
-        if ( ! @taxon_nos )	{
+        if ( ! @ranges )	{
             return \%disused;
         }
 
-        $sql = "SELECT distinct(parent_no) parent FROM authorities a,$TAXA_LIST_CACHE t WHERE taxon_rank in ('genus','subgenus','species') AND a.taxon_no=child_no AND parent_no IN (" . join(',',@taxon_nos) . ")";
-        @results = @{$dbt->getData($sql)};
-        $used{$_->{parent}} = 1 foreach @results;
-        for my $t ( @taxon_nos )	{
-            if ( ! $used{$t} )	{
-                $disused{$t} = 1;
+$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE taxon_rank in ('genus','subgenus','species') AND a.taxon_no=t.taxon_no AND (" . join(' OR ',@ranges) . ")";
+        @children = @{$dbt->getData($sql)};
+        for my $p ( @parents )	{
+            for my $c ( @children )	{
+                if ( $c->{lft} > $p->{lft} && $c->{rgt} < $p->{rgt} )	{
+                    $used{$p->{taxon_no}} = 1;
+                    last;
+                }
+            }
+        }
+        for my $p ( @parents )	{
+            if ( ! $used{$p->{taxon_no}} )	{
+                $disused{$p->{taxon_no}} = 1;
             }
         }
 
