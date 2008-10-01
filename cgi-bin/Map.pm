@@ -231,10 +231,12 @@ sub mapFinishImage {
     # following lines taken out by JA 27.10.06 while re-implementing support
     #  for GIF format files, not sure what it does to IE browsers
     # do this only if the browser is not IE
+    # confusion reigns supreme, seems to work fine for GIF and PNG but not
+    #  JPEG so I'm reinstating it JA 1.10.08
     # this prevents errors with rendering of transparent pixels in PNG format
-    if ( $q->param('browser') =~ /Microsoft/ || $q->param('linecommand') =~ /[A-Za-z]/ )	{
+#    if ( $q->param('browser') =~ /Microsoft/ || $q->param('linecommand') =~ /[A-Za-z]/ )	{
         $im->trueColorToPalette();
-    }
+#    }
 
     # this doesn't actually seem to work (see below), left in for posterity
     #print MAPGIF $im->gif;
