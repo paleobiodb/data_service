@@ -8,7 +8,7 @@ use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
 use TimeLookup;
 use Digest::MD5;
-use Constants qw($READ_URL $WRITE_URL $DATA_DIR $HTML_DIR);
+use Constants qw($READ_URL $WRITE_URL $DATA_DIR $HTML_DIR $TAXA_TREE_CACHE);
 
 # Flags and constants
 my $dbt;    # The DBTransactionManager object
@@ -162,7 +162,14 @@ sub mapCheckParams {
             if($q->param('taxon_rank') ne "species") {
                 my @taxa = TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon_name,'remove_rank_change'=>1});
                 if (scalar(@taxa)  > 1) {
-                    push @errors, "The map can't be drawn because more than one taxon has the name '$taxon_name.' If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>."
+                    my @nos;
+                    push @nos , $_->{'taxon_no'} foreach @taxa;
+                    my $sql = "SELECT taxon_no,lft,rgt FROM $TAXA_TREE_CACHE WHERE taxon_no IN (" . join(',',@nos) . ")";
+                    my @nyms = @{$dbt->getData($sql)};
+                    my %gap;
+                    $gap{$_->{'taxon_no'}} = $_->{'rgt'} - $_->{'lft'} foreach @nyms;
+                    @taxa = sort { $gap{$b->{'taxon_no'}} <=> $gap{$a->{'taxon_no'}} } @taxa;
+                    @taxa = ($taxa[0]);
                 }
             }
         }
