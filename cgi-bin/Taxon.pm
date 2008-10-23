@@ -211,7 +211,10 @@ sub displayAuthorityForm {
             $fields{'preservation'} = $lastauthority->{preservation};
             $fields{'extant'} = $lastauthority->{extant};
         }
-    }    
+    }
+
+    # hack needed because form can display preservation in either of two places
+    $fields{'preservation2'} = $fields{'preservation'};
 
     # Grab the measurement data if they exist
     # added some sanity checks here: "holotype" record in specimens table has
@@ -488,13 +491,13 @@ sub submitAuthorityForm {
 	
 	# build up a hash of fields/values to enter into the database
 	my %fields;
-	
+
 	if ($isNewEntry) {
 		$fields{'reference_no'} = $s->get('reference_no');
 		if (! $fields{'reference_no'} ) {
 			$errors->add("You must set your current reference before submitting a new authority");	
 		}
-        $fields{'type_taxon'} = ($q->param('type_taxon')) ? 1 : 0;
+		$fields{'type_taxon'} = ($q->param('type_taxon')) ? 1 : 0;
 	} 
 	
 	if ($q->param('ref_is_authority') =~ /PRIMARY|CURRENT/ && ( $q->param('author1init') || $q->param('author1last') || $q->param('author2init') || $q->param('author2last') || $q->param('pubyr') || $q->param('otherauthors') ) ) {
@@ -549,6 +552,12 @@ sub submitAuthorityForm {
 			$fields{$formField} = $q->param($formField);
 		}
 	}
+	# hack needed because form can display preservation in either of
+	#  two places
+	if ( $fields{'preservation2'} =~ /[a-z]/ )	{
+		$fields{'preservation'} = $fields{'preservation2'};
+	}
+	
 
 
 	$fields{'taxon_name'} = $q->param('taxon_name');
