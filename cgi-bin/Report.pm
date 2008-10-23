@@ -167,8 +167,6 @@ sub reportDisplayHTML {
 	print qq|<p>The report data have been saved as "<a href="$HOST_URL/public/reports/$reportFileName">$reportFileName</a>"</p>|;
     print "</center>\n";
     print "<p>&nbsp;</p>";
-my $date = now();
-print "GOT HTML $date ";
 }
 
 ##
@@ -608,8 +606,6 @@ sub reportBuildDataTables {
             }
         }    
     } 
-my $date = now();
-print "GOT TABLE $date ";
     #    print "<pre>".Dumper($self->{'dataTable'}) . "</pre>";
 }
 
@@ -747,15 +743,11 @@ sub reportQueryDB{
     }
     $sql .= " GROUP BY ".$groupSQL;
 
-my $date = now();
-print "$date ";
     if ($groupSQL) {
         dbg("SQL:".$sql);
        
         my $sth = $dbh->prepare($sql) || die "Prepare query failed\n";
         $sth->execute() || die "Execute query failed\n";
-$date = now();
-print "GOT DATA $date ";
         return $sth;
     } else {
         return undef;
