@@ -102,6 +102,8 @@ sub new {
         dotcolor=>[\&_listFromHardList,'mapcolors'],
         country=>[\&_countryList],
         time_scale=>[\&_timeScaleList],
+        # hack
+        preservation2=>[\&_listFromEnum,'authorities','preservation'],
         opinion_basis=>[\&_listFromEnum,'opinions','basis'],
         reference_basis=>[\&_listFromEnum,'refs','basis'],
         month=>[$months], day_of_month=>[$day_of_month], year=>[$years],
