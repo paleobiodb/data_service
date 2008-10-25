@@ -427,7 +427,10 @@ sub displayAuthorityForm {
             $fields{'original_no_select'} = $original_no_select;
         }
     }
-    
+
+
+    my @form_taxon_values = ('','no','yes');
+    $fields{'form_taxon_select'} = $hbo->htmlSelect('form_taxon',\@form_taxon_values,\@form_taxon_values,$fields{'form_taxon'});
 
     # Build extant select
     my @extant_values = ('','YES','NO');
