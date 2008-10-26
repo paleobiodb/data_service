@@ -123,7 +123,7 @@ sub new {
     # This block 'installs' a code reference in $select_lists to generate the list on the fly when its needed
     my %table_enums = (
         'cladograms' => ['source'],
-        'authorities' => ['taxon_rank','preservation'],
+        'authorities' => ['taxon_rank','preservation','form_taxon','extant'],
         'opinions' => ['phylogenetic_status','diagnosis_given'],
         'refs'=> ['project_name','publication_type','basis','language'],
         'collections'=> ['access_level', 'latdir', 'lngdir', 'latlng_basis', 'gps_datum', 'altitude_unit', 'geogscale', 'localbedunit', 'localorder', 'regionalbedunit', 'regionalorder', 'stratscale', 'lithification', 'lithification2',  'tectonic_setting', 'lagerstatten', 'concentration', 'orientation', 'preservation_quality', 'abund_in_sediment', 'art_whole_bodies', 'disart_assoc_maj_elems', 'disassoc_maj_elems', 'disassoc_minor_elems', 'sorting', 'fragmentation', 'bioerosion', 'encrustation', 'temporal_resolution', 'spatial_resolution', 'collection_type', 'collection_size_unit', 'rock_censused_unit', 'museum'],
