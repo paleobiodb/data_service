@@ -1801,7 +1801,7 @@ sub getSynonymyParagraph{
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
 
-    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','type_taxon_no','type_specimen','comments']);
+    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','form_taxon','type_taxon_no','type_specimen','comments']);
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if ( ! $taxon->{'author1last'} )	{
@@ -1833,29 +1833,14 @@ sub getSynonymyParagraph{
 		$text .= ". ";
 	}
 
-    if ($taxon->{'extant'} =~ /YES/i) {
+    if ($taxon->{'extant'} =~ /y/i) {
         $text .= "It is extant. ";
-    } elsif ($taxon->{'extant'} =~ /NO/i) {
+    } elsif (! $taxon->{'preservation'} && $taxon->{'extant'} =~ /n/i) {
         $text .= "It is not extant. ";
     }
 
-    # don't report preservation for extant taxa, because they are regular
-    #  taxa by definition
-    if ($taxon->{'preservation'} && $taxon->{'extant'} !~ /Y/i) {
-        my $preservation = $taxon->{'preservation'};
-        if ($preservation eq 'regular taxon') {
-            $preservation = "not an ichnofossil or a form taxon";
-        } elsif ($preservation =~ /^[aieou]/) {
-            $preservation = "an $preservation";
-        } else {
-            $preservation = "a $preservation";
-        }
-        if ( $taxon->{'extant'} =~ /N/i )	{
-            $text =~ s/\. $/ /;
-            $text .= "and is $preservation. ";
-        } else	{
-            $text .= "It is $preservation. ";
-        }
+    if ($taxon->{'form_taxon'} =~ /y/i) {
+            $text .= "It is considered to be a form taxon. ";
     }
 
     my @spellings = getAllSpellings($dbt,$taxon->{'taxon_no'});
@@ -1865,7 +1850,7 @@ sub getSynonymyParagraph{
         my $specimen_row = ${$dbt->getData($sql)}[0];
         if ($specimen_row) {
             if ($specimen_row->{'type_specimen'})	{
-                $text .= "Its type is $specimen_row->{type_specimen}";
+                $text .= "Its type specimen is $specimen_row->{type_specimen}";
                 if ($specimen_row->{'type_body_part'}) {
                     my $an = ($specimen_row->{'type_body_part'} =~ /^[aeiou]/) ? "an" : "a";
                     $text .= ", " if ($specimen_row->{'type_specimen'});
@@ -1878,6 +1863,25 @@ sub getSynonymyParagraph{
                     $text .= " ($specimen_row->{part_details})";
                 }
                 $text .= ". ";
+            }
+            # don't report preservation for extant taxa
+            if ($taxon->{'preservation'} && $taxon->{'extant'} !~ /y/i) {
+                my %p = ("body (3D)" => "3D body fossil", "compression" => "compression fossil", "soft parts (3D)" => "3D fossil preserving soft parts", "soft parts (2D)" => "compression preserving soft parts", "amber" => "inclusion in amber", "cast" => "cast", "mold" => "mold", "impression" => "impression", "trace" => "trace fossil", "not a trace" => "not a trace fossil");
+                my $preservation = $p{$taxon->{'preservation'}};
+                if ($preservation =~ /^[aieou]/) {
+                    $preservation = "an $preservation";
+                } elsif ($preservation !~ /^not/ ) {
+                    $preservation = "a $preservation";
+                }
+                if ($specimen_row->{'type_specimen'} && $specimen_row->{'type_body_part'})	{
+                    $text =~ s/\. $/, /;
+                    $text .= "and it is $preservation. ";
+                } elsif ($specimen_row->{'type_specimen'})	{
+                    $text =~ s/\. $/ /;
+                    $text .= "and is $preservation. ";
+                } else	{
+                    $text .= "It is $preservation. ";
+                }
             }
             if ($specimen_row->{'type_locality'} > 0)	{
                 my $sql = "SELECT i.interval_name AS max,IF (min_interval_no>0,i2.interval_name,'') AS min,IF (country='United States',state,country) AS place,collection_name FROM collections c,intervals i,intervals i2 WHERE collection_no=".$specimen_row->{'type_locality'}." AND i.interval_no=max_interval_no AND (min_interval_no=0 OR i2.interval_no=min_interval_no)";
@@ -1906,7 +1910,7 @@ sub getSynonymyParagraph{
     my $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE type_taxon_no IN (".join(",",@spellings).")";
     my @type_for = @{$dbt->getData($sql)};
     if (@type_for) {
-        $text .= "It is the type for ";
+        $text .= "It is the type $taxon->{'taxon_rank'} of ";
         foreach my $row (@type_for) {
             my $taxon_name = $row->{'taxon_name'};
             if ($row->{'taxon_rank'} =~ /genus|species/) {
@@ -3101,7 +3105,7 @@ sub getTaxa {
     if ($fields) {
         @fields = @$fields;
         if  ($fields[0] =~ /\*|all/) {
-            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','type_body_part','part_details','type_locality','extant','preservation','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments');
+            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','type_body_part','part_details','type_locality','extant','preservation','form_taxon','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments');
         }
         foreach my $f (@fields) {
             if ($f =~ /^author(1|2)(last|init)$|otherauthors|pubyr$/) {
