@@ -202,19 +202,22 @@ sub displayAuthorityForm {
         $fields{'ref_is_authority'} = 'PRIMARY';
         # prefill some fields based on the last entry from the same ref
         #  JA 6.5.07
-        my $sql = "SELECT ref_is_authority,pages,preservation,extant FROM authorities WHERE ((pages!='' AND pages IS NOT NULL) OR (preservation!='' AND preservation IS NOT NULL) OR (extant!='' AND extant IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " ORDER BY taxon_no DESC LIMIT 1";
+        my $sql = "SELECT ref_is_authority,pages,preservation,form_taxon,extant FROM authorities WHERE ((pages!='' AND pages IS NOT NULL) OR (preservation!='' AND preservation IS NOT NULL) OR (form_taxon!='' AND form_taxon IS NOT NULL)) OR (extant!='' AND extant IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " ORDER BY taxon_no DESC LIMIT 1";
         my $lastauthority = @{$dbt->getData($sql)}[0];
         if ( $lastauthority )	{
             if ( $lastauthority ->{ref_is_authority} eq "YES" )	{
                 $fields{'pages'} = $lastauthority->{pages};
             }
             $fields{'preservation'} = $lastauthority->{preservation};
+            $fields{'form_taxon'} = $lastauthority->{form_taxon};
             $fields{'extant'} = $lastauthority->{extant};
         }
     }
 
     # hack needed because form can display preservation in either of two places
-    $fields{'preservation2'} = $fields{'preservation'};
+    if ( ! $fields{'preservation2'} )	{
+        $fields{'preservation2'} = $fields{'preservation'};
+    }
 
     # Grab the measurement data if they exist
     # added some sanity checks here: "holotype" record in specimens table has
@@ -428,14 +431,6 @@ sub displayAuthorityForm {
         }
     }
 
-
-    my @form_taxon_values = ('','no','yes');
-    $fields{'form_taxon_select'} = $hbo->htmlSelect('form_taxon',\@form_taxon_values,\@form_taxon_values,$fields{'form_taxon'});
-
-    # Build extant select
-    my @extant_values = ('','YES','NO');
-    $fields{'extant_select'} = $hbo->htmlSelect('extant',\@extant_values,\@extant_values,$fields{'extant'});
-    
     # add in the error message
     if ($error_message) {
         $fields{'error_message'}=$error_message;
@@ -1154,7 +1149,7 @@ sub addSpellingAuthority {
         $record{taxon_rank} = $new_rank;
     }
 
-    my @dataFields = ("pages", "figures", "common_name", "extant", "preservation");
+    my @dataFields = ("pages", "figures", "common_name", "extant", "form_taxon", "preservation");
     my @origAuthFields = ("author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
     
     if ($orig->{'ref_is_authority'} =~ /yes/i) {
@@ -1915,7 +1910,7 @@ sub propagateAuthorityInfo {
     my $me = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
-    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','preservation');
+    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','form_taxon','preservation');
 
     # Two steps: find best authority info, then propagate to all spelling variants
     my @spellings;
