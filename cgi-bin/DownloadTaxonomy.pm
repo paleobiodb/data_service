@@ -45,9 +45,9 @@ sub getTaxonomyXML	{
 	# find senior synonyms of names matching query
 	my $sql;
 	if ( $searchString =~ /\%/ )	{
-		$sql = "SELECT t.taxon_no,spelling_no,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name LIKE '" . $searchString . "' AND taxon_rank IN ('genus','species')";
+		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t, opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name LIKE '" . $searchString . "' AND taxon_rank IN ('genus','species')";
 	} else	{
-		$sql = "SELECT t.taxon_no,spelling_no,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='$searchString' AND taxon_rank IN ('genus','species')";
+		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name='$searchString' AND taxon_rank IN ('genus','species')";
 	}
 
 	# for each senior name, find all junior names
@@ -59,11 +59,21 @@ sub getTaxonomyXML	{
 	}
 	print '<results id="" name="' . $q->param('name') . '" total_number_of_results="' . $results . '" start="0" number_of_results_returned="' . $results . '" error_message="" version="1.0">' . "\n";
 	for my $m ( @matches )	{
+		# if a bad name's parent is not itself bad, replace it with
+		#  the grandparent
+		# good luck if the grandparent is bad...
+		if ( $m->{status} ne "belongs to" )	{
+			$sql = "SELECT parent_no FROM $TAXA_TREE_CACHE t,opinions o WHERE " . $m->{synonym_no} . "=child_no AND t.opinion_no=o.opinion_no AND status!='belongs to'";
+			my $bad = ${$dbt->getData($sql)}[0];
+			if ( $bad && $bad->{parent_no} > 0 )	{
+				$m->{synonym_no} = $bad->{parent_no};
+			}
+		}
 		print "<result>\n";
-		$sql = "SELECT a.taxon_no,spelling_no,synonym_no,taxon_name,taxon_rank,common_name,DATE_FORMAT(a.modified,'%Y-%m-%d %T') modified,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.comments FROM authorities a,$TAXA_TREE_CACHE t,refs r WHERE a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no AND synonym_no=" . $m->{synonym_no} . " ORDER BY spelling_no,taxon_name";
+		$sql = "(SELECT status,a.taxon_no,spelling_no,synonym_no,taxon_name,taxon_rank,common_name,DATE_FORMAT(a.modified,'%Y-%m-%d %T') modified,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.comments FROM authorities a,$TAXA_TREE_CACHE t,refs r,opinions o WHERE a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no AND synonym_no=" . $m->{synonym_no} . " AND t.taxon_no!=" . $m->{taxon_no} . " AND t.opinion_no=o.opinion_no ORDER BY spelling_no,taxon_name) UNION (SELECT status,a.taxon_no,spelling_no,synonym_no,taxon_name,taxon_rank,common_name,DATE_FORMAT(a.modified,'%Y-%m-%d %T') modified,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.comments FROM authorities a,$TAXA_TREE_CACHE t,refs r,opinions o WHERE a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no AND t.taxon_no=" . $m->{taxon_no} . " AND t.opinion_no=o.opinion_no)";
 		my @variants = @{$dbt->getData($sql)};
 		# needed to recover references
-		my @nos = ();
+		my @nos = ($m->{taxon_no});
 		push @nos , $_->{taxon_no} foreach @variants;
 		$sql = "SELECT child_spelling_no AS taxon_no,r.* FROM refs r,opinions o WHERE r.reference_no=o.reference_no AND child_spelling_no IN (" . join(',',@nos) . ") GROUP BY child_spelling_no,r.reference_no ORDER BY author1last,author2last,pubyr";
 		my @refs = @{$dbt->getData($sql)};
@@ -72,6 +82,15 @@ sub getTaxonomyXML	{
 		my $matched;
 		my $accepted;
 
+		for my $v ( @variants )	{
+			if ( $v->{status} ne "belongs to" )	{
+				if ( $v->{comments} )	{
+					$v->{comments} .= " [specific status: " . $v->{status} . "]";
+				} else	{
+					$v->{comments} = "specific status: " . $v->{status};
+				}
+			}
+		}
 		for my $v ( @variants )	{
 			if ( $v->{taxon_no} == $m->{taxon_no} )	{
 				$matched = $v;
@@ -670,13 +689,21 @@ sub displayPBDBDownload {
         <p class="darkList" class="verylarge" style="padding-left: 0.5em; padding-top: 0.3em; padding-bottom: 0.3em; margin-bottom: 0em;">Output files</p>';
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
+
+    # the person table is tiny and joining on it really slows things down,
+    #  so grab the whole thing and create a lookup JA 28.9.08
+    my $sql = "SELECT name,person_no FROM person";
+    my @temp = @{$dbt->getData($sql)};
+    my %people;
+    $people{$_->{person_no}} = $_->{name} foreach @temp;
+
     my %references;
 
     # Create the opinions file 
     # Note that the opinions file MUST be created first -- this is because there is an option to get taxa
     # that have an opinion that fit the criteria attached to them, so we need to get a additional list of taxa
     # from the opinions function to download
-    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,%options); 
+    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,\%people,%options),; 
     my @opinions = @$opinions;
     open FH_OP, ">$filesystem_dir/opinions.csv"
         or die "Could not open opinions.csv ($!)";
@@ -714,11 +741,11 @@ sub displayPBDBDownload {
                 $referenced_taxa{$o->{'parent_spelling_no'}} = 1;
             }
         }
-        $options{'referenced_taxa'} = \%referenced_taxa;
+        $options{'referenced_taxa'} = join(',',keys %referenced_taxa);
     }
 
 
-    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,%options);
+    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,\%people,%options);
     my @names = @$names;
 
 
@@ -785,11 +812,7 @@ sub displayPBDBDownload {
     $csv->combine(@header);
     print FH_REF $csv->string()."\n";
     if (@references) {
-        my $sql = 'SELECT p1.name authorizer, p2.name enterer, p3.name modifier, r.* '.
-                  ' FROM refs r '.
-                  ' LEFT JOIN person p1 ON p1.person_no=r.authorizer_no'.
-                  ' LEFT JOIN person p2 ON p2.person_no=r.enterer_no'.
-                  ' LEFT JOIN person p3 ON p3.person_no=r.modifier_no'.
+        my $sql = 'SELECT r.* FROM refs r '.
                   ' WHERE r.reference_no IN ('.join(',',@references).')';
         my $sth = $dbh->prepare($sql);
         $sth->execute();
@@ -798,6 +821,11 @@ sub displayPBDBDownload {
         while (my $row = $sth->fetchrow_hashref()) {
             $ref_count++;
             my @line = ();
+            if ( $q->param('output_data') !~ /basic/ )	{
+                $row->{authorizer} = $people{$row->{authorizer_no}};
+                $row->{enterer} = $people{$row->{enterer_no}};
+                $row->{modifier} = $people{$row->{modifier_no}};
+            }
             foreach my $val (@header) {
                 my $csv_val = $row->{$val} || '';
                 push @line, $csv_val;
@@ -830,6 +858,8 @@ print '</td></tr></table></div>';
 sub getTaxonomicNames {
     my $dbt = shift;
     my $http_dir = shift;
+    my $ref =shift;
+    my %people = %{$ref};
     my $dbh = $dbt->dbh;
     my %options = @_;
     
@@ -855,6 +885,7 @@ sub getTaxonomicNames {
             $taxa_list{int($taxon_no)} = 1;
         }
     }
+
     if (%taxa_list) {
         push @where, "a.taxon_no IN (".join(",",keys %taxa_list).")";
     }
@@ -873,10 +904,9 @@ sub getTaxonomicNames {
 
     if ($options{'author'}) {
         my $author = $dbh->quote($options{'author'});
-        my $authorWild = $dbh->quote('%'.$options{'author'}.'%');
         push @where, "IF(a.ref_is_authority='YES',".
-            "r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild,". # If ref_is_authority, use ref
-            "a.author1last LIKE $author OR a.author2last LIKE $author OR a.otherauthors LIKE $authorWild)"; # Else, use record itself
+            "r.author1last=$author OR r.author2last=$author,". # If ref_is_authority, use ref
+            "a.author1last=$author OR a.author2last=$author)"; # Else, use record itself
     }
 
     if ($options{'person_no'}) {
@@ -916,7 +946,7 @@ sub getTaxonomicNames {
     my @results;
     my $message;
     if (@where) {
-        my $base_sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, tt.taxon_name type_taxon,"
+        my $base_sql = "SELECT a.authorizer_no, a.enterer_no, a.modifier_no, tt.taxon_name type_taxon,"
                 . "a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,a.common_name,a.type_specimen,a.type_body_part,a.part_details,a.extant,a.preservation,"
                 . "a.pages,a.figures,a.created,a.comments,t.spelling_no,t.synonym_no senior_synonym_no,"
                 . " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,"
@@ -928,9 +958,6 @@ sub getTaxonomicNames {
                 . " DATE_FORMAT(a.modified,'%Y-%m-%e %H:%i:%s') modified, "
                 . " DATE_FORMAT(a.modified,'%m/%e/%Y') modified_short "
                 . " FROM $TAXA_TREE_CACHE t, authorities a"
-                . " LEFT JOIN person p1 ON p1.person_no=a.authorizer_no"
-                . " LEFT JOIN person p2 ON p2.person_no=a.enterer_no"
-                . " LEFT JOIN person p3 ON p3.person_no=a.modifier_no"
                 . " LEFT JOIN authorities tt ON tt.taxon_no=a.type_taxon_no"
                 . " LEFT JOIN refs r ON r.reference_no=a.reference_no"
                 . " WHERE t.taxon_no=a.taxon_no";
@@ -944,6 +971,9 @@ sub getTaxonomicNames {
         my %taxa_cache = ();
         foreach my $row (@results) {
             $taxa_cache{$row->{'taxon_no'}} = $row;
+            $row->{authorizer} = $people{$row->{authorizer_no}};
+            $row->{enterer} = $people{$row->{enterer_no}};
+            $row->{modifier} = $people{$row->{modifier_no}};
             if ($parent_name_cache{$row->{'senior_synonym_no'}}) {
                 $row->{'parent_name'} = $parent_name_cache{$row->{'senior_synonym_no'}}{'taxon_name'};
             }
@@ -1047,6 +1077,8 @@ sub getTaxonomicNames {
 sub getTaxonomicOpinions {
     my $dbt = shift;
     my $http_dir = shift;
+    my $ref =shift;
+    my %people = %{$ref};
     my $dbh = $dbt->dbh;
     my %options = @_;
     
@@ -1090,10 +1122,9 @@ sub getTaxonomicOpinions {
 
     if ($options{'author'}) {
         my $author = $dbh->quote($options{'author'});
-        my $authorWild = $dbh->quote('%'.$options{'author'}.'%');
         push @where, "IF(o.ref_has_opinion='YES',".
-            "r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild,". # If ref_is_authority, use ref
-            "o.author1last LIKE $author OR o.author2last LIKE $author OR o.otherauthors LIKE $authorWild)"; # Else, use record itself
+            "r.author1last=$author OR r.author2last=$author,". # If ref_is_authority, use ref
+            "o.author1last=$author OR o.author2last=$author)"; # Else, use record itself
     }
 
     if ($options{'created_year'}) {
@@ -1133,9 +1164,7 @@ sub getTaxonomicOpinions {
     my @results = ();
     my $message = "";
     if (@where) {
-        my $sql = "(SELECT p1.name authorizer, p2.name enterer, p3.name modifier, "
-                . "a1.taxon_name child_name, a2.taxon_name child_spelling_name, "
-                . "a3.taxon_name parent_name, a4.taxon_name parent_spelling_name,"
+        my $sql = "(SELECT o.authorizer_no, o.enterer_no, o.modifier_no, "
                 . "o.opinion_no,o.reference_no,o.status,o.phylogenetic_status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
                 . "o.pages,o.figures,o.created,o.comments,IF((o.basis != '' && o.basis IS NOT NULL), o.basis, r.basis) basis,"
                 . " IF (o.ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,"
@@ -1147,19 +1176,32 @@ sub getTaxonomicOpinions {
                 . " DATE_FORMAT(o.modified,'%Y-%m-%e %H:%i:%s') modified, "
                 . " DATE_FORMAT(o.modified,'%m/%e/%Y') modified_short "
                 . " FROM opinions o"
-                . " LEFT JOIN authorities a1 ON a1.taxon_no=o.child_no"
-                . " LEFT JOIN authorities a2 ON a2.taxon_no=o.child_spelling_no"
-                . " LEFT JOIN authorities a3 ON a3.taxon_no=o.parent_no"
-                . " LEFT JOIN authorities a4 ON a4.taxon_no=o.parent_spelling_no"
-                . " LEFT JOIN person p1 ON p1.person_no=o.authorizer_no"
-                . " LEFT JOIN person p2 ON p2.person_no=o.enterer_no"
-                . " LEFT JOIN person p3 ON p3.person_no=o.modifier_no"
                 . " LEFT JOIN refs r ON r.reference_no=o.reference_no"
                 . " WHERE ".join(" AND ",@where)
-                . ") ORDER BY child_name,pubyr";
+                . ") ORDER BY pubyr";
         dbg("getTaxonomicOpinions called: ($sql)");
         @results = @{$dbt->getData($sql)};
         my $op_link = $http_dir."/opinions.csv";
+	my @nos;
+	push @nos , $_->{child_no} foreach @results;
+	push @nos , $_->{child_spelling_no} foreach @results;
+	push @nos , $_->{parent_no} foreach @results;
+	push @nos , $_->{parent_spelling_no} foreach @results;
+	if ( @nos )	{
+		my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE taxon_no IN (" . join(',',@nos) .  ")";
+        	my @names = @{$dbt->getData($sql)};
+		my %lookup;
+		$lookup{$_->{taxon_no}} = $_->{taxon_name} foreach @names;
+		for my $r ( @results )	{
+                        $r->{authorizer} = $people{$r->{authorizer_no}};
+                        $r->{enterer} = $people{$r->{enterer_no}};
+                        $r->{modifier} = $people{$r->{modifier_no}};
+			$r->{child_name} = $lookup{$r->{child_no}};
+			$r->{child_spelling_name} = $lookup{$r->{child_spelling_no}};
+			$r->{parent_name} = $lookup{$r->{parent_no}};
+			$r->{parent_spelling_name} = $lookup{$r->{parent_spelling_no}};
+		}
+	}
         
         $message .= "<p>".scalar(@results)." taxonomic opinions were printed to <a href=\"$op_link\">opinions.csv</a></p>";
     } else {
