@@ -2102,7 +2102,7 @@ sub queryDatabase {
             $q->param('occurrences_preservation')) {
             $get_preservation = 1;
         }
-         
+
         if (@ecoFields || $get_preservation ||
             $q->param("replace_with_ss") ne 'NO' ||
             $q->param("occurrences_class_name") eq "YES" || 
@@ -2289,6 +2289,11 @@ sub queryDatabase {
                 $get_ichno   = 1 if ($p eq 'ichnofossil'); 
                 $get_form    = 1 if ($p eq 'form taxon');
             }
+            if (! @preservations)	{
+                $get_regular = 1;
+                $get_ichno   = 1;
+                $get_form    = 1;
+            }
         }
 
 
@@ -2375,12 +2380,13 @@ sub queryDatabase {
 
             if ($get_preservation) {
                 my $preservation = $ecotaph{$row->{'o.taxon_no'}}{'preservation'};
-                if ($preservation eq 'ichnofossil') {
-                    next unless  ($get_ichno);
-                } elsif ($preservation eq 'form taxon') {
-                    next unless  ($get_form);
+                if ($preservation eq 'trace') {
+                    next unless ($get_ichno);
                 } else {
-                    next unless  ($get_regular);
+                    next unless ($get_regular);
+                }
+                if ($ecotaph{$row->{'o.taxon_no'}}{'form_taxon'} eq 'yes') {
+                    next unless ($get_form);
                 }
             }
             # delete abundances (not occurrences) if the collection excludes
@@ -2720,7 +2726,7 @@ sub queryDatabase {
             }
 
             # Set up the ecology fields
-            foreach (@ecoFields,'preservation') {
+            foreach (@ecoFields,'preservation','form_taxon') {
                 if ($ecotaph{$row->{'o.taxon_no'}}{$_} !~ /^\s*$/) {
                     $row->{$_} = $ecotaph{$row->{'o.taxon_no'}}{$_};
                 } else {
