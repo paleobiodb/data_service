@@ -220,11 +220,12 @@ sub getEcology {
 
     if ($get_basis || $get_preservation) {
         if (@taxon_nos) {
-            $sql = "SELECT taxon_no,taxon_rank,preservation FROM authorities WHERE taxon_no IN (".join(",",keys %all_taxon_nos).")";
+            $sql = "SELECT taxon_no,taxon_rank,preservation,form_taxon FROM authorities WHERE taxon_no IN (".join(",",keys %all_taxon_nos).")";
             my @results = @{$dbt->getData($sql)};
             foreach my $row (@results) {
                 $taxon_metadata{$row->{'taxon_no'}}{'taxon_rank'} = $row->{'taxon_rank'};
                 $taxon_metadata{$row->{'taxon_no'}}{'preservation'} = $row->{'preservation'};
+                $taxon_metadata{$row->{'taxon_no'}}{'form_taxon'} = $row->{'form_taxon'};
             }
         }
     }
@@ -242,7 +243,7 @@ sub getEcology {
         }
     }
     if ($get_preservation) {
-        push @fields,'preservation';
+        push @fields,('preservation','form_taxon');
     }
     
     my %child_taxa;
