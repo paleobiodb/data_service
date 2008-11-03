@@ -28,7 +28,7 @@ use strict;
     zone_fluvial=>['fluvial indet.', 'alluvial fan', 'channel lag', 'coarse channel fill', 'fine channel fill', '"channel"', 'wet floodplain', 'dry floodplain', '"floodplain"', 'crevasse splay', 'levee', 'mire/swamp', 'fluvial-lacustrine indet.', 'delta plain', 'fluvial-deltaic indet.'],
     zone_karst=>['cave', 'fissure fill', 'sinkhole', 'karst indet.'],
     zone_other_terrestrial=>['dune', 'interdune', 'loess', 'eolian indet.','tar', 'spring', 'glacial'],
-    zone_marginal_marine=>['peritidal','lagoonal/restricted shallow subtidal','estuary/bay','lagoonal','paralic indet.','delta plain','interdistributary bay'],
+    zone_marginal_marine=>['marginal marine indet.','peritidal','lagoonal/restricted shallow subtidal','estuary/bay','lagoonal','paralic indet.','delta plain','interdistributary bay'],
     zone_reef=>['reef, buildup or bioherm','perireef or subreef','intrashelf/intraplatform reef','platform/shelf-margin reef','slope/ramp reef','basin reef'],
     zone_shallow_subtidal=>['shallow subtidal indet.','open shallow subtidal','delta front','foreshore','shoreface','sand shoal'],
     zone_deep_subtidal=>['transition zone/lower shoreface','deep subtidal ramp','deep subtidal shelf','deep subtidal indet.'],
