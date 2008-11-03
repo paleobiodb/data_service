@@ -2,6 +2,44 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
+function marineClick ( ) {
+
+	var frm = document.forms[0];
+	if ( frm.environment_carbonate.checked && frm.environment_siliciclastic.checked ) {
+		frm.zone_marginal_marine.checked = true;
+		frm.zone_reef.checked = true;
+		frm.zone_shallow_subtidal.checked = true;
+		frm.zone_deep_subtidal.checked = true;
+		frm.zone_offshore.checked = true;
+		frm.zone_slope_basin.checked = true;
+	} else if ( ! frm.environment_carbonate.checked && ! frm.environment_siliciclastic.checked ) {
+		frm.zone_marginal_marine.checked = false;
+		frm.zone_reef.checked = false;
+		frm.zone_shallow_subtidal.checked = false;
+		frm.zone_deep_subtidal.checked = false;
+		frm.zone_offshore.checked = false;
+		frm.zone_slope_basin.checked = false;
+	}
+
+}
+
+function terrestrialClick ( ) {
+
+	var frm = document.forms[0];
+	if ( frm.environment_terrestrial.checked ) {
+		frm.zone_lacustrine.checked = true;
+		frm.zone_fluvial.checked = true;
+		frm.zone_karst.checked = true;
+		frm.zone_other_terrestrial.checked = true;
+	} else if ( ! frm.environment_terrestrial.checked ) {
+		frm.zone_lacustrine.checked = false;
+		frm.zone_fluvial.checked = false;
+		frm.zone_karst.checked = false;
+		frm.zone_other_terrestrial.checked = false;
+	}
+
+}
+
 function globalClick ( ) {
 
 	var frm = document.forms[0];
@@ -301,7 +339,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </td></tr>
 
 <tr class="lightGray">
-<td valign=top class="small">Select <b>lithologies</b>:</td>
+<td valign=top class="small"><b>Lithologies</b>:</td>
 <td valign=top class="small" colspan=3>
 <input type=checkbox name="lithology_carbonate" value="YES" checked>carbonate
 <input type=checkbox name="lithology_mixed" value="YES" checked>mixed
@@ -321,20 +359,24 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 
 
 <tr>
-<td valign=middle class="small">Select <b>environments</b>:</td>
+<td valign=middle class="small"><b>Environments</b>:</td>
 <td valign=top class="small" colspan=3>
-<input type=checkbox name="environment_carbonate" value="YES" checked>carbonate
-<input type=checkbox name="environment_siliciclastic" value="YES" checked>siliciclastic
-<input type=checkbox name="environment_terrestrial" value="YES" checked>terrestrial
+<input type=checkbox name="environment_carbonate" value="YES" checked onClick="marineClick();">carbonate
+<input type=checkbox name="environment_siliciclastic" value="YES" checked onClick="marineClick();">siliciclastic
+<input type=checkbox name="environment_terrestrial" value="YES" checked onClick="terrestrialClick();">terrestrial
 <input type=checkbox name="environment_unknown" value="YES" checked>unknown
 </td></tr>
 
 <tr>
-<td valign=middle class="small">... and/or onshore-offshore zones:</td>
+<td valign=middle class="small">... and/or environmental zones:</td>
 <td valign=top class="small" colspan=3>
+<nobr><input type=checkbox name="zone_lacustrine" value="YES" checked>lacustrine</nobr>
+<nobr><input type=checkbox name="zone_fluvial" value="YES" checked>fluvial</nobr>
+<nobr><input type=checkbox name="zone_karst" value="YES" checked>karst</nobr>
+<nobr><input type=checkbox name="zone_other_terrestrial" value="YES" checked>other terrestrial</nobr><br>
 <nobr><input type=checkbox name="zone_marginal_marine" value="YES" checked>marginal marine</nobr>
 <nobr><input type=checkbox name="zone_reef" value="YES" checked>reef</nobr>
-<nobr><input type=checkbox name="zone_shallow_subtidal" value="YES" checked>shallow subtidal</nobr>
+<nobr><input type=checkbox name="zone_shallow_subtidal" value="YES" checked>shallow subtidal</nobr><br>
 <nobr><input type=checkbox name="zone_deep_subtidal" value="YES" checked>deep subtidal</nobr>
 <nobr><input type=checkbox name="zone_offshore" value="YES" checked>offshore</nobr>
 <nobr><input type=checkbox name="zone_slope_basin" value="YES" checked>slope/basin</nobr>
@@ -351,7 +393,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </td></tr>
 
 <tr class="lightGray">
-<td valign=top class="small">Select <b>continents</b> or paleocontinents:</td>
+<td valign=top class="small"><b>Continents</b> or paleocontinents:</td>
 
 <td valign=top class="small" colspan=3>
 <table><tr><td class="small">
