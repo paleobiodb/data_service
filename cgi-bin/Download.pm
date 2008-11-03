@@ -302,9 +302,9 @@ sub retellOptions {
         $html .= $self->retellOptionsGroup('Environments','environment_',\@environment_group);
     }
 
-    # Onshore-offshore zones
-    my @zone_group = ('marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin');
-$html .= $self->retellOptionsGroup('Onshore-offshore zones:','zone_',\@zone_group);
+    # Environmental (previously just onshore-offshore) zones
+    my @zone_group = ('lacustrine','fluvial','karst','other terrestrial','marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin');
+    $html .= $self->retellOptionsGroup('Environmental zones:','zone_',\@zone_group);
 
     # Preservation mode
     my @pres_mode_group= ('cast','adpression','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
@@ -1114,41 +1114,23 @@ sub getEnvironmentString{
                 $env_sql = '('.$env_sql.')';
             }
         }
-        if ( ! $q->param("zone_marginal_marine") || ! $q->param("zone_reef") ||
-            ! $q->param("zone_shallow_subtidal") || ! $q->param("zone_deep_subtidal") ||
-            ! $q->param("zone_offshore") || ! $q->param("zone_slope_basin") ) {
-            my $marginal_str = join(",", map {"'".$_."'"} $hbo->getList('zone_marginal_marine'));
-            my $reef_str = join(",", map {"'".$_."'"} $hbo->getList('zone_reef'));
-            my $shallow_str = join(",", map {"'".$_."'"} $hbo->getList('zone_shallow_subtidal'));
-            my $deep_str = join(",", map {"'".$_."'"} $hbo->getList('zone_deep_subtidal'));
-            my $offshore_str = join(",", map {"'".$_."'"} $hbo->getList('zone_offshore'));
-            my $basinal_str = join(",", map {"'".$_."'"} $hbo->getList('zone_slope_basin'));
-            my $zone_sql;
-            if ( $q->param("zone_marginal_marine") )	{
-                $zone_sql .= " OR c.environment IN ($marginal_str)";
+        if ( ! $q->param("zone_lacustrine") || ! $q->param("zone_fluvial") || ! $q->param("zone_karst") || ! $q->param("zone_other_terrestrial") || ! $q->param("zone_marginal_marine") || ! $q->param("zone_reef") || ! $q->param("zone_shallow_subtidal") || ! $q->param("zone_deep_subtidal") || ! $q->param("zone_offshore") || ! $q->param("zone_slope_basin") ) {
+            my @lists;
+            my $zone_sql = " c.environment IN (";
+            for my $z ( 'lacustrine','fluvial','karst','other_terrestrial','marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin' )	{
+                if ( $q->param("zone_".$z) )	{
+                    push @lists , join(",", map {"'".$_."'"} $hbo->getList('zone_'.$z));
+                }
             }
-            if ( $q->param("zone_reef") )	{
-                $zone_sql .= " OR c.environment IN ($reef_str)";
-            }
-            if ( $q->param("zone_shallow_subtidal") )	{
-                $zone_sql .= " OR c.environment IN ($shallow_str)";
-            }
-            if ( $q->param("zone_deep_subtidal") )	{
-                $zone_sql .= " OR c.environment IN ($deep_str)";
-            }
-            if ( $q->param("zone_offshore") )	{
-                $zone_sql .= " OR c.environment IN ($offshore_str)";
-            }
-            if ( $q->param("zone_slope_basin") )	{
-                $zone_sql .= " OR c.environment IN ($basinal_str)";
-            }
-            $zone_sql =~ s/^ OR//;
-            if ($zone_sql) {
-                $zone_sql = '('.$zone_sql.')';
-                if ($env_sql) {
-                    $env_sql = '('.$env_sql.' AND '.$zone_sql.')';
-                } else	{
-                    $env_sql = $zone_sql;
+            if ( @lists )	{
+                $zone_sql .= join(',',@lists) . ")";
+                if ($zone_sql) {
+                    $zone_sql = '('.$zone_sql.')';
+                    if ($env_sql) {
+                        $env_sql = '('.$env_sql.' AND '.$zone_sql.')';
+                    } else	{
+                        $env_sql = $zone_sql;
+                    }
                 }
             }
         }
