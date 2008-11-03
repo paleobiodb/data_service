@@ -1101,7 +1101,7 @@ sub getEnvironmentString{
                 $env_sql .= " OR c.environment IN ($siliciclastic_str)";
             }
             if ( $q->param("environment_carbonate") && $q->param("environment_siliciclastic") )    {
-                $env_sql .= " OR c.environment IN ('marine indet.')";
+                $env_sql .= " OR c.environment IN ('marine indet.','coastal indet.','deltaic indet.')";
             }
             if ( $q->param("environment_terrestrial") ) {
                 $env_sql .= " OR c.environment IN ($terrestrial_str)";
@@ -1121,6 +1121,9 @@ sub getEnvironmentString{
                 if ( $q->param("zone_".$z) )	{
                     push @lists , join(",", map {"'".$_."'"} $hbo->getList('zone_'.$z));
                 }
+            }
+            if ( $q->param("zone_marginal_marine") && $q->param("zone_reef") && $q->param("zone_shallow_subtidal") && $q->param("zone_deep_subtidal") && $q->param("zone_offshore") && $q->param("zone_slope_basin") )	{
+                push @lists , "'coastal indet.','deltaic indet.'";
             }
             if ( @lists )	{
                 $zone_sql .= join(',',@lists) . ")";
