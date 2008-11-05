@@ -992,14 +992,19 @@ sub getLithologyString    {
     my $unknown = $q->param('lithology_unknown');
     my $lith_sql = "";
 
+    my $ff1 = "AND (c.fossilsfrom1='Y' OR c.fossilsfrom2 IS NULL OR c.fossilsfrom2='')";
+    my $ff2 = "AND (c.fossilsfrom2='Y' OR c.fossilsfrom1 IS NULL OR c.fossilsfrom1='')";
+    my $notff1 = "OR (c.fossilsfrom2='Y' AND (c.fossilsfrom1 IS NULL OR c.fossilsfrom1=''))";
+    my $notff2 = "OR (c.fossilsfrom1='Y' AND (c.fossilsfrom2 IS NULL OR c.fossilsfrom2=''))";
+
     # Lithology or Lithologies
     if ( $q->param('lithology1') ) {
         my $lith_term = $dbh->quote($q->param('lithology1'));
         if ($q->param('include_exclude_lithology1') eq "exclude") {
-            return qq| (c.lithology1 NOT LIKE $lith_term OR c.lithology1 IS NULL) AND|.
-                   qq| (c.lithology2 NOT LIKE $lith_term OR c.lithology2 IS NULL)|;
+            return qq| (c.lithology1!=$lith_term OR c.lithology1 IS NULL $notff1) AND|.
+                   qq| (c.lithology2!=$lith_term OR c.lithology2 IS NULL $notff2)|;
         } else {
-            return qq| (c.lithology1 LIKE $lith_term OR c.lithology2 LIKE $lith_term) |;
+            return qq| ((c.lithology1=$lith_term $ff1) OR (c.lithology2=$lith_term $ff2)) |;
         }
     } else {
         # if all the boxes were unchecked, just return (idiot proofing)
@@ -1017,27 +1022,27 @@ sub getLithologyString    {
             #  so go through all of them
             # carbonate only
             if  ( $carbonate && ! $mixed && ! $silic )    {
-                $lith_sql =  qq| ( c.lithology1 IN ($carbonate_str) AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($carbonate_str) ) ) |;
+                $lith_sql =  qq| ( c.lithology1 IN ($carbonate_str) $ff1 AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($carbonate_str) $notff2 ) ) |;
             }
             # mixed only
             elsif  ( ! $carbonate && $mixed && ! $silic )    {
-                $lith_sql = qq| ( c.lithology1 IN ($mixed_str) OR c.lithology2 IN ($mixed_str) OR ( c.lithology1 IN ($carbonate_str) && c.lithology2 IN ($silic_str) ) OR ( c.lithology1 IN ($silic_str) && c.lithology2 IN ($carbonate_str) ) ) |;
+                $lith_sql = qq| ( ( c.lithology1 IN ($mixed_str) $ff1 ) OR ( c.lithology2 IN ($mixed_str) $ff2 ) OR ( c.lithology1 IN ($carbonate_str) $ff1 AND c.lithology2 IN ($silic_str) $ff2 ) OR ( c.lithology1 IN ($silic_str) $ff1 AND c.lithology2 IN ($carbonate_str) $ff2 ) ) |;
             }
             # siliciclastic only
             elsif  ( ! $carbonate && ! $mixed && $silic )    {
-                $lith_sql = qq| ( c.lithology1 IN ($silic_str) AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($silic_str) ) ) |;
+                $lith_sql = qq| ( c.lithology1 IN ($silic_str) $ff1 AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($silic_str) $notff2 ) ) |;
             }
             # carbonate and siliciclastic but NOT mixed
             elsif  ( $carbonate && ! $mixed && $silic )    {
-                $lith_sql = qq| ( ( c.lithology1 IN ($carbonate_str) AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($carbonate_str) ) ) OR ( c.lithology1 IN ($silic_str) AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($silic_str) ) ) ) |;
+                $lith_sql = qq| ( ( c.lithology1 IN ($carbonate_str) $ff1 AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($carbonate_str) $notff2 ) ) OR ( c.lithology1 IN ($silic_str) $ff1 AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($silic_str) $notff2 ) ) ) |;
             }
             # carbonate and mixed
             elsif  ( $carbonate && $mixed && ! $silic )    {
-                $lith_sql = qq| ( ( c.lithology1 IN ($mixed_str) OR c.lithology2 IN ($mixed_str) OR ( c.lithology1 IN ($carbonate_str) && c.lithology2 IN ($silic_str) ) OR ( c.lithology1 IN ($silic_str) && c.lithology2 IN ($carbonate_str) ) ) OR ( c.lithology1 IN ($carbonate_str) AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($carbonate_str) ) ) ) |;
+                $lith_sql = qq| ( ( ( c.lithology1 IN ($mixed_str) $ff1 ) OR ( c.lithology2 IN ($mixed_str) $ff2 ) OR ( ( c.lithology1 IN ($carbonate_str) $ff1 ) AND ( c.lithology2 IN ($silic_str) $ff2 ) ) OR ( c.lithology1 IN ($silic_str) $ff1 AND c.lithology2 IN ($carbonate_str) $ff2 ) ) OR ( c.lithology1 IN ($carbonate_str) $ff1 AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($carbonate_str) $notff2 ) ) ) |;
             }
             # mixed and siliciclastic
             elsif  ( ! $carbonate && $mixed && $silic )    {
-                $lith_sql = qq| ( ( c.lithology1 IN ($mixed_str) OR c.lithology2 IN ($mixed_str) OR ( c.lithology1 IN ($carbonate_str) && c.lithology2 IN ($silic_str) ) OR ( c.lithology1 IN ($silic_str) && c.lithology2 IN ($carbonate_str) ) ) OR ( c.lithology1 IN ($silic_str) AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($silic_str) ) ) ) |;
+                $lith_sql = qq| ( ( ( c.lithology1 IN ($mixed_str) $ff1 ) OR ( c.lithology2 IN ($mixed_str) $ff2 ) OR ( c.lithology1 IN ($carbonate_str) $ff1 AND c.lithology2 IN ($silic_str) $ff2 ) OR ( c.lithology1 IN ($silic_str) $ff1 AND c.lithology2 IN ($carbonate_str) $ff2 ) ) OR ( c.lithology1 IN ($silic_str) $ff1 AND ( c.lithology2 IS NULL OR c.lithology2='' OR c.lithology2 IN ($silic_str) $notff2 ) ) ) |;
             }
             
             # lithologies where both fields are null
