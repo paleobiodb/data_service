@@ -60,15 +60,42 @@ sub rebuildCache {
     my $time_row = $sth->fetchrow_hashref();
     my $time = $time_row->{'t'};
 
+    # we need a reverse lookup of the original combination for each
+    #  currently used spelling because you can't figure out original
+    #  combinations from taxa_tree_cache in any way 2.9.08 JA
+    my $sql = "(SELECT child_no AS taxon_no,child_spelling_no AS spelling_no FROM opinions GROUP BY child_no,child_spelling_no) UNION (SELECT parent_no AS taxon_no,parent_spelling_no AS spelling_no FROM opinions GROUP BY parent_no,parent_spelling_no) UNION (SELECT taxon_no,spelling_no FROM $TAXA_TREE_CACHE t WHERE opinion_no=0)";
+    my @origrows = @{$dbt->getData($sql)};
+    my %orig;
+    foreach ( @origrows )	{
+        if ( $orig{$_->{'spelling_no'}} && $orig{$_->{'spelling_no'}} != $_->{'taxon_no'} )	{
+            print "$_->{'spelling_no'} is used to spell both $orig{$_->{'spelling_no'}} and $_->{'taxon_no'}\n";
+            $sql = "(SELECT child_no AS taxon_no FROM opinions o,$TAXA_TREE_CACHE t WHERE o.opinion_no=t.opinion_no AND child_spelling_no=".$_->{'spelling_no'}.") UNION (SELECT parent_no AS taxon_no FROM opinions o,$TAXA_TREE_CACHE t WHERE o.opinion_no=t.opinion_no AND parent_spelling_no=".$_->{'spelling_no'}.")";
+            my @rows = @{$dbt->getData($sql)};
+            if ( $#rows == 0 && $rows[0]->{'taxon_no'} == $orig{$_->{'spelling_no'}} )	{
+                print "Ignoring $_->{'taxon_no'} because only the opinion on $orig{$_->{'spelling_no'}} is currently used.\n\n";
+            } elsif ( $#rows == 0 && $rows[0]->{'taxon_no'} == $_->{'taxon_no'} )	{
+                print "Switching to $_->{'taxon_no'} because the opinion on $orig{$_->{'spelling_no'}} is not currently used.\n\n";
+                $orig{$_->{'spelling_no'}} = $_->{'taxon_no'};
+            } else	{
+                print "Unable to resolve conflict.\n\n";
+            }
+        } else	{
+            $orig{$_->{'spelling_no'}} = $_->{'taxon_no'};
+        }
+        # needed for cases where an original spelling is never used as
+        #  a valid spelling
+        $orig{$_->{'taxon_no'}} = $_->{'taxon_no'};
+    }
+
     # grab the entire current classification 11.7.08 JA
     # previously we didn't store the most recent parent opinions anywhere,
     #  but now we can just grab them from taxa_tree_cache on the assumption
     #  that those values at least are not corrupted (the values can be
     #  cleaned by running /scripts/update_opinion.pl all)
 
-    my $sql = "SELECT taxon_no,spelling_no,synonym_no,opinion_no FROM $TAXA_TREE_CACHE";
+    $sql = "SELECT taxon_no,spelling_no,synonym_no,opinion_no FROM $TAXA_TREE_CACHE";
     my @cache = @{$dbt->getData($sql)};
-    push @{$spellings{$_->{'spelling_no'}}} , $_->{'taxon_no'} foreach @cache;
+    push @{$spellings{$orig{$_->{'spelling_no'}}}} , $_->{'taxon_no'} foreach @cache;
 
     # now grab original combinations and their current opinions, valid or not
     # the first SELECT works for standard cases, and the second works for
@@ -78,21 +105,19 @@ sub rebuildCache {
     #  opinions have child_no=parent_no, and there are also corrupted
     #  child_no=parent_no opinions that resulted from ill-considered merges of
     #  biologically distinct taxa
-    my $sql = "(SELECT child_spelling_no,taxon_no,spelling_no,synonym_no,o.opinion_no,parent_no,status,spelling_reason FROM opinions o,$TAXA_TREE_CACHE t WHERE o.opinion_no=t.opinion_no AND child_no!=parent_no AND child_no=taxon_no) UNION (SELECT spelling_no AS child_spelling_no,taxon_no,spelling_no,synonym_no,o.opinion_no,parent_no,status,spelling_reason FROM opinions o,$TAXA_TREE_CACHE t WHERE o.opinion_no=t.opinion_no AND child_no!=parent_no AND child_no!=taxon_no AND child_spelling_no!=spelling_no AND taxon_no=synonym_no)";
+    my $sql = "(SELECT child_spelling_no,taxon_no,spelling_no,synonym_no,o.opinion_no,parent_no,status,spelling_reason FROM opinions o,$TAXA_TREE_CACHE t WHERE o.opinion_no=t.opinion_no AND child_no!=parent_no AND child_no=taxon_no) UNION (SELECT spelling_no AS child_spelling_no,taxon_no,spelling_no,synonym_no,o.opinion_no,parent_no,status,spelling_reason FROM opinions o,$TAXA_TREE_CACHE t WHERE o.opinion_no=t.opinion_no AND child_no!=parent_no AND spelling_no=synonym_no AND parent_no!=synonym_no AND parent_spelling_no!=spelling_no AND child_no!=synonym_no AND child_spelling_no!=spelling_no AND status='belongs to')";
     my @rows = @{$dbt->getData($sql)};
     for my $row ( @rows )	{
-        if ( $row->{'spelling_reason'} eq "misspelling" && $row->{'taxon_no'} ne $row->{'child_spelling_no'} )	{
-            $row->{'child_spelling_no'} = $row->{'spelling_no'};
-        }
-        # spellings is keyed by current spelling, so rekey by original
-        #  spelling if necessary
-        if ( $row->{'spelling_no'} != $row->{'taxon_no'} )	{
-            push @{$spellings{$row->{'taxon_no'}}} , @{$spellings{$row->{'spelling_no'}}};
-            delete $spellings{$row->{'spelling_no'}};
-        }
-        $opinions{$row->{'taxon_no'}} = $row;
-        if ( $row->{'parent_no'} > 0 )	{ 
-            push @{$allchildren{$row->{'parent_no'}}} , $row->{'taxon_no'};
+        # taxon_no in the second part of the query might or might not be the
+        #  original combination, so skip it if it's not
+        if ( $row->{'taxon_no'} == $orig{$row->{'taxon_no'}} )	{
+            if ( $row->{'spelling_reason'} eq "misspelling" && $row->{'taxon_no'} ne $row->{'child_spelling_no'} )	{
+                $row->{'child_spelling_no'} = $row->{'spelling_no'};
+            }
+            $opinions{$row->{'taxon_no'}} = $row;
+            if ( $row->{'parent_no'} > 0 )	{ 
+                push @{$allchildren{$row->{'parent_no'}}} , $row->{'taxon_no'};
+            }
         }
     }
 
@@ -139,7 +164,6 @@ sub rebuildCache {
 
         foreach my $row (@rows) {
             if ( ! $processed{$row->{'taxon_no'}} && $spellings{$row->{'taxon_no'}} )	{
-            #if ( ! $processed{$row->{'taxon_no'}} && $opinions{$row->{'taxon_no'}} )	{
                 my $ancestor_no = $row->{'taxon_no'};
                 my $opinion_no = $row->{'opinion_no'};
                 # Get the topmost ancestor
@@ -259,6 +283,7 @@ my $min_interval_no = 0;
 
     # now get recombinations, and corrections for current child and insert at the same 
     # place as the child.  $taxon_no should already be the senior synonym if there are synonyms
+    if (!$spellings{$taxon_no}){print "taxa_tree_cache is fatally corrupted because of a bad opinion on $taxon_no: try running it through /scripts/update_opinion.pl\n";}
     my @all_taxa = @{$spellings{$taxon_no}};
 
     # Now insert all the names
@@ -349,7 +374,7 @@ sub rebuildListCache	{
 		}
 
 		# add this taxon to the list if it's valid
-		if ( $r->{'taxon_no'} == $r->{'synonym_no'} )	{
+		if ( $r->{'spelling_no'} == $r->{'synonym_no'} )	{
 			push @parents , $r;
 			push @parent_nos , $r->{'spelling_no'};
 		}
