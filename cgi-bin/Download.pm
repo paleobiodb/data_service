@@ -2126,7 +2126,7 @@ sub queryDatabase {
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES" ||
-            $q->param('occurrences_extant') eq "YES" ) {
+            $q->param('occurrences_extant') =~ /y/i ) {
             %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
             if ( @ecoFields || $get_preservation )	{
                 %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields,0,$get_preservation)};
@@ -2411,7 +2411,7 @@ sub queryDatabase {
                 # record extant values only in two cases:
                 #  (1) output is species, rank is species, and extant is
                 #   marked for this species name
-                if ( $q->param('occurrences_species_name') =~ /yes/i && $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" &&  $extant_lookup{$row->{'o.taxon_no'}} =~ /[A-Z]/ )	{
+                if ( $q->param('occurrences_species_name') =~ /yes/i && $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" && $extant_lookup{$row->{'o.taxon_no'}} =~ /[A-Za-z]/ )	{
                     $row->{'extant'} = $extant_lookup{$row->{'o.taxon_no'}};
                 #  (2) output is not species, and rank is marked for the
                 #   taxon_no or the parent genus of a species
@@ -2422,7 +2422,7 @@ sub queryDatabase {
                     #   because (1) the occurrence is always "extant" if the
                     #   genus is, and (2) any genus value should override a
                     #   missing value
-                    if ( $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" && $row->{'extant'} ne "YES" )	{
+                    if ( $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" && $row->{'extant'} !~ /y/i )	{
                         my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                         foreach my $parent (@parents) {
                             if ( $parent->{'taxon_rank'} eq 'genus' )	{
@@ -2516,8 +2516,8 @@ sub queryDatabase {
                 $lump++;
             # an occurrence (or genus) is always extant if anything lumped
             #  into it is
-                if ( $row->{'extant'} eq "YES" )	{
-                    $lumpgenusref{$genus_string}->{'extant'} = "YES";
+                if ( $row->{'extant'} =~ /y/i )	{
+                    $lumpgenusref{$genus_string}->{'extant'} = "yes";
                 }
                 if ( $row->{'o.abund_unit'} =~ /(^specimens$)|(^individuals$)/ && $row->{'o.abund_value'} > 0 )	{
             # don't need to do this if you're lumping by other things, because
