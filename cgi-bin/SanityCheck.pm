@@ -112,11 +112,11 @@ sub processSanityCheck	{
 		main::displaySanityForm($vars);
 		return;
 	}
-	printf "<center><h3 style=\"margin-bottom: 2em;\">Progress report: %s",$q->param('taxon_name');
+	printf "<center><p class=\"pageTitle\" style=\"margin-bottom: 2em;\">Progress report: %s",$q->param('taxon_name');
 	if ( $q->param('excluded_taxon') )	{
 		printf " minus %s",$q->param('excluded_taxon');
 	}
-	printf "</h3></center>\n\n",$q->param('taxon_name');
+	printf "</p></center>\n\n",$q->param('taxon_name');
 
 	my %total;
 	my $authortext;
@@ -211,8 +211,8 @@ sub processSanityCheck	{
 	my %unknownExtant;
 	for my $rank ( @ranks ) 	{
 		if ( $total{$rank} > 0 )	{
-			$unknownExtant{$rank} = ( $total{$rank} - $extant{$rank}{'YES'} - $extant{$rank}{'NO'} );
-			printf "$plural{$rank}: %d extant, %d extinct, %d unknown (%.1f/%.1f/%.1f%%)<br>\n",$extant{$rank}{'YES'}, $extant{$rank}{'NO'}, $unknownExtant{$rank}, 100 * $extant{$rank}{'YES'} / $total{$rank}, 100 * $extant{$rank}{'NO'} / $total{$rank}, 100 * $unknownExtant{$rank} / $total{$rank};
+			$unknownExtant{$rank} = ( $total{$rank} - $extant{$rank}{'yes'} - $extant{$rank}{'no'} );
+			printf "$plural{$rank}: %d extant, %d extinct, %d unknown (%.1f/%.1f/%.1f%%)<br>\n",$extant{$rank}{'yes'}, $extant{$rank}{'no'}, $unknownExtant{$rank}, 100 * $extant{$rank}{'yes'} / $total{$rank}, 100 * $extant{$rank}{'no'} / $total{$rank}, 100 * $unknownExtant{$rank} / $total{$rank};
 			if ( $unknownExtant{$rank} > 0 && $unknownExtant{$rank} <= 200 )	{
 				my @temp = keys %{$dataneeded2{$rank}};
 				printMissing($rank,\@temp);
@@ -327,7 +327,7 @@ sub printBoxTop	{
 	my $headline = shift;
 
 	print qq|<div class="displayPanel" align="left" style="margin-left: 1em; margin-right: 1em;">
-  <span class="displayPanelHeader"><b>$headline</b></span>
+  <span class="displayPanelHeader">$headline</span>
   <div class="displayPanelContent small">
   <p style="padding-left: 1em;">
 |;
@@ -340,7 +340,7 @@ sub printBoxBottom	{
 	my $grade = shift;
 
 	print "  <p style=\"padding-left: 1em;\">\n";
-	printf "<b>$usthem grade: $grade</b><br>";
+	printf "<i>$usthem grade: $grade</i><br>";
 
 	print qq|  </p>
   </div>
