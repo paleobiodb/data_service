@@ -676,7 +676,7 @@ sub doCollections{
         my %maxlft;
         my %minrgt;
         for my $ch ( @children )	{
-            if ( $ch->{'extant'} eq "YES" )	{
+            if ( $ch->{'extant'} =~ /y/i )	{
                 for my $i ( $ch->{'lft'}..$ch->{'rgt'} )	{
                     if ( $ch->{'lft'} > $maxlft{$i} )	{
                         $maxlft{$i} = $ch->{'lft'};
@@ -694,7 +694,7 @@ sub doCollections{
                     $extant_list .= "$ch->{'taxon_no'},";
                     # taxon actually is extant regardless of how it was
                     #  marked, so make sure it is now marked correctly
-                    $ch->{'extant'} = "YES";
+                    $ch->{'extant'} = "yes";
                     last;
                 }
             }
@@ -709,7 +709,7 @@ sub doCollections{
             #  which taxa are subtaxa of extant groups
             my %has_extant_parent;
             for my $ch ( @children )	{
-                if ( $ch->{'extant'} eq "YES" )	{
+                if ( $ch->{'extant'} =~ /y/i )	{
                     for my $i ( $ch->{'lft'}..$ch->{'rgt'} )	{
                         $has_extant_parent{$i}++;
                     }
@@ -717,7 +717,7 @@ sub doCollections{
             }
             my $crown_list;
             for my $ch ( @children )	{
-                if ( $ch->{'extant'} eq "YES" || $has_extant_parent{$ch->{'lft'}} && $has_extant_parent{$ch->{'rgt'}} )	{
+                if ( $ch->{'extant'} =~ /y/i || $has_extant_parent{$ch->{'lft'}} && $has_extant_parent{$ch->{'rgt'}} )	{
                     $crown_list .= "$ch->{'taxon_no'},";
                 }
             }
