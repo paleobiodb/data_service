@@ -2146,6 +2146,8 @@ sub queryDatabase {
     my %year_named_lookup;
     my %type_specimen_lookup;
     my %body_part_lookup;
+    my %type_locality_lookup;
+    my %form_taxon_lookup;
     my %extant_lookup;
     my %common_name_lookup;
     if (($q->param("occurrences_first_author") ||
