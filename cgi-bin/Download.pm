@@ -505,6 +505,8 @@ sub retellOptions {
         push @occFields, 'preservation' if ($q->param('occurrences_preservation'));
         push @occFields, 'type_specimen' if ($q->param('occurrences_type_specimen'));
         push @occFields, 'type_body_part' if ($q->param('occurrences_type_body_part'));
+        push @occFields, 'type_locality' if ($q->param('occurrences_type_locality'));
+        push @occFields, 'form_taxon' if ($q->param('occurrences_form_taxon'));
         push @occFields, 'extant' if ($q->param('occurrences_extant'));
         push @occFields, 'common_name' if ($q->param('occurrences_common_name'));
 
@@ -2100,6 +2102,8 @@ sub queryDatabase {
             $q->param("occurrences_family_name") eq "YES" ||
             $q->param("occurrences_type_body_part") ||
             $q->param("occurrences_type_specimen") ||
+            $q->param("occurrences_type_locality") ||
+            $q->param("occurrences_form_taxon") ||
             $q->param("occurrences_extant") ||
             $q->param("occurrences_common_name") ||
             $q->param("occurrences_first_author") eq "YES" ||
@@ -2148,8 +2152,10 @@ sub queryDatabase {
         $q->param("occurrences_second_author") ||
         $q->param("occurrences_other_authors") ||
         $q->param("occurrences_year_named") ||
-        $q->param("occurrences_type_body_part") ||
         $q->param("occurrences_type_specimen") ||
+        $q->param("occurrences_type_body_part") ||
+        $q->param("occurrences_type_locality") ||
+        $q->param("occurrences_form_taxon") ||
         $q->param("occurrences_extant") ||
         $q->param("occurrences_common_name")) &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
@@ -2166,7 +2172,7 @@ sub queryDatabase {
                 push @spelling_nos, $row->{'spelling_no'};
             }
 
-            my $sql = "SELECT t.taxon_no,a.taxon_rank,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.extant,a.common_name FROM $TAXA_TREE_CACHE t, authorities a, refs r WHERE t.spelling_no IN (".join(',',@spelling_nos).") AND t.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
+            my $sql = "SELECT t.taxon_no,a.taxon_rank,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) others,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.type_specimen,a.type_body_part,a.type_locality,a.form_taxon,a.extant,a.common_name FROM $TAXA_TREE_CACHE t, authorities a, refs r WHERE t.spelling_no IN (".join(',',@spelling_nos).") AND t.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
             foreach my $row (@{$dbt->getData($sql)}) {
                 my $no = $row->{'taxon_no'};
                 $taxon_rank_lookup{$no} = $row->{'taxon_rank'};
@@ -2184,6 +2190,8 @@ sub queryDatabase {
                 $year_named_lookup{$no} = $row->{'pubyr'};
                 $type_specimen_lookup{$no} = $row->{'type_specimen'};
                 $body_part_lookup{$no} = $row->{'type_body_part'};
+                $type_locality_lookup{$no} = $row->{'type_locality'};
+                $form_taxon_lookup{$no} = $row->{'form_taxon'};
                 $extant_lookup{$no} = $row->{'extant'};
                 $common_name_lookup{$no} = $row->{'common_name'};
             }
@@ -2693,7 +2701,7 @@ sub queryDatabase {
                 }
             }
 
-            if ($q->param('occurrences_first_author') || $q->param('occurrences_second_author') || $q->param('occurrences_other_authors') || $q->param('occurrences_year_named') || $q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_common_name')) {
+            if ($q->param('occurrences_first_author') || $q->param('occurrences_second_author') || $q->param('occurrences_other_authors') || $q->param('occurrences_year_named') || $q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_type_locality') || $q->param('occurrences_form_taxon') || $q->param('occurrences_common_name')) {
                 my $taxon_no = $row->{'o.taxon_no'};
                 if ($ss_taxon_nos{$taxon_no}) {
                     $taxon_no = $ss_taxon_nos{$taxon_no};
@@ -2710,6 +2718,8 @@ sub queryDatabase {
                     $row->{'year_named'} = $year_named_lookup{$taxon_no};
                     $row->{'type_specimen'} = $type_specimen_lookup{$taxon_no};
                     $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
+                    $row->{'type_locality'} = $type_locality_lookup{$taxon_no};
+                    $row->{'type_form_taxon'} = $form_taxon_lookup{$taxon_no};
                 }
             # common names are never a problem
                 $row->{'common_name'} = $common_name_lookup{$taxon_no};
@@ -2996,6 +3006,8 @@ sub printCSV {
         push @header,'preservation' if ($q->param("occurrences_preservation"));
         push @header,'type_specimen' if ($q->param("occurrences_type_specimen"));
         push @header,'type_body_part' if ($q->param("occurrences_type_body_part"));
+        push @header,'type_locality' if ($q->param("occurrences_type_locality"));
+        push @header,'form_taxon' if ($q->param("occurrences_form_taxon"));
         push @header,'extant' if ($q->param("occurrences_extant"));
         push @header,'common_name' if ($q->param("occurrences_common_name"));
     }
@@ -3191,6 +3203,8 @@ sub printMatrix {
     push @occHeader,'preservation' if ($q->param("occurrences_preservation"));
     push @occHeader,'type_specimen' if ($q->param("occurrences_type_specimen"));
     push @occHeader,'type_body_part' if ($q->param("occurrences_type_body_part"));
+    push @occHeader,'type_locality' if ($q->param("occurrences_type_locality"));
+    push @occHeader,'form_taxon' if ($q->param("occurrences_form_taxon"));
     push @occHeader,'extant' if ($q->param("occurrences_extant"));
     push @occHeader,'common_name' if ($q->param("occurrences_common_name"));
     push @printedOccHeader,@ecoFields;
@@ -3201,6 +3215,8 @@ sub printMatrix {
     push @printedOccHeader,'preservation' if ($q->param("occurrences_preservation"));
     push @printedOccHeader,'type_specimen' if ($q->param("occurrences_type_specimen"));
     push @printedOccHeader,'type_body_part' if ($q->param("occurrences_type_body_part"));
+    push @printedOccHeader,'type_locality' if ($q->param("occurrences_type_locality"));
+    push @printedOccHeader,'form_taxon' if ($q->param("occurrences_form_taxon"));
     push @printedOccHeader,'extant' if ($q->param("occurrences_extant"));
     push @printedOccHeader,'common_name' if ($q->param("occurrences_common_name"));
 
