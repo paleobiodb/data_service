@@ -1050,7 +1050,7 @@ sub processCollectionForm {
         }
 
         my $verb = ($isNewEntry) ? "added" : "updated";
-        print "<center><p class=\"pageTitle\"><font color='red'>Collection record $verb</font></p></center>";
+        print "<center><p class=\"pageTitle\" style=\"margin-bottom: -0.5em;\"><font color='red'>Collection record $verb</font></p><p class=\"medium\"><i>Do not hit the back button!</i></p></center>";
 
         my ($colls_ref) = getCollections($dbt,$s,{'collection_no'=>$collection_no},['authorizer','enterer','modifier','*']);
         my $coll = $colls_ref->[0];
