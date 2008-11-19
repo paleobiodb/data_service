@@ -2299,36 +2299,48 @@ sub randomTaxonInfo{
     my $lft;
     my $rgt;
     if ( $q->param('taxon_name') =~ /^[A-Za-z]/ )	{
-        my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbh->quote($q->param('taxon_name'));
+        my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbh->quote($q->param('taxon_name'))." ORDER BY rgt-lft DESC";
         my $taxref = ${$dbt->getData($sql)}[0];
         if ( $taxref )	{
             $lft = $taxref->{lft};
             $rgt = $taxref->{rgt};
         }
     } elsif ( $q->param('common_name') =~ /^[A-Za-z]/ )	{
-        my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND common_name=".$dbh->quote($q->param('common_name'));
+        my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND common_name=".$dbh->quote($q->param('common_name'))." ORDER BY rgt-lft DESC";
         my $taxref = ${$dbt->getData($sql)}[0];
         if ( $taxref )	{
             $lft = $taxref->{lft};
             $rgt = $taxref->{rgt};
         }
     }
+    my @orefs;
     if ( $lft > 0 && $rgt > 0 )	{
-        $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a,$TAXA_TREE_CACHE t WHERE o.taxon_no=a.taxon_no AND taxon_rank='species' AND a.taxon_no=t.taxon_no AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt)";
-    } else	{
-        $sql = "SELECT o.taxon_no taxon_no FROM occurrences o,authorities a WHERE o.taxon_no=a.taxon_no AND taxon_rank='species'";
+        my $morewhere;
+        if ( $q->param('type_body_part') )	{
+            $morewhere = " AND type_body_part='".$q->param('type_body_part')."'";
+        }
+        if ( $q->param('preservation') )	{
+            $morewhere .= " AND preservation='".$q->param('preservation')."'";
+        }
+        $sql = "SELECT DISTINCT(o.taxon_no) taxon_no FROM occurrences o,authorities a,$TAXA_TREE_CACHE t WHERE o.taxon_no=a.taxon_no AND taxon_rank='species' AND a.taxon_no=t.taxon_no AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt) $morewhere";
+        @orefs = @{$dbt->getData($sql)};
     }
-    my @orefs = @{$dbt->getData($sql)};
-    my $x = int(rand($#orefs + 1));
-    $q->param('taxon_no' => $orefs[$x]->{taxon_no});
-    # DON'T SET THIS TO 1
-    #$q->param('is_real_user' => 1);
-    # infinite loops are bad
-    $q->param('random' => '');
-    if ( $q->param('action') eq "checkTaxonInfo" )	{
-        return;
+    if ( $q->param('match') eq "all" )	{
+        my @taxa;
+        push @taxa , $_->{taxon_no} foreach @orefs;
+        return \@taxa;
     } else	{
-        checkTaxonInfo();
+        my $x = int(rand($#orefs + 1));
+        $q->param('taxon_no' => $orefs[$x]->{taxon_no});
+        # DON'T SET THIS TO 1
+        #$q->param('is_real_user' => 1);
+        # infinite loops are bad
+        $q->param('match' => '');
+        if ( $q->param('action') eq "checkTaxonInfo" )	{
+            return;
+        } else	{
+            checkTaxonInfo();
+        }
     }
 }
 
@@ -2343,12 +2355,22 @@ sub beginTaxonInfo{
 }
 
 sub checkTaxonInfo {
-    if ( $q->param('random') eq "YES" )	{
-        # infinite loops are bad
-        $q->param('random' => '');
-        randomTaxonInfo();
-    }
     logRequest($s,$q);
+    if ( $q->param('match') eq "all" )	{
+        print $hbo->stdIncludes( "std_page_top" );
+        $q->param('taxa' => @{randomTaxonInfo()} );
+        if ( ! $q->param('taxa') )	{
+            TaxonInfo::searchForm($hbo,$q,1);
+        } else	{
+            TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
+        }
+        print $hbo->stdIncludes("std_page_bottom");
+        exit;
+    } elsif ( $q->param('match') eq "random" )	{
+        # infinite loops are bad
+        randomTaxonInfo();
+        $q->param('match' => '');
+    }
     print $hbo->stdIncludes( "std_page_top" );
     if ($IS_FOSSIL_RECORD) {
          FossilRecord::submitSearchTaxaForm($dbt,$q,$s,$hbo);
