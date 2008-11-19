@@ -104,27 +104,24 @@ sub checkTaxonInfo {
             $q->param('taxon_no'=>$results[0]->{'taxon_no'});
             displayTaxonInfoResults($dbt,$s,$q);
         } else{
+            @results = sort { $a->{taxon_name} cmp $b->{taxon_name} } @results;
             # now create a table of choices and display that to the user
-            print "<div align=\"center\"><p class=\"pageTitle\">Please select a taxon</p><br>";
-            print qq|<div class="displayPanel" align="center" style="width: 30em; padding-top: 1.5em;">
-<div class="displayPanelContent">
+            print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">Please select a taxonomic name</p><br>";
+            print qq|<div class="displayPanel" align="center" style="width: 36em; padding-top: 1.5em;">
+<div class="displayPanelContent small">
 |;
 
-            print qq|<form method="POST" action="$READ_URL">|;
-            print qq|<input type="hidden" name="action" value="checkTaxonInfo">|;
-            
             print "<table>\n";
             print "<tr>";
             for(my $i=0; $i<scalar(@results); $i++) {
                 my $authorityLine = Taxon::formatTaxon($dbt,$results[$i]);
                 my $checked = ($i == 0) ? "CHECKED" : "";
-                print qq|<td><input type="radio" name="taxon_no" value="$results[$i]->{taxon_no}" $checked> $authorityLine</td>|;
+                print qq|<td>&bull; <a href="$READ_URL?action=checkTaxonInfo&amp;taxon_no=$results[$i]->{taxon_no}" style="color: black;">$authorityLine</a></td>|;
                 print "</tr><tr>";
             }
             print "</tr>";
             print "<tr><td align=\"center\" colspan=3><br>";
-            print "<input type=\"submit\" value=\"Get taxon info\">";
-            print qq|</td></tr></table></form></div>
+            print qq|</td></tr></table></div>
 </div>
 </div>
 |;
