@@ -108,16 +108,20 @@ sub checkTaxonInfo {
             # now create a table of choices and display that to the user
             print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">Please select a taxonomic name</p><br>";
             print qq|<div class="displayPanel" align="center" style="width: 36em; padding-top: 1.5em;">
-<div class="displayPanelContent small">
+<div class="displayPanelContent">
 |;
 
             print "<table>\n";
             print "<tr>";
+            my $classes = qq|"medium"|;
             for(my $i=0; $i<scalar(@results); $i++) {
                 my $authorityLine = Taxon::formatTaxon($dbt,$results[$i]);
-                my $checked = ($i == 0) ? "CHECKED" : "";
-                print qq|<td>&bull; <a href="$READ_URL?action=checkTaxonInfo&amp;taxon_no=$results[$i]->{taxon_no}" style="color: black;">$authorityLine</a></td>|;
-                print "</tr><tr>";
+                if ($#results > 2)	{
+                    $classes = ($i/2 == int($i/2)) ? qq|"small darkList"| : "small";
+                }
+                # the width term games browsers
+                print qq|<td class=$classes style="width: 1em; padding: 0.25em; padding-left: 1em; padding-right: 1em; white-space: nowrap;">&bull; <a href="$READ_URL?action=checkTaxonInfo&amp;taxon_no=$results[$i]->{taxon_no}" style="color: black;">$authorityLine</a></td>|;
+                print "</tr>\n<tr>";
             }
             print "</tr>";
             print "<tr><td align=\"center\" colspan=3><br>";
