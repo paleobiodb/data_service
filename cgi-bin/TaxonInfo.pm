@@ -55,17 +55,33 @@ sub checkTaxonInfo {
     } elsif (!$q->param('taxon_name') && !($q->param('common_name')) && !($q->param('pubyr')) && !$q->param('author')) {
         searchForm($hbo,$q);
     } else {
-        my $temp = $q->param('taxon_name');
-        $temp =~ s/ sp\.//;
-        $q->param('taxon_name' => $temp);
-        my $options = {'match_subgenera'=>1,'remove_rank_change'=>1};
-        foreach ('taxon_name','common_name','author','pubyr') {
-            if ($q->param($_)) {
-                $options->{$_} = $q->param($_);
+        my @results;
+        if ( $q->param('taxa') )	{
+            my $morewhere;
+            if ( $q->param('author') )	{
+                $morewhere .= " AND (((a.author1last='".$q->param('author')."' OR a.author2last='".$q->param('author')."') AND ref_is_authority='') OR ((r.author1last='".$q->param('author')."' OR r.author2last='".$q->param('author')."') AND ref_is_authority='YES'))";
             }
+            if ( $q->param('pubyr') )	{
+                $morewhere .= " AND ((a.pubyr=".$q->param('pubyr')." AND ref_is_authority='') OR (r.pubyr=".$q->param('pubyr')." AND ref_is_authority='YES'))";
+            }
+            my $sql = "SELECT a.*,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,pages,figures,ref_is_authority,a.reference_no FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',$q->param('taxa')).") $morewhere";
+            @results = @{$dbt->getData($sql)};
+            # still might bomb if author and/or pubyr were submitted
+            if ( ! @results )	{
+                searchForm($hbo, $q, 1); # param for not printing header with form
+            }
+        } else	{
+            my $temp = $q->param('taxon_name');
+            $temp =~ s/ sp\.//;
+            $q->param('taxon_name' => $temp);
+            my $options = {'match_subgenera'=>1,'remove_rank_change'=>1};
+            foreach ('taxon_name','common_name','author','pubyr') {
+                if ($q->param($_)) {
+                    $options->{$_} = $q->param($_);
+                }
+            }
+            @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','common_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments']);
         }
-
-        my @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','common_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments']);   
 
         if(scalar @results < 1 && $q->param('taxon_name')){
             # If nothing from authorities, go to occs + reids
