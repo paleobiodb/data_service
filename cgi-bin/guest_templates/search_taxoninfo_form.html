@@ -20,7 +20,15 @@
         <td align="right">Publication year: <input name="pubyr" value="" size="4"></td>
       </tr>
       <tr>
-        <td colspan="3"><input type="checkbox" name="random" value="YES">Show a random species in this group</td>
+        <td>Body part of type specimen:</td>
+        <td colspan=2><select name="type_body_part"></select></td>
+      </tr>
+      <tr>
+        <td>Preservation:</td>
+        <td colspan=2><select name="preservation"></select></td>
+      </tr>
+      <tr>
+        <td colspan="3">Show <select name="match"><option value="">information regarding</option><option value="all">all species within</option><option value="random">a random species within</option></select> this taxonomic group</td>
       </tr>
       <tr>
         <td colspan=3 align="center" style="padding-top: 2em;"><input type="submit" value="Search"></td>
