@@ -6,6 +6,7 @@ use Data::Dumper;
 use Collection;
 use Reference;
 use TaxaCache;
+use PrintHierarchy;
 use Ecology;
 use Images;
 use Measurement;
@@ -259,7 +260,7 @@ sub displayTaxonInfoResults {
     <td id="tab4" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(4);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(4)">Phylogeny</td>
+      onMouseOut="setState(4)">Relationships</td>
   </tr>
   <tr>
     <td id="tab5" class="tabOff" style="white-space: nowrap;"
@@ -387,7 +388,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
     if ($modules{4}) {
         print '<div id="panel4" class="panel">';
         print '<div align="center">';
-    	doCladograms($dbt, $taxon_no);
+    	doCladograms($dbt, $taxon_no, $spelling_no, $taxon_name);
         print "</div>\n";
         print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
@@ -495,30 +496,54 @@ sub getCollectionsSet {
 }
 
 sub doCladograms {
-    my ($dbt,$taxon_no) = @_;
-#    my $p = TaxaCache::getParents($dbt,[$taxon_no]);
-#    my @parents = @{$p->{$taxon_no}};
+    my ($dbt,$taxon_no,$spelling_no,$taxon_name) = @_;
 
-#    my $nos = join(",",@parents, $taxon_no);
+    my $stepsup = 1;
+    if ( $taxon_no < 1 && $taxon_name =~ / / )	{
+        my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
+        $taxon_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
+        $stepsup = 0;
+    }
 
+    my $html;
     my @cladograms;
     if ( $taxon_no )	{
+        my $p = TaxaCache::getParents($dbt,[$spelling_no],'array_full');
+        my @parents = @{$p->{$spelling_no}};
+
+    # print a classification of the grandparent and its children down
+    #  three (or two) taxonomic levels (one below the focal taxon's)
+    # JA 23-24.11.08
+        PBDBUtil::autoCreateDir("$HTML_DIR/public/classification");
+        my $tree = TaxaCache::getChildren($dbt,$parents[$stepsup]->{'taxon_no'},'tree');
+        my $options = {
+            'max_levels'=>3,
+        };
+        $html = PrintHierarchy::htmlTaxaTree($dbt,$tree,$options);
+
         my $sql = "SELECT t2.taxon_no FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2 WHERE t1.taxon_no IN ($taxon_no) AND t2.synonym_no=t1.synonym_no";
-#    print $sql,"\n";
         my @results = @{$dbt->getData($sql)};
         my $parent_list = join(',',map {$_->{'taxon_no'}} @results);
 
         my $sql = "(SELECT DISTINCT cladogram_no FROM cladograms c WHERE c.taxon_no IN ($parent_list))".
               " UNION ".
               "(SELECT DISTINCT cladogram_no FROM cladogram_nodes cn WHERE cn.taxon_no IN ($parent_list))";
-#    print $sql,"\n";
     	@cladograms = @{$dbt->getData($sql)};
     }
 
+    if ( ! $html )	{
+        $html = "<div class=\"displayPanelContent\">\n<div align=\"center\" class=\"medium\"><i>No data on relationships are available</i></div></div>";
+    } else	{
+        $html = "<div class=\"small displayPanelContent\">\n".$html;
+    }
+
+    print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 2em; padding-bottom: 1em;">
+    <span class="displayPanelHeader" class="large">Classification of relatives</span>
+|;
+    print $html;
+    print "</div>\n\n";
+
     if (@cladograms) {
-        #print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
-        #         <span class="displayPanelHeader" class="large">Cladograms</span>
-        #         <div class="displayPanelContent">|;
         print "<div align=\"center\" style=\"margin-top: 1em;\">";
         foreach my $row (@cladograms) {
             my $cladogram_no = $row->{cladogram_no};
@@ -528,15 +553,14 @@ sub doCladograms {
             }
         }
         print "</div>";
-        #print qq|</div></div>|;
     } else {
-        print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
-                <span class="displayPanelHeader" class="large">Cladograms</span>
-                <div class="displayPanelContent">
-                  <div align="center"><i>No cladograms are available</i></div>
-                </div>
-                </div>
-                |;
+        print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 2em; padding-bottom: 1em;">
+    <span class="displayPanelHeader" class="large">Cladograms</span>
+        <div class="displayPanelContent">
+          <div align="center"><i>No cladograms are available</i></div>
+        </div>
+    </div>
+|;
     }
 } 
 
@@ -641,7 +665,13 @@ sub displayMap {
         }
         close MAP;
     } else {
-        print "<i>No distribution data are available</i>";
+        print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+<span class="displayPanelHeader" class="large">Map</span>
+<div class="displayPanelContent">
+  <div align="center"><i>No distribution data are available</i></div>
+</div>
+</div>
+|;
     }
 }
 
@@ -653,7 +683,15 @@ sub doCollections{
     my $dbh = $dbt->dbh;
     
     if (!@$colls) {
-        print "<div align=\"center\"><p class=\"large\">Collections</p><i> No collection or age range data are available</i></div>";
+        print qq|<div align="center">
+<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+<span class="displayPanelHeader" class="large">Collections</span>
+<div class="displayPanelContent">
+  <div align="center"><i>No collection or age range data are available</i></div>
+</div>
+</div>
+</div>
+|;
         return;
     }
 
@@ -1901,14 +1939,39 @@ sub getSynonymyParagraph{
                 }
             }
             if ($specimen_row->{'type_locality'} > 0)	{
-                my $sql = "SELECT i.interval_name AS max,IF (min_interval_no>0,i2.interval_name,'') AS min,IF (country='United States',state,country) AS place,collection_name FROM collections c,intervals i,intervals i2 WHERE collection_no=".$specimen_row->{'type_locality'}." AND i.interval_no=max_interval_no AND (min_interval_no=0 OR i2.interval_no=min_interval_no)";
+                my $sql = "SELECT i.interval_name AS max,IF (min_interval_no>0,i2.interval_name,'') AS min,IF (country='United States',state,country) AS place,collection_name,formation,lithology1,fossilsfrom1,lithology2,fossilsfrom2,environment FROM collections c,intervals i,intervals i2 WHERE collection_no=".$specimen_row->{'type_locality'}." AND i.interval_no=max_interval_no AND (min_interval_no=0 OR i2.interval_no=min_interval_no)";
                 my $coll_row = ${$dbt->getData($sql)}[0];
                 my $strat = $coll_row->{'max'};
                 if ( $coll_row->{'min'} )	{
                     $strat .= "/".$coll_row->{'min'};
                 }
+                my $fm = $coll_row->{'formation'};
+                if ( $fm )	{
+                    $fm = "the $fm Formation";
+                }
+                if ( $coll_row->{'fossilsfrom1'} eq "YES" && $coll_row->{'fossilsfrom2'} ne "YES" )	{
+                    $coll_row->{'lithology2'} = "";
+                } elsif ( $coll_row->{'fossilsfrom1'} ne "YES" && $coll_row->{'fossilsfrom2'} eq "YES" )	{
+                    $coll_row->{'lithology1'} = "";
+                }
+                my $lith = $coll_row->{'lithology1'};
+                if ( $coll_row->{'lithology2'} )	{
+                    $lith .= "/" . $coll_row->{'lithology2'};
+                }
+                if ( ! $lith )	{
+                    $lith = "horizon";
+                }
+                if ( $coll_row->{'environment'} )	{
+                    $strat = "a ".$strat;
+                    if ( $fm ) { $fm = "in $fm of"; } else { $fm = "in"; }
+                    $lith = $coll_row->{'environment'}." ".$lith;
+                } else	{
+                    $strat = "the ".$strat." of ";
+                }
+                $lith =~ s/ indet\.//;
+                $lith =~ s/"//g;
                 $coll_row->{'place'} =~ s/United Kingdom/the United Kingdom/;
-                $text .= "Its type locality is <a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=".$specimen_row->{'type_locality'}."&amp;is_real_user=$is_real_user\">".$coll_row->{'collection_name'}."</a> (".$strat." of ".$coll_row->{'place'}."). ";
+                $text .= "Its type locality is <a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=".$specimen_row->{'type_locality'}."&amp;is_real_user=$is_real_user\">".$coll_row->{'collection_name'}."</a>, which is in $strat $lith $fm $coll_row->{'place'}. ";
             }
         }
     } else {
