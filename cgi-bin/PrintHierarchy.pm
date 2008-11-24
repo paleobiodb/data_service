@@ -380,7 +380,7 @@ sub htmlTaxaTree {
         my $title = ($shortrank) ? "<b>$shortrank</b> " : "";
         my $taxon_name = $record->{'taxon_name'};
 
-        if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}}) {
+        if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}} && ! $record->{'status'}) {
             $taxon_name = '"'.$taxon_name.'"';
         }
         
@@ -431,7 +431,7 @@ sub htmlTaxaTree {
                 #    $html .= " <small>(excludes $t->{taxon_name}, the type)</small>";
                 #}
     #        }
-            if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}}) {
+            if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}} && ! $record->{'status'}) {
                 my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$record->{'type_taxon_no'}});
                 if ($t) {
                     my $link = "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$t->{taxon_no}\">$t->{taxon_name}</a>";
