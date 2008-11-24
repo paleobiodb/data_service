@@ -510,6 +510,9 @@ sub doCladograms {
     if ( $taxon_no )	{
         my $p = TaxaCache::getParents($dbt,[$spelling_no],'array_full');
         my @parents = @{$p->{$spelling_no}};
+        if ( $parents[0]->{taxon_no} == $spelling_no )	{
+            shift @parents;
+        }
 
     # print a classification of the grandparent and its children down
     #  three (or two) taxonomic levels (one below the focal taxon's)
