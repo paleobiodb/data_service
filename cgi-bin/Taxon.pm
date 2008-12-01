@@ -202,7 +202,7 @@ sub displayAuthorityForm {
         $fields{'ref_is_authority'} = 'PRIMARY';
         # prefill some fields based on the last entry from the same ref
         #  JA 6.5.07
-        my $sql = "SELECT ref_is_authority,pages,preservation,form_taxon,extant FROM authorities WHERE ((pages!='' AND pages IS NOT NULL) OR (preservation!='' AND preservation IS NOT NULL) OR (form_taxon!='' AND form_taxon IS NOT NULL)) OR (extant!='' AND extant IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " ORDER BY taxon_no DESC LIMIT 1";
+        my $sql = "SELECT ref_is_authority,pages,preservation,form_taxon,extant FROM authorities WHERE ((pages!='' AND pages IS NOT NULL) OR (preservation!='' AND preservation IS NOT NULL) OR (form_taxon!='' AND form_taxon IS NOT NULL) OR (extant!='' AND extant IS NOT NULL)) AND reference_no=" . $s->get('reference_no') . " AND enterer_no=" . $s->get('enterer_no') . " ORDER BY taxon_no DESC LIMIT 1";
         my $lastauthority = @{$dbt->getData($sql)}[0];
         if ( $lastauthority )	{
             if ( $lastauthority ->{ref_is_authority} eq "YES" )	{
@@ -486,7 +486,7 @@ sub submitAuthorityForm {
         }
     }
 
-	
+
 	# build up a hash of fields/values to enter into the database
 	my %fields;
 
@@ -649,8 +649,13 @@ sub submitAuthorityForm {
 			$coll = $t->get('type_locality');
 		}
 		if ( $coll != $q->param('type_locality') )	{
-			my($g,$sg,$s,$ss) = splitTaxon($q->param('taxon_name'));
-			my $sql = "(SELECT collection_no FROM occurrences WHERE genus_name='$g' AND (subgenus_name='$sg' OR subgenus_name IS NULL OR subgenus_name='') AND species_name='$s' and species_reso='n. sp.') UNION (SELECT collection_no FROM reidentifications WHERE genus_name='$g' AND (subgenus_name='$sg' OR subgenus_name IS NULL OR subgenus_name='') AND species_name='$s' AND species_reso='n. sp.')";
+			my $sql;
+			if ( $q->param('taxon_no') > 0 )	{
+				$sql = "(SELECT collection_no FROM occurrences WHERE taxon_no=".$q->param('taxon_no')." AND species_reso='n. sp.') UNION (SELECT collection_no FROM reidentifications WHERE taxon_no=".$q->param('taxon_no')." AND species_reso='n. sp.')";
+			} else	{
+				my($g,$sg,$s,$ss) = splitTaxon($q->param('taxon_name'));
+				$sql = "(SELECT collection_no FROM occurrences WHERE genus_name='$g' AND (subgenus_name='$sg' OR subgenus_name IS NULL OR subgenus_name='') AND species_name='$s' AND species_reso='n. sp.') UNION (SELECT collection_no FROM reidentifications WHERE genus_name='$g' AND (subgenus_name='$sg' OR subgenus_name IS NULL OR subgenus_name='') AND species_name='$s' AND species_reso='n. sp.')";
+			}
 			my @locs = @{$dbt->getData($sql)};
 			my $nlocs = $#locs + 1;
 			if ( $nlocs > 2 )	{
