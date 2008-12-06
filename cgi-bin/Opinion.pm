@@ -162,6 +162,8 @@ sub formatAsHTML {
                         : $child->{'taxon_name'};
         if ($row->{'status'} =~ /^[aeiou]/) {
             $output .= "'$child_html is an $row->{status}";
+        } elsif ($row->{'status'} =~ /^replaced/ ) {
+            $output .= "'$child_html is $row->{status}";
         } else {
             $output .= "'$child_html is a $row->{status}";
         }
