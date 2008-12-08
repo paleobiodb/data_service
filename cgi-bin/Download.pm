@@ -433,9 +433,17 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?","no") if ($q->param("replace_with_ss") eq 'NO');
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", "yes") if ($q->param('indet') eq 'YES');
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", "yes") if ($q->param('sp') eq 'NO');
-        my @genus_reso_types_group = ('aff.','cf.','ex gr.','n. gen.','sensu lato','?','"');
-        $html .= $self->retellOptionsGroup('Include occurrences qualified by','genus_reso_',\@genus_reso_types_group);
-        $html .= $self->retellOptionsRow ( "Include occurrences with informal names?", "yes") if ( $q->param("informal") eq 'YES');
+        my @reso_types_group = ('aff.','cf.','ex gr.','new','sensu lato','?','"');
+        my $quals .= $self->retellOptionsGroup('Include genus occurrences qualified by','genus_reso_',\@reso_types_group);
+        if ( $quals && $q->param('genus_reso_informal') eq "YES" )	{
+            $quals =~ s/<\/i>/, informal<\/i>/;
+        }
+        $html .= $quals;
+        $quals = $self->retellOptionsGroup('Include species occurrences qualified by','species_reso_',\@reso_types_group);
+        if ( $quals && $q->param('species_reso_informal') eq "YES" )	{
+            $quals =~ s/<\/i>/, informal<\/i>/;
+        }
+        $html .= $quals;
         $html .= $self->retellOptionsRow ( "Include occurrences falling outside Compendium age ranges?", "no") if ($q->param("compendium_ranges") eq 'NO');
         $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", "yes, require some kind of abundance data" ) if ($q->param("abundance_required") eq 'abundances');
         $html .= $self->retellOptionsRow ( "Only include occurrences with abundance data?", "yes, require specimen or individual counts" ) if ($q->param("abundance_required") eq 'specimens');
@@ -1314,38 +1322,51 @@ sub getCollectionTypeString{
     return $colltypes;
 }
 
-sub getGenusResoString{
+sub getResoString{
     my $self = shift;
+    my $level = shift;
     my $q = $self->{'q'};
 
     my $resos = "";
-    if ( !$q->param('genus_reso_n. gen.') || ! $q->param('genus_reso_aff.') || ! $q->param('genus_reso_cf.') || ! $q->param('genus_reso_ex gr.') || ! $q->param('genus_reso_sensu lato') || ! $q->param('genus_reso_?') || ! $q->param('genus_reso_"') ) { 
-        if ( $q->param('genus_reso_aff.') )    {
+    if ( ! $q->param($level.'_reso_new') || ! $q->param($level.'_reso_aff.') || ! $q->param($level.'_reso_cf.') || ! $q->param($level.'_reso_ex gr.') || ! $q->param($level.'_reso_sensu lato') || ! $q->param($level.'_reso_?') || ! $q->param($level.'_reso_"') || ! $q->param($level.'_reso_informal') ) { 
+        if ( $q->param($level.'_reso_aff.') )    {
             $resos .= ",'aff.'";
         }
-        if ( $q->param('genus_reso_cf.') )    {
-            $resos .= ",'cf.'";
-        }
-        if ( $q->param('genus_reso_ex gr.') )    {
+        if ( $q->param($level.'_reso_cf.') )    {
+            $resos .= ",'cf.'"; }
+        if ( $q->param($level.'_reso_ex gr.') )    {
             $resos .= ",'ex gr.'";
         }
-        if ( $q->param('genus_reso_sensu lato') )    {
+        if ( $q->param($level.'_reso_new') ) {
+            if ( $level eq "genus" )	{
+                $resos .= ",'n. gen.'";
+            } else	{
+                $resos .= ",'n. sp.'";
+            }
+        }
+        if ( $q->param($level.'_reso_sensu lato') )    {
             $resos .= ",'sensu lato'";
         }
-        if ( $q->param('genus_reso_?') )    {
+        if ( $q->param($level.'_reso_?') )    {
             $resos .= ",'?'";
         }
-        if ( $q->param('genus_reso_"') )    {
+        if ( $q->param($level.'_reso_"') )    {
             $resos .= ",'\"'";
         }
-        if ( $q->param('genus_reso_n. gen.') ) {
-            $resos .= ",'n. gen.'";
+        if ( $q->param($level.'_reso_informal') )    {
+            $resos .= ",'informal'";
         }
         $resos =~ s/^,//;
+    # only return something if at least one box was checked
         if ( $resos )    {
-            $resos = qq| o.genus_reso IN ($resos) |;
-            $resos = " (" . $resos ."OR o.genus_reso IS NULL OR o.genus_reso='')";
+            $resos = " o.".$level."_reso IN ($resos) ";
+            $resos = " (" . $resos ."OR o.".$level."_reso IS NULL OR o.".$level."_reso='')";
         }
+    }
+    # informal needs special handling because the default is to exclude it
+    # so, if no boxes were checked at all, exclude it anyway
+    if ( ! $resos && ! $q->param($level.'_reso_informal') )	{
+        $resos = " (".$level."_reso NOT IN ('informal') OR o.".$level."_reso IS NULL OR o.".$level."_reso='')";
     }
     return $resos;
 }
@@ -1403,9 +1424,10 @@ sub getOccurrencesWhereClause {
 
     push @occ_where, "o.species_name!='indet.'" if $q->param('indet') ne 'YES';
     push @occ_where, "o.species_name!='sp.'" if $q->param('sp') eq 'NO';
-    my $genusResoString = $self->getGenusResoString();
+    my $genusResoString = $self->getResoString('genus');
     push @occ_where, $genusResoString if $genusResoString;
-    push @occ_where, "(o.genus_reso!='informal' OR o.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
+    my $speciesResoString = $self->getResoString('species');
+    push @occ_where, $speciesResoString if $speciesResoString;
 
     push @reid_where, "re.species_name!='indet.'" if $q->param('indet') ne 'YES';
     push @reid_where, "re.species_name!='sp.'" if $q->param('sp') eq 'NO';
@@ -1413,7 +1435,8 @@ sub getOccurrencesWhereClause {
     # this is kind of a hack, I admit it JA 31.7.05
     $genusResoString =~ s/o\.genus_reso/re.genus_reso/g;
     push @reid_where, $genusResoString if $genusResoString;
-    push @reid_where, "(re.genus_reso!='informal' OR re.genus_reso IS NULL)" if $q->param('informal') ne 'YES';
+    $speciesResoString =~ s/o\.species_reso/re.species_reso/g;
+    push @reid_where, $speciesResoString if $speciesResoString;
 
     return (\@all_where,\@occ_where,\@reid_where);
 }
@@ -1807,10 +1830,8 @@ sub queryDatabase {
 
 
     # filters out things like o.collection_no=c.collection_no
-    # last two conditions are default terms
     my @conditions = grep {!/^\s*\w{1,2}\.\w+\s*=\s*\w{1,2}\.\w+\s*$/} @where,@occ_where;
     @conditions = grep {!/o.species_name!='indet.'/} @conditions;
-    @conditions = grep {!/(o.genus_reso!='informal' OR o.genus_reso IS NULL)/} @conditions;
     if (!@conditions) {
         push @form_errors, "No valid search terms were entered.";
     }
@@ -2067,14 +2088,35 @@ sub queryDatabase {
                       "AND t.taxon_no != t.synonym_no ".
                       "AND t.taxon_no IN (".join(",",keys %all_taxa).")";
             my @results = @{$dbt->getData($sql)};
-            foreach my $row (@results) {
-                # Don't forget these as well
-                $all_taxa{$row->{'synonym_no'}} = 1;
-                $ss_taxon_nos{$row->{'taxon_no'}} = $row->{'synonym_no'};
-                # Split it into bits here and store that, optimization
-                my @name_bits = Taxon::splitTaxon($row->{'taxon_name'});
-                $ss_taxon_names{$row->{'taxon_no'}} = \@name_bits;
-                $ss_taxon_rank{$row->{'taxon_no'}} = $row->{'taxon_rank'};
+            if ( @results )	{
+            # Lingyuanornis parvus case: senior synonym is itself invalid
+            # knock on wood and assume that the synonymy chain ends here
+            # JA 7.12.08
+                my @seniors;
+                push @seniors , $_->{'synonym_no'} foreach @results;
+                my $sql = "SELECT t.taxon_no,t.synonym_no,a.taxon_name,a.taxon_rank ".
+                      "FROM $TAXA_TREE_CACHE t, authorities a ".
+                      "WHERE t.synonym_no=a.taxon_no ".
+                      "AND t.taxon_no != t.synonym_no ".
+                      "AND t.taxon_no IN (".join(",",@seniors).")";
+                my @results2 = @{$dbt->getData($sql)};
+                my %nextsyn;
+                foreach my $row (@results2) {
+                    $nextsyn{$row->{'taxon_no'}} = $row;
+                }
+                foreach my $row (@results) {
+                    my ($syn,$name,$rank) = ($row->{'synonym_no'},$row->{'taxon_name'},$row->{'taxon_rank'});
+                    if ( $nextsyn{$row->{'synonym_no'}} )	{
+                        ($syn,$name,$rank) = ($nextsyn{$row->{'synonym_no'}}->{'synonym_no'},$nextsyn{$row->{'synonym_no'}}->{'taxon_name'},$nextsyn{$row->{'synonym_no'}}->{'taxon_rank'});
+                    }
+                    # Don't forget these as well
+                    $all_taxa{$row->{'synonym_no'}} = 1;
+                    $ss_taxon_nos{$row->{'taxon_no'}} = $syn;
+                    # Split it into bits here and store that, optimization
+                    my @name_bits = Taxon::splitTaxon($name);
+                    $ss_taxon_names{$row->{'taxon_no'}} = \@name_bits;
+                    $ss_taxon_rank{$row->{'taxon_no'}} = $rank;
+                }
             }
         }
     }
