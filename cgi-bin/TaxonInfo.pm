@@ -2143,12 +2143,14 @@ sub getSynonymyParagraph{
                 }
             }
         }
-        if ($first_row->{'status'} eq 'misspelling of') {
-            $text .= " according to ";
-        } else {
-            $text .= " by ";
-        }
-        $text .= printReferenceList($group,$best_opinion);
+            if ( $first_row->{'status'} !~ /belongs/ || $synmap1{$first_row->{'spelling_reason'}} ne "revalidated" || $first_row ne ${$group}[0] ) {
+                if ($first_row->{'status'} eq 'misspelling of') {
+                    $text .= " according to ";
+                } else {
+                    $text .= " by ";
+                }
+                $text .= printReferenceList($group,$best_opinion);
+            }
 	}
 	if($text ne ""){
         if ($text !~ /\.\s*$/) {
