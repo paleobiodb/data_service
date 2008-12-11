@@ -1823,7 +1823,8 @@ sub getSynonymyParagraph{
                    'recombination' => 'recombined as ',
 				   'correction' => 'corrected as ',
 				   'rank change' => 'reranked as ',
-				   'reassigment' => 'reassigned as ');
+				   'reassigment' => 'reassigned as ',
+				   'misspelling' => 'misspelled as ');
                    
 	my %synmap2 = ('belongs to' => 'revalidated ',
 				   'replaced by' => 'replaced with ',
@@ -1944,6 +1945,7 @@ sub getSynonymyParagraph{
             if ($specimen_row->{'type_locality'} > 0)	{
                 my $sql = "SELECT i.interval_name AS max,IF (min_interval_no>0,i2.interval_name,'') AS min,IF (country='United States',state,country) AS place,collection_name,formation,lithology1,fossilsfrom1,lithology2,fossilsfrom2,environment FROM collections c,intervals i,intervals i2 WHERE collection_no=".$specimen_row->{'type_locality'}." AND i.interval_no=max_interval_no AND (min_interval_no=0 OR i2.interval_no=min_interval_no)";
                 my $coll_row = ${$dbt->getData($sql)}[0];
+                $coll_row->{'lithology1'} =~ s/not reported//;
                 my $strat = $coll_row->{'max'};
                 if ( $coll_row->{'min'} )	{
                     $strat .= "/".$coll_row->{'min'};
@@ -2113,7 +2115,7 @@ sub getSynonymyParagraph{
                 } else {
                     $text .= "; it was reranked as the $spelling->{taxon_rank} ";
                 }
-            } else {
+            } elsif ( $synmap1{$first_row->{'spelling_reason'}} ne "revalidated" || $first_row ne ${$group}[0] ) {
 		        $text .= "; it was ".$synmap1{$first_row->{'spelling_reason'}};
             }
         } else {
@@ -2125,7 +2127,7 @@ sub getSynonymyParagraph{
                 $taxon_no = $first_row->{'parent_spelling_no'};
             } elsif ($first_row->{'status'} =~ /misspell/) {
                 $taxon_no = $first_row->{'child_spelling_no'};
-            } elsif ($first_row->{'spelling_reason'} =~ /correct|recomb|rank|reass/) {
+            } elsif ($first_row->{'spelling_reason'} =~ /correct|recomb|rank|reass|missp/) {
                 $taxon_no = $first_row->{'child_spelling_no'};
             }
             if ($taxon_no) {
@@ -2166,7 +2168,7 @@ sub getSynonymyParagraph{
     }
     $text =~ s/<br><br>\s*\.\s*$//i;
     my @parents_ordered = sort {$parents{$a}[-1]->{'pubyr'} <=> $parents{$b}[-1]->{'pubyr'} } keys %parents;
-    if (@parents_ordered) {
+    if (@parents_ordered && $taxon->{'taxon_rank'} !~ /species/) {
         $text .= "<br><br>";
         #my $taxon_name = $taxon->{'taxon_name'};
         #if ($taxon->{'taxon_rank'} =~ /genus|species/) {
