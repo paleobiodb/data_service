@@ -2066,7 +2066,8 @@ sub queryDatabase {
     foreach my $row (@dataRows) {
         if ($row->{'re.taxon_no'}) {
             $all_taxa{$row->{'re.taxon_no'}} = 1; 
-        } elsif ($row->{'o.taxon_no'}) {
+        }
+        if ($row->{'o.taxon_no'}) {
             $all_taxa{$row->{'o.taxon_no'}} = 1;
         }
     }
@@ -2382,11 +2383,12 @@ sub queryDatabase {
                         next;
                     }
 
-                    $row->{'or.genus_name'} = $row->{'o.genus_name'};
+                    foreach my $field ('genus_name','subgenus_name','species_name','subspecies_name','genus_reso','subgenus_reso','species_reso','taxon_no')	{
+                        if ( ! $row->{'or.'.$field} )	{
+                            $row->{'or.'.$field} = $row->{'o.'.$field};
+                        }
+                    }
                     $row->{'o.genus_name'} = $genus;
-                    $row->{'or.subgenus_name'} = $row->{'o.subgenus_name'};
-                    $row->{'or.species_name'} = $row->{'o.species_name'};
-                    $row->{'or.subspecies_name'} = $row->{'o.subspecies_name'};
                     if ($species) {
                         $row->{'o.subgenus_name'} = $subgenus;
                         $row->{'o.species_name'} = $species;
@@ -2396,13 +2398,9 @@ sub queryDatabase {
                     } else	{
                         $row->{'o.species_name'} = "indet.";
                     }
-                    $row->{'or.genus_reso'} = $row->{'o.genus_reso'};
-                    $row->{'or.subgenus_reso'} = $row->{'o.subgenus_reso'};
-                    $row->{'or.species_reso'} = $row->{'o.species_reso'};
                     $row->{'o.genus_reso'} = "";
                     $row->{'o.subgenus_reso'} = "";
                     $row->{'o.species_reso'} = "";
-                    $row->{'or.taxon_no'} = $row->{'o.taxon_no'};
                     $row->{'o.taxon_no'} = $no;
                 }
             }
@@ -2746,9 +2744,11 @@ sub queryDatabase {
             }
 
             if ($q->param('occurrences_first_author') || $q->param('occurrences_second_author') || $q->param('occurrences_other_authors') || $q->param('occurrences_year_named') || $q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_type_locality') || $q->param('occurrences_form_taxon') || $q->param('occurrences_common_name')) {
+            # type info must apply to the original name if there is one,
+            #  or else the data can't be recovered for invalid names JA 11.12.08
                 my $taxon_no = $row->{'o.taxon_no'};
-                if ($ss_taxon_nos{$taxon_no}) {
-                    $taxon_no = $ss_taxon_nos{$taxon_no};
+                if ($row->{'or.taxon_no'} > 0) {
+                    $taxon_no = $row->{'or.taxon_no'};
                 }
             # get these data only if (1) the record is of a species and the
             #  user wants species names, or (2) the user does not want species
@@ -2771,7 +2771,9 @@ sub queryDatabase {
 
             # Set up the ecology fields
             foreach (@ecoFields,'preservation','form_taxon') {
-                if ($ecotaph{$row->{'o.taxon_no'}}{$_} !~ /^\s*$/) {
+                if ($ecotaph{$row->{'or.taxon_no'}}{$_} !~ /^\s*$/) {
+                    $row->{$_} = $ecotaph{$row->{'or.taxon_no'}}{$_};
+                } elsif ($ecotaph{$row->{'o.taxon_no'}}{$_} !~ /^\s*$/) {
                     $row->{$_} = $ecotaph{$row->{'o.taxon_no'}}{$_};
                 } else {
                     $row->{$_} = '';
@@ -4259,17 +4261,13 @@ print "$sql";
 
 	my %id;
 	$sql = "SELECT occurrence_no,taxon_no FROM occurrences WHERE taxon_no IN (".join(',',@nos).")";
-#print "$sql";
 	my @occs = @{$dbt->getData($sql)};
-printf "O ",$#occs,"<br>";
 	$id{$_->{occurrence_no}} = $_->{taxon_no} foreach @occs;
 	# by doing this over again afterwards with the reIDs table we wipe
 	#  out any bad original IDs
 	$sql = "SELECT occurrence_no,taxon_no FROM reidentifications WHERE taxon_no IN (".join(',',@nos).")";
 	@occs = @{$dbt->getData($sql)};
-printf "R ",$#occs,"<br>";
 	$id{$_->{occurrence_no}} = $_->{taxon_no} foreach @occs;
-#print join(' ',keys %id);exit;
 
 	$sql = "SELECT * FROM authorities a,$TAXA_TREE_CACHE t,specimens s,measurements m WHERE a.taxon_no=t.synonym_no AND t.taxon_no=s.taxon_no AND s.specimen_no=m.specimen_no AND lft>=".$t->{lft}." AND rgt<=".$t->{rgt}." GROUP BY a.taxon_no,specimen_part,measurement_type";
 	my @measures = @{$dbt->getData($sql)};
