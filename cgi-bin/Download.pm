@@ -1080,6 +1080,25 @@ sub getEnvironmentString{
     my $hbo = $self->{'hbo'};
     my $dbh = $self->{'dbh'};
 
+    # ignore zone fields if only terrestrial plus all four terrestrial zones
+    #  are unchecked, regardless of unknown JA 15.12.08
+    if ( $q->param("environment_carbonate") && $q->param("environment_siliciclastic") && ! $q->param("environment_terrestrial") && ! $q->param("zone_lacustrine") && ! $q->param("zone_fluvial") && ! $q->param("zone_karst") && ! $q->param("zone_other_terrestrial") && $q->param("zone_marginal_marine") && $q->param("zone_reef") && $q->param("zone_shallow_subtidal") && $q->param("zone_deep_subtidal") && $q->param("zone_offshore") && $q->param("zone_slope_basin") ) {
+        $q->param("zone_lacustrine" => "YES");
+        $q->param("zone_fluvial" => "YES");
+        $q->param("zone_karst" => "YES");
+        $q->param("zone_other_terrestrial" => "YES");
+    }
+
+    # likewise with marine environments, regardless of unknown
+    if ( ! $q->param("environment_carbonate") && ! $q->param("environment_siliciclastic") && $q->param("environment_terrestrial") && $q->param("zone_lacustrine") && $q->param("zone_fluvial") && $q->param("zone_karst") && $q->param("zone_other_terrestrial") && ! $q->param("zone_marginal_marine") && ! $q->param("zone_reef") && ! $q->param("zone_shallow_subtidal") && ! $q->param("zone_deep_subtidal") && ! $q->param("zone_offshore") && ! $q->param("zone_slope_basin") ) {
+        $q->param("zone_marginal_marine" => "YES");
+        $q->param("zone_reef" => "YES");
+        $q->param("zone_shallow_subtidal" => "YES");
+        $q->param("zone_deep_subtidal" => "YES");
+        $q->param("zone_offshore" => "YES");
+        $q->param("zone_slope_basin" => "YES");
+    }
+
     my $env_sql = '';
 
     # Environment or environments
