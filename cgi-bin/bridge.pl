@@ -2212,6 +2212,26 @@ sub submitOpinionForm {
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub displayUntangleSearchForm {
+	print $hbo->stdIncludes("std_page_top");
+	my %vars = $q->Vars();
+	print $hbo->populateHTML('search_untangle_form', \%vars);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub displayUntangleForm {
+	my $error = shift;
+	print $hbo->stdIncludes("std_page_top");
+	Opinion::displayUntangleForm($dbt,$hbo, $s, $q, $error);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub processUntangleForm {
+	print $hbo->stdIncludes("std_page_top");
+	Opinion::processUntangleForm($dbt,$hbo, $s, $q);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
 sub submitTypeTaxonSelect {
 	print $hbo->stdIncludes("std_page_top");
 	Taxon::submitTypeTaxonSelect($dbt, $s, $q);
@@ -3754,7 +3774,84 @@ sub processEditOccurrences {
 		}
 	}
 
-	# second pass, update/insert loop
+	# finally, check for n. sp. resos that appear to be duplicates and
+	#  insert a type_locality number if there's no problem JA 14-15.12.08
+	# this is not 100% because it will miss cases where a species was
+	#  entered with "n. sp." using two different combinations
+	# a couple of (fast harmless) checks in the section section are
+	#  repeated here for simplicity
+	my (@to_check,%dupe_colls);
+	for (my $i = 0;$i < @rowTokens; $i++)	{
+		my %fields = %{$matrix[$i]};
+		if ( $fields{'genus_name'} eq "" && $fields{'occurrence_no'} < 1 )	{
+			next;
+		}
+        	if ( $fields{'reference_no'} !~ /^\d+$/ && $fields{'genus'} =~ /[A-Za-z]/ )	{
+            		next; 
+        	}
+        	if ( $fields{'collection_no'} !~ /^\d+$/ )	{
+            		next; 
+        	}
+	# guess the taxon no by trying to find a single match for the name
+	#  in the authorities table JA 1.4.04
+	# see Reclassify.pm for a similar operation
+	# only do this for non-informal taxa
+	# done here and not in the last pass because we need the taxon_nos
+		if ( $taxon_no{$fields{'latin_name'}} > 0 )	{
+			$fields{'taxon_no'} = $taxon_no{$fields{'latin_name'}};
+		} elsif ( $taxon_no{$fields{'latin_name'}} eq "" )	{
+			$fields{'taxon_no'} = Taxon::getBestClassification($dbt,\%fields);
+		} else	{
+			$fields{'taxon_no'} = 0;
+		}
+		if ( $fields{'taxon_no'} > 0 && $fields{'species_reso'} eq "n. sp." )	{
+			push @to_check , $fields{'taxon_no'};
+		}
+		%{$matrix[$i]} = %fields;
+	}
+	if ( @to_check )	{
+		# pre-processing is faster than a join
+		$sql = "SELECT taxon_no,taxon_name,type_locality FROM authorities WHERE taxon_no IN (".join(',',@to_check).") AND taxon_rank='species'";
+		my @species = @{$dbt->getData($sql)};
+		if ( @species )	{
+			@to_check = ();
+			push @to_check , $_->{'taxon_no'} foreach @species;
+			$sql = "(SELECT taxon_no,collection_no FROM occurrences WHERE collection_no!=$collection_no AND taxon_no in (".join(',',@to_check).") AND species_reso='n. sp.') UNION (SELECT taxon_no,collection_no FROM reidentifications WHERE collection_no!=$collection_no AND taxon_no in (".join(',',@to_check).") AND species_reso='n. sp.')";
+			my @dupe_refs = @{$dbt->getData($sql)};
+			if ( @dupe_refs )	{
+				$dupe_colls{$_->{'taxon_no'}} .= ", ".$_->{'collection_no'} foreach @dupe_refs;
+				for (my $i = 0;$i < @rowTokens; $i++)	{
+					my %fields = %{$matrix[$i]};
+					if ( ! $dupe_colls{$fields{'taxon_no'}} || ! $fields{'taxon_no'} )	{
+						next;
+					}
+					$dupe_colls{$fields{'taxon_no'}} =~ s/^, //;
+					if ( $dupe_colls{$fields{'taxon_no'}} =~ /^[0-9]+$/ )	{
+						push @warnings, "<a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_no=$fields{'taxon_no'}\"><i>$fields{'genus_name'} $fields{'species_name'}</i></a> has already been marked as new in collection $dupe_colls{$fields{'taxon_no'}}, so it won't be recorded as such in this one";
+					} elsif ( $dupe_colls{$fields{'taxon_no'}} =~ /, [0-9]/ )	{
+						$dupe_colls{$fields{'taxon_no'}} =~ s/(, )([0-9]*)$/ and $2/;
+						push @warnings, "<i>$fields{'genus_name'} $fields{'species_name'}</i> has already been marked as new in collections $dupe_colls{$fields{'taxon_no'}}, so it won't be recorded as such in this one";
+					}
+				}
+			}
+			my @to_update;
+			for my $s ( @species )	{
+				if ( ! $dupe_colls{$s->{'taxon_no'}} && $s->{'type_locality'} < 1 )	{
+					push @to_update , $s->{'taxon_no'};
+				} elsif ( ! $dupe_colls{$s->{'taxon_no'}} && $s->{'type_locality'} > 0 && $s->{'type_locality'} != $collection_no )	{
+					push @warnings, "The type locality of <a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_no=$s->{'taxon_no'}\"><i>$s->{'taxon_name'}</i></a> has already been marked as new in collection $s->{'type_locality'}, which seems incorrect";
+				}
+			}
+			if ( @to_update )	{
+				$sql = "UPDATE authorities SET type_locality=$collection_no,modified=modified WHERE taxon_no IN (".join(',',@to_update).")";
+				$dbh->do($sql);
+				Taxon::propagateAuthorityInfo($dbt,$_) foreach @to_update;
+			}
+		}
+
+	}
+
+	# last pass, update/insert loop
 	for (my $i = 0;$i < @rowTokens; $i++)	{
 
 	my %fields = %{$matrix[$i]};
@@ -3773,19 +3870,7 @@ sub processEditOccurrences {
             push @warnings, "There is no collection number for row $rowno, so it was skipped";
             next; 
         }
-
-        # guess the taxon no by trying to find a single match for the name
-        #  in the authorities table JA 1.4.04
-        # see Reclassify.pm for a similar operation
-        # only do this for non-informal taxa
-        if ( $taxon_no{$fields{'latin_name'}} > 0 )	{
-            $fields{'taxon_no'} = $taxon_no{$fields{'latin_name'}};
-        } elsif ( $taxon_no{$fields{'latin_name'}} eq "" )	{
-            $fields{'taxon_no'} = Taxon::getBestClassification($dbt,\%fields);
-        } else	{
-            $fields{'taxon_no'} = 0;
-        }
-        my $taxon_name = Collection::formatOccurrenceTaxonName(\%fields);
+	my $taxon_name = Collection::formatOccurrenceTaxonName(\%fields);
 
         if ($fields{'genus_name'} =~ /^\s*$/) {
             if ($fields{'occurrence_no'} =~ /^\d+$/ && $fields{'reid_no'} != -1) {
