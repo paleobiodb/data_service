@@ -640,15 +640,17 @@ sub submitAuthorityForm {
 	# paranoia check, this widget should only appear on species forms
 	} elsif ( $q->param('type_locality') && $rankFromSpaces ne "species" )	{
 		$errors->add("You can't enter type locality data for a $rankFromSpaces");
-	} elsif ( $q->param('type_locality') )	{
+	} elsif ( $q->param('taxon_rank') eq "species" )	{
 	# check very narrowly to see if the species has an apparent type
 	#  locality in the system: there must be an exact match between the
 	#  spellings on this form and in the occurrences/reIDs table
+	# try this even if nothing was in the system and nothing was entered
+	#  JA 15.12.08
 		my $coll;
 		if ( ! $isNewEntry )	{
 			$coll = $t->get('type_locality');
 		}
-		if ( $coll != $q->param('type_locality') )	{
+		if ( $coll != $q->param('type_locality') || ( ! $coll && ! $q->param('type_locality') ) )	{
 			my $sql;
 			if ( $q->param('taxon_no') > 0 )	{
 				$sql = "(SELECT collection_no FROM occurrences WHERE taxon_no=".$q->param('taxon_no')." AND species_reso='n. sp.') UNION (SELECT collection_no FROM reidentifications WHERE taxon_no=".$q->param('taxon_no')." AND species_reso='n. sp.')";
@@ -658,18 +660,24 @@ sub submitAuthorityForm {
 			}
 			my @locs = @{$dbt->getData($sql)};
 			my $nlocs = $#locs + 1;
-			if ( $nlocs > 2 )	{
+		# complain only if they entered something that didn't work
+			if ( $nlocs > 2 && $q->param('type_locality') > 0 )	{
 				my $collnos = join ', ',map {$_->{collection_no}} @locs;
 				$collnos =~ s/(, )([0-9]*$)/, and $2/;
 				$errors->add("Collections $collnos are all marked as the type locality of ".$q->param('taxon_name').", so it's not clear what should go in the authorities table");
-			} elsif ( $nlocs == 2 )	{
+				$q->param('type_locality' => "");
+			} elsif ( $nlocs == 2 && $q->param('type_locality') > 0 )	{
 				my $collnos = join ' and ',map {$_->{collection_no}} @locs;
 				$errors->add("Collections $collnos are both marked as the type locality of ".$q->param('taxon_name').", so it's not clear what should go in the authorities table");
-			} elsif ( $nlocs == 0 )	{
+				$q->param('type_locality' => "");
+			} elsif ( $nlocs == 0 && $q->param('type_locality') > 0 )	{
 				$errors->add("No occurrences of ".$q->param('taxon_name')." that are spelt this way have been marked 'n. sp.'");
-			} else	{
+				$q->param('type_locality' => "");
+		# there's one match: complain if they entered the wrong thing,
+		#  and otherwise add a value even if they entered nothing
+			} elsif ( $nlocs == 1 )	{
 				$coll = $locs[0]->{'collection_no'};
-				if ( $coll != $q->param('type_locality') )	{
+				if ( $coll != $q->param('type_locality') && $q->param('type_locality') > 0 )	{
 					$errors->add("You entered ".$q->param('type_locality')." as the type locality, but the only occurrence of this species marked with an 'n. sp.' is in collection $coll");
 				} else	{
 					$fields{'type_locality'} = $coll;
