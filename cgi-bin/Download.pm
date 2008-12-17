@@ -303,7 +303,7 @@ sub retellOptions {
     }
 
     # Environmental (previously just onshore-offshore) zones
-    my @zone_group = ('lacustrine','fluvial','karst','other terrestrial','marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin');
+    my @zone_group = ('lacustrine','fluvial','karst','other_terrestrial','marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin');
     $html .= $self->retellOptionsGroup('Environmental zones:','zone_',\@zone_group);
 
     # Preservation mode
