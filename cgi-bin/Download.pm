@@ -42,6 +42,7 @@ my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 my @ecoFields = (); # Note: generated at runtime in setupQueryFields
 my @pubyr = ();
+my @reso_types_group = ('aff.','cf.','ex gr.','new','sensu lato','?','"','informal','other');
 
 my $OUT_HTTP_DIR = "/public/downloads";
 my $OUT_FILE_DIR = $HTML_DIR.$OUT_HTTP_DIR;
@@ -433,7 +434,6 @@ sub retellOptions {
         $html .= $self->retellOptionsRow ( "Replace names with senior synonyms?","no") if ($q->param("replace_with_ss") eq 'NO');
         $html .= $self->retellOptionsRow ( "Include occurrences that are generically indeterminate?", "yes") if ($q->param('indet') eq 'YES');
         $html .= $self->retellOptionsRow ( "Include occurrences that are specifically indeterminate?", "yes") if ($q->param('sp') eq 'NO');
-        my @reso_types_group = ('aff.','cf.','ex gr.','new','sensu lato','?','"');
         my $quals .= $self->retellOptionsGroup('Include genus occurrences qualified by','genus_reso_',\@reso_types_group);
         if ( $quals && $q->param('genus_reso_informal') eq "YES" )	{
             $quals =~ s/<\/i>/, informal<\/i>/;
@@ -1341,13 +1341,24 @@ sub getCollectionTypeString{
     return $colltypes;
 }
 
+# WARNING: this code is slightly buggy because it assumes that senior synonym
+#  masking has no logical impact on the original resos, which might or might
+#  not make sense, especially for n. gen. and n. sp.
+# we make this problem somewhat transparent to the user by not carrying
+#  over the reso in such cases
 sub getResoString{
     my $self = shift;
     my $level = shift;
     my $q = $self->{'q'};
 
     my $resos = "";
-    if ( ! $q->param($level.'_reso_new') || ! $q->param($level.'_reso_aff.') || ! $q->param($level.'_reso_cf.') || ! $q->param($level.'_reso_ex gr.') || ! $q->param($level.'_reso_sensu lato') || ! $q->param($level.'_reso_?') || ! $q->param($level.'_reso_"') || ! $q->param($level.'_reso_informal') ) { 
+    my $unchecked;
+    for my $r ( @reso_types_group )	{
+        if ( ! $q->param($level.'_reso_'.$r) )	{
+            $unchecked++;
+        }
+    }
+    if ( $unchecked > 0 && $unchecked < $#reso_types_group + 1 )	{
         if ( $q->param($level.'_reso_aff.') )    {
             $resos .= ",'aff.'";
         }
@@ -1375,16 +1386,23 @@ sub getResoString{
         if ( $q->param($level.'_reso_informal') )    {
             $resos .= ",'informal'";
         }
+        if ( $q->param($level.'_reso_other') )    {
+            $resos .= ",''";
+        }
         $resos =~ s/^,//;
     # only return something if at least one box was checked
         if ( $resos )    {
             $resos = " o.".$level."_reso IN ($resos) ";
-            $resos = " (" . $resos ."OR o.".$level."_reso IS NULL OR o.".$level."_reso='')";
+    # $reso is good enough on its own unless 'other' is checked JA 18.12.08
+            if ( $q->param($level.'_reso_other') )    {
+                $resos = " (" . $resos ."OR o.".$level."_reso IS NULL)";
+            }
+        
         }
     }
     # informal needs special handling because the default is to exclude it
     # so, if no boxes were checked at all, exclude it anyway
-    if ( ! $resos && ! $q->param($level.'_reso_informal') )	{
+    if ( ! $resos && $unchecked == $#reso_types_group + 1 )	{
         $resos = " (o.".$level."_reso NOT IN ('informal') OR o.".$level."_reso IS NULL OR o.".$level."_reso='')";
     }
     return $resos;
