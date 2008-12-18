@@ -31,32 +31,32 @@
 				// an institution, or is "anonymous"
 			}
 			else{
-				errors += "First author initials may not be blank.\n"; 
+				errors += "* First author initials may not be blank\n"; 
 			}
 		} else {
 			// Check for a capital letter
 			if ( capital.test ( frm.author1init.value ) == false ) {
-			    errors += "First author initials should have a capital letter\n"; 
+			    errors += "* First author initials should have a capital letter\n"; 
 			}
 			if ( period.test ( frm.author1init.value ) == false ) {
-			    errors += "The first author's initials must end with a period.\n"; 
+			    errors += "* The first author's initials must end with a period\n"; 
 			}
 			if ( space.test ( frm.author1init.value ) == true ) {
-			    errors += "There must be a period and a space between the first author's two initials.\n"; 
+			    errors += "* There must be a period and a space between the first author's two initials\n"; 
 			}
 		}
 
 		// First Author Last
 		if ( frm.author1last.value == "" ) {
-			errors += "First author last name may not be blank.\n"; 
+			errors += "* First author last name may not be blank\n"; 
 		} else {
 			// Check for a capital letter
 			if ( capital.test ( frm.author1last.value ) == false ) {
                 if (! frm.author1last.value.match(last_name_anon)) {
-				    errors += "First author last name should have a capital letter\n"; 
+				    errors += "* First author last name should have a capital letter\n"; 
                 }
 			} else if ( all_caps.test ( frm.author1last.value ) == true && frm.author1last.value.length > 3) {
-			    errors += "First author name can't all consist of capital letters\n"; 
+			    errors += "* First author name can't all consist of capital letters\n"; 
             }
 		}
 
@@ -64,13 +64,13 @@
 		if ( frm.author2init.value != "" ) {
 			// Check for a capital letter
 			if ( capital.test ( frm.author2init.value ) == false ) {
-				errors += "Second author initials should have a capital letter.\n"; 
+				errors += "* Second author initials should have a capital letter\n"; 
 			} 
 			if ( period.test ( frm.author2init.value ) == false ) {
-			    errors += "The second author's initials must end with a period.\n"; 
+			    errors += "* The second author's initials must end with a period\n"; 
 			}
 			if ( space.test ( frm.author2init.value ) == true ) {
-			    errors += "There must be a period and a space between the second author's two initials.\n"; 
+			    errors += "* There must be a period and a space between the second author's two initials\n"; 
 			}
 		}
 
@@ -78,9 +78,9 @@
 		if ( frm.author2last.value != "" ) {
 			// Check for a capital letter
 			if ( capital.test ( frm.author2last.value ) == false ) {
-				errors += "Second author last name should have a capital letter.\n"; 
+				errors += "* Second author last name should have a capital letter\n"; 
 			} else if ( all_caps.test ( frm.author2last.value ) == true && frm.author2last.value.length > 3) {
-			    errors += "Second author name can not consist of all capital letters\n"; 
+			    errors += "* Second author name can not consist of all capital letters\n"; 
             }
 		}
 
@@ -89,18 +89,18 @@
         var pattern = /^[A-Z][a-z\']+/;
         var result = contents.match(pattern);
         if(result != null){
-            errors += "Names of additional authors must be initials first, " +
-                  	  "then lastname;  NOT last name first.\n"+
+            errors += "* Names of additional authors must be formatted with " +
+                  	  " initials before last names\n"+
                   	  "EXAMPLE: P. McCartney, J. P. Jones, J. Hendrix\n";
         }
 
 
 		// Publication Year
 		if ( frm.pubyr.value == "" ) {
-			errors += "The publication year may not be blank.\n"; 
+			errors += "* The publication year may not be blank\n"; 
 		} else {
 			if ( year.test( frm.pubyr.value ) == false ) {
-				errors += "The publication year is invalid.\n"; 
+				errors += "* The publication year is invalid\n"; 
 			}
 		}
 
@@ -109,7 +109,7 @@
         if (frm.language && frm.language.selectedIndex != null) {
             var index = frm.language.selectedIndex;
             if ( index == 0 ) {
-                errors += "The publication language must be selected.\n"; 
+                errors += "* The publication language must be selected\n"; 
             } 
         }
 
@@ -117,23 +117,42 @@
         if (frm.publication_type && frm.publication_type.selectedIndex != null) {
             var index = frm.publication_type.selectedIndex;
             if ( index == 0 ) {
-                errors += "The publication type must be selected.\n"; 
+                errors += "* The publication type must be selected\n"; 
             } else {
                 if ( frm.publication_type.options[frm.publication_type.selectedIndex].text == "book/book chapter" ) {
                     if ( frm.pubtitle.value == "" ) {
-                        errors += "If you select \"book/book chapter\", you are required to fill in its name.\n"; 
+                        errors += "* If you select \"book/book chapter\", you are required to fill in its name\n"; 
                     }
                 }
             }
         }
 
+		if ( /[^A-Za-z0-9\)\]]$/.test(frm.reftitle.value) )	{
+			errors += "* The reference's title must end with a letter\n";
+		}
+		if ( /[^A-Za-z0-9\-\ :;,\."\'\(\)\[\]!\?]/.test(frm.reftitle.value) )	{
+			errors += "* The reference's title includes stray characters\n";
+		}
+		if ( /  /.test(frm.reftitle.value) )	{
+			errors += "* The reference's title includes extra spaces\n";
+		}
+
+		if ( /[^A-Za-z0-9\)\]]$/.test(frm.pubtitle.value) )	{
+			errors += "* The book/serial name must end with a letter\n";
+		}
+		if ( /[^A-Za-z0-9\-\ :;,\."\'\(\)\[\]!\?]/.test(frm.pubtitle.value) )	{
+			errors += "* The book/serial name includes stray characters\n";
+		}
+		if ( /  /.test(frm.pubtitle.value) )	{
+			errors += "* The book/serial name includes extra spaces\n";
+		}
 		// Report errors
 		if ( errors != "" ) {
-			errors = "   Errors detected!!   \n" + 
+			errors = "   Errors detected!   \n" + 
 					 "---------------------------------------\n\n" +
 					 errors + "\n" +
 					 "---------------------------------------\n\n" +
-					 "See the tip sheet for instructions.";
+					 "See the tip sheet for instructions";
 			alert ( errors );
 			return false;
 		} 
