@@ -2195,7 +2195,7 @@ sub queryDatabase {
             $q->param("occurrences_second_author") eq "YES" ||
             $q->param("occurrences_other_authors") eq "YES" ||
             $q->param("occurrences_year_named") eq "YES")	{
-            my %genus_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'immediate')};
+            my %genus_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'immediate genus')};
         # will need the genus number for figuring out "extant"
             my @temp_nos = @taxon_nos;
             for my $no ( @taxon_nos )	{
