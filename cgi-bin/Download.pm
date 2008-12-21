@@ -2102,7 +2102,7 @@ sub queryDatabase {
     #  synonyms need to be classified as well JA 13.8.06
     foreach my $row (@dataRows) {
         if ($row->{'re.taxon_no'}) {
-            $all_taxa{$row->{'re.taxon_no'}} = 1; 
+            $all_taxa{$row->{'re.taxon_no'}} = 1;
         }
         if ($row->{'o.taxon_no'}) {
             $all_taxa{$row->{'o.taxon_no'}} = 1;
@@ -2110,21 +2110,16 @@ sub queryDatabase {
     }
 
     # Replace with senior synonym data
-    my %ss_taxon_nos = ();
+    my %ss_taxon_no = ();
     my %ss_taxon_names = ();
     my %ss_taxon_rank = ();
     my %misspelling = ();
     if ($q->param("replace_with_ss") ne 'NO' &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         if (%all_taxa) {
-            # Get senior synonyms for taxon used in this download
-            # Note the t.taxon_no != t.synonym_no clause - this is here
-            # so that the array only gets filled with replacement names,
-            # not cluttered up with taxa who don't have a senior synonym
             my $sql = "SELECT t.taxon_no,t.spelling_no,t.synonym_no,a.taxon_name,a.taxon_rank ".
                       "FROM $TAXA_TREE_CACHE t, authorities a ".
                       "WHERE t.synonym_no=a.taxon_no ".
-                      "AND t.taxon_no != t.synonym_no ".
                       "AND t.taxon_no IN (".join(",",keys %all_taxa).")";
             my @results = @{$dbt->getData($sql)};
             if ( @results )	{
@@ -2150,7 +2145,7 @@ sub queryDatabase {
                     }
                     # Don't forget these as well
                     $all_taxa{$row->{'synonym_no'}} = 1;
-                    $ss_taxon_nos{$row->{'taxon_no'}} = $syn;
+                    $ss_taxon_no{$row->{'taxon_no'}} = $syn;
                     # Split it into bits here and store that, optimization
                     my @name_bits = Taxon::splitTaxon($name);
                     $ss_taxon_names{$row->{'taxon_no'}} = \@name_bits;
@@ -2165,10 +2160,9 @@ sub queryDatabase {
 
     my @taxon_nos = keys %all_taxa;
     my %genus_no;
-    my %senior_genus_name;
-    my %genus_spelling;
 
     # Ecotaph/preservation/parent data
+    my %genus_class;
     my %master_class;
     my %ecotaph;
     my %all_genera;
@@ -2195,20 +2189,48 @@ sub queryDatabase {
             $q->param("occurrences_second_author") eq "YES" ||
             $q->param("occurrences_other_authors") eq "YES" ||
             $q->param("occurrences_year_named") eq "YES")	{
-            my %genus_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'immediate genus')};
+
+            # works for species whose immediate parents actually are genera
+            %genus_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'immediate genus')};
+            # likewise if the parents are subgenera
+            my %subgenus_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'immediate subgenus')};
+            # we'll want to map subgenera to genera using a proper lookup
+            #  because the genus name of a subgenus could be misspelt
+            my @subgenus_nos;
+            push @subgenus_nos , $subgenus_class{$_}->{'parent_synonym_no'} foreach keys %subgenus_class;
+            if ( @subgenus_nos )	{
+                my %temp=%{TaxaCache::getParents($dbt,\@subgenus_nos,'immediate genus')};
+                $genus_class{$_} = $temp{$_} foreach keys %temp;
+            # more importantly, here we figure out the genus of each species
+            #  now placed in a subgenus
+                $genus_class{$_} = $genus_class{$subgenus_class{$_}->{'parent_synonym_no'}} foreach keys %subgenus_class;
+                for my $n ( keys %subgenus_class )	{
+                    $genus_class{$n}->{'taxon_no'} = $n;
+                    $genus_class{$n}->{'opinion_parent_no'} = $subgenus_class{$n}->{'opinion_parent_no'};
+                    $genus_class{$n}->{'subgenus'} = $subgenus_class{$n}->{'parent_name'};
+                    $genus_class{$n}->{'subgenus'} =~ s/[A-Z][a-z]* \(//;
+                    $genus_class{$n}->{'subgenus'} =~ s/\)//;
+                }
+                push @taxon_nos , @subgenus_nos;
+            }
+
+            # any species or subgenus currently placed in an invalid genus
+            #  is a synonym by definition
+            for my $no ( keys %genus_class )	{
+                if ( $genus_class{$no}->{'parent_spelling_no'} != $genus_class{$no}->{'parent_synonym_no'} )	{
+                    $ss_taxon_no{$no} = $genus_class{$no}->{'parent_synonym_no'};
+                    $ss_taxon_names{$no} = \@{$genus_class{$no}->{'parent_name'}};
+                    $ss_taxon_rank{$no} = $genus_class{$no}->{'parent_rank'};
+                    $misspelling{$no} = "";
+                }
+            }
+
         # will need the genus number for figuring out "extant"
             my @temp_nos = @taxon_nos;
             for my $no ( @taxon_nos )	{
                 if ( $genus_class{$no}->{'parent_synonym_no'} )	{
                     push @temp_nos , $genus_class{$no}->{'parent_synonym_no'};
                     $genus_no{$no} = $genus_class{$no}->{'parent_synonym_no'};
-                # invalid genus
-                    if ( $genus_class{$no}->{'parent_spelling_no'} != $genus_class{$no}->{'parent_synonym_no'} )	{
-                        $senior_genus_name{$no} = $genus_class{$no}->{'parent_name'};
-                # misspelled genus
-                    } elsif ( $genus_class{$no}->{'parent_spelling_no'} != $genus_class{$no}->{'opinion_parent_no'} )	{
-                        $genus_spelling{$no} = $genus_class{$no}->{'parent_name'};
-                    }
                 }
             }
             @taxon_nos = @temp_nos;
@@ -2260,7 +2282,7 @@ sub queryDatabase {
         #  below, but this is incredibly inefficient and two hits is faster
         #  JA 22.5.08
             my @spelling_nos = ();
-            my $sql = "SELECT DISTINCT spelling_no FROM taxa_tree_cache WHERE taxon_no IN (".join(',',@taxon_nos).")";
+            my $sql = "SELECT DISTINCT spelling_no FROM $TAXA_TREE_CACHE WHERE taxon_no IN (".join(',',@taxon_nos).")";
             foreach my $row (@{$dbt->getData($sql)}) {
                 push @spelling_nos, $row->{'spelling_no'};
             }
@@ -2400,67 +2422,67 @@ sub queryDatabase {
                     $row->{'o.'.$field}=$row->{'re.'.$field};
                 }
             }
-            # Replace with senior_synonym_no PS 11/1/2005
-            # this is ugly because the "original name" is actually a reID
-            #  whenever a reID exists
-            if ($replace_with_ss) {
-                if ($ss_taxon_nos{$row->{'o.taxon_no'}} || $senior_genus_name{$row->{'o.taxon_no'}} || $genus_spelling{$row->{'o.taxon_no'}})	{
-                    my ($genus,$subgenus,$species,$subspecies);
-                    my $no = $ss_taxon_nos{$row->{'o.taxon_no'}};
-                    my $nuke;
-            # taxon is simply misspelled
-                    if ($misspelling{$row->{'o.taxon_no'}})	{
-                        ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
-            # species itself is a synonym
-                    } elsif ($ss_taxon_nos{$row->{'o.taxon_no'}})	{
-                        ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
-                        if ($genus ne $senior_genus_name{$no} && $senior_genus_name{$no})	{
-                          $genus = $senior_genus_name{$no};
-                          $subgenus = "";
-                          $species = "sp.";
-                          $subspecies = "";
-                          $no = $genus_no{$no};
-                        }
-                        $nuke++;
-            # weird case in which a species currently belongs to a genus that
-            #  is a synonym of another genus, so the species' status is unclear
-            #  and the only thing to do is use the senior name
-                    } elsif ($senior_genus_name{$row->{'o.taxon_no'}})	{
-                        $genus = $senior_genus_name{$row->{'o.taxon_no'}};
-                        $species = "sp.";
-                        $no = $genus_no{$row->{'o.taxon_no'}};
-                        $nuke++;
-            # equally weird case in which the genus is right but misspelled
-            #  (e.g., many -strea vs. -straea coral names), so the species
-            #  name and number are okay
-                    } elsif ($genus_spelling{$row->{'o.taxon_no'}})	{
-                        $genus = $genus_spelling{$row->{'o.taxon_no'}};
-                        $species = $row->{'o.species_name'};
-                        $subspecies = $row->{'o.subspecies_name'};
-                    }
-                    if ( $q->param('indet') ne 'YES' && ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus/ )	{
-                        next;
-                    }
-                    if ( $q->param('sp') eq 'NO' && ! $species )	{
-                        next;
-                    }
 
+            # Replace with senior_synonym_no PS 11/1/2005
+            # the "original name" is actually a reID whenever a reID exists
+            # even possibly okay names are now checked because of the chaotic
+            #  mismatches between occurrence and authority data created by
+            #  fuzzy matching of subgenus names JA 20.12.08
+            if ($replace_with_ss && $ss_taxon_no{$row->{'o.taxon_no'}})	{
+                my $no = $ss_taxon_no{$row->{'o.taxon_no'}};
+                my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
+                # genus or subgenus could be wrong if the species' current
+                #  spelling disagrees with the rank of its parent, e.g., it's
+                #  correctly spelled Yus yus but Yus is a subgenus of Xus
+                # case 1: the current genus should be a subgenus
+                if ( $genus eq $genus_class{$no}->{'subgenus'} )	{
+                    $genus = $genus_class{$no}->{'parent_name'};
+                    $subgenus = $genus_class{$no}->{'subgenus'};
+                }
+                # case 2: the current subgenus should be a genus
+                elsif ( $subgenus && $subgenus eq $genus_class{$no}->{'parent_name'} )	{
+                    $genus = $genus_class{$no}->{'parent_name'};
+                    $subgenus = "";
+                }
+                # free pass for unclassified species within classified genera
+                if ( ! $species && $row->{'o.species_name'} =~ /^[a-z]*$/ )	{
+                    $species = $row->{'o.species_name'};
+                # same for subgenera (certainly don't do this for classified
+                #  species, whose correct subgenera are known)
+                    if ( ! $subgenus && $row->{'o.subgenus_name'} =~ /^[A-Z][a-z]*$/ )	{
+                        $subgenus = $row->{'o.subgenus_name'};
+                    }
+                }
+
+                my $rowspecies = $row->{'o.species_name'};
+                if ( $rowspecies !~ /^[a-z]*$/ )	{
+                    $rowspecies = "";
+                }
+                if ( $q->param('indet') ne 'YES' && ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus/ )	{
+                    next;
+                }
+                if ( $q->param('sp') eq 'NO' && ( ! $species || $row->{'o.species_reso'} eq "informal" ) )	{
+                    next;
+                }
+                if ( $genus ne $row->{'o.genus_name'} || $subgenus ne $row->{'o.subgenus_name'} || $species ne $rowspecies )	{
                     foreach my $field ('genus_name','subgenus_name','species_name','subspecies_name','genus_reso','subgenus_reso','species_reso','taxon_no')	{
                         if ( ! $row->{'or.'.$field} )	{
                             $row->{'or.'.$field} = $row->{'o.'.$field};
                         }
                     }
                     $row->{'o.genus_name'} = $genus;
-                    if ($species) {
+                    if ( $species )	{
                         $row->{'o.subgenus_name'} = $subgenus;
                         $row->{'o.species_name'} = $species;
                         $row->{'o.subspecies_name'} = $subspecies;
-                    } elsif ( $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus|species/ && $nuke )	{
+                    } elsif ( $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus|species/ )	{
+                        $row->{'o.subgenus_name'} = $subgenus;
                         $row->{'o.species_name'} = "sp.";
-                    } elsif ( $nuke )	{
+                    } else	{
+                        $row->{'o.subgenus_name'} = "";
                         $row->{'o.species_name'} = "indet.";
                     }
-                    if ( $nuke )	{
+                    if ( ! $misspelling{$row->{'or.taxon_no'}} )	{
                         $row->{'o.genus_reso'} = "";
                         $row->{'o.subgenus_reso'} = "";
                         $row->{'o.species_reso'} = "";
@@ -2468,6 +2490,21 @@ sub queryDatabase {
                     $row->{'o.taxon_no'} = $no;
                 }
             }
+
+            # even a valid genus and/or subgenus name may be misspelt!
+            # JA 20.12.08
+            # at this point, species names and resos exist only if both the
+            #  genus and the species are valid, so ignore them
+            my $no = $row->{'o.taxon_no'};
+            if ( $genus_class{$no} && $genus_class{$no}->{'parent_spelling_no'} == $genus_class{$no}->{'parent_synonym_no'} && $genus_class{$no}->{'parent_spelling_no'} != $genus_class{$no}->{'opinion_parent_no'} && $genus_class{$no}->{'parent_name'} ne $row->{'o.genus_name'} )	{
+                if ( ! $row->{'or.genus_name'} )	{
+                    foreach my $field ('genus_name','subgenus_name','species_name','subspecies_name','genus_reso','subgenus_reso','species_reso','taxon_no')	{
+                        $row->{'or.'.$field} = $row->{'o.'.$field};
+                    }
+                }
+                $row->{'o.genus_name'} = $genus_class{$no}->{'parent_name'};
+            }
+
             # raise subgenera to genus level JA 18.8.04
             if ( $split_subgenera && $row->{'o.subgenus_name'} ) {
                 $row->{'o.genus_name'} = $row->{'o.subgenus_name'};
@@ -4301,7 +4338,6 @@ sub displayDownloadMeasurementsResults	{
 	my $dbh = $self->{'dbh'};
 
 	my $sql = "SELECT lft,rgt,rgt-lft width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."' ORDER BY width";
-print "$sql";
 	# if there are multiple matches, we hope to get the right one by
 	#  assuming the larger taxon is the legitimate one
 	my @taxa = @{$dbt->getData($sql)};
