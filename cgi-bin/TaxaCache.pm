@@ -931,8 +931,7 @@ sub getParents {
     # JA 19.12.08
     if ($return_type =~ /immediate/) {
         my ($return_type,$parent_rank) = split / /,$return_type;
-print "R $parent_rank";
-        my $sql = "select t.taxon_no taxon_no,parent_spelling_no opinion_parent_no,t2.spelling_no parent_spelling_no,t2.synonym_no parent_synonym_no,a.taxon_name parent_name,a.taxon_rank parent_rank FROM $TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2,authorities a,opinions o WHERE t.opinion_no=o.opinion_no AND parent_spelling_no=t2.taxon_no AND t2.spelling_no=a.taxon_no AND a.taxon_rank='$parent_rank' AND t.taxon_no IN (".join(',',@$taxon_nos_ref).")";
+        my $sql = "select t.taxon_no taxon_no,parent_spelling_no opinion_parent_no,t2.spelling_no parent_spelling_no,t2.synonym_no parent_synonym_no,a.taxon_name parent_name,a.taxon_rank parent_rank FROM $TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2,authorities a,opinions o WHERE t.opinion_no=o.opinion_no AND parent_no=t2.taxon_no AND t2.synonym_no=a.taxon_no AND a.taxon_rank='$parent_rank' AND t.taxon_no IN (".join(',',@$taxon_nos_ref).")";
         my @results = @{$dbt->getData($sql)};
         $hash{$_->{'taxon_no'}} = $_ foreach @results;
         return \%hash;
