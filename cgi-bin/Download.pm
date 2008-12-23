@@ -2219,7 +2219,7 @@ sub queryDatabase {
             for my $no ( keys %genus_class )	{
                 if ( $genus_class{$no}->{'parent_spelling_no'} != $genus_class{$no}->{'parent_synonym_no'} )	{
                     $ss_taxon_no{$no} = $genus_class{$no}->{'parent_synonym_no'};
-                    $ss_taxon_names{$no} = \@{$genus_class{$no}->{'parent_name'}};
+                    push @{$ss_taxon_names{$no}} , $genus_class{$no}->{'parent_name'};
                     $ss_taxon_rank{$no} = $genus_class{$no}->{'parent_rank'};
                     $misspelling{$no} = "";
                 }
