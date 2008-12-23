@@ -130,7 +130,7 @@
 		if ( /[^A-Za-z0-9\)\]]$/.test(frm.reftitle.value) )	{
 			errors += "* The reference's title must end with a letter\n";
 		}
-		if ( /[~\'@\#\$%\^\&\*_\+\{\}\|\\<>\/\t\n]/.test(frm.reftitle.value) )	{
+		if ( /[~@\#\$%\^\&\*_\+\{\}\|\\<>\/\t\n]/.test(frm.reftitle.value) )	{
 			errors += "* The reference's title includes weird characters\n";
 		}
 		if ( /  /.test(frm.reftitle.value) )	{
@@ -140,7 +140,7 @@
 		if ( /[^A-Za-z0-9\)\]]$/.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name must end with a letter\n";
 		}
-		if ( /[~\'@\#\$%\^\&\*_\+\{\}\|\\<>\/\t\n]/.test(frm.pubtitle.value) )	{
+		if ( /[~@\#\$%\^\&\*_\+\{\}\|\\<>\/\t\n]/.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name includes weird characters\n";
 		}
 		if ( /  /.test(frm.pubtitle.value) )	{
