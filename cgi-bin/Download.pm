@@ -145,30 +145,35 @@ sub buildDownload {
     } 
 
     # Tell what happened
-    print '<div align="center">';
-    print '<table border=0 width=600><tr><td>';
-    print '<p class="large darkList" style="padding: 2px; lmargin-bottom: 0.5em;">Output files</p>'; 
-    if ( $q->param("output_data") =~ /matrix/ ) {
-        print "$mainCount collections and $nameCount taxa were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
-    }  else {
-        my $things = ($q->param("output_data") =~ /occurrence/) 
-            ? "occurrences" : $q->param("output_data");
-        print "$mainCount $things were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
-        if ( $q->param("output_data") =~ /conjunct/i ) {
-            print "$colls collections were printed to <a href=\"$OUT_HTTP_DIR/$collFile\">$collFile</a><br>\n";
+    print "<div align=\"center\">\n";
+    print '<p class="large darkList" style="width: 36em; text-align: left; padding: 2px; lmargin-bottom: 0.5em;">Output</p>';
+    print "<div style=\"text-align: left; width: 40em;\">\n";
+    if ( $mainCount > 0 )	{
+        if ( $q->param("output_data") =~ /matrix/ ) {
+            print "$mainCount collections and $nameCount taxa were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
+        }  else {
+            my $things = ($q->param("output_data") =~ /occurrence/) 
+                ? "occurrences" : $q->param("output_data");
+            print "$mainCount $things were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
+            if ( $q->param("output_data") =~ /conjunct/i ) {
+                print "$colls collections were printed to <a href=\"$OUT_HTTP_DIR/$collFile\">$collFile</a><br>\n";
+            }
         }
+        if ( $q->param("output_data") =~ /occurrence|specimens/ ) {
+            print "$taxaCount taxonomic names were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
+        }
+        print "$refsCount references were printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
+        my $fileNames = $mainFile."/".$taxaFile."/".$refsFile;
+        if ( $q->param('time_scale') )    {
+            print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
+            $fileNames .= "/".$scaleFile;
+        }
+        print "</div>\n\n";
+        print "<p>You can also e-mail the files.<br>\n<nobr><form method=\"post\" action=$READ_URL>Address: <input type=\"hidden\" name=\"action\" value=\"emailDownloadFiles\"><input type=\"hidden\" name=\"filenames\" value=\"$fileNames\"><input name=\"email\" size=\"20\"> <input type=\"submit\" value=\"e-mail\"></form></nobr></p>\n\n";
+    } else	{
+        print "</div>\n\n";
+        print "<p><i>No occurrences met the search criteria</i></p>";
     }
-    if ( $q->param("output_data") =~ /occurrence|specimens/ ) {
-        print "$taxaCount taxonomic names were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
-    }
-    print "$refsCount references were printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
-    my $fileNames = $mainFile."/".$taxaFile."/".$refsFile;
-    if ( $q->param('time_scale') )    {
-        print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
-        $fileNames .= "/".$scaleFile;
-    }
-    print '</table>';
-    print "<p>You can also e-mail the files.<br>\n<nobr><form method=\"post\" action=$READ_URL>Address: <input type=\"hidden\" name=\"action\" value=\"emailDownloadFiles\"><input type=\"hidden\" name=\"filenames\" value=\"$fileNames\"><input name=\"email\" size=\"20\"> <input type=\"submit\" value=\"e-mail\"></form></nobr></p>\n\n";
     print qq|<p align="center" style="white-space: nowrap;"><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
     print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
     #print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a> - |;
@@ -228,7 +233,7 @@ sub retellOptions {
     # Call as needed
     $self->setupQueryFields() if (! $self->{'setup_query_fields_called'});
 
-    my $html = '<div align="center"><table border=0 width=600>';
+    my $html = "<div align=\"center\">\n<table style=\"width: 40em;\">\n";
     $html .= '<tr><td colspan=2><p class="large darkList" style="padding: 2px; margin-bottom: 0.5em;">Download criteria</p></td></tr>';
 
     # authorizer added 30.6.04 JA (left out by mistake?) 
@@ -566,7 +571,7 @@ sub retellOptions {
     }
     $html .= $self->retellOptionsRow ( "Specimen output fields", join ( "<br>", @specimenFields) ) if (@specimenFields);
 
-    $html .= "</table></div>";
+    $html .= "</table>\n</div>\n";
 
     $html =~ s/_/ /g;
     return $html;
@@ -2114,7 +2119,7 @@ sub queryDatabase {
     my %ss_taxon_names = ();
     my %ss_taxon_rank = ();
     my %misspelling = ();
-    if ($q->param("replace_with_ss") ne 'NO' &&
+    if (@dataRows && $q->param("replace_with_ss") ne 'NO' &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         if (%all_taxa) {
             my $sql = "SELECT t.taxon_no,t.spelling_no,t.synonym_no,a.taxon_name,a.taxon_rank ".
@@ -2168,7 +2173,7 @@ sub queryDatabase {
     my %all_genera;
     my @preservation = $q->param('preservation');
     my $get_preservation = 0;
-    if ($q->param("output_data") =~ /occurrence|specimens|genera|species/) { 
+    if (@dataRows && $q->param("output_data") =~ /occurrence|specimens|genera|species/) { 
         if ((@preservation > 0 && @preservation < 3) ||
             $q->param('occurrences_preservation')) {
             $get_preservation = 1;
@@ -2819,7 +2824,7 @@ sub queryDatabase {
             if (($q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
                 $q->param("occurrences_family_name") eq "YES") &&
-                $row->{'o.taxon_no'} > 0) {
+                $row->{'o.taxon_no'} > 0 && $master_class{$row->{'o.taxon_no'}}) {
                 my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                 foreach my $parent (@parents) {
                     if ($parent->{'taxon_rank'} eq 'family' && ! $row->{'o.family_name'}) {
@@ -4171,7 +4176,7 @@ sub setupQueryFields {
             my ($eml, $name) = $self->{t}->splitInterval($q->param('max_interval_name'));
             my $ret = Validation::checkInterval($dbt,$eml,$name);
             if (!$ret) {
-                push @form_errors, "There is no record of ".$q->param('max_interval_name')." in the database";
+                push @form_errors, "The database does not include a time interval called ".$q->param('max_interval_name');
                 $q->param('max_interval_name'=>'');
                 $q->param('max_eml_interval'=>'');
             } else {
@@ -4185,7 +4190,7 @@ sub setupQueryFields {
             my ($eml, $name) = $self->{t}->splitInterval($q->param('min_interval_name'));
             my $ret = Validation::checkInterval($dbt,$eml,$name);
             if (! $ret) {
-                push @form_errors, "There is no record of ".$q->param('min_interval_name')." in the database";
+                push @form_errors, "The database does not include a time interval called ".$q->param('min_interval_name');
                 $q->param('min_interval_name'=>'');
                 $q->param('min_eml_interval'=>'');
             } else {
