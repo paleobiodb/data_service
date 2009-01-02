@@ -30,15 +30,24 @@ sub getTaxonomyXML	{
 
 	# request is assumed to go through an HTTP GET
 
-	my $searchString = $q->param('name');
+	my $searchString;
+	if ( $q->param('name') )	{
+		$searchString = $q->param('name');
+	} elsif ( $q->param('id') )	{
+		$searchString = $q->param('id');
+	}
 	$searchString =~ s/\+/ /g;
 	$searchString =~ s/\*/%/g;
-	if ( $searchString !~ /^(|% )[A-Za-z]/ || $searchString =~ /[^A-Za-z %]/ )	{
-		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="Search string is formatted incorrectly" version="1.0">'."\n</results>\n";
+	if ( $searchString !~ /^(|% )[0-9A-Za-z]/ || $searchString =~ /[^0-9A-Za-z %]/ )	{
+		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The search string "'.$searchString.'" is formatted incorrectly" version="1.0">'."\n</results>\n";
 		return;
 	}
-	if ( $searchString !~ /[A-Za-z]{3,}/ )	{
+	if ( $searchString !~ /[A-Za-z]{3,}/ && $searchString =~ /[^0-9]/ )	{
 		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The taxonomic name is too short" version="1.0">'."\n</results>\n";
+		return;
+	}
+	if ( $searchString =~ /[0-9]/ && $searchString =~ /[^0-9]/ )	{
+		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The record ID number includes some non-numerical characters" version="1.0">'."\n</results>\n";
 		return;
 	}
 
@@ -46,6 +55,8 @@ sub getTaxonomyXML	{
 	my $sql;
 	if ( $searchString =~ /\%/ )	{
 		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t, opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name LIKE '" . $searchString . "' AND taxon_rank IN ('genus','species')";
+	} elsif ( $searchString > 0 )	{
+		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND t.taxon_no=$searchString AND taxon_rank IN ('genus','species')";
 	} else	{
 		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name='$searchString' AND taxon_rank IN ('genus','species')";
 	}
