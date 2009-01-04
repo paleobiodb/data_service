@@ -50,7 +50,7 @@ function checkFields() {
 </center>
 
 
-<p style="margin-left: 2em;"><i>Note: this form is intended for adult morphologies only... Please see the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p>
+<p class="small" style="margin-left: 2em; margin-bottom: 2em;"><i>Note: this form is intended for adult morphologies only. Please see the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p>
 
 <form method="POST" action="%%write_url%%" onSubmit="return checkFields();">
 
@@ -155,7 +155,7 @@ function checkFields() {
         <td>
           <span class="tiny">May refer to pollen, seeds,<br> leaves, etc. for plants but only<br>to entire bodies for animals</span>
         </td>
-        <td colspan=2 valign="top">
+        <td colspan="2" valign="top">
           <p class="small">Measurements are of the entire body?
           <select id="entire_body"><option value="">no</option><option value="yes">yes</option></select></p>
         </td>
@@ -234,10 +234,10 @@ function checkFields() {
 <span class="displayPanelHeader">Life history and behavior</span>
 <div class="displayPanelContent">
 
-<table class="small" cellpadding="8">
+<table cellpadding="8">
   <tr>
     <td valign=top><span class="fieldName">General environment</span></td>
-    <td>
+    <td class="small">
       <input id="taxon_environment" type=hidden value="" replace="NO">
       <input id="taxon_environment" type=checkbox value="hypersaline">hypersaline
       <input id="taxon_environment" type=checkbox value="marine">marine
@@ -325,21 +325,15 @@ function checkFields() {
 
 </div>
 </div>
-</div>
-</div>
 
 <div class="displayPanel">
 <span class="displayPanelHeader">Comments</span>
 <div class="displayPanelContent" style="padding-bottom: 1em;">
-  <textarea id="comments" rows=3 wrap="virtual" cols=80></textarea>
-
+  <textarea id="comments" rows="3" wrap="virtual" cols="90"></textarea>
 </div>
 </div>
 
+<center><input type=submit value="Submit"></center>
 
-<table width=100%><tr><td align="center">
-  <input type=submit value="Submit">
-</td></tr></table>
 </form>
-<p>&nbsp;</p>
 
