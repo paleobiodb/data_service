@@ -148,22 +148,21 @@ function checkFields() {
 <span class="displayPanelHeader">Adult size</span>
 <div class="displayPanelContent">
 
+<p class="verysmall">"Size" may refer to pollen, seeds, leaves, etc. for plants but only to entire bodies for animals.</p>
+
 <table class="small" cellpadding="8">
-  <tr><td colspan=3>
+  <tr><td colspan="3">
     <table>
       <tr>
-        <td>
-          <span class="tiny">May refer to pollen, seeds,<br> leaves, etc. for plants but only<br>to entire bodies for animals</span>
-        </td>
         <td colspan="2" valign="top">
-          <p class="small">Measurements are of the entire body?
+          <p class="fieldName">Measurements are of the entire body?
           <select id="entire_body"><option value="">no</option><option value="yes">yes</option></select></p>
         </td>
       </tr>
       <tr>
         <td></td>
-        <td colspan=3>
-          <p class="small">If no, name of body part: <input id="body_part" size=20></p>
+        <td colspan="3">
+          <p class="fieldName">If no, name of body part: <input id="body_part" size=20></p>
       </tr>
       <tr>
         <td></td>
@@ -172,7 +171,7 @@ function checkFields() {
         <td><span class="small"><u>height</u></span></td>
       </tr>
       <tr>
-        <td>Size estimate(s):</td>
+        <td><span class="fieldName">Size estimate(s):</span></td>
         <td valign="top"><select id="adult_length"></select>
         <td valign="top"><select id="adult_width"></select>
         <td valign="top"><select id="adult_height"></select>
@@ -236,7 +235,7 @@ function checkFields() {
 
 <table cellpadding="8">
   <tr>
-    <td valign=top><span class="fieldName">General environment</span></td>
+    <td valign=top><span class="small fieldName">General environment</span></td>
     <td class="small">
       <input id="taxon_environment" type=hidden value="" replace="NO">
       <input id="taxon_environment" type=checkbox value="hypersaline">hypersaline
@@ -311,7 +310,7 @@ function checkFields() {
   <tr>
     <td valign="top">
       <span class="fieldName">Dispersal (gametes)</span><br>
-      <span class="tiny">What carries the gametes?</span>
+      <span class="verysmall">What carries the gametes?</span>
       <!-- does NOT include clones -->
       <select id="dispersal1"></select><br>
     </td>
