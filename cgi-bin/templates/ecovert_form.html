@@ -45,12 +45,10 @@ function checkFields() {
 </script> 
 
 <center>
-<h2>Vertebrate ecology form: <span id="taxon_name"></span></h2>
+<p class="pageTitle">Vertebrate ecology form: <span id="taxon_name"></span></p>
 </center>
 
-<hr>
-
-<p><i>Note: this form is intended for adult morphologies only... Please see the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p>
+<p class="small" style="margin-left: 2em; margin-bottom: 2em;"><i>Note: this form is intended for adult morphologies only. Please read the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p>
 
 <form method="POST" action="%%write_url%%" onSubmit="return checkFields();">
 
@@ -59,28 +57,26 @@ function checkFields() {
 <input id="ecotaph_no" name="ecotaph_no" type="hidden">
 <input type="hidden" name="goal" value="ecovert">
 
-<h3>Morphology and development</h3>
+<div class="displayPanel">
+<span class="displayPanelHeader">Adult size</span>
+<div class="displayPanelText">
 
-<table cellpadding=5>
+<p class="verysmall">"Size" may refer to pollen, seeds, leaves, etc. for plants but only to entire bodies for animals.</p>
+
+<table cellpadding="5">
   <tr>
-    <td colspan=3>
+    <td colspan="3">
       <table>
-        <tr><td>
-          <b>Adult size</b>
-        </td></tr>
         <tr>
-          <td>
-            <span class="tiny">May refer to pollen, seeds,<br> leaves, etc. for plants but only<br>to entire bodies for animals</span>
-          </td>
-          <td colspan=2>
-            Measurements are of the entire body? 
-            <select id="entire_body"><option value="">no</option><option value="yes">yes</option></select>
+          <td colspan="2" valign="top">
+            <p class="small">Measurements are of the entire body? 
+            <select id="entire_body"><option value="">no</option><option value="yes">yes</option></select></p>
           </td>
         </tr>
         <tr>
           <td></td>
-          <td colspan=3>
-            If no, name of body part: <input id="body_part" size=20>
+          <td colspan="3">
+            <p class="small">If no, name of body part: <input id="body_part" size=20></p>
         </tr>
         <tr>
           <td></td>
@@ -89,7 +85,7 @@ function checkFields() {
           <td><span class="small"><u>height</u></span></td>
         </tr>
         <tr>
-          <td><b>Size estimate(s):</b></td>
+          <td><p class="small">Size estimate(s):</p></td>
           <td valign="top"><select id="adult_length"></select>
           <td valign="top"><select id="adult_width"></select>
           <td valign="top"><select id="adult_height"></select>
@@ -111,56 +107,61 @@ function checkFields() {
   </tr>
   <tr>
     <td colspan=2>
-      <b>Body mass range: minimum </b>
+      <p class="small">Body mass range: minimum
       <input id="minimum_body_mass" type="text" size=6>
       <select id="minimum_body_mass_unit" autofill="mass_units"></select>
-      <b>to maximum</b>
+      to maximum
       <input id="maximum_body_mass" type="text" size=6>
-      <select id="maximum_body_mass_unit" autofill="mass_units"></select>
+      <select id="maximum_body_mass_unit" autofill="mass_units"></select><p>
     </td>
   </tr>
   <tr>
     <td colspan=2>
-      &nbsp;&nbsp;<i> ... or </i><b>body mass estimate: </b>
+      &nbsp;&nbsp;<i> ... or </i><p class="small">body mass estimate: 
       <input id="body_mass_estimate" name="body_mass_estimate" size="8">
-      <select id="body_mass_estimate_unit" autofill="mass_units"></select>
+      <select id="body_mass_estimate_unit" autofill="mass_units"></select></p>
     </td>
   </tr>
   <tr>
     <td valign=top>
-      <b>Body mass source</b>
-      <select id="body_mass_source" name="body_mass_source">
+      <p class="small">Body mass source
+      <select id="body_mass_source" name="body_mass_source"></p>
     </td>
     <td>
-      <b>Body mass estimate type</b>
+      <p class="small">Body mass estimate type</p>
       <select id="body_mass_type" name="body_mass_type">
     </td>
   </tr>
   <tr>
     <td colspan=2>
-      <b>Body mass comment: </b>
+      <p class="small">Body mass comment: </p>
       <input id="body_mass_comment" type="text" name="body_mass_comment" size="40">
     </td>
   </tr>
   <tr>
     <td valign=top>
-      <b>Adult polymorphism/dimorphism?</b>
+      <p class="small">Adult polymorphism/dimorphism?</p>
       <select id="polymorph"><option value="">no</option><option value="yes">yes</option></select>
       <br>
     </td>
     <td>
-      <b>Social grouping</b>
+      <p class="small">Social grouping</p>
       <select id="grouping"></select>
     </td>
   </tr>
 </table>
 
-<hr>
-<h3>Life history and behavior</h3>
-<table cellpadding=5>
+</div>
+</div>
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Life history and behavior</span>
+<div class="displayPanelText">
+
+<table cellpadding="5">
   <tr>
-    <td valign=top><b>General environment</b></td>
-    <td>
+    <td valign=top><p class="small">General environment</p></td>
+    <td class="small">
       <input id="taxon_environment" type=hidden value="" replace="NO">
       <input id="taxon_environment" type=checkbox value="hypersaline">hypersaline
       <input id="taxon_environment" type=checkbox value="marine">marine
@@ -180,48 +181,45 @@ function checkFields() {
 <table cellpadding=10>
   <tr>
     <td>
-      <b>Life habit</b>
-      <select id="life_habit" autofill="ecovert_life_habit"></select><br>
+      <p class="small">Life habit
+      <select id="life_habit" autofill="ecovert_life_habit"></select></p>
     </td>
   </tr>
   <tr>
     <td>
-      <b>Diet/feeding mode 1</b>
-      <select id="diet1" autofill="ecovert_diet"></select><br>
+      <p class="small">Diet/feeding mode 1
+      <select id="diet1" autofill="ecovert_diet"></select></p>
     </td>
     <td>
-      <b>Diet/feeding mode 2</b>
-      <select id="diet2" autofill="ecovert_diet"></select><br>
+      <p class="small">Diet/feeding mode 2
+      <select id="diet2" autofill="ecovert_diet"></select></p>
     </td>
   </tr>
   <tr>
     <td>
-      <b>Reproduction</b>
-      <select id="reproduction" autofill="ecovert_reproduction"></select><br>
+      <p class="small">Reproduction
+      <select id="reproduction" autofill="ecovert_reproduction"></select></p>
     </td>
     <td>
-      <b>Brooding?</b>
-      <select id="brooding"><option value="">no</option><option value="yes">yes</option></select>
+      <p class="small">Brooding?
+      <select id="brooding"><option value="">no</option><option value="yes">yes</option></select></p>
     </td>
   </tr>
 </table>
 
-<hr>
+</div>
+</div>
 
-<table>
-  <tr>
-    <td valign="top">
-      <b>Comments:</b>
-    </td> 
-    <td>
-      <textarea id="comments" rows=3 wrap="virtual" cols=80></textarea>
-    </td>
-  </tr>
-</table>
 
-<table width=100%><tr><td align="center">
-  <input type=submit value="Submit">
-</td></tr></table>
+<div class="displayPanel">
+<span class="displayPanelHeader">Comments</span>
+<div class="displayPanelText">
+  <textarea id="comments" rows="3" wrap="virtual" cols="90"></textarea>
+</div>
+</div>
+
+
+<center><input type=submit value="Submit"></center>
+
 </form>
-<p>&nbsp;</p>
 
