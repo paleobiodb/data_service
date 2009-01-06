@@ -1161,20 +1161,24 @@ sub getTaxonomicOpinions {
         }  
     }
 
+    my @tables = ('opinions o','refs r');
     if ($options{'taxon_rank'} && $options{'taxon_rank'} !~ 'all') {
         if ($options{'taxon_rank'} =~ /above genus/) {
-            push @where,"a1.taxon_rank NOT IN ('subspecies','species','subgenus','genus')";
+            push @where,"taxon_rank NOT IN ('subspecies','species','subgenus','genus')";
         } elsif ($options{'taxon_rank'} =~ /genus or below/) {
-            push @where,"a1.taxon_rank IN ('subspecies','species','subgenus','genus')";
+            push @where,"taxon_rank IN ('subspecies','species','subgenus','genus')";
         } else {
-            push @where,"a1.taxon_rank LIKE ".$dbh->quote($options{'taxon_rank'});
+            push @where,"taxon_rank=".$dbh->quote($options{'taxon_rank'});
         }
+        push @tables , 'authorities a';
+        push @where , 'taxon_no=child_spelling_no';
     }
 
     # use between and both values so we'll use a key for a smaller tree;
     my @results = ();
     my $message = "";
     if (@where) {
+        push @where , 'r.reference_no=o.reference_no';
         my $sql = "(SELECT o.authorizer_no, o.enterer_no, o.modifier_no, "
                 . "o.opinion_no,o.reference_no,o.status,o.phylogenetic_status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
                 . "o.pages,o.figures,o.created,o.comments,IF((o.basis != '' && o.basis IS NOT NULL), o.basis, r.basis) basis,"
@@ -1186,11 +1190,11 @@ sub getTaxonomicOpinions {
                 . " IF (o.ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors, "
                 . " DATE_FORMAT(o.modified,'%Y-%m-%e %H:%i:%s') modified, "
                 . " DATE_FORMAT(o.modified,'%m/%e/%Y') modified_short "
-                . " FROM opinions o"
-                . " LEFT JOIN refs r ON r.reference_no=o.reference_no"
+                . " FROM ".join(',',@tables)
                 . " WHERE ".join(" AND ",@where)
                 . ") ORDER BY pubyr";
         dbg("getTaxonomicOpinions called: ($sql)");
+print $sql;
         @results = @{$dbt->getData($sql)};
         my $op_link = $http_dir."/opinions.csv";
 	my @nos;
