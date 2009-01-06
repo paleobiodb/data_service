@@ -1194,7 +1194,6 @@ sub getTaxonomicOpinions {
                 . " WHERE ".join(" AND ",@where)
                 . ") ORDER BY pubyr";
         dbg("getTaxonomicOpinions called: ($sql)");
-print $sql;
         @results = @{$dbt->getData($sql)};
         my $op_link = $http_dir."/opinions.csv";
 	my @nos;
