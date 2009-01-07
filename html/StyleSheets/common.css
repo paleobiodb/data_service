@@ -6,7 +6,7 @@
 	they are overridden by something more specific */
 body {
 	background-color: white;
-	background-image: url(/public/PDbg.gif);
+	background-image: url(/public/PDbg-reversed.gif);
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: 0.85em;
 	margin-bottom: 0px;
@@ -61,42 +61,18 @@ A:hover.menu {
 	color : black; font-size : 0.85em; 
 	border: 0px solid white;
 	/* top, right, bottom, left*/
-	/*padding: 0px 4px 0px 4px;*/
 	padding: 2px 5px 2px 5px;
 	text-decoration:none; 
 }
 
-A:link.homeBodyLinks	{
-	color : #0040A0;
-}       
-
-A:visited.homeBodyLinks	{
-	color : #7070A0;
-}       
-
-A:active.homeBodyLinks	{
-	color : #00AAFF;
-}       
-
-A:hover.homeBodyLinks	{
-	color : #C80078;
-}       
-
-A:link.homeStats	{
-	color : #000000;
-}       
-
-A:visited.homeStats	{
-	color : #7070A0;
-}       
-
-A:active.homeStats	{
-	color : #808080;
-}       
-
-A:hover.homeStats	{
-	color : #C80078;
-}       
+.homeBodyLinks a:link { color: goldenrod; }
+.homeBodyLinks a:visited { color: goldenrod; }
+.homeBodyLinks a:active { color: orange; }
+.homeBodyLinks a:hover { color: orange; }
+a:link.homeBodyLinks { color: goldenrod; }
+a:visited.homeBodyLinks { color: goldenrod; }
+a:active.homeBodyLinks { color: orange; }
+a:hover.homeBodyLinks { color: orange; }
 
 A:link.boring	{
 	color : #7070FF;
@@ -132,6 +108,7 @@ H6 {font-size: .9em;}
 
 .pageTitle	{
 	font-size: 1.3em;
+        margin-top: 1em;
 	margin-bottom: 1.5em;
 }
 
@@ -155,175 +132,210 @@ H6 {font-size: .9em;}
     margin-bottom: 0;
 }
 
-.readOnlyCheckBox,.readOnlyInput,.readOnlyTextarea,.readOnlySelect {
-/*    border: 1px darkgray solid;*/
-/*    background-color: #E0E0E0;*/
-}
-
-.mainBody	{
-    padding-top: 1em;
+#mainBody	{
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    height: 100%;
+    width: 59em;
+    padding-top: 2em;
     padding-left: 1em;
     margin-left: 1em; 
     margin-right: 1em;
+    background-color: white;
+    border: 1px solid lightgray;
+    z-index: 0;
 }
 
-#mainBodyGuest {
+.mainBodyGuest {
  /* need align and width to roughly center the page contents below the banner */
+    position: absolute;
+    top: 55px;
+    left: 0px;
+    height: 100%;
+    width: 59em;
     padding-top: 2em;
     padding-left: 1em;
-    margin-left: 0em; 
-    margin-right: 0em;
+    margin-right: 1px;
     text-align: left;
-    width: 52em;
-    position: absolute;
-    top: 52px;
-/*    bottom: 0;*/
+    z-index: 0;
+    background-color: ghostwhite;
+    border-right: 1px solid lightgray;
 }
 
 #homeBanner	{
-    width: 100%;
-    background-image: url(/public/bannerimages/dcaloostBlue3.jpg);
     min-width: 52em; /* needed because scrolling across when a window is small
                           causes the image to be truncated */
 
     position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    z-index: 9;
-}
-
-
-.homeLinksShadow	{
-    background: #E4E4E4;
-    position: relative;
-}
-
-.homeLinksShadow2	{
-    background: #D0D0D0;
-    width: 100%;
-    position: relative;
-    left: -0px;
-    top: -2px;
+    top: 0px;
+    left: 8em;
+    height: 50px;
+    width: 52em;
+    text-align: center;
+    border-right: 1px solid lightgray;
+    z-index: 8;
 }
 
 #homeLinks	{
-    width: 100%;
     min-width: 52em; /* needed because scrolling down when a window is small
                           causes the image to be truncated */
     position: absolute;
     top: 50px;
-    left: 0;
-    z-index: 9; 
+    left: 8em;
+    z-index: 8; 
+    height: 2em;
+    width: 52em;
+    border-right: 1px solid lightgray;
 }
 
 #homeLinksMenu {
-    margin: 0 0 0 0;
-    padding: 0 0 0 0;
-    background-color: #64A8FF;
-    border-bottom: 1px #909090 solid;
-    left: 0;
-    right: 0;
-    top: 0;
+    height: 2em;
+    width: 52em;
+    position: relative;
+    left: 8em;
+    top: 0px;
+    text-align: center;
+    z-index: -1;
+    border-right: 1px solid lightgray;
 }
 
-#homeTotals	{
- position: absolute; 
- top: 16em; 
- right: 2em; 
+.corner	{
+    background-color: #191970;
 }
 
-#homeInfo	{
-    padding-top: 3em;
+.sides	{
+    background-color: #4169E1;
+}
+
+.homeBodyGuest	{
+    position: relative;
+    margin-top: -0.5em;
+    margin-left: -1em;
+    margin-right: 0em;
     padding-bottom: 0em;
-    height: 38em;
-    width: 36em;
-    position: absolute;
-    top: 52px;
-    left: 15em;
-    right: 50em;
+  /* sets the overall height of the main area */
+    height: 50em;
+    border-right: 1px solid #B0B0B0;
+    border-bottom: 1px solid #B0B0B0;
+    background-color: white;
     overflow: hidden;
     z-index: 3;
 }
 
-#homeInfoSandbag	{
+.leftBar	{
     position: relative;
-    bottom: 0px;
-    right: 0px;
-    float: right;
+    float: left;
+    clear: left;
+margin: 0em;
+    height: 100%;
+    width: 8em;
+    background-color: #4169E1;
+/* required by IE */
+    overflow: auto;
+/*
+z-index: 9;
+*/
+}
+
+.leftBar a:link { color: white; }
+.leftBar a:visited { color: white; }
+.leftBar a:hover { color: black; }
+.leftBar a:active { color: black; }
+
+
+.leftBarSection	{
+    display: inline;
+    position: relative;
+    float: left;
+    clear: both;
+    width: 8em;
+    padding-bottom: 1em;
+    border-bottom: 1px solid white;
+}
+
+.leftBarShadow	{
+    display: inline;
+    position: relative;
+    float: left;
+    clear: both;
+    height: 1px;
+    width: 8em;
+    background-color: slategray;
+}
+
+.plusMinus	{
+    display: inline;
+    position: relative;
+    float: left;
+    clear: left;
+    margin-left: 0.5em;
+    margin-right: 0.4em;
+    margin-top: 0.8em;
+    font-family: Monaco;
+    color: white;
+}
+
+.leftBarHeader	{
+    display: inline;
+    position: relative;
+    float: left;
     clear: right;
+    margin-top: 1em;
+    font-size: 0.9em;
+    color: white;
 }
 
-#newCollectionLinks	{
-    position: absolute;
-    top: 42em;
-    bottom: 50em;
-    left: 12em;
-    height: 4.5em;
-    width: 30.5em;
-    margin-top: 51px;
-    padding: 0.75em;
-    overflow: hidden;
-    background-image: url('/public/PDbg.gif');
-    background-position: 0px 12px;
-    border-left: 1px solid #D0D0D0;
-    border-right: 1px solid #B0B0B0;
-    border-top: 1px solid #D0D0D0;
-    border-bottom: 1px solid #B0B0B0;
-    z-index: 9;
+.barLinks	{
+    position: relative;
+    float: left;
+    clear: both;
+    display: none;
 }
 
-#homeBorder	{
-    background-image: url(/public/PDbg.gif);
-    padding-top: 2.5em;
-    border-left: 1px solid #D0D0D0;
-    border-right: 1px solid #B0B0B0;
-    border-bottom: 1px solid #B0B0B0;
-    height: 38.5em;
-    width: 100px;
-    position: absolute;
-    left: 45em;
-    top: 52px;
-    z-index: 2;
-    overflow: hidden;
+.leftBarLink	{
+    position: relative;
+    float: left;
+    clear: both;
+    width: 8em;
+    margin: 0.5em;
+    margin-left: 1.4em;
+/* padding must be specified because IE cannot handle negative text-indents */
+    padding-left: 0.6em;
+    text-indent: -0.5em;
+    color: white;
+    font-size: 0.75em;
 }
 
+.topImage	{
+    display: inline;
+    position: relative;
+    float: left;
+    clear: none;
+    margin: 0em;
+    width: 13em;
+    padding-top: 1em;
+    padding-bottom: 1em;
+    border-bottom: 1px solid lightgray;
+  /* fixes Safari rendering problem */
+    text-align: center;
+}
 
 .fixedWidth {
-    width: 52em; 
-}
-
-
-.FeaturesShadow	{
-    background: #E4E4E4;
-    margin-left: 1.25em;
-    margin-right: 1.25em;
-    position: relative;
-}
-
-.FeaturesShadow2	{
-    background: #D0D0D0;
-    width: 100%;
-    position: relative;
-    left: -0px;
-    top: -1px;
+    width: 68em;
 }
 
 .Features	{
-    background-color: white;
+    position: relative;
     float: left;
     clear: none;
     height: 10em;
-    margin-left: 1em;
-    margin-right: 1em;
+    margin: 1em;
     padding-left: 0.5em;
     padding-right: 0.5em;
     text-align: left;
     font-family: Verdana, Arial, Helvetica, sans-serif;
-    border-left: 1px solid #D0D0D0;
-    border-right: 1px solid #B0B0B0;
-    border-top: 1px solid #D0D0D0;
-    border-bottom: 1px solid #B0B0B0;
+    border: 1px solid darkgray;
     overflow: hidden;
 /* Explorer demands to know this - go figure */
     position: relative;
@@ -331,7 +343,7 @@ H6 {font-size: .9em;}
 
 .FeatureHeadline	{
     text-align: center;
-    background-color: #C0C0D0;
+    background-color: gainsboro;
     margin-left: -0.5em;
     margin-right: -0.5em;
     margin-bottom: -0.25em;
@@ -342,107 +354,29 @@ H6 {font-size: .9em;}
 .FeatureText	{
     padding-top: 0.75em;
     padding-bottom: 0.75em;
+    color: black;
 }
 
-.homeTextBoxes	{
-    text-decoration: none;
-    float: left;
+.collectionLink	{
+    padding-left: 1em;
+    padding-right: 2em;
+    padding-bottom: 0.25em;
+    margin-bottom: 0.25em;
+    text-indent: -1em;
+    border-bottom: 1px solid lightgray;
 }
 
-#homeTextBoxShadow	{
-    background: #E4E4E4;
- /*   margin-left: 0.5em;
-    margin-right: 0.5em;*/
-    position: relative;
-}
+.collectionLink a:link { color: black; }
+.collectionLink a:visited { color: black; }
+.collectionLink a:hover { color: orange; }
+.collectionLink a:active { color: orange; }
 
-#homeTextBoxShadow2	{
-    background: #D0D0D0;
+.enteringNow	{
+    height: 2.5em;
     width: 100%;
-    position: relative;
-    left: -0px;
-    top: -2px;
-}
-
-#homeTextBox	{
-    background-image: url(/public/PDbg.gif);
-    color: 404040;
-    border: 1px solid #808080;
-    height: 21em;
-    padding: 16px;
-    padding: 16px;
-    padding-top: 30px;
-    position: relative;
-    left: -2px;
-}
-
-/*
-html,body	{
-    height: 100%;
-}
-*/
-
-.questions	{
-    font-family: "Century Gothic", Verdana, Arial, Helvetica, sans-serif;
-    font-size: 1em;
-    color: #303030;
-    padding: 0.5em;
-    padding-left: 0.9em;
-    width: 100%;
-    background-color: white;
-    border-left: 1px solid gray;
-    border-bottom: 1px solid gray;
-}
-
-.questionsShadow	{
-    position: absolute;
-    top: -2px;
-    left: -2px;
-    white-space: nowrap;
-    color: #D0D0D0;
-    background:red;
-}
-
-.questionsOverShadow	{
-    white-space: nowrap;
-}
-
-.homePageOnBullet	{
-    padding-top : 0.2em;
-    padding-left: 0.6em;
-    margin-top: -3px;
-    font-size : 1.0em;
-    text-decoration: none;
-    color : #303030;
-}
-
-.homePageOffBullet	{
-    padding-top : 0.2em;
-    padding-left: 0.6em;
-    margin-top: -3px;
-    font-size : 1.0em;
-    text-decoration: none;
-    color : #303030;
-}
-
-.homePageMSIEBullet	{
-    padding-top : 0.0em;
-    padding-left: 0.6em;
-    font-size : 1.33em; text-decoration: none;
-}
-
-.largeBullet	{
-   font-size : 2em;
-}
-
-/*	Meant to be a main section, for example, in an entry form. 
-	Used to help divide the page and make it easier to use.*/
-.mainSection {
-    padding: 1em 1em 1em 1em;
-	margin: 1em 1em 1em 1em;
-    border-style: solid;
-    border-color: #C8C8C8;
-    border-width: 4px 4px 4px 4px;
+    padding-bottom: 0.25em;
+    margin-bottom: 0.25em;
+    border-bottom: 1px solid lightgray;
 }
 
 /* Usually used for a single line of text which needs a bit more emphasis to stand out */
@@ -459,29 +393,6 @@ div.emphasized {
     border-bottom-width: 1px;
     border-top-width: 1px;
 }
-
-
-/*	used for titles at top of forms, ie, "Collection Search Form" */
-/*  deprecated, use H2 -- PS */
-.title,.title_small_overhead {
-	padding-top: 0.2em;
-	padding-bottom: 0.6em;
-	font-weight: bold;
-	font-size: 1.6em;
-	text-align: center;
-}
-
-/*	most titles have a smaller details section after them,
-	ie, "Fill in any of the following fields." */ 
-/*  deprecated, use H4 -- PS */
-.titleDetails {
-	padding-top: 0em;
-	padding-bottom: 1em;
-	font-weight: bold;
-	font-size: 1.2em;
-	text-align: center;
-}
-
 
 /* generic warning message */
 .errorMessage {
@@ -603,13 +514,11 @@ div.emphasized {
 
 .dataTableColumn, .dataTableColumnTotal, .dataTableColumnLeft {
     text-align: center;
-    /*white-space: nowrap;*/
     background-color:#EEEEEE;
     border-top: 0px;
     border-bottom: 1px #808080 solid;
     border-left: 0px;
     border-right: 1px #A0A0A0 solid;
-/*    padding: 0px 3px 0px 3px;*/
 }
 .dataTableColumnTotal { border-right: 0px; }
 .dataTableColumnLeft { border-left: 1px #A0A0A0 solid;}
@@ -674,24 +583,6 @@ table.navbox {
 	margin-bottom: 20px;
 }
 
-.navtable {
-    background-color: #E0E0E0;
-    border-style: solid;
-    border-width: 1px;
-    border-color: #666666;
-    padding-left: 5px;
-    padding-right: 5px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-}
-
-.float_box {
-    float: left;
-    clear: left;
-    margin-left: 20px;
-    margin-right: 20px;
-}
-
 .loginBox {
     background-color: #E6E6E6;
 
@@ -701,12 +592,10 @@ table.navbox {
     padding: 1em 1em 0.5em 1em;
 }  
 
-.tabOn, .tabOff, /*.tabHoverOn, .tabHoverOff,*/ .tabLoadingOn, .tabLoadingOff {
-    /*background-color: #EEEEEE;*/
+.tabOn, .tabOff, .tabLoadingOn, .tabLoadingOff {
 	color : white; 
     background-color: #909090;
     font-weight: bold;
-    /*border: 1px solid #0044CC;*/
     border: 1px solid #D9D9D9;
     top: 10px;
     width: 140px;
@@ -728,15 +617,6 @@ table.navbox {
 .tabLoadingOff {
     color: #C9C9C9;
 }
-
-/*.tabHoverOn{
-    background-color: #B0B0B0;
-}
-
-.tabHoverOff{
-    background-color: #D0D0D0;
-}
-*/
 
 .tabHotspot	{
     float: right;
@@ -767,16 +647,6 @@ table.navbox {
     z-index: 1;
     visibility: hidden;
 }
-
-/*
-A:link.tabOn, A:visited.tabOn, A:active.tabOn, A:link.tabOff, A:visited.tabOff, A:active.tabOff { 
-	color : white; text-decoration:none; 
-}
-
-A:hover.tabOn, A:hover.tabOff{ 
-	color : black;  text-decoration:none; 
-}       
-*/
 
 .superscript {
     font-size: 0.75em;
@@ -828,9 +698,7 @@ span.nonEditable {
     top: -0.6em;      
     padding-left: 0.5em;      
     padding-right: 0.5em;     
-    /*border: 1px solid black;*/    
-/*    border-bottom: 1px solid lightgray;*/
-    /*padding-bottom: .3em; */
+    border-top: 1px solid gainsboro;
     background-image: url(/public/PDbg.gif);    
     white-space: nowrap;    
 }
@@ -839,7 +707,6 @@ span.nonEditable {
     background-image: url(/public/PDbg.gif);
 }
 
-/*.displayPanelText tbody,.displayPanelText {*/
 .displayPanelText {
     font-size: 0.9em;
     background-image: url(/public/PDbg.gif);    
@@ -881,43 +748,42 @@ td.fixedLabel {
 }
 
 #dropDown, #dropDown ul {
-    padding: 0;
-    margin: 0;
     list-style: none;
-/*    position: relative;*/
 }
 
 /* how should the links look in the menu bar at the top?  */
 #dropDown a:link {  color : white; text-decoration:none; }
 #dropDown a:visited { color : white; text-decoration:none;}   
 #dropDown a:active { color : white; text-decoration:none; }   
-#dropDown a:hover { color : black; text-decoration:none; }
+#dropDown a:hover { color : white; text-decoration:none; }
 
-/*
-#dropDown a {
-    display: block;
-    width: 10em;
-}
-*/
 
 #dropDown td {
+    margin-top: -1em;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    padding-top: 0.2em;
     text-align: left;
-    color : white; 
+    color: white; 
     text-decoration: none;
-    font-size: .95em;
+    font-size: 0.9em;
+    border-left: 1px solid white;
 }
 
 #dropDown td.dropDownBullet {
+    border: none;
     width: auto;
-    padding-left:.75em;
-    padding-right:.75em;
+    padding-left: 1.5em;
+    padding-right: 1.5em;
 }
 
 #dropDown td ul {
     text-align: left;
-    background: #C0C0D0;
-    border-top: 1px #88B2DF solid;
+    background: #B0B0C0;
+    border: 1px solid white;
     position: absolute;
+    top: 0.8em;
+    margin-left: -0.6em;
     padding: 0.15em;
     z-index: 999;
     display: none;
@@ -937,7 +803,16 @@ td.fixedLabel {
   adding some padding JA 19.5.06 */
 #dropDown div.dropDownVertSpacer {
     height: 1.5em;
-    padding-top: 0.2em;
+}
+
+.dropDownShadow	{
+    position: relative;
+    float: left;
+    clear: none;
+    margin-left: -0.5em;
+    height: 100%;
+    width: 1px;
+    background-color: slategray;
 }
 
 #dropDown td ul li {
@@ -951,8 +826,6 @@ td.fixedLabel {
 }
 
 #dropDown td:hover ul, #dropDown td.sfhover ul {
-/*    left: auto;*/
-/*    left: auto;*/
     display: block;
 }
 
