@@ -344,15 +344,15 @@ sub displayHomePage {
 	for my $coll ( @colls )	{
 		if ( $entererseen{$coll->{reference_no}.$coll->{enterer_no}} < 1 )	{
 			$entererseen{$coll->{reference_no}.$coll->{enterer_no}}++;
-			$row->{collection_links} .= qq|<a class="homeBodyLinks" href="$READ_URL?action=displayCollectionDetails&collection_no=$coll->{collection_no}">$coll->{collection_name}</a>\n|;
+			$row->{collection_links} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=displayCollectionDetails&amp;collection_no=$coll->{collection_no}">$coll->{collection_name}</a></div>\n|;
 			$printed++;
-			if ( $printed == 8 )	{
+			if ( $printed == 25 )	{
 				last;
-			} else	{
-				$row->{collection_links} .= " - ";
 			}
 		}
 	}
+
+	$row->{'enterer_names'} = Person::homePageEntererList($dbt);
 
 	print $hbo->stdIncludes("std_page_top");
 	print $hbo->populateHTML('home', $row);
