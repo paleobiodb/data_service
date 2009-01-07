@@ -7,17 +7,17 @@
   <div show="title">%%title%%</div>
   <div hide="title">The Paleobiology Database</div>
 </title>
-<meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
+<meta http-equiv="content-type" content="text/html; charset=iso-8859-1">
 
-<link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css" />
+<link REL="stylesheet" TYPE="text/css" HREF="/StyleSheets/common.css">
 <!--[if IE]>
-<link rel="stylesheet" type="text/css" href="/StyleSheets/explorer.css" />
+<link rel="stylesheet" type="text/css" href="/StyleSheets/explorer.css">
 <![endif]-->
-<link REL="icon" HREF="/public/favicon.ico" type="image/x-icon" />
-<link REL="shortcut icon" HREF="/public/favicon.ico" type="image/x-icon" />
+<link REL="icon" HREF="/public/favicon.ico" type="image/x-icon">
+<link REL="shortcut icon" HREF="/public/favicon.ico" type="image/x-icon">
 
-<meta name="keywords" content="paleobiology, paleontology, database, fossil, fossils, evolution, history of life" />
-<meta name="description" content="The Paleobiology Database is an NSF-funded project involving more than 200 professional scientific researchers. Its goal is to document the history of life by providing global, collection-based occurrence and taxonomic data for marine and terrestrial animals and plants of any geological age." />
+<meta name="keywords" content="paleobiology, paleontology, database, fossil, fossils, evolution, history of life">
+<meta name="description" content="The Paleobiology Database is a community-based project involving more than 200 professional scientific researchers. Its goal is to document the history of life by providing global, collection-based occurrence and taxonomic data for marine and terrestrial animals and plants of any geological age.">
 
 <script src="/JavaScripts/login.js" language="JavaScript" type="text/javascript"></script>
 <script src="/JavaScripts/common.js" language="JavaScript" type="text/javascript"></script>
@@ -26,10 +26,20 @@
 
 <body>
 
-<div id="homeBanner">
-  <div class="fixedWidth" align="center">
+<div style="float: left; clear: none; width: 8em; position: relative; z-index: 9;">
+  <div class="corner" style="height: 48px; width: 8em; padding-top: 2px; text-align: center;">
+  </div>
+  <div class="corner" style="width: 8em; height: 2em;">
+  </div>
+  <div style="position: absolute; top: 2px; width: 8em; text-align: center;">
+    <img alt="ammonites" height="68" src="/public/bannerimages/corner-ammonites.gif">
+  </div>
+</div>
+
+<div id="homeBanner" style="width: 52em;">
+  <div class="sides">
     %%ete_banner%%
-    <img alt="banner" src="/public/bannerimages/coralbanner.jpg">
+    <img alt="banner" src="/public/bannerimages/plain-banner.gif" height="51" width="494">
   </div>
 </div>
 
@@ -39,23 +49,22 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
 </p>
 </noscript>
 
-<div id="homeLinks">
-  <div class="homeLinksShadow">
-  <div class="homeLinksShadow2">
-  <div id="homeLinksMenu">
-  <div class="fixedWidth" align="center">
+<div class="sides" id="homeLinks">
 	<!-- Menu -->
-    <table border="0" cellpadding="0" cellspacing="0" id="dropDown">
-	  <tr>
+    <table width="100%" border="0" cellpadding="0" cellspacing="0" id="dropDown">
+      <tr>
+        <td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
 		<td align="left" nowrap>
           <div class="dropDownVertSpacer">
-            <a href="%%read_url%%?user=Guest&amp;action=displayHomePage">Home</a>
+            <div class="dropDownShadow"></div>
+            <div><a href="%%read_url%%?user=Guest&amp;action=displayHomePage">Home</a></div>
           </div>
         </td>
-		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+        <td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
         <td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
-            <a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view">Search</a>
+            <div class="dropDownShadow"></div>
+            <div><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view">Search</a></div>
           </div>
           <ul>
             <li><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view">Fossil collection records</a></li>
@@ -67,10 +76,11 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?action=displayInterval&amp;interval_no=33">Time intervals</a></li>
           </ul>
         </td>
-		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
         <td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
-            <a href="%%read_url%%?user=Guest&amp;action=displayBasicDownloadForm">Download</a>
+            <div class="dropDownShadow"></div>
+            <div><a href="%%read_url%%?user=Guest&amp;action=displayBasicDownloadForm">Download</a></div>
           </div>
           <ul>
             <li><a href="%%read_url%%?user=Guest&amp;action=displayBasicDownloadForm">Collection, occurrence, or specimen data</a></li>
@@ -79,10 +89,11 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data</a></li>
           </ul>
         </td>
-		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
         <td align="left" nowrap>
-          <div class="dropDownVertSpacer"> 
-            <a href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">Analyze</a>
+          <div class="dropDownVertSpacer">
+            <div class="dropDownShadow"></div>
+            <div><a href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">Analyze</a></div>
           </div>
           <ul>
             <li><a href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">Draw maps of our fossil collections</a></li>
@@ -94,10 +105,11 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?user=Guest&amp;action=displaySearchSectionForm">Analyze stratigraphic sections</a></li> 
           </ul>
         </td>
-		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
         <td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
-            <a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">About</a>
+            <div class="dropDownShadow"></div>
+            <div><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">About</a></div>
           </div>
           <ul>
             <li><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">Frequently asked questions</a></li>
@@ -108,21 +120,19 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?action=displayInstitutions">Contributing institutions</a></li>
           </ul>
         </td>
-		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer">&bull;</div></td>
+		<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
 		<td align="left" nowrap>
           <div class="dropDownVertSpacer"> 
-            <a href="%%write_url%%?action=displayMenuPage&amp;user=Contributor">Contributor's area</a>
+            <div class="dropDownShadow"></div>
+            <div><a href="%%write_url%%?action=displayMenuPage&amp;user=Contributor">Log in</a></div>
           </div>
         </td>
+        <td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
         
       </tr>
     </table>
-  </div>
-  </div>
-  </div>
-  </div>
 </div> <!-- end homeLinks -->
 
-<div id="mainBodyGuest" class="fixedWidth">
+<div class="mainBodyGuest">
 
 <!-- End std_page_top.html -->
