@@ -330,6 +330,22 @@ sub formatInstitutionTable	{
     return $html;
 }
 
+# JA 1.1.09
+sub homePageEntererList	{
+	my $dbt = shift;
+	my $html;
+	my $sql = "SELECT first_name,last_name,institution FROM person ORDER BY last_action DESC LIMIT 10";
+	my @rows = @{$dbt->getData($sql)};
+	@rows = sort { $a->{'last_name'} cmp $b->{'last_name'} } @rows;
+	for my $i ( 0..$#rows )	{
+		my $r = $rows[$i];
+		$r->{'institution'} =~ s/(University of )(.)(.*)(, |-| - )/U$2 /;
+                $r->{'institution'} =~ s/(Mus.*)(, .*)/$1/;
+		$html .= "<div class=\"verysmall enteringNow\">$r->{'first_name'} $r->{'last_name'}<br>$r->{'institution'}</div>\n";
+	}
+	return $html;
+}
+
 sub scramble {
     my $email = shift;
     if ($email =~ /@/) {
