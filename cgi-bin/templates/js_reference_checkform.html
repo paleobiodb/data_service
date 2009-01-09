@@ -1,6 +1,8 @@
     <script language="JavaScript" type="text/javascript">
     <!-- Begin
 
+	window.onload = showHideEditors;
+
 	// This is a handy little function for seeing what properties an object has
 	function showProperties ( obj ) {
 		var result = "";
@@ -86,13 +88,13 @@
 
 		// OtherAuthors
 		var contents = frm.otherauthors.value;
-        var pattern = /^[A-Z][a-z\']+/;
-        var result = contents.match(pattern);
-        if(result != null){
-            errors += "* Names of additional authors must be formatted with " +
-                  	  " initials before last names\n"+
-                  	  "EXAMPLE: P. McCartney, J. P. Jones, J. Hendrix\n";
-        }
+		var pattern = /(^[A-Z][a-z\']+)|([A-Z]\.$)/;
+		var result = contents.match(pattern);
+		if ( result != null )	{
+			errors += "* Names of additional authors must be formatted with " +
+			" initials before last names\n"+
+			"Example: P. McCartney, J. P. Jones, J. Hendrix\n";
+		}
 
 
 		// Publication Year
@@ -126,6 +128,14 @@
                 }
             }
         }
+		var contents = frm.editors.value;
+		var pattern = /(^[A-Z][a-z\']+)|([A-Z]\.$)/;
+		var result = contents.match(pattern);
+		if ( result != null )	{
+			errors += "* Names of editors must be formatted with " +
+			" initials before last names\n"+
+			"Example: P. McCartney, J. P. Jones, J. Hendrix\n";
+		}
 
 		if ( /[^A-Za-z0-9\)\]]$/.test(frm.reftitle.value) )	{
 			errors += "* The reference's title must end with a letter\n";
@@ -158,6 +168,15 @@
 		} 
 		return true;
     }
+
+	function showHideEditors()	{
+		if ( document.forms[0].publication_type.value == 'book/book chapter' )	{
+			document.getElementById('editors').style.display = 'inline';
+		} else if ( document.getElementById('editors').style.display == 'inline' )	{
+			document.getElementById('editors').style.display = 'none';
+			document.forms[0].editors.value = '';
+		}
+	}
 
 
     //  End -->
