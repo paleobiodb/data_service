@@ -14,13 +14,13 @@ use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR);
 use fields qw(reference_no
 				reftitle
 				pubtitle
+				editors
 				pubyr
 				pubvol
 				pubno
 				firstpage
 				lastpage
-                project_name
-				
+				project_name
 				author1init
 				author1last
 				author2init
@@ -42,7 +42,7 @@ sub new {
     if (!$reference_no) { 
         $error_msg = "Could not create Reference object with reference_no=undef."
     } else {
-        my @fields = qw(reference_no reftitle pubtitle pubyr pubvol pubno firstpage lastpage author1init author1last author2init author2last otherauthors project_name);
+        my @fields = qw(reference_no reftitle pubtitle editors pubyr pubvol pubno firstpage lastpage author1init author1last author2init author2last otherauthors project_name);
         my $sql = "SELECT ".join(",",@fields)." FROM refs WHERE reference_no=".$dbt->dbh->quote($reference_no);
         my @results = @{$dbt->getData($sql)};
         if (@results) {
@@ -106,7 +106,10 @@ sub formatAsHTML {
 	
 	my $html = $self->authors() . ". ";
 	if ($self->{reftitle})	{ $html .= $self->{reftitle}; }
-	if ($self->{pubtitle})	{ $html .= " <i>" . $self->{pubtitle} . "</i>"; }
+	if ($self->{pubtitle})	{ $self->{pubtitle} = " <i>" . $self->{pubtitle} . "</i>"; }
+	if ($self->{editors} =~ /(,)|( and )/)	{ $self->{pubtitle} = ". In " . $self->{editors} . " (eds.), " . $self->{pubtitle} . ""; }
+	elsif ($self->{editors})	{ $self->{pubtitle} = ". In " . $self->{editors} . " (ed.), " . $self->{pubtitle} . ""; }
+	if ($self->{pubtitle})	{ $html .= $self->{pubtitle}; }
 	if ($self->{pubvol}) 	{ $html .= " <b>" . $self->{pubvol} . "</b>"; }
 	if ($self->{pubno})		{ $html .= "<b>(" . $self->{pubno} . ")</b>"; }
 
@@ -120,7 +123,7 @@ sub getReference {
     my $reference_no = int(shift);
 
     if ($reference_no) {
-        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
+        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.editors,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
         my $ref = ${$dbt->getData($sql)}[0];
         return $ref;
     } else {
@@ -221,8 +224,10 @@ sub formatLongRef {
 	$longRef .= "." if $ref->{'reftitle'} && $ref->{'reftitle'} !~ /\.\Z/;
 	$longRef .= " " if $ref->{'reftitle'};
 
-	$longRef .= "<i>" . $ref->{'pubtitle'} . "</i>" if $ref->{'pubtitle'};
-	$longRef .= " " if $ref->{'pubtitle'};
+	$ref->{'pubtitle'} = "<i>" . $ref->{'pubtitle'} . "</i>" if $ref->{'pubtitle'};
+	if ($ref->{'pubtitle'} && $ref->{'editors'} =~ /(,)|( and )/)	{ $ref->{'pubtitle'} = " In " . $ref->{'editors'} . " (eds.), " . $ref->{'pubtitle'}; }
+	elsif ($ref->{'pubtitle'} && $ref->{'editors'})	{ $ref->{'pubtitle'} = " In " . $ref->{'editors'} . " (ed.), " . $ref->{'pubtitle'}; }
+	$longRef .= $ref->{'pubtitle'}." " if $ref->{'pubtitle'};
 
 	$longRef .= "<b>" . $ref->{'pubvol'} . "</b>" if $ref->{'pubvol'};
 
