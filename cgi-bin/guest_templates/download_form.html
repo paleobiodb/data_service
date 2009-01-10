@@ -145,6 +145,8 @@ function countryChange() {
   </tr></table>
 </div>
 
+<div style="height: 110em;"> <!-- needed because of rendering problems introduced by position: absolute of .panel -->
+
 <div align="center"><p class="pageTitle" style="margin-bottom: -0.75em;">Download request form</p></div>
 
 <div id="panel1" class="panel"> 
@@ -1219,6 +1221,7 @@ Basic fields will only be downloaded when output type is "specimens".  Measureme
 </div>
 </form>
 
+</div>
 
 <script language="JavaScript" type="text/javascript">
     showPanel(1);
