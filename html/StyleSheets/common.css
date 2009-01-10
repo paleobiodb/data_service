@@ -589,6 +589,11 @@ table.navbox {
     border-style: solid;
     border-color: #C8C8C8;
     padding: 1em 1em 0.5em 1em;
+}
+
+.panelNavbar	{
+    width: 56em;
+    font-size: 0.9em;
 }  
 
 .tabOn, .tabOff, .tabLoadingOn, .tabLoadingOff {
@@ -631,11 +636,15 @@ table.navbox {
 
 .panel {
     position: absolute;
-    left: 10px;
-    width: 95%;
+    left: 1px;
     z-index: 1;
     visibility: hidden;
-    padding: 10px;
+    width: 58em;
+    padding: 1em;
+    background-color: ghostwhite;
+    border-left: 1px solid ghostwhite;
+    border-right: 1px solid lightgray;
+    border-bottom: 1px solid lightgray;
 }
 
 .collectionPanel {
