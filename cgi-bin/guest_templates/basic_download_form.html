@@ -136,6 +136,8 @@ function countryChange() {
   </tr></table>
 </div>
 
+<div style="height: 44em;"> <!-- needed because of rendering problems introduced by position: absolute of .panel -->
+
 <div align="center"><p class="pageTitle" style="margin-bottom: -0.75em;">Download request form</p></div>
 
 <div id="panel1" class="panel"> 
@@ -504,8 +506,10 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 
 </form>
 
+</div>
 
 <script language="JavaScript" type="text/javascript">
     showPanel(1);
 </script> 
+
 
