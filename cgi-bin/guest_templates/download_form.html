@@ -117,7 +117,7 @@ function countryChange() {
 <input id="form_type" type=hidden name="form_type" value="full">
 
 <div align=center>
-  <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
+  <table class="panelNavbar" cellpadding="0" cellspacing="0" border="0"><tr>
     <td id="tab1" class="tabOff" style="white-space: nowrap;"
       onClick="showPanel(1);" 
       onMouseOver="hover(this);" 
@@ -145,9 +145,7 @@ function countryChange() {
   </tr></table>
 </div>
 
-<div style="height: 110em;"> <!-- needed because of rendering problems introduced by position: absolute of .panel -->
-
-<div align="center"><p class="pageTitle" style="margin-bottom: -0.75em;">Download request form</p></div>
+<div align="center"><p class="pageTitle" style="margin-bottom: 0em;">Download request form</p></div>
 
 <div id="panel1" class="panel"> 
 
@@ -1220,8 +1218,6 @@ Basic fields will only be downloaded when output type is "specimens".  Measureme
 </p>
 </div>
 </form>
-
-</div>
 
 <script language="JavaScript" type="text/javascript">
     showPanel(1);
