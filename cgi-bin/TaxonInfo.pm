@@ -173,8 +173,6 @@ sub displayTaxonInfoResults {
         $is_real_user = 0;
     }
 
-    
-
 
     # Get most recently used name of taxon
     my ($spelling_no,$taxon_name,$common_name,$taxon_rank,$type_locality);
@@ -214,7 +212,7 @@ sub displayTaxonInfoResults {
         }
 	} 
 
-    print "<div class=\"small\">";
+    print "<div>\n";
     my @modules_to_display = (1,2,3,4,5,6,7,8);
 
     my $display_name = $taxon_name;
@@ -241,9 +239,10 @@ sub displayTaxonInfoResults {
     }
 
     print '
-<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>                                                                                       
-<div align=center>
-  <table cellpadding=0 cellspacing=0 border=0 width=700>
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+
+<div align="center">
+  <table class="panelNavbar" cellpadding="0" cellspacing="0" border="0">
   <tr>
     <td id="tab1" class="tabOff" style="white-space: nowrap;"
       onClick="showPanel(1);" 
@@ -292,14 +291,17 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 // -->
 </script>
 
+<div align="center" style="margin-bottom: 0em;">
+<p class="pageTitle" style="white-space: nowrap;">$display_name</p>
+</div>
+
+<div style="position: relative; top: -3.5em; left: 43em; margin-bottom: -2.5em; width: 8em; z-index: 9;">
 <form method="POST" action="$READ_URL">
-<div align="center" style="margin-bottom: -2.5em;">
-<p class="pageTitle" style="padding-left: 14em; white-space: nowrap;">$display_name 
-<span style="padding-left: 8em; padding-right: 0em;">
 <input type="hidden" name="action" value="checkTaxonInfo">
 <input type="text" name="taxon_name" value="Search again" size="14" onFocus="textClear(this);" onBlur="textRestore(this);" style="font-size: 0.7em;">
-</span></p></div>
 </form>
+</div>
+
 |;
 
     
@@ -320,7 +322,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 	# classification
 	if($modules{1}) {
         print '<div id="panel1" class="panel">';
-        print '<div align="center" style="margin-top: 1em;">';
+        print '<div align="center" class="small" style="margin-top: -1em;">';
 		print displayTaxonClassification($dbt, $taxon_no, $taxon_name,$is_real_user);
 
         my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
@@ -363,8 +365,8 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 	# synonymy
 	if($modules{2}) {
         print qq|<div id="panel2" class="panel";">
-<div class="displayPanel" style="margin-top: 1em; padding-top: 1em;">
-<div align="center" class="displayPanelContent">
+<div class="displayPanel" style="margin-top: -1em; padding-top: 1em;">
+<div align="center" class="small displayPanelContent">
 |;
         print displayTaxonHistory($dbt, $taxon_no, $is_real_user);
         if ( $taxon_no )	{
@@ -378,7 +380,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 
 	if ($modules{3}) {
         print '<div id="panel3" class="panel">';
-        print '<div align="center">';
+        print '<div align="center" style="margin-top: -2em;">';
     	print displaySynonymyList($dbt, $taxon_no);
         print "</div>\n";
         print "</div>\n";
@@ -387,7 +389,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 
     if ($modules{4}) {
         print '<div id="panel4" class="panel">';
-        print '<div align="center">';
+        print '<div align="center" class="small">';
     	doCladograms($dbt, $taxon_no, $spelling_no, $taxon_name);
         print "</div>\n";
         print "</div>\n";
@@ -396,7 +398,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
     
     if ($modules{5}) {
         print '<div id="panel5" class="panel">';
-        print '<div align="center">';
+        print '<div align="center" class="small" "style="margin-top: -2em;">';
         print displayDiagnoses($dbt,$taxon_no);
         print "<br>\n";
         unless ($quick) {
@@ -413,7 +415,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
     }
     if ($modules{6}) {
         print '<div id="panel6" class="panel">';
-        print '<div align="center">';
+        print '<div align="center" clas="small">';
         unless ($quick) {
 		    print displayEcology($dbt,$taxon_no,$in_list);
         }
@@ -465,8 +467,8 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
         print '<script language="JavaScript" type="text/javascript"> showTabText(8); </script>';
 	}
 
-
     print "</div>"; # Ends div class="small" declared at start
+
 }
 
 
@@ -520,7 +522,7 @@ sub doCladograms {
         PBDBUtil::autoCreateDir("$HTML_DIR/public/classification");
         my $tree = TaxaCache::getChildren($dbt,$parents[$stepsup]->{'taxon_no'},'tree');
         my $options = {
-            'max_levels'=>3,
+            'max_levels'=>2,
         };
         $html = PrintHierarchy::htmlTaxaTree($dbt,$tree,$options);
 
@@ -540,7 +542,7 @@ sub doCladograms {
         $html = "<div class=\"small displayPanelContent\">\n".$html;
     }
 
-    print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 2em; padding-bottom: 1em;">
+    print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 0em; padding-bottom: 1em;">
     <span class="displayPanelHeader" class="large">Classification of relatives</span>
 |;
     print $html;
@@ -630,6 +632,7 @@ sub doThumbs {
 </div>
 |;
     }
+    print "</div>\n";
 } 
 
 sub displayMap {
@@ -668,7 +671,7 @@ sub displayMap {
         }
         close MAP;
     } else {
-        print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+        print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 0em; padding-bottom: 1em;">
 <span class="displayPanelHeader" class="large">Map</span>
 <div class="displayPanelContent">
   <div align="center"><i>No distribution data are available</i></div>
@@ -687,7 +690,7 @@ sub doCollections{
     
     if (!@$colls) {
         print qq|<div align="center">
-<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+<div class="displayPanel" align="left" style="width: 36em; margin-top: 0em; padding-bottom: 1em;">
 <span class="displayPanelHeader" class="large">Collections</span>
 <div class="displayPanelContent">
   <div align="center"><i>No collection or age range data are available</i></div>
@@ -801,7 +804,7 @@ sub doCollections{
     }
 
     if ( $minfirst && $extant && $age_range_format ne 'for_strata_module' )	{
-        $range = "<div style=\"width: 40em; margin-left: auto; margin-right: auto; text-align: left; white-space: nowrap;\">Maximum range based only on fossils: " . $range . "<br>\n";
+        $range = "<div class=\"small\" style=\"width: 40em; margin-left: auto; margin-right: auto; text-align: left; white-space: nowrap;\">Maximum range based only on fossils: " . $range . "<br>\n";
         $minfirst =~ s/([0-9])0+$/$1/;
         $range .= "Minimum age of oldest fossil (stem group age): $minfirst Ma<br>\n";
         $mincrownfirst =~ s/([0-9])0+$/$1/;
@@ -809,13 +812,17 @@ sub doCollections{
         $range .= "<span class=\"verysmall\" style=\"padding-left: 2em;\"><i>Collections with crown group taxa are in <b>bold</b>.</i></span></div><br>\n";
     }
 
+    print qq|<div class="displayPanel" style="margin-top: 2em;">
+<div class="displayPanelContent">
+|;
+
     if ($age_range_format eq 'for_strata_module') {
-        print qq|Age range: $range<br>
+        print qq|Age range $range<br>
 </div>
 </div>
 |;
     } else {
-        print "<div align=\"center\"><p class=\"large\">Age range</p></div>\n $range<br><hr>";
+        print "<div class=\"small\" style=\"margin-left: 2em;\"><p>Age range $range</p></div>\n";
     }
 
     
@@ -959,8 +966,7 @@ sub doCollections{
 
 	if(scalar @sorted > 0){
 	if ($age_range_format ne 'for_strata_module') {
-		$output .= qq|<div align="center"><p class="large" style="margin-bottom: .4em;">Collections</p>
-|;
+		$output .= qq|<div class="small" style="margin-left: 2em; margin-bottom: 0.4em;"><p>Collections|;
 	} else	{
 		$output .= qq|
 </div>
@@ -969,17 +975,17 @@ sub doCollections{
 <div class="displayPanelContent">
 |;
 	}
-		my $collTxt = (scalar(@$colls)== 0) ? "None found"
-			: (scalar(@$colls) == 1) ? "One found"
-			: scalar(@$colls)." total";
+		my $collTxt = (scalar(@$colls)== 0) ? ": none found"
+			: (scalar(@$colls) == 1) ? ": one only"
+			: " (".scalar(@$colls)." total)";
 		if ($age_range_format ne 'for_strata_module') {
-			$output .= "($collTxt)</div>\n";
+			$output .= "$collTxt</p></div>\n";
 		}
 		if ( $#sorted <= 100 )	{
 			$output .= "<br>\n";
 		}
 
-		$output .= "<table>\n";
+		$output .= "<table class=\"small\" style=\"margin-left: 2em; margin-right: 2em; margin-bottom: 2em;\">\n";
 		if ( $#sorted > 100 )	{
 			$output .= qq|<tr>
 <td colspan="3"><p class=\"large\">Oldest occurrences</p>
@@ -1055,6 +1061,11 @@ sub doCollections{
 </div>
 |;
 	}
+
+	$output .= qq|
+</div>
+</div>
+|;
 
 	return $output;
 }
@@ -1364,7 +1375,11 @@ sub displayTaxonClassification {
     my ($dbt,$orig_no,$taxon_name,$is_real_user) = @_;
     my $dbh = $dbt->dbh;
 
-    my $output; # the html actually returned by the function
+    # the html actually returned by the function
+    my $output =qq|
+<div class="displayPanel">
+<div class="displayPanelContent">
+|;
 
     # These variables will reflect the name as currently used
     my ($taxon_no,$taxon_rank) = (0,"");
@@ -1456,7 +1471,7 @@ sub displayTaxonClassification {
             # Print out the table in the reverse order that we initially made it
             #
             $output .= "<table><tr><td valign=\"top\">\n";
-            $output .= "<table><tr valign=\"top\" class=\"large\"><th>Rank</th><th>Name</th><th>Author</th></tr>";
+            $output .= "<table><tr valign=\"top\"><th>Rank</th><th>Name</th><th>Author</th></tr>";
             my $class = '';
             for(my $i = scalar(@table_rows)-1;$i>=0;$i--) {
                 if ( $i == int((scalar(@table_rows) - 2) / 2) )	{
@@ -1502,6 +1517,8 @@ sub displayTaxonClassification {
     } else {
         $output .= "<p><i>No classification data are available</i></p>";
     }
+
+    $output .= "</div>\n</div>\n\n";
 
     return $output;
 }
@@ -2554,7 +2571,7 @@ sub displayEcology	{
 	my $dbt = shift;
 	my $taxon_no = shift;
 
-    my $output .= qq|<div class="displayPanel" align="left" style="width: 46em; margin-top: 2em; padding-top: 1em; padding-bottom: 1em;">
+    my $output .= qq|<div class="small displayPanel" align="left" style="width: 46em; margin-top: 0em; padding-top: 1em; padding-bottom: 1em;">
 <div align="center" class="displayPanelContent">
 |;
 
@@ -2611,7 +2628,7 @@ sub displayEcology	{
         }   
         my %all_ranks = ();
 
-		$output .= "<table cellpadding=4 width=600>";
+		$output .= "<table cellpadding=\"4\" style=\"width: 58em;\">";
         $output .= "<tr>";
 		my $cols = 0;
 		foreach my $i (0..$#ecotaphFields)	{
@@ -2879,10 +2896,9 @@ $mass_string
         }
         $str .= "</table><br>\n";
     } else {
-        $str .= "<div align=\"center\" style=\"padding-bottom: 1em;\"><i>No measurements are available</i></div>";
+        $str .= "<div align=\"center\" style=\"padding-bottom: 1em;\"><i>No measurements are available</i>\n</div>\n";
     }
     $str .= qq|</div>
-</div>
 |;
 
     if ( $mass_string )	{
@@ -2941,7 +2957,7 @@ sub displaySynonymyList	{
 	my $output = "";
 
 	$output .= qq|<div align="left" class="displayPanel" style="width: 32em; margin-top: 2em;">
-<div align="center" class="displayPanelContent" style="padding-top: 0.5em; padding-bottom: 1em;">
+<div align="center" class="small displayPanelContent" style="padding-top: 0.5em; padding-bottom: 1em;">
 |;
 
 	unless ($taxon_no) {
