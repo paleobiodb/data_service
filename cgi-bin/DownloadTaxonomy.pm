@@ -39,36 +39,36 @@ sub getTaxonomyXML	{
 	$searchString =~ s/\+/ /g;
 	$searchString =~ s/\*/%/g;
 	if ( $searchString !~ /^(|% )[0-9A-Za-z]/ || $searchString =~ /[^0-9A-Za-z %]/ )	{
-		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The search string "'.$searchString.'" is formatted incorrectly" version="1.0">'."\n</results>\n";
+		print '<results id="' . $q->param('id') . '" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The search string "'.$searchString.'" is formatted incorrectly" version="1.0">'."\n</results>\n";
 		return;
 	}
 	if ( $searchString !~ /[A-Za-z]{3,}/ && $searchString =~ /[^0-9]/ )	{
-		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The taxonomic name is too short" version="1.0">'."\n</results>\n";
+		print '<results id="' . $q->param('id') . '" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The taxonomic name is too short" version="1.0">'."\n</results>\n";
 		return;
 	}
 	if ( $searchString =~ /[0-9]/ && $searchString =~ /[^0-9]/ )	{
-		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The record ID number includes some non-numerical characters" version="1.0">'."\n</results>\n";
+		print '<results id="' . $q->param('id') . '" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="The record ID number includes some non-numerical characters" version="1.0">'."\n</results>\n";
 		return;
 	}
 
 	# find senior synonyms of names matching query
 	my $sql;
 	if ( $searchString =~ /\%/ )	{
-		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t, opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name LIKE '" . $searchString . "' AND taxon_rank IN ('genus','species')";
+		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t, opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name LIKE '" . $searchString . "'";
 	} elsif ( $searchString > 0 )	{
-		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND t.taxon_no=$searchString AND taxon_rank IN ('genus','species')";
+		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND t.taxon_no=$searchString";
 	} else	{
-		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name='$searchString' AND taxon_rank IN ('genus','species')";
+		$sql = "SELECT t.taxon_no,spelling_no,synonym_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name='$searchString'";
 	}
 
 	# for each senior name, find all junior names
 	my @matches = @{$dbt->getData($sql)};
 	my $results = $#matches + 1;
 	if ( $results == 0 )	{
-		print '<results id="" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="No names found" version="1.0">'."\n</results>\n";
+		print '<results id="' . $q->param('id') . '" name="' . $q->param('name') . '" total_number_of_results="0" start="0" number_of_results_returned="0" error_message="No names found" version="1.0">'."\n</results>\n";
 		return;
 	}
-	print '<results id="" name="' . $q->param('name') . '" total_number_of_results="' . $results . '" start="0" number_of_results_returned="' . $results . '" error_message="" version="1.0">' . "\n";
+	print '<results id="' . $q->param('id') . '" name="' . $q->param('name') . '" total_number_of_results="' . $results . '" start="0" number_of_results_returned="' . $results . '" error_message="" version="1.0">' . "\n";
 	for my $m ( @matches )	{
 		# if a bad name's parent is not itself bad, replace it with
 		#  the grandparent
@@ -96,9 +96,9 @@ sub getTaxonomyXML	{
 		for my $v ( @variants )	{
 			if ( $v->{status} ne "belongs to" )	{
 				if ( $v->{comments} )	{
-					$v->{comments} .= " [specific status: " . $v->{status} . "]";
+					$v->{comments} .= " [exact status: " . $v->{status} . "]";
 				} else	{
-					$v->{comments} = "specific status: " . $v->{status};
+					$v->{comments} = "exact status: " . $v->{status};
 				}
 			}
 		}
@@ -223,17 +223,19 @@ sub formatNameXML	{
 	my ($auth,$name_html) = formatAuthXML($n);
 	print "<name_html>$name_html</name_html>\n";
 	if ( $q->param('response') eq "full" )  	{
-		my ($genus,$species,$infraspecies);
-		if ( $n->{taxon_name} =~ / / )	{
-			($genus,$species,$infraspecies) = split / /,$n->{taxon_name};
-		} else	{
-			$genus = $n->{taxon_name};
-			$species = "";
-		}
-		print "<genus>".$genus."</genus>\n";
-		print "<species>".$species."</species>\n";
-		if ( $infraspecies )	{
-			print "<infraspecies_marker>\n<infraspecies>".$species."</infraspecies>\n</infraspecies_marker>\n";
+		if ( $n->{taxon_rank} =~ /genus|species/ )	{
+			my ($genus,$species,$infraspecies);
+			if ( $n->{taxon_name} =~ / / )	{
+				($genus,$species,$infraspecies) = split / /,$n->{taxon_name};
+			} else	{
+				$genus = $n->{taxon_name};
+				$species = "";
+			}
+			print "<genus>".$genus."</genus>\n";
+			print "<species>".$species."</species>\n";
+			if ( $infraspecies )	{
+				print "<infraspecies_marker>\n<infraspecies>".$species."</infraspecies>\n</infraspecies_marker>\n";
+			}
 		}
 		print "<author>$auth</author>\n";
 		$n->{comments} =~ s/\& /&amp; /g;
@@ -291,10 +293,16 @@ sub formatAuthXML	{
 	}
 	if ( $n->{pubyr} > 1500 ) { $auth .= " " . $n->{pubyr}; }
 	my $name_html;
+	if ( $n->{taxon_rank} =~ /genus|species/ )	{
+		$name_html = "<i>".$n->{taxon_name}."</i>";
+	}
 	if ( $n->{taxon_no} == $n->{spelling_no} )	{
-		$name_html = "<i>".$n->{taxon_name}."</i> $auth";
+		$name_html = $n->{taxon_name}." $auth";
 	} else	{
-		$name_html = "<i>".$n->{taxon_name}."</i> ($auth)";
+		$name_html = $n->{taxon_name}." ($auth)";
+	}
+	if ( $n->{taxon_rank} =~ /genus|species/ )	{
+		$name_html = "<i>".$n->{taxon_name}."</i>";
 	}
 	return($auth,$name_html);
 
