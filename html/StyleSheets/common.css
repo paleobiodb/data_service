@@ -637,23 +637,14 @@ table.navbox {
 .panel {
     position: absolute;
     left: 1px;
+    width: 58em;
     z-index: 1;
     visibility: hidden;
-    width: 58em;
     padding: 1em;
     background-color: ghostwhite;
     border-left: 1px solid ghostwhite;
     border-right: 1px solid lightgray;
     border-bottom: 1px solid lightgray;
-}
-
-.collectionPanel {
-    position: absolute;
-    left: 1em;
-    padding-left: -2em;
-    width: 100%;
-    z-index: 1;
-    visibility: hidden;
 }
 
 .superscript {
