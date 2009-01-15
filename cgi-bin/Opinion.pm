@@ -270,9 +270,9 @@ sub formatAsHTML {
 # rjp, 3/2004
 sub displayOpinionForm {
     my ($dbt,$hbo,$s,$q,$error_message) = @_;
-	
+
     my $dbh = $dbt->dbh;
-	
+
 	my %fields;  # a hash of fields and values that
 				 # we'll pass to HTMLBuilder to pop. the form.
 				 
@@ -294,6 +294,8 @@ sub displayOpinionForm {
 	my @synArray = ('','subjective synonym of', 'objective synonym of','replaced by','misspelling of','invalid subgroup of');
 	my @nomArray = ('','nomen dubium','nomen nudum','nomen oblitum', 'nomen vanum');
 
+	%fields = %{$q->Vars};
+
     # if the opinion already exists, grab it
     my $o;
     if (!$isNewEntry) {
@@ -302,12 +304,12 @@ sub displayOpinionForm {
             carp "Could not create opinion object in displayOpinionForm for opinion_no ".$q->param('opinion_no');
             return;
         }
+        $fields{'reference_no'} = $o->{'reference_no'};
     }
 
     # Grab the appropriate data to auto-fill the form
         # always give this a try because field values may have been passed
         #  in even if this is a new opinion
-	%fields = %{$q->Vars};
 	if (! $reSubmission) {
         if ($isNewEntry) {
             $fields{'child_no'} = $q->param('child_no');
@@ -384,6 +386,22 @@ sub displayOpinionForm {
                     last;
                 }
             }    
+        }
+    }
+
+    # try to match refs in the database to entered author data JA 14-15.1.09
+    # this is a loose match because merely listing a bunch of refs is harmless
+    if ( $fields{'author1last'} && $fields{'pubyr'} =~ /^[0-9]*$/ )	{
+        my $sql = "SELECT reference_no FROM refs WHERE author1last='".$fields{'author1last'}."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'};
+        if ( $fields{'author2last'} )	{
+            $sql .= " AND author2last='".$fields{'author2last'}."'";
+        }
+        my @refs = @{$dbt->getData($sql)};
+        for my $r ( @refs )	{
+            my $ref = Reference->new($dbt,$r->{'reference_no'});
+            my $checked;
+            if ( $q->param('ref_has_opinion') == $r->{'reference_no'} ) { $checked=' checked'; }
+            $fields{'earlier_refs'} .= '<div style="margin-left: 1em; text-indent: -2em;"<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="'.$r->{'reference_no'}.'" onClick="var f=document.forms[0]; f.author1init.value=\'\'; f.author1last.value=\'\'; f.author2init.value=\'\'; f.author2last.value=\'\'; f.otherauthors.value=\'\'; f.pubyr.value=\'\';"'.$checked.'>'.$ref->formatAsHTML()."</div>\n";
         }
     }
 
@@ -732,6 +750,8 @@ sub submitOpinionForm {
 	my $lookup_reference = "";
 	if ( $q->param('ref_has_opinion') eq 'CURRENT' )	{
 		$lookup_reference = $s->get('reference_no');
+	} elsif ( $q->param('ref_has_opinion') > 0 )	{
+		$lookup_reference = $q->param('ref_has_opinion');
 	} else	{
 		$lookup_reference = $fields{'reference_no'};
 	}
@@ -745,9 +765,10 @@ sub submitOpinionForm {
 	## Deal with the reference section at the top of the form.  This
 	## is almost identical to the way we deal with it in the authority form
 	## so this functionality should probably be merged at some point.
-	if (($q->param('ref_has_opinion') ne 'PRIMARY') && 
-	    ($q->param('ref_has_opinion') ne 'CURRENT') && 
-		($q->param('ref_has_opinion') ne 'NO')) {
+	if ( $q->param('ref_has_opinion') ne 'PRIMARY' && 
+		$q->param('ref_has_opinion') ne 'CURRENT' && 
+		$q->param('ref_has_opinion') ne 'NO' &&
+		$q->param('ref_has_opinion') < 1 ) {
 		$errors->add("You must choose one of the reference radio buttons");
 	}
 
@@ -783,6 +804,19 @@ sub submitOpinionForm {
 
             if ( $row->{'c'} > 0 || $row2->{'c'} > 0 ) {
                 $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
+            } else	{
+            # although the opinion doesn't seem to have been entered, there
+            #  still might be a reference matching this author info
+                my $sql = "SELECT reference_no FROM refs WHERE author1last='".$q->param('author1last')."' AND pubyr=".$q->param('pubyr');
+                if ( $q->param('author2last') )	{
+                    $sql .= " AND author2last='".$q->param('author2last')."'";
+                }
+                my @rows = @{$dbt->getData($sql)};
+                if ( $#rows == 0 )	{
+                    $errors->add("Please check to see if the opinion comes from the reference listed below");
+                } elsif ( $#rows > 0 )	{
+                    $errors->add("Please check to see if the opinion comes from one of the references listed below");
+                }
             }
         }
 
@@ -1234,10 +1268,10 @@ sub submitOpinionForm {
             $fields{$f} = $q->param($f);
         }
     }
-	
+
 	# correct the ref_has_opinion field.  In the HTML form, it can be "YES" or "NO"
 	# but in the database, it should be "YES" or "" (empty).
-	if ($q->param('ref_has_opinion') =~ /PRIMARY|CURRENT/) {
+	if (($q->param('ref_has_opinion') =~ /PRIMARY|CURRENT/) || $q->param('ref_has_opinion')>0) {
 		$fields{'ref_has_opinion'} = 'YES';
 	} elsif ($q->param('ref_has_opinion') eq 'NO') {
 		$fields{'ref_has_opinion'} = '';
@@ -1257,10 +1291,12 @@ sub submitOpinionForm {
 		return;
 	}
 
-	
+
     # Replace the reference with the current reference if need be
     if ($q->param('ref_has_opinion') =~ /CURRENT/ && $s->get('reference_no')) {
         $fields{'reference_no'} = $s->get('reference_no');
+    } elsif ($q->param('ref_has_opinion') > 0)	{
+        $fields{'reference_no'} = $q->param('ref_has_opinion');
     }
 
 	# now we'll actually insert or update into the database.
@@ -1272,8 +1308,8 @@ sub submitOpinionForm {
 	#  code below bombs
 	if ($createSpelling) {
         my ($new_taxon_no,$set_warnings) = Taxon::addSpellingAuthority($dbt,$s,$fields{'child_no'},$childSpellingName,$childSpellingRank,$fields{'reference_no'});
-            
-        
+           
+
         $fields{'child_spelling_no'} = $new_taxon_no;
         if (ref($set_warnings) eq 'ARRAY') {
             push @warnings, @{$set_warnings};
@@ -1297,7 +1333,7 @@ sub submitOpinionForm {
 
 	} else {
 		# if it's an old entry, then we'll update.
-        unless ($q->param('ref_has_opinion') =~ /CURRENT/) {
+        unless ($q->param('ref_has_opinion') =~ /CURRENT/ || $q->param('ref_has_opinion') > 0) {
             # Delete this field so its never updated unless we're switching to current ref
             delete $fields{'reference_no'};
         }
