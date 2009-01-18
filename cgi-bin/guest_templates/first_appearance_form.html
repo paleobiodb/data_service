@@ -1,0 +1,108 @@
+
+<style type="text/css">
+.widget	{
+    float: left;
+    clear; right;
+    width: 90%;
+    padding: 1em;
+    border-bottom: 1px solid lightgray;
+}
+</style>
+
+<form method="POST" action="%%read_url%%">
+<input name="action" type="hidden" value="displayFirstAppearance">
+
+<div align="center">
+  <p class="pageTitle">First appearance calculation form</p>
+  <div class="small displayPanel" align="center" style="width: 52em; margin-bottom: 3em;">
+  <div class="displayPanelContent" style="text-align: left; padding: 1em; padding-right: 0em; padding-top: 1em;">
+
+    <span show="error_message"><p class="medium" style="padding-left: 3em; padding-bottom: 1em;"><i>%%error_message%%</i></p></span>
+
+    <div class="widget" style="margin-top: -1em;">Scientific name:
+    <input name="taxon_name" value="" size="35"></div>
+
+    <div class="widget">Common name:
+    <input name="common_name" value="" size="35"></div>
+
+    <div class="widget">Taxonomic precision of IDs:
+      <select name="taxonomic_precision" onChange="if ( /^(any|family|genus)/.test(document.forms[0].taxonomic_precision.value) ) { document.forms[0].types_only.value='no, use all occurrences'; document.forms[0].type_body_part.value=''; }">
+        <option>any</option>
+        <option>any subtaxon</option>
+        <option>family level or better</option>
+        <option>genus or species level</option>
+        <option>species level</option>
+      </select>
+      <br><div class="small" style="padding-top: 0.5em; padding-left: 2em;">Using precise IDs only is recommended.</div>
+    </div>
+
+    <div class="widget">Use type specimens only?
+      <select name="types_only" onChange="if ( /yes/.test(document.forms[0].types_only.value) ) { document.forms[0].taxonomic_precision.value='species level'; } else { document.forms[0].type_body_part.value=''; }">
+        <option>no, use all occurrences</option>
+        <option>yes, use type specimen occurrences</option>
+      </select>
+    </div>
+
+    <div class="widget">If yes, the type specimen must consist of:
+      <select name="type_body_part" onChange="if ( /s/.test(document.forms[0].type_body_part.value) ) { document.forms[0].taxonomic_precision.value='species level'; document.forms[0].types_only.value='yes, use type specimen occurrences'; }">
+        <option></option>
+        <option>multiple teeth, a skull or a skeleton</option>
+        <option>a skull or skeleton</option>
+        <option>a skeleton</option>
+      </select>
+      <br><div class="small" style="padding-top: 0.5em; padding-left: 2em;">Type specimen body part data are highly complete only for selected vertebrate groups with <a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives</a>, such as terrestrial dinosaurs and whales.</div>
+    </div>
+
+    <div class="widget">Include trace fossils?
+      <select name="traces">
+        <option>no, exclude them</option>
+        <option>yes, include them</option>
+      </select>
+    </div>
+
+    <div class="widget"><div style="float: left; clear: right;">Continent: </div>
+      <div style="float: left; clear: right; padding-left: 2em; padding-bottom: 0em;">
+        <input type="checkbox" name="Africa" value="YES" checked>Africa
+        <input type="checkbox" name="Antarctica" value="YES" checked>Antarctica
+        <input type="checkbox" name="Asia" value="YES" checked>Asia
+        <input type="checkbox" name="Europe" value="YES" checked>Europe<br>
+        <input type="checkbox" name="North America" value="YES" checked>North America
+        <input type="checkbox" name="South America" value="YES" checked>South America
+        <input type="checkbox" name="Australia" value="YES" checked>Australia
+      </div>
+    </div>
+
+    <div class="widget">Geographic resolution:
+      <select name="geogscale">
+        <option value="">any</option>
+        <option value="hand sample,small collection,outcrop,NULL_OR_EMPTY">outcrop or small collection</option>
+        <option value="hand sample,small collection,NULL_OR_EMPTY">small collection</option>
+        <option value=""></option>
+        <option value=""></option>
+      </select>
+    </div>
+
+    <div class="widget">Stratigraphic resolution:
+      <select name="stratscale">
+        <option value="">any</option>
+        <option value="bed,group of beds,member,NULL_OR_EMPTY">bed to member</option>
+        <option value="bed,group of beds,NULL_OR_EMPTY">bed or group of beds</option>
+        <option value="bed,NULL_OR_EMPTY">bed</option>
+      </select>
+    </div>
+
+    <div class="widget">Precision of collection's age estimate: <input name="temporal_precision" size="5"> Myr
+    </div>
+
+    <div class="widget">Minimum age of included collections: <input name="minimum_age" size="5"> Myr
+      <br><div class="small" style="padding-top: 0.5em; padding-left: 2em;">Because the quality of the fossil record often improves going forward to the Recent, choosing a high minimum is recommended.</div>
+    </div>
+
+    <!-- needed to extend the panel to the bottom -->
+    <div style="clear: both;"</div>
+    <div align="center" style="margin-top: 1em;"><input type="submit" value="Calculate"></div>
+  </div>
+  </div>
+</div>
+</form>
+
