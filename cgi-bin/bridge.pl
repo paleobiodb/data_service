@@ -2406,6 +2406,21 @@ sub displayTaxonInfoResults {
     print $hbo->stdIncludes("std_page_bottom");
 }
 
+## END Taxon Info Stuff
+##############
+
+sub beginFirstAppearance	{
+	print $hbo->stdIncludes( "std_page_top" );
+	TaxonInfo::beginFirstAppearance($hbo, $q, '');
+	print $hbo->stdIncludes( "std_page_bottom" );
+}
+
+sub displayFirstAppearance	{
+	print $hbo->stdIncludes( "std_page_top" );
+	TaxonInfo::displayFirstAppearance($q, $s, $dbt, $hbo);
+	print $hbo->stdIncludes( "std_page_bottom" );
+}
+
 sub displaySearchFossilRecordTaxaForm {
     print $hbo->stdIncludes( "std_page_top" );
     print $hbo->stdIncludes("std_page_bottom");
@@ -2431,8 +2446,6 @@ sub submitFossilRecordCurveForm {
 ### End Module Navigation
 ##############
 
-## END Taxon Info Stuff
-##############
 
 ##############
 ## Scales stuff JA 7.7.03
