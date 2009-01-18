@@ -16,7 +16,7 @@
         for (var i=1; i<=7; i++)	{
             hideLinks(i);
         }
-        document.getElementById('leftBarSection'+batch).style.backgroundColor = 'slategray';
+        document.getElementById('leftBarSection'+batch).style.backgroundColor = '#191970';
         document.getElementById('barLinksPlus'+batch).style.display = 'none';
         document.getElementById('barLinksMinus'+batch).style.display = 'inline';
         document.getElementById('barLinks'+batch).style.display = 'inline';
@@ -70,8 +70,6 @@ Distribution
 </div>
 </div>
 
-<div class="leftBarShadow"><!-- a comment must be included to resolve a bizarre IE bug --></div>
-
 <div class="sides leftBarSection" id="leftBarSection2">
 <div class="plusMinus">
 <span id="barLinksPlus2" onClick="showLinks(2);">+</span>
@@ -88,8 +86,6 @@ Taxonomy
 <span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayDownloadMeasurementsForm">download measurements of specimens</a></span>
 </div>
 </div>
-
-<div class="leftBarShadow"><!-- a comment must be included to resolve a bizarre IE bug --></div>
 
 <div class="leftBarSection" id="leftBarSection3">
 <div class="plusMinus">
@@ -108,29 +104,26 @@ Stratigraphy
 </div>
 </div>
 
-<div class="leftBarShadow"><!-- a comment must be included to resolve a bizarre IE bug --></div>
-
 <div class="leftBarSection" id="leftBarSection4">
 <div class="plusMinus">
 <span id="barLinksPlus4" onClick="showLinks(4);">+</span>
 <span id="barLinksMinus4" onClick="hideLinks(4);" style="display: none;">-</span>
 </div>
-<div class="leftBarHeader" onClick="showLinks(4);">
+<div class="leftBarHeader" onClick="showLinks(4);"">
 Tools
 </div>
 
 <div class="barLinks" id="barLinks4" style="display: none;">
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">paleogeographic maps</a></span>
+<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">paleomaps</a></span>
 <span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayReportForm">data summary tables</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=most_common">lists of common taxa</a></span>
+<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=most_common">common taxa</a></span>
+<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=beginFirstAppearance">first appearances</a></span>
 <span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayCurveForm">diversity curve data</a></span>
 <span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=analyze_abundance">ecological statistics</a></span>
 <span class="leftBarLink"><a href="/cgi-bin/%%read_url%%?action=displayTaxaIntervalsForm">time scale confidence intervals</a></span>
 <span class="leftBarLink"><a href="%%read_url%%?action=displaySearchSectionForm">stratigraphic confidence intervals</a></span>
 </div>
 </div>
-
-<div class="leftBarShadow"><!-- a comment must be included to resolve a bizarre IE bug --></div>
 
 <div class="leftBarSection" id="leftBarSection5">
 <div class="plusMinus">
@@ -149,8 +142,6 @@ Explore
 <span class="leftBarLink"><a href="%%read_url%%?action=randomTaxonInfo">random species</a></span>
 </div>
 </div>
-
-<div class="leftBarShadow"><!-- a comment must be included to resolve a bizarre IE bug --></div>
 
 <div class="leftBarSection" id="leftBarSection6">
 <div class="plusMinus">
@@ -171,8 +162,6 @@ Activities
 </div>
 </div>
 
-<div class="leftBarShadow"><!-- a comment must be included to resolve a bizarre IE bug --></div>
-
 <div class="leftBarSection" id="leftBarSection7">
 <div class="plusMinus">
 <span id="barLinksPlus7" onClick="showLinks(7);">+</span>
@@ -191,8 +180,6 @@ Info
 <span class="leftBarLink"><a href="http://paleodb.org/trac/">source code</a></span>
 </div>
 </div>
-
-<div class="leftBarShadow"><!-- a comment must be included to resolve a bizarre IE bug --></div>
 
 <!-- end of navigation bar -->
 </div>
@@ -303,7 +290,7 @@ Info
 
       <div class="FeatureText">
         <div class="tiny">
-          Use our new <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=beginTaxonInfo">taxon search form</a> to search for all species in a group, or by body part and/or preservation category
+          Our new <a class="homeBodyLinks" href="%%read_url%%?user=Guest&amp;action=beginFirstAppearance">first appearance calculator</a> puts confidence intervals on the oldest fossil occurrence of any taxon
         </div>
       </div>
     </div>
