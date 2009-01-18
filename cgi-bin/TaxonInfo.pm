@@ -3092,6 +3092,673 @@ sub displaySynonymyList	{
     return $output;
 }
 
+# JA 10.1.09
+sub beginFirstAppearance	{
+	my ($hbo,$q,$error_message) = @_;
+	print $hbo->populateHTML('first_appearance_form', [$error_message], ['error_message']);
+	if ( $error_message )	{
+		exit;
+	}
+}
+
+# JA 10-13.1.09
+sub displayFirstAppearance	{
+	my ($q,$s,$dbt,$hbo) = @_;
+
+	my ($sql,$field,$name);
+	if ( $q->param('taxon_name') )	{
+		if ( $q->param('taxon_name') !~ /^[A-Z][a-z]*(| )[a-z]*$/ )	{
+			my $error_message = "The name '".$q->param('taxon_name')."' is formatted incorrectly.";
+			beginFirstAppearance($hbo,$q,$error_message);
+		}
+		$field = "taxon_name";
+		$name = $q->param('taxon_name');
+	} elsif ( $q->param('common_name') )	{
+		if ( $q->param('common_name') =~ /[^A-Za-z ]/ )	{
+			my $error_message = "A common name can't include anything but letters.";
+			beginFirstAppearance($hbo,$q,$error_message);
+		}
+		$field = "common_name";
+		$name = $q->param('common_name');
+	} else	{
+		my $error_message = "No search term was entered.";
+		beginFirstAppearance($hbo,$q,$error_message);
+	}
+
+	# it's overkill to use getChildren because the query is so simple
+	$sql  = "SELECT a.taxon_no,a.taxon_name,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.taxon_rank,a.extant,a.preservation,lft,rgt FROM refs r,authorities a,authorities a2,$TAXA_TREE_CACHE t WHERE r.reference_no=a.reference_no AND a2.taxon_no=t.taxon_no AND a2.$field='$name' AND a.taxon_no=t.synonym_no GROUP BY lft,rgt ORDER BY rgt-lft DESC";
+	my @nos = @{$dbt->getData($sql)};
+
+	$name= $nos[0]->{'taxon_name'};
+	if ( ! @nos )	{
+		my $error_message = $name." is not in the system.";
+		beginFirstAppearance($hbo,$q,$error_message);
+	}
+
+	if ( $field eq "common_name" )	{
+		$name = $nos[0]->{'taxon_name'}." (".$name.")";
+	}
+	my $authors = $nos[0]->{'author1last'};
+	if ( $nos[0]->{'otherauthors'} )	{
+		$authors .= " <i>et al.</i>";
+	} elsif ( $nos[0]->{'author2last'} )	{
+		$authors .= " and ".$nos[0]->{'author2last'};
+	}
+	$authors .= " ".$nos[0]->{'pubyr'};
+
+	if ( $nos[0]->{'lft'} == $nos[0]->{'rgt'} - 1 && $nos[0]->{'taxon_rank'} !~ /genus|species/ )	{
+		my $error_message = "$name $authors includes no classified subtaxa.";
+		beginFirstAppearance($hbo,$q,$error_message);
+	}
+
+	print $hbo->stdIncludes("std_page_top");
+
+	# MAIN TABLE HITS
+
+	$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,extant,preservation,lft,rgt,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>=".$nos[0]->{'lft'}." AND rgt<=".$nos[0]->{'rgt'}." ORDER BY lft";
+	my @allsubtaxa = @{$dbt->getData($sql)};
+	my @subtaxa;
+
+	if ( $q->param('taxonomic_precision') eq "any subtaxon" )	{
+		$sql = "SELECT a.taxon_no,taxon_name,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'};
+		@subtaxa = @{$dbt->getData($sql)};
+	} elsif ( $q->param('taxonomic_precision') =~ /species|genus|family/ )	{
+		my @ranks = ('subspecies','species');
+		if ( $q->param('taxonomic_precision') =~ /genus or species/ )	{
+			push @ranks , ('subgenus','genus');
+		} elsif ( $q->param('taxonomic_precision') =~ /family/ )	{
+			push @ranks , ('subgenus','genus','tribe','subfamily','family');
+		}
+		$sql = "SELECT a.taxon_no,taxon_name,type_locality,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'}." AND taxon_rank IN ('".join("','",@ranks)."')";
+		if ( $q->param('type_body_part') )	{
+			my $parts;
+			if ( $q->param('type_body_part') =~ /multiple teeth/i )	{
+				$parts = "'skeleton','partial skeleton','skull','partial skull','maxilla','mandible','teeth'";
+			} elsif ( $q->param('type_body_part') =~ /skull/i )	{
+				$parts = "'skeleton','partial skeleton','skull','partial skull'";
+			} elsif ( $q->param('type_body_part') =~ /skeleton/i )	{
+				$parts = "'skeleton','partial skeleton'";
+			}
+			$sql .= " AND type_body_part IN (".$parts.")";
+		}
+		@subtaxa = @{$dbt->getData($sql)};
+	} else	{
+		@subtaxa = @allsubtaxa;
+	}
+
+	# have to be sure the taxon wasn't marked not-"extant" even though
+	#  it includes extant subtaxa
+	my $extant = $nos[0]->{'extant'};
+	if ( $extant !~ /yes/i )	{
+		for my $t ( @allsubtaxa )	{
+			if ( $t->{'extant'} =~ /yes/i )	{
+				$extant = "yes";
+				last;
+			}
+		}
+	}
+
+	# TRACE FOSSIL REMOVAL
+
+	# this is a fast, elegant algorithm for determining simple
+	#  inheritance of a value (preservation) from parent to child
+	if ( $q->param('traces') !~ /yes/i )	{
+		my %istrace;
+		for my $i ( 0..$#allsubtaxa )	{
+			my $s = $allsubtaxa[$i];
+			if ( $s->{'preservation'} eq "trace" )	{
+				$istrace{$s->{'taxon_no'}}++;
+		# find parents by descending
+		# overall parent is innocent until proven guilty
+			} elsif ( ! $s->{'preservation'} && $s->{'lft'} >= $nos[0]->{'lft'} )	{
+				my $j = $i-1;
+			# first part means "not parent"
+				while ( ( $allsubtaxa[$j]->{'rgt'} < $s->{'lft'} || ! $allsubtaxa[$j]->{'preservation'} ) && $j > 0 )	{
+					$j--;
+				}
+				if ( $allsubtaxa[$j]->{'preservation'} eq "trace" )	{
+					$istrace{$s->{'taxon_no'}}++;
+				}
+			}
+		}
+		my @nontraces;
+		for $s ( @subtaxa )	{
+			if ( ! $istrace{$s->{'taxon_no'}} )	{
+				push @nontraces , $s;
+			}
+		}
+		@subtaxa = @nontraces;
+	}
+
+	# COLLECTION SEARCH
+
+	my %options = ();
+	if ( $q->param('types_only') =~ /yes/i )	{
+		for my $s ( @subtaxa )	{
+			if ( $s->{'type_locality'} > 0 ) { $options{'collection_list'} .= ",".$s->{'type_locality'}; }
+		}
+		$options{'collection_list'} =~ s/^,//;
+	}
+
+	# similarly, we could use getCollectionsSet but it would be overkill
+	my $fields = ['max_interval_no','min_interval_no','collection_no','collection_name','country','state','geogscale','formation','member','stratscale','lithification','minor_lithology','lithology1','lithification2','minor_lithology2','lithology2','environment'];
+
+	if ( ! $q->param('Africa') || ! $q->param('Antarctica') || ! $q->param('Asia') || ! $q->param('Australia') || ! $q->param('Europe') || ! $q->param('North America') || ! $q->param('South America') )	{
+		for my $c ( 'Africa','Antarctica','Asia','Australia','Europe','North America','South America' )	{
+			if ( $q->param($c) )	{
+				$options{'country'} .= ":".$c;
+			}
+		}
+		$options{'country'} =~ s/^://;
+	}
+
+	my (@in_list);
+	push @in_list , $_->{'taxon_no'} foreach @subtaxa;
+
+	$options{'permission_type'} = 'read';
+	$options{'taxon_list'} = \@in_list;
+	$options{'geogscale'} = $q->param('geogscale');
+	$options{'stratscale'} = $q->param('stratscale');
+	if ( $q->param('minimum_age') > 0 )	{
+		$options{'max_interval'} = 999;
+		$options{'min_interval'} = $q->param('minimum_age');
+	}
+
+	my ($colls) = Collection::getCollections($dbt,$s,\%options,$fields);
+	if ( ! @$colls )	{
+		my $error_message = "No occurrences of $name match the search criteria";
+		beginFirstAppearance($hbo,$q,$error_message);
+	}
+
+	my $interval_hash = getIntervalsData($dbt,$colls);
+	if ( $q->param('temporal_precision') )	{
+		my @newcolls;
+        	for my $coll (@$colls) {
+			if ( $interval_hash->{$coll->{'max_interval_no'}}->{'lower_boundary'} -  $interval_hash->{$coll->{'max_interval_no'}}->{'upper_boundary'} <= $q->param('temporal_precision') )	{
+				push @newcolls , $coll;
+			}
+		}
+		@$colls = @newcolls;
+	}
+	if ( ! @$colls )	{
+		my $error_message = "No occurrences of $name have sufficiently precise age data";
+		beginFirstAppearance($hbo,$q,$error_message);
+	}
+	my $ncoll = scalar(@$colls);
+
+	print "<div style=\"text-align: center\"><p class=\"medium pageTitle\">First appearance data for $name $authors</p></div>\n";
+	print "<div class=\"small\" style=\"padding-left: 2em; padding-right: 2em;  padding-bottom: 4em;\">\n";
+
+	if ( $#nos == 1 )	{
+		print "<p class=\"small\">Warning: a different but smaller taxon in the system has the name $name.</p>";
+	} elsif ( $#nos > 1 )	{
+		print "<p class=\"small\">Warning: $#nos smaller taxa in the system have the name $name.</p>";
+	}
+
+	print "<div class=\"displayPanel\">\n<span class=\"displayPanelHeader\" style=\"font-size: 1.2em;\">Basic data</span>\n<div class=\"displayPanelContents\">\n";
+
+	# CROWN GROUP CALCULATION
+
+	if ( $extant =~ /yes/i )	{
+		my $crown = findCrown(\@allsubtaxa);
+		if ( $crown =~ /^[A-Z][a-z]*$/)	{
+			my @params = $q->param();
+			my $paramlist;
+			for my $p ( $q->param() )	{
+				if ( $q->param($p) && $p ne "taxon_name" && $p ne "common_name" )	{
+					$paramlist .= "&amp;".$p."=".$q->param($p);
+				}
+			}
+			print "<p>The crown group of $name is <a href=\"$READ_URL?taxon_name=$crown$paramlist\">$crown</a> (click to compute its first appearance)</p>\n";
+		} elsif ( ! $crown )	{
+			print "<p><i>$name has no subtaxa marked in our system as extant, so its crown group cannot be determined</i></p>\n";
+		} else	{
+			$crown =~ s/(,)([A-Z][a-z ]*)$/ and $2/;
+			$crown =~ s/,/, /g;
+			print "<p style=\"padding-left: 1em; text-indent: -1em;\"><i>$name is the immediate parent of the extant $crown, so it is itself a crown group</i></p>\n";
+		}
+	} else	{
+		print "<p><i>$name is entirely extinct, so it has no crown group</i></p>\n";
+	}
+
+	# AGE RANGE/CONFIDENCE INTERVAL CALCULATION
+
+	my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$colls,$interval_hash);
+	my $max_no = $max->[0];
+	my $min_no = $min->[0];
+
+	my ($first_interval_top,@firsts,@rages,@ages,@gaps);
+	my $TRIALS = int( 10000 / scalar(@$colls) );
+	#my $TRIALS = 100000 / scalar(@$colls);
+        for my $coll (@$colls) {
+		my ($collmax,$collmin,$last_name) = ("","","");
+		$collmax = $interval_hash->{$coll->{'max_interval_no'}}->{'lower_boundary'};
+		# IMPORTANT: the collection's max age is truncated at the
+		#   taxon's max first appearance
+		if ( $collmax > $lb )	{
+			$collmax = $lb;
+		}
+		if ( $coll->{'min_interval_no'} == 0 )	{
+			$collmin = $interval_hash->{$coll->{'max_interval_no'}}->{'upper_boundary'};
+			$last_name = $interval_hash->{$coll->{'max_interval_no'}}->{'interval_name'};
+		} else	{
+			$collmin = $interval_hash->{$coll->{'min_interval_no'}}->{'upper_boundary'};
+			$last_name = $interval_hash->{$coll->{'min_interval_no'}}->{'interval_name'};
+		}
+		$coll->{'maximum Ma'} = $collmax;
+		$coll->{'minimum Ma'} = $collmin;
+		$coll->{'midpoint Ma'} = ( $collmax + $collmin ) / 2;
+		if ( $minfirst == $collmin )	{
+			if ( $coll->{'state'} && $coll->{'country'} eq "United States" )	{
+				$coll->{'country'} = "US (".$coll->{'state'}.")";
+			}
+			$first_interval_top = $last_name;
+			push @firsts , $coll;
+		}
+	# randomization to break ties and account for uncertainty in
+	#  age estimates
+		for my $t ( 1..$TRIALS )	{
+			push @{$rages[$t]} , rand($collmax - $collmin) + $collmin;
+		}
+	}
+
+	my $first_interval_base = $interval_hash->{$max_no}->{interval_name};
+	my $last_interval = $interval_hash->{$min_no}->{interval_name};
+	if ( $first_interval_base =~ /an$/ )	{
+		$first_interval_base = "the ".$first_interval_base;
+	}
+	if ( $first_interval_top =~ /an$/ )	{
+		$first_interval_top = "the ".$first_interval_top;
+	}
+	if ( $last_interval =~ /an$/ )	{
+		$last_interval = "the ".$last_interval;
+	}
+
+	my $agerange = $lb - $ub;;
+	if ( $q->param('minimum_age') > 0 )	{
+		$agerange = $lb - $q->param('minimum_age');
+	}
+	for my $t ( 1..$TRIALS )	{
+		@{$rages[$t]} = sort { $b <=> $a } @{$rages[$t]};
+	}
+	for my $i ( 0..$#{$rages[1]} )	{
+		my $x = 0;
+		for my $t ( 1..$TRIALS )	{
+			$x += $rages[$t][$i];
+		}
+		push @ages , $x / $TRIALS;
+	}
+	for my $i ( 0..$#ages-1 )	{
+		push @gaps , $ages[$i] - $ages[$i+1];
+	}
+	# shortest to longest
+	@gaps = sort { $a <=> $b } @gaps;
+
+	# AGE RANGE/CI OUTPUT
+
+	if ( $options{'country'} )	{
+		my $c = $options{'country'};
+		$c =~ s/:/, /g;
+		$c =~ s/(, )([A-Za-z ]*)$/ and $2/;
+		print "<p>Continents: $c</p>\n";
+	}
+
+	printf "<p>Maximum first appearance date: bottom of $first_interval_base (%.1f Ma)</p>\n",$lb;
+	printf "<p>Minimum first appearance date: top of $first_interval_top (%.1f Ma)</p>\n",$minfirst;
+	if ( $extant eq "no" )	{
+		printf "<p>Minimum last appearance date: top of $last_interval (%.1f Ma)</p>\n",$ub;
+	}
+	print "<p>Total number of collections: $ncoll</p>\n";
+	printf "<p>Collections per Myr between %.1f and %.1f Ma: %.2f</p>\n",$lb,$lb - $agerange,$ncoll / $agerange;
+	printf "<p>Average gap between collections: %.2f Myr</p>\n",$agerange / ( $ncoll - 1 );
+	printf "<p>Gap between two oldest collections: %.2f Myr</p>\n",$ages[0] - $ages[1];
+
+	print "</div>\n</div>\n\n";
+
+	print "<div class=\"displayPanel\" style=\"margin-top: 2em;\">\n<span class=\"displayPanelHeader\" style=\"font-size: 1.2em;\">Confidence intervals on the first appearance</span>\n<div class=\"displayPanelContents\">\n";
+
+	print "<div style=\"margin-left: 1em;\">\n";
+
+	printf "<p style=\"text-indent: -1em;\">Based on assuming continuous sampling (Strauss and Sadler 1987, 1989): 50%% = %.2f Ma, 90%% = %.2f Ma, 95%% = %.2f Ma, and 99%% = %.2f Ma<br>\n",Strauss(0.50),Strauss(0.90),Strauss(0.95),Strauss(0.99);
+
+	printf "<p style=\"text-indent: -1em;\">Based on percentiles of gap sizes (Marshall 1994): 50%% = %s, 90%% = %s, 95%% = %s, and 99%% = %s<br>\n",percentile(0.50),percentile(0.90),percentile(0.95),percentile(0.99);
+
+	printf "<p style=\"text-indent: -1em;\">Based on the oldest gap (Solow 2003): 50%% = %.2f Ma, 90%% = %.2f Ma, 95%% = %.2f Ma, and 99%% = %.2f Ma<br>\n",Solow(0.50),Solow(0.90),Solow(0.95),Solow(0.99);
+
+	print "<div id=\"note_link\" class=\"small\" style=\"margin-bottom: 1em; padding-left: 1em;\"><span class=\"mockLink\" onClick=\"document.getElementById('CI_note').style.display='inline'; document.getElementById('note_link').style.display='none';\"> > <i>Important: please read the explanatory notes.</span></i></div>\n";
+	print qq|<div id="CI_note" style="display: none;"><div class="small" style="margin-left: 1em; margin-right: 2em; background-color: ghostwhite;">
+<p style="margin-top: 0em;">All three confidence interval (CI) methods assume that there are no errors in identification, classification, temporal correlation, or time scale calibration. Our database is founded on published literature that often contains such errors, and we are not always able to correct them although (for example) we standardize taxonomy using synonymy tables. Our sampling of the literature is also variably complete, and it may not include all published early occurrences.</p>
+<p>The first CI two methods also assume that distribution of gap sizes does not change through time. The Strauss and Sadler method assumes more specifically that the gaps are randomly placed in time, so they follow a Dirichlet distribution. The percentile-based estimates assume nothing about the underlying distribution. They are computed by rank-ordering the N observed gaps and taking the average of the two gaps that span the percentile matching the appropriate CI (see Marshall 1994). These are gaps k and k + 1 where k < (1 - CI) N < k + 1. So, if there are 100 gaps then the 95% CI matches the 5th longest.</p>
+<p style="margin-bottom: 0em;">Intuitively, it might seem that percentiles underestimate the CIs when sample sizes are small. Marshall (1994) therefore proposed generating CIs on top of the nonparametric CIs. The CIs on CIs express the chance that 1 to k gaps are longer than 1 - CI' of all possible gaps, CI and CI' potentially being different (say, 50% and 5%). However, possible gaps are not of interest: one wants to know about a single real gap in the fossil record. The chance that 1 to k gaps are longer than this record is just k/N, the original CI. Therefore, CIs based on Marshall's method are not reported here.</p>
+<p>Solow's method has a computational problem: the size of the oldest gap cannot be computed when the oldest occurrences have the same range of age estimates (because they fall in the same geological time interval). To break ties, the point age estimate of each collection is randomized repeatedly within its age range to produce an average estimate of the oldest gap's size. The same randomization procedure is applied to all age estimates prior to computing the above-mentioned percentiles. The raw and randomized values are both reported in the download file.
+</p>
+</div></div></div>
+|;
+
+	# TIME VS. GAP SIZE TEST
+
+	# convert to ranks by manipulating an array of objects
+	my @gapdata;
+	for my $i ( 0..$#ages-1 )	{
+		$gapdata[$i]->{'age'} = $ages[$i];
+		$gapdata[$i]->{'gap'} = $ages[$i] - $ages[$i+1];
+	}
+	@gapdata = sort { $b->{'age'} <=> $a->{'age'} } @gapdata;
+	for my $i ( 0..$#ages-1 )	{
+		$gapdata[$i]->{'agerank'} = $i;
+	}
+	@gapdata = sort { $b->{'gap'} <=> $a->{'gap'} } @gapdata;
+	for my $i ( 0..$#ages-1 )	{
+		$gapdata[$i]->{'gaprank'} = $i;
+	}
+
+	my ($n,$mx,$my,$sx,$sy,$cov);
+	$n = $#ages;
+	if ( $n > 9 )	{
+		for my $i ( 0..$#ages-1 )	{
+			$mx += $gapdata[$i]->{'agerank'};
+			$my += $gapdata[$i]->{'gaprank'};
+		}
+		$mx /= $n;
+		$my /= $n;
+		for my $i ( 0..$#ages-1 )	{
+			$sx += ($gapdata[$i]->{'agerank'} - $mx)**2;
+			$sy += ($gapdata[$i]->{'gaprank'} - $my)**2;
+			$cov += ($gapdata[$i]->{'agerank'} - $mx) * ( $gapdata[$i]->{'gaprank'} - $my);
+		}
+		$sx = sqrt( $sx / ( $n - 1 ) );
+		$sy = sqrt( $sy / ( $n - 1 ) );
+		my $r = $cov / ( ( $n - 1 ) * $sx * $sy );
+		my $t = $r / sqrt( ( 1 - $r**2 ) / ( $n - 2 ) );
+	# for n > 9, the p < 0.001 critical values range from 3.291 to 4.587
+		my ($direction,$size) = ("positive","small");
+		if ( $r < 0 )	{
+			$direction = "negative";
+			$size = "large";
+		}
+		if ( $t > 3.291 )	{
+			printf "<p style=\"padding-left: 1em; text-indent: -1em;\">WARNING: there is a very significant $direction rank-order correlation of %.3f between time in Myr and gap size, so the continuous sampling- and percentile-based confidence interval estimates are far too small (try setting a higher minimum age)</p>\n",$r;
+	# and the p < 0.01 values range from 2.576 to 3.169
+		} elsif ( $t > 2.576 )	{
+			printf "<p style=\"padding-left: 1em; text-indent: -1em;\">WARNING: there is a significant $direction rank-order correlation of %.3f between time in Myr and gap size, so the continuous sampling- and percentile-based confidence interval estimates are too small (try setting a higher minimum age)</p>\n",$r;
+	# and the p < 0.05 values range from 1.960 to 2.228
+		} elsif ( $t > 1.960 )	{
+			printf "<p style=\"padding-left: 1em; text-indent: -1em;\">WARNING: there is a $direction rank-order correlation of %.3f between time in Myr and gap size, so the continuous sampling- and percentile-based confidence interval estimates are probably too small (try setting a higher minimum age)</p>\n",$r;
+		}
+	}
+
+	# CI COMPUTATIONS
+
+	sub percentile	{
+		my $c = shift;
+		my $i = int($c * ( $#gaps + 1 ) );
+		my $j = $i + 1;
+		if ( $i == $c * ( $#gaps + 1 ) )	{
+			$j = $i;
+		}
+		if ( $j > $#gaps )	{
+			return "NA";
+		}
+		return sprintf "%.2f Ma",( $lb + ( $gaps[$i] + $gaps[$j] ) / 2 );
+	}
+
+	sub Strauss	{
+		my $c = shift;
+		return $lb * ( ( 1 - $c )**( -1 /( $ncoll - 1 ) ) );
+	}
+
+	sub Solow	{
+		my $c = shift;
+		return $lb + ( $c / ( 1 - $c ) ) * ( $ages[0] - $ages[1] );
+	}
+
+# Bayesian CIs can computed using an equation related to Marshall's, but it yields CIs that are identical to percentiles converted from ranks.
+# Let t = the true gap in Myr between the oldest fossil and the actual first appearance, X = the overall distribution of possible gaps, Y = the observed gap size distribution, N = the number of observed gaps, and s = a possible percentile score of t within X.
+# We will evaluate only N equally spaced values of s between 0 and 100%.
+# We want the posterior probability that t is between the kth and k+1th values out of N for each value of k.
+# We will sum the probabilities to find the 50, 90, 95, and 99% CIs.
+# For each k we find the conditional probability Pk,i that exactly k out of N observations will be greater than t given that t's percentile score is closest to the ith s value, which is simply a binomial probability (see Marshall 1994).
+# Instead of summing across possible values of k, which would yield 1 for each value of i, we sum the conditionals across values of i (which by definition have equal priors) to produce a total tail probability for each k.
+# The grand total across all values of k is just N.
+# The posterior probability of each k is therefore its sum divided by N.
+# This method yields equal posteriors for all possible ranks, justifying transformation of ranks into percentiles.
+	#BayesCI(10);
+	sub BayesCI	{
+		my $n = shift;
+
+		my %fact = ();
+		for my $i ( 1..$n )	{
+			$fact{$i} = $fact{$i-1} + log( $i );
+		}
+
+		for my $k ( 0..int($n/1) )	{
+			my $conditional = 0;
+			for my $i ( 1..$n+1 )	{
+				my $p = ( $i - 0.5 ) / ( $n + 1 );
+				my $kp = $k * log( $p ) + ( $n - $k ) * log( 1 - $p );
+				$kp += $fact{$n};
+				$kp -= $fact{$k};
+				$kp -= $fact{$n - $k};
+				$conditional += exp( $kp );
+			}
+			my $posterior = $conditional / ( $n + 1 );
+			#printf "$k %.3f<br>",$posterior;
+		}
+	}
+	print "</div>\n</div>\n\n";
+
+	# COLLECTION DATA OUTPUT
+
+	print "<div class=\"displayPanel\" style=\"margin-top: 2em;\">\n<span class=\"displayPanelHeader\" style=\"font-size: 1.2em;\">First occurrence details</span>\n<div class=\"displayPanelContents\">\n";
+
+	my @collnos;
+	push @collnos , $_->{'collection_no'} foreach @$colls;
+	# getCollections won't return multiple occurrences per collection, so...
+	$sql = "(SELECT taxon_rank,collection_no,occurrence_no,reid_no,genus_reso,genus_name,IF(taxon_rank LIKE '%species',species_reso,'') species_reso,IF(taxon_rank LIKE '%species',species_name,'') species_name FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES' GROUP BY collection_no,r.taxon_no) UNION (SELECT taxon_rank,collection_no,occurrence_no,0,genus_reso,genus_name,IF(taxon_rank LIKE '%species',species_reso,'') species_reso,IF(taxon_rank LIKE '%species',species_name,'') species_name FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).") GROUP BY collection_no,o.taxon_no) ORDER BY genus_name,species_name";
+	my @occs = @{$dbt->getData($sql)};
+
+	# print data to output file JA 17.1.09
+	my $name = ($s->get("enterer")) ? $s->get("enterer") : "Guest";
+	my $filename = PBDBUtil::getFilename($name) . "-appearances.txt";;
+	print "<p><a href=\"/public/downloads/$filename\">Download the full data set</a></p>\n\n";
+	open OUT , ">$HTML_DIR/public/downloads/$filename";
+	@$colls = sort { $b->{'midpoint Ma'} <=> $a->{'midpoint Ma'} || $b->{'maximum Ma'} <=> $a->{'maximum Ma'} || $b->{'minimum Ma'} <=> $a->{'minimum Ma'} || $a->{'country'} cmp $b->{'country'} || $a->{'state'} cmp $b->{'state'} || $a->{'formation'} cmp $b->{'formation'} || $a->{'collection_name'} cmp $b->{'collection_name'} } @$colls;
+	splice @$fields , 0 , 2 , ('maximum Ma','minimum Ma','midpoint Ma','randomized Ma','randomized gap','taxa');
+	print OUT join("\t",@$fields),"\n";
+
+	my %ids;
+	$ids{$_->{'occurrence_no'}}++ foreach @occs;
+
+	my %includes;
+	for $_ ( @occs )	{
+		if ( $ids{$_->{'occurrence_no'}} == 1 || $_->{'reid_no'} > 0 )	{	
+			if ( $_->{'species_reso'} ne "n. sp." )	{
+				push @{$includes{$_->{'collection_no'}}} , $_->{'genus_reso'}." ".$_->{'genus_name'}." ".$_->{'species_reso'}." ".$_->{'species_name'};
+			} elsif ( $_->{'genus_reso'} ne "n. gen." )	{
+				push @{$includes{$_->{'collection_no'}}} , $_->{'genus_reso'}." ".$_->{'genus_name'}." ".$_->{'species_name'}." n. sp.";
+			} else	{
+				push @{$includes{$_->{'collection_no'}}} , $_->{'genus_name'}." ".$_->{'species_name'}." n. gen. n. sp.";
+			}
+		}
+	}
+
+	for my $i ( 0..scalar(@$colls)-1 )	{
+		my $coll = $$colls[$i];
+		$coll->{'randomized Ma'} = $ages[$i];
+		if ( $i < scalar(@$colls) - 1 )	{
+			$coll->{'randomized gap'} = $ages[$i] - $ages[$i+1];
+		# this transform should standardized the gap sizes if indeed
+		#  the sampling probability falls exponentially through time
+		#  (which it generally does not do cleanly)
+			#$coll->{'randomized gap'} = log((1/$coll->{'randomized gap'})*$ages[$i]);
+		} else	{
+			$coll->{'randomized gap'} = "NA";
+		}
+		$coll->{'taxa'} = join(',',@{$includes{$coll->{'collection_no'}}});
+		$coll->{'taxa'} =~ s/  / /g;
+		$coll->{'taxa'} =~ s/  / /g;
+		$coll->{'taxa'} =~ s/^ //g;
+		$coll->{'taxa'} =~ s/ $//g;
+		$coll->{'taxa'} =~ s/ ,/,/g;
+		for my $f ( @$fields )	{
+			my $val = $coll->{$f};
+			if ( $coll->{$f} =~ / / )	{
+				$val = '"'.$val.'"';
+			}
+			if ( $f =~ /randomized/ && $coll->{$f} ne "NA" )	{
+				printf OUT "%.3f",$coll->{$f};
+			} elsif ( $coll->{$f} =~ /^[0-9]+(\.|)[0-9]*$/ && $f !~ /_no$/ )	{
+				printf OUT "%.2f",$coll->{$f};
+			} else	{
+				print OUT "$val";
+			}
+			if ( $$fields[scalar(@$fields)-1] eq $f )	{
+				print OUT "\n";
+			} else	{
+				print OUT "\t";
+			}
+		}
+	}
+
+	for my $o ( @occs )	{
+		if ( $o->{'taxon_rank'} =~ /genus/ )	{
+			$o->{'genus_name'} = "<i>".$o->{'genus_name'}."</i>";
+			$o->{'species_name'} = "";
+		} elsif ( $o->{'taxon_rank'} =~ /species/ )	{
+			$o->{'genus_name'} = "<i>".$o->{'genus_name'};
+			$o->{'species_name'} = " ".$o->{'species_name'}."</i>";
+		}
+	}
+
+	if ( $#firsts == 0 )	{
+		if ( $firsts[0]->{'formation'} )	{
+			$firsts[0]->{'formation'} .= " Formation ";
+		}
+		my $agerange = $interval_hash->{$firsts[0]->{'max_interval_no'}}->{'interval_name'};
+		if ( $firsts[0]->{'min_interval_no'} > 0 )	{
+			$agerange .= " - ".$interval_hash->{$firsts[0]->{'min_interval_no'}}->{'interval_name'};
+		}
+		my @includes;
+		for my $o ( @occs )	{
+			if ( $o->{'collection_no'} == $firsts[0]->{'collection_no'} && ( $ids{$o->{'occurrence_no'}} == 1 || $o->{'reid_no'} > 0 ) )	{
+				push @includes , $o->{'genus_name'}.$o->{'species_name'};
+			}
+		}
+		print "<p style=\"padding-left: 1em; text-indent: -1em;\">The collection documenting the first appearance is <a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$firsts[0]->{'collection_no'}\">$firsts[0]->{'collection_name'}</a> ($agerange $firsts[0]->{'formation'} of $firsts[0]->{'country'}: includes ".join(', ',@includes).")</p>\n";
+	} else	{
+		@firsts = sort { $a->{'collection_name'} cmp $b->{'collection_name'} } @firsts;
+		print "<p class=\"large\" style=\"margin-bottom: -1em;\">Collections including first appearances</p>\n";
+		print "<table cellpadding=\"0\" cellspacing=\"0\" style=\"padding: 1.5em;\">\n";
+		my @fields = ('collection_no','collection_name','country','formation');
+		print "<tr valign=\"top\">\n";
+		for my $f ( @fields )	{
+			my $fn = $f;
+			$fn =~ s/^[a-z]/\U$&/;
+			$fn =~  s/_/ /g;
+			$fn =~ s/ no$//;
+			print "<td><div style=\"padding: 0.5em;\">$fn</div></td>\n";
+		}
+		print "<td style=\"padding: 0.5em;\">Age (Ma)</td>\n";
+		print "</tr>\n";
+		my $i;
+		for my $coll ( @firsts )	{
+			$i++;
+			my $classes = (($#firsts > 1) && ($i/2 > int($i/2))) ? qq|"small darkList"| : qq|"small"|;
+			print "<tr valign=\"top\" class=$classes style=\"padding: 3.5em;\">\n";
+			my $collno = $coll->{'collection_no'};
+			$coll->{'collection_no'} = "&nbsp;&nbsp;<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$coll->{'collection_no'}\">".$coll->{'collection_no'}."</a>";
+			if ( $coll->{'state'} && $coll->{'country'} eq "United States" )	{
+				$coll->{'country'} = "US (".$coll->{'state'}.")";
+			}
+			if ( ! $coll->{'formation'} )	{
+				$coll->{'formation'} = "-";
+			}
+			for my $f ( @fields )	{
+				print "<td style=\"padding: 0.5em;\">$coll->{$f}</td>\n";
+			}
+			printf "<td style=\"padding: 0.5em;\">%.1f to %.1f</td>\n",$interval_hash->{$coll->{'max_interval_no'}}->{'lower_boundary'},$interval_hash->{$coll->{'max_interval_no'}}->{'upper_boundary'};
+			print "</tr>\n";
+			my @includes = ();
+			for my $o ( @occs )	{
+				if ( $o->{'collection_no'} == $collno && ( $ids{$o->{'occurrence_no'}} == 1 || $o->{'reid_no'} > 0 ) )	{
+					push @includes , $o->{'genus_name'}.$o->{'species_name'};
+				}
+			}
+			print "<tr valign=\"top\" class=$classes><td></td><td style=\"padding-bottom: 0.5em;\" colspan=\"6\">includes ".join(', ',@includes)."</td></tr>\n";
+		}
+		print "</table>\n\n";
+	}
+	print "</div>\n</div>\n";
+
+	print "<div style=\"padding-left: 6em;\"><a href=\"$READ_URL?action=beginFirstAppearance\">Search again</a> - <a href=\"$READ_URL?action=displayTaxonInfoResults&amp;taxon_no=$nos[0]->{'taxon_no'}\">See more details about $name</a></div>\n";
+	print "</div>\n";
+
+	print $hbo->stdIncludes("std_page_bottom");
+	return;
+}
+
+# JA 13.1.09
+# fast simple algorithm for finding the crown group within any higher taxon
+# the crown is the least nested taxon that has multiple direct, extant children
+sub findCrown	{
+
+	$_ = shift;
+	my @taxa = @{$_};
+	@taxa = sort { $a->{'lft'} <=> $b->{'lft'} } @taxa;
+	# there may be bogus variants of the overall group
+	while ( $taxa[0]->{'taxon_no'} != $taxa[0]->{'synonym_no'} )	{
+		shift @taxa;
+	}
+
+	# first pass: correctly mark all extant taxa
+	my @ps = (0);
+	my @isextant;
+	# we assume taxon 0 is the overall group, so skip it
+	for my $i ( 1..$#taxa )	{
+		if ( $taxa[$i]->{'taxon_no'} == $taxa[$i]->{'synonym_no'} && ( $taxa[$i]->{'taxon_rank'} =~ /genus|species/ || $taxa[$i]->{'lft'} < $taxa[$i]->{'rgt'} - 1 ) )	{
+			while ( $taxa[$ps[$#ps]]->{'rgt'} < $taxa[$i]->{'lft'} )	{
+				pop @ps;
+			}
+			if ( $taxa[$i]->{'extant'} =~ /yes/i )	{
+				$isextant[$i]++;
+				$isextant[$_]++ foreach @ps;
+			}
+			push @ps , $i;
+		}
+	}
+
+	# second pass: count extant immediate children of each taxon
+	@ps = (0);
+	my @children;
+	for my $i ( 1..$#taxa )	{
+		if ( $taxa[$i]->{'taxon_no'} == $taxa[$i]->{'synonym_no'} && ( $taxa[$i]->{'taxon_rank'} =~ /genus|species/ || $taxa[$i]->{'lft'} < $taxa[$i]->{'rgt'} - 1 ) )	{
+			while ( $taxa[$ps[$#ps]]->{'rgt'} < $taxa[$i]->{'lft'} )	{
+				pop @ps;
+			}
+			if ( $isextant[$i] > 0 )	{
+				push @{$children[$ps[$#ps]]} , $i;
+			}
+			push @ps , $i;
+		}
+	}
+
+	if ( $#{$children[0]} > 0 )	{
+		my @names;
+		@{$children[0]} = sort { $taxa[$a]->{'taxon_name'} cmp $taxa[$b]->{'taxon_name'} } @{$children[0]};
+		push @names , $taxa[$_]->{'taxon_name'} foreach @{$children[0]};
+		return join(',',@names);
+	} elsif ( $#{$children[0]} < 0 )	{
+		return "";
+	} else	{
+		my $t = ${$children[0]}[0];
+		while ( $#{$children[$t]} == 0 )	{
+			$t = ${$children[$t]}[0];
+		}
+		return $taxa[$t]->{'taxon_name'};
+	}
+
+}
+
 # Small utility function, added 01/06/2005
 # Lump_ranks will cause taxa with the same name but diff rank (same taxa) to only pass
 # back one taxon_no (it doesn't really matter which)
