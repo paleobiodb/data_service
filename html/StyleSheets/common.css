@@ -67,12 +67,12 @@ A:hover.menu {
 
 .homeBodyLinks a:link { color: goldenrod; }
 .homeBodyLinks a:visited { color: goldenrod; }
-.homeBodyLinks a:active { color: orange; }
-.homeBodyLinks a:hover { color: orange; }
+.homeBodyLinks a:active { color: lightcoral; }
+.homeBodyLinks a:hover { color: lightcoral; }
 a:link.homeBodyLinks { color: goldenrod; }
 a:visited.homeBodyLinks { color: goldenrod; }
-a:active.homeBodyLinks { color: orange; }
-a:hover.homeBodyLinks { color: orange; }
+a:active.homeBodyLinks { color: lightcoral; }
+a:hover.homeBodyLinks { color: lightcoral; }
 
 A:link.boring	{
 	color : #7070FF;
@@ -237,8 +237,8 @@ H6 {font-size: .9em;}
 
 .leftBar a:link { color: white; }
 .leftBar a:visited { color: white; }
-.leftBar a:hover { color: black; }
-.leftBar a:active { color: black; }
+.leftBar a:hover { color: gold; }
+.leftBar a:active { color: gold; }
 
 
 .leftBarSection	{
@@ -247,19 +247,9 @@ H6 {font-size: .9em;}
     float: left;
     clear: both;
     width: 8em;
-    padding-bottom: 1em;
-    border-bottom: 1px solid white;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid #191970;
     overflow: hidden;
-}
-
-.leftBarShadow	{
-    display: inline;
-    position: relative;
-    float: left;
-    clear: both;
-    height: 1px;
-    width: 8em;
-    background-color: slategray;
 }
 
 .plusMinus	{
