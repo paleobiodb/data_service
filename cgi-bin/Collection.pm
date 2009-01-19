@@ -564,7 +564,7 @@ IS NULL))";
     # This can be country or continent. If its country just treat it like normal, else
     # do a lookup of all the countries in the continent
     if ($options{"country"}) {
-        if ($options{"country"} =~ /^(North America|South America|Europe|Africa|Antarctica|Asia|Australia)$/) {
+        if ($options{"country"} =~ /^(North America|South America|Europe|Africa|Antarctica|Asia|Australia)/) {
             if ( ! open ( REGIONS, "data/PBDB.regions" ) ) {
                 my $error_message = $!;
                 die($error_message);
@@ -578,7 +578,10 @@ IS NULL))";
                 $countries =~ s/'/\\'/g;
                 $REGIONS{$region} = $countries;
             }
-            my @countries = split(/\t/,$REGIONS{$options{'country'}});
+            my @countries;
+            for my $r ( split(/[^A-Za-z ]/,$options{"country"}) )	{
+                push @countries , split(/\t/,$REGIONS{$r});
+            }
             foreach my $country (@countries) {
                 $country = "'".$country."'";
             }
@@ -591,7 +594,7 @@ IS NULL))";
 
     # get the column info from the table
     my $sth = $dbh->column_info(undef,'pbdb','collections','%');
-    
+
 	# Compose the WHERE clause
 	# loop through all of the possible fields checking if each one has a value in it
     my %all_fields = ();
@@ -601,28 +604,36 @@ IS NULL))";
         my $type = $row->{'TYPE_NAME'};
         my $is_nullable = ($row->{'IS_NULLABLE'} eq 'YES') ? 1 : 0;
         my $is_primary =  $row->{'mysql_is_pri_key'};
-            
+
         # These are special cases handled above in code, so skip them
         next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country)$/);
 
 		if (exists $options{$field} && $options{$field} ne '') {
 			my $value = $options{$field};
-			if ($value eq "NOT_NULL_OR_EMPTY") {
-				push @where, "(c.$field IS NOT NULL AND c.$field !='')";
-			} elsif ($value eq "NULL_OR_EMPTY") {
-				push @where, "(c.$field IS NULL OR c.$field ='')";
-			} elsif ( $type =~ /ENUM/i) {
+			my ($null,$endnull);
+		# special handling if user passes a list with NULL_OR_EMPTY
+			if ( $value =~ /(^NULL_OR_EMPTY)|(,NULL_OR_EMPTY)/ )	{
+				$value =~ s/(|,)(NULL_OR_EMPTY)(|,)//;
+				$null = "(c.$field IS NULL OR c.$field='' OR ";
+				$endnull = ")";
+			}
+
+			if ( $value eq "NOT_NULL_OR_EMPTY" )	{
+				push @where , "(c.$field IS NOT NULL AND c.$field !='')";
+			} elsif ($value eq "NULL_OR_EMPTY" ) {
+				push @where ,"(c.$field IS NULL OR c.$field ='')";
+			} elsif ( $type =~ /ENUM/i ) {
 				# It is in a pulldown... no wildcards
-				push @where, "c.$field=".$dbh->quote($value);
-			} elsif ( $type =~ /SET/i) {
+				push @where, "$null c.$field IN ('".join("','",split(/,/,$value))."')$endnull";
+			} elsif ( $type =~ /SET/i ) {
                 # Its a set, use the special set syntax
-				push @where, "FIND_IN_SET(".$dbh->quote($value).", c.$field)";
-			} elsif ( $type =~ /INT/i) {
+				push @where, "$null FIND_IN_SET(".$dbh->quote($value).", c.$field)$endnull";
+			} elsif ( $type =~ /INT/i ) {
                 # Don't need to quote ints, however cast them to int a security measure
-				push @where, "c.$field=".int($value);
+				push @where, "$null c.$field=".int($value).$endnull;
 			} else {
                 # Assuming character, datetime, etc. 
-				push @where, "c.$field LIKE ".$dbh->quote('%'.$value.'%');
+				push @where, "$null c.$field LIKE ".$dbh->quote('%'.$value.'%').$endnull;
 			}
 		}
 	}
