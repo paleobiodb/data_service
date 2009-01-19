@@ -3170,6 +3170,9 @@ sub displayFirstAppearance	{
 			push @ranks , ('subgenus','genus','tribe','subfamily','family');
 		}
 		$sql = "SELECT a.taxon_no,taxon_name,type_locality,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'}." AND taxon_rank IN ('".join("','",@ranks)."')";
+		if ( $q->param('types_only') =~ /yes/i )	{
+			$sql .= " AND type_locality>0";
+		}
 		if ( $q->param('type_body_part') )	{
 			my $parts;
 			if ( $q->param('type_body_part') =~ /multiple teeth/i )	{
@@ -3238,6 +3241,7 @@ sub displayFirstAppearance	{
 			if ( $s->{'type_locality'} > 0 ) { $options{'collection_list'} .= ",".$s->{'type_locality'}; }
 		}
 		$options{'collection_list'} =~ s/^,//;
+		push @{$options{'species_reso'}} , "n. sp.";
 	}
 
 	# similarly, we could use getCollectionsSet but it would be overkill
@@ -3551,10 +3555,16 @@ sub displayFirstAppearance	{
 
 	print "<div class=\"displayPanel\" style=\"margin-top: 2em;\">\n<span class=\"displayPanelHeader\" style=\"font-size: 1.2em;\">First occurrence details</span>\n<div class=\"displayPanelContents\">\n";
 
+	# getCollections won't return multiple occurrences per collection, so...
 	my @collnos;
 	push @collnos , $_->{'collection_no'} foreach @$colls;
-	# getCollections won't return multiple occurrences per collection, so...
-	$sql = "(SELECT taxon_rank,collection_no,occurrence_no,reid_no,genus_reso,genus_name,IF(taxon_rank LIKE '%species',species_reso,'') species_reso,IF(taxon_rank LIKE '%species',species_name,'') species_name FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES' GROUP BY collection_no,r.taxon_no) UNION (SELECT taxon_rank,collection_no,occurrence_no,0,genus_reso,genus_name,IF(taxon_rank LIKE '%species',species_reso,'') species_reso,IF(taxon_rank LIKE '%species',species_name,'') species_name FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).") GROUP BY collection_no,o.taxon_no) ORDER BY genus_name,species_name";
+	my $reso;
+	# not returning occurrences means that getCollections can't apply this
+	#  filter consistently
+	if ( $q->param('types_only') =~ /yes/i )	{
+		$reso = " AND species_reso='n. sp.'";
+	}
+	$sql = "(SELECT taxon_rank,collection_no,occurrence_no,reid_no,genus_reso,genus_name,IF(taxon_rank LIKE '%species',species_reso,'') species_reso,IF(taxon_rank LIKE '%species',species_name,'') species_name FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES'$reso GROUP BY collection_no,r.taxon_no) UNION (SELECT taxon_rank,collection_no,occurrence_no,0,genus_reso,genus_name,IF(taxon_rank LIKE '%species',species_reso,'') species_reso,IF(taxon_rank LIKE '%species',species_name,'') species_name FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).")$reso GROUP BY collection_no,o.taxon_no) ORDER BY genus_name,species_name";
 	my @occs = @{$dbt->getData($sql)};
 
 	# print data to output file JA 17.1.09
