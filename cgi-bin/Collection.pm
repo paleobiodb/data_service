@@ -2296,7 +2296,10 @@ sub getReidHTMLTableByOccNum {
 
 sub getClassOrderFamily	{
 	my $rowref_ref = shift;
-	my $rowref = ${$rowref_ref};
+	my $rowref;
+	if ( $rowref_ref )	{
+		$rowref = ${$rowref_ref};
+	}
 	my $class_array_ref = shift;
 	my @class_array = @{$class_array_ref};
 
