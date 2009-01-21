@@ -207,7 +207,6 @@ sub htmlTaxaTree {
 
     my %rank_order = %Taxon::rankToNum;
 
-    $html .= "<table>";
     my $MAX_SEEN = 0;
 
     $tree->{'depth'} = 0;
