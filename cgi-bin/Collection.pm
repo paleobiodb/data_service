@@ -2300,50 +2300,88 @@ sub getClassOrderFamily	{
 	my $class_array_ref = shift;
 	my @class_array = @{$class_array_ref};
 
-	my $maxyr1 = 3000;
-	my $maxyr2 = 3000;
-	my $maxname1 = "";
-	my $maxname2 = "";
-	my $maxno1 = "";
-	my $maxno2 = "";
-	for my $t ( @class_array ) {
+	my ($toplowlevel,$maxyr,$toplevel) = (-1,'','');
+	# common name and family are easy
+	for my $i ( 0..$#class_array ) {
+		my $t = $class_array[$i];
 		if ( $t->{'taxon_rank'} =~ /superclass|phylum|kingdom/ )	{
 			last;
 		}
 		if ( ! $rowref->{'common_name'} && $t->{'common_name'} )	{
 			$rowref->{'common_name'} = $t->{'common_name'};
 		}
-		if ( $t->{'taxon_rank'} eq "family" && ! $t->{'family'} && ! $t->{'order'} && ! $t->{'class'} )	{
+		if ( $t->{'taxon_rank'} eq "family" && ! $t->{'family'} )	{
 			$rowref->{'family'} = $t->{'taxon_name'};
 			$rowref->{'family_no'} = $t->{'taxon_no'};
-		} elsif ( $t->{'taxon_rank'} eq "order" && ! $rowref->{'order'} && ! $rowref->{'class'} )	{
-			$rowref->{'order'} = $t->{'taxon_name'};
-			$rowref->{'order_no'} = $t->{'taxon_no'};
-		} elsif ( $t->{'taxon_rank'} eq "class" && ! $rowref->{'class'} )	{
+		}
+		if ( $t->{'taxon_rank'} =~ /family|tribe|genus|species/ )	{
+			$toplowlevel = $i;
+		}
+	}
+
+	# makes it possible for a higher-order name to be returned as its own
+	#  "order" or "class" (because toplowlevel is 0)
+	if ( $toplowlevel >= 0 )	{
+		$toplowlevel++;
+	} else	{
+		$toplowlevel = 0;
+	}
+
+	# find a plausible class name
+	for my $i ( $toplowlevel..$#class_array ) {
+		my $t = $class_array[$i];
+		if ( $t->{'taxon_rank'} =~ /superclass|phylum|kingdom/ )	{
+			last;
+		}
+		# take a class if you can get it
+		if ( $t->{'taxon_rank'} eq "class" )	{
+			$maxyr = $t->{'pubyr'};
 			$rowref->{'class'} = $t->{'taxon_name'};
 			$rowref->{'class_no'} = $t->{'taxon_no'};
+			$toplevel = $i;
+			last;
 		}
-		if ( $t->{'pubyr'} && $t->{'pubyr'} < $maxyr2 && ! $rowref->{'order'} && ! $rowref->{'class'} && $t->{'taxon_rank'} !~ /family|tribe|genus|species/ )	{
-			$maxyr2 = $t->{'pubyr'};
-			$maxname2 = $t->{'taxon_name'};
-			$maxno2 = $t->{'taxon_no'};
-		} elsif ( $t->{'pubyr'} && $t->{'pubyr'} < $maxyr1 && $rowref->{'order'} && ! $rowref->{'class'} && $t->{'taxon_rank'} !~ /family|tribe|genus|species/ )	{
-			$maxyr1 = $t->{'pubyr'};
-			$maxname1 = $t->{'taxon_name'};
-			$maxno1 = $t->{'taxon_no'};
+		# fish for a useable unranked clade
+		if ( ( ! $maxyr || $t->{'pubyr'} <= $maxyr ) && $t->{'taxon_rank'} eq "unranked clade" )	{
+			$maxyr = $t->{'pubyr'};
+			$rowref->{'class'} = $t->{'taxon_name'};
+			$rowref->{'class_no'} = $t->{'taxon_no'};
+			$toplevel = $i;
 		}
-		if ( $rowref->{'order'} && $rowref->{'class'} )	{
+	}
+
+	# find a plausible ordinal name
+	for my $i ( $toplowlevel..$toplevel-1 ) {
+		my $t = $class_array[$i];
+		# something is seriously wrong if a superordinal name has been
+		#  encountered, but if we already have a good "class" we might
+		#  want to use it anyway, so allow it to be checked later
+		if ( $t->{'taxon_rank'} =~ /class|phylum|kingdom/ )	{
+			$toplevel = $i+1;
+			last;
+		}
+		if ( $t->{'taxon_rank'} eq "order" )	{
+			$rowref->{'order'} = $t->{'taxon_name'};
+			$rowref->{'order_no'} = $t->{'taxon_no'};
 			last;
 		}
 	}
-	if ( ! $rowref->{'order'} && $maxname2 )	{
-		$rowref->{'order'} = $maxname2;
-		$rowref->{'order_no'} = $maxno2;
+
+	# otherwise extract the oldest unranked intermediate-level name
+	if ( ! $rowref->{'order'} )	{
+		$maxyr = "";
+		#  has been encountered, but if we already have a good "class"
+		#  we might want to use it anyway
+		for my $i ( $toplowlevel..$toplevel-1 ) {
+			my $t = $class_array[$i];
+			if ( ! $maxyr || $t->{'pubyr'} < $maxyr )	{
+				$maxyr = $t->{'pubyr'};
+				$rowref->{'order'} = $t->{'taxon_name'};
+				$rowref->{'order_no'} = $t->{'taxon_no'};
+			}
+		}
 	}
-	if ( ! $rowref->{'class'} && $maxname1 )	{
-		$rowref->{'class'} = $maxname1;
-		$rowref->{'class_no'} = $maxno1;
-	}
+
 	return $rowref;
 }
 
