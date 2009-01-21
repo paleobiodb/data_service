@@ -247,7 +247,7 @@ sub displayTaxonInfoResults {
     <td id="tab1" class="tabOff" style="white-space: nowrap;"
       onClick="showPanel(1);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(1)">Classification</td>
+      onMouseOut="setState(1)">Basic info</td>
     <td id="tab2" class="tabOff" style="white-space: nowrap;"
       onClick="showPanel(2);" 
       onMouseOver="hover(this);" 
@@ -255,7 +255,7 @@ sub displayTaxonInfoResults {
     <td id="tab3" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(3);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(3)">Synonymy</td>
+      onMouseOut="setState(3)">Classification</td>
     <td id="tab4" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(4);" 
       onMouseOver="hover(this);" 
@@ -283,6 +283,8 @@ sub displayTaxonInfoResults {
 </div>
 ';
 
+    my ($htmlCOF,$htmlClassification) = displayTaxonClassification($dbt, $taxon_no, $taxon_name, $is_real_user);
+
     print qq|
 <script language="Javascript" type="text/javascript">
 <!--
@@ -292,7 +294,8 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 </script>
 
 <div align="center" style="margin-bottom: 0em;">
-<p class="pageTitle" style="white-space: nowrap;">$display_name</p>
+<p class="pageTitle" style="white-space: nowrap; margin-bottom: 0em;">$display_name</p>
+<p class="medium">$htmlCOF</p>
 </div>
 
 <div style="position: relative; top: -3.5em; left: 43em; margin-bottom: -2.5em; width: 8em; z-index: 9;">
@@ -318,12 +321,23 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
     my %modules = ();
     $modules{$_} = 1 foreach @modules_to_display;
 
+    my ($htmlBasicInfo,$htmlSynonyms) = displayTaxonHistory($dbt, $taxon_no, $is_real_user);
 
 	# classification
 	if($modules{1}) {
         print '<div id="panel1" class="panel">';
-        print '<div align="center" class="small" style="margin-top: -1em;">';
-		print displayTaxonClassification($dbt, $taxon_no, $taxon_name,$is_real_user);
+        my $width = "52em;";
+        if ( $htmlBasicInfo =~ /No taxon/ )	{
+            $width = "44em;";
+        }
+        print qq|<div align="center" class="small" style="margin-left: 1em; margin-top: 1em;">
+<div style="width: $width;">
+<div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left;">
+<span class="displayPanelHeader">Taxonomy</span>
+<div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
+|;
+	print $htmlBasicInfo;
+	print "</div>\n</div>\n\n";
 
         my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
         my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
@@ -354,8 +368,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 
         print "</div>\n";
         print "</p>";
-        print "</div>\n";
-        print "</div>\n";
+        print "</div>\n</div>\n</div>\n\n";
 	}
 
     print '<script language="JavaScript" type="text/javascript">
@@ -365,10 +378,17 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 	# synonymy
 	if($modules{2}) {
         print qq|<div id="panel2" class="panel";">
-<div class="displayPanel" style="margin-top: -1em; padding-top: 1em;">
+<div align="center" class="small"">
+|;
+	if ( $htmlSynonyms )	{
+		print qq|<div class="displayPanel" style="margin-bottom: 2em; padding-top: -1em; width: 42em; text-align: left;">
+<span class="displayPanelHeader">Synonyms</span>
 <div align="center" class="small displayPanelContent">
 |;
-        print displayTaxonHistory($dbt, $taxon_no, $is_real_user);
+		print $htmlSynonyms;
+		print "</div>\n</div>\n";
+	}
+    	print displaySynonymyList($dbt, $taxon_no);
         if ( $taxon_no )	{
             print "<p>Is something missing? <a href=\"$READ_URL?user=Guest&amp;action=displayPage&amp;page=join_us\">Join the Paleobiology Database</a> and enter the data</p>\n";
         } else	{
@@ -380,17 +400,18 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 
 	if ($modules{3}) {
         print '<div id="panel3" class="panel">';
-        print '<div align="center" style="margin-top: -2em;">';
-    	print displaySynonymyList($dbt, $taxon_no);
-        print "</div>\n";
-        print "</div>\n";
+        print '<div align="center">';
+        print $htmlClassification;
+        print "</div>\n</div>\n\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
 	}
 
     if ($modules{4}) {
         print '<div id="panel4" class="panel">';
         print '<div align="center" class="small">';
-    	doCladograms($dbt, $taxon_no, $spelling_no, $taxon_name);
+        if ($is_real_user) {
+    	    doCladograms($dbt, $taxon_no, $spelling_no, $taxon_name);
+        }
         print "</div>\n";
         print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
@@ -400,7 +421,6 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
         print '<div id="panel5" class="panel">';
         print '<div align="center" class="small" "style="margin-top: -2em;">';
         print displayDiagnoses($dbt,$taxon_no);
-        print "<br>\n";
         unless ($quick) {
 		    print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
         }
@@ -432,7 +452,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 	# map
     if ($modules{7}) {
         print '<div id="panel7" class="panel">';
-        print '<div align="center">';
+        print '<div align="center" style="margin-top: -1em;">';
 
         if ($is_real_user) {
             displayMap($dbt,$q,$s,$collectionsSet);
@@ -504,6 +524,7 @@ sub doCladograms {
     if ( $taxon_no < 1 && $taxon_name =~ / / )	{
         my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
         $taxon_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
+        $spelling_no = $taxon_no;
         $stepsup = 0;
     }
 
@@ -539,15 +560,19 @@ sub doCladograms {
     if ( ! $html )	{
         $html = "<div class=\"displayPanelContent\">\n<div align=\"center\" class=\"medium\"><i>No data on relationships are available</i></div></div>";
     } else	{
-        $html = "<div class=\"small displayPanelContent\">\n".$html;
+        $html = "<div class=\"small displayPanelContent\" style=\"padding-bottom: 1em;\">\n<div style=\"margin-top: -1.5em;\">\n".$html."\n</div>\n\n";
     }
 
-    print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 0em; padding-bottom: 1em;">
+    print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 0em; padding-top: 0em;">
     <span class="displayPanelHeader" class="large">Classification of relatives</span>
 |;
     print $html;
     print "</div>\n\n";
 
+        print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 2em; padding-bottom: 1em;">
+    <span class="displayPanelHeader" class="large">Cladograms</span>
+        <div class="displayPanelContent">
+|;
     if (@cladograms) {
         print "<div align=\"center\" style=\"margin-top: 1em;\">";
         foreach my $row (@cladograms) {
@@ -559,14 +584,10 @@ sub doCladograms {
         }
         print "</div>";
     } else {
-        print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 2em; padding-bottom: 1em;">
-    <span class="displayPanelHeader" class="large">Cladograms</span>
-        <div class="displayPanelContent">
-          <div align="center"><i>No cladograms are available</i></div>
-        </div>
-    </div>
-|;
+          print "<div align=\"center\"><i>No cladograms are available</i></div>\n\n";
     }
+    print "</div>\n</div>\n\n";
+
 } 
 
 sub doThumbs {
@@ -812,7 +833,7 @@ sub doCollections{
         $range .= "<span class=\"verysmall\" style=\"padding-left: 2em;\"><i>Collections with crown group taxa are in <b>bold</b>.</i></span></div><br>\n";
     }
 
-    print qq|<div class="displayPanel" style="margin-top: 2em;">
+    print qq|<div class="displayPanel" style="margin-top: 0em;">
 <div class="displayPanelContent">
 |;
 
@@ -1375,11 +1396,7 @@ sub displayTaxonClassification {
     my ($dbt,$orig_no,$taxon_name,$is_real_user) = @_;
     my $dbh = $dbt->dbh;
 
-    # the html actually returned by the function
-    my $output =qq|
-<div class="displayPanel">
-<div class="displayPanelContent">
-|;
+    my $output;
 
     # These variables will reflect the name as currently used
     my ($taxon_no,$taxon_rank) = (0,"");
@@ -1419,12 +1436,20 @@ sub displayTaxonClassification {
 
     # Do the classification
     my @table_rows = ();
+    my $cofHTML;
     if ($classification_no) {
         # Now find the rank,name, and publication of all its parents
         my $orig_classification_no = getOriginalCombination($dbt,$classification_no);
         my $parent_hash = TaxaCache::getParents($dbt,[$orig_classification_no],'array_full');
-        my @parent_array = @{$parent_hash->{$orig_classification_no}}; 
-        
+        my @parent_array = @{$parent_hash->{$orig_classification_no}};
+        my $cof = Collection::getClassOrderFamily('',\@parent_array);
+        if ( $cof->{'class'} || $cof->{'order'} || $cof->{'family'} )	{
+            $cofHTML = $cof->{'class'}." - ".$cof->{'order'}." - ".$cof->{'family'};
+            $cofHTML =~ s/^ - //;
+            $cofHTML =~ s/ - $//;
+            $cofHTML =~ s/ -  - / - /;
+        }
+
         if (@parent_array) {
             my ($subspecies_no,$species_no,$subgenus_no,$genus_no) = (0,0,0,0);
             # Set for focal taxon
@@ -1470,8 +1495,13 @@ sub displayTaxonClassification {
             #
             # Print out the table in the reverse order that we initially made it
             #
-            $output .= "<table><tr><td valign=\"top\">\n";
-            $output .= "<table><tr valign=\"top\"><th>Rank</th><th>Name</th><th>Author</th></tr>";
+            # the html actually returned by the function
+            $output =qq|
+<div class="small displayPanel">
+<div class="displayPanelContent">
+<table><tr><td valign="top">
+<table><tr valign="top"><th>Rank</th><th>Name</th><th>Author</th></tr>
+|;
             my $class = '';
             for(my $i = scalar(@table_rows)-1;$i>=0;$i--) {
                 if ( $i == int((scalar(@table_rows) - 2) / 2) )	{
@@ -1509,18 +1539,27 @@ sub displayTaxonClassification {
                 $output .= '</tr>';
             }
             $output .= "</table>";
-            $output .= "</td></tr></table>";
+            $output .= "</td></tr></table>\n\n";
+            $output .= "<p class=\"small\" style=\"margin-left: 2em; margin-right: 2em; text-align: left;\">If no rank is listed, the taxon is considered an unranked clade in modern classifications. Ranks may be repeated or presented in the wrong order because authors working on different parts of the classification may disagree about how to rank taxa.</p>\n\n";
            
         } else {
-            $output .= "<p><i>No classification data are available</i></p>";
+            $output =qq|
+<div class="small displayPanel" style="width: 42em;">
+<div class="displayPanelContent">
+<p><i>No classification data are available</i></p>
+|;
         }
     } else {
-        $output .= "<p><i>No classification data are available</i></p>";
+        $output =qq|
+<div class="small displayPanel" style="width: 42em;">
+<div class="displayPanelContent">
+<p><i>No classification data are available</i></p>
+|;
     }
 
     $output .= "</div>\n</div>\n\n";
 
-    return $output;
+    return ($cofHTML,$output);
 }
 
 # Separated out from classification section PS 09/22/2005
@@ -1688,7 +1727,7 @@ sub displayRelatedTaxa {
         my $rank = ($focal_taxon_rank eq 'species') ? 'Subspecies' :
                    ($focal_taxon_rank eq 'genus') ? 'Species' :
                                                     'Subtaxa';
-$output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+$output .= qq|<div class="displayPanel" align="left" style="margin-bottom: 2em; padding-left: 1em; padding-bottom: 1em;">
   <span class="displayPanelHeader">$rank</span>
   <div class="displayPanelContent">
 |;
@@ -1699,7 +1738,7 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
     }
 
     if (@possible_child_taxa_links) {
-$output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+$output .= qq|<div class="displayPanel" align="left" style="margin-bottom: 2em; padding-left: 1em; padding-bottom: 1em;">
   <span class="displayPanelHeader">Species lacking formal opinion data</span>
   <div class="displayPanelContent">
 |;
@@ -1716,7 +1755,7 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
         my $rank = ($focal_taxon_rank eq 'species') ? 'species' :
                    ($focal_taxon_rank eq 'genus') ? 'genera' :
                                                     'taxa';
-$output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+$output .= qq|<div class="displayPanel" align="left" style="margin-bottom: 2em; padding-left: 1em; padding-bottom: 1em;">
   <span class="displayPanelHeader">Sister $rank</span>
   <div class="displayPanelContent">
 |;
@@ -1727,7 +1766,7 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
     }
     
     if (@possible_sister_taxa_links) {
-$output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; padding-bottom: 1em;">
+$output .= qq|<div class="displayPanel" align="left" style="margin-bottom: 2em; padding-left: 1em; padding-bottom: 1em;">
   <span class="displayPanelHeader">Sister species lacking formal opinion data</span>
   <div class="displayPanelContent">
 |;
@@ -1736,10 +1775,6 @@ $output .= qq|<div class="displayPanel" align="left" style="padding-left: 1em; p
         $output .= qq|  </div>
 </div>|;
     }
-
-    if (!$output) {
-        $output = "<p><i>No related taxa found</i></p>";
-    } 
 
     if ($orig_no) {
         $output .= '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download authority and opinion data</a></b> - <b><a href=# onClick="javascript: document.doViewClassification.submit()">View classification of included taxa</a></b>';
@@ -1766,7 +1801,7 @@ sub displayTaxonHistory {
 	my $output = "";  # html output...
 	
 	unless($taxon_no) {
-		return "<p><i>No taxonomic history is available</i></p>";
+		return "<p><i>No taxonomic data are available</i></p>";
 	}
 
     # Surrounding able prevents display bug in firefox
@@ -1804,23 +1839,31 @@ sub displayTaxonHistory {
 	
 	
 	# Print the info for the original combination of the passed in taxon first.
-	$output .= getSynonymyParagraph($dbt, $original_combination_no,$is_real_user);
+	my $basicOutput .= getSynonymyParagraph($dbt, $original_combination_no, $is_real_user);
 
 	# Get synonymies for all of these original combinations
-    my @paragraphs = ();
+	my @paragraphs = ();
 	foreach my $child (@results) {
 		my $list_item = getSynonymyParagraph($dbt, $child, $is_real_user);
-		push(@paragraphs, "<br><br>$list_item\n") if($list_item ne "");
+		push(@paragraphs, "<li style=\"padding-bottom: 1.5em;\">$list_item</li>\n") if($list_item ne "");
 	}
 
 	# Now alphabetize the rest:
-	@paragraphs = sort {lc($a) cmp lc($b)} @paragraphs;
-	foreach my $rec (@paragraphs) {
-		$output .= $rec;
+	if ( @paragraphs )	{
+		@paragraphs = sort {lc($a) cmp lc($b)} @paragraphs;
+		foreach my $rec (@paragraphs) {
+			$output .= $rec;
+		}
+	} else	{
+		$output = "";
 	}
 
-	$output .= "</ul></td></tr></table>";
-	return $output;
+	if ( $output !~ /<li/ )	{
+		$output = "";
+	} else	{
+		$output .= "</ul></td></tr></table>";
+	}
+	return ($basicOutput,$output);
 }
 
 
@@ -1829,7 +1872,7 @@ sub displayTaxonHistory {
 # taxonomic history, for example, if you search for a particular taxon
 # and then check the taxonomic history box at the left.
 #
-sub getSynonymyParagraph{
+sub getSynonymyParagraph	{
 	my $dbt = shift;
 	my $taxon_no = shift;
     my $is_real_user = shift;
@@ -1890,17 +1933,17 @@ sub getSynonymyParagraph{
 		for my $row ( @results )	{
 			if ( $row->{'spelling_reason'} =~ /rank/ )	{
 			# rank was changed at some point
-				$text .= "<li><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> was named as $article $rank. ";
+				$text .= "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> was named as $article $rank. ";
 				$rankchanged++;
 				last;
 			}
 		}
 		# rank was never changed
 		if ( ! $rankchanged )	{
-			$text .= "<li><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> is $article $rank. ";
+			$text .= "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a> is $article $rank. ";
 		}
 	} else	{
-		$text .= "<li><i><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a></i> was named by ";
+		$text .= "<i><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon->{taxon_no}&amp;is_real_user=$is_real_user\">$taxon->{taxon_name}</a></i> was named by ";
 	        if ($taxon->{'ref_is_authority'}) {
 			$text .= Reference::formatShortRef($taxon,'alt_pubyr'=>1,'show_comments'=>1,'link_id'=>1);
 		} else {
@@ -2220,7 +2263,6 @@ sub getSynonymyParagraph{
         }
     }
     
-    $text .= "</li>";
 	return $text;
 
     # Only used in this function, just a simple utility to print out a formatted list of references
@@ -2840,7 +2882,7 @@ sub displayMeasurements {
         }
 
         if ( $mass_string )	{
-            $mass_string = qq|<div class="displayPanel" align="left" style="width: 36em;">
+            $mass_string = qq|<div class="displayPanel" align="left" style="width: 36em; margin-bottom: 2em;">
 <span class="displayPanelHeader" class="large">Body mass estimates</span>
 <div align="center" class="displayPanelContent">
 <table cellspacing="6"><tr><th align="center">estimate</th><th align="center">equation</th><th align="center">reference</th></tr>
@@ -2911,7 +2953,7 @@ $mass_string
 sub displayDiagnoses {
     my ($dbt,$taxon_no) = @_;
     my $str = "";
-    $str .= qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
+    $str .= qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; margin-bottom: 2em; padding-bottom: 1em;">
 <span class="displayPanelHeader" class="large">Diagnosis</span>
 <div class="displayPanelContent">
 |;
@@ -2956,8 +2998,9 @@ sub displaySynonymyList	{
 	my $is_real_user = shift;
 	my $output = "";
 
-	$output .= qq|<div align="left" class="displayPanel" style="width: 32em; margin-top: 2em;">
-<div align="center" class="small displayPanelContent" style="padding-top: 0.5em; padding-bottom: 1em;">
+	$output .= qq|<div align="left" class="displayPanel" style="width: 42em; margin-top: 0em;">
+<span class="displayPanelHeader" style="text-align: left;">Synonymy list</span>
+<div align="center" class="small displayPanelContent" style="padding-top: 0em; padding-bottom: 1em;">
 |;
 
 	unless ($taxon_no) {
