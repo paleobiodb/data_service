@@ -9,7 +9,7 @@ use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD);
 
 # list of allowable data fields.
-use fields qw(opinion_no reference_no dbt DBrow);  
+use fields qw(opinion_no reference_no author1last author2last pubyr dbt DBrow);  
 
 # Optionally pass it an opinion_no
 sub new {
@@ -28,6 +28,9 @@ sub new {
         $self->{'DBrow'} = $results[0];
         $self->{'opinion_no'} = $results[0]->{'opinion_no'};
         $self->{'reference_no'} = $results[0]->{'reference_no'};
+        $self->{'author1last'} = $results[0]->{'author1last'};
+        $self->{'author2last'} = $results[0]->{'author2last'};
+        $self->{'pubyr'} = $results[0]->{'pubyr'};
     } else {
         carp "Could not create opinion object with passed in opinion $opinion_no";
         return;
@@ -392,7 +395,7 @@ sub displayOpinionForm {
     # try to match refs in the database to entered author data JA 14-15.1.09
     # this is a loose match because merely listing a bunch of refs is harmless
     if ( $fields{'author1last'} && $fields{'pubyr'} =~ /^[0-9]*$/ )	{
-        my $sql = "SELECT reference_no FROM refs WHERE author1last='".$fields{'author1last'}."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'};
+        my $sql = "SELECT reference_no FROM refs WHERE author1last='".$fields{'author1last'}."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'}." AND reference_no!=".$s->get('reference_no');
         if ( $fields{'author2last'} )	{
             $sql .= " AND author2last='".$fields{'author2last'}."'";
         }
@@ -719,7 +722,7 @@ sub submitOpinionForm {
 
 	# build up a hash of fields/values to enter into the database
 	my %fields;
-	
+
 	# Simple checks
     my $isNewEntry = ($q->param('opinion_no') > 0) ? 0 : 1;
 
@@ -734,6 +737,9 @@ sub submitOpinionForm {
         $fields{'opinion_no'} = $o->get('opinion_no');
         $fields{'child_no'} = $o->get('child_no');
         $fields{'reference_no'} = $o->get('reference_no');
+        $fields{'old_author1last'} = $o->get('author1last');
+        $fields{'old_author2last'} = $o->get('author2last');
+        $fields{'old_pubyr'} = $o->get('pubyr');
     } else {	
         $fields{'child_no'} = TaxonInfo::getOriginalCombination($dbt,$q->param('child_no')); 
 		$fields{'reference_no'} = $s->get('reference_no');
@@ -804,9 +810,11 @@ sub submitOpinionForm {
 
             if ( $row->{'c'} > 0 || $row2->{'c'} > 0 ) {
                 $errors->add("The author's opinion on ".$childName." already has been entered - an author can only have one opinion on a name");
-            } else	{
-            # although the opinion doesn't seem to have been entered, there
-            #  still might be a reference matching this author info
+            }
+        }
+
+        #  there might be a reference matching this author info
+            if ( ! $q->param('confirm_no_ref') && $q->param('author1last') && $q->param('pubyr') && ( $fields{'old_author1last'} ne $q->param('author1last') || $fields{'old_author2last'} ne $q->param('author2last') || $fields{'old_pubyr'} != $q->param('pubyr') ) )	{
                 my $sql = "SELECT reference_no FROM refs WHERE author1last='".$q->param('author1last')."' AND pubyr=".$q->param('pubyr');
                 if ( $q->param('author2last') )	{
                     $sql .= " AND author2last='".$q->param('author2last')."'";
@@ -814,11 +822,12 @@ sub submitOpinionForm {
                 my @rows = @{$dbt->getData($sql)};
                 if ( $#rows == 0 )	{
                     $errors->add("Please check to see if the opinion comes from the reference listed below");
+                    $q->param('confirm_no_ref' => "YES");
                 } elsif ( $#rows > 0 )	{
                     $errors->add("Please check to see if the opinion comes from one of the references listed below");
+                    $q->param('confirm_no_ref' => "YES");
                 }
             }
-        }
 
 		if (! $q->param('author1last')) {
 			$errors->add('You must enter at least the last name of the first author');	
