@@ -740,9 +740,9 @@ sub doCollections{
     $max = ($max_no) ? $interval_hash->{$max_no}->{interval_name} : "";
     $min = ($min_no) ? $interval_hash->{$min_no}->{interval_name} : ""; 
     if ($max ne $min) {
-        $range .= "<a href=\"$READ_URL?action=displayInterval&interval_no=$max_no\">$max</a> to <a href=\"$READ_URL?action=displayInterval&interval_no=$min_no\">$min</a>";
+        $range .= " <a href=\"$READ_URL?action=displayInterval&interval_no=$max_no\">$max</a> to <a href=\"$READ_URL?action=displayInterval&interval_no=$min_no\">$min</a>";
     } else {
-        $range .= "<a href=\"$READ_URL?action=displayInterval&interval_no=$max_no\">$max</a>";
+        $range .= " <a href=\"$READ_URL?action=displayInterval&interval_no=$max_no\">$max</a>";
     }
     $range .= " <i>or</i> $lb to $ub Ma";
 
@@ -825,12 +825,14 @@ sub doCollections{
     }
 
     if ( $minfirst && $extant && $age_range_format ne 'for_strata_module' )	{
-        $range = "<div class=\"small\" style=\"width: 40em; margin-left: auto; margin-right: auto; text-align: left; white-space: nowrap;\">Maximum range based only on fossils: " . $range . "<br>\n";
+        $range = "<div class=\"small\" style=\"width: 40em; margin-left: 2em; margin-right: auto; text-align: left; white-space: nowrap;\">Maximum range based only on fossils: " . $range . "<br>\n";
         $minfirst =~ s/([0-9])0+$/$1/;
         $range .= "Minimum age of oldest fossil (stem group age): $minfirst Ma<br>\n";
         $mincrownfirst =~ s/([0-9])0+$/$1/;
         $range .= "Minimum age of oldest fossil in any extant subgroup (crown group age): $mincrownfirst Ma<br>";
         $range .= "<span class=\"verysmall\" style=\"padding-left: 2em;\"><i>Collections with crown group taxa are in <b>bold</b>.</i></span></div><br>\n";
+    } else	{
+        $range = ":".$range;
     }
 
     print qq|<div class="displayPanel" style="margin-top: 0em;">
@@ -838,12 +840,12 @@ sub doCollections{
 |;
 
     if ($age_range_format eq 'for_strata_module') {
-        print qq|Age range $range<br>
+        print qq|Age range$range<br>
 </div>
 </div>
 |;
     } else {
-        print "<div class=\"small\" style=\"margin-left: 2em;\"><p>Age range $range</p></div>\n";
+        print "<div class=\"small\" style=\"margin-left: 2em; width: 90%; border-bottom: 1px solid lightgray;\"><p>Age range$range</p></div>\n";
     }
 
     
@@ -987,7 +989,7 @@ sub doCollections{
 
 	if(scalar @sorted > 0){
 	if ($age_range_format ne 'for_strata_module') {
-		$output .= qq|<div class="small" style="margin-left: 2em; margin-bottom: 0.4em;"><p>Collections|;
+		$output .= qq|<div class="small" style="margin-left: 2em; margin-bottom: -1em;"><p>Collections|;
 	} else	{
 		$output .= qq|
 </div>
@@ -1009,7 +1011,7 @@ sub doCollections{
 		$output .= "<table class=\"small\" style=\"margin-left: 2em; margin-right: 2em; margin-bottom: 2em;\">\n";
 		if ( $#sorted > 100 )	{
 			$output .= qq|<tr>
-<td colspan="3"><p class=\"large\">Oldest occurrences</p>
+<td colspan="3"><p class=\"large\" style="padding-left: 1em;">Oldest occurrences</p>
 </tr>|;
 		}
 		$output .= qq|<tr>
@@ -1905,7 +1907,7 @@ sub getSynonymyParagraph	{
     #   classification, so it can be bolded in the history paragraph JA 17.4.07
     # whoops, need to get original combination first JA 12.6.07
     my $orig = getOriginalCombination($dbt, $taxon_no);	
-    my @results = getMostRecentClassification($dbt,$orig);
+    my @results = getMostRecentClassification($dbt,$orig,{'use_synonyms'=>'no'});
 
     my $best_opinion;
     if (@results) {
@@ -2670,7 +2672,7 @@ sub displayEcology	{
         }   
         my %all_ranks = ();
 
-		$output .= "<table cellpadding=\"4\" style=\"width: 58em;\">";
+		$output .= "<table cellpadding=\"4\">";
         $output .= "<tr>";
 		my $cols = 0;
 		foreach my $i (0..$#ecotaphFields)	{
