@@ -165,12 +165,14 @@ sub displayTaxonInfoResults {
 
     my $taxon_no = int($q->param('taxon_no'));
 
-    my $is_real_user = 0;
+    my ($is_real_user,$not_bot) = (0,1);
     if ($q->request_method() eq 'POST' || $q->param('is_real_user') || $s->isDBMember()) {
         $is_real_user = 1;
+        $not_bot = 1;
     }
     if (PBDBUtil::checkForBot()) {
         $is_real_user = 0;
+        $not_bot = 0;
     }
 
 
@@ -199,7 +201,7 @@ sub displayTaxonInfoResults {
 
 	# Get the sql IN list for a Higher taxon:
 	my $in_list;
-    my $quick = 0;;
+        my $quick = 0;
 	if($taxon_no) {
         my $sql = "SELECT (rgt-lft) diff FROM $TAXA_TREE_CACHE WHERE taxon_no=$taxon_no";
         my $diff = ${$dbt->getData($sql)}[0]->{'diff'};
@@ -214,6 +216,9 @@ sub displayTaxonInfoResults {
 
     print "<div>\n";
     my @modules_to_display = (1,2,3,4,5,6,7,8);
+    if ( ! $not_bot )	{
+        @modules_to_display = (1,2);
+    }
 
     my $display_name = $taxon_name;
     if ( $common_name =~ /[A-Za-z]/ )	{
@@ -224,17 +229,19 @@ sub displayTaxonInfoResults {
         my $mrpo = getMostRecentClassification($dbt,$orig_ss);
         my $last_status = $mrpo->{'status'};
 
-        my %disused;
-        my $sql = "SELECT synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no=$taxon_no";
-        my $ss_no = ${$dbt->getData($sql)}[0]->{'synonym_no'};
-        if ($taxon_rank !~ /genus|species/) {
-            %disused = %{disusedNames($dbt,$ss_no)};
-        }
+        if ( $not_bot )	{
+            my %disused;
+            my $sql = "SELECT synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no=$taxon_no";
+            my $ss_no = ${$dbt->getData($sql)}[0]->{'synonym_no'};
+            if ($taxon_rank !~ /genus|species/) {
+                %disused = %{disusedNames($dbt,$ss_no)};
+            }
 
-        if ($disused{$ss_no}) {
-            $display_name .= " (disused)";
-        } elsif ($last_status =~ /nomen/) {
-            $display_name .= " ($last_status)";
+            if ($disused{$ss_no}) {
+                $display_name .= " (disused)";
+            } elsif ($last_status =~ /nomen/) {
+                $display_name .= " ($last_status)";
+            }
         }
     }
 
@@ -283,7 +290,10 @@ sub displayTaxonInfoResults {
 </div>
 ';
 
-    my ($htmlCOF,$htmlClassification) = displayTaxonClassification($dbt, $taxon_no, $taxon_name, $is_real_user);
+    my ($htmlCOF,$htmlClassification);
+    if ( $not_bot )	{
+        ($htmlCOF,$htmlClassification) = displayTaxonClassification($dbt, $taxon_no, $taxon_name, $is_real_user);
+    }
 
     print qq|
 <script language="Javascript" type="text/javascript">
@@ -340,7 +350,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
 	print "</div>\n</div>\n\n";
 
         my $entered_name = $q->param('entered_name') || $q->param('taxon_name') || $taxon_name;
-        my $entered_no   = $q->param('entered_no') || $q->param('taxon_no');
+        my $entered_no = $q->param('entered_no') || $q->param('taxon_no');
         print "<p>";
         print "<div>";
         print "<center>";
@@ -371,9 +381,11 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
         print "</div>\n</div>\n</div>\n\n";
 	}
 
-    print '<script language="JavaScript" type="text/javascript">
-    showPanel(1);
+    if ( ! $q->param('show_panel') )	{
+        print '<script language="JavaScript" type="text/javascript">
+        showPanel(1);
 </script>';
+    }
 
 	# synonymy
 	if($modules{2}) {
@@ -411,10 +423,22 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
         print '<div align="center" class="small">';
         if ($is_real_user) {
     	    doCladograms($dbt, $taxon_no, $spelling_no, $taxon_name);
+        } else {
+            print qq|<form method="POST" action="$READ_URL">|;
+            foreach my $f ($q->param()) {
+                print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
+            }
+            print "<input type=\"hidden\" name=\"show_panel\" value=\"4\">\n";
+            print "<input type=\"submit\" name=\"submit\" value=\"Show relationships\">";
+            print "</form>\n";
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(4); </script>';
+        print '<script language="JavaScript" type="text/javascript"> showTabText(4); ';
+        if ( $q->param('show_panel') == 4 )	{
+            print "showPanel(4)\n";
+        }
+        print "</script>\n";
     }
     
     if ($modules{5}) {
@@ -422,7 +446,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
         print '<div align="center" class="small" "style="margin-top: -2em;">';
         print displayDiagnoses($dbt,$taxon_no);
         unless ($quick) {
-		    print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
+            print displayMeasurements($dbt,$taxon_no,$taxon_name,$in_list);
         }
         print "</div>\n";
         
@@ -437,7 +461,7 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
         print '<div id="panel6" class="panel">';
         print '<div align="center" clas="small">';
         unless ($quick) {
-		    print displayEcology($dbt,$taxon_no,$in_list);
+            print displayEcology($dbt,$taxon_no,$in_list);
         }
         print "</div>\n";
         print "</div>\n";
@@ -461,15 +485,20 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
             foreach my $f ($q->param()) {
                 print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
             }
+            print "<input type=\"hidden\" name=\"show_panel\" value=\"7\">\n";
             print "<input type=\"submit\" name=\"submit\" value=\"Show map\">";
             print "</form>\n";
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(7); </script>';
-	}
+        print '<script language="JavaScript" type="text/javascript"> showTabText(7); ';
+        if ( $q->param('show_panel') == 7 )	{
+            print "showPanel(7)\n";
+        }
+        print "</script>\n";
+    }
 	# collections
-    if ($modules{7}) {
+    if ($modules{8}) {
         print '<div id="panel8" class="panel">';
         if ($is_real_user) {
 		    print doCollections($dbt, $s, $collectionsSet, $display_name, $taxon_no, $in_list, '', $is_real_user, $type_locality);
@@ -479,13 +508,18 @@ function textRestore (input) { if ( input.value == "" ) { input.value = input.de
             foreach my $f ($q->param()) {
                 print "<input type=\"hidden\" name=\"$f\" value=\"".$q->param($f)."\">\n";
             }
+            print "<input type=\"hidden\" name=\"show_panel\" value=\"8\">\n";
             print "<input type=\"submit\" name=\"submit\" value=\"Show age range and collections\">";
             print "</form>\n";
             print "</div>\n";
         }
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(8); </script>';
-	}
+        print '<script language="JavaScript" type="text/javascript"> showTabText(8); ';
+        if ( $q->param('show_panel') == 8 )	{
+            print "showPanel(8)\n";
+        }
+        print "</script>\n";
+    }
 
     print "</div>"; # Ends div class="small" declared at start
 
