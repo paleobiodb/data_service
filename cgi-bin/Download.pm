@@ -126,9 +126,9 @@ sub buildDownload {
         my $errorString = "<li>" . join('<li>',@form_errors);
         $q->param('error_message' => $errorString );
         if ( $q->param('form_type') eq "full" )	{
-            main::displayDownloadForm;
+            main::displayDownloadForm();
         } else	{
-            main::displayBasicDownloadForm;
+            main::displayBasicDownloadForm();
         }
         return;
     } 
@@ -216,9 +216,9 @@ sub checkInput {
         my $errorString = "<li>" . join('<li>',@errors);
         $q->param('error_message' => $errorString );
         if ( $q->param('form_type') eq "full" )	{
-            main::displayDownloadForm;
+            main::displayDownloadForm();
         } else	{
-            main::displayBasicDownloadForm;
+            main::displayBasicDownloadForm();
         }
         return 0;
     } 
@@ -4214,15 +4214,6 @@ sub setupQueryFields {
     if ($q->param('specimens_error')) {
         $q->param('specimens_error_unit'=>'YES');
     }
-    # Generate warning for taxon with homonyms
-    my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
-    push @taxa, split(/\s*[, \t\n-:;]{1}\s*/,$q->param('exclude_taxon_name'));
-    foreach my $taxon (@taxa) {
-        my @taxa = TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
-        if (scalar(@taxa)  > 1) {
-            push @form_errors, "The taxon name '$taxon' is ambiguous and belongs to multiple taxonomic hierarchies. Right the download script can't distinguish between these different cases. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
-        }
-    } 
 
     # Generate these fields on the fly
     @ecoFields = ();
@@ -4270,26 +4261,21 @@ sub getTaxonString {
     if (@taxa) {
         my @exclude_taxon_nos = ();
         foreach my $taxon (@exclude_taxa) {
-            my @taxon_nos = map {$_->{'taxon_no'}} TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon,'','lump');
             if (scalar(@taxon_nos) == 0) {
                 push @sql_and_bits, "table.genus_name NOT LIKE ".$dbh->quote($taxon);
-            } elsif (scalar(@taxon_nos) == 1) {
+            } else	{
                 push @exclude_taxon_nos, $taxon_nos[0];
-            } else { #result > 1
-                #do nothing here, quit above
             }
         }
         foreach my $taxon (@taxa) {
-            my @taxon_nos = map {$_->{'taxon_no'}} TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
-#            $self->dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon,'','lump');
             if (scalar(@taxon_nos) == 0) {
                 push @sql_or_bits, "table.genus_name LIKE ".$dbh->quote($taxon);
-            } elsif (scalar(@taxon_nos) == 1) {
+            } else	{
                 my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0],'','',\@exclude_taxon_nos);
                 # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                 @taxon_nos_unique{@all_taxon_nos} = ();
-            } else { #result > 1
-                #do nothing here, quit above
             }
         }
         if (%taxon_nos_unique) {
@@ -4298,16 +4284,14 @@ sub getTaxonString {
     } elsif (@exclude_taxa) {
         my @exclude_taxon_nos = ();
         foreach my $taxon (@exclude_taxa) {
-            my @taxon_nos = map {$_->{'taxon_no'}} TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon,'remove_rank_change'=>1});
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon,'','lump');
             if (scalar(@taxon_nos) == 0) {
                 push @sql_or_bits, "table.genus_name NOT LIKE ".$dbh->quote($taxon);
-            } elsif (scalar(@taxon_nos) == 1) {
+            } else	{
                 push @exclude_taxon_nos, $taxon_nos[0];
                 my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0],'','',\@exclude_taxon_nos);
                 # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                 @taxon_nos_unique{@all_taxon_nos} = ();
-            } else { #result > 1
-                #do nothing here, quit above
             }
         }
         if (%taxon_nos_unique) {
