@@ -2524,9 +2524,13 @@ sub getMostRecentClassification {
             my $spelling_no = $rows[0]->{'child_spelling_no'};
             # if the belongs to opinion has been borrowed from a junior
             #  synonym, we need to figure out the correct spelling
-            if ( $rows[0]->{'child_no'} ne $child_no )	{
-                my $taxon = getMostRecentSpelling($dbt,$child_no);
-                $spelling_no = $taxon->{'taxon_no'};
+            if ( $rows[0]->{'child_no'} != $child_no )	{
+                for my $i ( 1..$#rows )	{
+                    if ( $rows[$i]->{'child_no'} == $child_no && $rows[$i]->{'status'} ne "misspelling of" && $rows[$i]->{'spelling_reason'} ne "misspelling" )	{
+                        $spelling_no = $rows[$i]->{'child_spelling_no'};
+                        last;
+                    }
+                }
             }
             $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$spelling_no,synonym_no=$synonym_no,opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no IN (" . join(',',@spellings) . ")";
             my $dbh = $dbt->dbh;
@@ -2547,79 +2551,39 @@ sub getMostRecentClassification {
     }
 }
 
+# greatly simplified this function 22.1.09 JA
+# before opinion_no was stashed in taxa_tree_cache it replicated much of
+#  getMostRecentClassification by finding the most recent parent opinion
 sub getMostRecentSpelling {
     my $dbt = shift;
     my $child_no = int(shift);
     my $options = shift || {};
     return if (!$child_no);
     return if ($options->{reference_no} eq '0');
-    my $dbh = $dbt->dbh;
 
-    # Get a list of misspellings and exclude them - do this is a subselect in the future
-    my $sql = "SELECT DISTINCT child_spelling_no FROM opinions WHERE child_no=$child_no AND status='misspelling of'";
-    my $sth = $dbh->prepare($sql);
-    $sth->execute();
-    my @misspellings;
-    while (my @row = $sth->fetchrow_array()) {
-        push @misspellings, $row[0];
-    }
-
-    # This will return the most recent parent opinions. its a bit tricky cause: 
-    # we're sorting by aliased fields. So surround the query in parens () to do this:
-    # All values of the enum basis get recast as integers for easy sorting
-    # Lowest should appear at top of list (stated with evidence) and highest at bottom (second hand) so sort ASC
-    # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
-    my $reliability = 
-        "(IF ((o.basis != '' AND o.basis IS NOT NULL),".
-            "CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 END,".
-            #"CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 0 END,".
-        # ELSE:
-            "IF(r.reference_no = 6930,".
-                "0,".# is second hand, then 0 (lowest priority)
-            # ELSE:
-                " CASE r.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 2 END".
-            ")".
-         ")) AS reliability_index ";
-    my $fossil_record_sort;
-    my $fossil_record_field;
-    if ($IS_FOSSIL_RECORD) {
-        $fossil_record_field = "IF(project_name IS NOT NULL,FIND_IN_SET('fossil record',r.project_name),0) is_fossil_record, ";
-        $fossil_record_sort = "is_fossil_record DESC, ";
-    }
-    $sql = "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.type_locality, o.opinion_no, $reliability, $fossil_record_field"
-         . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) AS pubyr"
-         . " FROM opinions o" 
-         . " LEFT JOIN authorities a ON o.child_spelling_no=a.taxon_no"
-         . " LEFT JOIN authorities a2 ON o.child_no=a2.taxon_no"
-         . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
-         . " WHERE o.child_no=$child_no AND o.parent_no>0"
-         . " AND o.child_no != o.parent_no AND o.status != 'misspelling of'";
-    if ($options->{reference_no}) {
-        $sql .= " AND o.reference_no=$options->{reference_no}";
-    }
-    if (@misspellings) {
-        $sql .= " AND o.child_spelling_no NOT IN (".join(",",@misspellings).")";
-    }
-    $sql .= ") ";
-    if (@misspellings) {
-        $sql .= " UNION ";
-        $sql .= "(SELECT a2.taxon_name original_name, o.spelling_reason, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.type_locality, o.opinion_no, $reliability, $fossil_record_field"
-              . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr"
-              . " FROM opinions o" 
-              . " LEFT JOIN authorities a ON o.parent_spelling_no=a.taxon_no"
-              . " LEFT JOIN authorities a2 ON o.parent_no=a2.taxon_no"
-              . " LEFT JOIN refs r ON r.reference_no=o.reference_no" 
-              . " WHERE o.child_no=$child_no"
-              . " AND o.status = 'misspelling of' AND o.child_no=o.parent_no";
-        if ($options->{reference_no}) {
-            $sql .= " AND o.reference_no=$options->{reference_no}";
+    my ($sql,$spelling_no,$reason);
+    if ( $options->{'reference_no'} )	{
+        $sql = "(SELECT child_spelling_no spelling_no FROM opinions WHERE reference_no=".$options->{'reference_no'}." AND ref_has_opinion='YES' AND child_no=$child_no) UNION (SELECT parent_spelling_no spelling_no FROM opinions WHERE reference_no=".$options->{'reference_no'}." AND ref_has_opinion='YES' AND parent_no=$child_no)";
+        $spelling_no = ${$dbt->getData($sql)}[0]->{'spelling_no'};
+    } else	{
+        $sql = "SELECT spelling_no,opinion_no FROM $TAXA_TREE_CACHE t WHERE taxon_no=$child_no";
+        my $spelling = ${$dbt->getData($sql)}[0];
+        $spelling_no = $spelling->{'spelling_no'};
+        # currently only used by Collection::getSynonymName, so it doesn't
+        #  need to work in combination with reference_no
+        if ( $options->{'get_spelling_reason'} )	{
+            $sql = "SELECT spelling_reason FROM opinions o WHERE opinion_no=".$spelling->{'opinion_no'};
+            $reason = ${$dbt->getData($sql)}[0]->{'spelling_reason'};
         }
-        $sql .= ") ";
     }
-    $sql .= " ORDER BY $fossil_record_sort reliability_index DESC, pubyr DESC, opinion_no DESC LIMIT 1";
+
+    $sql = "SELECT a2.taxon_name original_name, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.type_locality FROM authorities a,authorities a2 WHERE a.taxon_no=$spelling_no AND a2.taxon_no=$child_no";
     my @rows = @{$dbt->getData($sql)};
 
     if (scalar(@rows)) {
+        if ( $options->{'get_spelling_reason'} )	{
+            $rows[0]->{'spelling_reason'} = $reason;
+        }
         return $rows[0];
     } else {
         my $taxon = getTaxa($dbt,{'taxon_no'=>$child_no});
