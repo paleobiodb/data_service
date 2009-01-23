@@ -454,6 +454,10 @@ sub updateCache {
     }
 
     # New most recent opinion
+    # moved the recompute call here because (I think) this function assumed
+    #  taxa_tree_cache would be current at this point, but changes to
+    #  getMostRecentClassification mean this is no longer true JA 22.1.09
+    my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$child_no,{'recompute'=>'yes'});
     $sql = "SELECT taxon_no,lft,rgt,spelling_no,synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no=$child_no";
     my $cache_row = ${$dbt->getData($sql)}[0];
     if (!$cache_row) {
@@ -546,7 +550,6 @@ sub updateCache {
     $sql = "SELECT spelling_no parent_no FROM $TAXA_TREE_CACHE WHERE lft < $cache_row->{lft} AND rgt > $cache_row->{rgt} ORDER BY lft DESC LIMIT 1";
     # BUG: may be multiple parents, compare most recent spelling:
     my $row = ${$dbt->getData($sql)}[0];
-    my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$child_no,{'recompute'=>'yes'});
     my $new_parent_no = ($mrpo && $mrpo->{'parent_no'}) ? $mrpo->{'parent_no'} : 0;
     if ($new_parent_no) {
         # Compare most recent spellings of the names, for consistency
