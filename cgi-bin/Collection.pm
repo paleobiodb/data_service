@@ -2171,7 +2171,7 @@ sub getSynonymName {
     my $is_spelling = 0;
     my $spelling_reason = "";
 
-    my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$ss_taxon_no);
+    my $spelling = TaxonInfo::getMostRecentSpelling($dbt,$ss_taxon_no,{'get_spelling_reason'=>1});
     if ($spelling->{'taxon_no'} != $taxon_no && $current_taxon_name ne $spelling->{'taxon_name'}) {
         $is_spelling = 1;
         $spelling_reason = $spelling->{'spelling_reason'};
