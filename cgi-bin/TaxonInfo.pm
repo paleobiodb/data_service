@@ -3835,6 +3835,7 @@ sub getTaxonNos {
         if ($lump_ranks) {
             $sql .= " GROUP BY t.lft,t.rgt";
         }
+        $sql .= " ORDER BY t.rgt-t.lft DESC";
         my @results = @{$dbt->getData($sql)};
         push @taxon_nos, $_->{'taxon_no'} for @results;
     }
