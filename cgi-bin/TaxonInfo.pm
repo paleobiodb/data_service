@@ -3824,11 +3824,7 @@ sub getTaxonNos {
     if ($dbt && $name)  {
         my $dbh = $dbt->dbh;
         my $sql;
-        if ($lump_ranks) {
-            $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_name=".$dbh->quote($name);
-        } else {
-            $sql = "SELECT a.taxon_no FROM authorities a WHERE a.taxon_name=".$dbh->quote($name);
-        }
+        $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_name=".$dbh->quote($name);
         if ($rank) {
             $sql .= " AND taxon_rank=".$dbh->quote($rank);
         }
