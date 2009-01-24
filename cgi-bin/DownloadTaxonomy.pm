@@ -1027,16 +1027,7 @@ sub getTaxonomicNames {
             $row->{'original_taxon_name'} = $orig_row->{'taxon_name'};
             $row->{'original_taxon_no'} = $orig_row->{'taxon_no'};
             $row->{'original_taxon_rank'} = $orig_row->{'taxon_rank'};
-            if ($orig_no != $row->{'taxon_no'}) {
-                $row->{'author1init'} = $orig_row->{'author1init'};
-                $row->{'author1last'} = $orig_row->{'author1last'};
-                $row->{'author2init'} = $orig_row->{'author2init'};
-                $row->{'author2last'} = $orig_row->{'author2last'};
-                $row->{'otherauthors'} = $orig_row->{'otherauthors'};
-                $row->{'pubyr'} = $orig_row->{'pubyr'};
-                $row->{'reference_no'} = $orig_row->{'reference_no'};
-            }
-           
+
             if ($parent && $parent->{'status'} =~ /nomen/) {
                 $row->{'is_valid'} = 0;
                 $row->{'invalid_reason'} = $parent->{'status'};
