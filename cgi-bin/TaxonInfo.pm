@@ -3457,11 +3457,15 @@ sub displayFirstAppearance	{
 	}
 	print "<p>Total number of collections: $ncoll</p>\n";
 	printf "<p>Collections per Myr between %.1f and %.1f Ma: %.2f</p>\n",$lb,$lb - $agerange,$ncoll / $agerange;
-	printf "<p>Average gap between collections: %.2f Myr</p>\n",$agerange / ( $ncoll - 1 );
-	printf "<p>Gap between two oldest collections: %.2f Myr</p>\n",$ages[0] - $ages[1];
+	if ( $ncoll > 1 )	{
+		printf "<p>Average gap between collections: %.2f Myr</p>\n",$agerange / ( $ncoll - 1 );
+		printf "<p>Gap between two oldest collections: %.2f Myr</p>\n",$ages[0] - $ages[1];
+	}
 
 	print "</div>\n</div>\n\n";
 
+	# begin more-than-one collection calculations
+	if ( $ncoll > 1 )	{
 	print "<div class=\"displayPanel\" style=\"margin-top: 2em;\">\n<span class=\"displayPanelHeader\" style=\"font-size: 1.2em;\">Confidence intervals on the first appearance</span>\n<div class=\"displayPanelContents\">\n";
 
 	print "<div style=\"margin-left: 1em;\">\n";
@@ -3593,6 +3597,8 @@ sub displayFirstAppearance	{
 		}
 	}
 	print "</div>\n</div>\n\n";
+
+	} # end more-than-one collection calculations
 
 	# COLLECTION DATA OUTPUT
 
