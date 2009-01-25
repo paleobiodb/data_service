@@ -106,8 +106,8 @@ sub getCollections {
             $sql2 = "SELECT DISTINCT o.genus_name, o.species_name, o.collection_no, o.taxon_no, re.taxon_no re_taxon_no FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND re.most_recent='YES' AND ";
         }
 	if ( $options{'species_reso'} )	{
-		$sql1 .= "o.species_reso IN ('".join("','",@{$options{'species_reso'}})."') AND ";
-		$sql2 .= "o.species_reso IN ('".join("','",@{$options{'species_reso'}})."') AND ";
+		$sql1 .= "(o.species_reso IN ('".join("','",@{$options{'species_reso'}})."') OR re.species_reso IN ('".join("','",@{$options{'species_reso'}})."')) AND ";
+		$sql2 .= "(o.species_reso IN ('".join("','",@{$options{'species_reso'}})."') OR re.species_reso IN ('".join("','",@{$options{'species_reso'}})."')) AND ";
 	}
         # taxon_list an array reference to a list of taxon_no's
         my %all_taxon_nos;
