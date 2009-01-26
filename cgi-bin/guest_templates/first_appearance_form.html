@@ -25,6 +25,11 @@
     <div class="widget">Common name:
     <input name="common_name" value="" size="35"></div>
 
+    <div class="widget">Excluded subtaxa:
+    <input name="exclude" value="" size="35">
+      <br><div class="small" style="padding-top: 0.5em; padding-left: 2em;">You may enter one or more scientific names.</div>
+    </div>
+
     <div class="widget">Taxonomic precision of IDs:
       <select name="taxonomic_precision" onChange="if ( /^(any|family|genus)/.test(document.forms[0].taxonomic_precision.value) ) { document.forms[0].types_only.value='no, use all occurrences'; document.forms[0].type_body_part.value=''; }">
         <option>any</option>
@@ -33,7 +38,7 @@
         <option>genus or species level</option>
         <option>species level</option>
       </select>
-      <br><div class="small" style="padding-top: 0.5em; padding-left: 2em;">Using precise IDs only is recommended.</div>
+      <br><div class="small" style="padding-top: 0.5em; padding-left: 2em;">Restricting the search to precise IDs is recommended.</div>
     </div>
 
     <div class="widget">Use type specimens only?
