@@ -3148,10 +3148,15 @@ sub beginFirstAppearance	{
 sub displayFirstAppearance	{
 	my ($q,$s,$dbt,$hbo) = @_;
 
+	$|=1;
 	my ($sql,$field,$name);
 	if ( $q->param('taxon_name') )	{
 		if ( $q->param('taxon_name') !~ /^[A-Z][a-z]*(| )[a-z]*$/ )	{
 			my $error_message = "The name '".$q->param('taxon_name')."' is formatted incorrectly.";
+			beginFirstAppearance($hbo,$q,$error_message);
+		}
+		if ( $q->param('common_name') )	{
+			my $error_message = "Please enter either a scientific or common name, not both.";
 			beginFirstAppearance($hbo,$q,$error_message);
 		}
 		$field = "taxon_name";
@@ -3166,6 +3171,17 @@ sub displayFirstAppearance	{
 	} else	{
 		my $error_message = "No search term was entered.";
 		beginFirstAppearance($hbo,$q,$error_message);
+	}
+	my $exclude;
+	if ( $q->param('exclude') )	{
+		my $names = $q->param('exclude');
+		$names =~ s/[^A-Za-z]/ /g;
+		$names =~ s/  / /g;
+		$names =~ s/  / /g;
+		$names =~ s/ /','/g;
+		$sql = "SELECT a.taxon_no,a.taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_name IN ('".$names."') AND a.taxon_no=t.spelling_no GROUP BY lft,rgt ORDER BY lft";
+		my @nos = @{$dbt->getData($sql)};
+		$exclude .= " AND (rgt<$_->{'lft'} OR lft>$_->{'rgt'})" foreach @nos;
 	}
 
 	# it's overkill to use getChildren because the query is so simple
@@ -3198,12 +3214,12 @@ sub displayFirstAppearance	{
 
 	# MAIN TABLE HITS
 
-	$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,extant,preservation,lft,rgt,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>=".$nos[0]->{'lft'}." AND rgt<=".$nos[0]->{'rgt'}." ORDER BY lft";
+	$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,extant,preservation,lft,rgt,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>=".$nos[0]->{'lft'}." AND rgt<=".$nos[0]->{'rgt'}.$exclude." ORDER BY lft";
 	my @allsubtaxa = @{$dbt->getData($sql)};
 	my @subtaxa;
 
 	if ( $q->param('taxonomic_precision') eq "any subtaxon" )	{
-		$sql = "SELECT a.taxon_no,taxon_name,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'};
+		$sql = "SELECT a.taxon_no,taxon_name,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'}.$exclude;
 		@subtaxa = @{$dbt->getData($sql)};
 	} elsif ( $q->param('taxonomic_precision') =~ /species|genus|family/ )	{
 		my @ranks = ('subspecies','species');
@@ -3212,7 +3228,7 @@ sub displayFirstAppearance	{
 		} elsif ( $q->param('taxonomic_precision') =~ /family/ )	{
 			push @ranks , ('subgenus','genus','tribe','subfamily','family');
 		}
-		$sql = "SELECT a.taxon_no,taxon_name,type_locality,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'}." AND taxon_rank IN ('".join("','",@ranks)."')";
+		$sql = "SELECT a.taxon_no,taxon_name,type_locality,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'}.$exclude." AND taxon_rank IN ('".join("','",@ranks)."')";
 		if ( $q->param('types_only') =~ /yes/i )	{
 			$sql .= " AND type_locality>0";
 		}
@@ -3358,7 +3374,11 @@ sub displayFirstAppearance	{
 			}
 			print "<p>The crown group of $name is <a href=\"$READ_URL?taxon_name=$crown$paramlist\">$crown</a> (click to compute its first appearance)</p>\n";
 		} elsif ( ! $crown )	{
-			print "<p><i>$name has no subtaxa marked in our system as extant, so its crown group cannot be determined</i></p>\n";
+			my $exclude = "";
+			if ( $q->param('exclude') )	{
+				$exclude = " other than the ones you excluded";
+			}
+			print "<p><i>$name has no subtaxa marked in our system as extant$exclude, so its crown group cannot be determined</i></p>\n";
 		} else	{
 			$crown =~ s/(,)([A-Z][a-z ]*)$/ and $2/;
 			$crown =~ s/,/, /g;
@@ -3775,7 +3795,7 @@ sub findCrown	{
 	# we assume taxon 0 is the overall group, so skip it
 	for my $i ( 1..$#taxa )	{
 		if ( $taxa[$i]->{'taxon_no'} == $taxa[$i]->{'synonym_no'} && ( $taxa[$i]->{'taxon_rank'} =~ /genus|species/ || $taxa[$i]->{'lft'} < $taxa[$i]->{'rgt'} - 1 ) )	{
-			while ( $taxa[$ps[$#ps]]->{'rgt'} < $taxa[$i]->{'lft'} )	{
+			while ( $taxa[$ps[$#ps]]->{'rgt'} < $taxa[$i]->{'lft'} && @ps )	{
 				pop @ps;
 			}
 			if ( $taxa[$i]->{'extant'} =~ /yes/i )	{
@@ -3791,7 +3811,7 @@ sub findCrown	{
 	my @children;
 	for my $i ( 1..$#taxa )	{
 		if ( $taxa[$i]->{'taxon_no'} == $taxa[$i]->{'synonym_no'} && ( $taxa[$i]->{'taxon_rank'} =~ /genus|species/ || $taxa[$i]->{'lft'} < $taxa[$i]->{'rgt'} - 1 ) )	{
-			while ( $taxa[$ps[$#ps]]->{'rgt'} < $taxa[$i]->{'lft'} )	{
+			while ( $taxa[$ps[$#ps]]->{'rgt'} < $taxa[$i]->{'lft'} && @ps )	{
 				pop @ps;
 			}
 			if ( $isextant[$i] > 0 )	{
