@@ -12,7 +12,7 @@ function checkMapBrowserVersion()	{
 //  End -->
 </script>
 
-<div align="center"><p class="pageTitle">Fossil collection map form</p></div>
+<div align="center"><p class="pageTitle">Paleogeographic map form</p></div>
 
 <form method=post action="%%read_url%%" onSubmit="return checkForm();">
 <input type="hidden" name="action" value="displayMapResults">
@@ -21,30 +21,32 @@ function checkMapBrowserVersion()	{
 
 <script>checkMapBrowserVersion();</script>
 
-<div class="displayPanel" align=left>
-<span class="displayPanelHeader">Options</span>
+<div class="displayPanel" align="left" style="width: 53em; padding-bottom: 1em; margin-bottom: 2em;">
+<span class="displayPanelHeader">Data</span>
 <div class="displayPanelContent small">
 
-<table border=0 cellpadding=2 cellspacing=2 width="100%">
+<div style="width: 28em; float: left; clear: none;">
 
-<tr><td valign="top" width="50%">
-
-<table border=0 cellpadding=2 cellspacing=2>
+<table border="0" cellpadding="4" cellspacing="2">
 
 <tr>
-<td valign=top nowrap>Group of animals:</td>
+<td valign="top" nowrap>Group of animals:</td>
 
-<td valign=top>
-<select name="taxon_name_preset">
+<td valign="top">
+<select name="taxon_name_preset" class="verysmall">
 <option>
+<option value="Tetrapoda">tetrapods
 <option value="Mammalia">mammals
 <option value="Carnivora">carnivores
-<option value="Insectivora">insectivores
+<option value="Lipotyphla">insectivores
 <option value="Primates">primates
 <option value="Hominidae">hominids
 <option value="Rodentia">rodents
 <option value="Artiodactyla">even-toed ungulates
 <option value="Perissodactyla">odd-toed ungulates
+<option value="Proboscidea">mammoths and mastodons
+<option value="Metatheria">marsupials
+<option value="Reptilia">reptiles
 <option value="Dinosauria">dinosaurs
 <option value="Aves">birds
 <option value="Crocodylia">crocodiles
@@ -73,51 +75,37 @@ function checkMapBrowserVersion()	{
 <option value="Porifera">sponges
 </select>
 </td>
+</tr>
 
 <tr>
-<td valign=top><nobr><i>... or</i> taxon name:</nobr></td>
-<td valign=top><input name="taxon_name" size="25"></td>
+<td valign="top"><nobr><i>... or</i> taxon name:</nobr></td>
+<td valign="top"><input name="taxon_name" size="25"></td>
+</tr>
 
 <tr>
-<td valign=top>Country:</td>
-<td valign=top><input id="country" size="25">
+<td valign="top">Country:</td>
+<td valign="top"><input id="country" size="25">
 </select>
+</tr>
 
 
 <tr>
 <td valign="top">State/province:</td>
-<td valign=top><input name="state" size="25" class="small"></td>
-
-<tr>
-<td valign=top>Projection:</td>
-<td valign=top><select name="projection" class="small">
-<option>equirectangular
-<option>Eckert IV
-</select>
-</td>
-
-<tr>
-<td valign=top>Colors:</td>
-<td valign=top>
-<select id="mapcolors" class="small">
-<option>green on blue
-<option>green on white
-<option>gray on white
-</select>
-</td>
+<td valign="top"><input name="state" size="25" class="small"></td>
+</tr>
 
 </table>
 
-</td>
+</div>
 
-<td valign="top" width="50%">
+<div style="width: 28em; float: left; clear: right;">
 
-<table border=0 cellpadding=2 cellspacing=2>
+<table border="0" cellpadding="4" cellspacing="2">
 
 <tr>
-<td valign=top>Time interval:</td>
-<td valign=top>
-<select name="interval_name_preset" class="small">
+<td valign="top">Time interval:</td>
+<td valign="top">
+<select name="interval_name_preset" class="verysmall">
 <option>
 <option>Pleistocene
 <option>Pliocene
@@ -137,46 +125,113 @@ function checkMapBrowserVersion()	{
 <option>Proterozoic
 </select>
 </td>
+</tr>
 
-<tr><td valign=top>Group, formation, or member:
+<tr>
+<td valign="top">Group, formation, or member:
 </td>
-<td valign=top><input name=group_formation_member size="25" class="small">
+<td valign="top"><input name=group_formation_member size="25" class="small">
 </td>
+</tr>
 
-<tr><td valign=top>Lithology:
+<tr>
+<td valign="top">Lithology:
 </td>
-<td valign=top><select id="lithologies" class="verysmall" autofill="lithology1">
+<td valign="top"><select id="lithologies" class="verysmall" autofill="lithology1">
+</select>
+</td>
+</tr>
+
+<tr>
+<td valign="top">Paleoenvironment:
+</td>
+<td valign="top"><select id="environment" class="verysmall"></select>
+</td>
+</tr>
+
+</table>
+
+</div>
+
+</div>
+
+<div style="clear: both;"></div>
+
+</div>
+
+<div class="displayPanel" align="left" style="float: left; clear: both; width: 53em; padding-bottom: 1em; margin-bottom: 1em;">
+<span class="displayPanelHeader">Plotting options</span>
+<div class="displayPanelContent small">
+
+<table border="0" cellpadding="4" cellspacing="2">
+
+<tr>
+
+<td valign="top">Projection:</td>
+<td valign="top"><select id="projection" class="verysmall">
 </select>
 </td>
 
-<tr><td valign="top">Paleoenvironment:
+<td valign="top" style="padding-left: 3em;">Center point:</td>
+<td valign="top"><select id="mapfocus" class="verysmall">
+</select>
 </td>
-<td valign=top><select id="environment" class="verysmall"></select>
+
+</tr>
+
+<tr>
+
+<td valign="top">Zoom:</td>
+<td valign="top"><select id="mapscale" class="verysmall">
+</select>
+</td>
+
+<td valign="top" style="padding-left: 3em;">Colors:</td>
+<td valign="top">
+<select id="mapcolors" class="verysmall">
+<option>green on blue
+<option>green on white
+<option>gray on white
+</select>
+</td>
+
+</tr>
+
+<tr>
+
+<td valign="top" colspan="4">Data points:
+<select id="pointsize1" class="verysmall" autofill="pointsize"></select>
+<select id="dotcolor1" class="verysmall" autofill="dotcolor"></select>
+<select id="pointshape1" class="verysmall" autofill="pointshape"></select>
+<span class="verysmall">with</span>
+<select id="dotborder1" class="verysmall" autofill="dotborder"></select>
+<span class="verysmall">borders</span>
 </td>
 
 </tr>
 
 </table>
 
-<div style="position: absolute; bottom: 6em; right: 8em;">
+</div>
+
+<div style="clear: both;"></div>
+
+</div>
+
+<div style="width: 56em;">
+<center>
 <input type=submit value="Draw map">
+</center>
 </div>
-
-</div>
-</div>
-
-</table>
 
 </form>
 
 <center>
-<div style="text-align: left; text-indent: -1em; padding-left: 2em; padding-righ: 1em;">
-<p class=small>
-<i>
+<div style="text-align: left; text-indent: -1em; padding-left: 3em; padding-right: 1em;">
+<p class="small">
 You can make a paleogeographic map by selecting a time interval.
 You can also use <a href="%%read_url%%?action=displayMapForm">more advanced options</a>.
 For more information about the plate reconstructions visit the <a href="http://www.scotese.com/license.htm">PALEOMAP website</a>.<br>
-</i>
 </p>
 </div>
 </center>
