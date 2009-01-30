@@ -441,8 +441,6 @@ sub displayMapResults {
         my %settings;
         if ($q->param('mapcolors') eq 'green on white') {
             %settings = (
-                pointsize1=>'auto', pointshape1=>'circles',
-                dotcolor1=>'gold', dotborder1=>'no',
                 mapbgcolor=>'white',crustcolor=>'olive drab', crustedgecolor=>'none',
                 usalinecolor=>'green', borderlinecolor=>'green', autoborders=>'yes',
                 gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
@@ -450,8 +448,6 @@ sub displayMapResults {
             );
         } elsif ($q->param('mapcolors') eq 'gray on white') {
             %settings = (
-                pointsize1=>'auto', pointshape1=>'circles',
-                dotcolor1=>'gold', dotborder1=>'no',
                 mapbgcolor=>'white',crustcolor=>'light gray', crustedgecolor=>'none',
                 usalinecolor=>'light gray', borderlinecolor=>'light gray', autoborders=>'yes',
                 gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
@@ -459,8 +455,6 @@ sub displayMapResults {
             );
         } else { # Green on blue default
             %settings = (
-                pointsize1=>'auto', pointshape1=>'circles',
-                dotcolor1=>'gold', dotborder1=>'no',
                 mapbgcolor=>'sky blue',crustcolor=>'olive drab', crustedgecolor=>'white',
                 usalinecolor=>'green', borderlinecolor=>'green', autoborders=>'yes',
                 gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
