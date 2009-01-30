@@ -363,8 +363,9 @@ sub displayHomePage {
 
 # Shows the form for requesting a map
 sub displayBasicMapForm {
+	my %vars = ( 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'gold', 'dotborder1'=>'no' );
 	print $hbo->stdIncludes("std_page_top");
-	print $hbo->populateHTML('basic_map_form');
+	print $hbo->populateHTML('basic_map_form', \%vars);
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -372,8 +373,8 @@ sub displayBasicMapForm {
 sub displayMapForm {
 
 	# List fields that should be preset
-	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'standard (0,0)', 'mapscale'=>'X 1', 'mapwidth'=>'100%', 'mapresolution'=>'fine', 'mapbgcolor'=>'white', 'crustcolor'=>'none', 'gridsize'=>'none', 'gridcolor'=>'gray', 'gridposition'=>'in back', 'linethickness'=>'medium', 'latlngnocolor'=>'none', 'coastlinecolor'=>'gray', 'borderlinecolor'=>'none', 'usalinecolor'=>'none', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'red', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'large', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'no', 'mapsearchfields3'=>'', 'pointsize3'=>'large', 'pointshape3'=>'triangles', 'dotcolor3'=>'yellow', 'dotborder3'=>'no', 'mapsearchfields4'=>'', 'pointsize4'=>'large', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'no' );
-	
+	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'standard (0,0)', 'mapscale'=>'X 1', 'mapwidth'=>'100%', 'mapresolution'=>'fine', 'mapbgcolor'=>'sky blue', 'crustcolor'=>'olive drab', 'crustedgecolor'=>'white', 'gridsize'=>'30', 'gridcolor'=>'light gray', 'gridposition'=>'in back', 'linethickness'=>'medium', 'latlngnocolor'=>'none', 'coastlinecolor'=>'dark green', 'borderlinecolor'=>'green', 'usalinecolor'=>'green', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'gold', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'large', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'no', 'mapsearchfields3'=>'', 'pointsize3'=>'large', 'pointshape3'=>'triangles', 'dotcolor3'=>'red', 'dotborder3'=>'no', 'mapsearchfields4'=>'', 'pointsize4'=>'large', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'no' );
+
 	# Prefs have higher precedence;
 	my %pref = $s->getPreferences();
 	my ($setFieldNames) = $s->getPrefFields();
