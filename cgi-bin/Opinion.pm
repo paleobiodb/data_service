@@ -395,7 +395,10 @@ sub displayOpinionForm {
     # try to match refs in the database to entered author data JA 14-15.1.09
     # this is a loose match because merely listing a bunch of refs is harmless
     if ( $fields{'author1last'} && $fields{'pubyr'} =~ /^[0-9]*$/ )	{
-        my $sql = "SELECT reference_no FROM refs WHERE author1last='".$fields{'author1last'}."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'}." AND reference_no!=".$s->get('reference_no');
+        my $sql = "SELECT reference_no FROM refs WHERE author1last='".$fields{'author1last'}."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'};
+        if ( $s->get('reference_no') > 0 )	{
+            $sql .= " AND reference_no!=".$s->get('reference_no');
+        }
         if ( $fields{'author2last'} )	{
             $sql .= " AND author2last='".$fields{'author2last'}."'";
         }
