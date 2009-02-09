@@ -1490,6 +1490,10 @@ sub getCollectionsWhereClause {
     my $dbh = $self->{'dbh'};
 
     my @where = ();
+
+    if ( $q->param('state') )	{
+        push @where," c.state='".$q->param('state')."' ";
+    }
     
     if ( $q->param('pubyr') > 0 && $q->param('output_data') =~ /collections/i )    {
         my $pubyrrelation = ">=";
