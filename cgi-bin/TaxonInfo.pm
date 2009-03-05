@@ -2063,7 +2063,11 @@ sub getSynonymyParagraph	{
                     $lith = "horizon";
                 }
                 if ( $coll_row->{'environment'} )	{
-                    $strat = "a ".$strat;
+                    if ( $strat =~ /^[AEIOU]/ )	{
+                        $strat = "an ".$strat;
+                    } else	{
+                        $strat = "a ".$strat;
+                    }
                     if ( $fm ) { $fm = "in $fm of"; } else { $fm = "in"; }
                     $lith = $coll_row->{'environment'}." ".$lith;
                 } else	{
@@ -2071,7 +2075,11 @@ sub getSynonymyParagraph	{
                 }
                 $lith =~ s/ indet\.//;
                 $lith =~ s/"//g;
-                $coll_row->{'place'} =~ s/United Kingdom/the United Kingdom/;
+                $coll_row->{'place'} =~ s/,.*//;
+                $coll_row->{'place'} =~ s/Libyan Arab Jamahiriya/Libya/;
+                $coll_row->{'place'} =~ s/Syrian Arab Republic/Syria/;
+                $coll_row->{'place'} =~ s/Lao People's Democratic Republic/Laos/;
+                $coll_row->{'place'} =~ s/(United Kingdom|Russian Federation|Czech Republic|Netherlands|Dominican Republic|Bahamas|Philippines|Netherlands Antilles|United Arab Emirates|Marshall Islands|Congo|Seychelles)/the $1/;
                 $text .= "Its type locality is <a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=".$specimen_row->{'type_locality'}."&amp;is_real_user=$is_real_user\">".$coll_row->{'collection_name'}."</a>, which is in $strat $lith $fm $coll_row->{'place'}. ";
             }
         }
