@@ -2011,17 +2011,21 @@ function showName()	{
 	$return .= "<div class=\"verysmall\">";
 	$return .= '<p><div align="center">';
 
+	if ( $options{'collection_no'} > 0 )	{
 	# have to have at least three taxa
-	if ( $abund_values > 2 )	{
-		$return .= qq|<a href="$READ_URL?action=rarefyAbundances&collection_no=$options{'collection_no'}">Analyze abundance data</a> - |;
-	}
+		if ( $abund_values > 2 )	{
+			$return .= qq|<a href="$READ_URL?action=rarefyAbundances&collection_no=$options{'collection_no'}">Analyze abundance data</a> - |;
+		}
 
-	$return .= qq|<a href="$READ_URL?action=displayCollectionEcology&collection_no=$options{'collection_no'}">Tabulate ecology data</a>|;
+		$return .= qq|<a href="$READ_URL?action=displayCollectionEcology&collection_no=$options{'collection_no'}">Tabulate ecology data</a>|;
 
-	if ($s->isDBMember()) {
-		$return .= qq| - <a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$options{'collection_no'}">Edit taxonomic list</a>|;
-		$return .= qq| - <a href="$WRITE_URL?action=displayOccsForReID&collection_no=$options{'collection_no'}">Reidentify taxa</a>|;
- 		$return .= $options{'save_links'};
+		if ($s->isDBMember()) {
+			$return .= qq| - <a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$options{'collection_no'}">Edit taxonomic list</a> - |;
+			$return .= qq|<a href="$WRITE_URL?action=displayOccsForReID&collection_no=$options{'collection_no'}">Reidentify taxa</a>|;
+		}
+	} elsif ($s->isDBMember()) {
+		$return .= qq|<a href="$WRITE_URL?action=displayReIDCollsAndOccsSearchForm">Reidentify more taxa</a>|;
+			$return .= $options{'save_links'};
 	}
 	$return .= "</div></p>\n</div>\n";
 
