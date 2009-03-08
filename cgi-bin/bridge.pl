@@ -1083,11 +1083,11 @@ sub displayCollResults {
 			foreach my $row (@dataRows) {
 				push(@colls , $row->{collection_no});
 			}
-            if ($q->param('type') eq 'reid') {
-			    displayOccsForReID(\@colls);
-            } else {
-			    Reclassify::displayOccurrenceReclassify($q,$s,$dbt,$hbo,\@colls);
-            }
+			if ($q->param('type') eq 'reid')	{
+				displayOccsForReID(\@colls);
+			} else	{
+				Reclassify::displayOccurrenceReclassify($q,$s,$dbt,$hbo,\@colls);
+			}
 			exit;
 		}
 		
@@ -4068,7 +4068,7 @@ sub processEditOccurrences {
         #  JA 3.8.07
         # this won't work if exactly ten occurrences have been displayed
         if ( $#rowTokens < 9 )	{
-            $links .= "<a href=\"$WRITE_URL?action=displayCollResults&type=reid&taxon_name=".$q->param('search_taxon_name')."&collection_no=".$q->param("list_collection_no")."&last_occ_num=".$q->param('last_occ_num')."\"><nobr>Reidentify next 10 occurrences</nobr></a> - ";
+            $links .= "<a href=\"$WRITE_URL?action=displayCollResults&type=reid&taxon_name=".$q->param('search_taxon_name')."&collection_no=".$q->param("list_collection_no")."&page_no=".$q->param('page_no')."\"><nobr>Reidentify next 10 occurrences</nobr></a> - ";
         }
         $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\"><nobr>Reidentify different occurrences</nobr></a>";
     } else {
@@ -4168,16 +4168,14 @@ sub displayOccsForReID {
 		@colls = @{$collNos};
 	}
 
-	my $onFirstPage = 0;
 	my $printCollDetails = 0;
 
 	print $hbo->stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('js_occurrence_checkform');
     
-	my $lastOccNum = $q->param('last_occ_num');
-	if ( ! $lastOccNum ) { 
-		$lastOccNum = -1;
-		$onFirstPage = 1; 
+	my $pageNo = $q->param('page_no');
+	if ( ! $pageNo ) { 
+		$pageNo = 1;
 	}
 
 
@@ -4191,6 +4189,11 @@ sub displayOccsForReID {
     my $printCollectionDetails = 0;
     # Don't build it directly from the genus_name or species_name, let dispalyCollResults
     # DO that for us and pass in a set of collection_nos, for consistency, then filter at the end
+
+	if (! @colls && $q->param('collection_no')) {
+		push @colls , $q->param('collection_no');
+	}
+
     if (@colls) {
 		$printCollectionDetails = 1;
 		push @where, "collection_no IN(".join(',',@colls).")";
@@ -4207,14 +4210,17 @@ sub displayOccsForReID {
         push @where, "0=1";
     }
 
-	push @where, "occurrence_no > $lastOccNum";
-
 	# some occs are out of primary key order, so order them JA 26.6.04
-    my $sql = "SELECT * FROM occurrences WHERE ".join(" AND ",@where).
-           " ORDER BY occurrence_no LIMIT 11";
+	my $sql = "SELECT * FROM occurrences WHERE ".join(" AND ",@where).
+		" ORDER BY ".$q->param('sort_occs_by');
+	if ( $q->param('sort_occs_order') eq "desc" )	{
+		$sql .= " DESC";
+	}
+	my $limit = 1 + 10 * $pageNo;
+	$sql .= " LIMIT $limit";
 
 	dbg("$sql<br>");
-    my @results = @{$dbt->getData($sql)};
+	my @results = @{$dbt->getData($sql)};
 
 	my $rowCount = 0;
 	my %pref = $s->getPreferences();
@@ -4228,6 +4234,7 @@ sub displayOccsForReID {
         $header_vars->{$_} = $pref{$_} for (@optional);
 		print $hbo->populateHTML('reid_header_row', $header_vars);
 
+	splice @results , 0 , ( $pageNo - 1 ) * 10;
         foreach my $row (@results) {
             my $html = "";
             # If we have 11 rows, skip the last one; and we need a next button
@@ -4308,14 +4315,18 @@ sub displayOccsForReID {
             }
             print $html;
 
-            $lastOccNum = $row->{'occurrence_no'};
         }
     }
 
 	print "</table>\n";
+	$pageNo++;
 	if ($rowCount > 0)	{
 		print qq|<center><p><input type=submit value="Save reidentifications"></center></p>\n|;
-		print qq|<input type="hidden" name="last_occ_num" value="$lastOccNum">\n|;
+		print qq|<input type="hidden" name="page_no" value="$pageNo">\n|;
+		print qq|<input type="hidden" name="sort_occs_by" value="|;
+		print $q->param('sort_occs_by'),"\">\n";
+		print qq|<input type="hidden" name="sort_occs_order" value="|;
+		print $q->param('sort_occs_order'),"\">\n";
 	} else	{
 		print "<center><p class=\"pageTitle\">Sorry! No matches were found</p></center>\n";
 		print "<p align=center><b>Please <a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">try again</a> with different search terms</b></p>\n";
@@ -4331,7 +4342,9 @@ sub displayOccsForReID {
 		print qq|<b><a href="$WRITE_URL?action=displayCollResults&type=reid|;
 		print qq|&taxon_name=$taxon_name|;
 		print qq|&collection_no=$collection_no|;
-        print qq|&last_occ_num=$lastOccNum">Skip to the next 10 occurrences</a></b>\n|;
+		print qq|&sort_occs_by=|,$q->param('sort_occs_by');
+		print qq|&sort_occs_order=|,$q->param('sort_occs_order');
+		print qq|&page_no=$pageNo">Skip to the next 10 occurrences</a></b>\n|;
 		print "</td></tr>\n";
 		print "<tr><td class=small align=center><i>Warning: if you go to the next page without saving, your changes will be lost</i></td>\n";
 	}
