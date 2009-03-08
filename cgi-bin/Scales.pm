@@ -568,7 +568,7 @@ sub processEditScaleForm	{
 			#  min interval_no for all the collections
 			# only do this the first time a new time interval name
 			#  is encountered
-					if ( ! %{$fieldused{$minmax}} )	{
+					if ( ! $fieldused{$minmax} )	{
 						my $sql;
 						if ( $minmax eq "max" )	{
 							$sql = "SELECT collection_no,eml_interval,interval_name,emlperiod_max,period_max,emlepoch_max,epoch_max,emlintage_max,intage_max,emllocage_max,locage_max FROM collections,intervals WHERE max_interval_no=interval_no";
@@ -1060,7 +1060,7 @@ sub displayInterval {
         print $hbo->htmlBox("Equivalent to",$html);
     }
     print "</td><td valign=top width=\"50%\">";
-    
+
     my @overlaps;
     my @contains;
     if ($itv->{'children'}) {
