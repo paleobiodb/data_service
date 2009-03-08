@@ -48,7 +48,16 @@ function checkForm ( ) {
   <div class="displayPanelContent small">
     <table border=0 cellpadding=2 cellspacing=2>
       <tr>
-        <td>Taxon name:</td><td><input name=taxon_name class="small"></td>
+        <td>Taxon name:</td><td><input name="taxon_name" class="small"></td>
+        <td>Sort occurrences by:</td>
+        <td>
+          <select name="sort_occs_by" class="small">
+            <option value="collection_no">collection number</option>
+            <option value="created" selected>date entered</option>
+            <option value="genus_name,subgenus_name,species_name">taxon name</option>
+          </select>
+          <select name="sort_occs_order" class="small"><option value="asc">ascending<option value="desc">descending</select>
+        </td>
       </tr>
     </table>
   </div>
@@ -60,19 +69,20 @@ function checkForm ( ) {
     <table border=0 cellpadding=2 cellspacing=2>
       <tr>
         <td>Collection name or number: </td><td><input name=collection_names class="small" size=20></td>
-        <td style="padding-left: 1em">Reference number: </td><td><input name=reference_no class="small" size=6></td>
+        <td style="padding-left: 1em">Reference #: </td><td><input name=reference_no class="small" size=6></td>
       </tr>
       <tr>
         <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: </td>
         <td><input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=16>&nbsp;<a href="#" onClick="document.forms[0].person_reversed.value='%%enterer_me%%'">Me</a></td>
-        <td style="padding-left: 1em;">Research group or project: </td>
+        <td style="padding-left: 1em;">Group/project: </td>
         <td><select id="research_group" class="small"></select>
       </tr>
       <tr>
-        <td>Oldest time interval (or age in Ma): </td><td colspan=3><select id="eml_max_interval" class="small"></select><input name="max_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+        <td colspan="4">Time interval (or age in Ma): <select id="eml_max_interval" class="small"></select><input name="max_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);">
+        to <select id="eml_min_interval" class="small"></select><input name="min_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
       </tr>
       <tr>
-        <td>Youngest time interval/Ma: </td><td colspan=3><select id="eml_min_interval" class="small"></select><input name="min_interval" class="small" onKeyUp="doComplete(event, this, intervalNames(),1);"></td>
+        <td>Group, formation, or member: </td><td><input name="group_formation_member" class="small" size=20></td>
       </tr>
       <tr>
       </tr>
