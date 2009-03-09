@@ -4179,42 +4179,46 @@ sub displayOccsForReID {
 	}
 
 
-    my $reference_no = $current_session_ref;
-    my $ref = Reference::getReference($dbt,$reference_no);
-    my $formatted_primary = Reference::formatLongRef($ref);
-    my $refString = "<b><a href=\"$READ_URL?action=displayReference&reference_no=$reference_no\">$reference_no</a></b> $formatted_primary<br>";
+	my $reference_no = $current_session_ref;
+	my $ref = Reference::getReference($dbt,$reference_no);
+	my $formatted_primary = Reference::formatLongRef($ref);
+	my $refString = "<b><a href=\"$READ_URL?action=displayReference&reference_no=$reference_no\">$reference_no</a></b> $formatted_primary<br>";
 
 	# Build the SQL
-    my @where = ();
-    my $printCollectionDetails = 0;
-    # Don't build it directly from the genus_name or species_name, let dispalyCollResults
-    # DO that for us and pass in a set of collection_nos, for consistency, then filter at the end
+	my @where = ();
+	my $printCollectionDetails = 0;
+	# Don't build it directly from the genus_name or species_name, let dispalyCollResults
+	# DO that for us and pass in a set of collection_nos, for consistency, then filter at the end
 
 	if (! @colls && $q->param('collection_no')) {
 		push @colls , $q->param('collection_no');
 	}
 
-    if (@colls) {
+	if (@colls) {
 		$printCollectionDetails = 1;
-		push @where, "collection_no IN(".join(',',@colls).")";
-        my ($genus,$subgenus,$species) = Taxon::splitTaxon($q->param('taxon_name'));
-        my $names = $dbh->quote($genus);
-        if ($subgenus) {
-            $names .= ", ".$dbh->quote($subgenus);
-        }
-        push @where, "(genus_name IN ($names) OR subgenus_name IN ($names))";
-        push @where, "species_name LIKE ".$dbh->quote($species) if ($species);
+		push @where, "collection_no IN (".join(',',@colls).")";
+		my ($genus,$subgenus,$species) = Taxon::splitTaxon($q->param('taxon_name'));
+		if ( $genus )	{
+			my $names = $dbh->quote($genus);
+			if ($subgenus) {
+				$names .= ", ".$dbh->quote($subgenus);
+			}
+			push @where, "(genus_name IN ($names) OR subgenus_name IN ($names))";
+		}
+		push @where, "species_name LIKE ".$dbh->quote($species) if ($species);
 	} elsif ($collection_no) {
 		push @where, "collection_no=$collection_no";
 	} else {
-        push @where, "0=1";
-    }
+		push @where, "0=1";
+	}
 
 	# some occs are out of primary key order, so order them JA 26.6.04
-	my $sql = "SELECT * FROM occurrences WHERE ".join(" AND ",@where).
-		" ORDER BY ".$q->param('sort_occs_by');
-	if ( $q->param('sort_occs_order') eq "desc" )	{
-		$sql .= " DESC";
+	my $sql = "SELECT * FROM occurrences WHERE ".join(" AND ",@where);
+	if ( $q->param('sort_occs_by') )	{
+		$sql .= " ORDER BY ".$q->param('sort_occs_by');
+		if ( $q->param('sort_occs_order') eq "desc" )	{
+			$sql .= " DESC";
+		}
 	}
 	my $limit = 1 + 10 * $pageNo;
 	$sql .= " LIMIT $limit";
@@ -4224,7 +4228,7 @@ sub displayOccsForReID {
 
 	my $rowCount = 0;
 	my %pref = $s->getPreferences();
-    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs','species_name');
+	my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs','species_name');
     if (@results) {
         my $header_vars = {
             'ref_string'=>$refString,
@@ -4329,7 +4333,7 @@ sub displayOccsForReID {
 		print $q->param('sort_occs_order'),"\">\n";
 	} else	{
 		print "<center><p class=\"pageTitle\">Sorry! No matches were found</p></center>\n";
-		print "<p align=center><b>Please <a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">try again</a> with different search terms</b></p>\n";
+		print "<p align=center>Please <a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">try again</a> with different search terms</p>\n";
 	}
 	print "</form>\n";
 	print "\n<table border=0 width=100%>\n<tr>\n";
