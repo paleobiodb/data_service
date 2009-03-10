@@ -2493,9 +2493,6 @@ sub getMostRecentClassification {
         $sql .= " AND o.max_interval_no IS NOT NULL and o.max_interval_no != 0";
     }
     $sql .= ") ORDER BY $fossil_record_sort reliability_index DESC, pubyr DESC, opinion_no DESC";
-    if ( ! wantarray ) {
-        $sql .= " LIMIT 1";
-    }
 
     my @rows = @{$dbt->getData($sql)};
 
@@ -2520,7 +2517,7 @@ sub getMostRecentClassification {
     if (scalar(@rows)) {
     # recompute alternate spellings instead of assuming taxa_tree_cache has
     #  them right JA 21.8.08
-        if ( $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} && ! wantarray )	{
+        if ( $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} )	{
             my $sql = "(SELECT distinct(child_spelling_no) spelling FROM opinions WHERE child_no=$child_no) UNION (SELECT distinct(parent_spelling_no) spelling FROM opinions WHERE parent_no=$child_no)";
             my @spellingRows = @{$dbt->getData($sql)};
             my @spellings = ($child_no);
@@ -2550,7 +2547,7 @@ sub getMostRecentClassification {
             return $rows[0];
         }
     } else {
-        if ( $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} && ! wantarray )	{
+        if ( $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} )	{
             $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$child_no,synonym_no=$child_no,opinion_no=0 WHERE taxon_no=$child_no";
             my $dbh = $dbt->dbh;
             $dbh->do($sql);
