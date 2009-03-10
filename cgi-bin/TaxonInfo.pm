@@ -2529,7 +2529,10 @@ sub getMostRecentClassification {
             my $spelling_no = $rows[0]->{'child_spelling_no'};
             # if the belongs to opinion has been borrowed from a junior
             #  synonym, we need to figure out the correct spelling
+            # default to child_no because there may be no opinion at all
+            #  on it JA 9.3.09
             if ( $rows[0]->{'child_no'} != $child_no )	{
+                $spelling_no = $child_no;
                 for my $i ( 1..$#rows )	{
                     if ( $rows[$i]->{'child_no'} == $child_no && $rows[$i]->{'status'} ne "misspelling of" && $rows[$i]->{'spelling_reason'} ne "misspelling" )	{
                         $spelling_no = $rows[$i]->{'child_spelling_no'};
