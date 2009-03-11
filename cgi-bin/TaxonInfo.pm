@@ -2522,11 +2522,11 @@ sub getMostRecentClassification {
             my @spellingRows = @{$dbt->getData($sql)};
             my @spellings = ($child_no);
             push @spellings, $_->{'spelling'} foreach @spellingRows;
-            my $synonym_no = $child_no;
-            if ( $rows[0]->{'status'} ne "belongs to" && $rows[0]->{'parent_no'} > 0 )	{
-                $synonym_no = $rows[0]->{'parent_no'};
-            }
+            my $synonym_no = $rows[0]->{'child_spelling_no'};
             my $spelling_no = $rows[0]->{'child_spelling_no'};
+            if ( $rows[0]->{'status'} ne "belongs to" && $rows[0]->{'parent_no'} > 0 )	{
+                $synonym_no = $rows[0]->{'parent_spelling_no'};
+            }
             # if the belongs to opinion has been borrowed from a junior
             #  synonym, we need to figure out the correct spelling
             # default to child_no because there may be no opinion at all
@@ -2538,6 +2538,10 @@ sub getMostRecentClassification {
                         $spelling_no = $rows[$i]->{'child_spelling_no'};
                         last;
                     }
+                }
+                # if the name is valid, the synonym_no must also be fixed
+                if ( $synonym_no != $rows[0]->{'parent_spelling_no'} )	{
+                    $synonym_no = $spelling_no;
                 }
             }
             $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$spelling_no,synonym_no=$synonym_no,opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no IN (" . join(',',@spellings) . ")";
