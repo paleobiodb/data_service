@@ -2352,14 +2352,30 @@ sub getOriginalCombination	{
 	my $taxon_no = shift;
 	my $restrict_to_ref = shift;
 
-	my $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE (o.child_no=$taxon_no) OR (o.child_spelling_no=$taxon_no)";
+	my $sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.child_spelling_no=$taxon_no";
 	if ($restrict_to_ref)	{
 		$sql .= " AND o.reference_no=".$restrict_to_ref;
 	}
 	my @results = @{$dbt->getData($sql)};
 
 	if (@results == 0)	{
-		$sql = "SELECT DISTINCT o.parent_no AS child_no FROM opinions o WHERE (o.parent_no=$taxon_no) OR (o.parent_spelling_no=$taxon_no)";
+		$sql = "SELECT DISTINCT o.child_no FROM opinions o WHERE o.child_no=$taxon_no";
+		if ($restrict_to_ref) {
+			$sql .= " AND o.reference_no=".$restrict_to_ref;
+		}
+		@results = @{$dbt->getData($sql)};
+	}
+
+	if (@results == 0)	{
+		$sql = "SELECT DISTINCT o.parent_no AS child_no FROM opinions o WHERE o.parent_spelling_no=$taxon_no";
+		if ($restrict_to_ref) {
+			$sql .= " AND o.reference_no=".$restrict_to_ref;
+		}
+		@results = @{$dbt->getData($sql)};
+	}
+
+	if (@results == 0)	{
+		$sql = "SELECT DISTINCT o.parent_no AS child_no FROM opinions o WHERE o.parent_no=$taxon_no";
 		if ($restrict_to_ref) {
 			$sql .= " AND o.reference_no=".$restrict_to_ref;
 		}
