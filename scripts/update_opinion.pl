@@ -18,6 +18,8 @@ if ($ARGV[0] eq "all")	{
 	my @rows = @{$dbt->getData($sql)};
 	$t .= ",".$_->{'taxon_no'} foreach @rows;
 	$t =~ s/^,//;
+} elsif ( $ARGV[0] !~ /[^0-9,]/ )	{
+	$t = $ARGV[0];
 } else	{
 	open IN,"<./$file";
 	$t = <IN>;
@@ -32,6 +34,7 @@ if ($t =~ /^[\d,]+$/) {
 	} else	{
 		push @taxa , $t;
 	}
+	my %seen;
 	for $taxon ( @taxa )	{
 		if ( $taxon/1000 == int($taxon/1000) )	{
 			print "$taxon = ";
@@ -40,6 +43,10 @@ if ($t =~ /^[\d,]+$/) {
 		if ( $taxon/1000 == int($taxon/1000) )	{
 			print "$orig\n";
 		}
+		if ( $seen{$orig} )	{
+			next;
+		}
+		$seen{$orig}++;
 		TaxonInfo::getMostRecentClassification($dbt,$orig,{'recompute'=>'yes'});
 	}
 }
