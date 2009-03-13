@@ -2468,12 +2468,12 @@ sub getMostRecentClassification {
     # it is imperative that belongs-to opinions on junior synonyms also be
     #  be considered, because they might actually be more reliable
     # obviously, don't do this if we are looking to see if the taxon is a
-    #  a synonym itself
-    # JA 14-15.6.07
+    #  a synonym itself JA 14-15.6.07
+    # only use synonyms of equal rank or bizarre stuff will happen JA 12.3.09
     my @synonyms;
     push @synonyms, $child_no;
     if ( $options->{'use_synonyms'} !~ /no/ && !$options->{reference_no})	{
-        push @synonyms , getJuniorSynonyms($dbt,$child_no);
+        push @synonyms , getJuniorSynonyms($dbt,$child_no,"equal");
     }
 
     my $fossil_record_sort;
@@ -4125,11 +4125,11 @@ sub getSeniorSynonym {
 # and original combination must be passed in. Use a hash to keep track to avoid duplicate and recursion
 # Note that invalid subgroup is technically not a synoym, but treated computationally the same
 sub getJuniorSynonyms {
-    my $dbt = shift;
-    my @taxon_nos = @_;
+        my $dbt = shift;
+        my $t = shift;
+        my $rank = shift;
 
-    my %seen_syn = ();
-    for my $t ( @taxon_nos )	{
+        my %seen_syn = ();
         my $senior;
         my $recent = getMostRecentClassification($dbt,$t,{'use_synonyms'=>'no'});
         if ( $recent->{'status'} =~ /synonym|replaced|subgroup|nomen/ && $recent->{'parent_no'} > 0 )	{
@@ -4148,7 +4148,7 @@ sub getJuniorSynonyms {
             my @results = @{$dbt->getData($sql)};
             foreach my $row (@results) {
                 my $parent = getMostRecentClassification($dbt,$row->{'child_no'},{'use_synonyms'=>'no'});
-                if ($parent->{'parent_no'} == $taxon_no && $parent->{'status'} =~ /synonym|replaced|subgroup|nomen/ && $parent->{'child_no'} != $t) {
+                if ($parent->{'parent_no'} == $taxon_no && ( $parent->{'status'} =~ /synonym|replaced/ || ( $rank ne "equal" && $parent->{'status'} =~ /subgroup|nomen/ ) ) && $parent->{'child_no'} != $t) {
                     if (!$seen_syn{$row->{'child_no'}}) {
                 # the most recent opinion on the focal taxon could be that
                 #  it is a synonym of its synonym
@@ -4163,7 +4163,6 @@ sub getJuniorSynonyms {
                 }
             }
         }
-    }
     return (keys %seen_syn);
 }
 
