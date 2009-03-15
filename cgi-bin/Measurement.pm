@@ -329,6 +329,7 @@ function submitForm ( )
     print qq|<tr><td align="center" valign="top"><a href="javascript:submitForm('')"><div class="measurementBullet" style="position: relative; margin-top: -0.1em;">&#149;</div></td>|;
     print "<td colspan=\"6\" valign=\"top\">&nbsp;Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3>new individual measurements</i><br>";
     print qq|
+  &nbsp;&nbsp;default specimen #: <input name="default_no" size="10"><br>
   &nbsp;&nbsp;default side:
   <select name="default_side">
   <option value=""></option>
@@ -341,6 +342,12 @@ function submitForm ( )
   <option value="both">both</option>
   </select><br>
   &nbsp;&nbsp;default part: <input name="default_part" size="10"><br>
+  &nbsp;&nbsp;default type:
+  <select name="default_type">
+  <option value="no">no</option>
+  <option value="holotype">holotype</option>
+  <option value="paratype">paratype</option>
+  </select><br>
   &nbsp;&nbsp;default source:
   <select name="default_source">
   <option value=""></option>
@@ -469,7 +476,7 @@ sub populateMeasurementForm {
                 #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','magnification','is_type');
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
-                    $table_rows .= $hbo->populateHTML('specimen_measurement_form_row',[$q->param('default_side'),$q->param('default_part'),$q->param('default_source')],['specimen_side','specimen_part','measurement_source']);
+                    $table_rows .= $hbo->populateHTML('specimen_measurement_form_row',[$q->param('default_no'),$q->param('default_side'),$q->param('default_part'),$q->param('default_type'),$q->param('default_source')],['specimen_id','specimen_side','specimen_part','specimen_is_type','measurement_source']);
                 }
                 push @fields,'table_rows';
                 push @values,$table_rows;
