@@ -155,7 +155,10 @@ sub processSanityCheck	{
 	my %refis;
 	%dataneeded = ();
 	for my $row ( @rows )	{
-		$dataneeded{$row->{rank}}{$row->{name}}++;
+		if ( $row->{extant} ne "yes" )	{
+			$row->{extant} = "no";
+		}
+		$dataneeded{$row->{rank}}{$row->{extant}}{$row->{name}}++;
 		$extant{$row->{rank}}{$row->{extant}}++;
 		if ( $row->{extant} !~ /yes|no/i )	{
 			$dataneeded2{$row->{rank}}{$row->{name}}++;
@@ -177,7 +180,8 @@ sub processSanityCheck	{
 				my @highers = @{$belongsto{$rank}{$row->{no}}};
 				for my $h ( @highers )	{
 					$sampled{$rank}{$h}++;
-					delete $dataneeded{$rank}{$h};
+					delete $dataneeded{$rank}{'no'}{$h};
+					delete $dataneeded{$rank}{'yes'}{$h};
 				}
 			}
 		}
@@ -196,8 +200,14 @@ sub processSanityCheck	{
 		if ( $total{$rank} > 0 )	{
 			printf "%d of %d $plural{$rank} (%.1f%%)<br>\n",$withoccs{$rank}, $total{$rank}, 100 * $withoccs{$rank} / $total{$rank};
 			if ( $total{$rank} - $withoccs{$rank} > 0 && $total{$rank} - $withoccs{$rank} <= 200 )	{
-				my @temp = keys %{$dataneeded{$rank}};
-				printMissing($rank,\@temp);
+				my @temp = keys %{$dataneeded{$rank}{'no'}};
+				my @temp2 = keys %{$dataneeded{$rank}{'yes'}};
+				if ( @temp2 )	{
+					printMissing($rank,\@temp,'extinct');
+					printMissing($rank,\@temp2,'extant');
+				} else	{
+					printMissing($rank,\@temp);
+				}
 			}
 			if ( $rank ne "genus" )	{
 				print "<br>\n";
@@ -354,8 +364,20 @@ sub printMissing	{
 	my $rank = shift;
 	my $tempref = shift;
 	my @temp = @{$tempref};
+	if ( ! @temp )	{
+		return;
+	}
+	my $category = shift;
 
-	print "<span class=\"small\">[missing data: ";
+	if ( $category )	{
+		my $noun = "genera";
+		if ( $#temp == 0 )	{
+			$noun = "genus";
+		}
+		printf "<span class=\"small\">[%d $category $noun missing data: ",$#temp + 1;
+	} else	{
+		print "<span class=\"small\">[missing data: ";
+	}
 	@temp = sort @temp;
 	print $temp[0];
 	for my $i ( 1..$#temp )	{
