@@ -1,6 +1,15 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
+function simplify( name )	{
+	name = name.replace(/ \(.*\) /,' ');
+	name = name.replace(/( |)(n\. gen\.)( |)/,' ');
+	name = name.replace(/( |)(n\. sp\.)( |)/,' ');
+	name = name.replace(/^ /,'');
+	name = name.replace(/ $/,'');
+	return name;
+}
+
 function checkForm()	{
 // informal formatting
 	var frm = document.forms[0];
@@ -32,30 +41,47 @@ function checkForm()	{
 			taxonName = taxonName.replace(/ <.*> /,' (Subgenus) ');
 			taxonName = taxonName.replace(/ <.*>$/,' species');
 
+			// checks for duplicates will need to ignore subgenera,
+			//  n. gen., and n. sp.
+			var simpleName = frm.taxon_name[i].value;
+			simpleName = simplify( simpleName );
+
+			// need this workaround because hasreid[0] is undefined
+			var has = 0;
+			if ( frm.occurrence_no[i].value > 0 )	{
+				has = hasreid[frm.occurrence_no[i].value];
+			}
+
 			// check for dupes
 			// revised 20.2.08 so only current IDs are matched,
 			//  as opposed to occurrences since reIDed
 			for ( var j=0; j < i; j++ )	{
-				if ( frm.taxon_name[j].value != "" && frm.taxon_name[j].value == taxonName )	{
+				var simpleName2 = frm.taxon_name[j].value;
+				simpleName2 = simplify( simpleName2 );
+				if ( frm.taxon_name[j].value != "" && simpleName == simpleName2 )	{
+					var has2 = 0;
+					if ( frm.occurrence_no[j].value > 0 )	{
+						has2 = hasreid[frm.occurrence_no[j].value];
+					}
 			// case 1: identical occurrence and its own reID
-					if ( frm.occurrence_no[i].value == frm.occurrence_no[j].value && hasreid[frm.occurrence_no[i].value] == 1 )	{
-						errors += "* " + taxonName + " and its reID have the same name\n";
+					if ( frm.occurrence_no[i].value == frm.occurrence_no[j].value && has > 0 )	{
+						errors += "* " + simpleName + " and its reID have the same name\n";
 					}
 			// case 2: identical occurrences with no reIDs
-					else if ( hasreid[frm.occurrence_no[i].value] == 0 && hasreid[frm.occurrence_no[j].value] == 0 )	{
-						errors += "* " + taxonName + " is listed twice\n";
+					else if ( has < 1 && has2 < 1 )	{
+						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 3: identical reIDs
 					if ( frm.reid_no[i].value > 0 && frm.reid_no[j].value > 0 )	{
-						errors += "* " + taxonName + " is listed twice\n";
+						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 4: first is a reID and second has no reID
-					if ( frm.reid_no[i].value > 0 && hasreid[frm.occurrence_no[j].value] == 0 )	{
-						errors += "* " + taxonName + " is listed twice\n";
+					if ( frm.reid_no[i].value > 0 && has2 < 1 )	{
+						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 5: first has no reID and second is a reID
-					if ( hasreid[frm.occurrence_no[i].value] == 0 && frm.reid_no[j].value > 0 )	{
-						errors += "* " + taxonName + " is listed twice\n";
+					if ( has < 1 && frm.reid_no[j].value > 0 )	{
+						errors += "* " + simpleName + " is listed twice\n";
 					}
 				}
 			}
@@ -157,25 +183,32 @@ function checkForm()	{
 				errors += "* The genus name is missing or ill-formed";
 			} else if ( ! /( |")([a-z][a-z]*)("|)$/.test( taxonName ) && ! /( )(indet\.|sp\.|spp\.)$/.test( taxonName ) )	{
 				errors += "* The species name is missing or ill-formed";
-			} else if ( /[A-Za-z0-9]/.test( frm.abund_value[i].value ) && ! /[a-z]/.test( frm.abund_unit[i].value ) )	{
-				errors += "* Don't forget the abundance unit";
-			} else if ( ! /[A-Za-z0-9]/.test( frm.abund_value[i].value ) && /[a-z]/.test( frm.abund_unit[i].value ) )	{
-				errors += "* Don't forget the abundance value";
-			} else if ( /[^0-9\.]/.test( frm.abund_value[i].value ) && ! /category/.test( frm.abund_unit[i].value ) )	{
-				errors += "* Enter a number if the abundance unit is '" + frm.abund_unit[i].value + "'";
-			} else if ( /^\./.test( frm.abund_value[i].value ) && ! /category/.test( frm.abund_unit[i].value ) )	{
-				errors += "* Start the abundance with a digit if the unit is '" + frm.abund_unit[i].value + "'";
-			} else if ( /\.$/.test( frm.abund_value[i].value ) && ! /category/.test( frm.abund_unit[i].value ) )	{
-				errors += "* End the abundance with a digit if the unit is '" + frm.abund_unit[i].value + "'";
-			} else if ( /\..*\./.test( frm.abund_value[i].value ) && ! /category/.test( frm.abund_unit[i].value ) )	{
-				errors += "* Enter only one period if the abundance unit is '" + frm.abund_unit[i].value + "'";
-			} else if ( frm.reference_no[i].value == "" )	{
+			}
+
+			if ( typeof( frm.abund_value ) != "undefined" || typeof( frm.abund_unit ) != "undefined" )	{
+				if ( /[A-Za-z0-9]/.test( frm.abund_value[i].value ) && ! /[a-z]/.test( frm.abund_unit[i].value ) )	{
+					errors += "* Don't forget the abundance unit";
+				} else if ( ! /[A-Za-z0-9]/.test( frm.abund_value[i].value ) && /[a-z]/.test( frm.abund_unit[i].value ) )	{
+					errors += "* Don't forget the abundance value";
+				} else if ( /[^0-9\.]/.test( frm.abund_value[i].value ) && ! /category/.test( frm.abund_unit[i].value ) )	{
+					errors += "* Enter a number if the abundance unit is '" + frm.abund_unit[i].value + "'";
+				} else if ( /^\./.test( frm.abund_value[i].value ) && ! /category/.test( frm.abund_unit[i].value ) )	{
+					errors += "* Start the abundance with a digit if the unit is '" + frm.abund_unit[i].value + "'";
+				} else if ( /\.$/.test( frm.abund_value[i].value ) && ! /category/.test( frm.abund_unit[i].value ) )	{
+					errors += "* End the abundance with a digit if the unit is '" + frm.abund_unit[i].value + "'";
+				} else if ( /\..*\./.test( frm.abund_value[i].value ) && ! /category/.test( frm.abund_unit[i].value ) )	{
+					errors += "* Enter only one period if the abundance unit is '" + frm.abund_unit[i].value + "'";
+				}
+			}
+
+			if ( frm.reference_no[i].value == "" )	{
 				errors += "* Don't leave out the reference number";
 			} else if ( /[^0-9]/.test( frm.reference_no[i].value ) )	{
 				errors += "* The reference number must be an integer";
 			} else if ( /^[^1-9]/.test( frm.reference_no[i].value ) )	{
 				errors += "* The reference number must be greater than one";
 			}
+
 			if ( errors != lasterrors )	{
 				errors += "\n    (" + frm.taxon_name[i].value + ")\n";
 			}
