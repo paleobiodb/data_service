@@ -151,8 +151,6 @@ sub displayEnterers {
         my $email;
         if ($row->{'email'}) {
             $email = scramble("$row->{'email'}");
-        } else {
-            $email = "<i>address unknown</i>";
         }
         $html .= "<td>$name</td><td>$row->{institution}</td><td>$email</td></tr>";
     }
@@ -202,10 +200,9 @@ sub formatAuthorizerTable	{
         my $email;
         if ($row->{'email'}) {
             $email = scramble("$row->{'email'}");
-        } else {
-            $email = "<i>address unknown</i>";
+            $email =  ", ".$email;
         }
-        $html .= "<td class=\"tiny\" style=\"text-indent: -1em; padding-left: 1.5em; padding-right: 0.5em;\">$name, $row->{institution}, $email</td></tr>\n";
+        $html .= "<td class=\"tiny\" style=\"text-indent: -1em; padding-left: 1.5em; padding-right: 0.5em;\">$name, $row->{institution}$email</td></tr>\n";
     }
     $html .= "</table>";
     return $html;
