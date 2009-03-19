@@ -1351,7 +1351,7 @@ sub getTitleWordOdds	{
 
 	sub printWords		{
 		my $sort = shift;
-		print "<div class=\"displayPanel\" style=\"float: left; clear: left; width: 24em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
+		print "<div class=\"displayPanel\" style=\"float: left; clear: left; width: 23em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
 		print "<span class=\"displayPanelHeader\">$title</span>\n";
 		print "<div class=\"displayPanelContent\">\n";
 		my $output = 0;
@@ -1400,7 +1400,7 @@ sub getTitleWordOdds	{
 		}
 		print "</table>\n</div>\n</div>\n\n";
 		if ( $output > 0 )	{
-			print "<div class=\"displayPanel\" style=\"float: left; clear: right; width: 26em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
+			print "<div class=\"displayPanel\" style=\"float: left; clear: right; width: 25em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
 			print "<span class=\"displayPanelHeader\">$title2</span>\n";
 			print "<div class=\"displayPanelContent\">\n";
 			my @reflist;
