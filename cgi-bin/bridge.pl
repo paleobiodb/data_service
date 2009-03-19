@@ -862,7 +862,7 @@ sub displayRefResults {
     logRequest($s,$q);
 
 	print $hbo->stdIncludes("std_page_top");
-    Reference::displayRefResults($dbt,$q,$s,$hbo);
+	Reference::displayRefResults($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes("std_page_bottom");
 				
 }
@@ -870,6 +870,13 @@ sub displayRefResults {
 sub getReferencesXML {
     logRequest($s,$q);
     Reference::getReferencesXML($dbt,$q,$s,$hbo);
+}
+
+sub getTitleWordOdds	{
+	logRequest($s,$q);
+	print $hbo->stdIncludes("std_page_top");
+	Reference::getTitleWordOdds($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
 }
 
 sub displayReferenceForm {
