@@ -1114,10 +1114,13 @@ sub getTitleWordOdds	{
 	my @tables= ("refs r");
 	my @where = ("(language IN ('English') OR language IS NULL) AND reftitle!='' AND reftitle IS NOT NULL");
 
+	my %isbad;
+	$isbad{$_}++ foreach ('about','and','been','for','from','have','its','near','not','off','some','the','their','them','this','those','two','which','with');
+
 	my (%cap,%iscap,%isplural,%notplural,%freq,%allfreq,%infreq,@words,@allwords,$n,$allrefs,$nrefs,@allrefs,%refwords);
 
 	# avoids another table scan
-	my $sql = "SELECT reftitle,reference_no FROM ".join(',',@tables)." WHERE ".join(' AND ',@where);
+	my $sql = "SELECT reftitle,pubtitle,reference_no FROM ".join(',',@tables)." WHERE ".join(' AND ',@where);
 	getWords($sql);
 	# okay, so it's a hack
 	%allfreq = %freq;
@@ -1136,9 +1139,6 @@ sub getTitleWordOdds	{
 	}
 
 	print "<p class=\"pageTitle\" style=\"margin-left: 16em; margin-bottom: 1.5em;\">Paper title analytical results</p>\n\n";
-
-	my %isbad;
-	$isbad{$_}++ foreach ('about','and','been','for','from','have','its','near','not','off','some','the','their','them','this','those','two','which','with');
 
 	# oy vey
 	if ( $q->param('title Palaeontologische Zeitschrift') )	{
@@ -1163,7 +1163,7 @@ sub getTitleWordOdds	{
 	}
 	if ( $q->param('keywords') =~ /[A-Za-z]/ )	{
 		my @words = split / /,$q->param('keywords');
-		$isbad{$_} foreach @words;
+		$isbad{$_}++ foreach @words;
 		my @likes;
 		push @likes , "(reftitle REGEXP '[^A-Za-z]".$_."[^A-Za-z]' OR reftitle REGEXP '".$_."[^A-Za-z]' OR reftitle REGEXP '[^A-Za-z]".$_."' OR reftitle REGEXP '[^A-Za-z]".$_."s[^A-Za-z]' OR reftitle REGEXP '".$_."s[^A-Za-z]' OR reftitle REGEXP '[^A-Za-z]".$_."s')" foreach @words;
 		push @where , "(".join(' OR ',@likes).")";
@@ -1313,17 +1313,39 @@ sub getTitleWordOdds	{
 		$infreq{$w} /= $inrefs;
 		$buzz{$w} = $infreq{$w} / $allfreq{$w}
 	}
-	my (%refbuzz,%absrefbuzz,%nrefwords,$max,$buzziest);
+	my (%refbuzz,%absrefbuzz,%jbuzz,%injournal);
 	for my $r ( @allrefs )	{
+		if ( ! $refwords{$r->{'reference_no'}} || $#{$refwords{$r->{'reference_no'}}} == 0 )	{
+			next;
+		}
+		my $nrefwords = 0;
+		$r->{'pubtitle'} =~ s/American Museum of Natural History/AMNH/;
+		$r->{'pubtitle'} =~ s/Geological Society of London/GSL/;
+		$r->{'pubtitle'} =~ s/Palaeogeography, Palaeoclimatology, Palaeoecology/Palaeo3/;
+		$r->{'pubtitle'} =~ s/Proceedings of the National Academy of Sciences/PNAS/;
+		$r->{'pubtitle'} =~ s/United States Geological Survey/USGS/;
 		for my $w ( @{$refwords{$r->{'reference_no'}}} )	{
 			if ( $buzz{$w} != 0 && $infreq{$w} * $inrefs >= $q->param('minimum') && $allfreq{$w} * $nallrefs >= $q->param('minimum') )	{
 				$refbuzz{$r->{'reference_no'}} += log( $buzz{$w} );
 				$absrefbuzz{$r->{'reference_no'}} += abs( log( $buzz{$w} ) );
-				$nrefwords{$r->{'reference_no'}}++;
 			}
+			$nrefwords++;
+		}
+		$refbuzz{$r->{'reference_no'}} /= $nrefwords;
+		$absrefbuzz{$r->{'reference_no'}} /= $nrefwords;
+		$jbuzz{$r->{'pubtitle'}} += $refbuzz{$r->{'reference_no'}};
+		$injournal{$r->{'pubtitle'}}++;
+	}
+	for my $j ( keys %jbuzz )	{
+		if ( $injournal{$j} < 100 || ! $j )	{
+			delete $jbuzz{$j};
+			delete $injournal{$j};
+		} else	{
+			$jbuzz{$j} /= $injournal{$j};
 		}
 	}
 	my @refnos = keys %refbuzz;
+	my @journals = keys %jbuzz;
 
 	if ( ! @refnos )	{
 		print "<p style=\"margin-bottom: 3em;\">Not enough papers fall in the categories you selected to compute the odds. Please <a href=\"$READ_URL?action=displayPage&page=word_odds_form\">try again</a>.</p>\n";
@@ -1332,26 +1354,32 @@ sub getTitleWordOdds	{
 
 	print "<div style=\"margin-left: 0em;\">\n\n";
 	my $title = "Words giving the best odds";
-	my $title2 = "Paper titles giving the best odds";
+	my $title2 = "Journals averaging the highest odds";
+	my $title3 = "Paper titles averaging the highest odds";
 	@allwords = sort { $infreq{$b} / $allfreq{$b} <=> $infreq{$a} / $allfreq{$a} } @allwords;
 	@refnos = sort { $refbuzz{$b} <=> $refbuzz{$a} || $#{$refwords{$b}} <=> $#{$refwords{$a}} } @refnos;
+	@journals = sort { $jbuzz{$b} <=> $jbuzz{$a} } @journals;
 	printWords('best');
 
 	$title = "Words giving the worst odds";
-	$title2 = "Papers with titles giving the worst odds";
+	$title2 = "Journals averaging the lowest odds";
+	$title3 = "Papers with titles averaging the lowest odds";
 	@allwords = sort { $infreq{$a} / $allfreq{$a} <=> $infreq{$b} / $allfreq{$b} || $allfreq{$b} <=> $allfreq{$a} } @allwords;
 	@refnos = sort { $refbuzz{$a} <=> $refbuzz{$b} || $#{$refwords{$b}} <=> $#{$refwords{$a}} } @refnos;
+	@journals = sort { $jbuzz{$a} <=> $jbuzz{$b} } @journals;
 	printWords('worst');
 
 	$title = "Words mattering the least";
-	$title2 = "Papers with titles giving the most even odds";
+	$title2 = "Hardest-to-tell journals";
+	$title3 = "Hardest-to-tell paper titles";
 	@allwords = sort { abs(log($infreq{$a} / $allfreq{$a})) <=> abs(log($infreq{$b} / $allfreq{$b})) || $allfreq{$b} <=> $allfreq{$a} } @allwords;
 	@refnos = sort { $absrefbuzz{$a} <=> $absrefbuzz{$b} || $#{$refwords{$b}} <=> $#{$refwords{$a}} } @refnos;
+	@journals = sort { abs( $jbuzz{$a} ) <=> abs( $jbuzz{$b} ) } @journals;
 	printWords('equal');
 
 	sub printWords		{
 		my $sort = shift;
-		print "<div class=\"displayPanel\" style=\"float: left; clear: left; width: 23em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
+		print "<div class=\"displayPanel\" style=\"float: left; clear: left; width: 26em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
 		print "<span class=\"displayPanelHeader\">$title</span>\n";
 		print "<div class=\"displayPanelContent\">\n";
 		my $output = 0;
@@ -1400,8 +1428,27 @@ sub getTitleWordOdds	{
 		}
 		print "</table>\n</div>\n</div>\n\n";
 		if ( $output > 0 )	{
-			print "<div class=\"displayPanel\" style=\"float: left; clear: right; width: 25em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
+			print "<div class=\"displayPanel\" style=\"float: left; clear: right; width: 23em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
 			print "<span class=\"displayPanelHeader\">$title2</span>\n";
+			print "<div class=\"displayPanelContent\">\n";
+			print "<table>\n";
+			print "<tr><td>Rank</td>\n";
+			print "<td>Journal</td>\n";
+			print "<td><nobr>Mean odds</nobr></td>\n";
+			for my $i ( 0..$output-1 )	{
+				if ( ! $journals[$i] )	{
+					last;
+				}
+				print "<tr>\n";
+				printf "<td align=\"center\" valign=\"top\">%d</td>\n",$i + 1;
+				print "<td class=\"verysmall\" style=\"padding-left: 0.5em; text-indent: -0.5em;\">$journals[$i]</td>\n";
+				printf "<td align=\"center\" valign=\"top\">%.2f</td>\n",exp( $jbuzz{$journals[$i]} );
+				print "</tr>\n";
+			}
+			print "</table></div>\n</div>\n\n";
+
+			print "<div class=\"displayPanel\" style=\"float: left; clear: right; width: 50em; margin-bottom: 3em; padding-left: 1em; padding-bottom: 1em;\">\n";
+			print "<span class=\"displayPanelHeader\">$title3</span>\n";
 			print "<div class=\"displayPanelContent\">\n";
 			my @reflist;
 			for my $i ( 0..9 )	{
@@ -1410,9 +1457,10 @@ sub getTitleWordOdds	{
 			$sql = "SELECT reference_no,author1init,author1last,author2init,author2last,otherauthors,reftitle,pubyr,pubtitle,pubvol,firstpage,lastpage FROM refs WHERE reference_no IN (".join(',',@reflist).")";
 			my %refdata;
 			$refdata{$_->{'reference_no'}} = $_ foreach @{$dbt->getData($sql)};
-			for my $i ( 0..int($output/4) )	{
-				print "<p class=\"verysmall\" style=\"margin-left: 1em; text-indent: -0.5em; padding-bottom: -1em;\">\n";
+			for my $i ( 0..9 )	{
+				printf "<p class=\"verysmall\" style=\"margin-left: 1em; text-indent: -0.5em; padding-bottom: -1em;\">\n%d&nbsp;&nbsp;",$i + 1;
 				print formatLongRef($refdata{$reflist[$i]});
+				printf " [average odds based on %d keywords: %.2f]\n",$#{$refwords{$reflist[$i]}} + 1,exp( $refbuzz{$reflist[$i]} );
 				print "</p>\n";
 			}
 			print "</div>\n</div>\n\n";
