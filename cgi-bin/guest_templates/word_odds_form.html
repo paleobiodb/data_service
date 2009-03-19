@@ -1,0 +1,192 @@
+<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+function checkOddChoices()	{
+	var frm = document.forms[0];
+	var errors = "";
+	var entered = 0;
+
+	for ( var i=0; i< frm.elements.length; i++ )	{
+		if ( frm.elements[i].checked )	{
+			entered++;
+		} else if ( frm.elements[i].value && frm.elements[i].type == "text" && frm.elements[i].name != "minimum" )	{
+			entered++;
+		}
+	}
+	if ( entered == 0 )	{
+		errors += "* You must check or enter something\n";
+	}
+	if ( frm.authors.value != "" && /[,;:-]/.test( frm.authors.value ) )	{
+		errors += "* Separate author names with spaces\n";
+	} else if ( frm.authors.value != "" && /(^ )|( $)/.test( frm.authors.value ) )	{
+		errors += "* Don't start or end the author list with a space\n";
+	} else if ( frm.authors.value != "" && /  /.test( frm.authors.value ) )	{
+		errors += "* There are consecutive spaces in the author list\n";
+	} else if ( frm.authors.value != "" && /[^A-Za-z ]/.test( frm.authors.value ) )	{
+		errors += "* Author names can only include characters\n";
+	}
+	if ( frm.first_year.value != "" && ! /^[12][0789][0-9][0-9]$/.test( frm.first_year.value ) )	{
+		errors += "* '" + frm.first_year.value + "' isn't a calendar year\n";
+	}
+	if ( frm.last_year.value != "" && ! /^[12][0789][0-9][0-9]$/.test( frm.last_year.value ) )	{
+		errors += "* '" + frm.last_year.value + "' isn't a calendar year\n";
+	}
+	if ( frm.keywords.value != "" && /[,;:-]/.test( frm.keywords.value ) )	{
+		errors += "* Separate keywords with spaces\n";
+	} else if ( frm.keywords.value != "" && /(^ )|( $)/.test( frm.keywords.value ) )	{
+		errors += "* Don't start or end the keyword list with a space\n";
+	} else if ( frm.keywords.value != "" && /  /.test( frm.keywords.value ) )	{
+		errors += "* There are consecutive spaces in the keyword list\n";
+	} else if ( frm.keywords.value != "" && /[^A-Za-z ]/.test( frm.keywords.value ) )	{
+		errors += "* Keywords can only include characters\n";
+	}
+	if ( frm.minimum.value == "" )	{
+		errors += "* You must enter a minimum count\n";
+	} else if ( /[^0-9]/.test( frm.minimum.value ) )	{
+		errors += "* The minimum count must be an integer\n";
+	} else if ( frm.minimum.value < 1 )	{
+		errors += "* The minimum count must be non-zero\n";
+	}
+	if ( frm.taxon.value != "" && ! /^[A-Z][a-z]*$/.test( frm.taxon.value ) )	{
+		errors += "* The taxon name doesn't look right\n";
+	}
+	if ( errors != "" )	{
+		alert( errors );
+		return false;
+	}
+	return true;
+}
+
+//  End -->
+</script>
+
+<div align="center">
+<p class="pageTitle" style="margin-bottom: 0em; padding-bottom: 1em;">
+Paper title analysis form</p>
+</div>
+
+<div>
+<p class="verysmall" style="margin-left: 3em; margin-right: 2em; text-indent: -0.5em;">
+This tool finds the words that are most likely to appear in the titles of publications falling in the categories you pick. You can use it to answer questions like these:
+</p>
+<div style="margin-left: 1em;">
+<ul class="verysmall">
+<li>What subjects does the <i>Journal of Paleontology</i> address most often?</li>
+<li>What words were most commonly used in the 19th century?</li>
+<li>What words tend to go along with "phylogeny"?</li>
+<li>What topics typify the Cambrian literature?</li>
+<li>What kinds of papers do people write about the group "Dinosauria"?</li>
+<li>... most importantly, what buzzwords will get my paper into <i>Nature</i>?</li>
+</ul>
+</div>
+</div>
+
+<form method="POST" action="%%read_url%%" onSubmit="return checkOddChoices();">
+&nbsp;&nbsp;<input type=hidden name="action" value="getTitleWordOdds">
+
+<div class="displayPanel">
+<span class="displayPanelHeader" style="align: left;">Citation data</span>
+<div class="displayPanelContent" style="padding: 1em; margin-top: -1em;">
+
+<div style="margin-bottom: 1em;">
+&nbsp;&nbsp;<input type="checkbox" name="title Acta Palaeontologica Polonica">Acta Palaeontologica Polonica
+&nbsp;&nbsp;<input type="checkbox" name="title Alcheringa">Alcheringa
+&nbsp;&nbsp;<input type="checkbox" name="title Ameghiniana">Ameghiniana
+&nbsp;&nbsp;<input type="checkbox" name="title American Journal of Botany">American Journal of Botany<br>
+
+&nbsp;&nbsp;<input type="checkbox" name="title American Journal of Science">American Journal of Science
+&nbsp;&nbsp;<input type="checkbox" name="title American Museum Novitates">American Museum Novitates
+&nbsp;&nbsp;<input type="checkbox" name="title Annals of Carnegie Museum">Annals of Carnegie Museum<br>
+
+&nbsp;&nbsp;<input type="checkbox" name="title Bulletin of the American Museum of Natural History ">Bulletin of the AMNH
+&nbsp;&nbsp;<input type="checkbox" name="title Canadian Journal of Earth Sciences">Canadian Journal of Earth Sciences
+&nbsp;&nbsp;<input type="checkbox" name="title Cretaceous Research">Cretaceous Research
+&nbsp;&nbsp;<input type="checkbox" name="title Facies">Facies<br>
+
+&nbsp;&nbsp;<input type="checkbox" name="title Geobios">Geobios
+&nbsp;&nbsp;<input type="checkbox" name="title Geological Magazine">Geological Magazine
+&nbsp;&nbsp;<input type="checkbox" name="title Journal of Human Evolution">Journal of Human Evolution
+&nbsp;&nbsp;<input type="checkbox" name="title Journal of Mammalogy">Journal of Mammalogy<br>
+
+&nbsp;&nbsp;<input type="checkbox" name="title Journal of Paleontology">Journal of Paleontology
+&nbsp;&nbsp;<input type="checkbox" name="title Journal of Vertebrate Paleontology">Journal of Vertebrate Paleontology
+&nbsp;&nbsp;<input type="checkbox" name="title Lethaia">Lethaia
+&nbsp;&nbsp;<input type="checkbox" name="title Nature">Nature<br>
+
+&nbsp;&nbsp;<input type="checkbox" name="title The Palaeobotanist">The Palaeobotanist
+&nbsp;&nbsp;<input type="checkbox" name="title Palaeogeography, Palaeoclimatology, Palaeoecology">Palaeo3
+&nbsp;&nbsp;<input type="checkbox" name="title Palaeontographica Abteilung A ">Palaeontographica Abteilung A 
+&nbsp;&nbsp;<input type="checkbox" name="title Palaeontologische Zeitschrift" value="YES">Pal&auml;ontologische Zeitschrift<br>
+
+&nbsp;&nbsp;<input type="checkbox" name="title Palaeontology">Palaeontology
+&nbsp;&nbsp;<input type="checkbox" name="title Paleontological Journal">Paleontological Journal
+&nbsp;&nbsp;<input type="checkbox" name="title Palaios">Palaios
+&nbsp;&nbsp;<input type="checkbox" name="title Proceedings of the Academy of Natural Sciences of Philadelphia">Proceedings of the ANSP
+&nbsp;&nbsp;<input type="checkbox" name="title Proceedings of the National Academy of Sciences">PNAS<br>
+
+&nbsp;&nbsp;<input type="checkbox" name="title Quarterly Journal of the Geological Society of London">Quarterly Journal of the GSL
+&nbsp;&nbsp;<input type="checkbox" name="title Review of Palaeobotany and Palynology">Review of Palaeobotany and Palynology
+&nbsp;&nbsp;<input type="checkbox" name="title Science">Science<br>
+&nbsp;&nbsp;<input type="checkbox" name="title United States Geological Survey Professional Paper">USGS Professional Paper
+&nbsp;&nbsp;<input type="checkbox" name="title Vertebrata PalAsiatica">Vertebrata PalAsiatica
+</div>
+
+<div style="margin-bottom: 1em;">
+Author names: <input size="30" name="authors">
+</div>
+
+<div style="margin-bottom: 1em;">
+Published from <input size="5" name="first_year"> to <input size="5" name="last_year">
+</div>
+
+<div style="margin-bottom: 1em;">
+Other words in title: <input name="keywords" size="20">
+</div>
+
+<div>
+Count words used at least <input size="5" name="minimum" value="5"> times inside and outside the set
+</div>
+
+</div>
+</div>
+
+<div class="displayPanel">
+<span class="displayPanelHeader" style="align: left;">Topics</span>
+<div class="displayPanelContent" style="padding: 1em; margin-top: -1em;">
+
+<p>Time interval</p>
+<input type="checkbox" name="period Cambrian" value="22">Cambrian
+<input type="checkbox" name="period Ordovician" value="21">Ordovician
+<input type="checkbox" name="period Silurian" value="20">Silurian
+<input type="checkbox" name="period Devonian" value="19">Devonian
+<input type="checkbox" name="period Carboniferous" value="18">Carboniferous
+<input type="checkbox" name="period Permian" value="17">Permian<br>
+<input type="checkbox" name="period Triassic" value="16">Triassic
+<input type="checkbox" name="period Jurassic" value="15">Jurassic
+<input type="checkbox" name="period Cretaceous" value="14">Cretaceous
+<input type="checkbox" name="period Paleogene" value="26">Paleogene
+<input type="checkbox" name="period Neogene" value="25">Neogene
+
+<p>Continent</p>
+<input type="checkbox" name="Africa" value="YES">Africa
+<input type="checkbox" name="Asia" value="YES">Asia
+<input type="checkbox" name="Australia" value="YES">Australia
+<input type="checkbox" name="Europe" value="YES">Europe
+<input type="checkbox" name="North America" value="YES">North America
+<input type="checkbox" name="South America" value="YES">South America
+<br>
+<input type="checkbox" name="exclude_places" value="YES">exclude place names
+
+<p>Taxonomic group: <input name="taxon" size="20"></p>
+
+</div>
+</div>
+
+<div align="center" style="margin-bottom: 2em;">&nbsp;&nbsp;<input type="submit" value="Find words"></div>
+
+<p class="tiny" style="margin-left: 5em; margin-right: 5em; text-indent: -0.5em;"><i>Disclaimer: this cynical analytical tool is the sole responsibility of its author and does not represent the views, beliefs, orientation, preferences, or political connections of the National Science Foundation, the University of California, NCEAS, the Paleobiology Database membership and Advisory Board, the aforementioned journals, or my mother, and is intended for the purposes of amusement and procrastination (mostly of and by its author).</i></p>
+
+</form>
+
