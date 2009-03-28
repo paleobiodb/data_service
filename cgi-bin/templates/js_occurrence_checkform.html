@@ -72,7 +72,7 @@ function checkForm()	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 3: identical reIDs
-					if ( frm.reid_no[i].value > 0 && frm.reid_no[j].value > 0 )	{
+					if ( frm.reid_no[i].value > 0 && frm.reid_no[j].value > 0 && frm.occurrence_no[i].value == frm.occurrence_no[j].value )	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 4: first is a reID and second has no reID
