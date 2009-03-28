@@ -76,11 +76,12 @@ function checkForm()	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 4: first is a reID and second has no reID
-					if ( frm.reid_no[i].value > 0 && has2 < 1 )	{
+			// only complain if the refs are identical
+					if ( frm.reid_no[i].value > 0 && has2 < 1 && frm.reference_no[i].value == frm.reference_no[j].value )	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 5: first has no reID and second is a reID
-					if ( has < 1 && frm.reid_no[j].value > 0 )	{
+					if ( has < 1 && frm.reid_no[j].value > 0 && frm.reference_no[i].value == frm.reference_no[j].value )	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 				}
