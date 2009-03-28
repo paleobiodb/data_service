@@ -395,7 +395,9 @@ sub displayOpinionForm {
     # try to match refs in the database to entered author data JA 14-15.1.09
     # this is a loose match because merely listing a bunch of refs is harmless
     if ( $fields{'author1last'} && $fields{'pubyr'} =~ /^[0-9]*$/ )	{
-        my $sql = "SELECT reference_no FROM refs WHERE author1last='".$fields{'author1last'}."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'};
+        my $auth = $fields{'author1last'};
+        $auth =~ s/'/\\'/g;
+        my $sql = "SELECT reference_no FROM refs WHERE author1last='".$auth."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'};
         if ( $s->get('reference_no') > 0 )	{
             $sql .= " AND reference_no!=".$s->get('reference_no');
         }
@@ -818,7 +820,9 @@ sub submitOpinionForm {
 
         #  there might be a reference matching this author info
             if ( ! $q->param('confirm_no_ref') && $q->param('author1last') && $q->param('pubyr') && ( $fields{'old_author1last'} ne $q->param('author1last') || $fields{'old_author2last'} ne $q->param('author2last') || $fields{'old_pubyr'} != $q->param('pubyr') ) )	{
-                my $sql = "SELECT reference_no FROM refs WHERE author1last='".$q->param('author1last')."' AND pubyr=".$q->param('pubyr');
+                my $auth = $q->param('author1last');
+                $auth =~ s/'/\\'/g;
+                my $sql = "SELECT reference_no FROM refs WHERE author1last='".$auth."' AND pubyr=".$q->param('pubyr');
                 if ( $q->param('author2last') )	{
                     $sql .= " AND author2last='".$q->param('author2last')."'";
                 }
