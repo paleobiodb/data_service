@@ -519,7 +519,12 @@ sub displayOpinionForm {
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no});
                 $higher_class = "unclassified $taxon->{taxon_rank}";
             }
-            $parent_pulldown .= qq|<br><nobr><input type="radio" name="parent_spelling_no" $selected value='$parent_no'> $parentName, $taxon->{taxon_rank}$pub_info [$higher_class]</nobr>\n|;
+            my @spellings = TaxonInfo::getAllSpellings($dbt,$parent_no);
+            my $sql = "SELECT DISTINCT(taxon_name) FROM authorities WHERE taxon_no IN ('".join("','",@spellings)."') AND taxon_name!='".$parentName."' ORDER BY taxon_name";
+            my @names = @{$dbt->getData($sql)};
+            my $equals = "";
+            $equals .= " = ".$_->{'taxon_name'} foreach @names;
+            $parent_pulldown .= qq|<br><nobr><input type="radio" name="parent_spelling_no" $selected value='$parent_no'> $parentName$equals, $taxon->{taxon_rank}$pub_info [$higher_class]</nobr>\n|;
         }
         $parent_pulldown .= qq|<br><input type="radio" name="parent_spelling_no" value=""> \n<span class=\"prompt\">Other taxon:</span> <input type="text" name="belongs_to_parent" value=""><br>\n|;
         $parent_pulldown .= "\n</span>\n";
