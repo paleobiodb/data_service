@@ -154,15 +154,28 @@ sub buildDownload {
         }  else {
             my $things = ($q->param("output_data") =~ /occurrence/) 
                 ? "occurrences" : $q->param("output_data");
-            print "$mainCount $things were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
+            if ( $mainCount == 1 )	{
+                $things =~ s/s$//;
+                print "$mainCount $things was printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
+            } else	{
+                print "$mainCount $things were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
+            }
             if ( $q->param("output_data") =~ /conjunct/i ) {
                 print "$colls collections were printed to <a href=\"$OUT_HTTP_DIR/$collFile\">$collFile</a><br>\n";
             }
         }
         if ( $q->param("output_data") =~ /occurrence|specimens/ ) {
-            print "$taxaCount taxonomic names were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
+            if ( $taxaCount == 1 )	{
+                print "1 taxonomic range was printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
+            } else	{
+                print "$taxaCount taxonomic ranges were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
+            }
+        } 
+        if ( $refsCount == 1 )	{
+            print "$refsCount reference was printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
+        } else	{
+            print "$refsCount references were printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
         }
-        print "$refsCount references were printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
         my $fileNames = $mainFile."/".$taxaFile."/".$refsFile;
         if ( $q->param('time_scale') )    {
             print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
@@ -1681,12 +1694,9 @@ sub queryDatabase {
                 push @fields,"c.$c AS `c.$c`";
             }
         }
-        if ( $q->param("collections_ma_max") )	{
-            push @fields,"c.max_ma AS `c.max_ma`";
-        }
-        if ( $q->param("collections_ma_min") )	{
-            push @fields,"c.min_ma AS `c.min_ma`";
-        }
+        # these data are always needed for range computations
+        push @fields,"c.max_ma AS `c.max_ma`";
+        push @fields,"c.min_ma AS `c.min_ma`";
         if ($q->param('collections_paleocoords') eq 'YES') {
             push @fields,"c.paleolat AS `c.paleolat`";
             push @fields,"c.paleolng AS `c.paleolng`";
@@ -2013,11 +2023,8 @@ sub queryDatabase {
         push @time_fields, 'subepoch_name'  if ($q->param('collections_subepoch'));
         push @time_fields, 'epoch_name'  if ($q->param('collections_epoch'));
         push @time_fields, 'stage_name'  if ($q->param('collections_stage'));
-        if ($q->param('collections_ma_max') ||
-            $q->param('collections_ma_min') ||
-            $q->param('collections_ma_mid')) {
-            push @time_fields, 'lower_boundary','upper_boundary';
-        }
+        # these data are always needed for range computations
+        push @time_fields, 'lower_boundary','upper_boundary';
         if (($q->param("collections_max_interval") eq "YES" || 
              $q->param("collections_min_interval") eq "YES")) {
             push @time_fields, 'interval_name';
@@ -3763,10 +3770,10 @@ sub printAbundFile {
     # Open the file handle we're going to use or die
     my $filename = $self->{'filename'};
     my $ext = ($q->param('output_format') =~ /tab/) ? "tab" : "csv";
-    my $abundFile = "$filename-abund.$ext";
+    my $rangeFile = "$filename-ranges.$ext";
 
-    if (!open(ABUNDFILE, ">$OUT_FILE_DIR/$abundFile")) {
-        die ("Could not open output file: $abundFile($!) <br>");
+    if (!open(RANGEFILE, ">$OUT_FILE_DIR/$rangeFile")) {
+        die ("Could not open output file: $rangeFile($!) <br>");
     }
          
 
@@ -3780,7 +3787,7 @@ sub printAbundFile {
 
     # compute relative abundance proportion and add to running total
     # WARNING: sum is of logged abundances because geometric means are desired
-    my (%occs_by_taxa,%summed_proportions,%number_of_counts);
+    my (%occs_by_taxa,%range_max,%range_min,%summed_proportions,%number_of_counts);
     my $min_abund = int($q->param('min_mean_abundance'));
     foreach my $row (@$results) {
         my $taxa_key = $row->{'o.genus_name'};
@@ -3789,6 +3796,15 @@ sub printAbundFile {
             $taxa_key .= "|".$row->{'o.species_name'};
         } 
         $occs_by_taxa{$taxa_key}++;
+        # range computation JA 8.4.09
+        # bear with me here, first we need the oldest min and youngest max
+        # note that the max and min can be reversed at this stage and it's okay
+        if ( $row->{'c.ma_min'} > $range_max{$taxa_key} )	{
+            $range_max{$taxa_key} = $row->{'c.ma_min'};
+        }
+        if ( ( $row->{'c.ma_max'} < $range_min{$taxa_key} || ! $range_min{$taxa_key} ) && $row->{'c.ma_max'} )	{
+            $range_min{$taxa_key} = $row->{'c.ma_max'};
+        }
         # need these two for ecology lookup below
 
         if ( ($row->{'o.abund_unit'} eq "specimens" || $row->{'o.abund_unit'} eq "individuals") && 
@@ -3806,36 +3822,62 @@ sub printAbundFile {
             }
         }
     }
-
+    # end of range computation JA 8.4.09
+    # now that we have the absolute minimum range we need to pad it out by
+    #  looking at youngest max and oldest min ranges of possible oldest and
+    #  youngest occurrences (got that?)
+    my %new_range_max;
+    my %new_range_min;
+    foreach my $row (@$results) {
+        my $taxa_key = $row->{'o.genus_name'};
+        if ($q->param('occurrences_species_name') =~ /yes/i) {
+            $taxa_key .= "|".$row->{'o.species_name'};
+        }
+        if ( $row->{'c.ma_max'} == $row->{'c.ma_min'} && $row->{'c.ma_max'} )	{
+            if ( $row->{'c.ma_max'} >= $range_max{$taxa_key} && ( $row->{'c.ma_max'} < $new_range_max{$taxa_key} || ! $new_range_max{$taxa_key} ) )	{
+                $new_range_max{$taxa_key} = $row->{'c.ma_max'};
+            }
+            if ( $row->{'c.ma_min'} <= $range_min{$taxa_key} && ( $row->{'c.ma_min'} >= $new_range_min{$taxa_key} || ! $new_range_min{$taxa_key} ) && $row->{'c.ma_min'} )	{
+                $new_range_min{$taxa_key} = $row->{'c.ma_min'};
+            }
+        } else	{
+            if ( $row->{'c.ma_max'} > $range_max{$taxa_key} && ( $row->{'c.ma_max'} < $new_range_max{$taxa_key} || ! $new_range_max{$taxa_key} ) )	{
+                $new_range_max{$taxa_key} = $row->{'c.ma_max'};
+            }
+            if ( $row->{'c.ma_min'} < $range_min{$taxa_key} && ( $row->{'c.ma_min'} >= $new_range_min{$taxa_key} || ! $new_range_min{$taxa_key} ) && $row->{'c.ma_min'} )	{
+                $new_range_min{$taxa_key} = $row->{'c.ma_min'};
+            }
+        }
+    }
     # print out a list of genera with total number of occurrences and average relative abundance
     # This list of genera is needed abundance file far below
-    my @abundline = ();
-    push @abundline, 'genus';
+    my @rangeline = ();
+    push @rangeline, 'genus';
     if ($q->param('occurrences_species_name') =~ /YES/i) {
-        push @abundline, 'species';
+        push @rangeline, 'species';
     }
-    push @abundline, 'collections','with abundances','geometric mean abundance';
-    print ABUNDFILE $self->formatRow(@abundline)."\n";
+    push @rangeline, 'base of range (Ma)','top of range (Ma)','collections','with abundances','geometric mean abundance';
+    print RANGEFILE $self->formatRow(@rangeline)."\n";
 
     my @taxa = sort keys %occs_by_taxa;
     foreach my $taxon ( @taxa ) {
-        @abundline = ();
+        @rangeline = ();
         if ($q->param('occurrences_species_name') =~ /YES/i) {
             my ($genus,$species)=split(/\|/,$taxon);
-            push @abundline, $genus, $species, $occs_by_taxa{$taxon}, sprintf("%d",$number_of_counts{$taxon});
+            push @rangeline, $genus, $species, $new_range_max{$taxon}, $new_range_min{$taxon}, $occs_by_taxa{$taxon}, sprintf("%d",$number_of_counts{$taxon});
         } else {
-            push @abundline, $taxon, $occs_by_taxa{$taxon}, sprintf("%d",$number_of_counts{$taxon});
+            push @rangeline, $taxon, $new_range_max{$taxon}, $new_range_min{$taxon}, $occs_by_taxa{$taxon}, sprintf("%d",$number_of_counts{$taxon});
         }
         
         if ( $number_of_counts{$taxon} > 0 )    {
-            push @abundline, sprintf("%.4f",exp($summed_proportions{$taxon} / $number_of_counts{$taxon}));
+            push @rangeline, sprintf("%.4f",exp($summed_proportions{$taxon} / $number_of_counts{$taxon}));
         } else    {
-            push @abundline, "NaN";
+            push @rangeline, "NaN";
         }
-        print ABUNDFILE $self->formatRow(@abundline)."\n";
+        print RANGEFILE $self->formatRow(@rangeline)."\n";
     }
-    close ABUNDFILE;
-    return (scalar(@taxa),$abundFile);
+    close RANGEFILE;
+    return (scalar(@taxa),$rangeFile);
 }
 
 
