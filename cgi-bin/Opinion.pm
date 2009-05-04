@@ -394,7 +394,7 @@ sub displayOpinionForm {
 
     # try to match refs in the database to entered author data JA 14-15.1.09
     # this is a loose match because merely listing a bunch of refs is harmless
-    if ( $fields{'author1last'} && $fields{'pubyr'} =~ /^[0-9]*$/ )	{
+    if ( $fields{'author1last'} && $fields{'pubyr'} =~ /^[0-9]{4}$/ )	{
         my $auth = $fields{'author1last'};
         $auth =~ s/'/\\'/g;
         my $sql = "SELECT reference_no FROM refs WHERE author1last='".$auth."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'};
@@ -797,7 +797,7 @@ sub submitOpinionForm {
 		# I have no idea why Poling didn't do this himself; typical
 		#  incompetence
 		# note: the ref no and parent no don't need to match
-        if ($isNewEntry && $q->param('status') ne 'misspelling of') {
+        if ($isNewEntry && $q->param('status') ne 'misspelling of' && $q->param('author1last') && $q->param('pubyr') > 0) {
 		    my $sql = "SELECT count(*) c FROM opinions WHERE ref_has_opinion !='YES' ".
                       " AND child_no=".$dbh->quote($fields{'child_no'}).
                       " AND author1last=".$dbh->quote($q->param('author1last')).
