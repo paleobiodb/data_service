@@ -4377,12 +4377,15 @@ sub setMostRecentReID {
     if ($occurrence_no =~ /^\d+$/) {
         my $sql = "SELECT re.* FROM reidentifications re, refs r WHERE r.reference_no=re.reference_no AND re.occurrence_no=".$occurrence_no." ORDER BY r.pubyr DESC, re.reid_no DESC";
         my @results = @{$dbt->getData($sql)};
-        if (@results) {
+        if ($results[0]->{'reid_no'}>0) {
             $sql = "UPDATE reidentifications SET modified=modified, most_recent='YES' WHERE reid_no=".$results[0]->{'reid_no'};
             my $result = $dbh->do($sql);
             dbg("set most recent: $sql");
             if (!$result) {
                 carp "Error setting most recent reid to YES for reid_no=$results[0]->{reid_no}";
+            } else	{
+                $sql = "UPDATE occurrences SET modified=modified, reid_no=".$results[0]->{'reid_no'}." WHERE occurrence_no=".$occurrence_no;
+                my $result = $dbh->do($sql);
             }
                 
             my @older_reids;
