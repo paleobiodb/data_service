@@ -1454,6 +1454,9 @@ sub displayCollectionDetailsPage {
     } else {
         $row->{"ten_my_bin"} = "";
     }
+
+    $row->{"zone_type"} =~ s/(^.)/\u$1/;
+
 	# check whether we have period/epoch/locage/intage max AND/OR min:
     if ($s->isDBMember()) {
         foreach my $term ("epoch","intage","locage","period"){
