@@ -13,8 +13,47 @@ function simplify( name )	{
 function checkForm()	{
 // informal formatting
 	var frm = document.forms[0];
-	var rows = frm.row_token.length;
+	var taxon_names = new Array();
+	var rows = 0;
+	var occurrence_nos = new Array();
+	var reid_nos = new Array();
+	var ref_nos = new Array();
 	var errors = "";
+
+	if ( typeof( frm.row_token) != "undefined" )	{
+		rows = frm.row_token.length;
+	} else	{
+		if ( /[^A-Za-z0-9 <>\.\"\?\(\)\*#\/]/.test( frm.taxon_list.value ) )	{
+			var lines = new Array();
+			lines = frm.taxon_list.value.split(/[^A-Za-z0-9 <>\.\"\?\(\)\*#\/]/);
+			for ( var i=0; i < lines.length; i++ )	{
+				if ( /^[^\*#\/]/.test( lines[i] ) )	{
+					taxon_names[rows] = lines[i];
+					rows = rows + 1;
+				} else if ( rows == 0 )	{
+					errors += '';
+					errors += "* Don't start the list with a comment\n";
+				}
+			}
+		} else	{
+			taxon_names[0] = frm.taxon_list.value;
+			rows = 1;
+		}
+		for ( var i=0; i < rows; i++ )	{
+			occurrence_nos[i] = -1;
+			reid_nos[i] = -1;
+			ref_nos[i] = frm.reference_no;
+		}
+	}
+	if ( typeof( frm.row_token) != "undefined" )	{
+		for ( var i=0; i < frm.taxon_name.length; i++ )	{
+			taxon_names[i] = frm.taxon_name[i].value;
+		}
+		occurrence_nos = frm.occurrence_no;
+		reid_nos = frm.reid_no;
+		ref_nos = frm.reference_no;
+	}
+
 	var lasterrors = "";
 	var lastocc = 0;
 	var hasreid = new Array();
@@ -22,19 +61,18 @@ function checkForm()	{
 	// need to know which occurrences are reidentified
 	// some strong assumptions: the reid is of the last occurrence
 	for ( var i=0; i < rows; i++ )	{
-		if ( frm.taxon_name[i].value != "" && frm.reid_no[i].value > 0 && lastocc > 0 && lastocc == frm.occurrence_no[i].value )	{
+		if ( taxon_names[i] != "" && reid_nos[i].value > 0 && lastocc > 0 && lastocc == occurrence_nos[i].value )	{
 			hasreid[lastocc] = hasreid[lastocc] + 1;
-		} else if ( frm.taxon_name[i].value != "" && frm.reid_no[i].value == 0 )	{
-			lastocc = frm.occurrence_no[i].value;
+		} else if ( taxon_names[i] != "" && reid_nos[i].value == 0 )	{
+			lastocc = occurrence_nos[i].value;
 			hasreid[lastocc] = 0;
 		}
 	}
 
 	// main pass
 	for ( var i=0; i < rows; i++ )	{
-		if ( frm.taxon_name[i].value != "" )	{
-			var taxonName = frm.taxon_name[i].value;
-
+		if ( taxon_names[i] != "" )	{
+			var taxonName = taxon_names[i];
 			// replace informals with dummy values for checking
 			//  purposes
 			taxonName = taxonName.replace(/^<.*> /,'Genus ');
@@ -43,28 +81,28 @@ function checkForm()	{
 
 			// checks for duplicates will need to ignore subgenera,
 			//  n. gen., and n. sp.
-			var simpleName = frm.taxon_name[i].value;
+			var simpleName = taxon_names[i];
 			simpleName = simplify( simpleName );
 
 			// need this workaround because hasreid[0] is undefined
 			var has = 0;
-			if ( frm.occurrence_no[i].value > 0 )	{
-				has = hasreid[frm.occurrence_no[i].value];
+			if ( occurrence_nos[i].value > 0 )	{
+				has = hasreid[occurrence_nos[i].value];
 			}
 
 			// check for dupes
 			// revised 20.2.08 so only current IDs are matched,
 			//  as opposed to occurrences since reIDed
 			for ( var j=0; j < i; j++ )	{
-				var simpleName2 = frm.taxon_name[j].value;
+				var simpleName2 = taxon_names[j];
 				simpleName2 = simplify( simpleName2 );
-				if ( frm.taxon_name[j].value != "" && simpleName == simpleName2 )	{
+				if ( taxon_names[j] != "" && simpleName == simpleName2 )	{
 					var has2 = 0;
-					if ( frm.occurrence_no[j].value > 0 )	{
-						has2 = hasreid[frm.occurrence_no[j].value];
+					if ( occurrence_nos[j].value > 0 )	{
+						has2 = hasreid[occurrence_nos[j].value];
 					}
 			// case 1: identical occurrence and its own reID
-					if ( frm.occurrence_no[i].value == frm.occurrence_no[j].value && has > 0 )	{
+					if ( occurrence_nos[i].value == occurrence_nos[j].value && has > 0 )	{
 						errors += "* " + simpleName + " and its reID have the same name\n";
 					}
 			// case 2: identical occurrences with no reIDs
@@ -72,16 +110,16 @@ function checkForm()	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 3: identical reIDs
-					if ( frm.reid_no[i].value > 0 && frm.reid_no[j].value > 0 && frm.occurrence_no[i].value == frm.occurrence_no[j].value )	{
+					if ( reid_nos[i].value > 0 && reid_nos[j].value > 0 && occurrence_nos[i].value == occurrence_nos[j].value )	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 4: first is a reID and second has no reID
 			// only complain if the refs are identical
-					if ( frm.reid_no[i].value > 0 && has2 < 1 && frm.reference_no[i].value == frm.reference_no[j].value )	{
+					if ( reid_nos[i].value > 0 && has2 < 1 && ref_nos[i].value == ref_nos[j].value )	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 			// case 5: first has no reID and second is a reID
-					if ( has < 1 && frm.reid_no[j].value > 0 && frm.reference_no[i].value == frm.reference_no[j].value )	{
+					if ( has < 1 && reid_nos[j].value > 0 && ref_nos[i].value == ref_nos[j].value )	{
 						errors += "* " + simpleName + " is listed twice\n";
 					}
 				}
@@ -202,16 +240,16 @@ function checkForm()	{
 				}
 			}
 
-			if ( frm.reference_no[i].value == "" )	{
+			if ( ref_nos[i].value == "" )	{
 				errors += "* Don't leave out the reference number";
-			} else if ( /[^0-9]/.test( frm.reference_no[i].value ) )	{
+			} else if ( /[^0-9]/.test( ref_nos[i].value ) )	{
 				errors += "* The reference number must be an integer";
-			} else if ( /^[^1-9]/.test( frm.reference_no[i].value ) )	{
+			} else if ( /^[^1-9]/.test( ref_nos[i].value ) )	{
 				errors += "* The reference number must be greater than one";
 			}
 
 			if ( errors != lasterrors )	{
-				errors += "\n    (" + frm.taxon_name[i].value + ")\n";
+				errors += "\n    (" + taxon_names[i] + ")\n";
 			}
 		}
 	}
