@@ -996,7 +996,7 @@ sub displayCollResults {
 #		$perm_limit = 1000000;
 		$perm_limit = $limit + $rowOffset;
 	} else {
-		if ($q->param("type") =~ /occurrence_table|count_occurrences|most_common/ ||
+		if ($q->param("type") =~ /occurrence_table|occurrence_list|count_occurrences|most_common/ ||
             $q->param('taxon_name') && ($q->param('type') eq "reid" ||
                                         $q->param('type') eq "reclassify_occurrence")) {
             # We're passing the collection_nos directly to the functions, so pass all of them                                            
@@ -1022,6 +1022,7 @@ sub displayCollResults {
         : ($type eq "edit") ? "displayCollectionForm"
         : ($type eq "view") ? "displayCollectionDetails"
         : ($type eq "edit_occurrence") ? "displayOccurrenceAddEdit"
+        : ($type eq "occurrence_list") ? "displayOccurrenceListForm"
         : ($type eq "analyze_abundance") ? "rarefyAbundances"
         : ($type eq "reid") ? "displayOccsForReID"
         : ($type eq "reclassify_occurrence") ?  "startDisplayOccurrenceReclassify"
@@ -3249,6 +3250,47 @@ EOF
     print $hbo->stdIncludes('blank_page_bottom');
 }
 
+# JA 19-20.5.09
+sub displayOccurrenceListForm	{
+
+	my $dbh = $dbt->dbh;
+
+	if (!$s->isDBMember()) {
+		displayLoginPage( "Please log in first." );
+		exit;
+	}
+	if (! $s->get('reference_no')) {
+		$s->enqueue($q->query_string());
+		displaySearchRefs("Please select a reference first"); 
+		exit;
+	}
+ 
+	my $collection_no = $q->param("collection_no");
+	my $sql = "SELECT count(*) c FROM occurrences WHERE collection_no=$collection_no";
+	my $count = ${$dbt->getData($sql)}[0]->{'c'};
+	if ( $count > 0 )	{
+		displayOccurrenceAddEdit();
+		exit;
+	}
+
+	my $sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
+	my $collection_name = ${$dbt->getData($sql)}[0]->{'collection_name'};
+
+	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->populateHTML('js_occurrence_checkform');
+
+	print qq|<form method=post action="$WRITE_URL" onSubmit='return checkForm();'>\n|;
+	my %vars;
+	$vars{'collection_no'} = $collection_no;
+	$vars{'list_collection_no'} = $collection_no;
+	$vars{'reference_no'} = $s->get('reference_no');
+	print $hbo->populateHTML('occurrence_list_form',\%vars);
+
+	print $hbo->stdIncludes("std_page_bottom");
+
+   
+}
+
 sub processOccurrenceTable {
 
     if (!$s->isDBMember()) {
@@ -3551,11 +3593,51 @@ sub processEditOccurrences {
 		exit;
 	}
                                 
+	# list of the number of rows to possibly update.
+	my @rowTokens;
+
+	# parse freeform all-in-one-textarea lists passed in by
+	#  displayOccurrenceListForm JA 19-20.5.09
+	if ( $q->param('row_token') )	{
+		@rowTokens = $q->param('row_token');
+	} elsif ( $q->param('taxon_list') )	{
+		my $taxon_list = $q->param('taxon_list');
+		# collapse down multiple delimiters, if any
+		$taxon_list =~ s/[^A-Za-z0-9 <>\.\"\?\*#\/][^A-Za-z0-9 <>\.\"\?\(\)\*#\/]/=/g;
+		my @lines = split /[^A-Za-z0-9 <>\.\"\?\(\)\*#\/]/,$taxon_list;
+		my (@names,@comments,@colls,@refs,@occs,@reids);
+		for my $l ( 0..$#lines )	{
+			if ( $lines[$l] !~ /[A-Za-z0-9]/ )	{
+				next;
+			}
+			if ( $lines[$l] =~ /^[\*#\/]/ && $#names == $#comments + 1 )	{
+				$lines[$l] =~ s/^[\*#\/]//g;
+				push @comments , $lines[$l];
+			} elsif ( $lines[$l] =~ /^[\*#\/]/ )	{
+				$lines[$l] =~ s/^[\*#\/]//;
+				$comments[$#comments] .= $lines[$l];
+			} else	{
+				push @names , $lines[$l];
+				while ( $#names > $#comments + 1 )	{
+					push @comments , "";
+				}
+			}
+		}
+		push @colls , $q->param('collection_no') foreach @names;
+		push @refs , $q->param('reference_no') foreach @names;
+		push @rowTokens , "row_token" foreach @names;
+		push @occs , -1 foreach @names;
+		push @reids , -1 foreach @names;
+		$q->param('taxon_name' => @names);
+		$q->param('comments' => @comments);
+		$q->param('collection_no' => @colls);
+		$q->param('reference_no' => @refs);
+		$q->param('occurrence_no' => @occs);
+		$q->param('reid_no' => @reids);
+	}
+
 	# Get the names of all the fields coming in from the form.
 	my @param_names = $q->param();
-
-	# list of the number of rows to possibly update.
-	my @rowTokens = $q->param('row_token');
 
 	# list of required fields
 	my @required_fields = ("collection_no", "taxon_name", "reference_no");
@@ -3575,6 +3657,7 @@ sub processEditOccurrences {
 	# loop over all rows submitted from the form
 
 	for (my $i = 0;$i < @rowTokens; $i++)	{
+
         # Flatten the table into a single row, for easy manipulation
         my %fields = ();
         foreach my $param (@param_names) {
@@ -4069,7 +4152,7 @@ sub processEditOccurrences {
 	print "</p></div>\n\n";
 
 	# Links to re-edit, etc
-    my $links = "<div align=\"center\">";
+    my $links = "<div align=\"center\" style=\"padding-top: 1em;\">";
     if ($q->param('form_source') eq 'new_reids_form') {
         # suppress link if there is clearly nothing more to reidentify
         #  JA 3.8.07
@@ -4081,6 +4164,7 @@ sub processEditOccurrences {
     } else {
         if ($q->param('list_collection_no')) {
             my $collection_no = $q->param("list_collection_no");
+            $links .= qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no"><nobr>Edit taxonomic list</nobr></a> - |;
             $links .= "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences&collection_no=$collection_no\"><nobr>Reclassify these occurrences</nobr></a> - ";
             $links .= "<a href=\"$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no\"><nobr>Edit the collection record</nobr></a><br>";
         }
