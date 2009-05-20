@@ -2003,9 +2003,6 @@ function showName()	{
 		$return .= qq|<tr><td colspan="5" align="right"><span onClick="showName();" id="commonClick" class="small">see common names</span></td>|;
 
 		$return .= "</table>";
-        if ($options{'save_links'}) {
-            $return .= "<input type=\"hidden\" name=\"show_links\" value=\"".uri_escape($options{'save_links'})."\">";
-        }
         if ($are_reclassifications) {
             $return .= "<br><input type=\"submit\" name=\"submit\" value=\"Classify taxa\">";
             $return .= "</form>"; 
@@ -2014,7 +2011,7 @@ function showName()	{
 	$return .= "<div class=\"verysmall\">";
 	$return .= '<p><div align="center">';
 
-	if ( $options{'collection_no'} > 0 )	{
+	if ( $options{'collection_no'} > 0 && ! $options{'save_links'} )	{
 	# have to have at least three taxa
 		if ( $abund_values > 2 )	{
 			$return .= qq|<a href="$READ_URL?action=rarefyAbundances&collection_no=$options{'collection_no'}">Analyze abundance data</a> - |;
@@ -2027,8 +2024,7 @@ function showName()	{
 			$return .= qq|<a href="$WRITE_URL?action=displayOccsForReID&collection_no=$options{'collection_no'}">Reidentify taxa</a>|;
 		}
 	} elsif ($s->isDBMember()) {
-		$return .= qq|<a href="$WRITE_URL?action=displayReIDCollsAndOccsSearchForm">Reidentify more taxa</a>|;
-			$return .= $options{'save_links'};
+		$return .= $options{'save_links'};
 	}
 	$return .= "</div></p>\n</div>\n";
 
