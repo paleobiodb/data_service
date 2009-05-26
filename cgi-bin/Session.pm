@@ -148,7 +148,7 @@ sub processLogin {
 			# Are they superuser?
 			my $superuser = 0;
 			if ( $authorizer_row->{'superuser'} && 
-                 $authorizer_row->{'is_authorizer'} && 
+                 $authorizer_row->{'role'} =~ /authorizer/ && 
                  $authorizer eq $enterer) {
                  $superuser = 1; 
             }
