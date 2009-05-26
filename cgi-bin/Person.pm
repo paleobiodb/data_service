@@ -50,7 +50,7 @@ sub makeAuthEntJavascript {
 sub listOfAuthorizers {
 	my ($dbt,$active_only,$fossil_record_only) = @_;
 	
-	my $sql = "SELECT name, person_no FROM person WHERE is_authorizer=1";
+	my $sql = "SELECT name, person_no FROM person WHERE FIND_IN_SET('authorizer',role)";
 	if ($active_only) { 
 		$sql .= " AND active=1 "; 
 	} 
@@ -131,7 +131,7 @@ sub displayEnterers {
     Institution names are placed in parentheses to indicate students who have since moved on.
     <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify <a href=\"mailto:alroy\@nceas.ucsb.edu\">John Alroy.</a></i></p><br>";
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=0";
+    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE role IN ('student','technician') OR role IS NULL";
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
@@ -214,7 +214,7 @@ sub displayFeaturedAuthorizers	{
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
-    my $sql = "SELECT p.first_name,p.last_name,p.institution,p.country,p.homepage,p.photo,max(reference_no) AS max_ref FROM person p,person p2,refs r WHERE p.is_authorizer=1 AND p2.last_entry IS NOT NULL AND r.created>DATE_SUB( now(), INTERVAL 1 YEAR) AND p.person_no=authorizer_no AND p2.person_no=enterer_no GROUP BY enterer_no";
+    my $sql = "SELECT p.first_name,p.last_name,p.institution,p.country,p.homepage,p.photo,max(reference_no) AS max_ref FROM person p,person p2,refs r WHERE FIND_IN_SET('authorizer',p.role) AND p2.last_entry IS NOT NULL AND r.created>DATE_SUB( now(), INTERVAL 1 YEAR) AND p.person_no=authorizer_no AND p2.person_no=enterer_no GROUP BY enterer_no";
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
@@ -273,7 +273,7 @@ sub displayInstitutions {
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE is_authorizer=1 AND last_entry IS NOT NULL";
+    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE FIND_IN_SET('authorizer',role) AND last_entry IS NOT NULL";
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
