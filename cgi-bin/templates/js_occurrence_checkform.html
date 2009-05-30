@@ -2,7 +2,13 @@
 <!-- Begin
 
 function simplify( name )	{
-	name = name.replace(/ \(.*\) /,' ');
+	// treat subgenera as genera
+	// assumes authors use or don't use subgenus names consistently
+	if ( / \(.*\) /.test( name ) )	{
+		name = name.replace(/^[A-Z][a-z]* /,'');
+		name = name.replace(/\(/,'');
+		name = name.replace(/\)/,'');
+	}
 	name = name.replace(/( |)(n\. gen\.)( |)/,' ');
 	name = name.replace(/( |)(n\. sp\.)( |)/,' ');
 	name = name.replace(/^ /,'');
