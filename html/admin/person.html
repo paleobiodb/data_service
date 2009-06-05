@@ -13,7 +13,7 @@
 		var result = "";
 
 		for ( var i in obj ) {
-			result += "o." + i + " = " + obj[i] + "<BR>\n";
+			result += "o." + i + " = " + obj[i] + "<br>\n";
 		}
 		document.write ( result );
 	}
@@ -24,18 +24,22 @@
 		var errors = "";
 
 		// checks
-		if ( frm.name.value == "" ) errors += "You must specify the person's name.\n";
-		if ( frm.email.value == "" ) errors += "You must specify the E-mail address.\n";
-		if ( frm.institution.value == "" ) errors += "You must specify the institution.\n";
-		if ( frm.country.value == "" ) errors += "You must specify the country.\n";
-
-		if ( frm.is_authorizer[0].checked ) {
+		if ( frm.first_name.value == "" ) errors += "Enter the first name.\n";
+		if ( frm.last_name.value == "" ) errors += "Enter the last name.\n";
+		if ( frm.name.value == "" ) errors += "Enter the name.\n";
+		if ( frm.reversed_name.value == "" ) errors += "Enter the reversed name.\n";
+		if ( frm.gender.value == "" ) errors += "Enter the gender.\n";
+		if ( frm.email.value == "" ) errors += "Enter the e-mail address.\n";
+		if ( frm.institution.value == "" ) errors += "Enter the institution.\n";
+		if ( frm.country.value == "" ) errors += "Enter the country.\n";
+		if ( frm.role.value == "" ) { errors += "Enter the role.\n"; }
+		else if ( frm.role.value == "authorizer" ) {
 			if ( frm.plaintext.value == "" ) errors += "Authorizers must have a password.\n";
 		}
 
 		// Report errors
 		if ( errors != "" ) {
-			errors = "   !!! Errors detected !!!   \n" + 
+			errors = "   Errors    \n" + 
 					 "---------------------------------------\n\n" +
 					 errors + "\n" +
 					 "---------------------------------------\n\n" +
@@ -53,30 +57,33 @@
 <input type=hidden name="action">
 <input id="person_no" type="hidden">
 
+<center>
 
-<div align="center">
-<h2>%%page_title%%</h2>
+<div style="margin-left: 2em;">
+<h2 style="margin-bottom: 2em;">%%page_title%%</h2>
+
+<div style="float: left; clear: none;">
 <table border=0 cellpadding=4 cellspacing=1 bgcolor="Silver">
 
 <tr>
-	<td bgcolor="White">First name: *<BR><font size="1"></font></td>
+	<td bgcolor="White">First name:<br></td>
 	<td bgcolor="White"><input id="first_name" type="text" maxlength="30"></td>
 </tr>
 <tr>
-	<td bgcolor="White">Last name: *<BR><font size="1">e.g. J. Smith</font></td>
+	<td bgcolor="White">Last name:<br></td>
 	<td bgcolor="White"><input id="last_name" type="text" maxlength="30"></td>
 </tr>
 <tr>
-	<td bgcolor="White">Name: *<BR><font size="1">e.g. J. Smith</font></td>
+	<td bgcolor="White">Name:<br><font size="1">e.g. J. Smith</font></td>
 	<td bgcolor="White"><input id="name" type="text" maxlength="64"></td>
 </tr>
 <tr>
-	<td bgcolor="White" nowrap>Reversed Name:</td>
+	<td bgcolor="White" nowrap>Reversed name:</td>
 	<td bgcolor="White"><input id="reversed_name" type="text" value="" maxlength="64"></td>
 </tr>
 <tr>
 	<td bgcolor="White" nowrap>Gender:</td>
-	<td bgcolor="White"><select name="gender"><option>F</option><option>M</option></select></td>
+	<td bgcolor="White"><select name="gender"><option></option><option>F</option><option>M</option></select></td>
 </tr>
 <tr>
 	<td bgcolor="White">Password: </td>
@@ -87,23 +94,11 @@
 	<td bgcolor="White"><input id="homepage" type="text" maxlength="80"></td>
 </tr>
 <tr>
-	<td bgcolor="White" nowrap>E-mail address: *</td>
-	<td bgcolor="White"><input id="email" type="text" value="" size="30" maxlength="255"></td>
-</tr>
+	<td bgcolor="White" nowrap>E-mail address:</td>
+	<td bgcolor="White"><input id="email" type="text" value="" size="24" maxlength="255"></td>
 <tr>
-	<td bgcolor="White">Institution: </td>
-	<td bgcolor="White"><input id="institution" type="text" value="" size="30" maxlength="80"></td>
-</tr>
-<tr>
-	<td bgcolor="White">Country: </td>
-	<td bgcolor="White"><input id="country" type="text" value="" size="30" maxlength="80"></td>
-</tr>
-<tr>
-	<td bgcolor="White" nowrap>Is authorizer?</td>
-	<td bgcolor="White">
-		<input id="is_authorizer" type="radio" name="is_authorizer" value="1" checked> Yes
-		<input id="is_authorizer" type="radio" name="is_authorizer" value="0"> No
-	</td>
+	<td bgcolor="White" nowrap>Role:</td>
+	<td bgcolor="White"><select name="role"><option></option><option>authorizer</option><option>student</option><option>technician</option></select></td>
 </tr>
 <tr>
 	<td bgcolor="White" nowrap>Is active?</td>
@@ -112,18 +107,32 @@
 		<input id="active" type="radio" name="active" value="0"> No
 	</td>
 </tr>
+</tr>
+</table>
+</div>
+
+<div style="float: left; clear: none;">
+<table border=0 cellpadding=4 cellspacing=1 bgcolor="Silver">
+<tr>
+	<td bgcolor="White">Institution: </td>
+	<td bgcolor="White"><input id="institution" type="text" value="" size="26" maxlength="80"></td>
+</tr>
+<tr>
+	<td bgcolor="White">Country: </td>
+	<td bgcolor="White"><input id="country" type="text" value="" size="26" maxlength="80"></td>
+</tr>
 
 <tr>
 	<td bgcolor="White" rowspan="9" valign="top">Groups:</td>
 </tr>
-<tr><td bgcolor="White"><input id="divergence" type="checkbox" name="divergence" value="1"> Divergence times</td></tr>
-<tr><td bgcolor="White"><input id="marine_invertebrate" type="checkbox" name="marine_invertebrate" value="1"> Marine invertebrate</td></tr>
-<tr><td bgcolor="White"><input id="micropaleontology" type="checkbox" name="micropaleontology" value="1"> Micropaleontology</td></tr>
+<tr><td bgcolor="White"><input id="divergence" type="checkbox" name="divergence" value="1"> divergence times</td></tr>
+<tr><td bgcolor="White"><input id="marine_invertebrate" type="checkbox" name="marine_invertebrate" value="1"> marine invertebrate</td></tr>
+<tr><td bgcolor="White"><input id="micropaleontology" type="checkbox" name="micropaleontology" value="1"> micropaleontology</td></tr>
 <tr><td bgcolor="White"><input id="PACED" type="checkbox" name="PACED" value="1"> PACED</td></tr>
-<tr><td bgcolor="White"><input id="paleobotany" type="checkbox" name="paleobotany" value="1"> Paleobotany</td></tr>
-<tr><td bgcolor="White"><input id="taphonomy" type="checkbox" name="taphonomy" value="1"> Taphonomy</td></tr>
-<tr><td bgcolor="White"><input id="vertebrate" type="checkbox" name="vertebrate" value="1"> Vertebrate</td></tr>
-<tr><td bgcolor="White"><input id="fossil_record" type="checkbox" name="fossil_record" value="1"> Fossil record</td></tr>
+<tr><td bgcolor="White"><input id="paleobotany" type="checkbox" name="paleobotany" value="1"> paleobotany</td></tr>
+<tr><td bgcolor="White"><input id="taphonomy" type="checkbox" name="taphonomy" value="1"> taphonomy</td></tr>
+<tr><td bgcolor="White"><input id="vertebrate" type="checkbox" name="vertebrate" value="1"> vertebrate</td></tr>
+<tr><td bgcolor="White"><input id="fossil_record" type="checkbox" name="fossil_record" value="1"> fossil record</td></tr>
 
 <tr>
 	<td bgcolor="White" colspan="2" align="center">
@@ -132,8 +141,8 @@
 </tr>
 </table>
 </div>
-
-<p align="center">* == required field</p>
+</div>
+</center>
 
 </form>
 
