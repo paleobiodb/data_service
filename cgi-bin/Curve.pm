@@ -66,6 +66,7 @@ use TimeLookup;
 use Text::CSV_XS;
 use PBDBUtil;
 use TaxaCache;
+use GD;
 use Constants qw($READ_URL $DATA_DIR $HTML_DIR);
 
 # FOO ##  # CGI::Carp qw(fatalsToBrowser);
@@ -110,7 +111,7 @@ sub setArrays	{
 	# Setup the variables
 	# this is the output directory used by Download.pm, not this program
 	$DOWNLOAD_FILE_DIR = $HTML_DIR."/public/downloads";# the default working directory
-    
+
 	# customize the subdirectory holding the output files
 	# modified to retrieve authorizer automatically JA 4.10.02
 	# modified to use yourname JA 17.7.05
@@ -766,7 +767,6 @@ sub assignGenera	{
 			}
 		}
 	}
-print "$chname[$firstdata]/$chname[$lastdata]";
 	# compute sampled diversity, range through diversity, originations,
 	#  extinctions, singletons and doubletons (Chao l and m)
 	print PADATA $q->param("taxonomic_level")."\t"."total occs";
@@ -1548,7 +1548,6 @@ sub printResults	{
 	}
 
 
-    if ($q->param('samplesize')) {
         print '<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>';
         print '<div align=center>
                  <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
@@ -1557,18 +1556,27 @@ sub printResults	{
                      onMouseOver="hover(this);" 
                      onMouseOut="setState(1)">Raw data</td>
                    <td id="tab2" class="tabOff" style="white-space: nowrap;"
-                     onClick="showPanel(2);" 
-                     onMouseOver="hover(this);" 
+                     onClick="showPanel(2);"
+                     onMouseOver="hover(this);"';
+    if ($q->param('samplesize')) {
+        print '
                      onMouseOut="setState(2)">Subsampled data </td>
-                 </tr></table>
-               </div>';
+                   <td id="tab3" class="tabOff" style="white-space: nowrap;"
+                     onClick="showPanel(3);" 
+                     onMouseOver="hover(this);" 
+                     onMouseOut="setState(3)">Diversity curve </td>
+';
+    } else	{
+        print '
+                     onMouseOut="setState(2)">Diversity curve </td>
+';
     }
+        print '                 </tr></table>
+               </div>';
 
 	print '<div align="center"><p class="pageTitle" style="margin-bottom: 0.5em;">Diversity curve report</p></div>';
 
-	if ($q->param('samplesize')) {
-		print '<div id="panel1" class="panel">';
-	}
+	print '<div id="panel1" class="panel">';
 
 		if ( $q->param('count_refs') eq "yes" )	{
 			$generaorrefs = "references";
@@ -2089,12 +2097,10 @@ sub printResults	{
 		print "\nYou may wish to <a href=\"$READ_URL?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
 		print "</div>\n";
 
+            print "</div>"; # END PANEL1 DIV
 
         if ($q->param('samplesize') ne '') {
-            print "</div>"; # END PANEL1 DIV
             print '<div id="panel2" class="panel">';
-
-
 			print qq|<div class="displayPanel" style="padding-top: 1em;">
 <table cellpadding="4">
 |;
@@ -2684,12 +2690,94 @@ sub printResults	{
 		print "</div>\n";
 
             print '</div>'; # End PANEL2 div
-            print '<script language="JavaScript" type="text/javascript">
-                    showPanel(1);
-                  </script> ';
+
 		}
-	
-	
+
+	# print a very simple graph JA 8.6.09
+		if ($q->param('samplesize') ne '')	{
+			print '<div id="panel3" class="panel">';
+		} else	{
+			print '<div id="panel2" class="panel">';
+		}
+		print qq|<div class="displayPanel" style="padding-top: 1em;">|;
+		my ($width,$height) = (650,500);
+		$im = new GD::Image($width,$height,1);
+		my %rgbs = ("white", "255,255,255",
+			"black", "0,0,0",
+			"gray", "128,128,128",
+			"red", "255,0,0",
+			"blue", "0,0,255",
+			"purple", "128,0,128",
+			"green", "0,128,0",
+			"orange", "255,165,0",
+			"yellow", "255,255,0");
+		my %col;
+		for my $color ( keys %rgbs )        {
+			my ($r,$g,$b) = split /,/,$rgbs{$color};
+			$col{$color} = $im->colorClosest($r,$g,$b);
+		}
+		$col{'unantialiased'} = $im->colorAllocate(-1,-1,-1);
+		$im->interlaced('true');
+		my $transparent = $im->colorAllocate(11, 22, 33);
+		$im->filledRectangle(0,0,$width,$height,$transparent);
+		$im->transparent($transparent);
+		my ($pwidth,$pheight,$pleft,$ptop,$maxdiv,$maxma) = (560,420,50,50,0,0);
+		$im->rectangle( $pleft, $height - $ptop, $pwidth + $pleft, $height - $ptop - $pheight, $col{'black'} );
+		my $FONT = "$DATA_DIR/fonts/sapirsan.ttf";
+		for ($i = 1; $i <= $chrons; $i++)     {
+			my $div = $richness[$i];
+			if ($q->param('samplesize') ne '')	{
+				$div = $msubsrichness[$i];
+			}
+			if ( $div > 0 && $basema{$chname[$i+1]} > 0 )	{
+				$maxma = $basema{$chname[$i+1]};
+			}
+			if ( $div > $maxdiv )	{
+				$maxdiv = $div;
+			}
+		}
+		if ( $maxdiv <= 100 )	{
+			$maxdiv = int( $maxdiv / 10 ) * 10 + 10;
+		} else	{
+			$maxdiv = int( $maxdiv / 100 ) * 100 + 100;
+		}
+		$maxma = int( $maxma / 10 ) * 10 + 10;
+		$im->stringFT($col{'unantialiased'},$FONT,10,0,$pwidth + $pleft - 10,$height - $ptop + 18,'0 Ma');
+		$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 18,$height - $ptop + 18,sprintf("%d",$maxma).' Ma');
+		if ( $maxdiv < 100 )	{
+			$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 18,$height - $pheight - $ptop + 6,sprintf("%d",$maxdiv));
+		} else	{
+			$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 24,$height - $pheight - $ptop + 6,sprintf("%d",$maxdiv));
+		}
+		my $xscale = -1 * $pwidth / $maxma;
+		my $yscale = $pheight / $maxdiv;
+		for ($i = 1; $i <= $chrons; $i++)     {
+			my $div1 = $richness[$i];
+			my $div2 = $richness[$i+1];
+			if ($q->param('samplesize') ne '')	{
+				$div1 = $msubsrichness[$i];
+				$div2 = $msubsrichness[$i+1];
+			}
+			if ( $div1 > 0 )	{
+				my $x1 = $xscale * ( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2 + $pleft + $pwidth;
+				my $x2 = $xscale * ( $basema{$chname[$i+1]} + $basema{$chname[$i]} ) / 2 + $pleft + $pwidth;
+				my $y1 = $div1 * $yscale + $ptop;
+				my $y2 = $div2 * $yscale + $ptop;
+				if ( $div1 > 0 && $div2 > 0 )	{
+					$im->line( $x1, $height - $y1, $x2, $height - $y2, $col{'black'} );
+				}
+				$im->filledRectangle( $x1 - 2, $height - $y1 - 2,$x1 + 2,$height - $y1 + 2,$col{'black'} );
+			}
+		}
+		open PNG_OUT,">$HTML_DIR/public/curve.png";
+		print PNG_OUT $im->png;
+		print '<center><img alt="diversity curve" src="/public/curve.png"></center>'."\n";
+		print '</div>'; # End PANEL3 div
+		print '<script language="JavaScript" type="text/javascript">
+showPanel(1);
+</script>';
+
+
 	}
 	else	{
 		print "\n<b>Sorry, the search failed.</b> No collections met the search criteria.<p>\n";
