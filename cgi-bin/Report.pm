@@ -901,19 +901,6 @@ sub findMostCommonTaxa	{
 	my @collection_nos = map {$_->{'collection_no'}} @dataRows;
 
 	my $atrank = $q->param('rank');
-	my $plural;
-	if ( $atrank eq "class" )	{
-		$plural = "classes";
-	} elsif ( $atrank eq "order" )	{
-		$plural = "orders";
-	} elsif ( $atrank eq "family" )	{
-		$plural = "families";
-	} elsif ( $atrank eq "genus" )	{
-		$plural = "genera";
-	} elsif ( $atrank eq "species" )	{
-		$plural = "species";
-	}
-	print "<center><p class=\"pageTitle\">The most common $plural in these collections</p></center>\n\n";
 
 	my $names;
 	if ( $atrank eq "species" )	{
@@ -921,9 +908,9 @@ sub findMostCommonTaxa	{
 	}
 	my $sql = "SELECT $names taxon_no,occurrence_no,collection_no FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
 	my $sql2 = "SELECT $names taxon_no,occurrence_no,collection_no FROM reidentifications WHERE most_recent='YES' AND taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
-	# WARNING: will fail if there are homonyms
+	# WARNING: will take largest taxon if there are homonyms
 	if ( $q->param('taxon_name') )	{
-		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."'";
+		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (taxon_name='".$q->param('taxon_name')."' OR common_name='".$q->param('taxon_name')."') ORDER BY rgt-lft DESC";
 		my $row = ${$dbt->getData($sql)}[0];
 		$sql = "SELECT t.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>=".$row->{'lft'}." AND rgt<=".$row->{'rgt'};
 		my @rows = @{$dbt->getData($sql)};
@@ -1042,6 +1029,20 @@ sub findMostCommonTaxa	{
 	my $csv = Text::CSV_XS->new({'binary'=>1});
 	PBDBUtil::autoCreateDir("$HTML_DIR/public/taxa");
 	open OUT,">$HTML_DIR/public/taxa/${filename}_taxa.csv";
+
+	my $plural;
+	if ( $atrank eq "class" )	{
+		$plural = "classes";
+	} elsif ( $atrank eq "order" )	{
+		$plural = "orders";
+	} elsif ( $atrank eq "family" )	{
+		$plural = "families";
+	} elsif ( $atrank eq "genus" )	{
+		$plural = "genera";
+	} elsif ( $atrank eq "species" )	{
+		$plural = "species";
+	}
+	print "<center><p class=\"pageTitle\">The most common $plural in these collections</p></center>\n\n";
 
 	print "<div class=\"displayPanel\" style=\"width: 50em; margin-left: 1em;\">\n";
 	print "<div class=\"displayPanelContent\">\n";
