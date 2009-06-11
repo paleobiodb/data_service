@@ -4015,7 +4015,7 @@ sub getTaxa {
         if ($subspecies =~ /[a-z]/) {
             $species_sql .= " $subspecies";
         }
-        my $taxon1_sql = "taxon_name LIKE '$options->{taxon_name}'";
+        my $taxon1_sql = "(taxon_name LIKE '$options->{taxon_name}' OR common_name LIKE '$options->{taxon_name}')";
         
         my $sql = "($base_sql WHERE ".join(" AND ",@where,$taxon1_sql).")";
         if ($subgenus) {
@@ -4034,7 +4034,7 @@ sub getTaxa {
         @results = @{$dbt->getData($sql)};
     } else {
         if ($options->{'taxon_name'}) {
-            push @where,"a.taxon_name LIKE ".$dbh->quote($options->{'taxon_name'});
+            push @where,"(a.taxon_name LIKE ".$dbh->quote($options->{'taxon_name'})." OR a.common_name LIKE ".$dbh->quote($options->{'taxon_name'}).")";
         }
         if (@where) {
             my $sql = $base_sql." WHERE ".join(" AND ",@where); 
