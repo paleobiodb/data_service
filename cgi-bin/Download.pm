@@ -224,6 +224,10 @@ sub checkInput {
     } elsif ( $required == 1 && $q->param('taxon_name') =~ /(Metazoa|Animalia)/ )	{
         push @errors , "If you want data for all animals, you must also specify a time interval, authorizer, or research group";
     }
+
+    if ( ! $q->param("restrict_to_field") && $q->param("restrict_to_list" ) )	{
+        push @errors , "You must pull down a 'Download only the following' value if you want to use this option";
+    }
     
     if (@errors) {
         my $errorString = "<li>" . join('<li>',@errors);
@@ -2589,7 +2593,7 @@ sub queryDatabase {
                     #   because (1) the occurrence is always "extant" if the
                     #   genus is, and (2) any genus value should override a
                     #   missing value
-                    if ( $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" && $row->{'extant'} !~ /y/i )	{
+                    if ( $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" && $row->{'extant'} !~ /y/i && $master_class{$row->{'o.taxon_no'}} )	{
                         my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                         foreach my $parent (@parents) {
                             if ( $parent->{'taxon_rank'} eq 'genus' )	{
