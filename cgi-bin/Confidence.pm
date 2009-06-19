@@ -1828,12 +1828,12 @@ sub getOccurrenceData {
         if ($options{'fields'}) {
             $fields = $options{'fields'};
         }
-        my $sql = "(SELECT $fields FROM occurrences o, collections c "
-                . " LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no"
-                . " WHERE o.collection_no=c.collection_no AND $where AND re.reid_no IS NULL)"
+        my $sql = "(SELECT $fields FROM occurrences o "
+                . " LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no)"
+                . " LEFT JOIN collections c ON (o.collection_no=c.collection_no) WHERE $where AND re.reid_no IS NULL)"
                 . " UNION "
                 . "(SELECT $fields FROM reidentifications o, occurrences o2, collections c"
-                . " WHERE o2.collection_no=c.collection_no AND o2.occurrence_no=o.occurrence_no AND o.most_recent='YES' AND $where)";
+                . " WHERE o2.collection_no=c.collection_no AND o.occurrence_no=o2.occurrence_no AND o.most_recent='YES' AND $where)";
         if ($options{'limit'}) {
             $sql .= " LIMIT 1"
         }
