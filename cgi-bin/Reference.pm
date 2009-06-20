@@ -184,6 +184,11 @@ sub formatShortRef  {
         }
     }
 
+    if ($options{'link_id'}) {
+        if ($refData->{'reference_no'}) {
+            $shortRef = qq|<a href="$READ_URL?action=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
+        }
+    }
     if ($options{'show_comments'}) {
         if ($refData->{'comments'}) {
             $shortRef .= " [" . $refData->{'comments'}."]";
@@ -191,11 +196,6 @@ sub formatShortRef  {
     }
     if ($options{'is_recombination'}) {
         $shortRef = "(".$shortRef.")";
-    }
-    if ($options{'link_id'}) {
-        if ($refData->{'reference_no'}) {
-            $shortRef = qq|<a href="$READ_URL?action=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
-        }
     }
 
     return $shortRef;
