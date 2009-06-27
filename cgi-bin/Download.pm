@@ -113,7 +113,7 @@ sub buildDownload {
     @authnos = sort { $byauth{$b} <=> $byauth{$a} } @authnos;
     # don't list authorizers contributing less than 10 person days of data
     #  (arbitrary, but seems good to me)
-    while ( $byauth{$authnos[$#authnos]} < 10 )	{
+    while ( $byauth{$authnos[$#authnos]} < 10 && @authnos )	{
         pop @authnos;
     }
     my $dbt = $self->{'dbt'};
