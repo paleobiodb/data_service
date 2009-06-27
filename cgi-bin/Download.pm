@@ -94,7 +94,34 @@ sub buildDownload {
     my $inputIsOK = $self->checkInput($q);
     return unless $inputIsOK;
 
+    # current limit for data set size that triggers the click through
+    # figure is based on a poll of 12 major contributors taken at NAPC 23.6.09
+    my $daylimit = 50;
+
     my ($lumpedResults,$allResults) = $self->queryDatabase();
+
+    my (%onday,%byauth,%authorizers);
+    for my $row (@$allResults)	{
+        $onday{$row->{'personday'}}++;
+        if ( $onday{$row->{'personday'}} == 1 )	{
+            $byauth{$row->{'authorizer_no'}}++;
+        }
+    }
+    my @d = keys %onday;
+    my $days = $#d + 1;
+    my @authnos = keys %byauth;
+    @authnos = sort { $byauth{$b} <=> $byauth{$a} } @authnos;
+    # don't list authorizers contributing less than 10 person days of data
+    #  (arbitrary, but seems good to me)
+    while ( $byauth{$authnos[$#authnos]} < 10 )	{
+        pop @authnos;
+    }
+    my $dbt = $self->{'dbt'};
+    my $dbh = $self->{'dbh'};
+    my $sql = "SELECT name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."')";
+    my @namerows = @{$dbt->getData($sql)};
+    $authorizers{$_->{'person_no'}} = $_->{'name'} foreach @namerows;
+    $byauth{$_} /= $days / 100 foreach keys %byauth;
 
     my ($refsCount,$nameCount,$taxaCount,$scaleCount,$mainCount) = (0,0,0,0,scalar(@$lumpedResults));
     my ($refsFile,$taxaFile,$scaleFile,$mainFile,$collFile,$colls) = ('','','','','',0);
@@ -133,16 +160,41 @@ sub buildDownload {
         return;
     } 
 
-    print qq|<div align="center"><p class="pageTitle">Download results</p></div>
-
-<div class="displayPanel" style="padding-top: 1em; padding-left: 1em; margin-left: 3em; margin-right: 3em; overflow: hidden;">
+    print "<div align=\"center\"><p class=\"pageTitle\">Download results</p></div>\n\n";
+    if ( $days >= $daylimit )	{
+        print qq|
+<div class="displayPanel" id="terms">
+<p>Your download is large. If you intend to use the data in a publication, we ask you to:</p>
+<ul>
+<li><a href="$READ_URL?action=displayPage&amp;page=join_us">Join the PaleoDB</a> and contribute more data.</li>
+<li>Acknowledge the major contributors to this data set by name.</li>
+<li>Cite the relevant <a href="$READ_URL?action=displayPage&amp;page=OSA">Online Systematics Archive</a>.</li>
+<li>If none are relevant, give a generic citation to the Paleobiology Database including the date of access.
+<li><a href="$READ_URL?action=displayPage&amp;page=publications">Request a publication number</a> once your paper is accepted.</li>
+</li>
+</ul>
+<p>The major contributors to this data set were:</p>
+<ul>
 |;
+printf "<li>$authorizers{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
+
+print qq|
+</ul>
+<p>If you agree to these terms, <a href="#" onClick=\"document.getElementById('mainPanel').style.display='inline'; document.getElementById('terms').style.display='none';\">click here</a> to access the data.</p>
+</div>
+<div id="mainPanel" style="display: none;">
+|;
+    }
+
+    print qq|<div class="displayPanel" style="padding-top: 1em; padding-left: 1em; margin-left: 3em; margin-right: 3em; overflow: hidden;">|;
+
     print $self->retellOptions();
     if (@form_warnings) {
         print '<div align="center">';
         print Debug::printWarnings(\@form_warnings);
         print '</div>';
-    } 
+    }
+
 
     # Tell what happened
     print "<div align=\"center\">\n";
@@ -189,10 +241,16 @@ sub buildDownload {
     }
     print qq|<p align="center" style="white-space: nowrap;"><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
     print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
+    if ( $days >= $daylimit )	{
+        print qq| - <a href="#" onClick=\"document.getElementById('mainPanel').style.display='none'; document.getElementById('terms').style.display='inline';\">Show terms again</a>|;
+    }
     #print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a> - |;
     #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
 
-    print qq|</div>|;
+    print "</div>\n\n";
+    if ( $days >= $daylimit )	{
+        print "</div>\n\n";
+    }
 }
 
 sub checkInput {
@@ -1663,7 +1721,7 @@ sub queryDatabase {
     my (@fields,@where,@occ_where,@reid_where,$taxon_where,@tables,@from,@groupby,@left_joins);
 
 
-    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short");
+    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short",'CONCAT(c.enterer_no," ",TO_DAYS(c.created)) AS personday');
     @tables = ('collections c');
     @where = $self->getCollectionsWhereClause();
 
