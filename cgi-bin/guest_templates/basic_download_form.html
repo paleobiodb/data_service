@@ -55,8 +55,11 @@ function globalClick ( ) {
 		frm.elements['South America'].checked = false;
 
 		frm.elements['paleo Australia'].checked = false;
+		frm.Arabia.checked = false;
 		frm.Avalonia.checked = false;
 		frm.Baltoscandia.checked = false;
+		frm.elements['Eastern USA'].checked = false;
+		frm.India.checked = false;
 		frm.Kazakhstania.checked = false;
 		frm.Laurentia.checked = false;
 		frm.Mediterranean.checked = false;
@@ -81,8 +84,11 @@ function continentClick ( ) {
 			frm.elements['South America'].checked ||
 
 			frm.elements['paleo Australia'].checked || 
+			frm.Arabia.checked || 
 			frm.Avalonia.checked || 
 			frm.Baltoscandia.checked || 
+			frm.elements['Eastern USA'].checked || 
+			frm.India.checked || 
 			frm.Kazakhstania.checked || 
 			frm.Laurentia.checked || 
 			frm.Mediterranean.checked || 
@@ -284,9 +290,12 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </p>
 
 <p>
+<span style="white-space: nowrap"><input type=checkbox name="Arabia" value="YES" onClick="continentClick();">Arabia</span>
 <span style="white-space: nowrap"><input type=checkbox name="paleo Australia" value="YES" onClick="continentClick();">Australia (paleocontinent)</span>
 <span style="white-space: nowrap"><input type=checkbox name="Avalonia" value="YES" onClick="continentClick();">Avalonia</span>
 <span style="white-space: nowrap"><input type=checkbox name="Baltoscandia" value="YES" onClick="continentClick();">Baltoscandia</span>
+<span style="white-space: nowrap"><input type=checkbox name="Eastern USA" value="YES" onClick="continentClick();">Eastern USA</span>
+<span style="white-space: nowrap"><input type=checkbox name="India" value="YES" onClick="continentClick();">India</span>
 <span style="white-space: nowrap"><input type=checkbox name="Kazakhstania" value="YES" onClick="continentClick();">Kazakhstania</span>
 <span style="white-space: nowrap"><input type=checkbox name="Laurentia" value="YES" onClick="continentClick();">Laurentia</span>
 <span style="white-space: nowrap"><input type=checkbox name="Mediterranean" value="YES" onClick="continentClick();">Mediterranean</span>
