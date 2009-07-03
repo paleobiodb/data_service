@@ -595,6 +595,13 @@ IS NULL))";
             push @where, "c.country LIKE ".$dbh->quote($options{'country'});
         }
     }
+    if ($options{'plate'}) {
+        $options{'plate'} =~ s/[^0-9,]/,/g;
+        while ( $options{'plate'} =~ /,,/ )	{
+            $options{'plate'} =~ s/,,/,/g;
+        }
+        push @where, "c.plate IN ($options{'plate'})";
+    }
 
     # get the column info from the table
     my $sth = $dbh->column_info(undef,'pbdb','collections','%');
@@ -610,7 +617,7 @@ IS NULL))";
         my $is_primary =  $row->{'mysql_is_pri_key'};
 
         # These are special cases handled above in code, so skip them
-        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country)$/);
+        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country|plate)$/);
 
 		if (exists $options{$field} && $options{$field} ne '') {
 			my $value = $options{$field};
