@@ -964,7 +964,7 @@ sub processCollectionForm {
     if ($is_valid) {
 
         #set paleolat, paleolng if we can PS 11/07/2004
-        my ($paleolat, $paleolng);
+        my ($paleolat, $paleolng, $pid);
         if ($q->param('lngdeg') >= 0 && $q->param('lngdeg') =~ /\d+/ &&
             $q->param('latdeg') >= 0 && $q->param('latdeg') =~ /\d+/)
         {
@@ -989,11 +989,12 @@ sub processCollectionForm {
 
             my $max_interval_no = ($q->param('max_interval_no')) ? $q->param('max_interval_no') : 0;
             my $min_interval_no = ($q->param('min_interval_no')) ? $q->param('min_interval_no') : 0;
-            ($paleolng, $paleolat) = getPaleoCoords($dbt,$max_interval_no,$min_interval_no,$f_lngdeg,$f_latdeg);
+            ($paleolng, $paleolat, $pid) = getPaleoCoords($dbt,$max_interval_no,$min_interval_no,$f_lngdeg,$f_latdeg);
             dbg("have paleocoords paleolat: $paleolat paleolng $paleolng");
             if ($paleolat ne "" && $paleolng ne "") {
                 $q->param("paleolng"=>$paleolng);
                 $q->param("paleolat"=>$paleolat);
+                $q->param("plate"=>$pid);
             }
         }
 
@@ -2930,7 +2931,7 @@ sub getPaleoCoords {
     }
 
     dbg("Paleolng: $paleolng Paleolat $paleolat fx $f_lngdeg fy $f_latdeg plat $plat plng $plng pid $pid");
-    return ($paleolng, $paleolat);
+    return ($paleolng, $paleolat, $pid);
 }
 
 # prints AEO age ranges of taxa in a collection so users can understand the
