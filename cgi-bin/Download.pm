@@ -772,8 +772,11 @@ sub getPlateString    {
     if ( $q->param('Avalonia') eq "YES" )    {
         push @plates , (315,332);
     }
+    # plate 305 fused with Baltoscandia at 300 Ma and was formed (I think) by
+    #  the Variscan orogeny during the Devonian and Carboniferous, so I am
+    #  including it here
     if ( $q->param('Baltoscandia') eq "YES" )    {
-        push @plates , (301,302,319);
+        push @plates , (301,302,305,319);
     }
     if ( $q->param('Eastern USA') eq "YES" )    {
         push @plates , (109);
