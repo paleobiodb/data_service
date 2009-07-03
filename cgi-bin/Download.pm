@@ -28,7 +28,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county tectonic_plate_id latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10mybin max_interval min_interval ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10mybin max_interval min_interval ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
@@ -752,7 +752,6 @@ sub getCountryString {
 sub getPlateString    {
     my $self = shift;
     my $q = $self->{'q'};
-    my $plate_sql = "";
     my @plates = ();
 
     if ( $q->param('Arabia') ne "YES" && $q->param('paleo Australia') ne "YES" && $q->param('Avalonia') ne "YES" && $q->param('Baltoscandia') ne "YES" && $q->param('Eastern USA') ne "YES" && $q->param('India') ne "YES" && $q->param('Kazakhstania') ne "YES" && $q->param('Laurentia') ne "YES" && $q->param('Mediterranean') ne "YES" && $q->param('North China') ne "YES" && $q->param('Precordillera') ne "YES" && $q->param('Siberia') ne "YES" && $q->param('paleo South America') ne "YES" && $q->param('South China') ne "YES" )    {
@@ -820,31 +819,7 @@ sub getPlateString    {
         return;
     }
 
-    $plate_sql = " ( ";
-    while (<PLATES>)    {
-        s/\n//;
-        my ($pllng,$pllat,$plate) = split /,/,$_;
-        my ($pllngdir,$pllatdir);
-        if ( $platein{$plate} )    {
-            if ( $pllng < 0 )    {
-                $pllng = abs($pllng);
-                $pllngdir = "West";
-            } else    {
-                $pllngdir = "East";
-            }
-            if ( $pllat < 0 )    {
-                $pllat = abs($pllat);
-                $pllatdir = "South";
-            } else    {
-                $pllatdir = "North";
-            }
-            $plate_sql .= " OR ( lngdeg=$pllng AND lngdir='$pllngdir' AND latdeg=$pllat AND latdir='$pllatdir' ) ";
-        }
-    }
-    $plate_sql .= " ) ";
-    $plate_sql =~ s/^ \(  OR / \( /;
-
-    return $plate_sql;
+    return " plate IN (".join(',',@plates).")";
 }
 
 # 12/13/2004 PS 
@@ -2133,21 +2108,6 @@ sub queryDatabase {
         close IN;
     }
 
-    # Get the plate ids if those will be downloaded
-    my %plate_ids;
-    if ($q->param('collections_tectonic_plate_id') eq "YES" && $q->param("output_data") !~ /genera|species/) {
-        if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
-            print "<font color='red'>Skipping plates.</font> Error message is $!<br><BR>\n";
-        } else {
-            <PLATES>;
-
-            while (my $line = <PLATES>) {
-                chomp $line;
-                my ($lng,$lat,$plate_id) = split /,/,$line;
-                $plate_ids{$lng."_".$lat}=$plate_id;
-            }
-        } 
-    }
 
     ###########################################################################
     #  Execute
@@ -3046,15 +3006,6 @@ sub queryDatabase {
                     $row->{'c.paleolatdec'} = $row->{'c.paleolat'};
                     $row->{'c.paleolngdec'} = $row->{'c.paleolng'};
                 }
-            }
-            if ($q->param('collections_tectonic_plate_id') eq 'YES') {
-                my $plate_key = "";
-                $plate_key .= "-" if ($row->{'c.lngdir'} eq 'West' && $row->{'c.lngdeg'} != 0);
-                $plate_key .= $row->{'c.lngdeg'};
-                $plate_key .= "_";
-                $plate_key .= "-" if ($row->{'c.latdir'} eq 'South' && $row->{'c.latdeg'} != 0);
-                $plate_key .= $row->{'c.latdeg'};
-                $row->{'c.tectonic_plate_id'} = $plate_ids{$plate_key};
             }
         }
 
@@ -4203,12 +4154,6 @@ sub setupQueryFields {
     $q->param('collections_emlepoch_min' => "YES")  if ($q->param('collections_epoch_min'));
     $q->param('collections_emllocage_max' => "YES") if ($q->param('collections_locage_max'));
     $q->param('collections_emllocage_min' => "YES") if ($q->param('collections_locage_min'));
-
-    if ($q->param('collections_tectonic_plate_id')) {
-        if (!$q->param("collections_coords")) {
-            $q->param("collections_coords"=>"YES");
-        }
-    }
 
     if ($q->param('lump_by_location')) {
         if (!$q->param("collections_coords") && $q->param('lump_by_location') =~ /coordinate/) {
