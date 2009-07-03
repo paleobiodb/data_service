@@ -1,15 +1,19 @@
 #!/usr/local/bin/perl 
 
 BEGIN {
-$ENV{DOWNLOAD_OUTFILE_DIR} = "/Volumes/pbdb_RAID/httpdocs/html/paleodb/data";
-$ENV{DOWNLOAD_DATAFILE_DIR} = "/Volumes/pbdb_RAID/httpdocs/cgi-bin/data";
-$ENV{MAP_COAST_DIR} = "/Volumes/pbdb_RAID/httpdocs/cgi-bin/data";
-$ENV{MAP_GIF_DIR} = "/Volumes/pbdb_RAID/httpdocs/html/public/maps";
-$ENV{REPORT_DDIR} = "/Volumes/pbdb_RAID/httpdocs/cgi-bin/data";
-$ENV{REPORT_DDIR2} = "/Volumes/pbdb_RAID/httpdocs/html/public/data";
+$ENV{DOWNLOAD_OUTFILE_DIR} = "/Users/alroy/pb/html/paleodb/data";
+$ENV{DOWNLOAD_DATAFILE_DIR} = "/Users/alroy/pb/cgi-bin/data";
+$ENV{MAP_COAST_DIR} = "/Users/alroy/pb/cgi-bin/data";
+$ENV{MAP_GIF_DIR} = "/Users/alroy/pb/html/public/maps";
+$ENV{REPORT_DDIR} = "/Users/alroy/pb/cgi-bin/data";
+$ENV{REPORT_DDIR2} = "/Users/alroy/pb/html/public/data";
 }
 
-use lib '../cgi-bin';
+use lib "/Users/alroy/pb/cgi-bin";
+use lib '/opt/local/lib/perl5/site_perl/5.8.9/darwin-2level';
+use lib '/opt/local/lib/perl5/site_perl/5.8.9/darwin-2level/auto';
+use lib '/opt/local/lib/perl5/vendor_perl/5.8.9';
+use lib '/opt/local/lib/perl5/vendor_perl/5.8.9/darwin-2level';
 use TimeLookup;
 use Map;
 use DBConnection;
@@ -17,7 +21,7 @@ use DBTransactionManager;
 
 # Flags and constants
 my $DEBUG = 0;			# The debug level of the calling program
-my $COAST_DIR = "../cgi-bin/data";
+my $COAST_DIR = "/Users/alroy/pb/cgi-bin/data";
 my $dbt = DBTransactionManager->new();
 my $dbh = $dbt->dbh;
 
@@ -38,7 +42,7 @@ if ($doUpdate) {
     print "DRY RUN\n" if ($DEBUG);
 }     
 
-$sql = "SELECT latdeg,latdir,latmin,latsec,latdec,lngdeg,lngdir,lngmin,lngsec,lngdec,collection_no,max_interval_no,min_interval_no,paleolat,paleolng FROM collections";
+$sql = "SELECT latdeg,latdir,latmin,latsec,latdec,lngdeg,lngdir,lngmin,lngsec,lngdec,collection_no,max_interval_no,min_interval_no,paleolat,paleolng,plate FROM collections";
 #my $sth = $dbh->prepare($sql);
 #$sth->execute();
 
@@ -67,6 +71,7 @@ foreach my $row (@results) {
     print "#$row->{collection_no} LAT:$lat LNG:$lng AGE:$collage\n" if ($DEBUG > 1);
     my $old_plat = sprintf("%.2f",$row->{'paleolat'});
     my $old_plng = sprintf("%.2f",$row->{'paleolng'});
+    my $old_plate = $row->{'plate'};
     printf ("%-20s%-20s\n","OLD PLAT:$row->{paleolat}","OLD PLNG:$row->{paleolng}") if ($DEBUG > 1);
     if ($lat !~ /\d/|| $lng !~ /\d/) {
         print "ERROR: No coord\n" if ($DEBUG > 1); 
@@ -88,8 +93,8 @@ foreach my $row (@results) {
             $plng = sprintf("%.2f",$plng);
             printf ("%-20s%-20s\n","NEW PLAT:$plat","NEW PLNG:$plng") if ($DEBUG > 1);
             
-            if ($old_plng ne $plng || $old_plat ne $plat) {
-                $sql = "UPDATE collections SET paleolng=$plng, paleolat=$plat,modified=modified WHERE collection_no=$row->{collection_no}";
+            if ($old_plng ne $plng || $old_plat ne $plat || $old_plate ne $pid) {
+                $sql = "UPDATE collections SET paleolng=$plng, paleolat=$plat, plate=$pid, modified=modified WHERE collection_no=$row->{collection_no}";
                 print "$sql\n" if ($DEBUG);
                 print "\n" if ($DEBUG > 1);
                 if ($doUpdate) {
