@@ -853,9 +853,13 @@ sub getPaleoLatLongString    {
             next;
         }
 
-        # all the boundaries must be given
-        if ( $latmin !~ /^-?\d+$/ || $latmax !~ /^-?\d+$/ || $lngmin !~ /^-?\d+$/ || $lngmax !~ /^-?\d+$/)    {
-            push @form_errors,"Paleolatitude and paleolongitude must be positive or negative integer values";
+        # all the boundaries must be given correctly
+        if ( $latmin !~ /^-?\d+(|\.\d+)$/ || $latmax !~ /^-?\d+(|\.\d+)$/ )    {
+            push @form_errors,"The paleolatitude is formatted incorrectly";
+            next;
+        }
+        if ( $lngmin !~ /^-?\d+(|\.\d+)$/ || $lngmax !~ /^-?\d+(|\.\d+)$/ )    {
+            push @form_errors,"The paleolongitude is formatted incorrectly";
             next;
         }
         # at least one of the boundaries must be non-trivial
@@ -918,9 +922,13 @@ sub getLatLongString    {
             next;
         }   
 
-        # all the boundaries must be given
-        if ( $latmin !~ /^-?\d+$/ || $latmax !~ /^-?\d+$/ || $lngmin !~ /^-?\d+$/ || $lngmax !~ /^-?\d+$/)    {
-            push @form_errors,"Latitude and longitude must be positive or negative integer values";
+        # all the boundaries must be given correctly
+        if ( $latmin !~ /^-?\d+(|\.\d+)$/ || $latmax !~ /^-?\d+(|\.\d+)$/ )    {
+            push @form_errors,"The latitude is formatted incorrectly";
+            next;
+        }
+        if ( $lngmin !~ /^-?\d+(|\.\d+)$/ || $lngmax !~ /^-?\d+(|\.\d+)$/ )    {
+            push @form_errors,"The longitude is formatted incorrectly";
             next;
         }
         # at least one of the boundaries must be non-trivial
@@ -929,28 +937,44 @@ sub getLatLongString    {
         }
 
         $latlongclause .= " OR (";
+        my $sum;
+
+        sub extractMinutes	{
+            my $latlng = shift;
+            my ($degrees,$minutes) = split /\./, shift;
+            if ( ! $minutes ) { return $latlng."deg"; }
+            else { return "IF(".$latlng."min IS NOT NULL,".$latlng."deg+(".$latlng."min/60),".$latlng."deg)"; }
+        }
+
+        $sum = extractMinutes('lat',$abslatmin);
         if ( $latmin >= 0 )    {
-            $latlongclause .= "latdeg>=$abslatmin AND latdir='North'";
+            $latlongclause .= "$sum>=$abslatmin AND latdir='North'";
         } else    {
-            $latlongclause .= "((latdeg<$abslatmin AND latdir='South') OR latdir='North')";
+            $latlongclause .= "(($sum<$abslatmin AND latdir='South') OR latdir='North')";
         }
+
         $latlongclause .= " AND ";
+        $sum = extractMinutes('lat',$abslatmax);
         if ( $latmax >= 0 )    {
-            $latlongclause .= "((latdeg<$abslatmax AND latdir='North') OR latdir='South')";
+            $latlongclause .= "(($sum<$abslatmax AND latdir='North') OR latdir='South')";
         } else    {
-            $latlongclause .= "latdeg>=$abslatmax AND latdir='South'";
+            $latlongclause .= "$sum>=$abslatmax AND latdir='South'";
         }
+
         $latlongclause .= " AND ";
+        $sum = extractMinutes('lng',$abslngmin);
         if ( $lngmin >= 0 )    {
-            $latlongclause .= "lngdeg>=$abslngmin AND lngdir='East'";
+            $latlongclause .= "$sum>=$abslngmin AND lngdir='East'";
         } else    {
-            $latlongclause .= "((lngdeg<$abslngmin AND lngdir='West') OR lngdir='East')";
+            $latlongclause .= "(($sum<$abslngmin AND lngdir='West') OR lngdir='East')";
         }
+
         $latlongclause .= " AND ";
+        $sum = extractMinutes('lng',$abslngmax);
         if ( $lngmax >= 0 )    {
-            $latlongclause .= "((lngdeg<$abslngmax AND lngdir='East') OR lngdir='West')";
+            $latlongclause .= "(($sum<$abslngmax AND lngdir='East') OR lngdir='West')";
         } else    {
-            $latlongclause .= "lngdeg>=$abslngmax AND lngdir='West'";
+            $latlongclause .= "$sum>=$abslngmax AND lngdir='West'";
         }
         $latlongclause .= ")";
     }
@@ -958,7 +982,6 @@ sub getLatLongString    {
     if ($latlongclause) {
         $latlongclause = '('.$latlongclause.')';
     }
-
 
     return $latlongclause;
 }
@@ -1005,7 +1028,7 @@ sub getIntervalString    {
         }
 
 
-        @form_errors = @$errors;
+        push @form_errors , @$errors;
         @form_warnings = @$warnings;
         my $intervals_sql = join(", ",@$intervals);
         # -1 to prevent crashing on blank string
