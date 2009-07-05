@@ -1232,6 +1232,17 @@ sub displayCollectionDetails {
         $coll->{'latsec'} = '';
         $coll->{'geogcomments'} = '';
     }
+    $coll->{'paleolatdir'} = "North";
+    if ( $coll->{'paleolat'} < 0 )	{
+        $coll->{'paleolatdir'} = "South";
+    }
+    $coll->{'paleolngdir'} = "East";
+    if ( $coll->{'paleolng'} < 0 )	{
+        $coll->{'paleolngdir'} = "West";
+    }
+    $coll->{'paleolat'} = sprintf "%.1f&deg;",abs($coll->{'paleolat'});
+    $coll->{'paleolng'} = sprintf "%.1f&deg;",abs($coll->{'paleolng'});
+
     print $hbo->stdIncludes('std_page_top', $page_vars);
 
     # Handle display of taxonomic list now 
