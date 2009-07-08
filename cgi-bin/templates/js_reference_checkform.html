@@ -143,7 +143,7 @@
 		if ( /[~@\#\$%\^\&\*_\+\{\}\|\\<>\t\n]/.test(frm.reftitle.value) || /[^A-Za-z0-9]\//.test(frm.reftitle.value) || /[\/][^A-Za-z0-9]/.test(frm.reftitle.value) || /[:;\?\!][A-Za-z0-9]/.test(frm.reftitle.value) )	{
 			errors += "* The reference's title includes weird characters\n";
 		}
-		if ( /[^0-9]\./.test(frm.reftitle.value) || /\.[^0-9]/.test(frm.reftitle.value) )	{
+		if ( /\.([^0-9 ]|$)/.test(frm.reftitle.value) )	{
 			errors += "* The reference's title includes a stray period\n";
 		}
 		if ( /  /.test(frm.reftitle.value) )	{
