@@ -200,7 +200,6 @@ function doCheckFieldsGeography() {
               frm.country.options[index].text == "Ethiopia" ||
               frm.country.options[index].text == "Japan" ||
               frm.country.options[index].text == "Poland" ||
-              frm.country.options[index].text == "Russian Federation" ||
               frm.country.options[index].text == "Sweden" ||
               frm.country.options[index].text == "Switzerland" ||
               frm.country.options[index].text == "India" ) &&
@@ -240,6 +239,12 @@ function doCheckFieldsGeography() {
               frm.country.options[index].text == "Indonesia" ) &&
              ( parseInt(frm.latdeg.value) > 15 ||
                frm.lngdir.options[indexLng].text != "East" ) ) {
+            bad_info += "\no Lat and long are outside this country";
+        }
+        else if ( frm.country.options[index].text == "Russian Federation" &&
+             ( ( parseInt(frm.lngdeg.value) < 160 &&
+               frm.lngdir.options[indexLng].text == "West" ) ||
+               frm.latdir.options[indexLat].text != "North" ) ) {
             bad_info += "\no Lat and long are outside this country";
         }
     }
