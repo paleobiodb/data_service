@@ -44,7 +44,7 @@ sub getResearchGroupSQL {
             push @terms, "sr.reference_no IN ($refs)";
         }
     } 
-    if($research_group =~ /^(?:decapod|divergence|ETE|marine invertebrate|micropaleontology|PACED|paleobotany|paleoentomology|taphonomy|vertebrate)$/) {
+    if($research_group =~ /^(?:decapod|divergence|ETE|GCP|marine invertebrate|micropaleontology|PACED|paleobotany|paleoentomology|taphonomy|vertebrate)$/) {
         if ($restricted_to) {
             push @terms, "c.research_group=".$dbt->dbh->quote($research_group);
         } else {
