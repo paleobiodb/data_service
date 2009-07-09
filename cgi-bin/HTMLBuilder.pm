@@ -49,7 +49,7 @@ mapwidth=>['100%','90%','80%','75%','70%','60%','50%'],
     pointshape=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
     dotborder=>[ 'no', 'black', 'white' ],
     mapsearchfields=>[ 'research group', 'country', 'state/province', 'time interval', 'formation', 'lithology', 'paleoenvironment', 'taxon' ],
-    research_group=>['', 'decapod','divergence', 'marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
+    research_group=>['', 'decapod','divergence', 'GCP', 'marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
 
     # Taphonomy/ecology and vertebrate cology fields
     fr_habitat=>['','terrestrial','marine','freshwater','marine,terrestrial','marine,freshwater','freshwater,terrestrial'],
