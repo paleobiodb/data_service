@@ -355,7 +355,7 @@ sub displayAuthorityForm {
         if (!$parentRank) { 
             $parentRank = 'genus';
         }
-        @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName,'taxon_rank'=>$parentRank},['*']);
+        @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName,'taxon_rank'=>$parentRank,'ignore_common_name'=>"YES"},['*']);
 		
 		if (@parents) {
 			my $select;
@@ -608,7 +608,7 @@ sub submitAuthorityForm {
         my $old_name = $t->get('taxon_name');
         my $new_name = $q->param('taxon_name');
         if ($old_name ne $new_name) {
-            my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$new_name});
+            my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$new_name,'ignore_common_name'=>"YES"});
             if ($taxon) {
                 $errors->add("Can't change the taxon's name from '$old_name' to '$new_name' because '$new_name' already exists in the database");
             }
@@ -703,7 +703,7 @@ sub submitAuthorityForm {
             } 
         }
         if (!$parent_no) {
-            my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parent_name});
+            my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parent_name,'ignore_common_name'=>"YES"});
             if (@parents > 1) {
                 $errors->add("There are multiple versions of the name '$parent_name' in the database.  Please select the right one.");
             } elsif (@parents == 1) {
@@ -728,7 +728,7 @@ sub submitAuthorityForm {
 	# This only applies to new entries, and to edits where they changed the taxon_name
 	# field to be the name of a different taxon which already exists.
 	if ($q->param('confirmed_taxon_name') ne $q->param('taxon_name')) {
-        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$fields{'taxon_name'}},['*']);
+        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$fields{'taxon_name'},'ignore_common_name'=>"YES"},['*']);
         my $taxonExists = scalar(@taxon);
         
 		if (($isNewEntry && $taxonExists) ||
@@ -1026,7 +1026,7 @@ sub updateChildNames {
         my $taxon_name = $child->{'taxon_name'};
         $taxon_name =~ s/^$quoted_old_name/$new_name/; 
         dbg("Changing parent from $old_name to $new_name.  child taxon from $child->{taxon_name} to $taxon_name");
-        $dbt->updateRecord($s,'authorities','taxon_no',$child->{'taxon_no'},{'taxon_name'=>$taxon_name});
+        $dbt->updateRecord($s,'authorities','taxon_no',$child->{'taxon_no'},{'taxon_name'=>$taxon_name,'ignore_common_name'=>"YES"});
     }
 }
 
@@ -1050,7 +1050,7 @@ sub updateImplicitBelongsTo {
     my %old_parents;
     if ($old_higher) {
         dbg("Looking for opinions to migrate for $old_higher");
-        foreach my $p (TaxonInfo::getTaxa($dbt,{'taxon_name'=>$old_higher})) {
+        foreach my $p (TaxonInfo::getTaxa($dbt,{'taxon_name'=>$old_higher,'ignore_common_name'=>"YES"})) {
             $old_parents{$p->{'taxon_no'}} = 1;
         }
     }
@@ -1218,7 +1218,7 @@ sub setOccurrencesTaxonNoByTaxon {
     }
 
     # start with a test for uniqueness
-    my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$taxon_name},['taxon_no','taxon_rank','taxon_name','author1last','author2last','pubyr']);
+    my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$taxon_name,'ignore_common_name'=>"YES"},['taxon_no','taxon_rank','taxon_name','author1last','author2last','pubyr']);
     my @taxon_nos= ();
     for (my $i=0;$i<@taxa;$i++) {
         my $orig_no_i = TaxonInfo::getOriginalCombination($dbt,$taxa[$i]->{'taxon_no'});
@@ -1585,7 +1585,7 @@ sub getTypeTaxonList {
 # This will print out the name of a taxon, its publication info, and its first parent
 # for distinguishing between taxon of the same name
 # Assumes correct publication info is conveniently in the record itself
-#   I.E. data from getTaxa($dbt,{'taxon_name'=>$taxon_name},['*']) -- see function for details
+#   I.E. data from getTaxa($dbt,{'taxon_name'=>$taxon_name,'ignore_common_name'=>"YES"},['*']) -- see function for details
 # 
 # it returns some HTML to display the authority information.
 sub formatTaxon{
