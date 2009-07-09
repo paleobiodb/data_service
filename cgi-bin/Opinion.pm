@@ -961,7 +961,7 @@ sub submitOpinionForm {
                 $errors->add("You must enter the name of a higher taxon this one belongs to");
             }
         } else {    
-            my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName}); 
+            my @parents = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parentName,'ignore_common_name'=>"YES"}); 
             if (scalar(@parents) > 1) {
                 $errors->add("The taxon '$parentName' exists multiple times in the database. Please select the one you want");	
             } elsif (scalar(@parents) == 0) {
@@ -1004,7 +1004,7 @@ sub submitOpinionForm {
             # Otherwise, go through the whole big routine
             $childSpellingName = $q->param('child_spelling_name');
             $childSpellingRank = $q->param('child_spelling_rank');
-            my @spellings = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$childSpellingName,'taxon_rank'=>$childSpellingRank}); 
+            my @spellings = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$childSpellingName,'taxon_rank'=>$childSpellingRank,'ignore_common_name'=>"YES"}); 
             if (scalar(@spellings) > 1) {
                 $errors->add("The spelling '$childSpellingName' exists multiple times in the database. Please select the one you want");	
             } elsif (scalar(@spellings) == 0) {
