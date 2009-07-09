@@ -1835,6 +1835,10 @@ sub processTaxonSearch {
         : ($goal eq 'ecotaph')    ? 'startPopulateEcologyForm'
         : ($goal eq 'ecovert')    ? 'startPopulateEcologyForm'
         : croak("Unknown goal given in submit taxon search");
+
+    if ( $goal eq 'authority' || $goal eq 'opinion' )	{
+        $options{'ignore_common_name'} = "YES";
+    }
     
     my @results = TaxonInfo::getTaxa($dbt,\%options,['*']);
         
