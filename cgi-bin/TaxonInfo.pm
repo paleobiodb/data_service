@@ -3947,6 +3947,10 @@ sub getTaxa {
     my $fields = shift;
     my $dbh = $dbt->dbh;
 
+    if ( $options->{'ignore_common_name'} )	{
+        $options->{'common_name'} = "";
+    }
+
     my $join_refs = 0;
     my @where = ();
     if ($options->{'taxon_no'}) {
@@ -4015,7 +4019,12 @@ sub getTaxa {
         if ($subspecies =~ /[a-z]/) {
             $species_sql .= " $subspecies";
         }
-        my $taxon1_sql = "(taxon_name LIKE '$options->{taxon_name}' OR common_name LIKE '$options->{taxon_name}')";
+        my $taxon1_sql;
+        if ($options->{'ignore_common_name'})	{
+            $taxon1_sql = "(taxon_name LIKE '$options->{taxon_name}')";
+        } else	{
+            $taxon1_sql = "(taxon_name LIKE '$options->{taxon_name}' OR common_name LIKE '$options->{taxon_name}')";
+        }
         
         my $sql = "($base_sql WHERE ".join(" AND ",@where,$taxon1_sql).")";
         if ($subgenus) {
@@ -4034,7 +4043,11 @@ sub getTaxa {
         @results = @{$dbt->getData($sql)};
     } else {
         if ($options->{'taxon_name'}) {
-            push @where,"(a.taxon_name LIKE ".$dbh->quote($options->{'taxon_name'})." OR a.common_name LIKE ".$dbh->quote($options->{'taxon_name'}).")";
+            if ($options->{'ignore_common_name'})	{
+                push @where,"(a.taxon_name LIKE ".$dbh->quote($options->{'taxon_name'}).")";
+            } else	{
+                push @where,"(a.taxon_name LIKE ".$dbh->quote($options->{'taxon_name'})." OR a.common_name LIKE ".$dbh->quote($options->{'taxon_name'}).")";
+            }
         }
         if (@where) {
             my $sql = $base_sql." WHERE ".join(" AND ",@where); 
