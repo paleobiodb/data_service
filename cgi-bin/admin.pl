@@ -214,7 +214,7 @@ sub displayActions	{
 	print $hb->populateHTML( "std_page_top" );
 	print $hb->populateHTML( "index" );
 
-	my $sql = "SELECT first_name, last_name, reversed_name, name, last_action, last_entry FROM person";
+	my $sql = "SELECT first_name, last_name, reversed_name, name, DATE_FORMAT(last_action,'%Y%m%d%H%i%s') last_action, DATE_FORMAT(last_entry,'%Y%m%d%H%i%s') last_entry FROM person";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	
