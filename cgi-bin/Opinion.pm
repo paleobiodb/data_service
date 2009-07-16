@@ -1609,9 +1609,8 @@ sub displayOpinionChoiceForm {
     if ($q->param('taxon_no')) {
         my $child_no = $q->param('taxon_no');
         my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_no);
-        my $sql = "SELECT o.opinion_no AS opinion_no,t.opinion_no AS current_opinion FROM opinions o,$TAXA_TREE_CACHE t ".
-                  " LEFT JOIN refs r ON r.reference_no=o.reference_no".
-                  " WHERE o.child_no=$orig_no AND o.child_no=t.taxon_no".
+        my $sql = "SELECT o.opinion_no AS opinion_no,t.opinion_no AS current_opinion FROM opinions o,$TAXA_TREE_CACHE t,refs r ".
+                  " WHERE o.child_no=$orig_no AND o.child_no=t.taxon_no AND r.reference_no=o.reference_no".
                   " ORDER BY IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) ASC";
         my @results = @{$dbt->getData($sql)};
         
@@ -1682,9 +1681,8 @@ sub displayOpinionChoiceForm {
         }
 
         if (@where && !@errors) {
-            push @where , "o.child_no=t.taxon_no";
-            my $sql = "SELECT o.opinion_no AS opinion_no,t.opinion_no AS current_opinion,o.reference_no,o.ref_has_opinion FROM opinions o,$TAXA_TREE_CACHE t ".
-                      " LEFT JOIN authorities a ON a.taxon_no=o.child_no".
+            push @where , "o.child_no=t.taxon_no AND a.taxon_no=o.child_no";
+            my $sql = "SELECT o.opinion_no AS opinion_no,t.opinion_no AS current_opinion,o.reference_no,o.ref_has_opinion FROM opinions o,$TAXA_TREE_CACHE t,authorities a ".
                       $join_refs.
                       " WHERE ".join(" AND ",@where).
                       " ORDER BY a.taxon_name ASC";
