@@ -603,7 +603,7 @@ sub displayOpinionForm {
         my @taxa = Taxon::getTypeTaxonList($dbt,$fields{'child_no'},$fields{'reference_no'});
         $fields{'type_taxon'} = 0;
         foreach my $row (@taxa) {
-            if ($row->{'type_taxon_no'} == $fields{'child_no'}) {
+            if ($row->{'type_taxon_no'} == $fields{'child_no'} && $row->{'taxon_no'} == $fields{'parent_spelling_no'}) {
                 $fields{'type_taxon'} = 1;
             }
         }
