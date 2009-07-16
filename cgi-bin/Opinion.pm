@@ -6,7 +6,7 @@ use CGI::Carp;
 use Data::Dumper;
 use TaxaCache;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD);
+use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $TAXA_TREE_CACHE);
 
 # list of allowable data fields.
 use fields qw(opinion_no reference_no author1last author2last pubyr dbt DBrow);  
@@ -1609,9 +1609,9 @@ sub displayOpinionChoiceForm {
     if ($q->param('taxon_no')) {
         my $child_no = $q->param('taxon_no');
         my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_no);
-        my $sql = "SELECT o.opinion_no FROM opinions o ".
+        my $sql = "SELECT o.opinion_no AS opinion_no,t.opinion_no AS current_opinion FROM opinions o,$TAXA_TREE_CACHE t ".
                   " LEFT JOIN refs r ON r.reference_no=o.reference_no".
-                  " WHERE o.child_no=$orig_no".
+                  " WHERE o.child_no=$orig_no AND o.child_no=t.taxon_no".
                   " ORDER BY IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) ASC";
         my @results = @{$dbt->getData($sql)};
         
@@ -1624,6 +1624,9 @@ sub displayOpinionChoiceForm {
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
             my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+            if ( $row->{'opinion_no'} == $row->{'current_opinion'} )	{
+                $opinion = "<b>".$opinion."</b>";
+            }
             if ( $o->{'reference_no'} != 6930 )	{
                 print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=$row->{opinion_no}">$opinion</a>$authority</li>|;
             } else	{
@@ -1679,7 +1682,8 @@ sub displayOpinionChoiceForm {
         }
 
         if (@where && !@errors) {
-            my $sql = "SELECT o.opinion_no,o.reference_no,o.ref_has_opinion FROM opinions o ".
+            push @where , "o.child_no=t.taxon_no";
+            my $sql = "SELECT o.opinion_no AS opinion_no,t.opinion_no AS current_opinion,o.reference_no,o.ref_has_opinion FROM opinions o,$TAXA_TREE_CACHE t ".
                       " LEFT JOIN authorities a ON a.taxon_no=o.child_no".
                       $join_refs.
                       " WHERE ".join(" AND ",@where).
@@ -1702,6 +1706,9 @@ sub displayOpinionChoiceForm {
             foreach my $row (@results) {
                 my $o = Opinion->new($dbt,$row->{'opinion_no'});
                 my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+                if ( $row->{'opinion_no'} == $row->{'current_opinion'} )	{
+                    $opinion = "<b>".$opinion."</b>";
+                }
                 if ( $q->param('reference_no') == $row->{'reference_no'} && $row->{'ref_has_opinion'} eq "YES" )	{
                     $authority = "";
                 }
@@ -1732,7 +1739,7 @@ sub displayOpinionChoiceForm {
     } 
     
     if ($q->param("taxon_no")) {
-        print qq|<div class="verysmall" style="margin-left: 4em; text-align: left;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>\nCreate a new opinion if your author's name is not in the above list.<br>\nDo not select an old opinion unless it was entered incorrectly or incompletely.$sepkoski</p></div>\n|;
+        print qq|<div class="verysmall" style="margin-left: 4em; text-align: left;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>The currently favored opinion is in <b>bold</b>.\n<br>\nCreate a new opinion if your author's name is not in the above list.<br>\nDo not select an old opinion unless it was entered incorrectly or incompletely.$sepkoski</p></div>\n|;
     } elsif ($q->param('reference_no') && $s->isDBMember())	{
         print qq|<tr><td align="left" colspan=2><div class="tiny" style="padding-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
         print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')">FAQ</a>.</p></div>\n|;
