@@ -2325,7 +2325,7 @@ sub getClassOrderFamily	{
 	my $class_array_ref = shift;
 	my @class_array = @{$class_array_ref};
 
-	my ($toplowlevel,$maxyr,$toplevel) = (-1,'','');
+	my ($toplowlevel,$maxyr,$toplevel) = (-1,'',$#class_array);
 	# common name and family are easy
 	for my $i ( 0..$#class_array ) {
 		my $t = $class_array[$i];
