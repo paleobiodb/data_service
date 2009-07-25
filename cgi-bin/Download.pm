@@ -2253,6 +2253,7 @@ sub queryDatabase {
 
         if (@ecoFields || $get_preservation ||
             $q->param("replace_with_ss") ne 'NO' ||
+            $q->param("extinct_taxa") eq "NO" ||
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES" ||
@@ -2317,6 +2318,7 @@ sub queryDatabase {
         # get the higher order names associated with each genus name,
         #   then set the ecotaph values by running up the hierarchy
         if ( @ecoFields || $get_preservation ||
+            $q->param("extinct_taxa") eq "NO" || 
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES" ||
@@ -2340,7 +2342,8 @@ sub queryDatabase {
     my %form_taxon_lookup;
     my %extant_lookup;
     my %common_name_lookup;
-    if (($q->param("occurrences_first_author") ||
+    if (($q->param("extinct_taxa") eq "NO" ||
+        $q->param("occurrences_first_author") ||
         $q->param("occurrences_second_author") ||
         $q->param("occurrences_other_authors") ||
         $q->param("occurrences_year_named") ||
@@ -2634,7 +2637,7 @@ sub queryDatabase {
 
             # "extant" calculations must be done here to allow correct
             #   lumping below
-            if ( $q->param('occurrences_extant') && $row->{'o.taxon_no'} > 0 )	{
+            if ( ( $q->param('occurrences_extant') || $q->param('extinct_taxa') eq "NO" ) && $row->{'o.taxon_no'} > 0 )	{
                 # confusing logic here, badly screwed up before JA 9.1.08
                 # record extant values only in two cases:
                 #  (1) output is species, rank is species, and extant is
@@ -2717,6 +2720,18 @@ sub queryDatabase {
     #my $td = timediff($t1,$t0);
     #my $time = 0+$td->[0] + $td->[1];
     #print "TD for populateStuffs: $time\n";
+
+    # quick pruning of extinct taxa JA 24.7.09
+    if ( $q->param('extinct_taxa') eq "NO" )	{
+        my @temp;
+        foreach my $row ( @dataRows ) {
+           if ( $row->{'extant'} =~ /y/i )	{
+               push @temp , $row;
+           }
+        }
+        @dataRows = @temp;
+        @temp = ();
+    }
 
     ###########################################################################
     #  Now handle lumping of collections
