@@ -688,6 +688,15 @@ location:
   <span class="white-space: nowrap"><input type="checkbox" name="preservation" value="ichnofossil" checked> ichnofossil</span></td></tr>
 
 <tr class="lightGray">
+<td valign=top class="small">Include occurrences of extinct taxa?</td>
+<td valign=top class="small">
+<select name=extinct_taxa>
+<option value="NO">no, exclude them</option>
+<option selected value="YES">yes, include them</option>
+</select>
+</td></tr>
+
+<tr>
 <td valign=top class="small">Include occurrences falling outside their age ranges in Sepkoski's Compendium?</td>
 <td valign=top class="small">
 <select name=compendium_ranges>
@@ -696,7 +705,7 @@ location:
 </select>
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Only include occurrences with abundance data?</td>
 <td valign=top class="small">
 <select name=abundance_required>
@@ -706,14 +715,14 @@ location:
 </select>
 </td></tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small" nowrap>... or <select name="abundance_taxon_include"><option selected>include<option>exclude</select> abundances of these taxa only:<br>
 <small><i>Other occurrences will still be printed, but without their abundance values</i></small></td>
 <td valign=top class="small">
 <textarea name=abundance_taxon_name rows=2 cols=37></textarea></td></tr>
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small" nowrap>Include abundances if the collection's taxonomic list omits some genera?
 <td valign=top class="small">
 <select name=incomplete_abundances>
@@ -722,7 +731,7 @@ location:
 </select>
 </td></tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small">Include occurrences that are classified or unclassified?<br>
 <small><i>This is useful if you want to find entries that might be typos</i></small></td>
 <td valign=top class="small">
@@ -733,7 +742,7 @@ location:
 </select>
 </td></tr>   
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Minimum # of specimens needed to compute mean abundance</td>
 <td valign=top class="small"><input name=min_mean_abundance type="text" size="12"></td></tr>
 </table>
