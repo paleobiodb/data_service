@@ -2486,7 +2486,7 @@ sub getMostRecentClassification {
     if ($options->{strat_range}) {
         $strat_fields = 'o.max_interval_no,o.min_interval_no,';
     }
-    my $sql = "(SELECT o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
+    my $sql = "(SELECT a.taxon_name,a.taxon_rank,o.status,o.spelling_reason, o.figures,o.pages, o.parent_no, o.parent_spelling_no, o.child_no, o.child_spelling_no,o.opinion_no, o.reference_no, o.ref_has_opinion, o.phylogenetic_status, ".
             " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.pubyr, r.pubyr) as pubyr, "
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.author1last, r.author1last) as author1last, "
             . " IF(o.pubyr IS NOT NULL AND o.pubyr != '' AND o.pubyr != '0000', o.author2last, r.author2last) as author2last, "
@@ -2546,8 +2546,23 @@ sub getMostRecentClassification {
             my @spellingRows = @{$dbt->getData($sql)};
             my @spellings = ($child_no);
             push @spellings, $_->{'spelling'} foreach @spellingRows;
-            my $synonym_no = $rows[0]->{'child_spelling_no'};
-            my $spelling_no = $rows[0]->{'child_spelling_no'};
+            # misspellings are a nightmare JA 4.8.09
+            # start with the child_no because there may be no correctly
+            #  spelt opinion
+            my ($synonym_no,$spelling_no) = ($rows[0]->{'child_no'},$rows[0]->{'child_no'});
+            my $genus = $rows[0]->{'taxon_name'};
+            my $species;
+            if ( $rows[0]->{'taxon_rank'} =~ /species/ )	{
+                ($genus,$species) = split / /,$rows[0]->{'taxon_name'};
+            }
+            # find a valid spelling if you can
+            for my $r ( @rows )	{
+                if ( $r->{'spelling_reason'} ne "misspelling" && $rows[0]->{'taxon_rank'} eq $r->{'taxon_rank'} && ( $r->{'taxon_rank'} !~ /species/ || $r->{'taxon_name'} =~ /$genus / ) )	{
+                    $synonym_no = $r->{'child_spelling_no'};
+                    $spelling_no = $r->{'child_spelling_no'};
+                    last;
+                }
+            }
             if ( $rows[0]->{'status'} ne "belongs to" && $rows[0]->{'parent_no'} > 0 )	{
                 $synonym_no = $rows[0]->{'parent_spelling_no'};
             }
