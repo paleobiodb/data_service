@@ -1291,35 +1291,35 @@ $| = 1;
 				if ($msubsrangethrough[$i] > 0)	{
 					$msubsrichness[$i] = $msubsrichness[$i] + $subsrichness[$i];
 				}
-				if ($q->param('diversity') =~ /^boundary-crossers/)	{
+				if ($q->param('diversity') =~ /boundary.crosser/i)	{
 					$outrichness[$i][$trials] = $trangethrough[$i] - $toriginate[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i] - $toriginate[$i];
 				}
-				elsif ($q->param('diversity') =~ /range-through\b/)	{
+				elsif ($q->param('diversity') =~ /range.through/i && $q->param('diversity') !~ /minus/i)	{
 					$outrichness[$i][$trials] = $trangethrough[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i];
 				}
-				elsif ($q->param('diversity') =~ /range-through minus/)	{
+				elsif ($q->param('diversity') =~ /range.through minus/i)	{
 					$outrichness[$i][$trials] = $trangethrough[$i] - $tsingletons[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i] - $tsingletons[$i];
 				}
-				elsif ($q->param('diversity') =~ /sampled-in-bin/)	{
+				elsif ($q->param('diversity') =~ /sampled/i)	{
 					$outrichness[$i][$trials] = $subsrichness[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $subsrichness[$i];
 				}
-				elsif ($q->param('diversity') =~ /sampled minus/)	{
+				elsif ($q->param('diversity') =~ /sampled minus/i)	{
 					$outrichness[$i][$trials] = $subsrichness[$i] - $tsingletons[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $subsrichness[$i] - $tsingletons[$i];
 				}
-				elsif ($q->param('diversity') =~ /two timers/)	{
+				elsif ($q->param('diversity') =~ /two timer/i)	{
 					$outrichness[$i][$trials] = $ttwotimers[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $ttwotimers[$i];
 				}
-				elsif ($q->param('diversity') =~ /local boundary-crossers/)	{
+				elsif ($q->param('diversity') =~ /local boundary-crosser/i)	{
 					$outrichness[$i][$trials] = $tlocalbc[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $tlocalbc[$i];
 				}
-				elsif ($q->param('diversity') =~ /local range-through/)	{
+				elsif ($q->param('diversity') =~ /local range.through/i)	{
 					$outrichness[$i][$trials] = $tlocalrt[$i];
 					$meanoutrichness[$i] = $meanoutrichness[$i] + $tlocalrt[$i];
 				}
