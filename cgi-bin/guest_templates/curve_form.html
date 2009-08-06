@@ -87,25 +87,20 @@
 <tr>
   <td valign="top">
     Diversity measure to report:<br>
-    <i><span class="small">Two timers will tell you the Meaning of Life.</span></i>
+    <i><span class="small">Only relevant to subsampling. Sampled counts are recommended.</span></i>
   </td>
   <td valign="top">
     <select name="diversity">
-      <option>boundary-crossers</option>
-      <option>range-through</option>
-      <option>range-through minus singletons</option>
-      <option>sampled-in-bin</option>
-      <option>sampled minus singletons</option>
-      <option selected>two timers</option>
-      <option>local boundary-crossers</option>
-      <option>local range-through</option>
+      <option>sampled taxa</option>
+      <option>range-through taxa</option>
+      <option>boundary-crosser taxa</option>
     </select>
   </td>
 </tr>
 
 <tr>
   <td valign="top">
-    Count references instead of genera?
+    Count references instead of taxa?
   </td>
   <td valign="top">
     <select name="count_refs">
@@ -131,7 +126,7 @@
 This form allows you to request a diversity curve with assorted statistics.
 
 <ul style="text-align: left;">
-<li class="small">A diversity curve shows the number of genera that are counted in different time intervals like epochs
+<li class="small">A diversity curve shows the number of taxa that are counted in different time intervals like epochs
 <li class="small">To make things work, you need to <a href="%%read_url%%?action=displayDownloadForm">download</a> an occurrence data file first
 <li class="small">If you just want to see a regular curve, select a diversity measure and press submit
 <li class="small">To run a standardized subsampling analysis, fill out the three required fields
@@ -279,7 +274,7 @@ This form allows you to request a diversity curve with assorted statistics.
 <tr>
   <td valign="top">
     Maximum number of references to draw in each temporal bin:<br>
-    <i><span class="small">The count may be exceeded for computational reasons. Works with unweighted, occurrences weighted, or occurrences-squared weighted subsampling. Important: don't combine this with the "Count references instead of genera" or the following option.</span></i>
+    <i><span class="small">The count may be exceeded for computational reasons. Works with unweighted, occurrences weighted, or occurrences-squared weighted subsampling. Important: don't combine this with the "Count references instead of taxa" or the following option.</span></i>
   </td>
   <td valign="top">
     <input name="ref_quota">
@@ -318,14 +313,14 @@ This form allows you to request a diversity curve with assorted statistics.
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="raw" name="print_base_raw" value="YES" checked> Base (Ma)
 <input type="checkbox" class="raw" name="print_midpoint_raw" value="YES" checked> Midpoint (Ma)
-<input type="checkbox" class="raw" name="print_sampled" value="YES" checked> Sampled genera
-<input type="checkbox" class="raw" name="print_range-through" value="YES" checked> Range-through genera
-<input type="checkbox" class="raw" name="print_boundary-crosser" value="YES" checked> Boundary-crosser genera
+<input type="checkbox" class="raw" name="print_sampled" value="YES" checked> Sampled taxa
+<input type="checkbox" class="raw" name="print_range-through" value="YES" checked> Range-through taxa
+<input type="checkbox" class="raw" name="print_boundary-crosser" value="YES" checked> Boundary-crosser taxa
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="raw" name="print_two_timer" value="YES"> Two timer genera
-<input type="checkbox" class="raw" name="print_three_timer" value="YES"> Three timer genera
+<input type="checkbox" class="raw" name="print_two_timer" value="YES"> Two timer taxa
+<input type="checkbox" class="raw" name="print_three_timer" value="YES"> Three timer taxa
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
