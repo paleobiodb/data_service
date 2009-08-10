@@ -388,12 +388,12 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup('Environmental zones:','zone_',\@zone_group);
 
     # Preservation mode
-    my @pres_mode_group= ('cast','adpression','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
+    my @pres_mode_group= ('cast','adpression','soft parts','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
     $html .= $self->retellOptionsGroup('Preservation modes:','pres_mode_',\@pres_mode_group);
 
     # Collection methods
-    if ( $q->param('coll_meth_hard') eq 'YES' )	{
-        $html .= $self->retellOptionsRow('Collection methods:','no easy sieving');
+    if ( $q->param('sieve') )	{
+        $html .= $self->retellOptionsRow('Collection methods:',$q->param('sieve'));
     }
 
     # Collection types
@@ -1349,7 +1349,7 @@ sub getPreservationModeString {
     my $q = $self->{'q'};
     my $dbh = $self->{'dbh'};
 
-    my @pres_modes_all = ('cast','adpression','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified');
+    my @pres_modes_all = ('cast','adpression','soft parts','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified');
     my $has_other = ($q->param('pres_mode_other') eq 'YES') ? 1 : 0; 
 
     # If its in the form, stick in in the array
@@ -1385,9 +1385,14 @@ sub getCollMethString {
 
     my $sql = "";
     my $sql2 = "";
-    # bulk + sieve excluded
-    if ( $q->param('coll_meth_hard') eq 'YES' )	{
+    if ( $q->param('sieve') =~ /not sieved/ )	{
+        $sql = "(coll_meth IS NULL OR coll_meth NOT LIKE '%sieve%')";
+    } elsif ( $q->param('sieve') =~ /not easily sieved/ )	{
         $sql = "(coll_meth IS NULL OR coll_meth NOT LIKE '%sieve%' OR coll_meth LIKE '%chemical%' OR coll_meth LIKE '%mechanical%')";
+    } elsif ( $q->param('sieve') =~ /easily sieved/ )	{
+        $sql = "(coll_meth LIKE '%sieve%' AND coll_meth NOT LIKE '%chemical%' AND coll_meth NOT LIKE '%mechanical%')";
+    } elsif ( $q->param('sieve') =~ /sieved/ )	{
+        $sql = "(coll_meth LIKE '%sieve%')";
     }
     return $sql;
 
