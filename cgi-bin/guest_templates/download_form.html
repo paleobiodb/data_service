@@ -512,22 +512,28 @@ and
 </td></tr>
 
 <tr>
-<td valign=top class="small">Modes of preservation and collection:</td>
+<td valign=top class="small">Modes of preservation:</td>
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_cast' value="YES" checked>cast</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_adpression' value="YES" checked>adpression</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_mold/impression' value="YES" checked>mold/impression</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_soft parts' value="YES" checked>soft parts</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_original aragonite' value="YES" checked>original aragonite</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_replaced with silica' value="YES" checked>replaced with silica</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_trace' value="YES" checked>trace</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_charcoalification' value="YES" checked>charcoalification</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_coalified' value="YES" checked>coalified</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_other' value="YES" checked>unknown preservation</span>
-<span style="white-space: nowrap"><input type=checkbox name='coll_meth_hard' value="YES">no easy sieving</span><br>
-<span class="small">"easy" means sieved and unlithified or poorly lithified</span>
 </td></tr>
 
 <tr class="lightGray">
+<td valign=top class="small">Collection methods:</td>
+<td valign=top class="small" colspan=3>
+<span style="white-space: nowrap"><select name="sieve"><option></option><option>sieved only</option><option>easily sieved only</option><option>not sieved</option><option>not easily sieved</option></select></span><br>
+<small><i>"Easily sieved" means sieved without chemical or mechanical preparation</i></small>
+</td></tr>
+
+<tr>
 <td valign=top class="small">Reason for describing collection:</td>
 <td valign=top class="small" colspan=3>
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_archaeological' value="YES" checked> archaeological</span>
@@ -539,7 +545,7 @@ and
 <span style="white-space: nowrap"><input type=checkbox name='collection_type_unknown' value="YES" checked> unknown</span>
 </td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small">Lump collections by:<br>
 <small><i>
 Occurrences of the same species will be lumped if the species name field is downloaded; otherwise lumping is by genus<br>
@@ -571,19 +577,18 @@ location:
 </span>
 </td></tr>
 
-<tr class="lightGray">
+<tr>
 <td valign=top class="small" nowrap>Exclude collections with
   <select name="occurrence_count_qualifier"><option>less</option><option>more</option></select> than</td>
 <td valign=top class="small" colspan=3><input name=occurrence_count type="text" size="12"> occurrences</td></tr>
 
-<tr>
+<tr class="lightGray">
 <td valign=top class="small" nowrap>Exclude collections with
   <select name="abundance_count_qualifier"><option>less</option><option>more</option></select> than<br>
   <small>Currently doesn't work if output is collection data</small></td>
 <td valign=top class="small" colspan=3><input name=abundance_count type="text" size="12"> specimens/individuals</td></tr>
 
-
-<tr class="lightGray">
+<tr>
 <td valign=top class="small">Exclude collections with subset collections? </td>
 <td valign=top class="small" colspan=3><select name="exclude_superset"><option selected value="NO">no, include them</option><option value="YES">yes, exclude them</option></select></td></tr>
 
