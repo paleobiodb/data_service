@@ -1086,9 +1086,9 @@ sub processCollectionForm {
             $can_modify->{$s->get('authorizer_no')} = 1;
             
             if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {
-                $links .= qq|<li><a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a></li>|;
+                $links .= qq|<li><a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit this collection</a></li>|;
             }
-            $links .= qq|<li><a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a></li>|;
+            $links .= qq|<li><a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add a collection copied from this one</a></li>|;
             if ($isNewEntry) {
                 $links .= qq|<li><a href="$WRITE_URL?action=displaySearchCollsForAdd&type=add">Add another collection with the same reference</a></li>|;
             } else {
@@ -1097,6 +1097,9 @@ sub processCollectionForm {
                 $links .= qq|<li><a href="$WRITE_URL?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></li>|;
             }
             $links .= qq|<li><a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></li>|;
+            if (! $isNewEntry) {
+                $links .= qq|<li><a href="$WRITE_URL?action=displayOccurrenceListForm&collection_no=$collection_no">Paste in taxonomic list</a></li>|;
+            }
             $links .= qq|<li><a href="$WRITE_URL?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></li>|;
             $links .= qq|<li><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></li>|;
             $links .= "</td></tr></table></div></p>";
@@ -1261,7 +1264,7 @@ sub displayCollectionDetails {
         if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {  
             $links .= qq|<a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a> - |;
         }
-        $links .=  qq|<a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add collection with fields prefilled based on this collection</a>|;  
+        $links .=  qq|<a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add a collection copied from this one</a>|;  
         $links .= "</div></p>";
     }
     $links .= "</div>\n";
