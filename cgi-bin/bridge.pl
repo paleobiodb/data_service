@@ -3269,22 +3269,42 @@ sub displayOccurrenceListForm	{
 		exit;
 	}
  
+	my %vars;
 	my $collection_no = $q->param("collection_no");
-	my $sql = "SELECT count(*) c FROM occurrences WHERE collection_no=$collection_no";
-	my $count = ${$dbt->getData($sql)}[0]->{'c'};
-	if ( $count > 0 )	{
-		displayOccurrenceAddEdit();
-		exit;
+	my $sql = "(SELECT o.genus_reso,o.genus_name,o.species_reso,o.species_name FROM occurrences o LEFT JOIN reidentifications r ON o.occurrence_no=r.occurrence_no WHERE o.collection_no=$collection_no AND r.reid_no IS NULL) UNION (SELECT r.genus_reso,r.genus_name,r.species_reso,r.species_name FROM occurrences o LEFT JOIN reidentifications r ON o.occurrence_no=r.occurrence_no WHERE o.collection_no=$collection_no AND r.most_recent='YES') ORDER BY genus_name,species_name";
+	my @occs = @{$dbt->getData($sql)};
+
+	if ( @occs )	{
+		$vars{'old_occurrences'} = "You can only add occurrences with this form. The existing ones are: ";
+		my @ids;
+		for my $o ( @occs )	{
+			$o->{'genus_reso'} =~ s/informal|"//;
+			$o->{'species_reso'} =~ s/informal|"//;
+			my ($gr,$gn,$sr,$sn) = ($o->{'genus_reso'},$o->{'genus_name'},$o->{'species_reso'},$o->{'species_name'});
+
+			my $id = $gn;
+			if ( $gr )	{
+				$id = $gr." ".$id;
+			}
+			if ( $sr )	{
+				$id .= " ".$sr;
+			}
+			$id .= " ".$sn;
+			if ( $sn !~ /indet\./ )	{
+				$id = "<i>".$id."</i>";
+			}
+			push @ids , $id;
+		}
+		$vars{'old_occurrences'} .= join(', ',@ids);
 	}
 
 	my $sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
-	my $collection_name = ${$dbt->getData($sql)}[0]->{'collection_name'};
+	$vars{'collection_name'} = ${$dbt->getData($sql)}[0]->{'collection_name'};
 
 	print $hbo->stdIncludes( "std_page_top" );
 	print $hbo->populateHTML('js_occurrence_checkform');
 
 	print qq|<form method=post action="$WRITE_URL" onSubmit='return checkForm();'>\n|;
-	my %vars;
 	$vars{'collection_no'} = $collection_no;
 	$vars{'list_collection_no'} = $collection_no;
 	$vars{'reference_no'} = $s->get('reference_no');
@@ -3602,6 +3622,7 @@ sub processEditOccurrences {
 
 	# parse freeform all-in-one-textarea lists passed in by
 	#  displayOccurrenceListForm JA 19-20.5.09
+	my $collection_no;
 	if ( $q->param('row_token') )	{
 		@rowTokens = $q->param('row_token');
 	} elsif ( $q->param('taxon_list') )	{
@@ -3638,7 +3659,9 @@ sub processEditOccurrences {
 		$q->param('reference_no' => @refs);
 		$q->param('occurrence_no' => @occs);
 		$q->param('reid_no' => @reids);
-	}
+	} else	{
+	    $collection_no = $q->param('collection_no');
+        }
 
 	# Get the names of all the fields coming in from the form.
 	my @param_names = $q->param();
@@ -3656,7 +3679,6 @@ sub processEditOccurrences {
         my @resos = ("\?","aff\.","cf\.","ex gr\.","n\. gen\.","n\. subgen\.","n\. sp\.","sensu lato");
 
 	my @matrix;
-	my $collection_no;
 
 	# loop over all rows submitted from the form
 
@@ -4169,12 +4191,14 @@ sub processEditOccurrences {
         if ($q->param('list_collection_no')) {
             my $collection_no = $q->param("list_collection_no");
             $links .= qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no"><nobr>Edit taxonomic list</nobr></a> - |;
+            $links .= "<nobr><a href=\"$WRITE_URL?action=displayOccurrenceListForm&collection_no=$collection_no\">Paste in more occurrences</a> - ";
             $links .= "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences&collection_no=$collection_no\"><nobr>Reclassify these occurrences</nobr></a> - ";
             $links .= "<a href=\"$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no\"><nobr>Edit the collection record</nobr></a><br>";
         }
         $links .= "<nobr><a href=\"$WRITE_URL?action=displaySearchCollsForAdd&type=add\">Add</a> or ";
         $links .= "<a href=\"$WRITE_URL?action=displaySearchColls&type=edit\">edit another collection</a> - </nobr>";
-        $links .= "<nobr><a href=\"$WRITE_URL?action=displaySearchColls&type=edit_occurrence\">Add/edit</a> or ";
+        $links .= "<nobr><a href=\"$WRITE_URL?action=displaySearchColls&type=edit_occurrence\">Add/edit</a>, ";
+        $links .= "<nobr><a href=\"$WRITE_URL?action=displaySearchColls&type=occurrence_list\">paste in</a>, or ";
         $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">reidentify different occurrences</a></nobr>";
     }
     $links .= "</div><br>";
@@ -4185,14 +4209,18 @@ sub processEditOccurrences {
 	my @new_subgenera =  TypoChecker::newTaxonNames($dbt,\@subgenera,'subgenus_name');
 	my @new_species =  TypoChecker::newTaxonNames($dbt,\@species,'species_name');
 
-	print qq|<div style="padding-left: 1em; padding-right: 1em;"|;
+	print qq|<div style="padding-left: 1em; padding-right: 1em;>"|;
 
+    my $return;
     if ($q->param('list_collection_no')) {
         my $collection_no = $q->param("list_collection_no");
         my $coll = ${$dbt->getData("SELECT collection_no,reference_no FROM collections WHERE collection_no=$collection_no")}[0];
-    	print Collection::buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$collection_no, 'hide_reference_no'=>$coll->{'reference_no'},'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
+    	$return = Collection::buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$collection_no, 'hide_reference_no'=>$coll->{'reference_no'},'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
     } else {
-    	print Collection::buildTaxonomicList($dbt,$hbo,$s,{'occurrence_list'=>\@occurrences, 'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
+    	$return = Collection::buildTaxonomicList($dbt,$hbo,$s,{'occurrence_list'=>\@occurrences, 'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
+    }
+    if ( ! $return )	{
+        print $links;
     }
 
     print "\n</div>\n<br>\n";
