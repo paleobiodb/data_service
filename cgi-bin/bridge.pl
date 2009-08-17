@@ -4221,6 +4221,8 @@ sub processEditOccurrences {
     }
     if ( ! $return )	{
         print $links;
+    } else	{
+        print $return;
     }
 
     print "\n</div>\n<br>\n";
