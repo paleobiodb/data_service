@@ -1097,9 +1097,7 @@ sub processCollectionForm {
                 $links .= qq|<li><a href="$WRITE_URL?action=displaySearchColls&type=edit&use_primary=yes">Edit another collection using its own reference</a></li>|;
             }
             $links .= qq|<li><a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></li>|;
-            if (! $isNewEntry) {
-                $links .= qq|<li><a href="$WRITE_URL?action=displayOccurrenceListForm&collection_no=$collection_no">Paste in taxonomic list</a></li>|;
-            }
+            $links .= qq|<li><a href="$WRITE_URL?action=displayOccurrenceListForm&collection_no=$collection_no">Paste in taxonomic list</a></li>|;
             $links .= qq|<li><a href="$WRITE_URL?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></li>|;
             $links .= qq|<li><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></li>|;
             $links .= "</td></tr></table></div></p>";
