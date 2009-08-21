@@ -1042,6 +1042,10 @@ sub getIntervalString    {
 }
 
 # JA 11.4.05
+# almost complete rewrite 21.8.09 to handle cases where lithification varies
+#  between lithologies
+# we now assume that if the user does not want a category, they don't want
+#  any collection that includes any fossils from that category
 sub getLithificationString    {
     my $self = shift;
     my $q = $self->{'q'};
@@ -1061,20 +1065,53 @@ sub getLithificationString    {
             return "";
         }
     # all other combinations
-    if ( $lithified )    {
-        $lithvals = " c.lithification='lithified' ";
+    my @include;
+    if (  $lithified )    {
+        push @include , 'lithified';
     }
-    if ( $poorly_lithified )    {
-        $lithvals .= " OR c.lithification='poorly lithified' ";
+    if (  $poorly_lithified )    {
+        push @include , 'poorly lithified';
     }
-    if ( $unlithified )    {
-        $lithvals .= " OR c.lithification='unlithified' ";
+    if (  $unlithified )    {
+        push @include , 'unlithified';
     }
-    if ( $unknown )    {
-        $lithvals .= " OR c.lithification='' OR c.lithification IS NULL ";
+    my ($liths1,$liths2);
+    if ( @include )	{
+        $liths1 = "lithification IN ('".join ("','",@include)."')";
+        $liths2 = "lithification2 IN ('".join ("','",@include)."')";
+        if ( $unknown )	{
+            $liths1 .= " OR lithification IS NULL OR lithification=''";
+            $liths2 .= " OR lithification2 IS NULL OR lithification2=''";
+        }
+    # must want unknown only
+    } else	{
+        $liths1 = "lithification IS NULL OR lithification=''";
+        $liths2 = "lithification2 IS NULL OR lithification2=''";
     }
-    $lithvals =~ s/^ OR//;
-    $lithif_sql = qq| ( $lithvals ) |;
+    $liths1 = " ( ".$liths1." )";
+    $liths2 = " ( ".$liths2." )";
+
+    # case 1: lithification and lithification2 are both good
+    # this will immediately grab all completely unknown (but wanted) cases
+    my @cases = (" ($liths1 AND $liths2) ");
+
+    # case 2: lithification is good and there is no lithification2 and
+    #  fossilsfrom2 is not yes
+    push @cases , " ($liths1 AND (lithification2='' OR lithification2 IS NULL) AND (fossilsfrom2='' OR fossilsfrom2 IS NULL)) ";
+
+    # case 3: lithification2 is good and there is no lithification and
+    #  fossilsfrom is not yes
+    push @cases , " ($liths2 AND (lithification='' OR lithification IS NULL) AND (fossilsfrom1='' OR fossilsfrom1 IS NULL)) ";
+
+    # case 4: lithification is good and lithification2 is bad but
+    #  fossilsfrom1 is Y and fossilsfrom2 is not
+    push @cases , " ($liths1 AND NOT $liths2 AND fossilsfrom1='Y' AND (fossilsfrom2 IS NULL OR fossilsfrom2='')) ";
+
+    # case 5: lithification2 is good and lithification is bad but
+    #  fossilsfrom2 is Y and fossilsfrom1 is not
+    push @cases , " ($liths2 AND NOT $liths1 AND fossilsfrom2='Y' AND (fossilsfrom1 IS NULL OR fossilsfrom1='')) ";
+
+    $lithif_sql = " (".join(' OR ',@cases).") ";
 
     return $lithif_sql;
 }
