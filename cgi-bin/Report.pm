@@ -639,7 +639,7 @@ sub reportQueryDB{
         'assemblage components'=>'assembl_comps', 'reason for describing collection'=>'collection_type',
         'list coverage'=>'collection_coverage', 'lithification'=>'lithification,lithification2',
         'lithology - all combinations'=>'lithology1,lithology2', 'lithology - weighted'=>'lithology1,lithology2',
-        'continent'=>'country', '10 m.y. bins (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 3: Periods (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (most common order)'=>'max_interval_no,min_interval_no', '10 m.y. bins (standard order)'=>'max_interval_no,min_interval_no','Gradstein 3: Periods (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (standard order)'=>'max_interval_no,min_interval_no','tectonic plate ID'=>'latdeg,latdir,lngdeg,lngdir');
+        'continent'=>'country', '10 m.y. bins (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 3: Periods (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (most common order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (most common order)'=>'max_interval_no,min_interval_no', '10 m.y. bins (standard order)'=>'max_interval_no,min_interval_no','Gradstein 3: Periods (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 5: Epochs (standard order)'=>'max_interval_no,min_interval_no', 'Gradstein 7: Stages (standard order)'=>'max_interval_no,min_interval_no','tectonic plate ID'=>'latdeg,latdir,lngdeg,lngdir','paleocontinent'=>'plate');
     foreach my $i (1..2) {
         if ($sqlFields{$q->param("searchfield$i")}) {
             push @{$self->{'searchFields'}[$i]}, split(/,/,$sqlFields{$q->param("searchfield$i")});
@@ -818,6 +818,9 @@ sub getTranslationTable {
         foreach my $row (@results) {
             $table{$row->{'person_no'}} = $row->{'name'};
         }
+    } elsif ($param eq 'paleocontinent') {
+        my $pcontinents = $self->getPaleocontinents();
+        %table = %{$pcontinents};
     } elsif ($param eq 'tectonic plate ID') {
         if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
             print "<font color='red'>Skipping plates.</font> Error message is $!<br><br>\n";
@@ -875,6 +878,22 @@ sub getRegions	{
 	}
     return \%regions;
 	close REGIONS;
+}
+
+# JA 4.9.09
+sub getPaleocontinents	{
+	my $self = shift;
+	my $dbt = $self->{dbt};
+	my %pcontinents;
+	my $sql = "SELECT plate,paleocontinent FROM plates";
+	my @refs = @{$dbt->getData($sql)};
+	for my $r ( @refs )	{
+		$pcontinents{$r->{'plate'}} = $r->{'paleocontinent'};
+		if ( ! $r->{'paleocontinent'} )	{
+			$pcontinents{$r->{'plate'}} = "plate ".$r->{'plate'};
+		}
+	}
+	return \%pcontinents;
 }
 
 # This only shown for internal errors
