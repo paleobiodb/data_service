@@ -657,7 +657,9 @@ IS NULL))";
     
 	if (@errors) {
 		my $message = "<div align=\"center\">".Debug::printErrors(\@errors)."<br>";
-		if ( $options{"calling_script"} eq "Map" )	{
+		if ( $options{"calling_script"} eq "displayCollResults" )	{
+			return;
+		} elsif ( $options{"calling_script"} eq "Map" )	{
 			$message .= "<a href=\"$READ_URL?action=displayMapForm\"><b>Try again</b></a>";
 		} elsif ( $options{"calling_script"} eq "Confidence" )	{
 			$message .= "<a href=\"$READ_URL?action=displaySearchSectionForm\"><b>Try again</b></a>";
