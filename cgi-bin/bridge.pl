@@ -1066,10 +1066,14 @@ sub displayCollResults {
             $options{'include_old_ids'} = 0;
         }
 
+		$options{'calling_script'} = "displayCollResults";
 		($dataRows,$ofRows,$warnings,$occRows) = Collection::getCollections($dbt,$s,\%options,$fields);
 	}
 
-	my @dataRows = @$dataRows;
+	my @dataRows;
+	if ( $dataRows )	{
+		@dataRows = @$dataRows;
+	}
 	my $displayRows = scalar(@dataRows);	# get number of rows to display
 
 	if ( $type eq 'occurrence_table' && @dataRows) {
@@ -1295,6 +1299,7 @@ sub displayCollResults {
 		} else {
 			my $error = "<center>\n<p style=\"margin-top: -1em;\">Your search produced no matches: please try again</p>";
 			displaySearchColls($error);
+			exit;
 		}
     }
 
