@@ -40,83 +40,32 @@ function terrestrialClick ( ) {
 
 }
 
-function globalClick ( ) {
+function countryChange(justChecked)	{
 
 	var frm = document.forms[0];
 
-	if ( frm.global.checked ) {
-		// Uncheck all continents
-		frm.Africa.checked = false;
-		frm.Antarctica.checked = false;
-		frm.Asia.checked = false;
-		frm.Australia.checked = false;
-		frm.Europe.checked = false;
-		frm.elements['North America'].checked = false;
-		frm.elements['South America'].checked = false;
-
-		frm.elements['paleo Australia'].checked = false;
-		frm.elements['paleo Africa'].checked = false;
-		frm.Arabia.checked = false;
-		frm.Avalonia.checked = false;
-		frm.Baltoscandia.checked = false;
-		frm.elements['Eastern USA'].checked = false;
-		frm.India.checked = false;
-		frm.Japan.checked = false;
-		frm.Kazakhstania.checked = false;
-		frm.Laurentia.checked = false;
-		frm.Mediterranean.checked = false;
-		frm.elements['New Zealand'].checked = false;
-		frm.elements['North China'].checked = false;
-		frm.Precordillera.checked = false;
-		frm.Siberia.checked = false;
-		frm.elements['paleo South America'].checked = false;
-		frm.elements['South China'].checked = false;
+	if ( frm.country.value != "" && justChecked == 'country' )	{
+		for( var i=0; i < frm.elements.length; i++ )	{
+			if ( frm.elements[i].className == 'modern' || frm.elements[i].className == 'w_laurasia' || frm.elements[i].className == 'w_gondwana' || frm.elements[i].className == 'e_laurasia' || frm.elements[i].className == 'e_paleotethys' || frm.elements[i].className == 'e_gondwana' )	{
+				frm.elements[i].checked = false;
+			}
+		}
+	} else if ( justChecked == 'modern' )	{
+		frm.country.value = "";
+		for( var i=0; i < frm.elements.length; i++ )	{
+			if ( frm.elements[i].className == 'w_laurasia' || frm.elements[i].className == 'w_gondwana' || frm.elements[i].className == 'e_laurasia' || frm.elements[i].className == 'e_paleotethys' || frm.elements[i].className == 'e_gondwana' )	{
+				frm.elements[i].checked = false;
+			}
+		}
+	} else	{
+		frm.country.value = "";
+		for( var i=0; i < frm.elements.length; i++ )	{
+			if ( frm.elements[i].className == 'modern' )	{
+				frm.elements[i].checked = false;
+			}
+		}
 	}
-}
 
-function continentClick ( ) {
-
-	var frm = document.forms[0];
-
-	if (	frm.Africa.checked || 
-			frm.Antarctica.checked || 
-			frm.Asia.checked || 
-			frm.Australia.checked || 
-			frm.Europe.checked || 
-			frm.elements['North America'].checked || 
-			frm.elements['South America'].checked ||
-
-			frm.elements['paleo Africa'].checked || 
-			frm.elements['paleo Australia'].checked || 
-			frm.Arabia.checked || 
-			frm.Avalonia.checked || 
-			frm.Baltoscandia.checked || 
-			frm.elements['Eastern USA'].checked || 
-			frm.India.checked || 
-			frm.Japan.checked || 
-			frm.Kazakhstania.checked || 
-			frm.Laurentia.checked || 
-			frm.Mediterranean.checked || 
-			frm.elements['New Zealand'].checked || 
-			frm.elements['North China'].checked || 
-			frm.Precordillera.checked || 
-			frm.Siberia.checked || 
-			frm.elements['paleo South America'].checked ||
-			frm.elements['South China'].checked  ) {
-		frm.global.checked = false;
-	} else {
-		// At least one must be checked, or hit the global
-		frm.global.checked = true;
-	}
-}
-
-function countryChange() {
-	var frm = document.forms[0];
-
-	if (frm.country.value != "") {
-		frm.global.checked = true;
-		globalClick();
-	}
 }
 
 //  End -->
@@ -409,37 +358,78 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 
 <td valign=top class="small" colspan=3>
 <table><tr><td class="small">
-<p><input type=checkbox name="global" value="YES" checked onClick="globalClick();"><i>global</i></p>
 
-<p>
-<span style="white-space: nowrap"><input type=checkbox name="Africa" value="YES" onClick="continentClick();">Africa</span>
-<span style="white-space: nowrap"><input type=checkbox name="Antarctica" value="YES" onClick="continentClick();">Antarctica</span>
-<span style="white-space: nowrap"><input type=checkbox name="Asia" value="YES" onClick="continentClick();">Asia</span>
-<span style="white-space: nowrap"><input type=checkbox name="Australia" value="YES" onClick="continentClick();">Australia</span>
-<span style="white-space: nowrap"><input type=checkbox name="Europe" value="YES" onClick="continentClick();">Europe</span>
-<span style="white-space: nowrap"><input type=checkbox name="North America" value="YES" onClick="continentClick();">North America</span>
-<span style="white-space: nowrap"><input type=checkbox name="South America" value="YES" onClick="continentClick();">South America</span>
-</p>
 
-<p>
-<span style="white-space: nowrap"><input type=checkbox name="paleo Africa" value="YES" onClick="continentClick();">Africa (paleocontinent)</span>
-<span style="white-space: nowrap"><input type=checkbox name="Arabia" value="YES" onClick="continentClick();">Arabia</span>
-<span style="white-space: nowrap"><input type=checkbox name="paleo Australia" value="YES" onClick="continentClick();">Australia (paleocontinent)</span>
-<span style="white-space: nowrap"><input type=checkbox name="Avalonia" value="YES" onClick="continentClick();">Avalonia</span>
-<span style="white-space: nowrap"><input type=checkbox name="Baltoscandia" value="YES" onClick="continentClick();">Baltoscandia</span>
-<span style="white-space: nowrap"><input type=checkbox name="Eastern USA" value="YES" onClick="continentClick();">Eastern USA</span>
-<span style="white-space: nowrap"><input type=checkbox name="India" value="YES" onClick="continentClick();">India</span>
-<span style="white-space: nowrap"><input type=checkbox name="Japan" value="YES" onClick="continentClick();">Japan</span>
-<span style="white-space: nowrap"><input type=checkbox name="Kazakhstania" value="YES" onClick="continentClick();">Kazakhstania</span>
-<span style="white-space: nowrap"><input type=checkbox name="Laurentia" value="YES" onClick="continentClick();">Laurentia</span>
-<span style="white-space: nowrap"><input type=checkbox name="Mediterranean" value="YES" onClick="continentClick();">Mediterranean</span>
-<span style="white-space: nowrap"><input type=checkbox name="New Zealand" value="YES" onClick="continentClick();">New Zealand</span>
-<span style="white-space: nowrap"><input type=checkbox name="North China" value="YES" onClick="continentClick();">North China</span>
-<span style="white-space: nowrap"><input type=checkbox name="Precordillera" value="YES" onClick="continentClick();">Precordillera</span>
-<span style="white-space: nowrap"><input type=checkbox name="Siberia" value="YES" onClick="continentClick();">Siberia</span>
-<span style="white-space: nowrap"><input type=checkbox name="paleo South America" value="YES" onClick="continentClick();">South America (paleocontinent)</span>
-<span style="white-space: nowrap"><input type=checkbox name="South China" value="YES" onClick="continentClick();">South China</span>
-</p>
+<div class="displayPanel small" style="float: left; clear: both; width: 46em;">
+<span class="displayPanelHeader"><input type=checkbox class="modern" name="modern" value="YES" checked onClick="checkAll(this,'modern'); countryChange('modern');">Modern</span></br>
+<div class="displayPanelContent verysmall">
+<span style="white-space: nowrap"><input type=checkbox class="modern" name="Africa" value="YES" checked onClick="countryChange('modern');">Africa</span>
+<span style="white-space: nowrap"><input type=checkbox class="modern" name="Antarctica" value="YES" checked onClick="countryChange('modern');">Antarctica</span>
+<span style="white-space: nowrap"><input type=checkbox class="modern" name="Asia" value="YES" checked onClick="countryChange('modern');">Asia</span>
+<span style="white-space: nowrap"><input type=checkbox class="modern" name="Australia" value="YES" checked onClick="countryChange('modern');">Australia</span>
+<span style="white-space: nowrap"><input type=checkbox class="modern" name="Europe" value="YES" checked onClick="countryChange('modern');">Europe</span>
+<span style="white-space: nowrap"><input type=checkbox class="modern" name="North America" value="YES" checked onClick="countryChange('modern');">North America</span>
+<span style="white-space: nowrap"><input type=checkbox class="modern" name="South America" value="YES" checked onClick="countryChange('modern');">South America</span>
+</div>
+</div>
+
+<div style="float: left; clear: none;">
+
+<div class="displayPanel small" style="float: left; clear: both; width: 18em;">
+<span class="displayPanelHeader"><input type=checkbox class="w_laurasia" value="YES" onClick="checkAll(this,'w_laurasia'); countryChange();">Western Laurasia</span></br><div class="displayPanelContent verysmall">
+<span style="white-space: nowrap"><input type=checkbox class="w_laurasia" name="Eastern USA" value="YES" onClick="countryChange('');">Eastern USA</span>
+<span style="white-space: nowrap"><input type=checkbox class="w_laurasia" name="Laurentia" value="YES" onClick="countryChange('');">Laurentia</span>
+<span style="white-space: nowrap"><input type=checkbox class="w_laurasia" name="Stikinia" value="YES" onClick="countryChange('');">Stikinia</span>
+<span style="white-space: nowrap"><input type=checkbox class="w_laurasia" name="Western Avalonia" value="YES" onClick="countryChange('');">Western Avalonia</span>
+<span style="white-space: nowrap"><input type=checkbox class="w_laurasia" name="Wrangellia" value="YES" onClick="countryChange('');">Wrangellia</span>
+</div>
+</div>
+
+<div class="displayPanel small" style="float: left; clear: both; width: 18em;">
+<span class="displayPanelHeader"><input type=checkbox class="w_gondwana" value="YES" onClick="checkAll(this,'w_gondwana'); countryChange();">Western Gondwana</span></br><div class="displayPanelContent verysmall">
+<span style="white-space: nowrap"><input type=checkbox class="w_gondwana" name="Caribbean" value="YES" onClick="countryChange('');">Caribbean</span>
+<span style="white-space: nowrap"><input type=checkbox class="w_gondwana" name="Costa Rica-Panama" value="YES" onClick="countryChange('');">Costa Rica-Panama</span>
+<span style="white-space: nowrap"><input type=checkbox class="w_gondwana" name="Precordillera" value="YES" onClick="countryChange('');">Precordillera</span>
+<span style="white-space: nowrap"><input type=checkbox class="w_gondwana" name="paleo South America" value="YES" onClick="countryChange('');">South America (paleocontinent)</span>
+<span style="white-space: nowrap"><input type=checkbox class="w_gondwana" name="Yucatan" value="YES" onClick="countryChange('');">Yucatan</span>
+</div>
+</div>
+
+</div>
+
+<div style="float: left; clear: none;">
+
+<div class="displayPanel small" style="float: left; clear: both; width: 25em;"><span class="displayPanelHeader"><input type=checkbox class="e_laurasia" value="YES" onClick="checkAll(this,'e_laurasia'); countryChange();">Eastern Laurasia</span></br>
+<div class="displayPanelContent verysmall">
+<span style="white-space: nowrap"><input type=checkbox class="e_laurasia" name="Baltoscandia" value="YES" onClick="countryChange('');">Baltoscandia</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_laurasia" name="Eastern Avalonia" value="YES" onClick="countryChange('');">Eastern Avalonia</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_laurasia" name="Japan" value="YES" onClick="countryChange('');">Japan</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_laurasia" name="Kazakhstania" value="YES" onClick="countryChange('');">Kazakhstania</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_laurasia" name="Mediterranean" value="YES" onClick="countryChange('');">Mediterranean</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_laurasia" name="Siberia" value="YES" onClick="countryChange('');">Siberia</span>
+</div>
+</div>
+
+<div class="displayPanel small" style="float: left; clear: both; width: 25em;"><span class="displayPanelHeader"><input type=checkbox class="e_paleotethys" value="YES" onClick="checkAll(this,'e_paleotethys'); countryChange();">Eastern Paleotethys</span></br>
+<div class="displayPanelContent verysmall">
+<span style="white-space: nowrap"><input type=checkbox class="e_paleotethys" name="North China" value="YES" onClick="countryChange('');">North China</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_paleotethys" name="Shan-Thai" value="YES" onClick="countryChange('');">Shan-Thai</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_paleotethys" name="South China" value="YES" onClick="countryChange('');">South China</span>
+</div>
+</div>
+
+<div class="displayPanel small" style="float: left; clear: both; width: 25em;">
+<span class="displayPanelHeader"><input type=checkbox class="e_gondwana" value="YES" onClick="checkAll(this,'e_gondwana'); countryChange();">Eastern Gondwana</span></br><div class="displayPanelContent verysmall">
+<span style="white-space: nowrap"><input type=checkbox class="e_gondwana" name="paleo Africa" value="YES" onClick="countryChange('');">Africa (paleocontinent)</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_gondwana" name="Arabia" value="YES" onClick="countryChange('');">Arabia</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_gondwana" name="paleo Australia" value="YES" onClick="countryChange('');">Australia (paleocontinent)</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_gondwana" name="India" value="YES" onClick="countryChange('');">India</span>
+<span style="white-space: nowrap"><input type=checkbox class="e_gondwana" name="New Zealand" value="YES" onClick="countryChange('');">New Zealand</span>
+</div>
+</div>
+
+</div>
+
 </td></tr></table>
 </td></tr>
 
@@ -450,7 +440,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <option>exclude</option>
 </select>a single country:</td>
 <td valign=top class="small" colspan=3>
-<select id="country" onChange="countryChange()"></select>
+<select id="country" onChange="countryChange('country')"></select>
 </td>
 </tr>
 
