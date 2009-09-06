@@ -418,23 +418,11 @@ sub retellOptions {
             $html .= $self->retellOptionsRow ( "Continents", join (  ", ", @continents ) );
         }
 
-        if ( $q->param("paleo Africa") )     { push ( @paleocontinents, "Africa" ); }
-        if ( $q->param("Arabia") )     { push ( @paleocontinents, "Arabia" ); }
-        if ( $q->param("paleo Australia") )     { push ( @paleocontinents, "Australia" ); }
-        if ( $q->param("Avalonia") )     { push ( @paleocontinents, "Avalonia" ); }
-        if ( $q->param("Baltoscandia") )     { push ( @paleocontinents, "Baltoscandia" ); }
-        if ( $q->param("Eastern USA") )     { push ( @paleocontinents, "Eastern USA" ); }
-        if ( $q->param("India") )     { push ( @paleocontinents, "India" ); }
-        if ( $q->param("Japan") )     { push ( @paleocontinents, "Japan" ); }
-        if ( $q->param("Kazakhstania") )     { push ( @paleocontinents, "Kazakhstania" ); }
-        if ( $q->param("Laurentia") )     { push ( @paleocontinents, "Laurentia" ); }
-        if ( $q->param("Mediterranean") )     { push ( @paleocontinents, "Mediterranean" ); }
-        if ( $q->param("New Zealand") )     { push ( @paleocontinents, "New Zealand" ); }
-        if ( $q->param("North China") )     { push ( @paleocontinents, "North China" ); }
-        if ( $q->param("Precordillera") )     { push ( @paleocontinents, "Precordillera" ); }
-        if ( $q->param("Siberia") )     { push ( @paleocontinents, "Siberia" ); }
-        if ( $q->param("paleo South America") )     { push ( @paleocontinents, "South America" ); }
-        if ( $q->param("South China") )     { push ( @paleocontinents, "South China" ); }
+        for my $p ( 'paleo Africa','Arabia','paleo Australia','Baltoscandia','Caribbean','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','Mediterranean','New Zealand','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Stikinia','Western Avalonia','Wrangellia','Yucatan' )	{
+            if ( $q->param($p) )	{
+                push ( @paleocontinents, $p );
+            }
+        }
         if ( $#paleocontinents > -1 ) {
             $html .= $self->retellOptionsRow ( "Paleocontinents", join (  ", ", @paleocontinents ) );
         }
@@ -757,32 +745,29 @@ sub getPlateString    {
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
 
-    if ( $q->param('paleo Africa') ne "YES" && $q->param('Arabia') ne "YES" && $q->param('paleo Australia') ne "YES" && $q->param('Avalonia') ne "YES" && $q->param('Baltoscandia') ne "YES" && $q->param('Eastern USA') ne "YES" && $q->param('India') ne "YES" && $q->param('Japan') ne "YES" && $q->param('Kazakhstania') ne "YES" && $q->param('Laurentia') ne "YES" && $q->param('Mediterranean') ne "YES" && $q->param('New Zealand') ne "YES" && $q->param('North China') ne "YES" && $q->param('Precordillera') ne "YES" && $q->param('Siberia') ne "YES" && $q->param('paleo South America') ne "YES" && $q->param('South China') ne "YES" )    {
-        return "";
-    }
+    my @paleocontinents = ( 'paleo Africa','Arabia','paleo Australia','Baltoscandia','Caribbean','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','Mediterranean','New Zealand','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Stikinia','Western Avalonia','Wrangellia','Yucatan' );
 
-    if ( $q->param('paleo Africa') eq "YES" && $q->param('Arabia') eq "YES" && $q->param('paleo Australia') eq "YES" && $q->param('Avalonia') eq "YES" && $q->param('Baltoscandia') eq "YES" && $q->param('Eastern USA') eq "YES" && $q->param('India') eq "YES" && $q->param('Japan') eq "YES" && $q->param('Kazakhstania') eq "YES" && $q->param('Laurentia') eq "YES" && $q->param('Mediterranean') eq "YES" && $q->param('New Zealand') eq "YES" && $q->param('North China') eq "YES" && $q->param('Precordillera') eq "YES" && $q->param('Siberia') eq "YES" && $q->param('paleo South America') eq "YES" && $q->param('South China') eq "YES" )    {
-        return "";
-    }
-
-    my @paleocontinents;
-    for my $p ( 'paleo Africa','Arabia','paleo Australia','Avalonia','Baltoscandia','Eastern USA','India','Japan','Kazakhstania','Laurentia','Mediterranean','New Zealand','North China','Precordillera','Siberia','paleo South America','South China' )	{
+    my @checked;
+    for my $p ( @paleocontinents )	{
         if ( $q->param($p) eq "YES" )    {
-            push @paleocontinents , $p;
-            $paleocontinents[$#paleocontinents] =~ s/paleo //;
+            push @checked , $p;
+            $checked[$#checked] =~ s/paleo //;
         }
     }
+
+    if ( ! @checked || $#paleocontinents == $#checked )	{
+        return "";
+    }
+
     my (@plates,%platein);
-    my $sql = "SELECT plate FROM plates WHERE paleocontinent IN ('" . join("','",@paleocontinents) . "')";
+    my $sql = "SELECT plate FROM plates WHERE paleocontinent IN ('" . join("','",@checked) . "')";
     my @platerefs = @{$dbt->getData($sql)};
+    if ( ! @platerefs )	{
+        return "";
+    }
     foreach my $p ( @platerefs )	{
         push @plates , $p->{'plate'};
         $platein{$p->{'plate'}} = "Y";
-    }
-
-    if ( ! open ( PLATES, "$DATA_DIR/plateidsv2.lst" ) ) {
-        print "<font color='red'>Skipping plates.</font> Error message is $!<br><BR>\n";
-        return;
     }
 
     return " plate IN (".join(',',@plates).")";
