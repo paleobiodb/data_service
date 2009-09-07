@@ -94,6 +94,7 @@ sub new {
         eml_max_interval=>[\&_listFromEnum,'intervals','eml_interval'],
         eml_min_interval=>[\&_listFromEnum,'intervals','eml_interval'],
         mapbgcolor=>[\&_listFromHardList,'mapcolors'],
+        platecolor=>[\&_listFromHardList,'mapcolors','unshift'=>'none'],
         crustcolor=>[\&_listFromHardList,'mapcolors','unshift'=>'none'],
         crustedgecolor=>[\&_listFromHardList,'mapcolors','unshift'=>'none'],
         gridcolor=>[\&_listFromHardList,'mapcolors'],
