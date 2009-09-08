@@ -418,7 +418,7 @@ sub retellOptions {
             $html .= $self->retellOptionsRow ( "Continents", join (  ", ", @continents ) );
         }
 
-        for my $p ( 'paleo Africa','Arabia','paleo Australia','Baltica','Caribbean','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan' )	{
+        for my $p ( 'paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan' )	{
             if ( $q->param($p) )	{
                 push ( @paleocontinents, $p );
             }
@@ -745,7 +745,7 @@ sub getPlateString    {
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
 
-    my @paleocontinents = ( 'paleo Africa','Arabia','paleo Australia','Baltica','Caribbean','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan' );
+    my @paleocontinents = ( 'paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan' );
 
     my @checked;
     for my $p ( @paleocontinents )	{
