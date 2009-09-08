@@ -161,7 +161,7 @@
 		if ( /[~@\#\$%\^\&\*_\+\{\}\|\\<>\t\n]/.test(frm.pubtitle.value) || /[^A-Za-z0-9]\//.test(frm.pubtitle.value) || /[\/][^A-Za-z0-9]/.test(frm.pubtitle.value) || /[:;\?\!][A-Za-z0-9]/.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name includes weird characters\n";
 		}
-		if ( /[^0-9]\./.test(frm.pubtitle.value) || /\.[^0-9]/.test(frm.pubtitle.value) )	{
+		if ( /\.[^0-9 ]/.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name includes a stray period\n";
 		}
 		if ( /  /.test(frm.pubtitle.value) )	{
