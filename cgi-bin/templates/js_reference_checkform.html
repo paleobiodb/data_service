@@ -146,7 +146,7 @@
 			}
 		}
 		if ( /\.[^0-9 ]/.test(frm.reftitle.value) )	{
-			if ( ! / nov\., /.test(frm.reftitle.value) && ! /U\.S\.A\., /.test(frm.reftitle.value) && ! /U\.S\.S\.R\., /.test(frm.reftitle.value) )	{
+			if ( ! / nov\.(,|) /.test(frm.reftitle.value) && ! /U\.S\.A\.(,|) /.test(frm.reftitle.value) && ! /U\.S\.S\.R\.(,|) /.test(frm.reftitle.value) )	{
 				errors += "* The reference's title includes a stray period\n";
 			}
 		}
