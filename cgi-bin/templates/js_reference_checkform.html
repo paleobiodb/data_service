@@ -137,14 +137,19 @@
 			"Example: P. McCartney, J. P. Jones, J. Hendrix\n";
 		}
 
-		if ( /[^A-Za-z0-9\)\]\?\!"]$/.test(frm.reftitle.value) )	{
+		if ( /[^A-Za-z0-9\)\]\?\!"\.]$/.test(frm.reftitle.value) )	{
 			errors += "* The reference's title must end with a letter\n";
+		}
+		if ( /\.$/.test(frm.reftitle.value) )	{
+			if ( ! / nov\.$/.test(frm.reftitle.value) && ! /U\.S\.A\.$/.test(frm.reftitle.value) && ! /U\.S\.S\.R\.$/.test(frm.reftitle.value) )	{
+				errors += "* Don't end the reference title with a period\n";
+			}
+		}
+		if ( /\.[^0-9 ]/.test(frm.reftitle.value) )	{
+			errors += "* The reference's title includes a stray period\n";
 		}
 		if ( /[~@\#\$%\^\&\*_\+\{\}\|\\<>\t\n]/.test(frm.reftitle.value) || /[^A-Za-z0-9]\//.test(frm.reftitle.value) || /[\/][^A-Za-z0-9]/.test(frm.reftitle.value) || /[:;\?\!][A-Za-z0-9]/.test(frm.reftitle.value) )	{
 			errors += "* The reference's title includes weird characters\n";
-		}
-		if ( /\.([^0-9 ]|$)/.test(frm.reftitle.value) )	{
-			errors += "* The reference's title includes a stray period\n";
 		}
 		if ( /  /.test(frm.reftitle.value) )	{
 			errors += "* The reference's title includes extra spaces\n";
