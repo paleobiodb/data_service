@@ -6,6 +6,7 @@ use GD;
 use CGI::Carp;
 use Class::Date qw(date localdate gmdate now);
 use Image::Magick;
+use DBTransactionManager;
 use TimeLookup;
 use Digest::MD5;
 use Constants qw($READ_URL $WRITE_URL $DATA_DIR $HTML_DIR $TAXA_TREE_CACHE);
@@ -1034,7 +1035,13 @@ sub mapGetRotations	{
 	# remove plates with no fossils as old as the map JA 8.9.09
 	# makes an exception for all plates with mid-Cambrian collections
 	my $sql = "SELECT plate,age FROM plates";
-	my @ages = @{$dbt->getData($sql)};
+	my @ages;
+	if ( ! $dbt )	{
+		my $dbt = new DBTransactionManager();
+		@ages = @{$dbt->getData($sql)};
+	} else	{
+		@ages = @{$dbt->getData($sql)};
+	}
 	for my $a ( @ages )	{
 		$plateage{$a->{'plate'}} = $a->{'age'};
 		if ( $self->{'maptime'} > $a->{'age'} && $a->{'age'} < 510 )	{
