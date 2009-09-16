@@ -38,8 +38,8 @@ my %map_defaults = (
     'pointsize3'=>'medium', 'dotcolor3'=>'yellow', 'pointshape3'=>'triangles','dotborder3'=>'no', 
     'pointsize4'=>'medium', 'dotcolor4'=>'green',  'pointshape4'=>'diamonds', 'dotborder4'=>'no', 
     'usalinecolor'=>'gray', 'borderlinecolor'=>'gray', 'autoborders'=>'no',
-    'mapbgcolor'=>'white', 'coastlinecolor'=>'black',
-    'crustcolor'=>'none',  'crustedgecolor'=>'light gray', 'linethickness'=>'medium', 
+    'mapbgcolor'=>'white', 'coastlinecolor'=>'black', 'platecolor'=>'none',
+    'crustcolor'=>'none',  'crustedgecolor'=>'none', 'linethickness'=>'medium', 
     'gridsize'=>'30', 'gridcolor'=>'light gray', 'gridposition'=>'in back'
 );
 # These are all form params that don't relate to the maps physical appearance
@@ -79,6 +79,10 @@ sub buildMap {
         if ($q->param($p) eq '') {
             $q->param($p=>$def);
         }
+    }
+    if ( ! $q->param('plate') || $q->param('plate') =~ /[^0-9 ,]/ )	{
+        $q->param('plate' => '');
+        $q->param('platecolor' => 'none');
     }
 
     my $dataSets;
@@ -690,17 +694,22 @@ sub readPlateIDs {
 # extract outlines taken from NOAA's NGDC Coastline Extractor
 sub mapDefineOutlines	{
 	my $self = shift;
-	#if ( $q->param('mapresolution') eq "coarse" )	{
-	#	$resostem = "075";
-	#} elsif ( $q->param('mapresolution') eq "medium" )	{
-	#	$resostem = "050";
-	#} elsif ( $q->param('mapresolution') eq "fine" )	{
-	#	$resostem = "025";
-	#} elsif ( $q->param('mapresolution') eq "very fine" )	{
-	#	$resostem = "010";
-	#} else {
-	#	$resostem = "025";
-    #}
+
+	if ( $q->param('mapresolution') eq "coarse" )	{
+		$resostem = "075";
+	} elsif ( $q->param('mapresolution') eq "medium" )	{
+		$resostem = "050";
+	} elsif ( $q->param('mapresolution') eq "fine" )	{
+		$resostem = "025";
+	} elsif ( $q->param('mapresolution') eq "very fine" )	{
+		$resostem = "010";
+	} else {
+		$resostem = "025";
+	}
+
+	if ( $q->param('crustcolor') eq "none" || $q->param('crustcolor') !~ /[A-Za-z]/ )	{
+		$q->param('crustedgecolor' => 'none');
+	}
 
 	# need to know the plate IDs to determine which cells are oceanic
 	# necessary either if crust is being drawn, or if plates are being
@@ -708,16 +717,17 @@ sub mapDefineOutlines	{
 	# this code used to be near the top of mapGetRotations, but I moved
 	#  it because the plate IDs are needed here to avoid the Andes bug
 	#  JA 5.5.06
-    my %plate;
-    my %cellage;
-	if ( $self->{maptime} > 0 || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
-        $self->readPlateIDs();
-        %plate = %{$self->{'plate'}};
-        %cellage = %{$self->{'cellage'}};
+	my %plate;
+	my %cellage;
+	if ( $self->{maptime} > 0 || ( $q->param('platecolor') ne "none" && $q->param('platecolor') =~ /[A-Za-z]/ ) || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
+		$self->readPlateIDs();
+		%plate = %{$self->{'plate'}};
+		%cellage = %{$self->{'cellage'}};
 	}
 
 	# read grid cell ages
-	if ( $self->{maptime} > 0 || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
+	if ( $self->{maptime} > 0 || ( $q->param('platecolor') ne "none" && $q->
+param('platecolor') =~ /[A-Za-z]/ ) || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
 
 		open MASK,"<$DATA_DIR/agev7.txt";
 		my $lat = 90;
@@ -816,14 +826,14 @@ sub mapDefineOutlines	{
 		}
 		close USA;
 	}
-	if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
+	if (  ( $q->param('platecolor') ne "none" && $q->param('platecolor') =~ /[A-Za-z]/ ) || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
 		if ( $q->param('crustedgecolor') ne "none" && $q->param('crustedgecolor') =~ /[A-Za-z]/ )	{
 			if ( ! open EDGES,"<$DATA_DIR/platepolygons/edges.$self->{maptime}" ) {
 				$self->htmlError ( "Couldn't open [$DATA_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
 			}
 			while (<EDGES>)	{
 				s/\n//;
-				($a,$b) = split /\t/,$_;
+				my ($a,$b,$c) = split /\t/,$_;
 				if ( $a >= 0 )	{
 					$ia = int($a);
 				} else	{
@@ -837,18 +847,20 @@ sub mapDefineOutlines	{
 				if ( $a =~ /#/ || $a =~ /[0-9]/ )	{
 					push @crustlng,$a;
 					push @crustlat,$b;
+					push @crustplate,$c;
 				}
 			}
 			close EDGES;
-			push @crustlng , "edge";
-			push @crustlat , "edge";
+			push @crustlng , "last edge";
+			push @crustlat , "last edge";
+			push @crustplate , "last edge";
 		}
 		if ( ! open PLATES,"<$DATA_DIR/platepolygons/polygons.$self->{maptime}" ) {
 			$self->htmlError ( "Couldn't open [$DATA_DIR/platepolygons/polygons.$self->{maptime}]: $!" );
 		}
 		while (<PLATES>)	{
 			s/\n//;
-			($a,$b) = split /\t/,$_;
+			my ($a,$b,$c) = split /\t/,$_;
 			if ( $a >= 0 )	{
 				$ia = int($a);
 			} else	{
@@ -862,6 +874,7 @@ sub mapDefineOutlines	{
 			if ( $a =~ /#/ || $a =~ /[0-9]/ )	{
 				push @crustlng,$a;
 				push @crustlat,$b;
+				push @crustplate,$c;
 			}
 		}
 		close PLATES;
@@ -1016,6 +1029,19 @@ sub mapGetRotations	{
 		my $a;
 		my $b;
 		($a,$b,$midlng,$midlat) = $self->projectPoints($midlng,$midlat);
+	}
+
+	# remove plates with no fossils as old as the map JA 8.9.09
+	# makes an exception for all plates with mid-Cambrian collections
+	my $sql = "SELECT plate,age FROM plates";
+	my @ages = @{$dbt->getData($sql)};
+	for my $a ( @ages )	{
+		$plateage{$a->{'plate'}} = $a->{'age'};
+		if ( $self->{'maptime'} > $a->{'age'} && $a->{'age'} < 510 )	{
+			$rotx{$self->{'maptime'}}{$a->{'plate'}} = "";
+			$roty{$self->{'maptime'}}{$a->{'plate'}} = "";
+			$rotdeg{$self->{'maptime'}}{$a->{'plate'}} = "";
+		}
 	}
 
 }
@@ -1201,7 +1227,7 @@ sub mapFinishSetup {
     # used to draw a short white rectangle across the bottom for the caption
     #  here, but this is no longer needed
     if ( ! $q->param('linecommand') )	{
-        @b = $im->stringFT($col{'unantialiased'},$FONT,10,0,5,$height+12,"plotting software 2002-2006 J. Alroy");
+        @b = $im->stringFT($col{'unantialiased'},$FONT,10,0,5,$height+12,"plotting software 2002-2009 J. Alroy");
     }
     $ai .=  "0 To\n";
     $ai .= sprintf("1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8);
@@ -1210,7 +1236,7 @@ sub mapFinishSetup {
     $ai .= sprintf("0 Tr\n0 O\n%s\n",$mycolor);
     $ai .=  "/_CenturyGothic 10 Tf\n";
     $ai .= sprintf("0 Tw\n");
-    $ai .=  "(plotting software c 2002-2006 J. Alroy) Tx 1 0 Tk\nTO\n";
+    $ai .=  "(plotting software c 2002-2009 J. Alroy) Tx 1 0 Tk\nTO\n";
     $ai .=  "0 To\n";
     $ai .= sprintf("1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+86.5,$AITOP-$height-10);
     $ai .=  "/_CenturyGothic 18 Tf\n";
@@ -1342,10 +1368,11 @@ sub mapDrawCoasts {
     my $self = shift;
 
     # first rescale the coordinates depending on the rotation
-        if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
+        if ( ( $q->param('platecolor') ne "none" && $q->param('platecolor') =~ /[A-Za-z]/ ) || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
             for $c (0..$#crustlat)	{
                 if ( $crustlat[$c] =~ /[0-9]/ )	{
-                    ($crustlng[$c],$crustlat[$c],$crustlngraw[$c],$crustlatraw[$c],$crustplate[$c]) = $self->projectPoints($crustlng[$c],$crustlat[$c],"grid");
+		# crustplate is read off of the polygons file
+                    ($crustlng[$c],$crustlat[$c],$crustlngraw[$c],$crustlatraw[$c]) = $self->projectPoints($crustlng[$c],$crustlat[$c],"grid");
                 }
             }
         }
@@ -1384,8 +1411,26 @@ sub mapDrawCoasts {
     #  crust pieces need to be filled, which means drawing a polygon for each
     #  degree cell JA 30.4.06
     # oh yeah, and it's incredibly complicated and slow
-    if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
-        my $crustcolor = $q->param('crustcolor');
+    if ( ( $q->param('platecolor') ne "none" && $q->param('platecolor') =~ /[A-Za-z]/ ) || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
+        my $platecolor;
+        if ( $q->param('platecolor') ne "none" && $q->param('platecolor') =~ /[A-Za-z]/ )	{
+            $platecolor = $q->param('platecolor');
+        }
+        my $crustcolor;
+        if ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ )	{
+            $crustcolor = $q->param('crustcolor');
+        }
+        my (@plates,@isplate);
+        if ( $platecolor && $q->param('plate') )	{
+            my $p = $q->param('plate');
+            $p =~ s/[^0-9]/ /g;
+            while ( $p =~ /  / )	{
+                $p =~ s/  / /g;
+            }
+            $p =~ s/^ //g;
+            $p =~ s/ $//g;
+            @plates = split / /,$p;
+        }
     # the rotation may have forced the polygon to straddle the edges of the map
     # if so, it has to be broken into pieces, which can be done by creating two
     #  smaller, poorly shaped ones
@@ -1395,15 +1440,18 @@ sub mapDrawCoasts {
         my @newcrustlng = ();
         my @newcrustlatraw = ();
         my @newcrustlngraw = ();
+        my @newcrustplate = ();
         my @templat = ();
         my @templng = ();
         my @templatraw = ();
         my @templngraw = ();
+        my @tempplate = ();
         for my $c (0..$#crustlat-1)	{
             push @templat , $crustlat[$c];
             push @templng , $crustlng[$c];
             push @templatraw , $crustlatraw[$c];
             push @templngraw , $crustlngraw[$c];
+            push @tempplate , $crustplate[$c];
             my $d;
             if ( $crustlng[$c+1] =~ /#/ )	{
                 $d = $lastsep;
@@ -1423,6 +1471,7 @@ sub mapDrawCoasts {
                       push @newcrustlng , $templng[$t];
                       push @newcrustlatraw , $templatraw[$t];
                       push @newcrustlngraw , $templngraw[$t];
+                      push @newcrustplate , $tempplate[$t];
                   }
             # no it isn't, it straddles 180 degrees longitude, so make
             #  two cells on opposite sides of the map
@@ -1431,6 +1480,7 @@ sub mapDrawCoasts {
                   my @templat2 = @templat;
                   my @templngraw2 = @templngraw;
                   my @templatraw2 = @templatraw;
+                  my @tempplate2 = @tempplate;
                   for my $t ( 0..$#templat )	{
                       if ( $templng[$t] > 0 )	{
                           ($templngraw[$t],$templatraw[$t]) = rotatePoint(-179.9,$templatraw[$t],$midlng,$midlat,"reversed");
@@ -1441,6 +1491,7 @@ sub mapDrawCoasts {
                       push @newcrustlng , $templng[$t];
                       push @newcrustlatraw , $templatraw[$t];
                       push @newcrustlngraw , $templngraw[$t];
+                      push @newcrustplate , $tempplate[$t];
                   }
                   for my $t ( 0..$#templat2 )	{
                       if ( $templng2[$t] < 0 )	{
@@ -1451,12 +1502,14 @@ sub mapDrawCoasts {
                       push @newcrustlng , $templng2[$t];
                       push @newcrustlatraw , $templatraw2[$t];
                       push @newcrustlngraw , $templngraw2[$t];
+                      push @newcrustplate , $tempplate2[$t];
                   }
                 }
                 @templat = ();
                 @templng = ();
                 @templatraw = ();
                 @templngraw = ();
+                @tempplate = ();
                 $bad = 0;
             }
         }
@@ -1464,11 +1517,21 @@ sub mapDrawCoasts {
         @crustlng = @newcrustlng;
         @crustlatraw = @newcrustlatraw;
         @crustlngraw = @newcrustlngraw;
+        @crustplate = @newcrustplate;
+        for my $c (0..$#crustlat)	{
+            for my $p ( @plates )	{
+                if ( $p eq $crustplate[$c] )	{
+                    $isplate[$c]++;
+                    last;
+                }
+            }
+        }
 
     # this is the main crust cell drawing routine
         my $poly = new GD::Polygon;
         my $thickness = "0.5";
         my $strokefill = "F\n";
+        # the edges are drawn first, so use crustedgecolor at first
         if ( $q->param('crustedgecolor') ne "none" && $q->param('crustedgecolor') =~ /[A-Za-z]/ )	{
             $im->setThickness(4);
             $thickness = "3";
@@ -1491,6 +1554,7 @@ sub mapDrawCoasts {
         push @crustlat , "";
         push @crustlatraw , "";
         for my $c (0..$#crustlat-1)	{
+          if ( ( $plateage{$crustplate[$c]} > $self->{'maptime'} || $plateage{$crustplate[$c]} > 510 ) && ( $isplate[$c] > 0 || $crustcolor ) )	{
             # finish drawing the edges of the plates
             my $d;
             if ( $crustlng[$c+1] =~ /#/ )	{
@@ -1548,10 +1612,12 @@ sub mapDrawCoasts {
                 if ( $firstx1 )	{
                     $ai .= sprintf("%.1f %.1f l\n",$AILEFT+$firstx1,$AITOP-$firsty1);
                     $ai .=  $strokefill;
-                    if ( $crustcolor eq $q->param('crustcolor') )	{
-                        $im->filledPolygon($poly,$col{$crustcolor});
-                    } else	{
+                    if ( $crustcolor eq $q->param('crustedgecolor') && $crustcolor )	{
                         $im->openPolygon($poly,$col{$crustcolor});
+                    } elsif ( $isplate[$c] > 0 )	{
+                        $im->filledPolygon($poly,$col{$platecolor});
+                    } elsif ( $crustcolor )	{
+                        $im->filledPolygon($poly,$col{$crustcolor});
                     }
                 }
                 $bad = 0;
@@ -1561,7 +1627,7 @@ sub mapDrawCoasts {
                 $lasty1 = "";
                 $badlastx1 = "";
                 $badlasty1 = "";
-                if ( $crustlng[$c] =~ /edge/ )	{
+                if ( $crustlng[$c] eq "last edge" )	{
                     $im->setThickness(1);
                     $crustcolor = $q->param('crustcolor');
                     my $tempcolor = $aicol{$crustcolor};
@@ -1574,11 +1640,32 @@ sub mapDrawCoasts {
                 }
                 $poly = new GD::Polygon;
             }
+          }
         }
     # finish the last plate
         if ( $bad == 0 )	{
-            $im->filledPolygon($poly,$col{$crustcolor});
+            if ( $isplate[$#crustlat] > 0 )	{
+                $im->filledPolygon($poly,$col{$platecolor});
+            } else	{
+                $im->filledPolygon($poly,$col{$crustcolor});
+            }
             $ai .=  "U\n";  # terminate the group
+        }
+    }
+
+    # prints plate ID numbers (needed for defining paleocontinents)
+    my %printed;
+    for my $c (0..$#crustlat)	{
+last;
+        if ( ! $printed{$crustplate[$c]} && $crustlng[$c] !~ /NaN/ && $crustlng[$c] =~ /[0-9]/ )	{
+            my $x1 = $self->getLng($crustlng[$c]);
+            my $y1 = $self->getLat($crustlat[$c]);
+            if ( $x1 > 0 && $y1 > 0 )	{
+                # helpful for identifying overlapping plates
+                printf "$c / $crustplate[$c] / %.1f / %.1f<br>",$x1,$y1;
+                $im->stringFT($col{'gold'},$FONT,18,0,$x1,$y1,$crustplate[$c]);
+            }
+            $printed{$crustplate[$c]}++;
         }
     }
 
@@ -1857,17 +1944,19 @@ sub mapDrawPoints{
                 if ($dotshape =~ /^circles$/)	{
                   if ( $x1+($dotsize*1.5)+1 < $width && $x1-($dotsize*1.5)-1 > 0 &&
                        $y1+($dotsize*1.5)+1 < $height && $y1-($dotsize*1.5)-1 > 0 )	{
-                    my $shadow= new GD::Polygon;
-                    $shadow->addPt($x1+1,$y1+($dotsize*2)+2);
-                    $shadow->addPt($x1+($dotsize*1.414)+1,$y1+($dotsize*1.414)+2);
-                    $shadow->addPt($x1+($dotsize*2)+1,$y1+2);
-                    $shadow->addPt($x1+($dotsize*1.414)+1,$y1-($dotsize*1.414)+2);
-                    $shadow->addPt($x1+1,$y1-($dotsize*2)+2);
-                    $shadow->addPt($x1-($dotsize*1.414)+1,$y1-($dotsize*1.414)+2);
-                    $shadow->addPt($x1-($dotsize*2)+1,$y1+2);
-                    $shadow->addPt($x1-($dotsize*1.414)+1,$y1+($dotsize*1.414)+2);
-                    $im->setAntiAliased($col{'gray'});
-                    $im->filledPolygon($shadow,gdAntiAliased);
+                    if ( $q->param('shadow') !~ /no/ )	{
+                        my $shadow= new GD::Polygon;
+                        $shadow->addPt($x1+1,$y1+($dotsize*2)+2);
+                        $shadow->addPt($x1+($dotsize*1.414)+1,$y1+($dotsize*1.414)+2);
+                        $shadow->addPt($x1+($dotsize*2)+1,$y1+2);
+                        $shadow->addPt($x1+($dotsize*1.414)+1,$y1-($dotsize*1.414)+2);
+                        $shadow->addPt($x1+1,$y1-($dotsize*2)+2);
+                        $shadow->addPt($x1-($dotsize*1.414)+1,$y1-($dotsize*1.414)+2);
+                        $shadow->addPt($x1-($dotsize*2)+1,$y1+2);
+                        $shadow->addPt($x1-($dotsize*1.414)+1,$y1+($dotsize*1.414)+2);
+                        $im->setAntiAliased($col{'gray'});
+                        $im->filledPolygon($shadow,gdAntiAliased);
+                    }
                     $im->setAntiAliased($col{$dotcolor});
                     my $poly = new GD::Polygon;
                     $poly->addPt($x1,$y1+($dotsize*2));
@@ -1919,17 +2008,19 @@ sub mapDrawPoints{
                   $ai .= sprintf("%.1f %.1f l\n",$AILEFT+$x1-$dotsize,$AITOP-$y1-$dotsize);
                   $ai .=  "S\n";
                 } elsif ($dotshape =~ /^diamonds$/)	{
+                  if ( $q->param('shadow') !~ /no/ )	{
+                      my $shadow = new GD::Polygon;
+                      $shadow->addPt($x1+1,$y1+($dotsize*2)+2);
+                      $shadow->addPt($x1+($dotsize*2)+1,$y1+2);
+                      $shadow->addPt($x1+1,$y1-($dotsize*2)+2);
+                      $shadow->addPt($x1-($dotsize*2)+1,$y1+2);
+                      $im->filledPolygon($shadow,$col{'gray'});
+                  }
                   my $poly = new GD::Polygon;
-                  my $shadow = new GD::Polygon;
                   $poly->addPt($x1,$y1+($dotsize*2));
                   $poly->addPt($x1+($dotsize*2),$y1);
                   $poly->addPt($x1,$y1-($dotsize*2));
                   $poly->addPt($x1-($dotsize*2),$y1);
-                  $shadow->addPt($x1+1,$y1+($dotsize*2)+2);
-                  $shadow->addPt($x1+($dotsize*2)+1,$y1+2);
-                  $shadow->addPt($x1+1,$y1-($dotsize*2)+2);
-                  $shadow->addPt($x1-($dotsize*2)+1,$y1+2);
-                  $im->filledPolygon($shadow,$col{'gray'});
                   $im->filledPolygon($poly,$col{$dotcolor});
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1-($dotsize*2));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1);
@@ -1939,36 +2030,54 @@ sub mapDrawPoints{
                 }
                 elsif ($dotshape =~ /^stars$/)	{
                   my $poly = new GD::Polygon;
-                  my $shadow = new GD::Polygon;
+                  my $shadow;
+                  if ( $q->param('shadow') !~ /no/ )	{
+                      $shadow = new GD::Polygon;
+                  }
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1+($dotsize*sin(9*36*$PI/180)),$AITOP-$y1+($dotsize*cos(9*36*$PI/180)));
                   for $p (0..9)	{
                     if ( $p % 2 == 1 )	{
                       $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
-                      $shadow->addPt($x1+($dotsize*sin($p*36*$PI/180))+1,$y1-($dotsize*cos($p*36*$PI/180))+1);
+                      if ( $q->param('shadow') !~ /no/ )	{
+                          $shadow->addPt($x1+($dotsize*sin($p*36*$PI/180))+1,$y1-($dotsize*cos($p*36*$PI/180))+1);
+                      }
                       $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize*cos($p*36*$PI/180)));
                     } else	{
                       $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
-                      $shadow->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180))+2,$y1-($dotsize/$C72*cos($p*36*$PI/180))+2);
+                      if ( $q->param('shadow') !~ /no/ )	{
+                          $shadow->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180))+2,$y1-($dotsize/$C72*cos($p*36*$PI/180))+2);
+                      }
                       $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize/$C72*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize/$C72*cos($p*36*$PI/180)));
                     }
                   }
-                  $im->filledPolygon($shadow,$col{'gray'});
+                  if ( $q->param('shadow') !~ /no/ )	{
+                      $im->filledPolygon($shadow,$col{'gray'});
+                  }
                   $im->filledPolygon($poly,$col{$dotcolor});
                 }
             # or draw a triangle
                 elsif ($dotshape =~ /^triangles$/)	{
                   my $poly = new GD::Polygon;
-                  my $shadow = new GD::Polygon;
+                  my $shadow;
+                  if ( $q->param('shadow') !~ /no/ )	{
+                      $shadow = new GD::Polygon;
+                  }
                # lower left vertex
                   $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-                  $shadow->addPt($x1+($dotsize*2)+1,$y1+($dotsize*2*sin(60*$PI/180))+2);
+                  if ( $q->param('shadow') !~ /no/ )	{
+                      $shadow->addPt($x1+($dotsize*2)+1,$y1+($dotsize*2*sin(60*$PI/180))+2);
+                  }
                # top middle vertex
                   $poly->addPt($x1+1,$y1-($dotsize*2*sin(60*$PI/180))+2);
-                  $shadow->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
+                  if ( $q->param('shadow') !~ /no/ )	{
+                      $shadow->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
+                  }
                # lower right vertex
                   $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-                  $shadow->addPt($x1-($dotsize*2)+1,$y1+($dotsize*2*sin(60*$PI/180))+2);
-                  $im->filledPolygon($shadow,$col{'gray'});
+                  if ( $q->param('shadow') !~ /no/ )	{
+                      $shadow->addPt($x1-($dotsize*2)+1,$y1+($dotsize*2*sin(60*$PI/180))+2);
+                      $im->filledPolygon($shadow,$col{'gray'});
+                  }
                   $im->filledPolygon($poly,$col{$dotcolor});
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180)));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1+($dotsize*2*sin(60*$PI/180)));
@@ -1977,7 +2086,9 @@ sub mapDrawPoints{
                 }
             # or draw a square
                 else	{
-                  $im->filledRectangle($x1-($dotsize*1.5)+1,$y1-($dotsize*1.5)+2,$x1+($dotsize*1.5)+1,$y1+($dotsize*1.5)+2,$col{'gray'});
+                  if ( $q->param('shadow') !~ /no/ )	{
+                      $im->filledRectangle($x1-($dotsize*1.5)+1,$y1-($dotsize*1.5)+2,$x1+($dotsize*1.5)+1,$y1+($dotsize*1.5)+2,$col{'gray'});
+                  }
                   $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$dotcolor});
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1+($dotsize*1.5));
@@ -2092,11 +2203,6 @@ sub projectPoints	{
 	#  re-rotate point back into the original coordinate system
 	if ( $self->{maptime} > 0 && ( $midlng != $x || $midlat != $y || $self->{'rotatemapfocus'} =~ /y/i ) && $pointclass ne "grid" && ($projected{$x}{$y} eq "" || $no_cache))	{
 
-		my $ma = $self->{maptime};
-		$oldx = $x;
-		$oldy = $y;
-
-
 	# integer coordinates are needed to determine the plate ID
 	# IMPORTANT: Scotese's plate ID data are weird in that the coordinates
 	#   refer to the lower left (southwest) corner of each grid cell, so,
@@ -2114,8 +2220,13 @@ sub projectPoints	{
 			$r = int($y-1);
 		}
 
-	    # what plate is this point on?
-	    $pid = $self->{plate}{$q}{$r};
+		# what plate is this point on?
+		$pid = $self->{plate}{$q}{$r};
+
+		my $ma = $self->{maptime};
+		$oldx = $x;
+		$oldy = $y;
+
 
 	# if there are no data, just bomb out
 		if ( $pid eq "" || $rotx{$ma}{$pid} eq "" || $roty{$ma}{$pid} eq "" )	{
@@ -2690,7 +2801,7 @@ sub drawGrids	{
 # which should never collide
 sub getTileID {
     my $q = shift;
-    my @tileParams = ('projection','mapscale','mapwidth','mapsize','maptime','maplat','maplng','usalinecolor','borderlinecolor','mapbgcolor','crustcolor','crustedgecolor','gridsize','gridcolor','gridposition','linethickness','coastlinecolor');
+    my @tileParams = ('projection','mapscale','mapwidth','mapsize','maptime','maplat','maplng','usalinecolor','borderlinecolor','mapbgcolor','platecolor','crustcolor','crustedgecolor','gridsize','gridcolor','gridposition','linethickness','coastlinecolor');
 
     my $data = "";
     foreach my $p (@tileParams) {
