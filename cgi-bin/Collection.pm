@@ -1191,14 +1191,24 @@ sub displayCollectionDetails {
         print Debug::printErrors(["Invalid collection number $collection_no"]);
         return;
     }
-	my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, c.* FROM collections c LEFT JOIN person p1 ON p1.person_no=c.authorizer_no LEFT JOIN person p2 ON p2.person_no=c.enterer_no LEFT JOIN person p3 ON p3.person_no=c.modifier_no WHERE collection_no=" . $collection_no;
-    dbg("Main SQL: $sql");
-    my @rs = @{$dbt->getData($sql)};
-    my $coll = $rs[0];
-    if (!$coll ) {
-        print Debug::printErrors(["No collection with collection number $collection_no"]);
-        return;
-    }
+
+	# grab the entire person table and work with a lookup hash because
+	#  person is tiny JA 2.10.09
+	my %name;
+	my $sql = "SELECT name,person_no FROM person";
+	my @people = @{$dbt->getData($sql)};
+	$name{$_->{person_no}} = $_->{name} foreach @people;
+
+	my $sql = "SELECT * FROM collections WHERE collection_no=" . $collection_no;
+	my @rs = @{$dbt->getData($sql)};
+	my $coll = $rs[0];
+	$coll->{authorizer} = $name{$coll->{authorizer_no}};
+	$coll->{enterer} = $name{$coll->{enterer_no}};
+	$coll->{modifier} = $name{$coll->{modifier_no}};
+	if (!$coll ) {
+		print Debug::printErrors(["No collection with collection number $collection_no"]);
+		return;
+	}
 
     my $page_vars = {};
     if ( $coll->{'research_group'} =~ /ETE/ && $q->param('guest') eq '' )	{
@@ -1248,9 +1258,13 @@ sub displayCollectionDetails {
 
     print $hbo->stdIncludes('std_page_top', $page_vars);
 
-    # Handle display of taxonomic list now 
-    my $taxa_list = buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
-    $coll->{'taxa_list'} = $taxa_list;
+    # Handle display of taxonomic list now
+    # don't even let bots see the lists because they will index the taxon
+    #  pages returned by TaxonInfo anyway JA 2.10.09
+    if ( ! PBDBUtil::checkForBot() )	{
+        my $taxa_list = buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
+        $coll->{'taxa_list'} = $taxa_list;
+    }
 
     my $links = "<div class=\"verysmall\">";
 
