@@ -1561,7 +1561,7 @@ sub mapDrawCoasts {
         push @crustlat , "";
         push @crustlatraw , "";
         for my $c (0..$#crustlat-1)	{
-          if ( ( $plateage{$crustplate[$c]} > $self->{'maptime'} || $plateage{$crustplate[$c]} > 510 ) && ( $isplate[$c] > 0 || $crustcolor ) )	{
+          if ( ( $plateage{$crustplate[$c]} > $self->{'maptime'} || $plateage{$crustplate[$c]} > 510 || $crustlng[$c] eq "last edge" ) && ( $isplate[$c] > 0 || $crustcolor ) )	{
             # finish drawing the edges of the plates
             my $d;
             if ( $crustlng[$c+1] =~ /#/ )	{
