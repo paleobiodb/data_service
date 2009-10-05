@@ -36,7 +36,7 @@ sub GCD { ( 180 / $PI ) * acos( ( sin($_[0]*$PI/180) * sin($_[1]*$PI/180) ) + ( 
 
 $|=1;					# Freeflowing data
 
-for $maptime (0..0)	{
+for $maptime (0)	{
 #for $maptime (0..600)	{
 	print "\r$maptime";
 	&mapGetRotations();
@@ -475,6 +475,9 @@ sub projectPoints	{
 	$rawy = $y;
 
 	if ( $pointclass eq "crust" )	{
+		if ( ! $pid )	{
+			$pid = $plate{$x}{$y};
+		}
 		return($x,$y,$rawx,$rawy,$pid);
 	}
 
