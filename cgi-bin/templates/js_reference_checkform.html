@@ -150,8 +150,14 @@
 				errors += "* The reference's title includes a stray period\n";
 			}
 		}
-		if ( /[~@\#\$%\^\&\*_\+\{\}\|\\<>\t\n]/.test(frm.reftitle.value) || /[^A-Za-z0-9]\//.test(frm.reftitle.value) || /[\/][^A-Za-z0-9]/.test(frm.reftitle.value) || /[:;\?\!][A-Za-z0-9]/.test(frm.reftitle.value) )	{
+		if ( /[~@\#\$%\^\*_\+\{\}\|\\<>\t\n]/.test(frm.reftitle.value) || /[^A-Za-z0-9]\//.test(frm.reftitle.value) || /[\/][^A-Za-z0-9]/.test(frm.reftitle.value) || /[:;\?\!][A-Za-z0-9]/.test(frm.reftitle.value) )	{
 			errors += "* The reference's title includes weird characters\n";
+		}
+		if ( /[^ ]\&/.test(frm.reftitle.value) || /[^ ]\&/.test(frm.pubtitle.value) )	{
+			errors += "* There must be a space before &\n";
+		}
+		if ( /\&[^ ]/.test(frm.reftitle.value) || /\&[^ ]/.test(frm.pubtitle.value) )	{
+			errors += "* There must be a space after &\n";
 		}
 		if ( /  /.test(frm.reftitle.value) )	{
 			errors += "* The reference's title includes extra spaces\n";
@@ -160,7 +166,7 @@
 		if ( /[^A-Za-z0-9\)\]\?\!"]$/.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name must end with a letter\n";
 		}
-		if ( /[~@\#\$%\^\&\*_\+\{\}\|\\<>\t\n]/.test(frm.pubtitle.value) || /[^A-Za-z0-9]\//.test(frm.pubtitle.value) || /[\/][^A-Za-z0-9]/.test(frm.pubtitle.value) || /[:;\?\!][A-Za-z0-9]/.test(frm.pubtitle.value) )	{
+		if ( /[~@\#\$%\^\*_\+\{\}\|\\<>\t\n]/.test(frm.pubtitle.value) || /[^A-Za-z0-9]\//.test(frm.pubtitle.value) || /[\/][^A-Za-z0-9]/.test(frm.pubtitle.value) || /[:;\?\!][A-Za-z0-9]/.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name includes weird characters\n";
 		}
 		if ( /\.[^0-9 ]/.test(frm.pubtitle.value) )	{
