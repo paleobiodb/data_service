@@ -3,6 +3,7 @@
 <!-- Begin
 
 var bad_info = ""; // Global variable
+var warnings = 0;
 
 window.onload = changeName;
 
@@ -50,7 +51,10 @@ function doCheckFieldsBasicInfo() {
         bad_info += "\no Don't include the country name in the collection name";
     }
     if (frm.collection_name.value.match(frm.state.value) != null && frm.state.value != "")	{
-        bad_info += "\no Don't include the state name in the collection name";
+        warnings = warnings + 1;
+        if ( warnings == 1 )	{
+            bad_info += "\no Warning: don't include the state name in the collection name";
+        }
     }
 
     // Deleting the primary reference is not allowed.
