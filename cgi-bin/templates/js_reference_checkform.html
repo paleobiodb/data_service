@@ -141,7 +141,7 @@
 			errors += "* The reference's title must end with a letter\n";
 		}
 		if ( /\.$/.test(frm.reftitle.value) )	{
-			if ( ! / nov\.$/.test(frm.reftitle.value) && ! /U\.S\.A\.$/.test(frm.reftitle.value) && ! /U\.S\.S\.R\.$/.test(frm.reftitle.value) )	{
+			if ( ! / nov\.$/.test(frm.reftitle.value) && ! /U\.S\.A\.$/.test(frm.reftitle.value) && ! /U\.S\.S\.R\.$/.test(frm.reftitle.value) && ! / sp\.$/.test(frm.reftitle.value) && ! / spec\.$/.test(frm.reftitle.value) && ! / nov\.$/.test(frm.reftitle.value) )	{
 				errors += "* Don't end the reference title with a period\n";
 			}
 		}
