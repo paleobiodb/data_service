@@ -1153,13 +1153,13 @@ sub getTitleWordOdds	{
 	if ( $q->param('authors') =~ /[A-Za-z]/ )	{
 		my $a = $q->param('authors');
 		$a =~ s/[^A-Za-z ]//g;
-		push @where , " (author1last IN ('".join("','",split(/ /,$a))."') OR author2last IN ('".join("','",split(/ /,$a))."'))";
+		push @where , " (r.author1last IN ('".join("','",split(/ /,$a))."') OR r.author2last IN ('".join("','",split(/ /,$a))."'))";
 	}
 	if ( $q->param('first_year') >= 1700 && ( $q->param('first_year') < $q->param('last_year') || ! $q->param('last_year') ) )		{
-		push @where , "pubyr>=".$q->param('first_year');
+		push @where , "r.pubyr>=".$q->param('first_year');
 	}
 	if ( $q->param('last_year') >= 1700 && ( $q->param('first_year') < $q->param('last_year') || ! $q->param('first_year') ) )		{
-		push @where , "pubyr<=".$q->param('last_year');
+		push @where , "r.pubyr<=".$q->param('last_year');
 	}
 	if ( $q->param('keywords') =~ /[A-Za-z]/ )	{
 		my @words = split / /,$q->param('keywords');
