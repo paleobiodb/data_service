@@ -3684,8 +3684,14 @@ sub displayFirstAppearance	{
 	if ( $q->param('types_only') =~ /yes/i )	{
 		$reso = " AND species_reso='n. sp.'";
 	}
-	$sql = "(SELECT taxon_rank,collection_no,occurrence_no,reid_no,genus_reso,genus_name,IF(taxon_rank LIKE '%species',species_reso,'') species_reso,IF(taxon_rank LIKE '%species',species_name,'') species_name FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES'$reso GROUP BY collection_no,r.taxon_no) UNION (SELECT taxon_rank,collection_no,occurrence_no,0,genus_reso,genus_name,IF(taxon_rank LIKE '%species',species_reso,'') species_reso,IF(taxon_rank LIKE '%species',species_name,'') species_name FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).")$reso GROUP BY collection_no,o.taxon_no) ORDER BY genus_name,species_name";
+	$sql = "(SELECT r.taxon_no,taxon_rank,collection_no,occurrence_no,reid_no FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES'$reso GROUP BY collection_no,r.taxon_no) UNION (SELECT o.taxon_no,taxon_rank,collection_no,occurrence_no,0 FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).")$reso GROUP BY collection_no,o.taxon_no)";
 	my @occs = @{$dbt->getData($sql)};
+
+	# impose synonymy mask, but only for taxa with occurrences JA 31.10.09
+	my (%hasocc,%senior_name);
+	$hasocc{$_->{taxon_no}}++ foreach @occs;
+	$sql = "SELECT t.taxon_no,taxon_name FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=synonym_no AND t.taxon_no IN (" . join(',',keys %hasocc) . ")";
+	$senior_name{$_->{'taxon_no'}} = $_->{'taxon_name'} foreach @{$dbt->getData($sql)};
 
 	# print data to output file JA 17.1.09
 	my $name = ($s->get("enterer")) ? $s->get("enterer") : "Guest";
@@ -3702,13 +3708,7 @@ sub displayFirstAppearance	{
 	my %includes;
 	for $_ ( @occs )	{
 		if ( $ids{$_->{'occurrence_no'}} == 1 || $_->{'reid_no'} > 0 )	{	
-			if ( $_->{'species_reso'} ne "n. sp." )	{
-				push @{$includes{$_->{'collection_no'}}} , $_->{'genus_reso'}." ".$_->{'genus_name'}." ".$_->{'species_reso'}." ".$_->{'species_name'};
-			} elsif ( $_->{'genus_reso'} ne "n. gen." )	{
-				push @{$includes{$_->{'collection_no'}}} , $_->{'genus_reso'}." ".$_->{'genus_name'}." ".$_->{'species_name'}." n. sp.";
-			} else	{
-				push @{$includes{$_->{'collection_no'}}} , $_->{'genus_name'}." ".$_->{'species_name'}." n. gen. n. sp.";
-			}
+			push @{$includes{$_->{'collection_no'}}} , $senior_name{$_->{'taxon_no'}};
 		}
 	}
 
@@ -3724,7 +3724,9 @@ sub displayFirstAppearance	{
 		} else	{
 			$coll->{'randomized gap'} = "NA";
 		}
-		$coll->{'taxa'} = join(',',@{$includes{$coll->{'collection_no'}}});
+		my %seen;
+		$seen{$_}++ foreach @{$includes{$coll->{'collection_no'}}};
+		$coll->{'taxa'} = join(', ',keys %seen);
 		$coll->{'taxa'} =~ s/  / /g;
 		$coll->{'taxa'} =~ s/  / /g;
 		$coll->{'taxa'} =~ s/^ //g;
