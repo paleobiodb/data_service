@@ -1162,7 +1162,7 @@ sub addSpellingAuthority {
         $record{taxon_rank} = $new_rank;
     }
 
-    my @dataFields = ("pages", "figures", "common_name", "extant", "form_taxon", "preservation");
+    my @dataFields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','form_taxon','preservation');
     my @origAuthFields = ("author1init", "author1last","author2init", "author2last","otherauthors", "pubyr" );
     
     if ($orig->{'ref_is_authority'} =~ /yes/i) {
