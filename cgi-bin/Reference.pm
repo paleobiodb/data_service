@@ -9,6 +9,7 @@ use Class::Date qw(now date);
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE);
 use Download;
+use Person;
 
 # Paths from the Apache environment variables (in the httpd.conf file).
 
@@ -641,6 +642,7 @@ sub displaySearchRefs {
 		$vars->{'use_current'} = "<input type='submit' name='use_current' value='Use current reference ($reference_no)'>\n";
 	} 
 
+	print Person::makeAuthEntJavascript($dbt);
 	print $hbo->populateHTML("search_refs_form", $vars);
 }
 
@@ -919,21 +921,41 @@ sub getReferences {
     } else {
         if ($options{'name'}) {
             $query_description .= " ".$options{'name'};
-            push @where,"(r.author1last LIKE ".$dbh->quote('%'.$options{'name'}.'%').
-                        " OR r.author2last LIKE ".$dbh->quote('%'.$options{'name'}.'%').
-                        " OR r.otherauthors LIKE ".$dbh->quote('%'.$options{'name'}.'%').')';
+            if ($options{'name_pattern'} =~ /equals/i)	{
+                push @where,"(r.author1last=".$dbh->quote($options{'name'}) . " OR r.author2last=".$dbh->quote($options{'name'}) . " OR r.otherauthors=".$dbh->quote($options{'name'}).')';
+            } elsif ($options{'name_pattern'} =~ /begins/i)	{
+                push @where,"(r.author1last LIKE ".$dbh->quote($options{'name'}.'%') . " OR r.author2last LIKE ".$dbh->quote($options{'name'}.'%') . " OR r.otherauthors LIKE ".$dbh->quote($options{'name'}.'%').')';
+            } elsif ($options{'name_pattern'} =~ /ends/i)	{
+                push @where,"(r.author1last LIKE ".$dbh->quote('%'.$options{'name'}) . " OR r.author2last LIKE ".$dbh->quote('%'.$options{'name'}) . " OR r.otherauthors LIKE ".$dbh->quote('%'.$options{'name'}).')';
+            } else	{ # includes
+                push @where,"(r.author1last LIKE ".$dbh->quote('%'.$options{'name'}.'%') . " OR r.author2last LIKE ".$dbh->quote('%'.$options{'name'}.'%') . " OR r.otherauthors LIKE ".$dbh->quote('%'.$options{'name'}.'%').')';
+            }
         }
         if ($options{'year'}) {
-            push @where, "r.pubyr LIKE ".$dbh->quote($options{'year'});
             $query_description .= " ".$options{'year'};
+            if ($options{'year_relation'} eq "in")	{
+                push @where, "r.pubyr=".$options{'year'};
+            } elsif ($options{'year_relation'} =~ /after/i)	{
+                push @where, "r.pubyr>".$options{'year'};
+            } elsif ($options{'year_relation'} =~ /before/i)	{
+                push @where, "r.pubyr<".$options{'year'};
+            }
         }
         if ($options{'reftitle'}) {
-            push @where, "r.reftitle LIKE ".$dbh->quote('%'.$options{'reftitle'}.'%');
             $query_description .= " ".$options{'reftitle'};
+            push @where, "r.reftitle LIKE ".$dbh->quote('%'.$options{'reftitle'}.'%');
         }
         if ($options{'pubtitle'}) {
             push @where, "r.pubtitle LIKE ".$dbh->quote('%'.$options{'pubtitle'}.'%');
-            $query_description .= " ".$options{'pubtitle'};
+            if ($options{'pubtitle_pattern'} =~ /equals/i)	{
+                push @where, "r.pubtitle LIKE ".$dbh->quote($options{'pubtitle'});
+            } elsif ($options{'pubtitle_pattern'} =~ /begins/i)	{
+                push @where, "r.pubtitle LIKE ".$dbh->quote($options{'pubtitle'}.'%');
+            } elsif ($options{'pubtitle_pattern'} =~ /ends/i)	{
+                push @where, "r.pubtitle LIKE ".$dbh->quote('%'.$options{'pubtitle'});
+            } else	{ # includes
+                push @where, "r.pubtitle LIKE ".$dbh->quote('%'.$options{'pubtitle'}.'%');
+            }
         }
         if ($options{'project_name'}) {
             push @where, "FIND_IN_SET(".$dbh->quote($options{'project_name'}).",r.project_name)";
