@@ -1,3 +1,4 @@
+
 <form method=post action="$exec_url">
 <input type=hidden name="action" value="displayRefResults">
 <input id="type" type=hidden name="type" value="">
@@ -15,30 +16,34 @@
 %%message%%
 </h4></div>
 
-<div class="displayPanel" align="center" style="width: 40em;">
+<div class="displayPanel" align="center" style="width: 50em;">
 <div class="displayPanelContent">
 <table border=0 cellpadding=4 class="small" style="padding-top: 1em; padding-bottom: 1em; padding-left: -1em;">
 <tr>
-	<td align=right>Author's last name:</td>
-	<td><input id="name" name="name" type=text size=20>
+	<td align=right>Author's name</td>
+	<td>
+	<select id="name_pattern" name="name_pattern"><option>equals</option><option>begins with</option><option>includes</option><option>ends with</option></select>
+	<input id="name" name="name" type=text size=12>
 	</td>
 
-	<td align=right>Year:</td>
+	<td align=right>Published</td>
 	<td>
+	<select id="year_relation" name="year_relation"><option>in</option><option>after</option><option>before</option></select>
 	<input id="year" name="year" type=text size=5 maxlength=4>
 	</td>
 
 <tr>
-	<td align=right>Title includes: </td>
+	<td align=right>Title includes</td>
 	<td colspan=4>
 	<input id="reftitle" name="reftitle" type=text size=50>
 	</td> 
 </tr>
 
 <tr>
-	<td align=right>Name of book<br>or serial:</td>
+	<td align=right>Book/serial name</td>
 	<td colspan=4>
-	<input id="pubtitle" name="pubtitle" type=text size=50>
+	<select id="pubtitle_pattern" name="pubtitle_pattern"><option>begins with</option><option>includes</option><option>ends with</option><option>equals</option></select>
+	<input id="pubtitle" name="pubtitle" type=text size=35>
 	</td>
 </tr>
 <div hide="type=add">
