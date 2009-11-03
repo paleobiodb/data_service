@@ -3,12 +3,17 @@
 
 <div align="center"><p class="pageTitle">Authority data for <span id="taxon_name"></span></p></div>
 
+<div show="error_message">
 <span id="error_message"></span>
-<div show="error_message"></div>
+</div>
 
 <form method="POST" action="%%write_url%%">
 
 <div class="displayPanel small" style="padding-top: 1em;">
+
+<div show="not_this_one">
+<span id="not_this_one"></span>
+</div>
 
 <input type="hidden" id="action" name="action" value="submitAuthorityForm">
 <input type="hidden" id="reference_no" name="reference_no">
