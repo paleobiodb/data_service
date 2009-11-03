@@ -776,6 +776,19 @@ sub displayMostCommonTaxa	{
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub countNames	{
+	require Report;
+
+	logRequest($s,$q);
+
+	print $hbo->stdIncludes( "std_page_top" );
+
+	my $r = Report->new($dbt,$q,$s);
+	$r->countNames();
+
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
 sub displayCurveForm {
     my $std_page_top = $hbo->stdIncludes("std_page_top");
     print $std_page_top;
@@ -1977,6 +1990,10 @@ sub processTaxonSearch {
             return;
         }
     # One match - good enough for most of these forms
+    } elsif (scalar(@results) == 1 && $q->param('goal') eq 'authority') {
+        $q->param("taxon_no"=>$results[0]->{'taxon_no'});
+        $q->param('called_by'=> 'processTaxonSearch');
+        Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'cladogram') {
         $q->param("taxon_no"=>$results[0]->{'taxon_no'});
         Cladogram::displayCladogramChoiceForm($dbt,$q,$s,$hbo);
