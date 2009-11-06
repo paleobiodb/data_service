@@ -259,3 +259,33 @@ function checkAllEmpty(frm,fields) {
     }
 }
 
+function textClear (input)	{
+	if ( input.value == input.defaultValue )	{
+		input.value = "";
+	}
+}
+
+function textRestore (input)	{
+	if ( input.value == "" )	{
+		input.value = input.defaultValue;
+	}
+}
+
+function checkName(i)    {
+	if ( /[^A-Za-z ]/.test( document.forms[i].taxon_name.value ) )	{
+		alert("A taxon name can only include letters");
+		return false;
+	} else if ( /^[^A-Z]/.test( document.forms[i].taxon_name.value ) )	{
+		alert("The taxon name isn't capitalized");
+		return false;
+	} else if ( / .* /.test( document.forms[i].taxon_name.value ) )	{
+		alert("The taxon name has too many spaces");
+		return false;
+	} else if ( /[a-z ][A-Z]/.test( document.forms[i].taxon_name.value ) )	{
+		alert("The taxon name isn't capitalized correctly");
+		return false;
+	} else	{
+		return true;
+	}
+}
+
