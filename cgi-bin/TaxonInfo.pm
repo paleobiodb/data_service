@@ -4218,10 +4218,10 @@ sub basicTaxonInfo	{
 var swapID;
 var eraseID;
 function requestMap()	{
-	document.getElementById('mapLink').innerHTML = '<img id="taxonImage" src="$HOST_URL/cgi-bin/$READ_URL?action=displayMapOnly&amp;display_header=NO&amp;taxon_no=$taxon_no">';
+	document.getElementById('taxonImage').src = '$HOST_URL/cgi-bin/$READ_URL?action=displayMapOnly&amp;display_header=NO&amp;taxon_no=$taxon_no';
+	document.getElementById('mapLink').innerHTML = '';
 	document.getElementById('moreMapLinkText').innerHTML = '';
 	document.getElementById('pleaseWait').innerHTML = '<i>Please wait for the map to be generated</i>';
-	document.getElementById('taxonImage').src = '/public/maps/taxon'+$taxon_no+'.png';
 	swapID = setInterval( "swapInMap()" , 2000 );
 	// there's no way to erase the message before the image is fully loaded,
 	//  so check frequently to see if it has been
@@ -4248,9 +4248,11 @@ function erasePleaseWait()	{
 
 // -->
 </script>
+
+<p><img id="taxonImage" src="/public/maps/taxon$taxon_no.png"><span id="mapLink" onClick="requestMap();" style="color: #0030D0;"><i>Click here</span><span id="moreMapLinkText"> to see a distribution map</span></i><span id="pleaseWait"></span></p>
+
 |;
 
-			print "<p><span id=\"mapLink\" onClick=\"requestMap();\" style=\"color: #0030D0;\"><i>Click here</span><span id=\"moreMapLinkText\"> to see a distribution map</span></i><span id=\"pleaseWait\"></span></p>\n\n";
 		}
 
 	}
@@ -4287,8 +4289,6 @@ function erasePleaseWait()	{
 		}
 	}
 	print "</div>\n</div>\n\n";
-
-	print $hbo->populateHTML("js_name_check");
 
 	print qq|
 <form method="POST" action="$READ_URL" onSubmit="return checkName(1);">
