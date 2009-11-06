@@ -263,6 +263,14 @@ sub mapFinishImage {
     close PNG;
     chmod 0664, "$GIF_DIR/$pngname";
 
+    if ( $q->param('taxon_no') )	{
+        open(PNG,">$GIF_DIR/taxon".$q->param('taxon_no').".png");
+        binmode(PNG);
+        print PNG $im->png;
+        close PNG;
+        chmod 0664, "$GIF_DIR/taxon".$q->param('taxon_no').".png";
+    }
+
     open(GIF,"<$GIF_DIR/$pngname");
     binmode(GIF);
     $image->Read(file=>\*GIF);
