@@ -74,7 +74,8 @@
 	}
 
 	var detect = navigator.userAgent.toLowerCase();
-		function checkBrowser(string)	{
+
+	function checkBrowser(string)	{
 		place = detect.indexOf(string) + 1;
 		thestring = string;
 		return place;
