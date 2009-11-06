@@ -1994,7 +1994,7 @@ window.onload = hideName;
 
 function addLink(link_id,link_action,taxon_name)	{
 	if ( ! /href/.test( document.getElementById(link_id).innerHTML ) )	{
-		document.getElementById(link_id).innerHTML = '<a href="$READ_URL?action=checkTaxonInfo' + link_action + '&amp;is_real_user=1">' + taxon_name + '</a>';
+		document.getElementById(link_id).innerHTML = '<a href="$READ_URL?action=basicTaxonInfo' + link_action + '&amp;is_real_user=1">' + taxon_name + '</a>';
 	}
 }
 
