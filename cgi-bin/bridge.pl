@@ -402,6 +402,12 @@ sub displayMapForm {
 }
 
 
+sub displayMapOnly	{
+	require Map;
+
+	my $m = Map->new($q,$dbt,$s);
+	my ($file,$errors,$warnings) = $m->buildMap();
+}
 
 sub displayMapResults {
     require Map;
@@ -2433,6 +2439,11 @@ sub displayTaxonInfoResults {
     print $hbo->stdIncludes( "std_page_top" );
 	TaxonInfo::displayTaxonInfoResults($dbt,$s,$q);
     print $hbo->stdIncludes("std_page_bottom");
+}
+
+# JA 3.11.09
+sub basicTaxonInfo	{
+	TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 }
 
 ## END Taxon Info Stuff
@@ -4807,7 +4818,7 @@ sub listTaxa {
     print "<BR><BR>";
     my $start = $page*200;
     for (my $i=$start; $i<$start+200 && $i <= $max_id;$i++) {
-        print "<a href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$i\">$i</a> ";
+        print "<a href=\"$READ_URL?action=basicTaxonInfo&taxon_no=$i\">$i</a> ";
     }
 
 	print $hbo->stdIncludes ("std_page_bottom");
