@@ -531,7 +531,7 @@ sub displayReference {
         if ($authority_count < 100) {
             my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE reference_no=$reference_no ORDER BY taxon_name";
             my @results = 
-                map { qq'<a href="$READ_URL?action=checkTaxonInfo&taxon_no=$_->{taxon_no}">$_->{taxon_name}</a>' }
+                map { qq'<a href="$READ_URL?action=basicTaxonInfo&taxon_no=$_->{taxon_no}">$_->{taxon_name}</a>' }
                 @{$dbt->getData($sql)};
             $html = join(", ",@results);
         } else {
