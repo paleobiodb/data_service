@@ -42,8 +42,13 @@ sub checkTaxonInfo {
 	my $q = shift;
 	my $s = shift;
 	my $dbt = shift;
-    my $hbo = shift;
-    my $dbh = $dbt->dbh;
+	my $hbo = shift;
+	my $dbh = $dbt->dbh;
+
+	if ( ! $q->param('taxon_name') && $q->param('search_again') )	{
+		my $name = $q->param('search_again');
+		$q->param('taxon_name' => $name);
+	}
 
     if (!$q->param("taxon_no") && !$q->param("taxon_name") && !$q->param("common_name") && !$q->param("author") && !$q->param("pubyr")) {
         searchForm($hbo, $q, 1); # param for not printing header with form
@@ -304,7 +309,7 @@ sub displayTaxonInfoResults {
 <div style="position: relative; top: -3.5em; left: 43em; margin-bottom: -2.5em; width: 8em; z-index: 9;">
 <form method="POST" action="$READ_URL">
 <input type="hidden" name="action" value="checkTaxonInfo">
-<input type="text" name="taxon_name" value="Search again" size="14" onFocus="textClear(this);" onBlur="textRestore(this);" style="font-size: 0.7em;">
+<input type="text" name="search_again" value="Search again" size="14" onFocus="textClear(search_again);" onBlur="textRestore(search_again);" style="font-size: 0.7em;">
 </form>
 </div>
 
@@ -3926,39 +3931,46 @@ sub basicTaxonInfo	{
 		$not_bot = 0;
 	}
 
+	my $taxon_name = $q->param('taxon_name');
+	if ( ! $taxon_name && $q->param('quick_search') )	{
+		$taxon_name = $q->param('quick_search');
+	} elsif ( ! $taxon_name && $q->param('search_again') )	{
+		$taxon_name = $q->param('search_again');
+	}
+
 	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
 
 	my $error;
 	my $taxon_no;
 	if ( $q->param('taxon_no') )	{
 		$taxon_no = $q->param('taxon_no');
-	} elsif ( $q->param('taxon_name') )	{
+	} elsif ( $taxon_name )	{
 		# used in preference to getTaxa because the query is dead simple
-		my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$q->param('taxon_name'));
+		my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_name);
 		if ( ! @taxon_nos && $q->param('last_taxon') == 9999 )	{
 			$taxon_no = $q->param('last_taxon');
-			$error = "WARNING: '".$q->param('taxon_name')."' is not in the database. Please search again.";
+			$error = "WARNING: '".$taxon_name."' is not in the database. Please search again.";
 		} elsif ( ! @taxon_nos )	{
 			my $rank_clause = "AND taxon_rank='species'";
-			if ( $q->param('taxon_name') !~ / / )	{
+			if ( $taxon_name !~ / / )	{
 				$rank_clause = "AND taxon_rank!='species'";
 			}
 			# first try matching only on consonants, which works
 			#  well for long names
-			my $wild = $q->param('taxon_name');
+			my $wild = $taxon_name;
 			my $length = length($wild);
 			$wild =~ s/[aeiou]/%/g;
 			my $sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND length(taxon_name)>=$length-1 AND length(taxon_name)<=$length+1 AND taxon_name LIKE '$wild' $rank_clause ORDER BY rgt-lft DESC";
 			my $guess = ${$dbt->getData($sql)}[0];
 			# now try first letter plus vowels
 			if ( ! $guess )	{
-				$wild = $q->param('taxon_name');
+				$wild = $taxon_name;
 				$wild =~ s/[^A-Zaeiou]/%/g;
 				$sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND length(taxon_name)>=$length-1 AND length(taxon_name)<=$length+1 AND taxon_name LIKE '$wild' $rank_clause ORDER BY rgt-lft DESC";
 				$guess = ${$dbt->getData($sql)}[0];
 			}
 			# we're desperate, so try whittling down the name
-			$wild = $q->param('taxon_name');
+			$wild = $taxon_name;
 			while ( ! $guess )	{
 				$wild =~ s/.$//;
 				$sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name LIKE '$wild%' $rank_clause ORDER BY rgt-lft DESC";
@@ -3966,7 +3978,7 @@ sub basicTaxonInfo	{
 			}
 			$taxon_no = $guess->{'taxon_no'};
 			$taxon_no = getSeniorSynonym($dbt,$taxon_no); 
-			$error = "WARNING: '".$q->param('taxon_name')."' is not in the database. ".italicize($guess)." seems like a plausible match.";
+			$error = "WARNING: '".$taxon_name."' is not in the database. ".italicize($guess)." seems like a plausible match.";
 		}
 		# getTaxonNos returns the "largest" taxon first if there are
 		#  multiple matches, so use it
@@ -4294,7 +4306,7 @@ function erasePleaseWait()	{
 <form method="POST" action="$READ_URL" onSubmit="return checkName(1);">
 <input type="hidden" name="action" value="basicTaxonInfo">
 <input type="hidden" name="last_taxon" value="$taxon_no">
-<input type="text" name="taxon_name" value="Search again" size="24" onFocus="textClear(this);" onBlur="textRestore(this);" style="font-size: 1.0em;">
+<input type="text" name="search_again" value="Search again" size="24" onFocus="textClear(search_again);" onBlur="textRestore(search_again);" style="font-size: 1.0em;">
 </form>
 
 |;
