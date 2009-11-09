@@ -263,12 +263,19 @@ sub mapFinishImage {
     close PNG;
     chmod 0664, "$GIF_DIR/$pngname";
 
-    if ( $q->param('taxon_no') )	{
-        open(PNG,">$GIF_DIR/taxon".$q->param('taxon_no').".png");
+    if ( $q->param('taxon_no') || $q->param('taxon_name') )	{
+	my $taxon;
+    	if ( $q->param('taxon_no') )	{
+		$taxon = $q->param('taxon_no');
+    	} elsif ( $q->param('taxon_name') )	{
+		$taxon = $q->param('taxon_name');
+		$taxon =~ s/ /_/g;
+	}
+        open(PNG,">$GIF_DIR/taxon".$taxon.".png");
         binmode(PNG);
         print PNG $im->png;
         close PNG;
-        chmod 0664, "$GIF_DIR/taxon".$q->param('taxon_no').".png";
+        chmod 0664, "$GIF_DIR/taxon".$taxon.".png";
     }
 
     open(GIF,"<$GIF_DIR/$pngname");
@@ -1938,7 +1945,7 @@ sub mapDrawPoints{
 			    } else	{
 				    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
 			    }
-			    print MAPOUT "\" href=\"$READ_URL?action=displayCollResults";
+			    print MAPOUT "\" href=\"$READ_URL?action=basicCollectionSearch";
                 print MAPOUT "&amp;collection_list=".join(",",@{$atCoord{$x1}{$y1}});
                 print MAPOUT "\">\n";
 
