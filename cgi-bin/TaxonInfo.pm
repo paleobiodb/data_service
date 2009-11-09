@@ -1083,10 +1083,10 @@ sub doCollections{
 					$formatted_no =~ s/([0-9])/type locality: $1/;
 				}
 				if ( $iscrown{$no} > 0 )	{
-					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\"><b>$1/;
+					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=basicCollectionSearch&amp;collection_no=$no&amp;is_real_user=$is_real_user\"><b>$1/;
                                 	$formatted_no .= "</b>";
 				} else	{
-					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$1/;
+					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?action=basicCollectionSearch&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$1/;
 				}
 				$output .= $formatted_no;
 			}
@@ -2344,7 +2344,7 @@ sub printTypeInfo	{
                 $coll_row->{'place'} =~ s/Syrian Arab Republic/Syria/;
                 $coll_row->{'place'} =~ s/Lao People's Democratic Republic/Laos/;
                 $coll_row->{'place'} =~ s/(United Kingdom|Russian Federation|Czech Republic|Netherlands|Dominican Republic|Bahamas|Philippines|Netherlands Antilles|United Arab Emirates|Marshall Islands|Congo|Seychelles)/the $1/;
-                $text .= "Its type locality is <a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=".$specimen_row->{'type_locality'}."&amp;is_real_user=$is_real_user\">".$coll_row->{'collection_name'}."</a>, which is in $strat $lith $fm $coll_row->{'place'}. ";
+                $text .= "Its type locality is <a href=\"$READ_URL?action=basicCollectionSearch&amp;collection_no=".$specimen_row->{'type_locality'}."&amp;is_real_user=$is_real_user\">".$coll_row->{'collection_name'}."</a>, which is in $strat $lith $fm $coll_row->{'place'}. ";
             }
         }
     } else {
@@ -3797,7 +3797,7 @@ sub displayFirstAppearance	{
 				push @includes , $o->{'genus_name'}.$o->{'species_name'};
 			}
 		}
-		print "<p style=\"padding-left: 1em; text-indent: -1em;\">The collection documenting the first appearance is <a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$firsts[0]->{'collection_no'}\">$firsts[0]->{'collection_name'}</a> ($agerange $firsts[0]->{'formation'} of $firsts[0]->{'country'}: includes ".join(', ',@includes).")</p>\n";
+		print "<p style=\"padding-left: 1em; text-indent: -1em;\">The collection documenting the first appearance is <a href=\"$READ_URL?action=basicCollectionSearch&amp;collection_no=$firsts[0]->{'collection_no'}\">$firsts[0]->{'collection_name'}</a> ($agerange $firsts[0]->{'formation'} of $firsts[0]->{'country'}: includes ".join(', ',@includes).")</p>\n";
 	} else	{
 		@firsts = sort { $a->{'collection_name'} cmp $b->{'collection_name'} } @firsts;
 		print "<p class=\"large\" style=\"margin-bottom: -1em;\">Collections including first appearances</p>\n";
@@ -3819,7 +3819,7 @@ sub displayFirstAppearance	{
 			my $classes = (($#firsts > 1) && ($i/2 > int($i/2))) ? qq|"small darkList"| : qq|"small"|;
 			print "<tr valign=\"top\" class=$classes style=\"padding: 3.5em;\">\n";
 			my $collno = $coll->{'collection_no'};
-			$coll->{'collection_no'} = "&nbsp;&nbsp;<a href=\"$READ_URL?action=displayCollectionDetails&amp;collection_no=$coll->{'collection_no'}\">".$coll->{'collection_no'}."</a>";
+			$coll->{'collection_no'} = "&nbsp;&nbsp;<a href=\"$READ_URL?action=basicCollectionSearch&amp;collection_no=$coll->{'collection_no'}\">".$coll->{'collection_no'}."</a>";
 			if ( $coll->{'state'} && $coll->{'country'} eq "United States" )	{
 				$coll->{'country'} = "US (".$coll->{'state'}.")";
 			}
@@ -3932,6 +3932,7 @@ sub basicTaxonInfo	{
 	}
 
 	my $taxon_name = $q->param('taxon_name');
+	$taxon_name =~ s/ sp(p|).$//;
 	if ( ! $taxon_name && $q->param('quick_search') )	{
 		$taxon_name = $q->param('quick_search');
 	} elsif ( ! $taxon_name && $q->param('search_again') )	{
@@ -3944,13 +3945,35 @@ sub basicTaxonInfo	{
 	my $taxon_no;
 	if ( $q->param('taxon_no') )	{
 		$taxon_no = $q->param('taxon_no');
+		$taxon_no = getSeniorSynonym($dbt,$taxon_no); 
 	} elsif ( $taxon_name )	{
 		# used in preference to getTaxa because the query is dead simple
 		my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_name);
-		if ( ! @taxon_nos && $q->param('last_taxon') == 9999 )	{
+		# genus name might be salvageable
+		if ( ! @taxon_nos && $taxon_name =~ /[a-z] [a-z]/i )	{
+			my ($g,$s) = split / /,$taxon_name;
+			@taxon_nos = TaxonInfo::getTaxonNos($dbt,$g);
+		}
+		# the name may be bona fide but completely unclassified, so
+		#  see if it has occurrences
+		my $occ;
+		if ( ! @taxon_nos )	{
+			my ($g,$s) = split / /,$taxon_name;
+			my $name_clause = "genus_name='".$g."'";
+			if ( $s )	{
+				$name_clause .= " AND species_name='".$s."'";
+			}
+			my $sql = "SELECT count(*) c FROM occurrences WHERE $name_clause";
+			$occ = ${$dbt->getData($sql)}[0];
+			if ( ! $occ )	{
+				$sql = "SELECT count(*) c FROM reidentifications WHERE $name_clause";
+				$occ = ${$dbt->getData($sql)}[0];
+			}
+		}
+		if ( ! @taxon_nos && $q->param('last_taxon') > 0 && ! $occ )	{
 			$taxon_no = $q->param('last_taxon');
 			$error = "WARNING: '".$taxon_name."' is not in the database. Please search again.";
-		} elsif ( ! @taxon_nos )	{
+		} elsif ( ! @taxon_nos && ! $occ )	{
 			my $rank_clause = "AND taxon_rank='species'";
 			if ( $taxon_name !~ / / )	{
 				$rank_clause = "AND taxon_rank!='species'";
@@ -3995,17 +4018,19 @@ sub basicTaxonInfo	{
 	my $authorfields = "if(ref_is_authority='YES',r.author1init,a.author1init) author1init,if(ref_is_authority='YES',r.author1last,a.author1last) author1last,if(ref_is_authority='YES',r.author2init,a.author2init) author2init,if(ref_is_authority='YES',r.author2last,a.author2last) author2last,if(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,if(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr";
 	my $authorfields2 = "if(ref_has_opinion='YES',r.author1init,o.author1init) author1init,if(ref_has_opinion='YES',r.author1last,o.author1last) author1last,if(ref_has_opinion='YES',r.author2init,o.author2init) author2init,if(ref_has_opinion='YES',r.author2last,o.author2last) author2last,if(ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors,if(ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr";
 
-	my $sql= "SELECT taxon_name,taxon_rank,common_name,extant,a.reference_no,ref_is_authority,$authorfields,lft,rgt FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND a.taxon_no=".$taxon_no." AND a.taxon_no=t.taxon_no";
-	my $auth = ${$dbt->getData($sql)}[0];
+	my ($sql,$auth,$class_hash);
+	if ( $taxon_no )	{
+		$sql= "SELECT taxon_name,taxon_rank,common_name,extant,a.reference_no,ref_is_authority,$authorfields,lft,rgt FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND a.taxon_no=".$taxon_no." AND a.taxon_no=t.taxon_no";
+		$auth = ${$dbt->getData($sql)}[0];
 
-
-	my $class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
-	my @class_array = @{$class_hash->{$taxon_no}};
-	if ( ! $auth->{'common_name'} )	{
-		for my $i ( 0..$#class_array )	{
-			if ( $class_array[$i]->{'common_name'} )	{
-				$auth->{'common_name'} = $class_array[$i]->{'common_name'};
-				last;
+		$class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
+		my @class_array = @{$class_hash->{$taxon_no}};
+		if ( ! $auth->{'common_name'} )	{
+			for my $i ( 0..$#class_array )	{
+				if ( $class_array[$i]->{'common_name'} )	{
+					$auth->{'common_name'} = $class_array[$i]->{'common_name'};
+					last;
+				}
 			}
 		}
 	}
@@ -4015,29 +4040,33 @@ sub basicTaxonInfo	{
 	print $hbo->stdIncludes("std_page_top",$page_title);
 
 	my $header;
-	if ( $auth->{'extant'} !~ /yes/i )	{
+	if ( $auth->{'extant'} !~ /yes/i && $taxon_no )	{
 		$header = "&dagger;";
 	}
 	if ( $auth->{'taxon_rank'} =~ /genus|species/ )	{
 		$header .= italicize($auth)." ";
-	} else	{
+	} elsif ( $taxon_no )	{
 		$header .= $auth->{'taxon_rank'}." ".$auth->{'taxon_name'}." ";
+	} else	{
+		$header = $taxon_name;
 	}
 	my ($x,$y) = split //,$header,2;
 	$x =~ tr/[a-z]/[A-Z]/;
 	$header = $x.$y;
 	$header =~ s/Unranked clade/Clade/;
 
-	my $author = formatShortAuthor($auth);
-	if ( $auth->{'ref_is_authority'} =~ /y/i )	{
-		$author = "<a href=\"$READ_URL?action=displayReference&amp;reference_no=$auth->{'reference_no'}&amp;is_real_user=$is_real_user\">".$author."</a>";
-	}
-	$header .= $author;
-	if ( $auth->{'common_name'} )	{
-		$header .= " (".$auth->{'common_name'}.")";
+	if ( $taxon_no )	{
+		my $author = formatShortAuthor($auth);
+		if ( $auth->{'ref_is_authority'} =~ /y/i )	{
+			$author = "<a href=\"$READ_URL?action=displayReference&amp;reference_no=$auth->{'reference_no'}&amp;is_real_user=$is_real_user\">".$author."</a>";
+		}
+		$header .= $author;
+		if ( $auth->{'common_name'} )	{
+			$header .= " (".$auth->{'common_name'}.")";
+		}
 	}
 
-        print qq|<div align="center" class="small" style="margin-left: 1em; margin-top: 3em;">
+        print qq|<div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
 <div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left; width: 54em;">
 <span class="displayPanelHeader">$header</span>
 <div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
@@ -4049,26 +4078,28 @@ sub basicTaxonInfo	{
 
 	# PARENT SECTION
 
-	my $parent = TaxaCache::getParent($dbt,$taxon_no);
-	if ( $parent )	{
-		my $parent_data = getTaxa($dbt,{'taxon_no'=>$parent->{'taxon_no'}},['taxon_name','taxon_rank','taxon_no']);
-		print "<p>Parent taxon: <a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$parent_data->{'taxon_no'}\">".italicize($parent_data)."</a>";
-		$sql = "SELECT r.reference_no,$authorfields2 FROM $TAXA_TREE_CACHE t,opinions o,refs r WHERE r.reference_no=o.reference_no AND t.opinion_no=o.opinion_no AND t.taxon_no=$taxon_no";
-		my $ref = ${$dbt->getData($sql)}[0];
-		print " according to ".Reference::formatShortRef($ref,'link_id'=>1);
-		print "</p>\n\n";
-		if ( $is_real_user > 0 )	{
-			$sql =  "SELECT r.reference_no,r.author1last,r.author2last,r.otherauthors,r.pubyr FROM opinions o,$TAXA_TREE_CACHE t,refs r WHERE child_no=taxon_no AND synonym_no=$taxon_no AND o.reference_no=r.reference_no AND o.reference_no!=".$ref->{'reference_no'}." GROUP BY r.reference_no ORDER BY r.author1last,r.author2last,r.pubyr";
-			my @refs = @{$dbt->getData($sql)};
-			if ( @refs )	{
-				print "<p $indent>See also ";
-				my @formatted;
-				for my $r ( @refs )	{
-					push @formatted , Reference::formatShortRef($r,'link_id'=>1);
+	if ( $taxon_no )	{
+		my $parent = TaxaCache::getParent($dbt,$taxon_no);
+		if ( $parent )	{
+			my $parent_data = getTaxa($dbt,{'taxon_no'=>$parent->{'taxon_no'}},['taxon_name','taxon_rank','taxon_no']);
+			print "<p>Parent taxon: <a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$parent_data->{'taxon_no'}\">".italicize($parent_data)."</a>";
+			$sql = "SELECT r.reference_no,$authorfields2 FROM $TAXA_TREE_CACHE t,opinions o,refs r WHERE r.reference_no=o.reference_no AND t.opinion_no=o.opinion_no AND t.taxon_no=$taxon_no";
+			my $ref = ${$dbt->getData($sql)}[0];
+			print " according to ".Reference::formatShortRef($ref,'link_id'=>1);
+			print "</p>\n\n";
+			if ( $is_real_user > 0 )	{
+				$sql =  "SELECT r.reference_no,r.author1last,r.author2last,r.otherauthors,r.pubyr FROM opinions o,$TAXA_TREE_CACHE t,refs r WHERE child_no=taxon_no AND synonym_no=$taxon_no AND o.reference_no=r.reference_no AND o.reference_no!=".$ref->{'reference_no'}." GROUP BY r.reference_no ORDER BY r.author1last,r.author2last,r.pubyr";
+				my @refs = @{$dbt->getData($sql)};
+				if ( @refs )	{
+					print "<p $indent>See also ";
+					my @formatted;
+					for my $r ( @refs )	{
+						push @formatted , Reference::formatShortRef($r,'link_id'=>1);
+					}
+					my $lastref = pop @formatted;
+					print join(', ',@formatted)." and ".$lastref;
+					print "</p>\n\n";
 				}
-				my $lastref = pop @formatted;
-				print join(', ',@formatted)." and ".$lastref;
-				print "</p>\n\n";
 			}
 		}
 	}
@@ -4077,67 +4108,102 @@ sub basicTaxonInfo	{
 	# this is a little off because it prints "current" spellings instead of
 	#   original spellings (usually they are the same for synonyms)
 
-	$sql = "SELECT taxon_name,taxon_rank,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND spelling_no=t.taxon_no AND a.reference_no=r.reference_no ORDER BY taxon_name";
-	my @syn_refs = @{$dbt->getData($sql)};
-	if ( $#syn_refs == 0 )	{
-		print "<p>Synonym: ".italicize($syn_refs[0])." ".formatShortAuthor($syn_refs[0])."</p>\n\n";
-	} elsif ( $#syn_refs > 0 )	{
-		print "<p $indent>Synonyms: ";
-		my $list;
+	if ( $taxon_no )	{
+		$sql = "SELECT taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND spelling_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no ORDER BY taxon_name";
+		my @syn_refs = @{$dbt->getData($sql)};
 		for my $s ( @syn_refs )	{
-			$list .= italicize($s)." ".formatShortAuthor($s).", ";
+			if ( $s->{'status'} !~ /subjective/ )	{
+				$s->{'note'} = $s->{'status'};
+				$s->{'note'} =~ s/ of$//;
+				$s->{'note'} =~ s/replaced by/replaced name/;
+				$s->{'note'} = " [".$s->{'note'}."]";
+			}
 		}
-		$list =~ s/, $//;
-		print "$list<p>\n\n";
+		if ( $#syn_refs == 0 )	{
+			print "<p>Synonym: ".italicize($syn_refs[0])." ".formatShortAuthor($syn_refs[0]).$syn_refs[0]->{'note'}."</p>\n\n";
+		} elsif ( $#syn_refs > 0 )	{
+			print "<p $indent>Synonyms: ";
+			my $list;
+			for my $s ( @syn_refs )	{
+				$list .= italicize($s)." ".formatShortAuthor($s).$s->{'note'}.", ";
+			}
+			$list =~ s/, $//;
+			print "$list<p>\n\n";
+		}
 	}
 
 	# TYPE SECTION
 
-	my @spellings = getAllSpellings($dbt,$taxon_no);
-	my $typeInfo = printTypeInfo($dbt,join(',',@spellings),$auth,1,'basicTaxonInfo');
-	if ( $typeInfo )	{
-		if ($auth->{'taxon_rank'} =~ /species/) {
-			print "<p $indent>Type specimen: ";
-		} else	{
-			print "<p $indent>Type: ";
+	if ( $taxon_no )	{
+		my @spellings = getAllSpellings($dbt,$taxon_no);
+		my $typeInfo = printTypeInfo($dbt,join(',',@spellings),$auth,1,'basicTaxonInfo');
+		if ( $typeInfo )	{
+			if ($auth->{'taxon_rank'} =~ /species/) {
+				print "<p $indent>Type specimen: ";
+			} else	{
+				print "<p $indent>Type: ";
+			}
+			if ( $typeInfo !~ /\. [A-Za-z]/ )	{
+				$typeInfo =~ s/[\.] //;
+			}
+			print $typeInfo;
+			print "<p>\n\n";
 		}
-		if ( $typeInfo !~ /\. [A-Za-z]/ )	{
-			$typeInfo =~ s/[\.] //;
-		}
-		print $typeInfo;
-		print "<p>\n\n";
 	}
 
 	# ECOLOGY SECTION
 
-	my $eco_hash = Ecology::getEcology($dbt,$class_hash,['locomotion','life_habit','diet1','diet2'],'get_basis');
-	my $ecotaphVals = $eco_hash->{$taxon_no};
+	if ( $taxon_no )	{
+		my $eco_hash = Ecology::getEcology($dbt,$class_hash,['locomotion','life_habit','diet1','diet2'],'get_basis');
+		my $ecotaphVals = $eco_hash->{$taxon_no};
 
-	if ( $ecotaphVals )	{
-		print "<p>Ecology:";
-		# it's really annoying how often this gets printed
-		$ecotaphVals->{'locomotion'} =~ s/actively mobile//;
-		for my $e ( 'locomotion','life_habit','diet1' )	{
-			if ( $ecotaphVals->{$e} )	{
-				print " ".$ecotaphVals->{$e};
+		if ( $ecotaphVals )	{
+			print "<p>Ecology:";
+			# it's really annoying how often this gets printed
+			$ecotaphVals->{'locomotion'} =~ s/actively mobile//;
+			for my $e ( 'locomotion','life_habit','diet1' )	{
+				if ( $ecotaphVals->{$e} )	{
+					print " ".$ecotaphVals->{$e};
+				}
 			}
+			if ( $ecotaphVals->{'diet1'} && $ecotaphVals->{'diet2'} )	{
+				print "-".$ecotaphVals->{'diet2'};
+			}
+			print "</p>\n\n";
 		}
-		if ( $ecotaphVals->{'diet1'} && $ecotaphVals->{'diet2'} )	{
-			print "-".$ecotaphVals->{'diet2'};
-		}
-		print "</p>\n\n";
 	}
 
 	# DISTRIBUTION SECTION
 
 	if ( $is_real_user > 0 )	{
-		$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE t WHERE lft>=".$auth->{'lft'}." AND rgt<=".$auth->{'rgt'};
-		my @subtaxa = @{$dbt->getData($sql)};
-		my @inlist;
-		push @inlist , $_->{'taxon_no'} foreach @subtaxa;
 
-		$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,count(*) c FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country)";
-		$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,count(*) c FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country)";
+		# taxon_string is needed for maps and taxon_param for links
+		my $taxon_string = $taxon_no;
+		my $taxon_param = "taxon_no=".$taxon_no;
+		if ( ! $taxon_string )	{
+			$taxon_string = $taxon_name;
+			$taxon_param = "taxon_name=".$taxon_name;
+		}
+		$taxon_string =~ s/ /_/g;
+
+		if ( $taxon_no )	{
+			$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE t WHERE lft>=".$auth->{'lft'}." AND rgt<=".$auth->{'rgt'};
+			my @subtaxa = @{$dbt->getData($sql)};
+			my @inlist;
+			push @inlist , $_->{'taxon_no'} foreach @subtaxa;
+
+			$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+		} else	{
+			my ($g,$s) = split / /,$taxon_name;
+			my $name_clause = "o.genus_name='".$g."'";
+			if ( $s )	{
+				$name_clause .= " AND o.species_name='".$s."'";
+			}
+			$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND $name_clause AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$name_clause =~ s/o\./re\./g;
+			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND $name_clause AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+		}
 
 		my @occs = @{$dbt->getData($sql)};
 
@@ -4158,28 +4224,33 @@ sub basicTaxonInfo	{
 			$base{$i->{'own'}} = $i->{'base'};
 		}
 
-		my %colls;
+		my (%bycountry,%bystate);
 		for my $o ( @occs )	{
 			if ( $period{$o->{'max_interval_no'}} =~ /Paleogene|Neogene/ )	{
 				if ( $epoch{$o->{'max_interval_no'}} eq $epoch{$o->{'min_interval_no'}} || $o->{'min_interval_no'} == 0 || ! $epoch{$o->{'min_interval_no'}} )	{
-					$colls{$epoch{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bycountry{$epoch{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bystate{$epoch{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
 				} else	{
-					$colls{$epoch{$o->{'max_interval_no'}}." to ".$epoch{$o->{'min_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bycountry{$epoch{$o->{'max_interval_no'}}." to ".$epoch{$o->{'min_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bystate{$epoch{$o->{'max_interval_no'}}." to ".$epoch{$o->{'min_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
 				}
 			} elsif ( $period{$o->{'max_interval_no'}} )	{
 				if ( $period{$o->{'max_interval_no'}} eq $period{$o->{'min_interval_no'}} || $o->{'min_interval_no'} == 0 || ! $period{$o->{'min_interval_no'}} )	{
-					$colls{$period{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bycountry{$period{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bystate{$period{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
 				} else	{
-					$colls{$period{$o->{'max_interval_no'}}." to ".$period{$o->{'min_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bycountry{$period{$o->{'max_interval_no'}}." to ".$period{$o->{'min_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bystate{$period{$o->{'max_interval_no'}}." to ".$period{$o->{'min_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
 				}
 			} else	{
-				$colls{$own{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+				$bycountry{$own{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+				$bystate{$own{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
 			}
 		}
 		if ( @occs )	{
 			print "<p>Distribution:</p>\n\n";
 			print "<div style=\"margin-left: 2em;\">\n";
-			my @intervals = keys %colls;
+			my @intervals = keys %bycountry;
 			for my $i ( @intervals )	{
 				if ( ! $base{$i} )	{
 					my ($x,$y) = split / /,$i;
@@ -4189,19 +4260,36 @@ sub basicTaxonInfo	{
 			@intervals = sort { $base{$a} <=> $base{$b} } @intervals;
 			for my $i ( @intervals )	{
 				print "<p $indent>&bull; $i of ";
-				my @countries = keys %{$colls{$i}};
+				my @countries = keys %{$bycountry{$i}};
 				@countries = sort @countries;
 				my $list;
 				for my $c ( @countries )	{
+					my @states = keys %{$bystate{$i}{$c}};
+					@states = sort @states;
+					for my $j ( 0..$#states )	{
+						if ( ! $states[$j] )	{
+							splice @states , $j , 1;
+							last;
+						}
+					}
 					my ($max_interval,$min_interval) = split/ to /,$i;
 					my $country = $c;
-					$list .= "<a href=\"$READ_URL?action=displayCollResults&amp;taxon_no=$taxon_no&amp;max_interval=$max_interval&amp;min_interval=$min_interval&amp;country=$country&amp;is_real_user=$is_real_user\">";
-					$country =~ s/Libyan Arab Jamahiriya/Libya/;
-					$country =~ s/Syrian Arab Republic/Syria/;
-					$country =~ s/Lao People's Democratic Republic/Laos/;
-					$country =~ s/(United Kingdom|Russian Federation|Czech Republic|Netherlands|Dominican Republic|Bahamas|Philippines|Netherlands Antilles|United Arab Emirates|Marshall Islands|Congo|Seychelles)/the $1/;
-					$country =~ s/, .*//;
-					$list .= "$country</a> ($colls{$i}{$c}), ";
+					my $shortcountry = $country;
+					$shortcountry =~ s/Libyan Arab Jamahiriya/Libya/;
+					$shortcountry =~ s/Syrian Arab Republic/Syria/;
+					$shortcountry =~ s/Lao People's Democratic Republic/Laos/;
+					$shortcountry =~ s/(United Kingdom|Russian Federation|Czech Republic|Netherlands|Dominican Republic|Bahamas|Philippines|Netherlands Antilles|United Arab Emirates|Marshall Islands|Congo|Seychelles)/the $1/;
+					$shortcountry =~ s/, .*//;
+					if ( $country !~ /United States|Canada/ || ! @states )	{
+						$list .= "<a href=\"$READ_URL?action=displayCollResults&amp;$taxon_param&amp;max_interval=$max_interval&amp;min_interval=$min_interval&amp;country=$country&amp;is_real_user=$is_real_user&amp;basic=yes\">$shortcountry</a> (".$bycountry{$i}{$c};
+					} else	{
+						for my $j ( 0..$#states )	{
+							$states[$j] = "<a href=\"$READ_URL?action=displayCollResults&amp;$taxon_param&amp;max_interval=$max_interval&amp;min_interval=$min_interval&amp;country=$country&amp;state=$states[$j]&amp;is_real_user=$is_real_user&amp;basic=yes\">$states[$j]</a>";
+						}
+						$list .= "$country ($bycountry{$i}{$c}";
+						$list .= ": ".join(', ',@states);
+					}
+					$list .= "), ";
 				}
 				$list =~ s/, $//;
 				print "$list</p>\n";
@@ -4217,11 +4305,11 @@ sub basicTaxonInfo	{
 			require GD;
 			my $im = new GD::Image(1,1,1);
 			my $GIF_DIR = $HTML_DIR."/public/maps";
-       			open(PNG,">$GIF_DIR/taxon".$taxon_no.".png");
+       			open(PNG,">$GIF_DIR/taxon".$taxon_string.".png");
 			binmode(PNG);
 			print PNG $im->png;
 			close PNG;
-			chmod 0664, "$GIF_DIR/taxon".$taxon_no.".png";
+			chmod 0664, "$GIF_DIR/taxon".$taxon_string.".png";
 
 			print qq|
 <script language="Javascript" type="text/javascript">
@@ -4230,7 +4318,7 @@ sub basicTaxonInfo	{
 var swapID;
 var eraseID;
 function requestMap()	{
-	document.getElementById('taxonImage').src = '$HOST_URL/cgi-bin/$READ_URL?action=displayMapOnly&amp;display_header=NO&amp;taxon_no=$taxon_no';
+	document.getElementById('taxonImage').src = '$HOST_URL/cgi-bin/$READ_URL?action=displayMapOnly&amp;display_header=NO&amp;$taxon_param';
 	document.getElementById('mapLink').innerHTML = '';
 	document.getElementById('moreMapLinkText').innerHTML = '';
 	document.getElementById('pleaseWait').innerHTML = '<i>Please wait for the map to be generated</i>';
@@ -4243,7 +4331,7 @@ function requestMap()	{
 
 function swapInMap()	{
 	document.getElementById('pleaseWait').innerHTML += ' .';
-	document.getElementById('taxonImage').src = '/public/maps/taxon'+$taxon_no+'.png?' + (new Date()).getTime();
+	document.getElementById('taxonImage').src = '/public/maps/taxon$taxon_string.png?' + (new Date()).getTime();
 	if ( document.getElementById('taxonImage').clientWidth > 100 )	{
 		clearInterval( swapID );
 	}
@@ -4261,7 +4349,7 @@ function erasePleaseWait()	{
 // -->
 </script>
 
-<p><img id="taxonImage" src="/public/maps/taxon$taxon_no.png"><span id="mapLink" onClick="requestMap();" style="color: #0030D0;"><i>Click here</span><span id="moreMapLinkText"> to see a distribution map</span></i><span id="pleaseWait"></span></p>
+<p><img id="taxonImage" src="/public/maps/taxon$taxon_string.png"><span id="mapLink" onClick="requestMap();" style="color: #0030D0;"><i>Click here</span><span id="moreMapLinkText"> to see a distribution map</span></i><span id="pleaseWait"></span></p>
 
 |;
 
@@ -4271,31 +4359,37 @@ function erasePleaseWait()	{
 
 	# CHILDREN SECTION
 
-	my @child_refs = @{TaxaCache::getChildren($dbt,$taxon_no,'immediate_children')};
-	print "<p style=\"margin-left: 1em;\"><span style=\"margin-left: -1em; text-indent: -0.5em;\">Subtaxa: ";
-	if ( @child_refs )	{
-		my @child_nos;
-		push @child_nos , $_->{'taxon_no'} foreach @child_refs;
-		$sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_no IN (".join(',',@child_nos).") ORDER BY taxon_name";
-		my @child_names = @{$dbt->getData($sql)};
-		my $list;
-		$list .= "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">".italicize($_)."</a>, " foreach @child_names;
-		$list =~ s/, $//;
-		print $list;
-		print ' (<a href=# onClick="javascript: document.doViewClassification.submit()">view classification</a>)';
-		print "</span></p>\n\n";
-		print "\n<form method=\"POST\" action=\"$READ_URL\" name=\"doViewClassification\">";
-		print '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
-		print '<input type="hidden" name="maximum_levels" value="99">';
-		print '<input type="hidden" name="taxon_no" value="'.$taxon_no.'">';
-		print "</form>\n";
-	} else	{
-		print "<i>none</i></span></p>\n\n";
+	if ( $taxon_no )	{
+		my @child_refs = @{TaxaCache::getChildren($dbt,$taxon_no,'immediate_children')};
+		print "<p style=\"margin-left: 1em;\"><span style=\"margin-left: -1em; text-indent: -0.5em;\">Subtaxa: ";
+		if ( @child_refs )	{
+			my @child_nos;
+			push @child_nos , $_->{'taxon_no'} foreach @child_refs;
+			$sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_no IN (".join(',',@child_nos).") ORDER BY taxon_name";
+			my @child_names = @{$dbt->getData($sql)};
+			my $list;
+			$list .= "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">".italicize($_)."</a>, " foreach @child_names;
+			$list =~ s/, $//;
+			print $list;
+			print ' (<a href=# onClick="javascript: document.doViewClassification.submit()">view classification</a>)';
+			print "</span></p>\n\n";
+			print "\n<form method=\"POST\" action=\"$READ_URL\" name=\"doViewClassification\">";
+			print '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
+			print '<input type="hidden" name="maximum_levels" value="99">';
+			print '<input type="hidden" name="taxon_no" value="'.$taxon_no.'">';
+			print "</form>\n";
+		} else	{
+			print "<i>none</i></span></p>\n\n";
+		}
 	}
 	
 	if ( $is_real_user > 0 )	{
-		print "<p><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon_no&amp;is_real_user=1\">Show more details</a></p>\n\n";
-		if ( $s->isDBMember() )	{
+		if ( $taxon_no )	{
+			print "<p><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon_no&amp;is_real_user=1\">Show more details</a></p>\n\n";
+		} else	{
+			print "<p><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_name=$taxon_name&amp;is_real_user=1\">Show more details</a></p>\n\n";
+		}
+		if ( $s->isDBMember() && $taxon_no )	{
 			print "<p><a href=\"$READ_URL?action=displayAuthorityForm&amp;taxon_no=$taxon_no\">Edit ".italicize($auth)."</a></p>\n\n";
 			print "<p><a href=\"$READ_URL?action=displayOpinionChoiceForm&amp;taxon_no=$taxon_no\">Add taxonomic opinions about ".italicize($auth)."</a></p>\n\n";
 		}
@@ -4303,10 +4397,17 @@ function erasePleaseWait()	{
 	print "</div>\n</div>\n\n";
 
 	print qq|
-<form method="POST" action="$READ_URL" onSubmit="return checkName(1);">
+<form method="POST" action="$READ_URL" onSubmit="return checkName(1,'search_again');">
 <input type="hidden" name="action" value="basicTaxonInfo">
-<input type="hidden" name="last_taxon" value="$taxon_no">
+|;
+	if ( $taxon_no )	{
+		print qq|<input type="hidden" name="last_taxon" value="$taxon_no">
+|;
+	}
+	print qq|
+<span class="small">
 <input type="text" name="search_again" value="Search again" size="24" onFocus="textClear(search_again);" onBlur="textRestore(search_again);" style="font-size: 1.0em;">
+</span>
 </form>
 
 |;
