@@ -271,18 +271,19 @@ function textRestore (input)	{
 	}
 }
 
-function checkName(i)    {
-	if ( /[^A-Za-z ]/.test( document.forms[i].taxon_name.value ) )	{
-		alert("A taxon name can only include letters");
+function checkName(i,j)    {
+	var name = document.forms[i].elements[j].value;
+	if ( /[^A-Za-z0-9 :;,\-\(\)]/.test( name ) )	{
+		alert("A search string can only include letters, commas, etc. ");
 		return false;
-	} else if ( /^[^A-Z]/.test( document.forms[i].taxon_name.value ) )	{
-		alert("The taxon name isn't capitalized");
+	} else if ( /^[^A-Za-z0-9]/.test( name ) )	{
+		alert("The search string must begin with a letter or number");
 		return false;
-	} else if ( / .* /.test( document.forms[i].taxon_name.value ) )	{
-		alert("The taxon name has too many spaces");
+	} else if ( / $/.test( name ) )	{
+		alert("The search string can't end with a space");
 		return false;
-	} else if ( /[a-z ][A-Z]/.test( document.forms[i].taxon_name.value ) )	{
-		alert("The taxon name isn't capitalized correctly");
+	} else if ( /[^A-Za-z0-9\)]$/.test( name ) )	{
+		alert("The search string must end with a letter or number");
 		return false;
 	} else	{
 		return true;
