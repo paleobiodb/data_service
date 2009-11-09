@@ -383,7 +383,7 @@ sub htmlTaxaTree {
             $taxon_name = '"'.$taxon_name.'"';
         }
         
-        my $link = "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$record->{taxon_no}\">$taxon_name</a>";
+        my $link = "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$record->{taxon_no}\">$taxon_name</a>";
         if ( $record->{'taxon_rank'} =~ /species|genus/ ) {
             $title .= "<i>".$link."</i>";
         } else {
@@ -433,7 +433,7 @@ sub htmlTaxaTree {
             if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}} && ! $record->{'status'}) {
                 my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$record->{'type_taxon_no'}});
                 if ($t) {
-                    my $link = "<a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$t->{taxon_no}\">$t->{taxon_name}</a>";
+                    my $link = "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$t->{taxon_no}\">$t->{taxon_name}</a>";
                     if ( $t->{'taxon_rank'} =~ /species|genus/ ) {
                         $link = "<i>".$link."</i>";
                     } 
