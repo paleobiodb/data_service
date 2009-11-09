@@ -34,10 +34,11 @@ function checkForm ( ) {
 </div>
 
 <div align=center>
-<form method=post action="bridge.pl" onSubmit="return checkForm();">
+<form name="collForm" method=post action="bridge.pl" onSubmit="return checkForm();">
 <input type=hidden name="action">
 <input type=hidden name="type">
 <input type=hidden name="use_primary">
+<input type=hidden name="basic" value="yes">
 
 <div class="displayPanel" align=left>
   <span class="displayPanelHeader">Search values</span>
@@ -222,7 +223,7 @@ function checkForm ( ) {
   </div>
 </div>
 
-<p><input type="submit" name="submit"></p>
+%%links%%
 
 </form>
 </div>
