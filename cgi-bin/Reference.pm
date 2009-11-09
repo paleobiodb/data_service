@@ -607,7 +607,7 @@ sub displayReference {
                 if (! $row->{'is_primary'}) {
                     $style = " class=\"boring\"";
                 }
-                my $coll_link = qq|<a href="$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
+                my $coll_link = qq|<a href="$READ_URL?action=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
                 $html .= $coll_link . ", ";
             }
             $html =~ s/, $//;
@@ -886,7 +886,7 @@ sub getReferenceLinkSummary {
             if (! $row->{'is_primary'}) {
                 $style = " class=\"boring\"";
             }
-            my $coll_link = qq|<a href="$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
+            my $coll_link = qq|<a href="$READ_URL?action=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
             $retString .= $coll_link . " ";
         }
         $retString .= ")";
