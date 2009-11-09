@@ -1214,6 +1214,47 @@ sub displayCollectionDetails {
     if ( $coll->{'research_group'} =~ /ETE/ && $q->param('guest') eq '' )	{
         $page_vars->{ete_banner} = "<div style=\"padding-left: 3em; float: left;\"><img alt=\"ETE\" src=\"/public/bannerimages/ete_logo.jpg\"></div>";
     }
+    print $hbo->stdIncludes('std_page_top', $page_vars);
+
+    $coll = formatCoordinate($s,$coll);
+
+    # Handle display of taxonomic list now
+    # don't even let bots see the lists because they will index the taxon
+    #  pages returned by TaxonInfo anyway JA 2.10.09
+    if ( ! PBDBUtil::checkForBot() )	{
+        my $taxa_list = buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
+        $coll->{'taxa_list'} = $taxa_list;
+    }
+
+    my $links = "<div class=\"verysmall\">";
+
+    # Links at bottom
+    if ($s->isDBMember()) {
+        $links .= '<p><div align="center">';
+        my $p = Permissions->new($s,$dbt);
+        my $can_modify = $p->getModifierList();
+        $can_modify->{$s->get('authorizer_no')} = 1;
+
+        if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {  
+            $links .= qq|<a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a> - |;
+        }
+        $links .=  qq|<a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add a collection copied from this one</a>|;  
+        $links .= "</div></p>";
+    }
+    $links .= "</div>\n";
+
+    $coll->{'collection_links'} = $links;
+
+    displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
+
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+# split out of displayCollectionDetails JA 6.11.09
+sub formatCoordinate	{
+
+    my ($s,$coll) = @_;
+
     # if the user is not logged in, round off the degrees
     # DO NOT mess with this routine, because Joe Public must not be
     #  able to locate a collection in the field and pillage it
@@ -1256,38 +1297,7 @@ sub displayCollectionDetails {
     $coll->{'paleolat'} = sprintf "%.1f&deg;",abs($coll->{'paleolat'});
     $coll->{'paleolng'} = sprintf "%.1f&deg;",abs($coll->{'paleolng'});
 
-    print $hbo->stdIncludes('std_page_top', $page_vars);
-
-    # Handle display of taxonomic list now
-    # don't even let bots see the lists because they will index the taxon
-    #  pages returned by TaxonInfo anyway JA 2.10.09
-    if ( ! PBDBUtil::checkForBot() )	{
-        my $taxa_list = buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
-        $coll->{'taxa_list'} = $taxa_list;
-    }
-
-    my $links = "<div class=\"verysmall\">";
-
-    # Links at bottom
-    if ($s->isDBMember()) {
-        $links .= '<p><div align="center">';
-        my $p = Permissions->new($s,$dbt);
-        my $can_modify = $p->getModifierList();
-        $can_modify->{$s->get('authorizer_no')} = 1;
-
-        if ($can_modify->{$coll->{'authorizer_no'}} || $s->isSuperUser) {  
-            $links .= qq|<a href="$WRITE_URL?action=displayCollectionForm&collection_no=$collection_no">Edit collection</a> - |;
-        }
-        $links .=  qq|<a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$collection_no">Add a collection copied from this one</a>|;  
-        $links .= "</div></p>";
-    }
-    $links .= "</div>\n";
-
-    $coll->{'collection_links'} = $links;
-
-    displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
-
-	print $hbo->stdIncludes("std_page_bottom");
+    return $coll;
 }
 
 sub displayCollectionDetailsPage {
@@ -2053,10 +2063,10 @@ function showName()	{
 			$return .= qq|<a href="$READ_URL?action=rarefyAbundances&collection_no=$options{'collection_no'}">Analyze abundance data</a> - |;
 		}
 
-		$return .= qq|<a href="$READ_URL?action=displayCollectionEcology&collection_no=$options{'collection_no'}">Tabulate ecology data</a>|;
+		$return .= qq|<a href="$READ_URL?action=displayCollectionEcology&collection_no=$options{'collection_no'}">Tabulate ecology data</a> - |;
 
 		if ($s->isDBMember()) {
-			$return .= qq| - <a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$options{'collection_no'}">Edit taxonomic list</a> - |;
+			$return .= qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$options{'collection_no'}">Edit taxonomic list</a> - |;
 			$return .= qq|<a href="$WRITE_URL?action=displayOccsForReID&collection_no=$options{'collection_no'}">Reidentify taxa</a>|;
 		}
 	} elsif ($s->isDBMember()) {
@@ -2427,6 +2437,567 @@ sub getClassOrderFamily	{
 	return $rowref;
 }
 
+
+# JA 6-9.11.09
+# routes to displayCollResults, like a lot of things
+sub basicCollectionSearch	{
+
+	my ($dbt,$q,$s,$hbo) = @_;
+	my $dbh = $dbt->dbh;
+
+	my $sql;
+	my $fields = "collection_no,collection_name,collection_aka,authorizer,authorizer_no,reference_no,country,state,max_interval_no,min_interval_no,collectors,collection_dates";
+
+	if ( ! $q->param('collection_name') && $q->param('quick_search') )	{
+		$q->param('collection_name' => $q->param('quick_search') );
+	}
+	if ( $q->param('collection_list') && $q->param('collection_list') =~ /^[\d ,]+$/ ) {
+		if ( $q->param('collection_list') =~ /,/ )	{
+			$sql = "SELECT $fields FROM collections WHERE collection_no IN (".$q->param('collection_list').")";
+			my @colls = @{$dbt->getData($sql)};
+			$q->param('type' => 'view');
+			$q->param('basic' => 'yes');
+			main::displayCollResults(\@colls);
+			exit;
+		} else	{
+		$	q->param('collection_no' => $q->param('collection_list') );
+			basicCollectionInfo($dbt,$q,$s,$hbo);
+			return;
+		}
+	}
+
+	# paranoia check (all searches should be by name or number)
+	if ( ( ! $q->param('collection_no') || ( $q->param('collection_no') && $q->param('collection_no') == 0 ) ) &&  ! $q->param('collection_name') )	{
+		$q->param('type' => 'view');
+		$q->param('basic' => 'yes');
+		main::displaySearchColls('<center><p style="margin-top: -1em;">Your search produced no matches: please try again</p></center>');
+		exit;
+	}
+
+	if ( $q->param('collection_no') )	{
+		$sql = "SELECT $fields FROM collections WHERE collection_no=".$q->param('collection_no');
+		my $coll = ${$dbt->getData($sql)}[0];
+		if ( $coll )	{
+			basicCollectionInfo($dbt,$q,$s,$hbo);
+			return;
+		} else	{
+			$q->param('type' => 'basic');
+			main::displaySearchColls('<center><p style="margin-top: -1em;">Your search produced no matches: please try again</p></center>');
+			exit;
+		}
+	}
+
+	# search is by name of something that could be any of several fields,
+	#  so check them in plausibility order
+
+	# try literal collection name first
+	# exact first
+	$sql = "SELECT $fields FROM collections WHERE collection_name='".$q->param('collection_name')."'";
+	my @colls = @{$dbt->getData($sql)};
+	route();
+	if ( @colls )	{
+		return;
+	}
+
+	# partial second
+	$sql = "SELECT $fields FROM collections WHERE collection_name LIKE '%".$q->param('collection_name')."%'";
+	@colls = @{$dbt->getData($sql)};
+	route();
+	if ( @colls )	{
+		return;
+	}
+
+	# try alternative collection name
+	$sql = "SELECT $fields FROM collections WHERE collection_aka LIKE '%".$q->param('collection_name')."%'";
+	@colls = @{$dbt->getData($sql)};
+	route();
+	if ( @colls )	{
+		return;
+	}
+
+	# try strat unit
+	$sql = "SELECT $fields FROM collections WHERE (geological_group LIKE '%".$q->param('collection_name')."%' OR formation LIKE '%".$q->param('collection_name')."%' OR member LIKE '%".$q->param('collection_name')."%')";
+	@colls = @{$dbt->getData($sql)};
+	route();
+	if ( @colls )	{
+		return;
+	}
+
+	sub route()	{
+		if ( ! @colls )	{
+			return;
+		} elsif ( $#colls == 0 )	{
+			$q->param('collection_no' => $colls[0]->{'collection_no'} );
+			basicCollectionInfo($dbt,$q,$s,$hbo);
+			exit;
+		} else	{
+			$q->param('type' => 'view');
+			$q->param('basic' => 'yes');
+			main::displayCollResults(\@colls);
+			exit;
+		}
+	}
+
+
+	if ( ! @colls )	{
+		$q->param('collection_no' => $q->param('last_collection') );
+		$q->param('type' => 'view');
+		$q->param('basic' => 'yes');
+		main::displaySearchColls('Your search produced no matches: please try again');
+		exit;
+	}
+	return;
+
+}
+
+# JA 6-9.11.09
+sub basicCollectionInfo	{
+
+	my ($dbt,$q,$s,$hbo,$error) = @_;
+	my $dbh = $dbt->dbh;
+
+	my ($is_real_user,$not_bot) = (1,1);
+	if (! $q->request_method() eq 'POST' && ! $q->param('is_real_user') && ! $s->isDBMember())	{
+		$is_real_user = 0;
+		$not_bot = 0;
+	} elsif (PBDBUtil::checkForBot())	{
+		$is_real_user = 0;
+		$not_bot = 0;
+	}
+
+	my $sql = "SELECT * FROM collections WHERE collection_no=".$q->param('collection_no');
+	my $c = ${$dbt->getData($sql)}[0];
+
+	my $page_vars = {};
+	if ( $c->{'research_group'} =~ /ETE/ && $q->param('guest') eq '' )	{
+		$page_vars->{ete_banner} = "<div style=\"padding-left: 3em; float: left;\"><img alt=\"ETE\" src=\"/public/bannerimages/ete_logo.jpg\"></div>";
+	}
+
+	print $hbo->stdIncludes("std_page_top", $page_vars);
+
+	my $header = $c->{'collection_name'};
+
+	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
+
+	for my $f ( 'lithadj','lithadj2','pres_mode','assembl_comps','coll_meth','museum' )	{
+		$c->{$f} =~ s/,/, /g;
+	}
+
+
+	print qq|
+<div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
+<div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left; width: 54em;">
+<span class="displayPanelHeader">$header</span>
+<div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
+|;
+
+	if ( $c->{'collection_aka'} )	{
+		print "<p>Also known as $c->{'collection_aka'}</p>\n\n";
+	}
+	print "<p>Where: ";
+	if ( $c->{'country'} eq "United States" )	{
+		if ( $c->{'county'} )	{
+			print $c->{'county'}." County, ";
+		}
+		print $c->{'state'};
+	} else	{
+		if ( $c->{'state'} )	{
+			print $c->{'state'}.", ";
+		}
+		print $c->{'country'};
+	}
+
+	$c = formatCoordinate($s,$c);
+	$c->{'latdir'} =~ s/(N|S).*/$1/;
+	$c->{'lngdir'} =~ s/(E|W).*/$1/;
+	$c->{'paleolatdir'} =~ s/(N|S).*/$1/;
+	$c->{'paleolngdir'} =~ s/(E|W).*/$1/;
+
+	if ( $s->isDBMember() && $c->{'latmin'} )	{
+		print " (".$c->{'latdeg'}."&deg;".$c->{'latmin'}."'";
+		if ( $c->{'latsec'} )	{
+			print $c->{'latsec'}.'"';
+		}
+		print " ".$c->{'latdir'};
+		print " ".$c->{'lngdeg'}."&deg;".$c->{'lngmin'}."'";
+		if ( $c->{'lngsec'} )	{
+			print $c->{'lngsec'}.'"';
+		}
+		print " ".$c->{'lngdir'};
+	} else	{
+		print " (".$c->{'latdeg'}.".".$c->{'latdec'}."&deg; ".$c->{'latdir'};
+		print ", ".$c->{'lngdeg'}.".".$c->{'lngdec'}."&deg; ".$c->{'lngdir'};
+	}
+	if ( $c->{'paleolat'} && $c->{'paleolng'} )	{
+		print ": paleocoordinates ".$c->{'paleolat'}." ".$c->{'paleolatdir'};
+		print ", ".$c->{'paleolng'}." ".$c->{'paleolngdir'};
+	}
+
+	print ")";
+	print "<\p>\n\n";
+
+	print "<p $indent>When: ";
+	if ( $c->{'zone'} )	{
+		print $c->{'zone'}." ".$c->{'zone_type'}." zone, ";
+	}
+	if ( $c->{'member'} )	{
+		print $c->{'member'}." Member";
+		if ( $c->{'formation'} )	{
+			print " (".$c->{'formation'}." Formation)";
+		}
+		print ", ";
+	} elsif ( $c->{'formation'} )	{
+		print $c->{'formation'}." Formation";
+		if ( $c->{'geological_group'} )	{
+			print " (".$c->{'geological_group'}." Group)";
+		}
+		print ", ";
+	} elsif ( $c->{'geological_group'} )	{
+		print $c->{'geological_group'}." Group, ";
+	}
+	$sql = "SELECT eml_interval,interval_name,lower_boundary,upper_boundary FROM intervals i,interval_lookup l WHERE i.interval_no=".$c->{'max_interval_no'}." AND i.interval_no=l.interval_no";
+	my ($max,$min);
+	$max = ${$dbt->getData($sql)}[0];
+	if ( $max->{'eml_interval'} )	{
+		print $max->{'eml_interval'}." ";
+	}
+	print $max->{'interval_name'}." ";
+	if ( $c->{'min_interval_no'} > 0 )	{
+		$sql = "SELECT eml_interval,interval_name,lower_boundary,upper_boundary FROM intervals i,interval_lookup l WHERE i.interval_no=".$c->{'min_interval_no'}." AND i.interval_no=l.interval_no";
+		$min = ${$dbt->getData($sql)}[0];
+		print " to ";
+		if ( $min->{'eml_interval'} )	{
+			print $min->{'eml_interval'}." ";
+		}
+		print $min->{'interval_name'}." ";
+	}
+	printf "(%.1f - ",$max->{'lower_boundary'};
+	if ( ! $min->{'upper_boundary'} )	{
+		printf "%.1f",$max->{'upper_boundary'};
+	} else	{
+		printf "%.1f",$min->{'upper_boundary'};
+	}
+	print " Ma)";
+	print "<\p>\n\n";
+
+	print "<p $indent>Environment/lithology: ";
+	my $env = $c->{'environment'};
+	$env =~ s/ indet.//;
+	$env =~ s/(carbonate|siliciclastic)//;
+	$env =~ s/\// or /;
+	print $env;
+
+	my @terms;
+	if ( $c->{'lithification'} )	{
+		push @terms , $c->{'lithification'};
+	}
+	$c->{'lithadj'} =~ s/(fine|medium|coarse)/$1-grained/;
+	$c->{'lithadj'} =~ s/dunes(,|)//;
+	$c->{'lithadj'} =~ s/grading/graded/;
+	$c->{'lithadj'} =~ s/burrows/burrowed/;
+	$c->{'lithadj'} =~ s/bioturbation/bioturbated/;
+	my @adjectives = split /, /,$c->{'lithadj'};
+	for my $adj ( @adjectives )	{
+	# I can't be bothered with most of the sed structure values
+		if ( $adj !~ / / )	{
+			push @terms , $adj;
+		}
+	}
+	if ( $c->{'minor_lithology'} )	{
+		push @terms , split /,/,$c->{'minor_lithology'};
+	}
+	$c->{'lithology1'} =~ s/"//g;
+	$c->{'lithology1'} =~ s/not reported/lithology not reported/g;
+	push @terms , $c->{'lithology1'};
+	my $last = pop @terms;
+	if ( $env && $last )	{
+		print "; ";
+	}
+	print join(', ',@terms)." ".$last;
+
+	if ( $c->{'lithology2'} )	{
+		my @terms;
+		if ( $c->{'lithification2'} )	{
+			push @terms , $c->{'lithification2'};
+		}
+		$c->{'lithadj2'} =~ s/(fine|medium|coarse)/$1-grained/;
+		$c->{'lithadj2'} =~ s/dunes(,|)//;
+		$c->{'lithadj2'} =~ s/grading/graded/;
+		$c->{'lithadj2'} =~ s/burrows/burrowed/;
+		$c->{'lithadj2'} =~ s/bioturbation/bioturbated/;
+		my @adjectives = split /, /,$c->{'lithadj2'};
+		for my $adj ( @adjectives )	{
+			if ( $adj !~ / / )	{
+				push @terms , $adj;
+			}
+		}
+		if ( $c->{'minor_lithology2'} )	{
+			push @terms , split /,/,$c->{'minor_lithology2'};
+		}
+		$c->{'lithology2'} =~ s/"//g;
+		push @terms , $c->{'lithology2'};
+		my $last = pop @terms;
+		print " and ".join(', ',@terms)." ".$last;
+	}
+	print "<\p>\n\n";
+
+	if ( $c->{'assembl_comps'} )	{
+		if ( $c->{'assembl_comps'} =~ /,/ )	{
+			print "<p>Size classes: ";
+		} else	{
+			print "<p>Size class: ";
+		}
+		print $c->{'assembl_comps'};
+		print "<\p>\n\n";
+	}
+
+	$c->{'pres_mode'} =~ s/body(,|)//;
+	if ( $c->{'pres_mode'} )	{
+		print "<p>Preservation: $c->{'pres_mode'}</p>\n\n";
+	}
+
+	$c->{'collection_dates'} =~ s/^[0-9]([0-9]|) //;
+	$c->{'collection_dates'} =~ s/^[A-Za-z]* //;
+	$c->{'collection_dates'} =~ s/(.*)([0-9]s)$/the $1$2/;
+	$c->{'collection_dates'} =~ s/[0-9][0-9]\.//g;
+	$c->{'collection_dates'} =~ s/[0-9]\.//g;
+	if ( $c->{'collectors'} || $c->{'collection_dates'} )	{
+		print "<p>Collected";
+		if ( $c->{'collectors'} )	{
+			print " by ".$c->{'collectors'};
+		}
+		if ( $c->{'collection_dates'} )	{
+			print " in ".$c->{'collection_dates'};
+		}
+		if ( $c->{'museum'} )	{
+			print "; reposited in the ".$c->{'museum'};
+		}
+		print "<\p>\n\n";
+	} elsif ( $c->{'museum'} )	{
+		print "<p>Reposited in the $c->{'museum'}</p>\n\n";
+	}
+
+	$c->{'coll_meth'} =~ s/(field collection|survey of museum collection|observed .not collected.|selective )//g;
+	$c->{'coll_meth'} =~ s/, ,/,/g;
+	$c->{'coll_meth'} =~ s/^, //g;
+	if ( $c->{'coll_meth'} )	{
+		print "<p>Collection methods: $c->{'coll_meth'}</p>\n\n";
+	}
+
+	$sql = "SELECT * FROM refs WHERE reference_no=".$c->{'reference_no'};
+	my $ref = ${$dbt->getData($sql)}[0];
+	print "<p $indent>Primary reference: ".Reference::formatLongRef($ref,'link_id'=>1)." <a class=\"verysmall\" href=\"$READ_URL?displayReference&reference_no=$c->{reference_no}\">more details</a>";
+	if ($s->isDBMember()) {
+		print " - <a class=\"verysmall\" href=\"$WRITE_URL?action=displayRefResults&amp;type=edit&amp;reference_no=$c->{reference_no}\">edit</a>";
+	}
+	print "</p>\n\n";
+
+	$sql = "SELECT r.reference_no,author1last,author2last,otherauthors,pubyr FROM refs r,secondary_refs s WHERE r.reference_no=s.reference_no AND collection_no=".$c->{'collection_no'}." ORDER BY author1last,author2last,pubyr";
+	my @refs = @{$dbt->getData($sql)};
+	if ( @refs )	{
+		my @formatted;
+		for my $r ( @refs )	{
+			push @formatted , Reference::formatShortRef($r,'link_id'=>1);
+		}
+		print "<p $indent>See also ".join(', ',@formatted)."<\p>\n\n";
+	}
+
+	if ( $c->{''} )	{
+		print "<p>: ";
+		print $c->{''};
+		print "<\p>\n\n";
+	}
+
+	$c->{'created'} =~ s/ .*//;
+	my ($y,$m,$d) = split /-/,$c->{'created'};
+	print "<p $indent>PaleoDB collection $c->{'collection_no'}: authorized by $c->{'authorizer'}, entered by $c->{'enterer'} on $d.$m.$y";
+
+	$sql = "(SELECT distinct(enterer) FROM occurrences WHERE collection_no=$c->{'collection_no'} AND enterer!=".$dbh->quote($c->{'enterer'}).") UNION (SELECT distinct(enterer) FROM reidentifications WHERE collection_no=$c->{'collection_no'} AND enterer!=".$dbh->quote($c->{'enterer'}).")";
+	my @enterers = @{$dbt->getData($sql)};
+	if ( @enterers )	{
+		print ", edited by ";
+		my @names;
+		push @names, $_->{'enterer'} foreach @enterers;
+		my $last = pop @names;
+		if ( @names )	{
+			print join(', ',@names)." and ".$last;
+		} else	{
+			print $last;
+		}
+	}
+	print "<\p>\n\n";
+
+	print "<a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$c->{'collection_no'}\">See full details</a>\n\n";
+
+	if ( $is_real_user == 0 || $not_bot == 0 )	{
+		print $hbo->stdIncludes("std_page_bottom");
+		return;
+	}
+
+	# the following is basically a complete rewrite of buildTaxonomicList
+	# so what?
+
+	$sql = "(SELECT lft,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no FROM occurrences o,$TAXA_TREE_CACHE t LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL AND o.taxon_no=t.taxon_no) UNION (SELECT lft,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no FROM reidentifications re,$TAXA_TREE_CACHE t WHERE collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no) UNION (SELECT 999999,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0 FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
+	my @occs = @{$dbt->getData($sql)};
+	my (%bad,%lookup);
+	for my $o ( @occs )	{
+		if ( $o->{'taxon_no'} != $o->{'synonym_no'} )	{
+			$bad{$o->{'taxon_no'}} = $o->{'synonym_no'};
+		}
+	}
+	if ( %bad )	{
+		$sql = "SELECT a.taxon_no,a.taxon_name bad,a.taxon_rank,synonym_no,a2.taxon_name good FROM authorities a,authorities a2,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.synonym_no=a2.taxon_no AND a.taxon_no IN (".join(',',keys %bad).")";
+		my @seniors = @{$dbt->getData($sql)};
+		for my $s ( @seniors )	{
+		# ignore rank changes that don't change spellings
+			if ( $s->{'bad'} ne $s->{'good'} )	{
+				if ( $s->{'taxon_rank'} =~ /genus|species/ )	{
+					$s->{'good'} = "<i>".$s->{'good'}."</i>";
+				}
+				$s->{'good'} = "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$s->{'synonym_no'}\">".$s->{'good'}."</a>";
+				$lookup{$s->{'synonym_no'}} = $s->{'good'};
+			}
+		}
+	}
+	print "<div style=\"margin-left: 0em; margin-right: 1em; border-top: 1px solid darkgray;\">\n\n";
+	print "<p class=\"large\" style=\"margin-top: 0.5em;\">Taxonomic list</p>\n\n";
+	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\">\n\n";
+	my ($lastclass,$lastorder,$lastfamily,$class);
+	for my $o ( @occs )	{
+		my ($ital,$ital2,$postfix) = ('<i>','</i>','');
+		if ( $o->{'species_name'} eq "indet." )	{
+			($ital,$ital2) = ('','');
+		}
+		if ( $o->{'genus_reso'} eq "n. gen." )	{
+			$postfix = $o->{'genus_reso'};
+			$o->{'genus_reso'} = "";
+		}
+		if ( $o->{'subgenus_reso'} eq "n. subgen." )	{
+			$postfix .= " ".$o->{'subgenus_reso'};
+			$o->{'subgenus_reso'} = "";
+		}
+		if ( $o->{'species_reso'} eq "n. sp." )	{
+			$postfix .= " ".$o->{'species_reso'};
+			$o->{'species_reso'} = "";
+		}
+		if ( $o->{'genus_reso'} =~ /informal|"/ )	{
+			$o->{'genus_reso'} =~ s/informal.*//;
+			$o->{'genus_name'} = '"'.$o->{'genus_name'}.'"';
+		}
+		if ( $o->{'subgenus_reso'} =~ /informal|"/ )	{
+			$o->{'subgenus_reso'} =~ s/informal.*//;
+			$o->{'subgenus_name'} = '"'.$o->{'subgenus_name'}.'"';
+		}
+		if ( $o->{'species_reso'} =~ /informal|"/ )	{
+			$o->{'species_reso'} =~ s/informal.*//;
+			$o->{'species_name'} = '"'.$o->{'species_name'}.'"';
+		}
+		if ( $o->{'subgenus_reso'} && $o->{'subgenus_name'} )	{
+			$o->{'subgenus_reso'} = "(".$o->{'subgenus_reso'};
+			$o->{'subgenus_name'} .= ")";
+		} elsif ( $o->{'subgenus_name'} )	{
+			$o->{'subgenus_name'} = "(".$o->{'subgenus_name'}.")";
+		}
+		$o->{'formatted'} = "$o->{'genus_reso'} $o->{'genus_name'} $o->{'subgenus_reso'} $o->{'subgenus_name'} $o->{'species_reso'} $o->{'species_name'}";
+		$o->{'formatted'} =~ s/  / /g;
+		$o->{'formatted'} =~ s/ $//g;
+		$o->{'formatted'} =~ s/^ //g;
+		$o->{'formatted'} = $ital.$o->{'formatted'}.$ital2;
+		if ( ! $lookup{$o->{'synonym_no'}} && $o->{'taxon_no'} )	{
+			$o->{'formatted'} = "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$o->{'taxon_no'}\">".$o->{'formatted'}."</a>";
+		} elsif ( ! $o->{'taxon_no'} )	{
+			my $name = $o->{'genus_name'};
+			if ( $o->{'species_name'} !~ /(sp|spp|indet)\./ )	{
+				$name .= " ".$o->{'species_name'};
+			}
+			$o->{'formatted'} = "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_name=$name\">".$o->{'formatted'}."</a>";
+		}
+		if ( $postfix )	{
+			$o->{'formatted'} .= " ".$postfix;
+		}
+		if ( $lookup{$o->{'synonym_no'}} )	{
+			$o->{'formatted'} = '"'.$o->{'formatted'}.'" = '.$lookup{$o->{'synonym_no'}};
+		}
+		if ( $o->{'abund_value'} )	{
+			$o->{'formatted'} .= "[".$o->{'abund_value'}."]";
+		}
+		my $class_hash = TaxaCache::getParents($dbt,[$o->{'taxon_no'}],'array_full');
+		my @class_array = @{$class_hash->{$o->{'taxon_no'}}};
+		my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$o->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
+		unshift @class_array , $taxon;
+		$o = getClassOrderFamily(\$o,\@class_array);
+		if ( ! $o->{'class'} && ! $o->{'order'} && ! $o->{'family'} )	{
+			$o->{'class'} = "unclassified";
+		}
+		if ( $o->{'class'} ne $lastclass || $o->{'order'} ne $lastorder || $o->{'family'} ne $lastfamily )	{
+			if ( $lastclass || $lastorder || $lastfamily )	{
+				print "</tr>\n";
+			}
+			my @parents;
+			for my $p ( 'class','order','family' )	{
+				if ( $o->{$p} )	{
+				#if ( $o->{$p} && $o->{$p} ne "unclassified" )	{
+					push @parents , $o->{$p};
+				}
+			}
+			my $parentlist = join(' - ',@parents);
+			if ( $class =~ /dark/ )	{
+				$class = '';
+			} elsif ( $#occs > 0 )	{
+				$class = ' class="darkList"';
+			}
+			print "<tr$class>\n<td valign=\"top\"><nobr>$parentlist</nobr></td>\n";
+			print "<td valign=\"top\">$o->{'formatted'}";
+		} else	{
+			print ", $o->{'formatted'}";
+		}
+		$lastclass = $o->{'class'};
+		$lastorder = $o->{'order'};
+		$lastfamily = $o->{'family'};
+	}
+	print "</tr>\n";
+	print "</table>\n\n";
+
+	print "</div>\n</div>\n</div>\n\n";
+
+	if ( $error )	{
+		print "<center><p style=\"margin-top: -1em;\"><i>$error</i></p></center>\n\n";
+	}
+
+	if ($s->isDBMember()) {
+		print "<div class=\"medium\" style=\"margin-top: -1em; margin-bottom: 1em;\">\n";
+		my $p = Permissions->new($s,$dbt);
+		my $can_modify = $p->getModifierList();
+		$can_modify->{$s->get('authorizer_no')} = 1;
+		if ($can_modify->{$c->{'authorizer_no'}} || $s->isSuperUser) {  
+			 print qq|<a href="$WRITE_URL?action=displayCollectionForm&collection_no=$c->{'collection_no'}">Edit collection</a> - |;
+		}
+		print qq|<a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$c->{'collection_no'}">Add a collection copied from this one</a> - |;
+		if ($can_modify->{$c->{'authorizer_no'}} || $s->isSuperUser) {  
+			print qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$c->{'collection_no'}">Edit taxonomic list</a> - |;
+		}
+		print qq|<a href="$WRITE_URL?action=displayOccsForReID&collection_no=$c->{'collection_no'}">Reidentify taxa</a>|;
+		print "\n</div>\n\n";
+	}
+
+        print qq|
+<form method="POST" action="$READ_URL">
+<input type="hidden" name="action" value="basicCollectionSearch">
+<input type="hidden" name="last_collection" value="$c->{'collection_no'}">
+<span class="small">
+<input type="text" name="collection_name" value="Search again" size="24" onFocus="textClear(collection_name);" onBlur="textRestore(collection_name);" style="font-size: 1.0em;">
+</span>
+</form>
+
+|;
+
+	print "<br>\n\n";
+	print "</div>\n\n";
+
+	print $hbo->stdIncludes("std_page_bottom");
+
+}
+
 # JA 21.2.03
 sub rarefyAbundances	{
     my ($dbt,$q,$s,$hbo) = @_;
@@ -2463,7 +3034,7 @@ sub rarefyAbundances	{
 		if ( $ntaxa == 1 )	{
 			$reason = "only one taxon has abundance data";
 		}	
-		print "<center><p>Diversity statistics not available</p>\n<p class=\"medium\">Statistics for $collection_name (PBDB collection <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_no</a>) cannot<br>be computed because $reason</p></center>\n\n";
+		print "<center><p>Diversity statistics not available</p>\n<p class=\"medium\">Statistics for $collection_name (PBDB collection <a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$collection_no\">$collection_no</a>) cannot<br>be computed because $reason</p></center>\n\n";
     		print "<p><div align=\"center\"><b><a href=\"$READ_URL?action=displaySearchColls&type=analyze_abundance\">Search again</a></b></div></p>";
 		return;
 	}
@@ -2527,7 +3098,7 @@ sub rarefyAbundances	{
 
 	print "<center>\n";
 	print "<div class=\"displayPanel\" style=\"width: 32em; margin-top: 2em;\">\n";
-	print "<span class=\"displayPanelHeader\"><span class=\"large\">Diversity statistics for <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_name</a></span></span>\n\n";
+	print "<span class=\"displayPanelHeader\"><span class=\"large\">Diversity statistics for <a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$collection_no\">$collection_name</a></span></span>\n\n";
 	print "<div class=\"displayPanelContent\" style=\"width: 32em; padding-top: 1em;\">\n";
 	print "<table><tr><td align=\"left\">\n";
 	printf "<p>Total richness: %d taxa<br>\n",$ntaxa;
@@ -2581,7 +3152,7 @@ sub rarefyAbundances	{
 	}
 
 	print "<div class=\"displayPanel\" style=\"width: 32em; margin-top: 2em;\">\n";
-	print "<span class=\"displayPanelHeader\"><span class=\"large\" >Rarefaction curve for <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$collection_no\">$collection_name</a></span></span>\n\n";
+	print "<span class=\"displayPanelHeader\"><span class=\"large\" >Rarefaction curve for <a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$collection_no\">$collection_name</a></span></span>\n\n";
 	print "<div class=\"displayPanelContent\">\n";
 
     PBDBUtil::autoCreateDir("$HTML_DIR/public/rarefaction");
@@ -2736,7 +3307,7 @@ sub displayCollectionEcology	{
 
 	if (!%$ecology) {
 		print "<center><p>Sorry, there are no ecological data for any of the taxa</p></center>\n\n";
-		print "<center><p><b><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=" . $q->param('collection_no') . "\">Return to the collection record</a></b></p></center>\n\n";
+		print "<center><p><b><a href=\"$READ_URL?action=basicCollectionSearch&collection_no=" . $q->param('collection_no') . "\">Return to the collection record</a></b></p></center>\n\n";
 		print $hbo->stdIncludes("std_page_bottom");
 		return;
 	} 
@@ -2901,7 +3472,7 @@ sub displayCollectionEcology	{
 	print "</table>\n";
     print "</div>";
 
-	print "<div align=\"center\"><p><b><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=".$q->param('collection_no')."\">Return to the collection record</a></b> - ";
+	print "<div align=\"center\"><p><b><a href=\"$READ_URL?action=basicCollectionSearch&collection_no=".$q->param('collection_no')."\">Return to the collection record</a></b> - ";
 	print "<b><a href=\"$READ_URL?action=displaySearchColls&type=view\">Search for other collections</a></b></p></div>\n\n";
 	print $hbo->stdIncludes("std_page_bottom");
 
@@ -2988,10 +3559,10 @@ sub explainAEOestimate	{
 		$no{$data[0]} = $taxa;
 		$range[$taxa]->{'name'} = $data[0];
 		$range[$taxa]->{'occs'} = $data[1];
-		(my $a,$range[$taxa]->{'max'}) = split / \(/,$data[3];
+		(my $z,$range[$taxa]->{'max'}) = split / \(/,$data[3];
 		$range[$taxa]->{'max'} =~ s/[^0-9\.]//g;
 		$range[$taxa]->{'max'} = sprintf("%.1f",$range[$taxa]->{'max'});
-		(my $a,$range[$taxa]->{'min'}) = split / \(/,$data[4];
+		(my $z,$range[$taxa]->{'min'}) = split / \(/,$data[4];
 		$range[$taxa]->{'min'} =~ s/[^0-9\.]//g;
 		$range[$taxa]->{'min'} = sprintf("%.1f",$range[$taxa]->{'min'});
 		# weird Equus alaskae/crinidens cases
