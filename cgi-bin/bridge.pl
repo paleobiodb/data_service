@@ -344,7 +344,7 @@ sub displayHomePage {
 	for my $coll ( @colls )	{
 		if ( $entererseen{$coll->{reference_no}.$coll->{enterer_no}} < 1 )	{
 			$entererseen{$coll->{reference_no}.$coll->{enterer_no}}++;
-			$row->{collection_links} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=displayCollectionDetails&amp;collection_no=$coll->{collection_no}">$coll->{collection_name}</a></div>\n|;
+			$row->{collection_links} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicCollectionSearch&amp;collection_no=$coll->{collection_no}">$coll->{collection_name}</a></div>\n|;
 			$printed++;
 			if ( $printed == 25 )	{
 				last;
@@ -921,6 +921,36 @@ sub processReferenceForm {
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+
+# 7.11.09 JA
+sub quickSearch	{
+
+	# case 1: search string cannot be a taxon name, so search collections
+	if ( $q->param('quick_search') =~ /[^A-Za-z ]/ || $q->param('quick_search') =~ / .* / )	{
+		Collection::basicCollectionSearch($dbt,$q,$s,$hbo);
+	}
+	else	{
+		my $sql = "SELECT count(*) c FROM authorities WHERE taxon_name='".$q->param('quick_search')."'";
+    		my $t = ${$dbt->getData($sql)}[0];
+	# case 2: string is formatted correctly and matches at least one name,
+	#  so search taxa only
+		if ( $t->{'c'} > 0 )	{
+			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
+		}
+	# case 3: search is formatted correctly but does not directly match
+	#  any name, so first try collections and then try taxa again (which
+	#  will yield some kind of a match somehow)
+		else	{
+			Collection::basicCollectionSearch($dbt,$q,$s,$hbo);
+			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
+		}
+	}
+
+	return;
+
+}
+
+
 # 5.4.04 JA
 # print the special search form used when you are adding a collection
 # uses some code lifted from displaySearchColls
@@ -958,7 +988,7 @@ sub displaySearchColls {
 
 	# Have to have a reference #, unless we are just searching
 	my $reference_no = $s->get("reference_no");
-	if ( ! $reference_no && $type !~ /^(?:analyze_abundance|view|edit|reclassify_occurrence|count_occurrences|most_common)$/) {
+	if ( ! $reference_no && $type !~ /^(?:basic|analyze_abundance|view|edit|reclassify_occurrence|count_occurrences|most_common)$/) {
 		# Come back here... requeue our option
 		$s->enqueue("action=displaySearchColls&type=$type" );
 		displaySearchRefs( "Please choose a reference first" );
@@ -966,15 +996,23 @@ sub displaySearchColls {
 	}
 
 	# Show the "search collections" form
-    my %vars = ();
-    $vars{'enterer_me'} = $s->get('enterer_reversed');
-    $vars{'page_title'} = "Collection search form";
-    $vars{'action'} = "displayCollResults";
-    $vars{'type'} = $type;
-    $vars{'submit'} = "Search collections";
-    $vars{'error'} = $error;
+	my %vars = ();
+	$vars{'enterer_me'} = $s->get('enterer_reversed');
+	$vars{'page_title'} = "Collection search form";
+	$vars{'action'} = "displayCollResults";
+	$vars{'type'} = $type;
+	$vars{'error'} = $error;
 
-	if ($type eq 'occurrence_table') {
+	$vars{'links'} = qq|
+<p><span class="mockLink" onClick="javascript: document.collForm.submit();"><b>Search collections</b></a>
+|;
+
+	if ( $type eq "view" || ! $type )	{
+		$vars{'links'} = qq|
+<p><span class="mockLink" onClick="javascript: document.collForm.basic.value = 'yes'; document.collForm.submit();"><b>Search for basic info</b></a> -
+<span class="mockLink" onClick="javascript: document.collForm.basic.value = ''; document.collForm.submit();"><b>Search for full details</b></a></p>
+|;
+	} elsif ($type eq 'occurrence_table') {
 		$vars{'reference_no'} = $reference_no;
 		$vars{'limit'} = 20;
 	}
@@ -987,11 +1025,25 @@ sub displaySearchColls {
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub basicCollectionSearch	{
+	print $hbo->stdIncludes("std_page_top");
+	Collection::basicCollectionSearch($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
 
 # User submits completed collection search form
 # System displays matching collection results
 # Called during collections search, and by displayReIDForm() routine.
 sub displayCollResults {
+
+	# dataRows might be passed in by basicCollectionSearch
+	my $dataRows = shift;
+	my $ofRows;
+	if ( $dataRows )	{
+		$ofRows = scalar(@$dataRows);
+	}
+
 	return if PBDBUtil::checkForBot();
 	if ( ! $s->get('enterer') && $q->param('type') eq "reclassify_occurrence" )    {
 		print $hbo->stdIncludes( "std_page_top" );
@@ -1007,7 +1059,6 @@ sub displayCollResults {
 
 	# limit passed to permissions module
 	my $perm_limit;
-
 
 	# effectively don't limit the number of collections put into the
 	#  initial set to examine when adding a new one
@@ -1025,13 +1076,16 @@ sub displayCollResults {
 		}
 	}
 
-    my $type;
+	my $type;
 	if ( $q->param('type') ) {
 		$type = $q->param('type');			# It might have been passed (ReID)
 	} else {
 		# QUEUE
 		my %queue = $s->unqueue();		# Most of 'em are queued
 		$type = $queue{type};
+		if ( ! $type )	{
+			$type = "view";
+		}
 	}
 
     my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
@@ -1047,48 +1101,49 @@ sub displayCollResults {
         : ($type eq "reclassify_occurrence") ?  "startDisplayOccurrenceReclassify"
         : ($type eq "most_common") ? "displayMostCommonTaxa"
         : "displayCollectionDetails";
-	
+
+	# GET COLLECTIONS
 	# Build the SQL
 	# which function to use depends on whether the user is adding a collection
 	my $sql;
     
-    my ($dataRows,$ofRows,$warnings,$occRows) = ([],'',[],[]);
+	my ($warnings,$occRows) = ([],[]);
+
 	if ( $q->param('type') eq "add" )	{
 		# you won't have an in list if you are adding
 		($dataRows,$ofRows) = processCollectionsSearchForAdd();
-	} else	{
-        my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no","collection_aka","collectors","collection_dates"];
-        if ($q->param('output_format') eq 'xml') {
-            push @$fields, "latdeg","latmin","latsec","latdir","latdec","lngdeg","lngmin","lngsec","lngdir","lngdec";
-        }
-        my %options = $q->Vars();
-        if ($type eq "reclassify_occurrence" || $type eq "reid") {
-            # Want to not get taxon_nos when reclassifying. Otherwise, if the taxon_no is set to zero, how will you find it?
-            $options{'no_authority_lookup'} = 1;
-            $options{'match_subgenera'} = 1;
-        }
-        $options{'limit'} = $perm_limit;
-        # Do a looser match against old ids as well
-        $options{'include_old_ids'} = 1;
-        # Even if we have a match in the authorities table, still match against the bare occurrences/reids  table
-        $options{'include_occurrences'} = 1;
-#        $options{'lithologies'} = $options{'lithology1'} if (!$options{'lithologies'}); delete $options{'lithology1'};
-#        $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'};
-        if ($q->param("taxon_list")) {
-            my @in_list = split(/,/,$q->param('taxon_list'));
-            $options{'taxon_list'} = \@in_list if (@in_list);
-        }
-        if ($type eq "count_occurrences")	{
-            $options{'count_occurrences'} = 1;
-        }
-        if ($type eq "most_common")	{
-            $options{'include_old_ids'} = 0;
-        }
+	} elsif ( ! $dataRows )	{
+		my $fields = ["authorizer","country", "state", "period_max", "period_min", "epoch_max", "epoch_min", "intage_max", "intage_min", "locage_max", "locage_min", "max_interval_no", "min_interval_no","collection_aka","collectors","collection_dates"];
+		if ($q->param('output_format') eq 'xml') {
+			push @$fields, "latdeg","latmin","latsec","latdir","latdec","lngdeg","lngmin","lngsec","lngdir","lngdec";
+		}
+		my %options = $q->Vars();
+		if ($type eq "reclassify_occurrence" || $type eq "reid") {
+	# Want to not get taxon_nos when reclassifying. Otherwise, if the taxon_no is set to zero, how will you find it?
+			$options{'no_authority_lookup'} = 1;
+			$options{'match_subgenera'} = 1;
+		}
+		$options{'limit'} = $perm_limit;
+	# Do a looser match against old ids as well
+		$options{'include_old_ids'} = 1;
+	# Even if we have a match in the authorities table, still match against the bare occurrences/reids  table
+		$options{'include_occurrences'} = 1;
+		if ($q->param("taxon_list")) {
+			my @in_list = split(/,/,$q->param('taxon_list'));
+			$options{'taxon_list'} = \@in_list if (@in_list);
+		}
+		if ($type eq "count_occurrences")	{
+			$options{'count_occurrences'} = 1;
+		}
+		if ($type eq "most_common")	{
+			$options{'include_old_ids'} = 0;
+		}
 
 		$options{'calling_script'} = "displayCollResults";
 		($dataRows,$ofRows,$warnings,$occRows) = Collection::getCollections($dbt,$s,\%options,$fields);
 	}
 
+	# DISPLAY MATCHING COLLECTIONS
 	my @dataRows;
 	if ( $dataRows )	{
 		@dataRows = @$dataRows;
@@ -1123,6 +1178,7 @@ sub displayCollResults {
 		}
 		
 		print $hbo->stdIncludes( "std_page_top" );
+
         # Display header link that says which collections we're currently viewing
         if (@$warnings) {
             print "<div align=\"center\">".Debug::printWarnings($warnings)."</div>";
@@ -1237,7 +1293,12 @@ sub displayCollResults {
                 $type eq 'edit' && ($s->get("superuser") ||
                                    ($s->get('authorizer_no') && $s->get("authorizer_no") == $dataRow->{'authorizer_no'}) ||
                                     $is_modifier_for{$dataRow->{'authorizer_no'}})) {
-		  	    print "<td align=center valign=top><a href=\"$exec_url?action=$action&collection_no=$dataRow->{collection_no}";
+                if ( $q->param('basic') =~ /yes/i && $type eq "view" )	{
+                    print "<td align=center valign=top><a href=\"$exec_url?action=basicCollectionSearch&collection_no=$dataRow->{collection_no}";
+                } else	{
+                    print "<td align=center valign=top><a href=\"$exec_url?action=$action&collection_no=$dataRow->{collection_no}";
+                }
+
                 # for collection edit:
                 if($q->param('use_primary')){
                     print "&use_primary=yes";
@@ -1308,8 +1369,12 @@ sub displayCollResults {
         print "</table>\n";
     } elsif ( $displayRows == 1 ) { # if only one row to display...
 		$q->param(collection_no=>$dataRows[0]->{'collection_no'});
+                if ( $q->param('basic') =~ /yes/i && $type eq "view" )	{
+			Collection::basicCollectionInfo($dbt,$q,$s,$hbo);
+			return;
+		}
 		# Do the action directly if there is only one row
-        execAction($action);
+		execAction($action);
     } else {
 		# If this is an add,  Otherwise give an error
 		if ( $type eq "add" ) {
@@ -2782,12 +2847,12 @@ sub displayOccurrenceAddEdit {
 	} 
 
 	my $collection_no = $q->param("collection_no");
-    # No collection no is passed in, search for one
+	# No collection no is passed in, search for one
 	if ( ! $collection_no ) { 
-        $q->param('type'=>'edit_occurrence');
+		$q->param('type'=>'edit_occurrence');
 		displaySearchColls();
-        exit;
-    }
+		exit;
+	}
 
 	# Grab the collection name for display purposes JA 1.10.02
 	my $sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
@@ -3144,7 +3209,7 @@ EOF
     foreach my $collection_no (@collections) {
         my $collection_name = escapeHTML(generateCollectionLabel($collection_no));
         print '<td class="addBorders"><div class="fixedColumn">'.
-            qq|<a target="_blank" href="$READ_URL?action=displayCollectionDetails&amp;collection_no=$collection_no"><img border="0" src="/public/collection_labels/$collection_no.png" alt="$collection_name"/></a>|.
+            qq|<a target="_blank" href="$READ_URL?action=basicCollectionSearch&amp;collection_no=$collection_no"><img border="0" src="/public/collection_labels/$collection_no.png" alt="$collection_name"/></a>|.
             "</div></td>";
     }
     print "</tr>\n";
@@ -4451,7 +4516,7 @@ sub displayOccsForReID {
                 $sth->execute();
                 my %collRow = %{$sth->fetchrow_hashref()};
                 $html .= "Collection:";
-                my $details = " <a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$row->{'collection_no'}\">$row->{'collection_no'}</a>"." ".$collRow{'collection_name'};
+                my $details = " <a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$row->{'collection_no'}\">$row->{'collection_no'}</a>"." ".$collRow{'collection_name'};
                 if ($collRow{'state'} && $collRow{'country'} eq "United States")	{
                      $details .= " - " . $collRow{'state'};
                 }
@@ -4794,7 +4859,7 @@ sub listCollections {
     print "<BR><BR>";
     my $start = $page*200;
     for (my $i=$start; $i<$start+200 && $i <= $max_id;$i++) {
-        print "<a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$i\">$i</a> ";
+        print "<a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$i\">$i</a> ";
     }
 
 	print $hbo->stdIncludes ("std_page_bottom");
