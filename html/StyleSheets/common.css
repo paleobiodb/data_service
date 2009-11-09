@@ -479,6 +479,11 @@ div.emphasized {
 	background-color:#FFFFFF;
 }
 
+.taxonomicList a:link	{ color: black; }
+.taxonomicList a:visited	{ color : black; text-decoration:none; }
+.taxonomicList a:active	{ color : #00AAFF; text-decoration:none; }
+.taxonomicList a:hover	{ color : #C80078; text-decoration:none; }
+
 .padLeft {
     padding-left: .5em;
 }
