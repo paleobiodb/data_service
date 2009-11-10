@@ -138,7 +138,7 @@ sub getCollections {
                     @taxon_nos = map {$_->{taxon_no}} @taxa;
                 }
             }
-            
+
             # Fix up the genus name and set the species name if there is a space 
             my ($genus,$subgenus,$species) = Taxon::splitTaxon($options{'taxon_name'});
 
@@ -2492,7 +2492,14 @@ sub basicCollectionSearch	{
 
 	# try literal collection name first
 	# exact first
-	$sql = "SELECT $fields FROM collections WHERE collection_name='".$q->param('collection_name')."'";
+	if ( $q->param('collection_name') =~ /[^0-9]/ )	{
+		$sql = "SELECT $fields FROM collections WHERE collection_name='".$q->param('collection_name')."'";
+	}
+	# special handling for plain integers
+	else	{
+		my $integer = $dbh->quote('.*[^0-9]'.$q->param('collection_name').'(([^0-9]+)|($))');
+		$sql = "SELECT $fields FROM collections WHERE collection_no=".$q->param('collection_name')." OR collection_name REGEXP $integer OR collection_aka REGEXP $integer OR collection_dates REGEXP $integer";
+	}
 	my @colls = @{$dbt->getData($sql)};
 	route();
 	if ( @colls )	{
@@ -2540,11 +2547,17 @@ sub basicCollectionSearch	{
 
 
 	if ( ! @colls )	{
-		$q->param('collection_no' => $q->param('last_collection') );
-		$q->param('type' => 'view');
-		$q->param('basic' => 'yes');
-		main::displaySearchColls('Your search produced no matches: please try again');
-		exit;
+		# function was called by quickSearch, which will try
+		#  taxon name next
+		if ( ! @colls && $q->param('quick_search') )	{
+			return;
+		} else	{
+			$q->param('collection_no' => $q->param('last_collection') );
+			$q->param('type' => 'view');
+			$q->param('basic' => 'yes');
+			main::displaySearchColls('Your search produced no matches: please try again');
+			exit;
+		}
 	}
 	return;
 
@@ -2837,7 +2850,7 @@ sub basicCollectionInfo	{
 	# the following is basically a complete rewrite of buildTaxonomicList
 	# so what?
 
-	$sql = "(SELECT lft,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL) UNION (SELECT lft,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no FROM reidentifications re,$TAXA_TREE_CACHE t WHERE collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no) UNION (SELECT 999999,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0 FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
+	$sql = "(SELECT lft,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL AND lft>0) UNION (SELECT lft,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no FROM reidentifications re,$TAXA_TREE_CACHE t WHERE collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no AND lft>0) UNION (SELECT 999999,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0 FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
 	my @occs = @{$dbt->getData($sql)};
 	my (%bad,%lookup);
 	for my $o ( @occs )	{
@@ -2936,7 +2949,6 @@ sub basicCollectionInfo	{
 			my @parents;
 			for my $p ( 'class','order','family' )	{
 				if ( $o->{$p} )	{
-				#if ( $o->{$p} && $o->{$p} ne "unclassified" )	{
 					push @parents , $o->{$p};
 				}
 			}
