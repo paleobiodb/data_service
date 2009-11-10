@@ -3960,6 +3960,7 @@ sub basicTaxonInfo	{
 		if ( ! @taxon_nos )	{
 			my ($g,$s) = split / /,$taxon_name;
 			my $name_clause = "genus_name='".$g."'";
+			my $name_clause = "(genus_name='".$g."' OR subgenus_name='".$g."')";
 			if ( $s )	{
 				$name_clause .= " AND species_name='".$s."'";
 			}
@@ -4196,7 +4197,7 @@ sub basicTaxonInfo	{
 			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 		} else	{
 			my ($g,$s) = split / /,$taxon_name;
-			my $name_clause = "o.genus_name='".$g."'";
+			my $name_clause = "(o.genus_name='".$g."' OR o.subgenus_name='".$g."')";
 			if ( $s )	{
 				$name_clause .= " AND o.species_name='".$s."'";
 			}
@@ -4280,11 +4281,15 @@ sub basicTaxonInfo	{
 					$shortcountry =~ s/Lao People's Democratic Republic/Laos/;
 					$shortcountry =~ s/(United Kingdom|Russian Federation|Czech Republic|Netherlands|Dominican Republic|Bahamas|Philippines|Netherlands Antilles|United Arab Emirates|Marshall Islands|Congo|Seychelles)/the $1/;
 					$shortcountry =~ s/, .*//;
+					my $min_interval_where;
+					if ( $min_interval )	{
+						$min_interval_where = "&amp;min_interval_no=$min_interval";
+					}
 					if ( $country !~ /United States|Canada/ || ! @states )	{
-						$list .= "<a href=\"$READ_URL?action=displayCollResults&amp;$taxon_param&amp;max_interval=$max_interval&amp;min_interval=$min_interval&amp;country=$country&amp;is_real_user=$is_real_user&amp;basic=yes\">$shortcountry</a> (".$bycountry{$i}{$c};
+						$list .= "<a href=\"$READ_URL?action=displayCollResults&amp;$taxon_param&amp;max_interval=$max_interval$min_interval_where&amp;country=$country&amp;is_real_user=$is_real_user&amp;basic=yes&amp;type=view&amp;match_subgenera=1\">$shortcountry</a> (".$bycountry{$i}{$c};
 					} else	{
 						for my $j ( 0..$#states )	{
-							$states[$j] = "<a href=\"$READ_URL?action=displayCollResults&amp;$taxon_param&amp;max_interval=$max_interval&amp;min_interval=$min_interval&amp;country=$country&amp;state=$states[$j]&amp;is_real_user=$is_real_user&amp;basic=yes\">$states[$j]</a>";
+							$states[$j] = "<a href=\"$READ_URL?action=displayCollResults&amp;$taxon_param&amp;max_interval=$max_interval$min_interval_where&amp;country=$country&amp;state=$states[$j]&amp;is_real_user=$is_real_user&amp;basic=yes&amp;type=view&amp;match_subgenera=1\">$states[$j]</a>";
 						}
 						$list .= "$country ($bycountry{$i}{$c}";
 						$list .= ": ".join(', ',@states);
