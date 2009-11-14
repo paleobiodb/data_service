@@ -30,8 +30,14 @@
     <td align="center" style="padding-left: 1em;" nowrap>
       <a href="%%write_url%%?action=displaySearchRefs&amp;type=select" class="menu">Reference: %%reference%%</a>
     </td>
-    <td align="left" style="padding-left: 1em; width: 14em;" nowrap>
-      <a href="%%write_url%%?user=Contributor&amp;action=displayHomePage" class="menu">Contributors' home page</a>
+    <td align="left" style="width: 14em;" nowrap>
+<div class="tiny" style="margin-bottom: -1em;">
+<form method="POST" action="%%read_url%%" onSubmit="return checkName(0,2);">
+<input type="hidden" name="action" value="quickSearch">
+<input type="hidden" name="last_taxon" value="$taxon_no">
+<input type="text" name="quick_search" value="Quick search" size="14" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em;">
+</form>
+</div>
     </td>
   </tr>
 </table>
