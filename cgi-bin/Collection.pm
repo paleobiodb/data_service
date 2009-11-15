@@ -2577,6 +2577,9 @@ sub basicCollectionInfo	{
 		$is_real_user = 0;
 		$not_bot = 0;
 	}
+	if ( $is_real_user > 0 )	{
+		main::logRequest($s,$q);
+	}
 
 	my $sql = "SELECT * FROM collections WHERE collection_no=".$q->param('collection_no');
 	my $c = ${$dbt->getData($sql)}[0];
@@ -2720,6 +2723,7 @@ sub basicCollectionInfo	{
 		push @terms , split /,/,$c->{'minor_lithology'};
 	}
 	$c->{'lithology1'} =~ s/"//g;
+	$c->{'lithology1'} =~ s/clastic/clastic sediments/g;
 	$c->{'lithology1'} =~ s/not reported/lithology not reported/g;
 	push @terms , $c->{'lithology1'};
 	my $last = pop @terms;
@@ -2894,15 +2898,15 @@ sub basicCollectionInfo	{
 			$o->{'species_reso'} = "";
 		}
 		if ( $o->{'genus_reso'} =~ /informal|"/ )	{
-			$o->{'genus_reso'} =~ s/informal.*//;
+			$o->{'genus_reso'} =~ s/informal.*|"//;
 			$o->{'genus_name'} = '"'.$o->{'genus_name'}.'"';
 		}
 		if ( $o->{'subgenus_reso'} =~ /informal|"/ )	{
-			$o->{'subgenus_reso'} =~ s/informal.*//;
+			$o->{'subgenus_reso'} =~ s/informal.*|"//;
 			$o->{'subgenus_name'} = '"'.$o->{'subgenus_name'}.'"';
 		}
 		if ( $o->{'species_reso'} =~ /informal|"/ )	{
-			$o->{'species_reso'} =~ s/informal.*//;
+			$o->{'species_reso'} =~ s/informal.*|"//;
 			$o->{'species_name'} = '"'.$o->{'species_name'}.'"';
 		}
 		if ( $o->{'subgenus_reso'} && $o->{'subgenus_name'} )	{
