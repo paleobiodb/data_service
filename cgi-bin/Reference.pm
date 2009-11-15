@@ -169,13 +169,13 @@ sub formatShortRef  {
         $shortRef .= " et al.";
     } elsif ( $refData->{'author2last'} ) {
         # We have at least 120 refs where the author2last is 'et al.'
-        if($refData->{'author2last'} ne "et al."){
+        if($refData->{'author2last'} !~ /^et al/i){
             $shortRef .= " and ";
+        	$shortRef .= $refData->{'author2init'}." " if $refData->{'author2init'} && ! $options{'no_inits'};
+        	$shortRef .= $refData->{'author2last'};
         } else {
-            $shortRef .= " ";
+            $shortRef .= " et al.";
         }
-        $shortRef .= $refData->{'author2init'}." " if $refData->{'author2init'} && ! $options{'no_inits'};
-        $shortRef .= $refData->{'author2last'};
     }
     if ($refData->{'pubyr'}) {
         if ($options{'alt_pubyr'}) {
