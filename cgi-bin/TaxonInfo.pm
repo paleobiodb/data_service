@@ -3930,6 +3930,9 @@ sub basicTaxonInfo	{
 		$is_real_user = 0;
 		$not_bot = 0;
 	}
+	if ( $is_real_user > 0 )	{
+		main::logRequest($s,$q);
+	}
 
 	my $taxon_name = $q->param('taxon_name');
 	$taxon_name =~ s/ sp(p|).$//;
@@ -4193,17 +4196,17 @@ sub basicTaxonInfo	{
 			my @inlist;
 			push @inlist , $_->{'taxon_no'} foreach @subtaxa;
 
-			$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
-			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(o.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 		} else	{
 			my ($g,$s) = split / /,$taxon_name;
 			my $name_clause = "(o.genus_name='".$g."' OR o.subgenus_name='".$g."')";
 			if ( $s )	{
 				$name_clause .= " AND o.species_name='".$s."'";
 			}
-			$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND $name_clause AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND $name_clause AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 			$name_clause =~ s/o\./re\./g;
-			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND $name_clause AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND $name_clause AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 		}
 
 		my @occs = @{$dbt->getData($sql)};
@@ -4225,8 +4228,10 @@ sub basicTaxonInfo	{
 			$base{$i->{'own'}} = $i->{'base'};
 		}
 
-		my (%bycountry,%bystate);
+		my ($ctotal,$ototal,%bycountry,%bystate);
 		for my $o ( @occs )	{
+			$ctotal += $o->{'c'};
+			$ototal += $o->{'o'};
 			if ( $period{$o->{'max_interval_no'}} =~ /Paleogene|Neogene/ )	{
 				if ( $epoch{$o->{'max_interval_no'}} eq $epoch{$o->{'min_interval_no'}} || $o->{'min_interval_no'} == 0 || ! $epoch{$o->{'min_interval_no'}} )	{
 					$bycountry{$epoch{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
@@ -4259,6 +4264,7 @@ sub basicTaxonInfo	{
 				}
 			}
 			@intervals = sort { $base{$a} <=> $base{$b} } @intervals;
+			my $printed;
 			for my $i ( @intervals )	{
 				print "<p $indent>&bull; $i of ";
 				my @countries = keys %{$bycountry{$i}};
@@ -4294,10 +4300,21 @@ sub basicTaxonInfo	{
 						$list .= "$country ($bycountry{$i}{$c}";
 						$list .= ": ".join(', ',@states);
 					}
+					$printed++;
+					if ( $printed == 1 && $bycountry{$i}{$c} == 1 )	{
+						$list .= " collection";
+					} elsif ( $printed == 1 && $bycountry{$i}{$c} > 1 )	{
+						$list .= " collections";
+					}
 					$list .= "), ";
 				}
 				$list =~ s/, $//;
 				print "$list</p>\n";
+			}
+			if ( $ctotal > 1 && $ctotal < $ototal )	{
+				print "<p>Total: $ctotal collections including $ototal occurrences</p>\n\n";
+			} elsif ( $ctotal > 1 && $ctotal == $ototal )	{
+				print "<p>Total: $ctotal collections each including a single occurrence</p>\n\n";
 			}
 			print "</div>\n\n";
 		} else	{
