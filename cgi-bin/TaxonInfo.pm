@@ -4043,6 +4043,13 @@ sub basicTaxonInfo	{
 	$page_title->{'title'} = "Paleobiology Database: ".$auth->{'taxon_name'};
 	print $hbo->stdIncludes("std_page_top",$page_title);
 
+	my $taxon = getMostRecentSpelling($dbt,$taxon_no);
+	if ( $taxon->{'taxon_no'} != $taxon_no )	{
+		$taxon_no = $taxon->{'taxon_no'};
+		$auth->{'taxon_name'} = $taxon->{'taxon_name'};
+		$auth->{'taxon_rank'} = $taxon->{'taxon_rank'};
+		$auth->{'common_name'} = $taxon->{'common_name'};
+	}
 	my $header;
 	if ( $auth->{'extant'} !~ /yes/i && $taxon_no )	{
 		$header = "&dagger;";
@@ -4083,10 +4090,10 @@ sub basicTaxonInfo	{
 	# PARENT SECTION
 
 	if ( $taxon_no )	{
-		my $parent = TaxaCache::getParent($dbt,$taxon_no);
+		my $sql = "SELECT taxon_name,taxon_rank,a.taxon_no FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=parent_spelling_no AND o.opinion_no=t.opinion_no AND t.taxon_no=$taxon_no";;
+		my $parent = ${$dbt->getData($sql)}[0];
 		if ( $parent )	{
-			my $parent_data = getTaxa($dbt,{'taxon_no'=>$parent->{'taxon_no'}},['taxon_name','taxon_rank','taxon_no']);
-			print "<p>Parent taxon: <a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$parent_data->{'taxon_no'}\">".italicize($parent_data)."</a>";
+			print "<p>Parent taxon: <a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$parent->{'taxon_no'}\">".italicize($parent)."</a>";
 			$sql = "SELECT r.reference_no,$authorfields2 FROM $TAXA_TREE_CACHE t,opinions o,refs r WHERE r.reference_no=o.reference_no AND t.opinion_no=o.opinion_no AND t.taxon_no=$taxon_no";
 			my $ref = ${$dbt->getData($sql)}[0];
 			print " according to ".Reference::formatShortRef($ref,'link_id'=>1);
@@ -4101,8 +4108,10 @@ sub basicTaxonInfo	{
 						push @formatted , Reference::formatShortRef($r,'link_id'=>1);
 					}
 					my $lastref = pop @formatted;
-					print join(', ',@formatted)." and ".$lastref;
-					print "</p>\n\n";
+					if ( @formatted )	{
+						print join(', ',@formatted)." and ";
+					}
+					print "$lastref</p>\n\n";
 				}
 			}
 		}
@@ -4113,6 +4122,21 @@ sub basicTaxonInfo	{
 	#   original spellings (usually they are the same for synonyms)
 
 	if ( $taxon_no )	{
+		$sql = "SELECT taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND spelling_no=synonym_no AND t.taxon_no!=spelling_no AND a.taxon_name!='".$auth->{'taxon_name'}."' ORDER BY taxon_name";
+#print $sql;exit;
+		my @spelling_refs = @{$dbt->getData($sql)};
+		my $noun = "spelling";
+		if ( $auth->{'taxon_rank'} =~ /species/ )	{
+			$noun = "combination";
+		}
+		if ( $#spelling_refs == 0 )	{
+			print "<p>Alternative $noun: ".italicize($spelling_refs[0])."</p>\n\n";
+		} elsif ( $#spelling_refs > 0 )	{
+			print "<p $indent>Alternative ".$noun."s: ";
+			my @spellings;
+			push @spellings , italicize($_) foreach @spelling_refs;
+			print join(', ',@spellings)."</p>\n\n";
+		}
 		$sql = "SELECT taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND spelling_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no ORDER BY taxon_name";
 		my @syn_refs = @{$dbt->getData($sql)};
 		for my $s ( @syn_refs )	{
@@ -4131,6 +4155,7 @@ sub basicTaxonInfo	{
 			for my $s ( @syn_refs )	{
 				$list .= italicize($s)." ".formatShortAuthor($s).$s->{'note'}.", ";
 			}
+			$list =~ s/  ,/,/;
 			$list =~ s/, $//;
 			print "$list<p>\n\n";
 		}
@@ -4413,7 +4438,7 @@ function erasePleaseWait()	{
 		}
 		if ( $s->isDBMember() && $taxon_no )	{
 			print "<p><a href=\"$READ_URL?action=displayAuthorityForm&amp;taxon_no=$taxon_no\">Edit ".italicize($auth)."</a></p>\n\n";
-			print "<p><a href=\"$READ_URL?action=displayOpinionChoiceForm&amp;taxon_no=$taxon_no\">Add taxonomic opinions about ".italicize($auth)."</a></p>\n\n";
+			print "<p><a href=\"$READ_URL?action=displayOpinionChoiceForm&amp;taxon_no=$taxon_no\">Add/edit taxonomic opinions about ".italicize($auth)."</a></p>\n\n";
 		}
 	}
 	print "</div>\n</div>\n\n";
