@@ -445,7 +445,7 @@ sub displaySearchStrataForm {
     $vars->{'enterer_me'} = $s->get("enterer_reversed");
     $vars->{'page_title'} = "Stratigraphic unit search form";
     $vars->{'action'} = "displaySearchStrataResults";
-    $vars->{'links'} = qq|<p><span class="mockLink" onClick="javascript: document.collForm.submit();"><b>Search for strata</b></a></p>|;
+    $vars->{'links'} = qq|<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.submit();"><b>Search for strata</b></a></p>|;
     # Show the "search collections" form
 
     # Set the Enterer
