@@ -7,7 +7,7 @@ var cur_row_num;
 var cur_collection_no;
 
 function handleSubmit() {
-    var f = document.forms[0];
+    var f = document.forms[1];
     if (f.genus_name.value != "") {
         insertOccurrenceRow();
         return false;
@@ -19,7 +19,7 @@ function handleSubmit() {
 function checkForm() {
     var table = document.getElementById('occurrencesTable');
 
-    var f = document.forms[0];
+    var f = document.forms[1];
     
     var abund_unit = f.abund_unit.options[f.abund_unit.selectedIndex].value;
 
@@ -100,7 +100,7 @@ function initTaxaArray(force_init) {
         // This block interates over all the rows and checks to make sure we're not duplicating anything
         for(var i=0;i<allRows.length;i++) {
             var row_num = allRows[i].value;
-            var elem = eval('document.forms[0].taxon_key_'+row_num);
+            var elem = eval('document.forms[1].taxon_key_'+row_num);
             var taxon_name = elem.value;
             taxa_by_row[row_num] = taxon_name;
         }
@@ -110,7 +110,7 @@ function initTaxaArray(force_init) {
 function initAutoFillHash() {
     if (autofill_values_init == 0) {
         autofill_values_init = 1;
-        var f = document.forms[0];
+        var f = document.forms[1];
         var isNumeric = /^[0-9]*\.?[0-9]+$/;
         var isPresense = /^[xX]$/;
         var isAbundElem = /^abund_value_/;
@@ -154,7 +154,7 @@ function insertOccurrenceRow() {
     
     var row = table.insertRow(-1);
     initCollectionsArray();
-    var f = document.forms[0];
+    var f = document.forms[1];
     var genus_reso = f.genus_reso.value;
     var genus_name = f.genus_name.value;
     // Do object detection - may not exist
@@ -174,7 +174,7 @@ function insertOccurrenceRow() {
     // This block interates over all the rows and checks to make sure we're not duplicating anything
     for(var i=0;i<allRows.length;i++) {
         var this_row = allRows[i].value;
-        var elem = eval('document.forms[0].taxon_key_'+this_row);
+        var elem = eval('document.forms[1].taxon_key_'+this_row);
         if (elem.value == taxon_key) {
             alert("Name is a duplicate");
             return false;
@@ -295,7 +295,7 @@ function doFocus () {
 
 function doAutoFill(row_num,collection_no) {
     initAutoFillHash();
-    var f = document.forms[0];
+    var f = document.forms[1];
     var abund_unit = f.abund_unit.options[f.abund_unit.selectedIndex].value;
     if (abund_unit == 'category' || abund_unit == 'rank') {
         var el = document.getElementById('abund_value_'+row_num+'_'+collection_no);
@@ -400,11 +400,11 @@ function handleKeyPress (e){
 function cellInfo(i,collection,reference,read_only,authorizer) {
     var cell_info = document.getElementById('cell_info');
 
-    var taxon_key = eval('document.forms[0].taxon_key_'+i+'.value');
+    var taxon_key = eval('document.forms[1].taxon_key_'+i+'.value');
     var bits = taxon_key.split("-_");
     var taxon_name = formatOccurrence(bits[3],bits[0],bits[4],bits[1],bits[5],bits[2]);
     
-    var abund_value = eval('document.forms[0].abund_value_'+i+'_'+collection+'.value');
+    var abund_value = eval('document.forms[1].abund_value_'+i+'_'+collection+'.value');
 
     var html = "";
     html += '&nbsp;Taxon: '+taxon_name+"<br />";
