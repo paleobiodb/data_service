@@ -409,7 +409,7 @@ sub displayOpinionForm {
             my $ref = Reference->new($dbt,$r->{'reference_no'});
             my $checked;
             if ( $q->param('ref_has_opinion') == $r->{'reference_no'} ) { $checked=' checked'; }
-            $fields{'earlier_refs'} .= '<div style="margin-left: 1em; text-indent: -2em;"<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="'.$r->{'reference_no'}.'" onClick="var f=document.forms[0]; f.author1init.value=\'\'; f.author1last.value=\'\'; f.author2init.value=\'\'; f.author2last.value=\'\'; f.otherauthors.value=\'\'; f.pubyr.value=\'\';"'.$checked.'>'.$ref->formatAsHTML()."</div>\n";
+            $fields{'earlier_refs'} .= '<div style="margin-left: 1em; text-indent: -2em;"<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="'.$r->{'reference_no'}.'" onClick="var f=document.forms[1]; f.author1init.value=\'\'; f.author1last.value=\'\'; f.author2init.value=\'\'; f.author2last.value=\'\'; f.otherauthors.value=\'\'; f.pubyr.value=\'\';"'.$checked.'>'.$ref->formatAsHTML()."</div>\n";
         }
     }
 
