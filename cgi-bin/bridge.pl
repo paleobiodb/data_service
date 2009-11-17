@@ -1021,12 +1021,12 @@ sub displaySearchColls {
 	$vars{'error'} = $error;
 
 	$vars{'links'} = qq|
-<p><span class="mockLink" onClick="javascript: document.collForm.submit();"><b>Search collections</b></a>
+<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.submit();"><b>Search collections</b></a>
 |;
 
 	if ( $type eq "view" || ! $type )	{
 		$vars{'links'} = qq|
-<p><span class="mockLink" onClick="javascript: document.collForm.basic.value = 'yes'; document.collForm.submit();"><b>Search for basic info</b></a> -
+<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.basic.value = 'yes'; document.collForm.submit();"><b>Search for basic info</b></a> -
 <span class="mockLink" onClick="javascript: document.collForm.basic.value = ''; document.collForm.submit();"><b>Search for full details</b></a></p>
 |;
 	} elsif ($type eq 'occurrence_table') {
