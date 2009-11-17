@@ -19,7 +19,7 @@
 		var period = /[A-Za-z]\.$/;
 		var space = /([A-Za-z])(\.| | \.)([A-Za-z])|([A-Z][A-Z])/;
 		var all_caps = /^[A-Z][A-Z]/;
-		var frm = document.forms[0];
+		var frm = document.forms[1];
 		var errors = "";
 
 		// First Author Initials
@@ -189,11 +189,11 @@
     }
 
 	function showHideEditors()	{
-		if ( document.forms[0].publication_type.value == 'book/book chapter' )	{
+		if ( document.forms[1].publication_type.value == 'book/book chapter' )	{
 			document.getElementById('editors').style.display = 'inline';
 		} else if ( document.getElementById('editors').style.display == 'inline' )	{
 			document.getElementById('editors').style.display = 'none';
-			document.forms[0].editors.value = '';
+			document.forms[1].editors.value = '';
 		}
 	}
 

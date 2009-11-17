@@ -1,10 +1,10 @@
 
 <script language="Javascript" type="text/javascript">
          function checkInput()	{
-               var rank = document.forms[0].taxon_rank.options[document.forms[0].taxon_rank.selectedIndex].text;
-               var value = document.forms[0].taxon_name.value;
-               var author = document.forms[0].author.value;
-               var pubyr = document.forms[0].pubyr.value;
+               var rank = document.forms[1].taxon_rank.options[document.forms[1].taxon_rank.selectedIndex].text;
+               var value = document.forms[1].taxon_name.value;
+               var author = document.forms[1].author.value;
+               var pubyr = document.forms[1].pubyr.value;
                if (value == "" && author == "" && pubyr == "")	{
                        alert('Please enter a search term');
 

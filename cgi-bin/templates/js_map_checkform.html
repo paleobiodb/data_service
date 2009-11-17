@@ -4,7 +4,7 @@
 // autofill period and epoch fields based on reconstruction date
 	function fillPeriodEpoch ()	{
 
-		var frm = document.forms[0];
+		var frm = document.forms[1];
 		if ( frm.maptime.value )	{
 			if ( frm.maptime.value == 0 )	{
 				frm.epoch.value = "Holocene";
@@ -129,7 +129,7 @@
 // select a period
 	function selectPeriod( period_name )	{
 
-		var frm = document.forms[0];
+		var frm = document.forms[1];
 
 		for ( var loop=0; loop < frm.period.length; loop++ )	{
 			if ( frm.period[loop].text == period_name )	{
@@ -143,7 +143,7 @@
 // check date, latitude, longitude
     function checkForm() {
 
-		var frm = document.forms[0];
+		var frm = document.forms[1];
 		var errors = "";
 
 		// date of paleogeographic reconstruction must be 0 - 600 m.y.

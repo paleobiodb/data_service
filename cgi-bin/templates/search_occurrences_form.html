@@ -4,7 +4,7 @@
 // Checks the form data
 function checkForm ( ) {
 
-    var frm = document.forms[0];
+    var frm = document.forms[1];
     var errors = "";
 
     var returnVal = checkIntervalNames();
@@ -73,7 +73,7 @@ function checkForm ( ) {
       </tr>
       <tr>
         <td>Data <select name="person_type" class="small"><option>authorizer</option><option>enterer</option><option>modifier</option><option value="any">any of above</option></select>: </td>
-        <td><input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=16>&nbsp;<a href="#" onClick="document.forms[0].person_reversed.value='%%enterer_me%%'">Me</a></td>
+        <td><input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size=16>&nbsp;<a href="#" onClick="document.forms[1].person_reversed.value='%%enterer_me%%'">Me</a></td>
         <td style="padding-left: 1em;">Group/project: </td>
         <td><select id="research_group" class="small"></select>
       </tr>

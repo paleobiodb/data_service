@@ -9,7 +9,7 @@ window.onload = changeName;
 
 function changeName()	{
 
-    var collname = document.forms[0].collection_name.value;
+    var collname = document.forms[1].collection_name.value;
 
     for ( i = 1; i <= 6; i++ )	{
 	if ( ! collname )	{
@@ -45,7 +45,7 @@ function checkFields() {
 }
 
 function doCheckFieldsBasicInfo() {
-    var frm = document.forms[0];
+    var frm = document.forms[1];
 
     if (frm.collection_name.value.match(frm.country.value) != null && frm.country.value != "")	{
         bad_info += "\no Don't include the country name in the collection name";
@@ -103,7 +103,7 @@ function doCheckFieldsBasicInfo() {
 }
 
 function doCheckFieldsCollectingInfo() {
-    var frm = document.forms[0];
+    var frm = document.forms[1];
 
     if ( frm.collection_size.value != "" ) {
         var	numeric = /^[0-9]*$/;
@@ -114,7 +114,7 @@ function doCheckFieldsCollectingInfo() {
 }
 
 function doCheckFieldsGeography() {
-    var frm = document.forms[0];
+    var frm = document.forms[1];
 
     if ( frm.country.selectedIndex == 0 ) {
         bad_info += "\no Country is required";
@@ -257,7 +257,7 @@ function doCheckFieldsGeography() {
 }
                                                                                                                                      
 function doCheckFieldsStratigraphy() {
-    var frm = document.forms[0];
+    var frm = document.forms[1];
 
     if ( frm.eml_max_interval.value == frm.eml_min_interval.value && frm.max_interval.value == frm.min_interval.value )	{
         bad_info += "\no If the maximum and minimum time intervals are the same, leave the minimum blank";
@@ -307,7 +307,7 @@ function doCheckFieldsStratigraphy() {
 }
 
 function doCheckFieldsGeology() {
-    var frm = document.forms[0];
+    var frm = document.forms[1];
     var indexology1 = frm.lithology1.selectedIndex;
     var indexology2 = frm.lithology2.selectedIndex;
     var indexadj = frm.lithadj[0].selectedIndex;
@@ -330,7 +330,7 @@ function doCheckFieldsGeology() {
 }
 
 function doCheckFieldsTaphonomy() {
-    var frm = document.forms[0];
+    var frm = document.forms[1];
     var full_count = 0;
 
     if (frm.art_whole_bodies.options[frm.art_whole_bodies.selectedIndex].text == "all") { 
