@@ -125,8 +125,12 @@ sub getReference {
     my $reference_no = int(shift);
 
     if ($reference_no) {
-        my $sql = "SELECT p1.name authorizer,p2.name enterer,p3.name modifier,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.editors,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r LEFT JOIN person p1 ON p1.person_no=r.authorizer_no LEFT JOIN person p2 ON p2.person_no=r.enterer_no LEFT JOIN person p3 ON p3.person_no=r.modifier_no WHERE r.reference_no=$reference_no";
+        my $sql = "SELECT authorizer_no,enterer_no,modifier_no,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.editors,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r WHERE r.reference_no=$reference_no";
         my $ref = ${$dbt->getData($sql)}[0];
+        my %lookup = %{PBDBUtil::getPersonLookup($dbt)};
+        $ref->{'authorizer'} = $lookup{$ref->{'authorizer_no'}};
+        $ref->{'enterer'} = $lookup{$ref->{'enterer_no'}};
+        $ref->{'modifier'} = $lookup{$ref->{'modifier_no'}};
         return $ref;
     } else {
         return undef;
