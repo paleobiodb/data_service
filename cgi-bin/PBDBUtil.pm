@@ -320,4 +320,18 @@ sub autoCreateDir {
     }
 }
 
+# JA 16.11.09
+# used to avoid joins involving person table, which can cause catastrophic
+#  performance problems
+sub getPersonLookup	{
+
+	my $dbt = shift;
+	my $sql = "SELECT name,person_no FROM person";
+	my @people = @{$dbt->getData($sql)};
+	my %name;
+	$name{$_->{'person_no'}} = $_->{'name'} foreach @people;
+	return \%name;
+
+}
+
 1;
