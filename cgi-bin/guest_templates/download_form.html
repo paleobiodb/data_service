@@ -4,7 +4,7 @@
 
 function marineClick ( ) {
 
-	var frm = document.forms[0];
+	var frm = document.forms[1];
 	if ( frm.environment_carbonate.checked && frm.environment_siliciclastic.checked ) {
 		frm.zone_marginal_marine.checked = true;
 		frm.zone_reef.checked = true;
@@ -25,7 +25,7 @@ function marineClick ( ) {
 
 function terrestrialClick ( ) {
 
-	var frm = document.forms[0];
+	var frm = document.forms[1];
 	if ( frm.environment_terrestrial.checked ) {
 		frm.zone_lacustrine.checked = true;
 		frm.zone_fluvial.checked = true;
@@ -42,7 +42,7 @@ function terrestrialClick ( ) {
 
 function countryChange(justChecked)	{
 
-	var frm = document.forms[0];
+	var frm = document.forms[1];
 
 	if ( frm.country.value != "" && justChecked == 'country' )	{
 		for( var i=0; i < frm.elements.length; i++ )	{
@@ -231,7 +231,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <input name="authorizer_reversed" size=20 onKeyUp="doComplete(event, this, authorizerNames());">
 
 <div show="is_contributor">
-<a href="#" onClick="document.forms[0].authorizer_reversed.value='%%authorizer_me%%'">Me</a>
+<a href="#" onClick="document.forms[1].authorizer_reversed.value='%%authorizer_me%%'">Me</a>
 </div>
 
 </td>

@@ -31,7 +31,7 @@
     </div>
 
     <div class="widget">Taxonomic precision of IDs:
-      <select name="taxonomic_precision" onChange="if ( /^(any|family|genus)/.test(document.forms[0].taxonomic_precision.value) ) { document.forms[0].types_only.value='no, use all occurrences'; document.forms[0].type_body_part.value=''; }">
+      <select name="taxonomic_precision" onChange="if ( /^(any|family|genus)/.test(document.forms[1].taxonomic_precision.value) ) { document.forms[1].types_only.value='no, use all occurrences'; document.forms[1].type_body_part.value=''; }">
         <option>any</option>
         <option>any subtaxon</option>
         <option>family level or better</option>
@@ -42,14 +42,14 @@
     </div>
 
     <div class="widget">Use type specimens only?
-      <select name="types_only" onChange="if ( /yes/.test(document.forms[0].types_only.value) ) { document.forms[0].taxonomic_precision.value='species level'; } else { document.forms[0].type_body_part.value=''; }">
+      <select name="types_only" onChange="if ( /yes/.test(document.forms[1].types_only.value) ) { document.forms[1].taxonomic_precision.value='species level'; } else { document.forms[1].type_body_part.value=''; }">
         <option>no, use all occurrences</option>
         <option>yes, use type specimen occurrences</option>
       </select>
     </div>
 
     <div class="widget">If yes, the type specimen must consist of:
-      <select name="type_body_part" onChange="if ( /s/.test(document.forms[0].type_body_part.value) ) { document.forms[0].taxonomic_precision.value='species level'; document.forms[0].types_only.value='yes, use type specimen occurrences'; }">
+      <select name="type_body_part" onChange="if ( /s/.test(document.forms[1].type_body_part.value) ) { document.forms[1].taxonomic_precision.value='species level'; document.forms[1].types_only.value='yes, use type specimen occurrences'; }">
         <option></option>
         <option>multiple teeth, a skull or a skeleton</option>
         <option>a skull or skeleton</option>
