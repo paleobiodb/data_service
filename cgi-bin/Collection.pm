@@ -46,15 +46,10 @@ sub getCollections {
     
     # Now add on any requested fields
     foreach my $field (@fields) {
-        if ($field eq 'authorizer') {
-            push @from, "p1.name authorizer"; 
-            push @left_joins, "LEFT JOIN person p1 ON p1.person_no = c.authorizer_no";
-        } elsif ($field eq 'enterer') {
-            push @from, "p2.name enterer"; 
-            push @left_joins, "LEFT JOIN person p2 ON p2.person_no = c.enterer_no";
+        if ($field eq 'enterer') {
+            push @from, "c.enterer_no"; 
         } elsif ($field eq 'modifier') {
-            push @from, "p3.name modifier"; 
-            push @left_joins, "LEFT JOIN person p3 ON p3.person_no = c.modifier_no";
+            push @from, "c.modifier_no"; 
         } else {
             push @from, "c.$field";
         }
@@ -729,6 +724,19 @@ IS NULL))";
             }
         }
     }
+    if ($options{'enterer'} || $options{'modifier'}) {
+        my %lookup = %{PBDBUtil::getPersonLookup($dbt)};
+        if ($options{'enterer'})	{
+            for my $row (@dataRows) {
+                $row->{'enterer'} = $lookup{$row->{'enterer'}};
+            }
+        }
+        if ($options{'modifier'})	{
+            for my $row (@dataRows) {
+                $row->{'modifier'} = $lookup{$row->{'modifier'}};
+            }
+        }
+    }
     for my $row (@dataRows) {
         if ( $genera{$row->{collection_no}} )	{
             $row->{genera} = $genera{$row->{collection_no}};
@@ -1194,10 +1202,7 @@ sub displayCollectionDetails {
 
 	# grab the entire person table and work with a lookup hash because
 	#  person is tiny JA 2.10.09
-	my %name;
-	my $sql = "SELECT name,person_no FROM person";
-	my @people = @{$dbt->getData($sql)};
-	$name{$_->{person_no}} = $_->{name} foreach @people;
+	my %name = %{PBDBUtil::getPersonLookup($dbt)};
 
 	my $sql = "SELECT * FROM collections WHERE collection_no=" . $collection_no;
 	my @rs = @{$dbt->getData($sql)};
@@ -1351,17 +1356,18 @@ sub displayCollectionDetailsPage {
     my $subString = join(", ",@links);
     $row->{'subset_string'} = $subString;
 
-	my $sql1 = "SELECT DISTINCT p1.name authorizer, p2.name enterer, p3.name modifier FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no LEFT JOIN person p2 ON p2.person_no=o.enterer_no LEFT JOIN person p3 ON p3.person_no=o.modifier_no WHERE o.collection_no=" . $collection_no;
-	my $sql2 = "SELECT DISTINCT p1.name authorizer, p2.name enterer, p3.name modifier FROM occurrences o LEFT JOIN person p1 ON p1.person_no=o.authorizer_no LEFT JOIN person p2 ON p2.person_no=o.enterer_no LEFT JOIN person p3 ON p3.person_no=o.modifier_no WHERE o.collection_no=" . $collection_no;
+    my $sql1 = "SELECT DISTINCT authorizer_no, enterer_no, modifier_no FROM occurrences WHERE collection_no=" . $collection_no;
+    my $sql2 = "SELECT DISTINCT authorizer_no, enterer_no, modifier_no FROM reidentifications WHERE collection_no=" . $collection_no;
     my @names = (@{$dbt->getData($sql1)},@{$dbt->getData($sql2)});
+    my %lookup = %{PBDBUtil::getPersonLookup($dbt)};
     if (@names) {
         my %unique_auth = ();
         my %unique_ent = ();
         my %unique_mod = ();
         foreach (@names) {
-            $unique_auth{$_->{'authorizer'}}++;
-            $unique_ent{$_->{'enterer'}}++;
-            $unique_mod{$_->{'modifier'}}++ if ($_->{'modifier'});
+            $unique_auth{$lookup{$_->{'authorizer_no'}}}++;
+            $unique_ent{$lookup{$_->{'enterer_no'}}}++;
+            $unique_mod{$lookup{$_->{'modifier_no'}}}++ if ($_->{'modifier'});
         }
         delete $unique_auth{$row->{'authorizer'}};
         delete $unique_ent{$row->{'enterer'}};
