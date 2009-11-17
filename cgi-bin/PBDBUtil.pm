@@ -214,7 +214,7 @@ function intervalNames() {
 }
 
 function checkIntervalNames(require_field) {
-    var frm = document.forms[0];
+    var frm = document.forms[1];
     var badname1 = "";
     var badname2 = "";
     var alertmessage = "";
