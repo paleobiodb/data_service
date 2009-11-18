@@ -5,8 +5,7 @@
 /*	note, this defines the defaults for the document unless 
 	they are overridden by something more specific */
 body {
-	background-color: white;
-	background-image: url(/public/PDbg-reversed.gif);
+	background-color: WhiteSmoke;
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: 0.85em;
 	margin-bottom: 0px;
@@ -132,34 +131,47 @@ H6 {font-size: .9em;}
     margin-bottom: 0;
 }
 
+.container	{
+    text-align: center;
+}
+
 #mainBody	{
     position: absolute;
     top: 0px;
     left: 0px;
     width: 59em;
+    height: 100%;
     padding-top: 2em;
     padding-left: 1em;
     margin-left: 1em; 
     margin-right: 1em;
+    padding-bottom: -1em;
     background-color: white;
     border: 1px solid lightgray;
     z-index: 1;
 }
 
 .mainBodyGuest {
+    width: 60em;
+    height: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
+    background-color: white;
+    border-left: 1px solid DarkGray;
+    border-right: 1px solid DarkGray;
+    text-align: left;
+}
+
+.bannerSpacer	{
  /* need align and width to roughly center the page contents below the banner */
     position: absolute;
     top: 55px;
-    left: 0px;
-    width: 56em;
+    width: 58em;
     padding-top: 2em;
-    padding-left: 2em;
-    padding-right: 2em;
-    text-align: left;
+    padding-left: 1em;
+    padding-right: 1em;
     z-index: 1;
-    background-color: ghostwhite;
-    border-right: 1px solid lightgray;
-    border-bottom: 1px solid lightgray;
 }
 
 #homeBanner	{
@@ -168,11 +180,11 @@ H6 {font-size: .9em;}
 
     position: absolute;
     top: 0px;
-    left: 8em;
+    margin-left: 8em;
     height: 50px;
     width: 52em;
     text-align: center;
-    border-right: 1px solid lightgray;
+    border-right: 1px solid DarkGray;
     z-index: 8;
 }
 
@@ -181,11 +193,11 @@ H6 {font-size: .9em;}
                           causes the image to be truncated */
     position: absolute;
     top: 50px;
-    left: 8em;
+    margin-left: 8em;
     z-index: 8; 
     height: 2em;
     width: 52em;
-    border-right: 1px solid lightgray;
+    border-right: 1px solid DarkGray;
 }
 
 #homeLinksMenu {
@@ -209,17 +221,11 @@ H6 {font-size: .9em;}
 
 .homeBodyGuest	{
     position: relative;
-    margin-top: -0.5em;
   /* counteracts left and right padding of mainBodyGuest */
-    margin-left: -2em;
-    margin-right: -2em;
+    margin-top: -0.5em;
+    margin-left: -1em;
+    margin-right: -1em;
     padding-bottom: 0em;
-  /* sets the overall height of the main area */
-    height: 50em;
-    border-right: 1px solid #B0B0B0;
-    border-bottom: 1px solid #B0B0B0;
-    background-color: white;
-    overflow: hidden;
     z-index: 3;
 }
 
@@ -227,9 +233,9 @@ H6 {font-size: .9em;}
     position: relative;
     float: left;
     clear: left;
-    margin: 0em;
-    height: 100%;
+    height: 45em;
     width: 8em;
+    margin: 0em;
     background-color: #4169E1;
 /* required by IE */
     overflow: auto;
@@ -322,6 +328,7 @@ H6 {font-size: .9em;}
     margin: 1em;
     padding-left: 0.5em;
     padding-right: 0.5em;
+    background-color: white;
     text-align: left;
     font-family: Verdana, Arial, Helvetica, sans-serif;
     border: 1px solid darkgray;
@@ -631,15 +638,12 @@ table.navbox {
 
 .panel {
     position: absolute;
-    left: 1px;
-    width: 58em;
+    margin-top: 2em;
+    margin-left: -1px;
+    width: 56em;
     z-index: 1;
     visibility: hidden;
     padding: 1em;
-    background-color: ghostwhite;
-    border-left: 1px solid ghostwhite;
-    border-right: 1px solid lightgray;
-    border-bottom: 1px solid lightgray;
 }
 
 .superscript {
@@ -664,8 +668,7 @@ span.nonEditable {
 
 
 .displayPanel {
-    border: 1px solid #C8C8C8; 
-    background-image: url(/public/PDbg.gif);    
+    border: 1px solid #C8C8C8;
     padding-top: 0.0em;
     padding-left: 0.5em;
     padding-right: 0.5em;
@@ -676,8 +679,7 @@ span.nonEditable {
 }
 
 .displayPanelRight {
-    border: 1px solid #C8C8C8; 
-    background-image: url(/public/PDbg.gif);    
+    border: 1px solid #C8C8C8;
     padding-top: 0.0em;
     padding-left: 0.5em;
     padding-right: 0.5em;
@@ -693,17 +695,16 @@ span.nonEditable {
     padding-left: 0.5em;      
     padding-right: 0.5em;     
     border-top: 1px solid gainsboro;
-    background-image: url(/public/PDbg.gif);    
+    background-color: white;
     white-space: nowrap;    
 }
 
 .displayPanelContent {
-    background-image: url(/public/PDbg.gif);
+    background-color: white;
 }
 
 .displayPanelText {
     font-size: 0.9em;
-    background-image: url(/public/PDbg.gif);    
 }
 
 .fixedColumn {
