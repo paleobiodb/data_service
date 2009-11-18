@@ -301,12 +301,12 @@ sub displayTaxonInfoResults {
     }
 
     print qq|
-<div align="center" style="margin-bottom: 0em;">
+<div align="center" style="margin-bottom: -1.5em;">
 <p class="pageTitle" style="white-space: nowrap; margin-bottom: 0em;">$display_name</p>
 <p class="medium">$htmlCOF</p>
 </div>
 
-<div style="position: relative; top: -3.5em; left: 43em; margin-bottom: -2.5em; width: 8em; z-index: 9;">
+<div style="position: relative; top: -3.5em; left: 43em; margin-bottom: -2.5em; width: 8em; z-index: 8;">
 <form method="POST" action="$READ_URL">
 <input type="hidden" name="action" value="checkTaxonInfo">
 <input type="text" name="search_again" value="Search again" size="14" onFocus="textClear(search_again);" onBlur="textRestore(search_again);" style="font-size: 0.7em;">
