@@ -2809,7 +2809,7 @@ sub basicCollectionInfo	{
 
 	$sql = "SELECT * FROM refs WHERE reference_no=".$c->{'reference_no'};
 	my $ref = ${$dbt->getData($sql)}[0];
-	print "<p $indent>Primary reference: ".Reference::formatLongRef($ref,'link_id'=>1)." <a class=\"verysmall\" href=\"$READ_URL?displayReference&reference_no=$c->{reference_no}\">more details</a>";
+	print "<p $indent>Primary reference: ".Reference::formatLongRef($ref,'link_id'=>1)." <a class=\"verysmall\" href=\"$READ_URL?action=displayReference&reference_no=$c->{reference_no}\">more details</a>";
 	if ($s->isDBMember()) {
 		print " - <a class=\"verysmall\" href=\"$WRITE_URL?action=displayRefResults&amp;type=edit&amp;reference_no=$c->{reference_no}\">edit</a>";
 	}
@@ -2850,12 +2850,12 @@ sub basicCollectionInfo	{
 	}
 	print "<\p>\n\n";
 
-	print "<a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$c->{'collection_no'}\">See full details</a>\n\n";
-
 	if ( $is_real_user == 0 || $not_bot == 0 )	{
 		print $hbo->stdIncludes("std_page_bottom");
 		return;
 	}
+
+	print "<a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$c->{'collection_no'}\">See full details</a>\n\n";
 
 	# the following is basically a complete rewrite of buildTaxonomicList
 	# so what?
