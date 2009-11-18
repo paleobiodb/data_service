@@ -4,14 +4,13 @@
    
 /*	note, this defines the defaults for the document unless 
 	they are overridden by something more specific */
-body {
+html, body {
+	height: 100%;
+	margin: 0px;
+	padding: 0px;
 	background-color: WhiteSmoke;
 	font-family: Verdana, Arial, Helvetica, sans-serif;
 	font-size: 0.85em;
-	margin-bottom: 0px;
-	margin-top: 0px;
-	margin-right: 0px;
-	margin-left: 0px;
 }
 
 table, tbody, tr, td, th { 
@@ -139,8 +138,8 @@ H6 {font-size: .9em;}
     position: absolute;
     top: 0px;
     left: 0px;
-    width: 59em;
     height: 100%;
+    width: 59em;
     padding-top: 2em;
     padding-left: 1em;
     margin-left: 1em; 
@@ -152,14 +151,11 @@ H6 {font-size: .9em;}
 }
 
 .mainBodyGuest {
-    width: 60em;
+    position: relative;
     height: 100%;
+    width: 60em;
     margin-left: auto;
     margin-right: auto;
-    text-align: left;
-    background-color: white;
-    border-left: 1px solid DarkGray;
-    border-right: 1px solid DarkGray;
     text-align: left;
 }
 
