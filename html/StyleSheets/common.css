@@ -10,7 +10,7 @@ html, body {
 	padding: 0px;
 	background-color: WhiteSmoke;
 	font-family: Verdana, Arial, Helvetica, sans-serif;
-	font-size: 0.85em;
+	font-size: 1em;
 }
 
 table, tbody, tr, td, th { 
@@ -229,7 +229,7 @@ H6 {font-size: .9em;}
     position: relative;
     float: left;
     clear: left;
-    height: 45em;
+    height: 44em;
     width: 8em;
     margin: 0em;
     background-color: #4169E1;
