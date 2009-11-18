@@ -355,7 +355,10 @@ function doCheckFieldsTaphonomy() {
 // End -->
 </script>
 
-   <div align=center>
+<div style="font-size: small;">
+
+<div align="center" style="width: 58em; margin-bottom: -1em; padding-top: 2em;">
+
    <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
    <td id="tab1" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(1);" 
@@ -382,7 +385,8 @@ function doCheckFieldsTaphonomy() {
       onMouseOver="hover(this);" 
       onMouseOut="setState(6)">Collecting Info</td>
    </tr></table>
-   </div>
+
+</div>
 
   <form name="form" action="%%write_url%%" method="post" onSubmit="return checkFields();">
   <input type="hidden" name="action" value="processCollectionForm">
@@ -391,7 +395,7 @@ function doCheckFieldsTaphonomy() {
   <input id="collection_no" type="hidden">
 
 <div id="panel1" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader1"></span>
   <div class="displayPanelContents" style="padding-top: 0.75em;">
 
@@ -481,7 +485,7 @@ function doCheckFieldsTaphonomy() {
 </div>
 
 <div id="panel2" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader2"></span>
   <div class="displayPanelContents" style="padding-top: 0.75em;">
 
@@ -570,7 +574,7 @@ function doCheckFieldsTaphonomy() {
 </div>
 
 <div id="panel3" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader3"></span>
   <div class="displayPanelContents" style="padding-top: 0.75em;">
 
@@ -663,7 +667,7 @@ function doCheckFieldsTaphonomy() {
 </div>
 
 <div id="panel4" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader4"></span>
   <div class="displayPanelContents" style="padding-top: 0.75em;">
 
@@ -772,7 +776,7 @@ function doCheckFieldsTaphonomy() {
 </div>
 
 <div id="panel5" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader5"></span>
   <div class="displayPanelContents" style="padding-top: 0.75em;">
 
@@ -1142,7 +1146,7 @@ original material is preserved!</i></p>
 </div>
 
 <div id="panel6" class="panel">
-  <div align="center" class="displayPanel" style="margin-top: 1em;">
+  <div align="center" class="displayPanel">
   <span class="displayPanelHeader" class="tiny" id="panelHeader6"></span>
   <div class="displayPanelContents" style="padding-top: 0.75em;">
 
@@ -1353,3 +1357,6 @@ original material is preserved!</i></p>
 <script language="JavaScript">
     showPanel(1);
 </script>
+
+</div>
+
