@@ -10,7 +10,7 @@ html, body {
 	padding: 0px;
 	background-color: WhiteSmoke;
 	font-family: Verdana, Arial, Helvetica, sans-serif;
-	font-size: 1em;
+	font-size: 0.9em;
 }
 
 table, tbody, tr, td, th { 
@@ -163,6 +163,7 @@ H6 {font-size: .9em;}
  /* need align and width to roughly center the page contents below the banner */
     position: absolute;
     top: 55px;
+    left: 0px;
     width: 58em;
     padding-top: 2em;
     padding-left: 1em;
@@ -189,6 +190,7 @@ H6 {font-size: .9em;}
                           causes the image to be truncated */
     position: absolute;
     top: 50px;
+    left: 0px;
     margin-left: 8em;
     z-index: 8; 
     height: 2em;
@@ -204,7 +206,7 @@ H6 {font-size: .9em;}
     top: 0px;
     text-align: center;
     z-index: -1;
-    border-right: 1px solid lightgray;
+    border-right: 1px solid LightGray;
 }
 
 .corner	{
@@ -228,13 +230,15 @@ H6 {font-size: .9em;}
 .leftBar	{
     position: relative;
     float: left;
-    clear: left;
+    clear: none;
     height: 44em;
     width: 8em;
     margin: 0em;
+/* fallback if fixed position div doesn't work */
     background-color: #4169E1;
 /* required by IE */
     overflow: auto;
+    z-index: 6;
 }
 
 .leftBar a:link { color: white; }
@@ -304,10 +308,10 @@ H6 {font-size: .9em;}
     float: left;
     clear: none;
     margin: 0em;
-    width: 13em;
+    width: 8em;
     padding-top: 1em;
     padding-bottom: 1em;
-    border-bottom: 1px solid lightgray;
+    border-bottom: 1px solid LightGray;
   /* fixes Safari rendering problem */
     text-align: center;
 }
@@ -750,12 +754,11 @@ td.fixedLabel {
 
 
 #dropDown td {
-    margin-top: -1em;
+    height: 2.5em;
     padding-left: 0.5em;
     padding-right: 0.5em;
-    padding-top: 0.2em;
+    padding-bottom: 0.2em;
     text-align: left;
-    color: white; 
     text-decoration: none;
     font-size: 0.9em;
     border-left: 1px solid white;
@@ -773,7 +776,7 @@ td.fixedLabel {
     background: #B0B0C0;
     border: 1px solid white;
     position: absolute;
-    top: 0.7em;
+    top: 1.1em;
     margin-left: -0.6em;
     padding: 0.15em;
     z-index: 999;
