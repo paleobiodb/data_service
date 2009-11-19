@@ -35,14 +35,16 @@
   </div>
   <div class="corner" style="width: 8em; height: 2em;">
   </div>
-  <div style="position: absolute; top: 0px; width: 8em; text-align: center;">
+  <div style="position: absolute; top: 0px; left: 0px; width: 8em; text-align: center;">
     <a class="corner" href="%%read_url%%?user=Guest&amp;action=displayHomePage" style="color: #191970;">
-    <img alt="ammonites" height="66" src="/public/bannerimages/corner-ammonites.gif">
+    <div style="position: relative; top: 23px; left: 0px; margin-top: 1em; margin-left: 50%;">
+    <img alt="ammonites" height="66" src="/public/bannerimages/corner-ammonites.gif" style="position: absolute; top: -33px; right: 8px;">
+    </div>
     </a>
   </div>
 </div>
 
-<div id="homeBanner" style="width: 52em;">
+<div id="homeBanner" style="position: absolute; top: 0px; left: 0px; width: 52em;">
   <div class="sides">
     %%ete_banner%%
     <a href="%%read_url%%?user=Guest&amp;action=displayHomePage" style="color: #4169E1;">
@@ -63,13 +65,13 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
       <tr>
 
         <td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
-	<td align="left" nowrap>
+	<td align="left" nowrap style="width: 9em;">
           <div class="dropDownVertSpacer">
-<div class="small" style="margin-top: -0.5em;">
+<div class="small">
 <form method="POST" action="%%read_url%%" onSubmit="return checkName(0,2);">
 <input type="hidden" name="action" value="quickSearch">
 <input type="hidden" name="last_taxon" value="$taxon_no">
-<input type="text" name="quick_search" value="Quick search" size="12" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em;">
+<input type="text" name="quick_search" value="Quick search" size="12" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em; position: absolute; bottom: 0.3em;">
 </form>
 </div>
           </div>
