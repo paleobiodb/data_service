@@ -330,14 +330,10 @@ sub displayHomePage {
 	my $sql = "SELECT * FROM statistics";
 	my $row = ${$dbt->getData($sql)}[0];
 
-	# display the eight most recently entered collections that have
+	# display the most recently entered collections that have
 	#  distinct combinations of references and enterers (the latter is
 	#  usually redundant)
-	my $nowDate = now();
-	$nowDate = $nowDate-'1M';
-	my ($date,$time) = split / /,$nowDate;
-	my ($yyyy,$mm,$dd) = split /-/,$date,3;
-	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name FROM collections WHERE created>".$yyyy.$mm.$dd."000000 ORDER BY collection_no DESC";
+	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name FROM collections ORDER BY collection_no DESC LIMIT 100";
 	my @colls = @{$dbt->getData($sql)};
 	my %entererseen;
 	my $printed;
@@ -354,7 +350,7 @@ sub displayHomePage {
 
 	# something similar for new "cool species" (recently published, type
 	#  body part known, etc.)
-	$sql = "SELECT taxon_name,a.taxon_no,a.reference_no FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND ref_is_authority='YES' AND r.pubyr>=year(now())-10 AND a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='species' AND type_body_part IS NOT NULL ORDER BY a.taxon_no DESC LIMIT 30";
+	$sql = "SELECT taxon_name,a.taxon_no,a.reference_no FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND ref_is_authority='YES' AND r.pubyr>=year(now())-10 AND a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='species' AND type_body_part IS NOT NULL ORDER BY a.taxon_no DESC LIMIT 100";
 	my @spp = @{$dbt->getData($sql)};
 	my %refseen;
 	$printed = 0;
@@ -363,7 +359,7 @@ sub displayHomePage {
 			$refseen{$s->{'reference_no'}}++;
 			$row->{'taxon_links'} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicTaxonInfo&amp;taxon_no=$s->{'taxon_no'}">$s->{'taxon_name'}</a></div>\n|;
 			$printed++;
-			if ( $printed == 11 )	{
+			if ( $printed == 40 )	{
 				last;
 			}
 		}
