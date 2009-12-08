@@ -6,7 +6,7 @@ use Constants qw($WRITE_URL $TAXA_TREE_CACHE);
 
 # written by JA 27-31.7,1.8.03
 
-my @fields = ('composition1', 'composition2', 'entire_body', 'body_part', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'reinforcement', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'polymorph', 'ontogeny', 'grouping', 'clonal', 'taxon_environment', 'locomotion', 'attached', 'epibiont', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'reproduction', 'asexual', 'brooding', 'dispersal1', 'dispersal2', 'comments','minimum_body_mass','minimum_body_mass_unit','maximum_body_mass','maximum_body_mass_unit','body_mass_comment','body_mass_estimate','body_mass_estimate_unit','body_mass_source','body_mass_type');
+my @fields = ('composition1', 'composition2', 'entire_body', 'body_part', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'reinforcement', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'polymorph', 'ontogeny', 'grouping', 'clonal', 'taxon_environment', 'locomotion', 'attached', 'epibiont', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'vision', 'reproduction', 'asexual', 'brooding', 'dispersal1', 'dispersal2', 'comments','minimum_body_mass','minimum_body_mass_unit','maximum_body_mass','maximum_body_mass_unit','body_mass_comment','body_mass_estimate','body_mass_estimate_unit','body_mass_source','body_mass_type');
 
 sub populateEcologyForm	{
 	my $dbt = shift;
@@ -17,7 +17,7 @@ sub populateEcologyForm	{
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
 	if ( ! $q->param('taxon_no')) {
-		print "<center><h3>Sorry, the taxon's name is unknown</h3></center>\n";
+		print "<center><div class=\"pageTitle\" style=\"margin-top: 1em;\">Sorry, the taxon's name is not in the system</div></center>\n";
 		exit;
 	}
     $taxon_no = int($q->param('taxon_no'));
@@ -98,7 +98,7 @@ sub processEcologyForm	{
 
 	# can't proceed without a taxon no
 	if (!$q->param('taxon_no'))	{
-		print "<center><h3>Sorry, the ecology/taphonomy table can't be updated because the taxon is unknown</h3></center>\n";
+		print "<center><div class=\"pageTitle\" style=\"margin-top: 1em;\">Sorry, the ecology/taphonomy table can't be updated because the taxon's name is not in the system</div></center>\n";
 		return;
 	}
 	my $taxon_no = int($q->param('taxon_no'));
@@ -113,7 +113,7 @@ sub processEcologyForm	{
 
     	# result is found, so bomb out
 		if ( $ecotaph )	{
-			print "<center><h3>Sorry, ecology/taphonomy information already exists for this taxon, please edit the old record instead of creating a new one.</h3></center>\n";
+			print "<center><div class=\"pageTitle\" style=\"margin-top: 1em;\">Sorry, ecology/taphonomy information already exists for this taxon; please edit the old record instead of creating a new one</div></center>\n";
             return;
 		}
 	}
@@ -138,12 +138,12 @@ sub processEcologyForm	{
 
 	if ( $q->param('ecotaph_no') > 0 )	{
         $dbt->updateRecord($s,'ecotaph','ecotaph_no',$q->param('ecotaph_no'),\%fields);
-		print "<center><h3>Ecological/taphonomic data for $taxon_name have been updated</h3></center>\n";
+		print "<center><div class=\"pageTitle\" style=\"margin-top: 1em;\">Ecological/taphonomic data for $taxon_name have been updated</div></center>\n";
 	} else {
         # Set the reference_no
         $fields{'reference_no'} = $s->get('reference_no');
         $dbt->insertRecord($s,'ecotaph',\%fields);
-		print "<center><h3>Ecological/taphonomic data for $taxon_name have been added</h3></center>\n";
+		print "<center><div class=\"pageTitle\" style=\"margin-top: 1em;\">Ecological/taphonomic data for $taxon_name have been added</div></center>\n";
 	}
 
     my $action = ($q->param('goal') eq 'ecovert') ? 'startStartEcologyVertebrateSearch' : 'startStartEcologyTaphonomySearch';
