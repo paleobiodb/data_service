@@ -152,6 +152,7 @@ sub processLogin {
         $enterer = $authorizer;
     }
     my $password = $q->param('password');
+
     if ( $authorizer =~ /,/ )	{
         $authorizer = Person::reverseName($authorizer);
     }
@@ -201,7 +202,9 @@ sub processLogin {
         if (($authorizer && $authorizer !~ /\./) ||
             ($enterer && $enterer !~ /\./)) {
             $errorMessage .= "Note that the format for names is <i>Smith, A.</i> ";
-        }    
+        } elsif ( $authorizer =~ /[A-Za-z]\. [A-Za-z]\. / || $enterer =~ /[A-Za-z]\. [A-Za-z]\. / )	{
+            $errorMessage .= "Please don't enter your middle initial. ";
+        }
         if (!$password) {
             $errorMessage .= "The password is required. ";
         }
