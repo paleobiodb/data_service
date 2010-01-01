@@ -331,9 +331,8 @@ sub formatInstitutionTable	{
 sub homePageEntererList	{
 	my $dbt = shift;
 	my $html;
-	my $sql = "SELECT first_name,last_name,institution FROM person ORDER BY last_entry DESC LIMIT 10";
+	my $sql = "SELECT first_name,last_name,institution FROM person WHERE hours IS NOT NULL ORDER BY hours DESC LIMIT 10";
 	my @rows = @{$dbt->getData($sql)};
-	@rows = sort { $a->{'last_name'} cmp $b->{'last_name'} } @rows;
 	for my $i ( 0..$#rows )	{
 		my $r = $rows[$i];
 		$r->{'institution'} =~ s/(University of )(.)(.*)(, |-| - )/U$2 /;
