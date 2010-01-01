@@ -93,8 +93,23 @@ $sql =	"UPDATE statistics SET ".
 $dbh->do ( $sql );
 if ( $DEBUG ) { print "$sql\n"; }
 
+
+# count the number of hours spent entering data over the last month JA 1.1.10
+# won't work on MySQL 4 because it doesn't support subselects
+$sql = "SELECT enterer_no,count(distinct(concat(to_days(created),hour(created)))) c FROM ((SELECT enterer_no,created FROM refs WHERE created>now()-interval 1 month) UNION (SELECT enterer_no,created FROM collections WHERE created>now()-interval 1 month) UNION (SELECT enterer_no,created FROM opinions WHERE created>now()-interval 1 month)) AS t GROUP BY enterer_no";
+$sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
+$sth->execute();
+while ( $s = $sth->fetchrow_hashref() )	{
+	$sql = "UPDATE person SET hours=".$s->{'c'}." WHERE person_no=".$s->{'enterer_no'};
+	$dbh->do ( $sql );
+}
+$sth->finish();
+
 $dbh->disconnect();
 
+
+# JA: following is legacy, might be useful as a guide if we ever want to
+#  do something like this again
 
 #added by rjp on 12/9/2003
 
