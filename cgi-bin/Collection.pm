@@ -2496,15 +2496,18 @@ sub basicCollectionSearch	{
 	# search is by name of something that could be any of several fields,
 	#  so check them in plausibility order
 
+	my $collection_name = $q->param('collection_name');
+	$collection_name =~ s/'/\\'/g;
+
 	# try literal collection name first
 	# exact first
-	if ( $q->param('collection_name') =~ /[^0-9]/ )	{
-		$sql = "SELECT $fields FROM collections WHERE collection_name='".$q->param('collection_name')."'";
+	if ( $collection_name =~ /[^0-9]/ )	{
+		$sql = "SELECT $fields FROM collections WHERE collection_name='".$collection_name."'";
 	}
 	# special handling for plain integers
 	else	{
-		my $integer = $dbh->quote('.*[^0-9]'.$q->param('collection_name').'(([^0-9]+)|($))');
-		$sql = "SELECT $fields FROM collections WHERE collection_no=".$q->param('collection_name')." OR collection_name REGEXP $integer OR collection_aka REGEXP $integer OR collection_dates REGEXP $integer";
+		my $integer = $dbh->quote('.*[^0-9]'.$collection_name.'(([^0-9]+)|($))');
+		$sql = "SELECT $fields FROM collections WHERE collection_no=".$collection_name." OR collection_name REGEXP $integer OR collection_aka REGEXP $integer OR collection_dates REGEXP $integer";
 	}
 	my @colls = @{$dbt->getData($sql)};
 	route();
@@ -2513,7 +2516,7 @@ sub basicCollectionSearch	{
 	}
 
 	# partial second
-	$sql = "SELECT $fields FROM collections WHERE collection_name LIKE '%".$q->param('collection_name')."%'";
+	$sql = "SELECT $fields FROM collections WHERE collection_name LIKE '%".$collection_name."%'";
 	@colls = @{$dbt->getData($sql)};
 	route();
 	if ( @colls )	{
@@ -2521,7 +2524,7 @@ sub basicCollectionSearch	{
 	}
 
 	# try alternative collection name
-	$sql = "SELECT $fields FROM collections WHERE collection_aka LIKE '%".$q->param('collection_name')."%'";
+	$sql = "SELECT $fields FROM collections WHERE collection_aka LIKE '%".$collection_name."%'";
 	@colls = @{$dbt->getData($sql)};
 	route();
 	if ( @colls )	{
@@ -2529,7 +2532,7 @@ sub basicCollectionSearch	{
 	}
 
 	# try strat unit
-	$sql = "SELECT $fields FROM collections WHERE (geological_group LIKE '%".$q->param('collection_name')."%' OR formation LIKE '%".$q->param('collection_name')."%' OR member LIKE '%".$q->param('collection_name')."%')";
+	$sql = "SELECT $fields FROM collections WHERE (geological_group LIKE '%".$collection_name."%' OR formation LIKE '%".$collection_name."%' OR member LIKE '%".$collection_name."%')";
 	@colls = @{$dbt->getData($sql)};
 	route();
 	if ( @colls )	{
