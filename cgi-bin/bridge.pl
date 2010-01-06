@@ -1944,6 +1944,9 @@ sub processTaxonSearch {
     if ( $goal eq 'authority' || $goal eq 'opinion' )	{
         $options{'ignore_common_name'} = "YES";
     }
+    if ( ( $goal eq 'authority' || $goal eq 'opinion' ) && $q->param('taxon_name') =~ / \(.*\)/ )	{
+        $options{'match_subgenera'} = "";
+    }
     
     my @results = TaxonInfo::getTaxa($dbt,\%options,['*']);
         
