@@ -437,7 +437,7 @@ sub displayAuthorityForm {
     }
 
     if ( $q->param('called_by') eq "processTaxonSearch" )	{
-        $fields{'not_this_one'} = '<span style="padding-left: 2em;"><i>If this version of '.$fields{'taxon_name'}.' is a homonym, <a href="'.$WRITE_URL.'?action=displayAuthorityForm&amp;goal=authority&amp;taxon_name='.$fields{'taxon_name'}.'&amp;taxon_no=-1">create a new authority record</a> for your version</i></span><br><br>';
+        $fields{'not_this_one'} = '<span style="padding-left: 2em;"><i>If this version of '.$fields{'taxon_name'}.' is a homonym, <a href="'.$WRITE_URL.'?action=displayAuthorityForm&amp;goal=authority&amp;taxon_name='.$q->param('taxon_name').'&amp;taxon_no=-1">create a new authority record</a> for your version</i></span><br><br>';
     }
 	
 	# print the form	
