@@ -61,8 +61,9 @@ sub getCollections {
 		$options{$options{'field_name'}} = $options{'field_includes'};
 	}
 
+
     # the next two are mutually exclusive
-    if ($options{'count_occurrences'})	{
+    if ($options{'count_occurrences'} || $options{'sortby'} eq 'occurrences')	{
         push @from, "taxon_no,count(*) AS c";
         push @tables, "occurrences o";
         push @where, "o.collection_no=c.collection_no";
@@ -688,6 +689,8 @@ IS NULL))";
             $sortby .= "si.interval_name";
         } elsif ($options{'sortby'} eq 'geography') {
             $sortby .= "IF(c.state IS NOT NULL AND c.state != '',c.state,c.country)";
+        } elsif ($options{'sortby'} eq 'occurrences') {
+            $sortby .= "c";
         }
 
         if ($sortby) {
@@ -705,6 +708,7 @@ IS NULL))";
     $sql .= " GROUP BY ".join(",",@groupby) if (@groupby);  
     $sql .= " HAVING ".join(",",@having) if (@having);  
     $sql .= " ORDER BY ".$sortby if ($sortby);
+
     dbg("Collections sql: $sql");
 
     $sth = $dbh->prepare($sql);
