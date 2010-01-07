@@ -301,7 +301,6 @@ sub processReclassifyForm	{
     my ($q,$s,$dbt,$hbo) = @_;
     my $dbh = $dbt->dbh;
 
-    print "<BR>";
 	print $hbo->stdIncludes("std_page_top");
 
 	print "<center>\n\n";
@@ -313,11 +312,11 @@ sub processReclassifyForm	{
 	    print "<table border=0 cellpadding=2 cellspacing=0 class=\"small\">\n";
         print "<tr><th class=\"large\">Taxon</th><th class=\"large\">Classification based on</th></tr>";
     } elsif ($q->param('taxon_name')) {
-        print "<p class=\"pageTitle\">Taxa reclassified for " , $q->param('taxon_name') ,"</p>\n\n";
+        print "<p class=\"pageTitle\">Reclassified occurrences of " , $q->param('taxon_name') ,"</p>\n\n";
 	    print "<table border=0 cellpadding=2 cellspacing=0 class=\"small\">\n";
         print "<tr><th class=\"large\">Collection</th><th class=\"large\">Classification based on</th></tr>";
     } else {
-        print "<p class=\"pageTitle\">Taxa reclassified</p>";
+        print "<p class=\"pageTitle\">Reclassified occurrences</p>";
 	    print "<table border=0 cellpadding=2 cellspacing=0 class=\"small\">\n";
         print "<tr><th class=\"large\">Taxon</th><th class=\"large\">Classification based on</th></tr>";
     }
@@ -338,13 +337,13 @@ sub processReclassifyForm	{
 	my $rowcolor = 0;
 
 	# first tick through the occurrence taxa and update as appropriate
-    my $seen_reclassification = 0;
+	my $seen_reclassification = 0;
 	foreach my $i (0..$#old_taxa)	{
 		my $old_taxon_no = $old_taxa[$i];
-        my $occurrence_description = uri_unescape($occurrence_descriptions[$i]);
+		my $occurrence_description = "<span>".uri_unescape($occurrence_descriptions[$i]);
 		my ($new_taxon_no,$authority) = split /\+/,$new_taxa[$i];
 		if ( $old_taxa[$i] != $new_taxa[$i] )	{
-            $seen_reclassification++;
+		$seen_reclassification++;
 
 		# update the occurrences table
             my $dbh_r = $dbt->dbh;
@@ -382,10 +381,10 @@ sub processReclassifyForm	{
 	#  all the occurrences
 	foreach my $i (0..$#old_reid_taxa)	{
 		my $old_taxon_no = $old_reid_taxa[$i];
-        my $reid_description = uri_unescape($reid_descriptions[$i]);
+		my $reid_description = uri_unescape($reid_descriptions[$i]);
 		my ($new_taxon_no,$authority) = split /\+/,$new_reid_taxa[$i];
 		if ( $old_reid_taxa[$i] != $new_reid_taxa[$i] )	{
-            $seen_reclassification++;
+			$seen_reclassification++;
 
 		# update the reidentifications table
 			my $dbh_r = $dbt->dbh;
@@ -425,15 +424,16 @@ sub processReclassifyForm	{
         if ($q->param('collection_no')) {
             print "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&collection_no=";
             print $q->param('collection_no');
-            print "\"><b>Reclassify this collection</b></a> - ";
+            print "\">Reclassify this collection</a> - ";
         } else {
             print "<a href=\"$WRITE_URL?action=displayCollResults&type=reclassify_occurrence&occurrences_authorizer_no=".$q->param('occurrences_authorizer_no')."&taxon_name=";
             print $q->param('taxon_name');
-            print "\"><b>Reclassify ".$q->param('taxon_name')."</b></a> - ";
+            print "\">Reclassify ".$q->param('taxon_name')."</a> - ";
         }
-    	print "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences\"><b>Reclassify another collection or taxon</b></a></p>\n\n";
+    	print "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences\">Reclassify another collection or taxon</a></p>\n\n";
     }
 
+	print "</center>\n\n";
 	print $hbo->stdIncludes("std_page_bottom");
 
 }
