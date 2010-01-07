@@ -122,7 +122,7 @@ sub getCollections {
             push @results, @{$dbt->getData($sql2)}; 
         } elsif ($options{'taxon_name'} || $options{'taxon_no'}) {
             # Parse these values regardless
-            my @taxon_nos;
+            my (@taxon_nos,%status);
 
             if ($options{'taxon_no'}) {
                 my $sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".$dbh->quote($options{'taxon_no'});
@@ -130,8 +130,21 @@ sub getCollections {
                 @taxon_nos = (int($options{'taxon_no'}))
             } else {
                 if (! $options{'no_authority_lookup'}) {
-                    my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1,'remove_rank_change'=>1});
-                    @taxon_nos = map {$_->{taxon_no}} @taxa;
+                # get all variants of a name and current status but not
+                #  related synonyms JA 7.1.10
+# new code, 
+                    my $sql = "SELECT t.taxon_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name='".$options{'taxon_name'}."'";
+                # if that didn't work and the name is not a species, see if
+                #  it appears as a subgenus
+                    my @taxa = @{$dbt->getData($sql)};
+                    if ( ! @taxa )	{
+                        $sql = "SELECT t.taxon_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name LIKE '% (".$options{'taxon_name'}.")'";
+                        @taxa = @{$dbt->getData($sql)};
+                    }
+                    if ( @taxa )	{
+                        $status{$_->{'taxon_no'}} = $_->{'status'} foreach @taxa;
+                        push @taxon_nos , $_->{'taxon_no'} foreach @taxa;
+                    }
                 }
             }
 
@@ -141,7 +154,11 @@ sub getCollections {
             if (@taxon_nos) {
                 # if taxon is a homonym... make sure we get all versions of the homonym
                 foreach my $taxon_no (@taxon_nos) {
-                    my @t = TaxaCache::getChildren($dbt,$taxon_no);
+                    my $ignore_senior = "";
+                    if ( $status{$taxon_no} =~ /nomen/ )	{
+                        $ignore_senior = 1;
+                    }
+                    my @t = TaxaCache::getChildren($dbt,$taxon_no,'',$ignore_senior);
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                     @all_taxon_nos{@t} = ();
                 }
