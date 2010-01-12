@@ -263,6 +263,55 @@ function doCheckFieldsStratigraphy() {
         bad_info += "\no If the maximum and minimum time intervals are the same, leave the minimum blank";
     }
 
+    if ( frm.direct_ma.value == "" && ( frm.direct_ma_error.value != "" || frm.direct_ma_unit.value != "" || frm.direct_ma_method.value != "" ) )	{
+        bad_info += "\n You forgot to enter a direct date";
+    }
+    if ( ( /[^0-9\.]/.test( frm.direct_ma.value ) || /\..*\./.test( frm.direct_ma.value ) || /\.$/.test( frm.direct_ma.value ) ) && frm.direct_ma.value != "" )	{
+        bad_info += "\n Direct dates must be numbers";
+    }
+    if ( ( /[^0-9\.]/.test( frm.direct_ma_error.value ) || /\..*\./.test( frm.direct_ma_error.value ) || /\.$/.test( frm.direct_ma_error.value ) ) && frm.direct_ma_error.value != "" )	{
+        bad_info += "\n Direct date errors must be numbers";
+    }
+    if ( frm.direct_ma.value != "" && frm.direct_ma_unit.value == "" )	{
+        bad_info += "\n Select a direct date unit";
+    }
+    if ( frm.direct_ma.value != "" && frm.direct_ma_method.value == "" )	{
+        bad_info += "\n Select a direct date method";
+    }
+
+    if ( frm.max_ma.value == "" && ( frm.max_ma_error.value != "" || frm.max_ma_unit.value != "" || frm.max_ma_method.value != "" ) )	{
+        bad_info += "\n You forgot to enter a maximum date";
+    }
+    if ( ( /[^0-9\.]/.test( frm.max_ma.value ) || /\..*\./.test( frm.max_ma.value ) || /\.$/.test( frm.max_ma.value ) ) && frm.max_ma.value != "" )	{
+        bad_info += "\n Maximum dates must be numbers";
+    }
+    if ( ( /[^0-9\.]/.test( frm.max_ma_error.value ) || /\..*\./.test( frm.max_ma_error.value ) || /\.$/.test( frm.max_ma_error.value ) ) && frm.max_ma_error.value != "" )	{
+        bad_info += "\n Maximum date errors must be numbers";
+    }
+    if ( frm.max_ma.value != "" && frm.max_ma_unit.value == "" )	{
+        bad_info += "\n Select a maximum date unit";
+    }
+    if ( frm.max_ma.value != "" && frm.max_ma_method.value == "" )	{
+        bad_info += "\n Select a maximum date method";
+    }
+
+    if ( frm.min_ma.value == "" && ( frm.min_ma_error.value != "" || frm.min_ma_unit.value != "" || frm.min_ma_method.value != "" ) )	{
+        bad_info += "\n You forgot to enter a minimum date";
+    }
+    if ( ( /[^0-9\.]/.test( frm.min_ma.value ) || /\..*\./.test( frm.min_ma.value ) || /\.$/.test( frm.min_ma.value ) ) && frm.min_ma.value != "" )	{
+        bad_info += "\n Minimum dates must be numbers";
+    }
+    if ( ( /[^0-9\.]/.test( frm.min_ma_error.value ) || /\..*\./.test( frm.min_ma_error.value ) || /\.$/.test( frm.min_ma_error.value ) ) && frm.min_ma_error.value != "" )	{
+        bad_info += "\n Minimum date errors must be numbers";
+    }
+    if ( frm.min_ma.value != "" && frm.min_ma_unit.value == "" )	{
+        bad_info += "\n Select a minimum date unit";
+    }
+    if ( frm.min_ma.value != "" && frm.min_ma_method.value == "" )	{
+        bad_info += "\n Select a minimum date method";
+    }
+
+
     var hasgroup = /group/i;
     if ( hasgroup.test ( frm.geological_group.value ) == true )      {
         bad_info += "\no A group name can't include the word \"group\"";
@@ -632,6 +681,16 @@ function doCheckFieldsTaphonomy() {
   </table>
  
   <table border=0>
+    <tr>
+      <td>Direct date and method:<br>&nbsp;<input id="direct_ma" size="5" maxlength="7"><input id="direct_ma_error" size="5" maxlength="7"><select class="verysmall" id="direct_ma_unit"></select></td>
+      <td>Max date and method:<br>&nbsp;<input id="max_ma" size="5" maxlength="7"><input id="max_ma_error" size="5" maxlength="7"><select class="verysmall" id="max_ma_unit"></select></td>
+      <td>Min date and method:<br>&nbsp;<input id="min_ma" size="5" maxlength="7"><input id="min_ma_error" size="5" maxlength="7"><select class="verysmall" id="min_ma_unit"></select></td>
+    </tr>
+    <tr>
+      <td>&nbsp;<select class="verysmall" id="direct_ma_method"></select></td>
+      <td>&nbsp;<select class="verysmall" id="max_ma_method"></select></td>
+      <td>&nbsp;<select class="verysmall" id="min_ma_method"></select></td>
+    </tr>
     <tr>
       <td>Group:<br><input id="geological_group" maxlength="60"></td>
       <td>Formation:<br><input id="formation" maxlength="60"></td>
