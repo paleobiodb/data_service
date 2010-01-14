@@ -1477,9 +1477,9 @@ sub displayCollectionDetailsPage {
     if ( $row->{'direct_ma'} )	{
         $row->{'age_estimate'} .= $row->{'direct_ma'};
         if ( $row->{'direct_ma_error'} )	{
-            $row->{'age_estimate'} .= " +/- " . $row->{'direct_ma_error'};
+            $row->{'age_estimate'} .= " &plusmn; " . $row->{'direct_ma_error'};
         }
-        $row->{'age_estimate'} .= " m.y. ago (" . $row->{'direct_ma_method'} . ")";
+        $row->{'age_estimate'} .= " ".$row->{'direct_ma_unit'}." (" . $row->{'direct_ma_method'} . ")";
     }
     my $link;
     my $endlink;
@@ -1489,14 +1489,14 @@ sub displayCollectionDetailsPage {
         }
         $row->{'age_estimate'} .= $row->{'max_ma'};
         if ( $row->{'max_ma_error'} )	{
-            $row->{'age_estimate'} .= " +/- " . $row->{'max_ma_error'};
+            $row->{'age_estimate'} .= " &plusmn; " . $row->{'max_ma_error'};
         }
 	if ( $row->{'max_ma_method'} eq "AEO" )	{
             $link = qq|<a href="$READ_URL?action=explainAEOestimate&amp;user=Guest&amp;collection_no=$row->{'collection_no'}">|;
             $endlink = "</a>";
         }
         if ( ! $row->{'min_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
-            $row->{'age_estimate'} .= " m.y. ago ($link" . $row->{'max_ma_method'} . "$endlink)";
+            $row->{'age_estimate'} .= " ".$row->{'max_ma_unit'}." ($link" . $row->{'max_ma_method'} . "$endlink)";
         }
     }
     if ( $row->{'min_ma'} && ( ! $row->{'max_ma'} || $row->{'min_ma'} ne $row->{'max_ma'} || $row->{'min_ma_method'} ne $row->{'max_ma_method'} ) )	{
@@ -1507,11 +1507,11 @@ sub displayCollectionDetailsPage {
         }
         $row->{'age_estimate'} .= $row->{'min_ma'};
         if ( $row->{'min_ma_error'} )	{
-            $row->{'age_estimate'} .= " +/- " . $row->{'min_ma_error'};
+            $row->{'age_estimate'} .= " &plusmn; " . $row->{'min_ma_error'};
         }
-        $row->{'age_estimate'} .= " m.y. ago ($link" . $row->{'min_ma_method'} . "$endlink)";
-    } elsif ( $row->{'age_estimate'} )	{
-        $row->{'age_estimate'} .= " m.y. ago ($link" . $row->{'max_ma_method'} . "$endlink)";
+        $row->{'age_estimate'} .= " ".$row->{'min_ma_unit'}." ($link" . $row->{'min_ma_method'} . "$endlink)";
+    } elsif ( $row->{'age_estimate'} && $row->{'max_ma_method'} ne "" )	{
+        $row->{'age_estimate'} .= " ".$row->{'max_ma_method'}." ($link" . $row->{'max_ma_method'} . "$endlink)";
     }
     foreach my $term ("period","epoch","stage") {
         $row->{$term} = "";
