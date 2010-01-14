@@ -264,51 +264,51 @@ function doCheckFieldsStratigraphy() {
     }
 
     if ( frm.direct_ma.value == "" && ( frm.direct_ma_error.value != "" || frm.direct_ma_unit.value != "" || frm.direct_ma_method.value != "" ) )	{
-        bad_info += "\n You forgot to enter a direct date";
+        bad_info += "\no You forgot to enter a direct date";
     }
     if ( ( /[^0-9\.]/.test( frm.direct_ma.value ) || /\..*\./.test( frm.direct_ma.value ) || /\.$/.test( frm.direct_ma.value ) ) && frm.direct_ma.value != "" )	{
-        bad_info += "\n Direct dates must be numbers";
+        bad_info += "\no Direct dates must be numbers";
     }
     if ( ( /[^0-9\.]/.test( frm.direct_ma_error.value ) || /\..*\./.test( frm.direct_ma_error.value ) || /\.$/.test( frm.direct_ma_error.value ) ) && frm.direct_ma_error.value != "" )	{
-        bad_info += "\n Direct date errors must be numbers";
+        bad_info += "\no Direct date errors must be numbers";
     }
     if ( frm.direct_ma.value != "" && frm.direct_ma_unit.value == "" )	{
-        bad_info += "\n Select a direct date unit";
+        bad_info += "\no Select a direct date unit";
     }
     if ( frm.direct_ma.value != "" && frm.direct_ma_method.value == "" )	{
-        bad_info += "\n Select a direct date method";
+        bad_info += "\no Select a direct date method";
     }
 
     if ( frm.max_ma.value == "" && ( frm.max_ma_error.value != "" || frm.max_ma_unit.value != "" || frm.max_ma_method.value != "" ) )	{
-        bad_info += "\n You forgot to enter a maximum date";
+        bad_info += "\no You forgot to enter a maximum date";
     }
     if ( ( /[^0-9\.]/.test( frm.max_ma.value ) || /\..*\./.test( frm.max_ma.value ) || /\.$/.test( frm.max_ma.value ) ) && frm.max_ma.value != "" )	{
-        bad_info += "\n Maximum dates must be numbers";
+        bad_info += "\no Maximum dates must be numbers";
     }
     if ( ( /[^0-9\.]/.test( frm.max_ma_error.value ) || /\..*\./.test( frm.max_ma_error.value ) || /\.$/.test( frm.max_ma_error.value ) ) && frm.max_ma_error.value != "" )	{
-        bad_info += "\n Maximum date errors must be numbers";
+        bad_info += "\no Maximum date errors must be numbers";
     }
     if ( frm.max_ma.value != "" && frm.max_ma_unit.value == "" )	{
-        bad_info += "\n Select a maximum date unit";
+        bad_info += "\no Select a maximum date unit";
     }
     if ( frm.max_ma.value != "" && frm.max_ma_method.value == "" )	{
-        bad_info += "\n Select a maximum date method";
+        bad_info += "\no Select a maximum date method";
     }
 
     if ( frm.min_ma.value == "" && ( frm.min_ma_error.value != "" || frm.min_ma_unit.value != "" || frm.min_ma_method.value != "" ) )	{
-        bad_info += "\n You forgot to enter a minimum date";
+        bad_info += "\no You forgot to enter a minimum date";
     }
     if ( ( /[^0-9\.]/.test( frm.min_ma.value ) || /\..*\./.test( frm.min_ma.value ) || /\.$/.test( frm.min_ma.value ) ) && frm.min_ma.value != "" )	{
-        bad_info += "\n Minimum dates must be numbers";
+        bad_info += "\no Minimum dates must be numbers";
     }
     if ( ( /[^0-9\.]/.test( frm.min_ma_error.value ) || /\..*\./.test( frm.min_ma_error.value ) || /\.$/.test( frm.min_ma_error.value ) ) && frm.min_ma_error.value != "" )	{
-        bad_info += "\n Minimum date errors must be numbers";
+        bad_info += "\no Minimum date errors must be numbers";
     }
     if ( frm.min_ma.value != "" && frm.min_ma_unit.value == "" )	{
-        bad_info += "\n Select a minimum date unit";
+        bad_info += "\no Select a minimum date unit";
     }
     if ( frm.min_ma.value != "" && frm.min_ma_method.value == "" )	{
-        bad_info += "\n Select a minimum date method";
+        bad_info += "\no Select a minimum date method";
     }
 
 
