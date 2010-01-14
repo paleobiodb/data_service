@@ -412,6 +412,7 @@ sub retellOptions {
         if ( $q->param("Asia") )             { push ( @continents, "Asia" ); }
         if ( $q->param("Australia") )         { push ( @continents, "Australia" ); }
         if ( $q->param("Europe") )             { push ( @continents, "Europe" ); }
+        if ( $q->param("Oceania") )             { push ( @continents, "Oceania" ); }
         if ( $q->param("North America") )     { push ( @continents, "North America" ); }
         if ( $q->param("South America") )     { push ( @continents, "South America" ); }
         if ( $#continents > -1 ) {
@@ -716,13 +717,7 @@ sub getCountryString {
         }
         close REGIONS;
         # Add the countries within selected regions
-        my @regions = ( 'North America', 
-                        'South America', 
-                        'Europe', 
-                        'Africa',
-                        'Antarctica', 
-                        'Asia', 
-                        'Australia');
+        my @regions = ( 'North America', 'South America', 'Europe', 'Africa', 'Antarctica', 'Asia', 'Australia', 'Oceania');
 
         foreach my $region (@regions) {
             if($q->param($region) eq 'YES') {
@@ -4136,7 +4131,7 @@ sub setupQueryFields {
     my $dbt = $self->{'dbt'};
     $self->{'setup_query_fields_called'} = 1;
 
-    my @continents = ('North America','South America','Europe','Africa','Antarctica','Asia','Australia');
+    my @continents = ('North America','South America','Europe','Africa','Antarctica','Asia','Australia','Oceania');
     foreach my $c (@continents) {
         if ($q->param('country') eq $c) {
             $q->param($c=>"YES");
