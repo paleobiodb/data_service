@@ -979,7 +979,10 @@ sub getIntervalString    {
         my $intervals_sql = join(", ",@$intervals);
         # -1 to prevent crashing on blank string
         # only use the interval names if there is no direct estimate
-        return "((c.max_interval_no IN (-1,$intervals_sql) AND c.min_interval_no IN (0,$intervals_sql) AND c.max_ma IS NULL AND c.min_ma IS NULL) OR (c.max_ma<=$lower AND c.min_ma>=$upper AND c.max_ma IS NOT NULL AND c.min_ma IS NOT NULL))";
+	# backed off this because there are too many cases of AEO values causing
+	#  collections to land in the wrong epoch, might change my mind later
+	return "(c.max_interval_no IN (-1,$intervals_sql) AND c.min_interval_no IN (0,$intervals_sql))";
+        #return "((c.max_interval_no IN (-1,$intervals_sql) AND c.min_interval_no IN (0,$intervals_sql) AND c.max_ma IS NULL AND c.min_ma IS NULL) OR (c.max_ma<=$lower AND c.min_ma>=$upper AND c.max_ma IS NOT NULL AND c.min_ma IS NOT NULL))";
     }
 
     
@@ -1759,8 +1762,12 @@ sub queryDatabase {
             }
         }
         # these data are always needed for range computations
+        push @fields,"c.direct_ma AS `c.direct_ma`";
+        push @fields,"c.direct_ma_unit AS `c.direct_ma_unit`";
         push @fields,"c.max_ma AS `c.max_ma`";
+        push @fields,"c.max_ma_unit AS `c.max_ma_unit`";
         push @fields,"c.min_ma AS `c.min_ma`";
+        push @fields,"c.min_ma_unit AS `c.min_ma_unit`";
         if ($q->param('collections_paleocoords') eq 'YES') {
             push @fields,"c.paleolat AS `c.paleolat`";
             push @fields,"c.paleolng AS `c.paleolng`";
@@ -2438,10 +2445,33 @@ sub queryDatabase {
             }
             $row->{'c.max_interval'} = $time_lookup->{$row->{'c.max_interval_no'}}{'interval_name'};
             $row->{'c.min_interval'} = $time_lookup->{$row->{'c.min_interval_no'}}{'interval_name'};
-            if ( $row->{'c.max_ma'} && $row->{'c.min_ma'} )	{
+            if ( $row->{'c.direct_ma'} > 0 && $row->{'c.direct_ma_unit'} =~ /ybp/i )	{
+                    $row->{'c.direct_ma'} /= 1000000;
+            } elsif ( $row->{'c.direct_ma'} > 0 && $row->{'c.direct_ma_unit'} =~ /ka/i )	{
+                    $row->{'c.direct_ma'} /= 1000;
+            }
+            if ( $row->{'c.max_ma'} > 0 && $row->{'c.max_ma_unit'} =~ /ybp/i )	{
+                    $row->{'c.max_ma'} /= 1000000;
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.max_ma_unit'} =~ /ka/i )	{
+                    $row->{'c.max_ma'} /= 1000;
+            }
+            if ( $row->{'c.min_ma'} > 0 && $row->{'c.min_ma_unit'} =~ /ybp/i )	{
+                    $row->{'c.min_ma'} /= 1000000;
+            } elsif ( $row->{'c.min_ma'} > 0 && $row->{'c.min_ma_unit'} =~ /ka/i )	{
+                    $row->{'c.min_ma'} /= 1000;
+            }
+            if ( $row->{'c.direct_ma'} )	{
+                $row->{'c.ma_max'} = $row->{'c.direct_ma'};
+                $row->{'c.ma_min'} = $row->{'c.direct_ma'};
+                $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} > 0 )	{
                 $row->{'c.ma_max'} = $row->{'c.max_ma'};
                 $row->{'c.ma_min'} = $row->{'c.min_ma'};
-                $row->{'c.ma_mid'} = ($row->{'c.max_ma'} + $row->{'c.min_ma'})/2;
+                $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} <= 0 )	{
+                $row->{'c.ma_max'} = $row->{'c.max_ma'};
+                $row->{'c.ma_min'} = 0;
+                $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
             } else	{
                 $row->{'c.ma_max'} = $max_lookup->{'lower_boundary'};
                 $row->{'c.ma_min'} = $min_lookup->{'upper_boundary'};
