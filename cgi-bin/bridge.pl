@@ -293,17 +293,21 @@ sub displayMenuPage	{
 		}
 	}
 
-    if ($s->isDBMember() && $q->param('user') ne 'Guest') {
-	    print $hbo->stdIncludes("std_page_top");
-	    print $hbo->populateHTML('menu');
-	    print $hbo->stdIncludes("std_page_bottom");
-    } else {
-        if ($q->param('user') eq 'Contributor') {
-		    displayLoginPage( "Please log in first.","displayMenuPage" );
-        } else {
-            displayHomePage();
-        }
-    }
+	if ($s->isDBMember() && $q->param('user') ne 'Guest') {
+		print $hbo->stdIncludes("std_page_top");
+		my $access;
+		if ( $s->get('role') =~ /authorizer|student|technician/ )	{
+			$access = "full";
+		}
+		print $hbo->populateHTML('menu',[$access],['access']);
+		print $hbo->stdIncludes("std_page_bottom");
+	} else	{
+        	if ($q->param('user') eq 'Contributor') {
+			displayLoginPage( "Please log in first.","displayMenuPage" );
+		} else	{
+			displayHomePage();
+		}
+	}
 }
 
 
