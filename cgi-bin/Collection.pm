@@ -1132,7 +1132,9 @@ sub processCollectionForm {
             $links .= qq|<li><a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$collection_no">Edit taxonomic list</a></li>|;
             $links .= qq|<li><a href="$WRITE_URL?action=displayOccurrenceListForm&collection_no=$collection_no">Paste in taxonomic list</a></li>|;
             $links .= qq|<li><a href="$WRITE_URL?action=displayCollResults&type=occurrence_table&reference_no=$coll->{reference_no}">Edit occurrence table for collections from the same reference</a></li>|;
-            $links .= qq|<li><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></li>|;
+            if ( $s->get('role') =~ /authorizer|student|technician/ )	{
+                $links .= qq|<li><a href="$WRITE_URL?action=displayOccsForReID&collection_no=$collection_no">Reidentify taxa</a></li>|;
+            }
             $links .= "</td></tr></table></div></p>";
 
             $coll->{'collection_links'} = $links;
@@ -2095,8 +2097,10 @@ function showName()	{
 		$return .= qq|<a href="$READ_URL?action=displayCollectionEcology&collection_no=$options{'collection_no'}">Tabulate ecology data</a> - |;
 
 		if ($s->isDBMember()) {
-			$return .= qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$options{'collection_no'}">Edit taxonomic list</a> - |;
-			$return .= qq|<a href="$WRITE_URL?action=displayOccsForReID&collection_no=$options{'collection_no'}">Reidentify taxa</a>|;
+			$return .= qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$options{'collection_no'}">Edit taxonomic list</a>|;
+			if ( $s->get('role') =~ /authorizer|student|technician/ )	{
+				$return .= qq| - <a href="$WRITE_URL?action=displayOccsForReID&collection_no=$options{'collection_no'}">Reidentify taxa</a>|;
+			}
 		}
 	} elsif ($s->isDBMember()) {
 		$return .= $options{'save_links'};
@@ -3022,9 +3026,11 @@ sub basicCollectionInfo	{
 		}
 		print qq|<a href="$WRITE_URL?action=displayCollectionForm&prefill_collection_no=$c->{'collection_no'}">Add a collection copied from this one</a> - |;
 		if ($can_modify->{$c->{'authorizer_no'}} || $s->isSuperUser) {  
-			print qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$c->{'collection_no'}">Edit taxonomic list</a> - |;
+			print qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&collection_no=$c->{'collection_no'}">Edit taxonomic list</a>|;
 		}
-		print qq|<a href="$WRITE_URL?action=displayOccsForReID&collection_no=$c->{'collection_no'}">Reidentify taxa</a>|;
+		if ( $s->get('role') =~ /authorizer|student|technician/ )	{
+			print qq| - <a href="$WRITE_URL?action=displayOccsForReID&collection_no=$c->{'collection_no'}">Reidentify taxa</a>|;
+		}
 		print "\n</div>\n\n";
 	}
 
