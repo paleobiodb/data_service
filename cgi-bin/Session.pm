@@ -91,15 +91,30 @@ sub processLogin {
     my ($sql,@results,$authorizer_row,$enterer_row);
 	# Get info from database on this authorizer.
 	$sql =	"SELECT * FROM person WHERE name=".$dbh->quote($authorizer);
-    @results =@{$dbt->getData($sql)};
-    $authorizer_row  = $results[0];
+	@results =@{$dbt->getData($sql)};
+	$authorizer_row  = $results[0];
 
 	# Get info from database on this enterer.
 	$sql =	"SELECT * FROM person WHERE name=".$dbh->quote($enterer);
-    @results =@{$dbt->getData($sql)};
-    $enterer_row  = $results[0];
+	@results =@{$dbt->getData($sql)};
+	$enterer_row  = $results[0];
 
-    if ($authorizer_row) {
+	# find highest-level role JA 20.1.09
+	# note that we are defaulting to lowest-level in cases where role
+	#  is unknown, which is only true for people added before the
+	#  student and technician categories were separated
+	if ( $enterer_row->{'role'} =~ /authorizer/ )	{
+		$enterer_row->{'role'} = "authorizer";
+	} elsif ( $enterer_row->{'role'} =~ /technician/ )	{
+		$enterer_row->{'role'} = "technician";
+	} elsif ( $enterer_row->{'role'} =~ /student/ )	{
+		$enterer_row->{'role'} = "student";
+	} else	{
+		$enterer_row->{'role'} = "limited";
+	}
+	
+
+	if ($authorizer_row) {
 		# Check the password
 		my $db_password = $authorizer_row->{'password'};
 		my $plaintext = $authorizer_row->{'plaintext'};
@@ -160,6 +175,7 @@ sub processLogin {
                        'authorizer_no'=>$authorizer_row->{'person_no'},
                        'enterer'=>$enterer_row->{'name'},
                        'enterer_no'=>$enterer_row->{'person_no'},
+                       'role'=>$enterer_row->{'role'},
                        'superuser'=>$superuser,
                        'marine_invertebrate'=>$authorizer_row->{'marine_invertebrate'}, 
                        'micropaleontology'=>$authorizer_row->{'micropaleontology'},
