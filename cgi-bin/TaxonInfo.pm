@@ -113,13 +113,13 @@ sub checkTaxonInfo {
             } else {
                 # If nothing, print out an error message
                 searchForm($hbo, $q, 1); # param for not printing header with form
-                if($s->isDBMember()) {
+                if($s->isDBMember() && $s->get('role') =~ /authorizer|student|technician/) {
                     print "<center><p><a href=\"$WRITE_URL?action=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
                 }
             }
         } elsif(scalar @results < 1 && ! $q->param('taxon_name')){
             searchForm($hbo, $q, 1); # param for not printing header with form
-            if($s->isDBMember()) {
+            if($s->isDBMember() && $s->get('role') =~ /authorizer|student|technician/) {
                 print "<center><p><a href=\"$WRITE_URL?action=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
             }
         } elsif(scalar @results == 1){
@@ -355,7 +355,7 @@ sub displayTaxonInfoResults {
 
         print displayRelatedTaxa($dbt, $taxon_no, $spelling_no, $taxon_name,$is_real_user);
 	print "</center>\n";
-        if($s->isDBMember()) {
+        if($s->isDBMember() && $s->get('role') =~ /authorizer|student|technician/) {
             # Entered Taxon
             if ($entered_no) {
                 print "<a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_no=$entered_no\">";
@@ -4436,9 +4436,9 @@ function erasePleaseWait()	{
 		} else	{
 			print "<p><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_name=$taxon_name&amp;is_real_user=1\">Show more details</a></p>\n\n";
 		}
-		if ( $s->isDBMember() && $taxon_no )	{
-			print "<p><a href=\"$READ_URL?action=displayAuthorityForm&amp;taxon_no=$taxon_no\">Edit ".italicize($auth)."</a></p>\n\n";
-			print "<p><a href=\"$READ_URL?action=displayOpinionChoiceForm&amp;taxon_no=$taxon_no\">Add/edit taxonomic opinions about ".italicize($auth)."</a></p>\n\n";
+		if ( $s->isDBMember() && $taxon_no && $s->get('role') =~ /authorizer|student|technician/ )	{
+			print "<p><a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_no=$taxon_no\">Edit ".italicize($auth)."</a></p>\n\n";
+			print "<p><a href=\"$WRITE_URL?action=displayOpinionChoiceForm&amp;taxon_no=$taxon_no\">Add/edit taxonomic opinions about ".italicize($auth)."</a></p>\n\n";
 		}
 	}
 	print "</div>\n</div>\n\n";
