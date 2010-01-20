@@ -37,6 +37,7 @@ use TaxaCache;
 use TypoChecker;
 use FossilRecord;
 use Cladogram;
+use Review;
 
 # god awful Poling modules
 use Taxon;
@@ -4792,6 +4793,30 @@ sub drawCladogram	{
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+# JA 17.1.10
+sub displayReviewForm {
+	print $hbo->stdIncludes("std_page_top");
+	Review::displayReviewForm($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub processReviewForm {
+	print $hbo->stdIncludes("std_page_top");
+	Review::processReviewForm($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub listReviews	{
+	print $hbo->stdIncludes("std_page_top");
+	Review::listReviews($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub showReview	{
+	print $hbo->stdIncludes("std_page_top");
+	Review::showReview($dbt,$q,$s,$hbo);
+	print $hbo->stdIncludes("std_page_bottom");
+}
 
 # Displays taxonomic opinions and names associated with a reference_no
 # PS 10/25/2004
