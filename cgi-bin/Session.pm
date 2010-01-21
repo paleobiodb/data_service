@@ -118,6 +118,12 @@ sub processLogin {
 		# Check the password
 		my $db_password = $authorizer_row->{'password'};
 		my $plaintext = $authorizer_row->{'plaintext'};
+		if ( $enterer_row->{'password'} ne "" )	{
+			$db_password = $enterer_row->{'password'};
+		}
+		if ( $enterer_row->{'plaintext'} ne "" )	{
+			$plaintext = $enterer_row->{'plaintext'};
+		}
 
 		# First try the plain text version
 		if ( $plaintext && $plaintext eq $password) {
