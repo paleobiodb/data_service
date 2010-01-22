@@ -1488,7 +1488,7 @@ sub displayCollectionDetailsPage {
     my $link;
     my $endlink;
     if ( $row->{'max_ma'} )	{
-        if ( ! $row->{'min_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
+        if ( ! $row->{'min_ma'} )	{
             $row->{'age_estimate'} .= "maximum ";
         }
         $row->{'age_estimate'} .= $row->{'max_ma'};
@@ -1499,15 +1499,15 @@ sub displayCollectionDetailsPage {
             $link = qq|<a href="$READ_URL?action=explainAEOestimate&amp;user=Guest&amp;collection_no=$row->{'collection_no'}">|;
             $endlink = "</a>";
         }
-        if ( ! $row->{'min_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
+        if ( $row->{'min_ma'} && $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
             $row->{'age_estimate'} .= " ".$row->{'max_ma_unit'}." ($link" . $row->{'max_ma_method'} . "$endlink)";
         }
     }
     if ( $row->{'min_ma'} && ( ! $row->{'max_ma'} || $row->{'min_ma'} ne $row->{'max_ma'} || $row->{'min_ma_method'} ne $row->{'max_ma_method'} ) )	{
-        if ( ! $row->{'max_ma'} || $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
+        if ( ! $row->{'max_ma'} )	{
             $row->{'age_estimate'} .= "minimum ";
         } else	{
-            $row->{'age_estimate'} .= " - ";
+            $row->{'age_estimate'} .= " to ";
         }
         $row->{'age_estimate'} .= $row->{'min_ma'};
         if ( $row->{'min_ma_error'} )	{
@@ -1515,7 +1515,7 @@ sub displayCollectionDetailsPage {
         }
         $row->{'age_estimate'} .= " ".$row->{'min_ma_unit'}." ($link" . $row->{'min_ma_method'} . "$endlink)";
     } elsif ( $row->{'age_estimate'} && $row->{'max_ma_method'} ne "" )	{
-        $row->{'age_estimate'} .= " ".$row->{'max_ma_method'}." ($link" . $row->{'max_ma_method'} . "$endlink)";
+        $row->{'age_estimate'} .= " ".$row->{'max_ma_unit'}." ($link" . $row->{'max_ma_method'} . "$endlink)";
     }
     foreach my $term ("period","epoch","stage") {
         $row->{$term} = "";
@@ -1524,7 +1524,6 @@ sub displayCollectionDetailsPage {
             $row->{$term} = $max_lookup->{$term."_name"};
         }
     }
-        
     if ($max_lookup->{"ten_my_bin"} &&
         $max_lookup->{"ten_my_bin"} eq $min_lookup->{"ten_my_bin"}) {
         $row->{"ten_my_bin"} = $max_lookup->{"ten_my_bin"};
