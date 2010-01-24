@@ -935,6 +935,9 @@ sub displayCollectionForm {
     } else {
         $vars{'page_title'} =  "Collection number ".$vars{'collection_no'};
         $vars{'page_submit_button'} = '<input type=submit name="edit_button" value="Edit collection and exit">';
+        if ( $vars{'art_whole_bodies'} || $vars{'disart_assoc_maj_elems'} || $vars{'disassoc_maj_elems'} || $vars{'disassoc_minor_elems'} )	{
+            $vars{'elements'} = 1;
+        }
     }
 
     # Output the main part of the page
@@ -2630,7 +2633,7 @@ sub basicCollectionInfo	{
 
 	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
 
-	for my $f ( 'lithadj','lithadj2','pres_mode','assembl_comps','coll_meth','museum' )	{
+	for my $f ( 'lithadj','lithadj2','pres_mode','assembl_comps','common_body_parts','rare_body_parts','coll_meth','museum' )	{
 		$c->{$f} =~ s/,/, /g;
 	}
 
@@ -2687,6 +2690,10 @@ sub basicCollectionInfo	{
 	print ")";
 	print "<\p>\n\n";
 
+	if ( $s->isDBMember() && $c->{'geogcomments'} )	{
+		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'geogcomments'}<\p>\n\n";
+	}
+
 	print "<p $indent>When: ";
 	if ( $c->{'zone'} )	{
 		print $c->{'zone'}." ".$c->{'zone_type'}." zone, ";
@@ -2730,6 +2737,10 @@ sub basicCollectionInfo	{
 	}
 	print " Ma)";
 	print "<\p>\n\n";
+
+	if ( $c->{'stratcomments'} )	{
+		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'stratcomments'}<\p>\n\n";
+	}
 
 	print "<p $indent>Environment/lithology: ";
 	my $env = $c->{'environment'};
@@ -2793,6 +2804,17 @@ sub basicCollectionInfo	{
 	}
 	print "<\p>\n\n";
 
+	if ( $c->{'geology_comments'} || $c->{'lithdescript'} )	{
+		print "<div class=\"verysmall\" style=\"margin-top: -1em;\">\n";
+		if ( $c->{'geology_comments'} )	{
+			print "<div style=\"margin-left: 2em; text-indent: -1em;\">&bull; $c->{'geology_comments'}</div>\n";
+		}
+		if ( $c->{'lithdescript'} )	{
+			print "<div style=\"margin-left: 2em; text-indent: -1em;\">&bull; $c->{'lithdescript'}</div>\n";
+		}
+		print "</div>\n\n";
+	}
+
 	if ( $c->{'assembl_comps'} )	{
 		if ( $c->{'assembl_comps'} =~ /,/ )	{
 			print "<p>Size classes: ";
@@ -2803,16 +2825,29 @@ sub basicCollectionInfo	{
 		print "<\p>\n\n";
 	}
 
+	if ( $c->{'assembl_comps'} && $c->{'component_comments'} )	{
+		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'component_comments'}<\p>\n\n";
+	}
+
 	$c->{'pres_mode'} =~ s/body(,|)//;
 	if ( $c->{'pres_mode'} )	{
 		print "<p>Preservation: $c->{'pres_mode'}</p>\n\n";
 	}
 
+	if ( $c->{'pres_mode'} && $c->{'taphonomy_comments'} )	{
+		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'taphonomy_comments'}<\p>\n\n";
+	}
+
+	# remove leading day of month (probably)
 	$c->{'collection_dates'} =~ s/^[0-9]([0-9]|) //;
-	$c->{'collection_dates'} =~ s/^[A-Za-z]* //;
+	# remove all leading verbiage
+	while ( $c->{'collection_dates'} =~ /^[A-Za-z]* / )	{
+		$c->{'collection_dates'} =~ s/^[A-Za-z]* //;
+	}
+	# fix up something like 1980s
 	$c->{'collection_dates'} =~ s/(.*)([0-9]s)$/the $1$2/;
-	$c->{'collection_dates'} =~ s/[0-9][0-9]\.//g;
-	$c->{'collection_dates'} =~ s/[0-9]\.//g;
+	# extract year from a string like 11.11.2011
+	$c->{'collection_dates'} =~ s/([0-9]+\.)([0-9]+\.)([1-2][0-9])/$3/g;
 	if ( $c->{'collectors'} || $c->{'collection_dates'} )	{
 		print "<p>Collected";
 		if ( $c->{'collectors'} )	{
@@ -2836,10 +2871,14 @@ sub basicCollectionInfo	{
 		print "<p>Collection methods: $c->{'coll_meth'}</p>\n\n";
 	}
 
+	if ( ( $c->{'collectors'} || $c->{'collection_dates'} || $c->{'museum'} || $c->{'coll_meth'} ) && $c->{'collection_comments'} )	{
+		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'collection_comments'}<\p>\n\n";
+	}
+
 	$sql = "SELECT * FROM refs WHERE reference_no=".$c->{'reference_no'};
 	my $ref = ${$dbt->getData($sql)}[0];
 	print "<p $indent>Primary reference: ".Reference::formatLongRef($ref,'link_id'=>1)." <a class=\"verysmall\" href=\"$READ_URL?action=displayReference&reference_no=$c->{reference_no}\">more details</a>";
-	if ($s->isDBMember()) {
+	if ( $s->isDBMember() ) {
 		print " - <a class=\"verysmall\" href=\"$WRITE_URL?action=displayRefResults&amp;type=edit&amp;reference_no=$c->{reference_no}\">edit</a>";
 	}
 	print "</p>\n\n";
@@ -2913,7 +2952,10 @@ sub basicCollectionInfo	{
 	}
 	print "<div style=\"margin-left: 0em; margin-right: 1em; border-top: 1px solid darkgray;\">\n\n";
 	print "<p class=\"large\" style=\"margin-top: 0.5em;\">Taxonomic list</p>\n\n";
-	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\">\n\n";
+	if ( $c->{'taxonomy_comments'} )	{
+		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'taxonomy_comments'}<\p>\n\n";
+	}
+	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\" style=\"margin-top: -1em;\">\n\n";
 	my ($lastclass,$lastorder,$lastfamily,$class);
 	for my $o ( @occs )	{
 		my ($ital,$ital2,$postfix) = ('<i>','</i>','');
