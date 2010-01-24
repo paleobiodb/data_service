@@ -1741,12 +1741,11 @@ sub displayOpinionChoiceForm {
     } elsif ($q->param('reference_no') && $s->isDBMember())	{
         print qq|<tr><td align="left" colspan=2><div class="tiny" style="padding-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
         print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')">FAQ</a>.</p></div>\n|;
-       # print "</span></p></td></tr>\n";
-       # print "</table>\n";
-        print "</td></tr></table>";
-        print "</form>\n";
-        print "</div>\n";
+        print "</td></tr>\n";
     }
+    print "</table>\n";
+    print "</form>\n";
+    print "</div>\n";
 }
 
 # Occasionally duplicate opinions will be created sort of due to user err.  User will enter
