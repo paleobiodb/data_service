@@ -306,9 +306,16 @@ sub getCollections {
             $lower = $options{'max_interval'};
             $upper = $options{'min_interval'};
         }
+        # added 1600 yr fudge factor to prevent uncalibrated 14C dates from
+        #  putting Pleistocene collections in the Holocene; there is only a
+        #  tiny chance that it might mess up a numerical Holocene search
+        #  JA 24.1.10
+        $lower -= 0.0016;
+        $upper -= 0.0016;
 
         # only use the interval names if there is no direct estimate
-        push @where , "((c.max_interval_no IN ($val) AND c.min_interval_no IN (0,$val) AND c.max_ma IS NULL AND c.min_ma IS NULL) OR (c.max_ma<=$lower AND c.min_ma>=$upper AND c.max_ma IS NOT NULL AND c.min_ma IS NOT NULL))";
+        # added ma_unit and direct_ma support (egads!) 24.1.10
+        push @where , "((c.max_interval_no IN ($val) AND c.min_interval_no IN (0,$val) AND c.direct_ma IS NULL AND c.max_ma IS NULL AND c.min_ma IS NULL) OR (c.max_ma_unit='YBP' AND c.max_ma IS NOT NULL AND c.max_ma/1000000<=$lower AND c.min_ma/1000000>=$upper) OR (c.max_ma_unit='Ka' AND c.max_ma IS NOT NULL AND c.max_ma/1000<=$lower AND c.min_ma/1000>=$upper) OR (c.max_ma_unit='Ma' AND c.max_ma IS NOT NULL AND c.max_ma<=$lower AND c.min_ma>=$upper) OR (c.direct_ma_unit='YBP' AND c.direct_ma/1000000<=$lower AND c.direct_ma/1000000>=$upper) OR (c.direct_ma_unit='Ka' AND c.direct_ma/1000<=$lower AND c.direct_ma/1000>=$upper AND c.direct_ma) OR (c.direct_ma_unit='Ma' AND c.direct_ma<=$lower AND c.direct_ma>=$upper))";
 	}
                                         
 	# Handle half/quarter degrees for long/lat respectively passed by Map.pm PS 11/23/2004
