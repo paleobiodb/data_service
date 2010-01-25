@@ -2558,7 +2558,7 @@ sub queryDatabase {
                 if ( $q->param('indet') ne 'YES' && ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus/ )	{
                     next;
                 }
-                if ( $q->param('sp') eq 'NO' && ( ! $species || $row->{'o.species_reso'} eq "informal" ) )	{
+                if ( $q->param('sp') eq 'NO' && ( ! $species || $row->{'o.species_reso'} eq "informal" ) || $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /species/ )	{
                     next;
                 }
                 if ( $genus ne $row->{'o.genus_name'} || $subgenus ne $row->{'o.subgenus_name'} || $species ne $rowspecies )	{
