@@ -244,10 +244,9 @@ print qq|
     if ( $days >= $daylimit )	{
         print qq| - <a href="#" onClick=\"document.getElementById('mainPanel').style.display='none'; document.getElementById('terms').style.display='inline';\">Show terms again</a>|;
     }
-    #print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a> - |;
     #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
 
-    print "</div>\n\n";
+    print "</div>\n\n</div>\n\n";
     if ( $days >= $daylimit )	{
         print "</div>\n\n";
     }
