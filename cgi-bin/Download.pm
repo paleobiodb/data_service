@@ -2555,13 +2555,13 @@ sub queryDatabase {
                 if ( $rowspecies !~ /^[a-z]*$/ )	{
                     $rowspecies = "";
                 }
-                if ( $q->param('indet') ne 'YES' && ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus/ )	{
+                if ( $q->param('indet') ne 'YES' && ( $row->{'o.genus_reso'} eq "informal" || ( ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} eq "" ) || ( $ss_taxon_rank{$row->{'o.taxon_no'}} ne "" && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus|species/ ) ) )	{
+                    next;
+		}
+                if ( $q->param('sp') eq 'NO' && ( ! $species || $row->{'o.species_reso'} eq "informal" ) )	{
                     next;
                 }
-                if ( $q->param('sp') eq 'NO' && ( ! $species || $row->{'o.species_reso'} eq "informal" ) || $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /species/ )	{
-                    next;
-                }
-                if ( $genus ne $row->{'o.genus_name'} || $subgenus ne $row->{'o.subgenus_name'} || $species ne $rowspecies )	{
+                if ( $genus ne $row->{'o.genus_name'} || $subgenus ne $row->{'o.subgenus_name'} || $species ne $rowspecies || ( $species !~ /indet\./ && $ss_taxon_rank{$row->{'o.taxon_no'}} ne "" && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus|species/ ) )	{
                     foreach my $field ('genus_name','subgenus_name','species_name','subspecies_name','genus_reso','subgenus_reso','species_reso','taxon_no')	{
                         if ( ! $row->{'or.'.$field} )	{
                             $row->{'or.'.$field} = $row->{'o.'.$field};
