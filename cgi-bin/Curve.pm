@@ -278,12 +278,12 @@ sub assignGenera	{
 
 
 	if ( ! open OCCS,"<$occsfile" )	{
-        if ($q->param("time_scale") =~ /neptune/i) {
-		    print "<p class=\"warning\">The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"$READ_URL?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to check off this field in the form.</p>\n";
-        } else {
-		    print "<p class=\"warning\">The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"$READ_URL?action=displayDownloadForm\">Download the data again</a> and make sure to check off the field you want in the \"Collection fields\" part of the form.</p>\n";
-        }
-        return;
+        	if ($q->param("time_scale") =~ /neptune/i)	{
+			print "<p class=\"warning\">The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"$READ_URL?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to check off this field in the form.</p>\n";
+		} else	{
+			print "<p class=\"warning\">The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"$READ_URL?action=displayDownloadForm\">Download the data again</a> and make sure to check off the field you want in the \"Collection fields\" part of the form.</p>\n";
+        	}
+		exit;
 	}
 
 	if ( $q->param('weight_by_ref') eq "yes" && $q->param('ref_quota') > 0 )	{
@@ -1548,16 +1548,17 @@ sub printResults	{
 	}
 
 
-        print '<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>';
-        print '<div align=center>
-                 <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
-                   <td id="tab1" class="tabOff" style="white-space: nowrap;"
-                     onClick="showPanel(1);" 
-                     onMouseOver="hover(this);" 
-                     onMouseOut="setState(1)">Raw data</td>
-                   <td id="tab2" class="tabOff" style="white-space: nowrap;"
-                     onClick="showPanel(2);"
-                     onMouseOver="hover(this);"';
+        print '<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+    <div align=center>
+         <table cellpadding=0 cellspacing=0 border=0 style="width: 54em;"><tr>
+         <td id="tab1" class="tabOff" style="white-space: nowrap;"
+             onClick="showPanel(1);" 
+             onMouseOver="hover(this);" 
+             onMouseOut="setState(1)">Raw data</td>
+         <td id="tab2" class="tabOff" style="white-space: nowrap;"
+             onClick="showPanel(2);"
+             onMouseOver="hover(this);"
+';
     if ($q->param('samplesize')) {
         print '
                      onMouseOut="setState(2)">Subsampled data </td>
@@ -1568,15 +1569,15 @@ sub printResults	{
 ';
     } else	{
         print '
-                     onMouseOut="setState(2)">Diversity curve </td>
+             onMouseOut="setState(2)">Diversity curve </td>
 ';
     }
-        print '                 </tr></table>
-               </div>';
+        print '         </tr></table>
+       </div>';
 
-	print '<div align="center"><p class="pageTitle" style="margin-bottom: 0.5em;">Diversity curve report</p></div>';
+	print "\n\n<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">Diversity curve report</p></div>\n\n";
 
-	print '<div id="panel1" class="panel">';
+	print "<div id=\"panel1\" class=\"panel\">\n\n";
 
 		if ( $q->param('count_refs') eq "yes" )	{
 			$generaorrefs = "references";
@@ -2097,7 +2098,7 @@ sub printResults	{
 		print "\nYou may wish to <a href=\"$READ_URL?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
 		print "</div>\n";
 
-            print "</div>"; # END PANEL1 DIV
+            print "</div>\n\n"; # END PANEL1 DIV
 
         if ($q->param('samplesize') ne '') {
             print '<div id="panel2" class="panel">';
@@ -2687,19 +2688,19 @@ sub printResults	{
                 print "<li>The subsampling curves (<a href=\"$HOST_URL$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
             }
     		print "</ul><p>\n";
-		print "</div>\n";
+		print "</div>\n\n";
 
-            print '</div>'; # End PANEL2 div
+            print "</div>\n\n"; # End PANEL2 div
 
 		}
 
 	# print a very simple graph JA 8.6.09
 		if ($q->param('samplesize') ne '')	{
-			print '<div id="panel3" class="panel">';
+			print "<div id=\"panel3\" class=\"panel\">\n\n";
 		} else	{
-			print '<div id="panel2" class="panel">';
+			print "<div id=\"panel2\" class=\"panel\">\n\n";
 		}
-		print qq|<div class="displayPanel" style="padding-top: 1em;">|;
+		print "<div class=\"displayPanel\" style=\"padding-top: 1em;\">\n\n";
 		my ($width,$height) = (650,500);
 		$im = new GD::Image($width,$height,1);
 		my %rgbs = ("white", "255,255,255",
@@ -2772,10 +2773,11 @@ sub printResults	{
 		open PNG_OUT,">$HTML_DIR/public/curve.png";
 		print PNG_OUT $im->png;
 		print '<center><img alt="diversity curve" src="/public/curve.png"></center>'."\n";
-		print '</div>'; # End PANEL3 div
+		print "</div>\n</div>\n\n"; # End PANEL3 div
 		print '<script language="JavaScript" type="text/javascript">
 showPanel(1);
-</script>';
+</script>
+';
 
 
 	}
