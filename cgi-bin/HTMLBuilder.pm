@@ -88,6 +88,8 @@ sub new {
         lithology1=>[\&_listFromEnum,'collections','lithology1','space_after'=>'not reported,breccia,marl,"carbonate",radiolarite,tar,siderite,quartzite'],
         lithology2=>[\&_listFromEnum,'collections','lithology2','space_after'=>'not reported,breccia,marl,"carbonate",radiolarite,tar,siderite,quartzite'],
         seq_strat=>[\&_listFromEnum,'collections','seq_strat','space_after'=>'late glacial'],
+        common_body_parts=>[\&_listFromEnum,'collections','common_body_parts','space_after'=>'other,eggs,valves,appendages,stem ossicles'],
+        rare_body_parts=>[\&_listFromEnum,'collections','rare_body_parts','space_after'=>'other,eggs,valves,appendages,stem ossicles'],
         type_body_part=>[\&_listFromEnum,'authorities','type_body_part','space_after'=>'other,egg,valve,appendages,stem ossicles'],
         ecotaph=>[\&_listFromTable,'ecotaph'],
         eml_interval=>[\&_listFromEnum,'intervals','eml_interval'],
@@ -131,7 +133,7 @@ sub new {
         'authorities' => ['taxon_rank','preservation','form_taxon','extant'],
         'opinions' => ['phylogenetic_status','diagnosis_given'],
         'refs'=> ['project_name','publication_type','basis','language'],
-        'collections'=> ['access_level', 'latdir', 'lngdir', 'latlng_basis', 'gps_datum', 'altitude_unit', 'geogscale', 'direct_ma_unit', 'direct_ma_method', 'max_ma_unit', 'max_ma_method', 'min_ma_unit', 'min_ma_method', 'zone_type', 'localbedunit', 'localorder', 'regionalbedunit', 'regionalorder', 'stratscale', 'lithification', 'lithification2', 'minor_lithology', 'minor_lithology2', 'tectonic_setting', 'lagerstatten', 'concentration', 'orientation', 'preservation_quality', 'abund_in_sediment', 'art_whole_bodies', 'disart_assoc_maj_elems', 'disassoc_maj_elems', 'disassoc_minor_elems', 'sorting', 'fragmentation', 'bioerosion', 'encrustation', 'temporal_resolution', 'spatial_resolution', 'collection_type', 'collection_size_unit', 'rock_censused_unit', 'museum'],
+        'collections'=> ['access_level', 'latdir', 'lngdir', 'latlng_basis', 'gps_datum', 'altitude_unit', 'geogscale', 'direct_ma_unit', 'direct_ma_method', 'max_ma_unit', 'max_ma_method', 'min_ma_unit', 'min_ma_method', 'zone_type', 'localbedunit', 'localorder', 'regionalbedunit', 'regionalorder', 'stratscale', 'lithification', 'lithification2', 'minor_lithology', 'minor_lithology2', 'tectonic_setting', 'lagerstatten', 'concentration', 'orientation', 'preservation_quality', 'abund_in_sediment', 'art_whole_bodies', 'disart_assoc_maj_elems', 'disassoc_maj_elems', 'disassoc_minor_elems', 'sorting', 'fragmentation', 'bioerosion', 'encrustation', 'temporal_resolution', 'spatial_resolution', 'articulated_parts', 'associated_parts', 'collection_type', 'collection_size_unit', 'rock_censused_unit', 'museum'],
         'ecotaph'=>['composition1', 'composition2', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'ontogeny', 'grouping', 'taxon_environment', 'locomotion', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'vision', 'reproduction', 'dispersal1', 'dispersal2','body_mass_source','body_mass_type'],
         'occurrences'=>['genus_reso', 'subgenus_reso', 'species_reso', 'plant_organ', 'plant_organ2'],
         'scales'=>['continent','basis','scale_rank']
