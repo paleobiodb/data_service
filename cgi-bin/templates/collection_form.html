@@ -11,7 +11,7 @@ function changeName()	{
 
     var collname = document.forms[1].collection_name.value;
 
-    for ( i = 1; i <= 6; i++ )	{
+    for ( i = 1; i <= 7; i++ )	{
 	if ( ! collname )	{
         	document.getElementById('panelHeader'+i).innerHTML = '<span class="large">New collection</span>';
 	} else	{
@@ -26,7 +26,8 @@ function checkFields() {
     doCheckFieldsGeography();
     doCheckFieldsStratigraphy();
     doCheckFieldsGeology();
-    doCheckFieldsTaphonomy();
+    doCheckFieldsPreservation();
+    doCheckFieldsComponents();
     doCheckFieldsCollectingInfo();
     
     var returnVal = checkIntervalNames(1);
@@ -378,27 +379,28 @@ function doCheckFieldsGeology() {
     }
 }
 
-function doCheckFieldsTaphonomy() {
+function doCheckFieldsPreservation() {
     var frm = document.forms[1];
-    var full_count = 0;
+    var modes = 0;
 
-    if (frm.art_whole_bodies.options[frm.art_whole_bodies.selectedIndex].text == "all") { 
-        full_count  += 1;
-    }    
-    if (frm.disart_assoc_maj_elems.options[frm.disart_assoc_maj_elems.selectedIndex].text == "all") {
-        full_count  += 1;
+    for ( i=0; i<frm.pres_mode.length; i++ )	{
+        if ( frm.pres_mode[i].checked )	{
+            modes++;
+        }
     }
-    if (frm.disassoc_maj_elems.options[frm.disassoc_maj_elems.selectedIndex].text == "all") {
-        full_count  += 1;
+    if ( modes == 0 )	{
+        bad_info += "\no Preservation mode is required";
     }
-    if (frm.disassoc_minor_elems.options[frm.disassoc_minor_elems.selectedIndex].text == "all") {
-        full_count  += 1;
-    } 
-    if (full_count > 1) {
-        bad_info += "\no Only one pulldown in the \"Articulation/element representation\" section be set to \"all\"";
+
+}
+
+function doCheckFieldsComponents() {
+    var frm = document.forms[1];
+
+    if ( ! frm.assembl_comps[1].checked && ! frm.assembl_comps[2].checked && ! frm.assembl_comps[3].checked ) {
+        bad_info += "\no Size class is required";
     }
-    
-    
+
 }
 
 // End -->
@@ -408,7 +410,7 @@ function doCheckFieldsTaphonomy() {
 
 <div align="center" style="width: 58em; margin-bottom: -1em; padding-top: 2em;">
 
-   <table cellpadding=0 cellspacing=0 border=0 width=600><tr>
+   <table cellpadding=0 cellspacing=0 border=0 style="width: 54em;"><tr>
    <td id="tab1" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(1);" 
       onMouseOver="hover(this);" 
@@ -428,11 +430,15 @@ function doCheckFieldsTaphonomy() {
    <td id="tab5" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(5);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(5)">Taphonomy</td>
+      onMouseOut="setState(5)">Preservation</td>
    <td id="tab6" class="tabOff" style="white-space: nowrap;"
       onClick = "showPanel(6);" 
       onMouseOver="hover(this);" 
-      onMouseOut="setState(6)">Collecting Info</td>
+      onMouseOut="setState(6)">Components</td>
+   <td id="tab7" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(7);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(7)">Collecting Info</td>
    </tr></table>
 
 </div>
@@ -446,11 +452,11 @@ function doCheckFieldsTaphonomy() {
 <div id="panel1" class="panel">
   <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader1"></span>
-  <div class="displayPanelContents" style="padding-top: 0.75em;">
+  <div class="displayPanelContents" style="padding-left: 1em; padding-top: 0.75em; padding-bottom: 0.75em;">
 
-  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <div style="float: left; clear: both; text-align: left;"> 
 
-  <p class="small" style="margin-bottom: 1.5em;">
+  <p class="verysmall" style="margin-bottom: 1.5em;">
     <span class="required">Required fields are in red.</span> 
     Consult the <a href="javascript:tipsPopup('/public/tips/tips.html')">tip sheet</a> for help. 
   </p>
@@ -525,39 +531,48 @@ function doCheckFieldsTaphonomy() {
     <span class="required">Author's main reason for describing collection:</span> <span class="verysmall"><select class="verysmall" id="collection_type"></select></span> analysis
   </p>
 
-  <p>
-     <div align="center"><span id="page_submit_button"></span></div>
-  </p>
+  </div>
+
+  <div align="center" style="clear: both; margin-top: 1em;"><span id="page_submit_button"></span></div>
+
   <span id="page_footer"></span>
-  </td></tr></table></div>
-</div>
+
+  </div>
+  </div>
 </div>
 
 <div id="panel2" class="panel">
   <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader2"></span>
-  <div class="displayPanelContents" style="padding-top: 0.75em;">
+  <div class="displayPanelContents" style="padding-left: 1em; padding-top: 0.75em; padding-bottom: 0.75em;">
 
-  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <div style="float: left; clear: both; text-align: left;"> 
 
-  <table border=0>
+  <div style="float: left; clear: both; width: 50em; margin-bottom: 1em;">
+    <div class="verysmall" style="position: relative; float: right; clear: right;">
+    <a href="javascript:tipsPopup('/public/tips/tips.html#CollectingInformation')">See the tip sheet</a>
+    </div>
+
+  <table border=0 style="margin-bottom: -0.5em;">
     <tr>
       <td>
         <span class="required">Country*</span>: <br><span class="verysmall"><select class="verysmall" id="country"></select></span>
       </td>
       <td>
-        <span class="required">State*</span>/province: <br><input id="state" maxlength="60">
+        <span class="required">State*</span>/province: <br><input id="state" size="18" maxlength="60">
       </td>
       <td>
-        County/parish/etc.: <br><input id="county" maxlength="60">
+        County/parish/etc.: <br><input id="county" size="18" maxlength="60">
       </td>
     </tr>
   </table>
+
+  </div>
   
-  <i><p class="small">*State is required for collections within the United States.</i></p>
+  <i><p class="verysmall">*State is required for collections within the United States</i></p>
   <br>
   
-  <table>
+  <table style="margin-top: -0.5em;">
     <tr>
       <td></td>
       <td><span class="required verysmall">Degrees</span></td>
@@ -584,7 +599,7 @@ function doCheckFieldsTaphonomy() {
     </tr>
   </table>
 
-  <p class="small"><i>*Enter either minutes-seconds or decimal value, but not both.<br>
+  <p class="verysmall"><i>*Enter either minutes-seconds or decimal value, but not both.<br>
    See the <a href="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</a>
   for web sites that provide coordinate data.</i></p>
   <p>
@@ -614,29 +629,36 @@ function doCheckFieldsTaphonomy() {
   <br>
   <textarea id="geogcomments" name=geogcomments rows=4 wrap="virtual" cols="80"></textarea>
 
-  <p>
-     <div align="center"><span id="page_submit_button"></span></div>
-  </p>
+  </div>
+
+  <div align="center" style="clear: both; margin-top: 1em;"><span id="page_submit_button"></span></div>
+
   <span id="page_footer"></span>
-    </td></tr></table></div>
-</div>
+
+  </div>
+  </div>
 </div>
 
 <div id="panel3" class="panel">
   <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader3"></span>
-  <div class="displayPanelContents" style="padding-top: 0.75em;">
+  <div class="displayPanelContents" style="padding-left: 1em; padding-top: 0.75em; padding-bottom: 0.75em;">
 
-  <table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <div style="float: left; clear: both; text-align: left;"> 
+
+  <div style="float: left; clear: both; width: 50em; margin-bottom: 1em;">
+    <div class="verysmall" style="position: relative; float: right; clear: right;">
+    <a href="javascript:tipsPopup('/public/tips/tips.html#CollectingInformation')">See the tip sheet</a>
+    </div>
 
   <table border=0>
      <tr>
       <td><span class="required"><nobr>Maximum (oldest) time interval:</nobr></span>&nbsp;&nbsp;&nbsp;&nbsp;<br>
       <span class="verysmall"><select class="verysmall" id="eml_max_interval"></select></span>
-      <input id="max_interval" maxlength="80" onKeyUp="doComplete(event, this, intervalNames(),0);">
+      <input id="max_interval" size="18" maxlength="80" onKeyUp="doComplete(event, this, intervalNames(),0);">
       </td>
       <td>Minimum (youngest) time interval:<br><span class="verysmall"><select class="verysmall" id="eml_min_interval"></select></span>
-                        <input id="min_interval" maxlength="80" onKeyUp="doComplete(event, this, intervalNames(),0);">
+                        <input id="min_interval" size="18" maxlength="80" onKeyUp="doComplete(event, this, intervalNames(),0);">
       </td>
     </tr>
     <tr>
@@ -647,39 +669,42 @@ function doCheckFieldsTaphonomy() {
 
     <tr>
       <td>
-      <i><div show="period_max"> <span class="verysmall">Period (oldest): <span id="emlperiod_max"></span> <span id="period_max"></span></span> </div></i>
+      <i><div show="period_max"> <span class="verysmall">Max period: <span id="emlperiod_max"></span> <span id="period_max"></span></span> </div></i>
       </td>
       <td>
-      <i><div show="period_min"> <span class="verysmall">Period (youngest): <span id="emlperiod_min"></span> <span id="period_min"></span></span> </div></i>
-      </td>
-    </tr>
-    <tr>
-      <td>
-      <i><div show="epoch_max"> <span class="verysmall">Epoch/series (oldest): <span id="emlepoch_max"></span> <span id="epoch_max"></span></span> </div></i>
-      </td>
-      <td>
-      <i><div show="epoch_min"> <span class="verysmall">Epoch/series (youngest): <span id="emlepoch_min"></span> <span id="epoch_min"></span></span> </div></i>
+      <i><div show="period_min"> <span class="verysmall">Min period: <span id="emlperiod_min"></span> <span id="period_min"></span></span> </div></i>
       </td>
     </tr>
     <tr>
       <td>
-      <i><div show="intage_max"> <span class="verysmall">International age/stage (oldest): <span id="emlintage_max"></span> <span id="intage_max"></span></span> </div></i>
+      <i><div show="epoch_max"> <span class="verysmall">Max epoch: <span id="emlepoch_max"></span> <span id="epoch_max"></span></span> </div></i>
       </td>
       <td>
-      <i><div show="intage_min"> <span class="verysmall">International age/stage (youngest): <span id="emlintage_min"></span> <span id="intage_min"></span></span> </div></i>
+      <i><div show="epoch_min"> <span class="verysmall">Min epoch: <span id="emlepoch_min"></span> <span id="epoch_min"></span></span> </div></i>
       </td>
     </tr>
     <tr>
       <td>
-      <i><div show="locage_max"> <span class="verysmall">Local age/stage (oldest): <span id="emllocage_max"></span> <span id="locage_max"></span></span> </div></i>
+      <i><div show="intage_max"> <span class="verysmall">Max international stage:<br>&nbsp;<span id="emlintage_max"></span> <span id="intage_max"></span></span> </div></i>
       </td>
       <td>
-      <i><div show="locage_min"> <span class="verysmall">Local age/stage (youngest): <span id="emllocage_min"></span> <span id="locage_min"></span></span> </div></i>
+      <i><div show="intage_min"> <span class="verysmall">Min international stage:<br>&nbsp;<span id="emlintage_min"></span> <span id="intage_min"></span></span> </div></i>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <i><div show="locage_max"> <span class="verysmall">Max local age/stage: <span id="emllocage_max"></span> <span id="locage_max"></span></span> </div></i>
+      </td>
+      <td>
+      <i><div show="locage_min"> <span class="verysmall">Min local age/stage: <span id="emllocage_min"></span> <span id="locage_min"></span></span> </div></i>
       </td>
     </tr>
 
   </table>
  
+  </div>
+
+  <div style="float: left; clear: both; margin-top: -1em;">
   <table border=0>
     <tr>
       <td>Direct date and method:<br><span class="verysmall">&nbsp;<input id="direct_ma" size="5" maxlength="7">&plusmn;<input id="direct_ma_error" size="5" maxlength="7"><select class="verysmall" id="direct_ma_unit"></select></span></td>
@@ -709,43 +734,48 @@ function doCheckFieldsTaphonomy() {
       <td>Numbered from:<br><span class="verysmall"><select class="verysmall" id="regionalorder"></select></span></td>
   	</tr>
   </table>
+  </div>
   
+  <div style="float: left; clear: both;">
   <p>
     Scale of stratigraphic resolution: <span class="verysmall"><select class="verysmall" id="stratscale"></select></span>
   </p>
   <p>
     Comments about stratigraphy:<br><textarea id="stratcomments" rows=4 wrap="virtual" cols="80"></textarea>
   </p>
+  </div>
 
-  <p>
-     <div align="center"><span id="page_submit_button"></span></div>
-  </p>
+  </div>
+
+  <div align="center" style="clear: both; margin-top: 1em;"><span id="page_submit_button"></span></div>
+
   <span id="page_footer"></span>
-  </td></tr></table></div>   
-</div>
+
+  </div>
+  </div>
 </div>
 
 <div id="panel4" class="panel">
   <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader4"></span>
-  <div class="displayPanelContents" style="padding-top: 0.75em;">
+  <div class="displayPanelContents" style="padding-left: 1em; padding-top: 0.75em; padding-bottom: 0.75em;">
 
-<table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <div style="float: left; clear: both; text-align: left;"> 
 
-  <p><span class="large required">Primary lithology</span><br>
-  <span class="verysmall">See the 
-  <a href="javascript:tipsPopup('/public/tips/lithtips.html')">tip sheet</a> for instructions.</span>
+  <div style="float: left; clear: both;"><span class="medium required">Primary lithology</span><br>
+  <span class="verysmall">See the <a href="javascript:tipsPopup('/public/tips/lithtips.html')">lithology tip sheet</a></span>
   </p>
   <p>&nbsp;
     <span class="verysmall"><select class="verysmall" id="lithification"></select></span>
     <span class="verysmall"><select class="verysmall" id="minor_lithology"></select></span>
     <span class="verysmall"><select class="verysmall" id="minor_lithology"></select></span>
     <span class="verysmall"><select class="verysmall" id="lithology1"></select></span>
-  </p>
+  </div>
   
-  <p class="small" style="margin-bottom: 0.3em;">
+  <div class="small" style="float: left; clear: both; margin-bottom: 0.3em;">
     Additional <a href="javascript:tipsPopup('/public/tips/lithtips.html')">lithology adjectives</a>:
-  </p>
+  </div>
+
   <div style="whitespace: nowrap;">
       <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
@@ -758,7 +788,7 @@ function doCheckFieldsTaphonomy() {
   </div>
   <p class="small">&nbsp;Fossils collected from this lithology?&nbsp;<input name="fossilsfrom1" type="checkbox" value="Y"></p>
 
-  <p><span class="large">Secondary lithology</span></p>
+  <p><span class="medium">Secondary lithology</span></p>
   <p>&nbsp;
     <span class="verysmall"><select class="verysmall" id="lithification2"></select></span>
     <span class="verysmall"><select class="verysmall" id="minor_lithology2"></select></span>
@@ -785,7 +815,7 @@ function doCheckFieldsTaphonomy() {
   Original, complete description of lithology:<br><textarea id="lithdescript" rows="3" wrap="virtual" cols="80"></textarea>
   </p>
  
-  <p class="large">Environment and setting</p>
+  <p class="medium">Environment and setting</p>
   
   <table border=0>
     <tr>
@@ -826,28 +856,28 @@ function doCheckFieldsTaphonomy() {
     <textarea id="geology_comments" rows="3" wrap="virtual" cols="80"></textarea>
   </p>
   
-  <p>
-     <div align="center"><span id="page_submit_button"></span></div>
-  </p>
+  </div>
+
+  <div align="center" style="clear: both; margin-top: 1em;"><span id="page_submit_button"></span></div>
+
   <span id="page_footer"></span>
-  </td></tr></table></div>  
-</div>
+
+  </div>
+  </div>
 </div>
 
 <div id="panel5" class="panel">
   <div align="center" class="displayPanel">
   <span class="displayPanelHeader" id="panelHeader5"></span>
-  <div class="displayPanelContents" style="padding-top: 0.75em;">
+  <div class="displayPanelContents" style="padding-top: 0.75em; padding-bottom: 0.75em;">
 
-<table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <div style="float: left; clear: both; margin-left: 1em; margin-bottom: 1em; width: 50em; text-align: left;">
 
-  <p class="small">
-    <i>Describe the entire collection, not just a few specimens. Check all values 
-    that apply.</i>
-  </p>
-  <p>
-    Modes of preservation:
-  </p>
+    <div class="verysmall" style="position: relative; float: right; clear: right;">
+    <a href="javascript:tipsPopup('/public/tips/tips.html#Preservation')">See the tip sheet</a>
+    </div>
+
+  <span class="required">Modes of preservation:</span><br>
   
   <table>
     <tr>
@@ -894,10 +924,11 @@ function doCheckFieldsTaphonomy() {
       </td>
     </tr>
   </table>
-  
-  <p>
-    Original biominerals or organics, if preserved:
-  </p>
+ 
+  </div>
+
+  <div style="float: left; clear: left; margin-left: 1em; margin-bottom: 1em; text-align: left;">
+  Original biominerals or organics:<br>
   
   <table>
   <tr>
@@ -933,11 +964,11 @@ function doCheckFieldsTaphonomy() {
   </tr>
   </table>
   
-  <i><p class="small">Check these boxes only if the 
-original material is preserved!</i></p>
-  <p>
-    Replacement minerals:
-  </p>
+  <i><span class="verysmall" style="margin-left: 1em;">Check boxes only if original material is preserved!</i></span>
+  </div>
+
+  <div style="float: left; clear: right; left; margin-left: 1em; margin-bottom: 1em; text-align: left;">
+  Replacement minerals:<br>
  
   <table>
   <tr>
@@ -986,11 +1017,13 @@ original material is preserved!</i></p>
     </td>
   </tr>
   </table>
-  <i><p class="small">"Other" includes barite, chlorite, and glauconite.</p></i>
 
-  <p>
-    Special modes of occurrence:
-  </p>
+  <i><span class="verysmall" style="margin-left: 1em;">"Other" includes barite, chlorite, and glauconite</span></i>
+  </div>
+
+<div style="float: left; clear: both; margin-left: 1em; text-align: left;">
+  Special modes of occurrence:<br>
+
   <table>
     <tr>
       <td>
@@ -1023,199 +1056,290 @@ original material is preserved!</i></p>
   </table>
   <p>
  
-<div show="taphonomy"> 
-  <table width=100%>
+  <table cellpadding="3" style="margin-left: -3px;">
   <tr>
-    <td valign=top width=50%>
+    <td>
+    Temporal resolution <span class="verysmall"><select class="verysmall" id="temporal_resolution"></select></span>
+    </td>
+    <td style="padding-left: 1em;">
+    Spatial resolution <span class="verysmall"><select class="verysmall" id="spatial_resolution"></select></span>
+    </td>
+  </tr>
+
+  <tr>
+    <td valign=top>
       Lagerstätten type <span class="verysmall"><select class="verysmall" id="lagerstatten"></select></span>
     </td>
-    <td valign=top>
+    <td valign=top style="padding-left: 1em;">
       Degree of concentration <span class="verysmall"><select class="verysmall" id="concentration"></select></span>
     </td>
   </tr>
-  </table>
-  <p>
-</div> <!-- div show=taphonomy end -->
-
-    <a href="javascript:tipsPopup('/public/tips/tips.html#AssemblageComponents')">Assemblage components</a>:
-      <span class="tiny">
-      <input id="assembl_comps" type="hidden" value="" replace="NO">
-      <input id="assembl_comps" type=checkbox value="macrofossils"> macrofossils
-      <input id="assembl_comps" type=checkbox value="mesofossils"> mesofossils
-      <input id="assembl_comps" type=checkbox value="microfossils"> microfossils
-      </span>
-  <p>
-
-<div show="taphonomy">
+  <tr>
+    <td valign=top>
       Spatial orientation <span class="verysmall"><select class="verysmall" id="orientation"></select></span>
-  <p>
-</div> <!-- div show=taphonomy end -->
- 
-  <table>
+    </td>
+  <tr>
+
   <tr>
     <td>
-      Preservation of anatomical detail <span class="verysmall"><select class="verysmall" id="preservation_quality"></select></span>&nbsp;&nbsp;
+      Anatomical detail <span class="verysmall"><select class="verysmall" id="preservation_quality"></select></span>&nbsp;&nbsp;
     </td>
-    <td>
+    <td style="padding-left: 1em;">
       Abundance in sediment <span class="verysmall"><select class="verysmall" id="abund_in_sediment"></select></span>
     </td>
   </tr>
-  </table>
-  <p>
 
-    Articulation/element representation:
-  </p>
-  
-  <table>
   <tr>
     <td>
-      articulated whole bodies <span class="verysmall"><select class="verysmall" id="art_whole_bodies"></select></span> 
-    </td>
-    <td>
-      associated major elements <span class="verysmall"><select class="verysmall" id="disart_assoc_maj_elems"></select></span>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      disassociated major elements <span class="verysmall"><select class="verysmall" id="disassoc_maj_elems"></select></span>&nbsp;&nbsp;
-    </td>
-    <td>
-      disassociated minor elements <span class="verysmall"><select class="verysmall" id="disassoc_minor_elems"></select></span>
-    </td>
-  </tr>
-  </table>
-  <p>
-
-<div show="taphonomy">
-  <table width=100%>
-  <tr>
-    <td width=50%>
       Size sorting <span class="verysmall"><select class="verysmall" id="sorting"></select></span>
     </td>
-    <td>
+    <td style="padding-left: 1em;">
       Fragmentation <span class="verysmall"><select class="verysmall" id="fragmentation"></select></span>
     </td>
   </tr>
-  </table>
-  <p>
 
-  <table width=100%>
   <tr>
-    <td width=50%>
+    <td>
       Bioerosion <span class="verysmall"><select class="verysmall" id="bioerosion"></select></span>
     </td>
-    <td>
+    <td style="padding-left: 1em;">
       Encrustation <span class="verysmall"><select class="verysmall" id="encrustation"></select></span>
     </td>
   </tr>
   </table>
-  <p>
- 
-  Feeding/predation traces:
-  <br>
-  <table>
-  <tr>
-    <td>
-      <input id="feed_pred_traces" type="hidden" value="" replace="NO">
-      <input id="feed_pred_traces" type=checkbox value="drill holes"> drill holes
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="repair scars"> repair scars
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="fractures"> fractures
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="punctures"> punctures
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="tooth marks"> tooth marks
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="gastric dissolution"> gastric dissolution
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="burning"> burning
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="cutmarks"> cutmarks
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="stone tools"> stone tools
-    </td>
-  </tr>
 
-  <tr>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="external foliage feeding"> external foliage feeding
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="arthropod mining"> arthropod mining
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="arthropod galling"> arthropod galling
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="arthropod boring"> arthropod boring
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="seed feeding"> seed feeding
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="piercing/sucking"> piercing/sucking
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="palynivory"> palynivory
-    </td>
-    <td>
-      <input id="feed_pred_traces" type=checkbox value="oviposition"> oviposition
-    </td>
-  </tr>
-  </table>
-  <p>
-</div> <!-- div show=taphonomy end-->
-
-  <table width=100%>
-  <tr>
-    <td width=50%>
-    Temporal resolution <span class="verysmall"><select class="verysmall" id="temporal_resolution"></select></span>
-    </td>
-    <td width=50%>
-    Spatial resolution <span class="verysmall"><select class="verysmall" id="spatial_resolution"></select></span>
-    </td>
-  </tr>
-  </table>
-  <p>
-    Comments on taphonomy:
-    <br>
-    <textarea id="taphonomy_comments" rows=4 wrap="virtual" cols="80"></textarea>
-  </p>
-  <p>
-     <div align="center"><span id="page_submit_button"></span></div>
-  </p>
-  <span id="page_footer"></span>
-  </td></tr></table></div>
 </div>
+
+  <div style="float: left; clear: both; margin-left: 1em;  margin-bottom: 1em; text-align: left;">
+    Comments on preservation:
+    <br>
+    <textarea id="preservation_comments" rows=4 wrap="virtual" cols="80"></textarea>
+  </div>
+
+  <div align="center" style="clear: both; margin-top: 1em;"><span id="page_submit_button"></span></div>
+
+  <span id="page_footer"></span>
+
+  </div>
+  </div>
 </div>
 
 <div id="panel6" class="panel">
   <div align="center" class="displayPanel">
   <span class="displayPanelHeader" class="tiny" id="panelHeader6"></span>
-  <div class="displayPanelContents" style="padding-top: 0.75em;">
+  <div class="displayPanelContents" style="padding-left: 1em; padding-top: 0.75em; padding-bottom: 0.75em; text-align: left;">
 
-<table border=0 cellpadding=0 cellspacing=0><tr><td>
+  <div style="float: left; clear: both; width: 50em; margin-bottom: 1em;">
 
-  <p>
-    What is <i>not</i> included in the list but <i>is</i> reported to be 
-    present?
-  </p>
-  
+    <div class="verysmall" style="position: relative; float: right; clear: right;">
+    <a href="javascript:tipsPopup('/public/tips/tips.html#Components')">See the tip sheet</a>
+    </div>
+
+    <span class="required">Size classes:</span>
+      <span class="tiny">
+      <input id="assembl_comps" type="hidden" value="" replace="NO">
+      <input id="assembl_comps" type=checkbox value="macrofossils">> 10 mm&nbsp;
+      <input id="assembl_comps" type=checkbox value="mesofossils">1 - 10 mm&nbsp;
+      <input id="assembl_comps" type=checkbox value="microfossils">< 1 mm 
+      </span>
+  </div>
+
+  <div style="float: left; clear: both; margin-bottom: 1em;">
+    <span>Articulated body parts:</span> <span class="verysmall"><select id="articulated_parts"></select></span>
+    <span style="margin-left: 4em;">Associated body parts:</span> <span class="verysmall"><select id="associated_parts"></select></span>
+  </div>
+
+  <div show="elements" style="float: left; clear: both;">
+  <table class="verysmall">
+  <tr>
+    <td>
+      <div show="elements">
+      <i>articulated whole bodies: <span class="verysmall"><span id="art_whole_bodies"></span></span></i>
+      </div>
+    </td>
+    <td style="padding-left: 3em;">
+      <div show="elements">
+      <i>associated major elements: <span class="verysmall"><span id="disart_assoc_maj_elems"></span></span></i>
+      </div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div show="elements">
+      <i>disassociated major elements: <span class="verysmall"><span id="disassoc_maj_elems"></span></span></i>
+      </div>
+    </td>
+    <td style="padding-left: 3em;">
+      <div show="elements">
+      <i>disassociated minor elements: <span class="verysmall"><span id="disassoc_minor_elems"></span></span></i>
+      </div>
+    </td>
+  </tr>
+  </table>
+  </div>
+
+  <div show="elements">
+  <div style="float: left; clear: both; height: 1em;"> </div>
+  </div>
+
+  <div style="float: left; clear: both; margin-bottom: 1em;">
+    Common parts:
+    <!-- FireFox needs the extra span -->
+    <span class="tiny">
+    <select class="tiny" id="common_body_parts"></select>
+    <select class="tiny" id="common_body_parts"></select>
+    <select class="tiny" id="common_body_parts"></select>
+    <select class="tiny" id="common_body_parts"></select>
+    <select class="tiny" id="common_body_parts"></select>
+    </span>
+  </div>
+  <div style="float: left; clear: both; margin-bottom: 1em;">
+    Rare parts:
+    <span class="tiny">
+    <select class="tiny" id="rare_body_parts"></select>
+    <select class="tiny" id="rare_body_parts"></select>
+    <select class="tiny" id="rare_body_parts"></select>
+    <select class="tiny" id="rare_body_parts"></select>
+    <select class="tiny" id="rare_body_parts"></select>
+    </span>
+  </div>
+
+  <div style="float: left; clear: both; margin-bottom: 1em;">
+  Feeding/predation traces:
+    <div class="tiny" style="text-align: left; padding-left: 1em;">
+    <table>
+    <tr>
+      <td>
+      <input id="feed_pred_traces" type="hidden" value="" replace="NO">
+      <input id="feed_pred_traces" type=checkbox value="drill holes"> drill holes
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="repair scars"> repair scars
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="fractures"> fractures
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="punctures"> punctures
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="tooth marks"> tooth marks
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="gastric dissolution"> gastric dissolution
+      </td>
+    </tr>
+
+     <tr>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="external foliage feeding"> external foliage feeding
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="arthropod mining"> arthropod mining
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="arthropod galling"> arthropod galling
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="arthropod boring"> arthropod boring
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="seed feeding"> seed feeding
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="piercing/sucking"> piercing/sucking
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="palynivory"> palynivory
+      </td>
+      <td>
+      <input id="feed_pred_traces" type=checkbox value="oviposition"> oviposition
+      </td>
+    </tr>
+    </table>
+    </div>
+  </div>
+
+  <div style="float: left; clear: both; margin-bottom: 1em;">
+    Artifacts:<br>
+    <div class="tiny" style="text-align: left; padding-left: 1em;">
+    <table>
+    <tr>
+      <td>
+      <input id="artifacts" type=checkbox value="stone points"> stone points
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="stone tools"> other stone tools
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="debitage"> debitage
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="cutmarks"> cutmarks
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="bone tools"> bone tools
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="burned bone"> burned bone
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <input id="artifacts" type=checkbox value="charcoal/hearths"> charcoal/hearths
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="metal tools"> metal tools
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="ceramics"> ceramics
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="textiles"> textiles
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="structural remains"> structural remains
+      </td>
+      <td>
+      <input id="artifacts" type=checkbox value="historical artifacts"> historical artifacts 
+      </td>
+    </tr>
+    </table>
+    </div>
+  </div>
+
+  <div style="float: left; clear: both; margin-bottom: 1em;">
+    Comments on included components:
+    <br>
+    <textarea id="component_comments" rows=4 wrap="virtual" cols="80"></textarea>
+  </div>
+
+  <div align="center" style="clear: both; margin-top: 1em;"><span id="page_submit_button"></span></div>
+
+  <span id="page_footer"></span>
+
+  </div>
+  </div>
+</div>
+
+<div id="panel7" class="panel">
+  <div align="center" class="displayPanel">
+  <span class="displayPanelHeader" class="tiny" id="panelHeader7"></span>
+  <div class="displayPanelContents" style="padding-left: 1em; padding-top: 0.75em; padding-bottom: 0.75em;">
+
+  <div style="float: left; clear: both; width: 50em; margin-bottom: 1em; text-align: left;">
+    <div class="verysmall" style="position: relative; float: right; clear: right;">
+    <a href="javascript:tipsPopup('/public/tips/tips.html#CollectingInformation')">See the tip sheet</a>
+    </div>
+
+    What is <i>not</i> included in the list but <i>is</i> reported to be present?
+  </div>
+ 
+  <div style="float: left; clear: both; margin-bottom: 0.5em;"> 
   <table border=0>
   <tr>
     <td valign=top>
@@ -1231,9 +1355,7 @@ original material is preserved!</i></p>
     </td>
     <td valign=top>
       <nobr>
-      <span class="tiny"><input id="collection_coverage" type=checkbox value="some genera"> some genera within</span>
-      </nobr><br>
-      <nobr><span class="tiny">&nbsp;&nbsp;groups that <i>are</i> listed</span>
+      <span class="tiny"><input id="collection_coverage" type=checkbox value="some genera"> some genera within listed groups</span>
       </nobr>
     </td>
   </tr>
@@ -1246,7 +1368,7 @@ original material is preserved!</i></p>
     <td valign=top>
       <nobr>
       <span class="tiny"><input id="collection_coverage" type=checkbox value="some macrofossils"> major groups of macrofossils</span><br>
-      <span class="tiny"><i>&nbsp;&nbsp;(e.g., trilobites, gastropods, herps)</i></span>
+      <span class="verytiny"><i>&nbsp;&nbsp;(e.g., trilobites, gastropods, herps)</i></span>
       </nobr>
     </td>
   </tr>
@@ -1263,7 +1385,9 @@ original material is preserved!</i></p>
     </td>
   </tr>
   </table>
-  
+  </div>
+
+  <div style="float: left; clear: both; margin-bottom: 0.5em;"> 
   <table>
   <tr>
     <td colspan="3">
@@ -1279,14 +1403,13 @@ original material is preserved!</i></p>
       <span class="tiny"><input id="coll_meth" type=checkbox value="observed (not collected)"> observed (not collected)</span>
     </td>
     <td>
-      <span class="tiny"><input id="coll_meth" type=checkbox value="survey of museum collection"> survey of<br>museum collection</span>
-    </td>
-    <td>
-      <span class="tiny"><input type=checkbox> rock shop</span>
+      <span class="tiny"><input id="coll_meth" type=checkbox value="survey of museum collection"> survey of museum collection</span>
     </td>
   </tr>
   </table>
-  
+  </div>
+
+  <div style="float: left; clear: both; margin-bottom: 0.5em;"> 
   <table>
   <tr>
     <td colspan="3">
@@ -1324,7 +1447,9 @@ original material is preserved!</i></p>
     </td>
   </tr>
   </table>
-  
+  </div>
+
+  <div style="float: left; clear: both; margin-bottom: 0.5em;"> 
   <table>
   <tr>
     <td colspan="3">
@@ -1344,6 +1469,9 @@ original material is preserved!</i></p>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="smear slide"> smear slide
     </td>
+    <td style="padding-left: 2em;">
+      <span class="tiny">minimum sieve size: <nobr><span class="tiny"><input id="sieve_size_min" class="tiny" size="5" maxlength="8"></span> mm</nobr></span>
+    </td>
   </tr>
   <tr>
     <td>
@@ -1358,29 +1486,23 @@ original material is preserved!</i></p>
     <td>
       <span class="tiny"><input id="coll_meth" type=checkbox value="peroxide"> peroxide
     </td>
+    <td style="padding-left: 2em;">
+      <span class="tiny">maximum sieve size: <nobr><span class="tiny"><input id="sieve_size_max" class="tiny" size="5" maxlength="8"></span> mm</nobr></span>
   </tr>
-  <tr>
-    <td colspan="2">
-      <span class="tiny">minimum sieve size: <nobr><span class="tiny"><input id="sieve_size_min" size=5 maxlength=8></span> mm</nobr></span>
-    </td>
-    <td colspan="2">
-      <span class="tiny">maximum sieve size: <nobr><span class="tiny"><input id="sieve_size_max" size=5 maxlength=8></span> mm</nobr></span>
   </tr>
   </table>
-  
-  <br>
-  
+  </div>
+
+  <div style="float: left; clear: both; text-align: left;"> 
   <table>
   <tr>
     <td>
-      Collection size:<nobr><span class="tiny"><input id="collection_size" size=8 maxlength=8></span>
-      <span class="verysmall"><select class="verysmall" id="collection_size_unit"></select></span>&nbsp;&nbsp;</nobr><br>
-  <i><p class="tiny">Give a total only if counts are not given for individual taxa.</p></i>
+      Collection size:<nobr><span class="tiny"><input id="collection_size" size="6" maxlength="8"></span>
+      <span class="verysmall"><select class="verysmall" id="collection_size_unit"></select></span></nobr><br>
+      <i><span class="tiny">Only needed if there are no individual counts</span></i>
     </td>
-  </tr>
-  <tr>
-    <td>
-      Amount of rock censused:<nobr><span class="tiny"><input id="rock_censused" size=8 maxlength=8></span>
+    <td valign="top" style="padding-left: 1em;">
+      Amount censused:<nobr><span class="tiny"><input id="rock_censused" size="6" maxlength="8"></span>
       <span class="verysmall"><select class="verysmall" id="rock_censused_unit"></select></span></nobr>
     </td>
   </tr>
@@ -1403,12 +1525,14 @@ original material is preserved!</i></p>
     Comments on the taxonomic list:<br><textarea id="taxonomy_comments" rows="3" wrap="virtual" cols="80"></textarea>
   </p>
 
-  <p>
-     <div align="center"><span id="page_submit_button"></span></div>
-  </p>
+  </div>
+
+  <div align="center" style="clear: both; margin-top: 1em;"><span id="page_submit_button"></span></div>
+
   <span id="page_footer"></span>
-  </td></tr></table></div>
-</div>
+
+  </div>
+  </div>
 </div>
   
 </form>
