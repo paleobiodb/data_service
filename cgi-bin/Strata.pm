@@ -293,7 +293,7 @@ sub displayStrata {
     } else { 
         $html .= "<i>unknown</i>";
     }
-    $html .= "</p>\n";
+    $html .= "</p>\n</div>\n\n</div>\n\n";
     print $html;
 
     # Display age range/Show what collections are in it 
