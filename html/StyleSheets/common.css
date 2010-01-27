@@ -134,6 +134,7 @@ H6 {font-size: .9em;}
     text-align: center;
 }
 
+/* this is probably obsolete at this point JA 17.1.10 */
 #mainBody	{
     position: absolute;
     top: 0px;
@@ -145,8 +146,6 @@ H6 {font-size: .9em;}
     margin-left: 1em; 
     margin-right: 1em;
     padding-bottom: -1em;
-    background-color: white;
-    border: 1px solid lightgray;
     z-index: 1;
 }
 
@@ -359,7 +358,6 @@ H6 {font-size: .9em;}
     padding-bottom: 0.25em;
     margin-bottom: 0.25em;
     text-indent: -1em;
-    border-bottom: 1px solid lightgray;
 }
 
 .collectionLink a:link { color: black; }
@@ -398,7 +396,6 @@ div.emphasized {
 	
 	padding: 0.5em 0.5em 0.5em 0.5em;
 
-    font-weight: bold;	
 	color: #D00000;
 	background-color: #FFFF80;
 
@@ -410,17 +407,17 @@ div.emphasized {
 
 .errorTitle {
 	color: #D00000;
-	font-weight: bold;
-	font-size: 1.0em;
+	font-size: 1.2em;
 	text-align: center;
 	margin: 0.5em 0em 1em 1em;
 }
 
 .errorBox {
+	margin-top: 2em;
 	border: 1px #909090 solid;
 	background-color: #FFFF80;
 	width: 600px;
-    text-align: left;
+	text-align: left;
 }
 
 .errorRow {
@@ -445,17 +442,17 @@ div.emphasized {
 
 
 .warningTitle {
-    font-size: 1.0em;
-    font-weight: bold;
-    text-align: left;
-	margin: 0em 0em 1em 1em;
+	font-size: 1.2em;
+	text-align: left;
+	margin: 0.5em 0em 1em 1em;
 }
 
 .warningBox {
+	margin-top: 2em;
 	border: 1px #909090 solid;
 	background-color: #EDEDFE;
 	width: 600px;
-    text-align: left;
+	text-align: left;
 }
 .boxBullet {  
     font-size : 1.0em; 
