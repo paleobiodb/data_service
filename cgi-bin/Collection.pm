@@ -2408,7 +2408,7 @@ sub getClassOrderFamily	{
 			$rowref->{'family'} = $t->{'taxon_name'};
 			$rowref->{'family_no'} = $t->{'taxon_no'};
 		}
-		if ( $t->{'taxon_rank'} =~ /family|tribe|genus|species/ )	{
+		if ( $t->{'taxon_rank'} =~ /family|tribe|genus|species/ && $t->{'taxon_rank'} ne "superfamily" )	{
 			$toplowlevel = $i;
 		}
 	}
@@ -2468,7 +2468,7 @@ sub getClassOrderFamily	{
 		#  we might want to use it anyway
 		for my $i ( $toplowlevel..$toplevel-1 ) {
 			my $t = $class_array[$i];
-			if ( ! $maxyr || $t->{'pubyr'} < $maxyr )	{
+			if ( ( ! $maxyr || $t->{'pubyr'} < $maxyr ) && $t->{'taxon_rank'} ne "superfamily" )	{
 				$maxyr = $t->{'pubyr'};
 				$rowref->{'order'} = $t->{'taxon_name'};
 				$rowref->{'order_no'} = $t->{'taxon_no'};
