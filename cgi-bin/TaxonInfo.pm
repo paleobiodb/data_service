@@ -4040,7 +4040,12 @@ sub basicTaxonInfo	{
 	}
 
 	my $page_title = ();
-	$page_title->{'title'} = "Paleobiology Database: ".$auth->{'taxon_name'};
+	$page_title->{'title'} = "Paleobiology Database: ";
+	if ( $auth->{'taxon_name'} )	{
+		$page_title->{'title'} .= $auth->{'taxon_name'};
+	} else	{
+		$page_title->{'title'} .= $taxon_name;
+	}
 	print $hbo->stdIncludes("std_page_top",$page_title);
 
 	my $taxon = getMostRecentSpelling($dbt,$taxon_no);
@@ -4079,9 +4084,25 @@ sub basicTaxonInfo	{
 
         print qq|<div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
 <div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left; width: 54em;">
-<span class="displayPanelHeader">$header</span>
-<div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
+<div class="displayPanelHeader" style="float: left; clear: none;">$header</div>
 |;
+	# CLASS/ORDER/FAMILY SECTION
+	if ( $taxon_no )	{
+		my $parent_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
+		my @parent_array = @{$parent_hash->{$taxon_no}};
+		my $cof = Collection::getClassOrderFamily('',\@parent_array);
+		my @parent_links;
+		for my $r ( 'class','order','family' )	{
+			if ( $cof->{$r} )	{
+				push @parent_links , "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$cof->{$r.'_no'}\">".$cof->{$r}."</a>";
+			}
+		}
+		if ( @parent_links )	{
+			print "<div class=\"displayPanelHeader\" style=\"float: right; clear: none;\">".join(' - ',@parent_links)."</div>\n\n";
+		}
+	}
+
+	print '<div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">';
 
 	if ( $error )	{
 		print "<p class=\"medium\"><i>$error</i></p>\n\n";
@@ -4090,7 +4111,7 @@ sub basicTaxonInfo	{
 	# PARENT SECTION
 
 	if ( $taxon_no )	{
-		my $sql = "SELECT taxon_name,taxon_rank,a.taxon_no FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=parent_spelling_no AND o.opinion_no=t.opinion_no AND t.taxon_no=$taxon_no";;
+		my $sql = "SELECT taxon_name,taxon_rank,a.taxon_no FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=parent_spelling_no AND o.opinion_no=t.opinion_no AND t.taxon_no=$taxon_no";
 		my $parent = ${$dbt->getData($sql)}[0];
 		if ( $parent )	{
 			print "<p>Parent taxon: <a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$parent->{'taxon_no'}\">".italicize($parent)."</a>";
@@ -4204,6 +4225,7 @@ sub basicTaxonInfo	{
 
 	# DISTRIBUTION SECTION
 
+	my @occs;
 	if ( $is_real_user > 0 )	{
 
 		# taxon_string is needed for maps and taxon_param for links
@@ -4234,7 +4256,7 @@ sub basicTaxonInfo	{
 			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND $name_clause AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 		}
 
-		my @occs = @{$dbt->getData($sql)};
+		@occs = @{$dbt->getData($sql)};
 
 		$sql = "SELECT l.interval_no,i1.interval_name period,i2.interval_name epoch,lower_boundary base FROM interval_lookup l,intervals i1,intervals i2 WHERE period_no=i1.interval_no AND epoch_no=i2.interval_no";
 		my @intervals = @{$dbt->getData($sql)};
@@ -4343,7 +4365,11 @@ sub basicTaxonInfo	{
 			}
 			print "</div>\n\n";
 		} else	{
-			print "<p>Distribution: <i>there are no occurrences of $auth->{'taxon_name'} in the database</i></p>\n\n";
+			if ( $auth->{'taxon_name'} )	{
+				print "<p>Distribution: <i>there are no occurrences of $auth->{'taxon_name'} in the database</i></p>\n\n";
+			} else	{
+				print "<p><i>There is no taxonomic or distributional information about '$taxon_name' in the database</i></p>\n\n";
+			}
 		}
 
 	# MAP SECTION
@@ -4430,7 +4456,7 @@ function erasePleaseWait()	{
 		}
 	}
 	
-	if ( $is_real_user > 0 )	{
+	if ( $is_real_user > 0 && ( @occs || $taxon_no ) )	{
 		if ( $taxon_no )	{
 			print "<p><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon_no&amp;is_real_user=1\">Show more details</a></p>\n\n";
 		} else	{
