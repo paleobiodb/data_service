@@ -4084,7 +4084,8 @@ sub basicTaxonInfo	{
 
         print qq|<div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
 <div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left; width: 54em;">
-<div class="displayPanelHeader" style="float: left; clear: none;">$header</div>
+<span class="displayPanelHeader">$header</span>
+<div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
 |;
 	# CLASS/ORDER/FAMILY SECTION
 	if ( $taxon_no )	{
@@ -4098,11 +4099,9 @@ sub basicTaxonInfo	{
 			}
 		}
 		if ( @parent_links )	{
-			print "<div class=\"displayPanelHeader\" style=\"float: right; clear: none;\">".join(' - ',@parent_links)."</div>\n\n";
+			print "<p class=\"small\" style=\"margin-top: -0.25em; margin-bottom: 0.75em; margin-left: 1em;\">".join(' - ',@parent_links)."</p>\n\n";
 		}
 	}
-
-	print '<div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">';
 
 	if ( $error )	{
 		print "<p class=\"medium\"><i>$error</i></p>\n\n";
@@ -4114,7 +4113,7 @@ sub basicTaxonInfo	{
 		my $sql = "SELECT taxon_name,taxon_rank,a.taxon_no FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=parent_spelling_no AND o.opinion_no=t.opinion_no AND t.taxon_no=$taxon_no";
 		my $parent = ${$dbt->getData($sql)}[0];
 		if ( $parent )	{
-			print "<p>Parent taxon: <a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$parent->{'taxon_no'}\">".italicize($parent)."</a>";
+			print "<p style=\"clear: left;\">Parent taxon: <a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$parent->{'taxon_no'}\">".italicize($parent)."</a>";
 			$sql = "SELECT r.reference_no,$authorfields2 FROM $TAXA_TREE_CACHE t,opinions o,refs r WHERE r.reference_no=o.reference_no AND t.opinion_no=o.opinion_no AND t.taxon_no=$taxon_no";
 			my $ref = ${$dbt->getData($sql)}[0];
 			print " according to ".Reference::formatShortRef($ref,'link_id'=>1);
