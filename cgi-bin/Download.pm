@@ -1373,9 +1373,9 @@ sub getCollMethString {
     if ( $q->param('sieve') =~ /not sieved/ )	{
         $sql = "(coll_meth IS NULL OR coll_meth NOT LIKE '%sieve%')";
     } elsif ( $q->param('sieve') =~ /not easily sieved/ )	{
-        $sql = "(coll_meth IS NULL OR coll_meth NOT LIKE '%sieve%' OR coll_meth LIKE '%chemical%' OR coll_meth LIKE '%mechanical%')";
+        $sql = "(coll_meth IS NULL OR coll_meth NOT LIKE '%sieve%' OR coll_meth LIKE '%chemical%' OR coll_meth LIKE '%mechanical%' OR (lithification='lithified' AND lithification2 IS NULL) OR (lithification IS NULL AND lithification2='lithified') OR (lithification='lithified' AND lithification2='lithified'))";
     } elsif ( $q->param('sieve') =~ /easily sieved/ )	{
-        $sql = "(coll_meth LIKE '%sieve%' AND coll_meth NOT LIKE '%chemical%' AND coll_meth NOT LIKE '%mechanical%')";
+        $sql = "(coll_meth LIKE '%sieve%' AND coll_meth NOT LIKE '%chemical%' AND coll_meth NOT LIKE '%mechanical%' AND (lithification IS NULL OR lithification!='lithified') AND (lithification2 IS NULL OR lithification2!='lithified'))";
     } elsif ( $q->param('sieve') =~ /sieved/ )	{
         $sql = "(coll_meth LIKE '%sieve%')";
     }
