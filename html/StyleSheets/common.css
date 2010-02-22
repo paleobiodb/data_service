@@ -63,12 +63,12 @@ A:hover.menu {
 	text-decoration:none; 
 }
 
-.homeBodyLinks a:link { color: goldenrod; }
-.homeBodyLinks a:visited { color: goldenrod; }
+.homeBodyLinks a:link { color: royalblue; }
+.homeBodyLinks a:visited { color: royalblue; }
 .homeBodyLinks a:active { color: lightcoral; }
 .homeBodyLinks a:hover { color: lightcoral; }
-a:link.homeBodyLinks { color: goldenrod; }
-a:visited.homeBodyLinks { color: goldenrod; }
+a:link.homeBodyLinks { color: royalblue; }
+a:visited.homeBodyLinks { color: royalblue; }
 a:active.homeBodyLinks { color: lightcoral; }
 a:hover.homeBodyLinks { color: lightcoral; }
 
@@ -319,7 +319,7 @@ H6 {font-size: .9em;}
     width: 68em;
 }
 
-.Features	{
+.Features,.PlainFeatures	{
     position: relative;
     float: left;
     clear: none;
@@ -327,23 +327,31 @@ H6 {font-size: .9em;}
     margin: 1em;
     padding-left: 0.5em;
     padding-right: 0.5em;
-    background-color: white;
     text-align: left;
     font-family: Verdana, Arial, Helvetica, sans-serif;
-    border: 1px solid darkgray;
     overflow: hidden;
 /* Explorer demands to know this - go figure */
     position: relative;
 }
 
+.Features	{
+    background-color: #FCFCFC;
+    border: 1px solid darkgray;
+}
+
+.PlainFeatures	{
+    border-top: 1px solid darkgray;
+}
+
 .FeatureHeadline	{
     text-align: center;
-    background-color: gainsboro;
+    background-color: #FCFCFC;
     margin-left: -0.5em;
     margin-right: -0.5em;
     margin-bottom: -0.25em;
-    padding-top: 0.15em;
+    padding-top: 0.3em;
     padding-bottom: 0.25em;
+    font-size: 1.1em;
 }
 
 .FeatureText	{
