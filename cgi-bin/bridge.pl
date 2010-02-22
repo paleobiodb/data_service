@@ -341,7 +341,7 @@ sub displayHomePage {
 	# display the most recently entered collections that have
 	#  distinct combinations of references and enterers (the latter is
 	#  usually redundant)
-	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name FROM collections ORDER BY collection_no DESC LIMIT 100";
+	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name FROM collections ORDER BY collection_no DESC LIMIT 400";
 	my @colls = @{$dbt->getData($sql)};
 	my %entererseen;
 	my $printed;
@@ -350,7 +350,7 @@ sub displayHomePage {
 			$entererseen{$coll->{reference_no}.$coll->{enterer_no}}++;
 			$row->{collection_links} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicCollectionSearch&amp;collection_no=$coll->{collection_no}">$coll->{collection_name}</a></div>\n|;
 			$printed++;
-			if ( $printed == 25 )	{
+			if ( $printed == 60 )	{
 				last;
 			}
 		}
@@ -367,10 +367,22 @@ sub displayHomePage {
 			$refseen{$s->{'reference_no'}}++;
 			$row->{'taxon_links'} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicTaxonInfo&amp;taxon_no=$s->{'taxon_no'}">$s->{'taxon_name'}</a></div>\n|;
 			$printed++;
-			if ( $printed == 40 )	{
+			if ( $printed == 60 )	{
 				last;
 			}
 		}
+	}
+
+	my $offset = int(rand(1000));
+	$sql = "SELECT taxon_name,a.taxon_no,rgt-lft+1 width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='genus' AND rgt>lft+1 AND ((t.taxon_no+$offset)/250)=floor((t.taxon_no+$offset)/250)";
+	my @genera = @{$dbt->getData($sql)};
+	for my $g ( @genera )	{
+		my $top = sprintf "%d%%",rand(95)-$g->{'width'};
+		my $left = sprintf "%d%%",rand(95)-$g->{'width'};
+		my $fontsize = sprintf "%.1fem",0.3+$g->{'width'}/15;
+		my $blue = sprintf "%x%x%x%xFF",6+int(rand(10)),int(rand(16)),int(rand(16)),int(rand(16));
+		$blue =~ s/ /0/g;
+		$row->{'random_names'} .= "<div class=\"\" style=\"position: absolute; top: $top; left: $left;\"><a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$g->{'taxon_no'}\"><span style=\"font-size: $fontsize; color: #$blue;\">".$g->{'taxon_name'}."</span></a></div>\n";
 	}
 
 	$row->{'enterer_names'} = Person::homePageEntererList($dbt);
