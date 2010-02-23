@@ -13,6 +13,10 @@ html, body {
 	font-size: 0.9em;
 }
 
+img {
+	border-style: none;
+}
+
 table, tbody, tr, td, th { 
 	font-size: 1em;
 }
@@ -145,7 +149,6 @@ H6 {font-size: .9em;}
     padding-left: 1em;
     margin-left: 1em; 
     margin-right: 1em;
-    padding-bottom: -1em;
     z-index: 1;
 }
 
@@ -164,7 +167,7 @@ H6 {font-size: .9em;}
     top: 55px;
     left: 0px;
     width: 58em;
-    padding-top: 2em;
+    margin-top: 2em;
     padding-left: 1em;
     padding-right: 1em;
     z-index: 1;
@@ -308,8 +311,8 @@ H6 {font-size: .9em;}
     clear: none;
     margin: 0em;
     width: 8em;
-    padding-top: 1em;
-    padding-bottom: 1em;
+    padding-top: 10px;
+    padding-bottom: 10px;
     border-bottom: 1px solid LightGray;
   /* fixes Safari rendering problem */
     text-align: center;
