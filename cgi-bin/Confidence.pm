@@ -458,7 +458,7 @@ sub buildList    {
             print "<table CELLPADDING=5 BORDER=0>";
             print "</table><br>"; 
             print "<input type=\"submit\" value=\"Submit\">";
-            print "</form></CENTER></div>";
+            print "</form></center></div>";
         } else {
             $q->param('input_type'=>'taxon');
             optionsForm($q, $s, $dbt, \%occ_list);
@@ -544,10 +544,10 @@ sub displayStratTaxa {
     if ($q->param('show_taxon_list') eq 'NO') {
         optionsForm($q, $s, $dbt, \%occ_list);
     } else {
-        print "<div align=\"center\"><p class=\"pageTitle\">Stratigraphic section taxon list</p></div><br>";
-        print "<form action=\"$READ_URL\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"showOptionsForm\">";
-        print "<center><table cellpadding=5 border=0>";
-        print "<tr><td><input type=checkbox checked=checked onClick=\"checkAll(this,'sp_checkbox');\"> Check all</td></tr>";
+        print "<div align=\"center\"><p class=\"pageTitle\">Stratigraphic section taxon list</p></div><br>\n";
+        print "<form action=\"$READ_URL\" method=\"post\"><input type=\"hidden\" name=\"action\" value=\"showOptionsForm\">\n";
+        print "<center><table cellpadding=5 border=0>\n";
+        print "<tr><td><input type=checkbox checked=checked onClick=\"checkAll(this,'sp_checkbox');\"> Check all</td></tr>\n";
         print "<input type=\"hidden\" name=\"input\" value=\"".uri_escape($section_name)."\">";
         print "<input type=\"hidden\" name=\"taxon_resolution\" value=\"".$q->param("taxon_resolution")."\">";
         print "<input type=\"hidden\" name=\"input_type\" value=\"".$q->param('input_type')."\">\n";
@@ -562,11 +562,11 @@ sub displayStratTaxa {
             }
             print "</tr>";
         }
-        print "</center></table><br>";
-        print "<center><span class=\"tiny\">(To remove taxon from list for analysis, uncheck before pressing 'Submit')</span><br><br>";
+        print "</center></table><br>\n";
+        print "<center><span class=\"tiny\">(To remove taxon from list for analysis, uncheck before pressing 'Submit')</span><br><br>\n";
         print "<input type=\"submit\" value=\"Submit\">";
         #print "<A HREF=\"/cgi-bin/$READ_URL?action=displayFirstForm\"><input type=\"button\" value=\"Start again\"></A>";
-        print "</center><br><br></form>";
+        print "</center><br><br></form>\n\n";
     } 
     return;
 }
@@ -626,7 +626,9 @@ sub optionsForm    {
     print "<input type=\"hidden\" name=\"input_type\" value=\"".$q->param('input_type')."\">";
     for(my $i=0;my ($taxon_name,$occurrence_list) = each(%occ_list);$i++){
         print "<input type=hidden name=taxon_name_$i value='$taxon_name' CHECKED=checked><input type=hidden name=\"occurrence_list_$i\" value=\"$occurrence_list\">\n";
-    }     
+    }
+
+    print "\n</div>\n\n";
 
     my $methods = ['Strauss and Sadler (1989)','Marshall (1994)','Solow (1996)'];
     my $method_select = HTMLBuilder::htmlSelect('conf_method',$methods,$methods,$q->param('conf_method'));
@@ -710,7 +712,7 @@ sub calculateTaxaInterval {
 
     if (scalar(keys(%occ_list)) <= 1 && $conf_method eq "Solow (1996)")   {
         optionsForm($q, $s, $dbt, \%occ_list);
-        print "<center><table><tr><th><font color=\"red\">The Solow (1996) method requires more than one taxon</font></th></tr></table></CENTER><br>";
+        print "<center><table><tr><th><font color=\"red\">The Solow (1996) method requires more than one taxon</font></th></tr></table></center><br>";
         return;
     }
 
@@ -958,7 +960,7 @@ sub calculateTaxaInterval {
     print printResultsPage($q,'Confidence interval results',$image_map,$image_name,\%taxa_hash,\@sortedTaxa,"Ma",\@not_in_scale);
 
     optionsForm($q, $s, $dbt, \%occ_list, 'small');
-    print " <b><a href=\"$READ_URL?action=displayTaxaIntervalsForm\">Start again</a></b><p></center><br><br><br>";
+    print "<center><p style=\"margin-bottom: 3em;\"><b><a href=\"$READ_URL?action=displayTaxaIntervalsForm\">Start again</a></b></p></center>\n\n";
 
 }
 
@@ -2446,7 +2448,7 @@ sub drawGraph {
     print IMAGEP $gd->png;
     close IMAGEP;
 
-    $image_map .= "</map>\n";
+    $image_map .= "</map>\n\n";
 
     return ($image_map,$image_name);
 }
