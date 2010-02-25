@@ -76,7 +76,7 @@ sub displaySearchSectionForm {
     $vars{'enterer_me'} = $s->get('enterer_reversed');
     $vars{'page_title'} = "Section search form";
     $vars{'action'} = "displaySearchSectionResults";
-    $vars{'submit'} = "Search sections";
+    $vars{'links'} = qq|<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.submit();"><b>Search for sections</b></a></p>|;
     print PBDBUtil::printIntervalsJava($dbt,1);
     print Person::makeAuthEntJavascript($dbt);
     print $hbo->populateHTML('search_collections_form',\%vars) ;
@@ -628,7 +628,7 @@ sub optionsForm    {
         print "<input type=hidden name=taxon_name_$i value='$taxon_name' CHECKED=checked><input type=hidden name=\"occurrence_list_$i\" value=\"$occurrence_list\">\n";
     }
 
-    print "\n</div>\n\n";
+    print "\n\n";
 
     my $methods = ['Strauss and Sadler (1989)','Marshall (1994)','Solow (1996)'];
     my $method_select = HTMLBuilder::htmlSelect('conf_method',$methods,$methods,$q->param('conf_method'));
@@ -654,11 +654,11 @@ sub optionsForm    {
         print "<div align=\"center\"><p class=\"pageTitle\">Confidence interval options</p></div>\n";
         print "<div class=\"displayPanel\" style=\"padding-top: 1em;\">\n";
         print "<center><table cellpadding=5 border=0>\n";
-        
+
         if ($type eq 'taxon')   {    
             print "<tr><th align=\"right\"> Time scale: </th><td><span class=\"tiny\">$scale_select</span></td></tr>";
         } 
-        
+
         print "<tr><th></th><td><span class=\"tiny\">(Please select a time scale that is appropriate for the taxa you have chosen)</span></td></tr>";
         print "<tr><th align=\"right\"> <nobr>Confidence interval method:</nobr> </th><td> $method_select<a href=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</a></td></tr>";
         print "<tr><th align=\"right\"> Estimate: </th><td> $estimate_select</td><tr>";
@@ -666,8 +666,8 @@ sub optionsForm    {
         print "<tr><th align=\"right\"> <nobr>Order taxa by:</nobr> </th><td> $order_by_select</td><tr>";
         print "<tr><th align=\"right\"> <nobr>Draw occurrences with:</nobr> </th><td> $color_select $glyph_type_select</td><tr>";
         print "</table><br>";
-        print "<input name=\"full\" type=\"submit\" value=\"Submit\">";
-        print "</form></center></div>";
+        print "<input name=\"full\" type=\"submit\" value=\"Submit\">\n";
+        print "</form></center></div>\n\n";
     } else {
         print '<center><div style="margin-left: 20px; margin-right: 20px;"><table class="darkList small" cellpadding=5 border=0 style="border: 1px #000000 solid">';
         print '<tr><th align="center" colspan=4><div class="medium">Options</div></th><tr>';
@@ -676,14 +676,14 @@ sub optionsForm    {
             print "<tr><th align=\"right\"> Time scale: </th><td colspan=3>$scale_select</td></tr>";
         } 
 
-        print "<tr><th align=\"right\"> Confidence interval Method: </td><td> $method_select <a href=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</a></td>";
+        print "<tr><th align=\"right\"> Confidence interval method: </td><td> $method_select <a href=\"javascript: tipsPopup('/public/tips/confidencetips1.html')\">   Help</a></td>";
         print "<TH align=\"right\"> Confidence level: </TH><TD>$confidence_select</td></tr>";
         print "<TR><TH align=\"right\"> Estimate: </TH><TD>$estimate_select</td>";
         print "<TH ALIGN=\"right\">Order taxa by: </TH><TD>$order_by_select</td><tr>";
         print "<TR><TH align=\"right\">Draw occurrences with: </TH><TD COLSPAN=3>$color_select $glyph_type_select</td></tr>";
         print "</table></div><br>";
-        print "<input name=\"full\" type=\"submit\" value=\"Submit\">";
-        print "</form></center><br><br>";
+        print "<input name=\"full\" type=\"submit\" value=\"Submit\">\n";
+        print "</form></center>\n\n";
     }
     return;
 }
@@ -960,6 +960,9 @@ sub calculateTaxaInterval {
     print printResultsPage($q,'Confidence interval results',$image_map,$image_name,\%taxa_hash,\@sortedTaxa,"Ma",\@not_in_scale);
 
     optionsForm($q, $s, $dbt, \%occ_list, 'small');
+
+    print "</div>\n\n";
+
     print "<center><p style=\"margin-bottom: 3em;\"><b><a href=\"$READ_URL?action=displayTaxaIntervalsForm\">Start again</a></b></p></center>\n\n";
 
 }
@@ -1082,7 +1085,7 @@ sub printResultsPage {
 
     print $html;
 
-    print "<br></td></tr></table>";
+    print "<br></td></tr></table>\n\n";
 
 
     if ($any_correlation)    {
@@ -1101,7 +1104,7 @@ sub printResultsPage {
     }
         
     if (@warnings) {
-        print "<div align=\"center\">".Debug::printWarnings(\@warnings)."</div><br>";
+        print "<div align=\"center\">".Debug::printWarnings(\@warnings)."</div><br>\n\n";
     }
 
     return;
@@ -1365,7 +1368,10 @@ sub calculateStratInterval	{
     print printResultsPage($q,"<i>$section_name</i> stratigraphic section",$image_map,$image_name,\%taxa_hash,\@sortedTaxa,$common_unit,[]);
 
     optionsForm($q, $s, $dbt, \%occ_list, 'small');
-    print " <b><a href=\"$READ_URL?action=displaySearchSectionForm\">Start again</a><b><p></center><br><br><br>";
+
+    print "</div>\n\n";
+
+    print " <center><b><a href=\"$READ_URL?action=displaySearchSectionForm\">Start again</a><b><p></center></center><br><br><br>\n\n";
 
     return;
 } 
