@@ -79,6 +79,7 @@ sub checkTaxonInfo {
         } else	{
             my $temp = $q->param('taxon_name');
             $temp =~ s/ sp\.//;
+            $temp =~ s/\./%/g;
             $q->param('taxon_name' => $temp);
             my $options = {'match_subgenera'=>1,'remove_rank_change'=>1};
             foreach ('taxon_name','common_name','author','pubyr') {
@@ -2828,7 +2829,7 @@ sub displayMeasurements {
             # In that case we only want the taxon itself (and its synonyms and alternate names), not the big recursively generated list
             # i.e. If they entered Nasellaria, get Nasellaria indet., or Nasellaria sp. or whatever.
             # get alternate spellings of focal taxon. 
-            my @small_in_list = TaxonInfo::getAllSynonyms($dbt,$taxon_no);
+            my @small_in_list = getAllSynonyms($dbt,$taxon_no);
             dbg("Passing small_in_list to getMeasurements".Dumper(\@small_in_list));
             @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@small_in_list,'get_global_specimens'=>1);
         }
@@ -3935,12 +3936,12 @@ sub basicTaxonInfo	{
 	}
 
 	my $taxon_name = $q->param('taxon_name');
-	$taxon_name =~ s/ sp(p|).$//;
 	if ( ! $taxon_name && $q->param('quick_search') )	{
 		$taxon_name = $q->param('quick_search');
 	} elsif ( ! $taxon_name && $q->param('search_again') )	{
 		$taxon_name = $q->param('search_again');
 	}
+	$taxon_name =~ s/ sp(p|)\.$//;
 
 	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
 
@@ -3950,12 +3951,14 @@ sub basicTaxonInfo	{
 		$taxon_no = $q->param('taxon_no');
 		$taxon_no = getSeniorSynonym($dbt,$taxon_no); 
 	} elsif ( $taxon_name )	{
+		$taxon_name =~ s/ sp\.//;
+		$taxon_name =~ s/\./%/g;
 		# used in preference to getTaxa because the query is dead simple
-		my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon_name);
+		my @taxon_nos = getTaxonNos($dbt,$taxon_name);
 		# genus name might be salvageable
-		if ( ! @taxon_nos && $taxon_name =~ /[a-z] [a-z]/i )	{
+		if ( ! @taxon_nos && $taxon_name =~ /[a-z%] [a-z%]/i )	{
 			my ($g,$s) = split / /,$taxon_name;
-			@taxon_nos = TaxonInfo::getTaxonNos($dbt,$g);
+			@taxon_nos = getTaxonNos($dbt,$g);
 		}
 		# the name may be bona fide but completely unclassified, so
 		#  see if it has occurrences
@@ -4527,7 +4530,7 @@ sub getTaxonNos {
     if ($dbt && $name)  {
         my $dbh = $dbt->dbh;
         my $sql;
-        $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (a.taxon_name=".$dbh->quote($name)." OR a.common_name=".$dbh->quote($name).")";
+        $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (a.taxon_name LIKE ".$dbh->quote($name)." OR a.common_name LIKE ".$dbh->quote($name).")";
         if ($rank) {
             $sql .= " AND taxon_rank=".$dbh->quote($rank);
         }
