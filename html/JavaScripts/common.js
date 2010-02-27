@@ -211,7 +211,7 @@ function descram(part2r,part1r) {
 //pass this function a checkbox.
 function checkAll(checkbox,the_class){
     var state = checkbox.checked;
-    var frm = document.forms[0];
+    var frm = document.forms[1];
     var like_class = new RegExp(the_class);
     for(var i=0; i < frm.elements.length; i++){
         if (like_class.test(frm.elements[i].className)) {
@@ -273,7 +273,7 @@ function textRestore (input)	{
 
 function checkName(i,j)    {
 	var name = document.forms[i].elements[j].value;
-	if ( /[^A-Za-z0-9 :;,\-\(\)]/.test( name ) )	{
+	if ( /[^A-Za-z0-9 \.:;,\-\(\)]/.test( name ) )	{
 		alert("A search string can only include letters, commas, etc. ");
 		return false;
 	} else if ( /^[^A-Za-z0-9]/.test( name ) )	{
