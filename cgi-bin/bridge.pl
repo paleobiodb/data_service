@@ -373,11 +373,11 @@ sub displayHomePage {
 		}
 	}
 
-	my $offset = int(rand(1000));
+	my $offset = int(rand(250));
 	$sql = "SELECT taxon_name,a.taxon_no,rgt-lft+1 width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='genus' AND rgt>lft+1 AND ((t.taxon_no+$offset)/250)=floor((t.taxon_no+$offset)/250)";
 	my @genera = @{$dbt->getData($sql)};
 	for my $g ( @genera )	{
-		my $top = sprintf "%d%%",rand(95)-$g->{'width'};
+		my $top = sprintf "%d%%",rand(100)-$g->{'width'};
 		my $left = sprintf "%d%%",rand(95)-$g->{'width'};
 		my $fontsize = sprintf "%.1fem",0.3+$g->{'width'}/15;
 		my $blue = sprintf "%x%x%x%xFF",6+int(rand(10)),int(rand(16)),int(rand(16)),int(rand(16));
@@ -4861,7 +4861,10 @@ sub logRequest {
     if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/ )  {
         return;
     }
-    my $status = open LOG, ">>/var/log/httpd/request_log";
+    my $status = open LOG, ">>/var/log/apache2/request_log";
+    if (!$status) {
+        $status = open LOG, ">>/var/log/httpd/request_log";
+    }
     if (!$status) {
         carp "Could not open request_log";
     } else {
