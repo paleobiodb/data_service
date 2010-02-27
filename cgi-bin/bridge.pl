@@ -958,12 +958,16 @@ sub processReferenceForm {
 # 7.11.09 JA
 sub quickSearch	{
 
+	my $qs = $q->param('quick_search');
+	$qs =~ s/\./%/g;
+	$q->param('quick_search' => $qs);
 	# case 1: search string cannot be a taxon name, so search collections
-	if ( $q->param('quick_search') =~ /[^A-Za-z ]/ || $q->param('quick_search') =~ / .* / )	{
+	if ( $qs =~ /[^A-Za-z% ]/ || $qs =~ / .* / )	{
+	# case 1: search string cannot be a taxon name, so search collections
 		Collection::basicCollectionSearch($dbt,$q,$s,$hbo);
 	}
 	else	{
-		my $sql = "SELECT count(*) c FROM authorities WHERE taxon_name='".$q->param('quick_search')."'";
+		my $sql = "SELECT count(*) c FROM authorities WHERE taxon_name LIKE '".$qs."'";
     		my $t = ${$dbt->getData($sql)}[0];
 	# case 2: string is formatted correctly and matches at least one name,
 	#  so search taxa only
