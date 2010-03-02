@@ -76,7 +76,7 @@ sub displaySearchSectionForm {
     $vars{'enterer_me'} = $s->get('enterer_reversed');
     $vars{'page_title'} = "Section search form";
     $vars{'action'} = "displaySearchSectionResults";
-    $vars{'links'} = qq|<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.submit();"><b>Search for sections</b></a></p>|;
+    $vars{'links'} = qq|<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.submit();"><b>Search for sections</b></span></p>|;
     print PBDBUtil::printIntervalsJava($dbt,1);
     print Person::makeAuthEntJavascript($dbt);
     print $hbo->populateHTML('search_collections_form',\%vars) ;
