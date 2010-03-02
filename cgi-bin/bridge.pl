@@ -1041,13 +1041,13 @@ sub displaySearchColls {
 	$vars{'error'} = $error;
 
 	$vars{'links'} = qq|
-<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.submit();"><b>Search collections</b></a>
+<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.submit();"><b>Search collections</b></span>
 |;
 
 	if ( $type eq "view" || ! $type )	{
 		$vars{'links'} = qq|
-<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.basic.value = 'yes'; document.collForm.submit();"><b>Search for basic info</b></a> -
-<span class="mockLink" onClick="javascript: document.collForm.basic.value = ''; document.collForm.submit();"><b>Search for full details</b></a></p>
+<p><span class="mockLink" onClick="javascript: checkForm(); document.collForm.basic.value = 'yes'; document.collForm.submit();"><b>Search for basic info</b></span> -
+<span class="mockLink" onClick="javascript: document.collForm.basic.value = ''; document.collForm.submit();"><b>Search for full details</b></span></p>
 |;
 	} elsif ($type eq 'occurrence_table') {
 		$vars{'reference_no'} = $reference_no;
