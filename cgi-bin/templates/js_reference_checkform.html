@@ -162,6 +162,9 @@
 		if ( /  /.test(frm.reftitle.value) )	{
 			errors += "* The reference's title includes extra spaces\n";
 		}
+		if ( /[A-Z][A-Z][A-Z]/.test(frm.reftitle.value) && ! /[a-z][a-z][a-z]/.test(frm.reftitle.value) )	{
+			errors += "* Don't capitalize the entire reference title\n";
+		}
 
 		if ( /[^A-Za-z0-9\)\]\?\!"]$/.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name must end with a letter\n";
@@ -174,6 +177,9 @@
 		}
 		if ( /  /.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name includes extra spaces\n";
+		}
+		if ( /[A-Z][A-Z][A-Z]/.test(frm.pubtitle.value) && ! /[a-z][a-z][a-z]/.test(frm.pubtitle.value) )	{
+			errors += "* Don't capitalize the entire book/serial name\n";
 		}
 		// Report errors
 		if ( errors != "" ) {
