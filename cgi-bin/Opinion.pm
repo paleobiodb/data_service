@@ -1232,10 +1232,10 @@ sub submitOpinionForm {
             $errors->add("The name entered in the \"How was it spelled\" section must be different from the name of the parent");
         }
     } else {
-        if ($parentName eq $childName || $parentName eq $childSpellingName) {
-            $errors->add("The taxon you enter and the one it belongs to can't have the same name");	
-        } elsif ($fields{'child_no'} == $fields{'parent_no'}) {
+        if ($fields{'child_no'} == $fields{'parent_no'}) {
             $errors->add("A taxon can't belong to itself");	
+        } elsif (($parentName eq $childName || $parentName eq $childSpellingName) && $fields{'parent_no'} == 0) {
+            $errors->add("The taxon you enter and the one it belongs to can't have the same name");	
         }
     }
 
