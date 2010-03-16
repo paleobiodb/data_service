@@ -331,7 +331,7 @@ sub displayPermissionListForm {
     my $working_group_select = $hbo->htmlSelect('working_group',$working_group_names,$working_group_values);
 
     print qq|<div align="center">|;
-    print qq|<h3 style="padding-bottom: 1em;">Editing permission list</h3>\n\n|;
+    print qq|<p class="pageTitle" style="padding-top: 0.5em; padding-bottom: 0.5em;">Editing permission list</p>\n\n|;
    
     # Form for designating heir:
     my $sql = "SELECT p2.name heir FROM person p1 LEFT JOIN person p2 ON p1.heir_no=p2.person_no WHERE p1.person_no=$authorizer_no";
@@ -341,7 +341,7 @@ sub displayPermissionListForm {
         $heir_reversed = Person::reverseName($results[0]->{'heir'});
     }
     print qq|<div class="displayPanel" align="left">\n|;
-    print qq|<span class="displayPanelHeader"><b>Designated heir</b></span>\n|;
+    print qq|<span class="displayPanelHeader medium">Designated heir</span>\n|;
     print qq|<div class="displayPanelContent" align="center">\n|;
     print qq|<form method="POST" action="$WRITE_URL">|;
     print qq|<input type="hidden" name="action" value="submitHeir">|;
@@ -390,7 +390,7 @@ sub displayPermissionListForm {
         }
         # Form for adding people to permission list
         print qq|</div>\n</div>\n\n<div class="displayPanel" align="left">\n|;
-        print qq|<span class="displayPanelHeader"><b>Permitted modifiers</b></span>\n|;
+        print qq|<span class="displayPanelHeader medium">Permitted modifiers</span>\n|;
         print qq|<div class="displayPanelContent" align="center">\n|;
         print qq|<form method="POST" action="$WRITE_URL">|;
         print qq|<input type="hidden" name="action" value="submitPermissionList">|;
@@ -433,7 +433,7 @@ sub displayPermissionListForm {
     @results = @{$dbt->getData($sql)};
     if (@results) {
         print qq|</div>\n</div>\n\n<div class="displayPanel" align="left">\n|;
-        print qq|<span class="displayPanelHeader"><b>Permitted authorizers</b></span>\n|;
+        print qq|<span class="displayPanelHeader medium">Permitted authorizers</span>\n|;
         print qq|<div class="displayPanelContent" align="center">\n|;
         print qq|<p>The following people have allowed you to edit their data:</p>\n|;
         print qq|<table cellpadding=0 cellspacing=2 style="padding-bottom: 1em;">|;
@@ -449,6 +449,7 @@ sub displayPermissionListForm {
         }
         print qq|</table>\n|;
     }
+    print qq|</div>\n|;
     print qq|</div>\n|;
     print qq|</div>\n|;
 
