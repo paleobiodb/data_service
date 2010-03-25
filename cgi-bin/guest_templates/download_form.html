@@ -698,11 +698,12 @@ location:
   <span class="white-space: nowrap"><input type="checkbox" name="preservation" value="ichnofossil" checked> ichnofossil</span></td></tr>
 
 <tr class="lightGray">
-<td valign=top class="small">Include occurrences of extinct taxa?</td>
+<td valign=top class="small">Include occurrences of extant or extinct taxa?</td>
 <td valign=top class="small">
-<select name=extinct_taxa>
-<option value="NO">no, exclude them</option>
-<option selected value="YES">yes, include them</option>
+<select name="extant_extinct">
+<option selected value="both">include both</option>
+<option value="extant">extant only</option>
+<option value="extinct">extinct only</option>
 </select>
 </td></tr>
 
