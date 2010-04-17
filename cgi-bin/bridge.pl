@@ -476,7 +476,7 @@ sub displayMapResults {
         $q->delete('taxon_name_preset');
     }
 
-    if ($q->param('mapcolors')) {
+    if ($q->param('mapcolors'))	{
         my %settings;
         if ($q->param('mapcolors') eq 'green on white') {
             %settings = (
@@ -492,12 +492,19 @@ sub displayMapResults {
                 gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
                 coastlinecolor=>'black'
             );
-        } else { # Green on blue default
+        } elsif ($q->param('mapcolors') eq 'green on blue') {
             %settings = (
                 mapbgcolor=>'sky blue',crustcolor=>'olive drab', crustedgecolor=>'white',
                 usalinecolor=>'green', borderlinecolor=>'green', autoborders=>'yes',
                 gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
                 coastlinecolor=>'dark green'
+            );
+        } else { # outlines only default
+            %settings = (
+                mapbgcolor=>'white',crustcolor=>'none', crustedgecolor=>'none',
+                usalinecolor=>'light gray', borderlinecolor=>'light gray', autoborders=>'yes',
+                gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
+                coastlinecolor=>'black'
             );
         }
         while(my ($k,$v) = each %settings) {
