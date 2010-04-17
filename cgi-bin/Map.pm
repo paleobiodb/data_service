@@ -43,10 +43,11 @@ my %map_defaults = (
     'crustcolor'=>'none',  'crustedgecolor'=>'none', 'linethickness'=>'medium', 
     'gridsize'=>'30', 'gridcolor'=>'light gray', 'gridposition'=>'in back'
 );
+
 # These are all form params that don't relate to the maps physical appearance
 #my @formParams = ('simple_map','research_group', 'authorizer', 'enterer', 'authorizer_reversed','enterer_reversed','modified_since', 'day_of_month', 'month', 'year', 'country', 'state', 'interval_name', 'group_formation_member', 'lithology1', 'environment', 'taxon_rank', 'taxon_name', 'mapsearchfields2', 'mapsearchterm2', 'mapsearchfields3', 'mapsearchterm3', 'mapsearchfields4', 'mapsearchterm4');
 
-          
+
 sub new {
     my $class = shift;
     $q = shift;
@@ -1128,7 +1129,7 @@ sub mapSetupImage {
     $vmult = 2;
     $hpix = 312;
     $vpix = 156;
-    if ( $q->param('projection') eq "orthographic" )	{
+    if ( $q->param('projection') eq "orthographic" || $q->param('mapshape') =~ /square/ )	{
         $hpix = 288;
         $vpix = 288;
     } elsif ( $q->param('projection') =~ /Eckert IV|Mollweide/ )	{
@@ -1144,7 +1145,7 @@ sub mapSetupImage {
     $x =~ s/[^0-9]//g;
     # need this correction because the entire image is too large with
     #  this projection JA 27.4.06
-    if ( $q->param("projection") eq "orthographic")	{
+    if ( $q->param('projection') eq "orthographic" || $q->param('mapshape') =~ /square/ )	{
         $x = $x * 0.75;
     }
     $hmult = $hmult * $x / 100;
@@ -2702,9 +2703,10 @@ sub drawBackground	{
 				if ( $hemi == 1 )	{
 					$x1 = -1* $x1;
 				}
-				if ( $q->param('projection') ne "orthographic" )	{
-				}
 				$x1 = $self->getLngTrunc($x1);
+				if ( $x1 == $width )	{
+					$x1--;
+				}
 				$y1 = $self->getLatTrunc($y1);
 				$poly->addPt($x1,$y1);
 				if ( $lat == -90 && $hemi == 0 )	{
