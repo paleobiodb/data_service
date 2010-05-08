@@ -128,8 +128,10 @@ function doCheckFieldsGeography() {
         // This is a squirrely way to do this, but otherwise some browsers fail
         var index = frm.country.selectedIndex;
         if ( index != 0 ) {
-            if ( frm.country.options[index].text == "United States") {
-                bad_info += "\no U.S. state is required";
+            if ( frm.country.options[index].text == "Australia" || frm.country.options[index].text == "United States" ) {
+                bad_info += "\no State is required";
+            } else if ( frm.country.options[index].text == "Canada" ) {
+                bad_info += "\no Province is required";
             }
         }
     }
@@ -569,7 +571,7 @@ function doCheckFieldsComponents() {
 
   </div>
   
-  <i><p class="verysmall">*State is required for collections within the United States</i></p>
+  <i><p class="verysmall">*State/province is required for collections within Australia, Canada, and the United States</i></p>
   <br>
   
   <table style="margin-top: -0.5em;">
