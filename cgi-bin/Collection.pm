@@ -2629,6 +2629,13 @@ sub basicCollectionInfo	{
 	my $sql = "SELECT * FROM collections WHERE collection_no=".$q->param('collection_no');
 	my $c = ${$dbt->getData($sql)}[0];
 
+	my $mockLI = 'class="verysmall" style="margin-top: -1em; margin-left: 2em; text-indent: -1em;">&bull;';
+	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
+
+	for my $field ( 'geogcomments','stratcomments','geology_comments','lithdescript','component_comments','taphonomy_comments','collection_comments','taxonomy_comments' )	{
+		$c->{$field} =~ s/\n/<\/p>\n<p $mockLI/g;
+	}
+
 	my $page_vars = {};
 	if ( $c->{'research_group'} =~ /ETE/ && $q->param('guest') eq '' )	{
 		$page_vars->{ete_banner} = "<div style=\"padding-left: 3em; float: left;\"><img alt=\"ETE\" src=\"/public/bannerimages/ete_logo.jpg\"></div>";
@@ -2637,8 +2644,6 @@ sub basicCollectionInfo	{
 	print $hbo->stdIncludes("std_page_top", $page_vars);
 
 	my $header = $c->{'collection_name'};
-
-	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
 
 	for my $f ( 'lithadj','lithadj2','pres_mode','assembl_comps','common_body_parts','rare_body_parts','coll_meth','museum' )	{
 		$c->{$f} =~ s/,/, /g;
@@ -2698,7 +2703,7 @@ sub basicCollectionInfo	{
 	print "<\p>\n\n";
 
 	if ( $s->isDBMember() && $c->{'geogcomments'} )	{
-		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'geogcomments'}<\p>\n\n";
+		print "<p $mockLI $c->{'geogcomments'}<\p>\n\n";
 	}
 
 	print "<p $indent>When: ";
@@ -2746,7 +2751,7 @@ sub basicCollectionInfo	{
 	print "<\p>\n\n";
 
 	if ( $c->{'stratcomments'} )	{
-		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'stratcomments'}<\p>\n\n";
+		print "<p $mockLI $c->{'stratcomments'}<\p>\n\n";
 	}
 
 	print "<p $indent>Environment/lithology: ";
@@ -2833,7 +2838,7 @@ sub basicCollectionInfo	{
 	}
 
 	if ( $c->{'assembl_comps'} && $c->{'component_comments'} )	{
-		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'component_comments'}<\p>\n\n";
+		print "<p $mockLI $c->{'component_comments'}<\p>\n\n";
 	}
 
 	$c->{'pres_mode'} =~ s/body(,|)//;
@@ -2842,7 +2847,7 @@ sub basicCollectionInfo	{
 	}
 
 	if ( $c->{'pres_mode'} && $c->{'taphonomy_comments'} )	{
-		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'taphonomy_comments'}<\p>\n\n";
+		print "<p $mockLI $c->{'taphonomy_comments'}<\p>\n\n";
 	}
 
 	# remove leading day of month (probably)
@@ -2879,7 +2884,7 @@ sub basicCollectionInfo	{
 	}
 
 	if ( ( $c->{'collectors'} || $c->{'collection_dates'} || $c->{'museum'} || $c->{'coll_meth'} ) && $c->{'collection_comments'} )	{
-		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'collection_comments'}<\p>\n\n";
+		print "<p $mockLI $c->{'collection_comments'}<\p>\n\n";
 	}
 
 	$sql = "SELECT * FROM refs WHERE reference_no=".$c->{'reference_no'};
@@ -2958,11 +2963,11 @@ sub basicCollectionInfo	{
 		}
 	}
 	print "<div style=\"margin-left: 0em; margin-right: 1em; border-top: 1px solid darkgray;\">\n\n";
-	print "<p class=\"large\" style=\"margin-top: 0.5em;\">Taxonomic list</p>\n\n";
+	print "<p class=\"large\" style=\"margin-top: 0.5em; margin-bottom: 1.5em;\">Taxonomic list</p>\n\n";
 	if ( $c->{'taxonomy_comments'} )	{
-		print "<p class=\"verysmall\" style=\"margin-top: -1em; margin-left: 2em; text-indent: -1em;\">&bull; $c->{'taxonomy_comments'}<\p>\n\n";
+		print "<p $mockLI $c->{'taxonomy_comments'}<\p>\n\n";
 	}
-	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\" style=\"margin-top: -1em;\">\n\n";
+	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\" style=\"margin-top: -0.5em;\">\n\n";
 	my ($lastclass,$lastorder,$lastfamily,$class);
 	for my $o ( @occs )	{
 		my ($ital,$ital2,$postfix) = ('<i>','</i>','');
