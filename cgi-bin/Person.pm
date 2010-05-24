@@ -218,7 +218,7 @@ sub displayFeaturedAuthorizers	{
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
-    $sql .= " ORDER BY p2.last_entry DESC LIMIT 20";
+    $sql .= " ORDER BY p2.last_entry DESC LIMIT 12";
     my @results = @{$dbt->getData($sql)};
     @results = sort { $a->{'last_name'} cmp $b->{'last_name'} || $a->{'first_name'} cmp $b->{'first_name'} } @results;
     my @refnos;
