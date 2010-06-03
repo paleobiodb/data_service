@@ -98,12 +98,15 @@ sub startSearchScale {
 		<input id="action" type="hidden" name="action" value="processShowForm">
 		<input type="hidden" name="scale" value="add">
 		<input type="submit" value="Add scale">
-		</form>|;
+		</form>
+|;
 	}
 
-	print "<p align=\"left\" class=\"tiny\" style=\"margin-left: 2em; margin-right: 2em;\">All data on the web site are prepared using an automatically generated composite time scale. The composite scale is based on the latest published correlations and boundary estimates for each time interval that are given above.</p>\n";
-
 	print qq|
+<p align="left" class="tiny" style="margin-left: 2em; margin-right: 2em;">All data on the web site are prepared using an automatically generated composite time scale. The composite scale is based on the latest published correlations and boundary estimates for each time interval that are given above.</p>
+
+</div>
+
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
