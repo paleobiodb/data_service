@@ -9,7 +9,7 @@
 <!-- don't even ask -->
 <div style="position: fixed; bottom: 0; height: 100%; width: 100%;">
 <div style="position: relative; margin-left: auto; margin-right: auto; height: 100%; width: 60em; z-index: 0;">
-<div id="bottomBox" style="position: relative; margin-left: -1px; margin-right: 0px; height: 100%; width: 100%; border-left: 1px solid DarkGray; border-right: 1px solid DarkGray; background-color: white;">
+<div id="bottomBox" style="position: relative; margin-left: -1px; margin-right: 0px; height: 100%; width: 100%; border-left: 1px solid DarkGray; border-right: 1px solid DarkGray; background-color: white; display: none;">
 </div> 
 </div> 
 </div> 
@@ -17,16 +17,15 @@
 <script language="JavaScript" type="text/javascript">
 <!--
 
-window.onload = changeBackground();
+window.onload = hacks();
 
-function changeBackground()	{
+function hacks()	{
 
-	var exploder = /Microsoft/i;
-	if ( exploder.test(navigator.appName) )	{
+	if ( ! /MSIE/i.test(navigator.userAgent) )	{
+		document.getElementById('bottomBox').style.display = 'block';
+	} else	{
 		document.getElementById('cornerBottomPadding').style.height = '2.5em';
 		document.getElementById('rightImage').style.borderRight = '1px solid LightGray';
-		document.getElementById('bottomBox').style.display = 'none';
-		document.body.style.backgroundColor = 'white';
 	}
 }
 
