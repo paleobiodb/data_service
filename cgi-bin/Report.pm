@@ -632,7 +632,7 @@ sub reportQueryDB{
     # How choices in HTML map to database fields
     my %sqlFields = (
         'authorizer'=>'authorizer_no', 'enterer'=>'enterer_no', 'research group'=>'research_group',
-        'country'=>'country', 'state'=>'state', 'interval name'=>'max_interval_no,min_interval_no', 'formation'=>'formation',
+        'country'=>'country', 'state'=>'state', 'interval name'=>'max_interval_no,min_interval_no', 'formation'=>'formation', 'geological group'=>'geological_group',
         'paleoenvironment'=>'environment', 'scale of geographic resolution'=>'geogscale', 
         'scale of stratigraphic resolution'=>'stratscale',
         'tectonic setting'=>'tectonic_setting', 'preservation mode'=>'pres_mode', 
