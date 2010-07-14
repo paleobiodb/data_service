@@ -557,8 +557,8 @@ sub processEditScaleForm	{
 				$sql = "SELECT modified FROM intervals WHERE interval_no='";
 				$sql .= $interval_no . "'";
 				my @modifieds = @{$dbt->getData($sql)};
-				$sql = "UPDATE intervals SET modified=modified,created=";
-				$sql .= $modifieds[0]->{modified} . " WHERE interval_no=" . $interval_no;
+				$sql = "UPDATE intervals SET modified=modified,created='";
+				$sql .= $modifieds[0]->{modified} . "' WHERE interval_no=" . $interval_no;
 				$dbh_r->do($sql);
 
 			# now that the interval exists, put its number wherever
@@ -682,8 +682,8 @@ sub processEditScaleForm	{
 				# set the created date
 				$sql = "SELECT modified FROM correlations WHERE scale_no=" . $scale_no . " AND interval_no=" . $interval_no;
 				my @modifieds = @{$dbt->getData($sql)};
-				$sql = "UPDATE correlations SET modified=modified,created=";
-				$sql .= $modifieds[0]->{modified} . " WHERE scale_no=" . $scale_no . " AND interval_no=" . $interval_no;
+				$sql = "UPDATE correlations SET modified=modified,created='";
+				$sql .= $modifieds[0]->{modified} . "' WHERE scale_no=" . $scale_no . " AND interval_no=" . $interval_no;
 				$dbh_r->do($sql);
 			}
 
