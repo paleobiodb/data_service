@@ -2417,6 +2417,95 @@ sub generateLookupTable {
     }
 }
 
+# 16-18.7.10
+# computes and stores guesstimated ages for boundaries that are not directly
+#  dated but do fall between boundaries with hard dates
+# works with one scale segment at a time
+# a segment must consist of several intervals that each correlate at least
+#  partially with a single parent
+sub interpolateBoundaries	{
+	my $self = shift;
+	my $dbt = $self->{'dbt'};
+	my $dbh = $dbt->dbh;
+
+	my $sql = "SELECT interval_no,interval_hash,ten_my_bin FROM interval_lookup ORDER BY interval_no";
+	my @refs = @{$dbt->getData($sql)};
+	my %itvs;
+	foreach my $r ( @refs ) {
+		my $VAR1;
+		$itvs{$r->{interval_no}} = eval $r->{interval_hash};
+		$itvs{$r->{interval_no}}->{bin} = $r->{ten_my_bin};
+	}
+
+	my %est_base;
+	my %est_top;
+
+	for my $i ( keys %itvs )	{
+		if ( $itvs{$i}->{max_no} != $itvs{$i}->{min_no} || $itvs{$i}->{max_no} != $itvs{$itvs{$i}->{prev_no}}->{min_no} )	{
+			my $last = $i;
+			my $next = $itvs{$i}->{next_no};
+			my @segment = ($i);
+			while ( ( $itvs{$next}->{max_no} == $itvs{$i}->{min_no} || $itvs{$next}->{max_no} == $itvs{$i}->{max_no} ) && $itvs{$next}->{lower_estimate_type} eq "correlated" )	{
+				$last = $next;
+				push @segment , $last;
+				$next = $itvs{$next}->{next_no};
+			}
+			if ( $i == $last )	{
+				next;
+			}
+			# at this point last either has a firmly dated top or
+			#  is at a scale top
+			my $inseg = $#segment + 1;
+			if ( $itvs{$i}->{max_no} != $itvs{$i}->{min_no} )	{
+				$inseg -= 0.5;
+			}
+			if ( $itvs{$last}->{max_no} != $itvs{$last}->{min_no} )	{
+				$inseg -= 0.5;
+			}
+			my $base = $itvs{$itvs{$i}->{min_no}}->{lower_boundary};
+			# the base might have been set in a previous round of
+			# interpolation
+			if ( $est_base{$i} > 0 )	{
+				$base = $est_base{$i};
+			}
+			my $top = $itvs{$itvs{$last}->{max_no}}->{upper_boundary};
+			my $sum = 0;
+			my $span = ( $base - $top ) / $inseg;
+			if ( ! $est_base{$i} )	{
+				$est_base{$i} = $itvs{$i}->{lower_boundary};
+			}
+			if ( $itvs{$i}->{max_no} != $itvs{$i}->{min_no} )	{
+				$sum = 0.5;
+			} else	{
+				$sum = 1;
+			}
+			$est_top{$i} = $base - $sum * $span;
+			if ( $itvs{$last}->{max_no} != $itvs{$last}->{min_no} )	{
+				$est_base{$last} = $top + $span / 2;
+			} else	{
+				$est_base{$last} = $top + $span;
+			}
+			$est_top{$last} = $itvs{$last}->{upper_boundary};
+			for my $s ( 1..$#segment-1 )	{
+				$est_base{$segment[$s]} = $base - $span * $sum;
+				$sum++;
+				$est_top{$segment[$s]} = $base - $span * $sum;
+			}
+		}
+	}
+	foreach my $r ( @refs ) {
+		my $i = $r->{interval_no};
+		if ( ! $est_base{$i} )	{
+			$est_base{$i} = "NULL";
+		}
+		if ( ! $est_top{$i} )	{
+			$est_top{$i} = "NULL";
+		}
+		my $sql = "UPDATE interval_lookup SET interpolated_base=".$est_base{$i}.",interpolated_top=".$est_top{$i}." WHERE interval_no=".$i;
+		$dbh->do($sql);
+	}
+}
+
 # Serializes an itv object by turning the links into numbers (primary keys such
 # as interval_no and scale_no).  To unserialize, just eval the text.
 sub serializeItv {
