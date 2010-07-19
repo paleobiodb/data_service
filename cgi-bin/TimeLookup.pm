@@ -2336,7 +2336,7 @@ sub lookupIntervals {
     my ($self,$intervals,$fields) = @_;
     my $dbt = $self->{'dbt'};
     
-    my @fields = ('interval_name','period_name','epoch_name','stage_name','ten_my_bin','lower_boundary','upper_boundary');
+    my @fields = ('interval_name','period_name','epoch_name','stage_name','ten_my_bin','lower_boundary','upper_boundary','interpolated_base','interpolated_top');
     if ($fields) {
         @fields = @$fields;
     } 
