@@ -3960,10 +3960,20 @@ sub basicTaxonInfo	{
 			my ($g,$s) = split / /,$taxon_name;
 			@taxon_nos = getTaxonNos($dbt,$g);
 		}
+		# if the name is misformatted it could only be a common name, so try that
+		if ( $taxon_name !~ /^[A-za-z]* [A-Za-z]*$/ )	{
+			my $name = $taxon_name;
+			$name =~ s/[^A-Za-z ]/%/g;
+			my $sql = "SELECT taxon_no FROM authorities WHERE common_name LIKE '".$name."'";
+			push @taxon_nos , ${$dbt->getData($sql)}[0]->{'taxon_no'};
+			if ( ! @taxon_nos )	{
+				$error = "WARNING: '".$taxon_name."' is not in the database. Please search again.";
+			}
+		}
 		# the name may be bona fide but completely unclassified, so
 		#  see if it has occurrences
 		my $occ;
-		if ( ! @taxon_nos )	{
+		if ( ! @taxon_nos && $error eq "" )	{
 			my ($g,$s) = split / /,$taxon_name;
 			my $name_clause = "genus_name='".$g."'";
 			my $name_clause = "(genus_name='".$g."' OR subgenus_name='".$g."')";
