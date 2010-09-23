@@ -972,6 +972,9 @@ sub quickSearch	{
 	if ( $qs =~ /[^A-Za-z% ]/ || $qs =~ / .* / )	{
 	# case 1: search string cannot be a taxon name, so search collections
 		Collection::basicCollectionSearch($dbt,$q,$s,$hbo);
+	# if basicCollectionSearch finds any match it should exit somehow before this
+	#   point, so try a common name search as a desperation measure
+		TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 	}
 	else	{
 		my $sql = "SELECT count(*) c FROM authorities WHERE taxon_name LIKE '".$qs."'";
