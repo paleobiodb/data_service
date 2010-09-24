@@ -1525,6 +1525,7 @@ sub getOccurrencesWhereClause {
     if ($plantOrganFieldCount != 0 && $plantOrganFieldCount != scalar(@plantOrganFieldNames)) {
         my $plant_organs = join(",", @includedPlantOrgans);
         push @occ_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
+        push @reid_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
     }  
 
 # I'm not sure this is going to work if reidentifications are not used
