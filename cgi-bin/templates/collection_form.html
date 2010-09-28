@@ -93,11 +93,6 @@ function doCheckFieldsBasicInfo() {
         bad_info += "\no The access level is public";
     }
 
-    var IGSNre = /^[a-zA-Z]{3}[0-9a-zA-Z]{6}$/i;
-    if (frm.igsn.value != '' && IGSNre.test(frm.igsn.value) == false) {
-        bad_info += "\no The IGSN number doesn't appear to be valid";
-    }
-
     if ( frm.collection_type.selectedIndex == 0) {
         bad_info += "\no Reason for describing collection is required";
     }
@@ -507,12 +502,6 @@ function doCheckFieldsComponents() {
       <td>
         Also known as:<br>
         <textarea id="collection_aka" rows=1 wrap="virtual" cols="80"></textarea>
-      </td>
-    </tr>
-    <tr>
-      <td>
-        IGSN (<a target="_BLANK" href="http://www.geosamples.org">SESAR</a>) number:
-        <input id="igsn" size=10 maxlength=9>
       </td>
     </tr>
     <tr>
