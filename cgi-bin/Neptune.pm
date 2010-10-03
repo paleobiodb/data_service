@@ -575,7 +575,7 @@ sub parseTaxa {
 # return a handle to the database (often called $dbh)
 sub connect {
     my $driver =   "Pg";
-    my $hostName = "cdb0.geol.iastate.edu";
+    my $hostName = "chronos.org";
     my $userName = "pbdbnep";
     my $dbName = "neptune";
     my $password = `cat /home/paleodbpasswd/neptune_passwd`;
