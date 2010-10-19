@@ -330,7 +330,7 @@ sub displayITISDownload {
     if ($options{'taxon_name'}) {
         my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1,'remove_rank_change'=>1});
         if (scalar(@taxon) > 1) {
-            push @errors, "Taxon name is homonym";
+            push @errors, "Taxon name is a homonym";
         } elsif (scalar(@taxon) < 1) {
             push @errors, "Taxon name not found";
         } else {
@@ -372,7 +372,12 @@ sub displayITISDownload {
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
 
-    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,\%options);
+    my $sql = "SELECT name,person_no FROM person";
+    my @temp = @{$dbt->getData($sql)};
+    my %people;
+    $people{$_->{person_no}} = $_->{name} foreach @temp;
+
+    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,\%people,\%options);
     my @names = @$names;
     my %references;
 
@@ -536,7 +541,7 @@ sub displayITISDownload {
     $ref_count = "No" if ($ref_count == 0);
     print "</p>$ref_count publications were printed</p>";
     
-    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,\%options); 
+    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,\%people,\%options); 
     my @opinions = @$opinions;
     open FH_RL, ">$filesystem_dir/reference_links.dat";
     my $ref_link_count = 0;
@@ -659,7 +664,7 @@ sub displayPBDBDownload {
     if ($options{'taxon_name'}) {
         my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1,'remove_rank_change'=>1});
         if (scalar(@taxon) > 1) {
-            push @errors, "Taxon name is homonym";
+            push @errors, "Taxon name is a homonym";
         } elsif (scalar(@taxon) < 1) {
             push @errors, "Taxon name not found";
         } else {
@@ -877,10 +882,11 @@ print '</td></tr></table></div>';
 sub getTaxonomicNames {
     my $dbt = shift;
     my $http_dir = shift;
-    my $ref =shift;
+    my $ref = shift;
     my %people = %{$ref};
+    $ref = shift;
+    my %options = %{$ref};
     my $dbh = $dbt->dbh;
-    my %options = @_;
     
     my @where = ();
    
@@ -1087,10 +1093,11 @@ sub getTaxonomicNames {
 sub getTaxonomicOpinions {
     my $dbt = shift;
     my $http_dir = shift;
-    my $ref =shift;
+    my $ref = shift;
     my %people = %{$ref};
+    $ref = shift;
+    my %options = %{$ref};
     my $dbh = $dbt->dbh;
-    my %options = @_;
     
     my @where = ();
     
