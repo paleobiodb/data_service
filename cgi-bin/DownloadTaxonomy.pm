@@ -372,7 +372,7 @@ sub displayITISDownload {
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
 
-    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,%options);
+    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,\%options);
     my @names = @$names;
     my %references;
 
@@ -536,7 +536,7 @@ sub displayITISDownload {
     $ref_count = "No" if ($ref_count == 0);
     print "</p>$ref_count publications were printed</p>";
     
-    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,%options); 
+    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,\%options); 
     my @opinions = @$opinions;
     open FH_RL, ">$filesystem_dir/reference_links.dat";
     my $ref_link_count = 0;
@@ -722,7 +722,7 @@ sub displayPBDBDownload {
     # Note that the opinions file MUST be created first -- this is because there is an option to get taxa
     # that have an opinion that fit the criteria attached to them, so we need to get a additional list of taxa
     # from the opinions function to download
-    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,\%people,%options),; 
+    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,\%people,\%options);
     my @opinions = @$opinions;
     open FH_OP, ">$filesystem_dir/opinions.csv"
         or die "Could not open opinions.csv ($!)";
@@ -764,7 +764,7 @@ sub displayPBDBDownload {
     }
 
 
-    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,\%people,%options);
+    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,\%people,\%options);
     my @names = @$names;
 
 
