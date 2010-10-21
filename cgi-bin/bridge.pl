@@ -73,6 +73,8 @@ if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/
 	 $q->param("user" => "Guest");
 }
 
+if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181/){exit;}
+
 # Make the HTMLBuilder object - it'll use whatever template dir is appropriate
 my $use_guest = ($q->param('user') =~ /^guest$/i) ? 1 : 0;
 my $hbo = HTMLBuilder->new($dbt,$s,$use_guest,'');
@@ -341,37 +343,70 @@ sub displayHomePage {
 	# display the most recently entered collections that have
 	#  distinct combinations of references and enterers (the latter is
 	#  usually redundant)
-	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name FROM collections ORDER BY collection_no DESC LIMIT 400";
+	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name,floor(plate/100) p FROM collections ORDER BY collection_no DESC LIMIT 400";
 	my @colls = @{$dbt->getData($sql)};
+	my %continent = (1 => 'North America', 2 => 'South America', 3 => 'Europe', 4 => 'Europe', 5 => 'Asia', 6 => 'Asia', 7 => 'Africa', 8 => 'Oceania', 9 => 'Oceania');
 	my %entererseen;
-	my $printed;
+	my $lastcontinent;
+	my @toprint;
 	for my $coll ( @colls )	{
-		if ( $entererseen{$coll->{reference_no}.$coll->{enterer_no}} < 1 )	{
+		if ( $entererseen{$coll->{reference_no}.$coll->{enterer_no}} < 1 && $coll->{p} )	{
 			$entererseen{$coll->{reference_no}.$coll->{enterer_no}}++;
-			$row->{collection_links} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicCollectionSearch&amp;collection_no=$coll->{collection_no}">$coll->{collection_name}</a></div>\n|;
-			$printed++;
-			if ( $printed == 60 )	{
+			push @toprint , $coll;
+			if ( $#toprint + 1 == 46 )	{
+				last;
+			}
+		}
+	}
+	@toprint = sort { $continent{$a->{p}} cmp $continent{$b->{p}} } @toprint;
+	for my $coll ( @toprint )	{
+		if ( $continent{$coll->{p}} ne $lastcontinent )	{
+			if ( $lastcontinent )	{
+				$row->{collection_links} .= "</div>\n";
+			}
+			$lastcontinent = $continent{$coll->{p}};
+			$row->{collection_links} .= qq|<div class="medium">$lastcontinent</div>\n<div style="padding-top: 0.5em; padding-bottom: 0.5em;">\n|;
+		}
+		$row->{collection_links} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicCollectionSearch&amp;collection_no=$coll->{collection_no}">$coll->{collection_name}</a></div>\n|;
+	}
+	$row->{'collection_links'} .= "</div>\n";
+
+	my %groupnames = ('Reptilia' => "Reptiles",'Mammalia'=> 'Mammals','Vertebrata' => 'Other vertebrates','Metazoa' => 'Invertebrates');
+	my @groups = keys %groupnames;
+	$sql = "SELECT lft,rgt,taxon_name FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND taxon_name IN ('".join("','",@groups)."') ORDER BY lft DESC";
+	my @grouprefs = @{$dbt->getData($sql)};
+
+	# something similar for new "cool species" (recently published, type
+	#  body part known, etc.)
+	$sql = "SELECT taxon_name,a.taxon_no,lft,rgt,a.reference_no FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND ref_is_authority='YES' AND r.pubyr>=year(now())-10 AND a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='species' AND type_body_part IS NOT NULL ORDER BY a.taxon_no DESC LIMIT 100";
+	my @spp = @{$dbt->getData($sql)};
+	my %refseen;
+	my @toprint;
+	for my $s ( @spp )	{
+		if ( ! $refseen{$s->{'reference_no'}} )	{
+			$refseen{$s->{'reference_no'}}++;
+			push @toprint , $s;
+			if ( $#toprint + 1 == 51 )	{
 				last;
 			}
 		}
 	}
 
-	# something similar for new "cool species" (recently published, type
-	#  body part known, etc.)
-	$sql = "SELECT taxon_name,a.taxon_no,a.reference_no FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND ref_is_authority='YES' AND r.pubyr>=year(now())-10 AND a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='species' AND type_body_part IS NOT NULL ORDER BY a.taxon_no DESC LIMIT 100";
-	my @spp = @{$dbt->getData($sql)};
-	my %refseen;
-	$printed = 0;
-	for my $s ( @spp )	{
-		if ( ! $refseen{$s->{'reference_no'}} )	{
-			$refseen{$s->{'reference_no'}}++;
-			$row->{'taxon_links'} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicTaxonInfo&amp;taxon_no=$s->{'taxon_no'}">$s->{'taxon_name'}</a></div>\n|;
-			$printed++;
-			if ( $printed == 60 )	{
-				last;
+	my %printed;
+	for my $g ( @grouprefs )	{
+		if ( $g ne $grouprefs[0] )	{
+			$row->{'taxon_links'} .= "</div>\n";
+		}
+		$row->{'taxon_links'} .= qq|<div class="medium">$groupnames{$g->{taxon_name}}</div>\n<div style="padding-top: 0.5em; padding-bottom: 0.5em;">\n|;
+		for my $s ( @toprint )	{
+			if ( $s->{lft} > $g->{lft} && $s->{rgt} < $g->{rgt} && ! $printed{$s->{taxon_no}} )	{
+				$printed{$s->{taxon_no}}++;
+				$row->{'taxon_links'} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicTaxonInfo&amp;taxon_no=$s->{'taxon_no'}">$s->{'taxon_name'}</a></div>\n|;
 			}
 		}
 	}
+	$row->{'taxon_links'} .= "</div>\n";
+
 
 	my $offset = int(rand(250));
 	$sql = "SELECT taxon_name,a.taxon_no,rgt-lft+1 width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='genus' AND rgt>lft+1 AND ((t.taxon_no+$offset)/250)=floor((t.taxon_no+$offset)/250)";
