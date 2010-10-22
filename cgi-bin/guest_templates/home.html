@@ -10,7 +10,7 @@
   }
 
   function showLinks(batch)	{
-        for (var i=1; i<=7; i++)	{
+        for (var i=1; i<=8; i++)	{
             hideLinks(i);
         }
         document.getElementById('leftBarSection'+batch).style.backgroundColor = '#191970';
@@ -166,14 +166,29 @@ Activities
 <span id="barLinksMinus7" onClick="hideLinks(7);" style="display: none;">-</span>
 </div>
 <div class="leftBarHeader" onClick="showLinks(7);">
-Info
+Mirrors
 </div>
 
 <div class="barLinks" id="barLinks7">
+<span class="leftBarLink"><a href="http://paleodb.science.mq.edu.au">Macquarie University</a></span>
+<span class="leftBarLink"><a href="http://mfnpaleo.paleodatabase.de">Museum f&uuml;r Naturkunde</a></span>
+<span class="leftBarLink"><a href="http://flatpebble.nceas.ucsb.edu">UCSB</a></span>
+<span class="leftBarLink"><a href="http://paleodb.geology.wisc.edu">University of Wisconsin-Madison</a></span>
+</div>
+</div>
+
+<div class="leftBarSection" id="leftBarSection8">
+<div class="plusMinus">
+<span id="barLinksPlus8" onClick="showLinks(8);">+</span>
+<span id="barLinksMinus8" onClick="hideLinks(8);" style="display: none;">-</span>
+</div>
+<div class="leftBarHeader" onClick="showLinks(8);">
+Info
+</div>
+
+<div class="barLinks" id="barLinks8">
 <span class="leftBarLink"><a href="%%read_url%%?action=displayAuthorizers">participating researchers</a></span>
 <span class="leftBarLink"><a href="%%read_url%%?action=displayInstitutions">participating institutions</a></span>
-<span class="leftBarLink"><a href="http://mfnpaleo.paleodatabase.de">Museum f&uuml;r Naturkunde mirror</a></span>
-<span class="leftBarLink"><a href="http://paleodb.geology.wisc.edu">University of Wisconsin-Madison mirror</a></span>
 <span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">Coordinator, developer, and database manager</a></span>
 <span class="leftBarLink"><a href="http://paleodb.org/trac/">source code</a></span>
 </div>
