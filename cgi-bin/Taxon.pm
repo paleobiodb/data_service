@@ -690,6 +690,10 @@ sub submitAuthorityForm {
 		}
 	}
 
+	if ( ! $q->param('extant') && $q->param('taxon_rank') =~ /genus|species/ )	{
+		$errors->add("You must pull down an 'extant' value");
+	}
+
 	# If the rank was species or subspecies, then we also need to insert
 	# an opinion record automatically which has the state of "belongs to"
 	# For example, if the child taxon is "Equus blah" then we need to 
@@ -755,7 +759,7 @@ sub submitAuthorityForm {
 			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If this record is a homonym and you want to create a new record, hit submit again. If its a rank change, just enter an opinion based on the existing taxon that uses the new rank and it'll be automatically created.");
 		}
 	}
-	
+
 	if ($errors->count() > 0) {
         # If theres an error message, then we know its the second time through
 		my $message = $errors->errorMessage();
