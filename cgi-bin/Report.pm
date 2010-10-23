@@ -1161,4 +1161,248 @@ sub findMostCommonTaxa	{
 
 }
 
+# JA 23.10.10
+sub fastTaxonCount	{
+	my ($dbt,$q,$s,$hbo) = @_;
+
+	print qq|
+<div align="center">
+  <p class="pageTitle">Taxon counts</p>
+</div>
+
+<div class="displayPanel">
+|;
+
+	my $sql;
+	my $errors;
+	my @qs;
+	push @qs , "taxon name = ".$q->param('taxon_name');
+	if ( $q->param('period') )	{
+		push @qs , "time interval = ".$q->param('period');
+		$sql = "SELECT interval_no FROM intervals WHERE interval_name='".$q->param('period')."'";
+		my $no = ${$dbt->getData($sql)}[0]->{interval_no};
+		$q->param('period' => $no);
+		$q->param('interval' => '');
+	}
+	my $interval_nos;
+	if ( $q->param('interval') )	{
+		push @qs , "time interval = ".$q->param('interval');
+		require TimeLookup;
+		my $t = new TimeLookup($dbt);
+		my $interval = $q->param('interval');
+		my $eml;
+		if ( $interval =~ /early |lower /i )	{
+			$eml = 'early/lower';
+			$interval =~ s/early //i;
+			$interval =~ s/lower //i;
+		} elsif ( $interval =~ /middle/i )	{
+			$eml = 'middle';
+			$interval =~ s/middle //i;
+		} elsif ( $interval =~ /late |upper /i )	{
+			$eml = 'late/upper';
+			$interval =~ s/late //i;
+			$interval =~ s/upper //i;
+		}
+		my ($intervals,$errs,$warnings) = $t->getRange($eml,$interval,'','');
+		$interval_nos = join(',',@$intervals);
+		if ( $interval_nos eq "" )	{
+			$errors = "Sorry, there is no time interval called '".$q->param('interval')."'";
+		}
+	}
+	if ( $q->param('strat_unit') )	{
+		push @qs , "stratigraphic unit = ".$q->param('strat_unit');
+	}
+	if ( $q->param('continent') )	{
+		push @qs , "continent = ".$q->param('continent');
+		$q->param('country' => '');
+	}
+	elsif ( $q->param('country') )	{
+		push @qs , "country/state = ".$q->param('country');
+	}
+	if ( $q->param('author') )	{
+		push @qs , "author of name = ".$q->param('author');
+	}
+	if ( $q->param('after') )	{
+		push @qs , "name published after = ".$q->param('after');
+	}
+	if ( $q->param('before') )	{
+		push @qs , "name published before = ".$q->param('before');
+	}
+
+	my $enterer;
+	if ( $q->param('enterer_reversed') )	{
+		push @qs , "data enterer = ".$q->param('enterer_reversed');
+		$sql = "SELECT person_no FROM person WHERE reversed_name='".$q->param('enterer_reversed')."'";
+		$enterer = ${$dbt->getData($sql)}[0]->{person_no};
+	}
+	print "<p style=\"margin-left: 2em; text-indent: -0.5em;\">Your query was: <i>".join(', ',@qs).".</i>";
+
+	my @tables = ("authorities a,$TAXA_TREE_CACHE t");
+	my @and;
+
+	if ( $q->param('period') || $interval_nos || $q->param('strat_unit') || $q->param('continent') || $q->param('country') )	{
+		push @tables , "collections c,occurrences o";
+		push @and , "c.collection_no=o.collection_no AND o.taxon_no=t.taxon_no";
+	}
+
+	if ( $q->param('period') )	{
+		push @tables , "interval_lookup i";
+		push @and , "c.max_interval_no=i.interval_no AND i.period_no=".$q->param('period');
+	} elsif ( $interval_nos )	{
+		push @and , "c.max_interval_no IN ($interval_nos)";
+	}
+
+	if ( $q->param('strat_unit') )	{
+		push @and , "(geological_group='".$q->param('strat_unit')."' OR formation='".$q->param('strat_unit')."' OR member='".$q->param('strat_unit')."')";
+	}
+
+	if ( $q->param('continent') )	{
+		# ugly but effective
+		my $c = $q->param('continent');
+		my $countries = `grep $c data/PBDB.regions`;
+		$countries =~ s/.*://;
+		$countries =~ s/'/\\'/;
+		$countries =~ s/\t/','/g;
+		push @and , "country IN ('".$countries."')";
+	} elsif ( $q->param('country') )	{
+		push @and , "(country LIKE '".$q->param('country')."%' OR state LIKE '".$q->param('country')."%')";
+	}
+
+	if ( $q->param('author') || $q->param('before') > 0 || $q->param('after') > 0 )	{
+		push @tables , "refs r";
+		push @and , "r.reference_no=a.reference_no";
+	}
+
+	if ( $q->param('author') )	{
+		if ( $q->param('author') =~ /[^A-Za-z ']/ )	{
+			$errors = "Sorry, the author name you entered is misformatted.";
+		}
+		push @and , "(((r.author1last='".$q->param('author')."' AND ref_is_authority='YES') OR a.author1last='".$q->param('author')."') OR ((r.author2last='".$q->param('author')."' AND ref_is_authority='YES') OR a.author2last='".$q->param('author')."'))";
+	}
+
+	if ( $q->param('before') > 0 || $q->param('after') > 0 )	{
+		if ( $q->param('after') && ( $q->param('after') =~ /[^0-9]/ || $q->param('after') < 1700 || $q->param('after') > 2100 ) )	{
+			$errors = "Sorry, the 'after' year you entered is misformatted.";
+		} elsif ( $q->param('before') && ( $q->param('before') =~ /[^0-9]/ || $q->param('before') < 1700 || $q->param('before') > 2100 ) )	{
+			$errors = "Sorry, the 'before' year you entered is misformatted.";
+		}
+		if ( $q->param('before') > 0 )	{
+			push @and , "((r.pubyr<=".$q->param('before')." AND ref_is_authority='YES') OR (a.pubyr<=".$q->param('before')." AND a.pubyr>1700))";
+		}
+		if ( $q->param('after') > 0 )	{
+			push @and , "((r.pubyr>=".$q->param('after')." AND ref_is_authority='YES') OR a.pubyr>=".$q->param('after').")";
+		}
+	}
+
+	if ( $enterer )	{
+		push @and , "a.enterer_no=".$enterer;
+	}
+
+	if ( $q->param('taxon_name') )	{
+		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND (taxon_name='".$q->param('taxon_name')."' OR common_name='".$q->param('taxon_name')."') ORDER BY rgt-lft DESC";
+		my $t = ${$dbt->getData($sql)}[0];
+		if ( $t )	{
+			push @and , "lft>$t->{lft} AND rgt<$t->{rgt}";
+		} else	{
+			$errors = "Sorry, there is no valid taxon in the database called \"$q->param('taxon_name')\".";
+		}
+	} else	{
+		$errors = "Sorry, you must enter a taxon name.";
+	}
+
+	# query excludes higher-order names lacking any genera or species
+	$sql = "SELECT lft,rgt,taxon_rank,taxon_name FROM ".join(',',@tables)." WHERE a.taxon_no=t.taxon_no AND (taxon_rank IN ('species','genus') OR rgt>lft+1)";
+	my ($sql2,@and2);
+	if ( $sql =~ /occurrences/ )	{
+		$sql2 = $sql;
+		$sql2 =~ s/(occurrences o,)/$1reidentifications re,/;
+		$sql2 =~ s/(occurrences o)( )/$1,reidentifications re /;
+		@and2 = @and;
+		push @and2 , "o.occurrence_no=re.occurrence_no AND re.most_recent='YES'";
+		$sql =~ s/(occurrences o)/$1 LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no/;
+		push @and , "re.reid_no IS NULL";
+	}
+
+	if ( @and )	{
+		$sql .= " AND ".join(' AND ',@and);
+	}
+	if ( @and2 )	{
+		$sql2 .= " AND ".join(' AND ',@and2);
+	}
+	my $group = " GROUP BY synonym_no ORDER BY lft";
+	if ( $sql2 )	{
+		$sql = "($sql $group) UNION ($sql2 $group)";
+	} else	{
+		$sql .= $group;
+	}
+
+	my @subtaxa = @{$dbt->getData($sql)};
+
+	if ( ! @subtaxa )	{
+		$errors = "Sorry, the query seems fine but nothing matched it.";
+	}
+
+	if ( $errors )	{
+		print "</p>\n\n";
+		print "<div align=\"center\" style=\"padding-bottom: 1em;\">&bull; $errors</div>\n\n";
+		print "</div>\n\n";
+		print "<div align=\"center\"><a href=\"$READ_URL?action=fastTaxonCount\">Count more taxa</a></div>\n\n";
+		return;
+	}
+	print " The counts are:</p>\n\n";
+
+
+	# a faster method could be used if queries were only ever by taxon name, but
+	#  it's needed to integrate occurrence data
+	my (%count,%list,%empty);
+	for my $s ( @subtaxa )	{
+		$count{$s->{taxon_rank}}++;
+		push @{$list{$s->{taxon_rank}}} , $s->{taxon_name};
+		if ( $s->{'lft'} + 1 == $s->{'rgt'} )	{
+			$empty{$s->{'taxon_rank'}}++;
+		}
+	}
+	my %plural = ('order'=>'orders','family'=>'families','genus'=>'genera','species'=>'species' );
+	for my $r ( 'order','family','genus','species' )	{
+		print "<div style=\"margin-left: 2em; text-indent: -0.5em;\">\n";
+		if ( $count{$r} > 0 )	{
+			my $name = $plural{$r};
+			if ( $count{$r} == 1 )	{
+				$name = $r;
+			}
+			print "<p>",$count{$r}," $name";
+			if ( $#{$list{$r}} <= 100 )	{
+				@{$list{$r}} = sort @{$list{$r}};
+				print " <span class=\"small\">(".join(', ',@{$list{$r}}).")</span>";
+			}
+			print "</p>\n";
+		}
+		print "</div>\n\n";
+	}
+	my @empties;
+	for my $r ( 'order','family','genus' )	{
+		if ( $empty{$r} )	{
+			push @empties , $empty{$r}." ".$plural{$r};
+		}
+	}
+	if ( @empties )	{
+		if ( $#empties > 0 )	{
+			push @empties , " and ".pop @empties;
+		}
+		my $warning = "<div align=\"center\"><p><i>Warning: ";
+		$warning .= join(', ',@empties);
+		$warning .= " do not include subtaxa that are recorded in the database.</i></p>\n";
+		$warning =~ s/ 1 families/ one family/;
+		$warning =~ s/ 1 genera/ one genus/;
+		if ( $#empties == 0 && $warning =~ / one / )	{
+			$warning =~ s/do not/does not/;
+		}
+		print $warning,"</div>\n\n";
+	}
+
+	print "</div>\n\n";
+	print "<div align=\"center\"><a href=\"$READ_URL?action=displayCountForm&page=taxon_count_form\"><b>Count more taxa</b></a></div>\n\n";
+}
+
+
 1;
