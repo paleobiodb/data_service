@@ -73,7 +73,7 @@ if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/
 	 $q->param("user" => "Guest");
 }
 
-if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181/){exit;}
+if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
 
 # Make the HTMLBuilder object - it'll use whatever template dir is appropriate
 my $use_guest = ($q->param('user') =~ /^guest$/i) ? 1 : 0;
@@ -856,6 +856,27 @@ sub displayMostCommonTaxa	{
 
 	print $hbo->stdIncludes("std_page_bottom");
 }
+
+sub displayCountForm	{
+	print $hbo->stdIncludes( "std_page_top" );
+	require Person;
+	print Person::makeAuthEntJavascript($dbt);
+	print $hbo->populateHTML('taxon_count_form');
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub fastTaxonCount	{
+	return if PBDBUtil::checkForBot();
+	logRequest($s,$q);
+
+	print $hbo->stdIncludes( "std_page_top" );
+
+	require Report;
+	Report::fastTaxonCount($dbt,$q,$s,$hbo);
+
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
 
 sub countNames	{
 	require Report;
