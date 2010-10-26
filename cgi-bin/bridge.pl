@@ -343,23 +343,12 @@ sub displayHomePage {
 	# display the most recently entered collections that have
 	#  distinct combinations of references and enterers (the latter is
 	#  usually redundant)
-	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name,floor(plate/100) p FROM collections ORDER BY collection_no DESC LIMIT 400";
+	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name,floor(plate/100) p FROM collections GROUP BY reference_no,enterer_no ORDER BY collection_no DESC LIMIT 46";
 	my @colls = @{$dbt->getData($sql)};
 	my %continent = (1 => 'North America', 2 => 'South America', 3 => 'Europe', 4 => 'Europe', 5 => 'Asia', 6 => 'Asia', 7 => 'Africa', 8 => 'Oceania', 9 => 'Oceania');
-	my %entererseen;
 	my $lastcontinent;
-	my @toprint;
+	@colls = sort { $continent{$a->{p}} cmp $continent{$b->{p}} } @colls;
 	for my $coll ( @colls )	{
-		if ( $entererseen{$coll->{reference_no}.$coll->{enterer_no}} < 1 && $coll->{p} )	{
-			$entererseen{$coll->{reference_no}.$coll->{enterer_no}}++;
-			push @toprint , $coll;
-			if ( $#toprint + 1 == 46 )	{
-				last;
-			}
-		}
-	}
-	@toprint = sort { $continent{$a->{p}} cmp $continent{$b->{p}} } @toprint;
-	for my $coll ( @toprint )	{
 		if ( $continent{$coll->{p}} ne $lastcontinent )	{
 			if ( $lastcontinent )	{
 				$row->{collection_links} .= "</div>\n";
