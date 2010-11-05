@@ -1222,8 +1222,11 @@ sub validateCollectionForm {
 #  * User selects a collection from the displayed list
 #  * System displays selected collection
 sub displayCollectionDetails {
-    my ($dbt,$q,$s,$hbo) = @_;
-    my $dbh = $dbt->dbh;
+	my ($dbt,$q,$s,$hbo) = @_;
+	my $dbh = $dbt->dbh;
+	if ( PBDBUtil::checkForBot() )	{
+		basicCollectionInfo($dbt,$q,$s,$hbo,'',1);
+	}
 
 	my $collection_no = int($q->param('collection_no'));
 
@@ -1261,10 +1264,8 @@ sub displayCollectionDetails {
     # Handle display of taxonomic list now
     # don't even let bots see the lists because they will index the taxon
     #  pages returned by TaxonInfo anyway JA 2.10.09
-    if ( ! PBDBUtil::checkForBot() )	{
-        my $taxa_list = buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
-        $coll->{'taxa_list'} = $taxa_list;
-    }
+    my $taxa_list = buildTaxonomicList($dbt,$hbo,$s,{'collection_no'=>$coll->{'collection_no'},'hide_reference_no'=>$coll->{'reference_no'}});
+    $coll->{'taxa_list'} = $taxa_list;
 
     my $links = "<div class=\"verysmall\">";
 
@@ -2611,19 +2612,22 @@ sub basicCollectionSearch	{
 # JA 6-9.11.09
 sub basicCollectionInfo	{
 
-	my ($dbt,$q,$s,$hbo,$error) = @_;
+	my ($dbt,$q,$s,$hbo,$error,$is_bot) = @_;
 	my $dbh = $dbt->dbh;
 
-	my ($is_real_user,$not_bot) = (1,1);
-	if (! $q->request_method() eq 'POST' && ! $q->param('is_real_user') && ! $s->isDBMember())	{
-		$is_real_user = 0;
-		$not_bot = 0;
-	} elsif (PBDBUtil::checkForBot())	{
-		$is_real_user = 0;
-		$not_bot = 0;
-	}
-	if ( $is_real_user > 0 )	{
-		main::logRequest($s,$q);
+	my ($is_real_user,$not_bot) = (0,0);
+	if ( ! $is_bot )	{
+		($is_real_user,$not_bot) = (1,1);
+		if (! $q->request_method() eq 'POST' && ! $q->param('is_real_user') && ! $s->isDBMember())	{
+			$is_real_user = 0;
+			$not_bot = 0;
+		} elsif (PBDBUtil::checkForBot())	{
+			$is_real_user = 0;
+			$not_bot = 0;
+		}
+		if ( $is_real_user > 0 )	{
+			main::logRequest($s,$q);
+		}
 	}
 
 	my $sql = "SELECT * FROM collections WHERE collection_no=".$q->param('collection_no');
@@ -2633,6 +2637,9 @@ sub basicCollectionInfo	{
 	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
 
 	for my $field ( 'geogcomments','stratcomments','geology_comments','lithdescript','component_comments','taphonomy_comments','collection_comments','taxonomy_comments' )	{
+		while ( $c->{$field} =~ /\n$/ )	{
+			$c->{$field} =~ s/\n$//;
+		}
 		$c->{$field} =~ s/\n/<\/p>\n<p $mockLI/g;
 	}
 
