@@ -467,6 +467,7 @@ sub displayMapOnly	{
 }
 
 sub displayMapResults {
+    return if PBDBUtil::checkForBot();
     require Map;
 
     $|=1; # Freeflowing data
