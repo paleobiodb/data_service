@@ -75,8 +75,8 @@ if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
 
-my $sql = "SELECT COUNT(*) c FROM INFORMATION_SCHEMA.PROCESSLIST";
-my $p = ${$dbt->getData($sql)}[0]->{c};
+my $sql = "SHOW PROCESSLIST";
+my $p = $dbt->dbh->do( $sql );
 if ( $p >= 10 )	{
 	if ( PBDBUtil::checkForBot() == 1 )	{
 		exit;
