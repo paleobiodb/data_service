@@ -75,6 +75,14 @@ if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
 
+my $sql = "SELECT COUNT(*) c FROM INFORMATION_SCHEMA.PROCESSLIST";
+my $p = ${$dbt->getData($sql)}[0]->{c};
+if ( $p >= 10 )	{
+	if ( PBDBUtil::checkForBot() == 1 )	{
+		exit;
+	}
+}
+
 # Make the HTMLBuilder object - it'll use whatever template dir is appropriate
 my $use_guest = ($q->param('user') =~ /^guest$/i) ? 1 : 0;
 my $hbo = HTMLBuilder->new($dbt,$s,$use_guest,'');
@@ -349,6 +357,9 @@ sub displayHomePage {
 	my $lastcontinent;
 	@colls = sort { $continent{$a->{p}} cmp $continent{$b->{p}} } @colls;
 	for my $coll ( @colls )	{
+		if ( ! $continent{$coll->{p}} )	{
+			next;
+		}
 		if ( $continent{$coll->{p}} ne $lastcontinent )	{
 			if ( $lastcontinent )	{
 				$row->{collection_links} .= "</div>\n";
