@@ -15,8 +15,8 @@ $Constants::HTML_DIR        = $conf->{'HTML_DIR'};
 $Constants::DATA_DIR        = $conf->{'DATA_DIR'};
 $Constants::DB_SOCKET       = $conf->{'DB_SOCKET'};
 $Constants::DB_PASSWD          = $conf->{'DB_PASSWD'};
-$Constants::IP_MAIN         = '128.111.220.135';
-$Constants::IP_BACKUP       = '128.111.220.138';
+$Constants::IP_MAIN         = '137.111.92.50';
+$Constants::IP_BACKUP       = '137.111.92.50';
 
 $Constants::IS_FOSSIL_RECORD = $conf->{'IS_FOSSIL_RECORD'};
 
