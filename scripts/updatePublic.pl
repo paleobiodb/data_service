@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/opt/local/bin/perl
 # original version by JA 17.3.02
 # completely rewritten by Garot June 2002
 # updates list and occurrence counts on public main page
@@ -9,12 +9,12 @@
 # added institution and country JA 15.4.04
 
 # NOTE: assumes /etc/cron.hourly will call the script
+# now called by /Library/LaunchDaemons/com.kosnik.updatePublic.plist JA 23.5.09
 
-
-use constant BASE => '/Volumes/pbdb_RAID/httpdocs';
-use constant CGI_DIR => '/Volumes/pbdb_RAID/httpdocs/cgi-bin';
-$IMGDIR = BASE.'/html/public/images';
-$BANNERIMGDIR = BASE.'/html/public/bannerimages';
+use constant BASE => '/Library/WebServer/paleodb';
+use constant CGI_DIR => '/Library/WebServer/paleodb/cgi-bin';
+$IMGDIR = BASE.'/Library/WebServer/paleodb/html/public/images';
+$BANNERIMGDIR = BASE.'/Library/WebServer/paleodb/html/public/bannerimages';
 
 #if (scalar(@ARGV)) {
 #    $BASE = $ARGV[0];
@@ -22,7 +22,6 @@ $BANNERIMGDIR = BASE.'/html/public/bannerimages';
 
 use lib CGI_DIR;
 
-use DBI;
 use DBConnection;
 
 my $DEBUG = 0;
@@ -119,30 +118,29 @@ $dbh->disconnect();
 #added by rjp on 12/9/2003
 
 # get a list of all the files in this directory
-@images = `ls $IMGDIR/*.jpg`;
+#@images = `ls $IMGDIR/*.jpg | grep -v fossil.jpg`;
 
-if ($DEBUG) { print "images: @images \n"; }
+#if ($DEBUG) { print "images: @images \n"; }
 
 # only do the jpegs for now, because who knows what will happen
 # if you change the file extension to .gif on a jpeg.
 
-$img_idx = int(rand($#images + 1));
-if ($DEBUG) { print "index: $img_idx \n"; }
+#$img_idx = int(rand($#images + 1));
+#if ($DEBUG) { print "index: $img_idx \n"; }
 
-$filename = $images[$img_idx];
-chomp($filename);
+#$filename = $images[$img_idx];
+#chomp($filename);
 
-if ($DEBUG) { print "filename: $filename \n"; }
+#if ($DEBUG) { print "filename: $filename \n"; }
 
-`cp -f $filename $IMGDIR/fossil.jpg`;
+#`cp -f $filename $IMGDIR/fossil.jpg`;
 
 # rotate the banner image JA 5.11.05
-
-@images = `ls $BANNERIMGDIR/*.jpg`;
-$img_idx = int(rand($#images + 1));
-$filename = $images[$img_idx];
-chomp($filename);
-`cp -f $filename $BANNERIMGDIR/fossil.jpg`;
+#@images = `ls $BANNERIMGDIR/*.jpg | grep -v fossil.jpg`;
+#$img_idx = int(rand($#images + 1));
+#$filename = $images[$img_idx];
+#chomp($filename);
+#`cp -f $filename $BANNERIMGDIR/fossil.jpg`;
 
 
 
