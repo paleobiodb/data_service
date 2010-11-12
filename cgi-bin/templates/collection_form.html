@@ -48,8 +48,15 @@ function checkFields() {
 function doCheckFieldsBasicInfo() {
     var frm = document.forms[1];
 
-    if (frm.collection_name.value.match(frm.country.value) != null && frm.country.value != "")	{
-        bad_info += "\no Don't include the country name in the collection name";
+    var coll = frm.collection_name.value;
+    var nameWords = coll.split(/[^A-Za-z0-9 ]/);
+    for ( i=0; i<nameWords.length; i++ )	{
+        var word = nameWords[i];
+        word = word.replace(/^ /,"");
+        word = word.replace(/ $/,"");
+        if (word == frm.country.value && frm.country.value != "")	{
+            bad_info += "\no Don't include the country name in the collection name";
+        }
     }
     if (frm.collection_name.value.match(frm.state.value) != null && frm.state.value != "")	{
         warnings = warnings + 1;
