@@ -1771,6 +1771,7 @@ sub queryDatabase {
         push @fields,"c.max_ma_unit AS `c.max_ma_unit`";
         push @fields,"c.min_ma AS `c.min_ma`";
         push @fields,"c.min_ma_unit AS `c.min_ma_unit`";
+        push @fields,"c.ma_interval_no AS `c.ma_interval_no`";
         if ($q->param('collections_paleocoords') eq 'YES') {
             push @fields,"c.paleolat AS `c.paleolat`";
             push @fields,"c.paleolng AS `c.paleolng`";
@@ -2435,6 +2436,8 @@ sub queryDatabase {
             # Populate the generated time fields;
             my $max_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
             my $min_lookup = ($row->{'c.min_interval_no'}) ? $time_lookup->{$row->{'c.min_interval_no'}} : $max_lookup;
+            $max_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $max_lookup;
+            $min_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $min_lookup;
 
             if ($max_lookup->{'ten_my_bin'} && $max_lookup->{'ten_my_bin'} eq $min_lookup->{'ten_my_bin'} && ($q->param('late_pleistocene') !~ /no/i || ($row->{'c.max_interval_no'} != 33 && $row->{'c.max_interval_no'} != 922))) {
                 $row->{'c.10mybin'} = $max_lookup->{'ten_my_bin'};
