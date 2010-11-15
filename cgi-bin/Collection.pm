@@ -1239,8 +1239,21 @@ sub setMaIntervalNo	{
 		$dbh->do($sql);
 		return 0;
 	}
-	$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min ORDER BY lower_boundary-upper_boundary";
+	# users will want a stage name if possible
+	$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min AND stage_no>0 ORDER BY lower_boundary-upper_boundary";
 	my $no = ${$dbt->getData($sql)}[0]->{'interval_no'};
+	if ( $no == 0 )	{
+		$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min AND subepoch_no>0 ORDER BY lower_boundary-upper_boundary";
+		$no = ${$dbt->getData($sql)}[0]->{'interval_no'};
+	}
+	if ( $no == 0 )	{
+		$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min AND epoch_no>0 ORDER BY lower_boundary-upper_boundary";
+		$no = ${$dbt->getData($sql)}[0]->{'interval_no'};
+	}
+	if ( $no == 0 )	{
+		$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min ORDER BY lower_boundary-upper_boundary";
+		$no = ${$dbt->getData($sql)}[0]->{'interval_no'};
+	}
 	if ( $no > 0 )	{
 		$sql = "UPDATE collections SET modified=modified,ma_interval_no=$no WHERE collection_no=$coll";
 		$dbh->do($sql);
