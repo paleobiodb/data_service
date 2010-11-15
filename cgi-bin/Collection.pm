@@ -1082,6 +1082,15 @@ sub processCollectionForm {
                 my $status = $dbt->updateRecord($s,'collections','collection_no',$collection_no,\%vars);
             }
         }
+
+	# if numerical dates were entered, set the best-matching interval no
+	my $ma;
+	if ( $q->param('direct_ma') > 0 )	{
+		my $no = setMaIntervalNo($dbt,$dbh,$collection_no,$q->param('direct_ma'),$q->param('direct_ma'));
+	}
+	elsif ( $q->param('max_ma') > 0 || $q->param('min_ma')> 0 )	{
+		my $no = setMaIntervalNo($dbt,$dbh,$collection_no,$q->param('max_ma'),$q->param('min_ma'));
+	}
             
         # Secondary ref handling.  Handle this after updating the collection or it'll mess up
         if ($secondary) {
@@ -1217,6 +1226,31 @@ sub validateCollectionForm {
     return $is_valid;
 }
 
+
+# JA 15.11.10
+# records the narrowest interval that includes the direct Ma values entered on the collection form
+# it's useful to know this because the enterer may have put in interval names that are either more
+#  broad than necessary or in outright conflict with the numerical values
+sub setMaIntervalNo	{
+	my ($dbt,$dbh,$coll,$max,$min) = @_;
+	my $sql;
+	if ( $max < $min || ! $max || ! $min )	{
+		$sql = "UPDATE collections SET modified=modified,ma_interval_no=NULL WHERE collection_no=$coll";
+		$dbh->do($sql);
+		return 0;
+	}
+	$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min ORDER BY lower_boundary-upper_boundary";
+	my $no = ${$dbt->getData($sql)}[0]->{'interval_no'};
+	if ( $no > 0 )	{
+		$sql = "UPDATE collections SET modified=modified,ma_interval_no=$no WHERE collection_no=$coll";
+		$dbh->do($sql);
+		return 1;
+	} else	{
+		$sql = "UPDATE collections SET modified=modified,ma_interval_no=NULL WHERE collection_no=$coll";
+		$dbh->do($sql);
+		return 0;
+	}
+}
 
 
 #  * User selects a collection from the displayed list
