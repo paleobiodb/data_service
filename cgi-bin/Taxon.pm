@@ -1428,7 +1428,10 @@ sub displayTypeTaxonSelectForm {
             print "<input type=\"hidden\" name=\"action\" value=\"submitTypeTaxonSelect\">\n";
             print "<input type=\"hidden\" name=\"reference_no\" value=\"$reference_no\">\n";
             print "<input type=\"hidden\" name=\"type_taxon_no\" value=\"$type_taxon_no\">\n";
-            print "<input type=\"hidden\" name=\"end_message\" value=\"".uri_escape($end_message)."\">\n";
+            $end_message =~ s/"/&quot;/g;
+            $end_message =~ s/</&lt;/g;
+            $end_message =~ s/>/&gt;/g;
+            print "<input type=\"hidden\" name=\"end_message\" value=\"".$end_message."\">\n";
             print "<table><tr><td style=\"border: 1px solid lightgray; padding: 1em;\">\n";
             print "<p class=\"large\">For which taxa is $type_taxon_name a type $type_taxon_rank?</p>";
             foreach my $row (reverse @parents) {
@@ -1490,7 +1493,10 @@ sub submitTypeTaxonSelect {
 
     my $type_taxon_no = $q->param('type_taxon_no');
     my $reference_no = $q->param('reference_no');
-    my $end_message = uri_unescape($q->param('end_message'));
+    my $end_message = $q->param('end_message');
+    $end_message =~ s/&quot;/"/g;
+    $end_message =~ s/&lt;/</g;
+    $end_message =~ s/&gt;/>/g;
     my @taxon_nos = $q->param('taxon_no');
     my @warnings = ();
 
