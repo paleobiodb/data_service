@@ -1557,11 +1557,13 @@ sub getTypeTaxonList {
 
     if ($focal_taxon->{'taxon_rank'} =~ /species/) {
         # A species may be a type for genus/subgenus only
-        my $i = 0;
-        for($i=0;$i<scalar(@parents);$i++) {
-            last if ($parents[$i]->{'taxon_rank'} !~ /species|genus|subgenus/);
-        }
-        splice(@parents,$i);
+        my @lower;
+        for my $p ( @parents ) {
+            if ($p->{'taxon_rank'} =~ /species|genus|subgenus/)        {
+                push @lower , $p;
+            }
+       }
+        @parents = @lower;
     } else {
         # A higher order taxon may be a type for subtribe/tribe/family/subfamily/superfamily only
         # Don't know about unranked clade, leave it for now
