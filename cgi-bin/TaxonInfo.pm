@@ -4196,8 +4196,11 @@ sub basicTaxonInfo	{
 
 	# TYPE SECTION
 
+	my @spellings;
 	if ( $taxon_no )	{
-		my @spellings = getAllSpellings($dbt,$taxon_no);
+		@spellings = getAllSpellings($dbt,$taxon_no);
+	}
+	if ( $taxon_no )	{
 		my $typeInfo = printTypeInfo($dbt,join(',',@spellings),$auth,1,'basicTaxonInfo');
 		if ( $typeInfo )	{
 			if ($auth->{'taxon_rank'} =~ /species/) {
@@ -4235,6 +4238,53 @@ sub basicTaxonInfo	{
 		}
 	}
 
+	# MEASUREMENT SECTION
+	# JA 24.11.10
+	# shamelessly lifted from similar section in displayMeasurements, but greatly simplified
+	my @specimens;
+	my $specimen_count;
+	if ( $taxon_no && $auth->{'taxon_rank'} eq "species" )	{
+		@specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@spellings,'get_global_specimens'=>1);
+		if ( @specimens )	{
+			my $p_table = Measurement::getMeasurementTable(\@specimens);
+			my %distinct_parts = ();
+			while ( my ($part,$m_table) = each %$p_table )	{
+				if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
+					$distinct_parts{$part}++;
+				}
+			}
+			my @part_list = keys %distinct_parts;
+			@part_list = sort { $a cmp $b } @part_list;
+			unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
+			my @values;
+			for my $part ( @part_list )	{
+				my $m_table = %$p_table->{$part};
+				if ( ! $m_table )	{
+					next;
+				}
+				for my $type ( ('length','width','height','diagonal','inflation') )	{
+					if ( $m_table->{$type} )	{
+						my $value = $m_table->{$type}{'average'};
+						if ( $value < 1 )	{
+							$value = sprintf("%.3f",$value);
+						} elsif ( $value < 10 )	{
+							$value = sprintf("%.2f",$value);
+						} else	{
+							$value = sprintf("%.1f",$value);
+						}
+						push @values , "$part $type $value";
+					}
+				}
+			}
+			if ( @values )	{
+				print "<p $indent>Average measurements (in mm): ".join(', ',@values);
+				print "</p>\n\n";
+			}
+		}
+	}
+
+    # Returns a triple index hash with index <part><dimension type><whats measured>
+    #  Where part can be leg, valve, etc, dimension type can be length,width,height,diagonal,inflation 
 	# DISTRIBUTION SECTION
 
 	my @occs;
