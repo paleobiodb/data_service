@@ -1117,7 +1117,7 @@ sub displayDownloadMeasurementsResults  {
 	if ( $q->param('year') =~ /y/i )	{
 		push @fields , "IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr";
 	}
-	for my $f ( 'authorizer','type_body_part','extant')	{
+	for my $f ( 'authorizer','type_specimen','type_body_part','type_locality','extant')	{
 		if ( $q->param($f) =~ /y/i )	{
 			push @fields , $f;
 		}
@@ -1132,9 +1132,9 @@ sub displayDownloadMeasurementsResults  {
 	# step 1
 
 	# the query will get valid species only
-	$sql = "SELECT ".join(',',@fields)." FROM authorities a,$TAXA_TREE_CACHE t WHERE taxon_rank='species' AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY lft ASC";
+	$sql = "SELECT ".join(',',@fields)." FROM authorities a,$TAXA_TREE_CACHE t WHERE taxon_rank='species' AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY taxon_name ASC";
 	if ( $q->param('authors') =~ /y/i || $q->param('year') =~ /y/i )	{
-		$sql = "SELECT ".join(',',@fields)." FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE taxon_rank='species' AND a.reference_no=r.reference_no AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY lft ASC";
+		$sql = "SELECT ".join(',',@fields)." FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE taxon_rank='species' AND a.reference_no=r.reference_no AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY taxon_name ASC";
 	}
 
 	my @refs = @{$dbt->getData($sql)};
@@ -1268,11 +1268,6 @@ sub displayDownloadMeasurementsResults  {
 	my @header_fields = ('species');
 	my %name;
 	$name{$_->{'taxon_no'}} = $_->{'taxon_name'} foreach @refs;
-	my %type_part;
-	if ( $q->param('type_body_part') =~ /y/i )	{
-		$type_part{$_->{'taxon_no'}} = $_->{'type_body_part'} foreach @refs;
-		push @header_fields , "type_body_part";
-	}
 	my %authors;
 	if ( $q->param('authors') =~ /y/i )	{
 		for my $r ( @refs )	{
@@ -1281,22 +1276,38 @@ sub displayDownloadMeasurementsResults  {
 			if ( $r->{'oa'} ) { $r->{a2} = " et al."; }
 			else { $r->{'a2'} =~ s/^([A-Za-z])/ and $1/; }
 			$authors{$r->{'taxon_no'}} = $r->{'a1'}.$r->{'a2'};
+			if ( ! $authors{$r->{'taxon_no'}} ) { $authors{$r->{'taxon_no'}} = "?" }
 		}
 		push @header_fields , "authors";
 	}
 	my %year;
 	if ( $q->param('year') =~ /y/i )	{
-		$year{$_->{'taxon_no'}} = $_->{'pubyr'} foreach @refs;
-		push @header_fields , "year_published";
+		$year{$_->{'taxon_no'}} = $_->{'pubyr'} ? $_->{'pubyr'} : "?" foreach @refs;
+		push @header_fields , "year published";
+	}
+	my %type;
+	if ( $q->param('type_specimen') =~ /y/i )	{
+		$type{$_->{'taxon_no'}} = $_->{'type_specimen'} ? $_->{'type_specimen'} : "?" foreach @refs;
+		push @header_fields , "type specimen";
+	}
+	my %type_part;
+	if ( $q->param('type_body_part') =~ /y/i )	{
+		$type_part{$_->{'taxon_no'}} = $_->{'type_body_part'} ? $_->{'type_body_part'} : "?" foreach @refs;
+		push @header_fields , "type body part";
+	}
+	my %locality;
+	if ( $q->param('type_locality') =~ /y/i )	{
+		$locality{$_->{'taxon_no'}} = $_->{'type_locality'} ? $_->{'type_locality'} : "?" foreach @refs;
+		push @header_fields , "type locality number";
 	}
 	my %extant;
 	if ( $q->param('extant') =~ /y/i )	{
-		$extant{$_->{'taxon_no'}} = $_->{'extant'} foreach @refs;
+		$extant{$_->{'taxon_no'}} = $_->{'extant'} ? $_->{'extant'} : "?" foreach @refs;
 		push @header_fields , "extant";
 	}
 	push @header_fields , ('part','measurement');
 	if ( $q->param('specimens_measured') =~ /y/i )	{
-		push @header_fields , "specimens_measured";
+		push @header_fields , "specimens measured";
 		push @columns , "specimens_measured";
 	}
 	push @header_fields , "mean";
@@ -1308,7 +1319,7 @@ sub displayDownloadMeasurementsResults  {
 		}
 	}
 	if ( $q->param('error') =~ /y/i )	{
-		push @header_fields , "error_unit";
+		push @header_fields , "error unit";
 		push @columns , "error_unit";
 	}
 
@@ -1353,9 +1364,19 @@ sub displayDownloadMeasurementsResults  {
 			}
 		}
 	}
-	@part_list = keys %distinct_parts;
-	@part_list = sort { $a cmp $b } @part_list;
-	unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
+
+	# this is slightly inefficient because getMeasurementTable has returned all parts, but that
+	#  function is fast enough that it's not worth rewriting to only return part_list
+	if ( $q->param('part_list') )	{
+		@part_list = split /[^A-Za-z0-9 ]/,$q->param('part_list');
+		s/^[ ]+// foreach @part_list;
+		s/[ ]+$// foreach @part_list;
+	} else	{
+		@part_list = keys %distinct_parts;
+		@part_list = sort { $a cmp $b } @part_list;
+		unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
+	}
+
 	for my $taxon_no ( @with_data )	{
 		my $p_table = $tables{$taxon_no};
 		for my $part ( @part_list )	{
@@ -1375,11 +1396,6 @@ sub displayDownloadMeasurementsResults  {
 						} else	{
 							print OUT $name{$taxon_no},$sep;
 						}
-						if ( $q->param('type_body_part') =~ /y/i && $type_part{$taxon_no} =~ / / && $sep =~ /,/ )	{
-							print OUT '"',$type_part{$taxon_no},'"',$sep;
-						} elsif ( $q->param('type_body_part') =~ /y/i )	{
-							print OUT $type_part{$taxon_no},$sep;
-						}
 						if ( $q->param('authors') =~ /y/i && $authors{$taxon_no} =~ / / && $sep =~ /,/ )	{
 							print OUT '"',$authors{$taxon_no},'"',$sep;
 						} elsif ( $q->param('authors') =~ /y/i )	{
@@ -1387,6 +1403,17 @@ sub displayDownloadMeasurementsResults  {
 						}
 						if ( $q->param('year') =~ /y/i )	{
 							print OUT $year{$taxon_no},$sep;
+						}
+						if ( $q->param('type_specimen') =~ /y/i )	{
+							print OUT $type{$taxon_no},$sep;
+						}
+						if ( $q->param('type_body_part') =~ /y/i && $type_part{$taxon_no} =~ / / && $sep =~ /,/ )	{
+							print OUT '"',$type_part{$taxon_no},'"',$sep;
+						} elsif ( $q->param('type_body_part') =~ /y/i )	{
+							print OUT $type_part{$taxon_no},$sep;
+						}
+						if ( $q->param('type_locality') =~ /y/i )	{
+							print OUT $locality{$taxon_no},$sep;
 						}
 						if ( $q->param('extant') =~ /y/i )	{
 							print OUT $extant{$taxon_no},$sep;
