@@ -28,6 +28,10 @@ function checkForm() {
             f.height_min.value != '' ||
             f.height_max.value != '' ||
             f.height_error.value != '' || 
+            f.circumference_median.value != '' ||
+            f.circumference_min.value != '' ||
+            f.circumference_max.value != '' ||
+            f.circumference_error.value != '' || 
             f.diagonal_median.value != '' ||
             f.diagonal_min.value != '' ||
             f.diagonal_max.value != '' ||
@@ -52,6 +56,9 @@ function checkForm() {
             field_count += 1;
         }
         if (f.height_average.value != '') {
+            field_count += 1;
+        }
+        if (f.circumference_average.value != '') {
             field_count += 1;
         }
         if (f.diagonal_average.value != '') {
@@ -146,6 +153,14 @@ function checkForm() {
             <td><input id="height_min" size="7" maxlength="7"></td>
             <td><input id="height_max" size="7" maxlength="7"></td>
             <td><input id="height_error" size="7" maxlength="7"><select id="height_error_unit"></select></td>
+          </tr>
+          <tr class="small">
+            <td>circumference</td>
+            <td><input id="circumference_average" size="7" maxlength="7"></td>
+            <td><input id="circumference_median" size="7" maxlength="7"></td>
+            <td><input id="circumference_min" size="7" maxlength="7"></td>
+            <td><input id="circumference_max" size="7" maxlength="7"></td>
+            <td><input id="circumference_error" size="7" maxlength="7"><select id="diagonal_error_unit"></select></td>
           </tr>
           <tr class="small">
             <td>diagonal</td>
