@@ -9,10 +9,10 @@ use Constants qw($READ_URL $WRITE_URL $HTML_DIR $TAXA_TREE_CACHE);
 # written by PS 6/22/2005 - 6/24/2005
 # Handle display and processing of form to enter measurements for specimens
 
-#my @specimen_fields= ('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','length_median','length_min','length_max','length_error','length_error_unit','width_median','width_min','width_max','width_error','width_error_unit','height_median','height_min','height_max','height_error','height_error_unit','diagonal_median','diagonal_min','diagonal_max','diagonal_error','diagonal_error_unit','inflation_median','inflation_min','inflation_max','inflation_error','inflation_error_unit','comments','length','width','height','diagonal','inflation');
+#my @specimen_fields= ('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','length_median','length_min','length_max','length_error','length_error_unit','width_median','width_min','width_max','width_error','width_error_unit','height_median','height_min','height_max','height_error','height_error_unit','circumference_median','circumference_min','circumference_max','circumference_error','circumference_error_unit','diagonal_median','diagonal_min','diagonal_max','diagonal_error','diagonal_error_unit','inflation_median','inflation_min','inflation_max','inflation_error','inflation_error_unit','comments','length','width','height','diagonal','inflation');
 
 my @specimen_fields   =('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','magnification','is_type','comments');
-my @measurement_types =('mass','length','width','height','diagonal','inflation');
+my @measurement_types =('mass','length','width','height','circumference','diagonal','inflation');
 my @measurement_fields=('average','median','min','max','error','error_unit');
 
 #
@@ -213,10 +213,10 @@ sub displaySpecimenList {
     my $contentstyle = qq|style="padding-top: 1em;"|;
     if ( $called_from ne "processMeasurementForm" )	{
         $panelheader = $taxon_name . " " . $collection;
-        $contentstyle = "";
+        $contentstyle = qq|style="padding-top: 1.5em;"|;
     }
     print qq|<center>
-<div class="displayPanel" align="center" style="width: 36em; margin-top: 2em;">
+<div class="displayPanel" align="center" style="width: 36em; margin-top: 2em; padding-bottom: 3em;">
   <span class="displayPanelHeader">$panelheader</span>
   <div class="displayPanelContent" $contentstyle>
 |;
@@ -329,8 +329,9 @@ function submitForm ( )
     print qq|<tr><td align="center" valign="top"><a href="javascript:submitForm('')"><div class="measurementBullet" style="position: relative; margin-top: -0.1em;">&#149;</div></td>|;
     print "<td colspan=\"6\" valign=\"top\">&nbsp;Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3>new individual measurements</i><br>";
     print qq|
-  &nbsp;&nbsp;default specimen #: <input name="default_no" size="10"><br>
-  &nbsp;&nbsp;default side:
+  <div style=\"padding-left: 2em;\">
+  default specimen #: <input name="default_no" size="10"><br>
+  default side:
   <select name="default_side">
   <option value=""></option>
   <option value="left">left</option>
@@ -341,14 +342,20 @@ function submitForm ( )
   <option value="ventral">ventral</option>
   <option value="both">both</option>
   </select><br>
-  &nbsp;&nbsp;default part: <input name="default_part" size="10"><br>
-  &nbsp;&nbsp;default type:
+  measurements:
+  <input type="checkbox" name="length" checked> length 
+  <input type="checkbox" name="width" checked> width
+  <input type="checkbox" name="height"> height<br>
+  <input type="checkbox" name="circumference" style="margin-left: 11em;"> circumference
+  <input type="checkbox" name="diagonal"> diagonal
+  <br>default part: <input name="default_part" size="10"><br>
+  default type:
   <select name="default_type">
   <option value="no">no</option>
   <option value="holotype">holotype</option>
   <option value="paratype">paratype</option>
   </select><br>
-  &nbsp;&nbsp;default source:
+  default source:
   <select name="default_source">
   <option value=""></option>
   <option value="text">text</option>
@@ -356,7 +363,9 @@ function submitForm ( )
   <option value="picture">picture</option>
   <option value="graph">graph</option>
   <option value="direct measurement">direct measurement</option>
-  </select>\n
+  </select>
+  <br>default magnification: <input name="default_magnification" size="10"><br>
+  </div>
 </td></tr>
 |;
 
@@ -471,15 +480,28 @@ sub populateMeasurementForm {
 	        push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,int($q->param('types_only')));
 	        print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
             } elsif ($q->param('specimen_no') == -2) {
-	            push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage');
-	            push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'');
+		push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage');
+		push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'');
+		my $column_names;
+		my $inputs;
+                for my $c ( 'length','height','width','circumference','diagonal' )	{
+			if ( $q->param($c) )	{
+				my @c = split //,$c;
+				$c[0] =~ tr/[a-z]/[A-Z]/;
+				my $cn = join('',@c);
+				$cn =~ s/Circumference/Circumf./;
+				$column_names .= qq|<th><span class="small">$cn</span></th>|;
+				$inputs .= qq|  <td><input type="text" name="|.$c.qq|_average" value="" size=7 class="tiny"></td>
+|;
+			}
+		}
                 #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','magnification','is_type');
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
-                    $table_rows .= $hbo->populateHTML('specimen_measurement_form_row',[$q->param('default_no'),$q->param('default_side'),$q->param('default_part'),$q->param('default_type'),$q->param('default_source')],['specimen_id','specimen_side','specimen_part','specimen_is_type','measurement_source']);
+                    $table_rows .= $hbo->populateHTML('specimen_measurement_form_row',[$q->param('default_no'),$inputs,$q->param('default_side'),$q->param('default_part'),$q->param('default_type'),$q->param('default_source'),$q->param('default_magnification')],['specimen_id','inputs','specimen_side','specimen_part','specimen_is_type','measurement_source','magnification']);
                 }
-                push @fields,'table_rows';
-                push @values,$table_rows;
+                push @fields,('column_names','table_rows');
+                push @values,($column_names,$table_rows);
 	        my $html = $hbo->populateHTML('specimen_measurement_form_individual', \@values, \@fields);
                 print $html;
             }
@@ -617,7 +639,7 @@ sub processMeasurementForm	{
         }
 
         # Make sure at least one of these fields is set
-        if (! ($fields{'length_average'} || $fields{'width_average'} || $fields{'height_average'} || $fields{'diagonal_average'}) ) {
+        if (! ($fields{'length_average'} || $fields{'width_average'} || $fields{'height_average'} || $fields{'circumference_average'} || $fields{'diagonal_average'}) ) {
             next;
         }
 
@@ -1389,7 +1411,7 @@ sub displayDownloadMeasurementsResults  {
 				$records{$part}++;
 				$specimens{$part} += $m_table->{'specimens_measured'};
 				$rows++;
-				foreach my $type (('length','width','height','diagonal','inflation'))	{
+				foreach my $type (('length','width','height','circumference','diagonal','inflation'))	{
 					if ( exists ($m_table->{$type}) && $q->param($type) =~ /y/i && $m_table->{$type}{'average'} > 0 )	{
 						if ( $sep =~ /,/ )	{
 							print OUT "\"$name{$taxon_no}\"",$sep;
