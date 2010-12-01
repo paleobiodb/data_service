@@ -4151,12 +4151,11 @@ sub basicTaxonInfo	{
 	}
 
 	# SYNONYM SECTION
-	# this is a little off because it prints "current" spellings instead of
-	#   original spellings (usually they are the same for synonyms)
 
+	my @spellings = ($taxon_no);
+	my @bad_spellings;
 	if ( $taxon_no )	{
-		$sql = "SELECT taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND spelling_no=synonym_no AND t.taxon_no!=spelling_no AND a.taxon_name!='".$auth->{'taxon_name'}."' ORDER BY taxon_name";
-#print $sql;exit;
+		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND spelling_no=synonym_no AND t.taxon_no!=spelling_no AND a.taxon_name!='".$auth->{'taxon_name'}."' ORDER BY taxon_name";
 		my @spelling_refs = @{$dbt->getData($sql)};
 		my $noun = "spelling";
 		if ( $auth->{'taxon_rank'} =~ /species/ )	{
@@ -4164,15 +4163,18 @@ sub basicTaxonInfo	{
 		}
 		if ( $#spelling_refs == 0 )	{
 			print "<p>Alternative $noun: ".italicize($spelling_refs[0])."</p>\n\n";
+			push @spellings , $spelling_refs[0]->{'taxon_no'};
 		} elsif ( $#spelling_refs > 0 )	{
 			print "<p $indent>Alternative ".$noun."s: ";
-			my @spellings;
-			push @spellings , italicize($_) foreach @spelling_refs;
-			print join(', ',@spellings)."</p>\n\n";
+			push @spellings , $_->{'taxon_no'} foreach @spelling_refs;
+			my @spelling_names;
+			push @spelling_names , italicize($_) foreach @spelling_refs;
+			print join(', ',@spelling_names)."</p>\n\n";
 		}
-		$sql = "SELECT taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND spelling_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no ORDER BY taxon_name";
+		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no ORDER BY taxon_name";
 		my @syn_refs = @{$dbt->getData($sql)};
 		for my $s ( @syn_refs )	{
+			push @bad_spellings , $s->{'taxon_no'};
 			if ( $s->{'status'} !~ /subjective/ )	{
 				$s->{'note'} = $s->{'status'};
 				$s->{'note'} =~ s/ of$//;
@@ -4196,10 +4198,6 @@ sub basicTaxonInfo	{
 
 	# TYPE SECTION
 
-	my @spellings;
-	if ( $taxon_no )	{
-		@spellings = getAllSpellings($dbt,$taxon_no);
-	}
 	if ( $taxon_no )	{
 		my $typeInfo = printTypeInfo($dbt,join(',',@spellings),$auth,1,'basicTaxonInfo');
 		if ( $typeInfo )	{
@@ -4244,7 +4242,8 @@ sub basicTaxonInfo	{
 	my @specimens;
 	my $specimen_count;
 	if ( $taxon_no && $auth->{'taxon_rank'} eq "species" )	{
-		@specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@spellings,'get_global_specimens'=>1);
+		my @all_spellings = (@spellings,@bad_spellings);
+		@specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@all_spellings,'get_global_specimens'=>1);
 		if ( @specimens )	{
 			my $p_table = Measurement::getMeasurementTable(\@specimens);
 			my %distinct_parts = ();
