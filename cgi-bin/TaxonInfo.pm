@@ -2860,7 +2860,7 @@ sub displayMeasurements {
             if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
                 $distinct_parts{$part}++;
             }
-            foreach my $type (('length','width','height','diagonal','inflation')) {
+            foreach my $type (('length','width','height','circumference','diagonal','inflation')) {
                 if (exists ($m_table->{$type})) {
                     if ( $m_table->{$type}{'min'} )	{
                         $partHeader{'min'} = "minimum";
@@ -2979,7 +2979,7 @@ $mass_string
             }
             $temp++;
 
-            foreach my $type (('length','width','height','diagonal','inflation')) {
+            foreach my $type (('length','width','height','circumference','diagonal','inflation')) {
                 if (exists ($m_table->{$type})) {
                     $str .= "<tr><td>$part $type</td>";
                     $str .= "<td>$m_table->{specimens_measured}</td>";
@@ -4261,7 +4261,7 @@ sub basicTaxonInfo	{
 				if ( ! $m_table )	{
 					next;
 				}
-				for my $type ( ('length','width','height','diagonal','inflation') )	{
+				for my $type ( ('length','width','height','circumference','diagonal','inflation') )	{
 					if ( $m_table->{$type} )	{
 						my $value = $m_table->{$type}{'average'};
 						if ( $value < 1 )	{
