@@ -12,9 +12,7 @@
 </div>
 
 <center>
-<div style="color: red;"><h4>
 %%message%%
-</h4></div>
 
 <div class="displayPanel" align="center" style="width: 50em;">
 <div class="displayPanelContent">
@@ -88,13 +86,22 @@
 </tr>
 
 <tr>
-	<td colspan="4" align="right">
+	<td colspan="4" valign="top">
+	<div style="float: right; clear: none;">
+	<div style="float: left; clear: none;">
 	<input type=submit value="Search"> %%use_current%% %%use_primary%%
+	</form>
+	</div>
+	<div style="float: left; clear: none; padding-left: 0.4em;">
+	<form method=post action="$exec_url">
+	<input type=hidden name="action" value="displayReferenceForm">
+	%%add%%
+	</form>
+	</div>
+	</div>
 	</td>
 </tr>
 </table>
-
-</form>
 
 </div>
 </div>
