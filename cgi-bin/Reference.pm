@@ -380,7 +380,7 @@ sub displayRefResults {
             my $formatted_reference = formatLongRef($row);
             print "<td>".$formatted_reference;
             if ( $type eq 'view' && $s->isDBMember() ) {
-                print qq| <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$row->{reference_no}">edit</a></b></small>|;
+                print qq| <small><a href="$WRITE_URL?action=displayRefResults&type=select&reference_no=$row->{reference_no}">select</a> - <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$row->{reference_no}">edit</a></small>|;
             }
             my $reference_summary = getReferenceLinkSummary($dbt,$s,$row->{'reference_no'});
             print "<br><small>$reference_summary</small></td>";
@@ -426,9 +426,8 @@ sub displayRefResults {
 			displayReferenceForm($dbt,$q,$s,$hbo);
 			return;
 		} else	{
-			my $error = "<center><p class=\"medium\">Nothing matches $query_description</p>\n";
+			my $error = "<p class=\"medium\">Nothing matches $query_description: please try again</p>\n";
 			displaySearchRefs($dbt,$q,$s,$hbo,$error);
-			exit(0);
 		}
 	}
 
@@ -467,7 +466,7 @@ sub displayReference {
 
     my $citation = formatLongRef($ref);
     if ($s->isDBMember())	{
-        $citation .= qq| <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$ref->{reference_no}">edit</a></b></small>|;
+        $citation .= qq| <small><a href="$WRITE_URL?action=displayRefResults&type=select&reference_no=$ref->{reference_no}">select</a> - <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$ref->{reference_no}">edit</a></small>|;
     }
     $citation = "<div style=\"text-indent: -0.75em; margin-left: 1em;\">" . $citation . "</div>";
     print $box->("Full reference",$citation);
@@ -638,12 +637,20 @@ sub displaySearchRefs {
 
 	# Prepend the message and the type
 
-    my $vars = {'message'=>$message,'type'=>$type};
+	my $vars = {'message'=>$message,'type'=>$type};
 	# If we have a default reference_no set, show another button.
 	# Don't bother to show if we are in select mode.
 	my $reference_no = $s->get("reference_no");
 	if ( $reference_no && $type ne "add" ) {
-		$vars->{'use_current'} = "<input type='submit' name='use_current' value='Use current reference ($reference_no)'>\n";
+		$vars->{'use_current'} = "<input type='submit' name='use_current' value='Use $reference_no'>\n";
+	}
+	if ( $message && $s->isDBMember() )	{
+		for my $f ("name","year","reftitle","project_name")	{
+			if ( $q->param($f) )	{
+				$vars->{'add'} .= "<input type='hidden' name='$f' value='".$q->param($f)."'>\n";
+			}
+		} 
+		$vars->{'add'} .= "<input type='submit' name='add' value='Add'>\n";
 	} 
 
 	print Person::makeAuthEntJavascript($dbt);
@@ -1023,7 +1030,6 @@ sub getReferences {
         my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
 		my $error = "<center><p class=\"medium\">Please fill out at least one field</p>\n";
 		displaySearchRefs($dbt,$q,$s,$hbo,$error);
-		exit(0);
 	}
 }
 
