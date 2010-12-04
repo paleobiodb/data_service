@@ -509,19 +509,6 @@ sub displayReference {
     }
 
   
-    my @uploads = @{$dbt->getData("SELECT upload_id,file_name,comments FROM uploads WHERE reference_no=$reference_no AND finished=1")};
-    if (@uploads) {
-        my $html = "";
-        foreach my $row (@uploads) {
-            $html .= "<a href=\"download.pl?what=upload&download_id=$row->{upload_id}\">$row->{file_name}</a> <br>$row->{comments}<br>";
-            $html .= "<br>" if ($row->{comments}); 
-        }
-        $html =~ s/(<br>)*$//;
-
-        print $box->("Downloads",$html);
-    }
-
-
     # Get counts
     my $sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
     my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
@@ -577,7 +564,16 @@ sub displayReference {
     
         my $class_link = qq| - <small><a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></small>|;
         print $box->(qq'Taxonomic opinions (<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
-    }      
+    }
+
+	# list taxa with measurements based on this reference JA 4.12.10
+	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
+	if ( @taxon_refs )	{
+		my @taxa;
+		push @taxa , "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		print $box->("Measurements",join('<br>',@taxa));
+	}
+
 
     # Handle collections box
     $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
@@ -624,6 +620,17 @@ sub displayReference {
     }
 	print $hbo->stdIncludes("std_page_bottom");
 }
+
+# JA 4.12.10
+sub getMeasuredTaxa	{
+	my $dbt = shift;
+	my $reference_no = shift;
+
+	my $sql = "(SELECT taxon_name,a.taxon_no FROM authorities a,specimens s WHERE s.reference_no=$reference_no AND a.taxon_no=s.taxon_no) UNION (SELECT taxon_name,a.taxon_no FROM authorities a,specimens s, occurrences o LEFT JOIN reidentifications r ON r.occurrence_no=o.occurrence_no WHERE s.reference_no=$reference_no AND a.taxon_no=o.taxon_no AND s.occurrence_no=o.occurrence_no AND r.reid_no IS NULL) UNION (SELECT taxon_name,a.taxon_no FROM authorities a,specimens s,reidentifications r WHERE s.reference_no=$reference_no AND a.taxon_no=r.taxon_no AND s.occurrence_no=r.occurrence_no AND s.occurrence_no>0 AND r.most_recent='YES' GROUP BY a.taxon_no) ORDER BY taxon_name ASC";
+
+	return @{$dbt->getData($sql)};
+}
+
 # Shows the search form
 # modified by rjp, 3/2004
 # JA: Poling completely fucked this up and I restored it from backup 13.4.04
@@ -864,6 +871,14 @@ sub getReferenceLinkSummary {
         $retString .= qq|</a> (<a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>), |;
     }      
 
+	# list taxa with measurements based on this reference JA 4.12.10
+	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
+	if ( @taxon_refs )	{
+		my @taxa;
+		push @taxa , "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		$retString .= "measurements of ".join(', ',@taxa).", ";
+	}
+
     # Handle Collections
 	# make sure displayed collections are readable by this person JA 24.6.02
 
@@ -902,7 +917,7 @@ sub getReferenceLinkSummary {
         }
         $retString .= ")";
     } 
-    
+
 	return $retString;
 }
 
