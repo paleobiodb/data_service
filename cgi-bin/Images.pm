@@ -141,7 +141,7 @@ sub processLoadImage{
 	#	write the image to the filesystem
 	my $enterer_name = $s->get('enterer');
 	$enterer_name =~ s/[^a-zA-Z]//g;
-    my $subdirs = "/upload_images/$enterer_name";
+    my $subdirs = "/public/upload_images/$enterer_name";
 	my $base = $HTML_DIR.$subdirs;
 	my $number = 1; 
 	# open enterer's directory.  if it doesn't exist, create it.
