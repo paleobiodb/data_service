@@ -441,7 +441,7 @@ sub showReview	{
 		my ($alt,$caption,$leftright,$width,$tagref) = parseTags($image);
 		my @tags = @{$tagref};
 
-		my $link .= `ls $HTML_DIR/upload_images/*/$tags[0].*`;
+		my $link .= `ls $HTML_DIR/public/upload_images/*/$tags[0].*`;
 		$link =~ s/$HTML_DIR//;
 		($newtext,$rest) = insertImage([$newtext,$rest,$leftright,$width,$alt,$link,$caption]);
 		$newtext .= $rest;
