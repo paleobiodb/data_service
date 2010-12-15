@@ -207,7 +207,9 @@ print qq|
             my $things = ($q->param("output_data") =~ /occurrence/) 
                 ? "occurrences" : $q->param("output_data");
             if ( $mainCount == 1 )	{
-                $things =~ s/s$//;
+                if ( $things !~ /species/ )	{
+                    $things =~ s/s$//;
+                }
                 print "$mainCount $things was printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
             } else	{
                 print "$mainCount $things were printed to <a href=\"$OUT_HTTP_DIR/$mainFile\">$mainFile</a><br>\n";
@@ -2987,8 +2989,10 @@ sub queryDatabase {
             if ($q->param('occurrences_first_author') || $q->param('occurrences_second_author') || $q->param('occurrences_other_authors') || $q->param('occurrences_year_named') || $q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_type_locality') || $q->param('occurrences_form_taxon') || $q->param('occurrences_common_name')) {
             # type info must apply to the original name if there is one,
             #  or else the data can't be recovered for invalid names JA 11.12.08
+            # if o.taxon_no and re.taxon_no are identical there's a reID of some kind, so
+            #  or.taxon_no is simply wrong and it should be ignored
                 my $taxon_no = $row->{'o.taxon_no'};
-                if ($row->{'or.taxon_no'} > 0) {
+                if ($row->{'or.taxon_no'} > 0 && $row->{'o.taxon_no'} != $row->{'re.taxon_no'}) {
                     $taxon_no = $row->{'or.taxon_no'};
                 }
             # get these data only if (1) the record is of a species and the
