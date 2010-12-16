@@ -183,10 +183,10 @@ sub processLoadImage{
 	my ($image, $x);
 	$image = Image::Magick->new;
 	$x = $image->Read(filename=>"$base/$new_file");
-    my $width = $image->Get('width') || 0;
-    my $height = $image->Get('height') || 0;
+	my $width = $image->Get('width') || 0;
+	my $height = $image->Get('height') || 0;
 	warn "$x" if "$x";
-	$x = $image->Scale('100x100');
+	$x = $image->Scale('200x200');
 	warn "$x" if "$x";
 	my $new_thumb = "${taxon_name}_${number}_thumb.$suffix";
 	$x = $image->Write("$base/$new_thumb");
@@ -259,24 +259,24 @@ sub displayImage {
     } else {
         my $ss = TaxaCache::getSeniorSynonym($dbt,$row->{'taxon_no'});
         
-        print "<div align=\"center\">";
+        print "<div align=\"center\" style=\"padding-top: 20px;\">";
         print "<img src=\"".$row->{'path_to_image'}."\" height=\"$height\" width=\"$width\" border=1><br>\n";
         print "<i>".$row->{'caption'}."</i><br>\n";
         print "<div class=\"small\">";
         print "<br><table border=0 cellpadding=2 cellspacing=0>";
-        print "<tr><td><b>Original name of image:</b></td><td>".$row->{'original_filename'}."</td></tr>\n";
+        print "<tr><td>Original name of image:</td><td>".$row->{'original_filename'}."</td></tr>\n";
         if ( $ss && $row->{'taxon_no'} != $ss->{'taxon_no'} ) {
-            print "<tr><td><b>Original identification:</b></td><td><a target=\"_blank\" href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
-            print "<tr><td><b>Current identification:</b></td><td><a target=\"_blank\" href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$ss->{taxon_no}\">".$ss->{'taxon_name'}."</a></td></tr>\n";
+            print "<tr><td>Original identification:</td><td><a target=\"_blank\" href=\"$READ_URL?action=basicTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
+            print "<tr><td>Current identification:</td><td><a target=\"_blank\" href=\"$READ_URL?action=basicTaxonInfo&taxon_no=$ss->{taxon_no}\">".$ss->{'taxon_name'}."</a></td></tr>\n";
         } else {
-            print "<tr><td><b>Current identification:</b></td><td><a target=\"_blank\" href=\"$READ_URL?action=checkTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
+            print "<tr><td>Current identification:</td><td><a target=\"_blank\" href=\"$READ_URL?action=basicTaxonInfo&taxon_no=$row->{taxon_no}\">".$row->{'taxon_name'}."</a></td></tr>\n";
         }
         if ( $row->{reference_no} > 0 ) {
             my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$row->{reference_no}";
             my $ref = ${$dbt->getData($sql)}[0];
             my $ref_string = Reference::formatShortRef($ref,'link_id'=>1);  
             $ref_string =~ s/<a /<a target="_blank" /;
-            print "<tr><td><b>Reference:</b></td><td> $ref_string</td></tr>\n";
+            print "<tr><td>Reference:</td><td> $ref_string</td></tr>\n";
         }
         print "</table>";
         print "</div>";
