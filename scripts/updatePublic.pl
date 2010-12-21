@@ -100,7 +100,7 @@ if ( $DEBUG ) { print "$sql\n"; }
 $sql = "UPDATE person SET hours=NULL,last_action=last_action WHERE hours IS NOT NULL";
 $dbh->do ( $sql );
 
-$sql = "SELECT enterer_no,count(distinct(concat(to_days(created),hour(created)))) c FROM ((SELECT enterer_no,created FROM refs WHERE created>now()-interval 1 month) UNION (SELECT enterer_no,created FROM collections WHERE created>now()-interval 1 month) UNION (SELECT enterer_no,created FROM opinions WHERE created>now()-interval 1 month)) AS t GROUP BY enterer_no";
+$sql = "SELECT enterer_no,count(distinct(concat(to_days(created),hour(created)))) c FROM ((SELECT enterer_no,created FROM refs WHERE created>now()-interval 1 month) UNION (SELECT enterer_no,created FROM collections WHERE created>now()-interval 1 month) UNION (SELECT enterer_no,created FROM opinions WHERE created>now()-interval 1 month) UNION (SELECT enterer_no,created FROM specimens WHERE created>now()-interval 1 month)) AS t GROUP BY enterer_no";
 $sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
 $sth->execute();
 while ( $s = $sth->fetchrow_hashref() )	{
