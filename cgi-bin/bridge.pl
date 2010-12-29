@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/opt/local/bin/perl
 
 # This is the main controller for PBDB, everything passes through here
 
@@ -67,9 +67,13 @@ my $dbt = new DBTransactionManager();
 # Make the session object
 my $s = new Session($dbt,$q->cookie('session_id'));
 
+if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "displayMenuPage" && $q->param('user') eq "Contributor" )	{
+	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=displayMenuPage&user=Contributor" );
+}
+
 # don't let users into the contributors' area unless they're on the main site
 #  or backup server (as opposed to a mirror site) JA 3.8.04
-if ( $HOST_URL !~ /paleobackup\.nceas\.ucsb\.edu/ && $HOST_URL !~ /paleodb\.org/ )	{
+if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ )	{
 	 $q->param("user" => "Guest");
 }
 
@@ -754,7 +758,7 @@ sub emailDownloadFiles	{
 
 # JA 28.7.08
 sub displayDownloadMeasurementsForm	{
-	my %vars;
+	my %vars = $q->Vars();
 	$vars{'error_message'} = shift;
 	print $hbo->stdIncludes("std_page_top");
 	print PBDBUtil::printIntervalsJava($dbt,1);
@@ -2419,23 +2423,16 @@ sub submitOpinionForm {
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
-sub displayUntangleSearchForm {
-	print $hbo->stdIncludes("std_page_top");
-	my %vars = $q->Vars();
-	print $hbo->populateHTML('search_untangle_form', \%vars);
-	print $hbo->stdIncludes("std_page_bottom");
-}
-
-sub displayUntangleForm {
+sub entangledNamesForm	{
 	my $error = shift;
 	print $hbo->stdIncludes("std_page_top");
-	Opinion::displayUntangleForm($dbt,$hbo, $s, $q, $error);
+	Taxon::entangledNamesForm($dbt,$hbo,$s,$q);
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
-sub processUntangleForm {
+sub disentangleNames	{
 	print $hbo->stdIncludes("std_page_top");
-	Opinion::processUntangleForm($dbt,$hbo, $s, $q);
+	Taxon::disentangleNames($dbt,$hbo,$s,$q);
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
