@@ -1386,6 +1386,8 @@ sub submitOpinionForm {
         $resultOpinionNumber = removeDuplicateOpinions($dbt,$s,$fields{'child_no'},$resultOpinionNumber);
     }
 
+    fixMassEstimates($dbt,$dbh,$fields{'child_no'});
+
     $o = Opinion->new($dbt,$resultOpinionNumber); 
     my $opinionHTML = $o->formatAsHTML();
     $opinionHTML =~ s/according to/of/i;
@@ -1591,6 +1593,40 @@ sub getOpinionsToMigrate {
     }
 
     return (\@opinions,\@parents);
+}
+
+sub fixMassEstimates	{
+
+	my $dbt = shift;
+	my $dbh = shift;
+	my $taxon_no = shift;
+	# update body mass estimates for this name and all spellings (because spelling numbers may
+	#  have been added) JA 7.12.10
+	# mass estimates of synonyms are not stored, so if this name is now a synonym the senior
+	#  synonym's data need to be updated; likewise, if this name was previously a synonym but
+	#  is now valid the data for both names need to be updated
+	# the easiest solution is just to work through all names ever linked to this one
+	my $sql = "SELECT parent_no FROM opinions WHERE child_no=".$taxon_no." AND status!='belongs to'";
+	my @parents = @{$dbt->getData($sql)};
+	my @entangled = ( TaxonInfo::getSeniorSynonym($dbt,$taxon_no) );
+	push @entangled , TaxonInfo::getSeniorSynonym($dbt,$_->{'parent_no'}) foreach @parents;
+	for my $e ( @entangled )	{
+		my @in_list = TaxonInfo::getAllSynonyms($dbt,$e);
+		my $sql = "UPDATE $TAXA_TREE_CACHE SET mass=NULL WHERE taxon_no IN (".join(',',@in_list).")";
+		$dbh->do($sql);
+		my @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@in_list,'get_global_specimens'=>1);
+		if ( @specimens )	{
+			my $p_table = Measurement::getMeasurementTable(\@specimens);
+			my @m = Measurement::getMassEstimates($dbt,$e,$p_table);
+			if ( $m[5] && $m[6] )	{
+				my $mean = $m[5] / $m[6];
+				@in_list = TaxonInfo::getAllSpellings($dbt,$e);
+				$sql = "UPDATE $TAXA_TREE_CACHE SET mass=$mean WHERE taxon_no IN (".join(',',@in_list).")";
+				$dbh->do($sql);
+			}
+		}
+	}
+
 }
 
 
