@@ -339,6 +339,9 @@ sub displayTaxonInfoResults {
         if ( $htmlBasicInfo =~ /No taxon/ )	{
             $width = "44em;";
         }
+
+        doThumbs($dbt,$in_list);
+
         print qq|<div align="center" class="small" style="margin-left: 1em; margin-top: 1em;">
 <div style="width: $width;">
 <div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left;">
@@ -449,10 +452,6 @@ sub displayTaxonInfoResults {
         }
         print "</div>\n";
         
-        print '<div align="center">';
-        doThumbs($dbt,$in_list);
-        print "</div>\n";
-
         print "</div>\n";
         print '<script language="JavaScript" type="text/javascript"> showTabText(5); </script>';
     }
@@ -630,6 +629,7 @@ sub doThumbs {
 	my @thumbs = Images::getImageList($dbt, $in_list);
 
     if (@thumbs) {
+        print '<div align="center" style="margin-left: 2em; margin-bottom: 2em;">';
         print "<table border=0 cellspacing=8 cellpadding=0>";
         for (my $i = 0;$i < scalar(@thumbs);$i+= $images_per_row) {
             print "<tr>";
@@ -648,12 +648,12 @@ sub doThumbs {
                         $maxheight = 400;
                         $maxwidth = 400 * $width / $height;
                     }
-                    $height =  $maxheight + 130;
+                    $height =  $maxheight + 150;
                     $width = $maxwidth;
                     if ( $width < 300 )	{
                         $width = 300;
                     }
-                    $width += 50;
+                    $width += 80;
                     my $t_width=$thumbnail_size;
                     my $t_height=$thumbnail_size;
                     if ($thumb->{'width'} && $thumb->{'height'}) {
@@ -677,16 +677,8 @@ sub doThumbs {
             print "</tr>";
         }
         print "</td></tr></table>";
-    } else {
-        print qq|<div class="displayPanel" align="left" style="width: 36em; margin-top: 2em; padding-bottom: 1em;">
-<span class="displayPanelHeader" class="large">Images</span>
-<div class="displayPanelContent">
-  <div align="center"><i>No images are available</i></div>
-</div>
-</div>
-|;
+        print "</div>\n";
     }
-    print "</div>\n";
 } 
 
 sub displayMap {
@@ -2835,6 +2827,13 @@ sub displayMeasurements {
         }
     } else {
         @specimens = Measurement::getMeasurements($dbt,'taxon_name'=>$taxon_name,'get_global_specimens'=>1);
+        my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
+        my $is_species = ($species) ? 1 : 0;
+        my $classification_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
+        if ($classification_no)	{
+            my $taxon = getTaxa($dbt,{'taxon_no'=>$classification_no});
+            $taxon_no = $taxon->{'taxon_no'};
+        }
     }
 
     # Returns a triple index hash with index <part><dimension type><whats measured>
@@ -2851,15 +2850,11 @@ sub displayMeasurements {
 
     if (@specimens) {
 
-        my %distinct_parts = ();
         my %errorSeen = ();
         my %partHeader = ();
         $partHeader{'average'} = "mean";
         my $defaultError = "";
         while (my($part,$m_table)=each %$p_table)	{
-            if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
-                $distinct_parts{$part}++;
-            }
             foreach my $type (('length','width','height','circumference','diagonal','inflation')) {
                 if (exists ($m_table->{$type})) {
                     if ( $m_table->{$type}{'min'} )	{
@@ -2885,76 +2880,29 @@ sub displayMeasurements {
                 }
             }
         }
-        my @part_list = keys %distinct_parts;
-        @part_list = sort { $a cmp $b } @part_list;
-        # mammal tooth measurements should always be listed in this fixed order
-        unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
 
         # estimate body mass if possible JA 18.7.07
         # code is here and not earlier because we need the parts list first
-        # need all the parents
-        my @parent_refs;
-        if ($taxon_no) {
-            my $sql = "SELECT parent_no FROM taxa_list_cache WHERE child_no=" . $taxon_no;
-            @parent_refs = @{$dbt->getData($sql)};
-        } else {
-            # Code from getTaxonClassification
-            # get alleged parents
-            my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
-            my $is_species = ($species) ? 1 : 0;
-            my $classification_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
-            if ($classification_no) {
-                my $taxon = getTaxa($dbt,{'taxon_no'=>$classification_no});
-                my $sql = "SELECT parent_no FROM taxa_list_cache WHERE child_no=" . $taxon->{taxon_no};
-                @parent_refs = @{$dbt->getData($sql)};
-                if ($taxon->{taxon_rank} =~ /genus/ && $is_species) {
-                    unshift @parent_refs, {'parent_no'=>$classification_no};
-                }
-            }
-        }
-        # get equations
-        # join on taxa_tree_cache because we need to know which parents are
-        #  the least inclusive
-        # don't do this with a join on taxa_list_cache because that table
-        #  is nightmarishly large
-        if (@parent_refs) {
-            my $sql = "SELECT taxon_name,lft,rgt,e.reference_no reference_no,part,length,width,area,intercept FROM authorities a,equations e,$TAXA_TREE_CACHE t WHERE a.taxon_no=e.taxon_no AND e.taxon_no=t.taxon_no AND t.synonym_no IN (" . join(',',map { $_->{parent_no} } @parent_refs) . ")";
-            my @eqn_refs = @{$dbt->getData($sql)};
-            @eqn_refs = sort { $a->{lft} <=> $b->{lft} || $a->{rgt} <=> $b->{rgt} } @eqn_refs;
+        my @m = Measurement::getMassEstimates($dbt,$taxon_no,$p_table);
+        my @part_list = @{$m[0]};
+        my @masses = @{$m[2]};
+        my @eqns = @{$m[3]};
+        my @refs = @{$m[4]};
+        my $grandmean = $m[5];
+        my $grandestimates = $m[6];
 
-            for my $part ( @part_list )	{
-                my $m_table = %$p_table->{$part};
-                if ( ! $m_table )	{
-                    next;
-                }
-                foreach my $type (('length','width','area')) {
-                    if ( $type eq "area" && $m_table->{length}{average} && $m_table->{width}{average} )	{
-                        $m_table->{area}{average} = $m_table->{length}{average} * $m_table->{width}{average};
-                    }
-                    if (exists ($m_table->{$type})) {
-                        foreach my $eqn ( @eqn_refs )	{
-                            if ( $part eq $eqn->{part} && $eqn->{$type} )	{
-                                my $mass = exp( ( log($m_table->{$type}{average}) * $eqn->{$type} ) + $eqn->{intercept} );
-                                my $reference = Reference::formatShortRef($dbt,$eqn->{reference_no},'no_inits'=>1,'link_id'=>1);
-                                $mass_string .= "<tr><td>&nbsp;";
-                                if ( $mass < 1000 )	{
-                                    $mass_string .= sprintf "%.1f g",$mass;
-                                } elsif ( $mass < 10000 )	{
-                                    $mass_string .= sprintf "%.2f kg",$mass / 1000;
-                                } else	{
-                                    $mass_string .= sprintf "%.1f kg",$mass / 1000;
-                                }
-                                $mass_string .= '</td>';
-                                $mass_string .= "<td><span class=\"small\">&nbsp;$eqn->{taxon_name} $part $type</span></td><td><span class=\"small\">$reference</span></td></tr>";
-                                next;
-                            }
-                        }
-                    }
-                }
-            }
+        for my $i ( 0..$#masses )	{
+            my $reference = Reference::formatShortRef($dbt,$refs[$i],'no_inits'=>1,'link_id'=>1);
+            $mass_string .= "<tr><td>&nbsp;";
+            $mass_string .= formatMass($masses[$i]);
+            $mass_string .= '</td>';
+            $mass_string .= "<td><span class=\"small\">&nbsp;$eqns[$i]</span></td><td><span class=\"small\">$reference</span></td></tr>";
         }
 
         if ( $mass_string )	{
+            if ( $#masses > 0 )	{
+                $mass_string .= '<tr><td colspan="3">mean: '.formatMass( exp( $grandmean / $grandestimates ) )."</td></tr>\n";
+            }
             $mass_string = qq|<div class="displayPanel" align="left" style="width: 36em; margin-bottom: 2em;">
 <span class="displayPanelHeader" class="large">Body mass estimates</span>
 <div align="center" class="displayPanelContent">
@@ -2981,6 +2929,9 @@ $mass_string
 
             foreach my $type (('length','width','height','circumference','diagonal','inflation')) {
                 if (exists ($m_table->{$type})) {
+                    if ( $m_table->{$type}{'average'} <= 0 )	{
+                        next;
+                    }
                     $str .= "<tr><td>$part $type</td>";
                     $str .= "<td>$m_table->{specimens_measured}</td>";
                     foreach my $column (('average','min','max','median','error')) {
@@ -3014,6 +2965,7 @@ $mass_string
         $str .= "<div align=\"center\" style=\"padding-bottom: 1em;\"><i>No measurements are available</i>\n</div>\n";
     }
     $str .= qq|</div>
+</div>
 |;
 
     if ( $mass_string )	{
@@ -3021,6 +2973,23 @@ $mass_string
     }
 
     return $str;
+}
+
+# JA 7.12.10
+sub formatMass	{
+	my $mass = shift;
+	if ( $mass < 1000 )	{
+		$mass = sprintf "%.1f g",$mass;
+	} elsif ( $mass < 10000 )	{
+		$mass = sprintf "%.2f kg",$mass / 1000;
+	} elsif ( $mass > 10000 && $mass < 1000000 )	{
+		$mass = sprintf "%.1f kg",$mass / 1000;
+	} elsif ( $mass < 10000000 )	{
+		$mass = sprintf "%.2f tons",$mass / 1000000;
+	} else	{
+		$mass = sprintf "%.1f tons",$mass / 1000000;
+	}
+	return $mass;
 }
 
 sub displayDiagnoses {
@@ -4120,8 +4089,77 @@ sub basicTaxonInfo	{
 		print "<p class=\"medium\"><i>$error</i></p>\n\n";
 	}
 
+	# IMAGE AND SYNONYM SECTIONS
+
+	my @spellings = ($taxon_no);
+	my @bad_spellings;
+	if ( $taxon_no )	{
+		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND spelling_no=synonym_no AND t.taxon_no!=spelling_no AND a.taxon_name!='".$auth->{'taxon_name'}."' ORDER BY taxon_name";
+		my @spelling_refs = @{$dbt->getData($sql)};
+		push @spellings , $_->{'taxon_no'} foreach @spelling_refs;
+		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no ORDER BY taxon_name";
+		my @syn_refs = @{$dbt->getData($sql)};
+		push @bad_spellings , $_->{'taxon_no'} foreach @syn_refs;
+		my @all_spellings = (@spellings,@bad_spellings);
+		my @thumbs = Images::getImageList($dbt, \@all_spellings);
+		for my $thumb ( @thumbs )	{
+			my $aspect = $thumb->{'height'} / $thumb->{'width'};
+			my $divwidth =  int( 500 / ( $#thumbs + 2 * $aspect**2 ) );
+			if ( $divwidth > $thumb->{'width'} )	{
+				$divwidth = $thumb->{'width'};
+			}
+			if ( $divwidth > 200 )	{
+				$divwidth = 200;
+			}
+			my $blowup = 300 / sqrt( $thumb->{'width'} * $thumb->{'height'} );
+			my ($height,$width) = ( int( $blowup*$thumb->{'height'} ) , int( $blowup*$thumb->{'width'} ) );
+			my $thumb_path = $thumb->{path_to_image};
+			$thumb_path =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
+			print '<div style="float: left; clear: none; margin-right: 10px;">';
+			printf "<a href=\"javascript: imagePopup('$READ_URL?action=displayImage&amp;image_no=$thumb->{image_no}&amp;maxheight=%d&amp;maxwidth=%d&amp;display_header=NO',%d,%d)\">",$height,$width,$width + 80,$height + 150;
+			print "<img src=\"$thumb_path\" border=1 vspace=3 width=$divwidth alt=\"$thumb->{caption}\">";
+			print "</a></div>\n\n";
+		}
+		print "<div style=\"clear: both;\"></div>\n\n";
+
+		my $noun = "spelling";
+		if ( $auth->{'taxon_rank'} =~ /species/ )	{
+			$noun = "combination";
+		}
+		if ( $#spelling_refs == 0 )	{
+			print "<p>Alternative $noun: ".italicize($spelling_refs[0])."</p>\n\n";
+#			push @spellings , $spelling_refs[0]->{'taxon_no'};
+		} elsif ( $#spelling_refs > 0 )	{
+			print "<p $indent>Alternative ".$noun."s: ";
+			my @spelling_names;
+			push @spelling_names , italicize($_) foreach @spelling_refs;
+			print join(', ',@spelling_names)."</p>\n\n";
+		}
+		for my $s ( @syn_refs )	{
+			if ( $s->{'status'} !~ /subjective/ )	{
+				$s->{'note'} = $s->{'status'};
+				$s->{'note'} =~ s/ of$//;
+				$s->{'note'} =~ s/replaced by/replaced name/;
+				$s->{'note'} = " [".$s->{'note'}."]";
+			}
+		}
+		if ( $#syn_refs == 0 )	{
+			print "<p>Synonym: ".italicize($syn_refs[0])." ".formatShortAuthor($syn_refs[0]).$syn_refs[0]->{'note'}."</p>\n\n";
+		} elsif ( $#syn_refs > 0 )	{
+			print "<p $indent>Synonyms: ";
+			my $list;
+			for my $s ( @syn_refs )	{
+				$list .= italicize($s)." ".formatShortAuthor($s).$s->{'note'}.", ";
+			}
+			$list =~ s/  ,/,/;
+			$list =~ s/, $//;
+			print "$list<p>\n\n";
+		}
+	}
+
 	# PARENT SECTION
 
+	my @sisters;
 	if ( $taxon_no )	{
 		my $sql = "SELECT taxon_name,taxon_rank,a.taxon_no FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=parent_spelling_no AND o.opinion_no=t.opinion_no AND t.taxon_no=$taxon_no";
 		my $parent = ${$dbt->getData($sql)}[0];
@@ -4147,52 +4185,60 @@ sub basicTaxonInfo	{
 					print "$lastref</p>\n\n";
 				}
 			}
+			#push @sisters , $_ ? $_->{'taxon_no'} != $taxon_no : "" foreach @{TaxaCache::getChildren($dbt,$parent->{'taxon_no'},'immediate_children')};
+			my @temp = @{TaxaCache::getChildren($dbt,$parent->{'taxon_no'},'immediate_children')};
+			for my $t ( @temp )	{
+				if ( $t->{'taxon_no'} != $taxon_no )	{
+					push @sisters, $t;
+				}
+			}
+	#		@sisters = @{TaxaCache::getChildren($dbt,$parent->{'taxon_no'},'immediate_children')};
 		}
+
+
+	# SISTERS SECTION
+
+		if ( @sisters )	{
+			if ( $#sisters == 0 )	{
+				print "<p style=\"clear: left;\">Sister taxon: <a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$sisters[0]->{'taxon_no'}\">".italicize($sisters[0])."</a>";
+			} else	{
+				print "<p style=\"margin-left: 1em;\"><span style=\"margin-left: -1em; text-indent: -0.5em;\">Sister taxa: ";
+				my $list;
+				$list .= "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">".italicize($_)."</a>, " foreach @sisters;
+				$list =~ s/, $//;
+				print $list;
+			}
+		} else	{
+			print "<p style=\"clear: left;\">Sister taxa: <i>none</i>";
+		}
+		print "</p>\n\n";
 	}
 
-	# SYNONYM SECTION
+	# CHILDREN SECTION
 
-	my @spellings = ($taxon_no);
-	my @bad_spellings;
 	if ( $taxon_no )	{
-		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND spelling_no=synonym_no AND t.taxon_no!=spelling_no AND a.taxon_name!='".$auth->{'taxon_name'}."' ORDER BY taxon_name";
-		my @spelling_refs = @{$dbt->getData($sql)};
-		my $noun = "spelling";
-		if ( $auth->{'taxon_rank'} =~ /species/ )	{
-			$noun = "combination";
-		}
-		if ( $#spelling_refs == 0 )	{
-			print "<p>Alternative $noun: ".italicize($spelling_refs[0])."</p>\n\n";
-			push @spellings , $spelling_refs[0]->{'taxon_no'};
-		} elsif ( $#spelling_refs > 0 )	{
-			print "<p $indent>Alternative ".$noun."s: ";
-			push @spellings , $_->{'taxon_no'} foreach @spelling_refs;
-			my @spelling_names;
-			push @spelling_names , italicize($_) foreach @spelling_refs;
-			print join(', ',@spelling_names)."</p>\n\n";
-		}
-		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no ORDER BY taxon_name";
-		my @syn_refs = @{$dbt->getData($sql)};
-		for my $s ( @syn_refs )	{
-			push @bad_spellings , $s->{'taxon_no'};
-			if ( $s->{'status'} !~ /subjective/ )	{
-				$s->{'note'} = $s->{'status'};
-				$s->{'note'} =~ s/ of$//;
-				$s->{'note'} =~ s/replaced by/replaced name/;
-				$s->{'note'} = " [".$s->{'note'}."]";
+		my @child_refs = @{TaxaCache::getChildren($dbt,$taxon_no,'immediate_children')};
+		if ( @child_refs || $auth->{'taxon_rank'} !~ /species/ )	{
+			print "<p style=\"margin-left: 1em;\"><span style=\"margin-left: -1em; text-indent: -0.5em;\">Subtaxa: ";
+			if ( @child_refs )	{
+				my @child_nos;
+				push @child_nos , $_->{'taxon_no'} foreach @child_refs;
+				$sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_no IN (".join(',',@child_nos).") ORDER BY taxon_name";
+				my @child_names = @{$dbt->getData($sql)};
+				my $list;
+				$list .= "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">".italicize($_)."</a>, " foreach @child_names;
+				$list =~ s/, $//;
+				print $list;
+				print ' (<a href=# onClick="javascript: document.doViewClassification.submit()">view classification</a>)';
+				print "</span></p>\n\n";
+				print "\n<form method=\"POST\" action=\"$READ_URL\" name=\"doViewClassification\">";
+				print '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
+				print '<input type="hidden" name="maximum_levels" value="99">';
+				print '<input type="hidden" name="taxon_no" value="'.$taxon_no.'">';
+				print "</form>\n";
+			} else	{
+				print "<i>none</i></span></p>\n\n";
 			}
-		}
-		if ( $#syn_refs == 0 )	{
-			print "<p>Synonym: ".italicize($syn_refs[0])." ".formatShortAuthor($syn_refs[0]).$syn_refs[0]->{'note'}."</p>\n\n";
-		} elsif ( $#syn_refs > 0 )	{
-			print "<p $indent>Synonyms: ";
-			my $list;
-			for my $s ( @syn_refs )	{
-				$list .= italicize($s)." ".formatShortAuthor($s).$s->{'note'}.", ";
-			}
-			$list =~ s/  ,/,/;
-			$list =~ s/, $//;
-			print "$list<p>\n\n";
 		}
 	}
 
@@ -4236,9 +4282,9 @@ sub basicTaxonInfo	{
 		}
 	}
 
-	# MEASUREMENT SECTION
+	# MEASUREMENT AND BODY MASS SECTIONS
 	# JA 24.11.10
-	# shamelessly lifted from similar section in displayMeasurements, but greatly simplified
+	# added body mass and simplified by calling getMassEstimates 9.12.10
 	my @specimens;
 	my $specimen_count;
 	if ( $taxon_no && $auth->{'taxon_rank'} eq "species" )	{
@@ -4246,44 +4292,32 @@ sub basicTaxonInfo	{
 		@specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@all_spellings,'get_global_specimens'=>1);
 		if ( @specimens )	{
 			my $p_table = Measurement::getMeasurementTable(\@specimens);
-			my %distinct_parts = ();
-			while ( my ($part,$m_table) = each %$p_table )	{
-				if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
-					$distinct_parts{$part}++;
-				}
+			my $orig = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
+			my $ss = TaxonInfo::getSeniorSynonym($dbt,$orig);
+			my @m = Measurement::getMassEstimates($dbt,$ss,$p_table);
+			if ( @{$m[1]} )	{
+				print "<p $indent>Average measurements (in mm): ".join(', ',@{$m[1]});
+				print "</p>\n\n";
 			}
-			my @part_list = keys %distinct_parts;
-			@part_list = sort { $a cmp $b } @part_list;
-			unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
-			my @values;
-			for my $part ( @part_list )	{
-				my $m_table = %$p_table->{$part};
-				if ( ! $m_table )	{
-					next;
+			if ( $m[5] && $m[6] )	{
+				my @eqns = @{$m[3]};
+				s/^[A-Za-z]+ // foreach @eqns;
+				my %perpart;
+				$perpart{$_}++ foreach @eqns;
+				@eqns = keys %perpart;
+				@eqns = sort @eqns;
+				if ( $#eqns > 0 )	{
+					$eqns[$#eqns] = "and ".$eqns[$#eqns];
 				}
-				for my $type ( ('length','width','height','circumference','diagonal','inflation') )	{
-					if ( $m_table->{$type} )	{
-						my $value = $m_table->{$type}{'average'};
-						if ( $value < 1 )	{
-							$value = sprintf("%.3f",$value);
-						} elsif ( $value < 10 )	{
-							$value = sprintf("%.2f",$value);
-						} else	{
-							$value = sprintf("%.1f",$value);
-						}
-						push @values , "$part $type $value";
-					}
+				if ( $#eqns > 1 )	{
+					$eqns[$_] .= "," foreach ( 0..$#eqns-1 );
 				}
-			}
-			if ( @values )	{
-				print "<p $indent>Average measurements (in mm): ".join(', ',@values);
+				print "<p $indent>Estimated body mass: ".formatMass( exp( $m[5]/$m[6] ) )." based on ".join(' ',@eqns);
 				print "</p>\n\n";
 			}
 		}
 	}
 
-    # Returns a triple index hash with index <part><dimension type><whats measured>
-    #  Where part can be leg, valve, etc, dimension type can be length,width,height,diagonal,inflation 
 	# DISTRIBUTION SECTION
 
 	my @occs;
@@ -4491,32 +4525,6 @@ function erasePleaseWait()	{
 
 	}
 
-	# CHILDREN SECTION
-
-	if ( $taxon_no )	{
-		my @child_refs = @{TaxaCache::getChildren($dbt,$taxon_no,'immediate_children')};
-		print "<p style=\"margin-left: 1em;\"><span style=\"margin-left: -1em; text-indent: -0.5em;\">Subtaxa: ";
-		if ( @child_refs )	{
-			my @child_nos;
-			push @child_nos , $_->{'taxon_no'} foreach @child_refs;
-			$sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE taxon_no IN (".join(',',@child_nos).") ORDER BY taxon_name";
-			my @child_names = @{$dbt->getData($sql)};
-			my $list;
-			$list .= "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">".italicize($_)."</a>, " foreach @child_names;
-			$list =~ s/, $//;
-			print $list;
-			print ' (<a href=# onClick="javascript: document.doViewClassification.submit()">view classification</a>)';
-			print "</span></p>\n\n";
-			print "\n<form method=\"POST\" action=\"$READ_URL\" name=\"doViewClassification\">";
-			print '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
-			print '<input type="hidden" name="maximum_levels" value="99">';
-			print '<input type="hidden" name="taxon_no" value="'.$taxon_no.'">';
-			print "</form>\n";
-		} else	{
-			print "<i>none</i></span></p>\n\n";
-		}
-	}
-	
 	if ( $is_real_user > 0 && ( @occs || $taxon_no ) )	{
 		if ( $taxon_no )	{
 			print "<p><a href=\"$READ_URL?action=checkTaxonInfo&amp;taxon_no=$taxon_no&amp;is_real_user=1\">Show more details</a></p>\n\n";
