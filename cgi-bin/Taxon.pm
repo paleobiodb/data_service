@@ -23,7 +23,7 @@ use Mail::Mailer;
 use TaxaCache;
 use Classification;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $HOST_URL);
+use Constants qw($READ_URL $WRITE_URL $HOST_URL $TAXA_TREE_CACHE);
 
 use Reference;
 
@@ -427,6 +427,7 @@ sub displayAuthorityForm {
         my @nos =   map {$_->[0]} @taxa;
         if (scalar(@names) > 1) {
             my $original_no_select = HTMLBuilder::htmlSelect('original_no',\@names,\@nos,$orig_no);
+            $original_no_select .= "\n<br><span class=\"verysmall\">If this is more than one taxon, you may <a href=\"$WRITE_URL?action=entangledNamesForm&amp;taxon_no=$orig_no\">disentangle them</a></span>";
             $fields{'original_no_select'} = $original_no_select;
         }
     }
@@ -439,7 +440,7 @@ sub displayAuthorityForm {
     if ( $q->param('called_by') eq "processTaxonSearch" )	{
         $fields{'not_this_one'} = '<span style="padding-left: 2em;"><i>If this version of '.$fields{'taxon_name'}.' is a homonym, <a href="'.$WRITE_URL.'?action=displayAuthorityForm&amp;goal=authority&amp;taxon_name='.$q->param('taxon_name').'&amp;taxon_no=-1">create a new authority record</a> for your version</i></span><br><br>';
     }
-	
+
 	# print the form	
     my $html = $hbo->populateHTML("add_enter_authority", \%fields);
     
@@ -2033,7 +2034,131 @@ sub propagateAuthorityInfo {
             $dbh->do($u_sql);
         }
     }
-}                                                                                                                                                                   
+}
+
+# JA 14.12.10
+sub entangledNamesForm	{
+	my ($dbt,$hbo,$s,$q) = @_;
+	my $taxon_no = $q->param('taxon_no');
+	my %vars;
+
+	my $if = "IF(a.ref_is_authority='YES'";
+	my $sql = "SELECT taxon_name,taxon_rank,$if,r.author1last,a.author1last) a1,$if,r.author2last,a.author2last) a2,$if,r.otherauthors,a.otherauthors) others,$if,r.pubyr,a.pubyr) yr,a.taxon_no FROM refs r,authorities a,$TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2 where r.reference_no=a.reference_no AND a.taxon_no=t.taxon_no AND a.taxon_no=t.taxon_no AND t.spelling_no=t2.spelling_no AND t2.taxon_no=$taxon_no ORDER BY taxon_name";
+	my @spellings = @{$dbt->getData($sql)};
+
+	my %ranks;
+	for my $i ( 0..$#spellings )	{
+		$vars{'spellings'} .= '<tr><td><input type=hidden name="spelling_no" value="'.$spellings[$i]->{taxon_no}.'">'.$spellings[$i]->{taxon_name}.'</td><td align="center"><input type="radio" id="spelling'.$i.'" name="spelling'.$i.'" value="1"></td><td align="center"><input type="radio" name="spelling'.$i.'" value="2"></td></tr>
+';
+		$ranks{$spellings[$i]->{'taxon_rank'}}++;
+	}
+	my @temp = keys %ranks;
+	if ( $#temp == 0 )	{
+		$vars{'rank'} = $spellings[0]->{'taxon_rank'};
+	} else	{
+		$vars{'rank'} = "thing";
+	}
+	$vars{'author'} = $spellings[0]->{'a1'};
+	if ( $spellings[0]->{'others'} )	{
+		$vars{'author'} .= " et al.";
+	} elsif ( $spellings[0]->{'a2'} )	{
+		$vars{'author'} .= " and ".$spellings[0]->{'a2'};
+	}
+	$vars{'author'} .= " (".$spellings[0]->{'yr'}.")";
+
+	print $hbo->stdIncludes("std_page_top");
+	print $hbo->populateHTML('entangled_names',\%vars);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+# JA 14.12.10
+# WARNING: this is super-dangerous, any bug could cause total havoc with taxa_tree_cache
+sub disentangleNames	{
+	my ($dbt,$hbo,$s,$q) = @_;
+	my $dbh = $dbt->dbh;
+
+	my @spellings = $q->param('spelling_no');
+	my (@version1,@version2);
+	for my $i ( 0..$#spellings )	{
+		if ( $q->param('spelling'.$i) == "1" )	{
+			push @version1 , $spellings[$i];
+		} elsif ( $q->param('spelling'.$i) == "2" )	{
+			push @version2 , $spellings[$i];
+		}
+	}
+
+	# fix the opinions (temporarily) by resetting child_no and parent_no to a taxon_no in
+	#  each version category, as appropriate
+	# at this point it doesn't matter if these numbers are really the "base" spelling numbers
+	#  because that will get fixed later
+	my $sql = "UPDATE opinions SET modified=modified,child_no=".$version1[0]." WHERE child_no IN (".join(',',@version1).") OR child_spelling_no IN (".join(',',@version1).")";
+	$dbh->do($sql);
+	$sql = "UPDATE opinions SET modified=modified,parent_no=".$version1[0]." WHERE parent_no IN (".join(',',@version1).") OR parent_spelling_no IN (".join(',',@version1).")";
+	$dbh->do($sql);
+	$sql = "UPDATE opinions SET modified=modified,child_no=".$version2[0]." WHERE child_no IN (".join(',',@version2).") OR child_spelling_no IN (".join(',',@version2).")";
+	$dbh->do($sql);
+	$sql = "UPDATE opinions SET modified=modified,parent_no=".$version2[0]." WHERE parent_no IN (".join(',',@version2).") OR parent_spelling_no IN (".join(',',@version2).")";
+	$dbh->do($sql);
+
+	# dump version 2 at the end of taxa_tree_cache
+	# don't mess with version 1 at this stage
+	$dbh->do("LOCK TABLES $TAXA_TREE_CACHE WRITE");
+	$sql = "SELECT max(rgt) max FROM $TAXA_TREE_CACHE";
+	my $max = ${$dbt->getData($sql)}[0]->{'max'};
+	$sql = "UPDATE $TAXA_TREE_CACHE SET lft=$max+1,rgt=$max+2 WHERE taxon_no IN (".join(',',@version2).")";
+	$dbh->do($sql);
+	$dbh->do("UNLOCK TABLES");
+
+	# fix everything, because version 1 might be classified based on a version 2 opinion
+	$sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=taxon_no,synonym_no=taxon_no,opinion_no=0 WHERE taxon_no IN (".join(',',@spellings).")";
+	$dbh->do($sql);
+
+	for my $s ( @spellings )	{
+		my $orig = TaxonInfo::getOriginalCombination($dbt,$s);
+		TaxonInfo::getMostRecentClassification($dbt,$orig,{'recompute'=>'yes'});
+		TaxaCache::updateCache($dbt,$orig);
+	}
+
+	# body mass estimates are also mixed up
+	Opinion::fixMassEstimates($dbt,$dbh,TaxonInfo::getOriginalCombination($dbt,$version1[0]));
+	Opinion::fixMassEstimates($dbt,$dbh,TaxonInfo::getOriginalCombination($dbt,$version2[0]));
+
+	# all of the children of the disentangled names are now hosed because their
+	#  upwards classifications go through them, so update
+	$sql = "SELECT distinct(child_no) FROM opinions WHERE parent_no IN (".join(',',@spellings).")";
+	my @children = @{$dbt->getData($sql)};
+	for my $c ( @children )	{
+		my $orig = TaxonInfo::getOriginalCombination($dbt,$c->{'child_no'});
+		TaxonInfo::getMostRecentClassification($dbt,$orig,{'recompute'=>'yes'});
+		TaxaCache::updateCache($dbt,$orig);
+	}
+
+	# report the results
+	my %vars;
+	my (@names1,@names2);
+	$sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN (".join(',',@version1).") ORDER BY taxon_name";
+	my @names = @{$dbt->getData($sql)};
+	push @names1 , $_->{'taxon_name'} foreach @names;
+	$sql = "SELECT taxon_name FROM authorities WHERE taxon_no IN (".join(',',@version2).") ORDER BY taxon_name";
+	push @names2 , $_->{'taxon_name'} foreach @{$dbt->getData($sql)};
+	if ( $#names1 > 1 )	{
+		$names1[$#names1] = "and ".$names1[$#names1];
+	} elsif ( $#names1 == 1 )	{
+		$names1[0] .= " and " . pop @names1;
+	}
+	if ( $#names2 > 1 )	{
+		$names2[$#names2] = "and ".$names2[$#names2];
+	} elsif ( $#names2 == 1 )	{
+		$names2[0] .= " and " . pop @names2;
+	}
+	$vars{'names1'} = join(", ",@names1);
+	$vars{'names2'} = join(", ",@names2);
+	$vars{'taxon_no1'} = $version1[0];
+	$vars{'taxon_no2'} = $version2[0];
+	print $hbo->populateHTML('disentangled',\%vars);
+
+
+}
 
 # end of Taxon.pm
 
