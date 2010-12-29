@@ -22,33 +22,47 @@ sub submitSpecimenSearch {
     my  ($dbt,$hbo,$q,$s) = @_;
     my $dbh = $dbt->dbh;
 
-    if (!$q->param('taxon_name') && !int($q->param('collection_no'))) {
-        push my @error , "You must enter a taxonomic name or a collection";
+    if ( ! $q->param('taxon_name') && ! $q->param('comment') && ! int($q->param('collection_no')) ) {
+        push my @error , "You must enter a taxonomic name, comment, or collection number";
         print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
     }
 
     # Grab the data from the database, filtering by either taxon_name and/or collection_no
-    my $sql1 = "SELECT c.collection_no, c.collection_name,o.occurrence_no,o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM (occurrences o, collections c) LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE o.collection_no=c.collection_no ";
-    my $sql2 = "SELECT c.collection_no, c.collection_name,o.occurrence_no,o.genus_name,o.species_name, count(DISTINCT specimen_no) cnt FROM (reidentifications re, occurrences o, collections c) LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no ";
+    my $sql1 = "SELECT c.collection_no, c.collection_name, IF(c.country IN ('Canada','United States'),c.state,c.country) place, i.interval_name max,IF(min_interval_no>0,i2.interval_name,'') min,o.occurrence_no,o.genus_reso o_genus_reso,o.genus_name o_genus_name,o.species_reso o_species_reso,o.species_name o_species_name,o.comments o_comments, '' re_genus_reso,'' re_genus_name,'' re_species_reso,'' re_species_name,'' re_comments, count(DISTINCT specimen_no) cnt FROM (occurrences o, collections c, intervals i) LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no LEFT JOIN intervals i2 ON c.min_interval_no=i2.interval_no LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE o.collection_no=c.collection_no AND c.max_interval_no=i.interval_no AND re.reid_no IS NULL ";
+    my $sql2 = "SELECT c.collection_no, c.collection_name, IF(c.country IN ('Canada','United States'),c.state,c.country) place, i.interval_name max,IF(min_interval_no>0,i2.interval_name,'') min,o.occurrence_no,o.genus_reso o_genus_reso,o.genus_name o_genus_name,o.species_reso o_species_reso,o.species_name o_species_name,o.comments o_comments, re.genus_reso re_genus_reso,re.genus_name re_genus_name,re.species_reso re_species_reso,re.species_name re_species_name,re.comments re_comments, count(DISTINCT specimen_no) cnt FROM (reidentifications re, occurrences o, collections c, intervals i) LEFT JOIN specimens s ON o.occurrence_no=s.occurrence_no LEFT JOIN intervals i2 ON c.min_interval_no=i2.interval_no WHERE re.occurrence_no=o.occurrence_no AND o.collection_no=c.collection_no AND c.max_interval_no=i.interval_no AND most_recent='YES' ";
+
     my $where = "";
     my @taxa;
     if ($q->param('taxon_name')) {
-        @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$q->param('taxon_name'),'match_subgenera'=>1});
+        if ( $q->param('match_type') =~ /exact|combinations only/ )	{
+            my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='".$q->param('taxon_name')."'";
+            @taxa = @{$dbt->getData($sql)};
+        } else	{
+            @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$q->param('taxon_name'),'match_subgenera'=>1});
+        }
     } 
     my $taxon_nos;        
     if (@taxa) {
         my (@taxon_nos,%all_taxa);
-        foreach (@taxa) {
-            if ($_->{'taxon_rank'} =~ /species|genus/) {
-                @taxon_nos = TaxaCache::getChildren($dbt,$_->{'taxon_no'});
-                @all_taxa{@taxon_nos} = ();
-            } else {
-                @taxon_nos = TaxonInfo::getAllSynonyms($dbt,$_->{'taxon_no'});
-                @all_taxa{@taxon_nos} = ();
-                @all_taxa{$_->{'taxon_no'}} = 1; 
+        if ( $q->param('match_type') !~ /exact/ )	{
+            foreach (@taxa) {
+                if ($_->{'taxon_rank'} =~ /species|genus/) {
+                    @taxon_nos = TaxaCache::getChildren($dbt,$_->{'taxon_no'});
+                    @all_taxa{@taxon_nos} = ();
+                } else {
+                    if ( $q->param('match_type') !~ /combinations only/ )	{
+                        @taxon_nos = TaxonInfo::getAllSynonyms($dbt,$_->{'taxon_no'});
+                    } else	{
+                        @taxon_nos = TaxonInfo::getAllSpellings($dbt,$_->{'taxon_no'});
+                    }
+                    @all_taxa{@taxon_nos} = ();
+                    @all_taxa{$_->{'taxon_no'}} = 1; 
+                }
             }
+            @taxon_nos = keys %all_taxa;
+        } else	{
+            push @taxon_nos , $_->{'taxon_no'} foreach @taxa;
         }
-        @taxon_nos = keys %all_taxa;
         $taxon_nos = join(",",@taxon_nos);
         $sql1 .= " AND o.taxon_no IN ($taxon_nos)";
         $sql2 .= " AND re.taxon_no IN ($taxon_nos)";
@@ -60,6 +74,11 @@ sub submitSpecimenSearch {
             $sql1 .= " AND o.species_name LIKE ".$dbh->quote($taxon_bits[1]);
             $sql2 .= " AND re.species_name LIKE ".$dbh->quote($taxon_bits[1]);
         }
+    }
+    if ($q->param('comment')) {
+        $sql1 .= " AND o.comments LIKE '%".$q->param('comment')."%'";
+        $sql2 .= " AND (o.comments LIKE '%".$q->param('comment')."%' OR re.comments LIKE '%".$q->param('comment')."%')";
+        #$sql2 .= " AND re.comments LIKE '%".$q->param('comment')."%'";
     }
     if ($q->param('collection_no')) {
         $sql1 .= " AND o.collection_no=".int($q->param('collection_no'));
@@ -102,23 +121,57 @@ sub submitSpecimenSearch {
         $coll_names{$_->{'collection_name'}} = 1 for (@results);
         my $coll_count = scalar(keys(%coll_names));
         my $class = (scalar($coll_count) > 0) ? '' : 'class="darkList"';
+        sub reso	{
+            my $reso = shift;
+            my $quote;
+            if ( $reso eq '"' )	{
+                $quote = '"';
+            } else	{
+                $reso .= " ";
+            }
+            return ($reso,$quote);
+        }
         foreach my $row (@results) {
             my $specimens = ($row->{'cnt'} >= 1) ? $row->{'cnt'} : 'none';
             my $taxon_name;
-            my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
-            if ($reid_row) {
-                $taxon_name = $reid_row->{'genus_name'}." ".$reid_row->{'species_name'};
-            } else {
-                $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
+            my ($reso,$quote) = reso($row->{'o_genus_reso'});
+            my ($reso2,$quote2) = reso($row->{'o_species_reso'});
+            if ( $reso eq '"' && $reso2 eq '"' )	{
+                $quote = "";
+                $reso2 = "";
+            }
+            $taxon_name = $reso.$row->{'o_genus_name'}.$quote." ".$reso2.$row->{'o_species_name'}.$quote2;
+            if ($row->{re_genus_name}) {
+                my ($reso,$quote) = reso($row->{'re_genus_reso'});
+                my ($reso2,$quote2) = reso($row->{'re_species_reso'});
+                if ( $reso eq '"' && $reso2 eq '"' )	{
+                    $quote = "";
+                    $reso2 = "";
+                }
+                $taxon_name .= "<br>\n&nbsp;= ".$reso.$row->{'re_genus_name'}.$quote." ".$reso2.$row->{'re_species_name'}.$quote2;
+            }
+            my $comments;
+            if ( $row->{'o_comments'} || $row->{'re_comments'} )	{
+                $comments = "<br>\n<div class=\"verysmall\" style=\"width: 20em; white-space: normal;\">$row->{'o_comments'}";
+                if ( $row->{'o_comments'} && $row->{'re_comments'} )	{
+                    $comments .= "/".$row->{'re_comments'};
+                } elsif ( $row->{'re_comments'} )	{
+                    $comments .= $row->{'re_comments'};
+                }
+                $comments .= "</div>\n";
             }
             if ($last_collection_no != $row->{'collection_no'}) {
                 $class = ($class eq '') ? $class='class="darkList"' : '';
             }
             #print "<td><input type=\"radio\" name=\"occurrence_no\" value=\"$row->{occurrence_no}\"> $row->{genus_name} $row->{species_name}</td><td>$measurements</td></tr>";
-            print "<tr $class><td><a href=\"$READ_URL?action=displaySpecimenList&occurrence_no=$row->{occurrence_no}\"><nobr>$taxon_name</nobr></a></td>";
+            print "<tr $class><td><a href=\"$READ_URL?action=displaySpecimenList&occurrence_no=$row->{occurrence_no}\"><nobr><span class=\"small\">$taxon_name</a>$comments</nobr></a></td>";
             if ($last_collection_no != $row->{'collection_no'}) {
                 $last_collection_no = $row->{'collection_no'};
-                print "<td><span style=\"margin-right: 1em;\"><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}\">$row->{collection_name}</a></span></td>";
+                my $interval = $row->{max};
+                if ( $row->{min} )	{
+                    $interval .= " - ".$row->{min};
+                }
+                print "<td><span class=\"small\" style=\"margin-right: 1em;\"><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$row->{collection_no}\">$row->{collection_name}</a></span><br><span class=\"verysmall\">$row->{collection_no}: $interval, $row->{place}</span></td>";
             } else {
                 print "<td></td>";
             }
@@ -476,8 +529,11 @@ sub populateMeasurementForm {
                     push @values , "g";
                 }
 
-	        push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','types_only');
-	        push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,int($q->param('types_only')));
+                my $sql = "SELECT author1init,author1last,author2init,author2last,pubyr,reftitle,pubtitle,pubvol,firstpage,lastpage FROM refs WHERE reference_no=".$s->get('reference_no');
+                my $ref = ${$dbt->getData($sql)}[0];
+
+	        push @fields,('reference','occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','types_only');
+	        push @values,(Reference::formatLongRef($ref),int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,int($q->param('types_only')));
 	        print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
             } elsif ($q->param('specimen_no') == -2) {
 		push (@fields,'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','specimen_coverage');
@@ -566,9 +622,12 @@ sub populateMeasurementForm {
             push @values, 'no';
         }      
 
+        my $sql = "SELECT author1init,author1last,author2init,author2last,pubyr,reftitle,pubtitle,pubvol,firstpage,lastpage FROM refs WHERE reference_no=".$row->{'reference_no'};
+        my $ref = ${$dbt->getData($sql)}[0];
+
         # some additional fields not from the form row
-	    push (@fields, 'occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection_no','types_only');
-	    push (@values, int($q->param('occurrence_no')),int($q->param('taxon_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no,int($q->param('types_only')));
+	    push (@fields, 'reference','occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection_no','types_only');
+	    push (@values, Reference::formatLongRef($ref),int($q->param('occurrence_no')),int($q->param('taxon_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no,int($q->param('types_only')));
 	    print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
     }
 
@@ -586,11 +645,19 @@ sub processMeasurementForm	{
         exit;
     }
 
+    my $taxon_no = $q->param('taxon_no');
+
     # get the taxon's name
     my ($taxon_name,$collection);
     if ($q->param('occurrence_no')) {
-        my $sql = "SELECT o.collection_no, o.genus_name, o.species_name, o.occurrence_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
+        my $sql = "SELECT o.taxon_no, o.collection_no, o.genus_name, o.species_name, o.occurrence_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
         my $row = ${$dbt->getData($sql)}[0];
+        $taxon_no = $row->{'taxon_no'};
+        $sql = "SELECT taxon_no FROM reidentifications WHERE occurrence_no=".$row->{'occurrence_no'}." AND most_recent='YES'";
+        my $reid_taxon = ${$dbt->getData($sql)}[0]->{'taxon_no'};
+        if ( $reid_taxon > 0 )	{
+            $taxon_no = $reid_taxon;
+        }
 
         my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
         if ($reid_row) {
@@ -662,6 +729,14 @@ sub processMeasurementForm	{
         }
 
         my $specimen_no;
+
+        # prevent duplication by resubmission of form for "new" specimen JA 21.12.10
+        # this is pretty conservative...
+        if ( $fields{'specimen_no'} <= 0 )	{
+            $sql = "SELECT specimen_no FROM specimens WHERE ((specimen_id='".$fields{'specimen_id'}."' AND specimen_id IS NOT NULL) OR (specimen_id IS NULL AND taxon_no=".$fields{'taxon_no'}." AND taxon_no>0) OR (specimen_id IS NULL AND occurrence_no=".$fields{'occurrence_no'}." AND occurrence_no>0)) AND specimen_part='".$fields{'specimen_part'}."'";
+            $fields{'specimen_no'} = ${$dbt->getData($sql)}[0]->{'specimen_no'};
+        }
+
         if ( $fields{'specimen_no'} > 0 )	{
             delete $fields{'taxon_no'}; # keys, never update thse
             delete $fields{'occurrence_no'}; # keys, never update thse
@@ -803,10 +878,9 @@ sub processMeasurementForm	{
 		$collection_no =~ s/\)//;
     		print qq|<tr><td valign="top"><a href="$WRITE_URL?action=submitSpecimenSearch&collection_no=$collection_no"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Add a measurement of another occurrence in this collection</td></tr>
 |;
-	 } else {
-		print qq|<tr><td valign="top"><a href="$WRITE_URL?action=submitSpecimenSearch&taxon_name=$taxon_name"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Add a measurement of $taxon_name in another collection</td></tr>
-|;
 	}
+	print qq|<tr><td valign="top"><a href="$WRITE_URL?action=submitSpecimenSearch&taxon_name=$taxon_name"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Add a measurement of $taxon_name in another collection</td></tr>
+|;
 	print qq|<tr><td><a href="$READ_URL?action=checkTaxonInfo&taxon_name=$taxon_name"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Get general info about this taxon</td></tr>
 <tr><td><a href="$WRITE_URL?action=displaySpecimenSearchForm"><span class="measurementBullet">&#149;</span></a></td><td colspan="6" valign="center">&nbsp;Add a measurement of another taxon</td></tr>
 </table>
@@ -814,6 +888,23 @@ sub processMeasurementForm	{
 </div>
 </center>
 |;
+
+    # cache average of all body mass estimates for this taxon's senior synonym JA 7.12.10
+    # note that we do not compute mass estimates for junior synonyms by themselves, so likewise
+    #  we (1) store combined data only, and (2) store these data under the names of the senior
+    #  synonyms only
+    my $orig = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
+    my $ss = TaxonInfo::getSeniorSynonym($dbt,$orig);
+    my @in_list = TaxonInfo::getAllSynonyms($dbt,$ss);
+    my @specimens = getMeasurements($dbt,'taxon_list'=>\@in_list,'get_global_specimens'=>1);
+    my $p_table = getMeasurementTable(\@specimens);
+    my @m = getMassEstimates($dbt,$ss,$p_table);
+    if ( $m[5] && $m[6] )	{
+        my $mean = $m[5] / $m[6];
+        @in_list = TaxonInfo::getAllSpellings($dbt,$ss);
+        my $sql = "UPDATE $TAXA_TREE_CACHE SET mass=$mean WHERE taxon_no IN (".join(',',@in_list).")";
+        $dbh->do($sql);
+    }
 
 }
 
@@ -1098,6 +1189,83 @@ sub avg {
     return $sum;
 }
 
+# JA 7.12.10
+# stolen from TaxonInfo::displayMeasurements, but greatly simplified with double join on
+#  taxa_tree_cache, also includes diameter and circumference, deals with multiple parent and/or
+#  "minus" taxa in equations table, and also computes mean
+sub getMassEstimates	{
+	my ($dbt,$taxon_no,$p_table) = @_;
+	my %distinct_parts = ();
+
+	while (my($part,$m_table)=each %$p_table)	{
+		if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
+			$distinct_parts{$part}++;
+		}
+	}
+	my @part_list = keys %distinct_parts;
+	@part_list = sort { $a cmp $b } @part_list;
+	# mammal tooth measurements should always be listed in this fixed order
+	unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
+
+	# first get equations
+	# join on taxa_tree_cache because we need to know which parents are
+	#  the least inclusive
+	# don't do this with a join on taxa_list_cache because that table
+	#  is nightmarishly large
+	# note that we are finding all equations including $taxon_no based either on
+	#  taxon_no or minus_taxon_no, then finding the least inclusive of these groups
+	#  (based on ORDER BY) and determining whether this group is a "minus" or not
+	#  (based on SELECT FIND_IN_SET...)
+	my $sql = "SELECT FIND_IN_SET(t2.taxon_no,e.minus_taxon_no) minus,taxon_name,t2.lft,e.reference_no,part,length,width,area,diameter,circumference,intercept FROM authorities a,equations e,refs r,$TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2 WHERE t.taxon_no=$taxon_no AND a.taxon_no=t2.taxon_no AND e.reference_no=r.reference_no AND t.lft>t2.lft AND t.rgt<t2.rgt AND (FIND_IN_SET(t2.taxon_no,e.taxon_no) OR FIND_IN_SET(t2.taxon_no,e.minus_taxon_no)) GROUP BY eqn_no ORDER BY t2.lft DESC,r.pubyr DESC";
+	my @eqn_refs = @{$dbt->getData($sql)};
+
+	my (@values,@masses,@eqns,@refs);
+	my (%mean,%estimates);
+	for my $part ( @part_list )	{
+		my $m_table = %$p_table->{$part};
+		if ( ! $m_table )	{
+			next;
+		}
+		foreach my $type (('length','width','area','diameter','circumference')) {
+			if ( $type eq "area" && $m_table->{length}{average} && $m_table->{width}{average} && $part =~ /^[PMpm][1234]$/ )	{
+				$m_table->{area}{average} = $m_table->{length}{average} * $m_table->{width}{average};
+			}
+			if ( $m_table->{$type}{'average'} > 0 ) {
+				my $value = $m_table->{$type}{'average'};
+				if ( $value < 1 )	{
+					$value = sprintf("%.3f",$value);
+				} elsif ( $value < 10 )	{
+					$value = sprintf("%.2f",$value);
+				} else	{
+					$value = sprintf("%.1f",$value);
+				}
+				push @values , "$part $type $value";
+				my $last_lft = "";
+				foreach my $eqn ( @eqn_refs )	{
+					if ( $part eq $eqn->{'part'} && $eqn->{$type} && ! $eqn->{'minus'} )	{
+						if ( $eqn->{'lft'} < $last_lft && $last_lft )	{
+							last;
+						}
+						$last_lft = $eqn->{'lft'};
+						my $mass = exp( ( log($m_table->{$type}{average}) * $eqn->{$type} ) + $eqn->{intercept} );
+						$mean{$type.$part} += log($mass);
+						$estimates{$type.$part}++;
+						push @masses , $mass;
+						push @eqns , "$eqn->{taxon_name} $part $type";
+						push @refs , $eqn->{'reference_no'};
+					}
+				}
+			}
+		}
+	}
+	my ($grandmean,$grandestimates);
+	for my $m ( keys %mean )	{
+		$grandmean += $mean{$m} / $estimates{$m};
+		$grandestimates++;
+	}
+	return (\@part_list,\@values,\@masses,\@eqns,\@refs,$grandmean,$grandestimates);
+}
+		
 # JA 25-29.7.08
 sub displayDownloadMeasurementsResults  {
 	my $q = shift;
@@ -1220,6 +1388,7 @@ sub displayDownloadMeasurementsResults  {
 	my $strat_unit;
 	if ( $q->param('group_formation_member') =~ /^[A-Z]/i )	{
 		$strat_unit = $q->param('group_formation_member');
+		$strat_unit =~ s/\'/\'\'/g;
 		$strat_unit = "(geological_group='".$strat_unit."' OR formation='".$strat_unit."' OR member='".$strat_unit."')";
 	}
 
@@ -1399,9 +1568,40 @@ sub displayDownloadMeasurementsResults  {
 		unshift @part_list , ("P1","P2","P3","P4","M1","M2","M3","M4","p1","p2","p3","p4","m1","m2","m3","m4");
 	}
 
+	my $types;
+	for my $type (('length','width','height','circumference','diagonal','inflation'))	{
+		if ( $q->param($type) =~ /y/i )	{
+			$types++;
+		}
+	}
+	my (%measured_parts,%measured_types);
 	for my $taxon_no ( @with_data )	{
+		my $measured_parts = 0;
 		my $p_table = $tables{$taxon_no};
 		for my $part ( @part_list )	{
+			my $m_table = %$p_table->{$part};
+			if ( $m_table )	{
+				for my $type (('length','width','height','circumference','diagonal','inflation'))	{
+					if ( $m_table->{$type} && $q->param($type) =~ /y/i && $m_table->{$type}{'average'} > 0 )	{
+						$measured_parts{$taxon_no}++;
+						$measured_types{$taxon_no}{$part}++;
+					}
+				}
+			}
+		}
+	}
+
+	my %printed_parts;
+	for my $taxon_no ( @with_data )	{
+		if ( $q->param('all_parts') =~ /y/i && $measured_parts{$taxon_no} < ( $#part_list + 1 ) * $types )	{
+			next;
+		}
+		my $p_table = $tables{$taxon_no};
+		for my $part ( @part_list )	{
+			if ( $measured_types{$taxon_no}{$part} < $types )	{
+				next;
+			}
+			$printed_parts{$taxon_no}++;
 			my $m_table = %$p_table->{$part};
 			if ( $m_table )	{
 				$printed_part = $part;
@@ -1411,8 +1611,8 @@ sub displayDownloadMeasurementsResults  {
 				$records{$part}++;
 				$specimens{$part} += $m_table->{'specimens_measured'};
 				$rows++;
-				foreach my $type (('length','width','height','circumference','diagonal','inflation'))	{
-					if ( exists ($m_table->{$type}) && $q->param($type) =~ /y/i && $m_table->{$type}{'average'} > 0 )	{
+				for my $type (('length','width','height','circumference','diagonal','inflation'))	{
+					if ( $m_table->{$type} && $q->param($type) =~ /y/i && $m_table->{$type}{'average'} > 0 )	{
 						if ( $sep =~ /,/ )	{
 							print OUT "\"$name{$taxon_no}\"",$sep;
 						} else	{
@@ -1440,7 +1640,10 @@ sub displayDownloadMeasurementsResults  {
 						if ( $q->param('extant') =~ /y/i )	{
 							print OUT $extant{$taxon_no},$sep;
 						}
-						print OUT $printed_part,$sep,$type,$sep,$m_table->{'specimens_measured'};
+						print OUT $printed_part,$sep,$type;
+						if ( $q->param('specimens_measured') =~ /y/i )	{
+							print OUT $sep,$m_table->{'specimens_measured'};
+						}
 						foreach my $column ( @columns )	{
 							my $value = $m_table->{$type}{$column};
 							print OUT $sep;
@@ -1495,7 +1698,8 @@ sub displayDownloadMeasurementsResults  {
 	} else	{
 		printf "<p>%d kinds of body parts</p>\n",$#temp+1;
 	}
-	printf "<p>%d species</p>\n",$#with_data+1;
+	my @temp = keys %printed_parts;
+	printf "<p>%d species</p>\n",$#temp+1;
 	if ( $rows == 1 )	{
 		print "<p>$rows data record</p>\n";
 	} else	{
