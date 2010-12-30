@@ -733,7 +733,7 @@ sub processMeasurementForm	{
         # prevent duplication by resubmission of form for "new" specimen JA 21.12.10
         # this is pretty conservative...
         if ( $fields{'specimen_no'} <= 0 )	{
-            $sql = "SELECT specimen_no FROM specimens WHERE ((specimen_id='".$fields{'specimen_id'}."' AND specimen_id IS NOT NULL) OR (specimen_id IS NULL AND taxon_no=".$fields{'taxon_no'}." AND taxon_no>0) OR (specimen_id IS NULL AND occurrence_no=".$fields{'occurrence_no'}." AND occurrence_no>0)) AND specimen_part='".$fields{'specimen_part'}."'";
+            $sql = "SELECT specimen_no FROM specimens WHERE ((specimen_id='".$fields{'specimen_id'}."' AND specimen_id IS NOT NULL) OR (specimen_id IS NULL AND taxon_no=".$fields{'taxon_no'}." AND taxon_no>0) OR (specimen_id IS NULL AND occurrence_no=".$fields{'occurrence_no'}." AND occurrence_no>0)) AND BINARY specimen_part='".$fields{'specimen_part'}."'";
             $fields{'specimen_no'} = ${$dbt->getData($sql)}[0]->{'specimen_no'};
         }
 
@@ -1354,11 +1354,15 @@ sub displayDownloadMeasurementsResults  {
 	my $collections;
 	if ( $q->param('collection_names') =~ /^[A-Za-z0-9]/i )	{
 		$collections = $q->param('collection_names');
-		if ( $q->param('collections') =~ /^[0-9 \t\n]+$/ )	{
-			$collections =~ s/[ \t\n]/,/g;
-			$collections = "collection_no IN (".$collections.")";
+		$collections =~ s/[^A-Za-z0-9 :;,\.\-\(\)\'"]//g;
+		if ( $collections =~ /^[0-9 ,]+$/ )	{
+			$collections =~ s/ /,/g;
+			while ( $collections =~ /,,/ )	{
+				$collections =~ s/,,/,/g;
+			}
+			$collections = "c.collection_no IN (".$collections.")";
 		} else	{
-			$collections =~ s/[ \t\n]/','/g;
+			$collections =~ s/\'/\\\'/g;
 			$collections = "(collection_name LIKE ('%".$collections."%') OR collection_aka LIKE ('%".$collections."%') )";
 		}
 	}
@@ -1388,7 +1392,7 @@ sub displayDownloadMeasurementsResults  {
 	my $strat_unit;
 	if ( $q->param('group_formation_member') =~ /^[A-Z]/i )	{
 		$strat_unit = $q->param('group_formation_member');
-		$strat_unit =~ s/\'/\'\'/g;
+		$strat_unit =~ s/\'/\\\'/g;
 		$strat_unit = "(geological_group='".$strat_unit."' OR formation='".$strat_unit."' OR member='".$strat_unit."')";
 	}
 
@@ -1556,8 +1560,9 @@ sub displayDownloadMeasurementsResults  {
 		}
 	}
 
-	# this is slightly inefficient because getMeasurementTable has returned all parts, but that
-	#  function is fast enough that it's not worth rewriting to only return part_list
+	# this is slightly inefficient because getMeasurementTable has returned all parts,
+	#  but that function is fast enough that it's not worth rewriting to only return
+	#  part_list
 	if ( $q->param('part_list') )	{
 		@part_list = split /[^A-Za-z0-9 ]/,$q->param('part_list');
 		s/^[ ]+// foreach @part_list;
@@ -1667,6 +1672,12 @@ sub displayDownloadMeasurementsResults  {
 		}
 	}
 	close OUT;
+	if ( $rows < 1 )	{
+		my $errorMessage = '<center><p class="medium"><i>None of the collections include data for '.$q->param('taxon_name').'. Please try another name or broaden your search criteria.</i></p></center>';
+		print PBDBUtil::printIntervalsJava($dbt,1);
+		main::displayDownloadMeasurementsForm($errorMessage);
+		return;
+	}
 	print "<div style=\"margin-left: 10em; margin-bottom: 5em;\">\n\n";
 	print "<p class=\"pageTitle\" style=\"margin-left: 8em;\">Download results</p>\n";
 	print "<p class=\"darkList\" style=\"width: 30em; padding: 0.1em; padding-left: 3em;\">Summary</p>\n";
