@@ -42,6 +42,7 @@ my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
 my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 my @ecoFields = (); # Note: generated at runtime in setupQueryFields
 my @pubyr = ();
+my @continents = ('North America','South America','Europe','Africa','Antarctica','Asia','Australia','Indian Ocean','Oceania');
 my @reso_types_group = ('aff.','cf.','ex gr.','new','sensu lato','?','"','informal','other');
 
 my $OUT_HTTP_DIR = "/public/downloads";
@@ -402,23 +403,19 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type_',\@collection_types_group);
 
     # Continents or country
-    my (@continents,@paleocontinents);
+    my (@checkedcontinents,@paleocontinents);
     # If a country was selected, ignore the continents JA 6.7.02
     if ( $q->param("country") )    {
         $html .= $self->retellOptionsRow ( "Country", $q->param("include_exclude_country") . " " . $q->param("country") );
     }
     else    {
-        if ( $q->param("Africa"))             { push ( @continents, "Africa" ); }
-        if ( $q->param("Antarctica") )         { push ( @continents, "Antarctica" ); }
-        if ( $q->param("Asia") )             { push ( @continents, "Asia" ); }
-        if ( $q->param("Australia") )         { push ( @continents, "Australia" ); }
-        if ( $q->param("Europe") )             { push ( @continents, "Europe" ); }
-        if ( $q->param("Indian Ocean") )             { push ( @continents, "Indian Ocean" ); }
-        if ( $q->param("Oceania") )             { push ( @continents, "Oceania" ); }
-        if ( $q->param("North America") )     { push ( @continents, "North America" ); }
-        if ( $q->param("South America") )     { push ( @continents, "South America" ); }
-        if ( $#continents > -1 ) {
-            $html .= $self->retellOptionsRow ( "Continents", join (  ", ", @continents ) );
+        for my $c ( @continents )	{
+            if ( $q->param($c))	{
+                push ( @checkedcontinents, $c );
+            }
+        }
+        if ( $#checkedcontinents > -1 && $#continents > $#checkedcontinents )	{
+            $html .= $self->retellOptionsRow ( "Continents", join (  ", ", @checkedcontinents ) );
         }
 
         for my $p ( 'paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan' )	{
@@ -694,6 +691,20 @@ sub getCountryString {
     my $q = $self->{'q'};
     my $dbh = $self->{'dbh'};
 
+    my @checkedcontinents;
+    for my $c ( @continents )	{
+        if ( $q->param($c) eq 'YES' )	{
+            push @checkedcontinents , $c;
+        }
+    }
+
+    if ( $#continents == $#checkedcontinents )	{
+        $q->param($_ => '') foreach @continents;
+        if ( ! $q->param('country') )	{
+            return;
+        }
+    }
+
     my $country_sql = "";
     my $in_str = "";
 
@@ -721,12 +732,9 @@ sub getCountryString {
         }
         close REGIONS;
         # Add the countries within selected regions
-        my @regions = ( 'North America', 'South America', 'Europe', 'Africa', 'Antarctica', 'Asia', 'Australia', 'Indian Ocean', 'Oceania');
 
-        foreach my $region (@regions) {
-            if($q->param($region) eq 'YES') {
-                $in_str = $in_str .','. "'".join("','", split(/\t/,$REGIONS{$region}))."'";
-            }
+        for my $c (@checkedcontinents) {
+            $in_str = $in_str .','. "'".join("','", split(/\t/,$REGIONS{$c}))."'";
             $in_str =~ s/^,//; 
         }
         if ($in_str) {
@@ -1647,7 +1655,11 @@ sub getCollectionsWhereClause {
         # Clean it up
             my @nos = split(/[^0-9]/,$q->param('restrict_to_list'));
             @nos = map {int($_)} @nos;
-            push @where, "c.".$q->param('restrict_to_field')." IN (".join(",",@nos).")";
+            if ( $q->param('restrict_to_field') =~ /reference_no/ )	{
+                push @where, "(c.reference_no IN (".join(",",@nos).") OR sr.reference_no IN (".join(",",@nos)."))";
+            } else	{
+                push @where, "c.".$q->param('restrict_to_field')." IN (".join(",",@nos).")";
+            }
         }
     }
 
@@ -1939,7 +1951,7 @@ sub queryDatabase {
     }
     
     # Handle matching against secondary refs
-    if($q->param('research_group') =~ /^(?:divergence|decapod|ETE|5%|1%|PACED|PGAP)$/){
+    if($q->param('research_group') =~ /^(?:divergence|decapod|ETE|5%|1%|PACED|PGAP)$/ || ( $q->param('restrict_to_field') =~ /reference_no/ && $q->param('restrict_to_list') =~ /[0-9]/ ) )	{
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
     }
 
@@ -2082,7 +2094,6 @@ sub queryDatabase {
     }
 
     $self->dbg("<b>Occurrences query:</b><br>\n$sql<br>");
-
 
     if (@form_errors) {
 #        print Debug::printErrors(\@form_errors);
@@ -4195,7 +4206,6 @@ sub setupQueryFields {
     my $dbt = $self->{'dbt'};
     $self->{'setup_query_fields_called'} = 1;
 
-    my @continents = ('North America','South America','Europe','Africa','Antarctica','Asia','Australia','Indian Ocean','Oceania');
     foreach my $c (@continents) {
         if ($q->param('country') eq $c) {
             $q->param($c=>"YES");
