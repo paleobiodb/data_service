@@ -1609,7 +1609,13 @@ sub fixMassEstimates	{
 	my $sql = "SELECT parent_no FROM opinions WHERE child_no=".$taxon_no." AND status!='belongs to'";
 	my @parents = @{$dbt->getData($sql)};
 	my @entangled = ( TaxonInfo::getSeniorSynonym($dbt,$taxon_no) );
-	push @entangled , TaxonInfo::getSeniorSynonym($dbt,$_->{'parent_no'}) foreach @parents;
+	# the parent is 0 in some old bad nomen dubium opinions
+	for my $p ( @parents )	{
+		my $ss = TaxonInfo::getSeniorSynonym($dbt,$p->{'parent_no'});
+		if ( $ss > 0 )	{
+			push @entangled , $ss;
+		}
+	}
 	for my $e ( @entangled )	{
 		my @in_list = TaxonInfo::getAllSynonyms($dbt,$e);
 		my $sql = "UPDATE $TAXA_TREE_CACHE SET mass=NULL WHERE taxon_no IN (".join(',',@in_list).")";
