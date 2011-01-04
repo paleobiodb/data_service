@@ -10,7 +10,7 @@ html, body {
 	padding: 0px;
 	background-color: WhiteSmoke;
 	font-family: Verdana, Arial, Helvetica, sans-serif;
-	font-size: 0.9em;
+	font-size: 0.95em;
 }
 
 img {
@@ -67,14 +67,14 @@ A:hover.menu {
 	text-decoration:none; 
 }
 
-.homeBodyLinks a:link { color: royalblue; }
-.homeBodyLinks a:visited { color: royalblue; }
-.homeBodyLinks a:active { color: lightcoral; }
-.homeBodyLinks a:hover { color: lightcoral; }
-a:link.homeBodyLinks { color: royalblue; }
-a:visited.homeBodyLinks { color: royalblue; }
-a:active.homeBodyLinks { color: lightcoral; }
-a:hover.homeBodyLinks { color: lightcoral; }
+.homeBodyLinks a:link { color: DarkBlue; }
+.homeBodyLinks a:visited { color: DarkBlue; }
+.homeBodyLinks a:active { color: Gold; }
+.homeBodyLinks a:hover { color: Gold; }
+a:link.homeBodyLinks { color: DarkBlue; }
+a:visited.homeBodyLinks { color: DarkBlue; }
+a:active.homeBodyLinks { color: Gold; }
+a:hover.homeBodyLinks { color: Gold; }
 
 A:link.boring	{
 	color : #7070FF;
@@ -144,7 +144,7 @@ H6 {font-size: .9em;}
     top: 0px;
     left: 0px;
     height: 100%;
-    width: 59em;
+    width: 67em;
     padding-top: 2em;
     padding-left: 1em;
     margin-left: 1em; 
@@ -155,7 +155,7 @@ H6 {font-size: .9em;}
 .mainBodyGuest {
     position: relative;
     height: 100%;
-    width: 60em;
+    width: 68em;
     margin-left: auto;
     margin-right: auto;
     text-align: left;
@@ -166,7 +166,7 @@ H6 {font-size: .9em;}
     position: absolute;
     top: 55px;
     left: 0px;
-    width: 58em;
+    width: 66em;
     margin-top: 2em;
     padding-left: 1em;
     padding-right: 1em;
@@ -174,21 +174,22 @@ H6 {font-size: .9em;}
 }
 
 #homeBanner	{
-    min-width: 52em; /* needed because scrolling across when a window is small
+    min-width: 60em; /* needed because scrolling across when a window is small
                           causes the image to be truncated */
 
     position: absolute;
     top: 0px;
+    left: 0px;
     margin-left: 8em;
     height: 50px;
-    width: 52em;
-    text-align: center;
+    width: 60em;
+    text-align: left;
     border-right: 1px solid DarkGray;
     z-index: 8;
 }
 
 #homeLinks	{
-    min-width: 52em; /* needed because scrolling down when a window is small
+    min-width: 60em; /* needed because scrolling down when a window is small
                           causes the image to be truncated */
     position: absolute;
     top: 50px;
@@ -196,13 +197,12 @@ H6 {font-size: .9em;}
     margin-left: 8em;
     z-index: 8; 
     height: 2em;
-    width: 52em;
+    width: 60em;
     border-right: 1px solid DarkGray;
 }
 
 #homeLinksMenu {
     height: 2em;
-    width: 52em;
     position: relative;
     left: 8em;
     top: 0px;
@@ -211,7 +211,7 @@ H6 {font-size: .9em;}
     border-right: 1px solid LightGray;
 }
 
-.corner	{
+.bannerColor	{
     background-color: #191970;
 }
 
@@ -243,66 +243,11 @@ H6 {font-size: .9em;}
     z-index: 6;
 }
 
-.leftBar a:link { color: white; }
-.leftBar a:visited { color: white; }
-.leftBar a:hover { color: gold; }
-.leftBar a:active { color: gold; }
+.infoLink a:link { color: LightCyan; }
+.infoLink a:visited { color: LightCyan; }
+.infoLink a:hover { color: Gold; }
+.infoLink a:active { color: Gold; }
 
-
-.leftBarSection	{
-    display: inline;
-    position: relative;
-    float: left;
-    clear: both;
-    width: 8em;
-    padding-bottom: 0.5em;
-    border-bottom: 1px solid #191970;
-    overflow: hidden;
-}
-
-.plusMinus	{
-    display: inline;
-    position: relative;
-    float: left;
-    clear: left;
-    margin-left: 0.5em;
-    margin-right: 0.4em;
-    margin-top: 0.8em;
-    font-family: Monaco;
-    color: white;
-}
-
-.leftBarHeader	{
-    display: inline;
-    position: relative;
-    float: left;
-    clear: right;
-    margin-top: 1em;
-    margin-bottom: 0.75em;
-    font-size: 0.9em;
-    color: white;
-}
-
-.barLinks	{
-    position: relative;
-    float: left;
-    clear: both;
-    display: none;
-}
-
-.leftBarLink	{
-    position: relative;
-    float: left;
-    clear: both;
-    width: 8em;
-    margin: 0.5em;
-    margin-left: 1.0em;
-/* padding must be specified because IE cannot handle negative text-indents */
-    padding-left: 0.6em;
-    text-indent: -0.5em;
-    color: white;
-    font-size: 0.75em;
-}
 
 .topImage	{
     display: inline;
@@ -316,6 +261,21 @@ H6 {font-size: .9em;}
     border-bottom: 1px solid LightGray;
   /* fixes Safari rendering problem */
     text-align: center;
+}
+
+.imageWrapper	{
+	position: absolute;
+	top: 0em;
+	left: 1em;
+	height: 18.5em;
+	width: 37em;
+	overflow: hidden;
+}
+
+.rotatingImage	{
+	margin-top: 1em;
+	width: 37em;
+	opacity: 0;
 }
 
 .fixedWidth {
@@ -602,7 +562,7 @@ table.navbox {
 }
 
 .panelNavbar	{
-    width: 56em;
+    width: 64em;
     font-size: 0.9em;
 }  
 
@@ -648,7 +608,7 @@ table.navbox {
     position: absolute;
     margin-top: 2em;
     margin-left: -1px;
-    width: 56em;
+    width: 64em;
     z-index: 1;
     visibility: hidden;
     padding: 1em;
@@ -761,7 +721,7 @@ td.fixedLabel {
 #dropDown a:hover { color : white; text-decoration:none; }
 
 
-#dropDown td {
+#dropDown {
     height: 2.5em;
     padding-left: 0.5em;
     padding-right: 0.5em;
@@ -769,21 +729,13 @@ td.fixedLabel {
     text-align: left;
     text-decoration: none;
     font-size: 0.9em;
-    border-left: 1px solid white;
 }
 
-#dropDown td.dropDownBullet {
-    border: none;
-    width: auto;
-    padding-left: 1.5em;
-    padding-right: 1.5em;
-}
-
-#dropDown td ul {
+#dropDown ul {
     text-align: left;
     background: #B0B0C0;
-    opacity: 0.80;
-    filter: alpha(opacity=80);
+    opacity: 0.95;
+    filter: alpha(opacity=95);
     border: 1px solid white;
     position: absolute;
     top: 1.1em;
@@ -792,24 +744,24 @@ td.fixedLabel {
     z-index: 999;
     display: none;
 }
-#dropDown td ul a:link,#dropDown td ul a:visited, #dropDown td ul a:hover {
+#dropDown ul a:link,#dropDown ul a:visited, #dropDown ul a:hover {
     color: #FFFFFF;
 }
-#dropDown td ul li:hover, #dropDown td ul li.sfhover {
+#dropDown ul li:hover, #dropDown ul li.sfhover {
     background: #FFFFFF;
 }
-#dropDown td ul a:hover {
+#dropDown ul a:hover {
     color: #000000;
 }
 
 /* This makes the div a bit bigger so the UL below it 
    (the drop down menu) is flush with the bottom of the top menu
   adding some padding JA 19.5.06 */
-#dropDown div.dropDownVertSpacer {
+#dropDown div#dropDownVertSpacer {
     height: 1.5em;
 }
 
-.dropDownShadow	{
+#dropDownShadow	{
     position: relative;
     float: left;
     clear: none;
@@ -819,7 +771,7 @@ td.fixedLabel {
     background-color: slategray;
 }
 
-#dropDown td ul li {
+#dropDown ul li {
     font-size : 0.95em;
     white-space: nowrap;
     text-align: left;
@@ -829,7 +781,7 @@ td.fixedLabel {
     padding: 0.15em;
 }
 
-#dropDown td:hover ul, #dropDown td.sfhover ul {
+#dropDown:hover ul, #dropDown.sfhover ul {
     display: block;
 }
 
