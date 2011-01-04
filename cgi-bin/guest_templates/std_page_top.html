@@ -29,9 +29,9 @@
 window.onload = changeBackground();
 
 function changeBackground()	{
-if ( /MSIE/i.test(navigator.userAgent) )	{
-	document.body.style.backgroundColor = 'White';
-}
+	if ( /MSIE/i.test(navigator.userAgent) )	{
+		document.body.style.backgroundColor = 'White';
+	}
 }
 
 //-->
@@ -42,12 +42,12 @@ if ( /MSIE/i.test(navigator.userAgent) )	{
 <div class="mainBodyGuest">
 
 <div style="float: left; clear: none; width: 8em; position: relative; z-index: 9;">
-  <div class="corner" style="height: 50px; width: 8em; padding-top: 0px; text-align: center;">
+  <div class="bannerColor" style="height: 50px; width: 8em; padding-top: 0px; text-align: center;">
   </div>
-  <div id="cornerBottomPadding" class="corner" style="width: 8em; height: 2em;">
+  <div id="cornerBottomPadding" class="bannerColor" style="width: 8em; height: 2em;">
   </div>
   <div style="position: absolute; top: 0px; left: 0px; width: 8em; text-align: center;">
-    <a class="corner" href="%%read_url%%?user=Guest&amp;action=displayHomePage" style="color: #191970;">
+    <a class="bannerColor" href="%%read_url%%?user=Guest&amp;action=displayHomePage" style="color: #191970;">
     <span style="position: relative; top: 0px; left: 0px; margin-top: 1em; margin-left: auto; margin-right: auto;">
     <img alt="ammonites" height="66" src="/public/bannerimages/corner-ammonites.gif">
     </span>
@@ -55,11 +55,11 @@ if ( /MSIE/i.test(navigator.userAgent) )	{
   </div>
 </div>
 
-<div id="homeBanner" style="position: absolute; top: 0px; left: 0px; width: 52em;">
-  <div class="sides">
+<div id="homeBanner">
+  <div class="bannerColor">
     %%ete_banner%%
     <a href="%%read_url%%?user=Guest&amp;action=displayHomePage" style="color: #4169E1;">
-    <img alt="banner" src="/public/bannerimages/plain-banner.gif" height="51" width="494">
+    <img alt="banner" src="/public/bannerimages/antipasto.png" height="51">
     </a>
   </div>
 </div>
@@ -70,26 +70,18 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
 </p>
 </noscript>
 
-<div class="sides" id="homeLinks">
-	<!-- Menu -->
-    <table width="100%" border="0" cellpadding="0" cellspacing="0" id="dropDown">
-      <tr>
+<div class="bannerColor" id="homeLinks">
 
-        <td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
-	<td align="left" nowrap style="width: 9em;">
-          <div class="dropDownVertSpacer">
-<div class="small">
+	<div class="small" id="quickSearchDiv" style="position: absolute; top: 0em; left: 29.75em;">
 <form method="POST" action="%%read_url%%" onSubmit="return checkName(0,2);">
 <input type="hidden" name="action" value="quickSearch">
 <input type="hidden" name="last_taxon" value="$taxon_no">
-<input type="text" name="quick_search" value="Quick search" size="12" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em; position: absolute; left: 4.2em; bottom: 0.3em;">
+<input type="text" name="quick_search" value="Quick search" size="11" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em; background: MidnightBlue; border: none; color: white;">
 </form>
-</div>
-          </div>
-        </td>
+        </div>
 
-        <td align="left" nowrap>
-          <div class="dropDownVertSpacer"> 
+	<div id="dropDown" style="position: absolute; top: 0em; left: 37.5em;">
+          <div id="dropDownVertSpacer">
             <div><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view">Full search</a></div>
           </div>
           <ul>
@@ -101,11 +93,10 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?action=startScale">Time scales</a></li>
             <li><a href="%%read_url%%?action=displayInterval&amp;interval_no=33">Time intervals</a></li>
           </ul>
-        </td>
+        </div>
 
-	<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
-        <td align="left" nowrap>
-          <div class="dropDownVertSpacer"> 
+	<div id="dropDown" style="position: absolute; top: 0em; left: 44.5em;">
+          <div id="dropDownVertSpacer"> 
             <div><a href="%%read_url%%?user=Guest&amp;action=displayBasicDownloadForm">Download</a></div>
           </div>
           <ul>
@@ -114,11 +105,10 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?user=Guest&amp;action=displayDownloadMeasurementsForm">Measurements of specimens</a></li>
             <li><a href="%%read_url%%?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune data</a></li>
           </ul>
-        </td>
+        </div>
 
-	<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
-        <td align="left" nowrap>
-          <div class="dropDownVertSpacer">
+	<div id="dropDown" style="position: absolute; top: 0em; left: 51em;">
+          <div id="dropDownVertSpacer">
             <div><a href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">Analyze</a></div>
           </div>
           <ul>
@@ -132,11 +122,10 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?user=Guest&amp;action=displayTaxaIntervalsForm">Analyze taxonomic ranges</a></li>
             <li><a href="%%read_url%%?user=Guest&amp;action=displaySearchSectionForm">Analyze stratigraphic sections</a></li> 
           </ul>
-        </td>
+        </div>
 
-	<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
-        <td align="left" nowrap>
-          <div class="dropDownVertSpacer"> 
+	<div id="dropDown" style="position: absolute; top: 0em; left: 56.5em;">
+          <div id="dropDownVertSpacer"> 
             <div><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">About</a></div>
           </div>
           <ul>
@@ -147,18 +136,14 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?action=displayInstitutions">Contributing institutions</a></li>
             <li><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=workshop_2011">2011 training workshop</a></li>
           </ul>
-        </td>
+        </div>
 
-	<td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
-	<td align="left" nowrap>
-          <div class="dropDownVertSpacer"> 
+	<div id="dropDown" style="position: absolute; top: 0em; left: 61em;">
+          <div id="dropDownVertSpacer"> 
             <div><a href="%%write_url%%?action=displayMenuPage&amp;user=Contributor">Log in</a></div>
           </div>
-        </td>
-        <td align="left" class="dropDownBullet"><div class="dropDownVertSpacer"></div></td>
-        
-      </tr>
-    </table>
+        </div>
+
 </div> <!-- end homeLinks -->
 
 <div class="bannerSpacer">
