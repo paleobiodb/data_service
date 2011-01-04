@@ -1302,7 +1302,7 @@ sub displayCollectionDetails {
 
     my $page_vars = {};
     if ( $coll->{'research_group'} =~ /ETE/ && $q->param('guest') eq '' )	{
-        $page_vars->{ete_banner} = "<div style=\"padding-left: 3em; float: left;\"><img alt=\"ETE\" src=\"/public/bannerimages/ete_logo.jpg\"></div>";
+        $page_vars->{ete_banner} = "<div style=\"padding-left: 0em; padding-right: 2em; float: left;\"><a href=\"http://www.mnh.si.edu/ETE\"><img alt=\"ETE\" src=\"/public/bannerimages/ete_logo.jpg\"></a></div>";
     }
     print $hbo->stdIncludes('std_page_top', $page_vars);
 
