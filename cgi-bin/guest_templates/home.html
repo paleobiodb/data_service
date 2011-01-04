@@ -2,40 +2,42 @@
 <script language="JavaScript" type="text/javascript">
   <!--
 
-  window.onload = startPage;
+	window.onload = startPage();
+	var op = 0;
+	var step = 0;
 
-  function startPage()    {
-        animsrc = "/public/animations/homepage/homepage.gif";
-        document["homepage_anim"].src = animsrc;
-  }
+	function startPage()    {
+		animsrc = "/public/animations/homepage/homepage.gif";
+		document["homepage_anim"].src = animsrc;
+		setInterval(fadeImage , 2);
+	}
 
-  function showLinks(batch)	{
-        for (var i=1; i<=8; i++)	{
-            hideLinks(i);
-        }
-        document.getElementById('leftBarSection'+batch).style.backgroundColor = '#191970';
-        document.getElementById('barLinksPlus'+batch).style.display = 'none';
-        document.getElementById('barLinksMinus'+batch).style.display = 'inline';
-        document.getElementById('barLinks'+batch).style.display = 'inline';
-  }
-  function hideLinks(batch)	{
-        document.getElementById('leftBarSection'+batch).style.backgroundColor = '#4169E1';
-        document.getElementById('barLinksPlus'+batch).style.display = 'inline';
-        document.getElementById('barLinksMinus'+batch).style.display = 'none';
-        document.getElementById('barLinks'+batch).style.display = 'none';
-  }
+function fadeImage()     {
+	step = step + 1;
+	var max = 2400;
+	var current = Math.floor( step / 400 ) + 1;
+	var next = current + 1;
+	if ( next > 6 )	{
+		next = 1;
+	}
+	var stage = Math.floor( ( step - current * 400 + 400 ) / 100 );
+	// fade out and in after two second delay
+	if ( stage == 2 )	{
+		op = op + 0.01;
+		document.getElementById('image'+current).style.opacity = 1 - op;
+		document.getElementById('image'+next).style.opacity = op;
+	// >= instead of == because JavaScript messes up the addition (!)
+		if ( op >= 1 )	{
+			op = 0;
+		}
+	}
+	if ( step == max )   {
+		step = 0;
+	}
+}
 
   -->
 </script>
-
-<div style="position: fixed; bottom: 0; height: 100%; width: 100%;">
-<div style="position: relative; height: 100%; z-index: 0;">
-<div style="position: relative; bottom: 0px; left: -1em; height: 100%; width: 8em; background-color: #4169E1;">
-</div>
-</div>
-</div>
-
-
 
 <!-- box surrounding main area -->
 
@@ -43,158 +45,6 @@
 
 
 <!-- navigation bar at left -->
-
-<!-- an inscrutable Explorer bug makes it necessary to make both homeBodyGuest
-     and leftBar classes instead of ids and to define color within leftBar (?) -->
-<div class="leftBar" style="overflow: auto;">
-
-<div class="leftBarSection" id="leftBarSection1">
-<div class="plusMinus">
-<span id="barLinksPlus1" onClick="showLinks(1);">+</span>
-<span id="barLinksMinus1" onClick="hideLinks(1);" style="display: none;">-</span>
-</div>
-<div class="leftBarHeader" onClick="showLinks(1);" style="overflow: auto;">
-Distribution
-</div>
-
-<div class="barLinks" id="barLinks1">
-<!--<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=about_distribution">intro</a></span>-->
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view">fossil collections</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=beginTaxonInfo">individual plants and animals</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchRefs&amp;type=view">published references</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayBasicDownloadForm">download collection, occurrence, or specimen data</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayDownloadNeptuneForm">download Neptune data</a></span>
-</div>
-</div>
-
-<div class="sides leftBarSection" id="leftBarSection2">
-<div class="plusMinus">
-<span id="barLinksPlus2" onClick="showLinks(2);">+</span>
-<span id="barLinksMinus2" onClick="hideLinks(2);" style="display: none;">-</span>
-</div>
-<div class="leftBarHeader" onClick="showLinks(2);">
-Taxonomy
-</div>
-
-<div class="barLinks" id="barLinks2" style="display: none;">
-<!--<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=about_taxonomy">intro</a></span>-->
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=startStartPrintHierarchy">classification of everything in a group</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayDownloadTaxonomyForm">download taxonomic names and opinions</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayDownloadMeasurementsForm">download measurements of specimens</a></span>
-</div>
-</div>
-
-<div class="leftBarSection" id="leftBarSection3">
-<div class="plusMinus">
-<span id="barLinksPlus3" onClick="showLinks(3);">+</span>
-<span id="barLinksMinus3" onClick="hideLinks(3);" style="display: none;">-</span>
-</div>
-<div class="leftBarHeader" onClick="showLinks(3);">
-Stratigraphy
-</div>
-
-<div class="barLinks" id="barLinks3">
-<!--<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=about_stratigraphy">intro</a></span>-->
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchStrataForm">stratigraphic units</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?action=startScale">time scales</a></span>
-<span class="leftBarLink"><a href="/cgi-bin/%%read_url%%?action=displayInterval&amp;interval_no=33">time intervals</a></span>
-</div>
-</div>
-
-<div class="leftBarSection" id="leftBarSection4">
-<div class="plusMinus">
-<span id="barLinksPlus4" onClick="showLinks(4);">+</span>
-<span id="barLinksMinus4" onClick="hideLinks(4);" style="display: none;">-</span>
-</div>
-<div class="leftBarHeader" onClick="showLinks(4);"">
-Tools
-</div>
-
-<div class="barLinks" id="barLinks4" style="display: none;">
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">paleomaps</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayReportForm">data summary tables</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=most_common">common taxa</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=beginFirstAppearance">first appearances</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayCurveForm">diversity curve data</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=analyze_abundance">ecological statistics</a></span>
-<span class="leftBarLink"><a href="/cgi-bin/%%read_url%%?action=displayTaxaIntervalsForm">time scale confidence intervals</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?action=displaySearchSectionForm">stratigraphic confidence intervals</a></span>
-</div>
-</div>
-
-<div class="leftBarSection" id="leftBarSection5">
-<div class="plusMinus">
-<span id="barLinksPlus5" onClick="showLinks(5);">+</span>
-<span id="barLinksMinus5" onClick="hideLinks(5);" style="display: none;">-</span>
-</div>
-<div class="leftBarHeader" onClick="showLinks(5);">
-Explore
-</div>
-
-<div class="barLinks" id="barLinks5">
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">FAQ</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=animations">paleogeographic animations</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?action=displayPage&amp;page=dinosaurs">dinosaur facts and figures</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?action=randomTaxonInfo">random species</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=word_odds_form">analyze paper titles</a></span>
-</div>
-</div>
-
-<div class="leftBarSection" id="leftBarSection6">
-<div class="plusMinus">
-<span id="barLinksPlus6" onClick="showLinks(6);">+</span>
-<span id="barLinksMinus6" onClick="hideLinks(6);" style="display: none;">-</span>
-</div>
-<div class="leftBarHeader" onClick="showLinks(6);">
-Activities
-</div>
-
-<div class="barLinks" id="barLinks6">
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=join_us">join the Database</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=workshop_2011">2011 analytical methods workshop</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=publications">official publications</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=working_groups">working groups</a></span>
-</div>
-</div>
-
-<div class="leftBarSection" id="leftBarSection7">
-<div class="plusMinus">
-<span id="barLinksPlus7" onClick="showLinks(7);">+</span>
-<span id="barLinksMinus7" onClick="hideLinks(7);" style="display: none;">-</span>
-</div>
-<div class="leftBarHeader" onClick="showLinks(7);">
-Mirrors
-</div>
-
-<div class="barLinks" id="barLinks7">
-<span class="leftBarLink"><a href="http://paleodb.science.mq.edu.au">Macquarie University</a></span>
-<span class="leftBarLink"><a href="http://mfnpaleo.paleodatabase.de">Museum f&uuml;r Naturkunde</a></span>
-<span class="leftBarLink"><a href="http://flatpebble.nceas.ucsb.edu">UCSB</a></span>
-<span class="leftBarLink"><a href="http://paleodb.geology.wisc.edu">University of Wisconsin-Madison</a></span>
-</div>
-</div>
-
-<div class="leftBarSection" id="leftBarSection8">
-<div class="plusMinus">
-<span id="barLinksPlus8" onClick="showLinks(8);">+</span>
-<span id="barLinksMinus8" onClick="hideLinks(8);" style="display: none;">-</span>
-</div>
-<div class="leftBarHeader" onClick="showLinks(8);">
-Info
-</div>
-
-<div class="barLinks" id="barLinks8">
-<span class="leftBarLink"><a href="%%read_url%%?action=displayAuthorizers">participating researchers</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?action=displayInstitutions">participating institutions</a></span>
-<span class="leftBarLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">Coordinator, developer, and database manager</a></span>
-<span class="leftBarLink"><a href="http://paleodb.org/trac/">source code</a></span>
-</div>
-</div>
-
-<!-- end of navigation bar -->
-</div>
 
   </div>
 
@@ -239,11 +89,29 @@ Info
 <!-- mess with the width at your own peril -->
   <div style="position: relative; float: left; clear: none; width: 50em;">
 
-    <div style="position: absolute; top: 0em; left: 1em; height: 14em; width: 35em; overflow: hidden;">
+    <div class="imageWrapper">
+      <img id="image1" class="rotatingImage" src="/public/images/Kiessling_Ammonites.jpg" style="opacity: 1;">
+    </div>
+    <div class="imageWrapper">
+      <img id="image2" class="rotatingImage" src="/public/images/Feldmann_Longusorbis_2.jpg">
+    </div>
+    <div class="imageWrapper">
+      <img id="image3" class="rotatingImage" src="/public/images/Granger_Grizzly_Buttes.jpg">
+    </div>
+    <div class="imageWrapper">
+      <img id="image4" class="rotatingImage" src="/public/images/Wilf_MH444_2.jpg">
+    </div>
+    <div class="imageWrapper">
+      <img id="image5" class="rotatingImage" src="/public/images/Kiessling_Bone_cellar.jpg" style="width: 38em; opacity: 0;">
+    </div>
+    <div class="imageWrapper">
+      <img id="image6" class="rotatingImage" src="/public/images/Holroyd_dicynodont_2.jpg">
+    </div>
+    <div class="imageWrapper" style="margin-top: 1em; height: 17.5em;">
       <span id="random_names"></span>
     </div>
 
-    <div class="PlainFeatures" style="position: absolute; top: 13.5em; left: -0.5em; height: 77em; width: 15.5em;">
+    <div class="PlainFeatures" style="position: absolute; top: 18em; left: -1em; height: 77em; width: 17em;">
       <div style="position: absolute; left: 1em; top: 0.5em; color: #F0F0F0; font-size: 2em;">
         <i>New species</i>
       </div>
@@ -265,7 +133,7 @@ Info
     </div>
 
 
-    <div class="PlainFeatures" style="position: absolute; top: 13.5em; left: 16em; height: 77em; width: 16.5em; padding-left: 1.5em; border-left: 1px solid darkgray;">
+    <div class="PlainFeatures" style="position: absolute; top: 18em; left: 17em; height: 77em; width: 18em; padding-left: 1.5em; border-left: 1px solid darkgray;">
       <div style="position: absolute; left: 1em; top: 0.5em; color: #F0F0F0; font-size: 2em;">
         <i>New collections</i>
       </div>
@@ -287,7 +155,7 @@ Info
     </div>
 
 
-    <div class="Features" style="display: inline; position: absolute; top: 0.5em; left: 35.5em; height: 12em; width: 13.5em;">
+    <div class="Features" style="display: inline; position: absolute; top: 0.5em; left: 38.5em; height: 12em; width: 13.5em;">
       <div class="FeatureHeadline" style="margin-top: 0.35em; width: 13.5em;">
         <div style="font-size: 0.9em;">
           <i>This hour's totals</i>
@@ -321,19 +189,20 @@ Info
     </div>
 
 
-    <!-- globe at top right -->
-    <div class="Features" style="position: relative; top: 62.5em; left: 35.5em; height: 12.5em; width: 13.5em;">
+    <div class="Features" style="position: relative; top: 62.5em; left: 38.5em; height: 12.5em; width: 13.5em;">
     <div style="position: relative; margin-top: 6em; margin-left: 7.5em;">
 
 <img alt="shadow" src="/public/animations/homepage_shadow.png" height="150" border="0" style="position: absolute; top: -70px; left: -80px;">
+<!--
 <img alt="paleogeographic map" src="/public/animations/homepage/homepage_firstframe.gif" height="170" border="0" style="position: absolute; left: -81px; top: -70px; margin-bottom: 5%;">
-<img alt="paleogeographic animation" name="homepage_anim" src="/public/animations/homepage/homepage_firstframe.gif" height="170" border="0" style="position: absolute; left: -81px; top: -70px; margin-bottom: 5%;">
+-->
+<img alt="paleogeographic animation" id="homepage_anim" src="/public/animations/homepage/homepage_firstframe.gif" height="170" border="0" style="position: absolute; left: -81px; top: -70px; margin-bottom: 5%;">
 
     </div>
     </div>
 
 
-    <div class="Features" style="display: inline; position: absolute; top: 76em; left: 35.5em; height: 14em; width: 13.5em;">
+    <div class="Features" style="display: inline; position: absolute; top: 76em; left: 38.5em; height: 14em; width: 13.5em;">
       <div class="FeatureHeadline">
         <div class="tiny">
           <i>Site addition</i>
@@ -342,13 +211,13 @@ Info
 
       <div class="FeatureText" style="padding-left: 0.75em; padding-right: 0.75em;">
         <div class="verysmall">
-          Try the new <a href=%%read_url%%?user=Guest&amp;action=displayCountForm">taxon counting tool</a>, which lets you count families, genera, and species from different parts of the fossil record. It also lists the names of the taxa that go into the counts (if there aren't too many!).
+          Try the new <a href=%%read_url%%?user=Guest&amp;action=displayCountForm" class="homeBodyLinks">taxon counting tool</a>, which lets you count families, genera, and species from different parts of the fossil record. It also lists the names of the taxa that go into the counts (if there aren't too many!).
         </div>
       </div>
     </div>
 
 
-    <div class="Features" style="position: absolute; top: 37.5em; left: 35.5em; height: 11em; width: 13.5em;">
+    <div class="Features" style="position: absolute; top: 37.5em; left: 38.5em; height: 11em; width: 13.5em;">
       <div class="FeatureHeadline">
         <div class="tiny">
           <i>Featured publication</i>
@@ -367,7 +236,7 @@ Info
     </div>
 
 
-    <div class="Features" style="position: absolute; top: 13.5em; left: 35.5em; height: 23em; width: 13.5em;">
+    <div class="Features" style="position: absolute; top: 13.5em; left: 38.5em; height: 23em; width: 13.5em;">
       <div class="FeatureHeadline">
         <div class="tiny">
           <i>This month's top contributors</i>
@@ -382,7 +251,7 @@ Info
     </div>
 
 
-    <div class="Features" style="position: absolute; top: 49.5em; left: 35.5em; height: 12em; width: 13.5em;">
+    <div class="Features" style="position: absolute; top: 49.5em; left: 38.5em; height: 12em; width: 13.5em;">
       <div class="FeatureHeadline">
         <div class="tiny">
           <i>Featured new members</i>
@@ -398,6 +267,76 @@ Info
           <div style="text-indent: -0.5em; margin-left: 0.5em; padding-bottom: 0.5em;"> Chris Beard, <a class="homeBodyLinks" href="http://www.carnegiemnh.org/vp/cv/beard.htm">Carnegie Museum of Natural History</a></div>
         </div>
       </div>
+    </div>
+
+    <div style="position: absolute; top: -5em; left: 55em; height: 96em; width: 10em; padding-left: 1em; padding-right: 1em; background: MediumBlue; color: white;">
+    <p class="medium">About the site</p>
+    <div class="tiny">
+<p>
+The Paleobiology Database seeks to provide researchers and the public with information about the entire fossil record.
+</p>
+
+<p>
+You can use the site to find out about <span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=view">fossil collections</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=beginTaxonInfo">individual plants and animals</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=startStartPrintHierarchy">taxonomic groups</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchRefs&amp;type=view">references to publications</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchStrataForm">stratigraphic units</a></span>,
+<span class="infoLink"><a href="%%read_url%%?action=startScale">time scales</a></span>, and
+<span class="infoLink"><a href="/cgi-bin/%%read_url%%?action=displayInterval&amp;interval_no=33">time intervals</a></span>.
+</p>
+
+<p>
+All of our data can be downloaded, including
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayBasicDownloadForm">collection, occurrence, or specimen records</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayDownloadTaxonomyForm">taxonomic names and opinions</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayDownloadMeasurementsForm">measurements of specimens</a></span>, and
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayDownloadNeptuneForm">Neptune occurrences</a></span>.
+</p>
+
+<p>
+Tools on the site also let you generate
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayBasicMapForm">paleomaps</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayReportForm">data summary tables</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=most_common">lists of common taxa</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=beginFirstAppearance">first appearances</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayCurveForm">diversity curves</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displaySearchColls&amp;type=analyze_abundance">ecological statistics</a></span>,
+<span class="infoLink"><a href="/cgi-bin/%%read_url%%?action=displayTaxaIntervalsForm">time scale confidence intervals</a></span>,
+<span class="infoLink"><a href="%%read_url%%?action=displaySearchSectionForm">stratigraphic confidence intervals</a></span>, and (just for fun)
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=word_odds_form">paper title stats</a></span>.
+</p>
+
+<p>
+Students may want to see our
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=animations">paleogeographic animations</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=globes">virtual globes</a></span>, and
+lists of <span class="infoLink"><a href="%%read_url%%?action=displayPage&amp;page=dinosaurs">dinosaur facts and figures</a></span>, or learn about a
+<span class="infoLink"><a href="%%read_url%%?action=randomTaxonInfo">random species</a></span>.
+</p>
+
+<p>
+Professional researchers are encouraged to <span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=join_us">join the Database</a></span> and students may want to apply for the
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=workshop_2011">2011 analytical methods workshop</a></span>.
+</p>
+
+<p>
+We maintain mirror sites at
+<span class="infoLink"><a href="http://paleodb.science.mq.edu.au">Macquarie University</a></span>, the
+<span class="infoLink"><a href="http://mfnpaleo.paleodatabase.de">Museum f&uuml;r Naturkunde</a></span>,
+<span class="infoLink"><a href="http://flatpebble.nceas.ucsb.edu">UCSB</a></span>, and the
+<span class="infoLink"><a href="http://paleodb.geology.wisc.edu">University of Wisconsin-Madison</a></span>.
+</p>
+
+<p>
+Finally, you may want to read our <span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=paleodbFAQ">FAQ</a></span> and our lists of
+<span class="infoLink"><a href="%%read_url%%?action=displayAuthorizers">participating researchers</a></span>,
+<span class="infoLink"><a href="%%read_url%%?action=displayInstitutions">participating institutions</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=personnel">personnel</a></span>,
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=OSA">Online Systematics Archives</a></span>, and
+<span class="infoLink"><a href="%%read_url%%?user=Guest&amp;action=displayPage&amp;page=publications">official publications</a></span>.
+</p>
+    </div>
     </div>
 
 
