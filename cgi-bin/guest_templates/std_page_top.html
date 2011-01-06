@@ -26,7 +26,7 @@
 <script language="JavaScript" type="text/javascript">
 <!--
 
-window.onload = changeBackground();
+window.onload = changeBackground;
 
 function changeBackground()	{
 	if ( /MSIE/i.test(navigator.userAgent) )	{
@@ -76,7 +76,7 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
 <form method="POST" action="%%read_url%%" onSubmit="return checkName(0,2);">
 <input type="hidden" name="action" value="quickSearch">
 <input type="hidden" name="last_taxon" value="$taxon_no">
-<input type="text" name="quick_search" value="Quick search" size="11" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em; background: MidnightBlue; border: none; color: white;">
+<input type="text" name="quick_search" value="Quick search" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="position: relative; bottom: 1px; width: 7em; padding-left: 0.2em; font-size: 1.0em; background: MidnightBlue; border: 1px solid white; color: white;">
 </form>
         </div>
 
