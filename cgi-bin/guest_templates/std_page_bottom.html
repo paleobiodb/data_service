@@ -17,22 +17,21 @@
 <script language="JavaScript" type="text/javascript">
 <!--
 
-window.onload = hacks();
-var o = 0;
-
 function hacks()	{
 
 	if ( ! /MSIE/i.test(navigator.userAgent) )	{
 		document.getElementById('bottomBox').style.display = 'block';
 	} else	{
-		document.getElementById('cornerBottomPadding').style.height = '2.5em';
-		document.getElementById('rightImage').style.borderRight = '1px solid LightGray';
+		document.getElementById('about').style.cssText = 'position: absolute; top: -4.5em; left: 55em; height: 98em; width: 12em; padding-top: 1em; padding-left: 1em; padding-right: 1em; background-color: MediumBlue; color: white;';
 	}
 	if ( /Safari/i.test(navigator.userAgent) )	{
 		document.getElementById('quickSearchDiv').style.top = '-0.3em';
 	}
 	document.getElementById('homepage_anim').src = animsrc;
+	return true;
 }
+
+window.onload = hacks;
 
 //-->
 </script>
