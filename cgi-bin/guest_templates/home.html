@@ -8,7 +8,6 @@
 
 	function startPage()    {
 		animsrc = "/public/animations/homepage/homepage.gif";
-		document["homepage_anim"].src = animsrc;
 		setInterval(fadeImage , 2);
 	}
 
@@ -50,7 +49,7 @@ function fadeImage()     {
 
 <!-- artwork at top of main area -->
 
-  <div style="position: relative; float: left; clear: right; top: 0px; left: 0px; height: 64px; width: 50em; background-color: white;">
+  <div style="position: relative; float: left; clear: right; top: 0px; left: 0px; height: 64px; width: 50em; background-color: white; border: none;">
   <div class="topImage" style="position: absolute; top: 0em; left: 0em;">
     <img alt="Pterodactylus" src="/public/bannerimages/Pterodactylus.gif" height="44">
   </div>
@@ -269,7 +268,7 @@ function fadeImage()     {
       </div>
     </div>
 
-    <div style="position: absolute; top: -5em; left: 55em; height: 96em; width: 10em; padding-left: 1em; padding-right: 1em; background: MediumBlue; color: white;">
+    <div id="about" style="position: absolute; top: 0em; left: 55em; margin-top: -70px; height: 96em; width: 10em; padding-left: 1em; padding-right: 1em; background-color: MediumBlue; color: white;">
     <p class="medium">About the site</p>
     <div class="tiny">
 <p>
