@@ -163,7 +163,6 @@ sub submitSpecimenSearch {
             if ($last_collection_no != $row->{'collection_no'}) {
                 $class = ($class eq '') ? $class='class="darkList"' : '';
             }
-            #print "<td><input type=\"radio\" name=\"occurrence_no\" value=\"$row->{occurrence_no}\"> $row->{genus_name} $row->{species_name}</td><td>$measurements</td></tr>";
             print "<tr $class><td><a href=\"$READ_URL?action=displaySpecimenList&occurrence_no=$row->{occurrence_no}\"><nobr><span class=\"small\">$taxon_name</a>$comments</nobr></a></td>";
             if ($last_collection_no != $row->{'collection_no'}) {
                 $last_collection_no = $row->{'collection_no'};
@@ -265,12 +264,12 @@ sub displaySpecimenList {
     my $panelheader = "";
     my $contentstyle = qq|style="padding-top: 1em;"|;
     if ( $called_from ne "processMeasurementForm" )	{
-        $panelheader = $taxon_name . " " . $collection;
+        $panelheader = '<span class="displayPanelHeader">'.$taxon_name.' '.$collection.'</span>';
         $contentstyle = qq|style="padding-top: 1.5em;"|;
     }
     print qq|<center>
 <div class="displayPanel" align="center" style="width: 36em; margin-top: 2em; padding-bottom: 3em;">
-  <span class="displayPanelHeader">$panelheader</span>
+  $panelheader
   <div class="displayPanelContent" $contentstyle>
 |;
     print "<form name=\"specimenList\" method=\"POST\" action=\"$WRITE_URL\">\n";
@@ -451,7 +450,7 @@ sub populateMeasurementForm {
     if ($q->param('occurrence_no')) {
         $old_field = "occurrence_no";
         $old_no = $q->param('occurrence_no');
-        my $sql = "SELECT o.collection_no, o.genus_name, o.species_name, o.occurrence_no, o.taxon_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
+        my $sql = "SELECT c.collection_name, o.collection_no, o.genus_name, o.species_name, o.occurrence_no, o.taxon_no FROM collections c, occurrences o WHERE c.collection_no=o.collection_no AND o.occurrence_no=".int($q->param('occurrence_no'));
         my $row = ${$dbt->getData($sql)}[0];
 
         my $reid_row = PBDBUtil::getMostRecentReIDforOcc($dbt,$row->{'occurrence_no'},1);
@@ -461,7 +460,7 @@ sub populateMeasurementForm {
             $taxon_name = $row->{'genus_name'}." ".$row->{'species_name'};
         }  
 
-        $collection = "(collection $row->{'collection_no'})";
+        $collection = "($row->{'collection_name'})";
 
         if (!$row || !$taxon_name || !$collection) {
             push my @error , "The occurrence of this taxon could not be found";
@@ -625,9 +624,41 @@ sub populateMeasurementForm {
         my $sql = "SELECT author1init,author1last,author2init,author2last,pubyr,reftitle,pubtitle,pubvol,firstpage,lastpage FROM refs WHERE reference_no=".$row->{'reference_no'};
         my $ref = ${$dbt->getData($sql)}[0];
 
+        # if the refs don't agree, the user might want to switch the record to the
+        #  current ref
+        if ( $row->{'reference_no'} != $s->get('reference_no') )	{
+            push @fields , 'switch_to_ref';
+            push @values , '<br><div style="margin-top: 0.5em;"><input type="checkbox" name="switch_ref" value="'.$s->get('reference_no').'"> switch this data record to your current reference ('.$s->get('reference_no').')'."</div>\n";
+        }
+
+	# if this is a general taxon-specific record, the user might want to swap it
+	#   to a specific occurrence
+	# exact match on genus and species is required to avoid printing tons of
+	#  irrelevant records
+	if ( $row->{'occurrence_no'} == 0 )	{
+		my ($g,$s) = split / /,$taxon_name;
+		my $sql = "SELECT collection_name,occurrence_no FROM collections c,occurrences o WHERE c.collection_no=o.collection_no AND genus_name='$g' AND species_name='$s'";
+        	@colls = @{$dbt->getData($sql)};
+		if ( @colls )	{
+			push @fields , 'occurrences';
+			my $occ_list = "<div style=\"margin-top: 0.5em;\">... and/or switch this record to ";
+			if ( $#colls == 0 )	{
+				$occ_list .= "<input type=\"checkbox\" name=\"switch_occ\" value=\"$colls[0]->{'occurrence_no'}\">$colls[0]->{'collection_name'}<br>\n";
+			} elsif ( $#colls <= 9 )	{
+				$occ_list .= "one of the following collections:<br>";
+				$occ_list .= "<input type=\"radio\" name=\"switch_occ\" value=\"$_->{'occurrence_no'}\" style=\"margin-left: 3em;\">$_->{'collection_name'}<br>\n" foreach @colls;
+			} else	{
+				$occ_list .= "collection number <input name=\"switch_coll\" size=6>\n<input type=\"hidden\" name=genus_name value=\"$g\">\n<input type=\"hidden\" name=species_name value=\"$s\">\n";
+			}
+			$occ_list .= "</div>\n";
+			push @values , $occ_list;
+		}
+	}
+
         # some additional fields not from the form row
-	    push (@fields, 'reference','occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection_no','types_only');
-	    push (@values, Reference::formatLongRef($ref),int($q->param('occurrence_no')),int($q->param('taxon_no')),$row->{'reference_no'},$row->{'specimen_no'},$taxon_name,$collection_no,int($q->param('types_only')));
+	    push (@fields, 'reference','occurrence_no','taxon_no','reference_no','specimen_no','taxon_name','collection','types_only');
+	    push (@values, sprintf("%s",Reference::formatLongRef($ref)),int($q->param('occurrence_no')),int($q->param('taxon_no')),int($row->{'reference_no'}),$row->{'specimen_no'},$taxon_name,$collection,int($q->param('types_only')));
+
 	    print $hbo->populateHTML('specimen_measurement_form_general', \@values, \@fields);
     }
 
@@ -648,7 +679,7 @@ sub processMeasurementForm	{
     my $taxon_no = $q->param('taxon_no');
 
     # get the taxon's name
-    my ($taxon_name,$collection);
+    my ($taxon_name,$collection,$newcoll,$badcoll);
     if ($q->param('occurrence_no')) {
         my $sql = "SELECT o.taxon_no, o.collection_no, o.genus_name, o.species_name, o.occurrence_no FROM occurrences o WHERE o.occurrence_no=".int($q->param('occurrence_no'));
         my $row = ${$dbt->getData($sql)}[0];
@@ -740,6 +771,29 @@ sub processMeasurementForm	{
         if ( $fields{'specimen_no'} > 0 )	{
             delete $fields{'taxon_no'}; # keys, never update thse
             delete $fields{'occurrence_no'}; # keys, never update thse
+            if ( $q->param('switch_ref') > 0 )	{
+                $fields{'reference_no'} = $q->param('switch_ref');
+            }
+            if ( $q->param('switch_occ') > 0 )	{
+                $fields{'occurrence_no'} = $q->param('switch_occ');
+                $fields{'taxon_no'} = undef;
+            } elsif ( $q->param('switch_coll') > 0 )	{
+                $sql = "SELECT occurrence_no FROM occurrences WHERE collection_no=".$q->param('switch_coll')." AND genus_name='".$q->param('genus_name')."' AND species_name='".$q->param('species_name')."'";
+                $fields{'occurrence_no'} = ${$dbt->getData($sql)}[0]->{'occurrence_no'};
+                # the user might have screwed up the collection number...
+                if ( $fields{'occurrence_no'} == 0 )	{
+                    delete $fields{'occurrence_no'};
+                } else	{
+                    $fields{'taxon_no'} = undef;
+		}
+            }
+            if ( $fields{'occurrence_no'} > 0 )	{
+                $sql = "SELECT collection_name FROM collections c,occurrences o WHERE c.collection_no=o.collection_no AND occurrence_no=".$fields{'occurrence_no'};
+                $newcoll = ${$dbt->getData($sql)}[0]->{'collection_name'};
+            } elsif ( $q->param('switch_coll') > 0 )	{
+                $sql = "SELECT collection_name FROM collections c WHERE collection_no=".$q->param('switch_coll');
+                $badcoll = ${$dbt->getData($sql)}[0]->{'collection_name'};
+            }
             $result = $dbt->updateRecord($s,'specimens','specimen_no',$fields{'specimen_no'},\%fields);
             $specimen_no = $fields{specimen_no};
 
@@ -812,7 +866,7 @@ sub processMeasurementForm	{
                     }
                 }
 
-                print "<center><p class=\"pageTitle\">$taxon_name $collection (revised data)</p></center>\n";
+                print "<center><p class=\"pageTitle\">$taxon_name$collection (revised data)</p></center>\n";
             } else {
                 print "Error updating database table row, please contact support";
                 carp "Error updating row in Measurement.pm: ".$result;
@@ -869,7 +923,15 @@ sub processMeasurementForm	{
     }
 
     if ($inserted_row_count) {
-        print "<center><p class=\"pageTitle\">$taxon_name $collection (new data)</p></center>\n";
+        print "<center><p class=\"pageTitle\">$taxon_name$collection (new data)</p></center>\n";
+    }
+
+    if ( $q->param('switch_occ') > 0 || $q->param('switch_coll') > 0 )	{
+        if ( $newcoll )	{
+            print "<div style=\"width: 32em; margin-left: auto; margin-right: auto; text-indent: -1em;\"><p class=\"verysmall\">The data record you updated has been switched successfully to $newcoll. You can search for it by clicking the 'another collection' link.</p></div>\n";
+        } elsif ( $badcoll )	{
+            print "<div style=\"width: 32em; margin-left: auto; margin-right: auto; text-indent: -1em;\"><p class=\"verysmall\">The data record was not switched because $taxon_name is not present in $badcoll. Try entering a different collection number.</p></div>\n";
+        }
     }
 
 	displaySpecimenList($dbt,$hbo,$q,$s,'processMeasurementForm');
