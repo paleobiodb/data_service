@@ -86,11 +86,15 @@ function checkForm() {
 <p class="pageTitle"><span id="taxon_name"></span> <span id="collection"></span></p>
 </center>
 
-<div class="small" style="width: 44em; margin-left: auto; margin-right: auto; margin-bottom: 1em; padding-left: 0.5em; text-indent: -0.5em;">%%reference%%</div>
-
-<div align="center"><table cellspacing=0 cellpadding=0 border=0><tr><td>
 <form method="POST" action="%%write_url%%" onSubmit="return checkForm();">
 
+<div class="small" style="width: 44em; margin-left: auto; margin-right: auto; margin-bottom: 1em; padding-left: 0.5em; text-indent: -0.5em;">
+%%reference%%
+%%switch_to_ref%%
+%%occurrences%%
+</div>
+
+<div align="center"><table cellspacing=0 cellpadding=0 border=0><tr><td>
 
 <input type="hidden" name="action" value="processMeasurementForm">
 <input id="types_only" type="hidden" name="types_only">
