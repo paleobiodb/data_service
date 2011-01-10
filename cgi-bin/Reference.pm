@@ -279,11 +279,14 @@ sub displayRefResults {
 	# use_primary is true if the user has clicked on the "Current reference" link at
 	# the top or bottom of the page.  Basically, don't bother doing a complicated 
 	# query if we don't have to.
-    my ($data,$query_description) = ([],'');
+	my ($data,$query_description) = ([],'');
 	unless($q->param('use_primary')) {
 		($data,$query_description) = getReferences($dbt,$q,$s,$hbo);
 	} 
-	my @data = @$data;
+	my @data;
+	if ( $data )	{
+		@data  = @$data;
+	}
 
 	if ((scalar(@data) == 1 && $type ne 'add') || $q->param('use_primary')) {
 		# Do the action, don't show results...
@@ -426,7 +429,12 @@ sub displayRefResults {
 			displayReferenceForm($dbt,$q,$s,$hbo);
 			return;
 		} else	{
-			my $error = "<p class=\"medium\">Nothing matches $query_description: please try again</p>\n";
+			my $error = "<p class=\"medium\">";
+			if ( $query_description )	{
+				$error .= "Nothing matches $query_description: please try again</p>\n";
+			} else	{
+				$error .= "Please enter at least one search term</p>\n";
+			}
 			displaySearchRefs($dbt,$q,$s,$hbo,$error);
 		}
 	}
@@ -1034,17 +1042,15 @@ sub getReferences {
 
         dbg("RefQuery SQL".$sql);
         
-	    if ( $query_description ) { 
-            $query_description =~ s/^\s*//;
-            $query_description = "'$query_description' "; 
-        }
-        my @data = @{$dbt->getData($sql)};
-	    return (\@data,$query_description);
+	if ( $query_description ) { 
+		$query_description =~ s/^\s*//;
+		$query_description = "'$query_description' "; 
+	}
+	my @data = @{$dbt->getData($sql)};
+	return (\@data,$query_description);
+
 	} else {
-        my $type = $q->param('type');
-        my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
-		my $error = "<center><p class=\"medium\">Please fill out at least one field</p>\n";
-		displaySearchRefs($dbt,$q,$s,$hbo,$error);
+		return ('','');
 	}
 }
 
