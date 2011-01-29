@@ -115,8 +115,8 @@ sub setArrays	{
 	# customize the subdirectory holding the output files
 	# modified to retrieve authorizer automatically JA 4.10.02
 	# modified to use yourname JA 17.7.05
-    $PRINTED_DIR = "/public/curve";
-	if ( $s->get('enterer') ne "Guest" || $q->param('yourname') ne "" )	{
+	$PRINTED_DIR = "/public/curve";
+	if ( $s->get('authorizer') ne "" || $q->param('yourname') ne "" )	{
 		my $temp;
 		if ( $q->param('yourname') ne "" )	{
 			$temp = $q->param('yourname');
@@ -129,7 +129,7 @@ sub setArrays	{
 		$PRINTED_DIR .= "/" . $temp;
 	}
 	$OUTPUT_DIR = $HTML_DIR.$PRINTED_DIR;
-    PBDBUtil::autoCreateDir($OUTPUT_DIR);
+	PBDBUtil::autoCreateDir($OUTPUT_DIR);
 
 	if ($q->param('samplingmethod') eq "classical rarefaction")	{
 		$samplingmethod = 1;
@@ -275,7 +275,6 @@ sub assignGenera	{
         'sep_char'    => $sepChar,
         'binary'      => 1
     });
-
 
 	if ( ! open OCCS,"<$occsfile" )	{
         	if ($q->param("time_scale") =~ /neptune/i)	{
