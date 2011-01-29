@@ -230,14 +230,14 @@ sub processLogin {
                          -expires =>"now" );
 
         # return them to the login page with a message about the bad login.
-        displayLoginPage(Debug::printErrors(["Sorry, your login failed. $errorMessage"]));
+        login(Debug::printErrors(["Sorry, your login failed. $errorMessage"]));
         exit;
     }
 }
 
 # Logout
 # Clears the SESSION_DATA table of this session.
-sub logout {
+sub logout	{
 	my $session_id = $q->cookie("session_id");
     my $dbh = $dbt->dbh;
 
@@ -251,7 +251,7 @@ sub logout {
 }
 
 # Displays the login page
-sub displayLoginPage {
+sub login	{
 	my $message = shift;
     my $destination = shift;
 	
@@ -269,7 +269,7 @@ sub displayLoginPage {
 
 sub displayPreferencesPage {
     if (!$s->isDBMember()) {
-        displayLoginPage( "Please log in first.");
+        login( "Please log in first.");
         return;
     }
     print $hbo->stdIncludes("std_page_top");
@@ -279,7 +279,7 @@ sub displayPreferencesPage {
 
 sub setPreferences {
     if (!$s->isDBMember()) {
-        displayLoginPage( "Please log in first.");
+        login( "Please log in first.");
         return;
     }
     print $hbo->stdIncludes("std_page_top");
@@ -319,9 +319,9 @@ sub displayMenuPage	{
 		print $hbo->stdIncludes("std_page_bottom");
 	} else	{
         	if ($q->param('user') eq 'Contributor') {
-			displayLoginPage( "Please log in first.","displayMenuPage" );
+			login( "Please log in first.","displayMenuPage" );
 		} else	{
-			displayHomePage();
+			home();
 		}
 	}
 }
@@ -330,7 +330,7 @@ sub displayMenuPage	{
 
 
 # well, displays the home page
-sub displayHomePage {
+sub home	{
 	# Clear Queue?  This is highest priority
 	if ( $q->param("clear") ) {
 		$s->clearQueue(); 
@@ -1003,7 +1003,7 @@ sub getTitleWordOdds	{
 
 sub displayReferenceForm {
     if (!$s->isDBMember()) {
-        displayLoginPage( "Please log in first.");
+        login( "Please log in first.");
         return;
     }
 
@@ -1888,7 +1888,7 @@ sub processCollectionsSearchForAdd	{
 sub displayCollectionForm {
     # Have to be logged in
     if (!$s->isDBMember()) {
-        displayLoginPage("Please log in first.");
+        login("Please log in first.");
         exit;
     }
     print $hbo->stdIncludes("std_page_top");
@@ -1898,7 +1898,7 @@ sub displayCollectionForm {
 
 sub processCollectionForm {
     if (!$s->isDBMember()) {
-        displayLoginPage("Please log in first.");
+        login("Please log in first.");
         exit;
     }
     print $hbo->stdIncludes("std_page_top");
@@ -2313,7 +2313,7 @@ sub submitAuthorityForm {
 
 sub displayClassificationTableForm {
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.");
+		login( "Please log in first.");
 		exit;
 	} 
     if (!$s->get('reference_no')) {
@@ -2328,7 +2328,7 @@ sub displayClassificationTableForm {
 
 sub displayClassificationUploadForm {
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.");
+		login( "Please log in first.");
 		exit;
 	} 
     if (!$s->get('reference_no')) {
@@ -2344,7 +2344,7 @@ sub displayClassificationUploadForm {
 
 sub submitClassificationTableForm {
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.");
+		login( "Please log in first.");
 		exit;
 	} 
     print $hbo->stdIncludes("std_page_top");
@@ -2354,7 +2354,7 @@ sub submitClassificationTableForm {
 
 sub submitClassificationUploadForm {
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.");
+		login( "Please log in first.");
 		exit;
 	} 
     print $hbo->stdIncludes("std_page_top");
@@ -2474,7 +2474,7 @@ sub searchOccurrenceMisspellingForm {
     if (!$s->isDBMember()) {
         # have to be logged in
         $s->enqueue("action=searchOccurrenceMisspellingForm" );
-        displayLoginPage( "Please log in first." );
+        login( "Please log in first." );
         exit;
     } 
 	print $hbo->stdIncludes("std_page_top");
@@ -2752,7 +2752,7 @@ sub displayLoadImageForm{
 
 sub processLoadImage{
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first");
+		login( "Please log in first");
 		exit;
 	} 
     print $hbo->stdIncludes("std_page_top");
@@ -2943,7 +2943,7 @@ sub displayOccurrenceAddEdit {
 	
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.",'displayOccurrenceAddEdit');
+		login( "Please log in first.",'displayOccurrenceAddEdit');
 		exit;
 	} 
     if (! $s->get('reference_no')) {
@@ -3174,7 +3174,7 @@ sub displayOccurrenceTable {
     my @all_collections = @{$_[0]};
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.",'displayOccurrenceTable' );
+		login( "Please log in first.",'displayOccurrenceTable' );
 		exit;
 	}
 	# Have to have a reference #
@@ -3464,7 +3464,7 @@ sub displayOccurrenceListForm	{
 	my $dbh = $dbt->dbh;
 
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first." );
+		login( "Please log in first." );
 		exit;
 	}
 	if (! $s->get('reference_no')) {
@@ -3522,7 +3522,7 @@ sub displayOccurrenceListForm	{
 sub processOccurrenceTable {
 
     if (!$s->isDBMember()) {
-        displayLoginPage( "Please log in first." );
+        login( "Please log in first." );
         exit;
     }
    
@@ -3817,7 +3817,7 @@ sub generateCollectionLabel {
 sub processEditOccurrences {
 	my $dbh = $dbt->dbh;
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first." );
+		login( "Please log in first." );
 		exit;
 	}
                                 
@@ -4445,7 +4445,7 @@ sub processEditOccurrences {
 sub displayReIDCollsAndOccsSearchForm {
 	# Have to be logged in
 	if (!$s->isDBMember()) {
-		displayLoginPage( "Please log in first.",'displayReIDCollsAndOccsSearchForm');
+		login( "Please log in first.",'displayReIDCollsAndOccsSearchForm');
 		exit;
 	}
 	# Have to have a reference #
