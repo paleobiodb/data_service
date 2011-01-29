@@ -22,18 +22,18 @@
 <table class="navbox" border="0" style="width: 100%">
   <tr>
     <td align="left" style="padding-left: 2em; width: 8em;" nowrap>
-      <a href="%%write_url%%?action=displayMenuPage&amp;clear=clearQueue" class="menu">Main menu</a>
+      <a href="%%write_url%%?a=displayMenuPage&amp;clear=clearQueue" class="menu">Main menu</a>
     </td>
     <td align="center" style="padding-left: 1em;" nowrap>
-      <a href="%%write_url%%?action=logout" class="menu"><span style="white-space: nowrap;">logout as %%enterer%%</span></a>
+      <a href="%%write_url%%?a=logout" class="menu"><span style="white-space: nowrap;">logout as %%enterer%%</span></a>
     </td>
     <td align="center" style="padding-left: 1em;" nowrap>
-      <a href="%%write_url%%?action=displaySearchRefs&amp;type=select" class="menu">Reference: %%reference%%</a>
+      <a href="%%write_url%%?a=displaySearchRefs&amp;type=select" class="menu">Reference: %%reference%%</a>
     </td>
     <td align="left" style="width: 14em;" nowrap>
 <div class="tiny" style="margin-bottom: -1em;">
 <form method="POST" action="%%read_url%%" onSubmit="return checkName(0,2);">
-<input type="hidden" name="action" value="quickSearch">
+<input type="hidden" name="a" value="quickSearch">
 <input type="hidden" name="last_taxon" value="$taxon_no">
 <input type="text" name="quick_search" value="Quick search" size="14" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em;">
 </form>
