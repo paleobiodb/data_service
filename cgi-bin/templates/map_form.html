@@ -15,8 +15,7 @@ function checkMapBrowserVersion()	{
 <div align="center"><p class="pageTitle">Paleogeographic map form</p></div>
 
 <form method=post action="%%read_url%%" onSubmit="return checkForm();">
-<input id="action" type=hidden name="action" value="displayMapResults">
-<input id="user" type=hidden name="user" value="Guest">
+<input id="action" type=hidden name="a" value="displayMapResults">
 
 <script>checkMapBrowserVersion();</script>
 
@@ -202,7 +201,7 @@ borders
 </select>
 
 <tr><td valign=top colspan="2">
-<div class="small"><i>Don't forget to <a href="%%read_url%%?action=displayPreferencesPage&destination=displayMapForm">set your preferences</a>.</i><p></div>
+<div class="small"><i>Don't forget to <a href="%%read_url%%?a=displayPreferencesPage&destination=displayMapForm">set your preferences</a>.</i><p></div>
 
 </table>
 
