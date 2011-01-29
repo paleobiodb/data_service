@@ -67,14 +67,12 @@ my $dbt = new DBTransactionManager();
 # Make the session object
 my $s = new Session($dbt,$q->cookie('session_id'));
 
-if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "displayMenuPage" && $q->param('user') eq "Contributor" )	{
-	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=displayMenuPage&user=Contributor" );
+if ( $q->param('a') )	{
+	$q->param('action' => $q->param('a') );
 }
 
-# don't let users into the contributors' area unless they're on the main site
-#  or backup server (as opposed to a mirror site) JA 3.8.04
-if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ )	{
-	 $q->param("user" => "Guest");
+if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "displayMenuPage" && $q->param('user') eq "Contributor" )	{
+	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=displayMenuPage&user=Contributor" );
 }
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
@@ -270,6 +268,10 @@ sub displayLoginPage {
 }
 
 sub displayPreferencesPage {
+    if (!$s->isDBMember()) {
+        displayLoginPage( "Please log in first.");
+        return;
+    }
     print $hbo->stdIncludes("std_page_top");
     Session::displayPreferencesPage($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes("std_page_bottom");
@@ -307,7 +309,7 @@ sub displayMenuPage	{
 		}
 	}
 
-	if ($s->isDBMember() && $q->param('user') ne 'Guest') {
+	if ($s->isDBMember()) {
 		print $hbo->stdIncludes("std_page_top");
 		my $access;
 		if ( $s->get('role') =~ /authorizer|student|technician/ )	{
