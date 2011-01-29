@@ -71,8 +71,8 @@ if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
 }
 
-if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "displayMenuPage" && $q->param('user') eq "Contributor" )	{
-	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=displayMenuPage&user=Contributor" );
+if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "menu" && $q->param('user') eq "Contributor" )	{
+	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor" );
 }
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
@@ -99,7 +99,7 @@ processAction();
 # rjp, 2/2004
 sub processAction {
 	# Grab the action from the form.  This is what subroutine we should run.
-	my $action = ($q->param("action") || "displayMenuPage");
+	my $action = ($q->param("action") || "menu");
 	
     # The right combination will allow me to conditionally set the DEBUG flag
     if ($s->get("enterer") eq "J. Sepkoski" && 
@@ -196,7 +196,7 @@ sub processLogin {
                          -cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
                          -expires =>"now" );
 
-        my $action = "displayMenuPage";
+        my $action = "menu";
         # Destination
         if ($q->param("destination") ne "") {
             $action = $q->param("destination");
@@ -288,7 +288,7 @@ sub setPreferences {
 }
 
 # displays the main menu page for the data enterers
-sub displayMenuPage	{
+sub menu	{
 	# Clear Queue?  This is highest priority
 	if ( $q->param("clear") ) {
 		$s->clearQueue(); 
@@ -319,7 +319,7 @@ sub displayMenuPage	{
 		print $hbo->stdIncludes("std_page_bottom");
 	} else	{
         	if ($q->param('user') eq 'Contributor') {
-			login( "Please log in first.","displayMenuPage" );
+			login( "Please log in first.","menu" );
 		} else	{
 			home();
 		}
@@ -964,7 +964,7 @@ sub displaySearchRefs {
 
 sub selectReference {
 	$s->setReferenceNo($q->param("reference_no") );
-	displayMenuPage( );
+	menu( );
 }
 
 # Wrapper to displayRefEdit
@@ -1158,7 +1158,7 @@ sub displayCollResults {
 	if ( ! $s->get('enterer') && $q->param('type') eq "reclassify_occurrence" )    {
 		print $hbo->stdIncludes( "std_page_top" );
 		print "<center>\n<p class=\"pageTitle\">Sorry!</p>\n\n";
-		print "<p>You can't reclassify occurrences unless you <a href=\"$WRITE_URL?action=displayMenuPage&amp;user=Contributor\">log in</a> first.</p>\n</center>\n";
+		print "<p>You can't reclassify occurrences unless you <a href=\"$WRITE_URL?action=menu&amp;user=Contributor\">log in</a> first.</p>\n</center>\n";
 		print $hbo->stdIncludes("std_page_bottom");
 		exit;
 	}
