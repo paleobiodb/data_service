@@ -104,7 +104,7 @@ sub displayReviewForm	{
 		print "<center><p class=\"pageTitle\">Please select a review page to edit</p></center>\n\n";
 		print qq|
 <form name="chooseReview" method=post action="bridge.pl">
-<input type="hidden" name="action" value="displayReviewForm">
+<input type="hidden" name="a" value="displayReviewForm">
 <input type="hidden" name="review_no" value="">
 </form>
 
@@ -226,7 +226,7 @@ sub listReviews	{
 	my ($dbt,$q,$s,$hbo) = @_;
 
 	my $sql = "SELECT first_name,last_name,institution,r.review_no,official_no,title FROM person,reviews r,versions v WHERE person_no=author_no AND r.review_no=v.review_no AND latest='Y' AND (author_no=".$s->get('enterer_no')." OR (released IS NOT NULL AND released<now()))";
-	if ( $s->get('enterer') eq "Guest" || $s->get('enterer_no') == 0 )	{
+	if ( $s->get('enterer_no') == 0 )	{
 		$sql .= " AND released>0";
 	}
 	$sql .= " ORDER BY official_no";
@@ -236,7 +236,7 @@ sub listReviews	{
 
 	print qq|
 <form name="chooseReview" method=post action="bridge.pl">
-<input type="hidden" name="action" value="showReview">
+<input type="hidden" name="a" value="showReview">
 <input type="hidden" name="review_no" value="">
 </form>
 |;
@@ -456,11 +456,11 @@ sub showReview	{
 	# anchors not dealt with yet
 
 	# special handling for properly formatted collection links
-	$text =~ s/\[\[collection /<a href="$READ_URL\?action=basicCollectionSearch&amp;collection_no=/g;
+	$text =~ s/\[\[collection /<a href="$READ_URL\?a=basicCollectionSearch&amp;collection_no=/g;
 	# special handling for properly formatted taxon links
-	$text =~ s/\[\[taxon /<a href="$READ_URL\?action=basicTaxonInfo&amp;taxon_name=/g;
+	$text =~ s/\[\[taxon /<a href="$READ_URL\?a=basicTaxonInfo&amp;taxon_name=/g;
 	# give up and try a basic search
-	$text =~ s/\[\[/<a href="$READ_URL\?action=quickSearch&amp;quick_search=/g;
+	$text =~ s/\[\[/<a href="$READ_URL\?a=quickSearch&amp;quick_search=/g;
 
 	$text =~ s/\]\]/<\/a>/g;
 	$text =~ s/\|/">/g;
@@ -493,7 +493,7 @@ sub showReview	{
 	# end the last major section
 	print "\n</div>\</div>\n\n";
 
-	print "<center><b><a href=\"$READ_URL?action=listReviews\">See more PaleoDB review pages</a></b></center>\n\n";
+	print "<center><b><a href=\"$READ_URL?a=listReviews\">See more PaleoDB review pages</a></b></center>\n\n";
 
 }
 
