@@ -1554,7 +1554,7 @@ sub displayCollectionDetailsPage {
             $row->{'age_estimate'} .= " &plusmn; " . $row->{'max_ma_error'};
         }
 	if ( $row->{'max_ma_method'} eq "AEO" )	{
-            $link = qq|<a href="$READ_URL?action=explainAEOestimate&amp;user=Guest&amp;collection_no=$row->{'collection_no'}">|;
+            $link = qq|<a href="$READ_URL?a=explainAEOestimate&amp;collection_no=$row->{'collection_no'}">|;
             $endlink = "</a>";
         }
         if ( $row->{'min_ma'} && $row->{'max_ma_method'} ne $row->{'min_ma_method'} )	{
