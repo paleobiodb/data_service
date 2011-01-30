@@ -86,7 +86,10 @@ if ( $p >= 10 )	{
 }
 
 # Make the HTMLBuilder object - it'll use whatever template dir is appropriate
-my $use_guest = ($q->param('user') =~ /^guest$/i) ? 1 : 0;
+my $use_guest = (!$s->isDBMember()) ? 1 : 0;
+if ( $q->param('action') eq "home" )	{
+	$use_guest = 1;
+}
 my $hbo = HTMLBuilder->new($dbt,$s,$use_guest,'');
 
 # process the action
@@ -195,6 +198,9 @@ sub processLogin {
         print $q->header(-type => "text/html", 
                          -cookie => [$cookie, $cookieEnterer, $cookieAuthorizer],
                          -expires =>"now" );
+
+        # the hbo object still thinks the user is a guest, so reset it
+        $hbo = HTMLBuilder->new($dbt,$s,0,'');
 
         my $action = "menu";
         # Destination
