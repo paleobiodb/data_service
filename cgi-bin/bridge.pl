@@ -71,7 +71,7 @@ if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
 }
 
-if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "menu" && $q->param('user') eq "Contributor" )	{
+if ( $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
 	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor" );
 }
 
