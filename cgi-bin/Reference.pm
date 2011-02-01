@@ -191,7 +191,7 @@ sub formatShortRef  {
 
     if ($options{'link_id'}) {
         if ($refData->{'reference_no'}) {
-            $shortRef = qq|<a href="$READ_URL?action=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
+            $shortRef = qq|<a href="$READ_URL?a=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
         }
     }
     if ($options{'show_comments'}) {
@@ -308,15 +308,15 @@ sub displayRefResults {
 
 		# if there's an action, go straight back to it without showing the ref
 		if ($action)	{
-            main::execAction($action);
+			main::execAction($action);
 		} elsif ($q->param('type') eq 'edit') {  
-            $q->param("reference_no"=>$data[0]->{'reference_no'});
-            displayReferenceForm($dbt,$q,$s,$hbo);
+			$q->param("reference_no"=>$data[0]->{'reference_no'});
+			displayReferenceForm($dbt,$q,$s,$hbo);
 		} elsif ($q->param('type') eq 'select') {  
-            main::displayMenuPage();
-        } else {
+			main::menu();
+        	} else {
 			# otherwise, display a page showing the ref JA 10.6.02
-            displayReference($dbt,$q,$s,$hbo,$data[0]);
+			displayReference($dbt,$q,$s,$hbo,$data[0]);
 		}
 		return;		# Out of here!
 	} elsif ( scalar(@data) > 0 ) {
@@ -368,22 +368,22 @@ sub displayRefResults {
             print "<td valign=\"top\">";
             if ($s->isDBMember()) {
                 if ($type eq 'add') {
-                    print "<a href=\"$exec_url?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+                    print "<a href=\"$exec_url?a=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
                 } elsif ($type eq 'edit') {
-                    print "<a href=\"$exec_url?action=displayRefResults&reference_no=$row->{reference_no}&type=edit\">$row->{reference_no}</a>";
+                    print "<a href=\"$exec_url?a=displayRefResults&reference_no=$row->{reference_no}&type=edit\">$row->{reference_no}</a>";
                 } elsif ($type eq 'view') {
-                    print "<a href=\"$exec_url?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a><br>";
+                    print "<a href=\"$exec_url?a=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a><br>";
                 } else {
-                    print "<a href=\"$exec_url?action=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
+                    print "<a href=\"$exec_url?a=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
                 }
             } else {
-                print "<a href=\"$READ_URL?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+                print "<a href=\"$READ_URL?a=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
             }
             print "</td>";
             my $formatted_reference = formatLongRef($row);
             print "<td>".$formatted_reference;
             if ( $type eq 'view' && $s->isDBMember() ) {
-                print qq| <small><a href="$WRITE_URL?action=displayRefResults&type=select&reference_no=$row->{reference_no}">select</a> - <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$row->{reference_no}">edit</a></small>|;
+                print qq| <small><a href="$WRITE_URL?a=displayRefResults&type=select&reference_no=$row->{reference_no}">select</a> - <a href="$WRITE_URL?a=displayRefResults&type=edit&reference_no=$row->{reference_no}">edit</a></small>|;
             }
             my $reference_summary = getReferenceLinkSummary($dbt,$s,$row->{'reference_no'});
             print "<br><small>$reference_summary</small></td>";
@@ -409,7 +409,7 @@ sub displayRefResults {
         $authname =~ s/\. //;
         printRefsCSV(\@data,$authname);
         print qq|<a href="/public/references/${authname}_refs.csv"><b>Download all the references</b></a> -\n|;
-	    print qq|<a href="$exec_url?action=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
+	    print qq|<a href="$exec_url?a=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
 	    print "</p></center><br>\n";
         
         if ($type eq 'add') {
@@ -474,7 +474,7 @@ sub displayReference {
 
     my $citation = formatLongRef($ref);
     if ($s->isDBMember())	{
-        $citation .= qq| <small><a href="$WRITE_URL?action=displayRefResults&type=select&reference_no=$ref->{reference_no}">select</a> - <a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$ref->{reference_no}">edit</a></small>|;
+        $citation .= qq| <small><a href="$WRITE_URL?a=displayRefResults&type=select&reference_no=$ref->{reference_no}">select</a> - <a href="$WRITE_URL?a=displayRefResults&type=edit&reference_no=$ref->{reference_no}">edit</a></small>|;
     }
     $citation = "<div style=\"text-indent: -0.75em; margin-left: 1em;\">" . $citation . "</div>";
     print $box->("Full reference",$citation);
@@ -529,16 +529,16 @@ sub displayReference {
         if ($authority_count < 100) {
             my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE reference_no=$reference_no ORDER BY taxon_name";
             my @results = 
-                map { qq'<a href="$READ_URL?action=basicTaxonInfo&taxon_no=$_->{taxon_no}">$_->{taxon_name}</a>' }
+                map { qq'<a href="$READ_URL?a=basicTaxonInfo&taxon_no=$_->{taxon_no}">$_->{taxon_name}</a>' }
                 @{$dbt->getData($sql)};
             $html = join(", ",@results);
         } else {
-            $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
+            $html .= qq|<b><a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
             my $plural = ($authority_count == 1) ? "" : "s";
             $html .= "view taxonomic name$plural";
             $html .= qq|</a></b> |;
         }
-        print $box->(qq'Taxonomic names (<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count</a>)',$html);
+        print $box->(qq'Taxonomic names (<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count</a>)',$html);
     }
     
     # Handle opinions box
@@ -562,7 +562,7 @@ sub displayReference {
                 @{$dbt->getData($sql)};
             $html = join("<br>",@results);
         } else {
-            $html .= qq|<b><a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
+            $html .= qq|<b><a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
             if ($opinion_count) {
                 my $plural = ($opinion_count == 1) ? "" : "s";
                 $html .= "view taxonomic opinion$plural";
@@ -570,15 +570,15 @@ sub displayReference {
             $html .= qq|</a></b> |;
         }
     
-        my $class_link = qq| - <small><a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></small>|;
-        print $box->(qq'Taxonomic opinions (<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
+        my $class_link = qq| - <small><a href="$READ_URL?a=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></small>|;
+        print $box->(qq'Taxonomic opinions (<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
     }
 
 	# list taxa with measurements based on this reference JA 4.12.10
 	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
 	if ( @taxon_refs )	{
 		my @taxa;
-		push @taxa , "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
 		print $box->("Measurements",join('<br>',@taxa));
 	}
 
@@ -614,16 +614,16 @@ sub displayReference {
                 if (! $row->{'is_primary'}) {
                     $style = " class=\"boring\"";
                 }
-                my $coll_link = qq|<a href="$READ_URL?action=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
+                my $coll_link = qq|<a href="$READ_URL?a=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
                 $html .= $coll_link . ", ";
             }
             $html =~ s/, $//;
         } else {
             my $plural = ($collection_count == 1) ? "" : "s";
-            $html .= qq|<b><a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a></b>|;
+            $html .= qq|<b><a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a></b>|;
         }
         if ($html) {
-            print $box->(qq'Collections (<a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
+            print $box->(qq'Collections (<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
         }
     }
 	print $hbo->stdIncludes("std_page_bottom");
@@ -819,7 +819,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         print qq|
         <div class="displayPanel" align="left" style="margin: 1em;">
         <span class="displayPanelHeader"><b>$box_header</b></span>
-        <table><tr><td valign=top>$formatted_ref <small><b><a href="$WRITE_URL?action=displayRefResults&type=edit&reference_no=$reference_no">edit</a></b></small></td></tr></table>
+        <table><tr><td valign=top>$formatted_ref <small><b><a href="$WRITE_URL?a=displayRefResults&type=edit&reference_no=$reference_no">edit</a></b></small></td></tr></table>
         </span>
         </div>|;
         
@@ -834,13 +834,13 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         <span class="displayPanelHeader"><b>Please enter all the data</b></span>
         <div class="displayPanelContent">
         <ul class="small" style="text-align: left;">
-            <li>Add or edit all the <a href="#" onClick="popup = window.open('$WRITE_URL?action=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined
-            <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$WRITE_URL?action=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy
-            <li>Edit <a href="#" onClick="popup = window.open('$WRITE_URL?action=displaySearchColls&type=edit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">existing collections</a> if new details are given
-            <li>Add all the <a href="#" onClick="popup = window.open('$WRITE_URL?action=displaySearchCollsForAdd', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">new collections</a>
-            <li>Add all new <a href="#" onClick="popup = window.open('$WRITE_URL?action=displayOccurrenceAddEdit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">occurrences</a> in existing or new collections
-            <li>Add all new <a href="#" onClick="popup = window.open('$WRITE_URL?action=displayReIDCollsAndOccsSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">reidentifications</a> of existing occurrences
-            <li>Add <a href="#" onClick="popup = window.open('$WRITE_URL?action=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$WRITE_URL?action=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$WRITE_URL?action=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>
+            <li>Add or edit all the <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined
+            <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy
+            <li>Edit <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySearchColls&type=edit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">existing collections</a> if new details are given
+            <li>Add all the <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySearchCollsForAdd', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">new collections</a>
+            <li>Add all new <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayOccurrenceAddEdit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">occurrences</a> in existing or new collections
+            <li>Add all new <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayReIDCollsAndOccsSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">reidentifications</a> of existing occurrences
+            <li>Add <a href="#" onClick="popup = window.open('$WRITE_URL?a=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$WRITE_URL?a=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>
         <ul>
         </div>
         </div>
@@ -860,7 +860,7 @@ sub getReferenceLinkSummary {
     my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
 
     if ($authority_count) {
-        $retString .= qq|<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+        $retString .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
         my $plural = ($authority_count == 1) ? "" : "s";
         $retString .= "$authority_count taxonomic name$plural";
         $retString .= qq|</a>, |;
@@ -871,19 +871,19 @@ sub getReferenceLinkSummary {
     my $opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
 
     if ($opinion_count) {
-        $retString .= qq|<a href="$READ_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
+        $retString .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
         if ($opinion_count) {
             my $plural = ($opinion_count == 1) ? "" : "s";
             $retString .= "$opinion_count taxonomic opinion$plural";
         }
-        $retString .= qq|</a> (<a href="$READ_URL?action=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>), |;
+        $retString .= qq|</a> (<a href="$READ_URL?a=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>), |;
     }      
 
 	# list taxa with measurements based on this reference JA 4.12.10
 	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
 	if ( @taxon_refs )	{
 		my @taxa;
-		push @taxa , "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
 		$retString .= "measurements of ".join(', ',@taxa).", ";
 	}
 
@@ -914,13 +914,13 @@ sub getReferenceLinkSummary {
         $retString .= "no collections";
     } else {
         my $plural = ($collection_count == 1) ? "" : "s";
-        $retString .= qq|<a href="$READ_URL?action=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a>  (|;
+        $retString .= qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a>  (|;
         foreach my $row (@$results) {
             my $style;
             if (! $row->{'is_primary'}) {
                 $style = " class=\"boring\"";
             }
-            my $coll_link = qq|<a href="$READ_URL?action=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
+            my $coll_link = qq|<a href="$READ_URL?a=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
             $retString .= $coll_link . " ";
         }
         $retString .= ")";
@@ -1401,7 +1401,7 @@ sub getTitleWordOdds	{
 	my @journals = keys %jbuzz;
 
 	if ( ! @refnos )	{
-		print "<p style=\"margin-bottom: 3em;\">Not enough papers fall in the categories you selected to compute the odds. Please <a href=\"$READ_URL?action=displayPage&page=word_odds_form\">try again</a>.</p>\n";
+		print "<p style=\"margin-bottom: 3em;\">Not enough papers fall in the categories you selected to compute the odds. Please <a href=\"$READ_URL?a=displayPage&page=word_odds_form\">try again</a>.</p>\n";
 		return;
 	}
 
@@ -1523,7 +1523,7 @@ sub getTitleWordOdds	{
 
 	print qq|
 <div class="verysmall" style="clear: left; margin-left: 3em; margin-right: 5em; padding-bottom: 3em; text-indent: -0.5em;">
-The odds ratio compares the percentage of paper titles within the journals or other categories you selected that include a given word to the same percentage for all other papers. If the "best odds" papers did not appear in a journal you selected, then maybe they should have. If only a few words are shown, then only those words are frequent and have the appropriate odds (respectively greater than 1, less than 1, or between 0.5 and 2). <a href=\"$READ_URL?action=displayPage&page=word_odds_form\">Try again</a> if you want to procrastinate even more.
+The odds ratio compares the percentage of paper titles within the journals or other categories you selected that include a given word to the same percentage for all other papers. If the "best odds" papers did not appear in a journal you selected, then maybe they should have. If only a few words are shown, then only those words are frequent and have the appropriate odds (respectively greater than 1, less than 1, or between 0.5 and 2). <a href=\"$READ_URL?a=displayPage&page=word_odds_form\">Try again</a> if you want to procrastinate even more.
 </div>
 |;
 }
