@@ -134,14 +134,14 @@ sub setArrays	{
 	if ($q->param('samplingmethod') eq "classical rarefaction")	{
 		$samplingmethod = 1;
 	}
-	elsif ($q->param('samplingmethod') eq "by list (unweighted)")	{
+	elsif ($q->param('samplingmethod') eq "by collection (unweighted)")	{
 		$samplingmethod = 2;
 	}
-	elsif ($q->param('samplingmethod') eq "by list (occurrences weighted)")	{
+	elsif ($q->param('samplingmethod') eq "by collection (occurrences-weighted)" && ($q->param('exponent') eq "" || $q->param('exponent') == 1))	{
 		$samplingmethod = 3;
 	}
 # replaced occurrences-squared with occurrences-exponentiated 27.10.05
-	elsif ($q->param('samplingmethod') eq "by list (occurrences-exponentiated weighted)")	{
+	elsif ($q->param('exponent') > 0)	{
 		$samplingmethod = 4;
 	}
 	elsif ($q->param('samplingmethod') eq "by specimen")	{
@@ -339,10 +339,9 @@ sub assignGenera	{
 		} elsif ( $fn eq "occurrences.abund_value" )	{
 			$field_abund_value = $fieldcount;
 		# only get the collection's ref no if we're weighting by
-		#  collections per ref and the sampling method is by-list
+		#  collections per ref and the sampling method is by-collection
 		#  9.4.05
 		} elsif ( $fn eq "collections.reference_no" )	{
-# FOO NOT SURE WHY I NEEDED THIS && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 ) && $samplingmethod > 1 && $samplingmethod < 5 )	{
 			$field_refno = $fieldcount;
 		} elsif ( $fn eq "collections.period" && $q->param('time_scale') eq "periods" )	{
 			$field_bin = $fieldcount;
@@ -661,21 +660,21 @@ sub assignGenera	{
 					$specimensinchron[$chid[$collno]] += $abund[$xx];
 				}
 				$occsread = $occsread + $nsp;
+				push @{$list[$collno]} , $occs[$xx];
 				$occsoftax[$occs[$xx]] = $occsoftax[$occs[$xx]] + $nsp;
 				for $qq ($occsinchron[$chid[$collno]]+1..$occsinchron[$chid[$collno]]+$nsp)	{
 					$occsbychron[$chid[$collno]][$qq] = $occs[$xx];
 				}
 				$occsinchron[$chid[$collno]] = $occsinchron[$chid[$collno]] + $nsp;
 				$present[$occs[$xx]][$chid[$collno]]++;
+				$inref[$chid[$collno]]{$occs[$xx]}{$collrefno[$collno]}++;
 				$occsinlist[$collno] = $occsinlist[$collno] + $nsp;
 				if ($occsinlist[$collno] == $nsp)	{
 					$listsread++;
 					$listsinchron[$chid[$collno]]++;
 					$listsbychron[$chid[$collno]][$listsinchron[$chid[$collno]]] = $collno;
-					$baseocc[$collno] = $occsinchron[$chid[$collno]] - $nsp + 1;
 					$listsfromref[$collrefno[$collno]][$chid[$collno]]++;
 				}
-				$topocc[$collno] = $occsinchron[$chid[$collno]];
 				$xx = $stone[$xx];
 			}
 		}
@@ -699,10 +698,12 @@ sub assignGenera	{
 		for $j (1..$listsinchron[$i])	{
 			push @temp,$occsinlist[$listsbychron[$i][$j]];
 		}
-		@temp = sort { $a <=> $b } @temp;
+		@temp = sort { $b <=> $a } @temp;
 		$j = int(($#temp)/2);
 		$k = int(($#temp + 1)/2);
 		$median[$i] = ($temp[$j] + $temp[$k])/2;
+	# flag taxa in the largest collection
+		$inlargest{$_}++ foreach $temp[0];
 	}
 
 	# compute sum of (squared) richnesses across lists
@@ -720,8 +721,8 @@ sub assignGenera	{
 	}
 	for $i (1..$#occsinlist+1)	{
 	# don't blow out the quota if you have a long list and the method is 4
-		if (($samplingmethod != 4) ||
-				($occsinlist[$i]**$exponent <= $q->param('samplesize')))	{
+		if ($samplingmethod != 4 ||
+				$occsinlist[$i]**$exponent <= $q->param('samplesize') || $q->param('samplesize') == 0)	{
 			$occsinchron2[$chid[$i]] = $occsinchron2[$chid[$i]] + $occsinlist[$i]**$exponent;
 		}
 	}
@@ -779,7 +780,7 @@ sub assignGenera	{
 	for $i (1..$ngen)	{
 		$first = 0;
 		$last = 0;
-		for $j ($1..$chrons)	{
+		for $j (1..$chrons)	{
 			if ($present[$i][$j] > 0)	{
 				$richness[$j]++;
 				if ($last == 0)	{
@@ -787,14 +788,24 @@ sub assignGenera	{
 				}
 				$first = $j;
 			}
+			# find one-reference taxa
+			my @refs = keys %{$inref[$j]{$i}};
+			if ($#refs == 0)	{
+				$onerefs[$j]++;
+			# find dominant taxon (must be in multiple refs)
+			} elsif ($present[$i][$j] > $maxoccs[$j])	{
+				$maxoccs[$j] = $present[$i][$j];
+			}
 			if ( $present[$i][$j] > 0 && $present[$i][$j+1] > 0 )	{
 				$twotimers[$j]++;
 			}
-		if ( $present[$i][$j-1] > 0 && $present[$i][$j] > 0 && $present[$i][$j+1] > 0 )	{
+			if ( $present[$i][$j-1] > 0 && $present[$i][$j] > 0 && $present[$i][$j+1] > 0 )	{
 				$threetimers[$j]++;
+				$rawsum3timers++;
 			}
 			if ( $present[$i][$j-1] > 0 && $present[$i][$j] == 0 && $present[$i][$j+1] > 0 )	{
 				$parttimers[$j]++;
+				$rawsumPtimers++;
 			}
 			if ( $j > 1 && $j < $chrons - 1 && ( $present[$i][$j-1] > 0 || $present[$i][$j] > 0 ) && ( $present[$i][$j+1] > 0 || $present[$i][$j+2] > 0 ) )	{
 				$localbc[$j]++;
@@ -802,6 +813,7 @@ sub assignGenera	{
 			if ( ( $present[$i][$j-1] > 0 && $present[$i][$j+1] > 0 ) || $present[$i][$j] > 0 )	{
 				$localrt[$j]++;
 			}
+			# find single-occurrence taxa
 			# chaom is the notation for Chao-2, q1 for ICE
 			if ($present[$i][$j] == 1)	{
 				$chaol[$j]++;
@@ -864,6 +876,21 @@ sub assignGenera	{
 		}
 	}
 	close PADATA;
+
+	# compute Good's u
+	for $i (1..$chrons)	{
+		if ( $occsinchron[$i] > 0 )	{
+			my $d = 0;
+			if ( $q->param('exclude_dominant') =~ /y/i )	{
+				$d = $maxoccs[$i];
+			}
+			if ( $q->param('one_occs_or_refs') =~ /ref/i )	{
+				$u[$i] = 1 - ( $onerefs[$i] / ( $occsinchron[$i] - $d ) );
+			} else	{
+				$u[$i] = 1 - ( $q1[$i] / ( $occsinchron[$i] - $maxoccs[$i] ) );
+			}
+		}
+	}
 
 	# compute ICE
 $| = 1;
@@ -977,7 +1004,7 @@ sub subsample	{
 	my $self = shift;
 
 	if ($q->param('samplingtrials') > 0)	{
-		for ($trials = 1; $trials <= $q->param('samplingtrials'); $trials++)	{
+		for my $trials (1..$q->param('samplingtrials'))	{
 			my @sampled = ();
 			my @lastsampled = ();
 			my @subsrichness = ();
@@ -1108,7 +1135,7 @@ $| = 1;
 					    $sampled[$i]++;
 					  }
 					  elsif ($samplingmethod == 3)	{
-					    $xx = $topocc[$listid[$j]] - $baseocc[$listid[$j]] + 1;
+					    $xx = $#{$list[$listid[$j]]} + 1;
 					 #  $tosub = $tosub - $xx;
 					# old fashioned method needed if using
 					#  this option 10.4.05
@@ -1123,7 +1150,7 @@ $| = 1;
 					  }
 					# method 4
 					  else	{
-					    $xx = $topocc[$listid[$j]] - $baseocc[$listid[$j]] + 1;
+					    $xx = $#{$list[$listid[$j]]} + 1;
 					 #  $tosub = $tosub - ($xx**2);
 					    $tosub--;
 					    $sampled[$i] = $sampled[$i] + $xx**$exponent;
@@ -1141,14 +1168,14 @@ $| = 1;
 					    $present[$occid[$j]][$i]++;
 					  }
 					  else	{
-					    for $k ($baseocc[$listid[$j]]..$topocc[$listid[$j]])	{
-					      if ($present[$occsbychron[$i][$k]][$i] == 0)	{
+					    for $k ( @{$listid[$j]} )	{
+					      if ($present[$k][$i] == 0)	{
 					        $subsrichness[$i]++;
 					      }
 					      if ( $sampled[$i] == 1 && $samplingmethod == 2 )	{
 					        $lastsubsrichness[$i] = $subsrichness[$i];
 					      }
-					      $present[$occsbychron[$i][$k]][$i]++;
+					      $present[$k][$i]++;
 					    }
 					  }
 	
@@ -1233,7 +1260,7 @@ $| = 1;
 						$mthreetimers[$j]++;
 						$sumthreetimers++;
 					}
-					if ( $present[$i][$j-1] > 0 && $present[$i][$j] == 0 && $present[$i][$j+1] > 0 )	{
+					if ( $present[$i][$j-1] > 0 && $present[$i][$j] == 0 && $present[$i][$j+1] > 0 && $meanrichness{'SIB'}[$j] > 0 )	{
 						$mparttimers[$j]++;
 						$sumparttimers++;
 					}
@@ -1287,57 +1314,27 @@ $| = 1;
 			}
 
 			for $i (1..$chrons)	{
-				if ($msubsrangethrough[$i] > 0)	{
-					$msubsrichness[$i] = $msubsrichness[$i] + $subsrichness[$i];
-				}
-				if ($q->param('diversity') =~ /boundary.crosser/i)	{
-					$outrichness[$i][$trials] = $trangethrough[$i] - $toriginate[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i] - $toriginate[$i];
-				}
-				elsif ($q->param('diversity') =~ /range.through/i && $q->param('diversity') !~ /minus/i)	{
-					$outrichness[$i][$trials] = $trangethrough[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i];
-				}
-				elsif ($q->param('diversity') =~ /range.through minus/i)	{
-					$outrichness[$i][$trials] = $trangethrough[$i] - $tsingletons[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $trangethrough[$i] - $tsingletons[$i];
-				}
-				elsif ($q->param('diversity') =~ /sampled/i)	{
-					$outrichness[$i][$trials] = $subsrichness[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $subsrichness[$i];
-				}
-				elsif ($q->param('diversity') =~ /sampled minus/i)	{
-					$outrichness[$i][$trials] = $subsrichness[$i] - $tsingletons[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $subsrichness[$i] - $tsingletons[$i];
-				}
-				elsif ($q->param('diversity') =~ /two timer/i)	{
-					$outrichness[$i][$trials] = $ttwotimers[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $ttwotimers[$i];
-				}
-				elsif ($q->param('diversity') =~ /local boundary-crosser/i)	{
-					$outrichness[$i][$trials] = $tlocalbc[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $tlocalbc[$i];
-				}
-				elsif ($q->param('diversity') =~ /local range.through/i)	{
-					$outrichness[$i][$trials] = $tlocalrt[$i];
-					$meanoutrichness[$i] = $meanoutrichness[$i] + $tlocalrt[$i];
-				}
+				$meanrichness{'BC'}[$i] = $meanrichness{'BC'}[$i] + $trangethrough[$i] - $toriginate[$i];
+				$meanrichness{'RT'}[$i] = $meanrichness{'RT'}[$i] + $trangethrough[$i];
+				push @{$outrichness[$i]} , $subsrichness[$i];
+				$meanrichness{'SIB'}[$i] = $meanrichness{'SIB'}[$i] + $subsrichness[$i];
 			}
 	 # end of trials loop
 		}
-		$trials = $q->param('samplingtrials');
+		my $trials = $q->param('samplingtrials');
 
 		for $i (1..$chrons)	{
 			if ($msubsrangethrough[$i] > 0)	{
 				$tsampled[$i] = $tsampled[$i]/$trials;
 				$msubsrefrichness[$i] = $msubsrefrichness[$i] / $trials;
-				$msubsrichness[$i] = $msubsrichness[$i]/$trials;
 				$mtwotimers[$i] = $mtwotimers[$i]/$trials;
 				$mthreetimers[$i] = $mthreetimers[$i]/$trials;
 				$mparttimers[$i] = $mparttimers[$i]/$trials;
 				$msubsnewbc[$i] = $msubsnewbc[$i]/$trials;
 				$msubsrangethrough[$i] = $msubsrangethrough[$i]/$trials;
-				$meanoutrichness[$i] = $meanoutrichness[$i]/$trials;
+				$meanrichness{'BC'}[$i] = $meanrichness{'BC'}[$i]/$trials;
+				$meanrichness{'RT'}[$i] = $meanrichness{'RT'}[$i]/$trials;
+				$meanrichness{'SIB'}[$i] = $meanrichness{'SIB'}[$i]/$trials;
 				$msubsoriginate[$i] = $msubsoriginate[$i]/$trials;
 				$msubsextinct[$i] = $msubsextinct[$i]/$trials;
 				$msubssingletons[$i] = $msubssingletons[$i]/$trials;
@@ -1370,7 +1367,7 @@ $| = 1;
 	#  interval is i - 1, not i + 1; also, mnewsib i is the estimate for
 	#  the bin between boundaries i and i - 1
 
-	if ($q->param('diversity') =~ /two timers/ && $threetimerp > 0)	{
+	if ( ( $q->param('print_origination_rate_ss') =~ /yes/i || $q->param('print_extinction_rate_ss') =~ /yes/i ) && $threetimerp > 0)	{
 
 		# get the turnover rates
 		# note that the rates are offset by the sampling probability,
@@ -1443,7 +1440,7 @@ $| = 1;
 	# compute Jolly-Seber estimator
 	for $i (reverse 1..$chrons)	{
 		if ( $msubsearlier[$i] > 0 && $msubslater[$i] > 0 )	{
-			$msubsjolly[$i] = ($msubsrichness[$i]**2 * ($msubsrangethrough[$i] - $msubsrichness[$i]) / ($msubsearlier[$i] * $msubslater[$i])) + $msubsrichness[$i];
+			$msubsjolly[$i] = ($meanrichness{'SIB'}[$i]**2 * ($msubsrangethrough[$i] - $meanrichness{'SIB'}[$i]) / ($msubsearlier[$i] * $msubslater[$i])) + $meanrichness{'SIB'}[$i];
 		}
 	}
 
@@ -1453,7 +1450,7 @@ $| = 1;
 	#  making a UW curve
 	if ( $samplingmethod == 2 && $q->param('printall') eq "no")	{
 		for $i (1..$chrons)	{
-			if ($msubsrichness[$i] > 0)	{
+			if ($meanrichness{'SIB'}[$i] > 0)	{
 				# get means
 				my $sumx = 0;
 				my $sumy = 0;
@@ -1515,7 +1512,7 @@ sub printResults	{
 					if ( $sampcurve[$j][$i] > 0 )	{
 						printf CURVES "%.1f",$sampcurve[$j][$i];
 					} else	{
-						print CURVES "NaN";
+						print CURVES "NA";
 					}
 				}
 			}
@@ -1589,178 +1586,141 @@ sub printResults	{
 <table cellpadding="4">
 |;
 		print "<tr><td class=tiny valign=top><b>Interval</b>\n";
-		if ( $q->param('print_base_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Base (Ma)</b>";
-		}
-		if ( $q->param('print_midpoint_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Midpoint (Ma)</b>";
-		}
-		if ( $q->param('print_sampled') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Sampled<br>$generaorrefs</b>";
-		}
-		if ( $q->param('print_range-through') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
-		}
-		if ( $q->param('print_boundary-crosser') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Boundary-crosser<br>$generaorrefs</b> ";
-		}
-		if ( $q->param('print_two_timer') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Two&nbsp;timer<br>$generaorrefs</b> ";
-		}
-		if ( $q->param('print_three_timer') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Three&nbsp;timer<br>$generaorrefs</b> ";
-		}
-		if ( $q->param('print_first_appearances_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>First<br>appearances</b>";
-		}
-		if ( $q->param('print_origination_rate_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Origination<br>rate</b> ";
-		}
-		if ( $q->param('print_last_appearances_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Last<br>appearances</b>";
-		}
-		if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
-		}
-		if ( $q->param('print_singletons_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Singletons</b> ";
-		}
-		if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
-		}
-		if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
-		}
-		if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Three timer<br>sampling stat</b> ";
-		}
-		if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Three timer<br>diversity estimate</b> ";
-		}
-		if ( $q->param('print_chao-2_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
-		}
-		if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
-		}
-		if ( $q->param('print_ice_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
-		}
-		if ( $q->param('print_pie') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Evenness of<br>occurrences (PIE)</b> ";
-		}
-		if ( $q->param('print_refs_raw') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>References</b> ";
-		}
-		if ( $q->param('print_lists') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
-		}
-		if ($samplingmethod != 5)	{
-			if ( $q->param('print_occurrences') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Occurrences</b> ";
-			}
-			if ( $q->param('print_occurrences-exponentiated') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Occurrences<br><nobr>-exponentiated</nobr></b> ";
-			}
-		}
-		if ( $samplingmethod == 5 || $q->param('print_specimens') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Specimens/<br>individuals</b> ";
-		}
-		if ( $q->param('print_mean_richness') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Mean<br>richness</b>";
-		}
-		if ( $q->param('print_median_richness') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Median<br>richness</b> ";
-		}
-
 		print TABLE "Bin";
 		print TABLE ",Bin name";
 		if ( $q->param('print_base_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Base (Ma)</b>";
 			print TABLE ",Base (Ma)";
 		}
 		if ( $q->param('print_midpoint_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Midpoint (Ma)</b>";
 			print TABLE ",Midpoint (Ma)";
 		}
 		if ( $q->param('print_sampled') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Sampled<br>$generaorrefs</b>";
 			print TABLE ",Sampled $generaorrefs";
 		}
 		if ( $q->param('print_range-through') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
 			print TABLE ",Range-through $generaorrefs";
 		}
 		if ( $q->param('print_boundary-crosser') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Boundary-crosser<br>$generaorrefs</b> ";
 			print TABLE ",Boundary-crosser $generaorrefs";
 		}
-		if ( $q->param('print_two_timer') eq "YES" )	{
-			print TABLE ",Two timer $generaorrefs";
-		}
-		if ( $q->param('print_three_timer') eq "YES" )	{
-			print TABLE ",Three timer $generaorrefs";
-		}
 		if ( $q->param('print_first_appearances_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>First<br>appearances</b>";
 			print TABLE ",First appearances";
 		}
-		if ( $q->param('print_origination_rate_raw') eq "YES" )	{
-			print TABLE ",Origination rate";
-		}
 		if ( $q->param('print_last_appearances_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Last<br>appearances</b>";
 			print TABLE ",Last appearances";
 		}
-		if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
-			print TABLE ",Extinction rate";
-		}
 		if ( $q->param('print_singletons_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Singletons</b> ";
 			print TABLE ",Singletons";
 		}
+		if ( $q->param('print_two_timers') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Two&nbsp;timer<br>$generaorrefs</b> ";
+			print TABLE ",Two timer $generaorrefs";
+		}
+		if ( $q->param('print_three_timers') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Three&nbsp;timer<br>$generaorrefs</b> ";
+			print TABLE ",Three timer $generaorrefs";
+		}
+		if ( $q->param('print_part_timers') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Part&nbsp;timer<br>$generaorrefs</b> ";
+			print TABLE ",Part timer $generaorrefs";
+		}
+		if ( $q->param('print_origination_rate_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>3T origination<br>rate</b> ";
+			print TABLE ",3T origination rate";
+		}
+		if ( $q->param('print_Foote_origination_rate_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>BC origination<br>rate</b> ";
+			print TABLE ",BC origination rate";
+		}
+		if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>3T extinction<br>rate</b> ";
+			print TABLE ",3T extinction rate";
+		}
+		if ( $q->param('print_Foote_extinction_rate_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>BC extinction<br>rate</b> ";
+			print TABLE ",BC extinction rate";
+		}
+		if ( $q->param('print_one_occs') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>One-occurrence<br>$generaorrefs</b> ";
+			print TABLE ",One-occurrence $generaorrefs";
+		}
+		if ( $q->param('print_one_refs') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>One-reference<br>$generaorrefs</b> ";
+			print TABLE ",One-reference $generaorrefs";
+		}
+		if ( $q->param('print_u') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b><nobr>Good's <i>u</i></nobr></b> ";
+			print TABLE ",Good's u";
+		}
 		if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
 			print TABLE ",Gap analysis sampling stat";
 		}
 		if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
 			print TABLE ",Gap analysis diversity estimate";
 		}
 		if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Three timer<br>sampling stat</b> ";
 			print TABLE ",Three timer sampling stat";
 		}
 		if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Three timer<br>diversity estimate</b> ";
 			print TABLE ",Three timer diversity estimate";
 		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
 			print TABLE ",Chao-2 estimate";
 		}
 		if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 			print TABLE ",Jolly-Seber estimate";
 		}
 		if ( $q->param('print_ice_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
 			print TABLE ",Incidence-based coverage estimate";
 		}
 		if ( $q->param('print_pie') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Evenness of<br>occurrences (PIE)</b> ";
 			print TABLE ",Evenness of occurrences (PIE)";
 		}
 		if ( $q->param('print_refs_raw') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>References</b> ";
 			print TABLE ",References";
 		}
-		if ($samplingmethod != 5)	{
-			if ( $q->param('print_lists') eq "YES" )	{
-				print TABLE ",$listorfm";
-			}
-			if ( $q->param('print_occurrences') eq "YES" )	{
-				print TABLE ",Occurrences";
-			}
-			if ( $q->param('print_occurrences-exponentiated') eq "YES" )	{
-				print TABLE ",Occurrences-exponentiated";
-			}
-		}
-		else	{
+		if ($samplingmethod != 5 || $q->param('print_lists') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
 			print TABLE ",$listorfm";
 		}
+		if ( $q->param('print_occurrences') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Occurrences</b> ";
+			print TABLE ",Occurrences";
+		}
+		if ( $q->param('print_occurrences-exponentiated') eq "YES" && $samplingmethod != 5 )	{
+			print "<td class=tiny align=center valign=top><b>Occurrences<br><nobr>-exponentiated</nobr></b> ";
+			print TABLE ",Occurrences-exponentiated";
+		}
 		if ( $samplingmethod == 5 || $q->param('print_specimens') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Specimens/<br>individuals</b> ";
 			print TABLE ",Specimens/individuals";
 		}
 		if ( $q->param('print_mean_richness') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Mean<br>richness</b>";
 			print TABLE ",Mean richness";
 		}
 		if ( $q->param('print_median_richness') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Median<br>richness</b> ";
 			print TABLE ",Median richness";
 		}
+
 		print TABLE "\n";
 
 	 # make sure all the files are read/writeable
@@ -1773,34 +1733,47 @@ sub printResults	{
 					$gapstat = $gapstat / ( $rangethrough[$i] - $originate[$i] - $extinct[$i] + $singletons[$i] );
 				}
 				else	{
-					$gapstat = "NaN";
+					$gapstat = "NA";
 				}
 				if ($threetimers[$i] + $parttimers[$i] > 0)	{
 					$ttstat = $threetimers[$i] / ( $threetimers[$i] + $parttimers[$i] );
 				}
 				else	{
-					$ttstat = "NaN";
+					$ttstat = "NA";
 				}
 				if ($chaom[$i] > 0)	{
 					$chaostat = $richness[$i] + ($chaol[$i] * $chaol[$i] / (2 * $chaom[$i]));
 				}
 				else	{
-					$chaostat = "NaN";
+					$chaostat = "NA";
 				}
+
 				$temp = $chname[$i];
 				$temp =~ s/ /&nbsp;/;
 				print "<tr><td class=tiny valign=top>$temp";
+				print TABLE $chrons - $i + 1;
+				print TABLE ",$chname[$i]";
+
 				if ( $q->param('print_base_raw') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%.1f",$basema{$chname[$i]};
+					printf TABLE ",%.1f",$basema{$chname[$i]};
 				}
 				if ( $q->param('print_midpoint_raw') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
+					printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 				}
 				if ( $q->param('print_sampled') eq "YES" )	{
-					print "<td class=tiny align=center valign=top>$richness[$i] ";
+					if ( $listsinchron[$i] > 0 )	{
+						print "<td class=tiny align=center valign=top>$richness[$i] ";
+						print TABLE ",$richness[$i]";
+					} else	{
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
 				}
 				if ( $q->param('print_range-through') eq "YES" )	{
 					print "<td class=tiny align=center valign=top>$rangethrough[$i] ";
+					print TABLE ",$rangethrough[$i]";
 				}
 		# compute boundary crossers
 		# this is total range through diversity minus singletons minus
@@ -1810,263 +1783,263 @@ sub printResults	{
 				if ( $q->param('print_boundary-crosser') eq "YES" )	{
 					$bcrich[$i] = $rangethrough[$i] - $originate[$i];
 					printf "<td class=tiny align=center valign=top>%d ",$bcrich[$i];
-				}
-				if ( $q->param('print_two_timer') eq "YES" )	{
-					printf "<td class=tiny align=center valign=top>%d ",$twotimers[$i];
-				}
-				if ( $q->param('print_three_timer') eq "YES" )	{
-					printf "<td class=tiny align=center valign=top>%d ",$threetimers[$i];
+					printf TABLE ",%d",$bcrich[$i];
 				}
 				if ( $q->param('print_first_appearances_raw') eq "YES" )	{
-					print "<td class=tiny align=center valign=top>$originate[$i] ";
-				}
-			# Foote origination rate - note: extinction counts must
-			#  exclude singletons
-				if ( $q->param('print_origination_rate_raw') eq "YES" )	{
-					if ( $bcrich[$i-1] > 0 && $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 )	{
-						printf "<td class=tiny align=center valign=top>%.4f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
+					if ( $listsinchron[$i] > 0 )	{
+						print "<td class=tiny align=center valign=top>$originate[$i] ";
+						print TABLE ",$originate[$i]";
 					} else	{
-						print "<td class=tiny align=center valign=top>NaN";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_last_appearances_raw') eq "YES" )	{
-					print "<td class=tiny align=center valign=top>$extinct[$i] ";
-				}
-			# Foote extinction rate
-				if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
-					if ( $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 && $bcrich[$i] > 0 )	{
-						printf "<td class=tiny align=center valign=top>%.4f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
+					if ( $listsinchron[$i] > 0 )	{
+						print "<td class=tiny align=center valign=top>$extinct[$i] ";
+						print TABLE ",$extinct[$i]";
 					} else	{
-						print "<td class=tiny align=center valign=top>NaN";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_singletons_raw') eq "YES" )	{
-					print "<td class=tiny align=center valign=top>$singletons[$i] ";
+					if ( $listsinchron[$i] > 0 )	{
+						print "<td class=tiny align=center valign=top>$singletons[$i] ";
+						print TABLE ",$singletons[$i]";
+					} else	{
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+				if ( $q->param('print_two_timers') eq "YES" )	{
+					if ( $richness[$i] > 0 && $richness[$i+1] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%d ",$twotimers[$i];
+						printf TABLE ",%d",$twotimers[$i];
+					} else	{
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+				if ( $q->param('print_three_timers') eq "YES" )	{
+					if ( $richness[$i-1] > 0 && $richness[$i] > 0 && $richness[$i+1] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%d ",$threetimers[$i];
+						printf TABLE ",%d",$threetimers[$i];
+					} else	{
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+				if ( $q->param('print_part_timers') eq "YES" )	{
+					if ( $richness[$i-1] > 0 && $richness[$i] > 0 && $richness[$i+1] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%d ",$parttimers[$i];
+						printf TABLE ",%d",$parttimers[$i];
+					} else	{
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+			# 3T origination rate
+				if ( $q->param('print_origination_rate_raw') eq "YES" )	{
+					if ( $threetimers[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.3f ",log( $twotimers[$i-1] / $threetimers[$i] ) - log( $rawsum3timers / ( $rawsum3timers + $rawsumPtimers ) );
+						printf TABLE ",%.3f",$mu[$i];
+					} else	{
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+			# Foote origination rate - note: extinction counts must
+			#  exclude singletons
+				if ( $q->param('print_Foote_origination_rate_raw') eq "YES" )	{
+					if ( $bcrich[$i-1] > 0 && $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.3f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
+						printf TABLE ",%.3f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
+					} else	{
+						print "<td class=tiny align=center valign=top>NA";
+						print TABLE ",NA";
+					}
+				}
+			# 3T extinction rate
+				if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
+					if ( $threetimers[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.3f ",log( $twotimers[$i] / $threetimers[$i] ) - log( $rawsum3timers / ( $rawsum3timers + $rawsumPtimers ) );
+						printf TABLE ",%.3f",$mu[$i];
+					} else	{
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+			# Foote extinction rate
+				if ( $q->param('print_Foote_extinction_rate_raw') eq "YES" )	{
+					if ( $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 && $bcrich[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.3f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
+						printf TABLE ",%.3f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
+					} else	{
+						print "<td class=tiny align=center valign=top>NA";
+						print TABLE ",NA";
+					}
+				}
+				if ( $q->param('print_one_occs') eq "YES" )	{
+					if ( $listsinchron[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%d ",$q1[$i];
+						printf TABLE ",%d",$q1[$i];
+					} else    {
+				  		print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+				if ( $q->param('print_one_refs') eq "YES" )	{
+					if ( $listsinchron[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%d ",$onerefs[$i];
+						printf TABLE ",%d",$onerefs[$i];
+					} else    {
+				  		print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+				if ( $q->param('print_u') eq "YES" )	{
+					if ( $listsinchron[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.3f ",$u[$i];
+						printf TABLE ",%.3f",$u[$i];
+					} else    {
+				  		print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
 				}
 				if ( $gapstat > 0 )	{
 					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",$gapstat;
+						printf TABLE ",%.3f",$gapstat;
 					}
 					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$richness[$i] / $gapstat;
+						printf TABLE ",%.1f",$richness[$i] / $gapstat;
 					}
 				} else	{
 					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
-						print "<td class=tiny align=center valign=top>NaN ";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
-						print "<td class=tiny align=center valign=top>NaN ";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $ttstat > 0 )	{
 					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",$ttstat;
+						printf TABLE ",%.3f",$ttstat;
 					}
 					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$richness[$i] / $ttstat;
+						printf TABLE ",%.1f",$richness[$i] / $ttstat;
 					}
 				} else	{
 					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
-						print "<td class=tiny align=center valign=top>NaN ";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
-						print "<td class=tiny align=center valign=top>NaN ";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_chao-2_raw') eq "YES" )	{
 					if ($chaostat > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$chaostat;
+						printf TABLE ",%.1f",$chaostat;
 					} else    {
-				  		print "<td class=tiny align=center valign=top>NaN ";
+				  		print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
 					if ($jolly[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$jolly[$i];
+						printf TABLE ",%.1f",$jolly[$i];
 					} else    {
-						print "<td class=tiny align=center valign=top>NaN ";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_ice_raw') eq "YES" )	{
 					if ($ice[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$ice[$i];
+						printf TABLE ",%.1f",$ice[$i];
 					} else    {
-						print "<td class=tiny align=center valign=top>NaN ";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_pie') eq "YES" )	{
 					if ($pie[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.5f ",$pie[$i];
+						printf TABLE ",%.5f",$pie[$i];
 					} else    {
-						print "<td class=tiny align=center valign=top>NaN ";
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_refs_raw') eq "YES" )	{
-					printf "<td class=tiny align=center valign=top>%d ",$refsinchron[$i];
+					if ( $listsinchron[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%d ",$refsinchron[$i];
+						print TABLE ",$refsinchron[$i]";
+					} else    {
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
 				}
 				if ( $q->param('print_lists') eq "YES" )	{
-					print "<td class=tiny align=center valign=top>$listsinchron[$i] ";
+					printf "<td class=tiny align=center valign=top>%d ",$listsinchron[$i];
+					printf TABLE ",%d",$listsinchron[$i];
 				}
 				if ( $q->param('print_occurrences') eq "YES" )	{
-					print "<td class=tiny align=center valign=top>$occsinchron[$i] ";
+					if ( $listsinchron[$i] > 0 )	{
+						print "<td class=tiny align=center valign=top>$occsinchron[$i] ";
+						print TABLE ",$occsinchron[$i]";
+					} else    {
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
 				}
-				if ( $q->param('print_occurrences-exponentiated') eq "YES" )	{
-					if ($samplingmethod != 5)	{
+				if ( $q->param('print_occurrences-exponentiated') eq "YES" && $samplingmethod != 5 )	{
+					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron2[$i];
+						printf TABLE ",%.1f",$occsinchron2[$i];
+					} else    {
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_specimens') eq "YES" && $samplingmethod != 5 )	{
-					print "<td class=tiny align=center valign=top>$specimensinchron[$i] ";
+					if ( $listsinchron[$i] > 0 )	{
+						print "<td class=tiny align=center valign=top>$specimensinchron[$i] ";
+						print TABLE ",$specimensinchron[$i]";
+					} else    {
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
+						printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
 					} else	{
-						print "<td class=tiny align=center valign=top>NaN "
+						print "<td class=tiny align=center valign=top>NA ";
+						 print TABLE ",NA";
 					}
 				}
 				if ( $q->param('print_median_richness') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%.1f ",$median[$i];
-				}
-
-				print TABLE $chrons - $i + 1;
-				print TABLE ",$chname[$i]";
-				if ( $q->param('print_base_raw') eq "YES" )	{
-					printf TABLE ",%.1f",$basema{$chname[$i]};
-				}
-				if ( $q->param('print_midpoint_raw') eq "YES" )	{
-					printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
-				}
-				if ( $q->param('print_sampled') eq "YES" )	{
-					print TABLE ",$richness[$i]";
-				}
-				if ( $q->param('print_range-through') eq "YES" )	{
-					print TABLE ",$rangethrough[$i]";
-				}
-			# boundary crossers
-				if ( $q->param('print_boundary-crosser') eq "YES" )	{
-					printf TABLE ",%d",$bcrich[$i];
-				}
-				if ( $q->param('print_two_timer') eq "YES" )	{
-					printf TABLE ",%d",$twotimers[$i];
-				}
-				if ( $q->param('print_three_timer') eq "YES" )	{
-					printf TABLE ",%d",$threetimers[$i];
-				}
-				if ( $q->param('print_first_appearances_raw') eq "YES" )	{
-					print TABLE ",$originate[$i]";
-				}
-			# Foote origination rate
-				if ( $q->param('print_origination_rate_raw') eq "YES" )	{
-					if ( $bcrich[$i-1] > 0 && $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 )	{
-						printf TABLE ",%.4f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
-					} else	{
-						print TABLE ",NaN";
-					}
-				}
-				if ( $q->param('print_last_appearances_raw') eq "YES" )	{
-					print TABLE ",$extinct[$i]";
-				}
-			# Foote extinction rate
-				if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
-					if ( $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 && $bcrich[$i] > 0 )	{
-						printf TABLE ",%.4f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
-					} else	{
-						print TABLE ",NaN";
-					}
-				}
-				if ( $q->param('print_singletons_raw') eq "YES" )	{
-					print TABLE ",$singletons[$i]";
-				}
-				if ( $gapstat > 0 )	{
-					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
-						printf TABLE ",%.3f",$gapstat;
-					}
-					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
-						printf TABLE ",%.1f",$richness[$i] / $gapstat;
-					}
-				} else	{
-					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
-						print TABLE ",NaN";
-					}
-					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
-						print TABLE ",NaN";
-					}
-				}
-				if ( $ttstat > 0 )	{
-					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
-						printf TABLE ",%.3f",$ttstat;
-					}
-					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
-						printf TABLE ",%.1f",$richness[$i] / $ttstat;
-					}
-				} else	{
-					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
-						print TABLE ",NaN";
-					}
-					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
-						print TABLE ",NaN";
-					}
-				}
-				if ( $q->param('print_chao-2_raw') eq "YES" )	{
-					if ($chaostat > 0 )	{
-						printf TABLE ",%.1f",$chaostat;
-					} else    {
-						print TABLE ",NaN";
-					}
-				}
-				if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
-					if ($jolly[$i] > 0 )	{
-						printf TABLE ",%.1f",$jolly[$i];
-					} else    {
-						print TABLE ",NaN";
-					}
-				}
-				if ( $q->param('print_ice_raw') eq "YES" )	{
-					if ($ice[$i] > 0 )	{
-						printf TABLE ",%.1f",$ice[$i];
-					} else    {
-						print TABLE ",NaN";
-					}
-				}
-				if ( $q->param('print_pie') eq "YES" )	{
-					if ($pie[$i] > 0 )	{
-						printf TABLE ",%.5f",$pie[$i];
-					} else    {
-						print TABLE ",NaN";
-					}
-				}
-				if ( $q->param('print_refs_raw') eq "YES" )	{
-					print TABLE ",$refsinchron[$i]";
-				}
-				if ( $q->param('print_lists') eq "YES" )	{
-					print TABLE ",$listsinchron[$i]";
-				}
-				if ( $q->param('print_occurrences') eq "YES" )	{
-					print TABLE ",$occsinchron[$i]";
-				}
-				if ( $q->param('print_occurrences-exponentiated') eq "YES" )	{
-					if ($samplingmethod != 5)	{
-						printf TABLE ",%.1f",$occsinchron2[$i];
-					}
-				}
-				if ( $q->param('print_specimens') eq "YES" && $samplingmethod != 5 )	{
-					print TABLE ",$specimensinchron[$i]";
-				}
-				if ( $q->param('print_mean_richness') eq "YES" )	{
-					if ( $listsinchron[$i] > 0 )	{
-						printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
-					} else	{
-						 print TABLE ",NaN";
-					}
-				}
-				if ( $q->param('print_median_richness') eq "YES" )	{
 					printf TABLE ",%.1f",$median[$i];
 				}
+
 				print "<p>\n";
 				print TABLE "\n";
 			}
 		}
+		close TABLE;
 		print qq|</table>
 </div>
 
@@ -2079,6 +2052,8 @@ sub printResults	{
 			print "\n<b>$refsread</b> reference and interval combinations, <b>$listsread</b> collections, and <b>$occsread</b> occurrences met the search criteria.<p>\n";
 		}
 	
+		printf "The average per-interval sampling probability based on three timer analysis of the raw data is <b>%.3f</b>.<p>\n",$rawsum3timers / ( $rawsum3timers + $rawsumPtimers);
+
 		print "\nThe following data files have been created:<p>\n";
 		print "<ul>\n";
 		print "<li>The above diversity curve data (<a href=\"$HOST_URL$PRINTED_DIR/raw_curve_data.csv\">raw_curve_data.csv</a>)<p>\n";
@@ -2099,501 +2074,404 @@ sub printResults	{
 
             print "</div>\n\n"; # END PANEL1 DIV
 
-        if ($q->param('samplesize') ne '') {
-            print '<div id="panel2" class="panel">';
+		if ($q->param('samplesize') ne '') {
+
+			print '<div id="panel2" class="panel">';
 			print qq|<div class="displayPanel" style="padding-top: 1em;">
 <table cellpadding="4">
 |;
+			print SUB_TABLE "Bin,Bin name";
+
 			print "<tr><td class=tiny valign=top><b>Interval</b>\n";
 			if ( $q->param('print_base_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Base (Ma)</b> ";
-			}
-			if ( $q->param('print_midpoint_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Midpoint (Ma)</b> ";
-			}
-#			if ( $q->param('print_') eq "YES" )	{
-#				print "<td class=tiny align=center valign=top><b>Sampled<br>$generaorrefs</b> ";
-#			}
-#			if ( $q->param('print_') eq "YES" )	{
-#				print "<td class=tiny align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
-#			}
-			if ( $q->param('print_items') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Items<br>sampled</b> ";
-			}
-			if ( $q->param('print_refs_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>References<br>sampled</b> ";
-			}
-			if ( $q->param('print_median') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Median ";
-				printf "%s diversity</b>",$q->param('diversity');
-			}
-			if ( $q->param('print_ci') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>1-sigma CI</b> ";
-			}
-			if ( $q->param('print_mean') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Mean ";
-				printf "%s diversity</b>",$q->param('diversity');
-			}
-			if ($q->param('diversity') =~ /two timers/)	{
-				if ( $q->param('print_three_timers_ss') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Mean three timers</b> ";
-				}
-				if ( $q->param('print_corrected_bc') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Corrected BC<br>diversity</b> ";
-				}
-				if ( $q->param('print_estimated_midpoint') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Estimated midpoint<br>diversity</b> ";
-				}
-				if ( $q->param('print_estimated_mesa') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Estimated mesa<br>diversity</b> ";
-				}
-				if ( $q->param('print_raw_sib') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Raw SIB<br>diversity</b> ";
-				}
-				if ( $q->param('print_corrected_sib') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Corrected SIB<br>diversity</b> ";
-				}
-				if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Origination<br>rate</b> ";
-				}
-				if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
-				}
-			}
-			elsif ($q->param('diversity') =~ /boundary-crossers/)	{
-				if ( $q->param('print_first_appearances_ss') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>First<br>appearances</b> ";
-				}
-				if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Origination<br>rate</b> ";
-				}
-				if ( $q->param('print_origination_percentage') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Origination<br>percentage</b> ";
-				}
-				if ( $q->param('print_last_appearances_ss') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Last<br>appearances</b> ";
-				}
-				if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Extinction<br>rate</b> ";
-				}
-				if ( $q->param('print_extinction_percentage') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Extinction<br>percentage</b> ";
-				}
-			} else	{
-				if ( $q->param('print_origination_percentage') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Origination<br>percentage</b> ";
-				}
-				if ( $q->param('print_extinction_percentage') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Extinction<br>percentage</b> ";
-				}
-			}
-			if ( $q->param('print_singletons_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Singletons</b> ";
-			}
-			if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
-			}
-			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
-			}
-			if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Three timer<br>sampling stat</b> ";
-			}
-			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Three timer<br>diversity estimate</b> ";
-			}
-			if ( $q->param('print_chao-2_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
-			}
-			if ( $q->param('print_jolly-seber_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
-			}
-			if ( $q->param('print_ice_ss') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
-			}
-			if ( $samplingmethod == 2)	{
-				if ( $q->param('print_michaelis-menten') eq "YES" )	{
-					print "<td class=tiny align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
-				}
-			}
-			print SUB_TABLE "Bin,Bin name";
-			if ( $q->param('print_base_ss') eq "YES" )	{
 				print SUB_TABLE ",Base (Ma)";
 			}
 			if ( $q->param('print_midpoint_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Midpoint (Ma)</b> ";
 				print SUB_TABLE ",Midpoint (Ma)";
 			}
-	#		if ( $q->param('print_') eq "YES" )	{
-	#			print SUB_TABLE ",Sampled $generaorrefs";
-	#		}
-	#		if ( $q->param('print_') eq "YES" )	{
-	#			print SUB_TABLE ",Range-through $generaorrefs";
-	#		}
 			if ( $q->param('print_items') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Items<br>sampled</b> ";
 				print SUB_TABLE ",Items sampled";
 			}
 			if ( $q->param('print_refs_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>References<br>sampled</b> ";
 				print SUB_TABLE ",References sampled";
 			}
 			if ( $q->param('print_median') eq "YES" )	{
-				print SUB_TABLE ",Median ";
-				printf SUB_TABLE "%s diversity",$q->param('diversity');
+				print "<td class=tiny align=center valign=top><b>Median sampled diversity</b>";
+				print SUB_TABLE ",Median sampled diversity";
 			}
 			if ( $q->param('print_ci') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>1-sigma CI</b> ";
 				print SUB_TABLE ",1-sigma lower CI,1-sigma upper CI";
 			}
 			if ( $q->param('print_mean') eq "YES" )	{
-				print SUB_TABLE ",Mean ";
-				printf SUB_TABLE "%s diversity",$q->param('diversity');
+				print "<td class=tiny align=center valign=top><b>Mean sampled diversity</b>";
+				print SUB_TABLE ",Mean sampled diversity";
 			}
-			if ($q->param('diversity') =~ /two timers/)	{
-				if ( $q->param('print_three_timers_ss') eq "YES" )	{
-					print SUB_TABLE ",Mean three timers";
-				}
-				if ( $q->param('print_corrected_bc') eq "YES" )	{
-					print SUB_TABLE ",Corrected BC diversity";
-				}
-				if ( $q->param('print_estimated_midpoint') eq "YES" )	{
-					print SUB_TABLE ",Estimated midpoint diversity";
-				}
-				if ( $q->param('print_estimated_mesa') eq "YES" )	{
-					print SUB_TABLE ",Estimated mesa diversity";
-				}
-				if ( $q->param('print_raw_sib') eq "YES" )	{
-					print SUB_TABLE ",Raw SIB diversity";
-				}
-				if ( $q->param('print_corrected_sib') eq "YES" )	{
-					print SUB_TABLE ",Corrected SIB diversity";
-				}
-				if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-					print SUB_TABLE ",Origination rate";
-				}
-				if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-					print SUB_TABLE ",Extinction rate";
-				}
+			if ( $q->param('print_range-through_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Range-through diversity</b>";
+				print SUB_TABLE ",Range-through diversity";
 			}
-			elsif ($q->param('diversity') =~ /boundary-crossers/)	{
-				if ( $q->param('print_first_appearances_ss') eq "YES" )	{
-					print SUB_TABLE ",First appearances";
-				}
-				if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-					print SUB_TABLE ",Origination rate";
-				}
-				if ( $q->param('print_origination_percentage') eq "YES" )	{
-					print SUB_TABLE ",Origination percentage";
-				}
-				if ( $q->param('print_last_appearances_ss') eq "YES" )	{
-					print SUB_TABLE ",Last appearances";
-				}
-				if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-					print SUB_TABLE ",Extinction rate";
-				}
-				if ( $q->param('print_extinction_percentage') eq "YES" )	{
-					print SUB_TABLE ",Extinction percentage";
-				}
-			} else	{
-				if ( $q->param('print_origination_percentage') eq "YES" )	{
-					print SUB_TABLE ",Origination percentage";
-				}
-				if ( $q->param('print_extinction_percentage') eq "YES" )	{
-					print SUB_TABLE ",Extinction percentage";
-				}
+			if ( $q->param('print_boundary-crosser_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Boundary-crosser diversity</b>";
+				print SUB_TABLE ",Boundary-crosser diversity";
+			}
+			if ( $q->param('print_corrected_bc') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Corrected BC<br>diversity</b> ";
+				print SUB_TABLE ",Corrected BC diversity";
+			}
+			if ( $q->param('print_estimated_midpoint') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Estimated midpoint<br>diversity</b> ";
+				print SUB_TABLE ",Estimated midpoint diversity";
+			}
+			if ( $q->param('print_estimated_mesa') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Estimated mesa<br>diversity</b> ";
+				print SUB_TABLE ",Estimated mesa diversity";
+			}
+			if ( $q->param('print_corrected_sib') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Corrected SIB<br>diversity</b> ";
+				print SUB_TABLE ",Corrected SIB diversity";
+			}
+
+			if ( $q->param('print_first_appearances_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>First<br>appearances</b> ";
+				print SUB_TABLE ",First appearances";
+			}
+			if ( $q->param('print_last_appearances_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Last<br>appearances</b> ";
+				print SUB_TABLE ",Last appearances";
 			}
 			if ( $q->param('print_singletons_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Singletons</b> ";
 				print SUB_TABLE ",Singletons";
 			}
+			if ( $q->param('print_two_timers_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Two timers</b> ";
+				print SUB_TABLE ",Two timers";
+			}
+			if ( $q->param('print_three_timers_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Three timers</b> ";
+				print SUB_TABLE ",Three timers";
+			}
+			if ( $q->param('print_part_timers_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Part timers</b> ";
+				print SUB_TABLE ",Part timers";
+			}
+			if ( $q->param('print_origination_rate_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>3T origination<br>rate</b> ";
+				print SUB_TABLE ",3T origination rate";
+			}
+
+			if ( $q->param('print_Foote_origination_rate_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>BC origination<br>rate</b> ";
+				print SUB_TABLE ",BC origination rate";
+			}
+			if ( $q->param('print_origination_percentage') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>RT origination<br>percentage</b> ";
+				print SUB_TABLE ",RT origination percentage";
+			}
+			if ( $q->param('print_Foote_origination_percentage') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>BC origination<br>percentage</b> ";
+				print SUB_TABLE ",BC origination percentage";
+			}
+
+			if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>3T extinction<br>rate</b> ";
+				print SUB_TABLE ",3T extinction rate";
+			}
+			if ( $q->param('print_Foote_extinction_rate_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>BC extinction<br>rate</b> ";
+				print SUB_TABLE ",BC extinction rate";
+			}
+			if ( $q->param('print_extinction_percentage') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>RT extinction<br>percentage</b> ";
+				print SUB_TABLE ",RT extinction percentage";
+			}
+			if ( $q->param('print_Foote_extinction_percentage') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>BC extinction<br>percentage</b> ";
+				print SUB_TABLE ",BC extinction percentage";
+			}
+
+			if ( $q->param('print_one_occs_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>One occurrence $generaorrefs</b> ";
+				print SUB_TABLE ",One occurrence $generaorrefs";
+			}
 			if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
 				print SUB_TABLE ",Gap analysis sampling stat";
 			}
 			if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
 				print SUB_TABLE ",Gap analysis diversity estimate";
 			}
 			if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Three timer<br>sampling stat</b> ";
 				print SUB_TABLE ",Three timer sampling stat";
 			}
 			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Three timer<br>diversity estimate</b> ";
 				print SUB_TABLE ",Three timer diversity estimate";
 			}
 			if ( $q->param('print_chao-2_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
 				print SUB_TABLE ",Chao-2 estimate";
 			}
 			if ( $q->param('print_jolly-seber_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
 				print SUB_TABLE ",Jolly-Seber estimate";
 			}
 			if ( $q->param('print_ice_ss') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
 				print SUB_TABLE ",Incidence-based coverage estimate";
 			}
-			if ( $samplingmethod == 2)	{
-				if ( $q->param('print_michaelis-menten') eq "YES" )	{
-					print SUB_TABLE ",Michaelis-Menten estimate";
-				}
+			if ( $samplingmethod == 2 && $q->param('print_michaelis-menten') eq "YES" )	{
+				print "<td class=tiny align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
+				print SUB_TABLE ",Michaelis-Menten estimate";
 			}
+
 			print SUB_TABLE "\n";
 
 			for ($i = 1; $i <= $chrons; $i++)     {
 				if ($rangethrough[$i] > 0)  {
-					$gapstat = $msubsrichness[$i] - $msubsoriginate[$i] - $msubsextinct[$i] + $msubssingletons[$i];
+					$gapstat = $meanrichness{'SIB'}[$i] - $msubsoriginate[$i] - $msubsextinct[$i] + $msubssingletons[$i];
 					if ($gapstat > 0)	{
 						$gapstat = $gapstat / ( $msubsrangethrough[$i] - $msubsoriginate[$i] - $msubsextinct[$i] + $msubssingletons[$i] );
-	#         $gapstat = $richness[$i] / $gapstat;
 					}
 					else	{
-						$gapstat = "NaN";
+						$gapstat = "NA";
 					}
 					if ( $mthreetimers[$i] + $mparttimers[$i] > 0 )	{
 						$ttstat = $mthreetimers[$i] / ( $mthreetimers[$i] + $mparttimers[$i] );
 					} else	{
-				  		$ttstat = "NaN";
+				  		$ttstat = "NA";
 					}
 					if ($msubschaom[$i] > 0)	{
-						$msubschaostat = $msubsrichness[$i] + ($msubschaol[$i] * $msubschaol[$i] / (2 * $msubschaom[$i]));
+						$msubschaostat = $meanrichness{'SIB'}[$i] + ($msubschaol[$i] * $msubschaol[$i] / (2 * $msubschaom[$i]));
 					}
 					else	{
-						$msubschaostat = "NaN";
+						$msubschaostat = "NA";
 					}
+
 					$temp = $chname[$i];
 					$temp =~ s/ /&nbsp;/;
 					print "<tr><td class=tiny valign=top>$temp";
-					if ( $q->param('print_base_ss') eq "YES" )	{
-						printf "<td class=tiny align=center valign=top>%.1f ",$basema{$chname[$i]};
-					}
-					if ( $q->param('print_midpoint_ss') eq "YES" )	{
-						printf "<td class=tiny align=center valign=top>%.1f ",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
-					}
-#					printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i];
-#					printf "<td class=tiny align=center valign=top>%.1f ",$msubsrangethrough[$i];
-					if ( $q->param('print_items') eq "YES" )	{
-						printf "<td class=tiny align=center valign=top>%.1f ",$tsampled[$i];
-					}
-					if ( $q->param('print_refs_ss') eq "YES" )	{
-						printf "<td class=tiny align=center valign=top>%.1f ",$msubsrefrichness[$i];
-					}
-					if ( $q->param('print_median') eq "YES" )	{
-						$s = int(0.5*$trials)+1;
-						print "<td class=tiny align=center valign=top>$outrichness[$i][$s] ";
-					}
-					if ( $q->param('print_ci') eq "YES" )	{
-						$qq = int(0.1587*$trials)+1;
-						$r = int(0.8413*$trials)+1;
-						print "<td class=tiny align=center valign=top>$outrichness[$i][$qq]-$outrichness[$i][$r] ";
-					}
-					if ( $q->param('print_mean') eq "YES" )	{
-						printf "<td class=tiny align=center valign=top>%.1f ",$meanoutrichness[$i];
-					}
-
-		# print assorted stats yielded by two timer analysis JA 23.8.04
-					if ($q->param('diversity') =~ /two timers/)	{
-						if ( $q->param('print_three_timers_ss') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$mthreetimers[$i];
-						}
-						if ( $q->param('print_corrected_bc') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$mnewbc[$i];
-						}
-						if ( $q->param('print_estimated_midpoint') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$mmidptdiv[$i];
-						}
-						if ( $q->param('print_estimated_mesa') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$mmesa[$i];
-						}
-			# we want the raw standardized SIB data for comparison
-			#  with the correction
-						if ( $q->param('print_raw_sib') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i];
-						}
-						if ( $q->param('print_corrected_sib') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$mnewsib[$i];
-						}
-						if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.3f ",$lam[$i];
-						}
-						if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.3f ",$mu[$i];
-						}
-					}
-					elsif ($q->param('diversity') =~ /boundary-crossers/)	{
-				# Foote origination rate
-						if ( $q->param('print_first_appearances_ss') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i];
-						}
-						if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-							if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
-								printf "<td class=tiny align=center valign=top>%.4f ",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
-							} else	{
-								print "<td class=tiny align=center valign=top>NaN ";
-							}
-						}
-						if ( $q->param('print_origination_percentage') eq "YES" )	{
-							if ( $meanoutrichness[$i] > 0 )	{
-								printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
-							} else	{
-								print "<td class=tiny align=center valign=top>NaN ";
-							}
-						}
-				# Foote extinction rate
-						if ( $q->param('print_last_appearances_ss') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i];
-						}
-						if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-							if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
-								printf "<td class=tiny align=center valign=top>%.4f ",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
-							} else	{
-								print "<td class=tiny align=center valign=top>NaN ";
-							}
-						}
-						if ( $q->param('print_extinction_percentage') eq "YES" )	{
-							if ( $meanoutrichness[$i] > 0 )	{
-								printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
-							} else	{
-								print "<td class=tiny align=center valign=top>NaN ";
-							}
-						}
-					} else	{
-						if ( $q->param('print_origination_percentage') eq "YES" )	{
-							if ( $meanoutrichness[$i] > 0 )	{
-								printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
-							} else	{
-								print "<td class=tiny align=center valign=top>NaN ";
-							}
-						}
-						if ( $q->param('print_extinction_percentage') eq "YES" )	{
-							if ( $meanoutrichness[$i] > 0 )	{
-								printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
-							} else	{
-								print "<td class=tiny align=center valign=top>NaN ";
-							}
-						}
-					}
-					if ( $q->param('print_singletons_ss') eq "YES" )	{
-						printf "<td class=tiny align=center valign=top>%.1f ",$msubssingletons[$i];
-					}
 					print SUB_TABLE $chrons - $i + 1;
 					print SUB_TABLE ",$chname[$i]";
+
 					if ( $q->param('print_base_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$basema{$chname[$i]};
 						printf SUB_TABLE ",%.1f",$basema{$chname[$i]};
 					}
 					if ( $q->param('print_midpoint_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 						printf SUB_TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 					}
-#					printf SUB_TABLE ",%.1f",$msubsrichness[$i];
-#					printf SUB_TABLE ",%.1f",$msubsrangethrough[$i];
 					if ( $q->param('print_items') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$tsampled[$i];
 						printf SUB_TABLE ",%.1f",$tsampled[$i];
 					}
 					if ( $q->param('print_refs_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubsrefrichness[$i];
 						printf SUB_TABLE ",%.1f",$msubsrefrichness[$i];
 					}
+					my $trials = $q->param('samplingtrials');
 					if ( $q->param('print_median') eq "YES" )	{
-						print SUB_TABLE ",$outrichness[$i][$s]";
+						if ( $tsampled[$i] > 0 )	{
+							my $s = int(0.5*$trials)+1;
+							print "<td class=tiny align=center valign=top>$outrichness[$i][$s] ";
+							print SUB_TABLE ",$outrichness[$i][$s]";
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
 					}
 					if ( $q->param('print_ci') eq "YES" )	{
-						print SUB_TABLE ",$outrichness[$i][$qq]";
-					}
-					if ( $q->param('print_ci') eq "YES" )	{
-						print SUB_TABLE ",$outrichness[$i][$r]";
+						if ( $tsampled[$i] > 0 )	{
+							my $qq = int(0.1587*$trials)+1;
+							my $r = int(0.8413*$trials)+1;
+							printf "<td class=tiny align=center valign=top><nobr>$outrichness[$i][$qq] - $outrichness[$i][$r]</nobr> ";
+							print SUB_TABLE ",$outrichness[$i][$qq]";
+							print SUB_TABLE ",$outrichness[$i][$r]";
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
 					}
 					if ( $q->param('print_mean') eq "YES" )	{
-						printf SUB_TABLE ",%.1f",$meanoutrichness[$i];
-					}
-					if ($q->param('diversity') =~ /two timers/)	{
-						if ( $q->param('print_three_timers_ss') eq "YES" )	{
-							printf SUB_TABLE ",%.1f",$mthreetimers[$i];
-						}
-						if ( $q->param('print_corrected_bc') eq "YES" )	{
-							printf SUB_TABLE ",%.1f",$mnewbc[$i];
-						}
-						if ( $q->param('print_estimated_midpoint') eq "YES" )	{
-							printf SUB_TABLE ",%.1f",$mmidptdiv[$i];
-						}
-						if ( $q->param('print_estimated_mesa') eq "YES" )	{
-							printf SUB_TABLE ",%.1f",$mmesa[$i];
-						}
-						if ( $q->param('print_raw_sib') eq "YES" )	{
-							printf SUB_TABLE ",%.3f",$msubsrichness[$i];
-						}
-						if ( $q->param('print_corrected_sib') eq "YES" )	{
-							printf SUB_TABLE ",%.1f",$mnewsib[$i];
-						}
-						if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-							printf SUB_TABLE ",%.3f",$lam[$i];
-						}
-						if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-							printf SUB_TABLE ",%.3f",$mu[$i];
+						if ( $tsampled[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$meanrichness{'SIB'}[$i];
+							printf SUB_TABLE ",%.1f",$meanrichness{'SIB'}[$i];
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
 						}
 					}
-					elsif ($q->param('diversity') =~ /boundary-crossers/)	{
-					# Foote origination rate
-						if ( $q->param('print_first_appearances_ss') eq "YES" )	{
-							printf SUB_TABLE ",%.1f",$msubsoriginate[$i];
-						}
-						if ( $q->param('print_origination_rate_ss') eq "YES" )	{
-							if ( $meanoutrichness[$i-1] > 0 && $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 )	{
-								printf SUB_TABLE ",%.4f",log( $meanoutrichness[$i-1] / ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) );
-							} else	{
-								print SUB_TABLE ",NaN";
-							}
-						}
-						if ( $q->param('print_origination_percentage') eq "YES" )	{
-							if ( $meanoutrichness[$i] > 0 )	{
-								printf SUB_TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
-							} else	{
-								print SUB_TABLE ",NaN";
-							}
-						}
-					# Foote extinction rate
-						if ( $q->param('print_last_appearances_ss') eq "YES" )	{
-							printf SUB_TABLE ",%.1f",$msubsextinct[$i];
-						}
-						if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
-							if ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanoutrichness[$i] > 0 )	{
-								printf SUB_TABLE ",%.4f",log( ( $meanoutrichness[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanoutrichness[$i] ) * -1;
-							} else	{
-								print SUB_TABLE ",NaN";
-							}
-						}
-						if ( $q->param('print_extinction_percentage') eq "YES" )	{
-							if ( $meanoutrichness[$i] > 0 )	{
-								printf SUB_TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
-							} else	{
-								print SUB_TABLE ",NaN";
-							}
-						}
-					} else	{
-						if ( $q->param('print_origination_percentage') eq "YES" )	{
-							if ( $meanoutrichness[$i] > 0 )	{
-								printf SUB_TABLE ",%.1f",$msubsoriginate[$i] / $meanoutrichness[$i] * 100;
-							} else	{
-								print SUB_TABLE ",NaN";
-							}
-						}
-						if ( $q->param('print_extinction_percentage') eq "YES" )	{
-							if ( $meanoutrichness[$i] > 0 )	{
-								printf SUB_TABLE ",%.1f",$msubsextinct[$i] / $meanoutrichness[$i] * 100;
-							} else	{
-								print SUB_TABLE ",NaN";
-							}
-						}
+
+					if ( $q->param('print_range-through_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$meanrichness{'RT'}[$i];
+						printf SUB_TABLE ",%.1f",$meanrichness{'RT'}[$i];
+					}
+					if ( $q->param('print_boundary-crosser_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$meanrichness{'BC'}[$i];
+						printf SUB_TABLE ",%.1f",$meanrichness{'BC'}[$i];
+					}
+
+		# print assorted stats yielded by two timer analysis JA 23.8.04
+					if ( $q->param('print_corrected_bc') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$mnewbc[$i];
+						printf SUB_TABLE ",%.1f",$mnewbc[$i];
+					}
+					if ( $q->param('print_estimated_midpoint') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$mmidptdiv[$i];
+						printf SUB_TABLE ",%.1f",$mmidptdiv[$i];
+					}
+					if ( $q->param('print_estimated_mesa') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$mmesa[$i];
+						printf SUB_TABLE ",%.1f",$mmesa[$i];
+					}
+					if ( $q->param('print_corrected_sib') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$mnewsib[$i];
+						printf SUB_TABLE ",%.1f",$mnewsib[$i];
+					}
+
+					if ( $q->param('print_first_appearances_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i];
+						printf SUB_TABLE ",%.1f",$msubsoriginate[$i];
+					}
+					if ( $q->param('print_last_appearances_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i];
+						printf SUB_TABLE ",%.1f",$msubsextinct[$i];
 					}
 					if ( $q->param('print_singletons_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubssingletons[$i];
 						printf SUB_TABLE ",%.1f",$msubssingletons[$i];
 					}
+					if ( $q->param('print_two_timers_ss') eq "YES" )	{
+						if ( $meanrichness{'SIB'}[$i] > 0 && $meanrichness{'SIB'}[$i+1] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$mtwotimers[$i];
+							printf SUB_TABLE ",%.1f",$mtwotimers[$i];
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_three_timers_ss') eq "YES" )	{
+						if ( $meanrichness{'SIB'}[$i-1] > 0 && $meanrichness{'SIB'}[$i] > 0 && $meanrichness{'SIB'}[$i+1] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$mthreetimers[$i];
+							printf SUB_TABLE ",%.1f",$mthreetimers[$i];
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_part_timers_ss') eq "YES" )	{
+						if ( $meanrichness{'SIB'}[$i-1] > 0 && $meanrichness{'SIB'}[$i] > 0 && $meanrichness{'SIB'}[$i+1] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$mparttimers[$i];
+							printf SUB_TABLE ",%.1f",$mparttimers[$i];
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_one_occs_ss') eq "YES" )	{
+						printf "<td class=tiny align=center valign=top>%.1f ",$msubsq1[$i];
+						printf SUB_TABLE ",%.1f",$msubsq1[$i];
+					}
+
+					if ( $q->param('print_origination_rate_ss') eq "YES" )	{
+						if ( $mtwotimers[$i-1] > 0 && $mthreetimers[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.3f ",$lam[$i];
+							printf SUB_TABLE ",%.3f",$lam[$i];
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_Foote_origination_rate_ss') eq "YES" )	{
+						if ( $meanrichness{'BC'}[$i-1] - $msubsoriginate[$i] + $msubssingletons[$i] > 0 && $meanrichness{'BC'}[$i-1] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.3f ",log( $meanrichness{'BC'}[$i-1] / ( $meanrichness{'BC'}[$i-1] - $msubsoriginate[$i] + $msubssingletons[$i] ) );
+							printf SUB_TABLE ",%.3f",log( $meanrichness{'BC'}[$i-1] / ( $meanrichness{'BC'}[$i-1] - $msubsoriginate[$i] + $msubssingletons[$i] ) );
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_origination_percentage') eq "YES" )	{
+						if ( $meanrichness{'SIB'}[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsoriginate[$i] / $meanrichness{'SIB'}[$i] * 100;
+							printf SUB_TABLE ",%.1f",$msubsoriginate[$i] / $meanrichness{'SIB'}[$i] * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_Foote_origination_percentage') eq "YES" )	{
+						if ( $meanrichness{'BC'}[$i-1] - $msubsoriginate[$i] + $msubssingletons[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",( 1 - ( $meanrichness{'BC'}[$i-1] - $msubsoriginate[$i] + $msubssingletons[$i] ) / $meanrichness{'BC'}[$i-1] ) * 100;
+							printf SUB_TABLE ",%.1f",( 1 - ( $meanrichness{'BC'}[$i-1] - $msubsoriginate[$i] + $msubssingletons[$i] ) / $meanrichness{'BC'}[$i-1] ) * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+
+					if ( $q->param('print_extinction_rate_ss') eq "YES" )	{
+						if ( $mthreetimers[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.3f ",$mu[$i];
+							printf SUB_TABLE ",%.3f",$mu[$i];
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_Foote_extinction_rate_ss') eq "YES" )	{
+						if ( $meanrichness{'BC'}[$i] - $msubsextinct[$i] + $msubssingletons[$i] > 0 && $meanrichness{'BC'}[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.3f ",log( ( $meanrichness{'BC'}[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanrichness{'BC'}[$i] ) * -1;
+							printf SUB_TABLE ",%.3f",log( ( $meanrichness{'BC'}[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanrichness{'BC'}[$i] ) * -1;
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_extinction_percentage') eq "YES" )	{
+						if ( $meanrichness{'SIB'}[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",$msubsextinct[$i] / $meanrichness{'SIB'}[$i] * 100;
+							printf SUB_TABLE ",%.1f",$msubsextinct[$i] / $meanrichness{'SIB'}[$i] * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+					if ( $q->param('print_Foote_extinction_percentage') eq "YES" )	{
+						if ( $meanrichness{'BC'}[$i] > 0 )	{
+							printf "<td class=tiny align=center valign=top>%.1f ",( 1 - ( $meanrichness{'BC'}[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanrichness{'BC'}[$i] ) * 100;
+							printf SUB_TABLE ",%.1f",( 1 - ( $meanrichness{'BC'}[$i] - $msubsextinct[$i] + $msubssingletons[$i] ) / $meanrichness{'BC'}[$i] ) * 100;
+						} else	{
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
+						}
+					}
+
 					if ($gapstat > 0)	{
 						if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
 							printf "<td class=tiny align=center valign=top>%.3f ",$gapstat;
 							printf SUB_TABLE ",%.3f",$gapstat;
 						}
 						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
-							printf "<td class=tiny align=center valign=top>%.1f ",$msubsrichness[$i] / $gapstat;
-							printf SUB_TABLE ",%.3f",$msubsrichness[$i] / $gapstat;
+							printf "<td class=tiny align=center valign=top>%.1f ",$meanrichness{'SIB'}[$i] / $gapstat;
+							printf SUB_TABLE ",%.3f",$meanrichness{'SIB'}[$i] / $gapstat;
 						}
-					}
-					else	{
+					} else	{
 						if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
-							print "<td class=tiny align=center valign=top>NaN ";
-							print SUB_TABLE ",NaN";
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
 						}
 						if ( $q->param('print_gap_analysis_estimate_ss') eq "YES" )	{
-							print "<td class=tiny align=center valign=top>NaN ";
-							print SUB_TABLE ",NaN";
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
 						}
 					}
 					if ($ttstat > 0)	{
@@ -2605,53 +2483,52 @@ sub printResults	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$mnewsib[$i] / $ttstat;
 							printf SUB_TABLE ",%.3f",$mnewsib[$i] / $ttstat;
 						}
-					}
-					else	{
+					} else	{
 						if ( $q->param('print_three_timer_stat_ss') eq "YES" )	{
-							print "<td class=tiny align=center valign=top>NaN ";
-							print SUB_TABLE ",NaN";
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
 						}
 						if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
-							print "<td class=tiny align=center valign=top>NaN ";
-							print SUB_TABLE ",NaN";
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
 						}
 					}
 					if ( $q->param('print_chao-2_ss') eq "YES" )	{
-						if ($msubschaostat > 0 && $msubsrichness[$i] > 0 )	{
+						if ($msubschaostat > 0 && $meanrichness{'SIB'}[$i] > 0 )	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$msubschaostat;
 							printf SUB_TABLE ",%.1f",$msubschaostat;
 						} else    {
-							print "<td class=tiny align=center valign=top>NaN ";
-							print SUB_TABLE ",NaN";
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
 						}
 					}
 					if ( $q->param('print_jolly-seber_ss') eq "YES" )	{
-						if ($msubsjolly[$i] > 0 && $msubsrichness[$i] > 0 )	{
+						if ($msubsjolly[$i] > 0 && $meanrichness{'SIB'}[$i] > 0 )	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$msubsjolly[$i];
 							printf SUB_TABLE ",%.1f",$msubsjolly[$i];
 						} else    {
-							print "<td class=tiny align=center valign=top>NaN ";
-							print SUB_TABLE ",NaN";
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
 						}
 					}
 					if ( $q->param('print_ice_ss') eq "YES" )	{
-						if ($msubsice[$i] > 0 && $msubsrichness[$i] > 0 )	{
+						if ($msubsice[$i] > 0 && $meanrichness{'SIB'}[$i] > 0 )	{
 							printf "<td class=tiny align=center valign=top>%.1f ",$msubsice[$i];
 							printf SUB_TABLE ",%.1f",$msubsice[$i];
 						} else    {
-							print "<td class=tiny align=center valign=top>NaN ";
-							print SUB_TABLE ",NaN";
+							print "<td class=tiny align=center valign=top>NA ";
+							print SUB_TABLE ",NA";
 						}
 					}
 					if ( $q->param('print_michaelis-menten') eq "YES" )	{
 						if ( $samplingmethod == 2)	{
-							if ($michaelis[$i] > 0 && $msubsrichness[$i] > 0 )	{
+							if ($michaelis[$i] > 0 && $meanrichness{'SIB'}[$i] > 0 )	{
 					  			printf "<td class=tiny align=center valign=top>%.1f ",$michaelis[$i];
 					  			printf SUB_TABLE ",%.1d",$michaelis[$i];
 							}
 							else    {
-								print "<td class=tiny align=center valign=top>NaN ";
-								print SUB_TABLE ",NaN";
+								print "<td class=tiny align=center valign=top>NA ";
+								print SUB_TABLE ",NA";
 							}
 						}
 					}
@@ -2659,6 +2536,7 @@ sub printResults	{
 					print SUB_TABLE "\n";
 				}
 			}
+			close SUB_TABLE;
 			print qq|</table>
 </div>
 
@@ -2671,7 +2549,7 @@ sub printResults	{
 			}
 			print "The total number of trials was <b>".$q->param('samplingtrials')."</b>.<p>\n";
 			if ( $threetimerp )	{
-				printf "The gap proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
+				printf "The average per-interval proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
 			}
 			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
 				print "Corrected SIB, not raw SIB, was used for the three timer diversity estimate.<p>\n";
@@ -2700,7 +2578,7 @@ sub printResults	{
 			print "<div id=\"panel2\" class=\"panel\">\n\n";
 		}
 		print "<div class=\"displayPanel\" style=\"padding-top: 1em;\">\n\n";
-		my ($width,$height) = (650,500);
+		my ($width,$height) = (680,500);
 		$im = new GD::Image($width,$height,1);
 		my %rgbs = ("white", "255,255,255",
 			"black", "0,0,0",
@@ -2721,13 +2599,13 @@ sub printResults	{
 		my $transparent = $im->colorAllocate(11, 22, 33);
 		$im->filledRectangle(0,0,$width,$height,$transparent);
 		$im->transparent($transparent);
-		my ($pwidth,$pheight,$pleft,$ptop,$maxdiv,$maxma) = (560,420,50,50,0,0);
+		my ($pwidth,$pheight,$pleft,$ptop,$maxdiv,$maxma) = (600,420,60,50,0,0);
 		$im->rectangle( $pleft, $height - $ptop, $pwidth + $pleft, $height - $ptop - $pheight, $col{'black'} );
-		my $FONT = "$DATA_DIR/fonts/sapirsan.ttf";
+		my $FONT = "$DATA_DIR/fonts/Vera.ttf";
 		for ($i = 1; $i <= $chrons; $i++)     {
 			my $div = $richness[$i];
 			if ($q->param('samplesize') ne '')	{
-				$div = $msubsrichness[$i];
+				$div = $meanrichness{'SIB'}[$i];
 			}
 			if ( $div > 0 && $basema{$chname[$i+1]} > 0 )	{
 				$maxma = $basema{$chname[$i+1]};
@@ -2742,12 +2620,14 @@ sub printResults	{
 			$maxdiv = int( $maxdiv / 100 ) * 100 + 100;
 		}
 		$maxma = int( $maxma / 10 ) * 10 + 10;
-		$im->stringFT($col{'unantialiased'},$FONT,10,0,$pwidth + $pleft - 10,$height - $ptop + 18,'0 Ma');
-		$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 18,$height - $ptop + 18,sprintf("%d",$maxma).' Ma');
+		$im->stringFT($col{'unantialiased'},$FONT,10,0,$pwidth + $pleft - 4,$height - $ptop + 18,'0');
+		$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 12,$height - $ptop + 18,sprintf("%d",$maxma));
+		$im->stringFT($col{'unantialiased'},$FONT,14,3.142857/2,$pleft - 30,$pheight / 2 + $ptop,'Count');
+		$im->stringFT($col{'unantialiased'},$FONT,14,0,$pwidth / 2 + $pleft - 50,$height - $ptop + 44,'Years ago (Ma)');
 		if ( $maxdiv < 100 )	{
-			$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 18,$height - $pheight - $ptop + 6,sprintf("%d",$maxdiv));
+			$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 26,$height - $pheight - $ptop + 6,sprintf("%d",$maxdiv));
 		} else	{
-			$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 24,$height - $pheight - $ptop + 6,sprintf("%d",$maxdiv));
+			$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 32,$height - $pheight - $ptop + 6,sprintf("%d",$maxdiv));
 		}
 		my $xscale = -1 * $pwidth / $maxma;
 		my $yscale = $pheight / $maxdiv;
@@ -2755,8 +2635,8 @@ sub printResults	{
 			my $div1 = $richness[$i];
 			my $div2 = $richness[$i+1];
 			if ($q->param('samplesize') ne '')	{
-				$div1 = $msubsrichness[$i];
-				$div2 = $msubsrichness[$i+1];
+				$div1 = $meanrichness{'SIB'}[$i];
+				$div2 = $meanrichness{'SIB'}[$i+1];
 			}
 			if ( $div1 > 0 )	{
 				my $x1 = $xscale * ( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2 + $pleft + $pwidth;
@@ -2764,9 +2644,11 @@ sub printResults	{
 				my $y1 = $div1 * $yscale + $ptop;
 				my $y2 = $div2 * $yscale + $ptop;
 				if ( $div1 > 0 && $div2 > 0 )	{
-					$im->line( $x1, $height - $y1, $x2, $height - $y2, $col{'black'} );
+$im->setThickness(2);
+					$im->line( $x1, $height - $y1, $x2, $height - $y2, $col{'gray'} );
+$im->setThickness(1);
 				}
-				$im->filledRectangle( $x1 - 2, $height - $y1 - 2,$x1 + 2,$height - $y1 + 2,$col{'black'} );
+				$im->filledEllipse( $x1, $height - $y1, 8, 8, $col{'black'} );
 			}
 		}
 		open PNG_OUT,">$HTML_DIR/public/curve.png";
