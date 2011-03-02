@@ -52,8 +52,8 @@
 
 <tr>
   <td valign="top">
-    Bin size, millions of years:<br>
-    <i><span class="small"><span class="required">Required</span> if you selected either of the Neptune options above.</span></i>
+    Bin size in millions of years:<br>
+    <i><span class="verysmall"><span class="required">Required</span> if you selected one of the Neptune options above; otherwise ignored.</span></i>
   </td>
   <td valign="top">
     <input type="text" name="neptune_bin_size" value="">
@@ -70,20 +70,6 @@
       <option>family</option>
       <option selected>genus</option>
       <option>species</option>
-    </select>
-  </td>
-</tr>
-
-<tr>
-  <td valign="top">
-    Diversity measure to report:<br>
-    <i><span class="small">Only relevant to subsampling. Sampled counts are recommended.</span></i>
-  </td>
-  <td valign="top">
-    <select name="diversity">
-      <option>sampled taxa</option>
-      <option>range-through taxa</option>
-      <option>boundary-crosser taxa</option>
     </select>
   </td>
 </tr>
@@ -113,10 +99,6 @@
 <br><div align="center"><input type=submit value="Submit"></div>
 
 <p class="small">
-This form allows you to request a diversity curve with assorted statistics.
-Submit the form without indicating any options for subsampling, unless you do want to perform subsampling analyses.</p>
-
-<p class="small">
 <span class="required">Warning</span>: you must first <a href="%%read_url%%?action=displayDownloadForm">download</a> an occurrence data file or you can't do an analysis.
 </p>
 
@@ -129,15 +111,14 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <tr>
   <td valign="top">
     Subsampling method:<br>
-    <i><span class="small"><span class="required">Required</span> for subsampling. A "list" is a list of taxa in a collection.</span></i>
+    <i><span class="verysmall"><span class="required">Required</span> for subsampling.</span></i>
   </td>
   <td valign="top">
     <select name="samplingmethod">
       <option selected></option>
       <option>classical rarefaction</option>
-      <option>by list (unweighted)</option>
-      <option>by list (occurrences weighted)</option>
-      <option>by list (occurrences-exponentiated weighted)</option>
+      <option>by collection (unweighted)</option>
+      <option>by collection (occurrences-weighted)</option>
       <option>by specimen</option>
     </select>
   </td>
@@ -146,7 +127,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <tr>
   <td valign="top">
     Weighting exponent:<br>
-    <i><span class="small"><span class="required">Required</span> for occurrences-exponentiated subsampling, and otherwise ignored. 2.0 = occurrences-squared weighting; 0.0 = unweighted subsampling; 1.0 = occurrences-weighted subsampling.</span></i>
+    <i><span class="verysmall"><span class="required">Required</span> for occurrences-weighted subsampling, and otherwise ignored. 2.0 = occurrences-squared weighting; 0.0 = unweighted subsampling; 1.0 = simple occurrences-weighted subsampling.</span></i>
   </td>
   <td valign="top">
     <select name="exponent">
@@ -160,7 +141,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
       <option>0.7</option>
       <option>0.8</option>
       <option>0.9</option>
-      <option>1.0</option>
+      <option selected>1.0</option>
       <option>1.1</option>
       <option>1.2</option>
       <option>1.3</option>
@@ -170,7 +151,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
       <option>1.7</option>
       <option>1.8</option>
       <option>1.9</option>
-      <option selected>2.0</option>
+      <option>2.0</option>
       <option>2.1</option>
       <option>2.2</option>
       <option>2.3</option>
@@ -187,8 +168,8 @@ Submit the form without indicating any options for subsampling, unless you do wa
 
 <tr>
   <td valign="top">
-    Exact number of items (collections, occurrences, or occurrences-squared) to draw in each temporal bin:<br>
-    <i><span class="small"><span class="required">Required</span> for subsampling.</span></i>
+    Number of items to draw in each temporal bin:<br>
+    <i><span class="verysmall"><span class="required">Required</span> for subsampling.</span></i>
   </td>
   <td valign="top">
     <input name="samplesize">
@@ -198,7 +179,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <tr>
   <td valign="top">
     Number of subsampling trials:<br>
-    <i><span class="small"><span class="required">Required</span> for subsampling.</span></i>
+    <i><span class="verysmall"><span class="required">Required</span> for subsampling.</span></i>
   </td>
   <td valign="top">
     <select name="samplingtrials">
@@ -219,7 +200,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <tr>
   <td valign="top">
     Intermediate numbers of items to report in subsampling curves:<br>
-    <i><span class="small">Not required.</span></i>
+    <i><span class="verysmall">Not required.</span></i>
   </td>
   <td valign="top">
     <select name="stepsize">
@@ -246,7 +227,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <tr>
   <td valign="top">
     Print subsampling stats for intervals with less items than the exact quota?<br>
-    <i><span class="small">Not required.</span></i>
+    <i><span class="verysmall">Not required.</span></i>
   </td>
   <td valign="top">
     <select name="printall">
@@ -259,7 +240,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <tr>
   <td valign="top">
     Maximum number of references to draw in each temporal bin:<br>
-    <i><span class="small">The count may be exceeded for computational reasons. Works with unweighted, occurrences weighted, or occurrences-squared weighted subsampling. Important: don't combine this with the "Count references instead of taxa" or the following option.</span></i>
+    <i><span class="verysmall">The count may be exceeded for computational reasons. Works with unweighted, occurrences weighted, or occurrences-squared weighted subsampling. Important: don't combine this with the "Count references instead of taxa" or the following option.</span></i>
   </td>
   <td valign="top">
     <input name="ref_quota">
@@ -269,7 +250,7 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <tr>
   <td valign="top">
     Avoid collections coming from references that yield many collections?<br>
-    <i><span class="small">Works only with unweighted or occurrences-weighted by-list subsampling.</span></i>
+    <i><span class="verysmall">Works only with unweighted or occurrences-weighted by-collection subsampling.</span></i>
   </td>
   <td valign="top">
     <select name="weight_by_ref">
@@ -290,39 +271,55 @@ Submit the form without indicating any options for subsampling, unless you do wa
 
 <table cellpadding=4>
 
-<tr><td class="small" valign="top">
-<b><input type="checkbox" onClick="checkAll(this,'raw');"> Check all</b>
-&nbsp;&nbsp;<b><input type="checkbox" onClick="checkAll(this,'r_estimate');"> Check estimates</b>
-</td></tr>   
-
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="raw" name="print_base_raw" value="YES" checked> Base (Ma)
 <input type="checkbox" class="raw" name="print_midpoint_raw" value="YES" checked> Midpoint (Ma)
-<input type="checkbox" class="raw" name="print_sampled" value="YES" checked> Sampled taxa
-<input type="checkbox" class="raw" name="print_range-through" value="YES" checked> Range-through taxa
-<input type="checkbox" class="raw" name="print_boundary-crosser" value="YES" checked> Boundary-crosser taxa
+<input type="checkbox" class="raw r_count" name="print_sampled" value="YES" checked> Sampled taxa
+<input type="checkbox" class="raw r_count" name="print_range-through" value="YES" checked> Range-through taxa
+<input type="checkbox" class="raw r_count" name="print_boundary-crosser" value="YES" checked> Boundary-crosser taxa
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="raw" name="print_two_timer" value="YES"> Two timer taxa
-<input type="checkbox" class="raw" name="print_three_timer" value="YES"> Three timer taxa
+<input type="checkbox" class="raw r_count" name="print_first_appearances_raw" value="YES"> First appearances
+<input type="checkbox" class="raw r_count" name="print_last_appearances_raw" value="YES"> Last appearances
+<input type="checkbox" class="raw r_count" name="print_singletons_raw" value="YES"> Singletons
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="raw" name="print_first_appearances_raw" value="YES"> First appearances
-<input type="checkbox" class="raw" name="print_origination_rate_raw" value="YES" checked> Origination rate
-<input type="checkbox" class="raw" name="print_last_appearances_raw" value="YES"> Last appearances
-<input type="checkbox" class="raw" name="print_extinction_rate_raw" value="YES" checked> Extinction rate
-<input type="checkbox" class="raw" name="print_singletons_raw" value="YES"> Singletons
+<input type="checkbox" class="raw r_count" name="print_two_timers" value="YES"> Two timers
+<input type="checkbox" class="raw r_count" name="print_three_timers" value="YES"> Three timers
+<input type="checkbox" class="raw r_count" name="print_part_timers" value="YES"> Part timers
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="raw" name="print_gap_analysis_stat_raw" value="YES"> Gap analysis sampling stat
+<input type="checkbox" class="raw" name="print_origination_rate_raw" value="YES" checked> 3T origination rate (Alroy 2008)
+<input type="checkbox" class="raw" name="print_Foote_origination_rate_raw" value="YES"> BC origination rate (Foote 1999)
+<input type="checkbox" class="raw" name="print_extinction_rate_raw" value="YES" checked> 3T extinction rate
+<input type="checkbox" class="raw" name="print_Foote_extinction_rate_raw" value="YES"> BC extinction rate
+</td></tr>
+
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw r_count" name="print_one_occs" value="YES"> One-occurrence taxa
+<input type="checkbox" class="raw r_count" name="print_one_refs" value="YES"> One-reference taxa
+<!--
+-->
+<input type="checkbox" class="raw" name="print_u" value="YES" checked> Good's <i>u</i>
+</td></tr>
+
+<tr><td class="verysmall" valign="top" nowrap style="padding-left: 1em;">
+<i>Good's</i> u <i>options:</i><br>
+Count <select name="one_occs_or_refs"><option>one-reference</option><option>one-occurrence</option></select> taxa&nbsp;&nbsp;
+Ignore most common taxon? <select name="exclude_dominant"><option>yes</option><option>no</option></select>&nbsp;&nbsp;
+Ignore largest collection? <select name="exclude_largest_coll"><option>yes</option><option>no</option></select>
+</td></tr>
+
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="raw" name="print_gap_analysis_stat_raw" value="YES"> Gap analysis sampling stat (Paul 1982)
 <input type="checkbox" class="raw r_estimate" name="print_gap_analysis_estimate_raw" value="YES"> Gap analysis diversity estimate
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="raw" name="print_three_timer_stat_raw" value="YES"> Three timer sampling stat
+<input type="checkbox" class="raw" name="print_three_timer_stat_raw" value="YES"> Three timer sampling stat (Alroy 2008)
 <input type="checkbox" class="raw r_estimate" name="print_three_timer_estimate_raw" value="YES"> Three timer diversity estimate
 </td></tr>
 
@@ -334,15 +331,23 @@ Submit the form without indicating any options for subsampling, unless you do wa
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="raw" name="print_lists" value="YES" checked> Collections
-<input type="checkbox" class="raw" name="print_occurrences" value="YES" checked> Occurrences
-<input type="checkbox" class="raw" name="print_occurrences-exponentiated" value="YES" checked> Occurrences-squared or exponentiated
-<input type="checkbox" class="raw" name="print_specimens" value="YES"> Specimens/individuals
+<input type="checkbox" class="raw r_count" name="print_lists" value="YES" checked> Collections
+<input type="checkbox" class="raw r_count" name="print_occurrences" value="YES" checked> Occurrences
+<input type="checkbox" class="raw r_count" name="print_occurrences-exponentiated" value="YES"> Occurrences-squared or exponentiated
+<input type="checkbox" class="raw r_count" name="print_specimens" value="YES"> Specimens/individuals
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="raw" name="print_mean_richness" value="YES"> Mean richness
 <input type="checkbox" class="raw" name="print_median_richness" value="YES"> Median richness
+</td></tr>
+
+<tr><td class="small" valign="top">
+<div style="width: 32em; padding-top: 0.5em; border-top: 1px solid gray; font-size: 1.1em;">
+<input type="checkbox" onClick="checkAll(this,'raw');"> Check all
+&nbsp;&nbsp;<input type="checkbox" onClick="checkAll(this,'r_count');"> Check counts
+&nbsp;&nbsp;<input type="checkbox" onClick="checkAll(this,'r_estimate');"> Check diversity estimates
+</div>
 </td></tr>
 
 </table>
@@ -356,43 +361,55 @@ Submit the form without indicating any options for subsampling, unless you do wa
 
 <table cellpadding=4>
 
-<tr><td class="small" valign="top">
-<b><input type="checkbox" onClick="checkAll(this,'subsampling');"> Check all</b>
-&nbsp;&nbsp;<b><input type="checkbox" onClick="checkAll(this,'s_estimate');"> Check estimates</b>
-</td></tr>   
-
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="subsampling" name="print_base_ss" value="YES" checked> Base (Ma)
 <input type="checkbox" class="subsampling" name="print_midpoint_ss" value="YES" checked> Midpoint (Ma)
-<input type="checkbox" class="subsampling" name="print_items" value="YES" checked> Items sampled
-<input type="checkbox" class="subsampling s_estimate" name="print_median" value="YES"> Median diversity
-<input type="checkbox" class="subsampling s_estimate" name="print_ci" value="YES"> 1-sigma CI
-<input type="checkbox" class="subsampling" name="print_mean" value="YES" checked> Mean diversity
+<input type="checkbox" class="subsampling s_count" name="print_items" value="YES" checked> Items sampled
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="subsampling" name="print_three_timers_ss" value="YES"> Mean three timers
+<input type="checkbox" class="subsampling s_count" name="print_median" value="YES"> Median sampled diversity
+<input type="checkbox" class="subsampling s_count" name="print_ci" value="YES"> 1-sigma CI
+<input type="checkbox" class="subsampling s_count" name="print_mean" value="YES" checked> Mean sampled diversity
+</td></tr>
+
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling s_count" name="print_range-through_ss" value="YES"> Range-through diversity
+<input type="checkbox" class="subsampling s_count" name="print_boundary-crosser_ss" value="YES"> Boundary-crosser diversity
+</td></tr>
+
+<tr><td class="small" valign="top" nowrap>
+<i>Estimates based on 2T and 3T counts:</i><br>
 <input type="checkbox" class="subsampling s_estimate" name="print_corrected_bc" value="YES"> Corrected BC diversity
 <input type="checkbox" class="subsampling s_estimate" name="print_estimated_midpoint" value="YES"> Estimated midpoint diversity
 <input type="checkbox" class="subsampling s_estimate" name="print_estimated_mesa" value="YES"> Estimated mesa diversity
+<input type="checkbox" class="subsampling s_estimate" name="print_corrected_sib" value="YES"> Corrected SIB diversity
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="subsampling" name="print_raw_sib" value="YES" checked> Raw SIB diversity
-<input type="checkbox" class="subsampling" name="print_corrected_sib" value="YES" checked> Corrected SIB diversity
+<input type="checkbox" class="subsampling s_count" name="print_first_appearances_ss" value="YES"> First appearances
+<input type="checkbox" class="subsampling s_count" name="print_last_appearances_ss" value="YES"> Last appearances
+<input type="checkbox" class="subsampling s_count" name="print_singletons_ss" value="YES"> Singletons
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="subsampling" name="print_first_appearances_ss" value="YES"> First appearances
-<input type="checkbox" class="subsampling" name="print_origination_rate_ss" value="YES" checked> Origination rate
-<input type="checkbox" class="subsampling" name="print_origination_percentage" value="YES"> Origination percentage
+<input type="checkbox" class="subsampling s_count" name="print_two_timers_ss" value="YES"> Two timers
+<input type="checkbox" class="subsampling s_count" name="print_three_timers_ss" value="YES"> Three timers
+<input type="checkbox" class="subsampling s_count" name="print_part_timers_ss" value="YES"> Part timers
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
-<input type="checkbox" class="subsampling" name="print_last_appearances_ss" value="YES"> Last appearances
-<input type="checkbox" class="subsampling" name="print_extinction_rate_ss" value="YES" checked> Extinction rate
-<input type="checkbox" class="subsampling" name="print_extinction_percentage" value="YES"> Extinction percentage
-<input type="checkbox" class="subsampling" name="print_singletons_ss" value="YES"> Singletons
+<input type="checkbox" class="subsampling" name="print_origination_rate_ss" value="YES" checked> 3T origination rate
+<input type="checkbox" class="subsampling" name="print_Foote_origination_rate_ss" value="YES"> BC origination rate
+<input type="checkbox" class="subsampling" name="print_origination_percentage" value="YES"> RT origination percentage
+<input type="checkbox" class="subsampling" name="print_Foote_origination_percentage" value="YES"> BC origination percentage
+</td></tr>
+
+<tr><td class="small" valign="top" nowrap>
+<input type="checkbox" class="subsampling" name="print_extinction_rate_ss" value="YES" checked> 3T extinction rate
+<input type="checkbox" class="subsampling" name="print_Foote_extinction_rate_ss" value="YES"> BC extinction rate
+<input type="checkbox" class="subsampling" name="print_extinction_percentage" value="YES"> RT extinction percentage
+<input type="checkbox" class="subsampling" name="print_Foote_extinction_percentage" value="YES"> BC extinction percentage
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
@@ -412,9 +429,19 @@ Submit the form without indicating any options for subsampling, unless you do wa
 <input type="checkbox" class="subsampling s_estimate" name="print_michaelis-menten" value="YES"> Michaelis-Menten estimate
 </td></tr>
 
+<tr><td class="small" valign="top">
+<div style="width: 32em; padding-top: 0.5em; border-top: 1px solid gray; font-size: 1.1em;">
+<input type="checkbox" onClick="checkAll(this,'subsampling');"> Check all
+&nbsp;&nbsp;<input type="checkbox" onClick="checkAll(this,'s_count');"> Check counts
+&nbsp;&nbsp;<input type="checkbox" onClick="checkAll(this,'s_estimate');"> Check diversity estimates
+</div>
+</td></tr>   
+
 </table>
 
-<p><span class="small">To compute Michaelis-Menten diversity estimates, set the diversity measure to "sampled-in-bin" and the subsampling method to "by list (unweighted)."</span></p>
+<p class="verysmall" style="width: 46em; margin-left: 2em; text-indent: -1em;">
+To compute Michaelis-Menten diversity estimates, set the diversity measure to "sampled-in-bin" and the subsampling method to "by collection (unweighted)."
+</p>
 
 <br><div align="center"><input type=submit value="Submit"></div>
 
