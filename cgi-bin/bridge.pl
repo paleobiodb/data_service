@@ -3025,7 +3025,7 @@ sub displayOccurrenceAddEdit {
 	}
 
 	my %pref = $s->getPreferences();
-    my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs');
+    my @optional = ('editable_collection_no','subgenera','genus_and_species_only','abundances','plant_organs');
 	print $hbo->populateHTML('js_occurrence_checkform');
 
 	print qq|<form method=post action="$WRITE_URL" onSubmit='return checkForm();'>\n|;
@@ -4563,7 +4563,7 @@ sub displayOccsForReID {
 
 	my $rowCount = 0;
 	my %pref = $s->getPreferences();
-	my @optional = ('subgenera','genus_and_species_only','abundances','plant_organs','species_name');
+	my @optional = ('editable_collection_no','subgenera','genus_and_species_only','abundances','plant_organs','species_name');
     if (@results) {
         my $header_vars = {
             'ref_string'=>$refString,
