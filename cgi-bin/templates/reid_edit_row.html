@@ -20,7 +20,15 @@
 	<td><input type="hidden" name="abund_unit" value=""></select></td>
 </div>
 </div>
-	<td align="center"><input id="reference_no" size="6" maxlength="10" class="tiny"></td>
+	<td align="center"><nobr>
+	<input id="reference_no" size="6" maxlength="10" class="tiny">
+<div hide="editable_collection_no">
+	<input id="collection_no" type="hidden">
+</div>
+<div show="editable_collection_no">
+	<input id="collection_no" size="6">
+</div>
+	</nobr></td>
 <div hide="genus_and_species_only">
 	<td><input id="comments" size="40" maxlength="65535" class="tiny"></td>
 <div show="plant_organs">
