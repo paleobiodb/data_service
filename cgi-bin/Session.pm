@@ -536,8 +536,9 @@ sub getPrefFields	{
 		}
 	}
 	# options concerning display of forms, not individual fields
-	my @shownFormParts = ("collection_search", "genus_and_species_only",
-		"taphonomy", "subgenera", "abundances", "plant_organs");
+	my @shownFormParts = ("collection_search", "editable_collection_no",
+		"genus_and_species_only", "taphonomy", "subgenera", "abundances",
+		"plant_organs");
 	return (\@setFieldNames,\%cleanSetFieldNames,\@shownFormParts);
 
 }
