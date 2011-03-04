@@ -415,7 +415,7 @@ sub assignGenera	{
 	} elsif ( ! $field_abund_unit && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
 		print "<p class=\"warning\">The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
-	} elsif ( ! $field_refno && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 || $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" ) )	{
+	} elsif ( ! $field_refno && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 || $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" || $q->param('print_one_refs') =~ /yes/i || $q->param('one_occs_or_refs') =~ /ref/i ) )	{
 		print "<p class=\"warning\">The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	} elsif ( $q->param("time_scale") =~ /neptune/i ) {
@@ -624,7 +624,7 @@ sub assignGenera	{
 					# count the collections belonging to
 					#  each ref and record which ref this
 					#  collection belongs to 9.4.05
-					if ( $collrefno[$collno] < 1 && $occrow[$field_refno] > 0 )	{
+					if ( $collrefno[$collno] < 1 && $occrow[$field_refno] > 0 && $field_refno > 0 )	{
 						$collsfromref[$occrow[$field_refno]][$chid[$collno]]++;
 						$collrefno[$collno] = $occrow[$field_refno];
 					}
@@ -885,8 +885,7 @@ sub assignGenera	{
 			if ( $q->param('exclude_dominant') =~ /y/i )	{
 				$d = $maxoccs[$i];
 			}
-			if ( $q->param('one_occs_or_refs') =~ /ref/i && $occsinchron[$i]
- - $d > 0 )	{
+			if ( $q->param('one_occs_or_refs') =~ /ref/i && $occsinchron[$i] - $d > 0 )	{
 				$u[$i] = 1 - ( $onerefs[$i] / ( $occsinchron[$i] - $d ) );
 			} elsif ( $occsinchron[$i] - $maxoccs[$i] > 0 )	{
 				$u[$i] = 1 - ( $q1[$i] / ( $occsinchron[$i] - $maxoccs[$i] ) );
