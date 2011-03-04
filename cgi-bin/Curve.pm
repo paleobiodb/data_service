@@ -795,6 +795,7 @@ sub assignGenera	{
 			# find dominant taxon (must be in multiple refs)
 			} elsif ($present[$i][$j] > $maxoccs[$j])	{
 				$maxoccs[$j] = $present[$i][$j];
+				$dominant[$j] = $i;
 			}
 			if ( $present[$i][$j] > 0 && $present[$i][$j+1] > 0 )	{
 				$twotimers[$j]++;
@@ -1676,6 +1677,18 @@ sub printResults	{
 			print "<td class=tiny align=center valign=top><b>Three timer<br>diversity estimate</b> ";
 			print TABLE ",Three timer diversity estimate";
 		}
+		if ( $q->param('print_dominance') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Dominance</b> ";
+			print TABLE ",Dominance";
+		}
+		if ( $q->param('print_dominant') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Dominant<br>taxon</b> ";
+			print TABLE ",Dominant taxon";
+		}
+		if ( $q->param('print_pie') eq "YES" )	{
+			print "<td class=tiny align=center valign=top><b>Evenness of<br>occurrences (PIE)</b> ";
+			print TABLE ",Evenness of occurrences (PIE)";
+		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
 			print TABLE ",Chao-2 estimate";
@@ -1687,10 +1700,6 @@ sub printResults	{
 		if ( $q->param('print_ice_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
 			print TABLE ",Incidence-based coverage estimate";
-		}
-		if ( $q->param('print_pie') eq "YES" )	{
-			print "<td class=tiny align=center valign=top><b>Evenness of<br>occurrences (PIE)</b> ";
-			print TABLE ",Evenness of occurrences (PIE)";
 		}
 		if ( $q->param('print_refs_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>References</b> ";
@@ -1945,6 +1954,33 @@ sub printResults	{
 						print TABLE ",NA";
 					}
 				}
+				if ( $q->param('print_dominance') eq "YES" )	{
+					if ($maxoccs[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.4f ",$maxoccs[$i] / $occsinchron[$i];
+						printf TABLE ",%.4f",$maxoccs[$i] / $occsinchron[$i];
+					} else    {
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+				if ( $q->param('print_dominant') eq "YES" )	{
+					if ($maxoccs[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%s ",$genus[$dominant[$i]];
+						printf TABLE ",%s",$genus[$dominant[$i]];
+					} else    {
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
+				if ( $q->param('print_pie') eq "YES" )	{
+					if ($pie[$i] > 0 )	{
+						printf "<td class=tiny align=center valign=top>%.5f ",$pie[$i];
+						printf TABLE ",%.5f",$pie[$i];
+					} else    {
+						print "<td class=tiny align=center valign=top>NA ";
+						print TABLE ",NA";
+					}
+				}
 				if ( $q->param('print_chao-2_raw') eq "YES" )	{
 					if ($chaostat > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$chaostat;
@@ -1967,15 +2003,6 @@ sub printResults	{
 					if ($ice[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$ice[$i];
 						printf TABLE ",%.1f",$ice[$i];
-					} else    {
-						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
-					}
-				}
-				if ( $q->param('print_pie') eq "YES" )	{
-					if ($pie[$i] > 0 )	{
-						printf "<td class=tiny align=center valign=top>%.5f ",$pie[$i];
-						printf TABLE ",%.5f",$pie[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
 						print TABLE ",NA";
