@@ -2078,8 +2078,10 @@ sub printResults	{
 		} else	{
 			print "\n<b>$refsread</b> reference and interval combinations, <b>$listsread</b> collections, and <b>$occsread</b> occurrences met the search criteria.<p>\n";
 		}
-	
-		printf "The average per-interval sampling probability based on three timer analysis of the raw data is <b>%.3f</b>.<p>\n",$rawsum3timers / ( $rawsum3timers + $rawsumPtimers);
+
+		if ( $rawsum3timers + $rawsumPtimers > 0 )	{
+			printf "The average per-interval sampling probability based on three timer analysis of the raw data is <b>%.3f</b>.<p>\n",$rawsum3timers / ( $rawsum3timers + $rawsumPtimers );
+		}
 
 		print "\nThe following data files have been created:<p>\n";
 		print "<ul>\n";
