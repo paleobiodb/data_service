@@ -885,9 +885,10 @@ sub assignGenera	{
 			if ( $q->param('exclude_dominant') =~ /y/i )	{
 				$d = $maxoccs[$i];
 			}
-			if ( $q->param('one_occs_or_refs') =~ /ref/i )	{
+			if ( $q->param('one_occs_or_refs') =~ /ref/i && $occsinchron[$i]
+ - $d > 0 )	{
 				$u[$i] = 1 - ( $onerefs[$i] / ( $occsinchron[$i] - $d ) );
-			} else	{
+			} elsif ( $occsinchron[$i] - $maxoccs[$i] > 0 )	{
 				$u[$i] = 1 - ( $q1[$i] / ( $occsinchron[$i] - $maxoccs[$i] ) );
 			}
 		}
