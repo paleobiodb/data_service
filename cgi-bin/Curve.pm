@@ -1587,150 +1587,150 @@ sub printResults	{
 <table cellpadding="4">
 |;
 		print "<tr><td class=tiny valign=top><b>Interval</b>\n";
-		print TABLE "Bin";
-		print TABLE ",Bin name";
+		my @header;
+		push @header , 'Bin,"Bin name"';
 		if ( $q->param('print_base_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Base (Ma)</b>";
-			print TABLE ",Base (Ma)";
+			push @header , '"Base (Ma)"';
 		}
 		if ( $q->param('print_midpoint_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Midpoint (Ma)</b>";
-			print TABLE ",Midpoint (Ma)";
+			push @header , '"Midpoint (Ma)"';
 		}
 		if ( $q->param('print_sampled') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Sampled<br>$generaorrefs</b>";
-			print TABLE ",Sampled $generaorrefs";
+			push @header , '"Sampled '.$generaorrefs.'"';
 		}
 		if ( $q->param('print_range-through') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Range-through<br>$generaorrefs</b> ";
-			print TABLE ",Range-through $generaorrefs";
+			push @header , '"Range-through '.$generaorrefs.'"';
 		}
 		if ( $q->param('print_boundary-crosser') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Boundary-crosser<br>$generaorrefs</b> ";
-			print TABLE ",Boundary-crosser $generaorrefs";
+			push @header , '"Boundary-crosser '.$generaorrefs.'"';
 		}
 		if ( $q->param('print_first_appearances_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>First<br>appearances</b>";
-			print TABLE ",First appearances";
+			push @header , '"First appearances"';
 		}
 		if ( $q->param('print_last_appearances_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Last<br>appearances</b>";
-			print TABLE ",Last appearances";
+			push @header , '"Last appearances"';
 		}
 		if ( $q->param('print_singletons_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Singletons</b> ";
-			print TABLE ",Singletons";
+			push @header , 'Singletons';
 		}
 		if ( $q->param('print_two_timers') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Two&nbsp;timer<br>$generaorrefs</b> ";
-			print TABLE ",Two timer $generaorrefs";
+			push @header , '"Two timer '.$generaorrefs.'"';
 		}
 		if ( $q->param('print_three_timers') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Three&nbsp;timer<br>$generaorrefs</b> ";
-			print TABLE ",Three timer $generaorrefs";
+			push @header , '"Three timer '.$generaorrefs.'"';
 		}
 		if ( $q->param('print_part_timers') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Part&nbsp;timer<br>$generaorrefs</b> ";
-			print TABLE ",Part timer $generaorrefs";
+			push @header , '"Part timer '.$generaorrefs.'"';
 		}
 		if ( $q->param('print_origination_rate_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>3T origination<br>rate</b> ";
-			print TABLE ",3T origination rate";
+			push @header , '"3T origination rate"';
 		}
 		if ( $q->param('print_Foote_origination_rate_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>BC origination<br>rate</b> ";
-			print TABLE ",BC origination rate";
+			push @header , '"BC origination rate"';
 		}
 		if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>3T extinction<br>rate</b> ";
-			print TABLE ",3T extinction rate";
+			push @header , '"3T extinction rate"';
 		}
 		if ( $q->param('print_Foote_extinction_rate_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>BC extinction<br>rate</b> ";
-			print TABLE ",BC extinction rate";
+			push @header , '"BC extinction rate"';
 		}
 		if ( $q->param('print_one_occs') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>One-occurrence<br>$generaorrefs</b> ";
-			print TABLE ",One-occurrence $generaorrefs";
+			push @header , '"One-occurrence '.$generaorrefs.'"';
 		}
 		if ( $q->param('print_one_refs') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>One-reference<br>$generaorrefs</b> ";
-			print TABLE ",One-reference $generaorrefs";
+			push @header , '"One-reference '.$generaorrefs.'"';
 		}
 		if ( $q->param('print_u') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b><nobr>Good's <i>u</i></nobr></b> ";
-			print TABLE ",Good's u";
+			push @header , qq|"Good's u"|;
 		}
 		if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
-			print TABLE ",Gap analysis sampling stat";
+			push @header , '"Gap analysis sampling stat"';
 		}
 		if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Gap analysis<br>diversity estimate</b> ";
-			print TABLE ",Gap analysis diversity estimate";
+			push @header , '"Gap analysis diversity estimate"';
 		}
 		if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Three timer<br>sampling stat</b> ";
-			print TABLE ",Three timer sampling stat";
+			push @header , '"Three timer sampling stat"';
 		}
 		if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Three timer<br>diversity estimate</b> ";
-			print TABLE ",Three timer diversity estimate";
+			push @header , '"Three timer diversity estimate"';
 		}
 		if ( $q->param('print_dominance') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Dominance</b> ";
-			print TABLE ",Dominance";
+			push @header , 'Dominance';
 		}
 		if ( $q->param('print_dominant') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Dominant<br>taxon</b> ";
-			print TABLE ",Dominant taxon";
+			push @header , '"Dominant taxon"';
 		}
 		if ( $q->param('print_pie') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Evenness of<br>occurrences (PIE)</b> ";
-			print TABLE ",Evenness of occurrences (PIE)";
+			push @header , '"Evenness of occurrences (PIE)"';
 		}
 		if ( $q->param('print_chao-2_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Chao-2<br>estimate</b> ";
-			print TABLE ",Chao-2 estimate";
+			push @header , '"Chao-2 estimate"';
 		}
 		if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Jolly-Seber<br>estimate</b> ";
-			print TABLE ",Jolly-Seber estimate";
+			push @header , '"Jolly-Seber estimate"';
 		}
 		if ( $q->param('print_ice_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
-			print TABLE ",Incidence-based coverage estimate";
+			push @header , '"Incidence-based coverage estimate"';
 		}
 		if ( $q->param('print_refs_raw') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>References</b> ";
-			print TABLE ",References";
+			push @header , 'References';
 		}
-		if ($samplingmethod != 5 || $q->param('print_lists') eq "YES" )	{
+		if ( ( $q->param('samplesize') > 0 && $samplingmethod != 5 ) || $q->param('print_lists') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
-			print TABLE ",$listorfm";
+			push @header , $listorfm;
 		}
 		if ( $q->param('print_occurrences') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Occurrences</b> ";
-			print TABLE ",Occurrences";
+			push @header , 'Occurrences';
 		}
 		if ( $q->param('print_occurrences-exponentiated') eq "YES" && $samplingmethod != 5 )	{
 			print "<td class=tiny align=center valign=top><b>Occurrences<br><nobr>-exponentiated</nobr></b> ";
-			print TABLE ",Occurrences-exponentiated";
+			push @header , '"Occurrences-exponentiated"';
 		}
 		if ( $samplingmethod == 5 || $q->param('print_specimens') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Specimens/<br>individuals</b> ";
-			print TABLE ",Specimens/individuals";
+			push @header , 'Specimens/individuals';
 		}
 		if ( $q->param('print_mean_richness') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Mean<br>richness</b>";
-			print TABLE ",Mean richness";
+			push @header , '"Mean richness"';
 		}
 		if ( $q->param('print_median_richness') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Median<br>richness</b> ";
-			print TABLE ",Median richness";
+			push @header , '"Median richness"';
 		}
 
-		print TABLE "\n";
+		print TABLE join(',',@header),"\n";
 
 	 # make sure all the files are read/writeable
 #		chmod 0664, "$OUTPUT_DIR/*";
@@ -1760,29 +1760,30 @@ sub printResults	{
 				$temp = $chname[$i];
 				$temp =~ s/ /&nbsp;/;
 				print "<tr><td class=tiny valign=top>$temp";
-				print TABLE $chrons - $i + 1;
-				print TABLE ",$chname[$i]";
+				my @data = ();
+				push @data , sprintf "%d",$chrons - $i + 1;
+				push @data , '"'.$chname[$i].'"';
 
 				if ( $q->param('print_base_raw') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%.1f",$basema{$chname[$i]};
-					printf TABLE ",%.1f",$basema{$chname[$i]};
+					push @data , sprintf "%.1f",$basema{$chname[$i]};
 				}
 				if ( $q->param('print_midpoint_raw') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
-					printf TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
+					push @data , sprintf "%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
 				}
 				if ( $q->param('print_sampled') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						print "<td class=tiny align=center valign=top>$richness[$i] ";
-						print TABLE ",$richness[$i]";
+						push @data , sprintf "%d",$richness[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_range-through') eq "YES" )	{
 					print "<td class=tiny align=center valign=top>$rangethrough[$i] ";
-					print TABLE ",$rangethrough[$i]";
+					push @data , sprintf "%d",$rangethrough[$i];
 				}
 		# compute boundary crossers
 		# this is total range through diversity minus singletons minus
@@ -1792,70 +1793,70 @@ sub printResults	{
 				if ( $q->param('print_boundary-crosser') eq "YES" )	{
 					$bcrich[$i] = $rangethrough[$i] - $originate[$i];
 					printf "<td class=tiny align=center valign=top>%d ",$bcrich[$i];
-					printf TABLE ",%d",$bcrich[$i];
+					push @data , $bcrich[$i];
 				}
 				if ( $q->param('print_first_appearances_raw') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
-						print "<td class=tiny align=center valign=top>$originate[$i] ";
-						print TABLE ",$originate[$i]";
+						printf "<td class=tiny align=center valign=top>%d ",$originate[$i];
+						push @data , sprintf "%d",$originate[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_last_appearances_raw') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
-						print "<td class=tiny align=center valign=top>$extinct[$i] ";
-						print TABLE ",$extinct[$i]";
+						printf "<td class=tiny align=center valign=top>%d ",$extinct[$i];
+						push @data , sprintf "%d",$extinct[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_singletons_raw') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
-						print "<td class=tiny align=center valign=top>$singletons[$i] ";
-						print TABLE ",$singletons[$i]";
+						printf "<td class=tiny align=center valign=top>%d ",$singletons[$i];
+						push @data , sprintf "%d",$singletons[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_two_timers') eq "YES" )	{
 					if ( $richness[$i] > 0 && $richness[$i+1] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%d ",$twotimers[$i];
-						printf TABLE ",%d",$twotimers[$i];
+						push @data , $twotimers[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_three_timers') eq "YES" )	{
 					if ( $richness[$i-1] > 0 && $richness[$i] > 0 && $richness[$i+1] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%d ",$threetimers[$i];
-						printf TABLE ",%d",$threetimers[$i];
+						push @data , $threetimers[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_part_timers') eq "YES" )	{
 					if ( $richness[$i-1] > 0 && $richness[$i] > 0 && $richness[$i+1] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%d ",$parttimers[$i];
-						printf TABLE ",%d",$parttimers[$i];
+						push @data , $parttimers[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 			# 3T origination rate
 				if ( $q->param('print_origination_rate_raw') eq "YES" )	{
 					if ( $threetimers[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",log( $twotimers[$i-1] / $threetimers[$i] ) - log( $rawsum3timers / ( $rawsum3timers + $rawsumPtimers ) );
-						printf TABLE ",%.3f",$mu[$i];
+						push @data , sprintf "%.3f",$mu[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 			# Foote origination rate - note: extinction counts must
@@ -1863,207 +1864,207 @@ sub printResults	{
 				if ( $q->param('print_Foote_origination_rate_raw') eq "YES" )	{
 					if ( $bcrich[$i-1] > 0 && $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.3f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
-						printf TABLE ",%.3f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
+						push @data , sprintf "%.3f",log( $bcrich[$i-1] / ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) );
 					} else	{
 						print "<td class=tiny align=center valign=top>NA";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 			# 3T extinction rate
 				if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
 					if ( $threetimers[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",log( $twotimers[$i] / $threetimers[$i] ) - log( $rawsum3timers / ( $rawsum3timers + $rawsumPtimers ) );
-						printf TABLE ",%.3f",$mu[$i];
+						push @data , sprintf "%.3f",$mu[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 			# Foote extinction rate
 				if ( $q->param('print_Foote_extinction_rate_raw') eq "YES" )	{
 					if ( $bcrich[$i] - $extinct[$i] + $singletons[$i] > 0 && $bcrich[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.3f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
-						printf TABLE ",%.3f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
+						push @data , sprintf "%.3f",log( ( $bcrich[$i] - $extinct[$i] + $singletons[$i] ) / $bcrich[$i] ) * -1;
 					} else	{
 						print "<td class=tiny align=center valign=top>NA";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_one_occs') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%d ",$q1[$i];
-						printf TABLE ",%d",$q1[$i];
+						push @data , $q1[$i];
 					} else    {
 				  		print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_one_refs') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%d ",$onerefs[$i];
-						printf TABLE ",%d",$onerefs[$i];
+						push @data , $onerefs[$i];
 					} else    {
 				  		print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_u') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",$u[$i];
-						printf TABLE ",%.3f",$u[$i];
+						push @data , sprintf "%.3f",$u[$i];
 					} else    {
 				  		print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $gapstat > 0 )	{
 					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",$gapstat;
-						printf TABLE ",%.3f",$gapstat;
+						push @data , sprintf "%.3f",$gapstat;
 					}
 					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$richness[$i] / $gapstat;
-						printf TABLE ",%.1f",$richness[$i] / $gapstat;
+						push @data , sprintf "%.1f",$richness[$i] / $gapstat;
 					}
 				} else	{
 					if ( $q->param('print_gap_analysis_stat_raw') eq "YES" )	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 					if ( $q->param('print_gap_analysis_estimate_raw') eq "YES" )	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $ttstat > 0 )	{
 					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",$ttstat;
-						printf TABLE ",%.3f",$ttstat;
+						push @data , sprintf "%.3f",$ttstat;
 					}
 					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$richness[$i] / $ttstat;
-						printf TABLE ",%.1f",$richness[$i] / $ttstat;
+						push @data , sprintf "%.1f",$richness[$i] / $ttstat;
 					}
 				} else	{
 					if ( $q->param('print_three_timer_stat_raw') eq "YES" )	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 					if ( $q->param('print_three_timer_estimate_raw') eq "YES" )	{
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_dominance') eq "YES" )	{
 					if ($maxoccs[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.4f ",$maxoccs[$i] / $occsinchron[$i];
-						printf TABLE ",%.4f",$maxoccs[$i] / $occsinchron[$i];
+						push @data , sprintf "%.4f",$maxoccs[$i] / $occsinchron[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_dominant') eq "YES" )	{
 					if ($maxoccs[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%s ",$genus[$dominant[$i]];
-						printf TABLE ",%s",$genus[$dominant[$i]];
+						push @data , $genus[$dominant[$i]];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_pie') eq "YES" )	{
 					if ($pie[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.5f ",$pie[$i];
-						printf TABLE ",%.5f",$pie[$i];
+						push @data , sprintf "%.5f",$pie[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_chao-2_raw') eq "YES" )	{
 					if ($chaostat > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$chaostat;
-						printf TABLE ",%.1f",$chaostat;
+						push @data , sprintf "%.1f",$chaostat;
 					} else    {
 				  		print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_jolly-seber_raw') eq "YES" )	{
 					if ($jolly[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$jolly[$i];
-						printf TABLE ",%.1f",$jolly[$i];
+						push @data , sprintf "%.1f",$jolly[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_ice_raw') eq "YES" )	{
 					if ($ice[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$ice[$i];
-						printf TABLE ",%.1f",$ice[$i];
+						push @data , sprintf "%.1f",$ice[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_refs_raw') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%d ",$refsinchron[$i];
-						print TABLE ",$refsinchron[$i]";
+						push @data , $refsinchron[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
-				if ( $q->param('print_lists') eq "YES" )	{
+				if ( ( $q->param('samplesize') > 0 && $samplingmethod != 5 ) || $q->param('print_lists') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%d ",$listsinchron[$i];
-					printf TABLE ",%d",$listsinchron[$i];
+					push @data , $listsinchron[$i];
 				}
 				if ( $q->param('print_occurrences') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						print "<td class=tiny align=center valign=top>$occsinchron[$i] ";
-						print TABLE ",$occsinchron[$i]";
+						push @data , $occsinchron[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_occurrences-exponentiated') eq "YES" && $samplingmethod != 5 )	{
 					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron2[$i];
-						printf TABLE ",%.1f",$occsinchron2[$i];
+						push @data , sprintf "%.1f",$occsinchron2[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_specimens') eq "YES" && $samplingmethod != 5 )	{
 					if ( $listsinchron[$i] > 0 )	{
 						print "<td class=tiny align=center valign=top>$specimensinchron[$i] ";
-						print TABLE ",$specimensinchron[$i]";
+						push @data , $specimensinchron[$i];
 					} else    {
 						print "<td class=tiny align=center valign=top>NA ";
-						print TABLE ",NA";
+						push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_mean_richness') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron[$i]/$listsinchron[$i];
-						printf TABLE ",%.1f",$occsinchron[$i]/$listsinchron[$i];
+						push @data , sprintf "%.1f",$occsinchron[$i]/$listsinchron[$i];
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
-						 print TABLE ",NA";
+						 push @data , 'NA';
 					}
 				}
 				if ( $q->param('print_median_richness') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%.1f ",$median[$i];
-					printf TABLE ",%.1f",$median[$i];
+					push @data , sprintf "%.1f",$median[$i];
 				}
 
 				print "<p>\n";
-				print TABLE "\n";
+				print TABLE join(',',@data),"\n";
 			}
 		}
 		close TABLE;
@@ -2226,7 +2227,7 @@ sub printResults	{
 
 			if ( $q->param('print_one_occs_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>One occurrence $generaorrefs</b> ";
-				print SUB_TABLE ",One occurrence $generaorrefs";
+				print SUB_TABLE '"One occurrence '.$generaorrefs.'"';
 			}
 			if ( $q->param('print_gap_analysis_stat_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Gap analysis<br>sampling stat</b> ";
@@ -2613,8 +2614,9 @@ sub printResults	{
 			"black", "0,0,0",
 			"gray", "128,128,128",
 			"red", "255,0,0",
+			"pink", "223,0,223",
+			"purple", "128,0,223",
 			"blue", "0,0,255",
-			"purple", "128,0,128",
 			"green", "0,128,0",
 			"orange", "255,165,0",
 			"yellow", "255,255,0");
@@ -2631,16 +2633,70 @@ sub printResults	{
 		my ($pwidth,$pheight,$pleft,$ptop,$maxdiv,$maxma) = (600,420,60,50,0,0);
 		$im->rectangle( $pleft, $height - $ptop, $pwidth + $pleft, $height - $ptop - $pheight, $col{'black'} );
 		my $FONT = "$DATA_DIR/fonts/Vera.ttf";
-		for ($i = 1; $i <= $chrons; $i++)     {
-			my $div = $richness[$i];
-			if ($q->param('samplesize') ne '')	{
-				$div = $meanrichness{'SIB'}[$i];
-			}
-			if ( $div > 0 && $basema{$chname[$i+1]} > 0 )	{
-				$maxma = $basema{$chname[$i+1]};
-			}
-			if ( $div > $maxdiv )	{
-				$maxdiv = $div;
+
+		my @vars = $q->param('variable');
+		my @colors = $q->param('linecolor');
+		my @scalings = $q->param('linescale');
+		my $withcolors = 0;
+		my @count;
+		my @linekey;
+		for my $v ( 0..$#vars )	{
+			if ( $colors[$v] )	{
+				$withcolors++;
+				my $var = $vars[$v];
+				my $scale = $scalings[$v];
+				$scale =~ s/[A-Za-z ]//g;
+				if ( $scale > 1 )	{
+					$var .= " ".$scalings[$v];
+				}
+				push @linekey , "$var: $colors[$v]";
+				for my $i ( 1..$chrons )     {
+					if ( $vars[$v] =~ /sampled diversity/i && $q->param('samplesize') eq "" )	{
+						$count[$v][$i] = $richness[$i];
+					} elsif ( $vars[$v] =~ /sampled diversity/i )	{
+						$count[$v][$i] = $meanrichness{'SIB'}[$i];
+					} elsif ( $vars[$v] =~ /range.through/i && $q->param('samplesize') eq "" )	{
+						$count[$v][$i] = $rangethrough[$i];
+					} elsif ( $vars[$v] =~ /range.through/i )	{
+						$count[$v][$i] = $meanrichness{'RT'}[$i];
+					} elsif ( $vars[$v] =~ /boundary.crosser/i && $q->param('samplesize') eq "" )	{
+						$count[$v][$i] = $bcrich[$i];
+					} elsif ( $vars[$v] =~ /boundary.crosser/i )	{
+						$count[$v][$i] = $meanrichness{'BC'}[$i];
+					} elsif ( $vars[$v] =~ /first.appear/i && $q->param('samplesize') eq "" )	{
+						$count[$v][$i] = $originate[$i];
+					} elsif ( $vars[$v] =~ /first.appear/i )	{
+						$count[$v][$i] = $msubsoriginate[$i];
+					} elsif ( $vars[$v] =~ /last.appear/i && $q->param('samplesize') eq "" )	{
+						$count[$v][$i] = $extinct[$i];
+					} elsif ( $vars[$v] =~ /last.appear/i )	{
+						$count[$v][$i] = $msubsextinct[$i];
+					} elsif ( $vars[$v] =~ /singletons/i )	{
+						$count[$v][$i] = $singletons[$i];
+					} elsif ( $vars[$v] =~ /dominance/i )	{
+						if ( $occsinchron[$i] > 0 )	{
+							$count[$v][$i] = $maxoccs[$i] / $occsinchron[$i];
+						} else	{
+							$count[$v][$i] = 0;
+						}
+					} elsif ( $vars[$v] =~ /collections/i )	{
+						$count[$v][$i] = $listsinchron[$i];
+					} elsif ( $vars[$v] =~ /occurrences/i )	{
+						$count[$v][$i] = $occsinchron[$i];
+					}
+					if ( $scale > 1 )	{
+						$count[$v][$i] *= $scale;
+					}
+					if ( ! $count[$v][$i] )	{
+						$count[$v][$i] = 0;
+					}
+					if ( $count[$v][$i] > 0 && $basema{$chname[$i+1]} > 0 && $basema{$chname[$i+1]} > $maxma )	{
+						$maxma = $basema{$chname[$i+1]};
+					}
+					if ( $count[$v][$i] > $maxdiv )	{
+						$maxdiv = $count[$v][$i];
+					}
+				}
 			}
 		}
 		if ( $maxdiv <= 100 )	{
@@ -2660,30 +2716,155 @@ sub printResults	{
 		}
 		my $xscale = -1 * $pwidth / $maxma;
 		my $yscale = $pheight / $maxdiv;
-		for ($i = 1; $i <= $chrons; $i++)     {
-			my $div1 = $richness[$i];
-			my $div2 = $richness[$i+1];
-			if ($q->param('samplesize') ne '')	{
-				$div1 = $meanrichness{'SIB'}[$i];
-				$div2 = $meanrichness{'SIB'}[$i+1];
-			}
-			if ( $div1 > 0 )	{
-				my $x1 = $xscale * ( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2 + $pleft + $pwidth;
-				my $x2 = $xscale * ( $basema{$chname[$i+1]} + $basema{$chname[$i]} ) / 2 + $pleft + $pwidth;
-				my $y1 = $div1 * $yscale + $ptop;
-				my $y2 = $div2 * $yscale + $ptop;
-				if ( $div1 > 0 && $div2 > 0 )	{
+		for my $v ( 0..$#vars )	{
+			if ( $colors[$v] )	{
+				for my $i ( 1..$chrons )     {
+					my ($div1,$div2) = ($count[$v][$i],$count[$v][$i+1]);
+					if ($q->param('samplesize') ne '')	{
+						$div1 = $meanrichness{'SIB'}[$i];
+						$div2 = $meanrichness{'SIB'}[$i+1];
+					}
+					if ( $div1 > 0 )	{
+						my $x1 = $xscale * ( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2 + $pleft + $pwidth;
+						my $x2 = $xscale * ( $basema{$chname[$i+1]} + $basema{$chname[$i]} ) / 2 + $pleft + $pwidth;
+						my $y1 = $div1 * $yscale + $ptop;
+						my $y2 = $div2 * $yscale + $ptop;
+						if ( $div1 > 0 && $div2 > 0 )	{
 $im->setThickness(2);
-					$im->line( $x1, $height - $y1, $x2, $height - $y2, $col{'gray'} );
+							$im->line( $x1, $height - $y1, $x2, $height - $y2, $col{$colors[$v]} );
 $im->setThickness(1);
+						}
+						$im->filledEllipse( $x1, $height - $y1, 8, 8, $col{$colors[$v]} );
+					}
 				}
-				$im->filledEllipse( $x1, $height - $y1, 8, 8, $col{'black'} );
 			}
 		}
-		open PNG_OUT,">$HTML_DIR/public/curve.png";
+
+		my $pngfile = "curve".int(rand(100)).".png";
+		open PNG_OUT,">$HTML_DIR/public/curve/$pngfile";
 		print PNG_OUT $im->png;
-		print '<center><img alt="diversity curve" src="/public/curve.png"></center>'."\n";
-		print "</div>\n</div>\n\n"; # End PANEL3 div
+		close PNG_OUT;
+		print "<center><img alt=\"diversity curve\" src=\"/public/curve/$pngfile\"></center>\n";
+		print "<center><p>".join('; ',@linekey)."</p>";
+	# correlations between illustrated counts with bootstrapped p-values
+		$| = 1;
+		if ( $withcolors > 1 && $q->param('correlate') =~ /y/i )	{
+		print "<table cellpadding=4>\n";
+		print "<tr><td colspan=6>Correlations between logged counts:</td></tr>\n";
+		print "<tr><td style=\"border-bottom: 1px solid black;\">count 1</td>\n<td style=\"border-bottom: 1px solid black;\">count 2</td>\n<td style=\"border-bottom: 1px solid black;\">N</td>\n<td style=\"border-bottom: 1px solid black;\">&nbsp;<i>r</i></td>\n<td style=\"border-bottom: 1px solid black;\"><i>p</i>-value</td><td style=\"border-bottom: 1px solid black;\">N<sup>*</sup></td>\n<td style=\"border-bottom: 1px solid black;\">&nbsp;<i>r<sup>*</sup></i></td>\n<td style=\"border-bottom: 1px solid black;\"><i>p</i>-value<sup>*</sup></td></tr>\n";
+		for my $v ( 1..$#vars )	{
+			for my $w ( 0..$v-1 )	{
+				if ( $colors[$v] && $colors[$w] )	{
+					print "<tr>\n<td>$vars[$w]</td>\n<td>$vars[$v]</td>\n";
+					my $real;
+					my @v1 = ();
+					my @v2 = ();
+					for my $i ( 1..$chrons )     {
+						if ( $count[$v][$i] > 0 && $count[$w][$i] > 0 )	{
+							push @v1 , log( $count[$v][$i] );
+							push @v2 , log( $count[$w][$i] );
+						}
+					}
+					# three data points required
+					if ( $#v1 < 2 )	{
+						next;
+					}
+					$real = correlate(\@v1,\@v2);
+					printf "<td>%d</td>\n",$#v1+1;
+					if ( $real eq "NA" )	{
+						print "<td>NA</td><td>NA</td><td>NA</td><td>NA</td><td>NA</td>\n";
+						next;
+					}
+					my $up = 0;
+					my $trials = 100000;
+					for my $t ( 1..$trials )	{
+						my @boot1 = ();
+						my @boot2 = ();
+						for my $i ( 0..$#v1 )	{
+							push @boot1 , $v1[int(rand($#v1+1))];
+							push @boot2 , $v2[int(rand($#v2+1))];
+						}
+						if ( correlate(\@boot1,\@boot2 ) >= $real )	{
+							$up++;
+						}
+					}
+					if ( $up > $trials / 2 )	{
+						$up = $trials - $up;
+					}
+					printf "<td>%.3f</td>\n",$real;
+					my $pvalue = sprintf "%.3f",$up / $trials;
+					if ( $pvalue == 0 )	{
+						$pvalue = "< 0.001";
+					}
+					print "<td>$pvalue</td>\n";
+					my @diff1 = ();
+					my @diff2 = ();
+				# differences only can be computed when neighboring
+				#  intervals have non-zero counts
+					for my $i ( 1..$chrons )     {
+						if ( $count[$v][$i] > 0 && $count[$w][$i] > 0 && $count[$v][$i+1] > 0 && $count[$w][$i+1] > 0 )	{
+							push @diff1 , $count[$v][$i] - $count[$v][$i+1];
+							push @diff2 , $count[$w][$i] - $count[$w][$i+1];
+						}
+					}
+					$real2 = correlate(\@diff1,\@diff2);
+					$up = 0;
+					for my $t ( 1..$trials )	{
+						my @boot1 = ();
+						my @boot2 = ();
+						for my $i ( 0..$#diff1 )	{
+							push @boot1 , $diff1[int(rand($#diff1+1))];
+							push @boot2 , $diff2[int(rand($#diff2+1))];
+						}
+						if ( correlate(\@boot1,\@boot2 ) >= $real2 )	{
+							$up++;
+						}
+					}
+					if ( $up > $trials / 2 )	{
+						$up = $trials - $up;
+					}
+					printf "<td>%d</td>\n",$#diff1+1;
+					printf "<td>%.3f</td>\n",$real2;
+					$pvalue = sprintf "%.3f",$up / $trials;
+					if ( $pvalue == 0 )	{
+						$pvalue = "< 0.001";
+					}
+					print "<td>$pvalue</td>\n";
+					print "</tr>\n";
+				}
+			}
+		}
+		print "<tr><td colspan=6><span class=\"verysmall\">&nbsp;&nbsp;<sup>*</sup> after taking first differences of the counts</span></td></tr>\n";
+		print "</table>\n</center>\n";
+		}
+
+		sub correlate	{
+			my ($v1ref,$v2ref) = @_;
+			my @v1 = @$v1ref;
+			my @v2 = @$v2ref;
+			my ($matches,$mean1,$mean2,$ssq1,$ssq2,$cov) = (0,0,0,0,0,0);
+			for my $i ( 0..$#v1 )	{
+				$mean1 += $v1[$i];
+				$mean2 += $v2[$i];
+				$matches++;
+			}
+			$mean1 /= $matches;
+			$mean2 /= $matches;
+			for my $i ( 0..$#v1 )	{
+				$ssq1 += ( $v1[$i] - $mean1 )**2;
+				$ssq2 += ( $v2[$i] - $mean2 )**2;
+				$cov += ( $v1[$i] - $mean1 ) * ( $v2[$i] - $mean2 );
+			}
+			my $cor = 0;
+			if ( $ssq1 > 0 && $ssq2 > 0 )	{
+				$cor = $cov / sqrt( $ssq1 * $ssq2 );
+				return( $cor );
+			} else	{
+				return( "NA" );
+			}
+		}
+		print "</div>\n";
+		print "</div>\n\n"; # End PANEL3 div
 		print '<script language="JavaScript" type="text/javascript">
 showPanel(1);
 </script>
