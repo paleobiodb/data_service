@@ -18,11 +18,15 @@
       onClick = "showPanel(4);" 
       onMouseOver="hover(this);" 
       onMouseOut="setState(4)">Subsampling columns</td>
+    <td id="tab5" class="tabOff" style="white-space: nowrap;"
+      onClick = "showPanel(5);" 
+      onMouseOver="hover(this);" 
+      onMouseOut="setState(5)">Graphing options</td>
   </tr></table>
 </div>
 
 <div align="center">
-<p class="pageTitle" style="margin-bottom: 0em; padding-bottom: 1em;">Diversity curve request form</p>
+<p class="pageTitle" style="margin-bottom: -1.5em;">Diversity curve request form</p>
 </div>
 
 <form method="POST" action="%%read_url%%">
@@ -448,8 +452,100 @@ To compute Michaelis-Menten diversity estimates, set the diversity measure to "s
 
 </div>
 
+<div id="panel5" class="panel">
+
+<p style="margin-left: 16em;">
+Choose line colors and scalings for the variables you want to graph.
+</p>
+
+<div style="margin-left: 19em;">
+
+<table cellpadding=4>
+
+<tr>
+<td><input type="hidden" id="variable" value="sampled diversity">Sampled taxa</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td><input type="hidden" id="variable" value="range-through diversity">Range-through taxa</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td><input type="hidden" id="variable" value="boundary-crosser diversity">Boundary-crosser taxa</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td><input type="hidden" id="variable" value="first appearances">First appearances</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td><input type="hidden" id="variable" value="last appearances">Last appearances</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td><input type="hidden" id="variable" value="singletons">Singletons</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td><input type="hidden" id="variable" value="dominance">Dominance</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td><input type="hidden" id="variable" value="collections">Collections</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td><input type="hidden" id="variable" value="occurrences">Occurrences</td>
+<td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
+<td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td colspan=6><input type="checkbox" name="correlate" value="YES"> Compute correlations between each pair of lines</td>
+</tr>
+
+</table>
+
+<br><div align="center"><input type=submit value="Submit"></div>
+
+</div>
+
+</div>
+
 </form>
 
 <script language="JavaScript" type="text/javascript">
     showPanel(1);
 </script> 
+
+<script language="JavaScript" type="text/javascript">
+<!--
+
+function select()	{
+        document.forms[1].linecolor[0].options[1].selected = true;
+        document.forms[1].linescale[6].options[8].selected = true;
+        return true;
+}
+
+window.onload = select();
+
+//-->
+</script>
+
+
