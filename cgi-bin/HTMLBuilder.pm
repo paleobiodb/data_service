@@ -52,6 +52,9 @@ mapwidth=>['100%','90%','80%','75%','70%','60%','50%'],
     mapsearchfields=>[ 'research group', 'country', 'state/province', 'time interval', 'formation', 'lithology', 'paleoenvironment', 'taxon' ],
     research_group=>['', 'decapod','divergence', 'GCP', 'marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
 
+    simplecolors=>['','black','gray','red','pink','purple','blue','green','orange','yellow'],
+    linescalings=>['x 1','x 2','x 3','x 5','x 10','x 20','x 30','x 50','x 100'],
+
     # Taphonomy/ecology and vertebrate cology fields
     fr_habitat=>['','terrestrial','marine','freshwater','marine,terrestrial','marine,freshwater','freshwater,terrestrial'],
 #        ['','terrestrial','marine','freshwater','fresh./marine'    ,'terr./marine'      ,'terr./fresh.']],
