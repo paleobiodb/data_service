@@ -1159,14 +1159,14 @@ sub getMeasurementTable {
 
     while (my ($part,$m_table) = each %p_table) {
         foreach my $type (keys %types) {
-            if ($m_table->{$type}{'specimens_measured'}) {
-                $m_table->{$type}{'average'} = exp($m_table->{$type}{'average'}/$m_table->{$type}{'specimens_measured'});
+            if ($m_table{$type}{'specimens_measured'}) {
+                $m_table{$type}{'average'} = exp($m_table{$type}{'average'}/$m_table{$type}{'specimens_measured'});
                 # if any averages were used in finding the min and max, the
                 #  values are statistically bogus and should be erased
                 # likewise if the sample size is 1
-                if ( $m_table->{$type}{'average_only'} == 1 || $m_table->{$type}{'specimens_measured'} == 1 )	{
-                    $m_table->{$type}{'min'} = "";
-                    $m_table->{$type}{'max'} = "";
+                if ( $m_table{$type}{'average_only'} == 1 || $m_table{$type}{'specimens_measured'} == 1 )	{
+                    $m_table{$type}{'min'} = "";
+                    $m_table{$type}{'max'} = "";
                 }
             }
         }
@@ -1175,11 +1175,11 @@ sub getMeasurementTable {
         my $can_compute = 0; # Can compute median, and error (std dev)
         my $is_group = 0; # Is it aggregate group data or a bunch of singles?
         if ($unique_specimen_nos{$part} == 1) {
-            if ($m_table->{'specimens_measured'} > 1) {
+            if ($m_table{'specimens_measured'} > 1) {
                 $can_compute = 1;
                 $is_group = 1;
             }
-        } elsif ($unique_specimen_nos{$part} >= 1 && $unique_specimen_nos{$part} == $m_table->{'specimens_measured'}) {
+        } elsif ($unique_specimen_nos{$part} >= 1 && $unique_specimen_nos{$part} == $m_table{'specimens_measured'}) {
             # This will only happen if the specimens_measured for each row is 1 above
             $can_compute = 1;
         }
@@ -1193,9 +1193,9 @@ sub getMeasurementTable {
             }
             if ($is_group) {
                 foreach my $row (@measurements_for_part) {
-                    $m_table->{$row->{'measurement_type'}}{'median'} = $row->{'real_median'};
-                    $m_table->{$row->{'measurement_type'}}{'error'} = $row->{'real_error'};
-                    $m_table->{$row->{'measurement_type'}}{'error_unit'} = $row->{'error_unit'};
+                    $m_table{$row->{'measurement_type'}}{'median'} = $row->{'real_median'};
+                    $m_table{$row->{'measurement_type'}}{'error'} = $row->{'real_error'};
+                    $m_table{$row->{'measurement_type'}}{'error_unit'} = $row->{'error_unit'};
                 }
             } else {
                 my %values_by_type;
@@ -1208,15 +1208,15 @@ sub getMeasurementTable {
                         if (scalar(@values) % 2 == 0) {
                             my $middle_index = int(scalar(@values)/2);
                             my $median = ($values[$middle_index] + $values[$middle_index-1])/2;
-                            $m_table->{$type}{'median'} = $median;
+                            $m_table{$type}{'median'} = $median;
                         } else {
                             my $middle_index = int(scalar(@values/2));
-                            $m_table->{$type}{'median'} = $values[$middle_index];
+                            $m_table{$type}{'median'} = $values[$middle_index];
                         }
                     }
                     if (scalar(@values) > 1) {
-                        $m_table->{$type}{'error'} = std_dev(@values);
-                        $m_table->{$type}{'error_unit'} = "1 s.d.";
+                        $m_table{$type}{'error'} = std_dev(@values);
+                        $m_table{$type}{'error_unit'} = "1 s.d.";
                     }
                 }
             }
@@ -1256,10 +1256,11 @@ sub avg {
 #  taxa_tree_cache, also includes diameter and circumference, deals with multiple parent and/or
 #  "minus" taxa in equations table, and also computes mean
 sub getMassEstimates	{
-	my ($dbt,$taxon_no,$p_table) = @_;
+	my ($dbt,$taxon_no,$tableref) = @_;
+	my %p_table = %{$tableref};
 	my %distinct_parts = ();
 
-	while (my($part,$m_table)=each %$p_table)	{
+	for my $part ( keys %p_table )	{
 		if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
 			$distinct_parts{$part}++;
 		}
@@ -1284,16 +1285,16 @@ sub getMassEstimates	{
 	my (@values,@masses,@eqns,@refs);
 	my (%mean,%estimates);
 	for my $part ( @part_list )	{
-		my $m_table = %$p_table->{$part};
-		if ( ! $m_table )	{
+		my %m_table = %{$p_table{$part}};
+		if ( ! %m_table )	{
 			next;
 		}
 		foreach my $type (('length','width','area','diameter','circumference')) {
-			if ( $type eq "area" && $m_table->{length}{average} && $m_table->{width}{average} && $part =~ /^[PMpm][1234]$/ )	{
-				$m_table->{area}{average} = $m_table->{length}{average} * $m_table->{width}{average};
+			if ( $type eq "area" && $m_table{length}{average} && $m_table{width}{average} && $part =~ /^[PMpm][1234]$/ )	{
+				$m_table{area}{average} = $m_table{length}{average} * $m_table{width}{average};
 			}
-			if ( $m_table->{$type}{'average'} > 0 ) {
-				my $value = $m_table->{$type}{'average'};
+			if ( $m_table{$type}{'average'} > 0 ) {
+				my $value = $m_table{$type}{'average'};
 				if ( $value < 1 )	{
 					$value = sprintf("%.3f",$value);
 				} elsif ( $value < 10 )	{
@@ -1309,7 +1310,7 @@ sub getMassEstimates	{
 							last;
 						}
 						$last_lft = $eqn->{'lft'};
-						my $mass = exp( ( log($m_table->{$type}{average}) * $eqn->{$type} ) + $eqn->{intercept} );
+						my $mass = exp( ( log($m_table{$type}{average}) * $eqn->{$type} ) + $eqn->{intercept} );
 						$mean{$type.$part} += log($mass);
 						$estimates{$type.$part}++;
 						push @masses , $mass;
@@ -1327,7 +1328,7 @@ sub getMassEstimates	{
 	}
 	return (\@part_list,\@values,\@masses,\@eqns,\@refs,$grandmean,$grandestimates);
 }
-		
+			
 # JA 25-29.7.08
 sub displayDownloadMeasurementsResults  {
 	my $q = shift;
@@ -1614,8 +1615,8 @@ sub displayDownloadMeasurementsResults  {
 	my @part_list;
 	my %distinct_parts = ();
 	for my $taxon_no ( @with_data )	{
-		my $p_table = $tables{$taxon_no};
-		while (my($part,$m_table)=each %$p_table)	{
+		my %p_table = %{$tables{$taxon_no}};
+		for my $part ( keys %p_table )	{
 			if ( $part !~ /^(p|m)(1|2|3|4)$/i )	{
 				$distinct_parts{$part}++;
 			}
@@ -1644,12 +1645,12 @@ sub displayDownloadMeasurementsResults  {
 	my (%measured_parts,%measured_types);
 	for my $taxon_no ( @with_data )	{
 		my $measured_parts = 0;
-		my $p_table = $tables{$taxon_no};
+		my %p_table = %{$tables{$taxon_no}};
 		for my $part ( @part_list )	{
-			my $m_table = %$p_table->{$part};
-			if ( $m_table )	{
+			my %m_table = %{$p_table{$part}};
+			if ( %m_table )	{
 				for my $type (('length','width','height','circumference','diagonal','inflation'))	{
-					if ( $m_table->{$type} && $q->param($type) =~ /y/i && $m_table->{$type}{'average'} > 0 )	{
+					if ( $m_table{$type} && $q->param($type) =~ /y/i && $m_table{$type}{'average'} > 0 )	{
 						$measured_parts{$taxon_no}++;
 						$measured_types{$taxon_no}{$part}++;
 					}
@@ -1663,23 +1664,23 @@ sub displayDownloadMeasurementsResults  {
 		if ( $q->param('all_parts') =~ /y/i && $measured_parts{$taxon_no} < ( $#part_list + 1 ) * $types )	{
 			next;
 		}
-		my $p_table = $tables{$taxon_no};
+		my %p_table = %{$tables{$taxon_no}};
 		for my $part ( @part_list )	{
 			if ( $measured_types{$taxon_no}{$part} < $types )	{
 				next;
 			}
 			$printed_parts{$taxon_no}++;
-			my $m_table = %$p_table->{$part};
-			if ( $m_table )	{
+			my %m_table = %{$p_table{$part}};
+			if ( %m_table )	{
 				$printed_part = $part;
 				if ( $part eq "" )	{
 					$printed_part = "unknown";
 				}
 				$records{$part}++;
-				$specimens{$part} += $m_table->{'specimens_measured'};
+				$specimens{$part} += $m_table{'specimens_measured'};
 				$rows++;
 				for my $type (('length','width','height','circumference','diagonal','inflation'))	{
-					if ( $m_table->{$type} && $q->param($type) =~ /y/i && $m_table->{$type}{'average'} > 0 )	{
+					if ( $m_table{$type} && $q->param($type) =~ /y/i && $m_table{$type}{'average'} > 0 )	{
 						if ( $sep =~ /,/ )	{
 							print OUT "\"$name{$taxon_no}\"",$sep;
 						} else	{
@@ -1709,10 +1710,10 @@ sub displayDownloadMeasurementsResults  {
 						}
 						print OUT $printed_part,$sep,$type;
 						if ( $q->param('specimens_measured') =~ /y/i )	{
-							print OUT $sep,$m_table->{'specimens_measured'};
+							print OUT $sep,$m_table{'specimens_measured'};
 						}
 						foreach my $column ( @columns )	{
-							my $value = $m_table->{$type}{$column};
+							my $value = $m_table{$type}{$column};
 							print OUT $sep;
 							if ( $column eq "error_unit" )	{
 								print OUT $value;
