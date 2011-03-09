@@ -2839,7 +2839,8 @@ sub displayMeasurements {
     # Returns a triple index hash with index <part><dimension type><whats measured>
     #  Where part can be leg, valve, etc, dimension type can be length,width,height,diagonal,inflation 
     #   and whats measured can be average, min,max,median,error
-    my $p_table = Measurement::getMeasurementTable(\@specimens);
+    my $p_table_ref = Measurement::getMeasurementTable(\@specimens);
+    my %p_table = %{$p_table_ref};
 
     my $mass_string;
 
@@ -2854,25 +2855,26 @@ sub displayMeasurements {
         my %partHeader = ();
         $partHeader{'average'} = "mean";
         my $defaultError = "";
-        while (my($part,$m_table)=each %$p_table)	{
+        for my $part ( keys %p_table )	{
+            my %m_table = %{$p_table{$part}};
             foreach my $type (('length','width','height','circumference','diagonal','inflation')) {
-                if (exists ($m_table->{$type})) {
-                    if ( $m_table->{$type}{'min'} )	{
+                if (exists ($m_table{$type})) {
+                    if ( $m_table{$type}{'min'} )	{
                         $partHeader{'min'} = "minimum";
                     }
-                    if ( $m_table->{$type}{'max'} )	{
+                    if ( $m_table{$type}{'max'} )	{
                         $partHeader{'max'} = "maximum";
                     }
-                    if ( $m_table->{$type}{'median'} )	{
+                    if ( $m_table{$type}{'median'} )	{
                         $partHeader{'median'} = "median";
                     }
-                    if ( $m_table->{$type}{'error_unit'} )	{
+                    if ( $m_table{$type}{'error_unit'} )	{
                         $partHeader{'error'} = "error";
-                        $errorSeen{$m_table->{$type}{'error_unit'}}++;
+                        $errorSeen{$m_table{$type}{'error_unit'}}++;
                         my @errors = keys %errorSeen;
                         if ( $#errors == 0 )	{
-                            $m_table->{$type}{'error_unit'} =~ s/^1 //;
-                            $defaultError = $m_table->{$type}{'error_unit'};
+                            $m_table{$type}{'error_unit'} =~ s/^1 //;
+                            $defaultError = $m_table{$type}{'error_unit'};
                         } else	{
                             $defaultError = "";
                         }
@@ -2883,7 +2885,7 @@ sub displayMeasurements {
 
         # estimate body mass if possible JA 18.7.07
         # code is here and not earlier because we need the parts list first
-        my @m = Measurement::getMassEstimates($dbt,$taxon_no,$p_table);
+        my @m = Measurement::getMassEstimates($dbt,$taxon_no,$p_table_ref);
         my @part_list = @{$m[0]};
         my @masses = @{$m[2]};
         my @eqns = @{$m[3]};
@@ -2921,21 +2923,21 @@ $mass_string
         }
         $str .= "<table cellspacing=\"$spacing;\"><tr><th>part</th><th align=\"left\">N</th><th>$partHeader{'average'}</th><th>$partHeader{'min'}</th><th>$partHeader{'max'}</th><th>$partHeader{'median'}</th><th>$defaultError</th><th></th></tr>";
         for my $part ( @part_list )	{
-            my $m_table = %$p_table->{$part};
-            if ( ! $m_table )	{
+            if ( ! $p_table{$part} )	{
                 next;
             }
+            my %m_table = %{$p_table{$part}};
             $temp++;
 
             foreach my $type (('length','width','height','circumference','diagonal','inflation')) {
-                if (exists ($m_table->{$type})) {
-                    if ( $m_table->{$type}{'average'} <= 0 )	{
+                if (exists ($m_table{$type})) {
+                    if ( $m_table{$type}{'average'} <= 0 )	{
                         next;
                     }
                     $str .= "<tr><td>$part $type</td>";
-                    $str .= "<td>$m_table->{specimens_measured}</td>";
+                    $str .= "<td>$m_table{specimens_measured}</td>";
                     foreach my $column (('average','min','max','median','error')) {
-                        my $value = $m_table->{$type}{$column};
+                        my $value = $m_table{$type}{$column};
                         if ( $value <= 0 && $partHeader{$column} ) {
                             $str .= "<td align=\"center\">-</td>";
                         } elsif ( ! $partHeader{$column} ) {
@@ -2952,9 +2954,9 @@ $mass_string
                         }
                     }
                     $str .= qq|<td align="center" style="white-space: nowrap;">|;
-                    if ( $m_table->{$type}{'error'} && ! $defaultError ) {
-                        $m_table->{$type}{error_unit} =~ s/^1 //;
-                        $str .= qq|$m_table->{$type}{error_unit}|;
+                    if ( $m_table{$type}{'error'} && ! $defaultError ) {
+                        $m_table{$type}{error_unit} =~ s/^1 //;
+                        $str .= qq|$m_table{$type}{error_unit}|;
                     }
                     $str .= '</td></tr>';
                 }
