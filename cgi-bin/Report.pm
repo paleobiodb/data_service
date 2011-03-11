@@ -1237,7 +1237,7 @@ sub fastTaxonCount	{
 	}
 	print "<p style=\"margin-left: 2em; text-indent: -0.5em;\">Your query was: <i>".join(', ',@qs).".</i>";
 
-	my @tables = ("authorities a,$TAXA_TREE_CACHE t");
+	my @tables = ("authorities a,$TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2");
 	my @and;
 
 	if ( $q->param('period') || $interval_nos || $q->param('strat_unit') || $q->param('continent') || $q->param('country') )	{
@@ -1302,7 +1302,7 @@ sub fastTaxonCount	{
 		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND (taxon_name='".$q->param('taxon_name')."' OR common_name='".$q->param('taxon_name')."') ORDER BY rgt-lft DESC";
 		my $t = ${$dbt->getData($sql)}[0];
 		if ( $t )	{
-			push @and , "lft>$t->{lft} AND rgt<$t->{rgt}";
+			push @and , "t2.lft>$t->{lft} AND t2.rgt<$t->{rgt}";
 		} else	{
 			$errors = "Sorry, there is no valid taxon in the database called \"$q->param('taxon_name')\".";
 		}
@@ -1311,7 +1311,12 @@ sub fastTaxonCount	{
 	}
 
 	# query excludes higher-order names lacking any genera or species
-	$sql = "SELECT lft,rgt,taxon_rank,taxon_name FROM ".join(',',@tables)." WHERE a.taxon_no=t.taxon_no AND (taxon_rank IN ('species','genus') OR rgt>lft+1)";
+	# we need a much more complicated join because senior synonyms can be invalid
+	#  (especially in nomen dubium cases)
+	# t.taxon_no (possibly used in an occurrences join) is the junior synonym,
+	#  t.synonym_no and t2.taxon_no are its senior synonym, and t2.synonym_no is the
+	#   senior senior synonym
+	$sql = "SELECT t2.lft,t2.rgt,taxon_rank,taxon_name,extant FROM ".join(',',@tables)." WHERE t.synonym_no=t2.taxon_no AND t2.synonym_no=a.taxon_no AND (taxon_rank IN ('species','genus') OR t2.rgt>t2.lft+1)";
 	my ($sql2,@and2);
 	if ( $sql =~ /occurrences/ )	{
 		$sql2 = $sql;
@@ -1329,7 +1334,7 @@ sub fastTaxonCount	{
 	if ( @and2 )	{
 		$sql2 .= " AND ".join(' AND ',@and2);
 	}
-	my $group = " GROUP BY synonym_no ORDER BY lft";
+	my $group = " GROUP BY t2.synonym_no ORDER BY t2.lft";
 	if ( $sql2 )	{
 		$sql = "($sql $group) UNION ($sql2 $group)";
 	} else	{
@@ -1358,7 +1363,7 @@ sub fastTaxonCount	{
 	for my $s ( @subtaxa )	{
 		$count{$s->{taxon_rank}}++;
 		push @{$list{$s->{taxon_rank}}} , $s->{taxon_name};
-		if ( $s->{'lft'} + 1 == $s->{'rgt'} )	{
+		if ( $s->{'lft'} + 1 == $s->{'rgt'} && $s->{'extant'} !~ /y/i && $s->{'taxon_rank'} !~ /species/ )	{
 			$empty{$s->{'taxon_rank'}}++;
 		}
 	}
@@ -1391,7 +1396,11 @@ sub fastTaxonCount	{
 		}
 		my $warning = "<div align=\"center\"><p><i>Warning: ";
 		$warning .= join(', ',@empties);
-		$warning .= " do not include subtaxa that are recorded in the database.</i></p>\n";
+		my $subtaxa = "subtaxa";
+		if ( $#empties == 0 && $empties[0] =~ / gen/ )	{
+			$subtaxa = "species";
+		}
+		$warning .= " do not include $subtaxa with taxonomic classification data.</i></p>\n";
 		$warning =~ s/ 1 families/ one family/;
 		$warning =~ s/ 1 genera/ one genus/;
 		if ( $#empties == 0 && $warning =~ / one / )	{
