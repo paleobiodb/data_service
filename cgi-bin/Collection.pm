@@ -2583,16 +2583,24 @@ sub basicCollectionSearch	{
 	my $collection_name = $q->param('collection_name');
 	$collection_name =~ s/'/\\'/g;
 
-	# try literal collection name first
+	# this really looks like a strat unit search, so try that first
+	if ( $collection_name =~ / (group|grp|formation|fm|member|mbr|)$/i )	{
+		$collection_name =~ s/ [A-Za-z]+$//;
+		$sql = "SELECT $fields FROM collections WHERE geological_group='".$collection_name."' OR formation='".$collection_name."' OR member='".$collection_name."'";
+	}
+
+	# try literal collection name next
 	# exact first
-	if ( $collection_name =~ /[^0-9]/ )	{
+	elsif ( $collection_name =~ /[^0-9]/ )	{
 		$sql = "SELECT $fields FROM collections WHERE collection_name='".$collection_name."'";
 	}
+
 	# special handling for plain integers
 	else	{
 		my $integer = $dbh->quote('.*[^0-9]'.$collection_name.'(([^0-9]+)|($))');
 		$sql = "SELECT $fields FROM collections WHERE collection_no=".$collection_name." OR collection_name REGEXP $integer OR collection_aka REGEXP $integer OR collection_dates REGEXP $integer";
 	}
+
 	my @colls = @{$dbt->getData($sql)};
 	route();
 	if ( @colls )	{
