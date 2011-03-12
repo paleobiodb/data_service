@@ -1036,10 +1036,24 @@ sub quickSearch	{
 
 	my $qs = $q->param('quick_search');
 	$qs =~ s/\./%/g;
+	$qs =~ s/  / /g;
 	$q->param('quick_search' => $qs);
-	# case 1: search string cannot be a taxon name, so search collections
+	# case 1 or 2: search string cannot be a taxon name, so search elsewhere
+	my $nowDate = now();
+	my ($date,$time) = split / /,$nowDate;
+	my ($yyyy,$mm,$dd) = split /-/,$date,3;
 	if ( $qs =~ /[^A-Za-z% ]/ || $qs =~ / .* / )	{
-	# case 1: search string cannot be a taxon name, so search collections
+	# case 1: string looks like author/year, so try references
+		my @words = split / /,$qs;
+		if ( $words[$#words] >= 1758 && $words[$#words] <= $yyyy )	{
+			$q->param('name_pattern' => 'equals');
+			$q->param('name' => $words[0]);
+			$q->param('year_relation' => 'in');
+			$q->param('year' => $words[$#words]);
+			displayRefResults();
+			exit;
+		}
+	# case 2: otherwise or if that fails, try collections
 		Collection::basicCollectionSearch($dbt,$q,$s,$hbo);
 	# if basicCollectionSearch finds any match it should exit somehow before this
 	#   point, so try a common name search as a desperation measure
@@ -1048,12 +1062,12 @@ sub quickSearch	{
 	else	{
 		my $sql = "SELECT count(*) c FROM authorities WHERE taxon_name LIKE '".$qs."'";
     		my $t = ${$dbt->getData($sql)}[0];
-	# case 2: string is formatted correctly and matches at least one name,
+	# case 3: string is formatted correctly and matches at least one name,
 	#  so search taxa only
 		if ( $t->{'c'} > 0 )	{
 			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 		}
-	# case 3: search is formatted correctly but does not directly match
+	# case 4: search is formatted correctly but does not directly match
 	#  any name, so first try collections and then try taxa again (which
 	#  will yield some kind of a match somehow)
 		else	{
