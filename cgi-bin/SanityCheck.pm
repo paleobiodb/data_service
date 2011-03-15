@@ -244,7 +244,7 @@ sub processSanityCheck	{
 	# this is tricky because the NAFMSD data uploaded on 23.1.02 overlapped
 	#  with Carroll, so we have to assume that names published before 1988
 	#  actually are in Carroll
-	$sql = "SELECT taxon_rank rank,taxon_name name,child_no no FROM refs r,opinions o,authorities a,$TAXA_TREE_CACHE t WHERE r.reference_no=a.reference_no AND child_no=a.taxon_no AND a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (o.reference_no IN (6930,4783,7584) OR (a.created<20030124000000 AND ((a.pubyr<1988 AND a.pubyr>1700) OR (r.pubyr<1988 AND r.pubyr>1700)))) GROUP BY child_no";
+	$sql = "SELECT taxon_rank rank,taxon_name name,child_no no FROM refs r,opinions o,authorities a,$TAXA_TREE_CACHE t WHERE r.reference_no=a.reference_no AND child_no=a.taxon_no AND a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (o.reference_no IN (5022,6930,4783,7584) OR (a.created<20030124000000 AND ((a.pubyr<1988 AND a.pubyr>1700) OR (r.pubyr<1988 AND r.pubyr>1700)))) GROUP BY child_no";
 	@rows = @{$dbt->getData($sql)};
 	my %compendium;
 	my %uncompendium;
@@ -258,7 +258,7 @@ sub processSanityCheck	{
 			$compendium{$rows[$i]->{rank}}++;
 			$dataneeded{$rows[$i]->{rank}}{$rows[$i]->{name}}++;
 		}
-		$sql = "SELECT taxon_rank rank,taxon_name name,child_no no FROM opinions o,authorities a WHERE child_no=a.taxon_no AND child_no IN ($in_list) AND o.reference_no NOT IN (6930,4783,7584) GROUP BY child_no";
+		$sql = "SELECT taxon_rank rank,taxon_name name,child_no no FROM opinions o,authorities a WHERE child_no=a.taxon_no AND child_no IN ($in_list) AND o.reference_no NOT IN (5022,6930,4783,7584) GROUP BY child_no";
 		@rows = @{$dbt->getData($sql)};
 		for my $i ( 0..$#rows )	{
 			$uncompendium{$rows[$i]->{rank}}++;
@@ -308,7 +308,7 @@ sub processSanityCheck	{
 	printBoxBottom("Our",$grade);
 
 	printBoxTop("Subtaxa in the Database not recorded in a compilation");
-	print "<i>Our system includes tetrapod names from Carroll (1988) and McKenna and Bell (1997), and marine animal names from Sepkoski (2002).</i></p>\n\n";
+	print "<i>Our system includes insect names from Carpenter (1992), tetrapod names from Carroll (1988) and McKenna and Bell (1997), and marine animal names from Sepkoski (2002).</i></p>\n\n";
 	print "<p style=\"padding-left: 1em;\">\n";
 	for my $rank ( @ranks ) 	{
 		if ( $total{$rank} > 0 )	{
@@ -370,9 +370,10 @@ sub printMissing	{
 	my $category = shift;
 
 	if ( $category )	{
-		my $noun = "genera";
-		if ( $#temp == 0 )	{
-			$noun = "genus";
+		my %plural = ('order' => 'orders', 'family' => 'families', 'genus' => 'genera');
+		my $noun = $rank;
+		if ( $#temp > 0 )	{
+			$noun = $plural{$rank};
 		}
 		printf "<span class=\"small\">[%d $category $noun missing data: ",$#temp + 1;
 	} else	{
