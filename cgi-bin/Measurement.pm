@@ -297,7 +297,6 @@ function submitForm ( )
 
     # now create a table of choices
     print "<table>\n";
-#        my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
 
     %specimens = ();
     %types = ();
@@ -338,8 +337,6 @@ function submitForm ( )
         }
     }
 
-    my $checked;
-    $checked = "CHECKED" if ($specimen_count == 1);
     my $types_only;
     $types_only = "types_only=$q->param('types_only')" if ($q->param('types_only'));
     # fixed order for mammal teeth
@@ -380,6 +377,16 @@ function submitForm ( )
     print "<td colspan=\"6\">&nbsp;Add a new average measurement</i></td></tr>\n";
     print qq|<tr><td align="center" valign="top"><a href="javascript:submitForm('')"><div class="measurementBullet" style="position: relative; margin-top: -0.1em;">&#149;</div></td>|;
     print "<td colspan=\"6\" valign=\"top\">&nbsp;Add <input type=\"text\" name=\"specimens_measured\" value=\"10\" size=3>new individual measurements</i><br>";
+
+    # anyone working on a large paper will enter the same type and source value
+    #  almost every time, so grab the last one
+    my $sql = "SELECT specimen_part,is_type,measurement_source FROM specimens WHERE reference_no=".$s->get('reference_no')." ORDER BY specimen_no DESC LIMIT 1";
+    my $defaults = ${$dbt->getData($sql)}[0];
+    my $part_value = 'value="'.$defaults->{'specimen_part'}.'"';
+    my %selected;
+    $selected{$defaults->{'is_type'}} = "selected";
+    $selected{$defaults->{'measurement_source'}} = "selected";
+
     print qq|
   <div style=\"padding-left: 2em;\">
   default specimen #: <input name="default_no" size="10"><br>
@@ -400,21 +407,21 @@ function submitForm ( )
   <input type="checkbox" name="height"> height<br>
   <input type="checkbox" name="circumference" style="margin-left: 11em;"> circumference
   <input type="checkbox" name="diagonal"> diagonal
-  <br>default part: <input name="default_part" size="10"><br>
+  <br>default part: <input type="text" name="default_part" size="10" $part_value><br>
   default type:
   <select name="default_type">
   <option value="no">no</option>
-  <option value="holotype">holotype</option>
-  <option value="paratype">paratype</option>
+  <option value="holotype" $selected{'holotype'}>holotype</option>
+  <option value="paratype" $selected{'paratype'}>paratype</option>
   </select><br>
   default source:
   <select name="default_source">
   <option value=""></option>
-  <option value="text">text</option>
-  <option value="table">table</option>
-  <option value="picture">picture</option>
-  <option value="graph">graph</option>
-  <option value="direct measurement">direct measurement</option>
+  <option value="text" $selected{'text'}>text</option>
+  <option value="table" $selected{'table'}>table</option>
+  <option value="picture" $selected{'picture'}>picture</option>
+  <option value="graph" $selected{'graph'}>graph</option>
+  <option value="direct measurement" $checked{'direct_measurement'}>direct measurement</option>
   </select>
   <br>default magnification: <input name="default_magnification" size="10"><br>
   </div>
