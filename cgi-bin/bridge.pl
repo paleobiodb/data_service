@@ -2070,9 +2070,10 @@ sub processTaxonSearch {
         if ($q->param('goal') eq 'authority') {
             # Try to see if theres any near matches already existing in the DB
             if ($q->param('taxon_name')) {
+                my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
+                my ($oldg,$oldsg,$oldsp);
                 my @typoResults = ();
                 unless ($q->param("skip_typo_check")) {
-                    my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
                 # give a free pass if the name is "plausible" because its
                 #  parts all exist in the authorities table JA 21.7.08
                 # disaster could ensue if the parts are actually typos,
@@ -2081,7 +2082,6 @@ sub processTaxonSearch {
                 #  it's a pretty simple piece of code
                     my $sql = "SELECT taxon_name tn FROM authorities WHERE taxon_name='$g' OR taxon_name LIKE '$g %' OR taxon_name LIKE '% ($sg) %' OR taxon_name LIKE '% $sp'";
                     my @partials = @{$dbt->getData($sql)};
-                    my ($oldg,$oldsg,$oldsp);
                     for my $p ( @partials )	{
                         if ( $p->{tn} eq $g )	{
                             $oldg++;
@@ -2110,6 +2110,11 @@ sub processTaxonSearch {
                             my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
                             foreach my $typo (@results) {
                                 my ($t_g,$t_sg,$t_sp) = Taxon::splitTaxon($typo);
+                            # if the genus exists, we only want typos including it
+                            # JA 16.3.11
+                                if ( $oldg && $g ne $t_g )	{
+                                    next;
+                                }
                                 if ($sp && !$t_sp) {
                                     $typo .= " $sp";
                                 }
@@ -2124,6 +2129,10 @@ sub processTaxonSearch {
     		        print "<p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">'<i>" . $q->param('taxon_name') . "</i>' was not found</p>\n<br>\n";
                     print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
                     print "<p><div align=\"left\"><ul>";
+                    my $none = "None of the above";
+                    if ( $#typoResults == 0 )	{
+                        $none = "Not the one above";
+                    }
                     foreach my $name (@typoResults) {
                         my @full_rows = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$name},['*']);
                         if (@full_rows) {
@@ -2135,7 +2144,13 @@ sub processTaxonSearch {
                             print "<li><a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_name=$name\">$name</a></li>";
                         }
                     }
-                    print "<li><a href=\"$WRITE_URL?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."&amp;skip_typo_check=1\">None of the above</a> - create a <b>new</b> taxon record";
+                    # don't let them get on the form if they're entering a species but
+                    #  the genus doesn't exist JA 16.3.11
+                    if ( $oldg == 0 && $sp )	{
+                        print "<li><a href=\"$WRITE_URL?a=displayAuthorityTaxonSearchForm\">$none</a> - search again";
+                    } else	{
+                        print "<li><a href=\"$WRITE_URL?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."&amp;skip_typo_check=1\">$none</a> - create a new taxon record";
+                    }
                     print "</ul>";
 
                     print "<div align=left class=small style=\"width: 500\">";
@@ -2170,7 +2185,7 @@ sub processTaxonSearch {
                 foreach my $row (@typoResults) {
                     my $full_row = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['*']);
                     my ($name,$authority) = Taxon::formatTaxon($dbt,$full_row,'return_array'=>1);
-                    print "<li><a href=\"$WRITE_URL?action=$next_action&amp;goal=$goal&amp;taxon_name=$full_row->{taxon_name}&amp;taxon_no=$row->{taxon_no}\">$name</a>$authority</li>";
+                    print "<li>$row->{taxon_no}<a href=\"$WRITE_URL?action=$next_action&amp;goal=$goal&amp;taxon_name=$full_row->{taxon_name}&amp;taxon_no=$row->{taxon_no}\">$name</a>$authority</li>";
                 }
                 print "</ul>";
 
@@ -2254,7 +2269,7 @@ sub processTaxonSearch {
                 print "None of the above ";
             }
             print "</a>";
-            print "- create a <b>new</b> taxon record</li>\n";
+            print "- create a new taxon record</li>\n";
         }
         
 		print "</ul></div>";
