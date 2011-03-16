@@ -392,17 +392,10 @@ sub displayAuthorityForm {
 	}
 
 
-    my @taxon_ranks;
-    if ($fields{'taxon_rank'} =~ /genus/) {
-        @taxon_ranks = ('subgenus','genus');
-    } elsif ($fields{'taxon_rank'} =~ /species/) {
-        @taxon_ranks = ('subspecies','species');
-    } else {
-        @taxon_ranks = grep {!/^\s*$|species|subgenus/} $hbo->getList('taxon_rank');
-    }
-    $fields{'taxon_rank_select'} = $hbo->htmlSelect('taxon_rank',\@taxon_ranks,\@taxon_ranks,$fields{'taxon_rank'}); 
-
     # Build original name select
+    # we must build this before the rank select (see below)
+    my %seen_rank;
+    my $original_rank = $fields{'taxon_rank'};
     if ($fields{taxon_no}) {
         my $orig_no = TaxonInfo::getOriginalCombination($dbt,$fields{taxon_no});
         my @spellings = TaxonInfo::getAllSpellings($dbt,$orig_no);
@@ -411,6 +404,10 @@ sub displayAuthorityForm {
         my $duplicate_names = 0;
         foreach my $spelling_no (@spellings) {
             my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$spelling_no});
+            $seen_rank{$taxon->{taxon_rank}}++;
+            if ( $taxon->{taxon_no} == $orig_no )	{
+                $original_rank = $taxon->{taxon_rank};
+            }
             push @taxa, [$spelling_no,$taxon->{taxon_name},$taxon->{taxon_rank}];
             if ($seen_name{$taxon->{taxon_name}}) {
                 $duplicate_names++;
@@ -431,6 +428,24 @@ sub displayAuthorityForm {
             $fields{'original_no_select'} = $original_no_select;
         }
     }
+
+    my @taxon_ranks;
+    $seen_rank{$fields{'taxon_rank'}}++;
+    # the subgenus, species, and subspecies ranks need special treatment
+    for my $rank ( 'subspecies','species','subgenus' )	{
+        if ( $seen_rank{$rank} )	{
+            @taxon_ranks = ($rank);
+        }
+    }
+    # note that we can still go wrong by presenting two choices, but it's no big deal
+    if ( $seen_rank{'subspecies'} && $seen_rank{'species'} )	{
+        @taxon_ranks = ('subspecies','species');
+    } elsif ( $seen_rank{'subgenus'} && $seen_rank{'genus'} )	{
+        @taxon_ranks = ('subgenus','genus');
+    } elsif ( $fields{'taxon_rank'} !~ /species|subgenus/ )	{
+        @taxon_ranks = grep {!/^\s*$|species|subgenus/} $hbo->getList('taxon_rank');
+    }
+    $fields{'taxon_rank_select'} = $hbo->htmlSelect('taxon_rank',\@taxon_ranks,\@taxon_ranks,$original_rank); 
 
     # add in the error message
     if ($error_message) {
