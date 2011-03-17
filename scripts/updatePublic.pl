@@ -109,6 +109,17 @@ while ( $s = $sth->fetchrow_hashref() )	{
 }
 $sth->finish();
 
+# hey, why not compute hours ever worked JA 17.3.11
+
+$sql = "SELECT enterer_no,count(distinct(concat(to_days(created),hour(created)))) c FROM ((SELECT enterer_no,created FROM refs) UNION (SELECT enterer_no,created FROM collections) UNION (SELECT enterer_no,created FROM opinions) UNION (SELECT enterer_no,created FROM specimens)) AS t GROUP BY enterer_no";
+$sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
+$sth->execute();
+while ( $s = $sth->fetchrow_hashref() )	{
+	$sql = "UPDATE person SET hours_ever=".$s->{'c'}.",last_action=last_action WHERE person_no=".$s->{'enterer_no'};
+	$dbh->do ( $sql );
+}
+$sth->finish();
+
 $dbh->disconnect();
 
 
