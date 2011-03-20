@@ -33,7 +33,11 @@ sub searchForm {
 	if ($search_again)	{
 		$page_title = "<p class=\"medium\">No results found (please search again)</p>";
 	}
-	print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,''], ['page_title','page_subtitle']);
+	my @ranks = $hbo->getList('taxon_rank');
+	shift @ranks;
+	my $rank_select = "<select name=\"taxon_rank\"><option>".join('</option><option>',@ranks)."</option></select>\n";
+	$rank_select =~ s/>species</ selected>species</;
+	print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,'',$rank_select], ['page_title','page_subtitle','taxon_rank_select']);
 }
 
 # This is the front end for displayTaxonInfoResults - always use this instead if you want to 
@@ -65,7 +69,27 @@ sub checkTaxonInfo {
         if ( $q->param('taxa') )	{
             my $morewhere;
             if ( $q->param('author') )	{
-                $morewhere .= " AND (((a.author1last='".$q->param('author')."' OR a.author2last='".$q->param('author')."') AND ref_is_authority='') OR ((r.author1last='".$q->param('author')."' OR r.author2last='".$q->param('author')."') AND ref_is_authority='YES'))";
+                my $author = $q->param('author');
+                my $init;
+                # if initials are supplied there must be an exact match on them because
+                #  you can always leave them out if you want a vague match
+                # up to three initials can be parsed
+                if ( $author =~ /^[A-Z]( |\.|[A-Z](\.|) |[A-Z](\.|)[A-Z](\.|) )/ )	{
+                    $author =~ s/(\.)([A-Z])/$2/g;
+                    $author =~ s/^([A-Z])([A-Z])([A-Z])/$1 $2 $3/;
+                    $author =~ s/^([A-Z])([A-Z])/$1 $2/;
+                    $author =~ s/([A-Z])( )/$1. /g;
+                    ($init,$author) = split / /,$author,2;
+                    while ( $author =~ /^[A-Z]\. / )	{
+                        my $init2;
+                        ($init2,$author) = split / /,$author,2;
+                        $init .= " ".$init2;
+                    }
+                    $morewhere .= " AND ((((a.author1init='$init' AND a.author1last='$author') OR (a.author2init='$init' AND a.author2last='$author')) AND ref_is_authority='') OR (((r.author1init='$init' AND r.author1last='$author') OR (r.author2init='$init' AND r.author2last='$author')) AND ref_is_authority='YES'))";
+print "$morewhere<br>";
+                } else	{
+                    $morewhere .= " AND (((a.author1last='$author' OR a.author2last='$author') AND ref_is_authority='') OR ((r.author1last='$author' OR r.author2last='$author') AND ref_is_authority='YES'))";
+                }
             }
             if ( $q->param('pubyr') )	{
                 $morewhere .= " AND ((a.pubyr=".$q->param('pubyr')." AND ref_is_authority='') OR (r.pubyr=".$q->param('pubyr')." AND ref_is_authority='YES'))";
@@ -75,6 +99,7 @@ sub checkTaxonInfo {
             # still might bomb if author and/or pubyr were submitted
             if ( ! @results )	{
                 searchForm($hbo, $q, 1); # param for not printing header with form
+		return;
             }
         } else	{
             my $temp = $q->param('taxon_name');
@@ -129,7 +154,12 @@ sub checkTaxonInfo {
         } else{
             @results = sort { $a->{taxon_name} cmp $b->{taxon_name} } @results;
             # now create a table of choices and display that to the user
-            print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">Please select a taxonomic name</p><br>";
+            print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">Please select a taxonomic name</p>\n";
+            if ( scalar @results >= 10 )	{
+                print "<p class=\"small\">The total number of matches is ".scalar @results."</p>\n";
+            } else	{
+                print "<br>\n";
+            }
             print qq|<div class="displayPanel" align="center" style="width: 36em; padding-top: 1.5em;">
 <div class="displayPanelContent">
 |;
