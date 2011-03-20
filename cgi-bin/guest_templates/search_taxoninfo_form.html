@@ -1,4 +1,41 @@
-<form method="POST" action="%%read_url%%">
+
+
+<script language="JavaScript" type="text/javascript">
+<!--
+
+function checkName()	{
+	var errors = "";
+
+	if ( document.forms[1].taxon_name.value == "" && document.forms[1].common_name.value == "" )	{
+		errors = "You must enter a taxon name or common name.\n";
+	}
+	if ( /^[^A-Za-z ]$/.test(document.forms[1].taxon_name.value) )	{
+		errors = "The taxon name is formatted incorrectly.\n";
+	}
+	if ( /^[^A-Za-z ]$/.test(document.forms[1].taxon_name.value) )	{
+		errors += "The common name is formatted incorrectly.\n";
+	}
+	if ( ( document.forms[1].author.value != "" && ! /^[A-Za-z].*[a-z]$/.test(document.forms[1].author.value) ) || /[^A-Za-z \.\-\']/.test(document.forms[1].author.value) )	{
+		errors += "The author name is formatted incorrectly.\n";
+	}
+	if ( /^[^0-9]$/.test(document.forms[1].pubyr.value) )	{
+		errors += "The publication year is formatted incorrectly.\n";
+	} else if ( document.forms[1].pubyr.value != "" && ( document.forms[1].pubyr.value < 1758 || document.forms[1].pubyr.value > 2010 ) )	{
+		errors += "The publication year seems to be wrong.\n";
+	}
+	if ( errors != "" )	{
+		alert(errors);
+		return false;
+	}
+	return true;
+}
+
+//-->
+</script>
+
+
+
+<form method="POST" action="%%read_url%%"onSubmit="return checkName();">
 <input name="action" type="hidden" value="checkTaxonInfo">
 
 <div align="center">
@@ -28,7 +65,17 @@
         <td colspan=2><select name="preservation"></select></td>
       </tr>
       <tr>
-        <td colspan="3">Show <select name="match"><option value="">information regarding</option><option value="all">all species within</option><option value="random">a random species within</option></select> this taxonomic group</td>
+        <td colspan="3">Show <select name="match"><option value="">information regarding</option><option value="all">all taxa within</option><option value="random">a random taxon within</option></select> this taxon
+        </td>
+      </tr>
+      <tr>
+        <td>
+          Within a taxon, only list
+        </td>
+        <td colspan="2">
+         <select name="validity"><option>valid</option><option>invalid</option><option>valid or invalid</option></select>
+         %%taxon_rank_select%% names
+        </td>
       </tr>
       <tr>
         <td colspan=3 align="center" style="padding-top: 2em;"><input type="submit" value="Search"></td>
