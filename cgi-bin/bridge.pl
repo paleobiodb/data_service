@@ -2185,7 +2185,7 @@ sub processTaxonSearch {
                 foreach my $row (@typoResults) {
                     my $full_row = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['*']);
                     my ($name,$authority) = Taxon::formatTaxon($dbt,$full_row,'return_array'=>1);
-                    print "<li>$row->{taxon_no}<a href=\"$WRITE_URL?action=$next_action&amp;goal=$goal&amp;taxon_name=$full_row->{taxon_name}&amp;taxon_no=$row->{taxon_no}\">$name</a>$authority</li>";
+                    print "<li><a href=\"$WRITE_URL?action=$next_action&amp;goal=$goal&amp;taxon_name=$full_row->{taxon_name}&amp;taxon_no=$row->{taxon_no}\">$name</a>$authority</li>";
                 }
                 print "</ul>";
 
@@ -2552,7 +2552,13 @@ sub startProcessReclassifyForm	{
 
 ##############
 ## Taxon Info Stuff
-sub randomTaxonInfo{
+
+# originally called randomTaxonInfo and then hijacked to also get all names in a group
+#  if those are requested instead
+# only called by checkTaxonInfo (in two places)
+# originally wrote this to only recover names tied to an occurrence; revised to get all
+#   names in the group, period JA 20.3.11
+sub getMatchingSubtaxa	{
     return if PBDBUtil::checkForBot();
 
     my $dbh = $dbt->dbh;
@@ -2574,25 +2580,41 @@ sub randomTaxonInfo{
             $rgt = $taxref->{rgt};
         }
     }
-    my @orefs;
+    my @trefs;
     if ( $lft > 0 && $rgt > 0 )	{
+        # default is valid names only as currently spelled
+        my $join = "a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no";
+        # invalid only
+        if ( $q->param('taxon_rank') =~ /[a-z]/ && $q->param('validity') =~ /^invalid$/i )	{
+                $join = "a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND t.taxon_no!=synonym_no";
+        # either one
+        } elsif ( $q->param('taxon_rank') =~ /[a-z]/ && $q->param('validity') =~ /invalid/i )	{
+                $join = "a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no";
+        }
         my $morewhere;
+        if ( $q->param('taxon_rank') )	{
+            $morewhere .= " AND taxon_rank='".$q->param('taxon_rank')."'";
+        } else	{
+            $morewhere .= " AND taxon_rank='species'";
+        }
         if ( $q->param('type_body_part') )	{
             $morewhere = " AND type_body_part='".$q->param('type_body_part')."'";
         }
         if ( $q->param('preservation') )	{
             $morewhere .= " AND preservation='".$q->param('preservation')."'";
         }
-        $sql = "SELECT DISTINCT(o.taxon_no) taxon_no FROM occurrences o,authorities a,$TAXA_TREE_CACHE t WHERE o.taxon_no=a.taxon_no AND taxon_rank='species' AND a.taxon_no=t.taxon_no AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt) $morewhere";
-        @orefs = @{$dbt->getData($sql)};
+        $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE $join AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt) $morewhere";
+        @trefs = @{$dbt->getData($sql)};
     }
     if ( $q->param('match') eq "all" )	{
         my @taxa;
-        push @taxa , $_->{taxon_no} foreach @orefs;
+        push @taxa , $_->{taxon_no} foreach @trefs;
         return \@taxa;
-    } else	{
-        my $x = int(rand($#orefs + 1));
-        $q->param('taxon_no' => $orefs[$x]->{taxon_no});
+    }
+    # otherwise select a taxon at random
+    else	{
+        my $x = int(rand($#trefs + 1));
+        $q->param('taxon_no' => $trefs[$x]->{taxon_no});
         # DON'T SET THIS TO 1
         #$q->param('is_real_user' => 1);
         # infinite loops are bad
@@ -2619,7 +2641,7 @@ sub checkTaxonInfo {
     logRequest($s,$q);
     if ( $q->param('match') eq "all" )	{
         print $hbo->stdIncludes( "std_page_top" );
-        $q->param('taxa' => @{randomTaxonInfo()} );
+        $q->param('taxa' => @{getMatchingSubtaxa()} );
         if ( ! $q->param('taxa') )	{
             TaxonInfo::searchForm($hbo,$q,1);
         } else	{
@@ -2629,7 +2651,7 @@ sub checkTaxonInfo {
         exit;
     } elsif ( $q->param('match') eq "random" )	{
         # infinite loops are bad
-        randomTaxonInfo();
+        getMatchingSubtaxa();
         $q->param('match' => '');
     }
     print $hbo->stdIncludes( "std_page_top" );
