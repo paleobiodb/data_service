@@ -2608,11 +2608,12 @@ sub printResults	{
 			print "<div id=\"panel2\" class=\"panel\">\n\n";
 		}
 		print "<div class=\"displayPanel\" style=\"padding-top: 1em;\">\n\n";
-		my ($width,$height) = (680,500);
+		my ($width,$height) = (680,520);
 		$im = new GD::Image($width,$height,1);
 		my %rgbs = ("white", "255,255,255",
 			"black", "0,0,0",
 			"gray", "128,128,128",
+			"lightgray", "192,192,192",
 			"red", "255,0,0",
 			"pink", "223,0,223",
 			"purple", "128,0,223",
@@ -2630,7 +2631,7 @@ sub printResults	{
 		my $transparent = $im->colorAllocate(11, 22, 33);
 		$im->filledRectangle(0,0,$width,$height,$transparent);
 		$im->transparent($transparent);
-		my ($pwidth,$pheight,$pleft,$ptop,$maxdiv,$maxma) = (600,420,60,50,0,0);
+		my ($pwidth,$pheight,$pleft,$ptop,$maxdiv,$maxma) = (600,420,60,70,0,0);
 		$im->rectangle( $pleft, $height - $ptop, $pwidth + $pleft, $height - $ptop - $pheight, $col{'black'} );
 		my $FONT = "$DATA_DIR/fonts/Vera.ttf";
 
@@ -2704,11 +2705,22 @@ sub printResults	{
 		} else	{
 			$maxdiv = int( $maxdiv / 100 ) * 100 + 100;
 		}
+
 		$maxma = int( $maxma / 10 ) * 10 + 10;
+		my %bases = ( "Ng" => 33.9, "Pg" => 65.5, "K" => 145.5, "J" => 199.6, "Tr" => 251, "P" => 299, "C" => 360.7, "D" => 418.1, "S" => 443.7, "O" => 490, "Cm" => 542);
+		my $suppress;
+		for my $ma ( values %bases )	{
+			if ( $ma < $maxma && $ma + 30 > $maxma )	{
+				$suppress++;
+			}
+		}
+
 		$im->stringFT($col{'unantialiased'},$FONT,10,0,$pwidth + $pleft - 4,$height - $ptop + 18,'0');
-		$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 12,$height - $ptop + 18,sprintf("%d",$maxma));
+		if ( ! $suppress )	{
+			$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 12,$height - $ptop + 18,sprintf("%d",$maxma));
+		}
 		$im->stringFT($col{'unantialiased'},$FONT,14,3.142857/2,$pleft - 30,$pheight / 2 + $ptop,'Count');
-		$im->stringFT($col{'unantialiased'},$FONT,14,0,$pwidth / 2 + $pleft - 50,$height - $ptop + 44,'Years ago (Ma)');
+		$im->stringFT($col{'unantialiased'},$FONT,14,0,$pwidth / 2 + $pleft - 50,$height - $ptop + 50,'Years ago (Ma)');
 		if ( $maxdiv < 100 )	{
 			$im->stringFT($col{'unantialiased'},$FONT,10,0,$pleft - 26,$height - $pheight - $ptop + 6,sprintf("%d",$maxdiv));
 		} else	{
@@ -2716,6 +2728,14 @@ sub printResults	{
 		}
 		my $xscale = -1 * $pwidth / $maxma;
 		my $yscale = $pheight / $maxdiv;
+		for my $period ( keys %bases )	{
+			my $ma = $bases{$period};
+			if ( $maxma > $ma )	{
+				$im->line( $ma * $xscale + $pleft + $pwidth, $height - ( $maxdiv * $yscale + $ptop ), $ma * $xscale + $pleft + $pwidth, $height - $ptop, $col{'lightgray'} );
+				$im->stringFT($col{'unantialiased'},$FONT,10,0,$ma * $xscale + $pleft + $pwidth + 12,50,$period);
+				$im->stringFT($col{'unantialiased'},$FONT,10,0,$ma * $xscale + $pleft + $pwidth - 16,$height - $ptop + 18,$ma);
+			}
+		}
 		for my $v ( 0..$#vars )	{
 			if ( $colors[$v] )	{
 				for my $i ( 1..$chrons )     {
