@@ -28,7 +28,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10mybin max_interval min_interval ma_max ma_min ma_mid interpolated_base interpolated_top interpolated_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval ma_max ma_min ma_mid interpolated_base interpolated_top interpolated_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
@@ -2111,6 +2111,7 @@ sub queryDatabase {
         push @time_fields, 'subepoch_name'  if ($q->param('collections_subepoch'));
         push @time_fields, 'epoch_name'  if ($q->param('collections_epoch'));
         push @time_fields, 'stage_name'  if ($q->param('collections_stage'));
+        push @time_fields, 'FR2_bin'  if ($q->param('collections_FR2_bin'));
         # these data are always needed for range computations
         push @time_fields, 'lower_boundary','upper_boundary';
         if ( $q->param("collections_interpolated_base") eq "YES" || $q->param("collections_interpolated_top") eq "YES" ||$q->param("collections_interpolated_mid") eq "YES" )	{
@@ -2122,14 +2123,13 @@ sub queryDatabase {
         }
     }
 
-    # get the PBDB 10 m.y. bin names for the collections JA 3.3.04
-    if ( ($q->param('collections_10mybin') && $q->param("output_data") !~ /genera|species/) ||
-         $q->param('compendium_ranges') eq 'NO' ) {
-        push @time_fields, 'ten_my_bin'  if ($q->param('collections_10mybin'));
-    }
-    if (@time_fields) {
-        $time_lookup = $self->{t}->lookupIntervals([],\@time_fields);
-    }
+	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
+	if ( ($q->param('collections_10_my_bin') && $q->param("output_data") !~ /genera|species/) || $q->param('compendium_ranges') eq 'NO' ) {
+		push @time_fields, 'ten_my_bin'  if ($q->param('collections_10_my_bin'));
+	}
+	if (@time_fields) {
+		$time_lookup = $self->{t}->lookupIntervals([],\@time_fields);
+	}
 
 
     # Get a list of acceptable Sepkoski compendium taxa/10 m.y. bin pairs
@@ -2431,7 +2431,8 @@ sub queryDatabase {
             if ($COLL{$row->{'collection_no'}}) {
                 # This is merely a timesaving measure, reuse old collections values if we've already come across this collection
                 my $orow = $COLL{$row->{'collection_no'}};
-                $row->{'c.10mybin'} = $orow->{'c.10mybin'};
+                $row->{'c.10_my_bin'} = $orow->{'c.10_my_bin'};
+                $row->{'c.FR2_bin'} = $orow->{'c.FR2_bin'};
                 $row->{'c.stage'}   = $orow->{'c.stage'};
                 $row->{'c.epoch'}   = $orow->{'c.epoch'};
                 $row->{'c.subepoch'}= $orow->{'c.subepoch'};
@@ -2453,7 +2454,10 @@ sub queryDatabase {
             $min_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $min_lookup;
 
             if ($max_lookup->{'ten_my_bin'} && $max_lookup->{'ten_my_bin'} eq $min_lookup->{'ten_my_bin'} && ($q->param('late_pleistocene') !~ /no/i || ($row->{'c.max_interval_no'} != 33 && $row->{'c.max_interval_no'} != 922))) {
-                $row->{'c.10mybin'} = $max_lookup->{'ten_my_bin'};
+                $row->{'c.10_my_bin'} = $max_lookup->{'ten_my_bin'};
+            }
+            if ($max_lookup->{'FR2_bin'} && $max_lookup->{'FR2_bin'} eq $min_lookup->{'FR2_bin'} && ($q->param('late_pleistocene') !~ /no/i || ($row->{'c.max_interval_no'} != 33 && $row->{'c.max_interval_no'} != 922))) {
+                $row->{'c.FR2_bin'} = $max_lookup->{'FR2_bin'};
             }
             
             if ($max_lookup->{'period_name'} && $max_lookup->{'period_name'} eq $min_lookup->{'period_name'}) {
@@ -2644,7 +2648,7 @@ sub queryDatabase {
             #  Compendium or (2) falling outside the official Compendium
             #  age range JA 27.8.04
             if ( $compendium_only) {
-                if ( ! $incompendium{$row->{'o.genus_name'}.$row->{'c.10mybin'}} )    {
+                if ( ! $incompendium{$row->{'o.genus_name'}.$row->{'c.10_my_bin'}} )    {
                     next; # Skip, no need to process any more
                 }
             }
