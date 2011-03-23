@@ -355,24 +355,27 @@ sub assignGenera	{
 		} elsif ( $fn eq "collections.stage" && $q->param('time_scale') eq "stages" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "stage";
-		} elsif ( $fn eq "collections.10mybin" && $q->param('time_scale') eq "10 m.y. bins" )	{
+		} elsif ( $fn eq "collections.10_my_bin" && $q->param('time_scale') eq "10 m.y. bins" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "10my";
+		} elsif ( $fn eq "collections.FR2_bin" && $q->param('time_scale') =~ /fossil record/i )	{
+			$field_bin = $fieldcount;
+			$bin_type = "FossilRecord2";
 		} elsif ( $fn eq "sample_age_ma" && $q->param('time_scale') =~ /neptune pacman/i) {
-            $field_bin = $fieldcount;
-            $bin_type = "neptune_pacman";
+			$field_bin = $fieldcount;
+			$bin_type = "neptune_pacman";
 		} elsif ( $fn eq "sample_age_ma" && $q->param('time_scale') =~ /neptune/i) {
-            $field_bin = $fieldcount;
-            $bin_type = "neptune";
-        }
+			$field_bin = $fieldcount;
+			$bin_type = "neptune";
+		}
 		$fieldcount++;
 	}
 
 	# this first condition never should be met, just being careful here
-    my $downloadForm = "displayDownloadForm";
-    if ($q->param('time_scale') =~ /neptune/i) {
-        $downloadForm = "displayDownloadNeptuneForm";
-    }
+	my $downloadForm = "displayDownloadForm";
+	if ($q->param('time_scale') =~ /neptune/i) {
+		$downloadForm = "displayDownloadNeptuneForm";
+	}
 	if ( $field_collection_no < 0)	{
 		my $collection_field = "collection number";
 		if ($q->param('time_scale') =~ /neptune/i)	{
@@ -433,53 +436,57 @@ sub assignGenera	{
 	#  10 m.y. bin scheme ever changes, this will need to be updated
 	# also get the bin boundaries in Ma
 	# switched from Harland to Gradstein scales JA 5.12.05
+	# Schroeter switched this to a TimeLookup call at some point
 	my @binnames;
-    my $t = new TimeLookup($dbt);
-    my $ig = $t->getIntervalGraph;
-    my $interval_name = {};
-    $interval_name->{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
+	my $t = new TimeLookup($dbt);
+	my $ig = $t->getIntervalGraph;
+	my $interval_name = {};
+	$interval_name->{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
+
 	if ( $bin_type eq "period" )	{
-        my @intervals = $t->getScaleOrder(69,'number');
-        @binnames = map {$interval_name->{$_}} @intervals;
+		my @intervals = $t->getScaleOrder(69,'number');
+		@binnames = map {$interval_name->{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-        $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
-        $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+		$topma{$interval_name->{$_}} = $top->{$_} for @intervals;
+		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "epoch" )	{
-        my @intervals = $t->getScaleOrder(71,'number');
-        @binnames = map {$interval_name->{$_}} @intervals;
+		my @intervals = $t->getScaleOrder(71,'number');
+		@binnames = map {$interval_name->{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-        $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
-        $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+		$topma{$interval_name->{$_}} = $top->{$_} for @intervals;
+		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "subepoch" )	{
-        my @intervals = $t->getScaleOrder(72,'number');
-        @binnames = map {$interval_name->{$_}} @intervals;
+		my @intervals = $t->getScaleOrder(72,'number');
+		@binnames = map {$interval_name->{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-        $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
-        $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+		$topma{$interval_name->{$_}} = $top->{$_} for @intervals;
+		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "stage" )	{
-        my @intervals = $t->getScaleOrder(73,'number');
-        @binnames = map {$interval_name->{$_}} @intervals;
+		my @intervals = $t->getScaleOrder(73,'number');
+		@binnames = map {$interval_name->{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-        $topma{$interval_name->{$_}} = $top->{$_} for @intervals;
-        $basema{$interval_name->{$_}} = $base->{$_} for @intervals;
-    } elsif ( $bin_type eq "10my" ) {
-        @binnames = $t->getBins();
-        my ($top,$base) = $t->getBoundariesReal('bins');
-        %topma = %$top;
-        %basema = %$base;
+		$topma{$interval_name->{$_}} = $top->{$_} for @intervals;
+		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+	} elsif ( $bin_type eq "10my" ) {
+		@binnames = $t->getBins();
+		my ($top,$base) = $t->getBoundariesReal('bins');
+		%topma = %$top;
+		%basema = %$base;
+	} elsif ( $bin_type eq "FossilRecord2" ) {
+		@binnames = $t->getFR2Bins();
+		my ($top,$base) = $t->getBoundariesReal('FR2');
+		%topma = %$top;
+		%basema = %$base;
 	} elsif ( $bin_type =~ /neptune/ ) {
-        # Neptune data ranges from -3 to 150 mA right now, use those at defaults
-        $neptune_range_min = 0;
-        $neptune_bin_count = int(180/$q->param('neptune_bin_size'));
-        $neptune_range_max = $q->param('neptune_bin_size')*$neptune_bin_count;
-        #foreach (@OCCDATA) {
-        #    
-        #}
-        @binnames = ();
-        for(my $i=$neptune_range_min;$i<$neptune_range_max;$i+=$q->param('neptune_bin_size')) {
-            push @binnames,"$i - ".($i+$q->param('neptune_bin_size'));
-        }
-    }
+	# Neptune data ranges from -3 to 150 mA right now, use those at defaults
+		$neptune_range_min = 0;
+		$neptune_bin_count = int(180/$q->param('neptune_bin_size'));
+		$neptune_range_max = $q->param('neptune_bin_size')*$neptune_bin_count;
+		@binnames = ();
+		for(my $i=$neptune_range_min;$i<$neptune_range_max;$i+=$q->param('neptune_bin_size')) {
+			 @binnames,"$i - ".($i+$q->param('neptune_bin_size'));
+		}
+	}
 	# assign chron numbers to named bins
 	# note: $chrons and $chname are key variables used later
 	for my $bn (@binnames)	{
@@ -488,10 +495,10 @@ sub assignGenera	{
 		$chname[$chrons] = $bn;
 	}
 
-    # HARDCODED for NOW, change this later PS 1/10/2005
-    if ( $bin_type =~ /neptune/i) {
-        $q->param("taxonomic_level"=>"species");
-    }
+	# HARDCODED for NOW, change this later PS 1/10/2005
+	if ( $bin_type =~ /neptune/i) {
+		$q->param("taxonomic_level"=>"species");
+	}
 	# PS had a hard coded level value of genus for standard PBDB data
 	#  here before, but it's not needed now that this is a proper query
 	#  parameter JA 18.2.06
@@ -505,8 +512,8 @@ sub assignGenera	{
 			#s/\n//;
             $status = $csv->parse($_);
             my @occrow = $csv->fields();
-            if (!$status) { print "Warning, error parsing CSV line $count"; }
             $count++;
+            if (!$status) { print "Warning, error parsing CSV line $count"; }
 			# tab-delimited file
 			#if ( $_ =~ /\t/ )	{
 			#	@occrow = split /\t/,$_;
@@ -554,11 +561,11 @@ sub assignGenera	{
                		} 
                 # else, nothing needs to be done for PBDB data
 		# family and order level only apply to PBDB data
-		} elsif ($q->param("taxonomic_level") eq "family") {
+		} elsif ( $q->param("taxonomic_level") eq "family" && ( $occrow[$field_family_name] || $q->param('replace_with_genus') !~ /y/i )) {
 			$occrow[$field_genus_name] = $occrow[$field_family_name]; 
-		} elsif ($q->param("taxonomic_level") eq "order") {
+		} elsif ( $q->param("taxonomic_level") eq "order" && ( $occrow[$field_order_name] || $q->param('replace_with_genus') !~ /y/i )) {
 			$occrow[$field_genus_name] = $occrow[$field_order_name]; 
-		} else { #species
+		} elsif ( $q->param("taxonomic_level") !~ /genus|family|order/ )	{ #species
 			if ($bin_type =~ /neptune/i) {
                     # do this since we may have subspecies
 				my $taxon_name = $occrow[$field_genus_name];
@@ -2700,6 +2707,7 @@ sub printResults	{
 				}
 			}
 		}
+
 		if ( $maxdiv <= 100 )	{
 			$maxdiv = int( $maxdiv / 10 ) * 10 + 10;
 		} else	{
@@ -2754,7 +2762,9 @@ $im->setThickness(2);
 							$im->line( $x1, $height - $y1, $x2, $height - $y2, $col{$colors[$v]} );
 $im->setThickness(1);
 						}
-						$im->filledEllipse( $x1, $height - $y1, 8, 8, $col{$colors[$v]} );
+						if ( $q->param('points_and_lines') =~ /points/i )	{
+							$im->filledEllipse( $x1, $height - $y1, 8, 8, $col{$colors[$v]} );
+						}
 					}
 				}
 			}
