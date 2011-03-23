@@ -1090,6 +1090,8 @@ sub processCollectionForm {
 	}
 	elsif ( $q->param('max_ma') > 0 || $q->param('min_ma')> 0 )	{
 		my $no = setMaIntervalNo($dbt,$dbh,$collection_no,$q->param('max_ma'),$q->param('min_ma'));
+	} else	{
+		setMaIntervalNo($dbt,$dbh,$collection_no);
 	}
             
         # Secondary ref handling.  Handle this after updating the collection or it'll mess up
