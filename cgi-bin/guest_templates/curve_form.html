@@ -39,7 +39,7 @@
 <tr>
   <td valign="top">
     Your name:<br>
-    <i><span class="small">If you entered your name when you downloaded the data, you must enter the same name here.<br>
+    <i><span class="small">If you entered your name when you downloaded the data,<br>&nbsp;&nbsp;you must enter the same name here.<br>
     If you didn't, leave this field blank.</span></i>
   <td valign="top">
     <input type="text" name="yourname" value=""  size="20" />
@@ -53,6 +53,7 @@
   <td valign="top">
     <select name="time_scale">
       <option selected>10 m.y. bins</option>
+      <option>Fossil Record 2 bins</option>
       <option>stages</option>
       <option>epochs</option>
       <option>Cenozoic subepochs</option>
@@ -86,6 +87,15 @@
       <option selected>genus</option>
       <option>species</option>
     </select>
+  </td>
+</tr>
+
+<tr>
+  </td>
+  <td valign="top">
+    Count incertae sedis genera as "families" or "orders"?
+  <td valign="top">
+    <input type="checkbox" name="replace_with_genus" value="YES"> yes
   </td>
 </tr>
 
@@ -538,6 +548,11 @@ Choose line colors and scalings for the variables you want to graph.
 <td><input type="hidden" id="variable" value="occurrences">Occurrences</td>
 <td><select id="linecolor" class="small" autofill="simplecolors"></select></td>
 <td><select id="linescale" class="small" autofill="linescalings"></select></td>
+</tr>
+
+<tr>
+<td>Plot</td>
+<td colspan="2"><select name="points_and_lines"><option>lines and points</option><option>lines only</option></select></td>
 </tr>
 
 <tr>
