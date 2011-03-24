@@ -77,14 +77,14 @@ my $dbh;
 my $q;					# Reference to the parameters
 my $s;
 my $dbt;
-my @genus;
+my (@genus,@freq);
 
 sub new {
 	my $class = shift;
 	$q = shift;
 	$s = shift;
 	$dbt = shift;
-    $dbh = $dbt->dbh;
+	$dbh = $dbt->dbh;
 	my $self = {};
 
 	bless $self, $class;
@@ -132,20 +132,20 @@ sub setArrays	{
 	PBDBUtil::autoCreateDir($OUTPUT_DIR);
 
 	if ($q->param('samplingmethod') eq "classical rarefaction")	{
-		$samplingmethod = 1;
+		$method = "CR";
 	}
 	elsif ($q->param('samplingmethod') eq "by collection (unweighted)")	{
-		$samplingmethod = 2;
+		$method = "UW";
 	}
 	elsif ($q->param('samplingmethod') eq "by collection (occurrences-weighted)" && ($q->param('exponent') eq "" || $q->param('exponent') == 1))	{
-		$samplingmethod = 3;
+		$method = "OW";
 	}
 # replaced occurrences-squared with occurrences-exponentiated 27.10.05
 	elsif ($q->param('exponent') > 0)	{
-		$samplingmethod = 4;
+		$method = "OXW";
 	}
 	elsif ($q->param('samplingmethod') eq "by specimen")	{
-		$samplingmethod = 5;
+		$method = "specimens";
 	}
 	$exponent = $q->param('exponent');
 
@@ -285,11 +285,6 @@ sub assignGenera	{
 		exit;
 	}
 
-	if ( $q->param('weight_by_ref') eq "yes" && $q->param('ref_quota') > 0 )	{
-		print "<p class=\"warning\">The data can't be analyzed because you can't set a reference quota and avoid collections from references with many collections at the same time.</p>\n";
-		exit;
-	}
-
 	# following fields need to be pulled from the input file:
 	#  collection_no (should be mandatory)
 	#  reference_no (optional, if refs are categories instead of genera)
@@ -412,13 +407,13 @@ sub assignGenera	{
 		print "<p class=\"warning\">The data can't be analyzed because the order name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	# these two might be missing
-	} elsif ( ! $field_abund_value && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
+	} elsif ( ! $field_abund_value && ( $method eq "specimens" || $q->param("print_specimens") eq "YES" ) )	{
 		print "<p class=\"warning\">The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
-	} elsif ( ! $field_abund_unit && ( $samplingmethod == 5 || $q->param("print_specimens") eq "YES" ) )	{
+	} elsif ( ! $field_abund_unit && ( $method eq "specimens" || $q->param("print_specimens") eq "YES" ) )	{
 		print "<p class=\"warning\">The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
-	} elsif ( ! $field_refno && ( $q->param('weight_by_ref') eq "yes" || $q->param('ref_quota') > 0 || $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" || $q->param('print_one_refs') =~ /yes/i || $q->param('one_occs_or_refs') =~ /ref/i ) )	{
+	} elsif ( ! $field_refno && ( $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" || $q->param('print_one_refs') =~ /yes/i || $q->param('one_occs_or_refs') =~ /ref/i ) )	{
 		print "<p class=\"warning\">The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
 		exit;
 	} elsif ( $q->param("time_scale") =~ /neptune/i ) {
@@ -576,8 +571,9 @@ sub assignGenera	{
 		}
 	}
 	
-		# get rid of records with no specimen/individual counts for method 5
-			if ($samplingmethod == 5)   {
+		# get rid of records with no specimen/individual counts for specimen-
+		#  based rarefaction
+			if ($method eq "specimens")   {
 				if ($occrow[$field_abund_value] eq "" || $occrow[$field_abund_value] == 0 ||
 				    ($occrow[$field_abund_unit] ne "specimens" && $occrow[$field_abund_unit] ne "individuals"))	{
 				  $occrow[$field_genus_name] = "";
@@ -608,7 +604,7 @@ sub assignGenera	{
 				}
 
 				$nsp = 1;
-				if ($samplingmethod == 5)       {
+				if ($method eq "specimens")       {
 					$nsp = $occrow[$field_abund_value];
 				}
 
@@ -660,7 +656,7 @@ sub assignGenera	{
 			$xx = $lastocc[$collno];
 			while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
 				$nsp = 1;
-				if ($samplingmethod == 5)	{
+				if ($method eq "specimens")	{
 					$nsp = $abund[$xx];
 				}
 				if ( $q->param('print_specimens') eq "YES" && $abund[$xx] > 0 )	{
@@ -714,12 +710,12 @@ sub assignGenera	{
 	}
 
 	# compute sum of (squared) richnesses across lists
-	if (($samplingmethod == 1) || ($samplingmethod == 5))	{
+	if ( $method =~ /CR|specimens/ )	{
 		for $i (1..$#occsinlist+1)	{
 			$usedoccsinchron[$chid[$i]] = $usedoccsinchron[$chid[$i]] + $occsinlist[$i];
 		}
 	}
-	elsif ($samplingmethod == 3)	{
+	elsif ($method eq "OW")	{
 		for $i (1..$#occsinlist+1)	{
 			if ($occsinlist[$i] <= $q->param('samplesize'))	{
 				$usedoccsinchron[$chid[$i]] = $usedoccsinchron[$chid[$i]] + $occsinlist[$i];
@@ -728,7 +724,7 @@ sub assignGenera	{
 	}
 	for $i (1..$#occsinlist+1)	{
 	# don't blow out the quota if you have a long list and the method is 4
-		if ($samplingmethod != 4 ||
+		if ($method ne "OXW" ||
 				$occsinlist[$i]**$exponent <= $q->param('samplesize') || $q->param('samplesize') == 0)	{
 			$occsinchron2[$chid[$i]] = $occsinchron2[$chid[$i]] + $occsinlist[$i]**$exponent;
 		}
@@ -894,8 +890,8 @@ sub assignGenera	{
 			}
 			if ( $q->param('one_occs_or_refs') =~ /ref/i && $occsinchron[$i] - $d > 0 )	{
 				$u[$i] = 1 - ( $onerefs[$i] / ( $occsinchron[$i] - $d ) );
-			} elsif ( $occsinchron[$i] - $maxoccs[$i] > 0 )	{
-				$u[$i] = 1 - ( $q1[$i] / ( $occsinchron[$i] - $maxoccs[$i] ) );
+			} elsif ( $occsinchron[$i] - $d > 0 )	{
+				$u[$i] = 1 - ( $q1[$i] / ( $occsinchron[$i] - $d ) );
 			}
 		}
 	}
@@ -1011,8 +1007,9 @@ sub findRecentGenera	{
 sub subsample	{
 	my $self = shift;
 
+	my $trials = $q->param('samplingtrials');
 	if ($q->param('samplingtrials') > 0)	{
-		for my $trials (1..$q->param('samplingtrials'))	{
+		for my $trial (1..$q->param('samplingtrials'))	{
 			my @sampled = ();
 			my @lastsampled = ();
 			my @subsrichness = ();
@@ -1022,22 +1019,19 @@ sub subsample	{
 
 			for $i (1..$chrons)	{
 				if (($q->param('printall') eq "yes" && $listsinchron[$i] > 0)||
-					  (($usedoccsinchron[$i] >= $q->param('samplesize') &&
-					    $samplingmethod != 2 && $samplingmethod != 4) ||
-					   ($listsinchron[$i] >= $q->param('samplesize') &&
-					    $samplingmethod == 2) ||
-					   ($occsinchron2[$i] >= $q->param('samplesize') &&
-					    $samplingmethod == 4)))	{
+					  (($usedoccsinchron[$i] >= $q->param('samplesize') && $method !~ /UW|OXW/) ||
+					   ($listsinchron[$i] >= $q->param('samplesize') && $method eq "UW") ||
+					   ($occsinchron2[$i] >= $q->param('samplesize') && $method eq "OXW")))	{
 		# figure out how many items must be drawn
 		# WARNING: an "item" in this section of code means a record or a list;
 		#   in the output an "item" may be a record-squared
-					if ($samplingmethod != 2 && $samplingmethod != 4)	{
+					if ($method !~ /UW|OXW/)	{
 					  $inbin = $usedoccsinchron[$i];
 					}
-					elsif ($samplingmethod == 2)	{
+					elsif ($method eq "UW")	{
 					  $inbin = $listsinchron[$i];
 					}
-					elsif ($samplingmethod == 4)	{
+					elsif ($method eq "OXW")	{
 					  $inbin = $occsinchron2[$i];
 					}
 					$ndrawn = 0;
@@ -1046,53 +1040,24 @@ sub subsample	{
 		#  regardless of the units of interest, and set quota based on the ratio
 		#  of the items quota to the average number of items per list 19.8.00
 					$tosub = $q->param('samplesize');
-					if ($samplingmethod == 3)	{
-			#     $tosub = $tosub - ($usedoccsinchron[$i]/$listsinchron[$i])/2;
-				# old fashioned method needed if using this
-				#  option 10.4.05
-				# oddly, the denominator of 2 in the old
-				#  equation appears to have been in error
-					  if ( $q->param('weight_by_ref') eq "yes" )	{
-					    $tosub = $tosub - ( $usedoccsinchron[$i] / $listsinchron[$i] ); 
-					  }
-				# modern method
-					  else	{
+					if ($method eq "OW")	{
 					    $tosub = ($tosub/($usedoccsinchron[$i]/$listsinchron[$i])) - 0.5;
-					  }
 					}
-					elsif ($samplingmethod == 4)	{
-			#     $tosub = $tosub - ($occsinchron2[$i]/$listsinchron[$i])/2;
-					  $tosub = ($tosub/($occsinchron2[$i]/$listsinchron[$i])) - 0.5;
-					}
-					my @refincluded = ();
-					if ( $q->param('ref_quota') > 0 )	{
-						my $refsallowed = 0;
-						my $itemsinrefs = 0;
-					# need a temporary list of refs
-						my @temprefs = keys %{$refisinchron[$i]};
-						while ( ( $refsallowed < $q->param('ref_quota') || $itemsinrefs < $tosub ) && $#temprefs > - 1 )	{
-$| = 1;
-							my $x = int( rand() * ( $#temprefs + 1 ) );
-							my $tempref = $temprefs[$x];
-							$refsallowed++;
-							$refincluded[$tempref] = "YES";
-							$itemsinrefs = $itemsinrefs + $listsfromref[$tempref][$i];
-							splice @temprefs , $x , 1;
-						}
-$| = 1;
+					elsif ($method eq "OXW")	{
+					    $tosub = ($tosub/($occsinchron2[$i]/$listsinchron[$i])) - 0.5;
 					}
 		 # make a list of items that may be drawn
-					if (($samplingmethod != 1) && ($samplingmethod != 5))	{
+					if ( $method !~ /CR|specimens/ )	{
 					  for $j (1..$listsinchron[$i])	{
 					    $listid[$j] = $listsbychron[$i][$j];
 					  }
 					  $nitems = $listsinchron[$i];
 			 # delete lists that would single-handedly blow out the record
 			 #   quota for this interval
-					  if (($samplingmethod > 2) && ($samplingmethod < 5))	{
+					  if ( $method =~ /OW|OXW/ )	{
 					    for $j (1..$listsinchron[$i])	{
 					      $xx = $occsinlist[$listid[$j]];
-					      if ($samplingmethod == 4)	{
+					      if ( $method eq "OXW" )	{
 					        $xx = $xx**$exponent;
 					      }
 					      if ($xx > $q->param('samplesize'))	{
@@ -1112,25 +1077,6 @@ $| = 1;
 					while ($tosub > 0 && $sampled[$i] < $inbin)	{
 					  $lastsampled[$i] = $sampled[$i];
 					  $j = int(rand $nitems) + 1;
-		# throw back collections with a probability proportional to
-		#  the number of collections belonging to the reference that
-		#  yielded the chosen collection 9.4.05
-		# WARNING: this only works for UW or OW (methods 2 and 3)
-					  if ( $collsfromref[$collrefno[$listid[$j]]][$i] > 0 )	{
-					    if ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]][$i] && $q->param('weight_by_ref') eq "yes" && $samplingmethod > 1 && $samplingmethod < 4 )	{
-					      $j = int(rand() * $nitems) + 1;
-					      while ( rand > 1 / $collsfromref[$collrefno[$listid[$j]]][$i] )	{
-					        $j = int(rand() * $nitems) + 1;
-					      }
-					    }
-					  }
-		# throw back collections that are not on the restricted list
-		#  if using the reference quota algorithm
-					  if ( $q->param('ref_quota') > 0 && $refincluded[$collrefno[$listid[$j]]] ne "YES" && $samplingmethod != 1 && $samplingmethod != 5 )	{
-					    while ( $refincluded[$collrefno[$listid[$j]]] ne "YES" )	{
-					      $j = int(rand $nitems) + 1;
-					    }
-					  }
 					  if ( $field_refno > 0 && $collrefno[$listid[$j]] > 0 )	{
 					    $refsampled[$collrefno[$listid[$j]]][$i]++;
 					    if ( $refsampled[$collrefno[$listid[$j]]][$i] == 1 )	{
@@ -1138,28 +1084,18 @@ $| = 1;
 					    }
 					  }
 		# modify the counter
-					  if (($samplingmethod < 3) || ($samplingmethod > 4))	{
-					    $tosub--;
-					    $sampled[$i]++;
-					  }
-					  elsif ($samplingmethod == 3)	{
-					    $xx = $#{$list[$listid[$j]]} + 1;
-					 #  $tosub = $tosub - $xx;
-					# old fashioned method needed if using
-					#  this option 10.4.05
-					    if ( $q->param('weight_by_ref') eq "yes" )	{
-					      $tosub = $tosub - $xx;
-					    }
-					#  standard method
-					    else	{
+					  if ( $method =~ /CR|UW|specimens/ )	{
 					      $tosub--;
-					    }
-					    $sampled[$i] = $sampled[$i] + $xx;
+					      $sampled[$i]++;
 					  }
-					# method 4
+					  elsif ( $method eq "OW" )	{
+					      $xx = $#{$list[$listid[$j]]} + 1;
+					      $tosub--;
+					      $sampled[$i] = $sampled[$i] + $xx;
+					  }
+					# OXW
 					  else	{
 					    $xx = $#{$list[$listid[$j]]} + 1;
-					 #  $tosub = $tosub - ($xx**2);
 					    $tosub--;
 					    $sampled[$i] = $sampled[$i] + $xx**$exponent;
 					  }
@@ -1169,18 +1105,18 @@ $| = 1;
 					  if ( ! $lastsubsrichness[$i] )	{
 						$lastsubsrichness[$i] = 1;
 					  }
-					  if (($samplingmethod == 1) || ($samplingmethod == 5))	{
+					  if ( $method =~ /CR|specimens/ )	{
 					    if ($present[$occid[$j]][$i] == 0)	{
 					      $subsrichness[$i]++;
 					    }
 					    $present[$occid[$j]][$i]++;
 					  }
 					  else	{
-					    for $k ( @{$listid[$j]} )	{
+					    for $k ( @{$list[$listid[$j]]} )	{
 					      if ($present[$k][$i] == 0)	{
 					        $subsrichness[$i]++;
 					      }
-					      if ( $sampled[$i] == 1 && $samplingmethod == 2 )	{
+					      if ( $sampled[$i] == 1 && $method eq "UW" )	{
 					        $lastsubsrichness[$i] = $subsrichness[$i];
 					      }
 					      $present[$k][$i]++;
@@ -1197,14 +1133,13 @@ $| = 1;
 					      $sampcurve[$i][$k] = $sampcurve[$i][$k] + ($x * $y / $z) + $lastsubsrichness[$i];
 					    }
 					  }
-		# for method 2 = UW, compute the honest to goodness
-		#  complete subsampling curve
-					  if ( $samplingmethod == 2 )	{
+		# for UW, compute the honest to goodness complete subsampling curve
+					  if ( $method eq "UW" )	{
 					    $fullsampcurve[$i][$sampled[$i]] = $fullsampcurve[$i][$sampled[$i]] + $subsrichness[$i];
 					  }
 	
 		 # erase the list or occurrence that has been drawn
-					  if (($samplingmethod != 1) && ($samplingmethod != 5))	{
+					  if ( $method !~ /CR|specimens/  )	{
 						my $xx = $lastocc[$listid[$j]];
 						while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
 							if ( $present[$occs[$xx]][$i] <= 10 )	{
@@ -1329,7 +1264,6 @@ $| = 1;
 			}
 	 # end of trials loop
 		}
-		my $trials = $q->param('samplingtrials');
 
 		for $i (1..$chrons)	{
 			if ($msubsrangethrough[$i] > 0)	{
@@ -1454,9 +1388,8 @@ $| = 1;
 
 	# fit Michaelis-Menten equation using Raaijmakers maximum likelihood
 	#  equation (Colwell and Coddington 1994, p. 106) 13.7.04
-	# do this only for method 2 (UW) because the method assumes you are
-	#  making a UW curve
-	if ( $samplingmethod == 2 && $q->param('printall') eq "no")	{
+	# do this only for UW because the method assumes you are making a UW curve
+	if ( $method eq "UW" && $q->param('printall') eq "no")	{
 		for $i (1..$chrons)	{
 			if ($meanrichness{'SIB'}[$i] > 0)	{
 				# get means
@@ -1712,7 +1645,7 @@ sub printResults	{
 			print "<td class=tiny align=center valign=top><b>References</b> ";
 			push @header , 'References';
 		}
-		if ( ( $q->param('samplesize') > 0 && $samplingmethod != 5 ) || $q->param('print_lists') eq "YES" )	{
+		if ( ( $q->param('samplesize') > 0 && $method ne "specimens" ) || $q->param('print_lists') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>$listorfm</b> ";
 			push @header , $listorfm;
 		}
@@ -1720,11 +1653,11 @@ sub printResults	{
 			print "<td class=tiny align=center valign=top><b>Occurrences</b> ";
 			push @header , 'Occurrences';
 		}
-		if ( $q->param('print_occurrences-exponentiated') eq "YES" && $samplingmethod != 5 )	{
+		if ( $q->param('print_occurrences-exponentiated') eq "YES" && $method ne "specimens" )	{
 			print "<td class=tiny align=center valign=top><b>Occurrences<br><nobr>-exponentiated</nobr></b> ";
 			push @header , '"Occurrences-exponentiated"';
 		}
-		if ( $samplingmethod == 5 || $q->param('print_specimens') eq "YES" )	{
+		if ( $method ne "specimens" || $q->param('print_specimens') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Specimens/<br>individuals</b> ";
 			push @header , 'Specimens/individuals';
 		}
@@ -2025,7 +1958,7 @@ sub printResults	{
 						push @data , 'NA';
 					}
 				}
-				if ( ( $q->param('samplesize') > 0 && $samplingmethod != 5 ) || $q->param('print_lists') eq "YES" )	{
+				if ( ( $q->param('samplesize') > 0 && $method ne "specimens" ) || $q->param('print_lists') eq "YES" )	{
 					printf "<td class=tiny align=center valign=top>%d ",$listsinchron[$i];
 					push @data , $listsinchron[$i];
 				}
@@ -2038,7 +1971,7 @@ sub printResults	{
 						push @data , 'NA';
 					}
 				}
-				if ( $q->param('print_occurrences-exponentiated') eq "YES" && $samplingmethod != 5 )	{
+				if ( $q->param('print_occurrences-exponentiated') eq "YES" && $method ne "specimens" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$occsinchron2[$i];
 						push @data , sprintf "%.1f",$occsinchron2[$i];
@@ -2047,7 +1980,7 @@ sub printResults	{
 						push @data , 'NA';
 					}
 				}
-				if ( $q->param('print_specimens') eq "YES" && $samplingmethod != 5 )	{
+				if ( $q->param('print_specimens') eq "YES" && $method ne "specimens" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						print "<td class=tiny align=center valign=top>$specimensinchron[$i] ";
 						push @data , $specimensinchron[$i];
@@ -2264,7 +2197,7 @@ sub printResults	{
 				print "<td class=tiny align=center valign=top><b>Incidence-based<br>coverage estimate</b> ";
 				print SUB_TABLE ",Incidence-based coverage estimate";
 			}
-			if ( $samplingmethod == 2 && $q->param('print_michaelis-menten') eq "YES" )	{
+			if ( $method eq "UW" && $q->param('print_michaelis-menten') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>Michaelis-Menten<br>estimate</b> ";
 				print SUB_TABLE ",Michaelis-Menten estimate";
 			}
@@ -2558,7 +2491,7 @@ sub printResults	{
 						}
 					}
 					if ( $q->param('print_michaelis-menten') eq "YES" )	{
-						if ( $samplingmethod == 2)	{
+						if ( $method eq "UW" )	{
 							if ($michaelis[$i] > 0 && $meanrichness{'SIB'}[$i] > 0 )	{
 					  			printf "<td class=tiny align=center valign=top>%.1f ",$michaelis[$i];
 					  			printf SUB_TABLE ",%.1d",$michaelis[$i];
@@ -2581,9 +2514,6 @@ sub printResults	{
 |;
 			print "The selected method was <b>".$q->param('samplingmethod')."</b>.<p>\n";
 			print "The number of items selected per temporal bin was <b>".$q->param('samplesize')."</b>.<p>\n";
-			if ( $q->param('ref_quota') > 0 )	{
-				print "The maximum number of references selected per temporal bin was <b>".$q->param('ref_quota')."</b>.<p>\n";
-			}
 			print "The total number of trials was <b>".$q->param('samplingtrials')."</b>.<p>\n";
 			if ( $threetimerp )	{
 				printf "The average per-interval proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
