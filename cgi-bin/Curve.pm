@@ -1,64 +1,4 @@
-# pmpd-curve.cgi
-# Written by John Alroy 25.3.99
-# updated to handle new database structure 31.3.99 JA
-# minor bug fixes 7.4.99, 30.6.99, 5.7.99 JA
-# can use arbitrary interval definitions given in timescale.10my file;
-#   searches may be restricted to a single class 28.6.99 JA
-# three major subsampling algorithms 7.7.99 JA
-# gap analysis and Chao-2 diversity estimators 8.7.99 JA
-# analyses restricted by lithologies; regions set by checkboxes
-#   instead of pulldown; Early/Middle/Late fields interpreted 27.7.99 JA
-# more genus field cleanups 29-30.7.99; 7.8.99
-# occurrences-squared algorithm; quota blowout prevention rule 9.8.99
-# first-by-last occurrence count matrix output 14.8.99
-# faster genus cleanups 15.8.99
-# prints presence-absence data to presences.txt; prints
-#   occurences-squared in basic table 16.8.99
-# prints "orphan" collections 18.8.99
-# prints number of records per genus to presences.txt; country field
-#   clean up 20.8.99
-# prints gap analysis completeness stat; geographic dispersal algorithm
-#   31.8.99
-# prints mean and median richness 2.9.99
-# genus occurrence upper or lower cutoff 19.9.99
-# prints confidence intervals around subsampled richness 16.12.99
-# prints median richness instead of mean 18.12.99
-# U.S.A. bug fix 15.1.00
-# allows local stages to span multiple international stages (see instances
-#   of "maxbelongsto" variable) 17.3.00
-# restricts data by paleoenvironmental zone (5-way scheme of Holland);
-#   prints full subsampling curves to CURVES 20-23.3.00
-# linear interpolation of number of taxa added by a subsampling draw;
-#   may print stats for intervals with less items than the quota 24.3.00 JA
-# bug fix in linear interpolation 26.3.00 JA
-# prints counts of occurrences per bin for each genus to presences.txt
-#   10.4.00 JA
-# more efficient stage/epoch binning 13-14.8.00 JA
-# reads occs file only once; lumps by formation; lumps multiple occurrences
-#   of the same genus in a list 14.8.00 JA
-# "combine" lithology field searches 17-18.8.00 JA
-# quotas always based on lists (instead of other units) 19.8.00 JA
-# reads Sepkoski time scale; rewritten Harland epoch input routine 26.8.00 JA
-# may report CIs for any of five diversity counts 17.9.00 JA
-# prints country of each list to binning.csv 19.9.00 JA
-# reads stages time scale; may require formation and/or member data 11.3.01 JA
-# orders may be required or allowed 22.3.01
-# prints data to presences.txt in matrix form 25.9.01 JA
-# may use data from only one research group 24.2.02 JA
-# prints names of enterers responsible for bad stage names 14.3.02 JA
-# restricts by narrowest allowable strat scale instead of just broadest
-#   15.3.02 JA
-# integrated into bridge.pl 7.6.02 Garot 
-# debugging related to above 21.6.02 JA
-# column headers printed to presences.txt 24.6.02 JA
-# major rewrite to use data output by Download.pm instead of vetting all
-#  the data in this program 30.6.04 JA
-# to do this, the following subroutines were eliminated:
-#  readRegions
-#  readOneClassFile
-#  readClassFiles
-#  readScale
-#  assignLocs
+# see bottom of file for historical notes
 
 package Curve;
 
@@ -69,15 +9,15 @@ use TaxaCache;
 use GD;
 use Constants qw($READ_URL $DATA_DIR $HTML_DIR);
 
-# FOO ##  # CGI::Carp qw(fatalsToBrowser);
-
 # Flags and constants
 my $DEBUG=0;			# The debug level of the calling program
 my $dbh;
 my $q;					# Reference to the parameters
 my $s;
 my $dbt;
-my (@genus,@freq);
+my $hbo;
+my ($method,@genus,@freq);
+my $downloadForm = "displayDownloadForm";
 
 sub new {
 	my $class = shift;
@@ -93,9 +33,10 @@ sub new {
 
 sub buildCurve {
 	my $self = shift;
+	$hbo = shift;
 
 	$self->setArrays;
-    PBDBUtil::autoCreateDir($OUTPUT_DIR);
+	PBDBUtil::autoCreateDir($OUTPUT_DIR);
 	# compute the sizes of intermediate steps to be reported in subsampling curves
 	if ($q->param('stepsize') ne "")	{
 	  $self->setSteps;
@@ -131,7 +72,10 @@ sub setArrays	{
 	$OUTPUT_DIR = $HTML_DIR.$PRINTED_DIR;
 	PBDBUtil::autoCreateDir($OUTPUT_DIR);
 
-	if ($q->param('samplingmethod') eq "classical rarefaction")	{
+	if ($q->param('samplingmethod') eq "shareholder quorum subsampling")	{
+		$method = "SQS";
+	}
+	elsif ($q->param('samplingmethod') eq "classical rarefaction")	{
 		$method = "CR";
 	}
 	elsif ($q->param('samplingmethod') eq "by collection (unweighted)")	{
@@ -148,7 +92,33 @@ sub setArrays	{
 		$method = "specimens";
 	}
 	$exponent = $q->param('exponent');
+# FOO
+#$method = "SQS";
+#$method = "CR";
 
+}
+
+sub printError	{
+	my $error = shift;
+	my $download = shift;
+	my $openFailed = shift;
+
+	print "<center><div class=\"warning\" style=\"margin-top: 2em; padding-left: 1em; text-align: left;\">\n<p style=\"margin-left: 1em; text-indent: -1em;\">$error\n";
+	my $link = "<a href=\"$READ_URL?action=$downloadForm\">download another file</a> that includes it";
+	if ( $openFailed )	{
+		$link = "<a href=\"$READ_URL?action=$downloadForm\">download a data file</a>";
+	}
+	if ( $download )	{
+		print "</p>\n<p>\n";
+		if ( $q->param('yourname') )	{
+			print "If you didn't simply enter the wrong name, you should $link.";
+		} else	{
+			print "If you didn't simply forget to enter your name, you should $link.";
+		}
+	}
+	print "</p></div></center>\n";
+	print $hbo->stdIncludes("std_page_bottom");
+	exit;
 }
 
 
@@ -277,12 +247,24 @@ sub assignGenera	{
     });
 
 	if ( ! open OCCS,"<$occsfile" )	{
-        	if ($q->param("time_scale") =~ /neptune/i)	{
-			print "<p class=\"warning\">The data can't be analyzed because you haven't yet downloaded a data file of occurrences with sample age data. <a href=\"$READ_URL?action=displayDownloadNeptuneForm\">Download the data again</a> and make sure to check off this field in the form.</p>\n";
-		} else	{
-			print "<p class=\"warning\">The data can't be analyzed because you haven't yet downloaded a data file of occurrences with period, epoch, stage, or 10 m.y. bin data. <a href=\"$READ_URL?action=displayDownloadForm\">Download the data again</a> and make sure to check off the field you want in the \"Collection fields\" part of the form.</p>\n";
-        	}
-		exit;
+		printError("The data can't be analyzed because you haven't yet downloaded a file of occurrences.",1,1);
+	}
+
+	if ( $method )	{
+		if ( $method ne "SQS" && $q->param('samplesize') == 0 )	{
+			printError("The sampling quota must be a positive integer. Please enter a number and resubmit the form.");
+		} elsif ( $method ne "SQS" && $q->param('samplesize') < 1 )	{
+			printError("The sampling quota must be greater than one. Please enter another number and resubmit the form.");
+		} elsif ( $method ne "SQS" && $q->param('samplesize') =~ /[^0-9]/ )	{
+			printError("The sampling quota must be a positive integer. Please enter another number and resubmit the form.");
+		} elsif ( $method eq "SQS" && $q->param('samplesize') <= 0 )	{
+			printError("The sampling quorum must be a positive fraction. Please enter a number and resubmit the form.");
+		} elsif ( $method eq "SQS" && $q->param('samplesize') >= 1 )	{
+			printError("The sampling quorum must be less than one. Please enter another number and resubmit the form.");
+		}
+		if ( $method ne "SQS" && $q->param('samplingtrials') == 0 )	{
+			printError("You forgot to select the number of sampling trials. Please choose a value and resubmit the form.");
+		}
 	}
 
 	# following fields need to be pulled from the input file:
@@ -293,29 +275,19 @@ sub assignGenera	{
 	#  abund_value and abund_unit (iff method 5 is selected)
 	#  epoch or "locage_max" (can be 10 m.y. bin)
 	$_ = <OCCS>;
-    $status = $csv->parse($_);
-    if (!$status) { print "Warning, error parsing CSV line $count"; }
-    my @fieldnames = $csv->fields();
-    @OCCDATA = <OCCS>;
-    close OCCS;
-	#s/\n//;
-	#my @fieldnames;
-	## tab-delimited file
-	#if ( $_ =~ /\t/ )	{
-	#	@fieldnames = split /\t/,$_;
-	#}
-	# comma-delimited file
-	#else	{
-	#	@fieldnames = split /,/,$_;
-	#}
+	$status = $csv->parse($_);
+	if (!$status) { print "Warning, error parsing CSV line $count"; }
+	my @fieldnames = $csv->fields();
+	@OCCDATA = <OCCS>;
+	close OCCS;
 
 	my $fieldcount = 0;
 	my $field_collection_no = -1;
 	for my $fn (@fieldnames)	{
 		if ( $fn eq "collection_no" )	{
 			$field_collection_no = $fieldcount;
-        } elsif ( $fn eq "sample_id" ) {
-            $field_collection_no = $fieldcount;
+		} elsif ( $fn eq "sample_id" ) {
+			$field_collection_no = $fieldcount;
 		} elsif ( $fn eq "occurrences.reference_no" && $q->param('count_refs') eq "yes" )	{
 			$field_genus_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.genus_name" && $q->param('count_refs') ne "yes" )	{
@@ -367,7 +339,6 @@ sub assignGenera	{
 	}
 
 	# this first condition never should be met, just being careful here
-	my $downloadForm = "displayDownloadForm";
 	if ($q->param('time_scale') =~ /neptune/i) {
 		$downloadForm = "displayDownloadNeptuneForm";
 	}
@@ -376,8 +347,7 @@ sub assignGenera	{
 		if ($q->param('time_scale') =~ /neptune/i)	{
 			$collection_field = "sample id";
 		} 
-		print "<p class=\"warning\">The data can't be analyzed because the $collection_field field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the form.</p>\n";
-		exit;
+		printError("The data can't be analyzed because the $collection_field field hasn't been downloaded.",1);
 	# this one is crucial and might be missing
 	} elsif ( ! $field_bin )	{
 		my $time_scale_field = $q->param('time_scale');
@@ -385,46 +355,36 @@ sub assignGenera	{
 		if ($time_scale_field =~ /neptune/i)	{
 			$time_scale_field = "sample_age_ma";
 		}
-		print "<p class=\"warning\">The data can't be analyzed because the $time_scale_field field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to check off this field in the \"Collection fields\" part of the form.</p>\n";
-		exit;
+		printError("The data can't be analyzed because the $time_scale_field field hasn't been downloaded.",1);
 	# this one also always should be present anyway, unless the user
 	#  screwed up and didn't download the ref numbers despite wanting
 	#  refs counted instead of genera
 	} elsif ( ! $field_genus_name && $q->param("taxonomic_level") ne "family" and $q->param("taxonomic_level") ne "order" )	{
 		if ( $q->param('count_refs') ne "yes" )	{
-			print "<p class=\"warning\">The data can't be analyzed because the genus name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
+			printError("The data can't be analyzed because the genus name field hasn't been downloaded.",1);
 		} else	{
-			print "<p class=\"warning\">The data can't be analyzed because the reference number field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
+			printError("The data can't be analyzed because the reference number field hasn't been downloaded.",1);
 		}
-		exit;
 	} elsif ( $q->param("taxonomic_level") eq "species" && ! $field_species_name && $q->param('count_refs') ne "yes") {
-		print "<p class=\"warning\">The data can't be analyzed because the species name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
-		exit;
+		printError("The data can't be analyzed because the species name field hasn't been downloaded.",1);
 	} elsif ( $q->param("taxonomic_level") eq "family" && ! $field_family_name && $q->param('count_refs') ne "yes") {
-		print "<p class=\"warning\">The data can't be analyzed because the family name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
-		exit;
+		printError("The data can't be analyzed because the family name field hasn't been downloaded.",1);
 	} elsif ( $q->param("taxonomic_level") eq "order" && ! $field_order_name && $q->param('count_refs') ne "yes") {
-		print "<p class=\"warning\">The data can't be analyzed because the order name field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
-		exit;
+		printError("The data can't be analyzed because the order name field hasn't been downloaded.",1);
 	# these two might be missing
 	} elsif ( ! $field_abund_value && ( $method eq "specimens" || $q->param("print_specimens") eq "YES" ) )	{
-		print "<p class=\"warning\">The data can't be analyzed because the abundance value field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
-		exit;
+		printError("The data can't be analyzed because the abundance value field hasn't been downloaded.",1);
 	} elsif ( ! $field_abund_unit && ( $method eq "specimens" || $q->param("print_specimens") eq "YES" ) )	{
-		print "<p class=\"warning\">The data can't be analyzed because the abundance unit field hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
-		exit;
+		printError("The data can't be analyzed because the abundance unit field hasn't been downloaded.",1);
 	} elsif ( ! $field_refno && ( $q->param('print_refs_raw') eq "yes" || $q->param('print_refs_ss') eq "yes" || $q->param('print_one_refs') =~ /yes/i || $q->param('one_occs_or_refs') =~ /ref/i ) )	{
-		print "<p class=\"warning\">The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded. <a href=\"$READ_URL?action=$downloadForm\">Download the data again</a> and make sure to include this field.</p>\n";
-		exit;
+		printError("The data can't be analyzed because the reference number field <i>from the collections table</i> hasn't been downloaded.",1);
 	} elsif ( $q->param("time_scale") =~ /neptune/i ) {
-        if ($q->param("neptune_bin_size") !~ /^(\d+(\.\d+)?|\.\d+)$/) {
-            print "<p class=\"warning\">Please enter a positive decimal number for the bin size to use if you are analyzing data from the Neptune database</p>";
-            exit;
-        } elsif ($q->param("neptune_bin_size") < .1 || $q->param("neptune_bin_size") > 100) {
-            print "<p class=\"warning\">Bin size must be between .1 and 100</p>";
-            exit;
-        }
-    }
+		if ($q->param("neptune_bin_size") !~ /^(\d+(\.\d+)?|\.\d+)$/) {
+			printError("Please enter a positive decimal number for the bin size to use if you are analyzing data from the Neptune database.");
+		} elsif ($q->param("neptune_bin_size") < .1 || $q->param("neptune_bin_size") > 100) {
+			printError("The bin size must be between 0.1 and 100.");
+		}
+	}
 
 	# figure out the ID numbers of the bins from youngest to oldest
 	# we do this in a messy way, i.e., using preset arrays; if the
@@ -2035,14 +1995,13 @@ sub printResults	{
 
 		print "</ul><p>\n";
 
-        my $downloadForm = "displayDownloadForm";
-        if ($q->param('time_scale') =~ /neptune/i) {
-            $downloadForm = "displayDownloadNeptuneForm";
-        }  
+		if ($q->param('time_scale') =~ /neptune/i) {
+			$downloadForm = "displayDownloadNeptuneForm";
+		}  
 		print "\nYou may wish to <a href=\"$READ_URL?action=$downloadForm\">download another data set</a></b> before you run another analysis.<p>\n";
 		print "</div>\n";
 
-            print "</div>\n\n"; # END PANEL1 DIV
+		print "</div>\n\n"; # END PANEL1 DIV
 
 		if ($q->param('samplesize') ne '') {
 
@@ -2855,5 +2814,70 @@ sub dbg {
 
 	return $DEBUG;					# Either way, return the current DEBUG value
 }
+
+
+# historical notes
+
+# pmpd-curve.cgi
+# Written by John Alroy 25.3.99
+# updated to handle new database structure 31.3.99 JA
+# minor bug fixes 7.4.99, 30.6.99, 5.7.99 JA
+# can use arbitrary interval definitions given in timescale.10my file;
+#   searches may be restricted to a single class 28.6.99 JA
+# three major subsampling algorithms 7.7.99 JA
+# gap analysis and Chao-2 diversity estimators 8.7.99 JA
+# analyses restricted by lithologies; regions set by checkboxes
+#   instead of pulldown; Early/Middle/Late fields interpreted 27.7.99 JA
+# more genus field cleanups 29-30.7.99; 7.8.99
+# occurrences-squared algorithm; quota blowout prevention rule 9.8.99
+# first-by-last occurrence count matrix output 14.8.99
+# faster genus cleanups 15.8.99
+# prints presence-absence data to presences.txt; prints
+#   occurences-squared in basic table 16.8.99
+# prints "orphan" collections 18.8.99
+# prints number of records per genus to presences.txt; country field
+#   clean up 20.8.99
+# prints gap analysis completeness stat; geographic dispersal algorithm
+#   31.8.99
+# prints mean and median richness 2.9.99
+# genus occurrence upper or lower cutoff 19.9.99
+# prints confidence intervals around subsampled richness 16.12.99
+# prints median richness instead of mean 18.12.99
+# U.S.A. bug fix 15.1.00
+# allows local stages to span multiple international stages (see instances
+#   of "maxbelongsto" variable) 17.3.00
+# restricts data by paleoenvironmental zone (5-way scheme of Holland);
+#   prints full subsampling curves to CURVES 20-23.3.00
+# linear interpolation of number of taxa added by a subsampling draw;
+#   may print stats for intervals with less items than the quota 24.3.00 JA
+# bug fix in linear interpolation 26.3.00 JA
+# prints counts of occurrences per bin for each genus to presences.txt
+#   10.4.00 JA
+# more efficient stage/epoch binning 13-14.8.00 JA
+# reads occs file only once; lumps by formation; lumps multiple occurrences
+#   of the same genus in a list 14.8.00 JA
+# "combine" lithology field searches 17-18.8.00 JA
+# quotas always based on lists (instead of other units) 19.8.00 JA
+# reads Sepkoski time scale; rewritten Harland epoch input routine 26.8.00 JA
+# may report CIs for any of five diversity counts 17.9.00 JA
+# prints country of each list to binning.csv 19.9.00 JA
+# reads stages time scale; may require formation and/or member data 11.3.01 JA
+# orders may be required or allowed 22.3.01
+# prints data to presences.txt in matrix form 25.9.01 JA
+# may use data from only one research group 24.2.02 JA
+# prints names of enterers responsible for bad stage names 14.3.02 JA
+# restricts by narrowest allowable strat scale instead of just broadest
+#   15.3.02 JA
+# integrated into bridge.pl 7.6.02 Garot 
+# debugging related to above 21.6.02 JA
+# column headers printed to presences.txt 24.6.02 JA
+# major rewrite to use data output by Download.pm instead of vetting all
+#  the data in this program 30.6.04 JA
+# to do this, the following subroutines were eliminated:
+#  readRegions
+#  readOneClassFile
+#  readClassFiles
+#  readScale
+#  assignLocs
 
 1;
