@@ -9,6 +9,9 @@ use strict;
 # Ten million year bins, in order from oldest to youngest
 @TimeLookup::bins = ("Cenozoic 6", "Cenozoic 5", "Cenozoic 4", "Cenozoic 3", "Cenozoic 2", "Cenozoic 1", "Cretaceous 8", "Cretaceous 7", "Cretaceous 6", "Cretaceous 5", "Cretaceous 4", "Cretaceous 3", "Cretaceous 2", "Cretaceous 1", "Jurassic 6", "Jurassic 5", "Jurassic 4", "Jurassic 3", "Jurassic 2", "Jurassic 1", "Triassic 4", "Triassic 3", "Triassic 2", "Triassic 1", "Permian 4", "Permian 3", "Permian 2", "Permian 1", "Carboniferous 5", "Carboniferous 4", "Carboniferous 3", "Carboniferous 2", "Carboniferous 1", "Devonian 5", "Devonian 4", "Devonian 3", "Devonian 2", "Devonian 1", "Silurian 2", "Silurian 1", "Ordovician 5", "Ordovician 4", "Ordovician 3", "Ordovician 2", "Ordovician 1", "Cambrian 4", "Cambrian 3", "Cambrian 2", "Cambrian 1");
 
+my %isBin;
+$isBin{$_}++ foreach @TimeLookup::bins;
+
 %TimeLookup::binning = (
     "33" => "Cenozoic 6", # Pleistocene
     "34" => "Cenozoic 6", # Pliocene
@@ -149,6 +152,135 @@ use strict;
     "799" => "Cambrian 1" # Nemakit-Daldynian
 );
 
+@TimeLookup::FR2_bins = ("Pleistocene","Pliocene","Upper Miocene","Middle Miocene","Lower Miocene","Chattian","Rupelian","Priabonian","Bartonian","Lutetian","Ypresian","Thanetian","Danian","Maastrichtian","Campanian","Santonian","Coniacian","Turonian","Cenomanian","Albian","Aptian","Barremian","Hauterivian","Valanginian","Berriasian","Portlandian","Kimmeridgian","Oxfordian","Callovian","Bathonian","Bajocian","Aalenian","Toarcian","Pliensbachian","Sinemurian","Hettangian","Rhaetian","Norian","Carnian","Ladinian","Anisian","Scythian","Tatarian","Kazanian","Kungurian","Artinskian","Sakmarian","Asselian","Gzelian","Kasimovian","Moscovian","Bashkirian","Serpukhovian","Visean","Tournaisian","Famennian","Frasnian","Givetian","Eifelian","Emsian","Pragian","Lochkovian","Pridoli","Ludlow","Wenlock","Llandovery","Ashgill","Caradoc","Llandeilo","Llanvirn","Arenig","Tremadoc","Merioneth","St Davids","Caerfai","Vendian");
+
+my %isFR2Bin;
+$isFR2Bin{$_}++ foreach @TimeLookup::FR2_bins;
+
+%TimeLookup::FR2_binning = (
+	"23" => "Vendian",
+	"71" => "Caerfai",
+	"70" => "St Davids",
+	"69" => "Merioneth",
+	"68" => "Tremadoc",
+	"67" => "Arenig",
+	"66" => "Llanvirn",
+	"65" => "Llandeilo",
+	"64" => "Caradoc",
+	"63" => "Ashgill",
+	"62" => "Llandovery",
+	"61" => "Wenlock",
+	"60" => "Ludlow",
+	"59" => "Pridoli",
+	"183" => "Lochkovian",
+	"182" => "Pragian",
+	"181" => "Emsian",
+	"180" => "Eifelian",
+	"179" => "Givetian",
+	"178" => "Frasnian",
+	"177" => "Famennian",
+	"55" => "Tournaisian",
+	"54" => "Visean",
+	"53" => "Serpukhovian",
+	"52" => "Bashkirian",
+	"51" => "Moscovian",
+	"50" => "Kasimovian",
+	"49" => "Gzelian",
+	"151" => "Asselian",
+	"150" => "Sakmarian",
+	"149" => "Artinskian",
+
+# in the Permian, the FR2 time scale uses Russian time terms with very complex
+#  relationships to the standard global time scale that are inferred from the following:
+
+# Sennikov and Golubev 2006:
+# Ufimian (post-Kungurian) = latest Cisuralian (LM)
+# Kazanian = Biarmian
+# Urzhumian = Biarmian
+# Severodvinian = Tatarian
+# Vjatkian = Tatarian
+
+# Leonova 2007:
+# Kungurian = pre-Roadian = latest LM
+# Ufimian = synonym or part of Kungurian (or possibly straddles boundary)
+# Kazanian = Roadian
+# Tatarian = Wordian and remaining Permian
+
+# Taylor et al. 2009:
+# Urzhumian = Tatarian = mid-Capitanian (and earlier?)
+# Severodovinian = Tatarian = late Capitanian + most of the Wuchiapingian
+# Vyatkian = Tatarian = latest Wuchiapingian + Changhsingian
+
+# composite:
+# Kungurian (includes Ufimian)
+# Kazanian = Roadian
+# Urzhumian = Tatarian = Wordian + early Capitanian [inferred]
+# Severodovinian = Tatarian = late Capitanian + most of the Wuchiapingian
+# Vjatkian = Tatarian = latest Wuchiapingian + Changhsingian
+
+# Fossil Record 2:
+# Kungurian
+# Ufimian (invalid)
+# Kazanian
+# (Urzhumian omitted)
+# Tatarian
+
+	"148" => "Kungurian", # Kungurian proper
+	"147" => "Kungurian", # Ufimian
+	"905" => "Kazanian", # Kazanian proper
+	"717" => "Kazanian", # Roadian
+	"904" => "Tatarian", # Tatarian proper
+	"146" => "Tatarian", # Wordian, assuming Urzhumian falls in FR2's "Tatarian"
+	"145" => "Tatarian", # Capitanian, with same assumption
+	"771" => "Tatarian", # Lopingian
+
+	# Scythian equals Early Triassic
+	"46" => "Scythian",
+	"139" => "Anisian",
+	"138" => "Ladinian",
+	"137" => "Carnian",
+	"136" => "Norian",
+	"135" => "Rhaetian",
+	"134" => "Hettangian",
+	"133" => "Sinemurian",
+	"132" => "Pliensbachian",
+	"131" => "Toarcian",
+	"130" => "Aalenian",
+	"129" => "Bajocian",
+	"128" => "Bathonian",
+	"127" => "Callovian",
+	"126" => "Oxfordian",
+	"125" => "Kimmeridgian",
+	# equals Tithonian
+	"124" => "Portlandian",
+	"123" => "Berriasian",
+	"122" => "Valanginian",
+	"121" => "Hauterivian",
+	"120" => "Barremian",
+	"119" => "Aptian",
+	"118" => "Albian",
+	"117" => "Cenomanian",
+	"116" => "Turonian",
+	"115" => "Coniacian",
+	"114" => "Santonian",
+	"113" => "Campanian",
+	"112" => "Maastrichtian",
+	"111" => "Danian",
+	# Selandian included in Benton's Thanetian based on Harland et al. 1989
+	"743" => "Thanetian",
+	"110" => "Thanetian",
+	"109" => "Ypresian",
+	"108" => "Lutetian",
+	"107" => "Bartonian",
+	"106" => "Priabonian",
+	"105" => "Rupelian",
+	"104" => "Chattian",
+	"85" => "Lower Miocene",
+	"84" => "Middle Miocene",
+	"83" => "Upper Miocene",
+	"34" => "Pliocene",
+	"33" => "Pleistocene"
+);
 
 %TimeLookup::rank_order = (
     'eon/eonothem' => 1,
@@ -371,8 +503,10 @@ sub getScaleMapping {
     # This bins thing is slightly tricky - if the keyword "bins" is passed
     # in, then map to bins
     my @intervals;
-    if ($scale =~ /bin/) {
+    if ($scale =~ /bin/ && $scale !~ /fossil/i) {
         @intervals = @TimeLookup::bins;
+    } elsif ($scale =~ /fossil/i) {
+        @intervals = @TimeLookup::FR2_bins;
     } else {
         my $scale = int($scale);
         return unless $scale;
@@ -403,6 +537,10 @@ sub getScaleMapping {
 
 sub getBins {
     return @TimeLookup::bins;
+}
+
+sub getFR2Bins {
+    return @TimeLookup::FR2_bins;
 }
 
 sub getBinning {
@@ -482,21 +620,29 @@ sub mapIntervals {
     }
 
     my $input_type = '';
+
     if (ref($intervals[0])) {
         $input_type = 'objects';
-    } elsif ($intervals[0] =~ /^\w+ \d$/) {
+    } elsif ($isBin{$intervals[0]} || $isFR2Bin{$intervals[0]}) {
         # We gotta convert the bins into an array of regular intervals
         $input_type = 'bins';
         my %binmap;
-        while (my ($interval_no,$binname) = each %TimeLookup::binning) {
-            push @{$binmap{$binname}},$interval_no;
+        if ($isBin{$intervals[0]})	{
+            while (my ($interval_no,$binname) = each %TimeLookup::binning) {
+                push @{$binmap{$binname}},$interval_no;
+            }
+        } else	{
+            while (my ($interval_no,$binname) = each %TimeLookup::FR2_binning) {
+                push @{$binmap{$binname}},$interval_no;
+            }
         }
         my @bins = @intervals;
         @intervals = ();
         foreach my $bin (@bins) {
             push @intervals, @{$binmap{$bin}};
         }
-        @intervals = map {$ig->{$_}} @intervals; 
+        @intervals = map {$ig->{$_}} @intervals;
+    # matches simple interval_no
     } elsif ($intervals[0] =~ /^\d+$/) {
         # Code expects intervals objects below - convert back afterwards
         $input_type = 'integers';
@@ -1411,7 +1557,7 @@ sub getBoundariesReal {
 #        print "5SET: ".scalar(values(%set))."\n";
 #        print "5UNSET: ".scalar(values(%unset))."\n";
     }
-    if ($return_type ne 'bins') {
+    if ($return_type !~ /bins|fr/i) {
         # Finally finished, return
         my %upper = ();
         my %lower = ();
@@ -1421,7 +1567,7 @@ sub getBoundariesReal {
         }
         return (\%upper,\%lower);
     } else {
-        return $self->_computeBinBounds();
+        return $self->_computeBinBounds($return_type);
     }
 }
 
@@ -1464,15 +1610,25 @@ sub getFromChildren {
 
 sub _computeBinBounds {
     my $self = shift;
+    my $binScheme = shift;
     my $ig = $self->getIntervalGraph;
 
     my $upperbinbound = {};
     my $lowerbinbound = {};
-    for(my $i=0;$i < @TimeLookup::bins; $i++) {
+    my @binCount = @TimeLookup::bins;
+    if ( $binScheme =~ /fr/i )	{
+        @binCount = @TimeLookup::FR2_bins;
+    }
+    for(my $i=0;$i < @binCount; $i++) {
         my $bin = $TimeLookup::bins[$i];
+        my %binning = %TimeLookup::binning;
+        if ( $binScheme =~ /fr/i )	{
+            $bin = $TimeLookup::FR2_bins[$i];
+            %binning = %TimeLookup::FR2_binning;
+         }
 #        my @intervals = map{$ig->{$_}} $self->mapIntervals($bin);
         my @intervals;
-        while (my ($itv_no,$in_bin) = each %TimeLookup::binning) {
+        while (my ($itv_no,$in_bin) = each %binning) {
             if ($in_bin eq $bin) {
                 push @intervals, $ig->{$itv_no};
             }
@@ -1516,6 +1672,9 @@ sub _computeBinBounds {
             $upperbinbound->{$bin} = 0;
         } else {
             my $next_bin = $TimeLookup::bins[$i-1];
+            if ( $binScheme =~ /fr/i )	{
+                my $next_bin = $TimeLookup::FR2_bins[$i-1];
+            }
             $upperbinbound->{$bin} = $lowerbinbound->{$next_bin};
         }
     }
@@ -1553,8 +1712,25 @@ sub getIntervalGraph {
     $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
     my @intervals = @{$dbt->getData($sql)};
 
-    $sql = "SELECT scale_no, interval_no, next_interval_no, max_interval_no, min_interval_no, lower_boundary FROM correlations c";
+    $sql = "SELECT c.scale_no, interval_no, next_interval_no, max_interval_no, min_interval_no, lower_boundary FROM correlations c,scales s,refs r WHERE c.scale_no=s.scale_no AND s.reference_no=r.reference_no ORDER BY pubyr DESC,scale_no DESC";
     my @results = @{$dbt->getData($sql)};
+
+    # simple, brute-force patch to handle cases where the current max used to
+    #   be the prev (e.g., anything going into Ufimian as of the 2007 scale)
+    # JA 24.3.11
+    # there is no guarantee at all that this will catch all such weird cases
+    #  in the future, but it catches the only one right now
+    my %next;
+    for my $r ( @results )	{
+        if ( ! $next{$r->{'interval_no'}} && $r->{'next_interval_no'} > 0 )	{
+            $next{$r->{'interval_no'}} = $r->{'next_interval_no'};
+        }
+        # brute force corruption of obsolete data... basically, we never need
+        #  to know about out-of-date next nos, so just toss them
+        elsif ( $next{$r->{'interval_no'}} )	{
+            $r->{'next_interval_no'} = 0;
+        }
+    }
 
     my %correlations = ();
     foreach (@results) {
@@ -2336,7 +2512,7 @@ sub lookupIntervals {
     my ($self,$intervals,$fields) = @_;
     my $dbt = $self->{'dbt'};
     
-    my @fields = ('interval_name','period_name','epoch_name','stage_name','ten_my_bin','lower_boundary','upper_boundary','interpolated_base','interpolated_top');
+    my @fields = ('interval_name','period_name','epoch_name','stage_name','ten_my_bin','FR2_bin','lower_boundary','upper_boundary','interpolated_base','interpolated_top');
     if ($fields) {
         @fields = @$fields;
     } 
@@ -2388,6 +2564,7 @@ sub generateLookupTable {
     my $subepoch_lookup = $self->getScaleMapping('72');
     my $stage_lookup    = $self->getScaleMapping('73');
     my $bin_lookup      = $self->getScaleMapping('bins');
+    my $FR2_lookup      = $self->getScaleMapping('fossil record 2');
     my ($ub_lookup,$lb_lookup) = $self->getBoundariesReal;
     my $ig = $self->getIntervalGraph;
 
@@ -2399,6 +2576,7 @@ sub generateLookupTable {
         my $epoch_no = $dbh->quote($epoch_lookup->{$interval_no});
         my $stage_no = $dbh->quote($stage_lookup->{$interval_no});
         my $ten_my_bin = $dbh->quote($bin_lookup->{$interval_no});
+        my $FR2_bin = $dbh->quote($FR2_lookup->{$interval_no});
         my $ub = $dbh->quote($ub_lookup->{$interval_no});
         my $lb = $dbh->quote($lb_lookup->{$interval_no});
         my $itv = $ig->{$interval_no};
@@ -2406,11 +2584,11 @@ sub generateLookupTable {
         my $sql = "SELECT interval_no FROM interval_lookup WHERE interval_no=$interval_no";
         my @r = @{$dbt->getData($sql)};
         if ($r[0]) {
-            my $sql = "UPDATE interval_lookup SET ten_my_bin=$ten_my_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub,interval_hash=$interval_hash WHERE interval_no=$interval_no";
+            my $sql = "UPDATE interval_lookup SET ten_my_bin=$ten_my_bin,fr2_bin=$FR2_bin,stage_no=$stage_no,subepoch_no=$subepoch_no,epoch_no=$epoch_no,period_no=$period_no,lower_boundary=$lb,upper_boundary=$ub,interval_hash=$interval_hash WHERE interval_no=$interval_no";
 #            print $sql,"\n";
             $dbh->do($sql);
         } else {
-            my $sql = "INSERT INTO interval_lookup(interval_no,ten_my_bin,stage_no,subepoch_no,epoch_no,period_no,lower_boundary,upper_boundary,interval_hash) VALUES ($interval_no,$ten_my_bin,$stage_no,$subepoch_no,$epoch_no,$period_no,$lb,$ub,$interval_hash)";
+            my $sql = "INSERT INTO interval_lookup(interval_no,ten_my_bin,fr2_bin,stage_no,subepoch_no,epoch_no,period_no,lower_boundary,upper_boundary,interval_hash) VALUES ($interval_no,$ten_my_bin,$FR2_bin,$stage_no,$subepoch_no,$epoch_no,$period_no,$lb,$ub,$interval_hash)";
 #            print $sql,"\n";
             $dbh->do($sql);
         }
