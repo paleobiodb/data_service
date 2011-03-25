@@ -1086,10 +1086,10 @@ sub processCollectionForm {
 	# if numerical dates were entered, set the best-matching interval no
 	my $ma;
 	if ( $q->param('direct_ma') > 0 )	{
-		my $no = setMaIntervalNo($dbt,$dbh,$collection_no,$q->param('direct_ma'),$q->param('direct_ma'));
+		my $no = setMaIntervalNo($dbt,$dbh,$collection_no,$q->param('direct_ma'),$q->param('direct_ma_unit'),$q->param('direct_ma'),$q->param('direct_ma_unit'));
 	}
 	elsif ( $q->param('max_ma') > 0 || $q->param('min_ma')> 0 )	{
-		my $no = setMaIntervalNo($dbt,$dbh,$collection_no,$q->param('max_ma'),$q->param('min_ma'));
+		my $no = setMaIntervalNo($dbt,$dbh,$collection_no,$q->param('max_ma'),$q->param('max_ma_unit'),$q->param('min_ma'),$q->param('min_ma_unit'));
 	} else	{
 		setMaIntervalNo($dbt,$dbh,$collection_no);
 	}
@@ -1234,13 +1234,26 @@ sub validateCollectionForm {
 # it's useful to know this because the enterer may have put in interval names that are either more
 #  broad than necessary or in outright conflict with the numerical values
 sub setMaIntervalNo	{
-	my ($dbt,$dbh,$coll,$max,$min) = @_;
+	my ($dbt,$dbh,$coll,$max,$max_unit,$min,$min_unit) = @_;
 	my $sql;
 	if ( $max < $min || ! $max || ! $min )	{
 		$sql = "UPDATE collections SET modified=modified,ma_interval_no=NULL WHERE collection_no=$coll";
 		$dbh->do($sql);
 		return 0;
 	}
+
+	# units matter! JA 25.3.11
+	if ( $max_unit =~ /ka/i )	{
+		$max /= 1000;
+	} elsif ( $max_unit =~ /ybp/i )	{
+		$max /= 1000000;
+	}
+	if ( $min_unit =~ /ka/i )	{
+		$min /= 1000;
+	} elsif ( $min_unit =~ /ybp/i )	{
+		$min /= 1000000;
+	}
+
 	# users will want a stage name if possible
 	$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min AND stage_no>0 ORDER BY lower_boundary-upper_boundary";
 	my $no = ${$dbt->getData($sql)}[0]->{'interval_no'};
