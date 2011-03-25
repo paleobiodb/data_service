@@ -2450,8 +2450,13 @@ sub queryDatabase {
             # Populate the generated time fields;
             my $max_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
             my $min_lookup = ($row->{'c.min_interval_no'}) ? $time_lookup->{$row->{'c.min_interval_no'}} : $max_lookup;
-            $max_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $max_lookup;
-            $min_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $min_lookup;
+            my $ma_lookup = $time_lookup->{$row->{'c.ma_interval_no'}};
+            # use the absolute date-based interval assignment only if it is completely
+	    #  consistent with the qualitative assignment JA 25.3.11
+            if ( $ma_lookup->{'lower_boundary'} <= $max_lookup->{'lower_boundary'} && $ma_lookup->{'upper_boundary'} >= $min_lookup->{'upper_boundary'} )	{
+                $max_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $max_lookup;
+                $min_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $min_lookup;
+            }
 
             if ($max_lookup->{'ten_my_bin'} && $max_lookup->{'ten_my_bin'} eq $min_lookup->{'ten_my_bin'} && ($q->param('late_pleistocene') !~ /no/i || ($row->{'c.max_interval_no'} != 33 && $row->{'c.max_interval_no'} != 922))) {
                 $row->{'c.10_my_bin'} = $max_lookup->{'ten_my_bin'};
