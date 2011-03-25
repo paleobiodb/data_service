@@ -926,18 +926,18 @@ sub displayCurveForm {
     print $hbo->stdIncludes("std_page_bottom");
 }
 
-sub displayCurveResults {
-    require Curve;
+sub displayCurveResults	{
+	require Curve;
 
-    logRequest($s,$q);
+	logRequest($s,$q);
 
-    my $std_page_top = $hbo->stdIncludes("std_page_top");
-    print $std_page_top;
+	my $std_page_top = $hbo->stdIncludes("std_page_top");
+	print $std_page_top;
 
 	my $c = Curve->new($q, $s, $dbt );
-	$c->buildCurve();
+	$c->buildCurve($hbo);
 
-    print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes("std_page_bottom");
 }
 
 # Show a generic page
