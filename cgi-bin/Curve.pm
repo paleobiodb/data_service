@@ -16,7 +16,7 @@ my $q;					# Reference to the parameters
 my $s;
 my $dbt;
 my $hbo;
-my ($method,@genus,@freq);
+my ($method,@genus,@freq,@u);
 my $downloadForm = "displayDownloadForm";
 
 sub new {
@@ -74,6 +74,7 @@ sub setArrays	{
 
 	if ($q->param('samplingmethod') eq "shareholder quorum subsampling")	{
 		$method = "SQS";
+		$q->param('stepsize' => '');
 	}
 	elsif ($q->param('samplingmethod') eq "classical rarefaction")	{
 		$method = "CR";
@@ -81,21 +82,18 @@ sub setArrays	{
 	elsif ($q->param('samplingmethod') eq "by collection (unweighted)")	{
 		$method = "UW";
 	}
-	elsif ($q->param('samplingmethod') eq "by collection (occurrences-weighted)" && ($q->param('exponent') eq "" || $q->param('exponent') == 1))	{
-		$method = "OW";
-	}
 # replaced occurrences-squared with occurrences-exponentiated 27.10.05
-	elsif ($q->param('exponent') > 0)	{
-		$method = "OXW";
+	elsif ($q->param('samplingmethod') eq "by collection (occurrences-weighted)")	{
+		if ( $q->param('exponent') == 1 )	{
+			$method = "OW";
+		} else	{
+			$method = "OXW";
+		}
 	}
 	elsif ($q->param('samplingmethod') eq "by specimen")	{
 		$method = "specimens";
 	}
 	$exponent = $q->param('exponent');
-# FOO
-#$method = "SQS";
-#$method = "CR";
-
 }
 
 sub printError	{
@@ -262,7 +260,7 @@ sub assignGenera	{
 		} elsif ( $method eq "SQS" && $q->param('samplesize') >= 1 )	{
 			printError("The sampling quorum must be less than one. Please enter another number and resubmit the form.");
 		}
-		if ( $method ne "SQS" && $q->param('samplingtrials') == 0 )	{
+		if ( $q->param('samplingtrials') == 0 )	{
 			printError("You forgot to select the number of sampling trials. Please choose a value and resubmit the form.");
 		}
 	}
@@ -659,14 +657,15 @@ sub assignGenera	{
 	for $i (1..$chrons)	{
 		@temp = ();
 		for $j (1..$listsinchron[$i])	{
-			push @temp,$occsinlist[$listsbychron[$i][$j]];
+			push @temp , $listsbychron[$i][$j];
 		}
-		@temp = sort { $b <=> $a } @temp;
+		@temp = sort { $occsinlist[$b] <=> $occsinlist[$a] } @temp;
 		$j = int(($#temp)/2);
 		$k = int(($#temp + 1)/2);
-		$median[$i] = ($temp[$j] + $temp[$k])/2;
+		$median[$i] = ($occsinlist[$temp[$j]] + $occsinlist[$temp[$k]])/2;
 	# flag taxa in the largest collection
-		$inlargest{$_}++ foreach $temp[0];
+	# these will not be counted in the one-occurrence or reference count
+		$inlargest[$i]{$_}++ foreach @{$list[$temp[0]]};
 	}
 
 	# compute sum of (squared) richnesses across lists
@@ -695,22 +694,18 @@ sub assignGenera	{
 		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/presences.txt<BR>$!" );
 	}
 
-    # For neptune data, we make bin names for all bins up to 200 ma year ago, now we
-    # trim those bins down after the fact by setting chrons to be the last bin with
-    # occurrences in it
-    if ($bin_type =~ /neptune/i) {
-        #foreach($i = 0; $i < $chrons;$i++) {
-        #    print "$i : listsinchron $listsinchron[$i]<BR>";
-        #}
-        my $i = 0;
-        foreach($i=$chrons;$i > 0;$i--) {
-            if ($listsinchron[$i]) {
-                last;
-            }
-        }
-        $chrons = $i;
-        #print "last $i";
-    }
+	# For neptune data, we make bin names for all bins up to 200 ma year ago, now we
+	# trim those bins down after the fact by setting chrons to be the last bin with
+	# occurrences in it
+	if ($bin_type =~ /neptune/i)	{
+		my $i = 0;
+		foreach($i=$chrons;$i > 0;$i--)	{
+			if ($listsinchron[$i])	{
+				last;
+			}
+		}
+		$chrons = $i;
+	}
 
 	my $firstdata;
 	for $j (1..$chrons)	{
@@ -753,7 +748,7 @@ sub assignGenera	{
 			}
 			# find one-reference taxa
 			my @refs = keys %{$inref[$j]{$i}};
-			if ($#refs == 0)	{
+			if ($#refs == 0 && ($q->param('exclude_largest_coll') !~ /yes/i || ! $inlargest[$j]{$i}))	{
 				$onerefs[$j]++;
 			# find dominant taxon (must be in multiple refs)
 			} elsif ($present[$i][$j] > $maxoccs[$j])	{
@@ -782,6 +777,9 @@ sub assignGenera	{
 			if ($present[$i][$j] == 1)	{
 				$chaol[$j]++;
 				$q1[$j]++;
+				if ($q->param('exclude_largest_coll') !~ /yes/i || ! $inlargest[$j]{$i})	{
+					$oneoccs[$j]++;
+				}
 			}
 			elsif ($present[$i][$j] == 2)	{
 				$chaom[$j]++;
@@ -851,7 +849,20 @@ sub assignGenera	{
 			if ( $q->param('one_occs_or_refs') =~ /ref/i && $occsinchron[$i] - $d > 0 )	{
 				$u[$i] = 1 - ( $onerefs[$i] / ( $occsinchron[$i] - $d ) );
 			} elsif ( $occsinchron[$i] - $d > 0 )	{
-				$u[$i] = 1 - ( $q1[$i] / ( $occsinchron[$i] - $d ) );
+				$u[$i] = 1 - ( $oneoccs[$i] / ( $occsinchron[$i] - $d ) );
+			}
+		# frequencies are only needed with SQS, and if the method is
+		#  by-specimen occsinchron will be wrong anyway
+			if ( $method eq "SQS" )	{
+				for $j (1..$ngen)	{
+					if ( $q->param('exclude_dominant') =~ /y/i && $j == $dominant[$i] )	{
+						next;
+					}
+					if ( $occsinchron[$i] - $d == 0 )	{
+						next;
+					}
+					$freq[$j][$i] = $present[$j][$i] / ( $occsinchron[$i] - $d ) * $u[$i];
+				}
 			}
 		}
 	}
@@ -978,33 +989,36 @@ sub subsample	{
 			my @refsampled = ();
 
 			for $i (1..$chrons)	{
-				if (($q->param('printall') eq "yes" && $listsinchron[$i] > 0)||
-					  (($usedoccsinchron[$i] >= $q->param('samplesize') && $method !~ /UW|OXW/) ||
-					   ($listsinchron[$i] >= $q->param('samplesize') && $method eq "UW") ||
-					   ($occsinchron2[$i] >= $q->param('samplesize') && $method eq "OXW")))	{
-		# figure out how many items must be drawn
-		# WARNING: an "item" in this section of code means a record or a list;
-		#   in the output an "item" may be a record-squared
-					if ($method !~ /UW|OXW/)	{
-					  $inbin = $usedoccsinchron[$i];
+				if ( ($q->param('printall') eq "yes" && $listsinchron[$i] > 0) || (
+	($u[$i] >= $q->param('samplesize') && $method eq "SQS") ||
+	($usedoccsinchron[$i] >= $q->param('samplesize') && $method !~ /SQS|UW|OXW/) ||
+	($listsinchron[$i] >= $q->param('samplesize') && $method eq "UW") ||
+	($occsinchron2[$i] >= $q->param('samplesize') && $method eq "OXW") ) )	{
+
+		# record number of items available to be drawn
+					if ( $method =~ /SQS|UW/ )	{
+						$inbin = $listsinchron[$i];
+					} elsif ( $method eq "OXW" )	{
+						$inbin = $occsinchron2[$i];
+					} else	{
+						$inbin = $usedoccsinchron[$i];
 					}
-					elsif ($method eq "UW")	{
-					  $inbin = $listsinchron[$i];
-					}
-					elsif ($method eq "OXW")	{
-					  $inbin = $occsinchron2[$i];
-					}
+
+		# set the number of items that must be drawn
+		# WARNING: an "item" here means an occurrence or a collection;
+		#  in the output an "item" may be a record-squared
 					$ndrawn = 0;
-		# old method was to track the number of items sampled and set the quota
-		#  based on this number; new method is to track the number of lists
-		#  regardless of the units of interest, and set quota based on the ratio
-		#  of the items quota to the average number of items per list 19.8.00
 					$tosub = $q->param('samplesize');
+	# special hacks for OW and OXW to handle overshooting of quotas
+	# old method was to track the number of items sampled and set the quota
+	#  based on this number; new method is to track the number of lists
+	#  regardless of the units of interest, and set quota based on the ratio
+	#  of the items quota to the average number of items per list 19.8.00
 					if ($method eq "OW")	{
-					    $tosub = ($tosub/($usedoccsinchron[$i]/$listsinchron[$i])) - 0.5;
+						$tosub = ($tosub/($usedoccsinchron[$i]/$listsinchron[$i])) - 0.5;
 					}
 					elsif ($method eq "OXW")	{
-					    $tosub = ($tosub/($occsinchron2[$i]/$listsinchron[$i])) - 0.5;
+						$tosub = ($tosub/($occsinchron2[$i]/$listsinchron[$i])) - 0.5;
 					}
 		 # make a list of items that may be drawn
 					if ( $method !~ /CR|specimens/ )	{
@@ -1012,8 +1026,8 @@ sub subsample	{
 					    $listid[$j] = $listsbychron[$i][$j];
 					  }
 					  $nitems = $listsinchron[$i];
-			 # delete lists that would single-handedly blow out the record
-			 #   quota for this interval
+		 # delete lists that would single-handedly blow out the record
+		 #   quota for this interval (OW or OXW only)
 					  if ( $method =~ /OW|OXW/ )	{
 					    for $j (1..$listsinchron[$i])	{
 					      $xx = $occsinlist[$listid[$j]];
@@ -1033,9 +1047,10 @@ sub subsample	{
 					  }
 					  $nitems = $occsinchron[$i];
 					}
-		 # draw an item
+		# main sampling loop
 					while ($tosub > 0 && $sampled[$i] < $inbin)	{
 					  $lastsampled[$i] = $sampled[$i];
+		# draw an item
 					  $j = int(rand $nitems) + 1;
 					  if ( $field_refno > 0 && $collrefno[$listid[$j]] > 0 )	{
 					    $refsampled[$collrefno[$listid[$j]]][$i]++;
@@ -1043,15 +1058,26 @@ sub subsample	{
 					      $msubsrefrichness[$i]++;
 					    }
 					  }
+	
 		# modify the counter
 					  if ( $method =~ /CR|UW|specimens/ )	{
 					      $tosub--;
 					      $sampled[$i]++;
-					  }
-					  elsif ( $method eq "OW" )	{
+					  } elsif ( $method eq "OW" )	{
 					      $xx = $#{$list[$listid[$j]]} + 1;
 					      $tosub--;
 					      $sampled[$i] = $sampled[$i] + $xx;
+					  } elsif ( $method eq "SQS" )	{
+					# needed because a list may include the same
+					#  taxon more than once
+					      my @timesinlist = ();
+					      for my $k ( @{$list[$listid[$j]]} )	{
+					          $timesinlist[$k]++;
+					          if ( $timesinlist[$k] == 1 && $present[$k][$i] == 0 )	{
+					              $tosub -= $freq[$k][$i];
+					          }
+					      }
+					      $sampled[$i]++;
 					  }
 					# OXW
 					  else	{
@@ -1059,7 +1085,22 @@ sub subsample	{
 					    $tosub--;
 					    $sampled[$i] = $sampled[$i] + $xx**$exponent;
 					  }
-	
+
+		# for SQS, stop with a probability inversely proportional to the overshoot
+		#  if the quorum has been exceed (i.e., counterintuitively, if the
+		#  overshoot is large keep the draw, and if it is small effectively throw
+		#  it back by bombing out)
+					  if ( $method eq "SQS" && $tosub < 0 )	{
+					      my $plus = 1;
+					      my $over = $q->param('samplesize') - $tosub;
+					      $plus = 1 - $q->param('samplesize') / $over;
+					      if ( rand() > $plus )	{
+					          $sampled[$i]--;
+					          last;
+                                              }
+					  }
+
+
 		 # declare the genus (or all genera in a list) present in this chron
 					  $lastsubsrichness[$i] = $subsrichness[$i];
 					  if ( ! $lastsubsrichness[$i] )	{
@@ -1070,13 +1111,12 @@ sub subsample	{
 					      $subsrichness[$i]++;
 					    }
 					    $present[$occid[$j]][$i]++;
-					  }
-					  else	{
-					    for $k ( @{$list[$listid[$j]]} )	{
+					  } else	{
+					    for my $k ( @{$list[$listid[$j]]} )	{
 					      if ($present[$k][$i] == 0)	{
 					        $subsrichness[$i]++;
 					      }
-					      if ( $sampled[$i] == 1 && $method eq "UW" )	{
+					      if ( $sampled[$i] == 1 && $method =~ /SQS|UW/ )	{
 					        $lastsubsrichness[$i] = $subsrichness[$i];
 					      }
 					      $present[$k][$i]++;
@@ -1104,19 +1144,19 @@ sub subsample	{
 						while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
 							if ( $present[$occs[$xx]][$i] <= 10 )	{
 								$msubsminf[$i]++;
-							$xx = -1;
-						} else	{
-							$xx = $stone[$xx];
+								$xx = -1;
+							} else	{
+								$xx = $stone[$xx];
 							}
 						}
-					    $listid[$j] = $listid[$nitems];
+						$listid[$j] = $listid[$nitems];
 					  }
 					  else	{
-					    $occid[$j] = $occid[$nitems];
+						$occid[$j] = $occid[$nitems];
 					  }
 					  $nitems--;
 					}
-		 # end of while loop
+		 # end of main sampling loop
 				}
 			# finish off recording data in complete subsampling curve
 				if ($atstep[$q->param('samplesize')]+1 > $atstep[int($sampled[$i])] && $inbin > $sampled[$i])	{
@@ -1617,7 +1657,7 @@ sub printResults	{
 			print "<td class=tiny align=center valign=top><b>Occurrences<br><nobr>-exponentiated</nobr></b> ";
 			push @header , '"Occurrences-exponentiated"';
 		}
-		if ( $method ne "specimens" || $q->param('print_specimens') eq "YES" )	{
+		if ( $method eq "specimens" || $q->param('print_specimens') eq "YES" )	{
 			print "<td class=tiny align=center valign=top><b>Specimens/<br>individuals</b> ";
 			push @header , 'Specimens/individuals';
 		}
@@ -1940,7 +1980,7 @@ sub printResults	{
 						push @data , 'NA';
 					}
 				}
-				if ( $q->param('print_specimens') eq "YES" && $method ne "specimens" )	{
+				if ( $method eq "specimens" || $q->param('print_specimens') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
 						print "<td class=tiny align=center valign=top>$specimensinchron[$i] ";
 						push @data , $specimensinchron[$i];
@@ -2021,8 +2061,16 @@ sub printResults	{
 				print SUB_TABLE ",Midpoint (Ma)";
 			}
 			if ( $q->param('print_items') eq "YES" )	{
-				print "<td class=tiny align=center valign=top><b>Items<br>sampled</b> ";
-				print SUB_TABLE ",Items sampled";
+				my $items = "Collections";
+				if ( $method =~ /OW|CR/ )	{
+					$items = "Occurrences";
+				} elsif ( $method eq "OXW" )	{
+					$items = "Occurrences^".$q->param('exponent');
+				} elsif ( $method eq "specimens" )	{
+					$items = "Specimens";
+				}
+				print "<td class=tiny align=center valign=top><b>$items<br>sampled</b> ";
+				print SUB_TABLE ",$items sampled";
 			}
 			if ( $q->param('print_refs_ss') eq "YES" )	{
 				print "<td class=tiny align=center valign=top><b>References<br>sampled</b> ";
@@ -2471,8 +2519,12 @@ sub printResults	{
 
 <div class="small" style="padding-left: 2em; padding-right: 2em;">
 |;
-			print "The selected method was <b>".$q->param('samplingmethod')."</b>.<p>\n";
-			print "The number of items selected per temporal bin was <b>".$q->param('samplesize')."</b>.<p>\n";
+			print "The subsampling method was <b>".$q->param('samplingmethod')."</b>.<p>\n";
+			if ( $method ne "SQS" )	{
+				print "The sampling quota per time interval was <b>".$q->param('samplesize')."</b>.<p>\n";
+			} else	{
+				print "The sampling quorum per time interval was <b>".$q->param('samplesize')."</b>.<p>\n";
+			}
 			print "The total number of trials was <b>".$q->param('samplingtrials')."</b>.<p>\n";
 			if ( $threetimerp )	{
 				printf "The average per-interval proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
@@ -2480,21 +2532,17 @@ sub printResults	{
 			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
 				print "Corrected SIB, not raw SIB, was used for the three timer diversity estimate.<p>\n";
 			}
-            if ($q->param('stepsize') ne "")	{
-		        print "\nThe following data files have been created:<p>\n";
-            } else {
-		        print "\nThe following data file has been created:<p>\n";
-            }
-		    print "<ul>\n";
-		    print "<li>The subsampled diversity curve data (<a href=\"$HOST_URL$PRINTED_DIR/subsampled_curve_data.csv\">subsampled_curve_data.csv</a>)<p>\n";
-            if ($q->param('stepsize') ne "")	{
-                print "<li>The subsampling curves (<a href=\"$HOST_URL$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
-            }
-    		print "</ul><p>\n";
-		print "</div>\n\n";
-
-            print "</div>\n\n"; # End PANEL2 div
-
+			if ($q->param('stepsize') ne "" && $method ne "SQS")	{
+				print "\n<p>The following data files have been created:</p>\n";
+				print "<ul>\n";
+				print "<li>The subsampled diversity curve data (<a href=\"$HOST_URL$PRINTED_DIR/subsampled_curve_data.csv\">subsampled_curve_data.csv</a>)<p>\n";
+				print "<li>The subsampling curves (<a href=\"$HOST_URL$PRINTED_DIR/subcurve.tab\">subcurve.tab</a>)<p>\n";
+				print "</ul>\n";
+			} else	{
+				print "<p>You may download the <a href=\"$HOST_URL$PRINTED_DIR/subsampled_curve_data.csv\">subsampled diversity curve data.</a></p>\n";
+			}
+			print "</div>\n\n";
+			print "</div>\n\n"; # End PANEL2 div
 		}
 
 	# print a very simple graph JA 8.6.09
@@ -2604,7 +2652,7 @@ sub printResults	{
 		}
 
 		$maxma = int( $maxma / 10 ) * 10 + 10;
-		my %bases = ( "Ng" => 33.9, "Pg" => 65.5, "K" => 145.5, "J" => 199.6, "Tr" => 251, "P" => 299, "C" => 360.7, "D" => 418.1, "S" => 443.7, "O" => 490, "Cm" => 542);
+		my %bases = ( "Ng" => 23.03, "Pg" => 65.5, "K" => 145.5, "J" => 199.6, "Tr" => 251, "P" => 299, "C" => 360.7, "D" => 418.1, "S" => 443.7, "O" => 490, "Cm" => 542);
 		my $suppress;
 		for my $ma ( values %bases )	{
 			if ( $ma < $maxma && $ma + 30 > $maxma )	{
@@ -2637,10 +2685,6 @@ sub printResults	{
 			if ( $colors[$v] )	{
 				for my $i ( 1..$chrons )     {
 					my ($div1,$div2) = ($count[$v][$i],$count[$v][$i+1]);
-					if ($q->param('samplesize') ne '')	{
-						$div1 = $meanrichness{'SIB'}[$i];
-						$div2 = $meanrichness{'SIB'}[$i+1];
-					}
 					if ( $div1 > 0 )	{
 						my $x1 = $xscale * ( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2 + $pleft + $pwidth;
 						my $x2 = $xscale * ( $basema{$chname[$i+1]} + $basema{$chname[$i]} ) / 2 + $pleft + $pwidth;
@@ -2788,7 +2832,6 @@ $im->setThickness(1);
 showPanel(1);
 </script>
 ';
-
 
 	}
 	else	{
