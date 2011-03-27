@@ -125,11 +125,12 @@
 <tr>
   <td valign="top">
     Subsampling method:<br>
-    <i><span class="verysmall"><span class="required">Required</span> for subsampling.</span></i>
+    <i><span class="verysmall"><span class="required">Required</span> for subsampling. See Alroy (2010) for a discussion of the alternatives.</span></i>
   </td>
   <td valign="top">
     <select name="samplingmethod">
       <option selected></option>
+      <option>shareholder quorum subsampling</option>
       <option>classical rarefaction</option>
       <option>by collection (unweighted)</option>
       <option>by collection (occurrences-weighted)</option>
@@ -141,7 +142,9 @@
 <tr>
   <td valign="top">
     Weighting exponent:<br>
-    <i><span class="verysmall"><span class="required">Required</span> for occurrences-weighted subsampling, and otherwise ignored. 2.0 = occurrences-squared weighting; 0.0 = unweighted subsampling; 1.0 = simple occurrences-weighted subsampling.</span></i>
+    <i><span class="verysmall"><span class="required">Required</span> for occurrences-weighted subsampling, and otherwise ignored.<br>
+    2.0 = occurrences-squared weighting; 0.0 = unweighted subsampling;<br>
+    1.0 = simple occurrences-weighted subsampling.</span></i>
   </td>
   <td valign="top">
     <select name="exponent">
@@ -182,11 +185,22 @@
 
 <tr>
   <td valign="top">
-    Number of items to draw in each temporal bin:<br>
-    <i><span class="verysmall"><span class="required">Required</span> for subsampling.</span></i>
+    Sampling quorum (for SQS) or quota of data records (for other methods):<br>
+    <i><span class="verysmall"><span class="required">Required</span> for subsampling. A quorum is a fraction; a quota is a count.</span></i>
   </td>
   <td valign="top">
     <input name="samplesize">
+  </td>
+</tr>
+
+<tr>
+  <td valign="top" colspan="2" nowrap>
+    Good's <i>u</i> options:<br>
+    <div class="verysmall">
+    Count <select name="one_occs_or_refs"><option>one-reference</option><option>one-occurrence</option></select> taxa&nbsp;&nbsp;&nbsp;&nbsp;
+    Ignore most common taxon? <select name="exclude_dominant"><option>yes</option><option>no</option></select>&nbsp;&nbsp;&nbsp;&nbsp;
+    Ignore largest collection? <select name="exclude_largest_coll"><option>yes</option><option>no</option></select>
+    </div>
   </td>
 </tr>
 
@@ -213,8 +227,8 @@
 
 <tr>
   <td valign="top">
-    Intermediate numbers of items to report in subsampling curves:<br>
-    <i><span class="verysmall">Not required.</span></i>
+    Sampled item counts to report in subsampling curves:<br>
+    <i><span class="verysmall">Not required and can't be computed by SQS.</span></i>
   </td>
   <td valign="top">
     <select name="stepsize">
@@ -240,7 +254,7 @@
 
 <tr>
   <td valign="top">
-    Print subsampling stats for intervals with less items than the exact quota?<br>
+    Print subsampling stats for intervals that do not meet the quorum or quota?<br>
     <i><span class="verysmall">Not required.</span></i>
   </td>
   <td valign="top">
@@ -290,16 +304,7 @@
 <tr><td class="small" valign="top" nowrap>
 <input type="checkbox" class="raw r_count" name="print_one_occs" value="YES"> One-occurrence taxa
 <input type="checkbox" class="raw r_count" name="print_one_refs" value="YES"> One-reference taxa
-<!--
--->
 <input type="checkbox" class="raw" name="print_u" value="YES" checked> Good's <i>u</i>
-</td></tr>
-
-<tr><td class="verysmall" valign="top" nowrap style="padding-left: 1em;">
-<i>Good's</i> u <i>options:</i><br>
-Count <select name="one_occs_or_refs"><option>one-reference</option><option>one-occurrence</option></select> taxa&nbsp;&nbsp;
-Ignore most common taxon? <select name="exclude_dominant"><option>yes</option><option>no</option></select>&nbsp;&nbsp;
-Ignore largest collection? <select name="exclude_largest_coll"><option>yes</option><option>no</option></select>
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
@@ -328,7 +333,7 @@ Ignore largest collection? <select name="exclude_largest_coll"><option>yes</opti
 <input type="checkbox" class="raw r_count" name="print_lists" value="YES" checked> Collections
 <input type="checkbox" class="raw r_count" name="print_occurrences" value="YES" checked> Occurrences
 <input type="checkbox" class="raw r_count" name="print_occurrences-exponentiated" value="YES"> Occurrences-squared or exponentiated
-<input type="checkbox" class="raw r_count" name="print_specimens" value="YES"> Specimens/individuals
+<input type="checkbox" class="raw r_count" name="print_specimens" value="YES"> Specimens or individuals
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
@@ -530,9 +535,9 @@ Choose line colors and scalings for the variables you want to graph.
 <!--
 
 function select()	{
-        document.forms[1].linecolor[0].options[1].selected = true;
-        document.forms[1].linescale[6].options[8].selected = true;
-        return true;
+	document.forms[1].linecolor[0].options[1].selected = true;
+	document.forms[1].linescale[6].options[8].selected = true;
+	return true;
 }
 
 window.onload = select();
