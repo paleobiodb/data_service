@@ -552,7 +552,7 @@ sub retellOptions {
         if ($q->param('output_data') =~ /occurrence|specimens/) {
             foreach my $field ( @occTaxonFieldNames) {
                 if( $q->param ( "occurrences_".$field ) ){ 
-                    if ($field =~ /family_name|order_name|class_name/) {
+                    if ($field =~ /parent_name|family_name|order_name|class_name/) {
                         push ( @occFields, $field ); 
                     } else {
                         push ( @occFields, "occurrences_".$field ); 
@@ -1732,6 +1732,11 @@ sub queryDatabase {
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
 
+    if ( $q->param('occurrences_abund') )	{
+        $q->param('occurrences_abund_value' => 'YES');
+        $q->param('occurrences_abund_unit' => 'YES');
+    }
+
     # Call as needed
     $self->setupQueryFields() if (! $self->{'setup_query_fields_called'});
 
@@ -2272,6 +2277,7 @@ sub queryDatabase {
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES" ||
+            $q->param("occurrences_parent_name") eq "YES" ||
             $q->param("occurrences_type_body_part") ||
             $q->param("occurrences_type_specimen") ||
             $q->param("occurrences_type_locality") ||
@@ -2337,6 +2343,7 @@ sub queryDatabase {
             $q->param("occurrences_class_name") eq "YES" || 
             $q->param("occurrences_order_name") eq "YES" || 
             $q->param("occurrences_family_name") eq "YES" ||
+            $q->param("occurrences_parent_name") eq "YES" ||
             $q->param('occurrences_extant') =~ /y/i ) {
             %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
             if ( @ecoFields || $get_preservation )	{
@@ -2980,10 +2987,15 @@ sub queryDatabase {
             # Setup up family/name/class fields
             if (($q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
-                $q->param("occurrences_family_name") eq "YES") &&
+                $q->param("occurrences_family_name") eq "YES" ||
+                $q->param("occurrences_parent_name") eq "YES") &&
                 $row->{'o.taxon_no'} > 0 && $master_class{$row->{'o.taxon_no'}}) {
                 my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                 foreach my $parent (@parents) {
+                    if ( $parent->{'taxon_rank'} !~ /species|genus/ && ! $row->{'o.parent_name'} )	{
+                        $row->{'o.parent_name'} = $parent->{'taxon_name'};
+                        $row->{'o.parent_rank'} = $parent->{'taxon_rank'};
+                    }
                     if ($parent->{'taxon_rank'} eq 'family' && ! $row->{'o.family_name'}) {
                         $row->{'o.family_name'} = $parent->{'taxon_name'};
                     } elsif ($parent->{'taxon_rank'} eq 'order' && ! $row->{'o.order_name'}) {
@@ -2994,6 +3006,7 @@ sub queryDatabase {
                     }
                 }
                 # Get higher order names for indets as well
+                # parent_name doesn't apply, it's useful only for genera and species
                 if ($row->{'o.species_name'} =~ /indet/ && $row->{'o.taxon_no'}) {
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'o.taxon_no'}});
                     if ($taxon->{'taxon_rank'} eq 'family') {
@@ -3269,6 +3282,8 @@ sub printCSV {
         push @header, 'o.class_name' if ($q->param("occurrences_class_name") eq 'YES');
         push @header, 'o.order_name' if ($q->param("occurrences_order_name") eq 'YES');
         push @header, 'o.family_name' if ($q->param("occurrences_family_name") eq 'YES');
+        push @header, 'o.parent_rank' if ($q->param("occurrences_parent_name") eq 'YES');
+        push @header, 'o.parent_name' if ($q->param("occurrences_parent_name") eq 'YES');
     }      
     if ($q->param('output_data') =~ /genera/) {
         push @header, 'o.genus_name';
@@ -3495,6 +3510,10 @@ sub printMatrix {
     if ($q->param("occurrences_family_name") eq 'YES') {
         push @occHeader, 'o.family_name';
         push @printedOccHeader, 'family_name';
+    }
+    if ($q->param("occurrences_parent_name") eq 'YES') {
+        push @occHeader, 'o.parent_rank,o.parent_name';
+        push @printedOccHeader, 'parent_rank,parent_name';
     }
 
     push @occHeader,@ecoFields;
@@ -3780,6 +3799,7 @@ sub printCONJUNCT {
 
 # print higher order names as if they were separate taxa, but don't keep
 #  doing it over and over JA 21.3.07
+# note that parent_name is never printed to a CONJUNCT file
         if ( $q->param('occurrences_class_name') eq "YES" && $row->{'o.class_name'} && ! $indetseen{$row->{'o.class_name'}} )	{
             print OUTFILE $row->{'o.class_name'}," indet.\n";
             $indetseen{$row->{'o.class_name'}} = 1;
