@@ -38,9 +38,8 @@
 
 <tr>
   <td valign="top">
-    Your name:<br>
-    <i><span class="small">If you entered your name when you downloaded the data,<br>&nbsp;&nbsp;you must enter the same name here.<br>
-    If you didn't, leave this field blank.</span></i>
+    File name:<br>
+    <i><span class="small"><span class="required">Required</span> if you entered a name when you downloaded the data.</span>
   <td valign="top">
     <input type="text" name="yourname" value=""  size="20" />
   </td>  
@@ -93,9 +92,9 @@
 <tr>
   </td>
   <td valign="top">
-    Count incertae sedis genera as "families" or "orders"?
-  <td valign="top">
-    <input type="checkbox" name="replace_with_genus" value="YES"> yes
+    If the family or order name is missing, use the immediate parent taxon's name instead?
+  <td class="small" valign="top">
+    <input type="checkbox" name="replace_with_parent" value="YES"> yes
   </td>
 </tr>
 
@@ -116,7 +115,7 @@
     Range extant taxa through to the Recent?
   </td>
   <td valign="top">
-    <input type=checkbox name="recent_genera" value="YES"> yes
+    <input class="small" type=checkbox name="recent_genera" value="YES"> yes
   </td>
 </tr>
 </table>
@@ -242,6 +241,15 @@ This form allows you to request a diversity curve with assorted statistics.
       <option>50</option>
       <option>100</option>
     </select>
+  </td>
+</tr>
+
+<tr>
+  <td valign="top">
+    Draw fewer collections from references yielding many of them?
+  </td>
+  <td class="small" valign="top">
+    <input type="checkbox" name="disperse" value="YES"> yes
   </td>
 </tr>
 
