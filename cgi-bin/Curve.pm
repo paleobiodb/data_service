@@ -72,6 +72,7 @@ sub setArrays	{
 	$OUTPUT_DIR = $HTML_DIR.$PRINTED_DIR;
 	PBDBUtil::autoCreateDir($OUTPUT_DIR);
 
+	$exponent = $q->param('exponent');
 	if ($q->param('samplingmethod') eq "shareholder quorum subsampling")	{
 		$method = "SQS";
 		$q->param('stepsize' => '');
@@ -92,8 +93,11 @@ sub setArrays	{
 	}
 	elsif ($q->param('samplingmethod') eq "by specimen")	{
 		$method = "specimens";
+	} else	{
+		$q->param('samplesize' => '');
+		$q->param('samplingtrials' => '');
+		$q->param('exponent' => '');
 	}
-	$exponent = $q->param('exponent');
 }
 
 sub printError	{
@@ -292,6 +296,8 @@ sub assignGenera	{
 			$field_genus_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.species_name" )	{
 			$field_species_name = $fieldcount;
+		} elsif ( $fn eq "occurrences.parent_name" )	{
+			$field_parent_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.family_name" )	{
 			$field_family_name = $fieldcount;
 		} elsif ( $fn eq "occurrences.order_name" )	{
@@ -369,6 +375,8 @@ sub assignGenera	{
 		printError("The data can't be analyzed because the family name field hasn't been downloaded.",1);
 	} elsif ( $q->param("taxonomic_level") eq "order" && ! $field_order_name && $q->param('count_refs') ne "yes") {
 		printError("The data can't be analyzed because the order name field hasn't been downloaded.",1);
+	} elsif ( $q->param("taxonomic_level") =~ /family|order/ && ! $field_parent_name && $q->param('replace_with_parent') =~ /y/i) {
+		printError("The data can't be analyzed because the parent name field hasn't been downloaded.",1);
 	# these two might be missing
 	} elsif ( ! $field_abund_value && ( $method eq "specimens" || $q->param("print_specimens") eq "YES" ) )	{
 		printError("The data can't be analyzed because the abundance value field hasn't been downloaded.",1);
@@ -514,10 +522,36 @@ sub assignGenera	{
                		} 
                 # else, nothing needs to be done for PBDB data
 		# family and order level only apply to PBDB data
-		} elsif ( $q->param("taxonomic_level") eq "family" && ( $occrow[$field_family_name] || $q->param('replace_with_genus') !~ /y/i )) {
+		} elsif ( $q->param("taxonomic_level") eq "family" && $occrow[$field_family_name] ) {
 			$occrow[$field_genus_name] = $occrow[$field_family_name]; 
-		} elsif ( $q->param("taxonomic_level") eq "order" && ( $occrow[$field_order_name] || $q->param('replace_with_genus') !~ /y/i )) {
+		} elsif ( $q->param("taxonomic_level") eq "family" && $q->param('replace_with_parent') =~ /y/i && $occrow[$field_parent_name] ) {
+			$occrow[$field_genus_name] = $occrow[$field_parent_name]; 
+		} elsif ( $q->param("taxonomic_level") eq "family" && $q->param('replace_with_parent') =~ /y/i && $occrow[$field_parent_name] ) {
+			$occrow[$field_genus_name] = $occrow[$field_parent_name]; 
+		} elsif ( $q->param("taxonomic_level") eq "order" && $occrow[$field_order_name] ) {
 			$occrow[$field_genus_name] = $occrow[$field_order_name]; 
+		} elsif ( $q->param("taxonomic_level") eq "order" && $q->param('replace_with_parent') =~ /y/i && $occrow[$field_parent_name] ) {
+			$occrow[$field_genus_name] = $occrow[$field_parent_name]; 
+		} elsif ( $q->param("taxonomic_level") =~ /family|order/ ) {
+			$occrow[$field_genus_name] = ""; 
+		} elsif ( $q->param("taxonomic_level") !~ /genus|family|order/ )	{ #species
+			if ($bin_type =~ /neptune/i) {
+                    # do this since we may have subspecies
+				my $taxon_name = $occrow[$field_genus_name];
+				my ($genus_name,$species_name) = split(/ /,$taxon_name);
+				$occrow[$field_genus_name] = $genus_name." ".$species_name;
+			} else {
+				$occrow[$field_genus_name] .= " ".$occrow[$field_species_name]; 
+		}
+	}
+	
+		# get rid of records with no specimen/individual counts for specimen-
+		#  based rarefaction
+			if ($method eq "specimens")   {
+		} elsif ( $q->param("taxonomic_level") eq "order" && $occrow[$field_order_name] ) {
+			$occrow[$field_genus_name] = $occrow[$field_order_name]; 
+		} elsif ( $q->param("taxonomic_level") eq "order" && $q->param('replace_with_parent') =~ /y/i && $occrow[$field_parent_name] ) {
+			$occrow[$field_genus_name] = $occrow[$field_parent_name]; 
 		} elsif ( $q->param("taxonomic_level") !~ /genus|family|order/ )	{ #species
 			if ($bin_type =~ /neptune/i) {
                     # do this since we may have subspecies
@@ -988,7 +1022,7 @@ sub subsample	{
 			my @present = ();
 			my @refsampled = ();
 
-			for $i (1..$chrons)	{
+			for $i ( 1..$chrons )	{
 				if ( ($q->param('printall') eq "yes" && $listsinchron[$i] > 0) || (
 	($u[$i] >= $q->param('samplesize') && $method eq "SQS") ||
 	($usedoccsinchron[$i] >= $q->param('samplesize') && $method !~ /SQS|UW|OXW/) ||
@@ -1042,22 +1076,31 @@ sub subsample	{
 					  }
 					}
 					else	{
-					  for ($j = 1; $j <= $occsinchron[$i]; $j++)	{
+					  for $j ( 1..$occsinchron[$i] )	{
 					    $occid[$j] = $occsbychron[$i][$j];
 					  }
 					  $nitems = $occsinchron[$i];
 					}
 		# main sampling loop
 					while ($tosub > 0 && $sampled[$i] < $inbin)	{
-					  $lastsampled[$i] = $sampled[$i];
+						$lastsampled[$i] = $sampled[$i];
 		# draw an item
-					  $j = int(rand $nitems) + 1;
-					  if ( $field_refno > 0 && $collrefno[$listid[$j]] > 0 )	{
-					    $refsampled[$collrefno[$listid[$j]]][$i]++;
-					    if ( $refsampled[$collrefno[$listid[$j]]][$i] == 1 )	{
-					      $msubsrefrichness[$i]++;
-					    }
-					  }
+						$j = int(rand $nitems) + 1;
+						if ( $field_refno > 0 && $collrefno[$listid[$j]] > 0 )	{
+							if ( $q->param('disperse') =~ /y/i )	{
+								$j = -1;
+								while ( $j == -1 )	{
+									$j = int(rand $nitems) + 1;
+									if ( rand() > 1 / $listsfromref[$collrefno[$listid[$j]]][$i] )	{
+										$j = -1;
+									}
+								}
+							}
+							$refsampled[$collrefno[$listid[$j]]][$i]++;
+							if ( $refsampled[$collrefno[$listid[$j]]][$i] == 1 )	{
+								$msubsrefrichness[$i]++;
+							}
+						}
 	
 		# modify the counter
 					  if ( $method =~ /CR|UW|specimens/ )	{
@@ -1086,10 +1129,10 @@ sub subsample	{
 					    $sampled[$i] = $sampled[$i] + $xx**$exponent;
 					  }
 
-		# for SQS, stop with a probability inversely proportional to the overshoot
-		#  if the quorum has been exceed (i.e., counterintuitively, if the
-		#  overshoot is large keep the draw, and if it is small effectively throw
-		#  it back by bombing out)
+		# for SQS, stop with a probability inversely proportional to
+		#  the overshoot if the quorum has been exceed (i.e.,
+		#  counterintuitively, if the overshoot is large keep the draw,
+		#  and if it is small effectively throw it back by bombing out)
 					  if ( $method eq "SQS" && $tosub < 0 )	{
 					      my $plus = 1;
 					      my $over = $q->param('samplesize') - $tosub;
@@ -1430,7 +1473,11 @@ sub subsample	{
 sub printResults	{
 	my $self = shift;
 
-	if ($q->param('stepsize') ne "")	{
+	if ( ! open TABLE,">$OUTPUT_DIR/raw_curve_data.csv" ) {
+		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/raw_curve_data.csv<BR>$!" );
+	}
+	
+	if ( $method && $q->param('stepsize') ne "" )	{
 		if ( ! open CURVES, ">$OUTPUT_DIR/subcurve.tab" ) {
 			$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/subcurve.tab<BR>$!" );
 		}
@@ -1463,13 +1510,9 @@ sub printResults	{
 			}
 		}
 		close CURVES;
-	}
-	
-	if ( ! open TABLE,">$OUTPUT_DIR/raw_curve_data.csv" ) {
-		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/raw_curve_data.csv<BR>$!" );
-	}
-	if ( ! open SUB_TABLE,">$OUTPUT_DIR/subsampled_curve_data.csv" ) {
-		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/subsampled_curve_data.csv<BR>$!" );
+		if ( ! open SUB_TABLE,">$OUTPUT_DIR/subsampled_curve_data.csv" ) {
+			$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/subsampled_curve_data.csv<BR>$!" );
+		}
 	}
 	
 	if ($listsread > 0)	{
@@ -2703,7 +2746,7 @@ $im->setThickness(1);
 			}
 		}
 
-		my $pngfile = "curve".int(rand(100)).".png";
+		my $pngfile = "curve".int(rand(1000)).".png";
 		open PNG_OUT,">$HTML_DIR/public/curve/$pngfile";
 		print PNG_OUT $im->png;
 		close PNG_OUT;
