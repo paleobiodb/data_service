@@ -86,7 +86,6 @@ sub checkTaxonInfo {
                         $init .= " ".$init2;
                     }
                     $morewhere .= " AND ((((a.author1init='$init' AND a.author1last='$author') OR (a.author2init='$init' AND a.author2last='$author')) AND ref_is_authority='') OR (((r.author1init='$init' AND r.author1last='$author') OR (r.author2init='$init' AND r.author2last='$author')) AND ref_is_authority='YES'))";
-print "$morewhere<br>";
                 } else	{
                     $morewhere .= " AND (((a.author1last='$author' OR a.author2last='$author') AND ref_is_authority='') OR ((r.author1last='$author' OR r.author2last='$author') AND ref_is_authority='YES'))";
                 }
@@ -1827,7 +1826,7 @@ $output .= qq|<div class="displayPanel" align="left" style="margin-bottom: 2em; 
   <span class="displayPanelHeader">Sister species lacking formal opinion data</span>
   <div class="displayPanelContent">
 |;
-        $_ =~ s/$genus /$initial. /g foreach ( @possible_sister_taxa_links );
+        $_ =~ s/>$genus />$initial. /g foreach ( @possible_sister_taxa_links );
         $output .= join(", ",@possible_sister_taxa_links);
         $output .= qq|  </div>
 </div>|;
