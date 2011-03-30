@@ -120,6 +120,17 @@ while ( $s = $sth->fetchrow_hashref() )	{
 }
 $sth->finish();
 
+# we need to know hours authorized to identify major contributors
+
+$sql = "SELECT authorizer_no,count(distinct(concat(to_days(created),hour(created)))) c FROM ((SELECT authorizer_no,created FROM refs) UNION (SELECT authorizer_no,created FROM collections) UNION (SELECT authorizer_no,created FROM opinions) UNION (SELECT authorizer_no,created FROM specimens)) AS t GROUP BY authorizer_no";
+$sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
+$sth->execute();
+while ( $s = $sth->fetchrow_hashref() )	{
+	$sql = "UPDATE person SET hours_authorized=".$s->{'c'}.",last_action=last_action WHERE person_no=".$s->{'authorizer_no'};
+	$dbh->do ( $sql );
+}
+$sth->finish();
+
 $dbh->disconnect();
 
 
