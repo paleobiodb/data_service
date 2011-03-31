@@ -95,26 +95,38 @@ sub buildDownload {
     my $inputIsOK = $self->checkInput($q);
     return unless $inputIsOK;
 
-    # current limit for data set size that triggers the click through
+    # current limit for data set size that triggers the click through: 50 work days
+    #  = 50 x 4 = 200 hours, assuming that actual entry makes up half the hours
     # figure is based on a poll of 12 major contributors taken at NAPC 23.6.09
-    my $daylimit = 50;
+    my $hourlimit = 200;
 
     my ($lumpedResults,$allResults) = $self->queryDatabase();
 
-    my (%onday,%byauth,%authorizers);
+    my (%onhour,%onref,%byauth,%authorizers);
+    # tally hours of keystroking if possible; otherwise tally references used for entry
+    #  of collections and guesstimate hours using the known 1.7:1 ratio in keystroked data
     for my $row (@$allResults)	{
-        $onday{$row->{'personday'}}++;
-        if ( $onday{$row->{'personday'}} == 1 )	{
-            $byauth{$row->{'authorizer_no'}}++;
+        if ( ! $row->{'upload'} )	{
+            $onhour{$row->{'personhour'}}++;
+            if ( $onhour{$row->{'personhour'}} == 1 )	{
+                $byauth{$row->{'authorizer_no'}}++;
+            }
+        } else	{
+            $onref{$row->{'authorizer_no'}." ".$row->{'reference_no'}}++;
+            if ( $onref{$row->{'authorizer_no'}." ".$row->{'reference_no'}} == 1 )	{
+                $byauth{$row->{'authorizer_no'}} += 1.7;
+            }
         }
     }
-    my @d = keys %onday;
-    my $days = $#d + 1;
+    my @h = keys %onhour;
+    my $hours = $#h + 1;
+    my @r = keys %onref;
+    $hours += 1.7 * ( $#r + 1 );
     my @authnos = keys %byauth;
     @authnos = sort { $byauth{$b} <=> $byauth{$a} } @authnos;
-    # don't list authorizers contributing less than 10 person days of data
+    # don't list authorizers contributing less than 10 person days = 80 person hours
     #  (arbitrary, but seems good to me)
-    while ( $byauth{$authnos[$#authnos]} < 10 && @authnos )	{
+    while ( $byauth{$authnos[$#authnos]} < 80 && @authnos )	{
         pop @authnos;
     }
     my $dbt = $self->{'dbt'};
@@ -122,7 +134,12 @@ sub buildDownload {
     my $sql = "SELECT name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."')";
     my @namerows = @{$dbt->getData($sql)};
     $authorizers{$_->{'person_no'}} = $_->{'name'} foreach @namerows;
-    $byauth{$_} /= $days / 100 foreach keys %byauth;
+    $byauth{$_} /= $hours / 100 foreach keys %byauth;
+    my $monthyears = sprintf("%.1f work years",$hours / 2000);
+    if ( $monthyears < 1 )	{
+        $monthyears = sprintf("%.1f work months",$hours / 2000 * 12);
+    }
+    $hours = sprintf("%d",$hours);
 
     my ($refsCount,$nameCount,$taxaCount,$scaleCount,$mainCount) = (0,0,0,0,scalar(@$lumpedResults));
     my ($refsFile,$taxaFile,$scaleFile,$mainFile,$collFile,$colls) = ('','','','','',0);
@@ -162,16 +179,17 @@ sub buildDownload {
     } 
 
     print "<div align=\"center\"><p class=\"pageTitle\">Download results</p></div>\n\n";
-    if ( $days >= $daylimit )	{
+    if ( $hours >= $hourlimit )	{
         print qq|
 <div class="displayPanel" id="terms">
 <p>Your download is large. If you intend to use the data in a publication, we ask you to:</p>
 <ul>
-<li><a href="$READ_URL?action=displayPage&amp;page=join_us">Join the PaleoDB</a> and contribute more data.</li>
-<li>Acknowledge the major contributors to this data set by name.</li>
+<li>Notify some of the major contributors about your research.</li>
+<li>Acknowledge the major contributors by name in your paper.</li>
 <li>Cite the relevant <a href="$READ_URL?action=displayPage&amp;page=OSA">Online Systematics Archive</a>.</li>
 <li>If none are relevant, give a generic citation to the Paleobiology Database including the date of access.
-<li><a href="$READ_URL?action=displayPage&amp;page=publications">Request a publication number</a> once your paper is accepted.</li>
+<li><a href="$READ_URL?action=displayPage&amp;page=join_us">Join the PaleoDB</a> and contribute more data.</li>
+<li>At a bare minimum, <a href="$READ_URL?action=displayPage&amp;page=publications">request a publication number</a> once your paper is accepted.</li>
 </li>
 </ul>
 <p>The major contributors to this data set were:</p>
@@ -181,6 +199,7 @@ printf "<li>$authorizers{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
 
 print qq|
 </ul>
+<p>Each percentage is based on the estimated amount of time spent entering data by the authorizer and associated data enterers. The grand total is $hours hours (equivalent to $monthyears). The estimate is based on (1) date stamps for keystroked collections and (2) counts of published references used to document uploaded collections.</p>
 <p>If you agree to these terms, <a href="#" onClick=\"document.getElementById('mainPanel').style.display='inline'; document.getElementById('terms').style.display='none';\">click here</a> to access the data.</p>
 </div>
 <div id="mainPanel" style="display: none;">
@@ -244,13 +263,13 @@ print qq|
     }
     print qq|<p align="center" style="white-space: nowrap;"><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
     print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
-    if ( $days >= $daylimit )	{
+    if ( $hours >= $hourlimit )	{
         print qq| - <a href="#" onClick=\"document.getElementById('mainPanel').style.display='none'; document.getElementById('terms').style.display='inline';\">Show terms again</a>|;
     }
     #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
 
     print "</div>\n\n</div>\n\n";
-    if ( $days >= $daylimit )	{
+    if ( $hours >= $hourlimit )	{
         print "</div>\n\n";
     }
 }
@@ -553,7 +572,7 @@ sub retellOptions {
             foreach my $field ( @occTaxonFieldNames) {
                 if( $q->param ( "occurrences_".$field ) ){ 
                     if ($field =~ /parent_name|family_name|order_name|class_name/) {
-                        push ( @occFields, $field ); 
+                        push ( @occFields, $field );
                     } else {
                         push ( @occFields, "occurrences_".$field ); 
                     }
@@ -1748,7 +1767,7 @@ sub queryDatabase {
     my (@fields,@where,@occ_where,@reid_where,$taxon_where,@tables,@from,@groupby,@left_joins);
 
 
-    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short",'CONCAT(c.enterer_no," ",TO_DAYS(c.created)) AS personday');
+    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short",'CONCAT(c.enterer_no," ",TO_DAYS(c.created),HOUR(c.created)) AS personhour','c.upload');
     @tables = ('collections c');
     @where = $self->getCollectionsWhereClause();
 
@@ -2733,6 +2752,21 @@ sub queryDatabase {
                 }
             }
 
+            # get parent extant values if extant values are wanted at all 31.3.11
+            # WARNING: we are taking recorded values at, well, face value even
+            #  though many higher taxa are unmarked because:
+            #  (1) few users actually care about these data,
+            #  (2) most unmarked taxa are in fact extinct, and
+            #  (3) the data are virtually complete for tetrapods, at least
+            if ( $q->param('occurrences_extant') )	{
+                my @parents = @{$master_class{$row->{'o.taxon_no'}}};
+                foreach my $parent (@parents) {
+                    $row->{'o.family_extant'} = $parent->{'extant'} if ( $parent->{'taxon_rank'} eq "family" );
+                    $row->{'o.order_extant'} = $parent->{'extant'} if ( $parent->{'taxon_rank'} eq "order" );
+                    $row->{'o.class_extant'} = $parent->{'extant'} if ( $parent->{'taxon_rank'} eq "class" );
+                }
+            }
+
         }
         @dataRows = @temp;
         
@@ -3280,10 +3314,14 @@ sub printCSV {
     }
     if ($q->param('output_data') =~ /occurrence|genera|species|specimens/) {
         push @header, 'o.class_name' if ($q->param("occurrences_class_name") eq 'YES');
+        push @header, 'o.class_extant' if ( $q->param("occurrences_class_name") eq 'YES' && $q->param('occurrences_extant') eq 'YES');
         push @header, 'o.order_name' if ($q->param("occurrences_order_name") eq 'YES');
+        push @header, 'o.order_extant' if ( $q->param("occurrences_order_name") eq 'YES' && $q->param('occurrences_extant') eq 'YES');
         push @header, 'o.family_name' if ($q->param("occurrences_family_name") eq 'YES');
+        push @header, 'o.family_extant' if ( $q->param("occurrences_family_name") eq 'YES' && $q->param('occurrences_extant') eq 'YES');
         push @header, 'o.parent_rank' if ($q->param("occurrences_parent_name") eq 'YES');
         push @header, 'o.parent_name' if ($q->param("occurrences_parent_name") eq 'YES');
+        push @header, 'o.parent_extant' if ( $q->param("occurrences_parent_name") eq 'YES' && $q->param('occurrences_extant') eq 'YES');
     }      
     if ($q->param('output_data') =~ /genera/) {
         push @header, 'o.genus_name';
