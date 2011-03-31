@@ -945,11 +945,11 @@ sub getParents {
     }
     foreach my $taxon_no (@$taxon_nos_ref) {
         if ($rank) {
-            my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank FROM $TAXA_LIST_CACHE l, $TAXA_TREE_CACHE t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no AND a.taxon_rank=$rank ORDER BY t.lft DESC";
+            my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank,a.extant FROM $TAXA_LIST_CACHE l, $TAXA_TREE_CACHE t, authorities a WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no AND a.taxon_rank=$rank ORDER BY t.lft DESC";
             my @results = @{$dbt->getData($sql)};
             $hash{$taxon_no} = $results[0];
         } elsif ($return_type eq 'array_full') {
-            my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank,a.common_name, IF (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', a.pubyr, IF (a.ref_is_authority='YES', r.pubyr, '')) pubyr FROM $TAXA_LIST_CACHE l, $TAXA_TREE_CACHE t, authorities a,refs r WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no AND a.reference_no=r.reference_no ORDER BY t.lft DESC";
+            my $sql = "SELECT a.taxon_no,a.taxon_name,a.taxon_rank,a.common_name,a.extant, IF (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', a.pubyr, IF (a.ref_is_authority='YES', r.pubyr, '')) pubyr FROM $TAXA_LIST_CACHE l, $TAXA_TREE_CACHE t, authorities a,refs r WHERE t.taxon_no=l.parent_no AND a.taxon_no=l.parent_no AND l.child_no=$taxon_no AND a.reference_no=r.reference_no ORDER BY t.lft DESC";
             $hash{$taxon_no} = $dbt->getData($sql);
         } else {
             my $sql = "SELECT l.parent_no FROM $TAXA_LIST_CACHE l, $TAXA_TREE_CACHE t WHERE t.taxon_no=l.parent_no AND l.child_no=$taxon_no ORDER BY t.lft DESC";
