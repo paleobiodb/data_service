@@ -1576,14 +1576,14 @@ sub getOccurrencesWhereClause {
     push @all_where, "o.abund_unit NOT LIKE \"\" AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'abundances';
     push @all_where, "o.abund_unit IN ('individuals','specimens') AND o.abund_value IS NOT NULL" if $q->param("abundance_required") eq 'specimens';
 
-    push @occ_where, "o.species_name!='indet.'" if $q->param('indet') ne 'YES';
+    push @occ_where, "o.species_name NOT LIKE '%indet%'" if $q->param('indet') ne 'YES';
     push @occ_where, "o.species_name!='sp.'" if $q->param('sp') eq 'NO';
     my $genusResoString = $self->getResoString('genus');
     push @occ_where, $genusResoString if $genusResoString;
     my $speciesResoString = $self->getResoString('species');
     push @occ_where, $speciesResoString if $speciesResoString;
 
-    push @reid_where, "re.species_name!='indet.'" if $q->param('indet') ne 'YES';
+    push @reid_where, "re.species_name NOT LIKE '%indet.%'" if $q->param('indet') ne 'YES';
     push @reid_where, "re.species_name!='sp.'" if $q->param('sp') eq 'NO';
 
     # this is kind of a hack, I admit it JA 31.7.05
@@ -1681,6 +1681,14 @@ sub getCollectionsWhereClause {
             }
         }
     }
+
+	# this one is super-simple, no need to make it a separate function
+	# note that a member name by itself is not adequate info (as mentioned
+	#  where strat lumping is carried out)
+	# JA 4.4.11
+	if ( $q->param('require_strat_unit') =~ /y/i )	{
+		push @where , "(c.geological_group IS NOT NULL OR c.formation IS NOT NULL)";
+	}
 
     foreach my $whereItem (
         $self->getCountryString(),
@@ -2936,7 +2944,9 @@ sub queryDatabase {
             #  collections actually from the same formation
                 if ( $row->{'c.formation'} )	{
                     $lump_string .= $row->{'c.formation'};
-            # you don't want to lump by member if there's no formation,
+            # grouping by group is better than nothing JA 3.4.11
+                } elsif ( $row->{'c.geological_group'} )	{
+            # you don't want to lump by member if there's no formation or group,
             #  because that's probably a data entry error
                 } else	{
                     $lump_string .= $row->{'collection_no'};
@@ -2945,6 +2955,15 @@ sub queryDatabase {
             elsif ( $q->param('lump_by_strat_unit') eq 'member' )    {
                 if ( $row->{'c.formation'} && $row->{'c.member'} )	{
                     $lump_string .= $row->{'c.formation'}.$row->{'c.member'};
+            # whoops, formation is better than nothing if the member is missing
+            # even if there are named members in the formation, you still don't want
+            #  to keep the "member unknown" collections separate from each other
+            # should have fixed this years ago JA 3.4.11
+                } elsif ( $row->{'c.formation'} )	{
+                    $lump_string .= $row->{'c.formation'};
+            # ditto group-only collections
+                } elsif ( $row->{'c.geological_group'} )	{
+                    $lump_string .= $row->{'c.geological_group'};
                 } else	{
                     $lump_string .= $row->{'collection_no'};
                 }
@@ -2989,11 +3008,6 @@ sub queryDatabase {
     
     @dataRows = @lumpedDataRows;
     my $dataRowsSize = scalar(@dataRows);
-    # Get a list of parents for classification purposes
-
-
-        
-
 
     # This is a bit nasty doing it here, but since we do lumping in PERL code, we have to do this after the
     # fact and can't do it after the fact. Will have to amend table structure or radically alter queries
@@ -3972,11 +3986,10 @@ sub printAbundFile {
     if (!open(RANGEFILE, ">$OUT_FILE_DIR/$rangeFile")) {
         die ("Could not open output file: $rangeFile($!) <br>");
     }
-         
 
-    # cumulate number of specimens per collection, 
+    # cumulate number of specimens per collection
     my %abundance = ();
-    foreach my $row (@$results) {
+    for my $row (@$results) {
         if ( $row->{'o.abund_unit'} =~ /^(?:specimens|individuals)$/ && $row->{'o.abund_value'} > 0 ) {
             $abundance{$row->{'collection_no'}} += $row->{'o.abund_value'};
         }
