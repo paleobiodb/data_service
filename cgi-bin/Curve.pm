@@ -241,6 +241,11 @@ sub assignGenera	{
         $sepChar = ",";
     }
 
+	if ( $q->param("time_scale") =~ /neptune/i )	{
+		$q->param('count_refs' => 'no');
+		$q->param('one_occs_or_refs' => 'one-occurrence');
+	}
+
     $csv = Text::CSV_XS->new({
         'quote_char'  => '"',
         'escape_char' => '"',
@@ -314,6 +319,11 @@ sub assignGenera	{
 		#  9.4.05
 		} elsif ( $fn eq "collections.reference_no" )	{
 			$field_refno = $fieldcount;
+		# field_midpt isn't used now, but could be used to force collections
+		#  with broad age estimates into a bin (a rainy day project)
+		# WARNING: uses the last seen of the two fields
+		} elsif ( $fn eq "collections.ma_mid" || $fn eq "collections.interpolated_mid" )	{
+			$field_midpt = $fieldcount;
 		} elsif ( $fn eq "collections.period" && $q->param('time_scale') eq "periods" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "period";
@@ -341,6 +351,7 @@ sub assignGenera	{
 		}
 		$fieldcount++;
 	}
+
 
 	# this first condition never should be met, just being careful here
 	if ($q->param('time_scale') =~ /neptune/i) {
@@ -438,14 +449,17 @@ sub assignGenera	{
 		my ($top,$base) = $t->getBoundariesReal('FR2');
 		%topma = %$top;
 		%basema = %$base;
-	} elsif ( $bin_type =~ /neptune/ ) {
+	} elsif ( $bin_type =~ /neptune/i ) {
 	# Neptune data ranges from -3 to 150 mA right now, use those at defaults
 		$neptune_range_min = 0;
 		$neptune_bin_count = int(180/$q->param('neptune_bin_size'));
 		$neptune_range_max = $q->param('neptune_bin_size')*$neptune_bin_count;
 		@binnames = ();
 		for(my $i=$neptune_range_min;$i<$neptune_range_max;$i+=$q->param('neptune_bin_size')) {
-			 @binnames,"$i - ".($i+$q->param('neptune_bin_size'));
+			my $name = "$i - ".($i + $q->param('neptune_bin_size'));
+			$topma{$name} = $i;
+			$basema{$name} = $i + $q->param('neptune_bin_size');
+			push @binnames , $name;
 		}
 	}
 	# assign chron numbers to named bins
@@ -464,7 +478,7 @@ sub assignGenera	{
 	#  here before, but it's not needed now that this is a proper query
 	#  parameter JA 18.2.06
 
-    my $count=0;
+	my $count=0;
     # The sample id variables maps neptune sample ids (text strings) to integers so that the curve script may
     # process them correctly
     #my %sampleid = ();
@@ -579,7 +593,7 @@ sub assignGenera	{
 		#  whether to do this really is the business of the user,
 		#  however
 			if ( $occrow[$field_genus_name] ne "" && $chid[$collno] > 0 )      {
-				$temp = $occrow[$field_genus_name];
+				$g = $occrow[$field_genus_name];
 		# we used to do some cleanups here that assumed error checking
 		#  on data entry didn't always work
 		# disabled 30.6.04 because on that date almost all genus-level
@@ -587,12 +601,10 @@ sub assignGenera	{
 		#  spaces, trailing spaces, and subgenus names
 	
 		 # create a list of all distinct genus names
-				$ao = 0;
-				$ao = $genid{$temp};
-				if ($ao == 0)	{
+				if ( ! $genid{$g} )	{
 					$ngen++;
-					$genus[$ngen] = $temp;
-					$genid{$temp} = $ngen;
+					$genus[$ngen] = $g;
+					$genid{$g} = $ngen;
 				}
 
 				$nsp = 1;
@@ -606,26 +618,24 @@ sub assignGenera	{
 
 				# add genus to master occurrence list and
 				#  store the abundances
-				if ($xx != -9)	{
-					push @occs,$genid{$temp};
-					if ( $lastocc[$collno] !~ /[0-9]/ )	{
-						push @stone , -1;
-					} else	{
-						push @stone,$lastocc[$collno];
-					}
-					push @abund,$occrow[$field_abund_value];
-					$lastocc[$collno] = $#occs;
-
-					# count the collections belonging to
-					#  each ref and record which ref this
-					#  collection belongs to 9.4.05
-					if ( $collrefno[$collno] < 1 && $occrow[$field_refno] > 0 && $field_refno > 0 )	{
-						$collsfromref[$occrow[$field_refno]][$chid[$collno]]++;
-						$collrefno[$collno] = $occrow[$field_refno];
-					}
-
-					$toccsinlist[$collno] = $toccsinlist[$collno] + $nsp;
+				push @occs,$genid{$g};
+				if ( $lastocc[$collno] !~ /[0-9]/ )	{
+					push @stone , -1;
+				} else	{
+					push @stone,$lastocc[$collno];
 				}
+				push @abund,$occrow[$field_abund_value];
+				$lastocc[$collno] = $#occs;
+
+				# count the collections belonging to
+				#  each ref and record which ref this
+				#  collection belongs to 9.4.05
+				if ( $collrefno[$collno] < 1 && $occrow[$field_refno] > 0 && $field_refno > 0 )	{
+					$collsfromref[$occrow[$field_refno]][$chid[$collno]]++;
+					$collrefno[$collno] = $occrow[$field_refno];
+				}
+
+				$toccsinlist[$collno] = $toccsinlist[$collno] + $nsp;
 				if ( $occrow[$field_refno] > 0 )	{
 					$refisinchron[$chid[$collno]]{$occrow[$field_refno]}++;
 				}
@@ -634,7 +644,7 @@ sub assignGenera	{
 	# END of input file parsing routine
 
 		if ( $q->param('recent_genera') =~ /yes/i )	{
-			$self->findRecentGenera;
+			$self->findRecentTaxa;
 	# declare Recent genera present in bin 1
 			for my $taxon ( keys %extantbyname )	{
 				if ( $genid{$taxon} =~ /[0-9]/ )	{
@@ -645,7 +655,7 @@ sub assignGenera	{
 
 	 # get basic counts describing lists and their contents
 		for $collno (1..$#lastocc+1)	{
-			$xx = $lastocc[$collno];
+			my $xx = $lastocc[$collno];
 			while ( $xx >= 0 && $xx =~ /[0-9]/ )	{
 				$nsp = 1;
 				if ($method eq "specimens")	{
@@ -672,6 +682,10 @@ sub assignGenera	{
 				}
 				$xx = $stone[$xx];
 			}
+		}
+
+		if ( $listsread == 0 )	{
+			printError("The occurrence file was found, but data can't be analyzed because the data records were all skipped.",1,1);
 		}
 
 		for my $c ( 0..$#collrefno )	{
@@ -982,11 +996,10 @@ $| = 1;
 }
 
 # JA 16.8.04
-sub findRecentGenera	{
+sub findRecentTaxa	{
 
 	my $self = shift;
 
-	# draw all comments pertaining to Jack's genera
 	my $asql = "SELECT taxon_no,taxon_name FROM authorities WHERE extant='YES' AND taxon_name IN ('" . join("','",@genus) . "')";
 	my @arefs = @{$dbt->getData($asql)};
 	my @taxon_nos= map {$_->{taxon_no}} @arefs;
@@ -1064,7 +1077,7 @@ sub subsample	{
 		 #   quota for this interval (OW or OXW only)
 					  if ( $method =~ /OW|OXW/ )	{
 					    for $j (1..$listsinchron[$i])	{
-					      $xx = $occsinlist[$listid[$j]];
+					      my $xx = $occsinlist[$listid[$j]];
 					      if ( $method eq "OXW" )	{
 					        $xx = $xx**$exponent;
 					      }
@@ -1107,7 +1120,7 @@ sub subsample	{
 					      $tosub--;
 					      $sampled[$i]++;
 					  } elsif ( $method eq "OW" )	{
-					      $xx = $#{$list[$listid[$j]]} + 1;
+					      my $xx = $#{$list[$listid[$j]]} + 1;
 					      $tosub--;
 					      $sampled[$i] = $sampled[$i] + $xx;
 					  } elsif ( $method eq "SQS" )	{
@@ -1124,7 +1137,7 @@ sub subsample	{
 					  }
 					# OXW
 					  else	{
-					    $xx = $#{$list[$listid[$j]]} + 1;
+					    my $xx = $#{$list[$listid[$j]]} + 1;
 					    $tosub--;
 					    $sampled[$i] = $sampled[$i] + $xx**$exponent;
 					  }
@@ -1519,13 +1532,13 @@ sub printResults	{
 		$listorfm = "Collections"; # I'm not sure why this is a variable
 					# but what the heck
 		$generaorrefs = "genera";
-	if ( $q->param('taxonomic_level') eq 'species') {
-		$generaorrefs = "species";
-	} elsif ( $q->param('taxonomic_level') eq 'family') {
-		$generaorrefs = "families";
-	} elsif ( $q->param('taxonomic_level') eq 'order') {
-		$generaorrefs = "orders";
-	}
+		if ( $q->param('taxonomic_level') eq 'species') {
+			$generaorrefs = "species";
+		} elsif ( $q->param('taxonomic_level') eq 'family') {
+			$generaorrefs = "families";
+		} elsif ( $q->param('taxonomic_level') eq 'order') {
+			$generaorrefs = "orders";
+		}
 
 
         print '<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
@@ -2564,9 +2577,12 @@ sub printResults	{
 |;
 			print "The subsampling method was <b>".$q->param('samplingmethod')."</b>.<p>\n";
 			if ( $method ne "SQS" )	{
-				print "The sampling quota per time interval was <b>".$q->param('samplesize')."</b>.<p>\n";
+				print "<p>The sampling quota per time interval was <b>".$q->param('samplesize')."</b>.</p>\n";
 			} else	{
-				print "The sampling quorum per time interval was <b>".$q->param('samplesize')."</b>.<p>\n";
+				print "<p>The sampling quorum per time interval was <b>".$q->param('samplesize')."</b>.</p>\n";
+				if ( $q->param('time_scale') =~ /neptune/i )	{
+					print "<p>Good's <i>u</i> was based on counts of one-occurrence taxa because Neptune data files do not include a reference field.</p>\n";
+				}
 			}
 			print "The total number of trials was <b>".$q->param('samplingtrials')."</b>.<p>\n";
 			if ( $threetimerp )	{
@@ -2876,9 +2892,6 @@ showPanel(1);
 </script>
 ';
 
-	}
-	else	{
-		print "\n<b>Sorry, the search failed.</b> No collections met the search criteria.<p>\n";
 	}
 
 }
