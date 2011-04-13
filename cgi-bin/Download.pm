@@ -2269,6 +2269,9 @@ sub queryDatabase {
                     }
                     # Don't forget these as well
                     $all_taxa{$row->{'synonym_no'}} = 1;
+                    # whoops, need this too (Globisinum pritchardi case)
+                    #  JA 13.4.11
+                    $all_taxa{$syn} = 1;
                     $ss_taxon_no{$row->{'taxon_no'}} = $syn;
                     # Split it into bits here and store that, optimization
                     my @name_bits = Taxon::splitTaxon($name);
@@ -4112,7 +4115,7 @@ sub printScaleFile {
 
     my ($interval_lookup,$upper_bin_bound,$lower_bin_bound);
     if ( $q->param('time_scale') eq "PBDB 10 m.y. bins" ) {
-        ($upper_bin_bound,$lower_bin_bound) = $self->{t}->getBoundariesReal('bins');
+        ($upper_bin_bound,$lower_bin_bound) = $self->{t}->computeBinBounds('bins');
         ($interval_lookup) = $self->{t}->getScaleMapping('bins');
     } else {
         ($upper_bin_bound,$lower_bin_bound) = $self->{t}->getBoundaries();
