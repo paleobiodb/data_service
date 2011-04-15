@@ -1222,11 +1222,14 @@ sub fastTaxonCount	{
 	if ( $q->param('author') )	{
 		push @qs , "author of name = ".$q->param('author');
 	}
-	if ( $q->param('after') )	{
-		push @qs , "name published after = ".$q->param('after');
+	if ( $q->param('after') && $q->param('before') )	{
+		push @qs , "name published between ".$q->param('after'). " and ".$q->param('before');
 	}
-	if ( $q->param('before') )	{
-		push @qs , "name published before = ".$q->param('before');
+	elsif ( $q->param('after') )	{
+		push @qs , "name published in or after ".$q->param('after');
+	}
+	elsif ( $q->param('before') )	{
+		push @qs , "name published in or before ".$q->param('before');
 	}
 
 	my $enterer;
@@ -1259,7 +1262,7 @@ sub fastTaxonCount	{
 	if ( $q->param('continent') )	{
 		# ugly but effective
 		my $c = $q->param('continent');
-		my $countries = `grep $c data/PBDB.regions`;
+		my $countries = `grep '$c' data/PBDB.regions`;
 		$countries =~ s/.*://;
 		$countries =~ s/'/\\'/;
 		$countries =~ s/\t/','/g;
