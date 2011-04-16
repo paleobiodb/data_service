@@ -638,13 +638,13 @@ sub populateMeasurementForm {
             push @values , '<br><div style="margin-top: 0.5em;"><input type="checkbox" name="switch_ref" value="'.$s->get('reference_no').'"> switch this data record to your current reference ('.$s->get('reference_no').')'."</div>\n";
         }
 
-	# if this is a general taxon-specific record, the user might want to swap it
-	#   to a specific occurrence
+	# if this is a general taxon-specific record, the user might want to
+	#   swap it to a specific occurrence
 	# exact match on genus and species is required to avoid printing tons of
 	#  irrelevant records
 	if ( $row->{'occurrence_no'} == 0 )	{
 		my ($g,$s) = split / /,$taxon_name;
-		my $sql = "SELECT collection_name,occurrence_no FROM collections c,occurrences o WHERE c.collection_no=o.collection_no AND genus_name='$g' AND species_name='$s'";
+		my $sql = "(SELECT collection_name,occurrence_no FROM collections c,occurrences o WHERE c.collection_no=o.collection_no AND genus_name='$g' AND species_name='$s') UNION (SELECT collection_name,occurrence_no FROM collections c,reidentifications r WHERE c.collection_no=r.collection_no AND genus_name='$g' AND species_name='$s') ORDER BY collection_name";
         	@colls = @{$dbt->getData($sql)};
 		if ( @colls )	{
 			push @fields , 'occurrences';
