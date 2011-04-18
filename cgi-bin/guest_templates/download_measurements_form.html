@@ -38,14 +38,15 @@
 <td valign=top class="small" nowrap>Body parts:<br>
 <span class="verysmall">Optional. Lists such as m1, skull, shell are okay.</span>
 </td>
-<td><input type="text" name="part_list" value="" class="small" size="20" />
+<td><input type="text" name="part_list" value="" class="small" size="20">
+<input type="checkbox" name="all_parts" value="yes"> <span class="verysmall">all parts must be measured</span>
 </td>
 </tr> 
 
 <tr> 
 <td valign=top class="small" nowrap>Collection name or number(s):
 </td>
-<td><input type="text" name="collection_names" value="" class="small" size="20" />
+<td><input type="text" name="collection_names" value="" class="small" size="20">
 </td>
 
 <tr>
@@ -77,7 +78,7 @@
 <td valign=top class="small" nowrap>Group, formation, or member:
 </td>
 <td>
-<input type="text" name="group_formation_member" value="" class="small" size="20" />
+<input type="text" name="group_formation_member" value="" class="small" size="20">
 </td>
 </tr>
 
@@ -102,12 +103,12 @@
 
 <table width="100%" class="tiny">
   <tr>
-    <td><input type="checkbox" name="authors" value="YES" />authors</td>
-    <td><input type="checkbox" name="year" value="YES" />year published</td>
-    <td><input type="checkbox" name="type_specimen" value="YES" />type specimen</td>
-    <td><input type="checkbox" name="type_body_part" value="YES" />type body part</td>
-    <td><input type="checkbox" name="type_locality" value="YES" />type locality number</td>
-    <td><input type="checkbox" name="extant" value="YES" />extant</td>
+    <td><input type="checkbox" name="authors" value="YES">authors</td>
+    <td><input type="checkbox" name="year" value="YES">year published</td>
+    <td><input type="checkbox" name="type_specimen" value="YES">type specimen</td>
+    <td><input type="checkbox" name="type_body_part" value="YES">type body part</td>
+    <td><input type="checkbox" name="type_locality" value="YES">type locality number</td>
+    <td><input type="checkbox" name="extant" value="YES">extant</td>
   </tr>
 </table>
 
@@ -120,26 +121,31 @@
 
 <p class="small">The geometric mean is always reported.</p>
 
-<table width="100%" class="tiny">
+<table width="80%" class="tiny">
   <tr>
-    <td width="30%" nowrap><input type="checkbox" value=""  title="Check all" onClick="checkAll(this,'s_measurements');" /><span class="medium">Check all</span></td>
+    <td nowrap colspan=5><input type="checkbox" value=""  title="Check all" onClick="checkAll(this,'s_measurements');"><span class="medium">Check all</span></td>
   </tr>
 
   <tr>
-    <td><input type="checkbox" name="length" value="YES"  class="length_width s_measurements" onClick="checkAll(this,'average');" checked />length</td>
-    <td><input type="checkbox" name="width" value="YES"  class="length_width s_measurements" onClick="checkAll(this,'average');" checked />width</td>
-    <td><input type="checkbox" name="height" value="YES"  class="s_measurements" onClick="checkAll(this,'average');" />height</td>
-    <td><input type="checkbox" name="circumference" value="YES"  class="s_measurements" onClick="checkAll(this,'average');" />circumference</td>
-    <td><input type="checkbox" name="diagonal" value="YES"  class="s_measurements" onClick="checkAll(this,'average');" />diagonal</td>
-    <td><input type="checkbox" name="inflation" value="YES"  class="s_measurements" onClick="checkAll(this,'average');" />inflation</td>
+    <td><input type="checkbox" name="length" value="YES"  class="length_width s_measurements" onClick="checkAll(this,'average');" checked>length</td>
+    <td width="20%"><input type="checkbox" name="width" value="YES"  class="length_width s_measurements" onClick="checkAll(this,'average');" checked>width</td>
+    <td width="20%"><input type="checkbox" name="height" value="YES"  class="s_measurements" onClick="checkAll(this,'average');">height</td>
+    <td width="20%"><input type="checkbox" name="circumference" value="YES"  class="s_measurements" onClick="checkAll(this,'average');">circumference</td>
   </tr>
 
   <tr>
-    <td><input type="checkbox" name="specimens_measured" value="YES"  class="s_measurements" checked />specimens measured</td>
-    <td><input type="checkbox" name="min" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');" />min</td>
-    <td><input type="checkbox" name="max" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');" />max</td>
-    <td><input type="checkbox" name="median" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');" />median</td>
-    <td><input type="checkbox" name="error" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');" />error</td>
+    <td><input type="checkbox" name="diagonal" value="YES"  class="s_measurements" onClick="checkAll(this,'average');">diagonal</td>
+    <td><input type="checkbox" name="inflation" value="YES"  class="s_measurements" onClick="checkAll(this,'average');">inflation</td>
+    <td><input type="checkbox" name="d13C" value="YES"  class="s_measurements" onClick="checkAll(this,'average');">&delta;<sup>13</sup>C</td>
+    <td><input type="checkbox" name="d18O" value="YES"  class="s_measurements" onClick="checkAll(this,'average');">&delta;<sup>18</sup>O</td>
+  </tr>
+
+  <tr>
+    <td><input type="checkbox" name="specimens_measured" value="YES"  class="s_measurements" checked>specimens measured</td>
+    <td><input type="checkbox" name="min" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">min</td>
+    <td><input type="checkbox" name="max" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">max</td>
+    <td><input type="checkbox" name="median" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">median</td>
+    <td><input type="checkbox" name="error" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">error</td>
   </tr>
 </table>
 </div>
