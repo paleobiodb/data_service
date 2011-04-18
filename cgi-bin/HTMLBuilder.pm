@@ -128,6 +128,8 @@ sub new {
         height_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
         diagonal_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
         inflation_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
+        d13C_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
+        d18O_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
         specimen_is_type=>[\&_listFromList, 'no','holotype','paratype','some paratypes'],
     };
    
