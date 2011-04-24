@@ -314,9 +314,6 @@ sub assignGenera	{
 			$field_abund_unit = $fieldcount;
 		} elsif ( $fn eq "occurrences.abund_value" )	{
 			$field_abund_value = $fieldcount;
-		# only get the collection's ref no if we're weighting by
-		#  collections per ref and the sampling method is by-collection
-		#  9.4.05
 		} elsif ( $fn eq "collections.reference_no" )	{
 			$field_refno = $fieldcount;
 		# field_midpt isn't used now, but could be used to force collections
@@ -441,12 +438,12 @@ sub assignGenera	{
 		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "10my" ) {
 		@binnames = $t->getBins();
-		my ($top,$base) = $t->getBoundariesReal('bins');
+		my ($top,$base) = $t->computeBinBounds('bins');
 		%topma = %$top;
 		%basema = %$base;
 	} elsif ( $bin_type eq "FossilRecord2" ) {
 		@binnames = $t->getFR2Bins();
-		my ($top,$base) = $t->getBoundariesReal('FR2');
+		my ($top,$base) = $t->computeBinBounds('FR2');
 		%topma = %$top;
 		%basema = %$base;
 	} elsif ( $bin_type =~ /neptune/i ) {
@@ -470,10 +467,6 @@ sub assignGenera	{
 		$chname[$chrons] = $bn;
 	}
 
-	# HARDCODED for NOW, change this later PS 1/10/2005
-	if ( $bin_type =~ /neptune/i) {
-		$q->param("taxonomic_level"=>"species");
-	}
 	# PS had a hard coded level value of genus for standard PBDB data
 	#  here before, but it's not needed now that this is a proper query
 	#  parameter JA 18.2.06
@@ -484,19 +477,10 @@ sub assignGenera	{
     #my %sampleid = ();
     #my $sampleid_count = 0;
         foreach (@OCCDATA) {
-			#s/\n//;
-            $status = $csv->parse($_);
-            my @occrow = $csv->fields();
-            $count++;
-            if (!$status) { print "Warning, error parsing CSV line $count"; }
-			# tab-delimited file
-			#if ( $_ =~ /\t/ )	{
-			#	@occrow = split /\t/,$_;
-			#}
-			# comma-delimited file
-			#else	{
-		    #		@occrow = split /,/,$_;
-			#}
+		s/\n//;
+		$status = $csv->parse($_);
+		my @occrow = $csv->fields();
+		$count++;
 
     		# set the bin ID number (chid) for the collection
 	    	# time interval name has some annoying quotes
@@ -529,7 +513,7 @@ sub assignGenera	{
 	# adapted this section to handle family and order level data
 	#  JA 18.2.06 
 		if ($q->param("taxonomic_level") eq "genus") {
-			if ($bin_type =~ /neptune/i) {
+			if ($bin_type =~ /neptune/i && $field_genus_name == $field_species_name) {
 				my $taxon_name = $occrow[$field_genus_name];
 				my ($genus_name) = split(/ /,$taxon_name);
 				$occrow[$field_genus_name] = $genus_name;
@@ -549,7 +533,7 @@ sub assignGenera	{
 		} elsif ( $q->param("taxonomic_level") =~ /family|order/ ) {
 			$occrow[$field_genus_name] = ""; 
 		} elsif ( $q->param("taxonomic_level") !~ /genus|family|order/ )	{ #species
-			if ($bin_type =~ /neptune/i) {
+			if ($bin_type =~ /neptune/i && $field_genus_name == $field_species_name) {
                     # do this since we may have subspecies
 				my $taxon_name = $occrow[$field_genus_name];
 				my ($genus_name,$species_name) = split(/ /,$taxon_name);
@@ -1523,9 +1507,9 @@ sub printResults	{
 			}
 		}
 		close CURVES;
-		if ( ! open SUB_TABLE,">$OUTPUT_DIR/subsampled_curve_data.csv" ) {
-			$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/subsampled_curve_data.csv<BR>$!" );
-		}
+	}
+	if ( ! open SUB_TABLE,">$OUTPUT_DIR/subsampled_curve_data.csv" ) {
+		$self->htmlError ( "$0:Couldn't open $OUTPUT_DIR/subsampled_curve_data.csv<BR>$!" );
 	}
 	
 	if ($listsread > 0)	{
@@ -1849,7 +1833,7 @@ sub printResults	{
 				if ( $q->param('print_origination_rate_raw') eq "YES" )	{
 					if ( $threetimers[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",log( $twotimers[$i-1] / $threetimers[$i] ) - log( $rawsum3timers / ( $rawsum3timers + $rawsumPtimers ) );
-						push @data , sprintf "%.3f",$mu[$i];
+						push @data , sprintf "%.3f",log( $twotimers[$i-1] / $threetimers[$i] ) - log( $rawsum3timers / ( $rawsum3timers + $rawsumPtimers ) );
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
 						push @data , 'NA';
@@ -1870,7 +1854,7 @@ sub printResults	{
 				if ( $q->param('print_extinction_rate_raw') eq "YES" )	{
 					if ( $threetimers[$i] > 0 )	{
 						printf "<td class=tiny align=center valign=top>%.3f ",log( $twotimers[$i] / $threetimers[$i] ) - log( $rawsum3timers / ( $rawsum3timers + $rawsumPtimers ) );
-						push @data , sprintf "%.3f",$mu[$i];
+						push @data , sprintf "%.3f",log( $twotimers[$i] / $threetimers[$i] ) - log( $rawsum3timers / ( $rawsum3timers + $rawsumPtimers ) );
 					} else	{
 						print "<td class=tiny align=center valign=top>NA ";
 						push @data , 'NA';
@@ -2586,7 +2570,7 @@ sub printResults	{
 			}
 			print "The total number of trials was <b>".$q->param('samplingtrials')."</b>.<p>\n";
 			if ( $threetimerp )	{
-				printf "The average per-interval proportion based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
+				printf "The average per-interval sampling probability based on three timer analysis of the subsampled data is <b>%.3f</b>.<p>\n",$threetimerp;
 			}
 			if ( $q->param('print_three_timer_estimate_ss') eq "YES" )	{
 				print "Corrected SIB, not raw SIB, was used for the three timer diversity estimate.<p>\n";
@@ -2706,6 +2690,10 @@ sub printResults	{
 
 		if ( $maxdiv <= 100 )	{
 			$maxdiv = int( $maxdiv / 10 ) * 10 + 10;
+		} elsif ( $maxdiv <= 200 )	{
+			$maxdiv = int( $maxdiv / 20 ) * 20 + 20;
+		} elsif ( $maxdiv <= 500 )	{
+			$maxdiv = int( $maxdiv / 50 ) * 50 + 50;
 		} else	{
 			$maxdiv = int( $maxdiv / 100 ) * 100 + 100;
 		}
