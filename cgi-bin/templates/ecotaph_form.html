@@ -50,7 +50,9 @@ function checkFields() {
 </center>
 
 
-<p class="small" style="margin-left: 2em; margin-bottom: 2em;"><i>Note: this form is intended for adult morphologies only. Please see the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p>
+%%primary_reference%%
+
+<center><p class="small" style="margin-left: 2em; margin-bottom: 2em;"><i>Note: this form is intended for adult morphologies only. Please see the <a href="javascript: tipsPopup('/public/tips/ecology_tips.html')">tip sheet</a>.</i></p></center>
 
 <form method="POST" action="%%write_url%%" onSubmit="return checkFields();">
 
@@ -58,7 +60,6 @@ function checkFields() {
 <input id="taxon_no" name="taxon_no" type="hidden">
 <input id="ecotaph_no" name="ecotaph_no" type="hidden">
 <input type="hidden" name="goal" value="ecotaph">
-
 
 <div class="displayPanel">
 <span class="displayPanelHeader">Morphology and development</span>
