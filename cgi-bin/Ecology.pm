@@ -3,6 +3,7 @@ package Ecology;
 use TaxaCache;
 use Debug qw(dbg);
 use Constants qw($WRITE_URL $TAXA_TREE_CACHE);
+use Reference;
 
 # written by JA 27-31.7,1.8.03
 
@@ -81,12 +82,20 @@ sub populateEcologyForm	{
 	    push (@values, $taxon_no,$taxon_name,$ecotaph->{'reference_no'},$ecotaph->{'ecotaph_no'});
     }
 
+	if ( $ecotaph->{'reference_no'} )	{
+		push @fields , "primary_reference";
+		my $sql = "SELECT * FROM refs WHERE reference_no=".$ecotaph->{'reference_no'};
+		push @values , '<center><div class="small" style="width: 60em; text-align: left; text-indent: -1em;">Primary reference: ' . Reference::formatLongRef(${$dbt->getData($sql)}[0]) . '</div></center>';
+		# ditch authorizer/enterer/modifier
+		$values[$#values] =~ s/ \[.*\]//;
+	}
+
 	# populate the form
-    if ($q->param('goal') eq 'ecovert') {
-	    print $hbo->populateHTML('ecovert_form', \@values, \@fields);
-    } else {
-	    print $hbo->populateHTML('ecotaph_form', \@values, \@fields);
-    }
+	if ($q->param('goal') eq 'ecovert')	{
+		print $hbo->populateHTML('ecovert_form', \@values, \@fields);
+	} else	{
+		print $hbo->populateHTML('ecotaph_form', \@values, \@fields);
+	}
 	return;
 }
 
