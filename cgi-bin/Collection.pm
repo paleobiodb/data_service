@@ -522,18 +522,29 @@ IS NULL))";
     # Maybe special environment terms
     if ( $options{'environment'}) {
         my $environment;
-        if ($options{'environment'} =~ /General/) {
+        if ($options{'environment'} =~ /general/i) {
             $environment = join(",", map {"'".$_."'"} @{$HTMLBuilder::hard_lists{'environment_general'}});
-        } elsif ($options{'environment'} =~ /Terrestrial/) {
+        } elsif ($options{'environment'} =~ /terrestrial/i) {
             $environment = join(",", map {"'".$_."'"} @{$HTMLBuilder::hard_lists{'environment_terrestrial'}});
-        } elsif ($options{'environment'} =~ /Siliciclastic/) {
+        } elsif ($options{'environment'} =~ /^marine/i) {
             $environment = join(",", map {"'".$_."'"} @{$HTMLBuilder::hard_lists{'environment_siliciclastic'}});
-        } elsif ($options{'environment'} =~ /Carbonate/) {
+            $environment .= "," . join(",", map {"'".$_."'"} @{$HTMLBuilder::hard_lists{'environment_carbonate'}});
+        } elsif ($options{'environment'} =~ /siliciclastic/i) {
+            $environment = join(",", map {"'".$_."'"} @{$HTMLBuilder::hard_lists{'environment_siliciclastic'}});
+        } elsif ($options{'environment'} =~ /carbonate/i) {
             $environment = join(",", map {"'".$_."'"} @{$HTMLBuilder::hard_lists{'environment_carbonate'}});
+        } elsif ($options{'environment'} =~ /^(lacustrine|fluvial|karst|marginal.marine|reef|shallow.subtidal|deep.subtidal|offshore|slope.basin)$/i) {
+            for my $z ( 'lacustrine','fluvial','karst','other_terrestrial','marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin' )	{
+                if ($options{'environment'} =~ $z)	{
+                    $environment = join(",", map {"'".$_."'"} @{$HTMLBuilder::hard_lists{"zone_$z"}});
+                    last;
+                }
+            }
         } else {
             $environment = $dbh->quote($options{'environment'});
         }
         if ($environment) {
+            $environment =~ s/,'',/,/g;
             push @where, "c.environment IN ($environment)";
         }
     }
@@ -777,7 +788,7 @@ IS NULL))";
     } else	{
         return (\@dataRows,$totalRows,\@warnings);
     }
-} # end sub processCollectionsSearch
+}
 
 
 # This is a multi step process: 
