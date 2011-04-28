@@ -3234,19 +3234,22 @@ sub rarefyAbundances	{
 		return;
 	}
 
-	# compute Berger-Parker, Shannon-Wiener, and Simpson indices
+	# compute Berger-Parker, Shannon-Wiener, and PIE indices
 	my $bpd = $abundmax / $abundsum;
 	my $swh;
-	my $simpson;
+	my $pie;
 	for my $ab ( @abund )	{
 		my $p = $ab / $abundsum;
 		$swh = $swh + ( $p * log($p) );
-		$simpson = $simpson + $p**2;
+		$pie += $p**2;
 	}
 	$swh = $swh * -1;
-	$simpson = 1 - $simpson;
-	# Lande 1996 correction
-	$simpson = $simpson * $ntaxa / ( $ntaxa - 1 );
+	$pie = 1 - $pie;
+	# Hurlbert's sample size correction (identical to Lande 1996's
+	# correction of 1 - Simpson's concentration)
+	# WARNING: this line was wrong through 28.4.11 because it used ntaxa
+	#  instead of abundsum
+	$pie = $pie * $abundsum / ( $abundsum - 1 );
 	# compute Fisher's alpha using May 1975 eqns. 3.12 and F.13
 	my $alpha = 100;
 	my $lastalpha;
@@ -3292,16 +3295,18 @@ sub rarefyAbundances	{
 
 
 	print "<center>\n";
-	print "<div class=\"displayPanel\" style=\"width: 32em; margin-top: 2em;\">\n";
+	print "<div class=\"displayPanel\" style=\"width: 38em; margin-top: 2em;\">\n";
 	print "<span class=\"displayPanelHeader\"><span class=\"large\">Diversity statistics for <a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$collection_no\">$collection_name</a></span></span>\n\n";
-	print "<div class=\"displayPanelContent\" style=\"width: 32em; padding-top: 1em;\">\n";
+	print "<div class=\"displayPanelContent\" style=\"width: 38em; padding-top: 1em;\">\n";
 	print "<table><tr><td align=\"left\">\n";
-	printf "<p>Total richness: %d taxa<br>\n",$ntaxa;
-	printf "Shannon-Wiener <i>H</i>: %.3f<br>\n",$swh;
-	printf "Simpson's <i>D</i>*: %.3f<br>\n",$simpson;
-	printf "Berger-Parker <i>d</i>: %.3f<br>\n",$bpd;
-	printf "Fisher's <i>alpha</i>**: %.2f<br>\n",$alpha;
-	printf "Kolmogorov-Smirnov <i>D</i>, data vs. log series***: %.3f",$logseriesksd;
+	print "<div>Total richness: $ntaxa taxa<br>\n";
+	print "Total number of specimens: $abundsum taxa<br>\n";
+	print "<div style=\"margin-left: 1em; text-indent: -1em;\">Abundances: <span class=\"verysmall\">".join(', ',@abund)."</span></div>\n";
+	printf "Frequency of most common taxon (Berger-Parker <i>d</i>): %.3f<br>\n",$bpd;
+	printf "Shannon's <i>H</i>: %.3f<br>\n",$swh;
+	printf "Hurlbert's <i>PIE</i>: %.3f<br>\n",$pie;
+	printf "Fisher's <i>alpha</i>*: %.2f<br>\n",$alpha;
+	printf "Kolmogorov-Smirnov <i>D</i>, data vs. log series**: %.3f",$logseriesksd;
 	if ( $logseriesksd > 1.031 / $ntaxa**0.5 )	{
 		print " (<i>p</i> < 0.01)<br>\n";
 	} elsif ( $logseriesksd > 0.886 / $ntaxa**0.5 )	{
@@ -3311,7 +3316,7 @@ sub rarefyAbundances	{
 	}
 	printf "Pielou's <i>J</i> (evenness): %.3f<br>\n",$pj;
 	printf "Buzas-Gibson <i>E</i> (evenness): %.3f</p>\n",$bge;
-	print "<div class=small><p>* = with Lande 1996 correction<br>\n** = solved recursively based on richness and total abundance<br>\n*** = test of whether the distribution differs from a log series</p></div></center>\n";
+	print "<div class=small><p>* = solved recursively based on richness and total abundance<br>\n** = test of whether the distribution differs from a log series</div></div></center>\n";
 	print "</td></tr></table>\n</div>\n</div>\n\n";
 
 	# rarefy the abundances
@@ -3346,7 +3351,7 @@ sub rarefyAbundances	{
 		$isalevel{$sl} = "Y";
 	}
 
-	print "<div class=\"displayPanel\" style=\"width: 32em; margin-top: 2em;\">\n";
+	print "<div class=\"displayPanel\" style=\"width: 38em; margin-top: 2em;\">\n";
 	print "<span class=\"displayPanelHeader\"><span class=\"large\" >Rarefaction curve for <a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$collection_no\">$collection_name</a></span></span>\n\n";
 	print "<div class=\"displayPanelContent\">\n";
 
