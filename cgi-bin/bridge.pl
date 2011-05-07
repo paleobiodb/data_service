@@ -383,7 +383,7 @@ sub home	{
 	}
 	$row->{'collection_links'} .= "</div>\n";
 
-	my %groupnames = ('Reptilia' => "Reptiles",'Mammalia'=> 'Mammals','Vertebrata' => 'Other vertebrates','Metazoa' => 'Invertebrates');
+	my %groupnames = ('Dinosauria' => 'Dinosaurs','Reptilia' => 'Other reptiles','Mammalia'=> 'Mammals','Vertebrata' => 'Other vertebrates','Insecta' => 'Insects', 'Metazoa' => 'Other invertebrates');
 	my @groups = keys %groupnames;
 	$sql = "SELECT lft,rgt,taxon_name FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND taxon_name IN ('".join("','",@groups)."') ORDER BY lft DESC";
 	my @grouprefs = @{$dbt->getData($sql)};
