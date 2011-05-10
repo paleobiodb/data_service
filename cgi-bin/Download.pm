@@ -2621,7 +2621,7 @@ sub queryDatabase {
                     $subgenus = "";
                 }
                 # free pass for unclassified species within classified genera
-                if ( ! $species && $row->{'o.species_name'} =~ /^[a-z]*$/ )	{
+                if ( ! $species && $row->{'o.species_name'} =~ /^[a-z]*$/ && $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus/ )	{
                     $species = $row->{'o.species_name'};
                 # same for subgenera (certainly don't do this for classified
                 #  species, whose correct subgenera are known)
