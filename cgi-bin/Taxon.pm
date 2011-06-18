@@ -575,7 +575,7 @@ sub submitAuthorityForm {
 	if ( $fields{'preservation2'} =~ /[a-z]/ )	{
 		$fields{'preservation'} = $fields{'preservation2'};
 	}
-	
+
 
 
 	$fields{'taxon_name'} = $q->param('taxon_name');
@@ -643,12 +643,17 @@ sub submitAuthorityForm {
         $errors->add("The selected rank '".$q->param('taxon_rank')."' doesn't match the spacing of the taxon name '".$q->param('taxon_name')."'");
     }
 
-    if ($q->param('length') && $q->param('length') !~ /^[0-9]*\.?[0-9]+$/) {
-        $errors->add("Length must be a decimal number");
-    }
-    if ($q->param('width') && $q->param('width') !~ /^[0-9]*\.?[0-9]+$/) {
-        $errors->add("Width must be a decimal number");
-    }
+	($fields{'museum'},$fields{'catalog_number'}) = extractCatalogNumber($q->param('type_specimen'));
+	if ( ! $fields{'museum'} )	{
+		delete $fields{'museum'};
+	}
+
+	if ($q->param('length') && $q->param('length') !~ /^[0-9]*\.?[0-9]+$/) {
+		$errors->add("Length must be a decimal number");
+	}
+	if ($q->param('width') && $q->param('width') !~ /^[0-9]*\.?[0-9]+$/) {
+		$errors->add("Width must be a decimal number");
+	}
 
 	# type locality handling JA 8.9.08
 	if ( $q->param('type_locality') && $q->param('type_locality') !~ /^[0-9]*$/ )	{
@@ -739,11 +744,11 @@ sub submitAuthorityForm {
 	}
 	## end of hack
 	####
-	
+
 	# at this point, we should have a nice hash array (%fields) of
 	# fields and values to enter into the authorities table.
-	
-	
+
+
 	# *** NOTE, if they try to enter a record which has the same name and
 	# taxon_rank as an existing record, we should display a warning page stating
 	# this fact..  However, if they *really* want to submit a duplicate, we should 
@@ -790,8 +795,8 @@ sub submitAuthorityForm {
 	
 	# now we'll actually insert or update into the database.
 	my $resultTaxonNumber;
-    my $resultReferenceNumber = $fields{'reference_no'};
-    my $status;
+	my $resultReferenceNumber = $fields{'reference_no'};
+	my $status;
 	
 	if ($isNewEntry) {
 		($status, $resultTaxonNumber) = $dbt->insertRecord($s,'authorities', \%fields);
@@ -954,6 +959,174 @@ sub submitAuthorityForm {
 	
 	print "<BR>";
 	print "</CENTER>";
+}
+
+# JA 15-18.5.11
+# no errors are returned because the user has either entered something we can
+#  parse or they haven't - whatever
+# more tweaks 8.6.11
+sub extractCatalogNumber	{
+	my $typeString = shift;
+	my ($museum,$number);
+
+	# MNHN case
+	$typeString =~ s/ d'/ /;
+	# general cleaning
+	$typeString =~ s/[^A-Za-z0-9:;,\.\- \(\)\/#]//g;
+	# should mean something like no number, type, specimen, etc. or
+	#  a specimens, series, etc.
+	$typeString =~ s/^(\()(.*)(\))/$2/;
+	if ( $typeString =~ /^((no|none|not|a) [a-z]|unknown|lost)/i )	{
+		return;
+	}
+
+	if ( $typeString =~ /^[A-Za-z]/ )	{
+
+		# plenty of cases such as "AT THE museum OF ... AND ..."
+		$typeString =~ s/\b(at|the|la|le|les|and|und|of|de|di|del|der|des|in|en|fr|fur) //gi;
+		# a few of these
+		$typeString =~ s/^collection (of |)//i;
+		# paratype and syntype info is categorically irrelevant
+		$typeString =~ s/([,:;]|)( |)(para|syn)type.*$//gi;
+		# there's often some nonsense meaning "no number" or "number"
+		$typeString =~ s/(\(|)unnumbered|no number|no #|number unknown|unknown number|unknown no\.(\)|)//i;
+		$typeString =~ s/cat\. no(s|)\. //i;
+		$typeString =~ s/specimen//i;
+		$typeString =~ s/ \((lost|destroyed)(.*|)\)//i;
+		while ( $typeString =~ /  / )	{
+			$typeString =~ s/  / /g;
+		}
+		$typeString =~ s/^ //g;
+		$typeString =~ s/ $//g;
+		$typeString =~ s/\(\)//g;
+
+		# by now we should have a museum name followed by one number
+		#  or a list of numbers, possibly followed by more nonsense
+		# first try to split based on something like "number"
+		my (@museumWords,@numberWords);
+		if ( $typeString =~ /\b(number|no|no\.|nos\.|#)\b/i )	{
+			$typeString =~ s/\b(co|holo|lecto|neo|plesio|)type\b//i;
+			$typeString =~ s/ $//;
+			my ($m,$sep,$n) = split /\b(number|no|no\.|nos\.|#)\b/i,$typeString;
+			$m =~ s/  / /g;
+			$m =~ s/ $//;
+			$m =~ s/,$//;
+			$n =~ s/^\.//;
+			$n =~ s/^ //;
+			@museumWords = split / /,$m;
+			@numberWords = split / /,$n;
+		}
+		# otherwise, scroll up through the string trying to figure
+		#  out the break point
+		else	{
+			my @words = split / /,$typeString;
+			my $readingNumber;
+			for my $i ( 0..$#words )	{
+		# -type words are themselves useless but might indicate the
+		#  preceding verbiage is a redundant repository name
+				if ( $words[$i] =~ /(co|holo|lecto|neo|plesio|)type/ )	{
+					if ( $words[$i+1] =~ /^[A-Z][A-Z]+/ && length( $words[$i+1] ) > 1 && $words[$i-1] =~ /[a-z]/ )	{
+						@museumWords = ();
+					}
+					next;
+				}
+				if ( $words[$i] =~ /[0-9]/ )	{
+					$readingNumber++;
+				} elsif ( $readingNumber > 0 )	{
+					last;
+				}
+				if ( $readingNumber > 0 )	{
+					push @numberWords , $words[$i];
+		# don't save extra junk if the first word by itself appears
+		#  to be a museum acronym
+				} elsif ( $museumWords[0] !~ /^[A-Z]+[A-Za-z\-:]?[A-Z]+$/ )	{
+					push @museumWords , $words[$i];
+				} else	{
+					push @numberWords , $words[$i];
+				}
+			}
+		}
+
+		# if there are two commas, treat everything after the second
+		#  one as part of the catalog number
+		# note that by now each comma is a space-bounded "word"
+		$museum = join(' ',@museumWords);
+		my ($a,$b,$c) = split /, /,$museum;
+		# use the second part only if the first is one to three words
+		if ( $b && $a !~ / .* .* / )	{
+			$museum = join(', ',$a,$b);
+		} elsif ( $b )	{
+			$museum = $a;
+		}
+		if ( $c )	{
+			unshift @numberWords, $c;
+		}
+		@museumWords = split / /,$museum;
+
+		# the end of the "museum name" might be a simple letter
+		#  prefixed to the specimen number
+		if ( $#museumWords > 0 && length( $museumWords[$#museumWords-1] ) > 1 && ( length( $museumWords[$#museumWords] ) == 1 || ( $museumWords[$#museumWords] =~ /^[A-Z]\.$/ && $museumWords[$#museumWords-1] !~ /^[A-Z]\.$/ ) ) )	{
+			unshift @numberWords , pop @museumWords;
+		} elsif ( $#museumWords == 0 && $museumWords[0] =~ /^[A-Z][^A-Za-z]?$/ )	{
+			unshift @numberWords , pop @museumWords;
+		}
+		# rarely, the single-string "museum name" may be a compound
+		#  of a real name and a sub-collection code separated by a
+		#  period or slash, so shift the latter to the catalog number
+		if ( $museumWords[0] =~ /[A-Z][A-Za-z](\.|\/)[A-Z].*/ )	{
+			my ($sep,$temp);
+			($museumWords[0],$sep,$temp) = split /(\.|\/)/,$museumWords[0],3;
+			unshift @numberWords , $temp;
+		}
+		$number = join(' ',@numberWords);
+	
+		# there may be some random commentary before the actual
+		#  museum name
+		while ( $museumWords[0] !~ /[A-Z]/ && @museumWords )	{
+			shift @museumWords;
+		}
+
+		# at this point we're hoping to be left with the museum name
+		# first get rid of hyphens because they should separate words
+		#  that we want to include separately in acronyms
+		$museum = join('-',@museumWords);
+		# while we're at it, get rid of parentheses
+		$museum =~ s/\(|\)//g;
+		@museumWords = split /\-/,$museum;
+		# any word not starting with an upper case letter should be
+		#  left out completely
+		s/^[^A-Z].*// foreach @museumWords;
+		# now extract the initial letters if there are multiple words
+		#  that do not seem like acronyms
+		if ( $#museumWords > 0 )	{
+			s/^([A-Z])(.*)/$1/ foreach @museumWords;
+		}
+		$museum = join('',@museumWords);
+		# periods are often present in acronyms
+		$museum =~ s/([A-Z])(\.)/$1/g;
+		# special hacks for the AMNH, BM, etc.
+		( $typeString !~ /aust/i ) ? $museum =~ s/^AM$/AMNH/ : "";
+		$museum =~ s/^F:AMNH$/F:AM/;
+		$museum =~ s/^(BM|BMNH)$/MNH/;
+		# Princeton collection is now at the YPM
+		$museum =~ s/^Princeton/YPM-PU/;
+		$museum =~ s/^PU$/YPM-PU/;
+		# CIT collection is now at the LACM
+		$museum =~ s/^(LACM|)CIT$/LACM(CIT)/;
+		$museum =~ s/[\.,']//g;
+
+		$number =~ s/^museum //gi;
+		$number =~ s/'//g;
+		$number =~ s/,$//g;
+		# some enterers seem to think that a specimen number is
+		#  an English sentence
+		$number =~ s/\.$//;
+		# at this point the number really should include a number
+		if ( $number !~ /[0-9]/ )	{
+			$number = "";
+		}
+	}
+	return ($museum,$number);
 }
 
 sub processSpecimenMeasurement {
@@ -1955,7 +2128,7 @@ sub propagateAuthorityInfo {
     my $me = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
-    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','form_taxon','preservation');
+    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','form_taxon','preservation','comments');
 
     # Two steps: find best authority info, then propagate to all spelling variants
     my @spellings;
