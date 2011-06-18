@@ -1,12 +1,15 @@
 <!-- Begin occurrence_header_row.html -->
 
-<div align="center"><p class="large" style="margin-bottom: 1.5em;"><span id="collection_name"></span></p></div>
+<div align="center" style="margin-left: auto; margin-right: auto; width: 30em;"><p class="large" style="margin-bottom: 1.5em;"><span id="collection_name"></span></p></div>
 
+<div align="center">
+
+<div show="collection_no">
 <p class="verysmall" style="padding-left: 1em; padding-right: 1em;">
 Consult the <a href="javascript:tipsPopup('/public/tips/occurrence_tips.html')">occurrence tip sheet</a> 
 and <a href="javascript:tipsPopup('/public/tips/paleobotany_tips.html')">plant organ tip sheet</a>.
-Delete entries by erasing the taxon name. 
 </p>
+</div>
 
 
 <table class="small">
@@ -16,7 +19,11 @@ Delete entries by erasing the taxon name.
 <div show="abundances">
 	<th colspan=2><a href="javascript:tipsPopup('/public/tips/tips.html#Abundance')">Abundance and unit</a></th>
 </div>
+<div show="counts">
+	<th>Count</th>
 </div>
+</div>
+<div hide="counts">
 	<th>
 	<div hide="editable_collection_no">
 	Reference
@@ -25,6 +32,7 @@ Delete entries by erasing the taxon name.
 	Ref & collection
 	</div>
 	</th>
+</div>
 <div hide="genus_and_species_only">
 	<th>Comments</th>
 <div show="plant_organs">
