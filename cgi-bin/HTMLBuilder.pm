@@ -99,6 +99,9 @@ sub new {
         eml_interval=>[\&_listFromEnum,'intervals','eml_interval'],
         eml_max_interval=>[\&_listFromEnum,'intervals','eml_interval'],
         eml_min_interval=>[\&_listFromEnum,'intervals','eml_interval'],
+        habitat=>[\&_listFromEnum,'inventories','habitat','space_after'=>'terrestrial,mangrove,freshwater'],
+        inventory_method=>[\&_listFromEnum,'inventories','inventory_method'],
+        inventory_size_unit=>[\&_listFromEnum,'inventories','inventory_size_unit'],
         mapbgcolor=>[\&_listFromHardList,'mapcolors'],
         platecolor=>[\&_listFromHardList,'mapcolors','unshift'=>'none'],
         crustcolor=>[\&_listFromHardList,'mapcolors','unshift'=>'none'],
@@ -766,11 +769,12 @@ sub stdIncludes {
         $self->{included}{$page} = 1;
     }
 
-    if ($page eq 'std_page_top' && $s && $s->isDBMember()) {
+    if ($s->isDBMember()) {
         $vars->{reference} = 'none';
         my $reference_no = $s->get('reference_no');
         if ($reference_no) {
-            $vars->{reference} = "$reference_no (".Reference::formatShortRef($dbt,$reference_no,'no_inits'=>1).")";
+            $vars->{reference_no} = $reference_no;
+            $vars->{reference} = Reference::formatShortRef($dbt,$reference_no,'no_inits'=>1);
         }
         $vars->{enterer} = $s->get("enterer") || "none"; 
     }
