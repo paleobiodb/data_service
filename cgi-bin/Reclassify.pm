@@ -4,7 +4,7 @@ use strict;
 use URI::Escape;
 use CGI qw(escapeHTML);
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL);
+use Constants qw($READ_URL $WRITE_URL $DB $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO $PAGE_TOP $PAGE_BOTTOM);
 
 # in memory of our dearly departed Ryan Poling
 
@@ -230,7 +230,7 @@ my $editable = 1;
                 if ($o->{reid_no}) {
                     print classificationSelect($dbt,$o->{reid_no},1,$editable,\@all_matches,$o->{taxon_no},$description);
                 } else {
-                    print classificationSelect($dbt,$o->{occurrence_no},0,$editable,\@all_matches,$o->{taxon_no},$description);
+                    print classificationSelect($dbt,$o->{$OCCURRENCE_NO},0,$editable,\@all_matches,$o->{taxon_no},$description);
                 }
                 print "</td>\n";
 				print "</tr>\n";
@@ -298,10 +298,49 @@ my $editable = 1;
 }
 
 sub processReclassifyForm	{
-    my ($q,$s,$dbt,$hbo) = @_;
-    my $dbh = $dbt->dbh;
+	my ($q,$s,$dbt,$hbo) = @_;
+	my $dbh = $dbt->dbh;
 
-	print $hbo->stdIncludes("std_page_top");
+	# get lists of old and new taxon numbers
+	# WARNING: taxon names are stashed in old numbers and authority info
+	#  is stashed in new numbers
+	my @old_taxa = $q->param('old_taxon_no');
+	my @new_taxa = $q->param('taxon_no');
+	my @occurrences = $q->param($OCCURRENCE_NO);
+	my @occurrence_lists = $q->param("occurrence_list");
+	my @occurrence_descriptions = $q->param('occurrence_description');
+	my @reid_descriptions = $q->param('reid_description');
+	my @old_reid_taxa = $q->param('old_reid_taxon_no');
+	my @new_reid_taxa = $q->param('reid_taxon_no');
+	my @reids = $q->param('reid_no');
+
+	# nothing fancy for the eco database: update and bomb out
+	if ( $DB eq "eco" )	{
+		foreach my $i (0..$#old_taxa)	{
+			my $old_taxon_no = $old_taxa[$i];
+			my ($new_taxon_no,$authority) = split /\+/,$new_taxa[$i];
+			if ( $old_taxa[$i] != $new_taxa[$i] )	{
+            			my $dbh_r = $dbt->dbh;
+				my $sql = "UPDATE $OCCURRENCES SET taxon_no=".$new_taxon_no.", modifier_no=".$s->get('enterer_no');
+				if ( $old_taxon_no > 0 )	{
+					$sql .= " WHERE taxon_no=" . $old_taxon_no;
+				} else	{
+					$sql .= " WHERE taxon_no=0";
+				}
+				if ($occurrences[$i] =~ /^\d+$/) {
+					$sql .= " AND $OCCURRENCE_NO=" . $occurrences[$i];
+					$dbh_r->do($sql);
+				} elsif ($occurrence_lists[$i] =~ /^[\d, ]+$/) {
+					$sql .= " AND $OCCURRENCE_NO IN (".$occurrence_lists[$i].")";
+					$dbh_r->do($sql);
+				}
+			}
+		}
+		Collection::inventoryInfo($dbt,$q,$s,$hbo,Collection::inventoryEditLinks($q->param('inventory_no')));
+		return;
+	}
+
+	print $hbo->stdIncludes($PAGE_TOP);
 
 	print "<center>\n\n";
 
@@ -321,19 +360,6 @@ sub processReclassifyForm	{
         print "<tr><th class=\"large\">Taxon</th><th class=\"large\">Classification based on</th></tr>";
     }
 
-	# get lists of old and new taxon numbers
-	# WARNING: taxon names are stashed in old numbers and authority info
-	#  is stashed in new numbers
-	my @old_taxa = $q->param('old_taxon_no');
-	my @new_taxa = $q->param('taxon_no');
-	my @occurrences = $q->param('occurrence_no');
-    my @occurrence_lists = $q->param("occurrence_list");
-	my @occurrence_descriptions = $q->param('occurrence_description');
-	my @reid_descriptions = $q->param('reid_description');
-	my @old_reid_taxa = $q->param('old_reid_taxon_no');
-	my @new_reid_taxa = $q->param('reid_taxon_no');
-	my @reids = $q->param('reid_no');
-
 	my $rowcolor = 0;
 
 	# first tick through the occurrence taxa and update as appropriate
@@ -347,9 +373,7 @@ sub processReclassifyForm	{
 
 		# update the occurrences table
             my $dbh_r = $dbt->dbh;
-			my $sql = "UPDATE occurrences SET taxon_no=".$new_taxon_no.
-                   ", modifier=".$dbh->quote($s->get('enterer')).
-			       ", modifier_no=".$s->get('enterer_no');
+			my $sql = "UPDATE occurrences SET taxon_no=".$new_taxon_no.", modifier=".$dbh->quote($s->get('enterer')).", modifier_no=".$s->get('enterer_no');
 			if ( $old_taxon_no > 0 )	{
 				$sql .= " WHERE taxon_no=" . $old_taxon_no;
 			} else	{
@@ -434,7 +458,7 @@ sub processReclassifyForm	{
     }
 
 	print "</center>\n\n";
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 
 }
 
@@ -452,7 +476,7 @@ sub classificationSelect {
     } else {
 		$html .= "<input type=\"hidden\" $disabled name=\"old_taxon_no\" value=\"$taxon_no\">\n";
         $html .= "<input type=\"hidden\" $disabled name=\"occurrence_description\" value=\"".uri_escape($description)."\">\n";
-		$html .= "<input type=\"hidden\" $disabled name=\"occurrence_no\" value=\"$key_no\">\n";
+		$html .= "<input type=\"hidden\" $disabled name=\"$OCCURRENCE_NO\" value=\"$key_no\">\n";
         $html .= "<select $disabled name=\"taxon_no\">";
     }
                  
