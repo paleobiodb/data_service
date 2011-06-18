@@ -3,11 +3,12 @@
 
 <p class="verysmall" style="margin-left: 8em; margin-right: 8em;">
 %%old_occurrences%%
-You can always use the <a href="%%write_url%%?action=displayOccurrenceAddEdit&collection_no=%%collection_no%%">regular form</a> instead.
+You can always use the <a href="%%write_url%%?action=displayOccurrenceAddEdit&amp;%%collection_no_field%%=%%coll_or_inventory%%">regular form</a> instead.
 </p>
 
 <input name="action" value="processEditOccurrences" type="hidden">
 <input type="hidden" name="collection_no" value="">
+<input type="hidden" name="inventory_no" value="">
 <input type="hidden" name="list_collection_no" value="">
 <input type="hidden" name="reference_no" value="">
 <input type="hidden" name="form_source" value="occurrence_list_form">
@@ -26,13 +27,18 @@ You can always use the <a href="%%write_url%%?action=displayOccurrenceAddEdit&co
 <div class="verysmall" style="clear: right; float: left; margin-top: 4em; margin-left: 2em; text-align: left;">
 
 <div>
-Place informal names in &lt;brackets&gt;.<br>
+<p style="margin-bottom: -1em;">Place informal names in &lt;brackets&gt;.</p>
 </div>
 <div style="text-indent: -0.5em; padding-left: 0.5em;">
-Write comments on the line after<br>the name starting with * # or /.<br>
+<p style="margin-bottom: -1em;">Write comments on the line after<br>the name starting with * # or /.</p>
+<span hide="collection_no_field=collection_no">
+<p style="margin-bottom: -1em;">Do not enter qualifiers such as<br>question marks, quotes, or "cf."</p>
+</span>
+<br>
 </div>
 Examples:
 <div style="border: 1px solid gray; text-align: left; margin-top: 1em; height: 15em; width: 18em;">
+<div show="collection_no_field=collection_no">
 Homo ? sapiens<br>
 *AMNH 99999<br>
 aff. Acer sp.<br>
@@ -42,13 +48,25 @@ cf. Murchisonia &lt;sp. A&gt;<br>
 Panthera onca<br>
 /subspecies "P. onca augusta"<br>
 </div>
+<div hide="collection_no_field=collection_no">
+Homo sapiens<br>
+* voucher specimen reposited at ANSP<br>
+Acer sp.<br>
+Onychophora indet.<br>
+# possibly a slug<br>
+Loxodonta africana<br>
+/subspecies "L. africana cyclotis"<br>
+</div>
+</div>
 
+<div show="collection_no_field=collection_no">
 <p class="verysmall">
 Don't forget to read the <a href="javascript:tipsPopup('/public/tips/occurrence_tips.html')">occurrence tip sheet</a> 
 </p>
+</div>
 
 <div style="clear: left; margin-top: 3em;">
-<p><input value="Enter" type="submit"> the new occurrences</p>
+<p><input value="Enter data" type="submit"></p>
 </form>
 
 </div>
