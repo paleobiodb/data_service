@@ -3,7 +3,7 @@ require Exporter;
 use FindBin;
 
 @ISA = qw(Exporter);
-@EXPORT_OK = qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $DB_SOCKET $DB_PASSWD $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $TAXA_LIST_CACHE $IP_MAIN $IP_BACKUP);  # symbols to export on request
+@EXPORT_OK = qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $DB_SOCKET $DB_PASSWD $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $TAXA_LIST_CACHE $IP_MAIN $IP_BACKUP $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO);  # symbols to export on request
 use strict;
 
 # general constants
@@ -30,6 +30,23 @@ if ($Constants::IS_FOSSIL_RECORD) {
     $Constants::TAXA_LIST_CACHE = 'taxa_list_cache';
     $Constants::READ_URL = 'bridge.pl';
     $Constants::WRITE_URL = 'bridge.pl';
+}
+
+$Constants::DB = 'pbdb';
+$Constants::PAGE_TOP = 'std_page_top';
+$Constants::PAGE_BOTTOM = 'std_page_bottom';
+$Constants::COLLECTIONS = 'collections';
+$Constants::COLLECTION_NO = 'collection_no';
+$Constants::OCCURRENCES = 'occurrences';
+$Constants::OCCURRENCE_NO = 'occurrence_no';
+if ( $ENV{'SERVER_NAME'} =~ /^eco/i )	{
+    $Constants::DB = 'eco';
+    $Constants::PAGE_TOP = 'eco_top';
+    $Constants::PAGE_BOTTOM = 'eco_bottom';
+    $Constants::COLLECTIONS = 'inventories';
+    $Constants::COLLECTION_NO = 'inventory_no';
+    $Constants::OCCURRENCES = 'inventory_entries';
+    $Constants::OCCURRENCE_NO = 'entry_no';
 }
 
 
