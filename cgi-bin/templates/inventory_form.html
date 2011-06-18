@@ -1,0 +1,360 @@
+
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+// loosely adapted from collection_form checkFields function
+
+function checkFields()	{
+
+	var frm = document.forms[1];
+	var errors = "";
+
+	if ( frm.inventory_name.value == "" )	{
+		errors += "\n* The inventory name is required";
+	}
+
+	if ( frm.country.selectedIndex == 0 )	{
+		errors += "\n* You must select the country";
+	}
+	var stateEntered = /.* state.*/i;
+	var provinceEntered = /.* province.*/i;
+	if ( frm.state.value == "" )	{
+		var index = frm.country.selectedIndex;
+		if ( frm.country.options[index].text == "Australia" || frm.country.options[index].text == "Brazil" || frm.country.options[index].text == "India" || frm.country.options[index].text == "United States" )	{
+			errors += "\n* You must enter the state name";
+		} else if ( frm.country.options[index].text == "Canada" || frm.country.options[index].text == "China" )	{
+			errors += "\n* You must enter the province name";
+		}
+	}
+	else if ( stateEntered.test (frm.state.value) == true )	{
+		errors += "\n* Don't put \"state\" in the state field";
+	}
+	else if ( provinceEntered.test (frm.state.value) == true )	{
+		errors += "\n* Don't put \"province\" in the province field";
+	}
+	if ( /([A-Z][A-Z])|(\.)/.test (frm.state.value) == true || ( frm.state.value != "" && /[a-z]/.test( frm.state.value ) == false ) )	{
+		errors += "\n* Don't abbreviate the state name";
+	}
+
+	// there's no testing right now for insane lat/long values relative
+	//  to the country name
+	// oh well
+	if ( /[A-Za-z:;]/.test (frm.lat.value) == true )	{
+		errors += "\n* Latitude must be a number";
+	}
+	if ( frm.lat.value > 90 || frm.lat.value < -90 )	{
+		errors += "\n* Latitude must be less than 90";
+	}
+	if ( /[A-Za-z:;]/.test (frm.lng.value) == true )	{
+		errors += "\n* Longitude must be a number";
+	}
+	if ( frm.lng.value > 180 || frm.lng.value < -180 )	{
+		errors += "\n* Longitude must be less than 180";
+	}
+
+	if ( ! /^[0-9]*$/.test(frm.altitude_value.value) )	{
+		errors += "\n* Altitude must be an integer";
+	} else if ( frm.altitude_value.value != "" && frm.altitude_unit.selectedIndex == 0 )	{
+		errors += "\n* You must select an altitude unit"; 
+	}
+
+	if ( frm.habitat.value == "" )	{
+		errors += "\n* You must select the habitat";
+	}
+
+	var asFloat = /^(|\-)[0-9]*(|\.[0-9]*)$/;
+	if ( asFloat.test (frm.MAT.value) == false )	{
+		errors += "\n* MAT must be a number";
+	}
+	if ( asFloat.test (frm.CMT.value) == false )	{
+		errors += "\n* CMT must be a number";
+	}
+	if ( asFloat.test (frm.WMT.value) == false )	{
+		errors += "\n* WMT must be a number";
+	}
+	if ( asFloat.test (frm.MART.value) == false )	{
+		errors += "\n* MART must be a number";
+	}
+	if ( asFloat.test (frm.MAP.value) == false || frm.MAP.value < 0 )	{
+		errors += "\n* MAP must be a positive number";
+	}
+	if ( frm.dry_months.value != "" && ! /^[0-9]*$/.test(frm.dry_months.value) )	{
+		errors += "\n* Dry months must be an integer";
+	}
+
+	if ( frm.MAT.value > 40 )	{
+		errors += "\n* MAT seems too high";
+	}
+	if ( frm.CMT.value > 40 )	{
+		errors += "\n* CMT seems too high";
+	}
+	if ( frm.WMT.value > 40 )	{
+		errors += "\n* WMT seems too high";
+	}
+	if ( frm.MART.value > 40 )	{
+		errors += "\n* MART seems too high";
+	}
+	if ( frm.MAP.value > 10000 )	{
+		errors += "\n* MAP seems too high";
+	}
+	if ( frm.dry_months.value > 12 || frm.dry_months.value < 0 )	{
+		errors += "\n* There must be 0 to 12 dry months";
+	}
+
+	if ( frm.inventory_size.value != "" && ! /^[0-9]*$/.test(frm.inventory_size.value) )	{
+		errors += "\n* Sample size must be an integer";
+	} else if ( frm.inventory_size.value != "" && frm.inventory_size_unit.selectedIndex == 0 )	{
+		errors += "\n* You must select a sample size unit"; 
+	}
+
+	if ( frm.sites.value != "" && ! /^[0-9]*$/.test(frm.sites.value) )	{
+		errors += "\n* The number of sites must be an integer";
+	}
+	if ( asFloat.test (frm.site_area.value) == false || frm.site_area.value < 0 )	{
+		errors += "\n* Site area must be a positive number";
+	}
+	if ( asFloat.test (frm.site_length.value) == false || frm.site_length.value < 0 )	{
+		errors += "\n* Site length must be a positive number";
+	}
+	if ( asFloat.test (frm.site_width.value) == false || frm.site_width.value < 0 )	{
+		errors += "\n* Site width must be a positive number";
+	}
+
+	if ( /[^0-9,\- ]/.test(frm.years.value) )	{
+		errors += "\n* The list of years is misformatted";
+	}
+
+	if ( errors != "" )	{
+		alert(errors);
+		return false;
+	}
+	return true;
+
+}
+
+// End -->
+</script>
+
+
+<div style="margin: 2em;">
+
+<form name="inventory_form" action="%%write_url%%" method="post" onSubmit="return checkFields();">
+
+<input type="hidden" name="action" value="processCollectionForm">
+<input id="db" value="eco" type="hidden">
+<input id="inventory_no" type="hidden">
+<input id="reference_no" type="hidden">
+
+<center style="margin-bottom: 2em;">
+%%title%%
+</center>
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Basic info</span>
+<div class="displayPanelContent">
+
+<span style="margin-left: 1em; text-indent: 1em;">
+%%ref_string%%
+</span>
+
+%%already_entered%%
+
+<p>
+Inventory name:
+<input id="inventory_name" size="60">
+</p>
+
+%%printed_inventory_no%%
+
+<p>
+Also known as:
+<input id="inventory_aka" size="70">
+</p>
+
+</div>
+</div>
+
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Geography</span>
+<div class="displayPanelContent">
+
+<p>
+Country:
+<select id="country"></select>
+
+&nbsp;&nbsp;State/province:
+<input id="state" size="18">
+
+&nbsp;&nbsp;County:
+<input id="county" size="18">
+</p>
+
+<p>
+Latitude:
+<input id="lat" size="10">
+
+&nbsp;&nbsp;Longitude:
+<input id="lng" size="10">
+
+&nbsp;&nbsp;GPS datum:
+<select id="gps_datum"></select>
+
+&nbsp;&nbsp;Altitude:
+<input id="altitude_value" size="5">
+<select id="altitude_unit"></select>
+</p>
+
+<p>
+Comments on geographic location:<br>
+<textarea id="geography_comments" rows="3" cols="80"></textarea>
+</p>
+
+</div>
+</div>
+
+<div class="displayPanel">
+<span class="displayPanelHeader">Environment</span>
+<div class="displayPanelContent">
+
+<p>
+Habitat:
+<select id="habitat"></select>
+</p>
+
+<p>
+MAT = <input id="MAT" size="3">
+CMT = <input id="CMT" size="3">
+WMT = <input id="WMT" size="3">
+MART = <input id="MART" size="3">
+MAP = <input id="MAP" size="3">
+&nbsp;&nbsp;dry months: <input id="dry_months" size="3">
+</p>
+<p>
+Description of environment:<br>
+<textarea id="habitat_comments" rows="3" cols="80"></textarea>
+</p>
+
+</div>
+</div>
+
+
+<div class="displayPanel" style="margin-bottom: 2em;">
+<span class="displayPanelHeader">Methods</span>
+<div class="displayPanelContent">
+
+<p>
+Sites:
+<input id="sites" size="3">
+
+&nbsp;&nbsp;Site area (ha):
+<input id="site_area" size="8">
+
+&nbsp;&nbsp;... <i>or</i> site length and width (m):
+<input id="site_length" size="6">
+<input id="site_width" size="6">
+</p>
+
+<p>
+Sample size:
+<input id="inventory_size" size="6">
+
+<select id="inventory_size_unit"></select>
+
+</p>
+
+<p>
+Inventoried by
+<input id="inventoried_by" size="18">
+during the year(s) <input id="years" size="10">
+over <input id="days" size="3"> days
+</p>
+
+<p style="margin-bottom: 0.5em;">
+Inventorying methods:
+</p>
+
+<div>
+
+<table class="small">
+
+<tr>
+
+<td colspan="2">
+&nbsp;<i>minimum stem size</i><br>
+<span class="small">
+<input type="checkbox" id="inventory_method" value="5 cm DBH">5 cm DBH
+<input type="checkbox" id="inventory_method" value="10 cm DBH">10 cm DBH
+<input type="checkbox" id="inventory_method" value="20 cm DBH">20 cm DBH
+<input type="checkbox" id="inventory_method" value="30 cm GBH">30 cm GBH
+<input type="checkbox" id="inventory_method" value="1 m h">1 m h
+</span>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+&nbsp;<i>visual</i><br>
+<span class="small">
+<input type="checkbox" id="inventory_method" value="belt transect"> belt transect
+<input type="checkbox" id="inventory_method" value="line transect"> line transect
+<input type="checkbox" id="inventory_method" value="quadrat"> quadrat
+</span>
+</td>
+
+<td style="padding-left: 2em;">
+&nbsp;<i>nets</i><br>
+<span class="small">
+<input type="checkbox" id="inventory_method" value="butterfly nets"> butterfly
+<input type="checkbox" id="inventory_method" value="harp nets"> harp
+<input type="checkbox" id="inventory_method" value="mist nets"> mist
+<input type="checkbox" id="inventory_method" value="sweep nets"> sweep
+</span>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+&nbsp;<i>traps</i><br>
+<span class="small">
+<input type="checkbox" id="inventory_method" value="malaise traps"> malaise
+<input type="checkbox" id="inventory_method" value="pheromone traps"> pheromone
+<input type="checkbox" id="inventory_method" value="pitfall traps"> pitfall
+</span>
+</td>
+
+<td style="padding-left: 2em;">
+&nbsp;<i>other</i><br>
+<span class="small">
+<input type="checkbox" id="inventory_method" value="automatic cameras"> automatic cameras
+<input type="checkbox" id="inventory_method" value="call recordings"> call recordings
+</span>
+</td>
+
+</tr>
+
+</table>
+
+</div>
+
+<div style="margin-top: 1.5em;">
+Comments on methods:<br>
+<textarea id="inventory_comments" rows="3" cols="80"></textarea>
+</div>
+
+</div>
+</div>
+
+
+<div style="width: 12em; margin-left: auto; margin-right: auto;">
+<input type="submit" value="Submit form">
+</div>
+</form>
+
+</div>
+
+
