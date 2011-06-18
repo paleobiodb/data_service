@@ -7,7 +7,7 @@ use CGI::Carp;
 use Data::Dumper;
 use Class::Date qw(now date);
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE);
+use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $DB $COLLECTIONS $COLLECTION_NO $PAGE_TOP $PAGE_BOTTOM);
 use Download;
 use Person;
 
@@ -311,17 +311,21 @@ sub displayRefResults {
 			main::execAction($action);
 		} elsif ($q->param('type') eq 'edit') {  
 			$q->param("reference_no"=>$data[0]->{'reference_no'});
+			print $hbo->stdIncludes($PAGE_TOP);
 			displayReferenceForm($dbt,$q,$s,$hbo);
+			print $hbo->stdIncludes($PAGE_BOTTOM);
 		} elsif ($q->param('type') eq 'select') {  
 			main::menu();
         	} else {
 			# otherwise, display a page showing the ref JA 10.6.02
+			print $hbo->stdIncludes($PAGE_TOP);
 			displayReference($dbt,$q,$s,$hbo,$data[0]);
+			print $hbo->stdIncludes($PAGE_BOTTOM);
 		}
 		return;		# Out of here!
 	} elsif ( scalar(@data) > 0 ) {
         # Needs to be > 0 for add -- case where its 1 is handled above explicitly
-	    print $hbo->stdIncludes( "std_page_top" );
+	    print $hbo->stdIncludes( $PAGE_TOP);
         # Print the sub header
         my $offset = (int($q->param('refsSeen')) || 0);
         my $limit = 30;
@@ -352,7 +356,7 @@ sub displayRefResults {
 #        }
 
 		# Print the references found
-        print "<div style=\"margin: 0.5em; border: 1px solid #E0E0E0;\">\n";
+        print "<div style=\"margin: 1.5em; padding: 1em; border: 1px solid #E0E0E0;\">\n";
 		print "<table border=0 cellpadding=5 cellspacing=0>\n";
 
         my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
@@ -368,7 +372,7 @@ sub displayRefResults {
             print "<td valign=\"top\">";
             if ($s->isDBMember()) {
                 if ($type eq 'add') {
-                    print "<a href=\"$exec_url?a=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+                    print "<a href=\"$exec_url?a=displayReferenceForm&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
                 } elsif ($type eq 'edit') {
                     print "<a href=\"$exec_url?a=displayRefResults&reference_no=$row->{reference_no}&type=edit\">$row->{reference_no}</a>";
                 } elsif ($type eq 'view') {
@@ -402,14 +406,14 @@ sub displayRefResults {
                 $old_query .= "&$k=$vars{$k}" if $vars{$k};
             }
             $old_query =~ s/^&//;
-            print qq|<a href="$exec_url?$old_query"><b>Get the next 30 references</b></a> - |;
+            print qq|<a href="$exec_url?$old_query">Get the next 30 references</a> - |;
         } 
 
         my $authname = $s->get('authorizer');
         $authname =~ s/\. //;
         printRefsCSV(\@data,$authname);
-        print qq|<a href="/public/references/${authname}_refs.csv"><b>Download all the references</b></a> -\n|;
-	    print qq|<a href="$exec_url?a=displaySearchRefs&type=$type"><b>Do another search</b></a>\n|;
+        print qq|<a href="/public/references/${authname}_refs.csv">Download all the references</a> -\n|;
+	    print qq|<a href="$exec_url?a=displaySearchRefs&type=$type">Do another search</a>\n|;
 	    print "</p></center><br>\n";
         
         if ($type eq 'add') {
@@ -424,8 +428,9 @@ sub displayRefResults {
             print "</div>";
         }
 	} else	{ # 0 Refs found
+		print $hbo->stdIncludes( $PAGE_TOP);
 		if ($q->param('type') eq 'add')	{
-            $q->param('reference_no'=>'');
+			$q->param('reference_no'=>'');
 			displayReferenceForm($dbt,$q,$s,$hbo);
 			return;
 		} else	{
@@ -439,9 +444,7 @@ sub displayRefResults {
 		}
 	}
 
-
-
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayReference {
@@ -469,7 +472,7 @@ sub displayReference {
         return $html;
     };
 
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     print "<div align=\"center\"><p class=\"pageTitle\">" . formatShortRef($ref) . "</p></div>";
 
     my $citation = formatLongRef($ref);
@@ -481,32 +484,32 @@ sub displayReference {
    
     # Start Metadata box
     my $html = "<table border=0 cellspacing=0 cellpadding=0\">";
-    $html .= "<tr><td class=\"fieldName\">ID number: </td><td>$reference_no</td></tr>";
+    $html .= "<tr><td class=\"fieldName\">ID number: </td><td>&nbsp;$reference_no</td></tr>";
     if ($ref->{'created'}) {
-        $html .= "<tr><td class=\"fieldName\">Created: </td><td>$ref->{'created'}</td></tr>";
+        $html .= "<tr><td class=\"fieldName\">Created: </td><td>&nbsp;$ref->{'created'}</td></tr>";
     }
     if ($ref->{'modified'}) {
         my $modified = date($ref->{'modified'});
-        $html .= "<tr><td class=\"fieldName\">Modified: </td><td> $modified</td></tr>" unless ($modified eq $ref->{'created'});
+        $html .= "<tr><td class=\"fieldName\">Modified: </td><td>&nbsp;$modified</td></tr>" unless ($modified eq $ref->{'created'});
     }
     if($ref->{'project_name'}) {
-        $html .= "<tr><td class=\"fieldName\">Project name: </td><td>$ref->{'project_name'}";
+        $html .= "<tr><td class=\"fieldName\">Project name: </td><td>&nbsp;$ref->{'project_name'}";
         if ($ref->{'project_ref_no'}) {
             $html .= " $ref->{'project_ref_no'}";
         }
         $html .= "</td></tr>";
     }
     if($ref->{'publication_type'}) {
-        $html .= "<tr><td class=\"fieldName\">Publication type: </td><td>$ref->{'publication_type'}</td></tr>";
+        $html .= "<tr><td class=\"fieldName\">Publication type: </td><td>&nbsp;$ref->{'publication_type'}</td></tr>";
     }
     if($ref->{'basis'}) {
-        $html .= "<tr><td class=\"fieldName\">Taxonomy: </td><td>$ref->{'basis'}</td></tr>";
+        $html .= "<tr><td class=\"fieldName\">Taxonomy: </td><td>&nbsp;$ref->{'basis'}</td></tr>";
     }
     if($ref->{'language'}) {
-        $html .= "<tr><td class=\"fieldName\">Language: </td><td>$ref->{'language'} </td></tr>";
+        $html .= "<tr><td class=\"fieldName\">Language: </td><td>&nbsp;$ref->{'language'} </td></tr>";
     }
     if($ref->{'doi'}) {
-        $html .= "<tr><td class=\"fieldName\">DOI: </td><td>$ref->{'doi'}</td></tr>";
+        $html .= "<tr><td class=\"fieldName\">DOI: </td><td>&nbsp;$ref->{'doi'}</td></tr>";
     }
     if($ref->{'comments'}) {
         $html .= "<tr><td colspan=2><span class=\"fieldName\">Comments: </span> $ref->{'comments'}</td></tr>";
@@ -528,17 +531,18 @@ sub displayReference {
         my $html = "";
         if ($authority_count < 100) {
             my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE reference_no=$reference_no ORDER BY taxon_name";
+            my $link = ( $DB ne "eco" ) ? 'a=basicTaxonInfo&taxon_no=' : 'a=displayCollResults&amp;type=view&taxon_no=';
             my @results = 
-                map { qq'<a href="$READ_URL?a=basicTaxonInfo&taxon_no=$_->{taxon_no}">$_->{taxon_name}</a>' }
+                map { qq'<a href="$READ_URL?$link$_->{taxon_no}">$_->{taxon_name}</a>' }
                 @{$dbt->getData($sql)};
             $html = join(", ",@results);
-        } else {
-            $html .= qq|<b><a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
+        } elsif ( $DB ne "eco" ) {
+            $html .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
             my $plural = ($authority_count == 1) ? "" : "s";
             $html .= "view taxonomic name$plural";
-            $html .= qq|</a></b> |;
+            $html .= qq|</a> |;
         }
-        print $box->(qq'Taxonomic names (<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count</a>)',$html);
+        print $box->(qq'Taxonomic names ($authority_count)',$html);
     }
     
     # Handle opinions box
@@ -561,40 +565,48 @@ sub displayReference {
                     [$name,$html] }
                 @{$dbt->getData($sql)};
             $html = join("<br>",@results);
-        } else {
-            $html .= qq|<b><a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
+        } elsif ( $DB ne "eco" ) {
+            $html .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
             if ($opinion_count) {
                 my $plural = ($opinion_count == 1) ? "" : "s";
                 $html .= "view taxonomic opinion$plural";
             }
-            $html .= qq|</a></b> |;
+            $html .= qq|</a> |;
         }
-    
-        my $class_link = qq| - <small><a href="$READ_URL?a=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></small>|;
-        print $box->(qq'Taxonomic opinions (<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count</a>) $class_link',$html);
+
+	my $class_link; 
+	if ( $DB ne "eco" )	{
+		$class_link = qq| - <small><a href="$READ_URL?a=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></small>|;
+	}
+	print $box->(qq'Taxonomic opinions ($opinion_count) $class_link',$html);
     }
 
 	# list taxa with measurements based on this reference JA 4.12.10
-	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
-	if ( @taxon_refs )	{
-		my @taxa;
-		push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
-		print $box->("Measurements",join('<br>',@taxa));
+	if ( $DB ne "eco" )	{
+		my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
+		if ( @taxon_refs )	{
+			my @taxa;
+			push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+			print $box->("Measurements",join('<br>',@taxa));
+		}
 	}
 
 
     # Handle collections box
-    $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
-    my $collection_count = ${$dbt->getData($sql)}[0]->{'c'};
-    $sql = "SELECT count(*) c FROM secondary_refs WHERE reference_no=$reference_no";
-    $collection_count += ${$dbt->getData($sql)}[0]->{'c'}; 
+    my $collection_count;
+    if ( $DB ne "eco" )	{
+        $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
+        $collection_count = ${$dbt->getData($sql)}[0]->{'c'};
+        $sql = "SELECT count(*) c FROM secondary_refs WHERE reference_no=$reference_no";
+        $collection_count += ${$dbt->getData($sql)}[0]->{'c'}; 
+    }
     if ($collection_count) {
         my $html = "";
         if ($collection_count < 100) {
             # primary ref in first SELECT, secondary refs in second SELECT
             # the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
             # any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
-            my $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections where reference_no=$reference_no)";
+            my $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections WHERE reference_no=$reference_no)";
             $sql .= " UNION ";
             $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
@@ -620,13 +632,26 @@ sub displayReference {
             $html =~ s/, $//;
         } else {
             my $plural = ($collection_count == 1) ? "" : "s";
-            $html .= qq|<b><a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a></b>|;
+            $html .= qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a>|;
         }
         if ($html) {
             print $box->(qq'Collections (<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
         }
     }
-	print $hbo->stdIncludes("std_page_bottom");
+
+    my @inventories;
+    if ( $DB eq "eco" )	{
+        $sql = "SELECT inventory_no FROM refs r,inventories i WHERE r.reference_no=i.reference_no AND r.reference_no=$reference_no";
+        @inventories = @{$dbt->getData($sql)};
+    }
+    if ( @inventories )	{
+        my $count = $#inventories + 1;
+        my @links;
+        push @links , qq|<a href="$READ_URL?a=inventoryInfo&amp;inventory_no=$_->{inventory_no}">$_->{inventory_no}</a>| foreach @inventories;
+        print $box->(qq'Inventories (<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$count</a>)',join(', ',@links));
+    }
+
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # JA 4.12.10
@@ -666,7 +691,7 @@ sub displaySearchRefs {
 			}
 		} 
 		$vars->{'add'} .= "<input type='submit' name='add' value='Add'>\n";
-	} 
+	}
 
 	print Person::makeAuthEntJavascript($dbt);
 	print $hbo->populateHTML("search_refs_form", $vars);
@@ -712,25 +737,29 @@ sub displayReferenceForm {
 		}
 	}
 
-    # Defaults, then database, then a resubmission/form data
-    my %vars = (%defaults,%db_row,%form_vars);
-    
-    if ($isNewEntry) {
-        $vars{"page_title"} = "New reference form";
-    } else {
-        $vars{"page_title"} = "Reference number $reference_no";
-    }
+	# Defaults, then database, then a resubmission/form data
+	my %vars = (%defaults,%db_row,%form_vars);
+
+	if ( $DB eq "eco" )	{
+		$vars{"db"} = "eco";
+	}
+
+	if ($isNewEntry)	{
+		$vars{"page_title"} = "New reference form";
+	} else	{
+		$vars{"page_title"} = "Reference number $reference_no";
+	}
 	print $hbo->populateHTML('js_reference_checkform');
 	print $hbo->populateHTML("enter_ref_form", \%vars);
 }
 
 #  * Will either add or edit a reference in the database
 sub processReferenceForm {
-    my ($dbt,$q,$s,$hbo) = @_;
-    my $dbh = $dbt->dbh;
+	my ($dbt,$q,$s,$hbo) = @_;
+	my $dbh = $dbt->dbh;
 	my $reference_no = int($q->param('reference_no'));
 
-    my $isNewEntry = ($reference_no > 0) ? 0 : 1;
+	my $isNewEntry = ($reference_no > 0) ? 0 : 1;
 
     my @child_nos = ();
     # If taxonomy basis is changed on an edit, the classifications that refer to that ref
@@ -818,21 +847,21 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         my $box_header = ($dupe || !$isNewEntry) ? "Full reference" : "New reference";
         print qq|
         <div class="displayPanel" align="left" style="margin: 1em;">
-        <span class="displayPanelHeader"><b>$box_header</b></span>
-        <table><tr><td valign=top>$formatted_ref <small><b><a href="$WRITE_URL?a=displayRefResults&type=edit&reference_no=$reference_no">edit</a></b></small></td></tr></table>
+        <span class="displayPanelHeader">$box_header</span>
+        <table><tr><td valign=top>$formatted_ref <small><a href="$WRITE_URL?a=displayRefResults&type=edit&reference_no=$reference_no">edit</a></small></td></tr></table>
         </span>
         </div>|;
         
 
        
        
-        if ($IS_FOSSIL_RECORD) {
-        } else {
-        print qq|</center>|;
-        print qq|
+	print qq|</center>
         <div class="displayPanel" align="left" style="margin: 1em;">
-        <span class="displayPanelHeader"><b>Please enter all the data</b></span>
-        <div class="displayPanelContent">
+        <span class="displayPanelHeader">Please enter all the data</span>
+        <div class="displayPanelContent large">
+|;
+	if ( $DB ne "eco" )	{
+		print qq|
         <ul class="small" style="text-align: left;">
             <li>Add or edit all the <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined
             <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy
@@ -842,91 +871,108 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
             <li>Add all new <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayReIDCollsAndOccsSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">reidentifications</a> of existing occurrences
             <li>Add <a href="#" onClick="popup = window.open('$WRITE_URL?a=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$WRITE_URL?a=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>
         <ul>
-        </div>
-        </div>
-        </center>|;
-        }
+|;
+	} else	{
+		print $hbo->populateHTML('eco_menu');
+	}
+	print "</div>\n</div>\n</center>\n";
     }
 }
 
 # JA 23.2.02
-sub getReferenceLinkSummary {
-    my ($dbt,$s,$reference_no) = @_;
-    my $dbh = $dbt->dbh;
-	my $retString = "";
+sub getReferenceLinkSummary	{
+	my ($dbt,$s,$reference_no) = @_;
+	my $dbh = $dbt->dbh;
+	my ($sql,@chunks);
 
-    # Handle Authorities
-    my $sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
-    my $authority_count = ${$dbt->getData($sql)}[0]->{'c'};
+	# $DB tests are repeated in case we want to make the lines more
+	#  complex or remove certainones
 
-    if ($authority_count) {
-        $retString .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
-        my $plural = ($authority_count == 1) ? "" : "s";
-        $retString .= "$authority_count taxonomic name$plural";
-        $retString .= qq|</a>, |;
-    }
-    
-    # Handle Opinions
-    $sql = "SELECT count(*) c FROM opinions WHERE reference_no=$reference_no";
-    my $opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
-
-    if ($opinion_count) {
-        $retString .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">|;
-        if ($opinion_count) {
-            my $plural = ($opinion_count == 1) ? "" : "s";
-            $retString .= "$opinion_count taxonomic opinion$plural";
-        }
-        $retString .= qq|</a> (<a href="$READ_URL?a=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>), |;
-    }      
-
-	# list taxa with measurements based on this reference JA 4.12.10
-	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
-	if ( @taxon_refs )	{
-		my @taxa;
-		push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
-		$retString .= "measurements of ".join(', ',@taxa).", ";
+	# Handle Authorities
+	my $authority_count;
+	if ( $DB ne "eco" )	{
+		$sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
+		$authority_count = ${$dbt->getData($sql)}[0]->{'c'};
 	}
 
-    # Handle Collections
+	if ($authority_count) {
+		my $plural = ($authority_count == 1) ? "" : "s";
+		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count taxonomic name$plural</a>|;
+	}
+
+	# Handle Opinions
+	my $opinion_count;
+	if ( $DB ne "eco" )	{
+		$sql = "SELECT count(*) c FROM opinions WHERE reference_no=$reference_no";
+		$opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
+	}
+
+	if ($opinion_count) {
+		my $plural = ($opinion_count == 1) ? "" : "s";
+		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count taxonomic opinion$plural</a> (<a href="$READ_URL?a=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>)|;
+	}      
+
+	# list taxa with measurements based on this reference JA 4.12.10
+	if ( $DB ne "eco" )	{
+		my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
+		if ( @taxon_refs )	{
+			my @taxa;
+			push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+			push @chunks , "measurements of ".join(', ',@taxa);
+		}
+	}
+
+	# Handle Collections
 	# make sure displayed collections are readable by this person JA 24.6.02
 
-
 	# primary ref in first SELECT, secondary refs in second SELECT
-    # the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
-    # any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
-    $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections where reference_no=$reference_no)";
-    $sql .= " UNION ";
-    $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
+	# the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
+	# any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
+	my @colls = ();
+	my $collection_count;
+	if ( $DB ne "eco" )	{
+		$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections WHERE reference_no=$reference_no)";
+		$sql .= " UNION ";
+		$sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
-    my $sth = $dbh->prepare($sql);
-    $sth->execute();
+		my $sth = $dbh->prepare($sql);
+		$sth->execute();
 
-	my $p = Permissions->new($s,$dbt);
-    my $results = [];
-	if($sth->rows) {
-	    my $limit = 999;
-	    my $ofRows = 0;
-        $p->getReadRows($sth,$results,$limit,\$ofRows);
-    }
+		my $p = Permissions->new($s,$dbt);
+		if($sth->rows) {
+			my $limit = 999;
+			my $ofRows = 0;
+			$p->getReadRows($sth,\@colls,$limit,\$ofRows);
+		}
+	} else	{
+		$sql = "SELECT inventory_no,authorizer_no,inventory_name FROM inventories WHERE reference_no=$reference_no";
+		@colls = @{$dbt->getData($sql)};
+	}
+	$collection_count = scalar(@colls);
 
-    my $collection_count = scalar(@$results);
-    if ($collection_count == 0) {
-        $retString .= "no collections";
-    } else {
-        my $plural = ($collection_count == 1) ? "" : "s";
-        $retString .= qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count collection$plural</a>  (|;
-        foreach my $row (@$results) {
-            my $style;
-            if (! $row->{'is_primary'}) {
-                $style = " class=\"boring\"";
-            }
-            my $coll_link = qq|<a href="$READ_URL?a=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
-            $retString .= $coll_link . " ";
-        }
-        $retString .= ")";
-    } 
+	if ($collection_count == 0 && $DB ne "eco") {
+		push @chunks , "no collections";
+	} elsif ($collection_count > 0)	{
+		my ($thing,$action);
+		if ( $DB ne "eco" )	{
+			$thing = ($collection_count == 1) ? "collection" : "collections";
+			$action = "basicCollectionSearch";
+		} else	{
+			$thing = ($collection_count == 1) ? "inventory" : "inventories";
+			$action = "inventoryInfo";
+		}
+		my @coll_links;
+		foreach my $row (@colls) {
+			my $style;
+			if (! $row->{'is_primary'}) {
+				$style = " class=\"boring\"";
+			}
+			push @coll_links , qq|<a href="$READ_URL?a=$action&$COLLECTION_NO=$row->{$COLLECTION_NO}" $style>$row->{$COLLECTION_NO}</a>|;
+		}
+		push @chunks , qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count $thing</a>  (|.join(' ',@coll_links).")";
+	}
 
-	return $retString;
+	return join(', ',@chunks);
 }
 
 
