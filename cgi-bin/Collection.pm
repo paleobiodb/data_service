@@ -2735,10 +2735,11 @@ sub basicCollectionSearch	{
 		$sql = "SELECT $fields FROM $COLLECTIONS WHERE $COLLECTION_NO=".$NO;
 		my $coll = ${$dbt->getData($sql)}[0];
 		if ( $coll && $DB ne "eco" )	{
+			$q->param($COLLECTION_NO => $NO);
 			basicCollectionInfo($dbt,$q,$s,$hbo);
 			return 1;
 		} elsif ( $coll )	{
-			$q->param('inventory_no' => $NO);
+			$q->param($COLLECTION_NO => $NO);
 			inventoryInfo($dbt,$q,$s,$hbo);
 			return 1;
 		} else	{
