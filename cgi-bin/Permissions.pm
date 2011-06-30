@@ -166,6 +166,43 @@ sub getReadRows {
 	}
 }
 
+# JA 30.6.11
+# stripped-down rewrite of getReadRows intended to check a single record
+# lots of recycled structure/variable naming in case getReadRows is ever
+#  simplified to draw from this function
+# WARNING: no check for required fields, I'm in a rush
+# so, make sure to retrieve rd_short like this:
+#  DATE_FORMAT(release_date, '%Y%m%d') AS rd_short
+sub readPermission	{
+
+	my $self = shift;
+	# you must pass in an object with SELECT data for one collection
+	my $row = shift;
+	my $s = $self->{'s'};
+	my $now = $self->getDate ( );
+	my %is_modifier_for = %{$self->getModifierList()};
+	my ($okToRead,$failedReason);
+	my $group = $row->{'research_group'};
+	$group =~ s/ /_/g;
+	if ( $s->get("superuser") == 1 )	{
+		$okToRead = "superuser";
+	} elsif ( $row->{access_level} eq "the public" )	{
+		$okToRead = "public";
+	} elsif ( $row->{access_level} =~ /database members/i && $s->get("authorizer_no") )	{
+		$okToRead = "db member";
+	} elsif ( $row->{access_level} =~ /group members/i && $s->get($group) )	{
+		$okToRead = "group member[$group]";
+	} elsif ( $s->get("authorizer_no") == $row->{'authorizer_no'} )	{
+		$okToRead = "authorizer";
+	} elsif ( $is_modifier_for{$row->{'authorizer_no'}} )	{
+		$okToRead = "modifier";
+	} elsif ( $row->{rd_short} < $now )	{
+		$okToRead = "past record";
+	}
+	return $okToRead;
+
+}
+
 # This function is deprecated PS 09/26/2006 - People can view stuff they can't
 # write to, but an error message will pop up if they can't edit it
 # Produces an array of rows that this person has permissions to WRITE
