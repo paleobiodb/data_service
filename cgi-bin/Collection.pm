@@ -2895,8 +2895,17 @@ sub basicCollectionInfo	{
 		}
 	}
 
-	my $sql = "SELECT * FROM collections WHERE collection_no=".$q->param('collection_no');
+	my $sql = "SELECT *,DATE_FORMAT(release_date, '%Y%m%d') AS rd_short FROM collections WHERE collection_no=".$q->param('collection_no');
 	my $c = ${$dbt->getData($sql)}[0];
+
+	my $p = Permissions->new($s,$dbt);
+	my $okToRead = $p->readPermission($c);
+	# if the collection is protected, pretend the search failed
+	if ( ! $okToRead )	{
+		$q->param('type' => 'view');
+		main::displaySearchColls('Your search produced no matches: please try again');
+		exit;
+	}
 
 	my $mockLI = 'class="verysmall" style="margin-top: -1em; margin-left: 2em; text-indent: -1em;"> &bull;';
 	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
