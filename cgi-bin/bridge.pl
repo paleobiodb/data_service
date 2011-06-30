@@ -2634,6 +2634,23 @@ sub submitTypeTaxonSelect {
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub badNameForm	{
+	my %vars;
+	$vars{'error'} = $_[0];
+	if ( $vars{'error'} )	{
+		$vars{'error'} = '<p class="small" style="margin-left: 1em; margin-bottom: 1.5em; margin-top: 1em; text-indent: -1em;">' . $vars{'error'} . ". Please try again.</p>\n\n";
+	}
+	print $hbo->stdIncludes($PAGE_TOP);
+	print $hbo->populateHTML('bad_name_form', \%vars);
+	print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
+sub badNames	{
+	print $hbo->stdIncludes($PAGE_TOP);
+	Opinion::badNames($dbt,$hbo,$s,$q);
+	print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
 ## END Opinion stuff
 ##############
 
