@@ -1832,6 +1832,141 @@ sub removeDuplicateOpinions {
     return($newNo);
 }
 
+# JA 29.6 to 4.7.11 (intermittently)
+sub badNames	{
+	my ($dbt,$hbo,$s,$q) = @_;
+
+	my $group = $q->param('taxon_name');
+	if ( $group =~ /[^A-Za-z ]/ )	{
+		main::badNameForm("The taxon name '$group' is misformatted");
+		return;
+	}
+	if ( $group =~ /.+ .* .+/ )	{
+		main::badNameForm("The taxon name '$group' includes too many spaces");
+		return;
+	}
+	my $exclude = $q->param('exclude_taxon_name');
+	if ( $exclude && $exclude =~ /[^A-Za-z ]/ )	{
+		main::badNameForm("The taxon name '$exclude' is misformatted");
+		return;
+	}
+	if ( $exclude =~ /.+ .* .+/ )	{
+		main::badNameForm("The taxon name '$exclude' includes too many spaces");
+		return;
+	}
+	my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$group."' ORDER BY rgt-lft DESC";
+        my $t = ${$dbt->getData($sql)}[0];
+	my ($lft,$rgt) = ($t->{'lft'},$t->{'rgt'});
+
+	my $exclude_clause;
+	if ( $exclude )	{
+		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$exclude."' ORDER BY rgt-lft DESC";
+        	my $ex = ${$dbt->getData($sql)}[0];
+		if ( $ex->{'lft'} > 0 )	{
+			$exclude_clause = " AND (t.lft<$ex->{'lft'} OR t.rgt>$ex->{'rgt'})";
+		} else	{
+			main::badNameForm("'$exclude' isn't in the database");
+			return;
+		}
+	}
+
+	my $restrict;
+	if ( $q->param('restrict_to_rank') =~ /species|genus/ ) 	{
+		$restrict = " AND a.taxon_rank LIKE '%".$q->param('restrict_to_rank')."'";
+	} elsif ( $q->param('restrict_to_rank') ) 	{
+		$restrict = " AND a.taxon_rank NOT LIKE '%species' AND a.taxon_rank NOT LIKE '%genus'";
+	}
+
+	# first find currently empty higher taxa (which might be OK)
+	# date of opinion doesn't matter, the issue is opinions on lower taxa
+
+	$sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND t.taxon_no=child_no AND t.opinion_no=o.opinion_no AND status='belongs to' AND lft>$lft AND rgt<$rgt AND rgt=lft+1$exclude_clause AND a.taxon_rank NOT LIKE '%species'$restrict ORDER BY a.taxon_name";
+        my @empties = @{$dbt->getData($sql)};
+	my @empty_nos = map { $_->{'taxon_no'} } @empties;
+
+	# find empty names that previously included something, so they're bad
+
+	my (@bad_nos,%former);
+	if ( @empty_nos )	{
+		$sql = "SELECT taxon_name,parent_no FROM authorities a,opinions o WHERE a.taxon_no=child_no AND (parent_no IN (".join(',',@empty_nos).") OR parent_spelling_no IN (".join(',',@empty_nos).")) AND status='belongs to' GROUP BY taxon_name,parent_no";
+		my @bads = @{$dbt->getData($sql)};
+		@bad_nos = map { $_->{'parent_no'} } @bads;
+		push @{$former{$_->{'parent_no'}}} , $_->{'taxon_name'} foreach @bads;
+	}
+
+	# find lower taxa belonging to invalid higher taxa
+
+	# date is of the most recent opinion pertaining to each lower taxon that
+	#  is mapped into the focal taxon (table o, not o2)
+	my $date;
+	if ( $q->param('year') > 0 && $q->param('month') > 0 && $q->param('day_of_month') > 0 )	{
+		$date = " AND o.created>".sprintf("%d%02d%02d000000",$q->param('year'),$q->param('month'),$q->param('day_of_month'));
+	}
+
+	$sql = "SELECT a.taxon_no,o2.status,a2.taxon_name parent FROM authorities a,authorities a2,$TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2,opinions o,opinions o2 WHERE a.taxon_no=t.taxon_no AND t.taxon_no=o.child_no AND t.opinion_no=o.opinion_no AND o.status='belongs to' AND o.parent_no=t2.taxon_no AND t2.taxon_no=o2.child_no AND o2.opinion_no=t2.opinion_no AND a2.taxon_no=o2.parent_no AND o2.status!='belongs to' AND t.lft>$lft AND t.rgt<$rgt$exclude_clause$restrict$date";
+	my @orphans = @{$dbt->getData($sql)};
+        push @bad_nos , map { $_->{'taxon_no'} } @orphans;
+	my (%parent_problem,%parent_parent);
+	$parent_problem{$_->{'taxon_no'}} = $_->{'status'} foreach @orphans;
+	$parent_parent{$_->{'taxon_no'}} = $_->{'parent'} foreach @orphans;
+
+	if ( ! @bad_nos )	{
+		main::badNameForm("There are no bad names within $group");
+		return;
+	}
+
+	# get needed info about the bad names
+
+	$sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name,a.type_taxon_no,a2.taxon_name parent,IF(ref_has_opinion='yes',r.author1last,o.author1last) auth1,IF(ref_has_opinion='yes',r.author2last,o.author2last) auth2,IF(ref_has_opinion='yes',r.otherauthors,o.otherauthors) others,IF(ref_has_opinion='yes',r.pubyr,o.pubyr) yr,IF(ref_has_opinion='yes',r.reference_no,o.reference_no) refno FROM authorities a,authorities a2,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND t.taxon_no=child_no AND t.opinion_no=o.opinion_no AND a2.taxon_no=parent_no AND o.reference_no=r.reference_no AND a.taxon_no IN (".join(',',@bad_nos).") ORDER BY a.taxon_name";
+        my @bad_info = @{$dbt->getData($sql)};
+
+	print "<center>\n<p class=\"pageTitle\">Bad names within $group</p>\n</center>\n\n";
+	print "<div class=\"displayPanel\" style=\"margin-left: auto; margin-right: auto; margin-bottom: 3em; width: 36em; padding-left: 1em; padding-bottom: 1em;\">\n";
+	if ( $#bad_info > 3 )	{
+		printf "<p><i>There are %d bad names in total</i></p>\n\n",$#bad_info;
+	}
+	for my $e ( @bad_info )	{
+		my $by = $e->{'auth1'}." ".$e->{'yr'};
+		if ( $e->{'other'} )	{
+			$by = $e->{'auth1'}." et al. ".$e->{'yr'};
+		} elsif ( $e->{'auth2'} )	{
+			$by = $e->{'auth1'}." and ".$e->{'auth2'}." ".$e->{'yr'};
+		}
+		$by =~ s/, jr.//gi;
+		$by = "<a href=\"$WRITE_URL?a=displayReference&amp;reference_no=$e->{'refno'}\">" . $by;
+		print '<div class="small" style="margin-top: 1em; margin-left: 1em; text-indent: -1em;">&bull; '.$e->{'taxon_rank'}." ".$e->{'taxon_name'}."</div>\n\n";
+		print "<div class=\"verysmall\" style=\"margin-left: 1em; text-indent: -1em; padding-left: 1em;\">currently assigned to ".$e->{'parent'}." based on $by</a></div>";
+		if ( $parent_problem{$e->{'taxon_no'}} )	{
+			my $status = $parent_problem{$e->{'taxon_no'}}." ".$parent_parent{$e->{'taxon_no'}};
+			$status =~ s/(objective)/an $1/;
+			$status =~ s/(subjective)/a $1/;
+			$status =~ s/(invalid sub)/an $1/;
+			$status =~ s/(nomen [^ ]*)( .*)/a $1 belonging to $2/;
+			print "<div class=\"verysmall\" style=\"margin-left: 1em; text-indent: -1em; padding-left: 1em;\">$e->{'parent'} is $status</a></div>";
+		}
+		elsif ( $e->{'type_taxon_no'} > 0 )	{
+			$sql = "SELECT taxon_rank,taxon_name FROM authorities WHERE taxon_no=".$e->{'type_taxon_no'};
+        		my $type = ${$dbt->getData($sql)}[0];
+			print "<div class=\"verysmall\" style=\"padding-left: 1em;\">type $type->{'taxon_rank'} is $type->{'taxon_name'}</div>";
+		}
+		if ( $former{$e->{'taxon_no'}} )	{
+			my @f = @{$former{$e->{'taxon_no'}}};
+			@f = sort { $a cmp $b } @f;
+			my $formers = $f[0];
+			if ( $#f == 1 )	{
+				$formers = $f[0]." and ".$f[1];
+			} elsif ( $#f > 1 )	{
+				$f[$#f] = "and ".$f[$#f];
+				$formers = join(', ',@f);
+			}
+			print "<div class=\"verysmall\" style=\"text-indent: -1em; padding-left: 2em;\">now empty, but formerly included $formers</div>\n";
+		}
+		print "\n";
+	}
+	print "<br>\n<center><a href=\"$WRITE_URL?a=badNameForm\">Search again</a></center>\n";
+	print "</div>\n\n";
+}
+
 
 1;
 
