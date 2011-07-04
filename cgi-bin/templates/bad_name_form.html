@@ -1,0 +1,39 @@
+
+<center>
+<div class="pageTitle">Search for bad names</div>
+</center>
+
+<form method="POST" action="%%write_url%%">
+<input type="hidden" name="a" value="badNames">
+
+<div class="displayPanel" style="width: 36em; margin-left: auto; margin-right: auto; padding-top: 1em; padding-left: 1.5em; padding-right: 1.5em; padding-bottom: 1em;">
+
+%%error%%
+
+<div style="float: left; clear: right; width: 36em;">
+
+<div class="medium" style="float: left; clear: left; margin-top: 1em; margin-bottom: 2em;">
+Taxon name: <input id="taxon_name" size="20">
+<br>... excluding subtaxon <input id="exclude_taxon_name" size="20">
+<br><br>Taxon rank: <select id="restrict_to_rank"><option></option><option>species</option><option>genus</option><option>higher taxon</option></select>
+<br><br>
+Based on opinions entered since 
+<select name="day_of_month"></select>
+<select name="month"></select>
+<select name="year"></select>
+</div>
+
+<div style="float: right; clear: right; margin-top: 1em; margin-left: 0em;"><input type="submit" value="Search"></div>
+
+</div>
+
+<div class="verysmall">
+This tool will return a list including (1) taxa with invalid parents, and (2) taxa that are currently considered valid by us and at some time included children known to us, but currently do not.
+</div>
+
+</div>
+
+</div>
+
+</form>
+
