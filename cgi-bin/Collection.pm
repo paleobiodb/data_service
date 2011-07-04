@@ -426,7 +426,7 @@ IS NULL))";
 
 	# Handle modified date
 	if ($options{'modified_since'} || $options{'year'})	{
-        my ($yyyy,$mm,$dd);
+        my ($yyyy,$mm,$dd) = ($options{'year'},$options{'month'},$options{'day_of_month'});
         if ($options{'modified_since'}) {
             my $nowDate = now();
             if ( "yesterday" eq $options{'modified_since'}) {
@@ -446,25 +446,6 @@ IS NULL))";
             }
             my ($date,$time) = split / /,$nowDate;
             ($yyyy,$mm,$dd) = split /-/,$date,3;
-        } elsif ($options{'year'}) {
-            $yyyy = $options{'year'};
-            $mm = $options{'month'};
-            # caught a major error here in which months passed as strings
-            #  (as normal) were not converted to numbers JA 4.5.06
-            my @months = ( "","January","February","March","April","May","June","July","August","September","October","November","December" );
-            for my $m ( 0..$#months )	{
-                if ( $mm eq $months[$m] )	{
-                    $mm = $m;
-                    last;
-                }
-            }
-            if ( $mm !~ /(10)|(11)|(12)/ )	{
-                $mm = "0" . $mm;
-            }
-            $dd = $options{'day_of_month'};
-            if ( $dd < 10 )	{
-                $dd = "0" . $dd;
-            }
         }  
 
         my $val = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
