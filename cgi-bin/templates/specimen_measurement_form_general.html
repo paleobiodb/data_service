@@ -36,6 +36,10 @@ function checkForm() {
             f.diagonal_min.value != '' ||
             f.diagonal_max.value != '' ||
             f.diagonal_error.value != '' || 
+            f.diameter_median.value != '' ||
+            f.diameter_min.value != '' ||
+            f.diameter_max.value != '' ||
+            f.diameter_error.value != '' || 
             f.inflation_median.value != '' ||
             f.inflation_min.value != '' ||
             f.inflation_max.value != '' ||
@@ -70,6 +74,9 @@ function checkForm() {
             field_count += 1;
         }
         if (f.diagonal_average.value != '') {
+            field_count += 1;
+        }
+        if (f.diameter_average.value != '') {
             field_count += 1;
         }
         if (f.inflation_average.value != '') {
@@ -180,7 +187,7 @@ function checkForm() {
             <td><input id="circumference_median" size="7" maxlength="7"></td>
             <td><input id="circumference_min" size="7" maxlength="7"></td>
             <td><input id="circumference_max" size="7" maxlength="7"></td>
-            <td><input id="circumference_error" size="7" maxlength="7"><select id="diagonal_error_unit"></select></td>
+            <td><input id="circumference_error" size="7" maxlength="7"><select id="circumference_error_unit"></select></td>
           </tr>
           <tr class="small">
             <td>diagonal</td>
@@ -189,6 +196,14 @@ function checkForm() {
             <td><input id="diagonal_min" size="7" maxlength="7"></td>
             <td><input id="diagonal_max" size="7" maxlength="7"></td>
             <td><input id="diagonal_error" size="7" maxlength="7"><select id="diagonal_error_unit"></select></td>
+          </tr>
+          <tr class="small">
+            <td>diameter</td>
+            <td><input id="diameter_average" size="7" maxlength="7"></td>
+            <td><input id="diameter_median" size="7" maxlength="7"></td>
+            <td><input id="diameter_min" size="7" maxlength="7"></td>
+            <td><input id="diameter_max" size="7" maxlength="7"></td>
+            <td><input id="diameter_error" size="7" maxlength="7"><select id="diameter_error_unit"></select></td>
           </tr>
           <tr class="small">
             <td>inflation</td>
