@@ -2866,7 +2866,7 @@ sub displayMeasurements {
     }
 
     # Returns a triple index hash with index <part><dimension type><whats measured>
-    #  Where part can be leg, valve, etc, dimension type can be length,width,height,diagonal,inflation 
+    #  Where part can be leg, valve, etc, dimension type can be length,width,height,circumference,diagonal,diameter,inflation 
     #   and whats measured can be average, min,max,median,error
     my $p_table_ref = Measurement::getMeasurementTable(\@specimens);
     my %p_table = %{$p_table_ref};
@@ -2886,7 +2886,7 @@ sub displayMeasurements {
         my $defaultError = "";
         for my $part ( keys %p_table )	{
             my %m_table = %{$p_table{$part}};
-            foreach my $type (('length','width','height','circumference','diagonal','inflation')) {
+            foreach my $type (('length','width','height','circumference','diagonal','diameter','inflation')) {
                 if (exists ($m_table{$type})) {
                     if ( $m_table{$type}{'min'} )	{
                         $partHeader{'min'} = "minimum";
@@ -2958,7 +2958,7 @@ $mass_string
             my %m_table = %{$p_table{$part}};
             $temp++;
 
-            foreach my $type (('length','width','height','circumference','diagonal','inflation')) {
+            foreach my $type (('length','width','height','circumference','diagonal','diameter','inflation')) {
                 if (exists ($m_table{$type})) {
                     if ( $m_table{$type}{'average'} <= 0 )	{
                         next;
