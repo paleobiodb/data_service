@@ -9,10 +9,8 @@ use Constants qw($READ_URL $WRITE_URL $HTML_DIR $TAXA_TREE_CACHE);
 # written by PS 6/22/2005 - 6/24/2005
 # Handle display and processing of form to enter measurements for specimens
 
-#my @specimen_fields= ('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','length_median','length_min','length_max','length_error','length_error_unit','width_median','width_min','width_max','width_error','width_error_unit','height_median','height_min','height_max','height_error','height_error_unit','circumference_median','circumference_min','circumference_max','circumference_error','circumference_error_unit','diagonal_median','diagonal_min','diagonal_max','diagonal_error','diagonal_error_unit','inflation_median','inflation_min','inflation_max','inflation_error','inflation_error_unit','comments','length','width','height','diagonal','inflation');
-
 my @specimen_fields   =('specimens_measured', 'specimen_coverage','specimen_id','specimen_side','specimen_part','measurement_source','magnification','is_type','comments');
-my @measurement_types =('mass','length','width','height','circumference','diagonal','inflation','d13C','d18O');
+my @measurement_types =('mass','length','width','height','circumference','diagonal','diameter','inflation','d13C','d18O');
 my @measurement_fields=('average','median','min','max','error','error_unit');
 
 #
@@ -407,6 +405,7 @@ function submitForm ( )
   <input type="checkbox" name="height"> height
   <input type="checkbox" name="circumference"> circumference<br>
   <input type="checkbox" name="diagonal" style="margin-left: 11em;"> diagonal
+  <input type="checkbox" name="diameter" style="margin-left: 11em;"> diameter
   <input type="checkbox" name="d13C"> &delta;<sup>13</sup>C
   <input type="checkbox" name="d18O"> &delta;<sup>18</sup>O
   <br>default part: <input type="text" name="default_part" size="10" $part_value><br>
@@ -548,7 +547,7 @@ sub populateMeasurementForm {
 		push (@values,int($q->param('occurrence_no')),int($q->param('taxon_no')),$s->get('reference_no'),'-1',$taxon_name,$collection,'');
 		my $column_names;
 		my $inputs;
-                for my $c ( 'length','height','width','circumference','diagonal' ,'d13C','d18O')	{
+                for my $c ( 'length','height','width','circumference','diagonal','diameter','d13C','d18O')	{
 			if ( $q->param($c) )	{
 				my $cn = $c;
 				if ( $c !~ /13C|18O/ )	{
@@ -564,7 +563,6 @@ sub populateMeasurementForm {
 |;
 			}
 		}
-                #@table_rows = ('specimen_id','length','width','height','diagonal','specimen_side','specimen_part','measurement_source','magnification','is_type');
                 my $table_rows = "";
                 for (1..$q->param('specimens_measured')) {
                     $table_rows .= $hbo->populateHTML('specimen_measurement_form_row',[$q->param('default_no'),$inputs,$q->param('default_side'),$q->param('default_part'),$q->param('default_type'),$q->param('default_source'),$q->param('default_magnification')],['specimen_id','inputs','specimen_side','specimen_part','specimen_is_type','measurement_source','magnification']);
@@ -751,7 +749,7 @@ sub processMeasurementForm	{
         }
 
         # Make sure at least one of these fields is set
-        if (! ($fields{'length_average'} || $fields{'width_average'} || $fields{'height_average'} || $fields{'circumference_average'} || $fields{'diagonal_average'})  || $fields{'d13C_average'} || $fields{'d18O_average'} ) {
+        if (! ($fields{'length_average'} || $fields{'width_average'} || $fields{'height_average'} || $fields{'circumference_average'} || $fields{'diagonal_average'} || $fields{'diameter_average'} || $fields{'d13C_average'} || $fields{'d18O_average'}) ) {
             next;
         }
 
@@ -1652,7 +1650,7 @@ sub displayDownloadMeasurementsResults  {
 	}
 
 	my $types;
-	for my $type (('length','width','height','circumference','diagonal','inflation','d13C','d18O'))	{
+	for my $type (('length','width','height','circumference','diagonal','diameter','inflation','d13C','d18O'))	{
 		if ( $q->param($type) =~ /y/i )	{
 			$types++;
 		}
@@ -1664,7 +1662,7 @@ sub displayDownloadMeasurementsResults  {
 		for my $part ( @part_list )	{
 			my %m_table = %{$p_table{$part}};
 			if ( %m_table )	{
-				for my $type (('length','width','height','circumference','diagonal','inflation','d13C','d18O'))	{
+				for my $type (('length','width','height','circumference','diagonal','diameter','inflation','d13C','d18O'))	{
 					if ( $m_table{$type} && $q->param($type) =~ /y/i && $m_table{$type}{'average'} > 0 )	{
 						$measured_parts{$taxon_no}++;
 						$measured_types{$taxon_no}{$part}++;
@@ -1694,7 +1692,7 @@ sub displayDownloadMeasurementsResults  {
 				$records{$part}++;
 				$specimens{$part} += $m_table{'specimens_measured'};
 				$rows++;
-				for my $type (('length','width','height','circumference','diagonal','inflation','d13C','d18O'))	{
+				for my $type (('length','width','height','circumference','diagonal','diameter','inflation','d13C','d18O'))	{
 					if ( $m_table{$type} && $q->param($type) =~ /y/i && $m_table{$type}{'average'} > 0 )	{
 						if ( $sep =~ /,/ )	{
 							print OUT "\"$name{$taxon_no}\"",$sep;
