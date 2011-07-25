@@ -1269,7 +1269,7 @@ sub avg {
 #  taxa_tree_cache, also includes diameter and circumference, deals with multiple parent and/or
 #  "minus" taxa in equations table, and also computes mean
 sub getMassEstimates	{
-	my ($dbt,$taxon_no,$tableref) = @_;
+	my ($dbt,$taxon_no,$tableref,$skip_area) = @_;
 	my %p_table = %{$tableref};
 	my %distinct_parts = ();
 
@@ -1303,19 +1303,27 @@ sub getMassEstimates	{
 			next;
 		}
 		foreach my $type (('length','width','area','diameter','circumference')) {
-			if ( $type eq "area" && $m_table{length}{average} && $m_table{width}{average} && $part =~ /^[PMpm][1234]$/ )	{
+			if ( $type eq "area" && $m_table{length}{average} && $m_table{width}{average} && $part =~ /^[PMpm][1234]$/ && ! $skip_area )	{
 				$m_table{area}{average} = $m_table{length}{average} * $m_table{width}{average};
 			}
 			if ( $m_table{$type}{'average'} > 0 ) {
-				my $value = $m_table{$type}{'average'};
-				if ( $value < 1 )	{
-					$value = sprintf("%.3f",$value);
-				} elsif ( $value < 10 )	{
-					$value = sprintf("%.2f",$value);
-				} else	{
-					$value = sprintf("%.1f",$value);
+				if ( $type ne "width" || ! $m_table{'length'}{'average'} || ! $m_table{'width'}{'average'} )	{
+					my $value = $m_table{$type}{'average'};
+					my $digits;
+					if ( $value < 1 )	{
+						$digits = "3f";
+					} elsif ( $value < 10 )	{
+						$digits = "2f";
+					} else	{
+						$digits = "1f";
+					}
+					$value = sprintf("%.$digits",$value);
+					if ( $type ne "length" || ! $m_table{'width'}{'average'} )	{
+						push @values , "$part $type $value";
+					} else	{
+						push @values , sprintf("$part $value x %.$digits",$m_table{'width'}{'average'});
+					}
 				}
-				push @values , "$part $type $value";
 				my $last_lft = "";
 				foreach my $eqn ( @eqn_refs )	{
 					if ( $part eq $eqn->{'part'} && $eqn->{$type} && ! $eqn->{'minus'} )	{
