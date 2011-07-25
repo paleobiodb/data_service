@@ -4325,7 +4325,7 @@ sub basicTaxonInfo	{
 			my $p_table = Measurement::getMeasurementTable(\@specimens);
 			my $orig = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
 			my $ss = TaxonInfo::getSeniorSynonym($dbt,$orig);
-			my @m = Measurement::getMassEstimates($dbt,$ss,$p_table);
+			my @m = Measurement::getMassEstimates($dbt,$ss,$p_table,'skip area');
 			if ( @{$m[1]} )	{
 				print "<p $indent>Average measurements (in mm): ".join(', ',@{$m[1]});
 				print "</p>\n\n";
