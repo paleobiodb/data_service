@@ -2240,6 +2240,7 @@ sub queryDatabase {
     my %misspelling = ();
     if (@dataRows && $q->param("replace_with_ss") ne 'NO' &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+#delete $all_taxa{''};
         if (%all_taxa) {
             my $sql = "SELECT t.taxon_no,t.spelling_no,t.synonym_no,a.taxon_name,a.taxon_rank ".
                       "FROM $TAXA_TREE_CACHE t, authorities a ".
@@ -2301,7 +2302,7 @@ sub queryDatabase {
             $get_preservation = 1;
         }
 
-        if (@ecoFields || $get_preservation ||
+        if ( @taxon_nos && ( @ecoFields || $get_preservation ||
             $q->param("replace_with_ss") ne 'NO' ||
             $q->param('extant_extinct') =~ /extant|extinct/i ||
             $q->param("occurrences_class_name") eq "YES" || 
@@ -2317,7 +2318,7 @@ sub queryDatabase {
             $q->param("occurrences_first_author") eq "YES" ||
             $q->param("occurrences_second_author") eq "YES" ||
             $q->param("occurrences_other_authors") eq "YES" ||
-            $q->param("occurrences_year_named") eq "YES")	{
+            $q->param("occurrences_year_named") eq "YES") )	{
 
             # works for species whose immediate parents actually are genera
             %genus_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'immediate genus')};
