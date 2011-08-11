@@ -606,9 +606,9 @@ sub displayReference {
             # primary ref in first SELECT, secondary refs in second SELECT
             # the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
             # any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
-            my $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections WHERE reference_no=$reference_no)";
+            my $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections WHERE reference_no=$reference_no)";
             $sql .= " UNION ";
-            $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
+            $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, year(release_date) release_year, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
             my $sth = $dbh->prepare($sql);
             $sth->execute();
@@ -620,6 +620,19 @@ sub displayReference {
                 my $ofRows = 0;
                 $p->getReadRows($sth,$results,$limit,\$ofRows);
             }
+		$sql =~ s/WHERE /WHERE release_date>now() AND /g;
+		my @protected = @{$dbt->getData($sql)};
+		my (%in_year,$protected_count);
+		$in_year{$_->{'release_year'}}++ foreach @protected;
+		$protected_count = scalar(@protected);
+		my @years = keys %in_year;
+		@years = sort { $a <=> $b } @years;
+		my $year_list = pop @years;
+		if ( $#years > 1 ) 	{
+			$year_list = join(', ',@years).", and ".$year_list;
+		} elsif ( $#years == 1 )	{
+			$year_list = $years[0]." and ".$year_list;
+		}
 
             foreach my $row (@$results) {
                 my $style;
@@ -630,6 +643,11 @@ sub displayReference {
                 $html .= $coll_link . ", ";
             }
             $html =~ s/, $//;
+		if ( $year_list )	{
+			my $number = ( $#protected > 0 ) ? sprintf("%d ",$#protected+1)."collections" : "one collection";
+			( $collection_count > $protected_count ) ? $html .= ", and " : "";
+			$html .= "$number to be released in $year_list";
+		}
         } else {
             my $plural = ($collection_count == 1) ? "" : "s";
             $html .= qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a>|;
@@ -929,11 +947,11 @@ sub getReferenceLinkSummary	{
 	# the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
 	# any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
 	my @colls = ();
-	my $collection_count;
+	my ($collection_count,$protected_count,%in_year);
 	if ( $DB ne "eco" )	{
-		$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections WHERE reference_no=$reference_no)";
+		$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections WHERE reference_no=$reference_no)";
 		$sql .= " UNION ";
-		$sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
+		$sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, year(release_date) release_year, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
 		my $sth = $dbh->prepare($sql);
 		$sth->execute();
@@ -943,6 +961,12 @@ sub getReferenceLinkSummary	{
 			my $limit = 999;
 			my $ofRows = 0;
 			$p->getReadRows($sth,\@colls,$limit,\$ofRows);
+		# second hit (which is reasonably fast) gets a count to warn
+		#  users that protected collections do exist
+			$sql =~ s/WHERE /WHERE release_date>now() AND /g;
+			my @protected = @{$dbt->getData($sql)};
+			$in_year{$_->{'release_year'}}++ foreach @protected;
+			$protected_count = scalar(@protected);
 		}
 	} else	{
 		$sql = "SELECT inventory_no,authorizer_no,inventory_name FROM inventories WHERE reference_no=$reference_no";
@@ -950,15 +974,16 @@ sub getReferenceLinkSummary	{
 	}
 	$collection_count = scalar(@colls);
 
-	if ($collection_count == 0 && $DB ne "eco") {
+	if ($collection_count == 0 && $protected_count == 0 && $DB ne "eco") {
 		push @chunks , "no collections";
-	} elsif ($collection_count > 0)	{
-		my ($thing,$action);
+	}
+	my ($thing1,$thing2,$action);
+	if ($collection_count > 0)	{
 		if ( $DB ne "eco" )	{
-			$thing = ($collection_count == 1) ? "collection" : "collections";
+			$thing1 = ($collection_count == 1) ? "collection" : "collections";
 			$action = "basicCollectionSearch";
 		} else	{
-			$thing = ($collection_count == 1) ? "inventory" : "inventories";
+			$thing1 = ($collection_count == 1) ? "inventory" : "inventories";
 			$action = "inventoryInfo";
 		}
 		my @coll_links;
@@ -969,7 +994,20 @@ sub getReferenceLinkSummary	{
 			}
 			push @coll_links , qq|<a href="$READ_URL?a=$action&$COLLECTION_NO=$row->{$COLLECTION_NO}" $style>$row->{$COLLECTION_NO}</a>|;
 		}
-		push @chunks , qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count $thing</a>  (|.join(' ',@coll_links).")";
+		$thing1 = ( $protected_count > 0 ) ? "released ".$thing1 : $thing1;
+		push @chunks , qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count $thing1</a>  (|.join(' ',@coll_links).")";
+	}
+	if ($protected_count > 0)	{
+		$thing2 = ($protected_count == 1) ? "collection" : "collections";
+		my @years = keys %in_year;
+		@years = sort { $a <=> $b } @years;
+		my $year_list = pop @years;
+		if ( $#years > 1 ) 	{
+			$year_list = join(', ',@years).", and ".$year_list;
+		} elsif ( $#years == 1 )	{
+			$year_list = $years[0]." and ".$year_list;
+		}
+		push @chunks , "$protected_count $thing2 to be released in $year_list";
 	}
 
 	return join(', ',@chunks);
@@ -1250,9 +1288,9 @@ sub getTitleWordOdds	{
 		push @where , "pubtitle IN ('".join("','",@titles)."')";
 	}
 	if ( $q->param('authors') =~ /[A-Za-z]/ )	{
-		my $a = $q->param('authors');
-		$a =~ s/[^A-Za-z ]//g;
-		push @where , " (r.author1last IN ('".join("','",split(/ /,$a))."') OR r.author2last IN ('".join("','",split(/ /,$a))."'))";
+		my $auth = $q->param('authors');
+		$auth =~ s/[^A-Za-z ]//g;
+		push @where , " (r.author1last IN ('".join("','",split(/ /,$auth))."') OR r.author2last IN ('".join("','",split(/ /,$auth))."'))";
 	}
 	if ( $q->param('first_year') >= 1700 && ( $q->param('first_year') < $q->param('last_year') || ! $q->param('last_year') ) )		{
 		push @where , "r.pubyr>=".$q->param('first_year');
