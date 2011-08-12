@@ -724,7 +724,7 @@ sub calculateTaxaInterval {
 
     my $t = new TimeLookup($dbt);
     my $mapping  = $t->getScaleMapping($scale);
-    my ($upper_boundary,$lower_boundary) = $t->getBoundaries;
+    my ($top_age,$base_age) = $t->getBoundaries;
 
     # Returns ordered array of interval_nos, ordered from youngest to oldest
     my @scale = $t->getScaleOrder($scale,'number');
@@ -784,13 +784,13 @@ sub calculateTaxaInterval {
                 my $interval_no = $scale[$i];
                 if (!$last_interval && $bar_data->{'mappings'}->{$interval_no}) {
                     $last_interval = $interval_no;    
-                    my $lower = $lower_boundary->{$interval_no};
+                    my $lower = $base_age->{$interval_no};
                     $last_lower = $lower;
                 }
                 if ($bar_data->{'mappings'}->{$interval_no}) {
                     my $map_count = scalar(@{ $bar_data->{'mappings'}->{$interval_no} });
                     $first_interval = $interval_no;
-                    my $lower = $lower_boundary->{$interval_no};
+                    my $lower = $base_age->{$interval_no};
                     push @gaplist, sprintf("%.1f", $lower - $last_lower); #round to 1 decimal precision
                     if ($map_count > 1) {
                         foreach (2 .. $map_count) {
@@ -811,8 +811,8 @@ sub calculateTaxaInterval {
             }
 #            print "FOR $taxon_name: $C1 MAPPED, $C2 MISMAPPED<br>";
            
-            my $first = $lower_boundary->{$first_interval};
-            my $last = $upper_boundary->{$last_interval};
+            my $first = $base_age->{$first_interval};
+            my $last = $top_age->{$last_interval};
 
             my $length = $first - $last;
             my $N = scalar(@gaplist);
@@ -897,8 +897,8 @@ sub calculateTaxaInterval {
 
 
     foreach my $interval_no (@scale) {
-        my $max = $lower_boundary->{$interval_no};
-        my $min = $upper_boundary->{$interval_no};
+        my $max = $base_age->{$interval_no};
+        my $min = $top_age->{$interval_no};
         my $interval_name = $interval_names->{$interval_no};
         my %collections = ();
         while (my ($label,$taxon_data) = each %taxa_hash) {
@@ -940,8 +940,8 @@ sub calculateTaxaInterval {
         $cg->addBar($taxon_label,$taxon_data,$link,$taxon);
 
         foreach my $interval_no (keys %{$taxon_data->{mappings}}){
-            my $max = $lower_boundary->{$interval_no};
-            my $min = $upper_boundary->{$interval_no};
+            my $max = $base_age->{$interval_no};
+            my $min = $top_age->{$interval_no};
             my $interval_name = $interval_names->{$interval_no};
             my %collections = ();
             foreach (@{$taxon_data->{'mappings'}->{$interval_no}}) {
