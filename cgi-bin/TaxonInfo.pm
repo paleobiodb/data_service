@@ -933,13 +933,13 @@ sub doCollections{
             $res .= " <span class=\"verysmall\">($row->{'seq_strat'})</span>";
         }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
-        my $maxmin .= $interval_hash->{$max}->{lower_boundary} . " - ";
+        my $maxmin .= $interval_hash->{$max}->{base_age} . " - ";
         $maxmin =~ s/0+ / /;
         $maxmin =~ s/\. /.0 /;
         if ( $max == $min )	{
-            $maxmin .= $interval_hash->{$max}->{upper_boundary};
+            $maxmin .= $interval_hash->{$max}->{top_age};
         } else	{
-            $maxmin .= $interval_hash->{$min}->{upper_boundary};
+            $maxmin .= $interval_hash->{$min}->{top_age};
         }
         $maxmin =~ s/([0-9])(0+$)/$1/;
         $maxmin =~ s/\.$/.0/;
@@ -982,15 +982,15 @@ sub doCollections{
             # this is kind of tricky because we want bigger bins to come
             #  before the bins they include, so the second part of the
             #  number recording the upper boundary has to be reversed
-            my $upper = $interval_hash->{$max}->{upper_boundary};
+            my $upper = $interval_hash->{$max}->{top_age};
             $max_interval_no{$res} = $max;
             if ( $max != $min ) {
-                $upper = $interval_hash->{$min}->{upper_boundary};
+                $upper = $interval_hash->{$min}->{top_age};
             }
             #if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	
             # WARNING: we're assuming upper boundary ages will never be
             #  greater than 999 million years
-            my $lower = int($interval_hash->{$max}->{lower_boundary} * 1000);
+            my $lower = int($interval_hash->{$max}->{base_age} * 1000);
             $upper = $upper * 1000;
             $upper = int(999000 - $upper);
             if ( $lower < 1000 )	{
@@ -1182,7 +1182,7 @@ sub getIntervalsData {
             last if (!@itvs);
             $where = " AND i.interval_no IN (".join(",",@itvs).")";
         }
-        my $sql = "SELECT i.interval_no,TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,il.interval_hash,il.lower_boundary,il.upper_boundary FROM interval_lookup il, intervals i WHERE il.interval_no=i.interval_no$where";
+        my $sql = "SELECT i.interval_no,TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,il.interval_hash,il.base_age,il.top_age FROM interval_lookup il, intervals i WHERE il.interval_no=i.interval_no$where";
         my @data = @{$dbt->getData($sql)};
         foreach my $row (@data) {
             my $itv = $t->deserializeItv($row->{'interval_hash'});
@@ -1259,14 +1259,14 @@ sub calculateAgeRange {
         if (!$min) {
             $min = $max;
         }
-        my $lb_max = $interval_hash->{$max}->{lower_boundary};
-        my $ub_max = $interval_hash->{$max}->{upper_boundary};
-        my $lb_min = $interval_hash->{$min}->{lower_boundary};
-        my $ub_min = $interval_hash->{$min}->{upper_boundary};
+        my $lb_max = $interval_hash->{$max}->{base_age};
+        my $ub_max = $interval_hash->{$max}->{top_age};
+        my $lb_min = $interval_hash->{$min}->{base_age};
+        my $ub_min = $interval_hash->{$min}->{top_age};
         dbg("MAX $max MIN $min LB $lb_max $lb_min UB $ub_max $ub_min");
         if ($ub_min !~ /\d/) {
-            $lb_min = $interval_hash->{$max}->{lower_boundary};
-            $ub_min = $interval_hash->{$max}->{upper_boundary};
+            $lb_min = $interval_hash->{$max}->{base_age};
+            $ub_min = $interval_hash->{$max}->{top_age};
         }
         my $range = "$max $min";
         if ($lb_max && $ub_max && $ub_max > $lb_max) {
@@ -3410,7 +3410,7 @@ sub displayFirstAppearance	{
 	if ( $q->param('temporal_precision') )	{
 		my @newcolls;
         	for my $coll (@$colls) {
-			if ( $interval_hash->{$coll->{'max_interval_no'}}->{'lower_boundary'} -  $interval_hash->{$coll->{'max_interval_no'}}->{'upper_boundary'} <= $q->param('temporal_precision') )	{
+			if ( $interval_hash->{$coll->{'max_interval_no'}}->{'base_age'} -  $interval_hash->{$coll->{'max_interval_no'}}->{'top_age'} <= $q->param('temporal_precision') )	{
 				push @newcolls , $coll;
 			}
 		}
@@ -3472,17 +3472,17 @@ sub displayFirstAppearance	{
 	#my $TRIALS = 100000 / scalar(@$colls);
         for my $coll (@$colls) {
 		my ($collmax,$collmin,$last_name) = ("","","");
-		$collmax = $interval_hash->{$coll->{'max_interval_no'}}->{'lower_boundary'};
+		$collmax = $interval_hash->{$coll->{'max_interval_no'}}->{'base_age'};
 		# IMPORTANT: the collection's max age is truncated at the
 		#   taxon's max first appearance
 		if ( $collmax > $lb )	{
 			$collmax = $lb;
 		}
 		if ( $coll->{'min_interval_no'} == 0 )	{
-			$collmin = $interval_hash->{$coll->{'max_interval_no'}}->{'upper_boundary'};
+			$collmin = $interval_hash->{$coll->{'max_interval_no'}}->{'top_age'};
 			$last_name = $interval_hash->{$coll->{'max_interval_no'}}->{'interval_name'};
 		} else	{
-			$collmin = $interval_hash->{$coll->{'min_interval_no'}}->{'upper_boundary'};
+			$collmin = $interval_hash->{$coll->{'min_interval_no'}}->{'top_age'};
 			$last_name = $interval_hash->{$coll->{'min_interval_no'}}->{'interval_name'};
 		}
 		$coll->{'maximum Ma'} = $collmax;
@@ -3830,7 +3830,7 @@ sub displayFirstAppearance	{
 			for my $f ( @fields )	{
 				print "<td style=\"padding: 0.5em;\">$coll->{$f}</td>\n";
 			}
-			printf "<td style=\"padding: 0.5em;\">%.1f to %.1f</td>\n",$interval_hash->{$coll->{'max_interval_no'}}->{'lower_boundary'},$interval_hash->{$coll->{'max_interval_no'}}->{'upper_boundary'};
+			printf "<td style=\"padding: 0.5em;\">%.1f to %.1f</td>\n",$interval_hash->{$coll->{'max_interval_no'}}->{'base_age'},$interval_hash->{$coll->{'max_interval_no'}}->{'top_age'};
 			print "</tr>\n";
 			my @includes = ();
 			for my $o ( @occs )	{
@@ -4384,7 +4384,7 @@ sub basicTaxonInfo	{
 
 		@occs = @{$dbt->getData($sql)};
 
-		$sql = "SELECT l.interval_no,i1.interval_name period,i2.interval_name epoch,lower_boundary base FROM interval_lookup l,intervals i1,intervals i2 WHERE period_no=i1.interval_no AND epoch_no=i2.interval_no";
+		$sql = "SELECT l.interval_no,i1.interval_name period,i2.interval_name epoch,base_age base FROM interval_lookup l,intervals i1,intervals i2 WHERE period_no=i1.interval_no AND epoch_no=i2.interval_no";
 		my @intervals = @{$dbt->getData($sql)};
 		my (%epoch,%period,%own,%base);
 		for my $i ( @intervals )	{
@@ -4394,7 +4394,7 @@ sub basicTaxonInfo	{
 			$base{$i->{'epoch'}} = $i->{'base'};
 			$base{$i->{'period'}} = $i->{'base'};
 		}
-		$sql = "SELECT i.interval_no,interval_name own,lower_boundary base FROM interval_lookup l,intervals i WHERE l.interval_no=i.interval_no";
+		$sql = "SELECT i.interval_no,interval_name own,base_age base FROM interval_lookup l,intervals i WHERE l.interval_no=i.interval_no";
 		my @intervals2 = @{$dbt->getData($sql)};
 		for my $i ( @intervals2 )	{
 			$own{$i->{'interval_no'}} = $i->{'own'};
