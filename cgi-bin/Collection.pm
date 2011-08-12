@@ -1329,18 +1329,18 @@ sub setMaIntervalNo	{
 	}
 
 	# users will want a stage name if possible
-	$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min AND stage_no>0 ORDER BY lower_boundary-upper_boundary";
+	$sql = "SELECT interval_no FROM interval_lookup WHERE base_age>$max AND top_age<$min AND stage_no>0 ORDER BY base_age-top_age";
 	my $no = ${$dbt->getData($sql)}[0]->{'interval_no'};
 	if ( $no == 0 )	{
-		$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min AND subepoch_no>0 ORDER BY lower_boundary-upper_boundary";
+		$sql = "SELECT interval_no FROM interval_lookup WHERE base_age>$max AND top_age<$min AND subepoch_no>0 ORDER BY base_age-top_age";
 		$no = ${$dbt->getData($sql)}[0]->{'interval_no'};
 	}
 	if ( $no == 0 )	{
-		$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min AND epoch_no>0 ORDER BY lower_boundary-upper_boundary";
+		$sql = "SELECT interval_no FROM interval_lookup WHERE base_age>$max AND top_age<$min AND epoch_no>0 ORDER BY base_age-top_age";
 		$no = ${$dbt->getData($sql)}[0]->{'interval_no'};
 	}
 	if ( $no == 0 )	{
-		$sql = "SELECT interval_no FROM interval_lookup WHERE lower_boundary>$max AND upper_boundary<$min ORDER BY lower_boundary-upper_boundary";
+		$sql = "SELECT interval_no FROM interval_lookup WHERE base_age>$max AND top_age<$min ORDER BY base_age-top_age";
 		$no = ${$dbt->getData($sql)}[0]->{'interval_no'};
 	}
 	if ( $no > 0 )	{
@@ -1641,8 +1641,8 @@ sub displayCollectionDetailsPage {
             $min_lookup=$max_lookup;
         }
     }
-    if ($max_lookup->{'lower_boundary'} && $min_lookup->{'upper_boundary'}) {
-        my @boundaries = ($max_lookup->{'lower_boundary'},$max_lookup->{'upper_boundary'},$min_lookup->{'lower_boundary'},$min_lookup->{'upper_boundary'});
+    if ($max_lookup->{'base_age'} && $min_lookup->{'top_age'}) {
+        my @boundaries = ($max_lookup->{'base_age'},$max_lookup->{'top_age'},$min_lookup->{'base_age'},$min_lookup->{'top_age'});
         @boundaries = sort {$b <=> $a} @boundaries;
         # Get rid of extra trailing zeros
         $boundaries[0] =~ s/(\.0|[1-9])(0)*$/$1/;
@@ -2876,7 +2876,7 @@ sub basicCollectionInfo	{
 		}
 	}
 
-	my $sql = "SELECT *,DATE_FORMAT(release_date, '%Y%m%d') AS rd_short FROM collections WHERE collection_no=".$q->param('collection_no');
+	my $sql = "SELECT *,DATE_FORMAT(release_date, '%Y%m%d') AS rd_short,concat(first_name,' ',last_name) AS authorizer FROM collections c,person p WHERE authorizer_no=person_no AND collection_no=".$q->param('collection_no');
 	my $c = ${$dbt->getData($sql)}[0];
 
 	my $p = Permissions->new($s,$dbt);
@@ -2991,7 +2991,7 @@ sub basicCollectionInfo	{
 
 	my ($max,$min);
 	if ( $c->{'max_interval_no'} > 0 )	{
-		$sql = "SELECT eml_interval,interval_name,lower_boundary,upper_boundary FROM intervals i,interval_lookup l WHERE i.interval_no=".$c->{'max_interval_no'}." AND i.interval_no=l.interval_no";
+		$sql = "SELECT eml_interval,interval_name,base_age,top_age FROM intervals i,interval_lookup l WHERE i.interval_no=".$c->{'max_interval_no'}." AND i.interval_no=l.interval_no";
 		$max = ${$dbt->getData($sql)}[0];
 		if ( $max->{'eml_interval'} )	{
 			print $max->{'eml_interval'}." ";
@@ -2999,7 +2999,7 @@ sub basicCollectionInfo	{
 		print $max->{'interval_name'}." ";
 	}
 	if ( $c->{'min_interval_no'} > 0 )	{
-		$sql = "SELECT eml_interval,interval_name,lower_boundary,upper_boundary FROM intervals i,interval_lookup l WHERE i.interval_no=".$c->{'min_interval_no'}." AND i.interval_no=l.interval_no";
+		$sql = "SELECT eml_interval,interval_name,base_age,top_age FROM intervals i,interval_lookup l WHERE i.interval_no=".$c->{'min_interval_no'}." AND i.interval_no=l.interval_no";
 		$min = ${$dbt->getData($sql)}[0];
 		print " to ";
 		if ( $min->{'eml_interval'} )	{
@@ -3007,12 +3007,12 @@ sub basicCollectionInfo	{
 		}
 		print $min->{'interval_name'}." ";
 	}
-	if ( $max->{'lower_boundary'} )	{
-		printf "(%.1f - ",$max->{'lower_boundary'};
-		if ( ! $min->{'upper_boundary'} )	{
-			printf "%.1f",$max->{'upper_boundary'};
+	if ( $max->{'base_age'} )	{
+		printf "(%.1f - ",$max->{'base_age'};
+		if ( ! $min->{'top_age'} )	{
+			printf "%.1f",$max->{'top_age'};
 		} else	{
-			printf "%.1f",$min->{'upper_boundary'};
+			printf "%.1f",$min->{'top_age'};
 		}
 		print " Ma)";
 	}
@@ -3183,7 +3183,7 @@ sub basicCollectionInfo	{
 	my ($y,$m,$d) = split /-/,$c->{'created'};
 	print "<p $indent>PaleoDB collection $c->{'collection_no'}: authorized by $c->{'authorizer'}, entered by $c->{'enterer'} on $d.$m.$y";
 
-	$sql = "(SELECT distinct(enterer) FROM occurrences WHERE collection_no=$c->{'collection_no'} AND enterer!=".$dbh->quote($c->{'enterer'}).") UNION (SELECT distinct(enterer) FROM reidentifications WHERE collection_no=$c->{'collection_no'} AND enterer!=".$dbh->quote($c->{'enterer'}).")";
+	$sql = "(SELECT distinct(concat(first_name,' ',last_name)) AS enterer FROM occurrences o,person p WHERE enterer_no=person_no AND collection_no=$c->{'collection_no'} AND enterer_no!=".$c->{'enterer_no'}.") UNION (SELECT distinct(concat(first_name,' ',last_name)) AS enterer FROM reidentifications r,person p WHERE enterer_no=person_no AND collection_no=$c->{'collection_no'} AND enterer_no!=".$c->{'enterer_no'}.")";
 	my @enterers = @{$dbt->getData($sql)};
 	if ( @enterers )	{
 		print ", edited by ";
@@ -4124,12 +4124,12 @@ sub getPaleoCoords {
 
     my ($paleolat, $paleolng,$plng,$plat,$lngdeg,$latdeg,$pid); 
     if ($f_latdeg <= 90 && $f_latdeg >= -90  && $f_lngdeg <= 180 && $f_lngdeg >= -180 ) {
-        my $colllowerbound =  $h->{$max_interval_no}{'lower_boundary'};
+        my $colllowerbound =  $h->{$max_interval_no}{'base_age'};
         my $collupperbound;
         if ($min_interval_no)  {
-            $collupperbound = $h->{$min_interval_no}{'upper_boundary'};
+            $collupperbound = $h->{$min_interval_no}{'top_age'};
         } else {        
-            $collupperbound = $h->{$max_interval_no}{'upper_boundary'};
+            $collupperbound = $h->{$max_interval_no}{'top_age'};
         }
         my $collage = ( $colllowerbound + $collupperbound ) / 2;
         $collage = int($collage+0.5);
