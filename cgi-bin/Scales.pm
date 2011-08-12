@@ -206,7 +206,7 @@ sub processShowEditForm	{
 		my $max_interval;
 		my $eml_min_interval;
 		my $min_interval;
-		my $lower_boundary;
+		my $base_age;
 		my $corr_comments;
 		# translate numbers into names for interval variables
 		if ( $times[$i]->{interval_no} )	{
@@ -238,7 +238,7 @@ sub processShowEditForm	{
 			@names = @{$dbt->getData($sql)};
 			$min_interval = $names[0]->{interval_name};
 
-			$lower_boundary = $times[$i]->{lower_boundary};
+			$base_age = $times[$i]->{base_age};
 			$corr_comments = $times[$i]->{corr_comments};
 		}
 		print "<input type=\"hidden\" name=\"correlation_no\" value=\"" , $times[$i]->{correlation_no} , "\">\n";
@@ -250,7 +250,7 @@ sub processShowEditForm	{
 			print "<input type=\"hidden\" name=\"min_interval_no\" value=\"" , $times[$i]->{min_interval_no} , "\">";
 		}
 
-		print $hbo->populateHTML('enter_scale_row', [$eml_interval, $interval, $eml_max_interval, $max_interval, $eml_min_interval, $min_interval, $lower_boundary, $corr_comments], ['eml_interval', 'interval', 'eml_max_interval', 'max_interval', 'eml_min_interval', 'min_interval', 'lower_boundary', 'corr_comments']);
+		print $hbo->populateHTML('enter_scale_row', [$eml_interval, $interval, $eml_max_interval, $max_interval, $eml_min_interval, $min_interval, $base_age, $corr_comments], ['eml_interval', 'interval', 'eml_max_interval', 'max_interval', 'eml_min_interval', 'min_interval', 'base_age', 'corr_comments']);
 	}
 
 	print "<tr><td colspan=6 align=\"right\">";
@@ -335,7 +335,7 @@ sub processViewTimeScale	{
 		if ( $time->{min_interval_no} > 0 )	{
 			$nmin++;
 		}
-		if ( $time->{lower_boundary} > 0 )	{
+		if ( $time->{base_age} > 0 )	{
 			$nlower++;
 		}
 	}
@@ -379,16 +379,16 @@ sub processViewTimeScale	{
 		$min_interval = $names[0]->{eml_interval}." ".$min_interval if ($names[0]->{eml_interval});
 		$min_interval = "<a href=\"$READ_URL?action=displayInterval&interval_no=$time->{min_interval_no}\">$min_interval</a>";
 
-		my $lower_boundary = $time->{lower_boundary};
-		$lower_boundary =~ s/000$//;
-		$lower_boundary =~ s/00$//;
-		$lower_boundary =~ s/0$//;
-		$lower_boundary =~ s/\.$//;
-		if ( $lower_boundary == 0 )	{
-			$lower_boundary = "";
+		my $base_age = $time->{base_age};
+		$base_age =~ s/000$//;
+		$base_age =~ s/00$//;
+		$base_age =~ s/0$//;
+		$base_age =~ s/\.$//;
+		if ( $base_age == 0 )	{
+			$base_age = "";
 		}
 
-		print $hbo->populateHTML('view_scale_row', [ $interval, $max_interval, $min_interval, $lower_boundary, $time->{corr_comments}], ['interval', 'max_interval', 'min_interval', 'lower_boundary', 'corr_comments']);
+		print $hbo->populateHTML('view_scale_row', [ $interval, $max_interval, $min_interval, $base_age, $time->{corr_comments}], ['interval', 'max_interval', 'min_interval', 'base_age', 'corr_comments']);
 	}
 
 	if ( $nlower > 0 )	{
@@ -438,7 +438,7 @@ sub processEditScaleForm	{
 	my @max_interval_names = $q->param('max_interval');
 	my @min_interval_names = $q->param('min_interval');
 
-	my @lower_boundaries = $q->param('lower_boundary');
+	my @lower_boundaries = $q->param('base_age');
 	my @comments_fields = $q->param('corr_comments');
 
 	my %vars = (
@@ -513,7 +513,7 @@ sub processEditScaleForm	{
 			$sql .= "',next_interval_no='" . $next_interval_no;
 			$sql .= "',max_interval_no='" . $max_interval_no;
 			$sql .= "',min_interval_no='" . $min_interval_no;
-			$sql .= "',lower_boundary='" . $lower_boundaries[$i];
+			$sql .= "',base_age='" . $lower_boundaries[$i];
 			$sql .= "',corr_comments='" . $comments_fields[$i] . "'";
 			$sql .= " WHERE correlation_no=" . $correlation_nos[$i];
 			$dbh_r->do($sql);
@@ -665,7 +665,7 @@ sub processEditScaleForm	{
 				$dbh_r->do($sql);
 			# otherwise, add to the correlations table
 			} else	{
-				$sql = "INSERT INTO correlations (authorizer_no, enterer_no, reference_no, scale_no, interval_no, next_interval_no, max_interval_no, min_interval_no, lower_boundary, corr_comments) VALUES (";
+				$sql = "INSERT INTO correlations (authorizer_no, enterer_no, reference_no, scale_no, interval_no, next_interval_no, max_interval_no, min_interval_no, base_age, corr_comments) VALUES (";
 				$sql .= $authorizer_no . ", ";
 				$sql .= $enterer_no . ", ";
 				$sql .= $s->get('reference_no') . ", '";
@@ -828,7 +828,7 @@ sub displayTenMyBinsDebug {
 sub itvsort {
     $a->{'all_scales'}->[0]->{'scale_no'} <=> $b->{'all_scales'}->[0]->{'scale_no'}
     ||
-    $b->{'lower_boundary'} <=> $a->{'lower_boundary'} 
+    $b->{'base_age'} <=> $a->{'base_age'} 
     ||
     $b->{'interval_no'} <=> $a->{'interval_no'}
 }
@@ -856,7 +856,7 @@ sub printInterval {
         print "<span style='border-top: 1px black solid'>";
     }
     my $scale = "scale $itv->{best_scale}->{scale_no}:$itv->{best_scale}->{continent}:$itv->{best_scale}->{pubyr}";
-    my $bounds = "lower [$itv->{lower_max}/$itv->{lower_boundary}/$itv->{lower_min}] to upper [$itv->{upper_max}/$itv->{upper_boundary}/$itv->{upper_min}]";
+    my $bounds = "lower [$itv->{lower_max}/$itv->{base_age}/$itv->{lower_min}] to upper [$itv->{upper_max}/$itv->{top_age}/$itv->{upper_min}]";
     print "$itv->{interval_no}: $itv->{name} - $bounds - $scale <br>";
     if ($overline) {
         print "</span>";
@@ -907,7 +907,7 @@ sub displayInterval {
     return unless $i;
 
     my $t = new TimeLookup($dbt);
-    my $lookup_hash =  $t->lookupIntervals([$i],['interval_name','period_no','period_name','epoch_no','epoch_name','subepoch_no','subepoch_name','stage_no','stage_name','ten_my_bin','lower_boundary','upper_boundary','interval_hash']);
+    my $lookup_hash =  $t->lookupIntervals([$i],['interval_name','period_no','period_name','epoch_no','epoch_name','subepoch_no','subepoch_name','stage_no','stage_name','ten_my_bin','base_age','top_age','interval_hash']);
     my $itv_hash = $lookup_hash->{$i};
     return unless $itv_hash;
 
@@ -971,15 +971,15 @@ sub displayInterval {
    
     print "<table width=\"100%\" cellspacing=\"5\" cellpadding=\"0\" border=\"0\"><tr><td valign=top width=\"50%\">";
     my $general_html = "";
-    if ($itv->{'lower_boundary'} =~ /\d/) {
-        my $lower = TimeLookup::printBoundary($itv->{'lower_boundary'}); 
+    if ($itv->{'base_age'} =~ /\d/) {
+        my $lower = TimeLookup::printBoundary($itv->{'base_age'}); 
         $general_html .= "Lower boundary: $lower Ma<br>";
         my $estimate = describeEstimate($itv,'lower');
         if ($estimate) {
             $general_html .= "Lower boundary source: ".$estimate."<br>";
         }
         
-        my $upper = TimeLookup::printBoundary($itv->{'upper_boundary'}); 
+        my $upper = TimeLookup::printBoundary($itv->{'top_age'}); 
         $general_html .= "Upper boundary: $upper Ma<br>";
         $estimate = describeEstimate($itv,'upper');
         if ($estimate) {
@@ -1084,8 +1084,8 @@ sub displayInterval {
         my $html = "";
         my $range = "";
         foreach my $o (@overlaps) {
-#            if ($o->{'lower_boundary'}) {
-#                $range = "(".$o->{'lower_boundary'}." - ".$o->{'upper_boundary'}.")";
+#            if ($o->{'base_age'}) {
+#                $range = "(".$o->{'base_age'}." - ".$o->{'top_age'}.")";
 #            }
             $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$o->{interval_no}\">$o->{interval_name}</a> $range</li>";
         }
@@ -1095,8 +1095,8 @@ sub displayInterval {
         my $html = "";
         my $range = "";
         foreach my $c (@contains) {
-#            if ($c->{'lower_boundary'}) {
-#                $range = "(".$c->{'lower_boundary'}." - ".$c->{'upper_boundary'}.")";
+#            if ($c->{'base_age'}) {
+#                $range = "(".$c->{'base_age'}." - ".$c->{'top_age'}.")";
 #            }
             my $shares = ($shared_upper{$c->{'interval_no'}}) ? " (shares upper boundary)"
                        : ($shared_lower{$c->{'interval_no'}}) ? " (shares lower boundary)" : "";
@@ -1174,7 +1174,7 @@ sub displayIntervalDebug {
         my $from_scale = shift;
         my $txt = "";
         if ($itv) {
-            #$txt = "<a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>: $itv->{lower_boundary} - $itv->{upper_boundary}";
+            #$txt = "<a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>: $itv->{base_age} - $itv->{top_age}";
             $txt = "<a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>";
             #<a href=\"$READ_URL?action=processViewScale&scale=$bestscale{$i}\">scale:$bestscale{$i}</a><br>";
         }
@@ -1215,14 +1215,14 @@ sub displayIntervalDebug {
 
     foreach my $abbrev ('gl','As','Au','Eu','NZ','NA','SA') {
         my $lower_max = 'lower_max'.$abbrev;
-        my $lower_boundary = 'lower_boundary'.$abbrev;
+        my $base_age = 'base_age'.$abbrev;
         my $lower_min = 'lower_min'.$abbrev;
         my $upper_max = 'upper_max'.$abbrev;
-        my $upper_boundary = 'upper_boundary'.$abbrev;
+        my $top_age = 'top_age'.$abbrev;
         my $upper_min = 'upper_min'.$abbrev;
-        if ($itv->{$lower_max} || $itv->{$lower_boundary} || $itv->{$lower_min} ||
-            $itv->{$upper_max} || $itv->{$upper_boundary} || $itv->{$upper_min}) {
-            print "  $abbrev:lower:[$itv->{$lower_max}/$itv->{$lower_boundary}/$itv->{$lower_min}] - $abbrev:upper:[$itv->{$upper_max}/$itv->{$upper_boundary}/$itv->{$upper_min}]<br>";
+        if ($itv->{$lower_max} || $itv->{$base_age} || $itv->{$lower_min} ||
+            $itv->{$upper_max} || $itv->{$top_age} || $itv->{$upper_min}) {
+            print "  $abbrev:lower:[$itv->{$lower_max}/$itv->{$base_age}/$itv->{$lower_min}] - $abbrev:upper:[$itv->{$upper_max}/$itv->{$top_age}/$itv->{$upper_min}]<br>";
         } 
     }
 
