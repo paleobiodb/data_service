@@ -13,6 +13,7 @@ use TaxaCache;
 use CGI::Carp;
 use Person;
 use Measurement;
+use Reference;
 use Text::CSV_XS;
 use URI::Escape;
 use Mail::Mailer;
@@ -50,6 +51,7 @@ my $OUT_FILE_DIR = $HTML_DIR.$OUT_HTTP_DIR;
 
 my (@form_errors,@form_warnings);
 my $matrix_limit = 5000;
+my $cites = "<div style=\"font-size: 0.75em; text-indent: -1em; margin-left: 1em; padding-left: 2em; padding-right: 2em;\">";
 
 sub new {
     my ($class,$dbt,$q,$s,$hbo) = @_;
@@ -201,6 +203,11 @@ print qq|
 </ul>
 <p>Each percentage is based on the estimated amount of time spent entering data by the authorizer and associated data enterers. The grand total is $hours hours (equivalent to $monthyears). The estimate is based on (1) date stamps for keystroked collections and (2) counts of published references used to document uploaded collections.</p>
 <p>If you agree to these terms, <a href="#" onClick=\"document.getElementById('mainPanel').style.display='inline'; document.getElementById('terms').style.display='none';\">click here</a> to access the data.</p>
+|;
+if ( $cites )	{
+    print "<p>Here are the publications that yielded the most records in this data set, in order of importance. Please cite some or all of them in any publication based on it. If possible, please also include the <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a> file as online supplementary information.</p>\n<p>$cites</p>\n";
+}
+print qq|
 </div>
 <div id="mainPanel" style="display: none;">
 |;
@@ -2145,7 +2152,7 @@ sub queryDatabase {
         push @time_fields, 'stage_name'  if ($q->param('collections_stage'));
         push @time_fields, 'FR2_bin'  if ($q->param('collections_FR2_bin'));
         # these data are always needed for range computations
-        push @time_fields, 'lower_boundary','upper_boundary';
+        push @time_fields, 'base_age','top_age';
         if ( $q->param("collections_interpolated_base") eq "YES" || $q->param("collections_interpolated_top") eq "YES" ||$q->param("collections_interpolated_mid") eq "YES" )	{
             push @time_fields, 'interpolated_base','interpolated_top';
         }
@@ -2240,7 +2247,6 @@ sub queryDatabase {
     my %misspelling = ();
     if (@dataRows && $q->param("replace_with_ss") ne 'NO' &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
-#delete $all_taxa{''};
         if (%all_taxa) {
             my $sql = "SELECT t.taxon_no,t.spelling_no,t.synonym_no,a.taxon_name,a.taxon_rank ".
                       "FROM $TAXA_TREE_CACHE t, authorities a ".
@@ -2318,7 +2324,7 @@ sub queryDatabase {
             $q->param("occurrences_first_author") eq "YES" ||
             $q->param("occurrences_second_author") eq "YES" ||
             $q->param("occurrences_other_authors") eq "YES" ||
-            $q->param("occurrences_year_named") eq "YES") )	{
+            $q->param("occurrences_year_named") eq "YES" ) )	{
 
             # works for species whose immediate parents actually are genera
             %genus_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'immediate genus')};
@@ -2491,7 +2497,7 @@ sub queryDatabase {
             my $ma_lookup = $time_lookup->{$row->{'c.ma_interval_no'}};
             # use the absolute date-based interval assignment only if it is completely
 	    #  consistent with the qualitative assignment JA 25.3.11
-            if ( $ma_lookup->{'lower_boundary'} <= $max_lookup->{'lower_boundary'} && $ma_lookup->{'upper_boundary'} >= $min_lookup->{'upper_boundary'} )	{
+            if ( $ma_lookup->{'base_age'} <= $max_lookup->{'base_age'} && $ma_lookup->{'top_age'} >= $min_lookup->{'top_age'} )	{
                 $max_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $max_lookup;
                 $min_lookup = ($row->{'c.ma_interval_no'}) ? $time_lookup->{$row->{'c.ma_interval_no'}} : $min_lookup;
             }
@@ -2545,9 +2551,9 @@ sub queryDatabase {
                 $row->{'c.ma_min'} = 0;
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
             } else	{
-                $row->{'c.ma_max'} = $max_lookup->{'lower_boundary'};
-                $row->{'c.ma_min'} = $min_lookup->{'upper_boundary'};
-                $row->{'c.ma_mid'} = ($max_lookup->{'lower_boundary'} + $min_lookup->{'upper_boundary'})/2;
+                $row->{'c.ma_max'} = $max_lookup->{'base_age'};
+                $row->{'c.ma_min'} = $min_lookup->{'top_age'};
+                $row->{'c.ma_mid'} = ($max_lookup->{'base_age'} + $min_lookup->{'top_age'})/2;
             }
             $row->{'c.interpolated_base'} = $max_lookup->{'interpolated_base'};
             $row->{'c.interpolated_top'} = $min_lookup->{'interpolated_top'};
@@ -3917,16 +3923,18 @@ sub printRefsFile {
 
     # now hit the secondary refs table, mark all of those references as
     #  having been used, and print all the refs JA 16.7.04
-    my %all_refs;
-    my %all_colls;
+    my (%all_refs,%all_colls,%colls_by_ref,%occs_by_ref);
     foreach my $row (@$results) {
         $all_colls{$row->{'collection_no'}}++;
         $all_refs{$row->{'reference_no'}}++;
+        $colls_by_ref{$row->{'reference_no'}}{$row->{'collection_no'}}++;
         if ($row->{'o.reference_no'}) {
             $all_refs{$row->{'o.reference_no'}}++;
+            $occs_by_ref{$row->{'o.reference_no'}}++;
         }
         if ($row->{'re.reference_no'}) {
             $all_refs{$row->{'re.reference_no'}}++;
+            $occs_by_ref{$row->{'re.reference_no'}}++;
         }
     }
     if (%all_colls) {
@@ -3953,6 +3961,8 @@ sub printRefsFile {
                    " WHERE reference_no IN (" . join (', ',keys %all_refs) . ")";
         $self->dbg("Get ref data sql: $sql"); 
         my @results = @{$dbt->getData($sql)};
+        @results = sort { $a->{'author1last'} cmp $b->{'author1last'} || $a->{'author2last'} cmp $b->{'author2last'} || $a->{'pubyr'} cmp $b->{'pubyr'} } @results;
+        my %points;
         foreach my $row (@results) {
             my @refvals = ();
             foreach my $r (@refsFieldNames) {
@@ -3969,10 +3979,47 @@ sub printRefsFile {
 
             # need this to print the publication year for collections JA 4.12.06
             $pubyr[$row->{reference_no}] = $row->{pubyr};
+            my @temp = keys %{$colls_by_ref{$row->{'reference_no'}}};
+            my $colls_by_ref = $#temp;
+            if ( $colls_by_ref == 0 )	{
+                $points{$row->{'reference_no'}} = $occs_by_ref{$row->{'reference_no'}};
+            } else	{
+                $points{$row->{'reference_no'}} = $colls_by_ref * $occs_by_ref{$row->{'reference_no'}};
+            }
+        }
+        # list major data sources 23-24.7.11 JA
+        @results = sort { $points{$b->{'reference_no'}} <=> $points{$a->{'reference_no'}} } @results;
+        my $printed;
+        for my $row ( @results )	{
+            if ( $printed == 20 || $points{$row->{'reference_no'}} < 100 )	{
+                last;
+            }
+            $printed++;
+            my ($colls,$occs) = ("collections","occurrences");
+            my @temp = keys %{$colls_by_ref{$row->{'reference_no'}}};
+            my $colls_by_ref = $#temp;
+            #my $colls_by_ref = $#{ keys %{$colls_by_ref{$row->{'reference_no'}}} };
+            $colls_by_ref == 1 ? $colls = "collection" : $colls;
+            $occs_by_ref{$row->{'reference_no'}} == 1 ? $occs = "occurrence" : $occs;
+            $cites .= "<div style=\"margin-bottom: -1.25em;\">";
+            my $ref = $row;
+            # suppress printing of authorizer/enterer info
+            $ref->{'authorizer'} = "";
+            $cites .= Reference::formatLongRef($row);
+            $cites .= " [";
+            $colls_by_ref > 0 ? $cites .= "$colls_by_ref $colls" : "";
+            $colls_by_ref > 0 && $occs_by_ref{$row->{'reference_no'}} > 0 ? $cites .= ", " : "";
+            $occs_by_ref{$row->{'reference_no'}} > 0 ? $cites .= $occs_by_ref{$row->{'reference_no'}}." $occs" : "";
+            $cites .= "]</div><br>\n";
+        }
+        if ( $points{$results[0]->{'reference_no'}} < 100 )	{
+            $cites = "";
+        } else	{
+            $cites .= "</div>\n\n";
         }
     }
     close REFSFILE;
-    return ($ref_count,$refsFile);
+    return ($ref_count,$refsFile,$cites);
 }
 
 
