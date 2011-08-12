@@ -111,8 +111,8 @@ sub processAction {
     }
     
 	# figure out what to do with the action
-    if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /paleodb\.org/) {
-	    print $q->redirect( -url=>'http://paleodb.org/cgi-bin/bridge.pl?action='.$action);
+    if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /flatpebble\.nceas/) {
+	    print $q->redirect( -url=>'http://flatpebble.nceas.ucsb.edu/cgi-bin/bridge.pl?action='.$action);
     } elsif ($action eq 'logout') {
     	logout();
         return;
@@ -538,7 +538,7 @@ sub displayMapResults {
         $q->delete('interval_name_preset');
         my $h = $t->lookupIntervals([$interval_no]);
         my $itv = $h->{$interval_no};
-        my $map_age = sprintf("%.0f",(($itv->{'lower_boundary'} + $itv->{'upper_boundary'})/2));
+        my $map_age = sprintf("%.0f",(($itv->{'base_age'} + $itv->{'top_age'})/2));
         if (!$map_age) {
             push @errors, "No age range for interval";
         }
