@@ -2917,13 +2917,16 @@ sub queryDatabase {
             # don't lump by county if there's no state, that would be nonsense
                 if ( $row->{'c.state'} && $row->{'c.county'} )	{
                     $lump_string .= $row->{'c.state'}."|".$row->{'c.county'};
-                } else	{
+            # whoops, splitting by collection_no would defeat lumping by
+            #  reference JA 26.8.11
+                } elsif ( $q->param('lump_by_ref') ne 'YES' )    {
                     $lump_string .= $row->{'collection_no'};
                 }
             } elsif ( $q->param('lump_by_location') =~ /state/ )    {
                 if ( $row->{'c.state'} )	{
                     $lump_string .= $row->{'c.state'};
-                } else	{
+            # same bug fix here, see above
+                } elsif ( $q->param('lump_by_ref') ne 'YES' )    {
                     $lump_string .= $row->{'collection_no'};
                 }
             }
@@ -2944,7 +2947,8 @@ sub queryDatabase {
                     $lump_string .= $row->{'c.formation'};
             # you don't want to lump by member if there's no formation,
             #  because that's probably a data entry error
-                } else	{
+            # same bug fix here, see above
+                } elsif ( $q->param('lump_by_ref') ne 'YES' )    {
                     $lump_string .= $row->{'collection_no'};
                 }
             }
@@ -2958,7 +2962,8 @@ sub queryDatabase {
                 } elsif ( $row->{'c.geological_group'} )	{
             # you don't want to lump by member if there's no formation or group,
             #  because that's probably a data entry error
-                } else	{
+            # same bug fix here, see above
+                } elsif ( $q->param('lump_by_ref') ne 'YES' )    {
                     $lump_string .= $row->{'collection_no'};
                 }
             }
@@ -2966,15 +2971,16 @@ sub queryDatabase {
                 if ( $row->{'c.formation'} && $row->{'c.member'} )	{
                     $lump_string .= $row->{'c.formation'}.$row->{'c.member'};
             # whoops, formation is better than nothing if the member is missing
-            # even if there are named members in the formation, you still don't want
-            #  to keep the "member unknown" collections separate from each other
+            # even if the formation has named members, you still don't want to
+            #  keep the "member unknown" collections separate from each other
             # should have fixed this years ago JA 3.4.11
                 } elsif ( $row->{'c.formation'} )	{
                     $lump_string .= $row->{'c.formation'};
             # ditto group-only collections
                 } elsif ( $row->{'c.geological_group'} )	{
                     $lump_string .= $row->{'c.geological_group'};
-                } else	{
+            # same bug fix here, see above
+                } elsif ( $q->param('lump_by_ref') ne 'YES' )    {
                     $lump_string .= $row->{'collection_no'};
                 }
             }
