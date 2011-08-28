@@ -2599,8 +2599,9 @@ sub getMostRecentClassification {
                 ($genus,$species) = split / /,$rows[0]->{'taxon_name'};
             }
             # find a valid spelling if you can
+            # have to make sure the opinion isn't on a synonym JA 28.8.11
             for my $r ( @rows )	{
-                if ( $r->{'spelling_reason'} ne "misspelling" && $rows[0]->{'taxon_rank'} eq $r->{'taxon_rank'} && ( $r->{'taxon_rank'} !~ /species/ || $r->{'taxon_name'} =~ /$genus / ) )	{
+                if ( $r->{'spelling_reason'} ne "misspelling" && $rows[0]->{'taxon_rank'} eq $r->{'taxon_rank'} && ( $r->{'taxon_rank'} !~ /species/ || $r->{'taxon_name'} =~ /$genus / ) && $rows[0]->{'child_no'} == $r->{child_no} )	{
                     $synonym_no = $r->{'child_spelling_no'};
                     $spelling_no = $r->{'child_spelling_no'};
                     last;
