@@ -60,6 +60,24 @@ sub rebuildCache {
     my $time_row = $sth->fetchrow_hashref();
     my $time = $time_row->{'t'};
 
+    # taxa_tree_cache may be incomplete if an earlier build failed, it wasn't
+    #  augmented after an authorities upload, or it wasn't being updated for
+    #  some other reason JA 29.8.11
+    my $sql = "SELECT a.taxon_no FROM authorities a LEFT JOIN $TAXA_TREE_CACHE t ON a.taxon_no=t.taxon_no WHERE t.taxon_no IS NULL";
+    my @badrows = @{$dbt->getData($sql)};
+    if ( @badrows )	{
+        printf "WARNING: %d names aren't currently in $TAXA_TREE_CACHE\n         proxy records will be added to represent them\n\n",$#badrows+1;
+        $sql = "SELECT max(rgt) m FROM $TAXA_TREE_CACHE";
+        my $at = ${$dbt->getData($sql)}[0]->{'m'};
+        for my $bad ( @badrows )	{
+            $at++;
+            $sql = sprintf("INSERT INTO $TAXA_TREE_CACHE(lft,rgt,taxon_no,spelling_no,synonym_no,opinion_no) VALUES (%d,%d,$bad->{taxon_no},$bad->{taxon_no},$bad->{taxon_no},0)",$at,$at+1);
+            $dbh->do($sql);
+            my $orig = TaxonInfo::getOriginalCombination($dbt, $bad->{'taxon_no'});
+            TaxonInfo::getMostRecentClassification($dbt,$orig,{'use_synonyms'=>'no'});
+        }
+    }
+
     # we need a reverse lookup of the original combination for each
     #  currently used spelling because you can't figure out original
     #  combinations from taxa_tree_cache in any way 2.9.08 JA
@@ -283,7 +301,7 @@ my $min_interval_no = 0;
 
     # now get recombinations, and corrections for current child and insert at the same 
     # place as the child.  $taxon_no should already be the senior synonym if there are synonyms
-    if (!$spellings{$taxon_no}){print "taxa_tree_cache is fatally corrupted because of a bad opinion on $taxon_no: try running it through /scripts/update_opinion.pl\n";}
+    if (!$spellings{$taxon_no}){print "taxa_tree_cache is fatally corrupted because of a bad opinion on $taxon_no\ntry running it through /scripts/update_opinion.pl\nalso, make sure it exists within authorities\n";}
     my @all_taxa = @{$spellings{$taxon_no}};
 
     # Now insert all the names
