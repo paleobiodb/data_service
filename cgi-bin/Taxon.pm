@@ -577,7 +577,6 @@ sub submitAuthorityForm {
 	}
 
 
-
 	$fields{'taxon_name'} = $q->param('taxon_name');
 
 	# correct the ref_is_authority field.  In the HTML form, it can be "YES" or "NO"
@@ -743,7 +742,101 @@ sub submitAuthorityForm {
         } 
 	}
 	## end of hack
-	####
+
+	# clean up the discussion field and prepare links in the text
+	# JA 5.9.11
+	if ( $fields{'discussion'} )	{
+		# remove weird characters
+		$fields{'discussion'} =~ s/[^0-9A-Za-z \.,:;<>\&\(\)\[\]\|\-\'"\/\n]//g;
+		# trim ending whitespace
+		$fields{'discussion'} =~ s/\s+$//;
+		# paragraphs should be separated by \n\n, so assume that \n
+		#  is intended to mean this
+		$fields{'discussion'} =~ s/\n+/\n\n/g;
+		# find potential links
+		my $text = $fields{'discussion'};
+		$text =~ s/^([^\[]*)(\[\[)//;
+		$text =~ s/(\]\])([^\[\]]*)(\[\[)/$1$3/g;
+		$text =~ s/(\]\])([^\]]*)$//;
+		my @links = split /\]\]\[\[/,$text;
+		# there are three kinds of links: simple strings that need to be
+		#  matched to database records, matchable strings followed by
+		#  corresponding visible text, and matchable strings followed
+		#  by previously computed record IDs and then visible text
+		for my $i ( 0..$#links )	{
+			my $l = $links[$i];
+			my ($value,$rest,$sql,$table,$no);
+			# in case 1 there is no pipe character
+			if ( $l !~ /\|/ )	{
+				$value = $l;
+				$rest = $l;
+			# in case 2 the first part doesn't end with a keyword
+			#  followed by a number
+			} elsif ( $l !~ /( ref|coll|taxon) [0-9]+\|/ )	{
+				($value,$rest) = split /\|/,$l;
+				$value =~ s/\s+$//;
+				$links[$i] =~ s/\s+\|/|/;
+			}
+			# in case 3 we assume the record ID was either computed
+			#  correctly or modified sensibly by the enterer,
+			#  so don't do anything at all
+
+			if ( $value )	{
+				# proper Linnean names must follow the rules
+				if ( $value =~ /^[A-Z][a-z]+(| [a-z]+)$/ )	{
+				# assume the user is looking for the most
+				#  inclusive taxon
+					$sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='$value' ORDER BY rgt-lft DESC LIMIT 1";
+					$no = ${$dbt->getData($sql)}[0]->{taxon_no};
+					$table = ( $no > 0 ) ? "taxon" : "";
+				}
+				# try the refs table if the formatting seems
+				#  sensible
+				elsif ( $value =~ /[A-Z].+ (1[7-9][0-9][0-9]|20[0-1][0-9])$/ )	{
+					my @words = split / /,$value;
+					my $year = pop @words;
+					$value = join ' ',@words;
+					my ($author1,$and,$author2) = split / (and|&) /,$value;
+					$author1 =~ s/'/\\'/g;
+					$author2 =~ s/'/\\'/g;
+					if ( $author2 && $author1 !~ /et al\./ )	{
+						$author2 = "author2last='$author2' AND (otherauthors IS NULL OR otherauthors='')";
+					} elsif ( ! $author2 && $author1 =~ /et al\./ )	{
+						$author1 =~ s/et al\.//;
+						$author2 = "author2last IS NOT NULL AND author2last!='' AND otherauthors IS NOT NULL and otherauthors!=''";
+					} else	{
+						$author2 = "(author2last IS NULL OR author2last='') AND (otherauthors IS NULL OR otherauthors='')";
+					}
+					$sql = "SELECT reference_no FROM refs WHERE author1last='$author1' AND $author2 AND pubyr=$year";
+					$no = ${$dbt->getData($sql)}[0]->{reference_no};
+					$table = ( $no > 0 ) ? "ref" : "";
+				}
+				# try a straight hit on the collections table
+				if ( ! $no )	{
+					$sql = "SELECT collection_no FROM collections WHERE collection_name='$value'";
+					$no = ${$dbt->getData($sql)}[0]->{collection_no};
+					$table = ( $no > 0 ) ? "coll" : "";
+				}
+				# partial match is the last, worst option
+				if ( ! $no )	{
+					$sql = "SELECT collection_no FROM collections WHERE collection_name LIKE '%$value%'";
+					$no = ${$dbt->getData($sql)}[0]->{collection_no};
+					$table = ( $no > 0 ) ? "coll" : "";
+				}
+			}
+			if ( $no )	{
+				my $new = $links[$i];
+				if ( $new =~ /\|/ )	{
+					$new =~ s/\|/ $table $no|/;
+				} else	{
+					$new = "$table $no|".$new;
+				}
+				my $old = $links[$i];
+				$old =~ s/\|/\\|/g;
+				$fields{'discussion'} =~ s/$old/$new/;
+			}
+		}
+	}
 
 	# at this point, we should have a nice hash array (%fields) of
 	# fields and values to enter into the authorities table.
@@ -782,17 +875,17 @@ sub submitAuthorityForm {
 	}
 
 	if ($errors->count() > 0) {
-        # If theres an error message, then we know its the second time through
+        # If there's an error message, then we know it's the second time through
 		my $message = $errors->errorMessage();
 		displayAuthorityForm($dbt,$hbo, $s, $q, $message);
 		return;
 	}
 
-    # Replace the reference with the current reference if need be
-    if ($q->param('ref_is_authority') =~ /CURRENT/ && $s->get('reference_no')) {
-        $fields{'reference_no'} = $s->get('reference_no');
-    }  
-	
+	# Replace the reference with the current reference if need be
+	if ($q->param('ref_is_authority') =~ /CURRENT/ && $s->get('reference_no')) {
+		$fields{'reference_no'} = $s->get('reference_no');
+	}
+
 	# now we'll actually insert or update into the database.
 	my $resultTaxonNumber;
 	my $resultReferenceNumber = $fields{'reference_no'};
@@ -2128,7 +2221,7 @@ sub propagateAuthorityInfo {
     my $me = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
-    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','form_taxon','preservation','comments');
+    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','form_taxon','preservation');
 
     # Two steps: find best authority info, then propagate to all spelling variants
     my @spellings;
@@ -2179,6 +2272,19 @@ sub propagateAuthorityInfo {
             }
         }
     }
+
+    # special handling for comments and discussion JA 4.9.11
+    # these fields include subjective info that can't be ranked by "quality,"
+    #  so glom everything together
+    foreach my $f ( 'comments','discussion' )	{
+        foreach my $spelling (@spellings) {
+            if ( $spelling->{$f} ) {
+                $seenMore{$f} .= $spelling->{$f}."\n";
+            }
+        }
+        $seenMore{$f} =~ s/\n$//;
+    }
+
     # the user just entered these data, so if they exist, they should be used
     # slightly dangerous because you cannot erase data completely if they're
     #  wrong; you have to replace them with something
@@ -2189,7 +2295,7 @@ sub propagateAuthorityInfo {
         }
     }
     if (%seenMore) {
-        foreach my $f (@more_fields) {
+        foreach my $f (@more_fields,'comments','discussion') {
             push @toUpdate, "$f=".$dbh->quote($seenMore{$f});
         }
     }
