@@ -111,7 +111,7 @@ sub checkTaxonInfo {
                     $options->{$_} = $q->param($_);
                 }
             }
-            @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','common_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments']);
+            @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','common_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments','discussion']);
         }
 
         if(scalar @results < 1 && $q->param('taxon_name')){
@@ -212,7 +212,7 @@ sub displayTaxonInfoResults {
 
 
     # Get most recently used name of taxon
-    my ($spelling_no,$taxon_name,$common_name,$taxon_rank,$type_locality);
+    my ($spelling_no,$taxon_name,$common_name,$taxon_rank,$discussion,$type_locality);
     if ($taxon_no) {
         my $sql = "SELECT count(*) c FROM authorities WHERE taxon_no=$taxon_no";
         my $row = ${$dbt->getData($sql)}[0];
@@ -229,6 +229,7 @@ sub displayTaxonInfoResults {
         $taxon_name = $taxon->{'taxon_name'};
         $common_name = $taxon->{'common_name'};
         $taxon_rank = $taxon->{'taxon_rank'};
+        $discussion = $taxon->{'discussion'};
         $type_locality = $taxon->{'type_locality'};
     } else {
         $taxon_name = $q->param('taxon_name');
@@ -371,9 +372,26 @@ sub displayTaxonInfoResults {
 
         doThumbs($dbt,$in_list);
 
+	# JA 5.9.11
+	if ( $discussion )	{
+		$discussion =~ s/(\[\[)([A-Za-z ]+|)(taxon )([0-9]+)(\|)/<a href="$READ_URL?a=basicTaxonInfo&amp;taxon_no=$4">/g;
+		$discussion =~ s/(\[\[)([A-Za-z0-9\'\. ]+|)(ref )([0-9]+)(\|)/<a href="$READ_URL?a=displayReference&amp;reference_no=$4">/g;
+		$discussion =~ s/(\[\[)([A-Za-z0-9\'"\.\-\(\) ]+|)(coll )([0-9]+)(\|)/<a href="$READ_URL?a=basicCollectionSearch&amp;collection_no=$4">/g;
+		$discussion =~ s/\]\]/<\/a>/g;
+		$discussion =~ s/\n\n/<\/p>\n<p>/g;
+
+		print qq|<div align="center" class="small" style="margin-left: 1em; margin-top: 1em;">
+<div style="width: $width;">
+<div class="displayPanel" style="margin-bottom: 3em; padding-left: 1em; padding-top: -1em; padding-bottom: 1.5em; text-align: left;">
+<span class="displayPanelHeader">Discussion</span>
+<div align="center" class="small displayPanelContent" style="text-align: left;">
+|;
+		print "<p>$discussion</p>\n</div>\n</div>\n</div>\n</div>\n";
+	}
+
         print qq|<div align="center" class="small" style="margin-left: 1em; margin-top: 1em;">
 <div style="width: $width;">
-<div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left;">
+<div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; padding-left: 1em; text-align: left;">
 <span class="displayPanelHeader">Taxonomy</span>
 <div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
 |;
@@ -2672,7 +2690,7 @@ sub getMostRecentSpelling {
         }
     }
 
-    $sql = "SELECT a2.taxon_name original_name, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.type_locality FROM authorities a,authorities a2 WHERE a.taxon_no=$spelling_no AND a2.taxon_no=$child_no";
+    $sql = "SELECT a2.taxon_name original_name, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.discussion, a.type_locality FROM authorities a,authorities a2 WHERE a.taxon_no=$spelling_no AND a2.taxon_no=$child_no";
     my @rows = @{$dbt->getData($sql)};
 
     if (scalar(@rows)) {
@@ -4038,7 +4056,7 @@ sub basicTaxonInfo	{
 
 	my ($sql,$auth,$class_hash);
 	if ( $taxon_no )	{
-		$sql= "SELECT taxon_name,taxon_rank,common_name,extant,a.reference_no,ref_is_authority,$authorfields,lft,rgt FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND a.taxon_no=".$taxon_no." AND a.taxon_no=t.taxon_no";
+		$sql= "SELECT taxon_name,taxon_rank,common_name,extant,a.reference_no,ref_is_authority,$authorfields,discussion,lft,rgt FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND a.taxon_no=".$taxon_no." AND a.taxon_no=t.taxon_no";
 		$auth = ${$dbt->getData($sql)}[0];
 
 		$class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
@@ -4119,6 +4137,19 @@ sub basicTaxonInfo	{
 
 	if ( $error )	{
 		print "<p class=\"medium\"><i>$error</i></p>\n\n";
+	}
+
+	# VERBAL DISCUSSION
+	# JA 5.9.11
+	if ( $auth->{'discussion'} )	{
+		my $discussion = $auth->{'discussion'};
+		$discussion =~ s/(\[\[)([A-Za-z ]+|)(taxon )([0-9]+)(\|)/<a href="$READ_URL?a=basicTaxonInfo&amp;taxon_no=$4">/g;
+		$discussion =~ s/(\[\[)([A-Za-z0-9\'\. ]+|)(ref )([0-9]+)(\|)/<a href="$READ_URL?a=displayReference&amp;reference_no=$4">/g;
+		$discussion =~ s/(\[\[)([A-Za-z0-9\'"\.\-\(\) ]+|)(coll )([0-9]+)(\|)/<a href="$READ_URL?a=basicCollectionSearch&amp;collection_no=$4">/g;
+		$discussion =~ s/\]\]/<\/a>/g;
+		$discussion =~ s/\n\n/<\/p>\n<p>/g;
+		print qq|<p style="font-size: 1.0em;">$discussion</p>
+|;
 	}
 
 	# IMAGE AND SYNONYM SECTIONS
@@ -4734,7 +4765,7 @@ sub getTaxa {
     if ($fields) {
         @fields = @$fields;
         if  ($fields[0] =~ /\*|all/) {
-            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','type_body_part','part_details','type_locality','extant','preservation','form_taxon','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments');
+            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','type_body_part','part_details','type_locality','extant','preservation','form_taxon','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','discussion');
         }
         foreach my $f (@fields) {
             if ($f =~ /^author(1|2)(last|init)$|otherauthors|pubyr$/) {
