@@ -1,7 +1,7 @@
 
 <span id="message"></span>
 
-<div align="center"><p class="pageTitle">Authority data for <span id="taxon_name"></span></p></div>
+<div align="center" style="width: 50em;"><p class="pageTitle">Authority data for <span id="taxon_name"></span></p></div>
 
 <div show="error_message">
 <span id="error_message"></span>
@@ -9,7 +9,7 @@
 
 <form method="POST" action="%%write_url%%">
 
-<div class="displayPanel small" style="padding-top: 1em;">
+<div class="displayPanel small" style="padding-top: 1em; width: 56em;">
 
 <div show="not_this_one">
 <span id="not_this_one"></span>
@@ -23,13 +23,13 @@
 <div align="left">
   <input id="ref_is_authority" name="ref_is_authority" type="radio" value="PRIMARY">
   <input type="text" id="taxon_name" name="taxon_name" size="20"> was first named in the data record's primary reference:
-  <div align="left" class="small" style="margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_primary_reference"></span></div>
+  <div align="left" class="small" style="width: 54em; margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_primary_reference"></span></div>
 </div>
 
 <div show="current_reference">
   <input id="ref_is_authority" name="ref_is_authority" type="radio" value="CURRENT">
    ... <i>or</i> it was first named in the current reference:
-<div align="left" class="small" style="margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_current_reference"></span></div>
+<div align="left" class="small" style="width: 54em; margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_current_reference"></span></div>
 </div>  
 
   <input id="ref_is_authority" name="ref_is_authority" type="radio" value="NO">
@@ -163,7 +163,7 @@
 <span class="prompt">Common name:
 </span>
 <input type="text" id="common_name" name="common_name" size="20"><br>
-<span class="verysmall">Enter the one most common name in singular form.</span>
+<span class="verysmall">Enter the most common name uncapitalized and in singular form.</span>
 </div>
 
 </div>
@@ -171,24 +171,35 @@
 
 <div style="clear: left; padding: 1em; height: 3em;">
 <div style="float: left; position: relative; left: 0em; top: 0em;">
-<span class="prompt">Comments:</span>
+<span class="prompt">Technical comments:</span>
 </div>
 <div style="float: left; position: relative; left: 0.5em; top: 0em;">
-<textarea id="comments" name="comments" rows="2" cols="70">
+<textarea id="comments" name="comments" rows="2" cols="62">
 </textarea>
 </div>
 </div>
 
+<div style="clear: left; padding: 1em; height: 12em;">
+<div style="float: left; position: relative; left: 0em; top: 0em;">
+<span class="prompt">Discussion:</span>
+</div>
+<div style="float: left; position: relative; left: 0.5em; top: 0em;">
+<textarea id="discussion" name="comments" rows="8" cols="70">
+</textarea>
+</div>
+<div class="verysmall" style="float: left; width: 56em; margin-left: 2em;">
+Valid markup includes the HTML &lt;b&gt;, &lt;i&gt;, and &lt;u&gt; tags (but not &lt;p&gt; or &lt;br&gt;) and the wiki tags [[ ]], which autogenerate a link to a taxon, collection, or reference page.
+</div>
 </div>
 
-<div style="clear: left;">
+</div>
 
-<center>
+<div style="clear: left; margin-left: 2em;">
 
 <span show="authorizer_name">
-<div align="left" class="tiny" style="margin: 1em; width: 33em;">
+<div align="left" class="tiny" style="margin: 1em; width: 50em;">
 
-<div style="clear: right; padding: 0.5em;">
+<div style="clear: right; padding: 0.5em; width: 56em;">
 <span id="authorizer_name"></span>
 <span id="enterer_name"></span>
 <span id="modifier_name"></span>
@@ -202,20 +213,17 @@
 </div>
 </span>
 
-<div style="clear: both;">
+<div style="clear: both; margin-left: 24em; margin-bottom: 1.5em;">
 <input type="submit" value="Submit">
 </div>
 
-</center>
+<div class="tiny" style="margin-left: 14em; padding-bottom: 2em;">
+Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html#AuthorityForm')">FAQ</a>.
+If the name is misspelled, <a href="%%write_url%%?action=displayAuthorityTaxonSearchForm">try another search</a>.
+</div>
 
 </div>
 
-<center>
-<p class="tiny">
-Please read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html#AuthorityForm')">FAQ</a>.
-If the name is misspelled, <a href="%%write_url%%?action=displayAuthorityTaxonSearchForm">try another search</a>.
-</p>
-</center>
 
 
 </form>
