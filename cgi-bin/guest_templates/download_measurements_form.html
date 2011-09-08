@@ -24,6 +24,14 @@
 </tr>
 
 <tr>
+<td valign=top class="small" nowrap>Excluding this taxon:
+</td>
+<td>
+<input type="text" name="exclude" value="">
+</td>
+</tr>
+
+<tr>
 <td valign=top class="small" nowrap>Group records by senior synonym?
 </td>
 <td>
@@ -147,6 +155,11 @@
     <td><input type="checkbox" name="max" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">max</td>
     <td><input type="checkbox" name="median" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">median</td>
     <td><input type="checkbox" name="error" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">error</td>
+  </tr>
+
+  <tr>
+    <td><input type="checkbox" name="authorizer" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">authorizer</td>
+    <td><input type="checkbox" name="enterer" value="YES"  class="s_measurements" onClick="checkAll(this,'length_width');">enterer</td>
   </tr>
 </table>
 </div>
