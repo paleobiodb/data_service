@@ -732,7 +732,7 @@ sub processMeasurementForm	{
     my @specimen_ids = $q->param('specimen_id');
     my @param_list = $q->param();
 
-    my $inserted_row_count = 0;
+    my ($updated_row_count,$inserted_row_count);
     for(my $i=0;$i<scalar(@specimen_ids);$i++) {
         my %fields = ();
 
@@ -773,11 +773,29 @@ sub processMeasurementForm	{
 
         my $specimen_no;
 
-        # prevent duplication by resubmission of form for "new" specimen JA 21.12.10
+        # prevent duplication by resubmission of form for "new" specimen
+        #  JA 21.12.10
         # this is pretty conservative...
-        if ( $fields{'specimen_no'} <= 0 )	{
-            $sql = "SELECT specimen_no FROM specimens WHERE ((specimen_id='".$fields{'specimen_id'}."' AND specimen_id IS NOT NULL) OR (specimen_id IS NULL AND taxon_no=".$fields{'taxon_no'}." AND taxon_no>0) OR (specimen_id IS NULL AND occurrence_no=".$fields{'occurrence_no'}." AND occurrence_no>0)) AND BINARY specimen_part='".$fields{'specimen_part'}."'";
+        # made less conservative by requiring matches on the comments and
+	#  all measurements when there is no specimen ID JA 7-8.9.11
+        if ( $fields{'specimen_no'} <= 0 && $fields{'specimen_id'} =~ /[A-Za-z0-9]/ )	{
+            $sql = "SELECT specimen_no FROM specimens WHERE specimen_id='".$fields{'specimen_id'}."' AND specimen_id IS NOT NULL AND BINARY specimen_part='".$fields{'specimen_part'}."' LIMIT 1";
             $fields{'specimen_no'} = ${$dbt->getData($sql)}[0]->{'specimen_no'};
+        } elsif ( $fields{'specimen_no'} <= 0 )	{
+            $sql = "SELECT m.specimen_no,m.measurement_type,m.average,comments FROM specimens s,measurements m WHERE s.specimen_no=m.specimen_no AND ((specimen_id IS NULL AND taxon_no=".$fields{'taxon_no'}." AND taxon_no>0) OR (specimen_id IS NULL AND occurrence_no=".$fields{'occurrence_no'}." AND occurrence_no>0)) AND BINARY specimen_part='".$fields{'specimen_part'}."' LIMIT 1";
+            my $match = ${$dbt->getData($sql)}[0];
+            # preliminary match
+            $fields{'specimen_no'} = $match->{'specimen_no'};
+            # bomb out if there is any mismatch involving key fields
+            if ( $fields{'comments'} ne $match->{'comments'} )	{
+                delete $fields{'specimen_no'};
+            }
+            for my $type ( @measurement_types )	{
+                if ( $fields{$type."_average"} != $match->{'average'} && $fields{$type."_average"} > 0 && $match->{'average'} > 0 && $type eq $match->{'measurement_type'} )	{
+                    delete $fields{'specimen_no'};
+                    last;
+                }
+            }
         }
 
         if ( $fields{'specimen_no'} > 0 )	{
@@ -849,6 +867,7 @@ sub processMeasurementForm	{
 #                        $row->{'error_unit'} = $q->param($type."_error_unit");
                         #$dbt->insertRecord($s,'measurements',$row);
                         $dbt->updateRecord($s,'measurements','measurement_no',$in_db{$type}{'measurement_no'},$in_cgi{$type});
+                         $updated_row_count++;
                     } elsif ($in_db{$type}) {
                         # Else if it exists only in the database now, delete it 
                         $sql = "DELETE FROM measurements WHERE measurement_no=".$in_db{$type}{'measurement_no'} . " LIMIT 1";
@@ -878,7 +897,6 @@ sub processMeasurementForm	{
                     }
                 }
 
-                print "<center><p class=\"pageTitle\">$taxon_name$collection (revised data)</p></center>\n";
             } else {
                 print "Error updating database table row, please contact support";
                 carp "Error updating row in Measurement.pm: ".$result;
@@ -934,7 +952,9 @@ sub processMeasurementForm	{
         }
     }
 
-    if ($inserted_row_count) {
+    if ( $updated_row_count > 0 )	{
+        print "<center><p class=\"pageTitle\">$taxon_name$collection (revised data)</p></center>\n";
+    } elsif ( $inserted_row_count > 0 )	{
         print "<center><p class=\"pageTitle\">$taxon_name$collection (new data)</p></center>\n";
     }
 
@@ -1406,9 +1426,9 @@ sub displayDownloadMeasurementsResults  {
 	# step 1
 
 	# the query will get valid species only
-	$sql = "SELECT ".join(',',@fields)." FROM authorities a,$TAXA_TREE_CACHE t WHERE taxon_rank='species' AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY taxon_name ASC";
+	$sql = "SELECT ".join(',',@fields)." FROM authorities a,$TAXA_TREE_CACHE t WHERE taxon_rank IN ('species','subspecies') AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY taxon_name ASC";
 	if ( $q->param('authors') =~ /y/i || $q->param('year') =~ /y/i )	{
-		$sql = "SELECT ".join(',',@fields)." FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE taxon_rank='species' AND a.reference_no=r.reference_no AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY taxon_name ASC";
+		$sql = "SELECT ".join(',',@fields)." FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE taxon_rank IN ('species','subspecies') AND a.reference_no=r.reference_no AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY taxon_name ASC";
 	}
 
 	my @refs = @{$dbt->getData($sql)};
