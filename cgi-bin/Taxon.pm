@@ -456,8 +456,31 @@ sub displayAuthorityForm {
         $fields{'not_this_one'} = '<span style="padding-left: 2em;"><i>If this version of '.$fields{'taxon_name'}.' is a homonym, <a href="'.$WRITE_URL.'?action=displayAuthorityForm&amp;goal=authority&amp;taxon_name='.$q->param('taxon_name').'&amp;taxon_no=-1">create a new authority record</a> for your version</i></span><br><br>';
     }
 
-	# print the form	
-    my $html = $hbo->populateHTML("add_enter_authority", \%fields);
+	# show credit for the discussion (if it was entered previously)
+	#  and allow crediting the current enterer (one way or another)
+	# JA 8.9.11
+	# discussed_by is populated from the existing authorities record
+	#  instead of a form resubmission; current_discussant and credit_me
+	#  stuff are popped into the form as needed
+	if ( $fields{'discussed_by'} )	{
+		# sorry, name wasn't grabbed when $t was created
+		my $sql = "SELECT name FROM person p WHERE person_no=".$fields{'discussed_by'};
+		my $name = ${$dbt->getData($sql)}[0]->{'name'};
+		$fields{'current_discussant'} = "Current discussant: $name&nbsp;&nbsp;";
+	}
+	# this will work either if a swap could be made or the discussion is new
+	if ( $fields{'discussed_by'} != $s->get('enterer_no') )	{
+		$fields{'credit_me'} = "<input type=\"checkbox\" name=\"discussed_by\" value=\"".$s->get('enterer_no')."\"> credit the discussion to ".$s->get('enterer')."\n";
+	}
+	if ( $fields{'credit_me'} )	{
+		$fields{'credit_me'} .= "<br>\n";
+	} elsif ( $fields{'current_discussant'} )	{
+		$fields{'current_discussant'} .= "<br>\n";
+	}
+
+	# print the form
+
+	my $html = $hbo->populateHTML("add_enter_authority", \%fields);
     
 	## Make the taxon_name non editable if this is a new entry to simplify things
 	if ($isNewEntry) {
