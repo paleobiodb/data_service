@@ -212,7 +212,7 @@ sub displayTaxonInfoResults {
 
 
     # Get most recently used name of taxon
-    my ($spelling_no,$taxon_name,$common_name,$taxon_rank,$discussion,$type_locality);
+    my ($spelling_no,$taxon_name,$common_name,$taxon_rank,$type_locality,$discussion,$discussant,$email);
     if ($taxon_no) {
         my $sql = "SELECT count(*) c FROM authorities WHERE taxon_no=$taxon_no";
         my $row = ${$dbt->getData($sql)}[0];
@@ -229,8 +229,17 @@ sub displayTaxonInfoResults {
         $taxon_name = $taxon->{'taxon_name'};
         $common_name = $taxon->{'common_name'};
         $taxon_rank = $taxon->{'taxon_rank'};
-        $discussion = $taxon->{'discussion'};
         $type_locality = $taxon->{'type_locality'};
+        # discussion info needed below JA 8.9.11
+        $discussion = $taxon->{'discussion'};
+        # avoid a join in getMostRecentSpelling that all sorts of functions
+        #  would invoke incessantly
+        if ( $taxon->{'discussed_by'} > 0 )	{
+            my $sql = "SELECT name AS discussant,email FROM person WHERE person_no=".$taxon->{'discussed_by'};
+            my $person = ${$dbt->getData($sql)}[0];
+            $discussant = $person->{'discussant'};
+            $email = $person->{'email'};
+        }
     } else {
         $taxon_name = $q->param('taxon_name');
     }
@@ -380,13 +389,31 @@ sub displayTaxonInfoResults {
 		$discussion =~ s/\]\]/<\/a>/g;
 		$discussion =~ s/\n\n/<\/p>\n<p>/g;
 
+		$email =~ s/\@/\' \+ \'\@\' \+ \'/;
+
 		print qq|<div align="center" class="small" style="margin-left: 1em; margin-top: 1em;">
 <div style="width: $width;">
 <div class="displayPanel" style="margin-bottom: 3em; padding-left: 1em; padding-top: -1em; padding-bottom: 1.5em; text-align: left;">
 <span class="displayPanelHeader">Discussion</span>
 <div align="center" class="small displayPanelContent" style="text-align: left;">
+<p>$discussion</p>
 |;
-		print "<p>$discussion</p>\n</div>\n</div>\n</div>\n</div>\n";
+
+		if ( $discussant ne "" )	{
+			print qq|<script language="JavaScript" type="text/javascript">
+    <!-- Begin
+    window.onload = showMailto;
+    function showMailto( )      {
+        document.getElementById('mailto').innerHTML = '<a href="' + 'mailto:' + '$email?subject=$taxon_name">$discussant</a>';
+    }
+    // End -->
+</script>
+
+<p class="verysmall">Send comments to <span id="mailto">me</span><p>
+|;
+
+		}
+		print "</div></div></div></div>\n";
 	}
 
         print qq|<div align="center" class="small" style="margin-left: 1em; margin-top: 1em;">
@@ -1516,7 +1543,7 @@ sub displayTaxonClassification {
         my $orig_classification_no = getOriginalCombination($dbt,$classification_no);
         my $parent_hash = TaxaCache::getParents($dbt,[$orig_classification_no],'array_full');
         my @parent_array = @{$parent_hash->{$orig_classification_no}};
-        my $cof = Collection::getClassOrderFamily('',\@parent_array);
+        my $cof = Collection::getClassOrderFamily($dbt,'',\@parent_array);
         if ( $cof->{'class'} || $cof->{'order'} || $cof->{'family'} )	{
             $cofHTML = $cof->{'class'}." - ".$cof->{'order'}." - ".$cof->{'family'};
             $cofHTML =~ s/^ - //;
@@ -2690,7 +2717,7 @@ sub getMostRecentSpelling {
         }
     }
 
-    $sql = "SELECT a2.taxon_name original_name, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.discussion, a.type_locality FROM authorities a,authorities a2 WHERE a.taxon_no=$spelling_no AND a2.taxon_no=$child_no";
+    $sql = "SELECT a2.taxon_name original_name, a.taxon_no, a.taxon_name, a.common_name, a.taxon_rank, a.discussion, a.discussed_by, a.type_locality, a.enterer_no FROM authorities a,authorities a2 WHERE a.taxon_no=$spelling_no AND a2.taxon_no=$child_no";
     my @rows = @{$dbt->getData($sql)};
 
     if (scalar(@rows)) {
@@ -4056,7 +4083,7 @@ sub basicTaxonInfo	{
 
 	my ($sql,$auth,$class_hash);
 	if ( $taxon_no )	{
-		$sql= "SELECT taxon_name,taxon_rank,common_name,extant,a.reference_no,ref_is_authority,$authorfields,discussion,lft,rgt FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND a.taxon_no=".$taxon_no." AND a.taxon_no=t.taxon_no";
+		$sql= "SELECT taxon_name,taxon_rank,common_name,extant,a.reference_no,ref_is_authority,$authorfields,discussion,lft,rgt,IF(discussed_by>0,name,'') AS discussant,email FROM authorities a,refs r,$TAXA_TREE_CACHE t,person p WHERE a.reference_no=r.reference_no AND a.taxon_no=".$taxon_no." AND a.taxon_no=t.taxon_no AND (discussed_by=person_no OR discussed_by IS NULL)";
 		$auth = ${$dbt->getData($sql)}[0];
 
 		$class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
@@ -4123,7 +4150,7 @@ sub basicTaxonInfo	{
 	if ( $taxon_no )	{
 		my $parent_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
 		my @parent_array = @{$parent_hash->{$taxon_no}};
-		my $cof = Collection::getClassOrderFamily('',\@parent_array);
+		my $cof = Collection::getClassOrderFamily($dbt,'',\@parent_array);
 		my @parent_links;
 		for my $r ( 'class','order','family' )	{
 			if ( $cof->{$r} )	{
@@ -4148,8 +4175,22 @@ sub basicTaxonInfo	{
 		$discussion =~ s/(\[\[)([A-Za-z0-9\'"\.\-\(\) ]+|)(coll )([0-9]+)(\|)/<a href="$READ_URL?a=basicCollectionSearch&amp;collection_no=$4">/g;
 		$discussion =~ s/\]\]/<\/a>/g;
 		$discussion =~ s/\n\n/<\/p>\n<p>/g;
-		print qq|<p style="font-size: 1.0em;">$discussion</p>
+		$auth->{'email'} =~ s/\@/\' \+ \'\@\' \+ \'/;
+		print qq|<p style="margin-bottom: -0.5em; font-size: 1.0em;">$discussion</p>
 |;
+		if ( $auth->{discussant} ne "" )	{
+			print qq|<script language="JavaScript" type="text/javascript">
+    <!-- Begin
+    window.onload = showMailto;
+    function showMailto( )	{
+        document.getElementById('mailto').innerHTML = '<a href="' + 'mailto:' + '$auth->{email}?subject=$auth->{taxon_name}">$auth->{discussant}</a>';
+    }
+    // End -->
+</script>
+
+<p class="verysmall">Send comments to <span id="mailto"></span><p>
+|;
+		}
 	}
 
 	# IMAGE AND SYNONYM SECTIONS
