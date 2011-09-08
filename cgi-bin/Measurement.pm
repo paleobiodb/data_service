@@ -1157,6 +1157,9 @@ sub getMeasurementTable {
             $unique_specimen_nos{$row->{'specimen_part'}}++;
             $seen_specimens{$row->{'specimen_no'}} = 1;
         }
+        # needed to credit data contributors JA 8.9.11
+        $p_table{$row->{'specimen_part'}}{'authorizer '.$row->{'authorizer_no'}}++;
+        $p_table{$row->{'specimen_part'}}{'enterer '.$row->{'enterer_no'}}++;
         $types{$row->{'measurement_type'}}++;
         my $part_type;
         if (! exists $p_table{$row->{'specimen_part'}}{$row->{'measurement_type'}}) {
@@ -1391,15 +1394,29 @@ sub displayDownloadMeasurementsResults  {
 		$sep = "\t";
 	}
 
-	my $sql = "SELECT t.taxon_no,lft,rgt,rgt-lft width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (taxon_name='".$q->param('taxon_name')."' OR common_name ='".$q->param('taxon_name')."') ORDER BY width DESC"; 
+	my $sql = "SELECT t.taxon_no,lft,rgt,rgt-lft width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (taxon_name='".$q->param('taxon_name')."' OR common_name ='".$q->param('taxon_name')."') ORDER BY width DESC LIMIT 1"; 
 	# if there are multiple matches, we hope to get the right one by
 	#  assuming the larger taxon is the legitimate one
-	my @taxa = @{$dbt->getData($sql)};
-	if ( ! @taxa ) 	{
+	my $taxon = @{$dbt->getData($sql)}[0];
+	if ( ! $taxon ) 	{
 		my $errorMessage = '<center><p class="medium"><i>The taxon '.$q->param('taxon_name').' is not in our database. Please try another name.</i></p></center>';
 		print PBDBUtil::printIntervalsJava($dbt,1);
 		main::displayDownloadMeasurementsForm($errorMessage);
 		return;
+	}
+
+	# same for "exclude" taxon JA 8.9.11
+	my $exclude_clause;
+	if ( $q->param('exclude') )	{
+		$sql = "SELECT t.taxon_no,lft,rgt,rgt-lft width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (taxon_name='".$q->param('exclude')."' OR common_name ='".$q->param('exclude')."') ORDER BY width DESC LIMIT 1"; 
+		my $exclude = ${$dbt->getData($sql)}[0];
+		if ( ! $exclude ) 	{
+			my $errorMessage = '<center><p class="medium"><i>The taxon '.$q->param('exclude').' is not in our database. Please try another name.</i></p></center>';
+			print PBDBUtil::printIntervalsJava($dbt,1);
+			main::displayDownloadMeasurementsForm($errorMessage);
+			return;
+		}
+		$exclude_clause = "AND (lft<$exclude->{'lft'} OR rgt>$exclude->{'rgt'})";
 	}
 
 	my @fields = ('synonym_no','spelling_no','a.taxon_no','taxon_name');;
@@ -1411,7 +1428,7 @@ sub displayDownloadMeasurementsResults  {
 	if ( $q->param('year') =~ /y/i )	{
 		push @fields , "IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr";
 	}
-	for my $f ( 'authorizer','type_specimen','type_body_part','type_locality','extant')	{
+	for my $f ( 'type_specimen','type_body_part','type_locality','extant')	{
 		if ( $q->param($f) =~ /y/i )	{
 			push @fields , $f;
 		}
@@ -1426,9 +1443,9 @@ sub displayDownloadMeasurementsResults  {
 	# step 1
 
 	# the query will get valid species only
-	$sql = "SELECT ".join(',',@fields)." FROM authorities a,$TAXA_TREE_CACHE t WHERE taxon_rank IN ('species','subspecies') AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY taxon_name ASC";
+	$sql = "SELECT ".join(',',@fields)." FROM authorities a,$TAXA_TREE_CACHE t WHERE taxon_rank IN ('species','subspecies') AND a.taxon_no=t.taxon_no AND lft>=".$taxon->{lft}." AND rgt<=".$taxon->{rgt}." $exclude_clause ORDER BY taxon_name ASC";
 	if ( $q->param('authors') =~ /y/i || $q->param('year') =~ /y/i )	{
-		$sql = "SELECT ".join(',',@fields)." FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE taxon_rank IN ('species','subspecies') AND a.reference_no=r.reference_no AND a.taxon_no=t.taxon_no AND lft>=".$taxa[0]->{lft}." AND rgt<=".$taxa[0]->{rgt}." ORDER BY taxon_name ASC";
+		$sql = "SELECT ".join(',',@fields)." FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE taxon_rank IN ('species','subspecies') AND a.reference_no=r.reference_no AND a.taxon_no=t.taxon_no AND lft>=".$taxon->{lft}." AND rgt<=".$taxon->{rgt}." $exclude_clause ORDER BY taxon_name ASC";
 	}
 
 	my @refs = @{$dbt->getData($sql)};
@@ -1501,6 +1518,7 @@ sub displayDownloadMeasurementsResults  {
 	}
 
 	my %by_valid;
+
 	if ( $collections || $countries || $interval_nos || $strat_unit )	{
 	# it's actually faster to get the occurrences and reIDs separately
 	#  from the measurements instead of doing a nightmare five-table
@@ -1555,6 +1573,7 @@ sub displayDownloadMeasurementsResults  {
 		for my $m ( @measurements )	{
 			if ( $sampled{$valid_no{$m->{'taxon_no'}}} )	{
 				push @{$by_valid{$valid_no{$m->{'taxon_no'}}}} , $m;
+#print "$m->{specimen_part}/$m->{measurement_type}<br>";
 			}
 		}
 	} else	{
@@ -1620,6 +1639,11 @@ sub displayDownloadMeasurementsResults  {
 	if ( $q->param('error') =~ /y/i )	{
 		push @header_fields , "error unit";
 		push @columns , "error_unit";
+	}
+	for my $c ('authorizer','enterer')	{
+		if ( $q->param($c) =~ /y/i )	{
+			push @header_fields , $c;
+		}
 	}
 
 	# step 4
@@ -1700,7 +1724,13 @@ sub displayDownloadMeasurementsResults  {
 		}
 	}
 
-	my %printed_parts;
+	# needed to print credit lines
+	my %person;
+	my $sql = "SELECT name,person_no FROM person";
+	$person{$_->{'person_no'}} = $_->{'name'} foreach @{$dbt->getData($sql)};
+
+
+	my (%printed_parts,%total_authorized,%total_entered);
 	for my $taxon_no ( @with_data )	{
 		if ( $q->param('all_parts') =~ /y/i && $measured_parts{$taxon_no} < ( $#part_list + 1 ) * $types )	{
 			next;
@@ -1711,6 +1741,20 @@ sub displayDownloadMeasurementsResults  {
 				next;
 			}
 			$printed_parts{$taxon_no}++;
+			my (%authorized,%entered);
+			for my $k ( keys %{$p_table{$part}} )	{
+				if ( $k =~ /^auth/ )	{
+					my $n = $k;
+					$n =~ s/[^0-9]//g;
+					$authorized{$person{$n}}++;
+					$total_authorized{$person{$n}}++;
+				} elsif ( $k =~ /^enter/ )	{
+					my $n = $k;
+					$n =~ s/[^0-9]//g;
+					$entered{$person{$n}}++;
+					$total_entered{$person{$n}}++;
+				}
+			}
 			my %m_table = %{$p_table{$part}};
 			if ( %m_table )	{
 				$printed_part = $part;
@@ -1769,6 +1813,16 @@ sub displayDownloadMeasurementsResults  {
 							}
 		
 						}
+						if ( $q->param('authorizer') =~ /y/i )	{
+							my @names = keys %authorized;
+							@names = sort @names;
+							print OUT $sep,join(', ',@names);
+						}
+						if ( $q->param('enterer') =~ /y/i )	{
+							my @names = keys %entered;
+							@names = sort @names;
+							print OUT $sep,join(', ',@names);
+						}
 						print OUT "\n";
 					}
 				}
@@ -1782,10 +1836,10 @@ sub displayDownloadMeasurementsResults  {
 		main::displayDownloadMeasurementsForm($errorMessage);
 		return;
 	}
-	print "<div style=\"margin-left: 10em; margin-bottom: 5em;\">\n\n";
+	print "<div style=\"margin-left: 10em; margin-bottom: 5em; width: 35em;\">\n\n";
 	print "<p class=\"pageTitle\" style=\"margin-left: 8em;\">Download results</p>\n";
 	print "<p class=\"darkList\" style=\"width: 30em; padding: 0.1em; padding-left: 3em;\">Summary</p>\n";
-	print "<div style=\"margin-left: 4em;\">\n\n";
+	print "<div style=\"margin-left: 3em;\">\n\n";
 	print "<p style=\"width: 26em; margin-left: 1em; text-indent: -1em;\">Search: taxon = ",$q->param('taxon_name');
 	if ( $q->param('collection_names') )	{
 		print "; collection = ",$q->param('collection_names');
@@ -1821,6 +1875,26 @@ sub displayDownloadMeasurementsResults  {
 		print "<p>$rows data records</p>\n";
 	}
 	print "<p>The data were saved to <a href=\"$OUT_HTTP_DIR/$outfile\">$outfile</a></p>\n";
+
+	print "<p style=\"margin-left: 1em; text-indent: -1em;\">Authorizers: ";
+	my (@names,@bits) = (keys %total_authorized,());
+	@names = sort { $total_authorized{$b} <=> $total_authorized{$a} } @names;
+	push @bits , "$_ ($total_authorized{$_}&nbsp;records)" foreach @names;
+	$_ =~ s/\(1&nbsp;records\)/(1&nbsp;record)/ foreach @bits;
+	$_ =~ s/([A-Z]\.) /$1&nbsp;/ foreach @bits;
+	print join(', ',@bits);
+	print "</p>\n";
+
+	print "<p style=\"margin-left: 1em; text-indent: -1em;\">Enterers: ";
+	(@names,@bits) = (keys %total_entered,());
+	@names = sort { $total_entered{$b} <=> $total_entered{$a} } @names;
+	push @bits , "$_ ($total_entered{$_}&nbsp;records)" foreach @names;
+	$_ =~ s/\(1&nbsp;records\)/(1&nbsp;record)/ foreach @bits;
+	$_ =~ s/([A-Z]\.) /$1&nbsp;/ foreach @bits;
+	print join(', ',@bits);
+	print "</p>\n";
+	print "</p>\n";
+
 	print "</div>\n\n";
 	print "<p class=\"darkList\" style=\"width: 30em; margin-top: 3em; padding: 0.1em; padding-left: 3em;\">Data totals for each body part</p>\n";
 	print "<table cellpadding=\"4\" style=\"margin-left: 6em;\">\n";
