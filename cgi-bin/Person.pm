@@ -124,7 +124,7 @@ sub reverseName {
     return $name;
 }
 
-sub displayEnterers {
+sub showEnterers {
     my ($dbt,$fossil_record_only) = @_;
     my $html = "<div align=\"center\"><div class=\"pageTitle\">Data enterers</div></div>";
     $html .= "<p \"align=left\">The following students and research assistants have entered data into the Database.
@@ -158,7 +158,7 @@ sub displayEnterers {
     return $html;
 }
 
-sub displayAuthorizers {
+sub showAuthorizers {
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
@@ -179,7 +179,7 @@ sub displayAuthorizers {
     }
 
     $html .= '<div align="center"><div class="pageTitle">Contributing researchers</div></div>';
-    $html .= qq|<div align="center" style="text-align: left; padding-left: 1em; padding-right: 1em;"><p class="small">The following Database members have entered data and/or supervised data entry by their students. See also our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
+    $html .= qq|<div align="center" style="text-align: left; padding-left: 1em; padding-right: 1em;"><p class="small">The following Database members have entered data and/or supervised data entry by their students. See also our list of <a href="$READ_URL?action=showInstitutions">contributing institutions</a>.</p></div>|;
     $html .= "\n<table><tr><td valign=\"top\" width=\"50%\">\n\n";
     $html .= formatAuthorizerTable(\@firsthalf);
     $html .= "\n</td><td valign=\"top\" width=\"50%\">\n";
@@ -210,7 +210,7 @@ sub formatAuthorizerTable	{
 }
 
 # JA 22.12.07
-sub displayFeaturedAuthorizers	{
+sub showFeaturedAuthorizers	{
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
@@ -241,7 +241,7 @@ sub displayFeaturedAuthorizers	{
     }
 
     $html .= '<div align="center"><div class="pageTitle">Featured contributors</div></div>';
-    $html .= qq|<div align="center" style="text-align: left; padding-left: 2.1em; padding-right: 2em; padding-bottom: 0em;"><p class="small">Here are some Database members who have entered data and/or supervised data entry recently. See also our full list of <a href="$READ_URL?action=displayAuthorizers">contributors</a> and our list of <a href="$READ_URL?action=displayInstitutions">contributing institutions</a>.</p></div>|;
+    $html .= qq|<div align="center" style="text-align: left; padding-left: 2.1em; padding-right: 2em; padding-bottom: 0em;"><p class="small">Here are some Database members who have entered data and/or supervised data entry recently. See also our full list of <a href="$READ_URL?action=showAuthorizers">contributors</a> and our list of <a href="$READ_URL?action=showInstitutions">contributing institutions</a>.</p></div>|;
     $html .= "<div class=\"small\" style=\"padding-left: 1em;\">\n";
     $html .= "<table><tr><td width=\"50%\" valign=\"top\">\n";
     for(my $i=0;$i<@results;$i++) {
@@ -269,62 +269,53 @@ sub displayFeaturedAuthorizers	{
     return $html;
 }
 
-sub displayInstitutions {
+# heavy rewrite by JA 9.9.11
+sub showInstitutions {
     my ($dbt,$fossil_record_only) = @_;
     my $html = "";
 
-    my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE FIND_IN_SET('authorizer',role) AND last_entry IS NOT NULL";
+    my $sql = "SELECT first_name,last_name,country,institution,email FROM person WHERE FIND_IN_SET('authorizer',role) AND last_entry IS NOT NULL AND institution IS NOT NULL AND institution!=''";
     if ($fossil_record_only) {
         $sql .= " AND fossil_record=1";
     }
-    $sql .= " ORDER BY last_name,first_name";
-    my @results = @{$dbt->getData($sql)};
-
-    my %institutions;
-    foreach my $row (@results) {
-        if ( $row->{'institution'} =~ /[A-Za-z0-9]/ )	{
-            push @{$institutions{$row->{'institution'}}}, $row;
-        } 
-    }
-    my @inst_names= keys %institutions;
-    @inst_names= sort {$a cmp $b} @inst_names;
-
-    my @firsthalf;
-    my @secondhalf;
-    for my $i ( 0..int($#inst_names/2) )	{
-        push @firsthalf , $inst_names[$i];
-    }
-    for my $i ( int($#inst_names/2)+1..$#inst_names)	{
-        push @secondhalf , $inst_names[$i];
-    }
+    $sql .= " ORDER BY country,institution,last_name,first_name";
+    my @rows = @{$dbt->getData($sql)};
 
     $html .= '<div align="center"><div class="pageTitle">Contributing institutions</div></div>';
-    $html .= qq|<div align="center" style="text-align: left; padding-left: 1em; padding-right: 1em;"><p class="small"><a href="$READ_URL?action=displayAuthorizers">Database members</a> who have contributed data or supervised data entry by students are affiliated with the following institutions.</p></div>|;
+    $html .= qq|<div align="center" style="text-align: left; padding-left: 2em; padding-right: 1em;"><p class="small"><a href="$READ_URL?action=showAuthorizers">Database members</a> who have contributed data or supervised data entry by students are affiliated with the following institutions.</p></div>|;
 
-    $html .= "\n<table><tr><td valign=\"top\" width=\"50%\">\n\n";
-    $html .= formatInstitutionTable(\@firsthalf,\%institutions);
-    $html .= "\n</td><td valign=\"top\" width=\"50%\">\n\n";
-    $html .= formatInstitutionTable(\@secondhalf,\%institutions);
-    $html .= "\n</td></tr></table>\n\n";
-
-}
-
-sub formatInstitutionTable	{
-    my $instnameref = shift;
-    my @inst_names = @{$instnameref};
-    my $institutionref = shift;
-    my %institutions = %{$institutionref};
-
-    my $html .= qq|<table cellpadding="3" cellspacing="0" border="0">\n\n|;
-    for(my $i=0;$i<@inst_names;$i++) {
-        my @all_people = @{$institutions{$inst_names[$i]}};
-        my @names = map {$_->{'first_name'}." ".$_->{'last_name'}} @all_people;
-
-        $html .= "<tr>";
-        $html .= "<td class=\"tiny\" style=\"text-indent: -1em; padding-left: 1.5em;\">\n<b>$inst_names[$i]</b><br>\n".join(", ",@names)."</td></tr>\n";
+    $html .= "\n<table style=\"margin-left: 0em;\"><tr><td valign=\"top\" width=\"50%\">\n\n";
+    my ($lastCountry,$lastInstitution,@names);
+    for my $r ( @rows )	{
+        if ( $r->{'institution'} ne $lastInstitution )	{
+            if ( $lastInstitution )	{
+                $html .= join(', ',@names)."</div>\n";
+                @names = ();
+            }
+            if ( $r->{'country'} ne $lastCountry )	{
+                if ( $lastCountry )	{
+                    $html .= "</div>\n\n";
+                }
+                if ( $r->{'country'} eq "United States" )	{
+                    $html .= "\n</td><td valign=\"top\" width=\"50%\">\n\n";
+                    $html .= "<div>\n";
+                }
+                $html .= "<div class=\"displayPanel\" style=\"padding-top: 0.5em; padding-bottom: 0.5em;\">\n$r->{'country'}\n";
+            }
+            if ( $r->{'country'} ne $lastCountry )	{
+                $lastCountry = $r->{'country'};
+            }
+            $html .= "<div class=\"tiny\" style=\"margin-top: 0.5em; text-indent: -1em; padding-left: 1.5em;\">\n";
+            $html .= "$r->{'institution'}<br>\n";
+            $lastInstitution = $r->{'institution'};
+        }
+        push @names , $r->{'first_name'}." ".$r->{'last_name'};
     }
-    $html .= "</table>\n\n";
+    $html .= join(', ',@names)."</div>\n";
+    $html .= "</div>\n</td></tr></table>\n\n";
+
     return $html;
+
 }
 
 # JA 1.1.09
