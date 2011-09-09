@@ -5027,33 +5027,34 @@ sub setMostRecentReID {
 # ------------------------ #
 # Person pages
 # ------------------------ #
-sub displayEnterers {
+sub showEnterers {
     logRequest($s,$q);
     print $hbo->stdIncludes("std_page_top");
-    print Person::displayEnterers($dbt,$IS_FOSSIL_RECORD);
+    print Person::showEnterers($dbt,$IS_FOSSIL_RECORD);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
-sub displayAuthorizers {
+sub showAuthorizers {
     logRequest($s,$q);
     print $hbo->stdIncludes("std_page_top");
-    print Person::displayAuthorizers($dbt,$IS_FOSSIL_RECORD);
+    print Person::showAuthorizers($dbt,$IS_FOSSIL_RECORD);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
-sub displayFeaturedAuthorizers {
+sub showFeaturedAuthorizers {
     logRequest($s,$q);
     print $hbo->stdIncludes("std_page_top");
-    print Person::displayFeaturedAuthorizers($dbt,$IS_FOSSIL_RECORD);
+    print Person::showFeaturedAuthorizers($dbt,$IS_FOSSIL_RECORD);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
-sub displayInstitutions {
+sub showInstitutions {
     logRequest($s,$q);
     print $hbo->stdIncludes("std_page_top");
-    print Person::displayInstitutions($dbt,$IS_FOSSIL_RECORD);
+    print Person::showInstitutions($dbt,$IS_FOSSIL_RECORD);
     print $hbo->stdIncludes("std_page_bottom");
 }
+
 
 # ------------------------ #
 # Confidence Intervals JSM #
