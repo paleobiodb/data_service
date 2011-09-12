@@ -2065,7 +2065,8 @@ sub getSynonymyParagraph	{
 
     my @spellings = getAllSpellings($dbt,$taxon->{'taxon_no'});
 
-    $text .= printTypeInfo($dbt,join(',',@spellings),$taxon,$is_real_user,'checkTaxonInfo',1);
+    my ($typeInfo,$typeLocality) = printTypeInfo($dbt,join(',',@spellings),$taxon,$is_real_user,'checkTaxonInfo',1);
+    $text .= $typeInfo;
 
     my $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities WHERE type_taxon_no IN (".join(",",@spellings).")";
     my @type_for = @{$dbt->getData($sql)};
@@ -2326,11 +2327,11 @@ sub printTypeInfo	{
     my $is_real_user = shift;
     my $taxonInfoGoal = shift;
     my $preface = shift;
-    my $text;
+    my ($text,$specimen_row);
 
     if ($taxon->{'taxon_rank'} =~ /species/) {
         my $sql = "SELECT taxon_no,type_specimen,type_body_part,part_details,type_locality FROM authorities WHERE ((type_specimen IS NOT NULL and type_specimen != '') OR (type_body_part IS NOT NULL AND type_body_part != '') OR (part_details IS NOT NULL AND part_details != '') OR (type_locality>0)) AND taxon_no IN (".$spellings.")";
-        my $specimen_row = ${$dbt->getData($sql)}[0];
+        $specimen_row = ${$dbt->getData($sql)}[0];
         if ($specimen_row) {
             if ($specimen_row->{'type_specimen'})	{
                 if ( $preface )	{
@@ -2430,7 +2431,7 @@ sub printTypeInfo	{
         }
     }
 
-    return $text;
+    return ($text,$specimen_row->{'type_locality'});
 
 }
 
@@ -4078,8 +4079,8 @@ sub basicTaxonInfo	{
 		exit;
 	}
 
-	my $authorfields = "if(ref_is_authority='YES',r.author1init,a.author1init) author1init,if(ref_is_authority='YES',r.author1last,a.author1last) author1last,if(ref_is_authority='YES',r.author2init,a.author2init) author2init,if(ref_is_authority='YES',r.author2last,a.author2last) author2last,if(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,if(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr";
-	my $authorfields2 = "if(ref_has_opinion='YES',r.author1init,o.author1init) author1init,if(ref_has_opinion='YES',r.author1last,o.author1last) author1last,if(ref_has_opinion='YES',r.author2init,o.author2init) author2init,if(ref_has_opinion='YES',r.author2last,o.author2last) author2last,if(ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors,if(ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr";
+	my $authorfields = "if(ref_is_authority='YES',r.author1init,a.author1init) author1init,if(ref_is_authority='YES',r.author1last,a.author1last) author1last,if(ref_is_authority='YES',r.author2init,a.author2init) author2init,if(ref_is_authority='YES',r.author2last,a.author2last) author2last,if(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,if(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,reftitle,pubtitle,pubvol,pubno,firstpage,lastpage";
+	my $authorfields2 = "if(ref_has_opinion='YES',r.author1init,o.author1init) author1init,if(ref_has_opinion='YES',r.author1last,o.author1last) author1last,if(ref_has_opinion='YES',r.author2init,o.author2init) author2init,if(ref_has_opinion='YES',r.author2last,o.author2last) author2last,if(ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors,if(ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,reftitle,pubtitle,pubvol,pubno,firstpage,lastpage";
 
 	my ($sql,$auth,$class_hash);
 	if ( $taxon_no )	{
@@ -4261,6 +4262,12 @@ sub basicTaxonInfo	{
 		}
 	}
 
+	# FULL AUTHORITY REFERENCE
+
+	if ( $auth->{'ref_is_authority'} =~ /y/i )	{
+		print "<p $indent>Full reference: ".Reference::formatLongRef($auth)."</p>\n\n";
+	}
+
 	# PARENT SECTION
 
 	my @sisters;
@@ -4348,8 +4355,9 @@ sub basicTaxonInfo	{
 
 	# TYPE SECTION
 
+	my ($typeInfo,$typeLocality);
 	if ( $taxon_no )	{
-		my $typeInfo = printTypeInfo($dbt,join(',',@spellings),$auth,1,'basicTaxonInfo');
+		($typeInfo,$typeLocality) = printTypeInfo($dbt,join(',',@spellings),$auth,1,'basicTaxonInfo');
 		if ( $typeInfo )	{
 			if ($auth->{'taxon_rank'} =~ /species/) {
 				print "<p $indent>Type specimen: ";
@@ -4436,23 +4444,24 @@ sub basicTaxonInfo	{
 		}
 		$taxon_string =~ s/ /_/g;
 
+		my $collection_fields = "c.collection_no,collection_name,max_interval_no,min_interval_no,country,state";
 		if ( $taxon_no )	{
 			$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE t WHERE lft>=".$auth->{'lft'}." AND rgt<=".$auth->{'rgt'};
 			my @subtaxa = @{$dbt->getData($sql)};
 			my @inlist;
 			push @inlist , $_->{'taxon_no'} foreach @subtaxa;
 
-			$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(o.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
-			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql = "(SELECT $collection_fields,count(distinct(o.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql .= " UNION (SELECT $collection_fields,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 		} else	{
 			my ($g,$s) = split / /,$taxon_name;
 			my $name_clause = "(o.genus_name='".$g."' OR o.subgenus_name='".$g."')";
 			if ( $s )	{
 				$name_clause .= " AND o.species_name='".$s."'";
 			}
-			$sql = "(SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND $name_clause AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql = "(SELECT $collection_fields,count(distinct(c.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND $name_clause AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 			$name_clause =~ s/o\./re\./g;
-			$sql .= " UNION (SELECT c.max_interval_no,c.min_interval_no,country,state,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND $name_clause AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
+			$sql .= " UNION (SELECT $collection_fields,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND $name_clause AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 		}
 
 		@occs = @{$dbt->getData($sql)};
@@ -4474,34 +4483,44 @@ sub basicTaxonInfo	{
 			$base{$i->{'own'}} = $i->{'base'};
 		}
 
-		my ($ctotal,$ototal,%bycountry,%bystate);
-		for my $o ( @occs )	{
-			$ctotal += $o->{'c'};
-			$ototal += $o->{'o'};
-			if ( $period{$o->{'max_interval_no'}} =~ /Paleogene|Neogene/ )	{
-				if ( $epoch{$o->{'max_interval_no'}} eq $epoch{$o->{'min_interval_no'}} || $o->{'min_interval_no'} == 0 || ! $epoch{$o->{'min_interval_no'}} )	{
-					$bycountry{$epoch{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
-					$bystate{$epoch{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
-				} else	{
-					$bycountry{$epoch{$o->{'max_interval_no'}}." to ".$epoch{$o->{'min_interval_no'}}}{$o->{'country'}} += $o->{'c'};
-					$bystate{$epoch{$o->{'max_interval_no'}}." to ".$epoch{$o->{'min_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
-				}
-			} elsif ( $period{$o->{'max_interval_no'}} )	{
-				if ( $period{$o->{'max_interval_no'}} eq $period{$o->{'min_interval_no'}} || $o->{'min_interval_no'} == 0 || ! $period{$o->{'min_interval_no'}} )	{
-					$bycountry{$period{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
-					$bystate{$period{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
-				} else	{
-					$bycountry{$period{$o->{'max_interval_no'}}." to ".$period{$o->{'min_interval_no'}}}{$o->{'country'}} += $o->{'c'};
-					$bystate{$period{$o->{'max_interval_no'}}." to ".$period{$o->{'min_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
-				}
-			} else	{
-				$bycountry{$own{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
-				$bystate{$own{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
+		print "<p>Distribution:";
+		if ( $#occs == 0 )	{
+			my $o = $occs[0];
+			print qq| found only at <a href="$READ_URL?a=basicCollectionSearch&amp;collection_no=$o->{collection_no}">$o->{'collection_name'}</a>|;
+			if ( $typeLocality == 0 )	{
+				my $place = ( $o->{'country'} =~ /United States|Canada/ ) ? $o->{'state'} : $o->{'country'};
+				$place =~ s/United King/the United King/;
+				my $time = ( $period{$o->{'max_interval_no'}} =~ /Paleogene|Neogene/ ) ? $epoch{$o->{'max_interval_no'}} : $period{$o->{'max_interval_no'}};
+				$time .= ( $period{$o->{'min_interval_no'}} =~ /Paleogene|Neogene/ ) ? " to ".$epoch{$o->{'min_interval_no'}} : "";
+				print qq| ($time of $place)|;
 			}
-		}
-		if ( @occs )	{
-			print "<p>Distribution:</p>\n\n";
-			print "<div style=\"margin-left: 2em;\">\n";
+			print "</p>\n\n";
+		} elsif ( @occs )	{
+			my ($ctotal,$ototal,%bycountry,%bystate);
+			for my $o ( @occs )	{
+				$ctotal += $o->{'c'};
+				$ototal += $o->{'o'};
+				if ( $period{$o->{'max_interval_no'}} =~ /Paleogene|Neogene/ )	{
+					if ( $epoch{$o->{'max_interval_no'}} eq $epoch{$o->{'min_interval_no'}} || $o->{'min_interval_no'} == 0 || ! $epoch{$o->{'min_interval_no'}} )	{
+						$bycountry{$epoch{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+						$bystate{$epoch{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
+					} else	{
+						$bycountry{$epoch{$o->{'max_interval_no'}}." to ".$epoch{$o->{'min_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+						$bystate{$epoch{$o->{'max_interval_no'}}." to ".$epoch{$o->{'min_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
+					}
+				} elsif ( $period{$o->{'max_interval_no'}} )	{
+					if ( $period{$o->{'max_interval_no'}} eq $period{$o->{'min_interval_no'}} || $o->{'min_interval_no'} == 0 || ! $period{$o->{'min_interval_no'}} )	{
+						$bycountry{$period{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+						$bystate{$period{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
+					} else	{
+						$bycountry{$period{$o->{'max_interval_no'}}." to ".$period{$o->{'min_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+						$bystate{$period{$o->{'max_interval_no'}}." to ".$period{$o->{'min_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
+					}
+				} else	{
+					$bycountry{$own{$o->{'max_interval_no'}}}{$o->{'country'}} += $o->{'c'};
+					$bystate{$own{$o->{'max_interval_no'}}}{$o->{'country'}}{$o->{'state'}} += $o->{'c'};
+				}
+			}
 			my @intervals = keys %bycountry;
 			for my $i ( @intervals )	{
 				if ( ! $base{$i} )	{
@@ -4510,6 +4529,8 @@ sub basicTaxonInfo	{
 				}
 			}
 			@intervals = sort { $base{$a} <=> $base{$b} } @intervals;
+			print "</p>\n\n";
+			print "<div style=\"margin-left: 2em;\">\n";
 			my $printed;
 			for my $i ( @intervals )	{
 				print "<p $indent>&bull; $i of ";
@@ -4564,6 +4585,7 @@ sub basicTaxonInfo	{
 			}
 			print "</div>\n\n";
 		} else	{
+			print "</p>\n\n";
 			if ( $auth->{'taxon_name'} )	{
 				print "<p>Distribution: <i>there are no occurrences of $auth->{'taxon_name'} in the database</i></p>\n\n";
 			} else	{
