@@ -4,15 +4,10 @@
 var bad_info = ""; // Global variable
 
 function checkForm() {
-    var errors = new Error();
-
-//    var isFloat = /^([0-9]+(\.[0-9]+)*|\.[0-9]+)$/;
 
     var f = document.forms[1];
-
-    if ( ! /[A-Za-z]/.test( f.specimen_part.value ) )	{
-        errors.add("You must indicate the part");
-    }
+    var isFloat = /^([0-9]+(\.[0-9]+)*|\.[0-9]+)$/;
+    var errors = "";
 
     var specimens_measured = parseInt(f.specimens_measured.value);
     if (specimens_measured == 1) {
@@ -52,11 +47,17 @@ function checkForm() {
             f.d18O_min.value != '' ||
             f.d18O_max.value != '' ||
             f.d18O_error.value != '') {
-            errors.add("If the number of specimens measured is 1, don't enter any median/min/max/error values");
+            errors += "* If the number of specimens measured is 1, don't enter any median/min/max/error values\n";
         }
-    } else if (specimens_measured > 1) {
-    } else {
-        errors.add("Specimens measured must be a number greater than or equal to 1");
+    } else if (f.specimens_measured.value < 1) {
+        errors += "* There must be at least one measured specimen\n";
+    }
+
+    if ( ! /[A-Za-z]/.test( f.specimen_part.value ) && f.specimen_part.value )	{
+        errors += "* The part name is misformatted\n";
+    }
+    else if ( ! /[A-Za-z]/.test( f.specimen_part.value ) )	{
+        errors += "* You must indicate the part\n";
     }
 
     if (specimens_measured >= 1) {
@@ -89,12 +90,45 @@ function checkForm() {
             field_count += 1;
         }
         if (field_count < 1) {
-            errors.add("Fill in at least one of the measurement values");
+            errors += "Fill in at least one of the measurement values\n";
         }
     }
 
-    if (errors.count() > 0) {
-        errors.showAlert()
+    // real_average is highest priority; I'm not bothering with the others
+    //  for now JA 19.9.11
+    if ( ! isFloat.test(f.mass_average.value) && f.mass_average.value )	{
+        errors += '* The mass average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.length_average.value) && f.length_average.value )	{
+        errors += '* The length average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.width_average.value) && f.width_average.value )	{
+        errors += '* The width average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.height_average.value) && f.height_average.value )	{
+        errors += '* The height average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.circumference_average.value) && f.circumference_average.value )	{
+        errors += '* The circumference average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.diagonal_average.value) && f.diagonal_average.value )	{
+        errors += '* The diagonal average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.diameter_average.value) && f.diameter_average.value )	{
+        errors += '* The diameter average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.inflation_average.value) && f.inflation_average.value )	{
+        errors += '* The inflation average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.d13C_average.value) && f.d13C_average.value )	{
+        errors += '* The d13C average value is misformatted\n';
+    }
+    if ( ! isFloat.test(f.d18O_average.value) && f.d18O_average.value )	{
+        errors += '* The d18O average value is misformatted\n';
+    }
+
+    if (errors != "") {
+        alert(errors);
         return false;
     }
     
