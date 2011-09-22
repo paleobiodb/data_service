@@ -5055,6 +5055,15 @@ sub showInstitutions {
     print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub publications	{
+    logRequest($s,$q);
+    print $hbo->stdIncludes($PAGE_TOP);
+    my %vars;
+    $vars{'publications'} = Person::publications($dbt,$hbo);
+    print $hbo->populateHTML('publications', \%vars);
+    print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
 
 # ------------------------ #
 # Confidence Intervals JSM #
