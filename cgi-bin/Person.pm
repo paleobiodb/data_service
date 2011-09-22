@@ -333,6 +333,50 @@ sub homePageEntererList	{
 	return $html;
 }
 
+# JA 22.9.11
+sub publications	{
+	my $dbt = shift;
+	my $sql = "SELECT * FROM pubs";
+	my @pubs = @{$dbt->getData($sql)};
+	my @lines;
+	for my $p ( @pubs )	{
+		my @authors = split /, /,$p->{'authors'};
+		my $authorlist = $authors[0];
+		if ( $#authors > 1 )	{
+			$authors[$#authors] = " and ".$authors[$#authors];
+			$authorlist = join(', ',@authors);
+		}
+		elsif ( $#authors == 1 )	{
+			$authorlist = $authors[0]." and ".$authors[1];
+		}
+		if ( ! $p->{'year'} )	{
+			$p->{'year'} = "In press";
+		}
+		if ( $p->{'title'} !~ /\?$/ )	{
+			$p->{'title'} .= ".";
+		}
+		my $editors;
+		if ( $p->{'editors'} =~ /, | and / )	{
+			$editors = "<i>In</i> ".$p->{'editors'}." (eds.), ";
+		} elsif ( $p->{'editors'} )	{
+			$editors = "<i>In</i> ".$p->{'editors'}." (ed.), ";
+		}
+		my $pages = ( $p->{'volume'} ) ? " ".$p->{'volume'} : "";
+		if ( $p->{'volume'} && $p->{'firstpage'} )	{
+			$pages .= ":".$p->{'firstpage'};
+		} elsif ( $p->{'firstpage'} )	{
+			$pages = ", pp. ".$p->{'firstpage'};
+		}
+		if ( $p->{'lastpage'} )	{
+			$pages .= "-".$p->{'lastpage'};
+		}
+		my $extras = ( $p->{'extras'} ) ? " $p->{'extras'}" : "";
+		push @lines , '<p class="verysmall" style="margin-left: 1em; text-indent: -1em; margin-bottom: -0.8em;"/>'.$p->{'pub_no'}.". $authorlist. ".$p->{'year'}.". ".$p->{'title'}." $editors <i>".$p->{'journal'}."</i>$pages.$extras</p>\n";
+	}
+	$lines[$#lines] =~ s/margin-bottom: .*"/"/;
+	return join("\n",@lines);
+}
+
 sub scramble {
     my $email = shift;
     if ($email =~ /@/) {
