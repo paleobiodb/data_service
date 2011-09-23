@@ -445,9 +445,15 @@ sub displayRefResults {
 			displayReferenceForm($dbt,$q,$s,$hbo);
 			return;
 		} else	{
-			my $error = "<p class=\"medium\">";
+			my $error = "<p class=\"small\" style=\"margin-left: 8em; margin-right: 8em;\">";
 			if ( $query_description )	{
-				$error .= "Nothing matches $query_description: please try again</p>\n";
+				$query_description =~ s/ $//;
+				$error .= "Nothing matches $query_description: ";
+				if ( $alternatives )	{
+					$alternatives =~ s/ and / or /;
+					$error .= " if you didn't mean $alternatives, ";
+				}
+				$error .= "please try again</p>\n\n";
 			} else	{
 				$error .= "Please enter at least one search term</p>\n";
 			}
