@@ -821,25 +821,20 @@ sub doCollections{
         return;
     }
 
-    my $interval_hash = getIntervalsData($dbt,$colls);
-    my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$colls,$interval_hash);
+    my @intervals = intervalData($dbt,$colls);
+    my %interval_hash;
+    $interval_hash{$_->{'interval_no'}} = $_ foreach @intervals;
+    my ($lb,$ub,$max_no,$minfirst,$min_no) = getAgeRange($dbt,$colls);
 
-
-#    print "MAX".Dumper($max);
-#    print "MIN".Dumper($min);
 
 	my $output = "";
     my $range = "";
     # simplified this because the users will understand the basic range,
     #  and it clutters the form JA 28.8.06
-#    my $max = join (" or ",map {$interval_name{$_}} @$max);
-#    my $min = join (" or ",map {$interval_name{$_}} @$min);
-    my $max_no = $max->[0];
-    my $min_no = $min->[0];
-    $max = ($max_no) ? $interval_hash->{$max_no}->{interval_name} : "";
-    $min = ($min_no) ? $interval_hash->{$min_no}->{interval_name} : ""; 
-    if ($max ne $min) {
-        $range .= " <a href=\"$READ_URL?a=displayInterval&interval_no=$max_no\">$max</a> to <a href=\"$READ_URL?a=displayInterval&interval_no=$min_no\">$min</a>";
+    my $max = ($max_no) ? $interval_hash{$max_no}->{interval_name} : "";
+    my $min = ($min_no) ? $interval_hash{$min_no}->{interval_name} : ""; 
+    if ($max ne $min && $min) {
+        $range .= " base of the <a href=\"$READ_URL?a=displayInterval&interval_no=$max_no\">$max</a> to the top of the <a href=\"$READ_URL?a=displayInterval&interval_no=$min_no\">$min</a>";
     } else {
         $range .= " <a href=\"$READ_URL?a=displayInterval&interval_no=$max_no\">$max</a>";
     }
@@ -915,7 +910,7 @@ sub doCollections{
             my $fields = ["country", "state", "max_interval_no", "min_interval_no"];
 
             my ($dataRows,$ofRows) = Collection::getCollections($dbt,$s,\%options,$fields);
-            my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$dataRows,$interval_hash);
+            my ($lb,$ub,$max,$minfirst,$min) = getAgeRange($dbt,$dataRows);
             for my $coll ( @$dataRows )	{
                 $iscrown{$coll->{'collection_no'}}++;
             }
@@ -961,7 +956,7 @@ sub doCollections{
 	# Process the data:  group all the collection numbers with the same
 	# time-place string together as a hash.
 	my %time_place_coll = ();
-    my (%bounds_coll,%max_interval_no);
+    my (%time_interval,%lower_res,%upper_res,%max_interval_no);
     my %lastgenus = ();
     my %intervals = ();
 	foreach my $row (@$colls) {
@@ -970,21 +965,21 @@ sub doCollections{
         if (!$min) {
             $min = $max;
         }
-        my $res = "<span class=\"small\"><a href=\"$READ_URL?a=displayInterval&interval_no=$row->{max_interval_no}\">$interval_hash->{$max}->{interval_name}</a>";
+        my $res = "<span class=\"small\"><a href=\"$READ_URL?a=displayInterval&interval_no=$row->{max_interval_no}\">$interval_hash{$max}->{interval_name}</a>";
         if ( $max != $min ) {
-            $res .= " - " . "<a href=\"$READ_URL?a=displayInterval&interval_no=$row->{min_interval_no}\">$interval_hash->{$min}->{interval_name}</a>";
+            $res .= " - " . "<a href=\"$READ_URL?a=displayInterval&interval_no=$row->{min_interval_no}\">$interval_hash{$min}->{interval_name}</a>";
         }
         if ( $row->{"seq_strat"} =~ /glacial/ )	{
             $res .= " <span class=\"verysmall\">($row->{'seq_strat'})</span>";
         }
         $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
-        my $maxmin .= $interval_hash->{$max}->{base_age} . " - ";
+        my $maxmin .= $interval_hash{$max}->{base_age} . " - ";
         $maxmin =~ s/0+ / /;
         $maxmin =~ s/\. /.0 /;
         if ( $max == $min )	{
-            $maxmin .= $interval_hash->{$max}->{top_age};
+            $maxmin .= $interval_hash{$max}->{top_age};
         } else	{
-            $maxmin .= $interval_hash->{$min}->{top_age};
+            $maxmin .= $interval_hash{$min}->{top_age};
         }
         $maxmin =~ s/([0-9])(0+$)/$1/;
         $maxmin =~ s/\.$/.0/;
@@ -1014,28 +1009,22 @@ sub doCollections{
 	    else	{
                 $time_place_coll{$res}[0] = $row->{'genera'} . " (" . $row->{'collection_no'} . "</a>";
                 $lastgenus{$res} = $row->{'genera'};
-                #push(@order,$res);
-            if ($interval_hash->{$min}->{'min_no'} == $max) {
-                $max = $min;
-            }
-            if ($interval_hash->{$max}->{'max_no'} == $min) {
-                $min = $max;
-            }
+
             # create a hash array where the keys are the time-place strings
             #  and each value is a number recording the min and max
             #  boundary estimates for the temporal bins JA 25.6.04
             # this is kind of tricky because we want bigger bins to come
             #  before the bins they include, so the second part of the
             #  number recording the upper boundary has to be reversed
-            my $upper = $interval_hash->{$max}->{top_age};
+            my $upper = $interval_hash{$max}->{top_age};
             $max_interval_no{$res} = $max;
             if ( $max != $min ) {
-                $upper = $interval_hash->{$min}->{top_age};
+                $upper = $interval_hash{$min}->{top_age};
             }
             #if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	
             # WARNING: we're assuming upper boundary ages will never be
             #  greater than 999 million years
-            my $lower = int($interval_hash->{$max}->{base_age} * 1000);
+            my $lower = int($interval_hash{$max}->{base_age} * 1000);
             $upper = $upper * 1000;
             $upper = int(999000 - $upper);
             if ( $lower < 1000 )	{
@@ -1054,34 +1043,16 @@ sub doCollections{
                     last;
                 }
             }
-            $bounds_coll{$res} = $lower . $upper;
+            $time_interval{$res} = $interval_hash{$max}->{interval_name};
+            $time_interval{$res} .=  ( $max != $min ) ? " - ".$interval_hash{$min}->{interval_name} : "";
+            $lower_res{$res} = $interval_hash{$max}->{base_age};
+            $upper_res{$res} = $interval_hash{$min}->{top_age};
             $intervals{$max} = 1 if ($max);
             $intervals{$min} = 1 if ($min);
 	    }
 	}
 
-    my %parents;
-    my %best_correlation;
-    foreach my $interval (keys %intervals) {
-        $parents{$interval} = join(" ",reverse getParentIntervals($interval,$interval_hash));
-        my $sql = "SELECT c.correlation_no FROM correlations c, scales s, refs r WHERE c.scale_no=s.scale_no AND s.reference_no=r.reference_no AND c.interval_no=$interval ORDER by r.pubyr DESC LIMIT 1";  
-        $best_correlation{$interval} = ${$dbt->getData($sql)}[0]->{'correlation_no'};
-    }
-
-#    use Data::Dumper; print Dumper(\%parents);
-#    print Dumper(\%best_correlation);
-
-	# sort the time-place strings temporally or by geographic location
-	my @sorted = sort { 
-        $bounds_coll{$b} <=> $bounds_coll{$a} || 
-        $parents{$max_interval_no{$a}} cmp $parents{$max_interval_no{$b}} ||
-        $best_correlation{$max_interval_no{$b}} <=> $best_correlation{$max_interval_no{$a}} ||
-        $a cmp $b 
-    } keys %bounds_coll;
-
-#    foreach my $s (@sorted) {
-#        print "$bounds_coll{$s}:$parents{$max_interval_no{$s}}:$best_correlation{$max_interval_no{$s}}:$s<BR>";
-#    }
+	my @sorted = sort { $lower_res{$b} <=> $lower_res{$a} || $upper_res{$b} <=> $upper_res{$a} || $time_interval{$a} cmp $time_interval{$b} } keys %lower_res;
 
 	# legacy: originally the sorting was just on the key
 #	my @sorted = sort (keys %time_place_coll);
@@ -1192,300 +1163,67 @@ sub doCollections{
 	return $output;
 }
 
-# Utility function.  This will get boundary information as well as max and min interval and next interval
-# all max interval and min interval nos (as well as higher order time terms) for use in passing
-# to calculateAgeRange
-sub getIntervalsData {
-    my ($dbt,$data) = @_;
-
-	# get a lookup of the boundary ages for all intervals JA 25.6.04
-	# the boundary age hashes are keyed by interval nos
-    my $t = new TimeLookup($dbt);
- 
-    my $interval_hash = {};
-
-    my $get_all_data = 0;
-    my @itvs = ();
-    if (ref($data) eq 'ARRAY') {
-        my %seen_itv = ();
-        foreach my $row (@$data) {
-            $seen_itv{$row->{'max_interval_no'}} = 1 if ($row->{max_interval_no});
-            $seen_itv{$row->{'min_interval_no'}} = 1 if ($row->{min_interval_no});
-        }
-        @itvs = keys %seen_itv;
-    } elsif ($data eq 'all') {
-        $get_all_data = 1;
-    }
-  
-    # this look gets boundaries for all intervals the in the collection set, as 
-    # well as all parents (broader) of those intervals, which is used below
-    # in calculateAgeRange for pruning purposes
-    for(my $i=0;$i<20;$i++) {
-        my %get_itv = ();
-        my $where = "";
-        if (!$get_all_data) {
-            last if (!@itvs);
-            $where = " AND i.interval_no IN (".join(",",@itvs).")";
-        }
-        my $sql = "SELECT i.interval_no,TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,il.interval_hash,il.base_age,il.top_age FROM interval_lookup il, intervals i WHERE il.interval_no=i.interval_no$where";
-        my @data = @{$dbt->getData($sql)};
-        foreach my $row (@data) {
-            my $itv = $t->deserializeItv($row->{'interval_hash'});
-            $interval_hash->{$row->{interval_no}} = $itv; 
-            if ($itv->{'max_no'}) {
-                $get_itv{$itv->{'max_no'}} = 1 
-            }
-            if ($itv->{'min_no'}) {
-                $get_itv{$itv->{'min_no'}} = 1 
-            }
-            $interval_hash->{$row->{interval_no}}->{'interval_name'} =~ s/\/lower//i;
-            $interval_hash->{$row->{interval_no}}->{'interval_name'} =~ s/\/upper//i;
-        }
-        last if ($get_all_data);
-        my @not_yet_fetched = ();
-        foreach my $i (keys %get_itv) {
-            if (!$interval_hash->{$i}) {
-                push @not_yet_fetched, $i;
-            }
-        }
-        @itvs = @not_yet_fetched;
-    }
-    return $interval_hash;
+# JA 23.9.11
+# replaces Schroeter's much more complicated getIntervalsData with a simple
+#  database hit
+sub intervalData	{
+	my ($dbt,$colls) = @_;
+	my %is_no;
+	$is_no{$_->{'max_interval_no'}}++ foreach @$colls;
+	$is_no{$_->{'min_interval_no'}}++ foreach @$colls;
+	delete $is_no{0};
+	my $sql = "SELECT TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,i.interval_no,base_age,top_age FROM intervals i,interval_lookup l WHERE i.interval_no=l.interval_no AND i.interval_no IN (".join(',',keys %is_no).")";
+	return @{$dbt->getData($sql)};
 }
 
-sub getParentIntervals {
-    my ($i,$hash) = @_;
-    my @intervals = ();
-    my @q = ($i);
-    my %seen = ();
-    while (my $i = pop @q) {
-        my $itv = $hash->{$i};
-        if ($itv->{'max_no'} && !$seen{$itv->{'max_no'}}) {
-            $seen{$itv->{'max_no'}} = 1;
-            push @q, $itv->{'max_no'};
-            push @intervals, $itv->{'max_no'};
-        }
-        if ($itv->{'min_no'} && $itv->{'min_no'} != $itv->{'max_no'} && !$seen{$itv->{'min_no'}}) {
-            $seen{$itv->{'min_no'}} = 1;
-            push @q, $itv->{'min_no'};
-            push @intervals, $itv->{'min_no'};
-        }
-    } 
-    return @intervals;
-}
+# JA 23.9.11
+# replaces Schroeter's old, hard-fought calculateAgeRange function, which was
+#  vastly more complicated
+sub getAgeRange	{
+	my ($dbt,$colls) = @_;
+	my @coll_nos = map { $_ ->{'collection_no'} } @$colls;
 
+	# get the youngest base age
+	# ultimately, the range's top must be this young or younger
+	# note that the range top is the top of some collection's min_interval
+	my $sql = "SELECT base_age AS maxtop FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") ORDER BY base_age ASC";
+	my $maxTop = ${$dbt->getData($sql)}[0]->{'maxtop'};
 
-# This goes through all collections and finds a "minimal cover". Each collection corresponds to a time range
-# i.e. 40-50 m.y. ago, 10-45 m.y. ago.  The time range that should be reported back is the minimally sized
-# range that can inserts with the range of every single collection
-#   Algorithm to do this is straightfoward. Imagine a set of ranges with overlap, "minimal cover" shown at bottom
-#           A[-- -- --]
-#       B[------] C[--]
-#    D[-- --- --]
-#            |========|
-#   The lower end of the "minimal cover" must be lower than the upper end of _all_ intervals
-#   Conversely, the upper end of the minimal cover must be greater than the lower end of all intervals.  
-#   So, just find the ub and lb that satisfy this condition, then lookup the intervals(s) that correspond
-#   to the lb and ub and return the best ones;
-#   No longer throw out intervals beforehand.  If we throw out A and B for being too vague, then 
-#   the cover will be from D --> C.  So don't throw anything out till the very end
-sub calculateAgeRange {
-    my ($dbt,$data,$interval_hash)  = @_;
-    my %all_ints = (); 
-    my %seen_range = ();
+	# likewise the oldest top age
+	# the range's base must be this old or older, and the base is the base
+	#  of some collection's max_interval
+	my $sql = "SELECT top_age AS minbase FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).")) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos)."))) AS ages ORDER BY top_age DESC";
+	my $minBase = ${$dbt->getData($sql)}[0]->{'minbase'};
 
-    foreach my $row (@$data)	{
-        # First cast max/min into these variables.
-        my $max = $row->{'max_interval_no'};
-        my $min = $row->{'min_interval_no'};
-        $all_ints{$max} = 1 if ($max);
-        $all_ints{$min} = 1 if ($min);
-        # If min is blank, set it to be the same as max (always) so we have a canonical representation
-        if (!$min) {
-            $min = $max;
-        }
-        my $lb_max = $interval_hash->{$max}->{base_age};
-        my $ub_max = $interval_hash->{$max}->{top_age};
-        my $lb_min = $interval_hash->{$min}->{base_age};
-        my $ub_min = $interval_hash->{$min}->{top_age};
-        dbg("MAX $max MIN $min LB $lb_max $lb_min UB $ub_max $ub_min");
-        if ($ub_min !~ /\d/) {
-            $lb_min = $interval_hash->{$max}->{base_age};
-            $ub_min = $interval_hash->{$max}->{top_age};
-        }
-        my $range = "$max $min";
-        if ($lb_max && $ub_max && $ub_max > $lb_max) {
-            dbg("FLIPPING");
-            my $tmp1 = $ub_max;
-            my $tmp2 = $ub_min;
-            $ub_max = $lb_max;
-            $ub_min = $lb_min;
-            $lb_max = $tmp1;
-            $lb_min = $tmp2;
-            $range = "$min $max";
-        } 
-        $seen_range{$range} = [$lb_max,$lb_min,$ub_max,$ub_min];
-    }
-    my @intervals = keys %all_ints;
+	# now get the range top
+	$sql = "SELECT MAX(top_age) top FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<$maxTop) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<$maxTop)) AS tops";
+	my $top = ${$dbt->getData($sql)}[0]->{'top'};
 
-    # First step in finding the minimal cover.  Find the bounds
-    # that we have to cover.  Any range must at least be younger 
-    # then the oldest upperbound ($oldest_ub) and older than
-    # the youngest lowerbound($youngest_ub). So first find these two values, skipping
-    # over "vague" interval ranges
-    my $oldest_ub = -1;
-    my $youngest_lb = 999999;
-    while (my ($range,$bounds) = each %seen_range) {
-        my ($max,$min) = split(/ /,$range);
-        my ($lb,$x1,$x2,$ub) = @$bounds;
+	# and the range base
+	$sql = "SELECT MIN(base_age) base FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND base_age>$minBase";
+	my $base = ${$dbt->getData($sql)}[0]->{'base'};
 
-        if ($ub =~ /\d/ && $ub > $oldest_ub) {
-            $oldest_ub = $ub;
-        }
-        if ($lb && $lb < $youngest_lb) {
-            $youngest_lb = $lb;
-        }
-    }
-    dbg("OLDEST_UB $oldest_ub - YOUNGEST_LB $youngest_lb");
+	my (%is_max,%is_min);
+	for my $c ( @$colls )	{
+		$is_max{$c->{'max_interval_no'}}++;
+		if ( $c->{'min_interval_no'} > 0 )	{
+			$is_min{$c->{'min_interval_no'}}++;
+		} else	{
+			$is_min{$c->{'max_interval_no'}}++;
+		}
+	}
 
+	# get the ID of the shortest interval whose base is equal to the
+	#  range base and explicitly includes an occurrence
+	$sql = "SELECT interval_no FROM interval_lookup WHERE interval_no IN (".join(',',keys %is_max).") AND base_age=$base ORDER BY top_age DESC LIMIT 1";
+	my $oldest_interval_no = ${$dbt->getData($sql)}[0]->{'interval_no'};
 
-    # Next step in finding minimal cover
-    my $best_lb = 999999;
-    my $best_ub = -1;
-    while (my ($range,$bounds) = each %seen_range) {
-        my ($max,$min) = split(/ /,$range);
-        my ($lb_max,$ub_max,$lb_min,$ub_min) = @$bounds;
-        if ($lb_max && $lb_max > $oldest_ub && $lb_max < $best_lb) {
-            if ($lb_min < $youngest_lb && $youngest_lb < $oldest_ub) {
-                # See calippus for the purpose for this - if we don't have this caluse upper 
-                # boundary is set to Miocenes upper bound, which is bad since Miocenes lower bound
-                # extends BEYOND what we're using for the lower bound
-                dbg("THREW OUT LB $lb_max -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
-            } else {
-                dbg("BEST_LB SET TO $lb_max -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
-                $best_lb = $lb_max;
-            }
-        }
-        if ($ub_min =~ /\d/ && $ub_min < $youngest_lb && $ub_min > $best_ub) {
-            if ($ub_max > $oldest_ub && $youngest_lb < $oldest_ub) {
-                dbg("THREW OUT UB $ub_min -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
-            } else {
-                dbg("BEST_UB SET TO $ub_min -- MAX $max, $lb_max-$lb_min MIN $min $ub_max-$ub_min");
-                $best_ub = $ub_min;
-            }
-        }
-    }
-    dbg("BEST_LB $best_lb - BEST_UB $best_ub");
+	# ditto for the shortest interval defining the top
+	# only the ID number is needed
+	$sql = "SELECT interval_no FROM interval_lookup WHERE interval_no IN (".join(',',keys %is_min).") AND top_age=$top ORDER BY base_age ASC LIMIT 1";
+	my $youngest_interval_no = ${$dbt->getData($sql)}[0]->{'interval_no'};
 
-    # We've found our minimal cover now but there may be multiple
-    # intervals which can satisfy it.  Store all potential candidates
-    # in the best_lb_ints (best lower boundary intervals) and best_ub_ints
-    # hashs.
-    my %best_lb_ints = ();
-    my %best_ub_ints = ();
-    while (my ($range,$bounds) = each %seen_range) {
-        my ($max,$min) = split(/ /,$range);
-        my ($lb,$x1,$x2,$ub) = @$bounds;
-        if ($lb == $best_lb) {
-            $best_lb_ints{$max} = 1;
-        }
-        if ($ub == $best_ub) {
-            $best_ub_ints{$min} = 1;
-        }
-    }
-    my @max = keys %best_lb_ints;
-    my @min = keys %best_ub_ints;
-
-    # Some dirty hacks for when we have multiple intervals that can be printed as a upper or lower boundary
-    # We want to throw out the intervals we can.  Sometimes having multiple intervals
-    # is legitimate and we should return both .  Sometimes it isn't and its just
-    # weird data.  Examples of weird data:  1. Quaternary/Tertiary is "orphaned" since its not a 
-    # legit time term, so manually remove that if we have to.  2. Early Cenomanian,Middle Cenomanian, Cenomanian
-    # have the same bounds since they have no lowerbound entered: early and middle inherit it from Cenomanian 
-    # Three ways of throwing out intervals: 1. Check is one is parent of other.  I.E. throw out Cenomanian is we
-    # have early cenomanian.  2. Are in same scale.  Throw out the later or earlier interval in the scale for
-    # max and min respectively.  3. Orphaned junk like Teritiary.  Just call a function to check for this
-
-    my %parent = ();
-    my %precedes = ();
-    foreach my $i (@max,@min) {
-        
-        my @p = getParentIntervals($i,$interval_hash);
-        foreach my $p (@p) {
-            $parent{$i}{$p} = 1 unless $i == $p;
-        }
-#        my @q = ($ig->{$i});
-#        while (my $j = pop @q) {
-#            $parent{$i}{$j->{'interval_no'}} = 1 unless $i == $j->{'interval_no'};
-#            push @q, $j->{'max'} if ($j->{'max'});
-#            push @q, $j->{'min'} if ($j->{'min'} && $j->{'min'} != $j->{'max'});
-#        }
-        my @q = ($i);
-        while (my $j = pop @q) {
-            $precedes{$i}{$j} = 1 unless $i == $j;
-            my $itv_j = $interval_hash->{$j};
-            foreach my $n (@{$itv_j->{'all_next_nos'}}) {
-                unless ($precedes{$i}{$n}) {
-                    push @q, $n;
-                }
-            }
-        }
-    }
-    # Deal with older term first. Try to get down to only 1 interval by throwing
-    # out broader (parent) intervals and younger intervals
-    my %all_max = (); 
-    $all_max{$_} = 1 for @max;
-    foreach my $i1 (@max) {
-        # If we're down to 1, exit
-        last if scalar keys %all_max == 1;
-        foreach my $i2 (@max) {
-            if ($parent{$i2}{$i1}) {
-                dbg("REMOVING $i1, its a parent of $i2");
-                delete $all_max{$i1};
-            } elsif ($precedes{$i2}{$i1}) {
-                dbg("REMOVING $i1, its is younger than $i2");
-                delete $all_max{$i1};
-            }
-        }
-        if ($interval_hash->{$i1}->{is_obsolete}) {
-            dbg("REMOVING $i1, it is obsolete");
-            delete $all_max{$i1};
-        }
-    }
-
-    # Deal with younger term. Try to get down to only 1 interval by throwing
-    # out broader (parent) intervals and older intervals
-    my %all_min= (); 
-    $all_min{$_} = 1 for @min;
-    foreach my $i1 (@min) {
-        # If we're down to 1, exit
-        last if scalar keys %all_min == 1;
-        foreach my $i2 (@min) {
-            if ($parent{$i2}{$i1}) {
-                dbg("REMOVING $i1, its a parent of $i2");
-                delete $all_min{$i1};
-            } elsif ($precedes{$i1}{$i2}) {
-                dbg("REMOVING $i1, its is older than $i2");
-                delete $all_min{$i1};
-            }
-        }
-        if ($interval_hash->{$i1}->{is_obsolete}) {
-            dbg("REMOVING $i1, it is obsolete");
-            delete $all_min{$i1};
-        }
-    }
-
-    @max = keys %all_max;
-    @min = keys %all_min;
-    $best_lb =~ s/00$//;
-    $best_ub =~ s/00$//;
-    if ($best_lb == 999999) {
-        $best_lb = '';
-    }
-    if ($best_ub == -1) {
-        $best_ub = '';
-    }
-    return ($best_lb,$best_ub,$oldest_ub,\@max,\@min);
+	return($base,$top,$oldest_interval_no,$minBase,$youngest_interval_no);
 }
 
 
@@ -2021,7 +1759,7 @@ sub getSynonymyParagraph	{
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
 
-    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','form_taxon','type_taxon_no','type_specimen','comments']);
+    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','form_taxon','type_taxon_no','type_specimen','comments','discussion']);
 	
 	# Get ref info from refs if 'ref_is_authority' is set
 	if ( ! $taxon->{'author1last'} )	{
@@ -3453,11 +3191,14 @@ sub displayFirstAppearance	{
 		beginFirstAppearance($hbo,$q,$error_message);
 	}
 
-	my $interval_hash = getIntervalsData($dbt,$colls);
+	my @intervals = intervalData($dbt,$colls);
+	my %interval_hash;
+	$interval_hash{$_->{'interval_no'}} = $_ foreach @intervals;
+
 	if ( $q->param('temporal_precision') )	{
 		my @newcolls;
         	for my $coll (@$colls) {
-			if ( $interval_hash->{$coll->{'max_interval_no'}}->{'base_age'} -  $interval_hash->{$coll->{'max_interval_no'}}->{'top_age'} <= $q->param('temporal_precision') )	{
+			if ( $interval_hash{$coll->{'max_interval_no'}}->{'base_age'} -  $interval_hash{$coll->{'max_interval_no'}}->{'top_age'} <= $q->param('temporal_precision') )	{
 				push @newcolls , $coll;
 			}
 		}
@@ -3510,27 +3251,24 @@ sub displayFirstAppearance	{
 
 	# AGE RANGE/CONFIDENCE INTERVAL CALCULATION
 
-	my ($lb,$ub,$minfirst,$max,$min) = calculateAgeRange($dbt,$colls,$interval_hash);
-	my $max_no = $max->[0];
-	my $min_no = $min->[0];
+	my ($lb,$ub,$max_no,$minfirst,$min_no) = getAgeRange($dbt,$colls);
 
 	my ($first_interval_top,@firsts,@rages,@ages,@gaps);
 	my $TRIALS = int( 10000 / scalar(@$colls) );
-	#my $TRIALS = 100000 / scalar(@$colls);
         for my $coll (@$colls) {
 		my ($collmax,$collmin,$last_name) = ("","","");
-		$collmax = $interval_hash->{$coll->{'max_interval_no'}}->{'base_age'};
+		$collmax = $interval_hash{$coll->{'max_interval_no'}}->{'base_age'};
 		# IMPORTANT: the collection's max age is truncated at the
 		#   taxon's max first appearance
 		if ( $collmax > $lb )	{
 			$collmax = $lb;
 		}
 		if ( $coll->{'min_interval_no'} == 0 )	{
-			$collmin = $interval_hash->{$coll->{'max_interval_no'}}->{'top_age'};
-			$last_name = $interval_hash->{$coll->{'max_interval_no'}}->{'interval_name'};
+			$collmin = $interval_hash{$coll->{'max_interval_no'}}->{'top_age'};
+			$last_name = $interval_hash{$coll->{'max_interval_no'}}->{'interval_name'};
 		} else	{
-			$collmin = $interval_hash->{$coll->{'min_interval_no'}}->{'top_age'};
-			$last_name = $interval_hash->{$coll->{'min_interval_no'}}->{'interval_name'};
+			$collmin = $interval_hash{$coll->{'min_interval_no'}}->{'top_age'};
+			$last_name = $interval_hash{$coll->{'min_interval_no'}}->{'interval_name'};
 		}
 		$coll->{'maximum Ma'} = $collmax;
 		$coll->{'minimum Ma'} = $collmin;
@@ -3549,8 +3287,8 @@ sub displayFirstAppearance	{
 		}
 	}
 
-	my $first_interval_base = $interval_hash->{$max_no}->{interval_name};
-	my $last_interval = $interval_hash->{$min_no}->{interval_name};
+	my $first_interval_base = $interval_hash{$max_no}->{interval_name};
+	my $last_interval = $interval_hash{$min_no}->{interval_name};
 	if ( $first_interval_base =~ /an$/ )	{
 		$first_interval_base = "the ".$first_interval_base;
 	}
@@ -3835,9 +3573,9 @@ sub displayFirstAppearance	{
 		if ( $firsts[0]->{'formation'} )	{
 			$firsts[0]->{'formation'} .= " Formation ";
 		}
-		my $agerange = $interval_hash->{$firsts[0]->{'max_interval_no'}}->{'interval_name'};
+		my $agerange = $interval_hash{$firsts[0]->{'max_interval_no'}}->{'interval_name'};
 		if ( $firsts[0]->{'min_interval_no'} > 0 )	{
-			$agerange .= " - ".$interval_hash->{$firsts[0]->{'min_interval_no'}}->{'interval_name'};
+			$agerange .= " - ".$interval_hash{$firsts[0]->{'min_interval_no'}}->{'interval_name'};
 		}
 		my @includes;
 		for my $o ( @occs )	{
@@ -3877,7 +3615,7 @@ sub displayFirstAppearance	{
 			for my $f ( @fields )	{
 				print "<td style=\"padding: 0.5em;\">$coll->{$f}</td>\n";
 			}
-			printf "<td style=\"padding: 0.5em;\">%.1f to %.1f</td>\n",$interval_hash->{$coll->{'max_interval_no'}}->{'base_age'},$interval_hash->{$coll->{'max_interval_no'}}->{'top_age'};
+			printf "<td style=\"padding: 0.5em;\">%.1f to %.1f</td>\n",$interval_hash{$coll->{'max_interval_no'}}->{'base_age'},$interval_hash{$coll->{'max_interval_no'}}->{'top_age'};
 			print "</tr>\n";
 			my @includes = ();
 			for my $o ( @occs )	{
