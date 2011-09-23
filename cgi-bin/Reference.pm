@@ -1165,9 +1165,12 @@ sub getReferences {
 			splice @wild , $i+1 , 1;
 			push @variants , join('',@wild);
 		}
-		$sql = "SELECT reference_no,author1last AS name,pubyr AS year,count(*) AS c FROM refs r WHERE author1last!='".$options{'name'}."' AND (author1last LIKE '".join("' OR author1last LIKE '",@variants)."')";
+		$sql = "SELECT reference_no,author1last AS name,pubyr AS year FROM refs r WHERE author1last!='".$options{'name'}."' AND (author1last LIKE '".join("' OR author1last LIKE '",@variants)."')";
 		$sql .= ( $options{'year'} > 1500 ) ? " AND $year_relation" : "";
 		$sql .= " AND length(author1last)-1<=".length($options{'name'})." AND length(author1last)+1>=".length($options{'name'});
+		my $sql2 = $sql;
+		$sql2 =~ s/author1/author2/g;
+		$sql = "SELECT reference_no,name,year,count(*) c FROM (($sql) UNION ($sql2)) AS matches";
 		$sql .= " GROUP BY name";
 		$sql .= ( $options{'year'} > 1500 ) ? ",year" : "";
 		my @likes = @{$dbt->getData($sql)};
