@@ -75,7 +75,7 @@ sub new {
 # return the referenceNumber
 sub get {
 	my Reference $self = shift;
-    my $field = shift;
+	my $field = shift;
 
 	return ($self->{$field});	
 }
@@ -279,9 +279,9 @@ sub displayRefResults {
 	# use_primary is true if the user has clicked on the "Current reference" link at
 	# the top or bottom of the page.  Basically, don't bother doing a complicated 
 	# query if we don't have to.
-	my ($data,$query_description) = ([],'');
+	my ($data,$query_description,$alternatives) = ([],'','');
 	unless($q->param('use_primary')) {
-		($data,$query_description) = getReferences($dbt,$q,$s,$hbo);
+		($data,$query_description,$alternatives) = getReferences($dbt,$q,$s,$hbo);
 	} 
 	my @data;
 	if ( $data )	{
@@ -319,7 +319,7 @@ sub displayRefResults {
         	} else {
 			# otherwise, display a page showing the ref JA 10.6.02
 			print $hbo->stdIncludes($PAGE_TOP);
-			displayReference($dbt,$q,$s,$hbo,$data[0]);
+			displayReference($dbt,$q,$s,$hbo,$data[0],$alternatives);
 			print $hbo->stdIncludes($PAGE_BOTTOM);
 		}
 		return;		# Out of here!
@@ -331,7 +331,8 @@ sub displayRefResults {
         my $limit = 30;
         print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 1em;\">$query_description matched ";
         if (scalar(@data) > 1 && scalar(@data) > $limit) {
-            print scalar(@data)." references</p><p class=\"medium\">Here are ";
+            print scalar(@data)." references</p>\n\n";
+            print "<p class=\"medium\">Here are ";
             if ($offset == 0)	{
                 print "the first $limit";
             } elsif ($offset + $limit > scalar(@data)) {
@@ -339,11 +340,11 @@ sub displayRefResults {
             } else	{
                 print "references ",($offset + 1), " through ".($offset + $limit);
             }
-            print "</p>";
+            print "</p>\n\n";
         } elsif ( scalar(@data) == 1) {
             print "exactly one reference</p>";
         } else	{
-            print scalar(@data)." references</p>";
+            print scalar(@data)." references</p>\n";
         }
         print "</div>\n";
 #        if ($type eq 'add') {
@@ -356,18 +357,21 @@ sub displayRefResults {
 #        }
 
 		# Print the references found
-        print "<div style=\"margin: 1.5em; padding: 1em; border: 1px solid #E0E0E0;\">\n";
+        print "<div style=\"margin: 1.5em; margin-bottom: 1em; padding: 1em; border: 1px solid #E0E0E0;\">\n";
 		print "<table border=0 cellpadding=5 cellspacing=0>\n";
 
         my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
 
 		# Only print the last 30 rows that were found JA 26.7.02
+         my $dark;
         for(my $i=$offset;$i < $offset + 30 && $i < scalar(@data); $i++) {
             my $row = $data[$i];
             if ( ($offset - $i) % 2 == 0 ) {
                 print "<tr class=\"darkList\">";
+                $dark++;
             } else {
                 print "<tr>";
+                $dark = "";
             }
             print "<td valign=\"top\">";
             if ($s->isDBMember()) {
@@ -394,7 +398,14 @@ sub displayRefResults {
             print "</tr>";
 		}
 		print "</table>\n";
-        print "</div>";
+		if ( $alternatives )	{
+			if ( ! $dark )	{
+				print "<div style=\"border-top: 1px solid #E0E0E0; margin-top: 0.5em; \"></div>\n";
+			}
+			print "<div class=\"small\" style=\"margin-left: 6em; margin-right: 4em; margin-top: 0.5em; margin-bottom: -0.5em; text-align: left; text-indent: -1em;\">Other possible matches include $alternatives.</div>\n\n";
+		}
+		print "</div>";
+
 
         # Now print links at bottom
         print  "<center><p>";
@@ -448,7 +459,7 @@ sub displayRefResults {
 }
 
 sub displayReference {
-    my ($dbt,$q,$s,$hbo,$ref) = @_;
+    my ($dbt,$q,$s,$hbo,$ref,$alternatives) = @_;
     my $dbh = $dbt->dbh;
 
     if (!$ref) {
@@ -480,6 +491,9 @@ sub displayReference {
         $citation .= qq| <small><a href="$WRITE_URL?a=displayRefResults&type=select&reference_no=$ref->{reference_no}">select</a> - <a href="$WRITE_URL?a=displayRefResults&type=edit&reference_no=$ref->{reference_no}">edit</a></small>|;
     }
     $citation = "<div style=\"text-indent: -0.75em; margin-left: 1em;\">" . $citation . "</div>";
+    if ( $alternatives )	{
+        $citation .= "<div style=\"margin-top: 0.5em;\">Other possible matches include $alternatives.</div>\n\n";
+    }
     print $box->("Full reference",$citation);
    
     # Start Metadata box
@@ -1031,8 +1045,11 @@ sub getReferences {
 
 	# build a string that will tell the user what they asked for
 	my $query_description = '';
+	# also return alternative searches that will work
+	my $alternatives = '';
 
     my @where = ();
+    my $year_relation;
     if ($options{'reference_no'}) {
         push @where, "r.reference_no=".int($options{'reference_no'}) if ($options{'reference_no'});
         $query_description .= " reference ".$options{'reference_no'} 
@@ -1052,13 +1069,16 @@ sub getReferences {
         if ($options{'year'}) {
             $query_description .= " ".$options{'year'};
             if ($options{'year_relation'} eq "in")	{
-                push @where, "r.pubyr=".$options{'year'};
+                $year_relation = "r.pubyr=".$options{'year'};
             } elsif ($options{'year_relation'} =~ /after/i)	{
-                push @where, "r.pubyr>".$options{'year'};
+                $year_relation = "r.pubyr>".$options{'year'};
             } elsif ($options{'year_relation'} =~ /before/i)	{
-                push @where, "r.pubyr<".$options{'year'};
+                $year_relation = "r.pubyr<".$options{'year'};
             }
         }
+	if ( $year_relation )	{
+		push @where , $year_relation;
+	}
         if ($options{'reftitle'}) {
             $query_description .= " ".$options{'reftitle'};
             push @where, "r.reftitle LIKE ".$dbh->quote('%'.$options{'reftitle'}.'%');
@@ -1131,7 +1151,44 @@ sub getReferences {
 		$query_description = "'$query_description' "; 
 	}
 	my @data = @{$dbt->getData($sql)};
-	return (\@data,$query_description);
+
+	# check for variant spellings using not very bright but effective
+	#  off-by-one-or-two check JA 23.9.11
+	# only do this for a standard last name (required) plus initials and/or
+	#  year search
+	if ( $options{'variants'} !~ /no/i && $options{'name'} && ( ! $options{'name_pattern'} || $options{'name_pattern'} =~ /equals/i ) && ! $options{'reference_no'} && ! $options{'reftitle'}&& ! $options{'pubtitle'} && ! $options{'project_name'} && ! $options{'authorizer_reversed'} && ! $options{'enterer_reversed'} )	{
+		my ($sql,@variants,$groupby);
+		my @letts = split //,$options{'name'};
+		for my $i ( 1..length($options{'name'})-2 )	{
+			my @wild = @letts;
+			$wild[$i] = "%";
+			splice @wild , $i+1 , 1;
+			push @variants , join('',@wild);
+		}
+		$sql = "SELECT reference_no,author1last AS name,pubyr AS year,count(*) AS c FROM refs r WHERE author1last!='".$options{'name'}."' AND (author1last LIKE '".join("' OR author1last LIKE '",@variants)."')";
+		$sql .= ( $options{'year'} > 1500 ) ? " AND $year_relation" : "";
+		$sql .= " AND length(author1last)-1<=".length($options{'name'})." AND length(author1last)+1>=".length($options{'name'});
+		$sql .= " GROUP BY name";
+		$sql .= ( $options{'year'} > 1500 ) ? ",year" : "";
+		my @likes = @{$dbt->getData($sql)};
+		my @links;
+		for my $l ( @likes )	{
+			if ( $l->{'c'} == 1 )	{
+				push @links , "<a href=\"$READ_URL?a=displayReference&amp;reference_no=$l->{'reference_no'}\">$l->{'name'}</a>";
+			} else	{
+				push @links , "<a href=\"$READ_URL?a=displayRefResults&amp;name=$l->{'name'}";
+				$links[$#links] .= ( $options{'year'} ) ? "&amp;year=$options{'year'}&amp;year_relation=$options{'year_relation'}" : "";
+				$links[$#links] .= "&amp;variants=no\">$l->{'name'}</a>";
+			}
+		}
+		if ( @likes )	{
+			$links[$#links] = ( $#links > 0 ) ? "and ".$links[$#links] : $links[$#links];
+			$alternatives .= ( @links && $#links > 1 ) ? join(', ',@links) : "";
+			$alternatives .= ( @links && $#links == 1 ) ? join(' ',@links) : "";
+			$alternatives .= ( @links && $#links == 0 ) ? $links[0] : "";
+		}
+	}
+	return (\@data,$query_description,$alternatives);
 
 	} else {
 		return ('','');
