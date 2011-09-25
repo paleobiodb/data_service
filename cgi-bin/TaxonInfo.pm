@@ -3940,7 +3940,7 @@ sub basicTaxonInfo	{
 		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND spelling_no=synonym_no AND t.taxon_no!=spelling_no AND a.taxon_name!='".$auth->{'taxon_name'}."' ORDER BY taxon_name";
 		my @spelling_refs = @{$dbt->getData($sql)};
 		push @spellings , $_->{'taxon_no'} foreach @spelling_refs;
-		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no ORDER BY taxon_name";
+		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no GROUP BY taxon_name,author1init,author1last,author2init,author2last,otherauthors,pubyr ORDER BY taxon_name";
 		my @syn_refs = @{$dbt->getData($sql)};
 		push @bad_spellings , $_->{'taxon_no'} foreach @syn_refs;
 		my @all_spellings = (@spellings,@bad_spellings);
@@ -3978,18 +3978,34 @@ sub basicTaxonInfo	{
 			push @spelling_names , italicize($_) foreach @spelling_refs;
 			print join(', ',@spelling_names)."</p>\n\n";
 		}
+		my ($synonyms,$nomens,$otherbads);
 		for my $s ( @syn_refs )	{
 			if ( $s->{'status'} !~ /subjective/ )	{
 				$s->{'note'} = $s->{'status'};
 				$s->{'note'} =~ s/ of$//;
 				$s->{'note'} =~ s/replaced by/replaced name/;
 				$s->{'note'} = " [".$s->{'note'}."]";
+				if ( $s->{'status'} =~ /synonym/ )	{
+					$synonyms++;
+				} elsif (  $s->{'status'} =~ /nomens/ )	{
+					$nomens++;
+				} else	{
+					$otherbads++;
+				}
 			}
 		}
 		if ( $#syn_refs == 0 )	{
 			print "<p>Synonym: ".italicize($syn_refs[0])." ".formatShortAuthor($syn_refs[0]).$syn_refs[0]->{'note'}."</p>\n\n";
+		} elsif ( $#syn_refs == 0 )	{
+			print "<p>Indeterminate subtaxon: ".italicize($syn_refs[0])." ".formatShortAuthor($syn_refs[0]).$syn_refs[0]->{'note'}."</p>\n\n";
+		} elsif ( $#syn_refs == 0 )	{
+			print "<p>Invalid subtaxon: ".italicize($syn_refs[0])." ".formatShortAuthor($syn_refs[0]).$syn_refs[0]->{'note'}."</p>\n\n";
 		} elsif ( $#syn_refs > 0 )	{
-			print "<p $indent>Synonyms: ";
+			if ( $nomens + $otherbads == 0 )	{
+				print "<p $indent>Synonyms: ";
+			} else	{
+				print "<p $indent>Invalid subtaxa: ";
+			}
 			my $list;
 			for my $s ( @syn_refs )	{
 				$list .= italicize($s)." ".formatShortAuthor($s).$s->{'note'}.", ";
