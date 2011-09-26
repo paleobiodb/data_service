@@ -9,13 +9,13 @@ use DBTransactionManager;
 my $dbt = DBTransactionManager->new($dbh);
 my $dbh = $dbt->dbh;
 
-my $sql = "SELECT plate,max(upper_boundary) max FROM collections,interval_lookup WHERE max_interval_no>0 AND min_interval_no=0 AND max_interval_no=interval_no AND upper_boundary<600 AND plate>0 GROUP BY plate ORDER BY plate";
+my $sql = "SELECT plate,max(top_age) max FROM collections,interval_lookup WHERE max_interval_no>0 AND min_interval_no=0 AND max_interval_no=interval_no AND top_age<600 AND plate>0 GROUP BY plate ORDER BY plate";
 my @ms = @{$dbt->getData($sql)};
 
 my %max;
 $max{$_->{'plate'}} = $_->{'max'} foreach @ms;
 
-my $sql = "SELECT plate,max(upper_boundary) max FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND upper_boundary<600 AND plate>0 GROUP BY plate ORDER BY plate";
+my $sql = "SELECT plate,max(top_age) max FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND top_age<600 AND plate>0 GROUP BY plate ORDER BY plate";
 my @ms = @{$dbt->getData($sql)};
 
 for my $m ( @ms )	{
