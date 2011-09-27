@@ -1677,7 +1677,7 @@ sub getCollectionsWhereClause {
             } else	{
                 push @where, "c.".$q->param('restrict_to_field')." LIKE '".$q->param('restrict_to_list')."%'";
             }
-        } elsif ($q->param("restrict_to_field") =~ /_no$/)	{
+        } elsif ($q->param("restrict_to_field") =~ /(_no|plate)$/)	{
         # Clean it up
             my @nos = split(/[^0-9]/,$q->param('restrict_to_list'));
             @nos = map {int($_)} @nos;
