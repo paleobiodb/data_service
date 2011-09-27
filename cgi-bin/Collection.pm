@@ -639,6 +639,32 @@ IS NULL))";
             push @where, "c.country LIKE ".$dbh->quote($options{'country'});
         }
     }
+
+    # JA 27.9.11
+    if ( $options{'min_lat'} && $options{'min_lat'} !~ /[^\-0-9]/ && $options{'min_lat'} > -90 && $options{'min_lat'} < 90 ) {
+        if ( $options{'min_lat'} > $options{'max_lat'} )	{
+            my $foo = $options{'min_lat'};
+            $options{'min_lat'} = $options{'max_lat'};
+            $options{'max_lat'} = $foo;
+        }
+        push @where , "IF(c.latdir='south',concat(\"-\",c.latdeg),c.latdeg)>=".$options{'min_lat'};
+    }
+    if ( $options{'max_lat'} && $options{'max_lat'} !~ /[^\-0-9]/ && $options{'max_lat'} > -90 && $options{'max_lat'} < 90 ) {
+        push @where , "IF(c.latdir='south',concat(\"-\",c.latdeg),c.latdeg)<=".$options{'max_lat'};
+    }
+    if ( $options{'min_lng'} && $options{'min_lng'} !~ /[^\-0-9]/ && $options{'min_lng'} > -180 && $options{'min_lng'} < 180 ) {
+        if ( $options{'min_lng'} > $options{'max_lng'} )	{
+            my $foo = $options{'min_lng'};
+            $options{'min_lng'} = $options{'max_lng'};
+            $options{'max_lng'} = $foo;
+        }
+        push @where , "IF(c.lngdir='west',concat(\"-\",c.lngdeg),c.lngdeg)>=".$options{'min_lng'};
+    }
+    if ( $options{'max_lng'} && $options{'max_lng'} !~ /[^\-0-9]/ && $options{'max_lng'} > -180 && $options{'max_lng'} < 180 ) {
+        push @where , "IF(c.lngdir='west',concat(\"-\",c.lngdeg),c.lngdeg)<=".$options{'max_lng'};
+    }
+
+
     if ($options{'plate'}) {
         $options{'plate'} =~ s/[^0-9,]/,/g;
         while ( $options{'plate'} =~ /,,/ )	{
@@ -661,7 +687,7 @@ IS NULL))";
         my $is_primary =  $row->{'mysql_is_pri_key'};
 
         # These are special cases handled above in code, so skip them
-        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country|plate|inventory_name)$/);
+        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country|min_lat|max_lat|min_lng|max_lng|plate|inventory_name)$/);
 
 		if (exists $options{$field} && $options{$field} ne '') {
 			my $value = $options{$field};
