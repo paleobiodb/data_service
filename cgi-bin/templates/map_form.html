@@ -75,6 +75,14 @@ function checkMapBrowserVersion()	{
 </td>
 </tr>
 
+<tr><td valign=top>Country:
+<td valign=top><select id="country" class="small"></select></td>
+</tr>
+
+<tr><td valign="top">State/province:
+<td valign=top><input name="state" size="25" class="small"></td>
+</tr>
+
 </table>
 
 </td>
@@ -83,15 +91,16 @@ function checkMapBrowserVersion()	{
 
 <table border="0" cellpadding="2" cellspacing="2">
 
-<tr><td valign=top>Country:
-<td valign=top><select id="country" class="small">
-</select>
+<tr><td valign="top">Latitude:</td>
+<td><input name="min_lat" size="6" class="small"> to <input name="max_lat" size="6" class="small"></td>
+</tr>
 
-<tr><td valign="top">State/province:
-<td valign=top><input name="state" size="25" class="small">
+<tr><td valign="top">Longitude:</td>
+<td><input name="min_lng" size="6" class="small"> to <input name="max_lng" size="6" class="small"></td>
+</tr>
 
 <tr><td valign="top">Plate ID numbers:
-<td valign=top><input name="plate" size="25" class="small">
+<td valign=top><input name="plate" size="25" class="small"><br>
 <span class="verysmall" style="margin-top: 0.25em;">Color:
 <select id="platecolor" class="small"></span>
 
