@@ -138,7 +138,7 @@ sub getTaxonomyXML	{
 				$letts[0] =~ tr/[a-z]/[A-Z]/;
 				print "<rank>".join('',@letts)."</rank>\n";
 				print "<name_html>$p->{taxon_name}</name_html>\n";
-				print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=checkTaxonInfo&amp;taxon_no=$p->{taxon_no}&amp;is_real_user=0</url>\n";
+				print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=basicTaxonInfo&amp;taxon_no=$p->{taxon_no}&amp;is_real_user=0</url>\n";
 				print "</taxon>\n";
 			}
 			print "</classification>\n";
@@ -163,7 +163,7 @@ sub getTaxonomyXML	{
 						print "<infraspecies_marker></infraspecies_marker>\n";
 						print "<infraspecies>$infraspecies</infraspecies>\n";
 						print "<author>$auth</author>\n";
-						print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=checkTaxonInfo&amp;taxon_no=$i->{taxon_no}&amp;is_real_user=0</url>\n";
+						print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=basicTaxonInfo&amp;taxon_no=$i->{taxon_no}&amp;is_real_user=0</url>\n";
 						print "</infraspecies>\n";
 					}
 					print "</infraspecies_for_this_species>\n";
@@ -242,7 +242,7 @@ sub formatNameXML	{
 		print "<additional_comments>".$n->{comments}."</additional_comments>\n";
 	}
 	# call to taxon info using taxon_no
-	print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=checkTaxonInfo&amp;taxon_no=$n->{taxon_no}&amp;is_real_user=0</url>\n";
+	print "<url>http://paleodb.org/cgi-bin/bridge.pl?action=basicTaxonInfo&amp;taxon_no=$n->{taxon_no}&amp;is_real_user=0</url>\n";
 	if ( $q->param('response') ne "full" )  	{
 		print "<online_resource></online_resource>\n";
 	}
@@ -617,7 +617,7 @@ sub displayITISDownload {
    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =localtime(time);
    my $date = sprintf("%d%02d%02d",($year+1900),$mon,$mday);   
 
-    my $dirname = ($s->isDBMember()) ? $s->{'enterer'} : "guest".$date."_".$$;
+    my $dirname = ($s->isDBMember()) ? $s->{'enterer'} : "guest_".$date."_".$$;
     $dirname =~ s/[^a-zA-Z0-9_\/]//g;
     umask '022';
 
@@ -625,7 +625,7 @@ sub displayITISDownload {
     my $cmd = "cp $datafile $filesystem_dir";
     my $ot = `$cmd`; 
     #print "$cmd -- $ot -- <BR>";
-    $cmd = "cd $filesystem_dir/.. && tar zcvf $dirname.tar.gz $dirname/*.dat $dirname/*.doc";
+    $cmd = "cd $filesystem_dir/.. && tar -zcvf $dirname.tar.gz $dirname/*.dat $dirname/*.doc";
     $ot = `$cmd`; 
     #print "$cmd -- $ot -- <BR>";
 
