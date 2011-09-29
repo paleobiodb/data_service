@@ -879,6 +879,7 @@ print '</td></tr></table></div>';
 #   if is_valid == false, then invalid_reason will be populated with the reason why:
 #       can be "synonym of, recombined as, corrected as, replaced by" etc
 # Gets immediate parent of taxa (at end, in separate query)
+# heavily written by JA 29.9.11
 sub getTaxonomicNames {
     my $dbt = shift;
     my $http_dir = shift;
@@ -957,7 +958,7 @@ sub getTaxonomicNames {
         push @where,"a.created $sign $date";
     }
 
-    if ($options{'taxon_rank'} && $options{'taxon_rank'} !~ 'all') {
+    if ($options{'taxon_rank'} && $options{'taxon_rank'} ne "all ranks") {
         if ($options{'taxon_rank'} =~ /above genus/) {
             push @where,"a.taxon_rank NOT IN ('subspecies','species','subgenus','genus')";
         } elsif ($options{'taxon_rank'} =~ /genus or below/) {
@@ -971,7 +972,7 @@ sub getTaxonomicNames {
     my @results;
     my $message;
     if (@where) {
-        my $base_sql = "SELECT a.authorizer_no, a.enterer_no, a.modifier_no, tt.taxon_name type_taxon,"
+        my $base_sql = "SELECT a.authorizer_no, a.enterer_no, a.modifier_no,"
                 . "a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,a.common_name,a.type_specimen,a.type_body_part,a.part_details,a.extant,a.preservation,"
                 . "a.pages,a.figures,a.created,a.comments,t.spelling_no,t.synonym_no senior_synonym_no,"
                 . " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,"
@@ -980,52 +981,42 @@ sub getTaxonomicNames {
                 . " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,"
                 . " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,"
                 . " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,"
-                . " DATE_FORMAT(a.modified,'%Y-%m-%e %H:%i:%s') modified, "
-                . " DATE_FORMAT(a.modified,'%m/%e/%Y') modified_short "
-                . " FROM $TAXA_TREE_CACHE t, authorities a"
-                . " LEFT JOIN authorities tt ON tt.taxon_no=a.type_taxon_no"
-                . " LEFT JOIN refs r ON r.reference_no=a.reference_no"
-                . " WHERE t.taxon_no=a.taxon_no";
+                . " DATE_FORMAT(a.modified,'%Y-%m-%e %H:%i:%s') modified,"
+                . " DATE_FORMAT(a.modified,'%m/%e/%Y') modified_short,"
+                . " o.status invalid_reason,pt.taxon_no parent_no,pt.taxon_name parent_name"
+                . " FROM $TAXA_TREE_CACHE t,authorities a,opinions o,authorities pt,refs r"
+                . " WHERE t.taxon_no=a.taxon_no AND t.opinion_no=o.opinion_no AND pt.taxon_no=o.parent_spelling_no AND r.reference_no=a.reference_no";
 
         my $sql = "$base_sql AND ".join(" AND ",@where)." ORDER BY a.taxon_name";
         dbg("getTaxonomicNames called: ($sql)");
         @results = @{$dbt->getData($sql)};
 
+        # only some (higher) taxa have type_taxon_nos, so grab their names
+        #  separately to avoid a tedious UNION
+        my %type_lookup;
+        if (%taxa_list) {
+            $sql = "SELECT a.taxon_no,a2.taxon_name type_taxon FROM authorities a,authorities a2 WHERE a.type_taxon_no=a2.taxon_no AND a.taxon_no IN (".join(",",keys %taxa_list).")";
+            my @types = @{$dbt->getData($sql)};
+            $type_lookup{$_->{'taxon_no'}} = $_->{'type_taxon'} foreach @types;
+        }
+
         my ($valid_count,$invalid_count) = (0,0);
         my %parent_name_cache = ();
         my %taxa_cache = ();
         foreach my $row (@results) {
+            $row->{type_taxon} = $type_lookup{$row->{'taxon_no'}};
             $taxa_cache{$row->{'taxon_no'}} = $row;
             $row->{authorizer} = $people{$row->{authorizer_no}};
             $row->{enterer} = $people{$row->{enterer_no}};
             $row->{modifier} = $people{$row->{modifier_no}};
-            if ($parent_name_cache{$row->{'senior_synonym_no'}}) {
-                $row->{'parent_name'} = $parent_name_cache{$row->{'senior_synonym_no'}}{'taxon_name'};
-            }
             my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'senior_synonym_no'});
-            my $parent = TaxonInfo::getMostRecentClassification($dbt,$orig_no);
-            if ($parent && $parent->{'parent_no'}) {
-                my $sql = "SELECT a.taxon_no, a.taxon_name FROM $TAXA_TREE_CACHE t, authorities a WHERE a.taxon_no=t.synonym_no AND t.taxon_no=$parent->{parent_no}";
-                my @r = @{$dbt->getData($sql)};
-                $row->{'parent_name'} = $r[0]->{'taxon_name'};
-                $row->{'parent_no'} = $r[0]->{'taxon_no'};
-                $parent_name_cache{$row->{'senior_synonym_no'}} = $r[0];
-            }
 
             # If this is a recombination, then use the old combinations reference information
             my $orig_row = {};
             if ($taxa_cache{$orig_no}) {
                 $orig_row = $taxa_cache{$orig_no};
             } elsif ($orig_no) {
-                my $sql = "SELECT a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,"
-                        . " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,"
-                        . " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,"
-                        . " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,"
-                        . " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,"
-                        . " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,"
-                        . " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors"
-                        . " FROM authorities a LEFT JOIN refs r ON a.reference_no=r.reference_no"
-                        . " WHERE a.taxon_no=$orig_no";
+                my $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name FROM authorities a WHERE a.taxon_no=$orig_no";
                 my @r = @{$dbt->getData($sql)};
                 $orig_row = $r[0];
                 $taxa_cache{$orig_row->{'taxon_no'}} = $orig_row;
@@ -1034,43 +1025,33 @@ sub getTaxonomicNames {
             $row->{'original_taxon_no'} = $orig_row->{'taxon_no'};
             $row->{'original_taxon_rank'} = $orig_row->{'taxon_rank'};
 
-            if ($parent && $parent->{'status'} =~ /nomen/) {
-                $row->{'is_valid'} = 0;
-                $row->{'invalid_reason'} = $parent->{'status'};
+            # some legacy nomen opinions lack parents (argh)
+            if ($row->{'status'} =~ /nomen/ && ! $row->{'parent_name'}) {
+                $row->{'is_valid'} = "";
+                $row->{'invalid_reason'} = $row->{'status'};
                 $invalid_count++;
             } elsif ($row->{'taxon_no'} != $row->{'senior_synonym_no'}) {
-                $row->{'is_valid'} = 0;
+                $row->{'is_valid'} = "";
+                # invalid names with known parents
                 if ($row->{'spelling_no'} != $row->{'senior_synonym_no'}) {
-                    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'taxon_no'});
-                    my $parent = TaxonInfo::getMostRecentClassification($dbt,$orig_no);
-                    if ($parent && $parent->{'parent_no'}) {
-                        my $sql = "SELECT taxon_name FROM authorities where taxon_no=$parent->{parent_no}";
-                        my @s = @{$dbt->getData($sql)};
-                        $row->{'invalid_reason'} = "$parent->{status} $s[0]->{taxon_name}";
-                        $row->{'synonym_no'} = $parent->{'parent_no'}; 
-                    } else {
-                        my $sql = "SELECT taxon_name FROM authorities where taxon_no=$row->{senior_synonym_no}";
-                        my @s = @{$dbt->getData($sql)};
-                        $row->{'invalid_reason'} = "synonym of $s[0]->{taxon_name}";
-                        $row->{'synonym_no'} = $row->{'senior_synonym_no'};
-                    }
+                    $row->{'invalid_reason'} .= ( $row->{invalid_reason} =~ /^nomen/ ) ? " belonging to" : "";
+                    $row->{'invalid_reason'} = "$row->{invalid_reason} $row->{parent_name}";
+                    $row->{'synonym_no'} = $row->{'parent_no'}; 
+                # valid names with changed spellings
                 } else {
-                    my $sql = "SELECT taxon_no,taxon_name,taxon_rank FROM authorities where taxon_no=$row->{spelling_no}";
-                    my @s = @{$dbt->getData($sql)};
-                    my $spelling_reason = Opinion::guessSpellingReason($row,$s[0]);
-                    if ($spelling_reason =~ /^corr/) {
-                        $row->{'invalid_reason'} = "corrected as $s[0]->{taxon_name}";
-                    } elsif ($spelling_reason =~ /^recomb/) {
-                        $row->{'invalid_reason'} = "recombined as $s[0]->{taxon_name}";
-                    } elsif ($spelling_reason =~ /^reass/) {
-                        $row->{'invalid_reason'} = "reassigned as $s[0]->{taxon_name}";
-                    } elsif ($spelling_reason =~ /^rank/) {
-                        $row->{'invalid_reason'} = "rank changed to $s[0]->{taxon_rank}";
-                        if ($row->{'taxon_name'} ne $s[0]->{'taxon_name'}) {
-                            $row->{'invalid_reason'} .= ", name to $s[0]->{taxon_name}";
+                    if ($row->{'invalid_reason'} =~ /^corr/) {
+                        $row->{'invalid_reason'} = "corrected as $row->{parent_name}";
+                    } elsif ($row->{'invalid_reason'} =~ /^recomb/) {
+                        $row->{'invalid_reason'} = "recombined as $row->{parent_name}";
+                    } elsif ($row->{'invalid_reason'} =~ /^reass/) {
+                        $row->{'invalid_reason'} = "reassigned as $row->{parent_name}";
+                    } elsif ($row->{'invalid_reason'} =~ /^rank/) {
+                        $row->{'invalid_reason'} = "rank changed to $row->{parent_name}";
+                        if ($row->{'taxon_name'} ne $row->{'parent_name'}) {
+                            $row->{'invalid_reason'} .= ", name to $row->{parent_name}";
                         }
-                    } else {
-                        $row->{'invalid_reason'} = $spelling_reason;
+                    } else	{
+                        $row->{'invalid_reason'} = "belongs to $row->{parent_name}";
                     }
                 }
                 $invalid_count++;
@@ -1168,7 +1149,7 @@ sub getTaxonomicOpinions {
     }
 
     my @tables = ('opinions o','refs r');
-    if ($options{'taxon_rank'} && $options{'taxon_rank'} !~ 'all') {
+    if ($options{'taxon_rank'} && $options{'taxon_rank'} ne "all ranks") {
         if ($options{'taxon_rank'} =~ /above genus/) {
             push @where,"taxon_rank NOT IN ('subspecies','species','subgenus','genus')";
         } elsif ($options{'taxon_rank'} =~ /genus or below/) {
@@ -1234,7 +1215,8 @@ sub getKingdomMap {
     my $dbt = shift;
     my %kingdom = ();
 
-    my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE taxon_rank LIKE 'kingdom'";
+    # duh, make sure to only get current spellings of valid kingdoms
+    my $sql = "SELECT a.taxon_no,taxon_name FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=spelling_no AND spelling_no=synonym_no AND taxon_rank LIKE 'kingdom' GROUP BY a.taxon_no";
 
     my @results = @{$dbt->getData($sql)};
 
