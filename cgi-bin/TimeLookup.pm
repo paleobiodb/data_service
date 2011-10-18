@@ -121,7 +121,8 @@ $isBin{$_}++ foreach @TimeLookup::bins;
     "64" => "Ordovician 4", # Caradoc
 # added 29.6.06
     "787" => "Ordovician 4", # early Late Ordovician
-    "65" => "Ordovician 3", # Llandeilo
+# now spans bins 3 and 4
+#    "65" => "Ordovician 3", # Llandeilo
     "66" => "Ordovician 3", # Llanvirn
 # used up to 15.8.04
 #	"30" => "Ordovician 3", # Middle Ordovician
@@ -597,35 +598,19 @@ sub isObsolete {
 }
 
 
-# Given a set of starting intervals (or bins), finds intervals that are implied
-# by those intervals, including all child intervals and parent intervals implied
-# by the children.  Note that saying something like (mapIntervals("Bin 1"),mapIntervals("Bin 2")) 
-# may not be the same as map(Intervals("Bin 1","Bin 2")) since the second call will get
-# additional children and parent intervals that map like between the bins while the first won't 
-# Can pass in interval objects, intervals, or ten my bins (text) and will return appropriate output
-# I.E.:
-# @intervals = $t->mapIntervals(40,41,42,43,44)
-# @interval_objects = $t->mapIntervals($itv1,$itv2,$itv3)
-# @intervals = $t->mapIntervals("Cretaceous 1","Cretaceous 2","Cretaceous 3");
+# old Schroeter function dramatically simplified by switching it to use
+#  base_age and top_age values JA 18.10.11
+# previously allowed interval objects to be passed in and out; now only
+#  allows interval_nos and bin names to be passed in and always passes out
+#  interval_nos
 sub mapIntervals {
     my $self = shift;
-    my $ig = $self->getIntervalGraph;
 
     my @intervals = @_;
     return unless (@intervals);
 
-    # Reset the visited values - each call is indepedent of others
-    foreach my $itv (values %$ig) {
-        $itv->{'visited'} = 0;
-    }
-
-    my $input_type = '';
-
-    if (ref($intervals[0])) {
-        $input_type = 'objects';
-    } elsif ($isBin{$intervals[0]} || $isFR2Bin{$intervals[0]}) {
+    if ($isBin{$intervals[0]} || $isFR2Bin{$intervals[0]}) {
         # We gotta convert the bins into an array of regular intervals
-        $input_type = 'bins';
         my %binmap;
         if ($isBin{$intervals[0]})	{
             while (my ($interval_no,$binname) = each %TimeLookup::binning) {
@@ -641,92 +626,20 @@ sub mapIntervals {
         foreach my $bin (@bins) {
             push @intervals, @{$binmap{$bin}};
         }
-        @intervals = map {$ig->{$_}} @intervals;
-    # matches simple interval_no
-    } elsif ($intervals[0] =~ /^\d+$/) {
-        # Code expects intervals objects below - convert back afterwards
-        $input_type = 'integers';
-        @intervals = map {$ig->{$_}} @intervals; 
-    } else {
+    } elsif ($intervals[0] !~ /^\d+$/) {
         die("mapIntervals called with unknown input: ".join(",",@intervals));
     }
-    
-    my @q = @intervals;
-    
-    my @mapped = ();
-    my %parents;
-    while (@q) {
-        while (my $itv = shift @q) {
-            unless ($itv->{'visited'}) {
-                push @mapped,$itv;
-                $itv->{'visited'} = 1;    
-                $parents{$itv->{'max'}} = $itv->{'max'} if ($itv->{'max'});
-                $parents{$itv->{'min'}} = $itv->{'min'} if ($itv->{'min'});
-                
-                foreach my $c (@{$itv->{'children'}}) {
-                    if ($c->{'max'}->{'visited'} && 
-                        $c->{'min'}->{'visited'} && 
-                        ! $c->{'visited'}) {
-                        push @q,$c;
-                    }
-                }
-            }
-        }
 
-        # Put in terms equivalent to a term a or sequence already mapped
-        foreach my $itv (values %$ig) {
-            if (!$itv->{'visited'} && $itv->{'shared_lower'} && $itv->{'shared_upper'}) {
-                foreach my $sl (@{$itv->{'shared_lower'}}) {
-                    foreach my $ul (@{$itv->{'shared_upper'}}) {
-                        if ($sl == $ul && $sl != $itv && $sl->{'visited'} && $ul->{'visited'}) {
-                            push @q, $itv;
-                        }
-                    } 
-                }
+    # new code starts here
+    # first find the age range of the submitted interval_nos
+    my $sql = "SELECT max(base_age) base,min(top_age) top FROM interval_lookup WHERE interval_no IN(".join(',',@intervals).")";
+    my $range = ${$self->{dbt}->getData($sql)}[0];
 
-            }
-        }
-        # Put in terms equivalent to a term a or sequence already mapped
-        foreach my $itv (values %$ig) {
-            if (!$itv->{'visited'} && $self->{'equiv'}->{$itv}) {
-                my $set = $self->{'equiv'}->{$itv};
-                my $all_visited = 1;
-                foreach my $itv (@$set) {
-                    if (!$itv->{'visited'}) {
-                        $all_visited = 0;
-                        last;
-                    }
-                }
-                if ($all_visited) {
-#                    print "All members equiv to $itv->{name} [".join(",",map{$_->{'name'}} @$set)."] were found\n";
-                    push @q, $itv;
-                }
-            }
-        }
-        # Not totally sure quite why this works right now
-        # TBD: Range across scales
-        # TBD: equiv local/globals
-        foreach my $itv (values %$ig) {
-            if (!$itv->{'visited'} && 
-                $itv->{'prev'} && $itv->{'prev'}->{'visited'} && 
-                $itv->{'next'} && $itv->{'next'}->{'visited'}) {
-                push @q, $itv;
-            }
-        }
-        # Is covered means it has children that span the 
-        # entire length of the parent, so the parent
-        # should be included
-        foreach my $p (values %parents) {
-            if (!$p->{'visited'} && $self->isCovered($p)) {
-                push @q,$p;
-            }
-        }
-    }
-    if ($input_type eq 'integers' || $input_type eq 'bins') {
-        return map {$_->{'interval_no'}} @mapped;
-    } else {
-        return @mapped;
-    }
+    # now this is trivial
+    $sql = "SELECT interval_no,base_age,top_age FROM interval_lookup WHERE base_age<=".$range->{'base'}." AND top_age>=".$range->{'top'};
+    my @no_refs = @{$self->{dbt}->getData($sql)};
+
+    return map { $_->{'interval_no'} } @no_refs;
 }
 
 sub getPrecedingIntervals{
