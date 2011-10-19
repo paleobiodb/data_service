@@ -778,7 +778,7 @@ sub displayPBDBDownload {
     if ( $q->param('output_data') =~ /basic/ )	{
         @header = ("taxon_rank","taxon_name","author1init","author1last","author2init","author2last","otherauthors","pubyr");
     } else	{
-        @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","common_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
+        @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","spelling_reason","common_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
     }
     $csv->combine(@header);
     print FH_VT $csv->string()."\n";
@@ -969,7 +969,7 @@ sub getTaxonomicNames {
     }
 
     # use between and both values so we'll use a key for a smaller tree;
-    my @results;
+    my (@results,@extended_results);
     my $message;
     if (@where) {
         my $base_sql = "SELECT a.authorizer_no, a.enterer_no, a.modifier_no,"
@@ -983,11 +983,12 @@ sub getTaxonomicNames {
                 . " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,"
                 . " DATE_FORMAT(a.modified,'%Y-%m-%e %H:%i:%s') modified,"
                 . " DATE_FORMAT(a.modified,'%m/%e/%Y') modified_short,"
+                . " o.spelling_reason,"
                 . " o.status invalid_reason,pt.taxon_no parent_no,pt.taxon_name parent_name"
                 . " FROM $TAXA_TREE_CACHE t,authorities a,opinions o,authorities pt,refs r"
-                . " WHERE t.taxon_no=a.taxon_no AND t.opinion_no=o.opinion_no AND pt.taxon_no=o.parent_spelling_no AND r.reference_no=a.reference_no";
+                . " WHERE t.spelling_no=a.taxon_no AND t.opinion_no=o.opinion_no AND pt.taxon_no=o.parent_spelling_no AND r.reference_no=a.reference_no";
 
-        my $sql = "$base_sql AND ".join(" AND ",@where)." ORDER BY a.taxon_name";
+        my $sql = "$base_sql AND ".join(" AND ",@where)." GROUP BY t.spelling_no ORDER BY a.taxon_name";
         dbg("getTaxonomicNames called: ($sql)");
         @results = @{$dbt->getData($sql)};
 
@@ -1002,63 +1003,68 @@ sub getTaxonomicNames {
 
         my ($valid_count,$invalid_count) = (0,0);
         my %parent_name_cache = ();
-        my %taxa_cache = ();
+        my %orig_cache = ();
         foreach my $row (@results) {
             $row->{type_taxon} = $type_lookup{$row->{'taxon_no'}};
-            $taxa_cache{$row->{'taxon_no'}} = $row;
             $row->{authorizer} = $people{$row->{authorizer_no}};
             $row->{enterer} = $people{$row->{enterer_no}};
             $row->{modifier} = $people{$row->{modifier_no}};
-            my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'senior_synonym_no'});
+            my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'spelling_no'});
 
             # If this is a recombination, then use the old combinations reference information
             my $orig_row = {};
-            if ($taxa_cache{$orig_no}) {
-                $orig_row = $taxa_cache{$orig_no};
-            } elsif ($orig_no) {
-                my $sql = "SELECT a.taxon_no,a.taxon_rank,a.taxon_name FROM authorities a WHERE a.taxon_no=$orig_no";
-                my @r = @{$dbt->getData($sql)};
-                $orig_row = $r[0];
-                $taxa_cache{$orig_row->{'taxon_no'}} = $orig_row;
+            if (! $orig_cache{$orig_no}) {
+                my $sql = "SELECT a.taxon_no taxon_no,a.taxon_rank taxon_rank,a.taxon_name FROM authorities a WHERE a.taxon_no=$orig_no";
+                $orig_cache{$orig_no} = ${$dbt->getData($sql)}[0];
             }
-            $row->{'original_taxon_name'} = $orig_row->{'taxon_name'};
-            $row->{'original_taxon_no'} = $orig_row->{'taxon_no'};
-            $row->{'original_taxon_rank'} = $orig_row->{'taxon_rank'};
+            $row->{'original_taxon_name'} = $orig_cache{$orig_no}->{'taxon_name'};
+            $row->{'original_taxon_no'} = $orig_cache{$orig_no}->{'taxon_no'};
+            $row->{'original_taxon_rank'} = $orig_cache{$orig_no}->{'taxon_rank'};
+            $row->{'is_valid'} = "";
 
             # some legacy nomen opinions lack parents (argh)
             if ($row->{'status'} =~ /nomen/ && ! $row->{'parent_name'}) {
                 $row->{'is_valid'} = "";
                 $row->{'invalid_reason'} = $row->{'status'};
                 $invalid_count++;
+            # invalid names with known parents
             } elsif ($row->{'taxon_no'} != $row->{'senior_synonym_no'}) {
-                $row->{'is_valid'} = "";
-                # invalid names with known parents
-                if ($row->{'spelling_no'} != $row->{'senior_synonym_no'}) {
-                    $row->{'invalid_reason'} .= ( $row->{invalid_reason} =~ /^nomen/ ) ? " belonging to" : "";
-                    $row->{'invalid_reason'} = "$row->{invalid_reason} $row->{parent_name}";
-                    $row->{'synonym_no'} = $row->{'parent_no'}; 
-                # valid names with changed spellings
-                } else {
-                    if ($row->{'invalid_reason'} =~ /^corr/) {
-                        $row->{'invalid_reason'} = "corrected as $row->{parent_name}";
-                    } elsif ($row->{'invalid_reason'} =~ /^recomb/) {
-                        $row->{'invalid_reason'} = "recombined as $row->{parent_name}";
-                    } elsif ($row->{'invalid_reason'} =~ /^reass/) {
-                        $row->{'invalid_reason'} = "reassigned as $row->{parent_name}";
-                    } elsif ($row->{'invalid_reason'} =~ /^rank/) {
-                        $row->{'invalid_reason'} = "rank changed to $row->{parent_name}";
-                        if ($row->{'taxon_name'} ne $row->{'parent_name'}) {
-                            $row->{'invalid_reason'} .= ", name to $row->{parent_name}";
-                        }
-                    } else	{
-                        $row->{'invalid_reason'} = "belongs to $row->{parent_name}";
-                    }
-                }
+                $row->{'invalid_reason'} .= ( $row->{invalid_reason} =~ /^nomen/ ) ? " belonging to" : "";
+                $row->{'invalid_reason'} = "$row->{invalid_reason} $row->{parent_name}";
+                $row->{'synonym_no'} = $row->{'parent_no'}; 
                 $invalid_count++;
+            # valid names with changed spellings
+            } elsif ($row->{'taxon_no'} != $row->{'original_taxon_no'}) {
+                    if ($row->{'spelling_reason'} =~ /^corr/) {
+                    $row->{'spelling_reason'} = "corrected as $row->{parent_name}";
+                } elsif ($row->{'spelling_reason'} =~ /^missp/) {
+                    $row->{'spelling_reason'} = "misspelling of $row->{original_taxon_name}";
+                } elsif ($row->{'spelling_reason'} =~ /^recomb/) {
+                    $row->{'spelling_reason'} = "recombined into $row->{parent_name}";
+                } elsif ($row->{'spelling_reason'} =~ /^reass/) {
+                    $row->{'spelling_reason'} = "reassigned into $row->{parent_name}";
+                } elsif ($row->{'spelling_reason'} =~ /^rank/) {
+                    $row->{'spelling_reason'} = "$orig_no rank changed from $row->{original_taxon_rank} to $row->{taxon_rank}";
+                    if ($row->{'taxon_name'} ne $row->{'parent_name'}) {
+                        $row->{'spelling_reason'} .= ", parent to $row->{parent_name}";
+                    }
+                } else	{
+                    $row->{'spelling_reason'} = "belongs to $row->{parent_name}";
+                }
+                $row->{'is_valid'} = 1;
+                $valid_count++;
+            # valid names with original spellings
             } else {
+                # taxa_tree_cache does track the correct spelling even if
+                #  the current opinion is mispelled, so the name will be
+                #  printed with the right spelling one way or another
+                if ($row->{'spelling_reason'} =~ /^missp/) {
+                    $row->{'spelling_reason'} = "original spelling";
+                }
                 $row->{'is_valid'} = 1;
                 $valid_count++;
             }
+            push @extended_results , $row;
         }
         my $it_link = $http_dir."/invalid_taxa.csv";
         my $vt_link = $http_dir."/valid_taxa.csv";
@@ -1068,7 +1074,7 @@ sub getTaxonomicNames {
         $message = "<p>No taxonomic names were downloaded because no search criteria were entered</p>";
     }
     
-    return (\@results, $message);
+    return (\@extended_results, $message);
 }
 
 sub getTaxonomicOpinions {
