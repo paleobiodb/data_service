@@ -4238,7 +4238,7 @@ sub basicTaxonInfo	{
 		}
 
 		print "<p>Distribution:";
-		if ( $#occs == 0 )	{
+		if ( $#occs == 0 && $occs[0]->{'c'} == 1 )	{
 			my $o = $occs[0];
 			print qq| found only at <a href="$READ_URL?a=basicCollectionSearch&amp;collection_no=$o->{collection_no}">$o->{'collection_name'}</a>|;
 			if ( $typeLocality == 0 )	{
