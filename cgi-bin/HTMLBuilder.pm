@@ -776,7 +776,7 @@ sub stdIncludes {
         my $reference_no = $s->get('reference_no');
         if ($reference_no) {
             $vars->{reference_no} = $reference_no;
-            $vars->{reference} = Reference::formatShortRef($dbt,$reference_no,'no_inits'=>1);
+            $vars->{reference} = "(".Reference::formatShortRef($dbt,$reference_no,'no_inits'=>1).")";
         }
         $vars->{enterer} = $s->get("enterer") || "none"; 
     }
