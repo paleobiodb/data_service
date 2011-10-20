@@ -2683,7 +2683,7 @@ sub searchOccurrenceMisspellingForm {
         $s->enqueue("action=searchOccurrenceMisspellingForm" );
         login( "Please log in first." );
         exit;
-    } 
+    }
 	print $hbo->stdIncludes("std_page_top");
 	TypoChecker::searchOccurrenceMisspellingForm ($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes("std_page_bottom");
@@ -3046,10 +3046,15 @@ sub startProcessEcologyForm	{
 
 ##############
 ## Specimen measurement stuff
-sub displaySpecimenSearchForm {
-    print $hbo->stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_specimen_form',[],[]);
-    print $hbo->stdIncludes("std_page_bottom");
+sub displaySpecimenSearchForm	{
+	print $hbo->stdIncludes("std_page_top");
+	if (!$s->get('reference_no'))	{
+		$s->enqueue('action=displaySpecimenSearchForm');
+		displaySearchRefs("You must choose a reference before adding measurements" );
+		exit;
+	}
+	print $hbo->populateHTML('search_specimen_form',[],[]);
+	print $hbo->stdIncludes("std_page_bottom");
 }
 
 sub submitSpecimenSearch{
