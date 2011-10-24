@@ -901,18 +901,61 @@ sub printTree {
     print "</small>";
 }
 
-sub displayInterval {
-    my ($dbt,$hbo,$q) = @_;
-    my $i = int($q->param('interval_no'));
-    return unless $i;
+# old Schroeter function almost completely rewritten by JA 23-24.10.11
+sub displayInterval	{
+	my ($dbt,$hbo,$q) = @_;
+	my $i = int($q->param('interval_no'));
+	return unless $i;
 
-    my $t = new TimeLookup($dbt);
-    my $lookup_hash =  $t->lookupIntervals([$i],['interval_name','period_no','period_name','epoch_no','epoch_name','subepoch_no','subepoch_name','stage_no','stage_name','ten_my_bin','base_age','top_age','interval_hash']);
-    my $itv_hash = $lookup_hash->{$i};
-    return unless $itv_hash;
+	my $sql = "SELECT i.*,il.* FROM intervals i,interval_lookup il WHERE i.interval_no=il.interval_no AND i.interval_no=".$i;
+	my $itv = ${$dbt->getData($sql)}[0];
 
-    my $itv = $t->deserializeItv($itv_hash->{'interval_hash'});
-    my $best_scale = $itv->{best_scale};
+	# just get it over with, the table is tiny
+	$sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+	my %name;
+	$name{$_->{interval_no}} = ( $_->{eml_interval} ) ? $_->{eml_interval}." ".$_->{interval_name} : $_->{interval_name} foreach @{$dbt->getData($sql)};
+
+	# find all overlapping intervals
+	$sql = "SELECT i.interval_no,base_age,base_age_relation,top_age,top_age_relation FROM intervals i,interval_lookup il WHERE i.interval_no=il.interval_no AND base_age>=".$itv->{top_age}." AND top_age<=".$itv->{base_age}." AND i.interval_no!=$i";
+	my @relations = @{$dbt->getData($sql)};
+	my (@equals,@within,@contains,@overlaps,@next,@previous);
+	for my $r ( @relations )	{
+		if ( $r->{base_age} == $itv->{base_age} && $r->{top_age} == $itv->{top_age} )	{
+			if ( $r->{base_age_relation} eq "equal to" && $r->{top_age_relation} eq "equal to" && $itv->{base_age_relation} eq "equal to" && $itv->{top_age_relation} eq "equal to" )	{
+				push @equals , $r;
+			} elsif ( $r->{base_age_relation} eq "equal to" && $r->{top_age_relation} eq "equal to" && ( $itv->{base_age_relation} eq "after" || $itv->{top_age_relation} eq "before" ) )	{
+				push @within , $r;
+			} elsif ( ( $r->{base_age_relation} eq "after" || $r->{top_age_relation} eq "before" ) && $itv->{base_age_relation} eq "equal to" && $itv->{top_age_relation} eq "equal to" )	{
+				push @contains , $r;
+			} else	{
+				push @overlaps , $r;
+			}
+		} elsif ( $r->{base_age} > $itv->{base_age} && $r->{top_age} < $itv->{top_age} )	{
+			push @within , $r;
+		} elsif ( $r->{base_age} < $itv->{base_age} && $r->{top_age} > $itv->{top_age} )	{
+			push @contains , $r;
+		} elsif ( $r->{base_age} != $itv->{top_age} && $r->{top_age} != $itv->{base_age} )	{
+			push @overlaps , $r;
+		}
+	}
+
+	$sql = "SELECT scale_name,s.scale_no,scale_rank,continent,pubyr,next_interval_no FROM scales s,correlations c,refs r WHERE s.scale_no=c.scale_no AND interval_no=$i AND c.reference_no=r.reference_no ORDER BY pubyr DESC";
+	my @scales = @{$dbt->getData($sql)};
+	my $best_scale = $scales[0];
+	my @scale_nos = map { $_->{scale_no} } @scales;
+	my @next_nos = map { $_->{next_interval_no} } @scales;
+
+	# queries for previous and next intervals are a little different
+	# query for previous interval depends on checking next intervals here
+	$sql = "SELECT i.interval_no,il.base_age,il.top_age FROM intervals i,interval_lookup il,correlations c WHERE i.interval_no=il.interval_no AND i.interval_no=c.interval_no AND scale_no IN (".join(',',@scale_nos).") AND next_interval_no=$i AND il.top_age=$itv->{base_age} GROUP BY c.interval_no";
+	my @previous = @{$dbt->getData($sql)};
+	# query for next interval depends on knowing all nominal next intervals
+	#  for the focal interval (see above)
+	my @next;
+	if ( @next_nos )	{
+		$sql = "SELECT i.interval_no,il.base_age,il.top_age FROM intervals i,interval_lookup il,correlations c WHERE i.interval_no=il.interval_no AND i.interval_no=c.interval_no AND scale_no IN (".join(',',@scale_nos).") AND i.interval_no IN (".join(',',@next_nos).") AND il.base_age=$itv->{top_age} GROUP BY c.interval_no";
+		@next = @{$dbt->getData($sql)};
+	}
 
     my $type = "";
     if ($best_scale) {
@@ -928,66 +971,23 @@ sub displayInterval {
               : ($rank eq 'chron/zone') ? 'zone'
               : "";
     }
-    my %shared_lower = ();
-    my %shared_upper= ();
-    foreach (@{$itv->{'shared_lower'}}) {
-        $shared_lower{$_->{'interval_no'}} = 1;
-    }
-    foreach (@{$itv->{'shared_upper'}}) {
-        $shared_upper{$_->{'interval_no'}} = 1;
-    }
 
-    print "<div align=\"center\"><p class=\"pageTitle\">$itv->{interval_name} $type</p></div>";
+	@within = sort { $a->{base_age} <=> $b->{base_age} || $b->{top_age} <=> $a->{top_age} } @within;
+	@contains = sort { $name{$a->{interval_no}} cmp $name{$b->{interval_no}} || $a->{interval_no} <=> $b->{interval_no} } @contains;
+	@overlaps = sort { $a->{base_age} <=> $b->{base_age} || $a->{top_age} <=> $b->{top_age} } @overlaps;
 
-    sub describeEstimate {
-        my $itv = shift;
-        my $type = shift;
-        my $src = $itv->{$type.'_boundarysrc'};
-        my $src_link = "<a href=\"$READ_URL?action=displayInterval&interval_no=$src->{interval_no}\">$src->{interval_name}</a>";
-        my $i = $src->{interval_no};
-        if ($itv->{$type."_boundary"} eq "0" && $itv->{$type.'_estimate_type'} =~ /direct/) {
-            return "direct";
-        } if ($itv->{$type.'_estimate_type'} =~ /direct/ && $itv->{$type.'_boundarysrc_no'} == $i) {
-            return "direct";
-        } elsif ($itv->{$type.'_estimate_type'} =~ /direct/ && $itv->{$type.'_boundarysrc_no'} != $i) {
-            my $msg;
-            unless ($itv->{$type.'_boundarysrc_no'} == $itv->{'next_no'}) { 
-                $msg = "base of $src_link";
-            } else {
-                $msg = "direct";
-            }
-            return $msg;
-        } elsif ($itv->{$type.'_estimate_type'} =~ /correlated/) {
-#            return "correlated with base of $src_link";
-            return "base of $src_link (approximate)";
-        } elsif ($itv->{$type.'_estimate_type'} =~ /children/) {
-            return "estimated from subintervals"; 
-        } elsif ($itv->{$type.'_estimate_type'} =~ /next/) {
-            return "from next interval $src_link";
-        } elsif ($itv->{$type.'_estimate_type'} =~ /previous/) {
-            return "from previous interval $src_link";
-        }
-    }
-   
+    print "<div align=\"center\"><p class=\"pageTitle\">$name{$itv->{interval_no}} $type</p></div>";
+
     print "<table width=\"100%\" cellspacing=\"5\" cellpadding=\"0\" border=\"0\"><tr><td valign=top width=\"50%\">";
     my $general_html = "";
     if ($itv->{'base_age'} =~ /\d/) {
         my $lower = TimeLookup::printBoundary($itv->{'base_age'}); 
-        $general_html .= "Lower boundary: $lower Ma<br>";
-        my $estimate = describeEstimate($itv,'lower');
-        if ($estimate) {
-            $general_html .= "Lower boundary source: ".$estimate."<br>";
-        }
-        
+        $general_html .= "Lower boundary: $itv->{base_age_relation} $lower Ma<br>";
         my $upper = TimeLookup::printBoundary($itv->{'top_age'}); 
-        $general_html .= "Upper boundary: $upper Ma<br>";
-        $estimate = describeEstimate($itv,'upper');
-        if ($estimate) {
-            $general_html .= "Upper boundary source: ".$estimate."<br>";
-        }
+        $general_html .= "Upper boundary: $itv->{top_age_relation} $upper Ma<br>";
 
-        if ($itv->{best_scale}) {
-            $general_html .= "Continent: $itv->{best_scale}->{continent}<br>";
+        if ($best_scale) {
+            $general_html .= "Continent: $best_scale->{continent}<br>";
         }
     }
     $general_html .= "<a href=# onClick=\"document.doColls.submit();\">See collections within this interval</a><br>";
@@ -995,140 +995,94 @@ sub displayInterval {
     $general_html .= qq|<form method="POST" action="$READ_URL" name="doColls"><input type="hidden" name="action" value="displayCollResults"><input type="hidden" name="max_interval_no" value="$i"></form>|;
     $general_html .= qq|<form method="POST" action="$READ_URL" name="doMap"><input type="hidden" name="action" value="displaySimpleMap"><input type="hidden" name="max_interval_no" value="$i"></form>|;
 
-    print $hbo->htmlBox("General",$general_html);
-    
-    my $corr_html; 
-    if ($itv_hash->{'period_no'} && $itv_hash->{'period_no'} != $i) {
-        $corr_html .= "Period: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{period_no}\">$itv_hash->{period_name}</a><br>";
-    }
-    if ($itv_hash->{'epoch_no'} && $itv_hash->{'epoch_no'} != $i) {
-        $corr_html .= "Epoch: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{epoch_no}\">$itv_hash->{'epoch_name'}</a><br>";
-    }
-    if ($itv_hash->{'subepoch_no'} && $itv_hash->{'subepoch_no'} != $i) {
-        $corr_html .= "Subepoch: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv_hash->{subepoch_no}\">$itv_hash->{'subepoch_name'}</a><br>";
-    }
-    if ($itv_hash->{'ten_my_bin'}) {
-        $corr_html .= "10 million year bin: $itv_hash->{ten_my_bin}<br>";
-    }
-    if ($itv->{'max_no'} == $itv->{'min_no'} && 
-        $itv->{'max_no'} != $itv_hash->{'epoch_no'} &&
-        $itv->{'max_no'} != $itv_hash->{'period_no'} ) {
-        my $shares = ($shared_upper{$itv->{'max_no'}}) ? " (shares upper boundary)"
-                   : ($shared_lower{$itv->{'max_no'}}) ? " (shares lower boundary)" : "";
-        $corr_html .= "Contained within: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{max_no}\">$itv->{max}->{interval_name}</a> $shares<br>";
-    }
-    if ($corr_html) {
-        print $hbo->htmlBox("Correlations",$corr_html);
-    }
+	print $hbo->htmlBox("General information",$general_html);
+ 
+	my $corr_html; 
+	if ($itv->{'period_no'} > 0 && $itv->{'period_no'} != $i)	{
+		$corr_html .= "Period: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{period_no}\">$name{$itv->{period_no}}</a><br>";
+	}
+	if ($itv->{'epoch_no'} > 0 && $itv->{'epoch_no'} != $i)	{
+		$corr_html .= "Epoch: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{epoch_no}\">$name{$itv->{epoch_no}}</a><br>";
+	}
+	if ($itv->{'subepoch_no'} > 0 && $itv->{'subepoch_no'} != $i)	{
+		$corr_html .= "Subepoch: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{subepoch_no}\">$name{$itv->{subepoch_no}}</a><br>";
+	}
+	if ($itv->{'stage_no'} > 0 && $itv->{'stage_no'} != $i)	{
+		$corr_html .= "Stage: <a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{stage_no}\">$name{$itv->{stage_no}}</a><br>";
+	}
 
-    if ($itv->{'all_prev'}) {
-        my $html = "";
-        for(my $i=0;$i<@{$itv->{'all_prev'}};$i++) {
-            my $prev = $itv->{'all_prev'}->[$i];     
-            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$prev->{interval_no}\">$prev->{interval_name}</a></li>";
-        }
-        my $s = (@{$itv->{'all_prev'}} > 1) ? "s" : "";
-        print $hbo->htmlBox("Previous interval$s",$html);
-    }
-    if ($itv->{'all_next'}) {
-        my $html = "";
-        for(my $i=0;$i<@{$itv->{'all_next'}};$i++) {
-            my $next = $itv->{'all_next'}->[$i];     
-            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$next->{interval_no}\">$next->{interval_name}</a></li>";
-        }
-        my $s = (@{$itv->{'all_next'}} > 1) ? "s" : "";
-        print $hbo->htmlBox("Next interval$s",$html);
-    }
+	if ($itv->{'ten_my_bin'})	{
+		$corr_html .= "10 million year bin: $itv->{ten_my_bin}<br>";
+	}
+	if ($corr_html)	{
+		print $hbo->htmlBox("Key correlations",$corr_html);
+	}
+
+ 	if ( @previous )	{
+		my $html = "";
+		$html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$_->{interval_no}\">$name{$_->{interval_no}}</a></li>" foreach @previous;
+		my $s = ($#previous > 0) ? "s" : "";
+		print $hbo->htmlBox("Previous interval$s",$html);
+	}
+ 	if ( @next )	{
+		my $html = "";
+		$html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$_->{interval_no}\">$name{$_->{interval_no}}</a></li>" foreach @next;
+		my $s = ($#next > 0) ? "s" : "";
+		print $hbo->htmlBox("Next interval$s",$html);
+	}
     
-    my @direct_equiv;
-    foreach (@{$itv->{'shared_upper'}}) {
-        if ($shared_lower{$_->{'interval_no'}}) {
-            push @direct_equiv, $_ unless $_->{'interval_no'} == $i;
-        }
-    }
-    my @equiv = @{$itv->{'equiv'}} if ($itv->{'equiv'});
-    if (@direct_equiv || @equiv) {
+    if (@equals) {
         my $html = "";
-        my $range = "";
-        foreach my $e (@direct_equiv) {
-            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$e->{interval_no}\">$e->{interval_name}</a> $range</li>";
-        }
-        if (@equiv) {
+        if (@equals) {
             my @intervals = ();
-            foreach my $e (@equiv) {
-                push @intervals, "<a href=\"$READ_URL?action=displayInterval&interval_no=$e->{interval_no}\">$e->{interval_name}</a>";
+            foreach my $e (@equals) {
+                push @intervals, "<a href=\"$READ_URL?action=displayInterval&interval_no=$e->{interval_no}\">$name{$e->{interval_no}}</a>";
             }
-            $html .= "<li>".join(" + ",@intervals)."</li>";
+            $html .= "<li>".join(', ',@intervals)."</li>";
         }
         print $hbo->htmlBox("Equivalent to",$html);
     }
+
+    if (@within) {
+        my $html = "";
+        foreach my $w (@within) {
+            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$w->{interval_no}\">$name{$w->{interval_no}}</a></li>";
+        }
+        print $hbo->htmlBox("Contained within",$html);
+    }
+
     print "</td><td valign=top width=\"50%\">";
 
-    my @overlaps;
-    my @contains;
-    if ($itv->{'children'}) {
-        foreach (@{$itv->{'children'}}) {
-            if ($_->{'max_no'} == $i && $_->{'min_no'} != $i) {
-                push @overlaps, $_;
-            } elsif ($_->{'max_no'} != $i && $_->{'min_no'} == $i) {
-                push @overlaps, $_;
-            } elsif ($_->{'max_no'} == $i && $_->{'min_no'} == $i) {
-                push @contains, $_;
-            }
-        }
-    }
-    if ($itv->{'max_no'} != $itv->{'min_no'}) {
-        push @overlaps, $itv->{'max'}, $itv->{'min'};
-    }
     if (@overlaps) {
         my $html = "";
         my $range = "";
         foreach my $o (@overlaps) {
-#            if ($o->{'base_age'}) {
-#                $range = "(".$o->{'base_age'}." - ".$o->{'top_age'}.")";
-#            }
-            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$o->{interval_no}\">$o->{interval_name}</a> $range</li>";
+            my ($base,$top) = ($o->{base_age},$o->{top_age});
+            $base =~ s/0+$//;
+            $top =~ s/0+$//;
+            $base =~ s/\.$/.0/;
+            $top =~ s/\.$/.0/;
+            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$o->{interval_no}\">$name{$o->{interval_no}}</a> ($base to $top Ma)</li>";
         }
         print $hbo->htmlBox("Overlaps with",$html);
     }
     if (@contains) {
-        my $html = "";
-        my $range = "";
+        my @list;
         foreach my $c (@contains) {
-#            if ($c->{'base_age'}) {
-#                $range = "(".$c->{'base_age'}." - ".$c->{'top_age'}.")";
-#            }
-            my $shares = ($shared_upper{$c->{'interval_no'}}) ? " (shares upper boundary)"
-                       : ($shared_lower{$c->{'interval_no'}}) ? " (shares lower boundary)" : "";
-            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$c->{interval_no}\">$c->{interval_name}</a> $range $shares</li>";
+            push @list , "<a href=\"$READ_URL?action=displayInterval&interval_no=$c->{interval_no}\">$name{$c->{interval_no}}</a>";
         }
-        print $hbo->htmlBox("Contains",$html);
+        print $hbo->htmlBox("Contains",("<li>".join(', ',@list)."</li>"));
     }
 
-
-    my %all_scales;
-    foreach ('all_next_scales','all_max_scales') {
-        if ($itv->{$_}) {
-            foreach my $scale (@{$itv->{$_}}) {
-                $all_scales{$scale->{'scale_no'}} = $scale;
-            }
-        }
-    }
-    if (%all_scales) {
-        my $html = "";
-        my @scales = values %all_scales;
-        @scales = sort {$b->{'pubyr'} <=> $a->{'pubyr'} ||
-                        $b->{'scale_no'} <=> $a->{'scale_no'}} @scales;
-
-        foreach my $scale (@scales) {
-            $html .= "<li><a href=\"$READ_URL?action=processViewScale&scale_no=$scale->{scale_no}\">$scale->{scale_name}</a> ($scale->{pubyr})<br>";
-        }
-        my $s = (@scales  > 1) ? "s" : "";
-        print $hbo->htmlBox("Appears in scale$s",$html);
-    }
-    print "</td></tr></table>";
-    print PBDBUtil::printIntervalsJava($dbt,1);
-    print $hbo->populateHTML("search_intervals_form");
+	my $html = "";
+	for my $scale (@scales)	{
+		$html .= "<li><a href=\"$READ_URL?action=processViewScale&scale_no=$scale->{scale_no}\">$scale->{scale_name}</a> ($scale->{pubyr})<br>";
+	}
+	my $s = (@scales  > 1) ? "s" : "";
+	print $hbo->htmlBox("Appears in scale$s",$html);
+	print "</td></tr></table>";
+	print PBDBUtil::printIntervalsJava($dbt,1);
+	print $hbo->populateHTML("search_intervals_form");
 }
 
 sub submitSearchInterval {
