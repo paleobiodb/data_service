@@ -128,7 +128,7 @@ sub getTaxonomyXML	{
 
 		if ( $q->param('response') eq "full" )  	{
 			# CLASSIFICATION BLOCK
-			$sql = "SELECT a.taxon_no,taxon_rank,taxon_name FROM authorities a,$TAXA_TREE_CACHE t,$TAXA_LIST_CACHE l WHERE a.taxon_no=t.taxon_no AND a.taxon_no=parent_no AND taxon_rank IN ('kingdom','phylum','class','order','family') AND taxon_name NOT IN ('Therapsida','Cetacea','Avetheropoda') AND child_no=" . $accepted->{taxon_no} . " ORDER BY lft";
+			$sql = "SELECT a.taxon_no,taxon_rank,taxon_name FROM authorities a,$TAXA_TREE_CACHE t,$TAXA_LIST_CACHE l WHERE a.taxon_no=t.spelling_no and t.taxon_no=spelling_no AND a.taxon_no=parent_no AND taxon_rank IN ('kingdom','phylum','class','order','family') AND taxon_name NOT IN ('Therapsida','Cetacea','Avetheropoda') AND child_no=" . $accepted->{taxon_no} . " ORDER BY lft";
 			my @parents = @{$dbt->getData($sql)};
 			print "<classification>\n";
 			for my $p ( @parents )	{
@@ -984,9 +984,9 @@ sub getTaxonomicNames {
                 . " DATE_FORMAT(a.modified,'%Y-%m-%e %H:%i:%s') modified,"
                 . " DATE_FORMAT(a.modified,'%m/%e/%Y') modified_short,"
                 . " o.spelling_reason,"
-                . " o.status invalid_reason,pt.taxon_no parent_no,pt.taxon_name parent_name"
-                . " FROM $TAXA_TREE_CACHE t,authorities a,opinions o,authorities pt,refs r"
-                . " WHERE t.spelling_no=a.taxon_no AND t.opinion_no=o.opinion_no AND pt.taxon_no=o.parent_spelling_no AND r.reference_no=a.reference_no";
+                . " o.status invalid_reason,pa.taxon_no parent_no,pa.taxon_name parent_name"
+                . " FROM $TAXA_TREE_CACHE t,authorities a,opinions o,$TAXA_TREE_CACHE pt,authorities pa,refs r"
+                . " WHERE t.spelling_no=a.taxon_no AND t.opinion_no=o.opinion_no AND pt.taxon_no=o.parent_no AND pt.spelling_no=pa.taxon_no AND r.reference_no=a.reference_no";
 
         my $sql = "$base_sql AND ".join(" AND ",@where)." GROUP BY t.spelling_no ORDER BY a.taxon_name";
         dbg("getTaxonomicNames called: ($sql)");
