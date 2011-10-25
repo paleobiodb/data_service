@@ -664,7 +664,6 @@ IS NULL))";
         push @where , "IF(c.lngdir='west',concat(\"-\",c.lngdeg),c.lngdeg)<=".$options{'max_lng'};
     }
 
-
     if ($options{'plate'}) {
         $options{'plate'} =~ s/[^0-9,]/,/g;
         while ( $options{'plate'} =~ /,,/ )	{
@@ -2018,7 +2017,7 @@ sub buildTaxonomicList {
                     # Get Self as well, in case we're a family indet.
                     my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$rowref->{'taxon_no'}},['taxon_name','common_name','taxon_rank','pubyr']);
                     unshift @class_array , $taxon;
-                    $rowref = getClassOrderFamily(\$rowref,\@class_array);
+                    $rowref = getClassOrderFamily($dbt,\$rowref,\@class_array);
                     if ( ! $rowref->{'class'} && ! $rowref->{'order'} && ! $rowref->{'family'} )	{
                         $rowref->{'class'} = "unclassified";
                     }
@@ -2547,7 +2546,7 @@ sub getReidHTMLTableByOccNum {
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
 
 		unshift @class_array , $taxon;
-                $row = getClassOrderFamily(\$row,\@class_array);
+                $row = getClassOrderFamily($dbt,\$row,\@class_array);
 
 		# row has the classification now, so stash it
 		$classification->{'class'}{'taxon_name'} = $row->{'class'};
@@ -2590,7 +2589,9 @@ sub getReidHTMLTableByOccNum {
 }
 
 
+# started another heavy rewrite 26.9.11, finished it 25.10.11
 sub getClassOrderFamily	{
+	my $dbt = shift;
 	my $rowref_ref = shift;
 	my $rowref;
 	if ( $rowref_ref )	{
@@ -2598,6 +2599,9 @@ sub getClassOrderFamily	{
 	}
 	my $class_array_ref = shift;
 	my @class_array = @{$class_array_ref};
+	if ( $#class_array == 0 )	{
+		return $rowref;
+	}
 
 	my ($toplowlevel,$maxyr,$toplevel) = (-1,'',$#class_array);
 	# common name and family are easy
@@ -2609,7 +2613,7 @@ sub getClassOrderFamily	{
 		if ( ! $rowref->{'common_name'} && $t->{'common_name'} )	{
 			$rowref->{'common_name'} = $t->{'common_name'};
 		}
-		if ( $t->{'taxon_rank'} eq "family" && ! $t->{'family'} )	{
+		if ( ( $t->{'taxon_rank'} eq "family" || $t->{'taxon_name'} =~ /idae$/ ) && ! $t->{'family'} )	{
 			$rowref->{'family'} = $t->{'taxon_name'};
 			$rowref->{'family_no'} = $t->{'taxon_no'};
 		}
@@ -2626,57 +2630,93 @@ sub getClassOrderFamily	{
 		$toplowlevel = 0;
 	}
 
-	# find a plausible class name
+	# we need to know which parents have ever been ranked as either a class
+	#  or an order
+	my (@other_parent_nos,%wasClass,%wasntClass,%wasOrder,%wasntOrder);
+	# first mark names currently ranked at these levels
+	for my $i ( $toplowlevel..$#class_array ) {
+		my $no = $class_array[$i]->{'taxon_no'};
+		if ( $class_array[$i]->{'taxon_rank'} eq "class" )	{
+			$wasClass{$no} = 9999;
+		} elsif ( $class_array[$i]->{'taxon_rank'} eq "order" )	{
+			$wasOrder{$no} = 9999;
+		} elsif ( $no )	{
+			push @other_parent_nos , $no;
+		}
+	}
+	# find other names previously ranked at these levels
+	if ( @other_parent_nos )	{
+		my $sql = "SELECT taxon_rank,spelling_no as parent_no,count(*) c FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=child_spelling_no AND child_spelling_no=t.taxon_no AND spelling_no IN (".join(',',@other_parent_nos).") GROUP BY taxon_rank,child_spelling_no";
+		for my $p ( @{$dbt->getData($sql)} )	{
+			if ( $p->{'taxon_rank'} eq "class" )	{
+				$wasClass{$p->{'parent_no'}} += $p->{'c'};
+			} else	{
+				$wasntClass{$p->{'parent_no'}} += $p->{'c'};
+			}
+			if ( $p->{'taxon_rank'} eq "order" )	{
+				$wasOrder{$p->{'parent_no'}} += $p->{'c'};
+			} else	{
+				$wasntOrder{$p->{'parent_no'}} += $p->{'c'};
+			}
+		}
+	}
+
+	# find the oldest parent most frequently ranked an order
+	# use publication year as a tie breaker
+	my ($maxyr,$mostoften,$orderlevel) = ('',-9999,'');
 	for my $i ( $toplowlevel..$#class_array ) {
 		my $t = $class_array[$i];
-		if ( $t->{'taxon_rank'} =~ /superclass|phylum|kingdom/ )	{
+		if ( $wasClass{$t->{'taxon_no'}} > 0 || $t->{'taxon_rank'} =~ /phylum|kingdom/ )	{
 			last;
 		}
-		# take a class if you can get it
-		if ( $t->{'taxon_rank'} eq "class" )	{
+		if ( ( $wasOrder{$t->{'taxon_no'}} - $wasntOrder{$t->{'taxon_no'}} > $mostoften && $wasOrder{$t->{'taxon_no'}} > 0 ) || ( $wasOrder{$t->{'taxon_no'}} - $wasntOrder{$t->{'taxon_no'}} == $mostoften && $wasOrder{$t->{'taxon_no'}} > 0 && $t->{'pubyr'} < $maxyr ) )	{
+			$mostoften = $wasOrder{$t->{'taxon_no'}} - $wasntOrder{$t->{'taxon_no'}};
 			$maxyr = $t->{'pubyr'};
-			$rowref->{'class'} = $t->{'taxon_name'};
-			$rowref->{'class_no'} = $t->{'taxon_no'};
-			$toplevel = $i;
-			last;
-		}
-		# fish for a useable unranked clade
-		if ( ( ! $maxyr || $t->{'pubyr'} <= $maxyr ) && $t->{'taxon_rank'} eq "unranked clade" )	{
-			$maxyr = $t->{'pubyr'};
-			$rowref->{'class'} = $t->{'taxon_name'};
-			$rowref->{'class_no'} = $t->{'taxon_no'};
-			$toplevel = $i;
-		}
-	}
-
-	# find a plausible ordinal name
-	for my $i ( $toplowlevel..$toplevel-1 ) {
-		my $t = $class_array[$i];
-		# something is seriously wrong if a superordinal name has been
-		#  encountered, but if we already have a good "class" we might
-		#  want to use it anyway, so allow it to be checked later
-		if ( $t->{'taxon_rank'} =~ /class|phylum|kingdom/ )	{
-			$toplevel = $i+1;
-			last;
-		}
-		if ( $t->{'taxon_rank'} eq "order" )	{
 			$rowref->{'order'} = $t->{'taxon_name'};
 			$rowref->{'order_no'} = $t->{'taxon_no'};
-			last;
+			$orderlevel = $i + 1;
 		}
 	}
-
-	# otherwise extract the oldest unranked intermediate-level name
-	if ( ! $rowref->{'order'} )	{
-		$maxyr = "";
-		#  has been encountered, but if we already have a good "class"
-		#  we might want to use it anyway
-		for my $i ( $toplowlevel..$toplevel-1 ) {
+	# if that fails then none of the parents have ever been orders,
+	#  so use the oldest name between the levels of family and
+	#  at-least-once class
+	if ( $rowref->{'order_no'} == 0 )	{
+		for my $i ( $toplowlevel..$#class_array ) {
 			my $t = $class_array[$i];
-			if ( ( ! $maxyr || $t->{'pubyr'} < $maxyr ) && $t->{'taxon_rank'} ne "superfamily" )	{
+			if ( $wasClass{$t->{'taxon_no'}} > 0 || $t->{'taxon_rank'} =~ /phylum|kingdom/ )	{
+				last;
+			}
+			if ( ! $maxyr || $t->{'pubyr'} < $maxyr )	{
 				$maxyr = $t->{'pubyr'};
 				$rowref->{'order'} = $t->{'taxon_name'};
 				$rowref->{'order_no'} = $t->{'taxon_no'};
+				$orderlevel = $i + 1;
+			}
+		}
+	}
+
+	# find the oldest parent ever ranked as a class
+	my ($maxyr,$mostoften) = ('',-9999);
+	for my $i ( $orderlevel..$#class_array ) {
+		my $t = $class_array[$i];
+		if ( ( $wasClass{$t->{'taxon_no'}} - $wasntClass{$t->{'taxon_no'}} > $mostoften && $wasClass{$t->{'taxon_no'}} > 0 ) || ( $wasClass{$t->{'taxon_no'}} - $wasntClass{$t->{'taxon_no'}} == $mostoften && $wasClass{$t->{'taxon_no'}} > 0 && $t->{'pubyr'} < $maxyr ) )	{
+			$mostoften = $wasClass{$t->{'taxon_no'}} - $wasntClass{$t->{'taxon_no'}};
+			$maxyr = $t->{'pubyr'};
+			$rowref->{'class'} = $t->{'taxon_name'};
+			$rowref->{'class_no'} = $t->{'taxon_no'};
+		}
+	}
+	# otherwise we're really in trouble, so use the oldest name available
+	if ( $rowref->{'class_no'} == 0 )	{
+		for my $i ( $orderlevel..$#class_array ) {
+			my $t = $class_array[$i];
+			if ( $t->{'taxon_rank'} =~ /phylum|kingdom/ )	{
+				last;
+			}
+			if ( ! $maxyr || $t->{'pubyr'} < $maxyr )	{
+				$maxyr = $t->{'pubyr'};
+				$rowref->{'class'} = $t->{'taxon_name'};
+				$rowref->{'class_no'} = $t->{'taxon_no'};
 			}
 		}
 	}
@@ -3325,7 +3365,7 @@ sub basicCollectionInfo	{
 		my @class_array = @{$class_hash->{$o->{'taxon_no'}}};
 		my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$o->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
 		unshift @class_array , $taxon;
-		$o = getClassOrderFamily(\$o,\@class_array);
+		$o = getClassOrderFamily($dbt,\$o,\@class_array);
 		if ( ! $o->{'class'} && ! $o->{'order'} && ! $o->{'family'} )	{
 			$o->{'class'} = "unclassified";
 		}
