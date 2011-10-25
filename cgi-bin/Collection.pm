@@ -2646,7 +2646,7 @@ sub getClassOrderFamily	{
 	}
 	# find other names previously ranked at these levels
 	if ( @other_parent_nos )	{
-		my $sql = "SELECT taxon_rank,spelling_no as parent_no,count(*) c FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=child_spelling_no AND child_spelling_no=t.taxon_no AND spelling_no IN (".join(',',@other_parent_nos).") GROUP BY taxon_rank,child_spelling_no";
+		my $sql = "SELECT taxon_rank,spelling_no as parent_no,count(*) c FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=child_spelling_no AND child_no=t.taxon_no AND spelling_no IN (".join(',',@other_parent_nos).") GROUP BY taxon_rank,child_spelling_no";
 		for my $p ( @{$dbt->getData($sql)} )	{
 			if ( $p->{'taxon_rank'} eq "class" )	{
 				$wasClass{$p->{'parent_no'}} += $p->{'c'};
