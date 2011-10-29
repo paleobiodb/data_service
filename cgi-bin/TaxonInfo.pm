@@ -1182,6 +1182,9 @@ sub intervalData	{
 sub getAgeRange	{
 	my ($dbt,$colls) = @_;
 	my @coll_nos = map { $_ ->{'collection_no'} } @$colls;
+	if ( ! @coll_nos )	{
+		return;
+	}
 
 	# get the youngest base age
 	# ultimately, the range's top must be this young or younger
