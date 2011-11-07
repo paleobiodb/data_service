@@ -207,9 +207,9 @@
   <td valign="top" colspan="2" nowrap>
     Good's <i>u</i> options:<br>
     <div class="verysmall">
-    Count <select name="one_occs_or_refs"><option>one-reference</option><option>one-occurrence</option></select> taxa&nbsp;&nbsp;&nbsp;&nbsp;
-    Ignore most common taxon? <select name="exclude_dominant"><option>yes</option><option>no</option></select>&nbsp;&nbsp;&nbsp;&nbsp;
-    Ignore largest collection? <select name="exclude_largest_coll"><option>yes</option><option>no</option></select>
+    Count <select name="one_occs_or_refs"><option>one-occurrence</option><option>one-reference</option></select> taxa&nbsp;&nbsp;&nbsp;&nbsp;
+    Ignore most common taxon? <select name="exclude_dominant"><option>no</option><option>yes</option></select>&nbsp;&nbsp;&nbsp;&nbsp;
+    Ignore largest collection? <select name="exclude_largest_coll"><option>no</option><option>yes</option></select>
     </div>
   </td>
 </tr>
@@ -352,7 +352,7 @@
 <input type="checkbox" class="raw r_count" name="print_lists" value="YES" checked> Collections
 <input type="checkbox" class="raw r_count" name="print_occurrences" value="YES" checked> Occurrences
 <input type="checkbox" class="raw r_count" name="print_occurrences-exponentiated" value="YES"> Occurrences-squared or exponentiated
-<input type="checkbox" class="raw r_count" name="print_specimens" value="YES"> Specimens or individuals
+<input type="checkbox" class="raw" name="print_specimens" value="YES"> Specimens or individuals
 </td></tr>
 
 <tr><td class="small" valign="top" nowrap>
