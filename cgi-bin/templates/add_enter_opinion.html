@@ -1,10 +1,72 @@
+
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+function checkForm()	{
+
+	var frm = document.forms[1];
+	var error = "";
+
+	var hasLength = frm.ref_has_opinion.length - 1;
+	if ( ( frm.author1last.value != "" || frm.pubyr.value != "" ) && ! frm.ref_has_opinion[hasLength].checked )	{
+		error += "* You forgot to check 'the opinion is repeated'\n";
+	}
+	if ( ( frm.ref_has_opinion[hasLength].checked || frm.author1init.value != "" || frm.pubyr.value != "" ) && frm.author1last.value == "" )	{
+		error += "* You forgot to enter the author name\n";
+	}
+	if ( frm.author1init.value != "" && ! /^[A-Z]\.$/.test(frm.author1init.value) && ! /^[A-Z]\.( |\-)[A-Z]\.$/.test(frm.author1init.value) && ! /^[A-Z]\. [A-Z]\. [A-Z]\.$/.test(frm.author1init.value)  )	{
+		error += "* The first author's initials are misformatted\n";
+	}
+	if ( frm.author1last.value != "" && ( ! /^[A-Z][a-z].*[a-z]$/.test(frm.author1last.value) || /[^A-Za-z' ]/.test(frm.author1last.value) ) )	{
+		error += "* The first author's last name is misformatted\n";
+	}
+	if ( frm.author2last.value != "" && ( ! /^[A-Z][a-z].*[a-z]$/.test(frm.author2last.value) || /[^A-Za-z' ]/.test(frm.author2last.value) ) )	{
+		error += "* The second author's last name is misformatted\n";
+	}
+	if ( /[^0-9]/.test(frm.pubyr.value) )	{
+		error += "* The publication year is misformatted\n";
+	} else if ( frm.pubyr.value != "" && ( frm.pubyr.value < 1758 || frm.pubyr.value > 2020 ) )	{
+		error += "* The publication year is wrong\n";
+	}
+	if ( ( frm.ref_has_opinion[hasLength].checked || frm.author1init.value != "" || frm.author1last.value != "" ) && frm.pubyr.value == "" )	{
+		error += "* You forgot to enter the publication year\n";
+	}
+
+	if ( ! frm.belongs_to_parent.value )	{
+		error += "* You forgot to enter the parent name\n";
+	} else if ( ! /^[A-Z][a-z]+( |[a-z])[a-z]+$/.test(frm.belongs_to_parent.value) )	{
+		error += "* The parent name is misformatted\n";
+	}
+	if ( ! frm.child_spelling_name.value )	{
+		error += "* You forgot to enter the 'Full name and rank'\n";
+	} else if ( ! /^[A-Z][a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value != "species" && frm.child_spelling_rank.value != "subspecies" )	{
+		error += "* The 'Full name and rank' is misformatted\n";
+	} else if ( ! /^[A-Z][a-z]+ [a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "species" )	{
+		error += "* The 'Full name and rank' is misformatted\n";
+	} else if ( ! /^[A-Z][a-z]+ [a-z]+ [a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "subspecies" )	{
+		error += "* The 'Full name and rank' is misformatted\n";
+	}
+
+	if ( error != "" )	{
+		alert(error);
+		return false;
+	}
+	return true;
+
+}
+
+// End -->
+</script>
+
+
+
 <span id="message"></span>
 
 <div align="center"><p class="pageTitle">Opinion record for <span id="taxon_display_name"></span></p></div>
 
 <div show="error_message">%%error_message%%</div>
 
-<form method="POST" action="%%write_url%%" onSubmit="checkForm()">
+<form method="POST" action="%%write_url%%" onSubmit="return checkForm();">
 
 <div class="displayPanel" style="padding-top: 1em;">
 
@@ -26,7 +88,7 @@ Whose opinion are you entering?
 
 <div align="left" class="small" style="margin-left: 2em;">
 
-<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="PRIMARY">
+<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="PRIMARY" onClick="document.forms[1].author1init.value = ''; document.forms[1].author1last.value = ''; document.forms[1].author2init.value = ''; document.forms[1].author2last.value = ''; document.forms[1].otherauthors.value = ''; document.forms[1].pubyr.value = '';">
 The primary reference argues for this opinion:
 <div align="left" class="small" style="margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_primary_reference"></span></div>
 <div show="current_reference" style="padding-left: 2em; padding-right: 2em;">
@@ -36,7 +98,7 @@ The primary reference argues for this opinion:
 <br><div align="left" class="small" style="margin-bottom: 0.5em; margin-left: 3em; text-indent: -1em;"><span id="formatted_current_reference"></span></div>
 </div>
 
-<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="NO">
+<input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="NO" onClick="document.forms[1].basis.selectedIndex = 0; document.forms[1].diagnosis_given.selectedIndex = 0;">
  ... <i>or</i> the opinion is repeated from an earlier authority, which is:
 
 <table>
