@@ -8,6 +8,7 @@ function checkForm()	{
 	var error = "";
 
 	var hasLength = frm.ref_has_opinion.length - 1;
+
 	if ( ( frm.author1last.value != "" || frm.pubyr.value != "" ) && ! frm.ref_has_opinion[hasLength].checked )	{
 		error += "* You forgot to check 'the opinion is repeated'\n";
 	}
@@ -32,10 +33,21 @@ function checkForm()	{
 		error += "* You forgot to enter the publication year\n";
 	}
 
+//alert(frm.belongs_to_parent.value);
 	if ( ! frm.belongs_to_parent.value )	{
-		error += "* You forgot to enter the parent name\n";
-	} else if ( ! /^[A-Z][a-z]+( |[a-z])[a-z]+$/.test(frm.belongs_to_parent.value) )	{
+		if ( typeof( frm.parent_spelling_no ) == "undefined" )	{
+			error += "* You forgot to enter the parent name\n";
+		} else if ( frm.parent_spelling_no[frm.parent_spelling_no.length-1].checked )	{
+			error += "* You forgot to enter the parent name\n";
+		}
+	} else if ( frm.belongs_to_parent.value != "" && typeof( frm.parent_spelling_no ) != "undefined" && ! frm.parent_spelling_no[frm.parent_spelling_no.length-1].checked )	{
+		error += "* You must check 'other taxon' if you type in a parent name\n";
+	}
+	if ( frm.belongs_to_parent.value != "" && ! /^[A-Z][a-z]+( |[a-z])[a-z]+$/.test(frm.belongs_to_parent.value) )	{
 		error += "* The parent name is misformatted\n";
+	}
+	if ( frm.basis.selectedIndex > 0 && frm.diagnosis_given.selectedIndex == 0 )	{
+		error += "* If the 'basis of opinion' is known you must select a 'diagnosis' value\n";
 	}
 	if ( ! frm.child_spelling_name.value )	{
 		error += "* You forgot to enter the 'Full name and rank'\n";
