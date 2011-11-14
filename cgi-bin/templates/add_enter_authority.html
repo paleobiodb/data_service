@@ -1,4 +1,89 @@
 
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+
+function checkForm()	{
+//alert('asdf');
+
+        var frm = document.forms[1];
+        var error = "";
+
+	var hasLength = frm.ref_is_authority.length - 1;
+
+	if ( / (sp|spp|indet)$/.test(frm.taxon_name.value) )	{
+		error += "* Taxon names can't end with sp, spp, or indet.\nAre you actually trying to enter an occurrence belonging to a collection?\n";
+	}
+	if ( / .* /.test(frm.taxon_name.value) && frm.taxon_rank.value != "subspecies" )	{
+		error += "* Only subspecies names include two spaces\n";
+	} else if ( ! / .* /.test(frm.taxon_name.value) && frm.taxon_rank.value == "subspecies" )	{
+		error += "* A subspecies name must include two spaces\n";
+	} else if ( / /.test(frm.taxon_name.value) && frm.taxon_rank.value != "species" )	{
+		error += "* Only species names include spaces\n";
+	} else if ( ! / /.test(frm.taxon_name.value) && frm.taxon_rank.value == "species" )	{
+		error += "* A species name must include a space\n";
+	}
+	if ( ( frm.author1init.value != "" || frm.author1last.value != "" || frm.author2init.value != "" || frm.author2last.value != "" || frm.pubyr.value != "" ) && ! frm.ref_is_authority[hasLength].checked )	{
+		error += "* You forgot to check 'it was named in an earlier publication'\n";
+	}
+	if ( ( frm.ref_is_authority[hasLength].checked || frm.author1init.value != "" || frm.pubyr.value != "" ) && frm.author1last.value == "" )	{
+		error += "* You forgot to enter the author name\n";
+	}
+	if ( frm.author1init.value != "" && ! /^[A-Z]\.$/.test(frm.author1init.value) && ! /^[A-Z]\.( |\-)[A-Z]\.$/.test(frm.author1init.value) && ! /^[A-Z]\. [A-Z]\. [A-Z]\.$/.test(frm.author1init.value)  )	{
+		error += "* The first author's initials are misformatted\n";
+	}
+	if ( frm.author1last.value != "" && ( ! /^[A-Z][a-z].*[a-z]$/.test(frm.author1last.value) || /[^A-Za-z' ]/.test(frm.author1last.value) ) )	{
+		error += "* The first author's last name is misformatted\n";
+	}
+	if ( frm.author2init.value != "" && ! /^[A-Z]\.$/.test(frm.author2init.value) && ! /^[A-Z]\.( |\-)[A-Z]\.$/.test(frm.author2init.value) && ! /^[A-Z]\. [A-Z]\. [A-Z]\.$/.test(frm.author2init.value)  )	{
+		error += "* The second author's initials are misformatted\n";
+	}
+	if ( frm.author2last.value != "" && ( ! /^[A-Z][a-z].*[a-z]$/.test(frm.author2last.value) || /[^A-Za-z' ]/.test(frm.author2last.value) ) )	{
+		error += "* The second author's last name is misformatted\n";
+	}
+	if ( /[^0-9]/.test(frm.pubyr.value) )	{
+		error += "* The publication year is misformatted\n";
+	} else if ( frm.pubyr.value != "" && ( frm.pubyr.value < 1758 || frm.pubyr.value > 2020 ) )	{
+		error += "* The publication year is wrong\n";
+	}
+	if ( typeof(frm.type_specimen) != "undefined" && frm.type_specimen.value != "" && frm.extant.selectedIndex == 0 )	{
+		error += "* If you know the type's number you must know whether the taxon is extant\n";
+	} else if ( typeof(frm.type_body_part) != "undefined" && frm.type_body_part.value != "" && frm.extant.selectedIndex == 0 )	{
+		error += "* If you know the type's body part you must know whether the taxon is extant\n";
+	}
+	if ( typeof(frm.preservation) != "undefined" )	{
+		if ( frm.preservation.selectedIndex == 10 )	{
+			error += "* We are no longer using the 'not a trace' category; please select another value\n";
+		}
+		if ( frm.preservation.selectedIndex > 1 && frm.extant.selectedIndex == 2 )	{
+			error += "* If the type isn't a body the taxon can't be extant\n";
+		}
+	} else if ( typeof(frm.preservation2) != "undefined" )	{
+		if ( frm.preservation2.selectedIndex == 10 )	{
+			error += "* We are no longer using the 'not a trace' category; please select another value\n";
+		}
+		if ( frm.preservation2.selectedIndex > 1 && frm.extant.selectedIndex == 2 )	{
+			error += "* If the type isn't a body the taxon can't be extant\n";
+		}
+	}
+	if ( /^[^a-z]/.test(frm.common_name.value) )	{
+		error += "* Don't capitalize the common name\n";
+	} else if ( /[^A-Za-z ']/.test(frm.common_name.value) || /[^a-z]$/.test(frm.common_name.value) )	{
+		error += "* The common name is misformatted\n";
+	}
+
+	if ( error != "" )	{
+		alert(error);
+		return false;
+	}
+	return true;
+
+}
+
+// End -->
+</script>
+
+
 <span id="message"></span>
 
 <div align="center" style="width: 50em;"><p class="pageTitle">Authority data for <span id="taxon_name"></span></p></div>
@@ -7,7 +92,7 @@
 <span id="error_message"></span>
 </div>
 
-<form method="POST" action="%%write_url%%">
+<form method="POST" action="%%write_url%%" onSubmit="return checkForm();">
 
 <div class="displayPanel small" style="padding-top: 1em; width: 56em;">
 
@@ -188,6 +273,8 @@
 </textarea>
 </div>
 <div class="verysmall" style="float: left; width: 56em; margin-left: 2em;">
+%%current_discussant%%
+%%credit_me%%
 Valid markup includes the HTML &lt;b&gt;, &lt;i&gt;, and &lt;u&gt; tags (but not &lt;p&gt; or &lt;br&gt;) and the wiki tags [[ ]], which autogenerate a link to a taxon, collection, or reference page.
 </div>
 </div>
