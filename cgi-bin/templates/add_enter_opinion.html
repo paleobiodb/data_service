@@ -9,7 +9,7 @@ function checkForm()	{
 
 	var hasLength = frm.ref_has_opinion.length - 1;
 
-	if ( ( frm.author1last.value != "" || frm.pubyr.value != "" ) && ! frm.ref_has_opinion[hasLength].checked )	{
+	if ( ( frm.author1init.value != "" || frm.author1last.value != "" || frm.author2init.value != "" || frm.author2last.value != "" || frm.pubyr.value != "" ) && ! frm.ref_has_opinion[hasLength].checked )	{
 		error += "* You forgot to check 'the opinion is repeated'\n";
 	}
 	if ( ( frm.ref_has_opinion[hasLength].checked || frm.author1init.value != "" || frm.pubyr.value != "" ) && frm.author1last.value == "" )	{
@@ -20,6 +20,9 @@ function checkForm()	{
 	}
 	if ( frm.author1last.value != "" && ( ! /^[A-Z][a-z].*[a-z]$/.test(frm.author1last.value) || /[^A-Za-z' ]/.test(frm.author1last.value) ) )	{
 		error += "* The first author's last name is misformatted\n";
+	}
+	if ( frm.author2init.value != "" && ! /^[A-Z]\.$/.test(frm.author2init.value) && ! /^[A-Z]\.( |\-)[A-Z]\.$/.test(frm.author2init.value) && ! /^[A-Z]\. [A-Z]\. [A-Z]\.$/.test(frm.author2init.value)  )	{
+		error += "* The second author's initials are misformatted\n";
 	}
 	if ( frm.author2last.value != "" && ( ! /^[A-Z][a-z].*[a-z]$/.test(frm.author2last.value) || /[^A-Za-z' ]/.test(frm.author2last.value) ) )	{
 		error += "* The second author's last name is misformatted\n";
@@ -33,7 +36,6 @@ function checkForm()	{
 		error += "* You forgot to enter the publication year\n";
 	}
 
-//alert(frm.belongs_to_parent.value);
 	if ( ! frm.belongs_to_parent.value )	{
 		if ( typeof( frm.parent_spelling_no ) == "undefined" )	{
 			error += "* You forgot to enter the parent name\n";
