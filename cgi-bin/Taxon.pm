@@ -641,6 +641,10 @@ sub submitAuthorityForm {
 		$errors->add("You can't submit the form with an empty taxon name!");	
 	}
 
+	if ( $q->param('taxon_name') =~ / (sp|spp|indet)$/ )	{
+		$errors->add("Taxon names can't end with sp, spp, or indet. Are you actually trying to enter an occurrence belonging to a collection?");	
+	}
+
 
     if (! validTaxonName($q->param('taxon_name'))) {
         $errors->add("The taxon's name is invalid; please check spacing and capitalization");	
