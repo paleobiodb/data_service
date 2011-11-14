@@ -2942,7 +2942,7 @@ sub basicCollectionInfo	{
 		}
 	}
 
-	my $sql = "SELECT c.*,DATE_FORMAT(release_date, '%Y%m%d') AS rd_short,concat(first_name,' ',last_name) AS authorizer FROM collections c,person p WHERE authorizer_no=person_no AND collection_no=".$q->param('collection_no');
+	my $sql = "SELECT c.*,DATE_FORMAT(release_date, '%Y%m%d') AS rd_short,CONCAT(p.first_name,' ',p.last_name) AS authorizer,CONCAT(p2.first_name,' ',p2.last_name) AS enterer FROM collections c,person p,person p2 WHERE authorizer_no=p.person_no AND enterer_no=p2.person_no AND collection_no=".$q->param('collection_no');
 	my $c = ${$dbt->getData($sql)}[0];
 
 	my $p = Permissions->new($s,$dbt);
