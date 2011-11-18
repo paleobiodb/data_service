@@ -45,7 +45,7 @@ function checkForm()	{
 	} else if ( frm.belongs_to_parent.value != "" && typeof( frm.parent_spelling_no ) != "undefined" && ! frm.parent_spelling_no[frm.parent_spelling_no.length-1].checked )	{
 		error += "* You must check 'other taxon' if you type in a parent name\n";
 	}
-	if ( frm.belongs_to_parent.value != "" && ! /^[A-Z][a-z]+( |[a-z])[a-z]+$/.test(frm.belongs_to_parent.value) )	{
+	if ( frm.belongs_to_parent.value != "" && ! /^[A-Z][a-z]+(| \([A-Z][a-z]+\))(| [a-z][a-z]+)$/.test(frm.belongs_to_parent.value) )	{
 		error += "* The parent name is misformatted\n";
 	}
 	if ( frm.basis.selectedIndex > 0 && frm.status.value == "belongs to" && frm.diagnosis_given.selectedIndex == 0 )	{
@@ -55,12 +55,14 @@ function checkForm()	{
 	if ( typeof( frm.child_spelling_no ) == "undefined" || frm.child_spelling_no[frm.child_spelling_no.length-2].checked )	{
 		if ( ! frm.child_spelling_name.value )	{
 			error += "* You forgot to enter the 'Full name and rank'\n";
-		} else if ( ! /^[A-Z][a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value != "species" && frm.child_spelling_rank.value != "subspecies" )	{
-			error += "* The 'Full name and rank' is misformatted\n";
-		} else if ( ! /^[A-Z][a-z]+ [a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "species" )	{
-			error += "* The 'Full name and rank' is misformatted\n";
 		} else if ( ! /^[A-Z][a-z]+ [a-z]+ [a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "subspecies" )	{
-			error += "* The 'Full name and rank' is misformatted\n";
+			error += "* The 'Full name' " + frm.child_spelling_name.value + " doesn't look like a subspecies\n";
+		} else if ( ! /^[A-Z][a-z]+ (|\([A-Z][a-z]+\) )[a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "species" )	{
+			error += "* The 'Full name' " + frm.child_spelling_name.value + " doesn't look like a species\n";
+		} else if ( ! /^[A-Z][a-z]+ \([A-Z][a-z]+\)$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "subgenus" )	{
+			error += "* The 'Full name' " + frm.child_spelling_name.value + " doesn't look like a subgenus\n";
+		} else if ( ! /^[A-Z][a-z]+$/.test(frm.child_spelling_name.value) && ! /(species|subgenus)/.test(frm.child_spelling_rank.value) )	{
+			error += "* The 'Full name' " + frm.child_spelling_name.value + " is misformatted\n";
 		}
 	}
 
