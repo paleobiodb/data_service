@@ -26,19 +26,22 @@ function checkForm()	{
 	if ( ( frm.author1init.value != "" || frm.author1last.value != "" || frm.author2init.value != "" || frm.author2last.value != "" || frm.pubyr.value != "" ) && ! frm.ref_is_authority[hasLength].checked )	{
 		error += "* You forgot to check 'it was named in an earlier publication'\n";
 	}
-	if ( ( frm.ref_is_authority[hasLength].checked || frm.author1init.value != "" || frm.pubyr.value != "" ) && frm.author1last.value == "" )	{
+	if ( ( frm.author1init.value != "" || frm.pubyr.value != "" ) && frm.author1last.value == "" )	{
+		error += "* You forgot to enter the author name\n";
+	} else if ( frm.ref_is_authority[hasLength].checked && frm.author1last.value == "" && /species|genus/.test(frm.taxon_rank.value) )	{
 		error += "* You forgot to enter the author name\n";
 	}
-	if ( frm.author1init.value != "" && ! /^[A-Z]\.$/.test(frm.author1init.value) && ! /^[A-Z]\.( |\-)[A-Z]\.$/.test(frm.author1init.value) && ! /^[A-Z]\. [A-Z]\. [A-Z]\.$/.test(frm.author1init.value)  )	{
-		error += "* The first author's initials are misformatted\n";
-	}
-	if ( frm.author1last.value != "" && ( ! /^[A-Z][a-z].*[a-z]$/.test(frm.author1last.value) || /[^A-Za-z' ]/.test(frm.author1last.value) ) )	{
-		error += "* The first author's last name is misformatted\n";
+	if ( frm.author1last.value != "" && /[^A-Za-z'\- ]/.test(frm.author1last.value) && ! /, Jr\./.test(frm.author1last.value) )	{
+		error += "* There seems to be a typo in the first author's last name\n";
+	} else if ( frm.author1last.value != "" && ! /^(|d'|d[aeo](|[nrs]) |Di|O'|M(c|ac|')|v[ao]n )[A-Z](|[a-z]+-[A-Z])[a-z]+(|, Jr\.)$/.test(frm.author1last.value) && ! /^[A-Z][a-z]+ (|[dv][a-z]+ )[A-Z][a-z]+(|, Jr\.)$/.test(frm.author1last.value) )	{
+                error += "* The first author's last name is misformatted\n";
 	}
 	if ( frm.author2init.value != "" && ! /^[A-Z]\.$/.test(frm.author2init.value) && ! /^[A-Z]\.( |\-)[A-Z]\.$/.test(frm.author2init.value) && ! /^[A-Z]\. [A-Z]\. [A-Z]\.$/.test(frm.author2init.value)  )	{
 		error += "* The second author's initials are misformatted\n";
 	}
-	if ( frm.author2last.value != "" && ( ! /^[A-Z][a-z].*[a-z]$/.test(frm.author2last.value) || /[^A-Za-z' ]/.test(frm.author2last.value) ) )	{
+	if ( frm.author2last.value != "" && /[^A-Za-z'\- ]/.test(frm.author2last.value) && ! /, Jr\./.test(frm.author2last.value) )	{
+		error += "* There seems to be a typo in the second author's last name\n";
+	} else if ( frm.author2last.value != "" && ! /^(|d'|d[aeo](|[nrs]) |Di|O'|M(c|ac|')|v[ao]n )[A-Z](|[a-z]+-[A-Z])[a-z]+(|, Jr\.)$/.test(frm.author2last.value) && ! /^[A-Z][a-z]+ (|[dv][a-z]+ )[A-Z][a-z]+(|, Jr\.)$/.test(frm.author2last.value) )	{
 		error += "* The second author's last name is misformatted\n";
 	}
 	if ( /[^0-9]/.test(frm.pubyr.value) )	{
