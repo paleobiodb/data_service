@@ -4,7 +4,6 @@
 
 
 function checkForm()	{
-//alert('asdf');
 
         var frm = document.forms[1];
         var error = "";
@@ -14,15 +13,29 @@ function checkForm()	{
 	if ( / (sp|spp|indet)$/.test(frm.taxon_name.value) )	{
 		error += "* Taxon names can't end with sp, spp, or indet.\nAre you actually trying to enter an occurrence belonging to a collection?\n";
 	}
-	if ( / .* /.test(frm.taxon_name.value) && frm.taxon_rank.value != "subspecies" )	{
+
+	if ( / .* /.test(frm.taxon_name.value) && ! / \([A-Z][a-z]+\) /.test(frm.taxon_name.value) && frm.taxon_rank.value != "subspecies" )	{
 		error += "* Only subspecies names include two spaces\n";
 	} else if ( ! / .* /.test(frm.taxon_name.value) && frm.taxon_rank.value == "subspecies" )	{
 		error += "* A subspecies name must include two spaces\n";
-	} else if ( / /.test(frm.taxon_name.value) && frm.taxon_rank.value != "species" )	{
-		error += "* Only species names include spaces\n";
+	} else if ( / /.test(frm.taxon_name.value) && ! /species|subgenus/.test(frm.taxon_rank.value) )	{
+		error += "* Only species and subgenus names include spaces\n";
 	} else if ( ! / /.test(frm.taxon_name.value) && frm.taxon_rank.value == "species" )	{
 		error += "* A species name must include a space\n";
+	} else if ( ! / /.test(frm.taxon_name.value) && frm.taxon_rank.value == "subgenus" )	{
+		error += "* A subgenus name must include a space\n";
+	} else if ( ! / \(.*\)/.test(frm.taxon_name.value) && frm.taxon_rank.value == "subgenus" )	{
+		error += "* A subgenus name must be within parentheses\n";
+	} else if ( ! /^[A-Z][a-z]+ [a-z]+ [a-z]+$/.test(frm.taxon_name.value) && frm.taxon_rank.value == "subspecies" )	{
+		error += "* The name '" + frm.taxon_name.value + "' doesn't look like a subspecies\n";
+	} else if ( ! /^[A-Z][a-z]+ (|\([A-Z][a-z]+\) )[a-z]+$/.test(frm.taxon_name.value) && frm.taxon_rank.value == "species" )	{
+		error += "* The name '" + frm.taxon_name.value + "' doesn't look like a species\n";
+	} else if ( ! /^[A-Z][a-z]+ \([A-Z][a-z]+\)$/.test(frm.taxon_name.value) && frm.taxon_rank.value == "subgenus" )	{
+	error += "* The name '" + frm.taxon_name.value + "' doesn't look like a subgenus\n";
+	} else if ( ! /^[A-Z][a-z]+$/.test(frm.taxon_name.value) && ! /(species|subgenus)/.test(frm.taxon_rank.value) )	{
+		error += "* The name '" + frm.taxon_name.value + "' is misformatted\n";
 	}
+
 	if ( ( frm.author1init.value != "" || frm.author1last.value != "" || frm.author2init.value != "" || frm.author2last.value != "" || frm.pubyr.value != "" ) && ! frm.ref_is_authority[hasLength].checked )	{
 		error += "* You forgot to check 'it was named in an earlier publication'\n";
 	}
