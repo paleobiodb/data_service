@@ -1108,6 +1108,23 @@ sub processCollectionForm {
             if ($q->param('latdir') =~ /South/) {
                     $f_latdeg = $f_latdeg * -1;
             }
+            # oh by the way, set type float lat and lng fields JA 26.11.11
+            # one step on the way to ditching the old lat/long fields...
+            $q->param('lat' => $f_latdeg);
+            $q->param('lng' => $f_lngdeg);
+            # set precision based on the latitude fields, assuming that the
+            #  longitude fields are consistent JA 26.11.11
+            if ( $q->param('latsec') =~ /[0-9]/ )	{
+                $q->param('latlng_precision' => 'seconds');
+            } elsif ( $q->param('latmin') =~ /[0-9]/ )	{
+                $q->param('latlng_precision' => 'minutes');
+            } elsif ( length($q->param('latdec')) > 0 && length($q->param('latdec')) < 9 )	{
+                $q->param('latlng_precision' => length($q->param('latdec')));
+            } elsif ( length($q->param('latdec')) > 0 )	{
+                $q->param('latlng_precision' => 8);
+            } else	{
+                $q->param('latlng_precision' => 'degrees');
+            }
 
             my $max_interval_no = ($q->param('max_interval_no')) ? $q->param('max_interval_no') : 0;
             my $min_interval_no = ($q->param('min_interval_no')) ? $q->param('min_interval_no') : 0;
