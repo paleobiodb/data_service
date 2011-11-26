@@ -389,7 +389,7 @@ sub home	{
 	# display the most recently entered collections that have
 	#  distinct combinations of references and enterers (the latter is
 	#  usually redundant)
-	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name,floor(plate/100) p FROM collections GROUP BY reference_no,enterer_no ORDER BY collection_no DESC LIMIT 46";
+	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name,floor(plate/100) p FROM collections WHERE (release_date<now() OR access_level='the public') GROUP BY reference_no,enterer_no ORDER BY collection_no DESC LIMIT 46";
 	my @colls = @{$dbt->getData($sql)};
 	my %continent = (1 => 'North America', 2 => 'South America', 3 => 'Europe', 4 => 'Europe', 5 => 'Asia', 6 => 'Asia', 7 => 'Africa', 8 => 'Oceania', 9 => 'Oceania');
 	my $lastcontinent;
@@ -2252,7 +2252,7 @@ sub processTaxonSearch {
                         }
                     }
                     if ( $oldg == 0 || ( $sg && $oldsg == 0 ) || $oldsp == 0 )	{
-                        $sql = "SELECT count(*) c FROM occurrences WHERE genus_name LIKE ".$dbh->quote($g);
+                        $sql = "SELECT count(*) c FROM occurrences WHERE genus_name LIKE ".$dbh->quote($g)." AND taxon_no>0";
                         if ($sg) {
                             $sql .= " AND subgenus_name LIKE ".$dbh->quote($sg);
                         }
@@ -2261,12 +2261,12 @@ sub processTaxonSearch {
                         }
                         my $exists_in_occ = ${$dbt->getData($sql)}[0]->{c};
                         unless ($exists_in_occ) {
-                            my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$q->param('taxon_name'))};
+                            my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$q->param('taxon_name'),"",1)};
                             my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
                             foreach my $typo (@results) {
                                 my ($t_g,$t_sg,$t_sp) = Taxon::splitTaxon($typo);
-                            # if the genus exists, we only want typos including it
-                            # JA 16.3.11
+                            # if the genus exists, we only want typos including
+                            # it JA 16.3.11
                                 if ( $oldg && $g ne $t_g )	{
                                     next;
                                 }
@@ -2299,17 +2299,17 @@ sub processTaxonSearch {
                             print "<li><a href=\"$WRITE_URL?action=displayAuthorityForm&amp;taxon_name=$name\">$name</a></li>";
                         }
                     }
-                    # don't let them get on the form if they're entering a species but
-                    #  the genus doesn't exist JA 16.3.11
+                    # route them to a genus form instead if the genus doesn't
+                    #   exist JA 24.10.11
                     if ( $oldg == 0 && $sp )	{
-                        print "<li><a href=\"$WRITE_URL?a=displayAuthorityTaxonSearchForm\">$none</a> - search again";
+                        print "<li><a href=\"$WRITE_URL?action=submitTaxonSearch&goal=authority&taxon_name=$g&amp;skip_typo_check=1\">$none</a> - create a new record for this genus";
                     } else	{
                         print "<li><a href=\"$WRITE_URL?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."&amp;skip_typo_check=1\">$none</a> - create a new taxon record";
                     }
                     print "</ul>";
 
                     print "<div align=left class=small style=\"width: 500\">";
-                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new taxon record";
+                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new taxon record.";
                     print "</div></p>";
                     print "</div>";
                     print "</td></tr></table></div>";
