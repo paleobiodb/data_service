@@ -1313,19 +1313,19 @@ sub getReleaseString	{
 	my $releaseDate = date($releaseDate);
 	my $releaseDateString = "immediate";
 
-	if ( $releaseDate == $createdDate+'3M' )	{
+	if ( $releaseDate > $createdDate+'1M' && $releaseDate <= $createdDate+'3M' )	{
 		$releaseDateString = 'three months';
-	} elsif ( $releaseDate == $createdDate+'6M' )	{
+	} elsif ( $releaseDate <= $createdDate+'6M' )	{
 		$releaseDateString = 'six months';
-	} elsif ( $releaseDate == $createdDate+'1Y' )	{
+	} elsif ( $releaseDate <= $createdDate+'1Y' )	{
 		$releaseDateString = 'one year';
-	} elsif ( $releaseDate == $createdDate+'2Y' )	{
+	} elsif ( $releaseDate <= $createdDate+'2Y' )	{
 		$releaseDateString = 'two years';
-	} elsif ( $releaseDate == $createdDate+'3Y' )	{
+	} elsif ( $releaseDate <= $createdDate+'3Y' )	{
 		$releaseDateString = 'three years';
-        } elsif ( $releaseDate == $createdDate+'4Y' )	{
+        } elsif ( $releaseDate <= $createdDate+'4Y' )	{
 		$releaseDateString = 'four years';
-	} elsif ( $releaseDate == $createdDate+'5Y' )	{
+	} elsif ( $releaseDate <= $createdDate+'5Y' )	{
 		$releaseDateString = 'five years';
 	}
 	# Else immediate release
