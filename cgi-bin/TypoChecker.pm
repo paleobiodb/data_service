@@ -104,7 +104,7 @@ sub getNameData {
     $name{'reid_list'} = join(",",@reids);
     my @collections;
     foreach (sort{$a <=> $b} keys %collections) {
-        my $link = "<b><a target=\"_COLWINDOW\" href=\"$READ_URL?action=displayCollectionDetails&collection_no=$_\">$_</a></b>";
+        my $link = "<a target=\"_COLWINDOW\" href=\"$READ_URL?action=displayCollectionDetails&collection_no=$_\">$_</a>";
         push @collections, $link;
     }
     $name{'collections'} = join(", ",@collections);
@@ -196,12 +196,13 @@ sub occurrenceMisspellingForm {
     if (@names) {
         print '<div align="center">';
         if ($show_detail eq 'typos') {
-            print '<h2>Possibly misspelled occurrences</h2>';
+            print '<p class="pageTitle">Possibly misspelled occurrences</p>';
         } elsif ($show_detail eq 'unclassified') {
-            print '<h2>Possibly misspelled/unclassified occurrences</h2>';
+            print '<p class="pageTitle">Possibly misspelled/unclassified occurrences</p>';
         } else {
-            print '<h2>Possibly misspelled/partially classified occurrences</h2>';
+            print '<p class="pageTitle">Possibly misspelled/partially classified occurrences</p>';
         }
+        print "</div>\n\n";
         print qq|<form action="$WRITE_URL" method="POST">|;
         print '<input type="hidden" name="action" value="submitOccurrenceMisspelling">';
         my $page_no = (int($q->param('page_no'))) ? int($q->param('page_no')) : 0;
@@ -288,9 +289,9 @@ sub occurrenceMisspellingForm {
                         $radio .= "<a target=\"_TAXONPOPUP\" href=\"$READ_URL?action=checkTaxonInfo&taxon_name=$_\">$_</a>";
                         $radio .= "</span>&nbsp; ";
                         if ($suggest_hash->{$_}{'match_quality'} == 3) {
-                            $radio = "<b>$radio</b>";
+                            $radio = "$radio";
                         } elsif ($suggest_hash->{$_}{'match_quality'} == 2) {
-                            $radio =~ s/>(\w+)\b/><b>$1<\/b>/;
+                            $radio =~ s/>(\w+)\b/>$1<\/b>/;
                         }
                         push @radios, $radio;
                     }
@@ -303,15 +304,9 @@ sub occurrenceMisspellingForm {
                 } else {
                     my @links; 
                     foreach (@suggestions) {
-                        my $link = "<span style=\"white-space: nowrap\">"
+                        push @links , "<span style=\"white-space: nowrap\">"
                                  . "<a target=\"_TAXONPOPUP\" href=\"$READ_URL?action=checkTaxonInfo&taxon_name=$_\">$_</a>"
                                  . "</span>&nbsp;";
-                        if ($suggest_hash->{$_}{'match_quality'} == 3) {
-                            $link= "<b>$link</b>";
-                        } elsif ($suggest_hash->{$_}{'match_quality'} == 2) {
-                            $link=~ s/>(\w+)\b/<b>$1<\/b>/;
-                        }
-                        push @links, $link;
                     }
                     $row .= join(" ",@links);
                 }
@@ -331,7 +326,7 @@ sub occurrenceMisspellingForm {
         }
         print '</table>';
         if ($displayed_results == 0 && $page_no == 0) {
-            my $message = "<div align=\"center\"><h4>No results to display, please search again</h4></div>";
+            my $message = "<div align=\"center\"><p class=\"pageTitle\">No results to display, please search again</p></div>";
             print "</form>";
             searchOccurrenceMisspellingForm($dbt,$q,$s,$hbo,$message,1);
             return;
@@ -344,13 +339,13 @@ sub occurrenceMisspellingForm {
             $upper_limit = ($name_count-$skip_count);
         }
         if ($upper_limit > $offset) {
-            #print '<h4> Here are rows '.($offset+1).' to '.$upper_limit;
+            #print '<p class="pageTitle"> Here are rows '.($offset+1).' to '.$upper_limit;
             my $lower = ($page_no*$limit+1);
             my $upper = ($page_no*$limit+$limit);
             if ($displayed_results < $limit) {
                 $upper = ($page_no*$limit+$displayed_results);
             }
-            print "<h4> Here are rows $lower to $upper";
+            print "<p class=\"pageTitle\"> Here are rows $lower to $upper";
         }
         my %v = $q->Vars();
         $v{'offset'} = ($offset+$limit+$skip_count);
@@ -383,7 +378,7 @@ sub occurrenceMisspellingForm {
             print " - <input type=\"submit\" name=\"submit\" value=\"Get next $limit\">";
             push @notes, "Any changes made on this page and previous pages will be carried over when you click \"Get next 15,\" but will not be committed to the database until you click \"Fix misspellings.\"";
         }
-        print "</h4>";
+        print "</p>";
         print '</div>';
 
         push @notes, 'If only a genus name is listed in the suggestions, the genus name will be changed but the species left the same. Bolded taxon names are names that exist in both the the occurrences and authority tables. Bolded collection names have occurrences which you have permission to edit, while unbolded names won\'t be changed. Suggestions are generated from existing occurrences and authorities records, so if you see a typo there you can click the name to see the source of the suggestion and track down the authorizer. Suggestions without radio buttons have no records which you have permission to edit.';
@@ -394,7 +389,7 @@ sub occurrenceMisspellingForm {
         }
         print '</form><br><br>';
     } else {
-            my $message = "<div align=\"center\"><h4>No results to display, please search again</h4></div>";
+            my $message = "<div align=\"center\"><p class=\"pageTitle\">No results to display, please search again</p></div>";
             searchOccurrenceMisspellingForm($dbt,$q,$s,$hbo,$message);
     }
 }
@@ -419,7 +414,7 @@ sub submitOccurrenceMisspelling {
         push @permission_list, $authorizer_no;
         my $authorizer_list = join(",",@permission_list);
         
-        print "<div align=\"center\"><h2>Spellings corrected</h2></div>";
+        print "<div align=\"center\"><p class=\"pageTitle\">Spellings corrected</p></div>";
 
         print "<div align=\"center\">";
         print "<div><ul style=\"text-align: left\">";
@@ -510,10 +505,10 @@ sub submitOccurrenceMisspelling {
 
         print "</ul></div>";
         if (!$count) {
-            print "<h4>No changes were made</h4>";
+            print "<p class=\"pageTitle\">No changes were made</p>";
         }
         print "</div>";
-        print "<div align=\"center\"><b><a href=\"$WRITE_URL?action=searchOccurrenceMisspellingForm\">Search for more misspellings</a></b></div>";
+        print "<div align=\"center\"><a href=\"$WRITE_URL?action=searchOccurrenceMisspellingForm\">Search for more misspellings</a></div>";
     }
 }
 
