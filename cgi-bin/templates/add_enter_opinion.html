@@ -40,6 +40,10 @@ function checkForm()	{
 		error += "* You forgot to enter the publication year\n";
 	}
 
+	if ( frm.status.value == "" )	{
+		error += "* You forgot to select the 'status' of the taxon\n";
+	}
+
 	if ( ! frm.belongs_to_parent.value )	{
 		if ( typeof( frm.parent_spelling_no ) == "undefined" )	{
 			error += "* You forgot to enter the parent name\n";
