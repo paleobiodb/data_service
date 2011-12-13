@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/opt/local/bin/perl
 #
 # Script for administrative functions
 
@@ -99,8 +99,9 @@ sub processPersonAdd {
 	my $nowString = now();
 	$q->param( created => "$nowString" ) unless $q->param('created');
 
-    my $return = insertRecord ( "person", "person_no", \$person_no);
-	if ( ! $return ) { &htmlError ( "$0: Unable to insert record" ); }
+	my $return = insertRecord ( "person", "person_no", \$person_no);
+	if ( $return != 1 && $return )	{ &htmlError ( $return ); }
+	elsif ( ! $return ) { &htmlError ( "$0: Unable to insert record" ); }
 
 	&displayHomePage();
 }
@@ -196,7 +197,9 @@ sub buildControls {
 sub htmlError {
 	my $message = shift;
 
-	print $message;
+	print $hb->populateHTML( "std_page_top" );
+	print $hb->populateHTML( "index" );
+	print "<center><p style=\"color: red;\"><i>$message</i></p></center>";
 	exit 1;
 }
 
@@ -274,6 +277,15 @@ sub insertRecord {
 	my $table = shift;
 	my $primaryKeyName = shift;
 	my $primaryKey = shift;
+
+	my $sql = "SELECT name FROM person WHERE name='".$q->param('name')."'";
+	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
+	$sth->execute();
+	my $row = $sth->fetchrow_hashref();
+	if ( $row->{'name'} eq $q->param('name') )	{
+		return "Can't insert the record because there's already an entry for ".$q->param('name');
+	}
+	$sth->finish();
 
 	# Get the database metadata
 	$sql = "SELECT * FROM $table WHERE $primaryKeyName=0";
