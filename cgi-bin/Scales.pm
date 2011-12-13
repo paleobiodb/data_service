@@ -401,11 +401,11 @@ sub processViewTimeScale	{
 	print $hbo->populateHTML('view_scale_top', $row);
 
 	if ( $stage eq "summary" )	{
-		print "<div align=\"center\"><p><b><a href=\"$WRITE_URL?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a></b> - ";
-		print "<b><a href=\"$WRITE_URL?action=processShowForm\">Create a new time scale</a></b> - ";
-		print "<b><a href=\"$WRITE_URL?action=startScale\">Edit another time scale</a></b></p></div>\n\n";
+		print "<div align=\"center\"><p><a href=\"$WRITE_URL?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a> - ";
+		print "<a href=\"$WRITE_URL?action=processShowForm\">Create a new time scale</a> - ";
+		print "<a href=\"$WRITE_URL?action=startScale\">Edit another time scale</a></p></div>\n\n";
 	} else	{
-		print "<div align=\"center\"><p><b><a href=\"$WRITE_URL?action=startScale\">View another time scale</a></b></p></div>\n\n";
+		print "<div align=\"center\"><p><a href=\"$WRITE_URL?action=startScale\">View another time scale</a></p></div>\n\n";
 	}
 
 	return;
@@ -704,35 +704,34 @@ sub processEditScaleForm	{
 
 # JA 9.8.04
 sub displayTenMyBins	{
-    my ($dbt,$q,$s,$hbo) = @_;
-    my $t = new TimeLookup($dbt);
+	my ($dbt,$q,$s,$hbo) = @_;
+	my $t = new TimeLookup($dbt);
 
-
-	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
+	print "<center><p class=\"pageTitle\">10 m.y.-long sampling bins</p></center>\n\n";
 
 	print "These bin definitions are used by the <a href=\"$READ_URL?action=displayCurveForm\">diversity curve generator</a>.\n\n";
 
 	my @binnames = $t->getBins;
-    my ($upperbin,$lowerbin) = $t->getBoundariesReal('bins');
+	my ($upperbin,$lowerbin) = $t->computeBinBounds('bins');
 
 
 	my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
 	my @results = @{$dbt->getData($sql)};
 
 	my (%intervalname,%intervalalias);
-    foreach my $row (@results) {
-        my $name = "";
-        $name = $row->{'eml_interval'}.' ' if ($row->{'eml_interval'});
-        $name .= $row->{'interval_name'};
+	foreach my $row (@results) {
+		my $name = "";
+		$name = $row->{'eml_interval'}.' ' if ($row->{'eml_interval'});
+		$name .= $row->{'interval_name'};
 
-        my $alias = $row->{'interval_name'};
-        if ( $row->{eml_interval} =~ /middle/i )	{
-            $alias .= "F";
-        } else	{
-            $alias .= $row->{'eml_interval'};
+		my $alias = $row->{'interval_name'};
+		if ( $row->{eml_interval} =~ /middle/i )	{
+			$alias .= "F";
+		} else	{
+			$alias .= $row->{'eml_interval'};
 		}
-        $intervalname{$row->{'interval_no'}} = $name;
-        $intervalalias{$row->{'interval_no'}} = $alias;
+		$intervalname{$row->{'interval_no'}} = $name;
+		$intervalalias{$row->{'interval_no'}} = $alias;
 	}
 
 	print "<hr>\n\n";
@@ -740,8 +739,8 @@ sub displayTenMyBins	{
 	print "<table><tr>\n";
 	print "<td valign=top>Bin name</td>  <td valign=top>Age&nbsp;at&nbsp;base&nbsp;(Ma)</td>  <td valign=top>Included intervals</td></tr>\n";
 
-    foreach my $bin (@binnames) {
-        my @intervals = $t->mapIntervals($bin);  
+	foreach my $bin (@binnames) {
+		my @intervals = $t->mapIntervals($bin);  
 
 		print "<tr><td valign=top nowrap>$bin</td>\n";
 		printf "<td align=center valign=top>%.1f</td>\n",$lowerbin->{$bin};
@@ -756,69 +755,6 @@ sub displayTenMyBins	{
 			print "<a href=\"$READ_URL?action=displayInterval&interval_no=$int\">$intervalname{$int}</a>";
 			$printed++;
 		}
-		print "</td></tr>\n\n";
-	}
-	print "</table>\n<p>\n\n";
-
-}
-
-sub displayTenMyBinsDebug {
-    my ($dbt,$q,$s,$hbo) = @_;
-    my $t = new TimeLookup($dbt);
-
-
-	print "<center><h2>10 m.y.-Long Sampling Bins</h2></center>\n\n";
-
-	print "These bin definitions are used by the <a href=\"$READ_URL?action=displayCurveForm\">diversity curve generator</a>.\n\n";
-
-	my @binnames = $t->getBins;
-    my $binning = $t->getBinning;
-    my ($upperbin,$lowerbin) = $t->getBoundariesReal('bins');
-    my $ig = $t->getIntervalGraph;
-
-	my $sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
-	my @results = @{$dbt->getData($sql)};
-
-	my (%intervalname,%intervalalias);
-    foreach my $row (@results) {
-        my $name = "";
-        $name = $row->{'eml_interval'}.' ' if ($row->{'eml_interval'});
-        $name .= $row->{'interval_name'};
-
-        my $alias = $row->{'interval_name'};
-        if ( $row->{eml_interval} =~ /middle/i )	{
-            $alias .= "F";
-        } else	{
-            $alias .= $row->{'eml_interval'};
-		}
-        $intervalname{$row->{'interval_no'}} = $name;
-        $intervalalias{$row->{'interval_no'}} = $alias;
-	}
-
-	print "<hr>\n\n";
-
-	print "<table><tr>\n";
-	print "<td valign=top>Bin name</td>  <td valign=top>Age&nbsp;at&nbsp;base&nbsp;(Ma)</td>  <td valign=top>Included intervals</td></tr>\n";
-
-
-    foreach my $bin (@binnames) {
-        my @intervals = map{$ig->{$_}} $t->mapIntervals($bin);  
-        my %ok_ints = ();
-        $ok_ints{$_->{'interval_no'}} = 1 foreach (@intervals);
-        my $filter = sub {
-            return $ok_ints{$_[0]->{'interval_no'}}
-        };
-        my @base = ();
-        foreach (@intervals) {
-            if ($binning->{$_->{'interval_no'}}) {
-                push @base, $_;
-            }
-        }
-
-		print "<tr><td valign=top>$bin</td>\n";
-		printf "<td align=center valign=top>%.1f - %.1f</td>\n",$lowerbin->{$bin},$upperbin->{$bin};
-		print "<td class=tiny>";
-        printTree($ig,\@base,$filter);
 		print "</td></tr>\n\n";
 	}
 	print "</table>\n<p>\n\n";
@@ -1100,8 +1036,8 @@ sub submitSearchInterval {
         $eml = PBDBUtil::stripTags($eml);
         $name = PBDBUtil::stripTags($name);
         print "<div align=\"center\">";
-        print "<h3>Could not find $eml $name</h3>";
-        print "<h4>(Please try again)</h4>";
+        print "<p>Could not find $eml $name</p>";
+        print "<p>(Please try again)</p>";
         print PBDBUtil::printIntervalsJava($dbt,1);
         print $hbo->populateHTML("search_intervals_form");
         print "</div>";
