@@ -44,6 +44,7 @@ my @mesoCenozoic = qw(triassic jurassic cretaceous tertiary);
 my @ecoFields = (); # Note: generated at runtime in setupQueryFields
 my @pubyr = ();
 my @continents = ('North America','South America','Europe','Africa','Antarctica','Asia','Australia','Indian Ocean','Oceania');
+my @paleocontinents = ('paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan');
 my @reso_types_group = ('aff.','cf.','ex gr.','new','sensu lato','?','"','informal','other');
 
 my $OUT_HTTP_DIR = "/public/downloads";
@@ -92,21 +93,17 @@ sub new {
 # Main handling routine
 sub buildDownload {
     my $self = shift;
-    my $q = $self->{'q'};
+    my ($q,$s) = ($self->{'q'},$self->{'s'});
 
     my $inputIsOK = $self->checkInput($q);
     return unless $inputIsOK;
 
-    # current limit for data set size that triggers the click through: 50 work days
-    #  = 50 x 4 = 200 hours, assuming that actual entry makes up half the hours
-    # figure is based on a poll of 12 major contributors taken at NAPC 23.6.09
-    my $hourlimit = 200;
-
     my ($lumpedResults,$allResults) = $self->queryDatabase();
 
-    my (%onhour,%onref,%byauth,%authorizers);
-    # tally hours of keystroking if possible; otherwise tally references used for entry
-    #  of collections and guesstimate hours using the known 1.7:1 ratio in keystroked data
+    my (%onhour,%onref,%byauth,%first,%last);
+    # tally hours of keystroking if possible; otherwise tally references used
+    #  for entry of collections and guesstimate hours using the known 1.7:1
+    #  ratio in keystroked data
     for my $row (@$allResults)	{
         if ( ! $row->{'upload'} )	{
             $onhour{$row->{'personhour'}}++;
@@ -126,16 +123,18 @@ sub buildDownload {
     $hours += 1.7 * ( $#r + 1 );
     my @authnos = keys %byauth;
     @authnos = sort { $byauth{$b} <=> $byauth{$a} } @authnos;
-    # don't list authorizers contributing less than 10 person days = 80 person hours
-    #  (arbitrary, but seems good to me)
-    while ( $byauth{$authnos[$#authnos]} < 80 && @authnos )	{
-        pop @authnos;
-    }
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
-    my $sql = "SELECT name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."')";
-    my @namerows = @{$dbt->getData($sql)};
-    $authorizers{$_->{'person_no'}} = $_->{'name'} foreach @namerows;
+    my $sql = "SELECT first_name,last_name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."') ORDER BY last_name,first_name";
+    my @people = @{$dbt->getData($sql)};
+    $first{$_->{'person_no'}} = $_->{'first_name'} foreach @people;
+    $last{$_->{'person_no'}} = $_->{'last_name'} foreach @people;
+    # don't prominently list authorizers contributing less than 10 person days =
+    #  80 person hours (arbitrary, but seems good to me)
+    my @others;
+    while ( $byauth{$authnos[$#authnos]} < 80 && @authnos )	{
+        push @others , pop @authnos;
+    }
     $byauth{$_} /= $hours / 100 foreach keys %byauth;
     my $monthyears = sprintf("%.1f work years",$hours / 2000);
     if ( $monthyears < 1 )	{
@@ -178,7 +177,12 @@ sub buildDownload {
             main::displayBasicDownloadForm();
         }
         return;
-    } 
+    }
+
+    # current limit for data set size that triggers the click through: 50 work
+    #  days = 50 x 4 = 200 hours, assuming that actual entry makes up half
+    # figure is based on a poll of 12 major contributors taken at NAPC 23.6.09
+    my $hourlimit = 200;
 
     print "<div align=\"center\"><p class=\"pageTitle\">Download results</p></div>\n\n";
     if ( $hours >= $hourlimit )	{
@@ -197,11 +201,16 @@ sub buildDownload {
 <p>The major contributors to this data set were:</p>
 <ul>
 |;
-printf "<li>$authorizers{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
+printf "<li>$first{$_} $last{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
 
 print qq|
 </ul>
-<p>Each percentage is based on the estimated amount of time spent entering data by the authorizer and associated data enterers. The grand total is $hours hours (equivalent to $monthyears). The estimate is based on (1) date stamps for keystroked collections and (2) counts of published references used to document uploaded collections.</p>
+<p class="small">Each percentage is based on the estimated amount of time spent entering data by the authorizer and associated data enterers. The grand total is $hours hours (equivalent to $monthyears). The estimate is based on (1) date stamps for keystroked collections and (2) counts of published references used to document uploaded collections.</p>
+<p class="small">Additional contributors include |;
+@others = sort { $last{$a} cmp $last{$b} || $first{$a} cmp $first{$b} } @others;
+$others[$_] = $first{$others[$_]}." ".$last{$others[$_]} foreach 0..$#others;
+$others[$#others] = "and ".$others[$#others];
+print join(', ',@others).qq|.</p>
 <p>If you agree to these terms, <a href="#" onClick=\"document.getElementById('mainPanel').style.display='inline'; document.getElementById('terms').style.display='none';\">click here</a> to access the data.</p>
 |;
 if ( $cites )	{
@@ -221,7 +230,6 @@ print qq|
         print Debug::printWarnings(\@form_warnings);
         print '</div>';
     }
-
 
     # Tell what happened
     print "<div align=\"center\">\n";
@@ -279,6 +287,32 @@ print qq|
     if ( $hours >= $hourlimit )	{
         print "</div>\n\n";
     }
+
+    # stash submitted form params so they can be recycled the next time the
+    #  user opens a download form JA 28.11.11
+    if ( $s->get("enterer_no") > 0 )	{
+        # fields with unusual defaults
+        my %defaults = ('form_type' => 'full', 'output_data' => 'occurrence list', 'output_format' => 'csv', 'research_group_restricted_to' => '0', 'created_before_after' => 'before', 'published_before_after' => 'after', 'occurrence_count_qualifier' => 'less', 'abundance_count_qualifier' => 'less', 'extant_extinct' => 'both', 'abundance_required' => 'all', 'get_global_specimens' => '1', 'collections_reference_no' => 'YES', 'collections_10_my_bin' => 'YES', 'collections_max_interval_no' => 'YES', 'collections_min_interval_no' => 'YES', 'occurrences_genus_name' => 'YES', 'occurrences_genus_reso' => 'YES' );
+        my @pairs;
+        # common defaults are handled here
+        for my $p ( $q->param() )	{
+            if ( $p ne "action" && $q->param($p) ne "" && $defaults{$p} ne $q->param($p) && ( $p !~ /lat/ || $q->param($p) !~ /90$/ ) && ( $p !~ /lng/ || $q->param($p) !~ /180$/ ) && ( $p !~ /^(lithology_|environment_|zone_|modern|replace_with_|compendium_|include_exclude|abundance_taxon|late_pleist)/ || $q->param($p) !~ /(yes|include)/i ) && ( $p !~ /(exclude_superset|lump_genera|split_subgenera|indet|incomplete_abund)/ || $q->param($p) !~ /^no$/i ) && ( $p !~ /_format$/ || $q->param($p) !~ /decimal/i ) )	{
+                push @pairs , "$p=".$q->param($p);
+            } elsif ( $defaults{$p} eq "YES" && $q->param($p) ne "YES" )	{
+                push @pairs , "$p=NO";
+            }
+        }
+	# these are the only isolated boxes that are checked by default
+	for my $p ( 'collections_reference_no', 'collections_10_my_bin' )	{
+		if ( $q->param($p) ne "YES" )	{
+                	push @pairs , "$p=NO";
+		}
+	}
+        s/'/\\'/g foreach @pairs;
+        $sql = "UPDATE person SET last_action=last_action,last_download='".join('/',@pairs)."' WHERE person_no=".$s->get("enterer_no");
+        $dbh->do($sql);
+    }
+
 }
 
 sub checkInput {
@@ -429,7 +463,7 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type_',\@collection_types_group);
 
     # Continents or country
-    my (@checkedcontinents,@paleocontinents);
+    my (@checkedcontinents,@uncheckedcontinents,@checkedpaleocontinents);
     # If a country was selected, ignore the continents JA 6.7.02
     if ( $q->param("country") )    {
         $html .= $self->retellOptionsRow ( "Country", $q->param("include_exclude_country") . " " . $q->param("country") );
@@ -438,19 +472,23 @@ sub retellOptions {
         for my $c ( @continents )	{
             if ( $q->param($c))	{
                 push ( @checkedcontinents, $c );
+            } else	{
+                push ( @uncheckedcontinents, $c );
             }
         }
         if ( $#checkedcontinents > -1 && $#continents > $#checkedcontinents )	{
             $html .= $self->retellOptionsRow ( "Continents", join (  ", ", @checkedcontinents ) );
+            $q->param($_ => '') foreach @checkedcontinents;
+            $q->param($_ => 'NO') foreach @uncheckedcontinents;
         }
 
-        for my $p ( 'paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan' )	{
+        for my $p ( @paleocontinents )	{
             if ( $q->param($p) )	{
-                push ( @paleocontinents, $p );
+                push ( @checkedpaleocontinents, $p );
             }
         }
-        if ( $#paleocontinents > -1 ) {
-            $html .= $self->retellOptionsRow ( "Paleocontinents", join (  ", ", @paleocontinents ) );
+        if ( $#checkedpaleocontinents > -1 ) {
+            $html .= $self->retellOptionsRow ( "Paleocontinents", join (  ", ", @checkedpaleocontinents ) );
         }
     }
 
@@ -682,14 +720,17 @@ sub retellOptionsGroup {
     my $missing = 0;
 
     foreach my $item (@$group_ref) {
-        $missing = 1 if (!$q->param($form_prepend.$item));
+        $missing++ if (!$q->param($form_prepend.$item));
     }
 
-    if ($missing) {
+    if ($missing && $missing < scalar(@$group_ref)) {
         my $options = "";
         foreach my $item (@$group_ref) {
             if ($q->param($form_prepend.$item)) {
                 $options .= ", ".$item;
+                $q->param($form_prepend.$item => '');
+            } else	{
+                $q->param($form_prepend.$item => 'NO');
             }
         }
         $options =~ s/_/ /g;
@@ -705,7 +746,7 @@ sub retellOptionsGroup {
 sub retellOptionsRow {
     my ($self,$name,$value) = @_;
 
-    if ( $value  && $value !~ /[<>]/) {
+    if ( $value && $value !~ /[<>]/) {
         return "<tr><td valign='top'>$name</td><td valign='top'><i>$value</i></td></tr>\n";
     }
 }
@@ -777,8 +818,6 @@ sub getPlateString    {
     my $self = shift;
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
-
-    my @paleocontinents = ( 'paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan' );
 
     my @checked;
     for my $p ( @paleocontinents )	{
@@ -2811,7 +2850,7 @@ sub queryDatabase {
                     if ($occ_more_than) {
                         next if ($COLL{$row->{'collection_no'}} > $occurrence_count);
                     } else {
-                        next if ($COLL{$row->{'collection_no'}} < $occurrence_count);
+                        next if ($COLL{$row->{'collection_no'}} != $occurrence_count);
                     }
                 }
                 # also assume that if the user is worrying about specimen or
@@ -3943,6 +3982,7 @@ sub printRefsFile {
             $occs_by_ref{$row->{'re.reference_no'}}++;
         }
     }
+    delete $all_colls{''};
     if (%all_colls) {
         my $sql = "SELECT reference_no FROM secondary_refs WHERE collection_no IN (".join (', ',keys %all_colls).")";
         $self->dbg("secondary refs sql: $sql"); 
