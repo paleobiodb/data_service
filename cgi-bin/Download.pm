@@ -1564,7 +1564,7 @@ sub getResoString{
     }
     # informal needs special handling because the default is to exclude it
     # so, if no boxes were checked at all, exclude it anyway
-    if ( ! $resos && $unchecked == $#reso_types_group + 1 )	{
+    if ( ! $resos && $unchecked == $#reso_types_group + 1 && $level =~ /genus/i )	{
         $resos = " (o.".$level."_reso NOT IN ('informal') OR o.".$level."_reso IS NULL OR o.".$level."_reso='')";
     }
     return $resos;
