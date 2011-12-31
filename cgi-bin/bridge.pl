@@ -71,8 +71,8 @@ if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
 }
 
-if ( $DB ne "eco" && $HOST_URL !~ /paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
-	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor" );
+if ( $DB ne "eco" && $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
+#	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor" );
 }
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
@@ -740,18 +740,34 @@ sub displaySimpleMap {
 
 
 sub displayDownloadForm {
-    
-    my %vars = $q->Vars();
-    $vars{'authorizer_me'} = $s->get("authorizer_reversed");
-    $vars{'enterer_me'} = $s->get("authorizer_reversed");
 
-    if ($s->isDBMember()) {
-        $vars{'row_class_1a'} = '';
-        $vars{'row_class_1b'} = ' class="lightGray"';
-    } else {
-        $vars{'row_class_1a'} = ' class="lightGray"';
-        $vars{'row_class_1b'} = '';
-    }
+	my %vars = $q->Vars();
+	$vars{'authorizer_me'} = $s->get("authorizer_reversed");
+	$vars{'enterer_me'} = $s->get("authorizer_reversed");
+
+	my $last;
+	if ( $s->isDBMember() )	{
+		$vars{'row_class_1a'} = '';
+		$vars{'row_class_1b'} = ' class="lightGray"';
+		my $dbh = $dbt->dbh;
+		if ( $q->param('restore_defaults') )	{
+			my $sql = "UPDATE person SET last_action=last_action,last_download=NULL WHERE person_no=".$s->get('enterer_no');
+			$dbh->do($sql);
+		} else	{
+			$last = ${$dbt->getData("SELECT last_download FROM person WHERE person_no=".$s->get('enterer_no'))}[0]->{'last_download'};
+			if ( $last )	{
+				$vars{'has_defaults'} = 1;
+				my @pairs = split '/',$last;
+				for my $p ( @pairs )	{
+					my ($k,$v) = split /=/,$p;
+					$vars{$k} = $v;
+				}
+			}
+		}
+	} else	{
+		$vars{'row_class_1a'} = ' class="lightGray"';
+		$vars{'row_class_1b'} = '';
+	}
 
 	print $hbo->stdIncludes("std_page_top");
 	print Person::makeAuthEntJavascript($dbt);
@@ -761,6 +777,15 @@ sub displayDownloadForm {
 
 sub displayBasicDownloadForm {
 	my %vars = $q->Vars();
+	my $last;
+	if ( $s->get('enterer_no') > 0 )	{
+		$last = ${$dbt->getData("SELECT last_download FROM person WHERE person_no=".$s->get('enterer_no'))}[0]->{'last_download'};
+		my @pairs = split '/',$last;
+		for my $p ( @pairs )	{
+			my ($k,$v) = split /=/,$p;
+			$vars{$k} = $v;
+		}
+	}
 	print $hbo->stdIncludes("std_page_top" );
 	print $hbo->populateHTML('basic_download_form',\%vars);
 	print $hbo->stdIncludes("std_page_bottom");
