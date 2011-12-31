@@ -94,6 +94,19 @@ sub new {
 sub buildDownload {
     my $self = shift;
     my ($q,$s) = ($self->{'q'},$self->{'s'});
+    my $dbt = $self->{'dbt'};
+    my $dbh = $self->{'dbh'};
+
+    if ( $q->param('restore_defaults') )	{
+        my $sql = "UPDATE person SET last_action=last_action,last_download=NULL";
+        $dbh->do($sql);
+        $q->param('error_message' => 'Your defaults have been restored');
+        if ( $q->param('form_type') eq "full" )	{
+            main::displayDownloadForm();
+        } else	{
+            main::displayBasicDownloadForm();
+        }
+    }
 
     my $inputIsOK = $self->checkInput($q);
     return unless $inputIsOK;
@@ -123,8 +136,6 @@ sub buildDownload {
     $hours += 1.7 * ( $#r + 1 );
     my @authnos = keys %byauth;
     @authnos = sort { $byauth{$b} <=> $byauth{$a} } @authnos;
-    my $dbt = $self->{'dbt'};
-    my $dbh = $self->{'dbh'};
     my $sql = "SELECT first_name,last_name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."') ORDER BY last_name,first_name";
     my @people = @{$dbt->getData($sql)};
     $first{$_->{'person_no'}} = $_->{'first_name'} foreach @people;
