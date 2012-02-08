@@ -826,8 +826,7 @@ sub doCollections{
     $interval_hash{$_->{'interval_no'}} = $_ foreach @intervals;
     my ($lb,$ub,$max_no,$minfirst,$min_no) = getAgeRange($dbt,$colls);
 
-
-	my $output = "";
+    my $output = "";
     my $range = "";
     # simplified this because the users will understand the basic range,
     #  and it clutters the form JA 28.8.06
@@ -1186,24 +1185,26 @@ sub getAgeRange	{
 		return;
 	}
 
-	# get the youngest base age
+	# get the youngest base age of any collection including this taxon
 	# ultimately, the range's top must be this young or younger
-	# note that the range top is the top of some collection's min_interval
 	my $sql = "SELECT base_age AS maxtop FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") ORDER BY base_age ASC";
 	my $maxTop = ${$dbt->getData($sql)}[0]->{'maxtop'};
 
 	# likewise the oldest top age
-	# the range's base must be this old or older, and the base is the base
-	#  of some collection's max_interval
+	# the range's base must be this old or older
+	# the top is the top of the max_interval for collections having
+	#  no separate max and min ages, but is the top of the min_interval
+	#  for collections having different max and min ages
 	my $sql = "SELECT top_age AS minbase FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).")) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos)."))) AS ages ORDER BY top_age DESC";
 	my $minBase = ${$dbt->getData($sql)}[0]->{'minbase'};
 
 	# now get the range top
-	$sql = "SELECT MAX(top_age) top FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<=$maxTop) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<=$maxTop)) AS tops";
+	# note that the range top is the top of some collection's min_interval
+	$sql = "SELECT MAX(top_age) top FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<$maxTop) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<$maxTop)) AS tops";
 	my $top = ${$dbt->getData($sql)}[0]->{'top'};
 
 	# and the range base
-	$sql = "SELECT MIN(base_age) base FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND base_age>=$minBase";
+	$sql = "SELECT MIN(base_age) base FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND base_age>$minBase";
 	my $base = ${$dbt->getData($sql)}[0]->{'base'};
 
 	my (%is_max,%is_min);
@@ -3255,7 +3256,6 @@ sub displayFirstAppearance	{
 	# AGE RANGE/CONFIDENCE INTERVAL CALCULATION
 
 	my ($lb,$ub,$max_no,$minfirst,$min_no) = getAgeRange($dbt,$colls);
-
 	my ($first_interval_top,@firsts,@rages,@ages,@gaps);
 	my $TRIALS = int( 10000 / scalar(@$colls) );
         for my $coll (@$colls) {
@@ -3494,7 +3494,7 @@ sub displayFirstAppearance	{
 	if ( $q->param('types_only') =~ /yes/i )	{
 		$reso = " AND species_reso='n. sp.'";
 	}
-	$sql = "(SELECT r.taxon_no,taxon_rank,collection_no,occurrence_no,reid_no FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES'$reso GROUP BY collection_no,r.taxon_no) UNION (SELECT o.taxon_no,taxon_rank,collection_no,occurrence_no,0 FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).")$reso GROUP BY collection_no,o.taxon_no)";
+	$sql = "(SELECT r.taxon_no,taxon_name,taxon_rank,collection_no,occurrence_no,reid_no FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES'$reso GROUP BY collection_no,r.taxon_no) UNION (SELECT o.taxon_no,taxon_name,taxon_rank,collection_no,occurrence_no,0 FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).")$reso GROUP BY collection_no,o.taxon_no)";
 	my @occs = @{$dbt->getData($sql)};
 
 	# impose synonymy mask, but only for taxa with occurrences JA 31.10.09
@@ -3563,12 +3563,8 @@ sub displayFirstAppearance	{
 	}
 
 	for my $o ( @occs )	{
-		if ( $o->{'taxon_rank'} =~ /genus/ )	{
-			$o->{'genus_name'} = "<i>".$o->{'genus_name'}."</i>";
-			$o->{'species_name'} = "";
-		} elsif ( $o->{'taxon_rank'} =~ /species/ )	{
-			$o->{'genus_name'} = "<i>".$o->{'genus_name'};
-			$o->{'species_name'} = " ".$o->{'species_name'}."</i>";
+		if ( $o->{'taxon_rank'} =~ /genus|species/ )	{
+			$o->{'taxon_name'} = "<i>".$o->{'taxon_name'}."</i>";
 		}
 	}
 
@@ -3583,7 +3579,7 @@ sub displayFirstAppearance	{
 		my @includes;
 		for my $o ( @occs )	{
 			if ( $o->{'collection_no'} == $firsts[0]->{'collection_no'} && ( $ids{$o->{'occurrence_no'}} == 1 || $o->{'reid_no'} > 0 ) )	{
-				push @includes , $o->{'genus_name'}.$o->{'species_name'};
+				push @includes , $o->{'taxon_name'};
 			}
 		}
 		print "<p style=\"padding-left: 1em; text-indent: -1em;\">The collection documenting the first appearance is <a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=$firsts[0]->{'collection_no'}\">$firsts[0]->{'collection_name'}</a> ($agerange $firsts[0]->{'formation'} of $firsts[0]->{'country'}: includes ".join(', ',@includes).")</p>\n";
@@ -3623,7 +3619,7 @@ sub displayFirstAppearance	{
 			my @includes = ();
 			for my $o ( @occs )	{
 				if ( $o->{'collection_no'} == $collno && ( $ids{$o->{'occurrence_no'}} == 1 || $o->{'reid_no'} > 0 ) )	{
-					push @includes , $o->{'genus_name'}.$o->{'species_name'};
+					push @includes , $o->{'taxon_name'};
 				}
 			}
 			print "<tr valign=\"top\" class=$classes><td></td><td style=\"padding-bottom: 0.5em;\" colspan=\"6\">includes ".join(', ',@includes)."</td></tr>\n";
