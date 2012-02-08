@@ -12,7 +12,7 @@ use Images;
 use Measurement;
 use Debug qw(dbg);
 use PBDBUtil;
-use Constants qw($HOST_URL $READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
+use Constants qw($HOST_URL $READ_URL $WRITE_URL $SQL_DB $IS_FOSSIL_RECORD $PAGE_TOP $PAGE_BOTTOM $HTML_DIR $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
 
 use strict;
 
@@ -1199,11 +1199,11 @@ sub getAgeRange	{
 	my $minBase = ${$dbt->getData($sql)}[0]->{'minbase'};
 
 	# now get the range top
-	$sql = "SELECT MAX(top_age) top FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<$maxTop) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<$maxTop)) AS tops";
+	$sql = "SELECT MAX(top_age) top FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<=$maxTop) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND top_age<=$maxTop)) AS tops";
 	my $top = ${$dbt->getData($sql)}[0]->{'top'};
 
 	# and the range base
-	$sql = "SELECT MIN(base_age) base FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND base_age>$minBase";
+	$sql = "SELECT MIN(base_age) base FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN (".join(',',@coll_nos).") AND base_age>=$minBase";
 	my $base = ${$dbt->getData($sql)}[0]->{'base'};
 
 	my (%is_max,%is_min);
@@ -3728,6 +3728,8 @@ sub basicTaxonInfo	{
 		$taxon_name = $q->param('quick_search');
 	} elsif ( ! $taxon_name && $q->param('search_again') )	{
 		$taxon_name = $q->param('search_again');
+	} elsif ( ! $taxon_name && $q->param('common_name') )	{
+		$taxon_name = $q->param('common_name');
 	}
 	$taxon_name =~ s/ sp(p|)\.$//;
 
@@ -3738,18 +3740,28 @@ sub basicTaxonInfo	{
 	if ( $q->param('taxon_no') )	{
 		$taxon_no = $q->param('taxon_no');
 		$taxon_no = getSeniorSynonym($dbt,$taxon_no); 
+	} elsif ( $q->param('author') || $q->param('pubyr') || $q->param('type_body_part') || $q->param('preservation') )	{
+	#} elsif ( ! $taxon_name && ( $q->param('author') || $q->param('pubyr') || $q->param('type_body_part') || $q->param('preservation') ) )	{
+		my @taxon_nos = getTaxonNos($dbt,$taxon_name,'','',$q->param('author'),$q->param('pubyr'),$q->param('type_body_part'),$q->param('preservation'));
+		if ( @taxon_nos )	{
+			$taxon_no = getSeniorSynonym($dbt,$taxon_nos[0]); 
+		} else	{
+			$error = "Nothing matching your search is in the database. Please try again.";
+			$taxon_name = "Failed search!";
+		}
 	} elsif ( $taxon_name )	{
 		$taxon_name =~ s/ sp\.//;
 		$taxon_name =~ s/\./%/g;
 		# used in preference to getTaxa because the query is dead simple
-		my @taxon_nos = getTaxonNos($dbt,$taxon_name);
+		my @taxon_nos = getTaxonNos($dbt,$taxon_name,'','',$q->param('author'),$q->param('pubyr'),$q->param('type_body_part'),$q->param('preservation'));
 		# genus name might be salvageable
 		if ( ! @taxon_nos && $taxon_name =~ /[a-z%] [a-z%]/i )	{
 			my ($g,$s) = split / /,$taxon_name;
 			@taxon_nos = getTaxonNos($dbt,$g);
 		}
-		# if the name is misformatted it could only be a common name, so try that
-		if ( $taxon_name !~ /^[A-za-z]* [A-Za-z]*$/ )	{
+		# if the name is misformatted it could only be a common name,
+		#  so try that
+		if ( $taxon_name !~ /^[A-za-z]* [A-Za-z]*$/ || $q->param('common_name') =~ /[A-Za-z]/ )	{
 			my $name = $taxon_name;
 			$name =~ s/[^A-Za-z ]/%/g;
 			my $sql = "SELECT taxon_no FROM authorities WHERE common_name LIKE '".$name."'";
@@ -3758,10 +3770,13 @@ sub basicTaxonInfo	{
 				$error = "WARNING: '".$taxon_name."' is not in the database. Please search again.";
 			}
 		}
+		if ( $taxon_nos[0] eq "" )	{
+			@taxon_nos = ();
+		}
 		# the name may be bona fide but completely unclassified, so
 		#  see if it has occurrences
 		my $occ;
-		if ( ! @taxon_nos && $error eq "" )	{
+		if ( ! @taxon_nos && $error eq "" && $SQL_DB eq "pbdb" )	{
 			my ($g,$s) = split / /,$taxon_name;
 			my $name_clause = "genus_name='".$g."'";
 			my $name_clause = "(genus_name='".$g."' OR subgenus_name='".$g."')";
@@ -3799,14 +3814,17 @@ sub basicTaxonInfo	{
 			}
 			# we're desperate, so try whittling down the name
 			$wild = $taxon_name;
-			while ( ! $guess )	{
+			while ( ! $guess && length( $wild ) > 3 )	{
 				$wild =~ s/.$//;
 				$sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name LIKE '$wild%' $rank_clause ORDER BY rgt-lft DESC";
 				$guess = ${$dbt->getData($sql)}[0];
 			}
 			$taxon_no = $guess->{'taxon_no'};
 			$taxon_no = getSeniorSynonym($dbt,$taxon_no); 
-			$error = "WARNING: '".$taxon_name."' is not in the database. ".italicize($guess)." seems like a plausible match.";
+			$error = "WARNING: '".$taxon_name."' is not in the database. ";
+			if ( $guess->{'taxon_name'} )	{
+				$error .= italicize($guess)." seems like a plausible match.";
+			}
 		}
 		# getTaxonNos returns the "largest" taxon first if there are
 		#  multiple matches, so use it
@@ -3814,9 +3832,9 @@ sub basicTaxonInfo	{
 			$taxon_no = getSeniorSynonym($dbt,$taxon_nos[0]); 
 		}
 	} else	{ # this should never happen
-		print $hbo->stdIncludes("std_page_top");
+		print $hbo->stdIncludes($PAGE_TOP);
 		print "<p>You must enter a taxon name.</p>\n\n";
-		print $hbo->stdIncludes("std_page_bottom");
+		print $hbo->stdIncludes($PAGE_BOTTOM);
 		exit;
 	}
 
@@ -3847,7 +3865,7 @@ sub basicTaxonInfo	{
 	} else	{
 		$page_title->{'title'} .= $taxon_name;
 	}
-	print $hbo->stdIncludes("std_page_top",$page_title);
+	print $hbo->stdIncludes($PAGE_TOP,$page_title);
 
 	my $taxon = getMostRecentSpelling($dbt,$taxon_no);
 	if ( $taxon->{'taxon_no'} != $taxon_no )	{
@@ -4131,7 +4149,7 @@ sub basicTaxonInfo	{
 
 	# ECOLOGY SECTION
 
-	if ( $taxon_no )	{
+	if ( $taxon_no && $SQL_DB eq "pbdb" )	{
 		my $eco_hash = Ecology::getEcology($dbt,$class_hash,['locomotion','life_habit','diet1','diet2'],'get_basis');
 		my $ecotaphVals = $eco_hash->{$taxon_no};
 
@@ -4156,7 +4174,7 @@ sub basicTaxonInfo	{
 	# added body mass and simplified by calling getMassEstimates 9.12.10
 	my @specimens;
 	my $specimen_count;
-	if ( $taxon_no && $auth->{'taxon_rank'} eq "species" )	{
+	if ( $taxon_no && $auth->{'taxon_rank'} eq "species" && $SQL_DB eq "pbdb" )	{
 		my @all_spellings = (@spellings,@bad_spellings);
 		@specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@all_spellings,'get_global_specimens'=>1);
 		if ( @specimens )	{
@@ -4190,7 +4208,7 @@ sub basicTaxonInfo	{
 	# DISTRIBUTION SECTION
 
 	my @occs;
-	if ( $is_real_user > 0 )	{
+	if ( $is_real_user > 0 && $SQL_DB eq "pbdb" )	{
 
 		# taxon_string is needed for maps and taxon_param for links
 		my $taxon_string = $taxon_no;
@@ -4409,9 +4427,9 @@ function erasePleaseWait()	{
 	}
 
 	if ( $is_real_user > 0 && ( @occs || $taxon_no ) )	{
-		if ( $taxon_no )	{
+		if ( $taxon_no && $SQL_DB eq "pbdb" )	{
 			print "<p><a href=\"$READ_URL?a=checkTaxonInfo&amp;taxon_no=$taxon_no&amp;is_real_user=1\">Show more details</a></p>\n\n";
-		} else	{
+		} elsif ( $SQL_DB eq "pbdb" )	{
 			print "<p><a href=\"$READ_URL?a=checkTaxonInfo&amp;taxon_name=$taxon_name&amp;is_real_user=1\">Show more details</a></p>\n\n";
 		}
 		if ( $s->isDBMember() && $taxon_no && $s->get('role') =~ /authorizer|student|technician/ )	{
@@ -4440,7 +4458,7 @@ function erasePleaseWait()	{
 	print "<br>\n\n";
 	print "</div>\n\n";
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
@@ -4472,18 +4490,24 @@ sub italicize	{
 # Lump_ranks will cause taxa with the same name but diff rank (same taxa) to only pass
 # back one taxon_no (it doesn't really matter which)
 sub getTaxonNos {
-    my $dbt = shift;
-    my $name = shift;
-    my $rank = shift;
-    my $lump_ranks = shift;
+    my ($dbt,$name,$rank,$lump_ranks,$author,$year,$type_body_part,$preservation) = @_;
     my @taxon_nos = ();
-    if ($dbt && $name)  {
+    if ( $dbt && ( $name || $author || $year || $type_body_part || $preservation ) )  {
         my $dbh = $dbt->dbh;
         my $sql;
-        $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (a.taxon_name LIKE ".$dbh->quote($name)." OR a.common_name LIKE ".$dbh->quote($name).")";
-        if ($rank) {
-            $sql .= " AND taxon_rank=".$dbh->quote($rank);
+        $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no";
+        if ( $author || $year )	{
+            $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t,refs r WHERE a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no ";
         }
+        if ( $name )	{
+            #$sql .= " AND (a.taxon_name LIKE ".$dbh->quote($name)." OR a.common_name LIKE ".$dbh->quote($name).")";
+        }
+        $sql .= ( $name ) ? " AND (a.taxon_name LIKE ".$dbh->quote($name)." OR a.common_name LIKE ".$dbh->quote($name).")" : "";
+        $sql .= ( $rank ) ? " AND taxon_rank=".$dbh->quote($rank) : "";
+        $sql .= ( $author ) ? " AND ((ref_is_authority='Y' AND (r.author1last='$author' OR r.author2last='$author')) OR (ref_is_authority='' AND (a.author1last='$author' OR a.author2last='$author')))" : "";
+        $sql .= ( $year ) ? " AND ((ref_is_authority='Y' AND r.pubyr='$year') OR (ref_is_authority='' AND a.pubyr='$year'))" : "";
+        $sql .= ( $type_body_part ) ? " AND type_body_part=".$dbh->quote($type_body_part) : "";
+        $sql .= ( $preservation ) ? " AND preservation=".$dbh->quote($preservation) : "";
         if ($lump_ranks) {
             $sql .= " GROUP BY t.lft,t.rgt";
         }
@@ -4491,7 +4515,6 @@ sub getTaxonNos {
         my @results = @{$dbt->getData($sql)};
         push @taxon_nos, $_->{'taxon_no'} for @results;
     }
-                                                                                                                                                         
     return @taxon_nos;
 }
 
