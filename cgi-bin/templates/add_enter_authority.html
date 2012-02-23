@@ -68,18 +68,20 @@ function checkForm()	{
 		error += "* If you know the type's body part you must know whether the taxon is extant\n";
 	}
 	if ( typeof(frm.preservation) != "undefined" )	{
-		if ( frm.preservation.selectedIndex == 10 )	{
+		var pres = frm.preservation.options[frm.preservation.selectedIndex].text;
+		if ( pres == 'not a trace' )	{
 			error += "* We are no longer using the 'not a trace' category; please select another value\n";
 		}
-		if ( frm.preservation.selectedIndex > 1 && frm.extant.selectedIndex == 2 )	{
-			error += "* If the type isn't a body the taxon can't be extant\n";
+		if ( pres != 'body (3D)' && pres != 'amber' && frm.extant.selectedIndex == 2 )	{
+			error += "* If the type isn't a body or in amber the taxon can't be extant\n";
 		}
 	} else if ( typeof(frm.preservation2) != "undefined" )	{
-		if ( frm.preservation2.selectedIndex == 10 )	{
+		var pres = frm.preservation2.options[frm.preservation2.selectedIndex].text;
+		if ( pres == 'not a trace' )	{
 			error += "* We are no longer using the 'not a trace' category; please select another value\n";
 		}
-		if ( frm.preservation2.selectedIndex > 1 && frm.extant.selectedIndex == 2 )	{
-			error += "* If the type isn't a body the taxon can't be extant\n";
+		if ( pres != 'body (3D)' && pres != 'amber' && frm.extant.selectedIndex == 2 )	{
+			error += "* If the type isn't a body or in amber the taxon can't be extant\n";
 		}
 	}
 	if ( /^[^a-z]/.test(frm.common_name.value) )	{
