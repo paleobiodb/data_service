@@ -1,13 +1,10 @@
 package PrintHierarchy;
 
 use TaxonInfo;
-use Taxon;
-use TaxaCache;
-use Classification;
-use Constants qw($READ_URL $WRITE_URL $HTML_DIR);
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR $PAGE_TOP $PAGE_BOTTOM $TAXA_TREE_CACHE);
 use strict;
 
-sub startPrintHierarchy	{
+sub classificationForm	{
 	my $hbo = shift;
 	my $s = shift;
 	my $error = shift;
@@ -16,445 +13,235 @@ sub startPrintHierarchy	{
 	if ( $s->get('enterer_no') > 0 )	{
 		$refno{'not_guest'} = 1;
 	}
-	$refno{'error_message'} = $error;
-	print $hbo->populateHTML('print_hierarchy_form',\%refno);
+	if ( $error )	{
+		$refno{'error_message'} = "<p style=\"margin-bottom: 2em;\"><i>".$error.": please try again</i></p>";
+	}
+	print $hbo->populateHTML('classify_form',\%refno);
 }
 
-sub processPrintHierarchy	{
-    my ($q,$s,$dbt,$hbo) = @_;
+# JA 27.2.12
+# complete rewrite of most of this module
+sub classify	{
+	my ($dbt,$hbo,$s,$q) = @_;
 
-    my $classification_file = "classification.csv";
+	my %shortranks = ( "subspecies" => "","species" => "",
+	 "subgenus" => "Subg.", "genus" => "G.", "subtribe" => "Subtr.",
+	 "tribe" => "Tr.", "subfamily" => "Subfm.", "family" => "Fm.",
+	 "superfamily" => "Superfm.", "infraorder" => "Infraor.",
+	 "suborder" => "Subor.", "order" => "Or.", "superorder" => "Superor.",
+	 "infraclass" => "Infracl.", "subclass" => "Subcl.", "class" => "Cl.",
+	 "superclass" => "Supercl.", "subphylum" => "Subph.",
+	 "phylum" => "Ph.");
 
-    # get focal taxon name from query parameters, then figure out taxon number
-    my @taxa = ();
-    my ($taxon_no,$taxon_name,$taxon_rank) = (undef,"","");
-    my $reference_no = int($q->param('reference_no'));
-    $reference_no = undef unless $reference_no;
-    if (int($q->param('taxon_no'))) {
-        @taxa = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
-        if (@taxa) {
-            $taxon_no   = $taxa[0]->{'taxon_no'};
-            $taxon_name = $taxa[0]->{'taxon_name'};
-            $taxon_rank = $taxa[0]->{'taxon_rank'};
-        }
-    } elsif ($q->param('taxon_name') =~ /^([A-Za-z -]+)$/) {
-        @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$1,'remove_rank_change'=>1});
-        if (@taxa) {
-            $taxon_no   = $taxa[0]->{'taxon_no'};
-            $taxon_name = $taxa[0]->{'taxon_name'};
-            $taxon_rank = $taxa[0]->{'taxon_rank'};
-        }
-    } elsif ($reference_no) {
-        @taxa = getRootTaxa($dbt,$reference_no);
-    }
+	my ($taxon_no,$reference_no) = ($q->param('taxon_no'),$q->param('reference_no'));
+	if ( $q->param('parent_no') )	{
+		$taxon_no = $q->param('parent_no');
+	}
+	my $fields = "t.taxon_no,taxon_name,taxon_rank,common_name,extant,status,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,lft,rgt";
+	my (@taxa,@parents,%children,$title);
 
-	if (! @taxa)	{
-		my $error = qq|<p class="medium"><i>|;
-		if (int($q->param('taxon_no')) || $q->param('taxon_name') =~ /^([A-Za-z -]+)$/)	{
-			$error .= "No classification is available for this taxon";
-		} elsif ($reference_no)	{
-			$error .= "This reference has no taxonomic opinions";
-		} else	{
-			$error .= "No query was entered";
+	# references require special handling because they may classify
+	#  multiple taxa and because parent-child relations are drawn directly
+	#  from opinions instead of taxa_tree_cache
+	if ( ! $taxon_no && $reference_no )	{
+		my $sql = "SELECT child_spelling_no,parent_spelling_no FROM opinions WHERE reference_no=".$reference_no." AND ref_has_opinion='YES'";
+		my @opinions = @{$dbt->getData($sql)};
+		my %in;
+		$in{$_->{'child_spelling_no'}}++ foreach @opinions;
+		$in{$_->{'parent_spelling_no'}}++ foreach @opinions;
+		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no AND t.taxon_no IN (".join(',',keys %in).")";
+		@taxa = @{$dbt->getData($sql)};
+		my %parent;
+		$parent{$_->{'child_spelling_no'}} = $_->{'parent_spelling_no'} foreach @opinions;
+		for my $i ( 0..$#taxa )	{
+			push @{$children{$parent{$taxa[$i]->{'taxon_no'}}}} , $taxa[$i];
+			if ( ! $parent{$taxa[$i]->{'taxon_no'}} )	{
+				push @parents , $taxa[$i];
+			}
 		}
-		$error .= ". Please try again.</i></p>\n\n";
-		startPrintHierarchy($hbo,$s,$error);
+		$sql = "SELECT * FROM refs WHERE reference_no=".$reference_no;
+		$title = TaxonInfo::formatShortAuthor( ${$dbt->getData($sql)}[0] );
+	# try to get a taxon_no for a common name
+	} elsif ( ! $taxon_no && $q->param('common_name') )	{
+		my $common = $q->param('common_name');
+		my $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND common_name='".$common."' ORDER BY rgt-lft DESC LIMIT 1";
+		$taxon_no = ${$dbt->getData($sql)}[0]->{'taxon_no'};
+		if ( ! $taxon_no && $common =~ /s$/ )	{
+			$common =~ s/s$//;
+			$sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND common_name='".$common."' ORDER BY rgt-lft DESC LIMIT 1";
+			$taxon_no = ${$dbt->getData($sql)}[0]->{'taxon_no'};
+		}
+	# ditto for a standard taxonomic name
+	} elsif ( ! $taxon_no && $q->param('taxon_name') )	{
+		my $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."' ORDER BY rgt-lft DESC LIMIT 1";
+		$taxon_no = ${$dbt->getData($sql)}[0]->{'taxon_no'};
+	}
+
+	if ( ! $taxon_no && ! @taxa )	{
+		if ( ! $q->param('boxes_only') )	{
+			print $hbo->stdIncludes($PAGE_TOP);
+			classificationForm($hbo, $s, 'Nothing matched the search term');
+			print $hbo->stdIncludes($PAGE_BOTTOM);
+		}
+		exit;
+	}
+
+	# grab all children of the parent taxon
+	if ( $taxon_no )	{
+		my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_no=".$taxon_no;
+		my $range = ${$dbt->getData($sql)}[0];
+		if ( $range->{'lft'} + 1 == $range->{'rgt'} )	{
+			if ( ! $q->param('boxes_only') )	{
+				print $hbo->stdIncludes($PAGE_TOP);
+				classificationForm($hbo, $s, 'Nothing is classified within this taxon');
+				print $hbo->stdIncludes($PAGE_BOTTOM);
+			}
+			exit;
+		}
+
+		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no AND t.taxon_no=t.spelling_no AND lft>=".$range->{'lft'}." AND rgt<=".$range->{'rgt'}." ORDER BY lft";
+		@taxa = @{$dbt->getData($sql)};
+		$title = TaxonInfo::italicize( $taxa[0] );
+
+		push @parents , $taxa[0];
+		for my $i ( 1..$#taxa )	{
+			my $isChild = 0;
+			for my $pre ( reverse 0..$i-1 )	{
+				if ( $taxa[$pre]->{'rgt'} > $taxa[$i]->{'rgt'} )	{
+					push @{$children{$taxa[$pre]->{'taxon_no'}}} , $taxa[$i];
+					$isChild++;
+					last;
+				}
+			}
+			if ( $isChild == 0 )	{
+				push @parents , $taxa[$i];
+			}
+		}
+	}
+
+	# put valid and invalid children in separate arrays
+	my (%valids,%invalids);
+	for my $t ( @taxa )	{
+		for my $c ( @{$children{$t->{'taxon_no'}}} )	{
+			if ( $c->{'status'} =~ /belongs/ && ( $c->{'lft'} + 1 < $c->{'rgt'} || $c->{'taxon_rank'} =~ /species|genus/ ) )	{
+				$c->{'status'} =~ s/belongs to/valid/;
+				push @{$valids{$t->{'taxon_no'}}} , $c;
+			} else	{
+				$c->{'status'} =~ s/ (of|by)//;
+				$c->{'status'} =~ s/subjective //;
+				$c->{'status'} =~ s/belongs to/empty/;
+				push @{$invalids{$t->{'taxon_no'}}} , $c;
+			}
+		}
+		if ( $valids{$t->{'taxon_no'}} )	{
+			@{$valids{$t->{'taxon_no'}}} = sort { $a->{'taxon_name'} cmp $b->{'taxon_name'} } @{$valids{$t->{'taxon_no'}}};
+		}
+	}
+
+	if ( ! $q->param('boxes_only') )	{
+		print $hbo->stdIncludes($PAGE_TOP);
+		chmod 0664, "$HTML_DIR/public/classification/classification.csv";
+		open OUT, ">$HTML_DIR/public/classification/classification.csv";
+		print OUT "taxon_rank,taxon_name,author,common_name,status,extant\n";
+	}
+	print $hbo->populateHTML('js_classification');
+	if ( ! $q->param('boxes_only') )	{
+		print "<center><p class=\"pageTitle\">Classification of $title</p></center>\n\n";
+	}
+	print "<div class=\"verysmall\" style=\"width: 50em; margin-left: auto; margin-right: auto;\">\n\n";
+
+	# don't display every name, only the top-level ones
+	my $shownDepth = 2;
+	if ( $#taxa < 10 )	{
+		$shownDepth = 999999;
+	} elsif ( $#taxa < 30 )	{
+		$shownDepth = 3;
+	}
+	for my $p ( @parents )	{
+		printBox( $p , '' , 1 );
+	}
+
+	print "\n</div>\n\n";
+
+	# recursively print boxes including taxon names and subtaxa
+	sub printBox	{
+		my $t = shift;
+		my $parent_no = shift;
+		my $depth = shift;
+		my @nos;
+		push @nos , $_->{'taxon_no'} foreach @{$valids{$t->{'taxon_no'}}};
+		my $list = join(',',@nos);
+		if ( $invalids{$t->{'taxon_no'}} )	{
+			$list .= ",".$t->{'taxon_no'}."bad";
+		}
+		$list =~ s/^,//;
+		my $extant = ( $t->{'extant'} !~ /y/i ) ? "no" : "yes";
+		print OUT "$t->{'taxon_rank'},\"$t->{'taxon_name'}\",\"".TaxonInfo::formatShortAuthor($t)."\",\"$t->{'common_name'}\",\"$t->{'status'}\",$extant\n";
+		$extant = ( $t->{'extant'} !~ /y/i ) ? "&dagger;" : "";
+		my $name = $shortranks{$t->{'taxon_rank'}}." "."$extant<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$t->{taxon_no}\">".TaxonInfo::italicize($t)."</a>";
+		if ( $t->{'author1last'} )	{
+			$name .= " ".TaxonInfo::formatShortAuthor($t);
+		}
+		if ( $t->{'common_name'} )	{
+			$name .= " [".$t->{'common_name'}."]";
+		}
+		my $class = ( $depth <= $shownDepth ) ? 'classBox' : 'hiddenClassBox';
+		my $style = ( $depth == 1 ) ? ' style="border-left: 0px;"' : '';
+		print qq|  <div id="t$t->{taxon_no}" class="$class"$style>
+|;
+		my $firstMargin = ( $depth <= $shownDepth ) ? "0em" : "0em";
+		if ( $list )	{
+			print qq|    <div id="n$t->{taxon_no}" class="classTaxon" style="margin-bottom: $firstMargin;" onMouseOver="showChildren('$t->{taxon_no}','$list');">|;
+		} else	{
+			print qq|    <div id="n$t->{taxon_no}" class="classTaxon">|;
+		}
+		print "$name</div>\n";
+		if ( $depth < $shownDepth && $list )	{
+			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onMouseOver="hideChildren('$t->{taxon_no}','$list');">hide</span></div>
+|;
+		} elsif ( $list )	{
+			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner"><span onMouseOut="showChildren('$t->{taxon_no}','$list');">+</span></div>
+|;
+		}
+		printBox( $_ , $t->{'taxon_no'} , $depth + 1 ) foreach @{$valids{$t->{'taxon_no'}}};
+		if ( $invalids{$t->{'taxon_no'}} )	{
+			my $class = ( $depth + 1 <= $shownDepth ) ? 'classBox' : 'hiddenClassBox';
+			print qq|  <div id="t$t->{'taxon_no'}bad" class="$class">
+|;
+			@{$invalids{$t->{'taxon_no'}}} = sort { $a->{'taxon_name'} cmp $b->{'taxon_name'} } @{$invalids{$t->{'taxon_no'}}};
+			for my $t ( @{$invalids{$t->{'taxon_no'}}} )	{
+				my $extant = ( $t->{'extant'} !~ /y/i ) ? "no" : "yes";
+				print OUT "$t->{'taxon_rank'},\"$t->{'taxon_name'}\",\"".TaxonInfo::formatShortAuthor($t)."\",\"$t->{'common_name'}\",\"$t->{'status'}\",$extant\n";
+			}
+			my @badList;
+			push @badList , TaxonInfo::italicize($_)." ".TaxonInfo::formatShortAuthor($_)." [".$_->{'status'}."]" foreach @{$invalids{$t->{'taxon_no'}}};
+			my $marginTop = ( $list ) ? "0.5em" : "0.5em;";
+			print "Invalid names: ".join(', ',@badList)."</div>\n";
+		}
+		print "  </div>\n";
 		return;
 	}
 
-    print '<div align="center" style="margin-bottom: -2em;">';
-    if ($taxon_name) {
-        print '<p class="pageTitle">Classification of ';
-        if ( $taxon_rank !~ /genus|species/) {
-            print "the ";
-        }
-        print $taxon_name;
-    } else {
-        print '<p class="pageTitle">Classification';
-    }
-    if ($reference_no) {
-        my $shortref = Reference::formatShortRef($dbt,$reference_no);
-        print " of $shortref";
-    }
-    print "</p></div>";
-
-    print "<div align=\"center\"><table>";
-    @taxa = sort {$a->{'taxon_name'} cmp $b->{'taxon_name'}} @taxa;
-    PBDBUtil::autoCreateDir("$HTML_DIR/public/classification");
-    my $OUT;
-    open $OUT, ">$HTML_DIR/public/classification/$classification_file";
-    foreach my $taxon (@taxa) {
-        my $taxon_no = $taxon->{'taxon_no'};
-
-        my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no,$reference_no);
-        my $tree;
-        if ($reference_no) {
-            $tree = Classification::getChildren($dbt,$orig_no,'tree',999,$reference_no);
-        } else {
-            $tree = TaxaCache::getChildren($dbt,$orig_no,'tree');
-        }
-        $tree->{'taxon_no'}=>$orig_no;
-        my $options = {
-            'max_levels'=>$q->param('maximum_levels'),
-            'outfile'=>$OUT,
-            'reference_no'=>$reference_no
-        };
-        my $html = htmlTaxaTree($dbt,$tree,$options);
-        my @lines = split /<tr>/,$html;
-        my $sizeclass = "tiny";
-        if ( $#lines < 10 )	{
-            $sizeclass = "medium";
-        } elsif ( $#lines < 20 )	{
-            $sizeclass = "small";
-        } elsif ( $#lines < 30 )	{
-            $sizeclass = "verysmall";
-        }
-        print "<tr><td align=\"left\" class=\"$sizeclass\">";
-        print $html;
-        print "</td></tr>";
-        print $OUT "\n";
-    }
-    close $OUT;
-	chmod 0664, "$HTML_DIR/public/classification/$classification_file";
-    print "</table></div>";
-
-	print "<hr><div style=\"padding-left: 2em;\"><p><b><a href=\"/public/classification/$classification_file\">Download</a></b> this list of taxonomic names</p>";
-    print '<p><b><a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download</a></b> authority and opinion data for these taxa</p>';
-    print qq|<form method="POST" action="$READ_URL" name="doDownloadTaxonomy">|;
-    print '<input type="hidden" name="action" value="displayDownloadTaxonomyResults">';
-    if ($taxon_no) {
-        print qq|<input type="hidden" name="taxon_no" value="$taxon_no">|;
-    }
-    if ($reference_no) {
-        print qq|<input type="hidden" name="reference_no" value="$reference_no">|;
-    }
-    print '</form>'; 
-
-	print "<p><b><a href=\"$READ_URL?action=startStartPrintHierarchy\">See another classification</a></b></p>";
-	print "</div>\n";
-}
-
-sub getStatus {
-    my ($dbt,$taxon_no,$reference_no) = @_;
-    # Not very efficient, but no better way to get the status I don't think
-    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no,$reference_no);
-    my $status = "";
-    if ($orig_no) {
-        my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$orig_no,{'reference_no'=>$reference_no});
-        if ($mrpo) {
-            if ($mrpo->{'status'} =~ /subjective/) { $status = 'subjective synonym'; }
-            elsif ($mrpo->{'status'} =~ /objective/) { $status = 'objective synonym'; }
-            elsif ($mrpo->{'status'} =~ /subgroup/) { $status = 'invalid subgroup'; }
-            elsif ($mrpo->{'status'} =~ /replaced/) { $status = 'replaced homonym'; }
-            elsif ($mrpo->{'status'} =~ /belongs/) { $status = ''; }
-            else { $status = "$mrpo->{status}";}
-        } else {
-            $status = 'synonym';
-        }
-    } else {
-        $status = 'synonym';
-    }
-    return $status;
-}
-
-sub getRootTaxa {
-    my ($dbt,$ref) = @_;
-    my $sql = "SELECT DISTINCT child_no FROM opinions WHERE reference_no=".int($ref); 
-    my @results = @{$dbt->getData($sql)};
-    my %all_child_nos = ();
-    foreach my $row (@results) {
-        my $mrpo = TaxonInfo::getMostRecentClassification($dbt,$row->{child_no},{'reference_no'=>$ref});
-        if ($mrpo) {
-            $all_child_nos{$row->{'child_no'}} = $mrpo;
-        }
-    }
-    my @root = ();
-    while (my ($child_no,$mrpo) = each %all_child_nos) {
-        my $parent_no = $mrpo->{'parent_no'};
-        unless ($all_child_nos{$parent_no}) {
-            push @root, $parent_no if ($parent_no);
-        }
-    }
-    my %all_parent_nos = ();
-    foreach my $parent_no (@root) {
-        $all_parent_nos{$parent_no} = 1;
-    }
-    my @taxon_nos = sort keys %all_parent_nos;
-    my @taxa = ();
-    foreach my $t (@taxon_nos) {
-        push @taxa, (TaxonInfo::getTaxa($dbt,{'taxon_no'=>$t}));
-    }
-    return @taxa;
+	if ( ! $q->param('boxes_only') )	{
+		print qq|<form method="POST" action="$READ_URL" name="doDownloadTaxonomy">
+<input type="hidden" name="action" value="displayDownloadTaxonomyResults">
+|;
+ 		if ( $taxon_no ) {
+			print qq|<input type="hidden" name="taxon_no" value="$taxon_no">|;
+		}
+		if ( $reference_no ) {
+			print qq|<input type="hidden" name="reference_no" value="$reference_no">|;
+		}
+		print "</form>\n"; 
+		print '<center><p class="tiny">';
+		print '<a href="/public/classification/classification.csv">Download</a></b> this list of taxonomic names';
+		print ' - <a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download</a> authority and opinion data for these taxa';
+		print " - <a href=\"$READ_URL?action=classification\">See another classification</a></p></center>";
+		print $hbo->stdIncludes($PAGE_BOTTOM);
+		close OUT;
+	}
+	return $#taxa + 1;
 }
 
 
-sub htmlTaxaTree {
-    my ($dbt,$tree,$options) = @_;
-
-    my $html = "";
-    my $reference_no = $options->{'reference_no'};
-    my $MAX = $options->{'max_levels'} || 99;
-    my $SIMPLE = $options->{'simple'};
-    my $OUT = $options->{'outfile'};
-
-	my %shortranks = ("subspecies"=>"","species" => "", 
-            "subgenus" => "Subg.", "genus" => "G.",
-			"subtribe"=> "Subtr.", "tribe" => "Tr.", 
-            "subfamily" => "Subfm.", "family" => "Fm.","superfamily" => "Superfm." ,
-			"infraorder" => "Infraor.", "suborder" => "Subor.", "order" => "Or.", "superorder" => "Superor.",
-			"infraclass" => "Infracl.", "subclass" => "Subcl.", "class" => "Cl.", "superclass" => "Supercl.",
-			"subphylum" => "Subph.", "phylum" => "Ph.");
-
-    my %rank_order = %Taxon::rankToNum;
-
-    my $MAX_SEEN = 0;
-
-    $tree->{'depth'} = 0;
-    my $root_status = getStatus($dbt,$tree->{'taxon_no'},$reference_no);
-    $tree->{'status'} = $root_status if ($root_status =~ /nomen/);
-    my @node_stack = ($tree);
-    # mark higher level taxa that had all their children removed as "invalid"
-    my %not_found_type_taxon = ();
-    my %found_type_for = ();
-    my %not_found_type_for = ();
-    my @check_is_disused = ();
-    my @check_has_nomen = ();
-    while (@node_stack) {
-        my $node = shift @node_stack;
-        if ($node->{'depth'} < $MAX) {
-            foreach my $child (@{$node->{'children'}}) {
-                $child->{'depth'} = $node->{'depth'} + 1;
-                if ($child->{'depth'} > $MAX_SEEN) {
-                    $MAX_SEEN = $child->{'depth'};
-                }
-            }
-            unshift @node_stack,@{$node->{'children'}};
-            unshift @node_stack,@{$node->{'synonyms'}};
-        }
-        if ($node->{'taxon_rank'} !~ /species|genus/ && !scalar(@{$node->{'children'}})) {
-            push @check_is_disused,$node->{'taxon_no'};
-        }
-        if ($node->{'taxon_rank'} !~ /species/) {
-            push @check_has_nomen,$node->{'taxon_no'};
-        }
-        
-        if ($node->{'type_taxon_no'}) {
-            my $type_taxon_no = $node->{'type_taxon_no'};
-            my $found_type = 0;
-            my @child_queue = ();
-            push @child_queue,$_ foreach (@{$node->{'children'}});
-            # Recursively search all children for the type taxon. We don't check
-            # synonyms though, expect the author to reclassify the taxa into the senior 
-            # synonym instead
-            while (@child_queue) {
-                my $child = shift @child_queue;
-                foreach (@{$child->{'synonyms'}}) {
-                    push @child_queue,$_;
-                }
-                foreach (@{$child->{'children'}}) {
-                    push @child_queue,$_;
-                }
-                
-                if ($child->{'taxon_no'} == $type_taxon_no) {
-#                    $html .= "<span style=\"color: red;\">FOUND TYPE $type_taxon_no for $node->{taxon_no},$node->{taxon_name}</span><BR>";
-                    $found_type = $child->{'taxon_no'};
-                    @child_queue = ();
-                    last;
-                }
-                foreach my $spelling (@{$child->{'spellings'}}) {
-                    if ($spelling->{'taxon_no'} == $type_taxon_no) {
-#                        $html .= "<span style=\"color: red;\">FOUND TYPE $type_taxon_no SPELLED $child->{taxon_no},$child->{taxon_name} for $node->{taxon_no},$node->{taxon_name}</span><BR>";
-                        $found_type = $child->{'taxon_no'};
-                        @child_queue = ();
-                        last;
-                    }
-                }
-            }
-            if (!$found_type) {
-#                $html .= "<span style=\"color: red;\"> COULD NOT FIND TYPE $type_taxon_no for $node->{taxon_no},$node->{taxon_name}</span><BR>";
-                $not_found_type_taxon{$node->{'taxon_no'}} = $type_taxon_no;
-                $not_found_type_for{$type_taxon_no} = $node->{'taxon_no'};
-            } else {
-                #$found_type_taxon{$node->{'taxon_no'}} = $type_taxon_no;
-                # Note that $found_type will not equal to $type_taxon_no if $type_taxon_no
-                # is the original combination no -- it will be the most current spelling_no for that combination
-                $found_type_for{$found_type} = $node->{'taxon_no'};
-            }
-        }
-    } 
-
-    my %disused = ();
-# commented out everything related to nomens here because we now record
-#  parents for nomens, so nomenChildren is obsolete JA 5.5.08
-#    my %nomen = (); 
-    unless ($reference_no || $SIMPLE) {
-        %disused = %{TaxonInfo::disusedNames($dbt,\@check_is_disused)};
-#        %nomen = %{TaxonInfo::nomenChildren($dbt,\@check_has_nomen)};
-    }
-
-    # Tricky part: integrate in synonyms and nomen dubiums seamlessly into tree so they
-    # get printed out correctly below
-    @node_stack = ($tree);
-    my @nodes_to_print = ();
-    my %syn_status = ();
-    while (@node_stack) {
-        my $node = shift @node_stack;
-        push @nodes_to_print, $node;
-        if ($node->{'depth'} < $MAX) {
-            # This block is a little redundant but sometimes needed if the synonym has children
-            foreach my $child (@{$node->{'children'}}) {
-                $child->{'depth'} = $node->{'depth'} + 1;
-                if ($child->{'depth'} > $MAX_SEEN) {
-                    $MAX_SEEN = $child->{'depth'};
-                }
-                $child->{'status'} = getStatus($dbt,$child->{'taxon_no'},$reference_no);
-            }
-            my @children = @{$node->{'children'}};
-            
-#            foreach (@{$nomen{$node->{'taxon_no'}}}) {
-#                $_->{'status'} = getStatus($dbt,$_->{'taxon_no'},$reference_no);
-#                $_->{'depth'} = $node->{'depth'} + 1;
-#            }
-#            push @children, @{$nomen{$node->{'taxon_no'}}};
-
-            foreach (@{$node->{'synonyms'}}) {
-                $_->{'status'} = getStatus($dbt,$_->{'taxon_no'},$reference_no);
-                $_->{'depth'} = $node->{'depth'} + 1;
-            }
-            push @children, @{$node->{'synonyms'}};
-
-            @children = sort {$rank_order{$b->{'taxon_rank'}} <=> $rank_order{$a->{'taxon_rank'}} ||
-                              $a->{'taxon_name'} cmp $b->{'taxon_name'}} @children;
-            unshift @node_stack, @children;
-        }
-    }
-
-    # now print out the data
-    $html .= "<table>\n";
-    $html .= "<tr>";
-    for (my $i=0;$i<=$MAX+5 && $i <= $MAX_SEEN+5;$i++) {
-           $html .= "<td style=\"width:20;\">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>"; 
-    }
-    $html .= "</tr>";
-    #my %type_taxon_nos = ();
-    #while (my ($type,$for) = each %found_type_taxon) {
-    #    $type_taxon_nos{$for} = $type;
-    #}
-    my @taxon_nos;
-    foreach my $record (@nodes_to_print)	{
-        push @taxon_nos , $record->{'taxon_no'};
-    }
-    my $sql = "SELECT taxon_no,ref_is_authority,";
-    for my $f ( 'reference_no','author1last','author2last','otherauthors','pubyr' )	{
-        $sql .= "IF (a.ref_is_authority='YES',r.$f,a.$f) $f,";
-    }
-    $sql =~ s/,$/ /;
-    $sql .= "FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no in (" . join(',',@taxon_nos) . ")";
-    my @results = @{$dbt->getData($sql)};
-    my %authority;
-    if ( @results )	{
-        $authority{$_->{'taxon_no'}}->{IS} = $_->{'ref_is_authority'} foreach ( @results );
-        $authority{$_->{'taxon_no'}}->{REF} = $_->{'reference_no'} foreach ( @results );
-        $authority{$_->{'taxon_no'}}->{A1} = $_->{'author1last'} foreach ( @results );
-        $authority{$_->{'taxon_no'}}->{A2} = $_->{'author2last'} foreach ( @results );
-        $authority{$_->{'taxon_no'}}->{OTHER} = $_->{'otherauthors'} foreach ( @results );
-        $authority{$_->{'taxon_no'}}->{YR} = $_->{'pubyr'} foreach ( @results );
-        foreach ( @taxon_nos )	{
-            if ( $authority{$_}->{A1} )	{
-                my $orig_no = TaxonInfo::getOriginalCombination($dbt,$_);
-                if ( $_ !~ $orig_no )	{
-                    $authority{$_}->{ORIGINAL} = "NO";
-                }
-            }
-        }
-
-    }
-    foreach my $record (@nodes_to_print)	{
-        $html .= "<tr>";
-        for (my $i=0;$i<$record->{'depth'};$i++) {
-            $html .= "<td></td>";
-        }
-        $html .= "<td style=\"white-space: nowrap;\" colspan=".($MAX + 5 - $record->{'depth'}).">";
-        my $shortrank = $shortranks{$record->{'taxon_rank'}};
-        my $title = ($shortrank) ? "<b>$shortrank</b> " : "";
-        my $taxon_name = $record->{'taxon_name'};
-
-        if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}} && ! $record->{'status'}) {
-            $taxon_name = '"'.$taxon_name.'"';
-        }
-        
-        my $link = "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$record->{taxon_no}\">$taxon_name</a>";
-        if ( $record->{'taxon_rank'} =~ /species|genus/ ) {
-            $title .= "<i>".$link."</i>";
-        } else {
-            $title .= $link;
-        }
-        $html .= $title;
-        if ( $authority{$record->{'taxon_no'}}->{A1} )	{
-            if ( $authority{$record->{'taxon_no'}}->{IS} =~ /Y/ )	{
-                $html .= qq|<a href="$READ_URL?action=displayReference&amp;reference_no=$authority{$record->{'taxon_no'}}->{REF}">|;
-            }
-            $html .= " <span class=\"small\">";
-            if ( $authority{$record->{'taxon_no'}}->{ORIGINAL} eq "NO" )	{
-                $html .= "(";
-            }
-            $html .= $authority{$record->{'taxon_no'}}->{A1};
-            if ( $authority{$record->{'taxon_no'}}->{OTHER} )	{
-                $html .= " et al.";
-            } elsif ( $authority{$record->{'taxon_no'}}->{A2} )	{
-                $html .= " and " . $authority{$record->{'taxon_no'}}->{A2};
-            }
-            $html .= " $authority{$record->{'taxon_no'}}->{YR}</span>";
-            if ( $authority{$record->{'taxon_no'}}->{ORIGINAL} eq "NO" )	{
-                $html .= ")";
-            }
-            if ( $authority{$record->{'taxon_no'}}->{IS} =~ /Y/ )	{
-                $html .= "</a>";
-            }
-        }
-
-        unless ($SIMPLE) {
-            if ($disused{$record->{'taxon_no'}}) {
-                $html .= " <small>(disused)</small>";
-            } elsif ($record->{'status'}) {
-                $html .= " <small>($record->{status})</small>";
-            }
-    #        my $type_taxon_for = $type_taxon_nos{$record->{'taxon_no'}};
-    #        if ($type_taxon_for) {
-                if ($found_type_for{$record->{'taxon_no'}}) {
-                    $html .= " <small>(type)</small>";
-                } 
-                #elsif ($not_found_type_for{$record->{'taxon_no'}}) {
-                #    my $type_taxon_for = $not_found_type_for{$record->{'taxon_no'}};
-                #    my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$type_taxon_for});
-                #    $html .= " <small>(excludes $t->{taxon_name}, the type)</small>";
-                #}
-    #        }
-            if ($record->{'type_taxon_no'} && $not_found_type_taxon{$record->{'taxon_no'}} && ! $record->{'status'}) {
-                my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$record->{'type_taxon_no'}});
-                if ($t) {
-                    my $link = "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$t->{taxon_no}\">$t->{taxon_name}</a>";
-                    if ( $t->{'taxon_rank'} =~ /species|genus/ ) {
-                        $link = "<i>".$link."</i>";
-                    } 
-                    $html .= "<small>";
-                    $html .= " (excludes $link, the type)";
-                    $html .= "</small>";
-                }
-            }
-        }
-
-        #if (@{$record->{'spellings'}}) {
-        #    $html .= " [";
-        #    $html .= "=$_->{taxon_name}, " for (@{$record->{'spellings'}});
-        #    $html .= "]";
-        #}
-        
-        if ($OUT) {
-            print $OUT $record->{'taxon_rank'}.",".$record->{'taxon_name'}."\n";
-        }
-    }
-    $html .= "</table></div>";
-    return $html;
-}
 1;
