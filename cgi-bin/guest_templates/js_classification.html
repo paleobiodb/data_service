@@ -1,0 +1,30 @@
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+var lastShown;
+var overs = 0;
+
+function showChildren(taxon_no,childList)	{
+	document.getElementById('hot'+taxon_no).style.fontSize = '0.7em';
+	document.getElementById('hot'+taxon_no).innerHTML = '<span onMouseOver="hideChildren(\'' + taxon_no + '\',\'' + childList + '\');">hide</span>';
+	var nums = new Array();
+	nums = childList.split(/,/);
+	for ( i = 0; i < nums.length; i++ )	{
+		document.getElementById('t'+nums[i]).style.display = 'block';
+	}
+	return true;
+}
+
+function hideChildren(taxon_no,childList)	{
+	document.getElementById('hot'+taxon_no).style.fontSize = '1em';
+	document.getElementById('hot'+taxon_no).innerHTML = '<span onMouseOut="showChildren(\'' + taxon_no + '\',\'' + childList + '\');">+</span>';
+	var nums = new Array();
+	nums = childList.split(/,/);
+	for ( i = 0; i < nums.length; i++ )	{
+		document.getElementById('t'+nums[i]).style.display = 'none';
+	}
+	return true;
+}
+
+//  End -->
+</script>
+
