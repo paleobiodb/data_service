@@ -1499,7 +1499,7 @@ sub submitOpinionForm {
   <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></li>
   <li$style><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&display=opinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></li>
   <li$style><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></li>
-  <li$style><a href="$WRITE_URL?action=startProcessPrintHierarchy&reference_no=$resultReferenceNumber&maximum_levels=100">Print this reference's classification</a></li>
+  <li$style><a href="$WRITE_URL?action=classify&reference_no=$resultReferenceNumber">Print this reference's classification</a></li>
   </ul>
 </td></tr></table>
 </p>
