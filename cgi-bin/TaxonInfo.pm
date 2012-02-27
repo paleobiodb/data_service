@@ -61,7 +61,7 @@ sub checkTaxonInfo {
 
     if ($q->param('taxon_no')) {
         # If we have is a taxon_no, use that:
-        displayTaxonInfoResults($dbt,$s,$q);
+        displayTaxonInfoResults($dbt,$s,$q,$hbo);
     } elsif (!$q->param('taxon_name') && !($q->param('common_name')) && !($q->param('pubyr')) && !$q->param('author')) {
         searchForm($hbo,$q);
     } else {
@@ -134,7 +134,7 @@ sub checkTaxonInfo {
                 #    $taxon_name .= " $species";
                 #}    
                 #$q->param('taxon_name'=>$taxon_name);
-                displayTaxonInfoResults($dbt,$s,$q);
+                displayTaxonInfoResults($dbt,$s,$q,$hbo);
             } else {
                 # If nothing, print out an error message
                 searchForm($hbo, $q, 1); # param for not printing header with form
@@ -149,7 +149,7 @@ sub checkTaxonInfo {
             }
         } elsif(scalar @results == 1){
             $q->param('taxon_no'=>$results[0]->{'taxon_no'});
-            displayTaxonInfoResults($dbt,$s,$q);
+            displayTaxonInfoResults($dbt,$s,$q,$hbo);
         } else{
             @results = sort { $a->{taxon_name} cmp $b->{taxon_name} } @results;
             # now create a table of choices and display that to the user
@@ -192,9 +192,7 @@ sub checkTaxonInfo {
 #   entered_name could also be set, for link display purposes. entered_name may not correspond 
 #   to taxon_no, depending on if we follow a synonym or go to an original combination
 sub displayTaxonInfoResults {
-	my $dbt = shift;
-	my $s = shift;
-	my $q = shift;
+	my ($dbt,$s,$q,$hbo) = @_;
 
     my $dbh = $dbt->dbh;
 
@@ -498,7 +496,7 @@ sub displayTaxonInfoResults {
         print '<div id="panel4" class="panel">';
         print '<div align="center" class="small">';
         if ($is_real_user) {
-    	    doCladograms($dbt, $taxon_no, $spelling_no, $taxon_name);
+    	    doCladograms($dbt, $hbo, $q, $s, $taxon_no, $spelling_no, $taxon_name);
         } else {
             print qq|<form method="POST" action="$READ_URL">|;
             foreach my $f ($q->param()) {
@@ -623,35 +621,39 @@ sub getCollectionsSet {
     return $dataRows;
 }
 
+# heavily rewriten to switch from using htmlTaxaTree to using classify
+#   JA 27.2.12
 sub doCladograms {
-    my ($dbt,$taxon_no,$spelling_no,$taxon_name) = @_;
+    my ($dbt,$hbo,$q,$s,$taxon_no,$spelling_no,$taxon_name) = @_;
 
+    my $parent_no;
     my $stepsup = 1;
     if ( $taxon_no < 1 && $taxon_name =~ / / )	{
         my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
-        $taxon_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
-        $spelling_no = $taxon_no;
+        $parent_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
         $stepsup = 0;
+    } else	{
+        my $parent = TaxaCache::getParent($dbt,$taxon_no);
+        $parent_no = $parent->{'taxon_no'};
     }
 
     my $html;
     my @cladograms;
-    if ( $taxon_no )	{
-        my $p = TaxaCache::getParents($dbt,[$spelling_no],'array_full');
-        my @parents = @{$p->{$spelling_no}};
-        if ( $parents[0]->{taxon_no} == $spelling_no )	{
-            shift @parents;
-        }
+    print qq|<div class="displayPanel" align="left" style="width: 52em; margin-top: 0em; padding-top: 0em;">
+    <span class="displayPanelHeader" class="large">Classification of relatives</span>
+|;
+    if ( $parent_no )	{
 
     # print a classification of the grandparent and its children down
     #  three (or two) taxonomic levels (one below the focal taxon's)
     # JA 23-24.11.08
-        PBDBUtil::autoCreateDir("$HTML_DIR/public/classification");
-        my $tree = TaxaCache::getChildren($dbt,$parents[$stepsup]->{'taxon_no'},'tree');
-        my $options = {
-            'max_levels'=>2,
-        };
-        $html = PrintHierarchy::htmlTaxaTree($dbt,$tree,$options);
+	print "<div class=\"displayPanelContent\">\n<div align=\"center\" class=\"medium\" style=\"padding-bottom: 1em;\"><i>\n\n";
+        $q->param('parent_no' => $parent_no);
+        $q->param('boxes_only' => 'YES');
+        my $subtaxa = PrintHierarchy::classify($dbt,$hbo,$s,$q);
+	if ( $subtaxa == 0 )	{
+	}
+	print "</div></div>\n\n";
 
         my $sql = "SELECT t2.taxon_no FROM $TAXA_TREE_CACHE t1, $TAXA_TREE_CACHE t2 WHERE t1.taxon_no IN ($taxon_no) AND t2.synonym_no=t1.synonym_no";
         my @results = @{$dbt->getData($sql)};
@@ -661,21 +663,14 @@ sub doCladograms {
               " UNION ".
               "(SELECT DISTINCT cladogram_no FROM cladogram_nodes cn WHERE cn.taxon_no IN ($parent_list))";
     	@cladograms = @{$dbt->getData($sql)};
-    }
 
-    if ( ! $html )	{
-        $html = "<div class=\"displayPanelContent\">\n<div align=\"center\" class=\"medium\"><i>No data on relationships are available</i></div></div>";
     } else	{
-        $html = "<div class=\"small displayPanelContent\" style=\"padding-bottom: 1em;\">\n<div style=\"margin-top: -1.5em;\">\n".$html."\n</div>\n\n";
+        print "<div class=\"displayPanelContent\">\n<div align=\"center\" class=\"medium\"><i>No data on relationships are available</i></div></div>";
     }
 
-    print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 0em; padding-top: 0em;">
-    <span class="displayPanelHeader" class="large">Classification of relatives</span>
-|;
-    print $html;
     print "</div>\n\n";
 
-        print qq|<div class="displayPanel" align="left" style="width: 42em; margin-top: 2em; padding-bottom: 1em;">
+        print qq|<div class="displayPanel" align="left" style="width: 52em; margin-top: 2em; padding-bottom: 1em;">
     <span class="displayPanelHeader" class="large">Cladograms</span>
         <div class="displayPanelContent">
 |;
@@ -1626,8 +1621,7 @@ $output .= qq|<div class="displayPanel" align="left" style="margin-bottom: 2em; 
         $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
         $output .= "</form>\n";
         $output .= "<form method=\"POST\" action=\"$READ_URL\" name=\"doViewClassification\">";
-        $output .= '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
-        $output .= '<input type="hidden" name="maximum_levels" value="99">';
+        $output .= '<input type="hidden" name="action" value="classify">';
         $output .= '<input type="hidden" name="taxon_no" value="'.$orig_no.'">';
         $output .= "</form>\n";
         
@@ -4114,8 +4108,7 @@ sub basicTaxonInfo	{
 				print ' (<a href=# onClick="javascript: document.doViewClassification.submit()">view classification</a>)';
 				print "</span></p>\n\n";
 				print "\n<form method=\"POST\" action=\"$READ_URL\" name=\"doViewClassification\">";
-				print '<input type="hidden" name="action" value="startProcessPrintHierarchy">';
-				print '<input type="hidden" name="maximum_levels" value="99">';
+				print '<input type="hidden" name="action" value="classify">';
 				print '<input type="hidden" name="taxon_no" value="'.$taxon_no.'">';
 				print "</form>\n";
 			} else	{
