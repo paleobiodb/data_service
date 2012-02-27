@@ -1067,7 +1067,7 @@ sub submitAuthorityForm {
         $end_message .= qq|
           <li$style><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&reference_no=$resultReferenceNumber&amp;display=opinions">Edit an opinion from the same reference</a></li>
           <li$style><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></li>
-          <li$style><a href="$WRITE_URL?action=startProcessPrintHierarchy&reference_no=$resultReferenceNumber&maximum_levels=100">Print this reference's classification</a></li>
+          <li$style><a href="$WRITE_URL?action=classify&reference_no=$resultReferenceNumber">Print this reference's classification</a></li>
           </ul>
         </td></tr></table>
         </div>|;
