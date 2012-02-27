@@ -2862,7 +2862,7 @@ sub checkTaxonInfo {
 
 sub displayTaxonInfoResults {
     print $hbo->stdIncludes( "std_page_top" );
-	TaxonInfo::displayTaxonInfoResults($dbt,$s,$q);
+	TaxonInfo::displayTaxonInfoResults($dbt,$s,$q,$hbo);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -3139,20 +3139,17 @@ sub displaySearchStrataResults{
 
 ##############
 ## PrintHierarchy stuff
-sub startStartPrintHierarchy	{
-    require PrintHierarchy;
-    print $hbo->stdIncludes("std_page_top");
-	PrintHierarchy::startPrintHierarchy($hbo, $s);
-    print $hbo->stdIncludes("std_page_bottom");
+sub classificationForm	{
+	return if PBDBUtil::checkForBot();
+	require PrintHierarchy;
+	logRequest($s,$q);
+	print $hbo->stdIncludes("std_page_top");
+	PrintHierarchy::classificationForm($hbo, $s);
+	print $hbo->stdIncludes("std_page_bottom");
 }
-sub startProcessPrintHierarchy	{
-    return if PBDBUtil::checkForBot();
-    require PrintHierarchy;
-    logRequest($s,$q);
-    
-    print $hbo->stdIncludes("std_page_top");
-	PrintHierarchy::processPrintHierarchy($q, $s, $dbt, $hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+sub classify	{
+	return if PBDBUtil::checkForBot();
+	PrintHierarchy::classify($dbt, $hbo, $s, $q);
 }
 ## END PrintHierarchy stuff
 ##############
