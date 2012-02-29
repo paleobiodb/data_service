@@ -72,7 +72,7 @@ function checkForm()	{
 		if ( pres == 'not a trace' )	{
 			error += "* We are no longer using the 'not a trace' category; please select another value\n";
 		}
-		if ( pres != 'body (3D)' && pres != 'amber' && frm.extant.selectedIndex == 2 )	{
+		if ( pres != 'body (3D)' && pres != 'amber' && frm.extant.selectedIndex == 2 && ( /species/.test(frm.taxon_rank.value) || pres != "" ) )	{
 			error += "* If the type isn't a body or in amber the taxon can't be extant\n";
 		}
 	} else if ( typeof(frm.preservation2) != "undefined" )	{
@@ -80,11 +80,11 @@ function checkForm()	{
 		if ( pres == 'not a trace' )	{
 			error += "* We are no longer using the 'not a trace' category; please select another value\n";
 		}
-		if ( pres != 'body (3D)' && pres != 'amber' && frm.extant.selectedIndex == 2 )	{
+		if ( pres != 'body (3D)' && pres != 'amber' && frm.extant.selectedIndex == 2 && ( /species/.test(frm.taxon_rank.value) || pres != "" ) )	{
 			error += "* If the type isn't a body or in amber the taxon can't be extant\n";
 		}
 	}
-	if ( /^[^a-z]/.test(frm.common_name.value) )	{
+	if ( /^([^a-z][A-Za-z]*)(| [^a-z][A-Za-z]*)(| [^a-z][A-Za-z]*)$/.test(frm.common_name.value) )	{
 		error += "* Don't capitalize the common name\n";
 	} else if ( /[^A-Za-z ']/.test(frm.common_name.value) || /[^a-z]$/.test(frm.common_name.value) )	{
 		error += "* The common name is misformatted\n";
