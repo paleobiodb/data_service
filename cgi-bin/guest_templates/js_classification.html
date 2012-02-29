@@ -1,9 +1,15 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
-var lastShown;
-var overs = 0;
+
+// off the shelf
+function pausecomp(ms)	{
+	ms += new Date().getTime();
+	while (new Date() < ms){}
+} 
+
 
 function showChildren(taxon_no,childList)	{
+	pausecomp(300);
 	document.getElementById('hot'+taxon_no).style.fontSize = '0.7em';
 	document.getElementById('hot'+taxon_no).innerHTML = '<span onMouseOver="hideChildren(\'' + taxon_no + '\',\'' + childList + '\');">hide</span>';
 	var nums = new Array();
@@ -15,8 +21,9 @@ function showChildren(taxon_no,childList)	{
 }
 
 function hideChildren(taxon_no,childList)	{
+	pausecomp(300);
 	document.getElementById('hot'+taxon_no).style.fontSize = '1em';
-	document.getElementById('hot'+taxon_no).innerHTML = '<span onMouseOut="showChildren(\'' + taxon_no + '\',\'' + childList + '\');">+</span>';
+	document.getElementById('hot'+taxon_no).innerHTML = '<span onMouseOver="showChildren(\'' + taxon_no + '\',\'' + childList + '\');">+</span>';
 	var nums = new Array();
 	nums = childList.split(/,/);
 	for ( i = 0; i < nums.length; i++ )	{
