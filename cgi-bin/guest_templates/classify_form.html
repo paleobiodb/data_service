@@ -5,10 +5,12 @@
 <div class="displayPanel" align="center" style="width: 30em; padding-top: 1em;">
 <div class="displayPanelContent small" style="text-align: center";> 
 %%error_message%%
+%%ref_list%%
 <form method=post action="%%read_url%%"> 
 <input id="action" type=hidden name="action" value="classify">
+
 <center>
-<table>
+<table style="margin-top: 1em;">
   <tr>
     <td align=right>Taxonomic name:</td><td><input name="taxon_name" type="text" size="25"></td>
   </tr>
@@ -17,7 +19,10 @@
     <td align=right>... or common name:</td><td><input name="common_name" type="text" size="25"></td>
   </tr>
   <tr>
-    <td align=right>Reference number:</td><td><input name="reference_no" type="text" size="10">
+    <td align=right>... or author and year:</td><td><input name="citation" type="text" size="25"></td>
+  </tr>
+  <tr>
+    <td align=right>... or reference number:</td><td><input name="reference_no" type="text" size="10">
     <span show="not_guest"><a href="#" onClick="document.forms[1].reference_no.value='%%current_ref%%'">current one</a></span>
     </td>
   </tr>
