@@ -8,13 +8,16 @@ sub classificationForm	{
 	my $hbo = shift;
 	my $s = shift;
 	my $error = shift;
+	my $ref_list = shift;
 	my %refno;
 	$refno{'current_ref'} = $s->get('reference_no');
 	if ( $s->get('enterer_no') > 0 )	{
 		$refno{'not_guest'} = 1;
 	}
 	if ( $error )	{
-		$refno{'error_message'} = "<p style=\"margin-bottom: 2em;\"><i>".$error.": please try again</i></p>";
+		$refno{'error_message'} = "<p style=\"margin-top: -0.2em; margin-bottom: 1em;\"><i>\n".$error;
+		$refno{'error_message'} .= ( ! $ref_list ) ? "<br>Please search again</i></p>" : "</i></p>\n";
+		$refno{'ref_list'} = $ref_list;
 	}
 	print $hbo->populateHTML('classify_form',\%refno);
 }
@@ -38,6 +41,31 @@ sub classify	{
 	if ( $q->param('parent_no') )	{
 		$taxon_no = $q->param('parent_no');
 	}
+	# if something like "Jones 1984" was submitted, find the matching
+	#  reference with the most opinions
+	# assume they are not looking for junior authors
+	if ( $q->param('citation') )	{
+		my ($auth,$year) = split / /,$q->param('citation');
+		if ( $year < 1700 || $year > 2100 )	{
+			print $hbo->stdIncludes($PAGE_TOP);
+			classificationForm($hbo, $s, 'The publication year is misformatted');
+			print $hbo->stdIncludes($PAGE_BOTTOM);
+			exit;
+		}
+		my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr,reftitle,pubtitle,pubvol,firstpage,lastpage FROM refs WHERE author1last='$auth' AND pubyr=$year ORDER BY author1last DESC,author2last DESC,pubyr DESC";
+		my @refs = @{$dbt->getData($sql)};
+		if ( $#refs == -1 )	{
+		} elsif ( $#refs == 0 )	{
+			$reference_no = $refs[0]->{'reference_no'};
+		} else	{
+			print $hbo->stdIncludes($PAGE_TOP);
+			my @ref_list;
+			push @ref_list , "<p class=\"verysmall\" style=\"margin-left: 2em; margin-right: 0.5em; text-indent: -1em; text-align: left; margin-bottom: -0.8em;\">".Reference::formatLongRef($_)." (ref ".$_->{'reference_no'}.")</p>\n" foreach @refs;
+			classificationForm($hbo, $s, 'The following matches were found',join('',@ref_list)."<div style=\"height: 1em;\"></div>");
+			print $hbo->stdIncludes($PAGE_BOTTOM);
+			exit;
+		}
+	}
 	my $fields = "t.taxon_no,taxon_name,taxon_rank,common_name,extant,status,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,lft,rgt";
 	my (@taxa,@parents,%children,$title);
 
@@ -47,6 +75,12 @@ sub classify	{
 	if ( ! $taxon_no && $reference_no )	{
 		my $sql = "SELECT child_spelling_no,parent_spelling_no FROM opinions WHERE reference_no=".$reference_no." AND ref_has_opinion='YES'";
 		my @opinions = @{$dbt->getData($sql)};
+		if ( ! @opinions )	{
+			print $hbo->stdIncludes($PAGE_TOP);
+			classificationForm($hbo, $s, 'No taxonomic opinions are tied to this reference');
+			print $hbo->stdIncludes($PAGE_BOTTOM);
+			exit;
+		}
 		my %in;
 		$in{$_->{'child_spelling_no'}}++ foreach @opinions;
 		$in{$_->{'parent_spelling_no'}}++ foreach @opinions;
