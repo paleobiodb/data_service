@@ -33,7 +33,8 @@ sub classify	{
 	 "superclass" => "Supercl.", "subphylum" => "Subph.",
 	 "phylum" => "Ph.");
 
-	my ($taxon_no,$reference_no) = ($q->param('taxon_no'),$q->param('reference_no'));
+	my $taxon_no = $q->param('taxon_no');
+	my $reference_no = $q->param('reference_no');
 	if ( $q->param('parent_no') )	{
 		$taxon_no = $q->param('parent_no');
 	}
@@ -51,6 +52,11 @@ sub classify	{
 		$in{$_->{'parent_spelling_no'}}++ foreach @opinions;
 		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no AND t.taxon_no IN (".join(',',keys %in).")";
 		@taxa = @{$dbt->getData($sql)};
+		# some parents may be completely unclassified
+		my $non_opinion_fields = $fields;
+		$non_opinion_fields =~ s/,status//;
+		$sql = "SELECT $non_opinion_fields FROM authorities a,$TAXA_TREE_CACHE t,refs r WHERE a.taxon_no=t.taxon_no AND t.opinion_no=0 AND a.reference_no=r.reference_no AND t.taxon_no IN (".join(',',keys %in).")";
+		push @taxa , @{$dbt->getData($sql)};
 		my %parent;
 		$parent{$_->{'child_spelling_no'}} = $_->{'parent_spelling_no'} foreach @opinions;
 		for my $i ( 0..$#taxa )	{
@@ -101,7 +107,8 @@ sub classify	{
 
 		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no AND t.taxon_no=t.spelling_no AND lft>=".$range->{'lft'}." AND rgt<=".$range->{'rgt'}." ORDER BY lft";
 		@taxa = @{$dbt->getData($sql)};
-		$title = TaxonInfo::italicize( $taxa[0] );
+		$title = "the ".$taxa[0]->{'taxon_rank'}." ".TaxonInfo::italicize( $taxa[0] );
+		$title =~ s/unranked //;
 
 		push @parents , $taxa[0];
 		for my $i ( 1..$#taxa )	{
@@ -186,7 +193,7 @@ sub classify	{
 			$name .= " [".$t->{'common_name'}."]";
 		}
 		my $class = ( $depth <= $shownDepth ) ? 'classBox' : 'hiddenClassBox';
-		my $style = ( $depth == 1 ) ? ' style="border-left: 0px;"' : '';
+		my $style = ( $depth == 1 ) ? ' style="border-left: 0px; margin-bottom: 0.8em; "' : '';
 		print qq|  <div id="t$t->{taxon_no}" class="$class"$style>
 |;
 		my $firstMargin = ( $depth <= $shownDepth ) ? "0em" : "0em";
@@ -200,7 +207,7 @@ sub classify	{
 			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onMouseOver="hideChildren('$t->{taxon_no}','$list');">hide</span></div>
 |;
 		} elsif ( $list )	{
-			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner"><span onMouseOut="showChildren('$t->{taxon_no}','$list');">+</span></div>
+			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner"><span onMouseOver="showChildren('$t->{taxon_no}','$list');">+</span></div>
 |;
 		}
 		printBox( $_ , $t->{'taxon_no'} , $depth + 1 ) foreach @{$valids{$t->{'taxon_no'}}};
@@ -236,7 +243,7 @@ sub classify	{
 		print '<center><p class="tiny">';
 		print '<a href="/public/classification/classification.csv">Download</a></b> this list of taxonomic names';
 		print ' - <a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download</a> authority and opinion data for these taxa';
-		print " - <a href=\"$READ_URL?action=classification\">See another classification</a></p></center>";
+		print " - <a href=\"$READ_URL?action=classify\">See another classification</a></p></center>";
 		print $hbo->stdIncludes($PAGE_BOTTOM);
 		close OUT;
 	}
