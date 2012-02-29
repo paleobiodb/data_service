@@ -675,6 +675,41 @@ span.nonEditable {
     font-size: 0.9em;
 }
 
+.classBox	{
+	display: block;
+	overflow: auto;
+	clear: left;
+	margin-left: 0.5em;
+	padding: 0.25em;
+	padding-left: 0.8em;
+	padding-right: 0em;
+	border-left: 1px solid Gainsboro;
+}
+.hiddenClassBox	{
+	display: none;
+	overflow: auto;
+	clear: left;
+	margin-left: 0.5em;
+	padding: 0.25em;
+	padding-left: 0.8em;
+	padding-right: 0em;
+	border-left: 1px solid Gainsboro;
+}
+.classTaxon	{
+	position: relative;
+	float: left;
+	clear: left;
+	padding-left: 1px;
+}
+.classHotCorner	{
+	position: relative;
+	float: right;
+	clear: right;
+	width: 8em;
+	text-align: right;
+	color: Gray;
+}
+
 .fixedColumn {
     overflow: hidden;
     width: 35px;
