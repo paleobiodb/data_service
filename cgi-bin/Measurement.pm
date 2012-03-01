@@ -643,28 +643,26 @@ sub populateMeasurementForm {
             push @values , '<br><div style="margin-top: 0.5em;"><input type="checkbox" name="switch_ref" value="'.$s->get('reference_no').'"> switch this data record to your current reference ('.$s->get('reference_no').')'."</div>\n";
         }
 
-	# if this is a general taxon-specific record, the user might want to
-	#   swap it to a specific occurrence
+        # allow users to swap records between occurrences or from general
+        #  taxon-specific records to particular occurrences
 	# exact match on genus and species is required to avoid printing tons of
 	#  irrelevant records
-	if ( $row->{'occurrence_no'} == 0 )	{
-		my ($g,$s) = split / /,$taxon_name;
-		my $sql = "(SELECT collection_name,occurrence_no FROM collections c,occurrences o WHERE c.collection_no=o.collection_no AND genus_name='$g' AND species_name='$s') UNION (SELECT collection_name,occurrence_no FROM collections c,reidentifications r WHERE c.collection_no=r.collection_no AND genus_name='$g' AND species_name='$s') ORDER BY collection_name";
-        	@colls = @{$dbt->getData($sql)};
-		if ( @colls )	{
-			push @fields , 'occurrences';
-			my $occ_list = "<div style=\"margin-top: 0.5em;\">... and/or switch this record to ";
-			if ( $#colls == 0 )	{
-				$occ_list .= "<input type=\"checkbox\" name=\"switch_occ\" value=\"$colls[0]->{'occurrence_no'}\">$colls[0]->{'collection_name'}<br>\n";
-			} elsif ( $#colls <= 9 )	{
-				$occ_list .= "one of the following collections:<br>";
-				$occ_list .= "<input type=\"radio\" name=\"switch_occ\" value=\"$_->{'occurrence_no'}\" style=\"margin-left: 3em;\">$_->{'collection_name'}<br>\n" foreach @colls;
-			} else	{
-				$occ_list .= "collection number <input name=\"switch_coll\" size=6>\n<input type=\"hidden\" name=genus_name value=\"$g\">\n<input type=\"hidden\" name=species_name value=\"$s\">\n";
-			}
-			$occ_list .= "</div>\n";
-			push @values , $occ_list;
+	my ($g,$s) = split / /,$taxon_name;
+	my $sql = "(SELECT collection_name,occurrence_no FROM collections c,occurrences o WHERE c.collection_no=o.collection_no AND genus_name='$g' AND species_name='$s') UNION (SELECT collection_name,occurrence_no FROM collections c,reidentifications r WHERE c.collection_no=r.collection_no AND genus_name='$g' AND species_name='$s') ORDER BY collection_name";
+       	@colls = @{$dbt->getData($sql)};
+	if ( @colls )	{
+		push @fields , 'occurrences';
+		my $occ_list = "<div style=\"margin-top: 0.5em;\">... and/or switch this record to ";
+		if ( $#colls == 0 )	{
+			$occ_list .= "<input type=\"checkbox\" name=\"switch_occ\" value=\"$colls[0]->{'occurrence_no'}\">$colls[0]->{'collection_name'}<br>\n";
+		} elsif ( $#colls <= 9 )	{
+			$occ_list .= "one of the following collections:<br>";
+			$occ_list .= "<input type=\"radio\" name=\"switch_occ\" value=\"$_->{'occurrence_no'}\" style=\"margin-left: 3em;\">$_->{'collection_name'}<br>\n" foreach @colls;
+		} else	{
+			$occ_list .= "collection number <input name=\"switch_coll\" size=6>\n<input type=\"hidden\" name=genus_name value=\"$g\">\n<input type=\"hidden\" name=species_name value=\"$s\">\n";
 		}
+		$occ_list .= "</div>\n";
+		push @values , $occ_list;
 	}
 
         # some additional fields not from the form row
