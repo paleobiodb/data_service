@@ -52,12 +52,11 @@ sub classify	{
 			print $hbo->stdIncludes($PAGE_BOTTOM);
 			exit;
 		}
-		my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr,reftitle,pubtitle,pubvol,firstpage,lastpage FROM refs WHERE author1last='$auth' AND pubyr=$year ORDER BY author1last DESC,author2last DESC,pubyr DESC";
+		my $sql = "SELECT reference_no,author1init,author1last,author2init,author2last,otherauthors,pubyr,reftitle,pubtitle,pubvol,firstpage,lastpage FROM refs WHERE author1last='$auth' AND pubyr=$year ORDER BY author1last DESC,author2last DESC,pubyr DESC";
 		my @refs = @{$dbt->getData($sql)};
-		if ( $#refs == -1 )	{
-		} elsif ( $#refs == 0 )	{
+		if ( $#refs == 0 )	{
 			$reference_no = $refs[0]->{'reference_no'};
-		} else	{
+		} elsif ( $#refs > 0 )	{
 			print $hbo->stdIncludes($PAGE_TOP);
 			my @ref_list;
 			push @ref_list , "<p class=\"verysmall\" style=\"margin-left: 2em; margin-right: 0.5em; text-indent: -1em; text-align: left; margin-bottom: -0.8em;\">".Reference::formatLongRef($_)." (ref ".$_->{'reference_no'}.")</p>\n" foreach @refs;
@@ -189,6 +188,7 @@ sub classify	{
 	if ( ! $q->param('boxes_only') )	{
 		print "<center><p class=\"pageTitle\">Classification of $title</p></center>\n\n";
 	}
+
 	print "<div class=\"verysmall\" style=\"width: 50em; margin-left: auto; margin-right: auto;\">\n\n";
 
 	# don't display every name, only the top-level ones
@@ -226,9 +226,9 @@ sub classify	{
 		if ( $t->{'common_name'} )	{
 			$name .= " [".$t->{'common_name'}."]";
 		}
-		my $class = ( $depth <= $shownDepth ) ? 'classBox' : 'hiddenClassBox';
+		my $class = ( $depth <= $shownDepth ) ? 'shownClassBox' : 'hiddenClassBox';
 		my $style = ( $depth == 1 ) ? ' style="border-left: 0px; margin-bottom: 0.8em; "' : '';
-		print qq|  <div id="t$t->{taxon_no}" class="$class"$style>
+		print qq|  <div id="t$t->{taxon_no}" id="classBox" class="$class"$style>
 |;
 		my $firstMargin = ( $depth <= $shownDepth ) ? "0em" : "0em";
 		if ( $list )	{
@@ -237,16 +237,19 @@ sub classify	{
 			print qq|    <div id="n$t->{taxon_no}" class="classTaxon">|;
 		}
 		print "$name</div>\n";
-		if ( $depth < $shownDepth && $list )	{
+		if ( $depth == 1 && $list && $#{$valids{$t->{'taxon_no'}}} > 0 )	{
+			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onMouseOver="showAll('hot$t->{taxon_no}');">show all</span></div>
+|;
+		} elsif ( $depth > 1 && $depth < $shownDepth && $list )	{
 			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onMouseOver="hideChildren('$t->{taxon_no}','$list');">hide</span></div>
 |;
-		} elsif ( $list )	{
+		} elsif ( $depth > 1 && $list )	{
 			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner"><span onMouseOver="showChildren('$t->{taxon_no}','$list');">+</span></div>
 |;
 		}
 		printBox( $_ , $t->{'taxon_no'} , $depth + 1 ) foreach @{$valids{$t->{'taxon_no'}}};
 		if ( $invalids{$t->{'taxon_no'}} )	{
-			my $class = ( $depth + 1 <= $shownDepth ) ? 'classBox' : 'hiddenClassBox';
+			my $class = ( $depth + 1 <= $shownDepth ) ? 'shownClassBox' : 'hiddenClassBox';
 			print qq|  <div id="t$t->{'taxon_no'}bad" class="$class">
 |;
 			@{$invalids{$t->{'taxon_no'}}} = sort { $a->{'taxon_name'} cmp $b->{'taxon_name'} } @{$invalids{$t->{'taxon_no'}}};
