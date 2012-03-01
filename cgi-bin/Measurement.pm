@@ -778,8 +778,10 @@ sub processMeasurementForm	{
         # this is pretty conservative...
         # made less conservative by requiring matches on the comments and
 	#  all measurements when there is no specimen ID JA 7-8.9.11
+        # and even less conservative (whoops) by requiring a taxon_no or
+        #  occurrence_no match even when specimen_id is known JA 1.3.12
         if ( $fields{'specimen_no'} <= 0 && $fields{'specimen_id'} =~ /[A-Za-z0-9]/ )	{
-            $sql = "SELECT specimen_no FROM specimens WHERE specimen_id='".$fields{'specimen_id'}."' AND specimen_id IS NOT NULL AND BINARY specimen_part='".$fields{'specimen_part'}."' LIMIT 1";
+            $sql = "SELECT specimen_no FROM specimens WHERE ((taxon_no=".$fields{'taxon_no'}." AND taxon_no>0) OR (occurrence_no=".$fields{'occurrence_no'}." AND occurrence_no>0)) AND specimen_id='".$fields{'specimen_id'}."' AND specimen_id IS NOT NULL AND BINARY specimen_part='".$fields{'specimen_part'}."' LIMIT 1";
             $fields{'specimen_no'} = ${$dbt->getData($sql)}[0]->{'specimen_no'};
         } elsif ( $fields{'specimen_no'} <= 0 )	{
             $sql = "SELECT m.specimen_no,m.measurement_type,m.average,comments FROM specimens s,measurements m WHERE s.specimen_no=m.specimen_no AND ((specimen_id IS NULL AND taxon_no=".$fields{'taxon_no'}." AND taxon_no>0) OR (specimen_id IS NULL AND occurrence_no=".$fields{'occurrence_no'}." AND occurrence_no>0)) AND BINARY specimen_part='".$fields{'specimen_part'}."' LIMIT 1";
