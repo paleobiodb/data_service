@@ -675,7 +675,7 @@ span.nonEditable {
     font-size: 0.9em;
 }
 
-.classBox	{
+.shownClassBox	{
 	display: block;
 	overflow: auto;
 	clear: left;
