@@ -1,0 +1,68 @@
+
+<div align="center">
+<p class="pageTitle">Published time scales</p>
+
+%%hiddens%%
+
+<div style="width: 46em;">
+
+<form action="%%read_url%%?a=searchScale" method="POST">
+<input id="action" type=hidden name="action" value="searchScale">
+<div class="small" style="height: 1em; margin-left: 9em; margin-bottom: 5em;">
+
+<div style="position: relative; float: left; clear: none;">
+rank<br>
+<select id="scale_rank">
+<option>all</option>
+<option>eon/eonothem</option>
+<option>era/erathem</option>
+<option>period/system</option>
+<option>subperiod/system</option>
+<option>epoch/series</option>
+<option>subepoch/series</option>
+<option>age/stage</option>
+<option>subage/stage</option>
+</select>
+</div>
+
+<div style="float: left; clear: none; margin-left: 1.5em;">
+continent<br>
+<select id="continent">
+<option>all</option>
+<option>global</option>
+<option>Asia</option>
+<option>Australia/New Zealand</option>
+<option>Europe</option>
+<option>North America</option>
+<option>South America</option>
+</select>
+</div>
+
+<div style="float: left; clear: none; margin-left: 1.5em;">
+period<br>
+<select id="period_max">
+</select>
+</div>
+
+<div style="float: left; clear: none; margin-left: 1.5em; padding-top: 1.2em;">
+<input type="submit" value="show">
+</div>
+
+</div>
+</form>
+
+<form name="scale_view_form" id="scale_view_form" action="%%read_url%%" method="POST">
+
+%%panels%%
+
+%%add_form%%
+
+<div align="left" class="tiny" style="margin-left: 2em; margin-right: 2em; padding-bottom: 3em;">You can use this form to view the published time scales we synthesize algorithmically to produce the website's master time scale. We employ the most recently published data to fix correlations and boundary estimates involving planes between pairs of time intervals. Boundary estimates given in the original sources are presented in the individual scales.</div>
+
+</div>
+
+</form>
+
+</div>
+
+
