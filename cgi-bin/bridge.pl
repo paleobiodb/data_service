@@ -72,7 +72,7 @@ if ( $q->param('a') )	{
 }
 
 if ( $DB ne "eco" && $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
-#	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor" );
+	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor" );
 }
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
@@ -2610,6 +2610,22 @@ sub displayOpinionChoiceForm {
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
+sub reviewOpinionsForm	{
+	if (!$s->isDBMember()) {
+		login( "Please log in first.");
+		exit;
+	}
+	Opinion::reviewOpinionsForm($dbt,$hbo,$s,$q);
+}
+
+sub reviewOpinions	{
+	if (!$s->isDBMember()) {
+		login( "Please log in first.");
+		exit;
+	}
+	Opinion::reviewOpinions($dbt,$hbo,$s,$q);
+}
+
 # rjp, 3/2004
 #
 # Displays a form for users to add/enter opinions about a taxon.
@@ -2914,11 +2930,11 @@ sub submitFossilRecordCurveForm {
 
 ##############
 ## Scales stuff JA 7.7.03
-sub startScale	{
-    require Scales;
-    print $hbo->stdIncludes("std_page_top");
-	Scales::startSearchScale($dbt, $s, $WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+sub searchScale	{
+	require Scales;
+	print $hbo->stdIncludes($PAGE_TOP);
+	Scales::searchScale($dbt, $hbo, $s, $q);
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub processShowForm	{
     require Scales;
