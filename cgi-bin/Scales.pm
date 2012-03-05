@@ -18,82 +18,91 @@ use strict;
 # +/+ processViewTimeScale
 # +/+ processEditScaleForm
 
-sub startSearchScale {
-	my $dbt = shift;
-	my $s = shift;
-
+sub searchScale {
+	my ($dbt,$hbo,$s,$q) = @_;
 	my $dbh = $dbt->dbh;
+	my %vars = $q->Vars();
 
-	# Print the form
-	print "<div align=\"center\"><p class=\"pageTitle\">Select a time scale to view</p>\n";
+	my @where = ("s.scale_no=c.scale_no AND c.interval_no=il.interval_no");
+	if ( $q->param('period_max') )	{
+		my $sql = "SELECT base_age,top_age FROM intervals i,interval_lookup il where i.interval_no=il.interval_no AND (eml_interval IS NULL OR eml_interval='') AND interval_name='".$q->param('period_max')."'";
+		my $i = ${$dbt->getData($sql)}[0];
+		push @where , "il.base_age>=".$i->{'top_age'}." AND il.top_age<=".$i->{'base_age'};
+	}
+	if ( ! $q->param('continent') )	{
+		$q->param('continent' => 'global');
+		$vars{'continent'} = "global";
+	}
+	if ( $q->param('continent') =~ /Aust/i )	{
+		push @where , "(continent='Australia' OR continent='New Zealand')";
+	} elsif ( $q->param('continent') && $q->param('continent') !~ /all/i )	{
+		push @where , "continent='".$q->param('continent')."'";
+	}
+	if ( $q->param('scale_rank') && $q->param('scale_rank') !~ /all/i )	{
+		push @where , "scale_rank='".$q->param('scale_rank')."'";
+	}
 
 	# Retrieve each scale's name from the database
-	my $sql = "SELECT authorizer_no,scale_no,scale_name,reference_no,continent,scale_rank FROM scales";
+	my $sql = "SELECT s.authorizer_no,s.scale_no,scale_name,s.reference_no,continent,scale_rank FROM scales s,correlations c,interval_lookup il WHERE ".join(' AND ',@where);
 	my @results = @{$dbt->getData($sql)};
-	my %scale_strings;
+	my (%scale_strings,%hasScales);
+
 	foreach my $scaleref (@results)	{
-		my $option = "<option value=\"" . $scaleref->{scale_no} . "\">";
+		$hasScales{$scaleref->{'continent'}}++;
+		my $option = "<div class=\"tiny\"><a href=\"$READ_URL?a=processViewScale&amp;scale_no=" . $scaleref->{scale_no} . "\" style=\"margin-left: 2em;\">";
 		my $name = $scaleref->{scale_name};
 		my $sql2 = "SELECT author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=" . $scaleref->{reference_no};
 		my @results2 = @{$dbt->getData($sql2)};
 		my $auth = $results2[0]->{author1last};
+		$auth =~ s/, (2nd\.|Jr\.)//;
 		if ( $results2[0]->{otherauthors} || $results2[0]->{author2last} eq "et al." )	{
 			$auth .= " et al.";
 		} elsif ( $results2[0]->{author2last} )	{
 			$auth .= " and " . $results2[0]->{author2last};
 		}
-		$auth .= " " . $results2[0]->{pubyr};
-		$auth = " [" . $auth . "]\n";
-		$scale_strings{$scaleref->{continent}.$scaleref->{scale_rank}}{$name} = $option . $name . $auth;
-
-		# Get the authorizer's name
-#		$sql2 = "SELECT name FROM person WHERE person_no=" . $scaleref->{authorizer_no};
-#		@results2 = @{$dbt->getData($sql2)};
-#		$scale_authorizer{$name} = $results2[0]->{name};
+		my $authyr = $auth . " " . $results2[0]->{pubyr};
+		$name =~ s/$authyr//;
+		$name =~ s/$auth//;
+		$name =~ s/$results2[0]->{author1last}//;
+		$authyr = " [" . $authyr . "]\n";
+		$scale_strings{$scaleref->{continent}.$scaleref->{scale_rank}}{$authyr} = $option . $name. "</a>" . $authyr . "</div>\n";
 	}
-
-	print "<table cellpadding=5>\n";
-	print "<tr><td align=\"left\"> ";
-	print "<form name=\"scale_view_form\" id=\"scale_view_form\" action=\"$WRITE_URL\" method=\"POST\">\n";
-	print "<input id=\"action\" type=\"hidden\" name=\"action\" value=\"processViewScale\">\n\n";
+	if ( ! @results )	{
+		$vars{'panels'} = "<div style=\"margin-bottom: 2em;\"><i>No time scales met your search criteria.<br>Please try again.</i></div>\n\n";
+	}
 
 	# WARNING: if African or Antarctic scales are ever entered, they need
 	#  to be added to this list
 	for my $c ( 'global','Asia','Australia','Europe','New Zealand','North America','South America' )	{
+		if ( $q->param('continent') !~ /all/i )	{
+			if ( $q->param('continent') && $q->param('continent') !~ /$c/i )	{
+				next;
+			} elsif ( ! $hasScales{$c} )	{
+				next;
+			}
+		}
 		my $continent = $c;
 		$continent =~ s/global/Global/;
-		print qq|<div class="displayPanel" align="left" style="padding-left: 2em;">
-  <span class="displayPanelHeader">$continent</span>
-  <div class="displayPanelContent">\n|;
+		$vars{'panels'} .= qq|<div class="displayPanel" align="left" style="padding-left: 2em;">\n|;
+		$vars{'panels'} .= qq|<span class="displayPanelHeader">$continent</span>\n|;
+		$vars{'panels'} .= qq|<div class="displayPanelContent">\n|;
 		for my $r ( 'eon/eonothem','era/erathem','period/system','subperiod/system','epoch/series','subepoch/series','age/stage','subage/stage','chron/zone' )	{
 			my @sorted = sort keys %{$scale_strings{$c.$r}};
 			if ( $#sorted > -1 )	{
-				my $crclean = $c . $r;
-				$crclean =~ s/[^A-Za-z]//g;
-				print "<div class=\"tiny\" style=\"padding-bottom: 2px;\">$r</div>\n";
-				print "<div class=\"verysmall\" style=\"padding-bottom: 4px;\">&nbsp;&nbsp;<select class=\"tiny\" name=\"scale$crclean\" onChange=\"document.getElementById('scale_view_form').submit()\">\n";
-				print "<option>\n";
+				$vars{'panels'} .= "<div style=\"margin-bottom: 0.5em;\">\n";
+				$vars{'panels'} .= "<div class=\"tiny\" style=\"padding-bottom: 2px;\">$r</div>\n";
 				for my $string ( @sorted )	{
-					print $scale_strings{$c.$r}{$string};
+					$vars{'panels'} .= $scale_strings{$c.$r}{$string};
 				}
-				print "</select></div>\n\n";
+				$vars{'panels'} .= "</div>\n\n";
 			}
 		}
-		print "</div>\n</div>\n\n";
+		$vars{'panels'} .= "</div>\n</div>\n\n";
 	}
-
-	print "</td></tr>";
-	print "<noscript>\n";
-	print "<tr><td align=\"center\"> ";
-	print "<input type=\"submit\" value=\"View scale\">";
-	print "</td></tr> ";
-	print "</noscript>\n";
-	print "</table>\n\n";
-	print "</form>\n\n";
 
 	if ( $s->get('enterer') eq "J. Alroy" || $s->get('enterer') eq "S. Holland" )	{
 
-		print qq|
+		$vars{'add_form'} = qq|
 		<form name="scale_add_form" action="$WRITE_URL" method="POST">
 		<input id="action" type="hidden" name="action" value="processShowForm">
 		<input type="hidden" name="scale" value="add">
@@ -101,28 +110,7 @@ sub startSearchScale {
 		</form>
 |;
 	}
-
-	print qq|
-<p align="left" class="tiny" style="margin-left: 2em; margin-right: 2em;">All data on the web site are prepared using an automatically generated composite time scale. The composite scale is based on the latest published correlations and boundary estimates for each time interval that are given above.</p>
-
-</div>
-
-<script language="JavaScript" type="text/javascript">
-<!-- Begin
-
-document.scale_view_form.reset();
-
-window.onunload = unloadPage;
-
-function unloadPage()	{
-	document.scale_view_form.reset();
-}
-
-//  End -->
-</script>
-
-|;
-
+	print $hbo->populateHTML('scale_search',\%vars);
 
 	return;
 
@@ -403,9 +391,9 @@ sub processViewTimeScale	{
 	if ( $stage eq "summary" )	{
 		print "<div align=\"center\"><p><a href=\"$WRITE_URL?action=processShowForm&scale=" , $q->param('scale') , "\">Edit this time scale</a> - ";
 		print "<a href=\"$WRITE_URL?action=processShowForm\">Create a new time scale</a> - ";
-		print "<a href=\"$WRITE_URL?action=startScale\">Edit another time scale</a></p></div>\n\n";
+		print "<a href=\"$WRITE_URL?action=searchScale\">Edit another time scale</a></p></div>\n\n";
 	} else	{
-		print "<div align=\"center\"><p><a href=\"$WRITE_URL?action=startScale\">View another time scale</a></p></div>\n\n";
+		print "<div align=\"center\"><p><a href=\"$WRITE_URL?action=searchScale\">View another time scale</a></p></div>\n\n";
 	}
 
 	return;
