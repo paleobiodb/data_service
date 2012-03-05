@@ -1645,8 +1645,6 @@ sub displayOpinionChoiceForm {
     my $q = shift;
     my $dbh = $dbt->dbh;
 
-    print "<div align=\"center\">";
-    print "<table><tr><td>";
     my $sepkoski;
     if ($q->param('taxon_no')) {
         my $child_no = $q->param('taxon_no');
@@ -1660,7 +1658,7 @@ sub displayOpinionChoiceForm {
         print "<div align=\"center\">";
         print "<p class=\"pageTitle\">Which opinion about ".$t->taxonNameHTML()." do you want to edit?</p>\n";
         
-	    print qq|<div class="displayPanel" style="padding: 1em;">\n|;
+	    print qq|<div class="displayPanel" style="padding: 1em; margin-left: 3em; margin-right: 3em;">\n|;
         print qq|<div align="left"><ul>|;
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
@@ -1677,7 +1675,6 @@ sub displayOpinionChoiceForm {
         }
         print qq|<li><a href="$WRITE_URL?action=displayOpinionForm&amp;child_no=$orig_no&amp;child_spelling_no=$child_no&amp;opinion_no=-1">Create a <b>new</b> opinion record</a></li>|;
         print qq|</ul></div>\n|;
-#        print qq|<tr><td align="center" colspan=2><p><input type=submit value="Submit"></p><br></td></tr>|;
     } else {
         my @where = ();
         my @errors = ();
@@ -1689,7 +1686,7 @@ sub displayOpinionChoiceForm {
             my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
             my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
             if (!$authorizer_no) {
-                push @errors, $q->param('authorizer_reversed')." is not a valid authorizer. Format like 'Sepkoski, J.'" if (!$authorizer_no); 
+                push @errors, $q->param('authorizer_reversed')." is misformatted. Try something like 'Raup, D.'" if (!$authorizer_no); 
             } else {
                 push @where, "o.authorizer_no=".$authorizer_no; 
             }
@@ -1698,7 +1695,7 @@ sub displayOpinionChoiceForm {
             my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('enterer_reversed')));
             my $enterer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
             if (!$enterer_no) {
-                push @errors, $q->param('enterer_reversed')." is not a valid enterer. Format like 'Sepkoski, J.'" if (!$enterer_no); 
+                push @errors, $q->param('enterer_reversed')." is misformatted. Try something like 'Raup, D.'" if (!$enterer_no); 
             } else {
                 push @where, "o.enterer_no=".$enterer_no; 
             }
@@ -1712,26 +1709,29 @@ sub displayOpinionChoiceForm {
         if ($q->param('pubyr')) {
             my $pubyr = $dbh->quote($q->param('pubyr'));
             push @where,"((o.ref_has_opinion NOT LIKE 'YES' AND o.pubyr LIKE $pubyr) OR (o.ref_has_opinion LIKE 'YES' AND r.pubyr LIKE $pubyr))";
-            $join_refs = " LEFT JOIN refs r ON r.reference_no=o.reference_no";
+            $join_refs = " LEFT JOIN refs r ON (o.reference_no=r.reference_no)";
         }
         if ($q->param('author')) {
             my $author = $dbh->quote($q->param('author'));
             my $authorWild = $dbh->quote('%'.$q->param('author').'%');
             push @where,"((o.ref_has_opinion NOT LIKE 'YES' AND (o.author1last LIKE $author OR o.author2last LIKE $author OR o.otherauthors LIKE $authorWild)) OR".
                         "(o.ref_has_opinion LIKE 'YES' AND (r.author1last LIKE $author OR r.author2last LIKE $author OR r.otherauthors LIKE $authorWild)))";
-            $join_refs = " LEFT JOIN refs r ON r.reference_no=o.reference_no";
+            $join_refs = " LEFT JOIN refs r ON (o.reference_no=r.reference_no)";
         }
 
+        # WARNING: changes in MySQL 5.0.12 force the use of parentheses in
+        #  the FROM clause when performing a LEFT JOIN
         if (@where && !@errors) {
             push @where , "o.child_no=t.taxon_no AND a.taxon_no=o.child_no";
-            my $sql = "SELECT o.opinion_no AS opinion_no,t.opinion_no AS current_opinion,o.reference_no,o.ref_has_opinion FROM opinions o,$TAXA_TREE_CACHE t,authorities a ".
+            my $sql = "SELECT o.opinion_no AS opinion_no,t.opinion_no AS current_opinion,o.reference_no,o.ref_has_opinion FROM (opinions o,$TAXA_TREE_CACHE t,authorities a) ".
                       $join_refs.
                       " WHERE ".join(" AND ",@where).
                       " ORDER BY a.taxon_name ASC";
             my @results = @{$dbt->getData($sql)};
             if (scalar(@results) == 0) {
-                print "<div align=\"center\"<p class=\"pageTitle\">No opinions found</p></div><br><br>";
-                return;
+                $q->param('errors' => '<div style="margin-bottom: 1.5em;">No opinions were found</div>');
+                main::displayOpinionSearchForm();
+                exit;
             }
             print "<div align=\"center\">";
             if ($s->isDBMember())	{
@@ -1740,7 +1740,7 @@ sub displayOpinionChoiceForm {
                 print "<p class=\"pageTitle\">Opinions from ".Reference::formatShortRef($dbt,$q->param("reference_no"))."</p>\n";
             }
 
-            print qq|<div class="displayPanel" style="padding: 1em; margin-left: 2em; margin-right: 2em;">\n|;
+            print qq|<div class="displayPanel" style="padding: 1em; margin-left: 3em; margin-right: 3em;">\n|;
             print qq|<div class="small" align="left">|;
             print qq|<ul>|;
             foreach my $row (@results) {
@@ -1764,16 +1764,16 @@ sub displayOpinionChoiceForm {
             print "</div>";
         } else {
             if (@errors) {
-                my $plural = (scalar(@errors) > 1) ? "s" : "";
-                my $message = "<br><div align=center><table width=600 border=0>" .
-                      "<tr><td class=darkList><font size='+1'><b> Error$plural</b></font></td></tr>" .
-                      "<tr><td>";
-                $message .= "<li class='medium'>$_</li>" for (@errors);
-                $message .= "</td></tr></table>";
-                $message .= "</div><br>"; 
-                print $message;
+                my $message = qq|<div class="small" style="margin-bottom: 1.5em;">\n\n<ul>\n|;
+                $message .= "<li class='medium'>$_</li>" foreach @errors;
+                $message .= "</ul>\n</div>\n<br>\n"; 
+                $q->param('errors' => $message);
+                main::displayOpinionSearchForm();
+                exit;
             } else {
-                print "<div align=\"center\">No terms were entered.</div>";
+                $q->param('errors' => '<div style="margin-bottom: 1.5em;">No search terms were entered</div>');
+                main::displayOpinionSearchForm();
+                exit;
             }
         }
     } 
@@ -1781,12 +1781,11 @@ sub displayOpinionChoiceForm {
     if ($q->param("taxon_no")) {
         print qq|<div class="verysmall" style="margin-left: 4em; text-align: left;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>The currently favored opinion is in <b>bold</b>.\n<br>\nCreate a new opinion if your author's name is not in the above list.<br>\nDo not select an old opinion unless it was entered incorrectly or incompletely.$sepkoski</p></div>\n|;
     } elsif ($q->param('reference_no') && $s->isDBMember())	{
-        print qq|<tr><td align="left" colspan=2><div class="tiny" style="padding-left: 8em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
+        print qq|<div class="tiny" style="padding-left: 8em; padding-bottom: 3em;"><p>An "opinion" is when an author classifies or synonymizes a taxon.<br>|;
         print qq|You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')">FAQ</a>.</p></div>\n|;
-        print "</td></tr>\n";
     }
-    print "</table>\n";
     print "</form>\n";
+    print "</div>\n";
     print "</div>\n";
 }
 
