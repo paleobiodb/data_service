@@ -192,23 +192,40 @@ sub classify	{
 	print "<div class=\"verysmall\" style=\"width: 50em; margin-left: auto; margin-right: auto;\">\n\n";
 
 	# don't display every name, only the top-level ones
-	my $shownDepth = 2;
-	if ( $#taxa < 10 )	{
-		$shownDepth = 999999;
-	} elsif ( $#taxa < 30 )	{
-		$shownDepth = 3;
-	}
+	my ($maxDepth,$shownDepth,$sumchildren,@atlevel);
 	for my $p ( @parents )	{
+		($maxDepth,$shownDepth,$sumchildren) = (0,9999,0);
+		@atlevel = ();
+		traverse( $p , '' , 1 );
+		for my $i ( 1..9 )	{
+			$sumchildren = $sumchildren + $atlevel[$i];
+			if ( $sumchildren >= 3 && $i > 1 )	{
+				$shownDepth = $i;
+				if ( $sumchildren <= 20 )	{
+					$shownDepth = $i + 1;
+				}
+				last;
+			}
+		}
 		printBox( $p , '' , 1 );
 	}
 
 	print "\n</div>\n\n";
 
+	# recursively counts children and terminals
+	sub traverse	{
+		my ($t,$parent_no,$depth) = @_;
+		if ( $depth > $maxDepth )	{
+			$maxDepth = $depth;
+		}
+		$atlevel[$depth] += scalar( @{$children{$t->{'taxon_no'}}} );
+		traverse( $_ , $t->{'taxon_no'} , $depth + 1 ) foreach @{$valids{$t->{'taxon_no'}}};
+		return;
+	}
+
 	# recursively print boxes including taxon names and subtaxa
 	sub printBox	{
-		my $t = shift;
-		my $parent_no = shift;
-		my $depth = shift;
+		my ($t,$parent_no,$depth) = @_;
 		my @nos;
 		push @nos , $_->{'taxon_no'} foreach @{$valids{$t->{'taxon_no'}}};
 		my $list = join(',',@nos);
@@ -237,7 +254,7 @@ sub classify	{
 			print qq|    <div id="n$t->{taxon_no}" class="classTaxon">|;
 		}
 		print "$name</div>\n";
-		if ( $depth == 1 && $list && $#{$valids{$t->{'taxon_no'}}} > 0 )	{
+		if ( $depth == 1 && $list && $#{$valids{$t->{'taxon_no'}}} > 0 && $maxDepth > $shownDepth )	{
 			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onMouseOver="showAll('hot$t->{taxon_no}');">show all</span></div>
 |;
 		} elsif ( $depth > 1 && $depth < $shownDepth && $list )	{
@@ -277,7 +294,7 @@ sub classify	{
 			print qq|<input type="hidden" name="reference_no" value="$reference_no">|;
 		}
 		print "</form>\n"; 
-		print '<center><p class="tiny">';
+		print '<center><p class="tiny" style="padding-bottom: 3em;">';
 		print '<a href="/public/classification/classification.csv">Download</a></b> this list of taxonomic names';
 		print ' - <a href=# onClick="javascript: document.doDownloadTaxonomy.submit()">Download</a> authority and opinion data for these taxa';
 		print " - <a href=\"$READ_URL?action=classify\">See another classification</a></p></center>";
