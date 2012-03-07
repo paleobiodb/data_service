@@ -596,7 +596,7 @@ sub displayReference {
 
 	my $class_link; 
 	if ( $DB ne "eco" )	{
-		$class_link = qq| - <small><a href="$READ_URL?a=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">view classification</a></small>|;
+		$class_link = qq| - <small><a href="$READ_URL?a=classify&amp;reference_no=$reference_no">view classification</a></small>|;
 	}
 	print $box->(qq'Taxonomic opinions ($opinion_count) $class_link',$html);
     }
@@ -947,7 +947,7 @@ sub getReferenceLinkSummary	{
 
 	if ($opinion_count) {
 		my $plural = ($opinion_count == 1) ? "" : "s";
-		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count taxonomic opinion$plural</a> (<a href="$READ_URL?a=startProcessPrintHierarchy&amp;reference_no=$reference_no&amp;maximum_levels=100">show classification</a>)|;
+		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count taxonomic opinion$plural</a> (<a href="$READ_URL?a=classify&amp;reference_no=$reference_no">show classification</a>)|;
 	}      
 
 	# list taxa with measurements based on this reference JA 4.12.10
@@ -1080,6 +1080,8 @@ sub getReferences {
                 $year_relation = "r.pubyr>".$options{'year'};
             } elsif ($options{'year_relation'} =~ /before/i)	{
                 $year_relation = "r.pubyr<".$options{'year'};
+            } else	{
+                $year_relation = "r.pubyr=".$options{'year'};
             }
         }
 	if ( $year_relation )	{
