@@ -681,8 +681,7 @@ sub processEditScaleForm	{
 		}
 
 	}
-    my $t = new TimeLookup($dbt);
-    $t->generateLookupTable;
+	TimeLookup::buildLookupTable($dbt);
 
 	$q->param('scale' => $scale_no);
 	processViewTimeScale($dbt, $hbo, $q, $s, 'summary', \@badintervals);
