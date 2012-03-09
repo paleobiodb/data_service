@@ -748,82 +748,6 @@ sub displayTenMyBins	{
 
 }
 
-sub itvsort {
-    $a->{'all_scales'}->[0]->{'scale_no'} <=> $b->{'all_scales'}->[0]->{'scale_no'}
-    ||
-    $b->{'base_age'} <=> $a->{'base_age'} 
-    ||
-    $b->{'interval_no'} <=> $a->{'interval_no'}
-}
-
-sub displayFullScale {
-    my ($dbt,$hbo) = @_;
-    my $t = new TimeLookup($dbt);
-    $t->getBoundaries();
-    my $ig = $t->getIntervalGraph();
-
-    my @base = ();
-    foreach my $itv (values %$ig) {
-        if (!$itv->{'max'}) {
-            push @base, $itv;
-        }
-    }
-    printTree($ig,\@base);
-}
-
-sub printInterval {
-    my $itv = shift;
-    my $overline = shift;
-    print "&nbsp;" x ($itv->{'depth'}*4);
-    if ($overline) {
-        print "<span style='border-top: 1px black solid'>";
-    }
-    my $scale = "scale $itv->{best_scale}->{scale_no}:$itv->{best_scale}->{continent}:$itv->{best_scale}->{pubyr}";
-    my $bounds = "lower [$itv->{lower_max}/$itv->{base_age}/$itv->{lower_min}] to upper [$itv->{upper_max}/$itv->{top_age}/$itv->{upper_min}]";
-    print "$itv->{interval_no}: $itv->{name} - $bounds - $scale <br>";
-    if ($overline) {
-        print "</span>";
-    }
-}
-
-sub printTree {
-    my ($ig,$base,$filter) = @_;
-    my @base = @$base;
-   
-    $_->{'depth'} = 0 foreach (@base);
-    @base = sort itvsort @base; 
-
-    my $last_depth = 0;
-    my $last_scale = 0;
-    print "<small>";
-    while (my $itv = pop @base) {
-        my $split = 0;
-        if ($last_depth == $itv->{'depth'} && $last_scale != $itv->{'next_scale'}->{'scale_no'}) {
-            $split = 1;
-        }
-        printInterval($itv,$split);
-        $last_depth = $itv->{'depth'};
-        $last_scale = $itv->{'next_scale'}->{'scale_no'};
-
-        my @children = ();
-        foreach (@{$itv->{'children'}}) {
-            if ($_ == $itv->{'max'} || $_ == $itv->{'min'}) {
-                print "SKIPPING $_->{interval_no}:$_->{name}, Loop";
-            } else {
-                if (!$filter || $filter->($_)) {
-                    push @children, $_;
-                } 
-            }
-        }
-
-        $_->{'depth'} = $itv->{'depth'}+1 foreach (@children);
-        @children = sort itvsort @children; 
-
-        push @base, @children;
-    }
-    print "</small>";
-}
-
 # old Schroeter function almost completely rewritten by JA 23-24.10.11
 sub displayInterval	{
 	my ($dbt,$hbo,$q) = @_;
@@ -841,7 +765,7 @@ sub displayInterval	{
 	# find all overlapping intervals
 	$sql = "SELECT i.interval_no,base_age,base_age_relation,top_age,top_age_relation FROM intervals i,interval_lookup il WHERE i.interval_no=il.interval_no AND base_age>=".$itv->{top_age}." AND top_age<=".$itv->{base_age}." AND i.interval_no!=$i";
 	my @relations = @{$dbt->getData($sql)};
-	my (@equals,@within,@contains,@overlaps,@next,@previous);
+	my (@equals,@within,@contains,@shares_base,@shares_top,@overlaps,@next,@previous);
 	for my $r ( @relations )	{
 		if ( $r->{base_age} == $itv->{base_age} && $r->{top_age} == $itv->{top_age} )	{
 			if ( $r->{base_age_relation} eq "equal to" && $r->{top_age_relation} eq "equal to" && $itv->{base_age_relation} eq "equal to" && $itv->{top_age_relation} eq "equal to" )	{
@@ -857,6 +781,10 @@ sub displayInterval	{
 			push @within , $r;
 		} elsif ( $r->{base_age} < $itv->{base_age} && $r->{top_age} > $itv->{top_age} )	{
 			push @contains , $r;
+		} elsif ( $r->{base_age} == $itv->{base_age} && $r->{top_age} != $itv->{top_age} )	{
+			push @shares_base , $r;
+		} elsif ( $r->{base_age} != $itv->{base_age} && $r->{top_age} == $itv->{top_age} )	{
+			push @shares_top , $r;
 		} elsif ( $r->{base_age} != $itv->{top_age} && $r->{top_age} != $itv->{base_age} )	{
 			push @overlaps , $r;
 		}
@@ -897,6 +825,8 @@ sub displayInterval	{
 
 	@within = sort { $a->{base_age} <=> $b->{base_age} || $b->{top_age} <=> $a->{top_age} } @within;
 	@contains = sort { $name{$a->{interval_no}} cmp $name{$b->{interval_no}} || $a->{interval_no} <=> $b->{interval_no} } @contains;
+	@shares_base = sort { $name{$a->{interval_no}} cmp $name{$b->{interval_no}} || $a->{interval_no} <=> $b->{interval_no} } @shares_base;
+	@shares_top = sort { $name{$a->{interval_no}} cmp $name{$b->{interval_no}} || $a->{interval_no} <=> $b->{interval_no} } @shares_top;
 	@overlaps = sort { $a->{base_age} <=> $b->{base_age} || $a->{top_age} <=> $b->{top_age} } @overlaps;
 
     print "<div align=\"center\"><p class=\"pageTitle\">$name{$itv->{interval_no}} $type</p></div>";
@@ -904,6 +834,9 @@ sub displayInterval	{
     print "<table width=\"100%\" cellspacing=\"5\" cellpadding=\"0\" border=\"0\"><tr><td valign=top width=\"50%\">";
     my $general_html = "";
     if ($itv->{'base_age'} =~ /\d/) {
+        # as I write, base_age_source and top_age_source in interval_lookup
+        #  are still buggy, so check the raw correlations directly JA 9.3.12
+        my $sql = "SELECT interval_name,interval_no FROM intervals i,scales s,refs r,correlations c WHERE lower_boundary=".$itv->{'base_age'}." ORDER BY pubyr DESC LIMIT 1";
         my $lower = TimeLookup::printBoundary($itv->{'base_age'}); 
         $general_html .= "Lower boundary: $itv->{base_age_relation} $lower Ma<br>";
         my $upper = TimeLookup::printBoundary($itv->{'top_age'}); 
@@ -941,6 +874,15 @@ sub displayInterval	{
 		print $hbo->htmlBox("Key correlations",$corr_html);
 	}
 
+	if (@within)	{
+		my $html = "";
+		foreach my $w (@within)	{
+			$html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$w->{interval_no}\">$name{$w->{interval_no}}</a></li>";
+		}
+		print $hbo->htmlBox("Contained within",$html);
+	}
+
+
  	if ( @previous )	{
 		my $html = "";
 		$html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$_->{interval_no}\">$name{$_->{interval_no}}</a></li>" foreach @previous;
@@ -966,36 +908,44 @@ sub displayInterval	{
         print $hbo->htmlBox("Equivalent to",$html);
     }
 
-    if (@within) {
-        my $html = "";
-        foreach my $w (@within) {
-            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$w->{interval_no}\">$name{$w->{interval_no}}</a></li>";
-        }
-        print $hbo->htmlBox("Contained within",$html);
-    }
-
     print "</td><td valign=top width=\"50%\">";
 
-    if (@overlaps) {
-        my $html = "";
-        my $range = "";
-        foreach my $o (@overlaps) {
-            my ($base,$top) = ($o->{base_age},$o->{top_age});
-            $base =~ s/0+$//;
-            $top =~ s/0+$//;
-            $base =~ s/\.$/.0/;
-            $top =~ s/\.$/.0/;
-            $html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$o->{interval_no}\">$name{$o->{interval_no}}</a> ($base to $top Ma)</li>";
-        }
-        print $hbo->htmlBox("Overlaps with",$html);
-    }
-    if (@contains) {
-        my @list;
-        foreach my $c (@contains) {
-            push @list , "<a href=\"$READ_URL?action=displayInterval&interval_no=$c->{interval_no}\">$name{$c->{interval_no}}</a>";
-        }
-        print $hbo->htmlBox("Contains",("<li>".join(', ',@list)."</li>"));
-    }
+	if (@contains)	{
+		my @list;
+		for my $c (@contains)	{
+			push @list , "<a href=\"$READ_URL?action=displayInterval&interval_no=$c->{interval_no}\">$name{$c->{interval_no}}</a>";
+		}
+		print $hbo->htmlBox("Contains",("<li>".join(', ',@list)."</li>"));
+	}
+	if (@shares_base)	{
+		my @list;
+		for my $c (@shares_base)	{
+			push @list , "<a href=\"$READ_URL?action=displayInterval&interval_no=$c->{interval_no}\">$name{$c->{interval_no}}</a>";
+		}
+		print $hbo->htmlBox("Shares base with",("<li>".join(', ',@list)."</li>"));
+	}
+
+	if (@shares_top)	{
+		my @list;
+		for my $c (@shares_top)	{
+			push @list , "<a href=\"$READ_URL?action=displayInterval&interval_no=$c->{interval_no}\">$name{$c->{interval_no}}</a>";
+		}
+		print $hbo->htmlBox("Shares top with",("<li>".join(', ',@list)."</li>"));
+	}
+
+	if (@overlaps)	{
+		my $html = "";
+		my $range = "";
+		for my $o (@overlaps)	{
+			my ($base,$top) = ($o->{base_age},$o->{top_age});
+			$base =~ s/0+$//;
+			$top =~ s/0+$//;
+			$base =~ s/\.$/.0/;
+			$top =~ s/\.$/.0/;
+			$html .= "<li><a href=\"$READ_URL?action=displayInterval&interval_no=$o->{interval_no}\">$name{$o->{interval_no}}</a> ($base to $top Ma)</li>";
+		}
+		print $hbo->htmlBox("Overlaps with",$html);
+	}
 
 	my $html = "";
 	for my $scale (@scales)	{
@@ -1032,93 +982,6 @@ sub submitSearchInterval {
         $q->param('interval_no'=>$row->{'interval_no'});
         displayInterval($dbt,$hbo,$q);
     }
-}
-
-sub displayIntervalDebug {
-    my ($dbt,$hbo,$q) = @_;
-    my $i = int($q->param('interval_no'));
-    return unless $i;
-
-    print "<div class=small>";
-   
-    my $t = new TimeLookup($dbt);
-    my @bounds = $t->getBoundaries;
-    my $ig = $t->getIntervalGraph();
-    my $itv = $ig->{$i};
-    
-    my $printer = sub {
-        my $itv = shift;
-        my $from_scale = shift;
-        my $txt = "";
-        if ($itv) {
-            #$txt = "<a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>: $itv->{base_age} - $itv->{top_age}";
-            $txt = "<a href=\"$READ_URL?action=displayInterval&interval_no=$itv->{interval_no}\">$itv->{name}</a>";
-            #<a href=\"$READ_URL?action=processViewScale&scale=$bestscale{$i}\">scale:$bestscale{$i}</a><br>";
-        }
-        return $txt;
-    };
-
-    print "<div align=\"center\"><p class=\"pageTitle\">".$printer->($itv)."</p></div>";
-
-    if ($itv->{'max'}) {
-        print "Maximum correlate: ".$printer->($itv->{'max'})."<br>";
-        if ($itv->{'min'} != $itv->{'max'}) {
-            print "Minimum correlate: ".$printer->($itv->{'max'})."<br>";
-        }
-    }
-    if ($itv->{'all_prev'}) {
-        my @prev = ();
-        foreach my $p (@{$itv->{'all_prev'}}) {
-            if ($p->{'next'} == $itv) {
-                push @prev, $p;
-            }
-        } 
-
-        if (@prev > 1) {
-            print "Previous intervals: ".join(", ",map {$printer->($_)} @prev)."<br>";
-        } elsif (@prev == 1) {
-            print "Previous interval: ".$printer->($prev[0])."<br>";
-        }
-    }
-
-    if ($itv->{'next'}) {
-        print "Next interval: ".$printer->($itv->{'next'})."<br>";
-    }
-
-    foreach my $c (sort itvsort @{$itv->{'children'}}) {
-        print "$c->{interval_no}:$c->{name} ";
-    }
-    print "</td></tr></table>";
-
-    foreach my $abbrev ('gl','As','Au','Eu','NZ','NA','SA') {
-        my $lower_max = 'lower_max'.$abbrev;
-        my $base_age = 'base_age'.$abbrev;
-        my $lower_min = 'lower_min'.$abbrev;
-        my $upper_max = 'upper_max'.$abbrev;
-        my $top_age = 'top_age'.$abbrev;
-        my $upper_min = 'upper_min'.$abbrev;
-        if ($itv->{$lower_max} || $itv->{$base_age} || $itv->{$lower_min} ||
-            $itv->{$upper_max} || $itv->{$top_age} || $itv->{$upper_min}) {
-            print "  $abbrev:lower:[$itv->{$lower_max}/$itv->{$base_age}/$itv->{$lower_min}] - $abbrev:upper:[$itv->{$upper_max}/$itv->{$top_age}/$itv->{$upper_min}]<br>";
-        } 
-    }
-
-    print "Scales : <br>";
-    foreach my $s (@{$itv->{'all_scales'}}) {
-        print " $s->{scale_name} $s->{continent} $s->{pubyr}<br>";
-    }
-    print "<br>";
-    foreach my $c (@{$itv->{'constraints'}}) {
-        print TimeLookup::_printConstraint($c)."<br>";
-    }
-    foreach my $c (@{$itv->{'conflicts'}}) {
-        print TimeLookup::_printConstraint($c)."<br>";
-    }
-
-    print "</td></tr>";
-    print "</table>";
-
-
 }
 
 1;
