@@ -1250,7 +1250,7 @@ sub displayTaxonClassification {
         $taxon_no = $taxon->{'taxon_no'};    
         $taxon_name = $taxon->{'taxon_name'};    
         $taxon_rank = $taxon->{'taxon_rank'};    
-        $classification_no = $orig_no;
+        $classification_no = $taxon_no;
         $classification_name = $taxon_name;
         $classification_rank = $taxon_rank;
         
