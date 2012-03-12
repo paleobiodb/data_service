@@ -3006,6 +3006,7 @@ sub basicCollectionInfo	{
 		my $minName .= ( $min->{'period'} =~ /Paleogene|Neogene|Quaternary/ ) ? $min->{'epoch'} : $min->{'period'};
 		$header .= ( $maxName ne $minName ) ? " to ".$minName : "";
 	}
+	$c->{'country'} =~ s/^United/the United/;
 
 	print qq|
 <div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
@@ -3013,6 +3014,7 @@ sub basicCollectionInfo	{
 <span class="displayPanelHeader">$header of $c->{'country'})</span>
 <div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
 |;
+	$c->{'country'} =~ s/^the United/United/;
 
 	if ( $c->{'collection_aka'} )	{
 		print "<p>Also known as $c->{'collection_aka'}</p>\n\n";
