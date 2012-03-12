@@ -261,8 +261,8 @@ sub processViewTimeScale	{
 	my $stage = shift;
 	my $bad = shift;
 
-    my @badintervals;
-    @badintervals = @$bad if $bad;
+	my @badintervals;
+	@badintervals = @$bad if $bad;
 
 	# new submit form has a ton of scale parameters; strip out the first
 	# one that isn't blank
@@ -757,10 +757,29 @@ sub displayInterval	{
 	my $sql = "SELECT i.*,il.* FROM intervals i,interval_lookup il WHERE i.interval_no=il.interval_no AND i.interval_no=".$i;
 	my $itv = ${$dbt->getData($sql)}[0];
 
+	my ($base_source,$top_source);
+	if ( $itv->{base_age_source} )	{
+		$sql = "SELECT s.scale_no,TRIM(CONCAT(eml_interval,' ',interval_name)) AS name FROM scales s,intervals i,correlations c WHERE s.scale_no=c.scale_no AND i.interval_no=c.interval_no AND c.correlation_no=".$itv->{base_age_source};
+		$base_source = ${$dbt->getData($sql)}[0];
+	}
+	if ( $itv->{top_age_source} )	{
+		# by default, say that the top age comes from some base age
+		$sql = "SELECT s.scale_no,TRIM(CONCAT(eml_interval,' ',interval_name)) AS name,c.interval_no AS correlated_no FROM scales s,intervals i,correlations c WHERE s.scale_no=c.scale_no AND i.interval_no=c.interval_no AND c.correlation_no=".$itv->{top_age_source};
+		$top_source = ${$dbt->getData($sql)}[0];
+		# because this is confusing, try to get the name of the
+		#  interval preceding the source in the same scale (there
+		#  won't be one if the scale starts with the source)
+		$sql = "SELECT TRIM(CONCAT(eml_interval,' ',interval_name)) AS name FROM intervals i,correlations c WHERE i.interval_no=c.interval_no AND c.scale_no=".$top_source->{scale_no}." AND c.next_interval_no=".$top_source->{correlated_no};
+		my $better_source = ${$dbt->getData($sql)}[0];
+		if ( $better_source )	{
+			$top_source->{name} = $better_source->{name};
+		}
+	}
+
 	# just get it over with, the table is tiny
-	$sql = "SELECT interval_no,eml_interval,interval_name FROM intervals";
+	$sql = "SELECT interval_no,TRIM(CONCAT(eml_interval,' ',interval_name)) AS name FROM intervals";
 	my %name;
-	$name{$_->{interval_no}} = ( $_->{eml_interval} ) ? $_->{eml_interval}." ".$_->{interval_name} : $_->{interval_name} foreach @{$dbt->getData($sql)};
+	$name{$_->{interval_no}} = $_->{name} foreach @{$dbt->getData($sql)};
 
 	# find all overlapping intervals
 	$sql = "SELECT i.interval_no,base_age,base_age_relation,top_age,top_age_relation FROM intervals i,interval_lookup il WHERE i.interval_no=il.interval_no AND base_age>=".$itv->{top_age}." AND top_age<=".$itv->{base_age}." AND i.interval_no!=$i";
@@ -785,6 +804,10 @@ sub displayInterval	{
 			push @shares_base , $r;
 		} elsif ( $r->{base_age} != $itv->{base_age} && $r->{top_age} == $itv->{top_age} )	{
 			push @shares_top , $r;
+		} elsif ( $r->{base_age} == $itv->{top_age} )	{
+			push @next ,  $r;
+		} elsif ( $r->{top_age} == $itv->{base_age} )	{
+			push @previous ,  $r;
 		} elsif ( $r->{base_age} != $itv->{top_age} && $r->{top_age} != $itv->{base_age} )	{
 			push @overlaps , $r;
 		}
@@ -793,35 +816,21 @@ sub displayInterval	{
 	$sql = "SELECT scale_name,s.scale_no,scale_rank,continent,pubyr,next_interval_no FROM scales s,correlations c,refs r WHERE s.scale_no=c.scale_no AND interval_no=$i AND c.reference_no=r.reference_no ORDER BY pubyr DESC";
 	my @scales = @{$dbt->getData($sql)};
 	my $best_scale = $scales[0];
-	my @scale_nos = map { $_->{scale_no} } @scales;
-	my @next_nos = map { $_->{next_interval_no} } @scales;
 
-	# queries for previous and next intervals are a little different
-	# query for previous interval depends on checking next intervals here
-	$sql = "SELECT i.interval_no,il.base_age,il.top_age FROM intervals i,interval_lookup il,correlations c WHERE i.interval_no=il.interval_no AND i.interval_no=c.interval_no AND scale_no IN (".join(',',@scale_nos).") AND next_interval_no=$i AND il.top_age=$itv->{base_age} GROUP BY c.interval_no";
-	my @previous = @{$dbt->getData($sql)};
-	# query for next interval depends on knowing all nominal next intervals
-	#  for the focal interval (see above)
-	my @next;
-	if ( @next_nos )	{
-		$sql = "SELECT i.interval_no,il.base_age,il.top_age FROM intervals i,interval_lookup il,correlations c WHERE i.interval_no=il.interval_no AND i.interval_no=c.interval_no AND scale_no IN (".join(',',@scale_nos).") AND i.interval_no IN (".join(',',@next_nos).") AND il.base_age=$itv->{top_age} GROUP BY c.interval_no";
-		@next = @{$dbt->getData($sql)};
+	my $type = "";
+	if ( $best_scale )	{
+		my $rank = $best_scale->{scale_rank};
+		$type = ($rank eq 'eon/eonothem') ? "eon"
+			: ($rank eq 'era/erathem') ? "era"
+			: ($rank eq 'subperiod/system') ? "subperiod"
+			: ($rank eq 'period/system') ? "period"
+			: ($rank eq 'subepoch/series') ? "subepoch"
+			: ($rank eq 'epoch/series') ? "epoch"
+			: ($rank eq 'age/stage') ? $rank
+			: ($rank eq 'subage/stage') ? $rank
+			: ($rank eq 'chron/zone') ? 'zone'
+			: "";
 	}
-
-    my $type = "";
-    if ($best_scale) {
-        my $rank = $best_scale->{scale_rank};
-        $type = ($rank eq 'eon/eonothem') ? "eon"
-              : ($rank eq 'era/erathem') ? "era"
-              : ($rank eq 'subperiod/system') ? "subperiod"
-              : ($rank eq 'period/system') ? "period"
-              : ($rank eq 'subepoch/series') ? "subepoch"
-              : ($rank eq 'epoch/series') ? "epoch"
-              : ($rank eq 'age/stage') ? $rank
-              : ($rank eq 'subage/stage') ? $rank
-              : ($rank eq 'chron/zone') ? 'zone'
-              : "";
-    }
 
 	@within = sort { $a->{base_age} <=> $b->{base_age} || $b->{top_age} <=> $a->{top_age} } @within;
 	@contains = sort { $name{$a->{interval_no}} cmp $name{$b->{interval_no}} || $a->{interval_no} <=> $b->{interval_no} } @contains;
@@ -829,27 +838,26 @@ sub displayInterval	{
 	@shares_top = sort { $name{$a->{interval_no}} cmp $name{$b->{interval_no}} || $a->{interval_no} <=> $b->{interval_no} } @shares_top;
 	@overlaps = sort { $a->{base_age} <=> $b->{base_age} || $a->{top_age} <=> $b->{top_age} } @overlaps;
 
-    print "<div align=\"center\"><p class=\"pageTitle\">$name{$itv->{interval_no}} $type</p></div>";
+	print "<div align=\"center\"><p class=\"pageTitle\">$name{$itv->{interval_no}} $type</p></div>";
 
-    print "<table width=\"100%\" cellspacing=\"5\" cellpadding=\"0\" border=\"0\"><tr><td valign=top width=\"50%\">";
-    my $general_html = "";
-    if ($itv->{'base_age'} =~ /\d/) {
-        # as I write, base_age_source and top_age_source in interval_lookup
-        #  are still buggy, so check the raw correlations directly JA 9.3.12
-        my $sql = "SELECT interval_name,interval_no FROM intervals i,scales s,refs r,correlations c WHERE lower_boundary=".$itv->{'base_age'}." ORDER BY pubyr DESC LIMIT 1";
-        my $lower = TimeLookup::printBoundary($itv->{'base_age'}); 
-        $general_html .= "Lower boundary: $itv->{base_age_relation} $lower Ma<br>";
-        my $upper = TimeLookup::printBoundary($itv->{'top_age'}); 
-        $general_html .= "Upper boundary: $itv->{top_age_relation} $upper Ma<br>";
+	print "<table width=\"100%\" cellspacing=\"5\" cellpadding=\"0\" border=\"0\"><tr><td valign=top width=\"50%\">";
+	my $general_html = "";
+	if ($itv->{'base_age'} =~ /\d/)	{
+		my $lower = TimeLookup::printBoundary($itv->{'base_age'});
+		my $see = ( $name{$itv->{interval_no}} ne $base_source->{name} ) ? "based on ".$base_source->{name} : "see scale";
+		$general_html .= "Lower boundary: $itv->{base_age_relation} $lower Ma (<a href=\"$READ_URL?a=processViewScale&scale_no=$base_source->{scale_no}\">$see</a>)<br>";
+		my $upper = TimeLookup::printBoundary($itv->{'top_age'}); 
+		$see = ( $name{$itv->{interval_no}} ne $top_source->{name} ) ? "based on ".$top_source->{name} : "see scale";
+		$general_html .= "Upper boundary: $itv->{top_age_relation} $upper Ma (<a href=\"$READ_URL?a=processViewScale&scale_no=$top_source->{scale_no}\">$see</a>)<br>";
 
-        if ($best_scale) {
-            $general_html .= "Continent: $best_scale->{continent}<br>";
-        }
-    }
-    $general_html .= "<a href=# onClick=\"document.doColls.submit();\">See collections within this interval</a><br>";
-    $general_html .= "<a href=# onClick=\"document.doMap.submit();\">See map of collections within this interval</a><br>";
-    $general_html .= qq|<form method="POST" action="$READ_URL" name="doColls"><input type="hidden" name="action" value="displayCollResults"><input type="hidden" name="max_interval_no" value="$i"></form>|;
-    $general_html .= qq|<form method="POST" action="$READ_URL" name="doMap"><input type="hidden" name="action" value="displaySimpleMap"><input type="hidden" name="max_interval_no" value="$i"></form>|;
+		if ($best_scale)	{
+			$general_html .= "Continent: $best_scale->{continent}<br>";
+		}
+	}
+	$general_html .= "<a href=# onClick=\"document.doColls.submit();\">See collections within this interval</a><br>";
+	$general_html .= "<a href=# onClick=\"document.doMap.submit();\">See map of collections within this interval</a><br>";
+	$general_html .= qq|<form method="POST" action="$READ_URL" name="doColls"><input type="hidden" name="action" value="displayCollResults"><input type="hidden" name="max_interval_no" value="$i"></form>|;
+	$general_html .= qq|<form method="POST" action="$READ_URL" name="doMap"><input type="hidden" name="action" value="displaySimpleMap"><input type="hidden" name="max_interval_no" value="$i"></form>|;
 
 	print $hbo->htmlBox("General information",$general_html);
  
@@ -895,20 +903,18 @@ sub displayInterval	{
 		my $s = ($#next > 0) ? "s" : "";
 		print $hbo->htmlBox("Next interval$s",$html);
 	}
-    
-    if (@equals) {
-        my $html = "";
-        if (@equals) {
-            my @intervals = ();
-            foreach my $e (@equals) {
-                push @intervals, "<a href=\"$READ_URL?action=displayInterval&interval_no=$e->{interval_no}\">$name{$e->{interval_no}}</a>";
-            }
-            $html .= "<li>".join(', ',@intervals)."</li>";
-        }
-        print $hbo->htmlBox("Equivalent to",$html);
-    }
 
-    print "</td><td valign=top width=\"50%\">";
+	if (@equals)	{
+		my $html = "";
+		my @intervals = ();
+		for my $e (@equals)	{
+			push @intervals, "<a href=\"$READ_URL?action=displayInterval&interval_no=$e->{interval_no}\">$name{$e->{interval_no}}</a>";
+		}
+		$html .= "<li>".join(', ',@intervals)."</li>";
+		print $hbo->htmlBox("Equivalent to",$html);
+	}
+
+	print "</td><td valign=top width=\"50%\">";
 
 	if (@contains)	{
 		my @list;
