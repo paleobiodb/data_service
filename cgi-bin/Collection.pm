@@ -2995,11 +2995,22 @@ sub basicCollectionInfo	{
 		$c->{$f} =~ s/,/, /g;
 	}
 
+	my ($max,$min);
+	$sql = "SELECT TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,base_age,top_age,i2.interval_name AS epoch,i3.interval_name AS period FROM intervals i,intervals i2,intervals i3,interval_lookup l WHERE i.interval_no=".$c->{'max_interval_no'}." AND i.interval_no=l.interval_no AND i2.interval_no=l.epoch_no AND i3.interval_no=period_no";
+	$max = ${$dbt->getData($sql)}[0];
+	my $maxName .= ( $max->{'period'} =~ /Paleogene|Neogene|Quaternary/ ) ? $max->{'epoch'} : $max->{'period'};
+	$header .= " (".$maxName;
+	if ( $c->{'min_interval_no'} > 0 )	{
+		$sql = "SELECT TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,base_age,top_age,i2.interval_name AS epoch,i3.interval_name AS period FROM intervals i,intervals i2,intervals i3,interval_lookup l WHERE i.interval_no=".$c->{'min_interval_no'}." AND i.interval_no=l.interval_no AND i2.interval_no=l.epoch_no AND i3.interval_no=period_no";
+		$min = ${$dbt->getData($sql)}[0];
+		my $minName .= ( $min->{'period'} =~ /Paleogene|Neogene|Quaternary/ ) ? $min->{'epoch'} : $min->{'period'};
+		$header .= ( $maxName ne $minName ) ? " to ".$minName : "";
+	}
 
 	print qq|
 <div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
 <div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left; width: 54em;">
-<span class="displayPanelHeader">$header</span>
+<span class="displayPanelHeader">$header of $c->{'country'})</span>
 <div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
 |;
 
@@ -3048,6 +3059,11 @@ sub basicCollectionInfo	{
 	print ")";
 	print "</p>\n\n";
 
+	if ( $c->{'latlng_basis'} )	{
+		$c->{'latlng_basis'} =~ s/(unpublished)/based on $1/;
+		print "<p $mockLI coordinate $c->{'latlng_basis'}</p>\n\n";
+	}
+	$c->{'geogscale'} ? print "<p $mockLI $c->{'geogscale'}-level geographic resolution</p>\n\n" : "";
 	if ( $s->isDBMember() && $c->{'geogcomments'} )	{
 		print "<p $mockLI $c->{'geogcomments'}</p>\n\n";
 	}
@@ -3072,22 +3088,9 @@ sub basicCollectionInfo	{
 		print $c->{'geological_group'}." Group, ";
 	}
 
-	my ($max,$min);
-	if ( $c->{'max_interval_no'} > 0 )	{
-		$sql = "SELECT eml_interval,interval_name,base_age,top_age FROM intervals i,interval_lookup l WHERE i.interval_no=".$c->{'max_interval_no'}." AND i.interval_no=l.interval_no";
-		$max = ${$dbt->getData($sql)}[0];
-		if ( $max->{'eml_interval'} )	{
-			print $max->{'eml_interval'}." ";
-		}
-		print $max->{'interval_name'}." ";
-	}
+	print $max->{'interval_name'}." ";
 	if ( $c->{'min_interval_no'} > 0 )	{
-		$sql = "SELECT eml_interval,interval_name,base_age,top_age FROM intervals i,interval_lookup l WHERE i.interval_no=".$c->{'min_interval_no'}." AND i.interval_no=l.interval_no";
-		$min = ${$dbt->getData($sql)}[0];
 		print " to ";
-		if ( $min->{'eml_interval'} )	{
-			print $min->{'eml_interval'}." ";
-		}
 		print $min->{'interval_name'}." ";
 	}
 	if ( $max->{'base_age'} )	{
@@ -3101,9 +3104,8 @@ sub basicCollectionInfo	{
 	}
 	print "</p>\n\n";
 
-	if ( $c->{'stratcomments'} )	{
-		print "<p $mockLI $c->{'stratcomments'}</p>\n\n";
-	}
+	$c->{'stratcomments'} ? print "<p $mockLI $c->{'stratcomments'}</p>\n\n" : "";
+	$c->{'stratscale'} ? print "<p $mockLI $c->{'stratscale'}-level stratigraphic resolution</p>\n\n" : "";
 
 	print "<p $indent>Environment/lithology: ";
 	my $env = $c->{'environment'};
@@ -3213,15 +3215,9 @@ sub basicCollectionInfo	{
 	$c->{'collection_dates'} =~ s/([0-9]+\.)([0-9]+\.)([1-2][0-9])/$3/g;
 	if ( $c->{'collectors'} || $c->{'collection_dates'} )	{
 		print "<p>Collected";
-		if ( $c->{'collectors'} )	{
-			print " by ".$c->{'collectors'};
-		}
-		if ( $c->{'collection_dates'} )	{
-			print " in ".$c->{'collection_dates'};
-		}
-		if ( $c->{'museum'} )	{
-			print "; reposited in the ".$c->{'museum'};
-		}
+		$c->{'collectors'} ? print " by ".$c->{'collectors'} : "";
+		$c->{'collection_dates'} ? print " in ".$c->{'collection_dates'} : "";
+		$c->{'museum'} ? print "; reposited in the ".$c->{'museum'} : "";
 		print "</p>\n\n";
 	} elsif ( $c->{'museum'} )	{
 		print "<p>Reposited in the $c->{'museum'}</p>\n\n";
@@ -3236,6 +3232,8 @@ sub basicCollectionInfo	{
 
 	if ( ( $c->{'collectors'} || $c->{'collection_dates'} || $c->{'museum'} || $c->{'coll_meth'} ) && $c->{'collection_comments'} )	{
 		print "<p $mockLI $c->{'collection_comments'}</p>\n\n";
+	} elsif ( $c->{'collection_comments'} )	{
+		print "<p>Collection methods: $c->{'collection_comments'}</p>\n\n";
 	}
 
 	$sql = "SELECT * FROM refs WHERE reference_no=".$c->{'reference_no'};
@@ -3255,6 +3253,8 @@ sub basicCollectionInfo	{
 		}
 		print "<p $indent>See also ".join(', ',@formatted)."</p>\n\n";
 	}
+
+	$c->{'collection_type'} ? print "<p $indent>Purpose of describing collection: $c->{'collection_type'} analysis<p>\n\n" : "";
 
 	if ( $c->{''} )	{
 		print "<p>: ";
@@ -3286,7 +3286,7 @@ sub basicCollectionInfo	{
 		return;
 	}
 
-	print "<a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$c->{'collection_no'}\">See full details</a>\n\n";
+	print "<p><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$c->{'collection_no'}\">See full details</a></p>\n\n";
 
 	# the following is basically a complete rewrite of buildTaxonomicList
 	# so what?
