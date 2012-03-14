@@ -469,7 +469,7 @@ sub home	{
 
 # Shows the form for requesting a map
 sub displayBasicMapForm {
-	my %vars = ( 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'gold', 'dotborder1'=>'no' );
+	my %vars = ( 'mapsize'=>'100%', 'pointsize1'=>'medium', 'pointshape1'=>'circles', 'dotcolor1'=>'gold', 'dotborder1'=>'no' );
 	print $hbo->stdIncludes("std_page_top");
 	print $hbo->populateHTML('basic_map_form', \%vars);
 	print $hbo->stdIncludes("std_page_bottom");
@@ -2980,23 +2980,6 @@ sub displayTenMyBins {
     print $hbo->stdIncludes("std_page_top");
     Scales::displayTenMyBins($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes("std_page_bottom");
-}
-sub displayFullScale {
-    require Scales;
-    print $hbo->stdIncludes("std_page_top");
-    Scales::displayFullScale($dbt, $hbo);
-    print $hbo->stdIncludes("std_page_bottom");
-}
-sub dumpAllIntervals {
-    return if PBDBUtil::checkForBot();
-    my $t = new TimeLookup($dbt);
-    $t->getBoundaries();
-    my $dmp = $t->_dumpGraph();
-    $dmp =~ s/(Interval (\d+):)/<a name="i$2">$1<\/a>/g;
-    $dmp =~ s/(\d{1,3})(:\w+\W)/<a href="#i$1">$1<\/a>$2/g;
-    print "<hr><pre>AAAAAAAA";
-    print $dmp;
-    print "</pre>";
 }
 
 ## END Scales stuff
