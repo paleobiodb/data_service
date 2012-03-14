@@ -1250,7 +1250,7 @@ sub mapFinishSetup {
     # used to draw a short white rectangle across the bottom for the caption
     #  here, but this is no longer needed
     if ( ! $q->param('linecommand') )	{
-        @b = $im->stringFT($col{'unantialiased'},$FONT,10,0,5,$height+12,"plotting software 2002-2009 J. Alroy");
+        @b = $im->stringFT($col{'unantialiased'},$FONT,10,0,5,$height+12,"plotting software 2002-2012 J. Alroy");
     }
     $ai .=  "0 To\n";
     $ai .= sprintf("1 0 0 1 %.1f %.1f 0 Tp\nTP\n",$AILEFT+5,$AITOP-$height-8);
@@ -1784,7 +1784,7 @@ last;
 }
 
 # Draw the points for collections on the map
-sub mapDrawPoints{
+sub mapDrawPoints	{
     my $self = shift;
     my $dataRowsRef = shift;
     my $ptset = shift;
@@ -1806,6 +1806,16 @@ sub mapDrawPoints{
     $dotshape = $q->param("pointshape$ptset") || "circles";
     $dotcolor = $q->param("dotcolor$ptset") || "red";
     $bordercolor = $dotcolor;
+
+    # heat colors are based on occurrence counts, so get them now JA 14.3.12
+    # getCollections could be used very indirectly to get these counts, but
+    #  it would be slower and it's just not worth the trouble
+    my %count;
+    if ( $dotcolor =~ /^heat|red to green/ )	{
+        my @nos = map { $_->{'collection_no'} } @$dataRowsRef;
+        my $sql = "SELECT collection_no,count(*) c FROM occurrences WHERE collection_no IN (".join(',',@nos).") GROUP BY collection_no";
+        $count{$_->{'collection_no'}} = $_->{'c'} foreach @{$dbt->getData($sql)};
+    }
 
     if ($q->param("dotborder$ptset") ne "no" )	{
         if($q->param('mapbgcolor') eq "black" || $q->param("dotborder$ptset") eq "white" )	{
@@ -1838,10 +1848,7 @@ sub mapDrawPoints{
     }
 
     # draw collection data points
-    %atCoord = ();
-    %longVal = ();
-    %latVal = ();
-    my $matches = 0;
+    my (%atCoord,%occsAtCoord,%longVal,%latVal,$maxpts,$matches);
 	foreach $collRef ( @{$dataRowsRef} ) {
  		%coll = %{$collRef};
  		if (( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
@@ -1914,6 +1921,10 @@ sub mapDrawPoints{
                     $x1 = int($x1) + 0.5;
                     $y1 = int($y1) + 0.5;
                     push @{$atCoord{$x1}{$y1}},$coll{'collection_no'};
+                    $occsAtCoord{$x1}{$y1} += $count{$coll{'collection_no'}};
+                    if ( $occsAtCoord{$x1}{$y1} > $maxpts )	{
+                        $maxpts = $occsAtCoord{$x1}{$y1};
+                    }
                     $longVal{$x1} = $coll{'lngdeg'} . $lnghalf . " " . $coll{'lngdir'};
                     $latVal{$y1} = $coll{'latdeg'} . $lathalf . " " . $coll{'latdir'};
 
@@ -1935,7 +1946,9 @@ sub mapDrawPoints{
 
     $ai .=  "u\n";  # start the group
     for $x1 (keys %longVal)	{
-	    for $y1 (keys %latVal)	{
+            my @ys = keys %latVal;
+            @ys = sort { $atCoord{$x1}{$b} <=> $atCoord{$x1}{$a} } @ys;
+	    for $y1 (@ys)	{
 		    if (ref $atCoord{$x1}{$y1})	{
 			    if ($dotsizeterm eq "proportional")	{
 				    $dotsize = int(scalar(@{$atCoord{$x1}{$y1}})**0.5 / 2) + 1;
@@ -1963,11 +1976,31 @@ sub mapDrawPoints{
                 }
                 # draw a circle and fill it
 
-                $im->setAntiAliased($col{$dotcolor});
+                my $thiscolor = $col{$dotcolor};
+                if ( $dotcolor !~ /^heat|red to green/ )	{
+                    $im->setAntiAliased($col{$dotcolor});
+                } else	{
+                    # JA 12-14.3.12
+                    my $offset = int(255 * log($occsAtCoord{$x1}{$y1}) / log($maxpts));
+                    my ($r,$g,$b);
+                    if ( $dotcolor =~ /red to green/ )	{
+                        # suggested by Kiessling
+                        $r = ( $offset < 128 ) ? $offset * 2 : 255;
+                        $g = ( $offset < 128 ) ? 223 : ( 223 - $offset * 223 / 255 ) * 2;
+                        $b = 0; 
+                    } else	{
+                        # this is close to the R standard heat.colors scheme
+                        $r = 255;
+                        $g = ( $offset < 128 ) ? 223 : ( 223 - $offset * 223 / 255 ) * 2;
+                        $b = ( $offset < 64) ? 127 : int( ( 223 - $offset * 233 / 255 ) * 3 / 4);
+                    }
+                    $thiscolor = $im->colorAllocate($r,$g,$b);
+                    $im->setAntiAliased($thiscolor);
+                }
                 if ($dotshape =~ /^circles$/)	{
                   if ( $x1+($dotsize*1.5)+1 < $width && $x1-($dotsize*1.5)-1 > 0 &&
                        $y1+($dotsize*1.5)+1 < $height && $y1-($dotsize*1.5)-1 > 0 )	{
-                    if ( $q->param('shadow') !~ /no/ )	{
+                    if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                         my $shadow= new GD::Polygon;
                         $shadow->addPt($x1+1,$y1+($dotsize*2)+2);
                         $shadow->addPt($x1+($dotsize*1.414)+1,$y1+($dotsize*1.414)+2);
@@ -1980,7 +2013,7 @@ sub mapDrawPoints{
                         $im->setAntiAliased($col{'gray'});
                         $im->filledPolygon($shadow,gdAntiAliased);
                     }
-                    $im->setAntiAliased($col{$dotcolor});
+                    $im->setAntiAliased($thiscolor);
                     my $poly = new GD::Polygon;
                     $poly->addPt($x1,$y1+($dotsize*2));
                     $poly->addPt($x1+($dotsize*1.414),$y1+($dotsize*1.414));
@@ -2010,28 +2043,28 @@ sub mapDrawPoints{
                     }
                   }
                 } elsif ($dotshape =~ /^crosses$/)	{
-                  $im->line($x1-$dotsize,$y1-$dotsize,$x1+$dotsize,$y1+$dotsize,$col{$dotcolor});
-                  $im->line($x1-$dotsize+0.50,$y1-$dotsize+0.50,$x1+$dotsize+0.50,$y1+$dotsize+0.50,$col{$dotcolor});
-                  $im->line($x1-$dotsize+0.50,$y1-$dotsize-0.50,$x1+$dotsize+0.50,$y1+$dotsize-0.50,$col{$dotcolor});
-                  $im->line($x1-$dotsize-0.50,$y1-$dotsize+0.50,$x1+$dotsize-0.50,$y1+$dotsize+0.50,$col{$dotcolor});
-                  $im->line($x1-$dotsize-0.50,$y1-$dotsize-0.50,$x1+$dotsize-0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+                  $im->line($x1-$dotsize,$y1-$dotsize,$x1+$dotsize,$y1+$dotsize,$thiscolor);
+                  $im->line($x1-$dotsize+0.50,$y1-$dotsize+0.50,$x1+$dotsize+0.50,$y1+$dotsize+0.50,$thiscolor);
+                  $im->line($x1-$dotsize+0.50,$y1-$dotsize-0.50,$x1+$dotsize+0.50,$y1+$dotsize-0.50,$thiscolor);
+                  $im->line($x1-$dotsize-0.50,$y1-$dotsize+0.50,$x1+$dotsize-0.50,$y1+$dotsize+0.50,$thiscolor);
+                  $im->line($x1-$dotsize-0.50,$y1-$dotsize-0.50,$x1+$dotsize-0.50,$y1+$dotsize-0.50,$thiscolor);
                   $ai .= sprintf("2 w\n");
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1-$dotsize,$AITOP-$y1+$dotsize);
                   $ai .= sprintf("%.1f %.1f l\n",$AILEFT+$x1+$dotsize,$AITOP-$y1-$dotsize);
                   $ai .=  "S\n";
 
-                  $im->line($x1+$dotsize,$y1-$dotsize,$x1-$dotsize,$y1+$dotsize,$col{$dotcolor});
-                  $im->line($x1+$dotsize+0.50,$y1-$dotsize+0.50,$x1-$dotsize+0.50,$y1+$dotsize+0.50,$col{$dotcolor});
-                  $im->line($x1+$dotsize+0.50,$y1-$dotsize-0.50,$x1-$dotsize+0.50,$y1+$dotsize-0.50,$col{$dotcolor});
-                  $im->line($x1+$dotsize-0.50,$y1-$dotsize+0.50,$x1-$dotsize-0.50,$y1+$dotsize+0.50,$col{$dotcolor});
-                  $im->line($x1+$dotsize-0.50,$y1-$dotsize-0.50,$x1-$dotsize-0.50,$y1+$dotsize-0.50,$col{$dotcolor});
+                  $im->line($x1+$dotsize,$y1-$dotsize,$x1-$dotsize,$y1+$dotsize,$thiscolor);
+                  $im->line($x1+$dotsize+0.50,$y1-$dotsize+0.50,$x1-$dotsize+0.50,$y1+$dotsize+0.50,$thiscolor);
+                  $im->line($x1+$dotsize+0.50,$y1-$dotsize-0.50,$x1-$dotsize+0.50,$y1+$dotsize-0.50,$thiscolor);
+                  $im->line($x1+$dotsize-0.50,$y1-$dotsize+0.50,$x1-$dotsize-0.50,$y1+$dotsize+0.50,$thiscolor);
+                  $im->line($x1+$dotsize-0.50,$y1-$dotsize-0.50,$x1-$dotsize-0.50,$y1+$dotsize-0.50,$thiscolor);
                   $ai .=  "$aicol{$dotcolor}\n";
                   $ai .= sprintf("2 w\n");
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1+$dotsize,$AITOP-$y1+$dotsize);
                   $ai .= sprintf("%.1f %.1f l\n",$AILEFT+$x1-$dotsize,$AITOP-$y1-$dotsize);
                   $ai .=  "S\n";
                 } elsif ($dotshape =~ /^diamonds$/)	{
-                  if ( $q->param('shadow') !~ /no/ )	{
+                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                       my $shadow = new GD::Polygon;
                       $shadow->addPt($x1+1,$y1+($dotsize*2)+2);
                       $shadow->addPt($x1+($dotsize*2)+1,$y1+2);
@@ -2044,7 +2077,7 @@ sub mapDrawPoints{
                   $poly->addPt($x1+($dotsize*2),$y1);
                   $poly->addPt($x1,$y1-($dotsize*2));
                   $poly->addPt($x1-($dotsize*2),$y1);
-                  $im->filledPolygon($poly,$col{$dotcolor});
+                  $im->filledPolygon($poly,$thiscolor);
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1,$AITOP-$y1-($dotsize*2));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1);
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1+($dotsize*2));
@@ -2054,54 +2087,54 @@ sub mapDrawPoints{
                 elsif ($dotshape =~ /^stars$/)	{
                   my $poly = new GD::Polygon;
                   my $shadow;
-                  if ( $q->param('shadow') !~ /no/ )	{
+                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                       $shadow = new GD::Polygon;
                   }
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1+($dotsize*sin(9*36*$PI/180)),$AITOP-$y1+($dotsize*cos(9*36*$PI/180)));
                   for $p (0..9)	{
                     if ( $p % 2 == 1 )	{
                       $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
-                      if ( $q->param('shadow') !~ /no/ )	{
+                      if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                           $shadow->addPt($x1+($dotsize*sin($p*36*$PI/180))+1,$y1-($dotsize*cos($p*36*$PI/180))+1);
                       }
                       $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize*cos($p*36*$PI/180)));
                     } else	{
                       $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
-                      if ( $q->param('shadow') !~ /no/ )	{
+                      if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                           $shadow->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180))+2,$y1-($dotsize/$C72*cos($p*36*$PI/180))+2);
                       }
                       $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize/$C72*sin($p*36*$PI/180)),$AITOP-$y1+($dotsize/$C72*cos($p*36*$PI/180)));
                     }
                   }
-                  if ( $q->param('shadow') !~ /no/ )	{
+                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                       $im->filledPolygon($shadow,$col{'gray'});
                   }
-                  $im->filledPolygon($poly,$col{$dotcolor});
+                  $im->filledPolygon($poly,$thiscolor);
                 }
             # or draw a triangle
                 elsif ($dotshape =~ /^triangles$/)	{
                   my $poly = new GD::Polygon;
                   my $shadow;
-                  if ( $q->param('shadow') !~ /no/ )	{
+                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                       $shadow = new GD::Polygon;
                   }
                # lower left vertex
                   $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-                  if ( $q->param('shadow') !~ /no/ )	{
+                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                       $shadow->addPt($x1+($dotsize*2)+1,$y1+($dotsize*2*sin(60*$PI/180))+2);
                   }
                # top middle vertex
                   $poly->addPt($x1+1,$y1-($dotsize*2*sin(60*$PI/180))+2);
-                  if ( $q->param('shadow') !~ /no/ )	{
+                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                       $shadow->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
                   }
                # lower right vertex
                   $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-                  if ( $q->param('shadow') !~ /no/ )	{
+                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                       $shadow->addPt($x1-($dotsize*2)+1,$y1+($dotsize*2*sin(60*$PI/180))+2);
                       $im->filledPolygon($shadow,$col{'gray'});
                   }
-                  $im->filledPolygon($poly,$col{$dotcolor});
+                  $im->filledPolygon($poly,$thiscolor);
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180)));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1,$AITOP-$y1+($dotsize*2*sin(60*$PI/180)));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1-($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180)));
@@ -2109,10 +2142,10 @@ sub mapDrawPoints{
                 }
             # or draw a square
                 else	{
-                  if ( $q->param('shadow') !~ /no/ )	{
+                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
                       $im->filledRectangle($x1-($dotsize*1.5)+1,$y1-($dotsize*1.5)+2,$x1+($dotsize*1.5)+1,$y1+($dotsize*1.5)+2,$col{'gray'});
                   }
-                  $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$col{$dotcolor});
+                  $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$thiscolor);
                   $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1+($dotsize*1.5));
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1+($dotsize*1.5));
@@ -2131,10 +2164,13 @@ sub mapDrawPoints{
     }
     $ai .=  "U\n";  # terminate the group
 
-   
-    $im->setAntiAliased($col{$bordercolor});
+ 
+    # borders look terrible with heat colors 
     # redraw the borders if they are not the same color as the points
       for $x1 (keys %longVal)	{
+        if ( $dotcolor =~ /^heat|red to green/ )	{
+            last;
+        }
         for $y1 (keys %latVal)	{
           if (ref $atCoord{$x1}{$y1}) {
             if ($dotsizeterm eq "proportional")	{
