@@ -408,43 +408,37 @@ sub assignGenera	{
 	# Schroeter switched this to a TimeLookup call at some point
 	my @binnames;
 	my $t = new TimeLookup($dbt);
-	my $ig = $t->getIntervalGraph;
-	my $interval_name = {};
-	$interval_name->{$_->{'interval_no'}} = $_->{'name'} foreach values %$ig;
+	my %name;
+	my %intervals = TimeLookup::allIntervals($dbt);
+	$name{$_} = $intervals{$_}->{'name'} foreach keys %intervals;
 
 	if ( $bin_type eq "period" )	{
 		my @intervals = $t->getScaleOrder(69,'number');
-		@binnames = map {$interval_name->{$_}} @intervals;
+		@binnames = map {$name{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-		$topma{$interval_name->{$_}} = $top->{$_} for @intervals;
-		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+		$basema{$name{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "epoch" )	{
 		my @intervals = $t->getScaleOrder(71,'number');
-		@binnames = map {$interval_name->{$_}} @intervals;
+		@binnames = map {$name{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-		$topma{$interval_name->{$_}} = $top->{$_} for @intervals;
-		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+		$basema{$name{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "subepoch" )	{
 		my @intervals = $t->getScaleOrder(72,'number');
-		@binnames = map {$interval_name->{$_}} @intervals;
+		@binnames = map {$name{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-		$topma{$interval_name->{$_}} = $top->{$_} for @intervals;
-		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+		$basema{$name{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "stage" )	{
 		my @intervals = $t->getScaleOrder(73,'number');
-		@binnames = map {$interval_name->{$_}} @intervals;
+		@binnames = map {$name{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-		$topma{$interval_name->{$_}} = $top->{$_} for @intervals;
-		$basema{$interval_name->{$_}} = $base->{$_} for @intervals;
+		$basema{$name{$_}} = $base->{$_} for @intervals;
 	} elsif ( $bin_type eq "10my" ) {
 		@binnames = $t->getBins();
 		my ($top,$base) = $t->computeBinBounds('bins');
-		%topma = %$top;
 		%basema = %$base;
 	} elsif ( $bin_type eq "FossilRecord2" ) {
 		@binnames = $t->getFR2Bins();
 		my ($top,$base) = $t->computeBinBounds('FR2');
-		%topma = %$top;
 		%basema = %$base;
 	} elsif ( $bin_type =~ /neptune/i ) {
 	# Neptune data ranges from -3 to 150 mA right now, use those at defaults
@@ -454,7 +448,6 @@ sub assignGenera	{
 		@binnames = ();
 		for(my $i=$neptune_range_min;$i<$neptune_range_max;$i+=$q->param('neptune_bin_size')) {
 			my $name = "$i - ".($i + $q->param('neptune_bin_size'));
-			$topma{$name} = $i;
 			$basema{$name} = $i + $q->param('neptune_bin_size');
 			push @binnames , $name;
 		}
