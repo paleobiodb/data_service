@@ -168,7 +168,7 @@ function checkMapBrowserVersion()	{
 
 <tr>
 
-<td valign="top">Projection:</td>
+<td valign="top" style="padding-left: 2em;">Projection:</td>
 <td valign="top"><select id="projection" class="verysmall">
 </select>
 </td>
@@ -182,16 +182,20 @@ function checkMapBrowserVersion()	{
 
 <tr>
 
-<td valign="top">Shape:</td>
+<td valign="top" style="padding-left: 2em;">Shape:</td>
 <td valign="top"><select id="mapshape" class="verysmall">
 </select>
 </td>
+
+<td valign="top" style="padding-left: 3em;">Image size:
+<td valign="top"><select id="mapsize" class="small">
+</select>
 
 </tr>
 
 <tr>
 
-<td valign="top">Zoom:</td>
+<td valign="top" style="padding-left: 2em;">Zoom:</td>
 <td valign="top"><select id="mapscale" class="verysmall">
 </select>
 </td>
@@ -216,7 +220,9 @@ function checkMapBrowserVersion()	{
 <select id="pointshape1" class="verysmall" autofill="pointshape"></select>
 <span class="verysmall">with</span>
 <select id="dotborder1" class="verysmall" autofill="dotborder"></select>
-<span class="verysmall">borders</span>
+<span class="verysmall">borders and</span>
+<select name="shadow" class="verysmall"><option>no shadows</option><option>shadows</option></select>
+ 
 </td>
 
 </tr>
