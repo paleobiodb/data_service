@@ -178,7 +178,7 @@
 		if ( /  /.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name includes extra spaces\n";
 		}
-		if ( /[A-Z][A-Z][A-Z]/.test(frm.pubtitle.value) && ! /[a-z][a-z][a-z]/.test(frm.pubtitle.value) )	{
+		if ( /[A-Z][A-Z][A-Z]/.test(frm.pubtitle.value) && ! /[a-z][a-z][a-z]/.test(frm.pubtitle.value) && ! /PLoS ONE/.test(frm.pubtitle.value) )	{
 			errors += "* Don't capitalize the entire book/serial name\n";
 		}
 		// Report errors
