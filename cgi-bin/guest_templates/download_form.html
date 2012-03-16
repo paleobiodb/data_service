@@ -174,14 +174,14 @@ Click here to <a href="%%read_url%%?a=displayDownloadForm&amp;restore_defaults=1
 <small><i>Genus level or above</i></small>
 </td>
 <td valign=top class="small">
-<textarea name=taxon_name rows=2 cols=40></textarea></td></tr>
+<textarea name=taxon_name rows=2 cols="40"></textarea></td></tr>
 
 <tr%%row_class_1b%%>
 <td valign=top class="small"><b>Taxon</b> or taxa to exclude:<br>
 <small><i>Genus level or above</i></small>
 </td>
 <td valign=top class="small">
-<textarea name=exclude_taxon_name rows=2 cols=40></textarea></td></tr>
+<textarea name=exclude_taxon_name rows=2 cols="40"></textarea></td></tr>
 
 <tr%%row_class_1a%%>
 <td valign=top class="small">If you only want lists from one <b>time span</b>, enter the oldest and youngest intervals <small><i>(by name or by age in Ma)</i></small>:</td>
@@ -897,6 +897,8 @@ location:
 
   <tr>
   <td nowrap><input type=checkbox class="c_time" name=collections_10_my_bin value="YES" checked>10 m.y. bin</td>
+  </tr>
+  <tr>
   <td nowrap><input type=checkbox class="c_time" name=collections_FR2_bin value="YES">Fossil Record 2 bin</td>
   <td nowrap><input type=checkbox class="c_time" name=collections_max_interval value="YES">maximum interval</td>
   <td nowrap><input type=checkbox class="c_time" name=collections_min_interval value="YES">minimum interval</td>
@@ -904,21 +906,32 @@ location:
   </tr>
 
   <tr>
-  <td nowrap><input type=checkbox class="c_time" name=collections_ma_max value="YES">maximum age (Ma)</td>
-  <td nowrap><input type=checkbox class="c_time" name=collections_ma_min value="YES">minimum age (Ma)</td>
-  <td nowrap><input type=checkbox class="c_time" name=collections_ma_mid value="YES">midpoint age (Ma)</td>
+  <td colspan="4" style="padding-top: 0.5em;"><i>Age estimates in Ma based on geochronology:</i></td>
+  </tr>
+  <td nowrap><input type=checkbox class="c_time" name=collections_max_ma value="YES">maximum dated age</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_min_ma value="YES">minimum dated age</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_direct_ma value="YES">directly dated age</td>
+  </tr>
+
+  <tr>
+  <td colspan="4" style="padding-top: 0.4em;"><i>Age estimates in Ma based on geochronology (if available) or interval names (if not):</i></td>
+  </tr>
+  <tr>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_max value="YES">maximum age</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_min value="YES">minimum age</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_ma_mid value="YES">midpoint age</td>
   <td nowrap>&nbsp;</td>
   </tr>
 
   <tr>
-  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_base value="YES">interpolated maximum (Ma)</td>
-  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_top value="YES">interpolated minimum (Ma)</td>
-  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_mid value="YES">interpolated midpoint (Ma)</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_base value="YES">interpolated maximum</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_top value="YES">interpolated minimum
+  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_mid value="YES">interpolated midpoint</td>
   <td nowrap>&nbsp;</td>
   </tr>
 
   <tr>
-    <td nowrap colspan=4><i>Interpolation can be used when time interval boundaries are not directly dated but fall in between boundaries that are.</i></td>
+    <td nowrap class="verysmall" colspan="4"><i>Interpolation can be used when time interval boundaries are not directly dated but fall in between boundaries that are.</i></td>
   </tr>
 
 </table></div>
@@ -927,7 +940,7 @@ location:
 <span class="displayPanelHeader">Legacy time fields</span></br>
 <table width="100%" class="tiny">
   <tr>
-    <td nowrap colspan=4><i>The following eight fields are obsolete, but you can still download the old data.</i></td>
+    <td nowrap colspan="4"><i>The following eight fields are obsolete, but you can still download the old data.</i></td>
   </tr>
 
   <tr>
