@@ -29,7 +29,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval ma_max ma_min ma_mid interpolated_base interpolated_top interpolated_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval direct_ma direct_ma_error direct_ma_method max_ma max_ma_error max_ma_method min_ma min_ma_error min_ma_method ma_max ma_min ma_mid interpolated_base interpolated_top interpolated_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
@@ -1868,36 +1868,33 @@ sub queryDatabase {
             }
         }
         # these data are always needed for range computations
-        push @fields,"c.direct_ma AS `c.direct_ma`";
-        push @fields,"c.direct_ma_unit AS `c.direct_ma_unit`";
-        push @fields,"c.max_ma AS `c.max_ma`";
-        push @fields,"c.max_ma_unit AS `c.max_ma_unit`";
-        push @fields,"c.min_ma AS `c.min_ma`";
-        push @fields,"c.min_ma_unit AS `c.min_ma_unit`";
-        push @fields,"c.ma_interval_no AS `c.ma_interval_no`";
-        if ($q->param('collections_paleocoords') eq 'YES') {
+        push @fields , "c.".$_." AS `c.".$_."`" foreach ( 'direct_ma','direct_ma_error','direct_ma_unit','direct_ma_method','max_ma','max_ma_error','max_ma_unit','max_ma_method','min_ma','min_ma_error','min_ma_unit','min_ma_method','ma_interval_no' );
+        if ($q->param('collections_direct_ma') eq 'YES')	{
+            $q->param('collections_direct_ma_error' => "YES");
+            $q->param('collections_direct_ma_method' => "YES");
+        }
+        if ($q->param('collections_max_ma') eq 'YES')	{
+            $q->param('collections_max_ma_error' => "YES");
+            $q->param('collections_max_ma_method' => "YES");
+        }
+        if ($q->param('collections_min_ma') eq 'YES')	{
+            $q->param('collections_min_ma_error' => "YES");
+            $q->param('collections_min_ma_method' => "YES");
+        }
+        if ($q->param('collections_paleocoords') eq 'YES')	{
             push @fields,"c.paleolat AS `c.paleolat`";
             push @fields,"c.paleolng AS `c.paleolng`";
         }
-        if ($q->param('collections_coords') eq 'YES') {
-            push @fields,"c.lngdeg AS `c.lngdeg`";
-            push @fields,"c.lngmin AS `c.lngmin`";
-            push @fields,"c.lngsec AS `c.lngsec`";
-            push @fields,"c.lngdec AS `c.lngdec`";
-            push @fields,"c.lngdir AS `c.lngdir`";
-            push @fields,"c.latdeg AS `c.latdeg`";
-            push @fields,"c.latmin AS `c.latmin`";
-            push @fields,"c.latsec AS `c.latsec`";
-            push @fields,"c.latdec AS `c.latdec`";
-            push @fields,"c.latdir AS `c.latdir`";
+        if ($q->param('collections_coords') eq 'YES')	{
+            push @fields , "c.".$_." AS `c.".$_."`" foreach ( 'lngdeg','lngmin','lngsec','lngdec','lngdir','latdeg','latmin','latsec','latdec','latdir' );
         }
-        if ($q->param('collections_authorizer') eq 'YES') {
+        if ($q->param('collections_authorizer') eq 'YES')	{
             push @fields, 'c.authorizer';
         }
-        if ($q->param('collections_enterer') eq 'YES') {
+        if ($q->param('collections_enterer') eq 'YES')	{
             push @fields, 'c.enterer';
         }
-        if ($q->param('collections_modifier') eq 'YES') {
+        if ($q->param('collections_modifier') eq 'YES')	{
             push @fields, 'c.modifier';
         }
     }
@@ -2525,20 +2522,9 @@ sub queryDatabase {
             if ($COLL{$row->{'collection_no'}}) {
                 # This is merely a timesaving measure, reuse old collections values if we've already come across this collection
                 my $orow = $COLL{$row->{'collection_no'}};
-                $row->{'c.10_my_bin'} = $orow->{'c.10_my_bin'};
-                $row->{'c.FR2_bin'} = $orow->{'c.FR2_bin'};
-                $row->{'c.stage'}   = $orow->{'c.stage'};
-                $row->{'c.epoch'}   = $orow->{'c.epoch'};
-                $row->{'c.subepoch'}= $orow->{'c.subepoch'};
-                $row->{'c.max_interval'}= $orow->{'c.max_interval'};
-                $row->{'c.min_interval'}= $orow->{'c.min_interval'};
-                $row->{'c.period'}  = $orow->{'c.period'};
-                $row->{'c.ma_max'}  = $orow->{'c.ma_max'};
-                $row->{'c.ma_min'}  = $orow->{'c.ma_min'};
-                $row->{'c.ma_mid'}  = $orow->{'c.ma_mid'};
-                $row->{'c.interpolated_base'}  = $orow->{'c.interpolated_base'};
-                $row->{'c.interpolated_top'}  = $orow->{'c.interpolated_top'};
-                $row->{'c.interpolated_mid'}  = $orow->{'c.interpolated_mid'};
+                for my $field ( '10_my_bin','FR2_bin','stage','subepoch','epoch','period','max_interval','min_interval','direct_ma','direct_ma_error','direct_ma_method','max_ma','max_ma_error','max_ma_error','min_ma','min_ma_error','min_ma_method' ,'ma_max','ma_min','ma_mid','interpolated_base','interpolated_top','interpolated_mid' )	{
+                	$row->{'c.'.$field}  = $orow->{'c.'.$field};
+                }
                 next;
             }
             # Populate the generated time fields;
@@ -2575,18 +2561,24 @@ sub queryDatabase {
             $row->{'c.min_interval'} = $time_lookup->{$row->{'c.min_interval_no'}}{'interval_name'};
             if ( $row->{'c.direct_ma'} > 0 && $row->{'c.direct_ma_unit'} =~ /ybp/i )	{
                     $row->{'c.direct_ma'} /= 1000000;
+                    $row->{'c.direct_ma_error'} /= 1000000;
             } elsif ( $row->{'c.direct_ma'} > 0 && $row->{'c.direct_ma_unit'} =~ /ka/i )	{
                     $row->{'c.direct_ma'} /= 1000;
+                    $row->{'c.direct_ma_error'} /= 1000;
             }
             if ( $row->{'c.max_ma'} > 0 && $row->{'c.max_ma_unit'} =~ /ybp/i )	{
                     $row->{'c.max_ma'} /= 1000000;
+                    $row->{'c.max_ma_error'} /= 1000000;
             } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.max_ma_unit'} =~ /ka/i )	{
                     $row->{'c.max_ma'} /= 1000;
+                    $row->{'c.max_ma_error'} /= 1000;
             }
             if ( $row->{'c.min_ma'} > 0 && $row->{'c.min_ma_unit'} =~ /ybp/i )	{
                     $row->{'c.min_ma'} /= 1000000;
+                    $row->{'c.min_ma_error'} /= 1000000;
             } elsif ( $row->{'c.min_ma'} > 0 && $row->{'c.min_ma_unit'} =~ /ka/i )	{
                     $row->{'c.min_ma'} /= 1000;
+                    $row->{'c.min_ma_error'} /= 1000;
             }
             if ( $row->{'c.direct_ma'} )	{
                 $row->{'c.ma_max'} = $row->{'c.direct_ma'};
