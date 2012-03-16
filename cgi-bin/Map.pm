@@ -1981,7 +1981,7 @@ sub mapDrawPoints	{
                     $im->setAntiAliased($col{$dotcolor});
                 } else	{
                     # JA 12-14.3.12
-                    my $offset = int(255 * log($occsAtCoord{$x1}{$y1}) / log($maxpts));
+                    $offset = ( $occsAtCoord{$x1}{$y1} > 0 ) ? int(255 * log($occsAtCoord{$x1}{$y1}) / log($maxpts)) : 0;
                     my ($r,$g,$b);
                     if ( $dotcolor =~ /red to green/ )	{
                         # suggested by Kiessling
