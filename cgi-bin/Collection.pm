@@ -3340,12 +3340,12 @@ function showAuthors()	{
 		$authors{$_->{'taxon_no'}} = Reference::formatShortRef($_) foreach @{$dbt->getData($sql)};
 	}
 	print "<div style=\"margin-left: 0em; margin-right: 1em; border-top: 1px solid darkgray;\">\n\n";
-	print "<p class=\"large\" style=\"margin-top: 0.5em; margin-bottom: 1.5em;\">Taxonomic list</p>\n\n";
+	print "<p class=\"large\" style=\"margin-top: 0.5em; margin-bottom: 0em;\">Taxonomic list</p>\n\n";
 	if ( $c->{'taxonomy_comments'} )	{
-		print "<p $mockLI $c->{'taxonomy_comments'}</p>\n\n";
+		print qq|<div class="verysmall" style="margin-left: 2em; margin-top: 0.5em; text-indent: -1em;"> &bull; $c->{'taxonomy_comments'}</div>\n\n|;
 	}
-	print qq|<p class="mockLink" onClick="showAuthors();">Show authors and comments</p>\n|;
-	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\" style=\"margin-top: -0.5em;\">\n\n";
+	print qq|<div class="mockLink" onClick="showAuthors();" style="margin-left: 1em; margin-top: 0.5em; margin-bottom: 0.5em;"> Show authors and comments</div>\n\n|;
+	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\">\n\n";
 	my ($lastclass,$lastorder,$lastfamily,$class,@with_authors);
 	for my $o ( @occs )	{
 		my ($ital,$ital2,$postfix) = ('<i>','</i>','');
@@ -3444,6 +3444,7 @@ function showAuthors()	{
 		$lastorder = $o->{'order'};
 		$lastfamily = $o->{'family'};
 	}
+	print "\n</div>\n<div class=\"withAuthors\">\n<div style=\"padding-bottom: 0.2em;\">".join("</div><div style=\"padding-bottom: 0.2em;\">\n",@with_authors)."</div></div>\n";
 	print "</tr>\n";
 	print "</table>\n\n";
 
