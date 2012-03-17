@@ -3009,10 +3009,29 @@ sub basicCollectionInfo	{
 	$c->{'country'} =~ s/^United/the United/;
 
 	print qq|
+
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+function showAuthors()	{
+	alldivs = document.getElementsByTagName('div');
+	for ( i = 0; i < alldivs.length; i++ )	{
+	//for ( i = 0; i < 33; i++ )	{
+//alert(alldivs[i].class);
+		if ( alldivs[i].className == 'noAuthors' )	{
+			alldivs[i].style.display = 'none';
+		} else if ( alldivs[i].className == 'withAuthors' )	{
+			alldivs[i].style.display = 'block';
+		}
+	}
+}
+//  End -->
+</script>
+
 <div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
 <div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left; width: 54em;">
 <span class="displayPanelHeader">$header of $c->{'country'})</span>
 <div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
+
 |;
 	$c->{'country'} =~ s/^the United/United/;
 
@@ -3288,8 +3307,6 @@ sub basicCollectionInfo	{
 		return;
 	}
 
-	print "<p><a href=\"$READ_URL?action=displayCollectionDetails&collection_no=$c->{'collection_no'}\">See full details</a></p>\n\n";
-
 	# the following is basically a complete rewrite of buildTaxonomicList
 	# so what?
 
@@ -3327,6 +3344,7 @@ sub basicCollectionInfo	{
 	if ( $c->{'taxonomy_comments'} )	{
 		print "<p $mockLI $c->{'taxonomy_comments'}</p>\n\n";
 	}
+	print qq|<p class="mockLink" onClick="showAuthors();">Show authors and comments</p>\n|;
 	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\" style=\"margin-top: -0.5em;\">\n\n";
 	my ($lastclass,$lastorder,$lastfamily,$class,@with_authors);
 	for my $o ( @occs )	{
@@ -3397,8 +3415,7 @@ sub basicCollectionInfo	{
 		}
 		if ( $o->{'class'} ne $lastclass || $o->{'order'} ne $lastorder || $o->{'family'} ne $lastfamily )	{
 			if ( $lastclass || $lastorder || $lastfamily )	{
-				print join("<br>\n",@with_authors);
-				#print "<tr$class>\n<td colspan=\"1\"></td>\n<td valign=\"top\">".join('<br>',@with_authors)."</td></tr>\n\n";
+				print "\n</div>\n<div class=\"withAuthors\">\n<div style=\"padding-bottom: 0.2em;\">".join("</div><div style=\"padding-bottom: 0.2em;\">\n",@with_authors)."</div></div>\n";
 				print "</tr>\n";
 				@with_authors = ();
 			}
@@ -3415,13 +3432,13 @@ sub basicCollectionInfo	{
 				$class = ' class="darkList"';
 			}
 			print "<tr$class>\n<td valign=\"top\"><nobr>$parentlist</nobr></td>\n";
-			print "<td valign=\"top\">$o->{'formatted'}";
+			print "<td valign=\"top\"><div class=\"noAuthors\">$o->{'formatted'}";
 			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
-			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<span class=\"verysmall\" style=\"padding-left: 2em;\">$o->{'comments'}</span>\n" : "";
+			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<div class=\"verysmall\" style=\"padding-left: 0.75em; padding-top: 0.2em; padding-bottom: 0.3em;\">$o->{'comments'}</div>\n" : "";
 		} else	{
 			print ", $o->{'formatted'}";
 			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
-			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n".$o->{'comments'} : "";
+			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<div class=\"verysmall\" style=\"padding-left: 0.75em; padding-top: 0.2em; padding-bottom: 0.3em;\">$o->{'comments'}</div>\n" : "";
 		}
 		$lastclass = $o->{'class'};
 		$lastorder = $o->{'order'};
