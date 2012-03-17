@@ -3293,16 +3293,18 @@ sub basicCollectionInfo	{
 	# the following is basically a complete rewrite of buildTaxonomicList
 	# so what?
 
-	$sql = "(SELECT lft,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL AND lft>0) UNION (SELECT lft,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no FROM reidentifications re,$TAXA_TREE_CACHE t WHERE collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no AND lft>0) UNION (SELECT 999999,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0 FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
+	$sql = "(SELECT lft,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no,o.comments,'' FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL AND lft>0) UNION (SELECT lft,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no,o.comments,re.comments FROM occurrences o,reidentifications re,$TAXA_TREE_CACHE t WHERE o.occurrence_no=re.occurrence_no AND re.collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no AND lft>0) UNION (SELECT 999999,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0,o.comments,'' FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
 	my @occs = @{$dbt->getData($sql)};
-	my (%bad,%lookup);
+	my (%bad,%lookup,@need_authors,%authors);
 	for my $o ( @occs )	{
 		if ( $o->{'taxon_no'} != $o->{'synonym_no'} )	{
 			$bad{$o->{'taxon_no'}} = $o->{'synonym_no'};
+		} elsif ( $o->{'taxon_no'} > 0 )	{
+			push @need_authors , $o->{'taxon_no'};
 		}
 	}
 	if ( %bad )	{
-		$sql = "SELECT a.taxon_no,a.taxon_name bad,a.taxon_rank,synonym_no,a2.taxon_name good FROM authorities a,authorities a2,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.synonym_no=a2.taxon_no AND a.taxon_no IN (".join(',',keys %bad).")";
+		$sql = "SELECT a.taxon_no,a.taxon_name bad,a.taxon_rank,synonym_no,a2.taxon_name good FROM authorities a,authorities a2,$TAXA_TREE_CACHE t,refs r WHERE a.taxon_no=t.taxon_no AND t.synonym_no=a2.taxon_no AND a2.reference_no=r.reference_no AND a.taxon_no IN (".join(',',keys %bad).")";
 		my @seniors = @{$dbt->getData($sql)};
 		for my $s ( @seniors )	{
 		# ignore rank changes that don't change spellings
@@ -3312,8 +3314,13 @@ sub basicCollectionInfo	{
 				}
 				$s->{'good'} = "<a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$s->{'synonym_no'}\">".$s->{'good'}."</a>";
 				$lookup{$s->{'synonym_no'}} = $s->{'good'};
+				push @need_authors , $s->{'synonym_no'};
 			}
 		}
+	}
+	if ( @need_authors )	{
+		$sql = "SELECT taxon_no,IF(ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@need_authors).")";
+		$authors{$_->{'taxon_no'}} = Reference::formatShortRef($_) foreach @{$dbt->getData($sql)};
 	}
 	print "<div style=\"margin-left: 0em; margin-right: 1em; border-top: 1px solid darkgray;\">\n\n";
 	print "<p class=\"large\" style=\"margin-top: 0.5em; margin-bottom: 1.5em;\">Taxonomic list</p>\n\n";
@@ -3321,7 +3328,7 @@ sub basicCollectionInfo	{
 		print "<p $mockLI $c->{'taxonomy_comments'}</p>\n\n";
 	}
 	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\" style=\"margin-top: -0.5em;\">\n\n";
-	my ($lastclass,$lastorder,$lastfamily,$class);
+	my ($lastclass,$lastorder,$lastfamily,$class,@with_authors);
 	for my $o ( @occs )	{
 		my ($ital,$ital2,$postfix) = ('<i>','</i>','');
 		if ( $o->{'species_name'} eq "indet." )	{
@@ -3390,7 +3397,10 @@ sub basicCollectionInfo	{
 		}
 		if ( $o->{'class'} ne $lastclass || $o->{'order'} ne $lastorder || $o->{'family'} ne $lastfamily )	{
 			if ( $lastclass || $lastorder || $lastfamily )	{
+				print join("<br>\n",@with_authors);
+				#print "<tr$class>\n<td colspan=\"1\"></td>\n<td valign=\"top\">".join('<br>',@with_authors)."</td></tr>\n\n";
 				print "</tr>\n";
+				@with_authors = ();
 			}
 			my @parents;
 			for my $p ( 'class','order','family' )	{
@@ -3406,8 +3416,12 @@ sub basicCollectionInfo	{
 			}
 			print "<tr$class>\n<td valign=\"top\"><nobr>$parentlist</nobr></td>\n";
 			print "<td valign=\"top\">$o->{'formatted'}";
+			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
+			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<span class=\"verysmall\" style=\"padding-left: 2em;\">$o->{'comments'}</span>\n" : "";
 		} else	{
 			print ", $o->{'formatted'}";
+			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
+			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n".$o->{'comments'} : "";
 		}
 		$lastclass = $o->{'class'};
 		$lastorder = $o->{'order'};
