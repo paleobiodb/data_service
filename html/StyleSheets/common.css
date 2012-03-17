@@ -459,6 +459,13 @@ div.emphasized {
 .taxonomicList a:active	{ color : #00AAFF; text-decoration:none; }
 .taxonomicList a:hover	{ color : #C80078; text-decoration:none; }
 
+.noAuthors	{
+	display: block;
+}
+.withAuthors	{
+	display: none;
+}
+
 .padLeft {
     padding-left: .5em;
 }
