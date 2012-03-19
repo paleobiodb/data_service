@@ -939,15 +939,24 @@ sub getReferenceLinkSummary	{
 	}
 
 	# Handle Opinions
-	my $opinion_count;
+	my (@opinion_counts,$opinion_total,$has_opinion);
 	if ( $DB ne "eco" )	{
-		$sql = "SELECT count(*) c FROM opinions WHERE reference_no=$reference_no";
-		$opinion_count = ${$dbt->getData($sql)}[0]->{'c'};
+		$sql = "SELECT ref_has_opinion,count(*) c FROM opinions WHERE reference_no=$reference_no GROUP BY ref_has_opinion ORDER BY ref_has_opinion";
+		@opinion_counts = @{$dbt->getData($sql)};
+		if ( $opinion_counts[0]->{'ref_has_opinion'} eq "YES" )	{
+			$has_opinion = $opinion_counts[0]->{'c'};
+		} elsif ( $opinion_counts[1]->{'ref_has_opinion'} eq "YES" )	{
+			$has_opinion = $opinion_counts[1]->{'c'};
+		}
+		$opinion_total = $opinion_counts[0]->{'c'} + $opinion_counts[1]->{'c'};
 	}
 
-	if ($opinion_count) {
-		my $plural = ($opinion_count == 1) ? "" : "s";
-		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_count taxonomic opinion$plural</a> (<a href="$READ_URL?a=classify&amp;reference_no=$reference_no">show classification</a>)|;
+	if ( $opinion_total ) {
+		my $plural = ($opinion_total == 1) ? "" : "s";
+		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_total taxonomic opinion$plural</a>|;
+		if ( $has_opinion > 0 )	{
+ 			$chunks[$#chunks] .= qq| (<a href="$READ_URL?a=classify&amp;reference_no=$reference_no">show classification</a>)|;
+		}
 	}      
 
 	# list taxa with measurements based on this reference JA 4.12.10
