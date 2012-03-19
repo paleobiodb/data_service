@@ -2996,14 +2996,19 @@ sub basicCollectionInfo	{
 	}
 
 	my ($max,$min);
-	$sql = "SELECT TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,base_age,top_age,i2.interval_name AS epoch,i3.interval_name AS period FROM intervals i,intervals i2,intervals i3,interval_lookup l WHERE i.interval_no=".$c->{'max_interval_no'}." AND i.interval_no=l.interval_no AND i2.interval_no=l.epoch_no AND i3.interval_no=period_no";
+	# this is a lot easier than a quadruple plus join and some unions,
+	#  etc., etc. and the table is tiny
+	$sql = "SELECT interval_no,TRIM(CONCAT(eml_interval,' ',interval_name)) AS interval_name FROM intervals";
+	my %interval;
+	$interval{$_->{'interval_no'}} = $_->{'interval_name'} foreach @{$dbt->getData($sql)};
+	$sql = "SELECT base_age,top_age,epoch_no,period_no FROM interval_lookup WHERE interval_no=".$c->{'max_interval_no'};
 	$max = ${$dbt->getData($sql)}[0];
-	my $maxName .= ( $max->{'period'} =~ /Paleogene|Neogene|Quaternary/ ) ? $max->{'epoch'} : $max->{'period'};
+	my $maxName .= ( $interval{$max->{'period_no'}} =~ /Paleogene|Neogene|Quaternary/ && $max->{'epoch_no'} > 0 ) ? $interval{$max->{'epoch_no'}} : $interval{$max->{'period_no'}};
 	$header .= " (".$maxName;
 	if ( $c->{'min_interval_no'} > 0 )	{
 		$sql = "SELECT TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,base_age,top_age,i2.interval_name AS epoch,i3.interval_name AS period FROM intervals i,intervals i2,intervals i3,interval_lookup l WHERE i.interval_no=".$c->{'min_interval_no'}." AND i.interval_no=l.interval_no AND i2.interval_no=l.epoch_no AND i3.interval_no=period_no";
 		$min = ${$dbt->getData($sql)}[0];
-		my $minName .= ( $min->{'period'} =~ /Paleogene|Neogene|Quaternary/ ) ? $min->{'epoch'} : $min->{'period'};
+		my $minName .= ( $interval{$min->{'period_no'}} =~ /Paleogene|Neogene|Quaternary/ && $min->{'epoch_no'} > 0 ) ? $interval{$min->{'epoch_no'}} : $interval{$min->{'period_no'}};
 		$header .= ( $maxName ne $minName ) ? " to ".$minName : "";
 	}
 	$c->{'country'} =~ s/^United/the United/;
@@ -3109,10 +3114,10 @@ function showAuthors()	{
 		print $c->{'geological_group'}." Group, ";
 	}
 
-	print $max->{'interval_name'}." ";
+	print $interval{$c->{'max_interval_no'}}." ";
 	if ( $c->{'min_interval_no'} > 0 )	{
 		print " to ";
-		print $min->{'interval_name'}." ";
+		print $interval{$c->{'max_interval_no'}}." ";
 	}
 	if ( $max->{'base_age'} )	{
 		printf "(%.1f - ",$max->{'base_age'};
@@ -3344,8 +3349,8 @@ function showAuthors()	{
 	if ( $c->{'taxonomy_comments'} )	{
 		print qq|<div class="verysmall" style="margin-left: 2em; margin-top: 0.5em; text-indent: -1em;"> &bull; $c->{'taxonomy_comments'}</div>\n\n|;
 	}
-	print qq|<div class="mockLink" onClick="showAuthors();" style="margin-left: 1em; margin-top: 0.5em; margin-bottom: 0.5em;"> Show authors and comments</div>\n\n|;
-	print "<table class=\"small\" cellpadding=\"4\" class=\"taxonomicList\">\n\n";
+	print qq|<div class="mockLink" onClick="showAuthors();" style="margin-left: 1em; margin-top: 0.5em; margin-bottom: 0.5em;"> Show authors, comments, and common names</div>\n\n|;
+	print "<table class=\"small\" cellspacing=\"0\" cellpadding=\"4\" class=\"taxonomicList\">\n\n";
 	my ($lastclass,$lastorder,$lastfamily,$class,@with_authors);
 	for my $o ( @occs )	{
 		my ($ital,$ital2,$postfix) = ('<i>','</i>','');
@@ -3407,7 +3412,7 @@ function showAuthors()	{
 		}
 		my $class_hash = TaxaCache::getParents($dbt,[$o->{'taxon_no'}],'array_full');
 		my @class_array = @{$class_hash->{$o->{'taxon_no'}}};
-		my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$o->{'taxon_no'}},['taxon_name','taxon_rank','pubyr']);
+		my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$o->{'taxon_no'}},['taxon_name','taxon_rank','pubyr','common_name']);
 		unshift @class_array , $taxon;
 		$o = getClassOrderFamily($dbt,\$o,\@class_array);
 		if ( ! $o->{'class'} && ! $o->{'order'} && ! $o->{'family'} )	{
@@ -3420,24 +3425,25 @@ function showAuthors()	{
 				@with_authors = ();
 			}
 			my @parents;
-			for my $p ( 'class','order','family' )	{
-				if ( $o->{$p} )	{
-					push @parents , $o->{$p};
-				}
-			}
-			my $parentlist = join(' - ',@parents);
 			if ( $class =~ /dark/ )	{
 				$class = '';
 			} elsif ( $#occs > 0 )	{
 				$class = ' class="darkList"';
 			}
-			print "<tr$class>\n<td valign=\"top\"><nobr>$parentlist</nobr></td>\n";
+			if ( $o->{'class'} ne $lastclass )	{
+				my $style = ( $o->{'class'} ne $occs[0]->{'class'} ) ? ' style="padding-top: 1.5em;"' : "";
+				print "<tr><td class=\"large\" colspan=\"2\"$style>".$o->{'class'}."</td></tr>\n";
+				$class = ' class="darkList"';
+			}
+			print "<tr$class>\n<td valign=\"top\"><nobr>";
+			print "&nbsp;".join(' - ',$o->{'order'},$o->{'family'})."</nobr></td>\n";
 			print "<td valign=\"top\"><div class=\"noAuthors\">$o->{'formatted'}";
-			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
+			#push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
+			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}}." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
 			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<div class=\"verysmall\" style=\"padding-left: 0.75em; padding-top: 0.2em; padding-bottom: 0.3em;\">$o->{'comments'}</div>\n" : "";
 		} else	{
 			print ", $o->{'formatted'}";
-			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
+			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}}." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
 			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<div class=\"verysmall\" style=\"padding-left: 0.75em; padding-top: 0.2em; padding-bottom: 0.3em;\">$o->{'comments'}</div>\n" : "";
 		}
 		$lastclass = $o->{'class'};
