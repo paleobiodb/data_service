@@ -76,7 +76,7 @@ sub classify	{
 		my @opinions = @{$dbt->getData($sql)};
 		if ( ! @opinions )	{
 			print $hbo->stdIncludes($PAGE_TOP);
-			classificationForm($hbo, $s, 'No taxonomic opinions are tied to this reference');
+			classificationForm($hbo, $s, 'No newly expressed taxonomic opinions are tied to this reference');
 			print $hbo->stdIncludes($PAGE_BOTTOM);
 			exit;
 		}
