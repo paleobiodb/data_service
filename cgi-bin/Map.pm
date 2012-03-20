@@ -114,7 +114,9 @@ sub buildMap {
     } 
 
 	$self->mapSetScale($dataSets);
+	$self->readPlateIDs();
 	$self->mapDefineOutlines();
+	# plate IDs may be required by projectPoints even for 0 Ma maps
 	if ( $self->{'maptime'} > 0 )	{
 		$self->mapGetRotations();
 	}
@@ -674,6 +676,18 @@ sub snapToTile {
 }
         
 sub readPlateIDs {
+
+	# some plates have no rotation data, so use rotations for the
+	#  most frequent neighboring plate
+	my %betterPlate;
+	open BAD,"<$DATA_DIR/bad_plate_neighbors";
+	<BAD>;
+	while ( <BAD> )	{
+		my @p = split /\t/,$_;
+		$betterPlate{$p[0]} = $p[1];
+	}
+	close BAD;
+
     my $self = shift;
     if ( ! open IDS,"<$DATA_DIR/plateidsv2.lst" ) {
         $self->htmlError ( "Couldn't open [$DATA_DIR/plateidsv2.lst]: $!" );
@@ -689,6 +703,7 @@ sub readPlateIDs {
     while (<IDS>)	{
         s/\n//;
         my ($x,$y,$z) = split /,/,$_;
+	$z = ( $betterPlate{$z} > 0 ) ? $betterPlate{$z} : $z;
         # Cinqua (coll 18717) correction: plate 198 has bogus rotation data,
         #  but fortunately spans just one cell that is adjacent to 205
         if ( $z == 198 )	{
@@ -737,7 +752,6 @@ sub mapDefineOutlines	{
 	my %plate;
 	my %cellage;
 	if ( $self->{maptime} > 0 || ( $q->param('platecolor') ne "none" && $q->param('platecolor') =~ /[A-Za-z]/ ) || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
-		$self->readPlateIDs();
 		%plate = %{$self->{'plate'}};
 		%cellage = %{$self->{'cellage'}};
 	}
@@ -2255,32 +2269,22 @@ sub projectPoints	{
 	my $oldx;
 	my $oldy;
 
+	# what plate is this point on?
+	# integer coordinates are needed to determine the plate ID
+	# IMPORTANT: Scotese's plate ID data are weird in that the coordinates
+	#   refer to the lower left (southwest) corner of each grid cell, so,
+	#  say, cell -10 / 10 is from -10 to -9 long and 10 to 11 lat
+	my ($q,$r); 
+	$q = ( $x >= 0 ) ? int($x) : int($x-1);
+	$r = ( $y >= 0 ) ? int($y) : int($y-1);
+	$pid = ( $self->{plate} ) ? $self->{plate}{$q}{$r} : "";
+
 	# rotate point if a paleogeographic map is being made
 	# strategy: rotate point such that the pole of rotation is the
 	#  north pole; use the GCD between them to get the latitude;
 	#  add the degree offset to its longitude to get the new value;
 	#  re-rotate point back into the original coordinate system
 	if ( $self->{maptime} > 0 && ( $midlng != $x || $midlat != $y || $self->{'rotatemapfocus'} =~ /y/i ) && $pointclass ne "grid" && ($projected{$x}{$y} eq "" || $no_cache))	{
-
-	# integer coordinates are needed to determine the plate ID
-	# IMPORTANT: Scotese's plate ID data are weird in that the coordinates
-	#   refer to the lower left (southwest) corner of each grid cell, so,
-	#  say, cell -10 / 10 is from -10 to -9 long and 10 to 11 lat
-		my $q; 
-		my $r;
-		if ( $x >= 0 )	{
-			$q = int($x);
-		} else	{
-			$q = int($x-1);
-		}
-		if ( $y >= 0 )	{
-			$r = int($y);
-		} else	{
-			$r = int($y-1);
-		}
-
-		# what plate is this point on?
-		$pid = $self->{plate}{$q}{$r};
 
 		my $ma = $self->{maptime};
 		$oldx = $x;
@@ -2289,7 +2293,7 @@ sub projectPoints	{
 
 	# if there are no data, just bomb out
 		if ( $pid eq "" || $rotx{$ma}{$pid} eq "" || $roty{$ma}{$pid} eq "" )	{
-			return('NaN','NaN');
+			return('NaN','NaN',$x,$y,$pid);
 		}
 
 	# how far are we going?
