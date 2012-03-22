@@ -1,33 +1,24 @@
 <!-- Begin std_page_bottom.html -->
 
-</div> 
+<!-- end innerMainPanel -->
+</div>
 
-</div> 
+<!-- end outerMainPanel -->
+</div>
 
-</div> 
+<!-- end mainBodyGuest -->
+</div>
 
-<!-- don't even ask -->
-<div style="position: fixed; bottom: 0; height: 100%; width: 100%;">
-<div style="position: relative; margin-left: auto; margin-right: auto; height: 100%; width: 68em; z-index: 0;">
-<div id="bottomBox" style="position: relative; margin-left: -1px; margin-right: 0px; height: 100%; width: 100%; border-left: 1px solid DarkGray; border-right: 1px solid DarkGray; background-color: white; display: none;">
-</div> 
-</div> 
-</div> 
+<!-- end container -->
+</div>
 
 <script language="JavaScript" type="text/javascript">
 <!--
 
 function hacks()	{
-
-	if ( ! /MSIE/i.test(navigator.userAgent) )	{
-		document.getElementById('bottomBox').style.display = 'block';
-	} else	{
-		document.getElementById('about').style.cssText = 'position: absolute; top: -4.5em; left: 55em; height: 98em; width: 12em; padding-top: 1em; padding-left: 1em; padding-right: 1em; background-color: MediumBlue; color: white;';
-	}
 	if ( /Safari/i.test(navigator.userAgent) )	{
-		document.getElementById('quickSearchDiv').style.top = '-0.3em';
+		document.getElementById('quickSearchDiv').style.bottom = '0.2em';
 	}
-	document.getElementById('homepage_anim').src = animsrc;
 	return true;
 }
 
