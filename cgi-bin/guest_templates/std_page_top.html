@@ -72,15 +72,15 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
 
 <div class="bannerColor" id="homeLinks">
 
-	<div class="small" id="quickSearchDiv" style="position: absolute; top: 0em; left: 29.75em;">
+	<div id="quickSearchDiv" class="small" style="left: 20.5em;">
 <form method="POST" action="%%read_url%%" onSubmit="return checkName(0,2);">
 <input type="hidden" name="a" value="quickSearch">
 <input type="hidden" name="last_taxon" value="$taxon_no">
-<input type="text" name="quick_search" value="Quick search" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="position: relative; bottom: 1px; width: 7em; padding-left: 0.2em; font-size: 1.0em; background: MidnightBlue; border: 1px solid white; color: white;">
+<input type="text" name="quick_search" value="Quick search" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="position: relative; bottom: 1px; width: 7em; padding-left: 0.2em; font-size: 0.9em; background: MidnightBlue; border: 1px solid white; color: white;">
 </form>
         </div>
 
-	<div id="dropDown" style="position: absolute; top: 0em; left: 37.5em;">
+	<div id="dropDown" style="left: 28.5em;">
           <div id="dropDownVertSpacer">
             <div><a href="%%read_url%%?a=displaySearchColls&amp;type=view">Full search</a></div>
           </div>
@@ -90,12 +90,12 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
             <li><a href="%%read_url%%?a=displaySearchRefs&amp;type=view">Published references</a></li>
             <li><a href="%%read_url%%?a=classificationForm">Classifications of taxa in groups</a></li>
             <li><a href="%%read_url%%?a=displaySearchStrataForm">Stratigraphic units</a></li>
-            <li><a href="%%read_url%%?a=startScale">Time scales</a></li>
+            <li><a href="%%read_url%%?a=searchScale">Time scales</a></li>
             <li><a href="%%read_url%%?a=displayInterval&amp;interval_no=33">Time intervals</a></li>
           </ul>
         </div>
 
-	<div id="dropDown" style="position: absolute; top: 0em; left: 44.5em;">
+	<div id="dropDown" style="left: 35em;">
           <div id="dropDownVertSpacer"> 
             <div><a href="%%read_url%%?a=displayBasicDownloadForm">Download</a></div>
           </div>
@@ -107,7 +107,7 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
           </ul>
         </div>
 
-	<div id="dropDown" style="position: absolute; top: 0em; left: 51em;">
+	<div id="dropDown" style="left: 41.5em;">
           <div id="dropDownVertSpacer">
             <div><a href="%%read_url%%?a=displayBasicMapForm">Analyze</a></div>
           </div>
@@ -124,7 +124,7 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
           </ul>
         </div>
 
-	<div id="dropDown" style="position: absolute; top: 0em; left: 56.5em;">
+	<div id="dropDown" style="left: 47em;">
           <div id="dropDownVertSpacer"> 
             <div><a href="%%read_url%%?a=displayPage&amp;page=paleodbFAQ">About</a></div>
           </div>
@@ -138,7 +138,7 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
           </ul>
         </div>
 
-	<div id="dropDown" style="position: absolute; top: 0em; left: 61em;">
+	<div id="dropDown" style="left: 51.5em;">
           <div id="dropDownVertSpacer"> 
             <div><a href="%%write_url%%?a=login">Log in</a></div>
           </div>
@@ -146,6 +146,8 @@ JavaScript is required to use this web site.  Please turn it on before proceedin
 
 </div> <!-- end homeLinks -->
 
-<div class="bannerSpacer">
+<div class="outerMainPanel">
+
+<div class="innerMainPanel">
 
 <!-- End std_page_top.html -->
