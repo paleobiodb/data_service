@@ -11,24 +11,24 @@
 // for things over than <A> tags
 sfHover = function() {
     if (document.getElementById("dropDown")) {
-        var sfEls1 = document.getElementById("dropDown").getElementsByTagName("TD");
-        var sfEls2 = document.getElementById("dropDown").getElementsByTagName("LI");
-        for (var i=0; i<sfEls1.length; i++) {
-            sfEls1[i].onmouseover=function() {
-                this.className+=" sfhover";
-            }
-            sfEls1[i].onmouseout=function() {
-                this.className=this.className.replace(new RegExp(" sfhover\\b"), "");
-            }
-        }
-        for (var i=0; i<sfEls2.length; i++) {
-            sfEls2[i].onmouseover=function() {
-                this.className+=" sfhover";
-            }
-            sfEls2[i].onmouseout=function() {
-                this.className=this.className.replace(new RegExp(" sfhover\\b"), "");
-            }
-        }
+	var sfEls1 = document.getElementById("dropDown").getElementsByTagName("TD");
+	var sfEls2 = document.getElementById("dropDown").getElementsByTagName("LI");
+	for (var i=0; i<sfEls1.length; i++) {
+	    sfEls1[i].onmouseover=function() {
+		this.className+=" sfhover";
+	    }
+	    sfEls1[i].onmouseout=function() {
+		this.className=this.className.replace(new RegExp(" sfhover\\b"), "");
+	    }
+	}
+	for (var i=0; i<sfEls2.length; i++) {
+	    sfEls2[i].onmouseover=function() {
+		this.className+=" sfhover";
+	    }
+	    sfEls2[i].onmouseout=function() {
+		this.className=this.className.replace(new RegExp(" sfhover\\b"), "");
+	    }
+	}
     }
 }
 if (window.attachEvent) window.attachEvent("onload", sfHover);
@@ -39,7 +39,7 @@ function showProperties ( obj ) {
     var result = "";
 
     for ( var i in obj ) {
-        result += "obj." + i + " = " + obj[i] + "<BR>\n";
+	result += "obj." + i + " = " + obj[i] + "<BR>\n";
     }
     document.write ( result );
 }  
@@ -48,7 +48,7 @@ function checkBrowserVersion() {
     var match = /Microsoft/i;
     
     if (match.test(navigator.appName)) {
-        document.write("<div class=\"warning\">Warning: Internet Explorer is not standards compliant and you should not use it on this web site or elsewhere. <BR> Aside from cosmetic defects in page rendering, error checking routines may not work correctly and you may be randomly logged out of the site.<BR><BR> Please download and use <a href=\"http://www.apple.com/safari/\">Safari</a> or <a href=\"http://www.mozilla.org/firefox/\">Firefox</a>, or read the web browser <A HREF=\"javascript: tipsPopup\('/public/tips/browser_tips.html'\)\">tip sheet</A> for information on other free browsers.</div>");
+	document.write("<div class=\"warning\">Warning: Internet Explorer is not standards compliant and you should not use it on this web site or elsewhere. <BR> Aside from cosmetic defects in page rendering, error checking routines may not work correctly and you may be randomly logged out of the site.<BR><BR> Please download and use <a href=\"http://www.apple.com/safari/\">Safari</a> or <a href=\"http://www.mozilla.org/firefox/\">Firefox</a>, or read the web browser <A HREF=\"javascript: tipsPopup\('/public/tips/browser_tips.html'\)\">tip sheet</A> for information on other free browsers.</div>");
     }
 }
 
@@ -89,13 +89,13 @@ function guessTaxonRank(taxon) {
     
     //alert ("taxon = '" + taxon + "'");
     if (isSubspecies.test(taxon)) {
-        return "subspecies";    
+	return "subspecies";    
     } else if (isSpecies.test(taxon)) {
-        return "species";   
+	return "species";   
     } else if (isHigher.test(taxon)) {
-        return "higher";
+	return "higher";
     } else {
-        return "invalid";
+	return "invalid";
     }
 }
 
@@ -120,7 +120,7 @@ function Error(msg) {
     this.internalcount = 0;
     
     if (msg) {
-        this.message = "* " + msg;    
+	this.message = "* " + msg;    
     }    
     
     this.ending = "\n\nRefer to the tip sheet for instructions.";
@@ -177,9 +177,9 @@ function imagePopup (URL,width,height) {
 // generation is ultra heavyweight
 function mapPopup(collection_no) {
     var link = 'bridge'+'.pl'+
-               '?action=displayMapOfCollection'+
-               '&display_header=NO'+
-               '&collection_no='+collection_no;
+	       '?action=displayMapOfCollection'+
+	       '&display_header=NO'+
+	       '&collection_no='+collection_no;
     window.open(link,'mapview','toolbar=0,scrollbars=1,location=0,statusbar=0,menubar=0,resizable=1,width=800,height=600');
 }
 
@@ -214,9 +214,9 @@ function checkAll(checkbox,the_class){
     var frm = document.forms[1];
     var like_class = new RegExp(the_class);
     for(var i=0; i < frm.elements.length; i++){
-        if (like_class.test(frm.elements[i].className)) {
-            frm.elements[i].checked = state;
-        }
+	if (like_class.test(frm.elements[i].className)) {
+	    frm.elements[i].checked = state;
+	}
     }
 }   
 
@@ -226,13 +226,13 @@ function checkAll(checkbox,the_class){
 function showHide(what)    {
     var elems = document.getElementsByName(what);
     for (var i=0,a; a=elems[i]; i++)    {
-        if ( a.style.visibility != "hidden" )    {
-            a.style.visibility = "hidden";
-            a.style.height = "0em";
-        } else    {
-            a.style.visibility = "visible";
-            a.style.height = "1.25em";
-        }
+	if ( a.style.visibility != "hidden" )    {
+	    a.style.visibility = "hidden";
+	    a.style.height = "0em";
+	} else    {
+	    a.style.visibility = "visible";
+	    a.style.height = "1.25em";
+	}
     }
 }
 
@@ -240,22 +240,22 @@ function checkAllEmpty(frm,fields) {
     var element_count = 0;
     var empty_count = 0;
     for(i=0;i<frm.elements.length;i++) {
-        var elem = frm.elements[i];
-        for(j=0;j<fields.length;j++) {
-            if (elem.name == fields[j]) {
-                element_count++; 
-                if (elem.options) {
-                    if (elem.selectedIndex == 0) empty_count++;
-                } else {
-                    if (elem.value == '') empty_count++;
-                }
-            }
-        }
+	var elem = frm.elements[i];
+	for(j=0;j<fields.length;j++) {
+	    if (elem.name == fields[j]) {
+		element_count++; 
+		if (elem.options) {
+		    if (elem.selectedIndex == 0) empty_count++;
+		} else {
+		    if (elem.value == '') empty_count++;
+		}
+	    }
+	}
     }
     if (element_count == empty_count) {
-        return true;
+	return true;
     } else {
-        return false;
+	return false;
     }
 }
 
@@ -288,5 +288,18 @@ function checkName(i,j)    {
 	} else	{
 		return true;
 	}
+}
+
+function switchToPanel(id,max)	{
+	for ( i = 1; i <= max; i++ )	{
+		if ( i != id )	{
+			document.getElementById('panel'+i).style.display = 'none';
+			document.getElementById('tab'+i).style.backgroundColor = 'LightGray';
+			document.getElementById('tab'+i).style.fontWeight = 'medium';
+		}
+	}
+	document.getElementById('panel'+id).style.display = 'block';
+	document.getElementById('tab'+id).style.backgroundColor = 'DarkGray';
+	document.getElementById('tab'+id).style.fontWeight = 'bold';
 }
 
