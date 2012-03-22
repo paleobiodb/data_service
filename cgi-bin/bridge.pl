@@ -384,12 +384,21 @@ sub home	{
 
 	sub lastEntry	{
 		my $thing = shift;
-		my $entry = ( $thing->{hour} > 0 ) ? 60 * $thing->{hour} : 60 * ( 24 + $thing->{hour} );
-		$entry += ( $thing->{minute} > 0 ) ? $thing->{minute} : 60 + $thing->{minute};
-		$entry .= " minutes ago";
-		$entry =~ s/^1 minutes ago/one minute ago/;
-		$entry =~ s/^0 minutes ago/this very minute/;
-		return $entry;
+		my $entry;
+		if ( $thing->{day_now} == $thing->{day_created} )	{
+			$entry = 60 * ( $thing->{hour_now} - $thing->{hour_created} )  + $thing->{minute_now} - $thing->{minute_created};
+		} elsif ( $thing->{day_now} == $thing->{day_created} + 1 )	{
+			$entry = 60 * $thing->{hour_now} + 60 * ( 24 - $thing->{hour_created} ) + $thing->{minute_now} - $thing->{minute_created};
+		}
+		if ( $entry )	{
+			$entry .= " minutes ago";
+			$entry =~ s/^1 minutes ago/one minute ago/;
+			$entry =~ s/^0 minutes ago/this very minute/;
+			return $entry;
+		# hopefully this will never happen
+		} else	{
+			return ($thing->{day_now} - $thing->{day_created})." days ago";
+		}
 	}
 
 	# Get some populated values
@@ -397,7 +406,7 @@ sub home	{
 	my $row = ${$dbt->getData($sql)}[0];
 
 	# PAPERS IN PRESS
-	$sql = "SELECT CONCAT(authors,'. ',title,'. <i>',journal,'.</i>') AS cite FROM pubs ORDER BY pub_no DESC LIMIT 3";
+	$sql = "SELECT CONCAT(authors,'. ',title,'. <i>',journal,'.</i> \[#',pub_no,'\]') AS cite FROM pubs WHERE created<now()-interval 1 week ORDER BY pub_no DESC LIMIT 3";
 	my @pubs;
 	push @pubs , $_->{cite} foreach @{$dbt->getData($sql)};
 	$row->{in_press} = '<div class="small" style="text-indent: -0.5em; margin-left: 0.5em;margin-bottom: 0.25em;">'.join(qq|</div>\n<div class="small" style="text-indent: -0.5em; margin-left: 0.5em; margin-bottom: 0.25em;">|,@pubs)."</div>";
@@ -406,7 +415,7 @@ sub home	{
 	# attempting any kind of join here would be brutal, just don't do it
 	# the time computation is awful but is needed because MySQL's date
 	#  subtraction functions seem to be buggy
-	my $sql = "SELECT hour(now())-hour(created) hour,minute(now())-minute(created) minute,reference_no,enterer_no,collection_no,collection_name,country,max_interval_no,min_interval_no FROM collections WHERE (release_date<now() OR access_level='the public') ORDER BY collection_no DESC LIMIT 1";
+	my $sql = "SELECT to_days(now()) day_now,to_days(created) day_created,hour(now()) hour_now,hour(created) hour_created,minute(now()) minute_now,minute(created) minute_created,reference_no,enterer_no,collection_no,collection_name,country,max_interval_no,min_interval_no FROM collections WHERE (release_date<now() OR access_level='the public') ORDER BY collection_no DESC LIMIT 1";
 	my $coll = @{$dbt->getData($sql)}[0];
 
 	$sql = "SELECT interval_no,interval_name FROM intervals WHERE interval_no IN (".$coll->{max_interval_no}.",".$coll->{min_interval_no}.")";
@@ -422,7 +431,7 @@ sub home	{
 	$row->{last_coll_ref} = "<a href=\"$READ_URL?a=displayReference&reference_no=$coll->{reference_no}\">".Reference::formatShortRef(${$dbt->getData('SELECT * FROM refs WHERE reference_no='.$coll->{reference_no})}[0])."</a>";
 
 	# MOST RECENTLY ENTERED SPECIES (must have reasonable data)
-	$sql = "SELECT hour(now())-hour(a.created) hour,minute(now())-minute(a.created) minute,a.reference_no,a.enterer_no,taxon_name,a.taxon_no,type_locality,type_specimen,type_body_part,r.author1last,r.author2last,r.otherauthors,r.pubyr FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND ref_is_authority='YES' AND a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='species' AND type_body_part IS NOT NULL ORDER BY a.taxon_no DESC LIMIT 1";
+	$sql = "SELECT to_days(now()) day_now,to_days(a.created) day_created,hour(now()) hour_now,hour(a.created) hour_created,minute(now()) minute_now,minute(a.created) minute_created,a.reference_no,a.enterer_no,taxon_name,a.taxon_no,type_locality,type_specimen,type_body_part,r.author1last,r.author2last,r.otherauthors,r.pubyr FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND ref_is_authority='YES' AND a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='species' AND type_body_part IS NOT NULL ORDER BY a.taxon_no DESC LIMIT 1";
 	my $sp = @{$dbt->getData($sql)}[0];
 	$row->{latest_species} = "<i><a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$sp->{taxon_no}\">$sp->{taxon_name}</a></i>";
 	$row->{latest_species} .= " <a href=\"$READ_URL?a=displayReference&reference_no=$sp->{reference_no}\">".Reference::formatShortRef($sp)."</a>";
