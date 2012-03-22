@@ -322,11 +322,12 @@ sub showInstitutions {
 sub homePageEntererList	{
 	my $dbt = shift;
 	my $html;
-	my $sql = "SELECT first_name,last_name,institution FROM person WHERE hours IS NOT NULL ORDER BY hours DESC LIMIT 10";
+	my $sql = "SELECT first_name,last_name,institution FROM person WHERE hours IS NOT NULL ORDER BY hours DESC LIMIT 13";
 	my @rows = @{$dbt->getData($sql)};
 	for my $i ( 0..$#rows )	{
 		my $r = $rows[$i];
 		$r->{'institution'} =~ s/(University of )(.)(.*)(, |-| - )/U$2 /;
+		$r->{'institution'} =~ s/Natural History Museum/NHM/;
                 $r->{'institution'} =~ s/(Mus.*)(, .*)/$1/;
 		$html .= "<div class=\"verysmall enteringNow\">$r->{'first_name'} $r->{'last_name'}<br>$r->{'institution'}</div>\n";
 	}
