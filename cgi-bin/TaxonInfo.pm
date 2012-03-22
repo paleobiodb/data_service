@@ -289,45 +289,29 @@ sub displayTaxonInfoResults {
     }
 
     print '
-<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+<script src="/JavaScripts/common.js" language="JavaScript" type="text/javascript"></script>
 
 <div align="center">
   <table class="panelNavbar" cellpadding="0" cellspacing="0" border="0">
   <tr>
-    <td id="tab1" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(1);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(1)">Basic info</td>
-    <td id="tab2" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(2);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(2)">Taxonomic history</td>
-    <td id="tab3" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(3);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(3)">Classification</td>
-    <td id="tab4" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(4);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(4)">Relationships</td>
+    <td id="tab1" class="tabOff" onClick="switchToPanel(1,8);">
+      Basic info</td>
+    <td id="tab2" class="tabOff" onClick="switchToPanel(2,8);">
+      Taxonomic history</td>
+    <td id="tab3" class="tabOff" onClick = "switchToPanel(3,8);">
+      Classification</td>
+    <td id="tab4" class="tabOff" onClick = "switchToPanel(4,8);">
+      Relationships</td>
   </tr>
   <tr>
-    <td id="tab5" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(5);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(5)">Morphology</td>
-    <td id="tab6" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(6);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(6)">Ecology and taphonomy</td>
-    <td id="tab7" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(7);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(7)">Map</td>
-    <td id="tab8" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(8);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(8)">Age range and collections</td>
+    <td id="tab5" class="tabOff" onClick="switchToPanel(5,8);">
+      Morphology</td>
+    <td id="tab6" class="tabOff" onClick = "switchToPanel(6,8);">
+      Ecology and taphonomy</td>
+    <td id="tab7" class="tabOff" onClick = "switchToPanel(7,8);">
+      Map</td>
+    <td id="tab8" class="tabOff" onClick = "switchToPanel(8,8);">
+      Age range and collections</td>
   </tr>
   </table>
 </div>
@@ -455,12 +439,6 @@ sub displayTaxonInfoResults {
         print "</div>\n</div>\n</div>\n\n";
 	}
 
-    if ( ! $q->param('show_panel') )	{
-        print '<script language="JavaScript" type="text/javascript">
-        showPanel(1);
-</script>';
-    }
-
 	# synonymy
 	if($modules{2}) {
         print qq|<div id="panel2" class="panel";">
@@ -481,7 +459,6 @@ sub displayTaxonInfoResults {
             print "<p>Please <a href=\"$READ_URL?a=displayPage&amp;page=join_us\">join the Paleobiology Database</a> and enter some data</p>\n";
         }
         print "</div>\n</div>\n</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(2); </script>';
 	}
 
 	if ($modules{3}) {
@@ -489,7 +466,6 @@ sub displayTaxonInfoResults {
         print '<div align="center">';
         print $htmlClassification;
         print "</div>\n</div>\n\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(3); </script>';
 	}
 
     if ($modules{4}) {
@@ -508,11 +484,6 @@ sub displayTaxonInfoResults {
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(4); ';
-        if ( $q->param('show_panel') == 4 )	{
-            print "showPanel(4)\n";
-        }
-        print "</script>\n";
     }
     
     if ($modules{5}) {
@@ -525,7 +496,6 @@ sub displayTaxonInfoResults {
         print "</div>\n";
         
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(5); </script>';
     }
     if ($modules{6}) {
         print '<div id="panel6" class="panel">';
@@ -535,7 +505,6 @@ sub displayTaxonInfoResults {
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(6); </script>';
     }
    
     my $collectionsSet;
@@ -561,11 +530,6 @@ sub displayTaxonInfoResults {
         }
         print "</div>\n";
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(7); ';
-        if ( $q->param('show_panel') == 7 )	{
-            print "showPanel(7)\n";
-        }
-        print "</script>\n";
     }
 	# collections
     if ($modules{8}) {
@@ -584,13 +548,13 @@ sub displayTaxonInfoResults {
             print "</div>\n";
         }
         print "</div>\n";
-        print '<script language="JavaScript" type="text/javascript"> showTabText(8); ';
-        if ( $q->param('show_panel') == 8 )	{
-            print "showPanel(8)\n";
-        }
-        print "</script>\n";
     }
 
+    if ( ! $q->param('show_panel') )	{
+        print "<script language=\"JavaScript\" type=\"text/javascript\">switchToPanel(1,8);</script>\n";
+    } else	{
+        print "<script language=\"JavaScript\" type=\"text/javascript\">switchToPanel(".$q->param('show_panel').",8);</script>\n";
+    }
     print "</div>"; # Ends div class="small" declared at start
 
 }
@@ -4407,7 +4371,7 @@ function erasePleaseWait()	{
 // -->
 </script>
 
-<p><img id="taxonImage" src="/public/maps/taxon$taxon_string.png"><span id="mapLink" onClick="requestMap();" style="color: #0030D0;"><i>Click here</span><span id="moreMapLinkText"> to see a distribution map</span></i><span id="pleaseWait"></span></p>
+<p><img id="taxonImage" src="/public/maps/taxon$taxon_string.png"><span id="mapLink" onClick="requestMap();" class="mockLink"><i>Click here</span><span id="moreMapLinkText"> to see a distribution map</span></i><span id="pleaseWait"></span></p>
 
 |;
 
