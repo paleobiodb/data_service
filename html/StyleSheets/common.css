@@ -9,8 +9,8 @@ html, body {
 	margin: 0px;
 	padding: 0px;
 	background-color: WhiteSmoke;
-	font-family: Franklin Gothic Book, Calibri, Microsoft PGothic, Geneva sans-serif;
-	font-size: 0.95em;
+	font-family: Franklin Gothic Book, Corbel, Microsoft PGothic, Geneva, sans-serif;
+	font-size: 1em;
 }
 
 img {
@@ -67,15 +67,6 @@ A:hover.menu {
 	text-decoration:none; 
 }
 
-.homeBodyLinks a:link { color: DarkBlue; }
-.homeBodyLinks a:visited { color: DarkBlue; }
-.homeBodyLinks a:active { color: Gold; }
-.homeBodyLinks a:hover { color: Gold; }
-a:link.homeBodyLinks { color: DarkBlue; }
-a:visited.homeBodyLinks { color: DarkBlue; }
-a:active.homeBodyLinks { color: Gold; }
-a:hover.homeBodyLinks { color: Gold; }
-
 A:link.boring	{
 	color : #7070FF;
 }       
@@ -88,13 +79,6 @@ H1, H2, H3, H4, H5, H6 {
 	padding: 0px 0px 0px 0px;
 	/*margin: 0.1em 1em 0.5em 1em;*/
 }
-
-H1 {font-size: 2em;}
-H2 {font-size: 1.5em;}
-H3 {font-size: 1.25em;}
-H4 {font-size: 1.1em;}
-H5 {font-size: 1em;}
-H6 {font-size: .9em;}
 
 .verytiny {  font-size : 0.7em; text-decoration:none; }
 .tiny {  font-size : 0.8em; text-decoration:none; }
@@ -127,18 +111,10 @@ H6 {font-size: .9em;}
 	color: white;
 }
 
-.indentNext {
-    text-indent: -1em; 
-    margin-left: 1em; 
-    margin-top: 0.15em; 
-    margin-bottom: 0;
-}
-
 .container	{
     text-align: center;
 }
 
-/* this is probably obsolete at this point JA 17.1.10 */
 #mainBody	{
     position: absolute;
     top: 0px;
@@ -155,41 +131,48 @@ H6 {font-size: .9em;}
 .mainBodyGuest {
     position: relative;
     height: 100%;
-    width: 68em;
+    width: 64em;
     margin-left: auto;
     margin-right: auto;
     text-align: left;
 }
 
-.bannerSpacer	{
- /* need align and width to roughly center the page contents below the banner */
+.outerMainPanel	{
     position: absolute;
     top: 55px;
     left: 0px;
-    width: 66em;
-    margin-top: 2em;
+    width: 58em;
+    z-index: 1;
+    padding-bottom: 2em;
+}
+
+.innerMainPanel	{
     padding-left: 1em;
     padding-right: 1em;
-    z-index: 1;
+    padding-top: 2em;
+    padding-bottom: 1em;
+    background: White;
+    border-left: 1px solid LightGray;
+    border-right: 1px solid LightGray;
+    border-bottom: 1px solid LightGray;
 }
 
 #homeBanner	{
-    min-width: 60em; /* needed because scrolling across when a window is small
+    min-width: 50em; /* needed because scrolling across when a window is small
                           causes the image to be truncated */
-
     position: absolute;
     top: 0px;
     left: 0px;
     margin-left: 8em;
     height: 50px;
-    width: 60em;
+    width: 50em;
     text-align: left;
     border-right: 1px solid DarkGray;
     z-index: 8;
 }
 
 #homeLinks	{
-    min-width: 60em; /* needed because scrolling down when a window is small
+    min-width: 50em; /* needed because scrolling down when a window is small
                           causes the image to be truncated */
     position: absolute;
     top: 50px;
@@ -197,7 +180,7 @@ H6 {font-size: .9em;}
     margin-left: 8em;
     z-index: 8; 
     height: 2em;
-    width: 60em;
+    width: 50em;
     border-right: 1px solid DarkGray;
 }
 
@@ -211,138 +194,52 @@ H6 {font-size: .9em;}
     border-right: 1px solid LightGray;
 }
 
+.homeLinksDiv	{
+    //position: absolute;
+    //background: green;
+    //bottom: -0em;
+}
+
 .bannerColor	{
     background-color: #191970;
 }
 
-.sides	{
-    background-color: #4169E1;
+.introTextBox	{
+    display: none;
+    height: 13.5em;
+    margin-top: -1.25em;
+    margin-bottom: 2em;
+    font-size: 0.9em;
 }
 
-.homeBodyGuest	{
-    position: relative;
-  /* counteracts left and right padding of mainBodyGuest */
-    margin-top: -0.5em;
-    margin-left: -1em;
-    margin-right: -1em;
-    padding-bottom: 0em;
-    z-index: 3;
+#introPanel1	{
+    display: block;
 }
 
-.leftBar	{
-    position: relative;
-    float: left;
-    clear: none;
-    height: 44em;
-    width: 8em;
-    margin: 0em;
-/* fallback if fixed position div doesn't work */
-    background-color: #4169E1;
-/* required by IE */
-    overflow: auto;
-    z-index: 6;
+.introNavBall	{
+    font-size: 2em;
+    color: LightGray;
 }
 
-.infoLink a:link { color: LightCyan; }
-.infoLink a:visited { color: LightCyan; }
-.infoLink a:hover { color: Gold; }
-.infoLink a:active { color: Gold; }
-
-
-.topImage	{
-    display: inline;
-    position: relative;
-    float: left;
-    clear: none;
-    margin: 0em;
-    width: 8em;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid LightGray;
-  /* fixes Safari rendering problem */
-    text-align: center;
+#navBall1	{
+    color: Black;
 }
 
-.imageWrapper	{
-	position: absolute;
-	top: 0em;
-	left: 1em;
-	height: 18.5em;
-	width: 37em;
-	overflow: hidden;
-}
-
-.rotatingImage	{
-	margin-top: 1em;
-	width: 37em;
-	opacity: 0;
-}
-
-.fixedWidth {
-    width: 68em;
-}
-
-.Features,.PlainFeatures	{
-    position: relative;
-    float: left;
-    clear: none;
-    height: 10em;
-    margin: 1em;
-    padding-left: 0.5em;
-    padding-right: 0.5em;
-    text-align: left;
-    font-family: Franklin Gothic Book, Calibri, Microsoft PGothic, Geneva sans-serif;
-    overflow: hidden;
-/* Explorer demands to know this - go figure */
-    position: relative;
-}
-
-.Features	{
-    background-color: #FCFCFC;
-    border: 1px solid darkgray;
-}
-
-.PlainFeatures	{
-    border-top: 1px solid darkgray;
-}
-
-.FeatureHeadline	{
-    text-align: center;
-    background-color: #FCFCFC;
-    margin-left: -0.5em;
-    margin-right: -0.5em;
-    margin-bottom: -0.25em;
-    padding-top: 0.3em;
-    padding-bottom: 0.25em;
-    font-size: 1.1em;
-}
-
-.FeatureText	{
-    padding-top: 0.75em;
-    padding-bottom: 0.75em;
-    color: black;
-}
-
-.collectionLink	{
-    padding-left: 1em;
-    padding-right: 2em;
-    padding-bottom: 0.25em;
-    margin-bottom: 0.25em;
-    text-indent: -1em;
-}
-
-.collectionLink a:link { color: black; }
-.collectionLink a:visited { color: black; }
-.collectionLink a:hover { color: orange; }
-.collectionLink a:active { color: orange; }
 
 .enteringNow	{
     height: 2.5em;
-    width: 100%;
+    width: 12.8em;
+    padding-left: 1em;
     padding-bottom: 0.25em;
     margin-bottom: 0.25em;
-    border-bottom: 1px solid lightgray;
 }
+
+.homeImage	{
+    float: left;
+    clear: none;
+    padding-left: 3em;
+}
+
 
 /* Usually used for a single line of text which needs a bit more emphasis to stand out */
 div.emphasized {
@@ -560,16 +457,14 @@ table.navbox {
 }
 
 .loginBox {
-    background-color: #E6E6E6;
-
-    border-width: 6px 6px 6px 6px;
-    border-style: solid;
-    border-color: #C8C8C8;
+    margin-top: 3em;
+    border: 1px solid LightBlue;
     padding: 1em 1em 0.5em 1em;
+    background-color: #FBFFFF;
 }
 
 .panelNavbar	{
-    width: 64em;
+    width: 60em;
     font-size: 0.9em;
 }  
 
@@ -584,6 +479,7 @@ table.navbox {
     z-index: 2;
     padding: 3px;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .tabOff, .tabLoadingOff {
@@ -612,12 +508,11 @@ table.navbox {
 }
 
 .panel {
-    position: absolute;
     margin-top: 2em;
     margin-left: -1px;
-    width: 64em;
+    width: 54em;
     z-index: 1;
-    visibility: hidden;
+    display: none;
     padding: 1em;
 }
 
@@ -761,9 +656,17 @@ td.fixedLabel {
 #dropDown a:active { color : white; text-decoration:none; }   
 #dropDown a:hover { color : white; text-decoration:none; }
 
+#quickSearchDiv	{
+    position: absolute;
+    bottom: 0em;
+    height: 2.1em;
+    font-size: 0.9em;
+}
 
 #dropDown {
-    height: 2.5em;
+    position: absolute;
+    bottom: 0em;
+    height: 1.9em;
     padding-left: 0.5em;
     padding-right: 0.5em;
     padding-bottom: 0.2em;
