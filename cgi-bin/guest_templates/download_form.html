@@ -71,6 +71,7 @@ function countryChange(justChecked)	{
 //  End -->
 </script>
 
+<div style="overflow: hidden;">
 
 <form method=post action="%%read_url%%">
 <input id="action" type=hidden name="action" value="displayDownloadResults">
@@ -79,30 +80,18 @@ function countryChange(justChecked)	{
 
 <div align="center" style="margin-top: 0.5em;">
   <table class="panelNavbar" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td id="tab1" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(1);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(1)">Basic options</td>
-    <td id="tab2" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(2);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(2)">Included collections</td>
-    <td id="tab3" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(3);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(3)">Included occurrences</td>
-    <td id="tab4" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(4);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(4)">Collection fields</td>
-    <td id="tab5" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(5);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(5)">Occurrence fields</td>
-    <td id="tab6" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(6);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(6)">Specimen fields</td>
+    <td id="tab1" class="tabOff" onClick="switchToPanel(1,6);">
+      Basic options</td>
+    <td id="tab2" class="tabOff" onClick="switchToPanel(2,6);">
+      Included collections</td>
+    <td id="tab3" class="tabOff" onClick = "switchToPanel(3,6);">
+      Included occurrences</td>
+    <td id="tab4" class="tabOff" onClick = "switchToPanel(4,6);">
+      Collection fields</td>
+    <td id="tab5" class="tabOff" onClick = "switchToPanel(5,6);">
+      Occurrence fields</td>
+    <td id="tab6" class="tabOff" onClick = "switchToPanel(6,6);">
+      Specimen fields</td>
   </tr></table>
 </div>
 
@@ -1297,7 +1286,9 @@ Basic fields will only be downloaded when output type is "specimens".  Measureme
 
 </form>
 
+</div>
+
 <script language="JavaScript" type="text/javascript">
-    showPanel(1);
+    switchToPanel(1,6);
 </script> 
 
