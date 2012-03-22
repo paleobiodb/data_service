@@ -78,22 +78,14 @@ function countryChange(justChecked)	{
 
 <div align="center" style="margin-top: 0.5em;">
   <table class="panelNavbar" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td id="tab1" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(1);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(1)">Basic options</td>
-    <td id="tab2" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(2);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(2)">Included collections</td>
-    <td id="tab3" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(3);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(3)">Collection fields</td>
-    <td id="tab4" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(4);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(4)">Occurrence fields</td>
+    <td id="tab1" class="tabOff" onClick="switchToPanel(1,4);">
+      Basic options</td>
+    <td id="tab2" class="tabOff" onClick="switchToPanel(2,4);">
+      Included collections</td>
+    <td id="tab3" class="tabOff" onClick = "switchToPanel(3,4);">
+      Collection fields</td>
+    <td id="tab4" class="tabOff" onClick = "switchToPanel(4,4);">
+      Occurrence fields</td>
   </tr></table>
 </div>
 
@@ -537,6 +529,6 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </form>
 
 <script language="JavaScript" type="text/javascript">
-    showPanel(1);
+    switchToPanel(1,4);
 </script> 
 
