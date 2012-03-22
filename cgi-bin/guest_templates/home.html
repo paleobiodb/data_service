@@ -1,277 +1,45 @@
-
 <script language="JavaScript" type="text/javascript">
-  <!--
+<!--
 
-	window.onload = startPage();
-	var op = 0;
-	var step = 0;
-
-	function startPage()    {
-		animsrc = "/public/animations/homepage/homepage.gif";
-		setInterval(fadeImage , 2);
+function introPanel(id)	{
+        for ( i = 1; i <= 4; i++ )	{
+		document.getElementById('introPanel'+i).style.display = 'none';
+		document.getElementById('navBall'+i).style.color = 'LightGray';
 	}
-
-function fadeImage()     {
-	step = step + 1;
-	var max = 2400;
-	var current = Math.floor( step / 400 ) + 1;
-	var next = current + 1;
-	if ( next > 6 )	{
-		next = 1;
-	}
-	var stage = Math.floor( ( step - current * 400 + 400 ) / 100 );
-	// fade out and in after two second delay
-	if ( stage == 2 )	{
-		op = op + 0.01;
-		document.getElementById('image'+current).style.opacity = 1 - op;
-		document.getElementById('image'+next).style.opacity = op;
-	// >= instead of == because JavaScript messes up the addition (!)
-		if ( op >= 1 )	{
-			op = 0;
-		}
-	}
-	if ( step == max )   {
-		step = 0;
-	}
+	document.getElementById('introPanel'+id).style.display = 'block';
+	document.getElementById('navBall'+id).style.color = 'Black';
 }
 
-  -->
+//-->
 </script>
 
-<!-- box surrounding main area -->
+<div style="overflow: hidden;">
 
-<div class="homeBodyGuest">
+<!-- left third -->
+<div style="float: left; clear: none; margin-top: 2em; margin-left: 2%; width: 32%; padding-left: 1em; border-left: 1px solid LightGray;">
 
+<div style="float: left; clear: left; margin-left: 0.5em; height: 16em; width: 16.75em; overflow: hidden; padding-top: 1em; border:1px solid Black;">
+  <span id="random_names"></span>
+</div>
 
-<!-- navigation bar at left -->
-
+<div style="float: left; margin: 0.5em; margin-top: 1em; padding-top: 0.5em; border-top: 1px solid LightGray;">
+  <div class="large" style="float: left; clear: both; margin-bottom: 0.5em;">Papers in press</div>
+  <div class="small" style="float: left; clear: both;">
+  <span id="in_press"></span>
   </div>
+</div>
 
-<!-- artwork at top of main area -->
+<!-- end left third -->
+</div>
 
-  <div style="position: relative; float: left; clear: right; top: 0px; left: 0px; height: 64px; width: 50em; background-color: white; border: none;">
-  <div class="topImage" style="position: absolute; top: 0em; left: 0em;">
-    <img alt="Pterodactylus" src="/public/bannerimages/Pterodactylus.gif" height="44">
-  </div>
-  <div class="topImage" style="position: absolute; top: 0em; left: 6em;">
-    <img alt="Aralia" src="/public/bannerimages/Aralia.gif" height="44">
-  </div>
-  <div class="topImage" style="position: absolute; top: 0em; left: 12em;">
-    <img alt="Agelacrinites" src="/public/bannerimages/Agelacrinites.jpg" height="44">
-  </div>
-  <div class="topImage" style="position: absolute; top: 0em; left: 18em;">
-    <img alt="Mesopithecus" src="/public/bannerimages/Mesopithecus.jpg" height="44">
-  </div>
-  <div class="topImage" style="position: absolute; top: 0em; left: 25em;">
-    <img alt="Neolenus" src="/public/bannerimages/Neolenus.gif" height="44">
-  </div>
-  <div class="topImage" style="position: absolute; top: 0em; left: 31.5em;">
-    <img alt="Xiphacantha" src="/public/bannerimages/Xiphacantha.gif" height="44">
-  </div>
-  <div class="topImage" style="position: absolute; top: 0em; left: 38em;">
-    <img alt="Microdon" src="/public/bannerimages/Microdon.jpg" height="44">
-  </div>
-  <div id="rightImage" class="topImage" style="position: absolute; top: 0em; left: 44em;">
-    <img alt="Eunema" src="/public/bannerimages/Eunema.jpg" height="44">
-  </div>
-  </div>
+<!-- center third -->
+<div style="float: left; clear: right; width: 35%; margin-top: 2em; margin-left: 2%; padding-left: 1em; border-left: 1px solid LightGray;">
 
-<!-- end of artwork -->
-
-<!--
-<div style="position: relative; float: left; clear: right; width: 50em; text-align: center; margin-top: 0.75em; margin-bottom: 0em; font-size: 1.0em; font-weight: bold;"><a style="color: red;" href="%%read_url%%?a=displayPage&amp;page=workshop_2012">Apply now for the 2012 Intensive Workshop in Analytical Methods!<br>
-<i>The deadline is Wednesday, 15 February.</i></a></div>
--->
-
-<!-- main text divs -->
-
-<!-- mess with the width at your own peril -->
-  <div style="position: relative; float: left; clear: none; width: 50em;">
-
-    <div class="imageWrapper">
-      <img id="image1" class="rotatingImage" src="/public/images/Kiessling_Ammonites.jpg" style="opacity: 1;">
-    </div>
-    <div class="imageWrapper">
-      <img id="image2" class="rotatingImage" src="/public/images/Feldmann_Longusorbis_2.jpg">
-    </div>
-    <div class="imageWrapper">
-      <img id="image3" class="rotatingImage" src="/public/images/Granger_Grizzly_Buttes.jpg">
-    </div>
-    <div class="imageWrapper">
-      <img id="image4" class="rotatingImage" src="/public/images/Wilf_MH444_2.jpg">
-    </div>
-    <div class="imageWrapper">
-      <img id="image5" class="rotatingImage" src="/public/images/Kiessling_Bone_cellar.jpg" style="width: 38em; opacity: 0;">
-    </div>
-    <div class="imageWrapper">
-      <img id="image6" class="rotatingImage" src="/public/images/Holroyd_dicynodont_2.jpg">
-    </div>
-    <div class="imageWrapper" style="margin-top: 1em; height: 17.5em;">
-      <span id="random_names"></span>
-    </div>
-
-    <div class="PlainFeatures" style="position: absolute; top: 18em; left: -1em; height: 77em; width: 17em;">
-      <div style="position: absolute; left: 1em; top: 0.5em; color: #F0F0F0; font-size: 2em;">
-        <i>New species</i>
-      </div>
-      <div style="position: absolute; left: 1em; top: 2em; color: #F2F2F2; font-size: 2em;">
-        <i>New species</i>
-      </div>
-      <div style="position: absolute; left: 1em; top: 3.5em; color: #F4F4F4; font-size: 2em;">
-        <i>New species</i>
-      </div>
-      <div style="position: absolute; left: 1em; top: 5em; color: #F6F6F6; font-size: 2em;">
-        <i>New species</i>
-      </div>
-
-      <div class="FeatureText" style="position: absolute; left: 1em; right: 0em; font-size: 1.1em;">
-        <div class="tiny">
-          <span id="taxon_links"></span>
-        </div>
-      </div>
-    </div>
-
-
-    <div class="PlainFeatures" style="position: absolute; top: 18em; left: 17em; height: 77em; width: 18em; padding-left: 1.5em; border-left: 1px solid darkgray;">
-      <div style="position: absolute; left: 1em; top: 0.5em; color: #F0F0F0; font-size: 2em;">
-        <i>New collections</i>
-      </div>
-      <div style="position: absolute; left: 1em; top: 2em; color: #F2F2F2; font-size: 2em;">
-        <i>New collections</i>
-      </div>
-      <div style="position: absolute; left: 1em; top: 3.5em; color: #F4F4F4; font-size: 2em;">
-        <i>New collections</i>
-      </div>
-      <div style="position: absolute; left: 1em; top: 5em; color: #F6F6F6; font-size: 2em;">
-        <i>New collections</i>
-      </div>
-
-      <div class="FeatureText" style="position: absolute; left: 1.5em; right: 0em; font-size: 1.1em;">
-        <div class="tiny">
-          <span id="collection_links"></span>
-        </div>
-      </div>
-    </div>
-
-
-    <div class="Features" style="display: inline; position: absolute; top: 0.5em; left: 38.5em; height: 12em; width: 13.5em;">
-      <div class="FeatureHeadline" style="margin-top: 0.35em; width: 13.5em;">
-        <div style="font-size: 0.9em;">
-          <i>Current totals</i>
-        </div>
-      </div>
-
-      <div class="FeatureText" style="padding-top: 0.4em; padding-left: 1.5em;">
-
-        <table cellpadding="0" cellspacing="4">
-          <tr>
-            <td align="right" valign="top" class="homeBodyLinks" style="font-size: 0.9em;">
-            <a href="bridge.pl?a=displaySearchRefs&amp;type=view"><span id="reference_total"></span></a><br>
-            <a href="bridge.pl?a=beginTaxonInfo"><span id="taxon_total"></span></a><br>
-            <a href="bridge.pl?a=displaySearchColls&amp;type=view"><span id="collection_total"></span></a><br>
-            <a href="bridge.pl?a=displaySearchColls&amp;type=view"><span id="occurrence_total"></span></a><br>
-            <a href="bridge.pl?a=showAuthorizers"><span id="enterer_total"></span></a><br>
-            <a href="bridge.pl?a=showInstitutions"><span id="institution_total"></span></a><br>
-            <a href="bridge.pl?a=showInstitutions"><span id="country_total"></span></a></td>
-
-            <td align="left" valign="top" style="font-size: 0.9em;">
-            <span style="white-space: nowrap;">references</span><br>
-            <span style="white-space: nowrap;">taxa</span><br>
-            <span style="white-space: nowrap;">collections</span><br>
-            <span style="white-space: nowrap;">occurrences</span><br>
-            <span style="white-space: nowrap;">contributors</span><br>
-            <span style="white-space: nowrap;">institutions</span><br>
-            <span style="white-space: nowrap;">countries</span></td>
-          </tr>
-        </table>
-      </div>
-    </div>
-
-
-    <div class="Features" style="position: relative; top: 62.5em; left: 38.5em; height: 12.5em; width: 13.5em;">
-    <div style="position: relative; margin-top: 6em; margin-left: 7.5em;">
-
-<img alt="shadow" src="/public/animations/homepage_shadow.png" height="150" border="0" style="position: absolute; top: -70px; left: -80px;">
-<!--
-<img alt="paleogeographic map" src="/public/animations/homepage/homepage_firstframe.gif" height="170" border="0" style="position: absolute; left: -81px; top: -70px; margin-bottom: 5%;">
--->
-<img alt="paleogeographic animation" id="homepage_anim" src="/public/animations/homepage/homepage_firstframe.gif" height="170" border="0" style="position: absolute; left: -81px; top: -70px; margin-bottom: 5%;">
-
-    </div>
-    </div>
-
-
-    <div class="Features" style="display: inline; position: absolute; top: 76em; left: 38.5em; height: 14em; width: 13.5em;">
-      <div class="FeatureHeadline">
-        <div class="tiny">
-          <i>Site addition</i>
-        </div>
-      </div>
-
-      <div class="FeatureText" style="padding-left: 0.75em; padding-right: 0.75em;">
-        <div class="verysmall">
-          Our heavily revised diversity curve generator now performs shareholder quorum subsampling, optionally uses the Fossil Record 2 time scale, reports extra stats, and plots multiple colored curves on the same graph - but <a href=%%read_url%%?a=displayBasicDownloadForm" class="homeBodyLinks">download some data</a> first
-        </div>
-      </div>
-    </div>
-
-
-    <div class="Features" style="position: absolute; top: 37.5em; left: 38.5em; height: 11em; width: 13.5em;">
-      <div class="FeatureHeadline">
-        <div class="tiny">
-          <i>Featured publication</i>
-        </div>
-      </div>
-
-      <div class="FeatureText">
-        <div class="tiny" style="text-indent: -0.5em; margin-left: 1em;">
-          S. Vill&eacute;ger, P. Novack-Gottshall, and D. Mouillot. 2011. The multidimensionality of the niche reveals functional diversity changes in benthic marine biotas across geological time. <i>Ecology Letters</i> 14:561-568 (#132).
-        </div>
-        <div class="tiny">
- <!-- <a href="bridge.pl?a=PASTQueryForm">Detrended Correspondence Analysis</a>, adapted by &Oslash;yvind Hammer from the <a href="http://folk.uio.no/ohammer/past/index.html">PAST</a> statistics package -->
-        <p style="margin-top: 1.5em;"><a class="homeBodyLinks" href="%%read_url%%?a=publications">&rarr; see more</a></p>
-        </div>
-      </div>
-    </div>
-
-
-    <div class="Features" style="position: absolute; top: 13.5em; left: 38.5em; height: 23em; width: 13.5em;">
-      <div class="FeatureHeadline">
-        <div class="tiny">
-          <i>This month's top contributors</i>
-        </div>
-      </div>
-
-      <div class="FeatureText">
-        <div class="tiny">
-          <span id="enterer_names"></span>
-        </div>
-      </div>
-    </div>
-
-
-    <div class="Features" style="position: absolute; top: 49.5em; left: 38.5em; height: 12em; width: 13.5em;">
-      <div class="FeatureHeadline">
-        <div class="tiny">
-          <i>Featured new contributors</i>
-        </div>
-      </div>
-
-      <div class="FeatureText">
-        <div class="tiny">
-          <div style="text-indent: -0.5em; margin-left: 0.5em; padding-bottom: 0.5em;"><a class="homeBodyLinks" href="bridge.pl?a=displayRefResults&type=view&amp;refsortby=entry date&amp;refsortorder=descending&amp;enterer_reversed=Hopkins, M.">Melanie Hopkins</a>, Field Museum</div>
-          <div style="text-indent: -0.5em; margin-left: 0.5em; padding-bottom: 0.5em;"><a class="homeBodyLinks" href="bridge.pl?a=displayRefResults&type=view&amp;refsortby=entry date&amp;refsortorder=descending&amp;enterer_reversed=Jud, N.">Nathan Jud</a>, Smithsonian Institution</div>
-          <div style="text-indent: -0.5em; margin-left: 0.5em; padding-bottom: 0.5em;"><a class="homeBodyLinks" href="bridge.pl?a=displayRefResults&type=view&amp;refsortby=entry date&amp;refsortorder=descending&amp;enterer_reversed=Oreska, M.">Matthew Oreska</a>, Smithsonian Institution</div>
-          <div style="text-indent: -0.5em; margin-left: 0.5em; padding-bottom: 0.5em;"><a class="homeBodyLinks" href="bridge.pl?a=displayRefResults&type=view&amp;refsortby=entry date&amp;refsortorder=descending&amp;enterer_reversed=Street, H.">Hallie Street</a>, Smithsonian Institution</div>
-        </div>
-      </div>
-    </div>
-
-    <div id="about" style="position: absolute; top: 0em; left: 55em; margin-top: -70px; height: 96em; width: 10em; padding-left: 1em; padding-right: 1em; background-color: MediumBlue; color: white;">
-    <p class="medium">About the site</p>
-    <div class="tiny">
+<div class="introTextBox" id="introPanel1">
+<p class="huge">Welcome to our site</p>
 <p>
 The Paleobiology Database seeks to provide researchers and the public with information about the entire fossil record.
+It has expanded continuously since 2000 thanks to the efforts of <span id="enterer_total"></span> paleontologists from around the world.
 </p>
 
 <p>
@@ -283,39 +51,56 @@ You can use the site to find out about <span class="infoLink"><a href="%%read_ur
 <span class="infoLink"><a href="%%read_url%%?a=searchScale">time scales</a></span>, and
 <span class="infoLink"><a href="/cgi-bin/%%read_url%%?a=displayInterval&amp;interval_no=33">time intervals</a></span>.
 </p>
+</div>
 
-<p>
-All of our data can be downloaded, including
-<span class="infoLink"><a href="%%read_url%%?a=displayBasicDownloadForm">collection, occurrence, or specimen records</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displayDownloadTaxonomyForm">taxonomic names and opinions</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displayDownloadMeasurementsForm">measurements of specimens</a></span>, and
-<span class="infoLink"><a href="%%read_url%%?a=displayDownloadNeptuneForm">Neptune occurrences</a></span>.
-</p>
-
+<div class="introTextBox" id="introPanel2">
+<p class="huge">Use our data</p>
 <p>
 Tools on the site also let you generate
-<span class="infoLink"><a href="%%read_url%%?a=displayBasicMapForm">paleomaps</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displayReportForm">data summary tables</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displaySearchColls&amp;type=most_common">lists of common taxa</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=beginFirstAppearance">first appearances</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displayCurveForm">diversity curves</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displaySearchColls&amp;type=analyze_abundance">ecological statistics</a></span>,
-<span class="infoLink"><a href="/cgi-bin/%%read_url%%?a=displayTaxaIntervalsForm">time scale confidence intervals</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displaySearchSectionForm">stratigraphic confidence intervals</a></span>, and (just for fun)
-<span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=word_odds_form">paper title stats</a></span>.
+<span class="infoLink"><a href="bridge.pl?a=displayBasicMapForm">paleomaps</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displayReportForm">data summary tables</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displaySearchColls&amp;type=most_common">lists of common taxa</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=beginFirstAppearance">first appearances</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displayCurveForm">diversity curves</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displaySearchColls&amp;type=analyze_abundance">ecological statistics</a></span>,
+<span class="infoLink"><a href="/cgi-bin/bridge.pl?a=displayTaxaIntervalsForm">time scale confidence intervals</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displaySearchSectionForm">stratigraphic confidence intervals</a></span>, and (just for fun)
+<span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=word_odds_form">paper title stats</a></span>.
 </p>
+<p>
+All of our data can be downloaded, including
+<span class="infoLink"><a href="bridge.pl?a=displayBasicDownloadForm">collection, occurrence, or specimen records</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displayDownloadTaxonomyForm">taxonomic names and opinions</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displayDownloadMeasurementsForm">measurements of specimens</a></span>, and
+<span class="infoLink"><a href="bridge.pl?a=displayDownloadNeptuneForm">Neptune occurrences</a></span>.
+</p>
+</div>
 
+<div class="introTextBox" id="introPanel3">
+<p class="huge">Other resources</p>
 <p>
 Students may want to see our
-<span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=animations">paleogeographic animations</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=globes">virtual globes</a></span>, and
-lists of <span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=dinosaurs">dinosaur facts and figures</a></span>, or learn about a
-<span class="infoLink"><a href="%%read_url%%?a=randomTaxonInfo">random species</a></span>.
+<span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=animations">paleogeographic animations</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=globes">virtual globes</a></span>, and
+lists of <span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=dinosaurs">dinosaur facts and figures</a></span>, or learn about a
+<span class="infoLink"><a href="bridge.pl?a=randomTaxonInfo">random species</a></span>.
 </p>
 
 <p>
-Professional researchers are encouraged to <span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=join_us">join the Database</a></span> and students may want to apply for the
-<span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=workshop_2012">2012 analytical methods workshop</a></span>.
+Professional researchers are encouraged to <span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=join_us">join the Database</a></span> and students may want to apply for the
+<span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=workshop_2012">2012 analytical methods workshop</a></span>.
+</p>
+</div>
+
+<div class="introTextBox" id="introPanel4">
+<p class="huge">More about us</p>
+<p>
+You may want to read our <span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=paleodbFAQ">FAQ</a></span> and our lists of
+<span class="infoLink"><a href="bridge.pl?a=showAuthorizers">participating researchers</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=showInstitutions">participating institutions</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=personnel">personnel</a></span>,
+<span class="infoLink"><a href="bridge.pl?a=displayPage&amp;page=OSA">Online Systematics Archives</a></span>, and
+<span class="infoLink"><a href="bridge.pl?a=publications">official publications</a></span>.
 </p>
 
 <p>
@@ -325,28 +110,93 @@ We maintain mirror sites at
 <span class="infoLink"><a href="http://flatpebble.nceas.ucsb.edu">UCSB</a></span>, and the
 <span class="infoLink"><a href="http://paleodb.geology.wisc.edu">University of Wisconsin-Madison</a></span>.
 </p>
-
-<p>
-Finally, you may want to read our <span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=paleodbFAQ">FAQ</a></span> and our lists of
-<span class="infoLink"><a href="%%read_url%%?a=showAuthorizers">participating researchers</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=showInstitutions">participating institutions</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=personnel">personnel</a></span>,
-<span class="infoLink"><a href="%%read_url%%?a=displayPage&amp;page=OSA">Online Systematics Archives</a></span>, and
-<span class="infoLink"><a href="%%read_url%%?a=publications">official publications</a></span>.
-</p>
-    </div>
-    </div>
-
-
-<!-- end main text divs -->
-  </div>
-
 </div>
+
+<div style="text-align: center;">
+<span class="introNavBall" id="navBall1" onClick="introPanel(1)" style="color: B
+lack;">&bull;</span><span class="introNavBall" id="navBall2" onClick="introPanel(2)">&bull;</span>
+<span class="introNavBall" id="navBall3" onClick="introPanel(3)">&bull;</span>
+<span class="introNavBall" id="navBall4" onClick="introPanel(4)">&bull;</span>
+</div>
+
+<!-- end intro text boxes -->
+
+
+<div class="large" style="margin-bottom: 0.75em; padding-top: 0.5em; padding-bottom: 0.5em; border-top: 1px solid LightGray;">Most recently entered collection</div>
+
+<div class="small" style="margin-left: 0.5em; margin-bottom: 1em;">
+  <div style="margin-bottom: 0.5em;"><span id="latest_collection"></span></div>
+  &bull; <span id="last_timeplace"></span><br>
+  &bull; Entered <span id="last_coll_entry"></span> by <span id="last_coll_enterer"></span><br>
+  &bull; Described by <span id="last_coll_ref"></span>
+</div>
+
+<div class="large" style="margin-bottom: 0.75em; padding-top: 0.5em; border-top: 1px solid LightGray;">Most recently entered species</div>
+<div class="small" style="margin-left: 0.5em;">
+  <div style="margin-bottom: 0.5em;"><span id="latest_species"></span></div>
+  &bull; Entered <span id="last_species_entry"></span> by <span id="last_species_enterer"></span><br>
+  <span id="type_specimen"></span>
+  <span id="type_locality"></span>
+</div>
+
+<!-- end center third -->
+</div>
+
+<!-- right third -->
+<div style="float: left; clear: right; width: 21%; margin-top: 2em; margin-left: 2%; padding-left: 1em; border-left: 1px solid LightGray;">
+
+<div style="float: left; clear: left; width: 12em;">
+  <div class="large" style="margin-left: 0.6em; margin-bottom: 0.75em;">Top contributors<br>this month</div>
+  <div class="small"><span id="enterer_names"></span></div>
+</div>
+
+<!-- end right third -->
+</div>
+
+<!-- basic stats running across bottom -->
+<div style="float: left; clear: both; width: 52.2em; height: 3em; margin-top: 1em; margin-left: 1.2em; margin-bottom: 1em; padding-top: 0.5em; padding-left: 1em; border-top: 1px solid LightGray; border-bottom: 1px solid LightGray;">
+Totals right now: <a href="%%read_url%%?a=displaySearchRefs&amp;type=view"><span id="reference_total"></span> references</a>
+&bull; <a href="%%read_url%%?a=beginTaxonInfo"><span id="taxon_total"></span> taxa</a>
+&bull; <a href="%%read_url%%?a=displaySearchColls&amp;type=view"><span id="collection_total"></span> fossil collections</a>
+&bull; <a href="%%read_url%%?a=displaySearchColls&amp;type=view"><span id="occurrence_total"></span> taxonomic occurrences</a><br>
+&nbsp;&nbsp;contributed by <a href="%%read_url%%?a=showAuthorizers"><span id="enterer_total"></span> scientists</a> from
+ <a href="%%read_url%%?a=showInstitutions"><span id="institution_total"></span> institutions</a> in
+ <a href="%%read_url%%?a=showInstitutions"><span id="country_total"></span> countries</a>
+</div>
+
+<!-- end basic stats -->
+
+<div style="position: relative; float: left; clear: right; height: 64px; width: 54em; background-color: white; border: none;">
+  <div class="homeImage">
+    <a href="%%read_url%%?a=basicTaxonInfo&amp;taxon_no=38494"><img alt="Pterodactylus" src="/public/bannerimages/Pterodactylus.gif" height="44"></a>
+  </div>
+  <div class="homeImage">
+    <a href="%%read_url%%?a=basicTaxonInfo&amp;taxon_no=56059"><img alt="Aralia" src="/public/bannerimages/Aralia.gif" height="44"></a>
+  </div>
+  <div class="homeImage">
+    <a href="%%read_url%%?a=basicTaxonInfo&amp;taxon_no=30745"><img alt="Agelacrinites" src="/public/bannerimages/Agelacrinites.jpg" height="44"></a>
+  </div>
+  <div class="homeImage">
+    <a href="%%read_url%%?a=basicTaxonInfo&amp;taxon_no=40870"><img alt="Mesopithecus" src="/public/bannerimages/Mesopithecus.jpg" height="44"></a>
+  </div>
+  <div class="homeImage">
+    <a href="%%read_url%%?a=basicTaxonInfo&amp;taxon_no=94364"><img alt="Neolenus" src="/public/bannerimages/Neolenus.gif" height="44"></a>
+  </div>
+  <div class="homeImage">
+    <img alt="Xiphacantha" src="/public/bannerimages/Xiphacantha.gif" height="44">
+  </div>
+  <div class="homeImage">
+    <a href="%%read_url%%?a=basicTaxonInfo&amp;taxon_no=210644"><img alt="Microdon" src="/public/bannerimages/Microdon.jpg" height="44"></a>
+  </div>
+  <div class="homeImage">
+    <a href="%%read_url%%?a=basicTaxonInfo&amp;taxon_no=8801"><img alt="Eunema" src="/public/bannerimages/Eunema.jpg" height="44"></a>
+  </div>
+</div>
+
 
 <div style="position: absolute; bottom: 0px; right: 0px;">
   <a href="%%read_url%%?a=listCollections"><span style="font-size: 0.25em; color: #F0F0F0;">list collections</span></a> <a href="%%read_url%%?a=listTaxa"><span style="font-size: 0.25em; color: #F0F0F0;">list taxa</span></a>
 </div>
 
 </div>
-
 
