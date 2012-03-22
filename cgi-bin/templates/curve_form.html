@@ -2,26 +2,16 @@
 
 <div align=center>
   <table class="panelNavbar" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td id="tab1" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(1);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(1)">Basic options</td>
-    <td id="tab2" class="tabOff" style="white-space: nowrap;"
-      onClick="showPanel(2);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(2)">Subsampling options</td>
-    <td id="tab3" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(3);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(3)">Raw data columns</td>
-    <td id="tab4" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(4);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(4)">Subsampling columns</td>
-    <td id="tab5" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(5);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(5)">Graphing options</td>
+    <td id="tab1" class="tabOff" style="white-space: nowrap;" onClick="switchToPanel(1,5);">
+      Basic options</td>
+    <td id="tab2" class="tabOff" style="white-space: nowrap;" onClick="switchToPanel(2,5);">
+      Subsampling options</td>
+    <td id="tab3" class="tabOff" style="white-space: nowrap;" onClick="switchToPanel(3,5);">
+      Raw data columns</td>
+    <td id="tab4" class="tabOff" style="white-space: nowrap;" onClick="switchToPanel(4,5);">
+      Subsampling columns</td>
+    <td id="tab5" class="tabOff" style="white-space: nowrap;" onClick="switchToPanel(5,5);">
+      Graphing options</td>
   </tr></table>
 </div>
 
@@ -547,7 +537,7 @@ Choose line colors and scalings for the variables you want to graph.
 </form>
 
 <script language="JavaScript" type="text/javascript">
-    showPanel(1);
+    switchToPanel(1,5);
 </script>
 
 <script language="JavaScript" type="text/javascript">
