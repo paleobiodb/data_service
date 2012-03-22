@@ -382,17 +382,104 @@ sub home	{
 		return;
 	}
 
+	sub lastEntry	{
+		my $thing = shift;
+		my $entry = ( $thing->{hour} > 0 ) ? 60 * $thing->{hour} : 60 * ( 24 + $thing->{hour} );
+		$entry += ( $thing->{minute} > 0 ) ? $thing->{minute} : 60 + $thing->{minute};
+		$entry .= " minutes ago";
+		$entry =~ s/^1 minutes ago/one minute ago/;
+		$entry =~ s/^0 minutes ago/this very minute/;
+		return $entry;
+	}
+
 	# Get some populated values
 	my $sql = "SELECT * FROM statistics";
 	my $row = ${$dbt->getData($sql)}[0];
+
+	# PAPERS IN PRESS
+	$sql = "SELECT CONCAT(authors,'. ',title,'. <i>',journal,'.</i>') AS cite FROM pubs ORDER BY pub_no DESC LIMIT 3";
+	my @pubs;
+	push @pubs , $_->{cite} foreach @{$dbt->getData($sql)};
+	$row->{in_press} = '<div class="small" style="text-indent: -0.5em; margin-left: 0.5em;margin-bottom: 0.25em;">'.join(qq|</div>\n<div class="small" style="text-indent: -0.5em; margin-left: 0.5em; margin-bottom: 0.25em;">|,@pubs)."</div>";
+
+	# MOST RECENTLY ENTERED COLLECTION
+	# attempting any kind of join here would be brutal, just don't do it
+	# the time computation is awful but is needed because MySQL's date
+	#  subtraction functions seem to be buggy
+	my $sql = "SELECT hour(now())-hour(created) hour,minute(now())-minute(created) minute,reference_no,enterer_no,collection_no,collection_name,country,max_interval_no,min_interval_no FROM collections WHERE (release_date<now() OR access_level='the public') ORDER BY collection_no DESC LIMIT 1";
+	my $coll = @{$dbt->getData($sql)}[0];
+
+	$sql = "SELECT interval_no,interval_name FROM intervals WHERE interval_no IN (".$coll->{max_interval_no}.",".$coll->{min_interval_no}.")";
+	my %interval_name;
+	$interval_name{$_->{interval_no}} = $_->{interval_name} foreach @{$dbt->getData($sql)};
+	my $first_interval = ( $coll->{min_interval_no} > 0 ) ? $interval_name{$coll->{max_interval_no}}." to ".$interval_name{$coll->{min_interval_no}} : $interval_name{$coll->{max_interval_no}};
+	$row->{latest_collection} = "<a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=$coll->{collection_no}\">".$coll->{collection_name}."</a>";
+	$row->{last_timeplace} = $first_interval." of ".$coll->{country};
+
+	$row->{last_coll_entry} = lastEntry($coll);
+	$sql = "SELECT CONCAT(first_name,' ',last_name) AS name FROM person WHERE person_no=".$coll->{enterer_no};
+	$row->{last_coll_enterer} = ${$dbt->getData($sql)}[0]->{name};
+	$row->{last_coll_ref} = "<a href=\"$READ_URL?a=displayReference&reference_no=$coll->{reference_no}\">".Reference::formatShortRef(${$dbt->getData('SELECT * FROM refs WHERE reference_no='.$coll->{reference_no})}[0])."</a>";
+
+	# MOST RECENTLY ENTERED SPECIES (must have reasonable data)
+	$sql = "SELECT hour(now())-hour(a.created) hour,minute(now())-minute(a.created) minute,a.reference_no,a.enterer_no,taxon_name,a.taxon_no,type_locality,type_specimen,type_body_part,r.author1last,r.author2last,r.otherauthors,r.pubyr FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND ref_is_authority='YES' AND a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='species' AND type_body_part IS NOT NULL ORDER BY a.taxon_no DESC LIMIT 1";
+	my $sp = @{$dbt->getData($sql)}[0];
+	$row->{latest_species} = "<i><a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$sp->{taxon_no}\">$sp->{taxon_name}</a></i>";
+	$row->{latest_species} .= " <a href=\"$READ_URL?a=displayReference&reference_no=$sp->{reference_no}\">".Reference::formatShortRef($sp)."</a>";
+	my $class_hash = TaxaCache::getParents($dbt,[$sp->{taxon_no}],'array_full');
+	my @class_array = @{$class_hash->{$sp->{taxon_no}}};
+	my $sp = Collection::getClassOrderFamily($dbt,\$sp,\@class_array);
+	$row->{last_species_entry} = lastEntry($sp);
+	$row->{latest_species} .= ( $sp->{common_name} ) ? " [".$sp->{common_name}."]" : "";
+	$sql = "SELECT CONCAT(first_name,' ',last_name) AS name FROM person WHERE person_no=".$sp->{enterer_no};
+	$row->{last_species_enterer} = ${$dbt->getData($sql)}[0]->{name};
+	$row->{type_specimen} = ( $sp->{type_specimen} )  ? "&bull; Type specimen ".$sp->{type_specimen}."<br>" : "";
+	if ( $sp->{type_locality} > 0 )	{
+		$sql = "SELECT collection_name FROM collections WHERE collection_no=".$sp->{type_locality};
+		$row->{type_locality} = "&bull; Type locality <a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=".$sp->{type_locality}."\">".${$dbt->getData($sql)}[0]->{collection_name}."</a><br>";
+	}
+
+	# RANDOM GENUS LINKS
+	my $offset = int(rand(1200));
+	$sql = "SELECT taxon_name,a.taxon_no,rgt-lft+1 width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='genus' AND rgt>lft+1 AND ((t.taxon_no+$offset)/1200)=floor((t.taxon_no+$offset)/1200) LIMIT 15";
+	my @genera = sort { $a->{width} <=> $b->{width} } @{$dbt->getData($sql)};
+	my ($characters,$clear);
+	for my $g ( @genera )	{
+		my $fontsize = sprintf "%.1fem",log( $g->{'width'} ) / 2;
+		my $blue = sprintf "#%x%x%x%xFF",0+int(rand(10)),int(rand(16)),0+int(rand(10)),int(rand(16));
+		$blue =~ s/ /0/g;
+		my $padding = (0.3 + int(rand(60)) / 10)."em";
+		$characters += length( $g->{'taxon_name'} ) + $padding;
+		if ( $characters > 24 )	{
+			$characters = 0;
+			$clear = "right";
+		} elsif ( $clear eq "right" || ! $clear )	{
+			$clear = "left";
+		} else	{
+			$clear = "none";
+		}
+		$row->{'random_names'} .= "<div style=\"float: left; clear: $clear; padding: 0.3em; padding-left: $padding; font-size: $fontsize;\"><a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$g->{'taxon_no'}\" style=\"color: $blue\">".$g->{'taxon_name'}."</a></div>\n";
+	}
+
+	# TOP CONTRIBUTORS THIS MONTH
+	$row->{'enterer_names'} = Person::homePageEntererList($dbt);
+
+	print $hbo->stdIncludes("std_page_top");
+	print $hbo->populateHTML('home', $row);
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+# calved off from sub home because it might be useable later on JA 22.3.12
+sub mostRecentData	{
 
 	# display the most recently entered collections that have
 	#  distinct combinations of references and enterers (the latter is
 	#  usually redundant)
 	my $sql = "SELECT reference_no,enterer_no,collection_no,collection_name,floor(plate/100) p FROM collections WHERE (release_date<now() OR access_level='the public') GROUP BY reference_no,enterer_no ORDER BY collection_no DESC LIMIT 46";
-	my @colls = @{$dbt->getData($sql)};
 	my %continent = (1 => 'North America', 2 => 'South America', 3 => 'Europe', 4 => 'Europe', 5 => 'Asia', 6 => 'Asia', 7 => 'Africa', 8 => 'Oceania', 9 => 'Oceania');
 	my $lastcontinent;
+my @colls; # place holder
+my $row; # place holder
 	@colls = sort { $continent{$a->{p}} cmp $continent{$b->{p}} } @colls;
 	for my $coll ( @colls )	{
 		if ( ! $continent{$coll->{p}} )	{
@@ -445,24 +532,6 @@ sub home	{
 	}
 	$row->{'taxon_links'} .= "</div>\n";
 
-
-	my $offset = int(rand(250));
-	$sql = "SELECT taxon_name,a.taxon_no,rgt-lft+1 width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='genus' AND rgt>lft+1 AND ((t.taxon_no+$offset)/250)=floor((t.taxon_no+$offset)/250)";
-	my @genera = @{$dbt->getData($sql)};
-	for my $g ( @genera )	{
-		my $top = sprintf "%d%%",rand(100)-$g->{'width'};
-		my $left = sprintf "%d%%",rand(95)-$g->{'width'};
-		my $fontsize = sprintf "%.1fem",0.3+$g->{'width'}/15;
-		my $blue = sprintf "%x%x%x%xFF",6+int(rand(10)),int(rand(16)),int(rand(16)),int(rand(16));
-		$blue =~ s/ /0/g;
-		$row->{'random_names'} .= "<div class=\"\" style=\"position: absolute; top: $top; left: $left;\"><a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$g->{'taxon_no'}\"><span style=\"font-size: $fontsize; color: #$blue;\">".$g->{'taxon_name'}."</span></a></div>\n";
-	}
-
-	$row->{'enterer_names'} = Person::homePageEntererList($dbt);
-
-	print $hbo->stdIncludes("std_page_top");
-	print $hbo->populateHTML('home', $row);
-	print $hbo->stdIncludes("std_page_bottom");
 }
 
 
