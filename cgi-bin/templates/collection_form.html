@@ -415,34 +415,20 @@ function doCheckFieldsComponents() {
 <div align="center" style="width: 58em; margin-bottom: -1em; padding-top: 2em;">
 
    <table cellpadding=0 cellspacing=0 border=0 style="width: 54em;"><tr>
-   <td id="tab1" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(1);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(1)">Basic Info</td>
-   <td id="tab2" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(2);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(2)">Geography</td>
-   <td id="tab3" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(3);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(3)">Stratigraphy</td>
-   <td id="tab4" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(4);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(4)">Geology</td>
-   <td id="tab5" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(5);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(5)">Preservation</td>
-   <td id="tab6" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(6);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(6)">Components</td>
-   <td id="tab7" class="tabOff" style="white-space: nowrap;"
-      onClick = "showPanel(7);" 
-      onMouseOver="hover(this);" 
-      onMouseOut="setState(7)">Collecting Info</td>
+   <td id="tab1" class="tabOff" "onClick="switchToPanel(1,7);">
+      Basic info</td>
+   <td id="tab2" class="tabOff" onClick="switchToPanel(2,7);">
+      Geography</td>
+   <td id="tab3" class="tabOff" onClick="switchToPanel(3,7);">
+      Stratigraphy</td>
+   <td id="tab4" class="tabOff" onClick="switchToPanel(4,7);">
+      Geology</td>
+   <td id="tab5" class="tabOff" onClick="switchToPanel(5,7);">
+      Preservation</td>
+   <td id="tab6" class="tabOff" onClick="switchToPanel(6,7);">
+      Components</td>
+   <td id="tab7" class="tabOff" onClick="switchToPanel(7,7);">
+      Collecting Info</td>
    </tr></table>
 
 </div>
@@ -1536,7 +1522,7 @@ function doCheckFieldsComponents() {
 </form>
 
 <script language="JavaScript">
-    showPanel(1);
+    switchToPanel(1,7);
 </script>
 
 </div>
