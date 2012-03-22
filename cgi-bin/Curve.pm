@@ -1516,31 +1516,25 @@ sub printResults	{
 		} elsif ( $q->param('taxonomic_level') eq 'order') {
 			$generaorrefs = "orders";
 		}
+	my $panels = ( $q->param('samplesize') > 0 ) ? 3 : 2;
 
-
-        print '<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
+        print qq|<script src="/JavaScripts/tabs.js" language="JavaScript" type="text/javascript"></script>
     <div align=center>
          <table cellpadding=0 cellspacing=0 border=0 style="width: 54em;"><tr>
-         <td id="tab1" class="tabOff" style="white-space: nowrap;"
-             onClick="showPanel(1);" 
-             onMouseOver="hover(this);" 
-             onMouseOut="setState(1)">Raw data</td>
-         <td id="tab2" class="tabOff" style="white-space: nowrap;"
-             onClick="showPanel(2);"
-             onMouseOver="hover(this);"
-';
-    if ($q->param('samplesize')) {
-        print '
-                     onMouseOut="setState(2)">Subsampled data </td>
-                   <td id="tab3" class="tabOff" style="white-space: nowrap;"
-                     onClick="showPanel(3);" 
-                     onMouseOver="hover(this);" 
-                     onMouseOut="setState(3)">Diversity curve </td>
-';
+         <td id="tab1" class="tabOff" onClick="switchToPanel(1,$panels);">
+             Raw data</td>
+         <td id="tab2" class="tabOff" onClick="switchToPanel(2,$panels);">
+|;
+    if ($q->param('samplesize'))	{
+        print qq|
+                     Subsampled data </td>
+                   <td id="tab3" class="tabOff" onClick="switchToPanel(3,$panels);">
+                     Diversity curve </td>
+|;
     } else	{
-        print '
-             onMouseOut="setState(2)">Diversity curve </td>
-';
+        print qq|
+             Diversity curve </td>
+|;
     }
         print '         </tr></table>
        </div>';
@@ -2868,10 +2862,10 @@ $im->setThickness(1);
 		}
 		print "</div>\n";
 		print "</div>\n\n"; # End PANEL3 div
-		print '<script language="JavaScript" type="text/javascript">
-showPanel(1);
+		print qq|<script language="JavaScript" type="text/javascript">
+switchToPanel(1,$panels);
 </script>
-';
+|;
 
 	}
 
