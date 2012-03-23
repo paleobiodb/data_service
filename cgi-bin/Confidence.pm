@@ -740,11 +740,9 @@ sub calculateTaxaInterval {
     }
     
 
-    my $ig = $t->getIntervalGraph;
     my $interval_names;
-    foreach my $itv (values %$ig) {
-        $interval_names->{$itv->{interval_no}} = $itv->{name};
-    }
+    my %intervals = TimeLookup::allIntervals($dbt);
+    $interval_names->{$_} = $intervals{$_}->{'name'} foreach keys %intervals;
 
     my %taxa_hash;
 
