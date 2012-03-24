@@ -404,6 +404,10 @@ sub home	{
 	# Get some populated values
 	my $sql = "SELECT * FROM statistics";
 	my $row = ${$dbt->getData($sql)}[0];
+	for my $f ( 'reference','taxon','collection','occurrence')	{
+		$row->{$f."_total"} =~ s/(\d)(\d{6})$/$1,$2/;
+		$row->{$f."_total"} =~ s/(\d)(\d{3})$/$1,$2/;
+	}
 
 	# PAPERS IN PRESS
 	$sql = "SELECT CONCAT(authors,'. ',title,'. <i>',journal,'.</i> \[#',pub_no,'\]') AS cite FROM pubs WHERE created<now()-interval 1 week ORDER BY pub_no DESC LIMIT 3";
@@ -450,7 +454,7 @@ sub home	{
 
 	# RANDOM GENUS LINKS
 	my $offset = int(rand(1200));
-	$sql = "SELECT taxon_name,a.taxon_no,rgt-lft+1 width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='genus' AND rgt>lft+1 AND ((t.taxon_no+$offset)/1200)=floor((t.taxon_no+$offset)/1200) LIMIT 15";
+	$sql = "SELECT taxon_name,a.taxon_no,rgt-lft+1 width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='genus' AND rgt>lft+1 AND ((t.taxon_no+$offset)/1200)=floor((t.taxon_no+$offset)/1200) LIMIT 20";
 	my @genera = sort { $a->{width} <=> $b->{width} } @{$dbt->getData($sql)};
 	my ($characters,$clear);
 	for my $g ( @genera )	{
