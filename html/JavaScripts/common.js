@@ -291,7 +291,11 @@ function checkName(i,j)    {
 }
 
 function switchToPanel(id,max)	{
-	for ( i = 1; i <= max; i++ )	{
+	var first = 1;
+	if ( ! /[A-Za-z]/.test( document.getElementById("panel1").innerHTML ) )	{
+		first = 2;
+	}
+	for ( i = first; i <= max; i++ )	{
 		if ( i != id )	{
 			document.getElementById('panel'+i).style.display = 'none';
 			document.getElementById('tab'+i).style.backgroundColor = 'LightGray';
