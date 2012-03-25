@@ -4,43 +4,33 @@
 
 <!-- encloses both boxes -->
 
-<div style="white-space: nowrap; width: 60em; align: left;">
+<div style="white-space: nowrap; width: 56em; align: left;">
 
-<div align="left" class="verysmall" style="float: left; clear: right; margin-left: 5em; margin-bottom: -1em;">
+<div align="left" class="verysmall" style="float: left; clear: right; margin-left: 5em; margin-bottom: 0.5em;">
 
    <span show="taxa_list">
    <div id="tab1" class="tabOff" style="width: 9em; float: left; clear: none;"
-      onClick = "showPanel(1); showCommonNameLink();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(1)">
-      <div class="tabHotspot" onMouseOver = "showPanel(1); hideCommonNames();"></div><div style="margin-top: -1px;">
+      onClick = "switchToPanel(1,5); showCommonNameLink();">
+      <div class="tabHotspot" onMouseOver = "switchToPanel(1,5); hideCommonNames();"></div><div style="margin-top: -1px;">
       List of taxa</div><div style="clear: both;"></div></div>
    </span>
    <!-- needed to fool tabs.js into working -->
    <span hide="taxa_list" id="tab1" name="commonName"></span>
    <div id="tab2" class="tabOff" style="width: 11em; float: left; clear: none;"
-      onClick = "showPanel(2); hideCommonNames();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(2)">
-      <div class="tabHotspot" onMouseOver = "showPanel(2); hideCommonNames();"></div><div style="margin-top: -1px;">
+      onClick = "switchToPanel(2,5); hideCommonNames();">
+      <div class="tabHotspot" onMouseOver = "switchToPanel(2,5); hideCommonNames();"></div><div style="margin-top: -1px;">
       Where &amp; when</div><div style="clear: both;"></div></div>
    <div id="tab3" class="tabOff" style="width: 7.5em; float: left; clear: none;"
-      onClick = "showPanel(3); hideCommonNames();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(3)">
-      <div class="tabHotspot" onMouseOver = "showPanel(3); hideCommonNames();"></div><div style="margin-top: -1px;">
+      onClick = "switchToPanel(3,5); hideCommonNames();">
+      <div class="tabHotspot" onMouseOver = "switchToPanel(3,5); hideCommonNames();"></div><div style="margin-top: -1px;">
       Geology</div><div style="clear: both;"></div></div>
    <div id="tab4" class="tabOff" style="width: 13em; float: left; clear: none;"
-      onClick = "showPanel(4); hideCommonNames();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(4)">
-      <div class="tabHotspot" onMouseOver = "showPanel(4); hideCommonNames();"></div><div style="margin-top: -1px;">
+      onClick = "switchToPanel(4,5); hideCommonNames();">
+      <div class="tabHotspot" onMouseOver = "switchToPanel(4,5); hideCommonNames();"></div><div style="margin-top: -1px;">
       Taphonomy &amp; methods</div><div style="clear: both;"></div></div>
    <div id="tab5" class="tabOff" style="width: 13em; float: left; clear: none;"
-      onClick = "showPanel(5); hideCommonNames();"
-      onMouseOver="hover(this);"
-      onMouseOut="setState(5)">
-      <div class="tabHotspot" onMouseOver = "showPanel(5); hideCommonNames();"></div><div style="margin-top: -1px;">
+      onClick = "switchToPanel(5,5); hideCommonNames();">
+      <div class="tabHotspot" onMouseOver = "switchToPanel(5,5); hideCommonNames();"></div><div style="margin-top: -1px;">
       Metadata &amp; references</div><div style="clear: both;"></div></div>
    <div style="clear: both;"></div>
 </div>
@@ -252,9 +242,9 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 if ( /[A-Za-z]/.test( document.getElementById("panel1").innerHTML ) )	{
-   	showPanel(1);
+   	switchToPanel(1,5);
 } else	{
-	showPanel(2);
+	switchToPanel(2,5);
 }
 // End -->
 </script> 
