@@ -295,7 +295,7 @@ function switchToPanel(id,max)	{
 		if ( i != id )	{
 			document.getElementById('panel'+i).style.display = 'none';
 			document.getElementById('tab'+i).style.backgroundColor = 'LightGray';
-			document.getElementById('tab'+i).style.fontWeight = 'medium';
+			document.getElementById('tab'+i).style.fontWeight = 'normal';
 		}
 	}
 	document.getElementById('panel'+id).style.display = 'block';
