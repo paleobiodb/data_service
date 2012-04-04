@@ -7,13 +7,13 @@
 package DBConnection;
 use strict;
 use DBI;
-use Constants qw($DB_SOCKET $DB_PASSWD);
+use Constants qw($DB_SOCKET $DB_PASSWD $DB_USER);
 # return a handle to the database (often called $dbh)
 
 sub connect {
     my $driver =   "mysql";
     my $hostName = "localhost";
-    my $userName = "pbdbuser";
+    my $userName = $DB_USER;
     my $dbName =   "pbdb";
 
     my $dsn;

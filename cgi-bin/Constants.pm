@@ -35,7 +35,7 @@ if ($Constants::IS_FOSSIL_RECORD) {
 $Constants::DB = 'pbdb';
 $Constants::SQL_DB = 'pbdb';
 $Constants::DB_TYPE = '';
-$Constants::DB_USER = 'pbdbuser';
+$Constants::DB_USER = $conf->{'DB_USER'} || 'pbdbuser';
 $Constants::PAGE_TOP = 'std_page_top';
 $Constants::PAGE_BOTTOM = 'std_page_bottom';
 $Constants::COLLECTIONS = 'collections';
