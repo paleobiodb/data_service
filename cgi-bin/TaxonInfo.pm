@@ -49,12 +49,12 @@ sub checkTaxonInfo {
 	my $hbo = shift;
 	my $dbh = $dbt->dbh;
 
-	if ( ! $q->param('taxon_name') && $q->param('search_again') )	{
+	if ( ! $q->param('taxon_name') && ! $q->param('museum') && $q->param('search_again') )	{
 		my $name = $q->param('search_again');
 		$q->param('taxon_name' => $name);
 	}
 
-    if (!$q->param("taxon_no") && !$q->param("taxon_name") && !$q->param("common_name") && !$q->param("author") && !$q->param("pubyr")) {
+    if (!$q->param("taxon_no") && !$q->param("taxon_name") && !$q->param("common_name") && !$q->param("author") && !$q->param("pubyr") && !$q->param("museum")) {
         searchForm($hbo, $q, 1); # param for not printing header with form
         return;
     }
@@ -62,10 +62,15 @@ sub checkTaxonInfo {
     if ($q->param('taxon_no')) {
         # If we have is a taxon_no, use that:
         displayTaxonInfoResults($dbt,$s,$q,$hbo);
-    } elsif (!$q->param('taxon_name') && !($q->param('common_name')) && !($q->param('pubyr')) && !$q->param('author')) {
+    } elsif (!$q->param('taxon_name') && !($q->param('common_name')) && !($q->param('pubyr')) && !$q->param('author') && !$q->param('museum')) {
         searchForm($hbo,$q);
     } else {
         my @results;
+        if ( $q->param('museum') )	{
+            my $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND museum='".$q->param('museum')."' GROUP BY taxon_no";
+            my @nos = map { $_->{'taxon_no'} } @{$dbt->getData($sql)};
+            $q->param('taxa' => join(',',@nos));
+        }
         if ( $q->param('taxa') )	{
             my $morewhere;
             if ( $q->param('author') )	{
@@ -114,7 +119,7 @@ sub checkTaxonInfo {
             @results = getTaxa($dbt,$options,['taxon_no','taxon_rank','taxon_name','common_name','author1last','author2last','otherauthors','pubyr','pages','figures','comments','discussion']);
         }
 
-        if(scalar @results < 1 && $q->param('taxon_name')){
+        if(scalar @results < 1 && $q->param('taxon_name'))	{
             # If nothing from authorities, go to occs + reids
             my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($q->param('taxon_name'));
             my $where = "WHERE genus_name LIKE ".$dbh->quote($genus);
@@ -142,45 +147,16 @@ sub checkTaxonInfo {
                     print "<center><p><a href=\"$WRITE_URL?a=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
                 }
             }
-        } elsif(scalar @results < 1 && ! $q->param('taxon_name')){
+        } elsif(scalar @results < 1 && ! $q->param('taxon_name'))	{
             searchForm($hbo, $q, 1); # param for not printing header with form
             if($s->isDBMember() && $s->get('role') =~ /authorizer|student|technician/) {
                 print "<center><p><a href=\"$WRITE_URL?a=submitTaxonSearch&amp;goal=authority&amp;taxon_name=".$q->param('taxon_name')."\"><b>Add taxonomic information</b></a></center>";
             }
-        } elsif(scalar @results == 1){
+        } elsif(scalar @results == 1)	{
             $q->param('taxon_no'=>$results[0]->{'taxon_no'});
             displayTaxonInfoResults($dbt,$s,$q,$hbo);
-        } else{
-            @results = sort { $a->{taxon_name} cmp $b->{taxon_name} } @results;
-            # now create a table of choices and display that to the user
-            print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">Please select a taxonomic name</p>\n";
-            if ( scalar @results >= 10 )	{
-                print "<p class=\"small\">The total number of matches is ".scalar @results."</p>\n";
-            } else	{
-                print "<br>\n";
-            }
-            print qq|<div class="displayPanel" align="center" style="width: 36em; padding-top: 1.5em;">
-<div class="displayPanelContent">
-|;
-
-            print "<table>\n";
-            print "<tr>";
-            my $classes = qq|"medium"|;
-            for(my $i=0; $i<scalar(@results); $i++) {
-                my $authorityLine = Taxon::formatTaxon($dbt,$results[$i]);
-                if ($#results > 2)	{
-                    $classes = ($i/2 == int($i/2)) ? qq|"small darkList"| : "small";
-                }
-                # the width term games browsers
-                print qq|<td class=$classes style="width: 1em; padding: 0.25em; padding-left: 1em; padding-right: 1em; white-space: nowrap;">&bull; <a href="$READ_URL?a=checkTaxonInfo&amp;taxon_no=$results[$i]->{taxon_no}" style="color: black;">$authorityLine</a></td>|;
-                print "</tr>\n<tr>";
-            }
-            print "</tr>";
-            print "<tr><td align=\"center\" colspan=3><br>";
-            print qq|</td></tr></table></div>
-</div>
-</div>
-|;
+        } else	{
+            listTaxonChoices($dbt,\@results);
         }
     }
 }
@@ -3659,10 +3635,7 @@ sub findCrown	{
 # JA 3-5.11.09
 sub basicTaxonInfo	{
 
-	my $q = shift;
-	my $s = shift;
-	my $dbt = shift;
-	my $hbo = shift;
+	my ($q,$s,$dbt,$hbo) = @_;
 
 	my ($is_real_user,$not_bot) = (1,1);
 	if (! $q->request_method() eq 'POST' && ! $q->param('is_real_user') && ! $s->isDBMember()) {
@@ -3675,6 +3648,17 @@ sub basicTaxonInfo	{
 	}
 	if ( $is_real_user > 0 )	{
 		main::logRequest($s,$q);
+	}
+
+	# reuses some old checkTaxonInfo functionality JA 8.4.12
+	if ( $q->param('match') =~ /all|random/i )	{
+		my @taxon_nos = @{getMatchingSubtaxa($dbt,$q,$s,$hbo)};
+		my $sql = "SELECT a.*,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@taxon_nos).")";
+		my @taxa = @{$dbt->getData($sql)};
+		print $hbo->stdIncludes($PAGE_TOP);
+		listTaxonChoices($dbt,\@taxa);
+		print $hbo->stdIncludes($PAGE_BOTTOM);
+		return;
 	}
 
 	my $taxon_name = $q->param('taxon_name');
@@ -4415,6 +4399,118 @@ function erasePleaseWait()	{
 }
 
 
+# moved over from bridge.pl JA 8.4.12
+# originally called randomTaxonInfo and then hijacked to also get all names in
+#  a group if those are requested instead
+# originally wrote this to only recover names tied to an occurrence; revised to
+#   get all names in the group, period JA 20.3.11
+sub getMatchingSubtaxa	{
+	return if PBDBUtil::checkForBot();
+	my ($dbt,$q,$s,$hbo) = @_;
+	my $dbh = $dbt->dbh;
+	my $sql;
+	my $lft;
+	my $rgt;
+	if ( $q->param('taxon_name') =~ /^[A-Za-z]/ )	{
+		my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbh->quote($q->param('taxon_name'))." ORDER BY rgt-lft DESC";
+		my $taxref = ${$dbt->getData($sql)}[0];
+		if ( $taxref )	{
+			$lft = $taxref->{lft};
+			$rgt = $taxref->{rgt};
+		}
+	} elsif ( $q->param('common_name') =~ /^[A-Za-z]/ )	{
+		my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND common_name=".$dbh->quote($q->param('common_name'))." ORDER BY rgt-lft DESC";
+		my $taxref = ${$dbt->getData($sql)}[0];
+		if ( $taxref )	{
+			$lft = $taxref->{lft};
+			$rgt = $taxref->{rgt};
+		}
+	}
+	my @trefs;
+	if ( $lft > 0 && $rgt > 0 )	{
+		# default is valid names only as currently spelled
+		my $join = "a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no";
+		# invalid only
+		if ( $q->param('taxon_rank') =~ /[a-z]/ && $q->param('validity') =~ /^invalid$/i )	{
+				$join = "a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND t.taxon_no!=synonym_no";
+		# either one
+		} elsif ( $q->param('taxon_rank') =~ /[a-z]/ && $q->param('validity') =~ /invalid/i )	{
+				$join = "a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no";
+		}
+		my $morewhere;
+		if ( $q->param('taxon_rank') )	{
+			$morewhere .= " AND taxon_rank='".$q->param('taxon_rank')."'";
+		} else	{
+			$morewhere .= " AND taxon_rank='species'";
+		}
+		if ( $q->param('type_body_part') )	{
+			$morewhere = " AND type_body_part='".$q->param('type_body_part')."'";
+		}
+		if ( $q->param('preservation') )	{
+			$morewhere .= " AND preservation='".$q->param('preservation')."'";
+		}
+		$sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE $join AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt) $morewhere";
+		@trefs = @{$dbt->getData($sql)};
+	}
+	if ( $q->param('match') eq "all" )	{
+		my @taxa;
+		push @taxa , $_->{taxon_no} foreach @trefs;
+		return \@taxa;
+	}
+	# otherwise select a taxon at random
+	else	{
+		my $x = int(rand($#trefs + 1));
+		$q->param('taxon_no' => $trefs[$x]->{taxon_no});
+		# DON'T SET THIS TO 1
+		#$q->param('is_real_user' => 1);
+		# infinite loops are bad
+		$q->param('match' => '');
+		if ( $q->param('action') =~ /checkTaxonInfo/ )	{
+			return;
+		} else	{
+			basicTaxonInfo($q,$s,$dbt,$hbo);
+			exit;
+		}
+	}
+}
+
+# calved off from checkTaxonInfo JA 8.4.12
+sub listTaxonChoices	{
+
+	my ($dbt,$resultsRef) = @_;
+	my @results = @{$resultsRef};
+	@results = sort { $a->{taxon_name} cmp $b->{taxon_name} } @results;
+	print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">Please select a taxonomic name</p>\n";
+	if ( scalar @results >= 10 )	{
+		print "<p class=\"small\">The total number of matches is ".scalar @results."</p>\n";
+	} else	{
+		print "<br>\n";
+	}
+	print qq|<div class="displayPanel" align="center" style="width: 36em; padding-top: 1.5em;">
+<div class="displayPanelContent">
+<table>
+<tr>
+|;
+
+	my $classes = qq|"medium"|;
+	for my $i ( 0..$#results )	{
+		my $authorityLine = Taxon::formatTaxon($dbt,$results[$i]);
+		if ($#results > 2)	{
+			$classes = ($i/2 == int($i/2)) ? qq|"small darkList"| : "small";
+		}
+		# the width term games browsers
+		print qq|<td class=$classes style="width: 1em; padding: 0.25em; padding-left: 1em; padding-right: 1em; white-space: nowrap;">&bull; <a href="$READ_URL?a=basicTaxonInfo&amp;taxon_no=$results[$i]->{taxon_no}" style="color: black;">$authorityLine</a></td>|;
+		print "</tr>\n<tr>";
+	}
+	print qq|</tr>
+<tr><td align="center" colspan=3><br>
+</td></tr></table></div>
+</div>
+</div>
+|;
+
+}
+
 # JA 3.11.09
 sub formatShortAuthor	{
 	my $taxon = shift;
@@ -4561,7 +4657,7 @@ sub getTaxa {
     if ($fields) {
         @fields = @$fields;
         if  ($fields[0] =~ /\*|all/) {
-            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','type_body_part','part_details','type_locality','extant','preservation','form_taxon','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','discussion');
+            @fields = ('taxon_no','reference_no','taxon_rank','taxon_name','common_name','type_taxon_no','type_specimen','museum','catalog_number','type_body_part','part_details','type_locality','extant','preservation','form_taxon','ref_is_authority','author1init','author1last','author2init','author2last','otherauthors','pubyr','pages','figures','comments','discussion');
         }
         foreach my $f (@fields) {
             if ($f =~ /^author(1|2)(last|init)$|otherauthors|pubyr$/) {
