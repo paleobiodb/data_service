@@ -36,7 +36,7 @@ function checkName()	{
 
 
 <form method="POST" action="%%read_url%%"onSubmit="return checkName();">
-<input name="action" type="hidden" value="checkTaxonInfo">
+<input name="action" type="hidden" value="basicTaxonInfo">
 
 <div align="center">
   <p class="pageTitle">%%page_title%%</p>
@@ -76,6 +76,12 @@ function checkName()	{
          <select name="validity"><option>valid</option><option>invalid</option><option>valid or invalid</option></select>
          %%taxon_rank_select%% names
         </td>
+      </tr>
+      <tr>
+        <td>
+           and exclude the subtaxon
+        </td>
+        <td colspan="2"><input name="exclude_taxon" value="" size="35"></td>
       </tr>
       <tr>
         <td colspan=3 align="center" style="padding-top: 2em;"><input type="submit" value="Search"></td>
