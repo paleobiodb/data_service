@@ -1651,7 +1651,8 @@ sub displayDownloadMeasurementsResults  {
 	my $OUT_HTTP_DIR = "/public/downloads";
 	my $OUT_FILE_DIR = $HTML_DIR.$OUT_HTTP_DIR;
 	my $name = ($s->get("enterer")) ? $s->get("enterer") : $q->param("yourname");
-	my $outfile = PBDBUtil::getFilename($name)."-size.txt";
+	my $outfile = PBDBUtil::getFilename($name)."-size-records.txt";
+	my $outfile2 = PBDBUtil::getFilename($name)."-size-table.txt";
 	open OUT,">$OUT_FILE_DIR/$outfile";
 	my $header = join($sep,@header_fields);
 	print OUT $header,"\n";
@@ -1730,7 +1731,7 @@ sub displayDownloadMeasurementsResults  {
 	$person{$_->{'person_no'}} = $_->{'name'} foreach @{$dbt->getData($sql)};
 
 
-	my (%printed_parts,%total_authorized,%total_entered);
+	my (%printed_parts,%total_authorized,%total_entered,%hasType,%matrix);
 	for my $taxon_no ( @with_data )	{
 		if ( $q->param('all_parts') =~ /y/i && $measured_parts{$taxon_no} < ( $#part_list + 1 ) * $types )	{
 			next;
@@ -1801,17 +1802,20 @@ sub displayDownloadMeasurementsResults  {
 							my $value = $m_table{$type}{$column};
 							print OUT $sep;
 							if ( $column eq "error_unit" )	{
-								print OUT $value;
 							} elsif ( $value <= 0 )	{
-								print OUT "NaN";
+								$value = "NaN";
 							} elsif ( $value < 1 )	{
-								printf OUT "%.3f",$value;
+								$value = sprintf "%.3f",$value;
 							} elsif ( $value < 10 )	{
-								printf OUT "%.2f",$value;
+								$value = sprintf "%.2f",$value;
 							} else	{
-								printf OUT "%.1f",$value;
+								$value = sprintf "%.1f",$value;
 							}
-		
+							print OUT $value;
+							if ( $column eq "average" && $value > 0 )	{
+								$hasType{$type." ".$part}++;
+								$matrix{$taxon_no}{$type}{$part} = $value;
+							}
 						}
 						if ( $q->param('authorizer') =~ /y/i )	{
 							my @names = keys %authorized;
@@ -1830,6 +1834,31 @@ sub displayDownloadMeasurementsResults  {
 		}
 	}
 	close OUT;
+	open OUT,">$OUT_FILE_DIR/$outfile2";
+	print OUT "species";
+	for my $type (('length','width','height','circumference','diagonal','diameter','inflation','d13C','d18O'))	{
+		for my $part ( @part_list )	{
+			if ( $hasType{$type." ".$part} > 0 )	{
+				print OUT qq|\t"$part $type"|;
+			}
+		}
+	}
+	print OUT "\n";
+	@with_data = keys %matrix;
+	for my $taxon_no ( sort { $name{$a} cmp $name{$b} } @with_data )	{
+		print OUT "$name{$taxon_no}";
+		for my $type (('length','width','height','circumference','diagonal','diameter','inflation','d13C','d18O'))	{
+			for my $part ( @part_list )	{
+				if ( $hasType{$type." ".$part} > 0 )	{
+					my $value = ( $matrix{$taxon_no}{$type}{$part} ) ? $matrix{$taxon_no}{$type}{$part} : "NA";
+					print OUT "\t$value";
+				}
+			}
+		}
+		print OUT "\n";
+	}
+	close OUT;
+
 	if ( $rows < 1 )	{
 		my $errorMessage = '<center><p class="medium"><i>None of the collections include data for '.$q->param('taxon_name').'. Please try another name or broaden your search criteria.</i></p></center>';
 		print PBDBUtil::printIntervalsJava($dbt,1);
@@ -1874,7 +1903,8 @@ sub displayDownloadMeasurementsResults  {
 	} else	{
 		print "<p>$rows data records</p>\n";
 	}
-	print "<p>The data were saved to <a href=\"$OUT_HTTP_DIR/$outfile\">$outfile</a></p>\n";
+	print "<p>Individual data records were saved to <a href=\"$OUT_HTTP_DIR/$outfile\">$outfile</a></p>\n";
+	print "<p>A matrix of averages was saved to <a href=\"$OUT_HTTP_DIR/$outfile2\">$outfile2</a></p>\n";
 
 	print "<p style=\"margin-left: 1em; text-indent: -1em;\">Authorizers: ";
 	my (@names,@bits) = (keys %total_authorized,());
