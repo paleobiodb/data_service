@@ -4449,6 +4449,11 @@ sub getMatchingSubtaxa	{
 		if ( $q->param('preservation') )	{
 			$morewhere .= " AND preservation='".$q->param('preservation')."'";
 		}
+		if ( $q->param('exclude_taxon') )	{
+			$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbh->quote($q->param('exclude_taxon'))." ORDER BY rgt-lft DESC";
+			my $exclude = ${$dbt->getData($sql)}[0];
+			$morewhere .= " AND (lft<".$exclude->{lft}." OR rgt>".$exclude->{rgt}.")";
+		}
 		$sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE $join AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt) $morewhere";
 		@trefs = @{$dbt->getData($sql)};
 	}
