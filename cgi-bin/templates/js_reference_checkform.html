@@ -141,7 +141,7 @@
 		}
 		else if ( /\.[^0-9 ]/.test(frm.reftitle.value) )	{
 			if ( ! / sp\.(; | ,|\)|)/.test(frm.reftitle.value) && ! / nov\.(; |, |\)|)/.test(frm.reftitle.value) && ! /U\.S\.A\.(; |, |\)|)/.test(frm.reftitle.value) && ! /U\.S\.S\.R\.(; |, |\)|)/.test(frm.reftitle.value) )	{
-				warnings += "* A reference title shouldn't include a stray period\n";
+				warnings += "* The reference title may include a stray period\n";
 				warning_count++;
 			}
 		}
@@ -168,7 +168,8 @@
 			errors += "* The book/serial name includes weird characters\n";
 		}
 		if ( /\.[^0-9 ]/.test(frm.pubtitle.value) )	{
-			errors += "* The book/serial name includes a stray period\n";
+			warnings += "* The book/serial name may include a stray period\n";
+			warning_count++;
 		}
 		if ( /  /.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name includes extra spaces\n";
@@ -187,7 +188,6 @@
 			alert ( warnings );
 			return false;
 		}
-//alert(warning_count);
 		return true;
 	}
 
