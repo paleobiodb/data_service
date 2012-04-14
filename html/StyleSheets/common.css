@@ -9,7 +9,7 @@ html, body {
 	margin: 0px;
 	padding: 0px;
 	background-color: WhiteSmoke;
-	font-family: Franklin Gothic Book, Corbel, Microsoft PGothic, Geneva, sans-serif;
+	font-family: Franklin Gothic Book, Corbel, Microsoft PGothic, Gill Sans, sans-serif;
 	font-size: 1em;
 }
 
@@ -119,13 +119,16 @@ H1, H2, H3, H4, H5, H6 {
     position: absolute;
     top: 0px;
     left: 0px;
-    height: 100%;
-    width: 67em;
-    padding-top: 2em;
+    width: 54em;
+    overflow: hidden;
     padding-left: 1em;
-    margin-left: 1em; 
-    margin-right: 1em;
+    padding-right: 1em;
+    padding-top: 2em;
+    padding-bottom: 1em;
     z-index: 1;
+    background-color: white;
+    border-right: 1px solid DarkGray;
+    border-bottom: 1px solid DarkGray;
 }
 
 .mainBodyGuest {
