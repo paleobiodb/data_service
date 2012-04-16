@@ -9,16 +9,20 @@ function checkForm()	{
 
 	var hasLength = frm.ref_has_opinion.length - 1;
 	var checkedHas = 0;
+	var repeatedHas = 0;
 
 	for ( i=0; i <= hasLength; i++ )	{
 		if ( frm.ref_has_opinion[i].checked )	{
 			checkedHas = i;
 		}
+		if ( frm.ref_has_opinion[i].value == "NO" )	{
+			repeatedHas = i;
+		}
 	}
-	if ( ( frm.author1init.value != "" || frm.author1last.value != "" || frm.author2init.value != "" || frm.author2last.value != "" || frm.pubyr.value != "" ) && checkedHas != 1 )	{
+	if ( ( frm.author1init.value != "" || frm.author1last.value != "" || frm.author2init.value != "" || frm.author2last.value != "" || frm.pubyr.value != "" ) && checkedHas != repeatedHas )	{
 		error += "* You forgot to check 'the opinion is repeated'\n";
 	}
-	if ( ( checkedHas == 1 || frm.author1init.value != "" || frm.pubyr.value != "" ) && frm.author1last.value == "" )	{
+	if ( ( checkedHas == repeatedHas || frm.author1init.value != "" || frm.pubyr.value != "" ) && frm.author1last.value == "" )	{
 		error += "* You forgot to enter the author name\n";
 	}
 	if ( frm.author1init.value != "" && ! /^[A-Z]\.$/.test(frm.author1init.value) && ! /^[A-Z]\.( |\-)[A-Z]\.$/.test(frm.author1init.value) && ! /^[A-Z]\. [A-Z]\. [A-Z]\.$/.test(frm.author1init.value)  )	{
@@ -42,7 +46,7 @@ function checkForm()	{
 	} else if ( frm.pubyr.value != "" && ( frm.pubyr.value < 1758 || frm.pubyr.value > 2020 ) )	{
 		error += "* The publication year is wrong\n";
 	}
-	if ( ( checkedHas == 1 || frm.author1init.value != "" || frm.author1last.value != "" ) && frm.pubyr.value == "" )	{
+	if ( ( checkedHas == repeatedHas || frm.author1init.value != "" || frm.author1last.value != "" ) && frm.pubyr.value == "" )	{
 		error += "* You forgot to enter the publication year\n";
 	}
 
