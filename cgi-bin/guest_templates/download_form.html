@@ -71,7 +71,7 @@ function countryChange(justChecked)	{
 //  End -->
 </script>
 
-<div style="overflow: hidden;">
+<div>
 
 <form method=post action="%%read_url%%">
 <input id="action" type=hidden name="action" value="displayDownloadResults">
@@ -113,9 +113,10 @@ function countryChange(justChecked)	{
 This form allows you to download a file with data about taxonomic occurrences, genera or species, fossil collections, or specimens.
 Page through the six tabs to see all the options.
 Key fields are in <b>bold</b>.
+You can always <a href=%%read_url%%?a=displayBasicDownloadForm">use the basic form instead</a>.
 To compute a diversity curve, you need to check off either "period," "epoch," "Cenozoic subepoch," or "10 m.y. bin" in the "Collection fields" part of the form.
 <span show="has_defaults">
-Click here to <a href="%%read_url%%?a=displayDownloadForm&amp;restore_defaults=1">restore defaults</a>.
+You can <a href="%%read_url%%?a=displayDownloadForm&amp;restore_defaults=1">restore default settings</a> if your want to discard your previous ones.
 </span>
 </p>
 </div>
