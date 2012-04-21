@@ -36,11 +36,17 @@ function checkName()	{
 
 
 <form method="POST" action="%%read_url%%"onSubmit="return checkName();">
+<div hide="gallery_form">
 <input name="action" type="hidden" value="basicTaxonInfo">
+</div>
+<div show="gallery_form">
+<input name="action" type="hidden" value="gallery">
+</div>
 
 <div align="center">
   <p class="pageTitle">%%page_title%%</p>
   <div class="displayPanel" align="center" style="width: 40em;">
+  %%page_subtitle%%
   <div class="displayPanelContent">
     <table border=0 cellpadding=4 class="small" style="padding-top: 1em; padding-bottom: 1em; padding-left: -1em;">
       <tr>
@@ -56,6 +62,7 @@ function checkName()	{
         <td align="left"><input name="author" value="" size="12"></td>
         <td align="right">Publication year: <input name="pubyr" value="" size="4"></td>
       </tr>
+      <div hide="basic_fields">
       <tr>
         <td>Body part of type specimen:</td>
         <td colspan=2><select name="type_body_part"></select></td>
@@ -83,17 +90,20 @@ function checkName()	{
         </td>
         <td colspan="2"><input name="exclude_taxon" value="" size="35"></td>
       </tr>
+      </div>
       <tr>
         <td colspan=3 align="center" style="padding-top: 2em;"><input type="submit" value="Search"></td>
       </tr>
       <tr>
     </table>
+    <div hide="basic_fields">
     <div class="tiny" style="width: 600; text-align: left; padding: 1em;"> 
       Don't enter the genus name if the species originally was combined in a subgenus.<br>
       &nbsp;Example: enter <i>"Scalites tropidophora"</i> instead of <i>"Pleurotomaria (Scalites) tropidophora."</i><br>
       To find species without using genus names, you may use the wildcard %.<br>
       &nbsp;Example: "% validus" would match <i>Belodon validus, Troodon validus,</i> etc.
     </div> 
+    </div>
   </div>
   </div>
 </div>
