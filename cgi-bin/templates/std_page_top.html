@@ -18,29 +18,50 @@
 </head>
 
 <body>
-<div align="left" style="position: relative; z-index: 2;">
-<table class="navbox" border="0" style="width: 100%">
-  <tr>
-    <td align="left" style="padding-left: 2em; width: 8em;" nowrap>
+
+<div class="container">
+
+<div id="mainBody">
+
+<div id="entryBanner">
+    <div style="float: left; clear: none; padding-left: 1em; width: 7em;">
       <a href="%%write_url%%?a=menu&amp;clear=clearQueue" class="menu">Main menu</a>
-    </td>
-    <td align="center" style="padding-left: 1em;" nowrap>
+    </div>
+    <div style="float: left; clear: none; padding-left: 3em; color: white; font-size: 0.85em; white-space: nowrap; width: 8em;">
+      <div id="entryDropDown">
+          <div>
+            <div style="text-align: left;">Quick links</div>
+          </div>
+          <div style="float: left; clear: none;">
+          <ul>
+            <li><a href="%%read_url%%?a=displaySearchRefs&amp;type=add">Add reference</a></li>
+            <li><a href="%%read_url%%?a=displaySearchRefs&amp;type=select">Change reference</a></li>
+            <li><a href="%%read_url%%?a=editCurrentRef">Edit this reference</a></li>
+            <li><a href="%%read_url%%?a=displaySearchCollsForAdd">Add collection</a></li>
+            <li><a href="%%read_url%%?a=displaySearchColls&amp;type=edit">Edit collection</a></li>
+            <li><a href="%%read_url%%?a=displayOccurrenceAddEdit">Occurrences</a></li>
+            <li><a href="%%read_url%%?a=displayAuthorityTaxonSearchForm">Names</a></li>
+            <li><a href="%%read_url%%?a=displayOpinionSearchForm">Opinions</a></li>
+            <li><a href="%%read_url%%?a=displaySpecimenSearchForm">Measurements</a></li>
+          </ul>
+          </div>
+        </div>
+    </div>
+    <div style="float: left; clear: none; padding-left: 0em; margin-top: -0.25em;">
+      <div class="tiny" style="margin-bottom: 0em;">
+      <form method="POST" action="%%read_url%%" onSubmit="return checkName(0,2);">
+      <input type="hidden" name="a" value="quickSearch">
+      <input type="hidden" name="last_taxon" value="$taxon_no">
+      <input type="text" name="quick_search" value="Quick search" size="14" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em;">
+      </form>
+      </div>
+    </div>
+    <div style="float: left; clear: none; padding-left: 2em;">
+      <a href="%%write_url%%?a=displayRefResults&amp;use_current=%%reference_no%%" class="menu">Reference: %%reference_no%% %%reference%%</a>
+    </div>
+    <div style="float: left; clear: none; padding-left: 1.5em;">
       <a href="%%write_url%%?a=logout" class="menu"><span style="white-space: nowrap;">logout as %%enterer%%</span></a>
-    </td>
-    <td align="center" style="padding-left: 1em;" nowrap>
-      <a href="%%write_url%%?a=displaySearchRefs&amp;type=select" class="menu">Reference: %%reference_no%% %%reference%%</a>
-    </td>
-    <td align="left" style="width: 14em;" nowrap>
-<div class="tiny" style="margin-bottom: -1em;">
-<form method="POST" action="%%read_url%%" onSubmit="return checkName(0,2);">
-<input type="hidden" name="a" value="quickSearch">
-<input type="hidden" name="last_taxon" value="$taxon_no">
-<input type="text" name="quick_search" value="Quick search" size="14" onFocus="textClear(quick_search);" onBlur="textRestore(quick_search);" style="font-size: 1.0em;">
-</form>
-</div>
-    </td>
-  </tr>
-</table>
+    </div>
 </div>
 
 <noscript>
@@ -49,5 +70,5 @@
   </p>
 </noscript>
 
-<div id="mainBody">
+<div class="innerMainPanel">
 
