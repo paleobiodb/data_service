@@ -1,78 +1,68 @@
-<table border=0 align=center>
-  <tr>
-    <td>
-      <div align="center">
-        <p class="pageTitle">Search for opinions</p>
-      </div>
+<center>
 
-      <div class="displayPanel" style="padding: 1em;">
-      <center><i>%%errors%%</i></center>
-      <div align="center">
-        <form method="POST" action="%%write_url%%">
-          <input name="action" type="hidden" value="submitOpinionSearch">
-          <input id="use_reference" type="hidden">
-          <table width="100%"><tr><td align=center>
-            <table border=0 cellpadding=2 cellspacing=2>
-              <tr>
-                <td>Taxon name:</td>
-                <td><input name="taxon_name" value="" size="30"></td>
-              </tr>
-              <tr>
-                <td>Authorizer:</td>
-                <td><input name="authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[1].authorizer_reversed.value='%%authorizer_me%%'">Me</a></td>
-              </tr>
-              <tr>
-                <td>Author:</td>
-                <td><input name="author" size=14><br></td>
-              </tr>
-              <tr>
-                <td>Publication year:</td>
-                <td><input name="pubyr" size=4><br></td>
-              </tr>
-              <tr>
-                <td>Reference number:</td>
-                <td><input name="reference_no" size=10><br></td>
-              </tr>
-              <tr>
-                <td>
-                  Record created
-                  <select name="created_before_after">
-                    <option>before</option>
-                    <option selected>after</option>
-                  </select>:
-                </td>
-                <td>
-                  <select name="created_month" autofill="month"></select>
-                  <select name="created_day" autofill="day_of_month"></select>
-                  <select name="created_year" autofill="year"></select>  
-                </td>
-              </tr>
-            </table>
-          </table>
-          <input type="submit" value="Search">
-        </form>
-      </div>
+<p class="pageTitle">Search for opinions</p>
 
-      <div align="center">
-        <p style="text-align:left; margin: 0em 0em 0em 5%;">
-          <span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<br>
-          Enter a genus before its species, a family before its genera, etc.<br>
-          Always enter the full taxonomic name for lower ranked taxa.<br>
-          &nbsp;Example: <i>"Pleurotomaria (Scalites) tropidophora."</i><br>
-          Always enter the genus when enterering subgenera.<br>
-          &nbsp;Example: <i>"Pleurotomaria (Scalites)"</i> for the subgenus <i>Scalites.</i><br>
-          <br>
-          Read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')">FAQ</a>.</span>
-        </p>
-      </div>
-      </div>
-      
-    </td>
-  </tr>
-</table>
+<div class="displayPanel" style="width: 30em; padding: 1em;">
+<center><i>%%errors%%</i></center>
+<div align="center">
+  <form method="POST" action="%%write_url%%">
+    <input name="action" type="hidden" value="submitOpinionSearch">
+    <input id="use_reference" type="hidden">
+    <table width="100%"><tr><td align=center>
+      <table border=0 cellpadding=2 cellspacing=2>
+        <tr>
+          <td>Taxon name:</td>
+          <td><input name="taxon_name" value="" size="30"></td>
+        </tr>
+        <tr>
+          <td>Authorizer:</td>
+          <td><input name="authorizer_reversed" size=14 onKeyUp="doComplete(event, this, authorizerNames());">&nbsp;<a href="#" onClick="document.forms[1].authorizer_reversed.value='%%authorizer_me%%'">Me</a></td>
+        </tr>
+        <tr>
+          <td>Author:</td>
+          <td><input name="author" size=14><br></td>
+        </tr>
+        <tr>
+          <td>Publication year:</td>
+          <td><input name="pubyr" size=4><br></td>
+        </tr>
+        <tr>
+          <td>Reference number:</td>
+          <td><input name="reference_no" size=10><br></td>
+        </tr>
+        <tr>
+          <td>
+            Record created
+            <select name="created_before_after">
+              <option>before</option>
+              <option selected>after</option>
+            </select>:
+          </td>
+          <td>
+            <select name="created_month" autofill="month"></select>
+            <select name="created_day" autofill="day_of_month"></select>
+            <select name="created_year" autofill="year"></select>  
+          </td>
+        </tr>
+      </table>
+    </table>
+    <input type="submit" value="Search">
+  </form>
+</div>
 
+<div align="center">
+  <p style="text-align:left; margin: 0em 0em 0em 5%;">
+    <span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<br>
+    Enter a genus before its species, a family before its genera, etc.<br>
+    Always enter the full taxonomic name for lower ranked taxa.<br>
+    &nbsp;Example: <i>"Pleurotomaria (Scalites) tropidophora."</i><br>
+    Always enter the genus when enterering subgenera.<br>
+    &nbsp;Example: <i>"Pleurotomaria (Scalites)"</i> for the subgenus <i>Scalites.</i><br>
+    <br>
+    Read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')">FAQ</a>.</span>
+  </p>
+</div>
+</div>
 
-
-
-
+</center>
 
