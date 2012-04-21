@@ -1836,6 +1836,7 @@ sub getOccurrencesXML {
         $q->param('sp'=>'YES');
         $q->param('indet'=>'YES');
         $q->param('collections_collection_name'=>'YES');
+        $q->param('collections_collection_environment'=>'YES');
         $q->param('collections_pres_mode'=>'YES');
         $q->param('collections_reference_no'=>'YES');
         $q->param('collections_country'=>'YES');
@@ -1944,6 +1945,7 @@ sub getOccurrencesXML {
                 $g->age_max($row->{'c.ma_max'}),
                 $g->age_min($row->{'c.ma_min'}),
                 $g->collection_name($row->{'c.collection_name'}),
+                $g->environment($row->{'c.environment'}),
                 $g->preservation($row->{'c.pres_mode'}),
                 $g->group($row->{'c.geological_group'}),
                 $g->formation($row->{'c.formation'}),
@@ -3016,9 +3018,19 @@ sub processLoadImage{
 		login( "Please log in first");
 		exit;
 	} 
-    print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes("std_page_top");
 	Images::processLoadImage($dbt, $q, $s);
-    print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub searchGallery	{
+	print $hbo->stdIncludes($PAGE_TOP);
+	print $hbo->populateHTML('search_taxoninfo_form' , ['Image gallery search form','',1,1], ['page_title','page_subtitle','gallery_form','basic_fields']);
+	print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
+sub gallery	{
+	Images::gallery($q,$s,$dbt,$hbo);
 }
 
 sub displayImage {
