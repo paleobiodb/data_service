@@ -163,7 +163,7 @@ sub classify	{
 	my (%valids,%invalids);
 	for my $t ( @taxa )	{
 		for my $c ( @{$children{$t->{'taxon_no'}}} )	{
-			if ( $c->{'status'} =~ /belongs/ && ( $c->{'lft'} + 1 < $c->{'rgt'} || $c->{'taxon_rank'} =~ /species|genus/ ) )	{
+			if ( $c->{'status'} =~ /belongs/ && ( $c->{'lft'} + 1 < $c->{'rgt'} || $c->{'taxon_rank'} =~ /species|genus/ || $reference_no > 0 ) )	{
 				$c->{'status'} =~ s/belongs to/valid/;
 				push @{$valids{$t->{'taxon_no'}}} , $c;
 			} else	{
@@ -249,19 +249,19 @@ sub classify	{
 |;
 		my $firstMargin = ( $depth <= $shownDepth ) ? "0em" : "0em";
 		if ( $list )	{
-			print qq|    <div id="n$t->{taxon_no}" class="classTaxon" style="margin-bottom: $firstMargin;" onMouseOver="showChildren('$t->{taxon_no}','$list');">|;
+			print qq|    <div id="n$t->{taxon_no}" class="classTaxon" style="margin-bottom: $firstMargin;" onClick="showChildren('$t->{taxon_no}','$list');">|;
 		} else	{
 			print qq|    <div id="n$t->{taxon_no}" class="classTaxon">|;
 		}
 		print "$name</div>\n";
 		if ( $depth == 1 && $list && $#{$valids{$t->{'taxon_no'}}} > 0 && $maxDepth > $shownDepth )	{
-			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onMouseOver="showAll('hot$t->{taxon_no}');">show all</span></div>
+			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onClick="showAll('hot$t->{taxon_no}');">show all</span></div>
 |;
 		} elsif ( $depth > 1 && $depth < $shownDepth && $list )	{
-			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onMouseOver="hideChildren('$t->{taxon_no}','$list');">hide</span></div>
+			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner" style="font-size: 0.7em;"><span onClick="hideChildren('$t->{taxon_no}','$list');">hide</span></div>
 |;
 		} elsif ( $depth > 1 && $list )	{
-			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner"><span onMouseOver="showChildren('$t->{taxon_no}','$list');">+</span></div>
+			print qq|    <div id="hot$t->{taxon_no}" class="classHotCorner"><span onClick="showChildren('$t->{taxon_no}','$list');">+</span></div>
 |;
 		}
 		printBox( $_ , $t->{'taxon_no'} , $depth + 1 ) foreach @{$valids{$t->{'taxon_no'}}};
