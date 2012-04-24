@@ -64,7 +64,7 @@ function checkForm()	{
 	} else if ( frm.belongs_to_parent.value != "" && typeof( frm.parent_spelling_no ) != "undefined" && ! frm.parent_spelling_no[frm.parent_spelling_no.length-1].checked )	{
 		error += "* You must check 'other taxon' if you type in a parent name\n";
 	}
-	if ( frm.belongs_to_parent.value != "" && ! /^[A-Z][a-z]+(| \([A-Z][a-z]+\))(| [a-z][a-z]+)$/.test(frm.belongs_to_parent.value) )	{
+	if ( frm.belongs_to_parent.value != "" && ! /^[A-Z][a-z]+(| \([A-Z][a-z]+\))(| [a-z][a-z]+)$/.test(frm.belongs_to_parent.value) && ! /^[A-Z][a-z]+ [a-z]+ [a-z]+$/.test(frm.belongs_to_parent.value) )	{
 		error += "* The parent name is misformatted\n";
 	}
 	if ( frm.basis.selectedIndex > 0 && frm.status.value == "belongs to" && frm.diagnosis_given.selectedIndex == 0 )	{
