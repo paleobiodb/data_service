@@ -4429,7 +4429,12 @@ sub getMatchingSubtaxa	{
 	my @trefs;
 	if ( $lft > 0 && $rgt > 0 )	{
 		# default is valid names only as currently spelled
+		my $tables = "authorities a,$TAXA_TREE_CACHE t";
 		my $join = "a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no";
+		if ( $q->param('author') =~ /^[A-Za-z]/ || $q->param('pubyr') > 1700 )	{
+			$tables .= ",refs r";
+			$join .= " AND a.reference_no=r.reference_no";
+		}
 		# invalid only
 		if ( $q->param('taxon_rank') =~ /[a-z]/ && $q->param('validity') =~ /^invalid$/i )	{
 				$join = "a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND t.taxon_no!=synonym_no";
@@ -4438,6 +4443,17 @@ sub getMatchingSubtaxa	{
 				$join = "a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no";
 		}
 		my $morewhere;
+		if ( $q->param('author') =~ /^[A-Za-z]/ )	{
+			my $author = $q->param('author');
+			$author =~ s/[^A-Za-z '\-]//g;
+			$author =~ s/'/\\'/g;
+			$morewhere .= " AND ((ref_is_authority='yes' AND (r.author1last='$author' OR r.author2last='$author')) OR (ref_is_authority!='yes' AND (a.author1last='$author' OR a.author2last='$author')))";
+		}
+		if ( $q->param('pubyr') > 1700 )	{
+			my $pubyr = $q->param('pubyr');
+			$pubyr =~ s/[^0-9]//g;
+			$morewhere .= " AND ((ref_is_authority='yes' AND r.pubyr=$pubyr) OR (ref_is_authority!='yes' AND a.pubyr=$pubyr))";
+		}
 		if ( $q->param('taxon_rank') )	{
 			$morewhere .= " AND taxon_rank='".$q->param('taxon_rank')."'";
 		} else	{
@@ -4454,7 +4470,7 @@ sub getMatchingSubtaxa	{
 			my $exclude = ${$dbt->getData($sql)}[0];
 			$morewhere .= " AND (lft<".$exclude->{lft}." OR rgt>".$exclude->{rgt}.")";
 		}
-		$sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE $join AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt) $morewhere";
+		$sql = "SELECT a.taxon_no FROM $tables WHERE $join AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt) $morewhere";
 		@trefs = @{$dbt->getData($sql)};
 	}
 	if ( $q->param('match') eq "all" )	{
