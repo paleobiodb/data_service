@@ -5095,17 +5095,4 @@ sub nomenChildren {
     return \%nomen;
 }
 
-sub rankOrder {
-    my %rankToNum = ('subspecies' => 1, 'species' => 2, 'subgenus' => 3,
-        'genus' => 4, 'subtribe' => 5, 'tribe' => 6,
-        'subfamily' => 7, 'family' => 8, 'superfamily' => 9,
-        'infraorder' => 10, 'suborder' => 11, 'order' => 12, 'superorder' => 13, 
-        'infraclass' => 14, 'subclass' => 15, 'class' => 16, 'superclass' => 17,
-        'subphylum' => 18, 'phylum' => 19, 'superphylum' => 20,
-        'subkingdom' => 21, 'kingdom' => 22, 'superkingdom' => 23,
-        'unranked clade' => 24, 'informal' => 25 ); 
-    return %rankToNum;
-}
-                                                                                                                                                                         
-
 1;
