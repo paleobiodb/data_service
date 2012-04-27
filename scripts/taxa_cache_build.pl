@@ -3,14 +3,14 @@
 use lib "../cgi-bin";
 use DBConnection;
 use DBTransactionManager;
-use TaxaCache;
+use TaxaCacheNew;
 
 my $dbh = DBConnection::connect();
 my $dbt = new DBTransactionManager($dbh);
 
 TaxaCache::rebuildCache($dbt);
-TaxaCache::cleanListCache($dbt);
-TaxaCache::rebuildListCache($dbt);
+#TaxaCache::cleanListCache($dbt);
+#TaxaCache::rebuildListCache($dbt);
 
 print "done rebuilding caches\n";
 
