@@ -895,9 +895,9 @@ sub submitAuthorityForm {
                 }
                 push @pub_info, $pub_info;
             }
-            my $plural = ($taxonExists == 1) ? "" : "s";
+            $taxonExists = ($taxonExists == 1) ? "once" : $taxonExists." times";
             $q->param('confirmed_taxon_name'=>$q->param('taxon_name'));
-			$errors->add("This taxonomic name already appears $taxonExists time$plural in the database: ".join(", ",@pub_info).". If this record is a homonym and you want to create a new record, hit submit again. If its a rank change, just enter an opinion based on the existing taxon that uses the new rank and it'll be automatically created.");
+			$errors->add("This taxonomic name already appears $taxonExists in the database: ".join(", ",@pub_info).". If this record is a homonym and you want to create a new record, hit submit again. If its a rank change, just enter an opinion based on the existing taxon that uses the new rank and it'll be automatically created.");
 		}
 	}
 
@@ -1084,7 +1084,7 @@ sub submitAuthorityForm {
 # JA 15-18.5.11
 # no errors are returned because the user has either entered something we can
 #  parse or they haven't - whatever
-# more tweaks 8.6.11
+# more tweaks 8.6.11, 27.3.12
 sub extractCatalogNumber	{
 	my $typeString = shift;
 	my ($museum,$number);
@@ -1102,6 +1102,8 @@ sub extractCatalogNumber	{
 
 	if ( $typeString =~ /^[A-Za-z]/ )	{
 
+		# hack, UA means University of Alberta
+		$typeString =~ s/University of Antananarivo/UANT/;
 		# plenty of cases such as "AT THE museum OF ... AND ..."
 		$typeString =~ s/\b(at|the|la|le|les|and|und|of|de|di|del|der|des|in|en|fr|fur) //gi;
 		# a few of these
@@ -1210,6 +1212,11 @@ sub extractCatalogNumber	{
 		# first get rid of hyphens because they should separate words
 		#  that we want to include separately in acronyms
 		$museum = join('-',@museumWords);
+		# University of Missouri can be confused with UMMP
+		# this has to be done here because of the lower case letter
+		$museum =~ s/^U.*M(o\.|is).*$/UMO/;
+		# YPM-PU will be fixed later, skip the hyphen for now
+		$museum =~ s/YPM-PU/PU/;
 		# while we're at it, get rid of parentheses
 		$museum =~ s/\(|\)//g;
 		@museumWords = split /\-/,$museum;
@@ -1228,9 +1235,15 @@ sub extractCatalogNumber	{
 		( $typeString !~ /aust/i ) ? $museum =~ s/^AM$/AMNH/ : "";
 		$museum =~ s/^F:AMNH$/F:AM/;
 		$museum =~ s/^(BM|BMNH)$/MNH/;
+		# UM is often used instead of UMMP
+		$museum =~ s/^UM$/UMMP/;
 		# Princeton collection is now at the YPM
 		$museum =~ s/^Princeton/YPM-PU/;
 		$museum =~ s/^PU$/YPM-PU/;
+		# etc.
+		$museum =~ s/^YP$/YPM/;
+		# changed my mind
+		$museum =~ s/^UMO$/UMo/;
 		# CIT collection is now at the LACM
 		$museum =~ s/^(LACM|)CIT$/LACM(CIT)/;
 		$museum =~ s/[\.,']//g;
@@ -1741,8 +1754,8 @@ sub displayTypeTaxonSelectForm {
             $end_message =~ s/</&lt;/g;
             $end_message =~ s/>/&gt;/g;
             print "<input type=\"hidden\" name=\"end_message\" value=\"".$end_message."\">\n";
-            print "<table><tr><td style=\"border: 1px solid lightgray; padding: 1em;\">\n";
             print "<p class=\"large\">For which taxa is $type_taxon_name a type $type_taxon_rank?</p>";
+            print "<div style=\"width: 30em; text-align: left; padding: 1em; padding-left: 2em; border: 1px solid lightgray;\">\n";
             foreach my $row (reverse @parents) {
                 my $checked = ($row->{'type_taxon_no'} == $type_taxon_no) ? 'CHECKED' : '';
                 print "<input type=\"checkbox\" name=\"taxon_no\" value=\"$row->{taxon_no}\" $checked> ";
@@ -1752,7 +1765,7 @@ sub displayTypeTaxonSelectForm {
                 }
                 print '<br>';
             }
-            print "</td></tr></table>\n";
+            print "</div>\n";
             print "<input type=\"submit\" value=\"Submit\">";
             print "</form>";
             print "</div>";
@@ -2240,15 +2253,13 @@ sub propagateAuthorityInfo {
     my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
     return if (!$orig_no);
 
-    #dbg("propagateAuthorityInfo called with taxon_no $taxon_no and orig $orig_no");
-
     my @spelling_nos = TaxonInfo::getAllSpellings($dbt,$orig_no);
     # Note that this is the taxon_no passed in, not the original combination -- an update to
     # a spelling should proprate around as well
     my $me = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no},['*']);
 
     my @authority_fields = ('author1init','author1last','author2init','author2last','otherauthors','pubyr');
-    my @more_fields = ('pages','figures','common_name','type_specimen','type_body_part','part_details','type_locality','extant','form_taxon','preservation');
+    my @more_fields = ('pages','figures','common_name','type_specimen','museum','catalog_number','type_body_part','part_details','type_locality','extant','form_taxon','preservation');
 
     # Two steps: find best authority info, then propagate to all spelling variants
     my @spellings;
@@ -2351,7 +2362,6 @@ sub propagateAuthorityInfo {
     if (@toUpdate) {
         foreach my $spelling_no (@spelling_nos) {
             my $u_sql =  "UPDATE authorities SET modified=modified, ".join(",",@toUpdate)." WHERE taxon_no=$spelling_no";
-            #dbg("propagateAuthorityInfo updating authority: $u_sql");
             $dbh->do($u_sql);
         }
     }
