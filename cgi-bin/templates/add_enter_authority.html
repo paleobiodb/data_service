@@ -26,7 +26,7 @@ function checkForm()	{
 		error += "* A subgenus name must include a space\n";
 	} else if ( ! / \(.*\)/.test(frm.taxon_name.value) && frm.taxon_rank.value == "subgenus" )	{
 		error += "* A subgenus name must be within parentheses\n";
-	} else if ( ! /^[A-Z][a-z]+ [a-z]+ [a-z]+$/.test(frm.taxon_name.value) && frm.taxon_rank.value == "subspecies" )	{
+	} else if ( ! /^[A-Z][a-z]+ (|\([A-Z][a-z]+\) )[a-z]+ [a-z]+$/.test(frm.taxon_name.value) && frm.taxon_rank.value == "subspecies" )	{
 		error += "* The name '" + frm.taxon_name.value + "' doesn't look like a subspecies\n";
 	} else if ( ! /^[A-Z][a-z]+ (|\([A-Z][a-z]+\) )[a-z]+$/.test(frm.taxon_name.value) && frm.taxon_rank.value == "species" )	{
 		error += "* The name '" + frm.taxon_name.value + "' doesn't look like a species\n";
