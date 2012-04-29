@@ -74,7 +74,7 @@ function checkForm()	{
 	if ( typeof( frm.child_spelling_no ) == "undefined" || frm.child_spelling_no[frm.child_spelling_no.length-2].checked )	{
 		if ( ! frm.child_spelling_name.value )	{
 			error += "* You forgot to enter the 'Full name and rank'\n";
-		} else if ( ! /^[A-Z][a-z]+ [a-z]+ [a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "subspecies" )	{
+		} else if ( ! /^[A-Z][a-z]+ (|\([A-Z][a-z]+\) )[a-z]+ [a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "subspecies" )	{
 			error += "* The 'Full name' " + frm.child_spelling_name.value + " doesn't look like a subspecies\n";
 		} else if ( ! /^[A-Z][a-z]+ (|\([A-Z][a-z]+\) )[a-z]+$/.test(frm.child_spelling_name.value) && frm.child_spelling_rank.value == "species" )	{
 			error += "* The 'Full name' " + frm.child_spelling_name.value + " doesn't look like a species\n";
