@@ -561,7 +561,7 @@ span.nonEditable {
 }
 
 .displayPanelHeader {
-    position: relative; 
+    position: relative;
     font-size: 1em;
     top: -0.6em;      
     padding-left: 0.5em;      
@@ -733,6 +733,7 @@ td.fixedLabel {
 
 #entryDropDown ul	{
     display: none;
+    position: relative;
     z-index: 9;
     width: auto;
     margin-top: -0.05em;
