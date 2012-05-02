@@ -53,6 +53,8 @@ function checkForm()	{
 
 	if ( frm.status.value == "" )	{
 		error += "* You forgot to select the 'status' of the taxon\n";
+	} else if ( frm.status.value != "belongs to" && frm.diagnosis_given.selectedIndex > 0 )	{
+		error += "* Don't select a 'diagnosis' value if the taxon is invalid\n";
 	}
 
 	if ( ! frm.belongs_to_parent.value )	{
