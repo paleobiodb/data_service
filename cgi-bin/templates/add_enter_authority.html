@@ -87,7 +87,13 @@ function checkForm()	{
 	}
 	if ( /^([^a-z][A-Za-z]*)(| [^a-z][A-Za-z]*)(| [^a-z][A-Za-z]*)$/.test(frm.common_name.value) )	{
 		error += "* Don't capitalize the common name\n";
-	} else if ( /[^A-Za-z ']/.test(frm.common_name.value) || /[^a-z]$/.test(frm.common_name.value) )	{
+	} else if ( /^[^A-Za-z]/.test(frm.common_name.value) )	{
+		error += "* The common name must start with a letter\n";
+	} else if ( /[^A-Za-z]$/.test(frm.common_name.value) )	{
+		error += "* The common name must end with a letter\n";
+	} else if ( /([^a-z]\-|\-[^a-z])/.test(frm.common_name.value) )	{
+		error += "* There's a stray hyphen in the common name\n";
+	} else if ( /[^A-Za-z \-']/.test(frm.common_name.value) || /[^a-z]$/.test(frm.common_name.value) )	{
 		error += "* The common name is misformatted\n";
 	}
 
