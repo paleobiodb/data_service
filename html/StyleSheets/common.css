@@ -9,7 +9,7 @@ html, body {
 	margin: 0px;
 	padding: 0px;
 	background-color: WhiteSmoke;
-	font-family: Franklin Gothic Book, Corbel, Microsoft PGothic, Geneva, sans-serif;
+	font-family: Franklin Gothic Book, Corbel, Microsoft PGothic, Gill Sans, sans-serif;
 	font-size: 1em;
 }
 
@@ -45,22 +45,22 @@ A:hover	{ color : #C80078; text-decoration:none; }
 
 /* how should the links look in the menu bar at the top?  */
 A:link.menu { 
-	color : white; font-size : 0.85em; text-decoration:none; 
+	color: white; font-size : 0.85em; text-decoration: none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:visited.menu { 
-	color : white; font-size : 0.85em; text-decoration:none; 
+	color: white; font-size : 0.85em; text-decoration: none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:active.menu { 
-	color : white; font-size : 0.85em; text-decoration:none; 
+	color: white; font-size : 0.85em; text-decoration: none; 
 	padding: 2px 5px 2px 5px;
 }
 
 A:hover.menu { 
-	color : black; font-size : 0.85em; 
+	color: white; font-size : 0.85em; 
 	border: 0px solid white;
 	/* top, right, bottom, left*/
 	padding: 2px 5px 2px 5px;
@@ -107,7 +107,7 @@ H1, H2, H3, H4, H5, H6 {
 }
 
 /* the menu at the top and bottom of each page. */
-.menu {
+.menu	{
 	color: white;
 }
 
@@ -116,21 +116,15 @@ H1, H2, H3, H4, H5, H6 {
 }
 
 #mainBody	{
-    position: absolute;
-    top: 0px;
-    left: 0px;
-    height: 100%;
-    width: 67em;
-    padding-top: 2em;
-    padding-left: 1em;
-    margin-left: 1em; 
-    margin-right: 1em;
-    z-index: 1;
+    position: relative;
+    width: 56em;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: left;
 }
 
 .mainBodyGuest {
     position: relative;
-    height: 100%;
     width: 64em;
     margin-left: auto;
     margin-right: auto;
@@ -225,7 +219,6 @@ H1, H2, H3, H4, H5, H6 {
     color: Black;
 }
 
-
 .enteringNow	{
     height: 2.5em;
     width: 12.8em;
@@ -240,6 +233,15 @@ H1, H2, H3, H4, H5, H6 {
     padding-left: 3em;
 }
 
+#entryBanner	{
+    float: left;
+    clear: right;
+    height: 1.25em;
+    width: 56em;
+    background: MidnightBlue;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+}
 
 /* Usually used for a single line of text which needs a bit more emphasis to stand out */
 div.emphasized {
@@ -559,7 +561,7 @@ span.nonEditable {
 }
 
 .displayPanelHeader {
-    position: relative; 
+    position: relative;
     font-size: 1em;
     top: -0.6em;      
     padding-left: 0.5em;      
@@ -689,13 +691,13 @@ td.fixedLabel {
     display: none;
 }
 #dropDown ul a:link,#dropDown ul a:visited, #dropDown ul a:hover {
-    color: #FFFFFF;
+    color: White;
 }
 #dropDown ul li:hover, #dropDown ul li.sfhover {
-    background: #FFFFFF;
+    background: White;
 }
 #dropDown ul a:hover {
-    color: #000000;
+    color: Black;
 }
 
 /* This makes the div a bit bigger so the UL below it 
@@ -727,6 +729,39 @@ td.fixedLabel {
 
 #dropDown:hover ul, #dropDown.sfhover ul {
     display: block;
+}
+
+#entryDropDown ul	{
+    display: none;
+    position: relative;
+    z-index: 9;
+    width: auto;
+    margin-top: -0.05em;
+    text-align: left;
+    background-color: LightGray;
+    opacity: 0.95;
+    filter: alpha(opacity=95);
+    padding-left: 0.75em;
+    padding-right: 0.5em;
+    padding-top: 0.25em;
+    padding-bottom: 0.25em;
+    color: White;
+    border: 1px solid White;
+}
+
+#entryDropDown:hover ul, #entryDropDown.sfhover ul	{
+    display: block;
+    z-index: 9;
+}
+
+#entryDropDown ul a:link,#entryDropDown ul a:visited	{
+    color: White;
+    z-index: 9;
+}
+
+#entryDropDown ul a:hover	{
+    color: Black;
+    z-index: 9;
 }
 
 /* row and column headers in data tables */

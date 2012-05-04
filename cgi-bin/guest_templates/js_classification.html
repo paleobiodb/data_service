@@ -40,7 +40,7 @@ function showAll(calledFromCorner)	{
 function showChildren(taxon_no,childList)	{
 	pausecomp(300);
 	document.getElementById('hot'+taxon_no).style.fontSize = '0.7em';
-	document.getElementById('hot'+taxon_no).innerHTML = '<span onMouseOver="hideChildren(\'' + taxon_no + '\',\'' + childList + '\');">hide</span>';
+	document.getElementById('hot'+taxon_no).innerHTML = '<span onClick="hideChildren(\'' + taxon_no + '\',\'' + childList + '\');">hide</span>';
 	var nums = new Array();
 	nums = childList.split(/,/);
 	for ( i = 0; i < nums.length; i++ )	{
@@ -52,7 +52,7 @@ function showChildren(taxon_no,childList)	{
 function hideChildren(taxon_no,childList)	{
 	pausecomp(300);
 	document.getElementById('hot'+taxon_no).style.fontSize = '1em';
-	document.getElementById('hot'+taxon_no).innerHTML = '<span onMouseOver="showChildren(\'' + taxon_no + '\',\'' + childList + '\');">+</span>';
+	document.getElementById('hot'+taxon_no).innerHTML = '<span onClick="showChildren(\'' + taxon_no + '\',\'' + childList + '\');">+</span>';
 	var nums = new Array();
 	nums = childList.split(/,/);
 	for ( i = 0; i < nums.length; i++ )	{

@@ -1,79 +1,82 @@
-<table border=0 align=center>
-  <tr>
-    <td>
-      <div align="center">
-        <form method="POST" action="%%write_url%%">
-          <input name="action" type="hidden" value="submitSpecimenSearch">
+<center>
 
-          <p class="pageTitle">Specimen search form</p><br>
+<p class="pageTitle">Specimen search form</p>
 
-          <div class="displayPanel" style="padding-top: 1em; padding-bottom: 1em;">
-          <table cellpadding=4>
-            <tr>
-              <td align="right">
-                Taxon name:
-              </td>
-              <td>
-                <input name="taxon_name" value="" size="30">
-              </td>
-            </tr>
-            <tr>
-              <td align="right">
-                What should be listed?
-              </td>
-              <td>
-                <select name="match_type">
-                <option>all combinations and synonyms</option>
-                <option>alternative combinations only</option>
-                <option>exact matches only</option>
-                </select>
-              </td>
-            </tr>
-            <tr>
-              <td align="right">
-                Comment on occurrence includes:
-              </td>
-              <td>
-                <input name="comment" value="" size="30">
-              </td>
-            </tr>
-            <tr>
-              <td align="right">
-                Collection number:
-              </td>
-              <td>
-                <input name="collection_no" value="" size="10">
-              </td>
-            </tr>
-            <tr>
-              <td colspan=2 align="center">
-                <br>
-                <input type="submit" value="Search">
-              </td>
-            </tr>
-            <tr>
-              <td colspan=2>
-                <p style="text-align:left; margin: 0em 0em 0em 5%;">
-                  <span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<br>
-                  Enter higher-ranked taxa first, e.g., enter a genus before its species; enter a family before its genera.<br>
-                  Don't enter the genus name if the species originally was combined in a subgenus.<br>
-                  Example: enter "Scalites tropidophora" instead of "Pleurotomaria (Scalites) tropidophora."<br>
-                  <br>
-                  You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')">FAQ</a>.</span>
-                </p>
-              </td>
-            </tr>
-          </table>
-          </div>
-          
-        </form>
-      </div>
-    </td>
-  </tr>
-</table>
+<div class="displayPanel" style="width: 30em; padding: 1em;">
+<div align="center">
+  <form method="POST" action="%%write_url%%">
+    <input name="action" type="hidden" value="submitSpecimenSearch">
 
+    <table cellpadding=4>
+      <tr>
+        <td align="right">
+          Taxon name:
+        </td>
+        <td>
+          <input name="taxon_name" value="" size="30">
+        </td>
+      </tr>
+      <tr>
+        <td align="right">
+          Should occurrences be listed?
+        </td>
+        <td>
+          <select name="get_occurrences">
+          <option>yes, list everything</option>
+          <option>no, list names only</option>
+        </td>
+      </tr>
+      <tr>
+        <td align="right">
+          What names should be listed?
+        </td>
+        <td>
+          <select name="match_type">
+          <option>all combinations and synonyms</option>
+          <option>alternative combinations only</option>
+          <option>exact matches only</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td align="right">
+          Comment on occurrence includes:
+        </td>
+        <td>
+          <input name="comment" value="" size="30">
+        </td>
+      </tr>
+      <tr>
+        <td align="right">
+          Collection number:
+        </td>
+        <td>
+          <input name="collection_no" value="" size="10">
+        </td>
+      </tr>
+      <tr>
+        <td colspan=2 align="center">
+          <br>
+          <input type="submit" value="Search">
+        </td>
+      </tr>
+      <tr>
+        <td colspan=2>
+          <p style="text-align:left; margin: 0em 0em 0em 5%;">
+            <span class="tiny">Don't abbreviate the name, and be careful to spell it correctly!<br>
+            Enter higher-ranked taxa first, e.g., enter a genus before its species; enter a family before its genera.<br>
+            Don't enter the genus name if the species originally was combined in a subgenus.<br>
+            Example: enter "Scalites tropidophora" instead of "Pleurotomaria (Scalites) tropidophora."<br>
+            <br>
+            You may want to read the <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')">FAQ</a>.</span>
+          </p>
+        </td>
+      </tr>
+    </table>
+    </div>
+    
+  </form>
+</div>
 
-
-
-
+</center>
 

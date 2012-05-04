@@ -1836,6 +1836,7 @@ sub getOccurrencesXML {
         $q->param('sp'=>'YES');
         $q->param('indet'=>'YES');
         $q->param('collections_collection_name'=>'YES');
+        $q->param('collections_collection_environment'=>'YES');
         $q->param('collections_pres_mode'=>'YES');
         $q->param('collections_reference_no'=>'YES');
         $q->param('collections_country'=>'YES');
@@ -1944,6 +1945,7 @@ sub getOccurrencesXML {
                 $g->age_max($row->{'c.ma_max'}),
                 $g->age_min($row->{'c.ma_min'}),
                 $g->collection_name($row->{'c.collection_name'}),
+                $g->environment($row->{'c.environment'}),
                 $g->preservation($row->{'c.pres_mode'}),
                 $g->group($row->{'c.geological_group'}),
                 $g->formation($row->{'c.formation'}),
@@ -2848,80 +2850,6 @@ sub startProcessReclassifyForm	{
 ##############
 ## Taxon Info Stuff
 
-# originally called randomTaxonInfo and then hijacked to also get all names in a group
-#  if those are requested instead
-# only called by checkTaxonInfo (in two places)
-# originally wrote this to only recover names tied to an occurrence; revised to get all
-#   names in the group, period JA 20.3.11
-sub getMatchingSubtaxa	{
-    return if PBDBUtil::checkForBot();
-
-    my $dbh = $dbt->dbh;
-    my $sql;
-    my $lft;
-    my $rgt;
-    if ( $q->param('taxon_name') =~ /^[A-Za-z]/ )	{
-        my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name=".$dbh->quote($q->param('taxon_name'))." ORDER BY rgt-lft DESC";
-        my $taxref = ${$dbt->getData($sql)}[0];
-        if ( $taxref )	{
-            $lft = $taxref->{lft};
-            $rgt = $taxref->{rgt};
-        }
-    } elsif ( $q->param('common_name') =~ /^[A-Za-z]/ )	{
-        my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND common_name=".$dbh->quote($q->param('common_name'))." ORDER BY rgt-lft DESC";
-        my $taxref = ${$dbt->getData($sql)}[0];
-        if ( $taxref )	{
-            $lft = $taxref->{lft};
-            $rgt = $taxref->{rgt};
-        }
-    }
-    my @trefs;
-    if ( $lft > 0 && $rgt > 0 )	{
-        # default is valid names only as currently spelled
-        my $join = "a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no";
-        # invalid only
-        if ( $q->param('taxon_rank') =~ /[a-z]/ && $q->param('validity') =~ /^invalid$/i )	{
-                $join = "a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND t.taxon_no!=synonym_no";
-        # either one
-        } elsif ( $q->param('taxon_rank') =~ /[a-z]/ && $q->param('validity') =~ /invalid/i )	{
-                $join = "a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no";
-        }
-        my $morewhere;
-        if ( $q->param('taxon_rank') )	{
-            $morewhere .= " AND taxon_rank='".$q->param('taxon_rank')."'";
-        } else	{
-            $morewhere .= " AND taxon_rank='species'";
-        }
-        if ( $q->param('type_body_part') )	{
-            $morewhere = " AND type_body_part='".$q->param('type_body_part')."'";
-        }
-        if ( $q->param('preservation') )	{
-            $morewhere .= " AND preservation='".$q->param('preservation')."'";
-        }
-        $sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE $join AND (lft BETWEEN $lft AND $rgt) AND (rgt BETWEEN $lft AND $rgt) $morewhere";
-        @trefs = @{$dbt->getData($sql)};
-    }
-    if ( $q->param('match') eq "all" )	{
-        my @taxa;
-        push @taxa , $_->{taxon_no} foreach @trefs;
-        return \@taxa;
-    }
-    # otherwise select a taxon at random
-    else	{
-        my $x = int(rand($#trefs + 1));
-        $q->param('taxon_no' => $trefs[$x]->{taxon_no});
-        # DON'T SET THIS TO 1
-        #$q->param('is_real_user' => 1);
-        # infinite loops are bad
-        $q->param('match' => '');
-        if ( $q->param('action') eq "checkTaxonInfo" )	{
-            return;
-        } else	{
-            checkTaxonInfo();
-        }
-    }
-}
-
 sub beginTaxonInfo{
     print $hbo->stdIncludes( "std_page_top" );
     if ($IS_FOSSIL_RECORD) {
@@ -2936,7 +2864,7 @@ sub checkTaxonInfo {
     logRequest($s,$q);
     if ( $q->param('match') eq "all" )	{
         print $hbo->stdIncludes( "std_page_top" );
-        $q->param('taxa' => @{getMatchingSubtaxa()} );
+        $q->param('taxa' => @{TaxonInfo::getMatchingSubtaxa($dbt,$q,$s,$hbo)} );
         if ( ! $q->param('taxa') )	{
             TaxonInfo::searchForm($hbo,$q,1);
         } else	{
@@ -2946,7 +2874,7 @@ sub checkTaxonInfo {
         exit;
     } elsif ( $q->param('match') eq "random" )	{
         # infinite loops are bad
-        getMatchingSubtaxa();
+        TaxonInfo::getMatchingSubtaxa($dbt,$q,$s,$hbo);
         $q->param('match' => '');
     }
     print $hbo->stdIncludes( "std_page_top" );
@@ -3090,9 +3018,19 @@ sub processLoadImage{
 		login( "Please log in first");
 		exit;
 	} 
-    print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes("std_page_top");
 	Images::processLoadImage($dbt, $q, $s);
-    print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes("std_page_bottom");
+}
+
+sub searchGallery	{
+	print $hbo->stdIncludes($PAGE_TOP);
+	print $hbo->populateHTML('search_taxoninfo_form' , ['Image gallery search form','',1,1], ['page_title','page_subtitle','gallery_form','basic_fields']);
+	print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
+sub gallery	{
+	Images::gallery($q,$s,$dbt,$hbo);
 }
 
 sub displayImage {

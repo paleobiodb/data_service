@@ -1,9 +1,11 @@
 package Images;
 
+use PBDBUtil;
 use Reference;
 use TaxaCache;
+use TaxonInfo;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $HTML_DIR);
+use Constants qw($READ_URL $WRITE_URL $HTML_DIR $PAGE_TOP $PAGE_BOTTOM);
 use strict;
 
 ###
@@ -233,21 +235,69 @@ sub getImageList {
 	my $taxa_list = shift;
     
 	my @results = ();
-    my @taxon_no_list = ();
-    foreach my $taxon_no (@$taxa_list) {
-        if ($taxon_no =~ /^\d+$/) {
-            push @taxon_no_list,$taxon_no;
-        }
-    }
-    if (scalar @taxon_no_list) {
+	my @taxon_no_list = ();
+	foreach my $taxon_no (@$taxa_list) {
+		if ($taxon_no =~ /^\d+$/) {
+			push @taxon_no_list,$taxon_no;
+		}
+	}
+	if (scalar @taxon_no_list) {
 		my $sql = "SELECT a.taxon_no, a.taxon_name, i.*".
 			  " FROM authorities a, images i".
 			  " WHERE a.taxon_no = i.taxon_no" . 
 			  " AND i.taxon_no IN (".join(",",@taxon_no_list).")";
 		@results = @{$dbt->getData($sql)};
-    }
+	}
 	return @results;
 }
+
+# JA 21.4.12
+sub gallery	{
+	my ($q,$s,$dbt,$hbo) = @_;
+	my ($is_real_user,$not_bot) = (1,1);
+	if ( ! PBDBUtil::checkForBot() && (  $q->request_method() eq 'POST' || $q->param('is_real_user') || $s->isDBMember() ) )	{
+		main::logRequest($s,$q);
+	} else	{
+		($is_real_user,$not_bot) = (0,0);
+	}
+	print $hbo->stdIncludes($PAGE_TOP);
+	my $taxon_name = ( $q->param('taxon_name') ) ? $q->param('taxon_name') : $q->param('common_name');
+	my $error_style = "padding-top: 1.5em; padding-bottom: 0.5em;";
+	if ( ! $taxon_name )	{
+		my ($page_title,$error) = ("Image gallery search form",qq|<div class="medium" style="$error_style"><i>Please enter a taxon name</i></div>|);
+		print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,$error,1,1], ['page_title','page_subtitle','gallery_form','basic_fields']);
+		print $hbo->stdIncludes($PAGE_BOTTOM);
+		exit;
+	} elsif ( $taxon_name !~ /^[A-Za-z]+$/ )	{
+		my ($page_title,$error) = ("Image gallery search form",qq|<div class="medium" style="$error_style"><i>The taxon name seems misformatted</i></div>|);
+		print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,$error,1,1], ['page_title','page_subtitle','gallery_form','basic_fields']);
+		print $hbo->stdIncludes($PAGE_BOTTOM);
+		exit;
+	}
+	my @matches = TaxonInfo::getTaxonNos($dbt,$taxon_name,'','',$q->param('author'),$q->param('pubyr'),$q->param('type_body_part'),$q->param('preservation'));
+	my @taxon_nos = TaxaCache::getChildren($dbt,$matches[0]);
+	my @thumbs = getImageList($dbt,\@taxon_nos);
+	if ( ! @thumbs )	{
+		my ($page_title,$error) = ("Image gallery search form",qq|<div class="medium" style="$error_style"><i>Sorry, we have no images of this taxon</i></div>|);
+		print $hbo->populateHTML('search_taxoninfo_form' , [$page_title,$error,1,1], ['page_title','page_subtitle','gallery_form','basic_fields']);
+		print $hbo->stdIncludes($PAGE_BOTTOM);
+		exit;
+	}
+	# Safari requires some weird fudging, who knows why
+	my $width = ( $#thumbs < 4 ) ? ( $#thumbs + 1 ) * 10.5 + 1.5 : 54.5;
+	$width .= "em";
+	my $borderWidth = ( $#thumbs < 3 ) ? "0px" : "1px";
+
+	print qq|<center><p class="pageTitle">Images of $taxon_name</p>\n\n<div style="width: $width; margin-left: auto; margin-right: auto; overflow: hidden; border: $borderWidth solid LightGray;">\n|;
+	for my $t ( @thumbs )	{
+		my $path = $t->{path_to_image};
+		$path =~ s/(.*)?(\d+)(.*)$/$1$2_thumb$3/;
+		print qq|<div class="verysmall" style="float: left; clear; none; padding: 1.25em;">\n<a href="$READ_URL?a=basicTaxonInfo&taxon_no=$t->{taxon_name}"><img src="$path" style="width: 10em;"></a>\n<br>\n<i><a href="$READ_URL?a=basicTaxonInfo&taxon_no=$t->{taxon_no}">$t->{taxon_name}</a></i>\n</div>\n\n|;
+	}
+	print qq|</div>\n<p class="medium"><a href="$READ_URL?a=searchGallery">Search again</a></p></center>\n\n|;
+	print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
 
 sub displayImage {
     my ($dbt,$image_no,$height,$width) = @_;

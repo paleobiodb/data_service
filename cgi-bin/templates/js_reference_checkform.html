@@ -3,17 +3,9 @@
 
 	window.onload = showHideEditors;
 
-	// This is a handy little function for seeing what properties an object has
-	function showProperties ( obj ) {
-		var result = "";
+	var warning_count = 0;
 
-		for ( var i in obj ) {
-			result += "o." + i + " = " + obj[i] + "<BR>\n";
-		}
-		document.write ( result );
-	}
-
-    function checkForm() {
+	function checkForm() {
 		var year = /^[1-2][0-9]{3}$/;
 		var capital = /[A-Z]/;
 		var period = /[A-Za-z]\.$/;
@@ -21,6 +13,7 @@
 		var all_caps = /^[A-Z][A-Z]/;
 		var frm = document.forms[1];
 		var errors = "";
+		var warnings = "";
 
 		// First Author Initials
 		// pattern for multiple spaces match
@@ -142,12 +135,14 @@
 		}
 		if ( /\.$/.test(frm.reftitle.value) )	{
 			if ( ! / nov\.$/.test(frm.reftitle.value) && ! /U\.S\.A\.$/.test(frm.reftitle.value) && ! /U\.S\.S\.R\.$/.test(frm.reftitle.value) && ! / sp\.$/.test(frm.reftitle.value) && ! / spec\.$/.test(frm.reftitle.value) && ! / nov\.$/.test(frm.reftitle.value) )	{
-				errors += "* Don't end the reference title with a period\n";
+				warnings += "* A reference title shouldn't end with a period\n";
+				warning_count++;
 			}
 		}
-		if ( /\.[^0-9 ]/.test(frm.reftitle.value) )	{
+		else if ( /\.[^0-9 ]/.test(frm.reftitle.value) )	{
 			if ( ! / sp\.(; | ,|\)|)/.test(frm.reftitle.value) && ! / nov\.(; |, |\)|)/.test(frm.reftitle.value) && ! /U\.S\.A\.(; |, |\)|)/.test(frm.reftitle.value) && ! /U\.S\.S\.R\.(; |, |\)|)/.test(frm.reftitle.value) )	{
-				errors += "* The reference's title includes a stray period\n";
+				warnings += "* The reference title may include a stray period\n";
+				warning_count++;
 			}
 		}
 		if ( /[~@\#\$%\^\*_\+\{\}\|\\<>\t\n]/.test(frm.reftitle.value) || /[^A-Za-z0-9]\//.test(frm.reftitle.value) || /[\/][^A-Za-z0-9]/.test(frm.reftitle.value) || /[:;\?\!][A-Za-z0-9]/.test(frm.reftitle.value) )	{
@@ -173,7 +168,8 @@
 			errors += "* The book/serial name includes weird characters\n";
 		}
 		if ( /\.[^0-9 ]/.test(frm.pubtitle.value) )	{
-			errors += "* The book/serial name includes a stray period\n";
+			warnings += "* The book/serial name may include a stray period\n";
+			warning_count++;
 		}
 		if ( /  /.test(frm.pubtitle.value) )	{
 			errors += "* The book/serial name includes extra spaces\n";
@@ -183,16 +179,17 @@
 		}
 		// Report errors
 		if ( errors != "" ) {
-			errors = "   Errors detected!   \n" + 
-					 "---------------------------------------\n\n" +
-					 errors + "\n" +
-					 "---------------------------------------\n\n" +
-					 "See the tip sheet for instructions";
+			errors = errors + "\nPlease fix the problem and resubmit";
 			alert ( errors );
+			warning_count = 0;
 			return false;
-		} 
+		} else if ( warning_count == 1 && warnings != "" )	{
+			warnings = warnings + "\nPlease make sure there isn't a mistake and resubmit\n";
+			alert ( warnings );
+			return false;
+		}
 		return true;
-    }
+	}
 
 	function showHideEditors()	{
 		if ( document.forms[1].publication_type.value == 'book/book chapter' )	{

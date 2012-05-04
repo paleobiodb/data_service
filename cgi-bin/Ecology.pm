@@ -438,6 +438,30 @@ sub kgToGrams{
     } else {
         return ($text*1000);
     }
-} 
+}
+
+# JA 17.4.12
+# creates one ecotaph attribute lookup for all taxa in a group
+sub fastEcologyLookup	{
+	my ($dbt,$field,$lft,$rgt) = @_;
+	my $sql = "(SELECT t.taxon_no,lft,rgt,e.$field FROM $TAXA_TREE_CACHE t,ecotaph e WHERE t.taxon_no=e.taxon_no AND lft>=$lft AND rgt<=$rgt) UNION (SELECT t.taxon_no,lft,rgt,NULL FROM $TAXA_TREE_CACHE t LEFT JOIN ecotaph e ON t.taxon_no=e.taxon_no WHERE lft>=$lft AND rgt<=$rgt AND e.ecotaph_no IS NULL)";
+	my @taxa = @{$dbt->getData($sql)};
+	my (%lookup,%from,%att);
+	for my $t ( @taxa )	{
+		if ( $t->{$field} ne "" )	{
+		for my $pos ( $t->{lft}..$t->{rgt} )	{
+			if ( $att{$pos} eq "" || $from{$pos} < $t->{lft} )	{
+				$att{$pos} = $t->{$field};
+				$from{$pos} = $t->{lft};
+			}
+		}
+		}
+	}
+	for my $t ( @taxa )	{
+		$lookup{$t->{taxon_no}} = $att{$t->{lft}};
+	}
+	return \%lookup;
+}
+
 
 1;
