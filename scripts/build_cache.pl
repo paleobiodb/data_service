@@ -10,7 +10,7 @@ my $dbh = DBConnection::connect();
 
 my %options;
 
-getopts('abcdef', \%options);
+getopts('abcdefgh', \%options);
 
 TaxaTree::rebuild($dbh, \%options);
 

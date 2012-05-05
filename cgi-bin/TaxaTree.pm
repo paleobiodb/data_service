@@ -8,10 +8,10 @@
 
 This module builds and maintains a hierarchy of taxonomic names.  This
 hierarchy is based on the data in the C<opinions> and C<authorities> tables,
-and is stored in the tables C<taxon_trees> and C<taxa_parents>.  These tables
-are also referred to extensively throughout the rest of the database code,
-because the taxonomic hierarchy is central to the organization of the data in
-the database.
+and is stored in the tables C<taxon_trees> and C<taxon_ancestors>.  These
+tables are also referred to extensively throughout the rest of the database
+code, because the taxonomic hierarchy is central to the organization of the
+data in the database.
 
 =head2 Definitions
 
@@ -138,21 +138,25 @@ leader no matter what the opinion says.
 =head2 Tree structure
 
 In order to facilitate logical operations on the taxa hierarchy, the entries
-in C<taxon_trees> are marked via preorder tree traversal.  This is done with
-fields C<lft> and C<rgt>.  The C<lft> field stores the traversal sequence, and
-the C<rgt> field of a given entry stores the maximum C<lft> value of the entry
-and all of its descendants.  An entry which has no descendants has C<lft> =
-C<rgt>.  Using these fields, we can formulate simple and efficient SQL queries
-to fetch all of the descendants of a given entry and other similar operations.
-For more information, see L<http://en.wikipedia.org/wiki/Nested_set_model>.
+in C<taxon_trees> are sequenced via preorder tree traversal.  This is recorded
+in the fields C<lft> and C<rgt>.  The C<lft> field stores the traversal
+sequence, and the C<rgt> field of a given entry stores the maximum sequence
+number of the entry and all of its descendants.  An entry which has no
+descendants has C<lft> = C<rgt>.  The C<depth> field stores the distance of a
+given entry from the root of its taxon tree, with top-level nodes having
+C<depth> = 1.  Note that all entries in the same concept group have the same
+C<lft>, C<rgt>, and C<depth> values.
 
-All entries in the same concept group have the same C<lft> and C<rgt> values.
+Using these fields, we can formulate simple and efficient SQL queries to fetch
+all of the descendants of a given entry and other similar operations.  For
+more information, see L<http://en.wikipedia.org/wiki/Nested_set_model>.
 
-The one operation that is not easy to do using the preorder traversal sequence
-is to compute the list of all parents of a given taxon.  Thus, we use a
-separate table, C<taxon_parents> to store this information.  This table has
-just two fields, C<parent_no> and C<child_no>, and stores the transitive
-closure of the hierarchy relation.
+The one necessary operation that is not easy to carry out using this method is
+to compute the list of all ancestors of a given taxon.  To do this, we use a
+separate table, C<taxon_ancestors>.  This table has three fields,
+C<parent_no>, C<depth>, and C<child_no>, and stores the transitive closure of
+the hierarchy relation.  The C<depth> field allows us to order the ancestors
+properly from senior to junior.
 
 =head2 Additional Tables
 
@@ -306,26 +310,31 @@ use strict;
 # Main table names
 
 our $TREE_TABLE = "taxon_trees";
-our $PARENT_TABLE = "taxon_parents";
+our $ANCESTOR_TABLE = "taxon_ancestors";
+our $OPINION_TABLE = "order_opinions";
 our $SUPPRESS_TABLE = "suppress_opinions";
 
 # Backup names for use with RENAME TABLES
 
-our $TREE_BAK = "taxa_cache_bak";
-our $PARENT_BAK = "taxa_parents_bak";
-our $SUPPRESS_BAK = "suppress_bak";
+our $TREE_BAK = "taxon_trees_bak";
+our $ANCESTOR_BAK = "taxon_ancestors_bak";
+our $OPINION_BAK = "order_opinions_bak";
+our $SUPPRESS_BAK = "suppress_opinions_bak";
 
 # Working table names
 
 our $TREE_TEMP = "tn";
-our $PARENT_TEMP = "pn";
+our $ANCESTOR_TEMP = "pn";
+our $OPINION_TEMP = "oo";
 our $SUPPRESS_TEMP = "sn";
 
 # Auxiliary table names
 
-our $OPINION_TEMP = "order_opinions";
 our $SPELLING_TEMP = "spelling_opinions";
 our $BEST_TEMP = "best_opinions";
+our $JUNIOR_TEMP = "junior_aux";
+our $BELONGS_TEMP = "belongs_aux";
+our $PARENT_TEMP = "parent_aux";
 
 =item rebuild ( dbh, step )
 
@@ -358,8 +367,12 @@ tables.  This is safe to run while the database is in active use.
 #     considered together
 # 
 #   - hierarchy must be computed next, because we use the hierarchy relation
-#     to traverse and mark the taxon trees.
+#     to organize and sequence the taxon trees.
 # 
+#   - tree sequence must be computed next, because the ancestry table uses it
+#     for proper ordering of ancestors.
+#   
+#   
 #   - once we have computed the hierarchy and marked the trees, we can swap
 #     the new tables for the current ones in an atomic operation.
 
@@ -376,7 +389,7 @@ sub rebuild {
     unless ( defined $step and ref $step eq 'HASH' )
     {
 	$step = { 'a' => 1, 'b' => 1, 'c' => 1, 'd' => 1, 'e' => 1,
-		  'f' => 1, 'g' => 1 };
+		  'f' => 1, 'g' => 1, 'h' => 1 };
     }
     
     # The following steps are required in order to carry out a full rebuild of
@@ -387,9 +400,10 @@ sub rebuild {
     computeSpelling($dbh) if $step->{c};
     computeSynonymy($dbh) if $step->{d};
     computeHierarchy($dbh) if $step->{e};
-    computeTreeFields($dbh) if $step->{f};
-    activateNewTables($dbh) if $step->{g};
-}    
+    computeTreeSequence($dbh) if $step->{f};
+    computeAncestry($dbh) if $step->{g};
+    activateNewTables($dbh, 1) if $step->{h};
+}
 
 my $NEW_TABLE;		# For debugging purposes, this allows us to properly
                         # zero out the relevant columns if we are repeatedly
@@ -424,26 +438,19 @@ sub createNewTables {
 				lft int unsigned not null,
 				rgt int unsigned not null,
 				depth int unsigned not null,
-				PRIMARY KEY (taxon_no),
-				KEY (orig_no),
-				KEY (spelling_no),
-				KEY (synonym_no),
-				KEY (parent_no),
-				KEY (opinion_no),
-				KEY (lft),
-				KEY (rgt))");
+				PRIMARY KEY (taxon_no))");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $PARENT_TEMP");
-    $result = $dbh->do("CREATE TABLE $PARENT_TEMP
-			       (parent_no int unsigned,
-				child_no int unsigned,
-				KEY (parent_no),
+    $result = $dbh->do("DROP TABLE IF EXISTS $ANCESTOR_TEMP");
+    $result = $dbh->do("CREATE TABLE $ANCESTOR_TEMP
+			       (child_no int unsigned not null,
+				parent_no int unsigned not null,
+				depth int unsigned not null,
 				KEY (child_no))");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_TEMP");
     $result = $dbh->do("CREATE TABLE $SUPPRESS_TEMP
-			       (opinion_no int unsigned,
-				suppress int unsigned,
+			       (opinion_no int unsigned not null,
+				suppress int unsigned not null,
 				PRIMARY KEY (opinion_no))");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $OPINION_TEMP");
@@ -457,8 +464,7 @@ sub createNewTables {
 			   child_no int unsigned not null,
 			   child_spelling_no int unsigned not null,
 			   parent_no int unsigned not null,
-			   parent_spelling_no int unsigned not null,
-			   KEY (orig_no), KEY (opinion_no))");
+			   parent_spelling_no int unsigned not null)");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
     $result = $dbh->do("CREATE TABLE $SPELLING_TEMP
@@ -477,7 +483,7 @@ sub createNewTables {
 			     status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 			     PRIMARY KEY (orig_no))");
     
-    # Now we populate $OPINIONS_TEMP with opinion data in the proper order.
+    # Now we populate $OPINION_TEMP with opinion data in the proper order.
     # This is much more efficient than using a view (verified by
     # experimentation using MySQL 5.1).  This table will be used as an auxiliary
     # in computing the four taxon relations.
@@ -509,6 +515,13 @@ sub createNewTables {
     
     $result = $dbh->do("UNLOCK TABLES");
     
+    # Once we have populated $OPINION_TEMP, we can efficiently index it.
+    
+    print STDERR "Rebuild:     indexing opinion table\n";
+    
+    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add index (orig_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add index (opinion_no)");
+    
     $NEW_TABLE = 1;		# we can stop here when debugging.
 }
 
@@ -524,7 +537,7 @@ sub groupByConcept {
     
     my ($result);
     
-    print STDERR "Rebuild: computing taxonomic concept group relation (b)\n";
+    print STDERR "Rebuild: computing concept group relation (b)\n";
     $DB::single = 1;
     
     # The following algorithm is adapted from the old getOriginalCombination()
@@ -581,6 +594,13 @@ sub groupByConcept {
 			SELECT taxon_no, taxon_no
 			FROM authorities a");
     
+    # Now that the orig_no field is completely set, we can efficiently index
+    # it.
+    
+    print STDERR "Rebuild:     indexing orig_no\n";
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (orig_no)");
+    
     my $a = 1;		# we can stop here when debugging
 };
 
@@ -600,7 +620,7 @@ sub computeSpelling {
     
     my ($result);
     
-    print STDERR "Rebuild: computing concept group leader relation (c)\n";
+    print STDERR "Rebuild: computing group leader relation (c)\n";
     $DB::single = 1;
     
     # At this point in the rebuilding process we have the taxa grouped by
@@ -706,11 +726,17 @@ sub computeSpelling {
     
     $result = $dbh->do("UPDATE $TREE_TEMP SET spelling_no = taxon_no WHERE spelling_no = 0");
     
+    # Now that we have set spelling_no, we can efficiently index it.
+    
+    print STDERR "Rebuild:     indexing spelling_no\n";
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (spelling_no)");
+    
     my $a = 1;		# we can stop on this line when debugging
 }
 
 
-# setSynonymy ( dbh )
+# computeSynonymy ( dbh )
 # 
 # Fill in the synonym_no field of $TREE_TEMP.  This computes the "synonymy"
 # relation.  We also fill in the opinion_no field for each entry that
@@ -833,6 +859,7 @@ sub computeSynonymy {
 	    $result = $insert_suppress->execute($suppress_opinion);
 	    
 	    push @check_taxa, $check_taxon;
+	    $taxa_moved{$check_taxon} = 0;
 	}
 	
 	# Next, we update the $BEST_TEMP table by deleting the suppressed
@@ -912,6 +939,12 @@ sub computeSynonymy {
     
     $result = $dbh->do("UPDATE $TREE_TEMP SET synonym_no = spelling_no WHERE synonym_no = 0");
     
+    # Now that we have set synonym_no for all taxa, we can efficiently index it.
+    
+    print STDERR "Rebuild:     indexing synonym_no\n";
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (synonym_no)");
+    
     # So far we have computed the immediate senior synonym for each taxon, but
     # what we want is the *most senior* synonym for each taxon.  Thus, we need
     # to look for instances where a -> b and b -> c, and change the relation
@@ -983,8 +1016,8 @@ sub computeHierarchy {
     # before an opinion on a junior one, in case of ties in reliability index
     # and publication year.
     
-    $result = $dbh->do("DROP TABLE IF EXISTS junior_temp");
-    $result = $dbh->do("CREATE TABLE junior_temp
+    $result = $dbh->do("DROP TABLE IF EXISTS $JUNIOR_TEMP");
+    $result = $dbh->do("CREATE TABLE $JUNIOR_TEMP
 				(junior_no int unsigned,
 				 senior_no int unsigned,
 				 is_senior int unsigned,
@@ -993,7 +1026,7 @@ sub computeHierarchy {
     
     # We start by adding all senior synonyms into the table, with is_senior=1
     
-    $result = $dbh->do("INSERT IGNORE INTO junior_temp
+    $result = $dbh->do("INSERT IGNORE INTO $JUNIOR_TEMP
 			SELECT orig_no, orig_no, 1
 			FROM $TREE_TEMP WHERE spelling_no = synonym_no");
     
@@ -1003,7 +1036,7 @@ sub computeHierarchy {
     # opinion on any of those shouldn't affect the senior taxon.  All of these
     # entries have is_senior=0
     
-    $result = $dbh->do("INSERT IGNORE INTO junior_temp
+    $result = $dbh->do("INSERT IGNORE INTO $JUNIOR_TEMP
 			SELECT t.orig_no, o.parent_no, 0
 			FROM $TREE_TEMP t JOIN $OPINION_TEMP o USING (opinion_no)
 			WHERE status in ('subjective synonym of', 'objective synonym of',
@@ -1023,21 +1056,21 @@ sub computeHierarchy {
     
     print STDERR "Rebuild:     selecting best opinions\n";
     
-    $result = $dbh->do("DROP TABLE IF EXISTS belongs_temp");
-    $result = $dbh->do("CREATE TABLE belongs_temp
+    $result = $dbh->do("DROP TABLE IF EXISTS $BELONGS_TEMP");
+    $result = $dbh->do("CREATE TABLE $BELONGS_TEMP
 				(orig_no int unsigned,
 				 opinion_no int unsigned,
 				 PRIMARY KEY (orig_no))");
     
-    $result = $dbh->do("INSERT IGNORE INTO belongs_temp
+    $result = $dbh->do("INSERT IGNORE INTO $BELONGS_TEMP
 			SELECT t.orig_no, o.opinion_no
-			FROM $TREE_TEMP t JOIN junior_temp j ON t.orig_no = j.senior_no
+			FROM $TREE_TEMP t JOIN $JUNIOR_TEMP j ON t.orig_no = j.senior_no
 				JOIN $OPINION_TEMP o ON o.orig_no = j.junior_no
 			WHERE o.status = 'belongs to' and t.orig_no != o.parent_no
 				and o.child_no != o.parent_no and o.child_spelling_no != o.parent_no
 			ORDER BY o.ri DESC, o.pubyr DESC, j.is_senior DESC, o.opinion_no DESC");
     
-    $result = $dbh->do("UPDATE $BEST_TEMP b JOIN belongs_temp x using (orig_no)
+    $result = $dbh->do("UPDATE $BEST_TEMP b JOIN $BELONGS_TEMP x using (orig_no)
 				JOIN $OPINION_TEMP o ON o.opinion_no = x.opinion_no
 			SET b.opinion_no = o.opinion_no, b.ri = o.ri, b.pubyr = o.pubyr,
 				b.parent_no = o.parent_no
@@ -1051,7 +1084,7 @@ sub computeHierarchy {
     
     my $best_opinions = $dbh->prepare("
 		SELECT orig_no, parent_no, ri, pubyr, opinion_no
-		FROM $BEST_TEMP where parent_no != 0");
+		FROM $BEST_TEMP WHERE parent_no > 0");
     
     $best_opinions->execute();
     
@@ -1109,6 +1142,7 @@ sub computeHierarchy {
 	    $insert_suppress->execute($suppress_opinion);
 	    
 	    push @check_taxa, $check_taxon;
+	    $taxa_moved{$check_taxon} = 0;
 	}
 	
 	# We also have to clean up the $BEST_TEMP table, so that we can
@@ -1126,9 +1160,10 @@ sub computeHierarchy {
 	    $result = $dbh->do("
 		INSERT IGNORE INTO $BEST_TEMP
 		SELECT j.senior_no, o.parent_no, o.opinion_no, o.ri, o.pubyr, o.status
-		FROM $OPINION_TEMP o JOIN junior_temp j ON o.orig_no = j.junior_no
+		FROM $OPINION_TEMP o JOIN $JUNIOR_TEMP j ON o.orig_no = j.junior_no
 			LEFT JOIN $SUPPRESS_TEMP USING (opinion_no)
-		WHERE o.status = 'belongs to' and j.senior_no != o.parent_no
+		WHERE suppress is null and orig_no in $filter
+			and o.status = 'belongs to' and j.senior_no != o.parent_no
 			and o.child_no != o.parent_no and o.child_spelling_no != o.parent_no
 			ORDER BY o.ri DESC, o.pubyr DESC, j.is_senior DESC, o.opinion_no DESC");
 	}
@@ -1136,10 +1171,9 @@ sub computeHierarchy {
 	# In order to repeat the cycle check, we need to grab these new
 	# opinions.
 	
-	$belongs_opinions = $dbh->prepare("
-		SELECT b.orig_no, o.parent_no, o.ri, o.pubyr, opinion_no
-		FROM belongs_opinions b JOIN $OPINION_TEMP o USING (opinion_no)
-		WHERE b.orig_no != o.parent_no and o.parent_no != 0 and b.orig_no in $filter");
+	my $belongs_opinions = $dbh->prepare("
+		SELECT orig_no, parent_no, ri, pubyr, opinion_no
+		FROM $BEST_TEMP WHERE parent_no > 0 and orig_no in $filter");
 	
 	$belongs_opinions->execute();
 	
@@ -1159,7 +1193,7 @@ sub computeHierarchy {
 	
 	@breaks = breakCycles($dbh, \%children, \%opinions, \%taxa_moved);
 	
-	print STDERR "Rebuild:     found " . scalar(@breaks) . "cycles \n";
+	print STDERR "Rebuild:         found " . scalar(@breaks) . " cycles \n";
     }
     
     # Now that we have eliminated all cycles, we can set the opinion_no field
@@ -1188,6 +1222,17 @@ sub computeHierarchy {
 				JOIN $OPINION_TEMP o ON o.opinion_no = t2.opinion_no
 				JOIN $TREE_TEMP t3 ON t3.taxon_no = o.parent_no
 			SET t.parent_no = t3.synonym_no");
+    
+    # Now that we have set parent_no for all taxa, we can efficiently index
+    # it. 
+    
+    print STDERR "Rebuild:     indexing parent_no\n";
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (parent_no)");
+    
+    print STDERR "Rebuild:     indexing opinion_no\n";
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (opinion_no)");
     
     my $a = 1;
 }
@@ -1345,15 +1390,17 @@ sub breakCycles {
 
 our (%children, %parent, %tree);
 
-# computeTreeFields ( dbh )
+# computeTreeSequence ( dbh )
 # 
 # Fill in the lft, rgt and depth fields of $TREE_TMP.  This has the effect of
-# arranging the rows into a Nested Set tree.  For more information, see:
-# http://en.wikipedia.org/wiki/Nested_set_model.
+# arranging the rows into a forest of Nested Set trees.  For more information,
+# see: http://en.wikipedia.org/wiki/Nested_set_model.
 
-sub computeTreeFields {
+sub computeTreeSequence {
     
     my ($dbh) = @_;
+    
+    my $result;
     
     print STDERR "Rebuild: traversing and marking taxon trees (f)\n";
     $DB::single = 1;
@@ -1377,69 +1424,98 @@ sub computeTreeFields {
 	$parent{$child_no} = $parent_no;
     }
     
-    # Now we build the tree, starting with taxon 1 'Eukaryota' at the top of
-    # the tree with lft=1 and depth=1.
+    # Now we create the "main" tree, starting with taxon 1 'Eukaryota' at the
+    # top of the tree with sequence=1 and depth=1.  The variable $sequence
+    # gets the maximum sequence number from the newly created tree.  Thus, the
+    # next tree (created below) uses $sequence+1 as its sequence number.
     
     print STDERR "Rebuild:     traversing tree rooted at 'Eukaryota'\n";
     
-    my $lft = computeTreeValues(1, 1, 1, 0);
+    my $sequence = createNode(1, 1, 1);
     
-    # Next, we go through all of the other taxa and insert the ones that
-    # haven't yet been inserted.  This is necessary because many taxa have no
-    # known parents.
+    # Next, we go through all of the other taxa.  When we find a taxon with no
+    # parent that we haven't visited yet, we create a new tree with it as the
+    # root.  This takes care of all the taxon for which their relationship to
+    # the main tree is not known.
     
     print STDERR "Rebuild:     traversing all other taxon trees\n";
     
  taxon:
     foreach my $taxon (keys %children)
     {
-	next if exists $tree{$taxon};
+	next if exists $parent{$taxon};		# skip any taxa that aren't roots
+	next if exists $tree{$taxon};		# skip any that we've already inserted
 	
-	my %seen;
-	my $t = $taxon;
-	
-	while ( $parent{$t} )
-	{
-	    $seen{$t} = 1;
-	    if ( $seen{$parent{$t}} )
-	    {
-		print STDOUT "Rebuild: WARNING - tree violation: $t => $parent{$t}\n";
-		next taxon;
-	    }
-	    $t = $parent{$t};
-	}
-	
-	$lft = computeTreeValues($t, $lft+1, 1, 0);
+	$sequence = createNode($taxon, $sequence+1, 1);
     }
     
-    # Now we need to actually insert all of those values back into the
-    # database. 
+    # Now we need to upload all of the tree sequence data to the server so
+    # that we can set lft, rgt, and depth in $TREE_TEMP.  To do this
+    # efficiently, we use an auxiliary table and a large insert statement.
     
-    print STDERR "Rebuild:     setting lft, rgt, depth\n";
+    print STDERR "Rebuild:     uploading tree sequence data\n";
     
-    my $sth = $dbh->prepare("UPDATE $TREE_TEMP SET lft=?, rgt=?, depth=? WHERE spelling_no=?");
+    $dbh->do("DROP TABLE IF EXISTS tree_insert");
+    $dbh->do("CREATE TABLE tree_insert
+     		       (spelling_no int unsigned,
+     			lft int unsigned,
+     			rgt int unsigned,
+     			depth int unsigned)");
+    
+    my $insert_stmt = "INSERT INTO tree_insert VALUES ";
+    my $comma = '';
     
     foreach my $taxon (keys %tree)
     {
-	$sth->execute(@{$tree{$taxon}}, $taxon)
+	$insert_stmt .= $comma;
+	$insert_stmt .= "($taxon," . join(',', @{$tree{$taxon}}) . ')';
+	$comma = ',';
+	
+	if ( length($insert_stmt) > 200000 )
+	{
+	    $result = $dbh->do($insert_stmt);
+	    $insert_stmt = "INSERT INTO tree_insert VALUES ";
+	    $comma = '';
+	}
     }
+    
+    $result = $dbh->do($insert_stmt) if $comma;
+    
+    # Now that we have uploaded the data, we can copy it into $TREE_TEMP    
+    
+    print STDERR "Rebuild:     setting lft, rgt, depth\n";
+    
+    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN tree_insert i USING (spelling_no)
+			SET t.lft = i.lft, t.rgt = i.rgt, t.depth = i.depth");
+    
+    # Now we can efficiently index them lft, rgt and depth.
+    
+    print STDERR "Rebuild:     indexing lft, rgt, depth\n";
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (lft)");
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (rgt)");
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (depth)");
     
     my $a = 1;
 }
 
 
-# computeTreeValues ( taxon, lft, depth )
+# createNode ( taxon, sequence, depth )
 # 
-# This recursive procedure is given a taxon number plus the 'lft' and 'depth'
-# values which that taxon should take in order to be placed properly in the
-# tree.  It creates tree nodes for this taxon and all of its descendants, and
-# fills in the proper 'lft', 'rgt' and 'depth' values for them all.  The
-# procedure returns the maximum 'rgt' value from all of the children, which in
-# turn is used to fill in the parent's 'rgt' value.
+# This recursive procedure creates a tree node for the given taxon, with the
+# given sequence number and depth, and then goes on to recursively create
+# nodes for all of its children.  Thus, the sequence numbers are set in a
+# preorder traversal.
+# 
+# Each node created has its 'lft' field set to its sequence number, and its
+# 'rgt' field set to the maximum sequence number of all its children.  Any
+# taxon which has no children will get the same 'lft' and 'rgt' value.  The
+# 'depth' field marks the distance from the root of the current tree, with
+# top-level nodes having a depth of 1.
 
-sub computeTreeValues {
+sub createNode {
 
-    my ($taxon, $lft, $depth, $parent) = @_;
+    my ($taxon, $sequence, $depth) = @_;
     
     # First check that we haven't seen this taxon yet.  That should always be
     # true, unless there are cycles in the parent-child relation (which would
@@ -1449,49 +1525,184 @@ sub computeTreeValues {
     {
 	# Create a new node to represent the taxon.
 	
-	$tree{$taxon} = [$lft, $lft, $depth];
+	$tree{$taxon} = [$sequence, $sequence, $depth];
 	
 	# If this taxon has children, we must then iterate through them and
-	# insert each one (and all its descendants) into the tree.  When we
-	# are finished, we fill in this node's 'rgt' field with the value
-	# returned from the last child.
+	# insert each one (and all its descendants) into the tree.  If there
+	# are no children, we just leave the node as it is.
 	
 	if ( exists $children{$taxon} )
 	{
 	    foreach my $child ( @{$children{$taxon}} )
 	    {
-		$lft = computeTreeValues($child, $lft + 1, $depth + 1, $taxon);
+		$sequence = createNode($child, $sequence+1, $depth+1);
 	    }
 	    
 	    # When we are finished with all of the children, fill in the 'rgt'
 	    # field with the value returned from the last child.
 	    
-	    $tree{$taxon}[1] = $lft;
+	    $tree{$taxon}[1] = $sequence;
 	}
 	
-	# If there are no children, we just leave the node as it is.
-	
-	return $lft;
+	return $sequence;
     }
     
     # If we have already seen this taxon, then we have a cycle!  Print a
     # warning, and otherwise ignore it.  This means that we have to return
-    # $lft - 1, because we didn't actually insert any node.
+    # $sequence-1, because we didn't actually insert any node.
     
     else
     {
-	print STDERR "Rebuild: WARNING - tree cycle for taxon $taxon (parent $parent)\n";
-	return $lft - 1;
+	print STDERR "Rebuild: WARNING - tree cycle for taxon $taxon\n";
+	return $sequence-1;
     }
 }
 
 
-sub activateNewTables {
+# computeAncestry ( dbh )
+# 
+# Fill in $ANCESTOR_TEMP with the transitive closure of the hierarchy
+# relation.  In other words: for every taxon t, for every ancestor u of t, the
+# record (t, u, d) will be entered into $ANCESTOR_TEMP where d is the
+# depth of u in its taxon tree.  This allows us to easily obtain a list of
+# all of the ancestors of any taxon, in rank order.
+
+sub computeAncestry {
 
     my ($dbh) = @_;
     
+    my $result;
     
+    print STDERR "Rebuild: computing ancestry relation (g)\n";
+    $DB::single = 1;
     
+    # Before we start building the ancestry relation, we need to know the
+    # maximum taxon tree depth.
+    
+    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_TEMP");
+    
+    # It is also helpful to generate an auxiliary table which will contain the
+    # hierarchy relation restricted to concept group leaders, along with the
+    # depth of the parent node.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $PARENT_TEMP");
+    $result = $dbh->do("CREATE TABLE $PARENT_TEMP
+			       (child_no int unsigned,
+				parent_no int unsigned,
+				depth int unsigned)");
+    
+    $result = $dbh->do("INSERT INTO $PARENT_TEMP
+			SELECT spelling_no, parent_no, depth - 1
+			FROM $TREE_TEMP
+			WHERE taxon_no = spelling_no AND parent_no > 0");
+    
+    $result = $dbh->do("ALTER TABLE $PARENT_TEMP ADD KEY (depth, parent_no)");
+    
+    # We will build the ancestry relation iteratively.  We start by slicing up
+    # the auxiliary table by depth, and seeding the ancestor relation with
+    # slice 1 (the top-most nodes of the taxon trees).
+    #
+    # Then we iterate through the rest of the slices.  Each slice in turn is
+    # conjugated with the ancestor relation, and the resulting pairs are added
+    # in.  The slice itself is then added as well.  This will have the result
+    # of generating a transitive closure of the hierarchy relation, restricted
+    # to concept group leaders.
+    
+    my $add_conjugation = $dbh->prepare("
+			INSERT INTO $ANCESTOR_TEMP
+			SELECT s.child_no, a.parent_no, a.depth
+			FROM $PARENT_TEMP s JOIN $ANCESTOR_TEMP a
+				ON s.parent_no = a.child_no and s.depth = ?");
+    
+    my $add_slice = $dbh->prepare("
+			INSERT INTO $ANCESTOR_TEMP
+			SELECT child_no, parent_no, depth
+			FROM $PARENT_TEMP WHERE depth = ?");
+    
+    print STDERR "Rebuild:     depth 1\n";
+    
+    $add_slice->execute(1);
+    
+    for ( my $i = 2; $i < $max_depth; $i++ )
+    {
+	print STDERR "Rebuild:     depth $i\n";
+	$result = $add_conjugation->execute($i);
+	$result = $add_slice->execute($i);
+    }
+    
+    my $a = 1;		# we can stop here when debugging
+}
+
+
+# activateNewTables ( dbh, keep_temps )
+# 
+# In one atomic operation, move the new taxon tables to active status and swap
+# out the old ones.  Those old ones are then deleted.
+# 
+# If keep_temps is true, then keep around the temporary tables that we created
+# during the rebuild process (this might be done for debugging purposes).
+# Otherwise, these are deleted.
+
+sub activateNewTables {
+
+    my ($dbh, $keep_temps) = @_;
+    
+    my $result;
+    
+    print STDERR "Rebuild: activating new tables (h)\n";
+    $DB::single = 1;
+    
+    # Delete any backup tables that might still be around
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $TREE_BAK");
+    $result = $dbh->do("DROP TABLE IF EXISTS $ANCESTOR_BAK");
+    $result = $dbh->do("DROP TABLE IF EXISTS $OPINION_BAK");
+    $result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_BAK");
+    
+    # Create dummy versions of any of the main tables that might be currently
+    # missing
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TREE_TABLE LIKE $TREE_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $ANCESTOR_TABLE LIKE $ANCESTOR_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OPINION_TABLE LIKE $OPINION_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $SUPPRESS_TABLE LIKE $SUPPRESS_TEMP");
+
+    
+    # Now do the Atomic Table Swap (tm)
+    
+    $result = $dbh->do("RENAME TABLE
+				$TREE_TABLE to $TREE_BAK,
+				$TREE_TEMP to $TREE_TABLE,
+				$ANCESTOR_TABLE to $ANCESTOR_BAK,
+				$ANCESTOR_TEMP to $ANCESTOR_TABLE,
+				$OPINION_TABLE to $OPINION_BAK,
+				$OPINION_TEMP to $OPINION_TABLE,
+				$SUPPRESS_TABLE to $SUPPRESS_BAK,
+				$SUPPRESS_TEMP to $SUPPRESS_TABLE");
+    
+    # Now we can get rid of the backup tables
+    
+    $result = $dbh->do("DROP TABLE $TREE_BAK");
+    $result = $dbh->do("DROP TABLE $ANCESTOR_BAK");
+    $result = $dbh->do("DROP TABLE $OPINION_BAK");
+    $result = $dbh->do("DROP TABLE $SUPPRESS_BAK");
+    
+    # Delete the auxiliary tables too, unless we were told to keep them.
+    
+    unless ( $keep_temps )
+    {
+	print STDERR "Rebuild: removing temporary tables\n";
+	
+	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $BEST_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $JUNIOR_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $BELONGS_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $PARENT_TEMP");
+    }
+    
+    print STDERR "Rebuild: done rebuilding taxon trees\n";
+    
+    my $a = 1;		# we can stop here when debugging
 }
 
 
