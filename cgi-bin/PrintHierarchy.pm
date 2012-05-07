@@ -199,9 +199,9 @@ sub classify	{
 		traverse( $p , '' , 1 );
 		for my $i ( 1..9 )	{
 			$sumchildren = $sumchildren + $atlevel[$i];
-			if ( $sumchildren >= 3 && $i > 1 )	{
+			if ( $sumchildren >= 10 && $i > 1 )	{
 				$shownDepth = $i;
-				if ( $sumchildren <= 20 )	{
+				if ( $sumchildren <= 30 )	{
 					$shownDepth = $i + 1;
 				}
 				last;
