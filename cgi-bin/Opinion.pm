@@ -257,7 +257,7 @@ sub formatAsHTML {
         $short_ref = Reference::formatShortRef($row);
     }
     if ($options{'return_array'}) {
-        return ($output," according to ".$short_ref);
+        return ($output," according to ",$short_ref);
     } else {
         $output .= " according to $short_ref";
         return $output;
@@ -1390,10 +1390,11 @@ sub submitOpinionForm {
     fixMassEstimates($dbt,$dbh,$fields{'child_no'});
 
     $o = Opinion->new($dbt,$resultOpinionNumber); 
-    my $opinionHTML = $o->formatAsHTML();
-    $opinionHTML =~ s/according to/of/i;
+    my ($opinion,$relation,$authority) = $o->formatAsHTML('return_array'=>1);
+    $relation =~ s/according to/of/i;
+    my $opinionHTML = $opinion.$relation.$authority;
 
-	my $enterupdate = ($isNewEntry) ? 'entered' : 'updated';
+    my $enterupdate = ($isNewEntry) ? 'entered' : 'updated';
 
     # we need to warn about the nasty case in which the author has synonymized
     #  genera X and Y, but we do not know the author's opinion on one or more
@@ -1456,14 +1457,14 @@ sub submitOpinionForm {
 |;
 
     if (@warnings) {
-        $end_message .= "<DIV class=\"warning\">";
+        $end_message .= "<div class=\"warning\">";
         if ( $#warnings > 0 )	{
-            $end_message .= "Warnings:<BR>";
-            $end_message .= "<LI>$_</LI>" for (@warnings);
+            $end_message .= "Warnings:<br>";
+            $end_message .= "<li>$_</li>" for (@warnings);
         } else	{
             $end_message .= "Warning: " . $warnings[0];
         }
-        $end_message .= "</DIV>";
+        $end_message .= "</div>";
     }
 
     # the authority data are very useful for deciding whether to also edit them
@@ -1477,35 +1478,23 @@ sub submitOpinionForm {
     }
     $authors .= " " . $auth->{'pubyr'};
 
-    my $style = qq| style="padding-top: 0.75em;"|;
-    $end_message .= qq|
-<div class="displayPanel">
-<p>
-<table cellpadding="10"><tr><td valign="top" class="small">
-  <p class="large" style="margin-left: 2em;">Name functions</p>
-  <ul>
-  <li><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></li>
-  <br><li><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName $authors</a></li>
-  <br><li><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&display=authorities&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></li>
-  <br><li><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></li>
-  <br><li><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></li>   
-  </ul>
-</td>
-<td valign="top" class="small">
-  <p class="large" style="margin-left: 2em;">Opinion functions</p>
-  <ul>
-  <li><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">Edit another opinion about $childSpellingName</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></li>
-  <li$style><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&display=opinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></li>
-  <li$style><a href="$WRITE_URL?action=classify&reference_no=$resultReferenceNumber">Print this reference's classification</a></li>
-  </ul>
-</td></tr></table>
-</p>
-</div>
-</div>|;
+    my %message_vals;
+    $message_vals{'child_no'} = $fields{child_no};
+    $message_vals{'child_spelling_no'} = $fields{child_spelling_no};
+    $message_vals{'result_reference'} = $resultReferenceNumber;
+    $message_vals{'result_opinion'} = $resultOpinionNumber;
+    $message_vals{'child_name'} = $childName;
+    $message_vals{'child_spelling'} = $childSpellingName;
+    $message_vals{'child_authors'} = Reference::formatShortRef($auth);
+    $message_vals{'opinion_authors'} = Reference::formatShortRef($dbt,$resultReferenceNumber);
+    $message_vals{'opinion_authors'} =~ s/[A-Z]\. //g;
+    if ( $s->get('reference_no') != $resultReferenceNumber && $s->get('reference_no') > 0 )	{
+        $message_vals{'my_reference'} = $s->get('reference_no');
+        $message_vals{'my_authors'} = Reference::formatShortRef($dbt,$s->get('reference_no'));
+        $message_vals{'my_authors'} =~ s/[A-Z]\. //g;
+    }
+
+    $end_message .= $hbo->populateHTML('opinion_end_message',\%message_vals);
 
     # See Taxon::displayTypeTaxonSelectForm for details
     Taxon::displayTypeTaxonSelectForm($dbt,$s,$fields{'type_taxon'},$fields{'child_no'},$childName,$childRank,$resultReferenceNumber,$end_message);
@@ -1663,7 +1652,8 @@ sub displayOpinionChoiceForm {
         print qq|<div align="left"><ul>|;
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
-            my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+            my ($opinion,$relation,$authority) = $o->formatAsHTML('return_array'=>1);
+            $authority = $relation.$authority;
             if ( $row->{'opinion_no'} == $row->{'current_opinion'} )	{
                 $opinion = "<b>".$opinion."</b>";
             }
@@ -1746,7 +1736,8 @@ sub displayOpinionChoiceForm {
             print qq|<ul>|;
             foreach my $row (@results) {
                 my $o = Opinion->new($dbt,$row->{'opinion_no'});
-                my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+                my ($opinion,$relation,$authority) = $o->formatAsHTML('return_array'=>1);
+                $authority = $relation.$authority;
                 if ( $row->{'opinion_no'} == $row->{'current_opinion'} )	{
                     $opinion = "<b>".$opinion."</b>";
                 }
