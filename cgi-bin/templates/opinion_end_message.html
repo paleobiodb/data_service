@@ -1,0 +1,28 @@
+<div class="displayPanel">
+<table cellpadding="10">
+ <tr><td valign="top" class="small">
+  <p class="large" style="margin-left: 2em;">Name functions</p>
+  <ul>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayAuthorityForm&taxon_no=%%child_no%%">Edit %%child_spelling%% %%child_authors%%</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayTaxonomicNamesAndOpinions&display=authorities&reference_no=%%result_reference%%">Edit a name tied to %%opinion_authors%%</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=basicTaxonInfo&taxon_no=%%child_no%%">Get general information about %%child_name%%</a></li>
+  </ul>
+ </td>
+ <td valign="top" class="small">
+  <p class="large" style="margin-left: 2em;">Opinion functions</p>
+  <ul>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayOpinionForm&opinion_no=%%result_opinion%%">Edit this opinion</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayOpinionChoiceForm&taxon_no=%%child_spelling_no%%">Edit another opinion about %%child_spelling%%</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayOpinionForm&opinion_no=-1&child_spelling_no=%%child_spelling_no%%&child_no=%%child_no%%">Add another opinion about %%child_name%%</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayTaxonomicNamesAndOpinions&display=opinions&reference_no=%%result_reference%%">Edit another one of %%opinion_authors%%'s opinions</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></li>
+  <li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=classify&reference_no=%%result_reference%%">Print %%opinion_authors%%'s classification</a></li>
+  <span show="my_authors"><li style="padding-bottom: 0.75em;"><a href="%%write_url%%?action=classify&reference_no=%%my_reference%%">Print %%my_authors%%'s classification</a></li></span>
+  </ul>
+ </td></tr>
+</table>
+</div>
+
