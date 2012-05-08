@@ -3,7 +3,7 @@
 use lib "../cgi-bin";
 use DBConnection;
 use DBTransactionManager;
-use TaxaTree;
+use TaxonTrees;
 use Getopt::Std;
 
 my $dbh = DBConnection::connect();
@@ -12,7 +12,7 @@ my %options;
 
 getopts('abcdefgh', \%options);
 
-TaxaTree::rebuild($dbh, \%options);
+TaxonTrees::rebuild($dbh, \%options);
 
 print "done rebuilding caches\n";
 

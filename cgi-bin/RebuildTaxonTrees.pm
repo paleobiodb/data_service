@@ -1,318 +1,13 @@
 # 
 # The Paleobiology Database
 # 
-#   TaxaTree.pm
+#   RebuildTaxonTrees.pm
 # 
 
-=head1 General Description
 
-This module builds and maintains a hierarchy of taxonomic names.  This
-hierarchy is based on the data in the C<opinions> and C<authorities> tables,
-and is stored in the tables C<taxon_trees> and C<taxon_ancestors>.  These
-tables are also referred to extensively throughout the rest of the database
-code, because the taxonomic hierarchy is central to the organization of the
-data in the database.
-
-=head2 Definitions
-
-Each distinct taxonomic name/rank combination represented in the database has
-a unique entry in the C<authorities> table, and a unique internal id number
-(taxon_no) assigned to it in that table.  In the documentation for this
-database, we use the term I<taxon> to represent the concept "distinct
-taxonomic name/rank combination".  So, for example, "Rhizopodea" as a class
-and "Rhizopodea" as a phylum are considered to be distinct I<taxa> in this
-database.  This is necessary because the database stores a continuum of
-historical data; when a taxon's rank or spelling has been changed at some
-point in the past, we need to have a way of properly representing taxonomic
-opinions from both before and after the change.  Thus we need to store both
-combinations as separate entries in the database.  When talking about a taxon
-in the sense of a grouping of organisms irrespective of spelling and rank
-changes, we will use the term "taxonomic concept".
-
-For each taxon in the database (in other words, for each distinct name/rank
-combination) we algorithmically select a "best opinion" from the entries in
-the C<opinions> table, representing the most recent and reliable taxonomic
-opinion that specifies a relationship between this taxon and the rest of the
-taxonomic hierarchy.  These "best opinions" are then used to arrange the taxa
-into a collection of trees.  Note that the taxa do not form a single tree,
-because there are a number of fossil taxa for which it is not known within
-which higher taxa they fall.
-
-=head2 Organization of taxa
-
-The entries in C<taxon_trees> are in 1-1 correspondence with the entries in the
-C<authorities> table, linked by the key field C<taxon_no>.  These taxa are further
-organized according to four separate relations, each computed from data in the
-C<opinions> table.  The names listed in parentheses are the fields in
-C<taxon_trees> which record each relation:
-
-=over 4
-
-=item Taxaonomic concept group (orig_no)
-
-This relation groups together all of the name/rank combinations that represent
-the same taxonomic concept.  In other words, when a taxon's rank is changed,
-or its spelling is changed, all of the resultant entries will have a different
-C<taxon_no> but the same C<orig_no>.  The C<orig_no> for each entry is equal
-to the C<taxon_no> of its original combination (so all original combinations
-have C<taxon_no> = C<orig_no>).
-
-Note that this relation can also be taken as an equivalence relation, whereas
-two taxa have the same C<orig_no> if and only if they represent the same
-taxonomic concept.
-
-=item Concept group leader (spelling_no)
-
-This relation selects from each taxonomic concept the currently accepted
-name/rank combination.  The value of C<spelling_no> for any entry is the
-C<taxon_no> of the currently accepted combination for its concept group.
-Thus, all members of a given concept group have the same value of
-C<spelling_no>.
-
-We will refer to this taxon as the "group leader" in the remainder of this
-documentation.  Note that a group leader always has C<taxon_no> =
-C<spelling_no>.
-
-=item Synonymy (synonym_no)
-
-This relation groups together all of the taxonomic concepts which are
-considered to be synonyms of each other.  Two taxa are considered to be
-synonymous if one is a subjective or objective synonym of the other, or was
-replaced by the other, or if one is an invalid subgroup or nomen dubium, nomen
-vanum or nomen nudum inside the other.
-
-The value of C<synonym_no> is the C<taxon_no> associated with the group leader
-of the most senior synonym for the given entry.  Thus, the currently accepted
-combination for the most senior synonym for any entry can always be quickly
-and efficiently looked up.  A group leader which has no senior synonym always
-has C<synonym_no> = C<spelling_no> = C<taxon_no>.
-
-Note that this is a relation on concept groups, not on taxa; all of the
-members of a concept group have the same C<synonym_no>.  All concept groups
-which are synonyms of each other will have the same C<synonym_no>, but
-different C<spelling_no>.  This relation, like the concept group relation
-above, can also be taken as an equivalence relation, whereas two taxa have the
-same C<synonym_no> if and only if they are synonyms of each other.
-
-=item Hierarchy (parent_no)
-
-This relation associates lower with higher taxa.  It forms a collection of
-trees, because (as noted above) there are a number of fossil taxa for which it
-is not known within which higher taxa they fall.
-
-Any taxon which does not fall within another taxon in the database (either
-because no such relationship is known or because it is a maximally general
-taxon) will have C<parent_no> = 0.
-
-All taxa which are synonyms of each other will have the same C<parent_no>
-value, and the C<parent_no> (if not 0) will always refer to the parent of the
-most senior synonym.  The value of C<parent_no> is always a taxon which is a
-concept group leader and not a junior synonym.  Thus, a parent taxon will
-always have C<synonym_no> = C<taxon_no> = C<spelling_no>.
-
-This relation, like the previous ones, can be taken as an equivalence
-relation, whereas two taxa have the same C<parent_no> if and only if they are
-siblings of each other.
-
-=back
-
-=head2 Opinions
-
-In addition to the fields listed above, each entry in C<taxon_trees> also has
-an C<opinion_no> field.  This field points to the "best opinion" (most recent
-and reliable) that has been algorithmically selected from the available
-opinions for that taxon.
-
-For a junior synonym, the value of opinion_no will be the opinion which
-specifies its immediately senior synonym.  There may exist synonym chains in
-the database, where A is a junior synonym of B which is a junior synonym of
-C.  In any case, C<synonym_no> should always point to the most senior synonym
-of each taxon.
-
-For a senior synonym, or for any taxon which does not have synonyms, the value
-of C<opinion_no> will be the opinion which specifies its immediately higher
-taxon.  Note, however, that the opinion may specify a different spelling than
-the value of parent_no, because parent_no always points to the concept group
-leader no matter what the opinion says.
-
-=head2 Tree structure
-
-In order to facilitate logical operations on the taxa hierarchy, the entries
-in C<taxon_trees> are sequenced via preorder tree traversal.  This is recorded
-in the fields C<lft> and C<rgt>.  The C<lft> field stores the traversal
-sequence, and the C<rgt> field of a given entry stores the maximum sequence
-number of the entry and all of its descendants.  An entry which has no
-descendants has C<lft> = C<rgt>.  The C<depth> field stores the distance of a
-given entry from the root of its taxon tree, with top-level nodes having
-C<depth> = 1.  Note that all entries in the same concept group have the same
-C<lft>, C<rgt>, and C<depth> values.
-
-Using these fields, we can formulate simple and efficient SQL queries to fetch
-all of the descendants of a given entry and other similar operations.  For
-more information, see L<http://en.wikipedia.org/wiki/Nested_set_model>.
-
-The one necessary operation that is not easy to carry out using this method is
-to compute the list of all ancestors of a given taxon.  To do this, we use a
-separate table, C<taxon_ancestors>.  This table has three fields,
-C<parent_no>, C<depth>, and C<child_no>, and stores the transitive closure of
-the hierarchy relation.  The C<depth> field allows us to order the ancestors
-properly from senior to junior.
-
-=head2 Additional Tables
-
-One auxiliary table is needed in order to properly compute the relations
-described above.  This table, called C<suppress_opinions> is needed because
-the synonymy and hierarchy relations must be structured as collections of
-trees.  Unfortunately, the set of opinions stored in the database often
-generates cycles in both of these relations.  For example, there will be cases
-in which the best opinion on taxon A states that it is a subjective synonym of
-B, while the best opinion on taxon B states that it is a subjective synonym of
-A.  In order to resolve this, the algorithm that computes the synonymy and
-hierarchy relations must break each cycle by choosing the best (most recent
-and reliable) opinion from those that define the cycle and suppressing any
-opinion that contradicts the chosen one.  The C<suppress_opinions> table
-records which opinions are so suppressed.
-
-=head1 Interface
-
-The interface to this module is as follows (note: I<this is a draft
-specification>).  In the following documentation, the parameter C<dbh> is
-always a database handle.  Note that routines whose names begin with "get"
-return objects, while those whose names begin with "list" return lists of
-taxon identifiers.
-
-=over 4
-
-=item addTaxon ( dbh, taxon_no )
-
-Add the given taxon to the tree.  This taxon must previously have been entered
-into the C<authorities> table.  The taxon will be added without parents,
-synonyms or spellings; therefore, it will be necessary to subsequently call
-either C<rebuild()> or C<updateOpinion()> in order to link it to the rest of the
-taxa tree.
-
-=item updateOpinion ( dbh, opinion_no ... )
-
-Adjust the taxa tree, taking into account any changes that have been made to
-the given opinions.  Some or all of these opinions may have been newly created
-or deleted.
-
-=item getCurrentSpelling ( dbh, taxon_no )
-
-Returns an object representing the concept group leader (current spelling) of
-the given taxon.
-
-=item listCurrentSpelling ( dbh, taxon_no )
-
-Returns the taxon number of the concept group leader (current spelling) of the
-given taxon, which may be the given taxon itself.
-
-=item getAllSpellings ( dbh, taxon_no )
-
-Returns a list of objects representing all taxa that fall into the same
-concept group as the given taxon.  The first object in the list will be the
-group leader.
-
-=item listAllSpellings ( dbh, taxon_no )
-
-Returns a list of taxon identifiers, listing all taxa that fall into the same
-concept group as the given taxon.  The first item in the list will be the
-group leader.
-
-=item getOriginalCombination ( dbh, taxon_no )
-
-Returns an object representing the original combination of the given taxon,
-which may be the taxon itself.
-
-=item listOriginalCombination ( dbh, taxon_no )
-
-Returns the taxon identifier for the original combination of the given taxon,
-which may be the taxon itself.
-
-=item getMostSeniorSynonym ( dbh, taxon_no )
-
-Returns an object representing the most senior synonym of the given taxon.  If
-the taxon does not have a senior synonym, an object representing the taxon
-itself is returned.
-
-=item getAllSynonyms ( dbh, taxon_no )
-
-Returns a list of objects representing all synonyms of the given taxon, in
-order of seniority.  If the given taxon has no synonyms, a single object is
-returned representing the taxon itself.
-
-=item listAllSynonyms ( dbh, taxon_no )
-
-Returns a list of taxon identifiers, listing all synonyms (junior and senior)
-of the given taxon as well as the taxon itself.  These are ordered senior to junior.
-
-=item getParent ( dbh, taxon_no )
-
-Returns an object representing the parent of the given taxon.  If there is
-none, then nothing is returned.
-
-=item listParent ( dbh, taxon_no )
-
-Returns the taxon identifier of the parent of the given taxon, or 0
-if there is none.
-
-=item getImmediateParent ( dbh, taxon_no )
-
-Returns an object representing the immediate parent of the given taxon, which
-may not be the same as the one referred to by C<parent_no>.  It may be a
-junior synonym instead, if the relevant opinions so state.
-
-=item getParents ( dbh, taxon_no )
-
-Returns a list of objects representing all parents of the given taxon, in
-order from highest to lowest.
-
-=item listParents ( dbh, taxon_no )
-
-Returns a list of taxon identifiers representing all parents of the given
-taxon, in order from highest to lowest.
-
-=item getChildren ( dbh, taxon_no, options )
-
-Returns a list of objects representing the children of the given taxon.  If
-the option "include_synonyms" is true, then synonyms of the children are
-included as well.  If the option "all" is true, then all descendants are
-included, not just immediate children.
-
-=item listChildren ( dbh, taxon_no, options )
-
-Returns a list of taxon identifiers for all children of the given taxon.  If
-the option "include_synonyms" is true, then synonyms of the children are
-included as well.  If the option "all" is true, then all descendants are
-included, not just immediate children.
-
-=item getHistory ( dbh, taxon_no )
-
-Returns a list of objects representing all taxa which have had the same
-conceptual meaning as the given taxon at some point in history.  These are
-sorted by publication date, and include some but not all synonyms (i.e. not
-invalid subgroups of the given taxon).
-
-=back
-
-=cut
-
-package TaxaTree;
-
-use Data::Dumper;
-use CGI::Carp;
-use TaxonInfo;
-use Text::JaroWinkler qw( strcmp95 );
-use Constants qw($TAXA_TREE_CACHE $TAXA_LIST_CACHE $IS_FOSSIL_RECORD);
+package TaxonTrees;
 
 use strict;
-
-# Main table names
-
-our $TREE_TABLE = "taxon_trees";
-our $ANCESTOR_TABLE = "taxon_ancestors";
-our $OPINION_TABLE = "order_opinions";
-our $SUPPRESS_TABLE = "suppress_opinions";
 
 # Backup names for use with RENAME TABLES
 
@@ -336,13 +31,14 @@ our $JUNIOR_TEMP = "junior_aux";
 our $BELONGS_TEMP = "belongs_aux";
 our $PARENT_TEMP = "parent_aux";
 
-=item rebuild ( dbh, step )
 
-Completely rebuild the taxa tree from the C<opinions> and C<authorities>
-tables.  This is safe to run while the database is in active use.
-
-=cut
-
+# rebuild ( dbh, debug )
+# 
+# Completely rebuild the taxa tree from the C<opinions> and C<authorities>
+# tables.  This is safe to run while the database is in active use.  If 'debug'
+# is specified, it must be a hash reference indicating which of the steps in the
+# rebuilding process to carry out.
+# 
 # In order to be safe to run while the database is in use, we operate on
 # temporary tables which are then atomically swapped for the actual ones via a
 # single RENAME TABLE operation.  While this has been going on, authorities
@@ -356,7 +52,7 @@ tables.  This is safe to run while the database is in active use.
 # Note that the steps taken in this routine must be carried out in the order
 # given, for the following reasons:
 # 
-#   - concept group must be computed first, because the other three relations
+#   - concept group must be computed first, because the other relations
 #     presuppose it
 # 
 #   - group leader must be computed next, because senior synonyms
@@ -372,9 +68,9 @@ tables.  This is safe to run while the database is in active use.
 #   - tree sequence must be computed next, because the ancestry table uses it
 #     for proper ordering of ancestors.
 #   
-#   
-#   - once we have computed the hierarchy and marked the trees, we can swap
-#     the new tables for the current ones in an atomic operation.
+#   - once we have computed the hierarchy, sequenced the trees, and computed
+#     the ancestor relation, we can swap the new tables for the current ones
+#     in an atomic operation.
 
 sub rebuild {
     
@@ -402,7 +98,7 @@ sub rebuild {
     computeHierarchy($dbh) if $step->{e};
     computeTreeSequence($dbh) if $step->{f};
     computeAncestry($dbh) if $step->{g};
-    activateNewTables($dbh, 1) if $step->{h};
+    activateNewTables($dbh, $step->{k}) if $step->{h};
 }
 
 my $NEW_TABLE;		# For debugging purposes, this allows us to properly
@@ -466,13 +162,6 @@ sub createNewTables {
 			   parent_no int unsigned not null,
 			   parent_spelling_no int unsigned not null)");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
-    $result = $dbh->do("CREATE TABLE $SPELLING_TEMP
-			    (orig_no int unsigned,
-			     spelling_no int unsigned,
-			     is_misspelling boolean,
-			     PRIMARY KEY (orig_no))");
-    
     $result = $dbh->do("DROP TABLE IF EXISTS $BEST_TEMP");
     $result = $dbh->do("CREATE TABLE $BEST_TEMP
 			    (orig_no int unsigned,
@@ -519,8 +208,8 @@ sub createNewTables {
     
     print STDERR "Rebuild:     indexing opinion table\n";
     
-    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add index (orig_no)");
-    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add index (opinion_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add unique key (opinion_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add key (orig_no)");
     
     $NEW_TABLE = 1;		# we can stop here when debugging.
 }
@@ -629,6 +318,13 @@ sub computeSpelling {
     # is a unique key on $SPELLING_TEMP, so by using INSERT IGNORE on a
     # selection which is already in the proper order, we can easily pick out
     # the best opinion.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
+    $result = $dbh->do("CREATE TABLE $SPELLING_TEMP
+			    (orig_no int unsigned,
+			     spelling_no int unsigned,
+			     is_misspelling boolean,
+			     PRIMARY KEY (orig_no))");
     
     $result = $dbh->do("
 		INSERT IGNORE INTO $SPELLING_TEMP
