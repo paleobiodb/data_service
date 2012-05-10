@@ -1381,7 +1381,7 @@ sub submitOpinionForm {
         }
         
         # Make sure opinions authority information is synchronized with the original combination
-        Taxon::propagateAuthorityInfo($dbt,$fields{'child_no'});
+        Taxon::propagateAuthorityInfo($dbt,$q,$fields{'child_no'});
 
         # Remove any duplicates that may have been added as a result of the migration
         $resultOpinionNumber = removeDuplicateOpinions($dbt,$s,$fields{'child_no'},$resultOpinionNumber);
