@@ -929,7 +929,7 @@ sub submitAuthorityForm {
 		# if it's an old entry, then we'll update.
 		$resultTaxonNumber = $t->get('taxon_no');
 		$status = $dbt->updateRecord($s,'authorities','taxon_no',$resultTaxonNumber, \%fields);
-        propagateAuthorityInfo($dbt,$resultTaxonNumber,1);
+        propagateAuthorityInfo($dbt,$q,$resultTaxonNumber,1);
 
         my $db_orig_no = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
 
@@ -2244,6 +2244,7 @@ sub getBestClassification{
 
 sub propagateAuthorityInfo {
     my $dbt = shift;
+    my $q = shift;
     my $taxon_no = shift;
     my $this_is_best = shift;
     
@@ -2314,13 +2315,24 @@ sub propagateAuthorityInfo {
     # special handling for comments and discussion JA 4.9.11
     # these fields include subjective info that can't be ranked by "quality,"
     #  so glom everything together
+    # whoops, completely screwed this up... behavior depends on whether the
+    #  submission was of an opinion (in which case comments from merged names
+    #  must be combined) or an authority (in which case the verbatim text
+    #  field must be used) JA 10.5.12
     foreach my $f ( 'comments','discussion' )	{
-        foreach my $spelling (@spellings) {
-            if ( $spelling->{$f} ) {
-                $seenMore{$f} .= $spelling->{$f}."\n";
+        # ref_is_authority is a required field, so this test is trustworthy
+        if ( $q->param('ref_is_authority') )	{
+            $seenMore{$f} = $q->param($f);
+        } else	{
+            my %textSeen;
+            foreach my $spelling (@spellings) {
+                if ( $spelling->{$f} ) {
+                    $textSeen{$spelling->{$f}}++;
+                }
             }
+            # the comments will come out in random order, but who cares
+            $seenMore{$f} = join("\n",keys(%textSeen));
         }
-        $seenMore{$f} =~ s/\n$//;
     }
 
     # the user just entered these data, so if they exist, they should be used
