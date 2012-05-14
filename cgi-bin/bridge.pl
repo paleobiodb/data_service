@@ -390,15 +390,18 @@ sub home	{
 		} elsif ( $thing->{day_now} == $thing->{day_created} + 1 )	{
 			$entry = 60 * $thing->{hour_now} + 60 * ( 24 - $thing->{hour_created} ) + $thing->{minute_now} - $thing->{minute_created};
 		}
-		if ( $entry )	{
+		if ( $entry < 60 )	{
 			$entry .= " minutes ago";
 			$entry =~ s/^1 minutes ago/one minute ago/;
 			$entry =~ s/^0 minutes ago/this very minute/;
-			return $entry;
+		} elsif ( $entry )	{
+			$entry = int($entry / 60)." hours ago";
+			$entry =~ s/^1 hours/one hour/;
 		# hopefully this will never happen
 		} else	{
-			return ($thing->{day_now} - $thing->{day_created})." days ago";
+			$entry = ($thing->{day_now} - $thing->{day_created})." days ago";
 		}
+		return $entry;
 	}
 
 	# Get some populated values
@@ -2389,9 +2392,9 @@ sub processTaxonSearch {
                 }
 
                 if (@typoResults) {
-                    print "<div align=\"center\"><table><tr><td align=\"center\">";
+                    print "<div align=\"center\">\n";
     		        print "<p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">'<i>" . $q->param('taxon_name') . "</i>' was not found</p>\n<br>\n";
-                    print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
+                    print "<div class=\"displayPanel medium\" style=\"width: 36em; padding: 1em;\">\n";
                     print "<p><div align=\"left\"><ul>";
                     my $none = "None of the above";
                     if ( $#typoResults == 0 )	{
@@ -2421,7 +2424,7 @@ sub processTaxonSearch {
                     print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new taxon record.";
                     print "</div></p>";
                     print "</div>";
-                    print "</td></tr></table></div>";
+                    print "</div>";
                 } else {
                     if (!$s->get('reference_no')) {
                         $s->enqueue($q->query_string());
@@ -2442,10 +2445,10 @@ sub processTaxonSearch {
             }
 
             if (@typoResults) {
-                print "<div align=\"center\"><table><tr><td align=\"center\">";
+                print "<div align=\"center\">";
     		    print "<p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">'<i>" . $q->param('taxon_name') . "</i>' was not found</p>\n<br>\n";
-                print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
-                print "<p><div align=\"left\"><ul>";
+                print "<div class=\"displayPanel medium\" style=\"width: 36em; padding: 1em;\">\n";
+                print "<div align=\"left\"><ul>";
                 foreach my $row (@typoResults) {
                     my $full_row = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['*']);
                     my ($name,$authority) = Taxon::formatTaxon($dbt,$full_row,'return_array'=>1);
@@ -2453,15 +2456,15 @@ sub processTaxonSearch {
                 }
                 print "</ul>";
 
-                print "<div align=left class=small style=\"width: 500\">";
+                print qq|<div align=left class="small">\n<p>|;
                 if ( $#typoResults > 0 )	{
-                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of them are what you're looking for, please <a href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
+                    print "The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of them are what you're looking for, please <a href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
                 } else	{
-                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, an approximate match was found and is listed above.  If it is not what you are looking for, please <a href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
+                    print "The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, an approximate match was found and is listed above.  If it is not what you are looking for, please <a href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
                 }
                 print "</div></p>";
                 print "</div>";
-                print "</td></tr></table></div>";
+                print "</div>";
             } else {
                 if ($q->param('taxon_name')) {
                     push my @errormessages , "The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.<br>Please <a href=\"$WRITE_URL?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> an authority record for this taxon first.";
@@ -2497,7 +2500,6 @@ sub processTaxonSearch {
     # or create a new taxon with the same name as an exisiting taxon
 	} else	{
 		print "<div align=\"center\">\n";
-        print "<table><tr><td align=\"center\">";
         if ($q->param("taxon_name")) { 
     		print "<p class=\"pageTitle\" style=\"margin-top: 1em;\">Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</p>\n<br>\n";
         } else {
@@ -2509,7 +2511,7 @@ sub processTaxonSearch {
         }
 
         # now create a table of choices
-		print "<div class=\"displayPanel medium\" style=\"padding: 1em; padding-right: 2em; margin-top: -1em;\">";
+		print "<div class=\"displayPanel medium\" style=\"width: 40em; padding: 1em; padding-right: 2em; margin-top: -1em;\">";
         print "<div align=\"left\"><ul>\n";
         my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
         foreach my $row (@results) {
@@ -2557,9 +2559,7 @@ sub processTaxonSearch {
 		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')\">FAQ</a>.</div></p>\n";
         }
 
-        print "</div>";
-        print "</td></tr></table>";
-		print "</div>\n";
+		print "</div>\n</div>\n";
 	}
 }
 
