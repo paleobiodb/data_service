@@ -9,29 +9,6 @@ package TaxonTrees;
 
 use strict;
 
-# Backup names for use with RENAME TABLES
-
-our $TREE_BAK = "taxon_trees_bak";
-our $ANCESTOR_BAK = "taxon_ancestors_bak";
-our $OPINION_BAK = "order_opinions_bak";
-our $SUPPRESS_BAK = "suppress_opinions_bak";
-
-# Working table names
-
-our $TREE_TEMP = "tn";
-our $ANCESTOR_TEMP = "pn";
-our $OPINION_TEMP = "oo";
-our $SUPPRESS_TEMP = "sn";
-
-# Auxiliary table names
-
-our $SPELLING_TEMP = "spelling_opinions";
-our $BEST_TEMP = "best_opinions";
-our $JUNIOR_TEMP = "junior_aux";
-our $BELONGS_TEMP = "belongs_aux";
-our $PARENT_TEMP = "parent_aux";
-
-
 # rebuild ( dbh, debug )
 # 
 # Completely rebuild the taxa tree from the C<opinions> and C<authorities>
@@ -52,11 +29,8 @@ our $PARENT_TEMP = "parent_aux";
 # Note that the steps taken in this routine must be carried out in the order
 # given, for the following reasons:
 # 
-#   - concept group must be computed first, because the other relations
-#     presuppose it
-# 
-#   - group leader must be computed next, because senior synonyms
-#     and parents must always be concept group leaders
+#   - group leader must be computed first, because senior_no and parent_no
+#     always point to group leaders.
 # 
 #   - synonymy must be computed next, because the hierarchy is defined 
 #     based on the best opinion for any taxon and its junior synonyms 
@@ -85,20 +59,19 @@ sub rebuild {
     unless ( defined $step and ref $step eq 'HASH' )
     {
 	$step = { 'a' => 1, 'b' => 1, 'c' => 1, 'd' => 1, 'e' => 1,
-		  'f' => 1, 'g' => 1, 'h' => 1 };
+		  'f' => 1, 'g' => 1 };
     }
     
     # The following steps are required in order to carry out a full rebuild of
     # the taxon tree tables:
     
     createNewTables($dbh) if $step->{a};
-    groupByConcept($dbh) if $step->{b};
-    computeSpelling($dbh) if $step->{c};
-    computeSynonymy($dbh) if $step->{d};
-    computeHierarchy($dbh) if $step->{e};
-    computeTreeSequence($dbh) if $step->{f};
-    computeAncestry($dbh) if $step->{g};
-    activateNewTables($dbh, $step->{k}) if $step->{h};
+    computeSpelling($dbh) if $step->{b};
+    computeSynonymy($dbh) if $step->{c};
+    computeHierarchy($dbh) if $step->{d};
+    computeTreeSequence($dbh) if $step->{e};
+    computeAncestry($dbh) if $step->{f};
+    activateNewTables($dbh, $step->{k}) if $step->{g};
 }
 
 my $NEW_TABLE;		# For debugging purposes, this allows us to properly
@@ -120,21 +93,27 @@ sub createNewTables {
     print STDERR "Rebuild: creating temporary tables (a)\n";
     $DB::single = 1;
     
-    # We start by re-creating all of the temporary tables, dropping the old ones
-    # if they still exist.
+    # We start by re-creating all of the temporary tables, dropping the old
+    # ones if they still exist.  $TREE_TEMP is populated with one row for each
+    # distinct orig_no value in authorities.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $TREE_TEMP");
     $result = $dbh->do("CREATE TABLE $TREE_TEMP 
-			       (taxon_no int unsigned not null,
-				orig_no int unsigned not null,
+			       (orig_no int unsigned not null,
 				spelling_no int unsigned not null,
 				synonym_no int unsigned not null,
 				parent_no int unsigned not null,
 				opinion_no int unsigned not null,
-				lft int unsigned not null,
-				rgt int unsigned not null,
-				depth int unsigned not null,
+				lft int unsigned,
+				rgt int unsigned,
+				depth int unsigned,
 				PRIMARY KEY (taxon_no))");
+    
+    $result = $dbh->do("INSERT INTO $TREE_TEMP
+			SELECT distinct orig_no, 0, 0, 0, 0
+			FROM authorities");
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD PRIMARY KEY (orig_no)");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $ANCESTOR_TEMP");
     $result = $dbh->do("CREATE TABLE $ANCESTOR_TEMP
@@ -157,7 +136,6 @@ sub createNewTables {
 			   pubyr varchar(4),
 			   status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 			   spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
-			   child_no int unsigned not null,
 			   child_spelling_no int unsigned not null,
 			   parent_no int unsigned not null,
 			   parent_spelling_no int unsigned not null)");
@@ -179,13 +157,10 @@ sub createNewTables {
     
     print STDERR "Rebuild:     populating opinion table\n";
     
-    # This query is adapated from the old getMostRecentClassification()
-    # routine, from TaxonInfo.pm line 2003.
-    
     $result = $dbh->do("LOCK TABLE opinions as o read, refs as r read, $OPINION_TEMP write");
     
     $result = $dbh->do("INSERT INTO $OPINION_TEMP
-		SELECT o.child_no, o.opinion_no, 
+		SELECT a1.orig_no, o.opinion_no, 
 			IF ((o.basis != '' AND o.basis IS NOT NULL), CASE o.basis
 			WHEN 'second hand' THEN 1
 			WHEN 'stated without evidence' THEN 2
@@ -197,9 +172,11 @@ sub createNewTables {
 				WHEN 'stated with evidence' THEN 3
 				ELSE 2 END)) AS ri,
 			if(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr,
-			o.status, o.spelling_reason, o.child_no, o.child_spelling_no,
-			o.parent_no, o.parent_spelling_no
+			o.status, o.spelling_reason, a2.orig_no, o.child_spelling_no,
+			o.parent_spelling_no
 		FROM opinions o LEFT JOIN refs r USING (reference_no)
+			JOIN authorities a1 ON a1.taxon_no = o.child_spelling_no
+			JOIN authorities a2 ON a2.taxon_no = o.parent_spelling_no
 		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
     
     $result = $dbh->do("UNLOCK TABLES");
@@ -208,227 +185,11 @@ sub createNewTables {
     
     print STDERR "Rebuild:     indexing opinion table\n";
     
-    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add unique key (opinion_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add primary key (opinion_no)");
     $result = $dbh->do("ALTER TABLE $OPINION_TEMP add key (orig_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_TEMP add key (parent_no)");
     
     $NEW_TABLE = 1;		# we can stop here when debugging.
-}
-
-
-# groupByConcept ( dbh )
-# 
-# Fill in the taxon_no and orig_no fields of $TREE_TEMP.  This computes the
-# "taxonomic concept group" relation.
-
-sub groupByConcept {
-
-    my ($dbh) =  @_;
-    
-    my ($result);
-    
-    print STDERR "Rebuild: computing concept group relation (b)\n";
-    $DB::single = 1;
-    
-    # The following algorithm is adapted from the old getOriginalCombination()
-    # routine from TaxonInfo.pm, line 2139.
-    
-    # We start by checking for taxa that are mentioned in some opinion as
-    # "child_spelling_no" and set the "original combination" as the
-    # "child_no" from that opinion.  If there is more than one such opinion,
-    # we take the oldest first, and if there are still conflicts, the one
-    # one with the lowest opinion number (the one entered first.)
-    
-    print STDERR "Rebuild:     setting orig_no, phase 1\n";
-    
-    $result = $dbh->do("INSERT IGNORE INTO $TREE_TEMP (taxon_no, orig_no)
-			SELECT distinct child_spelling_no, child_no
-			FROM $OPINION_TEMP
-			WHERE child_no != 0 and child_spelling_no != 0
-			ORDER BY pubyr ASC, opinion_no ASC");
-    
-    # Next, for we check for taxa that are mentioned in some opinion as
-    # "child_no", but not in any opinion as "child_spelling_no".  These taxa
-    # are their own "original combinations".  We filter out those which were
-    # caught in the last statement by using INSERT IGNORE.  Since we're
-    # looking for all taxa which meet this condition, we don't need to order
-    # the result.
-    
-    print STDERR "Rebuild:     setting orig_no, phase 2\n";
-    
-    $result = $dbh->do("INSERT IGNORE INTO $TREE_TEMP (taxon_no, orig_no)
-			SELECT child_no, child_no
-			FROM $OPINION_TEMP WHERE child_no != 0");
-    
-    # There are still some taxa we have not gotten yet, so we next check for
-    # taxa that are mentioned in some opinion as a "parent_spelling_no", and
-    # set the original combination to "parent_no" from that opinion.  Again,
-    # we need to order by publication year and opinion_no in case there are
-    # conflicts.
-    
-    print STDERR "Rebuild:     setting orig_no, phase 3\n";
-    
-    $result = $dbh->do("INSERT IGNORE INTO $TREE_TEMP (taxon_no, orig_no)
-			SELECT distinct parent_spelling_no, parent_no
-			FROM $OPINION_TEMP
-			WHERE parent_spelling_no != 0 and parent_no != 0
-			ORDER BY pubyr ASC, opinion_no ASC");
-    
-    # Every taxon not caught so far is its own "original combination" by
-    # default.  We want every taxon in authorities to have a corresponding
-    # entry in taxon_trees, so we add everything that's not already there.
-    
-    print STDERR "Rebuild:     setting orig_no, phase 4\n";
-    
-    $result = $dbh->do("INSERT IGNORE INTO $TREE_TEMP (taxon_no, orig_no)
-			SELECT taxon_no, taxon_no
-			FROM authorities a");
-    
-    # Now that the orig_no field is completely set, we can efficiently index
-    # it.
-    
-    print STDERR "Rebuild:     indexing orig_no\n";
-    
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (orig_no)");
-    
-    my $a = 1;		# we can stop here when debugging
-};
-
-
-# computeSpelling ( dbh )
-# 
-# Fill in the spelling_no field of $TREE_TEMP.  This computes the "concept
-# group leader" relation.  We do this by selecting the best opinion (most
-# recent and reliable) for each concept group.  Unless the best opinion is
-# recorded as a misspelling, we take its spelling to be the accepted one.
-# Otherwise, we look for the best spelling match among the available opinions
-# using the Jaro-Winkler algorithm.
-
-sub computeSpelling {
-
-    my ($dbh) = @_;
-    
-    my ($result);
-    
-    print STDERR "Rebuild: computing group leader relation (c)\n";
-    $DB::single = 1;
-    
-    # At this point in the rebuilding process we have the taxa grouped by
-    # concept, and the next step is to select the single best (most reliable
-    # and recent) spelling opinion for each concept group.  Note that orig_no
-    # is a unique key on $SPELLING_TEMP, so by using INSERT IGNORE on a
-    # selection which is already in the proper order, we can easily pick out
-    # the best opinion.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
-    $result = $dbh->do("CREATE TABLE $SPELLING_TEMP
-			    (orig_no int unsigned,
-			     spelling_no int unsigned,
-			     is_misspelling boolean,
-			     PRIMARY KEY (orig_no))");
-    
-    $result = $dbh->do("
-		INSERT IGNORE INTO $SPELLING_TEMP
-		SELECT child_no, child_spelling_no,
-		       if(spelling_reason = 'misspelling', true, false)
-		FROM $OPINION_TEMP");
-    
-    # The problematic cases are the ones where the best opinion is marked as a
-    # misspelling.  For each of these cases, we will have to grab all opinions
-    # for the concept group and find the closest spelling match.
-    
-    # First fetch the orig_no of each concept group for which this is the
-    # case, along with the actual misspelled name.
-    
-    print STDERR "Rebuild:     downloading spellings\n";
-    
-    my $misspellings = $dbh->prepare("
-			SELECT s.orig_no, a.taxon_name
-			FROM $SPELLING_TEMP s JOIN authorities a ON a.taxon_no = s.spelling_no
-			WHERE s.is_misspelling");
-    
-    $misspellings->execute();
-    
-    my (%misspelling, %best_match, %best_coeff, %seen,
-	$orig_no, $taxon_no, $taxon_name);
-    
-    while ( ($orig_no, $taxon_name) = $misspellings->fetchrow_array() )
-    {
-	$misspelling{$orig_no} = $taxon_name;
-    }
-    
-    # Then, fetch all of the candidate spellings for each of these
-    # misspellings.  We select them in descending order of publication year,
-    # so that if equal-weight misspellings are found then we choose the most
-    # recent one.
-    # 
-    # For each possible spelling, we compute the candidate's Jaro-Winkler
-    # coefficient against the known misspelling.  If this is better than the
-    # best match previously found, it becomes the preferred spelling for this
-    # taxon.  Note that the Jaro-Winkler coefficient runs from 0 (no similarity)
-    # to 1 (perfect similarity).
-    
-    print STDERR "Rebuild:     looking for good spellings\n";
-    
-    my $candidates = $dbh->prepare("
-			SELECT DISTINCT o.orig_no, o.child_spelling_no, a.taxon_name
-			FROM $OPINION_TEMP o JOIN $SPELLING_TEMP s USING (orig_no)
-				JOIN authorities a ON a.taxon_no = o.child_spelling_no
-			WHERE s.is_misspelling and o.spelling_reason != 'misspelling'
-			ORDER BY o.pubyr DESC");
-		       
-    $candidates->execute();
-    
-    while ( ($orig_no, $taxon_no, $taxon_name) = $candidates->fetchrow_array() )
-    {
-	next if $taxon_name eq $misspelling{$orig_no};
-	next if $seen{$orig_no . $taxon_name};
-	
-	my ($alen) = length($taxon_name);
-	my ($blen) = length($misspelling{$orig_no});
-	my ($coeff) = strcmp95( $taxon_name, $misspelling{$orig_no},
-				   ($alen > $blen ? $alen : $blen) );
-	
-	if ( !defined $best_coeff{$orig_no} or $coeff > $best_coeff{$orig_no} )
-	{
-	    $best_coeff{$orig_no} = $coeff;
-	    $best_match{$orig_no} = $taxon_no;
-	}
-	
-	$seen{$orig_no . $taxon_name} = 1;
-    }
-    
-    # Now we fix all of the misspellings that we identified above.
-    
-    my $fix_spelling = $dbh->prepare("UPDATE $SPELLING_TEMP SET spelling_no = ?
-				      WHERE orig_no = ?");
-    
-    foreach $orig_no (keys %misspelling)
-    {
-	my $spelling_no = $best_match{$orig_no} || $orig_no;
-	
-	$fix_spelling->execute($spelling_no, $orig_no);
-    }
-    
-    # Next, we copy all of the computed spelling_no values into $TREE_TEMP.
-    
-    print STDERR "Rebuild:     setting spelling_no\n";
-    
-    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $SPELLING_TEMP s USING (orig_no)
-			SET t.spelling_no = s.spelling_no");
-    
-    # Finally, in every row of $TREE_TEMP that still has a spelling_no of 0,
-    # we set spelling_no = taxon_no.  In other words, taxa which have no
-    # associated opinions are automatically their own group leader.
-    
-    $result = $dbh->do("UPDATE $TREE_TEMP SET spelling_no = taxon_no WHERE spelling_no = 0");
-    
-    # Now that we have set spelling_no, we can efficiently index it.
-    
-    print STDERR "Rebuild:     indexing spelling_no\n";
-    
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (spelling_no)");
-    
-    my $a = 1;		# we can stop on this line when debugging
 }
 
 
@@ -499,7 +260,7 @@ sub computeSynonymy {
     
     my $synonym_opinions = $dbh->prepare("
 		SELECT orig_no, parent_no, opinion_no, ri, pubyr
-		FROM $BEST_TEMP b
+		FROM $BEST_TEMP
 		WHERE status != 'belongs to' AND parent_no != 0");
     
     $synonym_opinions->execute();
@@ -529,7 +290,7 @@ sub computeSynonymy {
     
     my @breaks = breakCycles($dbh, \%juniors, \%opinions);
     
-    print STDERR "Rebuild:         found " . scalar(@breaks) . " cycles \n";
+    print STDERR "Rebuild:         found " . scalar(@breaks) . " cycle(s) \n";
     
     # As long as there are cycles to be broken, we suppress the indicated
     # opinions and do a re-check, just in case the next-best opinions cause a
@@ -613,7 +374,7 @@ sub computeSynonymy {
 	
 	@breaks = breakCycles($dbh, \%juniors, \%opinions, \%taxa_moved);
 	
-	print STDERR "Rebuild:         found " . scalar(@breaks) . " cycles \n";
+	print STDERR "Rebuild:         found " . scalar(@breaks) . " cycle(s) \n";
     }
     
     # Now that we've broken all of the cycles in $BEST_TEMP, we can use it
@@ -625,7 +386,7 @@ sub computeSynonymy {
     print STDERR "Rebuild:     setting synonym_no, opinion_no\n";
     
     $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $BEST_TEMP b USING (orig_no)
-				JOIN $TREE_TEMP t2 ON b.parent_no = t2.taxon_no
+				JOIN $TREE_TEMP t2 ON b.parent_no = t2.orig_no
 			SET t.synonym_no = t2.spelling_no, t.opinion_no = b.opinion_no
 			WHERE status != 'belongs to'");
     
@@ -655,9 +416,10 @@ sub computeSynonymy {
     
     do
     {
-	$result = $dbh->do("UPDATE $TREE_TEMP t JOIN $TREE_TEMP t2
-				ON t.synonym_no = t2.taxon_no and t.synonym_no != t2.synonym_no
-			    SET t.synonym_no = t2.synonym_no");
+	$result = $dbh->do("
+		UPDATE $TREE_TEMP t JOIN authorities a ON a.taxon_no = t.synonym_no
+			JOIN $TREE_TEMP t2 ON a.orig_no = t2.orig_no and t.synonym_no != t2.synonym_no
+		SET t.synonym_no = t2.synonym_no");
     }
 	while $result > 0 && ++$count < 20;
     
@@ -770,7 +532,7 @@ sub computeHierarchy {
 				JOIN $OPINION_TEMP o ON o.opinion_no = x.opinion_no
 			SET b.opinion_no = o.opinion_no, b.ri = o.ri, b.pubyr = o.pubyr,
 				b.parent_no = o.parent_no
-			WHERE b.status = 'belongs to'");
+			WHERE b.status = 'belongs to' and b.opinion_no != o.opinion_no");
     
     # Next, we download the entire set of "best opinions" so that we can look
     # for cycles (ignoring those with a parent_no of 0, because they obviously
@@ -799,7 +561,7 @@ sub computeHierarchy {
 	
 	if ( $child == $parent )
 	{
-	    print STDERR "Rebuild:     WARNING - best opinion for $child has same parent\n";
+	    print STDERR "Rebuild: WARNING - best opinion for $child has same parent (opinion $op)\n";
 	    next;
 	}
 
@@ -813,7 +575,7 @@ sub computeHierarchy {
     
     my @breaks = breakCycles($dbh, \%children, \%opinions);
     
-    print STDERR "Rebuild:         found " . scalar(@breaks) . " cycles \n";
+    print STDERR "Rebuild:         found " . scalar(@breaks) . " cycle(s) \n";
     
     # As long as there are cycles to be broken, we suppress the indicated
     # opinions and then re-check for cycles (just in case the next-best
@@ -889,7 +651,7 @@ sub computeHierarchy {
 	
 	@breaks = breakCycles($dbh, \%children, \%opinions, \%taxa_moved);
 	
-	print STDERR "Rebuild:         found " . scalar(@breaks) . " cycles \n";
+	print STDERR "Rebuild:         found " . scalar(@breaks) . " cycle(s) \n";
     }
     
     # Now that we have eliminated all cycles, we can set the opinion_no field
@@ -1101,11 +863,11 @@ sub computeTreeSequence {
     print STDERR "Rebuild: traversing and marking taxon trees (f)\n";
     $DB::single = 1;
     
-    $dbh->do("UPDATE $TREE_TEMP SET lft=0, rgt=0, depth=0") unless $NEW_TABLE;
+    $dbh->do("UPDATE $TREE_TEMP SET lft=NULL, rgt=NULL, depth=NULL") unless $NEW_TABLE;
     
     print STDERR "Rebuild:     downloading hierarchy relation\n";
     
-    my $pc_pairs = $dbh->prepare("SELECT distinct spelling_no, parent_no
+    my $pc_pairs = $dbh->prepare("SELECT spelling_no, parent_no
 				  FROM $TREE_TEMP
 				  WHERE parent_no > 0"); 
     
@@ -1177,14 +939,19 @@ sub computeTreeSequence {
     
     $result = $dbh->do($insert_stmt) if $comma;
     
-    # Now that we have uploaded the data, we can copy it into $TREE_TEMP    
+    # Now that we have uploaded the data, we can copy it into $TREE_TEMP and
+    # then delete the temporary table.
     
     print STDERR "Rebuild:     setting lft, rgt, depth\n";
+    
+    $result = $dbh->do("ALTER TABLE tree_insert ADD INDEX (spelling_no)");
     
     $result = $dbh->do("UPDATE $TREE_TEMP t JOIN tree_insert i USING (spelling_no)
 			SET t.lft = i.lft, t.rgt = i.rgt, t.depth = i.depth");
     
-    # Now we can efficiently index them lft, rgt and depth.
+    $result = $dbh->do("DROP TABLE IF EXISTS tree_insert");
+    
+    # Now we can efficiently index $TREE_TEMP on lft, rgt and depth.
     
     print STDERR "Rebuild:     indexing lft, rgt, depth\n";
     
@@ -1376,7 +1143,7 @@ sub activateNewTables {
 				$SUPPRESS_TABLE to $SUPPRESS_BAK,
 				$SUPPRESS_TEMP to $SUPPRESS_TABLE");
     
-    # Now we can get rid of the backup tables
+    # Then we can get rid of the backup tables
     
     $result = $dbh->do("DROP TABLE $TREE_BAK");
     $result = $dbh->do("DROP TABLE $ANCESTOR_BAK");
