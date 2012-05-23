@@ -358,8 +358,11 @@ sub addConcept {
     # Add a new row to $TREE_TABLE appropriate for a taxon with no
     # relationship to any other taxa.
     
+    my ($new_seq) = $dbh->selectrow_array("SELECT max(lft)+1 FROM $TREE_TABLE");
+    
     my $result = $dbh->do("INSERT INTO $TREE_TABLE 
-			   VALUES ($orig_no, $orig_no, $orig_no, $orig_no, 0)");
+			   VALUES ($orig_no, $orig_no, $orig_no, $orig_no, 0, 
+				   $new_seq, $new_seq, 1)");
 
     my $a = 1;		# we can stop here when debugging
 }
@@ -505,47 +508,54 @@ sub update {
     
     computeHierarchy($dbh);
     
-    # If the adjustments to the hierarchy are small, then we can adjust the
-    # tree sequence and ancestor relation in-place.
+    # At this point, we need to de-chain all synonym_no and parent_no values
+    # that point out of $TREE_TEMP into $TREE_TABLE.  They might point to
+    # junior synonyms in $TREE_TABLE, and if so they must be updated to point
+    # to the proper senior synonyms as indicated by the corresponding
+    # synonym_no values in $TREE_TABLE.
     
-    if ( treePerturbation($dbh) < 10 )
+    deChainReferences($dbh);
+    
+    # If the adjustments to the hierarchy are small, then we can now update
+    # $TREE_TABLE using the rows from $TREE_TEMP and then adjust the tree
+    # sequence in-place.  This will finish the procedure.
+    
+    if ( treePerturbation($dbh) < 1 )
     {
-	# lock tables
-	
-	# copy $TREE_TEMP into $TREE_TABLE
-	
-	# adjust sequence in $TREE_TABLE
-	
-	# adjust ancestor relation in $ANCESTOR_TABLE
-	
-	# unlock tables
+	updateTreeTables($dbh);
     }
     
-    # Otherwise, we need to completely rebuild the tree sequence and ancestor
-    # relation.
+    # Otherwise, we need to completely rebuild the tree sequence and then
+    # activate the temporary tables using atomic rename.
     
     else
     {
-	# copy $TREE_TABLE into $TREE_TEMP, $SUPPRESS_TABLE into
-	# $SUPPRESS_TEMP 
+	# Copy all rows from $TREE_TABLE into $TREE_TEMP that aren't already
+	# represented there.
 	
 	my $result = $dbh->do("
 		INSERT IGNORE INTO $TREE_TEMP
 		SELECT * FROM $TREE_TABLE");
 	
+	# Do the same thing for $SUPPRESS_TEMP, but ignore anything that is a
+	# classification opinion in $TREE_TEMP (such an opinion was previously
+	# suppressed, but now should not be).
+	
 	my $result = $dbh->do("
 		INSERT INTO $SUPPRESS_TEMP
-		SELECT * FROM $SUPPRESS_TABLE");
+		SELECT * FROM $SUPPRESS_TABLE s
+			LEFT JOIN $TREE_TEMP t ON s.opinion_no = t.opinion_no
+		WHERE orig_no is null");
 	
-	# resequence the tree
+	# Now that $TREE_TEMP has the entire tree, resequence it.
 	
 	computeTreeSequence($dbh);
 	
 	# recompute the ancestry relation
 	
-	computeAncestry($dbh);
+	#computeAncestry($dbh);
 	
-	# Then activate the new tables by renaming them over the previous
+	# Then activate the temporary tables by renaming them over the previous
 	# ones. 
 	
 	activateNewTables($dbh);
@@ -613,7 +623,7 @@ sub build {
     
     # Next, compute the ancestry relation using the sequenced trees.
     
-    computeAncestry($dbh) if $step_control->{f};
+    # computeAncestry($dbh) if $step_control->{f};
     
     # Finally, activate the new tables we have just computed by renaming them
     # over the previous ones.
@@ -1815,6 +1825,114 @@ sub breakCycles {
 }
 
 
+# deChainReferences ( dbh )
+# 
+# Update all synonym_no and parent_no values in $TREE_TEMP that point out of
+# that table (in other words, those that do not correspond to orig_no values
+# in $TREE_TEMP).  These might point to junior synonyms in $TREE_TABLE, and so
+# they must be updated to point to the proper senior synonyms as indicated by
+# the corresponding synonym_no values in $TREE_TABLE.
+# 
+# Note that all synonym_no values that point to other rows in $TREE_TEMP have
+# already been updated by deChainSynonyms().  Note also that we only have to
+# do this once because $TREE_TABLE and $TREE_TEMP each have no synonym_no
+# chains internally.  We only have to worry about single-link chains between
+# the two tables.
+    
+sub deChainReferences {
+    
+    my ($dbh) = @_;
+    
+    my $result;
+    
+    # First the synonym_no values
+    
+    $result = $dbh->do("
+		UPDATE $TREE_TEMP as t1
+			LEFT JOIN $TREE_TEMP as t2 ON t1.synonym_no = t2.orig_no
+			JOIN $TREE_TABLE as m ON t1.synonym_no = m.orig_no
+		SET t1.synonym_no = m.synonym_no
+		WHERE t2.orig_no is null");
+    
+    # Then the parent_no values
+    
+    $result = $dbh->do("
+		UPDATE $TREE_TEMP as t1
+			LEFT JOIN $TREE_TEMP as t2 ON t1.parent_no = t2.orig_no
+			JOIN $TREE_TABLE as m ON t1.parent_no = m.orig_no
+		SET t1.parent_no = m.synonym_no
+		WHERE t2.orig_no is null");
+    
+    my $a = 1;		# we can stop here when debugging
+}
+
+
+# treePerturbation ( dbh )
+# 
+# Determine which taxa have changed parents.  At the same time, estimate the
+# amount of time it would take to adjust the tree sequence in-place to account
+# for this.  Return the estimate, with a figure of 1 representing an estimate
+# that it would take just as long to recompute the whole tree.
+# 
+# The reason we need to make this calculation is that nested-set trees are
+# very expensive to alter.  A single moved taxon may require changing all of
+# the rows of $TREE_TABLE.
+
+sub estimateTreePerturbation {
+    
+    my ($dbh) = @_;
+    
+    my $result;
+    
+    # First, we get the tree size.
+    
+    my ($tree_size) = $dbh->selectrow_array("
+		SELECT count(*) from $TREE_TABLE WHERE lft is not null");
+    
+    # Then determine which of the taxa in $TREE_TEMP have changed parents, and
+    # grab some information about them.  We need to compute the total number
+    # of taxa that are moving, plus the total perturbation (number of tree
+    # rows that will have to be changed to move these taxa).  The latter is an
+    # estimate, so does not need to be exact.
+    
+    my $changed_taxa = $dbh->prepare("
+		SELECT orig_no, t2.lft, t2.rgt, t3.lft
+		FROM $TREE_TEMP t1 JOIN $TREE_TABLE t2 USING (orig_no)
+			JOIN $TREE_TABLE t3 ON t3.orig_no = t2.parent_no
+		WHERE t1.parent_no != t2.parent_no");
+    
+    $changed_taxa->execute();
+    
+    my ($move_count, $perturbation) = @_;
+    
+    while ( my($orig_no, $old_lft, $old_rgt, 
+	       $new_lft) = $changed_taxa->fetchrow_array() )
+    {
+	$move_count++;
+	if ( $old_lft > 0 )
+	{
+	    $perturbation += ($old_rgt - $old_lft) + ($new_lft - $old_lft);
+	}
+	else
+	{
+	    $perturbation += ($tree_size - $new_lft);
+	}
+    }
+    
+    # If there is nothing to move, then the perturbation of the tree is 0.
+    
+    if ( $move_count == 0 )
+    {
+	return 0;
+    }
+    
+    else
+    {
+	return $perturbation / $tree_size;
+    }
+}
+
+
 our (%children, %parent, %tree);
 
 # computeTreeSequence ( dbh )
@@ -1835,15 +1953,17 @@ sub computeTreeSequence {
     logMessage(2, "    downloading hierarchy relation");
     
     my $pc_pairs = $dbh->prepare("SELECT orig_no, parent_no
-				  FROM $TREE_TEMP
-				  WHERE parent_no > 0"); 
+				  FROM $TREE_TEMP"); 
     
     $pc_pairs->execute();
     
     while ( my ($child_no, $parent_no) = $pc_pairs->fetchrow_array() )
     {
-	$children{$parent_no} = [] unless defined $children{$parent_no};
-	push @{$children{$parent_no}}, $child_no;
+	if ( $parent_no > 0 )
+	{
+	    $children{$parent_no} = [] unless defined $children{$parent_no};
+	    push @{$children{$parent_no}}, $child_no;
+	}
 	$parent{$child_no} = $parent_no;
     }
     
@@ -1864,9 +1984,9 @@ sub computeTreeSequence {
     logMessage(2, "    sequencing all other taxon trees");
     
  taxon:
-    foreach my $taxon (keys %children)
+    foreach my $taxon (keys %parent)
     {
-	next if exists $parent{$taxon};		# skip any taxa that aren't roots
+	next if $parent{$taxon} > 0;		# skip any taxa that aren't roots
 	next if exists $tree{$taxon};		# skip any that we've already inserted
 	
 	$sequence = createNode($taxon, $sequence+1, 1);
@@ -2061,6 +2181,239 @@ sub computeAncestry {
 }
 
 
+# updateTreeTables ( dbh )
+# 
+# Do the final steps in the update procedure.  These are as follows:
+# 
+# 1) copy everything from $TREE_TEMP into $TREE_TABLE, overwriting
+#    corresponding rows
+# 2) adjust the tree sequence in $TREE_TABLE
+# 
+# These two have to be quick, since we need to do them with $TREE_TABLE
+# locked.
+# 
+# 3) copy everything from $SUPPRESS_TEMP into $SUPPRESS_TABLE, and clear
+#    entries from $SUPPRESS_TABLE that should no longer be there.
+
+sub updateTreeTables {
+
+    my ($dbh) = @_;
+    
+    my $result;
+    
+    # The first thing to do is to determine which rows have a changed
+    # parent_no value.  Each one will require an adjustment to the tree
+    # sequence.  We have to do this now, before we copy the rows from
+    # $TREE_TEMP over the corresponding rows from $TREE_TABLE below.
+    
+    # We order the rows in descending order of position to make sure that
+    # children are moved before their parents.  This is necessary in order to
+    # make sure that a parent is never moved underneath one of its existing
+    # children (we have already eliminated cycles, so if this is going to
+    # happen then the child must be moving as well).
+    
+    my $moved_taxa = $dbh->prepare("
+		SELECT t.orig_no, t.parent_no
+		FROM $TREE_TEMP as t LEFT JOIN $TREE_TABLE as m USING (orig_no)
+		WHERE t.parent_no != m.parent_no
+		ORDER BY m.lft DESC");
+    
+    $moved_taxa->execute();
+    
+    my (@move);
+    
+    while ( my ($orig_no, $new_parent) = $moved_taxa->fetchrow_array() )
+    {
+	push @move, [$orig_no, $new_parent];
+    }
+    
+    # Next, we need to fill in $TREE_TEMP with the corresponding lft, rgt, and
+    # depth values from $TREE_TABLE.  For all rows which aren't being moved to
+    # a new location in the hierarcy, those values won't be changing.  Those
+    # that are being moved will be updated below.
+    
+    $result = $dbh->do("UPDATE $TREE_TEMP as t JOIN $TREE_TABLE as m USING (orig_no)
+			SET t.lft = m.lft, t.rgt = m.rgt, t.depth = m.depth");
+    
+    # Before we update $TREE_TABLE, we need to lock it for writing.  This will
+    # ensure that all other threads see it in a consistent state, either pre-
+    # or post-update.  This means that we also have to lock $TREE_TEMP for
+    # read.
+    
+    $result = $dbh->do("LOCK TABLE $TREE_TABLE as m WRITE,
+				   $TREE_TEMP as t READ");
+    
+    # Now write all rows of $TREE_TEMP over the corresponding rows of
+    # $TREE_TABLE.
+
+    $result = $dbh->do("REPLACE INTO $TREE_TABLE
+			SELECT * FROM $TREE_TEMP");
+    
+    # Now adjust the tree sequence to take into account all rows that have
+    # changed their position in the hierarchy.  Note that we couldn't do this
+    # beforehand because the rows in $TREE_TEMP may have child rows that are
+    # not themselves in $TREE_TEMP.  We had to wait until $TREE_TABLE was
+    # otherwise completely updated and then do the adjustments in-place.
+    
+    foreach my $pair (@move)
+    {
+	adjustTreeSequence($dbh, @$pair);
+    }
+    
+    # Now we can unlock the tables.
+    
+    $result = $dbh->do("UNLOCK TABLES");
+    
+    # Finally, we need to update $SUPPRESS_TABLE.  We need to add everything
+    # that is in $SUPPRESS_TEMP, and remove everything that corresponds to a
+    # classification opinion in $TREE_TEMP.  The latter represent opinions
+    # which were previously suppressed, but now should not be.
+    
+    $result = $dbh->do("INSERT INTO $SUPPRESS_TABLE
+			SELECT * FROM $SUPPRESS_TEMP");
+    
+    $result = $dbh->do("DELETE $SUPPRESS_TABLE FROM $SUPPRESS_TABLE
+				JOIN $TREE_TEMP USING (opinion_no)");
+    
+    my $a = 1;		# we can stop here when debugging
+}
+
+
+# adjustTreeSequence ( dbh, orig_no, new_parent )
+# 
+# Adjust the tree sequence so that taxon $orig_no (along with all of its
+# children) falls properly under its new parent.  The taxon will end up as the
+# last child of the new parent.
+
+sub adjustTreeSequence {
+    
+    my ($dbh, $orig_no, $new_parent) = @_;
+    
+    my $sql = '';
+    my $change_depth = '';
+    
+    # First, find out where in the tree the taxon (and all its children)
+    # previously fell.
+    
+    my ($old_pos, $old_rgt, $old_depth) = $dbh->selectrow_array("
+		SELECT lft, rgt, depth
+		FROM $TREE_TABLE WHERE orig_no = $orig_no");
+    
+    # With this information we can calculate the size of the subtree being
+    # moved.
+    
+    my $width = $old_rgt - $old_pos + 1;
+    
+    # Next, figure out where in the tree the new parent is currently
+    # located.  If its new parent is 0, move the subtree to the very end.
+    
+    my ($parent_pos, $parent_rgt, $new_depth);
+    
+    if ( $new_parent > 0 )
+    {
+	($parent_pos, $parent_rgt, $new_depth) = $dbh->selectrow_array("
+		SELECT lft, rgt, depth+1 FROM $TREE_TABLE where orig_no = $new_parent");
+	
+	# Do nothing if we are instructed to move a taxon into its own subtree.
+	
+	if ( $parent_pos >= $old_pos && $parent_pos <= $old_rgt )
+	{
+	    return;
+	}
+    }
+    
+    else
+    {
+	$parent_pos = 0;
+	$new_depth = 1;
+	($parent_rgt) = $dbh->selectrow_array("SELECT max(lft) from $TREE_TABLE");
+    }
+    
+    # if we're moving to higher sequence numbers we do it like so:
+    
+    if ( $parent_rgt >= $old_pos )
+    {
+	# First compute the displacement of the subtree
+	
+	my $disp = $parent_rgt - $old_rgt;
+	
+	# If we are changing depth, create an sql clause to do that
+	
+	if ( $new_depth != $old_depth )
+	{
+	    my $depth_diff = $new_depth - $old_depth;
+	    $change_depth = ",depth = depth + if(lft <= $old_rgt, $depth_diff, 0)"
+	}
+	
+	# Now update lft, rgt and depth values for every row lying between the
+	# old position of the subtree and the new position (inclusive).
+	
+	$sql = "UPDATE $TREE_TABLE
+		SET rgt = rgt + if(lft > $old_rgt,
+				   if(rgt < $parent_rgt or lft > $parent_pos, -$width, 0),
+				   $disp)
+		    $change_depth,
+		    lft = lft + if(lft > $old_rgt, -$width, $disp)
+		WHERE lft >= $old_pos and lft <= $parent_rgt";
+	
+	$dbh->do($sql);
+	
+	# All rows which were parents of the taxon in its old position but are
+	# no longer parents of it will need their rgt values to shrink by the
+	# width of the tree.
+	
+	$sql = "UPDATE $TREE_TABLE
+		SET rgt = rgt - $width
+		WHERE lft < $old_pos and rgt >= $old_rgt and
+			(lft > $parent_pos or rgt < $parent_rgt)";
+	
+	$dbh->do($sql);
+    }
+    
+    # If we're moving to lower sequence numbers, we do it like so:
+    
+    elsif ( $parent_rgt < $old_pos )
+    {
+	# First compute the displacement of the subtree
+	
+	my $disp = ($parent_rgt + 1) - $old_pos;
+	
+	# If we are changing depth, create an sql clause to do that
+	
+	if ( $new_depth != $old_depth )
+	{
+	    my $depth_diff = $new_depth - $old_depth;
+	    $change_depth = ",depth = depth + if(lft >= $old_pos, $depth_diff, 0)"
+	}
+	
+	# Now update lft, rgt and depth values for every row lying between the
+	# old position of the subtree and the new position (inclusive).
+	
+	$sql = "UPDATE $TREE_TABLE
+		SET rgt = rgt + if(lft < $old_pos,
+				   if(rgt < $old_pos, $width, 0),
+				   -$disp)
+		    $change_depth,
+		    lft = lft + if(lft < $old_pos, $width, -$disp)
+		WHERE lft > $parent_rgt and lft <= $old_rgt";
+	
+	$dbh->do($sql);
+	
+	# All rows which are parents of the taxon in its new position but were
+	# not in its old position will need their rgt values to grow by the
+	# width of the tree.
+	
+	$sql = "UPDATE $TREE_TABLE
+		SET rgt = rgt + $width
+		WHERE lft <= $parent_pos and rgt >= $parent_rgt and rgt < $old_pos";
+	
+	$dbh->do($sql);
+    }
+    
+    my $a = 1;		# we can stop here when debugging
+}
+
+
 # activateNewTables ( dbh, keep_temps )
 # 
 # In one atomic operation, move the new taxon tables to active status and swap
@@ -2082,14 +2435,14 @@ sub activateNewTables {
     # Delete any backup tables that might still be around
     
     $result = $dbh->do("DROP TABLE IF EXISTS $TREE_BAK");
-    $result = $dbh->do("DROP TABLE IF EXISTS $ANCESTOR_BAK");
+    # $result = $dbh->do("DROP TABLE IF EXISTS $ANCESTOR_BAK");
     $result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_BAK");
     
     # Create dummy versions of any of the main tables that might be currently
     # missing
     
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TREE_TABLE LIKE $TREE_TEMP");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $ANCESTOR_TABLE LIKE $ANCESTOR_TEMP");
+    #$result = $dbh->do("CREATE TABLE IF NOT EXISTS $ANCESTOR_TABLE LIKE $ANCESTOR_TEMP");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $SUPPRESS_TABLE LIKE $SUPPRESS_TEMP");
 
     
@@ -2098,15 +2451,16 @@ sub activateNewTables {
     $result = $dbh->do("RENAME TABLE
 				$TREE_TABLE to $TREE_BAK,
 				$TREE_TEMP to $TREE_TABLE,
-				$ANCESTOR_TABLE to $ANCESTOR_BAK,
-				$ANCESTOR_TEMP to $ANCESTOR_TABLE,
 				$SUPPRESS_TABLE to $SUPPRESS_BAK,
 				$SUPPRESS_TEMP to $SUPPRESS_TABLE");
+
+    #				$ANCESTOR_TABLE to $ANCESTOR_BAK,
+    #				$ANCESTOR_TEMP to $ANCESTOR_TABLE,
     
     # Then we can get rid of the backup tables
     
     $result = $dbh->do("DROP TABLE $TREE_BAK");
-    $result = $dbh->do("DROP TABLE $ANCESTOR_BAK");
+    # $result = $dbh->do("DROP TABLE $ANCESTOR_BAK");
     $result = $dbh->do("DROP TABLE $SUPPRESS_BAK");
     
     # Delete the auxiliary tables too, unless we were told to keep them.
