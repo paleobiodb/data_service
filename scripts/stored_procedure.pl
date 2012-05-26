@@ -16,9 +16,9 @@ $dbh->do("CREATE PROCEDURE anyopinion ( t int unsigned )
 $dbh->do("DROP PROCEDURE IF EXISTS taxoninfo");
 $dbh->do("CREATE PROCEDURE taxoninfo (t int unsigned )
 	BEGIN
-		SELECT taxon_no, taxon_name, taxon_rank, lft, rgt, status, 
-		       parent_spelling_no parent, opinion_no
-		FROM authorities JOIN taxa_tree_cache USING (taxon_no)
+		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, 
+		       taxon_trees.parent_no, opinion_no
+		FROM authorities JOIN taxon_trees USING (orig_no)
 			LEFT JOIN opinions USING (opinion_no)
 		WHERE taxon_no = t;
 	END");
@@ -26,9 +26,9 @@ $dbh->do("CREATE PROCEDURE taxoninfo (t int unsigned )
 $dbh->do("DROP PROCEDURE IF EXISTS tninfo");
 $dbh->do("CREATE PROCEDURE tninfo (t int unsigned )
 	BEGIN
-		SELECT taxon_no, taxon_name, taxon_rank, lft, rgt, status, 
-		       parent_spelling_no parent, opinion_no
-		FROM authorities JOIN tn USING (taxon_no)
+		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, 
+		       tn.parent_no, opinion_no
+		FROM authorities JOIN tn USING (orig_no)
 			LEFT JOIN opinions USING (opinion_no)
 		WHERE taxon_no = t;
 	END");

@@ -138,13 +138,6 @@ Using these fields, we can formulate simple and efficient SQL queries to fetch
 all of the descendants of a given entry and other similar operations.  For
 more information, see L<http://en.wikipedia.org/wiki/Nested_set_model>.
 
-The one necessary operation that is not easy to carry out using this method is
-to compute the list of all ancestors of a given taxon.  To do this, we use a
-separate table, C<taxon_ancestors>.  This table has three fields,
-C<parent_no>, C<depth>, and C<child_no>, and stores the transitive closure of
-the hierarchy relation.  The C<depth> field allows us to order the ancestors
-properly from senior to junior.
-
 =head2 Additional Tables
 
 One auxiliary table is needed in order to properly compute the relations
@@ -170,23 +163,24 @@ taxon identifiers.
 
 =over 4
 
-=item addConcept ( dbh, orig_no )
+=item update ( dbh, concept_list, opinion_list )
 
-Add a new taxonomic concept to the taxon trees.  This should be called
-whenever a new concept is entered by a user.
+Adjust the taxon tree tables to take into account changes to the listed
+opinions and also changes to the membership of the listed concepts.  One or
+both of these lists may be empty.  Some of the listed concepts and/or opinions
+may disappear, as may happen if an opinion is deleted or if two concept groups
+are merged, while others may need to be created.  This routine should be called
+whenever C<orig_no> values in the C<authorities> table are adjusted, and both
+the old and the new orig_no values should be passed as part of the
+'concept_list' argument.  It should also be called whenever opinions are
+edited, added or deleted.
 
-=item updateTaxonTrees ( dbh, concept_list, opinion_list )
+This routine actually adds an entry to the taxon_queue table and waits for the
+maintenance thread to do the update.  It returns the id number of the newly
+added queue entry, which can be passed to the status() routine to determine
+when that particular update has been completed.
 
-Adjust the entries to take into account changes to the listed opinions and
-also changes to the membership of the listed concepts.  One or both of these
-lists may be empty.  Some of the listed concepts and/or opinions may
-disappear, as may happen if an opinion is deleted or if two concept groups are
-merged.  This routine should be called whenever C<orig_no> values in the
-C<authorities> table are adjusted, and both the old and the new orig_no values
-should be passed as part of the 'concept_list' argument.  It should also be
-called whenever opinions are edited, added or deleted.
-
-=item buildTaxonTrees ( dbh )
+=item build ( dbh )
 
 Build the taxon tree tables from scratch using the data in C<authorities> and
 C<opinions>.  Although this is probably not absolutely necessary if
@@ -194,6 +188,17 @@ updateTaxonTrees() has been called consistently whenever the C<authorities>
 and C<opinions> tables are changed, the author of this module suggests that it
 be run on a daily basis at a convenient time when traffic on the database is
 light.
+
+This routine actually adds an entry to the taxon_queue table and waits for the
+maintenance thread to do the build.  It returns the id number of the newly
+added queue entry, which can be passed to the status() routine to determine
+when that particular update has been completed.
+
+=item daemon ( dbh )
+
+This routine should be called by the taxon_trees maintenance daemon.  It goes
+into a loop, checking the taxon_queue table for entries and carrying them out
+in sequence.
 
 =item getCurrentSpelling ( dbh, taxon_no )
 
@@ -306,9 +311,10 @@ our $MSG_LEVEL = 0;
 # Main table names
 
 our $TREE_TABLE = "taxon_trees";
-our $ANCESTOR_TABLE = "taxon_ancestors";
 our $SUPPRESS_TABLE = "suppress_opinions";
 our $OPINION_CACHE = "order_opinions";
+
+our $QUEUE_TABLE = "taxon_queue";
 
 our $AUTHORITIES_TABLE = "authorities";
 our $OPINIONS_TABLE = "opinions";
@@ -317,14 +323,12 @@ our $REFS_TABLE = "refs";
 # Backup names for use with RENAME TABLES
 
 our $TREE_BAK = "taxon_trees_bak";
-our $ANCESTOR_BAK = "taxon_ancestors_bak";
 our $SUPPRESS_BAK = "suppress_opinions_bak";
 our $OPINION_BAK = "order_opinions_bak";
 
 # Working table names
 
 our $TREE_TEMP = "tn";
-our $ANCESTOR_TEMP = "pn";
 our $SUPPRESS_TEMP = "sn";
 our $OPINION_TEMP = "opn";
 
@@ -332,9 +336,8 @@ our $OPINION_TEMP = "opn";
 
 our $SPELLING_TEMP = "spelling_aux";
 our $SYNONYM_TEMP = "synonym_aux";
-our $CLASS_TEMP = "best_opinions";
-our $PARENT_TEMP = "parent_aux";
-
+our $CLASS_TEMP = "class_aux";
+our $CHECK_TEMP = "check_aux";
 
 # Modules needed
 
@@ -343,30 +346,10 @@ use Text::JaroWinkler qw( strcmp95 );
 use strict;
 
 
-# addConcept ( dbh, orig_no )
-# 
-# Add a new concept to the database.  This should be called whenever a new
-# concept is added to the authorities table.  The new concept will have by
-# default no relationship to any other concepts.  Therefore, once opinions
-# have been entered pertaining to it, updateOpinions() or updateConcepts()
-# will have to be called in order to link it to the rest of the taxon trees.
+# Variables and constants
 
-sub addConcept {
-
-    my ($dbh, $orig_no) = @_;
-    
-    # Add a new row to $TREE_TABLE appropriate for a taxon with no
-    # relationship to any other taxa.
-    
-    my ($new_seq) = $dbh->selectrow_array("SELECT max(lft)+1 FROM $TREE_TABLE");
-    
-    my $result = $dbh->do("INSERT INTO $TREE_TABLE 
-			   VALUES ($orig_no, $orig_no, $orig_no, $orig_no, 0, 
-				   $new_seq, $new_seq, 1)");
-
-    my $a = 1;		# we can stop here when debugging
-}
-
+our(@TREE_ERRORS);
+my($REPORT_THRESHOLD) = 20;
 
 # update ( dbh, concept_list, opinion_list, msg_level )
 # 
@@ -390,7 +373,7 @@ sub addConcept {
 
 sub update {
 
-    my ($dbh, $concept_list, $opinion_list, $msg_level) = @_;
+    my ($dbh, $concept_list, $opinion_list, $msg_level, $keep_temps) = @_;
     
     my %update_concepts;	# list of concepts to be updated
     
@@ -460,6 +443,8 @@ sub update {
 	    join(', ', keys %update_concepts) . "\n");
     }
     
+    $DB::single = 1;
+    
     # The rest of this routine updates the subset of $TREE_TABLE and
     # $ANCESTOR_TABLE that comprises the concept groups listed in
     # %update_concepts along with their junior synonyms and children.
@@ -476,8 +461,8 @@ sub update {
     
     # Next, expand $TREE_TEMP to include junior synonyms of the concepts
     # represented in it.  We need to do this before we update the synonymy
-    # relation, because a change in a concept's synonymy will not only change
-    # its own synonym_no but that of its junior synonyms as well.
+    # relation, so that we can detect and break any synonymy cycles that might
+    # be created by this update.
     
     expandToJuniors($dbh);
     
@@ -485,44 +470,43 @@ sub update {
     
     computeSynonymy($dbh);
     
-    # Next, expand $TREE_TEMP to include senior synonyms of the concepts
-    # represented in it.  We need to do this before we update the hierarchy
-    # relation, because the hierarchy relation is computed on synonym groups.
+    # Now that we have computed the synonymy relation, we need to expand
+    # $TREE_TEMP to include senior synonyms of the concepts represented in it.
+    # We need to do this before we update the hierarchy relation because the
+    # classification of those senior synonyms might change; if one of the rows
+    # in $TREE_TEMP is a new junior synonym, it might have a 'belongs to'
+    # opinion that is more recent and reliable than the previous best opinion
+    # for the senior.
     
     expandToSeniors($dbh);
     
-    # At this point, we need to de-chain the synonyms, so that synonym_no
-    # points to the most senior synonym for each concept.  This is necessary
-    # so that computeHierarchy can properly gather the synonym groups.
+    # At this point we remove synonym chains, so that synonym_no always points
+    # to the most senior synonym of each taxonomic concept.  This needs to be
+    # done before we update the hierarchy relation, because that computation
+    # depends on this property of synonym_no.
     
-    deChainSynonyms($dbh);
-    
-    # Next, expand $TREE_TEMP to include immediate children of the concepts
-    # represented in it (including junior synonyms).  We need to do this
-    # before we update the hierarchy relation, so that we can detect any
-    # cycles that might occur.  This is unlikely, but it's best to check.
-    
-    # expandToChildren($dbh);
+    linkSynonyms($dbh);
     
     # Then compute the hierarchy relation for every concept in $TREE_TEMP.
     
     computeHierarchy($dbh);
     
-    # At this point, we need to de-chain all synonym_no and parent_no values
-    # that point out of $TREE_TEMP into $TREE_TABLE.  They might point to
-    # junior synonyms in $TREE_TABLE, and if so they must be updated to point
-    # to the proper senior synonyms as indicated by the corresponding
-    # synonym_no values in $TREE_TABLE.
+    # Some parent_no values may not have been set properly, in particular
+    # those whose classification points to a parent which is not itself in
+    # $TREE_TEMP.  These must now be updated to their proper values.
     
-    deChainReferences($dbh);
+    linkParents($dbh);
     
     # If the adjustments to the hierarchy are small, then we can now update
     # $TREE_TABLE using the rows from $TREE_TEMP and then adjust the tree
-    # sequence in-place.  This will finish the procedure.
+    # sequence in-place.  This will finish the procedure.  We set the
+    # threshold at 3 because altering the tree in-place is several times more
+    # efficient than rebuilding it even if we have to scan over the entire
+    # table multiple times (3 is actually just a guess...)
     
-    if ( treePerturbation($dbh) < 1 )
+    if ( treePerturbation($dbh) < 3 )
     {
-	updateTreeTables($dbh);
+	updateTreeTables($dbh, $keep_temps);
     }
     
     # Otherwise, we need to completely rebuild the tree sequence and then
@@ -551,14 +535,10 @@ sub update {
 	
 	computeTreeSequence($dbh);
 	
-	# recompute the ancestry relation
-	
-	#computeAncestry($dbh);
-	
 	# Then activate the temporary tables by renaming them over the previous
 	# ones. 
 	
-	activateNewTables($dbh);
+	activateNewTables($dbh, $keep_temps);
     }
     
     my $a = 1;		# we can stop here when debugging
@@ -584,7 +564,7 @@ sub build {
     
     unless ( ref $step_control eq 'HASH' and %$step_control ) {
 	$step_control = { 'a' => 1, 'b' => 1, 'c' => 1,
-			  'd' => 1, 'e' => 1, 'f' => 1 };
+			  'd' => 1, 'e' => 1, 'f' => 1, 'g' => 1 };
     };
     
     # Then create the necessary tables.
@@ -605,9 +585,10 @@ sub build {
     
     computeSynonymy($dbh) if $step_control->{c};
     
-    # De-chain the synonymy relation.
+    # Update the synonymy relation so that synonym_no points to the most
+    # senior synonym, instead of the immediate senior synonym.
     
-    deChainSynonyms($dbh) if $step_control->{c};
+    linkSynonyms($dbh) if $step_control->{c};
     
     # Next, compute the hierarchy relation from the data in $OPINION_CACHE.
     
@@ -681,7 +662,6 @@ sub rebuildOpinionCache {
     my ($result);
     
     logMessage(2, "rebuilding opinion cache (a)");
-    $DB::single = 1;
     
     # In order to minimize interference with any other threads which might
     # need to access the opinion cache, we create a new table and then rename
@@ -775,9 +755,10 @@ sub populateOpinionCache {
 		FROM opinions o LEFT JOIN refs r USING (reference_no)
 			JOIN authorities a1 ON a1.taxon_no = o.child_spelling_no
 			JOIN authorities a2 ON a2.taxon_no = o.parent_spelling_no
+		$filter_clause
 		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
     
-    my $a = 1;		# we can stop here when debugging
+    return;
 }
 
 
@@ -842,31 +823,33 @@ sub updateOpinionConcepts {
     
     my $result;
     
+    logMessage(2, "updating opinions table to reflect concept changes");
+    
     # First, $OPINION_CACHE
     
     $result = $dbh->do("UPDATE $OPINION_CACHE o JOIN authorities a
 				ON a.taxon_no = o.child_spelling_no
-			WHERE a.orig_no in $concept_filter
-			SET o.orig_no = a.orig_no");
+			SET o.orig_no = a.orig_no
+			WHERE o.orig_no in $concept_filter");
     
     $result = $dbh->do("UPDATE $OPINION_CACHE o JOIN authorities a
 				ON a.taxon_no = o.parent_spelling_no
-			WHERE a.orig_no in $concept_filter
-			SET o.parent_no = a.orig_no");
+			SET o.parent_no = a.orig_no
+			WHERE o.parent_no in $concept_filter");
     
     # Next, $OPINIONS_TABLE
     
-    $result = $dbh->do("UPDATE $OPINIONS_TABLE o o JOIN authorities a
+    $result = $dbh->do("UPDATE $OPINIONS_TABLE o JOIN authorities a
 				ON a.taxon_no = o.child_spelling_no
-			WHERE a.orig_no in $concept_filter
-			SET o.child_no = a.orig_no");
+			SET o.child_no = a.orig_no
+			WHERE a.orig_no in $concept_filter");
     
     $result = $dbh->do("UPDATE $OPINIONS_TABLE o JOIN authorities a
 				ON a.taxon_no = o.parent_spelling_no
-			WHERE a.orig_no in $concept_filter
-			SET o.parent_no = a.orig_no");
+			SET o.parent_no = a.orig_no
+			WHERE a.orig_no in $concept_filter");
     
-    my $a = 1;		# we can stop here when debugging
+    return;
 }
 
 
@@ -886,7 +869,6 @@ sub createTempTables {
     my ($result);
     
     logMessage(2, "creating temporary tables (a)");
-    $DB::single = 1;
     
     # First create $TREE_TEMP, which will hold one row for every concept which
     # is being updated.
@@ -939,18 +921,8 @@ sub createTempTables {
 			       (opinion_no int unsigned not null,
 				suppress int unsigned not null,
 				PRIMARY KEY (opinion_no))");
-    
-    # And finally, a temporary table to record the ancestry relation.  This
-    # information will eventually be moved into $ANCESTOR_TABLE.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $ANCESTOR_TEMP");
-    $result = $dbh->do("CREATE TABLE $ANCESTOR_TEMP
-			       (child_no int unsigned not null,
-				parent_no int unsigned not null,
-				depth int unsigned not null,
-				KEY (child_no))");
-    
-    my $a = 1;		# we can stop here when debugging
+        
+    return;
 }
 
 
@@ -971,7 +943,6 @@ sub computeSpelling {
     my ($result);
     
     logMessage(2, "computing currently accepted spelling relation (b)");
-    $DB::single = 1;
     
     # In order to select the group leader for each concept, we start by
     # choosing the spelling associated with the most recent and reliable
@@ -1024,7 +995,7 @@ sub computeSpelling {
     
     my $count = scalar(keys %misspelling);
     
-    logMessage(1, "    found $count misspelling(s)");
+    logMessage(1, "    found $count misspellings") if $count > 0;
     
     # If we found any misspellings, fetch all of the candidates for the proper
     # spelling of each.  We select these in descending order of publication
@@ -1117,11 +1088,7 @@ sub computeSpelling {
 # expandToJuniors ( dbh )
 # 
 # Expand $TREE_TEMP to adding to it all rows from $TREE_TABLE which represent
-# junior synonyms of the concepts already in $TREE_TEMP.  Note that we can't
-# just use the synonym_no field of $TREE_TABLE, because it refers to the most
-# senior synonym instead of the immediate senior synonym.  We might have a
-# synonym chain A -> B -> C with B in $TREE_TEMP.  In such a case, we would
-# miss A if we relied on synonym_no.
+# junior synonyms of the concepts already in $TREE_TEMP.
 
 sub expandToJuniors {
     
@@ -1130,15 +1097,20 @@ sub expandToJuniors {
     # We need to repeat the following process until no new rows are added, so
     # that junior synonyms of junior synonyms, etc. also get added.
     
+    # Note that we can't just use the synonym_no field of $TREE_TABLE, because
+    # it refers to the most senior synonym instead of the immediate senior
+    # synonym.  We might have a synonym chain A -> B -> C with B in
+    # $TREE_TEMP.  In such a case, we would miss A if we relied on synonym_no.
+
     while (1)
     {
 	my $result = $dbh->do("
-		INSERT IGNORE INTO $TREE_TEMP
-		SELECT m.*
+		INSERT IGNORE INTO $TREE_TEMP (orig_no, spelling_no)
+		SELECT m.orig_no, m.spelling_no
 		FROM $TREE_TEMP t
 			JOIN $OPINION_CACHE o ON o.parent_no = t.orig_no
 				and o.status != 'belongs to'
-			JOIN $TREE_TABLE m ON m.opinion_no = o.opinion_no");
+			STRAIGHT_JOIN $TREE_TABLE m ON m.opinion_no = o.opinion_no");
 	
 	last if $result == 0;
     }
@@ -1150,28 +1122,60 @@ sub expandToJuniors {
 # expandToSeniors ( dbh )
 # 
 # Expand $TREE_TEMP by adding to it all rows from $TREE_TABLE which represent
-# senior synonyms of the concepts already in $TREE_TEMP.
+# senior synonyms of the concepts already in $TREE_TEMP, and all rows from
+# $TREE_TABLE representing concepts which used to be senior synonyms but might
+# not be anymore.  All of these might undergo a change of classification as
+# part of this update.
+# 
+# We have to expand $CLASS_TEMP in parallel, so that we will have the
+# necessary information to execute computeHierarchy() later in this process.
 
 sub expandToSeniors {
     
     my ($dbh) = @_;
     
+    my ($count, $result);
+    
     # We need to repeat the following process until no new rows are added, so
     # that senior synonyms of senior synonyms, etc. also get added
     
-    while (1)
+    do
     {
-	my $result = $dbh->do("
-		INSERT IGNORE INTO $TREE_TEMP
-		SELECT m.* FROM $TREE_TEMP t
+	# First the new synonyms (using $CLASS_TEMP)
+	
+	$count = $dbh->do("
+		INSERT IGNORE INTO $TREE_TEMP (orig_no, spelling_no, synonym_no)
+		SELECT m.orig_no, m.spelling_no, m.synonym_no
+		FROM $CLASS_TEMP c
 			JOIN $OPINION_CACHE o USING (opinion_no)
-			JOIN $TREE_TABLE m ON o.parent_no = m.orig_no
+			STRAIGHT_JOIN $TREE_TABLE m ON o.parent_no = m.orig_no
 				and o.status != 'belongs to'");
 	
-	last if $result == 0;
-    }
+	# Then the old synonyms (using $TREE_TABLE)
+	
+	$count += $dbh->do("
+		INSERT IGNORE INTO $TREE_TEMP (orig_no, spelling_no, synonym_no)
+		SELECT m.orig_no, m.spelling_no, m.synonym_no
+		FROM $TREE_TEMP t 
+			JOIN $TREE_TABLE m USING (orig_no)
+			JOIN $OPINION_CACHE o ON o.opinion_no = m.opinion_no
+			JOIN $TREE_TABLE m2 ON o.parent_no = m2.orig_no
+				and o.status != 'belongs to'");
+	
+	# Then expand $CLASS_TEMP with corresponding rows for every concept
+	# that was added to $TREE_TEMP.
+	
+	$result = $dbh->do("
+		INSERT IGNORE INTO $CLASS_TEMP
+		SELECT m.orig_no, m.opinion_no, m.parent_no, o.ri, o.pubyr, o.status
+		FROM $TREE_TEMP t JOIN $TREE_TABLE m USING (orig_no)
+			JOIN $OPINION_CACHE o ON o.opinion_no = m.opinion_no
+			LEFT JOIN $CLASS_TEMP c ON c.orig_no = t.orig_no
+		WHERE c.opinion_no is null") if $count > 0;
+	
+    } while $count > 0;
     
-    my $a = 1;		# we can stop on this line when debugging
+    return;
 }
 
 
@@ -1230,7 +1234,6 @@ sub computeSynonymy {
     my ($result, @check_taxa, %taxa_moved, $filter);
     
     logMessage(2, "computing synonymy relation (c)");
-    $DB::single = 1;
     
     # We start by choosing the "classification opinion" for each concept in
     # $TREE_TEMP.  We use the same mechanism as we did previously with the
@@ -1395,19 +1398,19 @@ sub computeSynonymy {
     
     $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (synonym_no)");
     
-    my $a = 1;		# we can stop here when debugging
+    return;
 }
 
 
-# deChainSynonyms ( dbh )
+# linkSynonyms ( dbh )
 # 
-# Alter the synonym_no field as follows: whenever we have a -> b and b -> c,
-# change the relation so that a -> c and b -> c.  This allows synonym_no to
-# represent the most senior synonym, instead of just the immediate senior
-# synonym.  Because the chains may be more than three taxa long, we need to
-# repeat the process until no more rows are affected.
+# Alter the synonym_no field to remove synonym chains.  Whenever we have 
+# a -> b and b -> c, change the relation so that a -> c and b -> c.  This
+# makes synonym_no represent the most senior synonym, instead of just the
+# immediate senior synonym.  Because the chains may be more than three taxa
+# long, we need to repeat the process until no more rows are affected.
 
-sub deChainSynonyms {
+sub linkSynonyms {
 
     my ($dbh) = @_;
     
@@ -1422,24 +1425,25 @@ sub deChainSynonyms {
     {
 	$result = $dbh->do("
 		UPDATE $TREE_TEMP t1 JOIN $TREE_TEMP t2
-			ON t1.synonym_no = t2.orig_no and t1.synonym_no != t2.synonym_no
+		    ON t1.synonym_no = t2.orig_no and t1.synonym_no != t2.synonym_no
 		SET t1.synonym_no = t2.synonym_no");
     }
 	while $result > 0 && ++$count < 20;
     
     if ( $count >= 20 )
     {
-	logMessage(0,"WARNING - possible synonymy cycle detected during de-chaining");
+	logMessage(0,"WARNING - possible synonymy cycle detected during synonym linking");
     }
     
-    my $a = 1;		# we can stop here when debugging
+    return;
 }
 
 
 # computeHierarchy ( dbh )
 # 
-# Fill in the parent_no and opinion_no fields of $TREE_TEMP.  This computes
-# the "hierarchy" relation for all of the concepts represented in $TREE_TEMP.
+# Fill in the opinion_no and parent_no fields of $TREE_TEMP.  This determines
+# the classification of each taxonomic concept represented in $TREE_TEMP, and
+# thus the Hierarchy relation as well.
 # 
 # We start with the set of classification opinions chosen by
 # computeSynonymy(), but we then recompute all of the ones that specify
@@ -1457,12 +1461,11 @@ sub deChainSynonyms {
 
 sub computeHierarchy {
     
-    my ($dbh) = @_;
+    my ($dbh, $is_update) = @_;
     
     my ($result, $filter, @check_taxa, %taxa_moved);
     
-    logMessage(1, "computing hierarchy relation (d)");
-    $DB::single = 1;
+    logMessage(2, "computing hierarchy relation (d)");
     
     # We already have the $CLASS_TEMP relation, but we need to adjust it by
     # grouping together all of the opinions for each senior synonym and its
@@ -1562,7 +1565,7 @@ sub computeHierarchy {
     
     my @breaks = breakCycles($dbh, \%children, \%opinions);
     
-    logMessage(1, "    found " . scalar(@breaks) . " cycle(s)");
+    logMessage(1, "    found " . scalar(@breaks) . " cycle(s)") if @breaks;
     
     # As long as there are cycles to be broken, we suppress the indicated
     # opinions and then re-check for cycles (just in case the next-best
@@ -1657,13 +1660,18 @@ sub computeHierarchy {
     # 
     # In other words, the parent_no value for any taxon will be the senior
     # synonym of the parent of the senior synonym.
+    # 
+    # Note that if this is an update (as opposed to a rebuild) not all of the
+    # parent_no values will be properly set.  We will have to fix that later
+    # with linkParents().
     
     logMessage(2, "    setting parent_no");
     
-    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $TREE_TEMP t2 ON t2.orig_no = t.synonym_no
-				JOIN $OPINION_CACHE o ON o.opinion_no = t2.opinion_no
-				JOIN $TREE_TEMP t3 ON t3.orig_no = o.parent_no
-			SET t.parent_no = t3.synonym_no");
+    $result = $dbh->do("
+		UPDATE $TREE_TEMP t JOIN $TREE_TEMP t2 ON t2.orig_no = t.synonym_no
+		    JOIN $OPINION_CACHE o ON o.opinion_no = t2.opinion_no
+		    JOIN $TREE_TEMP t3 ON t3.orig_no = o.parent_no
+		SET t.parent_no = t3.synonym_no");
     
     # Once we have set parent_no for all concepts, we can efficiently index it.
     
@@ -1672,6 +1680,8 @@ sub computeHierarchy {
     $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (parent_no)");
     
     my $a = 1;
+    
+    return;
 }
 
 
@@ -1825,45 +1835,28 @@ sub breakCycles {
 }
 
 
-# deChainReferences ( dbh )
+# linkParents ( dbh )
 # 
-# Update all synonym_no and parent_no values in $TREE_TEMP that point out of
-# that table (in other words, those that do not correspond to orig_no values
-# in $TREE_TEMP).  These might point to junior synonyms in $TREE_TABLE, and so
-# they must be updated to point to the proper senior synonyms as indicated by
-# the corresponding synonym_no values in $TREE_TABLE.
-# 
-# Note that all synonym_no values that point to other rows in $TREE_TEMP have
-# already been updated by deChainSynonyms().  Note also that we only have to
-# do this once because $TREE_TABLE and $TREE_TEMP each have no synonym_no
-# chains internally.  We only have to worry about single-link chains between
-# the two tables.
-    
-sub deChainReferences {
+# Update the parent_no field of $TREE_TEMP to include parents which are not
+# themselves represented in $TREE_TEMP.
+
+sub linkParents {
     
     my ($dbh) = @_;
     
     my $result;
     
-    # First the synonym_no values
+    # Set parent_no when the parent is not represented in $TREE_TEMP.
     
     $result = $dbh->do("
-		UPDATE $TREE_TEMP as t1
-			LEFT JOIN $TREE_TEMP as t2 ON t1.synonym_no = t2.orig_no
-			JOIN $TREE_TABLE as m ON t1.synonym_no = m.orig_no
-		SET t1.synonym_no = m.synonym_no
-		WHERE t2.orig_no is null");
+		UPDATE $TREE_TEMP t
+		    JOIN $TREE_TEMP t2 ON t2.orig_no = t.synonym_no
+		    JOIN $OPINION_CACHE o ON o.opinion_no = t2.opinion_no
+		    JOIN $TREE_TABLE m ON m.orig_no = o.parent_no
+		SET t.parent_no = m.synonym_no
+		WHERE t.parent_no = 0 and o.parent_no != 0");
     
-    # Then the parent_no values
-    
-    $result = $dbh->do("
-		UPDATE $TREE_TEMP as t1
-			LEFT JOIN $TREE_TEMP as t2 ON t1.parent_no = t2.orig_no
-			JOIN $TREE_TABLE as m ON t1.parent_no = m.orig_no
-		SET t1.parent_no = m.synonym_no
-		WHERE t2.orig_no is null");
-    
-    my $a = 1;		# we can stop here when debugging
+    return;
 }
 
 
@@ -1933,7 +1926,7 @@ sub estimateTreePerturbation {
 }
 
 
-our (%children, %parent, %tree);
+our (%children, %parent, %tree); our(%sseq);
 
 # computeTreeSequence ( dbh )
 # 
@@ -1948,7 +1941,6 @@ sub computeTreeSequence {
     my $result;
     
     logMessage(2, "traversing and marking taxon trees (e)");
-    $DB::single = 1;
     
     logMessage(2, "    downloading hierarchy relation");
     
@@ -2075,6 +2067,13 @@ sub createNode {
 	
 	$tree{$taxon} = [$sequence, $sequence, $depth];
 	
+	if ( exists $sseq{$sequence} )
+	{
+	    print STDERR "duplicate sequence for $sequence\n";
+	}
+	
+	$sseq{$sequence} = $taxon;
+	
 	# If this taxon has children, we must then iterate through them and
 	# insert each one (and all its descendants) into the tree.  If there
 	# are no children, we just leave the node as it is.
@@ -2107,80 +2106,6 @@ sub createNode {
 }
 
 
-# computeAncestry ( dbh )
-# 
-# Fill in $ANCESTOR_TEMP with the transitive closure of the hierarchy
-# relation.  In other words: for every taxon t, for every ancestor u of t, the
-# record (t, u, d) will be entered into $ANCESTOR_TEMP where d is the
-# depth of u in its taxon tree.  This allows us to easily obtain a list of
-# all of the ancestors of any taxon, in rank order.
-
-sub computeAncestry {
-
-    my ($dbh) = @_;
-    
-    my $result;
-    
-    logMessage(2, "computing ancestry relation (f)");
-    $DB::single = 1;
-    
-    # Before we start building the ancestry relation, we need to know the
-    # maximum taxon tree depth.
-    
-    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_TEMP");
-    
-    # It is also helpful to generate an auxiliary table which will contain the
-    # hierarchy relation restricted to concept group leaders, along with the
-    # depth of the parent node.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $PARENT_TEMP");
-    $result = $dbh->do("CREATE TABLE $PARENT_TEMP
-			       (child_no int unsigned,
-				parent_no int unsigned,
-				depth int unsigned)");
-    
-    $result = $dbh->do("INSERT INTO $PARENT_TEMP
-			SELECT orig_no, parent_no, depth - 1
-			FROM $TREE_TEMP WHERE parent_no != 0");
-    
-    $result = $dbh->do("ALTER TABLE $PARENT_TEMP ADD KEY (depth, parent_no)");
-    
-    # We will build the ancestry relation iteratively.  We start by slicing up
-    # the auxiliary table by depth, and seeding the ancestor relation with
-    # slice 1 (the top-most nodes of the taxon trees).
-    #
-    # Then we iterate through the rest of the slices.  Each slice in turn is
-    # conjugated with the ancestor relation, and the resulting pairs are added
-    # in.  The slice itself is then added as well.  This will have the result
-    # of generating a transitive closure of the hierarchy relation, restricted
-    # to concept group leaders.
-    
-    my $add_conjugation = $dbh->prepare("
-			INSERT INTO $ANCESTOR_TEMP
-			SELECT s.child_no, a.parent_no, a.depth
-			FROM $PARENT_TEMP s JOIN $ANCESTOR_TEMP a
-				ON s.parent_no = a.child_no and s.depth = ?");
-    
-    my $add_slice = $dbh->prepare("
-			INSERT INTO $ANCESTOR_TEMP
-			SELECT child_no, parent_no, depth
-			FROM $PARENT_TEMP WHERE depth = ?");
-    
-    print STDERR "Rebuild:     depth 1\n";
-    
-    $add_slice->execute(1);
-    
-    for ( my $i = 2; $i < $max_depth; $i++ )
-    {
-	logMessage(2, "    depth $i");
-	$result = $add_conjugation->execute($i);
-	$result = $add_slice->execute($i);
-    }
-    
-    my $a = 1;		# we can stop here when debugging
-}
-
-
 # updateTreeTables ( dbh )
 # 
 # Do the final steps in the update procedure.  These are as follows:
@@ -2197,7 +2122,7 @@ sub computeAncestry {
 
 sub updateTreeTables {
 
-    my ($dbh) = @_;
+    my ($dbh, $keep_temps) = @_;
     
     my $result;
     
@@ -2241,26 +2166,51 @@ sub updateTreeTables {
     # read.
     
     $result = $dbh->do("LOCK TABLE $TREE_TABLE as m WRITE,
-				   $TREE_TEMP as t READ");
+				   $TREE_TABLE WRITE,
+				   $TREE_TEMP as t READ,
+				   $TREE_TEMP READ");
+
+    #				   $TREE_TABLE as m2 WRITE,
+    #				   $TREE_TABLE as m3 WRITE,
+    #				   $OPINION_CACHE as o READ
     
     # Now write all rows of $TREE_TEMP over the corresponding rows of
     # $TREE_TABLE.
-
+    
+    logMessage(2, "copying into active tables (f)");
+    
     $result = $dbh->do("REPLACE INTO $TREE_TABLE
 			SELECT * FROM $TREE_TEMP");
     
+    # At some point we may want to recompute the parent_no values of children
+    # of concepts that have changed synonymy.  This would also involve
+    # additional tree sequence modifications, so it might not be worth the
+    # bother.  Unless we do this, some concepts may have their parent_no point
+    # to a junior synonym.
+    
+    # $result = $dbh->do("
+    # 		UPDATE $TREE_TABLE as m JOIN $TREE_TEMP as t ON m.parent_no = t.orig_no
+    # 			JOIN $TREE_TABLE as m2 ON m2.orig_no = m.synonym_no
+    # 			JOIN $OPINION_CACHE as o ON o.opinion_no = m2.opinion_no
+    # 			JOIN $TREE_TABLE as m3 ON m3.orig_no = o.parent_no
+    # 		SET m.parent_no = m3.synonym_no");
+    
     # Now adjust the tree sequence to take into account all rows that have
-    # changed their position in the hierarchy.  Note that we couldn't do this
-    # beforehand because the rows in $TREE_TEMP may have child rows that are
-    # not themselves in $TREE_TEMP.  We had to wait until $TREE_TABLE was
-    # otherwise completely updated and then do the adjustments in-place.
+    # changed their position in the hierarchy.  We couldn't do this until now,
+    # because the procedure requires a table that holds the entire updated set
+    # of taxon trees.
+    
+    my ($max_lft) = $dbh->selectrow_array("SELECT max(lft) from $TREE_TABLE");
+    
+    logMessage(2, "adjusting tree sequence (e)");
+    logMessage(2, "    " . scalar(@move) . " concept(s) are moving within the hierarchy");
     
     foreach my $pair (@move)
     {
-	adjustTreeSequence($dbh, @$pair);
+	adjustTreeSequence($dbh, $max_lft, @$pair);
     }
     
-    # Now we can unlock the tables.
+    # Now we can unlock the main tables.
     
     $result = $dbh->do("UNLOCK TABLES");
     
@@ -2269,25 +2219,97 @@ sub updateTreeTables {
     # classification opinion in $TREE_TEMP.  The latter represent opinions
     # which were previously suppressed, but now should not be.
     
+    # We don't bother to lock these tables, since no other part of the code
+    # should be using $SUPPRESS_TABLE in a critical role.
+    
     $result = $dbh->do("INSERT INTO $SUPPRESS_TABLE
 			SELECT * FROM $SUPPRESS_TEMP");
     
     $result = $dbh->do("DELETE $SUPPRESS_TABLE FROM $SUPPRESS_TABLE
 				JOIN $TREE_TEMP USING (opinion_no)");
     
-    my $a = 1;		# we can stop here when debugging
+    # Now, we can remove the temporary tables.
+
+    unless ( $keep_temps )
+    {
+	logMessage(2, "removing temporary tables");
+	
+	$result = $dbh->do("DROP TABLE IF EXISTS $TREE_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_TEMP");
+	
+	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $CLASS_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_TEMP");
+    }
+    
+    return;
 }
 
 
-# adjustTreeSequence ( dbh, orig_no, new_parent )
+# treePerturbation ( dbh )
+# 
+# Determine the amount by which the taxon tree will need to be perturbed in
+# order to complete the current update.  This is expressed as a fraction of
+# the tree size.  The return value will be used to determine whether to alter
+# the tree sequence in-place or recompute it from scratch.
+
+sub treePerturbation {
+    
+    my ($dbh) = @_;
+    
+    my ($max_seq) = $dbh->selectrow_array("SELECT max(lft) from $TREE_TABLE");
+    
+    my $moved_taxa = $dbh->prepare("
+		SELECT t.orig_no, t.parent_no, m.parent_no, m2.lft, m.lft
+		FROM $TREE_TEMP as t LEFT JOIN $TREE_TABLE as m USING (orig_no)
+			LEFT JOIN $TREE_TABLE as m2 ON m2.orig_no = t.parent_no
+		WHERE t.parent_no != m.parent_no
+		ORDER BY m.lft DESC");
+    
+    $moved_taxa->execute();
+    
+    my $total = 0;
+    
+    while ( my ($orig_no, $new_parent, $old_parent, 
+		$new_pos, $old_pos) = $moved_taxa->fetchrow_array() )
+    {
+	# If both new and old positions are defined
+	
+	if ( $new_pos && $old_pos )
+	{
+	    $total += abs($new_pos - $old_pos);
+	}
+	
+	# If the new one is not (i.e. we are moving that taxon to the end of
+	# the tree)
+	
+	elsif ( $old_pos )
+	{
+	    $total += ($max_seq - $old_pos);
+	}
+	
+	# If the old one is not (i.e. we are moving that taxon into the tree)
+	
+	elsif ( $new_pos )
+	{
+	    $total += ($max_seq - $new_pos);
+	}
+    }
+    
+    return ($total / $max_seq);
+}
+
+
+# adjustTreeSequence ( dbh, max_lft, orig_no, new_parent )
 # 
 # Adjust the tree sequence so that taxon $orig_no (along with all of its
 # children) falls properly under its new parent.  The taxon will end up as the
-# last child of the new parent.
+# last child of the new parent.  The parameter $max_lft should be the current
+# maximum lft value in the table.
 
 sub adjustTreeSequence {
     
-    my ($dbh, $orig_no, $new_parent) = @_;
+    my ($dbh, $max_lft, $orig_no, $new_parent) = @_;
     
     my $sql = '';
     my $change_depth = '';
@@ -2312,7 +2334,8 @@ sub adjustTreeSequence {
     if ( $new_parent > 0 )
     {
 	($parent_pos, $parent_rgt, $new_depth) = $dbh->selectrow_array("
-		SELECT lft, rgt, depth+1 FROM $TREE_TABLE where orig_no = $new_parent");
+		SELECT lft, rgt, depth+1 FROM $TREE_TABLE
+		WHERE orig_no = $new_parent");
 	
 	# Do nothing if we are instructed to move a taxon into its own subtree.
 	
@@ -2326,7 +2349,7 @@ sub adjustTreeSequence {
     {
 	$parent_pos = 0;
 	$new_depth = 1;
-	($parent_rgt) = $dbh->selectrow_array("SELECT max(lft) from $TREE_TABLE");
+	($parent_rgt) = $max_lft;
     }
     
     # if we're moving to higher sequence numbers we do it like so:
@@ -2392,9 +2415,9 @@ sub adjustTreeSequence {
 	$sql = "UPDATE $TREE_TABLE
 		SET rgt = rgt + if(lft < $old_pos,
 				   if(rgt < $old_pos, $width, 0),
-				   -$disp)
+				   $disp)
 		    $change_depth,
-		    lft = lft + if(lft < $old_pos, $width, -$disp)
+		    lft = lft + if(lft < $old_pos, $width, $disp)
 		WHERE lft > $parent_rgt and lft <= $old_rgt";
 	
 	$dbh->do($sql);
@@ -2410,7 +2433,7 @@ sub adjustTreeSequence {
 	$dbh->do($sql);
     }
     
-    my $a = 1;		# we can stop here when debugging
+    return;
 }
 
 
@@ -2430,37 +2453,29 @@ sub activateNewTables {
     my $result;
     
     logMessage(2, "activating new tables (g)");
-    $DB::single = 1;
     
     # Delete any backup tables that might still be around
     
     $result = $dbh->do("DROP TABLE IF EXISTS $TREE_BAK");
-    # $result = $dbh->do("DROP TABLE IF EXISTS $ANCESTOR_BAK");
     $result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_BAK");
     
     # Create dummy versions of any of the main tables that might be currently
     # missing
     
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TREE_TABLE LIKE $TREE_TEMP");
-    #$result = $dbh->do("CREATE TABLE IF NOT EXISTS $ANCESTOR_TABLE LIKE $ANCESTOR_TEMP");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $SUPPRESS_TABLE LIKE $SUPPRESS_TEMP");
-
     
     # Now do the Atomic Table Swap (tm)
     
     $result = $dbh->do("RENAME TABLE
-				$TREE_TABLE to $TREE_BAK,
-				$TREE_TEMP to $TREE_TABLE,
-				$SUPPRESS_TABLE to $SUPPRESS_BAK,
-				$SUPPRESS_TEMP to $SUPPRESS_TABLE");
-
-    #				$ANCESTOR_TABLE to $ANCESTOR_BAK,
-    #				$ANCESTOR_TEMP to $ANCESTOR_TABLE,
+			    $TREE_TABLE to $TREE_BAK,
+			    $TREE_TEMP to $TREE_TABLE,
+			    $SUPPRESS_TABLE to $SUPPRESS_BAK,
+			    $SUPPRESS_TEMP to $SUPPRESS_TABLE");
     
     # Then we can get rid of the backup tables
     
     $result = $dbh->do("DROP TABLE $TREE_BAK");
-    # $result = $dbh->do("DROP TABLE $ANCESTOR_BAK");
     $result = $dbh->do("DROP TABLE $SUPPRESS_BAK");
     
     # Delete the auxiliary tables too, unless we were told to keep them.
@@ -2471,12 +2486,276 @@ sub activateNewTables {
 	
 	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
 	$result = $dbh->do("DROP TABLE IF EXISTS $CLASS_TEMP");
-	$result = $dbh->do("DROP TABLE IF EXISTS $PARENT_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_TEMP");
     }
     
     logMessage(1, "done rebuilding taxon trees");
     
     my $a = 1;		# we can stop here when debugging
+}
+
+
+# check ( dbh )
+# 
+# Check the integrity of $TREE_TABLE.  Return true if the table is okay.  If
+# not, return false, write out some error messages, and leave one or more error messages
+# in the variable @TREE_ERRORS.
+
+sub check {
+
+    my ($dbh, $msg_level) = @_;
+    
+    my $result;
+    
+    # First, set the variables that control log output.
+    
+    $MSG_TAG = 'Check'; $MSG_LEVEL = $msg_level || 1;
+    
+    # Then, clear the error list.
+    
+    @TREE_ERRORS = ();
+    
+    # Next, make sure that every orig_no value in authorities corresponds to a
+    # taxon_no value.
+    
+    logMessage(2, "checking concept numbers");
+    
+    my ($bad_orig_auth) = $dbh->selectrow_array("
+		SELECT count(distinct a.orig_no)
+		FROM $AUTHORITIES_TABLE a LEFT JOIN $AUTHORITIES_TABLE a2
+			ON a.orig_no = a2.taxon_no
+		WHERE a2.taxon_no is null");
+    
+    if ( $bad_orig_auth > 0 )
+    {
+	push @TREE_ERRORS, "Found $bad_orig_auth bad orig_no value(s) in $AUTHORITIES_TABLE";
+	logMessage(1, "    found $bad_orig_auth bad orig_no value(s) in $AUTHORITIES_TABLE");
+	
+	if ( $bad_orig_auth < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT distinct a.orig_no
+		FROM $AUTHORITIES_TABLE a LEFT JOIN $AUTHORITIES_TABLE a2
+			ON a.orig_no = a2.taxon_no
+		WHERE a2.taxon_no is null");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    # Also make sure that the orig_no values are in 1-1 correspondence between
+    # $AUTHORITIES_TABLE and $TREE_TABLE.
+    
+    my ($bad_orig) = $dbh->selectrow_array("
+		SELECT count(t.orig_no)
+		FROM $TREE_TABLE as t LEFT JOIN $AUTHORITIES_TABLE as a USING (orig_no)
+		WHERE a.orig_no is null");
+    
+    if ( $bad_orig > 0 )
+    {
+	push @TREE_ERRORS, "Found $bad_orig concept(s) in $TREE_TABLE that do not match $AUTHORITIES_TABLE";
+	logMessage(1, "    found $bad_orig concept(s) in $TREE_TABLE that do not match $AUTHORITIES_TABLE");
+	
+	if ( $bad_orig < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT t.orig_no
+		FROM $TREE_TABLE as t LEFT JOIN $AUTHORITIES_TABLE as a USING (orig_no)
+		WHERE a.orig_no is null");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    my ($missing_orig) = $dbh->selectrow_array("
+		SELECT count(distinct a.orig_no)
+		FROM $AUTHORITIES_TABLE as a LEFT JOIN $TREE_TABLE as t USING (orig_no)
+		WHERE t.orig_no is null");
+    
+    if ( $missing_orig > 0 )
+    {
+	push @TREE_ERRORS, "Found $missing_orig concept(s) missing from $TREE_TABLE";
+	logMessage(1, "    found $missing_orig concept(s) missing from $TREE_TABLE");
+	
+	if ( $missing_orig < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT distinct a.orig_no
+		FROM $AUTHORITIES_TABLE as a LEFT JOIN $TREE_TABLE as t USING (orig_no)
+		WHERE t.orig_no is null");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    # Make sure every concept is distinct
+    
+    my ($concept_chain) = $dbh->selectrow_array("
+		SELECT count(a.orig_no)
+		FROM $AUTHORITIES_TABLE as a JOIN $AUTHORITIES_TABLE a2
+			ON a2.taxon_no = a.orig_no
+		WHERE a2.taxon_no != a2.orig_no");
+    
+    if ( $concept_chain > 0 )
+    {
+	push @TREE_ERRORS, "Found $concept_chain concept(s) chained to other concept(s)";
+	logMessage(1, "    found $concept_chain concept(s) chained to other concept(s)");
+	
+	if ( $missing_orig < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT a.orig_no
+		FROM $AUTHORITIES_TABLE as a JOIN $AUTHORITIES_TABLE a2
+			ON a2.taxon_no = a.orig_no
+		WHERE a2.taxon_no != a2.orig_no");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    # Make sure that every spelling number is a member of the proper concept
+    # group.
+    
+    logMessage(2, "checking spelling numbers");
+    
+    my ($bad_spelling) = $dbh->selectrow_array("
+		SELECT count(t.orig_no)
+		FROM $TREE_TABLE as t LEFT JOIN $AUTHORITIES_TABLE as a ON a.taxon_no = t.spelling_no
+		WHERE a.orig_no != t.orig_no or a.orig_no is null");
+    
+    if ( $bad_spelling > 0 )
+    {
+	push @TREE_ERRORS, "Found $bad_spelling entries with bad spelling numbers";
+	logMessage(1, "    found $bad_spelling entries with bad spelling numbers");
+	
+	if ( $bad_spelling < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT t.orig_no
+		FROM $TREE_TABLE as t JOIN $AUTHORITIES_TABLE as a ON a.taxon_no = t.spelling_no
+		WHERE a.orig_no != t.orig_no or a.orig_no is null");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    # Make sure that every synonym_no matches an orig_no.
+    
+    logMessage(2, "checking synonyms");
+    
+    my ($bad_synonym) = $dbh->selectrow_array("
+		SELECT count(t.orig_no)
+		FROM $TREE_TABLE as t LEFT JOIN $TREE_TABLE as t2
+			ON t.synonym_no = t2.orig_no
+		WHERE t2.orig_no is null");
+    
+    if ( $bad_synonym > 0 )
+    {
+	push @TREE_ERRORS, "Found $bad_synonym entries with bad synonym numbers";
+	logMessage(1, "    found $bad_synonym entries with bad synonym numbers");
+	
+	if ( $bad_synonym < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT t.orig_no
+		FROM $TREE_TABLE as t LEFT JOIN $TREE_TABLE as t2
+			ON t.synonym_no = t2.orig_no
+		WHERE t2.orig_no is null");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    # Make sure that every parent_no matches an orig_no.
+    
+    logMessage(2, "checking parents");
+    
+    my ($bad_parent) = $dbh->selectrow_array("
+		SELECT count(t.orig_no)
+		FROM $TREE_TABLE as t LEFT JOIN $TREE_TABLE as t2
+			ON t.parent_no = t2.orig_no
+		WHERE t.parent_no != 0 and t2.orig_no is null");
+    
+    if ( $bad_parent > 0 )
+    {
+	push @TREE_ERRORS, "Found $bad_parent entries with bad parent numbers";
+	logMessage(1, "    found $bad_parent entries with bad parent numbers");
+	
+	if ( $bad_parent < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT t.orig_no
+		FROM $TREE_TABLE as t LEFT JOIN $TREE_TABLE as t2
+			ON t.parent_no = t2.orig_no
+		WHERE t2.orig_no is null");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    # check that only senior synonyms are classified by 'belongs to' opinions
+    
+    my ($bad_class) = $dbh->selectrow_array("
+		SELECT count(t.orig_no)
+		FROM $TREE_TABLE as t JOIN $OPINION_CACHE o USING (opinion_no)
+		WHERE (o.status = 'belongs to' and t.synonym_no != t.orig_no)
+		   or (o.status != 'belongs to' and t.synonym_no = t.orig_no)");
+    
+    if ( $bad_class > 0 )
+    {
+	push @TREE_ERRORS, "Found $bad_class entries improperly classified";
+	logMessage(1, "    found $bad_class entries improperly classified");
+	
+	if ( $bad_class < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT t.orig_no
+		FROM $TREE_TABLE as t JOIN $OPINION_CACHE o USING (opinion_no)
+		WHERE (o.status = 'belongs to' and t.synonym_no != t.orig_no)
+		   or (o.status != 'belongs to' and t.synonym_no = t.orig_no)");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    # Check the integrity of the tree sequence.
+    
+    logMessage(2, "checking tree sequence");
+    
+    my ($bad_seq) = $dbh->selectrow_array("
+		SELECT count(t.orig_no)
+		FROM $TREE_TABLE as t join $TREE_TABLE as p on p.orig_no = t.parent_no
+		WHERE (t.lft < p.lft or t.lft > p.rgt)");
+    
+    if ( $bad_seq > 0 )
+    {
+	push @TREE_ERRORS, "Found $bad_seq entries out of sequence";
+	logMessage(1, "    found $bad_seq entries out of sequence");
+
+	if ( $bad_synonym < $REPORT_THRESHOLD )
+	{
+	    my ($list) = $dbh->selectcol_arrayref("
+		SELECT t.orig_no
+		FROM $TREE_TABLE as t join $TREE_TABLE as p on p.orig_no = t.parent_no
+		WHERE (t.lft < p.lft or t.lft > p.rgt)");
+	    
+	    logMessage(1, "        " . join(', ', @$list));
+	}
+    }
+    
+    # Now report the results
+    
+    if (@TREE_ERRORS)
+    {
+	logMessage(1, "FOUND " . scalar(@TREE_ERRORS) . " ERROR(S)");
+	return;
+    }
+    
+    else
+    {
+	logMessage(1, "Everything OK");
+	return 1;
+    }
 }
 
 
@@ -2495,6 +2774,8 @@ sub logMessage {
     }
 }
 
+
+# The following routines are intended only for debugging.
 
 sub clearSpelling {
 
