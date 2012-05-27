@@ -3315,7 +3315,7 @@ function showAuthors()	{
 	# the following is basically a complete rewrite of buildTaxonomicList
 	# so what?
 
-	$sql = "(SELECT lft,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no,o.comments,'' FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL AND lft>0) UNION (SELECT lft,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no,o.comments,re.comments FROM occurrences o,reidentifications re,$TAXA_TREE_CACHE t WHERE o.occurrence_no=re.occurrence_no AND re.collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no AND lft>0) UNION (SELECT 999999,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0,o.comments,'' FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
+	$sql = "(SELECT lft,o.reference_no,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no,o.comments,'' FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL AND lft>0) UNION (SELECT lft,re.reference_no,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no,o.comments,re.comments FROM occurrences o,reidentifications re,$TAXA_TREE_CACHE t WHERE o.occurrence_no=re.occurrence_no AND re.collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no AND lft>0) UNION (SELECT 999999,o.reference_no,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0,o.comments,'' FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
 	my @occs = @{$dbt->getData($sql)};
 	my (%bad,%lookup,@need_authors,%authors);
 	for my $o ( @occs )	{
@@ -3344,6 +3344,18 @@ function showAuthors()	{
 		$sql = "SELECT taxon_no,IF(ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@need_authors).")";
 		$authors{$_->{'taxon_no'}} = Reference::formatShortRef($_) foreach @{$dbt->getData($sql)};
 	}
+	my (%isRef,$refList,%refCiteNo);
+	$isRef{$_->{'reference_no'}}++ foreach @occs;
+	@refs = @{$dbt->getData("SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no IN (".join(',',keys %isRef).") ORDER BY author1last,author2last,otherauthors,pubyr")};
+	if ( $#refs > 0 )	{
+		
+		for my $i ( 0..$#refs )	{
+			$refList .= sprintf("; <sup>%d</sup>".Reference::formatShortRef($refs[$i]),$i+1);
+			$refCiteNo{$refs[$i]->{'reference_no'}} = $i + 1;
+		}
+		$refList =~ s/^; //;
+	}
+
 	print "<div style=\"margin-left: 0em; margin-right: 1em; border-top: 1px solid darkgray;\">\n\n";
 	print "<p class=\"large\" style=\"margin-top: 0.5em; margin-bottom: 0em;\">Taxonomic list</p>\n\n";
 	if ( $c->{'taxonomy_comments'} )	{
@@ -3407,6 +3419,7 @@ function showAuthors()	{
 		if ( $lookup{$o->{'synonym_no'}} )	{
 			$o->{'formatted'} = '"'.$o->{'formatted'}.'" = '.$lookup{$o->{'synonym_no'}};
 		}
+$o->{'formatted'} .= qq|<sup><span class="tiny">$refCiteNo{$o->{'reference_no'}}</span></sup>|;
 		if ( $o->{'abund_value'} )	{
 			$o->{'formatted'} .= "[".$o->{'abund_value'}."]";
 		}
@@ -3453,6 +3466,7 @@ function showAuthors()	{
 	print "\n</div>\n<div class=\"withAuthors\">\n<div style=\"padding-bottom: 0.2em;\">".join("</div><div style=\"padding-bottom: 0.2em;\">\n",@with_authors)."</div></div>\n";
 	print "</tr>\n";
 	print "</table>\n\n";
+	print "<div class=\"verysmall\" style=\"margin-top: 0.5em;\">$refList</div>\n";
 
 	print "</div>\n</div>\n</div>\n\n";
 
