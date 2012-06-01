@@ -163,23 +163,6 @@ taxon identifiers.
 
 =over 4
 
-=item update ( dbh, concept_list, opinion_list )
-
-Adjust the taxon tree tables to take into account changes to the listed
-opinions and also changes to the membership of the listed concepts.  One or
-both of these lists may be empty.  Some of the listed concepts and/or opinions
-may disappear, as may happen if an opinion is deleted or if two concept groups
-are merged, while others may need to be created.  This routine should be called
-whenever C<orig_no> values in the C<authorities> table are adjusted, and both
-the old and the new orig_no values should be passed as part of the
-'concept_list' argument.  It should also be called whenever opinions are
-edited, added or deleted.
-
-This routine actually adds an entry to the taxon_queue table and waits for the
-maintenance thread to do the update.  It returns the id number of the newly
-added queue entry, which can be passed to the status() routine to determine
-when that particular update has been completed.
-
 =item build ( dbh )
 
 Build the taxon tree tables from scratch using the data in C<authorities> and
@@ -257,6 +240,229 @@ use constant TYPE_OPINION => 2;
 use constant TYPE_REBUILD => 3;
 use constant TYPE_CHECK => 4;
 use constant TYPE_ERROR => 9;
+
+use constant UPDATE_PENDING => 1;
+use constant UPDATE_COMPLETE => 2;
+use constant UPDATE_ERROR => 4;
+use constant UPDATE_INVALID => 9;
+
+
+=item updateConcepts ( dbh, orig_no ... )
+
+Adjusts the taxon tree tables to take into account changes to the given
+concepts.  Some of the listed concepts may disappear from the taxon tables, as
+may happen if two concepts are merged, while others may need to be
+created.  This routine should be called whenever C<orig_no> values in the
+C<authorities> table are adjusted, and both the old and the new C<orig_no> values
+should be included in the argument list.
+
+This routine actually adds an entry to C<$QUEUE_TABLE> and waits for the
+maintenance thread to do the update.  It returns the id number of the newly
+added queue entry, which can be passed to the status() routine to determine
+when that particular update has been completed.
+
+=cut
+
+sub updateConcepts {
+    
+    my ($dbh, @concepts) = @_;
+    
+    # Insert into $QUEUE_TABLE one row for each modified taxonomic concept.
+    # Ignore any concepts that are not integers greater than zero.
+    
+    my $concept_op = TYPE_CONCEPT;
+    my $insert_sql = "INSERT INTO $QUEUE_TABLE (type, param, time) VALUES ";
+    my $comma = '';
+    
+    foreach my $orig_no (@concepts)
+    {
+	next unless $orig_no > 0;
+	$insert_sql .= "$comma($concept_op, " . $orig_no + 0 . ', now())';
+	$comma = ', ';
+    }
+    
+    # If we didn't get any valid concepts, return false.
+    
+    return unless $comma;
+    
+    # Now do the insert.
+    
+    $dbh->do($insert_sql);
+    
+    # Return the id of the last inserted row.  This can then be passed to
+    # status() to determine whether the requested update has been completed.
+    # We only care about the last inserted row, since they will be processed in
+    # order and under most circumstances are processed together as a group.  Once
+    # the last one has been completed, we know that all of the others have.
+    
+    return $dbh->last_insert_id();
+}
+
+
+=item updateOpinions ( dbh, opinion_no ... )
+
+Adjusts the taxon tree tables to take into account changes to the given
+opinions.  Some of the listed opinions may disappear from the taxon tables, as
+may happen if an opinion is deleted, while others may need to be created.
+This routine should be called whenever the C<opinions> table is modified.
+
+This routine actually adds an entry to C<$QUEUE_TABLE> and waits for the
+maintenance thread to do the update.  It returns the id number of the newly
+added queue entry, which can be passed to the status() routine to determine
+when that particular update has been completed.
+
+=cut
+
+sub updateOpinions {
+    
+    my ($dbh, @opinions) = @_;
+    
+    # Insert into $QUEUE_TABLE one row for each modified opinion.  Ignore any
+    # values that are not integers greater than zero.
+    
+    my $concept_op = TYPE_OPINION;
+    my $insert_sql = "INSERT INTO $QUEUE_TABLE (type, param, time) VALUES ";
+    my $comma = '';
+    
+    foreach my $opinion_no (@opinions)
+    {
+	next unless $opinion_no > 0;
+	$insert_sql .= "$comma($concept_op, " . $opinion_no + 0 . ', now())';
+	$comma = ', ';
+    }
+    
+    # If we didn't get any valid concepts, return false.
+    
+    return unless $comma;
+    
+    # Now do the insert.
+    
+    $dbh->do($insert_sql);
+    
+    # Return the id of the last inserted row.  This can then be passed to
+    # status() to determine whether the requested update has been completed.
+    # We only care about the last inserted row, since they will be processed in
+    # order and under most circumstances are processed together as a group.  Once
+    # the last one has been completed, we know that all of the others have.
+    
+    return $dbh->last_insert_id();
+}
+
+
+=item rebuild ( dbh )
+
+Requests a rebuild of the taxon trees.  This will be carried out by the
+maintenance thread at the next opportunity.  Returns a request id that can be
+passed to update_status() in order to determine whether the request has been
+carried out.
+
+=cut
+
+sub rebuild {
+
+    my ($dbh) = @_;
+    
+    my $rebuild_op = TYPE_REBUILD;
+    
+    $dbh->do("INSERT INTO $QUEUE_TABLE (type, param, time)
+	      VALUES ($rebuild_op, 0, now())");
+    
+    return $dbh->last_insert_id();
+}
+
+
+=item check ( dbh )
+
+Requests a check of the taxon trees.  This will be carried out by the
+maintenance thread at the next opportunity.  Returns a request id that can be
+passed to update_status() in order to determine whether the request has been
+carried out.
+
+=cut
+
+sub check {
+
+    my ($dbh) = @_;
+
+    my $check_op = TYPE_CHECK;
+    
+    $dbh->do("INSERT INTO $QUEUE_TABLE (type, param, time)
+	      VALUES ($check_op, 0, now())");
+    
+    return $dbh->last_insert_id();
+}
+
+
+=item updateStatus ( dbh, insert_id )
+
+This routine can be called subsequently to update_concepts() or
+update_opinions() to determine whether the requested updates have been
+completed.  It returns a status value as follows:
+
+=over 4
+
+=item UPDATE_PENDING
+
+The update has not yet been completed
+
+=item UPDATE_COMPLETE
+
+The update has been completed
+
+=item UPDATE_ERROR
+
+An error occurred while processing the update, so it was not completed.  In
+this case, the error message is returned as the second item in the return
+list. 
+
+=item UPDATE_INVALID
+
+The given id is not an integer greater than zero.
+
+=back
+
+Note that this routine will return UPDATE_COMPLETE if called with a parameter
+that is not a return value from a previous call to update_concepts() or
+update_opinions().
+
+=cut
+
+sub updateStatus {
+
+    my ($dbh, $insert_id) = @_;
+    
+    # First make sure that the parameter value is valid.    
+    
+    unless ( $insert_id > 0 )
+    {
+	return UPDATE_INVALID;
+    }
+    
+    # Then query the queue table.
+    
+    my ($type, $time, $comment) = $dbh->selectrow_array("
+		SELECT type, time, comment FROM $QUEUE_TABLE
+		WHERE id = ?", undef, $insert_id + 0);
+    
+    # Return the appropriate code.  If we didn't find anything, we can assume
+    # that the update has completed.
+    
+    if ( $type == TYPE_ERROR )
+    {
+	return (UPDATE_ERROR, $comment);
+    }
+    
+    elsif ( $type > 0 )
+    {
+	return (UPDATE_PENDING);
+    }
+    
+    else
+    {
+	return (UPDATE_COMPLETE);
+    }
+}
+
 
 =item daemon ( dbh )
 
@@ -503,14 +709,13 @@ sub handle_signal {
     die "Caught signal $sig: aborting";
 }
 
-# update ( dbh, concept_list, opinion_list, msg_level )
+# updateTables ( dbh, concept_list, opinion_list, msg_level )
 # 
-# This routine should be called whenever opinions are created, edited, or
-# deleted, or when concept membership in the authorities table is changed.
-# The argument 'concept_list' should be a list of concept identifiers that
-# have changed (either gaining or losing members) and the 'opinion_list'
-# argument should be a list of opinions that have been added, edited or
-# deleted.  Either or both may be empty or undefined.
+# This routine is called by daemon() whenever opinions are created, edited, or
+# deleted, or when concept membership in the authorities table is changed.  It
+# should NEVER BE CALLED FROM OUTSIDE THIS MODULE, because it has no
+# concurrency control and so inconsistent updates and race conditions may
+# occur.
 # 
 # The taxon tree tables will be updated to match the new state of authorities
 # and opinions.  This involves first computing the list of taxonomic concepts
@@ -697,11 +902,14 @@ sub updateTables {
 }
 
 
-# build ( dbh, msg_level )
+# buildTables ( dbh, msg_level )
 # 
-# Build the taxon tree tables from scratch, using only the information in
-# $AUTH_TABLE and $OPINIONS_TABLE.  If the 'msg_level' parameter is
-# given, it controls the verbosity of log messages produced.
+# Builds the taxon tree tables from scratch, using only the information in
+# $AUTH_TABLE and $OPINIONS_TABLE.  If the 'msg_level' parameter is given, it
+# controls the verbosity of log messages produced.  This routine is called by
+# daemon(), and should NEVER BE CALLED FROM OUTSIDE THIS MODULE.  There is no
+# concurrency control, and so race conditions and inconsistent updates may
+# occur if you do that.
 # 
 # The $step_control parameter is for debugging only.  If specified it must be
 # a hash reference that will control which steps are taken.
@@ -3706,10 +3914,10 @@ sub getHistory {
 	or return error("taxon $taxon_no not found");
     
     # Then chain backward to find all related taxa.  This may be a tree, not
-    # necessarily a linear list.
+    # necessarily a linear list, so we do a breadth-first search with
+    # @related_id_list as the search queue.
     
-    my (@related_id_list);
-    my (@search_queue) = $orig_no;
+    my (@related_id_list) = $orig_no;
     
     my ($backward_sth) = $dbh->prepare("
 		SELECT t.orig_no
@@ -3719,12 +3927,9 @@ sub getHistory {
 	
 	or return error("database error: " . $dbh->errstr);
     
-    while (@search_queue)
+    foreach my $t (@related_id_list)
     {
-	my $t = shift @search_queue;
-	push @related_id_list, $t;
-	
-	push @search_queue, $dbh->selectrow_array($backward_sth, undef, $t);
+	push @related_id_list, $dbh->selectrow_array($backward_sth, undef, $t);
     }
     
     # Then chain forward to find all related taxa.
