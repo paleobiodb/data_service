@@ -2190,16 +2190,7 @@ sub getMostRecentClassification {
     # Lowest should appear at top of list (stated with evidence) and highest at bottom (second hand) so sort DESC
     # and want to use opinions pubyr if it exists, else ref pubyr as second choice - PS
     my $reliability = 
-        "(IF ((o.basis != '' AND o.basis IS NOT NULL),".
-            "CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 END,".
-            #"CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 0 END,".
-        # ELSE:
-            "IF(r.reference_no = 6930,".
-                "0,".# is second hand, then 0 (lowest priority)
-            # ELSE:
-                " CASE r.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 2 END".
-            ")".
-         ")) AS reliability_index ";
+        "(IF ((o.basis != '' AND o.basis IS NOT NULL), CASE o.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'implied' THEN 2 WHEN 'stated with evidence' THEN 3 END, IF(r.reference_no = 6930,0, IF(ref_has_opinion IS NULL,2, CASE r.basis WHEN 'second hand' THEN 1 WHEN 'stated without evidence' THEN 2 WHEN 'stated with evidence' THEN 3 ELSE 2 END)))) AS reliability_index ";
 
     # previously, the most recent opinion wasn't stored in a table and had
     #  to be recomputed constantly; now, the default behavior is to retrieve
@@ -2608,6 +2599,7 @@ sub displayMeasurements {
         $partHeader{'average'} = "mean";
         my $defaultError = "";
         for my $part ( keys %p_table )	{
+	    next unless ref $p_table{$part} eq 'HASH';
             my %m_table = %{$p_table{$part}};
             foreach my $type (('length','width','height','circumference','diagonal','diameter','inflation')) {
                 if (exists ($m_table{$type})) {
