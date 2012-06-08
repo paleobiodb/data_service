@@ -3346,7 +3346,9 @@ function showAuthors()	{
 	}
 	my (%isRef,$refList,%refCiteNo);
 	$isRef{$_->{'reference_no'}}++ foreach @occs;
-	@refs = @{$dbt->getData("SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no IN (".join(',',keys %isRef).") ORDER BY author1last,author2last,otherauthors,pubyr")};
+	if ( %isRef )	{
+		@refs = @{$dbt->getData("SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no IN (".join(',',keys %isRef).") ORDER BY author1last,author2last,otherauthors,pubyr")};
+	}
 	if ( $#refs > 0 )	{
 		
 		for my $i ( 0..$#refs )	{
