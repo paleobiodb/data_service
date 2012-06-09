@@ -397,8 +397,8 @@ sub displayAuthorityForm {
     my %seen_rank;
     my $original_rank = $fields{'taxon_rank'};
     if ($fields{taxon_no}) {
-        my $orig_no = TaxonInfo::getOriginalCombination($dbt,$fields{taxon_no});
-        my @spellings = TaxonInfo::getAllSpellings($dbt,$orig_no);
+        my $orig_no = TaxonTrees::listOriginalCombination($dbt,$fields{taxon_no});
+        my @spellings = TaxonInfo::listAllSpellings($dbt,$orig_no);
         my @taxa = ();
         my %seen_name = ();
         my $duplicate_names = 0;
@@ -423,7 +423,7 @@ sub displayAuthorityForm {
         my @names = map {$_->[1]} @taxa;
         my @nos =   map {$_->[0]} @taxa;
         if (scalar(@names) > 1) {
-            my $original_no_select = HTMLBuilder::htmlSelect('original_no',\@names,\@nos,$orig_no);
+            my $original_no_select = HTMLBuilder::htmlSelect('orig_no',\@names,\@nos,$orig_no);
             $original_no_select .= "\n<br><span class=\"verysmall\">If this is more than one taxon, you may <a href=\"$WRITE_URL?action=entangledNamesForm&amp;taxon_no=$orig_no\">disentangle them</a></span>";
             $fields{'original_no_select'} = $original_no_select;
         }
@@ -931,42 +931,46 @@ sub submitAuthorityForm {
 		$status = $dbt->updateRecord($s,'authorities','taxon_no',$resultTaxonNumber, \%fields);
         propagateAuthorityInfo($dbt,$resultTaxonNumber,1);
 
-        my $db_orig_no = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
+#	The following code is no longer necessary, because its function is
+#	taken care of by TaxonTrees::updateOpinionConcepts().
+# 
+#         my $db_orig_no = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
 
-        if ($fields{'original_no'} =~ /^\d+$/ && $fields{'original_no'} != $db_orig_no) {
-            my $sql = "SELECT * FROM opinions WHERE child_no=$db_orig_no"; 
-            my @results = @{$dbt->getData($sql)};
-            my @parents = ();
-            foreach my $row (@results) {
-                Opinion::resetOriginalNo($dbt,$fields{'original_no'},$row);
-#                if ($row->{'child_no'} != $fields{original_no}) {
-                    if ($row->{'status'} eq 'misspelling of') {
-                        if ($row->{'parent_spelling_no'} =~ /^\d+$/) {
-                            push @parents,$row->{'parent_spelling_no'};
-                        }
-                    }
-                    if ($row->{'child_spelling_no'} =~ /^\d+$/) {
-                        push @parents,$row->{'child_spelling_no'};
-                    }
-                    if ($row->{'child_no'} =~ /^\d+$/) {
-                        push @parents,$row->{'child_no'};
-                    }
-#                }
-            }
-            # We also have to modify the parent_no so it points to the original
-            #  combination of any taxa classified into any migrated opinion
-            if ( @parents ) {
-                my %unique_parents = ();
-                foreach my $p (@parents) {
-                    $unique_parents{$p} = 1;
-                }
-                my @unique_parents = keys %unique_parents;
-                my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'original_no'} WHERE parent_no IN (".join(",",@unique_parents).")";
-                dbg("Migrating parents: $sql");
-                $dbh->do($sql);
-            }
+#         if ($fields{'original_no'} =~ /^\d+$/ && $fields{'original_no'} != $db_orig_no) {
+#             my $sql = "SELECT * FROM opinions WHERE child_no=$db_orig_no"; 
+#             my @results = @{$dbt->getData($sql)};
+#             my @parents = ();
+#             foreach my $row (@results) {
+#                 Opinion::resetOriginalNo($dbt,$fields{'original_no'},$row);
+# #                if ($row->{'child_no'} != $fields{original_no}) {
+#                     if ($row->{'status'} eq 'misspelling of') {
+#                         if ($row->{'parent_spelling_no'} =~ /^\d+$/) {
+#                             push @parents,$row->{'parent_spelling_no'};
+#                         }
+#                     }
+#                     if ($row->{'child_spelling_no'} =~ /^\d+$/) {
+#                         push @parents,$row->{'child_spelling_no'};
+#                     }
+#                     if ($row->{'child_no'} =~ /^\d+$/) {
+#                         push @parents,$row->{'child_no'};
+#                     }
+# #                }
+#             }
+#             # We also have to modify the parent_no so it points to the original
+#             #  combination of any taxa classified into any migrated opinion
+#             if ( @parents ) {
+#                 my %unique_parents = ();
+#                 foreach my $p (@parents) {
+#                     $unique_parents{$p} = 1;
+#                 }
+#                 my @unique_parents = keys %unique_parents;
+#                 my $sql = "UPDATE opinions SET modified=modified, parent_no=$fields{'original_no'} WHERE parent_no IN (".join(",",@unique_parents).")";
+#                 dbg("Migrating parents: $sql");
+#                 $dbh->do($sql);
+#             }
 
-        }
+#         }
+
         # Changing a genus|subgenus|species|subspecies is tricky since we have to change
         # other related opinions and authorities
         if ($t->get('taxon_name') ne $fields{'taxon_name'} &&
@@ -1004,7 +1008,7 @@ sub submitAuthorityForm {
         }
         $end_message .= "<div align=\"center\"><p class=\"large\">" . $fields{'taxon_name'} . " " .Reference::formatShortRef(\%fields). " has been $enterupdate the database</p></div>";
 
-        my $origResultTaxonNumber = TaxonInfo::getOriginalCombination($dbt,$resultTaxonNumber);
+        my $origResultTaxonNumber = $t->get('orig_no');
         
         $end_message .= qq|
     <div align="center" class="displayPanel">
@@ -1079,6 +1083,12 @@ sub submitAuthorityForm {
 	
 	print "<BR>";
 	print "</CENTER>";
+    
+    # Now update the taxon trees for both the old and new taxonomic concept
+    # (these will be the same, unless the user has explicitly changed the
+    # "original combination" for the taxon just edited).
+    
+    TaxonTrees::updateConcepts($dbh, $fields{'orig_no'}, $t->get('orig_no'));
 }
 
 # JA 15-18.5.11

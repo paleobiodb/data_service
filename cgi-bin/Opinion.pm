@@ -520,7 +520,7 @@ sub displayOpinionForm {
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no});
                 $higher_class = "unclassified $taxon->{taxon_rank}";
             }
-            my @spellings = TaxonInfo::getAllSpellings($dbt,$parent_no);
+            my @spellings = TaxonTrees::listAllSpellings($dbt,$parent_no);
             my $sql = "SELECT DISTINCT(taxon_name) FROM authorities WHERE taxon_no IN ('".join("','",@spellings)."') AND taxon_name!='".$parentName."' ORDER BY taxon_name";
             my @names = @{$dbt->getData($sql)};
             my $equals = "";
@@ -656,15 +656,15 @@ sub displayOpinionForm {
 	if (scalar(@child_spelling_nos) > 1 || (scalar(@child_spelling_nos) == 1 && @opinions_to_migrate1)) {
 		$spelling_row .= "<tr><td nowrap width=\"100%\" class=\"small\">";
 		foreach my $child_spelling_no (@child_spelling_nos) {
-			my $parent = TaxaCache::getParent($dbt,$child_spelling_no);
+			my $parent = TaxonTrees::getParent($dbh,$child_spelling_no);
 			my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$child_spelling_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
 			my $pub_info = Reference::formatShortRef($taxon);
 			my $selected = ($fields{'child_spelling_no'} == $child_spelling_no) ? "CHECKED" : "";
 			$pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
-			my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_spelling_no);
+			my $orig_no = TaxonTrees::listOriginalCombination($dbt,$child_spelling_no);
 			my $orig_info = "";
 			if ($orig_no != $child_spelling_no) {
-				my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$orig_no});
+				my $orig = TaxonTrees::getOriginalCombination($dbh, $orig_no);
 				$orig_info = ", originally $orig->{taxon_name}";
 			}
 			$spelling_row .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}, $taxon->{taxon_rank}${pub_info}${orig_info} <br>\n|;
@@ -1348,7 +1348,7 @@ sub submitOpinionForm {
 		# make sure we have a taxon_no for this entry...
 		if (!$fields{'child_no'} ) {
 			croak("Opinion::submitOpinionForm, tried to insert a record without knowing its child_no (original taxon)");
-			return;	
+			return;
 		}
 		
 		($code, $resultOpinionNumber) = $dbt->insertRecord($s,'opinions', \%fields);

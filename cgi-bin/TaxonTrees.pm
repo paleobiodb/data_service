@@ -1189,24 +1189,24 @@ sub updateOpinionConcepts {
     
     $result = $dbh->do("UPDATE $OPINION_CACHE o JOIN authorities a
 				ON a.taxon_no = o.child_spelling_no
-			SET o.orig_no = a.orig_no
+			SET o.orig_no = a.orig_no, o.modified = o.modified
 			WHERE o.orig_no in $concept_filter");
     
     $result = $dbh->do("UPDATE $OPINION_CACHE o JOIN authorities a
 				ON a.taxon_no = o.parent_spelling_no
-			SET o.parent_no = a.orig_no
+			SET o.parent_no = a.orig_no, o.modified = o.modified
 			WHERE o.parent_no in $concept_filter");
     
     # Next, $OPINIONS_TABLE
     
     $result = $dbh->do("UPDATE $OPINIONS_TABLE o JOIN authorities a
 				ON a.taxon_no = o.child_spelling_no
-			SET o.child_no = a.orig_no
+			SET o.child_no = a.orig_no, o.modified = o.modified
 			WHERE a.orig_no in $concept_filter");
     
     $result = $dbh->do("UPDATE $OPINIONS_TABLE o JOIN authorities a
 				ON a.taxon_no = o.parent_spelling_no
-			SET o.parent_no = a.orig_no
+			SET o.parent_no = a.orig_no, o.modified = o.modified
 			WHERE a.orig_no in $concept_filter");
     
     return;
@@ -3449,7 +3449,7 @@ sub listChildren {
 }
 
 
-our ($INFO_EXPR) = "a.taxon_name, a.taxon_no, a.taxon_rank, a.orig_no, o.status";
+our ($INFO_EXPR) = "a.taxon_name, a.taxon_no, a.taxon_rank, a.common_name, a.orig_no, o.status";
 
 # getTaxonParametrized ( dbh, taxon_no, parameter )
 # 
