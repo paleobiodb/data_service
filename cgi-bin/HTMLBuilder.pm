@@ -127,6 +127,7 @@ sub new {
         sex=>[\&_listFromEnum,'specimens','sex'],
         specimen_coverage=>[\&_listFromEnum,'specimens','specimen_coverage'],
         measurement_source=>[\&_listFromEnum,'specimens','measurement_source'],
+        mass_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
         length_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
         width_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
         height_error_unit=>[\&_listFromEnum,'measurements','error_unit'],
