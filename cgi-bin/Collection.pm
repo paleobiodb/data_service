@@ -3270,16 +3270,6 @@ function showAuthors()	{
 	}
 	print "</p>\n\n";
 
-	$sql = "SELECT r.reference_no,author1last,author2last,otherauthors,pubyr FROM refs r,secondary_refs s WHERE r.reference_no=s.reference_no AND collection_no=".$c->{'collection_no'}." ORDER BY author1last,author2last,pubyr";
-	my @refs = @{$dbt->getData($sql)};
-	if ( @refs )	{
-		my @formatted;
-		for my $r ( @refs )	{
-			push @formatted , Reference::formatShortRef($r,'link_id'=>1);
-		}
-		print "<p $indent>See also ".join(', ',@formatted)."</p>\n\n";
-	}
-
 	$c->{'collection_type'} ? print "<p $indent>Purpose of describing collection: $c->{'collection_type'} analysis<p>\n\n" : "";
 
 	if ( $c->{''} )	{
@@ -3317,7 +3307,7 @@ function showAuthors()	{
 
 	$sql = "(SELECT lft,o.reference_no,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no,o.comments,'' FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL AND lft>0) UNION (SELECT lft,re.reference_no,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no,o.comments,re.comments FROM occurrences o,reidentifications re,$TAXA_TREE_CACHE t WHERE o.occurrence_no=re.occurrence_no AND re.collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no AND lft>0) UNION (SELECT 999999,o.reference_no,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0,o.comments,'' FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
 	my @occs = @{$dbt->getData($sql)};
-	my (%bad,%lookup,@need_authors,%authors);
+	my (%bad,%lookup,@need_authors,%authors,%rankOfNo);
 	for my $o ( @occs )	{
 		if ( $o->{'taxon_no'} != $o->{'synonym_no'} )	{
 			$bad{$o->{'taxon_no'}} = $o->{'synonym_no'};
@@ -3341,18 +3331,20 @@ function showAuthors()	{
 		}
 	}
 	if ( @need_authors )	{
-		$sql = "SELECT taxon_no,IF(ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@need_authors).")";
-		$authors{$_->{'taxon_no'}} = Reference::formatShortRef($_) foreach @{$dbt->getData($sql)};
+		$sql = "SELECT taxon_no,taxon_rank,IF(ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@need_authors).")";
+		my @ref_info = @{$dbt->getData($sql)};
+		$authors{$_->{'taxon_no'}} = Reference::formatShortRef($_) foreach @ref_info;
+		$rankOfNo{$_->{'taxon_no'}} = $_->{'taxon_rank'} foreach @ref_info;
 	}
-	my (%isRef,$refList,%refCiteNo);
+	my (%isRef,@refs,$refList,%refCiteNo);
 	$isRef{$_->{'reference_no'}}++ foreach @occs;
 	if ( %isRef )	{
-		@refs = @{$dbt->getData("SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no IN (".join(',',keys %isRef).") ORDER BY author1last,author2last,otherauthors,pubyr")};
+		@refs = @{$dbt->getData("SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no IN (".join(',',keys %isRef).") AND reference_no!=$c->{'reference_no'} ORDER BY author1last,author2last,otherauthors,pubyr")};
 	}
 	if ( $#refs > 0 )	{
 		
 		for my $i ( 0..$#refs )	{
-			$refList .= sprintf("; <sup>%d</sup>".Reference::formatShortRef($refs[$i]),$i+1);
+			$refList .= sprintf("; <sup>%d</sup>".Reference::formatShortRef($refs[$i],'link_id'=>1),$i+1);
 			$refCiteNo{$refs[$i]->{'reference_no'}} = $i + 1;
 		}
 		$refList =~ s/^; //;
@@ -3367,6 +3359,7 @@ function showAuthors()	{
 	print "<table class=\"small\" cellspacing=\"0\" cellpadding=\"4\" class=\"taxonomicList\">\n\n";
 	my ($lastclass,$lastorder,$lastfamily,$class,@with_authors);
 	for my $o ( @occs )	{
+		# format taxon names
 		my ($ital,$ital2,$postfix) = ('<i>','</i>','');
 		if ( $o->{'species_name'} eq "indet." )	{
 			($ital,$ital2) = ('','');
@@ -3425,6 +3418,16 @@ $o->{'formatted'} .= qq|<sup><span class="tiny">$refCiteNo{$o->{'reference_no'}}
 		if ( $o->{'abund_value'} )	{
 			$o->{'formatted'} .= "[".$o->{'abund_value'}."]";
 		}
+
+		# get author/year info
+		my $author = $authors{$o->{'synonym_no'}};
+		# erase author if the classified taxon isn't a species but
+		#  the name looks like a proper species (= no funny characters)
+		if ( $rankOfNo{$o->{'synonym_no'}} !~ /species/ && $o->{'species_name'} !~ /[^a-z]/ && $o->{'species_reso'} !~ /"/ )	{
+			$author = "";
+		}
+
+		# get class/order/family names
 		my $class_hash = TaxaCache::getParents($dbt,[$o->{'taxon_no'}],'array_full');
 		my @class_array = @{$class_hash->{$o->{'taxon_no'}}};
 		my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$o->{'taxon_no'}},['taxon_name','taxon_rank','pubyr','common_name']);
@@ -3433,6 +3436,9 @@ $o->{'formatted'} .= qq|<sup><span class="tiny">$refCiteNo{$o->{'reference_no'}}
 		if ( ! $o->{'class'} && ! $o->{'order'} && ! $o->{'family'} )	{
 			$o->{'class'} = "unclassified";
 		}
+
+		# put everything together
+#$o->{formatted} .= $rankOfNo{$o->{'synonym_no'}};
 		if ( $o->{'class'} ne $lastclass || $o->{'order'} ne $lastorder || $o->{'family'} ne $lastfamily )	{
 			if ( $lastclass || $lastorder || $lastfamily )	{
 				print "\n</div>\n<div class=\"withAuthors\">\n<div style=\"padding-bottom: 0.2em;\">".join("</div><div style=\"padding-bottom: 0.2em;\">\n",@with_authors)."</div></div>\n";
@@ -3453,12 +3459,11 @@ $o->{'formatted'} .= qq|<sup><span class="tiny">$refCiteNo{$o->{'reference_no'}}
 			print "<tr$class>\n<td valign=\"top\"><nobr>";
 			print "&nbsp;".join(' - ',$o->{'order'},$o->{'family'})."</nobr></td>\n";
 			print "<td valign=\"top\"><div class=\"noAuthors\">$o->{'formatted'}";
-			#push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
-			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}}." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
+			push @with_authors , $o->{'formatted'}." ".$author." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
 			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<div class=\"verysmall\" style=\"padding-left: 0.75em; padding-top: 0.2em; padding-bottom: 0.3em;\">$o->{'comments'}</div>\n" : "";
 		} else	{
 			print ", $o->{'formatted'}";
-			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}}." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
+			push @with_authors , $o->{'formatted'}." ".$author." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
 			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<div class=\"verysmall\" style=\"padding-left: 0.75em; padding-top: 0.2em; padding-bottom: 0.3em;\">$o->{'comments'}</div>\n" : "";
 		}
 		$lastclass = $o->{'class'};
