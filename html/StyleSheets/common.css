@@ -35,7 +35,7 @@ hr {
 
 /* how should the regular links look? */
 A:link	{ color : Navy; text-decoration:none; }
-A:visited	{ color : SlateGray; text-decoration:none; }
+A:visited	{ color : Navy; text-decoration:none; }
 A:active	{ color : #00AAFF; text-decoration:none; }
 A:hover	{ color : #C80078; text-decoration:none; }
 
