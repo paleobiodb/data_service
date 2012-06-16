@@ -2582,7 +2582,13 @@ sub displayAuthorityTaxonSearchForm {
     $vars{'authorizer_me'} = $s->get('authorizer_reversed');
 
     print Person::makeAuthEntJavascript($dbt);
-    print $hbo->populateHTML('search_authority_form',\%vars);
+
+    $vars{'page_title'} = "Search for names to add or edit";
+    $vars{'action'} = "submitTaxonSearch";
+    $vars{'taxonomy_fields'} = "YES";
+    $vars{'goal'} = "authority";
+
+    print $hbo->populateHTML('search_taxon_form', \%vars);
 
     print $hbo->stdIncludes("std_page_bottom");
 }
@@ -2676,9 +2682,13 @@ sub displayOpinionSearchForm {
     print $hbo->stdIncludes("std_page_top");
     my %vars = $q->Vars();
     $vars{'authorizer_me'} = $s->get('authorizer_reversed');
-
     print Person::makeAuthEntJavascript($dbt);
-    print $hbo->populateHTML('search_opinion_form', \%vars);
+
+    $vars{'page_title'} = "Search for opinions to add or edit";
+    $vars{'action'} = "submitOpinionSearch";
+    $vars{'taxonomy_fields'} = "YES";
+
+    print $hbo->populateHTML('search_taxon_form', \%vars);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -3003,7 +3013,7 @@ sub startImage{
     my $page_title ='Search for the taxon with an image to be added';
 
     print $hbo->stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,'submitTaxonSearch',$goal],['page_title','action','goal']);
     print $hbo->stdIncludes("std_page_bottom");
 }
 
@@ -3064,7 +3074,7 @@ sub startStartEcologyTaphonomySearch{
     my $page_title ='Search for the taxon you want to describe';
 
     print $hbo->stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,'submitTaxonSearch',$goal],['page_title','action','goal']);
     print $hbo->stdIncludes("std_page_bottom");
 }
 sub startStartEcologyVertebrateSearch{
@@ -3072,7 +3082,7 @@ sub startStartEcologyVertebrateSearch{
     my $page_title ='Search for the taxon you want to describe';
 
     print $hbo->stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,'submitTaxonSearch',$goal],['page_title','action','goal']);
     print $hbo->stdIncludes("std_page_bottom");
 }
 sub startPopulateEcologyForm	{
