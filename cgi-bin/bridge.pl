@@ -80,7 +80,7 @@ if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
 my $sql = "SHOW PROCESSLIST";
 my $p = $dbt->dbh->do( $sql );
 if ( $p >= 10 )	{
-	if ( PBDBUtil::checkForBot() == 1 )	{
+	if ( PBDBUtil::checkForBot() == 1 || $p >= 20 )	{
 		exit;
 	}
 }
@@ -915,7 +915,7 @@ sub displayDownloadMeasurementsResults	{
 	require Download;
 	logRequest($s,$q);
 	print $hbo->stdIncludes("std_page_top");
-	Measurement::displayDownloadMeasurementsResults($q,$s,$dbt);
+	Measurement::displayDownloadMeasurementsResults($q,$s,$dbt,$hbo);
 	print $hbo->stdIncludes("std_page_bottom");
 }
 
