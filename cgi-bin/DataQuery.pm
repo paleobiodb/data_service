@@ -315,13 +315,13 @@ sub finishOutput {
 }
 
 
-# processRow ( )
+# processRecord ( )
 # 
 # This method is intended to be overridden.  It is called once for each row,
 # after the row is fetched but before the row's output is generated.  The row
 # hash is given as the first argument.
 
-sub processRow {
+sub processRecord {
 
 }
 

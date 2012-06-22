@@ -15,6 +15,7 @@ $Constants::HTML_DIR        = $conf->{'HTML_DIR'};
 $Constants::DATA_DIR        = $conf->{'DATA_DIR'};
 $Constants::DB_SOCKET       = $conf->{'DB_SOCKET'};
 $Constants::DB_PASSWD       = $conf->{'DB_PASSWD'};
+$Constants::DB_USER	    = $conf->{'DB_USER'} || 'pbdbuser';
 $Constants::IP_MAIN         = '137.111.92.50';
 $Constants::IP_BACKUP       = '137.111.92.50';
 
@@ -35,7 +36,6 @@ if ($Constants::IS_FOSSIL_RECORD) {
 $Constants::DB = 'pbdb';
 $Constants::SQL_DB = 'pbdb';
 $Constants::DB_TYPE = '';
-$Constants::DB_USER = 'pbdbuser';
 $Constants::PAGE_TOP = 'std_page_top';
 $Constants::PAGE_BOTTOM = 'std_page_bottom';
 $Constants::COLLECTIONS = 'collections';

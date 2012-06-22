@@ -36,7 +36,7 @@ sub setParameters {
 	# and spaces, since only those are valid in taxonomic names.
 	
 	$self->{taxon_name} = $params->{name};
-	$self->{taxon_name} =~ s/^[a-zA-Z ]//;
+	$self->{taxon_name} =~ s/[^a-zA-Z ]//;
     }
     
     # If 'exact' is specified, then information is returned about the exact taxon
@@ -107,7 +107,7 @@ sub fetchMultiple {
     {
 	($lft, $rgt) = $dbh->selectrow_array("
 		SELECT t.lft, t.rgt FROM taxa_tree_cache t JOIN authorities a USING (taxon_no)
-		WHERE a.name = ?", {RaiseError=>0}, $self->{taxon_name});
+		WHERE a.taxon_name = ?", {RaiseError=>0}, $self->{taxon_name});
 	
 	unless ( $lft > 0 )
 	{
@@ -167,6 +167,8 @@ sub initOutput {
     
     $self->{tree_stack} = [];
     $self->{comma_stack} = [];
+    
+    return;
 }
 
 
@@ -198,7 +200,7 @@ sub generateRecord {
     
     my $prefix = '';
     
-    while ( $row->{taxon_no} > $self->{tree_stack}[0] )
+    while ( @{$self->{tree_stack}} > 0 && $row->{lft} > $self->{tree_stack}[0] )
     {
 	$prefix .= "]}";
 	shift @{$self->{tree_stack}};
@@ -217,6 +219,23 @@ sub generateRecord {
     }
     
     return $prefix . $self->emitTaxonJSON($row);
+}
+
+
+sub finishOutput {
+
+    my ($self) = @_;
+    
+    my $output = '';
+    
+    foreach ( @{$self->{tree_stack}} )
+    {
+	$output .= ']}';
+    }
+    
+    $self->{tree_stack} = [];
+    $self->{comma_stack} = [];
+    return $output;
 }
     
 
@@ -241,7 +260,7 @@ sub emitTaxonJSON {
     $output .= ',"taxonID":"' . $row->{taxon_no} . '"' if $self->{show_id};
     
     if ( defined $row->{common_name} && $row->{common_name} ne '' ) {
-	$output .= ',"vernacularName":"' . PBJSON::json_clean($row->{common_name}) . '"';
+	$output .= ',"vernacularName":"' . DataQuery::json_clean($row->{common_name}) . '"';
     }
     
     if ( defined $self->{show_extant} and defined $row->{extant} 
@@ -249,8 +268,8 @@ sub emitTaxonJSON {
 	$output .= ',"extant":"' . $1 . '"';
     }
     
-    push @{$self->{tree_stack}}, $row->{rgt};
-    push @{$self->{comma_stack}}, 0;
+    unshift @{$self->{tree_stack}}, $row->{rgt};
+    unshift @{$self->{comma_stack}}, 0;
     $output .= ',"children":[';
     
     return $output;
