@@ -49,7 +49,13 @@ my $query = TreeQuery->new($dbh);
 
 $query->setParameters(\%params);
 
-$query->fetchMultiple() or
-    return $query->reportError();
+if ( $query->fetchMultiple() )
+{
+    print $query->generateCompoundResult();
+}
 
-print $query->generateCompoundResult();
+else
+{
+    print $query->reportError();
+}
+
