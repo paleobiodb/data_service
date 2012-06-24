@@ -52,7 +52,7 @@ sub setParameters {
     # hierarchy rooted at the specified taxon.  This parameter cannot be used
     # at the same time as 'name'.
     
-    if ( defined $params->{name} && $params->{name} > 0 )
+    if ( defined $params->{id} && $params->{id} > 0 )
     {
 	$self->{taxon_id} = $params->{taxon_id} + 0;
     }
@@ -136,6 +136,7 @@ sub fetchMultiple {
     else
     {
 	$self->{error} = "you must specify either the parameter 'name' or 'id'";
+	return;
     }
     
     # Now construct and execute the SQL statement that will be used to fetch
