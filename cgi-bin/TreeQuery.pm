@@ -54,7 +54,7 @@ sub setParameters {
     
     if ( defined $params->{id} && $params->{id} > 0 )
     {
-	$self->{taxon_id} = $params->{taxon_id} + 0;
+	$self->{taxon_id} = $params->{id} + 0;
     }
     
     # If "synonyms" is specified, then include junior synonyms.  The default
