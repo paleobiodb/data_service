@@ -146,7 +146,8 @@ sub fetchMultiple {
 		FROM taxa_tree_cache t JOIN authorities a USING (taxon_no)
 				       JOIN opinions o USING (opinion_no)
 		WHERE t.lft >= ? and t.rgt <= ?
-		  AND (o.status is null or o.status = 'belongs to')
+		  AND t.synonym_no = t.taxon_no
+		  AND (o.status is null OR o.status = 'belongs to')
 		ORDER BY t.lft";
     
     $self->{main_sth} = $dbh->prepare($sql);

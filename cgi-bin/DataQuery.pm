@@ -537,4 +537,25 @@ sub add_reference {
 }
 
 
+# reportError ( )
+# 
+# Return an error message, in the proper format.
+
+sub reportError {
+
+    my ($self) = @_;
+    
+    my $message = $self->{error} || "An error occurred.";
+    
+    if ( $self->{output_format} eq 'JSON' )
+    {
+	return '{"error":"' . $message . '"}';
+    }
+    
+    else
+    {
+	return $message;
+    }   
+}
+
 1;

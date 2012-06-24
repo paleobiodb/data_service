@@ -50,6 +50,6 @@ my $query = TreeQuery->new($dbh);
 $query->setParameters(\%params);
 
 $query->fetchMultiple() or
-    return reportError($query->error);
+    return $query->reportError();
 
 print $query->generateCompoundResult();
