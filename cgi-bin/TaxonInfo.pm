@@ -4471,18 +4471,13 @@ sub getMatchingSubtaxa	{
 	}
 	# otherwise select a taxon at random
 	else	{
+		@trefs = @{$dbt->getData("SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank IN ('species')")};
 		my $x = int(rand($#trefs + 1));
 		$q->param('taxon_no' => $trefs[$x]->{taxon_no});
-		# DON'T SET THIS TO 1
-		#$q->param('is_real_user' => 1);
 		# infinite loops are bad
 		$q->param('match' => '');
-		if ( $q->param('action') =~ /checkTaxonInfo/ )	{
-			return;
-		} else	{
-			basicTaxonInfo($q,$s,$dbt,$hbo);
-			exit;
-		}
+		basicTaxonInfo($q,$s,$dbt,$hbo);
+		exit;
 	}
 }
 
