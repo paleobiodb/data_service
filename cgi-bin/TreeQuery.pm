@@ -261,7 +261,7 @@ sub emitTaxonJSON {
     
     $output .= '{"scientificName":"' . DataQuery::json_clean($row->{taxon_name}) . '"';
     $output .= ',"taxonRank":"' . $row->{taxon_rank} . '"';
-    $output .= ',"taxonID":"' . $row->{taxon_no} . '"' if $self->{show_id};
+    $output .= ',"taxonID":"' . $row->{taxon_no} . '"';
     
     if ( defined $row->{common_name} && $row->{common_name} ne '' ) {
 	$output .= ',"vernacularName":"' . DataQuery::json_clean($row->{common_name}) . '"';
@@ -298,8 +298,7 @@ sub emitTaxonXML {
 	'</dwc:scientificName>' . "\n";
     $output .= '    <dwc:taxonRank>' . $row->{taxon_rank} . '</dwc:taxonRank>' . "\n";
     
-    $output .= '    <dwc:taxonID>' . $row->{taxon_no} . '</dwc:taxonID>' . "\n"
-	if $self->{show_id};
+    $output .= '    <dwc:taxonID>' . $row->{taxon_no} . '</dwc:taxonID>' . "\n";
     
     $output .= '  </dwc:Taxon>' . "\n";
 }
