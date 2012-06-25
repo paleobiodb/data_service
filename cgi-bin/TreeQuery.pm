@@ -64,6 +64,8 @@ sub setParameters {
     {
 	$self->{include_synonyms} = 1;
     }
+    
+    return 1;
 }
 
 
@@ -176,14 +178,14 @@ sub initOutput {
 
 # generateRecord ( row, is_first_record )
 # 
-# Return a string representing one record, in the selected output format.  The
-# parameter $is_first_record indicates whether this is the first record, which
-# is significant for JSON output (it controls whether or not to output an
-# initial comma, in that case).
+# Return a string representing one row of the result, in the selected output
+# format.  The parameter $is_first_record indicates whether this is the first
+# record, which is significant for JSON output (it controls whether or not to
+# output an initial comma, in that case).
 
 sub generateRecord {
 
-    my ($self, $row) = @_;
+    my ($self, $row, $is_first_record) = @_;
     
     # If the selected output format is XML, we just dispatch the appropriate
     # method.  In this case, the client of this service will get a preorder

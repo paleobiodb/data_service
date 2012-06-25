@@ -1,0 +1,178 @@
+<!doctype html>
+
+<!-- 
+	Based on HTML Boilerplate 1.0 by Paul Irish and Divya Manian. 
+	See http://html5boilerplate.com/ for the original
+	
+	Hacked by Puneet Kishor. All modifications released under a CC0 waiver 
+	by Puneet Kishor.
+	
+	July 12, 2011
+-->
+
+<!--[if lt IE 7 ]> <html class="no-js ie6" lang="en"> <![endif]-->
+<!--[if IE 7 ]>    <html class="no-js ie7" lang="en"> <![endif]-->
+<!--[if IE 8 ]>    <html class="no-js ie8" lang="en"> <![endif]-->
+<!--[if (gte IE 9)|!(IE)]><!--> <html class="no-js" lang="en"> <!--<![endif]-->
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+	
+	<title>[% apptitle %]: [% subapp %]</title>
+	<meta name="description" content="[% appdesc %]">
+	<meta name="copyright" content="CC-BY 3.0" />
+	<meta name="author" content="Puneet Kishor" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	
+	<link rel="shortcut icon" href="/favicon.ico">
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+	
+	<!-- CSS: implied media="all" -->
+	<link rel="stylesheet" type="text/css" href="[% applib %]/lib/html5/css/style.css?v=2">
+	<link rel="stylesheet" type="text/css" href="[% applib %]/lib/grid/16_40_20/grid.css" />
+	<link rel="stylesheet" type="text/css" href="[% appuri %]/css/style.css?v=1" />
+	<link href='http://fonts.googleapis.com/css?family=Limelight' rel='stylesheet' type='text/css'>
+	
+	<!-- Uncomment if you are specifically targeting less enabled mobile browsers -->
+	<!-- <link rel="stylesheet" media="handheld" href="css/handheld.css?v=2"> -->
+
+    <!-- css for plugins; uncomment as necessary -->
+    <!-- *************************************** -->
+    <!-- <link rel="stylesheet" type="text/css" href="[% applib %]/lib/jquery/plugins/gritter/css/jquery.gritter.css" media="screen"> -->
+    <!-- <link rel="stylesheet" type="text/css" href="[% applib %]/lib/jquery/plugins/jbar/css/style.css" media="screen"> -->
+	<!-- <link rel="stylesheet" type="text/css" href="[% applib %]/lib/jquery/plugins/notifications/jquery.notifications.css" media="screen" /> -->
+    <!-- <link rel="stylesheet" type="text/css" href="[% applib %]/lib/jquery/plugins/fancybox/jquery.fancybox-1.3.4.css" media="screen" /> -->
+    <!-- <link rel="stylesheet" type="text/css" href="[% applib %]/lib/jquery/plugins/tablestriper/tablestriper.css" media="screen" /> -->
+	<!-- <link rel="stylesheet" type="text/css" href="[% applib %]/lib/jquery/plugins/tour/css/jquerytour.css" media="screen" /> -->
+		
+	<!-- All JavaScript at the bottom, except for Modernizr which enables HTML5 elements & feature detects, and jQuery -->
+	<script src="[% applib %]/lib/modernizr/modernizr-1.7.min.js"></script>
+
+	<!-- Grab Google CDN's jQuery, with a protocol relative URL; fall back to local if necessary -->
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.js"></script>
+	<script>window.jQuery || document.write('<script src="[% applib %]/lib/jquery/jquery-1.6.4.min.js">\x3C/script>')</script>
+</head>
+
+<body>
+
+	<div id="container">
+		<header class="row">
+			<h1>[% apptitle %]</h1>
+			<h2>[% appdesc %]</h2>
+		</header>
+		
+		<div id="main" role="main" class="row">
+		[% content %]
+		</div>
+		
+		<footer class="row">
+                <p xmlns:dct="http://purl.org/dc/terms/" xmlns:vcard="http://www.w3.org/2001/vcard-rdf/3.0#">
+          <a rel="license"
+             href="http://creativecommons.org/publicdomain/zero/1.0/">
+            <img src="http://i.creativecommons.org/p/zero/1.0/88x31.png" style="border-style: none;" alt="CC0" />
+          </a>
+          <br />
+          To the extent possible under law,
+          <a rel="dct:publisher"
+             href="">
+            <span property="dct:title">Puneet Kishor</span></a>
+          has waived all copyright and related or neighboring rights to
+          <span property="dct:title">Pbdb</span>.
+        This work is published from:
+        <span property="vcard:Country" datatype="dct:ISO3166"
+              content="US" about="">
+          United States</span>.	
+		</footer>
+	</div> <!-- #container -->
+	
+	<!-- Uncomment scripts as needed. Better yet, concatenate and minify them -->
+	<!-- ******************************************************************** -->
+	<!-- <script type="text/javascript" src="http://maps.google.com/maps?file=api&amp;v=2&amp;sensor=false&amp;key="></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/ui/js/jquery-ui-1.8.12.custom.min.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/jqote2/jquery.jqote2.min.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/sparkline/jquery.sparkline.min.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/tools/jquery.tools.min.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/flot/jquery.flot.min.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/gritter/js/jquery.gritter.min.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/jbar/jquery.bar.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/notifications/jquery.notifications-1.1.min.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/fancybox/jquery.fancybox-1.3.4.pack.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/easing/jquery.easing-1.3.pack.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/tablestriper/jquery.tablestriper.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/tour/js/cufon-yui.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/tour/js/ChunkFive_400.font.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/jquery/plugins/tour/js/jquery.tour.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/json/json2.min.js"></script> -->
+	<!-- <script type="text/javascript" src="[% applib %]/lib/OpenLayers-2.11-rc1/OpenLayers.js"></script> -->
+	<!-- <script type="text/javascript" src="/js/app.js"></script> -->
+
+	<!--[if lt IE 7 ]>
+	<script src="js/libs/dd_belatedpng.js"></script>
+	<script>DD_belatedPNG.fix('img, .png_bg'); // Fix any <img> or .png_bg bg-images. Also, please read goo.gl/mZiyb </script>
+	<![endif]-->
+	
+	<!-- add script starter to the jQuery trigger below -->
+	<script type="text/javascript">
+var count = 0;
+
+function randomBetween(from, to){
+    return Math.floor(Math.random() * (to - from + 1) + from);
+}
+
+var countOccurrences = function() {
+	if (count == 0) {
+    $.ajax({
+        "url": "http://mumbai.geology.wisc.edu/d/pbdb/num_of_occurrences.json",
+        "data": "",
+        "type": "GET",
+        "dataType": "json",
+        "success": function(data) {
+			//if (count == 0) {
+            	count += data.num_of_occurrences * 1;
+            	$("#count").html(count);
+			//}
+			//else {
+			//	update((data.num_of_occurrences * 1) + randomBetween(1, 10));
+			//}
+    	}
+    });
+	}
+	else {
+		update((count * 1) + randomBetween(1, 10));
+	}
+}
+
+var update = function(num) {
+    var tmp = count, limit = (count * 1) + 100;
+    
+    var go = function() {
+        tmp++;
+        if (tmp > limit) {
+            clearInterval(animation);
+        }
+        $("#count").html(tmp);
+    }
+    
+    var animation = setInterval(go, 5);
+    
+    $("#count").html(num);
+    count = num;
+}
+
+	$(document).ready(function() {
+		countOccurrences();
+		var upd = setInterval( countOccurrences, 5000 );		
+	});
+	</script>
+
+	<script type="text/javascript">
+	/*
+	var _gaq=[['_setAccount',''],['_trackPageview']];
+	(function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];g.async=1;
+	g.src=('https:'==location.protocol?'//ssl':'//www')+'.google-analytics.com/ga.js';
+	s.parentNode.insertBefore(g,s)}(document,'script'));
+	*/
+	</script>
+
+</body>
+</html>

@@ -1,0 +1,66 @@
+
+body {
+font: 1.2em \"Hoefler Text\", Baskerville, Georgia, \"Times New Roman\", Times, serif;
+line-height: 1.2em;
+}
+
+p {
+padding-top: 0.5em;
+padding-bottom: 0.5em;
+}
+
+header {
+border-bottom: 1px solid #000;
+}
+
+header h1 {
+font: 3em \"Hoefler Text\", Baskerville, Georgia, \"Times New Roman\", Times, serif;
+color: #AA0000;
+}
+
+header h2 {
+font: 1em \"Hoefler Text\", Baskerville, Georgia, \"Times New Roman\", Times, serif;
+color: #000;
+}
+
+header h2 a {
+text-decoration: none;
+}
+
+#main {
+padding-top: 40px;
+}
+
+#count {
+font-family: 'Limelight', cursive;
+font-size: 64px;
+background-color: #444;
+color: #fff;
+width: 400px;
+height: 50px;
+padding-top: 30px;
+padding-left: 20px;
+margin-bottom: 10px;
+margin-left: 10px;
+border: 5px solid #dddddd;
+border-radius: 5px;
+-moz-border-radius: 5px;
+-moz-box-shadow: 5px 5px 10px #000000;
+-webkit-box-shadow: 5px 5px 10px #000000;
+-khtml-box-shadow: 5px 5px 10px #000000;
+box-shadow: 5px 5px 10px #000000;
+}
+
+#entries {
+font: .6em \"Helvetica Neue\", Arial, Helvetica, Geneva, sans-serif;
+}
+
+pre, code, tt {
+font: 0.8em \"Andale Mono\", Monaco, \"Liberation Mono\", \"Bitstream Vera Sans Mono\", \"DejaVu Sans Mono\", monospace;
+}
+
+footer {
+clear: both;
+padding-top: 2em;
+font: .6em \"Helvetica Neue\", Arial, Helvetica, Geneva, sans-serif;
+}
