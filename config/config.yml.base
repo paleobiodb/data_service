@@ -1,0 +1,22 @@
+appname       : "pbdata"
+apptitle      : "Paleobiology Data Services"
+appdesc	      : "fossils of the world"
+appauthor     : "Michael McClennen"
+appauthoremail: "mmcclenn@geology.wisc.edu"
+appversion    : "0.1"
+applicense    : "CC0 waiver"
+
+layout: "main"
+charset: "UTF-8"
+template: "tiny"
+
+plugins:
+    Database:
+      driver: 'mysql'
+      database: 'pbdb'
+      host: 'localhost:mysql_socket=/var/mysql/mysql.sock'
+      port: 3306
+      username: 'pbdbuser'
+      password: 'pbdbpwd'
+      dbi_params:
+        AutoCommit: 1
