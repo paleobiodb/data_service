@@ -137,7 +137,8 @@ sub generateCompoundResult {
 	
 	if ( defined $options{can_stream} && length($output) > 102400 )
 	{
-	    $self->{stashed_output} = $output;
+	    delete $self->{row_count};
+	    $self->{stashed_output} = $self->generateHeader() . $output;
 	    return;
 	}
     }
@@ -397,38 +398,79 @@ sub json_clean {
 }
 
 
-# add_reference ( )
+# generateAttribution ( )
 # 
-# Process the fields that define a publication reference
+# Generate an attribution string for the given record.  This relies on the
+# fields "a_al1", "a_al2", "a_ao", and "a_pubyr".
 
-sub add_reference {
+sub generateAttribution {
+
+    my ($self, $row) = @_;
+    
+    my $auth1 = $row->{a_al1} || '';
+    my $auth2 = $row->{a_a2l} || '';
+    my $auth3 = $row->{a_ao} || '';
+    my $pubyr = $row->{a_pubyr} || '';
+    
+    $auth1 =~ s/( Jr)|( III)|( II)//;
+    $auth1 =~ s/\.$//;
+    $auth1 =~ s/,$//;
+    $auth2 =~ s/( Jr)|( III)|( II)//;
+    $auth2 =~ s/\.$//;
+    $auth2 =~ s/,$//;
+    
+    my $attr_string = $auth1;
+    
+    if ( $auth3 ne '' or $auth2 =~ /et al/ )
+    {
+	$attr_string .= " et al.";
+    }
+    elsif ( $auth2 ne '' )
+    {
+	$attr_string .= " and $auth2";
+    }
+    
+    $attr_string .= " $pubyr" if $pubyr ne '';
+    
+    $row->{attribution} = $attr_string if $attr_string ne '';
+}
+
+
+# generateReference ( )
+# 
+# Generate a reference string for the given record.  This relies on the
+# fields "r_al1", "r_ai1", "r_al2", "r_ai2", "r_ao", "r_pubyr", "r_reftitle",
+# "r_pubtitle", "r_pubvol", "r_pubno".
+# 
+
+sub generateReference {
 
     my ($self, $row) = @_;
     
     # First format the author string.  This includes stripping extra periods
     # from initials and dealing with "et al" where it occurs.
     
-    my $a1i = $row->{r_a1i} || '';
-    my $a1l = $row->{r_a1l} || '';
+    my $ai1 = $row->{r_ai1} || '';
+    my $al1 = $row->{r_al1} || '';
     
-    $a1i =~ s/\.//g;
-    $a1i =~ s/([A-Za-z])/$1./g;
+    $ai1 =~ s/\.//g;
+    $ai1 =~ s/([A-Za-z])/$1./g;
     
-    my $auth1 = $a1i;
-    $auth1 .= ' ' if $a1i ne '' && $a1l ne '';
-    $auth1 .= $a1l;
+    my $auth1 = $ai1;
+    $auth1 .= ' ' if $ai1 ne '' && $al1 ne '';
+    $auth1 .= $al1;
     
-    my $a2i = $row->{r_a2i} || '';
-    my $a2l = $row->{r_a2l} || '';
+    my $ai2 = $row->{r_ai2} || '';
+    my $al2 = $row->{r_al2} || '';
     
-    $a2i =~ s/\.//g;
-    $a2i =~ s/([A-Za-z])/$1./g;
+    $ai2 =~ s/\.//g;
+    $ai2 =~ s/([A-Za-z])/$1./g;
     
-    my $auth2 = $a2i;
-    $auth2 .= ' ' if $a2i ne '' && $a2l ne '';
-    $auth2 .= $a2l;
+    my $auth2 = $ai2;
+    $auth2 .= ' ' if $ai2 ne '' && $al2 ne '';
+    $auth2 .= $al2;
     
-    my $auth3 = $row->{r_otherauthors} || '';
+    my $auth3 = $row->{r_ao} || '';
     
     $auth3 =~ s/\.//g;
     $auth3 =~ s/\b(\w)\b/$1./g;
@@ -547,7 +589,7 @@ sub reportError {
     
     my $message = $self->{error} || "An error occurred.";
     
-    if ( $self->{output_format} eq 'JSON' )
+    if ( $self->{output_format} eq 'json' )
     {
 	return '{"error":"' . $message . '"}';
     }

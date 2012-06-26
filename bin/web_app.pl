@@ -35,7 +35,16 @@ get '/taxa/list.:ct' => sub {
     
     $query->fetchMultiple() or return $query->reportError();
     
-    $query->generateCompoundResult( can_stream => server_supports_streaming );
+    if ( server_supports_streaming )
+    {
+	$query->generateCompoundResult( can_stream => 1 ) or
+	    stream_data( $query, 'streamResult' );
+    }
+    
+    else
+    {
+	$query->generateCompoundResult();
+    }
 };
 
 
@@ -73,7 +82,16 @@ get '/taxa/hierarchy.:ct' => sub {
     
     $query->fetchMultiple() or return $query->reportError();
     
-    return $query->generateCompoundResult( can_stream => server_supports_streaming );
+    if ( server_supports_streaming )
+    {
+	$query->generateCompoundResult( can_stream => 1 ) or
+	    stream_data( $query, 'streamResult' );
+    }
+    
+    else
+    {
+	$query->generateCompoundResult();
+    }
 };
 
 

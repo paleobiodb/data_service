@@ -26,35 +26,26 @@ sub setParameters {
     
     $self->DataQuery::setParameters($params);
     
-    # If 'name' is specified, then information is returned about the taxon
+    # If 'taxon_name' is specified, then information is returned about the taxon
     # hierarchy rooted at the specified taxon.  This parameter cannot be used
     # at the same time as 'id'.
     
-    if ( defined $params->{name} && $params->{name} ne '' )
+    if ( defined $params->{taxon_name} && $params->{taxon_name} ne '' )
     {
 	# Clean the parameter of everything except alphabetic characters
 	# and spaces, since only those are valid in taxonomic names.
 	
-	$self->{taxon_name} = $params->{name};
+	$self->{taxon_name} = $params->{taxon_name};
 	$self->{taxon_name} =~ s/[^a-zA-Z ]//;
     }
     
-    # If 'exact' is specified, then information is returned about the exact taxon
-    # specified.  Otherwise (default) information is returned about the senior
-    # synonym or correct spelling of the specified taxon if such exist.
-    
-    if ( defined $params->{exact} && $params->{exact} ne '' )
-    {
-	$self->{fetch_exact} = 1;
-    }
-    
-    # If "id" is specified, then information is returned about the taxon
+    # If "taxon_no" is specified, then information is returned about the taxon
     # hierarchy rooted at the specified taxon.  This parameter cannot be used
     # at the same time as 'name'.
     
-    if ( defined $params->{id} && $params->{id} > 0 )
+    if ( defined $params->{taxon_no} && $params->{taxon_no} > 0 )
     {
-	$self->{taxon_id} = $params->{id} + 0;
+	$self->{taxon_no} = $params->{taxon_no} + 0;
     }
     
     # If "synonyms" is specified, then include junior synonyms.  The default
@@ -64,6 +55,11 @@ sub setParameters {
     {
 	$self->{include_synonyms} = 1;
     }
+    
+    # Turn the following on always for now.  This will likely be changed later.
+    
+    $self->{show_attribution} = 1;
+    $self->{show_extant} = 1;
     
     return 1;
 }
@@ -120,15 +116,15 @@ sub fetchMultiple {
     
     # Otherwise, use the id.
     
-    elsif ( defined $self->{taxon_id} )
+    elsif ( defined $self->{taxon_no} )
     {
 	($lft, $rgt) = $dbh->selectrow_array("
 		SELECT t.lft, t.rgt FROM taxa_tree_cache t
-		WHERE t.taxon_no = ?", {RaiseError=>0}, $self->{taxon_id});
+		WHERE t.taxon_no = ?", {RaiseError=>0}, $self->{taxon_no});
 	
 	unless ( $lft > 0 )
 	{
-	    $self->{error} = "taxon id $self->{taxon_id} was not found in the database";
+	    $self->{error} = "taxon $self->{taxon_no} was not found in the database";
 	    return;
 	}
     }
@@ -137,17 +133,23 @@ sub fetchMultiple {
     
     else
     {
-	$self->{error} = "you must specify either the parameter 'name' or 'id'";
+	$self->{error} = "you must specify either the parameter 'taxon_name' or the parameter 'taxon_no'";
 	return;
     }
     
     # Now construct and execute the SQL statement that will be used to fetch
     # the desired information from the database.
     
-    $sql = "	SELECT t.taxon_no, t.lft, t.rgt, 
-		       a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status
+    $sql = "	SELECT t.taxon_no, t.orig_no, t.lft, t.rgt,
+		       a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status,
+	               if (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', 
+			   a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) a_pubyr,
+		       if (a.ref_is_authority = 'YES', r.author1last, a.author1last) a_al1,
+		       if (a.ref_is_authority = 'YES', r.author2last, a.author2last) a_al2,
+		       if (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) a_ao
 		FROM taxa_tree_cache t JOIN authorities a USING (taxon_no)
-				       JOIN opinions o USING (opinion_no)
+				       LEFT JOIN opinions o USING (opinion_no)
+				       LEFT JOIN refs r ON (a.reference_no = r.reference_no)
 		WHERE t.lft >= ? and t.rgt <= ?
 		  AND t.synonym_no = t.taxon_no
 		  AND (o.status is null OR o.status = 'belongs to')
@@ -173,6 +175,18 @@ sub initOutput {
     $self->{comma_stack} = [];
     
     return;
+}
+
+
+# processRecord ( row )
+# 
+# Do the necessary processing on the given row to make it ready to use.
+
+sub processRecord {
+
+    my ($self, $row) = @_;
+    
+    $self->generateAttribution($row);
 }
 
 
@@ -267,6 +281,19 @@ sub emitTaxonJSON {
 	$output .= ',"vernacularName":"' . DataQuery::json_clean($row->{common_name}) . '"';
     }
     
+    if ( defined $self->{show_attribution} && defined $row->{attribution} &&
+	 $row->{attribution} ne '' )
+    {
+	my $attr = $row->{attribution};
+	
+	if ( defined $row->{orig_no} && $row->{taxon_no} != $row->{orig_no} )
+	{
+	    $attr = "($attr)";
+	}
+	
+	$output .= ',"nameAccordingTo":"' . $attr . '"';
+    }
+    
     if ( defined $self->{show_extant} and defined $row->{extant} 
 	 and $row->{extant} =~ /(yes|no)/i ) {
 	$output .= ',"extant":"' . $1 . '"';
@@ -300,6 +327,19 @@ sub emitTaxonXML {
     
     $output .= '    <dwc:taxonID>' . $row->{taxon_no} . '</dwc:taxonID>' . "\n";
     
+    if ( defined $self->{show_attribution} && defined $row->{attribution} &&
+	 $row->{attribution} ne '' )
+    {
+	my $attr = $row->{attribution};
+	
+	if ( defined $row->{orig_no} && $row->{taxon_no} != $row->{orig_no} )
+	{
+	    $attr = "($attr)";
+	}
+	
+	$output .= '    <dwc:nameAccordingTo>' . $attr . '</dwc:nameAccordingTo>' . "\n";
+    }
+
     $output .= '  </dwc:Taxon>' . "\n";
 }
 
