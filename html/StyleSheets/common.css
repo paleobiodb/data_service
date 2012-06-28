@@ -95,7 +95,7 @@ H1, H2, H3, H4, H5, H6 {
 .pageTitle	{
 	font-size: 1.5em;
         margin-top: 1em;
-	margin-bottom: 1.5em;
+	margin-bottom: 1em;
 }
 
 .fieldName	{
@@ -190,6 +190,11 @@ H1, H2, H3, H4, H5, H6 {
 
 .bannerColor	{
     background-color: #191970;
+}
+
+.mobileInfoLink	{
+    float: left;
+    clear: both;
 }
 
 .introTextBox	{
@@ -504,12 +509,14 @@ table.navbox {
 }
 
 .panel {
-    margin-top: 2em;
+    margin-top: 1em;
     margin-left: -1px;
     width: 54em;
     z-index: 1;
     display: none;
-    padding: 1em;
+    padding-left: 1em;
+    padding-right: 1em;
+    padding-top: 1em;
 }
 
 .superscript {
