@@ -295,24 +295,24 @@ sub assignGenera	{
 			$field_collection_no = $fieldcount;
 		} elsif ( $fn eq "sample_id" ) {
 			$field_collection_no = $fieldcount;
-		} elsif ( $fn eq "occurrences.reference_no" && $q->param('count_refs') eq "yes" )	{
+		} elsif ( $fn eq "occurrence.reference_no" && $q->param('count_refs') eq "yes" )	{
 			$field_genus_name = $fieldcount;
-		} elsif ( $fn eq "occurrences.genus_name" && $q->param('count_refs') ne "yes" )	{
+		} elsif ( $fn eq "occurrence.genus_name" && $q->param('count_refs') ne "yes" )	{
 			$field_genus_name = $fieldcount;
-		} elsif ( $fn eq "occurrences.species_name" )	{
+		} elsif ( $fn eq "occurrence.species_name" )	{
 			$field_species_name = $fieldcount;
-		} elsif ( $fn eq "occurrences.parent_name" )	{
+		} elsif ( $fn eq "parent_name" )	{
 			$field_parent_name = $fieldcount;
-		} elsif ( $fn eq "occurrences.family_name" )	{
+		} elsif ( $fn eq "family_name" )	{
 			$field_family_name = $fieldcount;
-		} elsif ( $fn eq "occurrences.order_name" )	{
+		} elsif ( $fn eq "order_name" )	{
 			$field_order_name = $fieldcount;
 		} elsif ( $fn eq "resolved_fossil_name" )   {
 			$field_genus_name = $fieldcount;
 			$field_species_name = $fieldcount;
-		} elsif ( $fn eq "occurrences.abund_unit" )	{
+		} elsif ( $fn eq "abund_unit" )	{
 			$field_abund_unit = $fieldcount;
-		} elsif ( $fn eq "occurrences.abund_value" )	{
+		} elsif ( $fn eq "abund_value" )	{
 			$field_abund_value = $fieldcount;
 		} elsif ( $fn eq "collections.reference_no" )	{
 			$field_refno = $fieldcount;
@@ -321,22 +321,22 @@ sub assignGenera	{
 		# WARNING: uses the last seen of the two fields
 		} elsif ( $fn eq "collections.ma_mid" || $fn eq "collections.interpolated_mid" )	{
 			$field_midpt = $fieldcount;
-		} elsif ( $fn eq "collections.period" && $q->param('time_scale') eq "periods" )	{
+		} elsif ( $fn eq "period" && $q->param('time_scale') eq "periods" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "period";
-		} elsif ( $fn eq "collections.epoch" && $q->param('time_scale') eq "epochs" )	{
+		} elsif ( $fn eq "epoch" && $q->param('time_scale') eq "epochs" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "epoch";
-		} elsif ( $fn eq "collections.subepoch" && $q->param('time_scale') eq "Cenozoic subepochs" )	{
+		} elsif ( $fn eq "subepoch" && $q->param('time_scale') eq "Cenozoic subepochs" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "subepoch";
-		} elsif ( $fn eq "collections.stage" && $q->param('time_scale') eq "stages" )	{
+		} elsif ( $fn eq "stage" && $q->param('time_scale') eq "stages" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "stage";
-		} elsif ( $fn eq "collections.10_my_bin" && $q->param('time_scale') eq "10 m.y. bins" )	{
+		} elsif ( $fn eq "10_my_bin" && $q->param('time_scale') eq "10 m.y. bins" )	{
 			$field_bin = $fieldcount;
 			$bin_type = "10my";
-		} elsif ( $fn eq "collections.FR2_bin" && $q->param('time_scale') =~ /fossil record/i )	{
+		} elsif ( $fn eq "FR2_bin" && $q->param('time_scale') =~ /fossil record/i )	{
 			$field_bin = $fieldcount;
 			$bin_type = "FossilRecord2";
 		} elsif ( $fn eq "sample_age_ma" && $q->param('time_scale') =~ /neptune pacman/i) {
