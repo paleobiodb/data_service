@@ -14,6 +14,17 @@ use strict;
 use Encode;
 
 
+our ($DEFAULT_RESULT_LIMIT) = 500;	# Default limit on the number of
+                                        # results, unless overridden by the
+                                        # query parameter "limit=all".
+
+our ($STREAM_THRESHOLD) = 102400;	# If the result is above this size,
+                                        # and the server is capable of
+                                        # streaming, then it will be streamed.
+
+our ($COMMON_HELP) = "  limit - return at most the specified number of records (positive integer or 'all') - defaults to $DataQuery::DEFAULT_RESULT_LIMIT if not specified
+  count - (boolean) return two additional fields along with the record set: 'records_found' = total number of records found, 'records_returned' = number actually returned";
+
 
 # new ( dbh )
 # 
@@ -21,7 +32,7 @@ use Encode;
 
 sub new {
     
-    my ($class, $dbh, $format) = @_;
+    my ($class, $dbh) = @_;
     my $self = { dbh => $dbh };
     
     return bless $self, $class;
@@ -44,23 +55,44 @@ sub setParameters {
     my ($self, $params) = @_;
     
     # The 'limit' parameter, if given, limits the size of the result set.  If
-    # not specified, or not greater than zero, a default limit of 500 will be
-    # used.  If 'all' is specified as the value, then the full result set will
-    # be returned.
+    # not specified, a default limit of $DEFAULT_RESULT_LIMIT will be used.
+    # If 'all' is specified as the value, then the full result set will be
+    # returned no matter how large it is.
     
-    if ( defined $params->{limit} && lc $params->{limit} eq 'all' )
+    if ( defined $params->{limit} )
     {
-	$self->{limit} = 0;	    # the query routine will interpret
-    }                               # this as "no limit";
-    
-    elsif ( defined $params->{limit} && $params->{limit} >= 0 )
-    {
-	$self->{limit} = $params->{limit} + 0;
+	if ( $params->{limit} eq 'all' )
+	{
+	    delete $self->{limit_results};	# remove any limit that might
+                                                # have been in place
+	}
+	
+	elsif ( $params->{limit} >= 0 )
+	{
+	    $self->{limit_results} = $params->{limit} + 0;
+	}
+	
+	else
+	{
+	    die "400 The parameter 'limit' takes a nonnegative integer or the string 'all'\n";
+	}
     }
     
     else
     {
-	$self->{limit} = 'default';
+	$self->{limit_results} = $DEFAULT_RESULT_LIMIT;
+    }
+    
+    # The 'count' parameter only makes sense with a JSON-format result.  If
+    # true, it causes an extra piece of information to be returned:
+    # 'records_found', which gives the total number of records found
+    # regardless of any limit on the number returned.  Because of the 'limit'
+    # parameter, the number of records actually returned may be less than this
+    # number.
+    
+    if ( $params->{count} )
+    {
+	$self->{report_count} = 1;
     }
     
     # The 'ct' parameter sets the output format.  This must be specified in
@@ -78,7 +110,43 @@ sub setParameters {
 	elsif ( $ct eq 'json' ) {
 	    $self->{output_format} = 'json';
 	}
+	
+	else
+	{
+	    die "415 The output format must be one of 'xml' or 'json'\n";
+	}
     }
+}
+
+
+# countRecords ( )
+# 
+# Return the result count of the main query, regardless of any limit on the
+# number of records returned.  This routine should only be called after all of
+# the results have been fetched, so that we have an accurate count.
+
+sub countRecords {
+
+    my ($self) = @_;
+    
+    # If there is no limit, or the number of records fetched is less than the
+    # limit, then we just report the number of records actually fetched.
+    
+    unless ( defined $self->{limit_results} and
+	     $self->{row_count} == $self->{limit_results} )
+    {
+	return $self->{row_count};
+    }
+    
+    # If there is a limit, and the number of rows fetched equals that limit,
+    # then there might be more rows that matched the query.  So in this case
+    # we need to execute the count statement previously stashed by
+    # fetchMultiple().
+    
+    my ($dbh) = $self->{dbh};
+    
+    my ($result_count) = $dbh->selectrow_array($self->{count_sql});
+    return $result_count;
 }
 
 
@@ -107,12 +175,12 @@ sub generateSingleResult {
 #   can_stream => 1
 # 
 # This option can be used to inform this function that it should stream the
-# result unless the result is very small.  This option should only be used if
-# the server does in fact support streaming.  If the size of the result will
-# exceed 100 kilobytes, the result computed so far is stashed in the query
-# object and the function returns false.  The calling application can then
-# setup a call to streamResult to send the stashed data followed by the rest
-# of the data as it is retrieved from the database.
+# result if the result is large.  This option should only be used if the
+# server does in fact support streaming.  If the size of the result will
+# exceed $STREAM_THRESHOLD characters, the result computed so far is stashed
+# in the query object and the function returns false.  The calling application
+# can then setup a call to streamResult to send the stashed data followed by
+# the rest of the data as it is retrieved from the database.
 
 sub generateCompoundResult {
 
@@ -123,22 +191,40 @@ sub generateCompoundResult {
     my $is_first_row = 1;
     my $row;
     
+    PBDB_Data::debug_msg('options:', \%options);
+    
     $self->{row_count} = 0;
+    
+    # We call the initOutput method first, in case the query class has
+    # overridden it.  Anything it returns will get prepended to the output.
     
     my $initial = $self->initOutput();
     $output .= $initial if defined $initial;
     
+    # Now fetch the data rows one at a time.
+    
     while ( $row = $sth->fetchrow_hashref )
     {
+	# For each row, we start by calling the processRecord method (in case
+	# the query class has overridden it) and then call generateRecord to
+	# generate the actual output.
+	
 	$self->processRecord($row);
-	$output .= $self->generateRecord($row, $is_first_row);
+	$output .= $self->generateRecord($row, is_first => $is_first_row);
+	
 	$is_first_row = 0;
 	$self->{row_count}++;
 	
-	if ( defined $options{can_stream} && length($output) > 102400 )
+	# If streaming is a possibility, check whether we have passed the
+	# threshold for result size.  If so, then we need to immediately
+	# generate the header and stash it along with the output so far.  We
+	# then return false, which should lead to a subsequent call to
+	# streamResult().
+	
+	if ( defined $options{can_stream} && length($output) > $STREAM_THRESHOLD )
 	{
-	    delete $self->{row_count};
-	    $self->{stashed_output} = $self->generateHeader() . $output;
+	    PBDB_Data::debug_msg('STREAMING');
+	    $self->{stashed_output} = $self->generateHeader(streamed => 1) . $output;
 	    return;
 	}
     }
@@ -152,11 +238,17 @@ sub generateCompoundResult {
 
 # streamResult ( )
 # 
-# Generate the query result formatted according to the output format
-# previously set by setOutputFormat().  This routine should only be called if
-# generateCompoundOutput returned false.  It is passed a 'writer' object, to
-# which the stashed output from generateCompoundResult, each record in turn,
-# and then the footer is written.
+# Continue to generate a compound query result from where
+# generateCompoundResult() left off, and stream it to the client record by
+# record.  This routine should only be called if generateCompoundResult()
+# returned false.
+# 
+# This routine must be passed a Plack 'writer' object, to which will be
+# written in turn the stashed output from generateCompoundResult(), each
+# subsequent record, and then the footer.  Each of these chunks of data will
+# be immediately sent off to the client, instead of being marshalled together
+# in memory.  This allows the server to send results up to hundreds of
+# megabytes in length without bogging down.
 
 sub streamResult {
     
@@ -165,28 +257,35 @@ sub streamResult {
     my $sth = $self->{main_sth};
     my $row;
     
-    # First send out the partial output generated by generateCompoundResult(),
-    # which has been stashed in $self->{stashed_output}.
+    PBDB_Data::debug_msg("IN streamResult");
+    
+    # First send out the partial output previously stashed by
+    # generateCompoundResult().
     
     $writer->write( encode_utf8($self->{stashed_output}) );
     
-    # Then generate the remaining output.
+    # Then generate the remaining output.  We don't have to worry about
+    # 'is_first', because we know that we're past the first row already.
     
     while ( $row = $sth->fetchrow_hashref )
     {
 	$self->processRecord($row);
+	$self->{row_count}++;
 	$writer->write( encode_utf8($self->generateRecord($row)) );
     }
     
-    my $final = $self->finishOutput();
+    # Call the finishOutput() method, and send whatever if returns (if
+    # anything).
     
+    my $final = $self->finishOutput();
     $writer->write( $final ) if defined $final;
-    $writer->write( $self->generateFooter() );
+    
+    # Finally, send out the footer and then close the writer object.
+    
+    $writer->write( $self->generateFooter(streamed => 1) );
     $writer->close();
 }
 
-
-# Following are defaults for the output routines.  These can be overridden.
 
 # generateHeader ( )
 # 
@@ -194,16 +293,25 @@ sub streamResult {
 
 sub generateHeader {
     
-    my ($self) = @_;
+    my ($self, @options) = @_;
     
-    return $self->generateHeaderXML if $self->{output_format} eq 'xml';
-    return $self->generateHeaderJSON;
+    if ( $self->{output_format} eq 'json' )
+    {
+	return $self->generateHeaderJSON(@options);
+    }
+    
+    else
+    {
+	return $self->generateHeaderXML(@options);
+    }
 }
 
 
 # generateHeaderXML ( )
 # 
-# Return the proper header for an XML document in Darwin Core format.
+# Return the proper header for an XML document in Darwin Core format.  We
+# ignore any options, because XML/Darwin Core is such a rigid format that we don't
+# have much ability to customize it.
 
 sub generateHeaderXML {
 
@@ -217,13 +325,17 @@ END_XML
 }
 
 
-# generateHeaderJSON ( )
+# generateHeaderJSON ( options )
 # 
-# Return a string that will be valid as the beginning of a JSON result.
+# Return the proper header for a JSON result.  The accepted options are:
+# 
+#   streamed - if true, ignore report_count.  We don't yet know how many
+#		records there will be, so we have to wait and let
+#		generateFooterJSON() report this information.
 
 sub generateHeaderJSON {
 
-    my ($self) = @_;
+    my ($self, %options) = @_;
     
     my $output = '{' . "\n";
     
@@ -232,25 +344,13 @@ sub generateHeaderJSON {
 	$output .= '"class":' . $self->{object_class} . ",\n";
     }
     
-    if ( defined $self->{row_count} )
+    if ( defined $self->{report_count} and not $options{streamed} )
     {
-	$output .= '"count":' . ($self->{row_count} + 0) . ",\n";
+	$output .= '"records_found":' . $self->countRecords . ",\n";
+	$output .= '"records_returned":' . $self->{row_count} . ",\n";
     }
     
-    elsif ( defined $self->{total_count} )
-    {
-	if ( defined $self->{limit} && $self->{limit} < $self->{total_count} )
-	{
-	    $output .= '"count":' . ($self->{limit} + 0) . ",\n";
-	    $output .= '"total_count":' . ($self->{total_count} + 0) . ",\n";
-	}
-	else
-	{
-	    $output .= '"count": ' . ($self->{total_count} + 0) . ",\n";
-	}
-    }
-    
-    $output .= '"data": [';
+    $output .= '"records": [';
     return $output;
 }
 
@@ -261,10 +361,17 @@ sub generateHeaderJSON {
 
 sub generateFooter {
     
-    my ($self) = @_;
+    my ($self, @options) = @_;
     
-    return $self->generateFooterXML if $self->{output_format} eq 'xml';
-    return $self->generateFooterJSON;
+    if ( $self->{output_format} eq 'json' )
+    {
+	return $self->generateFooterJSON(@options);
+    }
+    
+    else
+    {
+	return $self->generateFooterXML(@options);
+    }
 }
 
 
@@ -284,13 +391,24 @@ END_XML
 # generateFooterJSON ( )
 # 
 # Return a string that will be valid as the end of a JSON result, after the
-# header and zero or more records.
+# header and zero or more records.  If the option "streamed" is given, then
+# add in the record count.
 
 sub generateFooterJSON {
     
-    my ($self) = @_;
+    my ($self, %options) = @_;
     
-    return "\n]\n}\n";
+    my $output = "\n]";
+    
+    if ( defined $self->{report_count} and $options{streamed} )
+    {
+	$output .= ",\n" . '"records_found":' . $self->countRecords;
+	$output .= ",\n" . '"records_returned":' . $self->{row_count};
+    }
+    
+    $output .= "\n}\n";
+    
+    return $output;
 }
 
 

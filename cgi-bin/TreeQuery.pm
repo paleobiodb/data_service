@@ -10,6 +10,34 @@ package TreeQuery;
 
 use strict;
 use base 'DataQuery';
+use Carp qw(croak);
+
+
+# helpText ( )
+# 
+# Returns a message describing this URL and how to use it.
+
+sub helpText {
+    
+    my ($self, $ct) = @_;
+    
+    my $list = ($ct eq 'json' ? ', and are arranged in a hierarchical list' : '');
+    
+    return "PaleoDB Data Service: /taxa/hierarchy.$ct
+
+The function of this URL is to retrieve parts of the taxonomic hierarchy stored in the Paleobiology Database.  The records provided contain minimal detail$list.  If you need additional information about the returned taxa, use /taxa/list.$ct instead.
+
+Available parameters include:
+
+  taxon_name - return the portion of the hierarchy rooted at the given taxon (scientific name)
+  taxon_no - return the portion of the hierarchy rooted at the given taxon (positive integer identifier)
+  limit_rank - only return taxa of this rank or higher ('species', 'genus', or 'family')
+  
+$DataQuery::COMMON_HELP
+
+You must always specify either the parameter 'taxon_name' or the parameter 'taxon_no'.\n";
+
+}
 
 
 # setParameters ( params )
@@ -22,7 +50,7 @@ sub setParameters {
     
     my ($self, $params) = @_;
     
-    # First tell our superclass to set any parameters it recognizes.
+    # First tell our superclass to process any parameters it recognizes.
     
     $self->DataQuery::setParameters($params);
     
@@ -30,30 +58,73 @@ sub setParameters {
     # hierarchy rooted at the specified taxon.  This parameter cannot be used
     # at the same time as 'id'.
     
-    if ( defined $params->{taxon_name} && $params->{taxon_name} ne '' )
+    if ( defined $params->{taxon_name} )
     {
+	# Check to make sure that taxon_no was not specified at the same time
+	
+	if ( defined $params->{taxon_no} )
+	{
+	    die "400 You may not specify 'taxon_name' and 'taxon_no' together\n";
+	}
+	
+	# Check to make sure we actually have a value
+	
+	if ( $params->{taxon_name} eq '' )
+	{ 
+	    die "400 You must provide a non-empty value for 'taxon_name'\n";
+	}
+	
 	# Clean the parameter of everything except alphabetic characters
 	# and spaces, since only those are valid in taxonomic names.
 	
+	if ( $params->{taxon_name} =~ /[^a-zA-Z\s]/ )
+	{
+	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace\n";
+	}
+	
 	$self->{taxon_name} = $params->{taxon_name};
-	$self->{taxon_name} =~ s/[^a-zA-Z ]//;
+	$self->{taxon_name} =~ s/\s+/ /g;
     }
     
     # If "taxon_no" is specified, then information is returned about the taxon
     # hierarchy rooted at the specified taxon.  This parameter cannot be used
     # at the same time as 'name'.
     
-    if ( defined $params->{taxon_no} && $params->{taxon_no} > 0 )
+    elsif ( defined $params->{taxon_no} )
     {
+	# First check to make sure that a valid value was provided
+	
+	if ( $params->{taxon_no} =~ /[^0-9]/ )
+	{
+	    die "400 You must provide a positive integer value for 'taxon_no'\n";
+	}
+	
 	$self->{taxon_no} = $params->{taxon_no} + 0;
     }
     
-    # If "synonyms" is specified, then include junior synonyms.  The default
-    # is to leave them out.
+    # If neither was specified, return the "help" message.
     
-    if ( defined $params->{synonyms} )
+    else
     {
-	$self->{include_synonyms} = 1;
+	die "400 help\n";
+    }
+    
+    # If "limit_rank" is specified, then we ignore all taxa below the
+    # specified rank.
+    
+    if ( defined $params->{limit_rank} )
+    {
+	my $limit = $params->{limit_rank};
+	
+	if ( $limit eq 'species' or $limit eq 'genus' or $limit eq 'family' or $limit eq 'order' or $limit eq 'class' )
+	{
+	    $self->{limit_rank} = $limit;
+	}
+	
+	else
+	{
+	    die "400 The parameter 'limit_rank' must be either 'species', 'genus', or 'family'\n";
+	}
     }
     
     # Turn the following on always for now.  This will likely be changed later.
@@ -67,35 +138,47 @@ sub setParameters {
 
 # fetchMultiple ( )
 # 
-# Query the database using the parameters previously specified (i.e. by a call
-# to setParameters).  This class only returns a compound result, even if the
-# given taxon has no children.
+# Query the database using the parameters specified by a previous call to
+# setParameters.  This class only returns a compound result, even if the given
+# taxon has no children.
 # 
-# Returns true if the fetch succeeded, false if an error occurred.
+# Returns true if the fetch succeeded, dies if an error occurred.
 
 sub fetchMultiple {
 
     my ($self) = @_;
     my ($sql);
     my (@taxon_filter, @extra_tables, @extra_fields);
-    my ($taxon_limit) = "";
+    my ($limit_sql) = "";
+    my ($rank_clause) = "";
     my ($lft, $rgt);
     
     # Get ahold of a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
     
-    # If a query limit has been specified, construct the appropriate SQL string.
+    # If a query limit has been specified, construct the appropriate SQL clause.
     
-    if ( defined $self->{limit} )
+    if ( defined $self->{limit_results} )
     {
-	if ( $self->{limit} eq 'default' )
+	$limit_sql = "LIMIT " . ($self->{limit_results} + 0);
+    }
+    
+    if ( defined $self->{limit_rank} )
+    {
+	if ( $self->{limit_rank} eq 'species' )
 	{
-	    $taxon_limit = "LIMIT 500";
+	    $rank_clause = "\n	  AND taxon_rank not in ('subspecies')";
 	}
-	elsif ( $self->{limit} > 0 )
+	
+	elsif ( $self->{limit_rank} eq 'genus' )
 	{
-	    $taxon_limit = "LIMIT " . $self->{limit};
+	    $rank_clause = "\n	  AND taxon_rank not in ('subspecies', 'species', 'subgenus')";
+	}
+
+	elsif ( $self->{limit_rank} eq 'family' )
+	{
+	    $rank_clause = "\n	  AND taxon_rank not in ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily')";
 	}
     }
     
@@ -107,10 +190,9 @@ sub fetchMultiple {
 		SELECT t.lft, t.rgt FROM taxa_tree_cache t JOIN authorities a USING (taxon_no)
 		WHERE a.taxon_name = ?", {RaiseError=>0}, $self->{taxon_name});
 	
-	unless ( $lft > 0 )
+	unless ( defined $lft && $lft > 0 )
 	{
-	    $self->{error} = "taxon '$self->{taxon_name}' was not found in the database";
-	    return;
+	    die "404 taxon '$self->{taxon_name}' was not found in the database\n";
 	}
     }
     
@@ -122,41 +204,44 @@ sub fetchMultiple {
 		SELECT t.lft, t.rgt FROM taxa_tree_cache t
 		WHERE t.taxon_no = ?", {RaiseError=>0}, $self->{taxon_no});
 	
-	unless ( $lft > 0 )
+	unless ( defined $lft && $lft > 0 )
 	{
-	    $self->{error} = "taxon $self->{taxon_no} was not found in the database";
-	    return;
+	    die "404 taxon $self->{taxon_no} was not found in the database\n";
 	}
-    }
-    
-    # If neither, we have a problem.
-    
-    else
-    {
-	$self->{error} = "you must specify either the parameter 'taxon_name' or the parameter 'taxon_no'";
-	return;
     }
     
     # Now construct and execute the SQL statement that will be used to fetch
     # the desired information from the database.
     
-    $sql = "	SELECT t.taxon_no, t.orig_no, t.lft, t.rgt,
-		       a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status,
-	               if (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', 
-			   a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) a_pubyr,
-		       if (a.ref_is_authority = 'YES', r.author1last, a.author1last) a_al1,
-		       if (a.ref_is_authority = 'YES', r.author2last, a.author2last) a_al2,
-		       if (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) a_ao
-		FROM taxa_tree_cache t JOIN authorities a USING (taxon_no)
-				       LEFT JOIN opinions o USING (opinion_no)
-				       LEFT JOIN refs r ON (a.reference_no = r.reference_no)
-		WHERE t.lft >= ? and t.rgt <= ?
-		  AND t.synonym_no = t.taxon_no
-		  AND (o.status is null OR o.status = 'belongs to')
-		ORDER BY t.lft";
+    $self->{main_sql} = "
+	SELECT t.taxon_no, t.orig_no, t.lft, t.rgt,
+	       a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status,
+	           if (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', 
+			a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) a_pubyr,
+		   if (a.ref_is_authority = 'YES', r.author1last, a.author1last) a_al1,
+		   if (a.ref_is_authority = 'YES', r.author2last, a.author2last) a_al2,
+		   if (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) a_ao
+	FROM taxa_tree_cache t JOIN authorities a USING (taxon_no)
+			       LEFT JOIN opinions o USING (opinion_no)
+			       LEFT JOIN refs r ON (a.reference_no = r.reference_no)
+	WHERE t.lft >= $lft and t.rgt <= $rgt
+	  AND t.synonym_no = t.taxon_no
+	  AND (o.status is null OR o.status = 'belongs to') $rank_clause
+	ORDER BY t.lft $limit_sql";
     
-    $self->{main_sth} = $dbh->prepare($sql);
-    $self->{main_sth}->execute($lft, $rgt);
+    # Also construct a statement to fetch the result count if necessary.
+    
+    $self->{count_sql} = "
+	SELECT count(*)
+	FROM taxa_tree_cache t LEFT JOIN opinions o USING (opinion_no)
+	WHERE t.lft >= $lft and t.rgt <= $rgt
+	  AND t.synonym_no = t.taxon_no
+	  AND (o.status is null OR o.status = 'belongs to')";
+    
+    # Now prepare and execute the main statement.
+    
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
+    $self->{main_sth}->execute();
     
     return 1;
 }
