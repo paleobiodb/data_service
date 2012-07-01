@@ -3979,7 +3979,8 @@ sub basicTaxonInfo	{
 		my $sql = "SELECT taxon_name,taxon_rank,a.taxon_no FROM authorities a,opinions o,$TAXA_TREE_CACHE t WHERE a.taxon_no=parent_spelling_no AND o.opinion_no=t.opinion_no AND t.taxon_no=$taxon_no";
 		my $parent = ${$dbt->getData($sql)}[0];
 		if ( $parent )	{
-			print "<p style=\"clear: left;\">Parent taxon: <a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$parent->{'taxon_no'}\">".italicize($parent)."</a>";
+			my $belongs = ( $auth->{'taxon_rank'} =~ /species/ ) ? "Belongs to" : "Parent taxon:";
+			print "<p style=\"clear: left;\">$belongs <a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$parent->{'taxon_no'}\">".italicize($parent)."</a>";
 			$sql = "SELECT r.reference_no,$authorfields2 FROM $TAXA_TREE_CACHE t,opinions o,refs r WHERE r.reference_no=o.reference_no AND t.opinion_no=o.opinion_no AND t.taxon_no=$taxon_no";
 			my $ref = ${$dbt->getData($sql)}[0];
 			print " according to ".Reference::formatShortRef($ref,'link_id'=>1);
@@ -4288,11 +4289,10 @@ sub basicTaxonInfo	{
 			}
 			print "</div>\n\n";
 		} else	{
-			print "</p>\n\n";
 			if ( $auth->{'taxon_name'} )	{
-				print "<p>Distribution: <i>there are no occurrences of $auth->{'taxon_name'} in the database</i></p>\n\n";
+				print " <i>there are no occurrences of $auth->{'taxon_name'} in the database</i></p>\n\n";
 			} else	{
-				print "<p><i>There is no taxonomic or distributional information about '$taxon_name' in the database</i></p>\n\n";
+				print "</p>\n\n<p><i>There is no taxonomic or distributional information about '$taxon_name' in the database</i></p>\n\n";
 			}
 		}
 
