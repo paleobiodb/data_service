@@ -364,7 +364,7 @@ sub streamResult {
     # First send out the partial output previously stashed by
     # generateCompoundResult().
     
-    $writer->write( $self->{stashed_output} );
+    $writer->write( encode_utf8($self->{stashed_output}) );
     
     # Then generate the remaining output.  We don't have to worry about
     # 'is_first', because we know that we're past the first row already.
@@ -374,7 +374,7 @@ sub streamResult {
 	$self->processRecord($row);
 	$self->{row_count}++;
 	my $output = $self->generateRecord($row);
-	$writer->write( $output );
+	$writer->write( encode_utf8($output) );
     }
     
     # Call the finishOutput() method, and send whatever if returns (if
