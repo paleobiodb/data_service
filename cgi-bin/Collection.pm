@@ -2660,6 +2660,18 @@ sub getClassOrderFamily	{
 	# first mark names currently ranked at these levels
 	for my $i ( $toplowlevel..$#class_array ) {
 		my $no = $class_array[$i]->{'taxon_no'};
+		# used by jsonCollection 30.6.12
+		if ( ! $rowref->{'category'} )	{
+			if ( $class_array[$i]->{'taxon_name'} =~ /Vertebrata|Chordata/ )	{
+				$rowref->{'category'} = "vertebrate";
+			} elsif ( $class_array[$i]->{'taxon_name'} =~ /Insecta/ )	{
+				$rowref->{'category'} = "insect";
+			} elsif ( $class_array[$i]->{'taxon_name'} =~ /Animalia|Metazoa/ )	{
+				$rowref->{'category'} = "invertebrate";
+			} elsif ( $class_array[$i]->{'taxon_name'} eq "Plantae" )	{
+				$rowref->{'category'} = "plant";
+			}
+		}
 		if ( $class_array[$i]->{'taxon_rank'} eq "class" )	{
 			$wasClass{$no} = 9999;
 		} elsif ( $class_array[$i]->{'taxon_rank'} eq "order" )	{
@@ -2743,6 +2755,9 @@ sub getClassOrderFamily	{
 				$rowref->{'class_no'} = $t->{'taxon_no'};
 			}
 		}
+	}
+	if ( ! $rowref->{'category'} )	{
+		$rowref->{'category'} = "microfossil";
 	}
 
 	return $rowref;
@@ -3554,7 +3569,7 @@ sub jsonCollection	{
 		my $child = { 'taxon_no' => $no } ;
 		unshift @class_array , $child;
 		my $child = getClassOrderFamily($dbt,\$child,\@class_array);
-		$cof{$no}{$_} = $child->{$_} foreach ('class','order','family');
+		$cof{$no}{$_} = $child->{$_} foreach ('category','common_name','class','order','family');
 	}
 
 	print qq|{ "collections": [ { |;
@@ -3591,11 +3606,14 @@ sub jsonCollection	{
 		}
 		$c->{'lithology'} .= ( $c->{'lithology2'} ne "" ) ? ' and '.$c->{'lithology2'} : "";
 
-		for my $f ( 'collection_name','reference','lithology','lithology2' )	{
+		for my $f ( 'collection_name','lithology','lithology2','environment' )	{
 			$c->{$f} =~ s/"//g;
 		}
 
 		for my $field ( 'collection_no' , 'collection_name', 'reference', 'country', 'state', 'county', 'lat', 'lng', 'max_interval', 'min_interval', 'geological_group', 'formation', 'member', 'lithology', 'environment', 'museum', 'authorizer', 'enterer', 'created' )	{
+			$c->{$field} =~ s/"/\\"/g;
+			# this shouldn't happen, but it does...
+			$c->{$field} =~ s/\t/ /g;
 			my $f = $field;
 			$f =~ s/collection_no/PaleoDB_collection/;
 			$f =~ s/lat/latitude/;
@@ -3605,7 +3623,7 @@ sub jsonCollection	{
 		}
 
 		my $list = qq|"taxa": [ |;
-		$list .= qq|{ "class": "$cof{$_->{taxon_no}}{class}",  "order": "$cof{$_->{taxon_no}}{order}", "family": "$cof{$_->{taxon_no}}{family}", "genus": "$_->{genus_name}", "species": "$_->{species_name}" }, | foreach @{$occs{$c->{'collection_no'}}};
+		$list .= qq|{ "category": "$cof{$_->{taxon_no}}{category}", "common_name": "$cof{$_->{taxon_no}}{common_name}", "class": "$cof{$_->{taxon_no}}{class}", "order": "$cof{$_->{taxon_no}}{order}", "family": "$cof{$_->{taxon_no}}{family}", "genus": "$_->{genus_name}", "species": "$_->{species_name}" }, | foreach @{$occs{$c->{'collection_no'}}};
 		$list =~ s/, $//;
 		$list .= " ]";
 		push @attributes , $list;
