@@ -381,11 +381,11 @@ sub streamResult {
     # anything).
     
     my $final = $self->finishOutput();
-    $writer->write( $final ) if defined $final;
+    $writer->write( encode_utf8($final) ) if defined $final;
     
     # Finally, send out the footer and then close the writer object.
     
-    $writer->write( $self->generateFooter(streamed => 1) );
+    $writer->write( encode_utf8($self->generateFooter(streamed => 1)) );
     $writer->close();
 }
 
