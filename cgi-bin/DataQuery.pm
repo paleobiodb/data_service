@@ -19,7 +19,7 @@ our ($DEFAULT_RESULT_LIMIT) = 500;	# Default limit on the number of
                                         # results, unless overridden by the
                                         # query parameter "limit=all".
 
-our ($STREAM_THRESHOLD) = 10;	# If the result is above this size,
+our ($STREAM_THRESHOLD) = 102400;	# If the result is above this size,
                                         # and the server is capable of
                                         # streaming, then it will be streamed.
 
