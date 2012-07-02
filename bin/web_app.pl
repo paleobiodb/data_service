@@ -13,6 +13,7 @@ use Dancer;
 use Dancer::Plugin::Database;
 use Dancer::Plugin::StreamData;
 use Try::Tiny;
+use Scalar::Util qw(blessed);
 
 use DataQuery;
 use TaxonQuery;
@@ -24,30 +25,36 @@ set environment => 'development';
 set apphandler => 'Debug';
 set log => 'debug';
 
+our(%HELP_TEXT);
+
+
+$HELP_TEXT{'/taxa/hierarchy'} = "PaleoDB Data Service: [URL]
+
+The function of this URL is to retrieve parts of the taxonomic hierarchy stored in the Paleobiology Database.  The records provided contain minimal detail, and [JSON:are returned as a hierarchical list in JSON format][XML:are returned in Darwin Core XML format].  If you need additional information about the returned taxa, use /taxa/list.[CT] instead.
+
+[PARAMS:Available parameters include:]
+
+[REQS]
+";
+
+get '/taxa/hierarchy.:ct' => sub {
+
+    doQueryMultiple('TreeQuery', '/taxa/hierarchy');
+};
+
+
+$HELP_TEXT{'/taxa/list'} = "PaleoDB Data Service: [URL]
+
+The function of this URL is to retrieve part or all of the taxonomic hierarchy stored in the Paleobiology Database.  There are a number of different options to select which taxa to display, and a number of options to select which information to display about them.  The information is returned [XML:in Darwin Core XML format (http://rs.tdwg.org/dwc/terms/index.htm).][JSON:as a JSON object.]
+
+[PARAMS:Available parameters include:]
+
+[REQS]
+";
+
 get '/taxa/list.:ct' => sub {
     
-    my ($query, $result);
-    my ($params) = params;
-    
-    $DB::single = 1;
-    
-    try {
-	
-	setContentType($params->{ct});
-	
-	$query = TaxonQuery->new(database());
-	
-	$query->setParameters($params);
-	$query->fetchMultiple();
-	$result = returnCompoundResult($query);
-    }
-	
-    catch {
-
-	$result = returnErrorResult($_);
-    };
-    
-    return $result;
+    doQueryMultiple('TaxonQuery', '/taxa/list');
 };
 
 
@@ -57,24 +64,69 @@ get '/taxa/all.:ct' => sub {
 };
 
 
+$HELP_TEXT{'/taxa/details'} = "PaleoDB Data Service: [URL]
+
+The function of this URL is to retrieve detailed information about a single taxon from the Paleobiology Database.  There are a number of options to select which information to display about the indicated taxon.  The information is returned [XML:in Darwin Core XML format (http://rs.tdwg.org/dwc/terms/index.htm).][JSON:as a JSON object.]
+
+[PARAMS:Available parameters include:]
+
+[REQS]
+";
+
 get '/taxa/details.:ct' => sub {
 
-    $DB::single = 1;
-    
-    setContentType(params->{ct});
-    
-    my $query = TaxonQuery->new(database());
-    
-    $query->setParameters(scalar(params)) or return $query->reportError();
-    
-    $query->fetchSingle(params->{id}) or return $query->reportError();
-    
-    return $query->generateSingleResult();
+    doQuerySingle('TaxonQuery', '/taxa/details');
 };
 
 
-get '/taxa/hierarchy.:ct' => sub {
+get '/taxa/:id.:ct' => sub {
+    
+    forward '/taxa/details.' . params->{ct}, { id => params->{id}, deprecated => 1 };
+};
 
+
+$HELP_TEXT{'/collections/list'} = "PaleoDB Data Service: [URL]
+
+The function of this URL is to retrieve information about paleontological collections from the Paleobiology Database.  There are a number of different options to select which collections to display, and a number of options to select which information to display about them.  The information is returned [XML:in Darwin Core XML format (http://rs.tdwg.org/dwc/terms/index.htm).][JSON:as a JSON object.]
+
+[PARAMS:Available parameters include:]
+
+[REQS]
+";
+
+get '/collections/list.:ct' => sub {
+
+    doQueryMultiple('CollectionQuery', '/collections/list');
+};
+
+
+$HELP_TEXT{'/collections/details'} = "PaleoDB Data Service: [URL]
+
+The function of this URL is to retrieve detailed information about a single paleontological collection from the Paleobiology Database.  There are a number of options to select which information to display about the indicated collection.  The information is returned [XML:in Darwin Core XML format (http://rs.tdwg.org/dwc/terms/index.htm).][JSON:as a JSON object.]
+
+[PARAMS:Available parameters include:]
+
+[REQS]
+";
+
+get '/collections/details.:ct' => sub {
+
+    doQuerySingle('CollectionQuery', '/collections/details');
+};
+
+
+# The following routines are used in the execution of the above routes.
+
+
+# doQueryMultiple ( class )
+# 
+# Execute a multiple-result query on the given class, using the URL parameters
+# from the current request.
+
+sub doQueryMultiple {
+    
+    my ($class, $label) = @_;
+    
     my ($query, $result);
     my ($params) = scalar(params);
     
@@ -82,64 +134,96 @@ get '/taxa/hierarchy.:ct' => sub {
 	
 	$DB::single = 1;
 	
+	# Set the content type of the response, or generate an error if
+	# $params->{ct} is unrecognized.
+	
 	setContentType($params->{ct});
 	
-	$query = TreeQuery->new(database());
+	# Create a new query object, set the parameters, and execute it the
+	# query.
 	
+	$query = $class->new(database(), 'multiple');
+	
+	$query->checkParameters($params, {ct => 1});
 	$query->setParameters($params);
 	$query->fetchMultiple();
-	$result = returnCompoundResult($query, 'streamResult');
-    }
 	
+	# If the server supports streaming, call generateCompoundResult with
+	# can_stream => 1 and see if it returns any data or not.  If so, then
+	# return that as the result to send back to the client.  An undefined
+	# result is a signal that we should stream the data by calling
+	# stream_data (imported from Dancer::Plugin::StreamData).
+	
+	if ( server_supports_streaming )
+	{
+	    $result = $query->generateCompoundResult( can_stream => 1 ) or
+		stream_data( $query, 'streamResult' );
+	}
+	
+	# If the server does not support streaming, we just generate the result
+	# and return it.
+	
+	else
+	{
+	    $result = $query->generateCompoundResult();
+	}
+    }
+    
+    # If an error occurs, pass it to returnErrorResult.
+    
     catch {
-
-	$result = returnErrorResult($query, $_);
+	
+	$result = returnErrorResult($query, $label, $_);
     };
     
     return $result;
-};
+}
 
 
-get '/taxa/:id.:ct' => sub {
+# doQuerySingle ( )
+# 
+# Execute a single-result query on the given class, using the URL parameters
+# from the current request.
+
+sub doQuerySingle {
+
+    my ($class, $label) = @_;
     
-    $DB::single = 1;
-    return forward '/taxa/details.' . params->{ct}, { id => params->{id} };
-};
-
-
-get '/collections/list.:ct' => sub {
-
-    $DB::single = 1;
+    my ($query, $result);
+    my ($params) = scalar(params);
     
-    setContentType(params->{ct});
+    try {
+	
+	$DB::single = 1;
+	
+	# Set the content type of the response, or generate an error if
+	# $params->{ct} is unrecognized.
+	
+	setContentType($params->{ct});
+	
+	# Create a new query object, set the parameters, and execute it the
+	# query.
+	
+	$query = $class->new(database(), 'single');
+	
+	$query->checkParameters($params, {ct => 1});
+	$query->setParameters($params);
+	$query->fetchSingle();
+	
+	# Generate the result and return it.
+	
+	$result = $query->generateSingleResult();
+    }
     
-    my $query = CollectionQuery->new(database());
+    # If an error occurs, pass it to returnErrorResult.
     
-    $query->setParameters(scalar(params)) or return $query->reportError();
-    
-    $query->fetchMultiple() or return $query->reportError();
-    
-    return $query->generateCompoundResult( can_stream => server_supports_streaming );
-};
+    catch {
 
-
-get '/collections/details.:ct' => sub {
-
-    $DB::single = 1;
+	$result = returnErrorResult($query, $label, $_);
+    };
     
-    setContentType(params->{ct});
-
-    my $query = CollectionQuery->new(database());
-    
-    $query->setParameters(scalar(params)) or return reportError($query);
-    
-    $query->fetchSingle(params->{id}) or return reportError($query);
-    
-    return $query->generateSingleResult();
-};
-
-
-# The following routines are used in the execution of the above routes.
+    return $result;
+}
 
 
 # setContentType ( ct )
@@ -153,12 +237,12 @@ sub setContentType {
     
     if ( $ct eq 'xml' )
     {
-	content_type 'text/xml';
+	content_type 'text/xml; charset=utf-8';
     }
     
     elsif ( $ct eq 'json' )
     {
-	content_type 'application/json';
+	content_type 'application/json; charset=utf-8';
     }
     
     else
@@ -170,37 +254,11 @@ sub setContentType {
 }
 
 
-# returnCompoundResult ( query, stream_method )
-# 
-# Call the proper method to generate a compound result from $query.  If the
-# server supports streaming, and the method returns false (indicating that the
-# result is large enough for streaming to make sense), we invoke the
-# stream_data function from Dancer::Plugin::StreamData.  If the server does
-# not support streaming, we just call the plain generateCompoundResult()
-# method.
-
-sub returnCompoundResult {
-
-    my ($query, $stream_method) = @_;
-    
-    if ( server_supports_streaming )
-    {
-	$query->generateCompoundResult( can_stream => 1 ) or
-	    stream_data( $query, $stream_method );
-    }
-    
-    else
-    {
-	$query->generateCompoundResult();
-    }
-}
-
-
 # returnErrorResult ( exception )
 # 
 # This method is called if an exception occurs during execution of a route
-# sub.  If $exception is a blessed reference, then we pass it on (this is
-# necessary for streaming to work properly).
+# subroutine.  If $exception is a blessed reference, then we pass it on (this
+# is necessary for streaming to work properly).
 # 
 # If it is a string that starts with a 4xx HTTP result code, we nip that off
 # and send the rest as the result.
@@ -214,13 +272,13 @@ sub returnCompoundResult {
 
 sub returnErrorResult {
 
-    my ($query, $exception) = @_;
+    my ($query, $label, $exception) = @_;
     my ($code) = 500;
     
-    # If the exception is a blessed reference, pass it on through.  It's
-    # a signal from one part of Dancer to another.
+    # If the exception is a blessed reference, pass it on.  It's most likely a
+    # signal from one part of Dancer to another.
     
-    if ( ref $exception )
+    if ( blessed $exception )
     {
 	die $exception;
     }
@@ -243,11 +301,11 @@ sub returnErrorResult {
 	$exception = "A server error occurred during processing of this request.  Please notify the administrator of this website.";
     }
     
-    # If the message is 'help', substitute the help text.
+    # If the message is 'help', display the help message for this route.
     
     if ( $exception eq 'help' )
     {
-	$exception = $query->helpText(params->{ct});
+	$exception = getHelpText($query, $label);
     }
     
     # Send back JSON results as an object with field 'error'.
@@ -255,7 +313,15 @@ sub returnErrorResult {
     if ( params->{ct} eq 'json' )
     {
 	status($code);
-	return to_json({ 'error' => $exception }) . "\n";
+	
+	my $error_obj = { 'error' => $exception };
+	
+	if ( defined $query->{warnings} and $query->{warnings} > 0 )
+	{
+	    $error_obj->{warnings} = $query->{warnings};
+	}
+	
+	return to_json($error_obj) . "\n";
     }
     
     # Everything else gets a plain text message.
@@ -269,6 +335,85 @@ sub returnErrorResult {
 }
 
 
+# getHelpText ( query, label )
+# 
+# Assemble a help message using the text stored in $HELP_TEXT{$label} together
+# with parameter information retrieved from $query.
+
+sub getHelpText {
+    
+    my ($query, $label) = @_;
+    
+    my $text = $HELP_TEXT{$label} or 
+	return "The help message for this URL was not defined.  Please contact the system administrator of this website.";
+    
+    $text =~ s/\[(.*?)\]/substHelpText($query, $1)/eg;
+    
+    return $text;
+}
+
+
+sub substHelpText {
+    
+    my ($query, $variable) = @_;
+    
+    if ( $variable eq 'URL' )
+    {
+	return request->uri;
+    }
+    
+    elsif ( $variable eq 'CT' )
+    {
+	return params->{ct};
+    }
+    
+    elsif ( $variable =~ /^XML:(.*)/ )
+    {
+	return $1 if params->{ct} eq 'xml';
+	return '';
+    }
+    
+    elsif ( $variable =~ /^JSON:(.*)/ )
+    {
+	return $1 if params->{ct} eq 'json';
+	return '';
+    }
+    
+    elsif ( $variable =~ /^PARAMS:(.*)/ )
+    {
+	my $param_string = $query->describeParameters();
+	
+	if ( defined $param_string && $param_string ne '' )
+	{
+	    return $1 . "\n\n" . $param_string;
+	}
+	else
+	{
+	    return '';
+	}
+    }
+    
+    elsif ( $variable eq 'REQS' )
+    {
+	my $req_string = $query->describeRequirements();
+	
+	if ( defined $req_string && $req_string ne '' )
+	{
+	    return $1 . "\n\n" . $req_string;
+	}
+	else
+	{
+	    return '';
+	}
+    }
+    
+    else
+    {
+	return "[$variable]";
+    }
+}
+
+
 sub debug_msg {
     
     debug(@_);
@@ -278,3 +423,5 @@ sub debug_msg {
 
 
 dance;
+
+

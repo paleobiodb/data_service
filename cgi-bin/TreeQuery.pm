@@ -9,36 +9,17 @@
 package TreeQuery;
 
 use strict;
-use base 'DataQuery';
+use parent 'DataQuery';
 use Carp qw(croak);
 
 
-# helpText ( )
-# 
-# Returns a message describing this URL and how to use it.
-
-sub helpText {
-    
-    my ($self, $ct) = @_;
-    
-    my $list = ($ct eq 'json' ? ', and are arranged in a hierarchical list' : '');
-    
-    return "PaleoDB Data Service: /taxa/hierarchy.$ct
-
-The function of this URL is to retrieve parts of the taxonomic hierarchy stored in the Paleobiology Database.  The records provided contain minimal detail$list.  If you need additional information about the returned taxa, use /taxa/list.$ct instead.
-
-Available parameters include:
-
+our ($PARAM_DESC) = <<DONE;
   taxon_name - return the portion of the hierarchy rooted at the given taxon (scientific name)
   taxon_no - return the portion of the hierarchy rooted at the given taxon (positive integer identifier)
   limit_rank - only return taxa of this rank or higher ('species', 'genus', or 'family')
-  
-$DataQuery::COMMON_HELP
+DONE
 
-You must always specify either the parameter 'taxon_name' or the parameter 'taxon_no'.\n";
-
-}
-
+our ($PARAM_CHECK) = { taxon_name => 1, taxon_no => 1, limit_rank => 1 };
 
 # setParameters ( params )
 # 
@@ -52,7 +33,7 @@ sub setParameters {
     
     # First tell our superclass to process any parameters it recognizes.
     
-    $self->DataQuery::setParameters($params);
+    $self->SUPER::setParameters($params);
     
     # If 'taxon_name' is specified, then information is returned about the taxon
     # hierarchy rooted at the specified taxon.  This parameter cannot be used
@@ -376,7 +357,7 @@ sub emitTaxonJSON {
 	    $attr = "($attr)";
 	}
 	
-	$output .= ',"nameAccordingTo":"' . $attr . '"';
+	$output .= ',"nameAccordingTo":"' . DataQuery::json_clean($attr) . '"';
     }
     
     if ( defined $self->{show_extant} and defined $row->{extant} 
@@ -422,7 +403,8 @@ sub emitTaxonXML {
 	    $attr = "($attr)";
 	}
 	
-	$output .= '    <dwc:nameAccordingTo>' . $attr . '</dwc:nameAccordingTo>' . "\n";
+	$output .= '    <dwc:nameAccordingTo>' . DataQuery::xml_clean($attr) . 
+	    '</dwc:nameAccordingTo>' . "\n";
     }
 
     $output .= '  </dwc:Taxon>' . "\n";

@@ -11,6 +11,7 @@ package DataQuery;
 
 use strict;
 
+use JSON;
 use Encode;
 
 
@@ -18,37 +19,81 @@ our ($DEFAULT_RESULT_LIMIT) = 500;	# Default limit on the number of
                                         # results, unless overridden by the
                                         # query parameter "limit=all".
 
-our ($STREAM_THRESHOLD) = 102400;	# If the result is above this size,
+our ($STREAM_THRESHOLD) = 10;	# If the result is above this size,
                                         # and the server is capable of
                                         # streaming, then it will be streamed.
 
-our ($COMMON_HELP) = "  limit - return at most the specified number of records (positive integer or 'all') - defaults to $DataQuery::DEFAULT_RESULT_LIMIT if not specified
-  count - (boolean) return two additional fields along with the record set: 'records_found' = total number of records found, 'records_returned' = number actually returned";
 
-
-# new ( dbh )
+# new ( dbh, version )
 # 
-# Generate a new query object, using the given database handle.
+# Generate a new query object, using the given database handle and version
+# label.  The usual version labels are 'single' and 'multiple'.  These
+# indicate whether the query should return a single record or multiple
+# records.
 
 sub new {
     
-    my ($class, $dbh) = @_;
-    my $self = { dbh => $dbh };
+    my ($class, $dbh, $version) = @_;
+    my $self = { dbh => $dbh, version => $version };
     
     return bless $self, $class;
 }
 
 
+# describeParameters ( )
+# 
+# Returns a message describing the available parameters for this query.
+# Subclasses should not override this method; rather, they should define the
+# package variable $PARAM_DESC (or $PARAM_DESC_<VERSION>) which this routine
+# will make use of.
+
+sub describeParameters {
+    
+    my ($self) = @_;
+    
+    no strict 'refs';
+    
+    my $v1 = ref($self) . '::PARAM_DESC_' . uc($self->{version});
+    my $v2 = ref($self) . '::PARAM_DESC';
+    
+    my $desc = $$v1 || $$v2;
+    
+    $desc .= "\n  limit - return at most the specified number of records (positive integer or 'all') - defaults to $DataQuery::DEFAULT_RESULT_LIMIT if not specified";
+    
+    $desc .= "\n  count - (boolean) return two additional fields along with the record set: 'records_found' = total number of records found, 'records_returned' = number actually returned" unless $self->{version} eq 'single';
+    
+    return $desc;
+}
+
+
+# describeRequirements ( )
+# 
+# Returns a message describing the parameter requirements for this query.
+# Subclasses should not override this method; rather, they should define the
+# package variable $PARAM_REQS (or $PARAM_REQS_<VERSION>) which this routine
+# will make use of.
+
+sub describeRequirements {
+    
+    my ($self) = @_;
+    
+    no strict 'refs';
+    
+    my $v1 = ref($self) . '::PARAM_REQS_' . uc($self->{version});
+    my $v2 = ref($self) . '::PARAM_REQS';
+    
+    return $$v1 || $$v2;
+}
+
+
 # setParameters ( params )
 # 
-# Accepts a hash of parameter values, filters them for correctness, and sets
-# the appropriate fields of the query object.  It is designed to be called
-# from a Dancer route, although that is not a requirement.
+# This method is designed to be overridden by subclasses and then called via
+# SUPER.  It accepts a hash of parameter values, filters them for correctness,
+# and sets the appropriate fields of the query object.  It is designed to be
+# called from a Dancer route, although that is not a requirement.
 # 
-# This method handles only parameters that are common to the various queries
-# implemented by this class and its subclasses.  Subclasses should override
-# this method, in order to recognize their particular parameters, and then
-# call this routine explicitly to recognize and set the common parameters.
+# This method handles only parameters that are common to this class.
 
 sub setParameters {
 
@@ -90,9 +135,19 @@ sub setParameters {
     # parameter, the number of records actually returned may be less than this
     # number.
     
-    if ( $params->{count} )
+    if ( exists $params->{count} )
     {
 	$self->{report_count} = 1;
+    }
+    
+    # The undocumented parameter 'stream' allows for debugging streamed data
+    # responses.  Value should be 'yes' or 'no'.
+    
+    $self->{should_stream} = '';
+    
+    if ( $params->{stream} )
+    {
+	$self->{should_stream} = $params->{stream};
     }
     
     # The 'ct' parameter sets the output format.  This must be specified in
@@ -115,6 +170,52 @@ sub setParameters {
 	{
 	    die "415 The output format must be one of 'xml' or 'json'\n";
 	}
+    }
+}
+
+
+# checkParameters ( params, good_params )
+# 
+# Make sure that all of the keys in %$params are valid for this query.
+# $good_params should be a hash whose keys are parameters understood by the
+# calling script or application.
+
+sub checkParameters {
+    
+    my ($self, $params, $good_params) = @_;
+    
+    return unless ref $params eq 'HASH';
+    
+    # Construct our initial check list.
+    
+    my (@good_list) = {limit => 1, count => 1};
+    unshift @good_list, $good_params if ref $good_params eq 'HASH';
+    
+    # If this object is actually in a subclass, look for a variable in that
+    # package called $PARAM_CHECK.  If there is one, and it is a hashref, add
+    # it to @good_list.
+    
+    {
+	no strict 'refs';
+	my $v1 = ref($self) . '::PARAM_CHECK';
+	push @good_list, $$v1 if ref $$v1 eq 'HASH';
+    }
+        
+    # Now check each parameter to make sure it falls into at least one of the
+    # good-key hashes.
+    
+ key:
+    foreach my $key (keys %$params)
+    {
+    hash:
+	foreach my $hash (@good_list)
+	{
+	    next hash unless ref $hash eq 'HASH';
+	    next key if exists $hash->{$key};
+	}
+	
+	$self->{warnings} = [] unless defined $self->{warnings};
+	push @{$self->{warnings}}, "ignored unknown parameter '$key'";
     }
 }
 
@@ -191,8 +292,6 @@ sub generateCompoundResult {
     my $is_first_row = 1;
     my $row;
     
-    PBDB_Data::debug_msg('options:', \%options);
-    
     $self->{row_count} = 0;
     
     # We call the initOutput method first, in case the query class has
@@ -210,7 +309,8 @@ sub generateCompoundResult {
 	# generate the actual output.
 	
 	$self->processRecord($row);
-	$output .= $self->generateRecord($row, is_first => $is_first_row);
+	my $row_output = $self->generateRecord($row, is_first => $is_first_row);
+	$output .= $row_output;
 	
 	$is_first_row = 0;
 	$self->{row_count}++;
@@ -221,9 +321,11 @@ sub generateCompoundResult {
 	# then return false, which should lead to a subsequent call to
 	# streamResult().
 	
-	if ( defined $options{can_stream} && length($output) > $STREAM_THRESHOLD )
+	if ( defined $options{can_stream} and $self->{should_stream} ne 'no' and
+	     (length($output) > $STREAM_THRESHOLD or $self->{should_stream} eq 'yes') )
 	{
-	    PBDB_Data::debug_msg('STREAMING');
+	    #PBDB_Data::debug_msg('STREAMING');
+	    #PBDB_Data::debug_msg($output);
 	    $self->{stashed_output} = $self->generateHeader(streamed => 1) . $output;
 	    return;
 	}
@@ -257,12 +359,12 @@ sub streamResult {
     my $sth = $self->{main_sth};
     my $row;
     
-    PBDB_Data::debug_msg("IN streamResult");
+    PBDB_Data::debug_msg("STREAMING");
     
     # First send out the partial output previously stashed by
     # generateCompoundResult().
     
-    $writer->write( encode_utf8($self->{stashed_output}) );
+    $writer->write( $self->{stashed_output} );
     
     # Then generate the remaining output.  We don't have to worry about
     # 'is_first', because we know that we're past the first row already.
@@ -271,7 +373,8 @@ sub streamResult {
     {
 	$self->processRecord($row);
 	$self->{row_count}++;
-	$writer->write( encode_utf8($self->generateRecord($row)) );
+	my $output = $self->generateRecord($row);
+	$writer->write( $output );
     }
     
     # Call the finishOutput() method, and send whatever if returns (if
@@ -337,17 +440,24 @@ sub generateHeaderJSON {
 
     my ($self, %options) = @_;
     
+    my $json = JSON->new->allow_nonref;
+    
     my $output = '{' . "\n";
+    
+    if ( defined $self->{warnings} and $self->{warnings} > 0 )
+    {
+	$output .= '"warnings":' . $json->encode($self->{warnings}) . ",\n";
+    }
     
     if ( defined $self->{object_class} )
     {
-	$output .= '"class":' . $self->{object_class} . ",\n";
+	$output .= '"class":' . $json->encode($self->{object_class}) . ",\n";
     }
     
     if ( defined $self->{report_count} and not $options{streamed} )
     {
-	$output .= '"records_found":' . $self->countRecords . ",\n";
-	$output .= '"records_returned":' . $self->{row_count} . ",\n";
+	$output .= '"records_found":' . $json->encode($self->countRecords + 0) . ",\n";
+	$output .= '"records_returned":' . $json->encode($self->{row_count} + 0) . ",\n";
     }
     
     $output .= '"records": [';
@@ -380,11 +490,20 @@ sub generateFooter {
 # Return the proper footer for an XML document in Darwin Core format.
 
 sub generateFooterXML {
-
-    return <<END_XML;
+    
+    my ($self) = @_;
+    
+    my $output = <<END_XML;
 </dwr:DarwinRecordSet>
 END_XML
 
+    if ( defined $self->{report_count} )
+    {
+	$output .= "<!-- records_found: " . $self->countRecords . " -->\n";
+	$output .= "<!-- records_returned: " . $self->{row_count} . " -->\n";
+    }
+    
+    return $output;
 }
 
 
@@ -398,12 +517,13 @@ sub generateFooterJSON {
     
     my ($self, %options) = @_;
     
+    my $json = JSON->new->allow_nonref;
     my $output = "\n]";
     
     if ( defined $self->{report_count} and $options{streamed} )
     {
-	$output .= ",\n" . '"records_found":' . $self->countRecords;
-	$output .= ",\n" . '"records_returned":' . $self->{row_count};
+	$output .= ",\n" . '"records_found":' . $json->encode($self->countRecords + 0);
+	$output .= ",\n" . '"records_returned":' . $json->encode($self->{row_count} + 0);
     }
     
     $output .= "\n}\n";
@@ -472,8 +592,9 @@ sub xml_clean {
     
     $string =~ s/(&(?!\w+;)|<|>)/$ENTITY{$1}/ge;
     
-    # Finally, delete all control characters (they shouldn't be in the database
-    # in the first place, but unfortunately some rows do contain them).
+    # Finally, delete all control characters (they shouldn't be in the
+    # database in the first place, but unfortunately some rows do contain
+    # them) as well as invalid utf-8 characters.
     
     $string =~ s/[\0-\037\177]//g;
     
