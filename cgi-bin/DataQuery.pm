@@ -374,18 +374,19 @@ sub streamResult {
 	$self->processRecord($row);
 	$self->{row_count}++;
 	my $output = $self->generateRecord($row);
-	$writer->write( encode_utf8($output) );
+	$writer->write( encode_utf8($output) ) if defined $output and $output ne '';
     }
     
     # Call the finishOutput() method, and send whatever if returns (if
     # anything).
     
     my $final = $self->finishOutput();
-    $writer->write( encode_utf8($final) ) if defined $final;
+    $writer->write( encode_utf8($final) ) if defined $final and $final ne '';
     
     # Finally, send out the footer and then close the writer object.
     
-    $writer->write( encode_utf8($self->generateFooter(streamed => 1)) );
+    my $footer = $self->generateFooter(streamed => 1);
+    $writer->write( encode_utf8($footer) ) if defined $footer and $footer ne '';
     $writer->close();
 }
 
