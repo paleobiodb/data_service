@@ -34,7 +34,7 @@ The function of this URL is to retrieve parts of the taxonomic hierarchy stored 
 
 [PARAMS:Available parameters include:]
 
-[REQS]
+[REQS:Requirements:]
 ";
 
 get '/taxa/hierarchy.:ct' => sub {
@@ -49,7 +49,7 @@ The function of this URL is to retrieve part or all of the taxonomic hierarchy s
 
 [PARAMS:Available parameters include:]
 
-[REQS]
+[REQS:Requirements:]
 ";
 
 get '/taxa/list.:ct' => sub {
@@ -70,7 +70,7 @@ The function of this URL is to retrieve detailed information about a single taxo
 
 [PARAMS:Available parameters include:]
 
-[REQS]
+[REQS:Requirements:]
 ";
 
 get '/taxa/details.:ct' => sub {
@@ -91,7 +91,7 @@ The function of this URL is to retrieve information about paleontological collec
 
 [PARAMS:Available parameters include:]
 
-[REQS]
+[REQS:Requirements:]
 ";
 
 get '/collections/list.:ct' => sub {
@@ -106,7 +106,7 @@ The function of this URL is to retrieve detailed information about a single pale
 
 [PARAMS:Available parameters include:]
 
-[REQS]
+[REQS:Requirements:]
 ";
 
 get '/collections/details.:ct' => sub {
@@ -144,15 +144,15 @@ sub doQueryMultiple {
 	
 	$query = $class->new(database(), 'multiple');
 	
-	$query->checkParameters($params, {ct => 1});
+	$query->checkParameters($params);
 	$query->setParameters($params);
 	$query->fetchMultiple();
 	
 	# If the server supports streaming, call generateCompoundResult with
-	# can_stream => 1 and see if it returns any data or not.  If so, then
-	# return that as the result to send back to the client.  An undefined
-	# result is a signal that we should stream the data by calling
-	# stream_data (imported from Dancer::Plugin::StreamData).
+	# can_stream => 1 and see if it returns any data or not.  If it does
+	# return data, send it back to the client as the response content.  An
+	# undefined result is a signal that we should stream the data by
+	# calling stream_data (imported from Dancer::Plugin::StreamData).
 	
 	if ( server_supports_streaming )
 	{
@@ -206,7 +206,7 @@ sub doQuerySingle {
 	
 	$query = $class->new(database(), 'single');
 	
-	$query->checkParameters($params, {ct => 1});
+	$query->checkParameters($params);
 	$query->setParameters($params);
 	$query->fetchSingle();
 	
@@ -379,7 +379,7 @@ sub substHelpText {
 	return '';
     }
     
-    elsif ( $variable =~ /^PARAMS:(.*)/ )
+    elsif ( $variable =~ /^PARAMS(?::(.*))?/ )
     {
 	my $param_string = $query->describeParameters();
 	
@@ -393,7 +393,7 @@ sub substHelpText {
 	}
     }
     
-    elsif ( $variable eq 'REQS' )
+    elsif ( $variable =~ /^REQS(?::(.*))?/ )
     {
 	my $req_string = $query->describeRequirements();
 	

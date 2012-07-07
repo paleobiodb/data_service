@@ -12,6 +12,57 @@ use strict;
 use base 'DataQuery';
 
 
+our ($PARAM_DESC_SINGLE) = <<DONE;
+  name - return information about the named taxon (scientific name)
+  rank - look for the taxon name only at the specified rank (taxon rank)
+  id - return information about the specified taxon (positive integer identifier)
+  taxon_name - synonym for 'name' (scientific name)
+  taxon_rank - synonym for 'rank' (taxon rank)
+  taxon_no - synonym for 'id' (positive integer identifier)
+  exact - return information about the taxon specified, rather than about a preferred variant or synonym (boolean)
+  
+  show - return some or all of the specified information (comma-separated list)
+            ref - include the publication reference for each taxon
+            attr - include the attribution for each taxon
+            code - include the nomenclatural code under which each taxon falls
+            all - include all available information
+DONE
+
+our ($PARAM_REQS_SINGLE) = "You must specify either taxon_name or taxon_no.\n\nNote that unless 'exact' is specified, the returned taxon will be the currently preferred variant or synonym if one exists.";
+
+our ($PARAM_CHECK_SINGLE) = { taxon_name => 1, taxon_rank => 1, taxon_no => 1, 
+			      name => 1, rank => 1, id => 1, exact => 1, show => 1 };
+
+our ($PARAM_DESC_MULTIPLE) = <<DONE;
+  type - only return information about taxa of this type ('valid', 'synonyms', 'invalid', 'all')
+  match - return information about all taxa whose names match this string (string with wildcards)
+  rank - only return information about taxa whose rank falls within the specified range (taxonomic rank or range)
+  id - return information about the specified taxa (comma-separated list of identifiers)
+  taxon_no - synonym for 'id' (comma-separated list of identifiers)
+  base_name - return information about the named taxon and its subtaxa (scientific name)
+  base_rank - look for the base taxon name only at the specified rank (taxon rank)
+  base_no - return information about the specified taxon and its subtaxa (positive integer identifier)
+  
+  show - return some or all of the specified information (comma-separated list)
+            ref - include the publication reference for each taxon
+            attr - include the attribution for each taxon
+            code - include the nomenclatural code under which each taxon falls
+            all - include all available information
+DONE
+
+#  leaf_name - return information about the named taxon and its supertaxa (scientific name)
+#  leaf_rank - look for the child taxon name only at the specified rank (taxon rank)
+#  leaf_no - return information about the named taxon and its supertaxa (positive integer identifier)
+
+
+our ($PARAM_REQS_MULTIPLE) = "You must specify at least one of: type, match, rank, id, base_name, base_no, child_name, child_no.\n\nNote that 'type' defaults to 'valid' unless otherwise specified.";
+
+our ($PARAM_CHECK_MULTIPLE) = { type => 1, match => 1, rank => 1,
+				base_name => 1, base_rank => 1, base_no => 1,
+				child_name => 1, child_rank => 1, child_no => 1, 
+				id => 1, show => 1 };
+
+
 
 # setParameters ( params )
 # 
@@ -25,268 +76,402 @@ sub setParameters {
     
     # First tell our superclass to set any parameters it recognizes.
     
-    $self->DataQuery::setParameters($params);
+    $self->SUPER::setParameters($params);
     
-    # The 'parent' parameter restricts the output to children of the specified
-    # taxon.  This allows us to query a subset of the taxa tree.  This can be
-    # applied to both multi-taxon and single-taxon queries; in the latter
-    # case, no result will be returned if the requested taxon is not a descendant
-    # of the 'parent' taxon.
+    # If we are dealing with a 'single' query, set the appropriate parameters
     
-    if ( defined $params->{parent} && ($params->{parent} + 0) > 0 )
+    if ( $self->{version} eq 'single' )
     {
-	$self->{parent_taxon} = $params->{parent} + 0;
+	$self->setParametersSingle($params);
     }
     
-    # The 'type' parameter selects the category of taxa to return: 'valid' is
-    # the default, and returns only taxa that are valid and are not junior
-    # synonyms of other taxa.  'synonyms' is a little more broad,
-    # returning all valid taxa even if they are junior synonyms.  'invalid'
-    # returns only invalid taxa, while 'all' returns all taxa regardless of
-    # their validity.
-    # 
-    # This parameter has no effect for single-taxon queries.
+    # Otherwise, set the parameters for a 'multiple' query
     
-    if ( defined $params->{type} )	# type=synonyms is the default
+    else
     {
-	$self->{taxon_type} = 'invalid' if lc $params->{type} eq 'invalid';
-	$self->{taxon_type} = 'valid' if lc $params->{type} eq 'valid';
-	$self->{taxon_type} = 'all' if lc $params->{type} eq 'all';
-	$self->{taxon_type} = 'synonyms' if lc $params->{type} eq 'synonyms';
-	$self->{taxon_type} = 'synonyms' unless $self->{taxon_type};
+	$self->setParametersMultiple($params);
     }
     
-    # If 'exact' is specified, then information is returned about the exact taxon
-    # specified.  Otherwise (default) information is returned about the senior
-    # synonym or correct spelling of the specified taxon if such exist.
+    # Then set common parameters
     
-    if ( defined $params->{exact} && $params->{exact} ne '' )
+    # If 'id_only' is specified, then return only a list of id numbers.
+    
+    if ( defined $params->{id_only} and $params->{id_only} ne '' )
     {
-	$self->{fetch_exact} = 1;
+	$self->{fetch_ids_only} = $self->parseBoolean($params->{id_only}, 'id_only');
     }
     
-    # If 'rank' is specified, then information is returned only about taxa of
-    # the given rank.  Multiple ranks can be specified, separated by commas.
+    # If 'show' is specified, then include additional information.
     
-    if ( defined $params->{rank} && $params->{rank} ne '' )
+    if ( defined $params->{show} and $params->{show} ne '' )
     {
-	$self->{rank} = $params->{rank};
-    }
-    
-    # If 'prefix' is specified, then information is returned only about taxa
-    # whose name starts with the given prefix.
-    
-    if ( defined $params->{prefix} && $params->{prefix} ne '' )
-    {
-	$self->{prefix_match} = $params->{prefix};
-    }
-    
-    # If 'match' is specified, then information is returned only about taxa
-    # whose name matches the given value.  The value will be matched against
-    # the database with a wildcard added at the beginning and end.
-    
-    if ( defined $params->{match} && $params->{match} ne '' )
-    {
-	$self->{name_match} = $params->{match};
-	delete $self->{prefix_match};
-    }
-    
-    # If 'rewrite' is specified, then rewrite the classification of genus and
-    # species taxa to match their names.  This is required in order to match
-    # the output of the existing PaleoDB website.
-    
-    if ( defined $params->{rewrite} && $params->{rewrite} )
-    {
-	$self->{rewrite_classification} = 1;
-    }
-    
-    # If 'showref' is specified, then include publication references for each
-    # taxon. 
-    
-    if ( defined $params->{showref} )
-    {
-	$self->{include_ref} = 1;
-    }
-    
-    # If 'showcode' is specified, then include nomenclatural code info for
-    # each taxon.
-    
-    if ( defined $params->{showcode} )
-    {
-	$self->{include_nc} = 1;
+	my (@show) = split /\s*,\s*/, lc($params->{show});
+	
+	foreach my $s (@show)
+	{
+	    if ( $s eq 'ref' )
+	    {
+		$self->{show_ref} = 1;
+	    }
+	    
+	    elsif ( $s eq 'code' )
+	    {
+		$self->{show_code} = 1;
+	    }
+	    
+	    elsif ( $s eq 'attr' )
+	    {
+		$self->{show_attribution} = 1;
+	    }
+	    
+	    elsif ( $s eq 'all' )
+	    {
+		$self->{show_ref} = 1;
+		$self->{show_code} = 1;
+		$self->{show_attribution} = 1;
+	    }
+	    
+	    else
+	    {
+		$self->warn("Unknown value '$s' for show");
+	    }
+	}
     }
     
     return 1;
 }
 
 
-# fetchMultiple ( )
-# 
-# Query the database for basic info about all taxa satisfying the conditions
-# previously specified (i.e. by a call to setParameters).
-# 
-# Returns true if the fetch succeeded, false if an error occurred.
-
-sub fetchMultiple {
-
-    my ($self) = @_;
-    my ($sql);
-    my (@taxon_filter, @extra_tables, @extra_fields);
-    my ($taxon_limit) = "";
+sub setParametersSingle {
     
-    # Get ahold of a database handle by which we can make queries.
+    my ($self, $params) = @_;
     
-    my $dbh = $self->{dbh};
+    # The parameter 'id' is a synonym for 'taxon_no'.
     
-    # If a query limit has been specified, construct the appropriate SQL string.
-    
-    if ( defined $self->{limit} && $self->{limit} > 0 )
+    if ( defined $params->{id} and $params->{id} ne '' )
     {
-	$taxon_limit = "LIMIT " . $self->{limit};
-    }
-    
-    # If we need to show the reference for each taxon, include the necessary
-    # fields. 
-    
-    if ( defined $self->{include_ref} )
-    {
-	push @extra_fields, "r.author1init r_a1i", "r.author1last r_a1l",
-	    "r.author2init r_a2i", "r.author2last r_a2l", "r.otherauthors r_otherauthors",
-		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
-		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
-			"r.firstpage r_fp", "r.lastpage r_lp";
-    }
-    
-    # If we need to show the nomenclatural code under which each taxon falls,
-    # include the necessary fields.  We also need to get the tree-range for
-    # the kingdom-level taxa Metazoa, Plantae and Metaphyta.
-    
-    if ( defined $self->{include_nc} )
-    {
-	push @extra_fields, "t.lft";
-	$self->getCodeRanges();
-    }
-    
-    # If a restriction has been entered on the category of taxa to be
-    # returned, add the appropriate filter.
-    
-    if ( defined $self->{taxon_type} )
-    {
-	if ( $self->{taxon_type} eq 'valid' ) {
-	    push @taxon_filter, "o.status = 'belongs to'";
-	    push @taxon_filter, "t.taxon_no = t.synonym_no";
-	}
-	elsif ( $self->{taxon_type} eq 'synonyms' ) {
-	    push @taxon_filter, "o.status in ('belongs to', 'subjective synonym of', 'objective synonym of')";
-	    push @taxon_filter, "t.taxon_no = t.spelling_no";
-	}
-	elsif ( $self->{taxon_type} eq 'invalid' ) {
-	    push @taxon_filter, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
-	}
-    }
-    
-    # If the result set is to be restricted to the descendants of a specified
-    # taxon, add the appropriate filter.
-    
-    if ( defined $self->{parent_taxon} and $self->{parent_taxon} > 0 )
-    {
-	my $orig = $self->{parent_taxon} + 0;
-	my $parent = $dbh->selectrow_array("SELECT synonym_no FROM taxa_tree_cache WHERE taxon_no = $orig");
-	push @extra_tables, "JOIN taxa_list_cache l ON l.child_no = taxon_no";
-	push @taxon_filter, "l.parent_no = " . ($parent + 0);
-    }
-    
-    # If the result set is to be restricted by name matching, add the
-    # appropriate filters.
-    
-    if ( defined $self->{name_match} )
-    {
-	my $match_filter = 'a.taxon_name LIKE ' . $dbh->quote('%' . $self->{name_match} . '%');
-	push @taxon_filter, $match_filter;
-    }
-    
-    elsif ( defined $self->{prefix_match} )
-    {
-	my $match_filter = 'a.taxon_name LIKE ' . $dbh->quote($self->{prefix_match} . '%');
-	push @taxon_filter, $match_filter;
-    }
-    
-    # If the result set is to be restricted to taxa of a given rank or ranks,
-    # add the appropriate filters.
-    
-    if ( defined $self->{rank} )
-    {
-	if ( $self->{rank} !~ /,/ )
+	if ( defined $params->{taxon_no} and $params->{taxon_no} ne '' and 
+	     $params->{id} ne $params->{taxon_no} )
 	{
-	    push @taxon_filter, 'a.taxon_rank = ' . $dbh->quote($self->{rank});
+	    die "400 You cannot specify different values for 'id' and 'taxon_no'.\n"
 	}
 	
-	else
-	{
-	    my @ranks = split /,/, $self->{rank};
-	    my $rank_filter = 'a.taxon_rank IN (';
-	    my $separator = '';
-	    foreach my $r (@ranks)
-	    {
-		$rank_filter .= $separator . $dbh->quote($r);
-		$separator = ',';
-	    }
-	    push @taxon_filter, ($rank_filter . ')');
-	}
+	$params->{taxon_no} = $params->{id};
     }
     
-    # Now construct the filter expression and extra_tables expression
+    # The parameter 'name' is a synonym for 'taxon_name'.
     
-    my $taxon_filter = join(' AND ', @taxon_filter);
-    $taxon_filter = "WHERE $taxon_filter" if $taxon_filter ne '';
+    if ( defined $params->{name} and $params->{name} ne '' )
+    {
+	if ( defined $params->{taxon_name} and $params->{taxon_name} ne '' and 
+	     $params->{name} ne $params->{taxon_name} )
+	{
+	    die "400 You cannot specify different values for 'name' and 'taxon_name'.\n"
+	}
+	
+	$params->{taxon_name} = $params->{name};
+    }
     
-    my $extra_tables = join('', @extra_tables);
+    # The parameter 'rank' is a synonym for 'taxon_rank'.
     
-    # and the extra_fields expression
+    if ( defined $params->{rank} and $params->{rank} ne '' )
+    {
+	if ( defined $params->{taxon_rank} and $params->{taxon_rank} ne '' and 
+	     $params->{rank} ne $params->{taxon_rank} )
+	{
+	    die "400 You cannot specify different values for 'rank' and 'taxon_rank'.\n"
+	}
+	
+	$params->{taxon_rank} = $params->{rank};
+    }
+        
+    # If 'taxon_name' is specified, then information is returned about the
+    # specified taxon.  This parameter cannot be used at the same time as
+    # 'taxon_no'.
     
-    my $extra_fields = join(', ', @extra_fields);
-    $extra_fields = ", " . $extra_fields if $extra_fields ne '';
+    if ( defined $params->{taxon_name} and $params->{taxon_name} ne '' )
+    {
+	# Check to make sure that taxon_no was not specified at the same time
+	
+	if ( defined $params->{taxon_no} and $params->{taxon_no} ne '' )
+	{
+	    die "400 You may not specify 'taxon_name' and 'taxon_no' together.\n";
+	}
+	
+	# Clean the parameter of everything except alphabetic characters
+	# and spaces, since only those are valid in taxonomic names.
+	
+	if ( $params->{taxon_name} =~ /[^a-zA-Z\s]/ )
+	{
+	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace.\n";
+	}
+	
+	$self->{base_taxon_name} = $params->{taxon_name};
+	$self->{base_taxon_name} =~ s/\s+/ /g;
+    }
     
-    # Counting the total number of rows is too expensive for any category of
-    # taxa except 'all'.
+    # If "taxon_no" is specified, then information is returned about the
+    # specified taxon.  This parameter cannot be used at the same time as
+    # 'taxon_name'.
     
-    $self->{total_count} = $dbh->selectrow_array("SELECT count(a.taxon_no) FROM authorities a")
-	if defined $self->{taxon_type} && $self->{taxon_type} eq 'all';
+    elsif ( defined $params->{taxon_no} and $params->{taxon_no} ne '' )
+    {
+	# First check to make sure that a valid value was provided
+	
+	if ( $params->{taxon_no} =~ /[^0-9]/ )
+	{
+	    die "400 You must provide a positive integer value for 'taxon_no'.\n";
+	}
+	
+	$self->{base_taxon_no} = $params->{taxon_no} + 0;
+    }
     
-    # Now construct and execute the SQL statement that will be used to fetch
-    # the desired information from the database.
+    # If neither was specified, return the "help" message.
     
-    $sql = 
-	"SELECT a.taxon_no, a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status, o.spelling_reason,
-		pa.taxon_no as parent_no, pa.taxon_name as parent_name, t.spelling_no, t.synonym_no, t.orig_no,
-		xa.taxon_no as accepted_no, xa.taxon_name as accepted_name,
-	        IF (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', 
-		    a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) pubyr,
-		IF (a.ref_is_authority = 'YES', r.author1last, a.author1last) author1,
-		IF (a.ref_is_authority = 'YES', r.author2last, a.author2last) author2,
-		IF (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) otherauthors
-		$extra_fields
-         FROM authorities a JOIN taxa_tree_cache t USING (taxon_no) $extra_tables
-		LEFT JOIN refs r USING (reference_no)
-		LEFT JOIN opinions o USING (opinion_no)
-		LEFT JOIN authorities xa ON (xa.taxon_no = CASE
-		    WHEN status <> 'belongs to' AND status <> 'invalid subgroup of' THEN o.parent_spelling_no
-		    WHEN t.taxon_no <> t.synonym_no THEN t.synonym_no END)
-		LEFT JOIN (taxa_tree_cache pt JOIN authorities pa ON (pa.taxon_no = pt.synonym_no))
-		    ON (pt.taxon_no = if(o.status = 'belongs to', o.parent_spelling_no, null))
-	 $taxon_filter ORDER BY t.lft ASC $taxon_limit";
+    else
+    {
+	die "400 help\n";
+    }
     
-    $self->{main_sth} = $dbh->prepare($sql);
-    $self->{main_sth}->execute();
+    # If "taxon_rank" is specified, then we only match the name if it matches
+    # the specified rank.
     
-    # Indicate that output should be streamed rather than assembled and
-    # returned immediately.  This will avoid a huge burden on the server to
-    # marshall a single result string from a potentially large set of data.
+    if ( defined $params->{taxon_rank} and $params->{taxon_rank} ne '' )
+    {
+	my $rank = lc $params->{taxon_rank};
+	
+	# This parameter cannot be used with taxon_no (since taxon_no uniquely
+	# identifies a taxon, it cannot be used with any other taxon-selecting
+	# parameters).
+	
+	if ( defined $params->{taxon_no} and $params->{taxon_no} ne '' )
+	{
+	    die "400 You may not use the 'taxon_rank' and 'taxon_no' parameters together.\n";
+	}
+	
+	# Make sure that the value is one of the accepted ones.
+	
+	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
+	{
+	    die "400 Unrecognized taxon rank '$rank'.";
+	}
+	
+	$self->{base_taxon_rank} = $rank;
+    }
     
-    $self->{streamOutput} = 1;
-    $self->{processMethod} = 'processRow';
+    # If "exact" is specified, then we report information about the exact
+    # taxon specified rather than its preferred variant or synonym.
     
-    return 1;
+    if ( defined $params->{exact} and $params->{exact} ne '' )
+    {
+	$self->{base_exact} = $self->parseBoolean($params->{exact}, 'exact');
+    }
+}
+
+
+sub setParametersMultiple {
+    
+    my ($self, $params) = @_;
+    
+    # Make sure we have at least one parameter from the required set.
+    
+    my $required_param = 0;
+    
+    # If 'type' is specified, the results are restricted to certain types
+    # of taxa.  Defaults to 'valid'.
+    
+    if ( defined $params->{type} and $params->{type} ne '' )
+    {
+	my $type = lc $params->{type};
+	$required_param = 1;
+	
+	unless ( $type eq 'valid' or $type eq 'invalid' or $type eq 'synonyms' or $type eq 'all' )
+	{
+	    die "400 Unrecognized taxon type '$type'.\n";
+	}
+	
+	$self->{filter_taxon_type} = $type;
+    }
+    
+    else
+    {
+	$self->{filter_taxon_type} = 'valid';
+    }
+    
+    # If 'match' is specified, the results are restricted to taxa whose names
+    # match the specified string.  SQL wildcards are allowed.
+    
+    if ( defined $params->{match} and $params->{match} ne '' )
+    {
+	$required_param = 1;
+	
+	# First check to make sure that a valid value was provided.
+	
+	if ( $params->{match} =~ /[^a-zA-Z_%\s]/ )
+	{
+	    die "400 The parameter 'taxon_match' may contain only characters from the Roman alphabet plus whitespace and the SQL wildcards '%' and '_'.\n";
+	}
+	
+	$self->{filter_taxon_match} = $params->{match};
+    }
+    
+    # If 'rank' is specified, the results are restricted to taxa whose rank
+    # falls within the specified set.
+    
+    if ( defined $params->{rank} and $params->{rank} ne '' )
+    {
+	$required_param = 1;
+	$self->{filter_taxon_rank} = $self->parseRankParam($params->{rank}, 'rank');
+    }
+    
+    # If 'base_name' is specified, the results are restricted to the
+    # specified taxon and its children.
+    
+    if ( defined $params->{base_name} and $params->{base_name} ne '' )
+    {
+	$required_param = 1;
+	
+	# Check to make sure that base_no was not specified at the same time
+	
+	if ( defined $params->{base_no} and $params->{base_no} ne '' )
+	{
+	    die "400 You may not specify 'base_name' and 'base_no' together.\n";
+	}
+	
+	# Make sure the parameter contains nothing except alphabetic
+	# characters and spaces, since only those are valid in taxonomic
+	# names.
+	
+	if ( $params->{base_name} =~ /[^a-zA-Z\s]/ )
+	{
+	    die "400 The parameter 'base_name' may contain only characters from the Roman alphabet plus whitespace.\n";
+	}
+	
+	$self->{base_taxon_name} = $params->{base_name};
+	$self->{base_taxon_name} =~ s/\s+/ /g;
+    }
+    
+    # If 'base_rank' is specified, then we only match the name if it
+    # matches the specified rank.
+    
+    if ( defined $params->{base_rank} and $params->{base_rank} ne '' )
+    {
+	my $rank = lc $params->{base_rank};
+	$required_param = 1;
+	
+	# This parameter cannot be used with taxon_no (since taxon_no uniquely
+	# identifies a taxon, it cannot be used with any other taxon-selecting
+	# parameters).
+	
+	if ( defined $params->{base_no} and $params->{base_no} ne '' )
+	{
+	    die "400 You may not use the 'base_rank' and 'base_no' parameters together.\n";
+	}
+	
+	# Make sure that the value is one of the accepted ones.
+	
+	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
+	{
+	    die "400 Unrecognized taxon rank '$rank'.";
+	}
+	
+	$self->{base_taxon_rank} = $rank;
+    }
+    
+    # If 'base_no' is specified, then the results are restricted to the
+    # specified taxon and its children.
+    
+    if ( defined $params->{base_no} and $params->{base_no} ne '' )
+    {
+	$required_param = 1;
+	
+	# First check to make sure that a valid value was provided
+	
+	if ( $params->{base_no} =~ /[^0-9]/ )
+	{
+	    die "400 You must provide a positive integer value for 'taxon_no'.\n";
+	}
+	
+	$self->{base_taxon_no} = $params->{base_no} + 0;
+    }
+    
+    # If 'child_name' is specified, then the results are restricted to the
+    # specified taxon and its parents.
+    
+    if ( defined $params->{child_name} and $params->{child_name} ne '' )
+    {
+	$required_param = 1;
+	
+	# Check to make sure that base_no was not specified at the same time
+	
+	if ( defined $params->{child_no} and $params->{child_no} ne '' )
+	{
+	    die "400 You may not specify 'child_name' and 'child_no' together.\n";
+	}
+	
+	# Make sure the parameter contains nothing except alphabetic
+	# characters and spaces, since only those are valid in taxonomic
+	# names.
+	
+	if ( $params->{child_name} =~ /[^a-zA-Z\s]/ )
+	{
+	    die "400 The parameter 'child_name' may contain only characters from the Roman alphabet plus whitespace.\n";
+	}
+	
+	$self->{child_taxon_name} = $params->{child_name};
+	$self->{child_taxon_name} =~ s/\s+/ /g;	    
+    }
+    
+    # If 'child_rank' is specified, then we only match the name if it
+    # matches the specified rank.
+    
+    if ( defined $params->{child_rank} and $params->{child_rank} ne '' )
+    {
+	my $rank = lc $params->{child_rank};
+	$required_param = 1;
+	
+	# This parameter cannot be used with taxon_no (since taxon_no uniquely
+	# identifies a taxon, it cannot be used with any other taxon-selecting
+	# parameters).
+	
+	if ( defined $params->{child_no} and $params->{child_no} ne '' )
+	{
+	    die "400 You may not use the 'child_rank' and 'child_no' parameters together.\n";
+	}
+	
+	# Make sure that the value is one of the accepted ones.
+	
+	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
+	{
+	    die "400 Unrecognized taxon rank '$rank'.";
+	}
+	
+	$self->{child_taxon_rank} = $rank;
+    }
+    
+    # If 'child_no' is specified, then the results are restricted to the
+    # specified taxon and its parents.
+    
+    if ( defined $params->{child_no} and $params->{child_no} ne '' )
+    {
+	$required_param = 1;
+	
+	# First check to make sure that a valid value was provided
+	
+	if ( $params->{child_no} =~ /[^0-9]/ )
+	{
+	    die "400 You must provide a positive integer value for 'taxon_no'.\n";
+	}
+	
+	$self->{child_taxon_no} = $params->{base_no} + 0;
+    }
+    
+    # Now make sure we've specified at least one of the required parameters.
+    
+    unless ( $required_param )
+    {
+	die "400 help\n";
+    }
 }
 
 
@@ -301,50 +486,117 @@ sub fetchMultiple {
 
 sub fetchSingle {
 
-    my ($self, $taxon_requested) = @_;
+    my ($self) = @_;
     my ($sql, @extra_fields);
     
     # Get ahold of a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
     
-    # Unless we were directed to use the exactly specified taxon, first get
-    # the senior synonym.  Because the synonym_no field is not always correct,
-    # we may need to iterate this query.  In order to save time, we do three
-    # iterations in one query.
+    # Then figure out which taxon we are looking for.  If we have a taxon_no,
+    # we can use that.
     
-    unless ( $self->{fetch_exact} )
+    my $taxon_no;
+    my $not_found_msg;
+    
+    if ( defined $self->{base_taxon_no} )
     {
-	my $sql =
-	    "SELECT t3.taxon_no, t3.synonym_no
+	$taxon_no = $self->{base_taxon_no};
+	
+	# Unless we were directed to use the exact taxon specified, we need to
+	# look up the senior synonym.  the senior synonym.  Because the
+	# synonym_no field is not always correct, we may need to iterate this
+	# query.  For efficiency, we do three iterations in one query.
+	
+	unless ( $self->{base_exact} )
+	{
+	    my $sql = "SELECT t3.synonym_no
 	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
 				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
 	     WHERE t1.taxon_no = ?";
-
-	my $prev; my $count = 0;
+	    
+	    ($taxon_no) = $dbh->selectrow_array($sql, undef, $taxon_no);
+	}
 	
-	do {
-	    ($prev, $taxon_requested) = $dbh->selectrow_array($sql, undef, $taxon_requested + 0);
-	} while ( $prev != $taxon_requested and $count++ < 3 );
+	$not_found_msg = "Taxon number $self->{base_taxon_no} was not found in the database";
     }
     
-    # If we need to show the reference for each taxon, include the necessary
-    # fields. 
+    # Otherwise, we must have a taxon name.  So look for that.
     
-    if ( defined $self->{include_ref} )
+    else
     {
-	push @extra_fields, "r.author1init r_a1i", "r.author1last r_a1l",
-	    "r.author2init r_a2i", "r.author2last r_a2l", "r.otherauthors r_otherauthors",
+	my $rank_clause = '';
+	my @args = $self->{base_taxon_name};
+	
+	$not_found_msg = "Taxon '$self->{base_taxon_name}' was not found in the database";
+	
+	# If a rank was specified, add a clause to narrow it down.
+	
+	if ( defined $self->{base_taxon_rank} )
+	{
+	    $rank_clause = "and a.taxon_rank = ?";
+	    push @args, $self->{base_taxon_rank};
+	    
+	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
+	}
+	
+	# If we were directed to return the exact taxon specified, we just
+	# look it up in the authorities table.
+	
+	if ( $self->{base_exact} )
+	{
+	    my $sql = "SELECT a.taxon_no
+		FROM authorities a WHERE a.taxon_name = ? $rank_clause";
+	    
+	    ($taxon_no) = $dbh->selectrow_array($sql, undef, @args);
+	}
+	
+	# Otherwise, we need to find the senior synonym (see above).
+	
+	else
+	{
+	    my $sql = "SELECT t3.synonym_no
+		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
+				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
+				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
+		WHERE a.taxon_name = ? $rank_clause";
+	    
+	    ($taxon_no) = $dbh->selectrow_array($sql, undef, @args);
+	}
+    }
+    
+    # If we haven't found a record, the result set will be empty.
+    
+    unless ( defined $taxon_no and $taxon_no > 0 )
+    {
+	return;
+    }
+    
+    # Now add the fields necessary to show the requested info.
+    
+    if ( defined $self->{show_ref} )
+    {
+	push @extra_fields, "r.author1init r_ai1", "r.author1last r_al1",
+	    "r.author2init r_ai2", "r.author2last r_al2", "r.otherauthors r_oa",
 		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
 		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
 			"r.firstpage r_fp", "r.lastpage r_lp";
+    }
+    
+    if ( defined $self->{show_attribution} )
+    {
+	push @extra_fields, 
+	    "if (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) a_pubyr",
+		"if (a.ref_is_authority = 'YES', r.author1last, a.author1last) a_al1",
+		    "if (a.ref_is_authority = 'YES', r.author2last, a.author2last) a_al2",
+			"if (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) a_ao";
     }
     
     # If we need to show the nomenclatural code under which the taxon falls,
     # include the necessary fields.  We also need to get the tree-range for
     # Metazoa and Plantae.
     
-    if ( defined $self->{include_nc} )
+    if ( defined $self->{show_code} )
     {
 	push @extra_fields, "t.lft";
 	$self->getCodeRanges();
@@ -358,12 +610,7 @@ sub fetchSingle {
     $sql = 
 	"SELECT a.taxon_no, a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status, o.spelling_reason,
 		pa.taxon_no as parent_no, pa.taxon_name as parent_name, t.spelling_no, t.synonym_no, t.orig_no,
-		xa.taxon_no as accepted_no, xa.taxon_name as accepted_name,
-	        IF (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', 
-		    a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) pubyr,
-		IF (a.ref_is_authority = 'YES', r.author1last, a.author1last) author1,
-		IF (a.ref_is_authority = 'YES', r.author2last, a.author2last) author2,
-		IF (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) otherauthors
+		xa.taxon_no as accepted_no, xa.taxon_name as accepted_name
 		$extra_fields
          FROM authorities a JOIN taxa_tree_cache t USING (taxon_no)
 	       	LEFT JOIN refs r USING (reference_no)
@@ -375,147 +622,368 @@ sub fetchSingle {
 		    ON (pt.taxon_no = if(o.status = 'belongs to', o.parent_spelling_no, null))
          WHERE a.taxon_no = ?";
     
-    my $sth = $dbh->prepare($sql);
-    $sth->execute($taxon_requested);
-    
-    my ($main_row) = $sth->fetchrow_hashref();
-    
-    $self->processRow($main_row);
-    $self->{main_row} = $main_row;
-    
-    # Make sure we know the senior synonym of this taxon (this is relevant
-    # only if the 'fetch_exact' flag is true) so that the parent list will
-    # turn out properly.
-    
-    my ($senior_synonym) = $main_row->{synonym_no};
-    
-    # Now fetch all parent info
-    
-    $sql = 
-       "SELECT a.taxon_no, a.taxon_name, a.taxon_rank, a.common_name, a.extant, 
-		pt.synonym_no as parent_no, t.orig_no,
-		IF (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', 
-		    a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) pubyr,
-		IF (a.ref_is_authority = 'YES', r.author1last, a.author1last) author1,
-		IF (a.ref_is_authority = 'YES', r.author2last, a.author2last) author2,
-		IF (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) otherauthors
-	FROM taxa_list_cache l JOIN taxa_tree_cache t ON (t.taxon_no = l.parent_no)
-		JOIN authorities a ON a.taxon_no = t.taxon_no
-		LEFT JOIN refs r USING (reference_no)
-		LEFT JOIN opinions o USING (opinion_no)
-		LEFT JOIN taxa_tree_cache pt ON (pt.taxon_no = o.parent_spelling_no)
-	WHERE l.child_no = ? AND l.parent_no <> l.child_no ORDER BY t.lft ASC";
-
-    $sth = $dbh->prepare($sql);
-    $sth->execute($senior_synonym);
-    
-    my $parent_list = $sth->fetchall_arrayref({});
-    
-    # Run through the parent list and note when we reach the last
-    # kingdom-level taxon.  Any entries before that point are dropped 
-    # [note: TaxonInfo.pm, line 1316]
-    
-    my $last_kingdom = 0;
-    
-    for (my $i = 0; $i < scalar(@$parent_list); $i++)
-    {
-	$last_kingdom = $i if $parent_list->[$i]{taxon_rank} eq 'kingdom';
-    }
-    
-    splice(@$parent_list, 0, $last_kingdom) if $last_kingdom > 0;
-    
-    $self->{parents} = $parent_list;
-    
-    # If this is a species or genus, we may need to rewrite the parent list
-    # according to the name given for the main taxon.
-    
-    if ( $self->{rewrite_classification} )
-    {
-	my ($genus, $subgenus, $species, $subspecies) = 
-	    interpretSpeciesName($main_row->{taxon_name});
-	
-	# Create a new parent list, and copy all taxa of family or higher rank
-	# to it.  Taxa of genus and lower rank are used to populate the
-	# taxon_no_by_rank table.
-	
-	$self->{parents} = [];
-	my ($taxon_row_by_rank) = {};
-	
-	foreach my $row (@$parent_list)
-	{
-	    unless ( $row->{taxon_rank} =~ /species|genus/ )
-	    {
-		push @{$self->{parents}}, $row;
-	    }
-	    
-	    else
-	    {
-		$taxon_row_by_rank->{$row->{taxon_rank}} = $row;
-	    }
-	}
-	
-	# Now add the genus, but with the genus name extracted from the current
-	# taxon's name.  If one wasn't found, use the current taxon.
-	
-	if ( defined $taxon_row_by_rank->{'genus'} )
-	{
-	    my $genus_row = $taxon_row_by_rank->{'genus'};
-	    $genus_row->{taxon_name} = $genus;
-	    push @{$self->{parents}}, $genus_row;
-	}
-	
-	else
-	{
-	    push @{$self->{parents}}, $main_row;
-	}
-	
-	# Then, add the subgenus, species and subspecies only if they occur in
-	# the current taxon's name.
-	
-	if ( defined $subgenus and $subgenus ne '' )
-	{
-	    my $subgenus_row = ( defined $taxon_row_by_rank->{'subgenus'} ?
-				 $taxon_row_by_rank->{'subgenus'} :
-				 { taxon_rank => 'subgenus' } );
-	    $subgenus_row->{taxon_name} = "$genus ($subgenus)";
-	    push @{$self->{parents}}, $subgenus_row;
-	}
-	
-	if ( defined $species and $species ne '' )
-	{
-	    my $species_row = ( defined $taxon_row_by_rank->{'species'} ?
-				$taxon_row_by_rank->{'species'} :
-				{ taxon_rank => 'species' } );
-	    $species_row->{taxon_name} = "$genus $species";
-	    if ( defined $subgenus and $subgenus ne '' ) {
-		$species_row->{taxon_name} = "$genus ($subgenus) $species";
-	    }
-	    push @{$self->{parents}}, $species_row;
-	}
-	
-	if ( defined $subspecies and $subspecies ne '' )
-	{
-	    my $subspecies_row = ( defined $taxon_row_by_rank->{'subspecies'} ?
-				   $taxon_row_by_rank->{'subspecies'} :
-				   { taxon_rank => 'subspecies' } );
-	    $subspecies_row->{taxon_name} = $main_row->{taxon_name};
-	    push @{$self->{parents}}, $subspecies_row;
-	}
-    }
-    
-    # Take off the last entry on the parent list if it is a duplicate of the
-    # main row, unless we have been told not to.
-    
-    unless ( $self->{dont_trim_parent_list} or scalar(@{$self->{parents}}) == 0 )
-    {
-	pop @{$self->{parents}} if $self->{parents}[-1]{taxon_rank} eq $self->{main_row}{taxon_rank};
-    }
-    
-    # Return success
+    $self->{main_sth} = $dbh->prepare($sql);
+    $self->{main_sth}->execute($taxon_no);
     
     return 1;
 }
 
+
+# fetchMultiple ( )
+# 
+# Query the database for basic info about all taxa satisfying the conditions
+# previously specified by a call to setParameters.
+# 
+# Returns true if the fetch succeeded, false if an error occurred.
+
+sub fetchMultiple {
+
+    my ($self) = @_;
+    my ($sql);
+    my (@filter_list, @extra_tables, @extra_fields);
+    my ($taxon_limit) = "";
+    my ($process_as_parent_list) = 0;
+    
+    # Get ahold of a database handle by which we can make queries.
+    
+    my $dbh = $self->{dbh};
+    
+    # If a query limit has been specified, construct the appropriate SQL string.
+    
+    if ( defined $self->{limit_results} )
+    {
+	$taxon_limit = "LIMIT " . ($self->{limit_results} + 0);
+    }
+    
+    # Now process the various parameters that limit the scope of the query:
+    
+    # If a restriction has been entered on the category of taxa to be
+    # returned, add the appropriate filter.
+    
+    if ( defined $self->{filter_taxon_type} )
+    {
+	if ( $self->{filter_taxon_type} eq 'valid' ) {
+	    push @filter_list, "o.status = 'belongs to'";
+	    push @filter_list, "t.taxon_no = t.synonym_no";
+	}
+	elsif ( $self->{filter_taxon_type} eq 'synonyms' ) {
+	    push @filter_list, "o.status in ('belongs to', 'subjective synonym of', 'objective synonym of')";
+	    push @filter_list, "t.taxon_no = t.spelling_no";
+	}
+	elsif ( $self->{filter_taxon_type} eq 'invalid' ) {
+	    push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
+	}
+    }
+    
+    # If a text match has been specified, add the appropriate filter.
+    
+    if ( defined $self->{filter_taxon_match} )
+    {
+	push @filter_list, "a.taxon_name like '$self->{filter_taxon_match}'";
+    }
+    
+    # If a rank or range of ranks has been specified, add the appropriate
+    # filter. 
+    
+    if ( ref $self->{filter_taxon_rank} eq 'ARRAY' )
+    {
+	my (@disjunction, @in_list);
+	
+	foreach my $r (@{$self->{filter_taxon_rank}})
+	{
+	    if ( ref $r eq 'ARRAY' )
+	    {
+		push @disjunction, "a.taxon_rank >= $r->[0] and a.taxon_rank <= $r->[1]";
+	    }
+	    
+	    else
+	    {
+		push @in_list, $r;
+	    }
+	}
+	
+	if ( @in_list )
+	{
+	    push @disjunction, "a.taxon_rank in (" . join(',', @in_list) . ")";
+	}
+	
+	if ( @disjunction )
+	{
+	    push @filter_list, '(' . join(' or ', @disjunction) . ')';
+	}
+    }
+    
+    # If a base taxon has been specified by taxon_no, find it and add the appropriate
+    # filter.
+    
+    if ( defined $self->{base_taxon_no} )
+    {
+	my $sql = "SELECT t3.lft, t3.rgt
+	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
+				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
+	     WHERE t1.taxon_no = ?";
+	
+	my ($lft, $rgt) = $dbh->selectrow_array($sql, undef, $self->{base_taxon_no});
+	
+	# If we can't find the base taxon, the result set will be empty.
+	
+	unless ( defined $lft and $lft > 0 )
+	{
+	    return;
+	}
+	
+	# Otherwise, we select the appropriate range of taxa.
+	
+	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
+    }
+    
+    # If a base taxon has been specified by taxon_name, find it and add the
+    # appropriate filter.
+    
+    if ( defined $self->{base_taxon_name} )
+    {
+	my $rank_clause = '';
+	my @args = $self->{base_taxon_name};
+	
+	my $not_found_msg = "Taxon '$self->{base_taxon_name}' was not found in the database";
+	
+	# If a rank was specified, add a clause to narrow it down.
+	
+	if ( defined $self->{base_taxon_rank} )
+	{
+	    $rank_clause = "and a.taxon_rank = ?";
+	    push @args, $self->{base_taxon_rank};
+	    
+	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
+	}
+	
+	my $sql = "SELECT t3.lft, t3.rgt
+		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
+				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
+				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
+		WHERE a.taxon_name = ? $rank_clause";
+	    
+	my ($lft, $rgt) = $dbh->selectrow_array($sql, undef, @args);
+	
+	# If we can't find the base taxon, the result set will be empty.
+	
+	unless ( defined $lft and $lft > 0 )
+	{
+	    return;
+	}
+	
+	# Otherwise, select the appropriate range of taxa.
+	
+	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
+    }
+    
+    # $$$ add child_taxon_no/child_taxon_name
+    
+    # Add the extra fields necessary to show the requested info
+    
+    if ( defined $self->{show_ref} )
+    {
+	push @extra_fields, "r.author1init r_ai1", "r.author1last r_al1",
+	    "r.author2init r_ai2", "r.author2last r_al2", "r.otherauthors r_oa",
+		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
+		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
+			"r.firstpage r_fp", "r.lastpage r_lp";
+    }
+    
+    if ( defined $self->{show_attribution} )
+    {
+	push @extra_fields, 
+	    "if (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) a_pubyr",
+		"if (a.ref_is_authority = 'YES', r.author1last, a.author1last) a_al1",
+		    "if (a.ref_is_authority = 'YES', r.author2last, a.author2last) a_al2",
+			"if (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) a_ao";
+    }
+    
+    if ( defined $self->{show_code} )
+    {
+	push @extra_fields, "t.lft";
+	$self->getCodeRanges();
+    }
+    
+    # Now construct the filter expression and extra_tables expression
+    
+    my $taxon_filter = join(' and ', @filter_list);
+    $taxon_filter = "WHERE $taxon_filter" if $taxon_filter ne '';
+    
+    # and the extra_fields expression
+    
+    my $extra_fields = join(', ', @extra_fields);
+    $extra_fields = ", " . $extra_fields if $extra_fields ne '';
+    
+    # Now construct and execute the SQL statement that will be used to fetch
+    # the desired information from the database.
+    
+    $self->{main_sql} = "
+	SELECT a.taxon_no, a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status, o.spelling_reason,
+		pa.taxon_no as parent_no, pa.taxon_name as parent_name, t.spelling_no, t.synonym_no, t.orig_no,
+		xa.taxon_no as accepted_no, xa.taxon_name as accepted_name
+		$extra_fields
+        FROM authorities a JOIN taxa_tree_cache t USING (taxon_no)
+		LEFT JOIN refs r USING (reference_no)
+		LEFT JOIN opinions o USING (opinion_no)
+		LEFT JOIN authorities xa ON (xa.taxon_no = CASE
+		    WHEN status <> 'belongs to' AND status <> 'invalid subgroup of' THEN o.parent_spelling_no
+		    WHEN t.taxon_no <> t.synonym_no THEN t.synonym_no END)
+		LEFT JOIN (taxa_tree_cache pt JOIN authorities pa ON (pa.taxon_no = pt.synonym_no))
+		    ON (pt.taxon_no = if(o.status = 'belongs to', o.parent_spelling_no, null))
+	$taxon_filter ORDER BY t.lft ASC $taxon_limit";
+    
+    # Also construct a statement to fetch the result count if necessary.
+    
+    $self->{count_sql} = "
+	SELECT count(*)
+	FROM authorities a JOIN taxa_tree_cache t USING (taxon_no)
+		LEFT JOIN opinions o USING (opinion_no)
+	$taxon_filter";
+    
+    # Now prepare and execute the main statement.
+    
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
+    $self->{main_sth}->execute();
+    
+    return 1;
+}
+
+
+sub processParents {
+
+    # Make sure we know the senior synonym of this taxon (this is relevant
+    # only if the 'fetch_exact' flag is true) so that the parent list will
+    # turn out properly.
+    
+    # my ($senior_synonym) = $main_row->{synonym_no};
+    
+    # # Now fetch all parent info
+    
+    # $sql = 
+    #    "SELECT a.taxon_no, a.taxon_name, a.taxon_rank, a.common_name, a.extant, 
+    # 		pt.synonym_no as parent_no, t.orig_no,
+    # 		IF (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', 
+    # 		    a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) pubyr,
+    # 		IF (a.ref_is_authority = 'YES', r.author1last, a.author1last) author1,
+    # 		IF (a.ref_is_authority = 'YES', r.author2last, a.author2last) author2,
+    # 		IF (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) otherauthors
+    # 	FROM taxa_list_cache l JOIN taxa_tree_cache t ON (t.taxon_no = l.parent_no)
+    # 		JOIN authorities a ON a.taxon_no = t.taxon_no
+    # 		LEFT JOIN refs r USING (reference_no)
+    # 		LEFT JOIN opinions o USING (opinion_no)
+    # 		LEFT JOIN taxa_tree_cache pt ON (pt.taxon_no = o.parent_spelling_no)
+    # 	WHERE l.child_no = ? AND l.parent_no <> l.child_no ORDER BY t.lft ASC";
+
+    # $sth = $dbh->prepare($sql);
+    # $sth->execute($senior_synonym);
+    
+    # my $parent_list = $sth->fetchall_arrayref({});
+    
+    # # Run through the parent list and note when we reach the last
+    # # kingdom-level taxon.  Any entries before that point are dropped 
+    # # [note: TaxonInfo.pm, line 1316]
+    
+    # my $last_kingdom = 0;
+    
+    # for (my $i = 0; $i < scalar(@$parent_list); $i++)
+    # {
+    # 	$last_kingdom = $i if $parent_list->[$i]{taxon_rank} eq 'kingdom';
+    # }
+    
+    # splice(@$parent_list, 0, $last_kingdom) if $last_kingdom > 0;
+    
+    # $self->{parents} = $parent_list;
+    
+    # # If this is a species or genus, we may need to rewrite the parent list
+    # # according to the name given for the main taxon.
+    
+    # if ( $self->{rewrite_classification} )
+    # {
+    # 	my ($genus, $subgenus, $species, $subspecies) = 
+    # 	    interpretSpeciesName($main_row->{taxon_name});
+	
+    # 	# Create a new parent list, and copy all taxa of family or higher rank
+    # 	# to it.  Taxa of genus and lower rank are used to populate the
+    # 	# taxon_no_by_rank table.
+	
+    # 	$self->{parents} = [];
+    # 	my ($taxon_row_by_rank) = {};
+	
+    # 	foreach my $row (@$parent_list)
+    # 	{
+    # 	    unless ( $row->{taxon_rank} =~ /species|genus/ )
+    # 	    {
+    # 		push @{$self->{parents}}, $row;
+    # 	    }
+	    
+    # 	    else
+    # 	    {
+    # 		$taxon_row_by_rank->{$row->{taxon_rank}} = $row;
+    # 	    }
+    # 	}
+	
+    # 	# Now add the genus, but with the genus name extracted from the current
+    # 	# taxon's name.  If one wasn't found, use the current taxon.
+	
+    # 	if ( defined $taxon_row_by_rank->{'genus'} )
+    # 	{
+    # 	    my $genus_row = $taxon_row_by_rank->{'genus'};
+    # 	    $genus_row->{taxon_name} = $genus;
+    # 	    push @{$self->{parents}}, $genus_row;
+    # 	}
+	
+    # 	else
+    # 	{
+    # 	    push @{$self->{parents}}, $main_row;
+    # 	}
+	
+    # 	# Then, add the subgenus, species and subspecies only if they occur in
+    # 	# the current taxon's name.
+	
+    # 	if ( defined $subgenus and $subgenus ne '' )
+    # 	{
+    # 	    my $subgenus_row = ( defined $taxon_row_by_rank->{'subgenus'} ?
+    # 				 $taxon_row_by_rank->{'subgenus'} :
+    # 				 { taxon_rank => 'subgenus' } );
+    # 	    $subgenus_row->{taxon_name} = "$genus ($subgenus)";
+    # 	    push @{$self->{parents}}, $subgenus_row;
+    # 	}
+	
+    # 	if ( defined $species and $species ne '' )
+    # 	{
+    # 	    my $species_row = ( defined $taxon_row_by_rank->{'species'} ?
+    # 				$taxon_row_by_rank->{'species'} :
+    # 				{ taxon_rank => 'species' } );
+    # 	    $species_row->{taxon_name} = "$genus $species";
+    # 	    if ( defined $subgenus and $subgenus ne '' ) {
+    # 		$species_row->{taxon_name} = "$genus ($subgenus) $species";
+    # 	    }
+    # 	    push @{$self->{parents}}, $species_row;
+    # 	}
+	
+    # 	if ( defined $subspecies and $subspecies ne '' )
+    # 	{
+    # 	    my $subspecies_row = ( defined $taxon_row_by_rank->{'subspecies'} ?
+    # 				   $taxon_row_by_rank->{'subspecies'} :
+    # 				   { taxon_rank => 'subspecies' } );
+    # 	    $subspecies_row->{taxon_name} = $main_row->{taxon_name};
+    # 	    push @{$self->{parents}}, $subspecies_row;
+    # 	}
+    # }
+    
+    # # Take off the last entry on the parent list if it is a duplicate of the
+    # # main row, unless we have been told not to.
+    
+    # unless ( $self->{dont_trim_parent_list} or scalar(@{$self->{parents}}) == 0 )
+    # {
+    # 	pop @{$self->{parents}} if $self->{parents}[-1]{taxon_rank} eq $self->{main_row}{taxon_rank};
+    # }
+    
+    # Return success
+    
+
+}
 
 # getCodeRanges ( )
 # 
@@ -559,14 +1027,14 @@ sub getCodeRanges {
 }
 
 
-# processRow ( row )
+# processRecord ( row )
 # 
 # This routine takes a hash representing one result row, and does some
 # processing before the output is generated.  The information fetched from the
 # database needs to be refactored a bit in order to match the Darwin Core
 # standard we are using for output.
 
-sub processRow {
+sub processRecord {
     
     my ($self, $row) = @_;
     
@@ -622,151 +1090,14 @@ sub processRow {
     
     if ( exists $row->{r_pubtitle} )
     {
-	$self->addReference($row);
-    }
-}
-
-
-# add_reference ( )
-# 
-# Process the fields that define a publication reference
-
-sub addReference {
-
-    my ($self, $row) = @_;
-    
-    # First format the author string.  This includes stripping extra periods
-    # from initials and dealing with "et al" where it occurs.
-    
-    my $a1i = $row->{r_a1i} || '';
-    my $a1l = $row->{r_a1l} || '';
-    
-    $a1i =~ s/\.//g;
-    $a1i =~ s/([A-Za-z])/$1./g;
-    
-    my $auth1 = $a1i;
-    $auth1 .= ' ' if $a1i ne '' && $a1l ne '';
-    $auth1 .= $a1l;
-    
-    my $a2i = $row->{r_a2i} || '';
-    my $a2l = $row->{r_a2l} || '';
-    
-    $a2i =~ s/\.//g;
-    $a2i =~ s/([A-Za-z])/$1./g;
-    
-    my $auth2 = $a2i;
-    $auth2 .= ' ' if $a2i ne '' && $a2l ne '';
-    $auth2 .= $a2l;
-    
-    my $auth3 = $row->{r_otherauthors} || '';
-    
-    $auth3 =~ s/\.//g;
-    $auth3 =~ s/\b(\w)\b/$1./g;
-    
-    # Then construct the author string
-    
-    my $authorstring = $auth1;
-    
-    if ( $auth2 =~ /et al/ )
-    {
-	$authorstring .= " $auth2";
-    }
-    elsif ( $auth2 ne '' && $auth3 ne '' )
-    {
-	$authorstring .= ", $auth2";
-	if ( $auth3 =~ /et al/ )
-	{
-	    $authorstring .= " $auth3";
-	}
-	else
-	{
-	    $authorstring .= ", and $auth3";
-	}
-    }
-    elsif ( $auth2 )
-    {
-	$authorstring .= " and $auth2";
+	$self->generateReference($row);
     }
     
-    # Now start building the reference with authorstring, publication year,
-    # reference title and publication title
+    # Create an attribution if that data was incluced in the query
     
-    my $longref = $authorstring;
-    
-    if ( $authorstring ne '' )
+    if ( exists $row->{a_pubyr} )
     {
-	$longref .= '.' unless $authorstring =~ /\.$/;
-	$longref .= ' ';
-    }
-    
-    my $pubyr = $row->{r_pubyr} || '';
-    
-    if ( $pubyr ne '' )
-    {
-	$longref .= "$pubyr. ";
-    }
-    
-    my $reftitle = $row->{r_reftitle} || '';
-    
-    if ( $reftitle ne '' )
-    {
-	$longref .= $reftitle;
-	$longref .= '.' unless $reftitle =~ /\.$/;
-	$longref .= ' ';
-    }
-    
-    my $pubtitle = $row->{r_pubtitle} || '';
-    my $editors = $row->{r_editors} || '';
-    
-    if ( $pubtitle ne '' )
-    {
-	# Later, ((i)) will be translated to <i>, etc.
-	
-	my $pubstring = "((i))$pubtitle((/i))";
-	
-	if ( $editors =~ /,| and / )
-	{
-	    $pubstring = " In $editors (eds.), $pubstring";
-	}
-	elsif ( $editors )
-	{
-	    $pubstring = " In $editors (ed.), $pubstring";
-	}
-	
-	$longref .= $pubstring . " ";
-    }
-    
-    # Now add volume and page number information if available
-    
-    my $pubvol = $row->{r_pubvol} || '';
-    my $pubno = $row->{r_pubno} || '';
-    
-    if ( $pubvol ne '' || $pubno ne '' )
-    {
-	# Later, ((b)) will be translated to <b>, etc.
-	
-	$longref .= '((b))';
-	$longref .= $pubvol if $pubvol ne '';
-	$longref .= "($pubno)" if $pubno ne '';
-	$longref .= '((/b))';
-    }
-    
-    my $fp = $row->{r_fp} || '';
-    my $lp = $row->{r_lp} || '';
-    
-    if ( ($pubvol ne '' || $pubno ne '') && ($fp ne '' || $lp ne '') )
-    {
-	$longref .= ':';
-	$longref .= $fp if $fp ne '';
-	$longref .= '-' if $fp ne '' && $lp ne '';
-	$longref .= $lp if $lp ne '';
-    }
-    
-    $row->{pubref} = $longref if $longref ne '';
-    
-    if ( $longref ne '' )
-    {
-	$row->{pubref} = $longref;
+	$self->generateAttribution($row);
     }
 }
 
@@ -808,16 +1139,16 @@ sub determineNomenclaturalCode {
 }
 
 
-# generateRecord ( row, is_first_record )
+# generateRecord ( row, options )
 # 
 # Return a string representing one row of the result, in the selected output
-# format.  The parameter $is_first_record indicates whether this is the first
+# format.  The option 'is_first' indicates that this is the first
 # record, which is significant for JSON output (it controls whether or not to
 # output an initial comma, in that case).
 
 sub generateRecord {
 
-    my ($self, $row, $is_first_record) = @_;
+    my ($self, $row, %options) = @_;
     
     # If the content type is XML, then we need to check whether the result
     # includes a list of parents.  If so, because of the inflexibility of XML
@@ -825,7 +1156,7 @@ sub generateRecord {
     # do is to output all of the parent records first, before the main record
     # (see http://eol.org/api/docs/hierarchy_entries).
     
-    if ( $self->{content_type} eq 'xml' )
+    if ( $self->{output_format} eq 'xml' )
     {
 	my $output = '';
 	
@@ -853,7 +1184,7 @@ sub generateRecord {
     # this is not the first record.  The subroutine emitTaxonJSON() will also
     # output the parent records, if there are any, as a sub-array.
     
-    my $insert = ($is_first_record ? '' : ',');
+    my $insert = ($options{is_first} ? '' : ',');
     
     return $insert . $self->emitTaxonJSON($row, $self->{parents});
 }
@@ -900,6 +1231,12 @@ sub emitTaxonXML {
     if ( defined $row->{parent_name} && $self->{show_parent_names} ) {
     	$output .= '    <dwc:parentNameUsage>' . DataQuery::xml_clean($row->{parent_name}) . 
 	    '</dwc:parentNameUsage>' . "\n";
+    }
+    
+    if ( defined $row->{attribution} && $row->{attribution} ne '' )
+    {
+	$output .= '    <dwc:scientificNameAuthorship>' . DataQuery::xml_clean($row->{attribution}) .
+	    '</dwc:scientificNameAuthorship>' . "\n";
     }
     
     if ( defined $row->{author1} && $row->{author1} ne '' ) {
@@ -982,6 +1319,11 @@ sub emitTaxonJSON {
     $output .= '{"taxonID":"' . $row->{taxon_no} . '"'; 
     $output .= ',"taxonRank":"' . $row->{taxon_rank} . '"';
     $output .= ',"scientificName":"' . DataQuery::json_clean($row->{taxon_name}) . '"';
+    
+    if ( defined $row->{attribution} && $row->{attribution} ne '' )
+    {
+	$output .= ',"scientificNameAuthorship":"' . DataQuery::json_clean($row->{attribution}) . '"';
+    }
     
     if ( defined $row->{author1} && $row->{author1} ne '' ) {
 	my $authorship = formatAuthorName($row->{author1}, $row->{author2}, $row->{otherauthors},

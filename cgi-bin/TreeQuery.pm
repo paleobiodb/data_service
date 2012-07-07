@@ -14,12 +14,20 @@ use Carp qw(croak);
 
 
 our ($PARAM_DESC) = <<DONE;
-  taxon_name - return the portion of the hierarchy rooted at the given taxon (scientific name)
-  taxon_no - return the portion of the hierarchy rooted at the given taxon (positive integer identifier)
-  limit_rank - only return taxa of this rank or higher ('species', 'genus', or 'family')
+  base_name - return the portion of the hierarchy rooted at the given taxon (scientific name)
+  base_rank - look for the taxon name only at the specified rank (taxon rank)
+  base_no - return the portion of the hierarchy rooted at the given taxon (positive integer identifier)
+  taxon_name - synonym for base_name (scientific name)
+  taxon_rank - synonym for base_rank (taxon rank)
+  taxon_no - synonym for base_no (positive integer identifier)
+  rank - only return taxa whose rank falls within the specified range (taxonomic rank(s))
 DONE
 
-our ($PARAM_CHECK) = { taxon_name => 1, taxon_no => 1, limit_rank => 1 };
+our ($PARAM_REQS) = "You must specify either base_name or base_no (alternatively taxon_name or taxon_no).";
+
+our ($PARAM_CHECK) = { taxon_name => 1, taxon_rank => 1, taxon_no => 1, 
+		       base_name => 1, base_rank => 1, base_no => 1, limit_rank => 1 };
+
 
 # setParameters ( params )
 # 
@@ -35,52 +43,84 @@ sub setParameters {
     
     $self->SUPER::setParameters($params);
     
-    # If 'taxon_name' is specified, then information is returned about the taxon
-    # hierarchy rooted at the specified taxon.  This parameter cannot be used
-    # at the same time as 'id'.
+    # The parameter 'taxon_no' is a synonym for 'base_no'.
     
-    if ( defined $params->{taxon_name} )
+    if ( defined $params->{taxon_no} and $params->{taxon_no} ne '' )
     {
-	# Check to make sure that taxon_no was not specified at the same time
-	
-	if ( defined $params->{taxon_no} )
+	if ( defined $params->{base_no} and $params->{base_no} ne '' and 
+	     $params->{taxon_no} ne $params->{base_no} )
 	{
-	    die "400 You may not specify 'taxon_name' and 'taxon_no' together\n";
+	    die "400 You cannot specify different values for 'taxon_no' and 'base_no'.\n"
 	}
 	
-	# Check to make sure we actually have a value
+	$params->{base_no} = $params->{taxon_no};
+    }
+    
+    # The parameter 'taxon_name' is a synonym for 'base_name'.
+
+    if ( defined $params->{taxon_name} and $params->{taxon_name} ne '' )
+    {
+	if ( defined $params->{base_name} and $params->{base_name} ne '' and 
+	     $params->{taxon_name} ne $params->{base_name} )
+	{
+	    die "400 You cannot specify different values for 'taxon_name' and 'base_name'.\n"
+	}
 	
-	if ( $params->{taxon_name} eq '' )
-	{ 
-	    die "400 You must provide a non-empty value for 'taxon_name'\n";
+	$params->{base_name} = $params->{taxon_name};
+    }
+    
+    # The parameter 'taxon_rank' is a synonym for 'base_rank'.
+
+    if ( defined $params->{taxon_rank} and $params->{taxon_rank} ne '' )
+    {
+	if ( defined $params->{base_rank} and $params->{base_rank} ne '' and 
+	     $params->{taxon_rank} ne $params->{base_rank} )
+	{
+	    die "400 You cannot specify different values for 'taxon_rank' and 'base_rank'.\n"
+	}
+	
+	$params->{base_rank} = $params->{taxon_rank};
+    }
+    
+    # If 'base_name' is specified, then information is returned about the
+    # hierarchy rooted at the specified taxon.  This parameter cannot be used
+    # at the same time as 'base_no'.
+    
+    if ( defined $params->{base_name} and $params->{base_name} ne '' )
+    {
+	# Check to make sure that base_no was not specified at the same time
+	
+	if ( defined $params->{base_no} and $params->{base_no} ne '' )
+	{
+	    die "400 You may not specify 'base_name' and 'base_no' together.\n";
 	}
 	
 	# Clean the parameter of everything except alphabetic characters
 	# and spaces, since only those are valid in taxonomic names.
 	
-	if ( $params->{taxon_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{base_name} =~ /[^a-zA-Z\s]/ )
 	{
-	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace\n";
+	    die "400 The parameter 'base_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
 	
-	$self->{taxon_name} = $params->{taxon_name};
-	$self->{taxon_name} =~ s/\s+/ /g;
+	$self->{base_taxon_name} = $params->{base_name};
+	$self->{base_taxon_name} =~ s/\s+/ /g;
     }
     
-    # If "taxon_no" is specified, then information is returned about the taxon
-    # hierarchy rooted at the specified taxon.  This parameter cannot be used
-    # at the same time as 'name'.
+    # If "base_no" is specified, then information is returned about the
+    # hierarchy rooted at the specified taxon.  This parameter cannot be used at
+    # the same time as 'base_name'.
     
-    elsif ( defined $params->{taxon_no} )
+    elsif ( defined $params->{base_no} and $params->{base_no} ne '' )
     {
 	# First check to make sure that a valid value was provided
 	
-	if ( $params->{taxon_no} =~ /[^0-9]/ )
+	if ( $params->{base_no} =~ /[^0-9]/ )
 	{
-	    die "400 You must provide a positive integer value for 'taxon_no'\n";
+	    die "400 You must provide a positive integer value for 'base_no'.\n";
 	}
 	
-	$self->{taxon_no} = $params->{taxon_no} + 0;
+	$self->{base_taxon_no} = $params->{base_no} + 0;
     }
     
     # If neither was specified, return the "help" message.
@@ -90,22 +130,40 @@ sub setParameters {
 	die "400 help\n";
     }
     
-    # If "limit_rank" is specified, then we ignore all taxa below the
-    # specified rank.
+    # If "base_rank" is specified, then we only match the name if it matches
+    # the specified rank.
     
-    if ( defined $params->{limit_rank} )
+    if ( defined $params->{base_rank} and $params->{base_rank} ne '' )
     {
-	my $limit = $params->{limit_rank};
+	my $rank = lc $params->{base_rank};
 	
-	if ( $limit eq 'species' or $limit eq 'genus' or $limit eq 'family' or $limit eq 'order' or $limit eq 'class' )
+	# This parameter cannot be used with base_no (since base_no uniquely
+	# identifies a taxon, it cannot be used with any other taxon-selecting
+	# parameters).
+	
+	if ( defined $params->{base_no} )
 	{
-	    $self->{limit_rank} = $limit;
+	    die "400 You may not use the 'base_rank' and 'base_no' parameters together.\n";
 	}
 	
-	else
+	# Make sure that the value is one of the accepted ones.
+	
+	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
 	{
-	    die "400 The parameter 'limit_rank' must be either 'species', 'genus', or 'family'\n";
+	    die "400 Unrecognized taxon rank '$rank'.";
 	}
+	
+	$self->{base_taxon_rank} = $rank;
+    }
+    
+    # If "rank" is specified, then we ignore all taxa that do not fall
+    # into the specified set of ranks.
+    
+    if ( defined $params->{rank} and $params->{rank} ne '' )
+    {
+	my $limit = lc $params->{rank};
+	
+	$self->{filter_rank} = $self->parseRankParam($limit, 'rank');
     }
     
     # Turn the following on always for now.  This will likely be changed later.
@@ -120,8 +178,7 @@ sub setParameters {
 # fetchMultiple ( )
 # 
 # Query the database using the parameters specified by a previous call to
-# setParameters.  This class only returns a compound result, even if the given
-# taxon has no children.
+# setParameters.
 # 
 # Returns true if the fetch succeeded, dies if an error occurred.
 
@@ -129,9 +186,8 @@ sub fetchMultiple {
 
     my ($self) = @_;
     my ($sql);
-    my (@taxon_filter, @extra_tables, @extra_fields);
+    my (@filter_list, @extra_tables, @extra_fields);
     my ($limit_sql) = "";
-    my ($rank_clause) = "";
     my ($lft, $rgt);
     
     # Get ahold of a database handle by which we can make queries.
@@ -145,51 +201,98 @@ sub fetchMultiple {
 	$limit_sql = "LIMIT " . ($self->{limit_results} + 0);
     }
     
-    if ( defined $self->{limit_rank} )
+    if ( ref $self->{filter_rank} eq 'ARRAY' )
     {
-	if ( $self->{limit_rank} eq 'species' )
+	my (@disjunction, @in_list);
+	
+	foreach my $r (@{$self->{filter_rank}})
 	{
-	    $rank_clause = "\n	  AND taxon_rank not in ('subspecies')";
+	    if ( ref $r eq 'ARRAY' )
+	    {
+		push @disjunction, "a.taxon_rank >= $r->[0] and a.taxon_rank <= $r->[1]";
+	    }
+	    
+	    else
+	    {
+		push @in_list, $r;
+	    }
 	}
 	
-	elsif ( $self->{limit_rank} eq 'genus' )
+	if ( @in_list )
 	{
-	    $rank_clause = "\n	  AND taxon_rank not in ('subspecies', 'species', 'subgenus')";
+	    push @disjunction, "a.taxon_rank in (" . join(',', @in_list) . ")";
 	}
-
-	elsif ( $self->{limit_rank} eq 'family' )
+	
+	if ( @disjunction )
 	{
-	    $rank_clause = "\n	  AND taxon_rank not in ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily')";
+	    push @filter_list, '(' . join(' or ', @disjunction) . ')';
 	}
     }
     
-    # If the target taxon was specified by name, find it.
+    # If the target taxon was specified by name and rank, look for it.
     
-    if ( defined $self->{taxon_name} )
+    if ( defined $self->{base_taxon_name} && defined $self->{base_taxon_rank} )
     {
 	($lft, $rgt) = $dbh->selectrow_array("
-		SELECT t.lft, t.rgt FROM taxa_tree_cache t JOIN authorities a USING (taxon_no)
-		WHERE a.taxon_name = ?", {RaiseError=>0}, $self->{taxon_name});
+		SELECT t2.lft, t2.rgt
+		FROM taxa_tree_cache t1 JOIN authorities a USING (taxon_no)
+			JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
+		WHERE a.taxon_name = ? and a.taxon_rank = ?", {}, 
+				$self->{base_taxon_name}, $self->{base_taxon_rank});
+	
+	# If we can't find the base taxon, the result set will be empty.
 	
 	unless ( defined $lft && $lft > 0 )
 	{
-	    die "404 taxon '$self->{taxon_name}' was not found in the database\n";
+	    return;
 	}
     }
     
-    # Otherwise, use the id.
+    # If the target taxon was specified by name, look for it.
     
-    elsif ( defined $self->{taxon_no} )
+    elsif ( defined $self->{base_taxon_name} )
     {
 	($lft, $rgt) = $dbh->selectrow_array("
-		SELECT t.lft, t.rgt FROM taxa_tree_cache t
-		WHERE t.taxon_no = ?", {RaiseError=>0}, $self->{taxon_no});
+		SELECT t2.lft, t2.rgt
+		FROM taxa_tree_cache t1 JOIN authorities a USING (taxon_no)
+			JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
+		WHERE a.taxon_name = ?", {}, $self->{base_taxon_name});
+	
+	# If we can't find the base taxon, the result set will be empty.
 	
 	unless ( defined $lft && $lft > 0 )
 	{
-	    die "404 taxon $self->{taxon_no} was not found in the database\n";
+	    return;
 	}
     }
+    
+    # Otherwise, if a taxon_no was specified, use that.
+    
+    elsif ( defined $self->{base_taxon_no} )
+    {
+	($lft, $rgt) = $dbh->selectrow_array("
+		SELECT t2.lft, t2.rgt FROM taxa_tree_cache t2
+			JOIN taxa_tree_cache t1 ON t2.taxon_no = t1.synonym_no
+		WHERE t1.taxon_no = ?", {}, $self->{base_taxon_no});
+	
+	# If we can't find the base taxon, the result set will be empty.
+	
+	unless ( defined $lft && $lft > 0 )
+	{
+	    return;
+	}
+    }
+    
+    # Otherwise, we have a problem.
+    
+    else
+    {
+	croak "No base taxon was specified";
+    }
+    
+    # Put together the filter clause.
+    
+    my $filter_clause = (@filter_list ? 'and ' . join(' and ', @filter_list) : '');
     
     # Now construct and execute the SQL statement that will be used to fetch
     # the desired information from the database.
@@ -206,8 +309,8 @@ sub fetchMultiple {
 			       LEFT JOIN opinions o USING (opinion_no)
 			       LEFT JOIN refs r ON (a.reference_no = r.reference_no)
 	WHERE t.lft >= $lft and t.rgt <= $rgt
-	  AND t.synonym_no = t.taxon_no
-	  AND (o.status is null OR o.status = 'belongs to') $rank_clause
+	  and t.synonym_no = t.taxon_no
+	  and (o.status is null OR o.status = 'belongs to') $filter_clause
 	ORDER BY t.lft $limit_sql";
     
     # Also construct a statement to fetch the result count if necessary.
@@ -256,16 +359,16 @@ sub processRecord {
 }
 
 
-# generateRecord ( row, is_first_record )
+# generateRecord ( row, options )
 # 
 # Return a string representing one row of the result, in the selected output
-# format.  The parameter $is_first_record indicates whether this is the first
-# record, which is significant for JSON output (it controls whether or not to
-# output an initial comma, in that case).
+# format.  The option 'is_first' indicates that this is the first record,
+# which is significant for JSON output (it controls whether or not to output
+# an initial comma, in that case).
 
 sub generateRecord {
 
-    my ($self, $row, $is_first_record) = @_;
+    my ($self, $row, %options) = @_;
     
     # If the selected output format is XML, we just dispatch the appropriate
     # method.  In this case, the client of this service will get a preorder
@@ -352,12 +455,7 @@ sub emitTaxonJSON {
     {
 	my $attr = $row->{attribution};
 	
-	if ( defined $row->{orig_no} && $row->{taxon_no} != $row->{orig_no} )
-	{
-	    $attr = "($attr)";
-	}
-	
-	$output .= ',"nameAccordingTo":"' . DataQuery::json_clean($attr) . '"';
+	$output .= ',"scientificNameAuthorship":"' . DataQuery::json_clean($attr) . '"';
     }
     
     if ( defined $self->{show_extant} and defined $row->{extant} 
@@ -398,13 +496,8 @@ sub emitTaxonXML {
     {
 	my $attr = $row->{attribution};
 	
-	if ( defined $row->{orig_no} && $row->{taxon_no} != $row->{orig_no} )
-	{
-	    $attr = "($attr)";
-	}
-	
-	$output .= '    <dwc:nameAccordingTo>' . DataQuery::xml_clean($attr) . 
-	    '</dwc:nameAccordingTo>' . "\n";
+	$output .= '    <dwc:scientificNameAuthorship>' . DataQuery::xml_clean($attr) . 
+	    '</dwc:scientificNameAuthorship>' . "\n";
     }
 
     $output .= '  </dwc:Taxon>' . "\n";

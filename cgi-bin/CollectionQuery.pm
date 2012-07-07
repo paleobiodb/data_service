@@ -12,6 +12,35 @@ use strict;
 use base 'DataQuery';
 
 
+our ($PARAM_DESC_MULTIPLE) = <<DONE;
+  taxon_name - list all collections that contain an example of the given taxon or any of its descendants (scientific name)
+  taxon_no - list all collections that contain an example of the given taxon or any of its descendants (positive integer identifier)
+  loc - list all collections that were found within the given geographic coordinates (bounding box)
+
+  show - return some or all of the specified information (comma-separated list)
+          ref - include the publication reference for each collection
+          taxa - include a list of taxa represented in the collection
+	  all - include all available information
+DONE
+
+our ($PARAM_REQS_MULTIPLE) = "You must specify at least one of: taxon_name, taxon_no, loc.";
+
+our ($PARAM_CHECK_MULTIPLE) = { taxon_name => 1, taxon_no => 1, loc => 1, show => 1 };
+
+our ($PARAM_DESC_SINGLE) = <<DONE;
+  collection_no - provide details about the given collection (positive integer identifier)
+
+  show - return some or all of the specified information (comma-separated list)
+          ref - include the publication reference for the collection
+          taxa - include a list of taxa represented in the collection
+	  all - include all available information
+DONE
+
+our ($PARAM_REQS_SINGLE) = "You must specify collection_no.";
+
+our ($PARAM_CHECK_SINGLE) = { collection_no => 1, show => 1 };
+
+
 # setParameters ( params )
 # 
 # This method accepts a hash of parameter values, filters them for correctness,
@@ -25,28 +54,137 @@ sub setParameters {
     # First tell our superclass (PBDataQuery) to set any parameters it
     # recognizes.
     
-    $self->PBDataQuery::setParameters($params);
+    $self->SUPER::setParameters($params);
     
-    # The 'taxon' parameter restricts the output to collections that contain
-    # occurrences of the given taxa or any of their children.  Multiple taxa
-    # can be specified, separated by commas.  Each taxon may be qualified by
-    # one or more ranks, following the taxon and preceded by a period.
-    # Otherwise, all matching taxa will be used.  Matches are all
-    # case-insensitive.  Examples: taxon=Pinnipedia,Bovidae
-    # taxon=Pinnipedia.order,Bovidae.family
+    # If we are dealing with a 'single' query, set the appropriate parameters
     
-    if ( defined $params->{taxon} )
+    if ( $self->{version} eq 'single' )
     {
-	$self->{taxon_filter} = $params->{taxon};
+	$self->setParametersSingle($params);
     }
     
-    # The 'geoloc' parameter restricts the output to collections whose
+    # Otherwise, set the parameters for a 'multiple' query
+    
+    else
+    {
+	$self->setParametersMultiple($params);
+    }
+    
+    # Now set common parameters.
+    
+    if ( defined $params->{show} and $params->{show} ne '' )
+    {
+	my (@show) = split /\s*,\s*/, lc($params->{show});
+	
+	foreach my $s (@show)
+	{
+	    if ( $s eq 'ref' )
+	    {
+		$self->{show_ref} = 1;
+	    }
+	    
+	    elsif ( $s eq 'taxa' )
+	    {
+		$self->{show_taxa} = 1;
+	    }
+	    
+	    elsif ( $s eq 'all' )
+	    {
+		$self->{show_ref} = 1;
+		$self->{show_taxa} = 1;
+	    }
+	    
+	    else
+	    {
+		$self->warn("Unknown value '$s' for show");
+	    }
+	}
+
+    }
+}
+
+
+sub setParametersSingle {
+
+    my ($self, $params) = @_;
+    
+    if ( defined $params->{collection_no} and $params->{collection_no} ne '' )
+    {
+	# First check to make sure that a valid value was provided
+	
+	if ( $params->{collection_no} =~ /[^0-9]/ )
+	{
+	    die "400 You must provide a positive integer value for 'collection_no'.\n";
+	}
+	
+	$self->{collection_no} = $params->{collection_no} + 0;
+    }
+    
+    else
+    {
+	die "400 help\n";
+    }
+}
+
+
+sub setParametersMultiple {
+    
+    my ($self, $params) = @_;
+    
+    # The 'taxon_name' parameter restricts the output to collections that
+    # contain occurrences of the given taxa or any of their children.
+    # Multiple taxa can be specified, separated by commas.
+    
+    if ( defined $params->{taxon_name} and $params->{taxon_name} ne '' )
+    {
+	# Check to make sure that taxon_no was not specified at the same time
+	
+	if ( defined $params->{taxon_no} and $params->{taxon_no} ne '' )
+	{
+	    die "400 You may not specify 'taxon_name' and 'taxon_no' together.\n";
+	}
+	
+	# Clean the parameter of everything except alphabetic characters
+	# and spaces, since only those are valid in taxonomic names.
+	
+	if ( $params->{taxon_name} =~ /[^a-zA-Z\s]/ )
+	{
+	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace\n";
+	}
+	
+	$self->{taxon_filter} = $params->{taxon_name};
+	$self->{taxon_filter} =~ s/\s+/ /g;
+    }
+    
+    # The 'taxon_no' parameter is similar to 'taxon_name' but takes a unique
+    # integer identifier instead.
+    
+    elsif ( defined $params->{taxon_no} and $params->{taxon_no} ne '' )
+    {
+	# First check to make sure that a valid value was provided
+	
+	if ( $params->{taxon_no} =~ /[^0-9]/ )
+	{
+	    die "400 You must provide a positive integer value for 'taxon_no'.\n";
+	}
+	
+	$self->{filter_taxon_no} = $params->{taxon_no} + 0;
+    }
+    
+    # The 'loc' parameter restricts the output to collections whose
     # location falls within the bounding box of the given geometry, specified
     # in WKT format.
     
-    if ( defined $params->{loc} )
+    elsif ( defined $params->{loc} )
     {
-	$self->{location_filter} = $params->{loc};
+	$self->{filter_location} = $params->{loc};
+    }
+    
+    # If we don't have one of these parameters, give the help message.
+    
+    else
+    {
+	die "400 help\n";
     }
 }
 
@@ -75,6 +213,17 @@ sub fetchMultiple {
     if ( defined $self->{limit} && $self->{limit} > 0 )
     {
 	$limit_stmt = "LIMIT " . $self->{limit};
+    }
+    
+    # If we are directed to show publication references, add the appopriate fields.
+    
+    if ( defined $self->{show_ref} )
+    {
+	push @extra_fields, "r.author1init r_ai1", "r.author1last r_al1",
+	    "r.author2init r_ai2", "r.author2last r_al2", "r.otherauthors r_oa",
+		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
+		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
+			"r.firstpage r_fp", "r.lastpage r_lp";
     }
     
     # If a taxon filter has been defined, apply it now.
@@ -114,6 +263,15 @@ sub fetchMultiple {
 	    }
 	}
 	
+	# If no taxa were found, then the result set will be empty.
+	
+	unless (@taxa)
+	{
+	    return;
+	}
+	
+	# Otherwise, construct the appropriate filter clause.
+	
 	$taxon_tables = "JOIN taxa_list_cache l ON l.child_no = o.taxon_no";
 	my $taxa_list = join(',', @taxa);
 	push @filters, "l.parent_no in ($taxa_list)";
@@ -128,8 +286,7 @@ sub fetchMultiple {
 	
 	unless ( defined $bound_rect )
 	{
-	    $self->{error} = "parameter error";
-	    return;
+	    die "400 Bad bounding box value '$self->{location_filter}'.\n";
 	}
 	
 	if ( $bound_rect =~ /POLYGON\(\((-?\d*\.?\d*) (-?\d*\.?\d*),[^,]+,(-?\d*\.?\d*) (-?\d*\.?\d*)/ )
@@ -156,21 +313,38 @@ sub fetchMultiple {
     # Now construct and execute the SQL statement that will be used to fetch
     # the desired information from the database.
     
-    $sql = 
-	"SELECT DISTINCT c.collection_no, c.collection_name, c.lat, c.lng $extra_fields
-         FROM collections c JOIN occurrences o using (collection_no)
-			    $taxon_tables
-	 $taxon_filter $limit_stmt";
+    $self->{main_sql} = "
+	SELECT DISTINCT c.collection_no, c.collection_name, c.lat, c.lng $extra_fields
+        FROM collections c JOIN occurrences o using (collection_no) $taxon_tables
+			LEFT JOIN refs r on r.reference_no = c.reference_no
+	$taxon_filter ORDER BY c.collection_no $limit_stmt";
     
-    $self->{main_sth} = $dbh->prepare($sql);
+    # Also construct an SQL statement that will be used if necessary to
+    # determine the result count.
+    
+    $self->{count_sql} = "
+	SELECT count(*) FROM collections c JOIN occurrences o using (collection_no)
+	$taxon_filter";
+    
+    # Then prepare and execute the main query and the secondary query.
+    
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
     $self->{main_sth}->execute();
     
-    # Indicate that output should be streamed rather than assembled and
-    # returned immediately.  This will avoid a huge burden on the server to
-    # marshall a single result string from a potentially large set of data.
+    # If we were directed to show associated taxa, construct an SQL statement
+    # that will be used to grab that list.
     
-    $self->{streamOutput} = 1;
-    $self->{processMethod} = 'processRow';
+    if ( $self->{show_taxa} )
+    {
+	$self->{second_sql} = "
+	SELECT DISTINCT c.collection_no, a.taxon_name
+	FROM collections c JOIN occurrences o using (collection_no) $taxon_tables
+			JOIN authorities a using (taxon_no)
+	$taxon_filter ORDER BY c.collection_no";
+	
+	$self->{second_sth} = $dbh->prepare($self->{second_sql});
+	$self->{second_sth}->execute();
+    }
     
     return 1;
 }
@@ -187,116 +361,132 @@ sub fetchMultiple {
 
 sub fetchSingle {
 
-    my ($self, $collection_requested) = @_;
+    my ($self) = @_;
     my ($sql, @extra_fields);
     
     # Get ahold of a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
     
-    my $extra_fields = join(', ', @extra_fields);
-    $extra_fields = ", " . $extra_fields if $extra_fields ne '';
+    # If we are directed to show publication references, add the appopriate fields.
+    
+    if ( defined $self->{show_ref} )
+    {
+	push @extra_fields, "r.author1init r_ai1", "r.author1last r_al1",
+	    "r.author2init r_ai2", "r.author2last r_al2", "r.otherauthors r_oa",
+		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
+		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
+			"r.firstpage r_fp", "r.lastpage r_lp";
+    }
     
     # Next, fetch basic info about the collection.
     
-    $sql = 
-	"SELECT c.collection_no, c.collection_name, c.lat, c.lng $extra_fields
-	 FROM collections c JOIN occurrences o using (collection_no)
-         WHERE c.collection_no = ?";
+    my $extra_fields = join(', ', @extra_fields);
+    $extra_fields = ", " . $extra_fields if $extra_fields ne '';
     
-    my $sth = $dbh->prepare($sql);
-    $sth->execute($collection_requested);
+    $self->{main_sql} = "
+	SELECT c.collection_no, c.collection_name, c.lat, c.lng $extra_fields
+	FROM collections c JOIN occurrences o using (collection_no)
+			LEFT JOIN refs r using (reference_no)
+        WHERE c.collection_no = ?";
     
-    my ($main_row) = $sth->fetchrow_hashref();
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
+    $self->{main_sth}->execute($self->{collection_no});
     
-    $self->processRow($main_row);
-    $self->{main_row} = $main_row;
+    # If we were directed to show associated taxa, construct an SQL statement
+    # that will be used to grab that list.
     
-    # Now fetch all info about the taxa represented in this collection
-    
-    $sql = 
-       "SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank, a.common_name, a.extant
-	FROM occurrences o JOIN taxa_list_cache l ON o.taxon_no = l.child_no
-		JOIN authorities a ON a.taxon_no = l.parent_no
-		JOIN taxa_tree_cache t ON t.taxon_no = l.parent_no
-	WHERE o.collection_no = ? AND l.parent_no <> l.child_no ORDER BY t.lft ASC";
-    
-    $sth = $dbh->prepare($sql);
-    $sth->execute($collection_requested);
-    
-    my $taxa_list = $sth->fetchall_arrayref({});
-    
-    # Run through the parent list and note when we reach the last
-    # kingdom-level taxon.  Any entries before that point are dropped 
-    # [note: TaxonInfo.pm, line 1316]
-    
-    my $last_kingdom = 0;
-    
-    for (my $i = 0; $i < scalar(@$taxa_list); $i++)
+    if ( $self->{show_taxa} )
     {
-	$last_kingdom = $i if $taxa_list->[$i]{taxon_rank} eq 'kingdom';
+	$self->{second_sql} = "
+	SELECT DISTINCT o.collection_no, a.taxon_name
+	FROM occurrences o JOIN authorities a USING (taxon_no)
+		JOIN taxa_tree_cache t ON t.taxon_no = a.taxon_no
+	WHERE o.collection_no = ? ORDER BY t.lft ASC";
+    
+	$self->{second_sth} = $dbh->prepare($self->{second_sql});
+	$self->{second_sth}->execute($self->{collection_no});
     }
-    
-    splice(@$taxa_list, 0, $last_kingdom) if $last_kingdom > 0;
-    
-    $self->{taxa} = $taxa_list;
-    
-    # Return success
     
     return 1;
 }
 
 
-# processRow ( row )
+# processRecord ( row )
 # 
 # This routine takes a hash representing one result row, and does some
 # processing before the output is generated.  The information fetched from the
 # database needs to be refactored a bit in order to match the Darwin Core
 # standard we are using for output.
 
-sub processRow {
+sub processRecord {
     
     my ($self, $row) = @_;
     
-   # Create a publication reference if that data was included in the query
+    # If there's a secondary statement handle, read from it to get a list of
+    # taxa for this record.  If there's a stashed record that matches this
+    # row, use it first.
+    
+    my (@taxon_names);
+    my ($row2);
+        
+    if ( defined $self->{stash_second} and 
+	 $self->{stash_second}{collection_no} == $row->{collection_no} )
+    {
+	push @taxon_names, $self->{stash_second}{taxon_name};
+	$self->{stash_second} = undef;
+    }
+    
+    if ( defined $self->{second_sth} and not defined $self->{stash_record} )
+    {
+	while ( $row2 = $self->{second_sth}->fetchrow_hashref() )
+	{
+	    if ( $row2->{collection_no} != $row->{collection_no} )
+	    {
+		$self->{stash_second} = $row2;
+		last;
+	    }
+	    
+	    else
+	    {
+		push @taxon_names, $row2->{taxon_name};
+	    }
+	}
+    }
+    
+    $row->{taxa} = \@taxon_names if @taxon_names > 0;
+    
+    # Create a publication reference if that data was included in the query
     
     if ( exists $row->{r_pubtitle} )
     {
-	$self->add_reference($row);
+	$self->generateReference($row);
     }
 }
 
 
-# emitRecordXML ( main_row, is_first )
+# generateRecord ( row, options )
 # 
 # This method is passed two parameters: a hash of values representing one
 # record, and an indication of whether this is the first record to be output
 # (which is ignored in this case).  It returns a string representing the
 # record in Darwin Core XML format.
 
-sub emitRecordXML {
+sub generateRecord {
 
-    my ($self, $main_row, $is_first) = @_;
+    my ($self, $row, %options) = @_;
     
-    my $output = '';
+    # Output according to the proper content type.
     
-    # If our query included parent info, then it was a single-record query.
-    # Because of the inflexibility of XML, the best we can do is to output all
-    # of the parent records first, before the main record.  We have no way of
-    # indicating a hierarchy (see http://eol.org/api/docs/hierarchy_entries).
-    
-    if ( defined $self->{parents} && ref $self->{parents} eq 'ARRAY' )
+    if ( $self->{output_format} eq 'xml' )
     {
-	foreach my $parent_row ( @{$self->{parents}} )
-	{
-	    $output .= $self->emitCollectionXML($parent_row, 1);
-	}
+	return $self->emitCollectionXML($row);
     }
     
-    # Now, we output the main record.
-    
-    $output .= $self->emitCollectionXML($main_row, 0);
-    return $output;
+    else
+    {
+	return ($options{is_first} ? "\n" : "\n,") . $self->emitCollectionJSON($row);
+    }
 }
 
 
@@ -309,57 +499,45 @@ sub emitCollectionXML {
     
     no warnings;
     
-    my ($self, $row, $short_record) = @_;
+    my ($self, $row) = @_;
     my $output = '';
     my @remarks = ();
     
     $output .= '  <Collection>' . "\n";
     $output .= '    <dwc:collectionID>' . $row->{collection_no} . '</dwc:collectionID>' . "\n";
     
-    $output .= '    <dwc:collectionCode>' . PBXML::xml_clean($row->{collection_name}) . 
+    $output .= '    <dwc:collectionCode>' . DataQuery::xml_clean($row->{collection_name}) . 
 	'</dwc:collectionCode>' . "\n";
     
     if ( defined $row->{lat} )
     {
-	$output .= '  <dwc:decimalLongitude>' . $row->{lng} . '</dwc:decimalLongitude>' . "\n";
-	$output .= '  <dwc:decimalLatitude>' . $row->{lat} . '</dwc:decimalLatitude>' . "\n";
+	$output .= '    <dwc:decimalLongitude>' . $row->{lng} . '</dwc:decimalLongitude>' . "\n";
+	$output .= '    <dwc:decimalLatitude>' . $row->{lat} . '</dwc:decimalLatitude>' . "\n";
+    }
+    
+    if ( ref $row->{taxa} eq 'ARRAY' and @{$row->{taxa}} )
+    {
+	$output .= '    <dwc:associatedTaxa>';
+	$output .= DataQuery::xml_clean(join(', ', @{$row->{taxa}}));
+	$output .= '</dwc:associatedTaxa>' . "\n";
     }
     
     if ( defined $row->{pubref} )
     {
-	my $pubref = PBXML::xml_clean($row->{pubref});
-	# We now need to translate, i.e. ((b)) to <b>.  This is done after
-	# xml_clean, because otherwise <b> would be turned into &lt;b&gt;
-	if ( $pubref =~ /\(\(/ )
-	{
-	    #$row->{pubref} =~ s/(\(\(|\)\))/$fixbracket{$1}/eg;
-	    #actually, we're just going to take them out for now
-	    $pubref =~ s/\(\(\/?\w*\)\)//g;
-	}
+	my $pubref = DataQuery::xml_clean($row->{pubref});
 	$output .= '    <dwc:associatedReferences>' . $pubref . '</dwc:associatedReferences>' . "\n";
     }
     
     if ( @remarks ) {
-	$output .= '    <collectionRemarks>' . join('; ', @remarks) . '</collectionRemarks>' . "\n";
+	$output .= '    <collectionRemarks>' . DataQuery::xml_clean(join('; ', @remarks)) . 
+	    '</collectionRemarks>' . "\n";
     }
     
     $output .= '  </Collection>' . "\n";
 }
 
 
-# emitRecordJSON ( row, is_first_record )
-# 
-# Return a string representing the given record in JSON format.
-
-sub emitRecordJSON {
-    
-    my ($self, $main_row, $is_first_record) = @_;
-    
-    return $self->emitCollectionJSON($main_row, $self->{parents}, $is_first_record, 0);
-}
-
-
-# emitTaxonJSON ( row, parents, is_first_record, short_record )
+# emitCollectionJSON ( row, options )
 # 
 # Return a string representing the given taxon record (row) in JSON format.
 # If 'parents' is specified, it should be an array of hashes each representing
@@ -371,12 +549,12 @@ sub emitCollectionJSON {
     
     no warnings;
     
-    my ($self, $row, $parents, $is_first_record, $short_record) = @_;
+    my ($self, $row) = @_;
     
-    my $output = ($is_first_record ? "\n" : "\n,");
+    my $output = '';
     
     $output .= '{"collectionID":"' . $row->{collection_no} . '"'; 
-    $output .= ',"collectionCode":"' . PBJSON::json_clean($row->{collection_name}) . '"';
+    $output .= ',"collectionCode":"' . DataQuery::json_clean($row->{collection_name}) . '"';
     
     if ( defined $row->{lat} )
     {
@@ -384,10 +562,16 @@ sub emitCollectionJSON {
 	$output .= ',"decimalLatitude":"' . $row->{lat} . '"';
     }
     
+    if ( ref $row->{taxa} eq 'ARRAY' and @{$row->{taxa}} )
+    {
+	$output .= ',"associatedTaxa":["';
+	$output .= DataQuery::xml_clean(join('","', @{$row->{taxa}}));
+	$output .= '"]';
+    }
+    
     if ( defined $row->{pubref} )
     {
-	my $pubref = PBJSON::json_clean($row->{pubref});
-	$pubref =~ s/\(\(\/?\w*\)\)//g;
+	my $pubref = DataQuery::json_clean($row->{pubref});
 	$output .= ',"associatedReferences":"' . $pubref . '"';
     }
     
@@ -407,162 +591,6 @@ sub emitCollectionJSON {
     
     $output .= "}";
     return $output;
-}
-
-
-# formatAuthorName ( author1last, author2last, otherauthors, pubyr, orig_no )
-# 
-# Format the given info into a single string that can be output as the
-# attribution of a taxon.
-
-sub formatAuthorName {
-    
-    no warnings;
-    
-    my ($author1last, $author2last, $otherauthors, $pubyr) = @_;
-    
-    my $a1 = defined $author1last ? $author1last : '';
-    my $a2 = defined $author2last ? $author2last : '';
-    
-    $a1 =~ s/( Jr)|( III)|( II)//;
-    $a1 =~ s/\.$//;
-    $a1 =~ s/,$//;
-    $a1 =~ s/\s*$//;
-    $a2 =~ s/( Jr)|( III)|( II)//;
-    $a2 =~ s/\.$//;
-    $a2 =~ s/,$//;
-    $a2 =~ s/\s*$//;
-    
-    my $shortRef = $a1;
-    
-    if ( $otherauthors ne '' ) {
-        $shortRef .= " et al.";
-    } elsif ( $a2 ) {
-        # We have at least 120 refs where the author2last is 'et al.'
-        if ( $a2 !~ /^et al/i ) {
-            $shortRef .= " and $a2";
-        } else {
-            $shortRef .= " et al.";
-        }
-    }
-    if ($pubyr) {
-	$shortRef .= " " . $pubyr;
-    }
-    
-    return $shortRef;
-}
-
-
-# interpretSpeciesName ( taxon_name )
-# 
-# Separate the given name into genus, subgenus, species and subspecies.
-
-sub interpretSpeciesName {
-
-    my ($taxon_name) = @_;
-    my @components = split(/\s+/, $taxon_name);
-    
-    my ($genus, $subgenus, $species, $subspecies);
-    
-    # If the first character is a space, the first component will be blank;
-    # ignore it.
-    
-    shift @components if @components && $components[0] eq '';
-    
-    # If there's nothing left, we were given bad input-- return nothing.
-    
-    return unless @components;
-    
-    # The first component is always the genus.
-    
-    $genus = shift @components;
-    
-    # If the next component starts with '(', it is a subgenus.
-    
-    if ( @components && $components[0] =~ /^\((.*)\)$/ )
-    {
-	$subgenus = $1;
-	shift @components;
-    }
-    
-    # The next component must be the species
-    
-    $species = shift @components if @components;
-    
-    # The last component, if there is one, must be the subspecies.  Strip
-    # parentheses if there are any.
-    
-    $subspecies = shift @components if @components;
-    
-    if ( defined $subspecies && $subspecies =~ /^\((.*)\)$/ ) {
-	$subspecies = $1;
-    }
-    
-    return ($genus, $subgenus, $species, $subspecies);
-}
-
-
-# The following hashes map the status codes stored in the opinions table of
-# PaleoDB into taxonomic and nomenclatural status codes in compliance with
-# Darwin Core.  The third one, %REPORT_ACCEPTED_TAXON, indicates which status
-# codes should trigger the "acceptedUsage" and "acceptedUsageID" fields in the
-# output.
-
-our (%TAXONOMIC_STATUS) = (
-	'belongs to' => 'valid',
-	'subjective synonym of' => 'heterotypic synonym',
-	'objective synonym of' => 'homotypic synonym',
-	'invalid subgroup of' => 'invalid',
-	'misspelling of' => 'invalid',
-	'replaced by' => 'invalid',
-	'nomen dubium' => 'invalid',
-	'nomen nudum' => 'invalid',
-	'nomen oblitum' => 'invalid',
-	'nomen vanum' => 'invalid',
-);
-
-
-our (%NOMENCLATURAL_STATUS) = (
-	'invalid subgroup of' => 'invalid subgroup',
-	'misspelling of' => 'misspelling',
-	'replaced by' => 'replaced by',
-	'nomen dubium' => 'nomen dubium',
-	'nomen nudum' => 'nomen nudum',
-	'nomen oblitum' => 'nomen oblitum',
-	'nomen vanum' => 'nomen vanum',
-);
-
-
-our (%REPORT_ACCEPTED_TAXON) = (
-	'subjective synonym of' => 1,
-	'objective synonym of' => 1,
-	'misspelling of' => 1,
-	'replaced by' => 1,
-);
-
-
-# interpretStatusCode ( pbdb_status )
-# 
-# Use the hashes given above to interpret a status code from the opinions
-# table of PaleoDB.  Returns: taxonomic status, whether we should report an
-# "acceptedUsage" taxon, and the nomenclatural status.
-
-sub interpretStatusCode {
-
-    my ($pbdb_status) = @_;
-    
-    # If the status is empty, return nothing.
-    
-    unless ( defined $pbdb_status and $pbdb_status ne '' )
-    {
-	return '', '', '';
-    }
-    
-    # Otherwise, interpret the status code according to the mappings specified
-    # above.
-    
-    return $TAXONOMIC_STATUS{$pbdb_status}, $REPORT_ACCEPTED_TAXON{$pbdb_status}, 
-	$NOMENCLATURAL_STATUS{$pbdb_status};
 }
 
 
