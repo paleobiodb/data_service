@@ -254,6 +254,29 @@ sub parseRankParam {
 }
 
 
+sub parseBooleanParam {
+
+    my ($self, $param, $param_name) = @_;
+    
+    my $value = lc $param;
+    
+    if ( $value eq '1' or $value eq 'yes' or $value eq 'true' )
+    {
+	return 1;
+    }
+    
+    elsif ( $value eq '0' or $value eq 'no' or $value eq 'false' )
+    {
+	return 0;
+    }
+    
+    else
+    {
+	die "400 Value for '$param_name' must be one of: 1, 0, yes, no, true, false.\n";
+    }
+}
+
+
 # checkParameters ( params, good_params )
 # 
 # Make sure that all of the keys in %$params are valid for this query.
@@ -821,7 +844,7 @@ sub generateAttribution {
     my ($self, $row) = @_;
     
     my $auth1 = $row->{a_al1} || '';
-    my $auth2 = $row->{a_a2l} || '';
+    my $auth2 = $row->{a_al2} || '';
     my $auth3 = $row->{a_ao} || '';
     my $pubyr = $row->{a_pubyr} || '';
     

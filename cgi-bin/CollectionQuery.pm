@@ -387,7 +387,7 @@ sub fetchSingle {
     $self->{main_sql} = "
 	SELECT c.collection_no, c.collection_name, c.lat, c.lng $extra_fields
 	FROM collections c JOIN occurrences o using (collection_no)
-			LEFT JOIN refs r using (reference_no)
+			LEFT JOIN refs r on r.reference_no = c.reference_no
         WHERE c.collection_no = ?";
     
     $self->{main_sth} = $dbh->prepare($self->{main_sql});

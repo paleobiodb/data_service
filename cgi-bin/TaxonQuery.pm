@@ -34,7 +34,8 @@ our ($PARAM_CHECK_SINGLE) = { taxon_name => 1, taxon_rank => 1, taxon_no => 1,
 			      name => 1, rank => 1, id => 1, exact => 1, show => 1 };
 
 our ($PARAM_DESC_MULTIPLE) = <<DONE;
-  type - only return information about taxa of this type ('valid', 'synonyms', 'invalid', 'all')
+  type - only return information about taxa of this type ('valid', 'synonyms', invalid', 'all')
+  extant - only return information about extant or non-extant taxa (boolean)
   match - return information about all taxa whose names match this string (string with wildcards)
   rank - only return information about taxa whose rank falls within the specified range (taxonomic rank or range)
   id - return information about the specified taxa (comma-separated list of identifiers)
@@ -57,7 +58,7 @@ DONE
 
 our ($PARAM_REQS_MULTIPLE) = "You must specify at least one of: type, match, rank, id, base_name, base_no, child_name, child_no.\n\nNote that 'type' defaults to 'valid' unless otherwise specified.";
 
-our ($PARAM_CHECK_MULTIPLE) = { type => 1, match => 1, rank => 1,
+our ($PARAM_CHECK_MULTIPLE) = { type => 1, extant => 1, match => 1, rank => 1,
 				base_name => 1, base_rank => 1, base_no => 1,
 				child_name => 1, child_rank => 1, child_no => 1, 
 				id => 1, show => 1 };
@@ -98,7 +99,7 @@ sub setParameters {
     
     if ( defined $params->{id_only} and $params->{id_only} ne '' )
     {
-	$self->{fetch_ids_only} = $self->parseBoolean($params->{id_only}, 'id_only');
+	$self->{fetch_ids_only} = $self->parseBooleanParam($params->{id_only}, 'id_only');
     }
     
     # If 'show' is specified, then include additional information.
@@ -264,7 +265,7 @@ sub setParametersSingle {
     
     if ( defined $params->{exact} and $params->{exact} ne '' )
     {
-	$self->{base_exact} = $self->parseBoolean($params->{exact}, 'exact');
+	$self->{base_exact} = $self->parseBooleanParam($params->{exact}, 'exact');
     }
 }
 
@@ -296,6 +297,14 @@ sub setParametersMultiple {
     else
     {
 	$self->{filter_taxon_type} = 'valid';
+    }
+    
+    # If 'extant' is specified, the results are restricted to taxa which are
+    # either extant or not extant, depending upon the specified value.
+    
+    if ( defined $params->{extant} and $params->{extant} ne '' )
+    {
+	$self->{filter_extant} = $self->parseBooleanParam($params->{extant}, 'extant');
     }
     
     # If 'match' is specified, the results are restricted to taxa whose names
@@ -672,6 +681,22 @@ sub fetchMultiple {
 	}
 	elsif ( $self->{filter_taxon_type} eq 'invalid' ) {
 	    push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
+	}
+    }
+    
+    # If a restriction has been specified for extant or non-extant taxa, add
+    # the appropriate filter.
+    
+    if ( defined $self->{filter_extant} )
+    {
+	if ( $self->{filter_extant} )
+	{
+	    push @filter_list, "a.extant = 'yes'";
+	}
+	
+	else
+	{
+	    push @filter_list, "a.extant = 'no'";
 	}
     }
     

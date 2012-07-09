@@ -21,12 +21,15 @@ our ($PARAM_DESC) = <<DONE;
   taxon_rank - synonym for base_rank (taxon rank)
   taxon_no - synonym for base_no (positive integer identifier)
   rank - only return taxa whose rank falls within the specified range (taxonomic rank(s))
+  type - only return information about taxa of this type ('valid', 'synonyms', invalid', 'all')
+  extant - only return information about extant or non-extant taxa (boolean)
 DONE
 
 our ($PARAM_REQS) = "You must specify either base_name or base_no (alternatively taxon_name or taxon_no).";
 
 our ($PARAM_CHECK) = { taxon_name => 1, taxon_rank => 1, taxon_no => 1, 
-		       base_name => 1, base_rank => 1, base_no => 1, limit_rank => 1 };
+		       base_name => 1, base_rank => 1, base_no => 1, rank => 1,
+		       type => 1, extant => 1 };
 
 
 # setParameters ( params )
@@ -166,6 +169,34 @@ sub setParameters {
 	$self->{filter_rank} = $self->parseRankParam($limit, 'rank');
     }
     
+    # If 'type' is specified, the results are restricted to certain types
+    # of taxa.  Defaults to 'valid'.
+    
+    if ( defined $params->{type} and $params->{type} ne '' )
+    {
+	my $type = lc $params->{type};
+	
+	unless ( $type eq 'valid' or $type eq 'invalid' or $type eq 'synonyms' or $type eq 'all' )
+	{
+	    die "400 Unrecognized taxon type '$type'.\n";
+	}
+	
+	$self->{filter_taxon_type} = $type;
+    }
+    
+    else
+    {
+	$self->{filter_taxon_type} = 'valid';
+    }
+    
+    # If 'extant' is specified, the results are restricted to taxa which are
+    # either extant or not extant, depending upon the specified value.
+    
+    if ( defined $params->{extant} and $params->{extant} ne '' )
+    {
+	$self->{filter_extant} = $self->parseBooleanParam($params->{extant}, 'extant');
+    }
+    
     # Turn the following on always for now.  This will likely be changed later.
     
     $self->{show_attribution} = 1;
@@ -226,6 +257,34 @@ sub fetchMultiple {
 	if ( @disjunction )
 	{
 	    push @filter_list, '(' . join(' or ', @disjunction) . ')';
+	}
+    }
+    
+    if ( defined $self->{filter_extant} )
+    {
+	if ( $self->{filter_extant} )
+	{
+	    push @filter_list, "a.extant = 'yes'";
+	}
+	
+	else
+	{
+	    push @filter_list, "a.extant = 'no'";
+	}
+    }
+    
+    if ( defined $self->{filter_taxon_type} )
+    {
+	if ( $self->{filter_taxon_type} eq 'valid' ) {
+	    push @filter_list, "o.status = 'belongs to'";
+	    push @filter_list, "t.taxon_no = t.synonym_no";
+	}
+	elsif ( $self->{filter_taxon_type} eq 'synonyms' ) {
+	    push @filter_list, "o.status in ('belongs to', 'subjective synonym of', 'objective synonym of')";
+	    push @filter_list, "t.taxon_no = t.spelling_no";
+	}
+	elsif ( $self->{filter_taxon_type} eq 'invalid' ) {
+	    push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
 	}
     }
     
@@ -309,18 +368,17 @@ sub fetchMultiple {
 			       LEFT JOIN opinions o USING (opinion_no)
 			       LEFT JOIN refs r ON (a.reference_no = r.reference_no)
 	WHERE t.lft >= $lft and t.rgt <= $rgt
-	  and t.synonym_no = t.taxon_no
-	  and (o.status is null OR o.status = 'belongs to') $filter_clause
+	  $filter_clause
 	ORDER BY t.lft $limit_sql";
     
     # Also construct a statement to fetch the result count if necessary.
     
     $self->{count_sql} = "
 	SELECT count(*)
-	FROM taxa_tree_cache t LEFT JOIN opinions o USING (opinion_no)
+	FROM taxa_tree_cache t JOIN authorities a USING (taxon_no)
+			       LEFT JOIN opinions o USING (opinion_no)
 	WHERE t.lft >= $lft and t.rgt <= $rgt
-	  AND t.synonym_no = t.taxon_no
-	  AND (o.status is null OR o.status = 'belongs to')";
+	  $filter_clause";
     
     # Now prepare and execute the main statement.
     
@@ -401,7 +459,7 @@ sub generateRecord {
     
     else
     {
-	$prefix .= "\n";
+	$prefix .= ($prefix ne '' ? "\n," : "\n");
 	$self->{comma_stack}[0] = 1;
     }
     
