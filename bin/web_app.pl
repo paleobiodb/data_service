@@ -28,6 +28,22 @@ set log => 'debug';
 our(%HELP_TEXT);
 
 
+get qr{/data(\d+.\d+)/(.*)} => sub {
+    
+    $DB::single = 1;
+    my ($version, $path) = splat;
+    forward '/' . $path, { v => $version };
+};
+
+
+get qr{/data/(.*)} => sub {
+    
+    $DB::single = 1;
+    my ($path) = splat;
+    forward '/' . $path;
+};
+
+
 $HELP_TEXT{'/taxa/hierarchy'} = "PaleoDB Data Service: [URL]
 
 The function of this URL is to retrieve parts of the taxonomic hierarchy stored in the Paleobiology Database.  The records provided contain minimal detail, and [JSON:are returned as a hierarchical list in JSON format][XML:are returned in Darwin Core XML format].  If you need additional information about the returned taxa, use /taxa/list.[CT] instead.

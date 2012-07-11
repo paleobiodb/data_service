@@ -15,6 +15,10 @@ use JSON;
 use Encode;
 
 
+our ($CURRENT_VERSION) = '1.0';
+
+our (%VERSION_ACCEPTED) = ( '1.0' => 1 );
+
 our ($DEFAULT_RESULT_LIMIT) = 500;	# Default limit on the number of
                                         # results, unless overridden by the
                                         # query parameter "limit=all".
@@ -123,6 +127,24 @@ sub warn {
 sub setParameters {
 
     my ($self, $params) = @_;
+    
+    # The 'v' parameter is required, and specifies the interface version being
+    # used.
+    
+    if ( defined $params->{v} and $params->{v} ne '' )
+    {
+	my $v = $params->{v};
+	
+	unless ( $VERSION_ACCEPTED{$v} )
+	{
+	    die "400 Unrecognized interface version '$v'.  Try using '$CURRENT_VERSION'.\n";
+	}
+    }
+    
+    else
+    {
+	die "400 You must specify an interface version.  You can add '&v=$CURRENT_VERSION' to the parameters, or prefix the path with /data$CURRENT_VERSION/.\n";
+    }
     
     # The 'limit' parameter, if given, limits the size of the result set.  If
     # not specified, a default limit of $DEFAULT_RESULT_LIMIT will be used.
@@ -291,7 +313,7 @@ sub checkParameters {
     
     # Construct our initial check list.
     
-    my (@good_list) = {limit => 1, count => 1, ct => 1};
+    my (@good_list) = {limit => 1, count => 1, ct => 1, v => 1, splat => 1};
     unshift @good_list, $good_params if ref $good_params eq 'HASH';
     
     # If this object is actually in a subclass, look for a variable in that
@@ -450,6 +472,7 @@ sub generateCompoundResult {
 	
 	foreach my $row (@rows)
 	{
+	    $self->processRecord($row);
 	    my $row_output = $self->generateRecord($row, is_first => $is_first_row);
 	    $output .= $row_output;
 	    
@@ -462,30 +485,33 @@ sub generateCompoundResult {
     # a possibility, we also test whether the output size is larger than our
     # threshold for streaming.
     
-    while ( $row = $sth->fetchrow_hashref )
+    else
     {
-	# For each row, we start by calling the processRecord method (in case
-	# the query class has overridden it) and then call generateRecord to
-	# generate the actual output.
-	
-	$self->processRecord($row);
-	my $row_output = $self->generateRecord($row, is_first => $is_first_row);
-	$output .= $row_output;
-	
-	$is_first_row = 0;
-	$self->{row_count}++;
-	
-	# If streaming is a possibility, check whether we have passed the
-	# threshold for result size.  If so, then we need to immediately
-	# generate the header and stash it along with the output so far.  We
-	# then return false, which should lead to a subsequent call to
-	# streamResult().
-	
-	if ( defined $options{can_stream} and $self->{should_stream} ne 'no' and
-	     (length($output) > $STREAM_THRESHOLD or $self->{should_stream} eq 'yes') )
+	while ( $row = $sth->fetchrow_hashref )
 	{
-	    $self->{stashed_output} = $self->generateHeader(streamed => 1) . $output;
-	    return;
+	    # For each row, we start by calling the processRecord method (in case
+	    # the query class has overridden it) and then call generateRecord to
+	    # generate the actual output.
+	    
+	    $self->processRecord($row);
+	    my $row_output = $self->generateRecord($row, is_first => $is_first_row);
+	    $output .= $row_output;
+	    
+	    $is_first_row = 0;
+	    $self->{row_count}++;
+	    
+	    # If streaming is a possibility, check whether we have passed the
+	    # threshold for result size.  If so, then we need to immediately
+	    # generate the header and stash it along with the output so far.  We
+	    # then return false, which should lead to a subsequent call to
+	    # streamResult().
+	    
+	    if ( defined $options{can_stream} and $self->{should_stream} ne 'no' and
+		 (length($output) > $STREAM_THRESHOLD or $self->{should_stream} eq 'yes') )
+	    {
+		$self->{stashed_output} = $self->generateHeader(streamed => 1) . $output;
+		return;
+	    }
 	}
     }
     

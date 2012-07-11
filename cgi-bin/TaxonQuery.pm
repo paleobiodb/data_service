@@ -60,7 +60,7 @@ our ($PARAM_REQS_MULTIPLE) = "You must specify at least one of: type, match, ran
 
 our ($PARAM_CHECK_MULTIPLE) = { type => 1, extant => 1, match => 1, rank => 1,
 				base_name => 1, base_rank => 1, base_no => 1,
-				child_name => 1, child_rank => 1, child_no => 1, 
+				leaf_name => 1, leaf_rank => 1, leaf_no => 1, 
 				id => 1, show => 1 };
 
 
@@ -404,75 +404,75 @@ sub setParametersMultiple {
 	$self->{base_taxon_no} = $params->{base_no} + 0;
     }
     
-    # If 'child_name' is specified, then the results are restricted to the
+    # If 'leaf_name' is specified, then the results are restricted to the
     # specified taxon and its parents.
     
-    if ( defined $params->{child_name} and $params->{child_name} ne '' )
+    if ( defined $params->{leaf_name} and $params->{leaf_name} ne '' )
     {
 	$required_param = 1;
 	
 	# Check to make sure that base_no was not specified at the same time
 	
-	if ( defined $params->{child_no} and $params->{child_no} ne '' )
+	if ( defined $params->{leaf_no} and $params->{leaf_no} ne '' )
 	{
-	    die "400 You may not specify 'child_name' and 'child_no' together.\n";
+	    die "400 You may not specify 'leaf_name' and 'leaf_no' together.\n";
 	}
 	
 	# Make sure the parameter contains nothing except alphabetic
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{child_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{leaf_name} =~ /[^a-zA-Z\s]/ )
 	{
-	    die "400 The parameter 'child_name' may contain only characters from the Roman alphabet plus whitespace.\n";
+	    die "400 The parameter 'leaf_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
 	
-	$self->{child_taxon_name} = $params->{child_name};
-	$self->{child_taxon_name} =~ s/\s+/ /g;	    
+	$self->{leaf_taxon_name} = $params->{leaf_name};
+	$self->{leaf_taxon_name} =~ s/\s+/ /g;	    
     }
     
-    # If 'child_rank' is specified, then we only match the name if it
+    # If 'leaf_rank' is specified, then we only match the name if it
     # matches the specified rank.
     
-    if ( defined $params->{child_rank} and $params->{child_rank} ne '' )
+    if ( defined $params->{leaf_rank} and $params->{leaf_rank} ne '' )
     {
-	my $rank = lc $params->{child_rank};
+	my $rank = lc $params->{leaf_rank};
 	$required_param = 1;
 	
 	# This parameter cannot be used with taxon_no (since taxon_no uniquely
 	# identifies a taxon, it cannot be used with any other taxon-selecting
 	# parameters).
 	
-	if ( defined $params->{child_no} and $params->{child_no} ne '' )
+	if ( defined $params->{leaf_no} and $params->{leaf_no} ne '' )
 	{
-	    die "400 You may not use the 'child_rank' and 'child_no' parameters together.\n";
+	    die "400 You may not use the 'leaf_rank' and 'leaf_no' parameters together.\n";
 	}
 	
 	# Make sure that the value is one of the accepted ones.
 	
 	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
 	{
-	    die "400 Unrecognized taxon rank '$rank'.";
+	    die "400 Unrecognized taxon rank '$rank' for leaf_rank.";
 	}
 	
-	$self->{child_taxon_rank} = $rank;
+	$self->{leaf_taxon_rank} = $rank;
     }
     
-    # If 'child_no' is specified, then the results are restricted to the
+    # If 'leaf_no' is specified, then the results are restricted to the
     # specified taxon and its parents.
     
-    if ( defined $params->{child_no} and $params->{child_no} ne '' )
+    if ( defined $params->{leaf_no} and $params->{leaf_no} ne '' )
     {
 	$required_param = 1;
 	
 	# First check to make sure that a valid value was provided
 	
-	if ( $params->{child_no} =~ /[^0-9]/ )
+	if ( $params->{leaf_no} =~ /[^0-9]/ )
 	{
 	    die "400 You must provide a positive integer value for 'taxon_no'.\n";
 	}
 	
-	$self->{child_taxon_no} = $params->{base_no} + 0;
+	$self->{leaf_taxon_no} = $params->{leaf_no} + 0;
     }
     
     # Now make sure we've specified at least one of the required parameters.
@@ -802,7 +802,69 @@ sub fetchMultiple {
 	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
     }
     
-    # $$$ add child_taxon_no/child_taxon_name
+    # If a leaf taxon has been specified by taxon_no, find it and add the appropriate
+    # filter.
+    
+    if ( defined $self->{leaf_taxon_no} )
+    {
+	my $sql = "SELECT t3.lft, t3.rgt
+	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
+				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
+	     WHERE t1.taxon_no = ?";
+	
+	my ($lft, $rgt) = $dbh->selectrow_array($sql, undef, $self->{leaf_taxon_no});
+	
+	# If we can't find the base taxon, the result set will be empty.
+	
+	unless ( defined $lft and $lft > 0 )
+	{
+	    return;
+	}
+	
+	# Otherwise, we select the appropriate range of taxa.
+	
+	push @filter_list, "t.lft <= $lft", "t.rgt >= $lft";
+    }
+    
+    # If a base taxon has been specified by taxon_name, find it and add the
+    # appropriate filter.
+    
+    if ( defined $self->{leaf_taxon_name} )
+    {
+	my $rank_clause = '';
+	my @args = $self->{leaf_taxon_name};
+	
+	my $not_found_msg = "Taxon '$self->{leaf_taxon_name}' was not found in the database";
+	
+	# If a rank was specified, add a clause to narrow it down.
+	
+	if ( defined $self->{leaf_taxon_rank} )
+	{
+	    $rank_clause = "and a.taxon_rank = ?";
+	    push @args, $self->{leaf_taxon_rank};
+	    
+	    $not_found_msg .= " at rank '$self->{leaf_taxon_rank}'";
+	}
+	
+	my $sql = "SELECT t3.lft, t3.rgt
+		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
+				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
+				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
+		WHERE a.taxon_name = ? $rank_clause";
+	    
+	my ($lft, $rgt) = $dbh->selectrow_array($sql, undef, @args);
+	
+	# If we can't find the base taxon, the result set will be empty.
+	
+	unless ( defined $lft and $lft > 0 )
+	{
+	    return;
+	}
+	
+	# Otherwise, select the appropriate range of taxa.
+	
+	push @filter_list, "t.lft <= $lft", "t.rgt >= $lft";
+    }
     
     # Add the extra fields necessary to show the requested info
     
@@ -871,184 +933,90 @@ sub fetchMultiple {
     $self->{main_sth} = $dbh->prepare($self->{main_sql});
     $self->{main_sth}->execute();
     
-    return 1;
+    # Make sure that processResultSet will be called if necessary after the
+    # results are fetched and before the output records are generated.  This
+    # is necessary if we are fetching a list of parents of a single taxon.
+    
+    $self->{process_resultset} = 1 if defined $self->{leaf_taxon_no} 
+	or defined $self->{leaf_taxon_name};
 }
 
 
-sub processParents {
+# This routine will be called if necessary in order to properly process the
+# results of a query for taxon parents.
 
-    # Make sure we know the senior synonym of this taxon (this is relevant
-    # only if the 'fetch_exact' flag is true) so that the parent list will
-    # turn out properly.
+sub processResultSet {
     
-    # my ($senior_synonym) = $main_row->{synonym_no};
+    my ($self, $rowlist) = @_;
     
-    # # Now fetch all parent info
+    # Run through the parent list and note when we reach the last
+    # kingdom-level taxon.  Any entries before that point are dropped 
+    # [see TaxonInfo.pm, line 1252 as of 2012-06-24]
+    # 
+    # If the leaf entry is of rank subgenus or lower, we may need to rewrite the
+    # last few entries so that their names properly match the higher level entries.
+    # [see TaxonInfo.pm, lines 1232-1271 as of 2012-06-24]
     
-    # $sql = 
-    #    "SELECT a.taxon_no, a.taxon_name, a.taxon_rank, a.common_name, a.extant, 
-    # 		pt.synonym_no as parent_no, t.orig_no,
-    # 		IF (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', 
-    # 		    a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) pubyr,
-    # 		IF (a.ref_is_authority = 'YES', r.author1last, a.author1last) author1,
-    # 		IF (a.ref_is_authority = 'YES', r.author2last, a.author2last) author2,
-    # 		IF (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) otherauthors
-    # 	FROM taxa_list_cache l JOIN taxa_tree_cache t ON (t.taxon_no = l.parent_no)
-    # 		JOIN authorities a ON a.taxon_no = t.taxon_no
-    # 		LEFT JOIN refs r USING (reference_no)
-    # 		LEFT JOIN opinions o USING (opinion_no)
-    # 		LEFT JOIN taxa_tree_cache pt ON (pt.taxon_no = o.parent_spelling_no)
-    # 	WHERE l.child_no = ? AND l.parent_no <> l.child_no ORDER BY t.lft ASC";
-
-    # $sth = $dbh->prepare($sql);
-    # $sth->execute($senior_synonym);
+    my @new_list;
+    my ($genus_name, $subgenus_name, $species_name, $subspecies_name);
     
-    # my $parent_list = $sth->fetchall_arrayref({});
-    
-    # # Run through the parent list and note when we reach the last
-    # # kingdom-level taxon.  Any entries before that point are dropped 
-    # # [note: TaxonInfo.pm, line 1316]
-    
-    # my $last_kingdom = 0;
-    
-    # for (my $i = 0; $i < scalar(@$parent_list); $i++)
-    # {
-    # 	$last_kingdom = $i if $parent_list->[$i]{taxon_rank} eq 'kingdom';
-    # }
-    
-    # splice(@$parent_list, 0, $last_kingdom) if $last_kingdom > 0;
-    
-    # $self->{parents} = $parent_list;
-    
-    # # If this is a species or genus, we may need to rewrite the parent list
-    # # according to the name given for the main taxon.
-    
-    # if ( $self->{rewrite_classification} )
-    # {
-    # 	my ($genus, $subgenus, $species, $subspecies) = 
-    # 	    interpretSpeciesName($main_row->{taxon_name});
-	
-    # 	# Create a new parent list, and copy all taxa of family or higher rank
-    # 	# to it.  Taxa of genus and lower rank are used to populate the
-    # 	# taxon_no_by_rank table.
-	
-    # 	$self->{parents} = [];
-    # 	my ($taxon_row_by_rank) = {};
-	
-    # 	foreach my $row (@$parent_list)
-    # 	{
-    # 	    unless ( $row->{taxon_rank} =~ /species|genus/ )
-    # 	    {
-    # 		push @{$self->{parents}}, $row;
-    # 	    }
-	    
-    # 	    else
-    # 	    {
-    # 		$taxon_row_by_rank->{$row->{taxon_rank}} = $row;
-    # 	    }
-    # 	}
-	
-    # 	# Now add the genus, but with the genus name extracted from the current
-    # 	# taxon's name.  If one wasn't found, use the current taxon.
-	
-    # 	if ( defined $taxon_row_by_rank->{'genus'} )
-    # 	{
-    # 	    my $genus_row = $taxon_row_by_rank->{'genus'};
-    # 	    $genus_row->{taxon_name} = $genus;
-    # 	    push @{$self->{parents}}, $genus_row;
-    # 	}
-	
-    # 	else
-    # 	{
-    # 	    push @{$self->{parents}}, $main_row;
-    # 	}
-	
-    # 	# Then, add the subgenus, species and subspecies only if they occur in
-    # 	# the current taxon's name.
-	
-    # 	if ( defined $subgenus and $subgenus ne '' )
-    # 	{
-    # 	    my $subgenus_row = ( defined $taxon_row_by_rank->{'subgenus'} ?
-    # 				 $taxon_row_by_rank->{'subgenus'} :
-    # 				 { taxon_rank => 'subgenus' } );
-    # 	    $subgenus_row->{taxon_name} = "$genus ($subgenus)";
-    # 	    push @{$self->{parents}}, $subgenus_row;
-    # 	}
-	
-    # 	if ( defined $species and $species ne '' )
-    # 	{
-    # 	    my $species_row = ( defined $taxon_row_by_rank->{'species'} ?
-    # 				$taxon_row_by_rank->{'species'} :
-    # 				{ taxon_rank => 'species' } );
-    # 	    $species_row->{taxon_name} = "$genus $species";
-    # 	    if ( defined $subgenus and $subgenus ne '' ) {
-    # 		$species_row->{taxon_name} = "$genus ($subgenus) $species";
-    # 	    }
-    # 	    push @{$self->{parents}}, $species_row;
-    # 	}
-	
-    # 	if ( defined $subspecies and $subspecies ne '' )
-    # 	{
-    # 	    my $subspecies_row = ( defined $taxon_row_by_rank->{'subspecies'} ?
-    # 				   $taxon_row_by_rank->{'subspecies'} :
-    # 				   { taxon_rank => 'subspecies' } );
-    # 	    $subspecies_row->{taxon_name} = $main_row->{taxon_name};
-    # 	    push @{$self->{parents}}, $subspecies_row;
-    # 	}
-    # }
-    
-    # # Take off the last entry on the parent list if it is a duplicate of the
-    # # main row, unless we have been told not to.
-    
-    # unless ( $self->{dont_trim_parent_list} or scalar(@{$self->{parents}}) == 0 )
-    # {
-    # 	pop @{$self->{parents}} if $self->{parents}[-1]{taxon_rank} eq $self->{main_row}{taxon_rank};
-    # }
-    
-    # Return success
-    
-
-}
-
-# getCodeRanges ( )
-# 
-# Fetch the ranges necessary to determine which nomenclatural code (i.e. ICZN,
-# ICN) applies to any given taxon.  This is only done if that information is
-# asked for.
-
-my @codes = ('Metazoa', 'Animalia', 'Plantae', 'Biliphyta', 'Metaphytae',
-	     'Fungi', 'Cyanobacteria');
-
-my $codes = { Metazoa => { code => 'ICZN'}, 
-	      Animalia => { code => 'ICZN'},
-	      Plantae => { code => 'ICN'}, 
-	      Biliphyta => { code => 'ICN'},
-	      Metaphytae => { code => 'ICN'},
-	      Fungi => { code => 'ICN'},
-	      Cyanobacteria => { code => 'ICN' } };
-
-sub getCodeRanges {
-
-    my ($self) = @_;
-    my ($dbh) = $self->{dbh};
-    
-    $self->{code_ranges} = $codes;
-    $self->{code_list} = \@codes;
-    
-    my $code_name_list = "'" . join("','", @codes) . "'";
-    
-    my $code_range_query = $dbh->prepare("
-	SELECT taxon_name, lft, rgt
-	FROM taxa_tree_cache join authorities using (taxon_no)
-	WHERE taxon_name in ($code_name_list)");
-    
-    $code_range_query->execute();
-    
-    while ( my($taxon, $lft, $rgt) = $code_range_query->fetchrow_array() )
+    for (my $i = 0; $i < scalar(@$rowlist); $i++)
     {
-	$codes->{$taxon}{lft} = $lft;
-	$codes->{$taxon}{rgt} = $rgt;
+	# Only keep taxa from the last kingdom-level entry on down.
+	
+    	@new_list = () if $rowlist->[$i]{taxon_rank} eq 'kingdom';
+	
+	# Skip junior synonyms, we only want a list of 'belongs to' entries.
+	
+	next unless $rowlist->[$i]{status} eq 'belongs to';
+	
+	# Note genus, subgenus, species and subspecies names, and rewrite as
+	# necessary anything lower than genus in order to match the genus, etc.
+	
+	my $taxon_name = $rowlist->[$i]{taxon_name};
+	my $taxon_rank = $rowlist->[$i]{taxon_rank};
+	
+	if ( $taxon_rank eq 'genus' )
+	{
+	    $genus_name = $taxon_name;
+	}
+	
+	elsif ( $taxon_rank eq 'subgenus' )
+	{
+	    if ( $taxon_name =~ /^(\w+)\s*\((\w+)\)/ )
+	    {
+		$subgenus_name = "$genus_name ($2)";
+		$rowlist->[$i]{taxon_name} = $subgenus_name;
+	    }
+	}
+	
+	elsif ( $taxon_rank eq 'species' )
+	{
+	    if ( $taxon_name =~ /^(\w+)\s*(\(\w+\)\s*)?(\w+)/ )
+	    {
+		$species_name = $subgenus_name || $genus_name;
+		$species_name .= " $3";
+		$rowlist->[$i]{taxon_name} = $species_name;
+	    }
+	}
+	
+	elsif ( $taxon_rank eq 'subspecies' )
+	{
+	    if ( $taxon_name =~ /^(\w+)\s*(\(\w+\)\s*)?(\w+)\s+(\w+)/ )
+	    {
+		$subspecies_name = "$species_name $4";
+		$rowlist->[$i]{taxon_name} = $subspecies_name;
+	    }
+	}
+	
+	# Now add the (possibly rewritten) entry to the list
+	
+	push @new_list, $rowlist->[$i];
     }
+    
+    # Now substitute the processed list for the raw one.
+    
+    @$rowlist = @new_list;
 }
 
 
@@ -1123,6 +1091,48 @@ sub processRecord {
     if ( exists $row->{a_pubyr} )
     {
 	$self->generateAttribution($row);
+    }
+}
+
+
+# getCodeRanges ( )
+# 
+# Fetch the ranges necessary to determine which nomenclatural code (i.e. ICZN,
+# ICN) applies to any given taxon.  This is only done if that information is
+# asked for.
+
+my @codes = ('Metazoa', 'Animalia', 'Plantae', 'Biliphyta', 'Metaphytae',
+	     'Fungi', 'Cyanobacteria');
+
+my $codes = { Metazoa => { code => 'ICZN'}, 
+	      Animalia => { code => 'ICZN'},
+	      Plantae => { code => 'ICN'}, 
+	      Biliphyta => { code => 'ICN'},
+	      Metaphytae => { code => 'ICN'},
+	      Fungi => { code => 'ICN'},
+	      Cyanobacteria => { code => 'ICN' } };
+
+sub getCodeRanges {
+
+    my ($self) = @_;
+    my ($dbh) = $self->{dbh};
+    
+    $self->{code_ranges} = $codes;
+    $self->{code_list} = \@codes;
+    
+    my $code_name_list = "'" . join("','", @codes) . "'";
+    
+    my $code_range_query = $dbh->prepare("
+	SELECT taxon_name, lft, rgt
+	FROM taxa_tree_cache join authorities using (taxon_no)
+	WHERE taxon_name in ($code_name_list)");
+    
+    $code_range_query->execute();
+    
+    while ( my($taxon, $lft, $rgt) = $code_range_query->fetchrow_array() )
+    {
+	$codes->{$taxon}{lft} = $lft;
+	$codes->{$taxon}{rgt} = $rgt;
     }
 }
 
