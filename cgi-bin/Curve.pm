@@ -314,12 +314,12 @@ sub assignGenera	{
 			$field_abund_unit = $fieldcount;
 		} elsif ( $fn eq "abund_value" )	{
 			$field_abund_value = $fieldcount;
-		} elsif ( $fn eq "collections.reference_no" )	{
+		} elsif ( $fn eq "collection.reference_no" )	{
 			$field_refno = $fieldcount;
 		# field_midpt isn't used now, but could be used to force collections
 		#  with broad age estimates into a bin (a rainy day project)
 		# WARNING: uses the last seen of the two fields
-		} elsif ( $fn eq "collections.ma_mid" || $fn eq "collections.interpolated_mid" )	{
+		} elsif ( $fn eq "ma_mid" || $fn eq "interpolated_mid" )	{
 			$field_midpt = $fieldcount;
 		} elsif ( $fn eq "period" && $q->param('time_scale') eq "periods" )	{
 			$field_bin = $fieldcount;
