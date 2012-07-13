@@ -1697,8 +1697,8 @@ sub getSynonymyParagraph	{
 	# Need to print out "[taxon_name] was named by [author] ([pubyr])".
 	# - select taxon_name, author1last, pubyr, reference_no, comments from authorities
 
-    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','form_taxon','type_taxon_no','type_specimen','comments','discussion']);
-	
+    my $taxon = getTaxa($dbt,{'taxon_no'=>$taxon_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr','reference_no','ref_is_authority','extant','preservation','form_taxon','type_taxon_no','type_specimen','type_body_part','part_details','type_locality','comments','discussion']);
+
 	# Get ref info from refs if 'ref_is_authority' is set
 	if ( ! $taxon->{'author1last'} )	{
 		my $rank = $taxon->{taxon_rank};
@@ -2003,27 +2003,25 @@ sub printTypeInfo	{
     my $is_real_user = shift;
     my $taxonInfoGoal = shift;
     my $preface = shift;
-    my ($text,$specimen_row);
+    my $text;
 
     if ($taxon->{'taxon_rank'} =~ /species/) {
-        my $sql = "SELECT taxon_no,type_specimen,type_body_part,part_details,type_locality FROM authorities WHERE ((type_specimen IS NOT NULL and type_specimen != '') OR (type_body_part IS NOT NULL AND type_body_part != '') OR (part_details IS NOT NULL AND part_details != '') OR (type_locality>0)) AND taxon_no IN (".$spellings.")";
-        $specimen_row = ${$dbt->getData($sql)}[0];
-        if ($specimen_row) {
-            if ($specimen_row->{'type_specimen'})	{
+        if ( $taxon->{'type_specimen'} || $taxon->{'type_body_part'} || $taxon->{'part_details'} || $taxon->{'type_locality'} )	{
+            if ($taxon->{'type_specimen'})	{
                 if ( $preface )	{
                     $text .= "Its type specimen is ";
                 }
-                $text .= "$specimen_row->{type_specimen}";
-                if ($specimen_row->{'type_body_part'}) {
-                    my $an = ($specimen_row->{'type_body_part'} =~ /^[aeiou]/) ? "an" : "a";
-                    $text .= ", " if ($specimen_row->{'type_specimen'});
-                    if ( $specimen_row->{type_body_part} =~ /teeth|postcrania|vertebrae|limb elements|appendages|ossicles/ )	{
+                $text .= "$taxon->{type_specimen}";
+                if ($taxon->{'type_body_part'}) {
+                    my $an = ($taxon->{'type_body_part'} =~ /^[aeiou]/) ? "an" : "a";
+                    $text .= ", " if ($taxon->{'type_specimen'});
+                    if ( $taxon->{type_body_part} =~ /teeth|postcrania|vertebrae|limb elements|appendages|ossicles/ )	{
                         $an = "a set of";
                     }
-                    $text .= "$an $specimen_row->{type_body_part}";
+                    $text .= "$an $taxon->{type_body_part}";
                 }
-                if ($specimen_row->{'part_details'}) {
-                    $text .= " ($specimen_row->{part_details})";
+                if ($taxon->{'part_details'}) {
+                    $text .= " ($taxon->{part_details})";
                 }
                 $text .= ". ";
             }
@@ -2036,18 +2034,18 @@ sub printTypeInfo	{
                 } elsif ($preservation !~ /^not/ ) {
                     $preservation = "a $preservation";
                 }
-                if ($specimen_row->{'type_specimen'} && $specimen_row->{'type_body_part'})	{
+                if ($taxon->{'type_specimen'} && $taxon->{'type_body_part'})	{
                     $text =~ s/\. $/, /;
                     $text .= "and it is $preservation. ";
-                } elsif ($specimen_row->{'type_specimen'})	{
+                } elsif ($taxon->{'type_specimen'})	{
                     $text =~ s/\. $/ /;
                     $text .= "and is $preservation. ";
                 } else	{
                     $text .= "It is $preservation. ";
                 }
             }
-            if ($specimen_row->{'type_locality'} > 0)	{
-                my $sql = "SELECT i.interval_name AS max,IF (min_interval_no>0,i2.interval_name,'') AS min,IF (country='United States',state,country) AS place,collection_name,formation,lithology1,fossilsfrom1,lithology2,fossilsfrom2,environment FROM collections c,intervals i,intervals i2 WHERE collection_no=".$specimen_row->{'type_locality'}." AND i.interval_no=max_interval_no AND (min_interval_no=0 OR i2.interval_no=min_interval_no)";
+            if ($taxon->{'type_locality'} > 0)	{
+                my $sql = "SELECT i.interval_name AS max,IF (min_interval_no>0,i2.interval_name,'') AS min,IF (country='United States',state,country) AS place,collection_name,formation,lithology1,fossilsfrom1,lithology2,fossilsfrom2,environment FROM collections c,intervals i,intervals i2 WHERE collection_no=".$taxon->{'type_locality'}." AND i.interval_no=max_interval_no AND (min_interval_no=0 OR i2.interval_no=min_interval_no)";
                 my $coll_row = ${$dbt->getData($sql)}[0];
                 $coll_row->{'lithology1'} =~ s/not reported//;
                 my $strat = $coll_row->{'max'};
@@ -2088,7 +2086,7 @@ sub printTypeInfo	{
                 $coll_row->{'place'} =~ s/Syrian Arab Republic/Syria/;
                 $coll_row->{'place'} =~ s/Lao People's Democratic Republic/Laos/;
                 $coll_row->{'place'} =~ s/(United Kingdom|Russian Federation|Czech Republic|Netherlands|Dominican Republic|Bahamas|Philippines|Netherlands Antilles|United Arab Emirates|Marshall Islands|Congo|Seychelles)/the $1/;
-                $text .= "Its type locality is <a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=".$specimen_row->{'type_locality'}."&amp;is_real_user=$is_real_user\">".$coll_row->{'collection_name'}."</a>, which is in $strat $lith $fm $coll_row->{'place'}. ";
+                $text .= "Its type locality is <a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=".$taxon->{'type_locality'}."&amp;is_real_user=$is_real_user\">".$coll_row->{'collection_name'}."</a>, which is in $strat $lith $fm $coll_row->{'place'}. ";
             }
         }
     } else {
@@ -2107,7 +2105,7 @@ sub printTypeInfo	{
         }
     }
 
-    return ($text,$specimen_row->{'type_locality'});
+    return ($text,$taxon->{'type_locality'});
 
 }
 
@@ -3664,13 +3662,14 @@ sub basicTaxonInfo	{
 
 	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
 
+	# TRY TO GET TAXON NUMBER
+
 	my $error;
 	my $taxon_no;
 	if ( $q->param('taxon_no') )	{
 		$taxon_no = $q->param('taxon_no');
 		$taxon_no = getSeniorSynonym($dbt,$taxon_no); 
 	} elsif ( $q->param('author') || $q->param('pubyr') || $q->param('type_body_part') || $q->param('preservation') )	{
-	#} elsif ( ! $taxon_name && ( $q->param('author') || $q->param('pubyr') || $q->param('type_body_part') || $q->param('preservation') ) )	{
 		my @taxon_nos = getTaxonNos($dbt,$taxon_name,'','',$q->param('author'),$q->param('pubyr'),$q->param('type_body_part'),$q->param('preservation'));
 		if ( @taxon_nos )	{
 			$taxon_no = getSeniorSynonym($dbt,$taxon_nos[0]); 
@@ -3767,12 +3766,14 @@ sub basicTaxonInfo	{
 		exit;
 	}
 
+	# PAGE TITLE ETC.
+
 	my $authorfields = "if(ref_is_authority='YES',r.author1init,a.author1init) author1init,if(ref_is_authority='YES',r.author1last,a.author1last) author1last,if(ref_is_authority='YES',r.author2init,a.author2init) author2init,if(ref_is_authority='YES',r.author2last,a.author2last) author2last,if(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,if(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,reftitle,pubtitle,pubvol,pubno,firstpage,lastpage";
 	my $authorfields2 = "if(ref_has_opinion='YES',r.author1init,o.author1init) author1init,if(ref_has_opinion='YES',r.author1last,o.author1last) author1last,if(ref_has_opinion='YES',r.author2init,o.author2init) author2init,if(ref_has_opinion='YES',r.author2last,o.author2last) author2last,if(ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors,if(ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,reftitle,pubtitle,pubvol,pubno,firstpage,lastpage";
 
 	my ($sql,$auth,$class_hash);
 	if ( $taxon_no )	{
-		$sql= "SELECT taxon_name,taxon_rank,common_name,extant,a.reference_no,ref_is_authority,$authorfields,discussion,lft,rgt,IF(discussed_by>0,name,'') AS discussant,email FROM authorities a,refs r,$TAXA_TREE_CACHE t,person p WHERE a.reference_no=r.reference_no AND a.taxon_no=".$taxon_no." AND a.taxon_no=t.taxon_no AND (discussed_by=person_no OR discussed_by IS NULL)";
+		$sql= "SELECT taxon_name,taxon_rank,common_name,extant,a.reference_no,ref_is_authority,$authorfields,type_specimen,type_body_part,part_details,type_locality,discussion,lft,rgt,IF(discussed_by>0,name,'') AS discussant,email FROM authorities a,refs r,$TAXA_TREE_CACHE t,person p WHERE a.reference_no=r.reference_no AND a.taxon_no=".$taxon_no." AND a.taxon_no=t.taxon_no AND (discussed_by=person_no OR discussed_by IS NULL)";
 		$auth = ${$dbt->getData($sql)}[0];
 
 		$class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
@@ -3835,7 +3836,9 @@ sub basicTaxonInfo	{
 <span class="displayPanelHeader">$header</span>
 <div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
 |;
+
 	# CLASS/ORDER/FAMILY SECTION
+
 	if ( $taxon_no )	{
 		my $parent_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
 		my @parent_array = @{$parent_hash->{$taxon_no}};
@@ -3857,6 +3860,7 @@ sub basicTaxonInfo	{
 
 	# VERBAL DISCUSSION
 	# JA 5.9.11
+
 	if ( $auth->{'discussion'} )	{
 		my $discussion = $auth->{'discussion'};
 		$discussion =~ s/(\[\[)([A-Za-z ]+|)(taxon )([0-9]+)(\|)/<a href="$READ_URL?a=basicTaxonInfo&amp;taxon_no=$4">/g;
@@ -3885,15 +3889,21 @@ sub basicTaxonInfo	{
 	# IMAGE AND SYNONYM SECTIONS
 
 	my @spellings = ($taxon_no);
-	my @bad_spellings;
+	my (@bad_spellings,@all_spellings,@distinct_auths);
 	if ( $taxon_no )	{
+		push @distinct_auths , $auth;
 		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND spelling_no=synonym_no AND t.taxon_no!=spelling_no AND a.taxon_name!='".$auth->{'taxon_name'}."' ORDER BY taxon_name";
 		my @spelling_refs = @{$dbt->getData($sql)};
 		push @spellings , $_->{'taxon_no'} foreach @spelling_refs;
-		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,status,$authorfields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no GROUP BY taxon_name,author1init,author1last,author2init,author2last,otherauthors,pubyr ORDER BY taxon_name";
+		$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,status,$authorfields,type_specimen,type_body_part,part_details,type_locality,spelling_no FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND synonym_no=$taxon_no AND synonym_no!=spelling_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no GROUP BY taxon_name,author1init,author1last,author2init,author2last,otherauthors,pubyr ORDER BY taxon_name";
 		my @syn_refs = @{$dbt->getData($sql)};
 		push @bad_spellings , $_->{'taxon_no'} foreach @syn_refs;
-		my @all_spellings = (@spellings,@bad_spellings);
+		@all_spellings = (@spellings,@bad_spellings);
+		for my $syn ( @syn_refs )	{
+			if ( $syn->{'taxon_no'} == $syn->{'spelling_no'} )	{
+				push @distinct_auths , $syn;
+			}
+		}
 		my @thumbs = Images::getImageList($dbt, \@all_spellings);
 		for my $thumb ( @thumbs )	{
 			my $aspect = $thumb->{'height'} / $thumb->{'width'};
@@ -4045,8 +4055,8 @@ sub basicTaxonInfo	{
 				$list .= "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">".italicize($_)."</a>, " foreach @child_names;
 				$list =~ s/, $//;
 				print $list;
-				print ' (<a href=# onClick="javascript: document.doViewClassification.submit()">view classification</a>)';
 				print "</span></p>\n\n";
+				print qq|<p><a href=# onClick="javascript: document.doViewClassification.submit()">View classification</a></span></p>\n\n|;
 				print "\n<form method=\"POST\" action=\"$READ_URL\" name=\"doViewClassification\">";
 				print '<input type="hidden" name="action" value="classify">';
 				print '<input type="hidden" name="taxon_no" value="'.$taxon_no.'">';
@@ -4063,16 +4073,25 @@ sub basicTaxonInfo	{
 	if ( $taxon_no )	{
 		($typeInfo,$typeLocality) = printTypeInfo($dbt,join(',',@spellings),$auth,1,'basicTaxonInfo');
 		if ( $typeInfo )	{
-			if ($auth->{'taxon_rank'} =~ /species/) {
-				print "<p $indent>Type specimen: ";
-			} else	{
-				print "<p $indent>Type: ";
-			}
 			if ( $typeInfo !~ /\. [A-Za-z]/ )	{
 				$typeInfo =~ s/[\.] //;
 			}
-			print $typeInfo;
-			print "<p>\n\n";
+			if ($auth->{'taxon_rank'} =~ /species/) {
+				if ( $#distinct_auths == 0 )	{
+					print "<p $indent>Type specimen: $typeInfo</p>\n\n";
+			# additional info for junior synonyms
+				} else	{
+					print "<p $indent>Type specimens:\n</p>\n<ul style=\"margin-top: -0.5em;\">";
+						print "<li><i>$auth->{'taxon_name'}</i>: ".$typeInfo."</li>\n";
+					for my $i ( 1..$#distinct_auths )	{
+						my ($synTypeInfo,$synTypeLocality) = printTypeInfo($dbt,join(',',@spellings),$distinct_auths[$i],1,'basicTaxonInfo');
+						print "<li><i>$distinct_auths[$i]->{'taxon_name'}</i>: ".$synTypeInfo."</li>\n";
+					}
+					print "</ul>\n";
+				}
+			} else	{
+				print "<p $indent>Type: $typeInfo</p>\n\n";
+			}
 		}
 	}
 
@@ -4101,10 +4120,10 @@ sub basicTaxonInfo	{
 	# MEASUREMENT AND BODY MASS SECTIONS
 	# JA 24.11.10
 	# added body mass and simplified by calling getMassEstimates 9.12.10
+
 	my @specimens;
 	my $specimen_count;
 	if ( $taxon_no && $auth->{'taxon_rank'} eq "species" && $SQL_DB eq "pbdb" )	{
-		my @all_spellings = (@spellings,@bad_spellings);
 		@specimens = Measurement::getMeasurements($dbt,{'taxon_list'=>\@all_spellings,'get_global_specimens'=>1});
 		if ( @specimens )	{
 			my $p_table = Measurement::getMeasurementTable(\@specimens);
@@ -4137,7 +4156,7 @@ sub basicTaxonInfo	{
 	# DISTRIBUTION SECTION
 
 	my @occs;
-	if ( $is_real_user > 0 && $SQL_DB eq "pbdb" )	{
+	if ( $is_real_user > 0 && $SQL_DB eq "pbdb" && $auth->{'rgt'} - $auth->{'lft'} < 20000 )	{
 
 		# taxon_string is needed for maps and taxon_param for links
 		my $taxon_string = $taxon_no;
@@ -4288,6 +4307,9 @@ sub basicTaxonInfo	{
 				print "<p>Total: $ctotal collections each including a single occurrence</p>\n\n";
 			}
 			print "</div>\n\n";
+		# don't print anything for really big groups, users shouldn't
+		#  expect to see occurrences anyway JA 13.7.12
+		} elsif ( $auth->{'rgt'} - $auth->{'lft'} >= 20000 )	{
 		} else	{
 			if ( $auth->{'taxon_name'} )	{
 				print " <i>there are no occurrences of $auth->{'taxon_name'} in the database</i></p>\n\n";
@@ -4298,7 +4320,7 @@ sub basicTaxonInfo	{
 
 	# MAP SECTION
 
-		if ( @occs)	{
+		if ( @occs && $auth->{'rgt'} - $auth->{'lft'} < 20000 )	{
 			require GD;
 			my $im = new GD::Image(1,1,1);
 			my $GIF_DIR = $HTML_DIR."/public/maps";
