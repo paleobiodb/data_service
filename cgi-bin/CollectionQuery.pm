@@ -12,7 +12,7 @@ use strict;
 use base 'DataQuery';
 
 
-our ($PARAM_DESC_MULTIPLE) = <<DONE;
+our ($PARAM_DESC_MULTIPLE_1_0) = <<DONE;
   taxon_name - list all collections that contain an example of the given taxon or any of its descendants (scientific name)
   taxon_no - list all collections that contain an example of the given taxon or any of its descendants (positive integer identifier)
   loc - list all collections that were found within the given geographic coordinates (bounding box)
@@ -23,11 +23,11 @@ our ($PARAM_DESC_MULTIPLE) = <<DONE;
 	  all - include all available information
 DONE
 
-our ($PARAM_REQS_MULTIPLE) = "You must specify at least one of: taxon_name, taxon_no, loc.";
+our ($PARAM_REQS_MULTIPLE_1_0) = "You must specify at least one of: taxon_name, taxon_no, loc.";
 
-our ($PARAM_CHECK_MULTIPLE) = { taxon_name => 1, taxon_no => 1, loc => 1, show => 1 };
+our ($PARAM_CHECK_MULTIPLE_1_0) = { taxon_name => 1, taxon_no => 1, loc => 1, show => 1 };
 
-our ($PARAM_DESC_SINGLE) = <<DONE;
+our ($PARAM_DESC_SINGLE_1_0) = <<DONE;
   collection_no - provide details about the given collection (positive integer identifier)
 
   show - return some or all of the specified information (comma-separated list)
@@ -36,9 +36,9 @@ our ($PARAM_DESC_SINGLE) = <<DONE;
 	  all - include all available information
 DONE
 
-our ($PARAM_REQS_SINGLE) = "You must specify collection_no.";
+our ($PARAM_REQS_SINGLE_1_0) = "You must specify collection_no.";
 
-our ($PARAM_CHECK_SINGLE) = { collection_no => 1, show => 1 };
+our ($PARAM_CHECK_SINGLE_1_0) = { collection_no => 1, show => 1 };
 
 
 # setParameters ( params )

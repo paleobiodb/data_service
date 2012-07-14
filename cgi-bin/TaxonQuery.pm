@@ -12,58 +12,174 @@ use strict;
 use base 'DataQuery';
 
 
-our ($PARAM_DESC_SINGLE) = <<DONE;
-  name - return information about the named taxon (scientific name)
-  rank - look for the taxon name only at the specified rank (taxon rank)
-  id - return information about the specified taxon (positive integer identifier)
-  taxon_name - synonym for 'name' (scientific name)
-  taxon_rank - synonym for 'rank' (taxon rank)
-  taxon_no - synonym for 'id' (positive integer identifier)
-  exact - return information about the taxon specified, rather than about a preferred variant or synonym (boolean)
+my ($show_values) = "=over 4
+
+=item ref
+
+include the publication reference for each taxon
+
+=item attr
+
+include the attribution (author and year) for each taxon
+
+=item code
+
+include the nomenclatural code under which each taxon falls
+
+=item all
+
+include all available information
+
+=back
+";
+
+our ($PARAM_DESC_SINGLE_1_0) = "=over 4
+
+=item B<taxon_name>
+
+return information about the named taxon (scientific name)
+
+=item B<taxon_rank>
+
+look for the taxon name only at the specified rank (taxon rank)
+
+=item B<taxon_no>
+
+return information about the specified taxon (positive integer identifier)
+
+=item B<name>
+
+synonym for 'taxon_name' (scientific name)
+
+=item B<rank>
+
+synonym for 'taxon_rank' (taxon rank)
+
+=item B<id>
+
+synonym for 'taxon_no' (positive integer identifier)
+
+=item B<exact>
+
+return information about the exact taxon specified, rather than about a preferred variant or synonym (boolean)
   
-  show - return some or all of the specified information (comma-separated list)
-            ref - include the publication reference for each taxon
-            attr - include the attribution for each taxon
-            code - include the nomenclatural code under which each taxon falls
-            all - include all available information
-DONE
+=item B<show>
 
-our ($PARAM_REQS_SINGLE) = "You must specify either taxon_name or taxon_no.\n\nNote that unless 'exact' is specified, the returned taxon will be the currently preferred variant or synonym if one exists.";
+return some or all of the specified information (comma-separated list)
 
-our ($PARAM_CHECK_SINGLE) = { taxon_name => 1, taxon_rank => 1, taxon_no => 1, 
+$show_values
+
+=back
+";
+
+our ($PARAM_REQS_SINGLE_1_0) = "You must specify either C<taxon_name> or C<taxon_no>.\n\nNote that unless C<exact> is specified, the returned taxon will be the currently preferred variant or senior synonym of the specified taxon if such exists in the database.";
+
+our ($PARAM_CHECK_SINGLE_1_0) = { taxon_name => 1, taxon_rank => 1, taxon_no => 1, 
 			      name => 1, rank => 1, id => 1, exact => 1, show => 1 };
 
-our ($PARAM_DESC_MULTIPLE) = <<DONE;
-  type - only return information about taxa of this type ('valid', 'synonyms', invalid', 'all')
-  extant - only return information about extant or non-extant taxa (boolean)
-  match - return information about all taxa whose names match this string (string with wildcards)
-  rank - only return information about taxa whose rank falls within the specified range (taxonomic rank or range)
-  id - return information about the specified taxa (comma-separated list of identifiers)
-  taxon_no - synonym for 'id' (comma-separated list of identifiers)
-  base_name - return information about the named taxon and its subtaxa (scientific name)
-  base_rank - look for the base taxon name only at the specified rank (taxon rank)
-  base_no - return information about the specified taxon and its subtaxa (positive integer identifier)
-  
-  show - return some or all of the specified information (comma-separated list)
-            ref - include the publication reference for each taxon
-            attr - include the attribution for each taxon
-            code - include the nomenclatural code under which each taxon falls
-            all - include all available information
-DONE
+our ($PARAM_DESC_MULTIPLE_1_0) = "=over 4
 
-#  leaf_name - return information about the named taxon and its supertaxa (scientific name)
-#  leaf_rank - look for the child taxon name only at the specified rank (taxon rank)
-#  leaf_no - return information about the named taxon and its supertaxa (positive integer identifier)
+=item B<taxon_no>
+
+return information about the specified taxa (comma-separated list of identifiers)
+
+=item B<id>
+
+synonym for 'id' (comma-separated list of identifiers)
+
+=item B<type>
+
+only return information about taxa of this type ('valid', 'synonyms', invalid', 'all')
+
+=item B<extant>
+
+only return information about extant or non-extant taxa (boolean)
+
+=item B<match>
+
+return information about all taxa whose names match this string (string with wildcards)
+
+=item B<rank>
+
+only return information about taxa whose rank falls within the specified range (taxonomic rank or range)
+
+=item B<base_name>
+
+return information about the named taxon and its subtaxa (scientific name)
+
+=item B<base_rank>
+
+look for the base taxon name only at the specified rank (taxon rank)
+
+=item B<base_no>
+
+return information about the specified taxon and its subtaxa (positive integer identifier)
+
+=item B<leaf_name>
+
+return information about the named taxon and its supertaxa (scientific name)
+
+=item B<leaf_rank>
+
+look for the leaf taxon name only at the specified rank (taxon rank)
+
+=item B<leaf_no>
+
+return information about the specified taxon and its supertaxa (positive integer identifier)
+
+=item B<show>
+
+return some or all of the specified information (comma-separated list)
+
+$show_values
+
+=back
+";
 
 
-our ($PARAM_REQS_MULTIPLE) = "You must specify at least one of: type, match, rank, id, base_name, base_no, child_name, child_no.\n\nNote that 'type' defaults to 'valid' unless otherwise specified.";
+our ($PARAM_REQS_MULTIPLE_1_0) = "You must specify at least one of: C<type, match, rank, id, base_name, base_no, child_name, child_no>.\n\nNote that C<type> defaults to C<valid> unless otherwise specified.";
 
-our ($PARAM_CHECK_MULTIPLE) = { type => 1, extant => 1, match => 1, rank => 1,
+our ($PARAM_CHECK_MULTIPLE_1_0) = { type => 1, extant => 1, match => 1, rank => 1,
 				base_name => 1, base_rank => 1, base_no => 1,
 				leaf_name => 1, leaf_rank => 1, leaf_no => 1, 
 				id => 1, show => 1 };
 
+our ($FIELD_DESC_1_0) = "=over 4
 
+=item B<scientificName>
+
+The name of this taxon.  This value can be used with parameter C<taxon_name> in subsequent queries.
+
+=item B<taxonRank>
+
+The rank of this taxon.  Values range from 'subspecies' through 'kingdom', plus 'unranked clade' and 'informal'.  This value can be used with parameters C<taxon_rank> and C<rank> in subsequent queries.
+
+=item B<taxonID>
+
+The unique identifier for this taxon in the Paleobiology Database.  Values are positive integers, and can be used with parameter C<taxon_no> in subsequent queries.
+
+=item B<parentNameUsageID>
+
+The identifier of this taxon's immediate parent.  This value can be used with the parameter C<taxon_no> in subsequent queries, and can also be used to arrange the records together into a tree.
+
+=item B<taxonomicStatus>
+
+The taxonomic status of this taxon.  Values include: 'valid', 'invalid', 'subjective synonym', 'objective synonym'.
+
+=item B<scientificNameAuthorship>
+
+The author(s) of this taxon, together with the year it was first published.  Requires C<show=attr>.
+
+=item B<namePublishedIn>
+
+A reference to a publication describing this taxon.  Note that the author of the publication might not be the author of the taxon.  Requires C<show=ref>.
+
+=item B<nomenclaturalCode>
+
+An indication of which nomenclatural code this taxon falls under.  Values include: 'ICZN', 'ICN', 'PhyloCode'.  Requires C<show=code>.
+
+=back
+";
 
 # setParameters ( params )
 # 

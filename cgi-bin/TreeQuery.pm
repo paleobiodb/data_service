@@ -13,23 +13,70 @@ use parent 'DataQuery';
 use Carp qw(croak);
 
 
-our ($PARAM_DESC) = <<DONE;
-  base_name - return the portion of the hierarchy rooted at the given taxon (scientific name)
-  base_rank - look for the taxon name only at the specified rank (taxon rank)
-  base_no - return the portion of the hierarchy rooted at the given taxon (positive integer identifier)
-  taxon_name - synonym for base_name (scientific name)
-  taxon_rank - synonym for base_rank (taxon rank)
-  taxon_no - synonym for base_no (positive integer identifier)
-  rank - only return taxa whose rank falls within the specified range (taxonomic rank(s))
-  type - only return information about taxa of this type ('valid', 'synonyms', invalid', 'all')
-  extant - only return information about extant or non-extant taxa (boolean)
-DONE
+our ($PARAM_DESC_1_0) = "=over 4
 
-our ($PARAM_REQS) = "You must specify either base_name or base_no (alternatively taxon_name or taxon_no).";
+=item B<base_name>
 
-our ($PARAM_CHECK) = { taxon_name => 1, taxon_rank => 1, taxon_no => 1, 
+return the portion of the hierarchy rooted at the given taxon (scientific name)
+
+=item B<base_rank>
+
+look for the taxon name only at the specified rank (taxon rank)
+
+=item B<base_no>
+
+return the portion of the hierarchy rooted at the given taxon (positive integer identifier)
+
+=item B<taxon_name>
+
+synonym for base_name (scientific name)
+
+=item B<taxon_rank>
+
+synonym for base_rank (taxon rank)
+
+=item B<taxon_no>
+
+synonym for base_no (positive integer identifier)
+
+=item B<rank>
+
+only return taxa whose rank falls within the specified range (taxonomic rank(s))
+
+=item B<extant>
+
+only return information about extant or non-extant taxa (boolean)";
+
+our ($PARAM_REQS_1_0) = "You must specify either C<base_name> or C<base_no> (alternatively C<taxon_name> or C<taxon_no>).";
+
+our ($PARAM_CHECK_1_0) = { taxon_name => 1, taxon_rank => 1, taxon_no => 1, 
 		       base_name => 1, base_rank => 1, base_no => 1, rank => 1,
 		       type => 1, extant => 1 };
+
+our ($FIELD_DESC_1_0) = "=over 4
+
+=item B<scientificName>
+
+The name of this taxon.  This value can be used with parameter C<taxon_name> in subsequent queries.
+
+=item B<taxonRank>
+
+The rank of this taxon.  Values range from 'subspecies' through 'kingdom', plus 'unranked clade' and 'informal'.  This value can be used with parameters C<taxon_rank> and C<rank> in subsequent queries.
+
+=item B<taxonID>
+
+The unique identifier for this taxon in the Paleobiology Database.  Values are positive integers, and can be used with parameter C<taxon_no> in subsequent queries.
+
+=item B<scientificNameAuthorship>
+
+The author(s) of this taxon, together with the year it was first published.  Requires C<show=attr>.
+
+=item B<children>
+
+A list of records consisting of the immediate children of this taxon.  Note that this field only occurs in JSON output.
+
+=back
+";
 
 
 # setParameters ( params )

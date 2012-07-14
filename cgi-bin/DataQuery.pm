@@ -46,8 +46,8 @@ our (%TAXONOMIC_RANK) = ( 'max' => 26, 'informal' => 26, 'unranked_clade' => 25,
 
 sub new {
     
-    my ($class, $dbh, $version) = @_;
-    my $self = { dbh => $dbh, version => $version };
+    my ($class, %fields) = @_;
+    my $self = { %fields };
     
     return bless $self, $class;
 }
@@ -56,9 +56,6 @@ sub new {
 # describeParameters ( )
 # 
 # Returns a message describing the available parameters for this query.
-# Subclasses should not override this method; rather, they should define the
-# package variable $PARAM_DESC (or $PARAM_DESC_<VERSION>) which this routine
-# will make use of.
 
 sub describeParameters {
     
@@ -66,14 +63,23 @@ sub describeParameters {
     
     no strict 'refs';
     
-    my $v1 = ref($self) . '::PARAM_DESC_' . uc($self->{version});
-    my $v2 = ref($self) . '::PARAM_DESC';
+    my $v = $self->{v}; $v =~ s/\./_/g;
+    
+    my $v1 = ref($self) . '::PARAM_DESC_' . uc($self->{version}) . '_' . $v;
+    my $v2 = ref($self) . '::PARAM_DESC_' . $v;
     
     my $desc = $$v1 || $$v2;
     
-    $desc .= "\n  limit - return at most the specified number of records (positive integer or 'all') - defaults to $DataQuery::DEFAULT_RESULT_LIMIT if not specified";
+    $desc .= "\n=over 4\n\n=item B<limit>
+
+return at most the specified number of records (positive integer or 'all') - defaults to $DataQuery::DEFAULT_RESULT_LIMIT if not specified\n\n";
     
-    $desc .= "\n  count - (boolean) return two additional fields along with the record set: 'records_found' = total number of records found, 'records_returned' = number actually returned" unless $self->{version} eq 'single';
+    $desc .= "=item B<count>
+
+include a count of the number of records found and returned (boolean)\n\n"
+	unless $self->{version} eq 'single';
+    
+    $desc .= "=back\n\n";
     
     return $desc;
 }
@@ -92,8 +98,32 @@ sub describeRequirements {
     
     no strict 'refs';
     
-    my $v1 = ref($self) . '::PARAM_REQS_' . uc($self->{version});
-    my $v2 = ref($self) . '::PARAM_REQS';
+    my $v = $self->{v}; $v =~ s/\./_/g;
+    
+    my $v1 = ref($self) . '::PARAM_REQS_' . uc($self->{version}) . '_' . $v;
+    my $v2 = ref($self) . '::PARAM_REQS_' . $v;
+    
+    return $$v1 || $$v2;
+}
+
+
+# describeFields ( )
+# 
+# Returns a message describing the output fields for this query.
+# Subclasses should not override this method; rather, they should define the
+# package variable $FIELD_DESC (or $FIELD_DESC_<VERSION>) which this routine
+# will make use of.
+
+sub describeFields {
+    
+    my ($self) = @_;
+    
+    no strict 'refs';
+    
+    my $v = $self->{v}; $v =~ s/\./_/g;
+    
+    my $v1 = ref($self) . '::FIELD_DESC_' . uc($self->{version}) . '_' . $v;
+    my $v2 = ref($self) . '::FIELD_DESC_' . $v;
     
     return $$v1 || $$v2;
 }
@@ -134,6 +164,7 @@ sub setParameters {
     if ( defined $params->{v} and $params->{v} ne '' )
     {
 	my $v = $params->{v};
+	$self->{v} = $v;
 	
 	unless ( $VERSION_ACCEPTED{$v} )
 	{
@@ -187,6 +218,14 @@ sub setParameters {
 	$self->{report_count} = 1;
     }
     
+    # The 'pod' parameter outputs unprocessed POD for help pages (for
+    # debugging purposes only).
+    
+    if ( defined $params->{pod} and $params->{pod} )
+    {
+	$self->{show_pod} = 1;
+    }
+    
     # The undocumented parameter 'stream' allows for debugging streamed data
     # responses.  Value should be 'yes' or 'no'.
     
@@ -211,6 +250,10 @@ sub setParameters {
 	
 	elsif ( $ct eq 'json' ) {
 	    $self->{output_format} = 'json';
+	}
+	
+	elsif ( $ct eq 'html' ) {
+	    die "400 help\n";
 	}
 	
 	else
@@ -307,14 +350,18 @@ sub parseBooleanParam {
 
 sub checkParameters {
     
-    my ($self, $params, $good_params) = @_;
+    my ($self, $params) = @_;
     
     return unless ref $params eq 'HASH';
     
+    # First, figure out which interface version we are checking against.
+    
+    my $v = $params->{v}; $v =~ s/\./_/g;
+    
     # Construct our initial check list.
     
-    my (@good_list) = {limit => 1, count => 1, ct => 1, v => 1, splat => 1};
-    unshift @good_list, $good_params if ref $good_params eq 'HASH';
+    my (@good_list) = {limit => 1, count => 1, ct => 1, v => 1, 
+		       splat => 1, pod => 1, stream => 1};
     
     # If this object is actually in a subclass, look for a variable in that
     # package called $PARAM_CHECK.  If there is one, and it is a hashref, add
@@ -322,10 +369,12 @@ sub checkParameters {
     
     {
 	no strict 'refs';
-	my $v1 = ref($self) . '::PARAM_CHECK_' . uc($self->{version});
-	my $v2 = ref($self) . '::PARAM_CHECK';
-	my $v = $$v1 || $$v2;
-	push @good_list, $v if ref $v eq 'HASH';
+
+	my $v1 = ref($self) . '::PARAM_CHECK_' . uc($self->{version}) . '_' . $v;
+	my $v2 = ref($self) . '::PARAM_CHECK_' . $v;
+	
+	my $class_list = $$v1 || $$v2;
+	push @good_list, $class_list if ref $class_list eq 'HASH';
     }
         
     # Now check each parameter to make sure it falls into at least one of the
