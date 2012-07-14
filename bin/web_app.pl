@@ -141,7 +141,7 @@ All URLs must start with either C</data/> or C</dataE<lt>versionE<gt>> (i.e. C</
 
 =item B<version 1.0>
 
-L<[URLVB:1.0]> or L<[URLVP:1.0]>
+L<[URL:B1.0]> or L<[URL:P1.0]>
 
 =back
 
@@ -845,8 +845,24 @@ sub substHelpText {
 	my ($path) = $1;
 	my ($v) = $query->{v};
 	my ($orig) = request->uri;
-	my ($base) = 'http://' . request->{env}{HTTP_HOST};
+	my ($hostname) = config->{hostname};
+	my ($port) = config->{hostport};
+	my ($base) = 'http://' . $hostname;
+	$base .= ":$port" if defined $port and $port ne '' and $port ne '80';
 	my ($tag) = '';
+	
+	if ( $path =~ /^([BP])(\d.*)/ )
+	{
+	    if ( $1 eq 'B' )
+	    {
+		$orig = '/data1.0';
+	    }
+	    else
+	    {
+		$orig = '/data';
+	    }
+	    $path = '/';
+	}
 	
 	if ( $path =~ /\.CT/ )
 	{
@@ -876,23 +892,6 @@ sub substHelpText {
 	else
 	{
 	    return $base . "/data${path}?v=$v${tag}";
-	}
-    }
-    
-    elsif ( $variable =~ /^URL(V[BP]):(.*)/ )
-    {
-	my ($s) = $1;
-	my ($v) = $2;
-	my ($base) = 'http://' . request->{env}{HTTP_HOST};
-	
-	if ( $s eq 'VB' )
-	{
-	    return $base . "/data${v}/";
-	}
-	
-	else
-	{
-	    return $base . "/data/?v=${v}";
 	}
     }
     
