@@ -52,6 +52,10 @@ if ( $ENV{'SERVER_NAME'} =~ /^eco/i )	{
     $Constants::OCCURRENCES = 'inventory_entries';
     $Constants::OCCURRENCE_NO = 'entry_no';
 }
+if ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i && $ENV{'HTTP_USER_AGENT'} !~ /iPad/i )	{
+    $Constants::PAGE_TOP = 'mobile_top';
+    $Constants::PAGE_BOTTOM = 'mobile_bottom';
+}
 
 
 sub read_conf {

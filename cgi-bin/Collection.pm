@@ -602,7 +602,8 @@ IS NULL))";
     # This field is only passed by links created in the Strata module PS 12/01/2004
 	if ($options{"lithologies"}) {
 		my $val = $dbh->quote($options{"lithologies"});
-		push @where, "(c.lithology1=$val OR c.lithology2=$val)"; 
+		$val =~ s/,/','/g;
+		push @where, "(c.lithology1 IN ($val) OR c.lithology2 IN ($val))"; 
 	}
 	if ($options{"lithadjs"}) {
 		my $val = $dbh->quote('%'.$options{"lithadjs"}.'%');
@@ -2605,6 +2606,12 @@ sub getReidHTMLTableByOccNum {
 	return ($html,$classification,$are_reclassifications);
 }
 
+# split off from basicCollectionInfo JA 28.6.12
+sub getTaxonomicList	{
+	my ($dbt,$collNos) = @_;
+	my $sql = "(SELECT o.collection_no,lft,o.reference_no,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no,o.comments,'' FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no IN (".join(',',@$collNos).") AND re.reid_no IS NULL AND lft>0) UNION (SELECT o.collection_no,lft,re.reference_no,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no,o.comments,re.comments FROM occurrences o,reidentifications re,$TAXA_TREE_CACHE t WHERE o.occurrence_no=re.occurrence_no AND re.collection_no IN (".join(',',@$collNos).") AND re.most_recent='YES' AND re.taxon_no=t.taxon_no AND lft>0) UNION (SELECT o.collection_no,999999,o.reference_no,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0,o.comments,'' FROM occurrences o WHERE collection_no IN (".join(',',@$collNos).") AND taxon_no=0) ORDER BY lft";
+	return \@{$dbt->getData($sql)};
+}
 
 # started another heavy rewrite 26.9.11, finished it 25.10.11
 sub getClassOrderFamily	{
@@ -2653,6 +2660,18 @@ sub getClassOrderFamily	{
 	# first mark names currently ranked at these levels
 	for my $i ( $toplowlevel..$#class_array ) {
 		my $no = $class_array[$i]->{'taxon_no'};
+		# used by jsonCollection 30.6.12
+		if ( ! $rowref->{'category'} )	{
+			if ( $class_array[$i]->{'taxon_name'} =~ /Vertebrata|Chordata/ )	{
+				$rowref->{'category'} = "vertebrate";
+			} elsif ( $class_array[$i]->{'taxon_name'} =~ /Insecta/ )	{
+				$rowref->{'category'} = "insect";
+			} elsif ( $class_array[$i]->{'taxon_name'} =~ /Animalia|Metazoa/ )	{
+				$rowref->{'category'} = "invertebrate";
+			} elsif ( $class_array[$i]->{'taxon_name'} eq "Plantae" )	{
+				$rowref->{'category'} = "plant";
+			}
+		}
 		if ( $class_array[$i]->{'taxon_rank'} eq "class" )	{
 			$wasClass{$no} = 9999;
 		} elsif ( $class_array[$i]->{'taxon_rank'} eq "order" )	{
@@ -2736,6 +2755,9 @@ sub getClassOrderFamily	{
 				$rowref->{'class_no'} = $t->{'taxon_no'};
 			}
 		}
+	}
+	if ( ! $rowref->{'category'} )	{
+		$rowref->{'category'} = "microfossil";
 	}
 
 	return $rowref;
@@ -3013,6 +3035,9 @@ sub basicCollectionInfo	{
 	}
 	$c->{'country'} =~ s/^United/the United/;
 
+	# I'm forced to do this by an iPhone bug
+	my $marginLeft = ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i && $ENV{'HTTP_USER_AGENT'} !~ /iPad/i ) ? "-4em" : "0em";
+
 	print qq|
 
 <script language="JavaScript" type="text/javascript">
@@ -3032,8 +3057,8 @@ function showAuthors()	{
 //  End -->
 </script>
 
-<div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
-<div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left; width: 54em;">
+<center>
+<div class="displayPanel" style="margin-left: $marginLeft; margin-top: 2em; margin-bottom: 2em; text-align: left; width: 80%;">
 <span class="displayPanelHeader">$header of $c->{'country'})</span>
 <div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
 
@@ -3270,16 +3295,6 @@ function showAuthors()	{
 	}
 	print "</p>\n\n";
 
-	$sql = "SELECT r.reference_no,author1last,author2last,otherauthors,pubyr FROM refs r,secondary_refs s WHERE r.reference_no=s.reference_no AND collection_no=".$c->{'collection_no'}." ORDER BY author1last,author2last,pubyr";
-	my @refs = @{$dbt->getData($sql)};
-	if ( @refs )	{
-		my @formatted;
-		for my $r ( @refs )	{
-			push @formatted , Reference::formatShortRef($r,'link_id'=>1);
-		}
-		print "<p $indent>See also ".join(', ',@formatted)."</p>\n\n";
-	}
-
 	$c->{'collection_type'} ? print "<p $indent>Purpose of describing collection: $c->{'collection_type'} analysis<p>\n\n" : "";
 
 	if ( $c->{''} )	{
@@ -3315,9 +3330,8 @@ function showAuthors()	{
 	# the following is basically a complete rewrite of buildTaxonomicList
 	# so what?
 
-	$sql = "(SELECT lft,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,synonym_no,o.comments,'' FROM occurrences o LEFT JOIN reidentifications re ON (o.occurrence_no=re.occurrence_no) LEFT JOIN $TAXA_TREE_CACHE t ON o.taxon_no=t.taxon_no WHERE o.collection_no=$c->{'collection_no'} AND re.reid_no IS NULL AND lft>0) UNION (SELECT lft,re.genus_reso,re.genus_name,re.subgenus_reso,re.subgenus_name,re.species_reso,re.species_name,re.taxon_no,synonym_no,o.comments,re.comments FROM occurrences o,reidentifications re,$TAXA_TREE_CACHE t WHERE o.occurrence_no=re.occurrence_no AND re.collection_no=$c->{'collection_no'} AND re.most_recent='YES' AND re.taxon_no=t.taxon_no AND lft>0) UNION (SELECT 999999,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no,0,o.comments,'' FROM occurrences o WHERE collection_no=$c->{'collection_no'} AND taxon_no=0) ORDER BY lft";
-	my @occs = @{$dbt->getData($sql)};
-	my (%bad,%lookup,@need_authors,%authors);
+	my @occs = @{getTaxonomicList($dbt,[$c->{'collection_no'}])};
+	my (%bad,%lookup,@need_authors,%authors,%rankOfNo);
 	for my $o ( @occs )	{
 		if ( $o->{'taxon_no'} != $o->{'synonym_no'} )	{
 			$bad{$o->{'taxon_no'}} = $o->{'synonym_no'};
@@ -3341,9 +3355,25 @@ function showAuthors()	{
 		}
 	}
 	if ( @need_authors )	{
-		$sql = "SELECT taxon_no,IF(ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@need_authors).")";
-		$authors{$_->{'taxon_no'}} = Reference::formatShortRef($_) foreach @{$dbt->getData($sql)};
+		$sql = "SELECT taxon_no,taxon_rank,IF(ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@need_authors).")";
+		my @ref_info = @{$dbt->getData($sql)};
+		$authors{$_->{'taxon_no'}} = Reference::formatShortRef($_) foreach @ref_info;
+		$rankOfNo{$_->{'taxon_no'}} = $_->{'taxon_rank'} foreach @ref_info;
 	}
+	my (%isRef,@refs,$refList,%refCiteNo);
+	$isRef{$_->{'reference_no'}}++ foreach @occs;
+	if ( %isRef )	{
+		@refs = @{$dbt->getData("SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no IN (".join(',',keys %isRef).") AND reference_no!=$c->{'reference_no'} ORDER BY author1last,author2last,otherauthors,pubyr")};
+	}
+	if ( $#refs > 0 )	{
+		
+		for my $i ( 0..$#refs )	{
+			$refList .= sprintf("; <sup>%d</sup>".Reference::formatShortRef($refs[$i],'link_id'=>1),$i+1);
+			$refCiteNo{$refs[$i]->{'reference_no'}} = $i + 1;
+		}
+		$refList =~ s/^; //;
+	}
+
 	print "<div style=\"margin-left: 0em; margin-right: 1em; border-top: 1px solid darkgray;\">\n\n";
 	print "<p class=\"large\" style=\"margin-top: 0.5em; margin-bottom: 0em;\">Taxonomic list</p>\n\n";
 	if ( $c->{'taxonomy_comments'} )	{
@@ -3353,6 +3383,7 @@ function showAuthors()	{
 	print "<table class=\"small\" cellspacing=\"0\" cellpadding=\"4\" class=\"taxonomicList\">\n\n";
 	my ($lastclass,$lastorder,$lastfamily,$class,@with_authors);
 	for my $o ( @occs )	{
+		# format taxon names
 		my ($ital,$ital2,$postfix) = ('<i>','</i>','');
 		if ( $o->{'species_name'} eq "indet." )	{
 			($ital,$ital2) = ('','');
@@ -3407,9 +3438,20 @@ function showAuthors()	{
 		if ( $lookup{$o->{'synonym_no'}} )	{
 			$o->{'formatted'} = '"'.$o->{'formatted'}.'" = '.$lookup{$o->{'synonym_no'}};
 		}
+$o->{'formatted'} .= qq|<sup><span class="tiny">$refCiteNo{$o->{'reference_no'}}</span></sup>|;
 		if ( $o->{'abund_value'} )	{
 			$o->{'formatted'} .= "[".$o->{'abund_value'}."]";
 		}
+
+		# get author/year info
+		my $author = $authors{$o->{'synonym_no'}};
+		# erase author if the classified taxon isn't a species but
+		#  the name looks like a proper species (= no funny characters)
+		if ( $rankOfNo{$o->{'synonym_no'}} !~ /species/ && $o->{'species_name'} !~ /[^a-z]/ && $o->{'species_reso'} !~ /"/ )	{
+			$author = "";
+		}
+
+		# get class/order/family names
 		my $class_hash = TaxaCache::getParents($dbt,[$o->{'taxon_no'}],'array_full');
 		my @class_array = @{$class_hash->{$o->{'taxon_no'}}};
 		my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$o->{'taxon_no'}},['taxon_name','taxon_rank','pubyr','common_name']);
@@ -3418,6 +3460,9 @@ function showAuthors()	{
 		if ( ! $o->{'class'} && ! $o->{'order'} && ! $o->{'family'} )	{
 			$o->{'class'} = "unclassified";
 		}
+
+		# put everything together
+#$o->{formatted} .= $rankOfNo{$o->{'synonym_no'}};
 		if ( $o->{'class'} ne $lastclass || $o->{'order'} ne $lastorder || $o->{'family'} ne $lastfamily )	{
 			if ( $lastclass || $lastorder || $lastfamily )	{
 				print "\n</div>\n<div class=\"withAuthors\">\n<div style=\"padding-bottom: 0.2em;\">".join("</div><div style=\"padding-bottom: 0.2em;\">\n",@with_authors)."</div></div>\n";
@@ -3438,12 +3483,11 @@ function showAuthors()	{
 			print "<tr$class>\n<td valign=\"top\"><nobr>";
 			print "&nbsp;".join(' - ',$o->{'order'},$o->{'family'})."</nobr></td>\n";
 			print "<td valign=\"top\"><div class=\"noAuthors\">$o->{'formatted'}";
-			#push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}};
-			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}}." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
+			push @with_authors , $o->{'formatted'}." ".$author." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
 			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<div class=\"verysmall\" style=\"padding-left: 0.75em; padding-top: 0.2em; padding-bottom: 0.3em;\">$o->{'comments'}</div>\n" : "";
 		} else	{
 			print ", $o->{'formatted'}";
-			push @with_authors , $o->{'formatted'}." ".$authors{$o->{'synonym_no'}}." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
+			push @with_authors , $o->{'formatted'}." ".$author." <span style=\"float: right; clear: right; padding-left: 2em;\">$o->{'common_name'}</span>";
 			$with_authors[$#with_authors] .= ( $o->{'comments'} ) ? "<br>\n<div class=\"verysmall\" style=\"padding-left: 0.75em; padding-top: 0.2em; padding-bottom: 0.3em;\">$o->{'comments'}</div>\n" : "";
 		}
 		$lastclass = $o->{'class'};
@@ -3453,6 +3497,7 @@ function showAuthors()	{
 	print "\n</div>\n<div class=\"withAuthors\">\n<div style=\"padding-bottom: 0.2em;\">".join("</div><div style=\"padding-bottom: 0.2em;\">\n",@with_authors)."</div></div>\n";
 	print "</tr>\n";
 	print "</table>\n\n";
+	print "<div class=\"verysmall\" style=\"margin-top: 0.5em;\">$refList</div>\n";
 
 	print "</div>\n</div>\n</div>\n\n";
 
@@ -3491,9 +3536,102 @@ function showAuthors()	{
 
 	print "<br>\n\n";
 	print "</div>\n\n";
+print "</center>";
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 
+}
+
+# JA 26-28.6.12
+sub jsonCollection	{
+	my ($dbt,$q,$s) = @_;
+	my %options;
+	$options{$_} = $q->param($_) foreach $q->param();
+	my ($colls_ref) = getCollections($dbt,$s,\%options,['*']);
+
+	my %intervalInSet;
+	for my $c ( @$colls_ref )	{
+		$intervalInSet{$c->{'max_interval_no'}}++;
+		$intervalInSet{$c->{'min_interval_no'}}++ if ( $c->{'min_interval_no'} > 0 );
+	}
+	my $t = new TimeLookup($dbt);
+	my @intervals = keys %intervalInSet;
+	my $lookup = $t->lookupIntervals(\@intervals);
+	my (%occs,%seenTaxa,%cof);
+	my @coll_nos = map { $_->{collection_no} } @$colls_ref;
+	for my $c ( @{getTaxonomicList($dbt,\@coll_nos)} )	{
+		push @{$occs{$c->{'collection_no'}}} , $c;
+		$seenTaxa{$c->{'taxon_no'}}++;
+	}
+	for my $no ( keys %seenTaxa )	{
+		my $class_hash = TaxaCache::getParents($dbt,[$no],'array_full');
+		my @class_array = @{$class_hash->{$no}};
+		my $child = { 'taxon_no' => $no } ;
+		unshift @class_array , $child;
+		my $child = getClassOrderFamily($dbt,\$child,\@class_array);
+		$cof{$no}{$_} = $child->{$_} foreach ('category','common_name','class','order','family');
+	}
+
+	print qq|{ "collections": [ { |;
+	my @colls;
+	for my $c ( @$colls_ref )	{
+		my @attributes;
+		my $coll_string;
+
+		for my $f ( 'lithadj','minor_lithology','lithadj2','minor_lithology2','museum' )	{
+			$c->{$f} =~ s/,/ /g;
+		}
+
+		$c->{'reference'} = Reference::formatLongRef($dbt,$c->{'reference_no'});
+		# strip out HTML plus the authorizer/enterer info
+		$c->{'reference'} =~ s/<span.*span>//;
+		$c->{'reference'} =~ s/<(\/|)(b|i|u)>//g;
+
+		$c->{'lat'} = sprintf("%.1f",$c->{'lat'});
+		$c->{'lng'} = sprintf("%.1f",$c->{'lng'});
+
+		my $max_lookup = $lookup->{$c->{'max_interval_no'}};
+		my $min_lookup = $lookup->{$c->{'min_interval_no'}};
+		$c->{'max_interval'} = $max_lookup->{'interval_name'};
+		$c->{'min_interval'} = $min_lookup->{'interval_name'};
+
+		$c->{'lithology'} = $c->{'lithology1'};
+		$c->{'lithadj'} =~ s/ication/ied/g;
+		$c->{'lithadj2'} =~ s/ication/ied/g;
+		for my $term ( 'minor_lithology','lithadj','lithification' )	{
+			$c->{'lithology'} = ( $c->{$term} ne "" ) ? $c->{$term}.' '.$c->{'lithology'} : $c->{'lithology'};
+		}
+		for my $term ( 'minor_lithology2','lithadj2','lithification2' )	{
+			$c->{'lithology2'} = ( $c->{$term} ne "" ) ? $c->{$term}.' '.$c->{'lithology2'} : $c->{'lithology2'};
+		}
+		$c->{'lithology'} .= ( $c->{'lithology2'} ne "" ) ? ' and '.$c->{'lithology2'} : "";
+
+		for my $f ( 'collection_name','lithology','lithology2','environment' )	{
+			$c->{$f} =~ s/"//g;
+		}
+
+		for my $field ( 'collection_no' , 'collection_name', 'reference', 'country', 'state', 'county', 'lat', 'lng', 'max_interval', 'min_interval', 'geological_group', 'formation', 'member', 'lithology', 'environment', 'museum', 'authorizer', 'enterer', 'created' )	{
+			$c->{$field} =~ s/"/\\"/g;
+			# this shouldn't happen, but it does...
+			$c->{$field} =~ s/\t/ /g;
+			my $f = $field;
+			$f =~ s/collection_no/PaleoDB_collection/;
+			$f =~ s/lat/latitude/;
+			$f =~ s/lng/longitude/;
+			$f =~ s/geological_group/group/;
+			push @attributes , qq|"$f": "$c->{$field}"|;
+		}
+
+		my $list = qq|"taxa": [ |;
+		$list .= qq|{ "category": "$cof{$_->{taxon_no}}{category}", "common_name": "$cof{$_->{taxon_no}}{common_name}", "class": "$cof{$_->{taxon_no}}{class}", "order": "$cof{$_->{taxon_no}}{order}", "family": "$cof{$_->{taxon_no}}{family}", "genus": "$_->{genus_name}", "species": "$_->{species_name}" }, | foreach @{$occs{$c->{'collection_no'}}};
+		$list =~ s/, $//;
+		$list .= " ]";
+		push @attributes , $list;
+
+		push @colls , join(', ',@attributes);
+	}
+	print join('}, { ',@colls);
+	print " } ] }";
 }
 
 sub inventoryForm	{
@@ -3610,7 +3748,7 @@ sub inventoryInfo	{
 	}
 
 	print qq|
-<div align="center" class="medium" style="margin-left: 1em; margin-top: 3em; width: 58em;">
+<div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
 
 <div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left;">
 <span class="displayPanelHeader">$i->{'inventory_name'}</span>

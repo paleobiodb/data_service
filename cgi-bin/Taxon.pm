@@ -2049,12 +2049,14 @@ sub guessTaxonRank {
 
 sub validTaxonName {
     my $taxon = shift;
-    
-    if ($taxon =~ /[()]/) {
+
+    if ($taxon =~ /^([A-Z%]|% )([a-z%]+)( [a-z%]+){0,2}$/)	{
+        return 1;
+    } elsif ($taxon =~ /[()]/)	{
         if ($taxon =~ /^[A-Z][a-z]+ \([A-Z][a-z]+\)( [a-z]+){0,2}$/) {
             return 1;
         }
-    } else {
+    } else	{
         if ($taxon =~ /^[A-Z][a-z]+( [a-z]+){0,2}$/) {
             return 1;
         }

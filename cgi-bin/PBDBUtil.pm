@@ -139,8 +139,7 @@ sub numberToName {
     }
 
     return $name;
-}   
-
+}
 
 
 # pass it an array ref and a scalar
@@ -307,7 +306,7 @@ sub stripTags {
 }
 
 sub checkForBot {
-    if ($ENV{'HTTP_USER_AGENT'} =~ /slurp|bot|spider|ask jeeves|crawl|archive|holmes|findlinks|webcopier|cfetch|stackrambler/i || $ENV{'REMOTE_ADDR'} =~ /^194.85./) {
+    if ($ENV{'HTTP_USER_AGENT'} =~ /slurp|bot|spider|ask jeeves|crawl|archive|holmes|findlinks|webcopier|cfetch|stackrambler|bnserver/i || $ENV{'REMOTE_ADDR'} =~ /^194.85./) {
         return 1;
     }
     return 0;
