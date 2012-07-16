@@ -401,7 +401,7 @@ sub home	{
 
 	# PAPERS IN PRESS
 	my $limit = 3;
-	if ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i )	{
+	if ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i && $ENV{'HTTP_USER_AGENT'} !~ /iPad/i )	{
 		$limit = 1;
 	}
 	$sql = "SELECT CONCAT(authors,'. ',title,'. <i>',journal,'.</i> \[#',pub_no,'\]') AS cite FROM pubs WHERE created<now()-interval 1 week ORDER BY pub_no DESC LIMIT $limit";
@@ -472,7 +472,7 @@ sub home	{
 	$row->{'enterer_names'} = Person::homePageEntererList($dbt);
 
 	print $hbo->stdIncludes($PAGE_TOP);
-	if ( $ENV{'HTTP_USER_AGENT'} !~ /Mobile/i )	{
+	if ( $ENV{'HTTP_USER_AGENT'} !~ /Mobile/i || $ENV{'HTTP_USER_AGENT'} =~ /iPad/i )	{
 		print $hbo->populateHTML('home', $row);
 	} else	{
 		print $hbo->populateHTML('mobile_home', $row);
