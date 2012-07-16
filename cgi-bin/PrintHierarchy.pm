@@ -80,15 +80,14 @@ sub classify	{
 			print $hbo->stdIncludes($PAGE_BOTTOM);
 			exit;
 		}
-		my %in;
-		$in{$_->{'child_spelling_no'}}++ foreach @opinions;
-		$in{$_->{'parent_spelling_no'}}++ foreach @opinions;
-		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no AND t.taxon_no IN (".join(',',keys %in).")";
+		my %isChild;
+		$isChild{$_->{'child_spelling_no'}}++ foreach @opinions;
+		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE o.reference_no=$reference_no AND ref_has_opinion='YES' AND child_spelling_no=a.taxon_no AND a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no";
 		@taxa = @{$dbt->getData($sql)};
 		# some parents may be completely unclassified
 		my $non_opinion_fields = $fields;
 		$non_opinion_fields =~ s/,status//;
-		$sql = "SELECT $non_opinion_fields FROM authorities a,$TAXA_TREE_CACHE t,refs r WHERE a.taxon_no=t.taxon_no AND t.opinion_no=0 AND a.reference_no=r.reference_no AND t.taxon_no IN (".join(',',keys %in).")";
+		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE o.reference_no=$reference_no AND ref_has_opinion='YES' AND parent_spelling_no=a.taxon_no AND a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no AND parent_spelling_no NOT IN (".join(',',keys %isChild).") GROUP BY parent_spelling_no";
 		push @taxa , @{$dbt->getData($sql)};
 		my %parent;
 		$parent{$_->{'child_spelling_no'}} = $_->{'parent_spelling_no'} foreach @opinions;
@@ -199,9 +198,9 @@ sub classify	{
 		traverse( $p , '' , 1 );
 		for my $i ( 1..9 )	{
 			$sumchildren = $sumchildren + $atlevel[$i];
-			if ( $sumchildren >= 3 && $i > 1 )	{
+			if ( $sumchildren >= 10 && $i > 1 )	{
 				$shownDepth = $i;
-				if ( $sumchildren <= 20 )	{
+				if ( $sumchildren <= 30 )	{
 					$shownDepth = $i + 1;
 				}
 				last;

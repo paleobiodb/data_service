@@ -15,6 +15,7 @@ $Constants::HTML_DIR        = $conf->{'HTML_DIR'};
 $Constants::DATA_DIR        = $conf->{'DATA_DIR'};
 $Constants::DB_SOCKET       = $conf->{'DB_SOCKET'};
 $Constants::DB_PASSWD       = $conf->{'DB_PASSWD'};
+$Constants::DB_USER	    = $conf->{'DB_USER'} || 'pbdbuser';
 $Constants::IP_MAIN         = '137.111.92.50';
 $Constants::IP_BACKUP       = '137.111.92.50';
 
@@ -51,6 +52,10 @@ if ( $ENV{'SERVER_NAME'} =~ /^eco/i )	{
     $Constants::COLLECTION_NO = 'inventory_no';
     $Constants::OCCURRENCES = 'inventory_entries';
     $Constants::OCCURRENCE_NO = 'entry_no';
+}
+if ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i && $ENV{'HTTP_USER_AGENT'} !~ /iPad/i )	{
+    $Constants::PAGE_TOP = 'mobile_top';
+    $Constants::PAGE_BOTTOM = 'mobile_bottom';
 }
 
 

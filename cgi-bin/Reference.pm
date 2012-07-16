@@ -272,15 +272,15 @@ sub getSecondaryRefs {
 
 # This shows the actual references.
 sub displayRefResults {
-    my ($dbt,$q,$s,$hbo) = @_;
+	my ($dbt,$q,$s,$hbo) = @_;
 
-    my $type = $q->param('type');
+	my $type = $q->param('type');
 
 	# use_primary is true if the user has clicked on the "Current reference" link at
 	# the top or bottom of the page.  Basically, don't bother doing a complicated 
 	# query if we don't have to.
 	my ($data,$query_description,$alternatives) = ([],'','');
-	unless($q->param('use_primary')) {
+	unless ( $q->param('use_primary') )	{
 		($data,$query_description,$alternatives) = getReferences($dbt,$q,$s,$hbo);
 	} 
 	my @data;
@@ -288,11 +288,11 @@ sub displayRefResults {
 		@data  = @$data;
 	}
 
-	if ((scalar(@data) == 1 && $type ne 'add') || $q->param('use_primary')) {
+	if ( (scalar(@data) == 1 && $type ne 'add') || $q->param('use_primary') || $q->param('use_last') )	{
 		# Do the action, don't show results...
 
 		# Set the reference_no
-		unless($q->param('use_primary') || $q->param('type') eq 'view') {
+		unless ( $q->param('use_primary') || $q->param('type') =~ /view|edit/ )	{
 			$s->setReferenceNo( $data[0]->{'reference_no'});
 		}
 
@@ -707,7 +707,7 @@ sub getMeasuredTaxa	{
 # JA: Poling completely fucked this up and I restored it from backup 13.4.04
 # $Message tells them why they are here
 sub displaySearchRefs {
-    my ($dbt,$q,$s,$hbo,$message) = @_;
+	my ($dbt,$q,$s,$hbo,$message) = @_;
 
 	my $type = $q->param("type");
 
@@ -720,7 +720,14 @@ sub displaySearchRefs {
 	# Don't bother to show if we are in select mode.
 	my $reference_no = $s->get("reference_no");
 	if ( $reference_no && $type ne "add" ) {
-		$vars->{'use_current'} = "<input type='submit' name='use_current' value='Use $reference_no'>\n";
+		$vars->{'use_current'} = qq|<input type="submit" name="use_current" value="Use $reference_no">\n|;
+	}
+	if ( $s->isDBMember() && $type ne "add" )	{
+		my $sql = "SELECT reference_no FROM refs WHERE enterer_no=".$s->get('enterer_no')." ORDER BY reference_no DESC LIMIT 1";
+		my $last = ${$dbt->getData($sql)}[0]->{reference_no};
+		if ( $last != $reference_no )	{
+			$vars->{'use_current'} .= qq|<input type="submit" name="use_last" value="Use last entered">\n<input type="hidden" name="last_ref" value="$last">\n|;
+		}
 	}
 	if ( $message && $s->isDBMember() )	{
 		for my $f ("name","year","reftitle","project_name")	{
@@ -1051,8 +1058,11 @@ sub getReferences {
     my $dbh = $dbt->dbh;
     my %options = $q->Vars();
 
-    if ($options{'use_current'}) {
+    if ($options{'use_current'})	{
         $options{'reference_no'} = $s->get('reference_no');
+    }
+    if ($options{'use_last'})	{
+        $options{'reference_no'} = $options{'last_ref'};
     }
     if ($options{'author'} && ! $options{'name'})	{
         $options{'name'} = $options{'author'};

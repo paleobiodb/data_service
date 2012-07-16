@@ -257,7 +257,7 @@ sub formatAsHTML {
         $short_ref = Reference::formatShortRef($row);
     }
     if ($options{'return_array'}) {
-        return ($output," according to ".$short_ref);
+        return ($output," according to ",$short_ref);
     } else {
         $output .= " according to $short_ref";
         return $output;
@@ -580,7 +580,7 @@ sub displayOpinionForm {
         $higher_rank = 'higher taxon';
     }
     my $selected= "CHECKED";
-    $belongs_to_row .= "<tr>\n<td colspan=\"2\">\n<span class=\"small\"><span class=\"prompt\">Status and parent:</span>&nbsp;</span> ";
+    $belongs_to_row .= "<div style=\"margin-top: 0.4em;\">\n<span class=\"prompt\">Status and parent:</span> ";
     my @statusArray;
     if ( $childRank =~ /species|genus/ )	{
 	@statusArray = ( 'belongs to', @synArray );
@@ -596,7 +596,7 @@ sub displayOpinionForm {
         my $parentTaxon = ($selected || ($isNewEntry && $childRank =~ /species/)) ? $parentName : "";
         $belongs_to_row .= qq|<input name="belongs_to_parent" size="24" value="$parentTaxon">|;
     }
-    $belongs_to_row .= qq|</td></tr>|;
+    $belongs_to_row .= qq|</div>|;
 
 
     if (!$reSubmission && !$isNewEntry) {
@@ -618,14 +618,14 @@ sub displayOpinionForm {
     my ($phyl_keys,$phyl_values) = $hbo->getKeysValues('phylogenetic_status');
     my $phyl_select = $hbo->htmlSelect('phylogenetic_status',$phyl_keys,$phyl_values,$fields{'phylogenetic_status'});
     
-    $belongs_to_row .= qq|<tr><td><div class="small">|;
+    $belongs_to_row .= qq|<div style="margin-top: 0.4em;">|;
     if ( $childRank !~ /species/ )	{
         $belongs_to_row .= "<span class=\"prompt\">Phylogenetic status:</span> $phyl_select";
     } 
     if ( $childRank =~ /species|genus|tribe|family/ )	{
         $belongs_to_row .= $type_select;
     }
-    $belongs_to_row .= "</div></td></tr>";
+    $belongs_to_row .= "</div>";
 
 	# if this is a second pass and we have a list of alternative taxon
 	#  numbers, make a pulldown menu listing the taxa JA 25.4.04
@@ -650,11 +650,11 @@ sub displayOpinionForm {
     }
 
     my $spelling_note = "<small>If the name is invalid, enter the invalid name and not its senior synonym, replacement, etc.</small>";
-    $spelling_row .= "<tr><td colspan=\"2\" class=\"small\"><span class=\"prompt\">Full name and rank of the taxon used in the reference:</span></td></tr>";
+    $spelling_row .= "<div><span class=\"prompt\">Full name and rank of the child taxon used in the reference:</span></div>\n";
 
 	my $spelling_rank_pulldown = $hbo->htmlSelect('child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
 	if (scalar(@child_spelling_nos) > 1 || (scalar(@child_spelling_nos) == 1 && @opinions_to_migrate1)) {
-		$spelling_row .= "<tr><td nowrap width=\"100%\" class=\"small\">";
+		$spelling_row .= "<div>";
 		foreach my $child_spelling_no (@child_spelling_nos) {
 			my $parent = TaxonTrees::getParent($dbh,$child_spelling_no);
 			my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$child_spelling_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
@@ -673,9 +673,9 @@ sub displayOpinionForm {
 		$spelling_row .= qq|<input type="hidden" name="new_child_spelling_name" value="$childSpellingName">|;
 		my $new_child_spelling_rank_pulldown = $hbo->htmlSelect('new_child_spelling_rank',\@ranks, \@ranks, $fields{'child_spelling_rank'});
 		$spelling_row .= qq|<input type="radio" name="child_spelling_no" value="-1"> Create a new '$childSpellingName' based off '$childName' with rank $new_child_spelling_rank_pulldown<br>|;
-		$spelling_row .= "$spelling_note</td></tr>";
+		$spelling_row .= "$spelling_note</div>";
 	} else {
-		$spelling_row .= qq|<tr><td nowrap width="100%" class="small"><input id="child_spelling_name" name="child_spelling_name" size=30 value="$childSpellingName">$spelling_rank_pulldown<br>$spelling_note</td></tr>|;
+		$spelling_row .= qq|<div><input id="child_spelling_name" name="child_spelling_name" size=30 value="$childSpellingName">$spelling_rank_pulldown<br>$spelling_note</div>|;
 	}
 
 
@@ -684,16 +684,15 @@ sub displayOpinionForm {
     if ($childRank =~ /subgenus/) {
         my ($genusName,$subGenusName) = Taxon::splitTaxon($childName);
         @select_values = ('original spelling','correction','misspelling','rank change','reassignment');
-        @select_keys = ("is the original spelling and rank", "is a correction of '$childName'","is a misspelling","has had its rank changed from $childRank","has been reassigned from its original genus '$genusName'");
+        @select_keys = ("original spelling and rank", "correction of '$childName'","misspelling","rank changed from $childRank","reassigned from the original genus '$genusName'");
     } elsif ($childRank =~ /species/) {
         @select_values = ('original spelling','recombination','correction','misspelling');
-        @select_keys = ("is the original spelling and rank","is a recombination or rank change of '$childName'","is a correction of '$childName'","is a misspelling");
+        @select_keys = ("original spelling and rank","recombination or rank change of '$childName'","correction of '$childName'","misspelling");
     } else {
         @select_values = ('original spelling','correction','misspelling','rank change');
-        @select_keys = ("is the original spelling and rank","is a correction of '$childName'","is a misspelling","has had its rank changed from its original rank of $childRank");
+        @select_keys = ("original spelling and rank","correction of '$childName'","misspelling","rank changed from original rank of $childRank");
     }
-    $spelling_row .= "<tr><td>&nbsp;</td></tr>";
-    $spelling_row .= "<tr><td class=\"small\"><span class=\"prompt\">Reason why this spelling and rank was used:</span><br>This ". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</td></tr>";
+    $spelling_row .= "<div style=\"margin-top: 0.5em;\"><span class=\"prompt\">Reason why this spelling and rank was used:</span>\n<span>". $hbo->htmlSelect('spelling_reason',\@select_keys,\@select_values,$fields{'spelling_reason'})."</span>";
 
     dbg("showOpinionForm, fields are: <pre>".Dumper(\%fields)."</pre>");
 
@@ -1381,7 +1380,7 @@ sub submitOpinionForm {
         }
         
         # Make sure opinions authority information is synchronized with the original combination
-        Taxon::propagateAuthorityInfo($dbt,$fields{'child_no'});
+        Taxon::propagateAuthorityInfo($dbt,$q,$fields{'child_no'});
 
         # Remove any duplicates that may have been added as a result of the migration
         $resultOpinionNumber = removeDuplicateOpinions($dbt,$s,$fields{'child_no'},$resultOpinionNumber);
@@ -1390,10 +1389,11 @@ sub submitOpinionForm {
     fixMassEstimates($dbt,$dbh,$fields{'child_no'});
 
     $o = Opinion->new($dbt,$resultOpinionNumber); 
-    my $opinionHTML = $o->formatAsHTML();
-    $opinionHTML =~ s/according to/of/i;
+    my ($opinion,$relation,$authority) = $o->formatAsHTML('return_array'=>1);
+    $relation =~ s/according to/of/i;
+    my $opinionHTML = $opinion.$relation.$authority;
 
-	my $enterupdate = ($isNewEntry) ? 'entered' : 'updated';
+    my $enterupdate = ($isNewEntry) ? 'entered' : 'updated';
 
     # we need to warn about the nasty case in which the author has synonymized
     #  genera X and Y, but we do not know the author's opinion on one or more
@@ -1456,14 +1456,14 @@ sub submitOpinionForm {
 |;
 
     if (@warnings) {
-        $end_message .= "<DIV class=\"warning\">";
+        $end_message .= "<div class=\"warning\">";
         if ( $#warnings > 0 )	{
-            $end_message .= "Warnings:<BR>";
-            $end_message .= "<LI>$_</LI>" for (@warnings);
+            $end_message .= "Warnings:<br>";
+            $end_message .= "<li>$_</li>" for (@warnings);
         } else	{
             $end_message .= "Warning: " . $warnings[0];
         }
-        $end_message .= "</DIV>";
+        $end_message .= "</div>";
     }
 
     # the authority data are very useful for deciding whether to also edit them
@@ -1477,35 +1477,23 @@ sub submitOpinionForm {
     }
     $authors .= " " . $auth->{'pubyr'};
 
-    my $style = qq| style="padding-top: 0.75em;"|;
-    $end_message .= qq|
-<div class="displayPanel">
-<p>
-<table cellpadding="10"><tr><td valign="top" class="small">
-  <p class="large" style="margin-left: 2em;">Name functions</p>
-  <ul>
-  <li><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm">Add/edit another taxon</a></li>
-  <br><li><a href="$WRITE_URL?action=displayAuthorityForm&taxon_no=$fields{child_spelling_no}">Edit $childSpellingName $authors</a></li>
-  <br><li><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&display=authorities&reference_no=$resultReferenceNumber">Edit a name from the same reference</a></li>
-  <br><li><a href="$WRITE_URL?action=displayAuthorityTaxonSearchForm&use_reference=new">Add/edit another taxon from another reference</a></li>
-  <br><li><a href="$READ_URL?action=checkTaxonInfo&taxon_no=$fields{child_no}">Get general information about $childName</a></li>   
-  </ul>
-</td>
-<td valign="top" class="small">
-  <p class="large" style="margin-left: 2em;">Opinion functions</p>
-  <ul>
-  <li><a href="$WRITE_URL?action=displayOpinionSearchForm">Add/edit opinion about another taxon</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=$resultOpinionNumber">Edit this opinion</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionChoiceForm&taxon_no=$fields{child_spelling_no}">Edit another opinion about $childSpellingName</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionForm&opinion_no=-1&child_spelling_no=$fields{child_spelling_no}&child_no=$fields{child_no}">Add another opinion about $childSpellingName</a></li>
-  <li$style><a href="$WRITE_URL?action=displayTaxonomicNamesAndOpinions&display=opinions&reference_no=$resultReferenceNumber">Edit an opinion from the same reference</a></li>
-  <li$style><a href="$WRITE_URL?action=displayOpinionSearchForm&use_reference=new">Add/edit opinion about another taxon from another reference</a></li>
-  <li$style><a href="$WRITE_URL?action=classify&reference_no=$resultReferenceNumber">Print this reference's classification</a></li>
-  </ul>
-</td></tr></table>
-</p>
-</div>
-</div>|;
+    my %message_vals;
+    $message_vals{'child_no'} = $fields{child_no};
+    $message_vals{'child_spelling_no'} = $fields{child_spelling_no};
+    $message_vals{'result_reference'} = $resultReferenceNumber;
+    $message_vals{'result_opinion'} = $resultOpinionNumber;
+    $message_vals{'child_name'} = $childName;
+    $message_vals{'child_spelling'} = $childSpellingName;
+    $message_vals{'child_authors'} = Reference::formatShortRef($auth);
+    $message_vals{'opinion_authors'} = Reference::formatShortRef($dbt,$resultReferenceNumber);
+    $message_vals{'opinion_authors'} =~ s/[A-Z]\. //g;
+    if ( $s->get('reference_no') != $resultReferenceNumber && $s->get('reference_no') > 0 )	{
+        $message_vals{'my_reference'} = $s->get('reference_no');
+        $message_vals{'my_authors'} = Reference::formatShortRef($dbt,$s->get('reference_no'));
+        $message_vals{'my_authors'} =~ s/[A-Z]\. //g;
+    }
+
+    $end_message .= $hbo->populateHTML('opinion_end_message',\%message_vals);
 
     # See Taxon::displayTypeTaxonSelectForm for details
     Taxon::displayTypeTaxonSelectForm($dbt,$s,$fields{'type_taxon'},$fields{'child_no'},$childName,$childRank,$resultReferenceNumber,$end_message);
@@ -1621,7 +1609,7 @@ sub fixMassEstimates	{
 		my @in_list = TaxonInfo::getAllSynonyms($dbt,$e);
 		my $sql = "UPDATE $TAXA_TREE_CACHE SET mass=NULL WHERE taxon_no IN (".join(',',@in_list).")";
 		$dbh->do($sql);
-		my @specimens = Measurement::getMeasurements($dbt,'taxon_list'=>\@in_list,'get_global_specimens'=>1);
+		my @specimens = Measurement::getMeasurements($dbt,{'taxon_list'=>\@in_list,'get_global_specimens'=>1});
 		if ( @specimens )	{
 			my $p_table = Measurement::getMeasurementTable(\@specimens);
 			my @m = Measurement::getMassEstimates($dbt,$e,$p_table);
@@ -1663,7 +1651,8 @@ sub displayOpinionChoiceForm {
         print qq|<div align="left"><ul>|;
         foreach my $row (@results) {
             my $o = Opinion->new($dbt,$row->{'opinion_no'});
-            my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+            my ($opinion,$relation,$authority) = $o->formatAsHTML('return_array'=>1);
+            $authority = $relation.$authority;
             if ( $row->{'opinion_no'} == $row->{'current_opinion'} )	{
                 $opinion = "<b>".$opinion."</b>";
             }
@@ -1746,7 +1735,8 @@ sub displayOpinionChoiceForm {
             print qq|<ul>|;
             foreach my $row (@results) {
                 my $o = Opinion->new($dbt,$row->{'opinion_no'});
-                my ($opinion,$authority) = $o->formatAsHTML('return_array'=>1);
+                my ($opinion,$relation,$authority) = $o->formatAsHTML('return_array'=>1);
+                $authority = $relation.$authority;
                 if ( $row->{'opinion_no'} == $row->{'current_opinion'} )	{
                     $opinion = "<b>".$opinion."</b>";
                 }

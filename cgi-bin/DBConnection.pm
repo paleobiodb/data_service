@@ -15,7 +15,7 @@ sub connect {
     my $hostName = "localhost";
     my $userName = $DB_USER;
     my $dbName =   "pbdb";
-
+    
     my $dsn;
     if ( $DB_SOCKET )	{
         $dsn = "DBI:$driver:database=$dbName;host=$hostName;mysql_socket=$DB_SOCKET";

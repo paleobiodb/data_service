@@ -80,7 +80,7 @@ if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
 my $sql = "SHOW PROCESSLIST";
 my $p = $dbt->dbh->do( $sql );
 if ( $p >= 10 )	{
-	if ( PBDBUtil::checkForBot() == 1 )	{
+	if ( PBDBUtil::checkForBot() == 1 || $p >= 20 )	{
 		exit;
 	}
 }
@@ -93,70 +93,57 @@ if ( $q->param('action') eq "home" )	{
 my $hbo = HTMLBuilder->new($dbt,$s,$use_guest,'');
 
 # process the action
-processAction();
-
-# ____________________________________________________________________________________
-# --------------------------------------- subroutines --------------------------------
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 # rjp, 2/2004
-sub processAction {
-	# Grab the action from the form.  This is what subroutine we should run.
-	my $action = ($q->param("action") || "menu");
+# Grab the action from the form.  This is what subroutine we should run.
+my $action = ($q->param("action") || "menu");
 	
-    # The right combination will allow me to conditionally set the DEBUG flag
-    if ($s->get("enterer") eq "J. Sepkoski" && 
-        $s->get("authorizer") eq "J. Alroy" ) {
-            $Debug::DEBUG = 1;
-    }
+# The right combination will allow me to conditionally set the DEBUG flag
+if ($s->get("enterer") eq "J. Sepkoski" && 
+    $s->get("authorizer") eq "J. Alroy" ) {
+        $Debug::DEBUG = 1;
+}
     
-	# figure out what to do with the action
-    if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /flatpebble\.nceas/) {
-	    print $q->redirect( -url=>'http://flatpebble.nceas.ucsb.edu/cgi-bin/bridge.pl?action='.$action);
-    } elsif ($action eq 'logout') {
-    	logout();
-        return;
-    } elsif ($action eq 'processLogin') {
-        processLogin();
-        return;
+# figure out what to do with the action
+if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /flatpebble\.nceas/)	{
+    print $q->redirect( -url=>'http://flatpebble.nceas.ucsb.edu/cgi-bin/bridge.pl?action='.$action);
+} elsif ($action eq 'logout')	{
+    logout();
+    return;
+} elsif ($action eq 'processLogin')	{
+    processLogin();
+    return;
+} else	{
+    if ($q->param('output_format') eq 'xml' ||
+        $q->param('action') =~ /XML$/) {
+        print $q->header(-type => "text/xml", 
+                     -Cache_Control=>'no-cache',
+                     -expires =>"now" );
+    } elsif ($q->param('action') =~ /json/i )	{
+        print $q->header(-type => "application/json", 
+                     -Cache_Control=>'no-cache',
+                     -expires =>"now" );
     } else {
-        if ($q->param('output_format') eq 'xml' ||
-            $q->param('action') =~ /XML$/) {
-            print $q->header(-type => "text/xml", 
-                         -Cache_Control=>'no-cache',
-                         -expires =>"now" );
-        } else {
-            print $q->header(-type => "text/html", 
-                         -Cache_Control=>'no-cache',
-                         -expires =>"now" );
-        } 
-
-        dbg("<p><font color='red' size='+1' face='arial'>You are in DEBUG mode!</font><br> Cookie []<BR> Action [$action] Authorizer [".$s->get("authorizer")."] Enterer [".$s->get("enterer")."]<BR></p>");
-        #dbg("@INC");
-        dbg($q->Dump);
-        execAction($action);
-	}
+        print $q->header(-type => "text/html", 
+                     -Cache_Control=>'no-cache',
+                     -expires =>"now" );
+    }
+    execAction($action);
     exit;
 }
 
-# Exec actions with this so we can peform some sanity check or do whatever on them
-# trap this in an eval {} later so we can dump out all relevant data on crash in the
-# future
+# call the proper subroutine
 sub execAction {
     my $action = shift;
     $action =~ s/[^a-zA-Z0-9_]//g;
+    # collection_no is a key param used all over the place and developers
+    #  hitting us for JSON or XML might get its name wrong JA 28.6.12
+    for my $param ( 'collection','coll','PaleoDB_collection' )	{
+        if ( $q->param($param) > 0 )	{
+            $q->param('collection_no' => $q->param($param));
+        }
+    }
     $action = \&{$action}; # Hack so use strict doesn't break
-    # Run the action (ie, call the proper subroutine)
     &$action;
-    #if ($@) {
-    #    print $@."<br>";
-    #    foreach (my $i = 0;$i< 5;$i++) {
-    #        my ($package, $filename, $line, $subroutine) = caller($i);
-    #        if ($package) {
-    #            print "$line: $package:$subroutine<br>";
-    #        } 
-    #    }
-    #}
     exit;
 }
 
@@ -284,9 +271,9 @@ sub displayPreferencesPage {
         login( "Please log in first.");
         return;
     }
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Session::displayPreferencesPage($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub setPreferences {
@@ -294,9 +281,9 @@ sub setPreferences {
         login( "Please log in first.");
         return;
     }
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Session::setPreferences($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # displays the main menu page for the data enterers
@@ -390,15 +377,18 @@ sub home	{
 		} elsif ( $thing->{day_now} == $thing->{day_created} + 1 )	{
 			$entry = 60 * $thing->{hour_now} + 60 * ( 24 - $thing->{hour_created} ) + $thing->{minute_now} - $thing->{minute_created};
 		}
-		if ( $entry )	{
+		if ( $entry < 60 )	{
 			$entry .= " minutes ago";
 			$entry =~ s/^1 minutes ago/one minute ago/;
 			$entry =~ s/^0 minutes ago/this very minute/;
-			return $entry;
+		} elsif ( $entry )	{
+			$entry = int($entry / 60)." hours ago";
+			$entry =~ s/^1 hours/one hour/;
 		# hopefully this will never happen
 		} else	{
-			return ($thing->{day_now} - $thing->{day_created})." days ago";
+			$entry = ($thing->{day_now} - $thing->{day_created})." days ago";
 		}
+		return $entry;
 	}
 
 	# Get some populated values
@@ -410,7 +400,11 @@ sub home	{
 	}
 
 	# PAPERS IN PRESS
-	$sql = "SELECT CONCAT(authors,'. ',title,'. <i>',journal,'.</i> \[#',pub_no,'\]') AS cite FROM pubs WHERE created<now()-interval 1 week ORDER BY pub_no DESC LIMIT 3";
+	my $limit = 3;
+	if ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i && $ENV{'HTTP_USER_AGENT'} !~ /iPad/i )	{
+		$limit = 1;
+	}
+	$sql = "SELECT CONCAT(authors,'. ',title,'. <i>',journal,'.</i> \[#',pub_no,'\]') AS cite FROM pubs WHERE created<now()-interval 1 week ORDER BY pub_no DESC LIMIT $limit";
 	my @pubs;
 	push @pubs , $_->{cite} foreach @{$dbt->getData($sql)};
 	$row->{in_press} = '<div class="small" style="text-indent: -0.5em; margin-left: 0.5em;margin-bottom: 0.25em;">'.join(qq|</div>\n<div class="small" style="text-indent: -0.5em; margin-left: 0.5em; margin-bottom: 0.25em;">|,@pubs)."</div>";
@@ -477,9 +471,13 @@ sub home	{
 	# TOP CONTRIBUTORS THIS MONTH
 	$row->{'enterer_names'} = Person::homePageEntererList($dbt);
 
-	print $hbo->stdIncludes("std_page_top");
-	print $hbo->populateHTML('home', $row);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_TOP);
+	if ( $ENV{'HTTP_USER_AGENT'} !~ /Mobile/i || $ENV{'HTTP_USER_AGENT'} =~ /iPad/i )	{
+		print $hbo->populateHTML('home', $row);
+	} else	{
+		print $hbo->populateHTML('mobile_home', $row);
+	}
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # calved off from sub home because it might be useable later on JA 22.3.12
@@ -552,9 +550,9 @@ my $row; # place holder
 # Shows the form for requesting a map
 sub displayBasicMapForm {
 	my %vars = ( 'mapsize'=>'100%', 'pointsize1'=>'medium', 'pointshape1'=>'circles', 'dotcolor1'=>'gold', 'dotborder1'=>'no' );
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	print $hbo->populateHTML('basic_map_form', \%vars);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # Shows the form for requesting a map
@@ -582,11 +580,11 @@ sub displayMapForm {
     }
 
 	# Spit out the HTML
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     print Person::makeAuthEntJavascript($dbt);
 	print $hbo->populateHTML('js_map_checkform');
     print $hbo->populateHTML('map_form', \%vars);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
@@ -604,7 +602,7 @@ sub displayMapResults {
     $|=1; # Freeflowing data
 
     logRequest($s,$q);
-	print $hbo->stdIncludes("std_page_top" );
+	print $hbo->stdIncludes($PAGE_TOP );
 
     my @errors;
     if ($q->param('interval_name_preset')) {
@@ -683,7 +681,7 @@ sub displayMapResults {
         }
         close MAP;
     }
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
@@ -723,7 +721,7 @@ sub displayMapOfCollection {
     if ($q->param("display_header") eq 'NO') {
         print $hbo->stdIncludes("blank_page_top") 
     } else {
-        print $hbo->stdIncludes("std_page_top") 
+        print $hbo->stdIncludes($PAGE_TOP) 
     }
 
     if ($coll->{'collection_no'}) {
@@ -769,12 +767,12 @@ sub displayMapOfCollection {
     if ($q->param("display_header") eq 'NO') {
         print $hbo->stdIncludes("blank_page_bottom") 
     } else {
-        print $hbo->stdIncludes("std_page_bottom") 
+        print $hbo->stdIncludes($PAGE_BOTTOM) 
     }
 }
 
 sub displaySimpleMap {
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	$q->param("simple_map"=>'YES');
     return if PBDBUtil::checkForBot();
 
@@ -817,7 +815,7 @@ sub displaySimpleMap {
         print "<i>No distribution data are available</i>";
     }  
     print "</div>";
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
@@ -851,10 +849,10 @@ sub displayDownloadForm {
 		$vars{'row_class_1b'} = '';
 	}
 
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	print Person::makeAuthEntJavascript($dbt);
 	print $hbo->populateHTML('download_form',\%vars);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayBasicDownloadForm {
@@ -868,32 +866,32 @@ sub displayBasicDownloadForm {
 			$vars{$k} = $v;
 		}
 	}
-	print $hbo->stdIncludes("std_page_top" );
+	print $hbo->stdIncludes($PAGE_TOP );
 	print $hbo->populateHTML('basic_download_form',\%vars);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayDownloadResults {
     require Download;
     logRequest($s,$q);
 
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 
 	my $m = Download->new($dbt,$q,$s,$hbo);
 	$m->buildDownload( );
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub emailDownloadFiles	{
 	require Download;
 
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 
 	my $m = Download->new($dbt,$q,$s,$hbo);
 	$m->emailDownloadFiles();
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 
 }
 
@@ -901,19 +899,19 @@ sub emailDownloadFiles	{
 sub displayDownloadMeasurementsForm	{
 	my %vars = $q->Vars();
 	$vars{'error_message'} = shift;
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	print PBDBUtil::printIntervalsJava($dbt,1);
 	print $hbo->populateHTML('download_measurements_form',\%vars);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayDownloadMeasurementsResults	{
 	return if PBDBUtil::checkForBot();
 	require Download;
 	logRequest($s,$q);
-	print $hbo->stdIncludes("std_page_top");
-	Measurement::displayDownloadMeasurementsResults($q,$s,$dbt);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_TOP);
+	Measurement::displayDownloadMeasurementsResults($q,$s,$dbt,$hbo);
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayDownloadNeptuneForm {
@@ -925,16 +923,16 @@ sub displayDownloadNeptuneForm {
         $vars{'row_class_1'} = ' class="lightGray"';
         $vars{'row_class_2'} = '';
     }
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     print $hbo->populateHTML('download_neptune_form',\%vars);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }       
     
 sub displayDownloadNeptuneResults {
     require Neptune;
-    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes( $PAGE_TOP );
     Neptune::displayNeptuneDownloadResults($q,$s,$hbo,$dbt);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }  
 
 sub displayDownloadTaxonomyForm {
@@ -942,10 +940,10 @@ sub displayDownloadTaxonomyForm {
     my %vars = $q->Vars();
     $vars{'authorizer_me'} = $s->get('authorizer_reversed');
 
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     print Person::makeAuthEntJavascript($dbt);
     print $hbo->populateHTML('download_taxonomy_form',\%vars);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }       
 
 sub getTaxonomyXML {
@@ -960,20 +958,20 @@ sub displayDownloadTaxonomyResults {
     require DownloadTaxonomy;
 
     logRequest($s,$q);
-    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes( $PAGE_TOP );
     if ($q->param('output_data') =~ /ITIS/i) {
         DownloadTaxonomy::displayITISDownload($dbt,$q,$s);
     } else { 
         DownloadTaxonomy::displayPBDBDownload($dbt,$q,$s);
     }
                                               
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }  
 
 sub displayReportForm {
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 	print $hbo->populateHTML('report_form');
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayReportResults {
@@ -981,12 +979,12 @@ sub displayReportResults {
 
 	logRequest($s,$q);
 
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 
 	my $r = Report->new($dbt,$q,$s);
 	$r->buildReport();
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayMostCommonTaxa	{
@@ -995,32 +993,32 @@ sub displayMostCommonTaxa	{
 
 	logRequest($s,$q);
 
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 
 	my $r = Report->new($dbt,$q,$s);
 	$r->findMostCommonTaxa($dataRowsRef);
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayCountForm	{
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 	require Person;
 	print Person::makeAuthEntJavascript($dbt);
 	print $hbo->populateHTML('taxon_count_form');
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub fastTaxonCount	{
 	return if PBDBUtil::checkForBot();
 	logRequest($s,$q);
 
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 
 	require Report;
 	Report::fastTaxonCount($dbt,$q,$s,$hbo);
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
@@ -1029,16 +1027,16 @@ sub countNames	{
 
 	logRequest($s,$q);
 
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 
 	my $r = Report->new($dbt,$q,$s);
 	$r->countNames();
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayCurveForm {
-    my $std_page_top = $hbo->stdIncludes("std_page_top");
+    my $std_page_top = $hbo->stdIncludes($PAGE_TOP);
     print $std_page_top;
 
 	my $html = $hbo->populateHTML('curve_form');
@@ -1056,7 +1054,7 @@ sub displayCurveForm {
     }
     print $html;
 
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayCurveResults	{
@@ -1064,13 +1062,13 @@ sub displayCurveResults	{
 
 	logRequest($s,$q);
 
-	my $std_page_top = $hbo->stdIncludes("std_page_top");
+	my $std_page_top = $hbo->stdIncludes($PAGE_TOP);
 	print $std_page_top;
 
 	my $c = Curve->new($q, $s, $dbt );
 	$c->buildCurve($hbo);
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # Show a generic page
@@ -1131,9 +1129,9 @@ sub getReferencesXML {
 
 sub getTitleWordOdds	{
 	logRequest($s,$q);
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Reference::getTitleWordOdds($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayReferenceForm {
@@ -1975,7 +1973,21 @@ sub getOccurrencesXML {
     }
 }
 
+# JA 23.6.12
+# hey, it's something
+sub jsonTaxon	{
+	my $t = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$q->param('name')},['all']);
+	my $author = TaxonInfo::formatShortAuthor($t);
+	my $parent_hash = TaxaCache::getParents($dbt,[$t->{'taxon_no'}],'array_full');
+	my @parent_array = @{$parent_hash->{$t->{'taxon_no'}}};
+	my $cof = Collection::getClassOrderFamily($dbt,'',\@parent_array);
+	print qq|{ "PaleoDB_no": "$t->{'taxon_no'}", "author": "$author", "common_name": "$t->{'common_name'}", "extant": "$t->{'extant'}", "rank": "$t->{'taxon_rank'}", "family": "$cof->{'family'}", "order": "$cof->{'order'}", "class": "$cof->{'class'}" }|;
+}
 
+# JA 27.6.12
+sub jsonCollection	{
+	Collection::jsonCollection($dbt,$q,$s);
+}
 
 # JA 5-6.4.04
 # compose the SQL to find collections of a certain age within 100 km of
@@ -2175,9 +2187,9 @@ sub displayCollectionForm {
         login("Please log in first.");
         exit;
     }
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Collection::displayCollectionForm($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub processCollectionForm {
@@ -2200,24 +2212,24 @@ sub rarefyAbundances {
     return if PBDBUtil::checkForBot();
     logRequest($s,$q);
 
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Collection::rarefyAbundances($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayCollectionEcology	{
 	return if PBDBUtil::checkForBot();
 	logRequest($s,$q);
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Collection::displayCollectionEcology($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub explainAEOestimate	{
 	return if PBDBUtil::checkForBot();
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Collection::explainAEOestimate($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 }
 
 # PS 11/7/2005
@@ -2226,7 +2238,7 @@ sub explainAEOestimate	{
 # Flow of this is a little complicated
 #
 sub submitOpinionSearch {
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     if ($q->param('taxon_name')) {
         $q->param('goal'=>'opinion');
         processTaxonSearch($dbt,$hbo,$q,$s);
@@ -2234,7 +2246,7 @@ sub submitOpinionSearch {
         $q->param('goal'=>'opinion');
         Opinion::displayOpinionChoiceForm($dbt,$s,$q);
     }
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # JA 17.8.02
@@ -2246,9 +2258,9 @@ sub submitOpinionSearch {
 # Edited by PS 01/24/2004, accept reference_no instead of taxon_name optionally
 #
 sub submitTaxonSearch {
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     processTaxonSearch($dbt, $hbo, $q, $s);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub processTaxonSearch {
@@ -2389,9 +2401,9 @@ sub processTaxonSearch {
                 }
 
                 if (@typoResults) {
-                    print "<div align=\"center\"><table><tr><td align=\"center\">";
+                    print "<div align=\"center\">\n";
     		        print "<p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">'<i>" . $q->param('taxon_name') . "</i>' was not found</p>\n<br>\n";
-                    print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
+                    print "<div class=\"displayPanel medium\" style=\"width: 36em; padding: 1em;\">\n";
                     print "<p><div align=\"left\"><ul>";
                     my $none = "None of the above";
                     if ( $#typoResults == 0 )	{
@@ -2421,7 +2433,7 @@ sub processTaxonSearch {
                     print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of the names above match, please enter a new taxon record.";
                     print "</div></p>";
                     print "</div>";
-                    print "</td></tr></table></div>";
+                    print "</div>";
                 } else {
                     if (!$s->get('reference_no')) {
                         $s->enqueue($q->query_string());
@@ -2442,10 +2454,10 @@ sub processTaxonSearch {
             }
 
             if (@typoResults) {
-                print "<div align=\"center\"><table><tr><td align=\"center\">";
+                print "<div align=\"center\">";
     		    print "<p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">'<i>" . $q->param('taxon_name') . "</i>' was not found</p>\n<br>\n";
-                print "<div class=\"displayPanel medium\" style=\"padding: 1em;\">\n";
-                print "<p><div align=\"left\"><ul>";
+                print "<div class=\"displayPanel medium\" style=\"width: 36em; padding: 1em;\">\n";
+                print "<div align=\"left\"><ul>";
                 foreach my $row (@typoResults) {
                     my $full_row = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$row->{'taxon_no'}},['*']);
                     my ($name,$authority) = Taxon::formatTaxon($dbt,$full_row,'return_array'=>1);
@@ -2453,15 +2465,15 @@ sub processTaxonSearch {
                 }
                 print "</ul>";
 
-                print "<div align=left class=small style=\"width: 500\">";
+                print qq|<div align=left class="small">\n<p>|;
                 if ( $#typoResults > 0 )	{
-                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of them are what you're looking for, please <a href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
+                    print "The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, some approximate matches were found and are listed above.  If none of them are what you're looking for, please <a href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
                 } else	{
-                    print "<p>The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, an approximate match was found and is listed above.  If it is not what you are looking for, please <a href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
+                    print "The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.  However, an approximate match was found and is listed above.  If it is not what you are looking for, please <a href=\"$WRITE_URL?action=displayAuthorityForm&taxon_no=-1&taxon_name=".$q->param('taxon_name')."\">enter a new authority record</a> first.";
                 }
                 print "</div></p>";
                 print "</div>";
-                print "</td></tr></table></div>";
+                print "</div>";
             } else {
                 if ($q->param('taxon_name')) {
                     push my @errormessages , "The taxon '" . $q->param('taxon_name') . "' doesn't exist in the database.<br>Please <a href=\"$WRITE_URL?action=submitTaxonSearch&goal=authority&taxon_name=".$q->param('taxon_name')."\">enter</a> an authority record for this taxon first.";
@@ -2497,7 +2509,6 @@ sub processTaxonSearch {
     # or create a new taxon with the same name as an exisiting taxon
 	} else	{
 		print "<div align=\"center\">\n";
-        print "<table><tr><td align=\"center\">";
         if ($q->param("taxon_name")) { 
     		print "<p class=\"pageTitle\" style=\"margin-top: 1em;\">Which '<i>" . $q->param('taxon_name') . "</i>' do you mean?</p>\n<br>\n";
         } else {
@@ -2509,7 +2520,7 @@ sub processTaxonSearch {
         }
 
         # now create a table of choices
-		print "<div class=\"displayPanel medium\" style=\"padding: 1em; padding-right: 2em; margin-top: -1em;\">";
+		print "<div class=\"displayPanel medium\" style=\"width: 40em; padding: 1em; padding-right: 2em; margin-top: -1em;\">";
         print "<div align=\"left\"><ul>\n";
         my $checked = (scalar(@results) == 1) ? "CHECKED" : "";
         foreach my $row (@results) {
@@ -2557,9 +2568,7 @@ sub processTaxonSearch {
 		    print "You may want to read the <a href=\"javascript:tipsPopup('/public/tips/taxonomy_FAQ.html')\">FAQ</a>.</div></p>\n";
         }
 
-        print "</div>";
-        print "</td></tr></table>";
-		print "</div>\n";
+		print "</div>\n</div>\n";
 	}
 }
 
@@ -2577,14 +2586,20 @@ sub displayAuthorityTaxonSearchForm {
     if ($q->param('use_reference') eq 'new') {
         $s->setReferenceNo(0);
     }
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     my %vars = $q->Vars();
     $vars{'authorizer_me'} = $s->get('authorizer_reversed');
 
     print Person::makeAuthEntJavascript($dbt);
-    print $hbo->populateHTML('search_authority_form',\%vars);
 
-    print $hbo->stdIncludes("std_page_bottom");
+    $vars{'page_title'} = "Search for names to add or edit";
+    $vars{'action'} = "submitTaxonSearch";
+    $vars{'taxonomy_fields'} = "YES";
+    $vars{'goal'} = "authority";
+
+    print $hbo->populateHTML('search_taxon_form', \%vars);
+
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # rjp, 3/2004
@@ -2598,16 +2613,16 @@ sub displayAuthorityForm {
 			exit;
         }
 	} 
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	Taxon::displayAuthorityForm($dbt, $hbo, $s, $q);	
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
 sub submitAuthorityForm {
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	Taxon::submitAuthorityForm($dbt,$hbo, $s, $q);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayClassificationTableForm {
@@ -2620,9 +2635,9 @@ sub displayClassificationTableForm {
 		displaySearchRefs("You must choose a reference before adding new taxa" );
 		exit;
 	}
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	FossilRecord::displayClassificationTableForm($dbt, $hbo, $s, $q);	
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayClassificationUploadForm {
@@ -2635,9 +2650,9 @@ sub displayClassificationUploadForm {
 		displaySearchRefs("You must choose a reference before adding new taxa" );
 		exit;
 	}
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	FossilRecord::displayClassificationUploadForm($dbt, $hbo, $s, $q);	
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
@@ -2646,9 +2661,9 @@ sub submitClassificationTableForm {
 		login( "Please log in first.");
 		exit;
 	} 
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	FossilRecord::submitClassificationTableForm($dbt,$hbo, $s, $q);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitClassificationUploadForm {
@@ -2656,9 +2671,9 @@ sub submitClassificationUploadForm {
 		login( "Please log in first.");
 		exit;
 	} 
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	FossilRecord::submitClassificationUploadForm($dbt,$hbo, $s, $q);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 ## END Authority stuff
@@ -2673,13 +2688,17 @@ sub displayOpinionSearchForm {
     if ($q->param('use_reference') eq 'new') {
         $s->setReferenceNo(0);
     }
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     my %vars = $q->Vars();
     $vars{'authorizer_me'} = $s->get('authorizer_reversed');
-
     print Person::makeAuthEntJavascript($dbt);
-    print $hbo->populateHTML('search_opinion_form', \%vars);
-    print $hbo->stdIncludes("std_page_bottom");
+
+    $vars{'page_title'} = "Search for opinions to add or edit";
+    $vars{'action'} = "submitOpinionSearch";
+    $vars{'taxonomy_fields'} = "YES";
+
+    print $hbo->populateHTML('search_taxon_form', \%vars);
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # PS 01/24/2004
@@ -2689,9 +2708,9 @@ sub displayOpinionChoiceForm {
     if ($q->param('use_reference') eq 'new') {
         $s->setReferenceNo(0);
     }
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     Opinion::displayOpinionChoiceForm($dbt,$s,$q);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub reviewOpinionsForm	{
@@ -2729,34 +2748,34 @@ sub displayOpinionForm {
         }
 	}
 	
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Opinion::displayOpinionForm($dbt, $hbo, $s, $q);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitOpinionForm {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Opinion::submitOpinionForm($dbt,$hbo, $s, $q);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub entangledNamesForm	{
 	my $error = shift;
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Taxon::entangledNamesForm($dbt,$hbo,$s,$q);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub disentangleNames	{
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Taxon::disentangleNames($dbt,$hbo,$s,$q);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitTypeTaxonSelect {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Taxon::submitTypeTaxonSelect($dbt, $s, $q);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub badNameForm	{
@@ -2782,21 +2801,21 @@ sub badNames	{
 ##############
 ## Editing list stuff
 sub displayPermissionListForm {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     Permissions::displayPermissionListForm($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitPermissionList {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     Permissions::submitPermissionList($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 } 
 
 sub submitHeir{
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     Permissions::submitHeir($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 } 
 
 ##############
@@ -2809,21 +2828,21 @@ sub searchOccurrenceMisspellingForm {
         login( "Please log in first." );
         exit;
     }
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	TypoChecker::searchOccurrenceMisspellingForm ($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub occurrenceMisspellingForm {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	TypoChecker::occurrenceMisspellingForm ($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitOccurrenceMisspelling {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	TypoChecker::submitOccurrenceMisspelling($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 ## END occurrence misspelling stuff
@@ -2851,45 +2870,45 @@ sub startProcessReclassifyForm	{
 ## Taxon Info Stuff
 
 sub beginTaxonInfo{
-    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes( $PAGE_TOP );
     if ($IS_FOSSIL_RECORD) {
         FossilRecord::displaySearchTaxaForm($dbt,$q,$s,$hbo);
     } else {
         TaxonInfo::searchForm($hbo, $q);
     }
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub checkTaxonInfo {
     logRequest($s,$q);
     if ( $q->param('match') eq "all" )	{
-        print $hbo->stdIncludes( "std_page_top" );
+        print $hbo->stdIncludes( $PAGE_TOP );
         $q->param('taxa' => @{TaxonInfo::getMatchingSubtaxa($dbt,$q,$s,$hbo)} );
         if ( ! $q->param('taxa') )	{
             TaxonInfo::searchForm($hbo,$q,1);
         } else	{
             TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
         }
-        print $hbo->stdIncludes("std_page_bottom");
+        print $hbo->stdIncludes($PAGE_BOTTOM);
         exit;
     } elsif ( $q->param('match') eq "random" )	{
         # infinite loops are bad
         TaxonInfo::getMatchingSubtaxa($dbt,$q,$s,$hbo);
         $q->param('match' => '');
     }
-    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes( $PAGE_TOP );
     if ($IS_FOSSIL_RECORD) {
          FossilRecord::submitSearchTaxaForm($dbt,$q,$s,$hbo);
     } else {
         TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
     }
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayTaxonInfoResults {
-    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes( $PAGE_TOP );
 	TaxonInfo::displayTaxonInfoResults($dbt,$s,$q,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # JA 3.11.09
@@ -2901,37 +2920,37 @@ sub basicTaxonInfo	{
 ##############
 
 sub beginFirstAppearance	{
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 	TaxonInfo::beginFirstAppearance($hbo, $q, '');
-	print $hbo->stdIncludes( "std_page_bottom" );
+	print $hbo->stdIncludes( $PAGE_BOTTOM );
 }
 
 sub displayFirstAppearance	{
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 	TaxonInfo::displayFirstAppearance($q, $s, $dbt, $hbo);
-	print $hbo->stdIncludes( "std_page_bottom" );
+	print $hbo->stdIncludes( $PAGE_BOTTOM );
 }
 
 sub displaySearchFossilRecordTaxaForm {
-    print $hbo->stdIncludes( "std_page_top" );
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes( $PAGE_TOP );
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitSearchFossilRecordTaxa {
     logRequest($s,$q);
-    print $hbo->stdIncludes( "std_page_top" );
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes( $PAGE_TOP );
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayFossilRecordCurveForm {
-    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes( $PAGE_TOP );
 	FossilRecord::displayFossilRecordCurveForm($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub submitFossilRecordCurveForm {
-    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes( $PAGE_TOP );
 	FossilRecord::submitFossilRecordCurveForm($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 ### End Module Navigation
@@ -2948,48 +2967,48 @@ sub searchScale	{
 }
 sub processShowForm	{
     require Scales;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	Scales::processShowEditForm($dbt, $hbo, $q, $s, $WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub processViewScale	{
     require Scales;
     logRequest($s,$q);
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	Scales::processViewTimeScale($dbt, $hbo, $q, $s);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub processEditScale	{
     require Scales;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	Scales::processEditScaleForm($dbt, $hbo, $q, $s, $WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub displayTenMyBinsDebug {
     return if PBDBUtil::checkForBot();
     require Scales;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Scales::displayTenMyBinsDebug($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub submitSearchInterval {
     require Scales;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Scales::submitSearchInterval($dbt, $hbo, $q);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub displayInterval {
     require Scales;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Scales::displayInterval($dbt, $hbo, $q);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub displayTenMyBins {
     return if PBDBUtil::checkForBot();
     require Scales;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Scales::displayTenMyBins($dbt,$q,$s,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 ## END Scales stuff
@@ -3002,15 +3021,15 @@ sub startImage{
     my $goal='image';
     my $page_title ='Search for the taxon with an image to be added';
 
-    print $hbo->stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_TOP);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,'submitTaxonSearch',$goal],['page_title','action','goal']);
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayLoadImageForm{
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	Images::displayLoadImageForm($dbt, $q, $s);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub processLoadImage{
@@ -3018,9 +3037,9 @@ sub processLoadImage{
 		login( "Please log in first");
 		exit;
 	} 
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Images::processLoadImage($dbt, $q, $s);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub searchGallery	{
@@ -3037,7 +3056,7 @@ sub displayImage {
     if ($q->param("display_header") eq 'NO') {
         print $hbo->stdIncludes("blank_page_top") 
     } else {
-        print $hbo->stdIncludes("std_page_top") 
+        print $hbo->stdIncludes($PAGE_TOP) 
     }
     my $image_no = int($q->param('image_no'));
     if (!$image_no) {
@@ -3050,7 +3069,7 @@ sub displayImage {
     if ($q->param("display_header") eq 'NO') {
         print $hbo->stdIncludes("blank_page_bottom"); 
     } else {
-        print $hbo->stdIncludes("std_page_bottom"); 
+        print $hbo->stdIncludes($PAGE_BOTTOM); 
     }
 }
 ## END Image stuff
@@ -3063,27 +3082,27 @@ sub startStartEcologyTaphonomySearch{
     my $goal='ecotaph';
     my $page_title ='Search for the taxon you want to describe';
 
-    print $hbo->stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_TOP);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,'submitTaxonSearch',$goal],['page_title','action','goal']);
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub startStartEcologyVertebrateSearch{
     my $goal='ecovert';
     my $page_title ='Search for the taxon you want to describe';
 
-    print $hbo->stdIncludes("std_page_top");
-    print $hbo->populateHTML('search_taxon_form',[$page_title,$goal],['page_title','goal']);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_TOP);
+    print $hbo->populateHTML('search_taxon_form',[$page_title,'submitTaxonSearch',$goal],['page_title','action','goal']);
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub startPopulateEcologyForm	{
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	Ecology::populateEcologyForm($dbt, $hbo, $q, $s, $WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub startProcessEcologyForm	{
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
 	Ecology::processEcologyForm($dbt, $q, $s, $WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 ## END Ecology stuff
 ##############
@@ -3091,38 +3110,38 @@ sub startProcessEcologyForm	{
 ##############
 ## Specimen measurement stuff
 sub displaySpecimenSearchForm	{
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	if (!$s->get('reference_no'))	{
 		$s->enqueue('action=displaySpecimenSearchForm');
 		displaySearchRefs("You must choose a reference before adding measurements" );
 		exit;
 	}
 	print $hbo->populateHTML('search_specimen_form',[],[]);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitSpecimenSearch{
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Measurement::submitSpecimenSearch($dbt,$hbo,$q,$s,$WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displaySpecimenList {
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Measurement::displaySpecimenList($dbt,$hbo,$q,$s,$WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub populateMeasurementForm{
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Measurement::populateMeasurementForm($dbt,$hbo,$q,$s,$WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub processMeasurementForm {
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Measurement::processMeasurementForm($dbt,$hbo,$q,$s,$WRITE_URL);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 ## END Specimen measurement stuff
@@ -3135,23 +3154,23 @@ sub processMeasurementForm {
 sub displayStrata {
     require Strata;
     logRequest($s,$q);
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Strata::displayStrata($q,$s,$dbt,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displaySearchStrataForm {
     require Strata;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Strata::displaySearchStrataForm($q,$s,$dbt,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }  
 
 sub displaySearchStrataResults{
     require Strata;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Strata::displaySearchStrataResults($q,$s,$dbt,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }  
 ## END Strata stuff
 ##############
@@ -3162,9 +3181,9 @@ sub classificationForm	{
 	return if PBDBUtil::checkForBot();
 	require PrintHierarchy;
 	logRequest($s,$q);
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	PrintHierarchy::classificationForm($hbo, $s);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub classify	{
 	return if PBDBUtil::checkForBot();
@@ -3177,18 +3196,18 @@ sub classify	{
 ## SanityCheck stuff
 sub displaySanityForm	{
 	my $error_message = shift;
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	print $hbo->populateHTML('sanity_check_form',$error_message);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub startProcessSanityCheck	{
 	return if PBDBUtil::checkForBot();
 	require SanityCheck;
 	logRequest($s,$q);
     
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	SanityCheck::processSanityCheck($q, $dbt, $hbo, $s);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 ## END SanityCheck stuff
 ##############
@@ -3197,15 +3216,15 @@ sub startProcessSanityCheck	{
 ## PAST stuff
 sub PASTQueryForm {
     require PAST;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     PAST::queryForm($dbt,$q,$hbo,$s);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub PASTQuerySubmit {
     require PAST;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     PAST::querySubmit($dbt,$q,$hbo,$s);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 ## End PAST stuff
 ##############
@@ -4809,11 +4828,11 @@ sub displayReIDCollsAndOccsSearchForm {
     $vars{'type'} = "reid";
 
 	# Spit out the HTML
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
     print PBDBUtil::printIntervalsJava($dbt,1);
     print Person::makeAuthEntJavascript($dbt);
 	print $hbo->populateHTML('search_occurrences_form',\%vars);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayOccsForReID {
@@ -4843,7 +4862,7 @@ sub displayOccsForReID {
 
 	my $printCollDetails = 0;
 
-	print $hbo->stdIncludes( "std_page_top" );
+	print $hbo->stdIncludes( $PAGE_TOP );
 	print $hbo->populateHTML('js_occurrence_checkform');
     
 	my $pageNo = $q->param('page_no');
@@ -5028,7 +5047,7 @@ sub displayOccsForReID {
 
 	print "</tr>\n</table><p>\n";
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
@@ -5075,30 +5094,30 @@ sub setMostRecentReID {
 # ------------------------ #
 sub showEnterers {
     logRequest($s,$q);
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     print Person::showEnterers($dbt,$IS_FOSSIL_RECORD);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub showAuthorizers {
     logRequest($s,$q);
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     print Person::showAuthorizers($dbt,$IS_FOSSIL_RECORD);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub showFeaturedAuthorizers {
     logRequest($s,$q);
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     print Person::showFeaturedAuthorizers($dbt,$IS_FOSSIL_RECORD);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub showInstitutions {
     logRequest($s,$q);
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     print Person::showInstitutions($dbt,$IS_FOSSIL_RECORD);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub publications	{
@@ -5119,109 +5138,109 @@ sub displaySearchSectionResults{
     return if PBDBUtil::checkForBot();
     require Confidence;
     logRequest($s,$q);
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Confidence::displaySearchSectionResults($q, $s, $dbt,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displaySearchSectionForm{
     require Confidence;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Confidence::displaySearchSectionForm($q, $s, $dbt,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayTaxaIntervalsForm{
     require Confidence;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Confidence::displayTaxaIntervalsForm($q, $s, $dbt,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayTaxaIntervalsResults{
     return if PBDBUtil::checkForBot();
     require Confidence;
     logRequest($s,$q);
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Confidence::displayTaxaIntervalsResults($q, $s, $dbt,$hbo);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub buildListForm {
     return if PBDBUtil::checkForBot();
     require Confidence;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Confidence::buildList($q, $s, $dbt,$hbo,{});
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayStratTaxaForm{
     return if PBDBUtil::checkForBot();
     require Confidence;
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     Confidence::displayStratTaxa($q, $s, $dbt);
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub showOptionsForm {
     return if PBDBUtil::checkForBot();
     require Confidence;
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Confidence::optionsForm($q, $s, $dbt);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub calculateTaxaInterval {
     return if PBDBUtil::checkForBot();
     require Confidence;
     logRequest($s,$q);
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Confidence::calculateTaxaInterval($q, $s, $dbt);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub calculateStratInterval {
     return if PBDBUtil::checkForBot();
     require Confidence;
     logRequest($s,$q);
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Confidence::calculateStratInterval($q, $s, $dbt);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 ## Cladogram stuff
 
 sub displayCladeSearchForm	{
-    print $hbo->stdIncludes("std_page_top");
+    print $hbo->stdIncludes($PAGE_TOP);
     print $hbo->populateHTML('search_clade_form');
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 
-	#print $hbo->stdIncludes("std_page_top");
+	#print $hbo->stdIncludes($PAGE_TOP);
     #Cladogram::displayCladeSearchForm($dbt,$q,$s,$hbo);
-	#print $hbo->stdIncludes("std_page_bottom");
+	#print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 #sub processCladeSearch	{
-#	print $hbo->stdIncludes("std_page_top");
+#	print $hbo->stdIncludes($PAGE_TOP);
 #    Cladogram::processCladeSearch($dbt,$q,$s,$hbo);
-#	print $hbo->stdIncludes("std_page_bottom");
+#	print $hbo->stdIncludes($PAGE_BOTTOM);
 #}
 sub displayCladogramChoiceForm	{
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     Cladogram::displayCladogramChoiceForm($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub displayCladogramForm	{
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     Cladogram::displayCladogramForm($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub submitCladogramForm {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     Cladogram::submitCladogramForm($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub drawCladogram	{
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
     my $cladogram_no = $q->param('cladogram_no');
     my $force_redraw = $q->param('force_redraw');
     my ($pngname, $caption, $taxon_name) = Cladogram::drawCladogram($dbt,$cladogram_no,$force_redraw);
@@ -5230,38 +5249,38 @@ sub drawCladogram	{
         print qq|<img src="/public/cladograms/$pngname"><br>$caption|;
         print qq|</div>|;
     }
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # JA 17.1.10
 sub displayReviewForm {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Review::displayReviewForm($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub processReviewForm {
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Review::processReviewForm($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub listReviews	{
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Review::listReviews($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub showReview	{
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 	Review::showReview($dbt,$q,$s,$hbo);
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # Displays taxonomic opinions and names associated with a reference_no
 # PS 10/25/2004
 sub displayTaxonomicNamesAndOpinions {
-    print $hbo->stdIncludes( "std_page_top" );
+    print $hbo->stdIncludes( $PAGE_TOP );
     my $ref = Reference->new($dbt,$q->param('reference_no'));
     if ($ref) {
         $q->param('goal'=>'authority');
@@ -5274,7 +5293,7 @@ sub displayTaxonomicNamesAndOpinions {
     } else {
         print "<div align=\"center\">".Debug::printErrors(["No valid reference supplied"])."</div>";
     }
-    print $hbo->stdIncludes("std_page_bottom");
+    print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 
@@ -5330,7 +5349,7 @@ sub logRequest {
 # These next functin simply provide simple links to all of our taxon/collection pages
 # so they can be indexed by search engines
 sub listCollections {
-	print $hbo->stdIncludes ("std_page_top");
+	print $hbo->stdIncludes ($PAGE_TOP);
     my $sql = "SELECT MAX(collection_no) max_id FROM collections";
     my $page = int($q->param("page"));
 
@@ -5349,11 +5368,11 @@ sub listCollections {
         print "<a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$i\">$i</a> ";
     }
 
-	print $hbo->stdIncludes ("std_page_bottom");
+	print $hbo->stdIncludes ($PAGE_BOTTOM);
 }
 
 sub listTaxa {
-	print $hbo->stdIncludes ("std_page_top");
+	print $hbo->stdIncludes ($PAGE_TOP);
     
     my $sql = "SELECT MAX(taxon_no) max_id FROM authorities";
     my $page = int($q->param("page"));
@@ -5373,7 +5392,7 @@ sub listTaxa {
         print "<a href=\"$READ_URL?action=basicTaxonInfo&taxon_no=$i\">$i</a> ";
     }
 
-	print $hbo->stdIncludes ("std_page_bottom");
+	print $hbo->stdIncludes ($PAGE_BOTTOM);
 }
 
 sub inventoryForm	{
@@ -5385,5 +5404,6 @@ sub inventoryInfo	{
 	logRequest($s,$q);
 	Collection::inventoryInfo($dbt,$q,$s,$hbo);
 }
+
 
 

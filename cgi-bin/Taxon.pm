@@ -929,7 +929,7 @@ sub submitAuthorityForm {
 		# if it's an old entry, then we'll update.
 		$resultTaxonNumber = $t->get('taxon_no');
 		$status = $dbt->updateRecord($s,'authorities','taxon_no',$resultTaxonNumber, \%fields);
-        propagateAuthorityInfo($dbt,$resultTaxonNumber,1);
+        propagateAuthorityInfo($dbt,$q,$resultTaxonNumber,1);
 
 #	The following code is no longer necessary, because its function is
 #	taken care of by TaxonTrees::updateOpinionConcepts().
@@ -2059,12 +2059,14 @@ sub guessTaxonRank {
 
 sub validTaxonName {
     my $taxon = shift;
-    
-    if ($taxon =~ /[()]/) {
+
+    if ($taxon =~ /^([A-Z%]|% )([a-z%]+)( [a-z%]+){0,2}$/)	{
+        return 1;
+    } elsif ($taxon =~ /[()]/)	{
         if ($taxon =~ /^[A-Z][a-z]+ \([A-Z][a-z]+\)( [a-z]+){0,2}$/) {
             return 1;
         }
-    } else {
+    } else	{
         if ($taxon =~ /^[A-Z][a-z]+( [a-z]+){0,2}$/) {
             return 1;
         }
@@ -2254,6 +2256,7 @@ sub getBestClassification{
 
 sub propagateAuthorityInfo {
     my $dbt = shift;
+    my $q = shift;
     my $taxon_no = shift;
     my $this_is_best = shift;
     
@@ -2324,13 +2327,24 @@ sub propagateAuthorityInfo {
     # special handling for comments and discussion JA 4.9.11
     # these fields include subjective info that can't be ranked by "quality,"
     #  so glom everything together
+    # whoops, completely screwed this up... behavior depends on whether the
+    #  submission was of an opinion (in which case comments from merged names
+    #  must be combined) or an authority (in which case the verbatim text
+    #  field must be used) JA 10.5.12
     foreach my $f ( 'comments','discussion' )	{
-        foreach my $spelling (@spellings) {
-            if ( $spelling->{$f} ) {
-                $seenMore{$f} .= $spelling->{$f}."\n";
+        # ref_is_authority is a required field, so this test is trustworthy
+        if ( $q->param('ref_is_authority') )	{
+            $seenMore{$f} = $q->param($f);
+        } else	{
+            my %textSeen;
+            foreach my $spelling (@spellings) {
+                if ( $spelling->{$f} ) {
+                    $textSeen{$spelling->{$f}}++;
+                }
             }
+            # the comments will come out in random order, but who cares
+            $seenMore{$f} = join("\n",keys(%textSeen));
         }
-        $seenMore{$f} =~ s/\n$//;
     }
 
     # the user just entered these data, so if they exist, they should be used

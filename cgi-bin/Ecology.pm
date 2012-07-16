@@ -2,7 +2,7 @@ package Ecology;
 
 use TaxaCache;
 use Debug qw(dbg);
-use Constants qw($WRITE_URL $TAXA_TREE_CACHE);
+use Constants qw($WRITE_URL $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
 use Reference;
 
 # written by JA 27-31.7,1.8.03
@@ -449,16 +449,33 @@ sub fastEcologyLookup	{
 	my (%lookup,%from,%att);
 	for my $t ( @taxa )	{
 		if ( $t->{$field} ne "" )	{
-		for my $pos ( $t->{lft}..$t->{rgt} )	{
-			if ( $att{$pos} eq "" || $from{$pos} < $t->{lft} )	{
-				$att{$pos} = $t->{$field};
-				$from{$pos} = $t->{lft};
+			for my $pos ( $t->{lft}..$t->{rgt} )	{
+				if ( $att{$pos} eq "" || $from{$pos} < $t->{lft} )	{
+					$att{$pos} = $t->{$field};
+					$from{$pos} = $t->{lft};
+				}
 			}
 		}
-		}
 	}
+	my $missing;
 	for my $t ( @taxa )	{
 		$lookup{$t->{taxon_no}} = $att{$t->{lft}};
+		if ( ! $lookup{$t->{taxon_no}} )	{
+			$missing++;
+		}
+	}
+	# if needed, use a default value taken from the closest scored parent
+	#  (or from the passed in taxon itself)
+	# unfortunately, the parents are in scrambled order...
+	#  JA 14.5.12
+	if ( $missing )	{
+		$sql = "SELECT e.$field FROM $TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2,ecotaph e,$TAXA_LIST_CACHE l WHERE t.lft=$lft AND t.taxon_no=child_no AND parent_no=e.taxon_no AND parent_no=t2.taxon_no ORDER BY t2.lft DESC";
+		my $value = ${$dbt->getData($sql)}[0]->{$field};
+		for my $t ( @taxa )	{
+			if ( ! $lookup{$t->{taxon_no}} )	{
+				$lookup{$t->{taxon_no}} = $value;
+			}
+		}
 	}
 	return \%lookup;
 }
