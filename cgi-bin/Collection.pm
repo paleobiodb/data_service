@@ -3036,7 +3036,7 @@ sub basicCollectionInfo	{
 	$c->{'country'} =~ s/^United/the United/;
 
 	# I'm forced to do this by an iPhone bug
-	my $marginLeft = ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i ) ? "-4em" : "0em";
+	my $marginLeft = ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i && $ENV{'HTTP_USER_AGENT'} !~ /iPad/i ) ? "-4em" : "0em";
 
 	print qq|
 
