@@ -158,25 +158,6 @@ sub setParameters {
 
     my ($self, $params) = @_;
     
-    # The 'v' parameter is required, and specifies the interface version being
-    # used.
-    
-    if ( defined $params->{v} and $params->{v} ne '' )
-    {
-	my $v = $params->{v};
-	$self->{v} = $v;
-	
-	unless ( $VERSION_ACCEPTED{$v} )
-	{
-	    die "400 Unrecognized interface version '$v'.  Try using '$CURRENT_VERSION'.\n";
-	}
-    }
-    
-    else
-    {
-	die "400 You must specify an interface version.  You can add '&v=$CURRENT_VERSION' to the parameters, or prefix the path with /data$CURRENT_VERSION/.\n";
-    }
-    
     # The 'limit' parameter, if given, limits the size of the result set.  If
     # not specified, a default limit of $DEFAULT_RESULT_LIMIT will be used.
     # If 'all' is specified as the value, then the full result set will be
@@ -218,8 +199,8 @@ sub setParameters {
 	$self->{report_count} = 1;
     }
     
-    # The 'pod' parameter outputs unprocessed POD for help pages (for
-    # debugging purposes only).
+    # The undocumented parameter 'pod' outputs unprocessed POD for help pages
+    # (for debugging purposes only).
     
     if ( defined $params->{pod} and $params->{pod} )
     {
@@ -252,13 +233,41 @@ sub setParameters {
 	    $self->{output_format} = 'json';
 	}
 	
+	elsif ( $ct eq 'txt' ) {
+	    $self->{output_format} = 'txt';
+	}
+	
 	elsif ( $ct eq 'html' ) {
 	    die "400 help\n";
 	}
 	
 	else
 	{
-	    die "415 The output format must be one of 'xml' or 'json'\n";
+	    die "415 The output format (URL suffix) must be one of 'xml', 'json', or 'txt'\n";
+	}
+    }
+    
+    # The 'sep' parameter is only relevant for text files.  It selects either
+    # comma-separated (csv) or tab-separated (tsv) output values.  The default
+    # is the latter.
+    
+    if ( defined $params->{sep} )
+    {
+	my $sep = lc $params->{sep};
+	
+	if ( $self->{output_format} ne 'txt' )
+	{
+	    die "400 The parameter 'sep' is only relevant for text (.txt) output.\n";
+	}
+	
+	elsif ( $sep eq 'csv' or $sep eq 'tsv' )
+	{
+	    $self->{value_sep} = $sep;
+	}
+	
+	else
+	{
+	    die "400 Unrecognized value '$sep' for parameter 'sep'.\n";
 	}
     }
 }
@@ -354,14 +363,30 @@ sub checkParameters {
     
     return unless ref $params eq 'HASH';
     
-    # First, figure out which interface version we are checking against.
+    # We first need to figure out what interface version we're checking
+    # against.  The 'v' parameter is required, and specifies the interface
+    # version being used.
     
-    my $v = $params->{v}; $v =~ s/\./_/g;
+    if ( defined $params->{v} and $params->{v} ne '' )
+    {
+	my $v = $params->{v};
+	$self->{v} = $v;
+	
+	unless ( $VERSION_ACCEPTED{$v} )
+	{
+	    die "400 Unrecognized interface version '$v'.  Try using '$CURRENT_VERSION'.\n";
+	}
+    }
+    
+    else
+    {
+	die "400 You must specify an interface version.  You can add '&v=$CURRENT_VERSION' to the parameters, or prefix the path with /data$CURRENT_VERSION/.\n";
+    }
     
     # Construct our initial check list.
     
     my (@good_list) = {limit => 1, count => 1, ct => 1, v => 1, 
-		       splat => 1, pod => 1, stream => 1};
+		       splat => 1, pod => 1, stream => 1, sep => 1 };
     
     # If this object is actually in a subclass, look for a variable in that
     # package called $PARAM_CHECK.  If there is one, and it is a hashref, add
@@ -369,7 +394,9 @@ sub checkParameters {
     
     {
 	no strict 'refs';
-
+	
+	my $v = $params->{v}; $v =~ s/\./_/g;
+	
 	my $v1 = ref($self) . '::PARAM_CHECK_' . uc($self->{version}) . '_' . $v;
 	my $v2 = ref($self) . '::PARAM_CHECK_' . $v;
 	
@@ -637,42 +664,15 @@ sub generateHeader {
 	return $self->generateHeaderJSON(@options);
     }
     
+    elsif ( $self->{output_format} eq 'txt' )
+    {
+	return $self->generateHeaderText(@options);
+    }
+    
     else
     {
 	return $self->generateHeaderXML(@options);
     }
-}
-
-
-# generateHeaderXML ( )
-# 
-# Return the proper header for an XML document in Darwin Core format.  We
-# ignore any options, because XML/Darwin Core is such a rigid format that we don't
-# have much ability to customize it.
-
-sub generateHeaderXML {
-
-    my ($self) = @_;
-    
-    # First check to see if we have any warning messages to convey
-    
-    my $warnings = '';
-    
-    if ( defined $self->{warnings} and $self->{warnings} > 0 )
-    {
-	foreach my $w ( @{$self->{warnings}} )
-	{
-	    $warnings .= "<!-- warning: $w -->\n";
-	}
-    }
-    
-    # Then generate the header
-    
-    return <<END_XML;
-<?xml version="1.0" standalone="yes"?>
-$warnings<dwr:DarwinRecordSet xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dwc="http://rs.tdwg.org/dwc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dwr="http://rs.tdwg.org/dwc/dwcrecord/" xmlns:dc="http://purl.org/dc/elements/1.1/" xsi:schemaLocation="http://rs.tdwg.org/dwc/dwcrecord/ http://rs.tdwg.org/dwc/xsd/tdwg_dwc_classes.xsd">
-END_XML
-
 }
 
 
@@ -723,6 +723,58 @@ sub generateHeaderJSON {
 }
 
 
+# generateHeaderXML ( )
+# 
+# Return the proper header for an XML document in Darwin Core format.  We
+# ignore any options, because XML/Darwin Core is such a rigid format that we don't
+# have much ability to customize it.
+
+sub generateHeaderXML {
+
+    my ($self) = @_;
+    
+    # First check to see if we have any warning messages to convey
+    
+    my $warnings = '';
+    
+    if ( defined $self->{warnings} and $self->{warnings} > 0 )
+    {
+	foreach my $w ( @{$self->{warnings}} )
+	{
+	    $warnings .= "<!-- warning: $w -->\n";
+	}
+    }
+    
+    # Then generate the header
+    
+    return <<END_XML;
+<?xml version="1.0" standalone="yes"?>
+$warnings<dwr:DarwinRecordSet xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dwc="http://rs.tdwg.org/dwc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dwr="http://rs.tdwg.org/dwc/dwcrecord/" xmlns:dc="http://purl.org/dc/elements/1.1/" xsi:schemaLocation="http://rs.tdwg.org/dwc/dwcrecord/ http://rs.tdwg.org/dwc/xsd/tdwg_dwc_classes.xsd">
+END_XML
+
+}
+
+
+# generateHeaderText ( )
+# 
+# Return the proper header for comma-separated text output.  We ignore any
+# options, because there is little if any room for extra information when
+# using this format.
+
+sub generateHeaderText {
+
+    my ($self) = @_;
+    
+    unless ( ref $self->{field_list} eq 'ARRAY' )
+    {
+	die "400 The output format 'txt' is not appropriate for this query.\n";
+    }
+    
+    my $header_line = $self->generateTextLine(@{$self->{field_list}});
+    return $header_line;
+}
+
+
 # generateFooter ( )
 # 
 # Generate the proper footer for the requested output format.
@@ -734,6 +786,11 @@ sub generateFooter {
     if ( $self->{output_format} eq 'json' )
     {
 	return $self->generateFooterJSON(@options);
+    }
+    
+    elsif ( $self->{output_format} eq 'txt' )
+    {
+	return $self->generateFooterText(@options);
     }
     
     else
@@ -762,6 +819,17 @@ END_XML
     }
     
     return $output;
+}
+
+
+# generateFooterText ( )
+# 
+# Return nothing, because text files (whether comma-separated values or
+# tab-separated values) don't have footers.
+
+sub generateFooterText {
+
+    return;
 }
 
 
@@ -825,6 +893,29 @@ sub finishOutput {
 
 sub processRecord {
 
+}
+
+
+# generateTextLine ( )
+# 
+# Generate a text line according to the 'value_sep' attribute: either
+# comma-separated (csv) or tab-separate (tsv).  The latter is the default.
+
+sub generateTextLine {
+
+    my ($self, @values) = @_;
+    
+    if ( $self->{value_sep} eq 'csv' )
+    {
+	my $line = '"' . join('","', @values) . '"' . "\n";
+	return $line;
+    }
+    
+    else
+    {
+	my $line = join("\t", @values) . "\n";
+	return $line;
+    }
 }
 
 
