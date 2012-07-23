@@ -74,8 +74,15 @@ function checkForm()	{
 	}
 
 	if ( typeof( frm.child_spelling_no ) == "undefined" || frm.child_spelling_no[frm.child_spelling_no.length-2].checked )	{
-		var parent = new RegExp(frm.belongs_to_parent.value);
-		if ( frm.belongs_to_parent.value != "" && frm.child_spelling_name.value != "" && ! frm.child_spelling_name.value.match(parent) )	{
+		var words = new Array();
+		words = frm.child_spelling_name.value.split(/ /);
+		var shouldbe = words[0];
+		if ( words.length == 3 )	{
+			shouldbe = shouldbe + ' ' + words[1];
+		} else if ( words.length == 4 )	{
+			shouldbe = shouldbe + ' ' + words[1] + ' ' + words[2];
+		}
+		if ( frm.belongs_to_parent.value != "" && frm.child_spelling_name.value != "" && frm.belongs_to_parent.value != shouldbe && /species/.test(frm.child_spelling_rank.value) && frm.status.value == "belongs to" )	{
 			error += "* The 'Full name' doesn't match the parent name\n";
 		}
 		if ( ! frm.child_spelling_name.value )	{
@@ -108,11 +115,23 @@ function checkForm()	{
 
 <div align="center"><p class="pageTitle">Opinion record for <span id="taxon_display_name"></span></p></div>
 
+<div style="width: 45em; margin-left: auto; margin-right: auto;">
+
 <div show="error_message">%%error_message%%</div>
+
+<div style="width: 60em; margin-top: -2em; margin-bottom: 1em; margin-left: auto; margin-right: auto; font-size: 0.6em;">
+<span style="padding-right: 1em;"><span id="authorizer_name"></span></span>
+<span style="padding-right: 1em;"><span id="enterer_name"></span></span>
+<span style="padding-right: 1em;"><span id="modifier_name"><span></span>
+<span style="padding-right: 1em;"><span id="created"></span></span>
+<span id="modified"></span>
+</div> 
 
 <form method="POST" action="%%write_url%%" onSubmit="return checkForm();">
 
-<div class="displayPanel" style="padding-top: 1em;">
+<div class="displayPanel" style="overflow: hidden; margin-left: 1em; padding-left: 2em; padding-top: 0.75em; padding-bottom: 0.75em;">
+
+<div class="verysmall">
 
 <input type="hidden" id="action" name="action" value="submitOpinionForm">
 <input type="hidden" id="reference_no" name="reference_no">
@@ -125,12 +144,6 @@ function checkForm()	{
 <input type="hidden" id="confirm_create_misspelling" name="confirm_create_misspelling">
 <input type="hidden" id="confirm_create_spelling" name="confirm_create_spelling">
 <input type="hidden" id="confirm_create_rank" name="confirm_create_rank">
-
-<div class="emphasized">
-Whose opinion are you entering?
-</div>
-
-<div align="left" class="small" style="margin-left: 2em;">
 
 <input type="radio" id="ref_has_opinion" name="ref_has_opinion" value="PRIMARY" onClick="document.forms[1].author1init.value = ''; document.forms[1].author1last.value = ''; document.forms[1].author2init.value = ''; document.forms[1].author2last.value = ''; document.forms[1].otherauthors.value = ''; document.forms[1].pubyr.value = ''; document.forms[1].pages.value = '';">
 The primary reference argues for this opinion:
@@ -173,81 +186,50 @@ The primary reference argues for this opinion:
 
 </div>
 
-<br>
-
-<div class="emphasized">
-How was it classified?
 </div>
-<table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
-  <tr>
-  <td colspan="2" class="small">
+
+<div class="displayPanel" style="overflow: hidden; margin-left: 1em; padding-left: 2em; padding-top: 0.75em; padding-bottom: 0.75em;">
+<div class="verysmall">
+
+  <div>
   <a href="#" onClick="popup = window.open('%%write_url%%?action=displayPage&page=classification_quality', 'blah', 'left=100,top=100,height=500,width=500,toolbar=yes,scrollbars=yes,resizeable=yes');">Basis of opinion</a>: <select id="basis" autofill="opinion_basis"></select>
-  <span style="margin-left: 12em;">
+  <span style="margin-left: 26em; font-size: 0.8em;">
     <a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html#Basis')">FAQ</a> 
     &nbsp;<input type="submit" value="Submit">
   </span>
-  </td>
-  </tr>
   <span id="belongs_to_row"></span>
-  <tr>
-    <td valign="middle" align="left" colspan="3" class="small"><span class="prompt">Diagnosis:</span> <select id="diagnosis_given"></select><br>
-      <textarea id="diagnosis" name="diagnosis" rows="3" cols="70"></textarea>
-    </td>
-  </tr>
-
-  <div show="is_fossil_record">
-  <tr>
-    <td colspan="3" align="left" valign="top">
-      <table width="100%"><tr><td width="40%" class="small">
-        <span class="prompt">First interval:</span> <input type="text" name="max_interval_name">
-      </td><td class="small">
-        <span class="prompt">Last interval:</span> <input type="text" name="min_interval_name">
-      </td></tr></table>
-    </td>
-  </tr>
   </div>
 
-  <tr>
-    <td colspan="3" align="left" valign="top" class="small">
-      <span class="prompt">Comments:</span><br>
-      <textarea id="comments" name="comments" rows="2" cols="70"></textarea>
-    </td>
-  </tr>
+  <div style="float: left; clear: none; margin-top: 0.4em;">
+    <span class="prompt">Diagnosis:</span> <select id="diagnosis_given"></select>
+  </div>
+
+  <div style="margin-top: 0.75em;" class="verysmall mockLink" onClick="getElementById('diagnosis_box').style.display='inline'; getElementById('diagnosis_link').style.display='none';">
+    <span id="diagnosis_link" style="padding-left: 3em;">enter diagnosis</span>
+  </div>
+
+  <div id="diagnosis_box" style="display: none; float: left; clear: both;">
+    <textarea id="diagnosis" name="diagnosis" rows="3" cols="70"></textarea>
+  </div>
+
+  <div style="float: left; clear: both; margin-top: 0.4em;">
+    <span class="prompt">Comments:</span><br>
+    <textarea id="comments" name="comments" rows="2" cols="70"></textarea>
+  </div>
   
-</table>
-
-<br>
-
-<div class="emphasized">
-How was it spelled?
+</div>
 </div>
 
-<table  width="100%" border=0 style="padding: 0em 2em 0em 2em;">
+<div class="displayPanel" style="overflow: hidden; margin-left: 1em; padding-left: 2em; padding-top: 0.75em; padding-bottom: 0.75em;">
+<div class="verysmall">
+
   <span id="spelling_row"></span>
-  <tr><td colspan="2">
-    <small>Select a value regardless of whether this paper was the first to use this combination, spelling, or rank.<small>
-  </td></tr>
-</table>
+  <div><small>Select a value regardless of whether this paper was the first to use this combination, spelling, or rank.</small></div>
+
+</div>
 </div>
 
-<div align="center">
-
-<p>
-<a href="javascript:tipsPopup('/public/tips/taxonomy_FAQ.html#OpinionForm')">FAQ</a> -
-<input type=submit value="Submit">
-</p>
-
-<table border="0" cellpadding="0" class="tiny" style="padding-bottom: 1em;">
-<tr>
-<td style="padding-right: 20px;"><span id="authorizer_name"></span></td>
-<td style="padding-right: 20px;"><span id="enterer_name"></span></td>
-<td><span id="modifier_name"><span></td>
-</tr>
-<tr>
-<td style="padding-right: 20px;"><span id="created"></span></td>
-<td><span id="modified"></span></td>
-</tr>
-</table> 
+</div>
 
 </div>
 
