@@ -1,181 +1,26 @@
 # 
 # The Paleobiology Database
 # 
-#   TaxaTree.pm
+#   TaxonTrees.pm
 # 
 
-=head1 General Description
+=head1 NAME
 
-This module builds and maintains a hierarchy of taxonomic names.  This
-hierarchy is based on the data in the C<opinions> and C<authorities> tables,
-and is stored in the tables C<taxon_trees> and C<taxon_ancestors>.  These
-tables are also referred to extensively throughout the rest of the database
-code, because the taxonomic hierarchy is central to the organization of the
-data in the database.
+TaxonTrees
 
-=head2 Definitions
+=head1 SYNOPSIS
 
-Each distinct taxonomic name/rank combination represented in the database has
-a unique entry in the C<authorities> table, and a unique internal id number
-(taxon_no) assigned to it in that table.  In the documentation for this
-database, we use the term I<spelling> to represent the idea "distinct
-taxonomic name/rank combination".  So, for example, "Rhizopodea" as a class
-and "Rhizopodea" as a phylum are considered to be distinct I<spellings> of the
-same I<taxonomic concept>.  In this case, the taxon's rank was changed at some
-point in the past.  It is also the case that "Cyrnaonyx" and "Cyraonyx" are
-distinct spellings of the same taxonomic concept, but in this case one was
-used at some point as a misspelling of the other.  Each spelling is a member
-of exactly one taxonomic concept.
+This module builds and maintains one or more hierarchies of taxonomic names.
+These hierarchies are based on the data in the C<opinions> and C<authorities>
+tables, and are stored in C<taxon_trees> and other tables.  The set of names
+known to the database is stored in the C<authorities> table, with primary key
+C<taxon_no>.  The taxon numbers from C<authorities> are used extensively as
+foreign keys throughout the rest of the database, because the taxonomic
+hierarchy is central to the organization of the data.
 
-For each taxonomic concept in the database, we algorithmically select a
-"classification opinion" from the entries in the C<opinions> table,
-representing the most recent and reliable taxonomic opinion that specifies a
-relationship between this taxon and the rest of the taxonomic hierarchy.
-These classification opinions are then used to arrange the taxa into a
-collection of trees.  Note that the taxa do not form a single tree, because
-there are a number of fossil taxa for which classification opinions have not
-yet been entered into the database.
+=head2 DEFINITIONS
 
-=head2 Organization of taxa
-
-The C<authorities> table contains one row for each distinct spelling with
-C<taxon_no> as primary key.  The C<taxon_trees> table contains one row for
-each taxonomic concept, with C<orig_no> as primary key.  The C<orig_no> field
-also exists as a foreign key in C<authorities>, tying the two tables together.
-
-The taxonomic spellings and concepts are organized according to four separate
-relations, based on the data in C<authorities> and C<opinions>.  These
-relations are discussed below; the name listed in parentheses after each one
-is the name of the field which records the relation.
-
-=over 4
-
-=item Taxonomic concept (orig_no)
-
-This relation groups together all of the spellings (name/rank combinations)
-that represent the same taxonomic concept.  In other words, when a taxon's
-rank is changed, or its spelling is changed, all of the resultant entries in
-C<authorities> will have a different C<taxon_no> but the same C<orig_no>.  The
-C<orig_no> for each concept is the C<taxon_no> of its original spelling, so
-all original spellings have C<taxon_no = orig_no>.  This is the only one
-of the organizing relations that is stored in the C<authorities> table.
-
-Note that this relation can be taken as an equivalence relation, whereas two
-spellings have the same C<orig_no> if and only if they represent the same
-taxonomic concept.
-
-=item Accepted spelling (spelling_no)
-
-This relation selects from each taxonomic concept the currently accepted
-spelling (in other words, the currently accepted name/rank combination).  The
-value of C<spelling_no> for any concept is the C<taxon_no> corresponding to
-this spelling.
-
-=item Synonymy (synonym_no)
-
-This relation groups together all of the taxonomic concepts which are
-considered to be synonyms of each other.  Two taxa are considered to be
-synonymous if one is a subjective or objective synonym of the other, or was
-replaced by the other, or if one is an invalid subgroup or nomen dubium, nomen
-vanum or nomen nudum inside the other.
-
-The value of C<synonym_no> is the C<orig_no> of the most senior synonym for
-the given concept group.  This means that all concepts which are synonyms of
-each other will have the same C<synonym_no>, but different C<orig_no>, and the
-senior synonym will have C<synonym_no = orig_no>.  This relation can also
-be taken as an equivalence relation, whereas two concept groups have the same
-C<synonym_no> if and only if they are synonyms of each other.
-
-=item Hierarchy (parent_no)
-
-This relation associates lower with higher taxa.  It forms a collection of
-trees, because (as noted above) there are a number of fossil taxa for which no
-classifying opinion has yet been entered.  Any taxonomic concept for which no
-opinion has been entered will have C<parent_no = 0>.
-
-All taxa which are synonyms of each other will have the same C<parent_no>
-value, and the C<parent_no> (if not 0) will be the one associated with the
-classification opinion on the most senior synonym.  Thus, this is really a
-relation on synonym groups.  In computing the hierarchy, we consider all
-opinions on a synonym group together.
-
-This relation, like the previous ones, can be taken as
-an equivalence relation, whereas two taxonomic concepts have the same
-C<parent_no> if and only if they are siblings of each other.
-
-=back
-
-=head2 Opinions
-
-In addition to the fields listed above, each entry in C<taxon_trees> also has
-an C<opinion_no> field.  This field points to the classification opinion that
-has been algorithmically selected from the available opinions for that taxon.
-
-For a junior synonym, the value of opinion_no will be the opinion which
-specifies its immediately senior synonym.  There may exist synonym chains in
-the database, where A is a junior synonym of B which is a junior synonym of C.
-In any case, C<synonym_no> should always point to the most senior synonym.
-
-For all taxonomic concepts which are not junior synonyms, the value of
-C<opinion_no> will be the opinion which specifies its immediately higher
-taxon.  Note that this opinion will also specify a particular spelling of the
-higher taxon, which may not be the currently accepted one.  In any case,
-C<parent_no> will always point to the original spelling of the parent taxon.
-
-=head2 Tree structure
-
-In order to facilitate tree printouts and logical operations on the taxa
-hierarchy, the entries in C<taxon_trees> are sequenced via preorder tree
-traversal.  This is recorded in the fields C<lft> and C<rgt>.  The C<lft>
-field stores the traversal sequence, and the C<rgt> field of a given entry
-stores the maximum sequence number of the entry and all of its descendants.
-An entry which has no descendants has C<lft> = C<rgt>.  The C<depth> field
-stores the distance of a given entry from the root of its taxon tree, with
-top-level nodes having C<depth> = 1.  All entries which have no parents or
-children will have null values in C<lft>, C<rgt> and C<depth>.
-
-Using these fields, we can formulate simple and efficient SQL queries to fetch
-all of the descendants of a given entry and other similar operations.  For
-more information, see L<http://en.wikipedia.org/wiki/Nested_set_model>.
-
-=head2 Additional Tables
-
-One auxiliary table is needed in order to properly compute the relations
-described above.  This table, called C<suppress_opinions>, is needed because
-the synonymy and hierarchy relations must be structured as collections of
-trees.  Unfortunately, the set of opinions stored in the database may generate
-cycles in one or both of these relations.  For example, there will be cases in
-which the best opinion on taxon A states that it is a subjective synonym of B,
-while the best opinion on taxon B states that it is a subjective synonym of A.
-In order to resolve this, the algorithm that computes the synonymy and
-hierarchy relations breaks each cycle by choosing the best (most recent and
-reliable) opinion from those that define the cycle and suppressing any opinion
-that contradicts the chosen one.  The C<suppress_opinions> table records which
-opinions are so suppressed.
-
-=head1 Interface
-
-The interface to this module is as follows (note: I<this is a draft
-specification>).  In the following documentation, the parameter C<dbh> is
-always a database handle.  Note that routines whose names begin with "get"
-return objects, while those whose names begin with "list" return lists of
-taxon identifiers.
-
-=over 4
-
-=item build ( dbh )
-
-Build the taxon tree tables from scratch using the data in C<authorities> and
-C<opinions>.  Although this is probably not absolutely necessary if
-updateTaxonTrees() has been called consistently whenever the C<authorities>
-and C<opinions> tables are changed, the author of this module suggests that it
-be run on a daily basis at a convenient time when traffic on the database is
-light.
-
-This routine actually adds an entry to the taxon_queue table and waits for the
-maintenance thread to do the build.  It returns the id number of the newly
-added queue entry, which can be passed to the status() routine to determine
-when that particular update has been completed.
+For an explanation of the table structure, see L<Taxonomy.pm|./Taxonomy.pm>.
 
 =cut
 
@@ -188,21 +33,17 @@ our $MSG_LEVEL = 0;
 
 # Main table names
 
-our $TREE_TABLE = "taxon_trees";
-our $SUPPRESS_TABLE = "suppress_opinions";
+our (@TREE_TABLE_LIST) = ("taxon_trees");
+our (%SUPPRESS_TABLE) = ("taxon_trees" => "suppress_opinions");
+
 our $OPINION_CACHE = "order_opinions";
+our $OPINION_BAK = "order_opinions_bak";
 
 our $QUEUE_TABLE = "taxon_queue";
 
 our $AUTH_TABLE = "authorities";
 our $OPINIONS_TABLE = "opinions";
 our $REFS_TABLE = "refs";
-
-# Backup names for use with RENAME TABLES
-
-our $TREE_BAK = "taxon_trees_bak";
-our $SUPPRESS_BAK = "suppress_opinions_bak";
-our $OPINION_BAK = "order_opinions_bak";
 
 # Working table names
 
@@ -213,13 +54,16 @@ our $OPINION_TEMP = "opn";
 # Auxiliary table names
 
 our $SPELLING_TEMP = "spelling_aux";
+our $TRAD_TEMP = "trad_aux";
 our $SYNONYM_TEMP = "synonym_aux";
 our $CLASS_TEMP = "class_aux";
 our $CHECK_TEMP = "check_aux";
 
 # Modules needed
 
-use Text::JaroWinkler qw( strcmp95 );
+use Carp qw(carp croak);
+use Try::Tiny;
+use Text::JaroWinkler qw(strcmp95);
 
 use strict;
 
@@ -241,25 +85,45 @@ use constant TYPE_REBUILD => 3;
 use constant TYPE_CHECK => 4;
 use constant TYPE_ERROR => 9;
 
-use constant UPDATE_PENDING => 1;
-use constant UPDATE_COMPLETE => 2;
-use constant UPDATE_ERROR => 4;
-use constant UPDATE_INVALID => 9;
+# Kingdoms and labels
+
+our(%KINGDOM_LABEL) = ( 'Metazoa' => 'Metazoa',
+			'Plantae' => 'Plantae',
+			'Metaphytae' => 'Plantae',
+			'Fungi' => 'Fungi',
+			'Protista' => 'Other',
+			'Chromista' => 'Other',
+			'Eubacteria' => 'Bacteria',
+			'Archaea' => 'Archaea');
 
 
-=item updateConcepts ( dbh, orig_no ... )
+=head1 INTERFACE
 
-Adjusts the taxon tree tables to take into account changes to the given
-concepts.  Some of the listed concepts may disappear from the taxon tables, as
-may happen if two concepts are merged, while others may need to be
-created.  This routine should be called whenever C<orig_no> values in the
-C<authorities> table are adjusted, and both the old and the new C<orig_no> values
-should be included in the argument list.
+The interface to this module is as follows (note: I<this is a draft
+specification>).  In the following documentation, the parameter C<dbh> is
+always a database handle.
 
-This routine actually adds an entry to C<$QUEUE_TABLE> and waits for the
-maintenance thread to do the update.  It returns the id number of the newly
-added queue entry, which can be passed to the status() routine to determine
-when that particular update has been completed.
+=head2 Action routines
+
+The following routines are used to request that certain actions be taken by
+the maintenance thread.  This mechanism is used in order to simplify the code
+for updating, rebuilding and checking the taxon tables.  By ensuring that only
+one thread will be writing to these tables at any given time, we avoid having
+to mess around with table write locks.
+
+Each routine returns a "request identifier" that can then be passed to
+C<requestStatus> to determine whether or not the request has been carried
+out. If necessary, C<requestStatus> can be called repeatedly until it returns
+an affirmative result.
+
+=head3 updateConcepts ( dbh, orig_no ... )
+
+Requests that the maintenance thread adjust the taxon tree tables to take
+into account changes to the given concepts.  Some of the listed concepts may
+disappear from the taxon tables, as may happen if two concepts are merged,
+while others may need to be created.  This routine should be called whenever
+C<orig_no> values in the C<authorities> table are adjusted, and both the old
+and the new C<orig_no> values should be included in the argument list.
 
 =cut
 
@@ -299,7 +163,7 @@ sub updateConcepts {
 }
 
 
-=item updateOpinions ( dbh, opinion_no ... )
+=head3 updateOpinions ( dbh, opinion_no ... )
 
 Adjusts the taxon tree tables to take into account changes to the given
 opinions.  Some of the listed opinions may disappear from the taxon tables, as
@@ -349,11 +213,11 @@ sub updateOpinions {
 }
 
 
-=item rebuild ( dbh )
+=head3 rebuild ( dbh )
 
 Requests a rebuild of the taxon trees.  This will be carried out by the
 maintenance thread at the next opportunity.  Returns a request id that can be
-passed to update_status() in order to determine whether the request has been
+passed to requestStatus() in order to determine whether the request has been
 carried out.
 
 =cut
@@ -371,12 +235,12 @@ sub rebuild {
 }
 
 
-=item check ( dbh )
+=head3 check ( dbh )
 
-Requests a check of the taxon trees.  This will be carried out by the
-maintenance thread at the next opportunity.  Returns a request id that can be
-passed to update_status() in order to determine whether the request has been
-carried out.
+Requests a consistency check of the taxon trees.  This will be carried out by
+the maintenance thread at the next opportunity.  Returns a request id that can
+be passed to requestStatus() in order to determine whether the request has
+been carried out.
 
 =cut
 
@@ -393,7 +257,7 @@ sub check {
 }
 
 
-=item updateStatus ( dbh, insert_id )
+=item requestStatus ( dbh, insert_id )
 
 This routine can be called subsequently to update_concepts() or
 update_opinions() to determine whether the requested updates have been
@@ -401,33 +265,32 @@ completed.  It returns a status value as follows:
 
 =over 4
 
-=item UPDATE_PENDING
+=item REQUEST_PENDING
 
-The update has not yet been completed
+The request has not yet been completed
 
-=item UPDATE_COMPLETE
+=item REQUEST_COMPLETE
 
-The update has been completed
+The request has been completed
 
-=item UPDATE_ERROR
+=item REQUEST_ERROR
 
 An error occurred while processing the update, so it was not completed.  In
 this case, the error message is returned as the second item in the return
 list. 
 
-=item UPDATE_INVALID
+=item REQUEST_INVALID
 
 The given id is not an integer greater than zero.
 
 =back
 
-Note that this routine will return UPDATE_COMPLETE if called with a parameter
-that is not a return value from a previous call to update_concepts() or
-update_opinions().
+Note that this routine will return REQUEST_COMPLETE if called with a parameter
+that is not a return value from a previous call to one of the action routines.
 
 =cut
 
-sub updateStatus {
+sub requestStatus {
 
     my ($dbh, $insert_id) = @_;
     
@@ -435,7 +298,7 @@ sub updateStatus {
     
     unless ( $insert_id > 0 )
     {
-	return UPDATE_INVALID;
+	return 'REQUEST_INVALID';
     }
     
     # Then query the queue table.
@@ -449,126 +312,134 @@ sub updateStatus {
     
     if ( $type == TYPE_ERROR )
     {
-	return (UPDATE_ERROR, $comment);
+	return ('REQUEST_ERROR', $comment);
     }
     
     elsif ( $type > 0 )
     {
-	return (UPDATE_PENDING);
+	return ('REQUEST_PENDING');
     }
     
     else
     {
-	return (UPDATE_COMPLETE);
+	return ('REQUEST_COMPLETE');
     }
 }
 
 
-=item daemon ( dbh )
+=head3 maintenance ( dbh, options )
 
-This routine should be called by the taxon_trees maintenance daemon.  It goes
-into a loop, checking the taxon_queue table for entries and carrying them out
-in sequence.
+This routine should be called periodically (every few seconds) by the
+taxon_trees maintenance daemon.  It checks the taxon_queue table for entries
+and carries out the pending requests.  The taxon_trees tables should not be
+written to except by this routine.
+
+Options should be passed as a hash ref.  Valid keys are:
+
+=over 4
+
+=item msg_level
+
+Override the default message level 
+
+=item keep_temps
+
+If true, do not delete temporary tables when done with a build.
+
+=back
 
 =cut
 
-sub daemon {
+sub maintenance {
     
-    my ($dbh) = @_;
+    my ($dbh, $options) = @_;
     
-    # Make sure that we respond to signals properly
+    $options ||= {};
     
-    local $SIG{TERM} = \&handle_abort;
-    local $SIG{QUIT} = \&handle_abort;
-    local $SIG{INT} = \&handle_abort;
+    # The following variables keep track of what we are being asked to do.
     
-    # Loop until signalled to stop
+    my (@id_list, @concept_list, @opinion_list, $rebuild_tables, 
+	$check_tables);
     
-    while ( !$ABORT )
-    {
-	# The following variables keep track of what we are being asked to do.
+    # Check $QUEUE_TABLE to see if any requests are pending.
+    
+    my $items = $dbh->prepare("SELECT id, type, param FROM $QUEUE_TABLE");
+    
+    $items->execute();
 	
-	my (@id_list, @concept_list, @opinion_list, $rebuild_tables, 
-	    $check_tables, $msg_level);
-	
-	# Check $QUEUE_TABLE to see if any requests are pending.
-	
-	my $items = $dbh->prepare("
-		SELECT id, type, param FROM $QUEUE_TABLE");
-	
-	$items->execute();
-	
-	while ( my($id, $type, $param, $time) = $items->fetchrow_array() )
-	{	    
-	    if ( $type == TYPE_CONCEPT )
-	    {
-		push @id_list, $id;
-		push @concept_list, $param;
-	    }
-	    elsif ( $type == TYPE_OPINION )
-	    {
-		push @id_list, $id;
-		push @opinion_list, $param;
-	    }
-	    elsif ( $type == TYPE_REBUILD )
-	    {
-		$rebuild_tables = 1;
-		$msg_level = $param || 2;
-	    }
-	    elsif ( $type == TYPE_CHECK )
-	    {
-		$check_tables = 1;
-		$msg_level = $param || 2;
-	    }
-	    elsif ( $type == TYPE_ERROR )
-	    {
-		# ignore these
-	    }
-	    else
-	    {
-		logMessage(0, "ERROR: invalid queue entry type '$type'");
-	    }
+    while ( my($id, $type, $param, $time) = $items->fetchrow_array() )
+    {	    
+	if ( $type == TYPE_CONCEPT )
+	{
+	    push @id_list, $id;
+	    push @concept_list, $param;
 	}
-	
-	my $id_filter = '(' . join(',', @id_list) . ')';
-	
-	# Also check to see if it is time for an automatic rebuild and if so
-	# then trigger it.  We do an automatic rebuild every day at 9am Sydney
-	# time (11pm GMT?), as long as it has been at least 18 hours
-	# since the last rebuild for any reason.
-	
-	my ($sec, $min, $hour) = gmtime;
-	
-	my ($rebuild_interval) = $dbh->selectrow_array("
-		SELECT timestampdiff(hour, time, now())
-		FROM $QUEUE_TABLE WHERE type = " . TYPE_REBUILD);
-	
-	if ( $hour == 23 and ($rebuild_interval > 18 or $rebuild_interval == 0) )
+	elsif ( $type == TYPE_OPINION )
+	{
+	    push @id_list, $id;
+	    push @opinion_list, $param;
+	}
+	elsif ( $type == TYPE_REBUILD )
 	{
 	    $rebuild_tables = 1;
 	}
-	
-	# If a rebuild is pending, that takes precedence over everything else.
-	
-	if ( $rebuild_tables )
+	elsif ( $type == TYPE_CHECK )
 	{
-	    logMessage(1, "Rebuilding tables at " . gmtime() . " GMT");
-	    
-	    # Put a record into the queue table, so that any threads that are
-	    # tracking the status of update requests can inform their users
-	    # that a rebuild is going on.  A param value of 1 means "in
-	    # progress".
-	    
-	    my $rebuild_op = TYPE_REBUILD;
-	    
-	    $dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $rebuild_op");
-	    $dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param)
+	    $check_tables = 1;
+	}
+	elsif ( $type == TYPE_ERROR )
+	{
+	    # ignore these
+	}
+	else
+	{
+	    logMessage(0, "ERROR: invalid queue entry type '$type'");
+	}
+    }
+    
+    my $id_filter = '(' . join(',', @id_list) . ')';
+    
+    # Also check to see if it is time for an automatic rebuild and if so then
+    # trigger it.  We do an automatic rebuild every day at 9am Sydney time
+    # (11pm GMT?), as long as it has been at least 18 hours since the last
+    # rebuild for any reason.
+    
+    my ($sec, $min, $hour) = gmtime;
+    
+    my ($rebuild_interval) = $dbh->selectrow_array("
+		SELECT timestampdiff(hour, time, now())
+		FROM $QUEUE_TABLE WHERE type = " . TYPE_REBUILD);
+    
+    if ( $hour == 23 and ($rebuild_interval > 18 or $rebuild_interval == 0) )
+    {
+	$rebuild_tables = 1;
+    }
+    
+    # If a rebuild is pending, that takes precedence over everything else.
+    
+    if ( $rebuild_tables )
+    {
+	logMessage(1, "Rebuilding tree tables at " . gmtime() . " GMT");
+	
+	# Put a record into the queue table, so that any threads that are
+	# tracking the status of update requests can inform their users
+	# that a rebuild is going on.  A param value of 1 means "in
+	# progress".
+	
+	my $rebuild_op = TYPE_REBUILD;
+	
+	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $rebuild_op");
+	$dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param)
 			  VALUES ($rebuild_op, now(), 1)");
-	    
-	    # Now, do the rebuild.
+	
+	# Now, rebuild each table in turn.
+
+	foreach my $table (@TREE_TABLE_LIST)
+	{
+	    logMessage(1, "Rebuilding table '$table'");
 	    
 	    eval {
-		buildTables($dbh, $msg_level);
+		buildTables($dbh, $table, $options);
 	    };
 	    
 	    # If an error occurred, we need to note this.
@@ -578,44 +449,53 @@ sub daemon {
 		logMessage(0, "Error: $@");
 	    }
 	    
-	    logMessage(1,"Done with rebuild at " . gmtime() . " GMT");
-	    
-	    # Record when this rebuild occurred, so that the next automatic
-	    # one won't come too soon.  A param value of 2 means "complete".
-	    # We also include the error message, if any.
-	    
-	    $dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $rebuild_op");
-	    $dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param, comment)
-			  VALUES ($rebuild_op, now(), 2, $@)");
-	    
-	    # Then, we remove all update requests that were pending at the
-	    # start of the rebuild operation, as they are made moot by the
-	    # rebuild.  Any updates that may have been added since then should
-	    # still be carried out.
-	    
-	    $dbh->do("DELETE FROM $QUEUE_TABLE WHERE id in $id_filter");
-	    
-	    # Also delete any error entries, since if the table is rebuilt
-	    # properly then those entries are now irrelevant.  If an error has
-	    # occurred in the rebuild, that is more serious anyway.
-	    
-	    $dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = " . TYPE_ERROR);
-	    
-	    # Finally, we need to do a check to make sure that the rebuilt
-	    # tables are okay.
-	    
-	    $check_tables = 1;
+	    logMessage(1, "Finished rebuild of '$table'");
 	}
 	
-	# If we are not rebuilding, but have one or more concepts or opinions to
-	# update, do those operations.
+	logMessage(1,"Done with total rebuild at " . gmtime() . " GMT");
 	
-	elsif ( @concept_list or @opinion_list )
+	# Record when this rebuild occurred, so that the next automatic
+	# one won't come too soon.  A param value of 2 means "complete".
+	# We also include the error message, if any.
+	
+	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $rebuild_op");
+	$dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param, comment)
+			  VALUES ($rebuild_op, now(), 2, $@)");
+	
+	# Then, we remove all update requests that were pending at the
+	# start of the rebuild operation, as they are made moot by the
+	# rebuild.  Any updates that may have been added since then should
+	# still be carried out.
+	
+	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE id in $id_filter");
+	
+	# Also delete any error entries, since if the table is rebuilt
+	# properly then those entries are now irrelevant.  If an error has
+	# occurred in the rebuild, that is more serious anyway.
+	
+	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = " . TYPE_ERROR);
+	
+	# Finally, we need to do a check to make sure that the rebuilt
+	# tables are okay.
+	
+	$check_tables = 1;
+    }
+    
+    # If we are not rebuilding, but have one or more concepts or opinions to
+    # update, do those operations.
+    
+    elsif ( @concept_list or @opinion_list )
+    {
+	logMessage(1, "Updating tree tables at " . gmtime() . " GMT");
+	
+	# Now, update each table in turn.
+	
+	foreach my $table (@TREE_TABLE_LIST)
 	{
-	    logMessage(1, "Updating tables at " . gmtime() . " GMT");
+	    logMessage(1, "Updating table '$table'");
 	    
 	    eval {
-		updateTables($dbh, \@concept_list, \@opinion_list);
+		updateTables($dbh, $table, \@concept_list, \@opinion_list, $options);
 	    };
 	    
 	    # If an error occurred during the update, leave those entries in
@@ -644,31 +524,38 @@ sub daemon {
 		$dbh->do("DELETE FROM $QUEUE_TABLE WHERE id in $id_filter");
 	    }
 	    
-	    logMessage(1,"Done with update at " . gmtime() . " GMT");
+	    logMessage(1, "Finished update of '$table'");
 	}
 	
-	# Now, if we were requested to check the tables (or if an update
-	# occurred, which triggers an automatic check) then do the check.  We
-	# want to do the check at the end, so that if a check request and some
-	# update requests come in simultaneously, the updates get done first.
+	logMessage(1,"Done with update at " . gmtime() . " GMT");
+    }
+    
+    # Now, if we were requested to check the tables (or if an update
+    # occurred, which triggers an automatic check) then do the check.  We
+    # want to do the check at the end, so that if a check request and some
+    # update requests come in simultaneously, the updates get done first.
+    
+    if ( $check_tables )
+    {
+	logMessage(1, "Checking tables at " . gmtime() . " GMT");
 	
-	if ( $check_tables )
-	{
-	    logMessage(1, "Checking tables at " . gmtime() . " GMT");
-	    
-	    # Put a record into the queue table, so that any threads that are
-	    # tracking the status of update requests can inform their users
-	    # that a rebuild is going on.  A param value of 1 means "in
-	    # progress".
-	    
-	    my $check_op = TYPE_CHECK;
-	    
-	    $dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $check_op");
-	    $dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param)
+	# Put a record into the queue table, so that any threads that are
+	# tracking the status of update requests can inform their users
+	# that a check is going on.  A param value of 1 means "in
+	# progress".
+	
+	my $check_op = TYPE_CHECK;
+	
+	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $check_op");
+	$dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param)
 			  VALUES ($check_op, now(), 1)");
+	
+	foreach my $table (@TREE_TABLE_LIST)
+	{
+	    logMessage(1, "Checking table '$table'");
 	    
 	    eval {
-		checkTables($dbh, $msg_level);
+		checkTables($dbh, $table, $options);
 	    };
 	    
 	    # If an error occurred, we need to note this.
@@ -678,40 +565,31 @@ sub daemon {
 		logMessage(0, "Error: $@");
 	    }
 	    
-	    # Now, record when this check occurred, so that the next automatic
-	    # one won't come too soon.  A param value of 2 means "complete".
-	    # We also include the error message, if any.
-	    
-	    my $check_op = TYPE_CHECK;
-	    
-	    $dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $check_op");
-	    $dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param, comment)
-			  VALUES ($check_op, now(), 2, $@)");
+	    logMessage(1, "Finished check of '$table'");
 	}
 	
-	# Finally, sleep and then loop around to check again.
+	logMessage(1,"Done with total check at " . gmtime() . " GMT");
 	
-	sleep(1);
+	# Now, record when this check occurred, so that the next automatic
+	# one won't come too soon.  A param value of 2 means "complete".
+	# We also include the error message, if any.
+	
+	my $check_op = TYPE_CHECK;
+	
+	$dbh->do("DELETE FROM $QUEUE_TABLE WHERE type = $check_op");
+	$dbh->do("INSERT INTO $QUEUE_TABLE (type, time, param, comment)
+			  VALUES ($check_op, now(), 2, $@)");
     }
+    
+    # Now we're done, until we're called again.
+    
+    return;
 }
 
 
-# handle_signal ( )
+# updateTables ( dbh, table_name, concept_list, opinion_list, options )
 # 
-# This is called as a signal handler, and directs the process to abort its
-# current request and terminate immediately.
-
-sub handle_signal {
-    
-    my ($sig) = @_;
-    
-    $ABORT = 1;
-    die "Caught signal $sig: aborting";
-}
-
-# updateTables ( dbh, concept_list, opinion_list, msg_level )
-# 
-# This routine is called by daemon() whenever opinions are created, edited, or
+# This routine is called by maintenance() whenever opinions are created, edited, or
 # deleted, or when concept membership in the authorities table is changed.  It
 # should NEVER BE CALLED FROM OUTSIDE THIS MODULE, because it has no
 # concurrency control and so inconsistent updates and race conditions may
@@ -724,19 +602,22 @@ sub handle_signal {
 # those concepts.  Finally, the taxonomic tree is renumbered and the ancestor
 # relationship adjusted to match.
 # 
-# The argument 'msg_level', if given, specifies how verbose this routine will
+# The option 'msg_level', if given, specifies how verbose this routine will
 # be in writing messages to the log.  It defaults to 1, which means a minimal
 # message set.
 
 sub updateTables {
 
-    my ($dbh, $concept_list, $opinion_list, $msg_level, $keep_temps) = @_;
+    my ($dbh, $tree_table, $concept_list, $opinion_list, $options) = @_;
+    
+    $options ||= {};
+    my $suppress_table = $SUPPRESS_TABLE{$tree_table};
     
     my %update_concepts;	# list of concepts to be updated
     
     # First, set the variables that control log output.
     
-    $MSG_TAG = 'Update'; $MSG_LEVEL = $msg_level || 1;
+    $MSG_TAG = 'Update'; $MSG_LEVEL = $options->{msg_level} || 1;
     
     # If we have been notified that concept membership has changed, then all
     # of these changed concepts must be updated in the taxon tree tables.
@@ -802,12 +683,12 @@ sub updateTables {
     
     $DB::single = 1;
     
-    # The rest of this routine updates the subset of $TREE_TABLE and
-    # $ANCESTOR_TABLE that comprises the concept groups listed in
-    # %update_concepts along with their junior synonyms and children.
+    # The rest of this routine updates the subset of $tree_table comprising
+    # the concept groups listed in %update_concepts along with their junior
+    # synonyms and children.
     
     # First create a temporary table to hold the new rows that will eventually
-    # go into $TREE_TABLE.  To start with, we will need one row for each
+    # go into $tree_table.  To start with, we will need one row for each
     # concept in %update_concepts.  Create some auxiliary tables as well.
     
     createTempTables($dbh, \%update_concepts);
@@ -821,7 +702,7 @@ sub updateTables {
     # relation, so that we can detect and break any synonymy cycles that might
     # be created by this update.
     
-    expandToJuniors($dbh);
+    expandToJuniors($dbh, $tree_table);
     
     # Then compute the synonymy relation for every concept in $TREE_TEMP.
     
@@ -835,7 +716,7 @@ sub updateTables {
     # opinion that is more recent and reliable than the previous best opinion
     # for the senior.
     
-    expandToSeniors($dbh);
+    expandToSeniors($dbh, $tree_table);
     
     # At this point we remove synonym chains, so that synonym_no always points
     # to the most senior synonym of each taxonomic concept.  This needs to be
@@ -852,18 +733,18 @@ sub updateTables {
     # those whose classification points to a parent which is not itself in
     # $TREE_TEMP.  These must now be updated to their proper values.
     
-    linkParents($dbh);
+    linkParents($dbh, $tree_table);
     
     # If the adjustments to the hierarchy are small, then we can now update
-    # $TREE_TABLE using the rows from $TREE_TEMP and then adjust the tree
+    # $tree_table using the rows from $TREE_TEMP and then adjust the tree
     # sequence in-place.  This will finish the procedure.  We set the
     # threshold at 3 because altering the tree in-place is several times more
     # efficient than rebuilding it even if we have to scan over the entire
     # table multiple times (3 is actually just a guess...)
     
-    if ( treePerturbation($dbh) < 3 )
+    if ( treePerturbation($dbh, $tree_table) < 3 )
     {
-	updateTreeTables($dbh, $keep_temps);
+	updateTreeTables($dbh, $tree_table, $suppress_table, $options->{keep_temps});
     }
     
     # Otherwise, we need to completely rebuild the tree sequence and then
@@ -871,12 +752,12 @@ sub updateTables {
     
     else
     {
-	# Copy all rows from $TREE_TABLE into $TREE_TEMP that aren't already
+	# Copy all rows from $tree_table into $TREE_TEMP that aren't already
 	# represented there.
 	
 	my $result = $dbh->do("
 		INSERT IGNORE INTO $TREE_TEMP
-		SELECT * FROM $TREE_TABLE");
+		SELECT * FROM $tree_table");
 	
 	# Do the same thing for $SUPPRESS_TEMP, but ignore anything that is a
 	# classification opinion in $TREE_TEMP (such an opinion was previously
@@ -884,7 +765,7 @@ sub updateTables {
 	
 	my $result = $dbh->do("
 		INSERT INTO $SUPPRESS_TEMP
-		SELECT * FROM $SUPPRESS_TABLE s
+		SELECT * FROM $suppress_table s
 			LEFT JOIN $TREE_TEMP t ON s.opinion_no = t.opinion_no
 		WHERE orig_no is null");
 	
@@ -895,7 +776,7 @@ sub updateTables {
 	# Then activate the temporary tables by renaming them over the previous
 	# ones. 
 	
-	activateNewTables($dbh, $keep_temps);
+	activateNewTables($dbh, $tree_table, $suppress_table, $options->{keep_temps});
     }
     
     my $a = 1;		# we can stop here when debugging
@@ -916,15 +797,18 @@ sub updateTables {
 
 sub buildTables {
 
-    my ($dbh, $msg_level, $step_control) = @_;
+    my ($dbh, $tree_table, $options, $step_control) = @_;
+    
+    $options ||= {};
+    my $suppress_table = $SUPPRESS_TABLE{$tree_table};
     
     # First, set the variables that control log output.
     
-    $MSG_TAG = 'Rebuild'; $MSG_LEVEL = $msg_level || 1;
+    $MSG_TAG = 'Rebuild'; $MSG_LEVEL = $options->{msg_level} || 1;
     
     unless ( ref $step_control eq 'HASH' and %$step_control ) {
 	$step_control = { 'a' => 1, 'b' => 1, 'c' => 1,
-			  'd' => 1, 'e' => 1, 'f' => 1, 'g' => 1 };
+			  'd' => 1, 'e' => 1, 'g' => 1 };
     };
     
     # Then create the necessary tables.
@@ -962,14 +846,17 @@ sub buildTables {
     
     computeTreeSequence($dbh) if $step_control->{e};
     
-    # Next, compute the ancestry relation using the sequenced trees.
+    # Next, label each taxon by kingdom.
     
-    # computeAncestry($dbh) if $step_control->{f};
+    computeKingdomLabels($dbh) if $step_control->{e};
     
     # Finally, activate the new tables we have just computed by renaming them
     # over the previous ones.
     
-    activateNewTables($dbh, $step_control->{k}) if $step_control->{g};
+    my $keep_temps = $step_control->{k} || $options->{keep_temps};
+    
+    activateNewTables($dbh, $tree_table, $suppress_table, $keep_temps)
+	if $step_control->{g};
     
     my $a = 1;		# we can stop here when debugging
 }
@@ -1216,9 +1103,9 @@ sub updateOpinionConcepts {
 # createTempTables ( dbh, concept_hash )
 # 
 # Create a new $TREE_TEMP table to hold the new rows that are being computed
-# for $TREE_TABLE.  If $concept_hash is specified, it must be a hash whose
-# keys represent a list of taxonomic concepts.  Otherwise, $TREE_TEMP will be
-# created with one row for every concept in the database.
+# for the tree table being updated.  If $concept_hash is specified, it must be a hash
+# whose keys represent a list of taxonomic concepts.  Otherwise, $TREE_TEMP
+# will be created with one row for every concept in the database.
 # 
 # Also create some other necessary tables.
 
@@ -1237,12 +1124,14 @@ sub createTempTables {
     $result = $dbh->do("CREATE TABLE $TREE_TEMP 
 			       (orig_no int unsigned not null,
 				spelling_no int unsigned not null,
+				trad_no int unsigned not null,
 				synonym_no int unsigned not null,
 				parent_no int unsigned not null,
 				opinion_no int unsigned not null,
 				lft int unsigned,
 				rgt int unsigned,
 				depth int unsigned,
+				kingdom enum ('Metazoa', 'Plantae', 'Fungi', 'Bacteria', 'Archaea', 'Other'),
 				PRIMARY KEY (orig_no))");
     
     # If we were given a list of concepts, populate it with just those.
@@ -1257,7 +1146,7 @@ sub createTempTables {
     }
 	
     $result = $dbh->do("INSERT INTO $TREE_TEMP
-			SELECT distinct orig_no, 0, 0, 0, 0, null, null, null
+			SELECT distinct orig_no, 0, 0, 0, 0, 0, null, null, null, null
 			FROM $AUTH_TABLE $concept_filter");
     
     # Next, create a temporary table to record the best opinion for each concept.
@@ -1441,23 +1330,54 @@ sub computeSpelling {
     
     $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (spelling_no)");
     
+    # As an addendum, we can now compute and index the trad_no field, which
+    # might be of interest to those who prefer the traditional taxonomic ranks
+    # whenever possible.  Its value is the same as spelling_no except where there
+    # is at least one taxon of the same name and a different rank, in which
+    # case the most recent and reliable such taxon is used instead.
+    
+    logMessage(2, "    computing trad_no");
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $TRAD_TEMP");
+    $result = $dbh->do("CREATE TABLE $TRAD_TEMP LIKE $SPELLING_TEMP");
+    $result = $dbh->do("
+		INSERT IGNORE INTO $TRAD_TEMP (orig_no, spelling_no)
+		SELECT t.orig_no, o.child_spelling_no
+		FROM authorities a
+			JOIN taxon_trees t ON a.taxon_no = t.spelling_no
+				AND a.taxon_rank = 'unranked clade'
+			JOIN $OPINION_CACHE o on o.orig_no = t.orig_no
+			JOIN authorities a2 on o.child_spelling_no = a2.taxon_no
+		WHERE a2.taxon_rank <> 'unranked clade' and a2.taxon_name = a.taxon_name
+		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
+    
+    logMessage(2, "    setting trad_no");
+    
+    $result = $dbh->do("UPDATE $TREE_TEMP SET trad_no = spelling_no");
+    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $TRAD_TEMP s USING (orig_no)
+			SET t.trad_no = s.spelling_no");
+    
+    logMessage(2, "    indexing trad_no");
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (trad_no)");
+    
     my $a = 1;		# we can stop on this line when debugging
 }
 
 
-# expandToJuniors ( dbh )
+# expandToJuniors ( dbh, tree_table )
 # 
-# Expand $TREE_TEMP to adding to it all rows from $TREE_TABLE which represent
+# Expand $TREE_TEMP to adding to it all rows from $tree_table which represent
 # junior synonyms of the concepts already in $TREE_TEMP.
 
 sub expandToJuniors {
     
-    my ($dbh) = @_;
+    my ($dbh, $tree_table) = @_;
     
     # We need to repeat the following process until no new rows are added, so
     # that junior synonyms of junior synonyms, etc. also get added.
     
-    # Note that we can't just use the synonym_no field of $TREE_TABLE, because
+    # Note that we can't just use the synonym_no field of $tree_table, because
     # it refers to the most senior synonym instead of the immediate senior
     # synonym.  We might have a synonym chain A -> B -> C with B in
     # $TREE_TEMP.  In such a case, we would miss A if we relied on synonym_no.
@@ -1470,7 +1390,7 @@ sub expandToJuniors {
 		FROM $TREE_TEMP t
 			JOIN $OPINION_CACHE o ON o.parent_no = t.orig_no
 				and o.status != 'belongs to'
-			STRAIGHT_JOIN $TREE_TABLE m ON m.opinion_no = o.opinion_no");
+			STRAIGHT_JOIN $tree_table m ON m.opinion_no = o.opinion_no");
 	
 	last if $result == 0;
     }
@@ -1479,11 +1399,11 @@ sub expandToJuniors {
 }
 
 
-# expandToSeniors ( dbh )
+# expandToSeniors ( dbh, tree_table )
 # 
-# Expand $TREE_TEMP by adding to it all rows from $TREE_TABLE which represent
+# Expand $TREE_TEMP by adding to it all rows from $tree_table which represent
 # senior synonyms of the concepts already in $TREE_TEMP, and all rows from
-# $TREE_TABLE representing concepts which used to be senior synonyms but might
+# $tree_table representing concepts which used to be senior synonyms but might
 # not be anymore.  All of these might undergo a change of classification as
 # part of this update.
 # 
@@ -1492,7 +1412,7 @@ sub expandToJuniors {
 
 sub expandToSeniors {
     
-    my ($dbh) = @_;
+    my ($dbh, $tree_table) = @_;
     
     my ($count, $result);
     
@@ -1508,18 +1428,18 @@ sub expandToSeniors {
 		SELECT m.orig_no, m.spelling_no, m.synonym_no
 		FROM $CLASS_TEMP c
 			JOIN $OPINION_CACHE o USING (opinion_no)
-			STRAIGHT_JOIN $TREE_TABLE m ON o.parent_no = m.orig_no
+			STRAIGHT_JOIN $tree_table m ON o.parent_no = m.orig_no
 				and o.status != 'belongs to'");
 	
-	# Then the old synonyms (using $TREE_TABLE)
+	# Then the old synonyms (using $tree_table)
 	
 	$count += $dbh->do("
 		INSERT IGNORE INTO $TREE_TEMP (orig_no, spelling_no, synonym_no)
 		SELECT m.orig_no, m.spelling_no, m.synonym_no
 		FROM $TREE_TEMP t 
-			JOIN $TREE_TABLE m USING (orig_no)
+			JOIN $tree_table m USING (orig_no)
 			JOIN $OPINION_CACHE o ON o.opinion_no = m.opinion_no
-			JOIN $TREE_TABLE m2 ON o.parent_no = m2.orig_no
+			JOIN $tree_table m2 ON o.parent_no = m2.orig_no
 				and o.status != 'belongs to'");
 	
 	# Then expand $CLASS_TEMP with corresponding rows for every concept
@@ -1528,7 +1448,7 @@ sub expandToSeniors {
 	$result = $dbh->do("
 		INSERT IGNORE INTO $CLASS_TEMP
 		SELECT m.orig_no, m.opinion_no, m.parent_no, o.ri, o.pubyr, o.status
-		FROM $TREE_TEMP t JOIN $TREE_TABLE m USING (orig_no)
+		FROM $TREE_TEMP t JOIN $tree_table m USING (orig_no)
 			JOIN $OPINION_CACHE o ON o.opinion_no = m.opinion_no
 			LEFT JOIN $CLASS_TEMP c ON c.orig_no = t.orig_no
 		WHERE c.opinion_no is null") if $count > 0;
@@ -1539,18 +1459,18 @@ sub expandToSeniors {
 }
 
 
-# expandToChildren ( dbh )
+# expandToChildren ( dbh, tree_table )
 # 
-# Expand $TREE_TEMP to adding to it all rows from $TREE_TABLE which represent
+# Expand $TREE_TEMP to adding to it all rows from $tree_table which represent
 # children of the concepts already in $TREE_TEMP.
 
 sub expandToChildren {
     
-    my ($dbh) = @_;
+    my ($dbh, $tree_table) = @_;
     
     my $result = $dbh->do("
 		INSERT IGNORE INTO $TREE_TEMP
-		SELECT m.* FROM $TREE_TABLE m JOIN $TREE_TEMP t
+		SELECT m.* FROM $tree_table m JOIN $TREE_TEMP t
 			ON m.parent_no = t.orig_no");
     
     logMessage(1, "adding children: $result concepts");
@@ -2195,14 +2115,14 @@ sub breakCycles {
 }
 
 
-# linkParents ( dbh )
+# linkParents ( dbh, tree_table )
 # 
 # Update the parent_no field of $TREE_TEMP to include parents which are not
 # themselves represented in $TREE_TEMP.
 
 sub linkParents {
     
-    my ($dbh) = @_;
+    my ($dbh, $tree_table) = @_;
     
     my $result;
     
@@ -2212,77 +2132,11 @@ sub linkParents {
 		UPDATE $TREE_TEMP t
 		    JOIN $TREE_TEMP t2 ON t2.orig_no = t.synonym_no
 		    JOIN $OPINION_CACHE o ON o.opinion_no = t2.opinion_no
-		    JOIN $TREE_TABLE m ON m.orig_no = o.parent_no
+		    JOIN $tree_table m ON m.orig_no = o.parent_no
 		SET t.parent_no = m.synonym_no
 		WHERE t.parent_no = 0 and o.parent_no != 0");
     
     return;
-}
-
-
-# treePerturbation ( dbh )
-# 
-# Determine which taxa have changed parents.  At the same time, estimate the
-# amount of time it would take to adjust the tree sequence in-place to account
-# for this.  Return the estimate, with a figure of 1 representing an estimate
-# that it would take just as long to recompute the whole tree.
-# 
-# The reason we need to make this calculation is that nested-set trees are
-# very expensive to alter.  A single moved taxon may require changing all of
-# the rows of $TREE_TABLE.
-
-sub estimateTreePerturbation {
-    
-    my ($dbh) = @_;
-    
-    my $result;
-    
-    # First, we get the tree size.
-    
-    my ($tree_size) = $dbh->selectrow_array("
-		SELECT count(*) from $TREE_TABLE WHERE lft is not null");
-    
-    # Then determine which of the taxa in $TREE_TEMP have changed parents, and
-    # grab some information about them.  We need to compute the total number
-    # of taxa that are moving, plus the total perturbation (number of tree
-    # rows that will have to be changed to move these taxa).  The latter is an
-    # estimate, so does not need to be exact.
-    
-    my $changed_taxa = $dbh->prepare("
-		SELECT orig_no, t2.lft, t2.rgt, t3.lft
-		FROM $TREE_TEMP t1 JOIN $TREE_TABLE t2 USING (orig_no)
-			JOIN $TREE_TABLE t3 ON t3.orig_no = t2.parent_no
-		WHERE t1.parent_no != t2.parent_no");
-    
-    $changed_taxa->execute();
-    
-    my ($move_count, $perturbation) = @_;
-    
-    while ( my($orig_no, $old_lft, $old_rgt, 
-	       $new_lft) = $changed_taxa->fetchrow_array() )
-    {
-	$move_count++;
-	if ( $old_lft > 0 )
-	{
-	    $perturbation += ($old_rgt - $old_lft) + ($new_lft - $old_lft);
-	}
-	else
-	{
-	    $perturbation += ($tree_size - $new_lft);
-	}
-    }
-    
-    # If there is nothing to move, then the perturbation of the tree is 0.
-    
-    if ( $move_count == 0 )
-    {
-	return 0;
-    }
-    
-    else
-    {
-	return $perturbation / $tree_size;
-    }
 }
 
 
@@ -2466,30 +2320,30 @@ sub createNode {
 }
 
 
-# updateTreeTables ( dbh )
+# updateTreeTables ( dbh, tree_table, suppress_table, keep_temps )
 # 
 # Do the final steps in the update procedure.  These are as follows:
 # 
-# 1) copy everything from $TREE_TEMP into $TREE_TABLE, overwriting
+# 1) copy everything from $TREE_TEMP into $tree_table, overwriting
 #    corresponding rows
-# 2) adjust the tree sequence in $TREE_TABLE
+# 2) adjust the tree sequence in $tree_table
 # 
-# These two have to be quick, since we need to do them with $TREE_TABLE
+# These two have to be quick, since we need to do them with $tree_table
 # locked.
 # 
-# 3) copy everything from $SUPPRESS_TEMP into $SUPPRESS_TABLE, and clear
-#    entries from $SUPPRESS_TABLE that should no longer be there.
+# 3) copy everything from $SUPPRESS_TEMP into $suppress_table, and clear
+#    entries from $suppress_table that should no longer be there.
 
 sub updateTreeTables {
 
-    my ($dbh, $keep_temps) = @_;
+    my ($dbh, $tree_table, $suppress_table, $keep_temps) = @_;
     
     my $result;
     
     # The first thing to do is to determine which rows have a changed
     # parent_no value.  Each one will require an adjustment to the tree
     # sequence.  We have to do this now, before we copy the rows from
-    # $TREE_TEMP over the corresponding rows from $TREE_TABLE below.
+    # $TREE_TEMP over the corresponding rows from $tree_table below.
     
     # We order the rows in descending order of position to make sure that
     # children are moved before their parents.  This is necessary in order to
@@ -2499,7 +2353,7 @@ sub updateTreeTables {
     
     my $moved_taxa = $dbh->prepare("
 		SELECT t.orig_no, t.parent_no
-		FROM $TREE_TEMP as t LEFT JOIN $TREE_TABLE as m USING (orig_no)
+		FROM $TREE_TEMP as t LEFT JOIN $tree_table as m USING (orig_no)
 		WHERE t.parent_no != m.parent_no
 		ORDER BY m.lft DESC");
     
@@ -2513,23 +2367,23 @@ sub updateTreeTables {
     }
     
     # Next, we need to fill in $TREE_TEMP with the corresponding lft, rgt, and
-    # depth values from $TREE_TABLE.  For all rows which aren't being moved to
+    # depth values from $tree_table.  For all rows which aren't being moved to
     # a new location in the hierarcy, those values won't be changing.  Those
     # that are being moved will be updated below.
     
-    $result = $dbh->do("UPDATE $TREE_TEMP as t JOIN $TREE_TABLE as m USING (orig_no)
+    $result = $dbh->do("UPDATE $TREE_TEMP as t JOIN $tree_table as m USING (orig_no)
 			SET t.lft = m.lft, t.rgt = m.rgt, t.depth = m.depth");
     
-    # Before we update $TREE_TABLE, we need to lock it for writing.  This will
+    # Before we update $tree_table, we need to lock it for writing.  This will
     # ensure that all other threads see it in a consistent state, either pre-
     # or post-update.  This means that we also have to lock $TREE_TEMP for
     # read.
     
-    $result = $dbh->do("LOCK TABLE $TREE_TABLE as m WRITE,
-				   $TREE_TABLE WRITE,
+    $result = $dbh->do("LOCK TABLE $tree_table as m WRITE,
+				   $tree_table WRITE,
 				   $TREE_TEMP as t READ,
 				   $TREE_TEMP READ");
-
+    
     #				   $TREE_TABLE as m2 WRITE,
     #				   $TREE_TABLE as m3 WRITE,
     #				   $OPINION_CACHE as o READ
@@ -2539,8 +2393,7 @@ sub updateTreeTables {
     
     logMessage(2, "copying into active tables (f)");
     
-    $result = $dbh->do("REPLACE INTO $TREE_TABLE
-			SELECT * FROM $TREE_TEMP");
+    $result = $dbh->do("REPLACE INTO $tree_table SELECT * FROM $TREE_TEMP");
     
     # At some point we may want to recompute the parent_no values of children
     # of concepts that have changed synonymy.  This would also involve
@@ -2560,14 +2413,14 @@ sub updateTreeTables {
     # because the procedure requires a table that holds the entire updated set
     # of taxon trees.
     
-    my ($max_lft) = $dbh->selectrow_array("SELECT max(lft) from $TREE_TABLE");
+    my ($max_lft) = $dbh->selectrow_array("SELECT max(lft) from $tree_table");
     
     logMessage(2, "adjusting tree sequence (e)");
     logMessage(2, "    " . scalar(@move) . " concept(s) are moving within the hierarchy");
     
     foreach my $pair (@move)
     {
-	adjustTreeSequence($dbh, $max_lft, @$pair);
+	adjustTreeSequence($dbh, $tree_table, $max_lft, @$pair);
     }
     
     # Now we can unlock the main tables.
@@ -2582,10 +2435,10 @@ sub updateTreeTables {
     # We don't bother to lock these tables, since no other part of the code
     # should be using $SUPPRESS_TABLE in a critical role.
     
-    $result = $dbh->do("INSERT INTO $SUPPRESS_TABLE
+    $result = $dbh->do("INSERT INTO $suppress_table
 			SELECT * FROM $SUPPRESS_TEMP");
     
-    $result = $dbh->do("DELETE $SUPPRESS_TABLE FROM $SUPPRESS_TABLE
+    $result = $dbh->do("DELETE $suppress_table FROM $suppress_table
 				JOIN $TREE_TEMP USING (opinion_no)");
     
     # Now, we can remove the temporary tables.
@@ -2598,6 +2451,7 @@ sub updateTreeTables {
 	$result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_TEMP");
 	
 	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $TRAD_TEMP");
 	$result = $dbh->do("DROP TABLE IF EXISTS $CLASS_TEMP");
 	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_TEMP");
     }
@@ -2606,7 +2460,7 @@ sub updateTreeTables {
 }
 
 
-# treePerturbation ( dbh )
+# treePerturbation ( dbh, tree_table )
 # 
 # Determine the amount by which the taxon tree will need to be perturbed in
 # order to complete the current update.  This is expressed as a fraction of
@@ -2615,14 +2469,14 @@ sub updateTreeTables {
 
 sub treePerturbation {
     
-    my ($dbh) = @_;
+    my ($dbh, $tree_table) = @_;
     
-    my ($max_seq) = $dbh->selectrow_array("SELECT max(lft) from $TREE_TABLE");
+    my ($max_seq) = $dbh->selectrow_array("SELECT max(lft) from $tree_table");
     
     my $moved_taxa = $dbh->prepare("
 		SELECT t.orig_no, t.parent_no, m.parent_no, m2.lft, m.lft
-		FROM $TREE_TEMP as t LEFT JOIN $TREE_TABLE as m USING (orig_no)
-			LEFT JOIN $TREE_TABLE as m2 ON m2.orig_no = t.parent_no
+		FROM $TREE_TEMP as t LEFT JOIN $tree_table as m USING (orig_no)
+			LEFT JOIN $tree_table as m2 ON m2.orig_no = t.parent_no
 		WHERE t.parent_no != m.parent_no
 		ORDER BY m.lft DESC");
     
@@ -2660,7 +2514,7 @@ sub treePerturbation {
 }
 
 
-# adjustTreeSequence ( dbh, max_lft, orig_no, new_parent )
+# adjustTreeSequence ( dbh, tree_table, max_lft, orig_no, new_parent )
 # 
 # Adjust the tree sequence so that taxon $orig_no (along with all of its
 # children) falls properly under its new parent.  The taxon will end up as the
@@ -2669,7 +2523,7 @@ sub treePerturbation {
 
 sub adjustTreeSequence {
     
-    my ($dbh, $max_lft, $orig_no, $new_parent) = @_;
+    my ($dbh, $tree_table, $max_lft, $orig_no, $new_parent) = @_;
     
     my $sql = '';
     my $change_depth = '';
@@ -2679,7 +2533,7 @@ sub adjustTreeSequence {
     
     my ($old_pos, $old_rgt, $old_depth) = $dbh->selectrow_array("
 		SELECT lft, rgt, depth
-		FROM $TREE_TABLE WHERE orig_no = $orig_no");
+		FROM $tree_table WHERE orig_no = $orig_no");
     
     # With this information we can calculate the size of the subtree being
     # moved.
@@ -2694,7 +2548,7 @@ sub adjustTreeSequence {
     if ( $new_parent > 0 )
     {
 	($parent_pos, $parent_rgt, $new_depth) = $dbh->selectrow_array("
-		SELECT lft, rgt, depth+1 FROM $TREE_TABLE
+		SELECT lft, rgt, depth+1 FROM $tree_table
 		WHERE orig_no = $new_parent");
 	
 	# Do nothing if we are instructed to move a taxon into its own subtree.
@@ -2731,7 +2585,7 @@ sub adjustTreeSequence {
 	# Now update lft, rgt and depth values for every row lying between the
 	# old position of the subtree and the new position (inclusive).
 	
-	$sql = "UPDATE $TREE_TABLE
+	$sql = "UPDATE $tree_table
 		SET rgt = rgt + if(lft > $old_rgt,
 				   if(rgt < $parent_rgt or lft > $parent_pos, -$width, 0),
 				   $disp)
@@ -2745,7 +2599,7 @@ sub adjustTreeSequence {
 	# no longer parents of it will need their rgt values to shrink by the
 	# width of the tree.
 	
-	$sql = "UPDATE $TREE_TABLE
+	$sql = "UPDATE $tree_table
 		SET rgt = rgt - $width
 		WHERE lft < $old_pos and rgt >= $old_rgt and
 			(lft > $parent_pos or rgt < $parent_rgt)";
@@ -2772,7 +2626,7 @@ sub adjustTreeSequence {
 	# Now update lft, rgt and depth values for every row lying between the
 	# old position of the subtree and the new position (inclusive).
 	
-	$sql = "UPDATE $TREE_TABLE
+	$sql = "UPDATE $tree_table
 		SET rgt = rgt + if(lft < $old_pos,
 				   if(rgt < $old_pos, $width, 0),
 				   $disp)
@@ -2786,7 +2640,7 @@ sub adjustTreeSequence {
 	# not in its old position will need their rgt values to grow by the
 	# width of the tree.
 	
-	$sql = "UPDATE $TREE_TABLE
+	$sql = "UPDATE $tree_table
 		SET rgt = rgt + $width
 		WHERE lft <= $parent_pos and rgt >= $parent_rgt and rgt < $old_pos";
 	
@@ -2794,6 +2648,95 @@ sub adjustTreeSequence {
     }
     
     return;
+}
+
+
+# computeKingdomLabels ( dbh )
+# 
+# For each of the major kingdoms (Metazoa, Plantae, Fungi, Bacteria, Archaea),
+# label all of the taxa in the corresponding hierarchy.
+
+sub computeKingdomLabels {
+    
+    my ($dbh) = @_;
+    
+    logMessage(2, "  setting kingdom labels (e)");
+    
+    # First, prepare an SQL statement determining the boundary of a particular
+    # hierarchy, and another for setting kingdom labels.
+    
+    my $get_bounds = $dbh->prepare("
+		SELECT lft, rgt FROM authorities JOIN $TREE_TEMP using (orig_no)
+		WHERE taxon_name = ? and taxon_rank = 'kingdom'");
+    
+    my $set_labels = $dbh->prepare("
+		UPDATE $TREE_TEMP SET kingdom = ?
+		WHERE lft >= ? and lft <= ?");
+    
+    # Then label the kingdoms one at a time.
+    
+    foreach my $k (keys %KINGDOM_LABEL)
+    {
+	my ($start, $end) = $dbh->selectrow_array($get_bounds, {}, $k);
+	my $kingdom_size;
+	
+	if ( defined $start and $start > 0 )
+	{
+	    $kingdom_size = $set_labels->execute($KINGDOM_LABEL{$k}, $start, $end);
+	}
+	
+	else
+	{
+	    $kingdom_size = 0;
+	}
+	
+	logMessage(2, "    kingdom $k ($KINGDOM_LABEL{$k}): $kingdom_size");
+    }
+}
+
+
+# updateKingdomLabels ( dbh, tree_table )
+# 
+# For each of the major kingdoms (Metazoa, Plantae, Fungi, Bacteria, Archaea),
+# label all of the taxa in the corresponding hierarchy of the updated part of
+# the tree.
+
+sub updateKingdomLabels {
+    
+    my ($dbh, $tree_table) = @_;
+    
+    logMessage(2, "  setting kingdom labels (e)");
+    
+    # First, prepare an SQL statement determining the boundary of a particular
+    # hierarchy, and another for setting kingdom labels.
+    
+    my $get_bounds = $dbh->prepare("
+		SELECT lft, rgt FROM authorities JOIN $tree_table using (orig_no)
+		WHERE taxon_name = ? and taxon_rank = 'kingdom'");
+    
+    my $set_labels = $dbh->prepare("
+		UPDATE $tree_table t JOIN $TREE_TEMP t2 using (orig_no) SET t.kingdom = ?
+		WHERE t.lft >= ? and t.lft <= ?");
+    
+    # Then label the kingdoms one at a time.
+    
+    foreach my $k (keys %KINGDOM_LABEL)
+    {
+	my ($start, $end) = $dbh->selectrow_array($get_bounds, {}, $k);
+	my $kingdom_size;
+	
+	if ( defined $start and $start > 0 )
+	{
+	    $kingdom_size = $set_labels->execute($KINGDOM_LABEL{$k}, $start, $end);
+	}
+	
+	else
+	{
+	    $kingdom_size = 0;
+	}
+	
+	logMessage(2, "    kingdom $k ($KINGDOM_LABEL{$k}): $kingdom_size");
+    }
 }
 
 
@@ -2808,35 +2751,40 @@ sub adjustTreeSequence {
 
 sub activateNewTables {
 
-    my ($dbh, $keep_temps) = @_;
+    my ($dbh, $tree_table, $suppress_table, $keep_temps) = @_;
     
     my $result;
     
-    logMessage(2, "activating new tables (g)");
+    logMessage(2, "activating tables '$tree_table' and '$suppress_table' (g)");
+    
+    # Compute the backup names
+    
+    my $tree_bak = "${tree_table}_bak";
+    my $suppress_bak = "${suppress_table}_bak";
     
     # Delete any backup tables that might still be around
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $TREE_BAK");
-    $result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_BAK");
+    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $suppress_bak");
     
     # Create dummy versions of any of the main tables that might be currently
     # missing
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TREE_TABLE LIKE $TREE_TEMP");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $SUPPRESS_TABLE LIKE $SUPPRESS_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $suppress_table LIKE $SUPPRESS_TEMP");
     
     # Now do the Atomic Table Swap (tm)
     
     $result = $dbh->do("RENAME TABLE
-			    $TREE_TABLE to $TREE_BAK,
-			    $TREE_TEMP to $TREE_TABLE,
-			    $SUPPRESS_TABLE to $SUPPRESS_BAK,
-			    $SUPPRESS_TEMP to $SUPPRESS_TABLE");
+			    $tree_table to $tree_bak,
+			    $TREE_TEMP to $tree_table,
+			    $suppress_table to $suppress_bak,
+			    $SUPPRESS_TEMP to $suppress_table");
     
     # Then we can get rid of the backup tables
     
-    $result = $dbh->do("DROP TABLE $TREE_BAK");
-    $result = $dbh->do("DROP TABLE $SUPPRESS_BAK");
+    $result = $dbh->do("DROP TABLE $tree_bak");
+    $result = $dbh->do("DROP TABLE $suppress_bak");
     
     # Delete the auxiliary tables too, unless we were told to keep them.
     
@@ -2845,11 +2793,12 @@ sub activateNewTables {
 	logMessage(2, "removing temporary tables");
 	
 	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $TRAD_TEMP");
 	$result = $dbh->do("DROP TABLE IF EXISTS $CLASS_TEMP");
 	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_TEMP");
     }
     
-    logMessage(1, "done rebuilding taxon trees");
+    logMessage(1, "done rebuilding tree tables for '$tree_table'");
     
     my $a = 1;		# we can stop here when debugging
 }
@@ -2863,13 +2812,14 @@ sub activateNewTables {
 
 sub check {
 
-    my ($dbh, $msg_level) = @_;
+    my ($dbh, $tree_table, $options) = @_;
     
     my $result;
+    my $options ||= {};
     
     # First, set the variables that control log output.
     
-    $MSG_TAG = 'Check'; $MSG_LEVEL = $msg_level || 1;
+    $MSG_TAG = 'Check'; $MSG_LEVEL = $options->{msg_level} || 1;
     
     # Then, clear the error list.
     
@@ -2904,23 +2854,23 @@ sub check {
     }
     
     # Also make sure that the orig_no values are in 1-1 correspondence between
-    # $AUTH_TABLE and $TREE_TABLE.
+    # $AUTH_TABLE and $tree_table.
     
     my ($bad_orig) = $dbh->selectrow_array("
 		SELECT count(t.orig_no)
-		FROM $TREE_TABLE as t LEFT JOIN $AUTH_TABLE as a USING (orig_no)
+		FROM $tree_table as t LEFT JOIN $AUTH_TABLE as a USING (orig_no)
 		WHERE a.orig_no is null");
     
     if ( $bad_orig > 0 )
     {
-	push @TREE_ERRORS, "Found $bad_orig concept(s) in $TREE_TABLE that do not match $AUTH_TABLE";
-	logMessage(1, "    found $bad_orig concept(s) in $TREE_TABLE that do not match $AUTH_TABLE");
+	push @TREE_ERRORS, "Found $bad_orig concept(s) in $tree_table that do not match $AUTH_TABLE";
+	logMessage(1, "    found $bad_orig concept(s) in $tree_table that do not match $AUTH_TABLE");
 	
 	if ( $bad_orig < $REPORT_THRESHOLD )
 	{
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT t.orig_no
-		FROM $TREE_TABLE as t LEFT JOIN $AUTH_TABLE as a USING (orig_no)
+		FROM $tree_table as t LEFT JOIN $AUTH_TABLE as a USING (orig_no)
 		WHERE a.orig_no is null");
 	    
 	    logMessage(1, "        " . join(', ', @$list));
@@ -2929,19 +2879,19 @@ sub check {
     
     my ($missing_orig) = $dbh->selectrow_array("
 		SELECT count(distinct a.orig_no)
-		FROM $AUTH_TABLE as a LEFT JOIN $TREE_TABLE as t USING (orig_no)
+		FROM $AUTH_TABLE as a LEFT JOIN $tree_table as t USING (orig_no)
 		WHERE t.orig_no is null");
     
     if ( $missing_orig > 0 )
     {
-	push @TREE_ERRORS, "Found $missing_orig concept(s) missing from $TREE_TABLE";
-	logMessage(1, "    found $missing_orig concept(s) missing from $TREE_TABLE");
+	push @TREE_ERRORS, "Found $missing_orig concept(s) missing from $tree_table";
+	logMessage(1, "    found $missing_orig concept(s) missing from $tree_table");
 	
 	if ( $missing_orig < $REPORT_THRESHOLD )
 	{
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT distinct a.orig_no
-		FROM $AUTH_TABLE as a LEFT JOIN $TREE_TABLE as t USING (orig_no)
+		FROM $AUTH_TABLE as a LEFT JOIN $tree_table as t USING (orig_no)
 		WHERE t.orig_no is null");
 	    
 	    logMessage(1, "        " . join(', ', @$list));
@@ -2980,7 +2930,7 @@ sub check {
     
     my ($bad_spelling) = $dbh->selectrow_array("
 		SELECT count(t.orig_no)
-		FROM $TREE_TABLE as t LEFT JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
+		FROM $tree_table as t LEFT JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
 		WHERE a.orig_no != t.orig_no or a.orig_no is null");
     
     if ( $bad_spelling > 0 )
@@ -2992,7 +2942,7 @@ sub check {
 	{
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT t.orig_no
-		FROM $TREE_TABLE as t JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
+		FROM $tree_table as t JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
 		WHERE a.orig_no != t.orig_no or a.orig_no is null");
 	    
 	    logMessage(1, "        " . join(', ', @$list));
@@ -3005,7 +2955,7 @@ sub check {
     
     my ($bad_synonym) = $dbh->selectrow_array("
 		SELECT count(t.orig_no)
-		FROM $TREE_TABLE as t LEFT JOIN $TREE_TABLE as t2
+		FROM $tree_table as t LEFT JOIN $tree_table as t2
 			ON t.synonym_no = t2.orig_no
 		WHERE t2.orig_no is null");
     
@@ -3018,7 +2968,7 @@ sub check {
 	{
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT t.orig_no
-		FROM $TREE_TABLE as t LEFT JOIN $TREE_TABLE as t2
+		FROM $tree_table as t LEFT JOIN $tree_table as t2
 			ON t.synonym_no = t2.orig_no
 		WHERE t2.orig_no is null");
 	    
@@ -3032,7 +2982,7 @@ sub check {
     
     my ($bad_parent) = $dbh->selectrow_array("
 		SELECT count(t.orig_no)
-		FROM $TREE_TABLE as t LEFT JOIN $TREE_TABLE as t2
+		FROM $tree_table as t LEFT JOIN $tree_table as t2
 			ON t.parent_no = t2.orig_no
 		WHERE t.parent_no != 0 and t2.orig_no is null");
     
@@ -3045,7 +2995,7 @@ sub check {
 	{
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT t.orig_no
-		FROM $TREE_TABLE as t LEFT JOIN $TREE_TABLE as t2
+		FROM $tree_table as t LEFT JOIN $tree_table as t2
 			ON t.parent_no = t2.orig_no
 		WHERE t2.orig_no is null");
 	    
@@ -3057,7 +3007,7 @@ sub check {
     
     my ($bad_class) = $dbh->selectrow_array("
 		SELECT count(t.orig_no)
-		FROM $TREE_TABLE as t JOIN $OPINION_CACHE o USING (opinion_no)
+		FROM $tree_table as t JOIN $OPINION_CACHE o USING (opinion_no)
 		WHERE (o.status = 'belongs to' and t.synonym_no != t.orig_no)
 		   or (o.status != 'belongs to' and t.synonym_no = t.orig_no)");
     
@@ -3070,7 +3020,7 @@ sub check {
 	{
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT t.orig_no
-		FROM $TREE_TABLE as t JOIN $OPINION_CACHE o USING (opinion_no)
+		FROM $tree_table as t JOIN $OPINION_CACHE o USING (opinion_no)
 		WHERE (o.status = 'belongs to' and t.synonym_no != t.orig_no)
 		   or (o.status != 'belongs to' and t.synonym_no = t.orig_no)");
 	    
@@ -3084,7 +3034,7 @@ sub check {
     
     my ($bad_seq) = $dbh->selectrow_array("
 		SELECT count(t.orig_no)
-		FROM $TREE_TABLE as t join $TREE_TABLE as p on p.orig_no = t.parent_no
+		FROM $tree_table as t join $tree_table as p on p.orig_no = t.parent_no
 		WHERE (t.lft < p.lft or t.lft > p.rgt)");
     
     if ( $bad_seq > 0 )
@@ -3096,7 +3046,7 @@ sub check {
 	{
 	    my ($list) = $dbh->selectcol_arrayref("
 		SELECT t.orig_no
-		FROM $TREE_TABLE as t join $TREE_TABLE as p on p.orig_no = t.parent_no
+		FROM $tree_table as t join $tree_table as p on p.orig_no = t.parent_no
 		WHERE (t.lft < p.lft or t.lft > p.rgt)");
 	    
 	    logMessage(1, "        " . join(', ', @$list));
@@ -3118,6 +3068,8 @@ sub check {
     }
 }
 
+
+# UTILITY ROUTINES
 
 # logMessage ( level, message )
 # 
@@ -3168,847 +3120,5 @@ sub clearTreeSequence {
     $dbh->do("UPDATE $TREE_TEMP SET lft = null, rgt = null, depth = null");
 }
 
-
-=item getCurrentSpelling ( dbh, taxon_no )
-
-Given the identifier of a spelling or of a taxonomic concept,
-returns an object representing the currently accepted spelling.
-
-=cut
-
-sub getCurrentSpelling {
-    
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonParametrized($dbh, $taxon_no, 'spelling');
-}
-
-
-=item listCurrentSpelling ( dbh, taxon_no )
-
-Given the identifier of a spelling or of a taxonomic concept, returns the
-spelling number (taxon_no) of the currently accepted spelling.
-
-=cut
-
-sub listCurrentSpelling {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdParametrized($dbh, $taxon_no, 'spelling');
-}
-
-
-=item getAllSpellings ( dbh, taxon_no )
-
-Given the identifier of a spelling or of a taxonomic concept, returns a list
-of objects representing all spellings of the indicated concept.  The first
-object in the list will be the currently accepted spelling.
-
-=cut
-
-sub getAllSpellings {
-    
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonListParametrized($dbh, $taxon_no, 'spelling');
-}
-
-
-=item listAllSpellings ( dbh, taxon_no )
-
-Given the identifier of a spelling or of a taxonomic concept, returns a list
-of spelling numbers (taxon_no) representing all spellings of the indicated
-concept.  The first item in the list will be the currently accepted spelling.
-
-=cut
-
-sub listAllSpellings {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdListParametrized($dbh, $taxon_no, 'spelling');
-}
-
-
-=item getOriginalCombination ( dbh, taxon_no )
-
-Returns an object representing the original spelling of the specified
-taxonomic concept, which may be the specified taxon itself.
-
-=cut
-
-sub getOriginalCombination {
-    
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonParametrized($dbh, $taxon_no, 'orig');
-}
-
-
-=item listOriginalCombination ( dbh, taxon_no )
-
-Returns the taxon_no for the original spelling of the given taxonomic concept,
-which may be the specified taxon itself.
-
-=cut
-
-sub listOriginalCombination {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdParametrized($dbh, $taxon_no, 'orig');
-}
-
-
-=item getMostSeniorSynonym ( dbh, taxon_no )
-
-Returns an object representing the most senior synonym of the specified
-taxonomic concept.  If the concept does not have a senior synonym, an object
-representing the concept itself is returned.
-
-=cut
-
-sub getMostSeniorSynonym {
-    
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonParametrized($dbh, $taxon_no, 'synonym');
-}
-
-
-=item listMostSeniorSynonym ( dbh, taxon_no )
-
-Returns the taxon_no for the most senior synonym of the given taxonomic
-concept, which may be the specified taxon itself.
-
-=cut
-
-sub listMostSeniorSynonym {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdParametrized($dbh, $taxon_no, 'synonym');
-}
-
-
-=item getAllSynonyms ( dbh, taxon_no )
-
-Returns a list of objects representing all synonyms of the specified taxonomic
-concept, in order of seniority.  If the specified concept has no synonyms, a single
-object is returned representing the concept itself.
-
-=cut
-
-sub getAllSynonyms {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonListParametrized($dbh, $taxon_no, 'synonym');
-}
-
-
-=item listAllSynonyms ( dbh, taxon_no )
-
-Returns a list of taxon identifiers, listing all synonyms (junior and senior)
-of the given taxon as well as the taxon itself.  These are ordered senior to
-junior.  If the concept has no synonyms, its own identifier is returned.
-
-=cut
-
-sub listAllSynonyms {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdListParametrized($dbh, $taxon_no, 'synonym');
-}
-
-
-=item getParent ( dbh, taxon_no )
-
-Returns an object representing the parent of the given taxon.  If there is
-none, then nothing is returned.
-
-=cut
-
-sub getParent {
-    
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonParametrized($dbh, $taxon_no, 'parent');
-}
-
-
-=item listParent ( dbh, taxon_no )
-
-Returns the taxon identifier of the parent of the given taxon, or 0
-if there is none.
-
-=cut
-
-sub listParent {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdParametrized($dbh, $taxon_no, 'parent');
-}
-
-
-=item getClassification ( dbh, taxon_no )
-
-Returns an object representing the immediate parent of the given taxonomic
-concept, which may not be the same as the one referred to by C<parent_no>.  It
-may be a junior synonym instead, if the relevant opinions so state.
-
-=cut
-
-sub getClassification {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonParametrized($dbh, $taxon_no, 'classification');
-}
-
-=item listClassification ( dbh, taxon_no )
-
-Returns the taxon identifier of the immediate parent of the given taxonomic
-concept, which may not be the same as the one referred to by C<parent_no>.  It
-may be a junior synonym instead, if the relevant opinions so state.
-
-=cut
-
-sub listClassification {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdParametrized($dbh, $taxon_no, 'classification');
-}
-
-
-=item getParents ( dbh, taxon_no )
-
-Returns a list of objects representing all parents of the given taxon, in
-order from highest to lowest.
-
-=cut
-
-sub getParents {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonListParametrized($dbh, $taxon_no, 'parent');
-}
-
-
-=item listParents ( dbh, taxon_no )
-
-Returns a list of taxon identifiers representing all parents of the given
-taxon, in order from highest to lowest.
-
-=cut
-
-sub listParents {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdListParametrized($dbh, $taxon_no, 'parent');
-}
-
-
-=item getChildren ( dbh, taxon_no, options )
-
-Returns a list of objects representing the children of the given taxon.  If
-the option "include_synonyms" is true, then synonyms of the children are
-included as well.  If the option "all" is true, then all descendants are
-included, not just immediate children.
-
-=cut
-
-sub getChildren {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonListParametrized($dbh, $taxon_no, 'child');
-}
-
-
-=item listChildren ( dbh, taxon_no, options )
-
-Returns a list of taxon identifiers for all children of the given taxon.  If
-the option "include_synonyms" is true, then synonyms of the children are
-included as well.  If the option "all" is true, then all descendants are
-included, not just immediate children.
-
-=cut
-
-sub listChildren {
-
-    my ($dbh, $taxon_no) = @_;
-    
-    return getTaxonIdListParametrized($dbh, $taxon_no, 'child');
-}
-
-
-our ($INFO_EXPR) = "a.taxon_name, a.taxon_no, a.taxon_rank, a.common_name, a.orig_no, o.status";
-
-# getTaxonParametrized ( dbh, taxon_no, parameter )
-# 
-# Returns a Taxon object corresponding to the given parameter of the base taxon
-# specified by taxon_no.  If an error occurs, returns an Error object
-# instead.  Valid parameters are:
-# 
-#    orig, spelling, synonym, parent, classification
-# 
-# For all but the first two, returns the current spelling of the indicated taxon.
-
-sub getTaxonParametrized {
-    
-    my ($dbh, $taxon_no, $parameter) = @_;
-    
-    # Turn off the automatic error handling
-    
-    local($dbh->{RaiseError}) = 0;
-    
-    # Check arguments
-    
-    unless ( defined $taxon_no && $taxon_no > 0 )
-    {
-	return error("invalid taxon_no '$taxon_no'");
-    }
-    
-    # Fetch the requested information
-    
-    my ($taxon);
-    
-    # Parameters spelling_no and orig_no require a simple look-up
-    
-    if ( $parameter eq 'orig' or $parameter eq 'spelling' )
-    {
-	$taxon = $dbh->selectrow_hashref("
-		SELECT $INFO_EXPR
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t USING (orig_no)
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.${parameter}_no
-			LEFT JOIN $OPINION_CACHE as o USING (opinion_no) 
-		WHERE a2.taxon_no = ?", undef, $taxon_no + 0);
-    }
-    
-    # Parameters synonym_no and parent_no require an extra join on $TREE_TABLE
-    # to look up the current spelling.
-    
-    elsif ( $parameter eq 'synonym' or $parameter eq 'parent' )
-    {
-	$taxon = $dbh->selectrow_hashref("
-		SELECT $INFO_EXPR
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $TREE_TABLE as t ON t.orig_no = t2.${parameter}_no
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
-			LEFT JOIN $OPINION_CACHE as o ON o.opinion_no = t.opinion_no
-		WHERE a2.taxon_no = ?", undef, $taxon_no + 0);
-    }
-    
-    # Parameter 'classification' requires the use of $OPINION_CACHE as well
-    
-    elsif ( $parameter eq 'classification' )
-    {
-	$taxon = $dbh->selectrow_hashref("
-		SELECT $INFO_EXPR
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $OPINION_CACHE as o2 USING (opinion_no)
-			JOIN $TREE_TABLE as t ON t.orig_no = o2.parent_no
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
-			LEFT JOIN $OPINION_CACHE as o ON o.opinion_no = t.opinion_no
-		WHERE a2.taxon_no = ?", undef, $taxon_no + 0);
-    }
-    
-    else
-    {
-	return error("invalid paramter '$parameter'");
-    }
-    
-    if ( defined $taxon )
-    {
-	return bless $taxon, "Taxon";
-    }
-    
-    elsif ( $dbh->err )
-    {
-	return error("database error: " . $dbh->errstr);
-    }
-    
-    else
-    {
-	return error("taxon $taxon_no not found");
-    }
-}
-
-
-# getTaxonIdParametrized ( dbh, taxon_no, parameter )
-# 
-# Returns the taxon identifier corresponding to the given parameter of the base
-# taxon specified by taxon_no.  If an error occurs, returns the undefined
-# value.  Valid parameters are:
-# 
-#    orig, spelling, synonym, parent
-# 
-# For the latter two, returns the current spelling of the indicated taxon.
-
-sub getTaxonIdParametrized {
-    
-    my ($dbh, $taxon_no, $parameter) = @_;
-    
-    # Turn off the automatic error handling
-    
-    local($dbh->{RaiseError}) = 0;
-    
-    # Check arguments
-    
-    unless ( defined $taxon_no && $taxon_no > 0 )
-    {
-	error("invalid taxon_no '$taxon_no'");
-	return;
-    }
-    
-    # Fetch the requested information
-    
-    my ($value);
-    
-    # Parameters orig_no and spelling_no require a simple lookup.
-    
-    if ( $parameter eq 'orig' or $parameter eq 'spelling' )
-    {
-	($value) = $dbh->selectrow_array("
-		SELECT t.${parameter}_no
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t USING (orig_no)
-		WHERE a2.taxon_no = ?", undef, $taxon_no + 0);
-    }
-    
-    # Parameters synonym_no and parent_no require an extra join on $TREE_TABLE
-    # to look up the spelling_no.
-    
-    elsif ( $parameter eq 'synonym' or $parameter eq 'parent' )
-    {
-	($value) = $dbh->selectrow_array("
-		SELECT t.spelling_no
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $TREE_TABLE as t ON t.orig_no = t2.${parameter}_no
-		WHERE a2.taxon_no = ?", undef, $taxon_no + 0);
-    }
-    
-    # Parameter 'classification' requires the use of $OPINION_CACHE as well
-    
-    elsif ( $parameter eq 'classification' )
-    {
-	($value) = $dbh->selectrow_array("
-		SELECT t.spelling_no
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $OPINION_CACHE o USING (opinion_no)
-			JOIN $TREE_TABLE as t ON t.orig_no = o.parent_no
-		WHERE a2.taxon_no = ?", undef, $taxon_no + 0);
-    }
-    
-    else
-    {
-	error("invalid paramter '$parameter'");
-	return;
-    }
-    
-    # If we got a value, return it.
-    
-    if ($value)
-    {
-	return $value;
-    }
-    
-    # If not, but an error occurred, note that.
-    
-    elsif ($dbh->err)
-    {
-	error("database error: " . $dbh->errstr);
-	return;
-    }
-    
-    # Otherwise, the indicated value does not exist.
-    
-    else
-    {
-	error("not found");
-	return;
-    }
-}
-
-
-# getTaxonListParametrized ( dbh, taxon_no, relationship )
-# 
-# Return a list of Taxon objects having the given
-# relationship to the base taxon specified by taxon_no.  If an error occurs,
-# returns an Error object instead.  Valid parameters are:
-# 
-#    'spelling', 'synonym', 'parent', 'child'
-# 
-# For all but the first of these, returns the current spelling of teach
-# matching taxonomic concept.
-
-sub getTaxonListParametrized {
-    
-    my ($dbh, $taxon_no, $parameter) = @_;
-    
-    # Turn off the automatic error handling
-    
-    local($dbh->{RaiseError}) = 0;
-    
-    # Check arguments
-    
-    unless ( defined $taxon_no && $taxon_no > 0 )
-    {
-	return error("invalid taxon_no '$taxon_no'");
-    }
-    
-    # Fetch the requested information
-    
-    my ($result_list);
-    
-    # for parameter 'spelling', make sure to return the currently accepted
-    # spelling first
-    
-    if ( $parameter eq 'spelling' )
-    {
-	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
-		FROM $AUTH_TABLE as a2 JOIN $AUTH_TABLE as a USING (orig_no)
-			JOIN $TREE_TABLE as t USING (orig_no)
-			LEFT JOIN $OPINION_CACHE as o USING (opinion_no)
-		WHERE a2.taxon_no = ?
-		ORDER BY if(a.taxon_no = t.spelling_no, 0, 1)", 
-		{ Slice => {} }, $taxon_no + 0);
-    }
-    
-    # for parameter 'synonym', make sure to return the most senior synonym first
-    
-    elsif ( $parameter eq 'synonym' )
-    {
-	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $TREE_TABLE as t USING (synonym_no)
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
-			LEFT JOIN $OPINION_CACHE as o ON o.opinion_no = t.opinion_no
-		WHERE a2.taxon_no = ?
-		ORDER BY if(a.orig_no = t.synonym_no, 0, 1)", 
-		{ Slice => {} }, $taxon_no + 0);
-    }
-    
-    # for parameter 'parent', order the results by higher to lower taxa
-    
-    elsif ( $parameter eq 'parent' )
-    {
-	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $TREE_TABLE as t ON t.lft <= t2.lft AND t.rgt >= t2.lft
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
-			LEFT JOIN $OPINION_CACHE as o ON o.opinion_no = t.opinion_no
-		WHERE a2.taxon_no = ?
-		ORDER BY t.lft",
-		{ Slice => {} }, $taxon_no + 0);
-    }
-    
-    # for parameter 'child', order the results by tree sequence
-    
-    elsif ( $parameter eq 'child' )
-    {
-	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $TREE_TABLE as t ON t.lft > t2.lft AND t.lft <= t2.rgt
-				AND t.depth = t2.depth + 1
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
-			LEFT JOIN $OPINION_CACHE as o ON o.opinion_no = t.opinion_no
-		WHERE a2.taxon_no = ?
-		ORDER BY t.lft", 
-		{ Slice => {} }, $taxon_no + 0);
-    }
-    
-    else
-    {
-	return error("invalid paramter '$parameter'");
-    }
-    
-    # If an error occurred, note that.
-    
-    if ( $dbh->err )
-    {
-	return error("database error: " . $dbh->errstr);
-    }
-    
-    # Otherwise, if we got no results (except for 'child') then we must have
-    # had an invalid taxon.  Many taxa have no children, but all the other
-    # parameters should return at least one result (the base taxon itself) for
-    # a valid taxon_no.
-    
-    elsif ( scalar(@$result_list) == 0 and $parameter ne 'child' )
-    {
-	return error("taxon $taxon_no not found");
-    }
-    
-    # Otherwise, we got results.  Bless all of the objects into the proper
-    # package and return the list.
-    
-    else
-    {
-	foreach my $t (@$result_list)
-	{
-	    bless $t, "Taxon";
-	}
-	
-	return @$result_list;
-    } 
-}
-
-
-# getTaxonIdListParametrized ( dbh, taxon_no, parameter )
-# 
-# Returns a list of Taxon identifiers corresponding to the given
-# parameter of the base taxon specified by taxon_no.  If an error occurs,
-# returns an Error object instead.  Valid parameters are:
-# 
-#    'spelling', 'synonym', 'parent', 'child'
-# 
-# For all but the first of these, returns the current spelling of teach
-# matching taxonomic concept.
-
-sub getTaxonIdListParametrized {
-    
-    my ($dbh, $taxon_no, $parameter) = @_;
-    
-    # Turn off the automatic error handling
-    
-    local($dbh->{RaiseError}) = 0;
-    
-    # Check arguments
-    
-    unless ( defined $taxon_no && $taxon_no > 0 )
-    {
-	error("invalid taxon_no '$taxon_no'");
-	return;
-    }
-    
-    # Fetch the requested information
-    
-    my ($taxon_ids);
-    
-    # for parameter 'spelling', make sure to return the currently accepted
-    # spelling first
-    
-    if ( $parameter eq 'spelling' )
-    {
-	$taxon_ids = $dbh->selectcol_arrayref("
-		SELECT a.taxon_no
-		FROM $AUTH_TABLE as a2 JOIN $AUTH_TABLE as a USING (orig_no)
-			JOIN $TREE_TABLE as t USING (orig_no)
-		WHERE a2.taxon_no = ?
-		ORDER BY if(a.taxon_no = t.spelling_no, 0, 1)", undef, $taxon_no + 0);
-    }
-    
-    # for parameter 'synonym', make sure to return the most senior synonym first
-    
-    elsif ( $parameter eq 'synonym' )
-    {
-	$taxon_ids = $dbh->selectcol_arrayref("
-		SELECT a.taxon_no
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $TREE_TABLE as t USING (synonym_no)
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
-		WHERE a2.taxon_no = ?
-		ORDER BY if(a.orig_no = t.synonym_no, 0, 1)", undef, $taxon_no + 0);
-    }
-    
-    # for parameter 'parent', order the results by higher to lower taxa
-    
-    elsif ( $parameter eq 'parent' )
-    {
-	$taxon_ids = $dbh->selectcol_arrayref("
-		SELECT a.taxon_no
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $TREE_TABLE as t ON t.lft <= t2.lft AND t.rgt >= t2.lft
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
-		WHERE a2.taxon_no = ?
-		ORDER BY t.lft", undef, $taxon_no + 0);
-    }
-    
-    # for parameter 'child', order the results by tree sequence
-    
-    elsif ( $parameter eq 'child' )
-    {
-	$taxon_ids = $dbh->selectcol_arrayref("
-		SELECT a.taxon_no
-		FROM $AUTH_TABLE as a2 JOIN $TREE_TABLE as t2 USING (orig_no)
-			JOIN $TREE_TABLE as t ON t.lft > t2.lft AND t.lft <= t2.rgt
-				AND t.depth = t2.depth + 1
-			JOIN $AUTH_TABLE as a ON a.taxon_no = t.spelling_no
-		WHERE a2.taxon_no = ?
-		ORDER BY t.lft", undef, $taxon_no + 0);
-    }
-    
-    else
-    {
-	error("invalid paramter '$parameter'");
-	return;
-    }
-    
-    # If an error occurred, note that.
-    
-    if ( $dbh->err )
-    {
-	error("database error: " . $dbh->errstr);
-	return;
-    }
-    
-    # Otherwise, if we got no results (except for 'child') then we must have
-    # had an invalid taxon.  Many taxa have no children, but all the other
-    # parameters should return at least one result (the base taxon itself) for
-    # a valid taxon_no.
-    
-    elsif ( scalar(@$taxon_ids) == 0 and $parameter ne 'child' )
-    {
-	error("taxon $taxon_no not found");
-	return;
-    }
-    
-    # Otherwise, we got results.
-    
-    else
-    {
-	return @$taxon_ids;
-    } 
-}
-
-
-=item getHistory ( dbh, taxon_no )
-
-Returns a list of objects representing all taxa which have had the same
-conceptual meaning as the given taxon at some point in history.  These are
-sorted by publication date, and include some but not all synonyms (i.e. not
-invalid subgroups of the given taxon).
-
-=cut
-
-sub getHistory {
-    
-    my ($dbh, $taxon_no) = @_;
-    
-    # Turn off the automatic error handling
-    
-    local($dbh->{RaiseError}) = 0;
-    local($dbh->{PrintError}) = 0;
-    
-    # Check arguments
-    
-    unless ( defined $taxon_no && $taxon_no > 0 )
-    {
-	return error("invalid taxon_no '$taxon_no'");
-    }
-    
-    # Then get the orig_no corresponding to the taxon we were given
-    
-    my ($orig_no) = getTaxonIdParametrized($dbh, $taxon_no, 'orig')
-	or return error("taxon $taxon_no not found");
-    
-    # Then chain backward to find all related taxa.  This may be a tree, not
-    # necessarily a linear list, so we do a breadth-first search with
-    # @related_id_list as the search queue.
-    
-    my (@related_id_list) = $orig_no;
-    
-    my ($backward_sth) = $dbh->prepare("
-		SELECT t.orig_no
-		FROM $TREE_TABLE as t JOIN $OPINION_CACHE o USING (opinion_no)
-		WHERE o.status in ('subjective synonym of', 'objective synonym of',
-				   'replaced by') and o.parent_no = ?")
-	
-	or return error("database error: " . $dbh->errstr);
-    
-    foreach my $t (@related_id_list)
-    {
-	push @related_id_list, $dbh->selectrow_array($backward_sth, undef, $t);
-    }
-    
-    # Then chain forward to find all related taxa.
-    
-    my ($forward_sth) = $dbh->prepare("
-		SELECT o.parent_no
-		FROM $TREE_TABLE as t JOIN $OPINION_CACHE o USING (opinion_no)
-		WHERE o.status in ('subjective synonym of', 'objective synonym of',
-				   'replaced by') and t.orig_no = ?")
-    
-	or return error("database error: " . $dbh->errstr);
-    
-    my ($t) = $orig_no;
-    
-    while ($t)
-    {
-	($t) = $dbh->selectrow_array($forward_sth, undef, $t);
-	push @related_id_list, $t if $t;
-    }
-    
-    # Now, fetch all of the indicated taxa.
-    
-    my ($taxon_filter) = '(' . join(', ', @related_id_list) . ')';
-    
-    my (@taxa) = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR,
-			if(a.pubyr IS NOT NULL AND a.pubyr != '', a.pubyr, r.pubyr) as pubyr
-		FROM $TREE_TABLE as t JOIN $AUTH_TABLE as a ON a.orig_no = t.orig_no
-			LEFT JOIN $OPINION_CACHE as o USING (opinion_no)
-			LEFT JOIN $REFS_TABLE as r USING (reference_no)
-		WHERE t.orig_no in $taxon_filter
-		ORDER BY pubyr ASC", { Slice => {} });
-    
-    # If an error occurred, report it.
-    
-    if ( $dbh->err )
-    {
-	return error("database error: " . $dbh->errstr);
-    }
-    
-    # Otherwise, we got results.  Bless all of the objects into the proper
-    # package and return the list.
-    
-    else
-    {
-	foreach my $t (@taxa)
-	{
-	    bless $t, "Taxon";
-	}
-	
-	return @taxa;
-    } 
-}
-
-
-our($ERRSTR);
-
-# error ( string )
-# 
-# Create an error object and return it.  Also save the error message for later
-# querying. 
-
-sub error {
-    
-    my ($msg) = @_;
-    
-    $ERRSTR = $msg;
-    
-    return bless { error => $msg }, "Error";
-}
-
-
-# errstr ( string )
-# 
-# Return the error message generated by the last operation.
-
-sub errstr {
-    
-    return $ERRSTR;
-}
 
 1;

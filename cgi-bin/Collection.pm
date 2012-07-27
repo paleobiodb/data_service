@@ -5,7 +5,7 @@ use HTMLBuilder;
 use PBDBUtil;
 use Validation;
 use Taxon;
-use TaxonInfo;
+use TaxonTrees;
 use TimeLookup;
 use TaxaCache;
 use Person;
@@ -33,9 +33,10 @@ use Constants qw($READ_URL $WRITE_URL $HTML_DIR $HOST_URL $TAXA_TREE_CACHE $DB $
 sub getCollections {
 	my $dbt = $_[0];
 	my $s = $_[1];
+	my $taxonomy = $_[2];
 	my $dbh = $dbt->dbh;
-	my %options = %{$_[2]};
-	my @fields = @{$_[3]};
+	my %options = %{$_[3]};
+	my @fields = @{$_[4]};
 
 	# Set up initial values
 	my (@where,@occ_where,@reid_where,@tables,@from,@left_joins,@groupby,@having,@errors,@warnings);
@@ -141,10 +142,14 @@ sub getCollections {
                 # get all variants of a name and current status but not
                 #  related synonyms JA 7.1.10
                     $options{'taxon_name'} =~ s/\./%/g;
-                    my $sql = "SELECT t.taxon_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name LIKE '".$options{'taxon_name'}."'";
+                    my $sql = "
+		SELECT t.taxon_no, o.status
+		FROM authorities a JOIN $taxonomy t USING (orig_no)
+				   JOIN opinions o USING (opinion_no)
+		WHERE taxon_name LIKE ?";
                 # if that didn't work and the name is not a species, see if
                 #  it appears as a subgenus
-                    my @taxa = @{$dbt->getData($sql)};
+                    my @taxa = @{$dbt->getData($sql, $options{'taxon_name'});
                     if ( ! @taxa )	{
                         $sql = "SELECT t.taxon_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name LIKE '% (".$options{'taxon_name'}.")'";
                         @taxa = @{$dbt->getData($sql)};
