@@ -5,14 +5,14 @@ function checkForm()	{
 	var frm = document.forms[1];
 	var taxon = frm.taxon_name.value;
 	var errors = "";
-	var isSpecies = /^[A-Z][a-z]+[ ][a-z]+\n?$/;
-	var isSubspecies = /^[A-Z][a-z]+[ ][a-z]+[ ][a-z]+\n?$/;
-	var isGenus = /^[A-Z][a-z]+[ ]\([A-Z][a-z]+\)[ ][a-z]+\n?$/;
+	var isSpecies = /^[A-Z][a-z]+ [a-z]+\n?$/;
+	var isSubspecies = /^[A-Z][a-z]+ [a-z]+ [a-z]+\n?$/;
+	var isSubgenus = /^[A-Z][a-z]+ \([A-Z][a-z]+\)(| [a-z]+)\n?$/;
 	var isHigher = /^[A-Z][a-z]+\n?$/;
 
 	if ( taxon == "" )	{
 		errors = 'You must enter a taxon name';
-	} else if ( ! isSubspecies.test(taxon) && ! isSpecies.test(taxon) && ! isHigher.test(taxon) && ! isGenus.test(taxon) )	{
+	} else if ( ! isSubspecies.test(taxon) && ! isSpecies.test(taxon) && ! isSubgenus.test(taxon) && ! isHigher.test(taxon) )	{
 		if ( /^ /.test(taxon) )  {
 			errors = 'The taxon name starts with a space';
 		} else if ( / $/.test(taxon) )  {
