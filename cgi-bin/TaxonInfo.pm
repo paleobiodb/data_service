@@ -4169,10 +4169,10 @@ sub basicTaxonInfo	{
 
 		my $collection_fields = "c.collection_no,collection_name,max_interval_no,min_interval_no,country,state";
 		if ( $taxon_no )	{
-			$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE t WHERE lft>=".$auth->{'lft'}." AND rgt<=".$auth->{'rgt'};
+			$sql = "SELECT child_no FROM $TAXA_LIST_CACHE t WHERE parent_no=$taxon_no";
 			my @subtaxa = @{$dbt->getData($sql)};
 			my @inlist;
-			push @inlist , $_->{'taxon_no'} foreach @subtaxa;
+			push @inlist , $_->{'child_no'} foreach @subtaxa;
 
 			$sql = "(SELECT $collection_fields,count(distinct(o.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 			$sql .= " UNION (SELECT $collection_fields,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
