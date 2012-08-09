@@ -209,7 +209,7 @@ sub setParameters {
 	$self->setParametersMultiple($params);
     }
     
-    # Then set common parameters
+    # Then set common parameters.
     
     # If 'id_only' is specified, then return only a list of id numbers.
     
@@ -248,10 +248,51 @@ sub setParameters {
 		$self->{show_attribution} = 1;
 	    }
 	    
+	    # The following are only for text output, and are ignored
+	    # otherwise. 
+	    
+	    elsif ( $s eq 'eol_core' )
+	    {
+		$self->{field_list} = ['taxonID', 'taxonRank', 'scientificName', 'parentNameUsageID',
+				       'taxonomicStatus', 'taxonRemarks', 'namePublishedIn'];
+		$self->{eol_core} = 1;
+		$self->{show_attribution} = 1;
+		$self->{show_ref} = 1;
+		$self->{generate_urns} = 1;
+	    }
+	    
+	    # Warn the client about unrecognized values, but don't abort processing.
+	    
 	    else
 	    {
 		$self->warn("Unknown value '$s' for show");
 	    }
+	}
+    }
+    
+    # If the output format is 'txt' then we must generate a list of field
+    # names (if not already specified by show=eol_core).
+    
+    if ( $self->{output_format} eq 'txt' and not defined $self->{field_list} )
+    {
+	# Here is the basic list:
+	
+	$self->{field_list} = ['taxonID', 'taxonRank', 'scientificName', 'parentNameUsageID',
+			       'taxonomicStatus', 'nomenclaturalStatus', 'extant'];
+	
+	if ( $self->{show_attribution} )
+	{
+	    push @{$self->{field_list}}, 'nameAccordingTo';
+	}
+	
+	if ( $self->{show_code} )
+	{
+	    push @{$self->{field_list}}, 'nomenclaturalCode';
+	}
+	
+	if ( $self->{show_ref} )
+	{
+	    push @{$self->{field_list}}, 'namePublishedIn';
 	}
     }
     
@@ -1301,7 +1342,7 @@ sub generateRecord {
 
     my ($self, $row, %options) = @_;
     
-    # If the content type is XML, then we need to check whether the result
+    # If the content type is 'xml', then we need to check whether the result
     # includes a list of parents.  If so, because of the inflexibility of XML
     # and Darwin Core, we cannot output a hierarchical list.  The best we can
     # do is to output all of the parent records first, before the main record
@@ -1328,6 +1369,14 @@ sub generateRecord {
 	
 	$output .= $self->emitTaxonXML($row, 0);
 	
+	return $output;
+    }
+    
+    # If the content type is 'txt', then we emit the record as a text line.
+    
+    elsif ( $self->{output_format} eq 'txt' )
+    {
+	my $output = $self->emitTaxonText($row);
 	return $output;
     }
     
@@ -1370,7 +1419,7 @@ sub emitTaxonXML {
     if ( $row->{taxon_rank} =~ /species/ && !$short_record ) {
 	my ($genus, $subgenus, $species, $subspecies) = interpretSpeciesName($row->{taxon_name});
 	$output .= '    <dwc:genus>' . $genus . '</dwc:genus>' . "\n" if defined $genus;
-	$output .= '    <dwc:subgenus>' . "$genus ($subgenus)" . '</dwc:subgenus>' . "\n" if defined $subgenus;
+	$output .= '    <dwc:subgenus>' . $subgenus . '</dwc:subgenus>' . "\n" if defined $subgenus;
 	$output .= '    <dwc:specificEpithet>' . $species . '</dwc:specificEpithet>' . "\n" if defined $species;
 	$output .= '    <dwc:infraSpecificEpithet>' . $subspecies . '</dwc:infraSpecificEpithet>' if defined $subspecies;
     }
@@ -1451,6 +1500,136 @@ sub emitTaxonXML {
     $output .= '  </dwc:Taxon>' . "\n";
 }
 
+
+# emitTaxonText ( row )
+# 
+# Return a string representing hte given record (row) in text format,
+# according to a predetermined list of fields.
+
+sub emitTaxonText {
+
+    my ($self, $row) = @_;
+    
+    my (@output);
+    
+    # Now process each field one at a time, building up the output list as we go.
+    
+    foreach my $field (@{$self->{field_list}})
+    {
+	# First determine the value, according to the field name.
+	
+	my $value;
+	
+	if ( $field eq 'taxonID' )
+	{
+	    if ( $self->{generate_urns} )
+	    {
+		$value = 'urn:org.paleodb:taxon_no:' . $row->{taxon_no};
+	    }
+	    else
+	    {
+		$value = $row->{taxon_no};
+	    }
+	}
+	
+	elsif ( $field eq 'taxonRank' )
+	{
+	    $value = $row->{taxon_rank};
+	}
+	
+	elsif ( $field eq 'scientificName' )
+	{
+	    $value = DataQuery::xml_clean($row->{taxon_name})
+		if defined $row->{taxon_name};
+	    
+	    # If we are generating the 'eol_core' format, we must include the
+	    # attribution after the name.
+	    
+	    if ( $self->{eol_core} && defined $row->{attribution} )
+	    {
+		$value .= ' ' . DataQuery::xml_clean($row->{attribution});
+	    }
+	}
+	
+	elsif ( $field eq 'parentNameUsageID' )
+	{
+	    $value = $row->{parent_no};
+	}
+	
+	elsif ( $field eq 'taxonomicStatus' )
+	{
+	    $value = $row->{taxonomic};
+	}
+	
+	elsif ( $field eq 'nomenclaturalStatus' )
+	{
+	    $value = $row->{nomenclatural};
+	}
+	
+	elsif ( $field eq 'nomenclaturalCode' )
+	{
+	    $value = $row->{nom_code};
+	}
+	
+	elsif ( $field eq 'nameAccordingTo' )
+	{
+	    $value = DataQuery::xml_clean($row->{attribution})
+		if defined $row->{attribution};
+	}
+	
+	elsif ( $field eq 'namePublishedIn' )
+	{
+	    $value = DataQuery::xml_clean($row->{pubref})
+		if defined $row->{pubref};
+	    
+	    # We now need to translate, i.e. ((b)) to <b>.  This is done after
+	    # xml_clean, because otherwise <b> would be turned into &lt;b&gt;
+	    if ( defined $value and $value =~ /\(\(/ )
+	    {
+		$value =~ s/(\(\(|\)\))/$fixbracket{$1}/eg;
+	    }
+	}
+	
+	elsif ( $field eq 'vernacularName' )
+	{
+	    $value = DataQuery::xml_clean($row->{common_name}) 
+		if defined $row->{common_name};
+	}
+	
+	elsif ( $field eq 'extant' )
+	{
+	    $value = $row->{extant};
+	}
+	
+	elsif ( $field eq 'taxonRemarks' )
+	{
+	    if ( defined $row->{extant} && $row->{extant} =~ /\w/ )
+	    {
+		$value = "extant: $row->{extant}";
+	    }
+	}
+	
+	# Then append the value to the output list, or the empty string if
+	# there is no value (or if, for some reason, it is a reference).  This is
+	# necessary because each line has to have the same fields in the same
+	# columns, even if some values are missing.
+	
+	if ( defined $value and ref $value eq '' )
+	{
+	    push @output, $value;
+	}
+	
+	else
+	{
+	    push @output, '';
+	}
+    }
+    
+    # Now generate and return a line of text from the @output array.
+    
+    my $line = $self->generateTextLine(@output);
+    return $line;
+}
 
 # emitTaxonJSON ( row, parents, short_record )
 # 

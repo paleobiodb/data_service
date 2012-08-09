@@ -672,11 +672,16 @@ sub setContentType {
 	content_type 'text/html; charset=utf-8';
     }
     
+    elsif ( $ct eq 'txt' )
+    {
+	content_type 'text/plain; charset=utf-8';
+    }
+    
     else
     {
 	status(415);
 	content_type 'text/plain';
-	halt("Unknown Media Type: '$ct' is not supported by this application; use '.json' or '.xml' instead");
+	halt("Unknown Media Type: '$ct' is not supported by this application; use '.json', '.xml', or '.txt' instead");
     }
 }
 
