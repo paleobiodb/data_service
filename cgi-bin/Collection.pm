@@ -149,7 +149,7 @@ sub getCollections {
 		WHERE taxon_name LIKE ?";
                 # if that didn't work and the name is not a species, see if
                 #  it appears as a subgenus
-                    my @taxa = @{$dbt->getData($sql, $options{'taxon_name'});
+                    my @taxa = @{$dbt->getData($sql, $options{'taxon_name'})};
                     if ( ! @taxa )	{
                         $sql = "SELECT t.taxon_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND taxon_name LIKE '% (".$options{'taxon_name'}.")'";
                         @taxa = @{$dbt->getData($sql)};
