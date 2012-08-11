@@ -2178,6 +2178,7 @@ sub getMostRecentClassification {
     my $dbt = shift;
     my $child_no = int(shift);
     my $options = shift || {};
+    my $cache = ( $options->{cache} ) ? $options->{cache} : $TAXA_TREE_CACHE;
 
     return if (!$child_no);
     return if ($options->{reference_no} eq '0');
@@ -2338,7 +2339,7 @@ sub getMostRecentClassification {
                     $synonym_no = $spelling_no;
                 }
             }
-            $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$spelling_no,synonym_no=$synonym_no,opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no IN (" . join(',',@spellings) . ")";
+            $sql = "UPDATE $cache SET spelling_no=$spelling_no,synonym_no=$synonym_no,opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no IN (" . join(',',@spellings) . ")";
             my $dbh = $dbt->dbh;
             $dbh->do($sql);
         }
@@ -2349,7 +2350,7 @@ sub getMostRecentClassification {
         }
     } else {
         if ( $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} )	{
-            $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$child_no,synonym_no=$child_no,opinion_no=0 WHERE taxon_no=$child_no";
+            $sql = "UPDATE $cache SET spelling_no=$child_no,synonym_no=$child_no,opinion_no=0 WHERE taxon_no=$child_no";
             my $dbh = $dbt->dbh;
             $dbh->do($sql);
         }
@@ -4173,7 +4174,7 @@ sub basicTaxonInfo	{
 			my @subtaxa = @{$dbt->getData($sql)};
 			my @inlist;
 			push @inlist , $_->{'child_no'} foreach @subtaxa;
-
+			push @inlist , $taxon_no;
 			$sql = "(SELECT $collection_fields,count(distinct(o.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 			$sql .= " UNION (SELECT $collection_fields,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 		} else	{
