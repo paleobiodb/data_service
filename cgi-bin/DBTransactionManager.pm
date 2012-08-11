@@ -485,10 +485,9 @@ sub deleteRecord {
 #					Returns empty anonymous array on failure.
 ##
 sub getData {
-	my DBTransactionManager $self = shift;
-	my $sql = shift;
-    my $dbh = $self->dbh;
-
+	my ($self, $sql, @params) = @_;
+	my $dbh = $self->dbh;
+	
 	# First, check the sql for any obvious problems
 	my $is_select = $self->checkIsSelect($sql);
 	if ($is_select) {
@@ -496,7 +495,7 @@ sub getData {
 		# SELECT:
         my $sth = $dbh->prepare($sql);
 
-        my $return = eval {$sth->execute();};
+        my $return = eval {$sth->execute(@params);};
 
         if ($sth->errstr || $@ ne "") {
             $self->{_err} = $sth->errstr;
