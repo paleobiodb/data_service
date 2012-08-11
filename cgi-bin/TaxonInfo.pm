@@ -2974,11 +2974,11 @@ sub displayFirstAppearance	{
 	$sql  = "SELECT a.taxon_no,a.taxon_name,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.taxon_rank,a.extant,a.preservation,lft,rgt FROM refs r,authorities a,authorities a2,$TAXA_TREE_CACHE t WHERE r.reference_no=a.reference_no AND a2.taxon_no=t.taxon_no AND a2.$field='$name' AND a.taxon_no=t.synonym_no GROUP BY lft,rgt ORDER BY rgt-lft DESC";
 	my @nos = @{$dbt->getData($sql)};
 
-	$name= $nos[0]->{'taxon_name'};
 	if ( ! @nos )	{
-		my $error_message = $name." is not in the system.";
+		my $error_message = qq|The name "$name" is not in the system. Please try again.|;
 		beginFirstAppearance($hbo,$q,$error_message);
 	}
+	$name = $nos[0]->{'taxon_name'};
 
 	if ( $field eq "common_name" )	{
 		$name = $nos[0]->{'taxon_name'}." (".$name.")";
@@ -2996,7 +2996,7 @@ sub displayFirstAppearance	{
 		beginFirstAppearance($hbo,$q,$error_message);
 	}
 
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 
 	# MAIN TABLE HITS
 
@@ -3555,7 +3555,7 @@ sub displayFirstAppearance	{
 	print "<div style=\"padding-left: 6em;\"><a href=\"$READ_URL?a=beginFirstAppearance\">Search again</a> - <a href=\"$READ_URL?a=displayTaxonInfoResults&amp;taxon_no=$nos[0]->{'taxon_no'}\">See more details about $name</a></div>\n";
 	print "</div>\n";
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 	return;
 }
 
