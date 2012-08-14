@@ -2402,8 +2402,10 @@ sub queryDatabase {
                 next;
             }
             # Populate the generated time fields;
-            my $max_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
-            my $min_lookup = ($row->{'c.min_interval_no'}) ? $time_lookup->{$row->{'c.min_interval_no'}} : $max_lookup;
+            my $base_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
+            my $top_lookup = ($row->{'c.min_interval_no'}) ? $time_lookup->{$row->{'c.min_interval_no'}} : $base_lookup;
+            my $max_lookup = $base_lookup;
+            my $min_lookup = $top_lookup;
             my $ma_lookup = $time_lookup->{$row->{'c.ma_interval_no'}};
             # use the absolute date-based interval assignment only if it is completely
 	    #  consistent with the qualitative assignment JA 25.3.11
@@ -2440,9 +2442,9 @@ sub queryDatabase {
                     $row->{'c.direct_ma'} /= 1000;
                     $row->{'c.direct_ma_error'} /= 1000;
             }
-            $row->{'c.interval_base'} = $max_lookup->{'base_age'};
-            $row->{'c.interval_top'} = $min_lookup->{'top_age'};
-            $row->{'c.interval_midpoint'} = ($max_lookup->{'base_age'} + $min_lookup->{'top_age'})/2;
+            $row->{'c.interval_base'} = $base_lookup->{'base_age'};
+            $row->{'c.interval_top'} = $top_lookup->{'top_age'};
+            $row->{'c.interval_midpoint'} = ($base_lookup->{'base_age'} + $top_lookup->{'top_age'})/2;
             $row->{'c.interpolated_base'} = $max_lookup->{'interpolated_base'};
             $row->{'c.interpolated_top'} = $min_lookup->{'interpolated_top'};
             if ( $row->{'c.interpolated_base'} == 0 )	{
@@ -2464,6 +2466,7 @@ sub queryDatabase {
                     $row->{'c.min_ma'} /= 1000;
                     $row->{'c.min_ma_error'} /= 1000;
             }
+            # use geochronology if available for composite max/min age
             if ( $row->{'c.direct_ma'} )	{
                 $row->{'c.ma_max'} = $row->{'c.direct_ma'};
                 $row->{'c.ma_min'} = $row->{'c.direct_ma'};
@@ -2476,10 +2479,11 @@ sub queryDatabase {
                 $row->{'c.ma_max'} = $row->{'c.max_ma'};
                 $row->{'c.ma_min'} = 0;
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
+            # otherwise strictly base ages on interval names
             } else	{
-                $row->{'c.ma_max'} = $max_lookup->{'base_age'};
-                $row->{'c.ma_min'} = $min_lookup->{'top_age'};
-                $row->{'c.ma_mid'} = ($max_lookup->{'base_age'} + $min_lookup->{'top_age'})/2;
+                $row->{'c.ma_max'} = $base_lookup->{'base_age'};
+                $row->{'c.ma_min'} = $top_lookup->{'top_age'};
+                $row->{'c.ma_mid'} = ($base_lookup->{'base_age'} + $top_lookup->{'top_age'})/2;
             }
             $COLL{$row->{'collection_no'}} = $row; 
         }
