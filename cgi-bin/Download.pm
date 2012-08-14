@@ -28,7 +28,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval direct_ma direct_ma_error direct_ma_method max_ma max_ma_error max_ma_method min_ma min_ma_error min_ma_method ma_max ma_min ma_mid interpolated_base interpolated_top interpolated_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
+my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval direct_ma direct_ma_error direct_ma_method max_ma max_ma_error max_ma_method min_ma min_ma_error min_ma_method interval_base interval_top interval_midpoint interpolated_base interpolated_top interpolated_mid ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
@@ -2396,7 +2396,7 @@ sub queryDatabase {
             if ($COLL{$row->{'collection_no'}}) {
                 # This is merely a timesaving measure, reuse old collections values if we've already come across this collection
                 my $orow = $COLL{$row->{'collection_no'}};
-                for my $field ( '10_my_bin','FR2_bin','stage','subepoch','epoch','period','max_interval','min_interval','direct_ma','direct_ma_error','direct_ma_method','max_ma','max_ma_error','max_ma_error','min_ma','min_ma_error','min_ma_method' ,'ma_max','ma_min','ma_mid','interpolated_base','interpolated_top','interpolated_mid' )	{
+                for my $field ( '10_my_bin','FR2_bin','stage','subepoch','epoch','period','max_interval','min_interval','direct_ma','direct_ma_error','direct_ma_method','max_ma','max_ma_error','max_ma_error','min_ma','min_ma_error','min_ma_method' ,'interval_base','interval_top','interval_midpoint','interpolated_base','interpolated_top','interpolated_mid','ma_max','ma_min','ma_mid' )	{
                 	$row->{'c.'.$field}  = $orow->{'c.'.$field};
                 }
                 next;
@@ -2440,6 +2440,16 @@ sub queryDatabase {
                     $row->{'c.direct_ma'} /= 1000;
                     $row->{'c.direct_ma_error'} /= 1000;
             }
+            $row->{'c.interval_base'} = $max_lookup->{'base_age'};
+            $row->{'c.interval_top'} = $min_lookup->{'top_age'};
+            $row->{'c.interval_midpoint'} = ($max_lookup->{'base_age'} + $min_lookup->{'top_age'})/2;
+            $row->{'c.interpolated_base'} = $max_lookup->{'interpolated_base'};
+            $row->{'c.interpolated_top'} = $min_lookup->{'interpolated_top'};
+            if ( $row->{'c.interpolated_base'} == 0 )	{
+                $row->{'c.interpolated_base'} = $row->{'c.ma_max'};
+                $row->{'c.interpolated_top'} = $row->{'c.ma_min'};
+            }
+            $row->{'c.interpolated_mid'} = ($row->{'c.interpolated_base'} + $row->{'c.interpolated_top'})/2;
             if ( $row->{'c.max_ma'} > 0 && $row->{'c.max_ma_unit'} =~ /ybp/i )	{
                     $row->{'c.max_ma'} /= 1000000;
                     $row->{'c.max_ma_error'} /= 1000000;
@@ -2471,13 +2481,6 @@ sub queryDatabase {
                 $row->{'c.ma_min'} = $min_lookup->{'top_age'};
                 $row->{'c.ma_mid'} = ($max_lookup->{'base_age'} + $min_lookup->{'top_age'})/2;
             }
-            $row->{'c.interpolated_base'} = $max_lookup->{'interpolated_base'};
-            $row->{'c.interpolated_top'} = $min_lookup->{'interpolated_top'};
-            if ( $row->{'c.interpolated_base'} == 0 )	{
-                $row->{'c.interpolated_base'} = $row->{'c.ma_max'};
-                $row->{'c.interpolated_top'} = $row->{'c.ma_min'};
-            }
-            $row->{'c.interpolated_mid'} = ($row->{'c.interpolated_base'} + $row->{'c.interpolated_top'})/2;
             $COLL{$row->{'collection_no'}} = $row; 
         }
     }
@@ -3749,6 +3752,8 @@ sub printAbundFile {
         # range computation JA 8.4.09
         # bear with me here, first we need the oldest min and youngest max
         # note that the max and min can be reversed at this stage and it's okay
+        # WARNING: range computations always use both interval-based info
+        #  and direct dating regardless of what the user wants
         if ( $row->{'c.ma_min'} > $range_max{$taxa_key} )	{
             $range_max{$taxa_key} = $row->{'c.ma_min'};
         }
