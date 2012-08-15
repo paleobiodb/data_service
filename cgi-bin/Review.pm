@@ -131,7 +131,7 @@ sub displayReviewForm	{
 
 
 sub processReviewForm	{
-	my ($dbt,$q,$s,$hbo) = @_;
+	my ($dbt,$taxonomy,$q,$s,$hbo) = @_;
 	my $dbh = $dbt->dbh;
 
 	my %vars = $q->Vars();
@@ -151,7 +151,7 @@ sub processReviewForm	{
 	}
 
 	if ( $q->param('preview') =~ /y/i )	{
-		showReview($dbt,$q,$s,$hbo,$error);
+		showReview($dbt,$taxonomy,$q,$s,$hbo,$error);
 		return;
 	}
 
@@ -217,7 +217,7 @@ sub processReviewForm	{
 		}
 	}
 
-	showReview($dbt,$q,$s,$hbo,$error);
+	showReview($dbt,$taxonomy,$q,$s,$hbo,$error);
 
 }
 
@@ -256,7 +256,7 @@ sub listReviews	{
 
 
 sub showReview	{
-	my ($dbt,$q,$s,$hbo,$error) = @_;
+	my ($dbt,$taxonomy,$q,$s,$hbo,$error) = @_;
 
 	my %keywords;
 	my @keyword_vars = ('personage','interval','region','taxon');
@@ -417,11 +417,11 @@ sub showReview	{
 		if ( $goal ne "submit" )	{
 			$isthere = `ls $HTML_DIR$maplink`;
 			if ( $isthere !~ /[A-Za-z]\.[a-z]/ )	{
-				makeMap($dbt,$q,$s,$hbo,join('_',@tags));
+				makeMap($dbt,$taxonomy,$q,$s,$hbo,join('_',@tags));
 				$isthere = `ls $HTML_DIR$maplink`;
 			}
 		} else	{
-			makeMap($dbt,$q,$s,$hbo,join('_',@tags));
+			makeMap($dbt,$taxonomy,$q,$s,$hbo,join('_',@tags));
 			$isthere = `ls $HTML_DIR$maplink`;
 		}
 		if ( $isthere =~ /[A-Za-z]\.[a-z]/ )	{
@@ -565,7 +565,7 @@ sub insertImage	{
 }
 
 sub makeMap	{
-	my ($dbt,$q,$s,$hbo,$maplink) = @_;
+	my ($dbt,$taxonomy,$q,$s,$hbo,$maplink) = @_;
 
 
 	# everything left must be cleaned up
@@ -667,7 +667,7 @@ sub makeMap	{
 		print "<center><p class=\"small\" style=\"margin-bottom: 2em;\">WARNING: ".join("; ",@errors)."</p></center>\n\n";
 	}
 	require Map;
-	my $m = Map->new($q,$dbt,$s);
+	my $m = Map->new($dbt, $taxonomy, $q, $s);
 	my ($map_html_path,$errors,$warnings) = $m->buildMap('dataSet'=>$colls);
 
 	my $count = `cat $HTML_DIR/public/maps/gifcount`;

@@ -37,7 +37,9 @@ sub getCollections {
 	my $dbh = $dbt->dbh;
 	my %options = %{$_[3]};
 	my @fields = @{$_[4]};
-
+	
+	my @taxa;
+	
 	# Set up initial values
 	my (@where,@occ_where,@reid_where,@tables,@from,@left_joins,@groupby,@having,@errors,@warnings);
 	@tables = ("collections c");

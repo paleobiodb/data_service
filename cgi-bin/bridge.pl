@@ -85,6 +85,10 @@ if ( $p >= 10 )	{
 	}
 }
 
+# Select the taxonomic hierarchy we will be using.
+
+my $taxonomy = Taxonomy->new($dbt->dbh, 'taxon_trees');
+
 # Make the HTMLBuilder object - it'll use whatever template dir is appropriate
 my $use_guest = (!$s->isDBMember()) ? 1 : 0;
 if ( $q->param('action') eq "home" )	{
@@ -591,7 +595,7 @@ sub displayMapForm {
 sub displayMapOnly	{
 	require Map;
 
-	my $m = Map->new($q,$dbt,$s);
+	my $m = Map->new($dbt, $taxonomy, $q, $s);
 	my ($file,$errors,$warnings) = $m->buildMap();
 }
 
@@ -666,7 +670,7 @@ sub displayMapResults {
         }
     }
 
-	my $m = Map->new($q,$dbt,$s);
+	my $m = Map->new($dbt, $taxonomy, $q, $s);
 	my ($file,$errors,$warnings) = $m->buildMap();
     if (ref $errors && @$errors) {
         print '<div align="center">'.Debug::printErrors($errors).'</div>';
@@ -714,7 +718,7 @@ sub displayMapOfCollection {
     $q->param('maplng'=>$lngdeg);
     $q->param('pointsize1'=>'auto');
     $q->param('autoborders'=>'yes');
-    my $m = Map->new($q,$dbt,$s);
+    my $m = Map->new($dbt, $taxonomy, $q, $s);
     my ($map_html_path,$errors,$warnings) = $m->buildMap();
 
 
@@ -797,7 +801,7 @@ sub displaySimpleMap {
     $q->param('mapscale'=>'auto');
     $q->param('autoborders'=>'yes');
     $q->param('pointsize1'=>'auto');
-    my $m = Map->new($q,$dbt,$s);
+    my $m = Map->new($dbt, $taxonomy, $q, $s);
     ($map_html_path,$errors,$warnings) = $m->buildMap();
 
     # MAP USES $q->param("taxon_name") to determine what it's doing.
@@ -2497,7 +2501,7 @@ sub processTaxonSearch {
         Opinion::displayOpinionChoiceForm($dbt,$s,$q);
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'image') {
         $q->param('taxon_no'=>$results[0]->{'taxon_no'});
-        Images::displayLoadImageForm($dbt,$q,$s); 
+        Images::displayLoadImageForm($dbt,$taxonomy,$q,$s); 
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'ecotaph') {
         $q->param('taxon_no'=>$results[0]->{'taxon_no'});
         Ecology::populateEcologyForm($dbt, $hbo, $q, $s, $WRITE_URL);
@@ -2887,7 +2891,7 @@ sub checkTaxonInfo {
         if ( ! $q->param('taxa') )	{
             TaxonInfo::searchForm($hbo,$q,1);
         } else	{
-            TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
+            TaxonInfo::checkTaxonInfo($dbt, $taxonomy, $q, $s, $hbo);
         }
         print $hbo->stdIncludes($PAGE_BOTTOM);
         exit;
@@ -2900,14 +2904,14 @@ sub checkTaxonInfo {
     if ($IS_FOSSIL_RECORD) {
          FossilRecord::submitSearchTaxaForm($dbt,$q,$s,$hbo);
     } else {
-        TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
+        TaxonInfo::checkTaxonInfo($dbt, $taxonomy, $q, $s, $hbo);
     }
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displayTaxonInfoResults {
     print $hbo->stdIncludes( $PAGE_TOP );
-	TaxonInfo::displayTaxonInfoResults($dbt,$s,$q,$hbo);
+	TaxonInfo::displayTaxonInfoResults($dbt,$taxonomy,$s,$q,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -3028,7 +3032,7 @@ sub startImage{
 
 sub displayLoadImageForm{
     print $hbo->stdIncludes($PAGE_TOP);
-	Images::displayLoadImageForm($dbt, $q, $s);
+	Images::displayLoadImageForm($dbt, $taxonomy, $q, $s);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -3064,7 +3068,7 @@ sub displayImage {
     } else {
         my $height = $q->param('maxheight');
         my $width = $q->param('maxwidth');
-        Images::displayImage($dbt,$image_no,$height,$width);
+        Images::displayImage($dbt,$taxonomy,$image_no,$height,$width);
     }
     if ($q->param("display_header") eq 'NO') {
         print $hbo->stdIncludes("blank_page_bottom"); 
@@ -5139,7 +5143,7 @@ sub displaySearchSectionResults{
     require Confidence;
     logRequest($s,$q);
     print $hbo->stdIncludes($PAGE_TOP);
-    Confidence::displaySearchSectionResults($q, $s, $dbt,$hbo);
+    Confidence::displaySearchSectionResults($q, $s, $dbt, $taxonomy, $hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5153,7 +5157,7 @@ sub displaySearchSectionForm{
 sub displayTaxaIntervalsForm{
     require Confidence;
     print $hbo->stdIncludes($PAGE_TOP);
-    Confidence::displayTaxaIntervalsForm($q, $s, $dbt,$hbo);
+    Confidence::displayTaxaIntervalsForm($q, $s, $dbt, $hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5162,7 +5166,7 @@ sub displayTaxaIntervalsResults{
     require Confidence;
     logRequest($s,$q);
     print $hbo->stdIncludes($PAGE_TOP);
-    Confidence::displayTaxaIntervalsResults($q, $s, $dbt,$hbo);
+    Confidence::displayTaxaIntervalsResults($q, $s, $dbt, $taxonomy, $hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5178,7 +5182,7 @@ sub displayStratTaxaForm{
     return if PBDBUtil::checkForBot();
     require Confidence;
     print $hbo->stdIncludes($PAGE_TOP);
-    Confidence::displayStratTaxa($q, $s, $dbt);
+    Confidence::displayStratTaxa($q, $s, $dbt, $taxonomy);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5261,7 +5265,7 @@ sub displayReviewForm {
 
 sub processReviewForm {
 	print $hbo->stdIncludes($PAGE_TOP);
-	Review::processReviewForm($dbt,$q,$s,$hbo);
+	Review::processReviewForm($dbt,$taxonomy,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5273,7 +5277,7 @@ sub listReviews	{
 
 sub showReview	{
 	print $hbo->stdIncludes($PAGE_TOP);
-	Review::showReview($dbt,$q,$s,$hbo);
+	Review::showReview($dbt,$taxonomy,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 

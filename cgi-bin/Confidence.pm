@@ -2,11 +2,10 @@ package Confidence;
 
 use strict;
 use Data::Dumper; 
-use TaxaCache;
+use Taxonomy;
 use Classification;
 use Collection;
 use Person;
-use TaxonInfo;
 use HTMLBuilder;
 use PBDBUtil;
 use URI::Escape;
@@ -28,7 +27,7 @@ my $IMAGE_DIR = "$HTML_DIR/public/confidence";
 # and passing on the taxon_no.  All non-homonym taxa get passed as hidden fields
 # PS 02/08/2004
 sub displayHomonymForm {
-    my ($q,$s,$dbt,$homonym_names,$occ_list) = @_;
+    my ($q,$s,$dbt,$taxonomy,$homonym_names,$occ_list) = @_;
     my $dbh=$dbt->dbh;
 
     my %occ_list = %$occ_list;
@@ -44,14 +43,14 @@ sub displayHomonymForm {
 
     my $i=0;
     foreach my $homonym_name (@homonym_names) {
-        my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$homonym_name, undef, 1);
-
+        my @taxon_nos = $taxonomy->getTaxaByName($homonym_name, { id => 'orig' });
+	
         # Find the parent taxon and use that to clarify the choice
-
+	
         print '<table border=0 cellspacing=3 cellpadding=3>'."\n";
         print "<tr>";
         foreach my $taxon_no (@taxon_nos) {
-            my $parent = TaxaCache::getParent($dbt,$taxon_no);
+            my $parent = $taxonomy->getRelatedTaxon($taxon_no, 'parent');
             print "<td><input type='radio' checked name='occurrence_list_$i' value='$taxon_no'>$homonym_name [$parent->{taxon_name}]</td>";
         }
         print "<input type='hidden' name='taxon_name_$i' value='$homonym_name'>\n";
@@ -85,14 +84,14 @@ sub displaySearchSectionForm {
 # Handles processing of the output from displaySectionSearchForm similar to displayCollResults
 # Goes to next step if 1 result returned, else displays a list of matches
 sub displaySearchSectionResults{
-    my ($q,$s,$dbt,$hbo) = @_;
-
+    my ($q, $s, $dbt, $taxonomy, $hbo) = @_;
+    
     my $limit = $q->param('limit') || 30;
     $limit = $limit*2; # two columns
     my $rowOffset = $q->param('rowOffset') || 0;
-
+    
     # Build the SQL
-
+    
     my $fields = ['max_interval_no','min_interval_no','state','country','localbed','localsection','localbedunit','regionalbed','regionalsection','regionalbedunit'];
     my %options = $q->Vars();
     $options{'permission_type'} = 'read';
@@ -100,10 +99,10 @@ sub displaySearchSectionResults{
     $options{'calling_script'} = 'Confidence';
 #    $options{'lithologies'} = $options{'lithology1'}; delete $options{'lithology1'};
 #    $options{'lithadjs'} = $options{'lithadj'}; delete $options{'lithadj'}; 
-    my ($dataRows) = Collection::getCollections($dbt,$s,\%options,$fields);
+    my ($dataRows) = Collection::getCollections($dbt, $taxonomy, $s, \%options, $fields);
     my @dataRows = sort {$a->{regionalsection} cmp $b->{regionalsection} ||
                       $a->{localsection} cmp $b->{localsection}} @$dataRows;
-
+    
     # get the enterer's preferences (needed to determine the number
     # of displayed blanks) JA 1.8.02
 
@@ -238,7 +237,7 @@ sub displaySearchSectionResults{
                          'taxon_resolution'=>$taxon_resolution,
                          'input'=>$section,
                          'input_type'=>$section_type});
-        displayStratTaxa($my_q,$s,$dbt);
+        displayStratTaxa($my_q,$s,$dbt,$taxonomy);
         return;
     } else {
         print "<center>\n<p class=\"pageTitle\">Your search produced no matches</p>";
@@ -293,7 +292,7 @@ sub displayTaxaIntervalsForm {
 
 # REMAKE SPECIES LIST
 sub displayTaxaIntervalsResults {
-    my ($q,$s,$dbt,$hbo) = @_;
+    my ($q, $s, $dbt, $taxonomy, $hbo) = @_;
     my $dbh=$dbt->dbh;
 
     # if homonyms found, display homonym chooser form
@@ -310,7 +309,7 @@ sub displayTaxaIntervalsResults {
         my @homonyms;
         
         foreach my $taxon (@taxa) {
-            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon, undef, 1);
+            my @taxon_nos = $taxonomy->getTaxaByName($taxon, { id => 'spelling' } );
             if (scalar(@taxon_nos) > 1) {
                 push @homonyms, $taxon;
             } elsif (scalar(@taxon_nos) == 1) {
@@ -331,23 +330,21 @@ sub displayTaxaIntervalsResults {
 }
 #--------------------------TAXON LIST BUILDER------------------------------------
 
-sub buildList    {
-    my $q=shift;
-    my $s=shift;
-    my $dbt=shift;
-    my $hbo=shift;
+sub buildList {
+    
+    my ($q, $s, $dbt, $taxonomy, $hbo, $occ_list_base) = @_;
+    
     my $dbh=$dbt->dbh;
-    my $occ_list_base=shift;
     my %occ_list_base=%$occ_list_base;
     my %occ_list;
-
+    
     # Set from homonym form
     if (!%occ_list_base) {
         for (my $i=0;$q->param("occurrence_list_$i");$i++)  {
             $occ_list_base{$q->param("taxon_name_$i")} = $q->param("occurrence_list_$i");
         }    
     }
-
+    
     # Use taxonomic search to build up a list of taxon_nos that are 
     # children of the potentially higher order taxonomic names entered in by the user
     # occ_list_base is the list of higher order names that haven't been
@@ -355,27 +352,29 @@ sub buildList    {
     while(my ($taxon_name,$no_or_name) = each %occ_list_base) {
         if ($no_or_name =~ /^\d+$/) {
             if ($q->param('taxon_resolution') eq 'as_is') {
-                my @taxon_nos = TaxaCache::getChildren($dbt,$no_or_name);
+                my @taxon_nos = $taxonomy->getRelatedTaxa($no_or_name, 'all_children', { id => 'spelling' });
                 my $taxon_list = join(",",@taxon_nos);
                 my $results = getOccurrenceData($dbt,'taxon_list'=>$taxon_list,'fields'=>$fields);
                 if (ref $results && @$results) {
                     $occ_list{$taxon_name} = join(",",map {$_->{'occurrence_no'}} @$results);
                 }
             } else {
-                my @taxon_nos = TaxaCache::getChildren($dbt,$no_or_name);
+                my @taxon_nos = $taxonomy->getRelatedTaxa($no_or_name, 'all_children', { id => 'spelling' });
                 my $taxon_list = join(",",@taxon_nos);
                 my $results = getOccurrenceData($dbt,'taxon_list'=>$taxon_list,'fields'=>$fields);
 
                 foreach my $row (@$results) {
                     my $taxon_no = $row->{'taxon_no'};
-                    my $best_name_ref = TaxaCache::getSeniorSynonym($dbt,$taxon_no);
+                    my $best_name_ref = $taxonomy->getRelatedTaxon($taxon_no, 'synonym');
                     my $genus_ref;
                     my $subgenus_ref;
                     if ($best_name_ref->{'taxon_rank'} =~ /genus|species/) {
                         if ($best_name_ref->{'taxon_rank'} =~ /species/) {
-                            $subgenus_ref = TaxaCache::getParent($dbt,$taxon_no,'subgenus');
-                            if (!$subgenus_ref) {
-                                $genus_ref= TaxaCache::getParent($dbt,$taxon_no,'genus');
+                            $genus_ref = $taxonomy->getRelatedTaxon($taxon_no, 'parent');
+			    if ( $genus_ref->{taxon_rank} eq 'subgenus' )
+			    {
+				$subgenus_ref = $genus_ref;
+				$genus_ref = $taxonomy->getRelatedTaxon($subgenus_ref, 'parent');
                             }
                         }
                         my ($genus,$subgenus,$species);
@@ -468,6 +467,9 @@ sub buildList    {
 #--------------DISPLAYS TAXA IN STRATIGRAPHIC SECTION FOR EDITING BY USER-------
 
 sub displayStratTaxa {
+    
+    my ($q, $s, $dbt, $taxonomy) = @_;
+
     my $q=shift;
     my $s=shift;
     my $dbt=shift;
@@ -489,15 +491,17 @@ sub displayStratTaxa {
     # taxon_no, use the genus+species name
     foreach my $row (@$taxa_list) {
         if ($row->{'taxon_no'}) {
-            my $best_name_ref = TaxaCache::getSeniorSynonym($dbt,$row->{'taxon_no'});
+            my $best_name_ref = $taxonomy->getRelatedTaxon($row->{'taxon_no'}, 'synonym');
             my $genus_ref;
             my $subgenus_ref;
             if ($best_name_ref->{'taxon_rank'} =~ /genus|species/) {
                 if ($best_name_ref->{'taxon_rank'} =~ /species/) {
-                    $subgenus_ref = TaxaCache::getParent($dbt,$row->{taxon_no},'subgenus');
-                    if (!$subgenus_ref) {
-                        $genus_ref= TaxaCache::getParent($dbt,$row->{taxon_no},'genus');
-                    }
+		    $genus_ref = $taxonomy->getRelatedTaxon($taxon_no, 'parent');
+		    if ( $genus_ref->{taxon_rank} eq 'subgenus' )
+		    {
+			$subgenus_ref = $genus_ref;
+			$genus_ref = $taxonomy->getRelatedTaxon($subgenus_ref, 'parent');
+		    }
                 }
                 my ($genus,$subgenus,$species);
                 my ($best_genus,$best_subgenus,$best_species) = Taxon::splitTaxon($best_name_ref->{'taxon_name'});

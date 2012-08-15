@@ -5,7 +5,7 @@ package Curve;
 use TimeLookup;
 use Text::CSV_XS;
 use PBDBUtil;
-use TaxaCache;
+use Taxonomy;
 use GD;
 use Constants qw($READ_URL $DATA_DIR $HTML_DIR);
 
@@ -980,8 +980,8 @@ sub findRecentTaxa	{
 	my $asql = "SELECT taxon_no,taxon_name FROM authorities WHERE extant='YES' AND taxon_name IN ('" . join("','",@genus) . "')";
 	my @arefs = @{$dbt->getData($asql)};
 	my @taxon_nos= map {$_->{taxon_no}} @arefs;
-
-	my $parents = TaxaCache::getParents($dbt,\@taxon_nos,'array_full');
+	
+	my $parents = Taxonomy->getRelatedTaxa(\@taxon_nos,'parent');
 	# extantbyname must be global!
 	for my $aref ( @arefs )	{
 		$extantbyname{$aref->{taxon_name}}++;

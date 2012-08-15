@@ -49,16 +49,14 @@ my %map_defaults = (
 
 
 sub new {
-    my $class = shift;
-    $q = shift;
-    $dbt = shift;
-    $s = shift;
+    my ($class, $dbt, $taxonomy, $q, $s) = @_;
+    
     unless ($q) {
         $q = new CGI;
     }
-
+    
 	# some functions that call Map do not pass a q or s object
-	my $self = {plate=>[]};
+	my $self = {plate => [], taxonomy => $taxonomy};
 	if ($q)	{
 		if ($q->param('linecommand') =~ /[A-Za-z]/)	{
 			$GIF_DIR =~ s/maps$//;
@@ -136,7 +134,9 @@ sub buildMap {
 # e.g. they exist in the db/aren't ambiguous. return errors if they aren't
 sub mapCheckParams {
     my $self = shift;
-
+    
+    my $taxonomy = $self->{taxonomy};
+    
     # For all four datasets (point types) ... 
     my @errors = ();
     my @warnings = ();
@@ -168,7 +168,7 @@ sub mapCheckParams {
         # Generate warning for taxon with homonyms
         if ($taxon_name) {
             if($q->param('taxon_rank') ne "species") {
-                my @taxa = TaxonInfo::getTaxa($dbt, {'taxon_name'=>$taxon_name,'remove_rank_change'=>1});
+                my @taxa = $taxonomy->getTaxaByName($taxon_name);
                 if (scalar(@taxa)  > 1) {
                     my @nos;
                     push @nos , $_->{'taxon_no'} foreach @taxa;

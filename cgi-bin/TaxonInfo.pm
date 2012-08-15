@@ -43,10 +43,7 @@ sub searchForm {
 # This is the front end for displayTaxonInfoResults - always use this instead if you want to 
 # call from another script.  Can pass it a taxon_no or a taxon_name
 sub checkTaxonInfo {
-	my $q = shift;
-	my $s = shift;
-	my $dbt = shift;
-	my $hbo = shift;
+    my ($dbt, $taxonomy, $q, $s, $hbo) = @_;
 	my $dbh = $dbt->dbh;
 
 	if ( ! $q->param('taxon_name') && ! $q->param('museum') && $q->param('search_again') )	{
@@ -61,7 +58,7 @@ sub checkTaxonInfo {
 
     if ($q->param('taxon_no')) {
         # If we have is a taxon_no, use that:
-        displayTaxonInfoResults($dbt,$s,$q,$hbo);
+        displayTaxonInfoResults($dbt,$taxonomy,$s,$q,$hbo);
     } elsif (!$q->param('taxon_name') && !($q->param('common_name')) && !($q->param('pubyr')) && !$q->param('author') && !$q->param('museum')) {
         searchForm($hbo,$q);
     } else {
@@ -139,7 +136,7 @@ sub checkTaxonInfo {
                 #    $taxon_name .= " $species";
                 #}    
                 #$q->param('taxon_name'=>$taxon_name);
-                displayTaxonInfoResults($dbt,$s,$q,$hbo);
+                displayTaxonInfoResults($dbt,$taxonomy,$s,$q,$hbo);
             } else {
                 # If nothing, print out an error message
                 searchForm($hbo, $q, 1); # param for not printing header with form
@@ -154,7 +151,7 @@ sub checkTaxonInfo {
             }
         } elsif(scalar @results == 1)	{
             $q->param('taxon_no'=>$results[0]->{'taxon_no'});
-            displayTaxonInfoResults($dbt,$s,$q,$hbo);
+            displayTaxonInfoResults($dbt,$taxonomy,$s,$q,$hbo);
         } else	{
             listTaxonChoices($dbt,\@results);
         }
@@ -168,7 +165,7 @@ sub checkTaxonInfo {
 #   entered_name could also be set, for link display purposes. entered_name may not correspond 
 #   to taxon_no, depending on if we follow a synonym or go to an original combination
 sub displayTaxonInfoResults {
-	my ($dbt,$s,$q,$hbo) = @_;
+	my ($dbt,$taxonomy,$s,$q,$hbo) = @_;
 
     my $dbh = $dbt->dbh;
 
@@ -494,7 +491,7 @@ sub displayTaxonInfoResults {
         print '<div align="center" style="margin-top: -1em;">';
 
         if ($is_real_user) {
-            displayMap($dbt,$q,$s,$collectionsSet);
+            displayMap($dbt,$taxonomy,$q,$s,$collectionsSet);
         } else {
             print qq|<form method="POST" action="$READ_URL">|;
             foreach my $f ($q->param()) {
@@ -691,7 +688,7 @@ sub doThumbs {
 } 
 
 sub displayMap {
-    my ($dbt,$q,$s,$collectionsSet)  = @_;
+    my ($dbt,$taxonomy,$q,$s,$collectionsSet)  = @_;
     require Map;
     
 	my @map_params = ('projection', 'maptime', 'mapbgcolor', 'gridsize', 'gridcolor', 'coastlinecolor', 'borderlinecolor', 'usalinecolor', 'pointshape1', 'dotcolor1', 'dotborder1');
@@ -710,7 +707,7 @@ sub displayMap {
         $q->param('mapscale'=>'auto');
         $q->param('autoborders'=>'yes');
         $q->param('pointsize1'=>'auto');
-        my $m = Map->new($q,$dbt,$s);
+        my $m = Map->new($dbt,$taxonomy,$q,$s);
         ($map_html_path,$errors,$warnings) = $m->buildMap('dataSet'=>$collectionsSet);
 #    }
 

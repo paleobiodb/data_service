@@ -35,9 +35,9 @@ our $MSG_LEVEL = 0;
 
 our (@TREE_TABLE_LIST) = ("taxon_trees");
 our (%SUPPRESS_TABLE) = ("taxon_trees" => "suppress_opinions");
+our (%SEARCH_TABLE) = ("taxon_trees" => "name_search");
 
 our $OPINION_CACHE = "order_opinions";
-our $OPINION_BAK = "order_opinions_bak";
 
 our $QUEUE_TABLE = "taxon_queue";
 
@@ -49,6 +49,7 @@ our $REFS_TABLE = "refs";
 
 our $TREE_TEMP = "tn";
 our $SUPPRESS_TEMP = "sn";
+our $SEARCH_TEMP = "fn";
 our $OPINION_TEMP = "opn";
 
 # Auxiliary table names
@@ -57,6 +58,8 @@ our $SPELLING_TEMP = "spelling_aux";
 our $TRAD_TEMP = "trad_aux";
 our $SYNONYM_TEMP = "synonym_aux";
 our $CLASS_TEMP = "class_aux";
+our $PARENT_TEMP = "parent_aux";
+our $GENUS_TEMP = "genus_aux";
 our $CHECK_TEMP = "check_aux";
 
 # Modules needed
@@ -612,6 +615,7 @@ sub updateTables {
     
     $options ||= {};
     my $suppress_table = $SUPPRESS_TABLE{$tree_table};
+    my $search_table = $SEARCH_TABLE{$tree_table};
     
     my %update_concepts;	# list of concepts to be updated
     
@@ -735,6 +739,10 @@ sub updateTables {
     
     linkParents($dbh, $tree_table);
     
+    # We can now update the search table.
+    
+    updateSearchTable($dbh, $search_table);
+    
     # If the adjustments to the hierarchy are small, then we can now update
     # $tree_table using the rows from $TREE_TEMP and then adjust the tree
     # sequence in-place.  This will finish the procedure.  We set the
@@ -801,6 +809,7 @@ sub buildTables {
     
     $options ||= {};
     my $suppress_table = $SUPPRESS_TABLE{$tree_table};
+    my $search_table = $SEARCH_TABLE{$tree_table};
     
     # First, set the variables that control log output.
     
@@ -808,7 +817,7 @@ sub buildTables {
     
     unless ( ref $step_control eq 'HASH' and %$step_control ) {
 	$step_control = { 'a' => 1, 'b' => 1, 'c' => 1,
-			  'd' => 1, 'e' => 1, 'g' => 1 };
+			  'd' => 1, 'e' => 1, 'f' => 1, 'g' => 1 };
     };
     
     # Then create the necessary tables.
@@ -850,12 +859,16 @@ sub buildTables {
     
     computeKingdomLabels($dbh) if $step_control->{e};
     
+    # Next, compute the name search table using the hierarchy relation.
+    
+    computeSearchTable($dbh) if $step_control->{f};
+    
     # Finally, activate the new tables we have just computed by renaming them
     # over the previous ones.
     
     my $keep_temps = $step_control->{k} || $options->{keep_temps};
     
-    activateNewTables($dbh, $tree_table, $suppress_table, $keep_temps)
+    activateNewTables($dbh, $keep_temps, $tree_table, $suppress_table, $search_table)
 	if $step_control->{g};
     
     my $a = 1;		# we can stop here when debugging
@@ -942,15 +955,15 @@ sub rebuildOpinionCache {
     # Now, we remove any backup table that might have been left in place, and
     # swap in the new table using an atomic rename operation
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $OPINION_BAK");
+    $result = $dbh->do("DROP TABLE IF EXISTS ${OPINION_CACHE}_bak");
     
     $result = $dbh->do("RENAME TABLE
-				$OPINION_CACHE to $OPINION_BAK,
+				$OPINION_CACHE to ${OPINION_CACHE}_bak,
 				$OPINION_TEMP to $OPINION_CACHE");
     
     # ...and remove the backup
     
-    $result = $dbh->do("DROP TABLE $OPINION_BAK");
+    $result = $dbh->do("DROP TABLE ${OPINION_CACHE}_bak");
     
     my $a = 1;		# we can stop here when debugging
 }
@@ -1170,7 +1183,18 @@ sub createTempTables {
 			       (opinion_no int unsigned not null,
 				suppress int unsigned not null,
 				PRIMARY KEY (opinion_no))");
-        
+    
+    # Finally, create a search table through which taxa can be efficiently and
+    # completely found by name.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_TEMP");
+    $result = $dbh->do("CREATE TABLE $SEARCH_TEMP
+			       (genus varchar(80),
+				sub smallint unsigned not null,
+				taxon_name varchar(80) not null,
+				orig_no int unsigned not null,
+				PRIMARY KEY (taxon_name, genus))");
+    
     return;
 }
 
@@ -2660,7 +2684,7 @@ sub computeKingdomLabels {
     
     my ($dbh) = @_;
     
-    logMessage(2, "  setting kingdom labels (e)");
+    logMessage(2, "setting kingdom labels (e)");
     
     # First, prepare an SQL statement determining the boundary of a particular
     # hierarchy, and another for setting kingdom labels.
@@ -2705,7 +2729,7 @@ sub updateKingdomLabels {
     
     my ($dbh, $tree_table) = @_;
     
-    logMessage(2, "  setting kingdom labels (e)");
+    logMessage(2, "setting kingdom labels (e)");
     
     # First, prepare an SQL statement determining the boundary of a particular
     # hierarchy, and another for setting kingdom labels.
@@ -2740,6 +2764,227 @@ sub updateKingdomLabels {
 }
 
 
+# computeSearchTable ( dbh )
+# 
+# Create a table through which taxa can be efficiently and completely found by
+# name.  For higher taxa this is trivial, but for species level and below we
+# need to deal with sub-genera and synonymous genera.  The goal is to be able
+# to find a species name in conjunction with any of its associated genera and
+# sub-genera.
+
+sub computeSearchTable {
+
+    my ($dbh) = @_;
+    
+    logMessage(2, "computing search table (f)");
+    
+    my $result;
+    
+    # Note that in all of the INSERT statements below we need to use the
+    # IGNORE modifier because taxon names are not completely unique.
+    # Different "spellings" of a taxon may have the same name but different
+    # ranks, if a taxon has been promoted or demoted at some point in time.
+    
+    # We start by copying all higher taxa into the search table.  That's the
+    # easy part.
+    
+    logMessage(2, "    adding higher taxa");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
+		SELECT null, 0, taxon_name, orig_no FROM $AUTH_TABLE
+		WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
+    
+    # The subgenera are a bit trickier, because most (but not all) are named
+    # as "Genus (Subgenus)".  The following expression will extract the
+    # subgenus name from this pattern, and will also properly treat taxa
+    # without a subgenus component by simply returning the whole name.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
+		SELECT null, 0, trim(trailing ')' from substring_index(taxon_name,'(',-1)),
+			taxon_no FROM $AUTH_TABLE
+		WHERE taxon_rank = 'subgenus'");
+    
+    # For species and sub-species, we split off the first component of each
+    # name as the genus name and add the resulting entries to the table.  Note
+    # that some species names also have a subgenus component, which must be
+    # skipped.
+    
+    logMessage(2, "    adding species by name");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
+		SELECT substring_index(taxon_name, ' ', 1), 0,
+			if(taxon_name like '%(%',
+				trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+				trim(substring(taxon_name, locate(' ', taxon_name)+1))),
+			orig_no
+		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')");
+    
+    # For those species names which have a subgenus component, split it out
+    # too and create an entry for that.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
+		SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1), 1,
+			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+			orig_no
+		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')
+			and taxon_name like '%(%'");
+    
+    # Now comes the really tricky part.  We want to list each species and
+    # subspecies under both its genus and subgenus (if any) and also under any
+    # genera and subgenera synonymous with either of those.  Note that the
+    # genus under which a species is placed in the hierarchy may not be in
+    # accord with its listed name!
+    # 
+    # In order to do this efficiently, we first need to create an auxiliary
+    # table associating each species and subspecies with a genus/subgenus.
+    
+    logMessage(2, "    adding species by hierarchy");
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $GENUS_TEMP");
+    $result = $dbh->do("CREATE TABLE $GENUS_TEMP
+			       (taxon_no int unsigned not null,
+				genus_no int unsigned not null,
+				primary key (taxon_no, genus_no))");
+    
+    # Now select the genus under which each species and subspecies has been
+    # placed:
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $GENUS_TEMP (taxon_no, genus_no)
+		SELECT a.taxon_no, ifnull(p1.orig_no, ifnull(p2.orig_no, p3.orig_no))
+		FROM $AUTH_TABLE a JOIN $TREE_TEMP t using (orig_no)
+			LEFT JOIN $TREE_TEMP t1 on t1.orig_no = t.parent_no
+			LEFT JOIN $AUTH_TABLE p1 on p1.taxon_no = t1.spelling_no
+				and p1.taxon_rank = 'genus'
+			LEFT JOIN $TREE_TEMP t2 on t2.orig_no = t1.parent_no
+			LEFT JOIN $AUTH_TABLE p2 on p2.taxon_no = t2.spelling_no
+				and p2.taxon_rank = 'genus'
+			LEFT JOIN $TREE_TEMP t3 on t3.orig_no = t2.parent_no
+			LEFT JOIN $AUTH_TABLE p3 on p3.taxon_no = t3.spelling_no
+				and p3.taxon_rank = 'genus'
+		WHERE a.taxon_rank in ('species', 'subspecies') and
+			(p1.taxon_no is not null or
+			 p2.taxon_no is not null or
+			 p3.taxon_no is not null)");
+    
+    # Then select the subgenus (if any) under which each species and
+    # subspecies has been placed:
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $GENUS_TEMP (taxon_no, genus_no)
+		SELECT a.taxon_no, ifnull(p1.orig_no, p2.orig_no)
+		FROM $AUTH_TABLE a JOIN $TREE_TEMP t using (orig_no)
+			LEFT JOIN $TREE_TEMP t1 on t1.orig_no = t.parent_no
+			LEFT JOIN $AUTH_TABLE p1 on p1.taxon_no = t1.spelling_no
+				and p1.taxon_rank = 'subgenus'
+			LEFT JOIN $TREE_TEMP t2 on t2.orig_no = t1.parent_no
+			LEFT JOIN $AUTH_TABLE p2 on p2.taxon_no = t2.spelling_no
+				and p2.taxon_rank = 'subgenus'
+		WHERE a.taxon_rank in ('species', 'subspecies') and
+			(p1.taxon_no is not null or
+			 p2.taxon_no is not null)");
+    
+    # Now that we have these tables, we can add an additional entry for each
+    # species under all genera and subgenera that are synonymous with any of
+    # these.  We use the same expressions as above to split out the subgenus
+    # part (if any) in the parent taxon name and split off the genus/subgenus
+    # part of the species name.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
+		SELECT trim(trailing ')' from substring_index(p.taxon_name,'(',-1)),
+			if(p.taxon_rank = 'subgenus', 1, 0),
+			if(a.taxon_name like '%(%',
+				trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
+				trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1))),
+			a.orig_no
+		FROM $GENUS_TEMP as g JOIN $AUTH_TABLE as a using (taxon_no)
+			JOIN $TREE_TEMP as t1 on t1.orig_no = g.genus_no
+			JOIN $TREE_TEMP as t2 on t2.synonym_no = t1.synonym_no
+			JOIN $AUTH_TABLE as p on p.taxon_no = t2.spelling_no");
+    
+    # We can stop here when debugging.
+    
+    my $a = 1;
+}
+
+
+# updateSearchTable ( dbh, search_table )
+# 
+# Update the specified search table to contain entries for each taxon
+# represented in $TREE_TEMP.
+
+sub updateSearchTable {
+
+    my ($dbh, $search_table) = @_;
+    
+    logMessage(2, "computing search table (f)");
+    
+    my $result;
+    
+    # We start by copying all higher taxa into the search table.
+    
+    logMessage(2, "    adding higher taxa");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $search_table (genus, sub, taxon_name, orig_no)
+		SELECT null, 0, taxon_name, orig_no
+		FROM $AUTH_TABLE JOIN $TREE_TEMP using (orig_no)
+		WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
+    
+    # The subgenera are a bit trickier, because most (but not all) are named
+    # as "Genus (Subgenus)".  The following expression will extract the
+    # subgenus name from this pattern, and will also properly treat taxa
+    # without a subgenus component by simply returning the whole name.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $search_table (genus, sub, taxon_name, orig_no)
+		SELECT null, 0, trim(trailing ')' from substring_index(taxon_name,'(',-1)),
+			taxon_no
+		FROM $AUTH_TABLE JOIN $TREE_TEMP using (orig_no)
+		WHERE taxon_rank = 'subgenus'");
+    
+    # For species and sub-species, we split off the first component of each
+    # name as the genus name and add the resulting entries to the table.  Note
+    # that some species names also have a subgenus component, which must be
+    # skipped.
+    
+    logMessage(2, "    adding species by name");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $search_table (genus, sub, taxon_name, orig_no)
+		SELECT substring_index(taxon_name, ' ', 1), 0,
+			if(taxon_name like '%(%',
+				trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+				trim(substring(taxon_name, locate(' ', taxon_name)+1))),
+			orig_no
+		FROM $AUTH_TABLE JOIN $TREE_TEMP using (orig_no)
+		WHERE taxon_rank in ('species', 'subspecies')");
+    
+    # For those species names which have a subgenus component, split it out
+    # too and create an entry for that.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $search_table (genus, sub, taxon_name, orig_no)
+		SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1), 1,
+			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+			orig_no
+		FROM $AUTH_TABLE JOIN $TREE_TEMP using (orig_no)
+		WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
+    
+    # We will wait until the next table rebuild to add in entries for
+    # synonymous genera and subgenera.
+    
+    # We can stop here when debugging.
+    
+    my $a = 1;
+}
+
+
 # activateNewTables ( dbh, keep_temps )
 # 
 # In one atomic operation, move the new taxon tables to active status and swap
@@ -2751,27 +2996,31 @@ sub updateKingdomLabels {
 
 sub activateNewTables {
 
-    my ($dbh, $tree_table, $suppress_table, $keep_temps) = @_;
+    my ($dbh, $keep_temps, $tree_table, $suppress_table, $search_table) = @_;
     
     my $result;
     
-    logMessage(2, "activating tables '$tree_table' and '$suppress_table' (g)");
+    logMessage(2, "activating tables '$tree_table', '$suppress_table',");
+    logMessage(2, "  and '$search_table' (g)");
     
     # Compute the backup names
     
     my $tree_bak = "${tree_table}_bak";
     my $suppress_bak = "${suppress_table}_bak";
+    my $search_bak = "${search_table}_bak";
     
     # Delete any backup tables that might still be around
     
     $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $suppress_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $search_bak");
     
     # Create dummy versions of any of the main tables that might be currently
     # missing
     
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_TEMP");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $suppress_table LIKE $SUPPRESS_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $search_table LIKE $SEARCH_TEMP");
     
     # Now do the Atomic Table Swap (tm)
     
@@ -2779,12 +3028,15 @@ sub activateNewTables {
 			    $tree_table to $tree_bak,
 			    $TREE_TEMP to $tree_table,
 			    $suppress_table to $suppress_bak,
-			    $SUPPRESS_TEMP to $suppress_table");
+			    $SUPPRESS_TEMP to $suppress_table,
+			    $search_table to $search_bak,
+			    $SEARCH_TEMP to $search_table");
     
     # Then we can get rid of the backup tables
     
     $result = $dbh->do("DROP TABLE $tree_bak");
     $result = $dbh->do("DROP TABLE $suppress_bak");
+    $result = $dbh->do("DROP TABLE $search_bak");
     
     # Delete the auxiliary tables too, unless we were told to keep them.
     

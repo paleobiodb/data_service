@@ -2,6 +2,7 @@
 package Cladogram;
 
 use GD;
+use Taxonomy;
 use Reference;
 use Data::Dumper;
 use Debug qw(dbg);
@@ -14,13 +15,13 @@ my $FONT2 = "$DATA_DIR/fonts/VeraBd.ttf";
 
 
 sub displayCladogramChoiceForm {
-    my ($dbt,$q,$s,$hbo) = @_;
+    my ($dbt, $q, $s, $taxonomy, $hbo) = @_;
 
     my $taxon_no = $q->param('taxon_no');
     my $session_ref = $s->get('reference_no');
     return unless $taxon_no =~ /^\d+$/;
 
-    my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no});
+    my $taxon = $taxonomy->getTaxon($taxon_no);
 
 	# if there are no matches, call displayCladeSearchForm and insert
 	#  a message saying "No matches were found, please search again"
@@ -40,14 +41,14 @@ sub displayCladogramChoiceForm {
     my @results = @{$dbt->getData($sql)};
     if (@results == 0) {
         $q->param('cladogram_no'=>'-1');
-        displayCladogramForm($dbt,$q,$s,$hbo);
+        displayCladogramForm($dbt, $q, $s, $taxonomy, $hbo);
         return;
     } else {
         # If we have one exact match (matches reference and taxon), use that
         foreach my $row (@results) {
             if ($row->{'reference_no'} == $session_ref && $row->{'taxon_no'} == $taxon_no) {
                 $q->param('cladogram_no'=>$row->{'cladogram_no'});
-                displayCladogramForm($dbt,$q,$s,$hbo);
+                displayCladogramForm($dbt, $q, $s, $taxonomy, $hbo);
                 return;
             }
         }
@@ -72,7 +73,7 @@ sub displayCladogramChoiceForm {
 }
 
 sub displayCladogramForm {
-    my ($dbt,$q,$s,$hbo,$errors) = @_;
+    my ($dbt, $q, $s, $taxonomy, $hbo, $errors) = @_;
 
     my $taxon_no = $q->param('taxon_no');
     my $cladogram_no = $q->param('cladogram_no');
@@ -105,7 +106,7 @@ sub displayCladogramForm {
         return;
     }
 
-    my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$taxon_no});
+    my $taxon = $taxonomy->getTaxon($taxon_no);
     my $vars = {};
     my @clades = ();
     my @bootstraps = ();
@@ -217,7 +218,7 @@ sub displayCladogramForm {
 }
 
 sub submitCladogramForm {
-    my ($dbt,$q,$s,$hbo) = @_;
+    my ($dbt, $q, $s, $taxonomy, $hbo) = @_;
 
     my $taxon_no = $q->param('taxon_no');
     my $cladogram_no = $q->param('cladogram_no');
@@ -265,7 +266,8 @@ sub submitCladogramForm {
 
         next if ($clade =~ /^\d+\s*=\s*$/ || $clade =~ /^\s*$/);
 
-        my ($parent_no,$parent_name,$child_nos,$child_names,$plesiomorphics) = parseClade($dbt,$clade,\%homonym_resolve,\@errors,\@missing_errors,\@homonym_errors);
+        my ($parent_no,$parent_name,$child_nos,$child_names,$plesiomorphics) = 
+	    parseClade($dbt,$taxonomy,$clade,\%homonym_resolve,\@errors,\@missing_errors,\@homonym_errors);
         if (!$node_lookup{$parent_name}) {
             $node_lookup{$parent_name} = {'taxon_name'=>$parent_name,'children'=>[]};
         }
@@ -377,7 +379,7 @@ sub submitCladogramForm {
     }
 
     if (@errors) {
-        displayCladogramForm($dbt,$q,$s,$hbo,\@errors);
+        displayCladogramForm($dbt, $q, $s, $taxonomy, $hbo, \@errors);
         return;
     } 
 
@@ -579,7 +581,7 @@ sub formatTreeString {
 
 sub parseClade {
 	# extract apparent taxon names and check their formatting
-    my ($dbt,$clade,$homonym_resolve,$errors,$missing_errors,$homonym_errors) = @_;
+    my ($dbt,$taxonomy,$clade,$homonym_resolve,$errors,$missing_errors,$homonym_errors) = @_;
 
     # Split on assignment separator first
     my ($parent_name,$children) = split(/\s*=\s*/,$clade,2);
@@ -613,7 +615,7 @@ sub parseClade {
             $taxon_no = -1 * $name;
         } else {
             if ($name =~ /^[A-Z][a-z]+ [a-z]+$/ || $name =~ /^[A-Z][a-z]+$/) {
-                my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$name,'remove_rank_change'=>1},['*']);
+                my @taxa = $taxonomy->getTaxaByName($name, {select => 'orig'});
                 if (@taxa < 1) {
                     push @$missing_errors, $name;
                 } elsif (@taxa > 1) {
@@ -636,7 +638,7 @@ sub parseClade {
     if ($parent_name =~ /^\d+$/) {
         $parent_no = -1 * $parent_name;
     } else {
-        my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$parent_name,'remove_rank_change'=>1},['*']);
+        my @taxa = $taxonomy->getTaxaByName($parent_name, {select => 'orig'});
         if (@taxa < 1) {
             push @$missing_errors, $parent_name;
         } elsif (@taxa > 1) {

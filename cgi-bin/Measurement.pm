@@ -17,7 +17,7 @@ my @measurement_fields=('average','median','min','max','error','error_unit');
 # Displays a list of potential specimens from the search.  
 #
 sub submitSpecimenSearch {
-    my  ($dbt,$hbo,$q,$s) = @_;
+    my ($dbt, $taxonomy, $hbo, $q, $s) = @_;
     my $dbh = $dbt->dbh;
 
     if ( ! $q->param('taxon_name') && ! $q->param('comment') && ! int($q->param('collection_no')) ) {
@@ -33,8 +33,7 @@ sub submitSpecimenSearch {
     my @taxa;
     if ($q->param('taxon_name')) {
         if ( $q->param('match_type') =~ /exact|combinations only/ )	{
-            my $sql = "SELECT taxon_no FROM authorities WHERE taxon_name='".$q->param('taxon_name')."'";
-            @taxa = @{$dbt->getData($sql)};
+            @taxa = $taxonomy->getTaxaByName($q->param('taxon_name'));
         } else	{
             @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$q->param('taxon_name'),'match_subgenera'=>1});
         }
