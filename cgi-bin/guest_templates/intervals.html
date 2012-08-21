@@ -1,0 +1,202 @@
+<style type="text/css">
+<!--
+
+.periodTabOn	{
+	width: 6em;
+	margin-left: 2em;
+	padding: 0.25em;
+	padding-bottom: 0.25em;
+	background-color: White;
+	border: 1px solid Gray;
+	border-bottom: 0px;
+	color: Black;
+}
+
+.periodTabOff	{
+	width: 6em;
+	margin-left: 2em;
+	padding: 0.25em;
+	padding-bottom: 0.25em;
+	background-color: LightGray;
+	border: 1px solid Gray;
+	border-bottom: 0px;
+	color: White;
+}
+
+.rankHeader	{
+	float: left;
+	clear: left;
+	font-size: 1em;
+	margin-top: 1em;
+	margin-bottom: 0.75em;
+}
+
+.intervalList	{
+	float: left;
+	clear: left;
+}
+
+-->
+</style>
+
+<script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+function switchPeriod(period)	{
+	var periods = new Array('Quaternary','Neogene','Paleogene','Cretaceous','Jurassic','Triassic','Permian','Carboniferous','Devonian','Silurian','Ordovician','Cambrian','Ediacaran');
+	for ( i = 0; i < periods.length; i++ )	{
+		document.getElementById(periods[i]+'Tab').className = 'periodTabOff';
+		document.getElementById(periods[i]).style.display = 'none';
+	}
+	document.getElementById(period+'Tab').className = 'periodTabOn';
+	document.getElementById(period).style.display = 'inline';
+}
+
+// End -->
+</script>
+
+<center><div class="pageTitle" style="margin-bottom: -1em;">Geological time intervals</div></center>
+
+<div style="margin-top: 2em; overflow: hidden;">
+
+<div style="float: left; clear: none; margin-left: 2em; margin-top: 1em;">
+
+<div id="QuaternaryTab" class="periodTabOn" onClick="switchPeriod('Quaternary');">
+Quaternary
+</div>
+<div id="NeogeneTab" class="periodTabOff" onClick="switchPeriod('Neogene');">
+Neogene
+</div>
+<div id="PaleogeneTab" class="periodTabOff" onClick="switchPeriod('Paleogene');">
+Paleogene
+</div>
+<div id="CretaceousTab" class="periodTabOff" onClick="switchPeriod('Cretaceous');">
+Cretaceous
+</div>
+<div id="JurassicTab" class="periodTabOff" onClick="switchPeriod('Jurassic');">
+Jurassic
+</div>
+<div id="TriassicTab" class="periodTabOff" onClick="switchPeriod('Triassic');">
+Triassic
+</div>
+<div id="PermianTab" class="periodTabOff" onClick="switchPeriod('Permian');">
+Permian
+</div>
+<div id="CarboniferousTab" class="periodTabOff" onClick="switchPeriod('Carboniferous');">
+Carboniferous
+</div>
+<div id="DevonianTab" class="periodTabOff" onClick="switchPeriod('Devonian');">
+Devonian
+</div>
+<div id="SilurianTab" class="periodTabOff" onClick="switchPeriod('Silurian');">
+Silurian
+</div>
+<div id="OrdovicianTab" class="periodTabOff" onClick="switchPeriod('Ordovician');">
+Ordovician
+</div>
+<div id="CambrianTab" class="periodTabOff" onClick="switchPeriod('Cambrian');">
+Cambrian
+</div>
+<div id="EdiacaranTab" class="periodTabOff" onClick="switchPeriod('Ediacaran');" style="border-bottom: 1px solid Gray;">
+Ediacaran
+</div>
+
+</div>
+
+<div style="float: left; clear: none; margin-left: 2em; margin-top: 0em;">
+
+<div id="Quaternary">
+<div class="rankHeader">Quaternary</div>
+<div class="intervalList">%%Quaternary_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Quaternary_stages%%</div>
+</div>
+
+<div id="Neogene" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Neogene_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Neogene_stages%%</div>
+</div>
+
+<div id="Paleogene" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Paleogene_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Paleogene_stages%%</div>
+</div>
+
+<div id="Cretaceous" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Cretaceous_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Cretaceous_stages%%</div>
+</div>
+
+<div id="Jurassic" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Jurassic_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Jurassic_stages%%</div>
+</div>
+
+<div id="Triassic" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Triassic_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Triassic_stages%%</div>
+</div>
+
+<div id="Permian" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Permian_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Permian_stages%%</div>
+</div>
+
+<div id="Carboniferous" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Carboniferous_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Carboniferous_stages%%</div>
+</div>
+
+<div id="Devonian" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Devonian_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Devonian_stages%%</div>
+</div>
+
+<div id="Silurian" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Silurian_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Silurian_stages%%</div>
+</div>
+
+<div id="Ordovician" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Ordovician_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Ordovician_stages%%</div>
+</div>
+
+<div id="Cambrian" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Cambrian_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Cambrian_stages%%</div>
+</div>
+
+<div id="Ediacaran" style="display: none;">
+<div class="rankHeader">Epochs</div>
+<div class="intervalList">%%Ediacaran_epochs%%</div>
+<div class="rankHeader">Stages</div>
+<div class="intervalList">%%Ediacaran_stages%%</div>
+</div>
+
+</div>
+
+</div>
+
