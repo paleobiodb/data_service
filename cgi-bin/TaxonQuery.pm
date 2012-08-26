@@ -259,6 +259,7 @@ sub setParameters {
 		$self->{show_attribution} = 1;
 		$self->{show_ref} = 1;
 		$self->{generate_urns} = 1;
+		$self->{rooted_result} = 1;
 	    }
 	    
 	    # Warn the client about unrecognized values, but don't abort processing.
@@ -434,6 +435,13 @@ sub setParametersMultiple {
     # Make sure we have at least one parameter from the required set.
     
     my $required_param = 0;
+    
+    # If 'rooted' is specified, then the root taxon's parent will be blank.
+    
+    if ( defined $params->{rooted_result} and $params->{rooted} ne '' )
+    {
+	$self->{rooted_result} = $self->parseBooleanParam($params->{rooted}, 'rooted');
+    }
     
     # If 'type' is specified, the results are restricted to certain types
     # of taxa.  Defaults to 'valid'.
@@ -900,12 +908,12 @@ sub fetchMultiple {
     
     if ( defined $self->{base_taxon_no} )
     {
-	my $sql = "SELECT t3.lft, t3.rgt
+	my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
 	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
 				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
 	     WHERE t1.taxon_no = ?";
 	
-	my ($lft, $rgt) = $dbh->selectrow_array($sql, undef, $self->{base_taxon_no});
+	my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, $self->{base_taxon_no});
 	
 	# If we can't find the base taxon, the result set will be empty.
 	
@@ -917,6 +925,7 @@ sub fetchMultiple {
 	# Otherwise, we select the appropriate range of taxa.
 	
 	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
+	$self->{root_taxon_no} = $base_no;
     }
     
     # If a base taxon has been specified by taxon_name, find it and add the
@@ -939,13 +948,13 @@ sub fetchMultiple {
 	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
 	}
 	
-	my $sql = "SELECT t3.lft, t3.rgt
+	my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
 		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
 				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
 				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
 		WHERE a.taxon_name = ? $rank_clause";
 	    
-	my ($lft, $rgt) = $dbh->selectrow_array($sql, undef, @args);
+	my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, @args);
 	
 	# If we can't find the base taxon, the result set will be empty.
 	
@@ -957,6 +966,7 @@ sub fetchMultiple {
 	# Otherwise, select the appropriate range of taxa.
 	
 	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
+	$self->{root_taxon_no} = $base_no;
     }
     
     # If a leaf taxon has been specified by taxon_no, find it and add the appropriate
@@ -1405,8 +1415,11 @@ sub emitTaxonXML {
     my $output = '';
     my @remarks = ();
     
+    my $taxon_no = $self->{generate_urns} ? DataQuery::generateURN($row->{taxon_no})
+	: $row->{taxon_no};
+    
     $output .= '  <dwc:Taxon>' . "\n";
-    $output .= '    <dwc:taxonID>' . $row->{taxon_no} . '</dwc:taxonID>' . "\n";
+    $output .= '    <dwc:taxonID>' . $taxon_no . '</dwc:taxonID>' . "\n";
     $output .= '    <dwc:taxonRank>' . $row->{taxon_rank} . '</dwc:taxonRank>' . "\n";
     
     # Taxon names shouldn't contain any invalid characters, but just in case...
@@ -1424,8 +1437,13 @@ sub emitTaxonXML {
 	$output .= '    <dwc:infraSpecificEpithet>' . $subspecies . '</dwc:infraSpecificEpithet>' if defined $subspecies;
     }
     
-    if ( defined $row->{parent_no} && $row->{parent_no} > 0 ) {
-	$output .= '    <dwc:parentNameUsageID>' . $row->{parent_no} . '</dwc:parentNameUsageID>' . "\n";
+    if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
+	    ( $self->{rooted_result} and $row->{taxon_no} == $row->{root_taxon_no} ) )
+    {
+	my $parent_no = $self->{generate_urns} ? DataQuery::generateURN($row->{parent_no})
+	    : $row->{parent_no};
+	
+	$output .= '    <dwc:parentNameUsageID>' . $parent_no . '</dwc:parentNameUsageID>' . "\n";
     }
     
     if ( defined $row->{parent_name} && $self->{show_parent_names} ) {
@@ -1461,7 +1479,10 @@ sub emitTaxonXML {
     }
     
     if ( defined $row->{accepted_no} ) {
-	$output .= '    <dwc:acceptedNameUsageID>' . $row->{accepted_no} . '</dwc:acceptedNameUsageID>' . "\n";
+	my $accepted_no = $self->{generate_urns} ? DataQuery::generateURN($row->{accepted_no})
+	    : $row->{accepted_no};
+	
+	$output .= '    <dwc:acceptedNameUsageID>' . $accepted_no . '</dwc:acceptedNameUsageID>' . "\n";
     }
     
     if ( defined $row->{accepted_name} ) {
@@ -1522,14 +1543,8 @@ sub emitTaxonText {
 	
 	if ( $field eq 'taxonID' )
 	{
-	    if ( $self->{generate_urns} )
-	    {
-		$value = 'urn:org.paleodb:taxon_no:' . $row->{taxon_no};
-	    }
-	    else
-	    {
-		$value = $row->{taxon_no};
-	    }
+	    $value = $row->{taxon_no};
+	    $value = DataQuery::generateURN($value) if $self->{generate_urns};
 	}
 	
 	elsif ( $field eq 'taxonRank' )
@@ -1554,6 +1569,7 @@ sub emitTaxonText {
 	elsif ( $field eq 'parentNameUsageID' )
 	{
 	    $value = $row->{parent_no};
+	    $value = DataQuery::generateURN($value) if $self->{generate_urns};
 	}
 	
 	elsif ( $field eq 'taxonomicStatus' )
@@ -1596,9 +1612,24 @@ sub emitTaxonText {
 		if defined $row->{common_name};
 	}
 	
+	elsif ( $field eq 'acceptedNameUsageID' )
+	{
+	    if ( defined $row->{accepted_no} )
+	    {
+		$value = $self->{generate_urns} ? DataQuery::generateURN($row->{accepted_no})
+		    : $row->{accepted_no};
+	    }
+	}
+	
+	if ( defined $row->{accepted_name} )
+	{
+	    $value = DataQuery::xml_clean($row->{accepted_name})
+		if defined $row->{accepted_name};
+	}
+	
 	elsif ( $field eq 'extant' )
 	{
-	    $value = $row->{extant};
+	    $value = $row->{extant} if defined $row->{extant};
 	}
 	
 	elsif ( $field eq 'taxonRemarks' )
