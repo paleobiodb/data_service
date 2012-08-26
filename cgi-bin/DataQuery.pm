@@ -829,7 +829,7 @@ END_XML
 
 sub generateFooterText {
 
-    return;
+    return '';
 }
 
 
@@ -905,7 +905,7 @@ sub generateTextLine {
 
     my ($self, @values) = @_;
     
-    if ( $self->{value_sep} eq 'csv' )
+    if ( defined $self->{value_sep} and $self->{value_sep} eq 'csv' )
     {
 	my $line = '"' . join('","', @values) . '"' . "\n";
 	return $line;
@@ -1009,7 +1009,10 @@ sub generateURN {
     
     my ($record_no, $record_type) = @_;
     
-    return "urn:paleodb.org:$record_type:$record_no";
+    my $type_label = 'x';
+    $type_label = 'tn' if $record_type eq 'taxon_no';
+    
+    return "urn:paleodb:$type_label$record_no";
 }
 
 

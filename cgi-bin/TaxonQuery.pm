@@ -1415,8 +1415,9 @@ sub emitTaxonXML {
     my $output = '';
     my @remarks = ();
     
-    my $taxon_no = $self->{generate_urns} ? DataQuery::generateURN($row->{taxon_no})
-	: $row->{taxon_no};
+    my $taxon_no = $self->{generate_urns}
+	? DataQuery::generateURN($row->{taxon_no}, 'taxon_no')
+	    : $row->{taxon_no};
     
     $output .= '  <dwc:Taxon>' . "\n";
     $output .= '    <dwc:taxonID>' . $taxon_no . '</dwc:taxonID>' . "\n";
@@ -1438,10 +1439,12 @@ sub emitTaxonXML {
     }
     
     if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
-	    ( $self->{rooted_result} and $row->{taxon_no} == $row->{root_taxon_no} ) )
+	 ( $self->{rooted_result} and defined $self->{root_taxon_no} 
+	      and $row->{taxon_no} == $self->{root_taxon_no} ) )
     {
-	my $parent_no = $self->{generate_urns} ? DataQuery::generateURN($row->{parent_no})
-	    : $row->{parent_no};
+	my $parent_no = $self->{generate_urns}
+	    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
+		: $row->{parent_no};
 	
 	$output .= '    <dwc:parentNameUsageID>' . $parent_no . '</dwc:parentNameUsageID>' . "\n";
     }
@@ -1479,8 +1482,9 @@ sub emitTaxonXML {
     }
     
     if ( defined $row->{accepted_no} ) {
-	my $accepted_no = $self->{generate_urns} ? DataQuery::generateURN($row->{accepted_no})
-	    : $row->{accepted_no};
+	my $accepted_no = $self->{generate_urns}
+	    ? DataQuery::generateURN($row->{accepted_no}, 'taxon_no')
+		: $row->{accepted_no};
 	
 	$output .= '    <dwc:acceptedNameUsageID>' . $accepted_no . '</dwc:acceptedNameUsageID>' . "\n";
     }
@@ -1543,8 +1547,9 @@ sub emitTaxonText {
 	
 	if ( $field eq 'taxonID' )
 	{
-	    $value = $row->{taxon_no};
-	    $value = DataQuery::generateURN($value) if $self->{generate_urns};
+	    $value = $self->{generate_urns}
+		? DataQuery::generateURN($row->{taxon_no}, 'taxon_no')
+		    : $row->{taxon_no};
 	}
 	
 	elsif ( $field eq 'taxonRank' )
@@ -1568,8 +1573,14 @@ sub emitTaxonText {
 	
 	elsif ( $field eq 'parentNameUsageID' )
 	{
-	    $value = $row->{parent_no};
-	    $value = DataQuery::generateURN($value) if $self->{generate_urns};
+	    if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
+		 ( $self->{rooted_result} and defined $self->{root_taxon_no}
+		      and $row->{taxon_no} == $self->{root_taxon_no} ) )
+	    {
+		$value = $self->{generate_urns}
+		    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
+			: $row->{parent_no};
+	    }
 	}
 	
 	elsif ( $field eq 'taxonomicStatus' )
@@ -1616,15 +1627,19 @@ sub emitTaxonText {
 	{
 	    if ( defined $row->{accepted_no} )
 	    {
-		$value = $self->{generate_urns} ? DataQuery::generateURN($row->{accepted_no})
-		    : $row->{accepted_no};
+		$value = $self->{generate_urns}
+		    ? DataQuery::generateURN($row->{accepted_no}, 'taxon_no')
+			: $row->{accepted_no};
 	    }
 	}
 	
-	if ( defined $row->{accepted_name} )
+	if ( $field eq 'acceptedName' and defined $row->{accepted_name} )
 	{
-	    $value = DataQuery::xml_clean($row->{accepted_name})
-		if defined $row->{accepted_name};
+	    if ( defined $row->{accepted_name} )
+	    {
+		$value = DataQuery::xml_clean($row->{accepted_name})
+		    if defined $row->{accepted_name};
+	    }
 	}
 	
 	elsif ( $field eq 'extant' )
