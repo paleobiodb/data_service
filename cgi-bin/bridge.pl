@@ -954,7 +954,7 @@ sub getTaxonomyXML {
     return if PBDBUtil::checkForBot();
     logRequest($s,$q);
     require DownloadTaxonomy;
-    DownloadTaxonomy::getTaxonomyXML($dbt,$q,$s,$hbo);
+    DownloadTaxonomy::getTaxonomyXML($dbt,$taxonomy,$q,$s,$hbo);
 }
 
 sub displayDownloadTaxonomyResults {
@@ -964,9 +964,9 @@ sub displayDownloadTaxonomyResults {
     logRequest($s,$q);
     print $hbo->stdIncludes( $PAGE_TOP );
     if ($q->param('output_data') =~ /ITIS/i) {
-        DownloadTaxonomy::displayITISDownload($dbt,$q,$s);
+        DownloadTaxonomy::displayITISDownload($dbt,$taxonomy,$q,$s);
     } else { 
-        DownloadTaxonomy::displayPBDBDownload($dbt,$q,$s);
+        DownloadTaxonomy::displayPBDBDownload($dbt,$taxonomy,$q,$s);
     }
                                               
     print $hbo->stdIncludes($PAGE_BOTTOM);

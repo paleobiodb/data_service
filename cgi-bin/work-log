@@ -1,0 +1,37 @@
+Cladogram.pm			NEEDS TESTING
+Classification.pm		*** WORKING ***
+Collection.pm
+CollectionQuery.pm
+Confidence.pm			NEEDS TESTING
+Curve.pm			NEEDS TESTING
+DBTransactionManager.pm		n/a
+DataQuery.pm
+Download.pm			AJ: line 2290
+DownloadTaxonomy.pm
+Ecology.pm
+FossilRecord.pm			AJ: do we need to update this?
+HTMLBuilder.pm			n/a
+Images.pm			NEEDS TESTING
+Map.pm				NEEDS TESTING
+Measurement.pm			AJ: explain getMassEstimates()
+Neptune.pm			n/a
+Opinion.pm			*** WORKING ***
+PrintHierarchy.pm		NEEDS TESTING
+Reclassify.pm			NEEDS TESTING
+Reference.pm			n/a
+Report.pm			NEEDS TESTING
+Review.pm			NEEDS TESTING
+SanityCheck.pm			NEEDS TESTING
+Strata.pm			NEEDS TESTING
+TaxaCache.pm			READY TO BE REMOVED
+Taxon.pm			REMOVED
+TaxonEdit.pm			*** WORKING ***
+TaxonInfo.pm			*** WORKING ***
+Taxonomy.pm			IN PROGRESS
+TaxonQuery.pm
+TaxonTrees.pm			NEEDS TESTING
+TreeQuery.pm
+TypoChecker.pm			NEEDS TESTING
+bridge.pl			*** WORKING ***
+dinosaurs.pl
+hierarchy.pl

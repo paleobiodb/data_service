@@ -3,7 +3,7 @@ package Download;
 use PBDBUtil;
 use Classification;
 use TimeLookup;
-use TaxonInfo;
+use Taxonomy;
 use Validation;
 use Ecology;
 use Taxon;
