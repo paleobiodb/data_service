@@ -1000,6 +1000,19 @@ sub json_clean {
 }
 
 
+# generateURN ( record_no, record_type )
+# 
+# Given a record number and record type, generate a URN.  The format is:
+# "urn:paleodb.org:<record_type>:<record_no>".
+
+sub generateURN {
+    
+    my ($record_no, $record_type) = @_;
+    
+    return "urn:paleodb.org:$record_type:$record_no";
+}
+
+
 # generateAttribution ( )
 # 
 # Generate an attribution string for the given record.  This relies on the
