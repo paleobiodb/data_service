@@ -26,7 +26,16 @@ For an explanation of the table structure, see L<Taxonomy.pm|./Taxonomy.pm>.
 
 package TaxonTrees;
 
-# Controls for debug messages
+# Modules needed
+
+use Carp qw(carp croak);
+use Try::Tiny;
+use Text::JaroWinkler qw(strcmp95);
+
+use strict;
+
+
+# Controlling variables for debug messages
 
 our $MSG_TAG = 'unknown';
 our $MSG_LEVEL = 0;
@@ -35,7 +44,7 @@ our $MSG_LEVEL = 0;
 
 our (@TREE_TABLE_LIST) = ("taxon_trees");
 our (%SUPPRESS_TABLE) = ("taxon_trees" => "suppress_opinions");
-our (%SEARCH_TABLE) = ("taxon_trees" => "name_search");
+our (%SEARCH_TABLE) = ("taxon_trees" => "taxon_search");
 
 our $OPINION_CACHE = "order_opinions";
 
@@ -61,15 +70,6 @@ our $CLASS_TEMP = "class_aux";
 our $PARENT_TEMP = "parent_aux";
 our $GENUS_TEMP = "genus_aux";
 our $CHECK_TEMP = "check_aux";
-
-# Modules needed
-
-use Carp qw(carp croak);
-use Try::Tiny;
-use Text::JaroWinkler qw(strcmp95);
-
-use strict;
-
 
 # Variables and constants
 
@@ -1189,11 +1189,11 @@ sub createTempTables {
     
     $result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_TEMP");
     $result = $dbh->do("CREATE TABLE $SEARCH_TEMP
-			       (genus varchar(80),
-				sub smallint unsigned not null,
+			       (genus varchar(80) not null,
+				subgenus varchar(80) not null,
 				taxon_name varchar(80) not null,
-				orig_no int unsigned not null,
-				PRIMARY KEY (taxon_name, genus))");
+				taxon_no int unsigned not null,
+				UNIQUE KEY (taxon_name, genus, subgenus))");
     
     return;
 }
@@ -2791,47 +2791,49 @@ sub computeSearchTable {
     logMessage(2, "    adding higher taxa");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
-		SELECT null, 0, taxon_name, orig_no FROM $AUTH_TABLE
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT null, null, taxon_name, taxon_no
+		FROM $AUTH_TABLE
 		WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
     # The subgenera are a bit trickier, because most (but not all) are named
     # as "Genus (Subgenus)".  The following expression will extract the
-    # subgenus name from this pattern, and will also properly treat taxa
-    # without a subgenus component by simply returning the whole name.
+    # subgenus name from this pattern, and will also properly treat the
+    # (incorrect) names that lack a subgenus component by simply returning the
+    # whole name.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
-		SELECT null, 0, trim(trailing ')' from substring_index(taxon_name,'(',-1)),
-			taxon_no FROM $AUTH_TABLE
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT substring_index(taxon_name, ' ', 1), null,
+			trim(trailing ')' from substring_index(taxon_name,'(',-1)),
+			taxon_no
+		FROM $AUTH_TABLE
 		WHERE taxon_rank = 'subgenus'");
     
     # For species and sub-species, we split off the first component of each
     # name as the genus name and add the resulting entries to the table.  Note
-    # that some species names also have a subgenus component, which must be
-    # skipped.
+    # that some species names also have a subgenus component which has to be
+    # split out as well.
     
     logMessage(2, "    adding species by name");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
-		SELECT substring_index(taxon_name, ' ', 1), 0,
-			if(taxon_name like '%(%',
-				trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-				trim(substring(taxon_name, locate(' ', taxon_name)+1))),
-			orig_no
-		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')");
-    
-    # For those species names which have a subgenus component, split it out
-    # too and create an entry for that.
-    
-    $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
-		SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1), 1,
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT substring_index(taxon_name, ' ', 1),
+			substring_index(substring_index(taxon_name, '(', -1), ')', 1),
 			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-			orig_no
+			taxon_no
 		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')
 			and taxon_name like '%(%'");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT substring_index(taxon_name, ' ', 1),
+			null,
+			trim(substring(taxon_name, locate(' ', taxon_name)+1)),
+			taxon_no
+		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')
+			and taxon_name not like '%(%'");
     
     # Now comes the really tricky part.  We want to list each species and
     # subspecies under both its genus and subgenus (if any) and also under any
@@ -2856,15 +2858,15 @@ sub computeSearchTable {
     $result = $dbh->do("
 		INSERT IGNORE INTO $GENUS_TEMP (taxon_no, genus_no)
 		SELECT a.taxon_no, ifnull(p1.orig_no, ifnull(p2.orig_no, p3.orig_no))
-		FROM $AUTH_TABLE a JOIN $TREE_TEMP t using (orig_no)
-			LEFT JOIN $TREE_TEMP t1 on t1.orig_no = t.parent_no
-			LEFT JOIN $AUTH_TABLE p1 on p1.taxon_no = t1.spelling_no
+		FROM $AUTH_TABLE as a JOIN $TREE_TEMP as t using (orig_no)
+			LEFT JOIN $TREE_TEMP as t1 on t1.orig_no = t.parent_no
+			LEFT JOIN $AUTH_TABLE as p1 on p1.taxon_no = t1.spelling_no
 				and p1.taxon_rank = 'genus'
-			LEFT JOIN $TREE_TEMP t2 on t2.orig_no = t1.parent_no
-			LEFT JOIN $AUTH_TABLE p2 on p2.taxon_no = t2.spelling_no
+			LEFT JOIN $TREE_TEMP as t2 on t2.orig_no = t1.parent_no
+			LEFT JOIN $AUTH_TABLE as p2 on p2.taxon_no = t2.spelling_no
 				and p2.taxon_rank = 'genus'
-			LEFT JOIN $TREE_TEMP t3 on t3.orig_no = t2.parent_no
-			LEFT JOIN $AUTH_TABLE p3 on p3.taxon_no = t3.spelling_no
+			LEFT JOIN $TREE_TEMP as t3 on t3.orig_no = t2.parent_no
+			LEFT JOIN $AUTH_TABLE as p3 on p3.taxon_no = t3.spelling_no
 				and p3.taxon_rank = 'genus'
 		WHERE a.taxon_rank in ('species', 'subspecies') and
 			(p1.taxon_no is not null or
@@ -2877,31 +2879,33 @@ sub computeSearchTable {
     $result = $dbh->do("
 		INSERT IGNORE INTO $GENUS_TEMP (taxon_no, genus_no)
 		SELECT a.taxon_no, ifnull(p1.orig_no, p2.orig_no)
-		FROM $AUTH_TABLE a JOIN $TREE_TEMP t using (orig_no)
-			LEFT JOIN $TREE_TEMP t1 on t1.orig_no = t.parent_no
-			LEFT JOIN $AUTH_TABLE p1 on p1.taxon_no = t1.spelling_no
+		FROM $AUTH_TABLE as a JOIN $TREE_TEMP as t using (orig_no)
+			LEFT JOIN $TREE_TEMP as t1 on t1.orig_no = t.parent_no
+			LEFT JOIN $AUTH_TABLE as p1 on p1.taxon_no = t1.spelling_no
 				and p1.taxon_rank = 'subgenus'
-			LEFT JOIN $TREE_TEMP t2 on t2.orig_no = t1.parent_no
-			LEFT JOIN $AUTH_TABLE p2 on p2.taxon_no = t2.spelling_no
+			LEFT JOIN $TREE_TEMP as t2 on t2.orig_no = t1.parent_no
+			LEFT JOIN $AUTH_TABLE as p2 on p2.taxon_no = t2.spelling_no
 				and p2.taxon_rank = 'subgenus'
 		WHERE a.taxon_rank in ('species', 'subspecies') and
 			(p1.taxon_no is not null or
 			 p2.taxon_no is not null)");
     
-    # Now that we have these tables, we can add an additional entry for each
-    # species under all genera and subgenera that are synonymous with any of
-    # these.  We use the same expressions as above to split out the subgenus
-    # part (if any) in the parent taxon name and split off the genus/subgenus
-    # part of the species name.
+    # Now that we have this auxiliary table, we can add an additional entry
+    # for each species under all genera and subgenera that are synonymous with
+    # its current genus and/or subgenus.  We use the same expressions as above
+    # to split out the various parts of the species taxon and the genus or
+    # subgenus names.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, sub, taxon_name, orig_no)
-		SELECT trim(trailing ')' from substring_index(p.taxon_name,'(',-1)),
-			if(p.taxon_rank = 'subgenus', 1, 0),
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT substring_index(p.taxon_name, ' ', 1),
+			if(p.taxon_name like '%(%',
+			   substring_index(substring_index(p.taxon_name, '(', -1), ')', 1),
+			   null),
 			if(a.taxon_name like '%(%',
 				trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
 				trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1))),
-			a.orig_no
+			a.taxon_no
 		FROM $GENUS_TEMP as g JOIN $AUTH_TABLE as a using (taxon_no)
 			JOIN $TREE_TEMP as t1 on t1.orig_no = g.genus_no
 			JOIN $TREE_TEMP as t2 on t2.synonym_no = t1.synonym_no
@@ -2931,8 +2935,8 @@ sub updateSearchTable {
     logMessage(2, "    adding higher taxa");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $search_table (genus, sub, taxon_name, orig_no)
-		SELECT null, 0, taxon_name, orig_no
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT null, null, taxon_name, taxon_no
 		FROM $AUTH_TABLE JOIN $TREE_TEMP using (orig_no)
 		WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
@@ -2942,8 +2946,9 @@ sub updateSearchTable {
     # without a subgenus component by simply returning the whole name.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $search_table (genus, sub, taxon_name, orig_no)
-		SELECT null, 0, trim(trailing ')' from substring_index(taxon_name,'(',-1)),
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT substring_index(taxon_name, ' ', 1), null,
+			trim(trailing ')' from substring_index(taxon_name,'(',-1)),
 			taxon_no
 		FROM $AUTH_TABLE JOIN $TREE_TEMP using (orig_no)
 		WHERE taxon_rank = 'subgenus'");
@@ -2956,28 +2961,27 @@ sub updateSearchTable {
     logMessage(2, "    adding species by name");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $search_table (genus, sub, taxon_name, orig_no)
-		SELECT substring_index(taxon_name, ' ', 1), 0,
-			if(taxon_name like '%(%',
-				trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-				trim(substring(taxon_name, locate(' ', taxon_name)+1))),
-			orig_no
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT substring_index(taxon_name, ' ', 1),
+			substring_index(substring_index(taxon_name, '(', -1), ')', 1)
+			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+			taxon_no
 		FROM $AUTH_TABLE JOIN $TREE_TEMP using (orig_no)
-		WHERE taxon_rank in ('species', 'subspecies')");
-    
-    # For those species names which have a subgenus component, split it out
-    # too and create an entry for that.
+		WHERE taxon_rank in ('species', 'subspecies')
+			and taxon_name like '%(%'");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $search_table (genus, sub, taxon_name, orig_no)
-		SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1), 1,
-			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-			orig_no
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		SELECT substring_index(taxon_name, ' ', 1),
+			null,
+			trim(substring(taxon_name, locate(' ', taxon_name)+1),
+			taxon_no
 		FROM $AUTH_TABLE JOIN $TREE_TEMP using (orig_no)
-		WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
+		WHERE taxon_rank in ('species', 'subspecies')
+			and taxon_name not like '%(%'");
     
-    # We will wait until the next table rebuild to add in entries for
-    # synonymous genera and subgenera.
+    # We will wait until the next table rebuild to add in entries based on the
+    # hierarchy for synonymous genera and subgenera.
     
     # We can stop here when debugging.
     
@@ -3000,8 +3004,7 @@ sub activateNewTables {
     
     my $result;
     
-    logMessage(2, "activating tables '$tree_table', '$suppress_table',");
-    logMessage(2, "  and '$search_table' (g)");
+    logMessage(2, "activating tables '$tree_table', '$suppress_table', and '$search_table' (g)");
     
     # Compute the backup names
     

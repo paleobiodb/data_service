@@ -254,7 +254,7 @@ sub new {
     
     my $self = { dbh => $dbh, 
 		 tree_table => $table_name,
-		 search_table => $SEARCH_TABLE{$table_name};
+		 search_table => $TaxonTrees::SEARCH_TABLE{$table_name},
 		 auth_table => $TaxonTrees::AUTH_TABLE,
 		 opinion_table => $TaxonTrees::OPINION_CACHE };
     
@@ -264,18 +264,110 @@ sub new {
 }
 
 
-# This expression lists the fields that will be returned as part of a Taxon object.
+# The following expressions list the various sets of fields that will be
+# returned as part of a Taxon object:
 
-our ($INFO_EXPR) = "a.taxon_name, a.taxon_no, a.taxon_rank, a.common_name, a.orig_no, o.status, 
-a.reference_no, t.spelling_no, t.synonym_no, t.parent_no, t.kingdom";
+# The "basic" fields are always returned.
+
+our ($BASIC_FIELDS) = "a.taxon_name, a.taxon_no, a.taxon_rank, a.common_name, a.extant, a.orig_no, o.status, a.reference_no";
+
+# The "attribution" fields are returned additionally if we are asked for taxon
+# attribution.
+
+our ($ATTR_FIELDS) = ", if(a.refauth, r.author1last, a.author1last) as a_al1, if(a.refauth, r.author2last, a.author2last) as a_al2, if(a.refauth, r.otherauthors, a.otherauthors) as a_ao, if(a.refauth, r.pubyr, a.pubyr) as a_pubyr";
+
+# The "old attribution" fields are the same but under the names expected by the
+# old code.
+
+our ($OLDATTR_FIELDS) = ", if(a.refauth, r.author1last, a.author1last) as author1last, if(a.refauth, r.author2last, a.author2last) as author2last, if(a.refauth, r.otherauthors, a.otherauthors) as otherauthors, if(a.refauth, r.pubyr, a.pubyr) as pubyr";
+
+# The "reference" fields are returned additionally if we are asked for the
+# reference for each taxon.
+
+our ($REF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
+
+# The "link" fields are returned additionally if we are asked to show how this
+# taxon relates to others.
+
+our ($LINK_FIELDS) = ", t.spelling_no, t.synonym_no, t.parent_no";
+
+# The "lft" fields are "lft" and "rgt".  They delineate each taxon's position
+# in the hierarchy.
+
+our ($LFT_FIELDS) = ", t.lft, t.rgt";
+
+# The "kingdom" field is returned if we are asked for that information.
+
+our ($KINGDOM_FIELDS) = ", t.kingdom";
 
 
 =head2 Object Methods
 
+The following methods (except for C<getTaxonIdTable>) can return either a list
+of Taxon objects or a list of taxon_no values.  Each of these takes an options
+hash as its last argument.  The options can include the following, plus any
+options listed under the individual method headings:
+
+=over 4
+
+=item include
+
+This option allows you to specify additional fields to be included in the
+resulting Taxon objects.  Its value should be a list of one or more of
+the following strings:
+
+=over 4
+
+=item attr
+
+Includes the fields 'a_al1', 'a_al2', 'a_ao' and 'a_pubyr', which provide the
+last names of the authors of the taxon and the year in which the taxon was
+first published.
+
+=item oldattr
+
+Includes the fields 'author1last', 'author2last', 'otherauthors' and 'pubyr',
+which provide the last names of the authors of the taxon and the year in which
+the taxon was first published.  These fields contain the same data as with
+'attr', but under the names expected by the old code.
+
+=item ref
+
+Includes the fields 'r_ai1', 'r_al1', 'r_ai2', 'r_al2', 'r_oa', 'r_pubyr',
+'r_reftitle', 'r_pubtitle', 'r_editors', 'r_pubvol', 'r_pubno', 'r_fp', and
+'r_lp'.  These provide the first and last names of the authors of the reference
+in which the taxon was first published, along with the publication information.
+
+=item link
+
+Includes the fields 'spelling_no', 'synonym_no', and 'parent_no', which
+indicate how the taxon is related to the rest of this taxonomic hierarchy.
+
+=item lft
+
+Includes the fields 'lft' and 'rgt', which delineates each taxon's position in
+the hierarchy.
+
+=item kingdom
+
+Includes the field 'kingdom', indicating the kingdom of life into which this
+taxon is placed.
+
+=back
+
+=item id
+
+If this option is specified, a list of distinct taxon_no values will be
+returned instead of a list of Taxon objects.  In that case, the 'include'
+option is ignored.
+
+=back
+
+
 =head3 getTaxon ( taxon_no, options )
 
 Returns a Taxon object corresponding to the given taxon_no.  This is a
-convenience routine that calls getRelatedTaxon with the relationship 'self'.
+convenience routine that calls C<getRelatedTaxon> with the relationship 'self'.
 
 =cut
 
@@ -289,14 +381,18 @@ sub getTaxon {
 
 =head3 getTaxaByName ( name, options )
 
-If this taxonomy contains one or more spellings matching the given name,
-returns a list of objects of class C<Taxon>.  If no matching taxa are found,
-returns the empty list.  If called in scalar context, returns the first 
-taxon found.  The name may include the SQL wildcards % and _.
+Returns a list of objects of class C<Taxon> representing all concepts in this
+taxonomy having one or more spellings which match the given name.  If no
+matching taxa are found, returns the empty list.  If called in scalar context,
+returns the first taxon found.  The name may include the SQL wildcard
+characters % and _.  Any periods appearing in the name are also treated as
+wildcards of the % type.
 
     @taxa = $taxonomy->getTaxaByName('Ficus', { kingdom => 'metazoa' });
+    @taxa = $taxonomy->getTaxaByName('F. bernardi');
 
-Options include:
+If the option 'id' is specified, returns a list of taxon identifiers
+instead.  Options include those specified above, plus:
 
 =over 4
 
@@ -317,9 +413,37 @@ If 'valid', only valid taxa which are not junior synonyms are returned.  If
 taxa are returned.  If 'all', all matching taxa are returned.  Defaults to
 'all'.
 
+=item exact
+
+This item is only relevant for species names.  If specified, the genus portion
+of the name is not matched against subgenera.
+
+=item common
+
+If specified, the name is matched against the common name of teach taxon as
+well as the scientific name.
+
+=item order
+
+If specified, the list of names is ordered by the specified criteria.  If
+'.desc' is appended to the value, they are ranked in descending order.
+Otherwise, they are ranked in ascending order.  Values include:
+
+=over 4
+
+=item name
+
+Taxa are ordered alphabetically by name
+
+=item size
+
+Taxa are ordered by size (number of descendants).
+
+=back
+
 =item select
 
-This option determines how the matching taxa are selected.  The possible
+This option determines how taxonomic concepts are treated.  The possible
 values are as follows:
 
 =over 4
@@ -342,11 +466,6 @@ Returns one Taxon object for each matching spelling.
 
 =back
 
-=item id
-
-If this option is specified, a list of (distinct) taxon_no values will be
-returned instead of a list of Taxon objects.
-
 =back
 
 =cut
@@ -365,14 +484,6 @@ sub getTaxaByName {
 	carp "taxon name is undefined or empty";
 	return;
     }
-    
-    # Prepare to fetch the requested information.
-    
-    my $dbh = $self->{dbh};
-    my $tree_table = $self->{tree_table};
-    my $search_table = $self->{search_table};
-    my $auth_table = $self->{auth_table};
-    my $opinion_table = $self->{opinion_table};
     
     # Set option defaults.
     
@@ -395,24 +506,48 @@ sub getTaxaByName {
     my (@filter_list, @param_list);
     my ($genus, $subgenus, $species, $subspecies, $search_name, $search_rank);
     
-    if ($taxon_name =~ /^([A-Za-z.%]+)(?:\s+\(([A-Za-z.%]+)\))?(?:\s+([a-z.%]+))?(?:\s+([a-z.%]+))?/)
+    # If we were given an array or hash of names, simply check each of them
+    # with no special searching.
+    
+    if ( ref $taxon_name eq 'ARRAY' or ref $taxon_name eq 'HASH' )
     {
-        $genus = $1 if ($1);
-        $subgenus = $2 if ($2);
-        $species = $3 if ($3);
-        $subspecies = $4 if ($4);
+	my @name_list = (ref $taxon_name eq 'ARRAY' ? @$taxon_name : keys %$taxon_name);
+	
+	# take out everything except alphabetic characters and spaces
+	tr{a-zA-Z}{}cd foreach @name_list;
+	# join the names together into a single expression
+	push @filter_list, "a.taxon_name in ('" . join("','", @name_list) . "')";
+    }
+    
+    elsif ( ref $taxon_name eq 'HASH' )
+    {
+	# take out everything except alphabetic characters and spaces
+	tr{a-zA-Z}{}cd foreach keys %$taxon_name;
+	# join the names together into a single expression
+	push @filter_list, "a.taxon_name in ('" . join("','", keys %$taxon_name) . "')";
+    }
+    
+    # Otherwise, try to parse the taxon name according to the usual rules.
+    
+    elsif ($taxon_name =~ /^([A-Za-z.%]+)(?:\s+\(([A-Za-z.%]+)\))?(?:\s+([a-z.%]+))?(?:\s+([a-z.%]+))?/)
+    {
+        $genus = $1;
+        $subgenus = $2 if defined $2;
+        $species = $3 if defined $3;
+        $subspecies = $4 if defined $4;
 	
 	$genus =~ s/\./%/g;
-	$subgenus =~ s/\./%/g;
-	$species =~ s/\./%/g;
-	$subspecies =~ s/\./%/g;
+	$subgenus =~ s/\./%/g if defined $subgenus;
+	$species =~ s/\./%/g if defined $species;
+	$subspecies =~ s/\./%/g if defined $subspecies;
 	
-	# If we have a multi-component name which is not a subgenus name, then
-	# it's a species name.
+	# If the search string specifies a species, then we look for that
+	# name.  We add terms as appropriate to select the specified genus and
+	# subgenus if any.
 	
 	if ( defined $species )
 	{
-	    push @filter_list, 'a.search_name like ?';
+	    push @filter_list, 's.taxon_name like ?';
 	    push @param_list, defined $subspecies ? "$species $subspecies"
 					 : $species;
 	    
@@ -421,27 +556,42 @@ sub getTaxaByName {
 	    
 	    if ( defined $subgenus )
 	    {
-		push @filter_list, 'a.search_genus like ?';
-		push @param_list, $genus;
-		push @filter_list, 'a.search_subgenus like ?';
-		push @param_list, $subgenus;
+		if ( $subgenus ne '%' )
+		{
+		    push @filter_list, 's.genus like ?';
+		    push @param_list, $genus;
+		}
+		if ( $genus ne '%' )
+		{
+		    push @filter_list, 's.subgenus like ?';
+		    push @param_list, $subgenus;
+		}
 	    }
 	    
-	    # If the genus was just specified as '%', do nothing because we
-	    # want to find all matching species names no matter what the genus.
+	    # If the genus was just specified as '%', no clause is needed
+	    # because we want to find all matching species names no matter
+	    # what the genus.
 	    
 	    elsif ( $genus eq '%' )
 	    {
 	    }
 	    
-	    # Otherwise, we match the specified genus against both the
-	    # "search_genus" and "search_subgenus" fields.  This is because
-	    # the user may not know whether the genus they are specifying is
-	    # actually a subgenus.
+	    # Otherwise, if the option "exact" was specified, we match the
+	    # specified genus solely against the genus field.
+	    
+	    elsif ( $options->{exact} )
+	    {
+		push @filter_list, 's.genus like ?';
+		push @param_list, $genus;
+	    }
+	    
+	    # Otherwise, we match the specified genus against both the "genus"
+	    # and "subgenus" fields.  This is because the user may not know
+	    # whether the genus they are specifying is actually a subgenus.
 	    
 	    else
 	    {
-		push @filter_list, '(a.search_genus like ? or a.search_subgenus like ?)';
+		push @filter_list, '(s.genus like ? or s.subgenus like ?)';
 		push @param_list, $genus, $genus;
 	    }
 	}
@@ -451,19 +601,20 @@ sub getTaxaByName {
 	
 	elsif ( defined $subgenus )
 	{
-	    push @filter_list, 'a.search_name like ?';
+	    push @filter_list, 's.taxon_name like ?';
 	    push @param_list, $subgenus;
-	    push @filter_list, 'a.search_genus like ?';
+	    push @filter_list, 's.genus like ?';
 	    push @param_list, $genus;
+	    push @filter_list, "a.taxon_rank = 'subgenus'";
 	}
 	
-	# Otherwise, we were given a single name, so just look for it in the
-	# search_name field.  Of course, in this case, we should filter out
+	# Otherwise, we were given a single name, so we just look for it in
+	# the search_name field.  Of course, in this case, we should exclude
 	# species and subspecies matches.
 	
 	else
 	{
-	    push @filter_list, 'a.search_name like ?';
+	    push @filter_list, 's.taxon_name like ?';
 	    push @param_list, $taxon_name;
 	    push @filter_list, "a.taxon_rank not in ('species', 'subspecies')";
 	}
@@ -476,7 +627,18 @@ sub getTaxaByName {
 	return;
     }
     
-    # Now, set the other filter parameters.
+    # If the option 'common' was specified, we also need to look in the
+    # common_name field.
+    
+    if ( $options->{common} )
+    {
+	my $clause = '((' . join(' and ', @filter_list) . ') or a.common_name like ?)';
+	@filter_list = ($clause);
+	push @param_list, $taxon_name;
+    }
+    
+    # Now, set the other filter parameters, plus query fields and tables,
+    # based on the specified options.
     
     if ( $status eq 'valid' )
     {
@@ -509,35 +671,86 @@ sub getTaxaByName {
 	push @filter_list, "t.kingdom = '$label'";
     }
     
+    my $query_fields = $BASIC_FIELDS;
+    my $query_tables = {};
+    
+    if ( defined $options->{include} )
+    {
+	($query_fields, $query_tables) = $self->generateQueryFields($options->{include});
+	
+	if ( defined $options->{order} and $options->{order} =~ /^size/ )
+	{
+	    $query_fields .= ", $LFT_FIELDS" unless $query_fields =~ /t\.lft/;
+	}
+    }
+    
+    my $order_expr = '';
+    
+    if ( defined $options->{order} )
+    {
+	my $direction = $options->{order} =~ /\.desc$/ ? 'DESC' : 'ASC';
+		
+	if ( $options->{order} =~ /^size/ )
+	{
+	    $order_expr = "ORDER BY t.rgt-t.lft $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^name/ )
+	{
+	    $order_expr = "ORDER BY a.taxon_name $direction";
+	}
+	
+	else
+	{
+	    croak "invalid value '$options->{order}' for option 'order'";
+	}
+    }
+    
     my $filter_expr = join(' and ', @filter_list);
     
     # If we are asked to return only taxon_no values, just do that.
     
     if ( $options->{id} )
     {
-	return $self->getTaxaIdsByName($taxon_name, $filter_expr, \@param_list, $select);
+	return $self->getTaxaIdsByName($filter_expr, \@param_list, $select, $order_expr);
     }
     
     # Otherwise prepare and execute the necessary SQL statement, and return the
     # resulting list.
     
+    my $dbh = $self->{dbh};
+    my $tree_table = $self->{tree_table};
+    my $search_table = $self->{search_table};
+    my $auth_table = $self->{auth_table};
+    my $opinion_table = $self->{opinion_table};
+    my $extra_tables = $query_tables->{ref} ? 
+	'LEFT JOIN refs as r on a.reference_no = r.reference_no' : '';
+    
     my $sql;
     
     if ( $select eq 'all' )
     {
-	$sql = "SELECT $INFO_EXPR
-		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+	$order_expr = 'ORDER BY if(a.taxon_no = t.spelling_no, 0, 1)'
+	    if $order_expr eq '';
+	
+	$sql = "SELECT $query_fields
+		FROM $search_table as s JOIN $auth_table as a using (taxon_no)
+			JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table o using (opinion_no)
-		WHERE $filter_expr";
+			$extra_tables
+		WHERE $filter_expr
+		$order_expr";
     }
     else
     {
-	$sql = "SELECT $INFO_EXPR
-		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
+	$sql = "SELECT $query_fields
+		FROM $search_table as s JOIN $auth_table as a2 using (taxon_no)
+			JOIN $tree_table as t using (orig_no)
 			JOIN $auth_table as a ON a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table o using (opinion_no)
+			$extra_tables
 		WHERE $filter_expr
-		GROUP BY a.orig_no";
+		GROUP BY a.orig_no $order_expr";
     }
     
     my $result_list = $dbh->selectall_arrayref($sql, { Slice => {} }, @param_list);
@@ -569,9 +782,390 @@ sub getTaxaByName {
 
 sub getTaxaIdsByName {
 
-    my ($self, $name, $filter_expr, $param_list, $select) = @_;
+    my ($self, $filter_expr, $param_list, $select, $order_expr) = @_;
     
     # Prepare to fetch the requested information.
+    
+    my $dbh = $self->{dbh};
+    my $tree_table = $self->{tree_table};
+    my $auth_table = $self->{auth_table};
+    my $search_table = $self->{search_table};
+    my $opinion_table = $self->{opinion_table};
+    
+    my $sql;
+    
+    if ( $select eq 'all' )
+    {
+	$order_expr = 'ORDER BY if(a.taxon_no = t.spelling_no, 0, 1)'
+	    if $order_expr eq '';
+	
+	$sql = "SELECT a.taxon_no
+		FROM $search_table as s JOIN $auth_table as a using (taxon_no)
+			JOIN $tree_table as t using (orig_no)
+			LEFT JOIN $opinion_table o using (opinion_no)
+		WHERE $filter_expr
+		$order_expr";
+    }
+    else
+    {
+	$sql = "SELECT distinct t.{$select}_no
+		FROM $search_table as s JOIN $auth_table as a using (taxon_no)
+			JOIN $tree_table as t using (orig_no)
+			LEFT JOIN $opinion_table o using (opinion_no)
+		WHERE $filter_expr
+		$order_expr";
+    }
+    
+    # Execute the SQL statement and return the result list (if there is one).
+    
+    my $result_list = $dbh->selectcol_arrayref($sql, {}, @$param_list);
+    
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	return @$result_list;
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+=head3 getTaxaBestMatch ( criteria, options )
+
+Returns a list of hashes representing those taxa whose names best match the
+specified criteria.  The criteria may be given either as a hash reference with
+the following fields, or as a list reference with six values in the following
+order:
+
+=over 4
+
+=item genus_reso
+
+=item genus_name
+
+=item subgenus_reso
+
+=item subgenus_name
+
+=item species_reso
+
+=item species_name
+
+=back
+
+Options include:
+
+=over 4
+
+=item id
+
+If specified, returns taxon identifiers instead of Taxon objects.
+
+=back
+
+=cut
+
+sub getTaxaBestMatch {
+
+    my ($self, $params, $options) = @_;
+    
+    # Start by parsing the parameters, which can be either a direct list or a
+    # hash ref.
+    
+    my ($genus_reso, $genus_name, $subgenus_reso, $subgenus_name, $species_reso, $species_name);
+    
+    if ( ref $params eq 'HASH' )
+    {
+        $genus_reso    = $params->{'genus_reso'} || "";
+        $genus_name    = $params->{'genus_name'} || "";
+        $subgenus_reso = $params->{'subgenus_reso'} || "";
+        $subgenus_name = $params->{'subgenus_name'} || "";
+        $species_reso  = $params->{'species_reso'} || "";
+        $species_name  = $params->{'species_name'} || "";
+    }
+    
+    elsif ( ref $params eq 'ARRAY' )
+    {
+        ($genus_reso,$genus_name,$subgenus_reso,$subgenus_name,$species_reso,$species_name) = @$params;
+    }
+    
+    else
+    {
+	croak "parameter must be either a hash ref or an array ref";
+    }
+    
+    # Set option defaults
+    
+    $options ||= {};
+    
+    # If $genus_reso is 'informal', or if $genus_name is empty, then we know
+    # right away that there won't be any matches.
+    
+    return if $genus_reso =~ /informal/;
+    return if $genus_name eq '';
+    
+    # A value of 'informal' should be treated the same as an empty value.  A
+    # species name that includes a period (such as 'sp.' or 'indet.') or
+    # any other non-letter character doesn't count either.
+    
+    $subgenus_name = '' if $subgenus_reso =~ /informal/;
+    $species_name = '' if $species_reso =~ /informal/ or $species_name !~ /^[a-z]+$/;
+    
+    # Now prepare to fetch the necessary information.
+    
+    my $dbh = $self->{dbh};
+    my $auth_table = $self->{auth_table};
+    my $search_table = $self->{search_table};
+    my ($genus_match, @genus_list);
+    my (@filter_list, @param_list);
+    
+    my $dbt;
+    
+    # We match genus against both genus and subgenus, and subgenus against
+    # both genus and subgenus, because genera and subgenera are often promoted
+    # or demoted.  What was a genus when the name was entered might now be a
+    # subgenus, or vice versa.
+    
+    if ( $subgenus_reso !~ /informal/ and $subgenus_name ne '' )
+    {
+	$genus_match = "in (?, ?)";
+	@genus_list = ($genus_name, $subgenus_name);
+    }
+    
+    else
+    {
+	$genus_match = "= ?";
+	@genus_list = ($genus_name);
+    }
+    
+    # If a species name was specified, we match on that.
+    
+    if ( $species_name ne '' )
+    {
+	push @filter_list, "(s.taxon_name = ? and (s.genus $genus_match or s.subgenus $genus_match))";
+	push @param_list, $species_name, @genus_list, @genus_list;
+    }
+    
+    # We also look for genera and sub-genera that match.
+    
+    push @filter_list, "(s.taxon_name $genus_match and a.taxon_rank in ('genus', 'subgenus'))";
+    push @param_list, @genus_list;
+    
+    # Now prepare and execute the query.  See ../scripts/stored_procedure.pl
+    # for the definition of 'compute_taxon_match'.
+    
+    my $filter_expr = join(' or ', @filter_list);
+    
+    my $sql = " SELECT a.taxon_no, a.taxon_name, a.orig_no, 
+			compute_taxon_match(a.taxon_name, ?, ?, ?) as match_level
+		FROM $auth_table as a JOIN $search_table as s using (taxon_no)
+		WHERE $filter_expr
+		HAVING match_level > 0
+		ORDER BY match_level DESC";
+    
+    my $matches = $dbh->selectall_arrayref($sql, { Slice => {} }, 
+					$genus_name, $subgenus_name, $species_name, @param_list);
+    
+    return unless defined $matches and @$matches > 0;
+    
+    # If the user requests a array, then return all matches that are in the same class.  The classes are
+    #  30: exact match, no need to return any others
+    #  20-29: species level match
+    #  10-19: genus level match
+    
+    if (wantarray)
+    {
+	my $best_match_class = int($matches->[0]{match_level}/10);
+	my @matches_in_class;
+	foreach my $row (@$matches) {
+	    my $match_class = int($row->{match_level}/10);
+	    if ($match_class >= $best_match_class) {
+		push @matches_in_class, $row;
+	    }
+	}
+	if ( $options->{id} )
+	{
+	    return map { $_->{taxon_no} } @matches_in_class;
+	}
+	else
+	{
+	    return @matches_in_class;
+	}
+    }
+
+    # If the user requests a scalar, only return the best match.  If the top
+    # two are homonyms, we need to check whether they are in the same concept.
+    
+    elsif ( scalar(@$matches) > 1 and $matches->[0]{taxon_name} eq $matches->[1]{taxon_name} )
+    {
+	# If the top two matches are in different concepts, return nothing.
+	if ( $matches->[0]{orig_no} != $matches->[1]{orig_no} )
+	{
+	    return;
+	}
+	# If the top two matches are both in the same concept, return the
+	# first if it's the original and the second otherwise.
+	elsif ( $matches->[1]{taxon_no} == $matches->[1]{orig_no} )
+	{
+	    return $options->{id} ? $matches->[1]{taxon_no} : $matches->[1];
+	}
+	else
+	{
+	    return $options->{id} ? $matches->[0]{taxon_no} : $matches->[0];
+	}
+    }
+    
+    # Otherwise, just return the top match.
+    
+    else
+    {
+	return $options->{id} ? $matches->[0]{taxon_no} : $matches->[0];
+    }
+}
+
+
+=head3 getTaxaByReference ( reference_no, options )
+
+Returns a list of objects of class C<Taxon> representing all taxa associated
+with the given reference.  If no matching taxa are found, returns the empty
+list.
+
+If the option 'id' is specified, returns a list of taxon identifiers
+instead.  Options include those specified above, plus:
+
+=over 4
+
+=item basis
+
+This option determines how the matching taxonomic concepts are found.  The
+possible values are as follows:
+
+=over 4
+
+=item authorities
+
+This is the default, and selects all entries in the C<authorities> table which
+are directly associated with the specified reference.
+
+=item opinions
+
+Selects all entries in the C<authorities> table which are associated with
+opinions that are in turn associated with the specified reference.
+
+=back
+
+=item rank
+
+Only return taxa of the specified rank.  Examples: family, genus.
+
+=item select
+
+This option determines how taxonomic concepts are treated.  The possible
+values are as follows:
+
+=over 4
+
+=item exact
+
+This is the default, and returns one Taxon object for each concept associated
+with the specified reference, representing the spelling actually associated
+with that reference.
+
+=item spelling
+
+Returns one Taxon object for each concept associated with the specified
+reference, representing the currently accepted spelling of that taxon (even if
+that is not the spelling associated with the reference).
+
+=item orig
+
+Returns one Taxon object for each concept which has a matching spelling,
+representing the original spelling of that concept (even if that is not the
+spelling associated with the reference).
+
+=back
+
+=back
+
+=cut
+
+sub getTaxaByReference {
+
+    my ($self, $reference_no, $options) = @_;
+    
+    # Check the arguments.  Carp a warning and return the empthy list if
+    # reference_no is not defined or is zero.
+    
+    unless ( defined $reference_no and $reference_no > 0 )
+    {
+	carp "reference_no is undefined or 0";
+	return;
+    }
+    
+    # Turn the parameter into a number
+    
+    $reference_no = $reference_no + 0;
+    
+    # Set option defaults.
+    
+    $options ||= {};
+    
+    my $select = defined $options->{select} ? lc $options->{select} : 'exact';
+    
+    unless ( $select eq 'exact' or $select eq 'spelling' 
+	     or $select eq 'orig' or $select eq 'trad' )
+    {
+	croak "invalid value '$options->{select}' for option 'select'";
+    }
+    
+    $select = 'trad' if $options->{trad} and $select eq 'spelling';
+    
+    my $basis = defined $options->{basis} ? lc $options->{basis} : 'authorities';
+    
+    # Set filter parameters and query fields based on the specified
+    # options.
+    
+    my (@filter_list, @param_list);
+    
+    if ( $basis eq 'authorities' )
+    {
+	push @filter_list, $select eq 'exact' ? "a.reference_no = ?" : "a2.reference_no = ?";
+	push @param_list, $reference_no;
+    }
+    
+    elsif ( $basis eq 'opinions' )
+    {
+	push @filter_list, "o.reference_no = ?";
+	push @param_list, $reference_no;
+    }
+    
+    my $query_fields = $BASIC_FIELDS;
+    my $query_tables = {};
+    
+    if ( defined $options->{rank} )
+    {
+	push @filter_list, $self->generateRankFilter($options->{rank});
+    }
+    
+    if ( defined $options->{include} )
+    {
+	($query_fields, $query_tables) = $self->generateQueryFields($options->{include});
+    }
+    
+    my $filter_expr = join(' and ', @filter_list);
+    
+    # If we are asked to return only taxon_no values, just do that.
+    
+    if ( $options->{id} )
+    {
+	return $self->getTaxaIdsByReference($filter_expr, \@param_list, $basis, $select);
+    }
+    
+    # Otherwise prepare the necessary SQL statement.  We don't need to worry
+    # about $query_tables, since currently the only possibiliy is the refs
+    # table and we are already joining to that.
     
     my $dbh = $self->{dbh};
     my $tree_table = $self->{tree_table};
@@ -580,19 +1174,118 @@ sub getTaxaIdsByName {
     
     my $sql;
     
-    if ( $select eq 'all' )
+    if ( $basis eq 'authorities' and $select eq 'exact' )
     {
-	$sql = "SELECT a.taxon_no
+	$sql = "SELECT $query_fields
 		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
-			LEFT JOIN $opinion_table o using (opinion_no)
+			LEFT JOIN refs as r using (reference_no)
+			LEFT JOIN opinions as o on t.opinion_no = o.opinion_no
 		WHERE $filter_expr";
     }
+    
+    elsif ( $basis eq 'authorities' )
+    {
+	$sql = "SELECT $query_fields
+		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
+			JOIN $auth_table as a on a.taxon_no = t.${select}_no
+			LEFT JOIN refs as r on a.reference_no = r.reference_no
+			LEFT JOIN opinions as o on t.opinion_no = o.opinion_no
+		WHERE $filter_expr";
+    }
+    
+    elsif ( $basis eq 'opinions' and $select eq 'exact' )
+    {
+	$query_fields =~ s/o\.status/if(a.taxon_no=o.child_spelling_no,o.status,null) as status/;
+	$query_fields .= ', if(a.taxon_no=o.child_spelling_no,o.parent_spelling_no,null) as parent_spelling_no';
+	
+	$sql = "SELECT $query_fields
+		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+			JOIN opinions as o on
+				(a.taxon_no = o.child_spelling_no or a.taxon_no = o.parent_spelling_no)
+			LEFT JOIN refs as r on (a.reference_no = r.reference_no)
+		WHERE $filter_expr";
+    }
+    
+    elsif ( $basis eq 'opinions' )
+    {
+	$query_fields =~ s/o\.status/if(a.taxon_no=o.child_spelling_no,o.status,null) as status/;
+	$query_fields .= ', if(a.taxon_no=o.child_spelling_no,o.parent_spelling_no,null) as parent_spelling_no';
+	
+	$sql = "SELECT $query_fields
+		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
+			JOIN $auth_table as a on a.taxon_no = t.${select}_no
+			JOIN opinions as o on
+				(a2.taxon_no = o.child_spelling_no or a2.taxon_no = o.parent_spelling_no)
+			LEFT JOIN refs as r on (a.reference_no = r.reference_no)
+		WHERE $filter_expr";
+	
+    }
+    
     else
     {
-	$sql = "SELECT distinct t.{$select}_no
+	croak "invalid basis '$basis'";
+    }
+    
+    # Now execute the statement, and return the resulting list if any.
+    
+    my $result_list = $dbh->selectall_arrayref($sql, { Slice => {} }, @param_list);
+    
+    if ( ref $result_list eq 'ARRAY' )
+    {
+	foreach my $t (@$result_list)
+	{
+	    bless $t, 'Taxon';
+	}
+	
+	return @$result_list;
+    }
+    
+    else
+    {
+	return;
+    }
+}
+
+
+sub getTaxaIdsByReference {
+
+    my ($self, $filter_expr, $param_list, $basis, $select) = @_;
+    
+    # Prepare to fetch the requested information.
+    
+    my $dbh = $self->{dbh};
+    my $tree_table = $self->{tree_table};
+    my $auth_table = $self->{auth_table};
+    my $search_table = $self->{search_table};
+    my $opinion_table = $self->{opinion_table};
+    
+    my $sql;
+    
+    if ( $basis eq 'authorities' and $select ne 'exact' )
+    {
+	$sql = "SELECT distinct t.${select}_no
 		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
-			LEFT JOIN $opinion_table o using (opinion_no)
 		WHERE $filter_expr";
+    }
+    
+    elsif ( $basis eq 'authorities' )
+    {
+	$sql = "SELECT a.taxon_no
+		FROM $auth_table as a
+		WHERE $filter_expr";
+    }
+    
+    elsif ( $basis eq 'opinions' )
+    {
+	$sql = "SELECT a.taxon_no
+		FROM $auth_table as a JOIN $opinion_table as o on
+				(a.taxon_no = o.child_spelling_no or a.taxon_no = o.parent_spelling_no)
+		WHERE $filter_expr";
+    }
+
+    else
+    {
+	croak "invalid basis '$basis'";
     }
     
     # Execute the SQL statement and return the result list (if there is one).
@@ -630,7 +1323,7 @@ Returns an object representing the original spelling of the base taxon.
 
 Returns an object representing the accepted spelling of the base taxon.  
 
-=item synonym
+=item senior
 
 Returns an object representing the senior synonym of the base taxon.
 
@@ -667,11 +1360,6 @@ spelling of the indicated taxonomic concept.
 Causes this routine to return the original spelling of the indicated taxonomic concept.
 
 =back
-
-=item id
-
-If this option is specified, a taxon_no value will be returned instead of a
-Taxon object.
 
 =back
 
@@ -712,11 +1400,6 @@ sub getRelatedTaxon {
     
     # Prepare to fetch the requested information.
     
-    my $dbh = $self->{dbh};
-    my $tree_table = $self->{tree_table};
-    my $auth_table = $self->{auth_table};
-    my $opinion_table = $self->{opinion_table};
-    
     my ($taxon, $select);
     
     $options ||= {};
@@ -730,6 +1413,18 @@ sub getRelatedTaxon {
     
     $select = 'trad' if $options->{trad} and $select eq 'spelling';
     
+    my $query_fields = $BASIC_FIELDS;
+    my $query_tables = {};
+    
+    if ( defined $options->{include} )
+    {
+	($query_fields, $query_tables) = $self->generateQueryFields($options->{include});
+    }
+    
+    # The relationship 'senior' selects the field 'synonym_no'.
+    
+    $rel = 'synonym' if $rel eq 'senior';
+    
     # If we were asked for just the taxon_no, do that.
     
     if ( $options->{id} )
@@ -737,14 +1432,24 @@ sub getRelatedTaxon {
 	return $self->getRelatedTaxonId($base_no, $rel, $select);
     }
     
+    # Otherwise, prepare and execute the relevant SQL query
+    
+    my $dbh = $self->{dbh};
+    my $tree_table = $self->{tree_table};
+    my $auth_table = $self->{auth_table};
+    my $opinion_table = $self->{opinion_table};
+    my $extra_tables = $query_tables->{ref} ? 
+	'LEFT JOIN refs as r on a.reference_no = r.reference_no' : '';
+    
     # Parameter self is quite easy to evaluate
     
     if ( $rel eq 'self' )
     {
 	$taxon = $dbh->selectrow_hashref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table as o using (opinion_no)
+			$extra_tables
 		WHERE a.taxon_no = ?", undef, $base_no + 0);
     }
     
@@ -753,10 +1458,11 @@ sub getRelatedTaxon {
     elsif ( $rel eq 'orig' or $rel eq 'spelling' or $rel eq 'trad' )
     {
 	$taxon = $dbh->selectrow_hashref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
 			JOIN $auth_table as a on a.taxon_no = t.${rel}_no
-			LEFT JOIN $opinion_table as o using (opinion_no) 
+			LEFT JOIN $opinion_table as o using (opinion_no)
+			$extra_tables
 		WHERE a2.taxon_no = ?", undef, $base_no + 0);
     }
     
@@ -766,11 +1472,12 @@ sub getRelatedTaxon {
     elsif ( $rel eq 'synonym' or $rel eq 'parent' )
     {
 	$taxon = $dbh->selectrow_hashref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.orig_no = t2.${rel}_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_tables
 		WHERE a2.taxon_no = ?", undef, $base_no + 0);
     }
     
@@ -779,12 +1486,13 @@ sub getRelatedTaxon {
     elsif ( $rel eq 'classification' )
     {
 	$taxon = $dbh->selectrow_hashref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $opinion_table as o2 using (opinion_no)
 			JOIN $tree_table as t on t.orig_no = o2.parent_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_tables
 		WHERE a2.taxon_no = ?", undef, $base_no + 0);
     }
     
@@ -874,20 +1582,20 @@ relationships are:
 
 =over 4
 
-=item spelling
+=item spellings
 
 Returns a list of objects representing the various spellings of the base
 taxa.
 
-=item synonym
+=item synonyms
 
 Returns a list of objects representing the various synonyms of the base taxa.
 
-=item senior
+=item seniors
 
 Returns a list of objects representing the senior synonyms of the base taxa.
 
-=item parent
+=item parents
 
 Returns a list of objects representing the immediate parents of the base taxa.
 
@@ -896,7 +1604,7 @@ Returns a list of objects representing the immediate parents of the base taxa.
 Returns a list of objects representing all taxa that contain any of the base
 taxa, from the kingdom level on down.
 
-=item child
+=item children
 
 Returns a list of objects representing the immediate children of the base taxon.
 
@@ -911,6 +1619,14 @@ Possible options are:
 
 =over 4 
 
+=item rank
+
+This option filters the list of resulting taxa, returning only those that
+match the given rank.  The value can be a single rank, or a list.  In the
+latter case, each item can be either a single rank, or a list of [min, max].
+This option is only valid for relationships 'parent', 'child', 'all_parents',
+and 'all_children'.
+
 =item status
 
 This option filters the list of resulting taxa according to taxonomic status.
@@ -920,13 +1636,11 @@ matching taxa are returned regardless of taxonomic or nomenclatural status.
 The default is 'valid' for the relationship 'parent' and 'child', and 'all'
 for 'synonym' and 'spelling'.
 
-=item rank
+=item exclude_self
 
-This option filters the list of resulting taxa, returning only those that
-match the given rank.  The value can be a single rank, or a list.  In the
-latter case, each item can be either a single rank, or a list of [min, max].
-This option is only valid for relationships 'parent', 'child', 'all_parents',
-and 'all_children'.
+If specified, then the base taxon or taxa are excluded from the returned
+list.  Otherwise (the default) they are included.  This option is only
+relevant for relationships 'all_parents' and 'all_children'.
 
 =item select
 
@@ -946,11 +1660,6 @@ Causes this routine to return the original spelling of each of the matching
 taxonomic concepts.
 
 =back
-
-=item id
-
-If this option is specified, a list of (distinct) taxon_no values will be
-returned instead of a list of Taxon objects.
 
 =back
 
@@ -1026,15 +1735,6 @@ sub getRelatedTaxa {
     
     my $rel = lc $parameter;
     
-    # Prepare to fetch the requested information
-    
-    my $dbh = $self->{dbh};
-    my $tree_table = $self->{tree_table};
-    my $auth_table = $self->{auth_table};
-    my $opinion_table = $self->{opinion_table};
-    
-    my ($result_list);
-    
     # Set option defaults.
     
     $options ||= {};
@@ -1069,13 +1769,13 @@ sub getRelatedTaxa {
     
     my (@filter_list, @param_list);
     
-    if ( $rel ne 'parent' and $base_no > 0 )
+    if ( $rel ne 'all_parents' and $base_no > 0 )
     {
 	push @filter_list, 'a2.taxon_no = ?';
 	push @param_list, $base_no;
     }
     
-    elsif ( $rel ne 'parent' )
+    elsif ( $rel ne 'all_parents' )
     {
 	push @filter_list, 'a2.taxon_no in (' . join(',', keys %base_nos) . ')';
     }
@@ -1103,8 +1803,29 @@ sub getRelatedTaxa {
 	push @filter_list, $self->generateRankFilter($options->{rank});
     }
     
+    if ( $options->{exclude_self} )
+    {
+	if ( $rel eq 'all_parents' )
+	{
+	    push @filter_list, "s.gen > 1";
+	}
+	
+	elsif ( $rel eq 'all_children' )
+	{
+	    push @filter_list, "t.lft != t2.lft";
+	}
+    }
+    
     my $filter_expr = join(' and ', @filter_list);
     $filter_expr = "WHERE $filter_expr" if $filter_expr ne '';
+    
+    my ($query_fields) = $BASIC_FIELDS;
+    my ($query_tables) = {};
+    
+    if ( defined $options->{include} )
+    {
+	($query_fields, $query_tables) = $self->generateQueryFields($options->{include});
+    }
     
     # If we were asked for just the taxon_no, do that.
     
@@ -1113,16 +1834,28 @@ sub getRelatedTaxa {
 	return $self->getRelatedTaxaIds($base_no || [keys %base_nos], $rel, $select, $filter_expr);
     }
     
+    # Otherwise, prepare and execute the relevant SQL query
+    
+    my $dbh = $self->{dbh};
+    my $tree_table = $self->{tree_table};
+    my $auth_table = $self->{auth_table};
+    my $opinion_table = $self->{opinion_table};
+    my $extra_tables = $query_tables->{ref} ?
+	'LEFT JOIN refs as r on a.reference_no = r.reference_no' : '';
+    
+    my ($result_list);
+    
     # For parameter 'spelling', make sure to return the currently accepted
     # spelling(s) first.
     
     if ( $rel eq 'spelling' )
     {
 	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $auth_table as a using (orig_no)
 			JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table as o using (opinion_no)
+			$extra_tables
 		$filter_expr
 		ORDER BY if(a.taxon_no = t.${select}_no, 0, 1)", 
 		{ Slice => {} }, @param_list);
@@ -1134,11 +1867,12 @@ sub getRelatedTaxa {
     elsif ( $rel eq 'synonym' )
     {
 	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t using (synonym_no)
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_tables
 		$filter_expr
 		ORDER BY if(a.orig_no = t.synonym_no, 0, 1)", 
 		{ Slice => {} }, @param_list);
@@ -1149,11 +1883,12 @@ sub getRelatedTaxa {
     elsif ( $rel eq 'senior' )
     {
 	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.orig_no = t2.synonym_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_tables
 		$filter_expr",
 		{ Slice => {} }, @param_list);
     }
@@ -1166,12 +1901,13 @@ sub getRelatedTaxa {
 	my $level_filter = $rel eq 'child' ? 'and t.depth = t2.depth + 1' : '';
 	
 	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
-			JOIN $tree_table as t on t.lft > t2.lft and t.lft <= t2.rgt
+			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
 				$level_filter
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_tables
 		$filter_expr
 		ORDER BY t.lft", 
 		{ Slice => {} }, @param_list);
@@ -1182,11 +1918,12 @@ sub getRelatedTaxa {
     elsif ( $rel eq 'parent' )
     {
 	$result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.orig_no = t2.parent_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_tables
 		$filter_expr",
 		{ Slice => {} }, @param_list);
     }
@@ -1245,10 +1982,11 @@ sub getRelatedTaxa {
 	    # need.
 	    
 	    $result_list = $dbh->selectall_arrayref("
-		SELECT $INFO_EXPR
+		SELECT $query_fields
 		FROM $tree_table as t JOIN $ANCESTRY_SCRATCH as s on s.orig_no = t.orig_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
+			$extra_tables
 		$filter_expr
 		ORDER BY t.lft",
 		{ Slice => {} });
@@ -1462,6 +2200,10 @@ base taxon, in order from kingdom level on down.
 Return a table containing the taxon_no of the base taxon and all of the taxa
 that it contains, as a preorder tree traversal.
 
+=item self
+
+Return a table containing just the given taxon numbers.
+
 =item all_taxa
 
 Return a table containing the taxon_no of every taxon in the database.  In
@@ -1477,6 +2219,12 @@ Valid options include:
 
 =over 4
 
+=item rank
+
+This option filters the list of resulting taxa, returning only those that
+match the given rank.  The value can be a single rank, or a list.  In the
+latter case, each item can be either a single rank, or a list of [min, max].
+
 =item status
 
 This option filters the list of resulting taxa according to taxonomic status.
@@ -1485,11 +2233,11 @@ returned.  If 'synonyms', only valid taxa and junior synonyms.  If 'all', all
 matching taxa are returned regardless of taxonomic or nomenclatural status.
 The default is 'valid'.
 
-=item rank
+=item exclude_self
 
-This option filters the list of resulting taxa, returning only those that
-match the given rank.  The value can be a single rank, or a list.  In the
-latter case, each item can be either a single rank, or a list of [min, max].
+If specified, then the base taxon or taxa are excluded from the returned
+table.  Otherwise (the default) they are included.  This option is only
+relevant for relationships 'all_parents' and 'all_children'.
 
 =item select
 
@@ -1643,6 +2391,19 @@ sub getTaxonIdTable {
 	push @filter_list, $self->generateRankFilter($options->{rank});
     }
     
+    if ( $options->{exclude_self} )
+    {
+	if ( $rel eq 'all_parents' )
+	{
+	    push @filter_list, "s.gen > 1";
+	}
+	
+	elsif ( $rel eq 'all_children' )
+	{
+	    push @filter_list, "t.lft != t2.lft";
+	}
+    }
+    
     my $filter_expr = join(' and ', @filter_list);
     $filter_expr = "WHERE $filter_expr" if $filter_expr ne '';
     
@@ -1774,6 +2535,16 @@ sub getTaxonIdTable {
 	    }
 	}
 	
+	# For relationship 'self', we just need to load the given taxon
+	# numbers into the table.
+	
+	elsif ( $rel eq 'self' )
+	{
+	    my $value_string = '(' . join('),(', keys %base_nos) . ')';
+	    
+	    $result = $dbh->do("INSERT INTO $table_name VALUES $value_string");
+	}
+	
 	else
 	{
 	    croak "invalid relationship '$parameter'";
@@ -1794,6 +2565,373 @@ sub getTaxonIdTable {
     
     return $table_name;
 }
+
+
+=head2 Other functions
+
+=head3 validName ( taxon_name, options )
+
+Returns true if the specified name is a valid taxon name, false otherwise.
+This function can be called either directly or as a method.
+
+    if ( $taxonomy->validName($name, { strict => 1 }) ) { ... }
+    if ( Taxonomy::validName($name, { strict => 1 }) ) { ... }
+
+The following options are available:
+
+=over 4
+
+=item strict
+
+If this option is specified, the name must contain nothing but Roman letters
+and spaces (with parentheses surrounding a subgenus qualification) and must
+strictly follow the letter case rules.  All names above species-level must
+begin with a single upper-case letter, while all species and subspecies names
+must be in lower case.  Name components must be separated by a single space.
+
+Otherwise, the "loose" rule is applied: spacing and case are ignored and
+periods and the % wildcard are allowed in the name.
+
+=back
+
+=cut
+
+sub validName {
+
+    # Start by parsing the argument list.  If the first argument is an object
+    # of class Taxonomy, ignore it.  This sub can be called either as a method
+    # or directly as a function.
+    
+    shift if ref $_[0] eq 'Taxonomy';
+    my ($name, $options) = @_;
+    $options = {} unless ref $options;
+    
+    # If the name matches the proper pattern, return true.
+    
+    if ( $options->{strict} )
+    {
+	return 1
+	if $name =~ /^[A-Z][a-z]+(?:\s\([A-Z][a-z]+\))?(?:\s[a-z]+)?(?:\s[a-z.]+)?/;
+    }
+    
+    else
+    {
+	return 1
+	if $name =~ /^\s*[a-z%.]+(?:\s*\([a-z%.]+\))?(?:\s+[a-z%.]+)?(?:\s+[a-z%.]+)?\s*/i;
+    }
+    
+    # Otherwise, return false.
+    
+    return undef;
+}
+
+
+=head3 splitName ( taxon_name )
+
+Splits the given name into the following components, some of which may be
+empty: genus, subgenus, species, subspecies.  Returns these four strings.
+This routine can be called either as a method or as a direct function.
+
+    ($g, $sg, $sp, $ssp) = $taxonomy->splitName($name);
+    ($g, $sg, $sp, $ssp) = Taxonomy::splitName($name);
+
+If the given name is not a valid taxonomic name according to the "loose" rules
+(see C<validName> above) then a list of four empty strings is returned.
+
+You should not use this function to check the validity of a taxon name.  Instead,
+use C<validName>.
+
+=cut
+
+sub splitTaxonName {
+
+    # Start by parsing the argument list.  If the first argument is an object
+    # of class Taxonomy, ignore it.  This sub can be called either as a method
+    # or directly as a function.
+    
+    shift if ref $_[0] eq 'Taxonomy';
+    my ($name) = @_;
+    
+    my ($genus,$subgenus,$species,$subspecies) = ("","","","");
+    
+    if ( $name =~ /^\s*([a-z%.]+)(?:\s\(([a-z%.]+)\))?(?:\s([a-z%.]+))?(?:\s([a-z%.]+))?/i )
+    {
+	$genus = $1 if ($1);
+	$subgenus = $2 if ($2);
+	$species = $3 if ($3);
+	$subspecies = $4 if ($4);
+    }
+    
+    return ($genus, $subgenus, $species, $subspecies);
+}
+
+
+=head3 guessTaxonRank ( name )
+
+Return the most likely rank for the given name, based upon its composition.
+This routine can be called either as a method or as a direct function.  If no
+rank can be guessed, returns undefined.
+
+=cut
+
+sub guessTaxonRank {
+
+    # Start by parsing the argument list.  If the first argument is an object
+    # of class Taxonomy, ignore it.  This sub can be called either as a method
+    # or directly as a function.
+    
+    shift if ref $_[0] eq 'Taxonomy';
+    my ($name) = @_;
+    
+    if ( $name =~ /^[a-z]+(\s*\([a-z]+\))?(\s+[a-z.]+)(\s+[a-z.])\s*$/i )
+    {
+        return "subspecies" if $4;
+	return "species" if $3;
+	return "subgenus" if $2;
+    }
+    
+    if ($name =~ /ini$/)	{
+        return "tribe";
+    } elsif ($name =~ /inae$/)	{
+        return "subfamily";
+    } elsif ($name =~ /idae$/)	{
+        return "family";
+    } elsif ($name =~ /eae$/)	{
+        return "family";
+    } elsif ($name =~ /oidea$/)	{
+        return "superfamily";
+    } elsif ($name =~ /ida$/)	{
+        return "order";
+    } elsif ($name =~ /formes$/)	{
+        return "order";
+    } elsif ($name =~ /ales$/)	{
+        return "order";
+    } else {
+	return;
+    }
+}
+
+
+# The following routines are used by the methods defined above to establish
+# the proper query fields and parameters.
+#
+# =========================================================================
+
+# generateQueryFields ( include_list )
+# 
+# The parameter 'include_list' can be either an array of strings or a
+# comma-separated concatenation of strings.  Possible values include: 'attr',
+# 'oldattr', 'ref', 'link', 'lft', 'kingdom'.
+# 
+# In any case, this routine returns a field list and a string which lists
+# extra joins to be included in the query.
+
+sub generateQueryFields {
+
+    my ($self, $include_list) = @_;
+    
+    # Return the default if our parameter is undefined.
+    
+    unless ( defined $include_list )
+    {
+	return $BASIC_FIELDS, '';
+    }
+    
+    # Next, turn $list into a reference to an actual list unless it already
+    # is one.
+    
+    unless ( ref $include_list )
+    {
+	my @strings = split(/\s*,\s*/, $include_list);
+	$include_list = \@strings;
+    }
+    
+    elsif ( ref $include_list ne 'ARRAY' )
+    {
+	croak "option 'include' must be either a string or an arrayref";
+    }
+    
+    # Now go through the list of strings and add the appropriate fields and
+    # tables for each.
+    
+    my $fields = $BASIC_FIELDS;
+    my %tables;
+    
+    foreach my $inc (@$include_list)
+    {
+	if ( $inc eq 'attr' )
+	{
+	    $fields .= $ATTR_FIELDS;
+	    $tables{ref} = 1;
+	}
+	
+	elsif ( $inc eq 'oldattr' )
+	{
+	    $fields .= $OLDATTR_FIELDS;
+	    $tables{ref} = 1;
+	}
+	
+	elsif ( $inc eq 'ref' )
+	{
+	    $fields .= $REF_FIELDS;
+	    $tables{ref} = 1;
+	}
+	
+	elsif ( $inc eq 'link' )
+	{
+	    $fields .= $LINK_FIELDS;
+	}
+	
+	elsif ( $inc eq 'lft' )
+	{
+	    $fields .= $LFT_FIELDS;
+	}
+	
+	elsif ( $inc eq 'kingdom' )
+	{
+	    $fields .= $KINGDOM_FIELDS;
+	}
+	
+	else
+	{
+	    carp "unrecognized value '$inc' in option 'include'";
+	}
+    }
+    
+    return ($fields, \%tables);
+}
+
+
+# generateQueryFields ( rank_list )
+# 
+# The parameter 'rank_list' can be either an array of strings or a
+# comma-separated concatenation of strings.  We return a list of filter
+# clauses which will select the specified rank or ranks.
+
+sub generateRankFilter {
+    
+    my ($self, $rank_list) = @_;
+    
+    # If the parameter is undefined, we return nothing (so the query goes
+    # ahead with no rank filtering).
+    
+    return unless defined $rank_list;
+    
+    # Next, we turn $rank_list into a reference to an actual list unless it
+    # already is one.
+    
+    unless ( ref $rank_list )
+    {
+	my @strings = split /\s*,\s*/, $rank_list;
+	$rank_list = \@strings;
+    }
+    
+    elsif ( ref $rank_list ne 'ARRAY' )
+    {
+	croak "option 'rank' must be either a string or an arrayref";
+    }
+    
+    # Now go through the list of ranks and collect up a list of distinct values.
+    # Ignore invalid ranks, but carp a warning about them.
+    
+    my %include_ranks;
+    
+    foreach my $rank (@$rank_list)
+    {
+	if ( $rank > 0 )
+	{
+	    $include_ranks{$rank} = 1;
+	}
+	
+	elsif ( $TAXONOMIC_RANK{$rank} )
+	{
+	    $include_ranks{$TAXONOMIC_RANK{$rank}} = 1;
+	}
+	
+	else
+	{
+	    carp "invalid rank '$rank'";
+	}
+    }
+    
+    # If we have at least one valid rank, generate a clause to select only
+    # taxa which have those ranks.
+    
+    if ( %include_ranks )
+    {
+	return 'a.taxon_rank in (' . join(',', keys %include_ranks) . ')';
+    }
+    
+    # Otherwise, if all of the ranks were invalid, generate a clause which
+    # will select no taxa (this is probably better than no filter at all in
+    # most cases).
+    
+    else
+    {
+	return 'a.taxon_rank = 0';
+    }
+}
+
+
+# ================================================================
+# 
+# This is here for reference.
+
+# This function takes two taxonomic names -- one from the occurrences/reids
+# table and one from the authorities table (broken down in genus (g), 
+# subgenus (sg) and species (s) components -- use splitTaxonName to
+# do this for entries from the authorities table) and compares
+# How closely they match up.  The higher the number, the better the
+# match.
+# 
+# < 30 but > 20 = species level match
+# < 20 but > 10 = genus/subgenus level match
+# 0 = no match
+sub computeMatchLevel {
+    my ($occ_g,$occ_sg,$occ_sp,$taxon_g,$taxon_sg,$taxon_sp) = @_;
+
+    my $match_level = 0;
+    return 0 if ($occ_g eq '' || $taxon_g eq '');
+
+    if ($taxon_sp) {
+        if ($occ_g eq $taxon_g && 
+            $occ_sg eq $taxon_sg && 
+            $occ_sp eq $taxon_sp) {
+            $match_level = 30; # Exact match
+        } elsif ($occ_g eq $taxon_g && 
+                 $occ_sp && $taxon_sp && $occ_sp eq $taxon_sp) {
+            $match_level = 28; # Genus and species match, next best thing
+        } elsif ($occ_g eq $taxon_sg && 
+                 $occ_sp && $taxon_sp && $occ_sp eq $taxon_sp) {
+            $match_level = 27; # The authorities subgenus being used a genus
+        } elsif ($occ_sg eq $taxon_g && 
+                 $occ_sp && $taxon_sp && $occ_sp eq $taxon_sp) {
+            $match_level = 26; # The authorities genus being used as a subgenus
+        } elsif ($occ_sg && $taxon_sg && $occ_sg eq $taxon_sg && 
+                 $occ_sp && $taxon_sp && $occ_sp eq $taxon_sp) {
+            $match_level = 25; # Genus don't match, but subgenus/species does, pretty weak
+        } 
+    } elsif ($taxon_sg) {
+        if ($occ_g eq $taxon_g  &&
+            $occ_sg eq $taxon_sg) {
+            $match_level = 19; # Genus and subgenus match
+        } elsif ($occ_g eq $taxon_sg) {
+            $match_level = 17; # The authorities subgenus being used a genus
+        } elsif ($occ_sg eq $taxon_g) {
+            $match_level = 16; # The authorities genus being used as a subgenus
+        } elsif ($occ_sg eq $taxon_sg) {
+            $match_level = 14; # Subgenera match up but genera don't, very junky
+        }
+    } else {
+        if ($occ_g eq $taxon_g) {
+            $match_level = 18; # Genus matches at least
+        } elsif ($occ_sg eq $taxon_g) {
+            $match_level = 15; # The authorities genus being used as a subgenus
+        }
+    }
+    return $match_level;
+}
+
 
 
 # #=head3 getHistory ( dbh, base_taxon, options )
@@ -1870,7 +3008,7 @@ sub getTaxonIdTable {
 #     my ($taxon_filter) = '(' . join(', ', @related_id_list) . ')';
     
 #     my (@taxa) = $dbh->selectall_arrayref("
-# 		SELECT $INFO_EXPR,
+# 		SELECT $BASIC_FIELDS,
 # 			if(a.pubyr IS NOT NULL AND a.pubyr != '', a.pubyr, r.pubyr) as pubyr
 # 		FROM $tree_table as t JOIN $AUTH_TABLE as a ON a.orig_no = t.orig_no
 # 			LEFT JOIN $OPINION_CACHE as o USING (opinion_no)
@@ -1929,6 +3067,32 @@ sub createTempTable {
     }
     
     return $table_name;
+}
+
+
+# ============================================================================= 
+# 
+# Accessor routines for objects of type Taxon
+
+package Taxon;
+
+use Carp (qw/carp croak/);
+
+# Universal accessor.  If we can't find the desired field, emit a warning and
+# return undefined.
+
+sub get {
+    my ($self, $fieldname) = @_;
+    
+    if ( exists $self->{$fieldname} )
+    {
+	return $self->{$fieldname};
+    }
+    else
+    {
+	carp "could not get field '$fieldname' for Taxon object";
+	return;
+    }
 }
 
 

@@ -9,7 +9,7 @@ use Ecology;
 use Taxon;
 use Data::Dumper;
 use DBTransactionManager;
-use TaxaCache;
+use Taxonomy;
 use CGI::Carp;
 use Person;
 use Measurement;
@@ -2295,6 +2295,7 @@ sub queryDatabase {
     if (@dataRows && $q->param("replace_with_ss") ne 'NO' &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
         if (%all_taxa) {
+	    my @taxon_nos 
             my $sql = "SELECT t.taxon_no,t.spelling_no,t.synonym_no,a.taxon_name,a.taxon_rank ".
                       "FROM $TAXA_TREE_CACHE t, authorities a ".
                       "WHERE t.synonym_no=a.taxon_no ".
@@ -3257,19 +3258,21 @@ sub createSpecimenPartsRows {
     my ($row,$q,$dbt,$occs_by_taxa) = @_;
     my @measurements = ();
     if ($q->param('output_data') eq 'collections' && $row->{'specimens_exist'}) {
-        @measurements = Measurement::getMeasurements($dbt,'collection_no'=>$row->{'collection_no'});
+        @measurements = Measurement::getMeasurements($dbt, $taxonomy, collection_no => $row->{'collection_no'});
     } elsif ($q->param('output_data') =~ /matrix/) {
-        @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$row->{'occurrence_list'});
+        @measurements = Measurement::getMeasurements($dbt, $taxonomy, occurrence_list => $row->{'occurrence_list'});
     } elsif ($q->param('output_data') =~ /occurrence/ && $row->{specimens_exist}) {
-        @measurements = Measurement::getMeasurements($dbt,'occurrence_no'=>$row->{'o.occurrence_no'});
+        @measurements = Measurement::getMeasurements($dbt, $taxonomy, occurrence_no => $row->{'o.occurrence_no'});
     } elsif ($q->param('output_data') eq 'genera') {
         my $genus_string = "$row->{'o.genus_name'}";
         if ($occs_by_taxa->{$genus_string} && @{$occs_by_taxa->{$genus_string}}) {
             if ($q->param('get_global_specimens')) {
                 # Note: will run into homonym issues till we figure out how to pass taxon_no(s)
-                @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
+                @measurements = Measurement::getMeasurements($dbt, $taxonomy, taxon_name => $genus_string,
+							     get_global_specimens => $q->param('get_global_specimens'));
             } else {
-                @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$occs_by_taxa->{$genus_string});
+                @measurements = Measurement::getMeasurements($dbt, $taxonomy, occurrence_list => 
+							     $occs_by_taxa->{$genus_string});
             }
         }
     } elsif ($q->param('output_data') eq 'species') {
@@ -3277,10 +3280,12 @@ sub createSpecimenPartsRows {
         if ($occs_by_taxa->{$genus_string} && @{$occs_by_taxa->{$genus_string}}) {
             if ($q->param('get_global_specimens')) {
                 # Note: will run into homonym issues till we figure out how to pass taxon_no(s)
-                @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
+                @measurements = Measurement::getMeasurements($dbt, $taxonomy, taxon_name => $genus_string,
+							     get_global_specimens => $q->param('get_global_specimens'));
             } else {
                 #print "OCC_LIST for $genus_string: ".join(", ",@{$occs_by_taxa->{$genus_string}})."<br>";
-                @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$occs_by_taxa->{$genus_string});
+                @measurements = Measurement::getMeasurements($dbt, $taxonomy, occurrence_list =>
+							     $occs_by_taxa->{$genus_string});
             }
         }
     } elsif ($q->param('output_data') eq 'specimens') {

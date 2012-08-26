@@ -1609,7 +1609,8 @@ sub fixMassEstimates	{
 		my @in_list = TaxonInfo::getAllSynonyms($dbt,$e);
 		my $sql = "UPDATE $TAXA_TREE_CACHE SET mass=NULL WHERE taxon_no IN (".join(',',@in_list).")";
 		$dbh->do($sql);
-		my @specimens = Measurement::getMeasurements($dbt,{'taxon_list'=>\@in_list,'get_global_specimens'=>1});
+		my @specimens = Measurement::getMeasurements($dbt, $taxonomy, taxon_list => \@in_list,
+							     get_global_specimens => 1);
 		if ( @specimens )	{
 			my $p_table = Measurement::getMeasurementTable(\@specimens);
 			my @m = Measurement::getMassEstimates($dbt,$e,$p_table);
@@ -1645,7 +1646,7 @@ sub displayOpinionChoiceForm {
         
         my $t = Taxon->new($dbt,$child_no);
         print "<div align=\"center\">";
-        print "<p class=\"pageTitle\">Which opinion about ".$t->taxonNameHTML()." do you want to edit?</p>\n";
+        print "<p class=\"pageTitle\">Which opinion about ".taxonNameHTML($t)." do you want to edit?</p>\n";
         
 	    print qq|<div class="displayPanel" style="padding: 1em; margin-left: 3em; margin-right: 3em;">\n|;
         print qq|<div align="left"><ul>|;
@@ -1955,6 +1956,20 @@ sub badNames	{
 	}
 	print "<br>\n<center><a href=\"$WRITE_URL?a=badNameForm\">Search again</a></center>\n";
 	print "</div>\n\n";
+}
+
+
+# return the taxonName for the initially specifed taxon.
+# but with proper italicization
+sub taxonNameHTML {
+    
+    my ($taxon_no) = @_;
+
+    if ($taxon_no->get('taxon_rank') =~ /(?:species|genus)$/) {
+		return "<i>" . $taxon_no->get('taxon_name') . "</i>";
+	} else {
+		return $taxon_no->get('taxon_name');	
+	}
 }
 
 

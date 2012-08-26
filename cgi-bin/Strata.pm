@@ -297,8 +297,11 @@ sub displayStrata {
     print $html;
 
     # Display age range/Show what collections are in it 
-    # Set this q parameter so processCollectionsSearch (called from doCollections) builds correct SQL query
-    print TaxonInfo::doCollections($dbt, $s, $dataRows, '' ,'', '','for_strata_module');
+
+    # Set this q parameter so processCollectionsSearch (called from
+    # doCollections) builds correct SQL query.  We don't need to pass in a
+    # valid taxonomy objct, because we're not passing in a taxon_no.
+    print TaxonInfo::doCollections($dbt, undef, $s, $dataRows, '' ,'', '','for_strata_module');
 #    print TaxonInfo::doCollections($q, $dbt, $s, '', '', "for_strata_module");
 
     print "<p>&nbsp;</p>";

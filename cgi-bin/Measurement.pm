@@ -1,7 +1,7 @@
 package Measurement;
 use Data::Dumper;
 use CGI::Carp;
-use TaxaCache;
+use Taxonomy;
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $HTML_DIR $TAXA_TREE_CACHE);
 
@@ -33,9 +33,9 @@ sub submitSpecimenSearch {
     my @taxa;
     if ($q->param('taxon_name')) {
         if ( $q->param('match_type') =~ /exact|combinations only/ )	{
-            @taxa = $taxonomy->getTaxaByName($q->param('taxon_name'));
+            @taxa = $taxonomy->getTaxaByName($q->param('taxon_name'), { exact => 1 });
         } else	{
-            @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$q->param('taxon_name'),'match_subgenera'=>1});
+            @taxa = $taxonomy->getTaxaByName($q->param('taxon_name'));
         }
     } 
     my $taxon_nos;        
@@ -44,13 +44,13 @@ sub submitSpecimenSearch {
         if ( $q->param('match_type') !~ /exact/ )	{
             foreach (@taxa) {
                 if ($_->{'taxon_rank'} =~ /species|genus/) {
-                    @taxon_nos = TaxaCache::getChildren($dbt,$_->{'taxon_no'});
+		    @taxon_nos = $taxonomy->getRelatedTaxa($_, 'all_children', { id => 1, select => 'all' });
                     @all_taxa{@taxon_nos} = ();
                 } else {
                     if ( $q->param('match_type') !~ /combinations only/ )	{
-                        @taxon_nos = TaxonInfo::getAllSynonyms($dbt,$_->{'taxon_no'});
+			@taxon_nos = $taxonomy->getRelatedTaxa($_, 'synonyms', { id => 1, select => 'all' });
                     } else	{
-                        @taxon_nos = TaxonInfo::getAllSpellings($dbt,$_->{'taxon_no'});
+			@taxon_nos = $taxonomy->getRelatedTaxa($_, 'spellings', { id => 1 });
                     }
                     @all_taxa{@taxon_nos} = ();
                     @all_taxa{$_->{'taxon_no'}} = 1; 
@@ -102,7 +102,7 @@ sub submitSpecimenSearch {
         print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
     } elsif (scalar(@results) == 1 && $q->param('collection_no')) {
         $q->param('occurrence_no'=>$results[0]->{'occurrence_no'});
-        displaySpecimenList($dbt,$hbo,$q,$s);
+        displaySpecimenList($dbt,$taxonomy,$hbo,$q,$s);
     } elsif (scalar(@results) == 0 && scalar(@results_taxa_only) == 0) {
         push my @error , "Occurrences or taxa matching these search terms could not be found";
         print "<center><p>".Debug::printWarnings(\@error)."</p></center>\n";
@@ -201,7 +201,7 @@ sub submitSpecimenSearch {
 # give them an option to edit an old one, or add a new set of measurements
 #
 sub displaySpecimenList {
-    my ($dbt,$hbo,$q,$s,$called_from) = @_;
+    my ($dbt,$taxonomy,$hbo,$q,$s,$called_from) = @_;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
 	if ( ! $q->param('occurrence_no') && ! $q->param('taxon_no')) {
@@ -217,7 +217,7 @@ sub displaySpecimenList {
     my $taxon_name;
     my $collection;
     if ($q->param('occurrence_no')) {
-        @results = getMeasurements($dbt,'occurrence_no'=>int($q->param('occurrence_no')));
+        @results = getMeasurements($dbt, $taxonomy, 'occurrence_no' => int($q->param('occurrence_no')));
         $sql = "SELECT collection_no,genus_name,species_name,occurrence_no FROM occurrences WHERE occurrence_no=".int($q->param("occurrence_no"));
         my $row = ${$dbt->getData($sql)}[0];
         if (!$row) {
@@ -247,7 +247,7 @@ sub displaySpecimenList {
         dbg("sql is $sql");
         @results = @{$dbt->getData($sql)};
 
-        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
+        my $taxon = $taxonomy->getTaxon(int($q->param('taxon_no')));
         if ($taxon->{'taxon_rank'} =~ /species/) {
             $taxon_name = $taxon->{'taxon_name'};
         } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
@@ -441,7 +441,7 @@ print qq|</table>
 }
 
 sub populateMeasurementForm {
-    my ($dbt,$hbo,$q,$s) = @_;
+    my ($dbt,$taxonomy,$hbo,$q,$s) = @_;
     my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
@@ -478,7 +478,7 @@ sub populateMeasurementForm {
     } else {
         $old_field = "taxon_no";
         $old_no = int($q->param('taxon_no'));
-        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))},['taxon_rank','taxon_name','extant']);
+        my $taxon = $taxonomy->getTaxon(int($q->param('taxon_no')));
         if ($taxon->{'taxon_rank'} =~ /species/) {
             $taxon_name = $taxon->{'taxon_name'};
         } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
@@ -674,7 +674,7 @@ sub populateMeasurementForm {
 }
 
 sub processMeasurementForm	{
-    my ($dbt,$hbo,$q,$s) = @_;
+    my ($dbt,$taxonomy,$hbo,$q,$s) = @_;
     my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
@@ -715,7 +715,7 @@ sub processMeasurementForm	{
             return;
         }
     } else {
-        my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>int($q->param('taxon_no'))});
+        my $taxon = $taxonomy->getTaxon(int($q->param('taxon_no')));
         if ($taxon->{'taxon_rank'} =~ /species/) {
             $taxon_name = $taxon->{'taxon_name'};
         } elsif ($taxon->{'taxon_rank'} =~ /genus/) {
@@ -965,7 +965,7 @@ sub processMeasurementForm	{
         }
     }
 
-	displaySpecimenList($dbt,$hbo,$q,$s,'processMeasurementForm');
+	displaySpecimenList($dbt,$taxonomy,$hbo,$q,$s,'processMeasurementForm');
 	if ($q->param('occurrence_no')) {
 		my ($temp,$collection_no) = split / /,$collection;
 		$collection_no =~ s/\)//;
@@ -989,7 +989,7 @@ sub processMeasurementForm	{
     my $orig = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
     my $ss = TaxonInfo::getSeniorSynonym($dbt,$orig);
     my @in_list = TaxonInfo::getAllSynonyms($dbt,$ss);
-    my @specimens = getMeasurements($dbt,'taxon_list'=>\@in_list,'get_global_specimens'=>1);
+    my @specimens = getMeasurements($dbt, $taxonomy, taxon_list => \@in_list, get_global_specimens => 1);
     my $p_table = getMeasurementTable(\@specimens);
     my @m = getMassEstimates($dbt,$ss,$p_table);
     if ( $m[5] && $m[6] )	{
@@ -1052,11 +1052,9 @@ sub syncWithAuthorities {
 #          only the taxon_no is known. used in TaxonInfo and in limited cases in Download
 #   Returns a straight array of what the DB results
 sub getMeasurements {
-    my $dbt = shift;
+    my ($dbt, $taxonomy, %options) = @_;
     my $dbh = $dbt->dbh;
-    my %options = @_;
-
-
+    
     my ($sql1,$sql2,$sql3,$where) = ("","","");
 
     $sql1 = "SELECT s.*,m.*,o.taxon_no FROM (specimens s, occurrences o, measurements m) LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE s.occurrence_no=o.occurrence_no AND s.specimen_no=m.specimen_no AND re.reid_no IS NULL";
@@ -1073,14 +1071,14 @@ sub getMeasurements {
     } elsif ($options{'taxon_name'} || $options{'taxon_no'}) {
         my @taxa;
         if ($options{'taxon_name'}) {
-            @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'}},['taxon_no']);
+            @taxa = $taxonomy->getTaxaByName($options{'taxon_name'});
         } else {
-            @taxa = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$options{'taxon_no'}},['taxon_no']);
+            @taxa = $taxonomy->getTaxon($options{'taxon_no'});
         }
         if (@taxa) {
             my (@taxon_nos,%all_taxa);
             foreach (@taxa) {
-                @taxon_nos = TaxaCache::getChildren($dbt,$_->{'taxon_no'});
+                @taxon_nos = $taxonomy->getRelatedTaxa($_, 'all_children', { id => 1, select => 'all' });
                 @all_taxa{@taxon_nos} = ();
             }
             @taxon_nos = keys %all_taxa;
@@ -1291,7 +1289,7 @@ sub avg {
 #  taxa_tree_cache, also includes diameter and circumference, deals with multiple parent and/or
 #  "minus" taxa in equations table, and also computes mean
 sub getMassEstimates	{
-	my ($dbt,$taxon_no,$tableref,$skip_area) = @_;
+	my ($dbt, $taxonomy, $taxon_no, $tableref, $skip_area) = @_;
 	my %p_table = %{$tableref};
 	my %distinct_parts = ();
 
@@ -1461,7 +1459,7 @@ sub displayDownloadMeasurementsResults  {
 
 	# step 2
 
-	my @measurements = getMeasurements($dbt,'taxon_list'=>\@taxon_list,'get_global_specimens'=>1);
+	my @measurements = getMeasurements($dbt, $taxonomy, taxon_list => \@taxon_list, get_global_specimens => 1);
 	if ( ! @measurements ) 	{
 		my $errorMessage = '<center><p class="medium"><i>We have no measurement data for species belonging to '.$q->param('taxon_name').'. Please try another taxon.</i></p></center>';
 		print PBDBUtil::printIntervalsJava($dbt,1);

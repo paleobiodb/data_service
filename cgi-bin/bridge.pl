@@ -33,7 +33,7 @@ use TaxonInfo;
 use TimeLookup;
 use Ecology;
 use Measurement;
-use TaxaCache;
+use Taxonomy;
 use TypoChecker;
 use FossilRecord;
 use Cladogram;
@@ -985,7 +985,7 @@ sub displayReportResults {
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $r = Report->new($dbt,$q,$s);
+	my $r = Report->new($dbt,$taxonomy,$q,$s);
 	$r->buildReport();
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -999,7 +999,7 @@ sub displayMostCommonTaxa	{
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $r = Report->new($dbt,$q,$s);
+	my $r = Report->new($dbt,$taxonomy,$q,$s);
 	$r->findMostCommonTaxa($dataRowsRef);
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -1020,7 +1020,7 @@ sub fastTaxonCount	{
 	print $hbo->stdIncludes( $PAGE_TOP );
 
 	require Report;
-	Report::fastTaxonCount($dbt,$q,$s,$hbo);
+	Report::fastTaxonCount($dbt,$taxonomy,$q,$s,$hbo);
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
@@ -1033,7 +1033,7 @@ sub countNames	{
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $r = Report->new($dbt,$q,$s);
+	my $r = Report->new($dbt,$taxonomy,$q,$s);
 	$r->countNames();
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -1479,7 +1479,7 @@ sub displayCollResults {
 			if ($q->param('type') eq 'reid')	{
 				displayOccsForReID(\@colls);
 			} else	{
-				Reclassify::displayOccurrenceReclassify($q,$s,$dbt,$hbo,\@colls);
+				Reclassify::displayOccurrenceReclassify($q,$s,$taxonomy,$dbt,$hbo,\@colls);
 			}
 			exit;
 		}
@@ -2386,7 +2386,7 @@ sub processTaxonSearch {
                         }
                         my $exists_in_occ = ${$dbt->getData($sql)}[0]->{c};
                         unless ($exists_in_occ) {
-                            my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$q->param('taxon_name'),"",1)};
+                            my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$taxonomy,$q->param('taxon_name'),"",1)};
                             my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
                             foreach my $typo (@results) {
                                 my ($t_g,$t_sg,$t_sp) = Taxon::splitTaxon($typo);
@@ -2833,19 +2833,19 @@ sub searchOccurrenceMisspellingForm {
         exit;
     }
 	print $hbo->stdIncludes($PAGE_TOP);
-	TypoChecker::searchOccurrenceMisspellingForm ($dbt,$q,$s,$hbo);
+	TypoChecker::searchOccurrenceMisspellingForm ($dbt,$taxonomy,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub occurrenceMisspellingForm {
 	print $hbo->stdIncludes($PAGE_TOP);
-	TypoChecker::occurrenceMisspellingForm ($dbt,$q,$s,$hbo);
+	TypoChecker::occurrenceMisspellingForm ($dbt,$taxonomy,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitOccurrenceMisspelling {
 	print $hbo->stdIncludes($PAGE_TOP);
-	TypoChecker::submitOccurrenceMisspelling($dbt,$q,$s,$hbo);
+	TypoChecker::submitOccurrenceMisspelling($dbt,$taxonomy,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -2856,11 +2856,11 @@ sub submitOccurrenceMisspelling {
 ## Reclassify stuff
 
 sub startStartReclassifyOccurrences	{
-	Reclassify::startReclassifyOccurrences($q, $s, $dbt, $hbo);
+	Reclassify::startReclassifyOccurrences($q, $s, $taxonomy, $dbt, $hbo);
 }
 
 sub startDisplayOccurrenceReclassify	{
-	Reclassify::displayOccurrenceReclassify($q, $s, $dbt, $hbo);
+	Reclassify::displayOccurrenceReclassify($q, $s, $taxonomy, $dbt, $hbo);
 }
 
 sub startProcessReclassifyForm	{
@@ -3126,25 +3126,25 @@ sub displaySpecimenSearchForm	{
 
 sub submitSpecimenSearch{
     print $hbo->stdIncludes($PAGE_TOP);
-    Measurement::submitSpecimenSearch($dbt,$hbo,$q,$s,$WRITE_URL);
+    Measurement::submitSpecimenSearch($dbt,$taxonomy,$hbo,$q,$s,$WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displaySpecimenList {
     print $hbo->stdIncludes($PAGE_TOP);
-    Measurement::displaySpecimenList($dbt,$hbo,$q,$s,$WRITE_URL);
+    Measurement::displaySpecimenList($dbt,$taxonomy,$hbo,$q,$s,$WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub populateMeasurementForm{
     print $hbo->stdIncludes($PAGE_TOP);
-    Measurement::populateMeasurementForm($dbt,$hbo,$q,$s,$WRITE_URL);
+    Measurement::populateMeasurementForm($dbt,$taxonomy,$hbo,$q,$s,$WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub processMeasurementForm {
     print $hbo->stdIncludes($PAGE_TOP);
-    Measurement::processMeasurementForm($dbt,$hbo,$q,$s,$WRITE_URL);
+    Measurement::processMeasurementForm($dbt,$taxonomy,$hbo,$q,$s,$WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -3191,7 +3191,7 @@ sub classificationForm	{
 }
 sub classify	{
 	return if PBDBUtil::checkForBot();
-	PrintHierarchy::classify($dbt, $hbo, $s, $q);
+	PrintHierarchy::classify($dbt, $taxonomy, $hbo, $s, $q);
 }
 ## END PrintHierarchy stuff
 ##############
@@ -3210,7 +3210,7 @@ sub startProcessSanityCheck	{
 	logRequest($s,$q);
     
 	print $hbo->stdIncludes($PAGE_TOP);
-	SanityCheck::processSanityCheck($q, $dbt, $hbo, $s);
+	SanityCheck::processSanityCheck($dbt, $taxonomy, $hbo, $s, $q);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 ## END SanityCheck stuff
@@ -5259,7 +5259,7 @@ sub drawCladogram	{
 # JA 17.1.10
 sub displayReviewForm {
 	print $hbo->stdIncludes($PAGE_TOP);
-	Review::displayReviewForm($dbt,$q,$s,$hbo);
+	Review::displayReviewForm($dbt,$taxonomy,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 

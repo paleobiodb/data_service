@@ -737,7 +737,8 @@ sub displayMap {
 
 # age_range_format changes appearance html formatting of age/range information, used by the strata module
 sub doCollections{
-    my ($dbt,$s,$colls,$display_name,$taxon_no,$in_list,$age_range_format,$is_real_user,$type_locality) = @_;
+    my ($dbt, $taxonomy, $s, $colls, $display_name, $taxon_no, $in_list,
+	$age_range_format, $is_real_user, $type_locality) = @_;
     my $dbh = $dbt->dbh;
     
     if (!@$colls) {
@@ -2553,17 +2554,20 @@ sub displayMeasurements {
         my $t = getTaxa($dbt,{'taxon_no'=>$taxon_no});
         if ($t->{'taxon_rank'} =~ /genus|species/) {
             # If the rank is genus or lower we want the big aggregate list of all taxa
-            @specimens = Measurement::getMeasurements($dbt,{'taxon_list'=>$in_list,'get_global_specimens'=>1});
+            @specimens = Measurement::getMeasurements($dbt, $taxonomy, taxon_list => $in_list, 
+						      get_global_specimens => 1);
         } else {
             # If the rank is higher than genus, then that rank is too big to be meaningful.  
             # In that case we only want the taxon itself (and its synonyms and alternate names), not the big recursively generated list
             # i.e. If they entered Nasellaria, get Nasellaria indet., or Nasellaria sp. or whatever.
             # get alternate spellings of focal taxon. 
             my @small_in_list = getAllSynonyms($dbt,$taxon_no);
-            @specimens = Measurement::getMeasurements($dbt,{'taxon_list'=>\@small_in_list,'get_global_specimens'=>1});
+            @specimens = Measurement::getMeasurements($dbt, $taxonomy, taxon_list => \@small_in_list, 
+						      get_global_specimens => 1);
         }
     } else {
-        @specimens = Measurement::getMeasurements($dbt,{'taxon_name'=>$taxon_name,'get_global_specimens'=>1});
+        @specimens = Measurement::getMeasurements($dbt, $taxonomy, taxon_name => $taxon_name,
+						  get_global_specimens => 1);
         my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($taxon_name);
         my $is_species = ($species) ? 1 : 0;
         my $classification_no = Taxon::getBestClassification($dbt,'',$genus,'',$subgenus,'',$species);
@@ -4121,7 +4125,8 @@ sub basicTaxonInfo	{
 	my @specimens;
 	my $specimen_count;
 	if ( $taxon_no && $auth->{'taxon_rank'} eq "species" && $SQL_DB eq "pbdb" )	{
-		@specimens = Measurement::getMeasurements($dbt,{'taxon_list'=>\@all_spellings,'get_global_specimens'=>1});
+		@specimens = Measurement::getMeasurements($dbt, $taxonomy, taxon_list => \@all_spellings,
+							  get_global_specimens => 1);
 		if ( @specimens )	{
 			my $p_table = Measurement::getMeasurementTable(\@specimens);
 			my $orig = TaxonInfo::getOriginalCombination($dbt,$taxon_no);

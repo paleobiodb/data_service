@@ -1,7 +1,7 @@
 package Person;
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD);
 use strict;
-use Reference;
+#use Reference;
 
 # Poling code calved off from displayLoginPage by JA 13.4.04
 sub makeAuthEntJavascript {

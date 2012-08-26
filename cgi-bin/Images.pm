@@ -2,8 +2,7 @@ package Images;
 
 use PBDBUtil;
 use Reference;
-use TaxaCache;
-use TaxonInfo;
+use Taxonomy;
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $HTML_DIR $PAGE_TOP $PAGE_BOTTOM);
 use strict;

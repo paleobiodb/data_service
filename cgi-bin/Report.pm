@@ -15,10 +15,16 @@ use Constants qw($READ_URL $WRITE_URL $HOST_URL $IS_FOSSIL_RECORD $DATA_DIR $HTM
 use strict;
 
 sub new {
-	my ($class,$dbt,$q,$s) = @_;
-	my $self = {dbt=>$dbt,q=>$q,s=>$s};
-	bless $self, $class;
+    my ($class, $taxonomy, $dbt, $q, $s) = @_;
+    my $self = { 
+		dbt => $dbt,
+		q => $q,
+		s => $s,
+		taxonomy => $taxonomy
+	       };
+    bless $self, $class;
 }
+
 
 sub buildReport {
 	my $self = shift;
@@ -615,10 +621,11 @@ sub reportBuildDataTables {
 # returning the variable $sth, a statement handle to the data
 ##
 sub reportQueryDB{
-	my $self = shift;
+    my ($self) = @_;
     my $q = $self->{q};
+    my $taxonomy = $self->{taxonomy};
     my $dbt = $self->{dbt};
-    my $dbh = $dbt->dbh;
+    my $dbh = $dbt->{dbh};
     my @whereTerms = ();
     my $fromSQL = 'collections c';
     my $leftJoinSQL = '';
@@ -704,17 +711,18 @@ sub reportQueryDB{
 	        my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$q->param('taxon_name'));
 
             my %taxon_nos_unique = ();
-            foreach my $taxon (@taxa) {
-                my @taxon_nos = TaxonInfo::getTaxonNos($dbt, $taxon, undef, 1);
-                dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon");
+            foreach my $taxon_name (@taxa) {
+                my @taxon_nos = $taxonomy->getTaxaByName($taxon_name, { common => 1, id => 1 });
+                dbg("Found ".scalar(@taxon_nos)." taxon_nos for $taxon_name");
                 if (scalar(@taxon_nos) == 0) {
-                    $genus_names_string .= ", ".$dbh->quote($taxon);
+                    $genus_names_string .= ", ".$dbh->quote($taxon_name);
                 } elsif (scalar(@taxon_nos) == 1) {
-                    my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0]);
+                    my @all_taxon_nos = $taxonomy->getRelatedTaxa($taxon_nos[0], 'all_children',
+								  { id => 1 } );
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                     @taxon_nos_unique{@all_taxon_nos} = ();
                 } else { #result > 1
-                    push @{$self->{'warnings'}}, "The counts are not restricted to '$taxon' because more than one taxon has that name. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
+                    push @{$self->{'warnings'}}, "The counts are not restricted to '$taxon_name' because more than one taxon has that name. If this is a problem email <a href='mailto: alroy\@nceas.ucsb.edu'>John Alroy</a>.";
                 }
             }
             my $taxon_nos_string = join(", ", keys %taxon_nos_unique);
@@ -914,6 +922,7 @@ sub findMostCommonTaxa	{
 	my $dataRowsRef = shift;
 	my $q = $self->{q};
 	my $s = $self->{s};
+	my $taxonomy = $self->{taxonomy};
 	my $dbt = $self->{dbt};
 
 	my @dataRows = @{$dataRowsRef};
@@ -928,20 +937,18 @@ sub findMostCommonTaxa	{
 	my $sql = "SELECT $names taxon_no,occurrence_no,collection_no FROM occurrences WHERE taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
 	my $sql2 = "SELECT $names taxon_no,occurrence_no,collection_no FROM reidentifications WHERE most_recent='YES' AND taxon_no>0 AND collection_no IN (" . join(',',@collection_nos) . ")";
 	# WARNING: will take largest taxon if there are homonyms
-	if ( $q->param('taxon_name') )	{
-		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND (taxon_name='".$q->param('taxon_name')."' OR common_name='".$q->param('taxon_name')."') ORDER BY rgt-lft DESC";
-		my $row = ${$dbt->getData($sql)}[0];
-		$sql = "SELECT t.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>=".$row->{'lft'}." AND rgt<=".$row->{'rgt'};
-		my @rows = @{$dbt->getData($sql)};
-		my $taxon_list;
-		for my $r ( @rows )	{
-			$taxon_list .= "," . $r->{'taxon_no'};
-		}
-		$taxon_list =~ s/^,//;
-		$sql = "SELECT $names taxon_no,occurrence_no,collection_no FROM occurrences WHERE taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
-		$sql2 = "SELECT $names taxon_no,occurrence_no,collection_no FROM reidentifications WHERE most_recent='YES' AND taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
+	if ( $q->param('taxon_name') )
+	{
+	    # Get all matching taxa, and then iterate through them to find the largest
+	    my $largest_taxon = $taxonomy->getTaxaByName($q->param('taxon_name'), 
+						{ common => 1, include => 'lft', order => 'size.desc' } );
+	    my @taxon_nos = $taxonomy->getRelatedTaxa($largest_taxon, 'all_children',
+							  { id => 1 });
+	    my $taxon_list = join(',', @taxon_nos);
+	    $sql = "SELECT $names taxon_no,occurrence_no,collection_no FROM occurrences WHERE taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
+	    $sql2 = "SELECT $names taxon_no,occurrence_no,collection_no FROM reidentifications WHERE most_recent='YES' AND taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
 	}
- 
+	
 	my @rows = @{$dbt->getData($sql)};
 	my @rows2 = @{$dbt->getData($sql2)};
 
@@ -958,19 +965,15 @@ sub findMostCommonTaxa	{
 	}
 	%seen = ();
 
-	my @nos = keys %hasno;
-	%hasno = ();
-
 	# get the name and rank of each taxon's synonym or (if valid)
 	#  current spelling
-	$sql = "SELECT t.taxon_no,taxon_rank,taxon_name,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=synonym_no AND t.taxon_no IN (". join(',',@nos) .")";
-	my @norows = @{$dbt->getData($sql)};
-
+	my @taxa2 = $taxonomy->getRelatedTaxa(\%hasno, 'self', { include => 'link' });
+	
 	my %synonym;
-	for my $r ( @norows )	{
+	for my $r ( @taxa2 )	{
 		$synonym{$r->{'taxon_no'}} = $r->{'synonym_no'};
 	}
-
+	
 	# get parents at higher ranks
 	my @ranks = "class";
 	if ( $atrank =~ /order|family|genus|species/ )	{
@@ -985,23 +988,22 @@ sub findMostCommonTaxa	{
 	if ( $atrank =~ /species/ )	{
 		push @ranks , "species";
 	}
-	$sql = "SELECT child_no,taxon_rank parent_rank,taxon_name parent FROM authorities a,$TAXA_TREE_CACHE t,$TAXA_LIST_CACHE l WHERE child_no IN (". join(',',@nos) . ") AND parent_no=a.taxon_no AND a.taxon_rank IN ('". join("','",@ranks) ."') AND a.taxon_no=t.taxon_no ORDER BY lft";
-	my @parentrows = @{$dbt->getData($sql)};
-
+	my $rank_list = join(',', @ranks);
+	my @parentrows = $taxonomy->getRelatedTaxa(\%hasno, 'all_parents', { rank => $rank_list });
+	
 	my %parent;
 	for my $r ( @parentrows )	{
 		$parent{$r->{'child_no'}}{$r->{'parent_rank'}} = $r->{'parent'};
 	}
 	@parentrows = ();
 
-	for my $r ( @norows )	{
+	for my $r ( @taxa2 )	{
 		if ( $r->{'taxon_rank'} eq $atrank )	{
 			$parent{$r->{'synonym_no'}}{$atrank} = $r->{'taxon_name'};
 		} elsif ( $atrank eq "species" && $r->{'taxon_rank'} eq "genus" )	{
 			$parent{$r->{'synonym_no'}}{$atrank} = $r->{'taxon_name'};
 		}
 	}
-	@norows = ();
 
 	# count occurrences
 	my %count;
@@ -1162,8 +1164,9 @@ sub findMostCommonTaxa	{
 }
 
 # JA 23.10.10
-sub fastTaxonCount	{
-	my ($dbt,$q,$s,$hbo) = @_;
+sub fastTaxonCount {
+    
+    my ($dbt, $taxonomy, $q, $s, $hbo) = @_;
 
 	print qq|
 <div align="center">
@@ -1240,7 +1243,7 @@ sub fastTaxonCount	{
 	}
 	print "<p style=\"margin-left: 2em; text-indent: -0.5em;\">Your query was: <i>".join(', ',@qs).".</i>";
 
-	my @tables = ("authorities a,$TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2");
+	my @tables = ("authorities a,$taxonomy->{tree_table} t,$taxonomy->{tree_table} t2");
 	my @and;
 
 	if ( $q->param('period') || $interval_nos || $q->param('strat_unit') || $q->param('continent') || $q->param('country') )	{
@@ -1301,18 +1304,24 @@ sub fastTaxonCount	{
 		push @and , "a.enterer_no=".$enterer;
 	}
 
-	if ( $q->param('taxon_name') )	{
-		$sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND (taxon_name='".$q->param('taxon_name')."' OR common_name='".$q->param('taxon_name')."') ORDER BY rgt-lft DESC";
-		my $t = ${$dbt->getData($sql)}[0];
-		if ( $t )	{
-			push @and , "t2.lft>$t->{lft} AND t2.rgt<$t->{rgt}";
-		} else	{
-			$errors = "Sorry, there is no valid taxon in the database called \"$q->param('taxon_name')\".";
-		}
-	} else	{
-		$errors = "Sorry, you must enter a taxon name.";
+	if ( $q->param('taxon_name') )
+	{
+	    my $largest_taxon = $taxonomy->getTaxaByName($q->param('taxon_name'), 
+						{ common => 1, include => 'lft', order => 'size' });
+	    if ( defined $largest_taxon )
+	    {
+		push @and, "t2.lft>$largest_taxon->{lft} AND t2.rgt<$largest_taxon->{rgt}";
+	    } 
+	    else
+	    {
+		$errors = "Sorry, there is no valid taxon in the database called \"$q->param('taxon_name')\".";
+	    }
+	} 
+	else
+	{
+	    $errors = "Sorry, you must enter a taxon name.";
 	}
-
+	
 	# query excludes higher-order names lacking any genera or species
 	# we need a much more complicated join because senior synonyms can be invalid
 	#  (especially in nomen dubium cases)

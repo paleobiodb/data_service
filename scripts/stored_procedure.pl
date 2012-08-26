@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/opt/local/bin/perl
 
 use lib "../cgi-bin";
 use DBConnection;
@@ -94,3 +94,64 @@ $dbh->do("CREATE PROCEDURE compute_ancestry (s int)
 			WHERE gen > 1 ORDER BY gen DESC;
 		END IF;
 	END");
+
+# compute_taxon_match ( a, cg, csg, csp )
+# 
+# This function takes a name from the authorities table followed by a
+# candidate taxon name as genus, subgenus, species.  It returns a number from
+# 0-30 indicating how well the two match.
+
+$dbh->do("SET GLOBAL log_bin_trust_function_creators = 1");
+$dbh->do("DROP FUNCTION IF EXISTS compute_taxon_match");
+$dbh->do("CREATE FUNCTION compute_taxon_match (a varchar(80), cg varchar(80), csg varchar(80), csp varchar(80))
+	RETURNS int DETERMINISTIC NO SQL
+	BEGIN
+		DECLARE ag, asg, asp varchar(80) default '';
+		# start by splitting up the value of 'a'
+		SET ag = substring_index(a, ' ', 1);
+		IF a like '%(%' THEN
+			SET asg = substring_index(substring_index(a, '(', -1), ')', 1);
+			IF a like '%) %' THEN
+				SET asp = trim(substring(a, locate(') ', a)+2));
+			END IF;
+		ELSEIF a like '% %' THEN
+			SET asp = trim(substring(a, locate(' ', a)+1));
+		END IF;
+		# now compare ag to cg, asg to csg, asp to csp
+		IF asp <> '' and asp = csp THEN
+			IF cg = ag and csg = asg THEN
+				RETURN 30;
+			ELSEIF cg = ag THEN
+				RETURN 28;
+			ELSEIF cg = asg THEN
+				RETURN 27;
+			ELSEIF csg = ag THEN
+				RETURN 26;
+			ELSEIF csg = asg THEN
+				RETURN 25;
+			ELSE
+				RETURN 0;
+			END IF;
+		ELSEIF asp <> '' THEN
+			RETURN 0;
+		ELSEIF asg <> '' THEN
+			IF cg = ag and csg = asg THEN
+				RETURN 19;
+			ELSEIF cg = asg THEN
+				RETURN 17;
+			ELSEIF csg = ag THEN
+				RETURN 16;
+			ELSEIF csg = asg THEN
+				RETURN 14;
+			ELSE
+				RETURN 0;
+			END IF;
+		ELSEIF ag = cg THEN
+			RETURN 18;
+		ELSEIF ag = csg THEN
+			RETURN 15;
+		ELSE
+			RETURN 0;
+		END IF;
+	END");
+

@@ -9,8 +9,9 @@ use strict;
 
 # 17-18.1.10 JA
 
-sub displayReviewForm	{
-	my ($dbt,$q,$s,$hbo) = @_;
+sub displayReviewForm {
+    
+    my ($dbt, $taxonomy, $q, $s, $hbo) = @_;
 
 	# enterers may not create pages (sorry)
 	if ( $s->get('enterer') ne $s->get('authorizer') )	{
@@ -52,8 +53,8 @@ sub displayReviewForm	{
 
 		# grab taxon name
 		if ( $vars{'taxon_no'} > 0 )	{
-			$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".$vars{'taxon_no'};
-			$vars{'taxon'} = ${$dbt->getData($sql)}[0]->{'taxon_name'};
+		    my $taxon_info = $taxonomy->getTaxon($vars{'taxon_no'});
+		    $vars{taxon} = $taxon_info->{taxon_name};
 		}
 
 		# grab interval name
@@ -140,10 +141,10 @@ sub processReviewForm	{
 
 	my ($taxon_no,$error);
 	if ( $vars{'taxon'} )	{
-	# assumes you mean the biggest one if there are homonyms
-		$sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$vars{'taxon'}."' ORDER BY rgt-lft DESC LIMIT 1";
-		$taxon_no = ${$dbt->getData($sql)}[0]->{'taxon_no'};
-	# error if taxon not found
+	    # assumes you mean the biggest one if there are homonyms
+	    my $taxon_no = $taxonomy->getTaxaByName($vars{taxon}, 
+						{ id => 1, order => 'size.desc' });
+	    # error if taxon not found
 	 	if ( $taxon_no == 0 )	{
 			$error = "WARNING: the taxon name '".$vars{'taxon'}."' doesn't exist in the database!";
 		}
@@ -330,8 +331,8 @@ sub showReview	{
 			$review->{'interval'} = ${$dbt->getData($sql)}[0]->{'interval_name'};
 		}
 		if ( $review->{'taxon_no'} > 0 )	{
-			$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".$review->{'taxon_no'};
-			$review->{'taxon'} = ${$dbt->getData($sql)}[0]->{'taxon_name'};
+		    my $taxon_info = $taxonomy->getTaxon($review->{taxon_no});
+		    $review->{'taxon'} = $taxon_info->{'taxon_name'};
 		}
 		for my $k ( @keyword_vars )	{
 			$keywords{$k} = $review->{$k};
@@ -582,8 +583,9 @@ sub makeMap	{
 	$unmatched{$_}++ foreach @tags;
 
 	# taxon names take precedence because they are common
-	my $sql = "SELECT a.taxon_no,taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name IN ('". join("','",keys %unmatched) ."') ORDER BY rgt-lft DESC";
-	my @matches = @{$dbt->getData($sql)};
+	
+	my @matches = $taxonomy->getTaxaByName(\%unmatched,
+					{ include => 'lft', order => 'size.desc' });
 	my %seen;
 	if ( @matches )	{
 		# need to remove duplicates by hand (oh well)
@@ -598,9 +600,7 @@ sub makeMap	{
 				delete $unmatched{$m->{'taxon_name'}};
 			}
 		}
-		my @in_list;
-		$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE WHERE lft>=".$taxon->{'lft'}." AND rgt<=".$taxon->{'rgt'};
-		push @in_list , $_->{'taxon_no'} foreach @{$dbt->getData($sql)};
+		my @in_list = $taxonomy->getRelatedTaxa($taxon, 'all_children', { id => 1 });
 		$options{'taxon_list'} = \@in_list;
 	}
 

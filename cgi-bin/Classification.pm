@@ -1,6 +1,5 @@
 package Classification;
 
-use TaxonInfo;
 use strict;
 use Data::Dumper;
 use Debug qw(dbg);

@@ -4,8 +4,7 @@ package DownloadTaxonomy;
 use PBDBUtil;
 use Data::Dumper;
 use DBTransactionManager;
-use TaxaCache;
-use TaxonInfo;
+use Taxonomy;
 use Person;
 use Opinion;
 use CGI::Carp;
@@ -20,7 +19,7 @@ use strict;
 #  http://webservice.catalogueoflife.org/annual-checklist/
 # doesn't relate to other subroutines here, but has to go somewhere...
 sub getTaxonomyXML	{
-	my ($dbt,$q,$s,$hbo) = @_;
+	my ($dbt,$taxonomy,$q,$s,$hbo) = @_;
 
 	print "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" ?>\n";
 
@@ -320,7 +319,7 @@ sub formatAuthXML	{
 # These ITIS files are not output:
 #   vernaculars.dat, vern_ref_links.dat, experts.dat, geographic_division.dat, jurisdiction.dat, other_sources.dat
 sub displayITISDownload {
-    my ($dbt,$q,$s) = @_;
+    my ($dbt,$taxonomy,$q,$s) = @_;
     my $dbh = $dbt->dbh;
     my @errors = ();
 
@@ -328,7 +327,7 @@ sub displayITISDownload {
     # the parameters.  Store the parameters in the %options hash and pass that in
     my %options = $q->Vars();
     if ($options{'taxon_name'}) {
-        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1,'remove_rank_change'=>1});
+        my @taxon = $taxonomy->getTaxaByName($options{'taxon_name'});
         if (scalar(@taxon) > 1) {
             push @errors, "Taxon name is a homonym";
         } elsif (scalar(@taxon) < 1) {
@@ -377,7 +376,7 @@ sub displayITISDownload {
     my %people;
     $people{$_->{person_no}} = $_->{name} foreach @temp;
 
-    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,\%people,\%options);
+    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$taxonomy,$http_dir,\%people,\%options);
     my @names = @$names;
     my %references;
 
@@ -656,7 +655,7 @@ sub displayITISDownload {
 #   references
 #     raw dump of references used
 sub displayPBDBDownload {
-    my ($dbt,$q,$s) = @_;
+    my ($dbt,$taxonomy,$q,$s) = @_;
     my $dbh = $dbt->dbh;
     my @errors = ();
 
@@ -769,7 +768,7 @@ sub displayPBDBDownload {
     }
 
 
-    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$http_dir,\%people,\%options);
+    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$taxonomy,$http_dir,\%people,\%options);
     my @names = @$names;
 
 
@@ -881,18 +880,23 @@ print '</td></tr></table></div>';
 # Gets immediate parent of taxa (at end, in separate query)
 # heavily written by JA 29.9.11
 sub getTaxonomicNames {
-    my $dbt = shift;
-    my $http_dir = shift;
-    my $ref = shift;
-    my %people = %{$ref};
-    $ref = shift;
-    my %options = %{$ref};
+    
+    my ($dbt, $taxonomy, $http_dir, $people_ref, $options_ref) = @_;
+    my %people = %$people_ref;
+    my %options = %$options_ref;
     my $dbh = $dbt->dbh;
+    
+    my $child_table_name;
     
     my @where = ();
    
     my %taxa_list = ();
-    if ($options{'taxon_no'}) {
+    if ($options{'taxon_no'})
+    {
+	$child_table_name = $taxonomy->getTaxaIdTable($options{'taxon_no'}, 'all_children');
+    }
+    
+    
         $taxa_list{0} = 1; # Prevent crashes for empty lists;
         my @children = TaxaCache::getChildren($dbt,$options{'taxon_no'});
         foreach my $taxon_no (@children) {
@@ -993,7 +997,7 @@ sub getTaxonomicNames {
         @results = @{$dbt->getData($sql)};
 
         # only some (higher) taxa have type_taxon_nos, so grab their names
-        #  separately to avoid a tedious UNION
+        #  separately to avoid a tedious UNION   $$$$$
         my %type_lookup;
         if (%taxa_list) {
             $sql = "SELECT a.taxon_no,a2.taxon_name type_taxon FROM authorities a,authorities a2 WHERE a.type_taxon_no=a2.taxon_no AND a.taxon_no IN (".join(",",keys %taxa_list).")";
