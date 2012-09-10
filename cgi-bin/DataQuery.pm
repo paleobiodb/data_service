@@ -1000,6 +1000,27 @@ sub json_clean {
 }
 
 
+# decodeFields ( )
+# 
+# Decode the various fields from a given record from utf-8.
+
+sub decodeFields {
+    
+    my ($row) = @_;
+    
+    my @fields = qw(a_al1 a_al2 a_ai1 a_ai2 a_ao r_al1 r_al2 r_ai1
+		    r_ai2 r_ao r_reftitle r_pubtitle r_editors);
+    
+    foreach my $f (@fields)
+    {
+	if ( defined $row->{$f} )
+	{
+	    $row->{$f} = decode_utf8($row->{$f});
+	}
+    }
+}
+
+
 # generateURN ( record_no, record_type )
 # 
 # Given a record number and record type, generate a URN.  The format is:
