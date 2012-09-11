@@ -1000,13 +1000,15 @@ sub json_clean {
 }
 
 
+our ($UTF8_DECODER) = Encode::find_encoding("utf8");
+
 # decodeFields ( )
 # 
 # Decode the various fields from a given record from utf-8.
 
 sub decodeFields {
     
-    my ($row) = @_;
+    my ($self, $row) = @_;
     
     my @fields = qw(a_al1 a_al2 a_ai1 a_ai2 a_ao r_al1 r_al2 r_ai1
 		    r_ai2 r_ao r_reftitle r_pubtitle r_editors);
@@ -1015,7 +1017,9 @@ sub decodeFields {
     {
 	if ( defined $row->{$f} )
 	{
-	    $row->{$f} = decode_utf8($row->{$f});
+	    eval {
+		$row->{$f} = decode("utf8", $row->{$f}, Encode::FB_CROAK);
+	    };
 	}
     }
 }

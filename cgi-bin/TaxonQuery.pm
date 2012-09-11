@@ -1585,7 +1585,7 @@ sub emitTaxonText {
 		      and $row->{taxon_no} == $self->{root_taxon_no} ) )
 	    {
 		$value = $self->{generate_urns}
-		    ? DataQuery::generateURN($row->{parent_no}, 'parent_no')
+		    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
 			: $row->{parent_no};
 	    }
 	}
@@ -1603,7 +1603,7 @@ sub emitTaxonText {
 	    if ( defined $row->{accepted_no} and $row->{accepted_no} > 0 )
 	    {
 		$value = $self->{generate_urns}
-		    ? DataQuery::generateURN($row->{accepted_no}, 'accepted_no')
+		    ? DataQuery::generateURN($row->{accepted_no}, 'taxon_no')
 			: $row->{accepted_no};
 	    }
 	}
