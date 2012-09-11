@@ -829,7 +829,7 @@ END_XML
 
 sub generateFooterText {
 
-    return;
+    return '';
 }
 
 
@@ -905,7 +905,7 @@ sub generateTextLine {
 
     my ($self, @values) = @_;
     
-    if ( $self->{value_sep} eq 'csv' )
+    if ( defined $self->{value_sep} and $self->{value_sep} eq 'csv' )
     {
 	my $line = '"' . join('","', @values) . '"' . "\n";
 	return $line;
@@ -997,6 +997,47 @@ sub json_clean {
     $string =~ s/[\0-\037\177]//g;
     
     return $string;
+}
+
+
+our ($UTF8_DECODER) = Encode::find_encoding("utf8");
+
+# decodeFields ( )
+# 
+# Decode the various fields from a given record from utf-8.
+
+sub decodeFields {
+    
+    my ($self, $row) = @_;
+    
+    my @fields = qw(a_al1 a_al2 a_ai1 a_ai2 a_ao r_al1 r_al2 r_ai1
+		    r_ai2 r_ao r_reftitle r_pubtitle r_editors);
+    
+    foreach my $f (@fields)
+    {
+	if ( defined $row->{$f} )
+	{
+	    eval {
+		$row->{$f} = decode("utf8", $row->{$f}, Encode::FB_CROAK);
+	    };
+	}
+    }
+}
+
+
+# generateURN ( record_no, record_type )
+# 
+# Given a record number and record type, generate a URN.  The format is:
+# "urn:paleodb.org:<record_type>:<record_no>".
+
+sub generateURN {
+    
+    my ($record_no, $record_type) = @_;
+    
+    my $type_label = 'x';
+    $type_label = 'tn' if $record_type eq 'taxon_no';
+    
+    return "urn:paleodb:$type_label$record_no";
 }
 
 
