@@ -1,6 +1,6 @@
 package TaxonInfo;
 
-use Taxon;
+#use Taxon;
 use TimeLookup;
 use Data::Dumper;
 use Collection;
@@ -2545,7 +2545,7 @@ sub displayEcology	{
 
 # PS 6/27/2005
 sub displayMeasurements {
-    my ($dbt,$taxon_no,$taxon_name,$in_list) = @_;
+    my ($dbt,$taxonomy,$taxon_no,$taxon_name,$in_list) = @_;  # $$$$
 
     # Specimen level data:
     my @specimens;
@@ -3625,7 +3625,7 @@ sub findCrown	{
 # JA 3-5.11.09
 sub basicTaxonInfo	{
 
-	my ($q,$s,$dbt,$hbo) = @_;
+	my ($q,$s,$dbt,$hbo,$taxonomy) = @_;    #$$$$
 
 	my ($is_real_user,$not_bot) = (1,1);
 	if (! $q->request_method() eq 'POST' && ! $q->param('is_real_user') && ! $s->isDBMember()) {

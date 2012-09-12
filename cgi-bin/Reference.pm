@@ -8,7 +8,7 @@ use Data::Dumper;
 use Class::Date qw(now date);
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $DB $COLLECTIONS $COLLECTION_NO $PAGE_TOP $PAGE_BOTTOM);
-use Download;
+#use Download;
 use Person;
 
 # Paths from the Apache environment variables (in the httpd.conf file).

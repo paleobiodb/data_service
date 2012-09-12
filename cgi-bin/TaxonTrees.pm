@@ -956,6 +956,7 @@ sub rebuildOpinionCache {
     # swap in the new table using an atomic rename operation
     
     $result = $dbh->do("DROP TABLE IF EXISTS ${OPINION_CACHE}_bak");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OPINION_CACHE LIKE $OPINION_TEMP");
     
     $result = $dbh->do("RENAME TABLE
 				$OPINION_CACHE to ${OPINION_CACHE}_bak,
@@ -1368,7 +1369,7 @@ sub computeSpelling {
 		INSERT IGNORE INTO $TRAD_TEMP (orig_no, spelling_no)
 		SELECT t.orig_no, o.child_spelling_no
 		FROM authorities a
-			JOIN taxon_trees t ON a.taxon_no = t.spelling_no
+			JOIN $TREE_TEMP t ON a.taxon_no = t.spelling_no
 				AND a.taxon_rank = 'unranked clade'
 			JOIN $OPINION_CACHE o on o.orig_no = t.orig_no
 			JOIN authorities a2 on o.child_spelling_no = a2.taxon_no
