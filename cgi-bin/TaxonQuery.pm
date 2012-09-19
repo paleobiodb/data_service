@@ -362,7 +362,7 @@ sub setParametersSingle {
 	# Clean the parameter of everything except alphabetic characters
 	# and spaces, since only those are valid in taxonomic names.
 	
-	if ( $params->{taxon_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{taxon_name} =~ /[^a-zA-Z()\s]/ )
 	{
 	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
