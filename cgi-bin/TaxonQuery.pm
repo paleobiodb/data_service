@@ -483,7 +483,7 @@ sub setParametersMultiple {
 	
 	# First check to make sure that a valid value was provided.
 	
-	if ( $params->{match} =~ /[^a-zA-Z_%\s]/ )
+	if ( $params->{match} =~ /[^a-zA-Z_%()\s]/ )
 	{
 	    die "400 The parameter 'taxon_match' may contain only characters from the Roman alphabet plus whitespace and the SQL wildcards '%' and '_'.\n";
 	}
@@ -518,7 +518,7 @@ sub setParametersMultiple {
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{base_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{base_name} =~ /[^a-zA-Z()\s]/ )
 	{
 	    die "400 The parameter 'base_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
@@ -589,7 +589,7 @@ sub setParametersMultiple {
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{leaf_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{leaf_name} =~ /[^a-zA-Z()\s]/ )
 	{
 	    die "400 The parameter 'leaf_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
