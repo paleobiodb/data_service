@@ -380,7 +380,8 @@ sub checkParameters {
     
     else
     {
-	die "400 You must specify an interface version.  You can add '&v=$CURRENT_VERSION' to the parameters, or prefix the path with /data$CURRENT_VERSION/.\n";
+	$self->warn("You should specify an interface version if you are building an application using this service.  Otherwise, your application might break when we change the interface.  The current version is $CURRENT_VERSION.  You can add '&v=$CURRENT_VERSION' to the parameters, or prefix the path with /data$CURRENT_VERSION/ instead of just /data/");
+	$self->{v} = $CURRENT_VERSION;
     }
     
     # Construct our initial check list.
@@ -395,7 +396,7 @@ sub checkParameters {
     {
 	no strict 'refs';
 	
-	my $v = $params->{v}; $v =~ s/\./_/g;
+	my $v = $self->{v}; $v =~ s/\./_/g;
 	
 	my $v1 = ref($self) . '::PARAM_CHECK_' . uc($self->{version}) . '_' . $v;
 	my $v2 = ref($self) . '::PARAM_CHECK_' . $v;
