@@ -71,9 +71,10 @@ if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
 }
 
-if ( $DB ne "eco" && $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
-	print $q->redirect( -url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor" );
-}
+#if ( $DB ne "eco" && $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/
+       #&& $q->param('action') eq "login" )  { print $q->redirect(
+#-url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor"
+#); }
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
 
@@ -1254,9 +1255,13 @@ sub displaySearchCollsForAdd	{
 
 	# Some prefilled variables like lat/lng/time term
 	my %pref = $s->getPreferences();
-
+	
+	my $openlayers_header = <<END_HEADER;
+<script src="/JavaScripts/OpenLayers.js"></script>
+END_HEADER
+		
 	# Spit out the HTML
-	print $hbo->stdIncludes( $PAGE_TOP );
+	print $hbo->stdIncludes( $PAGE_TOP, { extra_header => $openlayers_header } );
 	if ( $DB ne "eco" )	{
 		print  $hbo->populateHTML('search_collections_for_add_form' , \%pref);
 	} else	{
@@ -1489,7 +1494,7 @@ sub displayCollResults {
 			my @prefs = @{$dbt->getData($sql)};
 			$lookup{$_->{'person_no'}} = $_->{'name'} foreach @prefs;
 		}
-
+		
 		print $hbo->stdIncludes( $PAGE_TOP );
 
         # Display header link that says which collections we're currently viewing
@@ -2187,7 +2192,13 @@ sub displayCollectionForm {
         login("Please log in first.");
         exit;
     }
-    print $hbo->stdIncludes($PAGE_TOP);
+
+    # Add the map header
+    my $openlayers_header = <<END_HEADER;
+<script src="/JavaScripts/OpenLayers.js"></script>
+END_HEADER
+
+    print $hbo->stdIncludes($PAGE_TOP, { extra_header => $openlayers_header });
     Collection::displayCollectionForm($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
