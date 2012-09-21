@@ -39,10 +39,6 @@ our ($PARAM_DESC_SINGLE_1_0) = "=over 4
 
 return information about the named taxon (scientific name)
 
-=item B<taxon_rank>
-
-look for the taxon name only at the specified rank (taxon rank)
-
 =item B<taxon_no>
 
 return information about the specified taxon (positive integer identifier)
@@ -89,7 +85,7 @@ synonym for 'id' (comma-separated list of identifiers)
 
 =item B<type>
 
-only return information about taxa of this type ('valid', 'synonyms', invalid', 'all')
+only return information about taxa of this type ('valid', 'synonyms', invalid', 'distinct', 'all')
 
 =item B<extant>
 
@@ -107,10 +103,6 @@ only return information about taxa whose rank falls within the specified range (
 
 return information about the named taxon and its subtaxa (scientific name)
 
-=item B<base_rank>
-
-look for the base taxon name only at the specified rank (taxon rank)
-
 =item B<base_no>
 
 return information about the specified taxon and its subtaxa (positive integer identifier)
@@ -118,10 +110,6 @@ return information about the specified taxon and its subtaxa (positive integer i
 =item B<leaf_name>
 
 return information about the named taxon and its supertaxa (scientific name)
-
-=item B<leaf_rank>
-
-look for the leaf taxon name only at the specified rank (taxon rank)
 
 =item B<leaf_no>
 
@@ -140,8 +128,7 @@ $show_values
 our ($PARAM_REQS_MULTIPLE_1_0) = "You must specify at least one of: C<type, match, rank, id, base_name, base_no, child_name, child_no>.\n\nNote that C<type> defaults to C<valid> unless otherwise specified.";
 
 our ($PARAM_CHECK_MULTIPLE_1_0) = { type => 1, extant => 1, match => 1, rank => 1,
-				base_name => 1, base_rank => 1, base_no => 1,
-				leaf_name => 1, leaf_rank => 1, leaf_no => 1, 
+				base_name => 1, base_no => 1, leaf_name => 1, leaf_no => 1, 
 				id => 1, show => 1 };
 
 our ($FIELD_DESC_1_0) = "=over 4
@@ -165,6 +152,10 @@ The identifier of this taxon's immediate parent.  This value can be used with th
 =item B<taxonomicStatus>
 
 The taxonomic status of this taxon.  Values include: 'valid', 'invalid', 'subjective synonym', 'objective synonym'.
+
+=item B<nomenclaturalStatus>
+
+The nomenclatural status of this taxon.  Values include: 'invalid subgroup', 'misspelling', 'replaced by', 'nomen dubium', 'nomen nudum', 'nomen oblitum', 'nomen vanum'.
 
 =item B<scientificNameAuthorship>
 
@@ -254,14 +245,15 @@ sub setParameters {
 	    elsif ( $s eq 'eol_core' )
 	    {
 		$self->{field_list} = ['taxonID', 'taxonRank', 'scientificName', 'parentNameUsageID',
-				       'taxonomicStatus', 'taxonRemarks', 'namePublishedIn',
-				       'acceptedNameUsageID', 'acceptedNameUsage'];
+				       'taxonomicStatus', 'nomenclaturalStatus', 'taxonRemarks', 
+				       'namePublishedIn', 'acceptedNameUsageID'];
 		$self->{eol_core} = 1;
 		$self->{show_attribution} = 1;
 		$self->{show_synonym} = 1;
 		$self->{show_ref} = 1;
 		$self->{generate_urns} = 1;
 		$self->{rooted_result} = 1;
+		$self->{suppress_synonym_parents} = 1;
 	    }
 	    
 	    # Warn the client about unrecognized values, but don't abort processing.
@@ -362,7 +354,7 @@ sub setParametersSingle {
 	# Clean the parameter of everything except alphabetic characters
 	# and spaces, since only those are valid in taxonomic names.
 	
-	if ( $params->{taxon_name} =~ /[^a-zA-Z()\s]/ )
+	if ( $params->{taxon_name} =~ /[^a-zA-Z().,\s]/ )
 	{
 	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
@@ -453,7 +445,8 @@ sub setParametersMultiple {
 	my $type = lc $params->{type};
 	$required_param = 1;
 	
-	unless ( $type eq 'valid' or $type eq 'invalid' or $type eq 'synonyms' or $type eq 'all' )
+	unless ( $type eq 'valid' or $type eq 'invalid' or $type eq 'synonyms' or
+		 $type eq 'distinct' or $type eq 'all' )
 	{
 	    die "400 Unrecognized taxon type '$type'.\n";
 	}
@@ -518,40 +511,13 @@ sub setParametersMultiple {
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{base_name} =~ /[^a-zA-Z()\s]/ )
+	if ( $params->{base_name} =~ /[^a-zA-Z().,\s]/ )
 	{
-	    die "400 The parameter 'base_name' may contain only characters from the Roman alphabet plus whitespace.\n";
+	    die "400 The parameter 'base_name' may contain only characters from the Roman alphabet plus parentheses and whitespace.\n";
 	}
 	
 	$self->{base_taxon_name} = $params->{base_name};
 	$self->{base_taxon_name} =~ s/\s+/ /g;
-    }
-    
-    # If 'base_rank' is specified, then we only match the name if it
-    # matches the specified rank.
-    
-    if ( defined $params->{base_rank} and $params->{base_rank} ne '' )
-    {
-	my $rank = lc $params->{base_rank};
-	$required_param = 1;
-	
-	# This parameter cannot be used with taxon_no (since taxon_no uniquely
-	# identifies a taxon, it cannot be used with any other taxon-selecting
-	# parameters).
-	
-	if ( defined $params->{base_no} and $params->{base_no} ne '' )
-	{
-	    die "400 You may not use the 'base_rank' and 'base_no' parameters together.\n";
-	}
-	
-	# Make sure that the value is one of the accepted ones.
-	
-	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
-	{
-	    die "400 Unrecognized taxon rank '$rank'.";
-	}
-	
-	$self->{base_taxon_rank} = $rank;
     }
     
     # If 'base_no' is specified, then the results are restricted to the
@@ -563,12 +529,12 @@ sub setParametersMultiple {
 	
 	# First check to make sure that a valid value was provided
 	
-	if ( $params->{base_no} =~ /[^0-9]/ )
+	if ( $params->{base_no} =~ /[^0-9,]/ )
 	{
-	    die "400 You must provide a positive integer value for 'taxon_no'.\n";
+	    die "400 The value of 'taxon_no' must be one or more positive integers separated by commas.\n";
 	}
 	
-	$self->{base_taxon_no} = $params->{base_no} + 0;
+	$self->{base_taxon_no} = $params->{base_no};
     }
     
     # If 'leaf_name' is specified, then the results are restricted to the
@@ -589,40 +555,13 @@ sub setParametersMultiple {
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{leaf_name} =~ /[^a-zA-Z()\s]/ )
+	if ( $params->{leaf_name} =~ /[^a-zA-Z().,\s]/ )
 	{
 	    die "400 The parameter 'leaf_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
 	
 	$self->{leaf_taxon_name} = $params->{leaf_name};
 	$self->{leaf_taxon_name} =~ s/\s+/ /g;	    
-    }
-    
-    # If 'leaf_rank' is specified, then we only match the name if it
-    # matches the specified rank.
-    
-    if ( defined $params->{leaf_rank} and $params->{leaf_rank} ne '' )
-    {
-	my $rank = lc $params->{leaf_rank};
-	$required_param = 1;
-	
-	# This parameter cannot be used with taxon_no (since taxon_no uniquely
-	# identifies a taxon, it cannot be used with any other taxon-selecting
-	# parameters).
-	
-	if ( defined $params->{leaf_no} and $params->{leaf_no} ne '' )
-	{
-	    die "400 You may not use the 'leaf_rank' and 'leaf_no' parameters together.\n";
-	}
-	
-	# Make sure that the value is one of the accepted ones.
-	
-	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
-	{
-	    die "400 Unrecognized taxon rank '$rank' for leaf_rank.";
-	}
-	
-	$self->{leaf_taxon_rank} = $rank;
     }
     
     # If 'leaf_no' is specified, then the results are restricted to the
@@ -849,6 +788,9 @@ sub fetchMultiple {
 	elsif ( $self->{filter_taxon_type} eq 'invalid' ) {
 	    push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
 	}
+	elsif ( $self->{filter_taxon_type} eq 'distinct' ) {
+	    push @filter_list, "(o.spelling_reason <> 'rank change' or t.taxon_no = t.spelling_no)";
+	}
     }
     
     # If a restriction has been specified for extant or non-extant taxa, add
@@ -910,65 +852,116 @@ sub fetchMultiple {
     
     if ( defined $self->{base_taxon_no} )
     {
-	my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
+	my @base_ranges;
+	
+	foreach my $taxon_no (split /,/, $self->{base_taxon_no})
+	{
+	    next unless $taxon_no > 0;
+	    $taxon_no += 0;
+	    
+	    my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
 	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
 				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-	     WHERE t1.taxon_no = ?";
+	     WHERE t1.taxon_no = $taxon_no";
 	
-	my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, $self->{base_taxon_no});
+	    my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, $self->{base_taxon_no});
+	    
+	    # If we can't find the base taxon, the result set will be empty.
+	    
+	    unless ( defined $lft and $lft > 0 )
+	    {
+		next;
+	    }
+	    
+	    # Otherwise, we select the appropriate range of taxa.
+	    
+	    push @base_ranges, "(t.lft >= $lft and t.lft <= $rgt)";
+	    $self->{root_taxa}{$base_no} = 1;
+	}
 	
-	# If we can't find the base taxon, the result set will be empty.
+	# If we didn't find anything at all, the result set will be empty.
 	
-	unless ( defined $lft and $lft > 0 )
+	if ( @base_ranges == 0 )
 	{
 	    return;
 	}
 	
-	# Otherwise, we select the appropriate range of taxa.
+	# Otherwise, add the specified filter expression to the list.
 	
-	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
-	$self->{root_taxon_no} = $base_no;
+	elsif ( @base_ranges == 1 )
+	{
+	    push @filter_list, @base_ranges;
+	}
+	
+	else
+	{
+	    push @filter_list, '(' . join(' or ', @base_ranges) . ')';
+	}	
     }
     
-    # If a base taxon has been specified by taxon_name, find it and add the
-    # appropriate filter.
+    # If a base taxon (or more than one) has been specified by taxon_name,
+    # find it and add the appropriate filter.  We split the argument on
+    # commas, and then look for a suffix introduced by a period.
     
     if ( defined $self->{base_taxon_name} )
     {
-	my $rank_clause = '';
-	my @args = $self->{base_taxon_name};
+	my @base_ranges;
 	
-	my $not_found_msg = "Taxon '$self->{base_taxon_name}' was not found in the database";
-	
-	# If a rank was specified, add a clause to narrow it down.
-	
-	if ( defined $self->{base_taxon_rank} )
+	foreach my $name (split /\s*,\s*/, $self->{base_taxon_name})
 	{
-	    $rank_clause = "and a.taxon_rank = ?";
-	    push @args, $self->{base_taxon_rank};
+	    next if $name eq '';
+	    my $rank;
 	    
-	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
-	}
-	
-	my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
+	    if ( $name =~ /([a-zA-Z() ]*)\.\s*(.*)/ )
+	    {
+		$name = $1; $rank = $2;
+	    }
+	    
+	    my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
 		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
 				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
 				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-		WHERE a.taxon_name = ? $rank_clause";
+		WHERE a.taxon_name = '$name'";
 	    
-	my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, @args);
+	    if ( defined $rank and $rank ne '' )
+	    {
+		die "400 Unknown taxon rank '$rank'" unless $DataQuery::TAXONOMIC_RANK{lc $rank};
+		$sql .= "and a.taxon_rank = '" . lc $rank . "'";
+	    }
+	    
+	    my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql);
+	    
+	    # If we can't find the base taxon, the result set will be empty.
+	    
+	    unless ( defined $lft and $lft > 0 )
+	    {
+		next;
+	    }
 	
-	# If we can't find the base taxon, the result set will be empty.
+	    # Otherwise, select the appropriate range of taxa.
+	    
+	    push @base_ranges, "(t.lft >= $lft and t.lft <= $rgt)";
+	    $self->{root_taxa}{$base_no} = 1;
+	}
 	
-	unless ( defined $lft and $lft > 0 )
+	# If we didn't find anything at all, the result set will be empty.
+	
+	if ( @base_ranges == 0 )
 	{
 	    return;
 	}
 	
-	# Otherwise, select the appropriate range of taxa.
+	# Otherwise, add the specified filter expression to the list.
 	
-	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
-	$self->{root_taxon_no} = $base_no;
+	elsif ( @base_ranges == 1 )
+	{
+	    push @filter_list, @base_ranges;
+	}
+	
+	else
+	{
+	    push @filter_list, '(' . join(' or ', @base_ranges) . ')';
+	}
     }
     
     # If a leaf taxon has been specified by taxon_no, find it and add the appropriate
@@ -1003,16 +996,12 @@ sub fetchMultiple {
 	my $rank_clause = '';
 	my @args = $self->{leaf_taxon_name};
 	
-	my $not_found_msg = "Taxon '$self->{leaf_taxon_name}' was not found in the database";
-	
 	# If a rank was specified, add a clause to narrow it down.
 	
 	if ( defined $self->{leaf_taxon_rank} )
 	{
 	    $rank_clause = "and a.taxon_rank = ?";
 	    push @args, $self->{leaf_taxon_rank};
-	    
-	    $not_found_msg .= " at rank '$self->{leaf_taxon_rank}'";
 	}
 	
 	my $sql = "SELECT t3.lft, t3.rgt
@@ -1446,8 +1435,9 @@ sub emitTaxonXML {
     }
     
     if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
-	 ( $self->{rooted_result} and defined $self->{root_taxon_no} 
-	      and $row->{taxon_no} == $self->{root_taxon_no} ) )
+	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+	 ( $self->{rooted_result} and ref $self->{root_taxa} and 
+	   $self->{root_taxa}{$row->{taxon_no}} ) )
     {
 	my $parent_no = $self->{generate_urns}
 	    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
@@ -1456,7 +1446,11 @@ sub emitTaxonXML {
 	$output .= '    <dwc:parentNameUsageID>' . $parent_no . '</dwc:parentNameUsageID>' . "\n";
     }
     
-    if ( defined $row->{parent_name} && $self->{show_parent_names} ) {
+    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and $self->{show_parent_names} and not
+	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+	 ( $self->{rooted_result} and ref $self->{root_taxa} and 
+	   $self->{root_taxa}{$row->{taxon_no}} ) )
+    {
     	$output .= '    <dwc:parentNameUsage>' . DataQuery::xml_clean($row->{parent_name}) . 
 	    '</dwc:parentNameUsage>' . "\n";
     }
@@ -1581,8 +1575,9 @@ sub emitTaxonText {
 	elsif ( $field eq 'parentNameUsageID' )
 	{
 	    if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
-		 ( $self->{rooted_result} and defined $self->{root_taxon_no}
-		      and $row->{taxon_no} == $self->{root_taxon_no} ) )
+		 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+		 ( $self->{rooted_result} and ref $self->{root_taxa} and
+		   $self->{root_taxa}{$row->{taxon_no}} ) )
 	    {
 		$value = $self->{generate_urns}
 		    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
@@ -1592,7 +1587,10 @@ sub emitTaxonText {
 	
 	elsif ( $field eq 'parentNameUsage' )
 	{
-	    if ( defined $row->{parent_name} and $row->{parent_name} ne '' )
+	    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and not
+		 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+		 ( $self->{rooted_result} and ref $self->{root_taxa} and
+		   $self->{root_taxa}{$row->{taxon_no}} ) )
 	    {
 		$value = DataQuery::xml_clean($row->{parent_name});
 	    }
@@ -1654,25 +1652,6 @@ sub emitTaxonText {
 	{
 	    $value = DataQuery::xml_clean($row->{common_name}) 
 		if defined $row->{common_name};
-	}
-	
-	elsif ( $field eq 'acceptedNameUsageID' )
-	{
-	    if ( defined $row->{accepted_no} )
-	    {
-		$value = $self->{generate_urns}
-		    ? DataQuery::generateURN($row->{accepted_no}, 'taxon_no')
-			: $row->{accepted_no};
-	    }
-	}
-	
-	if ( $field eq 'acceptedName' and defined $row->{accepted_name} )
-	{
-	    if ( defined $row->{accepted_name} )
-	    {
-		$value = DataQuery::xml_clean($row->{accepted_name})
-		    if defined $row->{accepted_name};
-	    }
 	}
 	
 	elsif ( $field eq 'extant' )
@@ -1742,11 +1721,19 @@ sub emitTaxonJSON {
 	$output .= ',"scientificNameAuthorship":"' . DataQuery::json_clean($authorship) . '"';
     }
     
-    if ( defined $row->{parent_no} && $row->{parent_no} > 0 ) {
+    if ( defined $row->{parent_no} && $row->{parent_no} > 0 and not
+	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+	 ( $self->{rooted_result} and ref $self->{root_taxa} and
+	   $self->{root_taxa}{$row->{taxon_no}} ) )
+    {
 	$output .= ',"parentNameUsageID":"' . $row->{parent_no} . '"';
     }
     
-    if ( defined $row->{parent_name} && $self->{show_parent_names} ) {
+    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and $self->{show_parent_names} and not
+	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+	 ( $self->{rooted_result} and ref $self->{root_taxa} and
+	   $self->{root_taxa}{$row->{taxon_no}} ) )
+    {
 	$output .= ',"parentNameUsage":"' . DataQuery::json_clean($row->{parent_name}) . '"';
     }
     
