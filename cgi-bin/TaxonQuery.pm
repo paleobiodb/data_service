@@ -896,7 +896,7 @@ sub fetchMultiple {
 	else
 	{
 	    push @filter_list, '(' . join(' or ', @base_ranges) . ')';
-	}	
+	}
     }
     
     # If a base taxon (or more than one) has been specified by taxon_name,
