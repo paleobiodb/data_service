@@ -1395,6 +1395,7 @@ sub getPreservationModeString {
     my $q = $self->{'q'};
     my $dbh = $self->{'dbh'};
 
+    # the form should use underscores, the database doesn't JA 28.9.12
     my @pres_modes_all = ('cast','adpression','soft_parts','original_aragonite','mold/impression','replaced_with_silica','trace','charcoalification','coalified');
     my $has_other = ($q->param('pres_mode_other') eq 'YES') ? 1 : 0; 
 
@@ -1415,11 +1416,14 @@ sub getPreservationModeString {
                 delete $seen_modes{$_};
             }
             my @pres_modes_missing = keys %seen_modes;
+            $_ =~ s/_/ /g foreach @pres_modes_missing;
+            $_ =~ s/_/ /g foreach @pres_modes;
             $sql = "(pres_mode IS NULL OR (".join(" AND ", map{'NOT FIND_IN_SET('.$dbh->quote($_).',pres_mode)'} @pres_modes_missing)."))";
         } else {
             $sql = "(".join(" OR ",  map{'FIND_IN_SET('.$dbh->quote($_).',pres_mode)'} @pres_modes).")";
         }
     }
+    return $sql;
 
 }
 
