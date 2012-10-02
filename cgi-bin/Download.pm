@@ -457,7 +457,7 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup('Environmental zones:','zone_',\@zone_group);
 
     # Preservation mode
-    my @pres_mode_group= ('cast','adpression','soft parts','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
+    my @pres_mode_group= ('cast','adpression','soft_parts','original_aragonite','mold/impression','replaced_with_silica','trace','charcoalification','coalified','other');
     $html .= $self->retellOptionsGroup('Preservation modes:','pres_mode_',\@pres_mode_group);
 
     # Collection methods
@@ -1416,10 +1416,11 @@ sub getPreservationModeString {
                 delete $seen_modes{$_};
             }
             my @pres_modes_missing = keys %seen_modes;
-            $_ =~ s/_/ /g foreach @pres_modes_missing;
-            $_ =~ s/_/ /g foreach @pres_modes;
+            $pres_modes_missing[$_] =~ s/_/ /g foreach 0..$#pres_modes_missing;
+            $pres_modes[$_] =~ s/_/ /g foreach 0..$#pres_modes;
             $sql = "(pres_mode IS NULL OR (".join(" AND ", map{'NOT FIND_IN_SET('.$dbh->quote($_).',pres_mode)'} @pres_modes_missing)."))";
         } else {
+            $pres_modes[$_] =~ s/_/ /g foreach 0..$#pres_modes;
             $sql = "(".join(" OR ",  map{'FIND_IN_SET('.$dbh->quote($_).',pres_mode)'} @pres_modes).")";
         }
     }
