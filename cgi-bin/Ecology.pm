@@ -5,15 +5,17 @@ use Debug qw(dbg);
 use Constants qw($WRITE_URL $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
 use Reference;
 
+use strict;
+
+use Try::Tiny;
+
 # written by JA 27-31.7,1.8.03
 
 my @fields = ('composition1', 'composition2', 'entire_body', 'body_part', 'adult_length', 'adult_width', 'adult_height', 'adult_area', 'adult_volume', 'thickness', 'architecture', 'form', 'reinforcement', 'folds', 'ribbing', 'spines', 'internal_reinforcement', 'polymorph', 'ontogeny', 'grouping', 'clonal', 'taxon_environment', 'locomotion', 'attached', 'epibiont', 'life_habit', 'depth_habitat', 'diet1', 'diet2', 'vision', 'reproduction', 'asexual', 'brooding', 'dispersal1', 'dispersal2', 'comments','minimum_body_mass','minimum_body_mass_unit','maximum_body_mass','maximum_body_mass_unit','body_mass_comment','body_mass_estimate','body_mass_estimate_unit','body_mass_source','body_mass_type');
 
 sub populateEcologyForm	{
-	my $dbt = shift;
-	my $hbo = shift;
-	my $q = shift;
-	my $s = shift;
+    my ($dbt, $taxonomy, $hbo, $q, $s) = @_;
+    
     my $dbh = $dbt->dbh;
 
     # We need a taxon_no passed in, cause taxon_name is ambiguous
@@ -24,9 +26,7 @@ sub populateEcologyForm	{
     $taxon_no = int($q->param('taxon_no'));
 
     # For form display purposes
-	$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $taxon_no;
-	$taxon_name =  ${$dbt->getData($sql)}[0]->{'taxon_name'};
-
+    my $taxon = $taxonomy->getTaxon($taxon_no);
 
 	# query the ecotaph table for the old data
 	$sql = "SELECT * FROM ecotaph WHERE taxon_no=" . $taxon_no;
@@ -46,8 +46,8 @@ sub populateEcologyForm	{
                     $values[$i] = 'kg';
                 }
             }
-	        push (@fields,'taxon_no','taxon_name','reference_no','ecotaph_no');
-	        push (@values,$taxon_no ,$taxon_name ,$s->get('reference_no'),'-1');
+	        push (@fields,'taxon_no', 'taxon_name', 'reference_no', 'ecotaph_no');
+	        push (@values,$taxon_no, $taxon->{taxon_name}, $s->get('reference_no'), '-1');
         }
     } else {
         # This is an edit, use fields from the DB
@@ -79,7 +79,7 @@ sub populateEcologyForm	{
         }
         # some additional fields not from the form row
 	    push (@fields, 'taxon_no','taxon_name','reference_no','ecotaph_no');
-	    push (@values, $taxon_no,$taxon_name,$ecotaph->{'reference_no'},$ecotaph->{'ecotaph_no'});
+	    push (@values, $taxon_no,$taxon->{taxon_name},$ecotaph->{'reference_no'},$ecotaph->{'ecotaph_no'});
     }
 
 	if ( $ecotaph->{'reference_no'} )	{
@@ -100,9 +100,8 @@ sub populateEcologyForm	{
 }
 
 sub processEcologyForm	{
-	my $dbt = shift;
-	my $q = shift;
-	my $s = shift;
+    my ($dbt, $taxonomy, $q, $s) = @_;
+    
     my $dbh = $dbt->dbh;
 
 	# can't proceed without a taxon no
@@ -127,11 +126,10 @@ sub processEcologyForm	{
 		}
 	}
 
-	# get the taxon's name
-	$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=" . $taxon_no;
-	my $taxon_name = ${$dbt->getData($sql)}[0]->{'taxon_name'};
-
-	# if ecotaph no exists, update the record
+    # get the taxon's name
+    my $taxon = $taxonomy->getTaxon($taxon_no);
+    
+    # if ecotaph no exists, update the record
     my %fields = $q->Vars();
 
     # This is an edit, use fields from the DB
@@ -147,7 +145,7 @@ sub processEcologyForm	{
 
 	if ( $q->param('ecotaph_no') > 0 )	{
         $dbt->updateRecord($s,'ecotaph','ecotaph_no',$q->param('ecotaph_no'),\%fields);
-		print "<center><div class=\"pageTitle\" style=\"margin-top: 1em;\">Ecological/taphonomic data for $taxon_name have been updated</div></center>\n";
+		print "<center><div class=\"pageTitle\" style=\"margin-top: 1em;\">Ecological/taphonomic data for $taxon->{taxon_name} have been updated</div></center>\n";
 	} else {
         # Set the reference_no
         $fields{'reference_no'} = $s->get('reference_no');
@@ -183,215 +181,128 @@ sub processEcologyForm	{
 
 # Can return authorities.preservation if $get_preservation is 1 as well PS 8/2006
 
+our (%FIELD_MAP) = ('minimum_body_mass' => 'min_body_mass',
+		    'maximum_body_mass' => 'max_body_mass');
+
 sub getEcology {
-    my $dbt = shift;
-    my $classification_hash = shift;
-    my $ecology_fields = shift;
-    my $get_basis = shift;
-    my $get_preservation = shift;
-    my @ecology_fields = @$ecology_fields;
     
-    my @taxon_nos = map{int($_)} grep {int($_)} keys(%$classification_hash);
-    # This first section gets ecology data for all taxa and parent taxa
-    # Dealing with recombinatins/corrections is tricky.  Strategy I use is this: 
-    # Store an array of alternative taxon_nos to a taxon in %alt_taxon_nos hash
-    # Iterate through this array when getting eco_data for the taxon_no as well. 
-    # Synonyms hopefully dealt with as well
-    my %all_taxon_nos = (-1=>1); # so we don't crash if there are no taxon nos. 
-    my %alt_taxon_nos;
-    for my $taxon_no ( @taxon_nos ) {
-        if ($taxon_no) {
-            $all_taxon_nos{$taxon_no} = 1;
-            foreach my $parent (@{$classification_hash->{$taxon_no}}) {
-                $all_taxon_nos{$parent->{'taxon_no'}} = 1;
-            }
-        }
-    }
-
-    # Get a list of alternative names of existing taxa as well
-    my $sql = "SELECT taxon_no,synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no != synonym_no AND synonym_no IN (".join(",",keys %all_taxon_nos).")";
-    my @results = @{$dbt->getData($sql)};
-    foreach my $row (@results) {
-        # Synonym_no in this case means senior synonym_no. taxon_no is junior synonym or recombination to add
-        push @{$alt_taxon_nos{$row->{'synonym_no'}}},$row->{'taxon_no'};
-        $all_taxon_nos{$row->{'taxon_no'}} = 1;
-    }
-  
-    my %taxon_metadata = ();
-    if (@ecology_fields) {
-        $sql = "SELECT taxon_no,reference_no,".join(", ",@ecology_fields)." FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_taxon_nos).")";
-        dbg("Ecology sql: $sql");
-        @results = @{$dbt->getData($sql)};
-        foreach my $row (@results) {
-            $taxon_metadata{$row->{'taxon_no'}} = $row;
-        }
-    }
-
-    if ($get_basis || $get_preservation) {
-        if (@taxon_nos) {
-            $sql = "SELECT taxon_no,taxon_rank,preservation,form_taxon FROM authorities WHERE taxon_no IN (".join(",",keys %all_taxon_nos).")";
-            my @results = @{$dbt->getData($sql)};
-            foreach my $row (@results) {
-                $taxon_metadata{$row->{'taxon_no'}}{'taxon_rank'} = $row->{'taxon_rank'};
-                $taxon_metadata{$row->{'taxon_no'}}{'preservation'} = $row->{'preservation'};
-                $taxon_metadata{$row->{'taxon_no'}}{'form_taxon'} = $row->{'form_taxon'};
-            }
-        }
-    }
-
-
-    my @fields = ();
-
-    # Recurse fields are fields whose properties are inheritied from children, not just parents
-    my $get_body_mass = 0;
-    foreach my $field (@ecology_fields) {
-        if ($field =~ /maximum_body_mass|minimum_body_mass|body_mass_estimate/) {
-            $get_body_mass = 1;
-        } else {
-            push @fields, $field;
-        }
-    }
-    if ($get_preservation) {
-        push @fields,('preservation','form_taxon');
+    my ($dbt, $taxonomy, $taxon, $field_list, $options) = @_;
+    
+    my $dbh = $dbt->dbh;
+    
+    my $tree_table = $taxonomy->{tree_table};
+    
+    # First, figure out the options
+    
+    $options ||= {};
+    
+    my $get_basis = $options->{get_basis};
+    my $get_preservation = $options->{get_preservation};
+    
+    # Next, figure out the field list.
+    
+    my %field_names;
+    
+    unless ( ref $fields eq 'ARRAY' )
+    {
+	croak "parameter 'fields' must be an arrayref";
     }
     
-    my %child_taxa;
-    if ($get_body_mass) {
-        my %all_child_taxon_nos = (-1=>1);
-        foreach my $taxon_no (@taxon_nos) {
-            if ($taxon_metadata{$taxon_no}{'rank'} =~ /species/) {
-                # Optimization: if its species, don't call function, just get the species itself and its alternate spellings
-                $child_taxa{$taxon_no} = [$taxon_no,@{$alt_taxon_nos{$taxon_no}}];
-            } else {
-                my @child_taxon_nos = TaxaCache::getChildren($dbt,$taxon_no);
-                $child_taxa{$taxon_no} = \@child_taxon_nos;
-            }
-            $all_child_taxon_nos{$_} = 1 foreach @{$child_taxa{$taxon_no}}; 
-        }
+    foreach $f (@$field_list)
+    {
+	next if $f eq 'body_mass_estimate';
+	
+	$f = $FIELD_MAP{$f} if exists $FIELD_MAP{$f};
+	
+	$field_names{"qe.$f"} = 1;
+    }
     
-        $sql = "SELECT taxon_no,reference_no,minimum_body_mass,maximum_body_mass,body_mass_estimate FROM ecotaph WHERE taxon_no IN (".join(", ",keys %all_child_taxon_nos).")";
-        dbg("Ecology recurse sql: $sql");
-        @results = @{$dbt->getData($sql)};
-        foreach my $row (@results) {
-            # do it this way instead of assigning the whole row so as not to obliterate previous entries
-            $taxon_metadata{$row->{'taxon_no'}}{'minimum_body_mass'}  = $row->{'minimum_body_mass'};
-            $taxon_metadata{$row->{'taxon_no'}}{'maximum_body_mass'}  = $row->{'maximum_body_mass'};
-            $taxon_metadata{$row->{'taxon_no'}}{'body_mass_estimate'} = $row->{'body_mass_estimate'};
-            $taxon_metadata{$row->{'taxon_no'}}{'reference_no'} = $row->{'reference_no'};
-        }
-        if ($get_basis) {
-            $sql = "SELECT taxon_no,taxon_rank FROM authorities WHERE taxon_no IN (".join(",",keys %all_child_taxon_nos).")";
-            my @results = @{$dbt->getData($sql)};
-            foreach my $row (@results) {
-                $taxon_metadata{$row->{'taxon_no'}}{'taxon_rank'} = $row->{'taxon_rank'};
-            }
-        }
+    my $field_string = join(', ', 'qe.reference_no', keys %field_names);
+    
+    # Then, grab those fields from the indicated taxon plus all of its parents.
+    
+    my $list = 
+	$taxonomy->getRelatedTaxa($taxon, 
+				  'all_parents',
+				  { select => 'orig',
+				    join_tables => 
+				    'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no] ' .
+				    'LEFT JOIN $attrs_table as v using v.orig_no = [taxon_no]',
+				    extra_fields => $field_string });
+    
+    my $tt_table = $taxonomy->getTaxonIdTable($taxon, 'all_parents', 
+					      { select => 'orig', fields => 'lft' });
+    
+    my $list;
+    
+    try {
+	my $sql = "
+		SELECT $field_string FROM $tt_table as tt
+			JOIN authorities as a using (taxon_no)
+			LEFT JOIN ecotaph as e on e.taxon_no = tt.taxon_no
+			LEFT JOIN $attrs_table as v using v.orig_no = tt.taxon_no
+		ORDER BY tt.lft DESC";
+    
+	$list = $dbh->selectall_arrayref($sql, { Slice => {} });
     }
-
-    # Now we want to crawl upwards in the higherarchy of each taxon, using the first category value
-    # we find then stopping. Example: if the taxon has a value for diet1, use that. If it doesn't, and family
-    # and order have values, use the family (lower rank'd) value
-    my %ecotaph;
-    for my $taxon_no (@taxon_nos) {
-        my %refs_for_taxon = ();
-
-        # Create a sort of execution plan: start off with recombinations of the taxon, then the taxon itself, then each
-        # of its parent, starting with the lowest ranked parent first
-        my @exec_order = ();
-        push @exec_order, $taxon_no; #taxon/most current combination first
-        push @exec_order, @{$alt_taxon_nos{$taxon_no}}; #then syns/recombs
-        foreach my $parent (@{$classification_hash->{$taxon_no}}) {
-            push @exec_order, $parent->{'taxon_no'}; #ditto as above
-            push @exec_order, @{$alt_taxon_nos{$parent->{'taxon_no'}}}; 
-        }
-        
-        my ($seen_diet,$seen_composition,$seen_adult) = (0,0,0);
-        foreach my $use_taxon_no (@exec_order) {
-            my $taxon = $taxon_metadata{$use_taxon_no};
-            foreach my $field (@fields) {
-                # never get comments for anything other than the focal taxon
-                # maybe a little extreme, but it can save major embarassment
-                #  JA 11.1.08
-                next if ($field eq "comments" && $use_taxon_no != $exec_order[0]);
-                if ($taxon->{$field} && !$ecotaph{$taxon_no}{$field}) {
-                    # The following three next's deal with linked fields. We can't mix and match
-                    # diet1/diet2 from different family/classes, so if one of them is set, skip messing with the whole group
-                    next if ($field =~ /^composition/ && $seen_composition);
-                    next if ($field =~ /^diet/ && $seen_diet);
-                    next if ($field =~ /^adult_/ && $seen_adult);
-                    $ecotaph{$taxon_no}{$field} = $taxon->{$field};
-                    # If we want to know what class this data is based off of 
-                    # (used in displayCollectionEcology), get that as well
-                    $ecotaph{$taxon_no}{$field.'basis'} = $taxon->{'taxon_rank'} if ($get_basis);
-                    my $reference_no = $taxon->{'reference_no'};
-                    $refs_for_taxon{$reference_no} = 1;
-                }
-            }
-            $seen_composition = 1 if ($taxon->{'composition1'} ||
-                                      $taxon->{'composition2'});
-            $seen_diet = 1 if ($taxon->{'diet1'} ||
-                               $taxon->{'diet2'});
-            $seen_adult = 1 if ($taxon->{'adult_length'} ||
-                                $taxon->{'adult_width'} ||
-                                $taxon->{'adult_height'} ||
-                                $taxon->{'adult_area'} ||
-                                $taxon->{'adult_volume'});
-        }
-
-        # Now get minimum and maximum body mass. Algorithm is:
-        # For a given taxon, iterate though all its children.  Out of itself and all its children, use the 
-        # minimum and maximum values values for min and max body mass respectively. body_mass_estimate
-        # can also count as a minimum or maximum value
-        if ($get_body_mass){
-            foreach my $use_taxon_no (@{$child_taxa{$taxon_no}}) {
-                my $taxon = $taxon_metadata{$use_taxon_no};
-                my @values = ($taxon->{'minimum_body_mass'},
-                              $taxon->{'maximum_body_mass'},
-                              $taxon->{'body_mass_estimate'});
-                foreach my $v (@values) {
-                    if ($v && 
-                          (!exists $ecotaph{$taxon_no}{'minimum_body_mass'} ||
-                           $v < $ecotaph{$taxon_no}{'minimum_body_mass'})) {
-                        $ecotaph{$taxon_no}{'minimum_body_mass'} = $v;
-                        my $reference_no = $taxon->{'reference_no'};
-                        $refs_for_taxon{$reference_no} = 1;
-                        $ecotaph{$taxon_no}{'minimum_body_mass'.'basis'} = $taxon->{'taxon_rank'} if ($get_basis);
-                    }
-                    if ($v && 
-                           (!exists $ecotaph{$taxon_no}{'maximum_body_mass'} ||
-                           $v > $ecotaph{$taxon_no}{'maximum_body_mass'})) {
-                        $ecotaph{$taxon_no}{'maximum_body_mass'} = $v;
-                        my $reference_no = $taxon->{'reference_no'};
-                        $refs_for_taxon{$reference_no} = 1;
-                        $ecotaph{$taxon_no}{'maximum_body_mass'.'basis'} = $taxon->{'taxon_rank'} if ($get_basis);
-                    }
-                    # Note the distinction between exists and empty string ""
-                    #  if it doesn't exist, we have no value for it yet, so we're safe to use one
-                    #  if it does exist, then replace any value that might be there with a blank string 
-                    #       because since we have multiple values, we're now going to use a min -- max range instead
-                    # Note that we can have both a range and point estimate if both the min and max equal the point estimate
-                    # but as soon as the min and max aren't equal, the point estimate goes away
-                    if ($v && ! $ecotaph{$taxon_no}{'body_mass_estimate'}) {
-                        $ecotaph{$taxon_no}{'body_mass_estimate'} = $v;
-                    } 
-                }
-            }
-
-            if (exists $ecotaph{$taxon_no}) {
-                # if we have a range, then no body mass estimate
-                if ($ecotaph{$taxon_no}{'minimum_body_mass'} != $ecotaph{$taxon_no}{'maximum_body_mass'}) {
-                    $ecotaph{$taxon_no}{'body_mass_estimate'} = '';
-                }
-            }
-        }
-        
-        # Get all the references that were used in getting this ecology data
-        if (exists $ecotaph{$taxon_no}) {
-            my @refs = keys %refs_for_taxon;
-            $ecotaph{$taxon_no}{'references'} = \@refs;
-        }
+    
+    finally {
+	$dbh->do("DROP TABLE $tt_table IF EXISTS");
+    };
+    
+    # Drop the temporary table immediately, since we won't need it anymore.
+    
+    $dbh-do("DROP TABLE $tt_table IF EXISTS");
+    
+    # Now we can iterate through the list of rows (each representing a
+    # containing taxon of our base taxon, going up the taxonomic hierarchy)
+    # and pick out the first value appearing for each field.  That way, for
+    # each field, we pick out the value from as low as possible in the
+    # hierarchy.  For example, if 'diet' is defined at the genus level, we
+    # ignore it at all higher levels.
+    
+    return unless ref $list eq 'ARRAY';
+    
+    my (%ecotaph) = { references => {} };
+    
+    foreach my $row (@$list)
+    {
+	# For each row, we look through all of the fields and grab any values
+	# that are defined for that row.  We then delete the names of the
+	# fields whose values we found, so that we don't look for them further
+	# up the hierarchy.
+	
+	my @f = keys %field_names;
+	
+	foreach my $f (@f)
+	{
+	    if ( defined $row->{$f} )
+	    {
+		$ecotaph{$f}{value} = $row->{$f};
+		$ecotaph{$f}{rank} = $row->{taxon_rank};
+		$ecotaph{$f}{reference_no} = $row->{reference_no};
+		$ecotaph{references}{$row->{reference_no}} = 1;
+		
+		delete $field_names{$f};
+		
+		# For each of these groups, if one is found, we stop looking for
+		# the others as well.
+		
+		if ( $f =~ /^(diet|dispseral|composition)/ )
+		{
+		    delete $field_names{$1.'1'};
+		    delete $field_names{$1.'2'};
+		}
+	    }
+	}
     }
-
+    
+    # Turn the hash of references into a list.
+    
+    $ecotaph{references} = [ keys %{$ecotaph{references}} ];
+    
+    # Return the result.
+    
     return \%ecotaph;
 }
 
@@ -440,44 +351,69 @@ sub kgToGrams{
     }
 }
 
-# JA 17.4.12
-# creates one ecotaph attribute lookup for all taxa in a group
+# JA 17.4.12 creates one ecotaph attribute lookup for all taxa in a group
+# IMPORTANT: when the changes from Measurement.pm are merged, change the call
+# to this routine to pass in one taxon_no value instead of a (lft, rgt) pair!!!
 sub fastEcologyLookup	{
-	my ($dbt,$field,$lft,$rgt) = @_;
-	my $sql = "(SELECT t.taxon_no,lft,rgt,e.$field FROM $TAXA_TREE_CACHE t,ecotaph e WHERE t.taxon_no=e.taxon_no AND lft>=$lft AND rgt<=$rgt) UNION (SELECT t.taxon_no,lft,rgt,NULL FROM $TAXA_TREE_CACHE t LEFT JOIN ecotaph e ON t.taxon_no=e.taxon_no WHERE lft>=$lft AND rgt<=$rgt AND e.ecotaph_no IS NULL)";
-	my @taxa = @{$dbt->getData($sql)};
-	my (%lookup,%from,%att);
-	for my $t ( @taxa )	{
-		if ( $t->{$field} ne "" )	{
-			for my $pos ( $t->{lft}..$t->{rgt} )	{
-				if ( $att{$pos} eq "" || $from{$pos} < $t->{lft} )	{
-					$att{$pos} = $t->{$field};
-					$from{$pos} = $t->{lft};
-				}
-			}
-		}
+    my ($dbt, $taxonomy, $base_taxon, $field) = @_;
+    
+    my $dbh = $dbt->dbh;
+    
+    # First, retrieve the specified attribute for the base taxon and all of
+    # its children.
+    
+    my $result_list = 
+	$taxonomy->getRelatedTaxa($base_taxon, 
+				  'all_children',
+				  { select => 'orig', 
+				    include => 'lft',
+				    join_tables => 'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no]',
+				    extra_fields => "qe.$field" });
+    
+    # If the first row (the base taxon) doesn't have a value for the
+    # attribute, we will have to look up its parents.
+    
+    unless ( $result_list->[0]{$field} )
+    {
+	my $parent_list = 
+	    $taxonomy->getRelatedTaxa($base_taxon,
+				      'all_parents',
+				      { select => 'orig',
+					exclude_self => 1,
+					join_tables => 'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no]',
+					extra_fields => "qe.$field" });
+	
+        foreach $row ( @$parent_list )
+	{
+	    if ( $row->{$field} )
+	    {
+		$result_list->[0]{$field} = $row->{$field};
+		last;
+	    }
 	}
-	my $missing;
-	for my $t ( @taxa )	{
-		$lookup{$t->{taxon_no}} = $att{$t->{lft}};
-		if ( ! $lookup{$t->{taxon_no}} )	{
-			$missing++;
+    }
+    
+    my (%lookup, @default);
+    
+    return \%lookup unless ref $result_list eq 'ARRAY';
+    
+    foreach my $t (@$result_list)
+    {
+	if ( $t->{$field} ne "" )	{
+	    for my $pos ( $t->{lft}..$t->{rgt} )	{
+		if ( $att{$pos} eq "" || $from{$pos} < $t->{lft} )	{
+		    $att{$pos} = $t->{$field};
+		    $from{$pos} = $t->{lft};
 		}
+	    }
 	}
-	# if needed, use a default value taken from the closest scored parent
-	#  (or from the passed in taxon itself)
-	# unfortunately, the parents are in scrambled order...
-	#  JA 14.5.12
-	if ( $missing )	{
-		$sql = "SELECT e.$field FROM $TAXA_TREE_CACHE t,$TAXA_TREE_CACHE t2,ecotaph e,$TAXA_LIST_CACHE l WHERE t.lft=$lft AND t.taxon_no=child_no AND parent_no=e.taxon_no AND parent_no=t2.taxon_no ORDER BY t2.lft DESC";
-		my $value = ${$dbt->getData($sql)}[0]->{$field};
-		for my $t ( @taxa )	{
-			if ( ! $lookup{$t->{taxon_no}} )	{
-				$lookup{$t->{taxon_no}} = $value;
-			}
-		}
-	}
-	return \%lookup;
+    }
+    
+    for my $t ( @taxa )	{
+	$lookup{$t->{taxon_no}} = $att{$t->{lft}};
+    }
+
+    return \%lookup;
 }
 
 

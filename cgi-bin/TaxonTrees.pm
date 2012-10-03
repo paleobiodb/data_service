@@ -45,6 +45,7 @@ our $MSG_LEVEL = 0;
 our (@TREE_TABLE_LIST) = ("taxon_trees");
 our (%SUPPRESS_TABLE) = ("taxon_trees" => "suppress_opinions");
 our (%SEARCH_TABLE) = ("taxon_trees" => "taxon_search");
+our (%ATTRS_TABLE) = ("taxon_trees" => "taxon_attrs");
 
 our $OPINION_CACHE = "order_opinions";
 
@@ -59,6 +60,7 @@ our $REFS_TABLE = "refs";
 our $TREE_TEMP = "tn";
 our $SUPPRESS_TEMP = "sn";
 our $SEARCH_TEMP = "fn";
+our $ATTRS_TEMP = "vn";
 our $OPINION_TEMP = "opn";
 
 # Auxiliary table names
@@ -784,7 +786,7 @@ sub updateTables {
 	# Then activate the temporary tables by renaming them over the previous
 	# ones. 
 	
-	activateNewTables($dbh, $tree_table, $suppress_table, $options->{keep_temps});
+	activateNewTables($dbh, $tree_table, $options->{keep_temps});
     }
     
     my $a = 1;		# we can stop here when debugging
@@ -808,8 +810,6 @@ sub buildTables {
     my ($dbh, $tree_table, $options, $step_control) = @_;
     
     $options ||= {};
-    my $suppress_table = $SUPPRESS_TABLE{$tree_table};
-    my $search_table = $SEARCH_TABLE{$tree_table};
     
     # First, set the variables that control log output.
     
@@ -863,12 +863,19 @@ sub buildTables {
     
     computeSearchTable($dbh) if $step_control->{f};
     
+    # Next, compute the attributes table that keeps track of bottom-up
+    # attributes such as minimum and maximum mass.  Note that we only do this
+    # on a table rebuild; it wouldn't be worth the effort to fix this table on
+    # update, because that info isn't all that crucial.
+    
+    computeAttrsTable($dbh) if $step_control->{g};
+    
     # Finally, activate the new tables we have just computed by renaming them
     # over the previous ones.
     
     my $keep_temps = $step_control->{k} || $options->{keep_temps};
     
-    activateNewTables($dbh, $keep_temps, $tree_table, $suppress_table, $search_table)
+    activateNewTables($dbh, $tree_table, $keep_temps)
 	if $step_control->{g};
     
     my $a = 1;		# we can stop here when debugging
@@ -1185,7 +1192,7 @@ sub createTempTables {
 				suppress int unsigned not null,
 				PRIMARY KEY (opinion_no))");
     
-    # Finally, create a search table through which taxa can be efficiently and
+    # Create a search table through which taxa can be efficiently and
     # completely found by name.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_TEMP");
@@ -1195,6 +1202,16 @@ sub createTempTables {
 				taxon_name varchar(80) not null,
 				taxon_no int unsigned not null,
 				UNIQUE KEY (taxon_name, genus, subgenus))");
+    
+    # Create a table through which bottom-up attributes such as min_body_mass
+    # and max_body_mass can be looked up.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_TEMP");
+    $result = $dbh->do("CREATE TABLE $ATTRS_TEMP
+			       (orig_no int unsigned not null,
+				min_body_mass float,
+				max_body_mass float,
+				PRIMARY KEY (orig_no))");
     
     return;
 }
@@ -2990,7 +3007,69 @@ sub updateSearchTable {
 }
 
 
-# activateNewTables ( dbh, keep_temps )
+# computeAttrsTable ( dbh )
+# 
+# Create a table by which bottom-up attributes such as max_body_mass and
+# min_body_mass may be looked up.  These attributes propagate upward through
+# the taxonomic hierarchy; for example, the value of min_body_mass for a taxon
+# would be the mininum value of that attribute for all of its children.
+
+sub computeAttrsTable {
+
+    my ($dbh) = @_;
+    
+    logMessage(2, "computing attrs table (g)");
+    
+    my $result;
+    
+    $DB::single = 1;
+    
+    # Prime the table with the values actually stored in the ecotaph table.
+    
+    $result = $dbh->do("INSERT IGNORE INTO $ATTRS_TEMP (orig_no, min_body_mass, max_body_mass)
+			SELECT a.orig_no, coalesce(e.minimum_body_mass, e.body_mass_estimate),
+				coalesce(e.maximum_body_mass, e.body_mass_estimate)
+			FROM authorities as a join ecotaph as e using (taxon_no)
+			WHERE e.minimum_body_mass is not null or
+				e.maximum_body_mass is not null or
+				e.body_mass_estimate is not null");
+    
+    # Now figure out how deep in the table this information starts.
+    
+    my ($max_depth) = $dbh->selectrow_array("
+			SELECT max(t.depth)
+			FROM $TREE_TEMP as t join $ATTRS_TEMP as v using (orig_no)");
+    
+    # We then iterate from that depth on up to the top of the tree, computing
+    # each row from its immediate children.  We don't propagate these
+    # attributes up past the class level.
+    
+    for (my $row = $max_depth; $row > 1; $row--)
+    {
+	logMessage(1, "    computing row $row");
+	
+	my $sql = "REPLACE INTO $ATTRS_TEMP (orig_no, min_body_mass, max_body_mass)
+		SELECT t.parent_no, coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
+					min(v.min_body_mass), pv.min_body_mass), 
+			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
+					max(v.max_body_mass), pv.max_body_mass)
+		FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
+			JOIN $AUTH_TABLE as pa on pa.taxon_no = t.parent_no
+			LEFT JOIN $ATTRS_TEMP as pv on pv.orig_no = t.parent_no 
+		WHERE t.depth = $row and pa.taxon_rank not in
+			('kingdom', 'subkingdom', 'superphylum', 'phylum', 'subphylum', 'superclass')
+		GROUP BY t.parent_no";
+	
+	$dbh->do($sql);
+    }
+    
+    # We can stop here when debugging.
+    
+    my $a = 1;
+}
+
+
+# activateNewTables ( dbh, new_tree_table, keep_temps )
 # 
 # In one atomic operation, move the new taxon tables to active status and swap
 # out the old ones.  Those old ones are then deleted.
@@ -3001,30 +3080,40 @@ sub updateSearchTable {
 
 sub activateNewTables {
 
-    my ($dbh, $keep_temps, $tree_table, $suppress_table, $search_table) = @_;
+    my ($dbh, $tree_table, $keep_temps) = @_;
     
     my $result;
     
-    logMessage(2, "activating tables '$tree_table', '$suppress_table', and '$search_table' (g)");
+    # Determine the names of subordinate tables
     
-    # Compute the backup names
+    my $suppress_table = $SUPPRESS_TABLE{$tree_table};
+    my $search_table = $SEARCH_TABLE{$tree_table};
+    my $attrs_table = $SEARCH_TABLE{$tree_table};
+    
+    logMessage(2, "activating tables '$tree_table', '$suppress_table', '$search_table', '$attrs_table' (g)");
+    
+    # Compute the backup names of all the tables to be activated
     
     my $tree_bak = "${tree_table}_bak";
     my $suppress_bak = "${suppress_table}_bak";
     my $search_bak = "${search_table}_bak";
+    my $attrs_bak = "${attrs_table}_bak";
     
     # Delete any backup tables that might still be around
     
     $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $suppress_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $search_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $attrs_bak");
     
     # Create dummy versions of any of the main tables that might be currently
-    # missing
+    # missing (otherwise the rename will fail; the dummies will be deleted
+    # below anyway, after they are renamed to the backup names).
     
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_TEMP");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $suppress_table LIKE $SUPPRESS_TEMP");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $search_table LIKE $SEARCH_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $attrs_table LIKE $ATTRS_TEMP");
     
     # Now do the Atomic Table Swap (tm)
     
@@ -3034,13 +3123,16 @@ sub activateNewTables {
 			    $suppress_table to $suppress_bak,
 			    $SUPPRESS_TEMP to $suppress_table,
 			    $search_table to $search_bak,
-			    $SEARCH_TEMP to $search_table");
+			    $SEARCH_TEMP to $search_table
+			    $attrs_table to $attrs_bak,
+			    $ATTRS_TEMP to $attrs_table");
     
     # Then we can get rid of the backup tables
     
     $result = $dbh->do("DROP TABLE $tree_bak");
     $result = $dbh->do("DROP TABLE $suppress_bak");
     $result = $dbh->do("DROP TABLE $search_bak");
+    $result = $dbh->do("DROP TABLE $attrs_bak");
     
     # Delete the auxiliary tables too, unless we were told to keep them.
     

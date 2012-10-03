@@ -986,19 +986,16 @@ sub processMeasurementForm	{
     # note that we do not compute mass estimates for junior synonyms by themselves, so likewise
     #  we (1) store combined data only, and (2) store these data under the names of the senior
     #  synonyms only
-    my $orig = TaxonInfo::getOriginalCombination($dbt,$taxon_no);
-    my $ss = TaxonInfo::getSeniorSynonym($dbt,$orig);
-    my @in_list = TaxonInfo::getAllSynonyms($dbt,$ss);
-    my @specimens = getMeasurements($dbt, $taxonomy, taxon_list => \@in_list, get_global_specimens => 1);
+    my @synonym_nos = $taxonomy->getRelatedTaxa($taxon_no, { select => orig, id => 1 } );
+    my $senior_no = $synonym_nos[0];
+    my @specimens = getMeasurements($dbt, $taxonomy, taxon_list => \@synonym_nos, get_global_specimens => 1);
     my $p_table = getMeasurementTable(\@specimens);
-    my @m = getMassEstimates($dbt,$ss,$p_table);
+    my @m = getMassEstimates($dbt,$senior_no,$p_table);
     if ( $m[5] && $m[6] )	{
         my $mean = $m[5] / $m[6];
-        @in_list = TaxonInfo::getAllSpellings($dbt,$ss);
-        my $sql = "UPDATE $TAXA_TREE_CACHE SET mass=$mean WHERE taxon_no IN (".join(',',@in_list).")";
+        my $sql = "UPDATE $taxonomy->{attrs_table} SET mass=$mean WHERE orig_no = $senior_no";
         $dbh->do($sql);
     }
-
 }
 
 

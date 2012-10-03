@@ -2504,10 +2504,10 @@ sub processTaxonSearch {
         Images::displayLoadImageForm($dbt,$taxonomy,$q,$s); 
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'ecotaph') {
         $q->param('taxon_no'=>$results[0]->{'taxon_no'});
-        Ecology::populateEcologyForm($dbt, $hbo, $q, $s, $WRITE_URL);
+        Ecology::populateEcologyForm($dbt, $taxonomy, $hbo, $q, $s, $WRITE_URL);
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'ecovert') {
         $q->param('taxon_no'=>$results[0]->{'taxon_no'});
-        Ecology::populateEcologyForm($dbt, $hbo, $q, $s, $WRITE_URL);
+        Ecology::populateEcologyForm($dbt, $taxonomy, $hbo, $q, $s, $WRITE_URL);
 	# We have more than one matches, or we have 1 match or more and we're adding an authority.
     # Present a list so the user can either pick the taxon,
     # or create a new taxon with the same name as an exisiting taxon
@@ -3100,12 +3100,12 @@ sub startStartEcologyVertebrateSearch{
 }
 sub startPopulateEcologyForm	{
     print $hbo->stdIncludes($PAGE_TOP);
-	Ecology::populateEcologyForm($dbt, $hbo, $q, $s, $WRITE_URL);
+	Ecology::populateEcologyForm($dbt, $taxonomy, $hbo, $q, $s, $WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub startProcessEcologyForm	{
     print $hbo->stdIncludes($PAGE_TOP);
-	Ecology::processEcologyForm($dbt, $q, $s, $WRITE_URL);
+	Ecology::processEcologyForm($dbt, $taxonomy, $q, $s, $WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 ## END Ecology stuff
