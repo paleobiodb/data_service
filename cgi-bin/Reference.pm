@@ -626,7 +626,7 @@ sub displayReference {
             # primary ref in first SELECT, secondary refs in second SELECT
             # the '1 is primary' and '0 is_primary' is a cool trick - alias the value 1 or 0 to column is_primary
             # any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
-            my $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections WHERE reference_no=$reference_no)";
+            my $sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections c WHERE reference_no=$reference_no)";
             $sql .= " UNION ";
             $sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, year(release_date) release_year, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
@@ -640,7 +640,10 @@ sub displayReference {
                 my $ofRows = 0;
                 $p->getReadRows($sth,$results,$limit,\$ofRows);
             }
-		$sql =~ s/WHERE /WHERE release_date>now() AND /g;
+		my $readable = join(',',map { $_->{collection_no} } @$results);
+		if ( $readable )	{
+			$sql =~ s/WHERE /WHERE c.collection_no NOT IN ($readable) AND /g;
+		}
 		my @protected = @{$dbt->getData($sql)};
 		my (%in_year,$protected_count);
 		$in_year{$_->{'release_year'}}++ foreach @protected;
@@ -985,7 +988,7 @@ sub getReferenceLinkSummary	{
 	my @colls = ();
 	my ($collection_count,$protected_count,%in_year);
 	if ( $DB ne "eco" )	{
-		$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections WHERE reference_no=$reference_no)";
+		$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections c WHERE reference_no=$reference_no)";
 		$sql .= " UNION ";
 		$sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, year(release_date) release_year, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
@@ -999,7 +1002,10 @@ sub getReferenceLinkSummary	{
 			$p->getReadRows($sth,\@colls,$limit,\$ofRows);
 		# second hit (which is reasonably fast) gets a count to warn
 		#  users that protected collections do exist
-			$sql =~ s/WHERE /WHERE release_date>now() AND /g;
+			my $readable = join(',',map { $_->{collection_no} } @colls);
+			if ( $readable )	{
+				$sql =~ s/WHERE /WHERE c.collection_no NOT IN ($readable) AND /g;
+			}
 			my @protected = @{$dbt->getData($sql)};
 			$in_year{$_->{'release_year'}}++ foreach @protected;
 			$protected_count = scalar(@protected);
