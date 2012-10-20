@@ -2909,12 +2909,6 @@ sub checkTaxonInfo {
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
-sub displayTaxonInfoResults {
-    print $hbo->stdIncludes( $PAGE_TOP );
-	TaxonInfo::displayTaxonInfoResults($dbt,$taxonomy,$s,$q,$hbo);
-    print $hbo->stdIncludes($PAGE_BOTTOM);
-}
-
 # JA 3.11.09
 sub basicTaxonInfo	{
 	TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);

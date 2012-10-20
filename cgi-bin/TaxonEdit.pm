@@ -1752,63 +1752,52 @@ sub submitTypeTaxonSelect {
 # This function returns an array of potential higher taxa for which the focal taxon can be a type.
 # The array is an array of hash refs with the following keys: taxon_no, taxon_name, taxon_rank, type_taxon_no, type_taxon_name, type_taxon_rank
 sub getTypeTaxonList {
-    my $dbt = shift;
-    my $type_taxon_no = shift;   
-    my $reference_no = shift;
+    my ($dbt, $taxonomy, $base_no) = @_;
+    
     my $dbh = $dbt->dbh;
             
-    my $focal_taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$type_taxon_no});
-            
-    my $parents = Classification::get_classification_hash($dbt,'all',[$type_taxon_no],'array',$reference_no);
-    # This array holds possible higher taxa this taxon can be a type taxon for
-    # Note the reference_no passed to get_classification_hash - parents must be linked by opinions from
-    # the same reference as the reference_no of the opinion which is currently being inserted/edited
-    my @parents = @{$parents->{$type_taxon_no}}; # is an array ref
-
-# JA: we need not just potential parents, but all immediate parents that ever
-#  have been proposed, so also hit the opinion table directly 17.6.07
-    my @parent_nos;
-    for my $p ( @parents )	{
-        push @parent_nos , $p->{'taxon_no'};
+    my $focal_taxon = $taxonomy->getTaxon($base_no, { fields => 'type' });
+    
+    my $focal_rank = $focal_taxon->{taxon_rank};
+    my $rank_list;
+    
+    if ( $focal_rank eq 'species' or $focal_rank eq 'subspecies' )
+    {
+	$rank_list = ['genus'];
     }
-    my $sql = "SELECT taxon_no,taxon_rank,taxon_name FROM authorities a,opinions o WHERE child_no=". $focal_taxon->{taxon_no} ." AND taxon_rank!='". $focal_taxon->{'taxon_rank'} ."' AND parent_no=taxon_no";
-    if ( $#parents > -1 )	{
-        $sql .= " AND parent_no NOT IN (". join(',',@parent_nos) .")";
+    
+    else
+    {
+	$rank_list = ['subtribe', 'tribe', 'subfamily', 'family', 'superfamily',
+		      'infraorder', 'suborder', 'order', 'superorder'];
+	
+	while ( $rank_list[0] ne $focal_rank )
+	{
+	    shift @rank_list;
+	}
+	
+	return unless @rank_list;
     }
-    $sql .= " GROUP BY parent_no";
-    push @parents , @{$dbt->getData($sql)};
-
-    if ($focal_taxon->{'taxon_rank'} =~ /species/) {
-        # A species may be a type for genus/subgenus only
-        my @lower;
-        for my $p ( @parents ) {
-            if ($p->{'taxon_rank'} =~ /species|genus|subgenus/)        {
-                push @lower , $p;
-            }
-       }
-        @parents = @lower;
-    } else {
-        # A higher order taxon may be a type for subtribe/tribe/family/subfamily/superfamily only
-        # Don't know about unranked clade, leave it for now
-        my $i = 0;
-        for($i=0;$i<scalar(@parents);$i++) {
-            last if ($parents[$i]->{'taxon_rank'} !~ /tribe|family|unranked clade/);
-        }
-        splice(@parents,$i);
-    }
-    # This sets values in the hashes for the type_taxon_no, type_taxon_name, and type_taxon_rank
-    # in addition to the taxon_no, taxon_name, taxon_rank of the parent
-    foreach my  $parent (@parents) {
-        my $parent_taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent->{'taxon_no'}},['taxon_no','type_taxon_no','authorizer_no']);
-        $parent->{'authorizer_no'} = $parent_taxon->{'authorizer_no'};
-        $parent->{'type_taxon_no'} = $parent_taxon->{'type_taxon_no'};
-        if ($parent->{'type_taxon_no'}) {
-            my $type_taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent->{'type_taxon_no'}});
-            $parent->{'type_taxon_name'} = $type_taxon->{'taxon_name'};
-            $parent->{'type_taxon_rank'} = $type_taxon->{'taxon_rank'};
-        }
-    }
-
+    
+    # Unlike the previous version of this function, parents are not limited to
+    # those from a single reference (i.e. the authority reference for a taxon
+    # being edited).  Instead, all parents are included no matter what their
+    # reference.  If this does not give the desired results, we may want to
+    # change it back.
+    
+    my (@parents) = 
+	$taxonomy->getRelatedTaxa($base_no, 'all_parents',
+				  { rank => $rank_list, trad => 1,
+				    fields => 'type' });
+    
+    # We also need to add all immediate parents that have ever been proposed.
+    
+    my (@immediate_parents) = 
+	$taxonomy->getTaxaByOpinions($base_no, 'seniors',
+				     { fields => 'type' });
+    
+    push @parents, @immediate_parents;
+    
     return @parents;
 }
 
@@ -1821,30 +1810,29 @@ sub getTypeTaxonList {
 #   I.E. data from getTaxa($dbt,{'taxon_name'=>$taxon_name,'ignore_common_name'=>"YES"},['*']) -- see function for details
 # 
 # it returns some HTML to display the authority information.
-sub formatTaxon{
-    my $dbt = shift;
-    my $taxon = shift;
-    my %options = @_;
-	my $nameLine;
+sub formatTaxon {
+    
+    my ($dbt, $taxon, %options) = @_;
+    
+    my $nameLine;
     my $authLine;
-
-	# Print the name
-	# italicize if genus or species.
-	if ( $taxon->{'taxon_rank'} =~ /subspecies|species|genus/) {
+    
+    # Print the name
+    # italicize if genus or species.
+    if ( $taxon->{'taxon_rank'} =~ /subspecies|species|genus/) {
         if ($options{'no_html'}) {
             $nameLine .= "$taxon->{taxon_name}, $taxon->{taxon_rank}";
         } else {
-		    $nameLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
+	    $nameLine .= "<i>" . $taxon->{'taxon_name'} . "</i>";
         }
-	} else {
-		$nameLine .= $taxon->{'taxon_name'};
+    } else {
+	$nameLine .= $taxon->{'taxon_name'};
         if ($taxon->{'taxon_rank'} && $taxon->{'taxon_rank'} !~ /unranked clade/) {
             $authLine .= ", $taxon->{taxon_rank}";
         }
-	}
-
-    my $orig_no = TaxonInfo::getOriginalCombination($dbt,$taxon->{'taxon_no'});
-    my $is_recomb = ($orig_no == $taxon->{'taxon_no'}) ? 0 : 1;
+    }
+    
+    my $is_recomb = ($taxon->{orig_no} == $taxon->{taxon_no}) ? 0 : 1;
 	# If the authority is a PBDB ref, retrieve and print it
     my $pub_info = Reference::formatShortRef($taxon,'is_recombination'=>$is_recomb);
     if ($pub_info !~ /^\s*$/) {

@@ -941,7 +941,7 @@ sub findMostCommonTaxa	{
 	{
 	    # Get all matching taxa, and then iterate through them to find the largest
 	    my $largest_taxon = $taxonomy->getTaxaByName($q->param('taxon_name'), 
-						{ common => 1, include => 'lft', order => 'size.desc' } );
+						{ common => 1, fields => 'lft', order => 'size.desc' } );
 	    my @taxon_nos = $taxonomy->getRelatedTaxa($largest_taxon, 'all_children',
 							  { id => 1 });
 	    my $taxon_list = join(',', @taxon_nos);
@@ -967,7 +967,7 @@ sub findMostCommonTaxa	{
 
 	# get the name and rank of each taxon's synonym or (if valid)
 	#  current spelling
-	my @taxa2 = $taxonomy->getRelatedTaxa(\%hasno, 'self', { include => 'link' });
+	my @taxa2 = $taxonomy->getRelatedTaxa(\%hasno, 'self', { fields => 'link' });
 	
 	my %synonym;
 	for my $r ( @taxa2 )	{
@@ -1307,7 +1307,7 @@ sub fastTaxonCount {
 	if ( $q->param('taxon_name') )
 	{
 	    my $largest_taxon = $taxonomy->getTaxaByName($q->param('taxon_name'), 
-						{ common => 1, include => 'lft', order => 'size' });
+						{ common => 1, fields => 'lft', order => 'size' });
 	    if ( defined $largest_taxon )
 	    {
 		push @and, "t2.lft>$largest_taxon->{lft} AND t2.rgt<$largest_taxon->{rgt}";

@@ -1,14 +1,14 @@
 Cladogram.pm			NEEDS TESTING
-Classification.pm		*** WORKING ***
+Classification.pm		REMOVED
 Collection.pm
 CollectionQuery.pm
 Confidence.pm			NEEDS TESTING
 Curve.pm			NEEDS TESTING
 DBTransactionManager.pm		n/a
-DataQuery.pm
+DataQuery.pm			n/a
 Download.pm			AJ: line 2290
-DownloadTaxonomy.pm
-Ecology.pm
+DownloadTaxonomy.pm		*** WORKING ***
+Ecology.pm			NEEDS TESTING
 FossilRecord.pm			AJ: do we need to update this?
 HTMLBuilder.pm			n/a
 Images.pm			NEEDS TESTING
@@ -25,8 +25,8 @@ SanityCheck.pm			NEEDS TESTING
 Strata.pm			NEEDS TESTING
 TaxaCache.pm			READY TO BE REMOVED
 Taxon.pm			REMOVED
-TaxonEdit.pm			*** WORKING ***
-TaxonInfo.pm			*** WORKING ***
+TaxonEdit.pm			AJ: explain propagateAuthorityInfo()
+TaxonInfo.pm			AJ: checkTaxonInfo: museum param?
 Taxonomy.pm			IN PROGRESS
 TaxonQuery.pm
 TaxonTrees.pm			NEEDS TESTING

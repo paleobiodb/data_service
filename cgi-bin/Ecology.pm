@@ -340,7 +340,7 @@ sub fastEcologyLookup	{
 	$taxonomy->getRelatedTaxa($base_taxon, 
 				  'all_children',
 				  { select => 'orig', 
-				    include => 'lft',
+				    fields => 'lft',
 				    join_tables => 'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no]',
 				    extra_fields => "qe.$field" });
     

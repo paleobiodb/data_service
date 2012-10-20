@@ -280,7 +280,7 @@ our ($ATTR_FIELDS) = ", if(a.refauth, r.author1last, a.author1last) as a_al1, if
 # The "old attribution" fields are the same but under the names expected by the
 # old code.
 
-our ($OLDATTR_FIELDS) = ", if(a.refauth, r.author1last, a.author1last) as author1last, if(a.refauth, r.author2last, a.author2last) as author2last, if(a.refauth, r.otherauthors, a.otherauthors) as otherauthors, if(a.refauth, r.pubyr, a.pubyr) as pubyr";
+our ($OLDATTR_FIELDS) = ", if(a.refauth, r.author1last, a.author1last) as author1last, if(a.refauth, r.author2last, a.author2last) as author2last, if(a.refauth, r.otherauthors, a.otherauthors) as otherauthors, if(a.refauth, r.pubyr, a.pubyr) as pubyr, a.ref_is_authority";
 
 # The "reference" fields are returned additionally if we are asked for the
 # reference for each taxon.
@@ -303,7 +303,7 @@ our ($KINGDOM_FIELDS) = ", t.kingdom";
 
 # Tye "type" field is returned if we are asked for that information.
 
-our ($TT_FIELDS) = ", tta.taxon_name as type_taxon_name, tta.taxon_rank as type_taxon_rank";
+our ($TT_FIELDS) = ", tta.taxon_no as type_taxon_no, tta.taxon_name as type_taxon_name, tta.taxon_rank as type_taxon_rank, a.type_locality";
 
 
 # The following hash is used by &getTaxonIdTable
@@ -322,7 +322,7 @@ options listed under the individual method headings:
 
 =over 4
 
-=item include
+=item fields
 
 This option allows you to specify additional fields to be included in the
 resulting Taxon objects.  Its value should be a list of one or more of
@@ -370,7 +370,7 @@ taxon is placed.
 =item id
 
 If this option is specified, a list of distinct taxon_no values will be
-returned instead of a list of Taxon objects.  In that case, the 'include'
+returned instead of a list of Taxon objects.  In that case, the 'fields'
 option is ignored.
 
 =back
@@ -686,9 +686,9 @@ sub getTaxaByName {
     my $query_fields = $BASIC_FIELDS;
     my $extra_joins = '';
     
-    if ( defined $options->{include} )
+    if ( defined $options->{fields} )
     {
-	($query_fields, $extra_joins) = $self->generateQueryFields($options->{include});
+	($query_fields, $extra_joins) = $self->generateQueryFields($options->{fields});
 	
 	if ( defined $options->{order} and $options->{order} =~ /^size/ )
 	{
@@ -1165,9 +1165,9 @@ sub getTaxaByReference {
 	push @filter_list, $self->generateRankFilter($options->{rank});
     }
     
-    if ( defined $options->{include} )
+    if ( defined $options->{fields} )
     {
-	($query_fields, $extra_joins) = $self->generateQueryFields($options->{include}, ['ref']);
+	($query_fields, $extra_joins) = $self->generateQueryFields($options->{fields}, ['ref']);
     }
     
     my $filter_expr = join(' and ', @filter_list);
@@ -1323,7 +1323,7 @@ sub getTaxaIdsByReference {
 }
 
 
-=head3 getClassifications ( base_taxa, relationship, options )
+=head3 getTaxaByOpinions ( base_taxa, relationship, options )
 
 Returns a list of objects of class C<Taxon> representing all taxa under which
 (or over which) any of the given taxa have ever been classified.  The entire
@@ -1364,6 +1364,11 @@ value.  The default is 'belongs to'.  Accepted values include:
 Only return taxa which are classified as valid, in other words those for which
 the classification status is 'belongs to'.
 
+=item junior
+
+Only return taxa which are classified as junior synonyms, i.e. those for which
+the classification status is 'synonym of' or 'replaced by'.
+
 =item invalid
 
 Only return taxa which are classified as invalid, in other words those for
@@ -1384,7 +1389,7 @@ values are as follows:
 
 =item exact
 
-This is the default, and returns one Taxon object for parent taxon found,
+This is the default, and returns one Taxon object for each taxon found,
 representing the spelling actually associated with the opinion which records
 the classification.
 
@@ -1406,7 +1411,7 @@ opinion).
 
 =cut
 
-sub getClassifications {
+sub getTaxaByOpinions {
 
     my ($self, $base_taxa, $parameter, $options) = @_;
     
@@ -1527,6 +1532,10 @@ sub getClassifications {
     {
 	push @filter_list, "o.status in ('belongs to', 'subjective synonym of', 'objective synonym of')";
     }
+    elsif ( $status eq 'junior' )
+    {
+	push @filter_list, "o.status in ('subjective synonym of', 'objective synonym of', 'replaced by')";
+    }
     elsif ( $status eq 'invalid' ) {
 	push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
     }
@@ -1542,9 +1551,9 @@ sub getClassifications {
 	push @filter_list, $self->generateRankFilter($options->{rank});
     }
     
-    if ( defined $options->{include} )
+    if ( defined $options->{fields} )
     {
-	($query_fields, $extra_joins) = $self->generateQueryFields($options->{include});
+	($query_fields, $extra_joins) = $self->generateQueryFields($options->{fields});
     }
     
     my $filter_expr = join(' and ', @filter_list);
@@ -1805,9 +1814,9 @@ sub getRelatedTaxon {
     my $query_fields = $BASIC_FIELDS;
     my $extra_joins = '';
     
-    if ( defined $options->{include} )
+    if ( defined $options->{fields} )
     {
-	($query_fields, $extra_joins) = $self->generateQueryFields($options->{include});
+	($query_fields, $extra_joins) = $self->generateQueryFields($options->{fields});
     }
     
     # The relationship 'senior' selects the field 'synonym_no'.
@@ -2238,11 +2247,43 @@ sub getRelatedTaxa {
 	{
 	    push @filter_list, "t.lft != t2.lft";
 	}
+	
+	elsif ( $rel eq 'synonyms' )
+	{
+	    push @filter_list, "t.orig_no != t2.orig_no";
+	}
     }
     
-    if ( defined $options->{include} )
+    if ( defined $options->{fields} )
     {
-	($query_fields, $extra_joins) = $self->generateQueryFields($options->{include});
+	($query_fields, $extra_joins) = $self->generateQueryFields($options->{fields});
+	
+	if ( defined $options->{order} and $options->{order} =~ /^size/ )
+	{
+	    $query_fields .= ", $LFT_FIELDS" unless $query_fields =~ /t\.lft/;
+	}
+    }
+    
+    my $order_expr = '';
+    
+    if ( defined $options->{order} )
+    {
+	my $direction = $options->{order} =~ /\.desc$/ ? 'DESC' : 'ASC';
+		
+	if ( $options->{order} =~ /^size/ )
+	{
+	    $order_expr = "ORDER BY t.rgt-t.lft $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^name/ )
+	{
+	    $order_expr = "ORDER BY a.taxon_name $direction";
+	}
+	
+	else
+	{
+	    croak "invalid value '$options->{order}' for option 'order'";
+	}
     }
     
     if ( defined $options->{join_tables} )
@@ -2265,14 +2306,16 @@ sub getRelatedTaxa {
 	$extra_joins .= $join_tables;
     }
     
-    if ( defined $options->{extra_fields} )
+    if ( defined $options->{extra_fields} and
+	 $options->{extra_fields} ne '' )
     {
 	$query_fields .= ', ' . $options->{extra_fields};
     }
     
-    if ( defined $options->{extra_filters} )
+    if ( defined $options->{extra_filters} and
+	 $options->{extra_filters} ne '' )
     {
-	push @filter_list, $extra_filters;
+	push @filter_list, $options->{extra_filters};
     }
     
     my $filter_expr = join(' and ', @filter_list);
@@ -2299,6 +2342,9 @@ sub getRelatedTaxa {
     
     if ( $rel eq 'spellings' )
     {
+	$order_expr = 'ORDER BY if(a.taxon_no = t.${select}_no, 0, 1)'
+	    if $order_expr eq '';
+	
 	$result_list = $dbh->selectall_arrayref("
 		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $auth_table as a using (orig_no)
@@ -2306,7 +2352,7 @@ sub getRelatedTaxa {
 			LEFT JOIN $opinion_table as o using (opinion_no)
 			$extra_joins
 		$filter_expr
-		ORDER BY if(a.taxon_no = t.${select}_no, 0, 1)", 
+		$order_expr", 
 		{ Slice => {} }, @param_list);
     }
     
@@ -2319,7 +2365,8 @@ sub getRelatedTaxa {
 		FROM $auth_table as a JOIN $tree_table as t on a.taxon_no = t.orig_no
 			LEFT JOIN $opinion_table as o using (opinion_no)
 			$extra_joins
-		$filter_expr",
+		$filter_expr
+		$order_expr",
 		{ Slice => {} }, @param_list);
     }
     
@@ -2328,6 +2375,9 @@ sub getRelatedTaxa {
     
     elsif ( $rel eq 'synonyms' )
     {
+	$order_expr = 'ORDER BY if(a.orig_no = t.synonym_no, 0, 1)'
+	    if $order_expr eq '';
+	
 	$result_list = $dbh->selectall_arrayref("
 		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
@@ -2336,7 +2386,7 @@ sub getRelatedTaxa {
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
-		ORDER BY if(a.orig_no = t.synonym_no, 0, 1)", 
+		$order_expr", 
 		{ Slice => {} }, @param_list);
     }
     
@@ -2351,16 +2401,20 @@ sub getRelatedTaxa {
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
-		$filter_expr",
+		$filter_expr
+		$order_expr",
 		{ Slice => {} }, @param_list);
     }
     
     # For parameter 'child' or 'all_children', order the results by tree
-    # sequence.
+    # sequence unless otherwise specified.
     
     elsif ( $rel eq 'children' or $rel eq 'all_children' )
     {
 	my $level_filter = $rel eq 'child' ? 'and t.depth = t2.depth + 1' : '';
+	
+	$order_expr = 'ORDER BY t.lft'
+	    if $order_expr eq '';
 	
 	$result_list = $dbh->selectall_arrayref("
 		SELECT $query_fields
@@ -2371,7 +2425,7 @@ sub getRelatedTaxa {
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
-		ORDER BY t.lft", 
+		$order_expr", 
 		{ Slice => {} }, @param_list);
     }
     
@@ -2386,7 +2440,8 @@ sub getRelatedTaxa {
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
-		$filter_expr",
+		$filter_expr
+		$order_expr",
 		{ Slice => {} }, @param_list);
     }
     
@@ -2443,6 +2498,9 @@ sub getRelatedTaxa {
 	    # Finally, we can use this scratch table to get the information we
 	    # need.
 	    
+	    $order_expr = 'ORDER BY t.lft'
+		if $order_expr eq '';
+	    
 	    $result_list = $dbh->selectall_arrayref("
 		SELECT $query_fields
 		FROM $tree_table as t JOIN $ANCESTRY_SCRATCH as s on s.orig_no = t.orig_no
@@ -2450,7 +2508,7 @@ sub getRelatedTaxa {
 			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
-		ORDER BY t.lft",
+		$order_expr",
 		{ Slice => {} });
 	}
 	
@@ -3077,7 +3135,7 @@ sub getTaxonIdTable {
 
 =head2 Other functions
 
-=head3 validName ( taxon_name, options )
+=head3 isValidName ( taxon_name, options )
 
 Returns true if the specified name is a valid taxon name, false otherwise.
 This function can be called either directly or as a method.
@@ -3104,7 +3162,7 @@ periods and the % wildcard are allowed in the name.
 
 =cut
 
-sub validName {
+sub isValidName {
 
     # Start by parsing the argument list.  If the first argument is an object
     # of class Taxonomy, ignore it.  This sub can be called either as a method
@@ -3134,7 +3192,7 @@ sub validName {
 }
 
 
-=head3 splitName ( taxon_name )
+=head3 splitTaxonName ( taxon_name )
 
 Splits the given name into the following components, some of which may be
 empty: genus, subgenus, species, subspecies.  Returns these four strings.
@@ -3220,6 +3278,52 @@ sub guessTaxonRank {
 }
 
 
+=head3 isUsedTaxon ( taxon_no )
+
+Return true if the taxon has at least one genus- or species- level child.
+
+=cut
+
+sub isUsedTaxon {
+    
+    my ($self, $taxon_no) = @_;
+    
+    # Make sure that we have a positive taxon_no value, otherwise return false.
+    
+    return unless $taxon_no > 0;
+    $taxon_no = $taxon_no + 0;
+    
+    # Do the necessary query.  We only need to find one genus or species-level
+    # entry to ensure that this name is still used.
+    
+    my $dbh = $self->{dbh};
+    my $auth_table = $self->{auth_table};
+    my $tree_table = $self->{tree_table};
+    
+    my $result_list = $dbh->selectcol_arrayref("
+	SELECT a.orig_no
+	FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+		JOIN $tree_table as t2 on t.lft > t2.lft and t.lft <= t2.rgt
+		JOIN $auth_table as a2 on t2.orig_no = a2.orig_no
+	WHERE a2.taxon_no = $taxon_no AND a.taxon_rank in ('genus', 'subgenus', 'species')
+	LIMIT 1");
+    
+    # If we found something, return 1 (i.e. the taxon is used)
+    
+    if ( $result_list && @$result_list > 0 )
+    {
+	return 1;
+    }
+    
+    # Otherwise, return false (i.e. the taxon is disused)
+    
+    else
+    {
+	return;
+    }
+}
+
+
 # The following routines are used by the methods defined above to establish
 # the proper query fields and parameters.
 #
@@ -3240,11 +3344,11 @@ sub guessTaxonRank {
 
 sub generateQueryFields {
 
-    my ($self, $include_list, $ignore_tables) = @_;
+    my ($self, $fields_list, $ignore_tables) = @_;
     
     # Return the default if our parameter is undefined.
     
-    unless ( defined $include_list )
+    unless ( defined $fields_list )
     {
 	return $BASIC_FIELDS, '';
     }
@@ -3252,15 +3356,15 @@ sub generateQueryFields {
     # Next, turn $list into a reference to an actual list unless it already
     # is one.
     
-    unless ( ref $include_list )
+    unless ( ref $fields_list )
     {
-	my @strings = split(/\s*,\s*/, $include_list);
-	$include_list = \@strings;
+	my @strings = split(/\s*,\s*/, $fields_list);
+	$fields_list = \@strings;
     }
     
-    elsif ( ref $include_list ne 'ARRAY' )
+    elsif ( ref $fields_list ne 'ARRAY' )
     {
-	croak "option 'include' must be either a string or an arrayref";
+	croak "option 'fields' must be either a string or an arrayref";
     }
     
     # Now go through the list of strings and add the appropriate fields and
@@ -3269,7 +3373,7 @@ sub generateQueryFields {
     my $fields = $BASIC_FIELDS;
     my %tables;
     
-    foreach my $inc (@$include_list)
+    foreach my $inc (@$fields_list)
     {
 	if ( $inc eq 'attr' )
 	{
@@ -3312,7 +3416,7 @@ sub generateQueryFields {
 	
 	else
 	{
-	    carp "unrecognized value '$inc' in option 'include'";
+	    carp "unrecognized value '$inc' in option 'fields'";
 	}
     }
     

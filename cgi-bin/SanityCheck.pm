@@ -28,7 +28,7 @@ sub processSanityCheck	{
 	if ( ! $q->param('taxon_name') )	{
 		$error_message = "You must enter a taxon name.";
 	} else	{
-		my $row = $taxonomy->getTaxaByName($q->param('taxon_name'), { include => 'lft' });
+		my $row = $taxonomy->getTaxaByName($q->param('taxon_name'), { fields => 'lft' });
 		$lft = $row->{lft};
 		$rgt = $row->{rgt};
 		if ( ! $lft )	{
@@ -39,7 +39,7 @@ sub processSanityCheck	{
 			$error_message = $q->param('taxon_name') . " is not a higher taxon.";
 		}
 		if ( $q->param('excluded_taxon') )	{
-		    $row = $taxonomy->getTaxaByName($q->param('excluded_taxon'), { include => 'lft' });
+		    $row = $taxonomy->getTaxaByName($q->param('excluded_taxon'), { fields => 'lft' });
 			$lftrgt2 .= " AND (lft<" . $row->{lft} . " OR rgt>" . $row->{rgt} . ")";
 			if ( ! $row->{lft} )	{
 				$error_message .= " \"" . $q->param('excluded_taxon') . "\" is not in the Database.";

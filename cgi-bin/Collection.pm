@@ -6,7 +6,6 @@ use PBDBUtil;
 use Validation;
 use Taxonomy;
 use TimeLookup;
-use TaxaCache;
 use Person;
 use Permissions;
 use Class::Date qw(now date);
@@ -30,12 +29,11 @@ use Constants qw($READ_URL $WRITE_URL $HTML_DIR $HOST_URL $TAXA_TREE_CACHE $DB $
 # This function will die on error, so call it in an eval loop
 # PS 08/11/2005
 sub getCollections {
-	my $dbt = $_[0];
-	my $s = $_[1];
-	my $taxonomy = $_[2];
+	my ($dbt, $taxonomy, $options, $fields) = @_;
+	
 	my $dbh = $dbt->dbh;
-	my %options = %{$_[3]};
-	my @fields = @{$_[4]};
+	my %options = %{$options};
+	my @fields = @{$fields};
 	
 	my @taxa;
 	

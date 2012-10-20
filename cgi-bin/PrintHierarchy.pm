@@ -79,7 +79,7 @@ sub classify {
 ###		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE o.reference_no=$reference_no AND ref_has_opinion='YES' AND child_spelling_no=a.taxon_no AND a.taxon_no=t.taxon_no AND a.reference_no=r.reference_no";
 ###		@taxa = @{$dbt->getData($sql)};
 		@taxa = $taxonomy->getTaxaByReference($reference_no,
-				      { basis => 'opinions', include => ['lft', 'oldattr'] });
+				      { basis => 'opinions', fields => ['lft', 'oldattr'] });
 		
 		if ( ! @taxa )	{
 			print $hbo->stdIncludes($PAGE_TOP);
@@ -147,7 +147,7 @@ sub classify {
 	# grab all children of the parent taxon
 	if ( $taxon_no )	{
 		@taxa = $taxonomy->getRelatedTaxa($taxon_no, 'all_children', 
-				      { include => ['lft', 'oldattr'], status => 'all' });
+				      { fields => ['lft', 'oldattr'], status => 'all' });
 
 ###		my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_no=".$taxon_no;
 ###		my $range = ${$dbt->getData($sql)}[0];

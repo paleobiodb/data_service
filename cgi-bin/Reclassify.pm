@@ -483,7 +483,7 @@ sub classificationSelect {
                  
     # populate the select list of authorities
     foreach my $m (@$matches) {
-        my $t = $taxonomy->getTaxon($m->{taxon_no}, { include => 'oldattr' });
+        my $t = $taxonomy->getTaxon($m->{taxon_no}, { fields => 'oldattr' });
         # have to format the authority data
         my $authority = TaxonEdit::formatTaxon($dbt,$t);
 

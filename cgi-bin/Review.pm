@@ -585,7 +585,7 @@ sub makeMap	{
 	# taxon names take precedence because they are common
 	
 	my @matches = $taxonomy->getTaxaByName(\%unmatched,
-					{ include => 'lft', order => 'size.desc' });
+					{ fields => 'lft', order => 'size.desc' });
 	my %seen;
 	if ( @matches )	{
 		# need to remove duplicates by hand (oh well)
