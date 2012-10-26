@@ -1256,12 +1256,8 @@ sub displaySearchCollsForAdd	{
 	# Some prefilled variables like lat/lng/time term
 	my %pref = $s->getPreferences();
 	
-	my $openlayers_header = <<END_HEADER;
-<script src="/JavaScripts/OpenLayers.js"></script>
-END_HEADER
-		
 	# Spit out the HTML
-	print $hbo->stdIncludes( $PAGE_TOP, { extra_header => $openlayers_header } );
+	print $hbo->stdIncludes( $PAGE_TOP );
 	if ( $DB ne "eco" )	{
 		print  $hbo->populateHTML('search_collections_for_add_form' , \%pref);
 	} else	{
@@ -2193,12 +2189,7 @@ sub displayCollectionForm {
         exit;
     }
 
-    # Add the map header
-    my $openlayers_header = <<END_HEADER;
-<script src="/JavaScripts/OpenLayers.js"></script>
-END_HEADER
-
-    print $hbo->stdIncludes($PAGE_TOP, { extra_header => $openlayers_header });
+    print $hbo->stdIncludes($PAGE_TOP);
     Collection::displayCollectionForm($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }

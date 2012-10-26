@@ -556,7 +556,6 @@ function doCheckFieldsComponents() {
   <i><p class="verysmall">*State/province is required for collections within Australia, Canada, and the United States</i></p>
   <br>
 
-  <table><tr><td>
   <table style="margin-top: -0.5em;">
     <tr>
       <td></td>
@@ -588,12 +587,12 @@ function doCheckFieldsComponents() {
    See the <a href="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</a>
   for web sites that provide coordinate data.</i></p>
   <p>
-  </td>
-  <td><div style="width:300; height:150" id="map"></div></td>
+  <table><tr>
+  <td><div style="width:600; height:300" id="map"></div></td>
   </tr>
   
   <tr><td colspan=2><div align="center">
-    <input type="button" name="show" value="show on map" onmouseup="adjustCoords()">&nbsp;&nbsp;
+    <input type="button" name="show" value="show on map" onmouseup="adjustCoords(1)">&nbsp;&nbsp;
     <input type="button" name="reset_coodrds" value="reset coords" onmouseup="restoreCoords()">&nbsp;&nbsp;
     Set coords as:
       <select name="setcoords">
@@ -1537,13 +1536,16 @@ function doCheckFieldsComponents() {
   
 </form>
 
-<script language="JavaScript">
-    switchToPanel(1,7);
-</script>
 
-<!-- now include OpenLayers -->
+</div>
+
+<!-- now include OpenLayers and our map widget, and initialize them. -->
+<script src="/JavaScripts/OpenLayers.js"></script>
 <script src="/JavaScripts/mapwidget.js"></script>
 <script type="text/javascript">
+
+switchToPanel(2,7);
+
 // This function is passed as a callback to the map widget constructor.  It
 // is called when the user clicks on the map.
 
@@ -1603,11 +1605,11 @@ function setCoords ( lat, lng )
     mw.showMarker;
 }
 
-// This function is called the value of any of the coordinate fields is
-// changed.  If both of the degree fields have a value, the coordinates
-// are displayed on the map.
+// This function is called when the value of any of the coordinate
+// fields is changed.  If both of the degree fields have a value, the
+// coordinates are displayed on the map.
 
-function adjustCoords ()
+function adjustCoords (center)
 {
     var form = document.forms[1];
     if ( form.latdeg.value != '' && form.lngdeg.value != '' )
@@ -1638,7 +1640,7 @@ function adjustCoords ()
 	if ( form.lngdir.value == 'West' ) { lng = -1 * lng; }
 	
 	mw.setMarker(lng, lat);
-	mw.showMarker();
+	mw.showMarker(center);
     }
 }
 
@@ -1666,17 +1668,16 @@ function restoreCoords () {
     form.lngmin.value = savedCoords.lngmin;
     form.lngsec.value = savedCoords.lngsec;
     form.lngdir.value = savedCoords.lngdir;
-    adjustCoords();
+    adjustCoords(1);
 }
 
 var mw = new PBDB_map_widget('map', { click_callback: setCoords });
 var savedCoords = {};
 
-adjustCoords();
+adjustCoords(1);
 saveCoords();
+
+switchToPanel(1,7);
+
 </script>
   
-
-
-</div>
-

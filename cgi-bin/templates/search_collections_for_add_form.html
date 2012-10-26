@@ -72,7 +72,7 @@ function checkForm ( ) {
     <td><input id="latsec" size=3 maxlength=2 onchange="adjustCoords()"></td>
     <td><input id="latdec" size=5 maxlength=8 onchange="adjustCoords()"></td>
     <td><select id="latdir" onchange="adjustCoords()"></select>
-    <td rowspan=2><input type="button" name="show" value="show on map" onmouseup="adjustCoords()"></td>
+    <td rowspan=2><input type="button" name="show" value="show on map" onmouseup="adjustCoords(1)"></td>
   </tr>
   <tr>
     <td>Longitude</td>
@@ -116,7 +116,8 @@ function checkForm ( ) {
 
 </form>
 
-<!-- now include OpenLayers -->
+<!-- now include OpenLayers and our map widget, and then initialize them -->
+<script src="/JavaScripts/OpenLayers.js"></script>
 <script src="/JavaScripts/mapwidget.js"></script>
 <script type="text/javascript">
 // This function is passed as a callback to the map widget constructor.  It
@@ -182,7 +183,7 @@ function setCoords ( lat, lng )
 // changed.  If both of the degree fields have a value, the coordinates
 // are displayed on the map.
 
-function adjustCoords ()
+function adjustCoords (center)
 {
     var form = document.forms[1];
     if ( form.latdeg.value != '' && form.lngdeg.value != '' )
@@ -213,7 +214,7 @@ function adjustCoords ()
 	if ( form.lngdir.value == 'West' ) { lng = -1 * lng; }
 	
 	mw.setMarker(lng, lat);
-	mw.showMarker();
+	mw.showMarker(center);
     }
 }
 
