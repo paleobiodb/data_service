@@ -59,9 +59,15 @@ function checkForm() {
     else if ( ! /[A-Za-z]/.test( f.specimen_part.value ) )	{
         errors += "* You must indicate the part\n";
     }
+    if ( f.mass_average.value && ! /^body$/.test(f.specimen_part.value) )	{
+        errors += "* If you enter a mass value the part must be 'body'\n";
+    }
 
     if (specimens_measured >= 1) {
         var field_count = 0;
+        if (f.mass_average.value != '') {
+            field_count += 1;
+        }
         if (f.length_average.value != '') {
             field_count += 1;
         }
@@ -143,37 +149,39 @@ function checkForm() {
 
 <form method="POST" action="%%write_url%%" onSubmit="return checkForm();">
 
-<div class="small" style="width: 44em; margin-left: auto; margin-right: auto; margin-bottom: 1em; padding-left: 0.5em; text-indent: -0.5em;">
+<div class="small" style="width: 44em; margin-left: auto; margin-right: auto; margin-bottom: 1em; padding-left: 0.5em; text-indent: -0.5em; overflow: hidden;">
 %%reference%%
 %%switch_to_ref%%
 %%occurrences%%
 </div>
 
-<div align="center"><table cellspacing=0 cellpadding=0 border=0><tr><td>
+<div style="padding-left: 6em; overflow: hidden;">
 
 <input type="hidden" name="action" value="processMeasurementForm">
+<input id="full_form" type="hidden" value="YES">
 <input id="types_only" type="hidden" name="types_only">
 <input id="specimen_no" type="hidden" name="specimen_no">
 <input id="occurrence_no" type="hidden" name="occurrence_no">
 <input id="taxon_no" type="hidden" name="taxon_no">
 
-<table class="medium" cellpadding="6">
+<table class="verysmall" cellpadding="6">
   <tr>
     <td>Specimens measured <input id="specimens_measured" type="text" size="5"></td>
     <td>Proportion of sample measured <select name="specimen_coverage"><select id="specimen_coverage"></select></tr>
   </tr>
   <tr>
     <td>Specimen number <input id="specimen_id" type="text" size="20"></td>
-    <td>Side 
+    <td>Side/sex/part 
       <select id="specimen_side"></select>
-      Part <input id="specimen_part" type="text" size=10>
+      <select id="sex"></select>
+      <input id="specimen_part" type="text" size=10>
     </td>
   </tr>
   <tr>
-    <td valign="top" colspan=2>
+    <td valign="top" colspan="2">
       Size estimates (mm): 
-        <table>
-          <tr class="small">
+        <table class="small">
+          <tr>
             <td></td>
             <td>value*</td>
             <td>median</td>
@@ -181,7 +189,7 @@ function checkForm() {
             <td>max</td>
             <td>error</td>
           </tr>
-          <tr class="small">
+          <tr>
           <span show="mass_unit">
             <td>mass <select name="mass_unit" class="small"><option>g</option><option>kg</option></select></td>
             <td><input id="mass_average" size="7" maxlength="7"></td>
@@ -191,7 +199,7 @@ function checkForm() {
             <td><input id="mass_error" size="7" maxlength="7"><select id="mass_error_unit"></select></td>
           </span>
           </tr>
-          <tr class="small">
+          <tr>
             <td>length</td>
             <td><input id="length_average" size="7" maxlength="7"></td>
             <td><input id="length_median" size="7" maxlength="7"></td>
@@ -199,7 +207,7 @@ function checkForm() {
             <td><input id="length_max" size="7" maxlength="7"></td>
             <td><input id="length_error" size="7" maxlength="7"><select id="length_error_unit"></select></td>
           </tr>
-          <tr class="small">
+          <tr>
             <td>width</td>
             <td><input id="width_average" size="7" maxlength="7"></td>
             <td><input id="width_median" size="7" maxlength="7"></td>
@@ -207,7 +215,7 @@ function checkForm() {
             <td><input id="width_max" size="7" maxlength="7"></td>
             <td><input id="width_error" size="7" maxlength="7"><select id="width_error_unit"></select></td>
           </tr>
-          <tr class="small">
+          <tr>
             <td>height</td>
             <td><input id="height_average" size="7" maxlength="7"></td>
             <td><input id="height_median" size="7" maxlength="7"></td>
@@ -215,7 +223,7 @@ function checkForm() {
             <td><input id="height_max" size="7" maxlength="7"></td>
             <td><input id="height_error" size="7" maxlength="7"><select id="height_error_unit"></select></td>
           </tr>
-          <tr class="small">
+          <tr>
             <td>circumference</td>
             <td><input id="circumference_average" size="7" maxlength="7"></td>
             <td><input id="circumference_median" size="7" maxlength="7"></td>
@@ -223,7 +231,7 @@ function checkForm() {
             <td><input id="circumference_max" size="7" maxlength="7"></td>
             <td><input id="circumference_error" size="7" maxlength="7"><select id="circumference_error_unit"></select></td>
           </tr>
-          <tr class="small">
+          <tr>
             <td>diagonal</td>
             <td><input id="diagonal_average" size="7" maxlength="7"></td>
             <td><input id="diagonal_median" size="7" maxlength="7"></td>
@@ -231,7 +239,7 @@ function checkForm() {
             <td><input id="diagonal_max" size="7" maxlength="7"></td>
             <td><input id="diagonal_error" size="7" maxlength="7"><select id="diagonal_error_unit"></select></td>
           </tr>
-          <tr class="small">
+          <tr>
             <td>diameter</td>
             <td><input id="diameter_average" size="7" maxlength="7"></td>
             <td><input id="diameter_median" size="7" maxlength="7"></td>
@@ -239,7 +247,7 @@ function checkForm() {
             <td><input id="diameter_max" size="7" maxlength="7"></td>
             <td><input id="diameter_error" size="7" maxlength="7"><select id="diameter_error_unit"></select></td>
           </tr>
-          <tr class="small">
+          <tr>
             <td>inflation</td>
             <td><input id="inflation_average" size="7" maxlength="7"></td>
             <td><input id="inflation_median" size="7" maxlength="7"></td>
@@ -247,7 +255,7 @@ function checkForm() {
             <td><input id="inflation_max" size="7" maxlength="7"></td>
             <td><input id="inflation_error" size="7" maxlength="7"><select id="inflation_error_unit"></select></td>
           </tr>
-          <tr class="small">
+          <tr>
             <td>&delta;<sup>13</sup>C</td>
             <td><input id="d13C_average" size="7" maxlength="7"></td>
             <td><input id="d13C_median" size="7" maxlength="7"></td>
@@ -255,7 +263,7 @@ function checkForm() {
             <td><input id="d13C_max" size="7" maxlength="7"></td>
             <td><input id="d13C_error" size="7" maxlength="7"><select id="d13C_error_unit"></select></td>
           </tr>
-          <tr class="small">
+          <tr>
             <td>&delta;<sup>18</sup>O</td>
             <td><input id="d18O_average" size="7" maxlength="7"></td>
             <td><input id="d18O_median" size="7" maxlength="7"></td>
@@ -264,7 +272,7 @@ function checkForm() {
             <td><input id="d18O_error" size="7" maxlength="7"><select id="d18O_error_unit"></select></td>
           </tr>
         </table>
-        <div style="width: 600;"><small>* If the measurement magnification is not 1, enter the raw, uncalibrated result.</small></div>
+        <div class="small" style="width: 40em;">* If the measurement magnification is not 1, enter the raw, uncalibrated result.</div>
     </td>
   </tr>
   <tr>
@@ -274,38 +282,39 @@ function checkForm() {
   </tr>
   <tr>
     <td>
-      Measurement source 
-      <select id="measurement_source"></select>
+Type of length measurement: <select class="verysmall" id="length_position"><option></option><option>greatest</option><option>least</option><option>anteroposterior</option><option>basal</option><option>condylobasal</option><option>condyloincisive</option></select>
     </td>
     <td>
-      Measurement magnification <input id="magnification" type="text" size="7" maxlength="7">
+Type of width measurement: <select class="verysmall" id="width_position"><option></option><option>greatest</option><option>least</option><option>anterior</option><option>distal</option><option>midshaft</option><option>mediolateral</option><option>posterior</option><option>proximal</option><option>transverse</option><option>orbital</option><option>quadrate</option><option>zygomatic</option></select>
+    </td>
+    <td>
     </td>
   </tr>
   <tr>
-    <td colspan=2>
+    <td>
+     Measurement source 
+     <select id="measurement_source"></select>
+    </td>
+    <td>
+     Measurement magnification <input id="magnification" type="text" size="7" maxlength="7">
+    </td>
+  </tr>
+  <tr><td colspan="2">
       Does this sample include type specimens?
       <select id="specimen_is_type"></select>
-    </td>
-  </tr>
+  </td></tr>
 </table>
 
-<hr>
+  <div class="verysmall" style="margin-left: 6px;">
+    <div style="float: left; clear: none; margin-right: 1em;">
+    Comments:
+    </div>
+    <div style="float: left; clear: none; margin-right: 1em;">
+    <textarea id="comments" cols="50" rows="4" wrap="virtual"></textarea>
+    </div>
+    <div style="float: left; clear: none;">
+    <input type="submit" value="Submit">
+    </div>
+  </div>
 
-<table>
-  <tr>
-    <td valign="top">
-      Comments:
-    </td> 
-    <td>
-      <textarea id="comments" cols="60" rows="4" wrap="virtual"></textarea>
-    </td>
-  </tr>
-</table>
-
-</td></tr></table></div>
-
-<table width=100%><tr><td align="center">
-  <input type=submit value="Submit">
-</td></tr></table>
 </form>
-<p>&nbsp;</p>
