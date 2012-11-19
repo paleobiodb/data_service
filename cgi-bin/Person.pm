@@ -372,9 +372,9 @@ sub publications	{
 			$pages .= "-".$p->{'lastpage'};
 		}
 		my $extras = ( $p->{'extras'} ) ? " $p->{'extras'}" : "";
-		push @lines , '<p class="verysmall" style="margin-left: 1em; text-indent: -1em; margin-bottom: -0.8em;">'.$p->{'pub_no'}.". $authorlist. ".$p->{'year'}.". ".$p->{'title'}." $editors <i>".$p->{'journal'}."</i>$pages.$extras</p>\n";
+		push @lines , '<p class="verysmall" style="margin-left: 1em; text-indent: -1em; margin-bottom: -0.8em;"/>'.$p->{'pub_no'}.". $authorlist. ".$p->{'year'}.". ".$p->{'title'}." $editors <i>".$p->{'journal'}."</i>$pages.$extras</p>\n";
 	}
-	$lines[$#lines] =~ s/margin-bottom: .*;">/margin-bottom: 0.5em;">/;
+	$lines[$#lines] =~ s/margin-bottom: .*"/"/;
 	return join("\n",@lines);
 }
 
