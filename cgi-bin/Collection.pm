@@ -896,6 +896,17 @@ sub displayCollectionForm {
     } else {
         %vars = %row;
     }
+
+    ($vars{'sharealike'},$vars{'noderivs'},$vars{'noncommercial'}) = ('','Y','Y');
+    if ( $vars{'license'} =~ /SA/ )	{
+        $vars{'sharealike'} = 'Y';
+    }
+    if ( $vars{'license'} !~ /ND/ )	{
+        $vars{'noderivs'} = '';
+    }
+    if ( $vars{'license'} !~ /NC/ )	{
+        $vars{'noncommercial'} = '';
+    }
     
     # always carry over optional fields
     $vars{'taphonomy'} = $prefs{'taphonomy'};
@@ -1027,6 +1038,14 @@ sub processCollectionForm {
 	if ($secondary)	{
 		$q->param(reference_no => $secondary);
 	}
+
+	# there are three license checkboxes so users understand what they
+	#  are doing, so combine the data JA 20.11.12
+	my $license = 'CC BY';
+	$license .= ( $q->param('noncommercial') ) ? '-NC' : '';
+	$license .= ( $q->param('noderivs') ) ? '-ND' : '';
+	$license .= ( $q->param('sharealike') ) ? '-SA' : '';
+	$q->param('license' => $license);
 
 	# change interval names into numbers by querying the intervals table
 	# JA 11-12.7.03
@@ -3306,6 +3325,14 @@ function showAuthors()	{
 	$c->{'created'} =~ s/ .*//;
 	my ($y,$m,$d) = split /-/,$c->{'created'};
 	print "<p $indent>PaleoDB collection $c->{'collection_no'}: authorized by $c->{'authorizer'}, entered by $c->{'enterer'} on $d.$m.$y";
+	if ( $c->{'license'} )	{
+		my $full_license = $c->{'license'};
+		$full_license =~ s/(CC BY)(|-)/attribution$2/;
+		$full_license =~ s/SA/sharealike/;
+		$full_license =~ s/NC/noncommercial/;
+		$full_license =~ s/ND/no derivatives/;
+		print "</p>\n<p $indent>Creative Commons license: $c->{'license'} ($full_license)";
+	}
 
 	$sql = "(SELECT distinct(concat(first_name,' ',last_name)) AS enterer FROM occurrences o,person p WHERE enterer_no=person_no AND collection_no=$c->{'collection_no'} AND enterer_no!=".$c->{'enterer_no'}.") UNION (SELECT distinct(concat(first_name,' ',last_name)) AS enterer FROM reidentifications r,person p WHERE enterer_no=person_no AND collection_no=$c->{'collection_no'} AND enterer_no!=".$c->{'enterer_no'}.")";
 	my @enterers = @{$dbt->getData($sql)};
