@@ -566,7 +566,7 @@ function doCheckFieldsComponents() {
   
   <i><p class="verysmall">*State/province is required for collections within Australia, Canada, and the United States</i></p>
   <br>
-  
+
   <table style="margin-top: -0.5em;">
     <tr>
       <td></td>
@@ -578,19 +578,19 @@ function doCheckFieldsComponents() {
     </tr>
     <tr>
       <td>Latitude</td>
-      <td><input id="latdeg" size=5 maxlength=3></td>
-      <td><input id="latmin" size=3 maxlength=2></td>
-      <td><input id="latsec" size=3 maxlength=2></td>
-      <td><input id="latdec" size=5 maxlength=8></td>
-      <td><span class="verysmall"><select class="verysmall" id="latdir"></select></span>
+      <td><input id="latdeg" size=5 maxlength=3 onchange="adjustCoords()"></td>
+      <td><input id="latmin" size=3 maxlength=2 onchange="adjustCoords()"></td>
+      <td><input id="latsec" size=3 maxlength=2 onchange="adjustCoords()"></td>
+      <td><input id="latdec" size=5 maxlength=8 onchange="adjustCoords()"></td>
+      <td><span class="verysmall"><select class="verysmall" id="latdir" onchange="adjustCoords()"></select></span>
     </tr>
     <tr>
       <td>Longitude</td>
-      <td><input id="lngdeg" size=5 maxlength=3></td>
-      <td><input id="lngmin" size=3 maxlength=2></td>
-      <td><input id="lngsec" size=3 maxlength=2></td>
-      <td><input id="lngdec" size=5 maxlength=8></td>
-      <td><span class="verysmall"><select class="verysmall" id="lngdir"></select></span></td>
+      <td><input id="lngdeg" size=5 maxlength=3 onchange="adjustCoords()"></td>
+      <td><input id="lngmin" size=3 maxlength=2 onchange="adjustCoords()"></td>
+      <td><input id="lngsec" size=3 maxlength=2 onchange="adjustCoords()"></td>
+      <td><input id="lngdec" size=5 maxlength=8 onchange="adjustCoords()"></td>
+      <td><span class="verysmall"><select class="verysmall" id="lngdir" onchange="adjustCoords()"></select></span></td>
     </tr>
   </table>
 
@@ -598,6 +598,21 @@ function doCheckFieldsComponents() {
    See the <a href="javascript:tipsPopup('/public/tips/tips.html#Coordinates')">tip sheet</a>
   for web sites that provide coordinate data.</i></p>
   <p>
+  <table><tr>
+  <td><div style="width:600; height:300" id="map"></div></td>
+  </tr>
+  
+  <tr><td colspan=2><div align="center">
+    <input type="button" name="show" value="show on map" onmouseup="adjustCoords(1)">&nbsp;&nbsp;
+    <input type="button" name="reset_coodrds" value="reset coords" onmouseup="restoreCoords()">&nbsp;&nbsp;
+    Set coords as:
+      <select name="setcoords">
+	<option value="minsec">minutes/seconds</option>
+	<option value="decimal">decimal</option>
+      </select></div>
+  </td></tr>
+
+  </table>
 
   <table>
     <tr>
@@ -1532,9 +1547,148 @@ function doCheckFieldsComponents() {
   
 </form>
 
-<script language="JavaScript">
-    switchToPanel(1,7);
-</script>
 
 </div>
 
+<!-- now include OpenLayers and our map widget, and initialize them. -->
+<script src="/JavaScripts/OpenLayers.js"></script>
+<script src="/JavaScripts/mapwidget.js"></script>
+<script type="text/javascript">
+
+switchToPanel(2,7);
+
+// This function is passed as a callback to the map widget constructor.  It
+// is called when the user clicks on the map.
+
+function setCoords ( lat, lng )
+{
+    var form = document.forms[1];
+    var minsec = true;
+
+    if ( form.setcoords != null && form.setcoords.value == "decimal" ) { minsec = false; }
+    
+    var latdir, lngdir, latbase, lngbase, latdec, lngdec;
+    var latmin, latsec, lngmin, lngsec;
+    
+    if ( lat < 0 ) { latdir = "South"; } else { latdir = "North"; }
+    if ( lng < 0 ) { lngdir = "West"; } else { lngdir = "East"; }
+
+    with (Math) {
+        latbase = floor(abs(lat));
+        lngbase = floor(abs(lng));
+        latdec = (abs(lat) - latbase); latdec = round(latdec*10000)/10000;
+        lngdec = (abs(lng) - lngbase); lngdec = round(lngdec*10000)/10000;
+        if ( minsec )
+        {
+            latsec = round(latdec * 3600);
+            lngsec = round(lngdec * 3600);
+            latmin = floor(latsec / 60);
+            lngmin = floor(lngsec / 60);
+            latsec = latsec - latmin * 60;
+            lngsec = lngsec - lngmin * 60;
+        }
+    }
+    
+    form.latdeg.value = latbase;
+    form.latdir.value = latdir;
+    form.lngdeg.value = lngbase;
+    form.lngdir.value = lngdir;
+    if ( minsec )
+    {
+        form.latmin.value = latmin;
+        form.latsec.value = latsec;
+        form.lngmin.value = lngmin;
+        form.lngsec.value = lngsec;
+        form.latdec.value = "";
+        form.lngdec.value = "";
+    }
+    else
+    {
+        form.latdec.value = latdec.toString().slice(2);
+        form.lngdec.value = lngdec.toString().slice(2);
+        form.latmin.value = "";
+        form.latsec.value = "";
+        form.lngmin.value = "";
+        form.lngsec.value = "";
+    }
+    
+    mw.setMarker(lng, lat);
+    mw.showMarker;
+}
+
+// This function is called when the value of any of the coordinate
+// fields is changed.  If both of the degree fields have a value, the
+// coordinates are displayed on the map.
+
+function adjustCoords (center)
+{
+    var form = document.forms[1];
+    if ( form.latdeg.value != '' && form.lngdeg.value != '' )
+    {
+	var lat, lng;
+
+	if ( form.latdec.value != '' )
+	{
+	    lat = Number(form.latdeg.value + '.' + form.latdec.value);
+	}
+	else
+	{
+	    lat = Number(form.latdeg.value) + Number(form.latmin.value)/60 +
+			Number(form.latsec.value)/3600;
+	}
+	
+	if ( form.lngdec.value != '' )
+	{
+	    lng = Number(form.lngdeg.value + '.' + form.lngdec.value);
+	}
+	else
+	{
+	    lng = Number(form.lngdeg.value) + Number(form.lngmin.value)/60 +
+			Number(form.lngsec.value)/3600;
+	}
+
+	if ( form.latdir.value == 'South' ) { lat = -1 * lat; }
+	if ( form.lngdir.value == 'West' ) { lng = -1 * lng; }
+	
+	mw.setMarker(lng, lat);
+	mw.showMarker(center);
+    }
+}
+
+
+function saveCoords () {
+    var form = document.forms[1];
+    savedCoords.latdeg = form.latdeg.value;
+    savedCoords.latmin = form.latmin.value;
+    savedCoords.latsec = form.latsec.value;
+    savedCoords.latdir = form.latdir.value;
+    savedCoords.lngdeg = form.lngdeg.value;
+    savedCoords.lngmin = form.lngmin.value;
+    savedCoords.lngsec = form.lngsec.value;
+    savedCoords.lngdir = form.lngdir.value;
+}
+
+
+function restoreCoords () {
+    var form = document.forms[1];
+    form.latdeg.value = savedCoords.latdeg;
+    form.latmin.value = savedCoords.latmin;
+    form.latsec.value = savedCoords.latsec;
+    form.latdir.value = savedCoords.latdir;
+    form.lngdeg.value = savedCoords.lngdeg;
+    form.lngmin.value = savedCoords.lngmin;
+    form.lngsec.value = savedCoords.lngsec;
+    form.lngdir.value = savedCoords.lngdir;
+    adjustCoords(1);
+}
+
+var mw = new PBDB_map_widget('map', { click_callback: setCoords });
+var savedCoords = {};
+
+adjustCoords(1);
+saveCoords();
+
+switchToPanel(1,7);
+
+</script>
+  
