@@ -28,7 +28,7 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval direct_ma direct_ma_error direct_ma_method max_ma max_ma_error max_ma_method min_ma min_ma_error min_ma_method interval_base interval_top interval_midpoint interpolated_base interpolated_top interpolated_mid ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
+my @collectionsFieldNames = qw(authorizer license enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval direct_ma direct_ma_error direct_ma_method max_ma max_ma_error max_ma_method min_ma min_ma_error min_ma_method interval_base interval_top interval_midpoint interpolated_base interpolated_top interpolated_mid ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
@@ -680,7 +680,8 @@ sub retellOptions {
 
     if ($q->param('output_data') =~ /occurrence|collections/) {
         # collection table fields
-        my @collFields = ( "collection_no");
+        # these are required
+        my @collFields = ( 'collection_no','authorizer','license' );
         foreach my $field ( @collectionsFieldNames ) {
             if ( $q->param ( 'collections_'.$field ) ) { push ( @collFields, 'collections_'.$field ); }
         }
@@ -1809,11 +1810,10 @@ sub queryDatabase {
     my (@fields,@where,@occ_where,@reid_where,$taxon_where,@tables,@from,@groupby,@left_joins);
 
 
-    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short",'CONCAT(c.enterer_no," ",TO_DAYS(c.created),HOUR(c.created)) AS personhour','c.upload');
+    @fields = ('c.authorizer_no','c.authorizer AS `c.authorizer`','c.license','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short",'CONCAT(c.enterer_no," ",TO_DAYS(c.created),HOUR(c.created)) AS personhour','c.upload');
     @tables = ('collections c');
     @where = $self->getCollectionsWhereClause();
 
-    # Getting only occurrences or collections
     if ($q->param('output_data') =~ /occurrence|collections/) {
         my @collection_columns = $dbt->getTableColumns('collections');
         if ( $q->param('incomplete_abundances') eq "NO" && ! $q->param('collections_collection_coverage') )	{
@@ -1848,9 +1848,6 @@ sub queryDatabase {
         }
         if ($q->param('collections_coords') eq 'YES')	{
             push @fields , "c.".$_." AS `c.".$_."`" foreach ( 'lngdeg','lngmin','lngsec','lngdec','lngdir','latdeg','latmin','latsec','latdec','latdir' );
-        }
-        if ($q->param('collections_authorizer') eq 'YES')	{
-            push @fields, 'c.authorizer';
         }
         if ($q->param('collections_enterer') eq 'YES')	{
             push @fields, 'c.enterer';
@@ -2129,8 +2126,8 @@ sub queryDatabase {
         $getpoststr =~ s/\n//;
         $errstr .= " GET,POST ($getpoststr)";
         croak $errstr;
-    } 
-
+    }
+ 
     $self->dbg($sth->rows()." rows returned.<br>");
 
     # See if rows okay by permissions module
@@ -3147,6 +3144,9 @@ sub printCSV {
     if ($q->param('output_data') =~ /occurrence|collections/) {
         push @header,'collection_no';
     }
+    # these are required, users must understand where the data come from
+    #  and what the terms of use are JA 20.11.12
+    push @header,('c.authorizer','license');
     if ($q->param('output_data') =~ /occurrence|genera|species/) {
         push @header, 'o.class_name' if ($q->param("occurrences_class_name") eq 'YES');
         push @header, 'o.class_extant' if ( $q->param("occurrences_class_name") eq 'YES' && $q->param('occurrences_extant') eq 'YES');
@@ -3241,7 +3241,7 @@ sub printCSV {
     }
     my $headerline = $self->formatRow(@printedHeader);
     print OUTFILE $headerline."\n";
-   
+  
     foreach my $row (@$results) {
         my @line = ();
 
