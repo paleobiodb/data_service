@@ -65,6 +65,10 @@ function doCheckFieldsBasicInfo() {
         }
     }
 
+    if (frm.sharealike.checked && frm.noderivs.checked)	{
+        bad_info += "\no You can't check both 'no-derivatives' and 'sharealike'";
+    }
+
     // Deleting the primary reference is not allowed.
     // Note that the length of the radio group (or checkbox group) equals 
     // the number of radio buttons regardless of their checked status.
@@ -482,6 +486,13 @@ function doCheckFieldsComponents() {
       <span class="verysmall"><select class="verysmall" id="release_date"></select></span>
       <br>
       <br>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding-bottom: 0.5em;">Creative Commons license:
+        <input type="checkbox" id="sharealike" value="Y"> sharealike
+        <input type="checkbox" id="noderivs" value="Y"> no derivatives
+        <input type="checkbox" id="noncommercial" value="Y"> non-commercial
       </td>
     </tr>
     <tr>
