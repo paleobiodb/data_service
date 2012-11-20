@@ -1254,7 +1254,7 @@ sub displaySearchCollsForAdd	{
 
 	# Some prefilled variables like lat/lng/time term
 	my %pref = $s->getPreferences();
-
+	
 	# Spit out the HTML
 	print $hbo->stdIncludes( $PAGE_TOP );
 	if ( $DB ne "eco" )	{
@@ -1489,7 +1489,7 @@ sub displayCollResults {
 			my @prefs = @{$dbt->getData($sql)};
 			$lookup{$_->{'person_no'}} = $_->{'name'} foreach @prefs;
 		}
-
+		
 		print $hbo->stdIncludes( $PAGE_TOP );
 
         # Display header link that says which collections we're currently viewing
@@ -2187,6 +2187,7 @@ sub displayCollectionForm {
         login("Please log in first.");
         exit;
     }
+
     print $hbo->stdIncludes($PAGE_TOP);
     Collection::displayCollectionForm($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
