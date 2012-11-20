@@ -71,10 +71,9 @@ if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
 }
 
-#if ( $DB ne "eco" && $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/
-       #&& $q->param('action') eq "login" )  { print $q->redirect(
-#-url=>"http://paleodb.science.mq.edu.au/cgi-bin/bridge.pl?action=menu&user=Contributor"
-#); }
+if ( $DB ne "eco" && $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
+	print $q->redirect( -url=>"http://paleodb.org/cgi-bin/bridge.pl?action=menu&user=Contributor" );
+}
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
 
@@ -2961,6 +2960,12 @@ sub submitFossilRecordCurveForm {
 
 ##############
 ## Scales stuff JA 7.7.03
+sub intervals	{
+	require Scales;
+	print $hbo->stdIncludes($PAGE_TOP);
+	Scales::intervals($dbt, $hbo, $q);
+	print $hbo->stdIncludes($PAGE_BOTTOM);
+}
 sub searchScale	{
 	require Scales;
 	print $hbo->stdIncludes($PAGE_TOP);

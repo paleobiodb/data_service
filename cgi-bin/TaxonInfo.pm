@@ -2178,6 +2178,7 @@ sub getMostRecentClassification {
     my $dbt = shift;
     my $child_no = int(shift);
     my $options = shift || {};
+    my $cache = ( $options->{cache} ) ? $options->{cache} : $TAXA_TREE_CACHE;
 
     return if (!$child_no);
     return if ($options->{reference_no} eq '0');
@@ -2338,7 +2339,7 @@ sub getMostRecentClassification {
                     $synonym_no = $spelling_no;
                 }
             }
-            $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$spelling_no,synonym_no=$synonym_no,opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no IN (" . join(',',@spellings) . ")";
+            $sql = "UPDATE $cache SET spelling_no=$spelling_no,synonym_no=$synonym_no,opinion_no=" . $rows[0]->{'opinion_no'} . " WHERE taxon_no IN (" . join(',',@spellings) . ")";
             my $dbh = $dbt->dbh;
             $dbh->do($sql);
         }
@@ -2349,7 +2350,7 @@ sub getMostRecentClassification {
         }
     } else {
         if ( $options->{'use_synonyms'} !~ /no/ && ! $options->{'exclude_nomen'} && ! $options->{'reference_no'} )	{
-            $sql = "UPDATE $TAXA_TREE_CACHE SET spelling_no=$child_no,synonym_no=$child_no,opinion_no=0 WHERE taxon_no=$child_no";
+            $sql = "UPDATE $cache SET spelling_no=$child_no,synonym_no=$child_no,opinion_no=0 WHERE taxon_no=$child_no";
             my $dbh = $dbt->dbh;
             $dbh->do($sql);
         }
@@ -2973,11 +2974,11 @@ sub displayFirstAppearance	{
 	$sql  = "SELECT a.taxon_no,a.taxon_name,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.taxon_rank,a.extant,a.preservation,lft,rgt FROM refs r,authorities a,authorities a2,$TAXA_TREE_CACHE t WHERE r.reference_no=a.reference_no AND a2.taxon_no=t.taxon_no AND a2.$field='$name' AND a.taxon_no=t.synonym_no GROUP BY lft,rgt ORDER BY rgt-lft DESC";
 	my @nos = @{$dbt->getData($sql)};
 
-	$name= $nos[0]->{'taxon_name'};
 	if ( ! @nos )	{
-		my $error_message = $name." is not in the system.";
+		my $error_message = qq|The name "$name" is not in the system. Please try again.|;
 		beginFirstAppearance($hbo,$q,$error_message);
 	}
+	$name = $nos[0]->{'taxon_name'};
 
 	if ( $field eq "common_name" )	{
 		$name = $nos[0]->{'taxon_name'}." (".$name.")";
@@ -2995,7 +2996,7 @@ sub displayFirstAppearance	{
 		beginFirstAppearance($hbo,$q,$error_message);
 	}
 
-	print $hbo->stdIncludes("std_page_top");
+	print $hbo->stdIncludes($PAGE_TOP);
 
 	# MAIN TABLE HITS
 
@@ -3554,7 +3555,7 @@ sub displayFirstAppearance	{
 	print "<div style=\"padding-left: 6em;\"><a href=\"$READ_URL?a=beginFirstAppearance\">Search again</a> - <a href=\"$READ_URL?a=displayTaxonInfoResults&amp;taxon_no=$nos[0]->{'taxon_no'}\">See more details about $name</a></div>\n";
 	print "</div>\n";
 
-	print $hbo->stdIncludes("std_page_bottom");
+	print $hbo->stdIncludes($PAGE_BOTTOM);
 	return;
 }
 
@@ -4169,11 +4170,11 @@ sub basicTaxonInfo	{
 
 		my $collection_fields = "c.collection_no,collection_name,max_interval_no,min_interval_no,country,state";
 		if ( $taxon_no )	{
-			$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE t WHERE lft>=".$auth->{'lft'}." AND rgt<=".$auth->{'rgt'};
+			$sql = "SELECT child_no FROM $TAXA_LIST_CACHE t WHERE parent_no=$taxon_no";
 			my @subtaxa = @{$dbt->getData($sql)};
 			my @inlist;
-			push @inlist , $_->{'taxon_no'} foreach @subtaxa;
-
+			push @inlist , $_->{'child_no'} foreach @subtaxa;
+			push @inlist , $taxon_no;
 			$sql = "(SELECT $collection_fields,count(distinct(o.collection_no)) c,count(distinct(o.occurrence_no)) o FROM collections c,occurrences o LEFT JOIN reidentifications re ON o.occurrence_no=re.occurrence_no WHERE c.collection_no=o.collection_no AND o.taxon_no IN (".join(',',@inlist).") AND re.reid_no IS NULL GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 			$sql .= " UNION (SELECT $collection_fields,count(distinct(c.collection_no)) c,count(distinct(re.occurrence_no)) o FROM collections c,reidentifications re WHERE c.collection_no=re.collection_no AND taxon_no IN (".join(',',@inlist).") AND re.most_recent='YES' GROUP BY c.max_interval_no,c.min_interval_no,country,state)";
 		} else	{
