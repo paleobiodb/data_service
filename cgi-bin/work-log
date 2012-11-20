@@ -1,37 +1,38 @@
-Cladogram.pm			NEEDS TESTING
+Cladogram.pm			COMPILES
 Classification.pm		REMOVED
-Collection.pm
-CollectionQuery.pm
-Confidence.pm			NEEDS TESTING
-Curve.pm			NEEDS TESTING
+Collection.pm			*** WORKING ***
+CollectionQuery.pm		...
+Confidence.pm			COMPILES
+Curve.pm			COMPILES
 DBTransactionManager.pm		n/a
 DataQuery.pm			n/a
-Download.pm			AJ: line 2290
-DownloadTaxonomy.pm		*** WORKING ***
-Ecology.pm			NEEDS TESTING
-FossilRecord.pm			AJ: do we need to update this?
+Download.pm			COMPILES
+DownloadTaxonomy.pm		COMPILES
+Ecology.pm			COMPILES
+FossilRecord.pm			n/a
 HTMLBuilder.pm			n/a
-Images.pm			NEEDS TESTING
-Map.pm				NEEDS TESTING
-Measurement.pm			AJ: explain getMassEstimates()
+Images.pm			COMPILES
+Map.pm				COMPILES
+Measurement.pm			*** WORKING *** AJ: explain getMassEstimates()  Answer: explained
 Neptune.pm			n/a
 Opinion.pm			*** WORKING ***
-PrintHierarchy.pm		NEEDS TESTING
-Reclassify.pm			NEEDS TESTING
+Person.pm			n/a
+PrintHierarchy.pm		COMPILES
+Reclassify.pm			WAITING ON TaxonEdit.pm
 Reference.pm			n/a
-Report.pm			NEEDS TESTING
-Review.pm			NEEDS TESTING
-SanityCheck.pm			NEEDS TESTING
-Strata.pm			NEEDS TESTING
-TaxaCache.pm			READY TO BE REMOVED
+Report.pm			COMPILES
+Review.pm			COMPILES
+SanityCheck.pm			COMPILES
+Strata.pm			*** SYNTAX ERRORS *** 
+TaxaCache.pm			REMOVED
 Taxon.pm			REMOVED
-TaxonEdit.pm			AJ: explain propagateAuthorityInfo()
-TaxonInfo.pm			AJ: checkTaxonInfo: museum param?
-Taxonomy.pm			IN PROGRESS
-TaxonQuery.pm
-TaxonTrees.pm			NEEDS TESTING
-TreeQuery.pm
-TypoChecker.pm			NEEDS TESTING
+TaxonEdit.pm			*** WORKING *** AJ: explain propagateAuthorityInfo()  Answer: very important
+TaxonInfo.pm			*** WORKING *** AJ: checkTaxonInfo: museum param?  Answer: we don't need it yet
+Taxonomy.pm			COMPILES
+TaxonQuery.pm			...
+TaxonTrees.pm			COMPILES
+TreeQuery.pm			...
+TypoChecker.pm			COMPILES
 bridge.pl			*** WORKING ***
-dinosaurs.pl
-hierarchy.pl
+dinosaurs.pl			...
+hierarchy.pl			...

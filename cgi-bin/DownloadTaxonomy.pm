@@ -1,24 +1,27 @@
-package DownloadTaxonomy;
+ackage DownloadTaxonomy;
 
 #use strict;
 use PBDBUtil;
-use Data::Dumper;
 use DBTransactionManager;
 use Taxonomy;
 use Person;
-use Opinion;
-use CGI::Carp;
 use Debug qw(dbg);
 use Constants qw($READ_URL $DATA_DIR $HTML_DIR $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
 
 use strict;
+
+use Data::Dumper;
+use CGI::Carp;
+
 
 # JA 19-21,23.9.08
 # provides XML formatted taxonomic data for taxa matching a string search
 # uses the same format as the Catalogue of Life Annual Checklist Web Service:
 #  http://webservice.catalogueoflife.org/annual-checklist/
 # doesn't relate to other subroutines here, but has to go somewhere...
-sub getTaxonomyXML	{
+
+sub getTaxonomyXML {
+    
 	my ($dbt,$taxonomy,$q,$s,$hbo) = @_;
 
 	print "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" ?>\n";
@@ -318,8 +321,11 @@ sub formatAuthXML	{
 #    we have to make this up since our tables aren't denormalized.
 # These ITIS files are not output:
 #   vernaculars.dat, vern_ref_links.dat, experts.dat, geographic_division.dat, jurisdiction.dat, other_sources.dat
+
 sub displayITISDownload {
+
     my ($dbt,$taxonomy,$q,$s) = @_;
+    
     my $dbh = $dbt->dbh;
     my @errors = ();
 
@@ -333,10 +339,10 @@ sub displayITISDownload {
         } elsif (scalar(@taxon) < 1) {
             push @errors, "Taxon name not found";
         } else {
-            $options{'taxon_no'} = $taxon[0]->{'taxon_no'};
+            $options{taxon_no} = $taxon[0]->{taxon_no};
         }
     }
-
+    
     if ($q->param('person_reversed')) {
         my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('person_reversed')));
         my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
@@ -346,17 +352,7 @@ sub displayITISDownload {
             push @errors, "Could not find person ".$q->param("person_reversed")." in the database";
         }
     }
-    if ($q->param('person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('person_reversed')));
-        my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
-        if ($person_no) {
-            $options{'person_no'} = $person_no;
-        } else {
-            push @errors, "Could not find person ".$q->param("person_reversed")." in the database";
-        }
-    }
-
-
+    
     if (@errors) {
         displayErrors(@errors);
         print "<div align=\"center\"><h5><a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Please try again</a></h5></div><br>";
@@ -370,16 +366,10 @@ sub displayITISDownload {
         <p class="darkList" class="verylarge" style="padding-left: 0.5em; padding-top: 0.3em; padding-bottom: 0.3em; margin-bottom: 0em;">Output data</p>';
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
-
-    my $sql = "SELECT name,person_no FROM person";
-    my @temp = @{$dbt->getData($sql)};
-    my %people;
-    $people{$_->{person_no}} = $_->{name} foreach @temp;
-
-    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$taxonomy,$http_dir,\%people,\%options);
-    my @names = @$names;
+    
+    my ($names) = getTaxonomicNames($dbt,$taxonomy,\%options);
     my %references;
-
+    
     my $sepChar = ($q->param('output_type') eq 'pipe') ? '|'
                                                        : ",";
     my $csv = Text::CSV_XS->new({
@@ -388,122 +378,200 @@ sub displayITISDownload {
             'sep_char'    => $sepChar,
             'binary'      => 1
     }); 
-
-    # A Map of taxon_no --> kingdom_name. Needed for ITIS, since the kingdom name
-    # is used as a foreign key in multiple places for some reason
-    my %kingdom = getKingdomMap($dbt);
     
-    # The author1init,author1last,etc fields have been denormalized out into this table, which
-    # is effectively 1 field (the authors, all globbed in one field). Since PBDB isn't denormalized
-    # in this fashion, we use a semi-arbitrary number. this number is equal to the first taxon_no
-    # which uses this author/pubyr combination, so should be semi-stable
-    # This section needs to come benfore the taxonomic_units section so we can the use the numbers
-    # we pick here as a key in that file
-    open FH_AL, ">$filesystem_dir/taxon_authors_lookup.dat";
-    my @sorted_names = sort {$a->{taxon_no} <=> $b->{taxon_no}} @names;
-    my %seen_ref = ();
-    my %taxon_author_id_map = ();
     my $taxon_author_count = 0;
-    foreach my $t (@sorted_names) {
-        if ($t->{'author1last'}) {
-            my $refline = formatAuthors($t);
-
-            if ($t->{'spelling_no'} != $t->{'taxon_no'}) {
-                $refline = "(".$refline.")";
-            }
-            my $taxon_author_id = '';
-            if (!$seen_ref{$refline}) {
-                $seen_ref{$refline} = $t->{'taxon_no'};
-                $taxon_author_id = $t->{'taxon_no'};
-                my $modified_short = "";
-                my @line = ($taxon_author_id,$refline,$modified_short,$kingdom{$taxon_author_id});
-                $csv->combine(@line);
-                my $csv_string = $csv->string();
-                $csv_string =~ s/\r|\n//g;
-                print FH_AL $csv_string."\n";
-                $taxon_author_count++;
-            } else {
-                $taxon_author_id = $seen_ref{$refline};
-            }
-            $taxon_author_id_map{$t->{'taxon_no'}} = $taxon_author_id;
-        }
-    }
-    close FH_AL;
-    $taxon_author_count = "No" if ($taxon_author_count == 0);
-    print "<p>$taxon_author_count taxon authors names were printed</p>";
-
+    my $taxon_count = 0;
+    my $synonym_count = 0;
+    my $comment_count = 0;
+    
+    open FH_AL, ">$filesystem_dir/taxon_authors_lookup.dat"
+        or die "Could not create $filesystem_dir/taxon_authors_lookup.dat: $!";
     
     open FH_TU, ">$filesystem_dir/taxonomic_units.dat"
-        or die "Could not create taxonomic_units.dat";
-    my @columns= ('taxon_no','','taxon_name','is_valid','invalid_reason','','','','','created','parent_name','taxon_author_id','hybrid_author_id','kingdom','taxon_rank','modified_short','');
+        or die "Could not create $filesystem_dir/taxonomic_units.dat: $!";
+    
+    open FH_SL, ">$filesystem_dir/synonym_links.dat"
+        or die "Could not create $filesystem_dir/synonym_links.dat: $!";
+    
+    open FH_C, ">$filesystem_dir/comments.dat"
+	or die "Could not create $filesystem_dir/comments.dat: $!";
+    
+    open FH_CL, ">$filesystem_dir/tu_comments_links.dat"
+	or die "Could not create $filesystem_dir/tu_comments_links.dat: $!";
+    
+    if ( ref $names eq 'ARRAY' and @$names )
+    {
+	# First, print out all of the different authors and/or author combinations.
+	
+	# The author1init,author1last,etc fields have been denormalized out into this table, which
+	# is effectively 1 field (the authors, all globbed in one field). Since PBDB isn't denormalized
+	# in this fashion, we use a semi-arbitrary number. this number is equal to the first taxon_no
+	# which uses this author/pubyr combination, so should be semi-stable
+	# This section needs to come benfore the taxonomic_units section so we can the use the numbers
+	# we pick here as a key in that file
+	
+	my @sorted_names = sort {$a->{taxon_no} <=> $b->{taxon_no}} @$names;
+	my %seen_ref = ();
+	my %taxon_author_id_map = ();
+	
+	foreach my $t (@sorted_names) {
+	    if ($t->{'author1last'}) {
+		my $refline = formatAuthors($t);
+		
+		if ($t->{'spelling_no'} != $t->{'taxon_no'}) {
+		    $refline = "(".$refline.")";
+		}
+		my $taxon_author_id = '';
+		if (!$seen_ref{$refline}) {
+		    $seen_ref{$refline} = $t->{'taxon_no'};
+		    $taxon_author_id = $t->{'taxon_no'};
+		    my $modified_short = "";
+		    my @line = ($taxon_author_id,$refline,$modified_short,$t->{kingdom});
+		    $csv->combine(@line);
+		    my $csv_string = $csv->string();
+		    $csv_string =~ s/\r|\n//g;
+		    print FH_AL $csv_string."\n";
+		    $taxon_author_count++;
+		} else {
+		    $taxon_author_id = $seen_ref{$refline};
+		}
+		$taxon_author_id_map{$t->{'taxon_no'}} = $taxon_author_id;
+	    }
+	}
+	
+	$taxon_count = scalar(@$names);
+	
+	# Then, print out all of the taxonomic units.
+	
+	# taxon_no, taxon_name, 'unnamed taxon ind?', 'valid/invalid','invalid reason', 'TWG standards met?','complete/partial','related to previous?','','modified','parent name','parent_no','kingdom','taxon_rank',?,?
+	
+	my @columns= ('taxon_no','','taxon_name','is_valid','invalid_reason','','','','','created','parent_name','taxon_author_id','hybrid_author_id','kingdom','taxon_rank','modified_short','');
+    
+	foreach my $t (@$names) {
+	    my @line = ();
+	    foreach my $val (@columns) {
+		my $csv_val;
+		if ($val eq 'is_valid') {
+		    $csv_val = ($t->{'is_valid'}) ? 'valid' : 'invalid';
+		    if (! $t->{'is_valid'}) {
+			if ($t->{'invalid_reason'} =~ /synonym/) {
+			    $t->{'invalid_reason'} = 'junior synonym';
+			} elsif ($t->{'invalid_reason'} =~ /nomen vanum/) {
+			    $t->{'invalid_reason'} = 'unavailable, nomen vanum';
+			} elsif ($t->{'invalid_reason'} =~ /homonym/) {
+			    $t->{'invalid_reason'} = 'junior homonym';
+			} elsif ($t->{'invalid_reason'} =~ /invalid/) {
+			    $t->{'invalid_reason'} = 'invalid subgroup';
+			} elsif ($t->{'invalid_reason'} =~ /replaced/) {
+			    $t->{'invalid_reason'} = 'unavailable, incorrect original spelling';
+			} elsif ($t->{'invalid_reason'} =~ /recombined|corrected/) {
+			    $t->{'invalid_reason'} = 'original name/combination';
+			}
+		    }
+		} elsif ($val eq 'taxon_author_id') {
+		    $csv_val = $taxon_author_id_map{$t->{'taxon_no'}};
+		} else {
+		    $csv_val = $t->{$val} || '';
+		}
+		$csv_val =~ s/\r|\n//g;
+		push @line, $csv_val;
+	    }
+	    $csv->combine(@line);
+	    my $csv_string = $csv->string();
+	    $csv_string =~ s/\r|\n//g;
+	    print FH_TU $csv_string."\n";
+	    $references{$t->{'reference_no'}} = 1;
+	}
+	
+	# Then, all synonyms.
+	
+	foreach my $t (@$names) {
+	    my @line = ();
+	    # Does this apply to recombinations or just junior synonyms?
+	    # Right now only doing junior synonyms
+	    if ($t->{'spelling_no'} != $t->{'senior_synonym_no'}) {
+		#print "$t->{taxon_no} ss $t->{senior_synonym_no} s $t->{synonym_no}<BR>";
+		@line = ($t->{'taxon_no'},$t->{'synonym_no'},$t->{'modified_short'});
+		$csv->combine(@line);
+		my $csv_string = $csv->string();
+		$csv_string =~ s/\r|\n//g;
+		print FH_SL $csv_string."\n";  
+		$synonym_count++;
+	    }
+	}
+	
+	# Then, all comments.
+	
+	# Note that our comments aren't denormalized so the comment_id key
+	# (primary key for comments table for ITIS is just the primary key taxon_no for us
+	# header:     #comment_id,author,   comment,  created,  modified
+	
+	@columns = ("taxon_no","enterer","comments","created","modified_short");
+	
+	foreach my $taxon (@$names) {
+	    if ($taxon->{'comments'}) {
+		my @line = ();
+		foreach my $col (@columns) {
+		    push @line, $taxon->{$col}; 
+		}
+		$csv->combine(@line);
+		my $csv_string = $csv->string();
+		$csv_string =~ s/\r|\n//g;
+		print FH_C $csv_string."\n";  
+		$comment_count++;
+	    }
+	}
 
-    # taxon_no, taxon_name, 'unnamed taxon ind?', 'valid/invalid','invalid reason', 'TWG standards met?','complete/partial','related to previous?','','modified','parent name','parent_no','kingdom','taxon_rank',?,?
-    foreach my $t (@names) {
-        my @line = ();
-        foreach my $val (@columns) {
-            my $csv_val;
-            if ($val eq 'kingdom') {
-                $csv_val = $kingdom{$t->{'taxon_no'}} || '';
-            } elsif ($val eq 'is_valid') {
-                $csv_val = ($t->{'is_valid'}) ? 'valid' : 'invalid';
-                if (! $t->{'is_valid'}) {
-                    if ($t->{'invalid_reason'} =~ /synonym/) {
-                        $t->{'invalid_reason'} = 'junior synonym';
-                    } elsif ($t->{'invalid_reason'} =~ /nomen vanum/) {
-                        $t->{'invalid_reason'} = 'unavailable, nomen vanum';
-                    } elsif ($t->{'invalid_reason'} =~ /homonym/) {
-                        $t->{'invalid_reason'} = 'junior homonym';
-                    } elsif ($t->{'invalid_reason'} =~ /invalid/) {
-                        $t->{'invalid_reason'} = 'invalid subgroup';
-                    } elsif ($t->{'invalid_reason'} =~ /replaced/) {
-                        $t->{'invalid_reason'} = 'unavailable, incorrect original spelling';
-                    } elsif ($t->{'invalid_reason'} =~ /recombined|corrected/) {
-                        $t->{'invalid_reason'} = 'original name/combination';
-                    }
-                }
-            } elsif ($val eq 'taxon_author_id') {
-                $csv_val = $taxon_author_id_map{$t->{'taxon_no'}};
-            } else {
-                $csv_val = $t->{$val} || '';
-            }
-            $csv_val =~ s/\r|\n//g;
-            push @line, $csv_val;
-        }
-        $csv->combine(@line);
-        my $csv_string = $csv->string();
-        $csv_string =~ s/\r|\n//g;
-        print FH_TU $csv_string."\n";
-        $references{$t->{'reference_no'}} = 1;
+	# Note that our comments aren't denormalized so the comment_id key
+	# (primary key for comments table for ITIS is just the primary key taxon_no for us
+	# Why a modified value exists for a many-to-one type join table is beyond me
+	# header:     #taxon_no,comment_id,   modified
+	
+	@columns = ("taxon_no","taxon_no","modified_short");
+	
+	foreach my $taxon (@$names) {
+	    if ($taxon->{'comments'}) {
+		my @line = ();
+		foreach my $col (@columns) {
+		    push @line, $taxon->{$col}; 
+		}
+		$csv->combine(@line);
+		my $csv_string = $csv->string();
+		$csv_string =~ s/\r|\n//g;
+		print FH_CL $csv_string."\n";  
+	    }
+	}
     }
-    close FH_TU;
-    my $taxon_count = scalar(@names); 
+    
+    close FH_AL or carp "Problem closing $filesystem_dir/taxon_authors_lookup.dat: $!";
+    close FH_TU or carp "Problem closing $filesystem_dir/taxonomic_units.dat: $!";
+    close FH_SL or carp "Problem closing $filesystem_dir/synonym_links.dat: $!";    
+    close FH_C or carp "Problem closing $filesystem_dir/comments.dat: $!";
+    close FH_CL or carp "Problem closing $filesystem_dir/tu_comments_links.dat: $!";
+    
+    $taxon_author_count = "No" if ($taxon_author_count == 0);
+    print "<p>$taxon_author_count taxon authors names were printed</p>";
+    
     $taxon_count = "No" if ($taxon_count == 0);
     print "<p>$taxon_count taxononomic units were printed</p>";
-
-    open FH_SL, ">$filesystem_dir/synonym_links.dat";
-    my $synonym_count = 0;
-    foreach my $t (@names) {
-        my @line = ();
-        # Does this apply to recombinations or just junior synonyms?
-        # Right now only doing junior synonyms
-        if ($t->{'spelling_no'} != $t->{'senior_synonym_no'}) {
-            #print "$t->{taxon_no} ss $t->{senior_synonym_no} s $t->{synonym_no}<BR>";
-            @line = ($t->{'taxon_no'},$t->{'synonym_no'},$t->{'modified_short'});
-            $csv->combine(@line);
-            my $csv_string = $csv->string();
-            $csv_string =~ s/\r|\n//g;
-            print FH_SL $csv_string."\n";  
-            $synonym_count++;
-        }
-    }
-    close FH_SL;
+    
     $synonym_count = "No" if ($synonym_count == 0);
     print "<p>$synonym_count synonym links were printed</p>";
     
+    $comment_count = "No" if ($comment_count == 0);
+    print "<p>$comment_count comments and comment links were printed</p>";
+    
+    # Now, output all references.
+    
     my @references = keys %references; 
-    open FH_P, ">$filesystem_dir/publications.dat";
+    
+    open FH_P, ">$filesystem_dir/publications.dat"
+	or die "Could not open $filesystem_dir/publications.dat: $!";
+    
     my $ref_count = 0;
-    if (@references) {
+    
+    if (@references)
+    {
         # originally written by PS with an extremely tedious triple join on
         #  person meant to avoid using the authorizer/enterer/modifier fields,
         #  which might be space-intensive but do speed up this kind of thing
@@ -535,87 +603,50 @@ sub displayITISDownload {
             $csv_string =~ s/\r|\n//g;
             print FH_P $csv_string."\n";  
         }
-    }     
-    close FH_P;
+    }
+    
+    close FH_P or carp "Problem closing $filesystem_dir/publications.dat: $!";
+    
     $ref_count = "No" if ($ref_count == 0);
     print "</p>$ref_count publications were printed</p>";
     
-    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,\%people,\%options); 
-    my @opinions = @$opinions;
-    open FH_RL, ">$filesystem_dir/reference_links.dat";
-    my $ref_link_count = 0;
-    foreach my $o (@opinions) {
-        my %seen_ref = ();
-        if (!$seen_ref{$o->{'reference_no'}}) {
-            # taxon_no, PUB, reference_no, origianl_desc_ind?, initial_itis_desc_ind?,  change_track_id?, obsolete, update
-            my @line  = ($o->{'child_no'}, "PUB", $o->{'reference_no'}, "","","","",$o->{'modified_short'});
-            $csv->combine(@line);
-            my $csv_string = $csv->string();
-            $csv_string =~ s/\r|\n//g;
-            print FH_RL $csv_string."\n";  
-            $seen_ref{$o->{'reference_no'}} = 1;
-            $ref_link_count++;
-        }
-    }
-    close FH_RL;
-    $ref_link_count = "No" if ($ref_link_count == 0);
-    if ($opinion_file_message =~ /no search criteria/) {
-        print "<p>No reference links could be downloaded because no search criteria related to \"Taxonomic opinions\" were entered</p>";
-    } else {
+    my ($opinions) = getTaxonomicOpinions($dbt, $taxonomy, \%options); 
+    
+    open FH_RL, ">$filesystem_dir/reference_links.dat"
+	or die "Could not create $filesystem_dir/reference_links.dat: $!";
+    
+    if ( ref $opinions eq 'ARRAY' and @$opinions )
+    {
+	my $ref_link_count = 0;
+	foreach my $o (@$opinions) {
+	    my %seen_ref = ();
+	    if (!$seen_ref{$o->{'reference_no'}}) {
+		# taxon_no, PUB, reference_no, origianl_desc_ind?, initial_itis_desc_ind?,  change_track_id?, obsolete, update
+		my @line  = ($o->{'child_no'}, "PUB", $o->{'reference_no'}, "","","","",$o->{'modified_short'});
+		$csv->combine(@line);
+		my $csv_string = $csv->string();
+		$csv_string =~ s/\r|\n//g;
+		print FH_RL $csv_string."\n";  
+		$seen_ref{$o->{'reference_no'}} = 1;
+		$ref_link_count++;
+	    }
+	}
+	$ref_link_count = "No" if ($ref_link_count == 0);
         print "<p>$ref_link_count reference links were printed</p>";
     }
-   
-   
-    my @comments = ();
-    open FH_C, ">$filesystem_dir/comments.dat";
-    # Note that our comments aren't denormalized so the comment_id key
-    # (primary key for comments table for ITIS is just the primary key taxon_no for us
-    # header:     #comment_id,author,   comment,  created,  modified
-    @columns = ("taxon_no","enterer","comments","created","modified_short");
-    my $comment_count = 0;
-    foreach my $taxon (@names) {
-        if ($taxon->{'comments'}) {
-            my @line = ();
-            foreach my $col (@columns) {
-                push @line, $taxon->{$col}; 
-            }
-            $csv->combine(@line);
-            my $csv_string = $csv->string();
-            $csv_string =~ s/\r|\n//g;
-            print FH_C $csv_string."\n";  
-            $comment_count++;
-        }
+    else
+    {
+        print "<p>No reference links could be downloaded because no search criteria related to \"Taxonomic opinions\" were entered</p>";
     }
-    close FH_C;
-    $comment_count = "No" if ($comment_count == 0);
-    print "<p>$comment_count comments and comment links were printed</p>";
-
-    open FH_CL, ">$filesystem_dir/tu_comments_links.dat";
-    # Note that our comments aren't denormalized so the comment_id key
-    # (primary key for comments table for ITIS is just the primary key taxon_no for us
-    # Why a modified value exists for a many-to-one type join table is beyond me
-    # header:     #taxon_no,comment_id,   modified
-    @columns = ("taxon_no","taxon_no","modified_short");
-    foreach my $taxon (@names) {
-        if ($taxon->{'comments'}) {
-            my @line = ();
-            foreach my $col (@columns) {
-                push @line, $taxon->{$col}; 
-            }
-            $csv->combine(@line);
-            my $csv_string = $csv->string();
-            $csv_string =~ s/\r|\n//g;
-            print FH_CL $csv_string."\n";  
-        }
-    }
-    close FH_CL;
-
+    
+    close FH_RL or carp "Problem closing $filesystem_dir/reference_links.dat: $!";
+    
     # Now copy the documentation (.doc) and zip it up and link to the zipped file
-
-   #  0    1    2     3     4    5     6     7     8
-   my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =localtime(time);
-   my $date = sprintf("%d%02d%02d",($year+1900),$mon,$mday);   
-
+    
+    #  0    1    2     3     4    5     6     7     8
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =localtime(time);
+    my $date = sprintf("%d%02d%02d",($year+1900),$mon,$mday);   
+    
     my $dirname = ($s->isDBMember()) ? $s->{'enterer'} : "guest_".$date."_".$$;
     $dirname =~ s/[^a-zA-Z0-9_\/]//g;
     umask '022';
@@ -643,6 +674,11 @@ sub displayITISDownload {
 }
 
 
+our (%FIELD_MAP) = ( 'type_taxon' => 'type_taxon_name',
+		     'original_taxon_no' => 'orig_no',
+		     'original_taxon_name' => 'orig_name',
+		     'original_taxon_rank' => 'orig_rank' );
+
 # Builds the pbdb type output files
 #  There are 4 files output:
 #   taxonomic_names, current
@@ -654,42 +690,36 @@ sub displayITISDownload {
 #     raw dump of opinions with author fields and taxon fields denormalized, also basis
 #   references
 #     raw dump of references used
+
 sub displayPBDBDownload {
+
     my ($dbt,$taxonomy,$q,$s) = @_;
+    
     my $dbh = $dbt->dbh;
     my @errors = ();
-
+    
     my %options = $q->Vars();
-    if ($options{'taxon_name'}) {
-        my @taxon = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$options{'taxon_name'},'match_subgenera'=>1,'remove_rank_change'=>1});
+    if ($options{taxon_name}) {
+        my @taxon = $taxonomy->getTaxaByName($options{taxon_name});
         if (scalar(@taxon) > 1) {
             push @errors, "Taxon name is a homonym";
         } elsif (scalar(@taxon) < 1) {
             push @errors, "Taxon name not found";
         } else {
-            $options{'taxon_no'} = $taxon[0]->{'taxon_no'};
+            $options{taxon_no} = $taxon[0]->{taxon_no};
         }
     }
-
+    
     if ($q->param('person_reversed')) {
         my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('person_reversed')));
-        my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
+        my $person_no = ${$dbt->getData($sql)}[0]->{person_no};  
         if ($person_no) {
-            $options{'person_no'} = $person_no;
+            $options{person_no} = $person_no;
         } else {
             push @errors, "Could not find person ".$q->param("person_reversed")." in the database";
         }
     }
-    if ($q->param('person_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('person_reversed')));
-        my $person_no = ${$dbt->getData($sql)}[0]->{'person_no'};  
-        if ($person_no) {
-            $options{'person_no'} = $person_no;
-        } else {
-            push @errors, "Could not find person ".$q->param("person_reversed")." in the database";
-        }
-    }
-
+    
     my $sepChar = ($q->param('output_type') eq 'pipe') ? '|'
                                                        : ",";
     my $csv = Text::CSV_XS->new({
@@ -713,142 +743,207 @@ sub displayPBDBDownload {
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
 
-    # the person table is tiny and joining on it really slows things down,
-    #  so grab the whole thing and create a lookup JA 28.9.08
-    my $sql = "SELECT name,person_no FROM person";
-    my @temp = @{$dbt->getData($sql)};
-    my %people;
-    $people{$_->{person_no}} = $_->{name} foreach @temp;
-
     my %references;
 
     # Create the opinions file 
     # Note that the opinions file MUST be created first -- this is because there is an option to get taxa
     # that have an opinion that fit the criteria attached to them, so we need to get a additional list of taxa
     # from the opinions function to download
-    my ($opinions,$opinion_file_message) = getTaxonomicOpinions($dbt,$http_dir,\%people,\%options);
-    my @opinions = @$opinions;
+    
+    my ($opinions) = getTaxonomicOpinions($dbt, $taxonomy, \%options);
+    
     open FH_OP, ">$filesystem_dir/opinions.csv"
-        or die "Could not open opinions.csv ($!)";
+        or die "Could not open $filesystem_dir/opinions.csv: $!";
+    
     my @header;
+    
     if ( $q->param('output_data') =~ /basic/ )	{
         @header = ("child_name","status","parent_name","author1init","author1last","author2init","author2last","otherauthors","pubyr");
     } else	{
         @header = ("authorizer","enterer","modifier","reference_no","opinion_no","child_no","child_name","child_spelling_no","child_spelling_name","status","phylogenetic_status","spelling_reason","parent_no","parent_name","parent_spelling_no","parent_spelling_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","basis","comments","created","modified");
     }
+    
     $csv->combine(@header);
+    
     print FH_OP $csv->string()."\n";
-    foreach my $o (@opinions) {
-        my @line = ();
-        foreach my $val (@header) {
-            my $csv_val = $o->{$val} || '';
-            push @line, $csv_val;
-        }
-        $csv->combine(@line);
-        my $csv_string = $csv->string();
-        $csv_string =~ s/\r|\n//g;
-        print FH_OP $csv_string."\n";  
-        $references{$o->{'reference_no'}} = 1;
+    
+    if ( ref $opinions eq 'ARRAY' and @$opinions )
+    {
+	foreach my $o (@$opinions) {
+	    my @line = ();
+	    foreach my $val (@header) {
+		my $field = $FIELD_MAP{$val} || $val;
+		my $csv_val = $o->{$field} || '';
+		push @line, $csv_val;
+	    }
+	    $csv->combine(@line);
+	    my $csv_string = $csv->string();
+	    $csv_string =~ s/\r|\n//g;
+	    print FH_OP $csv_string."\n";  
+	    $references{$o->{'reference_no'}} = 1;
+	}
     }
-    close FH_OP;
-    print $opinion_file_message;
+    
+    close FH_OP or carp "Problem closing $filesystem_dir/opinions.csv: $!";
 
+    if ( ref $opinions eq 'ARRAY' and @$opinions )
+    {
+        print "<p>" . scalar(@$opinions) . " taxonomic opinions were printed to <a href=\"$http_dir/opinions.csv\">opinions.csv</a></p>";
+    }
+    else
+    {
+        print "<p>No taxonomic opinions were downloaded because no search criteria were entered</p>";
+    }
+    
     # If the user selects an option to get taxonomic names used by the downloaded opinions
     # then make a list of additional taxa to downlod
-    if ($options{'get_referenced_taxa'}) {
+    
+    if ( $options{get_referenced_taxa} and ref $opinions eq 'ARRAY' and @$opinions )
+    {
         my %referenced_taxa = (-1=>1);
-        foreach my $o (@opinions) {
+        foreach my $o (@$opinions) {
             $referenced_taxa{$o->{'child_no'}} = 1; 
             $referenced_taxa{$o->{'child_spelling_no'}} = 1; 
             if ($o->{'status'} eq 'misspelling of') {
                 $referenced_taxa{$o->{'parent_spelling_no'}} = 1;
             }
         }
-        $options{'referenced_taxa'} = join(',',keys %referenced_taxa);
+        $options{referenced_taxa} = join(',',keys %referenced_taxa);
     }
-
-
-    my ($names,$taxon_file_message) = getTaxonomicNames($dbt,$taxonomy,$http_dir,\%people,\%options);
-    my @names = @$names;
-
-
+    
+    # Now get all of the requested taxonomic names (including the additional
+    # ones specified in opinions).
+    
+    my ($names) = getTaxonomicNames($dbt,$taxonomy,\%options);
+    
+    my $valid_count = 0;
+    my $invalid_count = 0;
+    
+    # First, output the valid ones.
+    
     open FH_VT, ">$filesystem_dir/valid_taxa.csv"
-        or die "Could not open valid_taxa.csv ($!)";
-    if ( $q->param('output_data') =~ /basic/ )	{
+        or die "Could not open $filesystem_dir/valid_taxa.csv: $!";
+    
+    if ( $q->param('output_data') =~ /basic/ )
+    {
         @header = ("taxon_rank","taxon_name","author1init","author1last","author2init","author2last","otherauthors","pubyr");
-    } else	{
+    }
+    else
+    {
         @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","spelling_reason","common_name","taxon_rank","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
     }
+    
     $csv->combine(@header);
     print FH_VT $csv->string()."\n";
-    foreach my $t (@names) {
-        if ($t->{'is_valid'}) {
-            my @line = ();
-            foreach my $val (@header) {
-                my $csv_val = $t->{$val} || '';
-                push @line, $csv_val;
-            }
-            $csv->combine(@line);
-            my $csv_string = $csv->string();
-            $csv_string =~ s/\r|\n//g;
-            print FH_VT $csv_string."\n";  
-            $references{$t->{'reference_no'}} = 1;
-        }
+    
+    if ( ref $names eq 'ARRAY' and @$names )
+    {
+	foreach my $t (@$names) {
+	    if ($t->{'is_valid'}) {
+		my @line = ();
+		foreach my $val (@header) {
+		    my $field = $FIELD_MAP{$val} || $val;
+		    my $csv_val = $t->{$field} || '';
+		    push @line, $csv_val;
+		}
+		$csv->combine(@line);
+		my $csv_string = $csv->string();
+		$csv_string =~ s/\r|\n//g;
+		print FH_VT $csv_string."\n";
+		$valid_count++;
+		$references{$t->{'reference_no'}} = 1;
+	    }
+	}
     }
-    close FH_VT;
-
-
+    
+    close FH_VT or carp "Problem closing $filesystem_dir/valid_taxa.csv: $!";
+    
+    # Then output the invalid taxa.
+    
     open FH_IT, ">$filesystem_dir/invalid_taxa.csv"
-        or die "Could not open invalid_taxa.csv ($!)";
-    if ( $q->param('output_data') =~ /basic/ )	{
+        or die "Could not open $filesystem_dir/invalid_taxa.csv: $!";
+    
+    if ( $q->param('output_data') =~ /basic/ )
+    {
         @header = ("taxon_rank","taxon_name","author1init","author1last","author2init","author2last","otherauthors","pubyr","invalid_reason");
-    } else	{
+    }
+    else
+    {
         @header = ("authorizer","enterer","modifier","reference_no","taxon_no","taxon_name","common_name","taxon_rank","invalid_reason","original_taxon_no","original_taxon_name","original_taxon_rank","author1init","author1last","author2init","author2last","otherauthors","pubyr","pages","figures","parent_name","extant","preservation","type_taxon","type_specimen","type_body_part","part_details","comments","created","modified");
     }
+    
     $csv->combine(@header);
     print FH_IT $csv->string()."\n";
-    foreach my $t (@names) {
-        if (!$t->{'is_valid'}) {
-            my @line = ();
-            foreach my $val (@header) {
-                my $csv_val = $t->{$val} || '';
-                push @line, $csv_val;
-            }
-            $csv->combine(@line);
-            my $csv_string = $csv->string();
-            $csv_string =~ s/\r|\n//g;
-            print FH_IT $csv_string."\n";  
-            $references{$t->{'reference_no'}} = 1;
-        }
+    
+    if ( ref $names eq 'ARRAY' and @$names )
+    {
+	foreach my $t (@$names) {
+	    if (!$t->{'is_valid'}) {
+		my @line = ();
+		foreach my $val (@header) {
+		    my $field = $FIELD_MAP{$val} || $val;
+		    my $csv_val = $t->{$field} || '';
+		    push @line, $csv_val;
+		}
+		$csv->combine(@line);
+		my $csv_string = $csv->string();
+		$csv_string =~ s/\r|\n//g;
+		print FH_IT $csv_string."\n";
+		$invalid_count++;
+		$references{$t->{'reference_no'}} = 1;
+	    }
+	}
     }
-    close FH_IT;
-    print $taxon_file_message;
-
-
-    my @references = keys %references; 
-    open FH_REF, ">$filesystem_dir/references.csv";
-    if ( $q->param('output_data') =~ /basic/ )	{
+    
+    close FH_IT or carp "Problem closing $filesystem_dir/invalid_taxa.csv: $!";
+    
+    unless ( ref $names eq 'ARRAY' and @$names )
+    {
+	print "<p>No taxonomic names were downloaded because no search criteria were entered</p>\n";
+    }
+    
+    else
+    {
+        print "<p>$valid_count valid taxa were printed to <a href=\"$http_dir/valid_taxa.csv\">valid_taxa.csv</a></p>\n";
+        print "<p>$invalid_count invalid taxa were printed to <a href=\"$http_dir/invalid_taxa.csv\">invalid_taxa.csv</a></p>\n";
+    }
+    
+    my @references = keys %references;
+    
+    open FH_REF, ">$filesystem_dir/references.csv"
+	or die "Could not open $filesystem_dir/references.csv: $!";
+    
+    if ( $q->param('output_data') =~ /basic/ )
+    {
         @header = ('author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage');
-    } else	{
+    }
+    else
+    {
         @header = ('authorizer','enterer','modifier','reference_no','author1init','author1last','author2init','author2last','otherauthors','pubyr','reftitle','pubtitle','pubvol','pubno','firstpage','lastpage','publication_type','basis','comments','created','modified');
     }
+    
     $csv->combine(@header);
     print FH_REF $csv->string()."\n";
-    if (@references) {
-        my $sql = 'SELECT r.* FROM refs r '.
-                  ' WHERE r.reference_no IN ('.join(',',@references).')';
-        my $sth = $dbh->prepare($sql);
+    
+    if (@references)
+    {
+	my $ref_list = join(',', @references);
+	
+        my $sql = "
+		SELECT r.*, pp1.name as authorizer, pp2.name as enterer, pp3.name as modifier
+		FROM refs as r
+			LEFT JOIN person as pp1 on pp1.person_no = r.authorizer_no
+			LEFT JOIN person as pp2 on pp2.person_no = r.enterer_no
+			LEFT JOIN person as pp3 on pp3.person_no = r.modifier_no
+		WHERE r.reference_no IN ($ref_list)";
+        
+	my $sth = $dbh->prepare($sql);
         $sth->execute();
         
         my $ref_count = 0;
         while (my $row = $sth->fetchrow_hashref()) {
             $ref_count++;
             my @line = ();
-            if ( $q->param('output_data') !~ /basic/ )	{
-                $row->{authorizer} = $people{$row->{authorizer_no}};
-                $row->{enterer} = $people{$row->{enterer_no}};
-                $row->{modifier} = $people{$row->{modifier_no}};
-            }
             foreach my $val (@header) {
                 my $csv_val = $row->{$val} || '';
                 push @line, $csv_val;
@@ -864,11 +959,9 @@ sub displayPBDBDownload {
         print "<p>No references were printed</p>";
     }
 
-
-print '</td></tr></table></div>';
-  print "<div align=\"center\"><h5><a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
-
-
+    print '</td></tr></table></div>';
+    print "<div align=\"center\"><h5><a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
+    
     cleanOldGuestFiles();
 }
 
@@ -881,363 +974,281 @@ print '</td></tr></table></div>';
 # heavily written by JA 29.9.11
 sub getTaxonomicNames {
     
-    my ($dbt, $taxonomy, $http_dir, $people_ref, $options_ref) = @_;
-    my %people = %$people_ref;
-    my %options = %$options_ref;
+    my ($dbt, $taxonomy, $options) = @_;
+    
     my $dbh = $dbt->dbh;
+    my $query_options = {};
     
-    my $child_table_name;
+    # First process the filtering options.
     
-    my @where = ();
-   
-    my %taxa_list = ();
-    if ($options{'taxon_no'})
+    if ( $options->{reference_no} > 0 )
     {
-	$child_table_name = $taxonomy->getTaxaIdTable($options{'taxon_no'}, 'all_children');
+        $query_options->{reference_no} = $options->{reference_no} + 0;
     }
     
+    if ( $options->{pubyr} > 0 )
+    {
+	$query_options->{pubyr} = $options->{pubyr} + 0;
+	
+	if ( $options->{pubyr_before_after} eq 'before' )
+	{
+	    $query_options->{pubyr_rel} = 'before';
+	}
+	else
+	{
+	    $query_options->{pubyr_rel} = 'after';
+	}
+    }
     
-        $taxa_list{0} = 1; # Prevent crashes for empty lists;
-        my @children = TaxaCache::getChildren($dbt,$options{'taxon_no'});
-        foreach my $taxon_no (@children) {
-            $taxa_list{$taxon_no} = 1;
-        }
-        my %nomen_children = %{TaxonInfo::nomenChildren($dbt,\@children)};
-        foreach my $child_array (values %nomen_children) {
-            foreach my $child (@$child_array) {
-                $taxa_list{$child->{'taxon_no'}} = 1;
-            }
-        }
+    if ( $options->{author} =~ /\w/ )
+    {
+	$query_options->{author} = $options->{author};
     }
-    if ($options{'referenced_taxa'}) {
-        $taxa_list{0} = 1; # Prevent crashes for empty lists;
-        foreach my $taxon_no (split(/,/,$options{'referenced_taxa'})) {
-            $taxa_list{int($taxon_no)} = 1;
-        }
+    
+    if ( $options->{person_no} > 0 )
+    {
+	$query_options->{person_no} = $options->{person_no} + 0;
+	
+	if ( $options->{person_type} != '' )
+	{
+	    $query_options->{person_rel} = $options->{person_type};
+	}
+	else
+	{
+	    $query_options->{person_rel} = 'authorizer';
+	}
     }
-
-    if (%taxa_list) {
-        push @where, "a.taxon_no IN (".join(",",keys %taxa_list).")";
+    
+    if ( $options->{created_year} > 0 )
+    {
+        my ($yyyy,$mm,$dd) = ($options->{created_year},$options->{created_month},$options->{created_day});
+        $query_options->{created} = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
+	$query_options->{created_rel} = $options->{created_before_after} eq 'before' ? 'before' : 'after';
     }
-
-    if ($options{'reference_no'}) {
-        push @where, "a.reference_no=".int($options{'reference_no'});
+    
+    if ( $options->{taxon_rank} && $options->{taxon_rank} ne "all ranks")
+    {
+	$query_options->{rank} = $options->{taxon_rank};
     }
-
-    if ($options{'pubyr'}) {
-        my $sign = ($options{'pubyr_before_after'} eq 'before') ? '<=' 
-                 : ($options{'pubyr_before_after'} eq 'exactly') ? '=' 
-                 : '>=';
-        my $pubyr = int($options{'pubyr'});
-        push @where, "IF(a.ref_is_authority='YES',r.pubyr $sign $pubyr AND r.pubyr REGEXP '[0-9]+',a.pubyr $sign $pubyr AND a.pubyr REGEXP '[0-9]+')";
+    
+    # Specify the fields that need to be returned.
+    
+    my $query_fields = ['oldattr', 'link', 'parent', 'orig', 'tt', 'person',
+			'specimen', 'pages', 'created', 'modshort', 
+			'comments'];
+    
+    $query_options->{fields} = $query_fields;
+    $query_options->{status} = 'all';
+    
+    # Then, apply these to the specified taxa.
+    
+    my @taxa_list;
+    
+    if ( $options->{taxon_no} > 0 )
+    {
+	push @taxa_list, $taxonomy->getRelatedTaxa('all_children', $options->{taxon_no},
+						    $query_options);
     }
-
-    if ($options{'author'}) {
-        my $author = $dbh->quote($options{'author'});
-        push @where, "IF(a.ref_is_authority='YES',".
-            "r.author1last=$author OR r.author2last=$author,". # If ref_is_authority, use ref
-            "a.author1last=$author OR a.author2last=$author)"; # Else, use record itself
+    
+    else
+    {
+	push @taxa_list, $taxonomy->getRelatedTaxa('all_taxa', undef, $query_options);
     }
-
-    if ($options{'person_no'}) {
-        if ($options{'person_type'} eq 'all') {
-            my $p = $options{'person_no'};
-            push @where, "(a.authorizer_no IN ($p) OR a.enterer_no IN ($p) OR a.modifier_no IN ($p))";
-        } elsif ($options{'person_type'} eq 'authorizer_enterer') {
-            my $p = $options{'person_no'};
-            push @where, "(a.authorizer_no IN ($p) OR a.enterer_no IN ($p))";
-        } elsif ($options{'person_type'} eq 'enterer') {
-            push @where, 'a.enterer_no IN ('.$options{'person_no'}.')';
-        } elsif ($options{'person_type'} eq 'modifier') {
-            push @where, 'a.modifier_no IN ('.$options{'person_no'}.')';
-        } else { # defaults to authorizer
-            push @where, 'a.authorizer_no IN ('.$options{'person_no'}.')';
-        }
+    
+    # Next, add in all taxa specified by the 'referenced_taxa' option (those
+    # which have not already been included).
+    
+    if ( $options->{referenced_taxa} )
+    {
+	my (%found_taxon, @additions);
+	
+	foreach my $taxon (@taxa_list)
+	{
+	    $found_taxon{$taxon->{taxon_no}} = 1;
+	}
+	
+	push @additions, $taxonomy->getRelatedTaxa('self', $options->{referenced_taxa},
+						   { include => $query_fields });
+	
+	foreach my $taxon (@additions)
+	{
+	    push @taxa_list, $taxon unless $found_taxon{$taxon->{taxon_no}};
+	}
     }
-
-    if ($options{'created_year'}) {
-        my ($yyyy,$mm,$dd) = ($options{'created_year'},$options{'created_month'},$options{'created_day'});
-        my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
-        my $sign = ($options{'created_before_after'} eq 'before') ? '<=' : '>=';
-        push @where,"a.created $sign $date";
+    
+    # Now process each row
+    
+    unless ( @taxa_list )
+    {
+	return [];
     }
-
-    if ($options{'taxon_rank'} && $options{'taxon_rank'} ne "all ranks") {
-        if ($options{'taxon_rank'} =~ /above genus/) {
-            push @where,"a.taxon_rank NOT IN ('subspecies','species','subgenus','genus')";
-        } elsif ($options{'taxon_rank'} =~ /genus or below/) {
-            push @where,"a.taxon_rank IN ('subspecies','species','subgenus','genus')";
-        } else {
-            push @where,"a.taxon_rank LIKE ".$dbh->quote($options{'taxon_rank'});
-        }
-    }
-
-    # use between and both values so we'll use a key for a smaller tree;
-    my (@results,@extended_results);
-    my $message;
-    if (@where) {
-        my $base_sql = "SELECT a.authorizer_no, a.enterer_no, a.modifier_no,"
-                . "a.taxon_no,a.reference_no,a.taxon_rank,a.taxon_name,a.common_name,a.type_specimen,a.type_body_part,a.part_details,a.extant,a.preservation,"
-                . "a.pages,a.figures,a.created,a.comments,t.spelling_no,t.synonym_no senior_synonym_no,"
-                . " IF (a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,"
-                . " IF (a.ref_is_authority='YES',r.author1init,a.author1init) author1init,"
-                . " IF (a.ref_is_authority='YES',r.author1last,a.author1last) author1last,"
-                . " IF (a.ref_is_authority='YES',r.author2init,a.author2init) author2init,"
-                . " IF (a.ref_is_authority='YES',r.author2last,a.author2last) author2last,"
-                . " IF (a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,"
-                . " DATE_FORMAT(a.modified,'%Y-%m-%e %H:%i:%s') modified,"
-                . " DATE_FORMAT(a.modified,'%m/%e/%Y') modified_short,"
-                . " o.spelling_reason,"
-                . " o.status invalid_reason,pa.taxon_no parent_no,pa.taxon_name parent_name"
-                . " FROM $TAXA_TREE_CACHE t,authorities a,opinions o,$TAXA_TREE_CACHE pt,authorities pa,refs r"
-                . " WHERE t.spelling_no=a.taxon_no AND t.opinion_no=o.opinion_no AND pt.taxon_no=o.parent_no AND pt.spelling_no=pa.taxon_no AND r.reference_no=a.reference_no";
-
-        my $sql = "$base_sql AND ".join(" AND ",@where)." GROUP BY t.spelling_no ORDER BY a.taxon_name";
-        dbg("getTaxonomicNames called: ($sql)");
-        @results = @{$dbt->getData($sql)};
-
-        # only some (higher) taxa have type_taxon_nos, so grab their names
-        #  separately to avoid a tedious UNION   $$$$$
-        my %type_lookup;
-        if (%taxa_list) {
-            $sql = "SELECT a.taxon_no,a2.taxon_name type_taxon FROM authorities a,authorities a2 WHERE a.type_taxon_no=a2.taxon_no AND a.taxon_no IN (".join(",",keys %taxa_list).")";
-            my @types = @{$dbt->getData($sql)};
-            $type_lookup{$_->{'taxon_no'}} = $_->{'type_taxon'} foreach @types;
-        }
-
-        my ($valid_count,$invalid_count) = (0,0);
-        my %parent_name_cache = ();
-        my %orig_cache = ();
-        foreach my $row (@results) {
-            $row->{type_taxon} = $type_lookup{$row->{'taxon_no'}};
-            $row->{authorizer} = $people{$row->{authorizer_no}};
-            $row->{enterer} = $people{$row->{enterer_no}};
-            $row->{modifier} = $people{$row->{modifier_no}};
-            my $orig_no = TaxonInfo::getOriginalCombination($dbt,$row->{'spelling_no'});
-
-            # If this is a recombination, then use the old combinations reference information
-            my $orig_row = {};
-            if (! $orig_cache{$orig_no}) {
-                my $sql = "SELECT a.taxon_no taxon_no,a.taxon_rank taxon_rank,a.taxon_name FROM authorities a WHERE a.taxon_no=$orig_no";
-                $orig_cache{$orig_no} = ${$dbt->getData($sql)}[0];
-            }
-            $row->{'original_taxon_name'} = $orig_cache{$orig_no}->{'taxon_name'};
-            $row->{'original_taxon_no'} = $orig_cache{$orig_no}->{'taxon_no'};
-            $row->{'original_taxon_rank'} = $orig_cache{$orig_no}->{'taxon_rank'};
-            $row->{'is_valid'} = "";
-
-            # some legacy nomen opinions lack parents (argh)
-            if ($row->{'status'} =~ /nomen/ && ! $row->{'parent_name'}) {
-                $row->{'is_valid'} = "";
-                $row->{'invalid_reason'} = $row->{'status'};
-                $invalid_count++;
-            # invalid names with known parents
-            } elsif ($row->{'taxon_no'} != $row->{'senior_synonym_no'}) {
-                $row->{'invalid_reason'} .= ( $row->{invalid_reason} =~ /^nomen/ ) ? " belonging to" : "";
-                $row->{'invalid_reason'} = "$row->{invalid_reason} $row->{parent_name}";
-                $row->{'synonym_no'} = $row->{'parent_no'}; 
-                $invalid_count++;
-            # valid names with changed spellings
-            } elsif ($row->{'taxon_no'} != $row->{'original_taxon_no'}) {
-                    if ($row->{'spelling_reason'} =~ /^corr/) {
-                    $row->{'spelling_reason'} = "corrected as $row->{parent_name}";
-                } elsif ($row->{'spelling_reason'} =~ /^missp/) {
-                    $row->{'spelling_reason'} = "misspelling of $row->{original_taxon_name}";
-                } elsif ($row->{'spelling_reason'} =~ /^recomb/) {
-                    $row->{'spelling_reason'} = "recombined into $row->{parent_name}";
-                } elsif ($row->{'spelling_reason'} =~ /^reass/) {
-                    $row->{'spelling_reason'} = "reassigned into $row->{parent_name}";
-                } elsif ($row->{'spelling_reason'} =~ /^rank/) {
-                    $row->{'spelling_reason'} = "$orig_no rank changed from $row->{original_taxon_rank} to $row->{taxon_rank}";
-                    if ($row->{'taxon_name'} ne $row->{'parent_name'}) {
-                        $row->{'spelling_reason'} .= ", parent to $row->{parent_name}";
+    
+    my ($valid_count,$invalid_count) = (0,0);
+    
+    foreach my $row (@taxa_list)
+    {
+	$row->{is_valid} = "";
+	
+	# some legacy nomen opinions lack parents (argh)
+	if ( $row->{status} =~ /nomen/ && ! $row->{parent_name} )
+	{
+	    $row->{is_valid} = "";
+	    $row->{invalid_reason} = $row->{status};
+	    $invalid_count++;
+	}
+	
+	# invalid names with known parents
+	elsif ( $row->{taxon_no} != $row->{synonym_no} )
+	{
+	    $row->{invalid_reason} .= ( $row->{invalid_reason} =~ /^nomen/ ) ? " belonging to" : "";
+	    $row->{invalid_reason} = "$row->{invalid_reason} $row->{parent_name}";
+	    $row->{synonym_no} = $row->{parent_no}; 
+	    $invalid_count++;
+	}
+	
+	# valid names with changed spellings
+	elsif ( $row->{taxon_no} != $row->{orig_no} )
+	{
+	    if ($row->{spelling_reason} =~ /^corr/) {
+		$row->{spelling_reason} = "corrected as $row->{parent_name}";
+	    } elsif ($row->{spelling_reason} =~ /^missp/) {
+		$row->{'spelling_reason'} = "misspelling of $row->{original_taxon_name}";
+	    } elsif ($row->{spelling_reason} =~ /^recomb/) {
+		$row->{spelling_reason} = "recombined into $row->{parent_name}";
+	    } elsif ($row->{spelling_reason} =~ /^reass/) {
+		$row->{spelling_reason} = "reassigned into $row->{parent_name}";
+	    } elsif ($row->{spelling_reason} =~ /^rank/) {
+		$row->{spelling_reason} = "$row->{orig_no} rank changed from $row->{orig_rank} to $row->{taxon_rank}";
+		if ($row->{taxon_name} ne $row->{parent_name}) {
+                        $row->{spelling_reason} .= ", parent to $row->{parent_name}";
                     }
                 } else	{
-                    $row->{'spelling_reason'} = "belongs to $row->{parent_name}";
+                    $row->{spelling_reason} = "belongs to $row->{parent_name}";
                 }
-                $row->{'is_valid'} = 1;
+                $row->{is_valid} = 1;
                 $valid_count++;
-            # valid names with original spellings
-            } else {
-                # taxa_tree_cache does track the correct spelling even if
-                #  the current opinion is mispelled, so the name will be
-                #  printed with the right spelling one way or another
-                if ($row->{'spelling_reason'} =~ /^missp/) {
-                    $row->{'spelling_reason'} = "original spelling";
-                }
-                $row->{'is_valid'} = 1;
-                $valid_count++;
-            }
-            push @extended_results , $row;
-        }
-        my $it_link = $http_dir."/invalid_taxa.csv";
-        my $vt_link = $http_dir."/valid_taxa.csv";
-        $message .= "<p>$valid_count valid taxa were printed to <a href=\"$vt_link\">valid_taxa.csv</a></p>";
-        $message .= "<p>$invalid_count invalid taxa were printed to <a href=\"$it_link\">invalid_taxa.csv</a></p>";
-    } else {
-        $message = "<p>No taxonomic names were downloaded because no search criteria were entered</p>";
+	}
+	
+	# valid names with original spellings
+	else {
+	    # taxa_tree_cache does track the correct spelling even if
+	    #  the current opinion is mispelled, so the name will be
+	    #  printed with the right spelling one way or another
+	    if ($row->{spelling_reason} =~ /^missp/) {
+		$row->{spelling_reason} = "original spelling";
+	    }
+	    $row->{is_valid} = 1;
+	    $valid_count++;
+	}
     }
     
-    return (\@extended_results, $message);
+    return \@taxa_list;
 }
+
+
+# Get taxonomic opinions.
 
 sub getTaxonomicOpinions {
-    my $dbt = shift;
-    my $http_dir = shift;
-    my $ref = shift;
-    my %people = %{$ref};
-    $ref = shift;
-    my %options = %{$ref};
+    
+    my ($dbt, $taxonomy, $options) = @_;
+    
     my $dbh = $dbt->dbh;
+    my $query_options = {};
     
-    my @where = ();
+    # First process the filtering options
     
-    my %taxa_list = ();
-    if ($options{'taxon_no'}) {
-        $taxa_list{0} = 1; # Prevent crashes for empty lists;
-        my @children = TaxaCache::getChildren($dbt,$options{'taxon_no'});
-        foreach my $taxon_no (@children) {
-            $taxa_list{$taxon_no} = 1;
-        }
-        my %nomen_children = %{TaxonInfo::nomenChildren($dbt,\@children)};
-        foreach my $child_array (values %nomen_children) {
-            foreach my $child (@$child_array) {
-                $taxa_list{$child->{'taxon_no'}} = 1;
-            }
-        }
+    if ( $options->{reference_no} > 0 )
+    {
+        $query_options->{reference_no} = $options->{reference_no} + 0;
     }
-    if ($options{'referenced_taxa'}) {
-        $taxa_list{0} = 1; # Prevent crashes for empty lists;
-        foreach my $taxon_no (split(/,/,$options{'referenced_taxa'})) {
-            $taxa_list{int($taxon_no)} = 1;
-        }
-    }
-    if (%taxa_list) {
-        push @where, "o.child_no IN (".join(",",keys %taxa_list).")";
-    }
-
-    if ($options{'reference_no'}) {
-        push @where, "o.reference_no=".int($options{'reference_no'});
-    }
-
-    if ($options{'pubyr'}) {
-        my $sign = ($options{'pubyr_before_after'} eq 'before') ? '<=' 
-                 : ($options{'pubyr_before_after'} eq 'exactly') ? '=' 
-                                                                       : '>=';
-        my $pubyr = int($options{'pubyr'});
-        push @where, "IF(o.ref_has_opinion='YES',r.pubyr $sign $pubyr AND r.pubyr REGEXP '[0-9]+',o.pubyr $sign $pubyr AND o.pubyr REGEXP '[0-9]+')";
-    }
-
-    if ($options{'author'}) {
-        my $author = $dbh->quote($options{'author'});
-        push @where, "IF(o.ref_has_opinion='YES',".
-            "r.author1last=$author OR r.author2last=$author,". # If ref_is_authority, use ref
-            "o.author1last=$author OR o.author2last=$author)"; # Else, use record itself
-    }
-
-    if ($options{'created_year'}) {
-        my ($yyyy,$mm,$dd) = ($options{'created_year'},$options{'created_month'},$options{'created_day'});
-        my $date = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
-        my $sign = ($options{'created_before_after'} eq 'before') ? '<=' : '>=';
-        push @where,"o.created $sign $date";
-    }
-
-    if ($options{'person_no'}) {
-        if ($options{'person_type'} eq 'all') {
-            my $p = $options{'person_no'};
-            push @where, "(o.authorizer_no IN ($p) OR o.enterer_no IN ($p) OR o.modifier_no IN ($p))";
-        } elsif ($options{'person_type'} eq 'authorizer_enterer') {
-            my $p = $options{'person_no'};
-            push @where, "(o.authorizer_no IN ($p) OR o.enterer_no IN ($p))";
-        } elsif ($options{'person_type'} eq 'enterer') {
-            push @where, 'o.enterer_no IN ('.$options{'person_no'}.')';
-        } elsif ($options{'person_type'} eq 'modifier') {
-            push @where, 'o.modifier_no IN ('.$options{'person_no'}.')';
-        } else { # defaults to authorizer
-            push @where, 'o.authorizer_no IN ('.$options{'person_no'}.')';
-        }  
-    }
-
-    my @tables = ('opinions o','refs r');
-    if ($options{'taxon_rank'} && $options{'taxon_rank'} ne "all ranks") {
-        if ($options{'taxon_rank'} =~ /above genus/) {
-            push @where,"taxon_rank NOT IN ('subspecies','species','subgenus','genus')";
-        } elsif ($options{'taxon_rank'} =~ /genus or below/) {
-            push @where,"taxon_rank IN ('subspecies','species','subgenus','genus')";
-        } else {
-            push @where,"taxon_rank=".$dbh->quote($options{'taxon_rank'});
-        }
-        push @tables , 'authorities a';
-        push @where , 'taxon_no=child_spelling_no';
-    }
-
-    # use between and both values so we'll use a key for a smaller tree;
-    my @results = ();
-    my $message = "";
-    if (@where) {
-        push @where , 'r.reference_no=o.reference_no';
-        my $sql = "(SELECT o.authorizer_no, o.enterer_no, o.modifier_no, "
-                . "o.opinion_no,o.reference_no,o.status,o.phylogenetic_status,o.spelling_reason,o.child_no,o.child_spelling_no,o.parent_no,o.parent_spelling_no, "
-                . "o.pages,o.figures,o.created,o.comments,IF((o.basis != '' && o.basis IS NOT NULL), o.basis, r.basis) basis,"
-                . " IF (o.ref_has_opinion='YES',r.pubyr,o.pubyr) pubyr,"
-                . " IF (o.ref_has_opinion='YES',r.author1init,o.author1init) author1init,"
-                . " IF (o.ref_has_opinion='YES',r.author1last,o.author1last) author1last,"
-                . " IF (o.ref_has_opinion='YES',r.author2init,o.author2init) author2init,"
-                . " IF (o.ref_has_opinion='YES',r.author2last,o.author2last) author2last,"
-                . " IF (o.ref_has_opinion='YES',r.otherauthors,o.otherauthors) otherauthors, "
-                . " DATE_FORMAT(o.modified,'%Y-%m-%e %H:%i:%s') modified, "
-                . " DATE_FORMAT(o.modified,'%m/%e/%Y') modified_short "
-                . " FROM ".join(',',@tables)
-                . " WHERE ".join(" AND ",@where)
-                . ") ORDER BY pubyr";
-        dbg("getTaxonomicOpinions called: ($sql)");
-        @results = @{$dbt->getData($sql)};
-        my $op_link = $http_dir."/opinions.csv";
-	my @nos;
-	push @nos , $_->{child_no} foreach @results;
-	push @nos , $_->{child_spelling_no} foreach @results;
-	push @nos , $_->{parent_no} foreach @results;
-	push @nos , $_->{parent_spelling_no} foreach @results;
-	if ( @nos )	{
-		my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE taxon_no IN (" . join(',',@nos) .  ")";
-        	my @names = @{$dbt->getData($sql)};
-		my %lookup;
-		$lookup{$_->{taxon_no}} = $_->{taxon_name} foreach @names;
-		for my $r ( @results )	{
-                        $r->{authorizer} = $people{$r->{authorizer_no}};
-                        $r->{enterer} = $people{$r->{enterer_no}};
-                        $r->{modifier} = $people{$r->{modifier_no}};
-			$r->{child_name} = $lookup{$r->{child_no}};
-			$r->{child_spelling_name} = $lookup{$r->{child_spelling_no}};
-			$r->{parent_name} = $lookup{$r->{parent_no}};
-			$r->{parent_spelling_name} = $lookup{$r->{parent_spelling_no}};
-		}
+    
+    if ( $options->{pubyr} > 0 )
+    {
+	$query_options->{pubyr} = $options->{pubyr} + 0;
+	
+	if ( $options->{pubyr_before_after} eq 'before' )
+	{
+	    $query_options->{pubyr_rel} = 'before';
 	}
-        
-        $message .= "<p>".scalar(@results)." taxonomic opinions were printed to <a href=\"$op_link\">opinions.csv</a></p>";
-    } else {
-        $message .= "<p>No taxonomic opinions were downloaded because no search criteria were entered</p>";
+	else
+	{
+	    $query_options->{pubyr_rel} = 'after';
+	}
     }
-    return (\@results,$message);
-}
-
-sub getKingdomMap {
-    my $dbt = shift;
-    my %kingdom = ();
-
-    # duh, make sure to only get current spellings of valid kingdoms
-    my $sql = "SELECT a.taxon_no,taxon_name FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=spelling_no AND spelling_no=synonym_no AND taxon_rank LIKE 'kingdom' GROUP BY a.taxon_no";
-
-    my @results = @{$dbt->getData($sql)};
-
-    foreach my $row (@results) {
-        my @children = TaxaCache::getChildren($dbt,$row->{'taxon_no'});
-        foreach my $child (@children) {
-            $kingdom{$child} = $row->{'taxon_name'};
-        }
+    
+    if ( $options->{author} =~ /\w/ )
+    {
+	$query_options->{author} = $options->{author};
     }
-
-    return %kingdom;
+    
+    if ( $options->{person_no} > 0 )
+    {
+	$query_options->{person_no} = $options->{person_no} + 0;
+	
+	if ( $options->{person_type} != '' )
+	{
+	    $query_options->{person_rel} = $options->{person_type};
+	}
+	else
+	{
+	    $query_options->{person_rel} = 'authorizer';
+	}
+    }
+    
+    if ( $options->{created_year} > 0 )
+    {
+        my ($yyyy,$mm,$dd) = ($options->{created_year},$options->{created_month},$options->{created_day});
+        $query_options->{created} = $dbh->quote(sprintf("%d-%02d-%02d 00:00:00",$yyyy,$mm,$dd));
+	$query_options->{created_rel} = $options->{created_before_after} eq 'before' ? 'before' : 'after';
+    }
+    
+    # Specify the fields that need to be returned.
+    
+    my $query_fields = ['oldattr', 'person', 'pages', 'created', 'modshort',
+			'comments', 'names'];
+    
+    $query_options->{fields} = $query_fields;
+    $query_options->{status} = 'all';
+    
+    # Then apply these to the specified opinions.
+    
+    my @opinion_list;
+    
+    if ( $options->{taxon_no} > 0 )
+    {
+	push @opinion_list, $taxonomy->getOpinions('child_desc', $options->{taxon_no},
+						   $query_options);
+    }
+    
+    else
+    {
+	push @opinion_list, $taxonomy->getOpinions('all_opinions', undef, 
+						   $query_options);
+    }
+    
+    # Next, add in all taxa specified by the 'referenced_taxa' option (those
+    # which have not already been included).
+    
+    if ( $options->{referenced_taxa} )
+    {
+	my (%found_opinion, @additions);
+	
+	foreach my $opinion (@opinion_list)
+	{
+	    $found_opinion{$opinion->{opinion_no}} = 1;
+	}
+	
+	push @additions, $taxonomy->getOpinions('child', $options->{reference_taxa},
+						{ include => $query_fields });
+	
+	foreach my $opinion (@additions)
+	{
+	    push @opinion_list, $opinion unless $found_opinion{$opinion->{opinion_no}};
+	}
+    }
+    
+    return \@opinion_list;
+    
 }
 
 

@@ -881,7 +881,7 @@ sub displayDownloadResults {
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $m = Download->new($dbt,$q,$s,$hbo);
+	my $m = Download->new($dbt,$taxonomy,$q,$s,$hbo);
 	$m->buildDownload( );
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -892,7 +892,7 @@ sub emailDownloadFiles	{
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $m = Download->new($dbt,$q,$s,$hbo);
+	my $m = Download->new($dbt,$taxonomy,$q,$s,$hbo);
 	$m->emailDownloadFiles();
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -1447,7 +1447,9 @@ sub displayCollResults {
 		}
 
 		$options{'calling_script'} = "displayCollResults";
-		($dataRows,$ofRows,$warnings,$occRows) = Collection::getCollections($dbt,$s,\%options,$fields);
+		my $p = Permissions->new($s,$dbt);
+		($dataRows,$ofRows,$warnings,$occRows) = 
+		    Collection::getCollections($dbt,$taxonomy,$p,\%options,$fields);
 	}
 
 	# DISPLAY MATCHING COLLECTIONS

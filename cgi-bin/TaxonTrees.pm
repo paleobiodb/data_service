@@ -45,7 +45,10 @@ our $MSG_LEVEL = 0;
 our (@TREE_TABLE_LIST) = ("taxon_trees");
 our (%SUPPRESS_TABLE) = ("taxon_trees" => "suppress_opinions");
 our (%SEARCH_TABLE) = ("taxon_trees" => "taxon_search");
+our (%NAME_TABLE) = ("taxon_trees" => "taxon_names");
 our (%ATTRS_TABLE) = ("taxon_trees" => "taxon_attrs");
+our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
+our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
 
 our $OPINION_CACHE = "order_opinions";
 
@@ -60,6 +63,7 @@ our $REFS_TABLE = "refs";
 our $TREE_TEMP = "tn";
 our $SUPPRESS_TEMP = "sn";
 our $SEARCH_TEMP = "fn";
+our $NAME_TEMP = "nn";
 our $ATTRS_TEMP = "vn";
 our $OPINION_TEMP = "opn";
 
@@ -92,14 +96,10 @@ use constant TYPE_ERROR => 9;
 
 # Kingdoms and labels
 
-our(%KINGDOM_LABEL) = ( 'Metazoa' => 'Metazoa',
-			'Plantae' => 'Plantae',
-			'Metaphytae' => 'Plantae',
-			'Fungi' => 'Fungi',
-			'Protista' => 'Other',
-			'Chromista' => 'Other',
-			'Eubacteria' => 'Bacteria',
-			'Archaea' => 'Archaea');
+our(@KINGDOM_LIST) = ( 'Eukaryota', 'Metazoa', 'Plantae', 'Metaphytae',
+		       'Fungi', 'Eubacteria', 'Archaea' );
+
+our(%KINGDOM_LABEL) = ( 'Metaphytae' => 'Plantae' );
 
 
 =head1 INTERFACE
@@ -754,14 +754,18 @@ sub updateTables {
     
     if ( treePerturbation($dbh, $tree_table) < 3 )
     {
-	updateTreeTables($dbh, $tree_table, $suppress_table, $options->{keep_temps});
+	updateTreeTable($dbh, $tree_table);
+	updateSecondaryTables($dbh, $tree_table, $options->{keep_temps});
+	logMessage(1, "done updating tree tables for '$tree_table'");
     }
     
     # Otherwise, we need to completely rebuild the tree sequence and then
-    # activate the temporary tables using atomic rename.
+    # activate the temporary table using atomic rename.
     
     else
     {
+	my $suppress_table = $SUPPRESS_TABLE{$tree_table};
+	
 	# Copy all rows from $tree_table into $TREE_TEMP that aren't already
 	# represented there.
 	
@@ -783,10 +787,12 @@ sub updateTables {
 	
 	computeTreeSequence($dbh);
 	
-	# Then activate the temporary tables by renaming them over the previous
-	# ones. 
+	# Then activate the new tree table by renaming it over the previous
+	# one.  The secondary tables get updated as usual.
 	
-	activateNewTables($dbh, $tree_table, $options->{keep_temps});
+	activateTreeTable($dbh, $tree_table);
+	updateSecondaryTables($dbh, $tree_table, $options->{keep_temps});
+	logMessage(1, "done updating tree tables for '$tree_table'");
     }
     
     my $a = 1;		# we can stop here when debugging
@@ -826,7 +832,8 @@ sub buildTables {
     createTempTables($dbh) if $step_control->{a};
     
     # Next, determine the currently accepted spelling for each concept from
-    # the data in $OPINION_CACHE.
+    # the data in $OPINION_CACHE, and the "spelling reason" for each taxonomic
+    # name.
     
 	clearSpelling($dbh) if $step_control->{x} and $step_control->{b};
     
@@ -877,6 +884,8 @@ sub buildTables {
     
     activateNewTables($dbh, $tree_table, $keep_temps)
 	if $step_control->{g};
+    
+    logMessage(1, "done rebuilding tree tables for '$tree_table'");
     
     my $a = 1;		# we can stop here when debugging
 }
@@ -945,7 +954,7 @@ sub rebuildOpinionCache {
 			   pubyr varchar(4),
 			   status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 			   spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
-			   UNIQUE KEY (opinion_no))");
+			   UNIQUE KEY (opinion_no)) ENGINE=MYISAM");
     
     # Populate this table with data from $OPINIONS_TABLE.  We will sort this
     # data properly for determining the best (most recent and reliable)
@@ -992,11 +1001,16 @@ sub populateOpinionCache {
     
     # If we were given a filter expression, create the necessary clause.
     
-    my ($filter_clause) = "";
+    my $filter_clause;
     
     if ( $filter_expr )
     {
-	$filter_clause = "WHERE opinion_no in $filter_expr";
+	$filter_clause = "WHERE opinion_no in $filter_expr and (parent_no > 0 or child_no = 1)";
+    }
+    
+    else
+    {
+	$filter_clause = "WHERE parent_no > 0 or child_no = 1";
     }
     
     # This query is adapated from the old getMostRecentClassification()
@@ -1022,7 +1036,7 @@ sub populateOpinionCache {
 			o.status, o.spelling_reason
 		FROM opinions o LEFT JOIN refs r USING (reference_no)
 			JOIN authorities a1 ON a1.taxon_no = o.child_spelling_no
-			JOIN authorities a2 ON a2.taxon_no = o.parent_spelling_no
+			LEFT JOIN authorities a2 ON a2.taxon_no = o.parent_spelling_no
 		$filter_clause
 		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
     
@@ -1152,8 +1166,8 @@ sub createTempTables {
 				lft int unsigned,
 				rgt int unsigned,
 				depth int unsigned,
-				kingdom enum ('Metazoa', 'Plantae', 'Fungi', 'Bacteria', 'Archaea', 'Other'),
-				PRIMARY KEY (orig_no))");
+				kingdom enum ('Metazoa', 'Plantae', 'Fungi', 'Eubacteria', 'Archaea', 'Eukaryota'),
+				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
     # If we were given a list of concepts, populate it with just those.
     # Otherwise, grab every concept in $AUTH_TABLE
@@ -1180,7 +1194,7 @@ sub createTempTables {
 			    ri int unsigned not null,
 			    pubyr varchar(4),
 			    status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
-			    UNIQUE KEY (orig_no))");
+			    UNIQUE KEY (orig_no)) ENGINE=MYISAM");
     
     # Also, create a temporary table to record suppressed opinions due to
     # cycle-breaking.  This information will eventually be moved into
@@ -1190,7 +1204,7 @@ sub createTempTables {
     $result = $dbh->do("CREATE TABLE $SUPPRESS_TEMP
 			       (opinion_no int unsigned not null,
 				suppress int unsigned not null,
-				PRIMARY KEY (opinion_no))");
+				PRIMARY KEY (opinion_no)) ENGINE=MYISAM");
     
     # Create a search table through which taxa can be efficiently and
     # completely found by name.
@@ -1201,7 +1215,8 @@ sub createTempTables {
 				subgenus varchar(80) not null,
 				taxon_name varchar(80) not null,
 				taxon_no int unsigned not null,
-				UNIQUE KEY (taxon_name, genus, subgenus))");
+				KEY (taxon_name, genus, subgenus),
+				UNIQUE KEY (taxon_no, genus, subgenus)) ENGINE=MYISAM");
     
     # Create a table through which bottom-up attributes such as min_body_mass
     # and max_body_mass can be looked up.
@@ -1211,7 +1226,19 @@ sub createTempTables {
 			       (orig_no int unsigned not null,
 				min_body_mass float,
 				max_body_mass float,
-				PRIMARY KEY (orig_no))");
+				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
+    
+    # Create a table to store the spelling information for each taxonomic
+    # name. 
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $NAME_TEMP");
+    $result = $dbh->do("CREATE TABLE $NAME_TEMP
+			       (taxon_no int unsigned not null,
+				orig_no int unsigned not null,
+				opinion_no int unsigned not null,
+				PRIMARY KEY (taxon_no),
+				KEY (orig_no),
+				KEY (opinion_no)) ENGINE=MYISAM");
     
     return;
 }
@@ -1251,7 +1278,7 @@ sub computeSpelling {
 			    (orig_no int unsigned,
 			     spelling_no int unsigned,
 			     is_misspelling boolean,
-			     PRIMARY KEY (orig_no))");
+			     PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
     $result = $dbh->do("
 		INSERT IGNORE INTO $SPELLING_TEMP
@@ -1402,6 +1429,17 @@ sub computeSpelling {
     logMessage(2, "    indexing trad_no");
     
     $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (trad_no)");
+    
+    # Now select the best opinion for each *taxonomic name* (not concept) and
+    # fill in the "spelling reason" field of $NAME_TEMP.
+    
+    logMessage(2, "computing spelling table (b)");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $NAME_TEMP
+		SELECT o.child_spelling_no, o.orig_no, o.opinion_no
+		FROM $OPINION_CACHE o JOIN $TREE_TEMP USING (orig_no)
+		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
     my $a = 1;		# we can stop on this line when debugging
 }
@@ -1802,7 +1840,7 @@ sub computeHierarchy {
 				(junior_no int unsigned,
 				 senior_no int unsigned,
 				 primary key (junior_no),
-				 key (senior_no))");
+				 key (senior_no)) ENGINE=MYISAM");
     
     # First, we add all immediately junior synonyms, but only subjective and
     # objective synonyms and replaced taxa.  We leave out nomina dubia, nomina
@@ -2251,7 +2289,7 @@ sub computeTreeSequence {
      		       (orig_no int unsigned,
      			lft int unsigned,
      			rgt int unsigned,
-     			depth int unsigned)");
+     			depth int unsigned) ENGINE=MYISAM");
     
     my $insert_stmt = "INSERT INTO tree_insert VALUES ";
     my $comma = '';
@@ -2362,146 +2400,6 @@ sub createNode {
 }
 
 
-# updateTreeTables ( dbh, tree_table, suppress_table, keep_temps )
-# 
-# Do the final steps in the update procedure.  These are as follows:
-# 
-# 1) copy everything from $TREE_TEMP into $tree_table, overwriting
-#    corresponding rows
-# 2) adjust the tree sequence in $tree_table
-# 
-# These two have to be quick, since we need to do them with $tree_table
-# locked.
-# 
-# 3) copy everything from $SUPPRESS_TEMP into $suppress_table, and clear
-#    entries from $suppress_table that should no longer be there.
-
-sub updateTreeTables {
-
-    my ($dbh, $tree_table, $suppress_table, $keep_temps) = @_;
-    
-    my $result;
-    
-    # The first thing to do is to determine which rows have a changed
-    # parent_no value.  Each one will require an adjustment to the tree
-    # sequence.  We have to do this now, before we copy the rows from
-    # $TREE_TEMP over the corresponding rows from $tree_table below.
-    
-    # We order the rows in descending order of position to make sure that
-    # children are moved before their parents.  This is necessary in order to
-    # make sure that a parent is never moved underneath one of its existing
-    # children (we have already eliminated cycles, so if this is going to
-    # happen then the child must be moving as well).
-    
-    my $moved_taxa = $dbh->prepare("
-		SELECT t.orig_no, t.parent_no
-		FROM $TREE_TEMP as t LEFT JOIN $tree_table as m USING (orig_no)
-		WHERE t.parent_no != m.parent_no
-		ORDER BY m.lft DESC");
-    
-    $moved_taxa->execute();
-    
-    my (@move);
-    
-    while ( my ($orig_no, $new_parent) = $moved_taxa->fetchrow_array() )
-    {
-	push @move, [$orig_no, $new_parent];
-    }
-    
-    # Next, we need to fill in $TREE_TEMP with the corresponding lft, rgt, and
-    # depth values from $tree_table.  For all rows which aren't being moved to
-    # a new location in the hierarcy, those values won't be changing.  Those
-    # that are being moved will be updated below.
-    
-    $result = $dbh->do("UPDATE $TREE_TEMP as t JOIN $tree_table as m USING (orig_no)
-			SET t.lft = m.lft, t.rgt = m.rgt, t.depth = m.depth");
-    
-    # Before we update $tree_table, we need to lock it for writing.  This will
-    # ensure that all other threads see it in a consistent state, either pre-
-    # or post-update.  This means that we also have to lock $TREE_TEMP for
-    # read.
-    
-    $result = $dbh->do("LOCK TABLE $tree_table as m WRITE,
-				   $tree_table WRITE,
-				   $TREE_TEMP as t READ,
-				   $TREE_TEMP READ");
-    
-    #				   $TREE_TABLE as m2 WRITE,
-    #				   $TREE_TABLE as m3 WRITE,
-    #				   $OPINION_CACHE as o READ
-    
-    # Now write all rows of $TREE_TEMP over the corresponding rows of
-    # $TREE_TABLE.
-    
-    logMessage(2, "copying into active tables (f)");
-    
-    $result = $dbh->do("REPLACE INTO $tree_table SELECT * FROM $TREE_TEMP");
-    
-    # At some point we may want to recompute the parent_no values of children
-    # of concepts that have changed synonymy.  This would also involve
-    # additional tree sequence modifications, so it might not be worth the
-    # bother.  Unless we do this, some concepts may have their parent_no point
-    # to a junior synonym.
-    
-    # $result = $dbh->do("
-    # 		UPDATE $TREE_TABLE as m JOIN $TREE_TEMP as t ON m.parent_no = t.orig_no
-    # 			JOIN $TREE_TABLE as m2 ON m2.orig_no = m.synonym_no
-    # 			JOIN $OPINION_CACHE as o ON o.opinion_no = m2.opinion_no
-    # 			JOIN $TREE_TABLE as m3 ON m3.orig_no = o.parent_no
-    # 		SET m.parent_no = m3.synonym_no");
-    
-    # Now adjust the tree sequence to take into account all rows that have
-    # changed their position in the hierarchy.  We couldn't do this until now,
-    # because the procedure requires a table that holds the entire updated set
-    # of taxon trees.
-    
-    my ($max_lft) = $dbh->selectrow_array("SELECT max(lft) from $tree_table");
-    
-    logMessage(2, "adjusting tree sequence (e)");
-    logMessage(2, "    " . scalar(@move) . " concept(s) are moving within the hierarchy");
-    
-    foreach my $pair (@move)
-    {
-	adjustTreeSequence($dbh, $tree_table, $max_lft, @$pair);
-    }
-    
-    # Now we can unlock the main tables.
-    
-    $result = $dbh->do("UNLOCK TABLES");
-    
-    # Finally, we need to update $SUPPRESS_TABLE.  We need to add everything
-    # that is in $SUPPRESS_TEMP, and remove everything that corresponds to a
-    # classification opinion in $TREE_TEMP.  The latter represent opinions
-    # which were previously suppressed, but now should not be.
-    
-    # We don't bother to lock these tables, since no other part of the code
-    # should be using $SUPPRESS_TABLE in a critical role.
-    
-    $result = $dbh->do("INSERT INTO $suppress_table
-			SELECT * FROM $SUPPRESS_TEMP");
-    
-    $result = $dbh->do("DELETE $suppress_table FROM $suppress_table
-				JOIN $TREE_TEMP USING (opinion_no)");
-    
-    # Now, we can remove the temporary tables.
-
-    unless ( $keep_temps )
-    {
-	logMessage(2, "removing temporary tables");
-	
-	$result = $dbh->do("DROP TABLE IF EXISTS $TREE_TEMP");
-	$result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_TEMP");
-	
-	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
-	$result = $dbh->do("DROP TABLE IF EXISTS $TRAD_TEMP");
-	$result = $dbh->do("DROP TABLE IF EXISTS $CLASS_TEMP");
-	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_TEMP");
-    }
-    
-    return;
-}
-
-
 # treePerturbation ( dbh, tree_table )
 # 
 # Determine the amount by which the taxon tree will need to be perturbed in
@@ -2553,6 +2451,100 @@ sub treePerturbation {
     }
     
     return ($total / $max_seq);
+}
+
+
+# updateTreeTable ( dbh, tree_table, keep_temps )
+# 
+# Do the final steps in the update procedure.  These are as follows:
+# 
+# 1) copy everything from $TREE_TEMP into $tree_table, overwriting
+#    corresponding rows
+# 2) adjust the tree sequence in $tree_table
+# 
+# These two have to be quick, since we need to do them with $tree_table
+# locked.
+# 
+# 3) copy everything from $SUPPRESS_TEMP into $suppress_table, and clear
+#    entries from $suppress_table that should no longer be there.
+
+sub updateTreeTable {
+
+    my ($dbh, $tree_table) = @_;
+    
+    my $result;
+    
+    # The first thing to do is to determine which rows have a changed
+    # parent_no value.  Each one will require an adjustment to the tree
+    # sequence.  We have to do this now, before we copy the rows from
+    # $TREE_TEMP over the corresponding rows from $tree_table below.
+    
+    # We order the rows in descending order of position to make sure that
+    # children are moved before their parents.  This is necessary in order to
+    # make sure that a parent is never moved underneath one of its existing
+    # children (we have already eliminated cycles, so if this is going to
+    # happen then the child must be moving as well).
+    
+    my $moved_taxa = $dbh->prepare("
+		SELECT t.orig_no, t.parent_no
+		FROM $TREE_TEMP as t LEFT JOIN $tree_table as m USING (orig_no)
+		WHERE t.parent_no != m.parent_no
+		ORDER BY m.lft DESC");
+    
+    $moved_taxa->execute();
+    
+    my (@move);
+    
+    while ( my ($orig_no, $new_parent) = $moved_taxa->fetchrow_array() )
+    {
+	push @move, [$orig_no, $new_parent];
+    }
+    
+    # Next, we need to fill in $TREE_TEMP with the corresponding lft, rgt, and
+    # depth values from $tree_table.  For all rows which aren't being moved to
+    # a new location in the hierarcy, those values won't be changing.  Those
+    # that are being moved will be updated below.
+    
+    $result = $dbh->do("UPDATE $TREE_TEMP as t JOIN $tree_table as m USING (orig_no)
+			SET t.lft = m.lft, t.rgt = m.rgt, t.depth = m.depth");
+    
+    # Before we update $tree_table, we need to lock it for writing.  This will
+    # ensure that all other threads see it in a consistent state, either pre-
+    # or post-update.  This means that we also have to lock $TREE_TEMP for
+    # read.
+    
+    $result = $dbh->do("LOCK TABLE $tree_table as m WRITE,
+				   $tree_table WRITE,
+				   $TREE_TEMP as t READ,
+				   $TREE_TEMP READ");
+    
+    # Now write all rows of $TREE_TEMP over the corresponding rows of
+    # $TREE_TABLE.
+    
+    logMessage(2, "copying into active tables (f)");
+    
+    $result = $dbh->do("REPLACE INTO $tree_table SELECT * FROM $TREE_TEMP");
+    
+    # Finally, we adjust the tree sequence to take into account all rows that
+    # have changed their position in the hierarchy.  We couldn't do this until
+    # now, because the procedure requires a table that holds the entire
+    # updated set of taxon trees.
+    
+    my ($max_lft) = $dbh->selectrow_array("SELECT max(lft) from $tree_table");
+    
+    logMessage(2, "adjusting tree sequence (e)");
+    logMessage(2, "    " . scalar(@move) . " concept(s) are moving within the hierarchy");
+    
+    foreach my $pair (@move)
+    {
+	adjustTreeSequence($dbh, $tree_table, $max_lft, @$pair);
+    }
+    
+    # Now we can unlock the tree table.
+    
+    $result = $dbh->do("UNLOCK TABLES");
+    
+    return;
 }
 
 
@@ -2693,6 +2685,74 @@ sub adjustTreeSequence {
 }
 
 
+# updateSecondaryTables ( dbh, tree_table, keep_temps )
+# 
+# Update the secondary tables associated with the given tree table.  Unless
+# $keep_temps is true, all temporary tables will be deleted.
+
+sub updateSecondaryTables {
+    
+    my ($dbh, $tree_table, $keep_temps) = @_;
+    
+    my $result;
+    
+    my $suppress_table = $SUPPRESS_TABLE{$tree_table};
+    my $search_table = $SEARCH_TABLE{$tree_table};
+    my $name_table = $NAME_TABLE{$tree_table};
+    
+    # For $suppress_table, we need to remove all entries that correspond to a
+    # classification opinion in $TREE_TEMP.  These represent opinions which
+    # were previously suppressed, but now should not be.  We then add in
+    # everything in $SUPPRESS_TEMP.
+    
+    $result = $dbh->do("DELETE $suppress_table FROM $suppress_table
+				JOIN $TREE_TEMP using (opinion_no)");
+    
+    $result = $dbh->do("INSERT IGNORE INTO $suppress_table
+			SELECT * FROM $SUPPRESS_TEMP");
+    
+    # For $search_table, we need to remove all entries that correspond to
+    # taxonomic concepts in $TREE_TEMP.  We then add in everything from
+    # $SEARCH_TEMP.
+    
+    $result = $dbh->do("DELETE $search_table
+			FROM $search_table
+				JOIN $AUTH_TABLE using (taxon_no)
+				JOIN $TREE_TEMP using (orig_no)");
+    
+    $result = $dbh->do("REPLACE INTO $search_table SELECT * FROM $SEARCH_TEMP");
+    
+    # For $name_table, we need to do the same thing.
+    
+    $result = $dbh->do("DELETE $name_table
+			FROM $name_table
+				JOIN $AUTH_TABLE using (taxon_no)
+				JOIN $TREE_TEMP using (orig_no)");
+    
+    $result = $dbh->do("REPLACE INTO $name_table SELECT * FROM $NAME_TEMP");
+    
+    # Finally, we remove the temporary tables since they are no longer needed.
+    
+    unless ( $keep_temps )
+    {
+	logMessage(2, "removing temporary tables");
+	
+	$result = $dbh->do("DROP TABLE IF EXISTS $TREE_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $SUPPRESS_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $NAME_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_TEMP");
+	
+	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $TRAD_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $CLASS_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_TEMP");
+    }
+    
+    my $a = 1;		# We can stop here when debugging.
+}
+
+
 # computeKingdomLabels ( dbh )
 # 
 # For each of the major kingdoms (Metazoa, Plantae, Fungi, Bacteria, Archaea),
@@ -2717,14 +2777,15 @@ sub computeKingdomLabels {
     
     # Then label the kingdoms one at a time.
     
-    foreach my $k (keys %KINGDOM_LABEL)
+    foreach my $k (@KINGDOM_LIST)
     {
 	my ($start, $end) = $dbh->selectrow_array($get_bounds, {}, $k);
+	my $kingdom_label = $KINGDOM_LABEL{$k} || $k;
 	my $kingdom_size;
 	
 	if ( defined $start and $start > 0 )
 	{
-	    $kingdom_size = $set_labels->execute($KINGDOM_LABEL{$k}, $start, $end);
+	    $kingdom_size = $set_labels->execute($kingdom_label, $start, $end);
 	}
 	
 	else
@@ -2732,52 +2793,7 @@ sub computeKingdomLabels {
 	    $kingdom_size = 0;
 	}
 	
-	logMessage(2, "    kingdom $k ($KINGDOM_LABEL{$k}): $kingdom_size");
-    }
-}
-
-
-# updateKingdomLabels ( dbh, tree_table )
-# 
-# For each of the major kingdoms (Metazoa, Plantae, Fungi, Bacteria, Archaea),
-# label all of the taxa in the corresponding hierarchy of the updated part of
-# the tree.
-
-sub updateKingdomLabels {
-    
-    my ($dbh, $tree_table) = @_;
-    
-    logMessage(2, "setting kingdom labels (e)");
-    
-    # First, prepare an SQL statement determining the boundary of a particular
-    # hierarchy, and another for setting kingdom labels.
-    
-    my $get_bounds = $dbh->prepare("
-		SELECT lft, rgt FROM authorities JOIN $tree_table using (orig_no)
-		WHERE taxon_name = ? and taxon_rank = 'kingdom'");
-    
-    my $set_labels = $dbh->prepare("
-		UPDATE $tree_table t JOIN $TREE_TEMP t2 using (orig_no) SET t.kingdom = ?
-		WHERE t.lft >= ? and t.lft <= ?");
-    
-    # Then label the kingdoms one at a time.
-    
-    foreach my $k (keys %KINGDOM_LABEL)
-    {
-	my ($start, $end) = $dbh->selectrow_array($get_bounds, {}, $k);
-	my $kingdom_size;
-	
-	if ( defined $start and $start > 0 )
-	{
-	    $kingdom_size = $set_labels->execute($KINGDOM_LABEL{$k}, $start, $end);
-	}
-	
-	else
-	{
-	    $kingdom_size = 0;
-	}
-	
-	logMessage(2, "    kingdom $k ($KINGDOM_LABEL{$k}): $kingdom_size");
+	logMessage(2, "    kingdom $k ($kingdom_label): $kingdom_size");
     }
 }
 
@@ -2868,7 +2884,7 @@ sub computeSearchTable {
     $result = $dbh->do("CREATE TABLE $GENUS_TEMP
 			       (taxon_no int unsigned not null,
 				genus_no int unsigned not null,
-				primary key (taxon_no, genus_no))");
+				primary key (taxon_no, genus_no)) ENGINE=MYISAM");
     
     # Now select the genus under which each species and subspecies has been
     # placed:
@@ -3046,7 +3062,7 @@ sub computeAttrsTable {
     
     for (my $row = $max_depth; $row > 1; $row--)
     {
-	logMessage(1, "    computing row $row");
+	logMessage(1, "    computing row $row...") if $row % 10 == 0;
 	
 	my $sql = "REPLACE INTO $ATTRS_TEMP (orig_no, min_body_mass, max_body_mass)
 		SELECT t.parent_no, coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
@@ -3088,15 +3104,17 @@ sub activateNewTables {
     
     my $suppress_table = $SUPPRESS_TABLE{$tree_table};
     my $search_table = $SEARCH_TABLE{$tree_table};
-    my $attrs_table = $SEARCH_TABLE{$tree_table};
+    my $name_table = $NAME_TABLE{$tree_table};
+    my $attrs_table = $ATTRS_TABLE{$tree_table};
     
-    logMessage(2, "activating tables '$tree_table', '$suppress_table', '$search_table', '$attrs_table' (g)");
+    logMessage(2, "activating tables '$tree_table', '$suppress_table', '$search_table', '$name_table', '$attrs_table' (g)");
     
     # Compute the backup names of all the tables to be activated
     
     my $tree_bak = "${tree_table}_bak";
     my $suppress_bak = "${suppress_table}_bak";
     my $search_bak = "${search_table}_bak";
+    my $name_bak = "${name_table}_bak";
     my $attrs_bak = "${attrs_table}_bak";
     
     # Delete any backup tables that might still be around
@@ -3104,6 +3122,7 @@ sub activateNewTables {
     $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $suppress_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $search_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $name_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $attrs_bak");
     
     # Create dummy versions of any of the main tables that might be currently
@@ -3113,6 +3132,7 @@ sub activateNewTables {
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_TEMP");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $suppress_table LIKE $SUPPRESS_TEMP");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $search_table LIKE $SEARCH_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $name_table LIKE $NAME_TEMP");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $attrs_table LIKE $ATTRS_TEMP");
     
     # Now do the Atomic Table Swap (tm)
@@ -3123,16 +3143,19 @@ sub activateNewTables {
 			    $suppress_table to $suppress_bak,
 			    $SUPPRESS_TEMP to $suppress_table,
 			    $search_table to $search_bak,
-			    $SEARCH_TEMP to $search_table
+			    $SEARCH_TEMP to $search_table,
+			    $name_table to $name_bak,
+			    $NAME_TEMP to $name_table,
 			    $attrs_table to $attrs_bak,
 			    $ATTRS_TEMP to $attrs_table");
     
     # Then we can get rid of the backup tables
     
-    $result = $dbh->do("DROP TABLE $tree_bak");
-    $result = $dbh->do("DROP TABLE $suppress_bak");
-    $result = $dbh->do("DROP TABLE $search_bak");
-    $result = $dbh->do("DROP TABLE $attrs_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $suppress_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $search_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $name_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $attrs_bak");
     
     # Delete the auxiliary tables too, unless we were told to keep them.
     
@@ -3146,7 +3169,46 @@ sub activateNewTables {
 	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_TEMP");
     }
     
-    logMessage(1, "done rebuilding tree tables for '$tree_table'");
+    my $a = 1;		# we can stop here when debugging
+}
+
+
+# activateTreeTables ( dbh, new_tree_table )
+# 
+# In one atomic operation, move the new tree table to active status and swap
+# out the old one.  This routine does not do anything with the secondary tables.
+
+sub activateTreeTables {
+
+    my ($dbh, $tree_table) = @_;
+    
+    my $result;
+    
+    logMessage(2, "activating new version of table '$tree_table' (g)");
+    
+    # Compute the backup names of all the tables to be activated
+    
+    my $tree_bak = "${tree_table}_bak";
+    
+    # Delete any backup tables that might still be around
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
+    
+    # Create dummy versions of any of the tree table if it is missing
+    # (otherwise the rename will fail; the dummy will be deleted below anyway,
+    # after it is renamed to the backup name).
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_TEMP");
+    
+    # Now do the Atomic Table Swap (tm)
+    
+    $result = $dbh->do("RENAME TABLE
+			    $tree_table to $tree_bak,
+			    $TREE_TEMP to $tree_table");
+    
+    # Then we can get rid of the backup table
+    
+    $result = $dbh->do("DROP TABLE $tree_bak");
     
     my $a = 1;		# we can stop here when debugging
 }

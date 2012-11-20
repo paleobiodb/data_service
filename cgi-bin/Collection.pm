@@ -29,7 +29,7 @@ use Constants qw($READ_URL $WRITE_URL $HTML_DIR $HOST_URL $TAXA_TREE_CACHE $DB $
 # This function will die on error, so call it in an eval loop
 # PS 08/11/2005
 sub getCollections {
-	my ($dbt, $taxonomy, $options, $fields) = @_;
+	my ($dbt, $taxonomy, $permissions, $options, $fields) = @_;
 	
 	my $dbh = $dbt->dbh;
 	my %options = %{$options};
@@ -793,14 +793,13 @@ IS NULL))";
 
     $sth = $dbh->prepare($sql);
     $sth->execute();
-    my $p = Permissions->new($s,$dbt); 
 
     # See if rows okay by permissions module
     my @dataRows = ();
     my $limit = (int($options{'limit'})) ? int($options{'limit'}) : 10000000;
     my $totalRows = 0;
     if ( $DB ne "eco" )	{
-        $p->getReadRows ( $sth, \@dataRows, $limit, \$totalRows);
+        $permissions->getReadRows ( $sth, \@dataRows, $limit, \$totalRows);
     } else	{
         while ( my $row = $sth->fetchrow_hashref ( ) )	{
             push @dataRows, $row;

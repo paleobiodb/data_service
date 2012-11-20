@@ -2,15 +2,15 @@
 
 use lib "../cgi-bin";
 use DBConnection;
-use TaxonTrees;
+use Taxonomy;
 use Getopt::Std;
 use Data::Dumper;
 
 my $dbh = DBConnection::connect();
 
-my ($method, $taxon_no) = @ARGV;
+my $t = Taxonomy->new($dbh, 'taxon_trees');
 
-my (@result) = eval "TaxonTrees::$method(\$dbh, \$taxon_no)";
+my $a = 1;
 
 if ( $@ )
 {

@@ -3,7 +3,6 @@ package Confidence;
 use strict;
 use Data::Dumper; 
 use Taxonomy;
-use Classification;
 use Collection;
 use Person;
 use HTMLBuilder;
@@ -496,7 +495,7 @@ sub displayStratTaxa {
             my $subgenus_ref;
             if ($best_name_ref->{'taxon_rank'} =~ /genus|species/) {
                 if ($best_name_ref->{'taxon_rank'} =~ /species/) {
-		    $genus_ref = $taxonomy->getRelatedTaxon($taxon_no, 'parent');
+		    $genus_ref = $taxonomy->getRelatedTaxon($row, 'parent');
 		    if ( $genus_ref->{taxon_rank} eq 'subgenus' )
 		    {
 			$subgenus_ref = $genus_ref;

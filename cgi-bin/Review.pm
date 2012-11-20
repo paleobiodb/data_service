@@ -605,7 +605,7 @@ sub makeMap	{
 	}
 
 	# interval names are the next best guess (and fast to search)
-	$sql = "SELECT interval_no,interval_name FROM intervals WHERE interval_name IN ('". join("','",keys %unmatched) ."')";
+	my $sql = "SELECT interval_no,interval_name FROM intervals WHERE interval_name IN ('". join("','",keys %unmatched) ."')";
 	@matches = @{$dbt->getData($sql)};
 	%seen = ();
 	for my $m ( @matches )	{

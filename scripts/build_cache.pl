@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/opt/local/bin/perl
 
 use lib "../cgi-bin";
 use DBConnection;
