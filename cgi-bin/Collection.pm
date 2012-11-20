@@ -3325,14 +3325,6 @@ function showAuthors()	{
 	$c->{'created'} =~ s/ .*//;
 	my ($y,$m,$d) = split /-/,$c->{'created'};
 	print "<p $indent>PaleoDB collection $c->{'collection_no'}: authorized by $c->{'authorizer'}, entered by $c->{'enterer'} on $d.$m.$y";
-	if ( $c->{'license'} )	{
-		my $full_license = $c->{'license'};
-		$full_license =~ s/(CC BY)(|-)/attribution$2/;
-		$full_license =~ s/SA/sharealike/;
-		$full_license =~ s/NC/noncommercial/;
-		$full_license =~ s/ND/no derivatives/;
-		print "</p>\n<p $indent>Creative Commons license: $c->{'license'} ($full_license)";
-	}
 
 	$sql = "(SELECT distinct(concat(first_name,' ',last_name)) AS enterer FROM occurrences o,person p WHERE enterer_no=person_no AND collection_no=$c->{'collection_no'} AND enterer_no!=".$c->{'enterer_no'}.") UNION (SELECT distinct(concat(first_name,' ',last_name)) AS enterer FROM reidentifications r,person p WHERE enterer_no=person_no AND collection_no=$c->{'collection_no'} AND enterer_no!=".$c->{'enterer_no'}.")";
 	my @enterers = @{$dbt->getData($sql)};
@@ -3348,6 +3340,15 @@ function showAuthors()	{
 		}
 	}
 	print "</p>\n\n";
+
+	if ( $c->{'license'} )	{
+		my $full_license = $c->{'license'};
+		$full_license =~ s/(CC BY)(|-)/attribution$2/;
+		$full_license =~ s/SA/sharealike/;
+		$full_license =~ s/NC/noncommercial/;
+		$full_license =~ s/ND/no derivatives/;
+		print "<p $indent>Creative Commons license: $c->{'license'} ($full_license)</p>\n";
+	}
 
 	if ( $is_real_user == 0 || $not_bot == 0 )	{
 		print $hbo->stdIncludes($PAGE_BOTTOM);
