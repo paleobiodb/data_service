@@ -429,7 +429,7 @@ sub displayPreferencesPage {
 
 	my ($setFieldNames,$cleanSetFieldNames,$shownFormParts) = $s->getPrefFields();
 	# Populate the form
-    my @rowData;
+	my @rowData;
 	my @fieldNames = @{$setFieldNames};
 	push @fieldNames , @{$shownFormParts};
 	for my $f (@fieldNames)	{
@@ -511,7 +511,7 @@ sub getPrefFields	{
 		"dotcolor1" => "point color",
 		"dotborder1" => "point borders" );
 	# list of fields in tables
-	my @setFieldNames = ("blanks", "research_group", "country", "state",
+	my @setFieldNames = ("blanks", "research_group", "license", "country", "state",
 			"latdeg", "latdir", "lngdeg", "lngdir", "geogscale",
 			"max_interval",
 			"formation", "stratscale", "lithology1", "environment",
@@ -548,8 +548,10 @@ sub setPreferences	{
     my ($dbt,$q,$s,$hbo) = @_;
     my $dbh_r = $dbt->dbh;
 
-	print "<table width='100%'><tr><td colspan='2' align='center'><h3>Your current preferences</h3></td><tr><td align='center'>\n";
-	print "<table align=center cellpadding=4>\n";
+	print qq|<center><p class="large">Your current preferences</center>
+<table align=center cellpadding=4 width="80%">
+<tr><td>Displayed sections</td><td>Prefilled values</td></tr>
+|;
 
 	# assembl_comps: separate with commas
 	my @formVals = $q->param('assembl_comps');
@@ -577,8 +579,7 @@ sub setPreferences	{
 		$q->param(lngdeg => $q->param("lngdeg") . " " . $q->param("lngdir") );
 	}
 
-	print "<tr><td valign=\"top\" width=\"33%\">\n";
-	print "<b>Displayed sections</b><br>\n";
+	print "<tr><td valign=\"top\" width=\"33%\" class=\"verysmall\">\n";
 	for my $f (@{$shownFormParts})	{
 		my $cleanName = $f;
 		$cleanName =~ s/_/ /g;
@@ -598,22 +599,23 @@ sub setPreferences	{
 		}
 	}
 
-	print "</td>\n<td valign=\"top\" width=\"33%\">\n";
-	print "<b>Prefilled values</b><br>\n";
+	print "</td>\n<td valign=\"top\" width=\"33%\" class=\"verysmall\">\n";
 	for my $i (0..$#{$setFieldNames})	{
 		my $f = ${$setFieldNames}[$i];
 		if ($f =~ /^geogcomments$/)	{
 			print "</td></tr>\n<tr><td align=\"left\" colspan=3>\n";
 			if ($commentsStored)	{
-				print "<b>Comment fields</b><br>\n";
+				print "<p class='medium'>Comment fields</p>\n";
  			}
  		}
 		elsif ($f =~ /mapsize/)	{
-			print "</td></tr>\n<tr><td valign=\"top\" width=\"33%\">\n";
-			print "<b>Map view</b><br>\n";
+			print qq|</td></tr>
+<tr><td valign="top">Map view</td></tr>
+<tr><td valign="top" class="verysmall">
+|;
 		}
 		elsif ($f =~ /(formation)|(coastlinecolor)/)	{
-			print "</td><td valign=\"top\" width=\"33%\">\n<br>";
+			print "</td><td valign=\"top\" width=\"33%\" class=\"verysmall\">\n";
 		}
  		if ( $q->param($f) && $f !~ /^eml/ && $f !~ /^l..dir$/)	{
 			my @letts = split //,${$cleanSetFieldNames}{$f};
@@ -629,7 +631,7 @@ sub setPreferences	{
      	my $sql = "UPDATE person SET preferences=".$dbh_r->quote($pref_sql)." WHERE person_no=$enterer_no";
         my $result = $dbh_r->do($sql);
 
-	    print "<p>\n<a href=\"$WRITE_URL?action=displayPreferencesPage\"><b>Set preferences</b></a></td></tr></table><p>\n";
+	    print "<p>\n<center><a href=\"$WRITE_URL?action=displayPreferencesPage\">Edit these preferences</a></center>\n";
     	my %continue = $s->unqueue();
 	    if($continue{action}){
 		    print "<center><p>\n<a href=\"$WRITE_URL?action=$continue{action}\"><b>Continue</b></a><p></center>\n";
