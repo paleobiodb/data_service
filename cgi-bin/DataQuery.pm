@@ -380,7 +380,8 @@ sub checkParameters {
     
     else
     {
-	die "400 You must specify an interface version.  You can add '&v=$CURRENT_VERSION' to the parameters, or prefix the path with /data$CURRENT_VERSION/.\n";
+	$self->warn("You should specify an interface version if you are building an application using this service.  Otherwise, your application might break when we change the interface.  The current version is $CURRENT_VERSION.  You can add '&v=$CURRENT_VERSION' to the parameters, or prefix the path with /data$CURRENT_VERSION/ instead of just /data/");
+	$self->{v} = $CURRENT_VERSION;
     }
     
     # Construct our initial check list.
@@ -395,7 +396,7 @@ sub checkParameters {
     {
 	no strict 'refs';
 	
-	my $v = $params->{v}; $v =~ s/\./_/g;
+	my $v = $self->{v}; $v =~ s/\./_/g;
 	
 	my $v1 = ref($self) . '::PARAM_CHECK_' . uc($self->{version}) . '_' . $v;
 	my $v2 = ref($self) . '::PARAM_CHECK_' . $v;
@@ -997,6 +998,31 @@ sub json_clean {
     $string =~ s/[\0-\037\177]//g;
     
     return $string;
+}
+
+
+our ($UTF8_DECODER) = Encode::find_encoding("utf8");
+
+# decodeFields ( )
+# 
+# Decode the various fields from a given record from utf-8.
+
+sub decodeFields {
+    
+    my ($self, $row) = @_;
+    
+    my @fields = qw(a_al1 a_al2 a_ai1 a_ai2 a_ao r_al1 r_al2 r_ai1
+		    r_ai2 r_ao r_reftitle r_pubtitle r_editors);
+    
+    foreach my $f (@fields)
+    {
+	if ( defined $row->{$f} )
+	{
+	    eval {
+		$row->{$f} = decode("utf8", $row->{$f}, Encode::FB_CROAK);
+	    };
+	}
+    }
 }
 
 

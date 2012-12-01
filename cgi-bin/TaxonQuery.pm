@@ -254,9 +254,11 @@ sub setParameters {
 	    elsif ( $s eq 'eol_core' )
 	    {
 		$self->{field_list} = ['taxonID', 'taxonRank', 'scientificName', 'parentNameUsageID',
-				       'taxonomicStatus', 'taxonRemarks', 'namePublishedIn'];
+				       'taxonomicStatus', 'taxonRemarks', 'namePublishedIn',
+				       'acceptedNameUsageID', 'acceptedNameUsage'];
 		$self->{eol_core} = 1;
 		$self->{show_attribution} = 1;
+		$self->{show_synonym} = 1;
 		$self->{show_ref} = 1;
 		$self->{generate_urns} = 1;
 		$self->{rooted_result} = 1;
@@ -360,7 +362,7 @@ sub setParametersSingle {
 	# Clean the parameter of everything except alphabetic characters
 	# and spaces, since only those are valid in taxonomic names.
 	
-	if ( $params->{taxon_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{taxon_name} =~ /[^a-zA-Z()\s]/ )
 	{
 	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
@@ -481,7 +483,7 @@ sub setParametersMultiple {
 	
 	# First check to make sure that a valid value was provided.
 	
-	if ( $params->{match} =~ /[^a-zA-Z_%\s]/ )
+	if ( $params->{match} =~ /[^a-zA-Z_%()\s]/ )
 	{
 	    die "400 The parameter 'taxon_match' may contain only characters from the Roman alphabet plus whitespace and the SQL wildcards '%' and '_'.\n";
 	}
@@ -516,7 +518,7 @@ sub setParametersMultiple {
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{base_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{base_name} =~ /[^a-zA-Z()\s]/ )
 	{
 	    die "400 The parameter 'base_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
@@ -587,7 +589,7 @@ sub setParametersMultiple {
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{leaf_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{leaf_name} =~ /[^a-zA-Z()\s]/ )
 	{
 	    die "400 The parameter 'leaf_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
@@ -1198,6 +1200,11 @@ sub processRecord {
     
     my ($self, $row) = @_;
     
+    # The strings stored in the author fields of the database are encoded in
+    # utf-8, and need to be decoded (despite the utf-8 configuration flag).
+    
+    $self->decodeFields($row);
+    
     # Interpret the status info based on the code stored in the database.  The
     # code as stored in the database encompasses both taxonomic and
     # nomenclatural status info, which needs to be separated out.  In
@@ -1580,6 +1587,32 @@ sub emitTaxonText {
 		$value = $self->{generate_urns}
 		    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
 			: $row->{parent_no};
+	    }
+	}
+	
+	elsif ( $field eq 'parentNameUsage' )
+	{
+	    if ( defined $row->{parent_name} and $row->{parent_name} ne '' )
+	    {
+		$value = DataQuery::xml_clean($row->{parent_name});
+	    }
+	}
+	
+	elsif ( $field eq 'acceptedNameUsageID' )
+	{
+	    if ( defined $row->{accepted_no} and $row->{accepted_no} > 0 )
+	    {
+		$value = $self->{generate_urns}
+		    ? DataQuery::generateURN($row->{accepted_no}, 'taxon_no')
+			: $row->{accepted_no};
+	    }
+	}
+	
+	elsif ( $field eq 'acceptedNameUsage' )
+	{
+	    if ( defined $row->{accepted_name} and $row->{accepted_name} ne '' )
+	    {
+		$value = DataQuery::xml_clean($row->{accepted_name});
 	    }
 	}
 	
