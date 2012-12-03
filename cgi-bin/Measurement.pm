@@ -1819,7 +1819,6 @@ sub displayDownloadMeasurementsResults  {
 	if ( $q->param('sex') && $q->param('sex') ne "both" )	{
 		$options{'sex'} = $q->param('sex');
 	}
-#print "$_/$options{$_}<br>" foreach keys %options;
 
 	my @measurements = getMeasurements($dbt,\%options);
 	if ( ! @measurements ) 	{
@@ -1828,7 +1827,6 @@ sub displayDownloadMeasurementsResults  {
 		main::displayDownloadMeasurementsForm($errorMessage);
 		return;
 	}
-#printf "TAXA".scalar(@measurements);
 
 	# step 3: save measurements of species found in a subset of collections
 
@@ -2003,7 +2001,7 @@ sub displayDownloadMeasurementsResults  {
 					$faux->{'average'} = sprintf "%.1f",exp($meanL + $meanW);
 					$faux->{'real_average'} = $faux->{'average'};
 					push @{$by_valid{$faux->{'valid_no'}}} , $faux;
-push @measurements , $faux;
+					push @measurements , $faux;
 				}
 			}
 			if ( $widths{$id} && $heights{$id} && $q->param('volume') )	{
@@ -2021,7 +2019,7 @@ push @measurements , $faux;
 				$faux->{'average'} = sprintf "%.1f",exp($meanL + $meanW + $meanH);
 				$faux->{'real_average'} = $faux->{'average'};
 				push @{$by_valid{$faux->{'valid_no'}}} , $faux;
-push @measurements , $faux;
+				push @measurements , $faux;
 			}
 		}
 	}
@@ -2169,18 +2167,30 @@ push @measurements , $faux;
 		push @stat_fields , "error unit";
 		push @columns , "error_unit";
 	}
+
+	my @meta_fields;
 	for my $c ( 'authorizer','enterer' )	{
 		if ( $q->param($c) =~ /y/i && ( $q->param('coll_authorizer') || $q->param('coll_enterer') ) )	{
-			push @stat_fields , "measurement.".$c;
+			push @meta_fields , "measurement.".$c;
 		} elsif ( $q->param($c) )	{
-			push @stat_fields , $c;
+			push @meta_fields , $c;
 		}
 	}
 	if ( $q->param('refs') =~ /y/i )	{
-		push @stat_fields , "references";
+		push @meta_fields , "references";
 	}
 	push @header_fields , @stat_fields;
 	push @raw_header_fields , @stat_fields;
+	# figure out if any of the measurements have been rescaled using
+	#  the magnification field JA 3.12.12
+	for my $m ( @measurements )	{
+		if ( $m->{'magnification'} != 1 && $m->{'magnification'} > 0 )	{
+			push @raw_header_fields , 'magnification';
+			last;
+		}
+	}
+	push @header_fields , @meta_fields;
+	push @raw_header_fields , @meta_fields;
 
 	# step 6: take averages (getMeasurementTable)
 
@@ -2319,6 +2329,10 @@ push @measurements , $faux;
 			}
 		}
 		if ( $q->param('error') ) { print OUT $sep,csv($m->{'error_unit'}); }
+		if ( join('',@raw_header_fields) =~ /magnif/ )	{
+			my $magnif = ( $m->{'magnification'} > 0 ) ? $m->{'magnification'} : 1;
+			print OUT $sep,$magnif;
+		}
 		print OUT "\n";
 	}
 	close OUT;
