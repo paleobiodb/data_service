@@ -415,31 +415,35 @@ sub assignGenera	{
 	if ( $bin_type eq "period" )	{
 		my @intervals = $t->getScaleOrder(69,'number');
 		@binnames = map {$name{$_}} @intervals;
+		# some hacks required because Gradstein's old scale includes
+		#  the Quaternary within the Neogene
+		unshift @binnames , 'Quaternary';
 		my ($top,$base) = $t->getBoundaries();
-		$basema{$name{$_}} = $base->{$_} for @intervals;
+		($basema{$name{$_}},$topma{$name{$_}}) = ($base->{$_},$top->{$_}) for @intervals;
+		($basema{'Quaternary'},$topma{'Quaternary'}) = ($base->{12},$top->{12});
 	} elsif ( $bin_type eq "epoch" )	{
 		my @intervals = $t->getScaleOrder(71,'number');
 		@binnames = map {$name{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-		$basema{$name{$_}} = $base->{$_} for @intervals;
+		($basema{$name{$_}},$topma{$name{$_}}) = ($base->{$_},$top->{$_}) for @intervals;
 	} elsif ( $bin_type eq "subepoch" )	{
 		my @intervals = $t->getScaleOrder(72,'number');
 		@binnames = map {$name{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-		$basema{$name{$_}} = $base->{$_} for @intervals;
+		($basema{$name{$_}},$topma{$name{$_}}) = ($base->{$_},$top->{$_}) for @intervals;
 	} elsif ( $bin_type eq "stage" )	{
 		my @intervals = $t->getScaleOrder(73,'number');
 		@binnames = map {$name{$_}} @intervals;
 		my ($top,$base) = $t->getBoundaries();
-		$basema{$name{$_}} = $base->{$_} for @intervals;
+		($basema{$name{$_}},$topma{$name{$_}}) = ($base->{$_},$top->{$_}) for @intervals;
 	} elsif ( $bin_type eq "10my" ) {
 		@binnames = $t->getBins();
 		my ($top,$base) = $t->computeBinBounds('bins');
-		%basema = %$base;
+		(%basema,%topma) = (%$base,%$top);
 	} elsif ( $bin_type eq "FossilRecord2" ) {
 		@binnames = $t->getFR2Bins();
 		my ($top,$base) = $t->computeBinBounds('FR2');
-		%basema = %$base;
+		(%basema,%topma) = (%$base,%$top);
 	} elsif ( $bin_type =~ /neptune/i ) {
 	# Neptune data ranges from -3 to 150 mA right now, use those at defaults
 		$neptune_range_min = 0;
@@ -448,7 +452,7 @@ sub assignGenera	{
 		@binnames = ();
 		for(my $i=$neptune_range_min;$i<$neptune_range_max;$i+=$q->param('neptune_bin_size')) {
 			my $name = "$i - ".($i + $q->param('neptune_bin_size'));
-			$basema{$name} = $i + $q->param('neptune_bin_size');
+			($basema{$name},$topma{$name}) = ($i + $q->param('neptune_bin_size'),$i);
 			push @binnames , $name;
 		}
 	}
@@ -1736,8 +1740,8 @@ sub printResults	{
 					push @data , sprintf "%.1f",$basema{$chname[$i]};
 				}
 				if ( $q->param('print_midpoint_raw') eq "YES" )	{
-					printf "<td class=tiny align=center valign=top>%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
-					push @data , sprintf "%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
+					printf "<td class=tiny align=center valign=top>%.1f",( $basema{$chname[$i]} + $topma{$chname[$i]} ) / 2;
+					push @data , sprintf "%.1f",( $basema{$chname[$i]} + $topma{$chname[$i]} ) / 2;
 				}
 				if ( $q->param('print_sampled') eq "YES" )	{
 					if ( $listsinchron[$i] > 0 )	{
@@ -2270,8 +2274,8 @@ sub printResults	{
 						printf SUB_TABLE ",%.1f",$basema{$chname[$i]};
 					}
 					if ( $q->param('print_midpoint_ss') eq "YES" )	{
-						printf "<td class=tiny align=center valign=top>%.1f ",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
-						printf SUB_TABLE ",%.1f",( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2;
+						printf "<td class=tiny align=center valign=top>%.1f ",( $basema{$chname[$i]} + $topma{$chname[$i]} ) / 2;
+						printf SUB_TABLE ",%.1f",( $basema{$chname[$i]} + $topma{$chname[$i]} ) / 2;
 					}
 					if ( $q->param('print_items') eq "YES" )	{
 						printf "<td class=tiny align=center valign=top>%.1f ",$tsampled[$i];
@@ -2720,8 +2724,8 @@ sub printResults	{
 				for my $i ( 1..$chrons )     {
 					my ($div1,$div2) = ($count[$v][$i],$count[$v][$i+1]);
 					if ( $div1 > 0 )	{
-						my $x1 = $xscale * ( $basema{$chname[$i]} + $basema{$chname[$i-1]} ) / 2 + $pleft + $pwidth;
-						my $x2 = $xscale * ( $basema{$chname[$i+1]} + $basema{$chname[$i]} ) / 2 + $pleft + $pwidth;
+						my $x1 = $xscale * ( $basema{$chname[$i]} + $topma{$chname[$i]} ) / 2 + $pleft + $pwidth;
+						my $x2 = $xscale * ( $basema{$chname[$i+1]} + $topma{$chname[$i+1]} ) / 2 + $pleft + $pwidth;
 						my $y1 = $div1 * $yscale + $ptop;
 						my $y2 = $div2 * $yscale + $ptop;
 						if ( $div1 > 0 && $div2 > 0 )	{
