@@ -1110,16 +1110,16 @@ sub processCollectionForm {
         if ($q->param('lngdeg') >= 0 && $q->param('lngdeg') =~ /\d+/ &&
             $q->param('latdeg') >= 0 && $q->param('latdeg') =~ /\d+/)
         {
-            my ($f_latdeg, $f_lngdeg);
+            my ($f_latdeg, $f_lngdeg) = ($q->param('latdeg'), $q->param('lngdeg') );
             if ($q->param('lngmin') =~ /\d+/ && $q->param('lngmin') >= 0 && $q->param('lngmin') < 60)  {
-                $f_lngdeg = $q->param('lngdeg') + ($q->param('lngmin')/60) + ($q->param('lngsec')/3600);
-            } else {
-                $f_lngdeg = $q->param('lngdeg') . "." .  int($q->param('lngdec'));
+                $f_lngdeg += $q->param('lngmin')/60 + $q->param('lngsec')/3600;
+            } elsif ($q->param('lngdec') > 0) {
+                $f_lngdeg .= ".".$q->param('lngdec');
             }
             if ($q->param('latmin') =~ /\d+/ && $q->param('latmin') >= 0 && $q->param('latmin') < 60)  {
-                $f_latdeg = $q->param('latdeg') + ($q->param('latmin')/60) + ($q->param('latsec')/3600);
-            } else {
-                $f_latdeg = $q->param('latdeg') . "." .  int($q->param('latdec'));
+                $f_latdeg += $q->param('latmin')/60 + $q->param('latsec')/3600;
+            } elsif ($q->param('latdec') > 0) {
+                $f_latdeg .= ".".$q->param('latdec');
             }
             dbg("f_lngdeg $f_lngdeg f_latdeg $f_latdeg");
             if ($q->param('lngdir') =~ /West/)  {
