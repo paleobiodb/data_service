@@ -4,7 +4,6 @@ use strict;
 use TypoChecker;
 use CGI::Carp;
 use Data::Dumper;
-use TaxaCache;
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $TAXA_TREE_CACHE);
 
@@ -1589,6 +1588,7 @@ sub fixMassEstimates	{
 	my $dbt = shift;
 	my $dbh = shift;
 	my $taxon_no = shift;
+	my $taxonomy;
 	# update body mass estimates for this name and all spellings (because spelling numbers may
 	#  have been added) JA 7.12.10
 	# mass estimates of synonyms are not stored, so if this name is now a synonym the senior

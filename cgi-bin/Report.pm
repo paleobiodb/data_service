@@ -717,8 +717,8 @@ sub reportQueryDB{
                 if (scalar(@taxon_nos) == 0) {
                     $genus_names_string .= ", ".$dbh->quote($taxon_name);
                 } elsif (scalar(@taxon_nos) == 1) {
-                    my @all_taxon_nos = $taxonomy->getRelatedTaxa($taxon_nos[0], 'all_children',
-								  { id => 1 } );
+                    my @all_taxon_nos = $taxonomy->getTaxa('all_children', $taxon_nos[0], 
+							   { id => 1 } );
                     # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                     @taxon_nos_unique{@all_taxon_nos} = ();
                 } else { #result > 1
@@ -942,8 +942,7 @@ sub findMostCommonTaxa	{
 	    # Get all matching taxa, and then iterate through them to find the largest
 	    my $largest_taxon = $taxonomy->getTaxaByName($q->param('taxon_name'), 
 						{ common => 1, fields => 'lft', order => 'size.desc' } );
-	    my @taxon_nos = $taxonomy->getRelatedTaxa($largest_taxon, 'all_children',
-							  { id => 1 });
+	    my @taxon_nos = $taxonomy->getTaxa('all_children', $largest_taxon, { id => 1 });
 	    my $taxon_list = join(',', @taxon_nos);
 	    $sql = "SELECT $names taxon_no,occurrence_no,collection_no FROM occurrences WHERE taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
 	    $sql2 = "SELECT $names taxon_no,occurrence_no,collection_no FROM reidentifications WHERE most_recent='YES' AND taxon_no IN (".$taxon_list.") AND collection_no IN (" . join(',',@collection_nos) . ")";
@@ -967,7 +966,7 @@ sub findMostCommonTaxa	{
 
 	# get the name and rank of each taxon's synonym or (if valid)
 	#  current spelling
-	my @taxa2 = $taxonomy->getRelatedTaxa(\%hasno, 'self', { fields => 'link' });
+	my @taxa2 = $taxonomy->getTaxa('self', \%hasno, { fields => 'link' });
 	
 	my %synonym;
 	for my $r ( @taxa2 )	{
@@ -989,7 +988,7 @@ sub findMostCommonTaxa	{
 		push @ranks , "species";
 	}
 	my $rank_list = join(',', @ranks);
-	my @parentrows = $taxonomy->getRelatedTaxa(\%hasno, 'all_parents', { rank => $rank_list });
+	my @parentrows = $taxonomy->getTaxa('all_parents', \%hasno, { rank => $rank_list });
 	
 	my %parent;
 	for my $r ( @parentrows )	{

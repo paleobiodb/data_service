@@ -44,13 +44,13 @@ sub submitSpecimenSearch {
         if ( $q->param('match_type') !~ /exact/ )	{
             foreach (@taxa) {
                 if ($_->{'taxon_rank'} =~ /species|genus/) {
-		    @taxon_nos = $taxonomy->getRelatedTaxa($_, 'all_children', { id => 1, select => 'all' });
+		    @taxon_nos = $taxonomy->getTaxa('all_children', $_, { id => 1, select => 'all' });
                     @all_taxa{@taxon_nos} = ();
                 } else {
                     if ( $q->param('match_type') !~ /combinations only/ )	{
-			@taxon_nos = $taxonomy->getRelatedTaxa($_, 'synonyms', { id => 1, select => 'all' });
+			@taxon_nos = $taxonomy->getTaxa('synonyms', $_, { id => 1, select => 'all' });
                     } else	{
-			@taxon_nos = $taxonomy->getRelatedTaxa($_, 'spellings', { id => 1 });
+			@taxon_nos = $taxonomy->getTaxa('spellings', $_, { id => 1 });
                     }
                     @all_taxa{@taxon_nos} = ();
                     @all_taxa{$_->{'taxon_no'}} = 1; 
@@ -986,7 +986,7 @@ sub processMeasurementForm	{
     # note that we do not compute mass estimates for junior synonyms by themselves, so likewise
     #  we (1) store combined data only, and (2) store these data under the names of the senior
     #  synonyms only
-    my @synonym_nos = $taxonomy->getRelatedTaxa($taxon_no, { select => orig, id => 1 } );
+    my @synonym_nos = $taxonomy->getTaxa('synonyms', $taxon_no, { select => orig, id => 1 } );
     my $senior_no = $synonym_nos[0];
     my @specimens = getMeasurements($dbt, $taxonomy, taxon_list => \@synonym_nos, get_global_specimens => 1);
     my $p_table = getMeasurementTable(\@specimens);
@@ -1075,7 +1075,7 @@ sub getMeasurements {
         if (@taxa) {
             my (@taxon_nos,%all_taxa);
             foreach (@taxa) {
-                @taxon_nos = $taxonomy->getRelatedTaxa($_, 'all_children', { id => 1, select => 'all' });
+                @taxon_nos = $taxonomy->getTaxa('all_children', $_, { id => 1, select => 'all' });
                 @all_taxa{@taxon_nos} = ();
             }
             @taxon_nos = keys %all_taxa;

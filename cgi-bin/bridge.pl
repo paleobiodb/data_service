@@ -35,12 +35,10 @@ use Ecology;
 use Measurement;
 use Taxonomy;
 use TypoChecker;
-use FossilRecord;
 use Cladogram;
 use Review;
 
 # god awful Poling modules
-use Taxon;
 use Opinion;
 use Validation;
 use Debug qw(dbg);
@@ -59,13 +57,72 @@ use Constants qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_R
 #
 
 # Create the CGI, Session, and some other objects.
+
 my $q = new CGI;
+my $session_id = $q->cookie('session_id');
 
 # Make a Transaction Manager object
 my $dbt = new DBTransactionManager();
 
+# Check to see if we should save this request for later debugging.
+
+my $script_path = $ENV{PWD} . '/' . $0;
+my $savedir_path = $script_path;
+$savedir_path =~ s{/cgi-bin/.*}{/saves/};
+
+my $test_path = $script_path;
+$test_path =~ s{/cgi-bin/.*}{/dbgON};
+
+# If we were asked to open a saved argument file, do so.
+
+if ( $ARGV[0] > 0 or $ARGV[0] eq '+' )
+{
+    my ($save_fh, $save_path);
+    
+    if ( $ARGV[0] > 0 )
+    {
+	$save_path = "$savedir_path/q$ARGV[0].txt";
+    }
+    
+    else
+    {
+	my ($max_id);
+	opendir(my $savedir, $savedir_path) || die "can't opendir $savedir_path: $!";
+	map { $max_id = $_ unless $max_id > $_ } map { /([0-9]+)/ } readdir($savedir);
+	
+	$save_path = ">$savedir_path/q" . ($max_id+1) . '.txt';
+    }
+    
+    open ($save_fh, $save_path) || die "can't open $save_path: $!";
+    $q = CGI->new($save_fh);
+    my $cookie_line = <$save_fh>;
+    chomp $cookie_line;
+    if ( $cookie_line =~ /cookie: (.*)/ )
+    {
+	$session_id = $1;
+    }
+}
+
+# Otherwise, if the flag file exists then save the web arguments.
+
+elsif ( -e $test_path )
+{
+    my ($max_id, $save_fh);
+    opendir(my $savedir, $savedir_path) || die "can't opendir $savedir_path: $!";
+    map { $max_id = $_ unless $max_id > $_ } map { /([0-9]+)/ } readdir($savedir);
+    
+    my $save_path = ">$savedir_path/q" . ($max_id+1) . '.txt';
+    open($save_fh, $save_path) || die "can't open $save_path: $!";
+    
+    $q->save($save_fh);
+    print $save_fh "cookie: " . $q->cookie('session_id') . "\n";
+    close $save_fh || die "can't close $save_path: $!";
+}
+
 # Make the session object
-my $s = new Session($dbt,$q->cookie('session_id'));
+my $s = new Session($dbt,$session_id);
+
+# Now check what action was requested
 
 if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
@@ -437,9 +494,8 @@ sub home	{
 	my $sp = @{$dbt->getData($sql)}[0];
 	$row->{latest_species} = "<i><a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$sp->{taxon_no}\">$sp->{taxon_name}</a></i>";
 	$row->{latest_species} .= " <a href=\"$READ_URL?a=displayReference&reference_no=$sp->{reference_no}\">".Reference::formatShortRef($sp)."</a>";
-	my $class_hash = TaxaCache::getParents($dbt,[$sp->{taxon_no}],'array_full');
-	my @class_array = @{$class_hash->{$sp->{taxon_no}}};
-	my $sp = Collection::getClassOrderFamily($dbt,\$sp,\@class_array);
+	my @parent_list = $taxonomy->getTaxa('all_parents', $sp);
+	my $sp = Collection::getClassOrderFamily($dbt,\$sp,\@parent_list);
 	$row->{last_species_entry} = lastEntry($sp);
 	$row->{latest_species} .= ( $sp->{common_name} ) ? " [".$sp->{common_name}."]" : "";
 	$sql = "SELECT CONCAT(first_name,' ',last_name) AS name FROM person WHERE person_no=".$sp->{enterer_no};

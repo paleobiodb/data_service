@@ -23,16 +23,16 @@ Reference.pm			n/a
 Report.pm			COMPILES
 Review.pm			COMPILES
 SanityCheck.pm			COMPILES
-Strata.pm			*** SYNTAX ERRORS *** 
+Strata.pm			WAITING ON Collection.pm 
 TaxaCache.pm			REMOVED
 Taxon.pm			REMOVED
 TaxonEdit.pm			*** WORKING *** AJ: explain propagateAuthorityInfo()  Answer: very important
-TaxonInfo.pm			*** WORKING *** AJ: checkTaxonInfo: museum param?  Answer: we don't need it yet
+TaxonInfo.pm			*** WORKING ***
 Taxonomy.pm			COMPILES
 TaxonQuery.pm			...
 TaxonTrees.pm			COMPILES
 TreeQuery.pm			...
 TypoChecker.pm			COMPILES
-bridge.pl			*** WORKING ***
+bridge.pl			*** WORKING *** (need to add ability to save, load parameters)
 dinosaurs.pl			...
 hierarchy.pl			...

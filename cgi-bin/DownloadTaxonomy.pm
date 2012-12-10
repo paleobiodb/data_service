@@ -1046,13 +1046,13 @@ sub getTaxonomicNames {
     
     if ( $options->{taxon_no} > 0 )
     {
-	push @taxa_list, $taxonomy->getRelatedTaxa('all_children', $options->{taxon_no},
+	push @taxa_list, $taxonomy->getTaxa('all_children', $options->{taxon_no},
 						    $query_options);
     }
     
     else
     {
-	push @taxa_list, $taxonomy->getRelatedTaxa('all_taxa', undef, $query_options);
+	push @taxa_list, $taxonomy->getTaxa('all_taxa', undef, $query_options);
     }
     
     # Next, add in all taxa specified by the 'referenced_taxa' option (those
@@ -1067,8 +1067,8 @@ sub getTaxonomicNames {
 	    $found_taxon{$taxon->{taxon_no}} = 1;
 	}
 	
-	push @additions, $taxonomy->getRelatedTaxa('self', $options->{referenced_taxa},
-						   { include => $query_fields });
+	push @additions, $taxonomy->getTaxa('self', $options->{referenced_taxa},
+					    { include => $query_fields });
 	
 	foreach my $taxon (@additions)
 	{

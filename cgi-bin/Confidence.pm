@@ -351,14 +351,14 @@ sub buildList {
     while(my ($taxon_name,$no_or_name) = each %occ_list_base) {
         if ($no_or_name =~ /^\d+$/) {
             if ($q->param('taxon_resolution') eq 'as_is') {
-                my @taxon_nos = $taxonomy->getRelatedTaxa($no_or_name, 'all_children', { id => 'spelling' });
+                my @taxon_nos = $taxonomy->getTaxa('all_children', $no_or_name, { id => 'spelling' });
                 my $taxon_list = join(",",@taxon_nos);
                 my $results = getOccurrenceData($dbt,'taxon_list'=>$taxon_list,'fields'=>$fields);
                 if (ref $results && @$results) {
                     $occ_list{$taxon_name} = join(",",map {$_->{'occurrence_no'}} @$results);
                 }
             } else {
-                my @taxon_nos = $taxonomy->getRelatedTaxa($no_or_name, 'all_children', { id => 'spelling' });
+                my @taxon_nos = $taxonomy->getTaxa('all_children', $no_or_name, { id => 'spelling' });
                 my $taxon_list = join(",",@taxon_nos);
                 my $results = getOccurrenceData($dbt,'taxon_list'=>$taxon_list,'fields'=>$fields);
 

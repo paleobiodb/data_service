@@ -10,17 +10,127 @@ TaxonTrees
 
 =head1 SYNOPSIS
 
-This module builds and maintains one or more hierarchies of taxonomic names.
-These hierarchies are based on the data in the C<opinions> and C<authorities>
-tables, and are stored in C<taxon_trees> and other tables.  The set of names
-known to the database is stored in the C<authorities> table, with primary key
-C<taxon_no>.  The taxon numbers from C<authorities> are used extensively as
-foreign keys throughout the rest of the database, because the taxonomic
-hierarchy is central to the organization of the data.
+This module builds and maintains one or more hierarchies of taxonomic
+concepts.  These hierarchies are based on the data in the C<opinions> and
+C<authorities> tables, and are stored in C<taxon_trees> and other tables.  The
+set of taxonomic names known to the database is stored in the C<authorities>
+table, with primary key C<taxon_no>.  The taxon numbers from C<authorities>
+are used extensively as foreign keys throughout the rest of the database,
+because the taxonomic hierarchy is central to the organization of the entire
+data set.
 
 =head2 DEFINITIONS
 
 For an explanation of the table structure, see L<Taxonomy.pm|./Taxonomy.pm>.
+
+=head3 ALGORITHM
+
+The algorithm for building or rebuilding a taxonomic hierarchy is as follows.
+Note that this is an overview only, and you must inspect this module's code
+and the accompanying comments for a full understanding.  Note also that the
+taxonomic concept relation is stored in C<authorities> and so is not part of
+the algorithm.  The procedures for editing entries in C<authorities> include
+a mechanism for moving a taxonomic name from one concept group to another.
+
+=over 4
+
+=item 1. compute the accepted name relation
+
+This is done by sorting the opinions by reliability and publication year, and
+then selecting for each taxonomic concept the most reliable and recent opinion
+which classifies it.  Whichever taxonomic name is used in that opinion will be
+considered the accepted name, unless it is marked by some other opinion as a
+misspelling.  In that case, we use the first valid name from the following
+list.  In all cases, where more than one name is found, we choose the most
+recently published one and break ties by choosing the most reliable opinion.
+
+=over 4
+
+=item a.
+
+If a 'misspelling of' opinion exists for the selected name and the preferred
+name indicated by that opinion is not elsewhere marked as a misspelling, use
+that.
+
+=item b.
+
+From all of the other spellings found for this taxonomic concept, if any of them is
+not elsewhere marked as a misspelling, use that.
+
+=item c.
+
+For each of the other spellings found for this taxonomic concept, count the number of
+times it is mentioned in any opinion as a correct spelling, and subtract the
+number of times it is mentioned in any opinion as a misspelling.  If any of
+the spellings have a positive score, choose the one with the highest score.
+
+=item d.
+
+If no valid names have been found, use the original spelling even if some
+opinion considers it to be a misspelling.
+
+=back
+
+=item 2. compute the synonymy relation
+
+This is done by again choosing for each taxonomic concept the most reliable
+and recent opinion which classifies it.  We then look at the subset of these
+classification opinions that indicate a synonymy relationship.  This set of
+opinions defines a directed graph, and we check to see if that graph contains
+any cycles.  If it does, then for each cycle we find the most reliable and
+recent opinion in that cycle, suppress whichever opinion conflicts with it,
+and recompute the graph.  This step is repeated until no cycles remain.  The
+synonymy relation is then computed for each taxonomic concept by starting with
+the corresponding node and following the graph until it ends.
+
+=item 3. compute the hierarchy relation
+
+This is done by grouping the taxonomic concepts into synonym groups using the
+synonymy relation computed above.  For each group, the most reliable and
+recent opinion from among all of the 'belongs to' opinions that classify
+members of the group is chosen to be the classification opinion for that
+group.  This set of opinions defines a directed graph, and so we apply the
+same procedure as above.  We check to see if the graph contains any cycles,
+and if it does we look for the most reliable and recent opinion on each cycle
+and suppress any conflicting opinion, then recompute the graph.  This step is
+repeated until no cycles remain.  The hierarchy relation can then be read
+directly off of the graph.
+
+=item 4. sequence the tree
+
+This is done using a standard preorder traversal of the hierarchy.  We start
+with the tree rooted at the taxon "Eukaryota", and then continue through all
+other taxonomic concepts which are not part of that tree.  As noted above, we
+compute 'lft', 'rgt' and 'depth' for each taxonomic concept.
+
+=item 5. compute the search table
+
+This is done by creating entries for all of the known taxonomic names, and
+then adding additional entries so that each species is listed under both its
+genus and its subgenus if any, and also under all synonymous genera and
+subgenera.  The idea is to allow maximum flexibility in searching for a
+species name even if one knows only a partial classification or even only an
+obsolete one.
+
+=item 6. compute the derived attributes
+
+Once the hierarchy relation has been computed, we can use that to compute the
+hierarchically derived attributes.  We start with a bottom-up pass, which is
+sufficient to compute 'minimum_body_mass' and 'maximum_body_mass' for all
+higher taxa that contain at least one taxon having a value for these
+attributes.  This pass also fills in 'yes' values on higher taxa for the
+attribute 'extant'.  We then follow with a top-down pass, to fill in 'no'
+values on lower taxa for the attribute 'extant'.  Because we do the passes in
+this order, 'yes' values always trump 'no' values.
+
+Note that the algorithm described in this section comes in two closely-related
+versions: one for completely building the hierarchy from scratch, and one for
+adjusting the hierarchy when the set of taxonomic names and opinions has
+changed in any way.  The complete rebuild algorithm is more complete, and so
+it should be invoked automatically at least once per day.  The adjustment
+algorithm should be invoked immediately whenever authorities or opinions are
+added, edited or removed, to give a good approximation of what the adjusted
+hierarchy should look like.
 
 =cut
 
@@ -49,6 +159,7 @@ our (%NAME_TABLE) = ("taxon_trees" => "taxon_names");
 our (%ATTRS_TABLE) = ("taxon_trees" => "taxon_attrs");
 our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
 our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
+our (%ANCESTRY_PROC) = ("taxon_trees" => "compute_ancestry");
 
 our $OPINION_CACHE = "order_opinions";
 
@@ -70,6 +181,7 @@ our $OPINION_TEMP = "opn";
 # Auxiliary table names
 
 our $SPELLING_TEMP = "spelling_aux";
+our $MISSPELLING_TEMP = "misspelling_aux";
 our $TRAD_TEMP = "trad_aux";
 our $SYNONYM_TEMP = "synonym_aux";
 our $CLASS_TEMP = "class_aux";
@@ -739,7 +851,7 @@ sub updateTables {
     # those whose classification points to a parent which is not itself in
     # $TREE_TEMP.  These must now be updated to their proper values.
     
-    linkParents($dbh, $tree_table);
+    # linkParents($dbh, $tree_table);     # This is no longer needed MM 2012-12-08
     
     # We can now update the search table.
     
@@ -829,7 +941,7 @@ sub buildTables {
     # Then create the necessary tables.
     
     rebuildOpinionCache($dbh) if $step_control->{a};
-    createTempTables($dbh) if $step_control->{a};
+    createTempTables($dbh);
     
     # Next, determine the currently accepted spelling for each concept from
     # the data in $OPINION_CACHE, and the "spelling reason" for each taxonomic
@@ -1224,6 +1336,7 @@ sub createTempTables {
     $result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_TEMP");
     $result = $dbh->do("CREATE TABLE $ATTRS_TEMP
 			       (orig_no int unsigned not null,
+				extant int unsigned,
 				min_body_mass float,
 				max_body_mass float,
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
@@ -1235,6 +1348,7 @@ sub createTempTables {
     $result = $dbh->do("CREATE TABLE $NAME_TEMP
 			       (taxon_no int unsigned not null,
 				orig_no int unsigned not null,
+				spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
 				opinion_no int unsigned not null,
 				PRIMARY KEY (taxon_no),
 				KEY (orig_no),
@@ -1246,13 +1360,13 @@ sub createTempTables {
 
 # computeSpelling ( dbh )
 # 
-# Fill in the spelling_no field of $TREE_TEMP.  This computes the "concept
-# group leader" relation for all concepts represented in $TREE_TEMP.  We do
-# this by selecting the best "spelling opinion" (most recent and reliable
-# opinion, including those labelled "misspelling") for each concept group.
-# Unless the best opinion is recorded as a misspelling, we take its spelling
-# to be the accepted one.  Otherwise, we look for the best spelling match
-# among the available opinions using the Jaro-Winkler metric.
+# Fill in the spelling_no field of $TREE_TEMP.  This computes the "currently
+# accepted name" or "concept group leader" relation for all taxonomic concepts
+# represented in $TREE_TEMP.  We do this by selecting the best "spelling
+# opinion" (most recent and reliable opinion, including those labelled
+# "misspelling") for each concept group.  Unless the best opinion is recorded
+# as a misspelling, we take its spelling to be the accepted one.  Otherwise,
+# we look for the best spelling match among the available opinions.
 
 sub computeSpelling {
 
@@ -1262,134 +1376,145 @@ sub computeSpelling {
     
     logMessage(2, "computing currently accepted spelling relation (b)");
     
-    # In order to select the group leader for each concept, we start by
-    # choosing the spelling associated with the most recent and reliable
-    # opinion for each concept group.  This "spelling opinion" may differ from
-    # the "classification opinion" computed below, because we select from all
-    # opinions including those marked as "misspelling" and those with
-    # parent_no = child_no.
+    # In order to select the currently accepted name for each taxonomic
+    # concept, we first need to determine which taxonomic names are marked as
+    # misspellings by some (any) opinion in the database.
     
-    # We choose a single opinion for each group by defining a temporary table
-    # with a unique key on orig_no and using INSERT IGNORE with a properly
-    # ordered selection.
+    $result = $dbh->do("DROP TABLE IF EXISTS $MISSPELLING_TEMP");
+    $result = $dbh->do("CREATE TABLE $MISSPELLING_TEMP
+			   (spelling_no int unsigned,
+			    PRIMARY KEY (spelling_no)) ENGINE=MYISAM");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $MISSPELLING_TEMP
+		SELECT o.child_spelling_no FROM $OPINION_CACHE as o
+		WHERE spelling_reason = 'misspelling'");
+    
+    # Now, in order to select the currently accepted name for each taxonomic
+    # concept, we start by choosing the spelling associated with the most
+    # recent and reliable opinion for each concept group.  This "spelling
+    # opinion" may differ from the "classification opinion" computed below,
+    # because we select from all opinions including those marked as
+    # "misspelling" and those with parent_no = child_no.
+    
+    # We choose a single spelling for each taxonomic concept by defining a
+    # temporary table with a unique key on orig_no and using INSERT IGNORE
+    # with a properly ordered selection.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
     $result = $dbh->do("CREATE TABLE $SPELLING_TEMP
-			    (orig_no int unsigned,
-			     spelling_no int unsigned,
-			     is_misspelling boolean,
-			     PRIMARY KEY (orig_no)) ENGINE=MYISAM");
+			   (orig_no int unsigned,
+			    spelling_no int unsigned,
+			    opinion_no int unsigned,
+			    is_misspelling boolean,
+			    PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
     $result = $dbh->do("
 		INSERT IGNORE INTO $SPELLING_TEMP
-		SELECT o.orig_no, o.child_spelling_no,
-		       if(o.spelling_reason = 'misspelling', true, false)
-		FROM $OPINION_CACHE o JOIN $TREE_TEMP USING (orig_no)
+		SELECT o.orig_no, o.child_spelling_no, o.opinion_no,
+		       if(o.spelling_reason = 'misspelling' or m.spelling_no is not null,
+			  true, false)
+		FROM $OPINION_CACHE as o JOIN $TREE_TEMP USING (orig_no)
+			LEFT JOIN $MISSPELLING_TEMP as m on o.child_spelling_no = m.spelling_no
 		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
-    # The problematic cases are the ones where the best opinion is marked as a
-    # misspelling.  For each of these cases, we will have to grab all opinions
-    # for the concept group and find the closest spelling match.
+    # The next step is to fix those entries where the name indicated by the
+    # best opinion is marked as a misspelling.  We can fix some of them by
+    # looking for matching 'misspelling of' opinions where the indicated
+    # correct spelling is not elsewhere marked as a misspelling.  We order by
+    # pubyr first, breaking ties by reliabilty index and then by opinion_no.
+    # The order is the opposite of what we used above, because we are
+    # replacing rather than ignoring.
     
-    # First fetch the orig_no of each concept group for which this is the
-    # case, along with the actual misspelled name.
+    $result = $dbh->do("
+		REPLACE INTO $SPELLING_TEMP
+		SELECT s.orig_no, o.parent_spelling_no, o.opinion_no, false
+		FROM $SPELLING_TEMP as s JOIN $OPINION_CACHE as o using (orig_no)
+			LEFT JOIN $MISSPELLING_TEMP as m on o.parent_spelling_no = m.spelling_no
+		WHERE s.is_misspelling and o.status = 'misspelling of' and m.spelling_no is null
+		ORDER BY o.pubyr ASC, o.ri ASC, o.opinion_no ASC");
     
-    logMessage(2, "    looking for misspellings");
+    # We can fix a few more by looking through all of the relevant opinions
+    # for alternate names that are nowhere marked as misspellings.
     
-    my $misspellings = $dbh->prepare("
-			SELECT s.orig_no, a.taxon_name
-			FROM $SPELLING_TEMP s JOIN authorities a ON a.taxon_no = s.spelling_no
-			WHERE s.is_misspelling");
+    $result = $dbh->do("
+		REPLACE INTO $SPELLING_TEMP
+		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
+		FROM $SPELLING_TEMP as s JOIN $OPINION_CACHE as o using (orig_no)
+			LEFT JOIN $MISSPELLING_TEMP as m on o.child_spelling_no = m.spelling_no
+		WHERE s.is_misspelling and o.spelling_reason in ('correction', 'rank change',
+				'recombination', 'reassignment')
+			and m.spelling_no is null
+		ORDER BY o.pubyr ASC, o.ri ASC, o.opinion_no ASC");
     
-    $misspellings->execute();
+    # For those taxonomic concepts which still don't have a good spelling, we
+    # need to try a different approach.  We grab all of the possible names for
+    # these concepts, and compute a score for each by adding +1 for each
+    # opinion in which the name is considered to be a good spelling and -1 for
+    # each opinion in which it is considered to be a bad spelling.  We can
+    # then choose the best of these for each concept.
     
-    my (%misspelling, %best_match, %best_coeff, %seen,
-	$orig_no, $taxon_no, $taxon_name);
+    my ($SPELLING_SCORE) = "spelling_score";
     
-    while ( ($orig_no, $taxon_name) = $misspellings->fetchrow_array() )
-    {
-	$misspelling{$orig_no} = $taxon_name;
-    }
+    $result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_SCORE");
+    $result = $dbh->do("CREATE TABLE $SPELLING_SCORE
+			   (spelling_no int unsigned,
+			    orig_no int unsigned,
+			    score int,
+			    PRIMARY KEY (spelling_no)) ENGINE=MYISAM");
     
-    my $count = scalar(keys %misspelling);
+    $result = $dbh->do("
+		INSERT INTO $SPELLING_SCORE
+		SELECT o.child_spelling_no, o.orig_no, 
+			sum(if(o.spelling_reason = 'misspelling',-1,+1)) as score
+		FROM $SPELLING_TEMP as s JOIN $OPINION_CACHE as o using (orig_no)
+		WHERE s.is_misspelling
+		GROUP BY o.child_spelling_no");
     
-    logMessage(1, "    found $count misspellings") if $count > 0;
+    # Now choose the spellings with the best scores and use them to replace
+    # the misspellings.
     
-    # If we found any misspellings, fetch all of the candidates for the proper
-    # spelling of each.  We select these in descending order of publication
-    # year, so that if equal-weight misspellings are found then we choose the
-    # most recent one.
-    # 
-    # For each possible spelling, we compute the candidate's Jaro-Winkler
-    # coefficient against the known misspelling.  If this is better than the
-    # best match previously found, it becomes the preferred spelling for this
-    # taxon.  Note that the Jaro-Winkler coefficient runs from 0 (no similarity)
-    # to 1 (perfect similarity).
+    $result = $dbh->do("
+		REPLACE INTO $SPELLING_TEMP
+		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
+		FROM $SPELLING_TEMP as s JOIN $OPINION_CACHE as o using (orig_no)
+			JOIN $SPELLING_SCORE as x on x.spelling_no = o.child_spelling_no
+		WHERE s.is_misspelling and o.spelling_reason <> 'misspelling' and
+			x.score > 0
+		ORDER BY x.score ASC, o.pubyr ASC, o.ri ASC, o.opinion_no ASC");
     
-    if ( $count )
-    {
-	logMessage(2, "    looking for good spellings");
-	
-	my $candidates = $dbh->prepare("
-			SELECT DISTINCT o.orig_no, o.child_spelling_no, a.taxon_name
-			FROM $OPINION_CACHE o JOIN $SPELLING_TEMP s USING (orig_no)
-				JOIN authorities a ON a.taxon_no = o.child_spelling_no
-			WHERE s.is_misspelling and o.spelling_reason != 'misspelling'
-			ORDER BY o.pubyr DESC");
-	
-	$candidates->execute();
-	
-	while ( ($orig_no, $taxon_no, $taxon_name) = $candidates->fetchrow_array() )
-	{
-	    # We skip all spellings which are the same as the recent
-	    # misspelling, and also anything we've seen before.
-	    
-	    next if $taxon_name eq $misspelling{$orig_no};
-	    next if $seen{$orig_no . $taxon_name};
-	    
-	    # The strcmp95 routine requires a length parameter, so we give it
-	    # the maximum of the lengths of the two arguments.
-	    
-	    my ($a_len) = length($taxon_name);
-	    my ($b_len) = length($misspelling{$orig_no});
-	    my ($coeff) = strcmp95( $taxon_name, $misspelling{$orig_no},
-				    ($a_len > $b_len ? $a_len : $b_len) );
-	
-	    if ( !defined $best_coeff{$orig_no} or $coeff > $best_coeff{$orig_no} )
-	    {
-		$best_coeff{$orig_no} = $coeff;
-		$best_match{$orig_no} = $taxon_no;
-	    }
-	    
-	    $seen{$orig_no . $taxon_name} = 1;
-	}
-	
-	# Now we fix all of the misspellings that we identified above.
-	
-	my $fix_spelling = $dbh->prepare("
-		UPDATE $SPELLING_TEMP SET spelling_no = ?
-		WHERE orig_no = ?");
-	
-	foreach $orig_no (keys %misspelling)
-	{
-	    my $spelling_no = $best_match{$orig_no} || $orig_no;
-	    
-	    $fix_spelling->execute($spelling_no, $orig_no);
-	}
-	
-    }
+    # If this fails, we try the original spelling as long as its score is not
+    # negative.  First try a join on the opinion table, so that we can get an
+    # opinion_no value, but also try just the spelling table alone since often
+    # there is no opinion for the original name.
+    
+    $result = $dbh->do("
+		REPLACE INTO $SPELLING_TEMP
+		SELECT s.orig_no, o.child_spelling_no, o.opinion_no, false
+		FROM $SPELLING_TEMP as s JOIN $OPINION_CACHE as o on o.orig_no = s.orig_no
+				and o.child_spelling_no = s.orig_no
+			LEFT JOIN spelling_score as x on x.orig_no = s.orig_no
+		WHERE s.is_misspelling and (x.score is null or x.score >= 0)");
+    
+    $result = $dbh->do("
+		REPLACE INTO $SPELLING_TEMP
+		SELECT s.orig_no, s.orig_no, 0, false
+		FROM $SPELLING_TEMP as s LEFT JOIN $SPELLING_SCORE as x on x.spelling_no = s.orig_no
+		WHERE s.is_misspelling and (x.score is null or x.score >= 0)");
+    
+    # For anything that falls through all of these, we just use the original
+    # misspelling and call it a day.
     
     # Next, we copy all of the computed spelling_no values into $TREE_TEMP.
     
     logMessage(2, "    setting spelling_no");
     
-    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $SPELLING_TEMP s USING (orig_no)
+    $result = $dbh->do("UPDATE $TREE_TEMP as t JOIN $SPELLING_TEMP as s USING (orig_no)
 			SET t.spelling_no = s.spelling_no");
     
     # In every row of $TREE_TEMP that still has a spelling_no of 0, we set
-    # spelling_no = orig_no.  In other words, for each concept group with no
-    # associated opinions, the group leader is the original combination by
-    # default.
+    # spelling_no = orig_no.  In other words, each taxonomic name with no
+    # associated opinions is its own accepted spelling by default.
     
     $result = $dbh->do("UPDATE $TREE_TEMP SET spelling_no = orig_no WHERE spelling_no = 0");
     
@@ -1398,6 +1523,34 @@ sub computeSpelling {
     logMessage(2, "    indexing spelling_no");
     
     $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (spelling_no)");
+    
+    # Then we can compute the name table, which records the best opinion
+    # and spelling reason for each taxonomic name.
+    
+    logMessage(2, "    computing taxonomic name table");
+    
+    # First put in all of the names we've selected above.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $NAME_TEMP
+		SELECT s.spelling_no, s.orig_no, o.spelling_reason, o.opinion_no
+		FROM $SPELLING_TEMP as s JOIN $OPINION_CACHE as o using (opinion_no)");
+    
+    # Then fill in the rest of the names that have opinions, using the best available
+    # opinion for each one.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $NAME_TEMP
+		SELECT o.child_spelling_no, o.orig_no, o.spelling_reason, o.opinion_no
+		FROM $OPINION_CACHE as o JOIN $TREE_TEMP USING (orig_no)
+		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
+    
+    # Then add dummy entries for all other names.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $NAME_TEMP
+		SELECT a.taxon_no, a.orig_no, '', 0
+		FROM $AUTH_TABLE as a");
     
     # As an addendum, we can now compute and index the trad_no field, which
     # might be of interest to those who prefer the traditional taxonomic ranks
@@ -1429,17 +1582,6 @@ sub computeSpelling {
     logMessage(2, "    indexing trad_no");
     
     $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (trad_no)");
-    
-    # Now select the best opinion for each *taxonomic name* (not concept) and
-    # fill in the "spelling reason" field of $NAME_TEMP.
-    
-    logMessage(2, "computing spelling table (b)");
-    
-    $result = $dbh->do("
-		INSERT IGNORE INTO $NAME_TEMP
-		SELECT o.child_spelling_no, o.orig_no, o.opinion_no
-		FROM $OPINION_CACHE o JOIN $TREE_TEMP USING (orig_no)
-		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
     my $a = 1;		# we can stop on this line when debugging
 }
@@ -2014,12 +2156,8 @@ sub computeHierarchy {
     
     # Now we can set parent_no.  All concepts in a synonym group will share
     # the same parent, so we need to join a second copy of $TREE_TEMP to look
-    # up the senior synonym number.  In addition, parent_no must always point
-    # to a senior synonym, so we need to join a third copy of $TREE_TEMP to
-    # look up the parent's senior synonym number.
-    # 
-    # In other words, the parent_no value for any taxon will be the senior
-    # synonym of the parent of the senior synonym.
+    # up the senior synonym number.  In other words, the parent_no value for
+    # any taxon will point to the parent of its most senior synonym.
     # 
     # Note that if this is an update (as opposed to a rebuild) not all of the
     # parent_no values will be properly set.  We will have to fix that later
@@ -2030,8 +2168,7 @@ sub computeHierarchy {
     $result = $dbh->do("
 		UPDATE $TREE_TEMP t JOIN $TREE_TEMP t2 ON t2.orig_no = t.synonym_no
 		    JOIN $OPINION_CACHE o ON o.opinion_no = t2.opinion_no
-		    JOIN $TREE_TEMP t3 ON t3.orig_no = o.parent_no
-		SET t.parent_no = t3.synonym_no");
+		SET t.parent_no = o.parent_no");
     
     # Once we have set parent_no for all concepts, we can efficiently index it.
     
@@ -2198,7 +2335,9 @@ sub breakCycles {
 # linkParents ( dbh, tree_table )
 # 
 # Update the parent_no field of $TREE_TEMP to include parents which are not
-# themselves represented in $TREE_TEMP.
+# themselves represented in $TREE_TEMP.  This is not needed currently, but
+# might be in the future if we decide that parent_no should point to senior
+# synonyms (so I'm going to keep it in the code).
 
 sub linkParents {
     
@@ -2744,6 +2883,7 @@ sub updateSecondaryTables {
 	$result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_TEMP");
 	
 	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $MISSPELLING_TEMP");
 	$result = $dbh->do("DROP TABLE IF EXISTS $TRAD_TEMP");
 	$result = $dbh->do("DROP TABLE IF EXISTS $CLASS_TEMP");
 	$result = $dbh->do("DROP TABLE IF EXISTS $SYNONYM_TEMP");
@@ -3040,15 +3180,19 @@ sub computeAttrsTable {
     
     $DB::single = 1;
     
-    # Prime the table with the values actually stored in the ecotaph table.
+    # Prime the table with the values actually stored in the authorities table and
+    # ecotaph table.
     
-    $result = $dbh->do("INSERT IGNORE INTO $ATTRS_TEMP (orig_no, min_body_mass, max_body_mass)
-			SELECT a.orig_no, coalesce(e.minimum_body_mass, e.body_mass_estimate),
+    $result = $dbh->do("INSERT IGNORE INTO $ATTRS_TEMP (orig_no, extant, min_body_mass, max_body_mass)
+			SELECT a.orig_no, case a.extant when 'yes' then 1 when 'no' then 0 end,
+				coalesce(e.minimum_body_mass, e.body_mass_estimate),
 				coalesce(e.maximum_body_mass, e.body_mass_estimate)
-			FROM authorities as a join ecotaph as e using (taxon_no)
+			FROM $AUTH_TABLE as a JOIN ecotaph as e using (taxon_no)
+				JOIN $TREE_TEMP as t using (orig_no)
 			WHERE e.minimum_body_mass is not null or
 				e.maximum_body_mass is not null or
-				e.body_mass_estimate is not null");
+				e.body_mass_estimate is not null or
+				a.extant is not null");
     
     # Now figure out how deep in the table this information starts.
     
@@ -3056,25 +3200,54 @@ sub computeAttrsTable {
 			SELECT max(t.depth)
 			FROM $TREE_TEMP as t join $ATTRS_TEMP as v using (orig_no)");
     
+    # Fill in the rest of the entries with null values.
+    
+    $result = $dbh->do("INSERT IGNORE INTO $ATTRS_TEMP (orig_no, extant, min_body_mass, max_body_mass)
+			SELECT t.orig_no, null, null, null FROM $TREE_TEMP as t");
+    
     # We then iterate from that depth on up to the top of the tree, computing
     # each row from its immediate children.  We don't propagate these
-    # attributes up past the class level.
+    # attributes up past the class level, except for 'extant'.
     
     for (my $row = $max_depth; $row > 1; $row--)
     {
 	logMessage(1, "    computing row $row...") if $row % 10 == 0;
 	
-	my $sql = "REPLACE INTO $ATTRS_TEMP (orig_no, min_body_mass, max_body_mass)
-		SELECT t.parent_no, coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
-					min(v.min_body_mass), pv.min_body_mass), 
+	my $sql = "
+		UPDATE $ATTRS_TEMP as v JOIN
+		(SELECT t.parent_no, if(avg(v.extant) > 0, 1, pv.extant) as extant,
+			coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
+					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
 			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
-					max(v.max_body_mass), pv.max_body_mass)
+					max(v.max_body_mass), pv.max_body_mass) as max_body_mass
 		FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
 			JOIN $AUTH_TABLE as pa on pa.taxon_no = t.parent_no
 			LEFT JOIN $ATTRS_TEMP as pv on pv.orig_no = t.parent_no 
-		WHERE t.depth = $row and pa.taxon_rank not in
-			('kingdom', 'subkingdom', 'superphylum', 'phylum', 'subphylum', 'superclass')
-		GROUP BY t.parent_no";
+		WHERE t.depth = $row 
+		GROUP BY t.parent_no) as cv on v.orig_no = cv.parent_no
+		SET     v.extant = cv.extant,
+			v.min_body_mass = cv.min_body_mass,
+			v.max_body_mass = cv.max_body_mass";
+
+	$dbh->do($sql);
+    }
+    
+    # Finally, we iterate from the top of the tree back down, computing those
+    # attributes that percolate downward.  For the time being, the only one of
+    # those is a valud of extant=0.  We need to recompute $max_depth, since we
+    # now need to go all the way down, not just to the lowest row that had a
+    # non-null initial value.
+    
+    ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_TEMP");
+    
+    for (my $row = 2; $row <= $max_depth; $row++)
+    {
+	logMessage(1, "    computing row $row...") if $row % 10 == 0;
+	
+	my $sql = "
+		UPDATE $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
+			JOIN $ATTRS_TEMP as pv on pv.orig_no = t.parent_no
+		SET v.extant = 0 WHERE pv.extant = 0 and t.depth = $row";
 	
 	$dbh->do($sql);
     }

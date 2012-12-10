@@ -44,7 +44,7 @@ sub classify {
 	# if something like "Jones 1984" was submitted, find the matching
 	#  reference with the most opinions
 	# assume they are not looking for junior authors
-	if ( $q->param('citation') )	{
+	if ( $q->param('citation') and $hbo )	{
 		my ($auth,$year) = split / /,$q->param('citation');
 		if ( $year < 1700 || $year > 2100 )	{
 			print $hbo->stdIncludes($PAGE_TOP);
@@ -81,12 +81,15 @@ sub classify {
 		@taxa = $taxonomy->getTaxaByReference($reference_no,
 				      { basis => 'opinions', fields => ['lft', 'oldattr'] });
 		
-		if ( ! @taxa )	{
-			print $hbo->stdIncludes($PAGE_TOP);
-			classificationForm($hbo, $s, 'No newly expressed taxonomic opinions are tied to this reference');
-			print $hbo->stdIncludes($PAGE_BOTTOM);
-			exit;
+		unless ( @taxa )
+		{
+		    return unless $hbo;
+		    print $hbo->stdIncludes($PAGE_TOP);
+		    classificationForm($hbo, $s, 'No newly expressed taxonomic opinions are tied to this reference');
+		    print $hbo->stdIncludes($PAGE_BOTTOM);
+		    exit;
 		}
+		
 ###		# some parents may be completely unclassified
 ###		my $non_opinion_fields = $fields;
 ###		$non_opinion_fields =~ s/,status//;
@@ -135,29 +138,29 @@ sub classify {
 		$taxon_no = ${$dbt->getData($sql)}[0]->{'taxon_no'};
 	}
 
-	if ( ! $taxon_no && ! @taxa )	{
-		if ( ! $q->param('boxes_only') )	{
-			print $hbo->stdIncludes($PAGE_TOP);
-			classificationForm($hbo, $s, 'Nothing matched the search term');
-			print $hbo->stdIncludes($PAGE_BOTTOM);
-		}
-		exit;
+	unless ( $taxon_no && @taxa )
+	{
+	    return unless $hbo;
+	    print $hbo->stdIncludes($PAGE_TOP);
+	    classificationForm($hbo, $s, 'Nothing matched the search term');
+	    print $hbo->stdIncludes($PAGE_BOTTOM);
+	    exit;
 	}
-
+    
 	# grab all children of the parent taxon
 	if ( $taxon_no )	{
-		@taxa = $taxonomy->getRelatedTaxa($taxon_no, 'all_children', 
+		@taxa = $taxonomy->getTaxa('all_children', $taxon_no, 
 				      { fields => ['lft', 'oldattr'], status => 'all' });
 
 ###		my $sql = "SELECT lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND a.taxon_no=".$taxon_no;
 ###		my $range = ${$dbt->getData($sql)}[0];
-		unless ( @taxa > 1 )	{
-			if ( ! $q->param('boxes_only') )	{
-				print $hbo->stdIncludes($PAGE_TOP);
-				classificationForm($hbo, $s, 'Nothing is classified within this taxon');
-				print $hbo->stdIncludes($PAGE_BOTTOM);
-			}
-			exit;
+		unless ( @taxa > 1 )
+		{
+		    return unless $hbo;
+		    print $hbo->stdIncludes($PAGE_TOP);
+		    classificationForm($hbo, $s, 'Nothing is classified within this taxon');
+		    print $hbo->stdIncludes($PAGE_BOTTOM);
+		    exit;
 		}
 
 ###		$sql = "SELECT $fields FROM authorities a,$TAXA_TREE_CACHE t,opinions o,refs r WHERE a.taxon_no=t.taxon_no AND t.opinion_no=o.opinion_no AND a.reference_no=r.reference_no AND t.taxon_no=t.spelling_no AND lft>=".$range->{'lft'}." AND rgt<=".$range->{'rgt'}." ORDER BY lft";
@@ -200,14 +203,15 @@ sub classify {
 		}
 	}
 
-	if ( ! $q->param('boxes_only') )	{
+	if ( $hbo )
+	{
 		print $hbo->stdIncludes($PAGE_TOP);
 		chmod 0664, "$HTML_DIR/public/classification/classification.csv";
 		open OUT, ">$HTML_DIR/public/classification/classification.csv";
 		print OUT "taxon_rank,taxon_name,author,common_name,status,extant\n";
 	}
-	print $hbo->populateHTML('js_classification');
-	if ( ! $q->param('boxes_only') )	{
+	print qq^<script src="/JavaScripts/classification.js" language="JavaScript" type="text/javascript"></script>\n^;
+        if ( $hbo ) {
 		print "<center><p class=\"pageTitle\">Classification of $title</p></center>\n\n";
 	}
 
@@ -305,7 +309,7 @@ sub classify {
 		return;
 	}
 
-	if ( ! $q->param('boxes_only') )	{
+	if ( $hbo )	{
 		print qq|<form method="POST" action="$READ_URL" name="doDownloadTaxonomy">
 <input type="hidden" name="action" value="displayDownloadTaxonomyResults">
 |;

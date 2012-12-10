@@ -600,7 +600,7 @@ sub makeMap	{
 				delete $unmatched{$m->{'taxon_name'}};
 			}
 		}
-		my @in_list = $taxonomy->getRelatedTaxa($taxon, 'all_children', { id => 1 });
+		my @in_list = $taxonomy->getTaxa('all_children', $taxon, { id => 1 });
 		$options{'taxon_list'} = \@in_list;
 	}
 

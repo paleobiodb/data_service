@@ -76,13 +76,12 @@ sub getEcology { # $$$$$ need to fix this - must return hash keyed to base_taxa!
     # Then, grab those fields from the indicated taxa plus all of their parents.
     
     my $list = 
-	$taxonomy->getRelatedTaxa($base_taxa, 
-				  'all_parents',
-				  { select => 'spelling',
-				    join_tables => 
-				    'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no] ' .
-				    'LEFT JOIN $attrs_table as v using v.orig_no = [taxon_no]',
-				    extra_fields => $field_string });
+	$taxonomy->getTaxa('all_parents', $base_taxa, 
+			   { select => 'spelling',
+			     join_tables => 
+				'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no] ' .
+				'LEFT JOIN $attrs_table as v using v.orig_no = [taxon_no]',
+			     extra_fields => $field_string });
     
     # Now we can iterate through the list of rows (each representing a
     # containing taxon of one or more of our base taxa, going up the taxonomic
@@ -96,7 +95,7 @@ sub getEcology { # $$$$$ need to fix this - must return hash keyed to base_taxa!
     my ($row_cache) = {};
     
     # Now, we go through the rows one by one.  We are guaranteed that parents
-    # come before children, by the semantics of getRelatedTaxa().
+    # come before children, by the semantics of getTaxa().
     
     foreach my $row (@$list)
     {
@@ -223,12 +222,11 @@ sub fastEcologyLookup	{
     # its children.
     
     my $result_list = 
-	$taxonomy->getRelatedTaxa($base_taxon, 
-				  'all_children',
-				  { select => 'orig', 
-				    fields => 'lft',
-				    join_tables => 'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no]',
-				    extra_fields => "qe.$field" });
+	$taxonomy->getTaxa('all_children', $base_taxon, 
+			   { select => 'orig', 
+			     fields => 'lft',
+			     join_tables => 'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no]',
+			     extra_fields => "qe.$field" });
     
     # If the first row (the base taxon) doesn't have a value for the
     # attribute, we will have to look up its parents.
@@ -236,12 +234,11 @@ sub fastEcologyLookup	{
     unless ( $result_list->[0]{$field} )
     {
 	my $parent_list = 
-	    $taxonomy->getRelatedTaxa($base_taxon,
-				      'all_parents',
-				      { select => 'orig',
-					exclude_self => 1,
-					join_tables => 'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no]',
-					extra_fields => "qe.$field" });
+	    $taxonomy->getTaxa('all_parents', $base_taxon, 
+			       { select => 'orig',
+				 exclude_self => 1,
+				 join_tables => 'LEFT JOIN ecotaph as qe on qe.taxon_no = [taxon_no]',
+				 extra_fields => "qe.$field" });
 	
         foreach my $row ( @$parent_list )
 	{

@@ -2298,7 +2298,7 @@ sub queryDatabase {
     if (@dataRows && %all_taxa && $q->param("replace_with_ss") ne 'NO' &&
         $q->param('output_data') =~ /occurrence|specimens|genera|species/)
     {
-	my @result_list = $taxonomy->getRelatedTaxa(\%all_taxa, 'seniors', { fields => 'link' });
+	my @result_list = $taxonomy->getTaxa('seniors', \%all_taxa, { fields => 'link' });
 	
 	foreach my $row (@result_list)
 	{
@@ -2349,8 +2349,8 @@ sub queryDatabase {
 	    
 	    my %genus_class;
 	    
-	    my @result_list = $taxonomy->getRelatedTaxa(\@taxon_nos, 'parents',
-							{ rank => 'genus', select => 'spelling' });
+	    my @result_list = $taxonomy->getTaxa('parents', \@taxon_nos, 
+						 { rank => 'genus', select => 'spelling' });
 	    
 	    foreach my $row (@result_list)
 	    {
@@ -2368,8 +2368,8 @@ sub queryDatabase {
 	    
 	    my %subgenus_class;
 	    
-	    @result_list = $taxonomy->getRelatedTaxa(\@taxon_nos, 'parents',
-						     { rank => 'subgenus', select => 'spelling' });
+	    @result_list = $taxonomy->getTaxa('parents', \@taxon_nos, 
+					      { rank => 'subgenus', select => 'spelling' });
 	    
 	    foreach my $row (@result_list)
 	    {
@@ -2390,8 +2390,8 @@ sub queryDatabase {
 	    
             if ( @subgenus_nos )
 	    {
-		@result_list = $taxonomy->getRelatedTaxa(\@subgenus_nos, 'parents',
-							 { rank => 'genus', select => 'spelling' });
+		@result_list = $taxonomy->getTaxa('parents', \@subgenus_nos, 
+						  { rank => 'genus', select => 'spelling' });
 		
 		foreach my $row (@result_list)
 		{
@@ -2469,8 +2469,8 @@ sub queryDatabase {
 	    # we can follow up the parent chain.  The following call now produces a
 	    # linked-list structure rather than a hash of arrays.  MM 2012-11-18
 	    
-	    $master_class = $taxonomy->getRelatedTaxa(\@taxon_nos, 'all_parents',
-						      { hash => 'base' });
+	    $master_class = $taxonomy->getTaxa('all_parents', \@taxon_nos, 
+					       { hash => 'base' });
         }
     }
     
@@ -2504,9 +2504,9 @@ sub queryDatabase {
 	    # you need the data for all taxa with the same current spelling as any
 	    #  taxon in the current data set, i.e., all variant combinations etc.
 	    
-            my @result_list = $taxonomy->getRelatedTaxa(\@taxon_nos, 'spellings', 
-							{ fields => ['attr','specimen'], 
-							  distinct => 1 });
+            my @result_list = $taxonomy->getTaxa('spellings', \@taxon_nos, 
+						 { fields => ['attr','specimen'], 
+						   distinct => 1 });
 	    
             foreach my $row (@result_list)
 	    {
@@ -4686,8 +4686,8 @@ sub getTaxonString {
             if (scalar(@taxon_nos) == 0) {
                 push @sql_or_bits, "table.genus_name LIKE ".$dbh->quote($taxon);
             } else	{
-                my @all_taxon_nos = $taxonomy->getRelatedTaxa($taxon_nos[0], 'all_children',
-							      { exclude => \@exclude_taxon_nos, id => 1 });
+                my @all_taxon_nos = $taxonomy->getTaxa('all_children', $taxon_nos[0], 
+						       { exclude => \@exclude_taxon_nos, id => 1 });
                 # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                 @taxon_nos_unique{@all_taxon_nos} = ();
             }
@@ -4701,8 +4701,8 @@ sub getTaxonString {
             if (scalar(@taxon_nos) == 0) {
                 push @sql_or_bits, "table.genus_name NOT LIKE ".$dbh->quote($taxon);
             } else	{
-                my @exclude_taxon_nos = $taxonomy->getRelatedTaxa($taxon_nos[0], 'all_children',
-								  { id => 1 });
+                my @exclude_taxon_nos = $taxonomy->getTaxa('all_children', $taxon_nos[0], 
+							   { id => 1 });
                 # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                 @taxon_nos_unique{@exclude_taxon_nos} = ();
             }

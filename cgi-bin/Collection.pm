@@ -2618,13 +2618,11 @@ sub getTaxonomicList	{
 
 # started another heavy rewrite 26.9.11, finished it 25.10.11
 sub getClassOrderFamily	{
-	my $dbt = shift;
-	my $rowref_ref = shift;
+	my ($dbt, $rowref_ref, $class_array_ref) = @_;
 	my $rowref;
 	if ( $rowref_ref )	{
 		$rowref = ${$rowref_ref};
 	}
-	my $class_array_ref = shift;
 	my @class_array = @{$class_array_ref};
 	if ( $#class_array == 0 )	{
 		return $rowref;
@@ -3544,6 +3542,375 @@ print "</center>";
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 
 }
+
+
+# generateCollectionTable ( )
+# 
+# Given a set of collections, generate HTML code for a table listing them by
+# age range.  The parameter 'age_range_format' changes appearance html
+# formatting of age/range information, used by the strata module
+
+sub generateCollectionTable {
+    my ($dbt, $taxonomy, $s, $colls, $display_name, $base_taxon, 
+	$age_range_format, $is_real_user, $type_locality) = @_;
+    
+    my $dbh = $dbt->dbh;
+    
+    my $base_taxon = $taxonomy->getTaxon($base_taxon, { fields => 'lft' });
+    
+    if ( ref $colls != 'ARRAY' or @$colls == 0 ) {
+        print qq|<div align="center">
+<div class="displayPanel" align="left" style="width: 36em; margin-top: 0em; padding-bottom: 1em;">
+<span class="displayPanelHeader" class="large">Collections</span>
+<div class="displayPanelContent">
+  <div align="center"><i>No collection or age range data are available</i></div>
+</div>
+</div>
+</div>
+|;
+        return;
+    }
+
+    my @intervals = getIntervalData($dbt,$colls);
+    my %interval_hash;
+    $interval_hash{$_->{'interval_no'}} = $_ foreach @intervals;
+    my ($lb,$ub,$max_no,$minfirst,$min_no) = getAgeRange($dbt,$colls);
+
+    my $output = "";
+    my $range = "";
+    # simplified this because the users will understand the basic range,
+    #  and it clutters the form JA 28.8.06
+    my $max = ($max_no) ? $interval_hash{$max_no}->{interval_name} : "";
+    my $min = ($min_no) ? $interval_hash{$min_no}->{interval_name} : ""; 
+    if ($max ne $min && $min) {
+        $range .= " base of the <a href=\"$READ_URL?a=displayInterval&interval_no=$max_no\">$max</a> to the top of the <a href=\"$READ_URL?a=displayInterval&interval_no=$min_no\">$min</a>";
+    } else {
+        $range .= " <a href=\"$READ_URL?a=displayInterval&interval_no=$max_no\">$max</a>";
+    }
+    $range .= " <i>or</i> $lb to $ub Ma";
+
+    # I hate to hit another table, but we need to know whether ANY of the
+    #  included taxa are extant JA 15.12.06
+    
+    my $extant;
+    my $mincrownfirst;
+    my (%iscrown, $crown_list, $minfirst, $extant, $age_range_format);
+    
+    my @children = $taxonomy->getTaxa('all_children', $base_taxon, 
+				      { fields => 'lft', exclude_self => 1 });
+    
+    my @extant_list;
+    
+    foreach my $t ( @children )
+    {
+	push @extant_list, $t->{taxon_no} if $t->{ext2};
+    }
+    
+    # If there are extant taxa among the children of the base taxon, get all
+    # of the collections in which they occur.
+    
+    if ( @extant_list )
+    {
+	$extant = 1;
+	
+	# Pull the colls from the DB;
+	my %options = ();
+	$options{'permission_type'} = 'read';
+	$options{'calling_script'} = "TaxonInfo";
+            $options{'taxon_list'} = $crown_list;
+            my $fields = ["country", "state", "max_interval_no", "min_interval_no"];
+
+            my ($dataRows,$ofRows) = getCollections($dbt,$taxonomy,$s,\%options,$fields);
+            my ($lb,$ub,$max,$minfirst,$min) = getAgeRange($dbt,$dataRows);
+            for my $coll ( @$dataRows )	{
+                $iscrown{$coll->{'collection_no'}}++;
+            }
+            $mincrownfirst = $minfirst;
+	
+	
+	
+            # extinct taxa also can be in the crown group, so figure out
+            #  which taxa are subtaxa of extant groups
+            my %has_extant_parent;
+            for my $ch ( @children )	{
+                if ( $ch->{'extant'} =~ /y/i )	{
+                    for my $i ( $ch->{'lft'}..$ch->{'rgt'} )	{
+                        $has_extant_parent{$i}++;
+                    }
+                }
+            }
+            my $crown_list;
+            for my $ch ( @children )	{
+                if ( $ch->{'extant'} =~ /y/i || $has_extant_parent{$ch->{'lft'}} && $has_extant_parent{$ch->{'rgt'}} )	{
+                    $crown_list .= "$ch->{'taxon_no'},";
+                }
+            }
+            $crown_list =~ s/,$//;
+
+            # get collections including the living immediate children
+            # another annoying table hit!
+
+            # Pull the colls from the DB;
+            my %options = ();
+            $options{'permission_type'} = 'read';
+            $options{'calling_script'} = "TaxonInfo";
+            $options{'taxon_list'} = $crown_list;
+            my $fields = ["country", "state", "max_interval_no", "min_interval_no"];
+
+            my ($dataRows,$ofRows) = getCollections($dbt,$taxonomy,$s,\%options,$fields);
+            my ($lb,$ub,$max,$minfirst,$min) = getAgeRange($dbt,$dataRows);
+            for my $coll ( @$dataRows )	{
+                $iscrown{$coll->{'collection_no'}}++;
+            }
+            $mincrownfirst = $minfirst;
+    }
+    
+
+    if ( $minfirst && $extant && $age_range_format ne 'for_strata_module' )	{
+        $range = "<div class=\"small\" style=\"width: 40em; margin-left: 2em; margin-right: auto; text-align: left; white-space: nowrap;\">Maximum range based only on fossils: " . $range . "<br>\n";
+        $minfirst =~ s/([0-9])0+$/$1/;
+        $range .= "Minimum age of oldest fossil (stem group age): $minfirst Ma<br>\n";
+        $mincrownfirst =~ s/([0-9])0+$/$1/;
+        $range .= "Minimum age of oldest fossil in any extant subgroup (crown group age): $mincrownfirst Ma<br>";
+        $range .= "<span class=\"verysmall\" style=\"padding-left: 2em;\"><i>Collections with crown group taxa are in <b>bold</b>.</i></span></div><br>\n";
+    } else	{
+        $range = ":".$range;
+    }
+
+    print qq|<div class="displayPanel" style="margin-top: 0em;">
+<div class="displayPanelContent">
+|;
+
+    if ($age_range_format eq 'for_strata_module') {
+        print qq|Age range$range<br>
+</div>
+</div>
+|;
+    } else {
+        print "<div class=\"small\" style=\"margin-left: 2em; width: 90%; border-bottom: 1px solid lightgray;\"><p>Age range$range</p></div>\n";
+    }
+
+    
+	# figure out which intervals are too vague to use to set limits on
+	#  the joint upper and lower boundaries
+	# "vague" means there's some other interval falling entirely within
+	#  this one JA 26.1.05
+    # Don't do it this way, not reliable
+
+    # sort the collections by taxon name so the names can be printed just once
+    #  per set of collections sharing the same taxon
+    @{$colls} = sort { $a->{genera} cmp $b->{genera} } @{$colls};
+
+	# Process the data:  group all the collection numbers with the same
+	# time-place string together as a hash.
+	my %time_place_coll = ();
+    my (%time_interval,%lower_res,%upper_res,%max_interval_no);
+    my %lastgenus = ();
+    my %intervals = ();
+	foreach my $row (@$colls) {
+        my $max = $row->{'max_interval_no'};
+        my $min = $row->{'min_interval_no'};
+        if (!$min) {
+            $min = $max;
+        }
+        my $res = "<span class=\"small\"><a href=\"$READ_URL?a=displayInterval&interval_no=$row->{max_interval_no}\">$interval_hash{$max}->{interval_name}</a>";
+        if ( $max != $min ) {
+            $res .= " - " . "<a href=\"$READ_URL?a=displayInterval&interval_no=$row->{min_interval_no}\">$interval_hash{$min}->{interval_name}</a>";
+        }
+        if ( $row->{"seq_strat"} =~ /glacial/ )	{
+            $res .= " <span class=\"verysmall\">($row->{'seq_strat'})</span>";
+        }
+        $res .= "</span></td><td align=\"center\" valign=\"top\"><span class=\"small\"><nobr>";
+        my $maxmin .= $interval_hash{$max}->{base_age} . " - ";
+        $maxmin =~ s/0+ / /;
+        $maxmin =~ s/\. /.0 /;
+        if ( $max == $min )	{
+            $maxmin .= $interval_hash{$max}->{top_age};
+        } else	{
+            $maxmin .= $interval_hash{$min}->{top_age};
+        }
+        $maxmin =~ s/([0-9])(0+$)/$1/;
+        $maxmin =~ s/\.$/.0/;
+        $res .= $maxmin . "</nobr></span></td><td align=\"center\" valign=\"top\"><span class=\"small\">";
+
+        $row->{"country"} =~ s/United States/USA/;
+        $row->{"country"} =~ s/ /&nbsp;/;
+        $res .= $row->{"country"};
+        if($row->{"state"}){
+            $row->{"state"} =~ s/ /&nbsp;/;
+            $res .= " (" . $row->{"state"} . ")";
+        }
+        $res .= "</span>\n";
+
+            my @letts = split //,$display_name;
+            $row->{'genera'} =~ s/$display_name /$letts[0]\. /g;
+            $row->{'genera'} =~ s/[A-Z]\. indet/$display_name indet/g;
+	    if (exists $time_place_coll{$res})	{
+                if ( $lastgenus{$res} ne $row->{'genera'} )	{
+                    ${$time_place_coll{$res}}[$#{$time_place_coll{$res}}] .= ") ";
+                    push(@{$time_place_coll{$res}}, $row->{'genera'} . " (" . $row->{'collection_no'} . "</a>");
+                } else	{
+                    push(@{$time_place_coll{$res}}, " " . $row->{'collection_no'} . "</a>");
+                }
+                $lastgenus{$res} = $row->{'genera'};
+	    }
+	    else	{
+                $time_place_coll{$res}[0] = $row->{'genera'} . " (" . $row->{'collection_no'} . "</a>";
+                $lastgenus{$res} = $row->{'genera'};
+
+            # create a hash array where the keys are the time-place strings
+            #  and each value is a number recording the min and max
+            #  boundary estimates for the temporal bins JA 25.6.04
+            # this is kind of tricky because we want bigger bins to come
+            #  before the bins they include, so the second part of the
+            #  number recording the upper boundary has to be reversed
+            my $upper = $interval_hash{$max}->{top_age};
+            $max_interval_no{$res} = $max;
+            if ( $max != $min ) {
+                $upper = $interval_hash{$min}->{top_age};
+            }
+            #if ( ! $toovague{$max." ".$min} && ! $seeninterval{$max." ".$min})	
+            # WARNING: we're assuming upper boundary ages will never be
+            #  greater than 999 million years
+            my $lower = int($interval_hash{$max}->{base_age} * 1000);
+            $upper = $upper * 1000;
+            $upper = int(999000 - $upper);
+            if ( $lower < 1000 )	{
+                $lower = "000" . $lower;
+            }
+            elsif ( $lower < 10000 )	{
+                $lower = "00" . $lower;
+            }
+            elsif ( $lower < 100000 )	{
+                $lower = "0" . $lower;
+            }
+            my @glacials = ( "interglacial","glacial","early glacial","high glacial","late glacial" );
+            for my $gl ( 0..$#glacials )	{
+                if ( $row->{"seq_strat"} eq $glacials[$gl] )	{
+                    $upper -= ( 1 + $gl );
+                    last;
+                }
+            }
+            $time_interval{$res} = $interval_hash{$max}->{interval_name};
+            $time_interval{$res} .=  ( $max != $min ) ? " - ".$interval_hash{$min}->{interval_name} : "";
+            $lower_res{$res} = $interval_hash{$max}->{base_age};
+            $upper_res{$res} = $interval_hash{$min}->{top_age};
+            $intervals{$max} = 1 if ($max);
+            $intervals{$min} = 1 if ($min);
+	    }
+	}
+
+	my @sorted = sort { $lower_res{$b} <=> $lower_res{$a} || $upper_res{$b} <=> $upper_res{$a} || $time_interval{$a} cmp $time_interval{$b} } keys %lower_res;
+
+	# legacy: originally the sorting was just on the key
+#	my @sorted = sort (keys %time_place_coll);
+
+	if(scalar @sorted > 0){
+	if ($age_range_format ne 'for_strata_module') {
+		$output .= qq|<div class="small" style="margin-left: 2em; margin-bottom: -1em;"><p>Collections|;
+	} else	{
+		$output .= qq|
+</div>
+<div align="left" class="displayPanel">
+<span class="displayPanelHeader">Collections</span>
+<div class="displayPanelContent">
+|;
+	}
+		my $collTxt = (scalar(@$colls)== 0) ? ": none found"
+			: (scalar(@$colls) == 1) ? ": one only"
+			: " (".scalar(@$colls)." total)";
+		if ($age_range_format ne 'for_strata_module') {
+			$output .= "$collTxt</p></div>\n";
+		}
+		if ( $#sorted <= 100 )	{
+			$output .= "<br>\n";
+		}
+
+		$output .= "<table class=\"small\" style=\"margin-left: 2em; margin-right: 2em; margin-bottom: 2em;\">\n";
+		if ( $#sorted > 100 )	{
+			$output .= qq|<tr>
+<td colspan="3"><p class=\"large\" style="padding-left: 1em;">Oldest occurrences</p>
+</tr>|;
+		}
+		$output .= qq|<tr>
+<th align="center">Time interval</th>
+<th align="center">Ma</th>
+<th align="center">Country or state</th>
+<th align="left">Original ID and collection number</th></tr>
+|;
+
+	# overload rule: if there are more than 100 rows, print only the
+	#  first and last 10 for an extinct taxon, and the oldest 20 for
+	#   an extant taxon JA 6.5.07
+		if ( $#sorted > 100 )	{
+			my @temp = @sorted;
+			if ( $extant == 0 )	{
+				@sorted = splice @temp , 0 , 10;
+				push @sorted , ( splice @temp , $#temp - 9 , 10 );
+			} else	{
+				@sorted = splice @temp , 0 , 20;
+			}
+		}
+		my $row_color = 0;
+		foreach my $key (@sorted){
+			if($row_color % 2 == 0){
+				$output .= "<tr class='darkList'>";
+			} 
+			else{
+				$output .= "<tr>";
+			}
+			$output .= "<td align=\"center\" valign=\"top\">$key</td>".
+                       " <td align=\"left\"><span class=\"small\">";
+			foreach my $collection_no (@{$time_place_coll{$key}}){
+				my $formatted_no = $collection_no;
+                                my $no = $collection_no;
+                                $no =~ s/[^0-9]//g;
+				if ( $type_locality == $no )	{
+					$formatted_no =~ s/([0-9])/type locality: $1/;
+				}
+				if ( $iscrown{$no} > 0 )	{
+					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=$no&amp;is_real_user=$is_real_user\"><b>$1/;
+                                	$formatted_no .= "</b>";
+				} else	{
+					$formatted_no =~ s/([0-9])/<a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=$no&amp;is_real_user=$is_real_user\">$1/;
+				}
+				$output .= $formatted_no;
+			}
+			$output .= ")";
+			$output =~ s/([>\]]) \)/$1\)/;
+			$output .= "</span></td></tr>\n";
+			$row_color++;
+			if ( $row_color == 10 && $output =~ /Oldest/ && $extant == 0 )	{
+				$output .= qq|
+<tr>
+<td colspan="3"><p class="large" style="padding-top: 0.5em;">Youngest occurrences</p></td>
+</tr>
+<tr>
+<th align="center">Time interval</th>
+<th align="center">Ma</th>
+<th align="center">Country or state</th>
+<th align="left">PBDB collection number</th></tr>
+|;
+			}
+		}
+		$output .= "</table>";
+	} 
+
+	if ($age_range_format eq 'for_strata_module') {
+		$output .= qq|
+</div>
+</div>
+|;
+	}
+
+	$output .= qq|
+</div>
+</div>
+|;
+
+	return $output;
+}
+
 
 # JA 26-28.6.12
 sub jsonCollection	{

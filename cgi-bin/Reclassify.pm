@@ -231,7 +231,7 @@ my $editable = 1;
                 if ($o->{reid_no}) {
                     print classificationSelect($dbt,$taxonomy,$o->{reid_no},1,$editable,\@all_matches,$o->{taxon_no},$description);
                 } else {
-                    print classificationSelect($dbt,$taxonomy$o->{$OCCURRENCE_NO},0,$editable,\@all_matches,$o->{taxon_no},$description);
+                    print classificationSelect($dbt,$taxonomy,$o->{$OCCURRENCE_NO},0,$editable,\@all_matches,$o->{taxon_no},$description);
                 }
                 print "</td>\n";
 				print "</tr>\n";

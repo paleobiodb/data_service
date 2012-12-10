@@ -1,4 +1,4 @@
- 
+# 
 # The Paleobiology Database
 # 
 #   Taxonomy.pm
@@ -42,33 +42,41 @@ Taxonomy
 
 =head1 SYNOPSIS
 
-An object of this class represents a hierarchy of taxonomic names.  The set of
-names known to the database is stored in the C<authorities> table, with
-primary key C<taxon_no>.  The main hierarchy is computed from the data in the
-C<authorities> and C<opinions> tables, and is stored in the table
-C<taxon_trees>.  Other hierarchies may be defined as well, and will be stored
-in other tables with the same structure as C<taxon_trees>.  The taxon numbers
+An object of this class represents a hierarchically organized set of taxonomic
+names.  The set of names known to the database is stored in the C<authorities>
+table, with primary key C<taxon_no>.  The primary hierarchy is computed from
+the data in the C<authorities> and C<opinions> tables, and is stored in the
+table C<taxon_trees>.  This module can be easily modified to define alternate
+hierarchies as well, generated using different rules, and to store them in
+other tables with the same structure as C<taxon_trees>.  The taxon numbers
 from C<authorities> are used extensively as foreign keys throughout the rest
 of the database, because the taxonomic hierarchy is central to the
-organization of the data.  The hierarchy stored in C<taxon_trees> (and
-possibly others as well) is also used extensively by the rest of the database,
-for example to select sets of related taxa.
+organization of the data.  The hierarchy stored in C<taxon_trees> and related
+tables is also referred to extensively throughout the database code, for
+example to select all of the taxa which are descendents of a base taxon.
 
 =head2 Definitions
+
+The most crucial definition necessary to properly understand this class is the
+distinction between I<taxonomic name> and I<taxonomic concept>.  In the course
+of this documentation, we will try to use these terms as appropriate; in cases
+where the proper term is obvious from context, or is ambiguous, we will simply
+use the terms I<taxon> or I<taxa>.
 
 Each distinct taxonomic name/rank combination represented in the database has
 a unique entry in the C<authorities> table, and a primary key (taxon_no)
 assigned to it in that table.  In the documentation for this database, we use
-the term I<spelling> to represent the idea "distinct taxonomic name/rank
-combination".  So, for example, "Rhizopodea" as a class and "Rhizopodea" as a
-phylum are considered to be distinct I<spellings> of the same I<taxonomic
-concept>.  In this case, the taxon's rank was changed at some point in the
-past.  It is also the case that "Cyrnaonyx" and "Cyraonyx" are distinct
-spellings of the same taxonomic concept, but in this case one was used at some
-point as a misspelling of the other.  Each spelling is a member of exactly one
-taxonomic concept.  I<Note, however, that the taxonomic namespaces for
-plants/fungi (ICN) and animals (ICZN) are not distinct.  In order to specify a
-taxon uniquely by name, you must also specify a namespace>.
+the term I<taxonomic name> or (alternately I<spelling>) to represent the idea
+"distinct taxonomic name/rank combination".  So, for example, "Rhizopodea" as
+a class and "Rhizopodea" as a phylum are considered to be distinct spellings
+of the same taxonomic concept.  In this case, the taxon's rank was changed at
+some point in the past.  It is also the case that "Cyrnaonyx" and "Cyraonyx"
+are distinct spellings of the same taxonomic concept, but in this case one was
+used at some point as a misspelling of the other.  Each taxonomic name
+(spelling) is a member of exactly one taxonomic concept.  I<Note, however,
+that the taxonomic namespaces for plants/fungi (ICN) and animals (ICZN) are
+not distinct.  In order to specify a taxon uniquely by name, you must also
+specify a namespace or a kingdom>.
 
 A taxonomic hierarchy is built as follows.  For each taxonomic concept in the
 database, we algorithmically select a "classification opinion" from among the
@@ -79,11 +87,12 @@ to arrange the taxa into a collection of trees.  Note that the taxa do not
 necessarily form a single tree, because there are a number of fossil taxa for
 which classification opinions have not yet been entered into the database.
 Different taxonomies may use different rules for selecting classification
-opinions, or may consider different subsets of the C<opinions> table.
+opinions, or may consider different subsets of the C<authorities> and
+C<opinions> tables.  This process will be described in more detail below.
 
 =head2 Organization of taxa
 
-The C<authorities> table contains one row for each distinct spelling
+The C<authorities> table contains one row for each distinct taxonomic name
 (name/rank combination) with C<taxon_no> as primary key.  The C<orig_no> field
 associates each row in C<authorities> with the row representing the original
 spelling of its taxonomic concept.  Thus, the distinct values of C<orig_no>
@@ -91,7 +100,7 @@ represent the distinct taxonomic concepts known to the database.  The
 C<taxon_trees> table contains one row for each taxonomic concept, with
 C<orig_no> as primary key.
 
-The taxonomic spellings and concepts are organized according to four separate
+The taxonomic names and concepts are organized according to four separate
 relations, based on the data in C<authorities> and C<opinions>.  These
 relations are discussed below; the name listed in parentheses after each one
 is the name of the field in which records the relation.
@@ -100,9 +109,9 @@ is the name of the field in which records the relation.
 
 =item Taxonomic concept (orig_no)
 
-This relation groups together all of the spellings (name/rank combinations)
-that represent the same taxonomic concept.  It is recorded in the
-C<authorities> table.  Each row that represents an original spelling has
+This relation groups together all of the taxonomic names (name/rank
+combinations) that represent the same taxonomic concept.  It is recorded in
+the C<authorities> table.  Each row that represents an original spelling has
 C<taxon_no = orig_no>.  When a new spelling for a taxon is encountered, or an
 opinion is entered which changes its rank, a new row is created in
 C<authorities> with the same C<orig_no> but different C<taxon_no>.
@@ -111,62 +120,61 @@ Note that this relation can be taken as an equivalence relation, whereas two
 spellings have the same C<orig_no> if and only if they represent the same
 taxonomic concept.
 
-=item Accepted spelling (spelling_no)
+=item Accepted name (spelling_no)
 
 This relation selects from each taxonomic concept the currently accepted
-spelling (in other words, the currently accepted name/rank combination).  It
+name (in other words, the currently accepted name/rank combination).  It
 is stored in C<taxon_trees>.  The value of C<spelling_no> for any concept is
-the C<taxon_no> corresponding to the accpeted spelling.  The auxiliary field
+the C<taxon_no> corresponding to the accepted name.  The auxiliary field
 C<trad_no> records nearly the same information, but with traditional taxon
-ranks preferred over unranked clades.
+ranks given when possible instead of 'unranked clade'.
 
 =item Synonymy (synonym_no)
 
-This relation groups together all of the taxonomic concepts which are
-considered to be synonyms of each other.  Two taxa are considered to be
-synonymous if one is a subjective or objective synonym of the other, or was
-replaced by the other, or if one is an invalid subgroup or nomen dubium, nomen
-vanum or nomen nudum inside the other.
+This relation selects for each taxonomic concept the taxonomic concept which
+is its most senior synonym.  Two taxa are considered to be synonymous if one
+is a subjective or objective synonym of the other, or was replaced by the
+other, or if one is an invalid subgroup or nomen dubium, nomen vanum or nomen
+nudum inside the other.
 
-The value of C<synonym_no> is the C<orig_no> of the most senior synonym for
-the given concept group.  This means that all concepts which are synonyms of
-each other will have the same C<synonym_no>, but different C<orig_no>, and the
-senior synonym will have C<synonym_no = orig_no>.  This relation can also be
-taken as an equivalence relation, whereas two concepts have the same
-C<synonym_no> if and only if they represent the same group of organisms.  The
-set of taxonomic concepts that share a particular value of C<synonym_no> are
-called a synonym group.
+The value of C<synonym_no> is the C<orig_no> value of the most senior synonym
+for the given concept group.  This means that all concepts which are synonyms
+of each other will have the same C<synonym_no> but different C<orig_no>, and
+the senior synonym will have C<synonym_no = orig_no>.  This relation can thus
+be taken as an equivalence relation, whereas two concepts have the same
+C<synonym_no> if and only if they are synonymous.  The set of taxonomic
+concepts that share a particular value of C<synonym_no> are called a synonym
+group.
 
 =item Hierarchy (parent_no)
 
 This relation associates lower with higher taxa.  It forms a collection of
-trees, because (as noted above) there are a number of fossil taxa for which no
-classifying opinion has yet been entered.  Any taxonomic concept for which no
-opinion has been entered will have C<parent_no = 0>.
+trees, because (as noted above) there are a number of higher fossil taxa for
+which no classifying opinion has yet been entered.  Any taxonomic concept for
+which no opinion has been entered will have C<parent_no = 0>.
 
 All concepts which are synonyms of each other will have the same C<parent_no>
-value, and the C<parent_no> (if not 0) will be the one associated with the
-classification opinion on the most senior synonym.  Thus, it is really a
-relation on synonym groups.  In computing the hierarchy, we consider all
-opinions on a synonym group together.
+value.  In computing the hierarchy, we consider all opinions on a synonym
+group together.
 
-This relation, like the previous ones, can be taken as
-an equivalence relation, whereas two taxonomic concepts have the same
-C<parent_no> if and only if they are siblings of each other.
+This relation, like the previous ones, can be taken as an equivalence
+relation, whereas two taxonomic concepts have the same C<parent_no> if and
+only if they are siblings of each other.
 
 =back
 
 =head2 Opinions
 
-In addition to the fields listed above, each entry in C<taxon_trees> (or in
-any of the alternative hierarchy tables) also has an C<opinion_no> field.
-This field points to the classification opinion that has been algorithmically
-selected from the available opinions for that taxon.
+In addition to the fields listed above, each entry in C<taxon_trees> (or any
+alternative hierarchy tables that may be defined) also has an C<opinion_no>
+field.  This field points to the classification opinion that has been
+algorithmically selected from the available opinions for that taxon.
 
 For a junior synonym, the value of opinion_no will be the opinion which
 specifies its immediately senior synonym.  There may exist synonym chains in
 the database, where A is a junior synonym of B which is a junior synonym of C.
-In any case, C<synonym_no> should always point to the most senior synonym.
+In any case, the C<synonym_no> field should always point to the most senior
+synonym.
 
 For all taxonomic concepts which are not junior synonyms, the value of
 C<opinion_no> will be the opinion which specifies its immediately higher
@@ -176,7 +184,7 @@ C<parent_no> will always point to the original spelling of the parent taxon.
 
 =head2 Tree structure
 
-In order to facilitate tree printouts and logical operations on the taxa
+In order to facilitate tree printouts and logical operations on the taxonomic
 hierarchy, the entries in C<taxon_trees> are sequenced via preorder tree
 traversal.  This is recorded in the fields C<lft> and C<rgt>.  The C<lft>
 field stores the traversal sequence, and the C<rgt> field of a given entry
@@ -192,18 +200,58 @@ more information, see L<http://en.wikipedia.org/wiki/Nested_set_model>.
 
 =head2 Additional Tables
 
-One auxiliary table is needed in order to properly compute the relations
-described above.  This table, called C<suppress_opinions>, is needed because
-the synonymy and hierarchy relations must be structured as collections of
-trees.  Unfortunately, the set of opinions stored in the database may generate
-cycles in one or both of these relations.  For example, there will be cases in
-which the best opinion on taxon A states that it is a subjective synonym of B,
-while the best opinion on taxon B states that it is a subjective synonym of A.
-In order to resolve this, the algorithm that computes the synonymy and
-hierarchy relations breaks each cycle by choosing the best (most recent and
-reliable) opinion from those that define the cycle and suppressing any opinion
-that contradicts the chosen one.  The C<suppress_opinions> table records which
-opinions are so suppressed.
+Several auxiliary tables are needed in order to implement the necessary
+functionality for this module.  The tables described here are defined by
+default to work with C<taxon_trees>.  If additional hierarchy tables are later
+added, then additional instances of each of these tables must be defined as
+well.
+
+You will probably not need to refer to these tables directly, but they are
+used by the methods defined for this class.
+
+=over 4
+
+=item taxon_search
+
+This table maps strings representing taxonomic names to the corresponding
+C<taxon_no> values.  It is needed because a simple search on the C<taxon_name>
+field of the C<authorities> table is not sufficiently general.  Using this
+table, one can efficiently search for a species name if the full genus name is
+not known, or if the known genus is actually a junior synonym of the currently
+accepted genus.  Higher taxa can also be found through this table, for full
+generality.
+
+=item taxon_names
+
+This table records additional information about each individual taxonomic
+name, including its spelling status (i.e. whether it is a misspelling, rank
+change, etc.) and the opinion from which this status is taken.
+
+=item taxon_attrs
+
+This table is used to compute hierarchically derived attributes of taxonomic
+concepts, such as mass estimates.
+
+=item suppress_opinions
+
+You will probably never need to refer to this table, but it is included here
+for completeness.  This table is needed because the synonymy and hierarchy
+relations must be structured as collections of trees.  Unfortunately, the set
+of opinions stored in the database may generate cycles in one or both of these
+relations.  For example, there will be cases in which the best opinion on
+taxon A states that it is a subjective synonym of B, while the best opinion on
+taxon B states that it is a subjective synonym of A.  In order to resolve
+this, the algorithm that computes the synonymy and hierarchy relations breaks
+each cycle by choosing the best (most recent and reliable) opinion from those
+that define the cycle and suppressing any opinion that contradicts the chosen
+one.  The C<suppress_opinions> table records which opinions are so suppressed.
+
+=back
+
+=head2 Algorithm
+
+The algorithm for building or rebuilding a taxonomic hierarchy is given in the
+documentation for C<TaxonTrees.pm>.
 
 =cut
 
@@ -220,12 +268,12 @@ handle.  Here are some examples:
     my $taxon_rank = $base_taxon->{taxon_rank};
     my $reference = Reference->new($dbt, $base_taxon->{reference_no});
     
-    my @list = $taxonomy->getRelatedTaxa($base_taxon, 'children', { id_only => 1 });
+    my @list = $taxonomy->getTaxa($base_taxon, 'children', { id_only => 1 });
     my $child_id_list = '(' . join(',', @list) . ')';
     
     my $sth = $dbh->prepare("SELECT some_fields FROM some_table WHERE taxon_no IN $child_id_list");
     
-    my @lineage = $taxonomy->getRelatedTaxa($base_taxon, 'parents');
+    my @lineage = $taxonomy->getTaxa($base_taxon, 'parents');
     
     my ($id_table) = $taxonomy->getTaxonIdTable($base_taxon, 'all_children');
     
@@ -258,9 +306,11 @@ sub new {
 		 tree_table => $table_name,
 		 auth_table => $TaxonTrees::AUTH_TABLE,
 		 attrs_table => $TaxonTrees::ATTRS_TABLE{$table_name},
+		 name_table => $TaxonTrees::NAME_TABLE{$table_name},
 		 search_table => $TaxonTrees::SEARCH_TABLE{$table_name},
 		 opinion_table => $TaxonTrees::OPINION_TABLE{$table_name},
-		 opinion_cache => $TaxonTrees::OPINION_CACHE{$table_name} };
+		 opinion_cache => $TaxonTrees::OPINION_CACHE{$table_name},
+		 ancestry_procedure => $TaxonTrees::ANCESTRY_PROC{$table_name} };
     
     bless $self, $class;
     
@@ -269,11 +319,11 @@ sub new {
 
 
 # The following expressions list the various sets of fields that will be
-# returned as part of a Taxon object:
+# returned as part of a Taxon or Opinion object:
 
 # The "basic" fields are always returned.
 
-our ($AUTH_BASIC_FIELDS) = "a.taxon_name, a.taxon_no, a.taxon_rank, a.common_name, a.extant, a.orig_no, o.status, a.reference_no";
+our ($AUTH_BASIC_FIELDS) = "a.taxon_name, a.taxon_no, a.taxon_rank, a.common_name, a.extant, a.orig_no, o.status, o.parent_no as classification_no, a.reference_no";
 
 our ($OPINION_BASIC_FIELDS) = "o.opinion_no, o.reference_no, o.status, o.phylogenetic_status, o.spelling_reason, o.child_no, o.child_spelling_no, o.parent_no, o.parent_spelling_no";
 
@@ -319,6 +369,13 @@ our ($CHILD_FIELDS) = ", ca.taxon_name as child_name, ca.taxon_rank as child_ran
 
 our ($KINGDOM_FIELDS) = ", t.kingdom";
 
+# The "ext2" field is returned if we are asked for 'ext2'.  This is an
+# 'extant' field derived by propagating 'yes' values up the tree and 'no'
+# values down it.  The values are 1 for extant, 0 for not extant, undefined if
+# not recorded.
+
+our ($EXT2_FIELDS) = ", v.extant as ext2";
+
 # The "type" field is returned if we are asked for 'tt'.
 
 our ($TT_FIELDS) = ", tta.taxon_no as type_taxon_no, tta.taxon_name as type_taxon_name, tta.taxon_rank as type_taxon_rank, a.type_locality";
@@ -350,6 +407,10 @@ our ($OPINION_MODSHORT_FIELDS) = ", DATE_FORMAT(o.modified,'%m/%e/%Y') modified_
 # The "comment" fields are returned if we are asked for 'comments'.
 
 our ($COMMENT_FIELDS) = ", a.comments";
+
+# The "size" fields are returned if we are asked for 'size'.
+
+our ($SIZE_FIELDS) = ", (t.rgt-t.lft+1) as size";
 
 # The following hash is used by &getTaxonIdTable
 
@@ -473,7 +534,7 @@ option is ignored.
 If this option is specified, instead of a list of Taxon objects the return
 value will be a hashref whose keys are taxon_nos and whose values are Taxon
 objects.  This option is ignored if 'id' is also specified.  The method
-C<getRelatedTaxa> adds a special value for this option, refer to the
+C<getTaxa> adds a special value for this option, refer to the
 documentation below for details.
 
 =back
@@ -506,6 +567,11 @@ wildcards of the % type.
     @taxa = $taxonomy->getTaxaByName('Ficus', { kingdom => 'metazoa' });
     @taxa = $taxonomy->getTaxaByName('F. bernardi');
 
+This method uses the C<taxon_search> table described above, so it provides a
+very general match for species names.  Species can be found under both their
+genus and their subgenus if any, as well as under any synonymous genera or
+subgenera.
+
 If the option 'id' is specified, returns a list of taxon identifiers
 instead.  Options include those specified above, plus:
 
@@ -530,13 +596,13 @@ taxa are returned.  If 'all', all matching taxa are returned.  Defaults to
 
 =item exact
 
-This item is only relevant for genus and below.  If specified, the genus
-portion of the name is not matched against subgenera.
+This item is only relevant for taxa at or below the genus level.  If specified,
+only an exactly matching name will be returned.
 
 =item common
 
-If specified, the name is matched against the common name of teach taxon as
-well as the scientific name.
+If specified, returns taxa whose common name matches the argument as well as
+those whose scientific name matches it.
 
 =item order
 
@@ -796,11 +862,6 @@ sub getTaxaByName {
     if ( defined $options->{fields} and not $options->{id} )
     {
 	($query_fields, $extra_tables) = $self->generateQueryFields($options->{fields});
-    }
-    
-    if ( defined $options->{order} and $options->{order} =~ /^size/ )
-    {
-	$query_fields .= ", $LFT_FIELDS" unless $query_fields =~ /t\.lft/;
     }
     
     my $order_expr = '';
@@ -1846,9 +1907,9 @@ sub getClassificationIds {
 
 =head3 getRelatedTaxon ( base_taxon, relationship, options )
 
-Returns a Taxon object related in the specified way to the specified base
-taxon.  The base taxon can be specified either by a Taxon object or a taxon
-number.  The returned object might be the same as the one passed in, for
+Returns a single Taxon object related in the specified way to the specified
+base taxon.  The base taxon can be specified either by a Taxon object or a
+taxon number.  The returned object might be the same as the one passed in, for
 example if the accepted spelling is requested and the object passed in is
 already the accepted spelling for its taxonomic concept.  Possible
 relationships are:
@@ -2124,9 +2185,11 @@ sub getRelatedTaxonId {
 }
 
 
-=head3 getRelatedTaxa ( base_taxa, relationship, options )
+=head3 getTaxa ( relationship, base_taxa, options )
 
-Returns a list of Taxon objects having the specified relationship to the
+This is the most flexible and useful of all of the methods in this class.
+
+It returns a list of Taxon objects having the specified relationship to the
 specified base taxon or taxa.  If no matching taxa are found, returns an empty
 list.  The parameter C<base_taxa> may be either a taxon number or a Taxon
 object, an array of either of these, or a hash whose keys are taxon numbers.
@@ -2136,8 +2199,11 @@ this class, the field C<base_no> will be included where appropriate to
 indicate which of the base taxa each returned taxon is related to.
 
 Other tables can be joined to the query, by means of the options
-'join_tables', 'extra_fields' and 'extra_filters'.  This is perhaps the most
-flexible and useful of the methods provided by this class.
+'join_tables', 'extra_fields' and 'extra_filters'.
+
+If the option C<id> is specified, it returns instead a list of integer taxon
+ids.  If the option C<count> is specified, it returns instead a count of the
+number of matching taxa.
 
 Possible relationships are:
 
@@ -2149,25 +2215,34 @@ Returns a list of objects representing the specified base taxa.
 
 =item spellings
 
-Returns a list of objects representing the various spellings of the base
-taxa.
+Returns a list of objects representing the various spellings of the specified
+base taxa.  Names which are not represented in any opinion are ignored as
+spurious.
 
 =item current
 
-Returns a list of objects representing the current spellings of the base taxa.
+Returns a list of objects representing the currently accepted spellings of the
+specified base taxa.
 
 =item originals
 
-Returns a list of objects representing the original spellings of the base
-taxa.
+Returns a list of objects representing the original spellings of the specified
+base taxa.
 
 =item synonyms
 
-Returns a list of objects representing the various synonyms of the base taxa.
+Returns a list of objects representing the various synonyms (junior and senior) of the
+base taxa.
+
+=item juniors
+
+Returns a list of objects representing the junior synonyms of the base taxa.
 
 =item seniors
 
-Returns a list of objects representing the senior synonyms of the base taxa.
+Returns a list of objects representing the most senior synonyms of the base
+taxa.  There is currently no way to select all more  senior synonyms, but that
+could be added under 'all_seniors' if necessary.
 
 =item classifications
 
@@ -2181,7 +2256,8 @@ Returns a list of objects representing the immediate parents of the base taxa.
 =item all_parents
 
 Returns a list of objects representing all taxa that contain any of the base
-taxa, from the kingdom level on down.
+taxa, all the way up to kingdom level.  Note: this will only return the proper
+results if all of the base taxa fall into one kingdom.
 
 =item children
 
@@ -2195,15 +2271,23 @@ taxon or taxa (all of the taxa contained within the given taxa).
 
 =item all_taxa
 
-Returns a list of all taxa in the database.  This keyword would typically be
-used rarely, as it will return several tens of megabytes of data unless other
-constraining options (i.e. pubyr, author, reference_no) are included as well.
+Returns a list of all taxa in the database, filtered by the specified options.
+This keyword should be used carefully, as it will return several tens of
+megabytes of data unless other constraining options (i.e. pubyr, author,
+reference_no) are included as well.
 
 =back
 
 Possible options are:
 
 =over 4 
+
+=item count
+
+If this option is specified, the return value will be a single integer
+representing the number of matching taxa.  If filtering options such as
+'rank', etc. are avoided, and if 'status' is given as 'all', then this count
+is computed from the 'lft' and 'rgt' fields, which is extremely efficient.
 
 =item rank
 
@@ -2292,7 +2376,9 @@ for 'synonym' and 'spelling'.
 
 If specified, then the indicated taxa and all of their children are excluded
 from the returned list.  This option is only valid for relationships
-'children', 'all_children' and 'all_taxa'.
+'children', 'all_children' and 'all_taxa'.  The value of this option can be
+either a single taxon_no value or a comma-separated list, a taxon object, or a
+listref.
 
 =item exclude_self
 
@@ -2307,13 +2393,41 @@ in any of the returned objects, because it is possible that the same taxon
 could have the same relationship (i.e. senior synonym) to more than one member
 of the base taxa.
 
+=item order
+
+If specified, the list of names is ordered by the specified criteria.  If
+'.desc' is appended to the value, they are ranked in descending order.
+Otherwise, they are ranked in ascending order.  Possible values include:
+
+=over 4
+
+=item name
+
+Taxa are ordered alphabetically by name.
+
+=item size
+
+Taxa are ordered by size (number of descendants).
+
+=item lft
+
+Taxa are ordered by tree sequence number (which guarantees parents before children).
+
+=back
+
+If not specified, the order of the returned taxa depends upon the specified
+relationship.  For 'spellings', the accepted name will be returned first.  For
+'synonyms', the most senior synonym will be returned first.  For the rest, the
+taxa will be returned in tree sequence order (which guarantees parents before
+children).
+
 =item hash
 
 If this option is specified, then instead of a list of Taxon objects we get
 back a hash whose keys are taxon_nos and whose values are the Taxon objects.
-If the value of this option is 'base', then the keys are the base_no values.
-Otherwise, the keys are taxon_no values as with the other methods in this
-class.
+If the value of this option is 'base', then the keys are the taxon_no values
+of the base taxa.  Otherwise, the keys are taxon_no values as with the other
+methods in this class.
 
 =item select
 
@@ -2339,6 +2453,12 @@ Causes this routine to return all matching spellings, or all spellings of the
 matching taxonomic concepts.
 
 =back
+
+=item seniors
+
+This option is only relevant for relationships 'parents' and 'all_parents'.
+If it is specified, then the most senior synonym of each parent taxon is
+returned instead of the actual parent taxa.
 
 =item join_tables
 
@@ -2367,7 +2487,7 @@ to the WHERE clause in the resulting query.  For example: "qe.composition1 =
 
 =cut
  
-sub getRelatedTaxa {
+sub getTaxa {
     
     my ($self, $base_taxa, $parameter, $options) = @_;
     
@@ -2434,6 +2554,8 @@ sub getRelatedTaxa {
 	$base_no = $base_taxa->{taxon_no} if defined $base_taxa->{taxon_no};
 	$base_no = $base_taxa->{orig_no} if defined $base_taxa->{orig_no}
 	    and not $base_no > 0;
+	
+	$base_nos{$base_no} = 1 if $base_no > 0;
     }
     
     elsif ( defined $base_taxa && $base_taxa =~ /^[0-9]+$/ )
@@ -2492,14 +2614,9 @@ sub getRelatedTaxa {
     # We always include the necessary table to retrieve the parent taxon if
     # the relationship is 'all_parents'.
     
-    if ( defined $options->{fields} and not $options->{id} )
+    if ( defined $options->{fields} and not $options->{id} and not $options->{count} )
     {
 	($query_fields, $extra_tables) = $self->generateQueryFields($options->{fields});
-    }
-    
-    if ( defined $options->{order} and $options->{order} =~ /^size/ )
-    {
-	$query_fields .= ", $LFT_FIELDS" unless $query_fields =~ /t\.lft/;
     }
     
     if ( $rel eq 'all_parents' )
@@ -2510,6 +2627,7 @@ sub getRelatedTaxa {
     # Set filter clauses based on the specified options
     
     my (@filter_list, @param_list);
+    my ($quick_count) = 1;
     
     if ( $rel ne 'all_parents' and $rel ne 'all_taxa' and $base_no > 0 )
     {
@@ -2525,13 +2643,16 @@ sub getRelatedTaxa {
     if ( $status eq 'valid' )
     {
 	push @filter_list, "o.status = 'belongs to'";
+	$quick_count = 0;
     }
     
     elsif ( $status eq 'synonyms' ) {
 	push @filter_list, "o.status in ('belongs to', 'subjective synonym of', 'objective synonym of')";
+	$quick_count = 0;
     }
     elsif ( $status eq 'invalid' ) {
 	push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
+	$quick_count = 0;
     }
     elsif ( $status eq 'all' or $status eq 'any' ) {
 	# no filter needed
@@ -2573,17 +2694,20 @@ sub getRelatedTaxa {
 	my @include_list = ($base_no > 0 ? $base_no : keys(%base_nos));
 	
 	push @filter_list, $self->generateExcludeFilter('a', $options->{exclude}, \@include_list );
+	$quick_count = 0;
     }
     
     if ( defined $options->{rank} )
     {
 	push @filter_list, $self->generateRankFilter('a', $options->{rank});
+	$quick_count = 0;
     }
     
     if ( defined $options->{author} )
     {
 	push @filter_list, $self->generateAuthorFilter('a', $options->{author});
 	$extra_tables->{ref} = 1;
+	$quick_count = 0;
     }
     
     if ( defined $options->{pubyr} )
@@ -2591,36 +2715,42 @@ sub getRelatedTaxa {
 	push @filter_list, $self->generatePubyrFilter('a', $options->{pubyr},
 						      $options->{pubyr_rel});
 	$extra_tables->{ref} = 1;
+	$quick_count = 0;
     }
     
     if ( defined $options->{created} )
     {
 	push @filter_list, $self->generateDateFilter('a.created', $options->{created},
 						     $options->{created_rel});
+	$quick_count = 0;
     }
     
     if ( defined $options->{modified} )
     {
 	push @filter_list, $self->generateDateFilter('a.modified', $options->{modified},
 						     $options->{modified_rel});
+	$quick_count = 0;
     }
     
     if ( defined $options->{reference_no} )
     {
 	push @filter_list, $self->generateRefnoFilter('a', $options->{reference_no});
+	$quick_count = 0;
     }
     
     if ( defined $options->{person_no} )
     {
 	push @filter_list, $self->generatePersonFilter('a', $options->{person_no},
 						       $options->{person_rel});
+	$quick_count = 0;
     }
     
     # Select the order in which the results will be returned
     
     my $order_expr = '';
+    my $group_expr = '';
     
-    if ( defined $options->{order} )
+    if ( defined $options->{order} and not $options->{count} )
     {
 	my $direction = $options->{order} =~ /\.desc$/ ? 'DESC' : 'ASC';
 		
@@ -2634,9 +2764,28 @@ sub getRelatedTaxa {
 	    $order_expr = "ORDER BY a.taxon_name $direction";
 	}
 	
+	elsif ( $options->{order} =~ /^lft/ )
+	{
+	    $order_expr = "ORDER BY t.lft $direction";
+	}
+	
 	else
 	{
 	    croak "invalid value '$options->{order}' for option 'order'";
+	}
+    }
+    
+    # Add the appropriate grouping expression if necessary
+    
+    if ( $options->{distinct} )
+    {
+	if ( $select eq 'all' or $rel eq 'spellings' )
+	{
+	    $group_expr = 'GROUP BY a.taxon_no';
+	}
+	else
+	{
+	    $group_expr = 'GROUP BY a.orig_no';
 	}
     }
     
@@ -2652,6 +2801,7 @@ sub getRelatedTaxa {
 	 $options->{extra_filters} ne '' )
     {
 	push @filter_list, $options->{extra_filters};
+	$quick_count = 0;
     }
     
     # Add in 'base_no' if appropriate
@@ -2678,10 +2828,10 @@ sub getRelatedTaxa {
 	$extra_joins .= $join_tables;
     }
     
-    # Now, get ready to do the query.  If we were asked for just the taxon_nos, do
-    # that.
+    # Now, get ready to do the query.  If we were asked for just the count, do
+    # that.  If we were asked for just the taxon_nos, do that.
     
-    if ( $options->{id} )
+    if ( $options->{count} or $options->{id} )
     {
 	my $plist = \@param_list;
 	
@@ -2690,8 +2840,11 @@ sub getRelatedTaxa {
 	    $plist = [keys %base_nos];
 	}
 	
-	return $self->getRelatedTaxaIds($plist, $rel, $select, $filter_expr, $order_expr, 
-					$extra_joins);
+	return $self->getTaxaCount($plist, $rel, $quick_count, $select, $filter_expr,
+				   $extra_joins, $options) if $options->{count};
+	
+	return $self->getTaxaIds($plist, $rel, $select, $filter_expr, $order_expr, 
+				 $options->{seniors}, $extra_joins)
     }
     
     # Otherwise, prepare to execute the relevant SQL query
@@ -2699,13 +2852,15 @@ sub getRelatedTaxa {
     my $dbh = $self->{dbh};
     my $tree_table = $self->{tree_table};
     my $auth_table = $self->{auth_table};
+    my $name_table = $self->{name_table};
     my $opinion_table = $self->{opinion_table};
+    my $compute_ancestry = $self->{ancestry_procedure};
     
     my ($result_list, $base_list);
     
     # For parameter 'self', we just select the indicated taxa.  The 'distinct'
     # option is irrelevant here, since only one row is selected for each
-    # distinct taxon in the base set.
+    # distinct taxonomic name in the base set.
     
     if ( $rel eq 'self' )
     {
@@ -2719,23 +2874,25 @@ sub getRelatedTaxa {
 		$filter_expr";
     }
     
-    # For parameter 'spellings', make sure to return the currently accepted
-    # spelling(s) first.
+    # For parameter 'spellings', we need to look at the name table to make sure
+    # that we only report spellings that are referenced by child_spelling_no
+    # in some opinion.  Any others are spurious and can be ignored.  We also
+    # need to make sure to return the currently accepted spelling(s) first.
     
     elsif ( $rel eq 'spellings' )
     {
-	$order_expr = "ORDER BY if(a.taxon_no = t.${select}_no, 0, 1)"
-	    if $order_expr eq '';
+	$order_expr = "ORDER BY if(n.taxon_no = t.${select}_no, 0, 1)"
+	    unless $order_expr;
 	
-	$order_expr = "GROUP BY a.taxon_no $order_expr" if $options->{distinct};
-
 	$SQL_STRING = "
-		SELECT $query_fields
-		FROM $auth_table as a2 JOIN $auth_table as a using (orig_no)
-			JOIN $tree_table as t using (orig_no)
+		SELECT $query_fields, n.spelling_reason
+		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table as o using (opinion_no)
+			JOIN $name_table as n on n.orig_no = a2.orig_no
+			JOIN $auth_table as a on a.taxon_no = n.taxon_no
 			$extra_joins
 		$filter_expr
+		$group_expr
 		$order_expr";
     }
     
@@ -2743,16 +2900,15 @@ sub getRelatedTaxa {
     
     elsif ( $rel eq 'originals' )
     {
-	$order_expr = "GROUP BY a.taxon_no $order_expr" if $options->{distinct};
-	
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $query_fields, n.spelling_reason
 		FROM $auth_table as a2 JOIN $auth_table as a on a.taxon_no = a2.orig_no
-			JOIN $tree_table as t on a2.orig_no = t.orig_no
+			JOIN $tree_table as t on t.orig_no = a2.orig_no
 			LEFT JOIN $opinion_table as o using (opinion_no)
+			LEFT JOIN $name_table as n on n.taxon_no = a2.orig_no
 			$extra_joins
 		$filter_expr
-		GROUP BY a.taxon_no
+		$group_expr
 		$order_expr";
     }
     
@@ -2760,8 +2916,6 @@ sub getRelatedTaxa {
     
     elsif ( $rel eq 'current' )
     {
-	$order_expr = "GROUP BY a.taxon_no $order_expr" if $options->{distinct};
-	
 	$SQL_STRING = "
 		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
@@ -2769,69 +2923,82 @@ sub getRelatedTaxa {
 			LEFT JOIN $opinion_table as o using (opinion_no)
 			$extra_joins
 		$filter_expr
-		GROUP BY a.taxon_no
+		$group_expr
 		$order_expr";
     }
     
-    # For parameter 'synonyms', make sure to return the most senior synonym(s)
-    # first.
+    # For parameter 'synonyms', we return the most senior synonym(s) first by
+    # default.  For 'juniors' we will need some post-processing below in order
+    # to separate junior synonyms from senior synonyms.
     
-    elsif ( $rel eq 'synonyms' )
+    elsif ( $rel eq 'synonyms' or $rel eq 'juniors' or $rel eq 'seniors' )
     {
 	$order_expr = 'ORDER BY if(a.orig_no = t.synonym_no, 0, 1)'
-	    if $order_expr eq '';
+	    if $rel eq 'synonyms' and not $order_expr;
 	
-	$order_expr = "GROUP BY a.taxon_no $order_expr" if $options->{distinct};
+	my $synonym_select = $rel eq 'seniors' ? 'orig' : 'synonym';
 	
-	$SQL_STRING = "
-		SELECT $query_fields
+	if ( $select eq 'all' )
+	{
+	    $SQL_STRING = "
+		SELECT $query_fields, n.spelling_reason, if(a.orig_no = a2.orig_no, 1, 0) as is_base
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
-			JOIN $tree_table as t using (synonym_no)
+			JOIN $tree_table as t on t.${synonym_select}_no = t2.synonym_no
+			JOIN $name_table as n on n.orig_no = t.orig_no
+			JOIN $auth_table as a on a.taxon_no = n.taxon_no
+			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr
+		$group_expr
+		$order_expr";
+	}
+	else
+	{
+	    $SQL_STRING = "
+		SELECT $query_fields, if(a.orig_no = a2.orig_no, 1, 0) as is_base
+		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
+			JOIN $tree_table as t on t.${synonym_select}_no = t2.synonym_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
+		$group_expr
 		$order_expr";
-    }
-    
-    # For parameter 'seniors', we select just the senior synonyms.
-    
-    elsif ( $rel eq 'seniors' )
-    {
-	$order_expr = "GROUP BY a.taxon_no $order_expr" if $options->{distinct};
-	
-	$SQL_STRING = "
-		SELECT $query_fields
-		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
-			JOIN $tree_table as t on t.orig_no = t2.synonym_no
-			JOIN $auth_table as a on a.taxon_no = t.${select}_no
-			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
-			$extra_joins
-		$filter_expr
-		$order_expr";
+	}
     }
     
     # For parameter 'all_taxa', order the results by tree sequence unless
     # otherwise specified.  We need a slightly different query for
-    # select='all' than for the others.  The 'distinct' option is irrelevant
-    # here, because only one row will be selected for each distinct taxon in
-    # all cases.
+    # select='all' than for the others.
     
     elsif ( $rel eq 'all_taxa' )
     {
-	my $join_expr = $select eq 'all' ? "using (orig_no)" :
-	    "on a.taxon_no = t.${select}_no";
+	$order_expr = 'ORDER BY t.lft' unless $order_expr;
 	
-	$order_expr = 'ORDER BY t.lft'
-	    if $order_expr eq '';
-	
-	$SQL_STRING = "
-		SELECT $query_fields
-		FROM $auth_table as a JOIN $tree_table as t $join_expr
+	if ( $select eq 'all' )
+	{
+	    $SQL_STRING = "
+		SELECT $query_fields, n.spelling_reason
+		FROM $auth_table as a JOIN $name_table as n using (taxon_no)
+			JOIN $tree_table as t on t.orig_no = n.orig_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
+		$group_expr
 		$order_expr";
+	}
+	
+	else
+	{
+	    $SQL_STRING = "
+		SELECT $query_fields
+		FROM $auth_table as a JOIN $tree_table as t on a.taxon_no = t.${select}_no
+			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr
+		$group_expr
+		$order_expr";
+	}
     }
     
     # For parameter 'children' or 'all_children', order the results by tree
@@ -2841,24 +3008,40 @@ sub getRelatedTaxa {
     {
 	my $level_filter = $rel eq 'children' ? 'and t.depth = t2.depth + 1' : '';
 	
-	my $join_expr = $select eq 'all' ? "on a.orig_no = t.orig_no" :
-	    "on a.taxon_no = t.${select}_no";
-	
 	$order_expr = 'ORDER BY t.lft'
 	    if $order_expr eq '';
 	
-	$order_expr = "GROUP BY a.taxon_no $order_expr" if $options->{distinct};
+	if ( $select eq 'all' )
+	{
+	    $SQL_STRING = "
+		SELECT $query_fields, n.spelling_reason
+		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
+			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
+				$level_filter
+			JOIN $name_table as n on n.orig_no = t.orig_no
+			JOIN $auth_table as a on a.taxon_no = n.taxon_no
+			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr
+		$group_expr
+		$order_expr";
+	    
+	}
 	
-	$SQL_STRING = "
+	else
+	{
+	    $SQL_STRING = "
 		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
 				$level_filter
-			JOIN $auth_table as a $join_expr
+			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
+		$group_expr
 		$order_expr";
+	}
     }
     
     # For parameter 'classifications', do a straightforward lookup using a
@@ -2866,8 +3049,6 @@ sub getRelatedTaxa {
     
     elsif ( $rel eq 'classifications' )
     {
-	$order_expr = "GROUP BY a.taxon_no $order_expr" if $options->{distinct};
-	
 	$SQL_STRING = "
 		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
@@ -2877,23 +3058,29 @@ sub getRelatedTaxa {
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
+		$group_expr
 		$order_expr";
     }
-
-    # For parameter 'parents', do a straightforward lookup.
+    
+    # For parameter 'parents', do a straightforward lookup.  We need a
+    # slightly different query if the option 'seniors' was specified.
     
     elsif ( $rel eq 'parents' )
     {
-	$order_expr = "GROUP BY a.taxon_no $order_expr" if $options->{distinct};
-	
+	my $parent_join = $options->{seniors} ?
+	    "JOIN $tree_table as t3 on t3.orig_no = t2.parent_no
+	     JOIN $tree_table as t on t.orig_no = t3.synonym_no" :
+		 "JOIN $tree_table as t on t.orig_no = t2.parent_no";
+
 	$SQL_STRING = "
 		SELECT $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
-			JOIN $tree_table as t on t.orig_no = t2.parent_no
+			$parent_join
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
+		$group_expr
 		$order_expr";
     }
     
@@ -2903,22 +3090,21 @@ sub getRelatedTaxa {
     # be a temporary table, due to a limitation of MySQL, so we need to use a
     # global table with locks :(
     
-    # The 'distinct' option is irrelevant here, because the stored procedure
-    # 'compute_ancestry' generates only one row for each distinct taxon in the
-    # result set.
-    
     elsif ( $rel eq 'all_parents' )
     {
 	my $result;
 	
-	my $extra_locks = $self->generateExtraLocks($extra_tables);
+	# Create a temporary table by which we can extract information from
+	# $ANCESTRY_SCRATCH and convey it past the table locks.
+	
+	$result = $dbh->do("DROP TABLE IF EXISTS ancestry_temp");
+	$result = $dbh->do("CREATE TEMPORARY TABLE ancestry_temp LIKE $ANCESTRY_SCRATCH");
 	
 	$result = $dbh->do("LOCK TABLES $ANCESTRY_SCRATCH WRITE,
 				    $ANCESTRY_SCRATCH as s WRITE,
-				    $auth_table as a READ,
-				    $opinion_table as o READ,
-				    $tree_table as t READ
-				    $extra_locks");
+				    $auth_table as a WRITE,
+				    $tree_table as t WRITE,
+				    ancestry_temp WRITE");
 	
 	# We need a try block to make sure that the table locks are released
 	# no matter what else happens.
@@ -2943,41 +3129,12 @@ sub getRelatedTaxa {
 	    # parents of the taxa in $ANCESTRY_SCRATCH back into it until the
 	    # top of the taxonomic hierarchy is reached.
 	    
-	    $result = $dbh->do("CALL compute_ancestry(0)");
+	    $result = $dbh->do("CALL $compute_ancestry(0)");
 	    
-	    # Finally, we can use this scratch table to get the information we
-	    # need.
+	    # Finally, copy the information out of $ANCESTRY_SCRATCH to a
+	    # temporary table so that we can release the locks.
 	    
-	    $order_expr = 'ORDER BY t.lft'
-		if $order_expr eq '';
-	    
-	    $SQL_STRING = "
-		SELECT $query_fields, pa.taxon_no as parent_taxon_no
-		FROM $tree_table as t JOIN $ANCESTRY_SCRATCH as s on s.orig_no = t.orig_no
-			JOIN $auth_table as a on a.taxon_no = t.${select}_no
-			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
-			$extra_joins
-		$filter_expr
-		GROUP BY t.lft
-		$order_expr";
-
-	    $result_list = $dbh->selectall_arrayref($SQL_STRING, { Slice => {} });
-	    
-	    # If we were asked for a 'base' hash, we also need to include a
-	    # record for each original taxon.
-	    
-	    if ( $options->{hash} eq 'base' )
-	    {
-		my $select_expr = "WHERE a.taxon_no in (" . join(',', keys %base_nos) . ")";
-		
-		$base_list = $dbh->selectall_arrayref("
-		SELECT $query_fields, pa.taxon_no as parent_taxon_no
-		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
-			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
-			$extra_joins
-		$select_expr
-		$order_expr", { Slice => {} });
-	    }
+	    $result = $dbh->do("INSERT INTO ancestry_temp SELECT * FROM $ANCESTRY_SCRATCH");	    
 	}
 	
 	finally {
@@ -2985,48 +3142,145 @@ sub getRelatedTaxa {
 	    die $_[0] if defined $_[0];
 	};
 	
-	# As a final step, we need to go through the list and see if it
-	# includes multiple kingdom-level taxa.  If so, we need to delete
-	# everything up to the last kingdom-level taxon found.
+	# Now use this temporary table to do the actual query.
 	
-	my $last_kingdom = 0;
+	$order_expr = 'ORDER BY t.lft DESC'
+	    if $order_expr eq '';
 	
-	if ( ref $result_list eq 'ARRAY' )
+	my $t_join = $options->{seniors} ?
+	    "$tree_table as t2 JOIN ancestry_temp as s on s.orig_no = t2.orig_no
+	     JOIN $tree_table as t on t.orig_no = t2.synonym_no" :
+		 "$tree_table as t JOIN ancestry_temp as s on s.orig_no = t.orig_no";
+	
+	$SQL_STRING = "
+		SELECT $query_fields, pa.taxon_no as parent_taxon_no
+		FROM $t_join
+			JOIN $auth_table as a on a.taxon_no = t.${select}_no
+			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr
+		GROUP BY t.lft
+		$order_expr";
+	
+	# If we were asked for a 'base' hash, we also need to include a record
+	# for each original taxon.
+	
+	if ( $options->{hash} eq 'base' )
 	{
-	    foreach my $i (0..$#$result_list)
-	    {
-		$last_kingdom = $i if $result_list->[$i]{taxon_rank} eq 'kingdom';
-	    }
+	    my $select_expr = "WHERE a.taxon_no in (" . join(',', keys %base_nos) . ")";
 	    
-	    if ( $last_kingdom > 0 )
-	    {
-		splice @$result_list, 0, $last_kingdom;
-	    }
+	    $base_list = $dbh->selectall_arrayref("
+		SELECT $query_fields, pa.taxon_no as parent_taxon_no
+		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
+			$extra_joins
+		$select_expr
+		$order_expr", { Slice => {} });
 	}
-    }
+   }
     
     else
     {
 	croak "invalid relationship '$parameter'";
     }
     
-    # Except for 'all_parents', in which case the query had to be executed within
-    # the scope of the lock statement, we now execute the indicated query.
+    # Now execute the indicated query!!!
     
     unless ( $rel eq 'all_parents' )
     {
 	$result_list = $dbh->selectall_arrayref($SQL_STRING, { Slice => {} }, @param_list);
     }
-
+    
     # If we didn't get any results, return nothing.
     
-    unless ( ref $result_list eq 'ARRAY' )
+    unless ( ref $result_list eq 'ARRAY' and @$result_list )
     {
 	return;
     }
     
-    # Otherwise, bless all of the objects that we found (if any) into the
-    # proper package.  If the option 'hash' was specified, we construct a hash
+    # For relationships 'juniors' and 'all_parents', we need to do some
+    # post-processing:
+    
+    # For 'juniors', we must separate junior from senior synonyms.
+    
+    if ( $rel eq 'juniors' )
+    {
+	my (%taxon, %is_junior, @juniors);
+	
+	# First build a hash table of orig_no values.  These correspond to the
+	# classification_no values, and thus can be used to follow synonym
+	# chains.
+	
+	foreach my $t (@$result_list)
+	{
+	    $taxon{$t->{orig_no}} = $t;
+	}
+	
+	# Then, for each taxon number, follow its synonym chain.  If we find a
+	# base taxon or known junior synonym, everything in the chain up to that
+	# point is a junior synonym.  If not, everything in the chain up to
+	# that point is a senior synonym.
+	
+	foreach my $t (@$result_list)
+	{
+	    # If we've already decided the status of this taxon, skip to the
+	    # next one.
+	    
+	    next if defined $is_junior{$t->{orig_no}};
+	    
+	    # Otherwise, follow the classification links until we either find
+	    # a base taxon, or a known junior synonym, or the end of the
+	    # chain.
+	    
+	    my @so_far = ($t);
+	    my $i = $taxon{$t->{classification_no}};
+	    
+	    while ( defined $i )
+	    {
+		last if $i->{is_base} or $is_junior{$i->{orig_no}};
+		push @so_far, $i;
+		$i = $taxon{$i->{classification_no}};
+	    }
+	    
+	    # If we aren't at the end of the chain, we must have found a base
+	    # taxon or known junior synonym.  So everything we have
+	    # encountered so far was a junior synonym.  Otherwise, everything
+	    # we have encountered so far is known not to be a junior synonym.
+	    
+	    foreach my $u (@so_far)
+	    {
+		if ( defined $i )
+		{
+		    $is_junior{$u->{orig_no}} = 1;
+		    push @juniors, $u;
+		}
+		else
+		{
+		    $is_junior{$u->{orig_no}} = 0;
+		}
+	    }
+	}
+	
+	$result_list = \@juniors;
+    }
+    
+    # For 'all_parents', we must go through the list and delete everything
+    # after the first kingdom-level taxon found.
+    
+    elsif ( $rel eq 'all_parents' )
+    {
+	foreach my $i (0..$#$result_list)
+	{
+	    if ( $result_list->[$i]{taxon_rank} eq 'kingdom' )
+	    {
+		splice @$result_list, $i;
+		last;
+	    }
+	}
+    }
+    
+    # Now bless all of the objects that we found (if any) into the proper
+    # package.  If the option 'hash' was specified, we construct a hash
     # reference.  Otherwise, we return the list.
     
     my %hashref;
@@ -3077,9 +3331,193 @@ sub getRelatedTaxa {
 }
 
 
-sub getRelatedTaxaIds {
+sub getTaxaCount {
     
-    my ($self, $param_list, $rel, $select, $filter_expr, $order_expr, $extra_joins) = @_;
+    my ($self, $param_list, $rel, $quick_count, $select, $filter_expr, $extra_joins,
+        $options) = @_;
+    
+    # Prepare to fetch the requested information.
+    
+    my $dbh = $self->{dbh};
+    my $tree_table = $self->{tree_table};
+    my $auth_table = $self->{auth_table};
+    my $opinion_table = $self->{opinion_table};
+    
+    # If $quick_count is true, then we don't have any extra filtering to worry
+    # about and can make the count very efficient.
+    
+    # For parameters 'self' and 'spellings' we do a simple count
+    
+    if ( $rel eq 'self' )
+    {
+	$filter_expr =~ s/a2\./a\./g;
+	
+	if ( $quick_count )
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct a.taxon_no)
+		FROM $auth_table as a
+		$filter_expr";
+	}
+	
+	else
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct a.taxon_no)
+		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+			LEFT JOIN $opinion_table as o using (opinion_no)
+			$extra_joins
+		$filter_expr";
+	}
+    }
+    
+    elsif ( $rel eq 'spellings' )
+    {
+	if ( $quick_count )
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct a.taxon_no)
+		FROM $auth_table as a JOIN $auth_table as a2 using (orig_no)
+		$filter_expr";
+	}
+	
+	else
+	{
+	    $SQL_STRING = "
+		SELECT count (distinct a.taxon_no)
+		FROM $auth_table as a2 JOIN $auth_table as a using (orig_no)
+			JOIN $tree_table as t on t.orig_no = a.orig_no
+			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr";
+	}
+    }
+    
+    # The count expression for 'synonyms' differs according to whether
+    # select=all was specified.  If so, we count all synonymous taxonomic
+    # names, otherwise only synonymous concepts.
+    
+    elsif ( $rel eq 'synonyms' )
+    {
+	if ( $select eq 'all' )
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct a.taxon_no)
+		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
+			JOIN $tree_table as t using (synonym_no)
+			JOIN $auth_table as a on a.orig_no = t.orig_no
+		$filter_expr";
+	}
+	
+	elsif ( $quick_count )
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct t.orig_no)
+		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
+			JOIN $tree_table as t using (synonym_no)
+		$filter_expr";
+	}
+	
+	else
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct a.taxon_no)
+		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
+			JOIN $tree_table as t using (synonym_no)
+			JOIN $auth_table as a on a.taxon_no = t.${select}_no
+		$filter_expr";
+	}
+    }
+    
+    # For parameter 'all_taxa', the count expresion also differs depending
+    # upon whether or not select=all is specified.
+    
+    elsif ( $rel eq 'all_taxa' )
+    {
+	if ( $select eq 'all' and $quick_count )
+	{
+	    $SQL_STRING = "SELECT count(*) FROM $auth_table as a";
+	}
+	
+	elsif ( $select eq 'all' )
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct a.taxon_no)
+		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr";
+	}
+	
+	elsif ( $quick_count )
+	{
+	    $SQL_STRING = "SELECT count(*) FROM $tree_table as t";
+	}
+	
+	else
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct t.orig_no)
+		FROM $auth_table as a JOIN $tree_table as t on a.taxon_no = t.${select}_no
+			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr";
+	}
+    }
+    
+    # for parameter 'all_children', we can get a quick count using the lft and
+    # rgt values, as long as $quick_count is true.
+    
+    elsif ( $rel eq 'all_children' )
+    {
+	if ( $quick_count and $select ne 'all' )
+	{
+	    my $exclude = $options->{exclude_self} ? '-1' : '';
+	    
+	    $SQL_STRING = "
+		SELECT sum(rgt-lft$exclude)
+		FROM (SELECT t.rgt, t.lft 
+			FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
+			$filter_expr
+			GROUP BY t.orig_no)";
+	}
+	
+	elsif ( $select eq 'all' )
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct a.taxon_no)
+		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
+			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
+			JOIN $auth_table as a on a.orig_no = t.orig_no
+			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr";
+	}
+	
+	else
+	{
+	    $SQL_STRING = "
+		SELECT count(distinct t.orig_no)
+		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
+			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
+			JOIN $auth_table as a on a.orig_no = t.${select}_no
+			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
+			$extra_joins
+		$filter_expr";
+	}
+    }
+    
+    # Execute the query, and return the result.
+    
+    my ($count) = $dbh->selectrow_array($SQL_STRING, undef, @$param_list);
+    
+    return $count;
+}
+
+
+sub getTaxaIds {
+    
+    my ($self, $param_list, $rel, $select, $filter_expr, $order_expr, $seniors, $extra_joins) = @_;
     
     # Prepare to fetch the requested information.
     
@@ -3236,17 +3674,23 @@ sub getRelatedTaxaIds {
 		$order_expr";
     }
 
-    # For parameter 'parents', do a straightforward lookup.
+    # For parameter 'parents', do a straightforward lookup.  We need a
+    # slightly different query of the option 'seniors' was specified.
     
     elsif ( $rel eq 'parents' )
     {
 	$order_expr = 'ORDER BY t.lft'
 	    unless $order_expr;
 	
+	my $parent_join = $seniors ?
+	    "JOIN $tree_table as t3 on t3.orig_no = t2.parent_no
+	     JOIN $tree_table as t on t.orig_no = t3.synonym_no" :
+		 "JOIN $tree_table as t on t.orig_no = t2.parent_no";
+	
 	$SQL_STRING = "
 		SELECT a.taxon_no
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
-			JOIN $tree_table as t on t.orig_no = t2.parent_no
+			$parent_join
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
@@ -3268,7 +3712,8 @@ sub getRelatedTaxaIds {
 				    $ANCESTRY_SCRATCH as s WRITE,
 				    $auth_table as a READ,
 				    $opinion_table as o READ,
-				    $tree_table as t READ");
+				    $tree_table as t READ
+				    $tree_table as t2 READ");
 	
 	# We need a try block to make sure that the table locks are released
 	# no matter what else happens.
@@ -3305,11 +3750,17 @@ sub getRelatedTaxaIds {
 	    $result = $dbh->do("CALL compute_ancestry(0)");
 	    
 	    # Finally, we can use this scratch table to get the information we
-	    # need.
+	    # need.  We need a slightly different query if the option $seniors
+	    # was specified.
+	    
+	    my $t_join = $seniors ?
+		"$tree_table as t2 JOIN $ANCESTRY_SCRATCH as s on s.orig_no = t2.orig_no
+	         JOIN $tree_table as t on t.orig_no = t2.synonym_no" :
+		     "$tree_table as t JOIN $ANCESTRY_SCRATCH as s on s.orig_no = t.orig_no";
 	    
 	    $SQL_STRING = "
 		SELECT t.${select}_no as taxon_no, a.taxon_rank
-		FROM $tree_table as t JOIN $ANCESTRY_SCRATCH as s on s.orig_no = t.orig_no
+		FROM $t_join
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
@@ -3368,11 +3819,11 @@ sub getRelatedTaxaIds {
 }
 
 
-=head3 getOpinions ( taxa, relationship, options )
+=head3 getOpinions ( base_taxa, relationship, options )
 
 Returns a list of Opinion objects having the specified relationship to the
 specified base taxon or taxa.  If no matching opinions are found, returns an
-empty list.  The parameter C<taxa> may be either a taxon number or a Taxon
+empty list.  The parameter C<base_taxa> may be either a taxon number or a Taxon
 object, an array of either of these, or a hash whose keys are taxon numbers.
 
 Possible relationships are:
@@ -3751,7 +4202,8 @@ sub getOpinions {
 			JOIN $auth_table as a2 on $join_expr
 		$extra_joins
 		$filter_expr
-		GROUP BY opinion_no ASC";
+		GROUP BY opinion_no ASC
+		ORDER BY ri DESC, pubyr DESC, opinion_no DESC";
     }
     
     $result_list = $dbh->selectall_arrayref($SQL_STRING, { Slice => {} });
@@ -4477,34 +4929,233 @@ sub isUsedTaxon {
     return unless $taxon_no > 0;
     $taxon_no = $taxon_no + 0;
     
-    # Do the necessary query.  We only need to find one genus or species-level
-    # entry to ensure that this name is still used.
+    # Query all children to check whether this list includes at least one
+    # genus or species-level entry.  If so, then this name is still used.
     
     my $dbh = $self->{dbh};
     my $auth_table = $self->{auth_table};
     my $tree_table = $self->{tree_table};
     
-    my $result_list = $dbh->selectcol_arrayref("
-	SELECT a.orig_no
+    my ($taxon_count) = $dbh->selectrow_array("
+	SELECT count(*)
 	FROM $auth_table as a JOIN $tree_table as t using (orig_no)
 		JOIN $tree_table as t2 on t.lft > t2.lft and t.lft <= t2.rgt
 		JOIN $auth_table as a2 on t2.orig_no = a2.orig_no
-	WHERE a2.taxon_no = $taxon_no AND a.taxon_rank in ('genus', 'subgenus', 'species')
-	LIMIT 1");
+	WHERE a2.taxon_no = $taxon_no AND a.taxon_rank in ('genus', 'subgenus', 'species')");
     
-    # If we found something, return 1 (i.e. the taxon is used)
+    # If we found something, return true (i.e. the taxon is used) and
+    # otherwise return false.
     
-    if ( $result_list && @$result_list > 0 )
+    return $taxon_count > 0;
+}
+
+
+=head3 getClassOrderFamily ( focal_taxon, parent_list )
+
+Using the given list of parent Taxon objects, modify the given Taxon object to
+add fields 'class', 'order', 'family' and 'common_name' if it doesn't already
+have one.  Also add 'category'.  Return a list consisting of the class, order,
+and family names.
+
+=cut
+
+# JA: started another heavy rewrite 26.9.11, finished it 25.10.11
+# MM: modified the argument format, but didn't change the algorithm 2012-11-29
+
+sub getClassOrderFamily {
+    
+    my ($self, $focal_taxon, $parent_list) = @_;
+    
+    my $dbh = $self->{dbh};
+    my $auth_table = $self->{auth_table};
+    my $opinion_table = $self->{opinion_table};
+    
+    # Make sure we have a list of parents to work from.
+    
+    return unless ref $parent_list eq 'ARRAY' and @$parent_list > 0;
+    
+    # Keep track of the boundary in the list between what is still under
+    # consideration and what we are done with.
+    
+    my ($boundary) = 0;
+    
+    # Common name and family are easy.  We traverse the list from lowest rank
+    # to highest (i.e. in reverse order).
+    
+    foreach my $i (0..$#$parent_list)
     {
-	return 1;
+	my $t = $parent_list->[$i];
+	
+	last if $t->{'taxon_rank'} =~ /superclass|phylum|kingdom/;
+	
+	if ( ! $focal_taxon->{common_name} && $t->{common_name} )
+	{
+	    $focal_taxon->{common_name} = $t->{common_name};
+	}
+	
+	if ( ( $t->{'taxon_rank'} eq "family" || $t->{'taxon_name'} =~ /idae$/ ) && ! $t->{'family'} )
+	{
+	    $focal_taxon->{'family'} = $t->{'taxon_name'};
+	    $focal_taxon->{'family_no'} = $t->{'taxon_no'};
+	}
+	
+	# The topmost family/tribe/genus/species entry will now mark the
+	# boundary between what we're done with and what we still need to consider.
+	
+	if ( $t->{'taxon_rank'} =~ /family|tribe|genus|species/ && $t->{'taxon_rank'} ne "superfamily" )
+	{
+	    $boundary = $i + 1;
+	}
     }
     
-    # Otherwise, return false (i.e. the taxon is disused)
+    # We need to know which parents have ever been ranked as either a class
+    # or an order
     
-    else
+    my (@other_parent_nos,%wasClass,%wasntClass,%wasOrder,%wasntOrder);
+    
+    # First mark names currently ranked at these levels.
+
+    foreach my $i ($boundary..$#$parent_list)
     {
-	return;
+	my $t = $parent_list->[$i];
+	my $orig_no = $t->{taxon_no};
+	
+	# used by jsonCollection 30.6.12
+	if ( ! $focal_taxon->{'category'} )
+	{
+	    if ( $t->{taxon_name} =~ /Vertebrata|Chordata/ ) {
+		$focal_taxon->{'category'} = "vertebrate";
+	    } elsif ( $t->{taxon_name} =~ /Insecta/ ) {
+		$focal_taxon->{'category'} = "insect";
+	    } elsif ( $t->{taxon_name} =~ /Animalia|Metazoa/ ) {
+		$focal_taxon->{'category'} = "invertebrate";
+	    } elsif ( $t->{taxon_name} eq "Plantae" ) {
+		$focal_taxon->{'category'} = "plant";
+	    }
+	}
+	
+	if ( $t->{taxon_rank} eq "class" )
+	{
+	    $wasClass{$orig_no} = 9999;
+	} elsif ( $t->{taxon_rank} eq "order" )	{
+	    $wasOrder{$orig_no} = 9999;
+	} elsif ( $orig_no )	{
+	    push @other_parent_nos, $orig_no;
+	}
     }
+    
+    $focal_taxon->{category} ||= "microfossil";
+    
+    # Then find other names previously ranked at these levels.
+    
+    if ( @other_parent_nos )
+    {
+	my $other_list = join(',', @other_parent_nos);
+	
+	my $sql = "
+		SELECT a.taxon_rank, a.orig_no, count(*) as count
+		FROM $auth_table as a JOIN $opinion_table as o on a.taxon_no = o.child_spelling_no
+		WHERE o.child_no in ($other_list)
+		GROUP BY a.taxon_no";
+	
+	my $result_list = $dbh->selectall_arrayref($sql, { Slice => {} }) || [];
+	
+	foreach my $p (@$result_list)
+	{
+	    if ( $p->{taxon_rank} eq "class" )	{
+		$wasClass{$p->{orig_no}} += $p->{'c'};
+	    } else	{
+		$wasntClass{$p->{orig_no}} += $p->{'c'};
+	    }
+	    if ( $p->{taxon_rank} eq "order" )	{
+		$wasOrder{$p->{orig_no}} += $p->{'c'};
+	    } else	{
+		$wasntOrder{$p->{orig_no}} += $p->{'c'};
+	    }
+	}
+    }
+    
+    # Find the oldest parent most frequently ranked an order.  Use publication
+    # year as a tie breaker.
+    
+    my ($maxyr,$mostoften,$orderlevel) = ('',-9999,'');
+    
+    foreach my $i ($boundary..$#$parent_list)
+    {
+	my $t = $parent_list->[$i];
+	my $t_no = $t->{orig_no};
+	
+	last if $wasClass{$t_no} > 0 || $t->{'taxon_rank'} =~ /phylum|kingdom/;
+	
+	if ( ( $wasOrder{$t_no} - $wasntOrder{$t_no} > $mostoften && $wasOrder{$t_no} > 0 ) || ( $wasOrder{$t_no} - $wasntOrder{$t_no} == $mostoften && $wasOrder{$t_no} > 0 && $t->{'pubyr'} < $maxyr ) )
+	{
+	    $mostoften = $wasOrder{$t_no} - $wasntOrder{$t_no};
+	    $maxyr = $t->{pubyr};
+	    $focal_taxon->{order} = $t->{taxon_name};
+	    $focal_taxon->{order_no} = $t->{taxon_no};
+	    $boundary = $i + 1;
+	}
+    }
+    
+    # If that fails then none of the parents have ever been orders, so use the
+    # oldest name between the levels of family and at-least-once class.
+    
+    unless ( $focal_taxon->{order_no} )
+    {
+	foreach my $i ($boundary..$#$parent_list)
+	{
+	    my $t = $parent_list->[$i];
+	    my $t_no = $t->{orig_no};
+	    
+	    last if $wasClass{$t_no} > 0 || $t->{'taxon_rank'} =~ /phylum|kingdom/;
+	    
+	    if ( ! $maxyr || $t->{'pubyr'} < $maxyr )
+	    {
+		$maxyr = $t->{'pubyr'};
+		$focal_taxon->{'order'} = $t->{'taxon_name'};
+		$focal_taxon->{'order_no'} = $t->{taxon_no};
+		$boundary = $i + 1;
+	    }
+	}
+    }
+    
+    # Now find the oldest parent ever ranked as a class.
+    
+    ($maxyr,$mostoften) = ('',-9999);
+    
+    foreach my $i ($boundary..$#$parent_list)
+    {
+	my $t = $parent_list->[$i];
+	my $t_no = $t->{orig_no};
+	
+	if ( ( $wasClass{$t_no} - $wasntClass{$t_no} > $mostoften && $wasClass{$t_no} > 0 ) || ( $wasClass{$t_no} - $wasntClass{$t_no} == $mostoften && $wasClass{$t_no} > 0 && $t->{'pubyr'} < $maxyr ) )	{
+	    $mostoften = $wasClass{$t_no} - $wasntClass{$t_no};
+	    $maxyr = $t->{'pubyr'};
+	    $focal_taxon->{'class'} = $t->{'taxon_name'};
+	    $focal_taxon->{'class_no'} = $t->{taxon_no};
+	}
+    }
+    
+    # Otherwise we're really in trouble, so use the oldest name available.
+    
+    unless ( $focal_taxon->{class_no} )
+    {
+	for (my $i = $boundary; $i >= 0; $i--)
+	{
+	    my $t = $parent_list->[$i];
+	    my $t_no = $t->{orig_no};
+	    
+	    last if $t->{taxon_rank} =~ /phylum|kingdom/;
+	    
+	    if ( ! $maxyr || $t->{'pubyr'} < $maxyr )	{
+		$maxyr = $t->{pubyr};
+		$focal_taxon->{class} = $t->{'taxon_name'};
+		$focal_taxon->{class_no} = $t_no;
+	    }
+	}
+    }
+    
+    return ($focal_taxon->{class}, $focal_taxon->{order}, $focal_taxon->{family});
 }
 
 
@@ -4600,6 +5251,12 @@ sub generateQueryFields {
 	    $fields .= $KINGDOM_FIELDS;
 	}
 	
+	elsif ( $inc eq 'ext2' )
+	{
+	    $fields .= $EXT2_FIELDS;
+	    $tables{v} = 1;
+	}
+	
 	elsif ( $inc eq 'tt' )
 	{
 	    $fields .= $TT_FIELDS;
@@ -4635,6 +5292,11 @@ sub generateQueryFields {
 	elsif ( $inc eq 'comments' )
 	{
 	    $fields .= $COMMENT_FIELDS;
+	}
+	
+	elsif ( $inc eq 'size' )
+	{
+	    $fields .= $SIZE_FIELDS;
 	}
 	
 	else
@@ -4772,6 +5434,7 @@ sub generateExtraJoins {
     
     my $auth_table = $self->{auth_table};
     my $tree_table = $self->{tree_table};
+    my $attrs_table = $self->{attrs_table};
     
     my $extra_joins = '';
     
@@ -4789,6 +5452,8 @@ sub generateExtraJoins {
 	if $tables->{ora};
     $extra_joins .= "LEFT JOIN $auth_table as ca on ca.taxon_no = $main_table.child_spelling_no\n"
 	if $tables->{ca};
+    $extra_joins .= "LEFT JOIN $attrs_table as v on v.orig_no = $main_table.orig_no\n"
+	if $tables->{v};
     
     if ( $tables->{pa} and $main_table !~ /^o/ )
     {

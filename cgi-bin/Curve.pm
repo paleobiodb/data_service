@@ -981,7 +981,7 @@ sub findRecentTaxa	{
 	my @arefs = @{$dbt->getData($asql)};
 	my @taxon_nos= map {$_->{taxon_no}} @arefs;
 	
-	my $parents = Taxonomy->getRelatedTaxa(\@taxon_nos,'parent');
+	my $parents = Taxonomy->getTaxa('parents', \@taxon_nos);
 	# extantbyname must be global!
 	for my $aref ( @arefs )	{
 		$extantbyname{$aref->{taxon_name}}++;

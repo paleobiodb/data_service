@@ -20,7 +20,6 @@ use Data::Dumper;
 use CGI::Carp;
 use URI::Escape;
 use Mail::Mailer;
-use Classification;
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $HOST_URL $TAXA_TREE_CACHE);
 
@@ -1771,12 +1770,12 @@ sub getTypeTaxonList {
 	$rank_list = ['subtribe', 'tribe', 'subfamily', 'family', 'superfamily',
 		      'infraorder', 'suborder', 'order', 'superorder'];
 	
-	while ( $rank_list[0] ne $focal_rank )
+	while ( $rank_list->[0] ne $focal_rank )
 	{
-	    shift @rank_list;
+	    shift @$rank_list;
 	}
 	
-	return unless @rank_list;
+	return unless @$rank_list;
     }
     
     # Unlike the previous version of this function, parents are not limited to
@@ -1786,9 +1785,8 @@ sub getTypeTaxonList {
     # change it back.
     
     my (@parents) = 
-	$taxonomy->getRelatedTaxa($base_no, 'all_parents',
-				  { rank => $rank_list, trad => 1,
-				    fields => 'type' });
+	$taxonomy->getTaxa($base_no, 'all_parents',
+			   { rank => $rank_list, trad => 1, fields => 'type' });
     
     # We also need to add all immediate parents that have ever been proposed.
     
