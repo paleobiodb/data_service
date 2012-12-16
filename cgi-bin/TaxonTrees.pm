@@ -160,6 +160,7 @@ our (%ATTRS_TABLE) = ("taxon_trees" => "taxon_attrs");
 our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
 our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
 our (%ANCESTRY_PROC) = ("taxon_trees" => "compute_ancestry");
+our (%ANCESTRY_SCRATCH) = ("taxon_trees" => "ancestry_aux");
 
 our $OPINION_CACHE = "order_opinions";
 
@@ -934,8 +935,7 @@ sub buildTables {
     $MSG_TAG = 'Rebuild'; $MSG_LEVEL = $options->{msg_level} || 1;
     
     unless ( ref $step_control eq 'HASH' and %$step_control ) {
-	$step_control = { 'a' => 1, 'b' => 1, 'c' => 1,
-			  'd' => 1, 'e' => 1, 'f' => 1, 'g' => 1 };
+	$step_control->{$_} = 1 foreach 'a'..'h';
     };
     
     # Then create the necessary tables.
@@ -995,7 +995,7 @@ sub buildTables {
     my $keep_temps = $step_control->{k} || $options->{keep_temps};
     
     activateNewTables($dbh, $tree_table, $keep_temps)
-	if $step_control->{g};
+	if $step_control->{h};
     
     logMessage(1, "done rebuilding tree tables for '$tree_table'");
     
@@ -1327,16 +1327,18 @@ sub createTempTables {
 				subgenus varchar(80) not null,
 				taxon_name varchar(80) not null,
 				taxon_no int unsigned not null,
+				is_exact boolean,
 				KEY (taxon_name, genus, subgenus),
 				UNIQUE KEY (taxon_no, genus, subgenus)) ENGINE=MYISAM");
     
-    # Create a table through which bottom-up attributes such as min_body_mass
-    # and max_body_mass can be looked up.
+    # Create a table through which bottom-up attributes such as body_mass and
+    # extant_children can be looked up.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_TEMP");
     $result = $dbh->do("CREATE TABLE $ATTRS_TEMP
 			       (orig_no int unsigned not null,
-				extant int unsigned,
+				is_extant int unsigned,
+				extant_children int unsigned,
 				min_body_mass float,
 				max_body_mass float,
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
@@ -1524,6 +1526,38 @@ sub computeSpelling {
     
     $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (spelling_no)");
     
+    # As an aside, we can now compute and index the trad_no field, which might
+    # be of interest to those who prefer the traditional taxonomic ranks
+    # whenever possible.  Its value is the same as spelling_no except where
+    # the spelling_no corresponds to a name whose rank is 'unranked clade' and
+    # there is at least one taxon of the same name and a different rank, in
+    # which case the most recent and reliable such name is used instead.
+    
+    logMessage(2, "    computing trad_no");
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $TRAD_TEMP");
+    $result = $dbh->do("CREATE TABLE $TRAD_TEMP LIKE $SPELLING_TEMP");
+    $result = $dbh->do("
+		INSERT IGNORE INTO $TRAD_TEMP (orig_no, spelling_no)
+		SELECT t.orig_no, o.child_spelling_no
+		FROM authorities a
+			JOIN $TREE_TEMP t ON a.taxon_no = t.spelling_no
+				AND a.taxon_rank = 'unranked clade'
+			JOIN $OPINION_CACHE o on o.orig_no = t.orig_no
+			JOIN authorities a2 on o.child_spelling_no = a2.taxon_no
+		WHERE a2.taxon_rank <> 'unranked clade' and a2.taxon_name = a.taxon_name
+		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
+    
+    logMessage(2, "    setting trad_no");
+    
+    $result = $dbh->do("UPDATE $TREE_TEMP SET trad_no = spelling_no");
+    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $TRAD_TEMP s USING (orig_no)
+			SET t.trad_no = s.spelling_no");
+    
+    logMessage(2, "    indexing trad_no");
+    
+    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (trad_no)");
+    
     # Then we can compute the name table, which records the best opinion
     # and spelling reason for each taxonomic name.
     
@@ -1551,37 +1585,6 @@ sub computeSpelling {
 		INSERT IGNORE INTO $NAME_TEMP
 		SELECT a.taxon_no, a.orig_no, '', 0
 		FROM $AUTH_TABLE as a");
-    
-    # As an addendum, we can now compute and index the trad_no field, which
-    # might be of interest to those who prefer the traditional taxonomic ranks
-    # whenever possible.  Its value is the same as spelling_no except where there
-    # is at least one taxon of the same name and a different rank, in which
-    # case the most recent and reliable such taxon is used instead.
-    
-    logMessage(2, "    computing trad_no");
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $TRAD_TEMP");
-    $result = $dbh->do("CREATE TABLE $TRAD_TEMP LIKE $SPELLING_TEMP");
-    $result = $dbh->do("
-		INSERT IGNORE INTO $TRAD_TEMP (orig_no, spelling_no)
-		SELECT t.orig_no, o.child_spelling_no
-		FROM authorities a
-			JOIN $TREE_TEMP t ON a.taxon_no = t.spelling_no
-				AND a.taxon_rank = 'unranked clade'
-			JOIN $OPINION_CACHE o on o.orig_no = t.orig_no
-			JOIN authorities a2 on o.child_spelling_no = a2.taxon_no
-		WHERE a2.taxon_rank <> 'unranked clade' and a2.taxon_name = a.taxon_name
-		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
-    
-    logMessage(2, "    setting trad_no");
-    
-    $result = $dbh->do("UPDATE $TREE_TEMP SET trad_no = spelling_no");
-    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $TRAD_TEMP s USING (orig_no)
-			SET t.trad_no = s.spelling_no");
-    
-    logMessage(2, "    indexing trad_no");
-    
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (trad_no)");
     
     my $a = 1;		# we can stop on this line when debugging
 }
@@ -2164,6 +2167,8 @@ sub computeHierarchy {
     # with linkParents().
     
     logMessage(2, "    setting parent_no");
+    
+    # $$$ do we want to link parent_no to senior synonym or not???
     
     $result = $dbh->do("
 		UPDATE $TREE_TEMP t JOIN $TREE_TEMP t2 ON t2.orig_no = t.synonym_no
@@ -2965,8 +2970,8 @@ sub computeSearchTable {
     logMessage(2, "    adding higher taxa");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
-		SELECT null, null, taxon_name, taxon_no
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_no)
+		SELECT null, taxon_name, taxon_no
 		FROM $AUTH_TABLE
 		WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
@@ -2977,8 +2982,8 @@ sub computeSearchTable {
     # whole name.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
-		SELECT substring_index(taxon_name, ' ', 1), null,
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_no)
+		SELECT substring_index(taxon_name, ' ', 1),
 			trim(trailing ')' from substring_index(taxon_name,'(',-1)),
 			taxon_no
 		FROM $AUTH_TABLE
@@ -2991,29 +2996,41 @@ sub computeSearchTable {
     
     logMessage(2, "    adding species by name");
     
-    $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
-		SELECT substring_index(taxon_name, ' ', 1),
-			substring_index(substring_index(taxon_name, '(', -1), ')', 1),
-			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-			taxon_no
-		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')
-			and taxon_name like '%(%'");
+    # Species which don't have a subgenus
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_no)
 		SELECT substring_index(taxon_name, ' ', 1),
-			null,
 			trim(substring(taxon_name, locate(' ', taxon_name)+1)),
 			taxon_no
 		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')
 			and taxon_name not like '%(%'");
     
-    # Now comes the really tricky part.  We want to list each species and
-    # subspecies under both its genus and subgenus (if any) and also under any
-    # genera and subgenera synonymous with either of those.  Note that the
-    # genus under which a species is placed in the hierarchy may not be in
-    # accord with its listed name!
+    # Species which do have a subgenus
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_no)
+		SELECT substring_index(taxon_name, ' ', 1),
+			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+			taxon_no
+		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')
+			and taxon_name like '%(%'");
+    
+    # And again with the subgenus name treated as if it was a genus
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_no)
+		SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1),
+			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+			taxon_no
+		FROM $AUTH_TABLE WHERE taxon_rank in ('species', 'subspecies')
+			and taxon_name like '%(%'");
+    
+    # Now comes the really tricky part.  For the purposes of "loose matching"
+    # we also want to list each species under any genera and subgenera
+    # synonymous with the actual genus and/or subgenus.  Note that the genus
+    # under which a species is placed in the hierarchy may not be in accord
+    # with its listed name!
     # 
     # In order to do this efficiently, we first need to create an auxiliary
     # table associating each species and subspecies with a genus/subgenus.
@@ -3064,18 +3081,19 @@ sub computeSearchTable {
 			(p1.taxon_no is not null or
 			 p2.taxon_no is not null)");
     
-    # Now that we have this auxiliary table, we can add an additional entry
-    # for each species under all genera and subgenera that are synonymous with
-    # its current genus and/or subgenus.  We use the same expressions as above
-    # to split out the various parts of the species taxon and the genus or
-    # subgenus names.
+    # Now that we have this auxiliary table, we can add additional entries for
+    # each species under all genera and subgenera that are synonymous with its
+    # current genus and/or subgenus.  We use the same expressions as above to
+    # split out the various parts of the species taxon and the genus or
+    # subgenus names.  Because we are doing an "INSERT IGNORE" we will not
+    # overwrite any entries already in the table, so all of the exact entries
+    # will still be so marked.
+    
+    # We do this once for the genus names, and once for the subgenus names.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_no)
 		SELECT substring_index(p.taxon_name, ' ', 1),
-			if(p.taxon_name like '%(%',
-			   substring_index(substring_index(p.taxon_name, '(', -1), ')', 1),
-			   null),
 			if(a.taxon_name like '%(%',
 				trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
 				trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1))),
@@ -3084,6 +3102,19 @@ sub computeSearchTable {
 			JOIN $TREE_TEMP as t1 on t1.orig_no = g.genus_no
 			JOIN $TREE_TEMP as t2 on t2.synonym_no = t1.synonym_no
 			JOIN $AUTH_TABLE as p on p.taxon_no = t2.spelling_no");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_no)
+		SELECT substring_index(substring_index(p.taxon_name, '(', -1), ')', 1),
+			if(a.taxon_name like '%(%',
+				trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
+				trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1))),
+			a.taxon_no
+		FROM $GENUS_TEMP as g JOIN $AUTH_TABLE as a using (taxon_no)
+			JOIN $TREE_TEMP as t1 on t1.orig_no = g.genus_no
+			JOIN $TREE_TEMP as t2 on t2.synonym_no = t1.synonym_no
+			JOIN $AUTH_TABLE as p on p.taxon_no = t2.spelling_no
+		WHERE p.taxon_name like '%(%'");
     
     # We can stop here when debugging.
     
@@ -3178,21 +3209,19 @@ sub computeAttrsTable {
     
     my $result;
     
-    $DB::single = 1;
-    
     # Prime the table with the values actually stored in the authorities table and
     # ecotaph table.
     
-    $result = $dbh->do("INSERT IGNORE INTO $ATTRS_TEMP (orig_no, extant, min_body_mass, max_body_mass)
-			SELECT a.orig_no, case a.extant when 'yes' then 1 when 'no' then 0 end,
+    $result = $dbh->do("INSERT IGNORE INTO $ATTRS_TEMP 
+				(orig_no, is_extant, extant_children, min_body_mass, max_body_mass)
+			SELECT a.orig_no, case coalesce(a.extant) 
+					when 'yes' then 1 when 'no' then 0 else null end,
+				0,
 				coalesce(e.minimum_body_mass, e.body_mass_estimate),
 				coalesce(e.maximum_body_mass, e.body_mass_estimate)
-			FROM $AUTH_TABLE as a JOIN ecotaph as e using (taxon_no)
+			FROM $AUTH_TABLE as a LEFT JOIN ecotaph as e using (taxon_no)
 				JOIN $TREE_TEMP as t using (orig_no)
-			WHERE e.minimum_body_mass is not null or
-				e.maximum_body_mass is not null or
-				e.body_mass_estimate is not null or
-				a.extant is not null");
+			GROUP BY a.orig_no");
     
     # Now figure out how deep in the table this information starts.
     
@@ -3200,14 +3229,9 @@ sub computeAttrsTable {
 			SELECT max(t.depth)
 			FROM $TREE_TEMP as t join $ATTRS_TEMP as v using (orig_no)");
     
-    # Fill in the rest of the entries with null values.
-    
-    $result = $dbh->do("INSERT IGNORE INTO $ATTRS_TEMP (orig_no, extant, min_body_mass, max_body_mass)
-			SELECT t.orig_no, null, null, null FROM $TREE_TEMP as t");
-    
     # We then iterate from that depth on up to the top of the tree, computing
-    # each row from its immediate children.  We don't propagate these
-    # attributes up past the class level, except for 'extant'.
+    # each row from its immediate children.  The body_mass values should be
+    # ignored above class level.
     
     for (my $row = $max_depth; $row > 1; $row--)
     {
@@ -3215,19 +3239,21 @@ sub computeAttrsTable {
 	
 	my $sql = "
 		UPDATE $ATTRS_TEMP as v JOIN
-		(SELECT t.parent_no, if(avg(v.extant) > 0, 1, pv.extant) as extant,
+		(SELECT t.parent_no,
+			if(sum(v.is_extant) > 0, 1, pv.is_extant) as is_extant,
+			coalesce(sum(v.is_extant), 0) as extant_children,
 			coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
 					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
 			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
 					max(v.max_body_mass), pv.max_body_mass) as max_body_mass
 		FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
-			JOIN $AUTH_TABLE as pa on pa.taxon_no = t.parent_no
 			LEFT JOIN $ATTRS_TEMP as pv on pv.orig_no = t.parent_no 
 		WHERE t.depth = $row 
-		GROUP BY t.parent_no) as cv on v.orig_no = cv.parent_no
-		SET     v.extant = cv.extant,
-			v.min_body_mass = cv.min_body_mass,
-			v.max_body_mass = cv.max_body_mass";
+		GROUP BY t.parent_no) as nv on v.orig_no = nv.parent_no
+		SET     v.is_extant = nv.is_extant,
+			v.extant_children = nv.extant_children,
+			v.min_body_mass = nv.min_body_mass,
+			v.max_body_mass = nv.max_body_mass";
 
 	$dbh->do($sql);
     }
@@ -3247,10 +3273,39 @@ sub computeAttrsTable {
 	my $sql = "
 		UPDATE $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
 			JOIN $ATTRS_TEMP as pv on pv.orig_no = t.parent_no
-		SET v.extant = 0 WHERE pv.extant = 0 and t.depth = $row";
+		SET v.is_extant = 0 WHERE pv.is_extant = 0 and t.depth = $row";
 	
 	$dbh->do($sql);
     }
+    
+    # Now we have to coalesce the attributes within synonym groups.  We first
+    # coalesce to the senior synonym entries, then copy to all other synonyms.
+    
+    logMessage(1, "    coalescing synonym attributes");
+    
+    $result = $dbh->do("
+		UPDATE $ATTRS_TEMP as v JOIN 
+		(SELECT t.synonym_no,
+			if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
+			sum(v.extant_children) as extant_children,
+			min(v.min_body_mass) as min_body_mass,
+			max(v.max_body_mass) as max_body_mass
+		FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
+			JOIN $OPINION_CACHE as o using (opinion_no)
+		WHERE status in ('subjective synonym of', 'objective synonym of', 'replaced by')
+		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
+		SET     v.is_extant = nv.is_extant,
+			v.extant_children = nv.extant_children,
+			v.min_body_mass = nv.min_body_mass,
+			v.max_body_mass = nv.max_body_mass");
+    
+    $result = $dbh->do("
+		UPDATE $TREE_TEMP as t JOIN $ATTRS_TEMP as v on v.orig_no = t.orig_no
+			JOIN $ATTRS_TEMP as sv on sv.orig_no = t.synonym_no
+		SET	v.is_extant = sv.is_extant,
+			v.extant_children = sv.extant_children,
+			v.min_body_mass = sv.min_body_mass,
+			v.max_body_mass = sv.max_body_mass");
     
     # We can stop here when debugging.
     

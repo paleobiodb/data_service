@@ -82,20 +82,15 @@ $dbh->do("CREATE PROCEDURE compute_ancestry (s int)
 		DELETE IGNORE s FROM ancestry_aux as s LEFT JOIN authorities as a using (orig_no)
 			WHERE a.orig_no is null;
 		SET \@gen = 1;
-		SET \@cnt = 1;
-		WHILE \@cnt > 0 DO
-			INSERT IGNORE INTO ancestry_aux select parent_no, \@gen+1
-				FROM ancestry_aux as s join taxon_trees as t using (orig_no)
-				WHERE parent_no > 0 and gen = \@gen;
+		SET \@cnt = s + 1;
+		WHILE \@cnt > s DO
+			INSERT IGNORE INTO ancestry_aux select t.parent_no, \@gen+1
+				FROM ancestry_aux as s JOIN taxon_trees as t using (orig_no)
+					JOIN authorities as a on a.taxon_no = t.spelling_no
+				WHERE t.parent_no > 0 and a.taxon_rank <> 'kingdom' and gen = \@gen;
 			SET \@cnt = ROW_COUNT();
 			SET \@gen = \@gen + 1;
 		END WHILE;
-		IF s = 1 THEN
-			SELECT s.orig_no FROM ancestry_aux as s ORDER BY gen DESC;
-		ELSEIF s = 2 THEN
-			SELECT s.orig_no FROM ancestry_aux as s
-			WHERE gen > 1 ORDER BY gen DESC;
-		END IF;
 	END");
 
 # compute_taxon_match ( a, cg, csg, csp )

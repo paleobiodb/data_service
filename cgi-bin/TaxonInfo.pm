@@ -480,7 +480,7 @@ sub displayModule6 {
 <div align="center" clas="small">
 ^;
     
-    print displayEcology($dbt, $taxonomy, $focal_taxon->{taxon_no}) unless $limit_display;
+    print displayEcology($dbt, $taxonomy, $focal_taxon) unless $limit_display;
     
     print "</div>\n</div>\n";
 }
@@ -1756,135 +1756,141 @@ sub printTypeInfo	{
 
 
 # JA 1.8.03
-sub displayEcology	{
-	my $dbt = shift;
-	my $taxon_no = shift;
-
+sub displayEcology {
+    
+    my ($dbt, $taxonomy, $focal_taxon) = @_;
+    
     my $output .= qq|<div class="small displayPanel" align="left" style="width: 46em; margin-top: 0em; padding-top: 1em; padding-bottom: 1em;">
 <div align="center" class="displayPanelContent">
 |;
 
-	unless ($taxon_no){
-                $output .= qq|<i>No ecological data are available</i>
+    unless ( $focal_taxon )
+    {
+	$output .= qq|<i>No ecological data are available</i>
 </div>
 </div>
 |;
-		return $output;
-	}
-
-	# get the field names from the ecotaph table
-    my @ecotaphFields = $dbt->getTableColumns('ecotaph');
-    # also get values for ancestors
-    my $class_hash = TaxaCache::getParents($dbt,[$taxon_no],'array_full');
-    my $eco_hash = Ecology::getEcology($dbt,$class_hash,\@ecotaphFields,'get_basis');
-    my $ecotaphVals = $eco_hash->{$taxon_no};
-
-	if ( ! $ecotaphVals )	{
-                $output .= qq|<i>No ecological data are available</i>
-</div>
-</div>
-|;
-		return $output;
-	} else	{
-        # Convert units for display
-        foreach ('minimum_body_mass','maximum_body_mass','body_mass_estimate') {
-            if ($ecotaphVals->{$_}) {
-                if ($ecotaphVals->{$_} < 1) {
-                    $ecotaphVals->{$_} = Ecology::kgToGrams($ecotaphVals->{$_});
-                    $ecotaphVals->{$_} .= ' g';
-                } else {
-                    $ecotaphVals->{$_} .= ' kg';
-                }
-            }
-        } 
-        
-        my @references = @{$ecotaphVals->{'references'}};     
-
-        my @ranks = ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'infraclass', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade');
-        my %rankToKey = ();
-        foreach my $rank (@ranks) {
-            my $rank_abbrev = $rank;
-            $rank_abbrev =~ s/species/s/;
-            $rank_abbrev =~ s/genus/g/;
-            $rank_abbrev =~ s/tribe/t/;
-            $rank_abbrev =~ s/family/f/;
-            $rank_abbrev =~ s/order/o/;
-            $rank_abbrev =~ s/class/c/;
-            $rank_abbrev =~ s/phylum/p/;
-            $rank_abbrev =~ s/kingdom/f/;
-            $rank_abbrev =~ s/unranked clade/uc/;
-            $rankToKey{$rank} = $rank_abbrev;
-        }   
-        my %all_ranks = ();
-
-		$output .= "<table cellpadding=\"4\">";
-        $output .= "<tr>";
-		my $cols = 0;
-		foreach my $i (0..$#ecotaphFields)	{
-			my $name = $ecotaphFields[$i];
-			my $nextname = $ecotaphFields[$i+1];
-			my $n = $name;
-			my @letts = split //,$n;
-			$letts[0] =~ tr/[a-z]/[A-Z]/;
-			$n = join '',@letts;
-			$n =~ s/_/ /g;
-			$n =~ s/Taxon e/E/;
-			if ( $n =~ /1/ && $ecotaphVals->{$nextname} !~ /2/ )	{
-				$n =~ s/1//;
-			}
-			$n =~ s/1$/&nbsp;1/g;
-			$n =~ s/2$/&nbsp;2/g;
-			if ( $ecotaphVals->{$name} && $name !~ /_no$/ )	{
-				my $v = $ecotaphVals->{$name};
-				my $rank = $ecotaphVals->{$name."basis"};
-				$all_ranks{$rank} = 1; 
-				$v =~ s/,/, /g;
-				if ( $cols == 2 || $name =~ /^comments$/ || $name =~ /^created$/ || $name =~ /^size_value$/ || $name =~ /1$/ )	{
-				 	$output .= "</tr>\n<tr>\n";
-					$cols = 0;
-				}
-				$cols++;
-				my $colspan = ($name =~ /comments/) ? "colspan=2" : "";
-				my $rank_note = "<span class=\"superscript\">$rankToKey{$rank}</span>";
-				if ($name =~ /created|modified/) {
-					$rank_note = "";
-				}
-				$output .= "<td $colspan valign=\"top\"><table cellpadding=0 cellspacing=0 border=0><tr><td align=\"left\" valign=\"top\"><span class=\"fieldName\">$n:</span>&nbsp;</td><td valign=\"top\">${v}${rank_note}</td></tr></table></td> \n";
-			}
-		}
-        $output .= "</tr>" if ( $cols > 0 );
-        # now print out keys for superscripts above
-        $output .= "<tr><td colspan=2>";
-        my $html = "<span class=\"fieldName\">Source:</span> ";
-        foreach my $rank (@ranks) {
-            if ($all_ranks{$rank}) {
-                $html .= "$rankToKey{$rank} = $rank, ";
-            }
-        }
-        $html =~ s/, $//;
-        $output .= $html;
-        $output .= "</td></tr>"; 
-        $output .= "<tr><td colspan=2><span class=\"fieldName\">";
-        if (scalar(@references) == 1) {
-            $output .= "Reference: ";
-        } elsif (scalar(@references) > 1) {
-            $output .= "References: ";
-        }
-        $output .= "</span>";
-        for(my $i=0;$i<scalar(@references);$i++) {
-            my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$references[$i]";
-            my $ref = ${$dbt->getData($sql)}[0];
-            $references[$i] = Reference::formatShortRef($ref,'link_id'=>1);
-        }
-        $output .= join(", ",@references);
-        $output .= "</td></tr>";
-		$output .= "</table>\n";
-	}
-
-        $output .= "\n</div>\n</div>\n";
 	return $output;
+    }
+    
+    my $taxon_no = re $focal_taxon ? $focal_taxon->{taxon_no} : $focal_taxon;
+    
+    # get the field names from the ecotaph table
+    my @ecotaphFields = $dbt->getTableColumns('ecotaph');
 
+    # get the values for the focal taxon and all its ancestors
+    my $eco_hash = Ecology::getEcology($dbt,$focal_taxon,\@ecotaphFields, { get_basis => 1 });
+    
+    my $ecotaphVals = $eco_hash->{$taxon_no};
+    
+    if ( ! $ecotaphVals )
+    {
+	$output .= qq|<i>No ecological data are available</i>
+</div>
+</div>
+|;
+	return $output;
+    } 
+    
+    # Convert units for display
+    foreach ('minimum_body_mass','maximum_body_mass','body_mass_estimate')
+    {
+	if ($ecotaphVals->{$_}) {
+	    if ($ecotaphVals->{$_} < 1) {
+		$ecotaphVals->{$_} = Ecology::kgToGrams($ecotaphVals->{$_});
+		$ecotaphVals->{$_} .= ' g';
+	    } else {
+		$ecotaphVals->{$_} .= ' kg';
+	    }
+	}
+    } 
+    
+    my @references = @{$ecotaphVals->{'references'}};     
+    
+    my @ranks = ('subspecies', 'species', 'subgenus', 'genus', 'subtribe', 'tribe', 'subfamily', 'family', 'superfamily', 'infraorder', 'suborder', 'order', 'superorder', 'infraclass', 'subclass', 'class', 'superclass', 'subphylum', 'phylum', 'superphylum', 'subkingdom', 'kingdom', 'superkingdom', 'unranked clade');
+    my %rankToKey = ();
+    foreach my $rank (@ranks) {
+	my $rank_abbrev = $rank;
+	$rank_abbrev =~ s/species/s/;
+	$rank_abbrev =~ s/genus/g/;
+	$rank_abbrev =~ s/tribe/t/;
+	$rank_abbrev =~ s/family/f/;
+	$rank_abbrev =~ s/order/o/;
+	$rank_abbrev =~ s/class/c/;
+	$rank_abbrev =~ s/phylum/p/;
+	$rank_abbrev =~ s/kingdom/f/;
+	$rank_abbrev =~ s/unranked clade/uc/;
+	$rankToKey{$rank} = $rank_abbrev;
+    }   
+    my %all_ranks = ();
+    
+    $output .= "<table cellpadding=\"4\">";
+    $output .= "<tr>";
+    my $cols = 0;
+    foreach my $i (0..$#ecotaphFields)	{
+	my $name = $ecotaphFields[$i];
+	my $nextname = $ecotaphFields[$i+1];
+	my $n = $name;
+	my @letts = split //,$n;
+	$letts[0] =~ tr/[a-z]/[A-Z]/;
+	$n = join '',@letts;
+	$n =~ s/_/ /g;
+	$n =~ s/Taxon e/E/;
+	if ( $n =~ /1/ && $ecotaphVals->{$nextname} !~ /2/ )	{
+	    $n =~ s/1//;
+	}
+	$n =~ s/1$/&nbsp;1/g;
+	$n =~ s/2$/&nbsp;2/g;
+	if ( $ecotaphVals->{$name} && $name !~ /_no$/ )	{
+	    my $v = $ecotaphVals->{$name};
+	    my $rank = $ecotaphVals->{$name."basis"};
+	    $all_ranks{$rank} = 1; 
+	    $v =~ s/,/, /g;
+	    if ( $cols == 2 || $name =~ /^comments$/ || $name =~ /^created$/ || $name =~ /^size_value$/ || $name =~ /1$/ )	{
+		$output .= "</tr>\n<tr>\n";
+		$cols = 0;
+	    }
+	    $cols++;
+	    my $colspan = ($name =~ /comments/) ? "colspan=2" : "";
+	    my $rank_note = "<span class=\"superscript\">$rankToKey{$rank}</span>";
+	    if ($name =~ /created|modified/) {
+		$rank_note = "";
+	    }
+	    $output .= "<td $colspan valign=\"top\"><table cellpadding=0 cellspacing=0 border=0><tr><td align=\"left\" valign=\"top\"><span class=\"fieldName\">$n:</span>&nbsp;</td><td valign=\"top\">${v}${rank_note}</td></tr></table></td> \n";
+	}
+    }
+    $output .= "</tr>" if ( $cols > 0 );
+    # now print out keys for superscripts above
+    $output .= "<tr><td colspan=2>";
+    my $html = "<span class=\"fieldName\">Source:</span> ";
+    foreach my $rank (@ranks) {
+	if ($all_ranks{$rank}) {
+	    $html .= "$rankToKey{$rank} = $rank, ";
+	}
+    }
+    $html =~ s/, $//;
+    $output .= $html;
+    $output .= "</td></tr>"; 
+    $output .= "<tr><td colspan=2><span class=\"fieldName\">";
+    if (scalar(@references) == 1) {
+	$output .= "Reference: ";
+    } elsif (scalar(@references) > 1) {
+	$output .= "References: ";
+    }
+    $output .= "</span>";
+    for(my $i=0;$i<scalar(@references);$i++) {
+	my $sql = "SELECT reference_no,author1last,author2last,otherauthors,pubyr FROM refs WHERE reference_no=$references[$i]";
+	my $ref = ${$dbt->getData($sql)}[0];
+	$references[$i] = Reference::formatShortRef($ref,'link_id'=>1);
+    }
+    $output .= join(", ",@references);
+    $output .= "</td></tr>";
+    $output .= "</table>\n";
+    
+    $output .= "\n</div>\n</div>\n";
+    return $output;
 }
+
 
 # PS 6/27/2005
 sub displayMeasurements {
@@ -1970,7 +1976,7 @@ sub displayMeasurements {
 
         # estimate body mass if possible JA 18.7.07
         # code is here and not earlier because we need the parts list first
-        my @m = Measurement::getMassEstimates($dbt,$taxon_no,$p_table_ref);
+        my @m = Measurement::getMassEstimates($dbt,$taxonomy,$focal_taxon->{taxon_no},$p_table_ref);
         my @part_list = @{$m[0]};
         my @masses = @{$m[2]};
         my @eqns = @{$m[3]};
@@ -2063,7 +2069,6 @@ $mass_string
 }
 
 
-# $$$$
 # JA 7.12.10
 sub formatMass	{
 	my $mass = shift;
@@ -2081,9 +2086,11 @@ sub formatMass	{
 	return $mass;
 }
 
+
+
 sub displayDiagnoses {
     
-    my ($dbt, $focal_taxon) = @_;
+    my ($dbt, $taxonomy, $focal_taxon) = @_;
     
     my $taxon_no = $focal_taxon->{taxon_no};
     
@@ -2093,8 +2100,8 @@ sub displayDiagnoses {
 |;
     
     my @diagnoses = ();
-    if ($taxon_no) {
-        @diagnoses = getDiagnoses($dbt,$taxon_no);
+    if ($focal_taxon) {
+        @diagnoses = getDiagnoses($dbt, $taxonomy, $focal_taxon);
 
         if (@diagnoses) {
             $str .= "<table cellspacing=5>\n";
@@ -2148,29 +2155,28 @@ sub displaySynonymyList	{
 	return $output;
     }
     
-    # Find all spellings of all junior synonyms.
+    # Find all spellings of the focal taxon plus its junior synonyms.
     
-    my @synonyms = $taxonomy->getTaxa($focal_taxon, 'juniors', { select => 'all' });
     
-    # Include all spellings of the focal taxon.
+    my @taxa = $taxonomy->getTaxa('spellings', $focal_taxon);
     
-    push @synonyms, $taxonomy->getTaxa($focal_taxon, 'spellings');
+    push @taxa, $taxonomy->getTaxa('juniors', $focal_taxon, { spelling => 'all' });
     
     # Get all opinions with any of these taxa as children.
     
-    my @opinions = $taxonomy->getOpinions(\@juniors, 'child');
+    my @opinions = $taxonomy->getOpinions('children', \@taxa);
     
     # do some initial formatting and create a name lookup hash
     my %spelling = ();
     my %rank = ();
     my %synline = ();
-    for my $ar ( @synonyms )
+    for my $ar ( @taxa )
     {
 	$spelling{$ar->{taxon_no}} = $ar->{taxon_name};
 	$rank{$ar->{taxon_no}} = $ar->{taxon_rank};
 	if ( $ar->{taxon_no} == $ar->{orig_no} )
 	{
-	    my $synkey = buildSynLine($ar);
+	    my $synkey = buildSynLine($ar, $is_real_user);
 	    $synline{$synkey}{TAXON} = $ar->{taxon_name};
 	    $synline{$synkey}{YEAR} = $ar->{pubyr};
 	    $synline{$synkey}{AUTH} = $ar->{author1last} . " " . $ar->{author2last};
@@ -2185,7 +2191,7 @@ sub displaySynonymyList	{
 	{
 	    $or->{taxon_name} = $spelling{$or->{child_spelling_no}};
 	    $or->{taxon_rank} = $rank{$or->{child_spelling_no}};
-	    my $synkey = buildSynLine($or);
+	    my $synkey = buildSynLine($or, $is_real_user);
 	    $synline{$synkey}{TAXON} = $or->{taxon_name};
 	    $synline{$synkey}{YEAR} = $or->{pubyr};
 	    $synline{$synkey}{AUTH} = $or->{author1last} . " " . $or->{author2last};
@@ -2220,7 +2226,7 @@ sub displaySynonymyList	{
 
 sub buildSynLine {
     
-    my ($refdata) = @_;
+    my ($refdata, $is_real_user) = @_;
     my $synkey = "";
     
     if ( $refdata->{pubyr} )
@@ -2275,10 +2281,10 @@ sub beginFirstAppearance	{
 
 # JA 10-13.1.09
 sub displayFirstAppearance	{
-	my ($q,$s,$dbt,$hbo) = @_;
-
-	$|=1;
-	my ($sql,$field,$name);
+	my ($q,$s,$dbt,$taxonomy,$hbo) = @_;
+	
+	my ($search_name, $use_common);
+	
 	if ( $q->param('taxon_name') )	{
 		if ( $q->param('taxon_name') !~ /^[A-Z][a-z]*(| )[a-z]*$/ )	{
 			my $error_message = "The name '".$q->param('taxon_name')."' is formatted incorrectly.";
@@ -2288,109 +2294,130 @@ sub displayFirstAppearance	{
 			my $error_message = "Please enter either a scientific or common name, not both.";
 			beginFirstAppearance($hbo,$q,$error_message);
 		}
-		$field = "taxon_name";
-		$name = $q->param('taxon_name');
+		$search_name = $q->param('taxon_name');
+		$use_common = 0;
 	} elsif ( $q->param('common_name') )	{
 		if ( $q->param('common_name') =~ /[^A-Za-z ]/ )	{
 			my $error_message = "A common name can't include anything but letters.";
 			beginFirstAppearance($hbo,$q,$error_message);
 		}
-		$field = "common_name";
-		$name = $q->param('common_name');
+		$search_name = $q->param('common_name');
+		$use_common = 'only';
 	} else	{
 		my $error_message = "No search term was entered.";
 		beginFirstAppearance($hbo,$q,$error_message);
 	}
-	my $exclude;
-	if ( $q->param('exclude') )	{
-		my $names = $q->param('exclude');
-		$names =~ s/[^A-Za-z]/ /g;
-		$names =~ s/  / /g;
-		$names =~ s/  / /g;
-		$names =~ s/ /','/g;
-		$sql = "SELECT a.taxon_no,a.taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_name IN ('".$names."') AND a.taxon_no=t.spelling_no GROUP BY lft,rgt ORDER BY lft";
-		my @nos = @{$dbt->getData($sql)};
-		$exclude .= " AND (rgt<$_->{'lft'} OR lft>$_->{'rgt'})" foreach @nos;
+	
+	# If any taxa were specified for exclusion, create an exclusion object
+	# to be used in subsequent queries.
+	
+	my $exclusion;
+	if ( $q->param('exclude') )
+	{
+	    my @names = split /[\s,]+/, $q->param('exclude');
+	    my @excluded_taxa = $taxonomy->getTaxaByName(\@names);
+	    my $exclusion = $taxonomy->generateExclusion(\@excluded_taxa);
 	}
-
-	# it's overkill to use getChildren because the query is so simple
-	$sql  = "SELECT a.taxon_no,a.taxon_name,IF(a.ref_is_authority='YES',r.author1last,a.author1last) author1last,IF(a.ref_is_authority='YES',r.author2last,a.author2last) author2last,IF(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF(a.ref_is_authority='YES',r.pubyr,a.pubyr) pubyr,a.taxon_rank,a.extant,a.preservation,lft,rgt FROM refs r,authorities a,authorities a2,$TAXA_TREE_CACHE t WHERE r.reference_no=a.reference_no AND a2.taxon_no=t.taxon_no AND a2.$field='$name' AND a.taxon_no=t.synonym_no GROUP BY lft,rgt ORDER BY rgt-lft DESC";
-	my @nos = @{$dbt->getData($sql)};
-
-	$name= $nos[0]->{'taxon_name'};
-	if ( ! @nos )	{
-		my $error_message = $name." is not in the system.";
+	
+	# Now fetch our focal taxon.  If more than one match is found, get the
+	# biggest one.
+	
+	my ($focal_taxon, @other_matches) = 
+	    $taxonomy->getTaxaByName($search_name, { common => $use_common,
+						     senior => 1,
+						     order => 'size.desc',
+						     fields => ['oldattr', 'lft', 'ext2'] });
+	
+	unless ( $focal_taxon )
+	{
+		my $error_message = "$search_name is not in the system.";
 		beginFirstAppearance($hbo,$q,$error_message);
 	}
-
-	if ( $field eq "common_name" )	{
-		$name = $nos[0]->{'taxon_name'}." (".$name.")";
+	
+	# Figure out the name and attribution of the taxon.
+	
+	my $name = $focal_taxon->{taxon_name};
+	
+	if ( $focal_taxon->{common_name} )
+	{
+	    $name .= " ($focal_taxon->{common_name})";
 	}
-	my $authors = $nos[0]->{'author1last'};
-	if ( $nos[0]->{'otherauthors'} )	{
+	
+	my $authors = $focal_taxon->{'author1last'};
+	if ( $focal_taxon->{'otherauthors'} )	{
 		$authors .= " <i>et al.</i>";
-	} elsif ( $nos[0]->{'author2last'} )	{
-		$authors .= " and ".$nos[0]->{'author2last'};
+	} elsif ( $focal_taxon->{'author2last'} )	{
+		$authors .= " and ".$focal_taxon->{'author2last'};
 	}
-	$authors .= " ".$nos[0]->{'pubyr'};
-
-	if ( $nos[0]->{'lft'} == $nos[0]->{'rgt'} - 1 && $nos[0]->{'taxon_rank'} !~ /genus|species/ )	{
-		my $error_message = "$name $authors includes no classified subtaxa.";
-		beginFirstAppearance($hbo,$q,$error_message);
+	$authors .= " ".$focal_taxon->{'pubyr'};
+	
+	# If this is a higher taxon, make sure it includes at least one
+	# child taxon.
+	
+	if ( $focal_taxon->{'lft'} == $focal_taxon->{'rgt'} - 1 && $focal_taxon->{'taxon_rank'} !~ /genus|species/ )
+	{
+	    my $error_message = "$name $authors includes no classified subtaxa.";
+	    beginFirstAppearance($hbo,$q,$error_message);
 	}
-
+	
+	# Generate the result page.
+	
 	print $hbo->stdIncludes("std_page_top");
-
+	
 	# MAIN TABLE HITS
-
-	$sql = "SELECT a.taxon_no,taxon_name,taxon_rank,extant,preservation,lft,rgt,synonym_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>=".$nos[0]->{'lft'}." AND rgt<=".$nos[0]->{'rgt'}.$exclude." ORDER BY lft";
-	my @allsubtaxa = @{$dbt->getData($sql)};
+	
+	my @allsubtaxa = $taxonomy->getTaxa('all_children', $focal_taxon, 
+					    { exclude => $exclusion,
+					      fields => ['lft', 'preservation', 'ext2'] });
+	
 	my @subtaxa;
-
-	if ( $q->param('taxonomic_precision') eq "any subtaxon" )	{
-		$sql = "SELECT a.taxon_no,taxon_name,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'}.$exclude;
-		@subtaxa = @{$dbt->getData($sql)};
-	} elsif ( $q->param('taxonomic_precision') =~ /species|genus|family/ )	{
-		my @ranks = ('subspecies','species');
-		if ( $q->param('taxonomic_precision') =~ /genus or species/ )	{
-			push @ranks , ('subgenus','genus');
-		} elsif ( $q->param('taxonomic_precision') =~ /family/ )	{
-			push @ranks , ('subgenus','genus','tribe','subfamily','family');
+	
+	if ( $q->param('taxonomic_precision') =~ /species|genus|family/ )
+	{
+	    my @ranks = ('subspecies','species');
+	    if ( $q->param('taxonomic_precision') =~ /genus or species/ )	{
+		push @ranks , ('subgenus','genus');
+	    } elsif ( $q->param('taxonomic_precision') =~ /family/ )	{
+		push @ranks , ('subgenus','genus','tribe','subfamily','family');
+	    }
+	    
+	    my @extra_filters;
+	    
+	    if ( $q->param('types_only') =~ /yes/i )
+	    {
+		push @extra_filters,  "a.type_locality > 0";
+	    }
+	    
+	    if ( $q->param('type_body_part') )
+	    {
+		my $parts;
+		if ( $q->param('type_body_part') =~ /multiple teeth/i )	{
+		    $parts = "'skeleton','partial skeleton','skull','partial skull','maxilla','mandible','teeth'";
+		} elsif ( $q->param('type_body_part') =~ /skull/i )	{
+		    $parts = "'skeleton','partial skeleton','skull','partial skull'";
+		} elsif ( $q->param('type_body_part') =~ /skeleton/i )	{
+		    $parts = "'skeleton','partial skeleton'";
 		}
-		$sql = "SELECT a.taxon_no,taxon_name,type_locality,extant,preservation,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>".$nos[0]->{'lft'}." AND rgt<".$nos[0]->{'rgt'}.$exclude." AND taxon_rank IN ('".join("','",@ranks)."')";
-		if ( $q->param('types_only') =~ /yes/i )	{
-			$sql .= " AND type_locality>0";
-		}
-		if ( $q->param('type_body_part') )	{
-			my $parts;
-			if ( $q->param('type_body_part') =~ /multiple teeth/i )	{
-				$parts = "'skeleton','partial skeleton','skull','partial skull','maxilla','mandible','teeth'";
-			} elsif ( $q->param('type_body_part') =~ /skull/i )	{
-				$parts = "'skeleton','partial skeleton','skull','partial skull'";
-			} elsif ( $q->param('type_body_part') =~ /skeleton/i )	{
-				$parts = "'skeleton','partial skeleton'";
-			}
-			$sql .= " AND type_body_part IN (".$parts.")";
-		}
-		@subtaxa = @{$dbt->getData($sql)};
-	} else	{
-		@subtaxa = @allsubtaxa;
+		push @extra_filters, "a.type_body_part IN ($parts)" if $parts;
+	    }
+	    
+	    @subtaxa = $taxonomy->getTaxa('all_children', $focal_taxon,
+					  { exclude => $exclusion,
+					    rank => \@ranks,
+					    extra_filters => \@extra_filters,
+					    fields => ['lft', 'preservation', 'ext2'] });
+	    
+	} 
+	
+	else
+	{
+	    @subtaxa = @allsubtaxa;
 	}
-
-	# have to be sure the taxon wasn't marked not-"extant" even though
-	#  it includes extant subtaxa
-	my $extant = $nos[0]->{'extant'};
-	if ( $extant !~ /yes/i )	{
-		for my $t ( @allsubtaxa )	{
-			if ( $t->{'extant'} =~ /yes/i )	{
-				$extant = "yes";
-				last;
-			}
-		}
-	}
-
+	
+	my $extant = $focal_taxon->{ext2};
+	
 	# TRACE FOSSIL REMOVAL
-
+	
 	# this is a fast, elegant algorithm for determining simple
 	#  inheritance of a value (preservation) from parent to child
 	if ( $q->param('traces') !~ /yes/i )	{
@@ -2401,7 +2428,7 @@ sub displayFirstAppearance	{
 				$istrace{$s->{'taxon_no'}}++;
 		# find parents by descending
 		# overall parent is innocent until proven guilty
-			} elsif ( ! $s->{'preservation'} && $s->{'lft'} >= $nos[0]->{'lft'} )	{
+			} elsif ( ! $s->{'preservation'} && $s->{'lft'} >= $focal_taxon->{'lft'} )	{
 				my $j = $i-1;
 			# first part means "not parent"
 				while ( ( $allsubtaxa[$j]->{'rgt'} < $s->{'lft'} || ! $allsubtaxa[$j]->{'preservation'} ) && $j > 0 )	{
@@ -2483,16 +2510,21 @@ sub displayFirstAppearance	{
 
 	print "<div style=\"text-align: center\"><p class=\"medium pageTitle\">First appearance data for $name $authors</p></div>\n";
 	print "<div class=\"small\" style=\"padding-left: 2em; padding-right: 2em;  padding-bottom: 4em;\">\n";
-
-	if ( $#nos == 1 )	{
+	
+	my $other_count = scalar(@other_matches);
+	if ( $other_count == 1 )
+	{
 		print "<p class=\"small\">Warning: a different but smaller taxon in the system has the name $name.</p>";
-	} elsif ( $#nos > 1 )	{
-		print "<p class=\"small\">Warning: $#nos smaller taxa in the system have the name $name.</p>";
+	} 
+	elsif ( $other_count > 1 )
+	{
+	    
+		print "<p class=\"small\">Warning: $other_count smaller taxa in the system have the name $name.</p>";
 	}
-
+	
 	print "<div class=\"displayPanel\">\n<span class=\"displayPanelHeader\" style=\"font-size: 1.2em;\">Basic data</span>\n<div class=\"displayPanelContents\">\n";
 
-	# CROWN GROUP CALCULATION
+	# CROWN GROUP CALCULATION $$$
 
 	if ( $extant =~ /yes/i )	{
 		my $crown = findCrown(\@allsubtaxa);
@@ -2761,7 +2793,7 @@ sub displayFirstAppearance	{
 	if ( $q->param('types_only') =~ /yes/i )	{
 		$reso = " AND species_reso='n. sp.'";
 	}
-	$sql = "(SELECT r.taxon_no,taxon_name,taxon_rank,collection_no,occurrence_no,reid_no FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES'$reso GROUP BY collection_no,r.taxon_no) UNION (SELECT o.taxon_no,taxon_name,taxon_rank,collection_no,occurrence_no,0 FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$nos[0]->{'lft'} AND rgt<=$nos[0]->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).")$reso GROUP BY collection_no,o.taxon_no)";
+	$sql = "(SELECT r.taxon_no,taxon_name,taxon_rank,collection_no,occurrence_no,reid_no FROM reidentifications r,$TAXA_TREE_CACHE t,authorities a WHERE r.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$focal_taxon->{'lft'} AND rgt<=$focal_taxon->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND r.taxon_no IN (".join(',',@in_list).") AND most_recent='YES'$reso GROUP BY collection_no,r.taxon_no) UNION (SELECT o.taxon_no,taxon_name,taxon_rank,collection_no,occurrence_no,0 FROM occurrences o,$TAXA_TREE_CACHE t,authorities a WHERE o.taxon_no=t.taxon_no AND t.taxon_no=a.taxon_no AND lft>=$focal_taxon->{'lft'} AND rgt<=$focal_taxon->{'rgt'} AND collection_no IN (".join(',',@collnos).") AND o.taxon_no IN (".join(',',@in_list).")$reso GROUP BY collection_no,o.taxon_no)";
 	my @occs = @{$dbt->getData($sql)};
 
 	# impose synonymy mask, but only for taxa with occurrences JA 31.10.09
@@ -2895,7 +2927,7 @@ sub displayFirstAppearance	{
 	}
 	print "</div>\n</div>\n";
 
-	print "<div style=\"padding-left: 6em;\"><a href=\"$READ_URL?a=beginFirstAppearance\">Search again</a> - <a href=\"$READ_URL?a=displayTaxonInfoResults&amp;taxon_no=$nos[0]->{'taxon_no'}\">See more details about $name</a></div>\n";
+	print "<div style=\"padding-left: 6em;\"><a href=\"$READ_URL?a=beginFirstAppearance\">Search again</a> - <a href=\"$READ_URL?a=displayTaxonInfoResults&amp;taxon_no=$focal_taxon->{'taxon_no'}\">See more details about $name</a></div>\n";
 	print "</div>\n";
 
 	print $hbo->stdIncludes("std_page_bottom");

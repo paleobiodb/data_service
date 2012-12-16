@@ -2983,7 +2983,7 @@ sub beginFirstAppearance	{
 
 sub displayFirstAppearance	{
 	print $hbo->stdIncludes( $PAGE_TOP );
-	TaxonInfo::displayFirstAppearance($q, $s, $dbt, $hbo);
+	TaxonInfo::displayFirstAppearance($q, $s, $dbt, $taxonomy, $hbo);
 	print $hbo->stdIncludes( $PAGE_BOTTOM );
 }
 
