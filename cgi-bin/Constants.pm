@@ -42,16 +42,6 @@ $Constants::COLLECTIONS = 'collections';
 $Constants::COLLECTION_NO = 'collection_no';
 $Constants::OCCURRENCES = 'occurrences';
 $Constants::OCCURRENCE_NO = 'occurrence_no';
-if ( $ENV{'SERVER_NAME'} =~ /^eco/i )	{
-    $Constants::DB = 'eco';
-    $Constants::DB_TYPE = 'Recent occurrence';
-    $Constants::PAGE_TOP = 'eco_top';
-    $Constants::PAGE_BOTTOM = 'eco_bottom';
-    $Constants::COLLECTIONS = 'inventories';
-    $Constants::COLLECTION_NO = 'inventory_no';
-    $Constants::OCCURRENCES = 'inventory_entries';
-    $Constants::OCCURRENCE_NO = 'entry_no';
-}
 if ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i && $ENV{'HTTP_USER_AGENT'} !~ /iPad/i )	{
     $Constants::PAGE_TOP = 'mobile_top';
     $Constants::PAGE_BOTTOM = 'mobile_bottom';
