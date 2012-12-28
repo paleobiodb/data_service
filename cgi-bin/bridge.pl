@@ -71,7 +71,7 @@ if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
 }
 
-if ( $DB ne "eco" && $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
+if ( $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
 	print $q->redirect( -url=>"http://paleodb.org/cgi-bin/bridge.pl?action=menu&user=Contributor" );
 }
 
@@ -314,19 +314,7 @@ sub menu	{
 		if ( $s->get('role') =~ /authorizer|student|technician/ )	{
 			$access = "full";
 		}
-		if ( $DB ne "eco" )	{
-			print $hbo->populateHTML('menu',[$access],['access']);
-		} else	{
-		# print header separately because links are reused elsewhere
-			print qq|
-<div style="margin-left: auto; margin-right: auto; margin-bottom: 2em; text-align: center;"><p class="pageTitle">Data entry functions</p></div>
-
-<div class="displayPanel" style="width: 20em; margin-left: auto; margin-right: auto; margin-bottom: 1em; font-size: 1.1em;">
-
-|;
-			print $hbo->populateHTML('eco_menu',[$access],['access']);
-			print "\n</div>\n\n";
-		}
+		print $hbo->populateHTML('menu',[$access],['access']);
 		print $hbo->stdIncludes($PAGE_BOTTOM);
 	} else	{
         	if ($q->param('user') eq 'Contributor') {
@@ -360,13 +348,6 @@ sub home	{
 	 		# Run the command
             execAction($queue{'action'}); # Hack so use strict doesn't back
 		}
-	}
-
-	if ( $DB eq "eco" )	{
-		print $hbo->stdIncludes($PAGE_TOP);
-		print $hbo->populateHTML('eco_home',{error => $error});
-		print $hbo->stdIncludes($PAGE_BOTTOM);
-		return;
 	}
 
 	sub lastEntry	{
@@ -1159,18 +1140,12 @@ sub processReferenceForm {
 
 
 # 7.11.09 JA
-# hacked to keep eco DB searches away from taxon pages because there won't be
-#  enough taxon-specific info to make taxon pages useful for quite some time
-#  27.5.11 JA
 sub quickSearch	{
 
 	my $qs = $q->param('quick_search');
 	$qs =~ s/\./%/g;
 	$qs =~ s/  / /g;
 	$q->param('quick_search' => $qs);
-
-	my $taxa_skipped;
-	( $DB eq "eco" ) ? $taxa_skipped = 1 : "";
 
 	# case 1 or 2: search string cannot be a taxon name, so search elsewhere
 	my $nowDate = now();
@@ -1192,12 +1167,12 @@ sub quickSearch	{
 		$found == 1 ? exit : "";
 	# if basicCollectionSearch finds any match it should exit somehow before
 	#   this point, so try a common name search as a desperation measure
-		if ( $qs !~ /[^A-Za-z' ]/ && $DB ne "eco" )	{
+		if ( $qs !~ /[^A-Za-z' ]/ )	{
 			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 			exit;
 		}
 	}
-	elsif ( $DB ne "eco" )	{
+	else	{
 		my $sql = "SELECT count(*) c FROM authorities WHERE taxon_name LIKE '".$qs."'";
     		my $t = ${$dbt->getData($sql)}[0];
 	# case 3: string is formatted correctly and matches at least one name,
@@ -1215,9 +1190,6 @@ sub quickSearch	{
 			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 			exit;
 		}
-	} else	{
-		my $found = Collection::basicCollectionSearch($dbt,$q,$s,$hbo,$taxa_skipped);
-		( $found == 1 ) ? exit : "";
 	}
 
 	# if we don't have any idea what they're driving at, send them home
@@ -1257,11 +1229,7 @@ sub displaySearchCollsForAdd	{
 	
 	# Spit out the HTML
 	print $hbo->stdIncludes( $PAGE_TOP );
-	if ( $DB ne "eco" )	{
-		print  $hbo->populateHTML('search_collections_for_add_form' , \%pref);
-	} else	{
-		print  $hbo->populateHTML('search_inventories_for_add_form' , \%pref);
-	}
+	print $hbo->populateHTML('search_collections_for_add_form' , \%pref);
 	print $hbo->stdIncludes( $PAGE_BOTTOM );
 
 }
@@ -1310,14 +1278,9 @@ sub displaySearchColls {
 	# Spit out the HTML
 	print $hbo->stdIncludes($PAGE_TOP);
 	print Person::makeAuthEntJavascript($dbt);
-	if ( $DB ne "eco" )	{
-		$vars{'page_title'} = "Collection search form";
-		print PBDBUtil::printIntervalsJava($dbt,1);
-		print $hbo->populateHTML('search_collections_form', \%vars);
-	} else	{
-		$vars{'page_title'} = "Inventory search form";
-		print $hbo->populateHTML('inventory_search_form', \%vars);
-	}
+	$vars{'page_title'} = "Collection search form";
+	print PBDBUtil::printIntervalsJava($dbt,1);
+	print $hbo->populateHTML('search_collections_form', \%vars);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -1390,10 +1353,8 @@ sub displayCollResults {
 
     my $action =  
           ($type eq "add") ? "displayCollectionDetails"
-        : ($type eq "edit" && $DB ne "eco") ? "displayCollectionForm"
-        : ($type eq "edit" && $DB eq "eco") ? "inventoryForm"
-        : ($type eq "view" && $DB ne "eco") ? "displayCollectionDetails"
-        : ($type eq "view" && $DB eq "eco") ? "inventoryInfo"
+        : ($type eq "edit") ? "displayCollectionForm"
+        : ($type eq "view") ? "displayCollectionDetails"
         : ($type eq "edit_occurrence") ? "displayOccurrenceAddEdit"
         : ($type eq "occurrence_list") ? "displayOccurrenceListForm"
         : ($type eq "analyze_abundance") ? "rarefyAbundances"
@@ -1415,9 +1376,6 @@ sub displayCollResults {
 	} elsif ( ! $dataRows )	{
 		my %options = $q->Vars();
 		my $fields = ["authorizer","country", "state", "max_interval_no", "min_interval_no","collection_aka","collectors","collection_dates"];
-		if ( $DB eq "eco" )	{
-			$fields = ["authorizer_no","country", "state", "habitat", "inventory_aka","inventory_method","inventoried_by","years"];
-		}
 		if ($q->param('output_format') eq 'xml') {
 			push @$fields, "latdeg","latmin","latsec","latdir","latdec","lngdeg","lngmin","lngsec","lngdir","lngdec";
 		}
@@ -1480,16 +1438,6 @@ sub displayCollResults {
 			exit;
 		}
 
-	# need to grab the authorizer names, these are no built in to the
-	#  inventories table
-		my %lookup;
-		if ( $DB eq "eco" )	{
-			my @auth_nos = map { $_->{'authorizer_no'} } @dataRows;
-			my $sql = "SELECT person_no,name FROM person WHERE person_no IN (".join(',',@auth_nos).")";
-			my @prefs = @{$dbt->getData($sql)};
-			$lookup{$_->{'person_no'}} = $_->{'name'} foreach @prefs;
-		}
-		
 		print $hbo->stdIncludes( $PAGE_TOP );
 
         # Display header link that says which collections we're currently viewing
@@ -1525,31 +1473,18 @@ sub displayCollResults {
 	<table class="small" border="0" cellpadding="4" cellspacing="0">|;
 
 	# print columns header
-	if ( $DB ne "eco" )	{
-		print qq|<tr>
+	print qq|<tr>
 <th>Collection</th>
 <th align=left>Authorizer</th>
 <th align=left nowrap>Collection name</th>
 <th align=left>Reference</th>
 |;
-		print "<th align=left>Distance</th>\n" if ($type eq 'add');
-		print "</tr>\n\n";
-	} else	{
-		print qq|<tr>
-<th align=left>Contributor</th>
-<th align=left nowrap>Inventory name</th>
-<th align=left>Location</th>
-<th align=left>Habitat</th>
-<th align=left nowrap>Survey methods</th>
-<th align=left>Reference</th>
-|;
-		print "<th align=left>Distance</th>\n" if ($type eq 'add');
-		print "</tr>\n\n";
-	}
+	print "<th align=left>Distance</th>\n" if ($type eq 'add');
+	print "</tr>\n\n";
  
         # Make non-editable links not highlighted  
         my ($p,%is_modifier_for); 
-        if ($type eq 'edit' && $DB ne "eco") { 
+        if ($type eq 'edit') { 
             $p = Permissions->new($s,$dbt);
             %is_modifier_for = %{$p->getModifierList()};
         }
@@ -1618,7 +1553,6 @@ sub displayCollResults {
 			}
 
 
-            if ( $DB ne "eco" )	{ 
             if ($type ne 'edit' || 
                 $type eq 'edit' && ($s->get("superuser") ||
                                    ($s->get('authorizer_no') && $s->get("authorizer_no") == $dataRow->{'authorizer_no'}) ||
@@ -1649,7 +1583,6 @@ sub displayCollResults {
             } else {	
                 # Don't link it if if we're in edit mode and we don't have permission
                 print "<td align=center valign=top>$dataRow->{$COLLECTION_NO}</td>";
-            }
             }
 
 
@@ -1691,32 +1624,18 @@ sub displayCollResults {
             if ($dataRow->{'old_id'}) {
                 $timeplace .= " - old id";
             }
-            if ( $DB ne "eco" )	{
-                print "<td valign=top nowrap>$dataRow->{authorizer}</td>\n";
-                print qq|<td valign="top" style="padding-left: 0.5em; text-indent: -0.5em;"><span style="padding-right: 1em;">${collection_names}</span> <span class="tiny"><i>${timeplace}</i></span></td>
+            print "<td valign=top nowrap>$dataRow->{authorizer}</td>\n";
+            print qq|<td valign="top" style="padding-left: 0.5em; text-indent: -0.5em;"><span style="padding-right: 1em;">${collection_names}</span> <span class="tiny"><i>${timeplace}</i></span></td>
 |;
-            } else	{
-                $dataRow->{'authorizer'} = $lookup{$dataRow->{'authorizer_no'}};
-		$dataRow->{'inventory_name'} = "<a href=\"$exec_url?action=displayCollResults&amp;type=$type&amp;$COLLECTION_NO=$dataRow->{$COLLECTION_NO}\">" . $dataRow->{'inventory_name'} . "</a>";
-                $dataRow->{'inventory_method'} =~ s/,/, /g;
-                for my $field ( 'authorizer','inventory_name','country','habitat','inventory_method' )	{
-                    print "<td valign=top nowrap>$dataRow->{$field}</td>\n";
-                }
-            }
             print "<td valign=top nowrap>$reference</td>\n";
             print "<td valign=top align=center>".int($dataRow->{distance})." km </td>\n" if ($type eq 'add');
             print "</tr>";
-  		}
-
-        print "</table>\n</div>\n";
+            }
+            print "</table>\n</div>\n";
     } elsif ( $displayRows == 1 ) { # if only one row to display...
 		$q->param($COLLECTION_NO=>$dataRows[0]->{$COLLECTION_NO});
-                if ( ( $q->param('basic') =~ /yes/i || $DB eq "eco" ) && $type eq "view" )	{
-			if ( $DB ne "eco" )	{
-				Collection::basicCollectionInfo($dbt,$q,$s,$hbo);
-			} else	{
-				Collection::inventoryInfo($dbt,$q,$s,$hbo);
-			}
+                if ( $q->param('basic') =~ /yes/i && $type eq "view" )	{
+			Collection::basicCollectionInfo($dbt,$q,$s,$hbo);
 			return;
 		}
 		# Do the action directly if there is only one row
@@ -1724,11 +1643,7 @@ sub displayCollResults {
     } else {
 		# If this is an add,  Otherwise give an error
 		if ( $type eq "add" ) {
-			if ( $DB ne "eco" )	{
-				displayCollectionForm();
-			} else	{
-				inventoryForm();
-			}
+			displayCollectionForm();
 			return;
 		} else {
 			my $error = "<center>\n<p style=\"margin-top: -1em;\">Your search produced no matches: please try again</p>";
@@ -1783,9 +1698,6 @@ sub displayCollResults {
 		#  entry form JA 6.4.04
 		my @coordfields = ("latdeg","latmin","latsec","latdec","latdir",
 				"lngdeg","lngmin","lngsec","lngdec","lngdir");
-		if ( $DB eq "eco" )	{
-			@coordfields = ("lat","lng","survey_method");
-		}
 		for my $cf (@coordfields)	{
 			if ( $q->param($cf) )	{
 				print "<input type=\"hidden\" name=\"$cf\" value=\"";
@@ -1793,18 +1705,9 @@ sub displayCollResults {
 			}
 		}
 
-		if ( $DB ne "eco" )	{
-			print qq|<input type="hidden" name="action" value="displayCollectionForm">
+		print qq|<input type="hidden" name="action" value="displayCollectionForm">
 |;
-		} else	{
-			print qq|<input type="hidden" name="action" value="inventoryForm">
-|;
-		}
-		if ( $DB ne "eco" )	{
-			print qq|<center>\n<input type=submit value="Add a new collection">|;
-		} else	{
-			print qq|<center>\n<input type=submit value="Add a new inventory">|;
-		}
+		print qq|<center>\n<input type=submit value="Add a new collection">|;
 		print "</center>\n</form>\n";
 	}
 		
@@ -2003,37 +1906,18 @@ sub processCollectionsSearchForAdd	{
 
 	my $sql;
 
-	if ( $DB ne "eco" )	{
 	# get a list of interval numbers that fall in the geological period
-		my $t = new TimeLookup($dbt);
-		$sql = "SELECT interval_no FROM intervals WHERE interval_name LIKE ".$dbh->quote($q->param('period_max'));
-		my $period_no = ${$dbt->getData($sql)}[0]->{'interval_no'};
-		my @intervals = $t->mapIntervals($period_no);
-		$sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
-		$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
-	} else	{
-		$sql = "SELECT i.* FROM inventories i LEFT JOIN person p1 ON p1.person_no=i.authorizer_no WHERE FIND_IN_SET('".$q->param('inventory_method')."',inventory_method) AND ";
-	}
-
+	my $t = new TimeLookup($dbt);
+	$sql = "SELECT interval_no FROM intervals WHERE interval_name LIKE ".$dbh->quote($q->param('period_max'));
+	my $period_no = ${$dbt->getData($sql)}[0]->{'interval_no'};
+	my @intervals = $t->mapIntervals($period_no);
+	$sql = "SELECT c.collection_no, c.collection_aka, c.authorizer_no, p1.name authorizer, c.collection_name, c.access_level, c.research_group, c.release_date, DATE_FORMAT(release_date, '%Y%m%d') rd_short, c.country, c.state, c.latdeg, c.latmin, c.latsec, c.latdec, c.latdir, c.lngdeg, c.lngmin, c.lngsec, c.lngdec, c.lngdir, c.max_interval_no, c.min_interval_no, c.reference_no FROM collections c LEFT JOIN person p1 ON p1.person_no = c.authorizer_no WHERE ";
+	$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
 
 	# convert the submitted lat/long values
 	my ($lat,$lng,$latlng_format);
-	if ( $DB ne "eco" )	{
-		($lat,$latlng_format) = Collection::fromMinSec($q->param('latdeg'),$q->param('latmin'),$q->param('latsec'));
-		($lng,$latlng_format) = Collection::fromMinSec($q->param('lngdeg'),$q->param('lngmin'),$q->param('lngsec'));
-	} elsif ( $q->param('latsec') ne "" )	{
-		$lat = sprintf("%s%c %d' %d\"",$q->param('latdeg'),186,$q->param('latmin'),$q->param('latsec'));
-		$lng = sprintf("%s%c %d' %d\"",$q->param('lngdeg'),186,$q->param('lngmin'),$q->param('lngsec'));
-	} elsif ( $q->param('latmin') ne "" )	{
-		$lat = sprintf("%s%c %d'",$q->param('latdeg'),186,$q->param('latmin'));
-		$lng = sprintf("%s%c %d'",$q->param('lngdeg'),186,$q->param('lngmin'));
-	} elsif ( $q->param('latdec') )	{
-		$lat = $q->param('latdeg').".".$q->param('latdec');
-		$lng = $q->param('lngdeg').".".$q->param('lngdec');
-	} else	{
-		$lat = $q->param('latdeg');
-		$lng = $q->param('lngdeg');
-	}
+	($lat,$latlng_format) = Collection::fromMinSec($q->param('latdeg'),$q->param('latmin'),$q->param('latsec'));
+	($lng,$latlng_format) = Collection::fromMinSec($q->param('lngdeg'),$q->param('lngmin'),$q->param('lngsec'));
 	
 	# west and south are negative
 	if ( $q->param('latdir') =~ /S/ )	{
@@ -2044,11 +1928,6 @@ sub processCollectionsSearchForAdd	{
 	}
 	my $mylat = $lat;
 	my $mylng = $lng;
-	# these are needed to stash values as hiddens
-	if ( $DB eq "eco" )	{
-		$q->param('lat' => $lat);
-		$q->param('lng' => $lng);
-	}
 
 	# convert the coordinates to decimal values
 	# maximum latitude is center point plus 100 km, etc.
@@ -2062,7 +1941,6 @@ sub processCollectionsSearchForAdd	{
 
 	# create an inlist of lat/long degree values for hitting the
 	#  collections table
-	if ( $DB ne "eco" )	{
 
 	# reset the limits if you go "north" of the north pole etc.
 	# note that we don't have to get complicated with resetting, say,
@@ -2102,12 +1980,6 @@ sub processCollectionsSearchForAdd	{
 	$inlist =~ s/,$//;
 	$sql .= "c.lngdeg IN (" . $inlist . ")";
 
-	}
-	# for the inventories table, simply use the built-in decimal values
-	else	{
-		$sql .= "i.lat >= $minlat AND i.lat <= $maxlat AND i.lng >= $minlng AND i.lng <= $maxlng";
-	}
-
 	if ($q->param('sortby') eq $COLLECTION_NO) {
 		$sql .= " ORDER BY c.$COLLECTION_NO";
 	} elsif ($q->param('sortby') =~ /collection_name|inventory_name/) {
@@ -2116,17 +1988,12 @@ sub processCollectionsSearchForAdd	{
 
 	my @dataRows = ();
 
-	if ( $DB ne "eco" )	{
-		my $sth = $dbt->dbh->prepare($sql);
-		$sth->execute();
-		my $p = Permissions->new ($s,$dbt);
-		my $limit = 10000000;
-		my $ofRows = 0;
-		$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
-	} else	{
-		@dataRows = @{$dbt->getData($sql)};
-	}
-
+	my $sth = $dbt->dbh->prepare($sql);
+	$sth->execute();
+	my $p = Permissions->new ($s,$dbt);
+	my $limit = 10000000;
+	my $ofRows = 0;
+	$p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
 
 	# make sure collections really are within 100 km of the submitted
 	#  lat/long coordinate JA 6.4.04
@@ -2135,7 +2002,6 @@ sub processCollectionsSearchForAdd	{
     # have to recompute this
     for my $dr (@dataRows)	{
         my ($lat,$lng);
-        if ( $DB ne "eco" )	{
         # compute the coordinate
         $lat = $dr->{'latdeg'};
         $lng = $dr->{'lngdeg'};
@@ -2157,10 +2023,6 @@ sub processCollectionsSearchForAdd	{
         }
         if ( $dr->{'lngdir'} =~ /W/ )	{
             $lng = $lng * -1;
-        }
-        } else	{
-            $lat = $dr->{'lat'};
-            $lng = $dr->{'lng'};
         }
 
         # if the points are less than 100 km apart, save
@@ -3264,11 +3126,7 @@ sub displayOccurrenceAddEdit {
 
 	# Grab the collection name for display purposes JA 1.10.02
 	my $sql;
-	if ( $DB ne "eco" )	{
-		$sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
-	} else	{
-		$sql = "SELECT inventory_name FROM inventories WHERE inventory_no=$collection_no";
-	}
+	$sql = "SELECT collection_name FROM collections WHERE collection_no=$collection_no";
 	my $sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 	my $collection_name = ${$sth->fetchrow_arrayref()}[0];
@@ -3278,11 +3136,7 @@ sub displayOccurrenceAddEdit {
 
 	# get the occurrences right away because we need to make sure there
 	#  aren't too many to be displayed
-	if ( $DB ne "eco" )	{
-		$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no ORDER BY occurrence_no ASC";
-	} else	{
-		$sql = "SELECT * FROM inventory_entries WHERE inventory_no=$collection_no ORDER BY entry_no ASC";
-	}
+	$sql = "SELECT * FROM occurrences WHERE collection_no=$collection_no ORDER BY occurrence_no ASC";
 	$sth = $dbh->prepare( $sql ) || die ( "$sql<hr>$!" );
 	$sth->execute();
 
@@ -3330,11 +3184,7 @@ sub displayOccurrenceAddEdit {
 	}
 
 	my %pref = $s->getPreferences();
-	if ($DB ne "eco" )	{
-		print $hbo->populateHTML('js_occurrence_checkform');
-	} else	{
-		print $hbo->populateHTML('js_eco_entry_checkform');
-	}
+	print $hbo->populateHTML('js_occurrence_checkform');
 
 	print qq|<form method=post action="$WRITE_URL" onSubmit='return checkForm();'>\n|;
 	print qq|<input name="action" value="processEditOccurrences" type=hidden>\n|;
@@ -3345,15 +3195,6 @@ sub displayOccurrenceAddEdit {
 		'collection_no'=>$collection_no,
 		'collection_name'=>$collection_name
 	};
-	if ( $DB eq "eco" )	{
-		@optional = ('counts');
-		$header_vars = {
-			'inventory_no'=>$collection_no,
-			'collection_name'=>$collection_name,
-			'counts'=>'yes'
-		};
-		$pref{'counts'} = 'yes';
-	}
 	$header_vars->{$_} = $pref{$_} for (@optional);
 
 	print $hbo->populateHTML('occurrence_header_row', $header_vars);
@@ -3380,10 +3221,8 @@ sub displayOccurrenceAddEdit {
         print $hbo->populateHTML("occurrence_edit_row", $occ_row, [$occ_read_only]);
 
         my @reid_rows;
-        if ( $DB ne "eco" )	{
-            my $sql = "SELECT * FROM reidentifications WHERE occurrence_no=" .  $occ_row->{'occurrence_no'};
-            @reid_rows = @{$dbt->getData($sql)};
-        }
+        my $sql = "SELECT * FROM reidentifications WHERE occurrence_no=" .  $occ_row->{'occurrence_no'};
+        @reid_rows = @{$dbt->getData($sql)};
         foreach my $re_row (@reid_rows) {
             $re_row = formatTaxonNameInput($re_row);
             # Copy over optional fields;
@@ -3417,14 +3256,6 @@ sub displayOccurrenceAddEdit {
 		'occurrence_no'=>-1,
 		'taxon_name'=>$pref{'species_name'}
 	};
-	if ( $DB eq "eco" )	{
-		$blank = {
-			'inventory_no'=>$collection_no,
-			'reference_no'=>$s->get('reference_no'),
-			'entry_no'=>-1,
-			'counts'=>'yes'
-		};
-	}
 	if ( $blank->{'species_name'} eq " " )	{
 		$blank->{'species_name'} = "";
 	}
@@ -3812,9 +3643,6 @@ sub displayOccurrenceListForm	{
 	my %vars;
 	my $collection_no = $q->param($COLLECTION_NO);
 	my $sql = "(SELECT o.genus_reso,o.genus_name,o.species_reso,o.species_name FROM occurrences o LEFT JOIN reidentifications r ON o.occurrence_no=r.occurrence_no WHERE o.$COLLECTION_NO=$collection_no AND r.reid_no IS NULL) UNION (SELECT r.genus_reso,r.genus_name,r.species_reso,r.species_name FROM occurrences o LEFT JOIN reidentifications r ON o.occurrence_no=r.occurrence_no WHERE o.$COLLECTION_NO=$collection_no AND r.most_recent='YES') ORDER BY genus_name,species_name";
-	if ( $DB eq "eco" )	{
-		$sql = "SELECT genus_name,species_name FROM inventory_entries WHERE $COLLECTION_NO=$collection_no ORDER BY genus_name,species_name";
-	}
 	my @occs = @{$dbt->getData($sql)};
 
 	if ( @occs )	{
@@ -3841,20 +3669,14 @@ sub displayOccurrenceListForm	{
 		$vars{'old_occurrences'} .= join(', ',@ids);
 	}
 
-	if ( $DB ne "eco" )	{
-		my $sql = "SELECT collection_name FROM $COLLECTIONS WHERE $COLLECTION_NO=$collection_no";
-		$vars{'collection_name'} = ${$dbt->getData($sql)}[0]->{'collection_name'};
-	} else	{
-		my $sql = "SELECT inventory_name FROM $COLLECTIONS WHERE $COLLECTION_NO=$collection_no";
-		$vars{'collection_name'} = ${$dbt->getData($sql)}[0]->{'inventory_name'};
-	}
+	my $sql = "SELECT collection_name FROM $COLLECTIONS WHERE $COLLECTION_NO=$collection_no";
+	$vars{'collection_name'} = ${$dbt->getData($sql)}[0]->{'collection_name'};
 
 	print $hbo->stdIncludes($PAGE_TOP);
 	print $hbo->populateHTML('js_occurrence_checkform');
 
 	print qq|<form method=post action="$WRITE_URL" onSubmit='return checkForm();'>\n|;
 	$vars{$COLLECTION_NO} = $collection_no;
-	$vars{'coll_or_inventory'} = $collection_no;
 	$vars{'collection_no_field'} = $COLLECTION_NO;
 	$vars{'collection_no_field2'} = $COLLECTION_NO;
 	$vars{'list_collection_no'} = $collection_no;
@@ -4383,9 +4205,6 @@ sub processEditOccurrences {
 	#  used checkDuplicates; it's much faster and uses more lenient
 	#  criteria because isolated duplicates are handled by the JavaScript
 	my $sql ="SELECT genus_reso,genus_name,subgenus_reso,subgenus_name,species_reso,species_name,taxon_no FROM $OCCURRENCES WHERE $COLLECTION_NO=" . $collection_no;
-	if ( $DB eq "eco" )	{
-		$sql ="SELECT genus_name,species_name,taxon_no FROM $OCCURRENCES WHERE $COLLECTION_NO=" . $collection_no;
-	}
 	my @occrefs = @{$dbt->getData($sql)};
 	my %taxon_no;
 	if ( $#occrefs > 0 )	{
@@ -4495,9 +4314,6 @@ sub processEditOccurrences {
 			@to_check = ();
 			push @to_check , $_->{'taxon_no'} foreach @species;
 			$sql = "(SELECT taxon_no,collection_no FROM occurrences WHERE collection_no!=$collection_no AND taxon_no in (".join(',',@to_check).") AND species_reso='n. sp.') UNION (SELECT taxon_no,collection_no FROM reidentifications WHERE collection_no!=$collection_no AND taxon_no in (".join(',',@to_check).") AND species_reso='n. sp.')";
-			if ( $DB eq "eco" )	{
-				$sql = "SELECT taxon_no,inventory_no FROM inventory_entries WHERE inventory_no!=$collection_no AND taxon_no in (".join(',',@to_check).") AND species_reso='n. sp.'";
-			}
 			my @dupe_refs = @{$dbt->getData($sql)};
 			if ( @dupe_refs )	{
 				$dupe_colls{$_->{'taxon_no'}} .= ", ".$_->{$COLLECTION_NO} foreach @dupe_refs;
@@ -4711,35 +4527,25 @@ sub processEditOccurrences {
     # Now handle the actual deletion
     foreach my $o (@occurrences_to_delete) {
         my ($occurrence_no,$taxon_name,$line_no) = @{$o};
-        if ( $DB ne "eco" )	{
-            my $sql = "SELECT COUNT(*) c FROM reidentifications WHERE occurrence_no=$occurrence_no";
-            my $reid_cnt = ${$dbt->getData($sql)}[0]->{'c'};
-            $sql = "SELECT COUNT(*) c FROM specimens WHERE occurrence_no=$occurrence_no";
-            my $measure_cnt = ${$dbt->getData($sql)}[0]->{'c'};
-            if ($reid_cnt) {
-                push @warnings, "'$taxon_name' on line $line_no can't be deleted because there are reidentifications based on it";
-            }
-            if ($measure_cnt) {
-                push @warnings, "'$taxon_name' on line $line_no can't be deleted because there are measurements based on it";
-            }
-            if ($reid_cnt == 0 && $measure_cnt == 0) {
-                $dbt->deleteRecord($s,$OCCURRENCES,$OCCURRENCE_NO,$occurrence_no);
-            }
-        } else	{
+        my $sql = "SELECT COUNT(*) c FROM reidentifications WHERE occurrence_no=$occurrence_no";
+        my $reid_cnt = ${$dbt->getData($sql)}[0]->{'c'};
+        $sql = "SELECT COUNT(*) c FROM specimens WHERE occurrence_no=$occurrence_no";
+        my $measure_cnt = ${$dbt->getData($sql)}[0]->{'c'};
+        if ($reid_cnt) {
+            push @warnings, "'$taxon_name' on line $line_no can't be deleted because there are reidentifications based on it";
+        }
+        if ($measure_cnt) {
+            push @warnings, "'$taxon_name' on line $line_no can't be deleted because there are measurements based on it";
+        }
+        if ($reid_cnt == 0 && $measure_cnt == 0) {
             $dbt->deleteRecord($s,$OCCURRENCES,$OCCURRENCE_NO,$occurrence_no);
         }
-        
     }
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
 	print qq|<div align="center"><p class="large" style="margin-bottom: 1.5em;">|;
 	my $sql = "SELECT collection_name AS coll FROM collections WHERE collection_no=$collection_no";
-	my $coll_or_inventory = "collection";
-	if ( $DB eq "eco" )	{
-		$sql = "SELECT inventory_name AS coll FROM inventories WHERE inventory_no=$collection_no";
-		$coll_or_inventory = "inventory";
-	}
 	print ${$dbt->getData($sql)}[0]->{'coll'};
 	print "</p></div>\n\n";
 
@@ -4758,22 +4564,14 @@ sub processEditOccurrences {
             my $collection_no = $q->param("list_collection_no");
             $links .= qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&$COLLECTION_NO=$collection_no"><nobr>Edit this taxonomic list</nobr></a> - |;
             $links .= "<nobr><a href=\"$WRITE_URL?action=displayOccurrenceListForm&$COLLECTION_NO=$collection_no\">Paste in more names</a> - ";
-            if ( $DB ne "eco" )	{
-                $links .= "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences&$COLLECTION_NO=$collection_no\"><nobr>Reclassify these IDs</nobr></a> - ";
-            	$links .= "<a href=\"$WRITE_URL?action=displayCollectionForm&$COLLECTION_NO=$collection_no\"><nobr>Edit the $coll_or_inventory record</nobr></a><br>";
-            } else	{
-            	$links .= "<a href=\"$WRITE_URL?action=inventoryForm&$COLLECTION_NO=$collection_no\"><nobr>Edit the $coll_or_inventory record</nobr></a><br>";
-            }
+            $links .= "<a href=\"$WRITE_URL?action=startStartReclassifyOccurrences&$COLLECTION_NO=$collection_no\"><nobr>Reclassify these IDs</nobr></a> - ";
+            $links .= "<a href=\"$WRITE_URL?action=displayCollectionForm&$COLLECTION_NO=$collection_no\"><nobr>Edit the collection record</nobr></a><br>";
         }
         $links .= "<nobr><a href=\"$WRITE_URL?action=displaySearchCollsForAdd&type=add\">Add</a> or ";
-        $links .= "<a href=\"$WRITE_URL?action=displaySearchColls&type=edit\">edit another $coll_or_inventory</a> - </nobr>";
+        $links .= "<a href=\"$WRITE_URL?action=displaySearchColls&type=edit\">edit another collection</a> - </nobr>";
         $links .= "<nobr><a href=\"$WRITE_URL?action=displaySearchColls&type=edit_occurrence\">Add/edit</a>";
-        if ( $DB ne "eco" )	{
-            $links .= ", <nobr><a href=\"$WRITE_URL?action=displaySearchColls&type=occurrence_list\">paste in</a>, or ";
-            $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">reidentify IDs for a different $coll_or_inventory</a></nobr>";
-        } else	{
-            $links .= " or <nobr><a href=\"$WRITE_URL?action=displaySearchColls&type=occurrence_list\">paste in</a> IDs for a different $coll_or_inventory</nobr>";
-        }
+        $links .= ", <nobr><a href=\"$WRITE_URL?action=displaySearchColls&type=occurrence_list\">paste in</a>, or ";
+        $links .= "<a href=\"$WRITE_URL?action=displayReIDCollsAndOccsSearchForm\">reidentify IDs for a different collection</a></nobr>";
     }
     $links .= "</div><br>";
 
