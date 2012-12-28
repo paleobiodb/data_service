@@ -551,12 +551,12 @@ sub displayReference {
         my $html = "";
         if ($authority_count < 100) {
             my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE reference_no=$reference_no ORDER BY taxon_name";
-            my $link = ( $DB ne "eco" ) ? 'a=basicTaxonInfo&taxon_no=' : 'a=displayCollResults&amp;type=view&taxon_no=';
+            my $link = 'a=basicTaxonInfo&taxon_no=';
             my @results = 
                 map { qq'<a href="$READ_URL?$link$_->{taxon_no}">$_->{taxon_name}</a>' }
                 @{$dbt->getData($sql)};
             $html = join(", ",@results);
-        } elsif ( $DB ne "eco" ) {
+        } else {
             $html .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
             my $plural = ($authority_count == 1) ? "" : "s";
             $html .= "view taxonomic name$plural";
@@ -585,7 +585,7 @@ sub displayReference {
                     [$name,$html] }
                 @{$dbt->getData($sql)};
             $html = join("<br>",@results);
-        } elsif ( $DB ne "eco" ) {
+        } else {
             $html .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
             if ($opinion_count) {
                 my $plural = ($opinion_count == 1) ? "" : "s";
@@ -595,31 +595,25 @@ sub displayReference {
         }
 
 	my $class_link; 
-	if ( $DB ne "eco" )	{
-		$class_link = qq| - <small><a href="$READ_URL?a=classify&amp;reference_no=$reference_no">view classification</a></small>|;
-	}
+	$class_link = qq| - <small><a href="$READ_URL?a=classify&amp;reference_no=$reference_no">view classification</a></small>|;
 	print $box->(qq'Taxonomic opinions ($opinion_count) $class_link',$html);
     }
 
 	# list taxa with measurements based on this reference JA 4.12.10
-	if ( $DB ne "eco" )	{
-		my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
-		if ( @taxon_refs )	{
-			my @taxa;
-			push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
-			print $box->("Measurements",join('<br>',@taxa));
-		}
+	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
+	if ( @taxon_refs )	{
+		my @taxa;
+		push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		print $box->("Measurements",join('<br>',@taxa));
 	}
 
 
     # Handle collections box
     my $collection_count;
-    if ( $DB ne "eco" )	{
-        $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
-        $collection_count = ${$dbt->getData($sql)}[0]->{'c'};
-        $sql = "SELECT count(*) c FROM secondary_refs WHERE reference_no=$reference_no";
-        $collection_count += ${$dbt->getData($sql)}[0]->{'c'}; 
-    }
+    $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
+    $collection_count = ${$dbt->getData($sql)}[0]->{'c'};
+    $sql = "SELECT count(*) c FROM secondary_refs WHERE reference_no=$reference_no";
+    $collection_count += ${$dbt->getData($sql)}[0]->{'c'}; 
     if ($collection_count) {
         my $html = "";
         if ($collection_count < 100) {
@@ -678,18 +672,6 @@ sub displayReference {
         if ($html) {
             print $box->(qq'Collections (<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
         }
-    }
-
-    my @inventories;
-    if ( $DB eq "eco" )	{
-        $sql = "SELECT inventory_no FROM refs r,inventories i WHERE r.reference_no=i.reference_no AND r.reference_no=$reference_no";
-        @inventories = @{$dbt->getData($sql)};
-    }
-    if ( @inventories )	{
-        my $count = $#inventories + 1;
-        my @links;
-        push @links , qq|<a href="$READ_URL?a=inventoryInfo&amp;inventory_no=$_->{inventory_no}">$_->{inventory_no}</a>| foreach @inventories;
-        print $box->(qq'Inventories (<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$count</a>)',join(', ',@links));
     }
 
     print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -787,10 +769,6 @@ sub displayReferenceForm {
 
 	# Defaults, then database, then a resubmission/form data
 	my %vars = (%defaults,%db_row,%form_vars);
-
-	if ( $DB eq "eco" )	{
-		$vars{"db"} = "eco";
-	}
 
 	if ($isNewEntry)	{
 		$vars{"page_title"} = "New reference form";
@@ -908,8 +886,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         <span class="displayPanelHeader">Please enter all the data</span>
         <div class="displayPanelContent large">
 |;
-	if ( $DB ne "eco" )	{
-		print qq|
+	print qq|
         <ul class="small" style="text-align: left;">
             <li>Add or edit all the <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined
             <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy
@@ -920,9 +897,6 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
             <li>Add <a href="#" onClick="popup = window.open('$WRITE_URL?a=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$WRITE_URL?a=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>
         <ul>
 |;
-	} else	{
-		print $hbo->populateHTML('eco_menu');
-	}
 	print "</div>\n</div>\n</center>\n";
     }
 }
@@ -938,10 +912,8 @@ sub getReferenceLinkSummary	{
 
 	# Handle Authorities
 	my $authority_count;
-	if ( $DB ne "eco" )	{
-		$sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
-		$authority_count = ${$dbt->getData($sql)}[0]->{'c'};
-	}
+	$sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
+	$authority_count = ${$dbt->getData($sql)}[0]->{'c'};
 
 	if ($authority_count) {
 		my $plural = ($authority_count == 1) ? "" : "s";
@@ -950,16 +922,14 @@ sub getReferenceLinkSummary	{
 
 	# Handle Opinions
 	my (@opinion_counts,$opinion_total,$has_opinion);
-	if ( $DB ne "eco" )	{
-		$sql = "SELECT ref_has_opinion,count(*) c FROM opinions WHERE reference_no=$reference_no GROUP BY ref_has_opinion ORDER BY ref_has_opinion";
-		@opinion_counts = @{$dbt->getData($sql)};
-		if ( $opinion_counts[0]->{'ref_has_opinion'} eq "YES" )	{
-			$has_opinion = $opinion_counts[0]->{'c'};
-		} elsif ( $opinion_counts[1]->{'ref_has_opinion'} eq "YES" )	{
-			$has_opinion = $opinion_counts[1]->{'c'};
-		}
-		$opinion_total = $opinion_counts[0]->{'c'} + $opinion_counts[1]->{'c'};
+	$sql = "SELECT ref_has_opinion,count(*) c FROM opinions WHERE reference_no=$reference_no GROUP BY ref_has_opinion ORDER BY ref_has_opinion";
+	@opinion_counts = @{$dbt->getData($sql)};
+	if ( $opinion_counts[0]->{'ref_has_opinion'} eq "YES" )	{
+		$has_opinion = $opinion_counts[0]->{'c'};
+	} elsif ( $opinion_counts[1]->{'ref_has_opinion'} eq "YES" )	{
+		$has_opinion = $opinion_counts[1]->{'c'};
 	}
+	$opinion_total = $opinion_counts[0]->{'c'} + $opinion_counts[1]->{'c'};
 
 	if ( $opinion_total ) {
 		my $plural = ($opinion_total == 1) ? "" : "s";
@@ -970,13 +940,11 @@ sub getReferenceLinkSummary	{
 	}      
 
 	# list taxa with measurements based on this reference JA 4.12.10
-	if ( $DB ne "eco" )	{
-		my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
-		if ( @taxon_refs )	{
-			my @taxa;
-			push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
-			push @chunks , "measurements of ".join(', ',@taxa);
-		}
+	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
+	if ( @taxon_refs )	{
+		my @taxa;
+		push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		push @chunks , "measurements of ".join(', ',@taxa);
 	}
 
 	# Handle Collections
@@ -987,47 +955,37 @@ sub getReferenceLinkSummary	{
 	# any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
 	my @colls = ();
 	my ($collection_count,$protected_count,%in_year);
-	if ( $DB ne "eco" )	{
-		$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections c WHERE reference_no=$reference_no)";
-		$sql .= " UNION ";
-		$sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, year(release_date) release_year, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
+	$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections c WHERE reference_no=$reference_no)";
+	$sql .= " UNION ";
+	$sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, year(release_date) release_year, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
-		my $sth = $dbh->prepare($sql);
-		$sth->execute();
+	my $sth = $dbh->prepare($sql);
+	$sth->execute();
 
-		my $p = Permissions->new($s,$dbt);
-		if($sth->rows) {
-			my $limit = 999;
-			my $ofRows = 0;
-			$p->getReadRows($sth,\@colls,$limit,\$ofRows);
-		# second hit (which is reasonably fast) gets a count to warn
-		#  users that protected collections do exist
-			my $readable = join(',',map { $_->{collection_no} } @colls);
-			if ( $readable )	{
-				$sql =~ s/WHERE /WHERE c.collection_no NOT IN ($readable) AND /g;
-			}
-			my @protected = @{$dbt->getData($sql)};
-			$in_year{$_->{'release_year'}}++ foreach @protected;
-			$protected_count = scalar(@protected);
+	my $p = Permissions->new($s,$dbt);
+	if($sth->rows) {
+		my $limit = 999;
+		my $ofRows = 0;
+		$p->getReadRows($sth,\@colls,$limit,\$ofRows);
+	# second hit (which is reasonably fast) gets a count to warn
+	#  users that protected collections do exist
+		my $readable = join(',',map { $_->{collection_no} } @colls);
+		if ( $readable )	{
+			$sql =~ s/WHERE /WHERE c.collection_no NOT IN ($readable) AND /g;
 		}
-	} else	{
-		$sql = "SELECT inventory_no,authorizer_no,inventory_name FROM inventories WHERE reference_no=$reference_no";
-		@colls = @{$dbt->getData($sql)};
+		my @protected = @{$dbt->getData($sql)};
+		$in_year{$_->{'release_year'}}++ foreach @protected;
+		$protected_count = scalar(@protected);
 	}
 	$collection_count = scalar(@colls);
 
-	if ($collection_count == 0 && $protected_count == 0 && $DB ne "eco") {
+	if ($collection_count == 0 && $protected_count == 0) {
 		push @chunks , "no collections";
 	}
 	my ($thing1,$thing2,$action);
 	if ($collection_count > 0)	{
-		if ( $DB ne "eco" )	{
-			$thing1 = ($collection_count == 1) ? "collection" : "collections";
-			$action = "basicCollectionSearch";
-		} else	{
-			$thing1 = ($collection_count == 1) ? "inventory" : "inventories";
-			$action = "inventoryInfo";
-		}
+		$thing1 = ($collection_count == 1) ? "collection" : "collections";
+		$action = "basicCollectionSearch";
 		my @coll_links;
 		foreach my $row (@colls) {
 			my $style;
