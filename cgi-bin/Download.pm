@@ -167,7 +167,7 @@ sub buildDownload {
     if ($q->param('output_data') =~ /matrix/i) {
         ($nameCount,$mainCount,$mainFile) = $self->printMatrix($lumpedResults);
         if ($nameCount =~ /^ERROR/) {
-            push @form_errors, "The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the admins (pbdbadmin\@nceas.ucsb.edu) if this is a problem";
+            push @form_errors, "The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the database administrator if this is a problem";
         }
     } elsif ($q->param('output_data') =~ /conjunct/i) {
         ($mainCount,$mainFile,$collFile,$colls) = $self->printCONJUNCT($lumpedResults);
@@ -2469,15 +2469,17 @@ sub queryDatabase {
                     $row->{'c.min_ma_error'} /= 1000;
             }
             # use geochronology if available for composite max/min age
-            if ( $row->{'c.direct_ma'} )	{
+            # whoops, only use dates consistent with the time scale
+            #  JA 5.1.12
+            if ( $row->{'c.direct_ma'} && $row->{'c.direct_ma'} <= $base_lookup->{'base_age'} && $row->{'c.direct_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.direct_ma'};
                 $row->{'c.ma_min'} = $row->{'c.direct_ma'};
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
-            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} > 0 )	{
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} > 0 && $row->{'c.max_ma'} <= $base_lookup->{'base_age'} && $row->{'c.min_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.max_ma'};
                 $row->{'c.ma_min'} = $row->{'c.min_ma'};
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
-            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} <= 0 )	{
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} <= 0 && $row->{'c.max_ma'} <= $base_lookup->{'base_age'} && $row->{'c.min_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.max_ma'};
                 $row->{'c.ma_min'} = 0;
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
@@ -3995,7 +3997,7 @@ sub emailDownloadFiles	{
 	my $self = shift;
 	my $q = $self->{'q'};
 
-	my %headers = ('Subject'=> 'Paleobiology Database download files','From'=>'alroy');
+	my %headers = ('Subject'=> 'Paleobiology Database download files','From'=>'PaleoDB administrator');
 	$headers{'To'} = $q->param('email');
 	$headers{'Content-Transfer-Encoding'} = "7bit";
 	$headers{'Content-Type'} = 'multipart/mixed; boundary=Apple-Mail-81-601985459';
