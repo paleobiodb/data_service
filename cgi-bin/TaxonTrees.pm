@@ -3260,7 +3260,7 @@ sub computeAttrsTable {
     
     # Finally, we iterate from the top of the tree back down, computing those
     # attributes that percolate downward.  For the time being, the only one of
-    # those is a valud of extant=0.  We need to recompute $max_depth, since we
+    # those is a value of extant=0.  We need to recompute $max_depth, since we
     # now need to go all the way down, not just to the lowest row that had a
     # non-null initial value.
     

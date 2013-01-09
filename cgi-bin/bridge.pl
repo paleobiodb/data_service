@@ -1253,7 +1253,7 @@ sub quickSearch	{
 	# if basicCollectionSearch finds any match it should exit somehow before
 	#   this point, so try a common name search as a desperation measure
 		if ( $qs !~ /[^A-Za-z' ]/ && $DB ne "eco" )	{
-			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
+			TaxonInfo::basicTaxonSearch($q,$s,$taxonomy,$dbt,$hbo);
 			exit;
 		}
 	}
@@ -1263,7 +1263,7 @@ sub quickSearch	{
 	# case 3: string is formatted correctly and matches at least one name,
 	#  so search taxa only
 		if ( $t->{'c'} > 0 )	{
-			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
+			TaxonInfo::basicTaxonSearch($q,$s,$taxonomy,$dbt,$hbo);
 			exit;
 		}
 	# case 4: search is formatted correctly but does not directly match
@@ -1272,7 +1272,7 @@ sub quickSearch	{
 		else	{
 			my $found = Collection::basicCollectionSearch($dbt,$q,$s,$hbo);
 			$found == 1 ? exit : "";
-			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
+			TaxonInfo::basicTaxonSearch($q,$s,$taxonomy,$dbt,$hbo);
 			exit;
 		}
 	} else	{
@@ -2969,7 +2969,7 @@ sub checkTaxonInfo {
 
 # JA 3.11.09
 sub basicTaxonInfo	{
-	TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
+	TaxonInfo::basicTaxonSearch($q,$s,$taxonomy,$dbt,$hbo);
 }
 
 ## END Taxon Info Stuff

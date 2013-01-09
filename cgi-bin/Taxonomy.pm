@@ -273,9 +273,9 @@ handle.  Here are some examples:
     
     my @lineage = $taxonomy->getTaxa($base_taxon, 'parents');
     
-    my ($id_table) = $taxonomy->getTaxonIdTable('all_children', $base_taxon);
+    my ($id_table) = $taxonomy->getTaxa('all_children', $base_taxon, { return => 'id_table' });
     
-    my $sth = $dbh->prepare("SELECT some_fields FROM $id_table JOIN some_other_table WHERE condition");
+    my $result = $dbh->selectall_arrayref("SELECT some_fields FROM $id_table JOIN some_other_table WHERE condition");
     
     $dbh->do("DROP TABLE $id_table");
 
@@ -370,12 +370,12 @@ our ($CHILD_FIELDS) = ", ca.taxon_name as child_name, ca.taxon_rank as child_ran
 
 our ($KINGDOM_FIELDS) = ", t.kingdom";
 
-# The "ext2" field is returned if we are asked for 'ext2'.  This is an
-# 'extant' field derived by propagating 'yes' values up the tree and 'no'
-# values down it.  The values are 1 for extant, 0 for not extant, undefined if
-# not recorded.
+# The "extant" fields are returned if we are asked for 'extant'.  These fields
+# are computed from 'extant' field of the authorities table by propagating
+# 'yes' values up the tree and 'no' values down it.  The values are 1 for
+# extant, 0 for not extant, undefined if not recorded.
 
-our ($EXT2_FIELDS) = ", v.extant as ext2";
+our ($EXTANT_FIELDS) = ", v.is_extant, v.extant_children";
 
 # The "type" field is returned if we are asked for 'tt'.
 
@@ -384,6 +384,10 @@ our ($TT_FIELDS) = ", tta.taxon_no as type_taxon_no, tta.taxon_name as type_taxo
 # The "person" fields are returned if we are asked for 'person'.
 
 our ($PERSON_FIELDS) = ", a.authorizer_no, a.enterer_no, a.modifier_no, pp1.name as authorizer_name, pp2.name as enterer_name, pp3.name as modifier_name";
+
+# The "discussion" fields are returned if we are asked for 'discussion'.
+
+our ($DISCUSSION_FIELDS) = "a.discussion, ppd.name as discussant, ppd.email as discussant_email";
 
 # The "specimen" fields are returned if we are asked for 'specimen', or only
 # 'preservation' if we are just asked for that.
@@ -415,7 +419,7 @@ our ($COMMENT_FIELDS) = ", a.comments";
 
 our ($SIZE_FIELDS) = ", (t.rgt-t.lft+1) as size";
 
-# The following hash is used by &getTaxonIdTable
+# The following hash is used by the return option 'id_table'.
 
 our(%TAXON_FIELD) = ('lft' => 1, 'rgt' => 1, 'depth' => 1, 'opinion_no' => 1,
 		     'spelling_no' => 1, 'trad_no' => 1,
@@ -499,11 +503,13 @@ opinions.  These fields describe the taxon being assigned.
 Includes the field 'kingdom', indicating the kingdom of life into which each
 taxon is placed.
 
-=item ext2
+=item extant
 
-Includes the field 'ext2', which is derived from the 'extant' attribute by
-propagating 'yes' values up the tree and then 'no' values down it.  The values
-are 1 for extant, 0 for not extant, undefined if no value can be derived.
+Includes the field 'is_extant', which is derived from the 'extant' attribute
+by propagating 'yes' values up the tree and then 'no' values down it.  The
+values are 1 for extant, 0 for not extant, undefined if no value can be
+derived.  Also includes 'extant_children', which counts the number of (known)
+extant children.
 
 =item tt
 
@@ -557,25 +563,11 @@ defaults to 'list', unless otherwise stated.  The possible values are:
 
 =over 4
 
-=item count
-
-If this option is specified, the return value will be a single integer
-representing the number of matching taxa.  If filtering options such as
-'rank', etc. are avoided, and if 'status' is given as 'all', then this count
-is computed from the 'lft' and 'rgt' fields of the C<taxon_trees> table, which is
-extremely efficient.
-
-=item id
-
-If this value is specified, the result will be a list of distinct taxon_no or
-opinion_no values instead of a list of C<Taxon> or C<Opinion> objects.  The 'fields'
-option (if any) is ignored in this case.
-
 =item list
 
 If this value is specified (or if the 'return' option is not specified at all), the
 result will be a list of C<Taxon> or C<Opinion> objects (depending upon which method
-was called).  The only exception to this is C<getTaxonIdTable>.
+was called).
 
 =item hash
 
@@ -603,6 +595,29 @@ from @taxon_nos.  The value of each key will be a list of Taxon objects
 representing the given spellings of that taxon.  Note that in this case two
 different lists might in fact be identical, if two different values in
 @taxon_nos refer to different spellings of the same taxonomic concept.
+
+=item id
+
+If this value is specified, the result will be a list of distinct taxon_no or
+opinion_no values instead of a list of C<Taxon> or C<Opinion> objects.  The 'fields'
+option (if any) is ignored in this case.
+
+=item id_table
+
+If this value is specified, the result will be a single string.  This string
+will be the name of a temporary table with a column named 'taxon_no'.  This
+table will hold the taxon_no values of the selected taxa.  Additional columns
+may be specified by an option 'columns', which should be a list of column
+names from the tree table, authorities table and/or opinion table.  The option
+'columns' is ignored unless 'id_table' is specified.
+
+=item count
+
+If this option is specified, the return value will be a single integer
+representing the number of matching taxa.  If filtering options such as
+'rank', etc. are avoided, and if 'status' is given as 'all', then this count
+is computed from the 'lft' and 'rgt' fields of the C<taxon_trees> table, which is
+extremely efficient.
 
 =back
 
@@ -680,7 +695,7 @@ This value returns all taxa.
 =item extant
 
 This option filters the taxa by whether or not they are extant.  Recognized
-values are 1/yes/true for extant taxa, 0/no/false for not extant taxa, unknown
+values are 1/yes/true for extant taxa, 0/no/false for non-extant taxa, unknown
 for taxa whose status is not known to this database.
 
 =item senior
@@ -800,6 +815,22 @@ this option defaults to 'all'.
 Filter the resulting list of taxa according to whether or not they are extant
 (see above).
 
+=item author
+
+Only return taxa that were named by the specified author.
+
+=item pubyr
+
+Only return taxa that were named in the specified year.
+
+=item type_body_part
+
+Only return taxa whose 'type_body_part' attribute matches the specified value.
+
+=item preservation
+
+Only return taxa whose 'preservation' attribute matches the specified value.
+
 =item spelling
 
 Treat matching taxonomic names according to the specified rule (see above).
@@ -856,8 +887,8 @@ sub getTaxaByName {
     
     # Check the arguments.  Carp a warning and return undefined if name is not
     # defined or is empty.  Treat a wildcard '%' as empty; if you want to get
-    # all of the taxa in the database, you should use getTaxonIdTable() with
-    # the 'all_taxa' parameter instead.
+    # all of the taxa in the database, you should use getTaxa with the
+    # 'all_taxa' parameter.
     
     unless ( defined $taxon_name and $taxon_name ne '' and $taxon_name ne '%' )
     {
@@ -1089,6 +1120,28 @@ sub getTaxaByName {
     {
 	push @filter_list, $self->generateExtantFilter('v', $options->{extant});
 	$extra_tables->{v} = 1;
+    }
+    
+    if ( defined $options->{author} )
+    {
+	push @filter_list, $self->generateAuthorFilter('a', $options->{author});
+    }
+    
+    if ( defined $options->{pubyr} )
+    {
+	push @filter_list, $self->generatePubyrFilter('a', $options->{pubyr}, 'exact');
+    }
+    
+    if ( defined $options->{type_body_part} )
+    {
+	push @filter_list, $self->generateAttributeFilter('a', 'type_body_part', 'type_body_part',
+							  $options->{type_body_part});
+    }
+    
+    if ( defined $options->{preservation} )
+    {
+	push @filter_list, $self->generateAttributeFilter('a', 'preservation', 'preservation',
+							  $options->{preservation});
     }
     
     my $order_expr = '';
@@ -1487,7 +1540,6 @@ sub getTaxaBestMatch {
     }
 }
 
-# $$$$ need 'extant'
 
 =head3 getTaxaByReference ( reference_no, options )
 
@@ -1531,6 +1583,11 @@ Return the matching taxa in the specified manner (see above).
 =item status
 
 Only return taxa with the specified status (see above).
+
+=item extant
+
+Only return taxa that are or are not extant, according to the value of this
+option (see above).
 
 =item rank
 
@@ -1628,6 +1685,12 @@ sub getTaxaByReference {
     if ( defined $options->{rank} )
     {
 	push @filter_list, $self->generateRankFilter('a', $options->{rank});
+    }
+    
+    if ( defined $options->{extant} )
+    {
+	push @filter_list, $self->generateExtantFilter('v', $options->{extant});
+	$extra_tables->{v} = 1;
     }
     
     if ( defined $options->{kingdom} )
@@ -2420,7 +2483,7 @@ sub getRelatedTaxon {
     # The relationship 'pan_group' requires a call to computeAncestry, and
     # then a join on the ancestry_temp table.
     
-    elsif ( $rel eq 'pan' )
+    elsif ( $rel eq 'pan_group' )
     {
 	$self->computeAncestry({ $base_no => 1 });
 	
@@ -2687,16 +2750,26 @@ Possible options are:
 =item return
 
 Specifies the manner in which the matching taxa will be returned.  Recognized
-values for this method are: 'id', 'list', 'hash', 'base', 'count'.
+values for this method are: 'list', 'hash', 'base', 'id', 'id_table', 'count'.
 
 =item status
 
-Returns only taxa which have the specified status (see above).  It defaults to
+Return only taxa which have the specified status (see above).  It defaults to
 'all' for relationship 'spellings', and 'valid' otherwise.
 
 =item extant
 
-Returns only taxa whose extancy corresponds to the value of this option (see above).
+Return only taxa whose extancy corresponds to the value of this option (see above).
+
+=item type_body_part
+
+Return only taxa whose 'type_body_part' attribute matches one or more of the
+specified values.
+
+=item preservation
+
+Return only taxa whose 'preservation' attribute matches one or more of the
+specified values.
 
 =item rank
 
@@ -2926,7 +2999,8 @@ sub getTaxa {
     # We always include the necessary table to retrieve the parent taxon if
     # the relationship is 'all_parents'.
     
-    if ( defined $options->{fields} and $return ne 'id' and $return ne 'count' )
+    if ( defined $options->{fields} and $return ne 'id' 
+	 and $return ne 'id_table' and $return ne 'count' )
     {
 	($query_fields, $extra_tables) = $self->generateQueryFields($options->{fields});
     }
@@ -2986,12 +3060,20 @@ sub getTaxa {
     
     if ( defined $options->{exclude} )
     {
-	unless ( $rel eq 'children' or $rel eq 'all_children' or $rel eq 'all_taxa' )
+	if ( $rel eq 'children' or $rel eq 'all_children' or $rel eq 'all_taxa' )
 	{
-	    croak "option 'exclude' is not valid with relationship '$rel'";
+	    push @filter_list, $self->generateExcludeFilter('t', $options->{exclude});
 	}
 	
-	push @filter_list, $self->generateExcludeFilter('t', $options->{exclude});
+	else
+	{
+	    my $exclude_nos = ref $options->{exclude} eq 'Taxon::Exclude' ?
+		$options->{exclude}{base_nos} : $self->generateBaseNos($options->{exclude});
+	    
+	    push @filter_list, 't.orig_no not in (' . join(',', keys %$exclude_nos) . ')'
+		if ref $exclude_nos eq 'HASH';
+	}
+	
 	$quick_count = 0;
     }
     
@@ -3004,6 +3086,12 @@ sub getTaxa {
     {
 	push @filter_list, $self->generateRankFilter('a', $options->{rank});
 	$quick_count = 0;
+    }
+    
+    if ( defined $options->{extant} )
+    {
+	push @filter_list, $self->generateExtantFilter('v', $options->{extant});
+	$extra_tables->{v} = 1;
     }
     
     if ( defined $options->{author} )
@@ -3019,6 +3107,18 @@ sub getTaxa {
 						      $options->{pubyr_rel});
 	$extra_tables->{ref} = 1;
 	$quick_count = 0;
+    }
+    
+    if ( defined $options->{type_body_part} )
+    {
+	push @filter_list, $self->generateAttributeFilter('a', 'type_body_part', 'type_body_part',
+							  $options->{type_body_part});
+    }
+    
+    if ( defined $options->{preservation} )
+    {
+	push @filter_list, $self->generateAttributeFilter('a', 'preservation', 'preservation',
+							  $options->{preservation});
     }
     
     if ( defined $options->{created} )
@@ -3140,7 +3240,7 @@ sub getTaxa {
 			       $options, $quick_count) if $return eq 'count';
 	
     return $self->getTaxaIds($base_nos, $rel, $select, $filter_expr, $extra_joins,
-			     $options, $order_expr) if $return eq 'id';
+			     $options, $order_expr) if $return eq 'id' or $return eq 'id_table';
     
     # Otherwise, prepare to execute the relevant SQL query
     
@@ -3788,14 +3888,107 @@ sub getTaxaIds {
     
     my ($taxon_nos);
     
+    # We can return one of two things: either a list of taxon_no values, or a
+    # table containing them.
+    
+    my $return_table = 1 if lc $options->{return} eq 'id_table';
+    
+    # Select extra fields for the new table, if the options 'return =>
+    # id_table' and 'fields' were both specified.
+    
+    my $create_string = '';
+    my $select_string = '';
+    
+    my $field_list = $options->{fields};
+    
+    if ( defined $field_list and $return_table )
+    {
+	unless ( ref $field_list )
+	{
+	    my @fields = split /\s*,\s*/, $field_list;
+	    $field_list = \@fields;
+	}
+	
+	if ( ref $field_list ne 'ARRAY' )
+	{
+	    croak "option 'fields' must be a scalar or arrayref";
+	}
+	
+	my %seen;
+	
+	# Go through the specified field names, making sure to ignore
+	# duplicates.  Whatever was specified will override the default value
+	# of $select_string.
+	
+	foreach my $f ( @$field_list )
+	{
+	    next if $seen{$f}; $seen{$f} = 1;
+	    
+	    if ( $f eq 'taxon' )
+	    {
+		$create_string .= "taxon_no int unsigned not null,\n";
+		$select_string .= ",t.${select}_no";
+	    }
+	    
+	    elsif ( $f eq 'current' )
+	    {
+		$create_string .= "taxon_no int unsigned not null,\n";
+		$select_string .= ",t.spelling_no";
+	    }
+	    
+	    elsif ( $f eq 'orig' )
+	    {
+		$create_string .= "orig_no int unsigned not null,\n";
+		$select_string .= ",t.orig_no";
+	    }
+	    
+	    elsif ( $f eq 'senior' )
+	    {
+		$create_string .= "senior_no int unsigned not null,\n";
+		$select_string .= ",ti2.${select}_no";
+		$extra_joins .= " JOIN $tree_table as ti2 on ti2.orig_no = t.synonym_no"
+		    unless $extra_joins =~ / as t2 /;
+	    }
+	    
+	    elsif ( $f eq 'parent' )
+	    {
+		$create_string .= "parent_no int unsigned not null,\n";
+		$select_string .= ",ti3.${select}_no";
+		$extra_joins .= " JOIN $tree_table as ti3 on ti3.orig_no = t.parent_no"
+		    unless $extra_joins =~ / as t3 /;
+	    }
+	    
+	    elsif ( $f eq 'lft' or $f eq 'rgt' )
+	    {
+		$create_string .= "$f int unsigned not null,\n";
+		$select_string .= ",t.$f";
+	    }
+	    
+	    elsif ( $f eq 'opinion' )
+	    {
+		$create_string .= "opinion_no int unsigned not null,\n";
+		$select_string .= ",t.opinion_no";
+	    }
+	    
+	    else
+	    {
+		carp "unknown value '$f' for option 'fields'";
+	    }
+	}
+	
+	$select_string =~ s/^,//;
+	$create_string =~ s/,\s*$//;
+    }
+    
     # For parameter 'self', we do a simple lookup.
     
     if ( $rel eq 'self' )
     {
 	$filter_expr =~ s/a2\./a\./g;
+	$select_string = "a.taxon_no" unless $select_string;
 	
 	$SQL_STRING = "
-		SELECT a.taxon_no
+		SELECT $select_string
 		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table as o using (opinion_no)
 			$extra_joins
@@ -3807,8 +4000,10 @@ sub getTaxaIds {
     
     elsif ( $rel eq 'spellings' )
     {
+	$select_string = "a.taxon_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT a.taxon_no
+		SELECT $select_string
 		FROM $auth_table as a2 JOIN $auth_table as a using (orig_no)
 			JOIN $tree_table as t on t.orig_no = a.orig_no
 			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
@@ -3821,8 +4016,10 @@ sub getTaxaIds {
     
     elsif ( $rel eq 'originals' )
     {
+	$select_string = "a.taxon_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT DISTINCT a.taxon_no
+		SELECT DISTINCT $select_string
 		FROM $auth_table as a2 JOIN $auth_table as a on a.taxon_no = a2.orig_no
 			JOIN $tree_table as t on t.orig_no = a.orig_no
 			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
@@ -3835,8 +4032,10 @@ sub getTaxaIds {
     
     elsif ( $rel eq 'current' )
     {
+	$select_string = "a.taxon_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT DISTINCT a.taxon_no
+		SELECT DISTINCT $select_string
 		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
@@ -3849,10 +4048,13 @@ sub getTaxaIds {
     
     elsif ( $rel eq 'synonyms' )
     {
+	$select_string = "t.${select}_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT t.${select}_no
+		SELECT $select_string
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t using (synonym_no)
+			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
 			$extra_joins
 		$filter_expr
@@ -3863,8 +4065,10 @@ sub getTaxaIds {
     
     elsif ( $rel eq 'seniors' )
     {
+	$select_string = "a.taxon_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT DISTINCT a.taxon_no
+		SELECT DISTINCT $select_string
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.orig_no = t2.synonym_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
@@ -3879,8 +4083,10 @@ sub getTaxaIds {
     
     elsif ( $rel eq 'classifications' )
     {
+	$select_string = "a.taxon_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT a.taxon_no
+		SELECT $select_string
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $opinion_table as o2 using (opinion_no)
 			JOIN $tree_table as t on t.orig_no = o2.parent_no
@@ -3890,7 +4096,7 @@ sub getTaxaIds {
 		$filter_expr
 		$order_expr";
     }
-
+    
     # For parameter 'all_taxa', the first join will differ slightly if select=all
     
     elsif ( $rel eq 'all_taxa' )
@@ -3901,8 +4107,10 @@ sub getTaxaIds {
 	my $join_expr = $select eq 'all' ? "on a.orig_no = t.orig_no" :
 	    "on a.taxon_no = t.${select}_no";
 	
+	$select_string = "a.taxon_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT a.taxon_no
+		SELECT $select_string
 		FROM $auth_table as a JOIN $tree_table as t $join_expr
 			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
 			$extra_joins
@@ -3922,8 +4130,10 @@ sub getTaxaIds {
 	my $join_expr = $select eq 'all' ? "on a.orig_no = t.orig_no" :
 	    "on a.taxon_no = t.${select}_no";
 	
+	$select_string = "a.taxon_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT a.taxon_no
+		SELECT $select_string
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
 				$level_filter
@@ -3933,7 +4143,7 @@ sub getTaxaIds {
 		$filter_expr
 		$order_expr";
     }
-
+    
     # For parameter 'parents', do a straightforward lookup.  We need a
     # slightly different query of the option 'seniors' was specified.
     
@@ -3947,8 +4157,10 @@ sub getTaxaIds {
 	     JOIN $tree_table as t on t.orig_no = t3.synonym_no" :
 		 "JOIN $tree_table as t on t.orig_no = t2.parent_no";
 	
+	$select_string = "a.taxon_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT a.taxon_no
+		SELECT $select_string
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			$parent_join
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
@@ -3996,8 +4208,10 @@ sub getTaxaIds {
 	         JOIN $tree_table as t on t.orig_no = t2.synonym_no" :
 		     "$tree_table as t JOIN ancestry_temp as s on s.orig_no = t.orig_no";
 	
+	$select_string = "t.${select}_no" unless $select_string;
+	
 	$SQL_STRING = "
-		SELECT t.${select}_no as taxon_no
+		SELECT $select_string
 		FROM $t_join
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
@@ -4005,20 +4219,53 @@ sub getTaxaIds {
 		$filter_expr
 		ORDER BY t.lft DESC";
     }
-	
+    
     else
     {
 	croak "invalid relationship '$rel'";
     }
     
-    # Execute the query now.
+    # Execute the query now.  If the option 'return => id_table' was
+    # specified, then we insert the results into a temporary table.
+    # Otherwise, we return them as a list.
     
-    $taxon_nos = $dbh->selectcol_arrayref($SQL_STRING);
-    
-    # If we got some results, return them.  Otherwise, return the empty list.
-    
-    if ( ref $taxon_nos eq 'ARRAY' )
+    if ( lc $options->{return} eq 'id_table' )
     {
+	$create_string = 'taxon_no int unsigned not null' unless $create_string;
+	
+	my $table_name = $self->createTempTable($create_string);
+	
+	my $result;
+	
+	# We need a try block to make sure that we drop the temporary table
+	# if an error occurs.
+	
+	try
+	{
+	    $result = $dbh->do("INSERT INTO $table_name $SQL_STRING");
+	}
+	    
+	# If an error occurred, we drop the temporary table before re-throwing it.
+	
+	finally {
+	    if ( defined $_[0] )
+	    {
+		$dbh->do("DROP TABLE IF EXISTS $table_name");
+		die $_[0];
+	    }
+	};
+	
+	return $table_name;
+    }
+    
+    # Otherwise, we just do the query and return the list of results if any.
+    
+    else
+    {
+	$taxon_nos = $dbh->selectcol_arrayref($SQL_STRING);
+	
+	return unless ref $taxon_nos eq 'ARRAY';
+	
 	if ( $rel eq 'common_ancestor' )
 	{
 	    return $taxon_nos->[0];
@@ -4028,11 +4275,6 @@ sub getTaxaIds {
 	{
 	    return @$taxon_nos;
 	}
-    }
-    
-    else
-    {
-	return;
     }
 }
 
@@ -4457,369 +4699,6 @@ sub getOpinionIds {
 }
 
 
-=head3 getTaxonIdTable ( base_taxa, relationship, options )
-
-Returns the name of a newly created temporary table containing a list of
-taxon_no values identifying taxa that have the specified relationship to the
-specified base taxon or taxa.
-
-Once you get this table, you can join it with the other tables in the database
-to carry out any desired query.
-
-   # get a table containing the taxon_no of every taxon in class Mammalia,
-   # including junior synonyms and invalid spellings
-
-   $temp_table = $taxonomy->getTaxonIdTable(36651, 'all_children',
-			{status => 'synonyms', select => 'all'});
-   
-   # use this table to select all collections that contain mammalian fossils
-   
-   my $sth = $dbh->prepare("SELECT distinct collection_no FROM occurrences
-			    JOIN $temp_table using (taxon_no) WHERE ...");
-
-The base taxon can be either a taxon_no or a Taxon object, or an array of either.
-
-Valid relationships are:
-
-=over 4
-
-=item all_parents
-
-Return a table containing the taxon_no of every higher taxon that contains the
-base taxon, in order from kingdom level on down.
-
-=item all_children
-
-Return a table containing the taxon_no of the base taxon and all of the taxa
-that it contains, as a preorder tree traversal.
-
-=item self
-
-Return a table containing just the given taxon numbers.
-
-=item all_taxa
-
-Return a table containing the taxon_no of every taxon in the database.  In
-this case, the base taxon is ignored and can be undefined.
-
-=back
-
-Each row in the table represents one matching taxon.  The first column will be
-'taxon_no', and other columns can be specified using the 'fields' option.  The
-table can then be joined with other tables in order to fetch whatever
-information is desired about the resulting taxa.
-
-Valid options include:
-
-=over 4
-
-=item rank
-
-This option filters the list of resulting taxa, returning only those that
-match the given rank.  The value can be either a single rank, a
-comma-separated list, or a listref.  In the latter case, each item can be
-either a single rank, or a list of [min, max].
-
-=item status
-
-This option filters the list of resulting taxa according to taxonomic status.
-If 'valid', only valid taxa are returned.  If 'invalid', only invalid taxa are
-returned.  If 'synonyms', only valid taxa and junior synonyms.  If 'all', all
-matching taxa are returned regardless of taxonomic or nomenclatural status.
-The default is 'valid'.
-
-=item exclude_self
-
-If specified, then the base taxon or taxa are excluded from the returned
-table.  Otherwise (the default) they are included.  This option is only
-relevant for relationships 'all_parents' and 'all_children'.
-
-=item select
-
-This option determines how taxonomic concepts are treated.  The possible
-values are as follows:
-
-=over 4
-
-=item spelling
-
-This is the default, and selects the currently accepted spelling of each of
-the matching taxonomic concepts.
-
-=item orig
-
-Selects the original spelling of each of the matching taxonomic concepts.
-
-=item all
-
-Selects all spellings of each of the matching taxonomic concepts.
-
-=back
-
-=item fields
-
-The value of this option must be a comma-separated list (or arrayref) of
-strings.  Each string should be the name of a field in the taxon_trees table.
-One column will be included in the resulting table for each specified field,
-in addition to 'taxon_no' which is always present.
-
-=back
-
-=cut
-
-sub getTaxonIdTable {
-    
-    my ($self, $base_taxa, $parameter, $options) = @_;
-    
-    # Check arguments.  Only throw an error if we were given a reference but
-    # couldn't find a taxon number.  If we were passed the undefined value or
-    # a taxon number of zero, carp a warning and return undefined.
-    
-    my $rel = lc $parameter;
-    my $base_nos;
-    
-    unless ( $rel eq 'all_taxa' )
-    {
-	$base_nos = $self->generateBaseNos($base_taxa);
-	return unless ref $base_nos and %$base_nos > 0;
-    }
-    
-    # Set option defaults.
-    
-    $options ||= {};
-    
-    my $status = defined $options->{status} && $options->{status} ne '' ?
-	lc $options->{status} : 'valid';
-    my $select = defined $options->{select} ? lc $options->{select} : 'spelling';
-    
-    unless ( $select eq 'spelling' or $select eq 'orig' 
-	     or $select eq 'trad' or $select eq 'all' )
-    {
-	croak "invalid value '$options->{select}' for option 'select'";
-    }
-    
-    $select = 'trad' if $options->{trad} and $select eq 'spelling';
-    
-    # Construct the appropriate modifiers based on the options.
-    
-    my @filter_list;
-    
-    if ( $rel eq 'all_children' and scalar(keys %$base_nos) == 1 )
-    {
-	my ($base_no) = keys %$base_nos;
-	push @filter_list, "a2.taxon_no = $base_no";
-    }
-    
-    elsif ( $rel eq 'all_children' )
-    {
-	my $list = '(' . join(',', keys %$base_nos) . ')';
-	push @filter_list, "a2.taxon_no in $list";
-    }
-    
-    if ( $status eq 'valid' )
-    {
-	push @filter_list, "o.status = 'belongs to'";
-	push @filter_list, "t.orig_no = t.synonym_no";
-    }
-    elsif ( $status eq 'synonyms' ) {
-	push @filter_list, "o.status in ('belongs to', 'subjective synonym of', 'objective synonym of')";
-    }
-    elsif ( $status eq 'invalid' ) {
-	push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
-    }
-    elsif ( $status eq 'all' ) {
-	# no filter needed
-    }
-    else {
-	croak "invalid value '$status' for option 'status'";
-    }
-    
-    if ( defined $options->{rank} )
-    {
-	push @filter_list, $self->generateRankFilter('a', $options->{rank});
-    }
-    
-    if ( $options->{exclude_self} )
-    {
-	if ( $rel eq 'all_parents' )
-	{
-	    push @filter_list, "s.gen > 1";
-	}
-	
-	elsif ( $rel eq 'all_children' )
-	{
-	    push @filter_list, "t.lft != t2.lft";
-	}
-    }
-    
-    my $filter_expr = join(' and ', @filter_list);
-    $filter_expr = "WHERE $filter_expr" if $filter_expr ne '';
-    
-    # Select extra fields for the new table, if the option 'fields' was
-    # specified.
-    
-    my $create_string = '';
-    my $select_string = '';
-    
-    my $field_list = $options->{fields};
-    
-    if ( defined $field_list )
-    {
-	unless ( ref $field_list )
-	{
-	    my @fields = split /\s*,\s*/, $field_list;
-	    $field_list = \@fields;
-	}
-	
-	if ( ref $field_list ne 'ARRAY' )
-	{
-	    croak "option 'fields' must be a scalar or arrayref";
-	}
-	
-	my %seen;
-	
-	# Go through the specified field names, making sure to ignore
-	# duplicates.
-	
-	foreach my $f ( @$field_list )
-	{
-	    next if $seen{$f}; $seen{$f} = 1;
-	    
-	    if ( $TAXON_FIELD{$f} )
-	    {
-		$create_string .= "$f int unsigned not null,\n";
-		$select_string .= ",t.$f";
-	    }
-	    
-	    else
-	    {
-		carp "unknown value '$f' for option 'fields'";
-	    }
-	}
-    }
-    
-    # Prepare to fetch the requested information
-    
-    my $dbh = $self->{dbh};
-    my $tree_table = $self->{tree_table};
-    my $auth_table = $self->{auth_table};
-    my $opinion_table = $self->{opinion_table};
-    
-    # Create a temporary table to hold the requested information.
-    
-    my $table_name = $self->createTempTable("taxon_no int unsigned not null,
-					     $create_string
-					     UNIQUE KEY (taxon_no)");
-    
-    my $result;
-    
-    # We need a try block to make sure that we drop the temporary table and
-    # any locks we might hold if an error occurs.
-
-    try
-    {
-	# The relationships 'all_taxa' and 'all_children' are fairly
-	# straightforward. 
-	
-	if ( $rel eq 'all_taxa' and $select eq 'all' )
-	{
-	    $result = $dbh->do("INSERT INTO $table_name
-		SELECT a.taxon_no $select_string
-		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
-			LEFT JOIN $opinion_table as o using (opinion_no)
-		$filter_expr");
-	}
-	
-	elsif ( $rel eq 'all_taxa' )
-	{
-	    $result = $dbh->do("INSERT INTO $table_name
-		SELECT t.${select}_no $select_string
-		FROM $tree_table as t
-			LEFT JOIN $opinion_table as o using (opinion_no)
-		$filter_expr");
-	}
-	
-	elsif ( $rel eq 'all_children' and $select eq 'all' )
-	{
-	    $result = $dbh->do("INSERT INTO $table_name
-		SELECT a.taxon_no $select_string
-		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
-			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
-			JOIN $auth_table as a on t.orig_no = a.orig_no
-			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
-	        $filter_expr");
-	}
-	
-	elsif ( $rel eq 'all_children' )
-	{
-	    $result = $dbh->do("INSERT INTO $table_name
-		SELECT t.${select}_no $select_string
-		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
-			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
-			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
-	        $filter_expr");
-	}
-	
-	# for parameter 'all_parents', we need a more complicated procedure in
-	# order to do the query efficiently.  This requires using a scratch
-	# table and a stored procedure that recursively fills it in.  The
-	# scratch table cannot be a temporary table, due to a limitation of
-	# MySQL, so we need to use a global table with locks :(
-	
-	elsif ( $rel eq 'all_parents' )
-	{
-	    $self->computeAncestry($base_nos);
-	    
-	    if ( $select eq 'all' )
-	    {
-		$result = $dbh->do("INSERT INTO $table_name
-		SELECT a.taxon_no $select_string
-		FROM $auth_table as a JOIN ancestry_temp as s using (orig_no)
-			JOIN $tree_table as t on a.orig_no = t.orig_no
-			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
-		$filter_expr");
-	    }
-	    
-	    else
-	    {
-		$result = $dbh->do("INSERT INTO $table_name
-		SELECT t.${select}_no $select_string
-		FROM $tree_table as t JOIN ancestry_temp as s on s.orig_no = t.orig_no
-			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
-		$filter_expr");
-	    }
-	}
-	
-	# For relationship 'self', we just need to load the given taxon
-	# numbers into the table.
-	
-	elsif ( $rel eq 'self' )
-	{
-	    my $value_string = '(' . join('),(', keys %$base_nos) . ')';
-	    
-	    $result = $dbh->do("INSERT INTO $table_name VALUES $value_string");
-	}
-	
-	else
-	{
-	    croak "invalid relationship '$parameter'";
-	}
-    }
-    
-    # If an error occurred, we drop the temporary table before re-throwing it.
-	
-    finally {
-	if ( defined $_[0] )
-	{
-	    $dbh->do("DROP TABLE IF EXISTS $table_name");
-	    die $_[0];
-	}
-    };
-    
-    return $table_name;
-}
-
-
 =head3 generateExclusion ( excluded_taxa )
 
 Returns an object of class C<Taxon::Exclusion>, which can then be passed to
@@ -5063,7 +4942,7 @@ sub isUsedTaxon {
 
 Using the given list of parent Taxon objects, modify the given Taxon object to
 add fields 'class', 'order', 'family' and 'common_name' if it doesn't already
-have one.  Also add 'category'.  Return a list consisting of the class, order,
+have one.  Also add 'category'.  Also return a list the class, order,
 and family names.
 
 =cut
@@ -5448,9 +5327,9 @@ sub generateQueryFields {
 	    $fields .= $KINGDOM_FIELDS;
 	}
 	
-	elsif ( $inc eq 'ext2' )
+	elsif ( $inc eq 'extant' )
 	{
-	    $fields .= $EXT2_FIELDS;
+	    $fields .= $EXTANT_FIELDS;
 	    $tables{v} = 1;
 	}
 	
@@ -5464,6 +5343,12 @@ sub generateQueryFields {
 	{
 	    $fields .= $PERSON_FIELDS;
 	    $tables{pp} = 1;
+	}
+	
+	elsif ( $inc eq 'discussion' )
+	{
+	    $fields .= $DISCUSSION_FIELDS;
+	    $tables{ppd} = 1;
 	}
 	
 	elsif ( $inc eq 'specimen' )
@@ -5684,44 +5569,13 @@ sub generateExtraJoins {
 		LEFT JOIN person as pp3 on pp3.person_no = $main_table.modifier_no\n"
 	if $tables->{pp};
     
+    $extra_joins .= "
+		LEFT JOIN person as ppd on ppd.person_no = $main_table.discussed_by\n"
+	if $tables->{ppd};
+    
     # Return results
     
     return $extra_joins;
-}
-
-
-# generateExtraLocks( table_hash )
-# 
-# Converts the table hash into a string specifying extra locks that must be
-# acquired in order to do the query.
-
-sub generateExtraLocks {
-
-    my ($self, $tables) = @_;
-    
-    my $auth_table = $self->{auth_table};
-    my $tree_table = $self->{tree_table};
-    
-    # Return an empty string unless we actually have some joins to make
-    
-    return '' unless ref $tables eq 'HASH' and %$tables;
-    
-    # Create the necessary lock expressions.
-    
-    my $extra_locks = '';
-    
-    $extra_locks .= ", refs as r READ" if $tables->{ref};
-    $extra_locks .= ", $auth_table as tta READ" if $tables->{tta};
-    $extra_locks .= ", $auth_table as ora READ" if $tables->{ora};
-    $extra_locks .= ", $auth_table as ca READ" if $tables->{ca};
-    $extra_locks .= ", $auth_table as pa READ" if $tables->{pa};
-    $extra_locks .= ", $tree_table as pt READ" if $tables->{pa};
-    $extra_locks .= ", person as pp1 READ, person as pp2 READ, person as pp3 READ"
-	if $tables->{pp};
-    
-    # Return results
-    
-    return $extra_locks;
 }
 
 
@@ -6053,6 +5907,65 @@ sub generatePubyrFilter {
     
     return "if($table.refauth, r.pubyr $rel $value and r.pubyr <> '',
 			$table.pubyr $rel $value and $table.pubyr <> '')";
+}
+
+
+# generateAttributeFilter ( attribute, value_or_values )
+# 
+# Return a filter clause which will select only taxa for which the specified
+# attribute matches one or more of the specified values.
+
+sub generateAttributeFilter {
+    
+    my ($self, $table, $option_name, $attribute, $value_list) = @_;
+    
+    # If the parameter is undefined, we return nothing (so the query goes
+    # ahead with no author filtering).
+    
+    return unless defined $value_list;
+    
+    # Next, we turn $value_list into a reference to an actual list unless it
+    # already is one.
+    
+    unless ( ref $value_list )
+    {
+	my @strings = split /\s*,\s*/, $value_list;
+	$value_list = \@strings;
+    }
+    
+    elsif ( ref $value_list ne 'ARRAY' )
+    {
+	croak "option '$option_name' must be either a string or an arrayref";
+    }
+    
+    # Now, generate the filter.  If no valid values are found, generate an
+    # expression that will guarantee an empty result set.
+    
+    my %include_values;
+    
+    foreach my $value (@$value_list)
+    {
+	$value =~ s/\s+$//;
+	
+	if ( $value ne '' )
+	{
+	    my $dbh = $self->{dbh};
+	    my $clean_string = $dbh->quote($value);
+	    $include_values{$clean_string} = 1;
+	}
+    }
+
+    if ( keys %include_values )
+    {
+	my $expr = "(" . join(",", keys %include_values) . ")";
+	
+	return "$table.$attribute in $expr";
+    }
+    
+    else
+    {
+        return "$table.$attribute = 'SELECT NOTHING'";
+    }
 }
 
 

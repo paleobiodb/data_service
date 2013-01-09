@@ -29,7 +29,7 @@ use Constants qw($READ_URL $WRITE_URL $HTML_DIR $HOST_URL $TAXA_TREE_CACHE $DB $
 # This function will die on error, so call it in an eval loop
 # PS 08/11/2005
 sub getCollections {
-	my ($dbt, $taxonomy, $permissions, $options, $fields) = @_;
+    my ($dbt, $taxonomy, $permissions, $options, $fields) = @_;
 	
 	my $dbh = $dbt->dbh;
 	my %options = %{$options};
@@ -82,6 +82,14 @@ sub getCollections {
         push @where, "o.$COLLECTION_NO=c.$COLLECTION_NO AND abund_unit IN ('specimens','individuals')";
         push @having, "sum(abund_value)>=$specimen_count";
     }
+    
+    # Now figure out which taxa were requested.
+	
+    if ( $options->{taxon_list} )
+    {
+	
+    }
+
 
     # Reworked PS  08/15/2005
     # Instead of just doing a left join on the reids table, we achieve the close to the same effect
