@@ -16,7 +16,7 @@ use Reference;
 use Text::CSV_XS;
 use URI::Escape;
 use Mail::Mailer;
-use Constants qw($READ_URL $WRITE_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
+use Constants qw($READ_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
 
 use strict;
 
@@ -199,10 +199,10 @@ sub buildDownload {
 <ul>
 <li>Notify some of the major contributors about your research.</li>
 <li>Acknowledge the major contributors by name in your paper.</li>
-<li>Cite the relevant <a href="$READ_URL?action=displayPage&amp;page=OSA">Online Systematics Archive</a>.</li>
+<li>Cite the relevant <a href="?page=OSA">Online Systematics Archive</a>.</li>
 <li>If none are relevant, give a generic citation to the Paleobiology Database including the date of access.
-<li><a href="$READ_URL?action=displayPage&amp;page=join_us">Join the PaleoDB</a> and contribute more data.</li>
-<li>At a bare minimum, <a href="$READ_URL?action=displayPage&amp;page=publications">request a publication number</a> once your paper is accepted.</li>
+<li><a href="?page=join_us">Join the PaleoDB</a> and contribute more data.</li>
+<li>At a bare minimum, <a href="?a=publications">request a publication number</a> once your paper is accepted.</li>
 </li>
 </ul>
 <p>The major contributors to this data set were:</p>
@@ -283,12 +283,12 @@ print qq|
         print "</div>\n\n";
         print "<p><i>No occurrences met the search criteria</i></p>";
     }
-    print qq|<p align="center" style="white-space: nowrap;"><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
-    print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
+    print qq|<p align="center" style="white-space: nowrap;"><a href="?action=displayDownloadForm">Do another download</a> - |;
+    print qq|<a href="?action=displayCurveForm">Generate diversity curves</a>|;
     if ( $hours >= $hourlimit )	{
         print qq| - <a href="#" onClick=\"document.getElementById('mainPanel').style.display='none'; document.getElementById('terms').style.display='inline';\">Show terms again</a>|;
     }
-    #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
+    #print qq|<a href="?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
 
     print "</div>\n\n</div>\n\n";
     if ( $hours >= $hourlimit )	{
