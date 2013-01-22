@@ -129,7 +129,7 @@ sub showEnterers {
     my $html = "<div align=\"center\"><div class=\"pageTitle\">Data enterers</div></div>";
     $html .= "<p \"align=left\">The following students and research assistants have entered data into the Database.
     Institution names are placed in parentheses to indicate students who have since moved on.
-    <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify <a href=\"mailto:alroy\@nceas.ucsb.edu\">John Alroy.</a></i></p><br>";
+    <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify the database administrator.</a></i></p><br>";
 
     my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE role IN ('student','technician') OR role IS NULL";
     if ($fossil_record_only) {
@@ -336,7 +336,7 @@ sub homePageEntererList	{
 
 # JA 22.9.11
 sub publications	{
-	my $dbt = shift;
+	my ($dbt,$s) = @_;
 	my $sql = "SELECT * FROM pubs";
 	my @pubs = @{$dbt->getData($sql)};
 	my @lines;
@@ -349,6 +349,9 @@ sub publications	{
 		}
 		elsif ( $#authors == 1 )	{
 			$authorlist = $authors[0]." and ".$authors[1];
+		}
+		if ( $s->get('enterer') )	{
+			$p->{'pub_no'} = qq|<a href="?a=publicationForm&amp;pub_no=$p->{'pub_no'}">|.$p->{'pub_no'}."</a>";
 		}
 		if ( ! $p->{'year'} )	{
 			$p->{'year'} = "In press";
