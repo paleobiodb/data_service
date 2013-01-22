@@ -44,7 +44,7 @@ use Taxon;
 use Opinion;
 use Validation;
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO);
+use Constants qw($WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO);
 
 #*************************************
 # some global variables 
@@ -341,7 +341,7 @@ sub home	{
 			}
 	
 	 		# Run the command
-            execAction($queue{'action'}); # Hack so use strict doesn't back
+			execAction($queue{'action'}); # Hack so use strict doesn't back
 		}
 	}
 
@@ -396,19 +396,19 @@ sub home	{
 	my %interval_name;
 	$interval_name{$_->{interval_no}} = $_->{interval_name} foreach @{$dbt->getData($sql)};
 	my $first_interval = ( $coll->{min_interval_no} > 0 ) ? $interval_name{$coll->{max_interval_no}}." to ".$interval_name{$coll->{min_interval_no}} : $interval_name{$coll->{max_interval_no}};
-	$row->{latest_collection} = "<a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=$coll->{collection_no}\">".$coll->{collection_name}."</a>";
+	$row->{latest_collection} = "<a href=\"?a=basicCollectionSearch&amp;collection_no=$coll->{collection_no}\">".$coll->{collection_name}."</a>";
 	$row->{last_timeplace} = $first_interval." of ".$coll->{country};
 
 	$row->{last_coll_entry} = lastEntry($coll);
 	$sql = "SELECT CONCAT(first_name,' ',last_name) AS name FROM person WHERE person_no=".$coll->{enterer_no};
 	$row->{last_coll_enterer} = ${$dbt->getData($sql)}[0]->{name};
-	$row->{last_coll_ref} = "<a href=\"$READ_URL?a=displayReference&reference_no=$coll->{reference_no}\">".Reference::formatShortRef(${$dbt->getData('SELECT * FROM refs WHERE reference_no='.$coll->{reference_no})}[0])."</a>";
+	$row->{last_coll_ref} = "<a href=\"?a=displayReference&reference_no=$coll->{reference_no}\">".Reference::formatShortRef(${$dbt->getData('SELECT * FROM refs WHERE reference_no='.$coll->{reference_no})}[0])."</a>";
 
 	# MOST RECENTLY ENTERED SPECIES (must have reasonable data)
 	$sql = "SELECT to_days(now()) day_now,to_days(a.created) day_created,hour(now()) hour_now,hour(a.created) hour_created,minute(now()) minute_now,minute(a.created) minute_created,a.reference_no,a.enterer_no,taxon_name,a.taxon_no,type_locality,type_specimen,type_body_part,r.author1last,r.author2last,r.otherauthors,r.pubyr FROM authorities a,refs r,$TAXA_TREE_CACHE t WHERE a.reference_no=r.reference_no AND ref_is_authority='YES' AND a.taxon_no=t.taxon_no AND t.taxon_no=synonym_no AND taxon_rank='species' AND type_body_part IS NOT NULL ORDER BY a.taxon_no DESC LIMIT 1";
 	my $sp = @{$dbt->getData($sql)}[0];
-	$row->{latest_species} = "<i><a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$sp->{taxon_no}\">$sp->{taxon_name}</a></i>";
-	$row->{latest_species} .= " <a href=\"$READ_URL?a=displayReference&reference_no=$sp->{reference_no}\">".Reference::formatShortRef($sp)."</a>";
+	$row->{latest_species} = "<i><a href=\"?a=basicTaxonInfo&amp;taxon_no=$sp->{taxon_no}\">$sp->{taxon_name}</a></i>";
+	$row->{latest_species} .= " <a href=\"?a=displayReference&reference_no=$sp->{reference_no}\">".Reference::formatShortRef($sp)."</a>";
 	my $class_hash = TaxaCache::getParents($dbt,[$sp->{taxon_no}],'array_full');
 	my @class_array = @{$class_hash->{$sp->{taxon_no}}};
 	my $sp = Collection::getClassOrderFamily($dbt,\$sp,\@class_array);
@@ -419,7 +419,7 @@ sub home	{
 	$row->{type_specimen} = ( $sp->{type_specimen} )  ? "&bull; Type specimen ".$sp->{type_specimen}."<br>" : "";
 	if ( $sp->{type_locality} > 0 )	{
 		$sql = "SELECT collection_name FROM collections WHERE collection_no=".$sp->{type_locality};
-		$row->{type_locality} = "&bull; Type locality <a href=\"$READ_URL?a=basicCollectionSearch&amp;collection_no=".$sp->{type_locality}."\">".${$dbt->getData($sql)}[0]->{collection_name}."</a><br>";
+		$row->{type_locality} = "&bull; Type locality <a href=\"?a=basicCollectionSearch&amp;collection_no=".$sp->{type_locality}."\">".${$dbt->getData($sql)}[0]->{collection_name}."</a><br>";
 	}
 
 	# RANDOM GENUS LINKS
@@ -441,7 +441,7 @@ sub home	{
 		} else	{
 			$clear = "none";
 		}
-		$row->{'random_names'} .= "<div style=\"float: left; clear: $clear; padding: 0.3em; padding-left: $padding; font-size: $fontsize;\"><a href=\"$READ_URL?action=basicTaxonInfo&amp;taxon_no=$g->{'taxon_no'}\" style=\"color: $blue\">".$g->{'taxon_name'}."</a></div>\n";
+		$row->{'random_names'} .= "<div style=\"float: left; clear: $clear; padding: 0.3em; padding-left: $padding; font-size: $fontsize;\"><a href=\"?action=basicTaxonInfo&amp;taxon_no=$g->{'taxon_no'}\" style=\"color: $blue\">".$g->{'taxon_name'}."</a></div>\n";
 	}
 
 	# TOP CONTRIBUTORS THIS MONTH
@@ -479,7 +479,7 @@ my $row; # place holder
 			$lastcontinent = $continent{$coll->{p}};
 			$row->{collection_links} .= qq|<div class="medium">$lastcontinent</div>\n<div style="padding-top: 0.5em; padding-bottom: 0.5em;">\n|;
 		}
-		$row->{collection_links} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicCollectionSearch&amp;collection_no=$coll->{collection_no}">$coll->{collection_name}</a></div>\n|;
+		$row->{collection_links} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="?action=basicCollectionSearch&amp;collection_no=$coll->{collection_no}">$coll->{collection_name}</a></div>\n|;
 	}
 	$row->{'collection_links'} .= "</div>\n";
 
@@ -513,7 +513,7 @@ my $row; # place holder
 		for my $s ( @toprint )	{
 			if ( $s->{lft} > $g->{lft} && $s->{rgt} < $g->{rgt} && ! $printed{$s->{taxon_no}} )	{
 				$printed{$s->{taxon_no}}++;
-				$row->{'taxon_links'} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="$READ_URL?action=basicTaxonInfo&amp;taxon_no=$s->{'taxon_no'}">$s->{'taxon_name'}</a></div>\n|;
+				$row->{'taxon_links'} .= qq|<div class="verysmall collectionLink"><a class="homeBodyLinks" href="?action=basicTaxonInfo&amp;taxon_no=$s->{'taxon_no'}">$s->{'taxon_name'}</a></div>\n|;
 			}
 		}
 	}
@@ -1344,7 +1344,7 @@ sub displayCollResults {
 		}
 	}
 
-    my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
+    my $exec_url = ($type =~ /view/) ? "" : $WRITE_URL;
 
     my $action =  
           ($type eq "add") ? "displayCollectionDetails"
@@ -3477,7 +3477,7 @@ EOF
     foreach my $collection_no (@collections) {
         my $collection_name = escapeHTML(generateCollectionLabel($collection_no));
         print '<td class="addBorders"><div class="fixedColumn">'.
-            qq|<a target="_blank" href="$READ_URL?action=basicCollectionSearch&amp;collection_no=$collection_no"><img border="0" src="/public/collection_labels/$collection_no.png" alt="$collection_name"/></a>|.
+            qq|<a target="_blank" href="?action=basicCollectionSearch&amp;collection_no=$collection_no"><img border="0" src="/public/collection_labels/$collection_no.png" alt="$collection_name"/></a>|.
             "</div></td>";
     }
     print "</tr>\n";
@@ -4674,7 +4674,7 @@ sub displayOccsForReID {
 	my $reference_no = $current_session_ref;
 	my $ref = Reference::getReference($dbt,$reference_no);
 	my $formatted_primary = Reference::formatLongRef($ref);
-	my $refString = "<b><a href=\"$READ_URL?action=displayReference&reference_no=$reference_no\">$reference_no</a></b> $formatted_primary<br>";
+	my $refString = "<b><a href=\"?action=displayReference&reference_no=$reference_no\">$reference_no</a></b> $formatted_primary<br>";
 
 	# Build the SQL
 	my @where = ();
@@ -4775,7 +4775,7 @@ sub displayOccsForReID {
             
             my $ref = Reference::getReference($dbt,$row->{'reference_no'});
             my $formatted_primary = Reference::formatShortRef($ref);
-            my $refString = "<a href=\"$READ_URL?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a></b>&nbsp;$formatted_primary";
+            my $refString = "<a href=\"?action=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a></b>&nbsp;$formatted_primary";
 
             $html .= "<tr><td colspan=20 class=\"verysmall\" style=\"padding-bottom: 0.75em;\">Original reference: $refString<br>\n";
             # Print the collections details
@@ -4785,7 +4785,7 @@ sub displayOccsForReID {
                 $sth->execute();
                 my %collRow = %{$sth->fetchrow_hashref()};
                 $html .= "Collection:";
-                my $details = " <a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$row->{'collection_no'}\">$row->{'collection_no'}</a>"." ".$collRow{'collection_name'};
+                my $details = " <a href=\"?action=basicCollectionSearch&collection_no=$row->{'collection_no'}\">$row->{'collection_no'}</a>"." ".$collRow{'collection_name'};
                 if ($collRow{'state'} && $collRow{'country'} eq "United States")	{
                      $details .= " - " . $collRow{'state'};
                 }
@@ -5181,13 +5181,13 @@ sub listCollections {
         if ($page == $i) {
             print "$i ";
         } else {
-            print "<a href=\"$READ_URL?action=listCollections&page=$i\">$i</a> ";
+            print "<a href=\"?action=listCollections&page=$i\">$i</a> ";
         }
     }
     print "<BR><BR>";
     my $start = $page*200;
     for (my $i=$start; $i<$start+200 && $i <= $max_id;$i++) {
-        print "<a href=\"$READ_URL?action=basicCollectionSearch&collection_no=$i\">$i</a> ";
+        print "<a href=\"?action=basicCollectionSearch&collection_no=$i\">$i</a> ";
     }
 
 	print $hbo->stdIncludes ($PAGE_BOTTOM);
@@ -5205,13 +5205,13 @@ sub listTaxa {
         if ($page == $i) {
             print "$i ";
         } else {
-            print "<a href=\"$READ_URL?action=listCollections&page=$i\">$i</a> ";
+            print "<a href=\"?action=listCollections&page=$i\">$i</a> ";
         }
     }
     print "<BR><BR>";
     my $start = $page*200;
     for (my $i=$start; $i<$start+200 && $i <= $max_id;$i++) {
-        print "<a href=\"$READ_URL?action=basicTaxonInfo&taxon_no=$i\">$i</a> ";
+        print "<a href=\"?action=basicTaxonInfo&taxon_no=$i\">$i</a> ";
     }
 
 	print $hbo->stdIncludes ($PAGE_BOTTOM);
