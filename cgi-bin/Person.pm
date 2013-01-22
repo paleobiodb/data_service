@@ -374,7 +374,10 @@ sub publications	{
 		if ( $p->{'lastpage'} )	{
 			$pages .= "-".$p->{'lastpage'};
 		}
-		my $extras = ( $p->{'extras'} ) ? " $p->{'extras'}" : "";
+		$p->{'doi'} = ( $p->{'doi'} ) ? "DOI: http://".$p->{'doi'} : "";
+		my $extras = ( $p->{'extras'} ) ? " ".$p->{'extras'} : "";
+		$extras .= ( $p->{'doi'} && $p->{'extras'} ) ? " &mdash; " : "";
+		$extras .= $p->{'doi'};
 		push @lines , '<p class="verysmall" style="margin-left: 1em; text-indent: -1em; margin-bottom: -0.8em;"/>'.$p->{'pub_no'}.". $authorlist. ".$p->{'year'}.". ".$p->{'title'}." $editors <i>".$p->{'journal'}."</i>$pages.$extras</p>\n";
 	}
 	$lines[$#lines] =~ s/margin-bottom: .*"/"/;
