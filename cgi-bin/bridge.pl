@@ -96,7 +96,8 @@ my $hbo = HTMLBuilder->new($dbt,$s,$use_guest,'');
 # rjp, 2/2004
 # Grab the action from the form.  This is what subroutine we should run.
 my $action = ($q->param("action") || "menu");
-	
+$action = ( $q->param('page') )	? "page" : $action;
+
 # figure out what to do with the action
 if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /flatpebble\.nceas/)	{
     print $q->redirect( -url=>'http://flatpebble.nceas.ucsb.edu/cgi-bin/bridge.pl?action='.$action);
@@ -1047,13 +1048,13 @@ sub displayCurveResults	{
 }
 
 # Show a generic page
-sub displayPage {
+sub page {
 	my $page = shift;
 	if ( ! $page ) { 
 		# Try the parameters
 		$page = $q->param("page"); 
 		if ( ! $page ) {
-			$hbo->htmlError( "displayPage(): Unknown page..." );
+			$hbo->htmlError( "page(): Unknown page..." );
 		}
 	}
 
