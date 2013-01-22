@@ -72,7 +72,7 @@ if ( $q->param('a') )	{
 }
 
 if ( $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
-	print $q->redirect( -url=>"http://paleodb.org/cgi-bin/bridge.pl?action=menu&user=Contributor" );
+#	print $q->redirect( -url=>"http://paleodb.org/cgi-bin/bridge.pl?action=menu&user=Contributor" );
 }
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
@@ -97,12 +97,6 @@ my $hbo = HTMLBuilder->new($dbt,$s,$use_guest,'');
 # Grab the action from the form.  This is what subroutine we should run.
 my $action = ($q->param("action") || "menu");
 	
-# The right combination will allow me to conditionally set the DEBUG flag
-if ($s->get("enterer") eq "J. Sepkoski" && 
-    $s->get("authorizer") eq "J. Alroy" ) {
-        $Debug::DEBUG = 1;
-}
-    
 # figure out what to do with the action
 if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /flatpebble\.nceas/)	{
     print $q->redirect( -url=>'http://flatpebble.nceas.ucsb.edu/cgi-bin/bridge.pl?action='.$action);
@@ -4929,9 +4923,31 @@ sub publications	{
     logRequest($s,$q);
     print $hbo->stdIncludes($PAGE_TOP);
     my %vars;
-    $vars{'publications'} = Person::publications($dbt,$hbo);
+    $vars{'publications'} = Person::publications($dbt,$s);
     print $hbo->populateHTML('publications', \%vars);
     print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
+sub publicationForm	{
+    logRequest($s,$q);
+    print $hbo->stdIncludes($PAGE_TOP);
+    my $pub = ${$dbt->getData("SELECT * FROM pubs WHERE pub_no=".$q->param('pub_no'))}[0];
+    my %vars;
+    $vars{$_} = $pub->{$_} foreach ( 'pub_no','authors','year','title','journal','editors','publisher','volume','firstpage','lastpage','extras' );
+    print $hbo->populateHTML('publication_form', \%vars);
+    print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
+sub editPublication	{
+    logRequest($s,$q);
+    # author fields aren't editable because they should never change and
+    #  users could completely screw up the entries if they were
+    my @updates;
+    push @updates , "$_='".$q->param($_)."'" foreach ( 'year','title','journal','editors','publisher','volume','firstpage','lastpage','extras' );
+    s/''/NULL/ foreach @updates;
+    s/(\w)(')(\w)/$1\\'$3/g foreach @updates;
+    $dbt->dbh->do("UPDATE pubs SET ".join(",",@updates)." WHERE pub_no=".$q->param('pub_no'));
+    publications();
 }
 
 
