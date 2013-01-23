@@ -125,7 +125,7 @@ sub getReference {
     my $reference_no = int(shift);
 
     if ($reference_no) {
-        my $sql = "SELECT authorizer_no,enterer_no,modifier_no,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.editors,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r WHERE r.reference_no=$reference_no";
+        my $sql = "SELECT authorizer_no,enterer_no,modifier_no,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.editors,r.publisher,r.pubcity,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r WHERE r.reference_no=$reference_no";
         my $ref = ${$dbt->getData($sql)}[0];
         my %lookup = %{PBDBUtil::getPersonLookup($dbt)};
         $ref->{'authorizer'} = $lookup{$ref->{'authorizer_no'}};
@@ -255,6 +255,325 @@ sub formatLongRef {
 	}
     return $longRef;
 }
+
+
+# Given an object representing a PaleoDB reference, return a representation of
+# that reference in RIS format (text).
+
+sub formatRISRef {
+    
+    my ($dbt, $ref) = @_;
+    
+    return '' unless ref $ref;
+    
+    my $output = '';
+    my $refno = $ref->{reference_no};
+    my $pubtype = $ref->{publication_type};
+    my $reftitle = $ref->{reftitle} || '';
+    my $pubtitle = $ref->{pubtitle} || '';
+    my $pubyr = $ref->{pubyr} || '';
+    my $misc = '';
+    
+    # First, figure out what type of publication the reference refers to.
+    # Depending upon publication type, generate the proper RIS data record.
+    
+    if ( $pubtype eq 'journal article' or $pubtype eq 'serial monograph' )
+    {
+	$output .= risLine('TY', 'JOUR');
+    }
+    
+    elsif ( $pubtype eq 'book chapter' or ($pubtype eq 'book/book chapter' and 
+					   defined $ref->{editors} and $ref->{editors} ne '' ) )
+    {
+	$output .= risLine('TY', 'CHAP');
+    }
+    
+    elsif ( $pubtype eq 'book' or $pubtype eq 'book/book chapter' or $pubtype eq 'compendium' 
+	    or $pubtype eq 'guidebook' )
+    {
+	$output .= risLine('TY', 'BOOK');
+    }
+    
+    elsif ( $pubtype eq 'serial monograph' )
+    {
+	$output .= risLine('TY', 'SER');
+    }
+    
+    elsif ( $pubtype eq 'Ph.D. thesis' or $pubtype eq 'M.S. thesis' )
+    {
+	$output .= risLine('TY', 'THES');
+	$misc = $pubtype;
+    }
+    
+    elsif ( $pubtype eq 'abstract' )
+    {
+	$output .= risLine('TY', 'ABST');
+    }
+    
+    elsif ( $pubtype eq 'news article' )
+    {
+	$output .= risLine('TY', 'NEWS');
+    }
+    
+    elsif ( $pubtype eq 'unpublished' )
+    {
+	$output .= risLine('TY', 'UNPD');
+    }
+    
+    else
+    {
+	$output .= risLine('TY', 'GEN');
+    }
+    
+    # The following fields are common to all types:
+    
+    $output .= risLine('ID', "paleodb:ref:$refno");
+    $output .= risLine('DB', "Paleobiology Database");
+    
+    $output .= risAuthor('AU', $ref->{author1last}, $ref->{author1init})  if $ref->{author1last};
+    $output .= risAuthor('AU', $ref->{author2last}, $ref->{author2init}) if $ref->{author2last};
+    $output .= risOtherAuthors('AU', $ref->{otherauthors}) if $ref->{otherauthors};
+    $output .= risOtherAuthors('A2', $ref->{editors}) if $ref->{editors};
+    
+    $output .= risYear('PY', $pubyr) if $pubyr > 0;
+    $output .= risLine('TI', $reftitle);
+    $output .= risLine('T2', $pubtitle);
+    $output .= risLine('M1', $misc) if $misc;
+    $output .= risLine('VL', $ref->{pubvol}) if $ref->{pubvol};
+    $output .= risLine('IS', $ref->{pubno}) if $ref->{pubno};
+    $output .= risLine('PB', $ref->{publisher}) if $ref->{publisher};
+    $output .= risLine('CY', $ref->{pubcity}) if $ref->{pubcity};
+    
+    if ( defined $ref->{refpages} and $ref->{refpages} ne '' )
+    {
+	if ( $ref->{refpages} =~ /^(\d+)-(\d+)$/ )
+	{
+	    $output .= risLine('SP', $1);
+	    $output .= risLine('EP', $2);
+	}
+	else
+	{
+	    $output .= risLine('SP', $ref->{refpages});
+	}
+    }
+    
+    else
+    {
+	$output .= risLine('SP', $ref->{firstpage}) if $ref->{firstpage};
+	$output .= risLine('EP', $ref->{lastpage}) if $ref->{lastpage};
+    }
+    
+    $output .= risLine('N1', $ref->{comments}) if defined $ref->{comments} and $ref->{comments} ne '';
+    $output .= risLine('LA', $ref->{language}) if defined $ref->{language} and $ref->{language} ne '';
+    $output .= risLine('DO', $ref->{doi}) if defined $ref->{doi} and $ref->{doi} ne '';
+    
+    $output .= risLine('ER');
+    
+    return $output;
+}
+
+
+# Generate an arbitrary line in RIS format, given a tag and a value.  The value
+# may be empty.
+
+sub risLine {
+    
+    my ($tag, $value) = @_;
+    
+    $value ||= '';
+    $tag = "\nTY" if $tag eq 'TY';
+    
+    return "$tag  - $value\n";
+}
+
+
+# Generate an "author" line in RIS format, given a tag (which may be 'AU' for
+# author, 'A2' for editor, etc.), and the three components of a name: last,
+# first, and suffix.  The first and suffix may be null.
+
+sub risAuthor {
+    
+    my ($tag, $last, $init, $suffix) = @_;
+    
+    $init ||= '';
+    $init =~ s/ //g;
+    $suffix ||= '';
+    
+    # If the last name includes a suffix, split it out
+    
+    if ( $last =~ /^(.*),\s*(.*)/ or $last =~ /^(.*)\s+(jr.?|iii|iv)$/i or $last =~ /^(.*)\s+\((jr.?|iii|iv)\)$/ )
+    {
+	$last = $1;
+	$suffix = $2;
+	if ( $suffix =~ /^([sSjJ])/ ) { $suffix = $1 . "r."; }
+    }
+    
+    # Generate the appropriate line, depending upon which of the three components
+    # are non-empty.
+    
+    if ( $suffix ne '' )
+    {
+	return "$tag  - $last,$init,$suffix\n";
+    }
+    
+    elsif ( $init ne '' )
+    {
+	return "$tag  - $last,$init\n";
+    }
+    
+    else
+    {
+	return "$tag  - $last\n";
+    }
+}
+
+
+# Generate a "date" line in RIS format, given a tag and year, month and day
+# values.  The month and day values may be null.  An optional "other" value
+# may also be included, which can be arbitrary text.
+
+sub risYear {
+
+    my ($tag, $year, $month, $day, $other) = @_;
+    
+    my $date = sprintf("%04d", $year + 0) . "/";
+    
+    $date .= sprintf("%02d", $month + 0) if defined $month and $month > 0;
+    $date .= "/";
+    
+    $date .= sprintf("%02d", $day + 0) if defined $day and $day > 0;
+    $date .= "/";
+    
+    $date .= $other if defined $other;
+    
+    return "$tag  - $date\n";
+}
+
+
+# Generate one or more "author" lines in RIS format, given a tag and a value
+# which represents one or more names separated by commas.  This is a bit
+# tricky, because we need to split out name suffixes such as 'jr' and 'iii'.
+# If we come upon something we can't handle, we generate a line whose value is
+# 'PARSE ERROR'.
+
+sub risOtherAuthors {
+
+    my ($tag, $otherauthors) = @_;
+    
+    $otherauthors =~ s/^\s+//;
+    
+    my $init = '';
+    my $last = '';
+    my $suffix = '';
+    my $output = '';
+    
+    while ( $otherauthors =~ /[^,\s]/ )
+    {
+	if ( $otherauthors =~ /^(\w\.)\s*(.*)/ )
+	{
+	    $init .= $1;
+	    $otherauthors = $2;
+	}
+	
+	elsif ( $otherauthors =~ /^([^,]+)(?:,\s+(.*))?/ )
+	{
+	    $last = $1;
+	    $otherauthors = $2;
+	    
+	    if ( $otherauthors =~ /^(\w\w+\.?)(?:,\s+(.*))$/ )
+	    {
+		$suffix = $1;
+		$otherauthors = $2;
+	    }
+	    
+	    $output .= risAuthor($tag, $last, $init, $suffix);
+	    $init = $last = $suffix = '';
+	}
+	
+	else
+	{
+	    $output .= risLine($tag, "PARSE ERROR");
+	}
+    }
+    
+    return $output;
+}
+
+
+# Given a hash whose pages are page numbers or page ranges, generate a single
+# non-duplicative list.
+
+sub coalescePages {
+
+    my ($pages) = @_;
+    
+    return unless ref $pages eq 'HASH';
+    
+    my (%range, %other);
+    
+    foreach my $spec (keys %$pages)
+    {
+	if ( $spec =~ /^\s*(\d+)\s*-\s*(\d+)\s*$/ )
+	{
+	    my $first = $1;
+	    my $last = $2;
+	    
+	    if ( !defined $range{$first} or $range{$first} < $last )
+	    {
+		$range{$first} = $last;
+	    }
+	}
+	
+	elsif ( $spec =~ /^\s*(\d+)\s*$/ )
+	{
+	    my $page = $1;
+	    
+	    if ( !defined $range{$page} )
+	    {
+		$range{$page} = $page;
+	    }
+	}
+	
+	elsif ( $spec =~ /^\s*(\w.*)/ )
+	{
+	    my $page = $1;
+	    $other{$page} = $page unless exists $other{$page};
+	}
+    }
+    
+    my ($first, $last, @pages) = @_;
+    
+    foreach my $key ( sort { $a <=> $b } keys %range )
+    {
+	if ( defined $last and $key <= $last + 1 )
+	{
+	    $last = $key;
+	}
+	
+	elsif ( defined $last )
+	{
+	    push @pages, $first == $last ? $last : "$first-$last";
+	    $first = $key;
+	    $last = $range{$key};
+	}
+	
+	else
+	{
+	    $first = $key;
+	    $last = $range{$key};
+	}
+    }
+    
+    if ( defined $last )
+    {
+	push @pages, $first == $last ? $last : "$first-$last";
+    }
+    
+    push @pages, $_ foreach keys %other;
+    
+    return join(', ', @pages);
+}
+
 
 sub getSecondaryRefs {
     my $dbt = shift;
@@ -781,12 +1100,12 @@ sub displayReferenceForm {
 
 #  * Will either add or edit a reference in the database
 sub processReferenceForm {
-	my ($dbt,$q,$s,$hbo) = @_;
-	my $dbh = $dbt->dbh;
-	my $reference_no = int($q->param('reference_no'));
-
-	my $isNewEntry = ($reference_no > 0) ? 0 : 1;
-
+    my ($dbt,$q,$s,$hbo) = @_;
+    my $dbh = $dbt->dbh;
+    my $reference_no = int($q->param('reference_no'));
+    
+    my $isNewEntry = ($reference_no > 0) ? 0 : 1;
+    
     my @child_nos = ();
     # If taxonomy basis is changed on an edit, the classifications that refer to that ref
     # may also change, so we may have to update the taxa cache in that case
@@ -832,7 +1151,43 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         }
         return;
     }
-
+    
+    # Suppress fields that do not match publication type
+    
+    if ( $vars{publication_type} eq 'abstract' or
+	 $vars{publication_type} eq 'unpublished' )
+    {
+	delete $vars{publisher};
+	delete $vars{pubcity};
+    }
+    
+    unless ( $vars{publication_type} eq 'book' or
+	     $vars{publication_type} eq 'book chapter' or
+	     $vars{publication_type} eq 'book/book chapter' or
+	     $vars{publication_type} eq 'serial monograph' or
+	     $vars{publication_type} eq 'compendium' or
+	     $vars{publication_type} eq 'guidebook' )
+    {
+	delete $vars{editors};
+    }
+    
+    unless ( $vars{publication_type} eq 'journal article' or
+	     $vars{publication_type} eq 'serial monograph' or
+	     $vars{publication_type} eq 'news article' )
+    {
+	delete $vars{pubvol};
+	delete $vars{pubno};
+    }
+    
+    unless ( $vars{publication_type} eq 'journal article' or
+	     $vars{publication_type} eq 'book chapter' or
+	     $vars{publication_type} eq 'book/book chapter' or
+	     $vars{publication_type} eq 'news article' )
+    {
+	delete $vars{firstpage};
+	delete $vars{lastpage};
+    }
+    
     my ($dupe,$matches);
     
     if ($isNewEntry) {
@@ -1104,7 +1459,7 @@ sub getReferences {
         my $tables = "(refs r, person p1, person p2)".
                      " LEFT JOIN person p3 ON p3.person_no=r.modifier_no";
         # This exact order is very important due to work around with inflexible earlier code
-        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.basis,r.doi,r.comments,r.language,r.created,r.modified";
+        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.editors,r.pubyr,r.reftitle,r.pubtitle,r.publisher,r.pubcity,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.basis,r.doi,r.comments,r.language,r.created,r.modified";
         my @join_conditions = ("r.authorizer_no=p1.person_no","r.enterer_no=p2.person_no");
         my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@join_conditions,@where);
         my $orderBy = " ORDER BY ";

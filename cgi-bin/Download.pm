@@ -161,9 +161,13 @@ sub buildDownload {
     if ( $q->param("output_data") =~ /occurrence/ ) {
         ($taxaCount,$taxaFile) = $self->printAbundFile($allResults);
     }
-
-    ($refsCount,$refsFile) = $self->printRefsFile($allResults);
-  
+    
+    my ($dummy, $ris_count, $bad_list);
+    
+    ($refsCount, $refsFile, $dummy, $ris_count, $bad_list) = $self->printRefsFile($allResults);
+    my $risFile = $refsFile;
+    $risFile =~ s/-refs\..*/-ris.txt/;
+    
     if ($q->param('output_data') =~ /matrix/i) {
         ($nameCount,$mainCount,$mainFile) = $self->printMatrix($lumpedResults);
         if ($nameCount =~ /^ERROR/) {
@@ -267,12 +271,22 @@ print qq|
                 print "$taxaCount taxonomic ranges were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
             }
         } 
+	
         if ( $refsCount == 1 )	{
             print "$refsCount reference was printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
         } else	{
             print "$refsCount references were printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
         }
-        my $fileNames = $mainFile."/".$taxaFile."/".$refsFile;
+	
+	if ( $ris_count > 0 ) {
+	    print "$ris_count references were printed to <a href=\"$OUT_HTTP_DIR/$risFile\">$risFile</a><br>\n";
+	    if ( @$bad_list ) {
+		print "<p>The following references could not be printed due to erroneous data:<ul>\n";
+		print "<li>$_</li>\n" foreach @$bad_list;
+		print "</ul></p>\n";
+	    }
+	}
+        my $fileNames = $mainFile."/".$taxaFile."/".$refsFile."/".$risFile;
         if ( $q->param('time_scale') )    {
             print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
             $fileNames .= "/".$scaleFile;
@@ -3618,11 +3632,14 @@ sub printRefsFile {
     my $filename = $self->{'filename'};
     my $ext = ($q->param('output_format') =~ /tab/) ? "tab" : "csv";
     my $refsFile = "$filename-refs.$ext";
+    my $risFile = "$filename-ris.txt";
     if (!open(REFSFILE, ">$OUT_FILE_DIR/$refsFile")) {
         die ("Could not open output file: $refsFile($!) <br>");
     } 
-
-
+    if (!open(RISFILE, ">$OUT_FILE_DIR/$risFile")) {
+	die "Could not open output file: $risFile ($!) <br>";
+    }
+    
     # now hit the secondary refs table, mark all of those references as
     #  having been used, and print all the refs JA 16.7.04
     my (%all_refs,%all_colls,%colls_by_ref,%occs_by_ref);
@@ -3655,6 +3672,8 @@ sub printRefsFile {
 
     # print the refs
     my $ref_count = 0;
+    my $ris_ref_count = 0;
+    my (@ris_bad_list);
     if (%all_refs) {
         my $fields = join(",",map{"r.".$_} grep{!/^(?:authorizer|enterer|modifier)$/} @refsFieldNames);
         my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, $fields FROM refs r ".
@@ -3679,7 +3698,18 @@ sub printRefsFile {
             $refLine =~ s/\r|\n/ /g;
             printf REFSFILE "%s\n",$refLine;
             $ref_count++;
-
+	    
+	    my $refout = Reference::formatRISRef($dbt, $row);
+	    if ( $refout =~ /PARSE ERROR/ )
+	    {
+		push @ris_bad_list, $row->{reference_no};
+	    }
+	    else
+	    {
+		$ris_ref_count++;
+		print RISFILE $refout;
+	    }
+	    
             # need this to print the publication year for collections JA 4.12.06
             $pubyr[$row->{reference_no}] = $row->{pubyr};
             my @temp = keys %{$colls_by_ref{$row->{'reference_no'}}};
@@ -3722,7 +3752,7 @@ sub printRefsFile {
         }
     }
     close REFSFILE;
-    return ($ref_count,$refsFile,$cites);
+    return ($ref_count,$refsFile,$cites,$ris_ref_count,\@ris_bad_list);
 }
 
 
