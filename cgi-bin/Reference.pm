@@ -7,7 +7,7 @@ use CGI::Carp;
 use Data::Dumper;
 use Class::Date qw(now date);
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $DB $COLLECTIONS $COLLECTION_NO $PAGE_TOP $PAGE_BOTTOM);
+use Constants qw($WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $DB $COLLECTIONS $COLLECTION_NO $PAGE_TOP $PAGE_BOTTOM);
 use Download;
 use Person;
 
@@ -191,7 +191,7 @@ sub formatShortRef  {
 
     if ($options{'link_id'}) {
         if ($refData->{'reference_no'}) {
-            $shortRef = qq|<a href="$READ_URL?a=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
+            $shortRef = qq|<a href="?a=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
         }
     }
     if ($options{'show_comments'}) {
@@ -679,7 +679,7 @@ sub displayRefResults {
         print "<div style=\"margin: 1.5em; margin-bottom: 1em; padding: 1em; border: 1px solid #E0E0E0;\">\n";
 		print "<table border=0 cellpadding=5 cellspacing=0>\n";
 
-        my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
+        my $exec_url = ($type =~ /view/) ? "" : $WRITE_URL;
 
 		# Only print the last 30 rows that were found JA 26.7.02
          my $dark;
@@ -704,7 +704,7 @@ sub displayRefResults {
                     print "<a href=\"$exec_url?a=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
                 }
             } else {
-                print "<a href=\"$READ_URL?a=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+                print "<a href=\"?a=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
             }
             print "</td>";
             my $formatted_reference = formatLongRef($row);
@@ -872,11 +872,11 @@ sub displayReference {
             my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE reference_no=$reference_no ORDER BY taxon_name";
             my $link = 'a=basicTaxonInfo&taxon_no=';
             my @results = 
-                map { qq'<a href="$READ_URL?$link$_->{taxon_no}">$_->{taxon_name}</a>' }
+                map { qq'<a href="?$link$_->{taxon_no}">$_->{taxon_name}</a>' }
                 @{$dbt->getData($sql)};
             $html = join(", ",@results);
         } else {
-            $html .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
+            $html .= qq|<a href="?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
             my $plural = ($authority_count == 1) ? "" : "s";
             $html .= "view taxonomic name$plural";
             $html .= qq|</a> |;
@@ -905,7 +905,7 @@ sub displayReference {
                 @{$dbt->getData($sql)};
             $html = join("<br>",@results);
         } else {
-            $html .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
+            $html .= qq|<a href="?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
             if ($opinion_count) {
                 my $plural = ($opinion_count == 1) ? "" : "s";
                 $html .= "view taxonomic opinion$plural";
@@ -914,7 +914,7 @@ sub displayReference {
         }
 
 	my $class_link; 
-	$class_link = qq| - <small><a href="$READ_URL?a=classify&amp;reference_no=$reference_no">view classification</a></small>|;
+	$class_link = qq| - <small><a href="?a=classify&amp;reference_no=$reference_no">view classification</a></small>|;
 	print $box->(qq'Taxonomic opinions ($opinion_count) $class_link',$html);
     }
 
@@ -922,7 +922,7 @@ sub displayReference {
 	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
 	if ( @taxon_refs )	{
 		my @taxa;
-		push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		push @taxa , "<a href=\"?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
 		print $box->("Measurements",join('<br>',@taxa));
 	}
 
@@ -975,7 +975,7 @@ sub displayReference {
                 if (! $row->{'is_primary'}) {
                     $style = " class=\"boring\"";
                 }
-                my $coll_link = qq|<a href="$READ_URL?a=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
+                my $coll_link = qq|<a href="?a=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
                 $html .= $coll_link . ", ";
             }
             $html =~ s/, $//;
@@ -986,10 +986,10 @@ sub displayReference {
 		}
         } else {
             my $plural = ($collection_count == 1) ? "" : "s";
-            $html .= qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a>|;
+            $html .= qq|<a href="?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a>|;
         }
         if ($html) {
-            print $box->(qq'Collections (<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
+            print $box->(qq'Collections (<a href="?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
         }
     }
 
@@ -1272,7 +1272,7 @@ sub getReferenceLinkSummary	{
 
 	if ($authority_count) {
 		my $plural = ($authority_count == 1) ? "" : "s";
-		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count taxonomic name$plural</a>|;
+		push @chunks , qq|<a href="?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count taxonomic name$plural</a>|;
 	}
 
 	# Handle Opinions
@@ -1288,9 +1288,9 @@ sub getReferenceLinkSummary	{
 
 	if ( $opinion_total ) {
 		my $plural = ($opinion_total == 1) ? "" : "s";
-		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_total taxonomic opinion$plural</a>|;
+		push @chunks , qq|<a href="?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_total taxonomic opinion$plural</a>|;
 		if ( $has_opinion > 0 )	{
- 			$chunks[$#chunks] .= qq| (<a href="$READ_URL?a=classify&amp;reference_no=$reference_no">show classification</a>)|;
+ 			$chunks[$#chunks] .= qq| (<a href="?a=classify&amp;reference_no=$reference_no">show classification</a>)|;
 		}
 	}      
 
@@ -1298,7 +1298,7 @@ sub getReferenceLinkSummary	{
 	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
 	if ( @taxon_refs )	{
 		my @taxa;
-		push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		push @taxa , "<a href=\"?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
 		push @chunks , "measurements of ".join(', ',@taxa);
 	}
 
@@ -1347,10 +1347,10 @@ sub getReferenceLinkSummary	{
 			if (! $row->{'is_primary'}) {
 				$style = " class=\"boring\"";
 			}
-			push @coll_links , qq|<a href="$READ_URL?a=$action&$COLLECTION_NO=$row->{$COLLECTION_NO}" $style>$row->{$COLLECTION_NO}</a>|;
+			push @coll_links , qq|<a href="?a=$action&$COLLECTION_NO=$row->{$COLLECTION_NO}" $style>$row->{$COLLECTION_NO}</a>|;
 		}
 		$thing1 = ( $protected_count > 0 ) ? "released ".$thing1 : $thing1;
-		push @chunks , qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count $thing1</a>  (|.join(' ',@coll_links).")";
+		push @chunks , qq|<a href="?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count $thing1</a>  (|.join(' ',@coll_links).")";
 	}
 	if ($protected_count > 0)	{
 		$thing2 = ($protected_count == 1) ? "collection" : "collections";
@@ -1523,9 +1523,9 @@ sub getReferences {
 		my @links;
 		for my $l ( @likes )	{
 			if ( $l->{'c'} == 1 )	{
-				push @links , "<a href=\"$READ_URL?a=displayReference&amp;reference_no=$l->{'reference_no'}\">$l->{'name'}</a>";
+				push @links , "<a href=\"?a=displayReference&amp;reference_no=$l->{'reference_no'}\">$l->{'name'}</a>";
 			} else	{
-				push @links , "<a href=\"$READ_URL?a=displayRefResults&amp;name=$l->{'name'}";
+				push @links , "<a href=\"?a=displayRefResults&amp;name=$l->{'name'}";
 				$links[$#links] .= ( $options{'year'} ) ? "&amp;year=$options{'year'}&amp;year_relation=$options{'year_relation'}" : "";
 				$links[$#links] .= "&amp;variants=no\">$l->{'name'}</a>";
 			}
@@ -1891,7 +1891,7 @@ sub getTitleWordOdds	{
 	my @journals = keys %jbuzz;
 
 	if ( ! @refnos )	{
-		print "<p style=\"margin-bottom: 3em;\">Not enough papers fall in the categories you selected to compute the odds. Please <a href=\"$READ_URL?a=displayPage&page=word_odds_form\">try again</a>.</p>\n";
+		print "<p style=\"margin-bottom: 3em;\">Not enough papers fall in the categories you selected to compute the odds. Please <a href=\"?page=word_odds_form\">try again</a>.</p>\n";
 		return;
 	}
 
@@ -2013,7 +2013,7 @@ sub getTitleWordOdds	{
 
 	print qq|
 <div class="verysmall" style="clear: left; margin-left: 3em; margin-right: 5em; padding-bottom: 3em; text-indent: -0.5em;">
-The odds ratio compares the percentage of paper titles within the journals or other categories you selected that include a given word to the same percentage for all other papers. If the "best odds" papers did not appear in a journal you selected, then maybe they should have. If only a few words are shown, then only those words are frequent and have the appropriate odds (respectively greater than 1, less than 1, or between 0.5 and 2). <a href=\"$READ_URL?a=displayPage&page=word_odds_form\">Try again</a> if you want to procrastinate even more.
+The odds ratio compares the percentage of paper titles within the journals or other categories you selected that include a given word to the same percentage for all other papers. If the "best odds" papers did not appear in a journal you selected, then maybe they should have. If only a few words are shown, then only those words are frequent and have the appropriate odds (respectively greater than 1, less than 1, or between 0.5 and 2). <a href=\"?page=word_odds_form\">Try again</a> if you want to procrastinate even more.
 </div>
 |;
 }
