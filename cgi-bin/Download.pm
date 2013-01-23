@@ -16,7 +16,7 @@ use Reference;
 use Text::CSV_XS;
 use URI::Escape;
 use Mail::Mailer;
-use Constants qw($READ_URL $WRITE_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
+use Constants qw($READ_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
 
 use strict;
 
@@ -161,13 +161,17 @@ sub buildDownload {
     if ( $q->param("output_data") =~ /occurrence/ ) {
         ($taxaCount,$taxaFile) = $self->printAbundFile($allResults);
     }
-
-    ($refsCount,$refsFile) = $self->printRefsFile($allResults);
-  
+    
+    my ($dummy, $ris_count, $bad_list);
+    
+    ($refsCount, $refsFile, $dummy, $ris_count, $bad_list) = $self->printRefsFile($allResults);
+    my $risFile = $refsFile;
+    $risFile =~ s/-refs\..*/-ris.txt/;
+    
     if ($q->param('output_data') =~ /matrix/i) {
         ($nameCount,$mainCount,$mainFile) = $self->printMatrix($lumpedResults);
         if ($nameCount =~ /^ERROR/) {
-            push @form_errors, "The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the admins (pbdbadmin\@nceas.ucsb.edu) if this is a problem";
+            push @form_errors, "The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the database administrator if this is a problem";
         }
     } elsif ($q->param('output_data') =~ /conjunct/i) {
         ($mainCount,$mainFile,$collFile,$colls) = $self->printCONJUNCT($lumpedResults);
@@ -199,10 +203,10 @@ sub buildDownload {
 <ul>
 <li>Notify some of the major contributors about your research.</li>
 <li>Acknowledge the major contributors by name in your paper.</li>
-<li>Cite the relevant <a href="$READ_URL?action=displayPage&amp;page=OSA">Online Systematics Archive</a>.</li>
+<li>Cite the relevant <a href="?page=OSA">Online Systematics Archive</a>.</li>
 <li>If none are relevant, give a generic citation to the Paleobiology Database including the date of access.
-<li><a href="$READ_URL?action=displayPage&amp;page=join_us">Join the PaleoDB</a> and contribute more data.</li>
-<li>At a bare minimum, <a href="$READ_URL?action=displayPage&amp;page=publications">request a publication number</a> once your paper is accepted.</li>
+<li><a href="?page=join_us">Join the PaleoDB</a> and contribute more data.</li>
+<li>At a bare minimum, <a href="?a=publications">request a publication number</a> once your paper is accepted.</li>
 </li>
 </ul>
 <p>The major contributors to this data set were:</p>
@@ -267,12 +271,22 @@ print qq|
                 print "$taxaCount taxonomic ranges were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
             }
         } 
+	
         if ( $refsCount == 1 )	{
             print "$refsCount reference was printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
         } else	{
             print "$refsCount references were printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
         }
-        my $fileNames = $mainFile."/".$taxaFile."/".$refsFile;
+	
+	if ( $ris_count > 0 ) {
+	    print "$ris_count references were printed to <a href=\"$OUT_HTTP_DIR/$risFile\">$risFile</a><br>\n";
+	    if ( @$bad_list ) {
+		print "<p>The following references could not be printed due to erroneous data:<ul>\n";
+		print "<li>$_</li>\n" foreach @$bad_list;
+		print "</ul></p>\n";
+	    }
+	}
+        my $fileNames = $mainFile."/".$taxaFile."/".$refsFile."/".$risFile;
         if ( $q->param('time_scale') )    {
             print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
             $fileNames .= "/".$scaleFile;
@@ -283,12 +297,12 @@ print qq|
         print "</div>\n\n";
         print "<p><i>No occurrences met the search criteria</i></p>";
     }
-    print qq|<p align="center" style="white-space: nowrap;"><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
-    print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
+    print qq|<p align="center" style="white-space: nowrap;"><a href="?action=displayDownloadForm">Do another download</a> - |;
+    print qq|<a href="?action=displayCurveForm">Generate diversity curves</a>|;
     if ( $hours >= $hourlimit )	{
         print qq| - <a href="#" onClick=\"document.getElementById('mainPanel').style.display='none'; document.getElementById('terms').style.display='inline';\">Show terms again</a>|;
     }
-    #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
+    #print qq|<a href="?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
 
     print "</div>\n\n</div>\n\n";
     if ( $hours >= $hourlimit )	{
@@ -2469,15 +2483,17 @@ sub queryDatabase {
                     $row->{'c.min_ma_error'} /= 1000;
             }
             # use geochronology if available for composite max/min age
-            if ( $row->{'c.direct_ma'} )	{
+            # whoops, only use dates consistent with the time scale
+            #  JA 5.1.12
+            if ( $row->{'c.direct_ma'} && $row->{'c.direct_ma'} <= $base_lookup->{'base_age'} && $row->{'c.direct_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.direct_ma'};
                 $row->{'c.ma_min'} = $row->{'c.direct_ma'};
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
-            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} > 0 )	{
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} > 0 && $row->{'c.max_ma'} <= $base_lookup->{'base_age'} && $row->{'c.min_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.max_ma'};
                 $row->{'c.ma_min'} = $row->{'c.min_ma'};
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
-            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} <= 0 )	{
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} <= 0 && $row->{'c.max_ma'} <= $base_lookup->{'base_age'} && $row->{'c.min_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.max_ma'};
                 $row->{'c.ma_min'} = 0;
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
@@ -3616,11 +3632,14 @@ sub printRefsFile {
     my $filename = $self->{'filename'};
     my $ext = ($q->param('output_format') =~ /tab/) ? "tab" : "csv";
     my $refsFile = "$filename-refs.$ext";
+    my $risFile = "$filename-ris.txt";
     if (!open(REFSFILE, ">$OUT_FILE_DIR/$refsFile")) {
         die ("Could not open output file: $refsFile($!) <br>");
     } 
-
-
+    if (!open(RISFILE, ">$OUT_FILE_DIR/$risFile")) {
+	die "Could not open output file: $risFile ($!) <br>";
+    }
+    
     # now hit the secondary refs table, mark all of those references as
     #  having been used, and print all the refs JA 16.7.04
     my (%all_refs,%all_colls,%colls_by_ref,%occs_by_ref);
@@ -3653,6 +3672,8 @@ sub printRefsFile {
 
     # print the refs
     my $ref_count = 0;
+    my $ris_ref_count = 0;
+    my (@ris_bad_list);
     if (%all_refs) {
         my $fields = join(",",map{"r.".$_} grep{!/^(?:authorizer|enterer|modifier)$/} @refsFieldNames);
         my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, $fields FROM refs r ".
@@ -3677,7 +3698,18 @@ sub printRefsFile {
             $refLine =~ s/\r|\n/ /g;
             printf REFSFILE "%s\n",$refLine;
             $ref_count++;
-
+	    
+	    my $refout = Reference::formatRISRef($dbt, $row);
+	    if ( $refout =~ /PARSE ERROR/ )
+	    {
+		push @ris_bad_list, $row->{reference_no};
+	    }
+	    else
+	    {
+		$ris_ref_count++;
+		print RISFILE $refout;
+	    }
+	    
             # need this to print the publication year for collections JA 4.12.06
             $pubyr[$row->{reference_no}] = $row->{pubyr};
             my @temp = keys %{$colls_by_ref{$row->{'reference_no'}}};
@@ -3720,7 +3752,7 @@ sub printRefsFile {
         }
     }
     close REFSFILE;
-    return ($ref_count,$refsFile,$cites);
+    return ($ref_count,$refsFile,$cites,$ris_ref_count,\@ris_bad_list);
 }
 
 
@@ -3995,7 +4027,7 @@ sub emailDownloadFiles	{
 	my $self = shift;
 	my $q = $self->{'q'};
 
-	my %headers = ('Subject'=> 'Paleobiology Database download files','From'=>'alroy');
+	my %headers = ('Subject'=> 'Paleobiology Database download files','From'=>'PaleoDB administrator');
 	$headers{'To'} = $q->param('email');
 	$headers{'Content-Transfer-Encoding'} = "7bit";
 	$headers{'Content-Type'} = 'multipart/mixed; boundary=Apple-Mail-81-601985459';

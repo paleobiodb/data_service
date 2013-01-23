@@ -439,11 +439,13 @@ sub assignGenera	{
 	} elsif ( $bin_type eq "10my" ) {
 		@binnames = $t->getBins();
 		my ($top,$base) = $t->computeBinBounds('bins');
-		(%basema,%topma) = (%$base,%$top);
+		%basema = %$base;
+		%topma = %$top;
 	} elsif ( $bin_type eq "FossilRecord2" ) {
 		@binnames = $t->getFR2Bins();
 		my ($top,$base) = $t->computeBinBounds('FR2');
-		(%basema,%topma) = (%$base,%$top);
+		%basema = %$base;
+		%topma = %$top;
 	} elsif ( $bin_type =~ /neptune/i ) {
 	# Neptune data ranges from -3 to 150 mA right now, use those at defaults
 		$neptune_range_min = 0;

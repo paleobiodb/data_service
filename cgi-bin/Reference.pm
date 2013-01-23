@@ -7,7 +7,7 @@ use CGI::Carp;
 use Data::Dumper;
 use Class::Date qw(now date);
 use Debug qw(dbg);
-use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $DB $COLLECTIONS $COLLECTION_NO $PAGE_TOP $PAGE_BOTTOM);
+use Constants qw($WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $DB $COLLECTIONS $COLLECTION_NO $PAGE_TOP $PAGE_BOTTOM);
 use Download;
 use Person;
 
@@ -125,7 +125,7 @@ sub getReference {
     my $reference_no = int(shift);
 
     if ($reference_no) {
-        my $sql = "SELECT authorizer_no,enterer_no,modifier_no,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.editors,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r WHERE r.reference_no=$reference_no";
+        my $sql = "SELECT authorizer_no,enterer_no,modifier_no,r.reference_no,r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.editors,r.publisher,r.pubcity,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.created,r.modified,r.publication_type,r.basis,r.language,r.doi,r.comments,r.project_name,r.project_ref_no FROM refs r WHERE r.reference_no=$reference_no";
         my $ref = ${$dbt->getData($sql)}[0];
         my %lookup = %{PBDBUtil::getPersonLookup($dbt)};
         $ref->{'authorizer'} = $lookup{$ref->{'authorizer_no'}};
@@ -191,7 +191,7 @@ sub formatShortRef  {
 
     if ($options{'link_id'}) {
         if ($refData->{'reference_no'}) {
-            $shortRef = qq|<a href="$READ_URL?a=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
+            $shortRef = qq|<a href="?a=displayReference&reference_no=$refData->{reference_no}">$shortRef</a>|;
         }
     }
     if ($options{'show_comments'}) {
@@ -255,6 +255,325 @@ sub formatLongRef {
 	}
     return $longRef;
 }
+
+
+# Given an object representing a PaleoDB reference, return a representation of
+# that reference in RIS format (text).
+
+sub formatRISRef {
+    
+    my ($dbt, $ref) = @_;
+    
+    return '' unless ref $ref;
+    
+    my $output = '';
+    my $refno = $ref->{reference_no};
+    my $pubtype = $ref->{publication_type};
+    my $reftitle = $ref->{reftitle} || '';
+    my $pubtitle = $ref->{pubtitle} || '';
+    my $pubyr = $ref->{pubyr} || '';
+    my $misc = '';
+    
+    # First, figure out what type of publication the reference refers to.
+    # Depending upon publication type, generate the proper RIS data record.
+    
+    if ( $pubtype eq 'journal article' or $pubtype eq 'serial monograph' )
+    {
+	$output .= risLine('TY', 'JOUR');
+    }
+    
+    elsif ( $pubtype eq 'book chapter' or ($pubtype eq 'book/book chapter' and 
+					   defined $ref->{editors} and $ref->{editors} ne '' ) )
+    {
+	$output .= risLine('TY', 'CHAP');
+    }
+    
+    elsif ( $pubtype eq 'book' or $pubtype eq 'book/book chapter' or $pubtype eq 'compendium' 
+	    or $pubtype eq 'guidebook' )
+    {
+	$output .= risLine('TY', 'BOOK');
+    }
+    
+    elsif ( $pubtype eq 'serial monograph' )
+    {
+	$output .= risLine('TY', 'SER');
+    }
+    
+    elsif ( $pubtype eq 'Ph.D. thesis' or $pubtype eq 'M.S. thesis' )
+    {
+	$output .= risLine('TY', 'THES');
+	$misc = $pubtype;
+    }
+    
+    elsif ( $pubtype eq 'abstract' )
+    {
+	$output .= risLine('TY', 'ABST');
+    }
+    
+    elsif ( $pubtype eq 'news article' )
+    {
+	$output .= risLine('TY', 'NEWS');
+    }
+    
+    elsif ( $pubtype eq 'unpublished' )
+    {
+	$output .= risLine('TY', 'UNPD');
+    }
+    
+    else
+    {
+	$output .= risLine('TY', 'GEN');
+    }
+    
+    # The following fields are common to all types:
+    
+    $output .= risLine('ID', "paleodb:ref:$refno");
+    $output .= risLine('DB', "Paleobiology Database");
+    
+    $output .= risAuthor('AU', $ref->{author1last}, $ref->{author1init})  if $ref->{author1last};
+    $output .= risAuthor('AU', $ref->{author2last}, $ref->{author2init}) if $ref->{author2last};
+    $output .= risOtherAuthors('AU', $ref->{otherauthors}) if $ref->{otherauthors};
+    $output .= risOtherAuthors('A2', $ref->{editors}) if $ref->{editors};
+    
+    $output .= risYear('PY', $pubyr) if $pubyr > 0;
+    $output .= risLine('TI', $reftitle);
+    $output .= risLine('T2', $pubtitle);
+    $output .= risLine('M1', $misc) if $misc;
+    $output .= risLine('VL', $ref->{pubvol}) if $ref->{pubvol};
+    $output .= risLine('IS', $ref->{pubno}) if $ref->{pubno};
+    $output .= risLine('PB', $ref->{publisher}) if $ref->{publisher};
+    $output .= risLine('CY', $ref->{pubcity}) if $ref->{pubcity};
+    
+    if ( defined $ref->{refpages} and $ref->{refpages} ne '' )
+    {
+	if ( $ref->{refpages} =~ /^(\d+)-(\d+)$/ )
+	{
+	    $output .= risLine('SP', $1);
+	    $output .= risLine('EP', $2);
+	}
+	else
+	{
+	    $output .= risLine('SP', $ref->{refpages});
+	}
+    }
+    
+    else
+    {
+	$output .= risLine('SP', $ref->{firstpage}) if $ref->{firstpage};
+	$output .= risLine('EP', $ref->{lastpage}) if $ref->{lastpage};
+    }
+    
+    $output .= risLine('N1', $ref->{comments}) if defined $ref->{comments} and $ref->{comments} ne '';
+    $output .= risLine('LA', $ref->{language}) if defined $ref->{language} and $ref->{language} ne '';
+    $output .= risLine('DO', $ref->{doi}) if defined $ref->{doi} and $ref->{doi} ne '';
+    
+    $output .= risLine('ER');
+    
+    return $output;
+}
+
+
+# Generate an arbitrary line in RIS format, given a tag and a value.  The value
+# may be empty.
+
+sub risLine {
+    
+    my ($tag, $value) = @_;
+    
+    $value ||= '';
+    $tag = "\nTY" if $tag eq 'TY';
+    
+    return "$tag  - $value\n";
+}
+
+
+# Generate an "author" line in RIS format, given a tag (which may be 'AU' for
+# author, 'A2' for editor, etc.), and the three components of a name: last,
+# first, and suffix.  The first and suffix may be null.
+
+sub risAuthor {
+    
+    my ($tag, $last, $init, $suffix) = @_;
+    
+    $init ||= '';
+    $init =~ s/ //g;
+    $suffix ||= '';
+    
+    # If the last name includes a suffix, split it out
+    
+    if ( $last =~ /^(.*),\s*(.*)/ or $last =~ /^(.*)\s+(jr.?|iii|iv)$/i or $last =~ /^(.*)\s+\((jr.?|iii|iv)\)$/ )
+    {
+	$last = $1;
+	$suffix = $2;
+	if ( $suffix =~ /^([sSjJ])/ ) { $suffix = $1 . "r."; }
+    }
+    
+    # Generate the appropriate line, depending upon which of the three components
+    # are non-empty.
+    
+    if ( $suffix ne '' )
+    {
+	return "$tag  - $last,$init,$suffix\n";
+    }
+    
+    elsif ( $init ne '' )
+    {
+	return "$tag  - $last,$init\n";
+    }
+    
+    else
+    {
+	return "$tag  - $last\n";
+    }
+}
+
+
+# Generate a "date" line in RIS format, given a tag and year, month and day
+# values.  The month and day values may be null.  An optional "other" value
+# may also be included, which can be arbitrary text.
+
+sub risYear {
+
+    my ($tag, $year, $month, $day, $other) = @_;
+    
+    my $date = sprintf("%04d", $year + 0) . "/";
+    
+    $date .= sprintf("%02d", $month + 0) if defined $month and $month > 0;
+    $date .= "/";
+    
+    $date .= sprintf("%02d", $day + 0) if defined $day and $day > 0;
+    $date .= "/";
+    
+    $date .= $other if defined $other;
+    
+    return "$tag  - $date\n";
+}
+
+
+# Generate one or more "author" lines in RIS format, given a tag and a value
+# which represents one or more names separated by commas.  This is a bit
+# tricky, because we need to split out name suffixes such as 'jr' and 'iii'.
+# If we come upon something we can't handle, we generate a line whose value is
+# 'PARSE ERROR'.
+
+sub risOtherAuthors {
+
+    my ($tag, $otherauthors) = @_;
+    
+    $otherauthors =~ s/^\s+//;
+    
+    my $init = '';
+    my $last = '';
+    my $suffix = '';
+    my $output = '';
+    
+    while ( $otherauthors =~ /[^,\s]/ )
+    {
+	if ( $otherauthors =~ /^(\w\.)\s*(.*)/ )
+	{
+	    $init .= $1;
+	    $otherauthors = $2;
+	}
+	
+	elsif ( $otherauthors =~ /^([^,]+)(?:,\s+(.*))?/ )
+	{
+	    $last = $1;
+	    $otherauthors = $2;
+	    
+	    if ( $otherauthors =~ /^(\w\w+\.?)(?:,\s+(.*))$/ )
+	    {
+		$suffix = $1;
+		$otherauthors = $2;
+	    }
+	    
+	    $output .= risAuthor($tag, $last, $init, $suffix);
+	    $init = $last = $suffix = '';
+	}
+	
+	else
+	{
+	    $output .= risLine($tag, "PARSE ERROR");
+	}
+    }
+    
+    return $output;
+}
+
+
+# Given a hash whose pages are page numbers or page ranges, generate a single
+# non-duplicative list.
+
+sub coalescePages {
+
+    my ($pages) = @_;
+    
+    return unless ref $pages eq 'HASH';
+    
+    my (%range, %other);
+    
+    foreach my $spec (keys %$pages)
+    {
+	if ( $spec =~ /^\s*(\d+)\s*-\s*(\d+)\s*$/ )
+	{
+	    my $first = $1;
+	    my $last = $2;
+	    
+	    if ( !defined $range{$first} or $range{$first} < $last )
+	    {
+		$range{$first} = $last;
+	    }
+	}
+	
+	elsif ( $spec =~ /^\s*(\d+)\s*$/ )
+	{
+	    my $page = $1;
+	    
+	    if ( !defined $range{$page} )
+	    {
+		$range{$page} = $page;
+	    }
+	}
+	
+	elsif ( $spec =~ /^\s*(\w.*)/ )
+	{
+	    my $page = $1;
+	    $other{$page} = $page unless exists $other{$page};
+	}
+    }
+    
+    my ($first, $last, @pages) = @_;
+    
+    foreach my $key ( sort { $a <=> $b } keys %range )
+    {
+	if ( defined $last and $key <= $last + 1 )
+	{
+	    $last = $key;
+	}
+	
+	elsif ( defined $last )
+	{
+	    push @pages, $first == $last ? $last : "$first-$last";
+	    $first = $key;
+	    $last = $range{$key};
+	}
+	
+	else
+	{
+	    $first = $key;
+	    $last = $range{$key};
+	}
+    }
+    
+    if ( defined $last )
+    {
+	push @pages, $first == $last ? $last : "$first-$last";
+    }
+    
+    push @pages, $_ foreach keys %other;
+    
+    return join(', ', @pages);
+}
+
 
 sub getSecondaryRefs {
     my $dbt = shift;
@@ -360,7 +679,7 @@ sub displayRefResults {
         print "<div style=\"margin: 1.5em; margin-bottom: 1em; padding: 1em; border: 1px solid #E0E0E0;\">\n";
 		print "<table border=0 cellpadding=5 cellspacing=0>\n";
 
-        my $exec_url = ($type =~ /view/) ? $READ_URL : $WRITE_URL;
+        my $exec_url = ($type =~ /view/) ? "" : $WRITE_URL;
 
 		# Only print the last 30 rows that were found JA 26.7.02
          my $dark;
@@ -385,7 +704,7 @@ sub displayRefResults {
                     print "<a href=\"$exec_url?a=displayRefResults&reference_no=$row->{reference_no}&type=select\">$row->{reference_no}</a><br>";
                 }
             } else {
-                print "<a href=\"$READ_URL?a=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
+                print "<a href=\"?a=displayReference&reference_no=$row->{reference_no}\">$row->{reference_no}</a>";
             }
             print "</td>";
             my $formatted_reference = formatLongRef($row);
@@ -551,13 +870,13 @@ sub displayReference {
         my $html = "";
         if ($authority_count < 100) {
             my $sql = "SELECT taxon_no,taxon_name FROM authorities WHERE reference_no=$reference_no ORDER BY taxon_name";
-            my $link = ( $DB ne "eco" ) ? 'a=basicTaxonInfo&taxon_no=' : 'a=displayCollResults&amp;type=view&taxon_no=';
+            my $link = 'a=basicTaxonInfo&taxon_no=';
             my @results = 
-                map { qq'<a href="$READ_URL?$link$_->{taxon_no}">$_->{taxon_name}</a>' }
+                map { qq'<a href="?$link$_->{taxon_no}">$_->{taxon_name}</a>' }
                 @{$dbt->getData($sql)};
             $html = join(", ",@results);
-        } elsif ( $DB ne "eco" ) {
-            $html .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
+        } else {
+            $html .= qq|<a href="?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=authorities">|;
             my $plural = ($authority_count == 1) ? "" : "s";
             $html .= "view taxonomic name$plural";
             $html .= qq|</a> |;
@@ -585,8 +904,8 @@ sub displayReference {
                     [$name,$html] }
                 @{$dbt->getData($sql)};
             $html = join("<br>",@results);
-        } elsif ( $DB ne "eco" ) {
-            $html .= qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
+        } else {
+            $html .= qq|<a href="?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no&display=opinions">|;
             if ($opinion_count) {
                 my $plural = ($opinion_count == 1) ? "" : "s";
                 $html .= "view taxonomic opinion$plural";
@@ -595,31 +914,25 @@ sub displayReference {
         }
 
 	my $class_link; 
-	if ( $DB ne "eco" )	{
-		$class_link = qq| - <small><a href="$READ_URL?a=classify&amp;reference_no=$reference_no">view classification</a></small>|;
-	}
+	$class_link = qq| - <small><a href="?a=classify&amp;reference_no=$reference_no">view classification</a></small>|;
 	print $box->(qq'Taxonomic opinions ($opinion_count) $class_link',$html);
     }
 
 	# list taxa with measurements based on this reference JA 4.12.10
-	if ( $DB ne "eco" )	{
-		my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
-		if ( @taxon_refs )	{
-			my @taxa;
-			push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
-			print $box->("Measurements",join('<br>',@taxa));
-		}
+	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
+	if ( @taxon_refs )	{
+		my @taxa;
+		push @taxa , "<a href=\"?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		print $box->("Measurements",join('<br>',@taxa));
 	}
 
 
     # Handle collections box
     my $collection_count;
-    if ( $DB ne "eco" )	{
-        $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
-        $collection_count = ${$dbt->getData($sql)}[0]->{'c'};
-        $sql = "SELECT count(*) c FROM secondary_refs WHERE reference_no=$reference_no";
-        $collection_count += ${$dbt->getData($sql)}[0]->{'c'}; 
-    }
+    $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
+    $collection_count = ${$dbt->getData($sql)}[0]->{'c'};
+    $sql = "SELECT count(*) c FROM secondary_refs WHERE reference_no=$reference_no";
+    $collection_count += ${$dbt->getData($sql)}[0]->{'c'}; 
     if ($collection_count) {
         my $html = "";
         if ($collection_count < 100) {
@@ -662,7 +975,7 @@ sub displayReference {
                 if (! $row->{'is_primary'}) {
                     $style = " class=\"boring\"";
                 }
-                my $coll_link = qq|<a href="$READ_URL?a=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
+                my $coll_link = qq|<a href="?a=basicCollectionSearch&collection_no=$row->{collection_no}" $style>$row->{collection_no}</a>|;
                 $html .= $coll_link . ", ";
             }
             $html =~ s/, $//;
@@ -673,23 +986,11 @@ sub displayReference {
 		}
         } else {
             my $plural = ($collection_count == 1) ? "" : "s";
-            $html .= qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a>|;
+            $html .= qq|<a href="?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">view collection$plural</a>|;
         }
         if ($html) {
-            print $box->(qq'Collections (<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
+            print $box->(qq'Collections (<a href="?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count</a>)',$html);
         }
-    }
-
-    my @inventories;
-    if ( $DB eq "eco" )	{
-        $sql = "SELECT inventory_no FROM refs r,inventories i WHERE r.reference_no=i.reference_no AND r.reference_no=$reference_no";
-        @inventories = @{$dbt->getData($sql)};
-    }
-    if ( @inventories )	{
-        my $count = $#inventories + 1;
-        my @links;
-        push @links , qq|<a href="$READ_URL?a=inventoryInfo&amp;inventory_no=$_->{inventory_no}">$_->{inventory_no}</a>| foreach @inventories;
-        print $box->(qq'Inventories (<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$count</a>)',join(', ',@links));
     }
 
     print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -788,10 +1089,6 @@ sub displayReferenceForm {
 	# Defaults, then database, then a resubmission/form data
 	my %vars = (%defaults,%db_row,%form_vars);
 
-	if ( $DB eq "eco" )	{
-		$vars{"db"} = "eco";
-	}
-
 	if ($isNewEntry)	{
 		$vars{"page_title"} = "New reference form";
 	} else	{
@@ -803,12 +1100,12 @@ sub displayReferenceForm {
 
 #  * Will either add or edit a reference in the database
 sub processReferenceForm {
-	my ($dbt,$q,$s,$hbo) = @_;
-	my $dbh = $dbt->dbh;
-	my $reference_no = int($q->param('reference_no'));
-
-	my $isNewEntry = ($reference_no > 0) ? 0 : 1;
-
+    my ($dbt,$q,$s,$hbo) = @_;
+    my $dbh = $dbt->dbh;
+    my $reference_no = int($q->param('reference_no'));
+    
+    my $isNewEntry = ($reference_no > 0) ? 0 : 1;
+    
     my @child_nos = ();
     # If taxonomy basis is changed on an edit, the classifications that refer to that ref
     # may also change, so we may have to update the taxa cache in that case
@@ -854,7 +1151,43 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         }
         return;
     }
-
+    
+    # Suppress fields that do not match publication type
+    
+    if ( $vars{publication_type} eq 'abstract' or
+	 $vars{publication_type} eq 'unpublished' )
+    {
+	delete $vars{publisher};
+	delete $vars{pubcity};
+    }
+    
+    unless ( $vars{publication_type} eq 'book' or
+	     $vars{publication_type} eq 'book chapter' or
+	     $vars{publication_type} eq 'book/book chapter' or
+	     $vars{publication_type} eq 'serial monograph' or
+	     $vars{publication_type} eq 'compendium' or
+	     $vars{publication_type} eq 'guidebook' )
+    {
+	delete $vars{editors};
+    }
+    
+    unless ( $vars{publication_type} eq 'journal article' or
+	     $vars{publication_type} eq 'serial monograph' or
+	     $vars{publication_type} eq 'news article' )
+    {
+	delete $vars{pubvol};
+	delete $vars{pubno};
+    }
+    
+    unless ( $vars{publication_type} eq 'journal article' or
+	     $vars{publication_type} eq 'book chapter' or
+	     $vars{publication_type} eq 'book/book chapter' or
+	     $vars{publication_type} eq 'news article' )
+    {
+	delete $vars{firstpage};
+	delete $vars{lastpage};
+    }
+    
     my ($dupe,$matches);
     
     if ($isNewEntry) {
@@ -908,8 +1241,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         <span class="displayPanelHeader">Please enter all the data</span>
         <div class="displayPanelContent large">
 |;
-	if ( $DB ne "eco" )	{
-		print qq|
+	print qq|
         <ul class="small" style="text-align: left;">
             <li>Add or edit all the <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined
             <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy
@@ -920,9 +1252,6 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
             <li>Add <a href="#" onClick="popup = window.open('$WRITE_URL?a=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$WRITE_URL?a=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>
         <ul>
 |;
-	} else	{
-		print $hbo->populateHTML('eco_menu');
-	}
 	print "</div>\n</div>\n</center>\n";
     }
 }
@@ -938,45 +1267,39 @@ sub getReferenceLinkSummary	{
 
 	# Handle Authorities
 	my $authority_count;
-	if ( $DB ne "eco" )	{
-		$sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
-		$authority_count = ${$dbt->getData($sql)}[0]->{'c'};
-	}
+	$sql = "SELECT count(*) c FROM authorities WHERE reference_no=$reference_no";
+	$authority_count = ${$dbt->getData($sql)}[0]->{'c'};
 
 	if ($authority_count) {
 		my $plural = ($authority_count == 1) ? "" : "s";
-		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count taxonomic name$plural</a>|;
+		push @chunks , qq|<a href="?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$authority_count taxonomic name$plural</a>|;
 	}
 
 	# Handle Opinions
 	my (@opinion_counts,$opinion_total,$has_opinion);
-	if ( $DB ne "eco" )	{
-		$sql = "SELECT ref_has_opinion,count(*) c FROM opinions WHERE reference_no=$reference_no GROUP BY ref_has_opinion ORDER BY ref_has_opinion";
-		@opinion_counts = @{$dbt->getData($sql)};
-		if ( $opinion_counts[0]->{'ref_has_opinion'} eq "YES" )	{
-			$has_opinion = $opinion_counts[0]->{'c'};
-		} elsif ( $opinion_counts[1]->{'ref_has_opinion'} eq "YES" )	{
-			$has_opinion = $opinion_counts[1]->{'c'};
-		}
-		$opinion_total = $opinion_counts[0]->{'c'} + $opinion_counts[1]->{'c'};
+	$sql = "SELECT ref_has_opinion,count(*) c FROM opinions WHERE reference_no=$reference_no GROUP BY ref_has_opinion ORDER BY ref_has_opinion";
+	@opinion_counts = @{$dbt->getData($sql)};
+	if ( $opinion_counts[0]->{'ref_has_opinion'} eq "YES" )	{
+		$has_opinion = $opinion_counts[0]->{'c'};
+	} elsif ( $opinion_counts[1]->{'ref_has_opinion'} eq "YES" )	{
+		$has_opinion = $opinion_counts[1]->{'c'};
 	}
+	$opinion_total = $opinion_counts[0]->{'c'} + $opinion_counts[1]->{'c'};
 
 	if ( $opinion_total ) {
 		my $plural = ($opinion_total == 1) ? "" : "s";
-		push @chunks , qq|<a href="$READ_URL?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_total taxonomic opinion$plural</a>|;
+		push @chunks , qq|<a href="?a=displayTaxonomicNamesAndOpinions&reference_no=$reference_no">$opinion_total taxonomic opinion$plural</a>|;
 		if ( $has_opinion > 0 )	{
- 			$chunks[$#chunks] .= qq| (<a href="$READ_URL?a=classify&amp;reference_no=$reference_no">show classification</a>)|;
+ 			$chunks[$#chunks] .= qq| (<a href="?a=classify&amp;reference_no=$reference_no">show classification</a>)|;
 		}
 	}      
 
 	# list taxa with measurements based on this reference JA 4.12.10
-	if ( $DB ne "eco" )	{
-		my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
-		if ( @taxon_refs )	{
-			my @taxa;
-			push @taxa , "<a href=\"$READ_URL?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
-			push @chunks , "measurements of ".join(', ',@taxa);
-		}
+	my @taxon_refs = getMeasuredTaxa($dbt,$reference_no);
+	if ( @taxon_refs )	{
+		my @taxa;
+		push @taxa , "<a href=\"?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
+		push @chunks , "measurements of ".join(', ',@taxa);
 	}
 
 	# Handle Collections
@@ -987,57 +1310,47 @@ sub getReferenceLinkSummary	{
 	# any primary referneces will have a  virtual column called "is_primary" set to 1, and secondaries will not have it.  PS 04/29/2005
 	my @colls = ();
 	my ($collection_count,$protected_count,%in_year);
-	if ( $DB ne "eco" )	{
-		$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections c WHERE reference_no=$reference_no)";
-		$sql .= " UNION ";
-		$sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, year(release_date) release_year, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
+	$sql = "(SELECT collection_no,authorizer_no,collection_name,access_level,research_group,release_date,year(release_date) release_year,DATE_FORMAT(release_date, '%Y%m%d') rd_short, 1 is_primary FROM collections c WHERE reference_no=$reference_no)";
+	$sql .= " UNION ";
+	$sql .= "(SELECT c.collection_no, c.authorizer_no, c.collection_name, c.access_level, c.research_group, release_date, year(release_date) release_year, DATE_FORMAT(c.release_date,'%Y%m%d') rd_short, 0 is_primary FROM collections c, secondary_refs s WHERE c.collection_no = s.collection_no AND s.reference_no=$reference_no) ORDER BY collection_no";
 
-		my $sth = $dbh->prepare($sql);
-		$sth->execute();
+	my $sth = $dbh->prepare($sql);
+	$sth->execute();
 
-		my $p = Permissions->new($s,$dbt);
-		if($sth->rows) {
-			my $limit = 999;
-			my $ofRows = 0;
-			$p->getReadRows($sth,\@colls,$limit,\$ofRows);
-		# second hit (which is reasonably fast) gets a count to warn
-		#  users that protected collections do exist
-			my $readable = join(',',map { $_->{collection_no} } @colls);
-			if ( $readable )	{
-				$sql =~ s/WHERE /WHERE c.collection_no NOT IN ($readable) AND /g;
-			}
-			my @protected = @{$dbt->getData($sql)};
-			$in_year{$_->{'release_year'}}++ foreach @protected;
-			$protected_count = scalar(@protected);
+	my $p = Permissions->new($s,$dbt);
+	if($sth->rows) {
+		my $limit = 999;
+		my $ofRows = 0;
+		$p->getReadRows($sth,\@colls,$limit,\$ofRows);
+	# second hit (which is reasonably fast) gets a count to warn
+	#  users that protected collections do exist
+		my $readable = join(',',map { $_->{collection_no} } @colls);
+		if ( $readable )	{
+			$sql =~ s/WHERE /WHERE c.collection_no NOT IN ($readable) AND /g;
 		}
-	} else	{
-		$sql = "SELECT inventory_no,authorizer_no,inventory_name FROM inventories WHERE reference_no=$reference_no";
-		@colls = @{$dbt->getData($sql)};
+		my @protected = @{$dbt->getData($sql)};
+		$in_year{$_->{'release_year'}}++ foreach @protected;
+		$protected_count = scalar(@protected);
 	}
 	$collection_count = scalar(@colls);
 
-	if ($collection_count == 0 && $protected_count == 0 && $DB ne "eco") {
+	if ($collection_count == 0 && $protected_count == 0) {
 		push @chunks , "no collections";
 	}
 	my ($thing1,$thing2,$action);
 	if ($collection_count > 0)	{
-		if ( $DB ne "eco" )	{
-			$thing1 = ($collection_count == 1) ? "collection" : "collections";
-			$action = "basicCollectionSearch";
-		} else	{
-			$thing1 = ($collection_count == 1) ? "inventory" : "inventories";
-			$action = "inventoryInfo";
-		}
+		$thing1 = ($collection_count == 1) ? "collection" : "collections";
+		$action = "basicCollectionSearch";
 		my @coll_links;
 		foreach my $row (@colls) {
 			my $style;
 			if (! $row->{'is_primary'}) {
 				$style = " class=\"boring\"";
 			}
-			push @coll_links , qq|<a href="$READ_URL?a=$action&$COLLECTION_NO=$row->{$COLLECTION_NO}" $style>$row->{$COLLECTION_NO}</a>|;
+			push @coll_links , qq|<a href="?a=$action&$COLLECTION_NO=$row->{$COLLECTION_NO}" $style>$row->{$COLLECTION_NO}</a>|;
 		}
 		$thing1 = ( $protected_count > 0 ) ? "released ".$thing1 : $thing1;
-		push @chunks , qq|<a href="$READ_URL?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count $thing1</a>  (|.join(' ',@coll_links).")";
+		push @chunks , qq|<a href="?a=displayCollResults&type=view&wild=N&reference_no=$reference_no">$collection_count $thing1</a>  (|.join(' ',@coll_links).")";
 	}
 	if ($protected_count > 0)	{
 		$thing2 = ($protected_count == 1) ? "collection" : "collections";
@@ -1146,7 +1459,7 @@ sub getReferences {
         my $tables = "(refs r, person p1, person p2)".
                      " LEFT JOIN person p3 ON p3.person_no=r.modifier_no";
         # This exact order is very important due to work around with inflexible earlier code
-        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.pubyr,r.reftitle,r.pubtitle,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.basis,r.doi,r.comments,r.language,r.created,r.modified";
+        my $from = "p1.name authorizer, p2.name enterer, p3.name modifier, r.reference_no, r.author1init,r.author1last,r.author2init,r.author2last,r.otherauthors,r.editors,r.pubyr,r.reftitle,r.pubtitle,r.publisher,r.pubcity,r.pubvol,r.pubno,r.firstpage,r.lastpage,r.publication_type,r.basis,r.doi,r.comments,r.language,r.created,r.modified";
         my @join_conditions = ("r.authorizer_no=p1.person_no","r.enterer_no=p2.person_no");
         my $sql = "SELECT $from FROM $tables WHERE ".join(" AND ",@join_conditions,@where);
         my $orderBy = " ORDER BY ";
@@ -1210,9 +1523,9 @@ sub getReferences {
 		my @links;
 		for my $l ( @likes )	{
 			if ( $l->{'c'} == 1 )	{
-				push @links , "<a href=\"$READ_URL?a=displayReference&amp;reference_no=$l->{'reference_no'}\">$l->{'name'}</a>";
+				push @links , "<a href=\"?a=displayReference&amp;reference_no=$l->{'reference_no'}\">$l->{'name'}</a>";
 			} else	{
-				push @links , "<a href=\"$READ_URL?a=displayRefResults&amp;name=$l->{'name'}";
+				push @links , "<a href=\"?a=displayRefResults&amp;name=$l->{'name'}";
 				$links[$#links] .= ( $options{'year'} ) ? "&amp;year=$options{'year'}&amp;year_relation=$options{'year_relation'}" : "";
 				$links[$#links] .= "&amp;variants=no\">$l->{'name'}</a>";
 			}
@@ -1578,7 +1891,7 @@ sub getTitleWordOdds	{
 	my @journals = keys %jbuzz;
 
 	if ( ! @refnos )	{
-		print "<p style=\"margin-bottom: 3em;\">Not enough papers fall in the categories you selected to compute the odds. Please <a href=\"$READ_URL?a=displayPage&page=word_odds_form\">try again</a>.</p>\n";
+		print "<p style=\"margin-bottom: 3em;\">Not enough papers fall in the categories you selected to compute the odds. Please <a href=\"?page=word_odds_form\">try again</a>.</p>\n";
 		return;
 	}
 
@@ -1700,7 +2013,7 @@ sub getTitleWordOdds	{
 
 	print qq|
 <div class="verysmall" style="clear: left; margin-left: 3em; margin-right: 5em; padding-bottom: 3em; text-indent: -0.5em;">
-The odds ratio compares the percentage of paper titles within the journals or other categories you selected that include a given word to the same percentage for all other papers. If the "best odds" papers did not appear in a journal you selected, then maybe they should have. If only a few words are shown, then only those words are frequent and have the appropriate odds (respectively greater than 1, less than 1, or between 0.5 and 2). <a href=\"$READ_URL?a=displayPage&page=word_odds_form\">Try again</a> if you want to procrastinate even more.
+The odds ratio compares the percentage of paper titles within the journals or other categories you selected that include a given word to the same percentage for all other papers. If the "best odds" papers did not appear in a journal you selected, then maybe they should have. If only a few words are shown, then only those words are frequent and have the appropriate odds (respectively greater than 1, less than 1, or between 0.5 and 2). <a href=\"?page=word_odds_form\">Try again</a> if you want to procrastinate even more.
 </div>
 |;
 }

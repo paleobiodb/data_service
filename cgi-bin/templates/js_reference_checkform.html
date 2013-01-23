@@ -191,12 +191,38 @@
 		return true;
 	}
 
-	function showHideEditors()	{
-		if ( document.forms[1].publication_type.value == 'book/book chapter' )	{
+	function showHideEditors()
+	{
+		var pubtype = document.forms[1].publication_type.value;
+		if ( pubtype == '' || pubtype == 'abstract' || pubtype == 'unpublished' )
+		{
+			document.getElementById('pubinfo').style.display = 'none';
+		} else {
+			document.getElementById('pubinfo').style.display = 'inline';
+		}
+		
+		if ( pubtype == 'book' || pubtype == 'book chapter' || pubtype == 'book/book chapter' ||
+		     pubtype == 'serial monograph' || pubtype == 'compendium' || pubtype == 'guidebook' )
+		{
 			document.getElementById('editors').style.display = 'inline';
-		} else if ( document.getElementById('editors').style.display == 'inline' )	{
+		} else {
 			document.getElementById('editors').style.display = 'none';
-			document.forms[1].editors.value = '';
+		}
+		
+		if ( pubtype == 'journal article' || pubtype == 'serial monograph' ||
+			pubtype == 'news article' )
+		{
+			document.getElementById('volinfo').style.display = 'inline';
+		} else {
+			document.getElementById('volinfo').style.display = 'none';
+		}
+		
+		if ( pubtype == 'journal article' || pubtype == 'book chapter' ||
+			pubtype == 'book/book chapter' || pubtype == 'news article' )
+		{
+			document.getElementById('pageinfo').style.display = 'inline';
+		} else {
+			document.getElementById('pageinfo').style.display = 'none';
 		}
 	}
 

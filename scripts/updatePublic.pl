@@ -122,6 +122,11 @@ $sth->finish();
 
 # we need to know hours authorized to identify major contributors
 
+# the total needs to be cleared to make sure upload-only authorizers aren't
+#  given compounded credit
+$sql = "UPDATE person SET hours_authorized=NULL,last_action=last_action WHERE hours_authorized IS NOT NULL";
+$dbh->do ( $sql );
+
 $sql = "SELECT authorizer_no,count(distinct(concat(to_days(created),hour(created)))) c FROM ((SELECT authorizer_no,created FROM refs) UNION (SELECT authorizer_no,created FROM collections WHERE upload='') UNION (SELECT authorizer_no,created FROM opinions) UNION (SELECT authorizer_no,created FROM specimens)) AS t GROUP BY authorizer_no";
 $sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
 $sth->execute();
@@ -139,6 +144,8 @@ $sql = "SELECT authorizer_no,count(*)/3.4 c FROM collections WHERE upload='YES' 
 $sth = $dbh->prepare( $sql ) || die ( "$sql\n$!" );
 $sth->execute();
 while ( $s = $sth->fetchrow_hashref() )	{
+	$sql = "UPDATE person SET hours_authorized=0,last_action=last_action WHERE hours_authorized IS NULL AND person_no=".$s->{'authorizer_no'};
+	$dbh->do ( $sql );
 	$sql = "UPDATE person SET hours_authorized=hours_authorized+".$s->{'c'}.",last_action=last_action WHERE person_no=".$s->{'authorizer_no'};
 	$dbh->do ( $sql );
 }
