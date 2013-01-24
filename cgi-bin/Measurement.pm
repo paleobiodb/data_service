@@ -379,6 +379,10 @@ function submitForm ( )
   <option value=""></option>
   <option value="left">left</option>
   <option value="right">right</option>
+  <option value="upper left">upper left</option>
+  <option value="upper right">upper right</option>
+  <option value="lower left">lower left</option>
+  <option value="lower right">lower right</option>
   <option value="left?">left?</option>
   <option value="right?">right?</option>
   <option value="dorsal">dorsal</option>
