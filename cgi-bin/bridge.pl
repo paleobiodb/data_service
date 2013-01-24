@@ -72,7 +72,7 @@ if ( $q->param('a') )	{
 }
 
 if ( $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
-#	print $q->redirect( -url=>"http://paleodb.org/?a=menu&user=Contributor" );
+	print $q->redirect( -url=>"http://paleodb.org/?a=menu&user=Contributor" );
 }
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
