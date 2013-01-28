@@ -1154,38 +1154,10 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
     
     # Suppress fields that do not match publication type
     
-    if ( $vars{publication_type} eq 'abstract' or
-	 $vars{publication_type} eq 'unpublished' )
+    if ( $vars{publication_type} eq 'unpublished' )
     {
 	delete $vars{publisher};
 	delete $vars{pubcity};
-    }
-    
-    unless ( $vars{publication_type} eq 'book' or
-	     $vars{publication_type} eq 'book chapter' or
-	     $vars{publication_type} eq 'book/book chapter' or
-	     $vars{publication_type} eq 'serial monograph' or
-	     $vars{publication_type} eq 'compendium' or
-	     $vars{publication_type} eq 'guidebook' )
-    {
-	delete $vars{editors};
-    }
-    
-    unless ( $vars{publication_type} eq 'journal article' or
-	     $vars{publication_type} eq 'serial monograph' or
-	     $vars{publication_type} eq 'news article' )
-    {
-	delete $vars{pubvol};
-	delete $vars{pubno};
-    }
-    
-    unless ( $vars{publication_type} eq 'journal article' or
-	     $vars{publication_type} eq 'book chapter' or
-	     $vars{publication_type} eq 'book/book chapter' or
-	     $vars{publication_type} eq 'news article' )
-    {
-	delete $vars{firstpage};
-	delete $vars{lastpage};
     }
     
     my ($dupe,$matches);
