@@ -1224,7 +1224,16 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
             <li>Add <a href="#" onClick="popup = window.open('$WRITE_URL?a=startStartEcologyTaphonomySearch', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">ecological/taphonomic data</a>, <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySpecimenSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">specimen measurements</a>, and <a href="#" onClick="popup = window.open('$WRITE_URL?a=startImage', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">images</a>
         <ul>
 |;
-	print "</div>\n</div>\n</center>\n";
+	print "</div>\n";
+	
+	print qq|
+<form method="POST" action="$WRITE_URL">
+<input type="hidden" name="action" value="displayRefResults">
+<input type="hidden" name="reference_no" value="$reference_no">
+<input type="submit" value="Use this reference">
+</form>
+|;	
+	print "</div>\n</center>\n";
     }
 }
 

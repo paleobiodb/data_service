@@ -38,6 +38,7 @@ use TypoChecker;
 use FossilRecord;
 use Cladogram;
 use Review;
+use NexusfileEdit;
 
 # god awful Poling modules
 use Taxon;
@@ -117,7 +118,9 @@ if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /flatpebble\.nceas/
         print $q->header(-type => "application/json", 
                      -Cache_Control=>'no-cache',
                      -expires =>"now" );
-    } else {
+    } elsif ($q->param('redirectMain')) {
+	print $q->redirect( -url => $WRITE_URL );
+    } elsif ( $action ne 'processNexusUpload' and $action ne 'updateNexusFile' ) {
         print $q->header(-type => "text/html", 
                      -Cache_Control=>'no-cache',
                      -expires =>"now" );
@@ -3037,6 +3040,54 @@ sub displaySearchStrataResults{
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }  
 ## END Strata stuff
+##############
+
+##############
+## Nexus file stuff
+
+sub uploadNexusFile {
+
+    Nexusfile::displayUploadPage($dbt, $hbo, $q, $s);
+}
+
+
+sub processNexusUpload {
+
+    Nexusfile::processUpload($dbt, $hbo, $q, $s);
+}
+
+
+sub editNexusFile {
+
+    Nexusfile::editFile($dbt, $hbo, $q, $s);
+}
+
+
+sub updateNexusFile {
+
+    Nexusfile::processEdit($dbt, $hbo, $q, $s);
+}
+
+
+sub viewNexusFile {
+
+    Nexusfile::viewFile($dbt, $hbo, $q, $s);
+}
+
+
+sub nexusFileSearch {
+
+    Nexusfile::displaySearchPage($dbt, $hbo, $q, $s);
+}
+
+
+sub processNexusSearch {
+
+    Nexusfile::processSearch($dbt, $hbo, $q, $s);
+}
+
+
+## END Nexus file stuff
 ##############
 
 ##############

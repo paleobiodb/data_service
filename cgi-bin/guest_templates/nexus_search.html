@@ -1,0 +1,63 @@
+  <script language="JavaScript" type="text/javascript">
+<!-- Begin
+
+// Clears the form
+function clearForm ( ) {
+
+    var frm = document.forms[1];
+    
+    frm.file_name.value = '';
+    frm.taxon_name.value = '';
+    frm.person_reversed.value = '';
+    frm.reference_no.value = '';
+    return false;
+}
+
+//  End -->
+</script>
+
+<form method="POST" action="%%write_url%%" enctype="multipart/form-data">
+<input type="hidden" name="action" value="processNexusSearch">
+
+<div align="center">
+  <p class="pageTitle">Nexus file search form</p>
+  <p class="errorTitle">%%error_message%%</p>
+  </div>
+
+<div class="displayPanel" align=left>
+  <span class="displayPanelHeader">Search values</span>
+
+  <div class="displayPanelContent small">
+    <table border=0 cellpadding=2 cellspacing=2>
+      <tr>
+	<td>File name:</td><td><input name="file_name" class="small" size="40"></td>
+      </tr>
+      <tr>
+	<td>Taxon name:</td><td><input name="taxon_name" class="small" size="40"></td>
+      </tr>
+      <tr>
+	<td>Authorizer:</td>
+	<td>
+	  <input name="person_reversed" onKeyUp="doComplete(event, this, entererNames());" class="small" size="16">
+	<span show="is_contributor"><a href="#" onClick="document.forms[1].person_reversed.value='%%enterer_me%%'">me</a></span>
+	</td>
+      </tr>
+      <tr>
+	<td>Reference number:</td>
+	<td><input name="reference_no" class="small" size="10">
+	  <a href="#" onClick="document.forms[1].reference_no.value='%%current_ref%%'">current one</a>
+	</td>
+      </tr>
+    </table>
+    <div align="center">
+      <input type="submit" name="submit" value="Search">
+      <input type="button" name="clear" value="Clear" onClick="javascript: clearForm()">
+    </div>
+  </div>
+</div>
+
+</form>
+
+
+
+

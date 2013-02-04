@@ -1,0 +1,33 @@
+
+<div align="center">
+  <p class="pageTitle">Nexus file search results</p>
+  <p class="errorTitle">%%error_message%%</p>
+  </div>
+
+<div class="displayPanel" align=left>
+  <div class="displayPanelContent small">
+
+    %%search_results%%
+
+    <form method="POST" action="%%write_url%%" enctype="multipart/form-data">
+    <input type="hidden" name="action" value="nexusFileSearch">
+    <input type="hidden" name="file_name">
+    <input type="hidden" name="taxon_name">
+    <input type="hidden" name="person_reversed">
+    <input type="hidden" name="reference_no">
+    
+    <div align="center">
+      <p>&nbsp;</p>
+      <input type="submit" name="nexusFileSearch" value="Search again">
+      &nbsp;
+      <input type="submit" name="redirectMain" value="Done">
+    </div>
+    </form>  
+  </div>
+  </div>
+
+  
+
+
+
+
