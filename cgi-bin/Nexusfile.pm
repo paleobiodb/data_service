@@ -1,10 +1,11 @@
 #
-# Nexus.pm
+# Nexusfile.pm
 # 
 # Created by Michael McClennen, 2013-01-31
 # 
 # The purpose of this module is to provide an interface for getting
-# information about nexus files stored in the database.
+# information about nexus files stored in the database.  If you wish to modify
+# this information, use NexusfileWrite.pm.
 
 
 package Nexusfile;
@@ -27,7 +28,7 @@ Objects of this class represent nexus files stored in the database.
 
 =head1 INTERFACE
 
-=head3 getNexusFileInfo ( dbt, nexusfile_no, options )
+=head3 getFileInfo ( dbt, nexusfile_no, options )
 
 This function returns Return a list of one or more objects containing
 information about the specified nexus file(s).  If no matching file exists,
@@ -125,7 +126,7 @@ Include all of the above.
 
 =cut
 
-sub getNexusFileInfo {
+sub getFileInfo {
 
     my ($dbt, $nexusfile_no, $options) = @_;
     
@@ -314,6 +315,7 @@ sub getNexusFileInfo {
 	$nf{$f->{nexusfile_no}} = $f;
 	$f->{taxa} = [] if $fields->{taxa};
 	$f->{refs} = [] if $fields->{refs};
+	$f->{dbt} = $dbt;
     }
     
     return unless keys %nf;
@@ -490,26 +492,42 @@ sub extractFields {
 }
 
 
-=head2 Object methods
+=head3 getFileData ( dbt, nexusfile_no )
 
-=head3 getFileURL ( )
-
-Return the URL by which this nexus file can be downloaded.
+Return the contents of the specified nexus file.  If the nexusfile_no does not
+correspond to a nexus file stored in the system, return undef.
 
 =cut
 
-sub getFileURL {
+sub getFileData {
 
+    my ($dbt, $nexusfile_no) = @_;
+    
+    my $dbh = $dbt->{dbh};
+    
+    $nexusfile_no =~ tr/0-9//dc;
+    return unless $nexusfile_no > 0;
+    
+    my ($data) = $dbh->selectrow_array("SELECT data FROM nexus_data
+					WHERE nexusfile_no=$nexusfile_no");
+    
+    return $data;
+}
+
+
+=head2 Object methods
+
+=head3 getFileData ( )
+
+Return this file's data, as a single string.
+
+=cut
+
+sub getData {
+    
     my ($self) = @_;
     
-    return unless ref $self eq 'Nexusfile';
-    
-    my $base_name = "$READ_URL/public/nexus";
-    
-    my $authorizer_no = $self->{authorizer_no};
-    my $filename = $self->{filename};
-    
-    return "$base_name/$authorizer_no/$filename";
+    return getFileData($self->{dbt}, $self->{nexusfile_no});
 }
 
 1;

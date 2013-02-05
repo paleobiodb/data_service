@@ -38,7 +38,7 @@ use TypoChecker;
 use FossilRecord;
 use Cladogram;
 use Review;
-use NexusfileEdit;
+use NexusfileWeb;
 
 # god awful Poling modules
 use Taxon;
@@ -72,9 +72,10 @@ if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
 }
 
-if ( $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
-	print $q->redirect( -url=>"http://paleodb.org/?a=menu&user=Contributor" );
-}
+
+#if ( $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
+#	print $q->redirect( -url=>"http://paleodb.org/?a=menu&user=Contributor" );
+#}
 
 if ($ENV{'REMOTE_ADDR'} =~ /^188.186.181|^123.8.131.44/){exit;}
 
@@ -120,6 +121,8 @@ if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /flatpebble\.nceas/
                      -expires =>"now" );
     } elsif ($q->param('redirectMain')) {
 	print $q->redirect( -url => $WRITE_URL );
+    } elsif ( $q->path_info() =~ m{^/nexus/} ) {
+	$action = 'getNexusFile';
     } elsif ( $action ne 'processNexusUpload' and $action ne 'updateNexusFile' ) {
         print $q->header(-type => "text/html", 
                      -Cache_Control=>'no-cache',
@@ -3047,43 +3050,49 @@ sub displaySearchStrataResults{
 
 sub uploadNexusFile {
 
-    Nexusfile::displayUploadPage($dbt, $hbo, $q, $s);
+    NexusfileWeb::displayUploadPage($dbt, $hbo, $q, $s);
 }
 
 
 sub processNexusUpload {
 
-    Nexusfile::processUpload($dbt, $hbo, $q, $s);
+    NexusfileWeb::processUpload($dbt, $hbo, $q, $s);
 }
 
 
 sub editNexusFile {
 
-    Nexusfile::editFile($dbt, $hbo, $q, $s);
+    NexusfileWeb::editFile($dbt, $hbo, $q, $s);
 }
 
 
 sub updateNexusFile {
 
-    Nexusfile::processEdit($dbt, $hbo, $q, $s);
+    NexusfileWeb::processEdit($dbt, $hbo, $q, $s);
 }
 
 
 sub viewNexusFile {
 
-    Nexusfile::viewFile($dbt, $hbo, $q, $s);
+    NexusfileWeb::viewFile($dbt, $hbo, $q, $s);
 }
 
 
 sub nexusFileSearch {
 
-    Nexusfile::displaySearchPage($dbt, $hbo, $q, $s);
+    NexusfileWeb::displaySearchPage($dbt, $hbo, $q, $s);
 }
 
 
 sub processNexusSearch {
 
-    Nexusfile::processSearch($dbt, $hbo, $q, $s);
+    NexusfileWeb::processSearch($dbt, $hbo, $q, $s);
+}
+
+
+sub getNexusFile {
+
+    NexusfileWeb::sendFile($dbt, $q, $s);
 }
 
 
