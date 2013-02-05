@@ -16,6 +16,7 @@ use Reference;
 use Text::CSV_XS;
 use URI::Escape;
 use Mail::Mailer;
+use Class::Date(now);
 use Constants qw($READ_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
 
 use strict;
@@ -41,6 +42,7 @@ my @ecoFields = (); # Note: generated at runtime in setupQueryFields
 my @pubyr = ();
 my @continents = ('North America','South America','Europe','Africa','Antarctica','Asia','Australia','Indian Ocean','Oceania');
 my @paleocontinents = ('paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan');
+my (@checkedcontinents,@uncheckedcontinents,@checkedpaleocontinents);
 my @reso_types_group = ('aff.','cf.','ex gr.','new','sensu lato','?','"','informal','other');
 
 my $OUT_HTTP_DIR = "/public/downloads";
@@ -89,7 +91,7 @@ sub new {
 # Main handling routine
 sub buildDownload {
     my $self = shift;
-    my ($q,$s) = ($self->{'q'},$self->{'s'});
+    my ($q,$s,$hbo) = ($self->{'q'},$self->{'s'},$self->{'hbo'});
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
 
@@ -107,9 +109,11 @@ sub buildDownload {
     my $inputIsOK = $self->checkInput($q);
     return unless $inputIsOK;
 
+    geographyOptions($q);
+
     my ($lumpedResults,$allResults) = $self->queryDatabase();
 
-    my (%onhour,%onref,%byauth,%first,%last);
+    my (%onhour,%onref,%byauth,%first,%last,%initials,%first_plus);
     # tally hours of keystroking if possible; otherwise tally references used
     #  for entry of collections and guesstimate hours using the known 1.7:1
     #  ratio in keystroked data
@@ -132,10 +136,15 @@ sub buildDownload {
     $hours += 1.7 * ( $#r + 1 );
     my @authnos = keys %byauth;
     @authnos = sort { $byauth{$b} <=> $byauth{$a} } @authnos;
-    my $sql = "SELECT first_name,last_name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."') ORDER BY last_name,first_name";
-    my @people = @{$dbt->getData($sql)};
-    $first{$_->{'person_no'}} = $_->{'first_name'} foreach @people;
-    $last{$_->{'person_no'}} = $_->{'last_name'} foreach @people;
+    my $sql = "SELECT first_name,middle,last_name,name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."') ORDER BY last_name,first_name";
+    for my $p ( @{$dbt->getData($sql)} )	{
+        $first{$p->{'person_no'}} = $p->{'first_name'};
+        $last{$p->{'person_no'}} = $p->{'last_name'};
+        $initials{$p->{'person_no'}} = $p->{'first_name'}." ".$p->{'middle'};
+        $initials{$p->{'person_no'}} =~ s/([A-Za-z])[a-z]* /$1. /;
+        $initials{$p->{'person_no'}} =~ s/ //g;
+        $first_plus{$p->{'person_no'}} = $p->{'first_name'}." ".$p->{'middle'};
+    }
     # don't prominently list authorizers contributing less than 10 person days =
     #  80 person hours (arbitrary, but seems good to me)
     my @others;
@@ -197,40 +206,56 @@ sub buildDownload {
 
     print "<div align=\"center\"><p class=\"pageTitle\">Download results</p></div>\n\n";
     if ( $hours >= $hourlimit )	{
-        print qq|
-<div class="displayPanel" id="terms">
-<p>Your download is large. If you intend to use the data in a publication, we ask you to:</p>
-<ul>
-<li>Notify some of the major contributors about your research.</li>
-<li>Acknowledge the major contributors by name in your paper.</li>
-<li>Cite the relevant <a href="?page=OSA">Online Systematics Archive</a>.</li>
-<li>If none are relevant, give a generic citation to the Paleobiology Database including the date of access.
-<li><a href="?page=join_us">Join the PaleoDB</a> and contribute more data.</li>
-<li>At a bare minimum, <a href="?a=publications">request a publication number</a> once your paper is accepted.</li>
-</li>
-</ul>
-<p>The major contributors to this data set were:</p>
-<ul>
-|;
-printf "<li>$first{$_} $last{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
-
-print qq|
-</ul>
-<p class="small">Each percentage is based on the estimated amount of time spent entering data by the authorizer and associated data enterers. The grand total is $hours hours (equivalent to $monthyears). The estimate is based on (1) date stamps for keystroked collections and (2) counts of published references used to document uploaded collections.</p>
-<p class="small">Additional contributors include |;
-@others = sort { $last{$a} cmp $last{$b} || $first{$a} cmp $first{$b} } @others;
-$others[$_] = $first{$others[$_]}." ".$last{$others[$_]} foreach 0..$#others;
-$others[$#others] = "and ".$others[$#others];
-print join(', ',@others).qq|.</p>
-<p>If you agree to these terms, <a href="#" onClick=\"document.getElementById('mainPanel').style.display='inline'; document.getElementById('terms').style.display='none';\">click here</a> to access the data.</p>
-|;
-if ( $cites )	{
-    print "<p>Here are the publications that yielded the most records in this data set, in order of importance. Please cite some or all of them in any publication based on it. If possible, please also include the <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a> file as online supplementary information.</p>\n<p>$cites</p>\n";
-}
-print qq|
-</div>
-<div id="mainPanel" style="display: none;">
-|;
+        my (%vars,@pb_authors,@au);
+        push @pb_authors , "$initials{$_} $last{$_}" foreach @authnos;
+        $pb_authors[0] = "$last{$authnos[0]}, $initials{$authnos[0]}";
+        s/([A-Z])(\.)([A-Z])/$1$2 $3/g foreach @pb_authors;
+        # needed if there are two middle initials
+        s/([A-Z])(\.)([A-Z])/$1$2 $3/g foreach @pb_authors;
+        if ( $#pb_authors > 0 )	{
+            $pb_authors[$#pb_authors] = "and ".$pb_authors[$#pb_authors];
+        }
+        $vars{'paleobiology_authors'} = join(', ',@pb_authors).".";
+        $vars{'paleobiology_authors'} =~ s/\.\././;
+        if ( $#pb_authors == 1 )	{
+            $vars{'paleobiology_authors'} =~ s/, and / and /;
+        }
+        push @au , "$last{$_}, $first_plus{$_}" foreach @authnos;
+        $vars{'major_contributors'} = join('<br>AU ',@au);
+        if ( $q->param('max_interval_name') || $q->param('taxon_name') )	{
+            $vars{'keywords'} = "KW ";
+            $vars{'keywords'} .= ( $q->param($_) ) ? $q->param($_)."<br>" : "" foreach ('max_interval_name','min_interval_name','taxon_name');
+        }
+        $vars{'major_contributor_list'} .= sprintf "<li>$first{$_} $last{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
+        my $interval = ( $q->param('max_interval_name') ) ? " ".$q->param('max_interval_name') : "";
+        $interval .= ( $q->param('min_interval_name') ) ? " to ".$q->param('min_interval_name') : "";
+        $vars{'title'} = ( $q->param('taxon_name') ) ? "Taxonomic occurrences of$interval ".$q->param('taxon_name') : "Taxonomic occurrences";
+        my @places =  ( @checkedcontinents && $#checkedcontinents < $#continents ) ?  @checkedcontinents : ( @checkedpaleocontinents ) ? @checkedpaleocontinents : ( $q->param('country') ) ? $q->param('country') : "";
+        if ( $#places > 0 )	{
+            $places[$#places] = "and ".$places[$#places];
+        }
+        $vars{'title'} .= ( $places[0] ne "" ) ? " from ".join(', ',@places) : "";
+        if ( $#places == 1 )	{
+            $vars{'title'} =~ s/, and / and /;
+        }
+        $vars{'occurrence_count'} = scalar @$allResults;
+        ($vars{'year'},$vars{'month'},$vars{'day'}) = split /-/,now();
+        $vars{'day'} =~ s/^0//;
+        $vars{'day'} =~ s/ .*//;
+        my @toMonth = ("January","February","March","April","May","June","July","August","September","October","November","December");
+        $vars{'month'} = $toMonth[$vars{'month'}];
+        $vars{'ref_count'} = $refsCount;
+        $vars{'contributor_count'} = $#authnos + $#others + 2;
+        @others = sort { $last{$a} cmp $last{$b} || $first{$a} cmp $first{$b} } @others;
+        $others[$_] = $first{$others[$_]}." ".$last{$others[$_]} foreach 0..$#others;
+        $vars{'hours'} = $hours;
+        $vars{'monthyears'} = $monthyears;
+        $others[$#others] = "and ".$others[$#others];
+        $vars{'other_contributors'} = join(', ',@others);
+        $vars{'file_path'} = "$OUT_HTTP_DIR/$refsFile";
+        $vars{'file_name'} = $refsFile;
+        $vars{'cites'} = $cites;
+        print $hbo->populateHTML('download_terms', \%vars);
     }
 
     print qq|<div class="displayPanel" style="padding-top: 1em; padding-left: 1em; margin-left: 3em; margin-right: 3em; overflow: hidden;">|;
@@ -484,30 +509,17 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type_',\@collection_types_group);
 
     # Continents or country
-    my (@checkedcontinents,@uncheckedcontinents,@checkedpaleocontinents);
     # If a country was selected, ignore the continents JA 6.7.02
     if ( $q->param("country") )    {
         $html .= $self->retellOptionsRow ( "Country", $q->param("include_exclude_country") . " " . $q->param("country") );
     }
     else    {
-        for my $c ( @continents )	{
-            if ( $q->param($c))	{
-                push ( @checkedcontinents, $c );
-            } else	{
-                push ( @uncheckedcontinents, $c );
-            }
-        }
         if ( $#checkedcontinents > -1 && $#continents > $#checkedcontinents )	{
             $html .= $self->retellOptionsRow ( "Continents", join (  ", ", @checkedcontinents ) );
             $q->param($_ => '') foreach @checkedcontinents;
             $q->param($_ => 'NO') foreach @uncheckedcontinents;
         }
 
-        for my $p ( @paleocontinents )	{
-            if ( $q->param($p) )	{
-                push ( @checkedpaleocontinents, $p );
-            }
-        }
         if ( $#checkedpaleocontinents > -1 ) {
             $html .= $self->retellOptionsRow ( "Paleocontinents", join (  ", ", @checkedpaleocontinents ) );
         }
@@ -750,18 +762,31 @@ sub retellOptionsRow {
 }
 
 
+# 4.2.13 JA
+# figures out selected geography options for use in several places
+sub geographyOptions	{
+	my $q = shift;
+	for my $c ( @continents )	{
+		if ( $q->param($c) eq 'YES' )	{
+			push @checkedcontinents , $c;
+		} else	{
+                	push @uncheckedcontinents, $c;
+		}
+	}
+	for my $p ( @paleocontinents )	{
+		if ( $q->param($p) eq 'YES' )	{
+			push @checkedpaleocontinents, $p;
+			$checkedpaleocontinents[$#checkedpaleocontinents] =~ s/paleo //;
+		}
+	}
+}
+
 # 6.7.02 JA
 sub getCountryString {
     my $self = shift;
     my $q = $self->{'q'};
     my $dbh = $self->{'dbh'};
 
-    my @checkedcontinents;
-    for my $c ( @continents )	{
-        if ( $q->param($c) eq 'YES' )	{
-            push @checkedcontinents , $c;
-        }
-    }
 
     if ( $#continents == $#checkedcontinents )	{
         $q->param($_ => '') foreach @continents;
@@ -817,20 +842,12 @@ sub getPlateString    {
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
 
-    my @checked;
-    for my $p ( @paleocontinents )	{
-        if ( $q->param($p) eq "YES" )    {
-            push @checked , $p;
-            $checked[$#checked] =~ s/paleo //;
-        }
-    }
-
-    if ( ! @checked || $#paleocontinents == $#checked )	{
+    if ( ! @checkedpaleocontinents || $#paleocontinents == $#checkedpaleocontinents )	{
         return "";
     }
 
     my (@plates,%platein);
-    my $sql = "SELECT plate FROM plates WHERE paleocontinent IN ('" . join("','",@checked) . "')";
+    my $sql = "SELECT plate FROM plates WHERE paleocontinent IN ('" . join("','",@checkedpaleocontinents) . "')";
     my @platerefs = @{$dbt->getData($sql)};
     if ( ! @platerefs )	{
         return "";
