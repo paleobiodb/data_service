@@ -4923,32 +4923,18 @@ sub showInstitutions {
 sub publications	{
     logRequest($s,$q);
     print $hbo->stdIncludes($PAGE_TOP);
-    my %vars;
-    $vars{'publications'} = Person::publications($dbt,$s);
-    print $hbo->populateHTML('publications', \%vars);
+    Person::publications($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub publicationForm	{
     logRequest($s,$q);
-    print $hbo->stdIncludes($PAGE_TOP);
-    my $pub = ${$dbt->getData("SELECT * FROM pubs WHERE pub_no=".$q->param('pub_no'))}[0];
-    my %vars;
-    $vars{$_} = $pub->{$_} foreach ( 'pub_no','authors','year','title','journal','editors','publisher','volume','firstpage','lastpage','doi','extras' );
-    print $hbo->populateHTML('publication_form', \%vars);
-    print $hbo->stdIncludes($PAGE_BOTTOM);
+    Person::publicationForm($q,$dbt,$hbo);
 }
 
 sub editPublication	{
     logRequest($s,$q);
-    # author fields aren't editable because they should never change and
-    #  users could completely screw up the entries if they were
-    my @updates;
-    push @updates , "$_='".$q->param($_)."'" foreach ( 'year','title','journal','editors','publisher','volume','firstpage','lastpage','doi','extras' );
-    s/''/NULL/ foreach @updates;
-    s/(\w)(')(\w)/$1\\'$3/g foreach @updates;
-    $dbt->dbh->do("UPDATE pubs SET ".join(",",@updates)." WHERE pub_no=".$q->param('pub_no'));
-    publications();
+    Person::editPublication($q,$dbt);
 }
 
 
