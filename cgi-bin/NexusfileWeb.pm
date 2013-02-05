@@ -592,7 +592,7 @@ sub processEdit {
     elsif ( $q->param('saveNexusInfo') )
     {
 	my $notes = $q->param('notes');
-	Nexusfile::updateFileInfo($dbt, $nexusfile_no, { notes => $notes });
+	Nexusfile::setFileInfo($dbt, $nexusfile_no, { notes => $notes });
 	print $q->redirect( -uri => "$READ_URL");
 	exit;
     }
