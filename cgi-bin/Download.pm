@@ -254,7 +254,7 @@ sub buildDownload {
         $vars{'other_contributors'} = join(', ',@others);
         $vars{'file_path'} = "$OUT_HTTP_DIR/$refsFile";
         $vars{'file_name'} = $refsFile;
-        $vars{'cites'} = $cites;
+        $vars{'cites'} = $cites . '</div>';
         print $hbo->populateHTML('download_terms', \%vars);
     }
 

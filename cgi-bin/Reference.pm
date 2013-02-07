@@ -493,6 +493,7 @@ sub risOtherAuthors {
 	else
 	{
 	    $output .= risLine($tag, "PARSE ERROR");
+	    last;
 	}
     }
     
