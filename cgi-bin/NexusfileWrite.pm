@@ -74,7 +74,7 @@ sub addFile {
 		SELECT nexusfile_no FROM nexus_files
 		WHERE filename=$quoted_name and authorizer_no=$authorizer_no";
     
-    my ($nexusfile_no) = $dbh->selectrow_array($SQL_STRING);
+    my ($nexusfile_no) = $dbh->selectrow_array(encode_utf8($SQL_STRING));
     
     # If there is, then we update it.
     
@@ -89,7 +89,7 @@ sub addFile {
 		SET enterer_no=$enterer_no, notes=$quoted_notes, modified=now()
 		WHERE nexusfile_no=$nexusfile_no";
 	
-	$result = $dbh->do($SQL_STRING);
+	$result = $dbh->do(encode_utf8($SQL_STRING));
 	
 	if ( $result )
 	{
@@ -111,7 +111,7 @@ sub addFile {
 		INSERT INTO nexus_files (filename, authorizer_no, enterer_no, notes, created, modified)
 		VALUES ($quoted_name, $authorizer_no, $enterer_no, $quoted_notes, now(), now())";
 	
-	$result = $dbh->do($SQL_STRING);
+	$result = $dbh->do(encode_utf8($SQL_STRING));
 	
 	if ( $result )
 	{
@@ -158,6 +158,8 @@ sub setFileData {
     return unless $data;
     
     # Compute an MD5 digest of the data, so that we can check for duplicate content.
+    
+    $data = encode_utf8($data);
     
     my $digester = Digest::MD5->new()->add($data);
     my $md5_digest = $dbh->quote($digester->hexdigest());
@@ -278,7 +280,7 @@ sub setFileInfo {
 	$SQL_STRING = "UPDATE nexus_files SET notes=$quoted, modified=now()
 		       WHERE nexusfile_no=$nexusfile_no";
 	
-	my $result = $dbh->do($SQL_STRING);
+	my $result = $dbh->do(encode_utf8($SQL_STRING));
 	
 	return $result;
     }
@@ -452,21 +454,33 @@ sub generateTaxa {
     
     foreach my $line (split /\r?\n|\r/, $content)
     {
-	if ( $matrix_block ne 'done' and $line =~ /^MATRIX/i )
+	# Look for the start of the MATRIX section.
+	
+	if ( !defined $matrix_block and $line =~ /^\s*MATRIX/i )
 	{
 	    $matrix_block = 'in';
 	}
 	
+	# Parse a line from the MATRIX section
+	
 	elsif ( $matrix_block eq 'in' )
 	{
-	    if ( $line =~ /^END;/i )
+	    # Look for the end of the MATRIX section
+	    
+	    if ( $line =~ /^\s*END;/i )
 	    {
 		$matrix_block = 'done';
 		last;	# take this out if we need ever need to look for other stuff
 			# after the end of the matrix block
 	    }
 	    
-	    elsif ( $line =~ /^(\w+)/ or $line =~ /^'([^']+)'/ )
+	    # Every line in this section which starts with optional whitespace
+	    # and then a word or phrase (possibly quoted, possibly containing
+	    # the characters .?"') is assumed to specify a taxon.  All '_' are
+	    # translated to spaces.
+	    
+	    elsif ( $line =~ /^\s*([\w\?\.\'\"]+)/ or $line =~ /^\s*'([^']+)'/ 
+		    or $line =~ /^\s*"([^"]+)'/ )
 	    {
 		my $taxon_name = $1;
 		$taxon_name =~ s/_+/ /g;
@@ -479,10 +493,18 @@ sub generateTaxa {
     my $index_no = 1;
     my (@values, %found_genus);
     
+    # Now we go through each of the names and try to match it up to a taxon in
+    # the database.
+    
     foreach my $name (@file_taxa)
     {
+	# Take out any word ending in a period (i.e. 'spp.') and all instances
+	# of the characters '?' and '.'.
+	
 	my $search_name = $name;
-	$search_name =~ s/\w+\.//;
+	$search_name =~ s/\w+\.//g;
+	$search_name =~ s/[\?\.]//g;
+	
 	my $genus;
 	
 	if ( $search_name =~ /^(\w+)\s+(\w+)/ )

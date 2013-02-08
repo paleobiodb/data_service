@@ -13,12 +13,10 @@ use Nexusfile;
 use NexusfileWrite;
 use Constants qw($READ_URL $WRITE_URL $HTML_DIR $PAGE_TOP $PAGE_BOTTOM);
 
+use Encode;
 use CGI;
-#use CGI::Carp;
 use Data::Dumper;
 use Class::Date qw(now date);
-#use Debug qw(dbg);
-#use Person;
 
 my $UPLOAD_LIMIT = 102400;
 
@@ -75,6 +73,14 @@ sub processUpload {
     my $notes = $q->param('notes');
     my $replace = $q->param('replace');
     
+    # Check if the data is in utf8.
+    
+    if ( $q->charset() =~ /utf-?8/i )
+    {
+	$upload_file = decode_utf8($upload_file);
+	$notes = decode_utf8($notes);
+    }
+    
     my $values = { notes => $notes, replace => $replace };
     
     # Test that we actually got a file, and that no error occurred.
@@ -113,6 +119,14 @@ sub processUpload {
 	return uploadError($hbo, $q, 
 			   "The file you chose was not a valid nexus file.<br/>Please choose a different file.",
 			   $values);
+    }
+    
+    # If it was a MacClade file, we need to translate it out of the Macintosh
+    # character set.
+    
+    if ( $nexus_data =~ /\[MacClade \d/ )
+    {
+	$nexus_data = decode("MacRoman", $nexus_data);
     }
     
     # At this point, we have a valid upload.  Now we need to check whether
@@ -351,16 +365,6 @@ sub editFile {
 	Nexusfile::addReference($dbt, $nexusfile_no, $reference_no);
     }
     
-    # Otherwise, check all of the taxa that are not exactly linked up to see
-    # if we can link any of them more exactly.  (We don't need to do this when
-    # returning from editing a reference, because in that case we already did
-    # it when the edit page was initially displayed).
-    
-    else
-    {
-	Nexusfile::updateTaxa($dbt, $nexusfile_no);
-    }
-    
     # Grab all of the info currently known about the file.
     
     my ($nexusfile) = Nexusfile::getFileInfo($dbt, $nexusfile_no, { fields => 'all' });
@@ -576,6 +580,16 @@ sub processEdit {
 	exit;
     }
     
+    # Are we rescanning the file contents for taxonomic names?
+    
+    elsif ( $q->param('scanTaxa') )
+    {
+	my $data = Nexusfile::getFileData($dbt, $nexusfile_no);
+	Nexusfile::generateTaxa($dbt, $nexusfile_no, $data) if $data;
+	print $q->redirect( -uri => "$READ_URL?a=editNexusFile&nexusfile_no=$nexusfile_no");
+	exit;
+    }
+    
     # Are we deleting the entire nexus file?  If so, do it and redirect to the
     # main menu.
     
@@ -592,6 +606,12 @@ sub processEdit {
     elsif ( $q->param('saveNexusInfo') )
     {
 	my $notes = $q->param('notes');
+	
+	if ( $q->charset() =~ /utf-?8/i )
+	{
+	    $notes = decode_utf8($notes);
+	}
+	
 	Nexusfile::setFileInfo($dbt, $nexusfile_no, { notes => $notes });
 	print $q->redirect( -uri => "$READ_URL");
 	exit;
@@ -689,6 +709,11 @@ sub processSearch {
     my $taxon_name = $q->param('taxon_name');
     my $authorizer = $q->param('person_reversed');
     my $reference_no = $q->param('reference_no');
+    
+    if ( $q->charset() =~ /utf-?8/i )
+    {
+	$filename = decode_utf8($filename);
+    }
     
     my $values = { file_name => $filename, taxon_name => $taxon_name, 
 		   person_reversed => $authorizer, reference_no => $reference_no };
@@ -831,12 +856,19 @@ sub sendFile {
 
     my ($dbt, $q, $s) = @_;
     
-    my $path = $q->path_info();
+    # The path might or might not be in utf-8, so we may need to try both :(
+    # The attribute $q->charset() doesn't actually help us here, as it appears
+    # to apply only to url-encoded arguments and not to the path!
+    
+    my $path1 = $q->path_info();
+    my $path2 = decode_utf8($q->path_info());
+    
+    #die "Path1: $path1 Path2: $path2";
     
     # First check if we have a reasonable path.  If so, try to find the
     # corresponding file.  If we can find one, send it.
     
-    if ( $path =~ m{^/nexus/([0-9]+)/(.*)} )
+    if ( $path1 =~ m{^/nexus/([0-9]+)/(.*)} )
     {
 	my ($nf) = Nexusfile::getFileInfo($dbt, undef, { authorizer_no => $1,
 						       filename => $2 });
@@ -847,11 +879,25 @@ sub sendFile {
 	    print Nexusfile::getFileData($dbt, $nf->{nexusfile_no});
 	    exit;
 	}
+	
+	elsif ( $path2 =~ m{^/nexus/([0-9]+)/(.*)} )
+	{
+	    my ($nf) = Nexusfile::getFileInfo($dbt, undef, { authorizer_no => $1,
+							     filename => $2 });
+	    
+	    if ( ref $nf )
+	    {
+		print $q->header(-type => "text/plain", -charset => 'utf-8' );
+		print encode_utf8(Nexusfile::getFileData($dbt, $nf->{nexusfile_no}));
+		exit;
+	    }
+	}
     }
     
     # If we get here, we were not able to find the file.
     
     print $q->header(-status => '404 Not Found');
+    print "Not found";
 }
 
 1;

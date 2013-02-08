@@ -11,6 +11,7 @@
 package Nexusfile;
 use strict;
 
+use Encode;
 use Carp qw(carp croak);
 
 use Constants qw($HTML_DIR $READ_URL);
@@ -297,7 +298,7 @@ sub getFileInfo {
 		$filter_expr
 		GROUP BY f.nexusfile_no ORDER BY f.filename";
     
-    my ($result_list) = $dbh->selectall_arrayref($SQL_STRING, { Slice => {} });
+    my ($result_list) = $dbh->selectall_arrayref(encode_utf8($SQL_STRING), { Slice => {} });
     
     # Return immediately unless we got some results.
     
@@ -311,6 +312,9 @@ sub getFileInfo {
     foreach my $f (@$result_list)
     {
 	bless $f, 'Nexusfile';
+	
+	$f->{filename} = decode_utf8($f->{filename});
+	$f->{notes} = decode_utf8($f->{notes});
 	
 	$nf{$f->{nexusfile_no}} = $f;
 	$f->{taxa} = [] if $fields->{taxa};
@@ -511,7 +515,7 @@ sub getFileData {
     my ($data) = $dbh->selectrow_array("SELECT data FROM nexus_data
 					WHERE nexusfile_no=$nexusfile_no");
     
-    return $data;
+    return decode_utf8($data);
 }
 
 
