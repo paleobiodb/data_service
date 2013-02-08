@@ -122,7 +122,7 @@ if ($action eq 'displayDownloadNeptuneForm' &&  $HOST_URL !~ /flatpebble\.nceas/
 	print $q->redirect( -url => $WRITE_URL );
     } elsif ( $q->path_info() =~ m{^/nexus/} ) {
 	$action = 'getNexusFile';
-    } elsif ( $action ne 'processNexusUpload' and $action ne 'updateNexusFile' ) {
+    } elsif ( $action ne 'processNexusUpload' and $action ne 'updateNexusFile' and $action ne 'getNexusFile' ) {
         print $q->header(-type => "text/html", 
                      -Cache_Control=>'no-cache',
                      -expires =>"now" );

@@ -843,8 +843,9 @@ sub generateURL {
     my $filename = $nf->{filename};
     
     $filename =~ s/ /%20/g;
+    $filename =~ s/&/%26/g;
     
-    return "$READ_URL/nexus/$auth_no/$filename";
+    return "$READ_URL?a=getNexusFile&path=$auth_no/$filename";
 }
 
 
@@ -863,13 +864,23 @@ sub sendFile {
     my $path1 = $q->path_info();
     my $path2 = decode_utf8($q->path_info());
     
-    #die "Path1: $path1 Path2: $path2";
+    # If we have URL-encoded arguments, use those instead.
+    
+    unless ( $path1 )
+    {
+	$path1 = '/nexus/' . $q->param('path');
+	$path2 = '/nexus/' . decode_utf8($q->param('path'));
+    }
+    
+    #die "path1 = $path1";
     
     # First check if we have a reasonable path.  If so, try to find the
     # corresponding file.  If we can find one, send it.
     
     if ( $path1 =~ m{^/nexus/([0-9]+)/(.*)} )
     {
+	#die "auth = $1 filename = $2";
+	
 	my ($nf) = Nexusfile::getFileInfo($dbt, undef, { authorizer_no => $1,
 						       filename => $2 });
 	
@@ -882,6 +893,7 @@ sub sendFile {
 	
 	elsif ( $path2 =~ m{^/nexus/([0-9]+)/(.*)} )
 	{
+	    #die "p2 auth = $1 filename = $2";
 	    my ($nf) = Nexusfile::getFileInfo($dbt, undef, { authorizer_no => $1,
 							     filename => $2 });
 	    
