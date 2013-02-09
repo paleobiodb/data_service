@@ -841,20 +841,30 @@ sub generateTaxonLink {
     
     foreach my $word ( split( /\s+/, $t->{match_name} ) )
     {
-	$match{$word} = 1;
+	$match{$word} = 1 if $word;
     }
     
     @rest = split( /\s+/, $t->{taxon_name} );
     
     while (@rest)
     {
-	last unless $match{$rest[0]} or $rest[0] =~ /\.$/;
+	my $test = $rest[0];
+	$test =~ tr/a-zA-Z().//dc;
+	last unless $match{$test} or $test =~ /\.$/;
 	push @good, shift @rest;
     }
     
     my $good = join(' ', @good);
     my $rest = join(' ', @rest);
-    $line = qq%<a href="$url">$good</a> $rest%;
+    
+    if ( $good =~ /\w/ )
+    {
+	$line = qq%<a href="$url">$good</a> $rest%;
+    }
+    else
+    {
+	$line = $rest;
+    }
     
     return $line;
 }

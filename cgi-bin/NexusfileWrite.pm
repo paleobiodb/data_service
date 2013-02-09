@@ -534,6 +534,15 @@ sub generateTaxa {
 		last;
 	    }
 	    
+	    # If the word is "Outgroup", we can ignore it.
+	    
+	    elsif ( $search_name =~ /^outgroup$/i )
+	    {
+		$taxon = undef;
+		$debug .= "OUTGROUP\n";
+		last;
+	    }
+	    
 	    # Otherwise, look for it in the database.
 	    
 	    ($taxon) = TaxonInfo::getTaxa($dbt, { taxon_name => $search_name,
