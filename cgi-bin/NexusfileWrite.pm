@@ -479,8 +479,7 @@ sub generateTaxa {
 	    # the characters .?"') is assumed to specify a taxon.  All '_' are
 	    # translated to spaces.
 	    
-	    elsif ( $line =~ /^\s*([\w\?\.\'\"]+)/ or $line =~ /^\s*'([^']+)'/ 
-		    or $line =~ /^\s*"([^"]+)'/ )
+	    elsif ( $line =~ /^\s*([^'\s]\S+)/ or $line =~ /^\s*'([^']+)'/ )
 	    {
 		my $taxon_name = $1;
 		$taxon_name =~ s/_+/ /g;
@@ -491,73 +490,112 @@ sub generateTaxa {
     }
     
     my $index_no = 1;
-    my (@values, %found_genus);
+    my ($search_name, @values, %found_match);
+    my $debug = '';
     
     # Now we go through each of the names and try to match it up to a taxon in
     # the database.
     
     foreach my $name (@file_taxa)
     {
-	# Take out any word ending in a period (i.e. 'spp.') and all instances
-	# of the characters '?' and '.'.
+	# Ignore any word ending in a period (i.e. 'spp.'), and any word
+	# that starts with a non-word character except '('.  Then remove
+	# all characters except letters and ().
 	
-	my $search_name = $name;
-	$search_name =~ s/\w+\.//g;
-	$search_name =~ s/[\?\.]//g;
+	my @words = split(/\s+/, $name);
 	
-	my $genus;
+	my (@components, $taxon);
 	
-	if ( $search_name =~ /^(\w+)\s+(\w+)/ )
+	foreach my $w (@words)
 	{
-	    $search_name = "$1 $2";
-	    $genus = $1;
+	    if ( $w =~ /^[\w\(].*[^\.]$/ )
+	    {
+		$w =~ tr/a-zA-Z()//dc;
+		push @components, $w;
+	    }
 	}
 	
-	my ($t) = TaxonInfo::getTaxa($dbt, { taxon_name => $search_name });
+	# Now try to match all of the components together.  If no match is
+	# found, drop the last one and try again.  Cache successful matches.
+	
 	my $inexact = 'false';
 	
-	unless ( $t )
+	while (@components)
 	{
+	    $search_name = join(' ', @components);
+	    $debug .= "Search: $search_name\n";
+	    
+	    # If we've already found this name, we can stop here.
+	    
+	    if ( $found_match{$search_name} )
+	    {
+		$taxon = $found_match{$search_name};
+		$debug .= "CACHED\n";
+		last;
+	    }
+	    
+	    # Otherwise, look for it in the database.
+	    
+	    ($taxon) = TaxonInfo::getTaxa($dbt, { taxon_name => $search_name,
+						  match_subgenera => 1 });
+	    
+	    # If we find it, we can stop here.
+	    
+	    if ( $taxon )
+	    {
+		# if ( $search_name ne $taxon->{taxon_name} )
+		# {
+		#     if ( $search_name =~ /^(\w+)\s+\(\1\)\s+(.*)/ )
+		#     {
+		# 	if ( "$1 $2" ne $taxon->{taxon_name} )
+		# 	{
+		# 	    $inexact = 'true';
+		# 	}
+		#     }
+		#     elsif ( $search_name =~ /^(\w+)\s+\(\1\)$/ )
+		#     {
+		# 	if ( $1 ne $taxon->{taxon_name} )
+		# 	{
+		# 	    $inexact = 'true';
+		# 	}
+		#     }
+		#     else
+		#     {
+		# 	$inexact = 'true';
+		#     }
+		# }
+		$debug .= ($inexact eq 'true' ? "MATCH INEXACT $taxon->{taxon_name}\n" : "MATCH EXACT $taxon->{taxon_name}\n");
+		$found_match{$search_name} = $taxon;
+		last;
+	    }
+	    
+	    # Otherwise, we know we have at most an inexact match.  Drop the
+	    # last component and try again.
+	    
 	    $inexact = 'true';
-	    
-	    if ( $genus and $found_genus{$genus} )
-	    {
-		$t = $found_genus{$genus};
-	    }
-	    
-	    elsif ( $genus )
-	    {
-		($t) = TaxonInfo::getTaxa($dbt, { taxon_name => $genus });
-		
-		unless ( $t )
-		{
-		    ($t) = TaxonInfo::getTaxa($dbt, { taxon_name => $genus, match_subgenera => 1 });
-		}
-		
-		$found_genus{$genus} = $t if $t;
-	    }
-	    
-	    else
-	    {
-		($t) = TaxonInfo::getTaxa($dbt, { taxon_name => $search_name, match_subgenera => 1 });
-	    }
+	    pop @components;
 	}
 	
-	my $quoted = $dbh->quote($name);
-	my $taxon_no = $t->{taxon_no} || "0";
+	$debug .= "FAIL\n" unless ref $taxon;
 	
-	push @values, "($nexusfile_no, $quoted, $taxon_no, $index_no, $inexact)";
+	my $qname = $dbh->quote($name);
+	my $qmatch = $dbh->quote($search_name);
+	my $taxon_no = $taxon->{taxon_no} || "0";
+	
+	push @values, "($nexusfile_no, $qname, $qmatch, $taxon_no, $index_no, $inexact)";
 	$index_no++;
     }
     
     if ( @values )
     {
 	$SQL_STRING = "
-		INSERT IGNORE INTO nexus_taxa (nexusfile_no, taxon_name, orig_no, index_no, inexact)
+		INSERT IGNORE INTO nexus_taxa (nexusfile_no, taxon_name, match_name, orig_no, index_no, inexact)
 		VALUES " . join(',', @values);
 	
 	$result = $dbh->do($SQL_STRING);
     }
+    
+    #die $debug;
     
     return 1;
 }

@@ -335,8 +335,8 @@ sub getFileInfo {
 	my $nf_list = join(',', keys %nf);
 	
 	$SQL_STRING = "
-		SELECT t.nexusfile_no, t.orig_no as taxon_no, t.taxon_name, a.taxon_rank,
-		       t.inexact
+		SELECT t.nexusfile_no, t.orig_no as taxon_no, t.taxon_name, t.match_name,
+		       a.taxon_rank, t.inexact
 		FROM nexus_taxa as t LEFT JOIN authorities as a on a.taxon_no = t.orig_no
 		WHERE t.nexusfile_no in ($nf_list) ORDER BY t.index_no";
 	
@@ -346,6 +346,7 @@ sub getFileInfo {
 	{
 	    foreach my $t (@$taxon_list)
 	    {
+		$t->{taxon_name} = decode_utf8($t->{taxon_name});
 		my $f = $nf{$t->{nexusfile_no}};
 		push @{$f->{taxa}}, $t if $f;
 	    }
