@@ -201,14 +201,13 @@ sub viewFile {
     my ($dbt, $hbo, $q, $s) = @_;
     
     # First figure out which file we're supposed to be viewing, and grab all
-    # of the info currently known about the file.
+    # of the info currently known about the file.  If we can't find a file,
+    # then send the user an error page.
     
-    my $nexusfile_no = $q->param('nexusfile_no');
-    my $vars;
+    my $nf = findFile($dbt, $q, $s);
+    my ($vars, $nexusfile, $nexusfile_no, $auth_no, $filename);
     
-    my ($nexusfile) = Nexusfile::getFileInfo($dbt, $nexusfile_no, { fields => 'all' });
-    
-    unless ( $nexusfile )
+    unless ( ref $nf )
     {
 	$vars = { page_title => "View nexus file", 
 		  error_message => "No matching nexus file was found" };
@@ -217,8 +216,11 @@ sub viewFile {
     
     else
     {
-	my $auth_no = $nexusfile->{authorizer_no};
-	my $filename = $nexusfile->{filename};
+	$nexusfile_no = $nf->{nexusfile_no};
+	($nexusfile) = Nexusfile::getFileInfo($dbt, $nexusfile_no, { fields => 'all' });
+	
+	$auth_no = $nexusfile->{authorizer_no};
+	$filename = $nexusfile->{filename};
 	
 	$vars = { page_title => "View nexus file",
 		  filename => $filename,
@@ -841,75 +843,155 @@ sub generateURL {
     
     my $auth_no = $nf->{authorizer_no};
     my $filename = $nf->{filename};
+    my $nexusfile_no = $nf->{nexusfile_no};
     
-    $filename =~ s/ /%20/g;
-    $filename =~ s/&/%26/g;
+    # Restore these if we choose to use filenames in URL paths again
+    #$filename =~ s/ /%20/g;
+    #$filename =~ s/&/%26/g;
     
-    return "$READ_URL?a=getNexusFile&path=$auth_no/$filename";
+    return "$READ_URL?a=getNexusFile&nexusfile_no=$nexusfile_no";
 }
 
 
 # sendFile ( dbt, q, s )
 # 
-# Send a nexus file, with the proper header.
+# Send the nexus file indicated by the URL arguments, with the proper header.
 
 sub sendFile {
 
     my ($dbt, $q, $s) = @_;
     
-    # The path might or might not be in utf-8, so we may need to try both :(
-    # The attribute $q->charset() doesn't actually help us here, as it appears
-    # to apply only to url-encoded arguments and not to the path!
+    # First see if we can find a nexus file based on our arguments.  If not,
+    # then send the user an error page.
     
-    my $path1 = $q->path_info();
-    my $path2 = decode_utf8($q->path_info());
+    my $nf = findFile($dbt, $q, $s);
     
-    # If we have URL-encoded arguments, use those instead.
-    
-    unless ( $path1 )
+    unless ( ref $nf )
     {
-	$path1 = '/nexus/' . $q->param('path');
-	$path2 = '/nexus/' . decode_utf8($q->param('path'));
+	findError($q, $nf);
+	exit;
     }
     
-    #die "path1 = $path1";
+    # Otherewise, send out the specified file.
     
-    # First check if we have a reasonable path.  If so, try to find the
-    # corresponding file.  If we can find one, send it.
-    
-    if ( $path1 =~ m{^/nexus/([0-9]+)/(.*)} )
-    {
-	#die "auth = $1 filename = $2";
-	
-	my ($nf) = Nexusfile::getFileInfo($dbt, undef, { authorizer_no => $1,
-						       filename => $2 });
-	
-	if ( ref $nf )
-	{
-	    print $q->header(-type => "text/plain");
-	    print Nexusfile::getFileData($dbt, $nf->{nexusfile_no});
-	    exit;
-	}
-	
-	elsif ( $path2 =~ m{^/nexus/([0-9]+)/(.*)} )
-	{
-	    #die "p2 auth = $1 filename = $2";
-	    my ($nf) = Nexusfile::getFileInfo($dbt, undef, { authorizer_no => $1,
-							     filename => $2 });
-	    
-	    if ( ref $nf )
-	    {
-		print $q->header(-type => "text/plain", -charset => 'utf-8' );
-		print encode_utf8(Nexusfile::getFileData($dbt, $nf->{nexusfile_no}));
-		exit;
-	    }
-	}
-    }
-    
-    # If we get here, we were not able to find the file.
-    
-    print $q->header(-status => '404 Not Found');
-    print "Not found";
+    print $q->header(-type => "text/plain", -charset => 'utf-8' );
+    print encode_utf8(Nexusfile::getFileData($dbt, $nf->{nexusfile_no}));
+    exit;
 }
+
+
+# findFile ( dbt, q, s )
+# 
+# Attempt to find a nexus file in the database, according to the URL arguments
+# and session information.  If we can find one, return a Nexusfile object.
+# Otherwise, return an error message.  The caller can test whether the return
+# value is a reference.
+
+sub findFile {
+    
+    my ($dbt, $q, $s) = @_;
+    
+    my $nf;
+    
+    # If we have been given a nexusfile_no value, just use that.  Either we
+    # find a nexus file with the given nexusfile_no, or not.
+    
+    if ( (my $nexusfile_no = $q->param('nexusfile_no')) > 0 )
+    {
+	($nf) = Nexusfile::getFileInfo($dbt, $nexusfile_no);
+    }
+    
+    # If no nexusfile_no was found, then look for an authorizer_no value and
+    # filename.  These might occur in the path info, or as an argument called
+    # 'path' or as individual arguments.
+    
+    else
+    {
+	my ($authorizer_no, $filename);
+	
+	if ( $q->path_info() =~ m{^/nexus/([0-9]+)/(.*)} )
+	{
+	    $authorizer_no = $1;
+	    $filename = $2;
+	}
+	
+	elsif ( $q->param('path') =~ m{^([0-9]+)/(.*)} )
+	{
+	    $authorizer_no = $1;
+	    $filename = $2;
+	}
+	
+	elsif ( $q->param('authorizer_no') =~ /^[0-9]/ and $q->param('filename') )
+	{
+	    $authorizer_no = $q->param('authorizer_no');
+	    $authorizer_no =~ tr/0-9//dc;
+	    $filename = $q->param('filename');
+	}
+	
+	else
+	{
+	    return '400 Bad Request';
+	}
+	
+	# If we get here, then we have found an authorizer_no and filename.
+	# So try to retrieve a file based on that information.
+	
+	($nf) = Nexusfile::getFileInfo($dbt, undef, { authorizer_no => $authorizer_no,
+							 filename => decode_utf8($filename) });
+	
+	# If we fail, try again without utf8-decoding the filename.
+	
+	unless ( $nf )
+	{
+	    ($nf) = Nexusfile::getFileInfo($dbt, undef, { authorizer_no => $authorizer_no,
+							filename => $filename });
+	}
+    }
+    
+    # If we found something, return it.  Otherwise, return an error message.
+    
+    return (ref $nf ? $nf : '404 Not Found');
+}
+
+
+# findError ( q, message )
+#
+# Send out an error page.
+
+sub findError {
+
+    my ($q, $message) = @_;
+    
+    my ($body);
+    
+    if ( $message =~ /^400/ )
+    {
+	$body = "This URL does not contain the proper parameters for retrieving a nexus file";
+    }
+    
+    elsif ( $message =~ /^404/ )
+    {
+	$body = "The requested nexus file was not found";
+    }
+    
+    elsif ( $message =~ /^[0-9]+/ )
+    {
+	$body = '';
+    }
+    
+    else
+    {
+	$message = '400 Bad Request';
+	$body = '';
+    }
+    
+    print $q->header(-status => $message);
+    print "<html><head><title>$message</title><body>\n";
+    print "<h1>$message</h1>\n";
+    print "<h2>$body</h2>\n";
+    print "</body></html>\n";
+    exit;
+}
+
 
 1;
