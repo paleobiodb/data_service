@@ -240,7 +240,7 @@ sub viewFile {
     
     if ( $reference_string )
     {
-	$vars->{reference_string} = $reference_string;
+	$vars->{reference_string} = encode('iso-8859-1', $reference_string);
     }
     
     # If there are associated references, list them.
@@ -275,26 +275,26 @@ sub viewFile {
 	
 	foreach my $t (@{$nexusfile->{taxa}})
 	{
-	    my $name;
+	    my ($line);
 	    
 	    if ( $t->{taxon_no} > 0 )
 	    {
-		$name = qq%<a href="$READ_URL?a=basicTaxonInfo&taxon_no=$t->{taxon_no}">$t->{taxon_name}</a>%;
+		$line = encode('iso-8859-1', generateTaxonLink($t));
 		
 		if ( $t->{inexact} )
 		{
-		    $name .= " **";
+		    $line .= " **";
 		    $double = 1;
 		}
 	    }
 	    
 	    else
 	    {
-		$name = $t->{taxon_name} . " *";
+		$line = $t->{taxon_name} . " *";
 		$asterisk = 1;
 	    }
 	    
-	    $vars->{taxa} .= "<li>$name</li>\n";
+	    $vars->{taxa} .= "<li>$line</li>\n";
 	}
 	
 	$vars->{taxa} .= "</ul>\n";
@@ -391,7 +391,7 @@ sub editFile {
     
     if ( $reference_string )
     {
-	$vars->{reference_string} = $reference_string;
+	$vars->{reference_string} = encode('iso-8859-1', $reference_string);
     }
     
     # If there are associated references, list them.
@@ -429,24 +429,11 @@ sub editFile {
 	
 	foreach my $t (@{$nexusfile->{taxa}})
 	{
-	    my ($name, $rest, @rest, $genus, $species, $line);
+	    my ($line);
 	    
 	    if ( $t->{taxon_no} > 0 )
 	    {
-		if ( $t->{inexact} )
-		{
-		    ($name, @rest) = split /\s+/, $t->{taxon_name};
-		    $rest = join(' ', @rest);
-		}
-		
-		else
-		{
-		    ($genus, $species, @rest) = split /\s+/, $t->{taxon_name};
-		    $name = "$genus $species";
-		    $rest = join(' ', @rest);
-		}
-		
-		$line = qq%<a href="$READ_URL?a=basicTaxonInfo&taxon_no=$t->{taxon_no}">$name</a> $rest%;
+		$line = encode('iso-8859-1', generateTaxonLink($t));
 		
 		if ( $t->{inexact} )
 		{
@@ -830,6 +817,46 @@ sub searchError {
     print $hbo->stdIncludes($PAGE_BOTTOM);
     
     return;
+}
+
+
+# generateTaxonLink ( taxon )
+# 
+# Generate a link to the specified taxon.
+
+sub generateTaxonLink {
+    
+    my ($t) = @_;
+    
+    my $taxon_name = $t->{taxon_name};
+    my $match_name = $t->{match_name};
+    
+    my $url = "$READ_URL?a=basicTaxonInfo&taxon_no=$t->{taxon_no}";
+    
+    my (@good, @rest, %match, $line);
+    
+    # Go through each word of the taxon name.  Put it into "good" if it
+    # appears in $match_name, or if it ends in a period (and thus should be
+    # ignored).  Everything else will go into 'bad'.
+    
+    foreach my $word ( split( /\s+/, $t->{match_name} ) )
+    {
+	$match{$word} = 1;
+    }
+    
+    @rest = split( /\s+/, $t->{taxon_name} );
+    
+    while (@rest)
+    {
+	last unless $match{$rest[0]} or $rest[0] =~ /\.$/;
+	push @good, shift @rest;
+    }
+    
+    my $good = join(' ', @good);
+    my $rest = join(' ', @rest);
+    $line = qq%<a href="$url">$good</a> $rest%;
+    
+    return $line;
 }
 
 
