@@ -251,6 +251,10 @@ Options include:
 
 Update the 'notes' field of the nexus file record to the specified value.
 
+=item filename
+
+Update the 'filename' field of the nexus file record to the specified value.
+
 =item now
 
 Update the modified-time of the nexus file record (this can be used without
@@ -273,11 +277,17 @@ sub setFileInfo {
     
     # If the options 'notes' was specified, update the notes.
     
-    if ( $options->{notes} )
+    if ( $options->{notes} or $options->{filename} )
     {
-	my $quoted = $dbh->quote($options->{notes});
+	my @updates;
+	push @updates, "notes=" . $dbh->quote($options->{notes}) if defined $options->{notes};
+	push @updates, "filename=" . $dbh->quote($options->{filename}) if defined $options->{filename} and
+	    $options->{filename} ne '';
+	push @updates, "modified=now()";
 	
-	$SQL_STRING = "UPDATE nexus_files SET notes=$quoted, modified=now()
+	my $update_string = join(', ', @updates);
+	
+	$SQL_STRING = "UPDATE nexus_files SET $update_string
 		       WHERE nexusfile_no=$nexusfile_no";
 	
 	my $result = $dbh->do(encode_utf8($SQL_STRING));
@@ -490,7 +500,7 @@ sub generateTaxa {
     }
     
     my $index_no = 1;
-    my ($search_name, @values, %found_match);
+    my ($search_name, @values, @taxa, %found_match);
     my $debug = '';
     
     # Now we go through each of the names and try to match it up to a taxon in
@@ -552,27 +562,6 @@ sub generateTaxa {
 	    
 	    if ( $taxon )
 	    {
-		# if ( $search_name ne $taxon->{taxon_name} )
-		# {
-		#     if ( $search_name =~ /^(\w+)\s+\(\1\)\s+(.*)/ )
-		#     {
-		# 	if ( "$1 $2" ne $taxon->{taxon_name} )
-		# 	{
-		# 	    $inexact = 'true';
-		# 	}
-		#     }
-		#     elsif ( $search_name =~ /^(\w+)\s+\(\1\)$/ )
-		#     {
-		# 	if ( $1 ne $taxon->{taxon_name} )
-		# 	{
-		# 	    $inexact = 'true';
-		# 	}
-		#     }
-		#     else
-		#     {
-		# 	$inexact = 'true';
-		#     }
-		# }
 		$debug .= ($inexact eq 'true' ? "MATCH INEXACT $taxon->{taxon_name}\n" : "MATCH EXACT $taxon->{taxon_name}\n");
 		$found_match{$search_name} = $taxon;
 		last;
@@ -592,6 +581,7 @@ sub generateTaxa {
 	my $taxon_no = $taxon->{taxon_no} || "0";
 	
 	push @values, "($nexusfile_no, $qname, $qmatch, $taxon_no, $index_no, $inexact)";
+	push @taxa, $taxon_no;
 	$index_no++;
     }
     
@@ -602,6 +592,18 @@ sub generateTaxa {
 		VALUES " . join(',', @values);
 	
 	$result = $dbh->do($SQL_STRING);
+	
+	my $containing_taxon = TaxonInfo::getContainingTaxon($dbt, \@taxa);
+	
+	if ( $containing_taxon > 0 )
+	{
+	    $SQL_STRING = "UPDATE nexus_files SET taxon_no=$containing_taxon
+		           WHERE nexusfile_no=$nexusfile_no";
+	    
+	    $result = $dbh->do($SQL_STRING);
+	    
+	    my $a = 1;		# we can stop here when debugging
+	}
     }
     
     #die $debug;

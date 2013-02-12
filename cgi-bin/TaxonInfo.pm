@@ -4923,6 +4923,100 @@ sub getAllSynonyms {
     }
 }
 
+
+# Given a list of taxa, determine the minimal taxon which contains them all.
+# The taxa may be either taxon_no values or Taxon objects.
+
+sub getContainingTaxon {
+    
+    my ($dbt, $taxa_list) = @_;
+    
+    my $dbh = $dbt->{dbh};
+    my $sql;
+    
+    return unless ref $taxa_list eq 'ARRAY';
+    
+    # Go through the list and determine the parent of every taxon.  Add to
+    # our combined set and repeat until we get only one new result.
+    
+    my (%found, %new, $levels);
+    
+    foreach my $t (@$taxa_list)
+    {
+	if ( ref $t ) {
+	    $new{$t->{taxon_no}} = 1 if $t->{taxon_no} > 0;
+	} elsif ( $t > 0 ) {
+	    $new{$t} = 1;
+	}
+    }
+    
+    while ( keys %new > 1 and $levels < 15 )
+    {
+	$levels++;
+	my $sql_list = join(',', keys %new);
+	
+	$sql = "SELECT o.parent_spelling_no as parent_no, taxon_no
+		FROM taxa_tree_cache as t JOIN opinions as o using (opinion_no)
+		WHERE taxon_no in ($sql_list) GROUP BY taxon_no";
+	
+	my $results = $dbh->selectall_arrayref($sql, { Slice => {} });
+	
+	last unless ref $results and @$results;
+	
+	%new = ();
+	
+	foreach my $row (@$results)
+	{
+	    $found{$row->{taxon_no}} = $row->{parent_no};
+	}
+	
+	foreach my $row (@$results)
+	{
+	    unless ( $found{$row->{parent_no}} )
+	    {
+		$found{$row->{parent_no}} = 0;
+		$new{$row->{parent_no}} = 1;
+	    }
+	}
+    }
+    
+    # If we could not determine a single taxon that contains all of the input
+    # taxa, then return 0.
+    
+    unless ( scalar(keys %new) == 1 )
+    {
+	return 0;
+    }
+    
+    # Otherwise, we have a result.  But the single taxon might not be the
+    # minimal one, so we need to look back down through the %found array until
+    # we find a taxon for which we found more than one child.
+    
+    my ($top) = keys %new;	# At this point, we know there's only one key.
+    my ($child_count, $child);
+    
+    do
+    {
+	$child_count = 0;
+	
+	foreach my $t_no (keys %found)
+	{
+	    if ( $found{$t_no} == $top )
+	    {
+		$child_count++;
+		$child = $t_no;
+	    }
+	}
+	
+	$top = $child if $child_count == 1;
+    }
+	while ($child_count == 1);
+    
+    # Now we have the minimal taxon.  Return its senior synonym.
+    
+    return getSeniorSynonym($dbt, $top);
+}
+
 # This will return all diagnoses for a particular taxon, for all its spellings, and
 # for all its junior synonyms. The diagnoses are passed back as a sorted array of hashrefs ordered by
 # pubyr of the opinion.  Each hashref has the following keys:

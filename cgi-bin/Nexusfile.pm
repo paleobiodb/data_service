@@ -292,8 +292,10 @@ sub getFileInfo {
     
     $SQL_STRING = "
 		SELECT f.nexusfile_no, f.filename, f.authorizer_no, f.enterer_no,
+		       f.taxon_no, a.taxon_name, a.taxon_rank,
 		       f.created, f.modified, p.reversed_name as authorizer $extra_fields
-		FROM nexus_files as f JOIN person as p on p.person_no = f.authorizer_no
+		FROM nexus_files as f LEFT JOIN person as p on p.person_no = f.authorizer_no
+			LEFT JOIN authorities as a on a.taxon_no = f.taxon_no
 		$extra_joins
 		$filter_expr
 		GROUP BY f.nexusfile_no ORDER BY f.filename";
