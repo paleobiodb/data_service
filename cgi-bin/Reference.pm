@@ -10,6 +10,7 @@ use Debug qw(dbg);
 use Constants qw($WRITE_URL $IS_FOSSIL_RECORD $HTML_DIR $TAXA_TREE_CACHE $DB $COLLECTIONS $COLLECTION_NO $PAGE_TOP $PAGE_BOTTOM);
 use Download;
 use Person;
+use Nexusfile;
 
 # Paths from the Apache environment variables (in the httpd.conf file).
 
@@ -926,8 +927,37 @@ sub displayReference {
 		push @taxa , "<a href=\"?a=basicTaxonInfo&amp;taxon_no=$_->{'taxon_no'}\">$_->{'taxon_name'}</a>" foreach @taxon_refs;
 		print $box->("Measurements",join('<br>',@taxa));
 	}
-
-
+    
+    # Handle phlogenetic character matrices box
+    my @nexus_files = Nexusfile::getFileInfo($dbt, undef, { reference_no => $reference_no });
+    my @nexus_lines;
+    
+    if ( @nexus_files )
+    {
+	my $current_auth = $s->get('authorizer_no');
+	
+	foreach my $nf (@nexus_files)
+	{
+	    my $nexusfile_no = $nf->{nexusfile_no};
+	    my $filename = $nf->{filename};
+	    my $taxon_name = $nf->{taxon_name};
+	    my $taxon_no = $nf->{taxon_no};
+	    my $verb = $nf->{authorizer_no} == $current_auth ? 'edit' : 'view';
+	    
+	    next unless $nexusfile_no and $filename;
+	    
+	    my $line = qq%<a href="?a=${verb}NexusFile&nexusfile_no=$nexusfile_no">$filename</a>%;
+	    $line .= qq% (<a href="?a=basicTaxonInfo&taxon_no=$taxon_no">$taxon_name</a>)% if $taxon_name;
+	    push @nexus_lines, $line;
+	}
+    }
+    
+    if ( @nexus_lines )
+    {
+	my $count = scalar(@nexus_files);
+	print $box->("Phylogenetic character matrices ($count)", join("<br>\n", @nexus_lines));
+    }
+    
     # Handle collections box
     my $collection_count;
     $sql = "SELECT count(*) c FROM collections WHERE reference_no=$reference_no";
@@ -1218,6 +1248,7 @@ any further data from the reference.<br><br> "DATA NOT ENTERED: SEE |.$s->get('a
         <ul class="small" style="text-align: left;">
             <li>Add or edit all the <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayAuthorityTaxonSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic names</a>, especially if they are new or newly combined
             <li>Add or edit all the new or second-hand <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayOpinionSearchForm', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">taxonomic opinions</a> about classification or synonymy
+	    <li>Add <a href="#" onClick="popup = window.open('$WRITE_URL?a=uploadNexusFile', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">phylogenetic character matrices</a> describing these taxa
             <li>Edit <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySearchColls&type=edit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">existing collections</a> if new details are given
             <li>Add all the <a href="#" onClick="popup = window.open('$WRITE_URL?a=displaySearchCollsForAdd', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">new collections</a>
             <li>Add all new <a href="#" onClick="popup = window.open('$WRITE_URL?a=displayOccurrenceAddEdit', 'blah', 'left=100,top=100,height=700,width=700,toolbar=yes,scrollbars=yes,resizable=yes');">occurrences</a> in existing or new collections

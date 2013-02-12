@@ -168,7 +168,7 @@ sub processUpload {
     # confirm that the data was uploaded properly, and can add any publication
     # references). 
     
-    print $q->redirect( -uri => "$READ_URL?a=editNexusFile&nexusfile_no=$nexusfile_no");
+    print $q->redirect( -uri => "?a=editNexusFile&nexusfile_no=$nexusfile_no");
 }
 
 
@@ -227,7 +227,9 @@ sub viewFile {
 		  date_created => $nexusfile->{created},
 		  date_modified => $nexusfile->{modified},
 		  nexusfile_no => $nexusfile_no,
-		  download_link => generateURL($nexusfile) };
+		  download_link => generateURL($nexusfile),
+		  references => '',
+		  taxa => '' };
 	
 	if ( $q->param('noperm') )
 	{
@@ -253,7 +255,7 @@ sub viewFile {
 	{
 	    my $ref_no = $ref->{reference_no};
 	    $vars->{references} .= "<li>" . 
-		qq%(<a href="$READ_URL?a=displayRefResults&reference_no=$ref_no">$ref_no</a>)&nbsp;% .
+		qq%(<a href="?a=displayRefResults&reference_no=$ref_no">$ref_no</a>)&nbsp;% .
 		    Reference::formatAsHTML($ref) . "</li>\n";
 	}
 	
@@ -269,7 +271,13 @@ sub viewFile {
     
     if ( ref $nexusfile->{taxa} eq 'ARRAY' )
     {
-	$vars->{taxa} = "<ul>\n";
+	if ( $nexusfile->{taxon_name} )
+	{
+	    my $taxon_link = qq%<a href="?a=basicTaxonInfo&taxon_no=$nexusfile->{taxon_no}">$nexusfile->{taxon_name}</a>%;
+	    $vars->{taxa} .= qq%<p style="margin-left: 30;">Minimal containing taxon: $taxon_link</p>\n%;
+	}
+	
+	$vars->{taxa} .= "<ul>\n";
 	my $asterisk;
 	my $double;
 	
@@ -384,7 +392,9 @@ sub editFile {
 		 date_created => $nexusfile->{created},
 		 date_modified => $nexusfile->{modified},
 		 download_link => generateURL($nexusfile),
-	         nexusfile_no => $nexusfile_no };
+	         nexusfile_no => $nexusfile_no,
+		 references => '',
+	         taxa => '' };
     
     my $content = Nexusfile::getFileData($dbt, $nexusfile_no);
     my ($reference_string) = extractRefString($content);
@@ -404,7 +414,7 @@ sub editFile {
 	{
 	    my $ref_no = $ref->{reference_no};
 	    $vars->{references} .= "<li>" . 
-		qq%(<a href="$READ_URL?a=displayRefResults&reference_no=$ref_no">$ref_no</a>)&nbsp;% .
+		qq%(<a href="?a=displayRefResults&reference_no=$ref_no">$ref_no</a>)&nbsp;% .
 		    Reference::formatAsHTML($ref) . 
 			    qq%&nbsp; [<a href="#" onclick="delRef($ref_no)">delete</a>]% .
 				qq%&nbsp; [<a href="#" onclick="moveRef($ref_no)">top</a>]% .
@@ -423,13 +433,22 @@ sub editFile {
     
     if ( ref $nexusfile->{taxa} eq 'ARRAY' )
     {
-	$vars->{taxa} = "<ul>\n";
+	if ( $nexusfile->{taxon_name} )
+	{
+	    my $taxon_link = qq%<a href="?a=basicTaxonInfo&taxon_no=$nexusfile->{taxon_no}">$nexusfile->{taxon_name}</a>%;
+	    $vars->{taxa} .= qq%<p style="margin-left: 30;">Minimal containing taxon: $taxon_link</p>\n%;
+	}
+	
+	$vars->{taxa} .= qq%<table border="0" cellpadding="4">\n%;
 	my $asterisk;
 	my $double;
+	my $reminder;
 	
 	foreach my $t (@{$nexusfile->{taxa}})
 	{
-	    my ($line);
+	    my ($line, $link);
+	    
+	    # Generate the taxon name output
 	    
 	    if ( $t->{taxon_no} > 0 )
 	    {
@@ -448,10 +467,30 @@ sub editFile {
 		$asterisk = 1;
 	    }
 	    
-	    $vars->{taxa} .= "<li>$line</li>\n";
+	    # For taxa which were not matched exactly, generate a link to the
+	    # Authority form so that the user can easily add them.
+	    
+	    if ( $t->{taxon_no} == 0 or $t->{inexact} )
+	    {
+		$link = generateTaxonAddLink($t);
+		
+		unless ( $reminder )
+		{
+		    $link .= "&nbsp;&nbsp;<i>(remember to select the proper reference first)</i>";
+		    $reminder = 1;
+		}
+	    }
+	    
+	    else
+	    {
+		$link = '';
+	    }
+	    
+	    $vars->{taxa} .= "<tr><td>$line</td><td width=\"50\"></td>\n";
+	    $vars->{taxa} .= "<td>$link</td></tr>\n";
 	}
 	
-	$vars->{taxa} .= "</ul>\n";
+	$vars->{taxa} .= "</table>\n";
 	
 	if ( $asterisk )
 	{
@@ -522,7 +561,7 @@ sub processEdit {
     
     unless ( $nexusfile_no > 0 )
     {
-	print $q->redirect( -uri => "$READ_URL");
+	print $q->redirect( -uri => "?");
     }
     
     # Check that we have permission to edit the file.  If not, redirect to the
@@ -531,7 +570,7 @@ sub processEdit {
     unless ( $s->get('superuser') or
 	     Nexusfile::checkWritePermission($dbt, $nexusfile_no, $s->get('authorizer_no')) )
     {
-	print $q->redirect( -uri => "$READ_URL?a=viewNexusFile&nexusfile_no=$nexusfile_no&noperm=1");
+	print $q->redirect( -uri => "?a=viewNexusFile&nexusfile_no=$nexusfile_no&noperm=1");
 	exit;
     }
     
@@ -555,7 +594,7 @@ sub processEdit {
     elsif ( my $reference_no = $q->param('deleteReference') )
     {
 	Nexusfile::deleteReference($dbt, $nexusfile_no, $reference_no);
-	print $q->redirect( -uri => "$READ_URL?a=editNexusFile&nexusfile_no=$nexusfile_no");
+	print $q->redirect( -uri => "?a=editNexusFile&nexusfile_no=$nexusfile_no");
 	exit;
     }
     
@@ -565,7 +604,7 @@ sub processEdit {
     elsif ( my $reference_no = $q->param('moveReference') )
     {
 	Nexusfile::moveReference($dbt, $nexusfile_no, $reference_no);
-	print $q->redirect( -uri => "$READ_URL?a=editNexusFile&nexusfile_no=$nexusfile_no");
+	print $q->redirect( -uri => "?a=editNexusFile&nexusfile_no=$nexusfile_no");
 	exit;
     }
     
@@ -595,13 +634,15 @@ sub processEdit {
     elsif ( $q->param('saveNexusInfo') )
     {
 	my $notes = $q->param('notes');
+	my $filename = $q->param('filename');
 	
 	if ( $q->charset() =~ /utf-?8/i )
 	{
 	    $notes = decode_utf8($notes);
+	    $filename = decode_utf8($filename);
 	}
 	
-	Nexusfile::setFileInfo($dbt, $nexusfile_no, { notes => $notes });
+	Nexusfile::setFileInfo($dbt, $nexusfile_no, { notes => $notes, filename => $filename });
 	print $q->redirect( -uri => "$READ_URL");
 	exit;
     }
@@ -788,8 +829,13 @@ sub describeFileTable {
     my $auth_no = $nexusfile->{authorizer_no};
     my $authorizer = $nexusfile->{authorizer};
     my $filename = $nexusfile->{filename};
+    my $taxon_name = $nexusfile->{taxon_name};
     
-    my $first = qq%<a href="$READ_URL?a=viewNexusFile&nexusfile_no=$nexusfile_no">$filename</a>%;
+    my $first = qq%<a href="?a=viewNexusFile&nexusfile_no=$nexusfile_no">$filename</a>%;
+    my $href = qq^href="?a=basicTaxonInfo&taxon_no=$nexusfile->{taxon_no}"^;
+    
+    $first .= " (<a $href>$taxon_name</a>)" if $taxon_name;
+    
     my $second = qq%$authorizer%;
     my $third = '';
     
@@ -869,6 +915,33 @@ sub generateTaxonLink {
     return $line;
 }
 
+
+# generateTaxonAddLink ( taxon )
+# 
+# Given a Taxon object, generate a link that will produce the Authority form
+# with the taxon name filled in.  Note that we may have to clean up the name.
+
+sub generateTaxonAddLink {
+
+    my ($t) = @_;
+    
+    # Don't generate a link unless we actually have a taxon name.
+    
+    return '' unless $t->{taxon_name};
+    
+    # Take out any words ending in '.' and then remove all characters except
+    # letters and parentheses.
+    
+    my $name = $t->{taxon_name};
+    $name =~ s/\S+\.(?:\s|$)//g;
+    $name =~ tr/A-Za-z() //dc;
+    
+    # Construct the link and return it.
+    
+    my $href="$READ_URL?a=displayAuthorityForm&taxon_name=$name";
+    
+    return qq%<a href="$href">add this taxon</a>%;
+}
 
 # generateURL ( nexusfile )
 # 
