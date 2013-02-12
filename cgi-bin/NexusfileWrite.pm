@@ -593,7 +593,7 @@ sub generateTaxa {
 	
 	$result = $dbh->do($SQL_STRING);
 	
-	my $containing_taxon = TaxonInfo::getContainingTaxon($dbt, \@taxa);
+	my $containing_taxon = TaxonInfo::getContainerTaxon($dbt, \@taxa);
 	
 	if ( $containing_taxon > 0 )
 	{

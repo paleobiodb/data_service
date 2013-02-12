@@ -274,16 +274,18 @@ sub viewFile {
 	if ( $nexusfile->{taxon_name} )
 	{
 	    my $taxon_link = qq%<a href="?a=basicTaxonInfo&taxon_no=$nexusfile->{taxon_no}">$nexusfile->{taxon_name}</a>%;
-	    $vars->{taxa} .= qq%<p style="margin-left: 30;">Minimal containing taxon: $taxon_link</p>\n%;
+	    $vars->{taxa} .= qq%<p style="margin-left: 30;">Minimal containing taxon in this database: $taxon_link</p>\n%;
 	}
 	
-	$vars->{taxa} .= "<ul>\n";
+	$vars->{taxa} .= qq%<table border="0" cellpadding="4">\n%;
 	my $asterisk;
 	my $double;
+	my $reminder;
+	my $add_links = 1 if $s->isDBMember();
 	
 	foreach my $t (@{$nexusfile->{taxa}})
 	{
-	    my ($line);
+	    my ($line, $link);
 	    
 	    if ( $t->{taxon_no} > 0 )
 	    {
@@ -302,10 +304,31 @@ sub viewFile {
 		$asterisk = 1;
 	    }
 	    
-	    $vars->{taxa} .= "<li>$line</li>\n";
+	    # For taxa which were not matched exactly, generate a link to the
+	    # Authority form so that the user can easily add them.
+	    
+	    if ( ($t->{taxon_no} == 0 or $t->{inexact}) and $add_links )
+	    {
+		$link = generateTaxonAddLink($t);
+		
+		unless ( $reminder )
+		{
+		    $link .= "&nbsp;&nbsp;<i>(remember to select the proper reference first)</i>";
+		    $reminder = 1;
+		}
+	    }
+	    
+	    else
+	    {
+		$link = '';
+	    }
+	    
+	    $vars->{taxa} .= "<tr><td>$line</td><td width=\"50\"></td>\n";
+	    $vars->{taxa} .= "<td>$link</td>" if $add_links;
+	    $vars->{taxa} .- "</tr>\n";
 	}
 	
-	$vars->{taxa} .= "</ul>\n";
+	$vars->{taxa} .= "</table>\n";
 	
 	if ( $asterisk )
 	{
@@ -436,7 +459,7 @@ sub editFile {
 	if ( $nexusfile->{taxon_name} )
 	{
 	    my $taxon_link = qq%<a href="?a=basicTaxonInfo&taxon_no=$nexusfile->{taxon_no}">$nexusfile->{taxon_name}</a>%;
-	    $vars->{taxa} .= qq%<p style="margin-left: 30;">Minimal containing taxon: $taxon_link</p>\n%;
+	    $vars->{taxa} .= qq%<p style="margin-left: 30;">Minimal containing taxon in this database: $taxon_link</p>\n%;
 	}
 	
 	$vars->{taxa} .= qq%<table border="0" cellpadding="4">\n%;
@@ -938,7 +961,7 @@ sub generateTaxonAddLink {
     
     # Construct the link and return it.
     
-    my $href="$READ_URL?a=displayAuthorityForm&taxon_name=$name";
+    my $href="$READ_URL?a=displayAuthorityForm&taxon_no=-1&taxon_name=$name";
     
     return qq%<a href="$href">add this taxon</a>%;
 }
