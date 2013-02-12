@@ -4925,9 +4925,9 @@ sub getAllSynonyms {
 
 
 # Given a list of taxa, determine the minimal taxon which contains them all.
-# The taxa may be either taxon_no values or Taxon objects.
+# The argument may be a list of either taxon_no values or Taxon objects.
 
-sub getContainingTaxon {
+sub getContainerTaxon {
     
     my ($dbt, $taxa_list) = @_;
     
@@ -4936,63 +4936,86 @@ sub getContainingTaxon {
     
     return unless ref $taxa_list eq 'ARRAY';
     
-    # Go through the list and determine the parent of every taxon.  Add to
-    # our combined set and repeat until we get only one new result.
+    my (%found, %top, $no_infinite_loop, $root_reached);
     
-    my (%found, %new, $levels);
+    # First go through the given list and determine the initial set of taxa.
+    # These may either be taxon_no values (positive integers) or Taxon objects
+    # with a taxon_no or orig_no field.  In any case, put each taxon_no into %top.
     
     foreach my $t (@$taxa_list)
     {
 	if ( ref $t ) {
-	    $new{$t->{taxon_no}} = 1 if $t->{taxon_no} > 0;
+	    $top{$t->{taxon_no}} = 1 if $t->{taxon_no} > 0;
+	    $top{$t->{orig_no}} = 1 if $t->{orig_no} > 0 and not $t->{taxon_no} > 0;
 	} elsif ( $t > 0 ) {
-	    $new{$t} = 1;
+	    $top{$t} = 1;
 	}
     }
     
-    while ( keys %new > 1 and $levels < 15 )
+    # Now determine the parent of every taxon in %top.  Replace the contents
+    # of %top with the subset of these parents whose own parents we don't yet
+    # know.  Repeat until %top has fewer than two members.
+    
+    while ( keys %top > 1 and $no_infinite_loop < 60 )
     {
-	$levels++;
-	my $sql_list = join(',', keys %new);
+	$no_infinite_loop++;
+	my $top_list = join(',', keys %top);
 	
-	$sql = "SELECT o.parent_spelling_no as parent_no, taxon_no
+	$sql = "SELECT t.taxon_no, o.parent_spelling_no as parent_no
 		FROM taxa_tree_cache as t JOIN opinions as o using (opinion_no)
-		WHERE taxon_no in ($sql_list) GROUP BY taxon_no";
+		WHERE taxon_no in ($top_list) and o.parent_spelling_no > 0 and
+			o.parent_spelling_no <> t.taxon_no
+		GROUP BY t.taxon_no";
 	
 	my $results = $dbh->selectall_arrayref($sql, { Slice => {} });
 	
 	last unless ref $results and @$results;
 	
-	%new = ();
+	%top = ();
+	
+	# Remember all of the parent/child results.  If any of the parents is
+	# taxon #1, 'Eukaryota', then note that we have reached the root of
+	# the tree.
 	
 	foreach my $row (@$results)
 	{
 	    $found{$row->{taxon_no}} = $row->{parent_no};
+	    $root_reached = 1 if $row->{parent_no} == 1;
 	}
+	
+	# Now, for each parent whose own parent we don't know, put it into the
+	# new iteration of %top.
 	
 	foreach my $row (@$results)
 	{
-	    unless ( $found{$row->{parent_no}} )
+	    unless ( exists $found{$row->{parent_no}} )
 	    {
 		$found{$row->{parent_no}} = 0;
-		$new{$row->{parent_no}} = 1;
+		$top{$row->{parent_no}} = 1;
 	    }
 	}
+	
+	my $a = 1;	# we can stop here when debugging
     }
     
     # If we could not determine a single taxon that contains all of the input
-    # taxa, then return 0.
+    # taxa, and we never reached the root of the tree at any point, return 0.
     
-    unless ( scalar(keys %new) == 1 )
+    unless ( scalar(keys %top) == 1 or $root_reached )
     {
 	return 0;
     }
     
-    # Otherwise, we have a result.  But the single taxon might not be the
-    # minimal one, so we need to look back down through the %found array until
-    # we find a taxon for which we found more than one child.
+    # Otherwise, we have a result.  But the single taxon we have found so
+    # far might not be the minimal one, so we need to chain back through the
+    # %found array until we find a taxon for which we have more than one
+    # child.
     
-    my ($top) = keys %new;	# At this point, we know there's only one key.
+    # If we reached the root of the taxon tree at any point, start there with
+    # taxon 1, 'Eukaryota'.  Otherwise, we know that %top must have exactly
+    # one key and so we start there.
+    
+    my ($top) = $root_reached ? 1 : keys %top;
     my ($child_count, $child);
     
     do
@@ -5010,9 +5033,9 @@ sub getContainingTaxon {
 	
 	$top = $child if $child_count == 1;
     }
-	while ($child_count == 1);
+    while ($child_count == 1);
     
-    # Now we have the minimal taxon.  Return its senior synonym.
+    # Now we have the minimal container taxon.  Return its senior synonym.
     
     return getSeniorSynonym($dbt, $top);
 }
