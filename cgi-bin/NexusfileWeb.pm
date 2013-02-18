@@ -18,7 +18,7 @@ use CGI;
 use Data::Dumper;
 use Class::Date qw(now date);
 
-my $UPLOAD_LIMIT = 102400;
+my $UPLOAD_LIMIT = 1024000;
 
 our ($SQL_STRING, $ERROR_STRING);
 
