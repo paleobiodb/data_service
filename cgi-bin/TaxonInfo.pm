@@ -156,7 +156,7 @@ sub checkTaxonInfo {
             $q->param('taxon_no'=>$results[0]->{'taxon_no'});
             displayTaxonInfoResults($dbt,$s,$q,$hbo);
         } else	{
-            listTaxonChoices($dbt,\@results);
+            listTaxonChoices($dbt,$hbo,\@results);
         }
     }
 }
@@ -3643,11 +3643,7 @@ sub basicTaxonInfo	{
 	# reuses some old checkTaxonInfo functionality JA 8.4.12
 	if ( $q->param('match') =~ /all|random/i )	{
 		my @taxon_nos = @{getMatchingSubtaxa($dbt,$q,$s,$hbo)};
-		my $sql = "SELECT a.*,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@taxon_nos).")";
-		my @taxa = @{$dbt->getData($sql)};
-		print $hbo->stdIncludes($PAGE_TOP);
-		listTaxonChoices($dbt,\@taxa);
-		print $hbo->stdIncludes($PAGE_BOTTOM);
+		listTaxonChoices($dbt,$hbo,\@taxon_nos,1);
 		return;
 	}
 
@@ -3672,8 +3668,10 @@ sub basicTaxonInfo	{
 		$taxon_no = getSeniorSynonym($dbt,$taxon_no); 
 	} elsif ( $q->param('author') || $q->param('pubyr') || $q->param('type_body_part') || $q->param('preservation') )	{
 		my @taxon_nos = getTaxonNos($dbt,$taxon_name,'','',$q->param('author'),$q->param('pubyr'),$q->param('type_body_part'),$q->param('preservation'));
-		if ( @taxon_nos )	{
+		if ( scalar @taxon_nos == 1 )	{
 			$taxon_no = getSeniorSynonym($dbt,$taxon_nos[0]); 
+		} elsif ( scalar @taxon_nos > 1 )	{
+			listTaxonChoices($dbt,$hbo,\@taxon_nos,1);
 		} else	{
 			$error = "Nothing matching your search is in the database. Please try again.";
 			$taxon_name = "Failed search!";
@@ -3690,7 +3688,7 @@ sub basicTaxonInfo	{
 		}
 		# if the name is misformatted it could only be a common name,
 		#  so try that
-		if ( $taxon_name !~ /^[A-za-z]* [A-Za-z]*$/ || $q->param('common_name') =~ /[A-Za-z]/ )	{
+		if ( ! @taxon_nos && $taxon_name !~ /^[A-za-z]* [A-Za-z]*$/ || $q->param('common_name') =~ /[A-Za-z]/ )	{
 			my $name = $taxon_name;
 			$name =~ s/[^A-Za-z ]/%/g;
 			my $sql = "SELECT taxon_no FROM authorities WHERE common_name LIKE '".$name."'";
@@ -3757,8 +3755,11 @@ sub basicTaxonInfo	{
 		}
 		# getTaxonNos returns the "largest" taxon first if there are
 		#  multiple matches, so use it
-		else	{
+		elsif ( scalar @taxon_nos == 1 )	{
 			$taxon_no = getSeniorSynonym($dbt,$taxon_nos[0]); 
+		}
+		else	{
+			listTaxonChoices($dbt,$hbo,\@taxon_nos,1);
 		}
 	} else	{ # this should never happen
 		print $hbo->stdIncludes($PAGE_TOP);
@@ -4507,8 +4508,16 @@ sub getMatchingSubtaxa	{
 # calved off from checkTaxonInfo JA 8.4.12
 sub listTaxonChoices	{
 
-	my ($dbt,$resultsRef) = @_;
-	my @results = @{$resultsRef};
+	my ($dbt,$hbo,$data,$numbersOnly) = @_;
+	my @results;
+
+	if ( $numbersOnly == 0 )	{
+		@results = @{$data};
+	} else	{
+		print $hbo->stdIncludes($PAGE_TOP);
+		my $sql = "SELECT a.*,IF (ref_is_authority='YES',r.author1last,a.author1last) author1last,IF (ref_is_authority='YES',r.author2last,a.author2last) author2last,IF (ref_is_authority='YES',r.otherauthors,a.otherauthors) otherauthors,IF (ref_is_authority='YES',r.pubyr,a.pubyr) pubyr FROM authorities a,refs r WHERE a.reference_no=r.reference_no AND taxon_no IN (".join(',',@{$data}).")";
+		@results = @{$dbt->getData($sql)};
+	}
 	@results = sort { $a->{taxon_name} cmp $b->{taxon_name} } @results;
 	print "<div align=\"center\"><p class=\"pageTitle\" style=\"margin-bottom: 0.5em;\">Please select a taxonomic name</p>\n";
 	if ( scalar @results >= 10 )	{
@@ -4538,6 +4547,10 @@ sub listTaxonChoices	{
 </div>
 </div>
 |;
+	if ( $numbersOnly > 0 )	{
+		print $hbo->stdIncludes($PAGE_TOP);
+		exit;
+	}
 
 }
 
