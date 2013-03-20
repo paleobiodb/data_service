@@ -3643,8 +3643,10 @@ sub basicTaxonInfo	{
 	# reuses some old checkTaxonInfo functionality JA 8.4.12
 	if ( $q->param('match') =~ /all|random/i )	{
 		my @taxon_nos = @{getMatchingSubtaxa($dbt,$q,$s,$hbo)};
-		listTaxonChoices($dbt,$hbo,\@taxon_nos,1);
-		return;
+		if ( scalar @taxon_nos > 1 )	{
+			listTaxonChoices($dbt,$hbo,\@taxon_nos,1);
+			return;
+		}
 	}
 
 	my $taxon_name = $q->param('taxon_name');
@@ -3758,7 +3760,7 @@ sub basicTaxonInfo	{
 		elsif ( scalar @taxon_nos == 1 )	{
 			$taxon_no = getSeniorSynonym($dbt,$taxon_nos[0]); 
 		}
-		else	{
+		elsif ( scalar @taxon_nos > 1 )	{
 			listTaxonChoices($dbt,$hbo,\@taxon_nos,1);
 		}
 	} else	{ # this should never happen
