@@ -2725,7 +2725,7 @@ sub queryDatabase {
             #  (1) few users actually care about these data,
             #  (2) most unmarked taxa are in fact extinct, and
             #  (3) the data are virtually complete for tetrapods, at least
-            if ( $q->param('occurrences_extant') )	{
+            if ( $q->param('occurrences_extant') && $master_class{$row->{'o.taxon_no'}} )	{
                 my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                 foreach my $parent (@parents) {
                     $row->{'o.family_extant'} = $parent->{'extant'} if ( $parent->{'taxon_rank'} eq "family" );
