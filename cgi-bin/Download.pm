@@ -1,17 +1,13 @@
 package Download;
 
 use PBDBUtil;
-use Classification;
 use TimeLookup;
 use TaxonInfo;
 use Validation;
 use Ecology;
 use Taxon;
-use Data::Dumper;
 use DBTransactionManager;
 use TaxaCache;
-use CGI::Carp;
-use Person;
 use Reference;
 use Text::CSV_XS;
 use URI::Escape;
@@ -1634,7 +1630,10 @@ sub getOccurrencesWhereClause {
 
    
     if ($q->param('authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
+        my $name = $q->param('authorizer_reversed');
+        $name =~ s/^\s*(.*)\s*,\s*(.*)\s*$/$2 $1/;
+        $name =~ s/'/\\'/g;
+        my $sql = "SELECT person_no FROM person WHERE name='$name'";
         my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @all_where, "o.authorizer_no=".$authorizer_no if ($authorizer_no);
     }
@@ -1683,7 +1682,10 @@ sub getCollectionsWhereClause {
 
     # This is handled by getOccurrencesWhereClause if we're getting occs data.
     if($q->param('output_data') eq 'collections' && $q->param('authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
+        my $name = $q->param('authorizer_reversed');
+        $name =~ s/^\s*(.*)\s*,\s*(.*)\s*$/$2 $1/;
+        $name =~ s/'/\\'/g;
+        my $sql = "SELECT person_no FROM person WHERE name='$name'";
         my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @where, "c.authorizer_no=".$authorizer_no if ($authorizer_no);
     }
@@ -2146,18 +2148,7 @@ sub queryDatabase {
 
     my $sth = $dbh->prepare($sql); #|| die $self->dbg("Prepare query failed ($!)<br>");
 
-    eval { $sth->execute() };
-    if ($sth->errstr) {
-        my $cgi = new CGI;
-        my $errstr = "SQL error: sql($sql)"
-                   . " STH err (".$sth->errstr.")";
-        my $getpoststr; 
-        my %params = $cgi->Vars; 
-        while(my ($k,$v)=each(%params)) { $getpoststr .= "&$k=$v" if ($v ne ''); }
-        $getpoststr =~ s/\n//;
-        $errstr .= " GET,POST ($getpoststr)";
-        croak $errstr;
-    }
+    $sth->execute();
  
     $self->dbg($sth->rows()." rows returned.<br>");
 
