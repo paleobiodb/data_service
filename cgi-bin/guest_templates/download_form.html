@@ -80,18 +80,16 @@ function countryChange(justChecked)	{
 
 <div align="center" style="margin-top: 0.5em;">
   <table class="panelNavbar" cellpadding="0" cellspacing="0" border="0"><tr>
-    <td id="tab1" class="tabOff" onClick="switchToPanel(1,6);">
+    <td id="tab1" class="tabOff" onClick="switchToPanel(1,5);">
       Basic options</td>
-    <td id="tab2" class="tabOff" onClick="switchToPanel(2,6);">
+    <td id="tab2" class="tabOff" onClick="switchToPanel(2,5);">
       Included collections</td>
-    <td id="tab3" class="tabOff" onClick = "switchToPanel(3,6);">
+    <td id="tab3" class="tabOff" onClick = "switchToPanel(3,5);">
       Included occurrences</td>
-    <td id="tab4" class="tabOff" onClick = "switchToPanel(4,6);">
+    <td id="tab4" class="tabOff" onClick = "switchToPanel(4,5);">
       Collection fields</td>
-    <td id="tab5" class="tabOff" onClick = "switchToPanel(5,6);">
+    <td id="tab5" class="tabOff" onClick = "switchToPanel(5,5);">
       Occurrence fields</td>
-    <td id="tab6" class="tabOff" onClick = "switchToPanel(6,6);">
-      Specimen fields</td>
   </tr></table>
 </div>
 
@@ -516,9 +514,9 @@ and
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_cast' value="YES" checked>cast</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_adpression' value="YES" checked>adpression</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_mold/impression' value="YES" checked>mold/impression</span>
-<span style="white-space: nowrap"><input type=checkbox name='pres_mode_soft parts' value="YES" checked>soft parts</span>
-<span style="white-space: nowrap"><input type=checkbox name='pres_mode_original aragonite' value="YES" checked>original aragonite</span>
-<span style="white-space: nowrap"><input type=checkbox name='pres_mode_replaced with silica' value="YES" checked>replaced with silica</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_soft_parts' value="YES" checked>soft parts</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_original_aragonite' value="YES" checked>original aragonite</span>
+<span style="white-space: nowrap"><input type=checkbox name='pres_mode_replaced_with_silica' value="YES" checked>replaced with silica</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_trace' value="YES" checked>trace</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_charcoalification' value="YES" checked>charcoalification</span>
 <span style="white-space: nowrap"><input type=checkbox name='pres_mode_coalified' value="YES" checked>coalified</span>
@@ -811,7 +809,6 @@ location:
   </tr>
   
   <tr>
-  <td nowrap><input type=checkbox class="c_basic" name=collections_authorizer value="YES">authorizer</td>
   <td nowrap><input type=checkbox class="c_basic" name=collections_enterer value="YES">enterer</td>
   <td nowrap><input type=checkbox class="c_basic" name=collections_modifier value="YES">modifier</td>
   <td nowrap><input type=checkbox class="c_basic" name=collections_research_group value="YES">research group</td>
@@ -904,19 +901,28 @@ location:
   </tr>
 
   <tr>
+  <td colspan="4" style="padding-top: 0.4em;"><i>Age estimates in Ma based on interval names:</i></td>
+  </tr>
+  <tr>
+  <td nowrap><input type=checkbox class="c_time" name=collections_interval_base value="YES">interval base</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_interval_top value="YES">interval top</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_interval_midpoint value="YES">interval midpoint</td>
+  <td nowrap>&nbsp;</td>
+  </tr>
+  <tr>
+  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_base value="YES">interpolated maximum</td>
+  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_top value="YES">interpolated minimum
+  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_mid value="YES">interpolated midpoint</td>
+  <td nowrap>&nbsp;</td>
+  </tr>
+
+  <tr>
   <td colspan="4" style="padding-top: 0.4em;"><i>Age estimates in Ma based on geochronology (if available) or interval names (if not):</i></td>
   </tr>
   <tr>
   <td nowrap><input type=checkbox class="c_time" name=collections_ma_max value="YES">maximum age</td>
   <td nowrap><input type=checkbox class="c_time" name=collections_ma_min value="YES">minimum age</td>
   <td nowrap><input type=checkbox class="c_time" name=collections_ma_mid value="YES">midpoint age</td>
-  <td nowrap>&nbsp;</td>
-  </tr>
-
-  <tr>
-  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_base value="YES">interpolated maximum</td>
-  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_top value="YES">interpolated minimum
-  <td nowrap><input type=checkbox class="c_time" name=collections_interpolated_mid value="YES">interpolated midpoint</td>
   <td nowrap>&nbsp;</td>
   </tr>
 
@@ -1201,95 +1207,11 @@ location:
 </p>
 </div>
 
-
-<div id="panel6" class="panel"> 
-
-<p class="small" align="left" style="margin-left: 2em; margin-right: 2em;">
-Basic fields will only be downloaded when output type is "specimens".  Measurement fields will can be downloaded with any output type, but will be aggregate values for the occurrence, collection, or taxon if occurrences, collections, of taxonomic names are downloaded, respectively.
-</p>
-
-<div class="displayPanel">
-<span class="displayPanelHeader">Basic fields</span></br>
-<table width="100%" class="tiny">
-  <tr>
-    <td nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_basic');"><span class="medium">Check all</span></td>
-  </tr>
-  <tr>
-    <td><input type=checkbox class="s_basic" name=specimens_authorizer value="YES">authorizer</td>
-    <td><input type=checkbox class="s_basic" name=specimens_enterer value="YES">enterer</td>
-    <td><input type=checkbox class="s_basic" name=specimens_modifier value="YES">modifier</td>
-    <td><input type=checkbox class="s_basic" name=specimens_specimen_no value="YES">specimen no</td>
-  </tr>
-
-  <tr>
-    <td><input type=checkbox class="s_basic" name=specimens_reference_no value="YES">reference no</td>
-    <td><input type=checkbox class="s_basic" name=specimens_specimen_id value="YES">specimen id</td>
-    <td><input type=checkbox class="s_basic" name=specimens_specimen_side value="YES">side</td>
-    <td><input type=checkbox class="s_basic" name=specimens_specimen_part value="YES">part*</td>
-  </tr>
-
-  <tr>
-    <td><input type=checkbox class="s_basic" name=specimens_specimen_coverage value="YES">specimen coverage</td>
-    <td><input type=checkbox class="s_basic" name=specimens_measurement_source value="YES">measurement source</td>
-    <td><input type=checkbox class="s_basic" name=specimens_magnification value="YES">magnification</td>
-  </tr>
-
-  <tr>
-    <td><input type=checkbox class="s_basic" name=specimens_comments value="YES">comments</td>
-    <td><input type=checkbox class="s_basic" name=specimens_created value="YES">created</td>
-    <td><input type=checkbox class="s_basic" name=specimens_modified value="YES">modified</td>
-</table>
-<br><small>* Note that some records may be listed multiple times in the output file, once for each part, when downloading specimens, genera, or species</small>
-</div>
-<div class="displayPanel">
-<span class="displayPanelHeader">Measurement fields</span></br>
-<table width="100%" class="tiny">
-  <tr>
-    <td width="25%" nowrap><input type=checkbox title="Check all" onClick="checkAll(this,'s_measurements');"><span class="medium">Check all</span></td>
-  </tr>
-
-  <tr>
-    <td><input type=checkbox class="s_measurements" name=specimens_specimens_measured value="YES">specimens measured</td>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
-  </tr>
-  <tr>
-    <td><input type=checkbox class="length_width s_measurements" name=specimens_length onClick="checkAll(this,'average');" value="YES">length</td>
-    <td><input type=checkbox class="length_width s_measurements" name=specimens_width onClick="checkAll(this,'average');" value="YES">width</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_height onClick="checkAll(this,'average');" value="YES">height</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_diagonal onClick="checkAll(this,'average');" value="YES">diagonal</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_diameter onClick="checkAll(this,'average');" value="YES">diameter</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_inflation onClick="checkAll(this,'average');" value="YES">inflation</td>
-  </tr>
-
-  <tr>
-    <td><input type=checkbox class="s_measurements" name=specimens_d13C onClick="checkAll(this,'average');" value="YES">&delta;<sup>13</sup>C</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_d18O onClick="checkAll(this,'average');" value="YES">&delta;<sup>18</sup>O</td>
-  </tr>
-
-  <tr>
-    <td><input type=checkbox class="average s_measurements" name=specimens_average onClick="checkAll(this,'length_width');" value="YES">average (geometric mean)</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_min onClick="checkAll(this,'length_width');" value="YES">min</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_max onClick="checkAll(this,'length_width');" value="YES">max</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_median onClick="checkAll(this,'length_width');" value="YES">median</td>
-    <td><input type=checkbox class="s_measurements" name=specimens_error onClick="checkAll(this,'length_width');" value="YES">error</td>
-  </tr>
-</table>
-</div>
-
-<p align=center>
-<input type=submit value="Create data set">
-</p>
-</div>
-
 </form>
 
 </div>
 
 <script language="JavaScript" type="text/javascript">
-    switchToPanel(1,6);
+    switchToPanel(1,5);
 </script> 
 

@@ -1,0 +1,41 @@
+
+<style>
+.leftCol	{
+	float: left;
+	clear: left;
+	width: 9em;
+}
+.rightCol	{
+	float: left;
+	clear: right;
+}
+</style>
+
+<center>
+<p class="pageTitle" style="margin-bottom: 0em;">Publication %%pub_no%%</p>
+<p class="verysmall">%%authors%%</p>
+
+<form action="%%write_url%%" method="post">
+<input type="hidden" name="action" value="editPublication">
+<input id="pub_no" type="hidden">
+<input id="other_pub_no" type="hidden">
+
+<div class="displayPanel" style="width: 60%; padding: 1em; text-align: left; overflow: hidden;">
+<div class="leftCol">Year:</div> <div class="rightCol"><input id="year" size="3"></div>
+<div class="leftCol">Title:</div> <div class="rightCol"><textarea id="title" rows="4" cols="44"></div>
+<div class="leftCol">Journal:</div> <div class="rightCol"><input id="journal" size="50"></div>
+<div class="leftCol">Editors:</div> <div class="rightCol"><input id="editors" size="50"></div>
+<div class="leftCol">Publisher:</div> <div class="rightCol"><input id="publisher" size="50"></div>
+<div class="leftCol">Volume and pages:</div> <div class="rightCol"><input id="volume" size="3">
+<input id="firstpage" size="3">
+<input id="lastpage" size="3"></div>
+<div class="leftCol">Notes/links/etc.:</div> <div class="rightCol"><input id="extras" size="50"></div>
+<div class="leftCol">DOI:</div> <div class="rightCol"><input id="doi" size="50"></div>
+
+<div class="leftCol">&nbsp;</div> <div class="rightCol" style="margin-top: 1em; padding-left: 4em;"><input type="submit" value="update"></div>
+</form>
+
+</div>
+
+</center>
+

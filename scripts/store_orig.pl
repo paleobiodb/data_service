@@ -4,7 +4,7 @@
 # 
 # Author: Michael McClennen
 
-use lib qw(../pblegacy);
+use lib qw(../cgi-bin/);
 #use lib qw(../pbdata/lib);
 use strict;	
 

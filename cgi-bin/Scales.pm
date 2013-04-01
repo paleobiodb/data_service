@@ -18,6 +18,57 @@ use strict;
 # +/+ processViewTimeScale
 # +/+ processEditScaleForm
 
+# JA 21.8.12
+sub intervals	{
+	my ($dbt,$hbo,$q) = @_;
+
+	my $sql = "SELECT i.eml_interval eml,i.interval_name name,i.interval_no no,i2.interval_name period FROM intervals i,intervals i2,interval_lookup il WHERE i.interval_no=il.interval_no AND i2.interval_no=period_no ORDER BY i.interval_name,i.interval_no ASC";
+	my @intervals = @{$dbt->getData($sql)};
+
+	# interval_lookup doesn't currently store the rank or region
+	$sql = "SELECT c.interval_no no,scale_rank,continent FROM scales s,correlations c,refs r WHERE s.scale_no=c.scale_no AND s.reference_no=r.reference_no ORDER BY pubyr,s.scale_no DESC";
+	my @attributes = @{$dbt->getData($sql)};
+
+	my (%rank,%continent);
+	for my $a ( @attributes )	{
+		if ( ! $rank{$a->{no}} )	{
+			$rank{$a->{no}} = $a->{scale_rank};
+			$continent{$a->{no}} = $a->{continent};
+		}
+	}
+
+	my %vars;
+	my (%epochs,%stages);
+	for my $i ( @intervals )	{
+		$i->{eml} =~ s/\/Upper//;
+		$i->{eml} =~ s/\/Lower//;
+		if ( $rank{$i->{no}} eq "epoch/series" )	{
+			$epochs{$i->{period}}++;
+		} elsif ( $rank{$i->{no}} eq "age/stage" && ! $i->{eml} )	{
+			$stages{$i->{period}}++;
+		}
+	}
+	my (%seen,%seen2);
+	for my $i ( @intervals )	{
+		if ( $rank{$i->{no}} eq "epoch/series" )	{
+			$vars{$i->{period}."_epochs"} .= qq|<a href="$READ_URL?a=displayInterval&amp;interval_no=$i->{no}">$i->{eml} $i->{name}</a><br>\n|;
+			$seen{$i->{period}}++;
+			my $quarter = int ( $epochs{$i->{period}} / 4 + 0.75 );
+			if ( $seen{$i->{period}} == $quarter || $seen{$i->{period}} == $quarter * 2 || $seen{$i->{period}} == $quarter * 3 )	{
+				$vars{$i->{period}."_epochs"} .= qq|</div>\n\n<div style="float: left; clear: none; margin-left: 2em;">\n|;
+			}
+		} elsif ( $rank{$i->{no}} eq "age/stage" && ! $i->{eml} )	{
+			$vars{$i->{period}."_stages"} .= qq|<a href="$READ_URL?a=displayInterval&amp;interval_no=$i->{no}">|.$i->{name}.qq|</a><br>\n|;
+			$seen2{$i->{period}}++;
+			my $quarter = int ( $stages{$i->{period}} / 4 + 0.75 );
+			if ( $seen2{$i->{period}} == $quarter || $seen2{$i->{period}} == $quarter * 2 || $seen2{$i->{period}} == $quarter * 3 )	{
+				$vars{$i->{period}."_stages"} .= qq|</div>\n\n<div style="float: left; clear: none; margin-left: 2em;">\n|;
+			}
+		}
+	}
+	print $hbo->populateHTML('intervals',\%vars);
+}
+
 sub searchScale {
 	my ($dbt,$hbo,$s,$q) = @_;
 	my $dbh = $dbt->dbh;
@@ -428,6 +479,10 @@ sub processEditScaleForm	{
 
 	my @lower_boundaries = $q->param('base_age');
 	my @comments_fields = $q->param('corr_comments');
+	# whoops
+	for my $i ( 0..$#comments_fields )	{
+		$comments_fields[$i] =~ s/'/\\'/g;
+	}
 
 	my %vars = (
 		reference_no=>$s->get('reference_no'),
@@ -437,6 +492,7 @@ sub processEditScaleForm	{
 		scale_rank  =>$q->param('scale_rank'),
 		scale_comments=>$q->param('scale_comments')
 	);
+	$vars{'scale_comments'} =~ s/'/\\'/g;
 	if ($scale_no > 0 )	{
 	    # update the scales table
 		$dbt->updateRecord($s,'scales','scale_no',$scale_no,\%vars);

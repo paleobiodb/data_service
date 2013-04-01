@@ -1,5 +1,5 @@
 package Person;
-use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD);
+use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $PAGE_TOP $PAGE_BOTTOM);
 use strict;
 use Reference;
 
@@ -129,7 +129,7 @@ sub showEnterers {
     my $html = "<div align=\"center\"><div class=\"pageTitle\">Data enterers</div></div>";
     $html .= "<p \"align=left\">The following students and research assistants have entered data into the Database.
     Institution names are placed in parentheses to indicate students who have since moved on.
-    <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify <a href=\"mailto:alroy\@nceas.ucsb.edu\">John Alroy.</a></i></p><br>";
+    <i>IMPORTANT: if your e-mail address is not on this list and should be, please notify the database administrator.</a></i></p><br>";
 
     my $sql = "SELECT first_name,last_name,institution,email FROM person WHERE role IN ('student','technician') OR role IS NULL";
     if ($fossil_record_only) {
@@ -207,6 +207,19 @@ sub formatAuthorizerTable	{
     $html .= "</table>";
     return $html;
 
+}
+
+sub scramble {
+    my $email = shift;
+    if ($email =~ /@/) {
+        my ($part1,$part2) = split(/@/,$email);
+        $part2 = reverse($part2);
+        $part1 = reverse($part1);
+        $part1 =~ s/'/\\'/g;
+        $part2 =~ s/'/\\'/g;
+        $email = "<script type=\"text/javascript\">descram('$part2','$part1')</script>";
+    }  
+    return $email;
 }
 
 # JA 22.12.07
@@ -336,12 +349,32 @@ sub homePageEntererList	{
 
 # JA 22.9.11
 sub publications	{
-	my $dbt = shift;
-	my $sql = "SELECT * FROM pubs";
-	my @pubs = @{$dbt->getData($sql)};
+	my ($dbt,$q,$s,$hbo) = @_;
+	my @pubs = @{$dbt->getData("SELECT * FROM pubs")};
+	my @other_pubs = @{$dbt->getData("SELECT * FROM other_pubs ORDER BY last_names,initials,year")};
+	my %vars;
+	if ( $s->get('enterer') )	{
+		$vars{'add_link'} = qq|<div class="verysmall" style="float: right; clear: both; margin-right: 3em;"><a href="?a=publicationForm&amp;new_entry=Y">add an entry</a></div>\n|;
+	}
+	$vars{'publications'} = formatPublications($s,\@pubs);
+	$vars{'other_publications'} = formatPublications($s,\@other_pubs);
+	$vars{'panel'} = ( $q->param('other_pub_no') > 0 ) ? "2" : "1";
+	print $hbo->populateHTML('publications', \%vars);
+}
+
+sub formatPublications	{
+	my ($s,$pubs) = @_;
 	my @lines;
-	for my $p ( @pubs )	{
-		my @authors = split /, /,$p->{'authors'};
+	for my $p ( @$pubs )	{
+		my @authors;
+		if ( $p->{'authors'} )	{
+			@authors = split /, /,$p->{'authors'};
+		} else	{
+			my @inits = split /,/,$p->{'initials'};
+			s/([A-Z])(\.)([A-Z])/$1. $3/g foreach @inits;
+			my @lasts = split /,/,$p->{'last_names'};
+			push @authors , $inits[$_]." ".$lasts[$_] foreach 0..$#inits;
+		}
 		my $authorlist = $authors[0];
 		if ( $#authors > 1 )	{
 			$authors[$#authors] = " and ".$authors[$#authors];
@@ -349,6 +382,9 @@ sub publications	{
 		}
 		elsif ( $#authors == 1 )	{
 			$authorlist = $authors[0]." and ".$authors[1];
+		}
+		if ( $p->{'pub_no'} )	{
+			$p->{'pub_no'} .= ".";
 		}
 		if ( ! $p->{'year'} )	{
 			$p->{'year'} = "In press";
@@ -363,32 +399,93 @@ sub publications	{
 			$editors = "<i>In</i> ".$p->{'editors'}." (ed.), ";
 		}
 		my $pages = ( $p->{'volume'} ) ? " ".$p->{'volume'} : "";
-		if ( $p->{'volume'} && $p->{'firstpage'} )	{
-			$pages .= ":".$p->{'firstpage'};
-		} elsif ( $p->{'firstpage'} )	{
-			$pages = ", pp. ".$p->{'firstpage'};
+		my $first = $p->{'first_page'};
+		my $last = $p->{'last_page'};
+		if ( $p->{'volume'} && $first )	{
+			$pages .= ":".$first;
+		} elsif ( $first )	{
+			$pages = ", pp. ".$first;
 		}
-		if ( $p->{'lastpage'} )	{
-			$pages .= "-".$p->{'lastpage'};
+		if ( $last )	{
+			$pages .= "-".$last;
 		}
-		my $extras = ( $p->{'extras'} ) ? " $p->{'extras'}" : "";
-		push @lines , '<p class="verysmall" style="margin-left: 1em; text-indent: -1em; margin-bottom: -0.8em;">'.$p->{'pub_no'}.". $authorlist. ".$p->{'year'}.". ".$p->{'title'}." $editors <i>".$p->{'journal'}."</i>$pages.$extras</p>\n";
+		$pages .= ".";
+		if ( $s->get('enterer') && $p->{'pub_no'} )	{
+			$pages .= qq| <a href="?a=publicationForm&amp;pub_no=$p->{'pub_no'}">(edit)</a>|;
+		} elsif ( $s->get('enterer') && $p->{'other_pub_no'} )	{
+			$pages .= qq| <a href="?a=publicationForm&amp;other_pub_no=$p->{'other_pub_no'}">(edit)</a>|;
+		}
+		$p->{'doi'} = ( $p->{'doi'} ) ? " DOI: http://dx.doi.org/".$p->{'doi'} : "";
+		my $extras = ( $p->{'extras'} ) ? " ".$p->{'extras'} : "";
+		$extras .= ( $p->{'doi'} && $p->{'extras'} ) ? " &mdash; " : "";
+		$extras .= $p->{'doi'};
+		push @lines , '<p class="verysmall" style="margin-left: 1em; text-indent: -1em; margin-bottom: -0.8em;"/>'.$p->{'pub_no'}." $authorlist. ".$p->{'year'}.". ".$p->{'title'}." $editors <i>".$p->{'journal'}."</i>$pages$extras</p>\n";
 	}
-	$lines[$#lines] =~ s/margin-bottom: .*;">/margin-bottom: 0.5em;">/;
-	return join("\n",@lines);
+	$lines[$#lines] =~ s/margin-bottom: .*"/"/;
+	return qq|<div style="float: left; clear: both;">\n|.join("\n",@lines)."</div>\n";
 }
 
-sub scramble {
-    my $email = shift;
-    if ($email =~ /@/) {
-        my ($part1,$part2) = split(/@/,$email);
-        $part2 = reverse($part2);
-        $part1 = reverse($part1);
-        $part1 =~ s/'/\\'/g;
-        $part2 =~ s/'/\\'/g;
-        $email = "<script type=\"text/javascript\">descram('$part2','$part1')</script>";
-    }  
-    return $email;
+sub publicationForm	{
+    my ($q,$dbt,$hbo) = @_;
+    print $hbo->stdIncludes($PAGE_TOP);
+    my $pub;
+    if ( $q->param('pub_no') )	{
+        $pub = ${$dbt->getData("SELECT * FROM pubs WHERE pub_no=".$q->param('pub_no'))}[0];
+    } elsif ( $q->param('other_pub_no') )	{
+        $pub = ${$dbt->getData("SELECT * FROM other_pubs WHERE other_pub_no=".$q->param('other_pub_no'))}[0];
+    }
+    my %vars;
+    $vars{$_} = $pub->{$_} foreach ( 'pub_no','other_pub_no','authors','year','title','journal','editors','publisher','volume','no','first_page','last_page','first_page','last_page','doi','extras' );
+    my @authors;
+    if ( ! $vars{'authors'} && $pub->{'last_names'} )	{
+        my @inits = split /,/,$pub->{'initials'};
+        s/(\.)([A-Z])/. $2/g foreach @inits;
+        s/^([A-Z])([A-Z])$/$1. $2./g foreach @inits;
+        my @lasts = split /,/,$pub->{'last_names'};
+        push @authors , $inits[$_]." ".$lasts[$_] foreach 0..$#lasts;
+        $vars{'authors'} = join(', ',@authors);
+    }
+    $vars{'new_entry'} = $q->param('new_entry');
+    print $hbo->populateHTML('publication_form', \%vars);
+    print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
+sub editPublication	{
+    my ($q,$dbt) = @_;
+    # author fields in official publication table pubs aren't editable because
+    #  they should never change and users might completely screw up the entries
+    #  if they were
+    my @authors = split /, /,$q->param('authors');
+    s/(,)( jr.)/$2/gi foreach @authors;
+    my @inits = @authors;
+    my @lasts = @authors;
+    s/ [A-Z]['\-\p{Latin}]+//g foreach @inits;
+    s/[A-Z](|\.\-[A-Z])\. //g foreach @lasts;
+    s/'/\\'/g foreach @lasts;
+    my (@updates,@values);
+    my @fields = ( 'year','title','journal','editors','publisher','volume','no','first_page','last_page','doi','extras' );
+    for my $f ( @fields )	{
+        my $p = $q->param($f);
+        $p =~ s/^( )$//;
+        $p =~ s/'/\\'/g;
+        $p = ( $p ) ? "'".$p."'" : "NULL";
+        push @updates , "$f=$p";
+        push @values , $p;
+    }
+    # note that the new_entry param is a pure sanity check
+    if ( $q->param('pub_no') )	{
+        $dbt->dbh->do("UPDATE pubs SET ".join(",",@updates)." WHERE pub_no=".$q->param('pub_no'));
+    } elsif ( $q->param('other_pub_no') )	{
+        push @updates , "initials='".join(',',@inits)."'";
+        push @updates , "last_names='".join(',',@lasts)."'";
+        $dbt->dbh->do("UPDATE other_pubs SET ".join(",",@updates)." WHERE other_pub_no=".$q->param('other_pub_no'));
+    } elsif ( $q->param('new_entry') eq "Y" )	{
+        push @fields , "initials,last_names";
+        push @values, "'".join(',',@inits)."'";
+        push @values , "'".join(',',@lasts)."'";
+	 $dbt->dbh->do("INSERT INTO other_pubs(".join(',',@fields).") VALUES (".join(',',@values).")");
+    }
+    main::publications();
 }
 
 

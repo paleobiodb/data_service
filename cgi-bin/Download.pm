@@ -1,23 +1,19 @@
 package Download;
 
 use PBDBUtil;
-use Classification;
 use TimeLookup;
 use TaxonInfo;
 use Validation;
 use Ecology;
 use Taxon;
-use Data::Dumper;
 use DBTransactionManager;
 use TaxaCache;
-use CGI::Carp;
-use Person;
-use Measurement;
 use Reference;
 use Text::CSV_XS;
 use URI::Escape;
 use Mail::Mailer;
-use Constants qw($READ_URL $WRITE_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
+use Class::Date(now);
+use Constants qw($READ_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
 
 use strict;
 
@@ -29,14 +25,11 @@ $|=1;
 # download form.  When writing the data out to files, these arrays are compared
 # to the query params to determine the file header line and then the data to
 # be written out. 
-my @collectionsFieldNames = qw(authorizer enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval direct_ma direct_ma_error direct_ma_method max_ma max_ma_error max_ma_method min_ma min_ma_error min_ma_method ma_max ma_min ma_mid interpolated_base interpolated_top interpolated_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
+my @collectionsFieldNames = qw(authorizer license enterer modifier collection_subset reference_no pubyr collection_name collection_aka country state county plate latdeg latmin latsec latdir latdec lngdeg lngmin lngsec lngdir lngdec latlng_basis paleolatdeg paleolatmin paleolatsec paleolatdir paleolatdec paleolngdeg paleolngmin paleolngsec paleolngdir paleolngdec altitude_value altitude_unit geogscale spatial_resolution geogcomments period epoch subepoch stage 10_my_bin FR2_bin max_interval min_interval direct_ma direct_ma_error direct_ma_method max_ma max_ma_error max_ma_method min_ma min_ma_error min_ma_method interval_base interval_top interval_midpoint interpolated_base interpolated_top interpolated_mid ma_max ma_min ma_mid emlperiod_max period_max emlperiod_min period_min emlepoch_max epoch_max emlepoch_min epoch_min emlintage_max intage_max emlintage_min intage_min emllocage_max locage_max emllocage_min locage_min zone research_group geological_group formation member localsection localbed localbedunit localorder regionalsection regionalbed regionalbedunit regionalorder stratscale stratcomments lithdescript lithadj lithification minor_lithology lithology1 fossilsfrom1 lithification2 minor_lithology2 lithadj2 lithology2 fossilsfrom2 environment tectonic_setting pres_mode geology_comments spatial_resolution temporal_resolution feed_pred_traces encrustation bioerosion fragmentation sorting dissassoc_minor_elems dissassoc_maj_elems art_whole_bodies disart_assoc_maj_elems seq_strat lagerstatten concentration orientation preservation_quality abund_in_sediment sieve_size_min sieve_size_max assembl_comps taphonomy_comments collection_type collection_coverage coll_meth collection_size collection_size_unit museum collectors collection_dates rock_censused_unit rock_censused collection_comments taxonomy_comments release_date access_level created modified);
 my @occFieldNames = qw(authorizer enterer modifier occurrence_no abund_value abund_unit reference_no comments created modified plant_organ plant_organ2);
 my @occTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
 my @reidFieldNames = qw(authorizer enterer modifier reid_no reference_no comments created modified modified_temp plant_organ);
 my @reidTaxonFieldNames = qw(genus_reso genus_name subgenus_reso subgenus_name species_reso species_name taxon_no);
-my @specimenFieldNames = qw(authorizer enterer modifier specimen_no reference_no specimens_measured specimen_id specimen_side specimen_part specimen_coverage measurement_source magnification specimen_count comments created modified);
-my @measurementTypes = qw(average min max median error error_unit);
-my @measurementFields =  qw(length width height diagonal inflation);
 my @plantOrganFieldNames = ('unassigned','leaf','seed/fruit','axis','plant debris','marine palyn','microspore','megaspore','flower','seed repro','non-seed repro','wood','sterile axis','fertile axis','root','cuticle','multi organs');
 my @refsFieldNames = qw(authorizer enterer modifier reference_no author1init author1last author2init author2last otherauthors pubyr reftitle pubtitle editors pubvol pubno firstpage lastpage publication_type basis language doi comments project_name project_ref_no created modified);
 my @paleozoic = qw(cambrian ordovician silurian devonian carboniferous permian);
@@ -45,6 +38,7 @@ my @ecoFields = (); # Note: generated at runtime in setupQueryFields
 my @pubyr = ();
 my @continents = ('North America','South America','Europe','Africa','Antarctica','Asia','Australia','Indian Ocean','Oceania');
 my @paleocontinents = ('paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan');
+my (@checkedcontinents,@uncheckedcontinents,@checkedpaleocontinents);
 my @reso_types_group = ('aff.','cf.','ex gr.','new','sensu lato','?','"','informal','other');
 
 my $OUT_HTTP_DIR = "/public/downloads";
@@ -93,7 +87,7 @@ sub new {
 # Main handling routine
 sub buildDownload {
     my $self = shift;
-    my ($q,$s) = ($self->{'q'},$self->{'s'});
+    my ($q,$s,$hbo) = ($self->{'q'},$self->{'s'},$self->{'hbo'});
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
 
@@ -111,9 +105,11 @@ sub buildDownload {
     my $inputIsOK = $self->checkInput($q);
     return unless $inputIsOK;
 
+    geographyOptions($q);
+
     my ($lumpedResults,$allResults) = $self->queryDatabase();
 
-    my (%onhour,%onref,%byauth,%first,%last);
+    my (%onhour,%onref,%byauth,%first,%last,%initials,%first_plus);
     # tally hours of keystroking if possible; otherwise tally references used
     #  for entry of collections and guesstimate hours using the known 1.7:1
     #  ratio in keystroked data
@@ -136,10 +132,15 @@ sub buildDownload {
     $hours += 1.7 * ( $#r + 1 );
     my @authnos = keys %byauth;
     @authnos = sort { $byauth{$b} <=> $byauth{$a} } @authnos;
-    my $sql = "SELECT first_name,last_name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."') ORDER BY last_name,first_name";
-    my @people = @{$dbt->getData($sql)};
-    $first{$_->{'person_no'}} = $_->{'first_name'} foreach @people;
-    $last{$_->{'person_no'}} = $_->{'last_name'} foreach @people;
+    my $sql = "SELECT first_name,middle,last_name,name,person_no FROM person WHERE person_no IN ('".join("','",@authnos)."') ORDER BY last_name,first_name";
+    for my $p ( @{$dbt->getData($sql)} )	{
+        $first{$p->{'person_no'}} = $p->{'first_name'};
+        $last{$p->{'person_no'}} = $p->{'last_name'};
+        $initials{$p->{'person_no'}} = $p->{'first_name'}." ".$p->{'middle'};
+        $initials{$p->{'person_no'}} =~ s/([A-Za-z])[a-z]* /$1. /;
+        $initials{$p->{'person_no'}} =~ s/ //g;
+        $first_plus{$p->{'person_no'}} = $p->{'first_name'}." ".$p->{'middle'};
+    }
     # don't prominently list authorizers contributing less than 10 person days =
     #  80 person hours (arbitrary, but seems good to me)
     my @others;
@@ -162,16 +163,20 @@ sub buildDownload {
         ($scaleCount,$scaleFile) = $self->printScaleFile($allResults);
     }
 
-    if ( $q->param("output_data") =~ /occurrence|specimens/ ) {
+    if ( $q->param("output_data") =~ /occurrence/ ) {
         ($taxaCount,$taxaFile) = $self->printAbundFile($allResults);
     }
-
-    ($refsCount,$refsFile) = $self->printRefsFile($allResults);
-  
+    
+    my ($dummy, $ris_count, $bad_list);
+    
+    ($refsCount, $refsFile, $dummy, $ris_count, $bad_list) = $self->printRefsFile($allResults);
+    my $risFile = $refsFile;
+    $risFile =~ s/-refs\..*/-ris.txt/;
+    
     if ($q->param('output_data') =~ /matrix/i) {
         ($nameCount,$mainCount,$mainFile) = $self->printMatrix($lumpedResults);
         if ($nameCount =~ /^ERROR/) {
-            push @form_errors, "The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the admins (pbdbadmin\@nceas.ucsb.edu) if this is a problem";
+            push @form_errors, "The matrix is currently limited to $matrix_limit collections and $mainCount were returned. Please email the database administrator if this is a problem";
         }
     } elsif ($q->param('output_data') =~ /conjunct/i) {
         ($mainCount,$mainFile,$collFile,$colls) = $self->printCONJUNCT($lumpedResults);
@@ -197,40 +202,56 @@ sub buildDownload {
 
     print "<div align=\"center\"><p class=\"pageTitle\">Download results</p></div>\n\n";
     if ( $hours >= $hourlimit )	{
-        print qq|
-<div class="displayPanel" id="terms">
-<p>Your download is large. If you intend to use the data in a publication, we ask you to:</p>
-<ul>
-<li>Notify some of the major contributors about your research.</li>
-<li>Acknowledge the major contributors by name in your paper.</li>
-<li>Cite the relevant <a href="$READ_URL?action=displayPage&amp;page=OSA">Online Systematics Archive</a>.</li>
-<li>If none are relevant, give a generic citation to the Paleobiology Database including the date of access.
-<li><a href="$READ_URL?action=displayPage&amp;page=join_us">Join the PaleoDB</a> and contribute more data.</li>
-<li>At a bare minimum, <a href="$READ_URL?action=displayPage&amp;page=publications">request a publication number</a> once your paper is accepted.</li>
-</li>
-</ul>
-<p>The major contributors to this data set were:</p>
-<ul>
-|;
-printf "<li>$first{$_} $last{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
-
-print qq|
-</ul>
-<p class="small">Each percentage is based on the estimated amount of time spent entering data by the authorizer and associated data enterers. The grand total is $hours hours (equivalent to $monthyears). The estimate is based on (1) date stamps for keystroked collections and (2) counts of published references used to document uploaded collections.</p>
-<p class="small">Additional contributors include |;
-@others = sort { $last{$a} cmp $last{$b} || $first{$a} cmp $first{$b} } @others;
-$others[$_] = $first{$others[$_]}." ".$last{$others[$_]} foreach 0..$#others;
-$others[$#others] = "and ".$others[$#others];
-print join(', ',@others).qq|.</p>
-<p>If you agree to these terms, <a href="#" onClick=\"document.getElementById('mainPanel').style.display='inline'; document.getElementById('terms').style.display='none';\">click here</a> to access the data.</p>
-|;
-if ( $cites )	{
-    print "<p>Here are the publications that yielded the most records in this data set, in order of importance. Please cite some or all of them in any publication based on it. If possible, please also include the <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a> file as online supplementary information.</p>\n<p>$cites</p>\n";
-}
-print qq|
-</div>
-<div id="mainPanel" style="display: none;">
-|;
+        my (%vars,@pb_authors,@au);
+        push @pb_authors , "$initials{$_} $last{$_}" foreach @authnos;
+        $pb_authors[0] = "$last{$authnos[0]}, $initials{$authnos[0]}";
+        s/([A-Z])(\.)([A-Z])/$1$2 $3/g foreach @pb_authors;
+        # needed if there are two middle initials
+        s/([A-Z])(\.)([A-Z])/$1$2 $3/g foreach @pb_authors;
+        if ( $#pb_authors > 0 )	{
+            $pb_authors[$#pb_authors] = "and ".$pb_authors[$#pb_authors];
+        }
+        $vars{'paleobiology_authors'} = join(', ',@pb_authors).".";
+        $vars{'paleobiology_authors'} =~ s/\.\././;
+        if ( $#pb_authors == 1 )	{
+            $vars{'paleobiology_authors'} =~ s/, and / and /;
+        }
+        push @au , "$last{$_}, $first_plus{$_}" foreach @authnos;
+        $vars{'major_contributors'} = join('<br>AU ',@au);
+        if ( $q->param('max_interval_name') || $q->param('taxon_name') )	{
+            $vars{'keywords'} = "KW ";
+            $vars{'keywords'} .= ( $q->param($_) ) ? $q->param($_)."<br>" : "" foreach ('max_interval_name','min_interval_name','taxon_name');
+        }
+        $vars{'major_contributor_list'} .= sprintf "<li>$first{$_} $last{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
+        my $interval = ( $q->param('max_interval_name') ) ? " ".$q->param('max_interval_name') : "";
+        $interval .= ( $q->param('min_interval_name') ) ? " to ".$q->param('min_interval_name') : "";
+        $vars{'title'} = ( $q->param('taxon_name') ) ? "Taxonomic occurrences of$interval ".$q->param('taxon_name') : "Taxonomic occurrences";
+        my @places =  ( @checkedcontinents && $#checkedcontinents < $#continents ) ?  @checkedcontinents : ( @checkedpaleocontinents ) ? @checkedpaleocontinents : ( $q->param('country') ) ? $q->param('country') : "";
+        if ( $#places > 0 )	{
+            $places[$#places] = "and ".$places[$#places];
+        }
+        $vars{'title'} .= ( $places[0] ne "" ) ? " from ".join(', ',@places) : "";
+        if ( $#places == 1 )	{
+            $vars{'title'} =~ s/, and / and /;
+        }
+        $vars{'occurrence_count'} = scalar @$allResults;
+        ($vars{'year'},$vars{'month'},$vars{'day'}) = split /-/,now();
+        $vars{'day'} =~ s/^0//;
+        $vars{'day'} =~ s/ .*//;
+        my @toMonth = ("January","February","March","April","May","June","July","August","September","October","November","December");
+        $vars{'month'} = $toMonth[$vars{'month'}];
+        $vars{'ref_count'} = $refsCount;
+        $vars{'contributor_count'} = $#authnos + $#others + 2;
+        @others = sort { $last{$a} cmp $last{$b} || $first{$a} cmp $first{$b} } @others;
+        $others[$_] = $first{$others[$_]}." ".$last{$others[$_]} foreach 0..$#others;
+        $vars{'hours'} = $hours;
+        $vars{'monthyears'} = $monthyears;
+        $others[$#others] = "and ".$others[$#others];
+        $vars{'other_contributors'} = join(', ',@others);
+        $vars{'file_path'} = "$OUT_HTTP_DIR/$refsFile";
+        $vars{'file_name'} = $refsFile;
+        $vars{'cites'} = $cites . '</div>';
+        print $hbo->populateHTML('download_terms', \%vars);
     }
 
     print qq|<div class="displayPanel" style="padding-top: 1em; padding-left: 1em; margin-left: 3em; margin-right: 3em; overflow: hidden;">|;
@@ -264,19 +285,29 @@ print qq|
                 print "$colls collections were printed to <a href=\"$OUT_HTTP_DIR/$collFile\">$collFile</a><br>\n";
             }
         }
-        if ( $q->param("output_data") =~ /occurrence|specimens/ ) {
+        if ( $q->param("output_data") =~ /occurrence/ ) {
             if ( $taxaCount == 1 )	{
                 print "1 taxonomic range was printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
             } else	{
                 print "$taxaCount taxonomic ranges were printed to <a href=\"$OUT_HTTP_DIR/$taxaFile\">$taxaFile</a><br>\n";
             }
         } 
+	
         if ( $refsCount == 1 )	{
             print "$refsCount reference was printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
         } else	{
             print "$refsCount references were printed to <a href=\"$OUT_HTTP_DIR/$refsFile\">$refsFile</a><br>\n";
         }
-        my $fileNames = $mainFile."/".$taxaFile."/".$refsFile;
+	
+	if ( $ris_count > 0 ) {
+	    print "$ris_count references were printed to <a href=\"$OUT_HTTP_DIR/$risFile\">$risFile</a><br>\n";
+	    if ( @$bad_list ) {
+		print "<p>The following references could not be printed due to erroneous data:<ul>\n";
+		print "<li>$_</li>\n" foreach @$bad_list;
+		print "</ul></p>\n";
+	    }
+	}
+        my $fileNames = $mainFile."/".$taxaFile."/".$refsFile."/".$risFile;
         if ( $q->param('time_scale') )    {
             print "$scaleCount time intervals were printed to <a href=\"$OUT_HTTP_DIR/$scaleFile\">$scaleFile</a><br>\n";
             $fileNames .= "/".$scaleFile;
@@ -287,12 +318,12 @@ print qq|
         print "</div>\n\n";
         print "<p><i>No occurrences met the search criteria</i></p>";
     }
-    print qq|<p align="center" style="white-space: nowrap;"><a href="$READ_URL?action=displayDownloadForm">Do another download</a> - |;
-    print qq|<a href="$READ_URL?action=displayCurveForm">Generate diversity curves</a>|;
+    print qq|<p align="center" style="white-space: nowrap;"><a href="?action=displayDownloadForm">Do another download</a> - |;
+    print qq|<a href="?action=displayCurveForm">Generate diversity curves</a>|;
     if ( $hours >= $hourlimit )	{
         print qq| - <a href="#" onClick=\"document.getElementById('mainPanel').style.display='none'; document.getElementById('terms').style.display='inline';\">Show terms again</a>|;
     }
-    #print qq|<a href="$READ_URL?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
+    #print qq|<a href="?action=PASTQueryForm">Analyze with PAST functions</a></p></div>|;
 
     print "</div>\n\n</div>\n\n";
     if ( $hours >= $hourlimit )	{
@@ -303,7 +334,7 @@ print qq|
     #  user opens a download form JA 28.11.11
     if ( $s->get("enterer_no") > 0 )	{
         # fields with unusual defaults
-        my %defaults = ('form_type' => 'full', 'output_data' => 'occurrence list', 'output_format' => 'csv', 'research_group_restricted_to' => '0', 'created_before_after' => 'before', 'published_before_after' => 'after', 'occurrence_count_qualifier' => 'less', 'abundance_count_qualifier' => 'less', 'extant_extinct' => 'both', 'abundance_required' => 'all', 'get_global_specimens' => '1', 'collections_reference_no' => 'YES', 'collections_10_my_bin' => 'YES', 'collections_max_interval_no' => 'YES', 'collections_min_interval_no' => 'YES', 'occurrences_genus_name' => 'YES', 'occurrences_genus_reso' => 'YES' );
+        my %defaults = ('form_type' => 'full', 'output_data' => 'occurrence list', 'output_format' => 'csv', 'research_group_restricted_to' => '0', 'created_before_after' => 'before', 'published_before_after' => 'after', 'occurrence_count_qualifier' => 'less', 'abundance_count_qualifier' => 'less', 'extant_extinct' => 'both', 'abundance_required' => 'all', 'collections_reference_no' => 'YES', 'collections_10_my_bin' => 'YES', 'collections_max_interval_no' => 'YES', 'collections_min_interval_no' => 'YES', 'occurrences_genus_name' => 'YES', 'occurrences_genus_reso' => 'YES' );
         my @pairs;
         # common defaults are handled here
         for my $p ( $q->param() )	{
@@ -461,7 +492,7 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup('Environmental zones:','zone_',\@zone_group);
 
     # Preservation mode
-    my @pres_mode_group= ('cast','adpression','soft parts','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified','other');
+    my @pres_mode_group= ('cast','adpression','soft_parts','original_aragonite','mold/impression','replaced_with_silica','trace','charcoalification','coalified','other');
     $html .= $self->retellOptionsGroup('Preservation modes:','pres_mode_',\@pres_mode_group);
 
     # Collection methods
@@ -474,30 +505,17 @@ sub retellOptions {
     $html .= $self->retellOptionsGroup('Reasons for describing included collections:','collection_type_',\@collection_types_group);
 
     # Continents or country
-    my (@checkedcontinents,@uncheckedcontinents,@checkedpaleocontinents);
     # If a country was selected, ignore the continents JA 6.7.02
     if ( $q->param("country") )    {
         $html .= $self->retellOptionsRow ( "Country", $q->param("include_exclude_country") . " " . $q->param("country") );
     }
     else    {
-        for my $c ( @continents )	{
-            if ( $q->param($c))	{
-                push ( @checkedcontinents, $c );
-            } else	{
-                push ( @uncheckedcontinents, $c );
-            }
-        }
         if ( $#checkedcontinents > -1 && $#continents > $#checkedcontinents )	{
             $html .= $self->retellOptionsRow ( "Continents", join (  ", ", @checkedcontinents ) );
             $q->param($_ => '') foreach @checkedcontinents;
             $q->param($_ => 'NO') foreach @uncheckedcontinents;
         }
 
-        for my $p ( @paleocontinents )	{
-            if ( $q->param($p) )	{
-                push ( @checkedpaleocontinents, $p );
-            }
-        }
         if ( $#checkedpaleocontinents > -1 ) {
             $html .= $self->retellOptionsRow ( "Paleocontinents", join (  ", ", @checkedpaleocontinents ) );
         }
@@ -576,7 +594,7 @@ sub retellOptions {
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("occurrence_count_qualifier")." than",$q->param("occurrence_count")." occurrences") if (int($q->param("occurrence_count")));
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("abundance_count_qualifier")." than",$q->param("abundance_count")." specimens/individuals") if (int($q->param("abundance_count")));
 
-    if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+    if ($q->param('output_data') =~ /occurrence|genera|species/) {
         $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?","yes") if ($q->param('lump_genera') eq 'YES');
         $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?","yes") if ($q->param("split_subgenera") eq 'YES');
         $html .= $self->retellOptionsRow ( "Replace names with reidentifications?","no") if ($q->param('repace_with_reid') eq 'NO');
@@ -624,7 +642,7 @@ sub retellOptions {
         }
 
         my @occFields = ();
-        if ($q->param('output_data') =~ /occurrence|specimens/) {
+        if ($q->param('output_data') =~ /occurrence/) {
             foreach my $field ( @occTaxonFieldNames) {
                 if( $q->param ( "occurrences_".$field ) ){ 
                     if ($field =~ /parent_name|family_name|order_name|class_name/) {
@@ -682,9 +700,10 @@ sub retellOptions {
         
     } 
 
-    if ($q->param('output_data') =~ /occurrence|collections|specimens/) {
+    if ($q->param('output_data') =~ /occurrence|collections/) {
         # collection table fields
-        my @collFields = ( "collection_no");
+        # these are required
+        my @collFields = ( 'collection_no','authorizer','license' );
         foreach my $field ( @collectionsFieldNames ) {
             if ( $q->param ( 'collections_'.$field ) ) { push ( @collFields, 'collections_'.$field ); }
         }
@@ -692,30 +711,6 @@ sub retellOptions {
         $fieldnames =~ s/collections_//g;
         $html .= $self->retellOptionsRow ( "Collection output fields", $fieldnames );
     }
-
-    # specimen/measurement table fields
-    my @specimenFields = ();
-
-    if ($q->param('output_data') eq 'specimens') {
-        foreach my $f (@specimenFieldNames) {
-            if ($q->param('specimens_'.$f)) {
-                push (@specimenFields, 'specimens_'.$f); 
-            }
-        }
-    } else {
-        if ($q->param('specimens_specimens_measured')) {
-            push @specimenFields,'specimens_specimens_measured';
-        }
-    } 
-
-    foreach my $t (@measurementTypes) {
-        foreach my $f (@measurementFields) {
-            if ($q->param('specimens_'.$t) && $q->param('specimens_'.$f)) {
-                push (@specimenFields,'specimens_'.$t."_".$f);
-            }   
-        }
-    }
-    $html .= $self->retellOptionsRow ( "Specimen output fields", join ( "<br>", @specimenFields) ) if (@specimenFields);
 
     $html .= "</table>\n</div>\n";
 
@@ -763,18 +758,31 @@ sub retellOptionsRow {
 }
 
 
+# 4.2.13 JA
+# figures out selected geography options for use in several places
+sub geographyOptions	{
+	my $q = shift;
+	for my $c ( @continents )	{
+		if ( $q->param($c) eq 'YES' )	{
+			push @checkedcontinents , $c;
+		} else	{
+                	push @uncheckedcontinents, $c;
+		}
+	}
+	for my $p ( @paleocontinents )	{
+		if ( $q->param($p) eq 'YES' )	{
+			push @checkedpaleocontinents, $p;
+			$checkedpaleocontinents[$#checkedpaleocontinents] =~ s/paleo //;
+		}
+	}
+}
+
 # 6.7.02 JA
 sub getCountryString {
     my $self = shift;
     my $q = $self->{'q'};
     my $dbh = $self->{'dbh'};
 
-    my @checkedcontinents;
-    for my $c ( @continents )	{
-        if ( $q->param($c) eq 'YES' )	{
-            push @checkedcontinents , $c;
-        }
-    }
 
     if ( $#continents == $#checkedcontinents )	{
         $q->param($_ => '') foreach @continents;
@@ -830,20 +838,12 @@ sub getPlateString    {
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
 
-    my @checked;
-    for my $p ( @paleocontinents )	{
-        if ( $q->param($p) eq "YES" )    {
-            push @checked , $p;
-            $checked[$#checked] =~ s/paleo //;
-        }
-    }
-
-    if ( ! @checked || $#paleocontinents == $#checked )	{
+    if ( ! @checkedpaleocontinents || $#paleocontinents == $#checkedpaleocontinents )	{
         return "";
     }
 
     my (@plates,%platein);
-    my $sql = "SELECT plate FROM plates WHERE paleocontinent IN ('" . join("','",@checked) . "')";
+    my $sql = "SELECT plate FROM plates WHERE paleocontinent IN ('" . join("','",@checkedpaleocontinents) . "')";
     my @platerefs = @{$dbt->getData($sql)};
     if ( ! @platerefs )	{
         return "";
@@ -1423,7 +1423,8 @@ sub getPreservationModeString {
     my $q = $self->{'q'};
     my $dbh = $self->{'dbh'};
 
-    my @pres_modes_all = ('cast','adpression','soft parts','original aragonite','mold/impression','replaced with silica','trace','charcoalification','coalified');
+    # the form should use underscores, the database doesn't JA 28.9.12
+    my @pres_modes_all = ('cast','adpression','soft_parts','original_aragonite','mold/impression','replaced_with_silica','trace','charcoalification','coalified');
     my $has_other = ($q->param('pres_mode_other') eq 'YES') ? 1 : 0; 
 
     # If its in the form, stick in in the array
@@ -1443,11 +1444,15 @@ sub getPreservationModeString {
                 delete $seen_modes{$_};
             }
             my @pres_modes_missing = keys %seen_modes;
+            $pres_modes_missing[$_] =~ s/_/ /g foreach 0..$#pres_modes_missing;
+            $pres_modes[$_] =~ s/_/ /g foreach 0..$#pres_modes;
             $sql = "(pres_mode IS NULL OR (".join(" AND ", map{'NOT FIND_IN_SET('.$dbh->quote($_).',pres_mode)'} @pres_modes_missing)."))";
         } else {
+            $pres_modes[$_] =~ s/_/ /g foreach 0..$#pres_modes;
             $sql = "(".join(" OR ",  map{'FIND_IN_SET('.$dbh->quote($_).',pres_mode)'} @pres_modes).")";
         }
     }
+    return $sql;
 
 }
 
@@ -1625,7 +1630,10 @@ sub getOccurrencesWhereClause {
 
    
     if ($q->param('authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
+        my $name = $q->param('authorizer_reversed');
+        $name =~ s/^\s*(.*)\s*,\s*(.*)\s*$/$2 $1/;
+        $name =~ s/'/\\'/g;
+        my $sql = "SELECT person_no FROM person WHERE name='$name'";
         my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @all_where, "o.authorizer_no=".$authorizer_no if ($authorizer_no);
     }
@@ -1674,7 +1682,10 @@ sub getCollectionsWhereClause {
 
     # This is handled by getOccurrencesWhereClause if we're getting occs data.
     if($q->param('output_data') eq 'collections' && $q->param('authorizer_reversed')) {
-        my $sql = "SELECT person_no FROM person WHERE name like ".$dbh->quote(Person::reverseName($q->param('authorizer_reversed')));
+        my $name = $q->param('authorizer_reversed');
+        $name =~ s/^\s*(.*)\s*,\s*(.*)\s*$/$2 $1/;
+        $name =~ s/'/\\'/g;
+        my $sql = "SELECT person_no FROM person WHERE name='$name'";
         my $authorizer_no = ${$dbt->getData($sql)}[0]->{'person_no'};
         push @where, "c.authorizer_no=".$authorizer_no if ($authorizer_no);
     }
@@ -1832,28 +1843,11 @@ sub queryDatabase {
     my (@fields,@where,@occ_where,@reid_where,$taxon_where,@tables,@from,@groupby,@left_joins);
 
 
-    @fields = ('c.authorizer_no','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short",'CONCAT(c.enterer_no," ",TO_DAYS(c.created),HOUR(c.created)) AS personhour','c.upload');
+    @fields = ('c.authorizer_no','c.authorizer AS `c.authorizer`','c.license','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short",'CONCAT(c.enterer_no," ",TO_DAYS(c.created),HOUR(c.created)) AS personhour','c.upload');
     @tables = ('collections c');
     @where = $self->getCollectionsWhereClause();
 
-    # This confusing block relates to getting specimen measurement data that aren't
-    # tied to a specific occurrence/collection - if these fields are set, we have to throw out
-    # those data, since we can't know if it's valid. Anything that filters collections should
-    # cause us to throw out this data pretty much, except record created date (hence the grep)
-    # this may be a bit incomplete, gl trying to keep this logic up to date PS 07/18/2005
-    if (scalar(grep(!/created/,@where)) ||
-        $q->param('abundance_required') eq 'abundances' ||
-        $q->param('abundance_required') eq 'specimens' ||
-        $q->param('pubyr')) {
-        $q->param('get_global_specimens'=>0);
-        $self->dbg("get_global_specimens is 0");
-    } else {
-        $q->param('get_global_specimens'=>1);
-    }
-
- 
-    # Getting only specimens, occurrences, or collections
-    if ($q->param('output_data') =~ /specimens|occurrence|collections/) {
+    if ($q->param('output_data') =~ /occurrence|collections/) {
         my @collection_columns = $dbt->getTableColumns('collections');
         if ( $q->param('incomplete_abundances') eq "NO" && ! $q->param('collections_collection_coverage') )	{
             push @fields,"c.collection_coverage AS `c.collection_coverage`";
@@ -1888,9 +1882,6 @@ sub queryDatabase {
         if ($q->param('collections_coords') eq 'YES')	{
             push @fields , "c.".$_." AS `c.".$_."`" foreach ( 'lngdeg','lngmin','lngsec','lngdec','lngdir','latdeg','latmin','latsec','latdec','latdir' );
         }
-        if ($q->param('collections_authorizer') eq 'YES')	{
-            push @fields, 'c.authorizer';
-        }
         if ($q->param('collections_enterer') eq 'YES')	{
             push @fields, 'c.enterer';
         }
@@ -1902,12 +1893,12 @@ sub queryDatabase {
     # We'll want to join with the reid ids if we're hitting the occurrences table,
     # or if we're getting collections and filtering using the taxon_no in the occurrences table
     # or excluding collections based on occurrence or abundance counts
-    my $join_reids = ($q->param('output_data') =~ /occurrence|specimens|genera|species/ || $q->param('taxon_name') || $q->param('exclude_taxon_name') || $q->param('occurrence_count') || $q->param('abundance_count')) ? 1 : 0;
+    my $join_reids = ($q->param('output_data') =~ /occurrence|genera|species/ || $q->param('taxon_name') || $q->param('exclude_taxon_name') || $q->param('occurrence_count') || $q->param('abundance_count')) ? 1 : 0;
     if ($join_reids) {
         push @tables, 'occurrences o';
         unshift @where, 'c.collection_no = o.collection_no';
 
-        if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+        if ($q->param('output_data') =~ /occurrence|genera|species/) {
             push @fields, 'o.occurrence_no AS `o.occurrence_no`', 
                        'o.reference_no AS `o.reference_no`', 
                        'o.genus_reso AS `o.genus_reso`', 
@@ -2000,42 +1991,6 @@ sub queryDatabase {
         }
     }
 
-    if ($q->param('output_data') =~ /specimens/) {
-        push @fields, 's.specimen_no',
-                       's.specimens_measured', 
-                       's.specimen_part';
-        push @tables, 'specimens s';
-        unshift @where, 'o.occurrence_no = s.occurrence_no';
-
-        my @specimen_columns = $dbt->getTableColumns('specimens');
-        foreach my $c (@specimen_columns) {
-            if ($q->param("specimens_".$c)) {
-                push @fields,"s.$c AS `s.$c`";
-            }
-        }
-
-        if ($q->param('specimens_authorizer') eq 'YES') {
-            push @left_joins, "LEFT JOIN person ps1 ON s.authorizer_no=ps1.person_no";
-            push @fields, 'ps1.name AS `s.authorizer`';
-        }
-        if ($q->param('specimens_enterer') eq 'YES') {
-            push @left_joins, "LEFT JOIN person ps2 ON s.enterer_no=ps2.person_no";
-            push @fields, 'ps2.name AS `s.enterer`';
-        }
-        if ($q->param('specimens_modifier') eq 'YES') {
-            push @left_joins, "LEFT JOIN person ps3 ON s.modifier_no=ps3.person_no";
-            push @fields, 'ps3.name AS `s.modifier`';
-        }
-    } elsif ($q->param('include_specimen_fields')) {
-        if ($q->param('output_data') =~ /collections/ && !$join_reids) {
-            push @left_joins , "LEFT JOIN occurrences o ON o.collection_no=c.collection_no LEFT JOIN specimens s ON s.occurrence_no = o.occurrence_no";
-            push @fields,"(COUNT(DISTINCT s.specimen_no) > 0) specimens_exist";
-        } else {
-            push @left_joins , "LEFT JOIN specimens s ON s.occurrence_no = o.occurrence_no";
-            push @fields,"(COUNT(DISTINCT s.specimen_no) > 0) specimens_exist";
-        }
-    }
-    
     # Handle matching against secondary refs
     if($q->param('research_group') =~ /^(?:divergence|decapod|ETE|5%|1%|PACED|PGAP)$/ || ( $q->param('restrict_to_field') =~ /reference_no/ && $q->param('restrict_to_list') =~ /[0-9]/ ) )	{
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.collection_no=c.collection_no";
@@ -2055,7 +2010,7 @@ sub queryDatabase {
         } else {
             push @groupby, 'o.occurrence_no';
         }
-    } elsif ($q->param('output_data') eq 'collections' && ($q->param('research_group') || $join_reids || $q->param('include_specimen_fields'))) { # = collections
+    } elsif ($q->param('output_data') eq 'collections' && ($q->param('research_group') || $join_reids )) { # = collections
        push @groupby, 'c.collection_no';
     }
 
@@ -2119,52 +2074,6 @@ sub queryDatabase {
             }
             $sql = $sql1;
         }
-
-        # This is a tricky part of the code. This will get records for specimens/genera
-        # for which there is just a specimen measurement but there is no occurrence.  
-        if ($q->param('output_data') =~ /^(?:genera|specimens|species)$/ && 
-            $q->param('get_global_specimens') &&
-            $q->param('taxon_name') && 
-            $q->param('include_specimen_fields') ) {
-            my $taxon_nos_clause = "";
-            if ($taxon_where =~ /(taxon_no\s+IN\s+\(.*?\))/) {
-                $taxon_nos_clause = $1;
-            }
-            if ($taxon_nos_clause) {
-                my @specimen_fields = ();
-                for (@fields) {
-                    if ($_ =~ /^s\.|specimens\.enterer|specimens\.authorizer|specimens\.modifier/) {
-                        push @specimen_fields, $_;
-                    } elsif ($_ =~ /specimens_exist/) {
-                        push @specimen_fields, 1;
-                    } elsif ($_ =~ /o\.taxon_no/) {
-                        push @specimen_fields, 's.taxon_no AS `o.taxon_no`';
-                    } elsif ($_ =~ /o\.genus_name/) {
-                        push @specimen_fields, 'substring_index(taxon_name," ",1) AS `o.genus_name`';
-                    } elsif ($_ =~ /o\.species_name/) {
-                        # If taxon name containts a space, species name is whatever follow that space
-                        # If no space, species name is sp. if rank is a genus, indet if its higher order
-                        push @specimen_fields, 'IF(taxon_name REGEXP " ",trim(trim(leading substring_index(taxon_name," ",1) from taxon_name)),IF(taxon_rank REGEXP "genus","sp.","indet.")) AS `o.species_name`';
-                    } else {
-                        push @specimen_fields, 'NULL';
-                    }
-            }
-                my $sql3 = "SELECT ".join(",",@specimen_fields).
-                         " FROM (specimens s, authorities a) ";
-            if ($q->param('specimens_authorizer') eq 'YES') {
-                    $sql3 .= " LEFT JOIN person ps1 ON s.authorizer_no=ps1.person_no";
-                }
-                if ($q->param('specimens_enterer') eq 'YES') {
-                    $sql3 .= " LEFT JOIN person ps2 ON s.enterer_no=ps2.person_no";
-                }
-                if ($q->param('specimens_modifier') eq 'YES') {
-                    $sql3 .= " LEFT JOIN person ps3 ON s.modifier_no=ps3.person_no";
-                }
-                $sql3 .= " WHERE s.taxon_no=a.taxon_no AND s.$taxon_nos_clause";
-                $sql .= " UNION ($sql3)";
-
-            }
-        }
     } else {
         $sql = "SELECT ".join(",",@fields).
                " FROM (" .join(",",@tables).") ".join (" ",@left_joins).
@@ -2175,7 +2084,7 @@ sub queryDatabase {
         }
     }
     # added this because the occurrences must be ordered by collection no or the CONJUNCT output will split up the collections JA 14.7.05
-    if ( $q->param('output_data') =~ /occurrence|specimens/)    {
+    if ( $q->param('output_data') =~ /occurrence/)    {
         $sql .= " ORDER BY collection_no";
     }
 
@@ -2239,19 +2148,8 @@ sub queryDatabase {
 
     my $sth = $dbh->prepare($sql); #|| die $self->dbg("Prepare query failed ($!)<br>");
 
-    eval { $sth->execute() };
-    if ($sth->errstr) {
-        my $cgi = new CGI;
-        my $errstr = "SQL error: sql($sql)"
-                   . " STH err (".$sth->errstr.")";
-        my $getpoststr; 
-        my %params = $cgi->Vars; 
-        while(my ($k,$v)=each(%params)) { $getpoststr .= "&$k=$v" if ($v ne ''); }
-        $getpoststr =~ s/\n//;
-        $errstr .= " GET,POST ($getpoststr)";
-        croak $errstr;
-    } 
-
+    $sth->execute();
+ 
     $self->dbg($sth->rows()." rows returned.<br>");
 
     # See if rows okay by permissions module
@@ -2293,7 +2191,7 @@ sub queryDatabase {
     my %ss_taxon_rank = ();
     my %misspelling = ();
     if (@dataRows && $q->param("replace_with_ss") ne 'NO' &&
-        $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+        $q->param('output_data') =~ /occurrence|genera|species/) {
         if (%all_taxa) {
             my $sql = "SELECT t.taxon_no,t.spelling_no,t.synonym_no,a.taxon_name,a.taxon_rank ".
                       "FROM $TAXA_TREE_CACHE t, authorities a ".
@@ -2349,7 +2247,7 @@ sub queryDatabase {
     my %all_genera;
     my @preservation = $q->param('preservation');
     my $get_preservation = 0;
-    if (@dataRows && $q->param("output_data") =~ /occurrence|specimens|genera|species/) { 
+    if (@dataRows && $q->param("output_data") =~ /occurrence|genera|species/) { 
         if ((@preservation > 0 && @preservation < 3) ||
             $q->param('occurrences_preservation')) {
             $get_preservation = 1;
@@ -2459,7 +2357,7 @@ sub queryDatabase {
         $q->param("occurrences_form_taxon") ||
         $q->param("occurrences_extant") ||
         $q->param("occurrences_common_name")) &&
-        $q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+        $q->param('output_data') =~ /occurrence|genera|species/) {
         if (%all_taxa) {
 
         # you need the data for all taxa with the same current spelling as any
@@ -2522,14 +2420,16 @@ sub queryDatabase {
             if ($COLL{$row->{'collection_no'}}) {
                 # This is merely a timesaving measure, reuse old collections values if we've already come across this collection
                 my $orow = $COLL{$row->{'collection_no'}};
-                for my $field ( '10_my_bin','FR2_bin','stage','subepoch','epoch','period','max_interval','min_interval','direct_ma','direct_ma_error','direct_ma_method','max_ma','max_ma_error','max_ma_error','min_ma','min_ma_error','min_ma_method' ,'ma_max','ma_min','ma_mid','interpolated_base','interpolated_top','interpolated_mid' )	{
+                for my $field ( '10_my_bin','FR2_bin','stage','subepoch','epoch','period','max_interval','min_interval','direct_ma','direct_ma_error','direct_ma_method','max_ma','max_ma_error','max_ma_error','min_ma','min_ma_error','min_ma_method' ,'interval_base','interval_top','interval_midpoint','interpolated_base','interpolated_top','interpolated_mid','ma_max','ma_min','ma_mid' )	{
                 	$row->{'c.'.$field}  = $orow->{'c.'.$field};
                 }
                 next;
             }
             # Populate the generated time fields;
-            my $max_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
-            my $min_lookup = ($row->{'c.min_interval_no'}) ? $time_lookup->{$row->{'c.min_interval_no'}} : $max_lookup;
+            my $base_lookup = $time_lookup->{$row->{'c.max_interval_no'}};
+            my $top_lookup = ($row->{'c.min_interval_no'}) ? $time_lookup->{$row->{'c.min_interval_no'}} : $base_lookup;
+            my $max_lookup = $base_lookup;
+            my $min_lookup = $top_lookup;
             my $ma_lookup = $time_lookup->{$row->{'c.ma_interval_no'}};
             # use the absolute date-based interval assignment only if it is completely
 	    #  consistent with the qualitative assignment JA 25.3.11
@@ -2566,6 +2466,16 @@ sub queryDatabase {
                     $row->{'c.direct_ma'} /= 1000;
                     $row->{'c.direct_ma_error'} /= 1000;
             }
+            $row->{'c.interval_base'} = $base_lookup->{'base_age'};
+            $row->{'c.interval_top'} = $top_lookup->{'top_age'};
+            $row->{'c.interval_midpoint'} = ($base_lookup->{'base_age'} + $top_lookup->{'top_age'})/2;
+            $row->{'c.interpolated_base'} = $max_lookup->{'interpolated_base'};
+            $row->{'c.interpolated_top'} = $min_lookup->{'interpolated_top'};
+            if ( $row->{'c.interpolated_base'} == 0 )	{
+                $row->{'c.interpolated_base'} = $row->{'c.ma_max'};
+                $row->{'c.interpolated_top'} = $row->{'c.ma_min'};
+            }
+            $row->{'c.interpolated_mid'} = ($row->{'c.interpolated_base'} + $row->{'c.interpolated_top'})/2;
             if ( $row->{'c.max_ma'} > 0 && $row->{'c.max_ma_unit'} =~ /ybp/i )	{
                     $row->{'c.max_ma'} /= 1000000;
                     $row->{'c.max_ma_error'} /= 1000000;
@@ -2580,30 +2490,27 @@ sub queryDatabase {
                     $row->{'c.min_ma'} /= 1000;
                     $row->{'c.min_ma_error'} /= 1000;
             }
-            if ( $row->{'c.direct_ma'} )	{
+            # use geochronology if available for composite max/min age
+            # whoops, only use dates consistent with the time scale
+            #  JA 5.1.12
+            if ( $row->{'c.direct_ma'} && $row->{'c.direct_ma'} <= $base_lookup->{'base_age'} && $row->{'c.direct_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.direct_ma'};
                 $row->{'c.ma_min'} = $row->{'c.direct_ma'};
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
-            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} > 0 )	{
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} > 0 && $row->{'c.max_ma'} <= $base_lookup->{'base_age'} && $row->{'c.min_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.max_ma'};
                 $row->{'c.ma_min'} = $row->{'c.min_ma'};
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
-            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} <= 0 )	{
+            } elsif ( $row->{'c.max_ma'} > 0 && $row->{'c.min_ma'} <= 0 && $row->{'c.max_ma'} <= $base_lookup->{'base_age'} && $row->{'c.min_ma'} >= $top_lookup->{'top_age'} )	{
                 $row->{'c.ma_max'} = $row->{'c.max_ma'};
                 $row->{'c.ma_min'} = 0;
                 $row->{'c.ma_mid'} = ($row->{'c.ma_max'} + $row->{'c.ma_min'})/2;
+            # otherwise strictly base ages on interval names
             } else	{
-                $row->{'c.ma_max'} = $max_lookup->{'base_age'};
-                $row->{'c.ma_min'} = $min_lookup->{'top_age'};
-                $row->{'c.ma_mid'} = ($max_lookup->{'base_age'} + $min_lookup->{'top_age'})/2;
+                $row->{'c.ma_max'} = $base_lookup->{'base_age'};
+                $row->{'c.ma_min'} = $top_lookup->{'top_age'};
+                $row->{'c.ma_mid'} = ($base_lookup->{'base_age'} + $top_lookup->{'top_age'})/2;
             }
-            $row->{'c.interpolated_base'} = $max_lookup->{'interpolated_base'};
-            $row->{'c.interpolated_top'} = $min_lookup->{'interpolated_top'};
-            if ( $row->{'c.interpolated_base'} == 0 )	{
-                $row->{'c.interpolated_base'} = $row->{'c.ma_max'};
-                $row->{'c.interpolated_top'} = $row->{'c.ma_min'};
-            }
-            $row->{'c.interpolated_mid'} = ($row->{'c.interpolated_base'} + $row->{'c.interpolated_top'})/2;
             $COLL{$row->{'collection_no'}} = $row; 
         }
     }
@@ -2613,7 +2520,7 @@ sub queryDatabase {
     ###########################################################################
 
     my %occs_by_taxa;
-    if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+    if ($q->param('output_data') =~ /occurrence|genera|species/) {
         # Do integer compares is quite a bit faster than q-> calls, so set that up here
         my $replace_with_ss = ($q->param("replace_with_ss") ne 'NO') ? 1 : 0;
         my $replace_with_reid = ($q->param("replace_with_reid") ne 'NO') ? 1 : 0;
@@ -2767,16 +2674,7 @@ sub queryDatabase {
                 $row->{'o.abund_value'} = "";
                 $row->{'o.abund_unit'} = "";
             }
-	
-            if ($row->{'specimens_exist'}) {
-                if ($q->param('output_data') eq 'genera' || $q->param('output_data') eq 'species') {
-                    my $genus_string = $row->{'o.genus_name'};
-                    if ($q->param('output_data')  eq 'species') {
-                        $genus_string .= " $row->{'o.species_name'}";
-                    } 
-                    push @{$occs_by_taxa{$genus_string}}, $row->{'o.occurrence_no'};
-                }
-            }
+
             # If we haven't skipped this row yet because of a "next", we use it 
             push @temp, $row;
 
@@ -2818,7 +2716,7 @@ sub queryDatabase {
             #  (1) few users actually care about these data,
             #  (2) most unmarked taxa are in fact extinct, and
             #  (3) the data are virtually complete for tetrapods, at least
-            if ( $q->param('occurrences_extant') )	{
+            if ( $q->param('occurrences_extant') && $master_class{$row->{'o.taxon_no'}} )	{
                 my @parents = @{$master_class{$row->{'o.taxon_no'}}};
                 foreach my $parent (@parents) {
                     $row->{'o.family_extant'} = $parent->{'extant'} if ( $parent->{'taxon_rank'} eq "family" );
@@ -2872,14 +2770,6 @@ sub queryDatabase {
         }
 
     }
-
-    #use Benchmark qw(:all);
-    #my $t0 = new Benchmark;
-
-    #my $t1 = new Benchmark;
-    #my $td = timediff($t1,$t0);
-    #my $time = 0+$td->[0] + $td->[1];
-    #print "TD for populateStuffs: $time\n";
 
     # quick pruning of extinct taxa JA 24.7.09
     # or extant taxa JA 24.3.10
@@ -3079,17 +2969,16 @@ sub queryDatabase {
 
 
     # Sort by
-    if ($q->param('output_data') =~ /^(?:genera|specimens|species)$/) {
+    if ($q->param('output_data') =~ /^(?:genera|species)$/) {
         @dataRows = sort { $a->{'o.genus_name'} cmp $b->{'o.genus_name'} ||
                            $a->{'o.species_name'} cmp $b->{'o.species_name'}} @dataRows;
     }
 
-
     # main pass through the results set
     my $acceptedCount = 0;
-    foreach my $row ( @dataRows ){
+    foreach my $row ( @dataRows )	{
 
-        if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+        if ($q->param('output_data') =~ /occurrence|genera|species/) {
             # Setup up family/name/class fields
             if (($q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
@@ -3167,7 +3056,7 @@ sub queryDatabase {
         }
 
         # Set up collections fields
-        if ($q->param("output_data") =~ /collections|specimens|occurrence/) {
+        if ($q->param("output_data") =~ /collections|occurrence/) {
             # Get coordinates into the correct format (decimal or deg/min/sec/dir), performing
             # conversions as necessary
             if ($q->param('collections_coords') eq "YES") {
@@ -3237,107 +3126,10 @@ sub queryDatabase {
                 }
             }
         }
-
-        my @measurement_rows = ();
-        if ($q->param('include_specimen_fields') && $q->param('output_data') !~ /matrix/) {
-            $row->{'specimen_parts'} = createSpecimenPartsRows($row,$q,$dbt,\%occs_by_taxa);
-        }
     }
 
     return (\@dataRows,\@allDataRows,$dataRowsSize);
 }
-
-
-# This returns an array (reference) of hashrefs, where each row in the array is a set of measurements for a different part
-# This is necessary since the measurements need to be denormalized by part (might be multiple different parts i.e. tooth/leg) for
-# a single taxa/occurence/collection and its a pain to denormalize in SQL without screwing up various stats and such.
-# So denormalize in perl by just storing an array (1 row per part) and printing out and reprinting the same taxa/occurrence/collection data for
-# each row in the array.
-sub createSpecimenPartsRows {
-    my ($row,$q,$dbt,$occs_by_taxa) = @_;
-    my @measurements = ();
-    if ($q->param('output_data') eq 'collections' && $row->{'specimens_exist'}) {
-        @measurements = Measurement::getMeasurements($dbt,'collection_no'=>$row->{'collection_no'});
-    } elsif ($q->param('output_data') =~ /matrix/) {
-        @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$row->{'occurrence_list'});
-    } elsif ($q->param('output_data') =~ /occurrence/ && $row->{specimens_exist}) {
-        @measurements = Measurement::getMeasurements($dbt,'occurrence_no'=>$row->{'o.occurrence_no'});
-    } elsif ($q->param('output_data') eq 'genera') {
-        my $genus_string = "$row->{'o.genus_name'}";
-        if ($occs_by_taxa->{$genus_string} && @{$occs_by_taxa->{$genus_string}}) {
-            if ($q->param('get_global_specimens')) {
-                # Note: will run into homonym issues till we figure out how to pass taxon_no(s)
-                @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
-            } else {
-                @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$occs_by_taxa->{$genus_string});
-            }
-        }
-    } elsif ($q->param('output_data') eq 'species') {
-        my $genus_string = "$row->{'o.genus_name'} $row->{'o.species_name'}";
-        if ($occs_by_taxa->{$genus_string} && @{$occs_by_taxa->{$genus_string}}) {
-            if ($q->param('get_global_specimens')) {
-                # Note: will run into homonym issues till we figure out how to pass taxon_no(s)
-                @measurements = Measurement::getMeasurements($dbt,'taxon_name'=>$genus_string,'get_global_specimens'=>$q->param('get_global_specimens'));
-            } else {
-                #print "OCC_LIST for $genus_string: ".join(", ",@{$occs_by_taxa->{$genus_string}})."<br>";
-                @measurements = Measurement::getMeasurements($dbt,'occurrence_list'=>$occs_by_taxa->{$genus_string});
-            }
-        }
-    } elsif ($q->param('output_data') eq 'specimens') {
-        my $sql = "SELECT m.* FROM measurements m WHERE m.specimen_no =".$row->{'specimen_no'};
-        @measurements = @{$dbt->getData($sql)};
-        #Ugly hack - getMeasurementTable expect specimens joined w/measurements dataset, so add in these
-        # needed fields again so the function works correctly
-        foreach (@measurements) {
-            $_->{'specimens_measured'} = $row->{'specimens_measured'};
-            $_->{'specimen_no'} = $row->{'specimen_no'};
-            $_->{'specimen_part'} = $row->{'specimen_part'};
-        }
-    } 
-
-    my @parts_rows = ();
-    if (@measurements) {
-        # NOTE!: getMeasurementTable returns a 3-indexed hash with the indexes (specimen_part,measurement_type,value_measured) i.e. $p_table{'leg'}{'average'}{'length'}
-        my $p_table = Measurement::getMeasurementTable(\@measurements);    
-
-        while (my ($part,$m_table)=each %$p_table) {
-            my $part_row = {};
-            if ($q->param('output_data') eq 'specimens') {
-                foreach my $f (@specimenFieldNames) {
-                    if ($q->param('specimens_'.$f)) {
-                        $part_row->{'s.'.$f} = $row->{'s.'.$f};
-                    }
-                }
-            } else {
-                if ($q->param('specimens_specimen_part')) {
-                    $part_row->{'s.specimen_part'} = $part;
-                }
-                if ($q->param('specimens_specimens_measured')) {
-                    $part_row->{'s.specimens_measured'} = $m_table->{'specimens_measured'};
-                }
-            }
-
-            foreach my $t (@measurementTypes) {
-                foreach my $f (@measurementFields) {
-                    if ($q->param('specimens_'.$f) && $q->param('specimens_'.$t)) {
-                        if ($m_table->{$f}{$t}) {
-                            my $value = sprintf("%.4f",$m_table->{$f}{$t});
-                            $value =~ s/0+$//;
-                            $value =~ s/\.$//;    
-                            $part_row->{'s.'.$t.'_'.$f}=$value;
-                        } else {
-                            $part_row->{'s.'.$t.'_'.$f}='';
-                        }
-                    }
-                }
-            }
-
-            push @parts_rows,$part_row;
-        }
-    }
-    return \@parts_rows;
-}
-
 
 sub printCSV {
     my $self = shift;
@@ -3354,8 +3146,6 @@ sub printCSV {
     my $filename = $self->{'filename'};
     if ( $q->param("output_data") eq 'collections') {
         $mainFile = "$filename-collections.$ext";
-    } elsif ($q->param("output_data") eq 'specimens') {
-        $mainFile = "$filename-specimens.".$ext;
     } elsif ( $q->param("output_data") eq 'genera') {
         $mainFile = "$filename-genera.$ext";
     } elsif ( $q->param("output_data") eq 'species') {
@@ -3372,19 +3162,16 @@ sub printCSV {
     # Header Generation
     #
 
-    # Here is the relative ordering of stuff for each output type:
-    # -For collections: collection fields, specimen fields
-    # -For occurrences: collection_no, classification fields, occurrence fields, ecology fields, collection fields, aggregate specimen fields
-    # -For specimens: collection_no,classification fields, occurrence fields, ecology fields, collection fields, specific specimen fields, aggregate specimen fields
-    # -For genera: classification fields, aggregate specimen fields
-    # -For species: classification fields, aggregate specimen fields
     # print column names to occurrence output file JA 19.8.01
     my @header = ();
 
-    if ($q->param('output_data') =~ /occurrence|collections|specimens/) {
+    if ($q->param('output_data') =~ /occurrence|collections/) {
         push @header,'collection_no';
     }
-    if ($q->param('output_data') =~ /occurrence|genera|species|specimens/) {
+    # these are required, users must understand where the data come from
+    #  and what the terms of use are JA 20.11.12
+    push @header,('c.authorizer','license');
+    if ($q->param('output_data') =~ /occurrence|genera|species/) {
         push @header, 'o.class_name' if ($q->param("occurrences_class_name") eq 'YES');
         push @header, 'o.class_extant' if ( $q->param("occurrences_class_name") eq 'YES' && $q->param('occurrences_extant') eq 'YES');
         push @header, 'o.order_name' if ($q->param("occurrences_order_name") eq 'YES');
@@ -3401,7 +3188,7 @@ sub printCSV {
         push @header, 'o.genus_name';
         push @header, 'o.subgenus_name' if ($q->param("occurrences_subgenus_name") eq "YES");
         push @header, 'o.species_name';
-    } elsif ($q->param('output_data') =~ /occurrence|specimens/) {
+    } elsif ($q->param('output_data') =~ /occurrence/) {
         foreach (@occTaxonFieldNames) {
             if ($q->param("occurrences_".$_) eq 'YES') {
                 push(@header, "o.$_") 
@@ -3424,7 +3211,7 @@ sub printCSV {
         }
     }
 
-    if ($q->param('output_data') =~ /first_author|second_author|other_authors|year_named|occurrence|specimens|genera|species/) {
+    if ($q->param('output_data') =~ /first_author|second_author|other_authors|year_named|occurrence|genera|species/) {
         push @header,@ecoFields;
         push @header,'first_author' if ($q->param("occurrences_first_author"));
         push @header,'second_author' if ($q->param("occurrences_second_author"));
@@ -3439,7 +3226,7 @@ sub printCSV {
         push @header,'common_name' if ($q->param("occurrences_common_name"));
     }
        
-    if ($q->param('output_data') =~ /collections|occurrence|specimens/) {
+    if ($q->param('output_data') =~ /collections|occurrence/) {
         foreach (@collectionsFieldNames) {
             if ($q->param("collections_paleocoords_format") eq "DMS") {
                 next if ($_ =~ /^paleo(?:latdec|lngdec)/);
@@ -3457,47 +3244,19 @@ sub printCSV {
         }
     }
 
-
-    my @specimen_header;
-    my @dummy_specimen_row;
-    #Measurement header
-    if ($q->param('include_specimen_fields')) {
-        if ($q->param('output_data') eq 'specimens') {
-            foreach my $f (@specimenFieldNames) {
-                if ($q->param('specimens_'.$f)) {
-                    push @specimen_header,'s.'.$f;
-                }
-            }
-        } else {
-            if ($q->param('specimens_specimen_part')) {
-                push @specimen_header,'s.specimen_part';
-            }
-            if ($q->param('specimens_specimens_measured')) {
-                push @specimen_header,'s.specimens_measured';
-            }
-        } 
-
-        foreach my $t (@measurementTypes) {
-            foreach my $f (@measurementFields) {
-                if ($q->param('specimens_'.$t) && $q->param('specimens_'.$f)) {
-                    push @specimen_header, 's.'.$t."_".$f;
-                }
-            }
-        }   
-        foreach (@specimen_header) {
-            push @dummy_specimen_row, '';
-        }
-    }
-
     my @printedHeader = (); 
-    foreach (@header,@specimen_header) {
+    foreach (@header) {
         my $v = $_;
-        $v =~ s/^o\./occurrences\./;
-        $v =~ s/^or\./original\./;
-        $v =~ s/^re\./reidentifications\./;
-        $v =~ s/^c\./collections\./;
-        $v =~ s/^s\./specimens\./;
-        #$v =~ s/^e\./ecology\./;
+        # printing table names for all fields was really, really annoying,
+        #  should have fixed this years ago JA 14.6.12
+        if ( $v =~ /authorizer|enterer|modifier|reference_no|created|modified|genus_|species_/ )	{
+            $v =~ s/^o\./occurrence\./;
+            $v =~ s/^or\./original\./;
+            $v =~ s/^re\./reidentification\./;
+            $v =~ s/^c\./collection\./;
+        } else	{
+            $v =~ s/^(o|or|re|c)\.//;
+        }
         $v =~ s/^e\.//;
         if ($q->param("output_data") =~ /genera|species/) {
             $v =~ s/^[a-z]+\.//g;
@@ -3506,51 +3265,20 @@ sub printCSV {
     }
     my $headerline = $self->formatRow(@printedHeader);
     print OUTFILE $headerline."\n";
-    #$self->dbg ( "Output header: $headerline" );
-   
+  
     foreach my $row (@$results) {
         my @line = ();
 
         if ( $q->param('collections_pubyr') eq "YES" )	{
             $row->{'c.pubyr'} = $pubyr[$row->{'c.reference_no'}];
     	}
-        foreach my $v (@header) {
-            if ($row->{$v} =~ /^\s*$/) {
-                push @line, '';
-            } else {
-                push @line, $row->{$v};
-            }
+        for my $v (@header) {
+            push @line, $row->{$v};
         }
 
-        if ($q->param('include_specimen_fields')) {
-            my @specimen_parts;
-            if ($row->{'specimen_parts'}) {
-                @specimen_parts = @{$row->{'specimen_parts'}};
-            }
-            if (@specimen_parts) {
-                foreach my $part (@specimen_parts) {
-                    my @specimen_row = ();
-                    foreach (@specimen_header) {
-                        if ($part->{$_} !~ /^\s*$/) {
-                            push @specimen_row, $part->{$_};
-                        } else {
-                            push @specimen_row, '';
-                        }
-                    }
-                    my $curLine = $self->formatRow(@line,@specimen_row);
-                    $curLine =~ s/\r|\n/ /g;
-                    print OUTFILE "$curLine\n";
-                }
-            } else {
-                my $curLine = $self->formatRow(@line,@dummy_specimen_row);
-                $curLine =~ s/\r|\n/ /g;
-                print OUTFILE "$curLine\n";
-            }
-        } else {
-            my $curLine = $self->formatRow(@line);
-            $curLine =~ s/\r|\n/ /g;
-            print OUTFILE "$curLine\n";
-        }
+        my $curLine = $self->formatRow(@line);
+        $curLine =~ s/\r|\n/ /g;
+        print OUTFILE "$curLine\n";
     }
 
     return (scalar (@$results),$mainFile);
@@ -3699,48 +3427,7 @@ sub printMatrix {
         keys %matrix;
     my @collections = sort {$a <=> $b} keys %collections;
 
-    my %part_matrix;
-    my %parts;
-    my @measurementHeader;
-    my @specimenPrintedHeader;
-    #Measurement header
-    if ($q->param('include_specimen_fields')) {
-        foreach my $taxon_key (@taxa) {
-            my @occ_rows = @{$occ_data{$taxon_key}};
-            my @occurrences = map {$_->{'o.occurrence_no'}} @occ_rows;
-            my @specimen_parts = @{createSpecimenPartsRows({'occurrence_list'=>\@occurrences},$q,$dbt,{})};
-            foreach my $parts_row (@specimen_parts) {
-                my $part = $parts_row->{'s.specimen_part'};
-                $part_matrix{$taxon_key}{$part} = $parts_row;
-                $parts{$part} = 1;
-            }
-        }
-
-        my @printedHeaderChunk;
-        if ($q->param('specimens_specimens_measured')) {
-            push @measurementHeader,'s.specimens_measured';
-            push @printedHeaderChunk, "!PART ".'specimens_measured';
-        }
-
-        foreach my $t (@measurementTypes) {
-            foreach my $f (@measurementFields) {
-                if ($q->param('specimens_'.$t) && $q->param('specimens_'.$f)) {
-                    push @measurementHeader, 's.'.$t."_".$f;
-                    push @printedHeaderChunk, "!PART ".$t."_".$f;
-                }
-            }
-        } 
-        my @parts = sort {$a cmp $b} keys %parts;
-        foreach my $part (@parts) {
-            foreach my $header (@printedHeaderChunk) {
-                my $value = $header;
-                $value=~ s/^!PART/$part/;
-                push @specimenPrintedHeader,$value;
-            }
-        }
-    }
-
-    my $headerline = $self->formatRow((@printedNameHeader,@collections,@printedOccHeader,@specimenPrintedHeader));
+    my $headerline = $self->formatRow((@printedNameHeader,@collections,@printedOccHeader));
     print OUTFILE $headerline."\n";
    
     foreach my $taxon_key (@taxa) {
@@ -3770,17 +3457,6 @@ sub printMatrix {
             push @line, $ref->{$v};
         }
 
-        my @parts = sort {$a cmp $b} keys %parts;
-        foreach my $part (@parts) {
-            my $part_row = $part_matrix{$taxon_key}{$part} || {};
-            foreach (@measurementHeader) {
-                if ($part_row->{$_} !~ /^\s*$/) {
-                    push @line, $part_row->{$_};
-                } else {
-                    push @line, '';
-                }
-            }
-        }
         my $curLine = $self->formatRow(@line);
         $curLine =~ s/\r|\n/ /g;
         print OUTFILE "$curLine\n";
@@ -3964,11 +3640,14 @@ sub printRefsFile {
     my $filename = $self->{'filename'};
     my $ext = ($q->param('output_format') =~ /tab/) ? "tab" : "csv";
     my $refsFile = "$filename-refs.$ext";
+    my $risFile = "$filename-ris.txt";
     if (!open(REFSFILE, ">$OUT_FILE_DIR/$refsFile")) {
         die ("Could not open output file: $refsFile($!) <br>");
     } 
-
-
+    if (!open(RISFILE, ">$OUT_FILE_DIR/$risFile")) {
+	die "Could not open output file: $risFile ($!) <br>";
+    }
+    
     # now hit the secondary refs table, mark all of those references as
     #  having been used, and print all the refs JA 16.7.04
     my (%all_refs,%all_colls,%colls_by_ref,%occs_by_ref);
@@ -4001,6 +3680,8 @@ sub printRefsFile {
 
     # print the refs
     my $ref_count = 0;
+    my $ris_ref_count = 0;
+    my (@ris_bad_list);
     if (%all_refs) {
         my $fields = join(",",map{"r.".$_} grep{!/^(?:authorizer|enterer|modifier)$/} @refsFieldNames);
         my $sql = "SELECT p1.name authorizer, p2.name enterer, p3.name modifier, $fields FROM refs r ".
@@ -4025,7 +3706,18 @@ sub printRefsFile {
             $refLine =~ s/\r|\n/ /g;
             printf REFSFILE "%s\n",$refLine;
             $ref_count++;
-
+	    
+	    my $refout = Reference::formatRISRef($dbt, $row);
+	    if ( $refout =~ /PARSE ERROR/ )
+	    {
+		push @ris_bad_list, $row->{reference_no};
+	    }
+	    else
+	    {
+		$ris_ref_count++;
+		print RISFILE $refout;
+	    }
+	    
             # need this to print the publication year for collections JA 4.12.06
             $pubyr[$row->{reference_no}] = $row->{pubyr};
             my @temp = keys %{$colls_by_ref{$row->{'reference_no'}}};
@@ -4068,7 +3760,7 @@ sub printRefsFile {
         }
     }
     close REFSFILE;
-    return ($ref_count,$refsFile,$cites);
+    return ($ref_count,$refsFile,$cites,$ris_ref_count,\@ris_bad_list);
 }
 
 
@@ -4109,6 +3801,8 @@ sub printAbundFile {
         # range computation JA 8.4.09
         # bear with me here, first we need the oldest min and youngest max
         # note that the max and min can be reversed at this stage and it's okay
+        # WARNING: range computations always use both interval-based info
+        #  and direct dating regardless of what the user wants
         if ( $row->{'c.ma_min'} > $range_max{$taxa_key} )	{
             $range_max{$taxa_key} = $row->{'c.ma_min'};
         }
@@ -4341,7 +4035,7 @@ sub emailDownloadFiles	{
 	my $self = shift;
 	my $q = $self->{'q'};
 
-	my %headers = ('Subject'=> 'Paleobiology Database download files','From'=>'alroy');
+	my %headers = ('Subject'=> 'Paleobiology Database download files','From'=>'PaleoDB administrator');
 	$headers{'To'} = $q->param('email');
 	$headers{'Content-Transfer-Encoding'} = "7bit";
 	$headers{'Content-Type'} = 'multipart/mixed; boundary=Apple-Mail-81-601985459';
@@ -4395,7 +4089,7 @@ sub setupQueryFields {
 
     # Setup default parameters
     $q->param('output_format'=>'csv') if ($q->param('output_format') !~ /csv|tab/i);
-    $q->param('output_data'=>'occurrence list') if ($q->param('output_data') !~ /collections|occurrence|specimens|genera|species/);
+    $q->param('output_data'=>'occurrence list') if ($q->param('output_data') !~ /collections|occurrence|genera|species/);
 
     if ($q->param('output_data') =~ /conjunct/i) {
         $q->param("collections_regionalbed"=>"YES");
@@ -4549,24 +4243,9 @@ sub setupQueryFields {
         }
     }
 
-    # Specimen measurements implied fields
-    my @params = $q->param();
-    foreach my $f (@params) {
-        if ($f =~ /^specimens_/) {
-            $q->param('include_specimen_fields'=>1);
-            # Output won't make sense without this
-            $q->param('specimens_specimen_part'=>'YES');
-            $q->param('specimens_specimens_measured'=>'YES');
-            last;
-        }
-    }
-    if ($q->param('specimens_error')) {
-        $q->param('specimens_error_unit'=>'YES');
-    }
-
     # Generate these fields on the fly
     @ecoFields = ();
-    if ($q->param('output_data') =~ /occurrence|specimens|genera|species/) {
+    if ($q->param('output_data') =~ /occurrence|genera|species/) {
         for(1..6) {
             if ($q->param("ecology$_")) {
                 push @ecoFields, $q->param("ecology$_");
@@ -4666,55 +4345,5 @@ sub dbg {
 
     return $DEBUG;                    # Either way, return the current DEBUG value
 }
-
-# JA 28.7.08
-# stuck in this module for convenience, could be put somewhere else later
-sub displayDownloadMeasurementsResults	{
-	my $self = shift;
-	my $q = $self->{'q'};
-	my $dbt = $self->{'dbt'};
-	my $dbh = $self->{'dbh'};
-
-	my $sql = "SELECT lft,rgt,rgt-lft width FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$q->param('taxon_name')."' ORDER BY width";
-	# if there are multiple matches, we hope to get the right one by
-	#  assuming the larger taxon is the legitimate one
-	my @taxa = @{$dbt->getData($sql)};
-	my $t;
-	if ( ! @taxa )	{
-		my $errorMessage = '<p class="medium">We have no data for the taxon '.$q->param('taxon_name').'. Please try another name.</p>';
-		main::displayDownloadMeasurementsForm($errorMessage);
-		return;
-	} else	{
-		$t = $taxa[0];
-	}
-
-	# the taxon_no is only stored in specimens if there is no occurrence_no,
-	#  so we need to tediously extract the taxon_nos from the reID and
-	#  occurrences tables
-	# do this in separate hits to avoid a massive table join
-	$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE WHERE lft>=".$t->{lft}." AND rgt<=".$t->{rgt};
-	my @norefs = @{$dbt->getData($sql)};
-	my @nos;
-	push @nos , $_->{taxon_no} foreach @norefs;
-
-	my %id;
-	$sql = "SELECT occurrence_no,taxon_no FROM occurrences WHERE taxon_no IN (".join(',',@nos).")";
-	my @occs = @{$dbt->getData($sql)};
-	$id{$_->{occurrence_no}} = $_->{taxon_no} foreach @occs;
-	# by doing this over again afterwards with the reIDs table we wipe
-	#  out any bad original IDs
-	$sql = "SELECT occurrence_no,taxon_no FROM reidentifications WHERE taxon_no IN (".join(',',@nos).")";
-	@occs = @{$dbt->getData($sql)};
-	$id{$_->{occurrence_no}} = $_->{taxon_no} foreach @occs;
-
-	$sql = "SELECT * FROM authorities a,$TAXA_TREE_CACHE t,specimens s,measurements m WHERE a.taxon_no=t.synonym_no AND t.taxon_no=s.taxon_no AND s.specimen_no=m.specimen_no AND lft>=".$t->{lft}." AND rgt<=".$t->{rgt}." GROUP BY a.taxon_no,specimen_part,measurement_type";
-	my @measures = @{$dbt->getData($sql)};
-	for my $m ( @measures )	{
-print "$m->{taxon_name} $m->{specimen_part} $m->{measurement_type} $m->{average}<br>\n";
-	}
-
-
-}
-
 
 1;

@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/opt/local/bin/perl
 package taxa_cached;
 
 
@@ -96,8 +96,8 @@ sub doUpdate {
 
 sub daemonize {
     chdir '/'                 or die "Can't chdir to /: $!";
-    open STDOUT, '>>/home/peters/testd.log' or die "Can't write to log: $!";
-    open STDERR, '>>/home/peters/testd_err.log' or die "Can't write to errlog: $!";
+    #open STDOUT, '>>/home/peters/testd.log' or die "Can't write to log: $!";
+    #open STDERR, '>>/home/peters/testd_err.log' or die "Can't write to errlog: $!";
     open STDIN, '/dev/null'   or die "Can't read /dev/null: $!";
 #    open STDOUT, '>>/dev/null' or die "Can't write to /dev/null: $!";
 #    open STDERR, '>>/dev/null' or die "Can't write to /dev/null: $!";

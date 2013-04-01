@@ -43,13 +43,6 @@ sub getCollections {
 	# There fields must always be here
 	@from = ("c.authorizer_no","c.collection_no","c.collection_name","c.access_level","c.release_date","c.reference_no","DATE_FORMAT(release_date, '%Y%m%d') rd_short","c.research_group");
     
-
-	if ( $DB eq "eco" )	{
-		@tables = ("inventories c");
-		@from = ("c.inventory_no","c.inventory_name","c.reference_no");
-	}
-
-
     # Now add on any requested fields
     foreach my $field (@fields) {
         if ($field eq 'enterer') {
@@ -100,9 +93,7 @@ sub getCollections {
     if ($options{'taxon_list'} || $options{'taxon_name'} || $options{'taxon_no'}) {
         my %collections = (-1=>1); #default value, in case we don't find anything else, sql doesn't error out
         my ($sql1,$sql2);
-        if ( $DB eq "eco" )	{
-            $sql1 = "SELECT DISTINCT o.genus_name, o.species_name, o.$COLLECTION_NO, o.taxon_no FROM $OCCURRENCES o WHERE ";
-        } elsif ($options{'include_old_ids'}) {
+        if ($options{'include_old_ids'}) {
             $sql1 = "SELECT DISTINCT o.genus_name, o.species_name, o.$COLLECTION_NO, o.taxon_no, re.taxon_no re_taxon_no, (re.reid_no IS NOT NULL) is_old_id FROM occurrences o LEFT JOIN reidentifications re ON re.occurrence_no=o.occurrence_no WHERE ";
             $sql2 = "SELECT DISTINCT o.genus_name, o.species_name, o.$COLLECTION_NO, o.taxon_no, re.taxon_no re_taxon_no, (re.most_recent != 'YES') is_old_id  FROM occurrences o, reidentifications re WHERE re.occurrence_no=o.occurrence_no AND ";
         } else {
@@ -464,20 +455,15 @@ IS NULL))";
 	if ($options{'collection_list'} && $options{'collection_list'} =~ /^[\d ,]+$/) {
 		push @where, "c.$COLLECTION_NO IN ($options{collection_list})";
 	}
-	if ( ( $DB ne "eco" && $options{'collection_names'} ) || ( $DB eq "eco" && $options{'inventory_name'} ) ) {
+	if ( $options{'collection_names'} ) {
 		my $OPTION = $options{'collection_names'};
-		( $DB eq "eco" ) ? $OPTION = $options{'inventory_name'} : "";
 		# only match entire numbers within names, not parts
 		my $word = $dbh->quote('%'.$OPTION.'%');
 		my $integer = $dbh->quote('.*[^0-9]'.$OPTION.'(([^0-9]+)|($))');
 		# interpret plain integers as either names, collection years,
 		#  or collection_nos
 		if ($OPTION =~ /^\d+$/) {
-			if ( $DB ne "eco" )	{
-				push @where, "(c.collection_name REGEXP $integer OR c.collection_aka REGEXP $integer OR c.collection_dates REGEXP $integer OR c.$COLLECTION_NO=$OPTION)";
-			} else	{
-				push @where, "(c.inventory_name REGEXP $integer OR c.inventory_aka REGEXP $integer OR c.years REGEXP $integer OR c.$COLLECTION_NO=$OPTION)";
-			}
+			push @where, "(c.collection_name REGEXP $integer OR c.collection_aka REGEXP $integer OR c.collection_dates REGEXP $integer OR c.$COLLECTION_NO=$OPTION)";
 		}
 		# comma-separated lists of numbers are collection_nos, period
 		elsif ($OPTION =~ /^[0-9, \-]+$/) {
@@ -502,11 +488,7 @@ IS NULL))";
 		# assume that collectors field has names and collection_dates
 		#  doesn't (because non-year values are not interesting)
 		else {
-			if ( $DB ne "eco" )	{
-				push @where, "(c.collection_name LIKE $word OR c.collection_aka LIKE $word OR c.collectors LIKE $word)";
-			} else	{
-				push @where, "(c.inventory_name LIKE $word OR c.inventory_aka LIKE $word OR c.inventoried_by LIKE $word)";
-			}
+			push @where, "(c.collection_name LIKE $word OR c.collection_aka LIKE $word OR c.collectors LIKE $word)";
 		}
 	}
 	
@@ -558,7 +540,7 @@ IS NULL))";
         push @where, $research_group_sql if ($research_group_sql);
 	}
     
-	if ( int($options{'reference_no'}) && $DB ne "eco" )	{
+	if ( int($options{'reference_no'}) )	{
 		push @where, " (c.reference_no=".int($options{'reference_no'})." OR sr.reference_no=".int($options{'reference_no'}).") ";
 	} elsif ( int($options{'reference_no'}) )	{
 		push @where, " c.reference_no=".int($options{'reference_no'});
@@ -574,7 +556,7 @@ IS NULL))";
 
     # Do a left join on secondary refs if we have to
     # PS 11/29/2004
-    if ( ($options{'research_group'} =~ /^(?:decapod|divergence|ETE|5%|1%|PACED|PGAP)$/ || int($options{'reference_no'})) && $DB ne "eco" ) {
+    if ( ($options{'research_group'} =~ /^(?:decapod|divergence|ETE|5%|1%|PACED|PGAP)$/ || int($options{'reference_no'})) ) {
         push @left_joins, "LEFT JOIN secondary_refs sr ON sr.$COLLECTION_NO=c.$COLLECTION_NO";
     }
 
@@ -687,7 +669,7 @@ IS NULL))";
         my $is_primary =  $row->{'mysql_is_pri_key'};
 
         # These are special cases handled above in code, so skip them
-        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country|min_lat|max_lat|min_lng|max_lng|plate|inventory_name)$/);
+        next if ($field =~ /^(?:environment|localbed|regionalbed|research_group|reference_no|max_interval_no|min_interval_no|country|min_lat|max_lat|min_lng|max_lng|plate)$/);
 
 		if (exists $options{$field} && $options{$field} ne '') {
 			my $value = $options{$field};
@@ -795,14 +777,7 @@ IS NULL))";
     my @dataRows = ();
     my $limit = (int($options{'limit'})) ? int($options{'limit'}) : 10000000;
     my $totalRows = 0;
-    if ( $DB ne "eco" )	{
-        $p->getReadRows ( $sth, \@dataRows, $limit, \$totalRows);
-    } else	{
-        while ( my $row = $sth->fetchrow_hashref ( ) )	{
-            push @dataRows, $row;
-        }
-        $totalRows = $#dataRows + 1;
-    }
+    $p->getReadRows ( $sth, \@dataRows, $limit, \$totalRows);
 
     if ($options{'include_old_ids'}) {
         foreach my $row (@dataRows) {
@@ -895,6 +870,17 @@ sub displayCollectionForm {
         $vars{'reference_no'} = $s->get('reference_no');
     } else {
         %vars = %row;
+    }
+
+    ($vars{'sharealike'},$vars{'noderivs'},$vars{'noncommercial'}) = ('','Y','Y');
+    if ( $vars{'license'} =~ /SA/ )	{
+        $vars{'sharealike'} = 'Y';
+    }
+    if ( $vars{'license'} !~ /ND/ )	{
+        $vars{'noderivs'} = '';
+    }
+    if ( $vars{'license'} !~ /NC/ )	{
+        $vars{'noncommercial'} = '';
     }
     
     # always carry over optional fields
@@ -1028,6 +1014,14 @@ sub processCollectionForm {
 		$q->param(reference_no => $secondary);
 	}
 
+	# there are three license checkboxes so users understand what they
+	#  are doing, so combine the data JA 20.11.12
+	my $license = 'CC BY';
+	$license .= ( $q->param('noncommercial') ) ? '-NC' : '';
+	$license .= ( $q->param('noderivs') ) ? '-ND' : '';
+	$license .= ( $q->param('sharealike') ) ? '-SA' : '';
+	$q->param('license' => $license);
+
 	# change interval names into numbers by querying the intervals table
 	# JA 11-12.7.03
 	if ( $q->param('max_interval') )	{
@@ -1049,29 +1043,14 @@ sub processCollectionForm {
 		}
 		my $no = ${$dbt->getData($sql)}[0]->{interval_no};
 		$q->param(min_interval_no => $no);
-	} elsif ( $DB ne "eco" )	{
+	} else	{
 		$q->param(min_interval_no => 0);
 	}
 
 	# bomb out if no such interval exists JA 28.7.03
-	if ( $q->param('max_interval_no') < 1 && $DB ne "eco" )	{
+	if ( $q->param('max_interval_no') < 1 )	{
 		print "<center><p>You can't enter an unknown time interval name</p>\n<p>Please go back, check the time scales, and enter a valid name</p></center>";
 		return;
-	}
-
-	# the inventory form submits lat-min-sec in a single field JA 25.5.11
-	if ( $q->param('lat') =~ / / )	{
-		my ($lat,$format) = fromMinSec(split / /,$q->param('lat'));
-		$q->param('lat' => $lat);
-		$q->param('latlng_format' => $format);
-	} elsif ( $q->param('lat') )	{
-		my ($left,$right) = split /\./,$q->param('lat');
-		( ! $right ) ? $right = 1 : "";
-		$q->param('latlng_format' => length($right));
-	}
-	if ( $q->param('lng') =~ / / )	{
-		my ($lng,$format) = fromMinSec(split / /,$q->param('lng'));
-		$q->param('lng' => $lng);
 	}
 
     unless($q->param('fossilsfrom1')) {
@@ -1091,16 +1070,16 @@ sub processCollectionForm {
         if ($q->param('lngdeg') >= 0 && $q->param('lngdeg') =~ /\d+/ &&
             $q->param('latdeg') >= 0 && $q->param('latdeg') =~ /\d+/)
         {
-            my ($f_latdeg, $f_lngdeg);
+            my ($f_latdeg, $f_lngdeg) = ($q->param('latdeg'), $q->param('lngdeg') );
             if ($q->param('lngmin') =~ /\d+/ && $q->param('lngmin') >= 0 && $q->param('lngmin') < 60)  {
-                $f_lngdeg = $q->param('lngdeg') + ($q->param('lngmin')/60) + ($q->param('lngsec')/3600);
-            } else {
-                $f_lngdeg = $q->param('lngdeg') . "." .  int($q->param('lngdec'));
+                $f_lngdeg += $q->param('lngmin')/60 + $q->param('lngsec')/3600;
+            } elsif ($q->param('lngdec') > 0) {
+                $f_lngdeg .= ".".$q->param('lngdec');
             }
             if ($q->param('latmin') =~ /\d+/ && $q->param('latmin') >= 0 && $q->param('latmin') < 60)  {
-                $f_latdeg = $q->param('latdeg') + ($q->param('latmin')/60) + ($q->param('latsec')/3600);
-            } else {
-                $f_latdeg = $q->param('latdeg') . "." .  int($q->param('latdec'));
+                $f_latdeg += $q->param('latmin')/60 + $q->param('latsec')/3600;
+            } elsif ($q->param('latdec') > 0) {
+                $f_latdeg .= ".".$q->param('latdec');
             }
             dbg("f_lngdeg $f_lngdeg f_latdeg $f_latdeg");
             if ($q->param('lngdir') =~ /West/)  {
@@ -1168,8 +1147,6 @@ sub processCollectionForm {
             if ($isNewEntry) {
                 my ($status,$coll_id) = $dbt->insertRecord($s,$COLLECTIONS, \%vars);
                 $collection_no = $coll_id;
-                # needed by inventoryInfo
-                $q->param($COLLECTION_NO => $coll_id);
             } else {
                 my $status = $dbt->updateRecord($s,$COLLECTIONS,$COLLECTION_NO,$collection_no,\%vars);
             }
@@ -1182,7 +1159,7 @@ sub processCollectionForm {
 	}
 	elsif ( $q->param('max_ma') > 0 || $q->param('min_ma')> 0 )	{
 		my $no = setMaIntervalNo($dbt,$dbh,$collection_no,$q->param('max_ma'),$q->param('max_ma_unit'),$q->param('min_ma'),$q->param('min_ma_unit'));
-	} elsif ( $DB ne "eco" )	{
+	} else	{
 		setMaIntervalNo($dbt,$dbh,$collection_no);
 	}
             
@@ -1218,20 +1195,14 @@ sub processCollectionForm {
             }
         }
 
-        my $record_type = ($DB ne "eco") ? "Collection" : "Inventory";
         my $verb = ($isNewEntry) ? "added" : "updated";
-        print "<center><p class=\"pageTitle\" style=\"margin-bottom: -0.5em;\"><font color='red'>$record_type record $verb</font></p><p class=\"medium\"><i>Do not hit the back button!</i></p></center>";
+        print "<center><p class=\"pageTitle\" style=\"margin-bottom: -0.5em;\"><font color='red'>Collection record $verb</font></p><p class=\"medium\"><i>Do not hit the back button!</i></p></center>";
 
 	my $coll;
-	if ( $DB ne "eco" )	{
-        	my ($colls_ref) = getCollections($dbt,$s,{$COLLECTION_NO=>$collection_no},['authorizer','enterer','modifier','*']);
-        	$coll = $colls_ref->[0];
-	} else	{
-        	my ($colls_ref) = getCollections($dbt,$s,{$COLLECTION_NO=>$collection_no},['*']);
-        	$coll = $colls_ref->[0];
-	}
+       	my ($colls_ref) = getCollections($dbt,$s,{$COLLECTION_NO=>$collection_no},['authorizer','enterer','modifier','*']);
+       	$coll = $colls_ref->[0];
 
-        if ($coll && $DB ne "eco") {
+        if ($coll) {
             
             # If the viewer is the authorizer (or it's me), display the record with edit buttons
             my $links = '<p><div align="center"><table><tr><td>';
@@ -1261,26 +1232,8 @@ sub processCollectionForm {
             $coll->{'collection_links'} = $links;
 
             displayCollectionDetailsPage($dbt,$hbo,$q,$s,$coll);
-
-        } elsif ($coll && $DB eq "eco") {
-		$q->param('inventory_no' => $coll->{'inventory_no'});
-		inventoryInfo($dbt,$q,$s,$hbo,inventoryEditLinks($collection_no));
         }
     }
-}
-
-sub inventoryEditLinks	{
-	my $no = $_[0];
-	my $links = qq|<div class="medium"><ul>
-	<li><a href="$WRITE_URL?action=menu">Go to the data entry menu</a></li>
-	<li><a href="$WRITE_URL?action=inventoryForm&inventory_no=$no">Edit this inventory</a></li>
-	<li><a href="$WRITE_URL?action=inventoryForm&type=add">Add another inventory</a></li>
-	<li><a href="$WRITE_URL?action=inventoryForm&prefill_inventory_no=$no">Add an inventory copied from this one</a></li>
-	<li><a href="$WRITE_URL?action=displayOccurrenceAddEdit&inventory_no=$no">Edit species list</a></li>
-	<li><a href="$WRITE_URL?action=displayOccurrenceListForm&inventory_no=$no">Paste in species list</a></li>
-	</ul></div>
-|;
-	return $links;
 }
 
 # Set the release date
@@ -1337,7 +1290,7 @@ sub getReleaseString	{
 sub validateCollectionForm {
 	my ($dbt,$q,$s) = @_;
 	my $is_valid = 1;
-	unless($q->param('max_interval') || $DB eq "eco")	{
+	unless($q->param('max_interval'))	{
 		print "<center><p>The time interval field is required!</p>\n<p>Please go back and specify the time interval for this collection</p></center>";
 		print "<br><br>";
 		$is_valid = 0;
@@ -1871,10 +1824,6 @@ sub buildTaxonomicList {
 	if ($options{'collection_no'}) {
 		$sqlmiddle = " FROM occurrences o ";
 		$sqlend .= "AND collection_no=$options{'collection_no'}";
-	} elsif ($options{'inventory_no'}) {
-		$sqlstart = "SELECT reference_no,inventory_no,entry_no,o.taxon_no,genus_name,species_name,abund_value,o.mass,comments";
-		$sqlmiddle = " FROM inventory_entries o ";
-		$sqlend .= "AND inventory_no=$options{'inventory_no'}";
 	} elsif ($options{'occurrence_list'} && @{$options{'occurrence_list'}}) {
 		$sqlend .= "AND occurrence_no IN (".join(', ',@{$options{'occurrence_list'}}).") ORDER BY occurrence_no";
 	} else	{
@@ -2126,11 +2075,9 @@ sub buildTaxonomicList {
 
         }
 
-	my $list_title = ( $options{'inventory_no'} ) ? "Species list" : "Taxonomic list";
-
         # Taxonomic list header
         $return = "<div class=\"displayPanel\" align=\"left\">\n" .
-                  "  <span class=\"displayPanelHeader\">$list_title</span>\n" .
+                  "  <span class=\"displayPanelHeader\">Taxonomic list</span>\n" .
                   "  <div class=\"displayPanelContent\">\n" ;
 
 		if ($new_found) {
@@ -2155,9 +2102,7 @@ sub buildTaxonomicList {
             }
         }
 
-	my $table_size= ( $options{'inventory_no'} ) ? "medium" : "tiny";
-
-	$return .= "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"$table_size\"><tr>";
+	$return .= "<table border=\"0\" cellpadding=\"0\" cellspacing=\"0\" class=\"tiny\"><tr>";
 
 	# Sort:
         my @sorted = ();
@@ -2774,10 +2719,6 @@ sub basicCollectionSearch	{
 	my $sql;
 	my $fields = "collection_no,collection_name,collection_aka,authorizer,authorizer_no,reference_no,country,state,max_interval_no,min_interval_no,collectors,collection_dates";
 	my ($NAME_FIELD,$AKA_FIELD,$TIME) = ('collection_name','collection_aka','collection_dates');
-	if ( $DB eq "eco" )	{
-		$fields = "inventory_no,inventory_name,inventory_aka,authorizer_no,reference_no,country,state,inventoried_by,years";
-		($NAME_FIELD,$AKA_FIELD,$TIME) = ('inventory_name','inventory_aka','years');
-	}
 	my $NO = $q->param($COLLECTION_NO);
 	my $NAME = $q->param($NAME_FIELD);
 
@@ -2820,13 +2761,9 @@ sub basicCollectionSearch	{
 	if ( $NO )	{
 		$sql = "SELECT $fields FROM $COLLECTIONS WHERE $COLLECTION_NO=".$NO;
 		my $coll = ${$dbt->getData($sql)}[0];
-		if ( $coll && $DB ne "eco" )	{
+		if ( $coll )	{
 			$q->param($COLLECTION_NO => $NO);
 			basicCollectionInfo($dbt,$q,$s,$hbo);
-			return 1;
-		} elsif ( $coll )	{
-			$q->param($COLLECTION_NO => $NO);
-			inventoryInfo($dbt,$q,$s,$hbo);
 			return 1;
 		} else	{
 			$q->param('type' => 'basic');
@@ -2841,7 +2778,7 @@ sub basicCollectionSearch	{
 	$NAME =~ s/'/\\'/g;
 
 	# this really looks like a strat unit search, so try that first
-	if ( $DB ne "eco" && $NAME =~ / (group|grp|formation|fm|member|mbr|)$/i )	{
+	if ( $NAME =~ / (group|grp|formation|fm|member|mbr|)$/i )	{
 		$NAME =~ s/ [A-Za-z]+$//;
 		$sql = "SELECT $fields FROM $COLLECTIONS WHERE geological_group='".$NAME."' OR formation='".$NAME."' OR member='".$NAME."'";
 	}
@@ -2914,13 +2851,11 @@ sub basicCollectionSearch	{
 	}
 
 	# try strat unit
-	if ( $DB ne "eco" )	{
-		$sql = "SELECT $fields FROM $COLLECTIONS WHERE (geological_group LIKE '%".$NAME."%' OR formation LIKE '%".$NAME."%' OR member LIKE '%".$NAME."%')";
-		@colls = @{$dbt->getData($sql)};
-		if ( @colls )	{
-			route();
-			return 1;
-		}
+	$sql = "SELECT $fields FROM $COLLECTIONS WHERE (geological_group LIKE '%".$NAME."%' OR formation LIKE '%".$NAME."%' OR member LIKE '%".$NAME."%')";
+	@colls = @{$dbt->getData($sql)};
+	if ( @colls )	{
+		route();
+		return 1;
 	}
 
 	sub route()	{
@@ -2928,11 +2863,7 @@ sub basicCollectionSearch	{
 			return;
 		} elsif ( $#colls == 0 )	{
 			$q->param($COLLECTION_NO => $colls[0]->{$COLLECTION_NO} );
-			if ( $DB ne "eco" )	{
-				basicCollectionInfo($dbt,$q,$s,$hbo);
-			} else	{
-				inventoryInfo($dbt,$q,$s,$hbo);
-			}
+			basicCollectionInfo($dbt,$q,$s,$hbo);
 			exit;
 		} else	{
 			$q->param('type' => 'view');
@@ -3322,6 +3253,15 @@ function showAuthors()	{
 	}
 	print "</p>\n\n";
 
+	if ( $c->{'license'} )	{
+		my $full_license = $c->{'license'};
+		$full_license =~ s/(CC BY)(|-)/attribution$2/;
+		$full_license =~ s/SA/sharealike/;
+		$full_license =~ s/NC/noncommercial/;
+		$full_license =~ s/ND/no derivatives/;
+		print "<p $indent>Creative Commons license: $c->{'license'} ($full_license)</p>\n";
+	}
+
 	if ( $is_real_user == 0 || $not_bot == 0 )	{
 		print $hbo->stdIncludes($PAGE_BOTTOM);
 		return;
@@ -3632,242 +3572,6 @@ sub jsonCollection	{
 	}
 	print join('}, { ',@colls);
 	print " } ] }";
-}
-
-sub inventoryForm	{
-
-	my ($dbt,$q,$s,$hbo) = @_;
-	my $dbh = $dbt->dbh;
-
-	return if PBDBUtil::checkForBot();
-	if (!$s->isDBMember()) {
-		login( "Please log in first.",'inventoryForm');
-		exit;
-	}
-	if ( ! $s->get('reference_no') ) {
-		$s->enqueue($q->query_string());
-		main::displaySearchRefs( "Please choose a reference first" );
-		exit;
-	}
-
-	print $hbo->populateHTML($PAGE_TOP);
-
-	my %vars = $q->Vars();
-	$vars{'latmin'} eq "" ? delete $vars{'latmin'} : "";
-	$vars{'latsec'} eq "" ? delete $vars{'latsec'} : "";
-	( ! $vars{'latmin'} && ! $vars{'latsec'} && ! $vars{'latdec'} ) ? $vars{'latdec'} = "9" : "";
-	my $no;
-	if ( $q->param('inventory_no') > 0 )	{
-		$no = $q->param('inventory_no');
-	} elsif ( $q->param('prefill_inventory_no') > 0 )	{
-		$no = $q->param('prefill_inventory_no');
-	}
-	if ( $no > 0 )	{
-		my $sql = "SELECT * FROM inventories WHERE inventory_no=".$no;
-		my $row = ${$dbt->getData($sql)}[0];
-		%vars = %$row;
-		delete $vars{'inventory_no'};
-		if ( $row->{'latlng_format'} eq "minutes" )	{
-			my ($deg,$min,$sec) = toMinSec($row->{'lat'});
-			$vars{'lat'} = sprintf "%d%c %d'",$deg,186,60*$min;
-			my ($deg,$min,$sec) = toMinSec($row->{'lng'});
-			$vars{'lng'} = sprintf "%d%c %d'",$deg,186,60*$min;
-		} elsif ( $row->{'latlng_format'} eq "seconds" )	{
-			my ($deg,$min,$sec) = toMinSec($row->{'lat'});
-			$vars{'lat'} = sprintf "%d%c %d' %d\"",$deg,186,$min,$sec;
-			my ($deg,$min,$sec) = toMinSec($row->{'lng'});
-			$vars{'lng'} = sprintf "%d%c %d' %d\"",$deg,186,$min,$sec;
-		} else	{
-			$vars{'lat'} = sprintf "%.$row->{'latlng_format'}f",$row->{'lat'};
-			$vars{'lng'} = sprintf "%.$row->{'latlng_format'}f",$row->{'lng'};
-		}
-	}
-	my $sql = "SELECT inventory_name FROM inventories WHERE reference_no=".$s->get('reference_no');
-	my @inventory_refs = @{$dbt->getData($sql)};
-	if ( @inventory_refs )	{
-		my @inventories = map {$_->{'inventory_name'}} @inventory_refs;
-		$vars{'already_entered'} = join(', ',@inventories);
-		$vars{'already_entered'} = "<p>Inventories already tied to this reference: ".$vars{'already_entered'}."</p>\n\n";
-	}
-	$vars{'title'} = "<p class=\"pageTitle\">New inventory entry form</p>\n\n";
-	if ( $q->param('inventory_no') > 0 )	{
-		$vars{'inventory_no'} = $no;
-		$vars{'title'} = "<p class=\"pageTitle\">Inventory editing form</p>\n\n";
-		$vars{'printed_inventory_no'} = "<p>\nEcological Register inventory number: $vars{'inventory_no'}</p>\n\n";
-	}
-	$vars{'reference_no'} = $s->get('reference_no');
-	$vars{'ref_string'} = Reference::formatLongRef( Reference::getReference($dbt,$vars{'reference_no'}) );
-
-	print $hbo->populateHTML('inventory_form',\%vars);
-	print $hbo->populateHTML($PAGE_BOTTOM);
-
-}
-
-# JA 21.5.11
-# copied in large part from basicCollectionInfo, but that function is far too
-#  specialized to be reused for this purpose
-sub inventoryInfo	{
-	my ($dbt,$q,$s,$hbo,$links) = @_;
-	my $dbh = $dbt->dbh;
-
-	my ($is_real_user,$not_bot) = (1,1);
-	if (! $q->request_method() eq 'POST' && ! $q->param('is_real_user') && ! $s->isDBMember())	{
-		$is_real_user = 0;
-		$not_bot = 0;
-	} elsif (PBDBUtil::checkForBot())	{
-		$is_real_user = 0;
-		$not_bot = 0;
-	}
-	if ( $is_real_user > 0 )	{
-		main::logRequest($s,$q);
-	}
-
-	my $sql = "SELECT i.*,DATE_FORMAT(i.created,'%e %M %Y') AS day,concat(p1.first_name,' ',p1.last_name) AS authorizer,concat(p2.first_name,' ',p2.last_name) AS enterer FROM inventories i,person p1,person p2 WHERE inventory_no=".$q->param('inventory_no')." AND i.authorizer_no=p1.person_no AND i.enterer_no=p2.person_no";
-	my $i = ${$dbt->getData($sql)}[0];
-
-	my $mockLI = 'class="verysmall" style="margin-top: -1em; margin-left: 2em; text-indent: -1em;"> &bull;';
-	my $indent = 'style="padding-left: 1em; text-indent: -1em;"';
-
-	print $hbo->stdIncludes($PAGE_TOP);
-
-	for my $field ( 'geography_comments','habitat_comments','inventory_comments' )	{
-		while ( $i->{$field} =~ /\n$/ )	{
-			$i->{$field} =~ s/\n$//;
-		}
-		$i->{$field} =~ s/\n\n/\n/g;
-		$i->{$field} =~ s/\n/<\/p>\n<p $mockLI/g;
-	}
-
-	$i->{'inventory_method'} =~ s/,/, /g;
-	if ( $i->{'inventory_method'} =~ /.*, .*, / )	{
-		my @methods = split/,/,$i->{'inventory_method'};
-		$methods[$#methods] = " and ".$methods[$#methods];
-		$i->{'inventory_method'} = join(',',@methods);
-	} elsif ( $i->{'inventory_method'} =~ /.*, / )	{
-		$i->{'inventory_method'} =~ s/, / and /;
-	}
-
-	print qq|
-<div align="center" class="medium" style="margin-left: 1em; margin-top: 3em;">
-
-<div class="displayPanel" style="margin-top: -1em; margin-bottom: 2em; text-align: left;">
-<span class="displayPanelHeader">$i->{'inventory_name'}</span>
-<div align="left" class="small displayPanelContent" style="padding-left: 1em; padding-bottom: 1em;">
-|;
-
-	if ( $i->{'inventory_aka'} )	{
-		print "<p $indent>Also known as $i->{'inventory_aka'}</p>\n\n";
-	}
-	print "<p $indent>Where: ";
-	if ( $i->{'country'} eq "United States" )	{
-		$i->{'county'} ? print $i->{'county'}." County, " : "";
-		print $i->{'state'};
-	} else	{
-		$i->{'county'} ? print $i->{'county'}." County, " : "";
-		$i->{'state'} ? print $i->{'state'}.", " : "";
-		print $i->{'country'};
-	}
-
-	my ($latdir,$lngdir) = ("N","E");
-	$i->{'lat'} < 0 ? $latdir = "S" : "";
-	$i->{'lng'} < 0 ? $latdir = "W" : "";
-	$i->{'latdir'} =~ s/(N|S).*/$1/;
-	$i->{'lngdir'} =~ s/(E|W).*/$1/;
-	printf " (%.1f&deg; $latdir",$i->{'lat'};
-	printf ", %.1f&deg; $lngdir",$i->{'lng'};
-	$i->{'gps_datum'} ? print ": ".$i->{'gps_datum'} : "";
-	print ")";
-	if ( $i->{'altitude_value'} )	{
-		print "; altitude $i->{'altitude_value'} $i->{'altitude_unit'}";
-	}
-	print "</p>\n\n";
-
-	if ( $i->{'geography_comments'} )	{
-		print "<p $mockLI $i->{'geography_comments'}</p>\n\n";
-	}
-
-	print "<p>Environment: $i->{'habitat'}";
-	if ( $i->{'MAT'} || $i->{'CMT'} || $i->{'WMT'} || $i->{'MART'} || $i->{'MAP'} || $i->{'dry_months'} )	{
-		print "; ";
-		my (@weather,%deg);
-		$deg{$_} = "&deg;" foreach ( 'MAT','CMT','WMT','MART' );
-		$deg{'MAP'} = " mm";
-		$i->{$_} ? push @weather , sprintf("%s %.1f%s",$_,$i->{$_},$deg{$_}) : "" foreach ( 'MAT','CMT','WMT','MART','MAP');
-		$i->{'dry_months'} ? push @weather , "$i->{'dry_months'} dry months" : "";
-		print join(', ',@weather);
-	}
-	print "</p>\n\n";
-
-	$i->{'habitat_comments'} ? print "<p $mockLI $i->{'habitat_comments'}</p>\n\n" : "";
-
-	if ( $i->{'sites'} || $i->{'site_area'} || $i->{'site_length'} || $i->{'site_width'} )	{
-		my @stuff;
-		$i->{'sites'} ? push @stuff , "$i->{'sites'} sites" : "";
-		if ( $i->{'site_area'} )	{
-			push @stuff , sprintf("site area %.2f ha",$i->{'site_area'});
-		}
-		push @stuff , sprintf("%s %.0f m",$_,$i->{$_}) foreach ( 'site_length','site_width' );
-		$_ =~ s/_/ / foreach @stuff;
-		print "<p $indent>Site description: ".join(', ',@stuff)."</p>\n\n";
-	}
-
-	print "<p $indent>Survey methods: ";
-	$i->{'inventory_size_unit'} eq "captures" ? print "$i->{'inventory_size'} $i->{'inventory_size_unit'} made" : "";
-	$i->{'inventory_size_unit'} eq "individuals" ? print "$i->{'inventory_size'} $i->{'inventory_size_unit'} inventoried" : "";
-	! $i->{'inventory_size_unit'} ? print "inventoried" : "";
-	$i->{'inventoried_by'} ? print " by $i->{'inventoried_by'}" : "";
-	$i->{'years'} ? print " in $i->{'years'}" : "";
-	$i->{'days'} ? print " over $i->{'days'} days" : "";
-	$i->{'inventory_method'} ? print " using ".$i->{'inventory_method'} : "";
-	print "</p>\n\n";
-
-	$i->{'inventory_comments'} ? print "<p $mockLI $i->{'inventory_comments'}</p>\n\n" : "";
-
-	print "<p $indent>Ecological Register inventory #".$i->{'inventory_no'}.", contributed by ".$i->{'authorizer'}." and entered by ".$i->{'enterer'}." on ".$i->{'day'}."</p>\n\n";
-
-	print "<p>Reference: " . Reference::formatLongRef( Reference::getReference($dbt,$i->{'reference_no'}) ) . "</p>\n\n";
-
-	$sql = "SELECT inventory_no,inventory_name FROM inventories WHERE reference_no=".$i->{'reference_no'}." AND inventory_no!=".$i->{'inventory_no'}." ORDER BY inventory_name";
-	my @sibs = @{$dbt->getData($sql)};
-	if ( @sibs )	{
-		my @siblinks;
-		push @siblinks , "<a href=\"$READ_URL?a=inventoryInfo&amp;inventory_no=$_->{'inventory_no'}\">$_->{'inventory_name'}</a>" foreach @sibs;
-		print "Other inventories from this reference: ".join(', ',@siblinks)."</p>\n\n";
-	}
-
-	print $links;
-	print "</div></div>\n\n";
- 
-	if ( $is_real_user == 0 || $not_bot == 0 )	{
-		print $hbo->stdIncludes($PAGE_BOTTOM);
-		return;
-	}
-
-	print buildTaxonomicList($dbt,$hbo,$s,{'inventory_no'=>$i->{'inventory_no'},'hide_reference_no'=>$i->{'reference_no'}});
-
-	if ($s->isDBMember()) {
-		print "<div class=\"medium\" style=\"margin-top: 0em; margin-bottom: 1em;\">\n";
-		print qq|<a href="$WRITE_URL?action=inventoryForm&inventory_no=$i->{'inventory_no'}">Edit inventory</a> - |;
-		print qq|<a href="$WRITE_URL?action=inventoryForm&prefill_inventory_no=$i->{'inventory_no'}">Add an inventory copied from this one</a> - |;
-		print qq|<a href="$WRITE_URL?action=displayOccurrenceAddEdit&inventory_no=$i->{'inventory_no'}">Edit species list</a>|;
-		print "\n</div>\n\n";
-	}
-
-        print qq|
-<form method="POST" action="$READ_URL">
-<input type="hidden" name="action" value="basicCollectionSearch">
-<input type="hidden" name="last_inventory" value="$i->{'inventory_name'}">
-<span class="small">
-<input type="text" name="inventory_name" value="Search again" size="24" onFocus="textClear(inventory_name);" onBlur="textRestore(inventory_name);" style="font-size: 0.8em;">
-</span>
-</form>
-
-|;
-
-	print "</div>\n\n";
-
-	print $hbo->stdIncludes($PAGE_BOTTOM);
-
 }
 
 # JA 21.2.03

@@ -1,21 +1,24 @@
 <script language="JavaScript" type="text/javascript">
 <!-- Begin
 
-var bad_info = ""; // Global variable
-
 function checkForm() {
-    var errors = new Error();
 
-//    var isFloat = /^([0-9]+(\.[0-9]+)*|\.[0-9]+)$/;
+	var frm = document.forms[1];
 
-    var f = document.forms[0];
+	if ( typeof( frm.mass_average ) != "undefined" )	{
+		for ( i = 0; i < frm.specimen_part.length; i++ )	{
+			if ( frm.mass_average[i].value != "" && frm.specimen_part[i].value != "body" )	{
+					errors += "The part must be 'body' if you enter a mass value";
+			}
+		}
+	}
 
-    if (errors.count() > 0) {
-        errors.showAlert()
-        return false;
-    }
-    
-    return true;
+	if ( errors != "" )	{
+		alert(errors);
+		return false;
+	}
+
+	return true;
 }
 
 -->
@@ -33,15 +36,28 @@ function checkForm() {
 <input id="occurrence_no" type="hidden" name="occurrence_no">
 <input id="taxon_no" type="hidden" name="taxon_no">
 
+<div show="length_position">
+<div class="tiny" style="float: left; clear: left; margin-left: 2em; text-align: left;">
+type of length measurement: <select class="tiny" name="length_position"><option></option><option>greatest</option><option>least</option><option>anteroposterior</option><option>basal</option><option>condylobasal</option><option>condyloincisive</option></select>
+</div>
+</div>
+
+<div show="width_position">
+<div class="tiny" style="float: left; clear: right; margin-left: 2em; text-align: left;">
+type of width measurement: <select class="tiny" name="width_position"><option></option><option>greatest</option><option>least</option><option>anterior</option><option>distal</option><option>midshaft</option><option>mediolateral</option><option>posterior</option><option>proximal</option><option>transverse</option><option>orbital</option><optionquadrate</option><option>zygomatic</option></select>
+</div>
+</div>
+
 <table cellpadding="4" class="small">
   <tr>
-    <td valign="top" colspan=2>
-        <table cellpadding=0 cellspacing=2>
+    <td valign="top" colspan="2">
+        <table cellpadding="0" cellspacing="2">
           <tr>
             <th><span class="small">Specimen #</span></th>
+            <th><span class="small">Part</span></th>
             %%column_names%%
             <th><span class="small">Side</span></th>
-            <th><span class="small">Part</span></th>
+            <th><span class="small">Sex</span></th>
             <th><span class="small">Type?</span></th>
             <th><span class="small">Source</span></th>
             <th><span class="small">Magnification</span></th>
