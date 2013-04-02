@@ -3,6 +3,162 @@ use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $PAGE_TOP $PAGE_BOTTOM);
 use strict;
 use Reference;
 
+# replaces old admin.pl code JA 22.3.13
+sub personForm	{
+	my ($dbt,$hbo,$s,$q,$error) = @_;
+
+	my $name;
+	if ( $q->param('first_name') && $q->param('last_name') )	{
+		$name = $q->param('first_name')." ".$q->param('last_name');
+	} else	{
+		$name = $q->param('name');
+	}
+
+	if ( $s->get('roles') !~ /officer/ )	{
+		main::menu();
+		exit;
+	}
+
+	my @fields = ('title','action');
+	my @values;
+
+	my $sql = "SELECT * FROM person WHERE ";
+	my ($first,$init,$last,$person_no);
+	# brute-force out a name
+	# looks like first last
+	if ( $name =~ /[a-z]+, [A-Za-z]+/ )	{
+		($last,$init) = split /, /,$name;
+	}
+	# looks like first last
+	elsif ( $name =~ /[a-z]+(\.|) [A-Za-z]+/ )	{
+		($init,$last) = split / /,$name;
+	}
+	# try straight match on last name
+	else	{
+		($init,$last) = ("%%",$name);
+	}
+	$init =~ s/\'/\\'/g;
+	$last =~ s/\'/\\'/g;
+	if ( $init !~ /\./ )	{
+		$sql .= " first_name LIKE '$init' AND last_name='$last'";
+	} else	{
+		$init =~ s/([A-Za-z])(.*)/$1./;
+		$sql .= " name='$init $last'";
+	}
+
+	# if there are multiple matches the first one will be returned
+	if ( $init && $last )	{
+		$person_no = ${$dbt->getData($sql)}[0]->{'person_no'};
+	}
+
+	my $person;
+	if ( $q->param('person_no') > 0 )	{
+		$person_no = $q->param('person_no');
+	}
+	if ( $person_no > 0 )	{
+		$sql = "SELECT * FROM person WHERE person_no=".$person_no;
+		$person = ${$dbt->getData($sql)}[0];
+		push @values , ($person->{first_name}." ".$person->{last_name},"editPerson");
+	} elsif ( $person_no == 0 && $q->param('action') ne "addPerson" )	{
+		main::menu($q->param('name')." isn't in the system");
+		exit;
+	} else	{
+		push @values , ("Add a person","addPerson");
+	}
+	print $hbo->stdIncludes($PAGE_TOP);
+	if ( $person )	{
+		for my $field ( keys %$person )	{
+			push @fields , $field;
+			push @values , ( $q->param($field) eq "" || $field eq "name" ) ? $person->{$field} : $q->param($field);
+		}
+	} else	{
+		for my $p ( $q->param() )	{
+			push @fields , $p;
+			push @values , $q->param($p);
+		}
+	}
+	if ( $error )	{
+		push @values , $error;
+		push @fields , 'error';
+	}
+	push @values , join('","',map { $_->{'name'} } @{$dbt->getData("SELECT * FROM person")});
+	push @fields , "names";
+	print $hbo->populateHTML('person',\@values,\@fields);
+	print $hbo->stdIncludes($PAGE_BOTTOM);
+	exit;
+}
+
+# replaces old admin.pl code JA 22.3.13
+sub addPerson	{
+	my ($dbt,$hbo,$s,$q) = @_;
+	my ($fields,$values) = checkPersonData($dbt,$hbo,$s,$q);
+	$dbt->dbh->do("INSERT INTO person(".join(",",@$fields).") VALUES ('".join("','",@$values)."')");
+	main::menu($q->param('first_name')." ".$q->param('last_name')."'s record has been added");
+}
+
+# replaces old admin.pl code JA 22.3.13
+sub editPerson	{
+	my ($dbt,$hbo,$s,$q) = @_;
+	my ($fields,$values) = checkPersonData($dbt,$hbo,$s,$q);
+	for my $i ( 0..$#$fields )	{
+		$$fields[$i] .= ( $$values[$i] ne "NULL" ) ? "='".$$values[$i]."'" : "=NULL";
+	}
+	my $sql = "UPDATE person SET last_action=last_action,".join(',',@$fields)." WHERE person_no=".$q->param('person_no');
+	$dbt->dbh->do($sql);
+	main::menu($q->param('first_name')." ".$q->param('last_name')."'s record has been updated");
+}
+
+sub checkPersonData	{
+	my ($dbt,$hbo,$s,$q) = @_;
+	my $sql = "SHOW COLUMNS FROM person";
+	my $sth = $dbt->dbh->prepare($sql);
+	$sth->execute();
+	my $cols = $sth->fetchall_arrayref({});
+	$sth->finish();
+
+	# role is a bunch of checkboxes
+	my @roles;
+	for my $r ( $q->param('role') )	{
+		push @roles , $r;
+	}
+	$q->param('role' => join(',',@roles));
+
+	my (@fields,@values);
+	for my $i ( 0..$#{$cols} )	{
+		my $field = $$cols[$i]{'Field'};
+		my $value = ( $q->param($field) ne "" ) ? $q->param($field) : ( $$cols[$i]{'Default'} ne "" ) ? $$cols[$i]{'Default'} : "NULL";
+		if ( $q->param($field) eq "" && ( ( $field =~ /^(name|reversed_name|first_name|last_name|gender|country|institution|email|role)$/ ) || ( $field eq "plaintext" && $q->param('role') =~ /author/ ) ) )	{
+			my $error = "The $field is required";
+			$error =~ s/_/ /g;
+			$error =~ s/plaintext/password/;
+			personForm($dbt,$hbo,$s,$q,$error);
+		} elsif ( ( $field eq "name" && $value !~ /^[A-Z]\. [A-Za-z ']+$/ ) || ( $field eq "first_name" && $value !~ /^[A-Z][a-z]+$/ ) || ( $field eq "last_name" && $value !~ /^[A-Z][A-Za-z ']+$/ ) || ( $field eq "reversed_name" && $value !~ /^[A-Za-z ']+, [A-Z]\.$/ ) || ( $field eq "country" && $value !~ /^[A-Z][a-z]+(| [A-Z][a-z]+)$/ ) )	{
+			my $error = "The $field field is misformatted";
+			$error =~ s/_/ /g;
+			personForm($dbt,$hbo,$s,$q,$error);
+		} elsif ( $field eq "plaintext" && length $value < 6 && $q->param('role') =~ /author/ )	{
+			my $error = "The password must be at least six characters";
+			$error =~ s/_/ /g;
+			personForm($dbt,$hbo,$s,$q,$error);
+		} elsif ( $field eq "plaintext" && ( $value !~ /[0-9]/ || $value !~ /[A-Za-z]/ ) && $q->param('role') =~ /author/ )	{
+			my $error = "The password must include both a number and a letter";
+			$error =~ s/_/ /g;
+			personForm($dbt,$hbo,$s,$q,$error);
+		} elsif ( $field =~ /last_name/ && $q->param('name') !~ /$value/ )	{
+			my $error = "$value isn't in the person's name (".$q->param('name').")";
+			personForm($dbt,$hbo,$s,$q,$error);
+		} elsif ( $field =~ /last_name/ && $q->param('reversed_name') !~ /$value/ )	{
+			my $error = "$value isn't in the person's reversed name (".$q->param('reversed_name').")";
+			personForm($dbt,$hbo,$s,$q,$error);
+		} elsif ( $field !~ /person_no|hours|created|modified|last_action|last_entry|superuser/ )	{
+			$value =~ s/\'/\\'/g;
+			push @fields , $field;
+			push @values , $value;
+		}
+	}
+	return (\@fields,\@values);
+}
+
 # Poling code calved off from displayLoginPage by JA 13.4.04
 sub makeAuthEntJavascript {
     my $dbt = shift;
@@ -476,8 +632,6 @@ sub editPublication	{
     if ( $q->param('pub_no') )	{
         $dbt->dbh->do("UPDATE pubs SET ".join(",",@updates)." WHERE pub_no=".$q->param('pub_no'));
     } elsif ( $q->param('other_pub_no') )	{
-        push @updates , "initials='".join(',',@inits)."'";
-        push @updates , "last_names='".join(',',@lasts)."'";
         $dbt->dbh->do("UPDATE other_pubs SET ".join(",",@updates)." WHERE other_pub_no=".$q->param('other_pub_no'));
     } elsif ( $q->param('new_entry') eq "Y" )	{
         push @fields , "initials,last_names";
