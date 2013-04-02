@@ -288,6 +288,9 @@ sub setPreferences {
 
 # displays the main menu page for the data enterers
 sub menu	{
+	my %vars;
+	$vars{'message'} = shift;
+
 	# Clear Queue?  This is highest priority
 	if ( $q->param("clear") ) {
 		$s->clearQueue(); 
@@ -310,11 +313,13 @@ sub menu	{
 
 	if ($s->isDBMember()) {
 		print $hbo->stdIncludes($PAGE_TOP);
-		my $access;
 		if ( $s->get('role') =~ /authorizer|student|technician/ )	{
-			$access = "full";
+			$vars{'access'} = "full";
 		}
-		print $hbo->populateHTML('menu',[$access],['access']);
+		if ( $s->get('roles') =~ /officer/ )	{
+			$vars{'officer'} = "officer";
+		}
+		print $hbo->populateHTML('menu',\%vars);
 		print $hbo->stdIncludes($PAGE_BOTTOM);
 	} else	{
         	if ($q->param('user') eq 'Contributor') {
@@ -4951,6 +4956,25 @@ sub setMostRecentReID {
 # ------------------------ #
 # Person pages
 # ------------------------ #
+
+sub personForm	{
+	return if PBDBUtil::checkForBot();
+	logRequest($s,$q);
+	Person::personForm($dbt,$hbo,$s,$q);
+}
+
+sub addPerson	{
+	return if PBDBUtil::checkForBot();
+	logRequest($s,$q);
+	Person::addPerson($dbt,$hbo,$s,$q);
+}
+
+sub editPerson	{
+	return if PBDBUtil::checkForBot();
+	logRequest($s,$q);
+	Person::editPerson($dbt,$hbo,$s,$q);
+}
+
 sub showEnterers {
     logRequest($s,$q);
     print $hbo->stdIncludes($PAGE_TOP);
