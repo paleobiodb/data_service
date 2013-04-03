@@ -103,6 +103,7 @@ sub processLogin {
 	# note that we are defaulting to lowest-level in cases where role
 	#  is unknown, which is only true for people added before the
 	#  student and technician categories were separated
+	$enterer_row->{'roles'} = $enterer_row->{'role'};
 	if ( $enterer_row->{'role'} =~ /authorizer/ )	{
 		$enterer_row->{'role'} = "authorizer";
 	} elsif ( $enterer_row->{'role'} =~ /technician/ )	{
@@ -182,6 +183,7 @@ sub processLogin {
                        'enterer'=>$enterer_row->{'name'},
                        'enterer_no'=>$enterer_row->{'person_no'},
                        'role'=>$enterer_row->{'role'},
+                       'roles'=>$enterer_row->{'roles'},
                        'superuser'=>$superuser,
                        'marine_invertebrate'=>$authorizer_row->{'marine_invertebrate'}, 
                        'micropaleontology'=>$authorizer_row->{'micropaleontology'},

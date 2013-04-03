@@ -1,6 +1,8 @@
 
 <center><p class="pageTitle" align="center" style="margin-bottom: 1em;">Paleobiology Database Main Menu</p></center>
 
+<center><div style="margin-bottom: 2em;"><i>%%message%%</i></div></center>
+
 <table border="0 align="center">
         <tr>
           <td valign="top" class="small">
@@ -106,6 +108,15 @@
 
             <p class="large">Account management</p>
             <ul>
+              <div show="officer">
+              <li><a href="?a=personForm">Add person</a></li>
+              <li style="margin-bottom: 0em;">Edit person named
+                <form method="POST" action="">
+                <input type="hidden" name="a" value="personForm">
+                <input type="text" size="30" name="name" style="font-size: 0.5em; margin-bottom: -1em;">
+                </form>
+              </li>
+              </div>
               <li><a href="?a=logout">Log out or change login</a></li>
               <li><a href="?a=displayPreferencesPage">Set preferences</a></li>
               <li><a href="?a=displayPermissionListForm">Change editing permission list</a></li>
