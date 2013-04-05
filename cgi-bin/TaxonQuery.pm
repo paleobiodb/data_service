@@ -26,6 +26,10 @@ include the attribution (author and year) for each taxon
 
 include the nomenclatural code under which each taxon falls
 
+=item firstapp
+
+include the first appearance of each taxon in the fossil record (this is available for detail queries only, not list or hierarchy queries).
+
 =item all
 
 include all available information
@@ -169,6 +173,38 @@ A reference to a publication describing this taxon.  Note that the author of the
 
 An indication of which nomenclatural code this taxon falls under.  Values include: 'ICZN', 'ICN', 'PhyloCode'.  Requires C<show=code>.
 
+=item B<firstAppearanceMinMa>
+
+A minimal estimate of the age of the earliest appearance of this taxon in the fossil record as recorded in this database, in Ma.  Requires C<show=firstapp>.
+
+=item B<firstAppearanceMin>
+
+The name of the interval in which the taxon first appeared in the fossil record as recorded in this database (minimum estimate).  Requires C<show=firstapp>.
+
+=item B<firstAppearanceMaxMa>
+
+A maximal estimate of the age of the earliest appearance of this taxon in the fossil record as recorded in this database, in Ma.  Requires C<show=firstapp>.
+
+=item B<firstAppearanceMax>
+
+The name of the interval in which the taxon first appeared in the fossil record as recorded in this database (maximum estimate).  Requires C<show=firstapp>.
+
+=item B<lastAppearanceMa>
+
+An estimate of the age of the latest appearance of this taxon in the fossil record as recorded in this database, in Ma.  Requires C<show=firstapp>.
+
+=item B<lastAppearance>
+
+The name of the interval in which the taxon last appeared in the fossil record as recorded in this database (maximum estimate).  Requires C<show=firstapp>.
+
+=item B<appearanceNColl>
+
+The number of collections on which the first and last appearance estimates are based.  Requires C<show=firstapp>.
+
+=item B<ageRange>
+
+The age range in Ma across which this taxon appears in the fossil record as recorded in this database.  Requires C<show=firstapp>.
+
 =back
 ";
 
@@ -299,8 +335,9 @@ sub setParameters {
 	
 	if ( $self->{show_firstapp} )
 	{
-	    push @{$self->{field_list}}, 'firstAppearanceMin', 'firstAppearanceMinMa',
-		'firstAppearanceMax', 'firstAppearanceMaxMa', 'firstAppearanceNColls';
+	    push @{$self->{field_list}}, 'firstAppearanceMinMa', 'firstAppearanceMin',
+		'firstAppearanceMaxMa', 'firstAppearanceMax', 'lastAppearanceMa',
+		    'lastAppearance', 'ageRange', 'appearanceNColl';
 	}
     }
     
@@ -2187,6 +2224,46 @@ sub emitTaxonText {
 	    }
 	}
 	
+	elsif ( $field eq 'firstAppearanceMinMa' )
+	{
+	    $value = $row->{firstapp_min_ma} if defined $row->{firstapp_min_ma};
+	}
+	
+	elsif ( $field eq 'firstAppearanceMin' )
+	{
+	    $value = $row->{firstapp_min} if defined $row->{firstapp_min};
+	}
+	
+	elsif ( $field eq 'firstAppearanceMaxMa' )
+	{
+	    $value = $row->{firstapp_max_ma} if defined $row->{firstapp_max_ma};
+	}
+	
+	elsif ( $field eq 'firstAppearanceMax' )
+	{
+	    $value = $row->{firstapp_max} if defined $row->{firstapp_max};
+	}
+	
+	elsif ( $field eq 'lastAppearanceMa' )
+	{
+	    $value = $row->{lastapp_ma} if defined $row->{lastapp_ma};
+	}
+	
+	elsif ( $field eq 'lastAppearance' )
+	{
+	    $value = $row->{lastapp} if defined $row->{lastapp};
+	}
+	
+	elsif ( $field eq 'appearanceNColl' )
+	{
+	    $value = $row->{firstapp_ncoll} if defined $row->{firstapp_ncoll};
+	}
+	
+	elsif ( $field eq 'ageRange' )
+	{
+	    $value = $row->{firstapp_agerange} if defined $row->{firstapp_agerange};
+	}
+	
 	# Then append the value to the output list, or the empty string if
 	# there is no value (or if, for some reason, it is a reference).  This is
 	# necessary because each line has to have the same fields in the same
@@ -2322,7 +2399,7 @@ sub emitTaxonJSON {
     
     if ( defined $row->{firstapp_ncoll} )
     {
-	$output .= ',"firstAppearanceNColl":"' . $row->{firstapp_ncoll} . '"';
+	$output .= ',"appearanceNColl":"' . $row->{firstapp_ncoll} . '"';
     }
     
     if ( defined $row->{firstapp_agerange} )
