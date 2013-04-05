@@ -3,7 +3,7 @@ require Exporter;
 use FindBin;
 
 @ISA = qw(Exporter);
-@EXPORT_OK = qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $SQL_DB $DB_TYPE $DB_USER $DB_SOCKET $DB_PASSWD $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $TAXA_LIST_CACHE $IP_MAIN $IP_BACKUP $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO);  # symbols to export on request
+@EXPORT_OK = qw($READ_URL $WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $SQL_DB $DB_TYPE $DB_USER $DB_SOCKET $DB_PASSWD $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $TAXA_LIST_CACHE $IP_MAIN $IP_BACKUP $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO $ALLOW_LOGIN $CGI_DEBUG $ADMIN_EMAIL);  # symbols to export on request
 use strict;
 
 # general constants
@@ -16,6 +16,9 @@ $Constants::DATA_DIR        = $conf->{'DATA_DIR'};
 $Constants::DB_SOCKET       = $conf->{'DB_SOCKET'};
 $Constants::DB_PASSWD       = $conf->{'DB_PASSWD'};
 $Constants::DB_USER	    = $conf->{'DB_USER'} || 'pbdbuser';
+$Constants::ALLOW_LOGIN	    = $conf->{'ALLOW_LOGIN'};
+$Constants::CGI_DEBUG	    = $conf->{'CGI_DEBUG'};
+$Constants::ADMIN_EMAIL	    = $conf->{'ADMIN_EMAIL'};
 $Constants::IP_MAIN         = '137.111.92.50';
 $Constants::IP_BACKUP       = '137.111.92.50';
 

@@ -45,7 +45,7 @@ use Taxon;
 use Opinion;
 use Validation;
 use Debug qw(dbg);
-use Constants qw($WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO);
+use Constants qw($WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO $CGI_DEBUG);
 
 #*************************************
 # some global variables 
@@ -67,6 +67,20 @@ my $dbt = new DBTransactionManager();
 
 # Make the session object
 my $s = new Session($dbt,$q->cookie('session_id'));
+
+# Check for CGI debugging
+
+if ( $CGI_DEBUG )
+{
+    if ( defined $ARGV[0] and $ARGV[0] ne '' )
+    {
+	($q, $s) = Debug::load_cgi($dbt, $ARGV[0]);
+    }
+    else
+    {
+	Debug::save_cgi($q);
+    }
+}
 
 if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
