@@ -26,6 +26,10 @@ include the attribution (author and year) for each taxon
 
 include the nomenclatural code under which each taxon falls
 
+=item firstapp
+
+include the first appearance of each taxon in the fossil record (this is available for detail queries only, not list or hierarchy queries).
+
 =item all
 
 include all available information
@@ -38,10 +42,6 @@ our ($PARAM_DESC_SINGLE_1_0) = "=over 4
 =item B<taxon_name>
 
 return information about the named taxon (scientific name)
-
-=item B<taxon_rank>
-
-look for the taxon name only at the specified rank (taxon rank)
 
 =item B<taxon_no>
 
@@ -89,7 +89,7 @@ synonym for 'id' (comma-separated list of identifiers)
 
 =item B<type>
 
-only return information about taxa of this type ('valid', 'synonyms', invalid', 'all')
+only return information about taxa of this type ('valid', 'synonyms', invalid', 'distinct', 'all')
 
 =item B<extant>
 
@@ -107,10 +107,6 @@ only return information about taxa whose rank falls within the specified range (
 
 return information about the named taxon and its subtaxa (scientific name)
 
-=item B<base_rank>
-
-look for the base taxon name only at the specified rank (taxon rank)
-
 =item B<base_no>
 
 return information about the specified taxon and its subtaxa (positive integer identifier)
@@ -118,10 +114,6 @@ return information about the specified taxon and its subtaxa (positive integer i
 =item B<leaf_name>
 
 return information about the named taxon and its supertaxa (scientific name)
-
-=item B<leaf_rank>
-
-look for the leaf taxon name only at the specified rank (taxon rank)
 
 =item B<leaf_no>
 
@@ -140,8 +132,7 @@ $show_values
 our ($PARAM_REQS_MULTIPLE_1_0) = "You must specify at least one of: C<type, match, rank, id, base_name, base_no, child_name, child_no>.\n\nNote that C<type> defaults to C<valid> unless otherwise specified.";
 
 our ($PARAM_CHECK_MULTIPLE_1_0) = { type => 1, extant => 1, match => 1, rank => 1,
-				base_name => 1, base_rank => 1, base_no => 1,
-				leaf_name => 1, leaf_rank => 1, leaf_no => 1, 
+				base_name => 1, base_no => 1, leaf_name => 1, leaf_no => 1, 
 				id => 1, show => 1 };
 
 our ($FIELD_DESC_1_0) = "=over 4
@@ -166,6 +157,10 @@ The identifier of this taxon's immediate parent.  This value can be used with th
 
 The taxonomic status of this taxon.  Values include: 'valid', 'invalid', 'subjective synonym', 'objective synonym'.
 
+=item B<nomenclaturalStatus>
+
+The nomenclatural status of this taxon.  Values include: 'invalid subgroup', 'misspelling', 'replaced by', 'nomen dubium', 'nomen nudum', 'nomen oblitum', 'nomen vanum'.
+
 =item B<scientificNameAuthorship>
 
 The author(s) of this taxon, together with the year it was first published.  Requires C<show=attr>.
@@ -177,6 +172,38 @@ A reference to a publication describing this taxon.  Note that the author of the
 =item B<nomenclaturalCode>
 
 An indication of which nomenclatural code this taxon falls under.  Values include: 'ICZN', 'ICN', 'PhyloCode'.  Requires C<show=code>.
+
+=item B<firstAppearanceMinMa>
+
+A minimal estimate of the age of the earliest appearance of this taxon in the fossil record as recorded in this database, in Ma.  Requires C<show=firstapp>.
+
+=item B<firstAppearanceMin>
+
+The name of the interval in which the taxon first appeared in the fossil record as recorded in this database (minimum estimate).  Requires C<show=firstapp>.
+
+=item B<firstAppearanceMaxMa>
+
+A maximal estimate of the age of the earliest appearance of this taxon in the fossil record as recorded in this database, in Ma.  Requires C<show=firstapp>.
+
+=item B<firstAppearanceMax>
+
+The name of the interval in which the taxon first appeared in the fossil record as recorded in this database (maximum estimate).  Requires C<show=firstapp>.
+
+=item B<lastAppearanceMa>
+
+An estimate of the age of the latest appearance of this taxon in the fossil record as recorded in this database, in Ma.  Requires C<show=firstapp>.
+
+=item B<lastAppearance>
+
+The name of the interval in which the taxon last appeared in the fossil record as recorded in this database (maximum estimate).  Requires C<show=firstapp>.
+
+=item B<appearanceNColl>
+
+The number of collections on which the first and last appearance estimates are based.  Requires C<show=firstapp>.
+
+=item B<ageRange>
+
+The age range in Ma across which this taxon appears in the fossil record as recorded in this database.  Requires C<show=firstapp>.
 
 =back
 ";
@@ -218,7 +245,8 @@ sub setParameters {
 	$self->{fetch_ids_only} = $self->parseBooleanParam($params->{id_only}, 'id_only');
     }
     
-    # If 'show' is specified, then include additional information.
+    # If 'show' is specified, then include additional information.  We only
+    # include first appearance calculations for single queries.
     
     if ( defined $params->{show} and $params->{show} ne '' )
     {
@@ -241,11 +269,17 @@ sub setParameters {
 		$self->{show_attribution} = 1;
 	    }
 	    
+	    elsif ( $s eq 'firstapp' )
+	    {
+		$self->{show_firstapp} = 1 if $self->{version} eq 'single';
+	    }
+	    
 	    elsif ( $s eq 'all' )
 	    {
 		$self->{show_ref} = 1;
 		$self->{show_code} = 1;
 		$self->{show_attribution} = 1;
+		$self->{show_firstapp} = 1 if $self->{version} eq 'single';
 	    }
 	    
 	    # The following are only for text output, and are ignored
@@ -254,14 +288,15 @@ sub setParameters {
 	    elsif ( $s eq 'eol_core' )
 	    {
 		$self->{field_list} = ['taxonID', 'taxonRank', 'scientificName', 'parentNameUsageID',
-				       'taxonomicStatus', 'taxonRemarks', 'namePublishedIn',
-				       'acceptedNameUsageID', 'acceptedNameUsage'];
+				       'taxonomicStatus', 'nomenclaturalStatus', 'taxonRemarks', 
+				       'namePublishedIn', 'acceptedNameUsageID'];
 		$self->{eol_core} = 1;
 		$self->{show_attribution} = 1;
 		$self->{show_synonym} = 1;
 		$self->{show_ref} = 1;
 		$self->{generate_urns} = 1;
 		$self->{rooted_result} = 1;
+		$self->{suppress_synonym_parents} = 1;
 	    }
 	    
 	    # Warn the client about unrecognized values, but don't abort processing.
@@ -296,6 +331,13 @@ sub setParameters {
 	if ( $self->{show_ref} )
 	{
 	    push @{$self->{field_list}}, 'namePublishedIn';
+	}
+	
+	if ( $self->{show_firstapp} )
+	{
+	    push @{$self->{field_list}}, 'firstAppearanceMinMa', 'firstAppearanceMin',
+		'firstAppearanceMaxMa', 'firstAppearanceMax', 'lastAppearanceMa',
+		    'lastAppearance', 'ageRange', 'appearanceNColl';
 	}
     }
     
@@ -362,7 +404,7 @@ sub setParametersSingle {
 	# Clean the parameter of everything except alphabetic characters
 	# and spaces, since only those are valid in taxonomic names.
 	
-	if ( $params->{taxon_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{taxon_name} =~ /[^a-zA-Z().,\s]/ )
 	{
 	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
@@ -453,7 +495,8 @@ sub setParametersMultiple {
 	my $type = lc $params->{type};
 	$required_param = 1;
 	
-	unless ( $type eq 'valid' or $type eq 'invalid' or $type eq 'synonyms' or $type eq 'all' )
+	unless ( $type eq 'valid' or $type eq 'invalid' or $type eq 'synonyms' or
+		 $type eq 'distinct' or $type eq 'all' )
 	{
 	    die "400 Unrecognized taxon type '$type'.\n";
 	}
@@ -483,7 +526,7 @@ sub setParametersMultiple {
 	
 	# First check to make sure that a valid value was provided.
 	
-	if ( $params->{match} =~ /[^a-zA-Z_%\s]/ )
+	if ( $params->{match} =~ /[^a-zA-Z_%()\s]/ )
 	{
 	    die "400 The parameter 'taxon_match' may contain only characters from the Roman alphabet plus whitespace and the SQL wildcards '%' and '_'.\n";
 	}
@@ -518,40 +561,13 @@ sub setParametersMultiple {
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{base_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{base_name} =~ /[^a-zA-Z().,\s]/ )
 	{
-	    die "400 The parameter 'base_name' may contain only characters from the Roman alphabet plus whitespace.\n";
+	    die "400 The parameter 'base_name' may contain only characters from the Roman alphabet plus parentheses and whitespace.\n";
 	}
 	
 	$self->{base_taxon_name} = $params->{base_name};
 	$self->{base_taxon_name} =~ s/\s+/ /g;
-    }
-    
-    # If 'base_rank' is specified, then we only match the name if it
-    # matches the specified rank.
-    
-    if ( defined $params->{base_rank} and $params->{base_rank} ne '' )
-    {
-	my $rank = lc $params->{base_rank};
-	$required_param = 1;
-	
-	# This parameter cannot be used with taxon_no (since taxon_no uniquely
-	# identifies a taxon, it cannot be used with any other taxon-selecting
-	# parameters).
-	
-	if ( defined $params->{base_no} and $params->{base_no} ne '' )
-	{
-	    die "400 You may not use the 'base_rank' and 'base_no' parameters together.\n";
-	}
-	
-	# Make sure that the value is one of the accepted ones.
-	
-	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
-	{
-	    die "400 Unrecognized taxon rank '$rank'.";
-	}
-	
-	$self->{base_taxon_rank} = $rank;
     }
     
     # If 'base_no' is specified, then the results are restricted to the
@@ -563,12 +579,12 @@ sub setParametersMultiple {
 	
 	# First check to make sure that a valid value was provided
 	
-	if ( $params->{base_no} =~ /[^0-9]/ )
+	if ( $params->{base_no} =~ /[^0-9,]/ )
 	{
-	    die "400 You must provide a positive integer value for 'taxon_no'.\n";
+	    die "400 The value of 'taxon_no' must be one or more positive integers separated by commas.\n";
 	}
 	
-	$self->{base_taxon_no} = $params->{base_no} + 0;
+	$self->{base_taxon_no} = $params->{base_no};
     }
     
     # If 'leaf_name' is specified, then the results are restricted to the
@@ -589,40 +605,13 @@ sub setParametersMultiple {
 	# characters and spaces, since only those are valid in taxonomic
 	# names.
 	
-	if ( $params->{leaf_name} =~ /[^a-zA-Z\s]/ )
+	if ( $params->{leaf_name} =~ /[^a-zA-Z().,\s]/ )
 	{
 	    die "400 The parameter 'leaf_name' may contain only characters from the Roman alphabet plus whitespace.\n";
 	}
 	
 	$self->{leaf_taxon_name} = $params->{leaf_name};
 	$self->{leaf_taxon_name} =~ s/\s+/ /g;	    
-    }
-    
-    # If 'leaf_rank' is specified, then we only match the name if it
-    # matches the specified rank.
-    
-    if ( defined $params->{leaf_rank} and $params->{leaf_rank} ne '' )
-    {
-	my $rank = lc $params->{leaf_rank};
-	$required_param = 1;
-	
-	# This parameter cannot be used with taxon_no (since taxon_no uniquely
-	# identifies a taxon, it cannot be used with any other taxon-selecting
-	# parameters).
-	
-	if ( defined $params->{leaf_no} and $params->{leaf_no} ne '' )
-	{
-	    die "400 You may not use the 'leaf_rank' and 'leaf_no' parameters together.\n";
-	}
-	
-	# Make sure that the value is one of the accepted ones.
-	
-	unless ( $DataQuery::ACCEPTED_RANK{$rank} )
-	{
-	    die "400 Unrecognized taxon rank '$rank' for leaf_rank.";
-	}
-	
-	$self->{leaf_taxon_rank} = $rank;
     }
     
     # If 'leaf_no' is specified, then the results are restricted to the
@@ -849,6 +838,9 @@ sub fetchMultiple {
 	elsif ( $self->{filter_taxon_type} eq 'invalid' ) {
 	    push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
 	}
+	elsif ( $self->{filter_taxon_type} eq 'distinct' ) {
+	    push @filter_list, "(o.spelling_reason <> 'rank change' or t.taxon_no = t.spelling_no)";
+	}
     }
     
     # If a restriction has been specified for extant or non-extant taxa, add
@@ -910,65 +902,116 @@ sub fetchMultiple {
     
     if ( defined $self->{base_taxon_no} )
     {
-	my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
+	my @base_ranges;
+	
+	foreach my $taxon_no (split /,/, $self->{base_taxon_no})
+	{
+	    next unless $taxon_no > 0;
+	    $taxon_no += 0;
+	    
+	    my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
 	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
 				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-	     WHERE t1.taxon_no = ?";
+	     WHERE t1.taxon_no = $taxon_no";
 	
-	my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, $self->{base_taxon_no});
+	    my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, $self->{base_taxon_no});
+	    
+	    # If we can't find the base taxon, the result set will be empty.
+	    
+	    unless ( defined $lft and $lft > 0 )
+	    {
+		next;
+	    }
+	    
+	    # Otherwise, we select the appropriate range of taxa.
+	    
+	    push @base_ranges, "(t.lft >= $lft and t.lft <= $rgt)";
+	    $self->{root_taxa}{$base_no} = 1;
+	}
 	
-	# If we can't find the base taxon, the result set will be empty.
+	# If we didn't find anything at all, the result set will be empty.
 	
-	unless ( defined $lft and $lft > 0 )
+	if ( @base_ranges == 0 )
 	{
 	    return;
 	}
 	
-	# Otherwise, we select the appropriate range of taxa.
+	# Otherwise, add the specified filter expression to the list.
 	
-	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
-	$self->{root_taxon_no} = $base_no;
+	elsif ( @base_ranges == 1 )
+	{
+	    push @filter_list, @base_ranges;
+	}
+	
+	else
+	{
+	    push @filter_list, '(' . join(' or ', @base_ranges) . ')';
+	}
     }
     
-    # If a base taxon has been specified by taxon_name, find it and add the
-    # appropriate filter.
+    # If a base taxon (or more than one) has been specified by taxon_name,
+    # find it and add the appropriate filter.  We split the argument on
+    # commas, and then look for a suffix introduced by a period.
     
     if ( defined $self->{base_taxon_name} )
     {
-	my $rank_clause = '';
-	my @args = $self->{base_taxon_name};
+	my @base_ranges;
 	
-	my $not_found_msg = "Taxon '$self->{base_taxon_name}' was not found in the database";
-	
-	# If a rank was specified, add a clause to narrow it down.
-	
-	if ( defined $self->{base_taxon_rank} )
+	foreach my $name (split /\s*,\s*/, $self->{base_taxon_name})
 	{
-	    $rank_clause = "and a.taxon_rank = ?";
-	    push @args, $self->{base_taxon_rank};
+	    next if $name eq '';
+	    my $rank;
 	    
-	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
-	}
-	
-	my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
+	    if ( $name =~ /([a-zA-Z() ]*)\.\s*(.*)/ )
+	    {
+		$name = $1; $rank = $2;
+	    }
+	    
+	    my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
 		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
 				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
 				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-		WHERE a.taxon_name = ? $rank_clause";
+		WHERE a.taxon_name = '$name'";
 	    
-	my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, @args);
+	    if ( defined $rank and $rank ne '' )
+	    {
+		die "400 Unknown taxon rank '$rank'" unless $DataQuery::TAXONOMIC_RANK{lc $rank};
+		$sql .= "and a.taxon_rank = '" . lc $rank . "'";
+	    }
+	    
+	    my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql);
+	    
+	    # If we can't find the base taxon, the result set will be empty.
+	    
+	    unless ( defined $lft and $lft > 0 )
+	    {
+		next;
+	    }
 	
-	# If we can't find the base taxon, the result set will be empty.
+	    # Otherwise, select the appropriate range of taxa.
+	    
+	    push @base_ranges, "(t.lft >= $lft and t.lft <= $rgt)";
+	    $self->{root_taxa}{$base_no} = 1;
+	}
 	
-	unless ( defined $lft and $lft > 0 )
+	# If we didn't find anything at all, the result set will be empty.
+	
+	if ( @base_ranges == 0 )
 	{
 	    return;
 	}
 	
-	# Otherwise, select the appropriate range of taxa.
+	# Otherwise, add the specified filter expression to the list.
 	
-	push @filter_list, "t.lft >= $lft", "t.lft <= $rgt";
-	$self->{root_taxon_no} = $base_no;
+	elsif ( @base_ranges == 1 )
+	{
+	    push @filter_list, @base_ranges;
+	}
+	
+	else
+	{
+	    push @filter_list, '(' . join(' or ', @base_ranges) . ')';
+	}
     }
     
     # If a leaf taxon has been specified by taxon_no, find it and add the appropriate
@@ -1003,16 +1046,12 @@ sub fetchMultiple {
 	my $rank_clause = '';
 	my @args = $self->{leaf_taxon_name};
 	
-	my $not_found_msg = "Taxon '$self->{leaf_taxon_name}' was not found in the database";
-	
 	# If a rank was specified, add a clause to narrow it down.
 	
 	if ( defined $self->{leaf_taxon_rank} )
 	{
 	    $rank_clause = "and a.taxon_rank = ?";
 	    push @args, $self->{leaf_taxon_rank};
-	    
-	    $not_found_msg .= " at rank '$self->{leaf_taxon_rank}'";
 	}
 	
 	my $sql = "SELECT t3.lft, t3.rgt
@@ -1235,22 +1274,25 @@ sub processRecord {
 	}
     }
     
-    # If no status was found, assume 'valid'.  We need to do this because of
-    # the many entries in taxa_tree_cache that don't reference an opinion.
+    # Put the two status strings into the row record.  If no value exists,
+    # leave it blank.
     
-    $taxonomic = 'valid' unless $taxonomic;
-    
-    # Put the two status strings into the row record.
-    
-    $row->{taxonomic} = $taxonomic;
-    $row->{nomenclatural} = $nomenclatural;
+    $row->{taxonomic} = $taxonomic || '';
+    $row->{nomenclatural} = $nomenclatural || '';
     
     # Determine the nomenclatural code that has jurisidiction, if that was
-    # requested. 
+    # requested.
     
-    if ( defined $row->{lft} )
+    if ( $self->{show_code} and defined $row->{lft} )
     {
 	$self->determineNomenclaturalCode($row);
+    }
+    
+    # Determine the first appearance data, if that was requested.
+    
+    if ( $self->{show_firstapp} )
+    {
+	$self->determineFirstAppearance($row);
     }
     
     # Create a publication reference if that data was included in the query
@@ -1275,6 +1317,11 @@ sub processRecord {
 # ICN) applies to any given taxon.  This is only done if that information is
 # asked for.
 
+sub getCodeRanges {
+
+    my ($self) = @_;
+    my ($dbh) = $self->{dbh};
+    
 my @codes = ('Metazoa', 'Animalia', 'Plantae', 'Biliphyta', 'Metaphytae',
 	     'Fungi', 'Cyanobacteria');
 
@@ -1286,11 +1333,6 @@ my $codes = { Metazoa => { code => 'ICZN'},
 	      Fungi => { code => 'ICN'},
 	      Cyanobacteria => { code => 'ICN' } };
 
-sub getCodeRanges {
-
-    my ($self) = @_;
-    my ($dbh) = $self->{dbh};
-    
     $self->{code_ranges} = $codes;
     $self->{code_list} = \@codes;
     
@@ -1348,7 +1390,511 @@ sub determineNomenclaturalCode {
 }
 
 
-# generateRecord ( row, options )
+# determineFirstAppearance ( row )
+# 
+# Calculate the first appearance of this taxon.
+
+sub determineFirstAppearance {
+    
+    my ($self, $row) = @_;
+    
+    my $dbh = $self->{dbh};
+    
+    # Generate a parameter hash to pass to calculateFirstAppearance().
+    
+    my $params = { taxonomic_precision => $self->{firstapp_precision},
+		   types_only => $self->{firstapp_types_only},
+		   traces => $self->{firstapp_include_traces},
+		 };
+    
+    # Get the results.
+    
+    my $results = calculateFirstAppearance($dbh, $row->{taxon_no}, $params);
+    return unless ref $results eq 'HASH';
+    
+    # Check for error
+    
+    if ( $results->{error} )
+    {
+	$self->{firstapp_error} = "An error occurred while calculating the first apperance";
+	return;
+    }
+    
+    # If we got results, copy each field into the row.
+    
+    foreach my $field ( keys %$results )
+    {
+	$row->{$field} = $results->{$field};
+    }
+}
+
+
+# calculateFirstAppearance ( dbh, taxon_no, params )
+# 
+# Calculate the first appearance data for the specified taxon, using the
+# specified parameters.  The first parameter must be either a valid session
+# record, which is used to determine which collections we have access to, or
+# else a dbh (when this routine is called from the data service
+# application). In the latter case, we must generate a dummy session record.
+
+sub calculateFirstAppearance {
+    
+    my ($dbh, $taxon_no, $params) = @_;
+    
+    # If we were given a session record, look up the dbt and dbh.  Otherwise,
+    # generate a dummy session record.
+    
+    # my ($s, $dbt, $dbh);
+    
+    # if ( ref $session_param eq 'Session' )
+    # {
+    # 	$s = $session_param;
+    # 	$dbt = $s->{dbt};
+    # 	$dbh = $s->{dbt}{dbh};
+    # }
+    
+    # else
+    # {
+    # 	$dbh = $session_param;
+    # 	$dbt = DBTransactionManager->new($dbh);
+    # 	$s = bless { logged_in => 0, dbt => $dbt }, 'Session';
+    # }
+    
+    # Figure default parameter values.
+    
+    $params ||= {};
+    $params->{taxonomic_precision} ||= 'any';
+    
+    # Determine excluded taxa, if any.
+    
+    # my ($sql, $field, $name, $exclude);
+    
+    # if ( $params->{exclude} )
+    # {
+    # 	my $names = $params->{exclude};
+    # 	$names =~ s/[^A-Za-z]/ /g;
+    # 	$names =~ s/  / /g;
+    # 	$names =~ s/  / /g;
+    # 	$names =~ s/ /','/g;
+    # 	$sql = "SELECT a.taxon_no,a.taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_name IN ('".$names."') AND a.taxon_no=t.spelling_no GROUP BY lft,rgt ORDER BY lft";
+    # 	my @nos = @{$dbt->getData($sql)};
+    # 	$exclude .= " AND (rgt<$_->{'lft'} OR lft>$_->{'rgt'})" foreach @nos;
+    # }
+    
+    # First get all subtaxa.
+    
+    my $sql = " SELECT t.lft, t.rgt, a.taxon_rank, a.extant 
+		FROM authorities as a JOIN taxa_tree_cache as t using (taxon_no)
+		WHERE a.taxon_no = $taxon_no";
+    
+    my ($lft, $rgt, $rank, $extant) = $dbh->selectrow_array($sql);
+    
+    unless ( $lft )
+    {
+	return { error => 'No matching taxon found.' };
+    }
+    
+    unless ( $rgt >= $lft + 1 or $rank =~ /genus|species/ )
+    {
+	return { error => 'No classified subtaxa found.' };
+    }
+    
+    # Determine the proper query based on the parameters
+    # 'taxonomic_precision', 'types_only', and 'type_body_part'.
+    
+    $sql = "SELECT a.taxon_no,taxon_name,taxon_rank,extant,preservation,type_locality,lft,rgt,synonym_no
+		FROM authorities a JOIN taxa_tree_cache as t USING (taxon_no)
+		WHERE lft>=".$lft." AND rgt<=".$rgt." ORDER BY lft";
+    my @allsubtaxa = @{$dbh->selectall_arrayref($sql, { Slice => {} })};
+    my @subtaxa;
+    
+    if ( $params->{taxonomic_precision} =~ /^any/ )
+    {
+	@subtaxa = @allsubtaxa;
+    }
+    
+    elsif ( $params->{taxonomic_precision} =~ /species|genus|family/ )
+    {
+	my @ranks = ('subspecies','species');
+	if ( $params->{taxonomic_precision} =~ /genus or species/ )	{
+	    push @ranks , ('subgenus','genus');
+	} elsif ( $params->{taxonomic_precision} =~ /family/ )	{
+	    push @ranks , ('subgenus','genus','tribe','subfamily','family');
+	}
+	$sql = "SELECT a.taxon_no,taxon_name,type_locality,extant,preservation,lft,rgt
+		FROM authorities as a join taxa_tree_cache as t using (taxon_no)
+		WHERE a.taxon_no=t.taxon_no AND lft>".$lft." AND rgt<".$rgt." AND taxon_rank IN ('".join("','",@ranks)."')";
+	
+	if ( $params->{types_only} )
+	{
+	    $sql .= " AND type_locality>0";
+	}
+	
+	if ( $params->{type_body_part} )
+	{
+	    my $parts;
+	    if ( $params->{type_body_part} =~ /multiple teeth/i )	{
+		$parts = "'skeleton','partial skeleton','skull','partial skull','maxilla','mandible','teeth'";
+	    } elsif ( $params->{type_body_part} =~ /skull/i )	{
+		$parts = "'skeleton','partial skeleton','skull','partial skull'";
+	    } elsif ( $params->{type_body_part} =~ /skeleton/i )	{
+		$parts = "'skeleton','partial skeleton'";
+	    }
+	    $sql .= " AND type_body_part IN (".$parts.")";
+	}
+	my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+	@subtaxa = @$result;
+    }
+    
+    else
+    {
+	warn "Invalid value '$params->{taxonomic_precision}' for parameter 'taxonomic_precision'";
+	return { error => 'Internal error' }
+    }
+    
+    # See if this taxon is extant (if either it or any of its subtaxa is so
+    # marked). 
+    
+    if ( $extant ne 'yes' )	{
+	for my $t ( @allsubtaxa )	{
+	    if ( defined $t->{extant} and $t->{extant} eq 'yes' )
+	    {
+		$extant = "yes";
+		last;
+	    }
+	}
+    }
+    
+    # Remove trace fossils from @subtaxa, unless the parameter 'traces' is
+    # true.  The 'preservation' attribute is inherited from parent to child if
+    # no value is specified for the child.
+    
+    unless ( $params->{traces} )
+    {
+    	my %istrace;
+    	for my $i ( 0..$#allsubtaxa )
+    	{
+    	    my $st = $allsubtaxa[$i];
+    	    if ( defined $st->{preservation} and $st->{preservation} eq "trace" )
+    	    {
+    		$istrace{$st->{'taxon_no'}}++;
+    		# find parents by descending
+    		# overall parent is innocent until proven guilty
+    	    } elsif ( ! $st->{'preservation'} && $st->{'lft'} >= $lft )	{
+    		my $j = $i-1;
+    		# first part means "not parent"
+    		while ( ( $allsubtaxa[$j]->{'rgt'} < $st->{'lft'} || 
+    			  ! $allsubtaxa[$j]->{'preservation'} ) && $j > 0 )
+    		{
+    		    $j--;
+    		}
+    		if ( defined $allsubtaxa[$j]{preservation} and $allsubtaxa[$j]{preservation} eq "trace" )
+    		{
+    		    $istrace{$st->{'taxon_no'}}++;
+    		}
+    	    }
+    	}
+    	my @nontraces;
+    	for my $st ( @subtaxa )
+    	{
+    	    if ( ! $istrace{$st->{'taxon_no'}} )	{
+    		push @nontraces , $st;
+    	    }
+    	}
+    	@subtaxa = @nontraces;
+    }
+    
+    # Now that we've got a good list of taxa, find all matching collections.
+    
+    my $taxa = join(',', map { $_->{taxon_no} } @subtaxa);
+    
+    $sql = "    SELECT c.collection_no, c.max_interval_no, c.min_interval_no
+		FROM collections as c JOIN 
+			(SELECT o.collection_no FROM occurrences as o
+				LEFT JOIN reidentifications as re ON re.occurrence_no = o.occurrence_no
+			WHERE re.reid_no is null and o.taxon_no in ($taxa)
+			UNION 
+			SELECT o.collection_no FROM occurrences as o
+				JOIN reidentifications as re ON re.occurrence_no = o.occurrence_no
+			WHERE re.most_recent='YES' and re.taxon_no in ($taxa)) as m
+				ON c.collection_no = m.collection_no
+		WHERE (c.access_level = 'the public' or c.release_date <= now())
+		GROUP BY c.collection_no";
+    
+    my $colls = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    # my $options = {};
+    # if ( $params->{types_only} )
+    # {
+    # 	for my $st ( @subtaxa )	{
+    # 	    if ( $st->{type_locality} > 0 ) { $options->{collection_list} .= ",".$st->{type_locality}; }
+    # 	}
+    # 	$options->{collection_list} =~ s/^,//;
+    # 	$options->{'species_reso'} = ["n. sp."];
+    # }
+    
+    # we could use getCollectionsSet but it would be overkill
+    # my $fields = ['max_interval_no','min_interval_no','collection_no','collection_name','country','state','geogscale','formation','member','stratscale','lithification','minor_lithology','lithology1','lithification2','minor_lithology2','lithology2','environment'];
+    
+    # if ( ! $params->{Africa} || ! $params->{Antarctica} || ! $params->{Asia} || ! $params->{Australia} || ! $params->{Europe} || ! $params->{'North America'} || ! $params->{'South America'} )
+    # {
+    # 	my @list = grep $params->{$1}, ('Africa', 'Antarctica', 'Asia', 'Australia', 'Europe',
+    # 					'North America', 'South America' );
+    # 	$options->{'country'} = join(':', @list);
+    # }
+    
+    # my @in_list = map $_->{taxon_no}, @subtaxa;
+    # $options->{taxon_list} = \@in_list;
+    
+    # $options->{permission_type} = 'read';
+    # $options->{geogscale} = $params->{geogscale};
+    # $options->{stratscale} = $params->{stratscale};
+    # if ( $params->{minimum_age} > 0 )	{
+    # 	$options->{max_interval} = 999;
+    # 	$options->{min_interval} = $params->{minimum_age};
+    # }
+    
+    # my ($colls) = Collection::getCollections($dbt, $s, $options, $fields);
+    unless ( @$colls )	{
+	return { error =>  "No occurrences of this taxon match the search criteria" };
+    }
+    
+    my @intervals = intervalData($dbh, $colls);
+    my %interval_hash = map { ($_->{interval_no}, $_) } @intervals;
+    
+    if ( defined $params->{temporal_precision} )
+    {
+	my @newcolls;
+	for my $coll (@$colls) 
+	{
+	    if ( $interval_hash{$coll->{'max_interval_no'}}->{'base_age'} -  $interval_hash{$coll->{'max_interval_no'}}->{'top_age'} <= $params->{temporal_precision} )	{
+		push @newcolls , $coll;
+	    }
+	}
+	$colls = \@newcolls;
+    }
+    
+    if ( ! @$colls )
+    {
+	return { error => "No occurrences of this taxon have sufficiently precise age data" };
+    }
+    
+    my $ncoll = scalar(@$colls);
+    
+    # AGE RANGE/CONFIDENCE INTERVAL CALCULATION
+    
+    my ($lb, $ub, $max_no, $minfirst, $maxlast, $min_no) = getAgeRange($dbh, $colls);
+    my ($first_interval_top, @firsts, @rages, @ages, @gaps);
+    my $TRIALS = int( 10000 / scalar(@$colls) );
+    
+    for my $coll (@$colls)
+    {
+	my ($collmax,$collmin,$last_name) = ("","","");
+	$collmax = $interval_hash{$coll->{'max_interval_no'}}{'base_age'};
+	# IMPORTANT: the collection's max age is truncated at the
+	#   taxon's max first appearance
+	if ( $collmax > $lb )	{
+	    $collmax = $lb;
+	}
+	if ( $coll->{'min_interval_no'} == 0 )	{
+	    $collmin = $interval_hash{$coll->{'max_interval_no'}}{'top_age'};
+	    $last_name = $interval_hash{$coll->{'max_interval_no'}}{'interval_name'};
+	} else	{
+	    $collmin = $interval_hash{$coll->{'min_interval_no'}}{'top_age'};
+	    $last_name = $interval_hash{$coll->{'min_interval_no'}}{'interval_name'};
+	}
+	# $coll->{'maximum Ma'} = $collmax;
+	# $coll->{'minimum Ma'} = $collmin;
+	# $coll->{'midpoint Ma'} = ( $collmax + $collmin ) / 2;
+	if ( $minfirst == $collmin )	{
+	    # if ( $coll->{'state'} && $coll->{'country'} eq "United States" )	{
+	    # 	$coll->{'country'} = "US (".$coll->{'state'}.")";
+	    # }
+	    $first_interval_top = $last_name;
+	    push @firsts , $coll;
+	}
+	# # randomization to break ties and account for uncertainty in
+	# #  age estimates
+	# for my $t ( 1..$TRIALS )
+	# {
+	#     push @{$rages[$t]} , rand($collmax - $collmin) + $collmin;
+	# }
+    }
+    
+    my $first_interval_base = $interval_hash{$max_no}{interval_name};
+    my $last_interval = $interval_hash{$min_no}{interval_name};
+    if ( $first_interval_base =~ /an$/ )	{
+	$first_interval_base = "the ".$first_interval_base;
+    }
+    if ( $first_interval_top =~ /an$/ )	{
+	$first_interval_top = "the ".$first_interval_top;
+    }
+    if ( $last_interval =~ /an$/ )	{
+	$last_interval = "the ".$last_interval;
+    }
+    
+    my $agerange = $lb - $ub;;
+    if ( defined $params->{minimum_age} and $params->{minimum_age} > 0 )	{
+	$agerange = $lb - $params->{minimum_age};
+    }
+    
+    # for my $t ( 1..$TRIALS )	{
+    # 	@{$rages[$t]} = sort { $b <=> $a } @{$rages[$t]};
+    # }
+    # for my $i ( 0..$#{$rages[1]} )	{
+    # 	my $x = 0;
+    # 	for my $t ( 1..$TRIALS )	{
+    # 	    $x += $rages[$t][$i];
+    # 	}
+    # 	push @ages , $x / $TRIALS;
+    # }
+    # for my $i ( 0..$#ages-1 )	{
+    # 	push @gaps , $ages[$i] - $ages[$i+1];
+    # }
+    # # shortest to longest
+    # @gaps = sort { $a <=> $b } @gaps;
+    
+    # Now construct the output record.
+    
+    my $result = { firstapp_max => $first_interval_base,
+		   firstapp_max_ma => sprintf("%.1f", $lb),
+		   firstapp_min => $first_interval_top,
+		   firstapp_min_ma => sprintf("%.1f", $minfirst),
+		   lastapp => $last_interval,
+		   lastapp_ma => sprintf("%.1f", $ub),
+		   extant => $extant,
+		   firstapp_ncoll => $ncoll,
+		   firstapp_agerange => $agerange,
+		 };
+    
+    # If more than one collection was found, add confidence intervals.
+    
+    # if ( $ncoll > 1 )
+    # {
+    # 	$result->{ci_labels} = [0.50, 0.90, 0.95, 0.99];
+    # 	$result->{ci_continuous} = [Strauss2($lb, $ncoll, 0.50, 0.90, 0.95, 0.99)];
+    # 	$result->{ci_percentile} = [percentile2($lb, \@gaps, 0.50, 0.90, 0.95, 0.99)];
+    # 	$result->{ci_oldest_gap} = [Solow2($lb, \@ages, 0.50, 0.90, 0.95, 0.99)];
+	
+    # 	# Determine if there are rank-order correlations between time and gap size.
+	
+    # 	# convert to ranks by manipulating an array of objects
+    # 	my @gapdata;
+    # 	for my $i ( 0..$#ages-1 )
+    # 	{
+    # 	    $gapdata[$i]->{'age'} = $ages[$i];
+    # 	    $gapdata[$i]->{'gap'} = $ages[$i] - $ages[$i+1];
+    # 	}
+    # 	@gapdata = sort { $b->{'age'} <=> $a->{'age'} } @gapdata;
+    # 	for my $i ( 0..$#ages-1 )
+    # 	{
+    # 	    $gapdata[$i]->{'agerank'} = $i;
+    # 	}
+    # 	@gapdata = sort { $b->{'gap'} <=> $a->{'gap'} } @gapdata;
+    # 	for my $i ( 0..$#ages-1 )
+    # 	{
+    # 		$gapdata[$i]->{'gaprank'} = $i;
+    # 	}
+
+    # 	my ($n,$mx,$my,$sx,$sy,$cov);
+    # 	$n = $#ages;
+    # 	if ( $n > 9 )
+    # 	{
+    # 	    for my $i ( 0..$#ages-1 )
+    # 	    {
+    # 		$mx += $gapdata[$i]->{'agerank'};
+    # 		$my += $gapdata[$i]->{'gaprank'};
+    # 	    }
+    # 	    $mx /= $n;
+    # 	    $my /= $n;
+    # 	    for my $i ( 0..$#ages-1 )
+    # 	    {
+    # 		$sx += ($gapdata[$i]->{'agerank'} - $mx)**2;
+    # 		$sy += ($gapdata[$i]->{'gaprank'} - $my)**2;
+    # 		$cov += ($gapdata[$i]->{'agerank'} - $mx) * ( $gapdata[$i]->{'gaprank'} - $my);
+    # 	    }
+    # 	    $sx = sqrt( $sx / ( $n - 1 ) );
+    # 	    $sy = sqrt( $sy / ( $n - 1 ) );
+    # 	    my $r = $cov / ( ( $n - 1 ) * $sx * $sy );
+    # 	    my $t = $r / sqrt( ( 1 - $r**2 ) / ( $n - 2 ) );
+	    
+    # 	    $result->{time_gap_r} = $r;
+    # 	    $result->{time_gap_t} = $t;
+    # 	    # for n > 9, the p < 0.001 critical values range from 3.291 to 4.587
+    # 	}
+    # }
+    
+    return $result;
+}
+
+
+sub intervalData {
+    
+    my ($dbh, $colls) = @_;
+    
+    my %is_no;
+    $is_no{$_->{'max_interval_no'}}++ foreach @$colls;
+    $is_no{$_->{'min_interval_no'}}++ foreach @$colls;
+    delete $is_no{0};
+    my $sql = "SELECT TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,i.interval_no,base_age,top_age FROM intervals i,interval_lookup l WHERE i.interval_no=l.interval_no AND i.interval_no IN (".join(',',keys %is_no).")";
+    return @{$dbh->selectall_arrayref($sql, { Slice => {} })};
+}
+
+
+sub getAgeRange	{
+	my ($dbh,$colls) = @_;
+	
+	return unless (@$colls);
+	
+	my $coll_list = join(',', map { $_ ->{'collection_no'} } @$colls);
+	
+	# get the youngest base age of any collection including this taxon
+	# ultimately, the range's top must be this young or younger
+	my $sql = "SELECT base_age AS maxtop FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN ($coll_list) ORDER BY base_age ASC LIMIT 1";
+	my ($maxTop) = $dbh->selectrow_array($sql);
+	
+	# likewise the oldest top age
+	# the range's base must be this old or older
+	# the top is the top of the max_interval for collections having
+	#  no separate max and min ages, but is the top of the min_interval
+	#  for collections having different max and min ages
+	$sql = "SELECT top_age AS minbase FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN ($coll_list)) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN ($coll_list))) AS ages ORDER BY top_age DESC LIMIT 1";
+	my ($minBase) = $dbh->selectrow_array($sql);
+
+	# now get the range top
+	# note that the range top is the top of some collection's min_interval
+	$sql = "SELECT MAX(top_age) top FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN ($coll_list) AND top_age<$maxTop) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN ($coll_list) AND top_age<$maxTop)) AS tops";
+	my ($top) = $dbh->selectrow_array($sql);
+	
+	# and the range base
+	$sql = "SELECT MIN(base_age) base FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN ($coll_list) AND base_age>$minBase LIMIT 1";
+	my ($base) = $dbh->selectrow_array($sql);
+	
+	my (%is_max,%is_min);
+	for my $c ( @$colls )	{
+		$is_max{$c->{'max_interval_no'}}++;
+		if ( $c->{'min_interval_no'} > 0 )	{
+			$is_min{$c->{'min_interval_no'}}++;
+		} else	{
+			$is_min{$c->{'max_interval_no'}}++;
+		}
+	}
+
+	# get the ID of the shortest interval whose base is equal to the
+	#  range base and explicitly includes an occurrence
+	$sql = "SELECT interval_no FROM interval_lookup WHERE interval_no IN (".join(',',keys %is_max).") AND base_age=$base ORDER BY top_age DESC LIMIT 1";
+	my $oldest_interval_no = $dbh->selectrow_array($sql);
+
+	# ditto for the shortest interval defining the top
+	# only the ID number is needed
+	$sql = "SELECT interval_no FROM interval_lookup WHERE interval_no IN (".join(',',keys %is_min).") AND top_age=$top ORDER BY base_age ASC LIMIT 1";
+	my $youngest_interval_no = ${$dbh->selectcol_arrayref($sql)}[0];
+
+	return($base,$top,$oldest_interval_no,$minBase,$maxTop,$youngest_interval_no);
+}
+
+
+# Generaterecord ( row, options )
 # 
 # Return a string representing one row of the result, in the selected output
 # format.  The option 'is_first' indicates that this is the first
@@ -1446,8 +1992,9 @@ sub emitTaxonXML {
     }
     
     if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
-	 ( $self->{rooted_result} and defined $self->{root_taxon_no} 
-	      and $row->{taxon_no} == $self->{root_taxon_no} ) )
+	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+	 ( $self->{rooted_result} and ref $self->{root_taxa} and 
+	   $self->{root_taxa}{$row->{taxon_no}} ) )
     {
 	my $parent_no = $self->{generate_urns}
 	    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
@@ -1456,7 +2003,11 @@ sub emitTaxonXML {
 	$output .= '    <dwc:parentNameUsageID>' . $parent_no . '</dwc:parentNameUsageID>' . "\n";
     }
     
-    if ( defined $row->{parent_name} && $self->{show_parent_names} ) {
+    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and $self->{show_parent_names} and not
+	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+	 ( $self->{rooted_result} and ref $self->{root_taxa} and 
+	   $self->{root_taxa}{$row->{taxon_no}} ) )
+    {
     	$output .= '    <dwc:parentNameUsage>' . DataQuery::xml_clean($row->{parent_name}) . 
 	    '</dwc:parentNameUsage>' . "\n";
     }
@@ -1581,8 +2132,9 @@ sub emitTaxonText {
 	elsif ( $field eq 'parentNameUsageID' )
 	{
 	    if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
-		 ( $self->{rooted_result} and defined $self->{root_taxon_no}
-		      and $row->{taxon_no} == $self->{root_taxon_no} ) )
+		 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+		 ( $self->{rooted_result} and ref $self->{root_taxa} and
+		   $self->{root_taxa}{$row->{taxon_no}} ) )
 	    {
 		$value = $self->{generate_urns}
 		    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
@@ -1592,7 +2144,10 @@ sub emitTaxonText {
 	
 	elsif ( $field eq 'parentNameUsage' )
 	{
-	    if ( defined $row->{parent_name} and $row->{parent_name} ne '' )
+	    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and not
+		 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+		 ( $self->{rooted_result} and ref $self->{root_taxa} and
+		   $self->{root_taxa}{$row->{taxon_no}} ) )
 	    {
 		$value = DataQuery::xml_clean($row->{parent_name});
 	    }
@@ -1656,25 +2211,6 @@ sub emitTaxonText {
 		if defined $row->{common_name};
 	}
 	
-	elsif ( $field eq 'acceptedNameUsageID' )
-	{
-	    if ( defined $row->{accepted_no} )
-	    {
-		$value = $self->{generate_urns}
-		    ? DataQuery::generateURN($row->{accepted_no}, 'taxon_no')
-			: $row->{accepted_no};
-	    }
-	}
-	
-	if ( $field eq 'acceptedName' and defined $row->{accepted_name} )
-	{
-	    if ( defined $row->{accepted_name} )
-	    {
-		$value = DataQuery::xml_clean($row->{accepted_name})
-		    if defined $row->{accepted_name};
-	    }
-	}
-	
 	elsif ( $field eq 'extant' )
 	{
 	    $value = $row->{extant} if defined $row->{extant};
@@ -1686,6 +2222,46 @@ sub emitTaxonText {
 	    {
 		$value = "extant: $row->{extant}";
 	    }
+	}
+	
+	elsif ( $field eq 'firstAppearanceMinMa' )
+	{
+	    $value = $row->{firstapp_min_ma} if defined $row->{firstapp_min_ma};
+	}
+	
+	elsif ( $field eq 'firstAppearanceMin' )
+	{
+	    $value = $row->{firstapp_min} if defined $row->{firstapp_min};
+	}
+	
+	elsif ( $field eq 'firstAppearanceMaxMa' )
+	{
+	    $value = $row->{firstapp_max_ma} if defined $row->{firstapp_max_ma};
+	}
+	
+	elsif ( $field eq 'firstAppearanceMax' )
+	{
+	    $value = $row->{firstapp_max} if defined $row->{firstapp_max};
+	}
+	
+	elsif ( $field eq 'lastAppearanceMa' )
+	{
+	    $value = $row->{lastapp_ma} if defined $row->{lastapp_ma};
+	}
+	
+	elsif ( $field eq 'lastAppearance' )
+	{
+	    $value = $row->{lastapp} if defined $row->{lastapp};
+	}
+	
+	elsif ( $field eq 'appearanceNColl' )
+	{
+	    $value = $row->{firstapp_ncoll} if defined $row->{firstapp_ncoll};
+	}
+	
+	elsif ( $field eq 'ageRange' )
+	{
+	    $value = $row->{firstapp_agerange} if defined $row->{firstapp_agerange};
 	}
 	
 	# Then append the value to the output list, or the empty string if
@@ -1742,11 +2318,19 @@ sub emitTaxonJSON {
 	$output .= ',"scientificNameAuthorship":"' . DataQuery::json_clean($authorship) . '"';
     }
     
-    if ( defined $row->{parent_no} && $row->{parent_no} > 0 ) {
+    if ( defined $row->{parent_no} && $row->{parent_no} > 0 and not
+	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+	 ( $self->{rooted_result} and ref $self->{root_taxa} and
+	   $self->{root_taxa}{$row->{taxon_no}} ) )
+    {
 	$output .= ',"parentNameUsageID":"' . $row->{parent_no} . '"';
     }
     
-    if ( defined $row->{parent_name} && $self->{show_parent_names} ) {
+    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and $self->{show_parent_names} and not
+	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
+	 ( $self->{rooted_result} and ref $self->{root_taxa} and
+	   $self->{root_taxa}{$row->{taxon_no}} ) )
+    {
 	$output .= ',"parentNameUsage":"' . DataQuery::json_clean($row->{parent_name}) . '"';
     }
     
@@ -1781,6 +2365,51 @@ sub emitTaxonJSON {
     
     if ( defined $row->{extant} and $row->{extant} =~ /(yes|no)/i ) {
 	$output .= ',"extant":"' . $1 . '"';
+    }
+    
+    if ( defined $row->{firstapp_min} )
+    {
+	$output .= ',"firstAppearanceMin":"' . $row->{firstapp_min} . '"';
+	$output .= ',"firstAppearanceMinMa":"' . $row->{firstapp_min_ma} . '"';
+    }
+    
+    if ( defined $row->{firstapp_max} )
+    {
+	$output .= ',"firstAppearanceMax":"' . $row->{firstapp_max} . '"';
+	$output .= ',"firstAppearanceMaxMa":"' . $row->{firstapp_max_ma} . '"';
+    }
+    
+    if ( defined $row->{lastapp} )
+    {
+	$output .= ',"lastAppearance":"' . $row->{lastapp} . '"';
+	$output .= ',"lastAppearanceMa":"' . $row->{lastapp_ma} . '"';
+    }
+    
+    if ( defined $row->{lastapp_min} )
+    {
+	$output .= ',"lastAppearanceMin":"' . $row->{lastapp_min} . '"';
+	$output .= ',"lastAppearanceMinMa":"' . $row->{lastapp_min_ma} . '"';
+    }
+    
+    if ( defined $row->{lastapp_max} )
+    {
+	$output .= ',"lastAppearanceMin":"' . $row->{lastapp_max} . '"';
+	$output .= ',"lastAppearanceMinMa":"' . $row->{lastapp_max_ma} . '"';
+    }
+    
+    if ( defined $row->{firstapp_ncoll} )
+    {
+	$output .= ',"appearanceNColl":"' . $row->{firstapp_ncoll} . '"';
+    }
+    
+    if ( defined $row->{firstapp_agerange} )
+    {
+	$output .= ',"ageRange":"' . $row->{firstapp_agerange} . '"';
+    }
+    
+    if ( defined $row->{firstapp_oldest_gap} )
+    {
+	$output .= ',"oldestGap":"' . $row->{firstapp_oldest_gap} . '"';
     }
     
     if ( defined $parents && ref $parents eq 'ARRAY' )

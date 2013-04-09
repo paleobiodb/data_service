@@ -594,6 +594,7 @@ sub displayITISDownload {
             push @line, ($pubtitle || "");
             push @line, ($row->{'pubyr'} || ""); # Listed pub date
             push @line, '','','','',''; #Actual pub date, publisher, pub place, isbn, issn
+	    #my $pages = Reference::coalescePages($pages{$row->{reference_no}});
             push @line, ($row->{'pages'} || ""); #pages
             push @line, ($row->{'comments'} || "");
             push @line, $row->{'modified_short'};
@@ -743,8 +744,8 @@ sub displayPBDBDownload {
 
     my ($filesystem_dir,$http_dir) = makeDataFileDir($s);
 
-    my %references;
-
+    my (%references, %pages);
+    
     # Create the opinions file 
     # Note that the opinions file MUST be created first -- this is because there is an option to get taxa
     # that have an opinion that fit the criteria attached to them, so we need to get a additional list of taxa
@@ -781,6 +782,7 @@ sub displayPBDBDownload {
 	    $csv_string =~ s/\r|\n//g;
 	    print FH_OP $csv_string."\n";  
 	    $references{$o->{'reference_no'}} = 1;
+	    $pages{$o->{reference_no}}{$o->{pages}} = 1;
 	}
     }
     
@@ -852,6 +854,7 @@ sub displayPBDBDownload {
 		print FH_VT $csv_string."\n";
 		$valid_count++;
 		$references{$t->{'reference_no'}} = 1;
+		$pages{$t->{reference_no}}{$t->{pages}} = 1;
 	    }
 	}
     }
@@ -874,7 +877,7 @@ sub displayPBDBDownload {
     
     $csv->combine(@header);
     print FH_IT $csv->string()."\n";
-    
+	
     if ( ref $names eq 'ARRAY' and @$names )
     {
 	foreach my $t (@$names) {
@@ -891,6 +894,7 @@ sub displayPBDBDownload {
 		print FH_IT $csv_string."\n";
 		$invalid_count++;
 		$references{$t->{'reference_no'}} = 1;
+	    $pages{$t->{reference_no}}{$t->{pages}} = 1;
 	    }
 	}
     }
@@ -910,8 +914,8 @@ sub displayPBDBDownload {
     
     my @references = keys %references;
     
-    open FH_REF, ">$filesystem_dir/references.csv"
-	or die "Could not open $filesystem_dir/references.csv: $!";
+    open FH_REF, ">$filesystem_dir/references.csv";
+    open FH_RIS, ">$filesystem_dir/references_ris.txt";
     
     if ( $q->param('output_data') =~ /basic/ )
     {
@@ -925,6 +929,7 @@ sub displayPBDBDownload {
     $csv->combine(@header);
     print FH_REF $csv->string()."\n";
     
+    my @ris_bad_list;
     if (@references)
     {
 	my $ref_list = join(',', @references);
@@ -941,6 +946,7 @@ sub displayPBDBDownload {
         $sth->execute();
         
         my $ref_count = 0;
+	my $ris_ref_count = 0;
         while (my $row = $sth->fetchrow_hashref()) {
             $ref_count++;
             my @line = ();
@@ -951,16 +957,39 @@ sub displayPBDBDownload {
             $csv->combine(@line);
             my $csv_string = $csv->string();
             $csv_string =~ s/\r|\n//g;
-            print FH_REF $csv_string."\n";  
+            print FH_REF $csv_string."\n";
+	    $row->{refpages} = Reference::coalescePages($pages{$row->{reference_no}});
+	    my $outref = Reference::formatRISRef($dbt, $row);
+	    if ( $outref =~ /PARSE ERROR/ )
+	    {
+		push @ris_bad_list, $row->{reference_no};
+	    }
+	    else
+	    {
+		$ris_ref_count++;
+		print FH_RIS $outref;
+	    }
         }
         my $ref_link = $http_dir."/references.csv";
-        print "<p>$ref_count references were printed to <a href=\"$ref_link\">references.csv</a></p>";
+	my $ris_link = $http_dir."/references_ris.txt";
+        print "<p>$ref_count references were printed to <a href=\"$ref_link\">references.csv</a></p>\n";
+	print "<p>$ris_ref_count references were printed to <a href=\"$ris_link\">references_ris.txt</a></p>\n";
+	
+	if ( @ris_bad_list )
+	{
+	    print "<p>The following references could not be printed due to erroneous data:<ul>\n";
+	    print "<li>$_</li>\n" foreach @ris_bad_list;
+	    print "</ul></p>\n";
+	}
     } else {
         print "<p>No references were printed</p>";
     }
 
     print '</td></tr></table></div>';
     print "<div align=\"center\"><h5><a href=\"$READ_URL?action=displayDownloadTaxonomyForm\">Do another download</a></h5></div><br>";
+    
+    close FH_REF;
+    close FH_RIS;
     
     cleanOldGuestFiles();
 }

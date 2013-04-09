@@ -2,4 +2,4 @@
 # so that DBD::mysql.pm can properly connect to the mysqld server.
 #
 export DYLD_LIBRARY_PATH=/usr/local/mysql/lib
-starman --listen :3000 --workers=2 bin/web_app.pl
+/opt/local/bin/starman --listen :3000 --workers=2 bin/web_app.pl

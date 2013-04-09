@@ -94,18 +94,26 @@
     </div>
     <br>... or enter the full name of the serial or book here:<br><textarea name="pubtitle" rows="2" cols="70" wrap="virtual"></textarea>
     </p>
-    <p id="editors" style="display: none;">
-    Book editors: <input name="editors" size="50">
+    <p id="editors">
+    Book editors: <input name="editors" size="50"><br />
+    </p>
+    <p id="pubinfo">
+    Publisher: <input name="publisher" size="40">
+    City: <input name="pubcity" size="20">
     </p>
     <p>
+    <span id="volinfo">
     Volume: <input name=pubvol size=5 value="" maxlength=10>
     Number: <input name=pubno size=4 value="" maxlength=10>
+    </span>
+    <span id="pageinfo">
     Page numbers: <input name=firstpage size=5 value="" maxlength=10>
     - <input name=lastpage size=5 value="" maxlength=10>
-    <span style="margin-left: 4em;"><input type=submit value="Submit"></span>
+    </span>
     </p>
     <p>
     DOI: <input name=doi size=24 value="">
+    <span style="margin-left: 4em;"><input type=submit value="Submit"></span>
     </p>
     <p>
     Comments:<br><textarea name="comments" rows="3" cols="70" wrap="virtual"></textarea>

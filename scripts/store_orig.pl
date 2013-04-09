@@ -4,7 +4,12 @@
 # 
 # Author: Michael McClennen
 
+<<<<<<< HEAD
 use lib qw(../cgi-bin);
+=======
+use lib qw(../cgi-bin/);
+#use lib qw(../pbdata/lib);
+>>>>>>> f7e4923de638db3ce65dc03b22dd619deaab9ef3
 use strict;	
 
 use Class::Date qw(date localdate gmdate now);

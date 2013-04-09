@@ -7,6 +7,8 @@ require Exporter;
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(dbg);  # symbols to export on request
 
+use Constants qw($CGI_DEBUG);
+
 use strict;
 
 # Debug level, 1 is minimal debugging, higher is more verbose
@@ -102,5 +104,116 @@ sub dbg {
     }
     return $Debug::DEBUG;
 }
+
+
+# The following two routines are for saving and loading the CGI state.  This
+# allows us to make a request using a web brower and then replay it under the
+# Perl debugger.  To activate this system, set CGI_DEBUG = 1 in pbdb.conf.
+# This will cause the last 5 requests to be saved.  Then run bridge.pl with
+# the number of the desired saved request: 1 = most recent, 2 = next-most,
+# etc.  Note: this only works if the directory 'saves' exists inside the main
+# pbdb directory.
+
+# save_cgi ( q )
+# 
+# Save the CGI state for later use in debugging.
+
+sub save_cgi {
+    
+    my ($q) = @_;
+    
+    my $script_path = $ENV{PWD} . '/' . $0;
+    my $savedir_path = $script_path;
+    $savedir_path =~ s{/cgi-bin/.*}{/saves};
+    
+    my ($save_fh);
+    
+    # Rename each of the save files q<n>.txt for n=1,2...$CGI_DEBUG-1 to
+    # q<n+1>.txt.
+    
+    for ( my $index = $CGI_DEBUG-1; $index > 0; $index-- )
+    {
+	my $next = $index + 1;
+	rename("$savedir_path/q$index.txt", "$savedir_path/q$next.txt");
+    }
+    
+    # Now save the CGI state, including the session cookie and path info, to
+    # /saves/q1.txt
+    
+    my $save_path = ">$savedir_path/q1.txt";
+    open($save_fh, $save_path) || die "can't open $save_path: $!";
+    
+    $q->save($save_fh);
+    
+    print $save_fh "session: " . $q->cookie('session_id') . "\n";
+    print $save_fh "path_info: " . $q->path_info() . "\n";
+    
+    close $save_fh || die "can't close $save_path: $!";
+}
+
+
+# load_cgi ( num )
+# 
+# Load the CGI state from a saved file (numbered 1-5; these hold the state for
+# the last 5 invocations of bridge.pl.)  Return a list of two objects: a CGI
+# object, and a Session object.
+
+sub load_cgi {
+    
+    my ($dbt, $arg) = @_;
+    
+    my $script_path = $ENV{PWD} . '/' . $0;
+    my $savedir_path = $script_path;
+    $savedir_path =~ s{/cgi-bin/.*}{/saves};
+    
+    my ($q, $s, $save_fh, $line, $print_args);
+    
+    if ( $arg =~ /^p([0-9]+)$/ )
+    {
+	$arg = $1;
+	$print_args = 1;
+    }
+    
+    die "Bad debug argument: $arg\n" unless $arg >= 1 and $arg <= $CGI_DEBUG;
+    
+    my $save_path = "$savedir_path/q$arg.txt";
+    open ($save_fh, $save_path) || die "can't open $save_path: $!\n";
+    
+    unless ( $print_args )
+    {
+	$q = CGI->new($save_fh);
+    }
+    
+    while ( defined($line = <$save_fh>) )
+    {
+	if ( $print_args )
+	{
+	    print $line;
+	    next;
+	}
+	
+	chomp $line;
+	
+	if ( $line =~ /^session: (.*)/ )
+	{
+	    $s = Session->new($dbt, $1);
+	}
+	elsif ( $line =~ /^path_info: (.*)/ )
+	{
+	    $q->{'.path_info'} = $1;
+	}
+    }
+    
+    if ( $print_args )
+    {
+	exit;
+    }
+    
+    else
+    {
+	return $q, $s;
+    }
+}
+
 
 1;

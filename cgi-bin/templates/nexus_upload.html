@@ -1,0 +1,18 @@
+<form method="POST" action="%%write_url%%" enctype="multipart/form-data">
+<input type="hidden" name="action" value="processNexusUpload">
+
+<div align="center"><p class="pageTitle">%%page_title%%</p>
+
+<p class="errorTitle">%%error_message%%</p>
+  
+<div class="displayPanel">
+<p class="medium">File to upload:&nbsp;<input type=file name="nexus_file" accept="text/*,.nex"></p>
+  <p class="medium">Optional description or notes about this file (1024 characters max)<br>
+  <textarea cols=60 rows=4 name="notes"></textarea></p>
+  <input type="checkbox" name="replace" value="Replace existing file">
+  Replace existing file&nbsp;&nbsp;
+  <input type="submit" name="submit" value="Upload">
+  </div>
+  </div>
+
+</form>

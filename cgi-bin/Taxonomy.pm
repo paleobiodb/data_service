@@ -5388,7 +5388,7 @@ sub generateQueryFields {
 	
 	else
 	{
-	    carp "unrecognized value '$inc' in option 'fields'";
+	    carp "unrecognized value '$inc' for option 'fields'";
 	}
     }
     

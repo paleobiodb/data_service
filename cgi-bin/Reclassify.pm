@@ -315,32 +315,6 @@ sub processReclassifyForm	{
 	my @new_reid_taxa = $q->param('reid_taxon_no');
 	my @reids = $q->param('reid_no');
 
-	# nothing fancy for the eco database: update and bomb out
-	if ( $DB eq "eco" )	{
-		foreach my $i (0..$#old_taxa)	{
-			my $old_taxon_no = $old_taxa[$i];
-			my ($new_taxon_no,$authority) = split /\+/,$new_taxa[$i];
-			if ( $old_taxa[$i] != $new_taxa[$i] )	{
-            			my $dbh_r = $dbt->dbh;
-				my $sql = "UPDATE $OCCURRENCES SET taxon_no=".$new_taxon_no.", modifier_no=".$s->get('enterer_no');
-				if ( $old_taxon_no > 0 )	{
-					$sql .= " WHERE taxon_no=" . $old_taxon_no;
-				} else	{
-					$sql .= " WHERE taxon_no=0";
-				}
-				if ($occurrences[$i] =~ /^\d+$/) {
-					$sql .= " AND $OCCURRENCE_NO=" . $occurrences[$i];
-					$dbh_r->do($sql);
-				} elsif ($occurrence_lists[$i] =~ /^[\d, ]+$/) {
-					$sql .= " AND $OCCURRENCE_NO IN (".$occurrence_lists[$i].")";
-					$dbh_r->do($sql);
-				}
-			}
-		}
-		Collection::inventoryInfo($dbt,$q,$s,$hbo,Collection::inventoryEditLinks($q->param('inventory_no')));
-		return;
-	}
-
 	print $hbo->stdIncludes($PAGE_TOP);
 
 	print "<center>\n\n";

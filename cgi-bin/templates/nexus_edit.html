@@ -1,0 +1,75 @@
+<form method="POST" name="nexform" action="%%write_url%%" enctype="multipart/form-data">
+<input type="hidden" name="action" value="updateNexusFile">
+<input type="hidden" name="nexusfile_no">
+<input type="hidden" name="deleteReference">
+<input type="hidden" name="moveReference">
+
+<div align="center"><p class="pageTitle">Edit nexus file: <i>%%filename%%</i></p>
+
+<p class="errorTitle">%%error_message%%</p>
+  
+<div align="center" show="download_link">
+  <p class="blue"><a href="%%download_link%%">Download this file</a></p>
+</div>
+
+<div align="left" class="displayPanel">
+
+  <!--<p>Uploaded: %%date_created%% &nbsp;&nbsp; Modified: %%date_modified%%</p>-->
+  <br/>
+  <div class="displayPanel">
+    <span class="displayPanelHeader">References</span>
+    <span show="reference_string"><p><em>%%reference_string%%</em></p></span>
+    <p class="displayPanelText">%%references%%</p>
+    <input type=submit name="addReference" value="Add reference">
+    </div>
+
+  <div class="displayPanel">
+    <span class="displayPanelHeader">Taxonomic names</span>
+    <p class="displayPanelText">%%taxa%%</p>
+    <input type=submit name="scanTaxa" value="Rescan this file">
+    </div>
+
+  <div class="displayPanel">
+    <span class="displayPanelHeader">Notes</span>
+    <p style="margin-top: 0"><textarea cols=60 rows=4 name="notes"></textarea></p>
+    </div>
+  
+  <div class="displayPanel">
+    <span class="displayPanelHeader">Info</span>
+    <p>Filename: <input type="text" name="filename" size="60"></p>
+    <span class="small">Uploaded: %%date_created%% &nbsp;&nbsp; Modified: %%date_modified%%</span>
+    </div>
+
+    <p>
+    <table border="0" width="800">
+      <tr><td width="40%">
+	<input type="submit" name="saveNexusInfo" value="Save">
+	<input type="submit" name="cancelNexusInfo" value="Cancel">
+      </td>
+      <td>
+	<input type="submit" name="deleteNexusFile" value="Delete this file" onclick="return confirm('Delete this file permanently from the system?');">
+	</td>
+	</tr></table>
+    </p>
+  </div>
+  </div>
+
+</form>
+
+<script language="JavaScript" type="text/javascript">
+<!--
+
+function delRef (ref_no)
+{
+    document.nexform.deleteReference.value=ref_no;
+    document.nexform.submit();
+}
+
+
+function moveRef (ref_no)
+{
+    document.nexform.moveReference.value=ref_no;
+    document.nexform.submit();
+}
+-->
+</script>

@@ -397,12 +397,12 @@ sub displayOpinionForm {
     if ( $fields{'author1last'} && $fields{'pubyr'} =~ /^[0-9]{4}$/ )	{
         my $auth = $fields{'author1last'};
         $auth =~ s/'/\\'/g;
-        my $sql = "SELECT reference_no FROM refs WHERE author1last='".$auth."' AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'};
+        my $sql = "SELECT reference_no FROM refs WHERE author1last=".$dbh->quote($auth)." AND pubyr=".$fields{'pubyr'}." AND reference_no!=".$fields{'reference_no'};
         if ( $s->get('reference_no') > 0 )	{
             $sql .= " AND reference_no!=".$s->get('reference_no');
         }
         if ( $fields{'author2last'} )	{
-            $sql .= " AND author2last='".$fields{'author2last'}."'";
+            $sql .= " AND author2last=".$dbh->quote($fields{'author2last'});
         }
         my @refs = @{$dbt->getData($sql)};
         for my $r ( @refs )	{

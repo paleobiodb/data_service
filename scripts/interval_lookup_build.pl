@@ -6,5 +6,4 @@ use DBTransactionManager;
 use TimeLookup;
 
 my $dbt = new DBTransactionManager();
-my $t = new TimeLookup($dbt);
-$t->generateLookupTable($dbt,1);
+TimeLookup::buildLookupTable($dbt);

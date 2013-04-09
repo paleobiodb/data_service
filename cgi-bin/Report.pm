@@ -1425,4 +1425,61 @@ sub fastTaxonCount {
 }
 
 
+# JA 26-27.3.12
+# simple display of major museum list drawn from new museums table plus
+#  basic stats and links
+# museums table should include all museums with at least 100 documented
+#  type specimens in the system; to check this, try:
+# select museum,count(*) c from authorities a,taxa_tree_cache t where a.taxon_no=t.taxon_no and t.taxon_no=spelling_no group by museum having c>=100;
+sub museums	{
+	my ($dbt,$hbo) = @_;
+	my %vars;
+
+	# the table is tiny
+	my $sql = "SELECT * FROM museums";
+	my (%about,%lookup,%typeCount,%collCount);
+	$about{$_->{code}} = $_ foreach @{$dbt->getData($sql)};
+	for my $code ( keys %about )	{
+		$lookup{$code} = $code;
+		if ( $about{$code}->{aka} )	{
+			$lookup{$_} = $about{$code}->{code} foreach split /,/,$about{$code}->{aka};
+		}
+	}
+
+	$sql = "SELECT museum,count(*) c FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND t.taxon_no=spelling_no AND taxon_rank='species' AND FIND_IN_SET(museum,'".join(',',keys %lookup)."') GROUP BY museum ORDER BY museum";
+	$typeCount{$lookup{$_->{museum}}} += $_->{c} foreach @{$dbt->getData($sql)};
+
+	$sql = "SELECT museum,count(*) c FROM collections GROUP BY museum";
+	my @colls = @{$dbt->getData($sql)};
+	# collections museum is a set, so getting counts is a pain
+	for my $c ( @colls )	{
+		my @codes = split /,/,$c->{museum};
+		$collCount{$lookup{$_}} += $c->{c} foreach @codes;
+	}
+
+	for my $code ( sort keys %typeCount )	{
+		if ( ! $about{$code}->{name} )	{
+			next;
+		}
+		if ( $about{$code}->{aka} )	{
+			$about{$code}->{code} .= ",".$about{$code}->{aka};
+			$about{$code}->{code} =~ s/,/\//g;
+		}
+		$about{$code}->{name} = "<a href=\"http://$about{$code}->{website}\">". $about{$code}->{name}."</a>";
+		if ( $about{$code}->{now_at} =~ /museum|academy|instit/i )	{
+			$about{$code}->{now_at} = "the ".$about{$code}->{now_at};
+		}
+		$about{$code}->{name} .= ( $about{$code}->{now_at} ) ? "<br><span class=\"tiny\">&nbsp;now housed at ".$about{$code}->{now_at}."</span>" : "";
+		$vars{museum_list} .= "<tr>\n<td valign=\"top\">$about{$code}->{code}</td>\n";
+		for my $col ( 'name','city','country' )	{
+			$vars{museum_list} .= "<td valign=\"top\">$about{$code}->{$col}</td>\n";
+		}
+		$vars{museum_list} .= qq|<td valign="top"><span class="mockLink" onClick="searchTypes('$code');">$typeCount{$code}</span></td>\n|;
+		$vars{museum_list} .= qq|<td valign="top"><span class="mockLink" onClick="searchCollections('$code');">$collCount{$code}</span></td>\n|;
+		$vars{museum_list} .= "</tr>\n";
+	}
+	print $hbo->populateHTML("museum_form", \%vars);
+}
+
+
 1;
