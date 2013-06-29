@@ -11,6 +11,7 @@ package TaxonQuery;
 use strict;
 use base 'DataQuery';
 
+use Taxonomy;
 
 my ($show_values) = "=over 4
 
@@ -341,6 +342,11 @@ sub setParameters {
 	}
     }
     
+    # We use the default taxonomy.  If more than one taxonomy becomes
+    # available, we should add a parameter which will select which one to use.
+    
+    $self->{taxonomy} = Taxonomy->new($self->{dbh}, 'taxon_trees');
+    
     return 1;
 }
 
@@ -652,82 +658,38 @@ sub setParametersMultiple {
 sub fetchSingle {
 
     my ($self) = @_;
-    my ($sql, @extra_fields);
     
-    # Get ahold of a database handle by which we can make queries.
+    # We start with the taxonomy we are using, and with a hash which will
+    # contain the parameters for selecting the desired result.
     
-    my $dbh = $self->{dbh};
+    my $taxonomy = $self->{taxonomy};
+    my $taxon_no;
+    my $select = {};
     
     # Then figure out which taxon we are looking for.  If we have a taxon_no,
     # we can use that.
     
-    my $taxon_no;
-    my $not_found_msg;
+    my $not_found_msg = "Taxon number $self->{base_taxon_no} was not found in the database";
     
     if ( defined $self->{base_taxon_no} )
     {
 	$taxon_no = $self->{base_taxon_no};
-	
-	# Unless we were directed to use the exact taxon specified, we need to
-	# look up the senior synonym.  the senior synonym.  Because the
-	# synonym_no field is not always correct, we may need to iterate this
-	# query.  For efficiency, we do three iterations in one query.
-	
-	unless ( $self->{base_exact} )
-	{
-	    my $sql = "SELECT t3.synonym_no
-	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
-				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-	     WHERE t1.taxon_no = ?";
-	    
-	    ($taxon_no) = $dbh->selectrow_array($sql, undef, $taxon_no);
-	}
-	
-	$not_found_msg = "Taxon number $self->{base_taxon_no} was not found in the database";
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
     
     else
     {
-	my $rank_clause = '';
-	my @args = $self->{base_taxon_name};
-	
 	$not_found_msg = "Taxon '$self->{base_taxon_name}' was not found in the database";
-	
-	# If a rank was specified, add a clause to narrow it down.
+	my $name_select = { order => 'size.desc', spelling => 'exact' };
 	
 	if ( defined $self->{base_taxon_rank} )
 	{
-	    $rank_clause = "and a.taxon_rank = ?";
-	    push @args, $self->{base_taxon_rank};
-	    
+	    $name_select->{rank} = $self->{base_taxon_rank};
 	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
 	}
 	
-	# If we were directed to return the exact taxon specified, we just
-	# look it up in the authorities table.
-	
-	if ( $self->{base_exact} )
-	{
-	    my $sql = "SELECT a.taxon_no
-		FROM authorities a WHERE a.taxon_name = ? $rank_clause";
-	    
-	    ($taxon_no) = $dbh->selectrow_array($sql, undef, @args);
-	}
-	
-	# Otherwise, we need to find the senior synonym (see above).
-	
-	else
-	{
-	    my $sql = "SELECT t3.synonym_no
-		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
-				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
-				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-		WHERE a.taxon_name = ? $rank_clause";
-	    
-	    ($taxon_no) = $dbh->selectrow_array($sql, undef, @args);
-	}
+	($taxon_no) = $taxonomy->getTaxaByName($self->{base_taxon_name}, $name_select);
     }
     
     # If we haven't found a record, the result set will be empty.
@@ -739,56 +701,21 @@ sub fetchSingle {
     
     # Now add the fields necessary to show the requested info.
     
-    if ( defined $self->{show_ref} )
-    {
-	push @extra_fields, "r.author1init r_ai1", "r.author1last r_al1",
-	    "r.author2init r_ai2", "r.author2last r_al2", "r.otherauthors r_oa",
-		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
-		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
-			"r.firstpage r_fp", "r.lastpage r_lp";
-    }
+    my @fields;
     
-    if ( defined $self->{show_attribution} )
-    {
-	push @extra_fields, 
-	    "if (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) a_pubyr",
-		"if (a.ref_is_authority = 'YES', r.author1last, a.author1last) a_al1",
-		    "if (a.ref_is_authority = 'YES', r.author2last, a.author2last) a_al2",
-			"if (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) a_ao";
-    }
+    push @fields, 'ref' if $self->{show_ref};
+    push @fields, 'attr' if $self->{show_attribution};
+    push @fields, 'kingdom' if $self->{show_code};
     
-    # If we need to show the nomenclatural code under which the taxon falls,
-    # include the necessary fields.  We also need to get the tree-range for
-    # Metazoa and Plantae.
+    $select->{fields} = \@fields;
     
-    if ( defined $self->{show_code} )
-    {
-	push @extra_fields, "t.lft";
-	$self->getCodeRanges();
-    }
+    # If we aren't asked for the exact taxon, choose the senior synonym.
     
-    my $extra_fields = join(', ', @extra_fields);
-    $extra_fields = ", " . $extra_fields if $extra_fields ne '';
+    my $rel = $self->{base_exact} ? 'self' : 'senior';
     
     # Next, fetch basic info about the taxon.
     
-    $sql = 
-	"SELECT a.taxon_no, a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status, o.spelling_reason,
-		pa.taxon_no as parent_no, pa.taxon_name as parent_name, t.spelling_no, t.synonym_no, t.orig_no,
-		xa.taxon_no as accepted_no, xa.taxon_name as accepted_name
-		$extra_fields
-         FROM authorities a JOIN taxa_tree_cache t USING (taxon_no)
-	       	LEFT JOIN refs r USING (reference_no)
-		LEFT JOIN opinions o USING (opinion_no)
-		LEFT JOIN authorities xa ON (xa.taxon_no = CASE
-		    WHEN status <> 'belongs to' AND status <> 'invalid subgroup of' THEN o.parent_spelling_no
-		    WHEN t.taxon_no <> t.synonym_no THEN t.synonym_no END)
-		LEFT JOIN (taxa_tree_cache pt JOIN authorities pa ON (pa.taxon_no = pt.synonym_no))
-		    ON (pt.taxon_no = if(o.status = 'belongs to', o.parent_spelling_no, null))
-         WHERE a.taxon_no = ?";
-    
-    $self->{main_sth} = $dbh->prepare($sql);
-    $self->{main_sth}->execute($taxon_no);
+    ($self->{result_row}) = $taxonomy->getRelatedTaxon($taxon_no, $rel, $select);
     
     return 1;
 }
@@ -804,20 +731,22 @@ sub fetchSingle {
 sub fetchMultiple {
 
     my ($self) = @_;
-    my ($sql);
-    my (@filter_list, @extra_tables, @extra_fields);
+    
     my ($taxon_limit) = "";
     my ($process_as_parent_list) = 0;
     
-    # Get ahold of a database handle by which we can make queries.
+    # We start with the taxonomy we are using, and with a hash which will
+    # contain the parameters for selecting the desired result.
     
-    my $dbh = $self->{dbh};
+    my $taxonomy = $self->{taxonomy};
+    my $taxon_no;
+    my $select = {};
     
-    # If a query limit has been specified, construct the appropriate SQL string.
+    # If a query limit has been specified, add the appropriate parameter.
     
     if ( defined $self->{limit_results} )
     {
-	$taxon_limit = "LIMIT " . ($self->{limit_results} + 0);
+	$select->{limit} = $self->{limit_results} + 0;
     }
     
     # Now process the various parameters that limit the scope of the query:

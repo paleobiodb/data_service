@@ -478,6 +478,17 @@ sub generateSingleResult {
 	    $self->generateFooter();
     }
     
+    # Otherwise, if we have a result row already, use that.
+    
+    elsif ( defined $self->{result_row} )
+    {
+	$self->processRecord($self->{result_row});
+	$self->{row_count} = 1;
+	
+	return $self->generateHeader() . $self->generateRecord($self->{result_row}, is_first => 1) .
+	    $self->generateFooter();
+    }
+    
     # Otherwise, we have an empty result set.
     
     else

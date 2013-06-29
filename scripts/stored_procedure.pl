@@ -16,11 +16,68 @@ $dbh->do("CREATE PROCEDURE anyopinion ( t int unsigned )
 $dbh->do("DROP PROCEDURE IF EXISTS taxoninfo");
 $dbh->do("CREATE PROCEDURE taxoninfo (t int unsigned )
 	BEGIN
-		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, 
-		       taxon_trees.parent_no, opinion_no
-		FROM authorities JOIN taxon_trees USING (orig_no)
+		SELECT a.taxon_no, t.orig_no, a.taxon_name, a.taxon_rank, status, t.synonym_no,
+		       t.parent_no, opinion_no
+		FROM authorities as a JOIN taxon_trees as t on a.taxon_no = t.spelling_no
+			JOIN authorities as a2 on a2.orig_no = t.orig_no
+			LEFT JOIN opinions USING (opinion_no)
+		WHERE a2.taxon_no = t;
+	END");
+
+$dbh->do("DROP PROCEDURE IF EXISTS exactinfo");
+$dbh->do("CREATE PROCEDURE exactinfo (t int unsigned )
+	BEGIN
+		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, t.synonym_no,
+		       t.parent_no, opinion_no
+		FROM authorities JOIN taxon_trees as t using (orig_no)
 			LEFT JOIN opinions USING (opinion_no)
 		WHERE taxon_no = t;
+	END");
+
+$dbh->do("DROP PROCEDURE IF EXISTS taxonrange");
+$dbh->do("CREATE PROCEDURE taxonrange (t int unsigned )
+	BEGIN
+		SELECT taxon_no, orig_no, taxon_name, taxon_rank, t.lft, t.rgt, t.synonym_no,
+		       t.parent_no
+		FROM authorities JOIN taxon_trees as t using (orig_no)
+			LEFT JOIN opinions USING (opinion_no)
+		WHERE taxon_no = t;
+	END");
+
+$dbh->do("DROP PROCEDURE IF EXISTS nameinfo");
+$dbh->do("CREATE PROCEDURE nameinfo (t varchar(80))
+	BEGIN
+		IF instr(t, ' ') > 0 THEN
+		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, t.synonym_no,
+		       t.parent_no, opinion_no
+		FROM authorities JOIN taxon_trees as t using (orig_no)
+			LEFT JOIN opinions using (opinion_no)
+		WHERE taxon_name like t and taxon_rank in ('subgenus', 'species', 'subspecies');
+		ELSE
+		SELECT taxon_no, orig_no, taxon_name, taxon_rank, status, t.synonym_no,
+		       t.parent_no, opinion_no
+		FROM authorities JOIN taxon_trees as t using (orig_no)
+			LEFT JOIN opinions using (opinion_no)
+		WHERE taxon_name like t and taxon_rank not in ('subgenus', 'species', 'subspecies');
+		END IF;
+	END");
+
+$dbh->do("DROP PROCEDURE IF EXISTS namerange");
+$dbh->do("CREATE PROCEDURE namerange (t varchar(80))
+	BEGIN
+		IF instr(t, ' ') > 0 THEN
+		SELECT taxon_no, orig_no, taxon_name, taxon_rank, t.lft, t.rgt, t.synonym_no,
+		       t.parent_no
+		FROM authorities JOIN taxon_trees as t using (orig_no)
+			LEFT JOIN opinions using (opinion_no)
+		WHERE taxon_name like t and taxon_rank in ('subgenus', 'species', 'subspecies');
+		ELSE
+		SELECT taxon_no, orig_no, taxon_name, taxon_rank, t.lft, t.rgt, t.synonym_no,
+		       t.parent_no
+		FROM authorities JOIN taxon_trees as t using (orig_no)
+			LEFT JOIN opinions using (opinion_no)
+		WHERE taxon_name like t and taxon_rank not in ('subgenus', 'species', 'subspecies');
+		END IF;
 	END");
 
 $dbh->do("DROP PROCEDURE IF EXISTS tninfo");
@@ -57,41 +114,97 @@ $dbh->do("CREATE PROCEDURE bestopinion (t int unsigned)
 		SELECT * from best_opinions WHERE orig_no = t;
 	END");
 
-# compute_ancestry ( select )
+# compute_ancestry ( auth_table, tree_table, taxon_nos )
 # 
-# Using the seed values in the table 'ancestry_aux', which should all be taxon
-# numbers, iteratively add all taxonomic parents to the table until no more
-# are found.  This will produce a list of all ancestors of the given taxa
-# (including the starting taxa themselves).  If 'select' is 1, then finish by
-# selecting the taxon numbers from the table.  If 'select' is 2, then select
-# only the taxon numbers representing parents (not the originals).  If
-# 'select' is 0, don't select anything.
+# Starting with the taxa specified by the parameter 'taxon_nos', generate a
+# list of the corresponding orig_no values along with all parents up to the
+# top of their taxonomic trees.  These values will be left in the table
+# 'ancestry_scratch', which should be locked from before this call until after
+# the values are no longer needed.
 # 
-# This procedure is used in Taxonomy.pm.
+# The locking requirement is unfortunate, but made necessary by a limitation
+# of MySQL.  Stored procedures cannot access temporary tables more than once
+# in the same procedure.  Thus, 'ancestry_scratch' must be a permanent table,
+# shared among all connections to the database.
 # 
-# Note that we start by substituting orig_no values for taxon_no values, and
-# then deleting everything that isn't an orig_no.  This allows the caller to seed the
-# table with taxon_nos that are not necessarily original.
+# All three parameters must be strings.  The first two are the names of the
+# authority table and tree table to use, respectively.  The third parameter
+# should be a comma-separated list of taxon_no values.
 
 $dbh->do("DROP PROCEDURE IF EXISTS compute_ancestry");
-$dbh->do("CREATE PROCEDURE compute_ancestry (s int)
+$dbh->do("CREATE PROCEDURE compute_ancestry (auth_table varchar(80), tree_table varchar(80), taxon_nos varchar(32000))
 	BEGIN
-		UPDATE IGNORE ancestry_aux as s
-			JOIN authorities as a on s.orig_no = a.taxon_no
-			SET s.orig_no = a.orig_no;
-		DELETE IGNORE s FROM ancestry_aux as s LEFT JOIN authorities as a using (orig_no)
-			WHERE a.orig_no is null;
-		SET \@gen = 1;
-		SET \@cnt = s + 1;
-		WHILE \@cnt > s DO
-			INSERT IGNORE INTO ancestry_aux select t.parent_no, \@gen+1
-				FROM ancestry_aux as s JOIN taxon_trees as t using (orig_no)
-					JOIN authorities as a on a.taxon_no = t.spelling_no
-				WHERE t.parent_no > 0 and a.taxon_rank <> 'kingdom' and gen = \@gen;
+		# Clear the scratch table
+		DELETE FROM ancestry_scratch;
+		# Insert the taxonomic concepts specified by 'taxon_nos'
+		SET \@stmt1 = CONCAT('INSERT INTO ancestry_scratch SELECT orig_no FROM ',
+				     auth_table, ' WHERE taxon_no in(', taxon_nos, ')');
+		PREPARE seed_table FROM \@stmt1;
+		EXECUTE seed_table;
+		# Now iterate adding parents to the table until no more are to
+		# be found.
+		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_scratch SELECT parent_no ',
+				     'FROM ancestry_scratch JOIN ', tree_table, ' using (orig_no) ',
+				     'WHERE parent_no > 0');
+		PREPARE compute_parents	FROM \@stmt2;
+		SET \@cnt = 1;
+		WHILE \@cnt > 0 DO
+			EXECUTE compute_parents;
 			SET \@cnt = ROW_COUNT();
-			SET \@gen = \@gen + 1;
 		END WHILE;
 	END");
+
+
+
+# $dbh->do("DROP PROCEDURE IF EXISTS compute_ancestry");
+# $dbh->do("CREATE PROCEDURE compute_ancestry (s int)
+# 	BEGIN
+# 		UPDATE IGNORE ancestry_aux as s
+# 			JOIN authorities as a on s.orig_no = a.taxon_no
+# 			SET s.orig_no = a.orig_no;
+# 		DELETE IGNORE s FROM ancestry_aux as s LEFT JOIN authorities as a using (orig_no)
+# 			WHERE a.orig_no is null;
+# 		SET \@gen = 1;
+# 		SET \@cnt = s + 1;
+# 		WHILE \@cnt > s DO
+# 			INSERT IGNORE INTO ancestry_aux select t.parent_no, \@gen+1
+# 				FROM ancestry_aux as s JOIN taxon_trees as t using (orig_no)
+# 					JOIN authorities as a on a.taxon_no = t.spelling_no
+# 				WHERE t.parent_no > 0 and a.taxon_rank <> 'kingdom' and gen = \@gen;
+# 			SET \@cnt = ROW_COUNT();
+# 			SET \@gen = \@gen + 1;
+# 		END WHILE;
+# 	END");
+
+
+# $dbh->do("DROP PROCEDURE IF EXISTS compute_ancestry");
+# $dbh->do("CREATE PROCEDURE compute_ancestry (tree_table varchar(80))
+# 	BEGIN
+# 		# Replace all values in ancestry_aux with corresponding
+# 		# orig_no values.
+# 		UPDATE IGNORE ancestry_aux as s
+# 			JOIN authorities as a on s.orig_no = a.taxon_no
+# 			SET s.orig_no = a.orig_no;
+# 		# Delete all values from ancestry_aux that have no orig_no
+# 		DELETE IGNORE s FROM ancestry_aux as s LEFT JOIN authorities as a using (orig_no)
+# 			WHERE a.orig_no is null;
+# 		# Determine the starting depth
+# 		SET \@stmt1 = CONCAT('SELECT max(depth) FROM ancestry_aux JOIN ', tree_table,
+# 				     ' using (orig_no) INTO \@depth');
+# 		PREPARE compute_depth FROM \@stmt1;
+# 		EXECUTE compute_depth;
+# 		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_aux SELECT t.parent_no ',
+# 				     'FROM ancestry_aux as s JOIN ', tree_table, ' as t using (orig_no) ',
+# 				     'WHERE t.parent_no > 0 and depth = ?');
+# 		PREPARE compute_parents	FROM \@stmt2;
+# 		SET \@cnt = 1;
+# 		WHILE \@cnt > 0 DO
+# 			EXECUTE compute_parents USING \@depth;
+# 			SET \@cnt = ROW_COUNT();
+# 			SET \@depth = \@depth - 1;
+# 		END WHILE;
+# 	END");
+
 
 # compute_taxon_match ( a, cg, csg, csp )
 # 

@@ -715,7 +715,6 @@
 | taxa_tree_cache        | taxon_no               | PRI  | NO   | int         |
 | taxa_tree_cache        | lft                    | MUL  | NO   | int         |
 | taxa_tree_cache        | rgt                    | MUL  | NO   | int         |
-| taxa_tree_cache        | orig_no                |      | YES  | int         |
 | taxa_tree_cache        | spelling_no            | MUL  | NO   | int         |
 | taxa_tree_cache        | synonym_no             | MUL  | NO   | int         |
 | taxa_tree_cache        | opinion_no             | MUL  | NO   | int         |
