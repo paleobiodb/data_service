@@ -816,7 +816,7 @@ sub buildTables {
     
     my $keep_temps = $step_control->{k} || $options->{keep_temps};
     
-    activateNewTables($dbh, $tree_table, $keep_temps)
+    activateNewTaxonomyTables($dbh, $tree_table, $keep_temps)
 	if $step_control->{i};
     
     logMessage(1, "done building tree tables for '$tree_table'");
