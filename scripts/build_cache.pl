@@ -12,7 +12,7 @@ my $t = Taxonomy->new($dbh, 'taxon_trees');
 
 my %options;
 
-getopts('tTmbk', \%options);
+getopts('tT:mbk', \%options);
 #getopts('abcdefghikxmMyt', \%options);
 
 ensureOrig($dbh);
