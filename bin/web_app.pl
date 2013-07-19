@@ -12,11 +12,13 @@ package PBDB_Data;
 use Dancer;
 use Dancer::Plugin::Database;
 use Dancer::Plugin::StreamData;
+use Dancer::Plugin::ValidateParams;
 use Try::Tiny;
 use Scalar::Util qw(blessed);
 use Pod::Simple::HTML;
 use Pod::Simple::Text;
 
+use Taxonomy;
 use DataQuery;
 use TaxonQuery;
 use TreeQuery;
@@ -30,7 +32,130 @@ set log => 'debug';
 our(%HELP_TEXT);
 
 
-# Provide the style sheet
+# Specify the parameters we will accept, and the acceptable value types for
+# each of them.
+
+ruleset '1.1:common_params' => 
+    [content_type => 'ct', 'json', 'xml', 'txt=text/tab-separated-values', 'csv', 
+		{ key => 'output_format' }],
+    [optional => 'limit', POS_ZERO_VALUE, { default => $DataQuery::DEFAULT_LIMIT } ],
+    [optional => 'limit', ENUM_VALUE('all'),
+      { error => "acceptable values for 'limit' are a positive integer, 0, or 'all'" } ],
+    [optional => 'offset', POS_ZERO_VALUE],
+    [optional => 'count', FLAG_VALUE];
+
+ruleset '1.1:common_display' =>
+    [optional => 'vocab', ENUM_VALUE('dwc', 'com', 'pbdb')],
+    # The following are only relevant for .csv and .txt output
+    [optional => 'quoted', FLAG_VALUE],
+    [optional => 'no_header', FLAG_VALUE],
+    [optional => 'linebreak', ENUM_VALUE('cr','crlf'), { default => 'crlf' }];
+
+ruleset '1.1:taxon_specifier' => 
+    [param => 'name', \&TaxonQuery::validNameSpec, { alias => 'taxon_name' }],
+    [param => 'id', POS_VALUE, { alias => 'taxon_id' }],
+    [at_most_one => 'name', 'id', 'taxon_id'],
+    [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact'),
+      { default => 'current' } ];
+
+ruleset '1.1:taxon_selector' =>
+    [param => 'taxon_name', \&TaxonQuery::validNameSpec, { alias => 'name' }],
+    [param => 'taxon_id', INT_LIST_PERMISSIVE(1), { alias => 'id' }],
+    [param => 'base_name', \&TaxonQuery::validNameSpec],
+    [param => 'base_id', INT_LIST_PERMISSIVE(1)],
+    [param => 'leaf_name', \&TaxonQuery::validNameSpec],
+    [param => 'leaf_id', INT_LIST_PERMISSIVE(1)],
+    [param => 'status', ENUM_VALUE('valid', 'senior', 'invalid', 'all'),
+      { default => 'valid' } ],
+    [at_most_one => 'name', 'taxon_name', 'id', 'taxon_id', 'base_name', 'base_id'],
+    [at_most_one => 'name', 'taxon_name', 'id', 'taxon_id', 'leaf_name', 'leaf_id'],
+    [at_most_one => 'leaf_name', 'leaf_id'],
+    [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact', 'all'),
+      { default => 'current' } ];
+
+ruleset '1.1:taxon_filter' => 
+    [optional => 'rank', \&TaxonQuery::validRankSpec],
+    [optional => 'extant', BOOLEAN_VALUE],
+    [optional => 'depth', POS_VALUE];
+
+ruleset '1.1:taxon_display' => 
+    [optional => 'show', LIST_PERMISSIVE('ref','attr','time','coll','phyl','size','det','all')],
+    [optional => 'exact', FLAG_VALUE];
+
+ruleset '1.1:taxa/single' => 
+    [require => '1.1:taxon_specifier',
+	{ error => "you must specify either 'name' or 'id'" }],
+    [allow => '1.1:taxon_display'],
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1/taxa/list' => 
+    [require => '1.1:taxon_selector',
+	{ error => "you must specify one of 'name', 'id', 'status', 'base_name', 'base_id', 'leaf_name', 'leaf_id'" }],
+    [allow => '1.1:taxon_filter'],
+    [allow => '1.1:taxon_display'],
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:coll_specifier' =>
+    [param => 'id', POS_VALUE, { alias => 'coll_id' }];
+
+ruleset '1.1:coll_selector' =>
+    [param => 'id', INT_LIST_PERMISSIVE(1), { alias => 'coll_id' }],
+    [param => 'bin_id', STRING_VALUE],
+    [param => 'taxon_name', \&TaxonQuery::validNameSpec],
+    [param => 'taxon_id', INT_LIST_PERMISSIVE(1)],
+    [param => 'base_name', \&TaxonQuery::validNameSpec],
+    [param => 'base_id', INT_LIST_PERMISSIVE(1)],
+    [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
+    [param => 'lng_min', REAL_VALUE('-180.0','180.0')],
+    [param => 'lng_max', REAL_VALUE('-180.0','180.0')],
+    [param => 'lat_min', REAL_VALUE('-90.0','90.0')],
+    [param => 'lat_max', REAL_VALUE('-90.0','90.0')],
+    [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
+	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
+    [param => 'loc', STRING_VALUE],		# This should be a geometry in WKT format
+    [param => 'min_ma', REAL_VALUE(0)],
+    [param => 'max_ma', REAL_VALUE(0)],
+    [param => 'interval', STRING_VALUE],
+    [optional => 'time_strict', FLAG_VALUE];
+
+ruleset '1.1:coll_display' =>
+    [param => 'show', LIST_PERMISSIVE('ref','sref','loc','time','taxa','occ','det')];
+
+ruleset '1.1:colls/single' => 
+    [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
+    [allow => '1.1:coll_display'],
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:colls/list' => 
+    [require => '1.1:coll_selector', { error => "you must specify one of: 'id', 'bin_id', 'taxon_name', 'taxon_id', 'base_name', 'base_id', ('lng_min', 'lng_max', 'lat_min' and 'lat_max'), 'loc', 'min_ma', 'max_ma', 'interval'" }],
+    [allow => '1.1:coll_display'],
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:summary_display' => 
+    [param => 'level', INT_VALUE(1,2), { default => 1 }],
+    [param => 'show', LIST_VALUE('chron', 'all')];
+
+ruleset '1.1:colls/summarize' => 
+    [require => '1.1:coll_selector'],
+    [allow => '1.1:summary_display'],
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+
+# Send app pages
+
+get '/app/:filename' => sub {
+    
+    my $filename = param "filename";
+    return send_file("app/$filename", streaming => 1);
+};
+
+
+# Provide the style sheet for documentation pages
 
 get '/data/css/dsdoc.css' => sub {
     
@@ -39,500 +164,210 @@ get '/data/css/dsdoc.css' => sub {
 };
 
 
-# Translate URL paths that begin with version numbers
+# Translate old URLs without a version number (we assume they are 1.0).
 
-get qr{/data(\d+.\d+)/(.*)} => sub {
+get qr{/data(/.*)} => sub {
     
-    $DB::single = 1;
-    my ($version, $path) = splat;
-    forward "/data/$path", { v => $version };
-};
-
-
-# Translate URL paths without version numbers
-
-get qr{/taxa/(.*)} => sub {
-    
-    $DB::single = 1;
     my ($path) = splat;
-    forward "/data/taxa/$path", { v => '1.0' };
+    forward "/data1.0$path";
 };
 
-get qr{/collections/(.*)} => sub {
 
+# If the given URL asks for documentation, provide that as best we can.  If
+# the given path does not correspond to any known documentation, we provide
+# a page explaining what went wrong and providing the proper URLs.
+
+get qr{/data([^/]*)(/.+)\.(html|pod)} => sub {
+    
     $DB::single = 1;
+    my ($version, $path, $ct) = @_;
+    sendDocumentation($version, $path, ct => $ct);
+};
+
+get qr{/data([^/]*)(/[^.]+)?} => sub {
+    
+    $DB::single = 1;
+    my ($version, $path) = @_;
+    sendDocumentation($version, $path, ct => 'html');
+};
+
+
+# Now we have the version 1.1 routes
+
+get '/data1.1/taxa/single.:ct' => sub {
+
+    querySingle('TaxonQuery', v => '1.1',
+		validation => '1.1:taxa/single',
+		op => 'single');
+};
+
+get '/data1.1/taxa/:id.:ct' => sub {
+
+    querySingle('TaxonQuery', v => '1.1',
+		validation => '1.1:taxa/single',
+		op => 'single');
+};
+
+get '/data1.1/taxa/list.:ct' => sub {
+
+    queryMultiple('TaxonQuery', v => '1.1',
+		  validation => '1.1:taxa/list',
+		  op => 'list');
+};
+
+get '/data1.1/taxa/all.:ct' => sub {
+
+    queryMultiple('TaxonQuery', v => '1.1',
+		  validation => '1.1:taxa/list',
+		  op => 'list');
+};
+
+get '/data1.1/taxa/hierarchy.:ct' => sub {
+
+    queryMultiple('TaxonQuery', v => '1.1',
+		  validation => '1.1:taxa/list',
+		  op => 'hierarchy');
+};
+
+get '/data1.1/colls/single.:ct' => sub {
+    
+    querySingle('CollectionQuery', v => '1.1',
+		validation => '1.1:colls/single',
+		op => 'single');
+};
+
+get '/data1.1/colls/:id.:ct' => sub {
+    
+    querySingle('CollectionQuery', v => '1.1',
+		validation => '1.1:colls/single',
+		op => 'single');
+};
+
+get '/data1.1/colls/list.:ct' => sub {
+
+    queryMultiple('CollectionQuery', v => '1.1',
+		  validation => '1.1:colls/list',
+		  op => 'list');
+};
+
+get '/data1.1/colls/all.:ct' => sub {
+
+    queryMultiple('CollectionQuery', v => '1.1',
+		  validation => '1.1:colls/list',
+		  op => 'list');
+};
+
+get '/data1.1/colls/summary.:ct' => sub {
+
+    queryMultiple('CollectionQuery', v => '1.1',
+		  validation => '1.1:colls/summary',
+		  op => 'summary');
+};
+
+# Any other URL beginning with '/data1.1/' is an error.
+
+get qr{/data1\.1/(.*)} => sub {
+
     my ($path) = splat;
-    forward "/data/collections/$path", { v => '1.0' };
+    $DB::single = 1;
+    returnErrorResult({}, "404 Not found");
 };
 
 
-# Deal with individual pages
+# Now we try the version 1.0 URLs
 
-get qr{/data/?} => sub {
+# require "web_app10.pm";
     
-    $DB::single = 1;
-    showUsage('/');
-};
 
-get qr{/data/(\w+)/?} => sub {
-    
-    $DB::single = 1;
+# Anything that falls through to here is a bad request
+
+get qr{(.*)} => sub {
+
     my ($path) = splat;
-    showUsage("/$path/");
+    $DB::single = 1;
+    returnErrorResult({}, "404 Not found");
 };
 
 
-$HELP_TEXT{'HEADER'} = "
-=head1 PaleoDB Data Service[1]
-
-=head2 VERSION
-
-This page documents L<version [V]|[URL:/]> of the service.
-";
-
-
-$HELP_TEXT{'/1.0'} = "
-[HEADER]
-
-=head2 DESCRIPTION
-
-The function of this service is to provide programmatic access to the information stored in the Paleobiology Database.  This information can be retrieved in two different formats: XML and JSON.  The field names are taken for the most part from the L<Darwin Core|http://rs.tdwg.org/dwc/> standard.
-
-=head2 VERSION
-
-This page documents version 1.0 of the data service.
-
-=head2 SCOPE
-
-This service currently provides access to the following information:
-
-=over 4
-
-=item L<Taxonomic entries|[URL:/taxa/]>
-
-The PaleoDB includes over 1,000,000 taxonomic entries organized into a hierarchy that encompasses life past and present.
-
-=item L<Collections|[URL:/collections/]>
-
-The core of the PaleoDB is our list of taxonomic collections
-from around the globe.
-
-=back
-
-=head2 USAGE
-
-In general, all requests to this service should conform to the following guidelines:
-
-=over 4
-
-=item 1
-
-The HTTP method must be GET or HEAD.
-
-=item 2
-
-Each request must include a service version number, in order to select which version of the service you wish to use.  Different versions may provide different URL paths, different parameters, different output field names, and so on.  The current version of this service is 1.0.  Prior versions may be supported for an indefinite period of time, so that existing client applications will not break when we upgrade to a new version.
-
-=item 3
-
-All URLs must start with either C</data/> or C</dataE<lt>versionE<gt>> (i.e. C</data1.0/>).  If the version number is not given in the URL path, it must be specified with the parameter 'v' as in C</url/path?v=1.0&other_parameters>.  Information about the currently accepted versions can be found through the following links:
-
-=over 4
-
-=item B<version 1.0>
-
-L<[URL:B1.0]> or L<[URL:P1.0]>
-
-=back
-
-=item 4
-
-The return data type is indicated by the suffix on the URL path.  Any URL path ending in C<.json> will return a JSON object, while paths ending in C<.xml> will return XML data in the Darwin Core format.  Any URL path ending in '.html' will return usage information (not data) as an HTML page.
-
-=item 5
-
-Each URL has a set of major parameters, at least one of which is required in order to return information.  Any request that does not include one of these major parameters will respond with usage information.
-
-=item 6
-
-Documentation about the currently valid URLs can be found through the following links:
-
-=over 4
-
-=item L<[URL:/taxa/list.html]>
-
-=item L<[URL:/taxa/hierarchy.html]>
-
-=item L<[URL:/taxa/details.html]>
-
-=item L<[URL:/collections/list.html]>
-
-=item L<[URL:/collections/details.html]>
-
-=back
-
-=back
-
-=head2 RESPONSE
-
-All data requested through this service can be returned in either of two formats: JSON and XML.  The output format is selected by the suffix on the URL path, which can be .json or .xml respectively.  The following sections provide more information on each format.
-
-Each response is limited by default to 500 records, unless a different limit is specified by the use of the C<limit> parameter.  If you specify C<limit=all>, then all matching records will be returned.  I<Be warned that the result set may exceed one million records for some queries!>  Please be responsible about using such queries, so as not to overwhelm our server.
-
-You can always get a count of the number of records found, by including the C<count> parameter (no value is required).  This will include two additional pieces of information in the response: the number of records found, and the number of records returned (which may be smaller because of the limit noted above).  By using C<count> with C<limit=0>, you can find out how many records would be returned without actually getting any data.
-
-The HTTP response code will indicate the following conditions:
-
-=over 4
-
-=item B<200>
-
-The request was fulfilled.  You must check the contents of the response to determine whether or not any records were found and returned.
-
-=item B<400>
-
-The request could not be fulfilled, because of invalid parameters
-
-=item B<404>
-
-The request could not be fulfilled, because of an invalid URL path.
-
-=item B<500>
-
-The request could not be fulfilled, because a server error occurred.
-
-=back
-
-=head3 JSON responses
-
-All JSON responses will be single objects, which may contain one or more of the following fields:
-
-=over 4
-
-=item B<records>
-
-If the request could be fulfilled, this field will be present.  Its value will be an array (possibly empty) of JSON objects each representing a record in the result set.  The fields of these individual objects are described in the documentation for each URL path.
-
-=item B<records_found>
-
-If the C<count> parameter was specified, this field will be present and will state the number of records found by the query.  This number may exceed the limit on records returned.
-
-=item B<records_returned>
-
-If the C<count> parameter was specified, this field will be present and will state the number of records actually returned.
-
-=item B<error>
-
-If the request could not be fulfilled because of invalid parameters, this field will be present and will contain a diagnostic error message.  If the request could not be fulfilled because of a server error, the message will not be very helpful.  In that case, you will need to contact the server administrator.
-
-=item B<warnings>
-
-If problems occurred which did not prevent the request from being fulfilled, this field will be present.  Its value will be an array of strings, each one providing a diagnostic message.
-
-=back
-
-=head3 XML responses
-
-All XML responses will be formatted as L<Darwin Core|http://rs.tdwg.org/dwc/>
-record sets.  Additional information (if any) will be provided via XML comments, which may include one or more of the following:
-
-=over 4
-
-=item C<E<lt>!-- records found: I<n> --E<gt>>
-
-If the C<count> parameter was specified, this comment will be present and will state the number of records found by the query.  This number may exceed the limit on records returned.
-
-=item C<E<lt>!-- records returned: I<n> --E<gt>>
-
-If the C<count> parameter was specified, this comment will be present and will state the number of records actually returned.
-
-=item C<E<lt>!-- warnings: I<messages> --E<gt>>
-
-If problems occurred which did not prevent the request from being fulfilled, this comment will be present.  It will include a list of diagnostic messages, separated by semicolons.
-
-=back
-
-If an error occurs that prevents the request from being fulfilled, the response will simply be the error message as plain text.
-
-[FOOTER]
-
-=cut
-";
-
-
-$HELP_TEXT{RESPONSE} = "
-=head2 RESPONSE
-
-See L<here|[URL:/#RESPONSE]> for the structure of the response.  The field names for each record are taken from the Darwin Core standard, with a few necessary additions.  The fields provided by this URL path are as follows:
-
-";
-
-
-$HELP_TEXT{RESPONSE_NOFIELDS} = "
-=head2 RESPONSE
-
-See L<here|[URL:/#RESPONSE]> for the structure of the response.  The field names for each record are taken from the Darwin Core standard, with a few necessary additions.
-
-";
-
-
-$HELP_TEXT{FOOTER} = "
-=head2 AUTHOR
-
-This service is provided by the L<Paleobiology Database|http://www.paleodb.org/cgi-bin/bridge.pl?a=displayPage&page=paleodbFAQ>, a joint project of the L<University of Wisconsin-Madison|http://www.wisc.edu/> and L<Macquarie University|http://www.mq.edu.au/>.
-
-If you have questions about this service, please contact Michael McClennen E<lt>L<mmcclenn\@geology.wisc.edu|mailto:mmcclenn\@geology.wisc.edu>E<gt>.
-";
-
-$HELP_TEXT{'/taxa/1.0'} = "
-[HEADER:/taxa/]
-
-=head2 DESCRIPTION
-
-The URL paths under this heading provide access to the taxonomic hierarchy stored in the Paleobiology Database.
-
-=head2 USAGE
-
-The currently available paths are as follows:
-
-=over 4
-
-=item L</taxa/list|[URL:/taxa/list.html]>
-
-A query using this path will return a list of records representing taxa that match the criteria specified by the parameters.  It can be used to show the descendants of a given taxon, the ancestors of a given taxon, taxa whose names match a given pattern, taxa of a given rank, or all of the taxa in the database (the latter will be an extremely large result set).
-
-=item L</taxa/details|[URL:/taxa/details.html]>
-
-A query using this path will return a single record representing the given taxon, which can be specified either by name or by identifier (taxon_no).
-
-=item L</taxa/hierarchy|[URL:/taxa/hierarchy.html]>
-
-A query using this path will return a hierarchical list of records representing the portion of the hierarchy rooted at the given taxon.  The base taxon can be specified either by name or by identifier (taxon_no).
-
-=back
-
-[FOOTER]
-
-";
-
-
-$HELP_TEXT{'/taxa/hierarchy1.0'} = "[HEADER:/taxa/hierarchy]
-
-=head2 DESCRIPTION
-
-The function of this URL path is to retrieve parts of the taxonomic hierarchy stored in the Paleobiology Database.  The records are returned either as a hierarchical list in JSON format or as a L<Darwin Core|http://rs.tdwg.org/dwc/terms/index.html> record set in XML format depending upon the suffix provided.
-
-The records returned by this URL path provide minimal detail.  If you need more extensive data about the returned taxa, use L<[URL:/taxa/list.CT]> instead.  See L<[URL:/]> for more information about the format of the responses.
-
-=head2 USAGE
-
-Here are some usage examples:
-
-=over 4
-
-L<[URL:/taxa/hierarchy.json?base_name=Dascillidae]>
-
-L<[URL:/taxa/hierarchy.json?taxon_no=69296]>
-
-L<[URL:/taxa/hierarchy.xml?base_name=Dascillidae&rank=genus]>
-
-=back
-
-[PARAMS]
-
-[REQS]
-
-[RESPONSE]
-
-[FOOTER]
-";
-
-get '/data/taxa/hierarchy.:ct' => sub {
-
-    doQueryMultiple('TreeQuery', '/taxa/hierarchy');
-};
-
-
-$HELP_TEXT{'/taxa/list1.0'} = "[HEADER:/taxa/list]
-
-=head2 DESCRIPTION
-
-The function of this URL path is to retrieve parts of the taxonomic hierarchy stored in the Paleobiology Database.  The records are returned either as a straight list in JSON format or as a L<Darwin Core|http://rs.tdwg.org/dwc/terms/> record set in XML format depending upon the suffix provided.
-
-This URL path provides a variety of options for selecting which taxa to display, and a number of options to select which information to return about them.
-
-=head2 USAGE
-
-Here are some usage examples:
-
-=over 4
-
-L<[URL:/taxa/list.json?base_name=Dascillidae&type=synonyms&extant]>
-
-L<[URL:/taxa/list.json?base_no=69296&show=ref,attr]>
-
-L<[URL:/taxa/list.xml?leaf_name=Dascillidae]>
-
-=back
-
-[PARAMS]
-
-[REQS]
-
-[RESPONSE]
-
-[FOOTER]
-";
-
-get '/data/taxa/list.:ct' => sub {
-    
-    doQueryMultiple('TaxonQuery', '/taxa/list');
-};
-
-
-get '/data/taxa/all.:ct' => sub {
-
-    forward '/taxa/list.' . params->{ct};
-};
-
-
-$HELP_TEXT{'/taxa/details1.0'} = "[HEADER:/taxa/details]
-
-=head2 DESCRIPTION
-
-The function of this URL path is to retrieve detailed information about a single taxon from the Paleobiology Database.  The record is returned as an object in JSON format or as a L<Darwin Core|http://rs.tdwg.org/dwc/> record set in XML format depending upon the suffix provided.
-
-=head2 USAGE
-
-Here are some usage examples:
-
-=over 4
-
-L<[URL:/taxa/details.json?taxon_name=Dascillidae]>
-
-L<[URL:/taxa/details.json?taxon_no=69296&show=ref,attr]>
-
-=back
-
-[PARAMS]
-
-[REQS]
-
-[RESPONSE]
-
-[FOOTER]
-";
-
-get '/data/taxa/details.:ct' => sub {
-
-    doQuerySingle('TaxonQuery', '/taxa/details');
-};
-
-
-get qw{/data/taxa/(\d+)\.(\w+)} => sub {
-       
-    my ($id, $ct) = splat;
-    forward "/data/taxa/details.$ct", { id => $id, deprecated => 1 };
-};
-
-
-$HELP_TEXT{'/collections/1.0'} = "[HEADER:/collections/]
-
-=head2 DESCRIPTION
-
-The URL paths under this heading provide access to information about paleontological collections stored in the Paleobiology Database.
-
-=head2 USAGE
-
-The currently available paths are as follows:
-
-=over 4
-
-=item L</collections/list|[URL:/collections/list.html]>
-
-A query using this path will return a list of records representing collections that match the criteria specified by the parameters.
-
-=item L</collections/details|[URL:/collections/details.html]>
-
-A query using this path will return a single record representing a collection, which must be specified by identifier (collection_no).
-
-=back
-
-[FOOTER]
-";
-
-
-$HELP_TEXT{'/collections/list1.0'} = "[HEADER:/collections/list]
-
-The function of this URL is to retrieve information about paleontological collections from the Paleobiology Database.  There are a variety of options to select which collections to display, and a number of options to select which information to display about them.
-
-[PARAMS]
-
-[REQS]
-
-[RESPONSE]
-
-[FOOTER]
-";
-
-get '/data/collections/list.:ct' => sub {
-
-    doQueryMultiple('CollectionQuery', '/collections/list');
-};
-
-
-$HELP_TEXT{'/collections/details'} = "[HEADER:/collections/details]
-
-=head2 DESCRIPTION
-
-The function of this URL is to retrieve detailed information about a single paleontological collection from the Paleobiology Database.  There are a number of options to select which information to display about the indicated collection.
-
-[PARAMS]
-
-[REQS]
-
-[RESPONSE]
-
-[FOOTER]
-";
-
-get '/data/collections/details.:ct' => sub {
-
-    doQuerySingle('CollectionQuery', '/collections/details');
-};
-
-
-# The following routines are used in the execution of the above routes.
-
-
-# doQueryMultiple ( class )
+# querySingle ( class, attrs )
 # 
-# Execute a multiple-result query on the given class, using the URL parameters
-# from the current request.
+# Execute a single-result query on the given class, using the parameters
+# specified by the current request.  Those derived from the URL path are in
+# %attrs, those from the URL arguments are in %$params.
 
-sub doQueryMultiple {
-    
-    my ($class, $label) = @_;
+sub querySingle {
+
+    my ($class, %attrs) = @_;
     
     my ($query, $result);
-    my ($params) = scalar(params);
     
     try {
 	
 	$DB::single = 1;
 	
-	# Set the content type of the response, or generate an error if
-	# $params->{ct} is unrecognized.
+	# Create a new query object.
 	
-	setContentType($params->{ct});
+	$query = $class->new(database(), %attrs);
 	
-	# Otherwise, create a new query object, set the parameters, and execute
-	# it the query.
+	# Validate and clean the parameters.  If an error occurs,
+	# an error response will be generated automatically.
 	
-	$query = $class->new(dbh => database(), version => 'multiple');
+	$query->{params} = validate_request($attrs{validation}, params);
 	
-	$query->checkParameters($params);
-	$query->setParameters($params);
+	# Determine the output fields and vocabulary.
+	
+	$query->setOutputList();
+	
+	# Execute the query and generate the result.
+	
+	$query->fetchSingle();
+	$result = $query->generateSingleResult();
+    }
+    
+    # If an error occurs, return an appropriate error response to the client.
+    
+    catch {
+
+	$result = returnErrorResult($query, $_);
+    };
+    
+    # Send the result back to the client.
+    
+    return $result;
+}
+
+
+# queryMultiple ( class, attrs )
+# 
+# Execute a multiple-result query on the given class, using the parameters
+# specified by the current request.  Those derived from the URL path are in
+# %attrs, those from the URL arguments are in %$params.
+
+sub queryMultiple {
+    
+    my ($class, %attrs) = @_;
+    
+    my ($query, $result);
+    
+    try {
+	
+	$DB::single = 1;
+	
+	# Create a new query object.
+	
+	$query = $class->new(database(), %attrs);
+	
+	# Validate and clean the parameters.  If an error occurs,
+	# an error response will be generated automatically.
+	
+	$query->{params} = validate_request($attrs{validation}, params);
+	
+	# Determine the output fields and vocabulary.
+	
+	$query->setOutputList();
+	
+	# Execute the query and generate the result.
+	
 	$query->fetchMultiple();
 	
 	# If the server supports streaming, call generateCompoundResult with
@@ -560,53 +395,7 @@ sub doQueryMultiple {
     
     catch {
 	
-	$result = returnErrorResult($query, $label, $_);
-    };
-    
-    return $result;
-}
-
-
-# doQuerySingle ( )
-# 
-# Execute a single-result query on the given class, using the URL parameters
-# from the current request.
-
-sub doQuerySingle {
-
-    my ($class, $label) = @_;
-    
-    my ($query, $result);
-    my ($params) = scalar(params);
-    
-    try {
-	
-	$DB::single = 1;
-	
-	# Set the content type of the response, or generate an error if
-	# $params->{ct} is unrecognized.
-	
-	setContentType($params->{ct});
-	
-	# Create a new query object, set the parameters, and execute it the
-	# query.
-	
-	$query = $class->new(dbh => database(), version => 'single');
-	
-	$query->checkParameters($params);
-	$query->setParameters($params);
-	$query->fetchSingle();
-	
-	# Generate the result and return it.
-	
-	$result = $query->generateSingleResult();
-    }
-    
-    # If an error occurs, pass it to returnErrorResult.
-    
-    catch {
-
-	$result = returnErrorResult($query, $label, $_);
+	$result = returnErrorResult($query, $_);
     };
     
     return $result;
@@ -672,6 +461,11 @@ sub setContentType {
 	content_type 'text/html; charset=utf-8';
     }
     
+    elsif ( $ct eq 'csv' )
+    {
+	content_type 'text/csv; charset=utf-8';
+    }
+    
     elsif ( $ct eq 'txt' )
     {
 	content_type 'text/plain; charset=utf-8';
@@ -679,14 +473,14 @@ sub setContentType {
     
     else
     {
-	status(415);
 	content_type 'text/plain';
-	halt("Unknown Media Type: '$ct' is not supported by this application; use '.json', '.xml', or '.txt' instead");
+	status(415);
+	halt("Unknown Media Type: '$ct' is not supported by this application; use '.json', '.xml', '.csv' or '.txt' instead");
     }
 }
 
 
-# returnErrorResult ( exception )
+# returnErrorResult ( message )
 # 
 # This method is called if an exception occurs during execution of a route
 # subroutine.  If $exception is a blessed reference, then we pass it on (this
@@ -704,7 +498,7 @@ sub setContentType {
 
 sub returnErrorResult {
 
-    my ($query, $label, $exception) = @_;
+    my ($query, $exception) = @_;
     my ($code) = 500;
     
     # If the exception is a blessed reference, pass it on.  It's most likely a
@@ -718,7 +512,7 @@ sub returnErrorResult {
     # Otherwise, if it's a string that starts with 4xx, break that out as the
     # HTTP result code.
     
-    if ( $exception =~ /^(4\d+)\s+(.*)/ )
+    if ( defined $exception and $exception =~ /^(4\d+)\s+(.*)/ )
     {
 	$code = $1;
 	$exception = $2;
@@ -728,8 +522,9 @@ sub returnErrorResult {
     
     else
     {
-	error "Caught an error at " . scalar(gmtime) . ":\n";
-	error $exception;
+	print STDERR "\n=============\nCaught an error at " . scalar(gmtime) . ":\n";
+	print STDERR $exception;
+	print STDERR "=============\n";
 	$exception = "A server error occurred during processing of this request.  Please notify the administrator of this website.";
     }
     
@@ -737,7 +532,7 @@ sub returnErrorResult {
     
     if ( $exception =~ /^help/ )
     {
-	my $pod = getHelpText($query, $label);
+	my $pod = 'HELP'; #getHelpText($query, $label);
 	my $parser;
 	
 	if ( $query->{show_pod} )
@@ -745,7 +540,7 @@ sub returnErrorResult {
 	    $exception = $pod;
 	}
 	
-	elsif ( params->{ct} eq 'html' )
+	elsif ( $query->{ct} eq 'html' )
 	{
 	    $parser = new Pod::Simple::HTML;
 	    $parser->html_css('/data/css/dsdoc.css');
@@ -765,7 +560,7 @@ sub returnErrorResult {
     
     # Send back JSON results as an object with field 'error'.
     
-    if ( params->{ct} eq 'json' )
+    if ( defined $query->{params}{ct} and $query->{params}{ct} eq 'json' )
     {
 	status($code);
 	
@@ -781,7 +576,7 @@ sub returnErrorResult {
     
     # A content type of HTML means we were asked for some documentation.
     
-    elsif ( params->{ct} eq 'html' )
+    elsif ( defined $query->{params}{ct} and $query->{params}{ct} eq 'html' )
     {
 	status(200);
 	content_type 'text/html';

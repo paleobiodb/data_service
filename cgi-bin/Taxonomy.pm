@@ -1385,7 +1385,7 @@ sub getTaxaByName {
 	
 	$SQL_STRING = "
 		SELECT $query_fields
-		FROM $search_table as s JOIN $auth_table as a2 using (taxon_no)
+		FROM $search_table as s JOIN $auth_table as a2 on s.match_no = a2.taxon_no
 			$join_string
 			JOIN $auth_table as a ON a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table o on o.opinion_no = t.opinion_no
@@ -2278,7 +2278,7 @@ sub getTaxaByOpinions {
     
     # Execute the SQL statement and return the result list (if there is one).
     
-    my $result_list = $dbh->selectall_arrayref($SQL_STRING, {});
+    $result_list = $dbh->selectall_arrayref($SQL_STRING, {});
     
     # If we didn't find any results, return nothing.
     

@@ -15,15 +15,15 @@ use JSON;
 use Encode;
 
 
-our ($CURRENT_VERSION) = '1.0';
+our ($CURRENT_VERSION) = '1.1';
 
-our (%VERSION_ACCEPTED) = ( '1.0' => 1 );
+our (%VERSION_ACCEPTED) = ( '1.0' => 1, '1.1' => 1 );
 
-our ($DEFAULT_RESULT_LIMIT) = 500;	# Default limit on the number of
+our ($DEFAULT_LIMIT) = 500;		# Default limit on the number of
                                         # results, unless overridden by the
                                         # query parameter "limit=all".
 
-our ($STREAM_THRESHOLD) = 102400;	# If the result is above this size,
+our ($STREAM_THRESHOLD) = 20480;	# If the result is above this size,
                                         # and the server is capable of
                                         # streaming, then it will be streamed.
 
@@ -39,93 +39,25 @@ our (%TAXONOMIC_RANK) = ( 'max' => 26, 'informal' => 26, 'unranked_clade' => 25,
 
 # new ( dbh, version )
 # 
-# Generate a new query object, using the given database handle and version
-# label.  The usual version labels are 'single' and 'multiple'.  These
-# indicate whether the query should return a single record or multiple
-# records.
+# Generate a new query object, using the given database handle and any other
+# attributes that are specified.
 
 sub new {
     
-    my ($class, %fields) = @_;
-    my $self = { %fields };
+    my ($class, $dbh, %fields) = @_;
+    
+    # First select a Taxonomy to use in satisfying this query (not all queries
+    # actually need this).
+    
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    # Now create a query record.
+    
+    my $self = { dbh => $dbh, taxonomy => $taxonomy, %fields };
+    
+    # Bless it into the proper class and return it.
     
     return bless $self, $class;
-}
-
-
-# describeParameters ( )
-# 
-# Returns a message describing the available parameters for this query.
-
-sub describeParameters {
-    
-    my ($self) = @_;
-    
-    no strict 'refs';
-    
-    my $v = $self->{v}; $v =~ s/\./_/g;
-    
-    my $v1 = ref($self) . '::PARAM_DESC_' . uc($self->{version}) . '_' . $v;
-    my $v2 = ref($self) . '::PARAM_DESC_' . $v;
-    
-    my $desc = $$v1 || $$v2;
-    
-    $desc .= "\n=over 4\n\n=item B<limit>
-
-return at most the specified number of records (positive integer or 'all') - defaults to $DataQuery::DEFAULT_RESULT_LIMIT if not specified\n\n";
-    
-    $desc .= "=item B<count>
-
-include a count of the number of records found and returned (boolean)\n\n"
-	unless $self->{version} eq 'single';
-    
-    $desc .= "=back\n\n";
-    
-    return $desc;
-}
-
-
-# describeRequirements ( )
-# 
-# Returns a message describing the parameter requirements for this query.
-# Subclasses should not override this method; rather, they should define the
-# package variable $PARAM_REQS (or $PARAM_REQS_<VERSION>) which this routine
-# will make use of.
-
-sub describeRequirements {
-    
-    my ($self) = @_;
-    
-    no strict 'refs';
-    
-    my $v = $self->{v}; $v =~ s/\./_/g;
-    
-    my $v1 = ref($self) . '::PARAM_REQS_' . uc($self->{version}) . '_' . $v;
-    my $v2 = ref($self) . '::PARAM_REQS_' . $v;
-    
-    return $$v1 || $$v2;
-}
-
-
-# describeFields ( )
-# 
-# Returns a message describing the output fields for this query.
-# Subclasses should not override this method; rather, they should define the
-# package variable $FIELD_DESC (or $FIELD_DESC_<VERSION>) which this routine
-# will make use of.
-
-sub describeFields {
-    
-    my ($self) = @_;
-    
-    no strict 'refs';
-    
-    my $v = $self->{v}; $v =~ s/\./_/g;
-    
-    my $v1 = ref($self) . '::FIELD_DESC_' . uc($self->{version}) . '_' . $v;
-    my $v2 = ref($self) . '::FIELD_DESC_' . $v;
-    
-    return $$v1 || $$v2;
 }
 
 
@@ -142,134 +74,6 @@ sub warn {
     
     $self->{warnings} = [] unless defined $self->{warnings};
     push @{$self->{warnings}}, $message;
-}
-
-
-# setParameters ( params )
-# 
-# This method is designed to be overridden by subclasses and then called via
-# SUPER.  It accepts a hash of parameter values, filters them for correctness,
-# and sets the appropriate fields of the query object.  It is designed to be
-# called from a Dancer route, although that is not a requirement.
-# 
-# This method handles only parameters that are common to this class.
-
-sub setParameters {
-
-    my ($self, $params) = @_;
-    
-    # The 'limit' parameter, if given, limits the size of the result set.  If
-    # not specified, a default limit of $DEFAULT_RESULT_LIMIT will be used.
-    # If 'all' is specified as the value, then the full result set will be
-    # returned no matter how large it is.
-    
-    if ( defined $params->{limit} )
-    {
-	if ( $params->{limit} eq 'all' )
-	{
-	    delete $self->{limit_results};	# remove any limit that might
-                                                # have been in place
-	}
-	
-	elsif ( $params->{limit} >= 0 )
-	{
-	    $self->{limit_results} = $params->{limit} + 0;
-	}
-	
-	else
-	{
-	    die "400 The parameter 'limit' takes a nonnegative integer or the string 'all'\n";
-	}
-    }
-    
-    else
-    {
-	$self->{limit_results} = $DEFAULT_RESULT_LIMIT;
-    }
-    
-    # The 'count' parameter only makes sense with a JSON-format result.  If
-    # true, it causes an extra piece of information to be returned:
-    # 'records_found', which gives the total number of records found
-    # regardless of any limit on the number returned.  Because of the 'limit'
-    # parameter, the number of records actually returned may be less than this
-    # number.
-    
-    if ( exists $params->{count} )
-    {
-	$self->{report_count} = 1;
-    }
-    
-    # The undocumented parameter 'pod' outputs unprocessed POD for help pages
-    # (for debugging purposes only).
-    
-    if ( defined $params->{pod} and $params->{pod} )
-    {
-	$self->{show_pod} = 1;
-    }
-    
-    # The undocumented parameter 'stream' allows for debugging streamed data
-    # responses.  Value should be 'yes' or 'no'.
-    
-    $self->{should_stream} = '';
-    
-    if ( $params->{stream} )
-    {
-	$self->{should_stream} = $params->{stream};
-    }
-    
-    # The 'ct' parameter sets the output format.  This must be specified in
-    # all cases.  Depending on the content type, we select the appropriate set
-    # of routines for generating the response body from the query result.
-    
-    if ( defined $params->{ct} )
-    {
-	my $ct = lc $params->{ct};
-	
-	if ( $ct eq 'xml' ) {
-	    $self->{output_format} = 'xml';
-	}
-	
-	elsif ( $ct eq 'json' ) {
-	    $self->{output_format} = 'json';
-	}
-	
-	elsif ( $ct eq 'txt' ) {
-	    $self->{output_format} = 'txt';
-	}
-	
-	elsif ( $ct eq 'html' ) {
-	    die "400 help\n";
-	}
-	
-	else
-	{
-	    die "415 The output format (URL suffix) must be one of 'xml', 'json', or 'txt'\n";
-	}
-    }
-    
-    # The 'sep' parameter is only relevant for text files.  It selects either
-    # comma-separated (csv) or tab-separated (tsv) output values.  The default
-    # is the latter.
-    
-    if ( defined $params->{sep} )
-    {
-	my $sep = lc $params->{sep};
-	
-	if ( $self->{output_format} ne 'txt' )
-	{
-	    die "400 The parameter 'sep' is only relevant for text (.txt) output.\n";
-	}
-	
-	elsif ( $sep eq 'csv' or $sep eq 'tsv' )
-	{
-	    $self->{value_sep} = $sep;
-	}
-	
-	else
-	{
-	    die "400 Unrecognized value '$sep' for parameter 'sep'.\n";
-	}
-    }
 }
 
 
@@ -328,98 +132,68 @@ sub parseRankParam {
 }
 
 
-sub parseBooleanParam {
-
-    my ($self, $param, $param_name) = @_;
-    
-    my $value = lc $param;
-    
-    if ( $value eq '1' or $value eq 'yes' or $value eq 'true' )
-    {
-	return 1;
-    }
-    
-    elsif ( $value eq '0' or $value eq 'no' or $value eq 'false' )
-    {
-	return 0;
-    }
-    
-    else
-    {
-	die "400 Value for '$param_name' must be one of: 1, 0, yes, no, true, false.\n";
-    }
-}
-
-
-# checkParameters ( params, good_params )
+# setOutputList ( )
 # 
-# Make sure that all of the keys in %$params are valid for this query.
-# $good_params should be a hash whose keys are parameters understood by the
-# calling script or application.
+# Determine the list of output rules for this query, based on the 'show'
+# parameter and the output format.
 
-sub checkParameters {
+sub setOutputList {
+
+    my ($self) = @_;
     
-    my ($self, $params) = @_;
+    # Set 'show' and 'show_order' based on the value of the 'show' parameter.
+    # Make sure that 'show_order' contains no duplicates.
+
+    my (@show, %show);
     
-    return unless ref $params eq 'HASH';
-    
-    # We first need to figure out what interface version we're checking
-    # against.  The 'v' parameter is required, and specifies the interface
-    # version being used.
-    
-    if ( defined $params->{v} and $params->{v} ne '' )
+    if ( ref $self->{params}{show} eq 'ARRAY' )
     {
-	my $v = $params->{v};
-	$self->{v} = $v;
-	
-	unless ( $VERSION_ACCEPTED{$v} )
+	foreach my $p ( @{$self->{params}{show}} )
 	{
-	    die "400 Unrecognized interface version '$v'.  Try using '$CURRENT_VERSION'.\n";
+	    next if $show{$p};
+	    $show{$p} = 1;
+	    push @show, $p;
 	}
     }
     
-    else
+    $self->{show} = \%show;
+    $self->{show_order} = \@show;
+    $self->{output_format} = $self->{params}{output_format};
+    
+    # Set the vocabulary according to the 'vocab' parameter, or defaulting to
+    # the best vocabulary for the content type.
+    
+    my $vocab = $self->{params}{vocab} ||
+	
+	($self->{output_format} eq 'json' ? 'com' :
+	 $self->{output_format} eq 'xml' ? 'dwc' :
+	 'pbdb');
+    
+    $self->{vocab} = $vocab;
+    
+    # Now set the actual list of output fields for the basic query operation
+    # and each of the requested sections.
+    
+    my @output_list;
+    my @proc_list;
+    
+    foreach my $section ($self->{op}, @show)
     {
-	$self->warn("You should specify an interface version if you are building an application using this service.  Otherwise, your application might break when we change the interface.  The current version is $CURRENT_VERSION.  You can add '&v=$CURRENT_VERSION' to the parameters, or prefix the path with /data$CURRENT_VERSION/ instead of just /data/");
-	$self->{v} = $CURRENT_VERSION;
+	next unless $section;
+	
+	push @output_list, grep {
+
+	    0 if $vocab eq 'dwc' and not exists $_->{dwc};
+	    0 if $vocab eq 'com' and not exists $_->{com};
+	    1;
+		
+	} $self->getOutputFields($section);
+	
+	push @proc_list, $self->getProcFields($section);
     }
     
-    # Construct our initial check list.
-    
-    my (@good_list) = {limit => 1, count => 1, ct => 1, v => 1, 
-		       splat => 1, pod => 1, stream => 1, sep => 1 };
-    
-    # If this object is actually in a subclass, look for a variable in that
-    # package called $PARAM_CHECK.  If there is one, and it is a hashref, add
-    # it to @good_list.
-    
-    {
-	no strict 'refs';
-	
-	my $v = $self->{v}; $v =~ s/\./_/g;
-	
-	my $v1 = ref($self) . '::PARAM_CHECK_' . uc($self->{version}) . '_' . $v;
-	my $v2 = ref($self) . '::PARAM_CHECK_' . $v;
-	
-	my $class_list = $$v1 || $$v2;
-	push @good_list, $class_list if ref $class_list eq 'HASH';
-    }
-        
-    # Now check each parameter to make sure it falls into at least one of the
-    # good-key hashes.
-    
- key:
-    foreach my $key (keys %$params)
-    {
-    hash:
-	foreach my $hash (@good_list)
-	{
-	    next hash unless ref $hash eq 'HASH';
-	    next key if exists $hash->{$key};
-	}
-	
-	$self->warn("ignored unknown parameter '$key'");
-    }
+    $self->{output_list} = \@output_list;
+    $self->{proc_list} = \@proc_list if @proc_list;
 }
 
 
@@ -465,28 +239,28 @@ sub generateSingleResult {
 
     my ($self) = @_;
     
+    # If we have a result row already, use that.
+    
+    if ( defined $self->{main_record} )
+    {
+	$self->processRecord($self->{main_record}, $self->{proc_list});
+	$self->{row_count} = 1;
+	
+	return $self->emitHeader() . $self->emitRecord($self->{main_record}, is_first => 1) .
+	    $self->emitFooter();
+    }
+    
     # If we have a result set, fetch the first record and generate the result.
     
-    if ( defined $self->{main_sth} )
+    elsif ( defined $self->{main_sth} )
     {
 	my $row = $self->{main_sth}->fetchrow_hashref();
 	
-	$self->processRecord($row);
+	$self->processRecord($row, $self->{proc_list});
 	$self->{row_count} = 1;
 	
-	return $self->generateHeader() . $self->generateRecord($row, is_first => 1) .
-	    $self->generateFooter();
-    }
-    
-    # Otherwise, if we have a result row already, use that.
-    
-    elsif ( defined $self->{result_row} )
-    {
-	$self->processRecord($self->{result_row});
-	$self->{row_count} = 1;
-	
-	return $self->generateHeader() . $self->generateRecord($self->{result_row}, is_first => 1) .
-	    $self->generateFooter();
+	return $self->emitHeader() . $self->emitRecord($row, is_first => 1) .
+	    $self->emitFooter();
     }
     
     # Otherwise, we have an empty result set.
@@ -495,7 +269,7 @@ sub generateSingleResult {
     {
 	$self->{row_count} = 0;
 	
-	return $self->generateHeader() . $self->generateFooter();
+	return $self->emitHeader() . $self->emitFooter();
     }
 }
 
@@ -522,7 +296,7 @@ sub generateCompoundResult {
     
     my $sth = $self->{main_sth};
     my $output = '';
-    my $is_first_row = 1;
+    my $first_row = 1;
     my $row;
     
     $self->{row_count} = 0;
@@ -533,7 +307,7 @@ sub generateCompoundResult {
     
     unless ( defined $self->{main_sth} )
     {
-	return $self->generateHeader() . $self->generateFooter();
+	return $self->emitHeader() . $self->emitFooter();
     }
     
     # Otherwise, we have some results.  We call the initOutput method first,
@@ -560,11 +334,11 @@ sub generateCompoundResult {
 	
 	foreach my $row (@rows)
 	{
-	    $self->processRecord($row);
-	    my $row_output = $self->generateRecord($row, is_first => $is_first_row);
+	    $self->processRecord($row, $self->{proc_list});
+	    my $row_output = $self->emitRecord($row, is_first => $first_row);
 	    $output .= $row_output;
 	    
-	    $is_first_row = 0;
+	    $first_row = 0;
 	    $self->{row_count}++;
 	}
     }
@@ -581,11 +355,11 @@ sub generateCompoundResult {
 	    # the query class has overridden it) and then call generateRecord to
 	    # generate the actual output.
 	    
-	    $self->processRecord($row);
-	    my $row_output = $self->generateRecord($row, is_first => $is_first_row);
+	    $self->processRecord($row, $self->{proc_list});
+	    my $row_output = $self->emitRecord($row, is_first => $first_row);
 	    $output .= $row_output;
 	    
-	    $is_first_row = 0;
+	    $first_row = 0;
 	    $self->{row_count}++;
 	    
 	    # If streaming is a possibility, check whether we have passed the
@@ -597,7 +371,7 @@ sub generateCompoundResult {
 	    if ( defined $options{can_stream} and $self->{should_stream} ne 'no' and
 		 (length($output) > $STREAM_THRESHOLD or $self->{should_stream} eq 'yes') )
 	    {
-		$self->{stashed_output} = $self->generateHeader(streamed => 1) . $output;
+		$self->{stashed_output} = $self->emitHeader(streamed => 1) . $output;
 		return;
 	    }
 	}
@@ -606,7 +380,7 @@ sub generateCompoundResult {
     my $final = $self->finishOutput();
     $output .= $final if defined $final;
     
-    return $self->generateHeader() . $output . $self->generateFooter();
+    return $self->emitHeader() . $output . $self->emitFooter();
 }
 
 
@@ -643,9 +417,9 @@ sub streamResult {
     
     while ( $row = $sth->fetchrow_hashref )
     {
-	$self->processRecord($row);
+	$self->processRecord($row, $self->{proc_list});
 	$self->{row_count}++;
-	my $output = $self->generateRecord($row);
+	my $output = $self->emitRecord($row);
 	$writer->write( encode_utf8($output) ) if defined $output and $output ne '';
     }
     
@@ -657,46 +431,136 @@ sub streamResult {
     
     # Finally, send out the footer and then close the writer object.
     
-    my $footer = $self->generateFooter(streamed => 1);
+    my $footer = $self->emitFooter(streamed => 1);
     $writer->write( encode_utf8($footer) ) if defined $footer and $footer ne '';
     $writer->close();
 }
 
 
-# generateHeader ( )
+# processRecord ( record, proc_list )
+# 
+# Carry out each of the specified processing steps on the given record.
+
+sub processRecord {
+
+    my ($self, $record, $proc_list) = @_;
+    
+    return unless ref $proc_list eq 'ARRAY';
+    
+    foreach my $p ( @$proc_list )
+    {
+	next unless ref $p eq 'HASH';
+	
+	my $field = $p->{rec};
+	next unless $record->{$field};
+	
+	my @result;
+	
+	# First figure out the result of the processing step
+	
+	if ( ref $p->{code} eq 'CODE' )
+	{
+	    if ( $p->{use_main} )
+	    {
+		@result = $p->{code}($self, $record);
+	    }
+	    
+	    elsif ( $p->{use_each} and ref $record->{$field} eq 'ARRAY' )
+	    {
+		@result = map { $p->{code}($self, $_) } @{$record->{$field}};
+	    }
+	    
+	    else
+	    {
+		@result = $p->{code}($self, $record->{$field});
+	    }
+	}
+	
+	elsif ( $p->{subfield} )
+	{
+	    if ( ref $record->{$field} eq 'ARRAY' )
+	    {
+		@result = map { $_->{$p->{subfield}} if ref $_ eq 'HASH'; } @{$record->{$field}};
+	    }
+	    
+	    elsif  ( ref $record->{$field} eq 'HASH' )
+	    {
+		@result = $record->{$field}{$p->{subfield}};
+	    }
+	}
+	
+	# Then add it or set it to the specified field.
+	
+        if ( $p->{add} )
+	{
+	    my $res = $p->{add};
+	    $record->{$res} = [ $record->{$res} ] if defined $record->{$res}
+		and ref $record->{$res} ne 'ARRAY';
+	    
+	    push @{$record->{$res}}, @result;
+	}
+	
+	elsif ( $p->{set} )
+	{
+	    my $res = $p->{set};
+	    if ( @result == 1 )
+	    {
+		($record->{$res}) = @result;
+	    }
+	    
+	    elsif ( @result > 1 )
+	    {
+		$record->{$res} = \@result;
+	    }
+	    
+	    elsif ( not $p->{always} )
+	    {
+		delete $record->{$res};
+	    }
+	    
+	    else
+	    {
+		$record->{$res} = '';
+	    }
+	}
+    }
+}
+
+
+# emitHeader ( )
 # 
 # Generate the proper header for the requested output format.
 
-sub generateHeader {
+sub emitHeader {
     
     my ($self, @options) = @_;
     
     if ( $self->{output_format} eq 'json' )
     {
-	return $self->generateHeaderJSON(@options);
+	return $self->emitHeaderJSON(@options);
     }
     
-    elsif ( $self->{output_format} eq 'txt' )
+    elsif ( $self->{output_format} eq 'xml' )
     {
-	return $self->generateHeaderText(@options);
+	return $self->emitHeaderXML(@options);
     }
     
     else
     {
-	return $self->generateHeaderXML(@options);
+	return $self->emitHeaderText(@options);
     }
 }
 
 
-# generateHeaderJSON ( options )
+# emitHeaderJSON ( options )
 # 
 # Return the proper header for a JSON result.  The accepted options are:
 # 
 #   streamed - if true, ignore report_count.  We don't yet know how many
 #		records there will be, so we have to wait and let
-#		generateFooterJSON() report this information.
+#		emitFooterJSON() report this information.
 
-sub generateHeaderJSON {
+sub emitHeaderJSON {
 
     my ($self, %options) = @_;
     
@@ -735,13 +599,13 @@ sub generateHeaderJSON {
 }
 
 
-# generateHeaderXML ( )
+# emitHeaderXML ( )
 # 
 # Return the proper header for an XML document in Darwin Core format.  We
 # ignore any options, because XML/Darwin Core is such a rigid format that we don't
 # have much ability to customize it.
 
-sub generateHeaderXML {
+sub emitHeaderXML {
 
     my ($self) = @_;
     
@@ -749,7 +613,7 @@ sub generateHeaderXML {
     
     my $warnings = '';
     
-    if ( defined $self->{warnings} and $self->{warnings} > 0 )
+    if ( ref $self->{warnings} eq 'ARRAY' and @{$self->{warnings}} > 0 )
     {
 	foreach my $w ( @{$self->{warnings}} )
 	{
@@ -767,56 +631,209 @@ END_XML
 }
 
 
-# generateHeaderText ( )
+# emitHeaderText ( )
 # 
-# Return the proper header for comma-separated text output.  We ignore any
-# options, because there is little if any room for extra information when
-# using this format.
+# Return the proper header for comma-separated text output or tab-separated
+# text output.  We ignore any options, because there is no room for extra
+# information when using this format.
 
-sub generateHeaderText {
+sub emitHeaderText {
 
     my ($self) = @_;
     
-    unless ( ref $self->{field_list} eq 'ARRAY' )
-    {
-	die "400 The output format 'txt' is not appropriate for this query.\n";
-    }
+    # Skip the header if we are directed to do so.
     
-    my $header_line = $self->generateTextLine(@{$self->{field_list}});
-    return $header_line;
+    return '' if $self->{params}{no_header};
+    
+    # Otherwise, we go through the output list and collect up the field names. 
+    
+    my (@fields) = map { $_->{rec} } @{$self->{output_list}};
+    
+    # Now put them all together into one line.
+    
+    return $self->generateTextLine(@fields);
 }
 
 
-# generateFooter ( )
+# emitRecord ( )
+# 
+# Generate the output for a single record
+
+sub emitRecord {
+
+    my ($self, $record, $is_first) = @_;
+    
+    if ( $self->{output_format} eq 'json' )
+    {
+	return $self->emitRecordJSON($record, $is_first);
+    }
+    
+    elsif ( $self->{output_format} eq 'xml' )
+    {
+	return $self->emitRecordXML($record);
+    }
+    
+    else
+    {
+	return $self->emitRecordText($record);
+    }
+}
+
+
+# emitRecordJSON ( )
+# 
+# Generate the proper output for a single record in JSON.
+
+sub emitRecordJSON {
+    
+    my ($self, $record, $is_first) = @_;
+    
+    # Start the output.
+    
+    my $init = $is_first ? "\n" : ",\n";
+    
+    # Construct a hash that we can pass to the to_json function.
+    
+    my $outrec = $self->constructObjectJSON($record, $self->{output_list});
+    
+    return $init . to_json($outrec);
+}
+
+
+# constructObjectJSON ( record, rule )
+# 
+# Generate a hash based on the given record and the specified rule (or rules,
+# as an array ref).
+
+sub constructObjectJSON {
+
+    my ($self, $record, $rulespec) = @_;
+    
+    my $vocab = $self->{vocab};
+    
+    # Start with an empty hash.
+    
+    my %obj;
+    
+    # Go through the rule list, generating the fields one by one.
+    
+    foreach my $f (ref $rulespec eq 'ARRAY' ? @$rulespec : $rulespec)
+    {
+	# Skip rules which are not valid in this vocabulary.
+	
+	my $outkey = $vocab eq 'pbdb' ? $f->{pbdb} || $f->{rec} : $f->{$vocab};
+	next unless $outkey;
+	
+	# Skip any field that is empty, unless 'always' is set.
+	
+	my $field = $f->{rec};
+	next unless $f->{always} or defined $record->{$field} and $record->{$field} ne '';
+	
+	# Process the rule to generate a key/value pair.  If a code ref was
+	# supplied, call that routine.  Otherwise, generate either an array,
+	# sub-object or scalar value as indicated.
+	
+	if ( ref $f->{code} eq 'CODE' )
+	{
+	    $obj{$outkey} = $f->{code}($record->{$field}, $f);
+	}
+	
+	elsif ( ref $record->{$field} eq 'ARRAY' )
+	{
+	    my $rule = $f->{rule} || $f;
+	    $obj{$outkey} = $self->constructArrayJSON($record->{$field}, $rule);
+	}
+	
+	elsif ( ref $record->{$field} eq 'HASH' )
+	{
+	    my $rule = $f->{rule} || $f;
+	    $obj{$outkey} = $self->constructObjectJSON($record->{$field}, $rule);
+	}
+	
+	else
+	{
+	    $obj{$outkey} = json_clean($record->{$field});
+	}
+    }
+    
+    return \%obj;
+}
+
+
+sub constructArrayJSON {
+
+    my ($self, $arrayref, $rulespec) = @_;
+    
+    my $f = $rulespec if ref $rulespec and ref $rulespec ne 'ARRAY';
+    
+    # Start with an empty array.
+    
+    my @array;
+    
+    # Go through the elements of the specified arrayref, applying the
+    # specified rule to each one.  If a code ref was supplied, call that
+    # routine.  Otherwise, generate either an array, sub-object or scalar
+    # value as indicated.
+    
+    foreach my $elt ( @$arrayref )
+    {
+	if ( ref $f->{code} eq 'CODE' )
+	{
+	    push @array, $f->{code}($elt, $rulespec);
+	}
+	
+	elsif ( ref $elt eq 'ARRAY' )
+	{
+	    my $subrule = $f->{rule} || $rulespec;
+	    push @array, $self->constructArrayJSON($elt, $subrule);
+	}
+	
+	elsif ( ref $elt eq 'HASH' )
+	{
+	    my $subrule = $f->{rule} || $rulespec;
+	    push @array, $self->constructObjectJSON($elt, $subrule);
+	}
+	
+	else
+	{
+	    push @array, json_clean($elt);
+	}
+    }
+    
+    return \@array;
+}
+
+
+# emitFooter ( )
 # 
 # Generate the proper footer for the requested output format.
 
-sub generateFooter {
+sub emitFooter {
     
     my ($self, @options) = @_;
     
     if ( $self->{output_format} eq 'json' )
     {
-	return $self->generateFooterJSON(@options);
+	return $self->emitFooterJSON(@options);
     }
     
     elsif ( $self->{output_format} eq 'txt' )
     {
-	return $self->generateFooterText(@options);
+	return $self->emitFooterText(@options);
     }
     
     else
     {
-	return $self->generateFooterXML(@options);
+	return $self->emitFooterXML(@options);
     }
 }
 
 
-# generateFooterXML ( )
+# emitFooterXML ( )
 # 
 # Return the proper footer for an XML document in Darwin Core format.
 
-sub generateFooterXML {
+sub emitFooterXML {
     
     my ($self) = @_;
     
@@ -834,24 +851,24 @@ END_XML
 }
 
 
-# generateFooterText ( )
+# emitFooterText ( )
 # 
 # Return nothing, because text files (whether comma-separated values or
 # tab-separated values) don't have footers.
 
-sub generateFooterText {
+sub emitFooterText {
 
     return '';
 }
 
 
-# generateFooterJSON ( )
+# emitFooterJSON ( )
 # 
 # Return a string that will be valid as the end of a JSON result, after the
 # header and zero or more records.  If the option "streamed" is given, then
 # add in the record count.
 
-sub generateFooterJSON {
+sub emitFooterJSON {
     
     my ($self, %options) = @_;
     
@@ -897,41 +914,31 @@ sub finishOutput {
 }
 
 
-# processRecord ( )
-# 
-# This method is intended to be overridden.  It is called once for each row,
-# after the row is fetched but before the row's output is generated.  The row
-# hash is given as the first argument.
-
-sub processRecord {
-
-}
-
+# Following are some utility routines
+# ===================================
 
 # generateTextLine ( )
 # 
-# Generate a text line according to the 'value_sep' attribute: either
-# comma-separated (csv) or tab-separate (tsv).  The latter is the default.
+# Generate a text line according to the output format and the 'quoted' and
+# 'linebreak' parameters.
 
 sub generateTextLine {
 
-    my ($self, @values) = @_;
+    my $self = shift;
+    my $quoted = $self->{params}{quoted};
+    my $term = $self->{params}{linebreak} eq 'cr' ? "\n" : "\r\n";
     
-    if ( defined $self->{value_sep} and $self->{value_sep} eq 'csv' )
+    if ( $self->{output_format} eq 'csv' )
     {
-	my $line = '"' . join('","', @values) . '"' . "\n";
-	return $line;
+	return join(',', map { csv_clean($_, $quoted) } @_) . $term;
     }
     
     else
     {
-	my $line = join("\t", @values) . "\n";
-	return $line;
+	return join("\t", map { txt_clean($_) } @_) . $term;
     }
 }
 
-
-# Following are some utility routines.
 
 # xml_clean ( string )
 # 
@@ -944,9 +951,16 @@ sub xml_clean {
     
     my ($string, $preserve_tags) = @_;
     
-    # Do nothing unless our first argument is defined
+    # Return an empty string unless the value is defined.
     
-    return unless defined $string;
+    return "" unless defined $string;
+    
+    # Do a quick check for okay characters.  If there's nothing exotic, just
+    # return the value as-is.
+    
+    return $string unless $string =~ /[^a-zA-Z0-9 _.,;:-]/;
+    
+    # Otherwise, we have more work to do.
     
     # First, turn any numeric character references into actual Unicode
     # characters.  The database does contain some of these.
@@ -981,16 +995,27 @@ sub xml_clean {
 my (%ESCAPE) = ( '\\' => '\\\\', '"' => '\\"', "\t" => '\\t', "\n" => '\\n',
 		 "\r" => '\\r' );	#'
 
-sub json_clean {
+sub json_clean_extra {
     
     my ($string) = @_;
     
-    # Do nothing unless our first argument is defined
+    # Return an empty string unless the value is defined.
     
-    return unless defined $string;
+    return "''" unless defined $string;
     
-    # First, turn any numeric character references into actual Unicode
-    # characters.  The database does contain some of these.
+    # Do a quick check for numbers.  If it matches, return the value as-is.
+    
+    return $string if $string =~ /^-?(?:[0-9]+|[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[Ee]-?\d+)?$/;
+    
+    # Do aother quick check for okay characters.  If there's nothing exotic,
+    # just return the quoted value.
+    
+    return '"' . $string . '"' unless $string =~ /[^a-zA-Z0-9 _.,;:-]/;
+    
+    # Otherwise, we need to do some longer processing.
+    
+    # Turn any numeric character references into actual Unicode characters.
+    # The database does contain some of these.
     
     $string =~ s/&\#(\d)+;/pack("U", $1)/eg;
     
@@ -1001,6 +1026,111 @@ sub json_clean {
     # Translate ((b)) into <b> and ((i)) into <i>
     
     #$string =~ s/\(\(([bi])\)\)/<$1>/ge;
+    
+    # Finally, delete all other control characters (they shouldn't be in the
+    # database in the first place, but unfortunately some rows do contain
+    # them).
+    
+    $string =~ s/[\0-\037\177]//g;
+    
+    return $string;
+}
+
+
+sub json_clean {
+    
+    my ($string) = @_;
+    
+    # Return an empty string unless the value is defined.
+    
+    return '' unless defined $string;
+    
+    # Otherwise, we need to do some longer processing.
+    
+    # Turn any numeric character references into actual Unicode characters.
+    # The database does contain some of these.  Also take out all control
+    # characters, which shouldn't be in there either.
+    
+    $string =~ s/&\#(\d)+;/pack("U", $1)/eg;
+    $string =~ s/[\0-\037\177]//g;
+    
+    return $string;
+}
+
+
+my (%TXTESCAPE) = ( '"' => '""', "'" => "''", "\t" => '\t', "\n" => '\n',
+		 "\r" => '\r' );	#'
+
+# csv_clean ( string, quoted )
+# 
+# Given a string value, return an equivalent string value that will be valid
+# as part of a csv-format result.  If 'quoted' is true, then all fields will
+# be quoted.  Otherwise, only those which contain commas or quotes will be.
+
+sub csv_clean {
+
+    my ($string, $quoted) = @_;
+    
+    # Return an empty string unless the value is defined.
+    
+    return $quoted ? '""' : '' unless defined $string;
+    
+    # Do a quick check for okay characters.  If there's nothing exotic, just
+    # return the quoted value.
+    
+    return $quoted ? '"' . $string . '"' : $string
+	unless $string =~ /^[a-zA-Z0-9 _.;:-]/;
+    
+    # Otherwise, we need to do some longer processing.
+    
+    # Turn any numeric character references into actual Unicode characters.
+    # The database does contain some of these.
+    
+    $string =~ s/&\#(\d)+;/pack("U", $1)/eg;
+    
+    # Next, double all quotes and textify whitespace control characters
+    
+    $string =~ s/("|'|\n|\t|\r)/$TXTESCAPE{$1}/ge;
+    
+    # Finally, delete all other control characters (they shouldn't be in the
+    # database in the first place, but unfortunately some rows do contain
+    # them).
+    
+    $string =~ s/[\0-\037\177]//g;
+    
+    return '"' . $string . '"';
+}
+
+
+# txt_clean ( string )
+# 
+# Given a string value, return an equivalent string value that will be valid
+# as part of a csv-format result.  If 'quoted' is true, then all fields will
+# be quoted.  Otherwise, only those which contain commas or quotes will be.
+
+sub txt_clean {
+
+    my ($string, $quoted) = @_;
+    
+    # Return an empty string unless the value is defined.
+    
+    return '' unless defined $string;
+    
+    # Do a quick check for okay characters.  If there's nothing exotic, just
+    # return the value as-is.
+    
+    return $string unless $string =~ /^[a-zA-Z0-9 _.,;:-]/;
+    
+    # Otherwise, we need to do some longer processing.
+    
+    # Turn any numeric character references into actual Unicode characters.
+    # The database does contain some of these.
+    
+    $string =~ s/&\#(\d)+;/pack("U", $1)/eg;
+    
+    # Next, textify whitespace control characters
+    
+    $string =~ s/(\n|\t|\r)/$TXTESCAPE{$1}/ge;
     
     # Finally, delete all other control characters (they shouldn't be in the
     # database in the first place, but unfortunately some rows do contain
@@ -1231,12 +1361,8 @@ sub generateReference {
 	$longref .= $lp if $lp ne '';
     }
     
-    $row->{pubref} = $longref if $longref ne '';
-    
-    if ( $longref ne '' )
-    {
-	$row->{pubref} = $longref;
-    }
+    return $longref if $longref ne '';
+    return;
 }
 
 

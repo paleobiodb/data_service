@@ -13,7 +13,6 @@ use Constants qw($READ_URL $WRITE_URL $DATA_DIR $HTML_DIR $TAXA_TREE_CACHE);
 
 # Flags and constants
 my $dbt;    # The DBTransactionManager object
-my $q;	    # Reference to the parameters
 my $s;
 
 my $MAP_URL= "/public/maps";
@@ -56,7 +55,7 @@ sub new {
     }
     
 	# some functions that call Map do not pass a q or s object
-	my $self = {plate => [], taxonomy => $taxonomy};
+	my $self = {plate => [], taxonomy => $taxonomy, dbt => $dbt, taxonomy => $taxonomy, q => $q};
 	if ($q)	{
 		if ($q->param('linecommand') =~ /[A-Za-z]/)	{
 			$GIF_DIR =~ s/maps$//;
@@ -71,9 +70,10 @@ sub new {
 }
 
 sub buildMap {
-	my $self = shift;
+    my $self = shift;
     my %options = @_;
-
+    my $q = $self->{q};
+	
     # Load in default parameters
     while (my ($p,$def) = each %map_defaults) {
         if ($q->param($p) eq '') {
@@ -86,17 +86,127 @@ sub buildMap {
     }
 
     my $dataSets;
-    if ($options{'dataSet'}) {
-        $dataSets->[1] = $options{dataSet};
-    } else {
-        my ($errors,$warnings)  = $self->mapCheckParams();
-        unless (ref $errors && @$errors) {
-            ($dataSets,$errors2,$warnings2)  = $self->mapQueryDB();
-            push @$errors, @$errors2;
-            push @$warnings, @$warnings2;
-        }
+    # if ($options{'dataSet'}) {
+    #     $dataSets->[1] = $options{dataSet};
+    # } else {
+    #     my ($errors,$warnings)  = $self->mapCheckParams();
+    #     unless (ref $errors && @$errors) {
+    #         ($dataSets,$errors2,$warnings2)  = $self->mapQueryDB();
+    #         push @$errors, @$errors2;
+    #         push @$warnings, @$warnings2;
+    #     }
+    # }
+    
+    # =======
+    
+    my $dbt = $self->{dbt};
+    my $dbh = $dbt->{dbh};
+    my $sql;
+    my $result;
+    my $taxon_name;
+    my $taxon_no;
+    my $exclude_name;
+    my $exclude_no;
+    my $use_taxonomy;
+    my $use_matrix;
+    my @select;
+    
+    if ( ($taxon_name = $q->param('taxon_name')) ne '' )
+    {
+	$sql = "SELECT lft, rgt FROM taxon_trees WHERE name = '$taxon_name'";
+	my ($lft, $rgt) = $dbh->selectrow_array($sql);
+	
+	push @select, "t.lft >= $lft and t.lft <= $rgt";
+	$use_taxonomy = 1;
     }
-
+    
+    elsif ( ($taxon_no = $q->param('taxon_no')) > 0 )
+    {
+	$sql = "SELECT lft, rgt FROM taxon_trees WHERE orig_no = $taxon_no";
+	my ($lft, $rgt) = $dbh->selectrow_array($sql);
+	
+	push @select, "t.lft >= $lft and t.lft <= $rgt";
+	$use_taxonomy = 1;
+    }
+    
+    if ( ($exclude_name = $q->param('exclude_name')) ne '' )
+    {
+	$sql = "SELECT lft, rgt FROM taxon_trees WHERE name = '$exclude_name'";
+	my ($lft, $rgt) = $dbh->selectrow_array($sql);
+	
+	push @select, "(t.lft < $lft or t.lft > $rgt)";
+	$use_taxonomy = 1;
+    }
+    
+    elsif ( ($exclude_no = $q->param('exclude_no')) > 0 )
+    {
+	$sql = "SELECT lft, rgt FROM taxon_trees WHERE orig_no = $exclude_no";
+	my ($lft, $rgt) = $dbh->selectrow_array($sql);
+	
+	push @select, "(t.lft < $lft or t.lft > $rgt)";
+	$use_taxonomy = 1;
+    }
+    
+    if ( ($interval_name = $q->param('interval_name')) ne '' )
+    {
+	$sql = "SELECT base_age, top_age FROM interval_map
+		WHERE interval_name = '$interval_name'";
+	my ($early, $late) = $dbh->selectrow_array($sql);
+	$early += 0.1;
+	$late -= 0.1;
+	push @select, "m.early_age <= $early and m.late_age >= $late";
+	$use_matrix = 1;
+    }
+    
+    my $selector = join(' and ', @select);
+    
+    if ( $use_taxonomy )
+    {    
+	$sql = "SELECT k.lng, k.lat, count(distinct collection_no) as n_colls,
+			k.n_colls as total_colls,
+			k.std_dev, min(m.lng) as lng_min, max(m.lng) as lng_max, 
+			min(m.lat) as lat_min, max(m.lat) as lat_max
+		FROM taxon_trees as t JOIN occ_matrix as m using (orig_no)
+			JOIN clusters as k using (clust_lng, clust_lat)
+		WHERE $selector
+		GROUP BY m.clust_lng, m.clust_lat
+		HAVING n_colls > 0";
+	
+	print STDERR "SQL:\n$sql\n\n";
+    
+	$result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    }
+    
+    elsif ( $use_matrix )
+    {
+	$sql = "SELECT k.lng, k.lat, count(distinct collection_no) as n_colls,
+			k.n_colls as total_colls,
+			k.std_dev, min(m.lng) as lng_min, max(m.lng) as lng_max, 
+			min(m.lat) as lat_min, max(m.lat) as lat_max
+		FROM occ_matrix as m JOIN clusters as k using (clust_lng, clust_lat)
+		WHERE $selector
+		GROUP BY m.clust_lng, m.clust_lat
+		HAVING n_colls > 0";
+	
+	print STDERR "SQL:\n$sql\n\n";
+    
+	$result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    }
+    
+    else
+    {
+	$sql = "SELECT lat, lng, n_colls, std_dev, lng_min, lng_max, lat_min, lat_max
+		FROM clusters WHERE n_colls > 0";
+    
+	print STDERR "SQL:\n$sql\n\n";
+    
+	$result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    }
+    
+    $dataSets = [ undef, $result ];
+    
+    # =======
+    
     foreach my $i (1 .. 4) {
         if (ref $dataSets->[$i] && @{$dataSets->[$i]}) {
             $count += @{$dataSets->[$i]};
@@ -134,7 +244,8 @@ sub buildMap {
 # e.g. they exist in the db/aren't ambiguous. return errors if they aren't
 sub mapCheckParams {
     my $self = shift;
-    
+    my $q = $self->{q};
+    my $dbt = $self->{dbt};
     my $taxonomy = $self->{taxonomy};
     
     # For all four datasets (point types) ... 
@@ -188,6 +299,9 @@ sub mapCheckParams {
 
 sub mapQueryDB {
     my $self = shift;
+    my $dbt = $self->{dbt};
+    my $q = $self->{q};
+    my $taxonomy = $self->{taxonomy};
     my %options = $q->Vars();
     $options{'permission_type'} = 'read';
     $options{'calling_script'} = 'Map';
@@ -211,7 +325,7 @@ sub mapQueryDB {
                 if ($toptions{'interval_name'}) {
                     ($toptions{'eml_max_interval'},$toptions{'max_interval'}) = TimeLookup::splitInterval($toptions{'interval_name'});
                 }
-                my ($dataRowsRef,$ofRows) = Collection::getCollections($dbt,$s,\%toptions,$fields);  
+                my ($dataRowsRef,$ofRows) = Collection::getCollections($dbt,$taxonomy,$s,\%toptions,$fields);  
                 $dataSets[$ptset] = $dataRowsRef;
             }
         } elsif ($ptset == 1) {
@@ -226,7 +340,7 @@ sub mapQueryDB {
                 if ($options{'interval_name'}) {
                     ($options{'eml_max_interval'},$options{'max_interval'}) = TimeLookup::splitInterval($options{'interval_name'});
                 }
-                my ($dataRowsRef,$ofRows,$warnings) = Collection::getCollections($dbt,$s,\%options,$fields);  
+                my ($dataRowsRef,$ofRows,$warnings) = Collection::getCollections($dbt,$taxonomy,$s,\%options,$fields);  
                 push @warnings, @$warnings; 
                 $dataSets[$ptset] = $dataRowsRef;
             }
@@ -241,7 +355,7 @@ sub mapQueryDB {
 sub mapFinishImage {
     my $self = shift;
     my @dataSets = @{$_[0]};
-
+    my $q = $self->{q};
 
     # following lines taken out by JA 27.10.06 while re-implementing support
     #  for GIF format files, not sure what it does to IE browsers
@@ -454,6 +568,7 @@ sub mapFinishImage {
 
 sub mapSetScale	{
     my $self = shift;
+    my $q = $self->{q};
     my @dataSets = ();
     @dataSets = @{$_[0]} if ref $_[0];
 
@@ -465,7 +580,8 @@ sub mapSetScale	{
         # rotations and projections.
         ($midlat,$midlng,$scale) = (0,0,1);
     } elsif ($q->param("mapscale") =~ /auto/) {
-        ($midlat,$midlng,$scale) = calculateBounds(@dataSets);
+        #($midlat,$midlng,$scale) = calculateBounds($q, @dataSets);
+	($midlat,$midlng,$scale) = (0,0,1);
         ($midlat,$midlng) = $self->snapToTile($midlat,$midlng,$scale);
     } else {
         $scale = $q->param('mapscale');
@@ -514,7 +630,7 @@ sub mapSetScale	{
 
 
 sub calculateBounds {
-    my @dataSets = @_;
+    my ($q, @dataSets) = @_;
     my ($lat1,$lng1,$lat2,$lng2);
     my ($lat_size,$lng_size) = (0,0);
     my ($midlat,$midlng,$scale);
@@ -726,7 +842,7 @@ sub readPlateIDs {
 # extract outlines taken from NOAA's NGDC Coastline Extractor
 sub mapDefineOutlines	{
 	my $self = shift;
-
+	my $q = $self->{q};
 	if ( $q->param('mapresolution') eq "coarse" )	{
 		$resostem = "075";
 	} elsif ( $q->param('mapresolution') eq "medium" )	{
@@ -914,8 +1030,8 @@ param('platecolor') =~ /[A-Za-z]/ ) || ( $q->param('crustcolor') ne "none" && $q
 
 # read Scotese's plate ID and rotation data files
 sub mapGetRotations	{
-	my $self = shift;
-
+    my $self = shift;
+    my $q = $self->{q};
     if (!@ALL_ROT) {
 	    if ( ! open ROT,"<$DATA_DIR/master01c.rot" ) {
 		    $self->htmlError ( "Couldn't open [$DATA_DIR/master01c.rot]: $!" );
@@ -1086,7 +1202,7 @@ sub mapGetRotations	{
 
 sub mapSetupImage {
     my $self = shift;
-
+    my $q = $self->{q};
     PBDBUtil::autoCreateDir($GIF_DIR);
     # erase all files that haven't been accessed in more than a day
 	opendir(DIR,"$GIF_DIR") or die "couldn't open $GIF_DIR ($!)";
@@ -1246,6 +1362,8 @@ sub mapSetupImage {
 
 # This draws a footer and few miscellaneous items
 sub mapFinishSetup {
+    my $self = shift;
+    my $q = $self->{q};
     my $mapbgcolor = $q->param('mapbgcolor');
     if ( ! $mapbgcolor )	{
         $mapbgcolor = 'white';
@@ -1403,7 +1521,7 @@ sub initPalette {
 # draw crust, coastlines, and borders
 sub mapDrawCoasts {
     my $self = shift;
-
+    my $q = $self->{q};
     # first rescale the coordinates depending on the rotation
         if ( ( $q->param('platecolor') ne "none" && $q->param('platecolor') =~ /[A-Za-z]/ ) || ( $q->param('crustcolor') ne "none" && $q->param('crustcolor') =~ /[A-Za-z]/ ) )	{
             for $c (0..$#crustlat)	{
@@ -1798,10 +1916,11 @@ last;
 }
 
 # Draw the points for collections on the map
-sub mapDrawPoints	{
-    my $self = shift;
-    my $dataRowsRef = shift;
-    my $ptset = shift;
+sub mapDrawPoints {
+    
+    my ($self, $dataRowsRef, $ptset) = @_;
+    
+    my $q = $self->{q};
 
     # find the point size JA 26.4.06
     if ($q->param("pointsize$ptset") =~ /auto/) {
@@ -1824,12 +1943,12 @@ sub mapDrawPoints	{
     # heat colors are based on occurrence counts, so get them now JA 14.3.12
     # getCollections could be used very indirectly to get these counts, but
     #  it would be slower and it's just not worth the trouble
-    my %count;
-    if ( $dotcolor =~ /^heat|red to green/ )	{
-        my @nos = map { $_->{'collection_no'} } @$dataRowsRef;
-        my $sql = "SELECT collection_no,count(*) c FROM occurrences WHERE collection_no IN (".join(',',@nos).") GROUP BY collection_no";
-        $count{$_->{'collection_no'}} = $_->{'c'} foreach @{$dbt->getData($sql)};
-    }
+    # my %count;
+    # if ( $dotcolor =~ /^heat|red to green/ )	{
+    #     my @nos = map { $_->{'collection_no'} } @$dataRowsRef;
+    #     my $sql = "SELECT collection_no,count(*) c FROM occurrences WHERE collection_no IN (".join(',',@nos).") GROUP BY collection_no";
+    #     $count{$_->{'collection_no'}} = $_->{'c'} foreach @{$dbt->getData($sql)};
+    # }
 
     if ($q->param("dotborder$ptset") ne "no" )	{
         if($q->param('mapbgcolor') eq "black" || $q->param("dotborder$ptset") eq "white" )	{
@@ -1860,125 +1979,47 @@ sub mapDrawPoints	{
     if ($dotsizeterm eq "proportional")	{
         $maxdotsize = 3.5;
     }
-
+    
+    my $maxpts = 0;
+    $maxpts += $_->{n_colls} foreach @$dataRowsRef;
+    
+    $ai .=  "u\n";  # start the group
+    
     # draw collection data points
-    my (%atCoord,%occsAtCoord,%longVal,%latVal,$maxpts,$matches);
-	foreach $collRef ( @{$dataRowsRef} ) {
- 		%coll = %{$collRef};
- 		if (( $coll{'latdeg'} > 0 || $coll{'latmin'} > 0 || $coll{'latdec'} > 0 ) &&
-            ( $coll{'lngdeg'} > 0 || $coll{'lngmin'} > 0 || $coll{'lngdec'} > 0 )) {
-            # When magnification is high, want to use minutes 
-            # in addition to degrees, so the resolution is a bit higher
-            if ($scale > 6)  {
-                $lngoff = $coll{'lngdeg'};
-                if ( $coll{'lngmin'} =~ /^[0-9]/ )	{
-                    $lngoff += $coll{'lngmin'} / 60;
-                } elsif ( $coll{'lngdec'} =~ /^[0-9]/)	{
-                    $lngoff .= "." . $coll{'lngdec'};
-                }
-
-                $latoff = $coll{'latdeg'};
-                if ( $coll{'latmin'} =~ /^[0-9]/ )	{
-                    $latoff += $coll{'latmin'} / 60;
-                } elsif ( $coll{'latdec'} =~ /^[0-9]/)	{
-                    $latoff .= "." . $coll{'latdec'};
-                }
-
-                if ($scale >= 10)  {
-                    $lngoff = int(4 * $lngoff) / 4;
-                    $lnghalf = $lngoff - $coll{'lngdeg'};
-                    $latoff = int(8 * $latoff) / 8;
-                    $lathalf = $latoff - $coll{'latdeg'};
-                } else	{
-                    # doubles the number of points longitudinally
-                    $lngoff = int(2 * $lngoff) / 2;
-                    $lnghalf = $lngoff - $coll{'lngdeg'};
-                    # quadruples the number of point rows latitudinally
-                    $latoff = int(4 * $latoff) / 4;
-                    $lathalf = $latoff - $coll{'latdeg'};
-                }
-
-                $coordres = 'half';
-            } else {
-                $lngoff = $coll{'lngdeg'};
-                # E/W modification appears unnecessary, but code is here just in case
-                if ( $coll{'lngdir'} eq "East" )	{
-                  $lngoff = $lngoff + 0.0;
-                } elsif ( $coll{'lngdir'} eq "West" )	{
-                  $lngoff = $lngoff - 0.0;
-                }
-                $latoff = $coll{'latdeg'};
-                $lathalf = ".00";
-                $lnghalf = ".00";
-                # doubles the number of point rows latitudinally
-                if ( $coll{'latmin'} >= 30 || $coll{'latdec'} =~ /^[5-9]/ )	{
-                  $latoff = $latoff + 0.5;
-                  $lathalf = ".50";
-                }
-                if ( $coll{'latdir'} eq "North" )	{
-                  $latoff = $latoff + 0.5;
-                } elsif ( $coll{'latdir'} eq "South" )	{
-                  $latoff = $latoff - 0.5;
-                }
-                $coordres = 'full';
-            }
-          
-            ($x1,$y1,$hemi) = $self->getCoords($lngoff,$latoff);
-
-            if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 &&
-                $x1+$maxdotsize < $width &&
-                $y1-$maxdotsize > 0 &&
-                $y1+$maxdotsize < $height )	{
+    
+    foreach $record ( @$dataRowsRef )
+    {
+	($x1,$y1,$hemi) = $self->getCoords($record->{lng},$record->{lat});
+		
+	if ( $x1 > 0 && $y1 > 0 && $x1-$maxdotsize > 0 &&
+	     $x1+$maxdotsize < $width &&
+	     $y1-$maxdotsize > 0 &&
+	     $y1+$maxdotsize < $height )
+	{
             # the rounding guarantees that all circles will have the same
             #  shape, and adding 0.5 guarantees that all circles will be
             #  symmetrical and therefore round
-                    $x1 = int($x1) + 0.5;
-                    $y1 = int($y1) + 0.5;
-                    push @{$atCoord{$x1}{$y1}},$coll{'collection_no'};
-                    $occsAtCoord{$x1}{$y1} += $count{$coll{'collection_no'}};
-                    if ( $occsAtCoord{$x1}{$y1} > $maxpts )	{
-                        $maxpts = $occsAtCoord{$x1}{$y1};
-                    }
-                    $longVal{$x1} = $coll{'lngdeg'} . $lnghalf . " " . $coll{'lngdir'};
-                    $latVal{$y1} = $coll{'latdeg'} . $lathalf . " " . $coll{'latdir'};
-
-                    #dbg("Collection ".$coll{'collection_no'}." pixels($x1,$y1) " 
-                    #         . "with degrees(".$coll{'lngdeg'}." ".$coll{'lngmin'}."/".$coll{'lngdec'}.",".$coll{'latdeg'}." ".$coll{'latmin'}."/".$coll{'latdec'}.")"
-                    #         . "binned to degrees(".$longVal{$x1}.",".$latVal{$y1}.")");
-
-                    $hemiVal{$x1}{$y1} = $hemi;
-                    $matches++;
-            }
-        }
-    }
-    
-	# Bail if we don't have anything to draw.
-	if($matches < 1 && $q->param('simple_map') =~ /YES/i){
-		print "NO MATCHING COLLECTION DATA AVAILABLE<br>";
-		return;
+	    $x1 = int($x1) + 0.5;
+	    $y1 = int($y1) + 0.5;
 	}
-
-    $ai .=  "u\n";  # start the group
-    for $x1 (keys %longVal)	{
-            my @ys = keys %latVal;
-            @ys = sort { $atCoord{$x1}{$b} <=> $atCoord{$x1}{$a} } @ys;
-	    for $y1 (@ys)	{
-		    if (ref $atCoord{$x1}{$y1})	{
-			    if ($dotsizeterm eq "proportional")	{
-				    $dotsize = int(scalar(@{$atCoord{$x1}{$y1}})**0.5 / 2) + 1;
-			    }
-			    print MAPOUT "<area shape=\"rect\" coords=\"";
-			    if ( $hemiVal{$x1}{$y1} eq "N" )	{
-				    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1+0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+0.5+(1.5*$dotsize));
-			    } else	{
-				    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
-			    }
-			    print MAPOUT "\" href=\"$READ_URL?action=basicCollectionSearch";
-                print MAPOUT "&amp;collection_list=".join(",",@{$atCoord{$x1}{$y1}});
-                print MAPOUT "\">\n";
-
-                my $mycolor = $aicol{$dotcolor};
-                $mycolor =~ s/ XA/ Xa/;
+	
+	if ($dotsizeterm eq "proportional")
+	{
+	    $dotsize = int(log($record->{n_colls})/2.5) + 1;
+	}
+	
+	print MAPOUT "<area shape=\"rect\" coords=\"";
+	if ( $hemi eq "N" )
+	{
+	    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1+0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1+0.5+(1.5*$dotsize));
+	} 
+	else
+	{
+	    printf MAPOUT "%d,%d,%d,%d", int($x1-(1.5*$dotsize)), int($y1-0.5-(1.5*$dotsize)), int($x1+(1.5*$dotsize)), int($y1-0.5+(1.5*$dotsize));
+	}
+	
+	my $mycolor = $aicol{$dotcolor};
+	$mycolor =~ s/ XA/ Xa/;
                 if ( $dotshape !~ /circles/ && $dotshape !~ /crosses/ )	{
                     $ai .=  "0 O\n";
                     $ai .=  "$mycolor\n";
@@ -1995,7 +2036,7 @@ sub mapDrawPoints	{
                     $im->setAntiAliased($col{$dotcolor});
                 } else	{
                     # JA 12-14.3.12
-                    $offset = ( $occsAtCoord{$x1}{$y1} > 0 ) ? int(255 * log($occsAtCoord{$x1}{$y1}) / log($maxpts)) : 0;
+                    $offset = ( $record->{n_colls} > 0 ) ? int(255 * log($record->{n_colls}) / log($maxpts)) : 0;
                     my ($r,$g,$b);
                     if ( $dotcolor =~ /red to green/ )	{
                         # suggested by Kiessling
@@ -2155,84 +2196,89 @@ sub mapDrawPoints	{
                   $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*2),$AITOP-$y1-($dotsize*2*sin(60*$PI/180)));
                 }
             # or draw a square
-                else	{
-                  if ( $q->param('shadow') =~ /^shadow|yes/ )	{
-                      $im->filledRectangle($x1-($dotsize*1.5)+1,$y1-($dotsize*1.5)+2,$x1+($dotsize*1.5)+1,$y1+($dotsize*1.5)+2,$col{'gray'});
-                  }
-                  $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$thiscolor);
-                  $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
-                  $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1+($dotsize*1.5));
-                  $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1+($dotsize*1.5));
-                  $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
-                  $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
-                }
-                if ( $dotshape !~ /circles/ && $dotshape !~ /crosses/ )	{
-                  if ( $bordercolor !~ "borderblack" )	{
-                    $ai .=  "f\n";
-                  } else	{
-                    $ai .=  "b\n";
-                  }
-                }
-            }
-        }
+	else
+	{
+	    if ( $q->param('shadow') =~ /^shadow|yes/ )
+	    {
+		$im->filledRectangle($x1-($dotsize*1.5)+1,$y1-($dotsize*1.5)+2,$x1+($dotsize*1.5)+1,$y1+($dotsize*1.5)+2,$col{'gray'});
+	    }
+	    $im->filledRectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),$thiscolor);
+	    $ai .= sprintf("%.1f %.1f m\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
+	    $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1+($dotsize*1.5));
+	    $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1+($dotsize*1.5));
+	    $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1+($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
+	    $ai .= sprintf("%.1f %.1f L\n",$AILEFT+$x1-($dotsize*1.5),$AITOP-$y1-($dotsize*1.5));
+	}
+	if ( $dotshape !~ /circles/ && $dotshape !~ /crosses/ )
+	{
+	    if ( $bordercolor !~ "borderblack" )
+	    {
+		$ai .=  "f\n";
+	    }
+	    else
+	    {
+		$ai .=  "b\n";
+	    }
+	}
     }
+
     $ai .=  "U\n";  # terminate the group
 
  
     # borders look terrible with heat colors 
     # redraw the borders if they are not the same color as the points
-      for $x1 (keys %longVal)	{
-        if ( $dotcolor =~ /^heat|red to green/ )	{
-            last;
-        }
-        for $y1 (keys %latVal)	{
-          if (ref $atCoord{$x1}{$y1}) {
-            if ($dotsizeterm eq "proportional")	{
-              $dotsize = int(scalar(@{$atCoord{$x1}{$y1}})**0.5 / 2) + 1;
-            }
-            if ($dotshape =~ /^circles$/)	{
-              # for consistency, antialiasing actually only supported for straight lines, not arcs
-              my $poly = new GD::Polygon;
-              $poly->addPt($x1,$y1+($dotsize*2));
-              $poly->addPt($x1+($dotsize*1.414),$y1+($dotsize*1.414));
-              $poly->addPt($x1+($dotsize*2),$y1);
-              $poly->addPt($x1+($dotsize*1.414),$y1-($dotsize*1.414));
-              $poly->addPt($x1,$y1-($dotsize*2));
-              $poly->addPt($x1-($dotsize*1.414),$y1-($dotsize*1.414));
-              $poly->addPt($x1-($dotsize*2),$y1);
-              $poly->addPt($x1-($dotsize*1.414),$y1+($dotsize*1.414));
-              $im->polygon($poly,gdAntiAliased);
-            } elsif ($dotshape =~ /^crosses$/)	{ # don't do anything
-            } elsif ($dotshape =~ /^diamonds$/)	{
-              my $poly = new GD::Polygon;
-              $poly->addPt($x1,$y1+($dotsize*2));
-              $poly->addPt($x1+($dotsize*2),$y1);
-              $poly->addPt($x1,$y1-($dotsize*2));
-              $poly->addPt($x1-($dotsize*2),$y1);
-              # straight diagonals aren't antialiased, this just here for consistency
-              $im->polygon($poly,gdAntiAliased);
-            } elsif ($dotshape =~ /^stars$/)	{
-              my $poly = new GD::Polygon;
-              for $p (0..9)	{
-                if ( $p % 2 == 1 )	{
-                  $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
-              } else	{
-                  $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
-                }
-              }
-              $im->polygon($poly,gdAntiAliased);
-            } elsif ($dotshape =~ /^triangles$/)	{
-              my $poly = new GD::Polygon;
-              $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-              $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
-              $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
-              $im->polygon($poly,gdAntiAliased);
-            } else	{
-              $im->rectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),gdAntiAliased);
-            }
-          }
-        }
-      }
+      # for $x1 (keys %longVal)	{
+      #   if ( $dotcolor =~ /^heat|red to green/ )	{
+      #       last;
+      #   }
+      #   for $y1 (keys %latVal)	{
+      #     if (ref $atCoord{$x1}{$y1}) {
+      #       if ($dotsizeterm eq "proportional")	{
+      #         $dotsize = int(scalar(@{$atCoord{$x1}{$y1}})**0.5 / 2) + 1;
+      #       }
+      #       if ($dotshape =~ /^circles$/)	{
+      #         # for consistency, antialiasing actually only supported for straight lines, not arcs
+      #         my $poly = new GD::Polygon;
+      #         $poly->addPt($x1,$y1+($dotsize*2));
+      #         $poly->addPt($x1+($dotsize*1.414),$y1+($dotsize*1.414));
+      #         $poly->addPt($x1+($dotsize*2),$y1);
+      #         $poly->addPt($x1+($dotsize*1.414),$y1-($dotsize*1.414));
+      #         $poly->addPt($x1,$y1-($dotsize*2));
+      #         $poly->addPt($x1-($dotsize*1.414),$y1-($dotsize*1.414));
+      #         $poly->addPt($x1-($dotsize*2),$y1);
+      #         $poly->addPt($x1-($dotsize*1.414),$y1+($dotsize*1.414));
+      #         $im->polygon($poly,gdAntiAliased);
+      #       } elsif ($dotshape =~ /^crosses$/)	{ # don't do anything
+      #       } elsif ($dotshape =~ /^diamonds$/)	{
+      #         my $poly = new GD::Polygon;
+      #         $poly->addPt($x1,$y1+($dotsize*2));
+      #         $poly->addPt($x1+($dotsize*2),$y1);
+      #         $poly->addPt($x1,$y1-($dotsize*2));
+      #         $poly->addPt($x1-($dotsize*2),$y1);
+      #         # straight diagonals aren't antialiased, this just here for consistency
+      #         $im->polygon($poly,gdAntiAliased);
+      #       } elsif ($dotshape =~ /^stars$/)	{
+      #         my $poly = new GD::Polygon;
+      #         for $p (0..9)	{
+      #           if ( $p % 2 == 1 )	{
+      #             $poly->addPt($x1+($dotsize*sin($p*36*$PI/180)),$y1-($dotsize*cos($p*36*$PI/180)));
+      #         } else	{
+      #             $poly->addPt($x1+($dotsize/$C72*sin($p*36*$PI/180)),$y1-($dotsize/$C72*cos($p*36*$PI/180)));
+      #           }
+      #         }
+      #         $im->polygon($poly,gdAntiAliased);
+      #       } elsif ($dotshape =~ /^triangles$/)	{
+      #         my $poly = new GD::Polygon;
+      #         $poly->addPt($x1+($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+      #         $poly->addPt($x1,$y1-($dotsize*2*sin(60*$PI/180)));
+      #         $poly->addPt($x1-($dotsize*2),$y1+($dotsize*2*sin(60*$PI/180)));
+      #         $im->polygon($poly,gdAntiAliased);
+      #       } else	{
+      #         $im->rectangle($x1-($dotsize*1.5),$y1-($dotsize*1.5),$x1+($dotsize*1.5),$y1+($dotsize*1.5),gdAntiAliased);
+      #       }
+      #     }
+      #   }
+      # }
 }
 
 sub getCoords	{
@@ -2561,7 +2607,7 @@ sub rotatePoint	{
 
 sub getLng	{
 	my $self = shift;
-
+	my $q = $self->{q};
 	my $l = $_[0];
 	if ( $l =~ /NaN/ )	{
 		return($l);
@@ -2586,7 +2632,7 @@ sub getLng	{
 
 sub getLngTrunc	{
 	my $self = shift;
-
+	my $q = $self->{q};
 	my $l = $_[0];
 	if ( $l =~ /NaN/ )	{
 		return($l);
@@ -2604,8 +2650,8 @@ sub getLngTrunc	{
 }
 
 sub getLat	{
-	my $self = shift;
-
+    my $self = shift;
+    my $q = $self->{q};
 	my $l = $_[0];
 	if ( $l =~ /NaN/ )	{
 		return($l);
@@ -2627,7 +2673,7 @@ sub getLat	{
 
 sub getLatTrunc	{
 	my $self = shift;
-
+	my $q = $self->{q};
 	my $l = $_[0];
 	if ( $l =~ /NaN/ )	{
 		return($l);
@@ -2647,7 +2693,7 @@ sub getLatTrunc	{
 sub drawBackground	{
 	my $self = shift;
 	my $stage = shift;
-
+	my $q = $self->{q};
 	my ($origx,$origy) = $self->projectPoints($midlng,$midlat);
 	my $mapbgcolor = $q->param('mapbgcolor');
 	if (  !$mapbgcolor )	{
@@ -2774,7 +2820,7 @@ sub drawBackground	{
 
 sub drawGrids	{
     my $self = shift;
-
+    my $q = $self->{q};
   # this section used to have a very complicated routine for printing lat/long
   #  numbers along the grid lines; I removed it because the numbers looked
   #  horrible and weren't being printed due to some bug I couldn't fix

@@ -31,7 +31,7 @@ use Constants qw($READ_URL $WRITE_URL $HTML_DIR $HOST_URL $TAXA_TREE_CACHE $DB $
 sub getCollections {
     my ($dbt, $taxonomy, $permissions, $options, $fields) = @_;
 	
-	my $dbh = $dbt->dbh;
+	my $dbh = $dbt->{dbh};
 	my %options = %{$options};
 	my @fields = @{$fields};
 	
@@ -141,8 +141,8 @@ sub getCollections {
                 #  related synonyms JA 7.1.10
                     $options{'taxon_name'} =~ s/\./%/g;
                     my $sql = "
-		SELECT t.taxon_no, o.status
-		FROM authorities a JOIN $taxonomy t USING (orig_no)
+		SELECT a.taxon_no, o.status
+		FROM authorities a JOIN taxon_trees USING (orig_no)
 				   JOIN opinions o USING (opinion_no)
 		WHERE taxon_name LIKE ?";
                 # if that didn't work and the name is not a species, see if

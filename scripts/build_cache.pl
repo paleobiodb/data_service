@@ -12,16 +12,20 @@ my $t = Taxonomy->new($dbh, 'taxon_trees');
 
 my %options;
 
-getopts('abcdefghikxmMyt', \%options);
+getopts('tTmbk', \%options);
+#getopts('abcdefghikxmMyt', \%options);
 
 ensureOrig($dbh);
 populateOrig($dbh);
 
-TaxonTrees::computeOccurrenceMatrix($dbh, { msg_level => 2 }) if $options{m} or $options{M};
-TaxonTrees::buildTables($dbh, 'taxon_trees', { msg_level => 2 }, \%options) unless $options{M};
+TaxonTrees::initMessages(2);
+
+TaxonTrees::computeCollectionBins($dbh) if $options{b};
+TaxonTrees::computeOccurrenceMatrix($dbh) if $options{m};
+TaxonTrees::buildTables($dbh, 'taxon_trees', { msg_level => 2 }, $options{T}) 
+    if $options{t} or $options{T};
 
 print "done rebuilding caches\n";
-
 
 
 

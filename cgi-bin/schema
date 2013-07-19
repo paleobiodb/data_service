@@ -358,6 +358,14 @@
 | interval_lookup        | interpolated_top       |      | YES  | float       |
 | interval_lookup        | interval_hash          |      | NO   | text        |
 
+| interval_map           | interval_no            | PRI  | NO   | int         |
+| interval_map           | interval_name          | MUL  | NO   | varchar     |
+| interval_map           | older_seq              |      | NO   | int         |
+| interval_map           | younger_seq            |      | NO   | int         |
+| interval_map           | base_age               | MUL  | NO   | float       |
+| interval_map           | top_age                | MUL  | NO   | float       |
+| interval_map           | reference_no           |      | NO   | int         |
+
 | intervals              | authorizer_no          |      | NO   | int         |
 | intervals              | enterer_no             |      | NO   | int         |
 | intervals              | modifier_no            |      | NO   | int         |

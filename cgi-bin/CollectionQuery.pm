@@ -11,185 +11,213 @@ package CollectionQuery;
 use strict;
 use base 'DataQuery';
 
-
-our ($PARAM_DESC_MULTIPLE_1_0) = <<DONE;
-  taxon_name - list all collections that contain an example of the given taxon or any of its descendants (scientific name)
-  taxon_no - list all collections that contain an example of the given taxon or any of its descendants (positive integer identifier)
-  loc - list all collections that were found within the given geographic coordinates (bounding box)
-
-  show - return some or all of the specified information (comma-separated list)
-          ref - include the publication reference for each collection
-          taxa - include a list of taxa represented in the collection
-	  all - include all available information
-DONE
-
-our ($PARAM_REQS_MULTIPLE_1_0) = "You must specify at least one of: taxon_name, taxon_no, loc.";
-
-our ($PARAM_CHECK_MULTIPLE_1_0) = { taxon_name => 1, taxon_no => 1, loc => 1, show => 1 };
-
-our ($PARAM_DESC_SINGLE_1_0) = <<DONE;
-  collection_no - provide details about the given collection (positive integer identifier)
-
-  show - return some or all of the specified information (comma-separated list)
-          ref - include the publication reference for the collection
-          taxa - include a list of taxa represented in the collection
-	  all - include all available information
-DONE
-
-our ($PARAM_REQS_SINGLE_1_0) = "You must specify collection_no.";
-
-our ($PARAM_CHECK_SINGLE_1_0) = { collection_no => 1, show => 1 };
+use Carp qw(carp croak);
 
 
-# setParameters ( params )
+our (%OUTPUT, %PROC);
+
+our ($SINGLE_FIELDS) = "c.collection_no, c.collection_name, c.collection_subset, c.collection_aka, c.lat, c.lng, c.reference_no";
+
+our ($MULT_FIELDS) = "c.collection_no, c.collection_name, c.collection_subset, c.lat, c.lng, c.reference_no";
+
+$OUTPUT{single} = 
+   [
+    { rec => 'collection_no', dwc => 'collectionID', com => 'cid',
+	doc => "A positive integer that uniquely identifies the collection"},
+    { rec => 'lng', dwc => 'decimalLongitude', com => 'lng',
+	doc => "The longitude at which the collection is located (in degrees)" },
+    { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
+	doc => "The latitude at which the collection is located (in degrees)" },
+    { rec => 'collection_name', dwc => 'collectionCode', com => 'cna',
+	doc => "An arbitrary name which identifies the collection, not necessarily unique" },
+    { rec => 'collection_subset', com => 'csu',
+	doc => "If this collection is a part of another one, this field specifies which part" },
+    { rec => 'reference_no', com => 'prn',
+        doc => "The id of the primary reference associated with the collection" },
+   ];
+
+our ($REF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
+
+$PROC{ref} = 
+   [
+    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&DataQuery::generateReference },
+    { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&DataQuery::generateReference },
+    { rec => 'sec_refs', add => 'reference_no', subfield => 'reference_no' },
+   ];
+
+$OUTPUT{ref} =
+   [
+    { rec => 'pubyr', com => 'pby',
+	doc => "The year of publication of the primary reference associated with this collection" },
+    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => '; ',
+	doc => "The reference(s) associated with this collection (as formatted text)" },
+    { rec => 'refno_list', pbdb => 'reference_no', com => 'rid',
+	doc => "A list of reference identifiers, exactly corresponding to the references listed under {pubref}" },
+   ];
+
+our ($SHORTREF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr";
+
+$OUTPUT{sref} = 
+   [
+    { rec => 'pubyr', com => 'pby',
+	doc => "The year of publication of the primary reference associated with this collection" },
+    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => '; ',
+	doc => "The reference(s) associated with this collection (pubyr and authors only)" },
+    { rec => 'refno_list', pbdb => 'reference_no', com => 'rid', keep => 1,
+	doc => "A list of reference identifiers, exactly corresponding to the references listed under {pubref}" },
+   ];
+
+our ($TIME_FIELDS) = ", ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age";
+
+$OUTPUT{time} =
+   [
+    { rec => 'early_int', com => 'int',
+	doc => "The geologic time range associated with this collection, or the period that begins the range if {late_int} is also given" },
+    { rec => 'late_int', com => 'lin',
+	doc => "The period that ends the geologic time range associated with this collection" },
+    { rec => 'early_age', com => 'eag',
+	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
+    { rec => 'late_age', com => 'lag',
+	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
+   ];
+
+our ($PERS_FIELDS) = ", authorizer_no, ppa.name as authorizer, enterer_no, ppe.name as enterer";
+
+our ($LOC_FIELDS) = ", c.country, c.state, c.county, c.paleolat, c.paleolng, c.latlng_precision";
+
+$OUTPUT{loc} = 
+   [
+    { rec => 'country', com => 'cc2',
+	doc => "The country in which this collection is located (ISO-3166-1 alpha-2)" },
+    { rec => 'state', com => 'sta',
+	doc => "The state or province in which this collection is located [not available for all collections]" },
+    { rec => 'county', com => 'cny',
+	doc => "The county in which this collection is located [not available for all collections]" },
+    { rec => 'latlng_precision', com => 'gpr',
+	doc => "The precision of the collection location (degrees/minutes/seconds/#digits)" },
+   ];
+
+$OUTPUT{rem} = 
+   [
+    { rec => 'collection_aka', dwc => 'collectionRemarks', com => 'crm', xml_list => '; ',
+	doc => "Any additional remarks that were entered about the colection"},
+   ];
+
+our (%DOC_ORDER);
+
+$DOC_ORDER{'single'} = ['single', 'ref', 'time', 'loc', 'rem'];
+$DOC_ORDER{'list'} = ();
+$DOC_ORDER{'summary'} = ();
+
+
+# getOutputFields ( )
 # 
-# This method accepts a hash of parameter values, filters them for correctness,
-# and sets the appropriate fields of the query object.  It is designed to be
-# called from a Dancer route, although that is not a requirement.
+# Determine the list of output fields, given the name of a section to display.
 
-sub setParameters {
+sub getOutputFields {
     
-    my ($self, $params) = @_;
+    my ($self, $section) = @_;
     
-    # First tell our superclass (PBDataQuery) to set any parameters it
-    # recognizes.
-    
-    $self->SUPER::setParameters($params);
-    
-    # If we are dealing with a 'single' query, set the appropriate parameters
-    
-    if ( $self->{version} eq 'single' )
-    {
-	$self->setParametersSingle($params);
-    }
-    
-    # Otherwise, set the parameters for a 'multiple' query
-    
-    else
-    {
-	$self->setParametersMultiple($params);
-    }
-    
-    # Now set common parameters.
-    
-    if ( defined $params->{show} and $params->{show} ne '' )
-    {
-	my (@show) = split /\s*,\s*/, lc($params->{show});
-	
-	foreach my $s (@show)
-	{
-	    if ( $s eq 'ref' )
-	    {
-		$self->{show_ref} = 1;
-	    }
-	    
-	    elsif ( $s eq 'taxa' )
-	    {
-		$self->{show_taxa} = 1;
-	    }
-	    
-	    elsif ( $s eq 'all' )
-	    {
-		$self->{show_ref} = 1;
-		$self->{show_taxa} = 1;
-	    }
-	    
-	    else
-	    {
-		$self->warn("Unknown value '$s' for show");
-	    }
-	}
-
-    }
+    return @{$OUTPUT{$section}}
+	if ref $OUTPUT{$section} eq 'ARRAY';
+    return;
 }
 
 
-sub setParametersSingle {
+# getProcFields ( )
+# 
+# Determine the list of processing fields, given the name of a section to display
 
-    my ($self, $params) = @_;
+sub getProcFields {
+
+    my ($self, $section) = @_;
     
-    if ( defined $params->{collection_no} and $params->{collection_no} ne '' )
-    {
-	# First check to make sure that a valid value was provided
-	
-	if ( $params->{collection_no} =~ /[^0-9]/ )
-	{
-	    die "400 You must provide a positive integer value for 'collection_no'.\n";
-	}
-	
-	$self->{collection_no} = $params->{collection_no} + 0;
-    }
-    
-    else
-    {
-	die "400 help\n";
-    }
+    return @{$PROC{$section}}
+	if ref $PROC{$section} eq 'ARRAY';
+    return;
 }
 
 
-sub setParametersMultiple {
+# fetchSingle ( )
+# 
+# Query for all relevant information about the collection specified by the
+# 'id' parameter.  Returns true if the query succeeded, false otherwise.
+
+sub fetchSingle {
+
+    my ($self) = @_;
     
-    my ($self, $params) = @_;
+    # Get a database handle by which we can make queries.
     
-    # The 'taxon_name' parameter restricts the output to collections that
-    # contain occurrences of the given taxa or any of their children.
-    # Multiple taxa can be specified, separated by commas.
+    my $dbh = $self->{dbh};
     
-    if ( defined $params->{taxon_name} and $params->{taxon_name} ne '' )
+    # Make sure we have a valid id number.
+    
+    my $id = $self->{params}{id};
+    
+    die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my ($extra_fields, $tables) = $self->generateQueryFields($self->{show_order});
+    
+    # Determine the necessary joins.
+    
+    my ($join_list) = $self->generateJoinList('c', $tables);
+    
+    # Generate the main query.
+    
+    $self->{main_sql} = "
+	SELECT $SINGLE_FIELDS $extra_fields
+	FROM collections c
+		$join_list
+        WHERE c.collection_no = $id";
+    
+    $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+    
+    # Abort if we couldn't retrieve the record.
+    
+    return unless $self->{main_record};
+    
+    # If we were directed to show references, grab any secondary references.
+    
+    if ( $self->{show}{ref} or $self->{show}{sref} )
     {
-	# Check to make sure that taxon_no was not specified at the same time
+	my (@fields) = 'sref' if $self->{show}{sref};
+	@fields = 'ref' if $self->{show}{ref};
 	
-	if ( defined $params->{taxon_no} and $params->{taxon_no} ne '' )
-	{
-	    die "400 You may not specify 'taxon_name' and 'taxon_no' together.\n";
-	}
+	($extra_fields) = $self->generateQueryFields(\@fields);
 	
-	# Clean the parameter of everything except alphabetic characters
-	# and spaces, since only those are valid in taxonomic names.
+	$self->{aux_sql}[0] = "
+	SELECT s.reference_no $extra_fields
+	FROM secondary_refs as s JOIN refs as r using (reference_no)
+	WHERE s.collection_no = $id";
 	
-	if ( $params->{taxon_name} =~ /[^a-zA-Z\s]/ )
-	{
-	    die "400 The parameter 'taxon_name' may contain only characters from the Roman alphabet plus whitespace\n";
-	}
-	
-	$self->{taxon_filter} = $params->{taxon_name};
-	$self->{taxon_filter} =~ s/\s+/ /g;
+	$self->{main_record}{sec_refs} = $dbh->selectall_arrayref($self->{aux_sql}[0], { Slice => {} });
     }
     
-    # The 'taxon_no' parameter is similar to 'taxon_name' but takes a unique
-    # integer identifier instead.
+    # If we were directed to show associated taxa, grab them too.
     
-    elsif ( defined $params->{taxon_no} and $params->{taxon_no} ne '' )
+    if ( $self->{show}{taxa} )
     {
-	# First check to make sure that a valid value was provided
+	my $auth_table = $self->{taxonomy}{auth_table};
+	my $tree_table = $self->{taxonomy}{tree_table};
 	
-	if ( $params->{taxon_no} =~ /[^0-9]/ )
-	{
-	    die "400 You must provide a positive integer value for 'taxon_no'.\n";
-	}
+	$self->{aux_sql}[1] = "
+	SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank, a.orig_no, t.name, t.rank, t.spelling_no
+	FROM occurrences as o JOIN $auth_table as a USING (taxon_no)
+		LEFT JOIN $tree_table as t using (orig_no)
+	WHERE o.collection_no = $id ORDER BY t.lft ASC";
 	
-	$self->{filter_taxon_no} = $params->{taxon_no} + 0;
+	$self->{main_record}{taxa} = $dbh->selectall_arrayref($self->{aux_sql}[1], { Slice => {} });
     }
     
-    # The 'loc' parameter restricts the output to collections whose
-    # location falls within the bounding box of the given geometry, specified
-    # in WKT format.
-    
-    elsif ( defined $params->{loc} )
-    {
-	$self->{filter_location} = $params->{loc};
-    }
-    
-    # If we don't have one of these parameters, give the help message.
-    
-    else
-    {
-	die "400 help\n";
-    }
+    return 1;
 }
 
 
-# fetchInfoManyCollections ( )
+# fetchMultiple ( )
 # 
 # Query the database for basic info about all collections satisfying the
 # conditions previously specified (i.e. by a call to setParameters).
@@ -350,68 +378,6 @@ sub fetchMultiple {
 }
 
 
-# fetchInfoSingleCollection ( collection_requested )
-# 
-# Query for all relevant information about the requested taxon.
-# 
-# Options may have been set previously by methods of this class or of the
-# parent class PBDataQuery.
-# 
-# Returns true if the fetch succeeded, false if an error occurred.
-
-sub fetchSingle {
-
-    my ($self) = @_;
-    my ($sql, @extra_fields);
-    
-    # Get ahold of a database handle by which we can make queries.
-    
-    my $dbh = $self->{dbh};
-    
-    # If we are directed to show publication references, add the appopriate fields.
-    
-    if ( defined $self->{show_ref} )
-    {
-	push @extra_fields, "r.author1init r_ai1", "r.author1last r_al1",
-	    "r.author2init r_ai2", "r.author2last r_al2", "r.otherauthors r_oa",
-		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
-		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
-			"r.firstpage r_fp", "r.lastpage r_lp";
-    }
-    
-    # Next, fetch basic info about the collection.
-    
-    my $extra_fields = join(', ', @extra_fields);
-    $extra_fields = ", " . $extra_fields if $extra_fields ne '';
-    
-    $self->{main_sql} = "
-	SELECT c.collection_no, c.collection_name, c.lat, c.lng $extra_fields
-	FROM collections c JOIN occurrences o using (collection_no)
-			LEFT JOIN refs r on r.reference_no = c.reference_no
-        WHERE c.collection_no = ?";
-    
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute($self->{collection_no});
-    
-    # If we were directed to show associated taxa, construct an SQL statement
-    # that will be used to grab that list.
-    
-    if ( $self->{show_taxa} )
-    {
-	$self->{second_sql} = "
-	SELECT DISTINCT o.collection_no, a.taxon_name
-	FROM occurrences o JOIN authorities a USING (taxon_no)
-		JOIN taxa_tree_cache t ON t.taxon_no = a.taxon_no
-	WHERE o.collection_no = ? ORDER BY t.lft ASC";
-    
-	$self->{second_sth} = $dbh->prepare($self->{second_sql});
-	$self->{second_sth}->execute($self->{collection_no});
-    }
-    
-    return 1;
-}
-
-
 # processRecord ( row )
 # 
 # This routine takes a hash representing one result row, and does some
@@ -419,75 +385,80 @@ sub fetchSingle {
 # database needs to be refactored a bit in order to match the Darwin Core
 # standard we are using for output.
 
-sub processRecord {
+# sub processRecord {
     
-    my ($self, $row) = @_;
+#     my ($self, $row) = @_;
     
-    # If there's a secondary statement handle, read from it to get a list of
-    # taxa for this record.  If there's a stashed record that matches this
-    # row, use it first.
+#     # If there's a secondary statement handle, read from it to get a list of
+#     # taxa for this record.  If there's a stashed record that matches this
+#     # row, use it first.
     
-    my (@taxon_names);
-    my ($row2);
+#     my (@taxon_names);
+#     my ($row2);
         
-    if ( defined $self->{stash_second} and 
-	 $self->{stash_second}{collection_no} == $row->{collection_no} )
-    {
-	push @taxon_names, $self->{stash_second}{taxon_name};
-	$self->{stash_second} = undef;
-    }
+#     if ( defined $self->{stash_second} and 
+# 	 $self->{stash_second}{collection_no} == $row->{collection_no} )
+#     {
+# 	push @taxon_names, $self->{stash_second}{taxon_name};
+# 	$self->{stash_second} = undef;
+#     }
     
-    if ( defined $self->{second_sth} and not defined $self->{stash_record} )
-    {
-	while ( $row2 = $self->{second_sth}->fetchrow_hashref() )
-	{
-	    if ( $row2->{collection_no} != $row->{collection_no} )
-	    {
-		$self->{stash_second} = $row2;
-		last;
-	    }
+#     if ( defined $self->{second_sth} and not defined $self->{stash_record} )
+#     {
+# 	while ( $row2 = $self->{second_sth}->fetchrow_hashref() )
+# 	{
+# 	    if ( $row2->{collection_no} != $row->{collection_no} )
+# 	    {
+# 		$self->{stash_second} = $row2;
+# 		last;
+# 	    }
 	    
-	    else
-	    {
-		push @taxon_names, $row2->{taxon_name};
-	    }
-	}
-    }
+# 	    else
+# 	    {
+# 		push @taxon_names, $row2->{taxon_name};
+# 	    }
+# 	}
+#     }
     
-    $row->{taxa} = \@taxon_names if @taxon_names > 0;
+#     $row->{taxa} = \@taxon_names if @taxon_names > 0;
     
-    # Create a publication reference if that data was included in the query
+#     # Create a publication reference if that data was included in the query
     
-    if ( exists $row->{r_pubtitle} )
-    {
-	$self->generateReference($row);
-    }
-}
+#     if ( exists $row->{r_pubtitle} and $self->{show}{ref} )
+#     {
+# 	$self->generateReference($row);
+#     }
+# }
 
 
 # generateRecord ( row, options )
 # 
 # This method is passed two parameters: a hash of values representing one
-# record, and an indication of whether this is the first record to be output
+# record, and an indication of whether this is the first record to be output.
 # (which is ignored in this case).  It returns a string representing the
 # record in Darwin Core XML format.
 
-sub generateRecord {
+# sub generateRecord {
 
-    my ($self, $row, %options) = @_;
+#     my ($self, $row, %options) = @_;
     
-    # Output according to the proper content type.
+#     # Output according to the proper content type.
     
-    if ( $self->{output_format} eq 'xml' )
-    {
-	return $self->emitCollectionXML($row);
-    }
+#     if ( $self->{output_format} eq 'xml' )
+#     {
+# 	return $self->emitCollectionXML($row);
+#     }
     
-    else
-    {
-	return ($options{is_first} ? "\n" : "\n,") . $self->emitCollectionJSON($row);
-    }
-}
+#     elsif ( $self->{output_format} eq 'json' )
+#     {
+# 	return ($options{is_first} ? "\n" : "\n,") . $self->emitCollectionJSON($row);
+#     }
+    
+#     elsif ( $self->{output_format} eq 'txt' or $self->{output_format} eq 'csv' )
+#     {
+# 	return $self->emitCollectionText($row);
+#     }
+# }
 
 
 # emitCollectionXML ( row, short_record )
@@ -518,7 +489,7 @@ sub emitCollectionXML {
     if ( ref $row->{taxa} eq 'ARRAY' and @{$row->{taxa}} )
     {
 	$output .= '    <dwc:associatedTaxa>';
-	$output .= DataQuery::xml_clean(join(', ', @{$row->{taxa}}));
+	$output .= DataQuery::xml_clean(join(', ', map { $_->{taxon_name} } @{$row->{taxa}}));
 	$output .= '</dwc:associatedTaxa>' . "\n";
     }
     
@@ -553,7 +524,7 @@ sub emitCollectionJSON {
     
     my $output = '';
     
-    $output .= '{"collectionID":"' . $row->{collection_no} . '"'; 
+    $output .= '{"collectionID":"' . DataQuery::json_clean($row->{collection_no}) . '"'; 
     $output .= ',"collectionCode":"' . DataQuery::json_clean($row->{collection_name}) . '"';
     
     if ( defined $row->{lat} )
@@ -591,6 +562,113 @@ sub emitCollectionJSON {
     
     $output .= "}";
     return $output;
+}
+
+
+# generateQueryFields ( fields )
+# 
+# The parameter 'fields' should be a hash whose keys are strings, or a
+# comma-separated list of strings.
+# 
+# This routine returns a field string and a hash which lists extra tables to
+# be joined in the query.
+
+sub generateQueryFields {
+
+    my ($self, $fields_ref) = @_;
+    
+    # Return the default if our parameter is undefined.
+    
+    unless ( ref $fields_ref eq 'ARRAY' )
+    {
+	return '', {};
+    }
+    
+    # Now go through the list of strings and add the appropriate fields and
+    # tables for each.
+    
+    my $fields = '';
+    my %tables;
+    
+    foreach my $inc (@$fields_ref)
+    {
+	if ( $inc eq 'ref' )
+	{
+	    $fields .= $REF_FIELDS;
+	    $tables{ref} = 1;
+	}
+	
+	elsif ( $inc eq 'pers' )
+	{
+	    $fields .= $PERS_FIELDS;
+	    $tables{ppa} = 1;
+	    $tables{ppe} = 1;
+	}
+	
+	elsif ( $inc eq 'loc' )
+	{
+	    $fields .= $LOC_FIELDS;
+	}
+	
+	elsif ( $inc eq 'time' )
+	{
+	    $fields .= $TIME_FIELDS;
+	    $tables{int} = 1;
+	}
+	
+	elsif ( $inc eq 'taxa' )
+	{
+	    # nothing needed here
+	}
+	
+	elsif ( $inc eq 'occ' )
+	{
+	    # nothing needed here
+	}
+	
+	elsif ( $inc eq 'det' )
+	{
+	    #$fields .= $DETAIL_FIELDS;
+	}
+	
+	else
+	{
+	    carp "unrecognized value '$inc' for option 'fields'";
+	}
+    }
+    
+    return ($fields, \%tables);
+}
+
+
+# generateJoinList ( tables )
+# 
+# Generate the actual join string indicated by the table hash.
+
+sub generateJoinList {
+
+    my ($self, $mt, $tables) = @_;
+    
+    my $join_list = '';
+    
+    # Return an empty string unless we actually have some joins to make
+    
+    return $join_list unless ref $tables eq 'HASH' and %$tables;
+    
+    # Create the necessary join expressions.
+    
+    $join_list .= "LEFT JOIN refs as r on r.reference_no = $mt.reference_no\n" 
+	if $tables->{ref};
+    $join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.max_interval_no
+		JOIN interval_map as li on li.interval_no = \
+		if($mt.min_interval_no > 0, $mt.min_interval_no, $mt.max_interval_no)\n"
+	if $tables->{int};
+    $join_list .= "LEFT JOIN person as ppa on ppa.person_no = $mt.authorizer_no\n"
+	if $tables->{ppa};
+    $join_list .= "LEFT JOIN person as ppe on ppe.person_no = $mt.enterer_no\n"
+	if $tables->{ppe};
+    
+    return $join_list;
 }
 
 

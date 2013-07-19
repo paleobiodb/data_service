@@ -16,9 +16,9 @@ sub connect {
 
     my $dsn;
     if ( $DB_SOCKET )	{
-        $dsn = "DBI:$driver:database=$SQL_DB;host=$hostName;mysql_socket=$DB_SOCKET";
+        $dsn = "DBI:$driver:database=$SQL_DB;host=$hostName;mysql_socket=$DB_SOCKET;mysql_client_found_rows=0";
     } else	{
-        $dsn = "DBI:$driver:database=$SQL_DB;host=$hostName";
+        $dsn = "DBI:$driver:database=$SQL_DB;host=$hostName;mysql_client_found_rows=0";
     }
 
     my $connection;

@@ -138,9 +138,9 @@ package TaxonTrees;
 
 # Modules needed
 
+use Constants qw($FINE_BIN_SIZE $COARSE_BIN_SIZE);
 use Carp qw(carp croak);
 use Try::Tiny;
-use Text::JaroWinkler qw(strcmp95);
 
 use strict;
 
@@ -148,7 +148,7 @@ use strict;
 # Controlling variables for debug messages
 
 our $MSG_TAG = 'unknown';
-our $MSG_LEVEL = 0;
+our $MSG_LEVEL = 1;
 
 # Main table names - if new entries are ever added to @TREE_TABLE_LIST,
 # corresponding entries should be added to the hashes immediately below.  Each
@@ -169,7 +169,10 @@ our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
 our (%REFS_TABLE) = ("taxon_trees" => "refs");
 
 our ($OCC_MATRIX) = "occ_matrix";
-our ($FIRSTAPP_TABLE) = "first_app";
+our ($OCC_SUMMARY) = "occ_summary";
+our ($REF_SUMMARY) = "ref_summary";
+our ($COLL_BINS) = "coll_bins";
+our ($COLL_CLUST) = "clusters";
 
 # Working table names - when the taxonomy tables are rebuilt, they are rebuilt
 # using the following table names.  The last step of the rebuild is to replace
@@ -178,14 +181,17 @@ our ($FIRSTAPP_TABLE) = "first_app";
 # last step of the update operation is to insert these entries into the main
 # tables.
 
-our $TREE_TEMP = "tn";
-our $NAME_TEMP = "nn";
-our $ATTRS_TEMP = "vn";
-our $SEARCH_TEMP = "sn";
-our $INTS_TEMP = "intn";
-our $OPINION_TEMP = "opn";
-our $OCC_MATRIX_TEMP = "ocmn";
-our $FIRSTAPP_TEMP = "fan";
+our $TREE_WORK = "tn";
+our $NAME_WORK = "nn";
+our $ATTRS_WORK = "vn";
+our $SEARCH_WORK = "sn";
+our $INTS_WORK = "intn";
+our $OPINION_WORK = "opn";
+our $OCC_MATRIX_WORK = "ocmn";
+our $OCC_SUMMARY_WORK = "ocsn";
+our $REF_SUMMARY_WORK = "rfsn";
+our $COLL_BINS_WORK = "cbn";
+our $COLL_CLUST_WORK = "kmcn";
 
 # Auxiliary table names - these tables are creating during the process of
 # computing the main tables, and then discarded.
@@ -198,6 +204,7 @@ our $CLASSIFY_AUX = "class_aux";
 our $ADJUST_AUX = "adjust_aux";
 our $SPECIES_AUX = "species_aux";
 our $INTS_AUX = "ints_aux";
+our $CLUST_AUX = "clust_aux";
 
 # Additional tables
 
@@ -205,7 +212,7 @@ our $QUEUE_TABLE = "taxon_queue";
 our $COUNTRY_MAP = "country_map";
 our $INTERVAL_MAP = "interval_map";
 
-# Variables and constants
+# Other variables and constants
 
 our (@TREE_ERRORS);
 my ($REPORT_THRESHOLD) = 20;
@@ -730,25 +737,25 @@ sub maintenance {
 
 sub buildTables {
 
-    my ($dbh, $tree_table, $options, $step_control) = @_;
+    my ($dbh, $tree_table, $options, $steps) = @_;
     
     $options ||= {};
+    my $step_control;
     
     # First, set the variables that control log output and also determine
     # which tables will be computed.
     
-    $MSG_TAG = 'Rebuild'; $MSG_LEVEL = $options->{msg_level} || 1;
+    $MSG_TAG = 'Rebuild';
     
-    unless ( ref $step_control eq 'HASH' and %$step_control ) {
-	$step_control->{$_} = 1 foreach 'a'..'i';
-    };
+    my @steps = split(//, $steps || 'Aabcdefghi');
+    $step_control->{$_} = 1 foreach @steps;
     
-    $TREE_TEMP = 'taxon_trees' if $step_control->{t};
+    $TREE_WORK = 'taxon_trees' if $step_control->{t};
     
     # Now create the necessary tables, including generating the opinion cache
     # from the opinion table.
     
-    buildOpinionCache($dbh, $tree_table) if $step_control->{a};
+    buildOpinionCache($dbh, $tree_table) if $step_control->{A};
     createWorkingTables($dbh, $tree_table) if $step_control->{a};
     
     # Next, determine the currently accepted spelling for each concept from
@@ -924,21 +931,21 @@ sub updateTables {
     
     createWorkingTables($dbh, $tree_table, \%update_concepts);
     
-    # Next, compute the accepted name for every concept in $TREE_TEMP and also
-    # add corresponding entries to $NAME_TEMP.
+    # Next, compute the accepted name for every concept in $TREE_WORK and also
+    # add corresponding entries to $NAME_WORK.
     
     computeSpelling($dbh, $tree_table);
     
-    # Then compute the synonymy relation for every concept in $TREE_TEMP.  In
-    # the process, we need to expand $TREE_TEMP to include junior synonyms.
+    # Then compute the synonymy relation for every concept in $TREE_WORK.  In
+    # the process, we need to expand $TREE_WORK to include junior synonyms.
     
     computeSynonymy($dbh, $tree_table, { expandToJuniors => 1 });
     
     # Now that we have computed the synonymy relation, we need to expand
-    # $TREE_TEMP to include senior synonyms of the concepts represented in it.
+    # $TREE_WORK to include senior synonyms of the concepts represented in it.
     # We need to do this before we update the hierarchy relation because the
     # classification of those senior synonyms might change; if one of the rows
-    # in $TREE_TEMP is a new junior synonym, it might have a 'belongs to'
+    # in $TREE_WORK is a new junior synonym, it might have a 'belongs to'
     # opinion that is more recent and reliable than the previous best opinion
     # for the senior.
     
@@ -951,13 +958,13 @@ sub updateTables {
     
     linkSynonyms($dbh);
     
-    # Then compute the hierarchy relation for every concept in $TREE_TEMP.
+    # Then compute the hierarchy relation for every concept in $TREE_WORK.
     
     computeHierarchy($dbh);
     
     # Some parent_no values may not have been set properly, in particular
     # those whose classification points to a parent which is not itself in
-    # $TREE_TEMP.  These must now be updated to their proper values.
+    # $TREE_WORK.  These must now be updated to their proper values.
     
     # linkParents($dbh, $tree_table);     # This is no longer needed MM 2012-12-08
     
@@ -966,7 +973,7 @@ sub updateTables {
     updateSearchTable($dbh, $search_table);
     
     # If the adjustments to the hierarchy are small, then we can now update
-    # $tree_table using the rows from $TREE_TEMP and then adjust the tree
+    # $tree_table using the rows from $TREE_WORK and then adjust the tree
     # sequence in-place.  This will finish the procedure.  We set the
     # threshold at 3 because altering the tree in-place is several times more
     # efficient than rebuilding it even if we have to scan over the entire
@@ -984,14 +991,14 @@ sub updateTables {
     
     else
     {
-	# Copy all rows from $tree_table into $TREE_TEMP that aren't already
+	# Copy all rows from $tree_table into $TREE_WORK that aren't already
 	# represented there.
 	
 	my $result = $dbh->do("
-		INSERT IGNORE INTO $TREE_TEMP
+		INSERT IGNORE INTO $TREE_WORK
 		SELECT * FROM $tree_table");
 	
-	# Now that $TREE_TEMP has the entire tree, resequence it.
+	# Now that $TREE_WORK has the entire tree, resequence it.
 	
 	computeTreeSequence($dbh);
 	
@@ -1025,8 +1032,8 @@ sub buildOpinionCache {
     # need to access the opinion cache, we create a new table and then rename
     # it into the old one.
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $OPINION_TEMP");
-    $result = $dbh->do("CREATE TABLE $OPINION_TEMP
+    $result = $dbh->do("DROP TABLE IF EXISTS $OPINION_WORK");
+    $result = $dbh->do("CREATE TABLE $OPINION_WORK
 			  (opinion_no int unsigned not null,
 			   orig_no int unsigned not null,
 			   child_spelling_no int unsigned not null,
@@ -1045,22 +1052,22 @@ sub buildOpinionCache {
     # opinions, since this will speed up subsequent steps of the taxon trees
     # rebuild/update process.
     
-    populateOpinionCache($dbh, $OPINION_TEMP, $tree_table);
+    populateOpinionCache($dbh, $OPINION_WORK, $tree_table);
     
     # Then index the newly populated opinion cache.
     
-    $result = $dbh->do("ALTER TABLE $OPINION_TEMP ADD KEY (orig_no)");
-    $result = $dbh->do("ALTER TABLE $OPINION_TEMP ADD KEY (parent_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (orig_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (parent_no)");
     
     # Now, we remove any backup table that might have been left in place, and
     # swap in the new table using an atomic rename operation
     
     $result = $dbh->do("DROP TABLE IF EXISTS ${OPINION_CACHE}_bak");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OPINION_CACHE LIKE $OPINION_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OPINION_CACHE LIKE $OPINION_WORK");
     
     $result = $dbh->do("RENAME TABLE
 				$OPINION_CACHE to ${OPINION_CACHE}_bak,
-				$OPINION_TEMP to $OPINION_CACHE");
+				$OPINION_WORK to $OPINION_CACHE");
     
     # ...and remove the backup
     
@@ -1254,14 +1261,14 @@ sub updateOpinionConcepts {
 
 # createWorkingTables ( dbh, tree_table, concept_hash )
 # 
-# Create a new $TREE_TEMP table to hold the new rows that are being computed
+# Create a new $TREE_WORK table to hold the new rows that are being computed
 # for the tree table being updated.  If $concept_hash is specified, it must be
 # a hashref whose keys represent a list of taxonomic concepts.  Otherwise,
-# $TREE_TEMP will be created with one row for every concept in the database.
+# $TREE_WORK will be created with one row for every concept in the database.
 # The new table doesn't have any indices yet, because it is more efficient to
 # add these later.
 # 
-# We also create the secondary tables associated with $TREE_TEMP.
+# We also create the secondary tables associated with $TREE_WORK.
 
 sub createWorkingTables {
 
@@ -1273,11 +1280,11 @@ sub createWorkingTables {
     
     my $auth_table = $AUTH_TABLE{$tree_table};
     
-    # First create $TREE_TEMP, which will hold one row for every concept that
+    # First create $TREE_WORK, which will hold one row for every concept that
     # is being updated.
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $TREE_TEMP");
-    $result = $dbh->do("CREATE TABLE $TREE_TEMP 
+    $result = $dbh->do("DROP TABLE IF EXISTS $TREE_WORK");
+    $result = $dbh->do("CREATE TABLE $TREE_WORK 
 			       (orig_no int unsigned not null,
 				name varchar(80) not null,
 				rank tinyint not null,
@@ -1305,17 +1312,17 @@ sub createWorkingTables {
 	    join(',', keys %$concept_hash) . ')';
     }
 	
-    $result = $dbh->do("INSERT INTO $TREE_TEMP (orig_no)
+    $result = $dbh->do("INSERT INTO $TREE_WORK (orig_no)
 			SELECT distinct orig_no
 			FROM $auth_table $concept_filter");
     
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD PRIMARY KEY (orig_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK ADD PRIMARY KEY (orig_no)");
     
     # Create a table to store the spelling information for each taxonomic
     # name. 
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $NAME_TEMP");
-    $result = $dbh->do("CREATE TABLE $NAME_TEMP
+    $result = $dbh->do("DROP TABLE IF EXISTS $NAME_WORK");
+    $result = $dbh->do("CREATE TABLE $NAME_WORK
 			       (taxon_no int unsigned not null,
 				orig_no int unsigned not null,
 				spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
@@ -1328,15 +1335,15 @@ sub createWorkingTables {
 
 # computeSpelling ( dbh, tree_table )
 # 
-# Fill in the spelling_no field of $TREE_TEMP.  This computes the "currently
+# Fill in the spelling_no field of $TREE_WORK.  This computes the "currently
 # accepted name" or "concept group leader" relation for all taxonomic concepts
-# represented in $TREE_TEMP.  We do this by selecting the best "spelling
+# represented in $TREE_WORK.  We do this by selecting the best "spelling
 # opinion" (most recent and reliable opinion, including those labelled
 # "misspelling") for each concept group.  Unless the best opinion is recorded
 # as a misspelling, we take its spelling to be the accepted one.  Otherwise,
 # we look for the best spelling match among the available opinions.
 # 
-# We then use this information fill in the taxon_name field of $TREE_TEMP,
+# We then use this information fill in the taxon_name field of $TREE_WORK,
 # although some of these values will be modified later.
 
 sub computeSpelling {
@@ -1388,7 +1395,7 @@ sub computeSpelling {
 		SELECT o.orig_no, o.child_spelling_no, o.opinion_no,
 		       if(o.spelling_reason = 'misspelling' or m.spelling_no is not null,
 			  true, false)
-		FROM $opinion_cache as o JOIN $TREE_TEMP USING (orig_no)
+		FROM $opinion_cache as o JOIN $TREE_WORK USING (orig_no)
 			LEFT JOIN $MISSPELLING_AUX as m on o.child_spelling_no = m.spelling_no
 		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
@@ -1479,20 +1486,20 @@ sub computeSpelling {
     # For anything that falls through all of these, we just use the original
     # misspelling and call it a day.
     
-    # Next, we copy all of the computed spelling_no values into $TREE_TEMP.
+    # Next, we copy all of the computed spelling_no values into $TREE_WORK.
     # For every taxonomic concept which doesn't have a spelling_no value, we
     # just use the orig_no.
     
     logMessage(2, "    setting spelling_no");
     
-    $result = $dbh->do("UPDATE $TREE_TEMP as t LEFT JOIN $SPELLING_AUX as s USING (orig_no)
+    $result = $dbh->do("UPDATE $TREE_WORK as t LEFT JOIN $SPELLING_AUX as s USING (orig_no)
 			SET t.spelling_no = ifnull(s.spelling_no, t.orig_no)");
     
     # Now that we have set spelling_no, we can efficiently index it.
     
     logMessage(2, "    indexing spelling_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (spelling_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (spelling_no)");
     
     # As an aside, we can now compute and index the trad_no field, which might
     # be of interest to those who prefer the traditional taxonomic ranks
@@ -1509,7 +1516,7 @@ sub computeSpelling {
 		INSERT IGNORE INTO $TRAD_AUX (orig_no, spelling_no)
 		SELECT t.orig_no, o.child_spelling_no
 		FROM $auth_table as a
-			JOIN $TREE_TEMP as t ON a.taxon_no = t.spelling_no
+			JOIN $TREE_WORK as t ON a.taxon_no = t.spelling_no
 				AND a.taxon_rank = 'unranked clade'
 			JOIN $opinion_cache as o on o.orig_no = t.orig_no
 			JOIN $auth_table as a2 on o.child_spelling_no = a2.taxon_no
@@ -1518,13 +1525,13 @@ sub computeSpelling {
     
     logMessage(2, "    setting trad_no");
     
-    $result = $dbh->do("UPDATE $TREE_TEMP SET trad_no = spelling_no");
-    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $TRAD_AUX s USING (orig_no)
+    $result = $dbh->do("UPDATE $TREE_WORK SET trad_no = spelling_no");
+    $result = $dbh->do("UPDATE $TREE_WORK t JOIN $TRAD_AUX s USING (orig_no)
 			SET t.trad_no = s.spelling_no");
     
     logMessage(2, "    indexing trad_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP ADD INDEX (trad_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (trad_no)");
     
     # We then copy the selected name and rank into $TREE_TABLE.  We use the
     # traditional rank instead of the currently accepted one, because 'unranked clade'
@@ -1532,7 +1539,7 @@ sub computeSpelling {
     
     logMessage(2, "    setting name and rank");
     
-    $result = $dbh->do("UPDATE $TREE_TEMP as t JOIN $auth_table as a on taxon_no = trad_no
+    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on taxon_no = trad_no
 			SET t.name = a.taxon_name, t.rank = a.taxon_rank");
     
     # Then we can compute the name table, which records the best opinion
@@ -1543,7 +1550,7 @@ sub computeSpelling {
     # First put in all of the names we've selected above.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $NAME_TEMP
+		INSERT IGNORE INTO $NAME_WORK
 		SELECT s.spelling_no, s.orig_no, o.spelling_reason, o.opinion_no
 		FROM $SPELLING_AUX as s JOIN $opinion_cache as o using (opinion_no)");
     
@@ -1551,15 +1558,15 @@ sub computeSpelling {
     # opinion for each one.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $NAME_TEMP
+		INSERT IGNORE INTO $NAME_WORK
 		SELECT o.child_spelling_no, o.orig_no, o.spelling_reason, o.opinion_no
-		FROM $opinion_cache as o JOIN $TREE_TEMP USING (orig_no)
+		FROM $opinion_cache as o JOIN $TREE_WORK USING (orig_no)
 		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
     # Then add dummy entries for all other names.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $NAME_TEMP
+		INSERT IGNORE INTO $NAME_WORK
 		SELECT a.taxon_no, a.orig_no, '', 0
 		FROM $auth_table as a");
     
@@ -1567,8 +1574,8 @@ sub computeSpelling {
     
     logMessage(2, "    indexing taxonomic name table");
     
-    $result = $dbh->do("ALTER TABLE $NAME_TEMP ADD KEY (orig_no)");
-    $result = $dbh->do("ALTER TABLE $NAME_TEMP ADD KEY (opinion_no)");
+    $result = $dbh->do("ALTER TABLE $NAME_WORK ADD KEY (orig_no)");
+    $result = $dbh->do("ALTER TABLE $NAME_WORK ADD KEY (opinion_no)");
     
     my $a = 1;		# we can stop on this line when debugging
 }
@@ -1576,8 +1583,8 @@ sub computeSpelling {
 
 # expandToJuniors ( dbh, tree_table )
 # 
-# Expand $TREE_TEMP to adding to it all rows from $tree_table which represent
-# junior synonyms of the concepts already in $TREE_TEMP.
+# Expand $TREE_WORK to adding to it all rows from $tree_table which represent
+# junior synonyms of the concepts already in $TREE_WORK.
 
 sub expandToJuniors {
     
@@ -1591,14 +1598,14 @@ sub expandToJuniors {
     # Note that we can't just use the synonym_no field of $tree_table, because
     # it refers to the most senior synonym instead of the immediate senior
     # synonym.  We might have a synonym chain A -> B -> C with B in
-    # $TREE_TEMP.  In such a case, we would miss A if we relied on synonym_no.
+    # $TREE_WORK.  In such a case, we would miss A if we relied on synonym_no.
 
     while (1)
     {
 	my $result = $dbh->do("
-		INSERT IGNORE INTO $TREE_TEMP (orig_no, taxon_name, taxon_rank, spelling_no)
+		INSERT IGNORE INTO $TREE_WORK (orig_no, taxon_name, taxon_rank, spelling_no)
 		SELECT m.orig_no, m.taxon_name, m.taxon_rank, m.spelling_no
-		FROM $TREE_TEMP as t
+		FROM $TREE_WORK as t
 			JOIN $opinion_cache as o ON o.parent_no = t.orig_no
 				and o.status != 'belongs to' and o.orig_no <> o.parent_no
 			STRAIGHT_JOIN $tree_table as m ON m.opinion_no = o.opinion_no");
@@ -1612,8 +1619,8 @@ sub expandToJuniors {
 
 # expandToChildren ( dbh, tree_table )
 # 
-# Expand $TREE_TEMP to adding to it all rows from $tree_table which represent
-# children of the concepts already in $TREE_TEMP.  This is not needed unless
+# Expand $TREE_WORK to adding to it all rows from $tree_table which represent
+# children of the concepts already in $TREE_WORK.  This is not needed unless
 # we decide to have parent_no point to senior synonyms, but I will leave it in
 # the code in case we later maek that decision.
 
@@ -1622,8 +1629,8 @@ sub expandToChildren {
     my ($dbh, $tree_table) = @_;
     
     my $result = $dbh->do("
-		INSERT IGNORE INTO $TREE_TEMP
-		SELECT m.* FROM $tree_table m JOIN $TREE_TEMP t
+		INSERT IGNORE INTO $TREE_WORK
+		SELECT m.* FROM $tree_table m JOIN $TREE_WORK t
 			ON m.parent_no = t.orig_no");
     
     logMessage(1, "adding children: $result concepts");
@@ -1632,8 +1639,8 @@ sub expandToChildren {
 
 # computeSynonymy ( dbh, tree_table, options )
 # 
-# Fill in the synonym_no field of $TREE_TEMP.  This computes the "synonymy"
-# relation for all of the concepts represented in $TREE_TEMP.  We do this by
+# Fill in the synonym_no field of $TREE_WORK.  This computes the "synonymy"
+# relation for all of the concepts represented in $TREE_WORK.  We do this by
 # choosing the "classification opinion" for each concept (the most reliable
 # and recent opinion that specifies a different parent_no) and then looking at
 # those concepts for which the opinion specifies synonymy.
@@ -1672,7 +1679,7 @@ sub computeSynonymy {
     my $OPINION_CACHE = $OPINION_CACHE{$tree_table};
     
     # We start by choosing the "classification opinion" for each concept in
-    # $TREE_TEMP.  We use the same mechanism as we did previously with the
+    # $TREE_WORK.  We use the same mechanism as we did previously with the
     # spelling opinions: use a table with a unique key on orig_no, and INSERT
     # IGNORE with a properly ordered selection.  We use slightly different
     # criteria to select these than we did for the "spelling opinions", which
@@ -1695,7 +1702,7 @@ sub computeSynonymy {
     $result = $dbh->do("INSERT IGNORE INTO $CLASSIFY_AUX
 			SELECT o.orig_no, o.opinion_no, o.parent_no,
 			    o.ri, o.pubyr, o.status
-			FROM $OPINION_CACHE o JOIN $TREE_TEMP USING (orig_no)
+			FROM $OPINION_CACHE o JOIN $TREE_WORK USING (orig_no)
 			WHERE o.orig_no != o.parent_no
 			ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
@@ -1822,11 +1829,11 @@ sub computeSynonymy {
     }
     
     # Now that we have broken all of the cycles in $CLASSIFY_AUX, we can
-    # fill in synonym_no and valid_no in $TREE_TEMP.
+    # fill in synonym_no and valid_no in $TREE_WORK.
     
     logMessage(2, "    setting synonym_no and valid_no");
     
-    $result = $dbh->do("UPDATE $TREE_TEMP as t LEFT JOIN $CLASSIFY_AUX as b using (orig_no)
+    $result = $dbh->do("UPDATE $TREE_WORK as t LEFT JOIN $CLASSIFY_AUX as b using (orig_no)
 			SET t.synonym_no = if(status <> 'belongs to' and b.parent_no > 0,
 					      b.parent_no, orig_no),
 			    t.valid_no = if(status in ('subjective synonym of',
@@ -1838,8 +1845,8 @@ sub computeSynonymy {
     
     logMessage(2, "    indexing synonym_no and valid_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (synonym_no)");
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (valid_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (synonym_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (valid_no)");
     
     return;
 }
@@ -1847,8 +1854,8 @@ sub computeSynonymy {
 
 # expandToSeniors ( dbh, tree_table )
 # 
-# Expand $TREE_TEMP by adding to it all rows from $tree_table which represent
-# senior synonyms of the concepts already in $TREE_TEMP, and all rows from
+# Expand $TREE_WORK by adding to it all rows from $tree_table which represent
+# senior synonyms of the concepts already in $TREE_WORK, and all rows from
 # $tree_table representing concepts which used to be senior synonyms but might
 # not be anymore.  All of these might undergo a change of classification as
 # part of this update.
@@ -1872,7 +1879,7 @@ sub expandToSeniors {
 	# First the new synonyms (using $CLASSIFY_AUX)
 	
 	$count = $dbh->do("
-		INSERT IGNORE INTO $TREE_TEMP (orig_no, spelling_no, synonym_no)
+		INSERT IGNORE INTO $TREE_WORK (orig_no, spelling_no, synonym_no)
 		SELECT m.orig_no, m.spelling_no, m.synonym_no
 		FROM $CLASSIFY_AUX c
 			JOIN $OPINION_CACHE o USING (opinion_no)
@@ -1882,21 +1889,21 @@ sub expandToSeniors {
 	# Then the old synonyms (using $tree_table)
 	
 	$count += $dbh->do("
-		INSERT IGNORE INTO $TREE_TEMP (orig_no, spelling_no, synonym_no)
+		INSERT IGNORE INTO $TREE_WORK (orig_no, spelling_no, synonym_no)
 		SELECT m.orig_no, m.spelling_no, m.synonym_no
-		FROM $TREE_TEMP t 
+		FROM $TREE_WORK t 
 			JOIN $tree_table m USING (orig_no)
 			JOIN $OPINION_CACHE o ON o.opinion_no = m.opinion_no
 			JOIN $tree_table m2 ON o.parent_no = m2.orig_no
 				and o.status != 'belongs to'");
 	
 	# Then expand $CLASSIFY_AUX with corresponding rows for every concept
-	# that was added to $TREE_TEMP.
+	# that was added to $TREE_WORK.
 	
 	$result = $dbh->do("
 		INSERT IGNORE INTO $CLASSIFY_AUX
 		SELECT m.orig_no, m.opinion_no, m.parent_no, o.ri, o.pubyr, o.status
-		FROM $TREE_TEMP t JOIN $tree_table m USING (orig_no)
+		FROM $TREE_WORK t JOIN $tree_table m USING (orig_no)
 			JOIN $OPINION_CACHE o ON o.opinion_no = m.opinion_no
 			LEFT JOIN $CLASSIFY_AUX c ON c.orig_no = t.orig_no
 		WHERE c.opinion_no is null") if $count > 0;
@@ -1931,7 +1938,7 @@ sub linkSynonyms {
     do
     {
 	$result = $dbh->do("
-		UPDATE $TREE_TEMP t1 JOIN $TREE_TEMP t2
+		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
 		    on t1.synonym_no = t2.orig_no and t1.synonym_no != t2.synonym_no
 		SET t1.synonym_no = t2.synonym_no");
     }
@@ -1949,7 +1956,7 @@ sub linkSynonyms {
     do
     {
 	$result = $dbh->do("
-		UPDATE $TREE_TEMP t1 JOIN $TREE_TEMP t2
+		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
 		    on t1.valid_no = t2.orig_no and t1.valid_no != t2.valid_no
 		SET t1.valid_no = t2.valid_no");
     }
@@ -1967,8 +1974,8 @@ sub linkSynonyms {
 
 # computeHierarchy ( dbh )
 # 
-# Fill in the opinion_no and parent_no fields of $TREE_TEMP.  This determines
-# the classification of each taxonomic concept represented in $TREE_TEMP, and
+# Fill in the opinion_no and parent_no fields of $TREE_WORK.  This determines
+# the classification of each taxonomic concept represented in $TREE_WORK, and
 # thus the Hierarchy relation as well.
 # 
 # We start with the set of classification opinions chosen by
@@ -1981,8 +1988,8 @@ sub linkSynonyms {
 # affect the senior concept.
 # 
 # After this is done, we must check for cycles using the same procedure as
-# computeSynonymy().  Only then can we set the parent_no field of $TREE_TEMP.
-# Finally, we set opinion_no for each row of $TREE_TEMP, based on the modified
+# computeSynonymy().  Only then can we set the parent_no field of $TREE_WORK.
+# Finally, we set opinion_no for each row of $TREE_WORK, based on the modified
 # set of classification opinions.
 
 sub computeHierarchy {
@@ -2018,7 +2025,7 @@ sub computeHierarchy {
     
     $result = $dbh->do("INSERT IGNORE INTO $SYNONYM_AUX
 			SELECT t.orig_no, t.synonym_no
-			FROM $TREE_TEMP t JOIN $CLASSIFY_AUX c USING (orig_no)
+			FROM $TREE_WORK t JOIN $CLASSIFY_AUX c USING (orig_no)
 			WHERE c.status in ('subjective synonym of', 'objective synonym of',
 						'replaced by')
 				and t.synonym_no = c.parent_no");
@@ -2170,22 +2177,22 @@ sub computeHierarchy {
     
     logMessage(2, "    setting opinion_no");
     
-    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN $CLASSIFY_AUX c USING (orig_no)
+    $result = $dbh->do("UPDATE $TREE_WORK t JOIN $CLASSIFY_AUX c USING (orig_no)
 			SET t.opinion_no = c.opinion_no");
     
     logMessage(2, "    indexing opinion_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (opinion_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (opinion_no)");
     
     # Now we can set parent_no.  All concepts in a synonym group will share
-    # the same parent, so we need to join a second copy of $TREE_TEMP to look
+    # the same parent, so we need to join a second copy of $TREE_WORK to look
     # up the senior synonym number.  In other words, the parent_no value for
     # any taxon will point to the parent of its most senior synonym.
     
     logMessage(2, "    setting parent_no");
     
     $result = $dbh->do("
-		UPDATE $TREE_TEMP t JOIN $TREE_TEMP t2 ON t2.orig_no = t.synonym_no
+		UPDATE $TREE_WORK t JOIN $TREE_WORK t2 ON t2.orig_no = t.synonym_no
 		    JOIN $OPINION_CACHE o ON o.opinion_no = t2.opinion_no
 		SET t.parent_no = o.parent_no");
     
@@ -2193,7 +2200,7 @@ sub computeHierarchy {
     
     logMessage(2, "    indexing parent_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (parent_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parent_no)");
     
     my $a = 1;
     
@@ -2353,8 +2360,8 @@ sub breakCycles {
 
 # linkParents ( dbh, tree_table )
 # 
-# Update the parent_no field of $TREE_TEMP to include parents which are not
-# themselves represented in $TREE_TEMP.  This is not needed currently, but
+# Update the parent_no field of $TREE_WORK to include parents which are not
+# themselves represented in $TREE_WORK.  This is not needed currently, but
 # might be in the future if we decide that parent_no should point to senior
 # synonyms (so I'm going to keep it in the code).
 
@@ -2364,11 +2371,11 @@ sub linkParents {
     
     my $result;
     
-    # Set parent_no when the parent is not represented in $TREE_TEMP.
+    # Set parent_no when the parent is not represented in $TREE_WORK.
     
     $result = $dbh->do("
-		UPDATE $TREE_TEMP t
-		    JOIN $TREE_TEMP t2 ON t2.orig_no = t.synonym_no
+		UPDATE $TREE_WORK t
+		    JOIN $TREE_WORK t2 ON t2.orig_no = t.synonym_no
 		    JOIN $OPINION_CACHE{$tree_table} o ON o.opinion_no = t2.opinion_no
 		    JOIN $tree_table m ON m.orig_no = o.parent_no
 		SET t.parent_no = m.synonym_no
@@ -2380,7 +2387,7 @@ sub linkParents {
 
 # adjustHierarchicalNames ( dbh )
 # 
-# Update the taxonomic names stored in $TREE_TEMP so that species, subspecies
+# Update the taxonomic names stored in $TREE_WORK so that species, subspecies
 # and subgenus names match the genera under which they are hierarchically
 # placed.  If two or more genera are synonymized, then the names of all
 # contained taxa should match the senior synonym.  The 'imp' flag is used to
@@ -2412,19 +2419,19 @@ sub adjustHierarchicalNames {
 		SELECT t.orig_no,
 		       concat(t1.name, ' (',
 		              trim(trailing ')' from substring_index(t.name,'(',-1)), ')')
-		FROM $TREE_TEMP as t
-			JOIN $TREE_TEMP as p1 on p1.orig_no = t.parent_no
-			JOIN $TREE_TEMP as t1 on t1.orig_no = p1.synonym_no 
+		FROM $TREE_WORK as t
+			JOIN $TREE_WORK as p1 on p1.orig_no = t.parent_no
+			JOIN $TREE_WORK as t1 on t1.orig_no = p1.synonym_no 
 				and p1.rank = 5
 		WHERE t.rank = 4";
     
     $result = $dbh->do($SQL_STRING);
     
     # If the computed name is different from the one already stored in
-    # $TREE_TEMP, then update the name and set the 'imp' flag.
+    # $TREE_WORK, then update the name and set the 'imp' flag.
     
     $SQL_STRING = "
-		UPDATE $TREE_TEMP as t JOIN $ADJUST_AUX as ax using (orig_no)
+		UPDATE $TREE_WORK as t JOIN $ADJUST_AUX as ax using (orig_no)
 		SET t.name = ax.new_name,
 		    t.imp = 1
 		WHERE ax.new_name <> t.name";
@@ -2447,23 +2454,23 @@ sub adjustHierarchicalNames {
 			      if(t.name like '%)%',
 				 trim(substring(t.name, locate(') ', t.name)+2)),
 				 trim(substring(t.name, locate(' ', t.name)+1))))
-		FROM $TREE_TEMP as t
-			LEFT JOIN $TREE_TEMP as p1 on p1.orig_no = t.parent_no
-			LEFT JOIN $TREE_TEMP as t1 on t1.orig_no = p1.synonym_no 
-			LEFT JOIN $TREE_TEMP as p2 on p2.orig_no = p1.parent_no
-			LEFT JOIN $TREE_TEMP as t2 on t2.orig_no = p2.synonym_no
-			LEFT JOIN $TREE_TEMP as p3 on p3.orig_no = p2.parent_no
-			LEFT JOIN $TREE_TEMP as t3 on t3.orig_no = p3.synonym_no
+		FROM $TREE_WORK as t
+			LEFT JOIN $TREE_WORK as p1 on p1.orig_no = t.parent_no
+			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = p1.synonym_no 
+			LEFT JOIN $TREE_WORK as p2 on p2.orig_no = p1.parent_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = p2.synonym_no
+			LEFT JOIN $TREE_WORK as p3 on p3.orig_no = p2.parent_no
+			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = p3.synonym_no
 		WHERE t.rank in (2, 3) and
 			(p1.rank in (4,5) or p2.rank in (4,5) or p3.rank in (4,5))";
     
     $result = $dbh->do($SQL_STRING);
     
     # If the computed name is different from the one already stored in
-    # $TREE_TEMP, then update the name and set the 'imp' flag.
+    # $TREE_WORK, then update the name and set the 'imp' flag.
     
     $SQL_STRING = "
-		UPDATE $TREE_TEMP as t JOIN $ADJUST_AUX as ax using (orig_no)
+		UPDATE $TREE_WORK as t JOIN $ADJUST_AUX as ax using (orig_no)
 		SET t.name = ax.new_name,
 		    t.imp = 1
 		WHERE ax.new_name <> t.name";
@@ -2476,7 +2483,7 @@ sub adjustHierarchicalNames {
 
 # computeTreeSequence ( dbh )
 # 
-# Fill in the lft, rgt and depth fields of $TREE_TEMP.  This has the effect of
+# Fill in the lft, rgt and depth fields of $TREE_WORK.  This has the effect of
 # arranging the rows into a forest of Nested Set trees.  For more information,
 # see: http://en.wikipedia.org/wiki/Nested_set_model.
 # 
@@ -2505,7 +2512,7 @@ sub computeTreeSequence {
     # a powerful enough language to do this efficiently).
     
     my $fetch_hierarchy = $dbh->prepare("SELECT orig_no, rank, parent_no
-					   FROM $TREE_TEMP");
+					   FROM $TREE_WORK");
     
     $fetch_hierarchy->execute();
     
@@ -2546,7 +2553,7 @@ sub computeTreeSequence {
     }
     
     # Now we need to upload all of the tree sequence data to the server so
-    # that we can set lft, rgt, and depth in $TREE_TEMP.  To do this
+    # that we can set lft, rgt, and depth in $TREE_WORK.  To do this
     # efficiently, we use an auxiliary table and a large insert statement.
     
     logMessage(2, "    uploading tree sequence data");
@@ -2580,25 +2587,25 @@ sub computeTreeSequence {
     
     $result = $dbh->do($insert_stmt) if $comma;
     
-    # Now that we have uploaded the data, we can copy it into $TREE_TEMP and
+    # Now that we have uploaded the data, we can copy it into $TREE_WORK and
     # then delete the temporary table.
     
     logMessage(2, "    setting lft, rgt, depth");
     
     $result = $dbh->do("ALTER TABLE tree_insert ADD INDEX (orig_no)");
     
-    $result = $dbh->do("UPDATE $TREE_TEMP t JOIN tree_insert i USING (orig_no)
+    $result = $dbh->do("UPDATE $TREE_WORK t JOIN tree_insert i USING (orig_no)
 			SET t.lft = i.lft, t.rgt = i.rgt, t.bound = i.bound, t.depth = i.depth");
     
     $result = $dbh->do("DROP TABLE IF EXISTS tree_insert");
     
-    # Now we can efficiently index $TREE_TEMP on lft, rgt and depth.
+    # Now we can efficiently index $TREE_WORK on lft, rgt and depth.
     
     logMessage(2, "    indexing lft, rgt, depth");
     
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (lft)");
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (rgt)");
-    $result = $dbh->do("ALTER TABLE $TREE_TEMP add index (depth)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (lft)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (rgt)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (depth)");
     
     my $a = 1;
 }
@@ -2607,7 +2614,7 @@ sub computeTreeSequence {
 # updateTreeSequence ( dbh, tree_table )
 # 
 # This function is called during an update.  It generates new sequence numbers
-# for everything in $TREE_TEMP whose parent is different from the
+# for everything in $TREE_WORK whose parent is different from the
 # corresponding entry in $TREE_TABLE, and for all of their chidlren.  The
 # basic algorithm is the same as in computeTreeSequence above, except that the
 # space for sequence numbers is provided by the existing lft and rgt values of
@@ -2620,7 +2627,7 @@ sub updateTreeSequence {
     my $result;
     my $count = 0;
     
-    # We start by fetching the contents of $TREE_TEMP, plus the orig_no, lft
+    # We start by fetching the contents of $TREE_WORK, plus the orig_no, lft
     # and rgt values of the new parent entries.  $$$
 }
 
@@ -2718,7 +2725,7 @@ sub treePerturbation {
     
     my $moved_taxa = $dbh->prepare("
 		SELECT t.orig_no, t.parent_no, m.parent_no, m2.lft, m.lft
-		FROM $TREE_TEMP as t LEFT JOIN $tree_table as m USING (orig_no)
+		FROM $TREE_WORK as t LEFT JOIN $tree_table as m USING (orig_no)
 			LEFT JOIN $tree_table as m2 ON m2.orig_no = t.parent_no
 		WHERE t.parent_no != m.parent_no
 		ORDER BY m.lft DESC");
@@ -2761,7 +2768,7 @@ sub treePerturbation {
 # 
 # Do the final steps in the update procedure.  These are as follows:
 # 
-# 1) copy everything from $TREE_TEMP into $tree_table, overwriting
+# 1) copy everything from $TREE_WORK into $tree_table, overwriting
 #    corresponding rows
 # 2) adjust the tree sequence in $tree_table
 # 
@@ -2778,7 +2785,7 @@ sub updateTreeTable {
     # The first thing to do is to determine which rows have a changed
     # parent_no value.  Each one will require an adjustment to the tree
     # sequence.  We have to do this now, before we copy the rows from
-    # $TREE_TEMP over the corresponding rows from $tree_table below.
+    # $TREE_WORK over the corresponding rows from $tree_table below.
     
     # We order the rows in descending order of position to make sure that
     # children are moved before their parents.  This is necessary in order to
@@ -2788,7 +2795,7 @@ sub updateTreeTable {
     
     my $moved_taxa = $dbh->prepare("
 		SELECT t.orig_no, t.parent_no
-		FROM $TREE_TEMP as t LEFT JOIN $tree_table as m USING (orig_no)
+		FROM $TREE_WORK as t LEFT JOIN $tree_table as m USING (orig_no)
 		WHERE t.parent_no != m.parent_no
 		ORDER BY m.lft DESC");
     
@@ -2801,30 +2808,30 @@ sub updateTreeTable {
 	push @move, [$orig_no, $new_parent];
     }
     
-    # Next, we need to fill in $TREE_TEMP with the corresponding lft, rgt, and
+    # Next, we need to fill in $TREE_WORK with the corresponding lft, rgt, and
     # depth values from $tree_table.  For all rows which aren't being moved to
     # a new location in the hierarcy, those values won't be changing.  Those
     # that are being moved will be updated below.
     
-    $result = $dbh->do("UPDATE $TREE_TEMP as t JOIN $tree_table as m USING (orig_no)
+    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $tree_table as m USING (orig_no)
 			SET t.lft = m.lft, t.rgt = m.rgt, t.depth = m.depth");
     
     # Before we update $tree_table, we need to lock it for writing.  This will
     # ensure that all other threads see it in a consistent state, either pre-
-    # or post-update.  This means that we also have to lock $TREE_TEMP for
+    # or post-update.  This means that we also have to lock $TREE_WORK for
     # read.
     
     $result = $dbh->do("LOCK TABLE $tree_table as m WRITE,
 				   $tree_table WRITE,
-				   $TREE_TEMP as t READ,
-				   $TREE_TEMP READ");
+				   $TREE_WORK as t READ,
+				   $TREE_WORK READ");
     
-    # Now write all rows of $TREE_TEMP over the corresponding rows of
+    # Now write all rows of $TREE_WORK over the corresponding rows of
     # $TREE_TABLE.
     
     logMessage(2, "copying into active tables (f)");
     
-    $result = $dbh->do("REPLACE INTO $tree_table SELECT * FROM $TREE_TEMP");
+    $result = $dbh->do("REPLACE INTO $tree_table SELECT * FROM $TREE_WORK");
     
     # Finally, we adjust the tree sequence to take into account all rows that
     # have changed their position in the hierarchy.  We couldn't do this until
@@ -3002,24 +3009,24 @@ sub updateSecondaryTables {
     my $name_table = $NAME_TABLE{$tree_table};
     
     # For $search_table, we need to remove all entries that correspond to
-    # taxonomic concepts in $TREE_TEMP.  We then add in everything from
-    # $SEARCH_TEMP.
+    # taxonomic concepts in $TREE_WORK.  We then add in everything from
+    # $SEARCH_WORK.
     
     $result = $dbh->do("DELETE $search_table
 			FROM $search_table
 				JOIN $auth_table using (taxon_no)
-				JOIN $TREE_TEMP using (orig_no)");
+				JOIN $TREE_WORK using (orig_no)");
     
-    $result = $dbh->do("REPLACE INTO $search_table SELECT * FROM $SEARCH_TEMP");
+    $result = $dbh->do("REPLACE INTO $search_table SELECT * FROM $SEARCH_WORK");
     
     # For $name_table, we need to do the same thing.
     
     $result = $dbh->do("DELETE $name_table
 			FROM $name_table
 				JOIN $auth_table using (taxon_no)
-				JOIN $TREE_TEMP using (orig_no)");
+				JOIN $TREE_WORK using (orig_no)");
     
-    $result = $dbh->do("REPLACE INTO $name_table SELECT * FROM $NAME_TEMP");
+    $result = $dbh->do("REPLACE INTO $name_table SELECT * FROM $NAME_WORK");
     
     # Finally, we remove the temporary tables since they are no longer needed.
     
@@ -3027,10 +3034,10 @@ sub updateSecondaryTables {
     {
 	logMessage(2, "removing temporary tables");
 	
-	$result = $dbh->do("DROP TABLE IF EXISTS $TREE_TEMP");
-	$result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_TEMP");
-	$result = $dbh->do("DROP TABLE IF EXISTS $NAME_TEMP");
-	$result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_TEMP");
+	$result = $dbh->do("DROP TABLE IF EXISTS $TREE_WORK");
+	$result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_WORK");
+	$result = $dbh->do("DROP TABLE IF EXISTS $NAME_WORK");
+	$result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_WORK");
 	
 	$result = $dbh->do("DROP TABLE IF EXISTS $SPELLING_AUX");
 	$result = $dbh->do("DROP TABLE IF EXISTS $MISSPELLING_AUX");
@@ -3098,8 +3105,8 @@ sub computeIntermediates {
     my $auth_table = $AUTH_TABLE{$tree_table};
     my $opinion_cache = $OPINION_CACHE{$tree_table};
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $INTS_TEMP");
-    $result = $dbh->do("CREATE TABLE $INTS_TEMP
+    $result = $dbh->do("DROP TABLE IF EXISTS $INTS_WORK");
+    $result = $dbh->do("CREATE TABLE $INTS_WORK
 			       (ints_no int unsigned,
 				kingdom_no int unsigned,
 				kingdom varchar(80),
@@ -3138,8 +3145,8 @@ sub computeIntermediates {
     $SQL_STRING = "
 		INSERT INTO $INTS_AUX (orig_no, parent_no, depth, taxon_name, current_rank)
 		SELECT a.orig_no, t2.synonym_no, t.depth, a.taxon_name, a.taxon_rank
-		FROM $auth_table as a JOIN $TREE_TEMP as t on a.taxon_no = t.spelling_no
-			LEFT JOIN $TREE_TEMP as t2 on t2.orig_no = t.parent_no
+		FROM $auth_table as a JOIN $TREE_WORK as t on a.taxon_no = t.spelling_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t.parent_no
 		WHERE a.taxon_rank > 5 and t.orig_no = t.synonym_no";
     
     $result = $dbh->do($SQL_STRING);
@@ -3222,7 +3229,7 @@ sub computeIntermediates {
     logMessage(2, "    setting top level entries");
     
     $SQL_STRING = "
-		INSERT INTO $INTS_TEMP (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
+		INSERT INTO $INTS_WORK (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
 		SELECT orig_no, if(current_rank in ('kingdom', 'subkingdom'), orig_no, null),
 			if(current_rank = 'phylum' or was_phylum > 0, orig_no, null),
 			if(current_rank = 'class' or was_class > 0, orig_no, null),
@@ -3237,21 +3244,21 @@ sub computeIntermediates {
     # unless the newly entered taxon is itself a better match for one of the
     # classifications.
     
-    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_TEMP");
+    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_WORK");
     
     foreach my $depth (2..$max_depth)
     {
 	logMessage(2, "    computing row $depth...") if $depth % 10 == 0;
 	
 	$SQL_STRING = "
-		INSERT INTO $INTS_TEMP (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
+		INSERT INTO $INTS_WORK (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
 		SELECT k.orig_no,
 			if(k.current_rank = 'kingdom' or (k.current_rank = 'subkingdom' and ifnull(p.kingdom_no, 1) = 1), k.orig_no, p.kingdom_no) as nk,
 			if(k.current_rank in ('phylum','superphylum') or (k.current_rank = 'subphylum' and p.phylum_no is null) or k.was_phylum - k.not_phylum > ifnull(xp.was_phylum - xp.not_phylum, 0), k.orig_no, p.phylum_no) as np,
 			if(k.current_rank = 'class' or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), k.orig_no, p.class_no) as nc,
 			if(k.current_rank = 'order' or k.was_order - k.not_order > ifnull(xo.was_order - xo.not_order, 0), k.orig_no, p.order_no) as no,
 			if(k.current_rank = 'family' or k.taxon_name like '%idae', k.orig_no, p.family_no) as nf
-		FROM $INTS_AUX as k JOIN $INTS_TEMP as p on p.ints_no = k.parent_no
+		FROM $INTS_AUX as k JOIN $INTS_WORK as p on p.ints_no = k.parent_no
 			LEFT JOIN $INTS_AUX as xp on xp.orig_no = p.phylum_no
 			LEFT JOIN $INTS_AUX as xc on xc.orig_no = p.class_no
 			LEFT JOIN $INTS_AUX as xo on xo.orig_no = p.order_no
@@ -3265,7 +3272,7 @@ sub computeIntermediates {
     # copies of the authorities table.
     
     $SQL_STRING = "
-		UPDATE $INTS_TEMP as k
+		UPDATE $INTS_WORK as k
 			LEFT JOIN $INTS_AUX as xk on xk.orig_no = k.kingdom_no
 			LEFT JOIN $INTS_AUX as xp on xp.orig_no = k.phylum_no
 			LEFT JOIN $INTS_AUX as xc on xc.orig_no = k.class_no
@@ -3280,22 +3287,22 @@ sub computeIntermediates {
     $result = $dbh->do($SQL_STRING);
     
     # Finally, link this table up to the main table.  We start by setting
-    # ic_no = orig_no for each row in $TREE_TEMP that corresponds to a row in
-    # $INTS_TEMP.
+    # ic_no = orig_no for each row in $TREE_WORK that corresponds to a row in
+    # $INTS_WORK.
     
     logMessage(2, "    linking to tree table...");
     
-    $SQL_STRING = "UPDATE $TREE_TEMP as t join $INTS_TEMP as k on t.orig_no = k.ints_no
+    $SQL_STRING = "UPDATE $TREE_WORK as t join $INTS_WORK as k on t.orig_no = k.ints_no
 		   SET t.ints_no = t.orig_no";
     
     $result = $dbh->do($SQL_STRING);
     
-    # Then we go through $TREE_TEMP in tree sequence order.  For any row that
+    # Then we go through $TREE_WORK in tree sequence order.  For any row that
     # has ic_no = 0 we set it to the most recently encountered non-zero value.
     # Thus, the row for each genus, species, etc. points to the row for the
-    # most specific containing taxon in $INTS_TEMP.
+    # most specific containing taxon in $INTS_WORK.
     
-    $SQL_STRING = "UPDATE $TREE_TEMP
+    $SQL_STRING = "UPDATE $TREE_WORK
 		   SET ints_no = if(ints_no > 0, \@a := ints_no, \@a)
 		   ORDER by lft";
     
@@ -3332,8 +3339,8 @@ sub computeSearchTable {
     
     my $auth_table = $AUTH_TABLE{$tree_table};
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_TEMP");
-    $result = $dbh->do("CREATE TABLE $SEARCH_TEMP
+    $result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_WORK");
+    $result = $dbh->do("CREATE TABLE $SEARCH_WORK
 			       (genus varchar(80) not null,
 				taxon_name varchar(80) not null,
 				taxon_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
@@ -3349,9 +3356,9 @@ sub computeSearchTable {
     logMessage(2, "    adding higher taxa");
     
     $result = $dbh->do("
-		INSERT INTO $SEARCH_TEMP (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
+		INSERT INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
 		SELECT null, taxon_name, taxon_rank, taxon_no, synonym_no, 1
-		FROM $auth_table as a join $TREE_TEMP as t using (orig_no)
+		FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 		WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
     # The subgenera are a bit trickier, because most (but not all) are named
@@ -3363,11 +3370,11 @@ sub computeSearchTable {
     logMessage(2, "    adding subgenera");
     
     $result = $dbh->do("
-		INSERT INTO $SEARCH_TEMP (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
+		INSERT INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
 		SELECT substring_index(taxon_name, ' ', 1),
 			trim(trailing ')' from substring_index(taxon_name,'(',-1)),
 		        taxon_rank, taxon_no, synonym_no, 1
-		FROM $auth_table as a join $TREE_TEMP as t using (orig_no)
+		FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 		WHERE taxon_rank = 'subgenus'");
     
     # For species and sub-species, we split off the first component of each
@@ -3380,7 +3387,7 @@ sub computeSearchTable {
     # Species which don't have a subgenus
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
+		INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
 		SELECT substring_index(taxon_name, ' ', 1),
 			trim(substring(taxon_name, locate(' ', taxon_name)+1)),
 			taxon_rank, taxon_no, orig_no, 1
@@ -3390,7 +3397,7 @@ sub computeSearchTable {
     # Species which do have a subgenus
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
+		INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
 		SELECT substring_index(taxon_name, ' ', 1),
 			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
 			taxon_rank, taxon_no, orig_no, 1
@@ -3400,7 +3407,7 @@ sub computeSearchTable {
     # And again with the subgenus name treated as if it was a genus
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
+		INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
 		SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1),
 			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
 			taxon_rank, taxon_no, orig_no, 1
@@ -3436,14 +3443,14 @@ sub computeSearchTable {
 			if(a.taxon_name like '%(%',
 			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
 			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
-		FROM $auth_table as a JOIN $TREE_TEMP as t using (orig_no)
-			LEFT JOIN $TREE_TEMP as t1 on t1.orig_no = t.parent_no
+		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
+			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parent_no
 			LEFT JOIN $auth_table as p1 on p1.taxon_no = t1.spelling_no
 				and p1.taxon_rank = 'genus'
-			LEFT JOIN $TREE_TEMP as t2 on t2.orig_no = t1.parent_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parent_no
 			LEFT JOIN $auth_table as p2 on p2.taxon_no = t2.spelling_no
 				and p2.taxon_rank = 'genus'
-			LEFT JOIN $TREE_TEMP as t3 on t3.orig_no = t2.parent_no
+			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.parent_no
 			LEFT JOIN $auth_table as p3 on p3.taxon_no = t3.spelling_no
 				and p3.taxon_rank = 'genus'
 		WHERE a.taxon_rank in ('species', 'subspecies') and
@@ -3464,11 +3471,11 @@ sub computeSearchTable {
 			if(a.taxon_name like '%(%',
 			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
 			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
-		FROM $auth_table as a JOIN $TREE_TEMP as t using (orig_no)
-			LEFT JOIN $TREE_TEMP as t1 on t1.orig_no = t.parent_no
+		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
+			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parent_no
 			LEFT JOIN $auth_table as p1 on p1.taxon_no = t1.spelling_no
 				and p1.taxon_rank = 'subgenus'
-			LEFT JOIN $TREE_TEMP as t2 on t2.orig_no = t1.parent_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parent_no
 			LEFT JOIN $auth_table as p2 on p2.taxon_no = t2.spelling_no
 				and p2.taxon_rank = 'subgenus'
 		WHERE a.taxon_rank in ('species', 'subspecies') and
@@ -3482,21 +3489,21 @@ sub computeSearchTable {
     # species name will hit if the specified genus is synonymous to the actual
     # current genus.
     
-    # First delete all entries that match anything in $SEARCH_TEMP, because we
+    # First delete all entries that match anything in $SEARCH_WORK, because we
     # only want to do loose matching where there isn't already an exact match.
     
     $SQL_STRING = "
 		DELETE $SPECIES_AUX
-		FROM $SPECIES_AUX JOIN $SEARCH_TEMP
-			on $SPECIES_AUX.genus = $SEARCH_TEMP.genus and
-			   $SPECIES_AUX.taxon_name = $SEARCH_TEMP.taxon_name";
+		FROM $SPECIES_AUX JOIN $SEARCH_WORK
+			on $SPECIES_AUX.genus = $SEARCH_WORK.genus and
+			   $SPECIES_AUX.taxon_name = $SEARCH_WORK.taxon_name";
     
     $result = $dbh->do($SQL_STRING);
     
-    # Then generate new entries in $SEARCH_TEMP.
+    # Then generate new entries in $SEARCH_WORK.
     
     $SQL_STRING = "
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
+		INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
 		SELECT sx.genus, sx.taxon_name, a.taxon_rank, sx.match_no, sx.result_no, 0
 		FROM $SPECIES_AUX as sx JOIN $auth_table as a on a.taxon_no = sx.match_no";
     
@@ -3511,7 +3518,7 @@ sub computeSearchTable {
 # updateSearchTable ( dbh, search_table )
 # 
 # Update the specified search table to contain entries for each taxon
-# represented in $TREE_TEMP.
+# represented in $TREE_WORK.
 
 sub updateSearchTable {
 
@@ -3528,9 +3535,9 @@ sub updateSearchTable {
     logMessage(2, "    adding higher taxa");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		INSERT IGNORE INTO $SEARCH_WORK (genus, subgenus, taxon_name, taxon_no)
 		SELECT null, null, taxon_name, taxon_no
-		FROM $auth_table JOIN $TREE_TEMP using (orig_no)
+		FROM $auth_table JOIN $TREE_WORK using (orig_no)
 		WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
     # The subgenera are a bit trickier, because most (but not all) are named
@@ -3539,11 +3546,11 @@ sub updateSearchTable {
     # without a subgenus component by simply returning the whole name.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		INSERT IGNORE INTO $SEARCH_WORK (genus, subgenus, taxon_name, taxon_no)
 		SELECT substring_index(taxon_name, ' ', 1), null,
 			trim(trailing ')' from substring_index(taxon_name,'(',-1)),
 			taxon_no
-		FROM $auth_table JOIN $TREE_TEMP using (orig_no)
+		FROM $auth_table JOIN $TREE_WORK using (orig_no)
 		WHERE taxon_rank = 'subgenus'");
     
     # For species and sub-species, we split off the first component of each
@@ -3554,22 +3561,22 @@ sub updateSearchTable {
     logMessage(2, "    adding species by name");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		INSERT IGNORE INTO $SEARCH_WORK (genus, subgenus, taxon_name, taxon_no)
 		SELECT substring_index(taxon_name, ' ', 1),
 			substring_index(substring_index(taxon_name, '(', -1), ')', 1)
 			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
 			taxon_no
-		FROM $auth_table JOIN $TREE_TEMP using (orig_no)
+		FROM $auth_table JOIN $TREE_WORK using (orig_no)
 		WHERE taxon_rank in ('species', 'subspecies')
 			and taxon_name like '%(%'");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_TEMP (genus, subgenus, taxon_name, taxon_no)
+		INSERT IGNORE INTO $SEARCH_WORK (genus, subgenus, taxon_name, taxon_no)
 		SELECT substring_index(taxon_name, ' ', 1),
 			null,
 			trim(substring(taxon_name, locate(' ', taxon_name)+1),
 			taxon_no
-		FROM $auth_table JOIN $TREE_TEMP using (orig_no)
+		FROM $auth_table JOIN $TREE_WORK using (orig_no)
 		WHERE taxon_rank in ('species', 'subspecies')
 			and taxon_name not like '%(%'");
     
@@ -3603,16 +3610,17 @@ sub computeAttrsTable {
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_TEMP");
-    $result = $dbh->do("CREATE TABLE $ATTRS_TEMP
+    $result = $dbh->do("DROP TABLE IF EXISTS $ATTRS_WORK");
+    $result = $dbh->do("CREATE TABLE $ATTRS_WORK
 			       (orig_no int unsigned not null,
 				is_valid boolean,
 				is_senior boolean,
 				is_extant boolean,
 				extant_children smallint,
 				distinct_children smallint,
-				extant_size int,
-				taxon_size int,
+				extant_size int unsigned,
+				taxon_size int unsigned,
+				n_colls int unsigned not null,
 				min_body_mass float,
 				max_body_mass float,
 				first_early_int_no int unsigned,
@@ -3625,9 +3633,9 @@ sub computeAttrsTable {
     # Prime the table with the values actually stored in the authorities
     # table, ecotaph table and first appearance tables.
     
-    $sql = "    INSERT IGNORE INTO $ATTRS_TEMP 
+    $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
-			 extant_size, taxon_size, min_body_mass, max_body_mass, 
+			 extant_size, taxon_size, n_colls, min_body_mass, max_body_mass, 
 			 first_early_int_no, first_late_int_no, last_early_int_no, last_late_int_no,
 			 not_trace)
 		SELECT a.orig_no,
@@ -3635,14 +3643,14 @@ sub computeAttrsTable {
 			(t.orig_no = t.synonym_no) or (t.orig_no = t.valid_no) as is_senior,
 			case coalesce(a.extant) 
 				when 'yes' then 1 when 'no' then 0 else null end as is_extant,
-			0, 0, 0, 0,
+			0, 0, 0, 0, occ.n_colls,
 			coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
 			coalesce(e.maximum_body_mass, e.body_mass_estimate) as max,
-			fa.first_early_int_no, fa.first_late_int_no, fa.last_early_int_no, fa.last_late_int_no,
+			occ.first_early_int_no, occ.first_late_int_no, occ.last_early_int_no, occ.last_late_int_no,
 			(a.preservation <> 'trace' or a.preservation is null)
-		FROM $auth_table as a JOIN $TREE_TEMP as t using (orig_no)
+		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
-			LEFT JOIN fa_temp as fa using (orig_no)
+			LEFT JOIN $OCC_SUMMARY as occ using (orig_no)
 		GROUP BY a.orig_no";
     
     $result = $dbh->do($sql);
@@ -3652,19 +3660,21 @@ sub computeAttrsTable {
     
     logMessage(2, "    coalescing attributes to senior synonyms");
     
-    $sql = "	UPDATE $ATTRS_TEMP as v JOIN 
+    $sql = "	UPDATE $ATTRS_WORK as v JOIN 
 		(SELECT t.synonym_no,
 			if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
+			sum(v.n_colls) as n_colls,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace,
 			min(v.first_early_int_no) as first_early_int_no,
 			min(v.first_late_int_no) as first_late_int_no,
 			min(v.last_early_int_no) as last_early_int_no,
 			min(v.last_late_int_no) as last_late_int_no
-		 FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
+		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
+			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.first_early_int_no = nv.first_early_int_no,
@@ -3677,7 +3687,7 @@ sub computeAttrsTable {
     
     # Now figure out how deep the table goes.
     
-    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_TEMP");
+    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_WORK");
     
     # We then iterate from that depth up to the top of the tree, computing
     # each row from its immediate children and then coalescing the attributes
@@ -3694,26 +3704,28 @@ sub computeAttrsTable {
 	# interval numbers).
 	
 	my $sql = "
-		UPDATE $ATTRS_TEMP as v JOIN
+		UPDATE $ATTRS_WORK as v JOIN
 		(SELECT t.parent_no,
 			if(sum(v.is_extant) > 0, 1, pv.is_extant) as is_extant,
 			coalesce(sum(v.is_extant), 0) as extant_children,
 			count(v.orig_no) as distinct_children,
 			sum(v.extant_size) as extant_size,
 			sum(v.taxon_size) as taxon_size,
+			sum(v.n_colls) + pv.n_colls as n_colls,
 			coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
 					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
 			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
 					max(v.max_body_mass), pv.max_body_mass) as max_body_mass,
 			if(sum(v.not_trace) > 0, 1, pv.not_trace) as not_trace
-		 FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
-			LEFT JOIN $ATTRS_TEMP as pv on pv.orig_no = t.parent_no 
+		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no 
 		 WHERE t.depth = $child_depth and v.is_valid and v.is_senior
 		 GROUP BY t.parent_no) as nv on v.orig_no = nv.parent_no
 		SET     v.is_extant = nv.is_extant,
 			v.extant_children = nv.extant_children,
 			v.distinct_children = nv.distinct_children,
 			v.extant_size = nv.extant_size,
+			v.n_colls = nv.n_colls,
 			v.taxon_size = nv.taxon_size,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
@@ -3722,11 +3734,11 @@ sub computeAttrsTable {
 	$result = $dbh->do($sql);
 	
 	# Now do the same for the first/last interval numbers.  The reason
-	# this needs to be a separate statement is that we ignore taxa which
-	# are only known from trace fossils.
+	# this needs to be a separate statement is so that we can ignore taxa
+	# which are only known from trace fossils.
 	
 	my $sql = "
-		UPDATE $ATTRS_TEMP as v JOIN
+		UPDATE $ATTRS_WORK as v JOIN
 		(SELECT t.parent_no,
 			coalesce(least(min(v.first_early_int_no), pv.first_early_int_no), 
 				min(v.first_early_int_no), pv.first_early_int_no) as first_early_int_no,
@@ -3736,8 +3748,8 @@ sub computeAttrsTable {
 				min(v.last_early_int_no), pv.last_early_int_no) as last_early_int_no,
 			coalesce(least(min(v.last_late_int_no), pv.last_late_int_no), 
 				min(v.last_late_int_no), pv.last_late_int_no) as last_late_int_no
-		 FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
-			LEFT JOIN $ATTRS_TEMP as pv on pv.orig_no = t.parent_no
+		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no
 		 WHERE t.depth = $child_depth and v.is_valid and v.is_senior and v.not_trace
 		 GROUP BY t.parent_no) as nv on v.orig_no = nv.parent_no
 		SET	v.first_early_int_no = nv.first_early_int_no,
@@ -3753,13 +3765,14 @@ sub computeAttrsTable {
 	# containing taxon.
 	
 	$sql = "
-		UPDATE $ATTRS_TEMP as v JOIN 
+		UPDATE $ATTRS_WORK as v JOIN 
 		(SELECT t.synonym_no,
 			if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
 			sum(v.extant_children) as extant_children_sum,
 			sum(v.distinct_children) as distinct_children_sum,
 			sum(v.extant_size) as extant_size_sum,
 			sum(v.taxon_size) as taxon_size_sum,
+			sum(v.n_colls) as n_colls,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
 			min(v.first_early_int_no) as first_early_int_no,
@@ -3767,7 +3780,7 @@ sub computeAttrsTable {
 			min(v.last_early_int_no) as last_early_int_no,
 			min(v.last_late_int_no) as last_late_int_no,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
-		FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
+		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and v.is_valid
 		GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
@@ -3775,6 +3788,7 @@ sub computeAttrsTable {
 			v.distinct_children = nv.distinct_children_sum,
 			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
 			v.taxon_size = nv.taxon_size_sum + 1,
+			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.first_early_int_no = nv.first_early_int_no,
@@ -3789,13 +3803,14 @@ sub computeAttrsTable {
 	# invalid subgroups, etc. will have accurate counts.
 	
 	$sql = "
-		UPDATE $ATTRS_TEMP as v JOIN 
+		UPDATE $ATTRS_WORK as v JOIN 
 		(SELECT t.valid_no,
 			if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
 			sum(v.extant_children) as extant_children_sum,
 			sum(v.distinct_children) as distinct_children_sum,
 			sum(v.extant_size) as extant_size_sum,
 			sum(v.taxon_size) as taxon_size_sum,
+			sum(v.n_colls) as n_colls,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
 			min(v.first_early_int_no) as first_early_int_no,
@@ -3803,7 +3818,7 @@ sub computeAttrsTable {
 			min(v.last_early_int_no) as last_early_int_no,
 			min(v.last_late_int_no) as last_late_int_no,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
-		FROM $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
+		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and t.valid_no <> t.synonym_no
 		GROUP BY t.valid_no) as nv on v.orig_no = nv.valid_no
 		SET     v.is_extant = nv.is_extant,
@@ -3811,6 +3826,7 @@ sub computeAttrsTable {
 			v.distinct_children = nv.distinct_children_sum,
 			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
 			v.taxon_size = nv.taxon_size_sum + 1,
+			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.first_early_int_no = nv.first_early_int_no,
@@ -3833,9 +3849,9 @@ sub computeAttrsTable {
 	# Children inherit the attributes of the senior synonym of the parent.
 	
 	my $sql = "
-		UPDATE $ATTRS_TEMP as v JOIN $TREE_TEMP as t using (orig_no)
-			JOIN $TREE_TEMP as t2 on t2.orig_no = t.parent_no and t.depth = $row
-			JOIN $ATTRS_TEMP as pv on pv.orig_no = t.synonym_no
+		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+			JOIN $TREE_WORK as t2 on t2.orig_no = t.parent_no and t.depth = $row
+			JOIN $ATTRS_WORK as pv on pv.orig_no = t.synonym_no
 		SET v.is_extant = 0 WHERE pv.is_extant = 0";
 	
 	$dbh->do($sql);
@@ -3850,8 +3866,8 @@ sub computeAttrsTable {
     logMessage(2, "    setting attributes for junior synonyms");
     
     $result = $dbh->do("
-		UPDATE $ATTRS_TEMP as v JOIN $TREE_TEMP as t on v.orig_no = t.orig_no
-			JOIN $ATTRS_TEMP as sv on sv.orig_no = t.valid_no and sv.orig_no <> v.orig_no
+		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t on v.orig_no = t.orig_no
+			JOIN $ATTRS_WORK as sv on sv.orig_no = t.valid_no and sv.orig_no <> v.orig_no
 		SET	v.is_extant = sv.is_extant,
 			v.extant_children = sv.extant_children,
 			v.distinct_children = sv.distinct_children,
@@ -3871,11 +3887,311 @@ sub computeAttrsTable {
 }
 
 
+# computeCollectionBins ( dbh )
+# 
+# Group the set of collections into bins, on two different levels of
+# resolution.  The fine-grained resolution is generated by simply binning the
+# collections into bins of size $FINE_BIN_SIZE (expressed in degrees of
+# latitude/longitude), while the coarse-grained resolution is generated by
+# apply the k-means clustering algorithm to the set of fine bins.  One cluster
+# is generated for each non-empty square of size $COARSE_BIN_SIZE on the
+# surface of the earth, but the clusters may overlap the coarse bin
+# boundaries.  This process generates a tractable set of data points (order of
+# magitude close to 1000) for displaying large-scale and medium-scale maps of
+# our collections.  This routine is called whenever the set of clusters needs
+# to be initially generated or completely rebuilt.  Otherwise,
+# updateCollectionBins() can be used to add newly entered collections to the
+# existing cluster tables.
+
+sub computeCollectionBins {
+
+    my ($dbh) = @_;
+    
+    $MSG_TAG = "Rebuild";
+    
+    logMessage(1, "rebuilding the collection cluster tables");
+    
+    # Add the bin fields to the collections table, if they aren't there
+    # already.
+    
+    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE collections"); 
+    
+    unless ( $table_definition =~ /`clust_lat` smallint/ )
+    {
+	logMessage(1, "    creating bin fields in collections...");
+	
+	# Create the fields and indexes for them.
+	
+	$dbh->do("ALTER TABLE collections ADD COLUMN bin_lng smallint after collection_subset");
+	$dbh->do("ALTER TABLE collections ADD COLUMN bin_lat smallint after bin_lng");
+	$dbh->do("ALTER TABLE collections ADD COLUMN clust_lng smallint after bin_lat");
+	$dbh->do("ALTER TABLE collections ADD COLUMN clust_lat smallint after bin_lng");
+	$dbh->do("ALTER TABLE collections ADD INDEX (bin_lng, bin_lat)");
+	$dbh->do("ALTER TABLE collections ADD INDEX (clust_lng, clust_lat)");
+    }
+    
+    # Start by binning the collections into fine-resolution bins with integer
+    # coordinates and then taking the centroid of each bin and counting the
+    # number of collections that fall within it.  We will be able to use this
+    # set of bins to generate medium-scale maps, in order to reduce the number
+    # of data points that need to be displayed.  We will also use this set of
+    # bins as the individual data points for the k-means algorithm, which will
+    # make it dramatically more efficient to generate the coarse-grained
+    # clusters than if we used the entire set of collections.
+    
+    $dbh->do("DROP TABLE IF EXISTS $COLL_BINS_WORK");
+    
+    $dbh->do("CREATE TABLE $COLL_BINS_WORK (
+		bin_lat smallint not null,
+		bin_lng smallint not null,
+		clust_lat smallint,
+		clust_lng smallint,
+		n_colls int unsigned,
+		lng float,
+		lat float,
+		lng_min float,
+		lng_max float,
+		lat_min float,
+		lat_max float,
+		std_dev float,
+		unique key (bin_lng, bin_lat)) Engine=MyISAM");
+    
+    my ($sql, $result);
+    
+    # First compute the set of non-empty bins and the collection count,
+    # centroid and standard deviation for each bin.
+    
+    logMessage(2, "    binning collections into fine bins...");
+    
+    $sql = "	INSERT IGNORE INTO $COLL_BINS_WORK
+			(bin_lng, bin_lat, n_colls, lng, lat, 
+			 lng_min, lng_max, lat_min, lat_max, std_dev)
+		SELECT bin_lng, bin_lat, count(*), avg(lng), avg(lat),
+		       min(lng) as lng_min, max(lng) as lng_max,
+		       min(lat) as lat_min, max(lat) as lat_max,
+		       sqrt(var_pop(lng)+var_pop(lat))
+		FROM (SELECT floor((lng+180.0)/$FINE_BIN_SIZE) as bin_lng, 
+			     floor((lat+90.0)/$FINE_BIN_SIZE) as bin_lat,
+			     lng, lat FROM collections) as c
+		GROUP BY bin_lng, bin_lat";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "    generated $result non-empty bins.");
+    
+    # Next, we create a table to describe the coarse clusters.
+    
+    $dbh->do("DROP TABLE IF EXISTS $COLL_CLUST_WORK");
+    
+    $dbh->do("CREATE TABLE $COLL_CLUST_WORK (
+		clust_lng smallint,
+		clust_lat smallint,
+		n_colls int unsigned,
+		lng float,
+		lat float,
+		lng_min float,
+		lng_max float,
+		lat_min float,
+		lat_max float,
+		std_dev float,
+		unique key (clust_lng, clust_lat)) Engine=MyISAM");
+    
+    # And finally, an auxiliary table for use in computing cluster assignments
+    
+    $dbh->do("DROP TABLE IF EXISTS $CLUST_AUX");
+    
+    $dbh->do("CREATE TABLE $CLUST_AUX (
+		bin_lng smallint,
+		bin_lat smallint,
+		clust_lng smallint,
+		clust_lat smallint,
+		unique key (bin_lng, bin_lat))");
+    
+    # We must now seed the k-means algorithm by choosing an initial set of
+    # collections.  This set will determine the number of clusters in the
+    # final result, and its geographical distribution will have a dramatic
+    # influence on the shape of the final set of clusters.  So we need to
+    # choose carefully.  We want to limit the maximum geographic extent of any
+    # particular cluster, and to ensure that geographically isolated
+    # collections are always formed into their own clusters.  To accomplish
+    # this, we re-bin the collections more coarsely into 5-degree-square bins
+    # (still with integer coordinates) and choose as our initial cluster
+    # coordinates the centroid of each bin (note that this requires a weighted
+    # average of the centroids of the constituent bins weighted by the number
+    # of collections in each one).  The number of non-empty bins will then
+    # determine the number of clusters.  We won't fill in the number of
+    # collections for each cluster until later, because the k-means algorithm
+    # will move collections from cluster to cluster until it stabilizes.
+    
+    my $bin_ratio = $FINE_BIN_SIZE / $COARSE_BIN_SIZE;
+    
+    $sql = "	INSERT IGNORE INTO $COLL_CLUST_WORK (clust_lng, clust_lat, lng, lat)
+		SELECT clust_lng, clust_lat, 
+		       sum(lng * n_colls)/sum(n_colls), sum(lat * n_colls)/sum(n_colls)
+		FROM (SELECT floor(bin_lng * $bin_ratio) as clust_lng,
+			     floor(bin_lat * $bin_ratio) as clust_lat,
+			     lng, lat, n_colls FROM $COLL_BINS_WORK) as c
+		GROUP BY clust_lng, clust_lat";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "    seeded the cluster table with $result data points (bins)");
+    
+    # Now we make initial assignments of bins to clusters, by assigning each
+    # bin to the cluster whose centroid is closest to it (which may be on the
+    # other side of a coarse-bin boundary).  We use the $CLUST_AUX table along
+    # with an ORDER BY clause to select the closest cluster for each bin, and
+    # then copy the cluster identifiers clust_lng and clust_lat back into
+    # $COLL_BINS_WORK.
+    
+    logMessage(2, "    assigning bins to clusters...");
+    
+    $sql = "	INSERT IGNORE INTO $CLUST_AUX
+		SELECT c.bin_lng, c.bin_lat, k.clust_lng, k.clust_lat
+		FROM $COLL_BINS_WORK as c JOIN $COLL_CLUST_WORK as k
+			on k.clust_lng between floor((c.lng+180.0)/$COARSE_BIN_SIZE)-1
+				and floor((c.lng+180.0)/$COARSE_BIN_SIZE)+1
+			and k.clust_lat between floor((c.lat+90.0)/$COARSE_BIN_SIZE)-1
+				and floor((c.lat+90.0)/$COARSE_BIN_SIZE)+1
+		ORDER BY POW(k.lat-c.lat,2)+POW(k.lng-c.lng,2) ASC";
+    
+    $dbh->do($sql);
+    
+    $sql = "    UPDATE $COLL_BINS_WORK as cb JOIN $CLUST_AUX as k using (bin_lng, bin_lat)
+		SET cb.clust_lng = k.clust_lng, cb.clust_lat = k.clust_lat";
+    
+    # $sql = "	UPDATE $COLL_BINS_WORK as c SET c.clust_no = 
+    # 		(SELECT k.clust_no from $COLL_CLUST_WORK as k 
+    # 		 ORDER BY POW(k.lat-c.lat, 2) + POW(k.lng-c.lng, 2) ASC LIMIT 1)";
+    
+    my ($rows_changed) = $dbh->do($sql);
+    my ($bound) = 0;
+    
+    # Then we update the centroid of each cluster and recompute the cluster
+    # assignments.  Repeat until no points move to a different cluster, or at
+    # most the specified number of rounds.
+    
+    while ( $rows_changed > 0 and $bound < 10 )
+    {
+	# Compute the centroid of each cluster based on the data points (bins)
+	# assigned to it.
+	
+	logMessage(2, "    computing cluster centroids...");
+	
+	$sql = "UPDATE $COLL_CLUST_WORK as k JOIN 
+		(SELECT clust_lng, clust_lat,
+			sum(lng * n_colls)/sum(n_colls) as lng_avg,
+			sum(lat * n_colls)/sum(n_colls) as lat_avg
+		 FROM $COLL_BINS_WORK GROUP BY clust_lng, clust_lat) as cluster
+			using (clust_lng, clust_lat)
+		SET k.lng = cluster.lng_avg, k.lat = cluster.lat_avg";
+	
+	$result = $dbh->do($sql);
+	
+	# Then reassign each point (bin) to the closest cluster.
+	
+	logMessage(2, "    recomputing cluster assignments...");
+	
+	$dbh->do("DELETE FROM $CLUST_AUX");
+	
+	$sql = "INSERT IGNORE INTO $CLUST_AUX
+		SELECT c.bin_lng, c.bin_lat, k.clust_lng, k.clust_lat
+		FROM $COLL_BINS_WORK as c JOIN $COLL_CLUST_WORK as k
+			on k.clust_lng between floor((c.lng+180.0)/$COARSE_BIN_SIZE)-1
+				and floor((c.lng+180.0)/$COARSE_BIN_SIZE)+1
+			and k.clust_lat between floor((c.lat+90.0)/$COARSE_BIN_SIZE)-1
+				and floor((c.lat+90.0)/$COARSE_BIN_SIZE)+1
+		ORDER BY POW(k.lat-c.lat,2)+POW(k.lng-c.lng,2) ASC";
+	
+	$dbh->do($sql);
+	
+	$sql = "UPDATE $COLL_BINS_WORK as cb JOIN $CLUST_AUX as k using (bin_lng, bin_lat)
+		SET cb.clust_lng = k.clust_lng, cb.clust_lat = k.clust_lat";
+	
+	# $sql = "UPDATE $COLL_BINS_WORK as c SET c.clust_no = 
+	# 	(SELECT k.clust_no from $COLL_CLUST_WORK as k 
+	# 	 ORDER BY POW(k.lat-c.lat,2)+POW(k.lng-c.lng,2) ASC LIMIT 1)";
+	
+	($rows_changed) = $dbh->do($sql);
+	
+	logMessage(2, "    $rows_changed rows changed");
+	
+	$bound++;
+    }
+    
+    logMessage(2, "    setting collection bin and cluster numbers...");
+    
+    # Now that we have a stable assignment of bins to clusters, we can record
+    # the bin and cluster assignments for each individual collection.
+    
+    $sql = "	UPDATE collections as c 
+		JOIN $COLL_BINS_WORK as cb on cb.bin_lng = floor(c.lng / $FINE_BIN_SIZE)
+			and cb.bin_lat = floor(c.lat / $FINE_BIN_SIZE)
+		SET c.bin_lng = cb.bin_lng, c.bin_lat = cb.bin_lat,
+		    c.clust_lng = cb.clust_lng, c.clust_lat = cb.clust_lat";
+    
+    $result = $dbh->do($sql);
+    
+    # Now we can compute the total number of collections, the geographic
+    # extent, and the standard deviation of each cluster (the cluster
+    # centroids have already been computed above).
+    
+    logMessage(2, "   setting collection statistics for each cluster...");
+    
+    $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
+		(SELECT clust_lng, clust_lat, sum(n_colls) as n_colls,
+			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
+			min(lng_min) as lng_min, max(lng_max) as lng_max,
+			min(lat_min) as lat_min, max(lat_max) as lat_max
+		FROM $COLL_BINS_WORK GROUP BY clust_lng, clust_lat) as cluster
+			using (clust_lng, clust_lat)
+		SET k.n_colls = cluster.n_colls, k.std_dev = cluster.std_dev,
+		    k.lng_min = cluster.lng_min, k.lng_max = cluster.lng_max,
+		    k.lat_min = cluster.lat_min, k.lat_max = cluster.lat_max";
+    
+    $result = $dbh->do($sql);
+    
+    # Finally, we swap in the new tables for the old ones.
+    
+    logMessage(2, "activating tables '$COLL_BINS', '$COLL_CLUST'");
+    
+    # Compute the backup names of all the tables to be activated
+    
+    my $coll_bins_bak = "${COLL_BINS}_bak";
+    my $coll_clust_bak = "${COLL_CLUST}_bak";
+    
+    # Delete any old tables that might have been left around.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $coll_bins_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $coll_clust_bak");
+    
+    # Do the swap.
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_BINS LIKE $COLL_BINS_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_CLUST LIKE $COLL_CLUST_WORK");
+    
+    $result = $dbh->do("RENAME TABLE
+			    $COLL_BINS to $coll_bins_bak,
+			    $COLL_BINS_WORK to $COLL_BINS,
+			    $COLL_CLUST to $coll_clust_bak,
+			    $COLL_CLUST_WORK to $COLL_CLUST");
+    
+    # Delete the old tables.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $coll_bins_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $coll_clust_bak");
+    
+    my $a = 1;		# We can stop here when debugging
+}
+
+
 # computeOccurrenceMatrix ( dbh, options )
 # 
 # Compute the occurrence matrix, recording which taxonomic concepts are
 # associated with which collections in which geological and chronological
-# locations.
+# locations.  This table is used to satisfy the bulk of the queries from the
+# front-end application.  This function also computes an occurrence summary
+# table, summarizing occurrence information by taxon.
 
 sub computeOccurrenceMatrix {
     
@@ -3883,49 +4199,75 @@ sub computeOccurrenceMatrix {
     
     my ($sql, $result, $count);
     
-    $MSG_LEVEL = $options->{msg_level} || 1;
+    $MSG_TAG = "Rebuild";
     
-    # Make sure that the country code lookup table is in the database.
+    # Make sure that the country code lookup table and interval map are the
+    # database.
     
     createCountryMap($dbh);
+    createIntervalTable($dbh);
     
-    # Create a clean working table
+    # Create a clean working table which will become the new occurrence
+    # matrix.
     
-    logMessage(1, "Rebuilding occurrence relation");
+    logMessage(1, "Rebuilding occurrence tables");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $OCC_MATRIX_TEMP");
-    $result = $dbh->do("CREATE TABLE $OCC_MATRIX_TEMP (
-				collection_no int unsigned not null,
+    $result = $dbh->do("DROP TABLE IF EXISTS $OCC_MATRIX_WORK");
+    $result = $dbh->do("CREATE TABLE $OCC_MATRIX_WORK (
 				occurrence_no int unsigned not null,
+				collection_no int unsigned not null,
 				reid_no int unsigned not null,
 				orig_no int unsigned not null,
+				reference_no int unsigned not null,
+				bin_lng smallint,
+				bin_lat smallint,
+				clust_lng smallint,
+				clust_lat smallint,
+				lng float,
+				lat float,
 				loc point not null,
 				cc char(2),
 				early_int_no int unsigned not null,
 				late_int_no int unsigned not null,
-				early_age float not null,
-				late_age float not null,
+				early_age float,
+				late_age float,
 				access_level tinyint unsigned not null,
-				primary key (collection_no, occurrence_no)) ENGINE=MyISAM");
+				primary key (occurrence_no)) ENGINE=MyISAM");
     
-    # Create a working table for first appearances as well
+    # Then create working tables which will become the new occurrence summary
+    # table and reference summary table.
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $FIRSTAPP_TEMP");
-    $result = $dbh->do("CREATE TABLE $FIRSTAPP_TEMP (
+    $result = $dbh->do("DROP TABLE IF EXISTS $OCC_SUMMARY_WORK");
+    $result = $dbh->do("CREATE TABLE $OCC_SUMMARY_WORK (
 				orig_no int unsigned primary key,
+				n_occs int unsigned not null,
+				n_colls int unsigned not null,
 				first_early_int_no int unsigned not null,
 				first_late_int_no int unsigned not null,
 				last_early_int_no int unsigned not null,
 				last_late_int_no int unsigned not null) ENGINE=MyISAM");
     
+    $result = $dbh->do("DROP TABLE IF EXISTS $REF_SUMMARY_WORK");
+    $result = $dbh->do("CREATE TABLE $REF_SUMMARY_WORK (
+				reference_no int unsigned primary key,
+				n_occs int unsigned not null,
+				n_colls int unsigned not null,
+				early_int_no int unsigned not null,
+				late_int_no int unsigned not null) ENGINE=MyISAM");
+    
     logMessage(2, "    inserting occurrences...");
     
     # Add one row for every occurrence in the database.
     
-    $sql = "	INSERT INTO $OCC_MATRIX_TEMP
-		       (collection_no, occurrence_no, orig_no,
+    $sql = "	INSERT INTO $OCC_MATRIX_WORK
+		       (occurrence_no, collection_no, orig_no, reference_no,
+			bin_lng, bin_lat, clust_lng, clust_lat, lng, lat,
 			loc, cc, early_int_no, late_int_no, early_age, late_age, access_level)
-		SELECT c.collection_no, o.occurrence_no, a.orig_no,
+		SELECT o.occurrence_no, c.collection_no, a.orig_no,
+			if(o.reference_no > 0, o.reference_no, c.reference_no),
+			floor((c.lng+180.0)/$FINE_BIN_SIZE),
+			floor((c.lat+90.0)/$FINE_BIN_SIZE),
+			cb.clust_lng, cb.clust_lat, c.lng, c.lat,
 			point(c.lng, c.lat), map.cc,
 			imax.interval_no, imin.interval_no,
 			imax.base_age, imin.top_age,
@@ -3935,11 +4277,13 @@ sub computeOccurrenceMatrix {
 				when 'authorizer only' then if(c.release_date < now(), 0, 2)
 				else 0
 			end
-		FROM collections as c JOIN occurrences as o using (collection_no)
-			JOIN authorities as a using (taxon_no)
+		FROM occurrences as o JOIN collections as c using (collection_no)
+			LEFT JOIN authorities as a using (taxon_no)
 			JOIN $INTERVAL_MAP as imax on imax.interval_no = c.max_interval_no
 			JOIN $INTERVAL_MAP as imin on imin.interval_no = 
 				if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
+			LEFT JOIN $COLL_BINS as cb on cb.bin_lng = floor((c.lng+180.0)/$FINE_BIN_SIZE)
+					and cb.bin_lat = floor((c.lat+90.0)/$FINE_BIN_SIZE)
 			LEFT JOIN country_map as map on map.name = c.country";
     
     $count = $dbh->do($sql);
@@ -3949,7 +4293,7 @@ sub computeOccurrenceMatrix {
     # Update each occurrence entry as necessary to take into account the latest
     # reidentification if any.
     
-    $sql = "	UPDATE $OCC_MATRIX_TEMP as m
+    $sql = "	UPDATE $OCC_MATRIX_WORK as m
 			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no and re.most_recent = 'YES'
 			JOIN authorities as a on a.taxon_no = re.taxon_no
 		SET m.orig_no = a.orig_no,
@@ -3959,68 +4303,133 @@ sub computeOccurrenceMatrix {
     
     logMessage(2, "    $count re-identifications");
     
-    # Now pull out the first and last appearances for each individual taxon,
-    # putting them into the first appearance table.  We use the older_seq and
+    # Add some indices to the main occurrence relation, which is more
+    # efficient to do now that the table is populated.
+    
+    logMessage(2, "    indexing by collection");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (collection_no)");
+    
+    logMessage(2, "    indexing by taxonomic concept");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (orig_no)");
+    
+    logMessage(2, "    indexing by reference_no");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (reference_no)");
+    
+    logMessage(2, "    indexing by geographic coordinates (spatial)");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD SPATIAL INDEX (loc)");
+    
+    logMessage(2, "    indexing by geographic coordinates (separate)");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (lng, lat)");
+    
+    logMessage(2, "    indexing by country");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (cc)");
+    
+    logMessage(2, "    indexing by chronological interval");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (early_int_no)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (late_int_no)");
+    
+    logMessage(2, "    indexing by early and late age");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (early_age)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (late_age)");
+    
+    # We now summarize the occurrence matrix by taxon.  We use the older_seq and
     # younger_seq interval identifications instead of interval_no, in order
     # that we can use the min() function to find the temporal bounds for each taxon.
     
-    logMessage(2, "    extracting first and last appearances");
+    logMessage(2, "    summarizing by taxon");
     
-    $sql = "	INSERT INTO $FIRSTAPP_TEMP (orig_no, first_early_int_no, first_late_int_no,
-						last_early_int_no, last_late_int_no)
-		SELECT m.orig_no, min(ei.older_seq), min(li.older_seq),
-				min(ei.younger_seq), min(li.younger_seq)
-		FROM $OCC_MATRIX as m JOIN interval_map as ei on ei.interval_no = m.early_int_no
+    $sql = "	INSERT INTO $OCC_SUMMARY_WORK (orig_no, n_occs, n_colls,
+			first_early_int_no, first_late_int_no, last_early_int_no, last_late_int_no)
+		SELECT m.orig_no, count(*), count(distinct collection_no),
+			min(ei.older_seq), min(li.older_seq), min(ei.younger_seq), min(li.younger_seq)
+		FROM $OCC_MATRIX_WORK as m JOIN interval_map as ei on ei.interval_no = m.early_int_no
 			JOIN interval_map as li on li.interval_no = m.late_int_no
 		GROUP BY m.orig_no";
     
     $result = $dbh->do($sql);
     
-    # Add some indices to the main occurrence relation, which is more
-    # efficient to do now that the table is populated.
+    # Then index the symmary table by earliest and latest interval number, so
+    # that we can quickly query for which taxa began or ended at a particular
+    # time. 
     
-    logMessage(2, "    indexing by taxonomic concept");
+    logMessage(2, "    indexing the summary table");
     
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_TEMP ADD INDEX (orig_no)");
+    $result = $dbh->do("ALTER TABLE $OCC_SUMMARY_WORK ADD INDEX (first_early_int_no)");
+    $result = $dbh->do("ALTER TABLE $OCC_SUMMARY_WORK ADD INDEX (last_late_int_no)");
     
-    logMessage(2, "    indexing by geographic coordinates");
+    # We now summarize the occurrence matrix by reference_no.  For each
+    # reference, we record the range of time periods it covers, plus the
+    # number of occurrences and collections that refer to it.
     
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_TEMP ADD SPATIAL INDEX (loc)");
+    logMessage(2, "    summarizing by reference_no");
     
-    logMessage(2, "    indexing by country");
+    $sql = "	INSERT INTO $REF_SUMMARY_WORK (reference_no, n_occs, n_colls,
+			early_int_no, late_int_no)
+		SELECT m.reference_no, count(*), count(distinct collection_no),
+			min(ei.older_seq), min(li.younger_seq)
+		FROM $OCC_MATRIX_WORK as m JOIN interval_map as ei on ei.interval_no = m.early_int_no
+			JOIN interval_map as li on li.interval_no = m.late_int_no
+		GROUP BY m.reference_no";
     
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_TEMP ADD INDEX (cc)");
+    $result = $dbh->do($sql);
     
-    logMessage(2, "    indexing by chronological interval");
+    # Then index the reference summary table by numbers of collections and
+    # occurrences, so that we can quickly query for the most heavily used ones.
     
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_TEMP ADD INDEX (early_int_no)");
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_TEMP ADD INDEX (late_int_no)");
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_TEMP ADD INDEX (early_age)");
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_TEMP ADD INDEX (late_age)");
+    logMessage(2, "    indexing the summary table");
     
-    # Then swap in the new tables.
+    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (n_occs)");
+    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (n_colls)");
     
-    my $occurrence_bak = "${OCC_MATRIX}_bak";
-    my $firstapp_bak = "${FIRSTAPP_TABLE}_bak";
+    # Now swap in the new tables:
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $occurrence_bak");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OCC_MATRIX LIKE $OCC_MATRIX_TEMP");
+    logMessage(2, "activating tables '$OCC_MATRIX', '$OCC_SUMMARY', '$REF_SUMMARY'");
+    
+    # Compute the backup names of all the tables to be activated
+    
+    my $occ_matrix_bak = "${OCC_MATRIX}_bak";
+    my $occ_summary_bak = "${OCC_SUMMARY}_bak";
+    my $ref_summary_bak = "${REF_SUMMARY}_bak";
+    
+    # Delete any old tables that might have been left around.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $occ_matrix_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $occ_summary_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $ref_summary_bak");
+    
+    # Do the swap.
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OCC_MATRIX LIKE $OCC_MATRIX_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OCC_SUMMARY LIKE $OCC_SUMMARY_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $REF_SUMMARY LIKE $REF_SUMMARY_WORK");
+    
     $result = $dbh->do("RENAME TABLE
-			    $OCC_MATRIX to $occurrence_bak,
-			    $OCC_MATRIX_TEMP to $OCC_MATRIX");
-    $result = $dbh->do("DROP TABLE IF EXISTS $occurrence_bak");
+			    $OCC_MATRIX to $occ_matrix_bak,
+			    $OCC_MATRIX_WORK to $OCC_MATRIX,
+			    $OCC_SUMMARY to $occ_summary_bak,
+			    $OCC_SUMMARY_WORK to $OCC_SUMMARY,
+			    $REF_SUMMARY to $ref_summary_bak,
+			    $REF_SUMMARY_WORK to $REF_SUMMARY");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $firstapp_bak");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $FIRSTAPP_TABLE LIKE $FIRSTAPP_TEMP");
-    $result = $dbh->do("RENAME TABLE
-			    $FIRSTAPP_TABLE to $firstapp_bak,
-			    $FIRSTAPP_TEMP to $FIRSTAPP_TABLE");
-    $result = $dbh->do("DROP TABLE IF EXISTS $firstapp_bak");
+    # Delete the old tables.
     
-    logMessage(1, "Done rebuilding occurrence relation");
+    $result = $dbh->do("DROP TABLE IF EXISTS $occ_matrix_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $occ_summary_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $ref_summary_bak");
 }
 
 
+
+# createCountryMap ( dbh, force )
+# 
 # Create the country_map table if it does not already exist.
 # Still need to fix: Zaire, U.A.E., UAE, Czechoslovakia, Netherlands Antilles
 
@@ -4040,13 +4449,15 @@ sub createCountryMap {
 		continent char(2),
 		name varchar(80) not null,
 		INDEX (name),
-		INDEX (continent))");
+		INDEX (continent)) Engine=MyISAM");
     
     # Then populate it if necessary.
     
     my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $COUNTRY_MAP");
     
     return if $count;
+    
+    logMessage(2, "    rebuilding country map");
     
     $dbh->do("INSERT INTO $COUNTRY_MAP (cc, continent, name) VALUES
 	('AU', 'AU', 'Australia'),
@@ -4244,6 +4655,12 @@ sub createCountryMap {
 }
 
 
+# createIntervalTable ( dbh, force )
+# 
+# Create a new table for time intervals, containing all of the necessary
+# information for each interval, and numbering them in two different
+# sequences: younger to older, and older to younger.
+
 sub createIntervalTable {
 
     my ($dbh, $force) = @_;
@@ -4268,7 +4685,7 @@ sub createIntervalTable {
 		reference_no int unsigned not null,
 		INDEX (interval_name),
 		INDEX (base_age, top_age),
-		INDEX (top_age, base_age))");
+		INDEX (top_age, base_age)) Engine=MyISAM");
     
     # Then populate it if necessary.  Abort if there are any rows already in
     # the table.
@@ -4276,6 +4693,8 @@ sub createIntervalTable {
     my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $INTERVAL_MAP");
     
     return if $count;
+    
+    logMessage(2, "    rebuilding interval map");
     
     $result = $dbh->do("
 		INSERT INTO $INTERVAL_MAP (interval_no, interval_name, base_age, top_age, reference_no)
@@ -4313,7 +4732,8 @@ sub createIntervalTable {
     return;
 }
 
-# activateNewTables ( dbh, new_tree_table, keep_temps )
+
+# activateNewTaxonomyTables ( dbh, new_tree_table, keep_temps )
 # 
 # In one atomic operation, move the new taxon tables to active status and swap
 # out the old ones.  Those old ones are then deleted.
@@ -4322,7 +4742,7 @@ sub createIntervalTable {
 # during the rebuild process (this might be done for debugging purposes).
 # Otherwise, these are deleted.
 
-sub activateNewTables {
+sub activateNewTaxonomyTables {
 
     my ($dbh, $tree_table, $keep_temps) = @_;
     
@@ -4357,25 +4777,25 @@ sub activateNewTables {
     # missing (otherwise the rename will fail; the dummies will be deleted
     # below anyway, after they are renamed to the backup names).
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_TEMP");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $search_table LIKE $SEARCH_TEMP");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $name_table LIKE $NAME_TEMP");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $attrs_table LIKE $ATTRS_TEMP");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $ints_table LIKE $INTS_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $search_table LIKE $SEARCH_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $name_table LIKE $NAME_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $attrs_table LIKE $ATTRS_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $ints_table LIKE $INTS_WORK");
     
     # Now do the Atomic Table Swap (tm)
     
     $SQL_STRING =	   "RENAME TABLE
 			    $tree_table to $tree_bak,
-			    $TREE_TEMP to $tree_table,
+			    $TREE_WORK to $tree_table,
 			    $search_table to $search_bak,
-			    $SEARCH_TEMP to $search_table,
+			    $SEARCH_WORK to $search_table,
 			    $name_table to $name_bak,
-			    $NAME_TEMP to $name_table,
+			    $NAME_WORK to $name_table,
 			    $attrs_table to $attrs_bak,
-			    $ATTRS_TEMP to $attrs_table,
+			    $ATTRS_WORK to $attrs_table,
 			    $ints_table to $ints_bak,
-			    $INTS_TEMP to $ints_table";
+			    $INTS_WORK to $ints_table";
     
     $result = $dbh->do($SQL_STRING);
     
@@ -4430,13 +4850,13 @@ sub activateTreeTables {
     # (otherwise the rename will fail; the dummy will be deleted below anyway,
     # after it is renamed to the backup name).
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_TEMP");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_WORK");
     
     # Now do the Atomic Table Swap (tm)
     
     $result = $dbh->do("RENAME TABLE
 			    $tree_table to $tree_bak,
-			    $TREE_TEMP to $tree_table");
+			    $TREE_WORK to $tree_table");
     
     # Then we can get rid of the backup table
     
@@ -4716,6 +5136,22 @@ sub check {
 
 # UTILITY ROUTINES
 
+# initMessages ( msg_level )
+# 
+# Initialize a timer, so that we can tell how long each step takes.  Also set
+# the $MSG_LEVEL parameter.  
+
+our ($START_TIME);
+
+sub initMessages {
+    
+    my ($level) = @_;
+    
+    $MSG_LEVEL = $level if defined $level;    
+    $START_TIME = time;
+}
+
+
 # logMessage ( level, message )
 # 
 # If $level is greater than or equal to the package variable $MSG_LEVEL, then
@@ -4725,10 +5161,12 @@ sub logMessage {
 
     my ($level, $message) = @_;
     
-    if ( $level <= $MSG_LEVEL )
-    {
-	print STDERR "$MSG_TAG: $message\n";
-    }
+    return if $level > $MSG_LEVEL;
+    
+    my $elapsed = time - $START_TIME;    
+    my $elapsed_str = sprintf("%2dm %2ds", $elapsed / 60, $elapsed % 60);
+    
+    print STDERR "$MSG_TAG: [ $elapsed_str ]  $message\n";
 }
 
 
@@ -4738,7 +5176,7 @@ sub clearSpelling {
 
     my ($dbh) = @_;
     
-    $dbh->do("UPDATE $TREE_TEMP SET spelling_no = 0");
+    $dbh->do("UPDATE $TREE_WORK SET spelling_no = 0");
 }
 
 
@@ -4746,7 +5184,7 @@ sub clearSynonymy {
     
     my ($dbh) = @_;
     
-    $dbh->do("UPDATE $TREE_TEMP SET synonym_no = 0");
+    $dbh->do("UPDATE $TREE_WORK SET synonym_no = 0");
 }
 
 
@@ -4754,7 +5192,7 @@ sub clearHierarchy {
     
     my ($dbh) = @_;
     
-    $dbh->do("UPDATE $TREE_TEMP SET opinion_no = 0, parent_no = 0");
+    $dbh->do("UPDATE $TREE_WORK SET opinion_no = 0, parent_no = 0");
 }
 
 
@@ -4762,7 +5200,7 @@ sub clearTreeSequence {
 
     my ($dbh) = @_;
     
-    $dbh->do("UPDATE $TREE_TEMP SET lft = null, rgt = null, depth = null");
+    $dbh->do("UPDATE $TREE_WORK SET lft = null, rgt = null, depth = null");
 }
 
 
