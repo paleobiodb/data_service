@@ -750,7 +750,7 @@ sub buildTables {
     my @steps = split(//, $steps || 'Aabcdefghi');
     $step_control->{$_} = 1 foreach @steps;
     
-    $TREE_WORK = 'taxon_trees' if $step_control->{t};
+    $TREE_WORK = 'taxon_trees' unless $step_control->{a};
     
     # Now create the necessary tables, including generating the opinion cache
     # from the opinion table.
@@ -3620,6 +3620,7 @@ sub computeAttrsTable {
 				distinct_children smallint,
 				extant_size int unsigned,
 				taxon_size int unsigned,
+				n_occs int unsigned not null,
 				n_colls int unsigned not null,
 				min_body_mass float,
 				max_body_mass float,
@@ -3635,7 +3636,7 @@ sub computeAttrsTable {
     
     $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
-			 extant_size, taxon_size, n_colls, min_body_mass, max_body_mass, 
+			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
 			 first_early_int_no, first_late_int_no, last_early_int_no, last_late_int_no,
 			 not_trace)
 		SELECT a.orig_no,
@@ -3643,7 +3644,7 @@ sub computeAttrsTable {
 			(t.orig_no = t.synonym_no) or (t.orig_no = t.valid_no) as is_senior,
 			case coalesce(a.extant) 
 				when 'yes' then 1 when 'no' then 0 else null end as is_extant,
-			0, 0, 0, 0, occ.n_colls,
+			0, 0, 0, 0, occ.n_occs, occ.n_colls,
 			coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
 			coalesce(e.maximum_body_mass, e.body_mass_estimate) as max,
 			occ.first_early_int_no, occ.first_late_int_no, occ.last_early_int_no, occ.last_late_int_no,
@@ -3665,6 +3666,7 @@ sub computeAttrsTable {
 			if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
+			sum(v.n_occs) as n_occs,
 			sum(v.n_colls) as n_colls,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace,
 			min(v.first_early_int_no) as first_early_int_no,
@@ -3674,6 +3676,7 @@ sub computeAttrsTable {
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
+			v.n_occs = nv.n_occs,
 			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
@@ -3711,6 +3714,7 @@ sub computeAttrsTable {
 			count(v.orig_no) as distinct_children,
 			sum(v.extant_size) as extant_size,
 			sum(v.taxon_size) as taxon_size,
+			sum(v.n_occs) + pv.n_occs as n_occs,
 			sum(v.n_colls) + pv.n_colls as n_colls,
 			coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
 					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
@@ -3725,6 +3729,7 @@ sub computeAttrsTable {
 			v.extant_children = nv.extant_children,
 			v.distinct_children = nv.distinct_children,
 			v.extant_size = nv.extant_size,
+			v.n_occs = nv.n_occs,
 			v.n_colls = nv.n_colls,
 			v.taxon_size = nv.taxon_size,
 			v.min_body_mass = nv.min_body_mass,
@@ -3772,6 +3777,7 @@ sub computeAttrsTable {
 			sum(v.distinct_children) as distinct_children_sum,
 			sum(v.extant_size) as extant_size_sum,
 			sum(v.taxon_size) as taxon_size_sum,
+			sum(v.n_occs) as n_occs,
 			sum(v.n_colls) as n_colls,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
@@ -3788,6 +3794,7 @@ sub computeAttrsTable {
 			v.distinct_children = nv.distinct_children_sum,
 			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
 			v.taxon_size = nv.taxon_size_sum + 1,
+			v.n_occs = nv.n_occs,
 			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
@@ -3810,6 +3817,7 @@ sub computeAttrsTable {
 			sum(v.distinct_children) as distinct_children_sum,
 			sum(v.extant_size) as extant_size_sum,
 			sum(v.taxon_size) as taxon_size_sum,
+			sum(v.n_occs) as n_occs,
 			sum(v.n_colls) as n_colls,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
@@ -3826,6 +3834,7 @@ sub computeAttrsTable {
 			v.distinct_children = nv.distinct_children_sum,
 			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
 			v.taxon_size = nv.taxon_size_sum + 1,
+			v.n_occs = nv.n_occs,
 			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
@@ -3873,6 +3882,8 @@ sub computeAttrsTable {
 			v.distinct_children = sv.distinct_children,
 			v.extant_size = sv.extant_size,
 			v.taxon_size = sv.taxon_size,
+			v.n_occs = sv.n_occs,
+			v.n_colls = sv.n_colls,
 			v.min_body_mass = sv.min_body_mass,
 			v.max_body_mass = sv.max_body_mass,
 			v.first_early_int_no = sv.first_early_int_no,
