@@ -168,11 +168,12 @@ our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
 our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
 our (%REFS_TABLE) = ("taxon_trees" => "refs");
 
-our ($OCC_MATRIX) = "occ_matrix";
-our ($OCC_SUMMARY) = "occ_summary";
-our ($REF_SUMMARY) = "ref_summary";
-our ($COLL_BINS) = "coll_bins";
-our ($COLL_CLUST) = "clusters";
+our $COLL_MATRIX = "coll_matrix";
+our $COLL_BINS = "coll_bins";
+our $COLL_CLUST = "clusters";
+our $OCC_MATRIX = "occ_matrix";
+our $OCC_SUMMARY = "occ_summary";
+our $REF_SUMMARY = "ref_summary";
 
 # Working table names - when the taxonomy tables are rebuilt, they are rebuilt
 # using the following table names.  The last step of the rebuild is to replace
@@ -187,11 +188,12 @@ our $ATTRS_WORK = "vn";
 our $SEARCH_WORK = "sn";
 our $INTS_WORK = "intn";
 our $OPINION_WORK = "opn";
-our $OCC_MATRIX_WORK = "ocmn";
-our $OCC_SUMMARY_WORK = "ocsn";
-our $REF_SUMMARY_WORK = "rfsn";
+our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
 our $COLL_CLUST_WORK = "kmcn";
+our $OCC_MATRIX_WORK = "omn";
+our $OCC_SUMMARY_WORK = "tsn";
+our $REF_SUMMARY_WORK = "rsn";
 
 # Auxiliary table names - these tables are creating during the process of
 # computing the main tables, and then discarded.
@@ -3644,7 +3646,7 @@ sub computeAttrsTable {
 			(t.orig_no = t.synonym_no) or (t.orig_no = t.valid_no) as is_senior,
 			case coalesce(a.extant) 
 				when 'yes' then 1 when 'no' then 0 else null end as is_extant,
-			0, 0, 0, 0, occ.n_occs, occ.n_colls,
+			0, 0, 0, 0, occ.n_occs, 0,
 			coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
 			coalesce(e.maximum_body_mass, e.body_mass_estimate) as max,
 			occ.first_early_int_no, occ.first_late_int_no, occ.last_early_int_no, occ.last_late_int_no,
@@ -3667,7 +3669,6 @@ sub computeAttrsTable {
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
 			sum(v.n_occs) as n_occs,
-			sum(v.n_colls) as n_colls,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace,
 			min(v.first_early_int_no) as first_early_int_no,
 			min(v.first_late_int_no) as first_late_int_no,
@@ -3677,7 +3678,6 @@ sub computeAttrsTable {
 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
 			v.n_occs = nv.n_occs,
-			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.first_early_int_no = nv.first_early_int_no,
@@ -3715,7 +3715,6 @@ sub computeAttrsTable {
 			sum(v.extant_size) as extant_size,
 			sum(v.taxon_size) as taxon_size,
 			sum(v.n_occs) + pv.n_occs as n_occs,
-			sum(v.n_colls) + pv.n_colls as n_colls,
 			coalesce(least(min(v.min_body_mass), pv.min_body_mass), 
 					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
 			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
@@ -3730,7 +3729,6 @@ sub computeAttrsTable {
 			v.distinct_children = nv.distinct_children,
 			v.extant_size = nv.extant_size,
 			v.n_occs = nv.n_occs,
-			v.n_colls = nv.n_colls,
 			v.taxon_size = nv.taxon_size,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
@@ -3778,7 +3776,6 @@ sub computeAttrsTable {
 			sum(v.extant_size) as extant_size_sum,
 			sum(v.taxon_size) as taxon_size_sum,
 			sum(v.n_occs) as n_occs,
-			sum(v.n_colls) as n_colls,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
 			min(v.first_early_int_no) as first_early_int_no,
@@ -3795,7 +3792,6 @@ sub computeAttrsTable {
 			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
 			v.taxon_size = nv.taxon_size_sum + 1,
 			v.n_occs = nv.n_occs,
-			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.first_early_int_no = nv.first_early_int_no,
@@ -3818,7 +3814,6 @@ sub computeAttrsTable {
 			sum(v.extant_size) as extant_size_sum,
 			sum(v.taxon_size) as taxon_size_sum,
 			sum(v.n_occs) as n_occs,
-			sum(v.n_colls) as n_colls,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
 			min(v.first_early_int_no) as first_early_int_no,
@@ -3835,7 +3830,6 @@ sub computeAttrsTable {
 			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
 			v.taxon_size = nv.taxon_size_sum + 1,
 			v.n_occs = nv.n_occs,
-			v.n_colls = nv.n_colls,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
 			v.first_early_int_no = nv.first_early_int_no,
@@ -3849,7 +3843,8 @@ sub computeAttrsTable {
     
     # Finally, we iterate from the top of the tree back down, computing those
     # attributes that propagate downward.  For the time being, the only one of
-    # these is a value of extant=0.
+    # these is a value of extant=0 (which overrides any values of
+    # extant=null).
     
     for (my $row = 2; $row <= $max_depth; $row++)
     {
@@ -3883,7 +3878,6 @@ sub computeAttrsTable {
 			v.extant_size = sv.extant_size,
 			v.taxon_size = sv.taxon_size,
 			v.n_occs = sv.n_occs,
-			v.n_colls = sv.n_colls,
 			v.min_body_mass = sv.min_body_mass,
 			v.max_body_mass = sv.max_body_mass,
 			v.first_early_int_no = sv.first_early_int_no,
@@ -3974,12 +3968,23 @@ sub computeCollectionCounts {
 	$result = $dbh->do("DROP TABLE IF EXISTS ROW$child_depth");
     }
     
+    # Then finish off with row 1
+
+    $sql = "	UPDATE $ATTRS_WORK as v JOIN
+		(SELECT orig_no, count(*) as n_colls FROM ROW1
+		 GROUP BY orig_no) as c using (orig_no)
+		SET v.n_colls = c.n_colls";
+    
+    $result = $dbh->do($sql);
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS ROW1");
+    
     logMessage(2, "    done");
 }
 
 
 
-# computeCollectionBins ( dbh )
+# computeCollectionTables ( dbh )
 # 
 # Group the set of collections into bins, on two different levels of
 # resolution.  The fine-grained resolution is generated by simply binning the
@@ -3995,50 +4000,131 @@ sub computeCollectionCounts {
 # updateCollectionBins() can be used to add newly entered collections to the
 # existing cluster tables.
 
-sub computeCollectionBins {
+sub computeCollectionTables {
 
     my ($dbh) = @_;
     
+    my ($result, $sql);
+    
     $MSG_TAG = "Rebuild";
     
-    logMessage(1, "rebuilding the collection cluster tables");
+    # Make sure that the country code lookup table and interval map are the
+    # database.
     
-    # Add the bin fields to the collections table, if they aren't there
-    # already.
+    createCountryMap($dbh);
+    createIntervalTable($dbh);
     
-    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE collections"); 
+    # Now create a clean working table which will become the new collection
+    # matrix.
     
-    unless ( $table_definition =~ /`clust_lat` smallint/ )
-    {
-	logMessage(1, "    creating bin fields in collections...");
-	
-	# Create the fields and indexes for them.
-	
-	$dbh->do("ALTER TABLE collections ADD COLUMN bin_lng smallint after collection_subset");
-	$dbh->do("ALTER TABLE collections ADD COLUMN bin_lat smallint after bin_lng");
-	$dbh->do("ALTER TABLE collections ADD COLUMN clust_lng smallint after bin_lat");
-	$dbh->do("ALTER TABLE collections ADD COLUMN clust_lat smallint after bin_lng");
-	$dbh->do("ALTER TABLE collections ADD INDEX (bin_lng, bin_lat)");
-	$dbh->do("ALTER TABLE collections ADD INDEX (clust_lng, clust_lat)");
-    }
+    logMessage(1, "rebuilding collection tables");
     
-    # Start by binning the collections into fine-resolution bins with integer
-    # coordinates and then taking the centroid of each bin and counting the
-    # number of collections that fall within it.  We will be able to use this
-    # set of bins to generate medium-scale maps, in order to reduce the number
-    # of data points that need to be displayed.  We will also use this set of
+    $dbh->do("DROP TABLE IF EXISTS $COLL_MATRIX_WORK");
+    
+    $dbh->do("CREATE TABLE $COLL_MATRIX_WORK (
+		collection_no int unsigned primary key,
+		bin_lng smallint not null,
+		bin_lat smallint not null,
+		clust_lng smallint,
+		clust_lat smallint,
+		lng float,
+		lat float,
+		loc point not null,
+		cc char(2),
+		early_int_no int unsigned not null,
+		late_int_no int unsigned not null,
+		early_age float,
+		late_age float,
+		n_occs int unsigned not null,
+		reference_no int unsigned not null,
+		access_level tinyint unsigned not null) Engine=MYISAM");
+    
+    logMessage(2, "    inserting collections...");
+    
+    $sql = "	INSERT INTO $COLL_MATRIX_WORK
+		       (collection_no, bin_lng, bin_lat, lng, lat, loc, cc,
+			early_int_no, late_int_no, early_age, late_age, 
+			reference_no, access_level)
+		SELECT c.collection_no, 
+			floor((c.lng+180.0)/$FINE_BIN_SIZE),
+			floor((c.lat+90.0)/$FINE_BIN_SIZE),
+			c.lng, c.lat, point(c.lng, c.lat), map.cc,
+			imax.interval_no, imin.interval_no,
+			imax.base_age, imin.top_age, c.reference_no,
+			case c.access_level
+				when 'database members' then if(c.release_date < now(), 0, 1)
+				when 'research group' then if(c.release_date < now(), 0, 2)
+				when 'authorizer only' then if(c.release_date < now(), 0, 2)
+				else 0
+			end
+		FROM collections as c
+			JOIN $INTERVAL_MAP as imax on imax.interval_no = c.max_interval_no
+			JOIN $INTERVAL_MAP as imin on imin.interval_no = 
+				if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
+			LEFT JOIN country_map as map on map.name = c.country";
+
+    my $count = $dbh->do($sql);
+    
+    logMessage(2, "      $count collections");
+    
+    logMessage(2, "    counting occurrences for each collection");
+    
+    $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN
+		(SELECT collection_no, count(*) as n_occs
+		FROM occurrences GROUP BY collection_no) as sum using (collection_no)
+	    SET m.n_occs = sum.n_occs";
+    
+    $result = $dbh->do($sql);
+    
+    # Now that the table is full, we can add the necessary indices much more
+    # efficiently than if we had defined them at the start.
+    
+    logMessage(2, "    indexing by reference_no");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (reference_no)");
+    
+    logMessage(2, "    indexing by geographic coordinates (spatial)");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (loc)");
+    
+    logMessage(2, "    indexing by geographic coordinates (separate)");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (lng, lat)");
+    
+    logMessage(2, "    indexing by country");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (cc)");
+    
+    logMessage(2, "    indexing by chronological interval");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_int_no)");
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_int_no)");
+    
+    logMessage(2, "    indexing by early and late age");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_age)");
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_age)");
+    
+    # We then group the collections into fine-resolution bins with integer
+    # coordinates, taking the centroid of each bin and counting the number of
+    # collections that fall within it.  We will be able to use this set of
+    # bins to generate medium-scale maps, in order to reduce the number of
+    # data points that need to be displayed.  We will also use this set of
     # bins as the individual data points for the k-means algorithm, which will
-    # make it dramatically more efficient to generate the coarse-grained
-    # clusters than if we used the entire set of collections.
+    # allow us to efficiently generate the coarse-grained clusters that we
+    # need for displaying global maps.
+    
+    logMessage(2, "    grouping collections into fine bins...");
     
     $dbh->do("DROP TABLE IF EXISTS $COLL_BINS_WORK");
     
     $dbh->do("CREATE TABLE $COLL_BINS_WORK (
-		bin_lat smallint not null,
 		bin_lng smallint not null,
-		clust_lat smallint,
+		bin_lat smallint not null,
 		clust_lng smallint,
+		clust_lat smallint,
 		n_colls int unsigned,
+		n_occs int unsigned,
 		lng float,
 		lat float,
 		lng_min float,
@@ -4046,25 +4132,21 @@ sub computeCollectionBins {
 		lat_min float,
 		lat_max float,
 		std_dev float,
+		access_level tinyint unsigned not null,
 		unique key (bin_lng, bin_lat)) Engine=MyISAM");
     
     my ($sql, $result);
     
-    # First compute the set of non-empty bins and the collection count,
-    # centroid and standard deviation for each bin.
-    
-    logMessage(2, "    binning collections into fine bins...");
-    
     $sql = "	INSERT IGNORE INTO $COLL_BINS_WORK
-			(bin_lng, bin_lat, n_colls, lng, lat, 
-			 lng_min, lng_max, lat_min, lat_max, std_dev)
-		SELECT bin_lng, bin_lat, count(*), avg(lng), avg(lat),
+			(bin_lng, bin_lat, n_colls, n_occs, lng, lat, 
+			 lng_min, lng_max, lat_min, lat_max, std_dev,
+			 access_level)
+		SELECT bin_lng, bin_lat, count(*), sum(n_occs), avg(lng), avg(lat),
 		       min(lng) as lng_min, max(lng) as lng_max,
 		       min(lat) as lat_min, max(lat) as lat_max,
-		       sqrt(var_pop(lng)+var_pop(lat))
-		FROM (SELECT floor((lng+180.0)/$FINE_BIN_SIZE) as bin_lng, 
-			     floor((lat+90.0)/$FINE_BIN_SIZE) as bin_lat,
-			     lng, lat FROM collections) as c
+		       sqrt(var_pop(lng)+var_pop(lat)),
+		       min(access_level)
+		FROM $COLL_MATRIX_WORK
 		GROUP BY bin_lng, bin_lat";
     
     $result = $dbh->do($sql);
@@ -4079,6 +4161,7 @@ sub computeCollectionBins {
 		clust_lng smallint,
 		clust_lat smallint,
 		n_colls int unsigned,
+		n_occs int unsigned,
 		lng float,
 		lat float,
 		lng_min float,
@@ -4086,6 +4169,7 @@ sub computeCollectionBins {
 		lat_min float,
 		lat_max float,
 		std_dev float,
+		access_level tinyint unsigned,
 		unique key (clust_lng, clust_lat)) Engine=MyISAM");
     
     # And finally, an auxiliary table for use in computing cluster assignments
@@ -4163,7 +4247,7 @@ sub computeCollectionBins {
     # assignments.  Repeat until no points move to a different cluster, or at
     # most the specified number of rounds.
     
-    while ( $rows_changed > 0 and $bound < 10 )
+    while ( $rows_changed > 0 and $bound < 12 )
     {
 	# Compute the centroid of each cluster based on the data points (bins)
 	# assigned to it.
@@ -4211,58 +4295,64 @@ sub computeCollectionBins {
 	$bound++;
     }
     
-    logMessage(2, "    setting collection bin and cluster numbers...");
+    logMessage(2, "    setting collection cluster numbers...");
     
     # Now that we have a stable assignment of bins to clusters, we can record
     # the bin and cluster assignments for each individual collection.
     
-    $sql = "	UPDATE collections as c 
-		JOIN $COLL_BINS_WORK as cb on cb.bin_lng = floor(c.lng / $FINE_BIN_SIZE)
-			and cb.bin_lat = floor(c.lat / $FINE_BIN_SIZE)
-		SET c.bin_lng = cb.bin_lng, c.bin_lat = cb.bin_lat,
-		    c.clust_lng = cb.clust_lng, c.clust_lat = cb.clust_lat";
+    $sql = "	UPDATE $COLL_MATRIX_WORK as c 
+		JOIN $COLL_BINS_WORK as cb using (bin_lng, bin_lat)
+		SET c.clust_lng = cb.clust_lng, c.clust_lat = cb.clust_lat";
     
     $result = $dbh->do($sql);
     
-    # Now we can compute the total number of collections, the geographic
-    # extent, and the standard deviation of each cluster (the cluster
-    # centroids have already been computed above).
+    # Now we can compute the total number of collections and occurrences, the
+    # geographic extent, the access level, and the standard deviation for each
+    # cluster (the cluster centroids have already been computed above).
     
     logMessage(2, "   setting collection statistics for each cluster...");
     
     $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
 		(SELECT clust_lng, clust_lat, sum(n_colls) as n_colls,
+			sum(n_occs) as n_occs,
 			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
 			min(lng_min) as lng_min, max(lng_max) as lng_max,
-			min(lat_min) as lat_min, max(lat_max) as lat_max
-		FROM $COLL_BINS_WORK GROUP BY clust_lng, clust_lat) as cluster
+			min(lat_min) as lat_min, max(lat_max) as lat_max,
+			min(access_level) as access_level
+		FROM $COLL_BINS_WORK GROUP BY clust_lng, clust_lat) as agg
 			using (clust_lng, clust_lat)
-		SET k.n_colls = cluster.n_colls, k.std_dev = cluster.std_dev,
-		    k.lng_min = cluster.lng_min, k.lng_max = cluster.lng_max,
-		    k.lat_min = cluster.lat_min, k.lat_max = cluster.lat_max";
+		SET k.n_colls = agg.n_colls, k.n_occs = agg.n_occs,
+		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
+		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,
+		    k.lat_min = agg.lat_min, k.lat_max = agg.lat_max";
     
     $result = $dbh->do($sql);
     
     # Finally, we swap in the new tables for the old ones.
     
-    logMessage(2, "activating tables '$COLL_BINS', '$COLL_CLUST'");
+    logMessage(2, "activating tables '$COLL_MATRIX', '$COLL_BINS', '$COLL_CLUST'");
     
     # Compute the backup names of all the tables to be activated
     
+    my $coll_matrix_bak = "${COLL_MATRIX}_bak";
     my $coll_bins_bak = "${COLL_BINS}_bak";
     my $coll_clust_bak = "${COLL_CLUST}_bak";
     
     # Delete any old tables that might have been left around.
     
+    $result = $dbh->do("DROP TABLE IF EXISTS $coll_matrix_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_bins_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_clust_bak");
     
     # Do the swap.
     
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_MATRIX LIKE $COLL_MATRIX_WORK");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_BINS LIKE $COLL_BINS_WORK");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_CLUST LIKE $COLL_CLUST_WORK");
     
     $result = $dbh->do("RENAME TABLE
+			    $COLL_MATRIX to $coll_matrix_bak,
+			    $COLL_MATRIX_WORK to $COLL_MATRIX,
 			    $COLL_BINS to $coll_bins_bak,
 			    $COLL_BINS_WORK to $COLL_BINS,
 			    $COLL_CLUST to $coll_clust_bak,
@@ -4270,6 +4360,7 @@ sub computeCollectionBins {
     
     # Delete the old tables.
     
+    $result = $dbh->do("DROP TABLE IF EXISTS $coll_matrix_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_bins_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_clust_bak");
     
@@ -4292,12 +4383,6 @@ sub computeOccurrenceMatrix {
     my ($sql, $result, $count);
     
     $MSG_TAG = "Rebuild";
-    
-    # Make sure that the country code lookup table and interval map are the
-    # database.
-    
-    createCountryMap($dbh);
-    createIntervalTable($dbh);
     
     # Create a clean working table which will become the new occurrence
     # matrix.
@@ -4347,9 +4432,9 @@ sub computeOccurrenceMatrix {
 				early_int_no int unsigned not null,
 				late_int_no int unsigned not null) ENGINE=MyISAM");
     
-    logMessage(2, "    inserting occurrences...");
-    
     # Add one row for every occurrence in the database.
+    
+    logMessage(2, "    inserting occurrences...");
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
 		       (occurrence_no, collection_no, orig_no, reference_no,
@@ -4380,7 +4465,7 @@ sub computeOccurrenceMatrix {
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "    $count occurrences");
+    logMessage(2, "      $count occurrences");
     
     # Update each occurrence entry as necessary to take into account the latest
     # reidentification if any.

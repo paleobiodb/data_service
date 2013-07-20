@@ -42,12 +42,13 @@ $PROC{ref} =
    [
     { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&DataQuery::generateReference },
     { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&DataQuery::generateReference },
-    { rec => 'sec_refs', add => 'reference_no', subfield => 'reference_no' },
+    { rec => 'reference_no', add => 'refno_list' },
+    { rec => 'sec_refs', add => 'refno_list', subfield => 'reference_no' },
    ];
 
 $OUTPUT{ref} =
    [
-    { rec => 'pubyr', com => 'pby',
+    { rec => 'r_pubyr', com => 'pby',
 	doc => "The year of publication of the primary reference associated with this collection" },
     { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => '; ',
 	doc => "The reference(s) associated with this collection (as formatted text)" },
@@ -73,7 +74,7 @@ $OUTPUT{time} =
    [
     { rec => 'early_int', com => 'int',
 	doc => "The geologic time range associated with this collection, or the period that begins the range if {late_int} is also given" },
-    { rec => 'late_int', com => 'lin',
+    { rec => 'late_int', com => 'lin', dedup => 'early_int',
 	doc => "The period that ends the geologic time range associated with this collection" },
     { rec => 'early_age', com => 'eag',
 	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },

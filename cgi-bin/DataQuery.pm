@@ -489,6 +489,11 @@ sub processRecord {
 	    }
 	}
 	
+	else
+	{
+	    @result = $record->{$field};
+	}
+	
 	# Then add it or set it to the specified field.
 	
         if ( $p->{add} )
@@ -711,9 +716,10 @@ sub constructObjectJSON {
     
     my $vocab = $self->{vocab};
     
-    # Start with an empty hash.
+    # Start with an empty string.
     
-    my %obj;
+    my $outrec = '{';
+    my $sep = '';
     
     # Go through the rule list, generating the fields one by one.
     
@@ -729,34 +735,47 @@ sub constructObjectJSON {
 	my $field = $f->{rec};
 	next unless $f->{always} or defined $record->{$field} and $record->{$field} ne '';
 	
+	# Skip any field indicated by a 'dedup' rule.
+	
+	next if $f->{dedup} and defined $record->{$field} and defined $record->{$f->{dedup}}
+	    and $record->{$field} eq $record->{$f->{dedup}};
+	
 	# Process the rule to generate a key/value pair.  If a code ref was
 	# supplied, call that routine.  Otherwise, generate either an array,
 	# sub-object or scalar value as indicated.
 	
+	my $value = '';
+	
 	if ( ref $f->{code} eq 'CODE' )
 	{
-	    $obj{$outkey} = $f->{code}($record->{$field}, $f);
+	    $value = json_clean($f->{code}($record->{$field}, $f));
 	}
 	
 	elsif ( ref $record->{$field} eq 'ARRAY' )
 	{
 	    my $rule = $f->{rule} || $f;
-	    $obj{$outkey} = $self->constructArrayJSON($record->{$field}, $rule);
+	    $value = $self->constructArrayJSON($record->{$field}, $rule);
 	}
 	
 	elsif ( ref $record->{$field} eq 'HASH' )
 	{
 	    my $rule = $f->{rule} || $f;
-	    $obj{$outkey} = $self->constructObjectJSON($record->{$field}, $rule);
+	    $value = $self->constructObjectJSON($record->{$field}, $rule);
 	}
 	
 	else
 	{
-	    $obj{$outkey} = json_clean($record->{$field});
+	    $value = json_clean($record->{$field});
+	}
+	
+	if ( defined $value and $value ne '' )
+	{
+	    $outrec .= "$sep\"$outkey\":$value";
+	    $sep = ',';
 	}
     }
     
-    return \%obj;
+    return "$outrec}";
 }
 
 
@@ -766,41 +785,50 @@ sub constructArrayJSON {
     
     my $f = $rulespec if ref $rulespec and ref $rulespec ne 'ARRAY';
     
-    # Start with an empty array.
+    # Start with an empty string.
     
-    my @array;
+    my $outrec = '[';
+    my $sep = '';
     
     # Go through the elements of the specified arrayref, applying the
     # specified rule to each one.  If a code ref was supplied, call that
     # routine.  Otherwise, generate either an array, sub-object or scalar
     # value as indicated.
     
+    my $value = '';
+    
     foreach my $elt ( @$arrayref )
     {
 	if ( ref $f->{code} eq 'CODE' )
 	{
-	    push @array, $f->{code}($elt, $rulespec);
+	    $value = json_clean($f->{code}($elt, $rulespec));
 	}
 	
 	elsif ( ref $elt eq 'ARRAY' )
 	{
 	    my $subrule = $f->{rule} || $rulespec;
-	    push @array, $self->constructArrayJSON($elt, $subrule);
+	    $value = $self->constructArrayJSON($elt, $subrule);
 	}
 	
 	elsif ( ref $elt eq 'HASH' )
 	{
 	    my $subrule = $f->{rule} || $rulespec;
-	    push @array, $self->constructObjectJSON($elt, $subrule);
+	    $value = $self->constructObjectJSON($elt, $subrule);
 	}
 	
 	else
 	{
-	    push @array, json_clean($elt);
+	    $value = json_clean($elt);
+	}
+	
+	if ( defined $value and $value ne '' )
+	{
+	    $outrec .= "$sep$value";
+	    $sep = ',';
 	}
     }
     
-    return \@array;
+    return "$outrec]";
 }
 
 
@@ -995,19 +1023,20 @@ sub xml_clean {
 my (%ESCAPE) = ( '\\' => '\\\\', '"' => '\\"', "\t" => '\\t', "\n" => '\\n',
 		 "\r" => '\\r' );	#'
 
-sub json_clean_extra {
+sub json_clean {
     
     my ($string) = @_;
     
     # Return an empty string unless the value is defined.
     
-    return "''" unless defined $string;
+    return '""' unless defined $string and $string ne '';
     
     # Do a quick check for numbers.  If it matches, return the value as-is.
     
-    return $string if $string =~ /^-?(?:[0-9]+|[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[Ee]-?\d+)?$/;
+    return $string if $string =~
+    /^-?(?:[0-9]+|[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[Ee]-?\d+)?$/;
     
-    # Do aother quick check for okay characters.  If there's nothing exotic,
+    # Do another quick check for okay characters.  If there's nothing exotic,
     # just return the quoted value.
     
     return '"' . $string . '"' unless $string =~ /[^a-zA-Z0-9 _.,;:-]/;
@@ -1033,11 +1062,11 @@ sub json_clean_extra {
     
     $string =~ s/[\0-\037\177]//g;
     
-    return $string;
+    return '"' . $string . '"';
 }
 
 
-sub json_clean {
+sub json_clean_simple {
     
     my ($string) = @_;
     
