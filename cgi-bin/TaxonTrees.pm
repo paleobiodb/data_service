@@ -3248,7 +3248,7 @@ sub computeIntermediates {
     
     foreach my $depth (2..$max_depth)
     {
-	logMessage(2, "    computing row $depth...") if $depth % 10 == 0;
+	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
 	
 	$SQL_STRING = "
 		INSERT INTO $INTS_WORK (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
@@ -3698,7 +3698,7 @@ sub computeAttrsTable {
     
     for (my $depth = $max_depth; $depth > 0; $depth--)
     {
-	logMessage(2, "    computing row $depth...") if $depth % 10 == 0;
+	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
 	
 	my $child_depth = $depth + 1;
 	
@@ -3853,7 +3853,7 @@ sub computeAttrsTable {
     
     for (my $row = 2; $row <= $max_depth; $row++)
     {
-	logMessage(2, "    computing row $row...") if $row % 10 == 0;
+	logMessage(2, "    computing tree level $row...") if $row % 10 == 0;
 	
 	# Children inherit the attributes of the senior synonym of the parent.
 	
@@ -3896,6 +3896,87 @@ sub computeAttrsTable {
     
     my $a = 1;
 }
+
+
+# computeCollectionCounts ( dbh )
+# 
+# For each taxon, compute the number of distinct collections in which it or
+# any of its subtaxa appears.
+
+sub computeCollectionCounts {
+
+    my ($dbh) = @_;
+    
+    logMessage(2, "computing collection counts (h)");
+    
+    # First figure out how deep the table goes, and grab the bottom level.
+    
+    my ($TREE_WORK) = 'taxon_trees';
+    my ($ATTRS_WORK) = 'taxon_attrs';
+    my ($sql, $result);
+    
+    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_WORK");
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS ROW$max_depth");
+    
+    $sql = "	CREATE TABLE ROW$max_depth (
+			orig_no int unsigned,
+			collection_no int unsigned,
+			primary key (orig_no, collection_no)) Engine=MEMORY
+		IGNORE SELECT m.orig_no, m.collection_no
+		FROM $OCC_MATRIX as m JOIN $TREE_WORK as t using (orig_no)
+		WHERE t.depth = $max_depth";
+    
+    $result = $dbh->do($sql);
+    
+    # Now iterate up from the bottom level to 1, computing each level by
+    # copying from $OCC_MATRIX and then merging in the level below.  Once we
+    # have merged the lower level, we can copy its counts over to $ATTRS_WORK
+    # and then drop the table.
+    
+    for ( my $depth = $max_depth - 1; $depth > 0; $depth-- )
+    {
+	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
+	
+	my $child_depth = $depth + 1;
+	
+	# Grab the next level from $OCC_MATRIX
+	
+	$result = $dbh->do("DROP TABLE IF EXISTS ROW$depth");
+	
+	$sql = "CREATE TABLE ROW$depth (
+			orig_no int unsigned,
+			collection_no int unsigned,
+			primary key (orig_no, collection_no)) Engine=MEMORY
+		IGNORE SELECT m.orig_no, m.collection_no 
+		FROM $OCC_MATRIX as m JOIN $TREE_WORK as t using (orig_no)
+		WHERE t.depth = $depth";
+	
+	$result = $dbh->do($sql);
+	
+	$sql = "INSERT IGNORE INTO ROW$depth (orig_no, collection_no)
+		SELECT t.parent_no, c.collection_no
+		FROM ROW$child_depth as c JOIN $TREE_WORK as t using (orig_no)";
+	
+	$result = $dbh->do($sql);
+	
+	# Now copy the child-level collection counts into $ATTRS_WORK.
+	
+	$sql = "UPDATE $ATTRS_WORK as v JOIN
+		(SELECT orig_no, count(*) as n_colls FROM ROW$child_depth
+		 GROUP BY orig_no) as c using (orig_no)
+		SET v.n_colls = c.n_colls";
+	
+	$result = $dbh->do($sql);
+	
+	# Then drop the table.
+	
+	$result = $dbh->do("DROP TABLE IF EXISTS ROW$child_depth");
+    }
+    
+    logMessage(2, "    done");
+}
+
 
 
 # computeCollectionBins ( dbh )

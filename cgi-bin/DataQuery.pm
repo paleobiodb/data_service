@@ -696,7 +696,7 @@ sub emitRecordJSON {
     
     my $outrec = $self->constructObjectJSON($record, $self->{output_list});
     
-    return $init . to_json($outrec);
+    return $outrec;
 }
 
 
