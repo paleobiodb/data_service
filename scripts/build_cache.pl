@@ -21,7 +21,7 @@ populateOrig($dbh);
 TaxonTrees::initMessages(2);
 
 TaxonTrees::computeCollectionTables($dbh) if $options{b};
-TaxonTrees::computeOccurrenceMatrix($dbh) if $options{m};
+TaxonTrees::computeOccurrenceTables($dbh) if $options{m};
 TaxonTrees::computeCollectionCounts($dbh) if $options{v};
 TaxonTrees::buildTables($dbh, 'taxon_trees', { msg_level => 2 }, $options{T}) 
     if $options{t} or $options{T};

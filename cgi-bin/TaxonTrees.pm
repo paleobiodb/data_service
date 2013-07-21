@@ -172,7 +172,7 @@ our $COLL_MATRIX = "coll_matrix";
 our $COLL_BINS = "coll_bins";
 our $COLL_CLUST = "clusters";
 our $OCC_MATRIX = "occ_matrix";
-our $OCC_SUMMARY = "occ_summary";
+our $TAXON_SUMMARY = "taxon_summary";
 our $REF_SUMMARY = "ref_summary";
 
 # Working table names - when the taxonomy tables are rebuilt, they are rebuilt
@@ -192,7 +192,7 @@ our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
 our $COLL_CLUST_WORK = "kmcn";
 our $OCC_MATRIX_WORK = "omn";
-our $OCC_SUMMARY_WORK = "tsn";
+our $TAXON_SUMMARY_WORK = "tsn";
 our $REF_SUMMARY_WORK = "rsn";
 
 # Auxiliary table names - these tables are creating during the process of
@@ -3653,7 +3653,7 @@ sub computeAttrsTable {
 			(a.preservation <> 'trace' or a.preservation is null)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
-			LEFT JOIN $OCC_SUMMARY as occ using (orig_no)
+			LEFT JOIN $TAXON_SUMMARY as occ using (orig_no)
 		GROUP BY a.orig_no";
     
     $result = $dbh->do($sql);
@@ -4368,7 +4368,7 @@ sub computeCollectionTables {
 }
 
 
-# computeOccurrenceMatrix ( dbh, options )
+# computeOccurrenceTables ( dbh, options )
 # 
 # Compute the occurrence matrix, recording which taxonomic concepts are
 # associated with which collections in which geological and chronological
@@ -4376,7 +4376,7 @@ sub computeCollectionTables {
 # front-end application.  This function also computes an occurrence summary
 # table, summarizing occurrence information by taxon.
 
-sub computeOccurrenceMatrix {
+sub computeOccurrenceTables {
     
     my ($dbh, $options) = @_;
     
@@ -4391,77 +4391,23 @@ sub computeOccurrenceMatrix {
     
     $result = $dbh->do("DROP TABLE IF EXISTS $OCC_MATRIX_WORK");
     $result = $dbh->do("CREATE TABLE $OCC_MATRIX_WORK (
-				occurrence_no int unsigned not null,
+				occurrence_no int unsigned primary key,
 				collection_no int unsigned not null,
 				reid_no int unsigned not null,
+				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
-				reference_no int unsigned not null,
-				bin_lng smallint,
-				bin_lat smallint,
-				clust_lng smallint,
-				clust_lat smallint,
-				lng float,
-				lat float,
-				loc point not null,
-				cc char(2),
-				early_int_no int unsigned not null,
-				late_int_no int unsigned not null,
-				early_age float,
-				late_age float,
-				access_level tinyint unsigned not null,
-				primary key (occurrence_no)) ENGINE=MyISAM");
-    
-    # Then create working tables which will become the new occurrence summary
-    # table and reference summary table.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $OCC_SUMMARY_WORK");
-    $result = $dbh->do("CREATE TABLE $OCC_SUMMARY_WORK (
-				orig_no int unsigned primary key,
-				n_occs int unsigned not null,
-				n_colls int unsigned not null,
-				first_early_int_no int unsigned not null,
-				first_late_int_no int unsigned not null,
-				last_early_int_no int unsigned not null,
-				last_late_int_no int unsigned not null) ENGINE=MyISAM");
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $REF_SUMMARY_WORK");
-    $result = $dbh->do("CREATE TABLE $REF_SUMMARY_WORK (
-				reference_no int unsigned primary key,
-				n_occs int unsigned not null,
-				n_colls int unsigned not null,
-				early_int_no int unsigned not null,
-				late_int_no int unsigned not null) ENGINE=MyISAM");
+				reference_no int unsigned not null) ENGINE=MyISAM");
     
     # Add one row for every occurrence in the database.
     
     logMessage(2, "    inserting occurrences...");
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
-		       (occurrence_no, collection_no, orig_no, reference_no,
-			bin_lng, bin_lat, clust_lng, clust_lat, lng, lat,
-			loc, cc, early_int_no, late_int_no, early_age, late_age, access_level)
-		SELECT o.occurrence_no, c.collection_no, a.orig_no,
-			if(o.reference_no > 0, o.reference_no, c.reference_no),
-			floor((c.lng+180.0)/$FINE_BIN_SIZE),
-			floor((c.lat+90.0)/$FINE_BIN_SIZE),
-			cb.clust_lng, cb.clust_lat, c.lng, c.lat,
-			point(c.lng, c.lat), map.cc,
-			imax.interval_no, imin.interval_no,
-			imax.base_age, imin.top_age,
-			case c.access_level
-				when 'database members' then if(c.release_date < now(), 0, 1)
-				when 'research group' then if(c.release_date < now(), 0, 2)
-				when 'authorizer only' then if(c.release_date < now(), 0, 2)
-				else 0
-			end
+		       (occurrence_no, collection_no, taxon_no, orig_no, reference_no)
+		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no,
+			if(o.reference_no > 0, o.reference_no, c.reference_no)
 		FROM occurrences as o JOIN collections as c using (collection_no)
-			LEFT JOIN authorities as a using (taxon_no)
-			JOIN $INTERVAL_MAP as imax on imax.interval_no = c.max_interval_no
-			JOIN $INTERVAL_MAP as imin on imin.interval_no = 
-				if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
-			LEFT JOIN $COLL_BINS as cb on cb.bin_lng = floor((c.lng+180.0)/$FINE_BIN_SIZE)
-					and cb.bin_lat = floor((c.lat+90.0)/$FINE_BIN_SIZE)
-			LEFT JOIN country_map as map on map.name = c.country";
+			LEFT JOIN authorities as a using (taxon_no)";
     
     $count = $dbh->do($sql);
     
@@ -4473,8 +4419,10 @@ sub computeOccurrenceMatrix {
     $sql = "	UPDATE $OCC_MATRIX_WORK as m
 			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no and re.most_recent = 'YES'
 			JOIN authorities as a on a.taxon_no = re.taxon_no
-		SET m.orig_no = a.orig_no,
-		    m.reid_no = re.reid_no";
+		SET m.reid_no = re.reid_no,
+		    m.taxon_no = re.taxon_no,
+		    m.orig_no = a.orig_no,
+		    m.reference_no = if(re.reference_no > 0, re.reference_no, m.reference_no)";
     
     $count = $dbh->do($sql);
     
@@ -4495,43 +4443,38 @@ sub computeOccurrenceMatrix {
     
     $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (reference_no)");
     
-    logMessage(2, "    indexing by geographic coordinates (spatial)");
-    
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD SPATIAL INDEX (loc)");
-    
-    logMessage(2, "    indexing by geographic coordinates (separate)");
-    
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (lng, lat)");
-    
-    logMessage(2, "    indexing by country");
-    
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (cc)");
-    
-    logMessage(2, "    indexing by chronological interval");
-    
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (early_int_no)");
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (late_int_no)");
-    
-    logMessage(2, "    indexing by early and late age");
-    
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (early_age)");
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (late_age)");
-    
     # We now summarize the occurrence matrix by taxon.  We use the older_seq and
     # younger_seq interval identifications instead of interval_no, in order
     # that we can use the min() function to find the temporal bounds for each taxon.
     
     logMessage(2, "    summarizing by taxon");
     
-    $sql = "	INSERT INTO $OCC_SUMMARY_WORK (orig_no, n_occs, n_colls,
-			first_early_int_no, first_late_int_no, last_early_int_no, last_late_int_no)
+    # Then create working tables which will become the new occurrence summary
+    # table and reference summary table.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $TAXON_SUMMARY_WORK");
+    $result = $dbh->do("CREATE TABLE $TAXON_SUMMARY_WORK (
+				orig_no int unsigned primary key,
+				n_occs int unsigned not null,
+				n_colls int unsigned not null,
+				first_early_int_seq int unsigned not null,
+				first_late_int_seq int unsigned not null,
+				last_early_int_seq int unsigned not null,
+				last_late_int_seq int unsigned not null) ENGINE=MyISAM");
+    
+    $sql = "	INSERT INTO $TAXON_SUMMARY_WORK (orig_no, n_occs, n_colls,
+			first_early_int_seq, first_late_int_seq, last_early_int_seq, last_late_int_seq)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
 			min(ei.older_seq), min(li.older_seq), min(ei.younger_seq), min(li.younger_seq)
-		FROM $OCC_MATRIX_WORK as m JOIN interval_map as ei on ei.interval_no = m.early_int_no
-			JOIN interval_map as li on li.interval_no = m.late_int_no
+		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
+			JOIN interval_map as ei on ei.interval_no = c.early_int_no
+			JOIN interval_map as li on li.interval_no = c.late_int_no
 		GROUP BY m.orig_no";
     
-    $result = $dbh->do($sql);
+    $count = $dbh->do($sql);
+
+    
+    logMessage(2, "      $count taxa");
     
     # Then index the symmary table by earliest and latest interval number, so
     # that we can quickly query for which taxa began or ended at a particular
@@ -4539,8 +4482,8 @@ sub computeOccurrenceMatrix {
     
     logMessage(2, "    indexing the summary table");
     
-    $result = $dbh->do("ALTER TABLE $OCC_SUMMARY_WORK ADD INDEX (first_early_int_no)");
-    $result = $dbh->do("ALTER TABLE $OCC_SUMMARY_WORK ADD INDEX (last_late_int_no)");
+    $result = $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (n_occs)");
+    $result = $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (n_colls)");
     
     # We now summarize the occurrence matrix by reference_no.  For each
     # reference, we record the range of time periods it covers, plus the
@@ -4548,12 +4491,21 @@ sub computeOccurrenceMatrix {
     
     logMessage(2, "    summarizing by reference_no");
     
+    $result = $dbh->do("DROP TABLE IF EXISTS $REF_SUMMARY_WORK");
+    $result = $dbh->do("CREATE TABLE $REF_SUMMARY_WORK (
+				reference_no int unsigned primary key,
+				n_occs int unsigned not null,
+				n_colls int unsigned not null,
+				early_int_seq int unsigned not null,
+				late_int_seq int unsigned not null) ENGINE=MyISAM");
+    
     $sql = "	INSERT INTO $REF_SUMMARY_WORK (reference_no, n_occs, n_colls,
-			early_int_no, late_int_no)
+			early_int_seq, late_int_seq)
 		SELECT m.reference_no, count(*), count(distinct collection_no),
 			min(ei.older_seq), min(li.younger_seq)
-		FROM $OCC_MATRIX_WORK as m JOIN interval_map as ei on ei.interval_no = m.early_int_no
-			JOIN interval_map as li on li.interval_no = m.late_int_no
+		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
+			JOIN interval_map as ei on ei.interval_no = c.early_int_no
+			JOIN interval_map as li on li.interval_no = c.late_int_no
 		GROUP BY m.reference_no";
     
     $result = $dbh->do($sql);
@@ -4568,38 +4520,38 @@ sub computeOccurrenceMatrix {
     
     # Now swap in the new tables:
     
-    logMessage(2, "activating tables '$OCC_MATRIX', '$OCC_SUMMARY', '$REF_SUMMARY'");
+    logMessage(2, "activating tables '$OCC_MATRIX', '$TAXON_SUMMARY', '$REF_SUMMARY'");
     
     # Compute the backup names of all the tables to be activated
     
     my $occ_matrix_bak = "${OCC_MATRIX}_bak";
-    my $occ_summary_bak = "${OCC_SUMMARY}_bak";
+    my $taxon_summary_bak = "${TAXON_SUMMARY}_bak";
     my $ref_summary_bak = "${REF_SUMMARY}_bak";
     
     # Delete any old tables that might have been left around.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $occ_matrix_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $occ_summary_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $taxon_summary_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $ref_summary_bak");
     
     # Do the swap.
     
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OCC_MATRIX LIKE $OCC_MATRIX_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OCC_SUMMARY LIKE $OCC_SUMMARY_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_SUMMARY LIKE $TAXON_SUMMARY_WORK");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $REF_SUMMARY LIKE $REF_SUMMARY_WORK");
     
     $result = $dbh->do("RENAME TABLE
 			    $OCC_MATRIX to $occ_matrix_bak,
 			    $OCC_MATRIX_WORK to $OCC_MATRIX,
-			    $OCC_SUMMARY to $occ_summary_bak,
-			    $OCC_SUMMARY_WORK to $OCC_SUMMARY,
+			    $TAXON_SUMMARY to $taxon_summary_bak,
+			    $TAXON_SUMMARY_WORK to $TAXON_SUMMARY,
 			    $REF_SUMMARY to $ref_summary_bak,
 			    $REF_SUMMARY_WORK to $REF_SUMMARY");
     
     # Delete the old tables.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $occ_matrix_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $occ_summary_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $taxon_summary_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $ref_summary_bak");
 }
 
