@@ -2520,7 +2520,7 @@ sub computeTreeSequence {
     
     while ( my ($child_no, $taxon_rank, $synonym_no, $parent_no) = $fetch_hierarchy->fetchrow_array() )
     {
-	my $immediate_parent = $child_no <> $synonym_no ? $synonym_no : $parent_no;
+	my $immediate_parent = $child_no != $synonym_no ? $synonym_no : $parent_no;
 	$nodes->{$child_no} = { parent_no => $immediate_parent, rank => $taxon_rank };
 	$count++;
     }
