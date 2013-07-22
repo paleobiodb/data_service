@@ -55,6 +55,7 @@ ruleset '1.1:taxon_specifier' =>
     [param => 'name', \&TaxonQuery::validNameSpec, { alias => 'taxon_name' }],
     [param => 'id', POS_VALUE, { alias => 'taxon_id' }],
     [at_most_one => 'name', 'id', 'taxon_id'],
+    [optional => 'rank', \&TaxonQuery::validRankSpec],
     [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact'),
       { default => 'current' } ];
 
@@ -304,6 +305,8 @@ sub querySingle {
     
     try {
 	
+	header "Access-Control-Allow-Origin" => "*";
+	
 	$DB::single = 1;
 	
 	# Create a new query object.
@@ -351,6 +354,8 @@ sub queryMultiple {
     my ($query, $result);
     
     try {
+	
+	header "Access-Control-Allow-Origin" => "*";
 	
 	$DB::single = 1;
 	

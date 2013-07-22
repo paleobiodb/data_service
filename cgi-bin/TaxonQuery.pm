@@ -14,30 +14,7 @@ use base 'DataQuery';
 use Taxonomy;
 
 
-# validNameSpec ( name )
-# 
-# Returns true if the given value is a valid taxonomic name specifier.  We
-# allow not only single names, but also lists of names and extra modifiers as
-# follows: 
-# 
-# valid_spec:	name_spec [ , name_spec ... ]
-# 
-# name_spec:	[ single_name : ] general_name [ < exclude_list > ]
-# 
-# single_name:	no spaces, but may include wildcards
-# 
-# general_name: may include up to four components, second component may
-#		include parentheses, may include wildcards
-# 
-# exclude_list:	general_name [ , general_name ]
-
-sub validNameSpec {
-    
-    my ($value, $context) = @_;
-    
-    return;	# for now
-    
-}
+our (%OUTPUT, %PROC);
 
 
 # fetchSingle ( taxon_requested )
@@ -53,13 +30,11 @@ sub fetchSingle {
 
     my ($self) = @_;
     
-    die "GOT TO THE QUERY!!!\n";
-    
     # We start with the taxonomy we are using, and with a hash which will
     # contain the parameters for selecting the desired result.
     
     my $dbh = $self->{dbh};
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = $self->{taxonomy};
     my $taxon_no;
     my $select = {};
     
@@ -68,21 +43,21 @@ sub fetchSingle {
     
     my $not_found_msg = "Taxon number $self->{base_taxon_no} was not found in the database";
     
-    if ( defined $self->{base_taxon_no} )
-    {
-	$taxon_no = $self->{base_taxon_no};
+    if ( $self->{params}{id} )
+    {    
+	my $taxon_no = $self->{params}{id};
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
     
-    else
+    elsif ( defined $self->{params}{name} )
     {
-	$not_found_msg = "Taxon '$self->{base_taxon_name}' was not found in the database";
+	$not_found_msg = "Taxon '$self->{params}{name}' was not found in the database";
 	my $name_select = { order => 'size.desc', spelling => 'exact' };
 	
-	if ( defined $self->{base_taxon_rank} )
+	if ( defined $self->{params}{rank} )
 	{
-	    $name_select->{rank} = $self->{base_taxon_rank};
+	    $name_select->{rank} = $self->{params}{rank};
 	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
 	}
 	
@@ -475,6 +450,32 @@ sub fetchMultiple {
     
     $self->{process_resultset} = 1 if defined $self->{leaf_taxon_no} 
 	or defined $self->{leaf_taxon_name};
+}
+
+
+# validNameSpec ( name )
+# 
+# Returns true if the given value is a valid taxonomic name specifier.  We
+# allow not only single names, but also lists of names and extra modifiers as
+# follows: 
+# 
+# valid_spec:	name_spec [ , name_spec ... ]
+# 
+# name_spec:	[ single_name : ] general_name [ < exclude_list > ]
+# 
+# single_name:	no spaces, but may include wildcards
+# 
+# general_name: may include up to four components, second component may
+#		include parentheses, may include wildcards
+# 
+# exclude_list:	general_name [ , general_name ]
+
+sub validNameSpec {
+    
+    my ($value, $context) = @_;
+    
+    return;	# for now
+    
 }
 
 
