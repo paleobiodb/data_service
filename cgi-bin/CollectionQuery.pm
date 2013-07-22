@@ -257,7 +257,6 @@ sub fetchMultiple {
     my $dbh = $self->{dbh};
     
     my $tables = {};
-    my $limit = '';
     my $calc = '';
     
     # Construct a list of filter expressions that must be added to the query
@@ -274,19 +273,13 @@ sub fetchMultiple {
     
    # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $tables);
+    my $join_list = $self->generateJoinList('c', $tables);
     
     # If a query limit has been specified, modify the query accordingly.
     
-    if ( defined $self->{params}{offset} )
-    {
-	$limit = "OFFSET " . $self->{params}{offset} . "\n";
-    }
+    my $limit = $self->generateLimitClause();
     
-    if ( defined $self->{params}{limit} and $self->{params}{limit} ne 'all' )
-    {
-	$limit = "LIMIT " . $self->{params}{limit} . "\n";
-    }
+    # If we were asked to count rows, modify the query accordingly
     
     if ( $self->{params}{count} )
     {
@@ -314,7 +307,7 @@ sub fetchMultiple {
     
     if ( $calc )
     {
-	($self->{result_count}) = $dbh->selectrow_array("FOUND_ROWS()");
+	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
     }
     
     # If we were directed to show references, grab any secondary references.
@@ -680,5 +673,27 @@ sub generateJoinList {
     return $join_list;
 }
 
+
+sub generateLimitClause {
+
+    my ($self) = @_;
+    
+    my $limit = $self->{params}{limit};
+    my $offset = $self->{params}{offset};
+    
+    if ( defined $offset and $offset > 0 )
+    {
+	$offset += 0;
+	$limit = $limit eq 'all' ? 10000000 : $limit + 0;
+	return "LIMIT $offset,$limit";
+    }
+    
+    elsif ( defined $limit and $limit ne 'all' )
+    {
+	return "LIMIT " . ($limit + 0);
+    }
+    
+    return '';
+}
 
 1;

@@ -306,6 +306,7 @@ sub generateCompoundResult {
     my $row;
     
     $self->{should_stream} ||= '';
+    $self->{row_count} = 0;
     
     # The first thing to do is to check if we have a statement handle.  If
     # not, the result set is empty and we need to return the relevant header
@@ -593,14 +594,17 @@ sub emitHeaderJSON {
 	$output .= '"class":' . $json->encode($self->{object_class}) . ",\n";
     }
     
-    # Check if we have been asked to report record counts, but only do this if
-    # we're not streaming.  If we are streaming, this will have to wait until
-    # the footer, when we will have determined how many records we actually have.
+    # Check if we have been asked to report the result count, and if it is
+    # available.
     
-    if ( defined $self->{report_count} and not $options{streamed} )
+    if ( defined $self->{params}{count} and defined $self->{result_count} )
     {
-	$output .= '"records_found":' . $json->encode($self->countRecords + 0) . ",\n";
-	$output .= '"records_returned":' . $json->encode($self->{row_count} + 0) . ",\n";
+	my $limit = $self->{params}{limit};
+	my $returned = $limit eq 'all' ? $self->{result_count} : 
+	    $limit < $self->{result_count} ? $limit : $self->{result_count};
+	
+	$output .= '"records_found":' . $json->encode($self->{result_count} + 0) . ",\n";
+	$output .= '"records_returned":' . $json->encode($returned + 0) . ",\n";
     }
     
     # The actual data will go into an array, in a field called "records".
