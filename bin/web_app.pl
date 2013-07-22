@@ -136,12 +136,32 @@ ruleset '1.1:colls/list' =>
     [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
+ruleset '1.1:summary_selector' =>
+    [param => 'id', INT_LIST_PERMISSIVE(1), { alias => 'coll_id' }],
+    [param => 'bin_id', INT_LIST_PERMISSIVE(1)],
+    [param => 'taxon_name', \&TaxonQuery::validNameSpec],
+    [param => 'taxon_id', INT_LIST_PERMISSIVE(1)],
+    [param => 'base_name', \&TaxonQuery::validNameSpec],
+    [param => 'base_id', INT_LIST_PERMISSIVE(1)],
+    [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
+    [param => 'lngmin', REAL_VALUE],
+    [param => 'lngmax', REAL_VALUE],
+    [param => 'latmin', REAL_VALUE],
+    [param => 'latmax', REAL_VALUE],
+    [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
+	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
+    [param => 'loc', STRING_VALUE],		# This should be a geometry in WKT format
+    [param => 'min_ma', REAL_VALUE(0)],
+    [param => 'max_ma', REAL_VALUE(0)],
+    [param => 'interval', STRING_VALUE],
+    [optional => 'time_strict', FLAG_VALUE];
+
 ruleset '1.1:summary_display' => 
     [param => 'level', INT_VALUE(1,2), { default => 1 }],
     [param => 'show', LIST_VALUE('ext', 'all')];
 
 ruleset '1.1:colls/summary' => 
-    [require => '1.1:coll_selector'],
+    [allow => '1.1:summary_selector'],
     [allow => '1.1:summary_display'],
     [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];

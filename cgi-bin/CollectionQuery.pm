@@ -299,7 +299,10 @@ sub fetchMultiple {
     
     my @filters = $self->generateQueryFilters($dbh, $tables);
     
-    croak "No filters were specified for fetchMultiple" unless @filters;
+    croak "No filters were specified for fetchMultiple"
+	unless @filters || $self->{op} eq 'summary';
+    
+    push @filters, "1=1" unless @filters;
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -756,9 +759,9 @@ sub generateJoinList {
     # Create the necessary join expressions.
     
     $join_list .= "JOIN coll_matrix as c using (bin_id)\n"
-	if $tables->{c} == 2;
+	if defined $tables->{c} && $tables->{c} == 2;
     $join_list .= "JOIN coll_matrix as c using (clust_id)\n"
-	if $tables->{c} == 1;
+	if defined $tables->{c} && $tables->{c} == 1;
     $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
 	if $tables->{o};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
