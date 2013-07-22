@@ -1016,7 +1016,7 @@ sub getTaxaByName {
 	# alphabetic characters, wildcards and single spaces and prepare to
 	# search on common_name.
 	
-	if ( $options->{common} eq 'only' )
+	if ( defined $options->{common} && $options->{common} eq 'only' )
 	{
 	    $tn =~ tr{a-zA-Z%_. }{}cd;
 	    $tn =~ s/\./%/g;
@@ -1075,7 +1075,7 @@ sub getTaxaByName {
     # Now we go through these categories and construct a filter expression.
     
     my (@name_filters, %exact_names, @exact_genera);
-    my $name_field = $options->{common} eq 'only' ? 'common_name' : 'taxon_name';
+    my $name_field = defined $options->{common} && $options->{common} eq 'only' ? 'common_name' : 'taxon_name';
     
     # First, the exact names.  Any that contain wildcards need a separate
     # 'like', otherwise we can just use 'in'.  But we ignore completely any

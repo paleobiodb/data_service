@@ -1,5 +1,5 @@
 #
-# PBCollectionQuery
+# CollectionQuery
 # 
 # A class that returns information from the PaleoDB database about a single
 # collection or a category of collections.  This is a subclass of PBDataQuery.
@@ -16,11 +16,11 @@ use Carp qw(carp croak);
 
 our (%OUTPUT, %PROC);
 
-our ($SINGLE_FIELDS) = "c.collection_no, c.collection_name, c.collection_subset, c.collection_aka, c.lat, c.lng, c.reference_no";
+our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, c.reference_no";
 
-our ($MULT_FIELDS) = "c.collection_no, c.collection_name, c.collection_subset, c.lat, c.lng, c.reference_no";
+our ($MULT_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, c.reference_no";
 
-$OUTPUT{single} = 
+$OUTPUT{single} = $OUTPUT{list} = 
    [
     { rec => 'collection_no', dwc => 'collectionID', com => 'cid',
 	doc => "A positive integer that uniquely identifies the collection"},
@@ -60,7 +60,7 @@ our ($SHORTREF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.au
 
 $OUTPUT{sref} = 
    [
-    { rec => 'pubyr', com => 'pby',
+    { rec => 'r_pubyr', com => 'pby',
 	doc => "The year of publication of the primary reference associated with this collection" },
     { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => '; ',
 	doc => "The reference(s) associated with this collection (pubyr and authors only)" },
@@ -96,6 +96,25 @@ $OUTPUT{loc} =
 	doc => "The county in which this collection is located [not available for all collections]" },
     { rec => 'latlng_precision', com => 'gpr',
 	doc => "The precision of the collection location (degrees/minutes/seconds/#digits)" },
+   ];
+
+$OUTPUT{taxa} = 
+   [
+    { rec => 'taxa', com => 'tax',
+      doc => "A list of records describing the taxa that have been identified as appearing in this collection",
+      rule => [{ rec => 'taxon_name', com => 'tna',
+		 doc => "The scientific name of the taxon" },
+	       { rec => 'taxon_rank', com => 'trn',
+		 doc => "The taxonomic rank" },
+	       { rec => 'taxon_no', com => 'tid',
+		 doc => "A positive integer that uniquely identifies the taxon" },
+	       { rec => 'ident_name', com => 'ina', dedup => 'taxon_name',
+		 doc => "The name under which the occurrence was actually identified" },
+	       { rec => 'ident_rank', com => 'irn', dedup => 'taxon_rank',
+		 doc => "The taxonomic rank as actually identified" },
+	       { rec => 'ident_no', com => 'iid', dedup => 'taxon_no',
+		 doc => "A positive integer that uniquely identifies the name as identified" }]
+    }
    ];
 
 $OUTPUT{rem} = 
@@ -161,7 +180,9 @@ sub fetchSingle {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my ($extra_fields, $tables) = $self->generateQueryFields($self->{show_order});
+    my $tables = {};
+    
+    my $extra_fields = $self->generateQueryFields($self->{show_order}, $tables);
     
     # Determine the necessary joins.
     
@@ -171,7 +192,7 @@ sub fetchSingle {
     
     $self->{main_sql} = "
 	SELECT $SINGLE_FIELDS $extra_fields
-	FROM collections c
+	FROM coll_matrix as c JOIN collections as cc using (collection_no)
 		$join_list
         WHERE c.collection_no = $id";
     
@@ -206,9 +227,11 @@ sub fetchSingle {
 	my $tree_table = $self->{taxonomy}{tree_table};
 	
 	$self->{aux_sql}[1] = "
-	SELECT DISTINCT a.taxon_no, a.taxon_name, a.taxon_rank, a.orig_no, t.name, t.rank, t.spelling_no
-	FROM occurrences as o JOIN $auth_table as a USING (taxon_no)
-		LEFT JOIN $tree_table as t using (orig_no)
+	SELECT DISTINCT t.spelling_no as taxon_no, t.name as taxon_name, rm.rank as taxon_rank, 
+		a.taxon_no as ident_no, a.taxon_name as ident_name, a.taxon_rank as ident_rank
+	FROM occ_matrix as o JOIN $auth_table as a USING (taxon_no)
+		LEFT JOIN $tree_table as t on t.orig_no = o.orig_no
+		LEFT JOIN rank_map as rm on rm.rank_no = t.rank
 	WHERE o.collection_no = $id ORDER BY t.lft ASC";
 	
 	$self->{main_record}{taxa} = $dbh->selectall_arrayref($self->{aux_sql}[1], { Slice => {} });
@@ -228,151 +251,108 @@ sub fetchSingle {
 sub fetchMultiple {
 
     my ($self) = @_;
-    my ($sql);
-    my (@filters, @extra_tables, @extra_fields);
-    my ($limit_stmt) = "";
-    my ($taxon_tables) = "";
     
-    # Get ahold of a database handle by which we can make queries.
+    # Get a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
     
-    # If a query limit has been specified, construct the appropriate SQL string.
+    my $tables = {};
+    my $limit = '';
+    my $calc = '';
     
-    if ( defined $self->{limit} && $self->{limit} > 0 )
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters = $self->generateQueryFilters($dbh, $tables);
+    
+    croak "No filters were specified for fetchMultiple" unless @filters;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $extra_fields = $self->generateQueryFields($self->{show_order}, $tables);
+    
+   # Determine the necessary joins.
+    
+    my ($join_list) = $self->generateJoinList('c', $tables);
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    if ( defined $self->{params}{offset} )
     {
-	$limit_stmt = "LIMIT " . $self->{limit};
+	$limit = "OFFSET " . $self->{params}{offset} . "\n";
     }
     
-    # If we are directed to show publication references, add the appopriate fields.
-    
-    if ( defined $self->{show_ref} )
+    if ( defined $self->{params}{limit} and $self->{params}{limit} ne 'all' )
     {
-	push @extra_fields, "r.author1init r_ai1", "r.author1last r_al1",
-	    "r.author2init r_ai2", "r.author2last r_al2", "r.otherauthors r_oa",
-		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
-		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
-			"r.firstpage r_fp", "r.lastpage r_lp";
+	$limit = "LIMIT " . $self->{params}{limit} . "\n";
     }
     
-    # If a taxon filter has been defined, apply it now.
-    
-    if ( defined $self->{taxon_filter} )
+    if ( $self->{params}{count} )
     {
-	my @specs = split /,/, $self->{taxon_filter};
-	my ($sql, @taxa);
-	
-	my $taxa_name_query = $dbh->prepare(
-		"SELECT DISTINCT t3.synonym_no
-		 FROM authorities join taxa_tree_cache t1 using (taxon_no)
-			join taxa_tree_cache t2 on t2.taxon_no = t1.synonym_no
-			join taxa_tree_cache t3 on t3.taxon_no = t2.synonym_no
-		 WHERE taxon_name = ?");
-	
-	my $taxa_rank_query = $dbh->prepare(
-		"SELECT DISTINCT t3.synonym_no
-		 FROM authorities join taxa_tree_cache t1 using (taxon_no)
-			join taxa_tree_cache t2 on t2.taxon_no = t1.synonym_no
-			join taxa_tree_cache t3 on t3.taxon_no = t2.synonym_no
-		 WHERE taxon_name = ? AND taxon_rank = ?");
-	
-	foreach my $spec (@specs)
-	{
-	    my $result;
-	    
-	    if ( $spec =~ /^(\w+)\.(\w+)/ )
-	    {
-		$result = $taxa_rank_query->execute($1, $2);
-		push @taxa, $taxa_rank_query->fetchrow_array();
-	    }
-	    else
-	    {
-		$result = $taxa_name_query->execute($spec);
-		push @taxa, $taxa_name_query->fetchrow_array();
-	    }
-	}
-	
-	# If no taxa were found, then the result set will be empty.
-	
-	unless (@taxa)
-	{
-	    return;
-	}
-	
-	# Otherwise, construct the appropriate filter clause.
-	
-	$taxon_tables = "JOIN taxa_list_cache l ON l.child_no = o.taxon_no";
-	my $taxa_list = join(',', @taxa);
-	push @filters, "l.parent_no in ($taxa_list)";
+	$calc = 'SQL_CALC_FOUND_ROWS';
     }
     
-    # If a location filter has been defined, apply it now
+    # Generate the main query.
     
-    if ( defined $self->{location_filter} )
-    {
-	my ($bound_rect) =
-	    $dbh->selectrow_array("SELECT astext(envelope(geomfromtext('$self->{location_filter}')))");
-	
-	unless ( defined $bound_rect )
-	{
-	    die "400 Bad bounding box value '$self->{location_filter}'.\n";
-	}
-	
-	if ( $bound_rect =~ /POLYGON\(\((-?\d*\.?\d*) (-?\d*\.?\d*),[^,]+,(-?\d*\.?\d*) (-?\d*\.?\d*)/ )
-	{
-	    push @filters, "c.lng >= $1";
-	    push @filters, "c.lat >= $2";
-	    push @filters, "c.lng <= $3";
-	    push @filters, "c.lat <= $4";
-	}
-    }
-    
-    # Now construct the filter expression and extra_tables expression
-    
-    my $taxon_filter = join(' AND ', @filters);
-    $taxon_filter = "WHERE $taxon_filter" if $taxon_filter ne '';
-    
-    my $extra_tables = join('', @extra_tables);
-    
-    # and the extra_fields expression
-    
-    my $extra_fields = join(', ', @extra_fields);
-    $extra_fields = ", " . $extra_fields if $extra_fields ne '';
-    
-    # Now construct and execute the SQL statement that will be used to fetch
-    # the desired information from the database.
+    my $filter_list = join(' and ', @filters);
     
     $self->{main_sql} = "
-	SELECT DISTINCT c.collection_no, c.collection_name, c.lat, c.lng $extra_fields
-        FROM collections c JOIN occurrences o using (collection_no) $taxon_tables
-			LEFT JOIN refs r on r.reference_no = c.reference_no
-	$taxon_filter ORDER BY c.collection_no $limit_stmt";
-    
-    # Also construct an SQL statement that will be used if necessary to
-    # determine the result count.
-    
-    $self->{count_sql} = "
-	SELECT count(*) FROM collections c JOIN occurrences o using (collection_no)
-	$taxon_filter";
+	SELECT $calc $MULT_FIELDS $extra_fields
+	FROM coll_matrix as c join collections as cc using (collection_no)
+		$join_list
+        WHERE $filter_list
+	GROUP BY c.collection_no
+	$limit";
     
     # Then prepare and execute the main query and the secondary query.
     
     $self->{main_sth} = $dbh->prepare($self->{main_sql});
     $self->{main_sth}->execute();
     
+    # If we were asked to get the count, then do so
+    
+    if ( $calc )
+    {
+	($self->{result_count}) = $dbh->selectrow_array("FOUND_ROWS()");
+    }
+    
+    # If we were directed to show references, grab any secondary references.
+    
+    if ( $self->{show}{ref} or $self->{show}{sref} )
+    {
+	my (@fields) = 'sref' if $self->{show}{sref};
+	@fields = 'ref' if $self->{show}{ref};
+	
+	($extra_fields) = $self->generateQueryFields(\@fields);
+	
+	$self->{aux_sql}[0] = "
+	SELECT s.reference_no $extra_fields
+	FROM secondary_refs as s JOIN refs as r using (reference_no)
+	WHERE s.collection_no = ?";
+	
+	$self->{aux_sth}[0] = $dbh->prepare($self->{aux_sql}[0]);
+	$self->{aux_sth}[0]->execute();
+    }
+    
     # If we were directed to show associated taxa, construct an SQL statement
     # that will be used to grab that list.
     
-    if ( $self->{show_taxa} )
+    if ( $self->{show}{taxa} )
     {
-	$self->{second_sql} = "
-	SELECT DISTINCT c.collection_no, a.taxon_name
-	FROM collections c JOIN occurrences o using (collection_no) $taxon_tables
-			JOIN authorities a using (taxon_no)
-	$taxon_filter ORDER BY c.collection_no";
+	my $auth_table = $self->{taxonomy}{auth_table};
+	my $tree_table = $self->{taxonomy}{tree_table};
 	
-	$self->{second_sth} = $dbh->prepare($self->{second_sql});
-	$self->{second_sth}->execute();
+	$self->{aux_sql}[1] = "
+	SELECT DISTINCT t.spelling_no as taxon_no, t.name as taxon_name, rm.rank as taxon_rank, 
+		a.taxon_no as ident_no, a.taxon_name as ident_name, a.taxon_rank as ident_rank
+	FROM occ_matrix as o JOIN $auth_table as a USING (taxon_no)
+		LEFT JOIN $tree_table as t on t.orig_no = o.orig_no
+		LEFT JOIN rank_map as rm on rm.rank_no = t.rank
+	WHERE o.collection_no = ? ORDER BY t.lft ASC";
+		
+	$self->{aux_sth}[1] = $dbh->prepare($self->{aux_sql}[1]);
+	$self->{aux_sth}[1]->execute();
     }
     
     return 1;
@@ -432,138 +412,51 @@ sub fetchMultiple {
 # }
 
 
-# generateRecord ( row, options )
-# 
-# This method is passed two parameters: a hash of values representing one
-# record, and an indication of whether this is the first record to be output.
-# (which is ignored in this case).  It returns a string representing the
-# record in Darwin Core XML format.
-
-# sub generateRecord {
-
-#     my ($self, $row, %options) = @_;
-    
-#     # Output according to the proper content type.
-    
-#     if ( $self->{output_format} eq 'xml' )
-#     {
-# 	return $self->emitCollectionXML($row);
-#     }
-    
-#     elsif ( $self->{output_format} eq 'json' )
-#     {
-# 	return ($options{is_first} ? "\n" : "\n,") . $self->emitCollectionJSON($row);
-#     }
-    
-#     elsif ( $self->{output_format} eq 'txt' or $self->{output_format} eq 'csv' )
-#     {
-# 	return $self->emitCollectionText($row);
-#     }
-# }
-
-
 # emitCollectionXML ( row, short_record )
 # 
 # Returns a string representing the given record (row) in Darwin Core XML
 # format.  If 'short_record' is true, suppress certain fields.
 
-sub emitCollectionXML {
+# sub emitCollectionXML {
     
-    no warnings;
+#     no warnings;
     
-    my ($self, $row) = @_;
-    my $output = '';
-    my @remarks = ();
+#     my ($self, $row) = @_;
+#     my $output = '';
+#     my @remarks = ();
     
-    $output .= '  <Collection>' . "\n";
-    $output .= '    <dwc:collectionID>' . $row->{collection_no} . '</dwc:collectionID>' . "\n";
+#     $output .= '  <Collection>' . "\n";
+#     $output .= '    <dwc:collectionID>' . $row->{collection_no} . '</dwc:collectionID>' . "\n";
     
-    $output .= '    <dwc:collectionCode>' . DataQuery::xml_clean($row->{collection_name}) . 
-	'</dwc:collectionCode>' . "\n";
+#     $output .= '    <dwc:collectionCode>' . DataQuery::xml_clean($row->{collection_name}) . 
+# 	'</dwc:collectionCode>' . "\n";
     
-    if ( defined $row->{lat} )
-    {
-	$output .= '    <dwc:decimalLongitude>' . $row->{lng} . '</dwc:decimalLongitude>' . "\n";
-	$output .= '    <dwc:decimalLatitude>' . $row->{lat} . '</dwc:decimalLatitude>' . "\n";
-    }
+#     if ( defined $row->{lat} )
+#     {
+# 	$output .= '    <dwc:decimalLongitude>' . $row->{lng} . '</dwc:decimalLongitude>' . "\n";
+# 	$output .= '    <dwc:decimalLatitude>' . $row->{lat} . '</dwc:decimalLatitude>' . "\n";
+#     }
     
-    if ( ref $row->{taxa} eq 'ARRAY' and @{$row->{taxa}} )
-    {
-	$output .= '    <dwc:associatedTaxa>';
-	$output .= DataQuery::xml_clean(join(', ', map { $_->{taxon_name} } @{$row->{taxa}}));
-	$output .= '</dwc:associatedTaxa>' . "\n";
-    }
+#     if ( ref $row->{taxa} eq 'ARRAY' and @{$row->{taxa}} )
+#     {
+# 	$output .= '    <dwc:associatedTaxa>';
+# 	$output .= DataQuery::xml_clean(join(', ', map { $_->{taxon_name} } @{$row->{taxa}}));
+# 	$output .= '</dwc:associatedTaxa>' . "\n";
+#     }
     
-    if ( defined $row->{pubref} )
-    {
-	my $pubref = DataQuery::xml_clean($row->{pubref});
-	$output .= '    <dwc:associatedReferences>' . $pubref . '</dwc:associatedReferences>' . "\n";
-    }
+#     if ( defined $row->{pubref} )
+#     {
+# 	my $pubref = DataQuery::xml_clean($row->{pubref});
+# 	$output .= '    <dwc:associatedReferences>' . $pubref . '</dwc:associatedReferences>' . "\n";
+#     }
     
-    if ( @remarks ) {
-	$output .= '    <collectionRemarks>' . DataQuery::xml_clean(join('; ', @remarks)) . 
-	    '</collectionRemarks>' . "\n";
-    }
+#     if ( @remarks ) {
+# 	$output .= '    <collectionRemarks>' . DataQuery::xml_clean(join('; ', @remarks)) . 
+# 	    '</collectionRemarks>' . "\n";
+#     }
     
-    $output .= '  </Collection>' . "\n";
-}
-
-
-# emitCollectionJSON ( row, options )
-# 
-# Return a string representing the given taxon record (row) in JSON format.
-# If 'parents' is specified, it should be an array of hashes each representing
-# a parent taxon record.  If 'is_first_record' is true, then the result will
-# not start with a comma.  If 'short_record' is true, then some fields will be
-# suppressed.
-
-sub emitCollectionJSON {
-    
-    no warnings;
-    
-    my ($self, $row) = @_;
-    
-    my $output = '';
-    
-    $output .= '{"collectionID":"' . DataQuery::json_clean($row->{collection_no}) . '"'; 
-    $output .= ',"collectionCode":"' . DataQuery::json_clean($row->{collection_name}) . '"';
-    
-    if ( defined $row->{lat} )
-    {
-	$output .= ',"decimalLongitude":"' . $row->{lng} . '"';
-	$output .= ',"decimalLatitude":"' . $row->{lat} . '"';
-    }
-    
-    if ( ref $row->{taxa} eq 'ARRAY' and @{$row->{taxa}} )
-    {
-	$output .= ',"associatedTaxa":["';
-	$output .= DataQuery::xml_clean(join('","', @{$row->{taxa}}));
-	$output .= '"]';
-    }
-    
-    if ( defined $row->{pubref} )
-    {
-	my $pubref = DataQuery::json_clean($row->{pubref});
-	$output .= ',"associatedReferences":"' . $pubref . '"';
-    }
-    
-    # if ( defined $parents && ref $parents eq 'ARRAY' )
-    # {
-    # 	my $is_first_parent = 1;
-    # 	$output .= ',"ancestors":[';
-	
-    # 	foreach my $parent_row ( @{$self->{parents}} )
-    # 	{
-    # 	    $output .= $self->emitTaxonJSON($parent_row, undef, $is_first_parent);
-    # 	    $is_first_parent = 0;
-    # 	}
-	
-    # 	$output .= ']';
-    # }
-    
-    $output .= "}";
-    return $output;
-}
+#     $output .= '  </Collection>' . "\n";
+# }
 
 
 # generateQueryFields ( fields )
@@ -576,34 +469,33 @@ sub emitCollectionJSON {
 
 sub generateQueryFields {
 
-    my ($self, $fields_ref) = @_;
+    my ($self, $fields_ref, $tables_ref) = @_;
     
     # Return the default if our parameter is undefined.
     
     unless ( ref $fields_ref eq 'ARRAY' )
     {
-	return '', {};
+	return '';
     }
     
     # Now go through the list of strings and add the appropriate fields and
     # tables for each.
     
     my $fields = '';
-    my %tables;
     
     foreach my $inc (@$fields_ref)
     {
 	if ( $inc eq 'ref' )
 	{
 	    $fields .= $REF_FIELDS;
-	    $tables{ref} = 1;
+	    $tables_ref->{ref} = 1;
 	}
 	
 	elsif ( $inc eq 'pers' )
 	{
 	    $fields .= $PERS_FIELDS;
-	    $tables{ppa} = 1;
-	    $tables{ppe} = 1;
+	    $tables_ref->{ppa} = 1;
+	    $tables_ref->{ppe} = 1;
 	}
 	
 	elsif ( $inc eq 'loc' )
@@ -614,7 +506,7 @@ sub generateQueryFields {
 	elsif ( $inc eq 'time' )
 	{
 	    $fields .= $TIME_FIELDS;
-	    $tables{int} = 1;
+	    $tables_ref->{int} = 1;
 	}
 	
 	elsif ( $inc eq 'taxa' )
@@ -638,7 +530,115 @@ sub generateQueryFields {
 	}
     }
     
-    return ($fields, \%tables);
+    return $fields;
+}
+
+
+# generateQueryFilters ( tables )
+# 
+# Generate a list of filter clauses that will be used to generate the
+# appropriate result set.
+
+sub generateQueryFilters {
+
+    my ($self, $dbh, $tables_ref) = @_;
+    
+    my @filters;
+    
+    # Check for parameter 'id'
+    
+    if ( ref $self->{params}{id} eq 'ARRAY' and
+	 @{$self->{params}{id}} )
+    {
+	my $id_list = join(',', @{$self->{params}{id}});
+	push @filters, "c.collection_no in ($id_list)";
+    }
+    
+    # Check for parameter 'bin_id'
+    
+    
+    
+    # Check for parameters 'taxon_name', 'base_name', 'taxon_id', 'base_id'
+    
+    my $taxon_name = $self->{params}{taxon_name} || $self->{params}{base_name};
+    my $taxon_no = $self->{params}{taxon_id} || $self->{params}{base_id};
+    my @taxa;
+    
+    # First get the relevant taxon records
+    
+    if ( $taxon_name )
+    {
+	(@taxa) = $self->{taxonomy}->getTaxaByName($taxon_name, { fields => 'lft' });
+    }
+    
+    elsif ( $taxon_no )
+    {
+	(@taxa) = $self->{taxonomy}->getRelatedTaxa('self', $taxon_no, { fields => 'lft' });
+    }
+    
+    # Then construct the necessary filters
+    
+    if ( @taxa and ($self->{params}{base_name} or $self->{params}{base_id}) )
+    {
+	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @taxa;
+	push @filters, "($taxon_filters)";
+	$tables_ref->{t} = 1;
+    }
+    
+    elsif ( @taxa )
+    {
+	my $taxon_list = join ',', map { $_->{orig_no} } @taxa;
+	push @filters, "o.orig_no in ($taxon_list)";
+	$tables_ref->{o} = 1;
+    }
+    
+    # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax'
+    
+    if ( $self->{params}{lngmin} )
+    {
+	my $x1 = $self->{params}{lngmin};
+	my $x2 = $self->{params}{lngmax};
+	my $y1 = $self->{params}{latmin};
+	my $y2 = $self->{params}{latmax};
+	my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
+	push @filters, "mbrwithin(loc, geomfromtext($polygon))";
+    }
+    
+    if ( $self->{params}{loc} )
+    {
+	push @filters, "st_within(loc, geomfromtext($self->{params}{loc})";
+    }
+    
+    # Check for parameters 'min_ma', 'max_ma', 'interval'
+    
+    my $min_age = $self->{params}{min_ma};
+    my $max_age = $self->{params}{max_ma};
+    
+    if ( $self->{params}{interval} )
+    {
+	my $quoted_name = $dbh->quote($self->{params}{interval});
+	
+	my $sql = "SELECT base_age, top_age FROM interval_map
+		   WHERE interval_name like $quoted_name";
+	
+	($max_age, $min_age) = $dbh->selectrow_array($sql);
+    }
+    
+    if ( defined $min_age and $min_age > 0 )
+    {
+	my $min_filt = $self->{params}{time_strict} ? "c.late_age" : "c.early_age";
+	push @filters, "$min_filt > $min_age";
+    }
+    
+    if ( defined $max_age and $max_age > 0 )
+    {
+	my $max_filt = $self->{params}{time_strict} ? "c.early_age" : "c.late_age";
+	push @filters, "$max_filt < $max_age";
+    }
+    
+    # Return the list
+    
+    return @filters;
 }
 
 
@@ -656,8 +656,16 @@ sub generateJoinList {
     
     return $join_list unless ref $tables eq 'HASH' and %$tables;
     
+    # Some tables imply others.
+    
+    $tables->{o} = 1 if $tables->{t};
+    
     # Create the necessary join expressions.
     
+    $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
+	if $tables->{o};
+    $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
+	if $tables->{t};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = $mt.reference_no\n" 
 	if $tables->{ref};
     $join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.max_interval_no

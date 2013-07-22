@@ -33,7 +33,9 @@ use Taxonomy;
 
 sub validNameSpec {
     
-    return 1;	# for now
+    my ($value, $context) = @_;
+    
+    return;	# for now
     
 }
 

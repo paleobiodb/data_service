@@ -2513,14 +2513,15 @@ sub computeTreeSequence {
     # that we can do the sequence computation in Perl (because SQL is just not
     # a powerful enough language to do this efficiently).
     
-    my $fetch_hierarchy = $dbh->prepare("SELECT orig_no, rank, parent_no
+    my $fetch_hierarchy = $dbh->prepare("SELECT orig_no, rank, synonym_no, parent_no
 					   FROM $TREE_WORK");
     
     $fetch_hierarchy->execute();
     
-    while ( my ($child_no, $taxon_rank, $parent_no) = $fetch_hierarchy->fetchrow_array() )
+    while ( my ($child_no, $taxon_rank, $synonym_no, $parent_no) = $fetch_hierarchy->fetchrow_array() )
     {
-	$nodes->{$child_no} = { parent_no => $parent_no, rank => $taxon_rank };
+	my $immediate_parent = $child_no <> $synonym_no ? $synonym_no : $parent_no;
+	$nodes->{$child_no} = { parent_no => $immediate_parent, rank => $taxon_rank };
 	$count++;
     }
     
@@ -4024,10 +4025,10 @@ sub computeCollectionTables {
     
     $dbh->do("CREATE TABLE $COLL_MATRIX_WORK (
 		collection_no int unsigned primary key,
-		bin_lng smallint not null,
-		bin_lat smallint not null,
-		clust_lng smallint,
-		clust_lat smallint,
+		bin_lng smallint unsigned not null,
+		bin_lat smallint unsigned not null,
+		bin_id int unsigned,
+		clust_id int unsigned,
 		lng float,
 		lat float,
 		loc point not null,
@@ -4047,8 +4048,8 @@ sub computeCollectionTables {
 			early_int_no, late_int_no, early_age, late_age, 
 			reference_no, access_level)
 		SELECT c.collection_no, 
-			floor((c.lng+180.0)/$FINE_BIN_SIZE),
-			floor((c.lat+90.0)/$FINE_BIN_SIZE),
+			if(c.lng between -180.0 and 180.0, floor((c.lng+180.0)/$FINE_BIN_SIZE), null) as bin_lng,
+			if(c.lat between -90.0 and 90.0, floor((c.lat+90.0)/$FINE_BIN_SIZE), null) as bin_lat,
 			c.lng, c.lat, point(c.lng, c.lat), map.cc,
 			imax.interval_no, imin.interval_no,
 			imax.base_age, imin.top_age, c.reference_no,
@@ -4063,7 +4064,7 @@ sub computeCollectionTables {
 			JOIN $INTERVAL_MAP as imin on imin.interval_no = 
 				if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
 			LEFT JOIN country_map as map on map.name = c.country";
-
+    
     my $count = $dbh->do($sql);
     
     logMessage(2, "      $count collections");
@@ -4080,9 +4081,10 @@ sub computeCollectionTables {
     # Now that the table is full, we can add the necessary indices much more
     # efficiently than if we had defined them at the start.
     
-    logMessage(2, "    indexing by reference_no");
+    logMessage(2, "    indexing by bin identifier");
     
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (reference_no)");
+    $result = $dbh->do("UPDATE $COLL_MATRIX_WORK SET bin_id = 200000000 + bin_lng * 10000 + bin_lat");
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (bin_id)");
     
     logMessage(2, "    indexing by geographic coordinates (spatial)");
     
@@ -4095,6 +4097,10 @@ sub computeCollectionTables {
     logMessage(2, "    indexing by country");
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (cc)");
+    
+    logMessage(2, "    indexing by reference_no");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (reference_no)");
     
     logMessage(2, "    indexing by chronological interval");
     
@@ -4120,10 +4126,10 @@ sub computeCollectionTables {
     $dbh->do("DROP TABLE IF EXISTS $COLL_BINS_WORK");
     
     $dbh->do("CREATE TABLE $COLL_BINS_WORK (
-		bin_lng smallint not null,
-		bin_lat smallint not null,
-		clust_lng smallint,
-		clust_lat smallint,
+		bin_lng smallint unsigned not null,
+		bin_lat smallint unsigned not null,
+		bin_id int unsigned primary key,
+		clust_id int unsigned,
 		n_colls int unsigned,
 		n_occs int unsigned,
 		lng float,
@@ -4139,10 +4145,10 @@ sub computeCollectionTables {
     my ($sql, $result);
     
     $sql = "	INSERT IGNORE INTO $COLL_BINS_WORK
-			(bin_lng, bin_lat, n_colls, n_occs, lng, lat, 
+			(bin_lng, bin_lat, bin_id, n_colls, n_occs, lng, lat, 
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
-		SELECT bin_lng, bin_lat, count(*), sum(n_occs), avg(lng), avg(lat),
+		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs), avg(lng), avg(lat),
 		       min(lng) as lng_min, max(lng) as lng_max,
 		       min(lat) as lat_min, max(lat) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
@@ -4159,8 +4165,9 @@ sub computeCollectionTables {
     $dbh->do("DROP TABLE IF EXISTS $COLL_CLUST_WORK");
     
     $dbh->do("CREATE TABLE $COLL_CLUST_WORK (
-		clust_lng smallint,
-		clust_lat smallint,
+		clust_lng smallint unsigned not null,
+		clust_lat smallint unsigned not null,
+		clust_id int unsigned not null,
 		n_colls int unsigned,
 		n_occs int unsigned,
 		lng float,
@@ -4178,11 +4185,8 @@ sub computeCollectionTables {
     $dbh->do("DROP TABLE IF EXISTS $CLUST_AUX");
     
     $dbh->do("CREATE TABLE $CLUST_AUX (
-		bin_lng smallint,
-		bin_lat smallint,
-		clust_lng smallint,
-		clust_lat smallint,
-		unique key (bin_lng, bin_lat))");
+		bin_id int unsigned primary key,
+		clust_id int unsigned not null)");
     
     # We must now seed the k-means algorithm by choosing an initial set of
     # collections.  This set will determine the number of clusters in the
@@ -4214,6 +4218,8 @@ sub computeCollectionTables {
     
     logMessage(2, "    seeded the cluster table with $result data points (bins)");
     
+    $result = $dbh->do("UPDATE $COLL_CLUST_WORK SET clust_id = 1000000 + clust_lng * 1000 + clust_lat");
+    
     # Now we make initial assignments of bins to clusters, by assigning each
     # bin to the cluster whose centroid is closest to it (which may be on the
     # other side of a coarse-bin boundary).  We use the $CLUST_AUX table along
@@ -4224,18 +4230,18 @@ sub computeCollectionTables {
     logMessage(2, "    assigning bins to clusters...");
     
     $sql = "	INSERT IGNORE INTO $CLUST_AUX
-		SELECT c.bin_lng, c.bin_lat, k.clust_lng, k.clust_lat
-		FROM $COLL_BINS_WORK as c JOIN $COLL_CLUST_WORK as k
-			on k.clust_lng between floor((c.lng+180.0)/$COARSE_BIN_SIZE)-1
-				and floor((c.lng+180.0)/$COARSE_BIN_SIZE)+1
-			and k.clust_lat between floor((c.lat+90.0)/$COARSE_BIN_SIZE)-1
-				and floor((c.lat+90.0)/$COARSE_BIN_SIZE)+1
-		ORDER BY POW(k.lat-c.lat,2)+POW(k.lng-c.lng,2) ASC";
+		SELECT b.bin_id, k.clust_id
+		FROM $COLL_BINS_WORK as b JOIN $COLL_CLUST_WORK as k
+			on k.clust_lng between floor(bin_lng * $bin_ratio)-1
+				and floor(bin_lng * $bin_ratio)+1
+			and k.clust_lat between floor(bin_lat * $bin_ratio)-1
+				and floor(bin_lat * $bin_ratio)+1
+		ORDER BY POW(k.lat-b.lat,2)+POW(k.lng-b.lng,2) ASC";
     
     $dbh->do($sql);
     
-    $sql = "    UPDATE $COLL_BINS_WORK as cb JOIN $CLUST_AUX as k using (bin_lng, bin_lat)
-		SET cb.clust_lng = k.clust_lng, cb.clust_lat = k.clust_lat";
+    $sql = "    UPDATE $COLL_BINS_WORK as cb JOIN $CLUST_AUX as k using (bin_id)
+		SET cb.clust_id = k.clust_id";
     
     # $sql = "	UPDATE $COLL_BINS_WORK as c SET c.clust_no = 
     # 		(SELECT k.clust_no from $COLL_CLUST_WORK as k 
@@ -4248,7 +4254,7 @@ sub computeCollectionTables {
     # assignments.  Repeat until no points move to a different cluster, or at
     # most the specified number of rounds.
     
-    while ( $rows_changed > 0 and $bound < 12 )
+    while ( $rows_changed > 0 and $bound < 10 )
     {
 	# Compute the centroid of each cluster based on the data points (bins)
 	# assigned to it.
@@ -4256,11 +4262,11 @@ sub computeCollectionTables {
 	logMessage(2, "    computing cluster centroids...");
 	
 	$sql = "UPDATE $COLL_CLUST_WORK as k JOIN 
-		(SELECT clust_lng, clust_lat,
+		(SELECT clust_id,
 			sum(lng * n_colls)/sum(n_colls) as lng_avg,
 			sum(lat * n_colls)/sum(n_colls) as lat_avg
-		 FROM $COLL_BINS_WORK GROUP BY clust_lng, clust_lat) as cluster
-			using (clust_lng, clust_lat)
+		 FROM $COLL_BINS_WORK GROUP BY clust_id) as cluster
+			using (clust_id)
 		SET k.lng = cluster.lng_avg, k.lat = cluster.lat_avg";
 	
 	$result = $dbh->do($sql);
@@ -4272,18 +4278,18 @@ sub computeCollectionTables {
 	$dbh->do("DELETE FROM $CLUST_AUX");
 	
 	$sql = "INSERT IGNORE INTO $CLUST_AUX
-		SELECT c.bin_lng, c.bin_lat, k.clust_lng, k.clust_lat
-		FROM $COLL_BINS_WORK as c JOIN $COLL_CLUST_WORK as k
-			on k.clust_lng between floor((c.lng+180.0)/$COARSE_BIN_SIZE)-1
-				and floor((c.lng+180.0)/$COARSE_BIN_SIZE)+1
-			and k.clust_lat between floor((c.lat+90.0)/$COARSE_BIN_SIZE)-1
-				and floor((c.lat+90.0)/$COARSE_BIN_SIZE)+1
-		ORDER BY POW(k.lat-c.lat,2)+POW(k.lng-c.lng,2) ASC";
+		SELECT b.bin_id, k.clust_id
+		FROM $COLL_BINS_WORK as b JOIN $COLL_CLUST_WORK as k
+			on k.clust_lng between floor(bin_lng * $bin_ratio)-1
+				and floor(bin_lng * $bin_ratio)+1
+			and k.clust_lat between floor(bin_lat * $bin_ratio)-1
+				and floor(bin_lat * $bin_ratio)+1
+		ORDER BY POW(k.lat-b.lat,2)+POW(k.lng-b.lng,2) ASC";
 	
 	$dbh->do($sql);
 	
-	$sql = "UPDATE $COLL_BINS_WORK as cb JOIN $CLUST_AUX as k using (bin_lng, bin_lat)
-		SET cb.clust_lng = k.clust_lng, cb.clust_lat = k.clust_lat";
+	$sql = "UPDATE $COLL_BINS_WORK as cb JOIN $CLUST_AUX as k using (bin_id)
+		SET cb.clust_id = k.clust_id";
 	
 	# $sql = "UPDATE $COLL_BINS_WORK as c SET c.clust_no = 
 	# 	(SELECT k.clust_no from $COLL_CLUST_WORK as k 
@@ -4299,13 +4305,16 @@ sub computeCollectionTables {
     logMessage(2, "    setting collection cluster numbers...");
     
     # Now that we have a stable assignment of bins to clusters, we can record
-    # the bin and cluster assignments for each individual collection.
+    # the cluster assignments for each individual collection.
     
     $sql = "	UPDATE $COLL_MATRIX_WORK as c 
-		JOIN $COLL_BINS_WORK as cb using (bin_lng, bin_lat)
-		SET c.clust_lng = cb.clust_lng, c.clust_lat = cb.clust_lat";
+		JOIN $COLL_BINS_WORK as cb using (bin_id)
+		SET c.clust_id = cb.clust_id";
     
     $result = $dbh->do($sql);
+    
+    $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD INDEX (clust_id)");
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (clust_id)");
     
     # Now we can compute the total number of collections and occurrences, the
     # geographic extent, the access level, and the standard deviation for each
@@ -4314,14 +4323,14 @@ sub computeCollectionTables {
     logMessage(2, "   setting collection statistics for each cluster...");
     
     $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
-		(SELECT clust_lng, clust_lat, sum(n_colls) as n_colls,
+		(SELECT clust_id, sum(n_colls) as n_colls,
 			sum(n_occs) as n_occs,
 			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
 			min(lng_min) as lng_min, max(lng_max) as lng_max,
 			min(lat_min) as lat_min, max(lat_max) as lat_max,
 			min(access_level) as access_level
-		FROM $COLL_BINS_WORK GROUP BY clust_lng, clust_lat) as agg
-			using (clust_lng, clust_lat)
+		FROM $COLL_BINS_WORK GROUP BY clust_id) as agg
+			using (clust_id)
 		SET k.n_colls = agg.n_colls, k.n_occs = agg.n_occs,
 		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
 		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,
@@ -4861,6 +4870,51 @@ sub createIntervalTable {
 			ORDER BY base_age desc, top_age desc");
     
     return;
+}
+
+
+our $RANK_MAP = 'rank_map';
+
+sub createRankMap {
+
+    my ($dbh, $force) = @_;
+    
+    my $result;
+
+    # First make sure we have a clean table.
+    
+    if ( $force )
+    {
+	$dbh->do("DROP TABLE IF EXISTS $RANK_MAP");
+    }
+    
+    $result = $dbh->do("
+	CREATE TABLE IF NOT EXISTS $RANK_MAP (
+		rank_no tinyint unsigned primary key,
+		rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
+		key (rank)) Engine=MyISAM");
+    
+    # Then populate it if necessary.  Abort if there are any rows already in
+    # the table.
+    
+    my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $RANK_MAP");
+    
+    return if $count;
+    
+    logMessage(2, "    rebuilding rank map");
+    
+    my $sql = "INSERT INTO $RANK_MAP (rank_no, rank) VALUES
+		(2, 'subspecies'), (3, 'species'), (4, 'subgenus'), (5, 'genus'),
+		(6, 'subtribe'), (7, 'tribe'), (8, 'subfamily'), (9, 'family'),
+		(10, 'superfamily'), (11, 'infraorder'), (12, 'suborder'),
+		(13, 'order'), (14, 'superorder'), (15, 'infraclass'), (16, 'subclass'),
+		(17, 'class'), (18, 'superclass'), (19, 'subphylum'), (20, 'phylum'),
+		(21, 'superphylum'), (22, 'subkingdom'), (23, 'kingdom'),
+		(25, 'unranked clade'), (26, 'informal')";
+    
+    $dbh->do($sql);
+    
+    my $a = 1;	# we can stop here when debugging
 }
 
 

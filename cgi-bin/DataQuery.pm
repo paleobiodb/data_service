@@ -36,6 +36,12 @@ our (%TAXONOMIC_RANK) = ( 'max' => 26, 'informal' => 26, 'unranked_clade' => 25,
 			 'family' => 9, 'subfamily' => 8, 'tribe' => 7, 'subtribe' => 6,
 			 'genus' => 5, 'subgenus' => 4, 'species' => 3, 'subspecies' => 2, 'min' => 2 );
 
+our (%RANK_STRING) = ( 26 => 'informal', 25 => 'unranked clade', 23 => 'kingdom',
+		       22 => 'subkingdom', 21 => 'superphylum', 20 => 'phylum', 19 => 'subphylum',
+		       18 => 'superclass', 17 => 'class', 16 => 'subclass', 15 => 'infraclass',
+		       14 => 'superorder', 13 => 'order', 12 => 'suborder', 11 => 'infraorder',
+		       10 => 'superfamily', 9 => 'family', 8 => 'subfamily', 7 => 'tribe', 
+		       6 => 'subtribe', 5 => 'genus', 4 => 'subgenus', 3 => 'species', 2 => 'subspecies');
 
 # new ( dbh, version )
 # 
@@ -299,7 +305,7 @@ sub generateCompoundResult {
     my $first_row = 1;
     my $row;
     
-    $self->{row_count} = 0;
+    $self->{should_stream} ||= '';
     
     # The first thing to do is to check if we have a statement handle.  If
     # not, the result set is empty and we need to return the relevant header
@@ -356,7 +362,7 @@ sub generateCompoundResult {
 	    # generate the actual output.
 	    
 	    $self->processRecord($row, $self->{proc_list});
-	    my $row_output = $self->emitRecord($row, is_first => $first_row);
+	    my $row_output = $self->emitRecord($row, $first_row);
 	    $output .= $row_output;
 	    
 	    $first_row = 0;
@@ -701,7 +707,7 @@ sub emitRecordJSON {
     
     my $outrec = $self->constructObjectJSON($record, $self->{output_list});
     
-    return $outrec;
+    return $init . $outrec;
 }
 
 
@@ -749,6 +755,11 @@ sub constructObjectJSON {
 	if ( ref $f->{code} eq 'CODE' )
 	{
 	    $value = json_clean($f->{code}($record->{$field}, $f));
+	}
+	
+	elsif ( ref $f->{code} eq 'HASH' )
+	{
+	    $value = json_clean($f->{code}{$record->{$field}});
 	}
 	
 	elsif ( ref $record->{$field} eq 'ARRAY' )
@@ -802,6 +813,11 @@ sub constructArrayJSON {
 	if ( ref $f->{code} eq 'CODE' )
 	{
 	    $value = json_clean($f->{code}($elt, $rulespec));
+	}
+	
+	elsif ( ref $f->{code} eq 'HASH' )
+	{
+	    $value = json_clean($f->{code}{$elt});
 	}
 	
 	elsif ( ref $elt eq 'ARRAY' )

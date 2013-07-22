@@ -108,10 +108,10 @@ ruleset '1.1:coll_selector' =>
     [param => 'base_name', \&TaxonQuery::validNameSpec],
     [param => 'base_id', INT_LIST_PERMISSIVE(1)],
     [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
-    [param => 'lng_min', REAL_VALUE('-180.0','180.0')],
-    [param => 'lng_max', REAL_VALUE('-180.0','180.0')],
-    [param => 'lat_min', REAL_VALUE('-90.0','90.0')],
-    [param => 'lat_max', REAL_VALUE('-90.0','90.0')],
+    [param => 'lngmin', REAL_VALUE('-180.0','180.0')],
+    [param => 'lngmax', REAL_VALUE('-180.0','180.0')],
+    [param => 'latmin', REAL_VALUE('-90.0','90.0')],
+    [param => 'latmax', REAL_VALUE('-90.0','90.0')],
     [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
 	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
     [param => 'loc', STRING_VALUE],		# This should be a geometry in WKT format
@@ -137,7 +137,7 @@ ruleset '1.1:colls/list' =>
 
 ruleset '1.1:summary_display' => 
     [param => 'level', INT_VALUE(1,2), { default => 1 }],
-    [param => 'show', LIST_VALUE('chron', 'all')];
+    [param => 'show', LIST_VALUE('time', 'all')];
 
 ruleset '1.1:colls/summarize' => 
     [require => '1.1:coll_selector'],
@@ -236,13 +236,6 @@ get '/data1.1/colls/single.:ct' => sub {
 		op => 'single');
 };
 
-get '/data1.1/colls/:id.:ct' => sub {
-    
-    querySingle('CollectionQuery', v => '1.1',
-		validation => '1.1:colls/single',
-		op => 'single');
-};
-
 get '/data1.1/colls/list.:ct' => sub {
 
     queryMultiple('CollectionQuery', v => '1.1',
@@ -262,6 +255,14 @@ get '/data1.1/colls/summary.:ct' => sub {
     queryMultiple('CollectionQuery', v => '1.1',
 		  validation => '1.1:colls/summary',
 		  op => 'summary');
+};
+
+get '/data1.1/colls/:id.:ct' => sub {
+    
+    returnErrorResult({}, "404 Not found") unless params('id') =~ /^[0-9]+$/;
+    querySingle('CollectionQuery', v => '1.1',
+		validation => '1.1:colls/single',
+		op => 'single');
 };
 
 # Any other URL beginning with '/data1.1/' is an error.

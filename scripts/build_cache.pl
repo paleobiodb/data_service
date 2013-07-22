@@ -12,7 +12,7 @@ my $t = Taxonomy->new($dbh, 'taxon_trees');
 
 my %options;
 
-getopts('tT:mbvk', \%options);
+getopts('tT:mbvrk', \%options);
 #getopts('abcdefghikxmMyt', \%options);
 
 ensureOrig($dbh);
@@ -23,6 +23,7 @@ TaxonTrees::initMessages(2);
 TaxonTrees::computeCollectionTables($dbh) if $options{b};
 TaxonTrees::computeOccurrenceTables($dbh) if $options{m};
 TaxonTrees::computeCollectionCounts($dbh) if $options{v};
+TaxonTrees::createRankMap($dbh) if $options{r};
 TaxonTrees::buildTables($dbh, 'taxon_trees', { msg_level => 2 }, $options{T}) 
     if $options{t} or $options{T};
 
