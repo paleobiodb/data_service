@@ -594,7 +594,7 @@ sub generateQueryFilters {
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax'
     
-    if ( $self->{params}{lngmin} )
+    if ( defined $self->{params}{lngmin} )
     {
 	my $x1 = $self->{params}{lngmin};
 	my $x2 = $self->{params}{lngmax};
