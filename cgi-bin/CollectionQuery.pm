@@ -22,7 +22,11 @@ our ($LIST_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset,
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
+our ($SUMMARY_1A) = "s.clust_id as sum_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng";
+
 our ($SUMMARY_2) = "s.bin_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
+
+our ($SUMMARY_2A) = "s.bin_id as sum_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng";
 
 $OUTPUT{single} = $OUTPUT{list} = 
    [
@@ -323,8 +327,10 @@ sub fetchMultiple {
     
     if ( $self->{op} eq 'summary' and $self->{params}{level} == 2 ) 
     {
+	my $fields = $tables->{c} ? $SUMMARY_2A : $SUMMARY_2;
+	
 	$self->{main_sql} = "
-	SELECT $calc $SUMMARY_2 $extra_fields
+	SELECT $calc $fields $extra_fields
 	FROM coll_bins as s $join_list
 	WHERE $filter_list
 	GROUP BY s.bin_id
@@ -334,8 +340,10 @@ sub fetchMultiple {
     
     elsif ( $self->{op} eq 'summary' ) 
     {
+	my $fields = $tables->{c} ? $SUMMARY_1A : $SUMMARY_1;
+	
 	$self->{main_sql} = "
-	SELECT $calc $SUMMARY_1 $extra_fields
+	SELECT $calc $fields $extra_fields
 	FROM clusters as s $join_list
 	WHERE $filter_list
 	GROUP BY s.clust_id
@@ -743,9 +751,14 @@ sub generateJoinList {
     # Some tables imply others.
     
     $tables->{o} = 1 if $tables->{t};
+    $tables->{c} = $self->{params}{level} if $tables->{o} and $self->{op} eq 'summary';
     
     # Create the necessary join expressions.
     
+    $join_list .= "JOIN coll_matrix as c using (bin_id)\n"
+	if $tables->{c} == 2;
+    $join_list .= "JOIN coll_matrix as c using (clust_id)\n"
+	if $tables->{c} == 1;
     $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
 	if $tables->{o};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
