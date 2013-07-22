@@ -18,7 +18,11 @@ our (%OUTPUT, %PROC);
 
 our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, c.reference_no";
 
-our ($MULT_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, c.reference_no";
+our ($LIST_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, c.reference_no";
+
+our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
+
+our ($SUMMARY_2) = "s.bin_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
 $OUTPUT{single} = $OUTPUT{list} = 
    [
@@ -34,6 +38,23 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "If this collection is a part of another one, this field specifies which part" },
     { rec => 'reference_no', com => 'prn',
         doc => "The id of the primary reference associated with the collection" },
+   ];
+
+$OUTPUT{summary} = 
+   [
+    { rec => 'sum_id', com => 'bin', doc => "A positive integer that identifies the summary bin" },
+    { rec => 'n_colls', com => 'nco', doc => "The number of collections in this bin or cluster" },
+    { rec => 'n_occs', com => 'noc', doc => "The number of occurrences in this bin or cluster" },
+    { rec => 'lng', com => 'lng', doc => "The longitude of the centroid of this bin or cluster" },
+    { rec => 'lat', com => 'lat', doc => "The latitude of the centroid of this bin or cluster" },
+   ];
+
+our ($BIN_FIELDS) = ", c.bin_id, c.clust_id";
+
+$OUTPUT{bin} = 
+   [
+    { rec => 'bin_id', com => 'bin', doc => "The identifier of the bin in which this collection is located" },
+    { rec => 'clust_id', com => 'clu', doc => "The identifier of the cluster in which this collection is located" },
    ];
 
 our ($REF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
@@ -121,6 +142,16 @@ $OUTPUT{rem} =
    [
     { rec => 'collection_aka', dwc => 'collectionRemarks', com => 'crm', xml_list => '; ',
 	doc => "Any additional remarks that were entered about the colection"},
+   ];
+
+our ($EXT_FIELDS) = ", s.lng_min, s.lng_max, s.lat_min, s.lat_max";
+
+$OUTPUT{ext} =
+   [
+    { rec => 'lng_min', com => 'lg1', doc => "The mimimum longitude for collections in this bin or cluster" },
+    { rec => 'lng_max', com => 'lg2', doc => "The maximum longitude for collections in this bin or cluster" },
+    { rec => 'lat_min', com => 'la1', doc => "The mimimum latitude for collections in this bin or cluster" },
+    { rec => 'lat_max', com => 'la2', doc => "The maximum latitude for collections in this bin or cluster" },
    ];
 
 our (%DOC_ORDER);
@@ -290,14 +321,39 @@ sub fetchMultiple {
     
     my $filter_list = join(' and ', @filters);
     
-    $self->{main_sql} = "
-	SELECT $calc $MULT_FIELDS $extra_fields
+    if ( $self->{op} eq 'summary' and $self->{params}{level} == 2 ) 
+    {
+	$self->{main_sql} = "
+	SELECT $calc $SUMMARY_2 $extra_fields
+	FROM coll_bins as s $join_list
+	WHERE $filter_list
+	GROUP BY s.bin_id
+	ORDER BY s.bin_id
+	$limit";
+    }
+    
+    elsif ( $self->{op} eq 'summary' ) 
+    {
+	$self->{main_sql} = "
+	SELECT $calc $SUMMARY_1 $extra_fields
+	FROM clusters as s $join_list
+	WHERE $filter_list
+	GROUP BY s.clust_id
+	ORDER BY s.clust_id
+	$limit";
+    }
+    
+    else
+    {
+	$self->{main_sql} = "
+	SELECT $calc $LIST_FIELDS $extra_fields
 	FROM coll_matrix as c join collections as cc using (collection_no)
 		$join_list
         WHERE $filter_list
 	GROUP BY c.collection_no
 	ORDER BY c.collection_no
 	$limit";
+    }
     
     # Then prepare and execute the main query and the secondary query.
     
@@ -479,7 +535,12 @@ sub generateQueryFields {
     
     foreach my $inc (@$fields_ref)
     {
-	if ( $inc eq 'ref' )
+	if ( $inc eq 'bin' )
+	{
+	    $fields .= $BIN_FIELDS;
+	}
+	
+	elsif ( $inc eq 'ref' )
 	{
 	    $fields .= $REF_FIELDS;
 	    $tables_ref->{ref} = 1;
@@ -518,6 +579,11 @@ sub generateQueryFields {
 	    #$fields .= $DETAIL_FIELDS;
 	}
 	
+	elsif ( $inc eq 'ext' )
+	{
+	    $fields .= $EXT_FIELDS;
+	}
+	
 	else
 	{
 	    carp "unrecognized value '$inc' for option 'fields'";
@@ -550,7 +616,22 @@ sub generateQueryFilters {
     
     # Check for parameter 'bin_id'
     
-    
+    if ( ref $self->{params}{bin_id} eq 'ARRAY' )
+    {
+	my @bins = grep { $_ > 0 } @{$self->{params}{bin_id}};
+	my $first_bin = $bins[0];
+	my $list = join(',', @bins);
+	
+	if ( $first_bin >= 200000000 )
+	{
+	    push @filters, "c.bin_id in ($list)";
+	}
+	
+	elsif ( $first_bin >= 1000000 )
+	{
+	    push @filters, "c.clust_id in ($list)";
+	}
+    }
     
     # Check for parameters 'taxon_name', 'base_name', 'taxon_id', 'base_id'
     
@@ -594,8 +675,17 @@ sub generateQueryFilters {
 	my $x2 = $self->{params}{lngmax};
 	my $y1 = $self->{params}{latmin};
 	my $y2 = $self->{params}{latmax};
-	my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
-	push @filters, "mbrwithin(loc, geomfromtext($polygon))";
+	
+	if ( $self->{op} eq 'summary' )
+	{
+	    push @filters, "s.lng between $x1 and $x2 and s.lat between $y1 and $y2";
+	}
+	
+	else
+	{
+	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
+	    push @filters, "mbrwithin(loc, geomfromtext($polygon))";
+	}
     }
     
     if ( $self->{params}{loc} )

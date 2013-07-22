@@ -102,7 +102,7 @@ ruleset '1.1:coll_specifier' =>
 
 ruleset '1.1:coll_selector' =>
     [param => 'id', INT_LIST_PERMISSIVE(1), { alias => 'coll_id' }],
-    [param => 'bin_id', STRING_VALUE],
+    [param => 'bin_id', INT_LIST_PERMISSIVE(1)],
     [param => 'taxon_name', \&TaxonQuery::validNameSpec],
     [param => 'taxon_id', INT_LIST_PERMISSIVE(1)],
     [param => 'base_name', \&TaxonQuery::validNameSpec],
@@ -121,7 +121,7 @@ ruleset '1.1:coll_selector' =>
     [optional => 'time_strict', FLAG_VALUE];
 
 ruleset '1.1:coll_display' =>
-    [param => 'show', LIST_PERMISSIVE('ref','sref','loc','time','taxa','occ','det')];
+    [param => 'show', LIST_PERMISSIVE('bin','ref','sref','loc','time','taxa','occ','det')];
 
 ruleset '1.1:colls/single' => 
     [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
@@ -137,9 +137,9 @@ ruleset '1.1:colls/list' =>
 
 ruleset '1.1:summary_display' => 
     [param => 'level', INT_VALUE(1,2), { default => 1 }],
-    [param => 'show', LIST_VALUE('time', 'all')];
+    [param => 'show', LIST_VALUE('ext', 'all')];
 
-ruleset '1.1:colls/summarize' => 
+ruleset '1.1:colls/summary' => 
     [require => '1.1:coll_selector'],
     [allow => '1.1:summary_display'],
     [allow => '1.1:common_display'],
