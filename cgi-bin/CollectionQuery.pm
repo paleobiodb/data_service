@@ -296,6 +296,7 @@ sub fetchMultiple {
 		$join_list
         WHERE $filter_list
 	GROUP BY c.collection_no
+	ORDER BY c.collection_no
 	$limit";
     
     # Then prepare and execute the main query and the secondary query.
@@ -312,41 +313,41 @@ sub fetchMultiple {
     
     # If we were directed to show references, grab any secondary references.
     
-    if ( $self->{show}{ref} or $self->{show}{sref} )
-    {
-	my (@fields) = 'sref' if $self->{show}{sref};
-	@fields = 'ref' if $self->{show}{ref};
+    # if ( $self->{show}{ref} or $self->{show}{sref} )
+    # {
+    # 	my (@fields) = 'sref' if $self->{show}{sref};
+    # 	@fields = 'ref' if $self->{show}{ref};
 	
-	($extra_fields) = $self->generateQueryFields(\@fields);
+    # 	($extra_fields) = $self->generateQueryFields(\@fields);
 	
-	$self->{aux_sql}[0] = "
-	SELECT s.reference_no $extra_fields
-	FROM secondary_refs as s JOIN refs as r using (reference_no)
-	WHERE s.collection_no = ?";
+    # 	$self->{aux_sql}[0] = "
+    # 	SELECT s.reference_no $extra_fields
+    # 	FROM secondary_refs as s JOIN refs as r using (reference_no)
+    # 	WHERE s.collection_no = ?";
 	
-	$self->{aux_sth}[0] = $dbh->prepare($self->{aux_sql}[0]);
-	$self->{aux_sth}[0]->execute();
-    }
+    # 	$self->{aux_sth}[0] = $dbh->prepare($self->{aux_sql}[0]);
+    # 	$self->{aux_sth}[0]->execute();
+    # }
     
     # If we were directed to show associated taxa, construct an SQL statement
     # that will be used to grab that list.
     
-    if ( $self->{show}{taxa} )
-    {
-	my $auth_table = $self->{taxonomy}{auth_table};
-	my $tree_table = $self->{taxonomy}{tree_table};
+    # if ( $self->{show}{taxa} )
+    # {
+    # 	my $auth_table = $self->{taxonomy}{auth_table};
+    # 	my $tree_table = $self->{taxonomy}{tree_table};
 	
-	$self->{aux_sql}[1] = "
-	SELECT DISTINCT t.spelling_no as taxon_no, t.name as taxon_name, rm.rank as taxon_rank, 
-		a.taxon_no as ident_no, a.taxon_name as ident_name, a.taxon_rank as ident_rank
-	FROM occ_matrix as o JOIN $auth_table as a USING (taxon_no)
-		LEFT JOIN $tree_table as t on t.orig_no = o.orig_no
-		LEFT JOIN rank_map as rm on rm.rank_no = t.rank
-	WHERE o.collection_no = ? ORDER BY t.lft ASC";
+    # 	$self->{aux_sql}[1] = "
+    # 	SELECT DISTINCT t.spelling_no as taxon_no, t.name as taxon_name, rm.rank as taxon_rank, 
+    # 		a.taxon_no as ident_no, a.taxon_name as ident_name, a.taxon_rank as ident_rank
+    # 	FROM occ_matrix as o JOIN $auth_table as a USING (taxon_no)
+    # 		LEFT JOIN $tree_table as t on t.orig_no = o.orig_no
+    # 		LEFT JOIN rank_map as rm on rm.rank_no = t.rank
+    # 	WHERE o.collection_no = ? ORDER BY t.lft ASC";
 		
-	$self->{aux_sth}[1] = $dbh->prepare($self->{aux_sql}[1]);
-	$self->{aux_sth}[1]->execute();
-    }
+    # 	$self->{aux_sth}[1] = $dbh->prepare($self->{aux_sql}[1]);
+    # 	$self->{aux_sth}[1]->execute();
+    # }
     
     return 1;
 }
@@ -661,9 +662,8 @@ sub generateJoinList {
 	if $tables->{t};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = $mt.reference_no\n" 
 	if $tables->{ref};
-    $join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.max_interval_no
-		JOIN interval_map as li on li.interval_no = \
-		if($mt.min_interval_no > 0, $mt.min_interval_no, $mt.max_interval_no)\n"
+    $join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.early_int_no
+		JOIN interval_map as li on li.interval_no = $mt.late_int_no\n"
 	if $tables->{int};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = $mt.authorizer_no\n"
 	if $tables->{ppa};
