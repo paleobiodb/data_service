@@ -26,7 +26,7 @@ $OUTPUT{single} = $OUTPUT{list} =
         doc => "The type of this object: 'int' for an interval" },
     { rec => 'interval_name', com => 'nam',
 	doc => "The name of this interval" },
-    { rec => 'abbev', com => 'abr',
+    { rec => 'abbrev', com => 'abr',
         doc => "The standard abbreviation for the interval name, if any" },
     { rec => 'level', com => 'lvl',
         doc => "The level of this interval: eon=1, era=2, period=3, epoch=4, age=5" },
