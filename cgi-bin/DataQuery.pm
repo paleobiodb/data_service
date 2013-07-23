@@ -469,17 +469,17 @@ sub processRecord {
 	{
 	    if ( $p->{use_main} )
 	    {
-		@result = $p->{code}($self, $record);
+		@result = $p->{code}($self, $record, $p);
 	    }
 	    
 	    elsif ( $p->{use_each} and ref $record->{$field} eq 'ARRAY' )
 	    {
-		@result = map { $p->{code}($self, $_) } @{$record->{$field}};
+		@result = map { $p->{code}($self, $_, $p) } @{$record->{$field}};
 	    }
 	    
 	    else
 	    {
-		@result = $p->{code}($self, $record->{$field});
+		@result = $p->{code}($self, $record->{$field}, $p);
 	    }
 	}
 	
@@ -771,7 +771,11 @@ sub constructObjectJSON {
 	
 	if ( ref $f->{code} eq 'CODE' )
 	{
-	    $value = json_clean($f->{code}($value, $f));
+	    if ( $f->{use_main} ) {
+		$value = json_clean($f->{code}($self, $record, $f));
+	    } else  {
+		$value = json_clean($f->{code}($self, $value, $f));
+	    }
 	}
 	
 	elsif ( ref $f->{code} eq 'HASH' )

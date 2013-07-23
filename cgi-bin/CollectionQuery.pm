@@ -16,9 +16,9 @@ use Carp qw(carp croak);
 
 our (%OUTPUT, %PROC);
 
-our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-our ($LIST_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+our ($LIST_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
@@ -43,6 +43,8 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "The longitude at which the collection is located (in degrees)" },
     { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
 	doc => "The latitude at which the collection is located (in degrees)" },
+    { rec => 'llp', com => 'prc', use_main => 1, code => \&CollectionQuery::generateBasisCode,
+        doc => "A two-letter code indicating the basis and precision of the geographic coordinates." },
     { rec => 'collection_name', dwc => 'collectionCode', com => 'nam',
 	doc => "An arbitrary name which identifies the collection, not necessarily unique" },
     { rec => 'collection_subset', com => 'nm2',
@@ -155,7 +157,7 @@ $OUTPUT{rem} =
 	doc => "Any additional remarks that were entered about the colection"},
    ];
 
-our ($EXT_FIELDS) = ", s.lng_min, s.lng_max, s.lat_min, s.lat_max";
+our ($EXT_FIELDS) = ", s.lng_min, s.lng_max, s.lat_min, s.lat_max, s.std_dev";
 
 $OUTPUT{ext} =
    [
@@ -163,6 +165,7 @@ $OUTPUT{ext} =
     { rec => 'lng_max', com => 'lg2', doc => "The maximum longitude for collections in this bin or cluster" },
     { rec => 'lat_min', com => 'la1', doc => "The mimimum latitude for collections in this bin or cluster" },
     { rec => 'lat_max', com => 'la2', doc => "The maximum latitude for collections in this bin or cluster" },
+    { rec => 'std_dev', com => 'std', doc => "The standard deviation of the coordinates in this cluster" },
    ];
 
 our (%DOC_ORDER);
@@ -309,9 +312,6 @@ sub fetchMultiple {
     
     my @filters = $self->generateQueryFilters($dbh, $tables);
     
-    croak "No filters were specified for fetchMultiple"
-	unless @filters || $self->{op} eq 'summary';
-    
     push @filters, "1=1" unless @filters;
     
     # Determine which fields and tables are needed to display the requested
@@ -429,59 +429,6 @@ sub fetchMultiple {
     
     return 1;
 }
-
-
-# processRecord ( row )
-# 
-# This routine takes a hash representing one result row, and does some
-# processing before the output is generated.  The information fetched from the
-# database needs to be refactored a bit in order to match the Darwin Core
-# standard we are using for output.
-
-# sub processRecord {
-    
-#     my ($self, $row) = @_;
-    
-#     # If there's a secondary statement handle, read from it to get a list of
-#     # taxa for this record.  If there's a stashed record that matches this
-#     # row, use it first.
-    
-#     my (@taxon_names);
-#     my ($row2);
-        
-#     if ( defined $self->{stash_second} and 
-# 	 $self->{stash_second}{collection_no} == $row->{collection_no} )
-#     {
-# 	push @taxon_names, $self->{stash_second}{taxon_name};
-# 	$self->{stash_second} = undef;
-#     }
-    
-#     if ( defined $self->{second_sth} and not defined $self->{stash_record} )
-#     {
-# 	while ( $row2 = $self->{second_sth}->fetchrow_hashref() )
-# 	{
-# 	    if ( $row2->{collection_no} != $row->{collection_no} )
-# 	    {
-# 		$self->{stash_second} = $row2;
-# 		last;
-# 	    }
-	    
-# 	    else
-# 	    {
-# 		push @taxon_names, $row2->{taxon_name};
-# 	    }
-# 	}
-#     }
-    
-#     $row->{taxa} = \@taxon_names if @taxon_names > 0;
-    
-#     # Create a publication reference if that data was included in the query
-    
-#     if ( exists $row->{r_pubtitle} and $self->{show}{ref} )
-#     {
-# 	$self->generateReference($row);
-#     }
-# }
 
 
 # emitCollectionXML ( row, short_record )
@@ -790,5 +737,32 @@ sub generateJoinList {
     return $join_list;
 }
 
+
+# generateBasisCode ( record )
+# 
+# Generate a geographic basis code for the specified record.
+
+our %BASIS_CODE = 
+    ('stated in text' => 'T',
+     'based on nearby landmark' => 'L',
+     'based on political unit' => 'P',
+     'estimated from map' => 'M',
+     'unpublished field data' => 'U',
+     '' => '_');
+
+our %PREC_CODE = 
+    ('degrees' => 'D',
+     'minutes' => 'M',
+     'seconds' => 'S',
+     '1' => '1', '2' => '2', '3' => '3', '4' => '4',
+     '5' => '5', '6' => '6', '7' => '7', '8' => '8',
+     '' => '_');
+
+sub generateBasisCode {
+
+    my ($self, $record) = @_;
+    
+    return $BASIS_CODE{$record->{llb}||''} . $PREC_CODE{$record->{llp}||''};
+}
 
 1;
