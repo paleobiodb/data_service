@@ -132,7 +132,7 @@ ruleset '1.1:colls/single' =>
     [allow => '1.1:common_params'];
 
 ruleset '1.1:colls/list' => 
-    [require => '1.1:coll_selector', { error => "you must specify one of: 'id', 'bin_id', 'taxon_name', 'taxon_id', 'base_name', 'base_id', ('lng_min', 'lng_max', 'lat_min' and 'lat_max'), 'loc', 'min_ma', 'max_ma', 'interval'" }],
+    [require => '1.1:coll_selector', { error => "you must specify one of: 'id', 'bin_id', 'taxon_name', 'taxon_id', 'base_name', 'base_id', ('lngmin', 'lngmax', 'latmin' and 'latmax'), 'loc', 'min_ma', 'max_ma', 'interval'" }],
     [allow => '1.1:coll_display'],
     [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];

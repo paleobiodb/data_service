@@ -16,9 +16,9 @@ use Carp qw(carp croak);
 
 our (%OUTPUT, %PROC);
 
-our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, c.reference_no, sr.sec_rnos";
+our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-our ($LIST_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, c.reference_no";
+our ($LIST_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
@@ -235,11 +235,10 @@ sub fetchSingle {
     $self->{main_sql} = "
 	SELECT $SINGLE_FIELDS $extra_fields
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
-		LEFT JOIN (SELECT collection_no, group_concat(reference_no) as sec_rnos
-			FROM secondary_refs GROUP BY collection_no
-			ORDER BY reference_no) as sr using (collection_no)
+		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
-        WHERE c.collection_no = $id";
+        WHERE c.collection_no = $id
+	GROUP BY c.collection_no";
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
@@ -370,8 +369,7 @@ sub fetchMultiple {
 	$self->{main_sql} = "
 	SELECT $calc $LIST_FIELDS $extra_fields
 	FROM coll_matrix as c join collections as cc using (collection_no)
-		LEFT JOIN (SELECT collection_no, group_concat(reference_no) as sec_refs
-			FROM secondary_refs GROUP BY collection_no) as sr using (collection_no)
+		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
         WHERE $filter_list
 	GROUP BY c.collection_no
