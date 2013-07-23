@@ -10,11 +10,79 @@ package TaxonQuery;
 
 use strict;
 use base 'DataQuery';
+use Carp qw(carp croak);
 
 use Taxonomy;
 
 
 our (%OUTPUT, %PROC);
+
+$OUTPUT{single} = $OUTPUT{list} = 
+   [
+    { rec => 'taxon_no', dwc => 'taxonID', com => 'oid',
+	doc => "A positive integer that uniquely identifies this taxonomic name"},
+    { rec => 'orig_no', com => 'cid',
+        doc => "A positive integer that uniquely identifies the taxonomic concept"},
+    { rec => 'record_type', com => 'typ', value => 'tax', value_dwc => 'Taxon',
+        doc => "The type of this object: 'tax' for a taxonomic name" },
+    { rec => 'taxon_rank', dwc => 'taxonRank', com => 'rnk',
+	doc => "The taxonomic rank of this name" },
+    { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
+	doc => "The scientific name of this taxon" },
+    { rec => 'common_name', dwc => 'vernacularName', com => 'nm2',
+        doc => "The common (vernacular) name of this taxon, if any" },
+    { rec => 'attribution', dwc => 'scientificNameAuthorship', com => 'att', 
+	doc => "The attribution (author and year) of this taxonomic name" },
+    { rec => 'parent_no', dwc => 'parentNameUsageID', com => 'par', 
+	doc => "The identifier of the parent taxonomic concept, if any" },
+    { rec => 'synonym_no', dwc => 'acceptedNameUsageID', pbdb => 'senior_no', com => 'snr', dedup => 'orig_no',
+        doc => "The identifier of the senior synonym of this taxonomic concept, if any" },
+    { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', json_list => 1,
+	doc => "The reference from which this name was entered into the database (as formatted text)" },
+    { rec => 'reference_no', com => 'rid', json_list => 1,
+	doc => "The identifier of the primary reference associated with the taxon" },
+    { rec => 'extant', com => 'ext', 
+        doc => "True if this taxon is extant on earth today, false if not, not present if unrecorded" },
+   ];
+
+$PROC{attr} = 
+   [
+    { rec => 'a_al1', set => 'attribution', use_main => 1, code => \&DataQuery::generateAttribution },
+    { rec => 'a_pubyr', set => 'pubyr' },
+   ];
+
+$PROC{ref} =
+   [
+    { rec => 'r_al1', set => 'pubref', use_main => 1, code => \&DataQuery::generateReference },
+   ];
+
+
+# getOutputFields ( )
+# 
+# Determine the list of output fields, given the name of a section to display.
+
+sub getOutputFields {
+    
+    my ($self, $section) = @_;
+    
+    return @{$OUTPUT{$section}}
+	if ref $OUTPUT{$section} eq 'ARRAY';
+    return;
+}
+
+
+# getProcFields ( )
+# 
+# Determine the list of processing fields, given the name of a section to display
+
+sub getProcFields {
+
+    my ($self, $section) = @_;
+    
+    return @{$PROC{$section}}
+	if ref $PROC{$section} eq 'ARRAY';
+    return;
+}
 
 
 # fetchSingle ( taxon_requested )
@@ -41,11 +109,12 @@ sub fetchSingle {
     # Then figure out which taxon we are looking for.  If we have a taxon_no,
     # we can use that.
     
-    my $not_found_msg = "Taxon number $self->{base_taxon_no} was not found in the database";
+    my $not_found_msg = '';
     
     if ( $self->{params}{id} )
     {    
-	my $taxon_no = $self->{params}{id};
+	$taxon_no = $self->{params}{id};
+	$not_found_msg = "Taxon number $taxon_no was not found in the database";
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
@@ -53,7 +122,7 @@ sub fetchSingle {
     elsif ( defined $self->{params}{name} )
     {
 	$not_found_msg = "Taxon '$self->{params}{name}' was not found in the database";
-	my $name_select = { order => 'size.desc', spelling => 'exact' };
+	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id' };
 	
 	if ( defined $self->{params}{rank} )
 	{
@@ -61,7 +130,7 @@ sub fetchSingle {
 	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
 	}
 	
-	($taxon_no) = $taxonomy->getTaxaByName($self->{base_taxon_name}, $name_select);
+	($taxon_no) = $taxonomy->getTaxaByName($self->{params}{name}, $name_select);
     }
     
     # If we haven't found a record, the result set will be empty.
@@ -75,19 +144,19 @@ sub fetchSingle {
     
     my @fields;
     
-    push @fields, 'ref' if $self->{show_ref};
-    push @fields, 'attr' if $self->{show_attribution};
-    push @fields, 'kingdom' if $self->{show_code};
+    push @fields, 'ref' if $self->{show}{ref};
+    push @fields, 'attr' if $self->{show}{attr};
+    push @fields, 'kingdom' if $self->{show}{code};
     
     $select->{fields} = \@fields;
     
     # If we aren't asked for the exact taxon, choose the senior synonym.
     
-    my $rel = $self->{base_exact} ? 'self' : 'senior';
+    my $rel = $self->{params}{exact} ? 'self' : 'senior';
     
     # Next, fetch basic info about the taxon.
     
-    ($self->{result_row}) = $taxonomy->getRelatedTaxon($taxon_no, $rel, $select);
+    ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $select);
     
     return 1;
 }
@@ -104,8 +173,49 @@ sub fetchMultiple {
 
     my ($self) = @_;
     
-    my ($taxon_limit) = "";
-    my ($process_as_parent_list) = 0;
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $self->{dbh};
+    my $taxonomy = $self->{taxonomy};
+    my $tree_table = $self->{tree_table};
+    my $auth_table = $self->{auth_table};
+    
+    my $tables = {};
+    my $calc = '';
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters = $self->generateQueryFilters($dbh, $tables);
+    
+    croak "No filters were specified for fetchMultiple"
+	unless @filters or $self->{op} eq 'summary';
+    
+    push @filters, "1=1" unless @filters;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $extra_fields = $self->generateQueryFields($self->{show_order}, $tables);
+    
+   # Determine the necessary joins.
+    
+    my $join_list = $self->generateJoinList('c', $tables);
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $self->generateLimitClause();
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    if ( $self->{params}{count} )
+    {
+	$calc = 'SQL_CALC_FOUND_ROWS';
+    }
+    
+    # Generate the main query.
+    
+    my $filter_list = join(' and ', @filters);
     
     # We start with the taxonomy we are using, and with a hash which will
     # contain the parameters for selecting the desired result.
@@ -412,7 +522,7 @@ sub fetchMultiple {
     
     my $extra_fields = join(', ', @extra_fields);
     $extra_fields = ", " . $extra_fields if $extra_fields ne '';
-    
+    my $taxon_limit = '';
     # Now construct and execute the SQL statement that will be used to fetch
     # the desired information from the database.
     
@@ -564,7 +674,7 @@ sub processResultSet {
 # database needs to be refactored a bit in order to match the Darwin Core
 # standard we are using for output.
 
-sub processRecord {
+sub oldProcessRecord {
     
     my ($self, $row) = @_;
     

@@ -483,6 +483,11 @@ sub processRecord {
 	    }
 	}
 	
+	elsif ( $p->{split} )
+	{
+	    @result = split $p->{split}, $record->{$field};
+	}
+	
 	elsif ( $p->{subfield} )
 	{
 	    if ( ref $record->{$field} eq 'ARRAY' )
@@ -740,10 +745,11 @@ sub constructObjectJSON {
 	my $outkey = $vocab eq 'pbdb' ? $f->{pbdb} || $f->{rec} : $f->{$vocab};
 	next unless $outkey;
 	
-	# Skip any field that is empty, unless 'always' is set.
+	# Skip any field that is empty, unless 'always' or 'value' is set.
 	
 	my $field = $f->{rec};
-	next unless $f->{always} or defined $record->{$field} and $record->{$field} ne '';
+	next unless $f->{always} or $f->{value} or 
+	    defined $record->{$field} and $record->{$field} ne '';
 	
 	# Skip any field indicated by a 'dedup' rule.
 	
@@ -754,33 +760,45 @@ sub constructObjectJSON {
 	# supplied, call that routine.  Otherwise, generate either an array,
 	# sub-object or scalar value as indicated.
 	
-	my $value = '';
+	my $value = $record->{$field} || '';
+	
+	# If a specific value was defined, use that instead of the field value.
+	
+	$value = $f->{value} if defined $f->{value};
+	$value = $f->{"${vocab}_value"} if defined $f->{"${vocab}_value"};
+    
+	# Process the value according to the rule
 	
 	if ( ref $f->{code} eq 'CODE' )
 	{
-	    $value = json_clean($f->{code}($record->{$field}, $f));
+	    $value = json_clean($f->{code}($value, $f));
 	}
 	
 	elsif ( ref $f->{code} eq 'HASH' )
 	{
-	    $value = json_clean($f->{code}{$record->{$field}});
+	    $value = json_clean($f->{code}{$value});
 	}
 	
-	elsif ( ref $record->{$field} eq 'ARRAY' )
+	elsif ( ref $value eq 'ARRAY' )
 	{
 	    my $rule = $f->{rule} || $f;
-	    $value = $self->constructArrayJSON($record->{$field}, $rule);
+	    $value = $self->constructArrayJSON($value, $rule);
+	}
+	
+	elsif ( $f->{json_list} )
+	{
+	    $value = $self->constructArrayJSON([$value], $f);
 	}
 	
 	elsif ( ref $record->{$field} eq 'HASH' )
 	{
 	    my $rule = $f->{rule} || $f;
-	    $value = $self->constructObjectJSON($record->{$field}, $rule);
+	    $value = $self->constructObjectJSON($value, $rule);
 	}
 	
 	else
 	{
-	    $value = json_clean($record->{$field});
+	    $value = json_clean($value);
 	}
 	
 	if ( defined $value and $value ne '' )
@@ -1191,6 +1209,29 @@ sub txt_clean {
 }
 
 
+sub generateLimitClause {
+
+    my ($self) = @_;
+    
+    my $limit = $self->{params}{limit};
+    my $offset = $self->{params}{offset};
+    
+    if ( defined $offset and $offset > 0 )
+    {
+	$offset += 0;
+	$limit = $limit eq 'all' ? 10000000 : $limit + 0;
+	return "LIMIT $offset,$limit";
+    }
+    
+    elsif ( defined $limit and $limit ne 'all' )
+    {
+	return "LIMIT " . ($limit + 0);
+    }
+    
+    return '';
+}
+
+
 our ($UTF8_DECODER) = Encode::find_encoding("utf8");
 
 # decodeFields ( )
@@ -1269,10 +1310,13 @@ sub generateAttribution {
     if ( $attr_string ne '' )
     {
 	$attr_string = "($attr_string)" if defined $row->{orig_no} &&
-	    $row->{orig_no} > 0 && $row->{orig_no} != $row->{taxon_no};
+	    $row->{orig_no} > 0 && defined $row->{taxon_no} && 
+		$row->{orig_no} != $row->{taxon_no};
 	
-	$row->{attribution} = $attr_string;
+	return $attr_string;
     }
+    
+    return;
 }
 
 

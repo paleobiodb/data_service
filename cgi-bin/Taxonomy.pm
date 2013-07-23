@@ -1442,9 +1442,10 @@ sub getTaxaIdsByName {
 	
 	$SQL_STRING = "
 		SELECT a.taxon_no
-		FROM $search_table as s JOIN $auth_table as a using (taxon_no)
+		FROM $search_table as s JOIN $auth_table as a on s.match_no = a.taxon_no
 			JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table o using (opinion_no)
+			$extra_joins
 		WHERE $filter_expr
 		$order_expr $limit_expr";
     }
@@ -1454,7 +1455,7 @@ sub getTaxaIdsByName {
 	$SQL_STRING = "
 		SELECT distinct t.${select}_no
 		FROM (SELECT a.taxon_rank, t2.orig_no, t2.synonym_no
-		      FROM $search_table as s JOIN $auth_table as a2 using (taxon_no)
+		      FROM $search_table as s JOIN $auth_table as a2 on s.match_no = a2.taxon_no
 				JOIN $tree_table as t2 using (orig_no)
 				JOIN $auth_table as a on a.taxon_no = t2.spelling_no
 				LEFT JOIN $opinion_table as o on o.opinion_no = t2.opinion_no
@@ -1477,7 +1478,7 @@ sub getTaxaIdsByName {
 	
 	$SQL_STRING = "
 		SELECT distinct t.${select}_no
-		FROM $search_table as s JOIN $auth_table as a using (taxon_no)
+		FROM $search_table as s JOIN $auth_table as a on s.match_no = a.taxon_no
 			$join_string
 			LEFT JOIN $opinion_table o on o.opinion_no = t.opinion_no
 			$extra_joins
@@ -2469,7 +2470,8 @@ sub getRelatedTaxon {
 	    and $base_taxon->{orig_no} > 0 and not $base_no > 0;
     }
     
-    if ( defined $base_taxon and $base_taxon =~ /^[0-9]+$/ and not $base_no > 0 )
+    if ( defined $base_taxon and $base_taxon =~ /^[0-9]+$/ and 
+	 not (defined $base_no and $base_no > 0) )
     {
 	$base_no = $base_taxon;
     }

@@ -23,6 +23,7 @@ use DataQuery;
 use TaxonQuery;
 use TreeQuery;
 use CollectionQuery;
+use IntervalQuery;
 
 
 set environment => 'development';
@@ -166,6 +167,9 @@ ruleset '1.1:colls/summary' =>
     [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
+ruleset '1.1:intervals' => 
+    [allow => '1.1:common_params'],
+    [allow => '1.1:common_display'];
 
 # Send app pages
 
@@ -284,6 +288,13 @@ get '/data1.1/colls/:id.:ct' => sub {
     querySingle('CollectionQuery', v => '1.1',
 		validation => '1.1:colls/single',
 		op => 'single');
+};
+
+get '/data1.1/intervals/list.:ct' => sub {
+
+    queryMultiple('IntervalQuery', v => '1.1',
+		  validation => '1.1:intervals',
+		  op => 'list');
 };
 
 # Any other URL beginning with '/data1.1/' is an error.

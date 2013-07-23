@@ -16,7 +16,7 @@ use Carp qw(carp croak);
 
 our (%OUTPUT, %PROC);
 
-our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, c.reference_no";
+our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, c.reference_no, sr.sec_rnos";
 
 our ($LIST_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, c.reference_no";
 
@@ -24,41 +24,51 @@ our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
 our ($SUMMARY_1A) = "s.clust_id as sum_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng";
 
-our ($SUMMARY_2) = "s.bin_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
+our ($SUMMARY_2) = "s.bin_id as sum_id, s.clust_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
-our ($SUMMARY_2A) = "s.bin_id as sum_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng";
+our ($SUMMARY_2A) = "s.bin_id as sum_id, s.clust_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng";
+
+$PROC{single} = $PROC{list} =
+   [
+    { rec => 'sec_rnos', add => 'reference_no', split => ',' },
+   ];
 
 $OUTPUT{single} = $OUTPUT{list} = 
    [
-    { rec => 'collection_no', dwc => 'collectionID', com => 'cid',
+    { rec => 'collection_no', dwc => 'collectionID', com => 'oid',
 	doc => "A positive integer that uniquely identifies the collection"},
+    { rec => 'record_type', com => 'typ', value => 'col', value_dwc => 'Occurrence',
+        doc => "The type of this object: 'col' for a collection" },
     { rec => 'lng', dwc => 'decimalLongitude', com => 'lng',
 	doc => "The longitude at which the collection is located (in degrees)" },
     { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
 	doc => "The latitude at which the collection is located (in degrees)" },
-    { rec => 'collection_name', dwc => 'collectionCode', com => 'cna',
+    { rec => 'collection_name', dwc => 'collectionCode', com => 'nam',
 	doc => "An arbitrary name which identifies the collection, not necessarily unique" },
-    { rec => 'collection_subset', com => 'csu',
+    { rec => 'collection_subset', com => 'nm2',
 	doc => "If this collection is a part of another one, this field specifies which part" },
-    { rec => 'reference_no', com => 'prn',
-        doc => "The id of the primary reference associated with the collection" },
+    { rec => 'reference_no', com => 'rid', json_list => 1,
+        doc => "The identifier(s) of the references from which this data was entered" },
    ];
 
 $OUTPUT{summary} = 
    [
-    { rec => 'sum_id', com => 'bin', doc => "A positive integer that identifies the summary bin" },
-    { rec => 'n_colls', com => 'nco', doc => "The number of collections in this bin or cluster" },
-    { rec => 'n_occs', com => 'noc', doc => "The number of occurrences in this bin or cluster" },
-    { rec => 'lng', com => 'lng', doc => "The longitude of the centroid of this bin or cluster" },
-    { rec => 'lat', com => 'lat', doc => "The latitude of the centroid of this bin or cluster" },
+    { rec => 'sum_id', com => 'oid', doc => "A positive integer that identifies the cluster" },
+    { rec => 'clust_id', com => 'cnt', doc => "A positive integer that identifies the containing cluster, if any" },
+    { rec => 'record_type', com => 'typ', value => 'clu',
+        doc => "The type of this object: 'clu' for a collection cluster" },
+    { rec => 'n_colls', com => 'nco', doc => "The number of collections in cluster" },
+    { rec => 'n_occs', com => 'noc', doc => "The number of occurrences in this cluster" },
+    { rec => 'lng', com => 'lng', doc => "The longitude of the centroid of this cluster" },
+    { rec => 'lat', com => 'lat', doc => "The latitude of the centroid of this cluster" },
    ];
 
 our ($BIN_FIELDS) = ", c.bin_id, c.clust_id";
 
 $OUTPUT{bin} = 
    [
-    { rec => 'bin_id', com => 'bin', doc => "The identifier of the bin in which this collection is located" },
-    { rec => 'clust_id', com => 'clu', doc => "The identifier of the cluster in which this collection is located" },
+    { rec => 'clust_id', com => 'lv1', doc => "The identifier of the level-1 cluster in which this collection is located" },
+    { rec => 'bin_id', com => 'lv2', doc => "The identifier of the level-2 cluster in which this collection is located" },
    ];
 
 our ($REF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
@@ -67,30 +77,27 @@ $PROC{ref} =
    [
     { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&DataQuery::generateReference },
     { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&DataQuery::generateReference },
-    { rec => 'reference_no', add => 'refno_list' },
-    { rec => 'sec_refs', add => 'refno_list', subfield => 'reference_no' },
    ];
 
 $OUTPUT{ref} =
    [
-    { rec => 'r_pubyr', com => 'pby',
-	doc => "The year of publication of the primary reference associated with this collection" },
+    #{ rec => 'r_pubyr', com => 'pby',
+    #	doc => "The year of publication of the primary reference associated with this collection" },
     { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => '; ',
 	doc => "The reference(s) associated with this collection (as formatted text)" },
     { rec => 'refno_list', pbdb => 'reference_no', com => 'rid',
 	doc => "A list of reference identifiers, exactly corresponding to the references listed under {pubref}" },
    ];
 
-our ($SHORTREF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr";
+our ($ATTR_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr";
 
-$OUTPUT{sref} = 
+$OUTPUT{attr} = 
    [
     { rec => 'r_pubyr', com => 'pby',
 	doc => "The year of publication of the primary reference associated with this collection" },
-    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => '; ',
+    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', 
+        json_list => 1, xml_list => '; ',
 	doc => "The reference(s) associated with this collection (pubyr and authors only)" },
-    { rec => 'refno_list', pbdb => 'reference_no', com => 'rid', keep => 1,
-	doc => "A list of reference identifiers, exactly corresponding to the references listed under {pubref}" },
    ];
 
 our ($TIME_FIELDS) = ", ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age";
@@ -228,6 +235,9 @@ sub fetchSingle {
     $self->{main_sql} = "
 	SELECT $SINGLE_FIELDS $extra_fields
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
+		LEFT JOIN (SELECT collection_no, group_concat(reference_no) as sec_rnos
+			FROM secondary_refs GROUP BY collection_no
+			ORDER BY reference_no) as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id";
     
@@ -241,17 +251,18 @@ sub fetchSingle {
     
     if ( $self->{show}{ref} or $self->{show}{sref} )
     {
-	my (@fields) = 'sref' if $self->{show}{sref};
-	@fields = 'ref' if $self->{show}{ref};
-	
-	($extra_fields) = $self->generateQueryFields(\@fields);
-	
-	$self->{aux_sql}[0] = "
-	SELECT s.reference_no $extra_fields
-	FROM secondary_refs as s JOIN refs as r using (reference_no)
-	WHERE s.collection_no = $id";
-	
-	$self->{main_record}{sec_refs} = $dbh->selectall_arrayref($self->{aux_sql}[0], { Slice => {} });
+        my (@fields) = 'sref' if $self->{show}{sref};
+        @fields = 'ref' if $self->{show}{ref};
+        
+        ($extra_fields) = $self->generateQueryFields(\@fields);
+        
+        $self->{aux_sql}[0] = "
+        SELECT sr.reference_no $extra_fields
+        FROM secondary_refs as sr JOIN refs as r using (reference_no)
+        WHERE sr.collection_no = $id
+	ORDER BY sr.reference_no";
+        
+        $self->{main_record}{sec_refs} = $dbh->selectall_arrayref($self->{aux_sql}[0], { Slice => {} });
     }
     
     # If we were directed to show associated taxa, grab them too.
@@ -359,6 +370,8 @@ sub fetchMultiple {
 	$self->{main_sql} = "
 	SELECT $calc $LIST_FIELDS $extra_fields
 	FROM coll_matrix as c join collections as cc using (collection_no)
+		LEFT JOIN (SELECT collection_no, group_concat(reference_no) as sec_refs
+			FROM secondary_refs GROUP BY collection_no) as sr using (collection_no)
 		$join_list
         WHERE $filter_list
 	GROUP BY c.collection_no
@@ -779,27 +792,5 @@ sub generateJoinList {
     return $join_list;
 }
 
-
-sub generateLimitClause {
-
-    my ($self) = @_;
-    
-    my $limit = $self->{params}{limit};
-    my $offset = $self->{params}{offset};
-    
-    if ( defined $offset and $offset > 0 )
-    {
-	$offset += 0;
-	$limit = $limit eq 'all' ? 10000000 : $limit + 0;
-	return "LIMIT $offset,$limit";
-    }
-    
-    elsif ( defined $limit and $limit ne 'all' )
-    {
-	return "LIMIT " . ($limit + 0);
-    }
-    
-    return '';
-}
 
 1;
