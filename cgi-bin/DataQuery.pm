@@ -760,7 +760,7 @@ sub constructObjectJSON {
 	# supplied, call that routine.  Otherwise, generate either an array,
 	# sub-object or scalar value as indicated.
 	
-	my $value = $record->{$field} || '';
+	my $value = defined $record->{$field} ? $record->{$field} : '';
 	
 	# If a specific value was defined, use that instead of the field value.
 	
