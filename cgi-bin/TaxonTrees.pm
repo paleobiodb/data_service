@@ -4149,8 +4149,8 @@ sub computeCollectionTables {
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
 		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs), avg(lng), avg(lat),
-		       min(lng) as lng_min, max(lng) as lng_max,
-		       min(lat) as lat_min, max(lat) as lat_max,
+		       round(min(lng),2) as lng_min, round(max(lng),2) as lng_max,
+		       round(min(lat),2) as lat_min, round(max(lat),2) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
 		       min(access_level)
 		FROM $COLL_MATRIX_WORK

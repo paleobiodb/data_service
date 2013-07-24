@@ -14,9 +14,9 @@ use base 'DataQuery';
 use Carp qw(carp croak);
 
 
-our (%OUTPUT, %PROC);
+our (%SELECT, %OUTPUT, %PROC, %TABLES);
 
-our ($INT_FIELDS) = "i.interval_no, i.interval_name, i.abbrev, i.level, i.parent_no, i.color, i.base_age, i.top_age, i.reference_no";
+$SELECT{single} = $SELECT{list} = "i.interval_no, i.interval_name, i.abbrev, i.level, i.parent_no, i.color, i.base_age, i.top_age, i.reference_no";
 
 $OUTPUT{single} = $OUTPUT{list} = 
    [
@@ -42,7 +42,9 @@ $OUTPUT{single} = $OUTPUT{list} =
         doc => "The identifier(s) of the references from which this data was entered" },
    ];
 
-our ($REF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
+$SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
+
+$TABLES{ref} = 'r';
 
 $PROC{ref} = 
    [
@@ -59,34 +61,6 @@ our (%DOC_ORDER);
 
 $DOC_ORDER{'single'} = ['single', 'ref'];
 $DOC_ORDER{'list'} = ['single', 'ref'];
-
-
-# getOutputFields ( )
-# 
-# Determine the list of output fields, given the name of a section to display.
-
-sub getOutputFields {
-    
-    my ($self, $section) = @_;
-    
-    return @{$OUTPUT{$section}}
-	if ref $OUTPUT{$section} eq 'ARRAY';
-    return;
-}
-
-
-# getProcFields ( )
-# 
-# Determine the list of processing fields, given the name of a section to display
-
-sub getProcFields {
-
-    my ($self, $section) = @_;
-    
-    return @{$PROC{$section}}
-	if ref $PROC{$section} eq 'ARRAY';
-    return;
-}
 
 
 # fetchSingle ( )
@@ -111,21 +85,19 @@ sub fetchSingle {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $tables = {};
-    
-    my $extra_fields = $self->generateQueryFields($self->{show_order}, $tables);
+    my $fields = join(', ', @{$self->{select_list}});
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $tables);
+    my ($join_list) = $self->generateJoinList('i', $self->{select_tables});
     
     # Generate the main query.
     
     $self->{main_sql} = "
-	SELECT $INT_FIELDS $extra_fields
-	FROM interval_map as i
-		$join_list
-        WHERE i.interval_no = $id";
+	SELECT $fields
+	FROM interval_map as i $join_list
+        WHERE i.interval_no = $id
+	GROUP BY i.interval_no";
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
@@ -162,11 +134,11 @@ sub fetchMultiple {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $extra_fields = $self->generateQueryFields($self->{show_order}, $tables);
+    my $fields = join(', ', @{$self->{select_list}});
     
     # Determine the necessary joins.
     
-    my $join_list = $self->generateJoinList('i', $tables);
+    my ($join_list) = $self->generateJoinList('i', $self->{select_tables});
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -184,9 +156,8 @@ sub fetchMultiple {
     my $filter_list = join(' and ', @filters);
     
     $self->{main_sql} = "
-	SELECT $calc $INT_FIELDS $extra_fields
-	FROM interval_map as i
-		$join_list
+	SELECT $calc $fields
+	FROM interval_map as i $join_list
 	WHERE $filter_list
 	ORDER BY i.level, i.top_age
 	$limit";
@@ -207,48 +178,6 @@ sub fetchMultiple {
 }
 
 
-# generateQueryFields ( fields )
-# 
-# The parameter 'fields' should be a hash whose keys are strings, or a
-# comma-separated list of strings.
-# 
-# This routine returns a field string and a hash which lists extra tables to
-# be joined in the query.
-
-sub generateQueryFields {
-
-    my ($self, $fields_ref, $tables_ref) = @_;
-    
-    # Return the default if our parameter is undefined.
-    
-    unless ( ref $fields_ref eq 'ARRAY' )
-    {
-	return '';
-    }
-    
-    # Now go through the list of strings and add the appropriate fields and
-    # tables for each.
-    
-    my $fields = '';
-    
-    foreach my $inc (@$fields_ref)
-    {
-	if ( $inc eq 'ref' )
-	{
-	    $fields .= $REF_FIELDS;
-	    $tables_ref->{ref} = 1;
-	}
-	
-	else
-	{
-	    carp "unrecognized value '$inc' for option 'fields'";
-	}
-    }
-    
-    return $fields;
-}
-
-
 # generateJoinList ( tables )
 # 
 # Generate the actual join string indicated by the table hash.
@@ -266,7 +195,7 @@ sub generateJoinList {
     # Create the necessary join expressions.
     
     $join_list .= "LEFT JOIN refs as r on r.reference_no = $mt.reference_no\n" 
-	if $tables->{ref};
+	if $tables->{r};
     
     return $join_list;
 }

@@ -21,7 +21,7 @@ $OUTPUT{single} = $OUTPUT{list} =
    [
     { rec => 'taxon_no', dwc => 'taxonID', com => 'oid',
 	doc => "A positive integer that uniquely identifies this taxonomic name"},
-    { rec => 'orig_no', com => 'cid',
+    { rec => 'orig_no', com => 'qid',
         doc => "A positive integer that uniquely identifies the taxonomic concept"},
     { rec => 'record_type', com => 'typ', value => 'tax', value_dwc => 'Taxon',
         doc => "The type of this object: 'tax' for a taxonomic name" },
@@ -43,6 +43,10 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "The identifier of the primary reference associated with the taxon" },
     { rec => 'extant', com => 'ext', 
         doc => "True if this taxon is extant on earth today, false if not, not present if unrecorded" },
+    { rec => 'size', com => 'siz',
+        doc => "The total number of taxa in the database that are contained within this taxon, including itself" },
+    { rec => 'extant_size', com => 'exs',
+        doc => "The total number of extant taxa in the database that are contained within this taxon, including itself" },
    ];
 
 $PROC{attr} = 
@@ -57,35 +61,7 @@ $PROC{ref} =
    ];
 
 
-# getOutputFields ( )
-# 
-# Determine the list of output fields, given the name of a section to display.
-
-sub getOutputFields {
-    
-    my ($self, $section) = @_;
-    
-    return @{$OUTPUT{$section}}
-	if ref $OUTPUT{$section} eq 'ARRAY';
-    return;
-}
-
-
-# getProcFields ( )
-# 
-# Determine the list of processing fields, given the name of a section to display
-
-sub getProcFields {
-
-    my ($self, $section) = @_;
-    
-    return @{$PROC{$section}}
-	if ref $PROC{$section} eq 'ARRAY';
-    return;
-}
-
-
-# fetchSingle ( taxon_requested )
+# fetchSingle ( )
 # 
 # Query for all relevant information about the requested taxon.
 # 
@@ -98,13 +74,9 @@ sub fetchSingle {
 
     my ($self) = @_;
     
-    # We start with the taxonomy we are using, and with a hash which will
-    # contain the parameters for selecting the desired result.
-    
     my $dbh = $self->{dbh};
     my $taxonomy = $self->{taxonomy};
     my $taxon_no;
-    my $select = {};
     
     # Then figure out which taxon we are looking for.  If we have a taxon_no,
     # we can use that.
@@ -142,13 +114,15 @@ sub fetchSingle {
     
     # Now add the fields necessary to show the requested info.
     
+    my $options = {};
+    
     my @fields;
     
     push @fields, 'ref' if $self->{show}{ref};
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'kingdom' if $self->{show}{code};
     
-    $select->{fields} = \@fields;
+    $options->{fields} = \@fields;
     
     # If we aren't asked for the exact taxon, choose the senior synonym.
     
@@ -156,7 +130,7 @@ sub fetchSingle {
     
     # Next, fetch basic info about the taxon.
     
-    ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $select);
+    ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $options);
     
     return 1;
 }
@@ -173,393 +147,62 @@ sub fetchMultiple {
 
     my ($self) = @_;
     
-    # Get a database handle by which we can make queries.
-    
     my $dbh = $self->{dbh};
-    my $taxonomy = $self->{taxonomy};
-    my $tree_table = $self->{tree_table};
-    my $auth_table = $self->{auth_table};
-    
-    my $tables = {};
-    my $calc = '';
-    
-    # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
-    
-    my @filters = $self->generateQueryFilters($dbh, $tables);
-    
-    croak "No filters were specified for fetchMultiple"
-	unless @filters or $self->{op} eq 'summary';
-    
-    push @filters, "1=1" unless @filters;
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    my $extra_fields = $self->generateQueryFields($self->{show_order}, $tables);
-    
-   # Determine the necessary joins.
-    
-    my $join_list = $self->generateJoinList('c', $tables);
-    
-    # If a query limit has been specified, modify the query accordingly.
-    
-    my $limit = $self->generateLimitClause();
-    
-    # If we were asked to count rows, modify the query accordingly
-    
-    if ( $self->{params}{count} )
-    {
-	$calc = 'SQL_CALC_FOUND_ROWS';
-    }
-    
-    # Generate the main query.
-    
-    my $filter_list = join(' and ', @filters);
-    
-    # We start with the taxonomy we are using, and with a hash which will
-    # contain the parameters for selecting the desired result.
-    
     my $taxonomy = $self->{taxonomy};
     my $taxon_no;
-    my (@filter_list, @extra_fields);
-    my $select = {};
-    my $dbh = $self->{dbh};
     
-    # If a query limit has been specified, add the appropriate parameter.
+    # First, figure out what info we need to provide
     
-    if ( defined $self->{limit_results} )
+    my $options = {};
+    
+    my @fields = ('link');
+    
+    push @fields, 'ref' if $self->{show}{ref};
+    push @fields, 'attr' if $self->{show}{attr};
+    push @fields, 'kingdom' if $self->{show}{code};
+    
+    $options->{fields} = \@fields;
+    
+    # Specify the other query options according to the query parameters.
+    
+    $options->{exact} = 1 if $self->{params}{exact};
+    
+    # If the parameter 'name' was given, then we are listing taxa by name.
+    
+    if ( $self->{params}{name} )
     {
-	$select->{limit} = $self->{limit_results} + 0;
+	my $name = $self->{params}{name};
+	
+	my @result_list = $taxonomy->getTaxaByName($name, $options);
+	return unless @result_list;
+	
+	$self->{main_result} = \@result_list;
+	$self->{result_count} = scalar(@result_list);
+	return 1;
     }
     
-    # Now process the various parameters that limit the scope of the query:
+    # Otherwise, if the parameter 'id' was given, then we are listing
+    # taxa by relationship.
     
-    # If a restriction has been entered on the category of taxa to be
-    # returned, add the appropriate filter.
-    
-    if ( defined $self->{filter_taxon_type} )
+    elsif ( $self->{params}{id} or $self->{params}{rel} eq 'all_taxa' )
     {
-	if ( $self->{filter_taxon_type} eq 'valid' ) {
-	    push @filter_list, "o.status = 'belongs to'";
-	    push @filter_list, "t.taxon_no = t.synonym_no";
-	}
-	elsif ( $self->{filter_taxon_type} eq 'synonyms' ) {
-	    push @filter_list, "o.status in ('belongs to', 'subjective synonym of', 'objective synonym of')";
-	    push @filter_list, "t.taxon_no = t.spelling_no";
-	}
-	elsif ( $self->{filter_taxon_type} eq 'invalid' ) {
-	    push @filter_list, "o.status not in ('belongs to', 'subjective synonym of', 'objective synonym of')";
-	}
-	elsif ( $self->{filter_taxon_type} eq 'distinct' ) {
-	    push @filter_list, "(o.spelling_reason <> 'rank change' or t.taxon_no = t.spelling_no)";
-	}
+	my $id_list = $self->{params}{id};
+	my $rel = $self->{params}{rel} || 'self';
+	
+	my @result_list = $taxonomy->getTaxa($rel, $id_list, $options);
+	return unless @result_list;
+	
+	$self->{main_result} = \@result_list;
+	$self->{result_count} = scalar(@result_list);
+	return 1;
     }
     
-    # If a restriction has been specified for extant or non-extant taxa, add
-    # the appropriate filter.
+    # Otherwise, we have an empty result.
     
-    if ( defined $self->{filter_extant} )
+    else
     {
-	if ( $self->{filter_extant} )
-	{
-	    push @filter_list, "a.extant = 'yes'";
-	}
-	
-	else
-	{
-	    push @filter_list, "a.extant = 'no'";
-	}
+	return;
     }
-    
-    # If a text match has been specified, add the appropriate filter.
-    
-    if ( defined $self->{filter_taxon_match} )
-    {
-	push @filter_list, "a.taxon_name like '$self->{filter_taxon_match}'";
-    }
-    
-    # If a rank or range of ranks has been specified, add the appropriate
-    # filter. 
-    
-    if ( ref $self->{filter_taxon_rank} eq 'ARRAY' )
-    {
-	my (@disjunction, @in_list);
-	
-	foreach my $r (@{$self->{filter_taxon_rank}})
-	{
-	    if ( ref $r eq 'ARRAY' )
-	    {
-		push @disjunction, "a.taxon_rank >= $r->[0] and a.taxon_rank <= $r->[1]";
-	    }
-	    
-	    else
-	    {
-		push @in_list, $r;
-	    }
-	}
-	
-	if ( @in_list )
-	{
-	    push @disjunction, "a.taxon_rank in (" . join(',', @in_list) . ")";
-	}
-	
-	if ( @disjunction )
-	{
-	    push @filter_list, '(' . join(' or ', @disjunction) . ')';
-	}
-    }
-    
-    # If a base taxon has been specified by taxon_no, find it and add the appropriate
-    # filter.
-    
-    if ( defined $self->{base_taxon_no} )
-    {
-	my @base_ranges;
-	
-	foreach my $taxon_no (split /,/, $self->{base_taxon_no})
-	{
-	    next unless $taxon_no > 0;
-	    $taxon_no += 0;
-	    
-	    my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
-	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
-				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-	     WHERE t1.taxon_no = $taxon_no";
-	
-	    my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql, undef, $self->{base_taxon_no});
-	    
-	    # If we can't find the base taxon, the result set will be empty.
-	    
-	    unless ( defined $lft and $lft > 0 )
-	    {
-		next;
-	    }
-	    
-	    # Otherwise, we select the appropriate range of taxa.
-	    
-	    push @base_ranges, "(t.lft >= $lft and t.lft <= $rgt)";
-	    $self->{root_taxa}{$base_no} = 1;
-	}
-	
-	# If we didn't find anything at all, the result set will be empty.
-	
-	if ( @base_ranges == 0 )
-	{
-	    return;
-	}
-	
-	# Otherwise, add the specified filter expression to the list.
-	
-	elsif ( @base_ranges == 1 )
-	{
-	    push @filter_list, @base_ranges;
-	}
-	
-	else
-	{
-	    push @filter_list, '(' . join(' or ', @base_ranges) . ')';
-	}
-    }
-    
-    # If a base taxon (or more than one) has been specified by taxon_name,
-    # find it and add the appropriate filter.  We split the argument on
-    # commas, and then look for a suffix introduced by a period.
-    
-    if ( defined $self->{base_taxon_name} )
-    {
-	my @base_ranges;
-	
-	foreach my $name (split /\s*,\s*/, $self->{base_taxon_name})
-	{
-	    next if $name eq '';
-	    my $rank;
-	    
-	    if ( $name =~ /([a-zA-Z() ]*)\.\s*(.*)/ )
-	    {
-		$name = $1; $rank = $2;
-	    }
-	    
-	    my $sql = "SELECT t3.lft, t3.rgt, t3.taxon_no
-		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
-				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
-				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-		WHERE a.taxon_name = '$name'";
-	    
-	    if ( defined $rank and $rank ne '' )
-	    {
-		die "400 Unknown taxon rank '$rank'" unless $DataQuery::TAXONOMIC_RANK{lc $rank};
-		$sql .= "and a.taxon_rank = '" . lc $rank . "'";
-	    }
-	    
-	    my ($lft, $rgt, $base_no) = $dbh->selectrow_array($sql);
-	    
-	    # If we can't find the base taxon, the result set will be empty.
-	    
-	    unless ( defined $lft and $lft > 0 )
-	    {
-		next;
-	    }
-	
-	    # Otherwise, select the appropriate range of taxa.
-	    
-	    push @base_ranges, "(t.lft >= $lft and t.lft <= $rgt)";
-	    $self->{root_taxa}{$base_no} = 1;
-	}
-	
-	# If we didn't find anything at all, the result set will be empty.
-	
-	if ( @base_ranges == 0 )
-	{
-	    return;
-	}
-	
-	# Otherwise, add the specified filter expression to the list.
-	
-	elsif ( @base_ranges == 1 )
-	{
-	    push @filter_list, @base_ranges;
-	}
-	
-	else
-	{
-	    push @filter_list, '(' . join(' or ', @base_ranges) . ')';
-	}
-    }
-    
-    # If a leaf taxon has been specified by taxon_no, find it and add the appropriate
-    # filter.
-    
-    if ( defined $self->{leaf_taxon_no} )
-    {
-	my $sql = "SELECT t3.lft, t3.rgt
-	     FROM taxa_tree_cache t1 JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
-				     JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-	     WHERE t1.taxon_no = ?";
-	
-	my ($lft, $rgt) = $dbh->selectrow_array($sql, undef, $self->{leaf_taxon_no});
-	
-	# If we can't find the base taxon, the result set will be empty.
-	
-	unless ( defined $lft and $lft > 0 )
-	{
-	    return;
-	}
-	
-	# Otherwise, we select the appropriate range of taxa.
-	
-	push @filter_list, "t.lft <= $lft", "t.rgt >= $lft";
-    }
-    
-    # If a base taxon has been specified by taxon_name, find it and add the
-    # appropriate filter.
-    
-    if ( defined $self->{leaf_taxon_name} )
-    {
-	my $rank_clause = '';
-	my @args = $self->{leaf_taxon_name};
-	
-	# If a rank was specified, add a clause to narrow it down.
-	
-	if ( defined $self->{leaf_taxon_rank} )
-	{
-	    $rank_clause = "and a.taxon_rank = ?";
-	    push @args, $self->{leaf_taxon_rank};
-	}
-	
-	my $sql = "SELECT t3.lft, t3.rgt
-		FROM authorities a JOIN taxa_tree_cache t1 USING (taxon_no)
-				JOIN taxa_tree_cache t2 ON t2.taxon_no = t1.synonym_no
-				JOIN taxa_tree_cache t3 ON t3.taxon_no = t2.synonym_no
-		WHERE a.taxon_name = ? $rank_clause";
-	    
-	my ($lft, $rgt) = $dbh->selectrow_array($sql, undef, @args);
-	
-	# If we can't find the base taxon, the result set will be empty.
-	
-	unless ( defined $lft and $lft > 0 )
-	{
-	    return;
-	}
-	
-	# Otherwise, select the appropriate range of taxa.
-	
-	push @filter_list, "t.lft <= $lft", "t.rgt >= $lft";
-    }
-    
-    # Add the extra fields necessary to show the requested info
-    
-    if ( defined $self->{show_ref} )
-    {
-	push @extra_fields, "r.author1init r_ai1", "r.author1last r_al1",
-	    "r.author2init r_ai2", "r.author2last r_al2", "r.otherauthors r_oa",
-		"r.pubyr r_pubyr", "r.reftitle r_reftitle", "r.pubtitle r_pubtitle",
-		    "r.editors r_editors", "r.pubvol r_pubvol", "r.pubno r_pubno",
-			"r.firstpage r_fp", "r.lastpage r_lp";
-    }
-    
-    if ( defined $self->{show_attribution} )
-    {
-	push @extra_fields, 
-	    "if (a.pubyr IS NOT NULL AND a.pubyr != '' AND a.pubyr != '0000', a.pubyr, IF (a.ref_is_authority = 'YES', r.pubyr, '')) a_pubyr",
-		"if (a.ref_is_authority = 'YES', r.author1last, a.author1last) a_al1",
-		    "if (a.ref_is_authority = 'YES', r.author2last, a.author2last) a_al2",
-			"if (a.ref_is_authority = 'YES', r.otherauthors, a.otherauthors) a_ao";
-    }
-    
-    if ( defined $self->{show_code} )
-    {
-	push @extra_fields, "t.lft";
-	$self->getCodeRanges();
-    }
-    
-    # Now construct the filter expression and extra_tables expression
-    
-    my $taxon_filter = join(' and ', @filter_list);
-    $taxon_filter = "WHERE $taxon_filter" if $taxon_filter ne '';
-    
-    # and the extra_fields expression
-    
-    my $extra_fields = join(', ', @extra_fields);
-    $extra_fields = ", " . $extra_fields if $extra_fields ne '';
-    my $taxon_limit = '';
-    # Now construct and execute the SQL statement that will be used to fetch
-    # the desired information from the database.
-    
-    $self->{main_sql} = "
-	SELECT a.taxon_no, a.taxon_rank, a.taxon_name, a.common_name, a.extant, o.status, o.spelling_reason,
-		pa.taxon_no as parent_no, pa.taxon_name as parent_name, t.spelling_no, t.synonym_no, t.orig_no,
-		xa.taxon_no as accepted_no, xa.taxon_name as accepted_name
-		$extra_fields
-        FROM authorities a JOIN taxa_tree_cache t USING (taxon_no)
-		LEFT JOIN refs r USING (reference_no)
-		LEFT JOIN opinions o USING (opinion_no)
-		LEFT JOIN authorities xa ON (xa.taxon_no = CASE
-		    WHEN status <> 'belongs to' AND status <> 'invalid subgroup of' THEN o.parent_spelling_no
-		    WHEN t.taxon_no <> t.synonym_no THEN t.synonym_no END)
-		LEFT JOIN (taxa_tree_cache pt JOIN authorities pa ON (pa.taxon_no = pt.synonym_no))
-		    ON (pt.taxon_no = if(o.status = 'belongs to', o.parent_spelling_no, null))
-	$taxon_filter ORDER BY t.lft ASC $taxon_limit";
-    
-    # Also construct a statement to fetch the result count if necessary.
-    
-    $self->{count_sql} = "
-	SELECT count(*)
-	FROM authorities a JOIN taxa_tree_cache t USING (taxon_no)
-		LEFT JOIN opinions o USING (opinion_no)
-	$taxon_filter";
-    
-    # Now prepare and execute the main statement.
-    
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
-    
-    # Make sure that processResultSet will be called if necessary after the
-    # results are fetched and before the output records are generated.  This
-    # is necessary if we are fetching a list of parents of a single taxon.
-    
-    $self->{process_resultset} = 1 if defined $self->{leaf_taxon_no} 
-	or defined $self->{leaf_taxon_name};
 }
 
 

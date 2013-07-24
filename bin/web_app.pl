@@ -25,6 +25,12 @@ use TreeQuery;
 use CollectionQuery;
 use IntervalQuery;
 
+our($DEBUG);
+
+if ( $ARGV[0] eq 'GET' )
+{
+    $DEBUG = 1;
+}
 
 set environment => 'development';
 set apphandler => 'Debug';
@@ -61,17 +67,13 @@ ruleset '1.1:taxon_specifier' =>
       { default => 'current' } ];
 
 ruleset '1.1:taxon_selector' =>
-    [param => 'taxon_name', \&TaxonQuery::validNameSpec, { alias => 'name' }],
-    [param => 'taxon_id', INT_LIST_PERMISSIVE(1), { alias => 'id' }],
-    [param => 'base_name', \&TaxonQuery::validNameSpec],
-    [param => 'base_id', INT_LIST_PERMISSIVE(1)],
-    [param => 'leaf_name', \&TaxonQuery::validNameSpec],
-    [param => 'leaf_id', INT_LIST_PERMISSIVE(1)],
+    [param => 'name', \&TaxonQuery::validNameSpec, { alias => 'taxon_name' }],
+    [param => 'id', INT_LIST_PERMISSIVE(1), { alias => 'base_id' }],
+    [param => 'rel', ENUM_VALUE('self', 'synonyms', 'children', 'all_children', 
+				'parents', 'all_parents', 'common_ancestor', 'all_taxa'),
+      { default => 'self' } ],
     [param => 'status', ENUM_VALUE('valid', 'senior', 'invalid', 'all'),
       { default => 'valid' } ],
-    [at_most_one => 'name', 'taxon_name', 'id', 'taxon_id', 'base_name', 'base_id'],
-    [at_most_one => 'name', 'taxon_name', 'id', 'taxon_id', 'leaf_name', 'leaf_id'],
-    [at_most_one => 'leaf_name', 'leaf_id'],
     [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact', 'all'),
       { default => 'current' } ];
 
@@ -91,7 +93,7 @@ ruleset '1.1:taxa/single' =>
     [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
-ruleset '1.1/taxa/list' => 
+ruleset '1.1:taxa/list' => 
     [require => '1.1:taxon_selector',
 	{ error => "you must specify one of 'name', 'id', 'status', 'base_name', 'base_id', 'leaf_name', 'leaf_id'" }],
     [allow => '1.1:taxon_filter'],
@@ -226,13 +228,6 @@ get '/data1.1/taxa/single.:ct' => sub {
 		op => 'single');
 };
 
-get '/data1.1/taxa/:id.:ct' => sub {
-
-    querySingle('TaxonQuery', v => '1.1',
-		validation => '1.1:taxa/single',
-		op => 'single');
-};
-
 get '/data1.1/taxa/list.:ct' => sub {
 
     queryMultiple('TaxonQuery', v => '1.1',
@@ -252,6 +247,13 @@ get '/data1.1/taxa/hierarchy.:ct' => sub {
     queryMultiple('TaxonQuery', v => '1.1',
 		  validation => '1.1:taxa/list',
 		  op => 'hierarchy');
+};
+
+get '/data1.1/taxa/:id.:ct' => sub {
+
+    querySingle('TaxonQuery', v => '1.1',
+		validation => '1.1:taxa/single',
+		op => 'single');
 };
 
 get '/data1.1/colls/single.:ct' => sub {

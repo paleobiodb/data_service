@@ -14,11 +14,11 @@ use base 'DataQuery';
 use Carp qw(carp croak);
 
 
-our (%OUTPUT, %PROC);
+our (%SELECT, %TABLES, %PROC, %OUTPUT);
 
-our ($SINGLE_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-our ($LIST_FIELDS) = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
@@ -30,7 +30,7 @@ our ($SUMMARY_2A) = "s.bin_id as sum_id, s.clust_id, count(distinct collection_n
 
 $PROC{single} = $PROC{list} =
    [
-    { rec => 'sec_rnos', add => 'reference_no', split => ',' },
+    { rec => 'sec_ref_nos', add => 'reference_no', split => ',' },
    ];
 
 $OUTPUT{single} = $OUTPUT{list} = 
@@ -65,7 +65,7 @@ $OUTPUT{summary} =
     { rec => 'lat', com => 'lat', doc => "The latitude of the centroid of this cluster" },
    ];
 
-our ($BIN_FIELDS) = ", c.bin_id, c.clust_id";
+$SELECT{bin} = "c.bin_id, c.clust_id";
 
 $OUTPUT{bin} = 
    [
@@ -73,7 +73,9 @@ $OUTPUT{bin} =
     { rec => 'bin_id', com => 'lv2', doc => "The identifier of the level-2 cluster in which this collection is located" },
    ];
 
-our ($REF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
+$SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
+
+$TABLES{ref} = 'r';
 
 $PROC{ref} = 
    [
@@ -87,11 +89,11 @@ $OUTPUT{ref} =
     #	doc => "The year of publication of the primary reference associated with this collection" },
     { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => '; ',
 	doc => "The reference(s) associated with this collection (as formatted text)" },
-    { rec => 'refno_list', pbdb => 'reference_no', com => 'rid',
-	doc => "A list of reference identifiers, exactly corresponding to the references listed under {pubref}" },
    ];
 
-our ($ATTR_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr";
+$SELECT{attr} = "r.author1init as a_ai1, r.author1last as a_al1, r.author2init as a_ai2, r.author2last as a_al2, r.otherauthors as a_oa, r.pubyr as a_pubyr";
+
+$TABLES{attr} = 'r';
 
 $OUTPUT{attr} = 
    [
@@ -102,7 +104,9 @@ $OUTPUT{attr} =
 	doc => "The reference(s) associated with this collection (pubyr and authors only)" },
    ];
 
-our ($TIME_FIELDS) = ", ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age";
+$SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age";
+
+$TABLES{time} = ['ei', 'li'];
 
 $OUTPUT{time} =
    [
@@ -116,9 +120,11 @@ $OUTPUT{time} =
 	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
    ];
 
-our ($PERS_FIELDS) = ", authorizer_no, ppa.name as authorizer, enterer_no, ppe.name as enterer";
+$SELECT{pers} = "authorizer_no, ppa.name as authorizer, enterer_no, ppe.name as enterer";
 
-our ($LOC_FIELDS) = ", c.country, c.state, c.county, c.paleolat, c.paleolng, c.latlng_precision";
+$TABLES{pers} = ['ppa', 'ppe'];
+
+$SELECT{loc} = "cc.country, cc.state, cc.county";
 
 $OUTPUT{loc} = 
    [
@@ -128,8 +134,6 @@ $OUTPUT{loc} =
 	doc => "The state or province in which this collection is located [not available for all collections]" },
     { rec => 'county', com => 'cny',
 	doc => "The county in which this collection is located [not available for all collections]" },
-    { rec => 'latlng_precision', com => 'gpr',
-	doc => "The precision of the collection location (degrees/minutes/seconds/#digits)" },
    ];
 
 $OUTPUT{taxa} = 
@@ -157,7 +161,7 @@ $OUTPUT{rem} =
 	doc => "Any additional remarks that were entered about the colection"},
    ];
 
-our ($EXT_FIELDS) = ", s.lng_min, s.lng_max, s.lat_min, s.lat_max, s.std_dev";
+$SELECT{ext} = "s.lng_min, s.lng_max, s.lat_min, s.lat_max, s.std_dev";
 
 $OUTPUT{ext} =
    [
@@ -173,34 +177,6 @@ our (%DOC_ORDER);
 $DOC_ORDER{'single'} = ['single', 'ref', 'time', 'loc', 'rem'];
 $DOC_ORDER{'list'} = ();
 $DOC_ORDER{'summary'} = ();
-
-
-# getOutputFields ( )
-# 
-# Determine the list of output fields, given the name of a section to display.
-
-sub getOutputFields {
-    
-    my ($self, $section) = @_;
-    
-    return @{$OUTPUT{$section}}
-	if ref $OUTPUT{$section} eq 'ARRAY';
-    return;
-}
-
-
-# getProcFields ( )
-# 
-# Determine the list of processing fields, given the name of a section to display
-
-sub getProcFields {
-
-    my ($self, $section) = @_;
-    
-    return @{$PROC{$section}}
-	if ref $PROC{$section} eq 'ARRAY';
-    return;
-}
 
 
 # fetchSingle ( )
@@ -225,23 +201,23 @@ sub fetchSingle {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $tables = {};
-    
-    my $extra_fields = $self->generateQueryFields($self->{show_order}, $tables);
+    my $fields = join(', ', @{$self->{select_list}});
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $tables);
+    my ($join_list) = $self->generateJoinList('c', $self->{select_tables});
     
     # Generate the main query.
     
     $self->{main_sql} = "
-	SELECT $SINGLE_FIELDS $extra_fields
+	SELECT $fields
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id
 	GROUP BY c.collection_no";
+    
+    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
@@ -253,13 +229,10 @@ sub fetchSingle {
     
     if ( $self->{show}{ref} or $self->{show}{sref} )
     {
-        my (@fields) = 'sref' if $self->{show}{sref};
-        @fields = 'ref' if $self->{show}{ref};
-        
-        ($extra_fields) = $self->generateQueryFields(\@fields);
-        
+	my $extra_fields = $SELECT{ref};
+	
         $self->{aux_sql}[0] = "
-        SELECT sr.reference_no $extra_fields
+        SELECT sr.reference_no, $extra_fields
         FROM secondary_refs as sr JOIN refs as r using (reference_no)
         WHERE sr.collection_no = $id
 	ORDER BY sr.reference_no";
@@ -317,11 +290,11 @@ sub fetchMultiple {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $extra_fields = $self->generateQueryFields($self->{show_order}, $tables);
+    my $fields = join(', ', @{$self->{select_list}});
     
-   # Determine the necessary joins.
+    # Determine the necessary joins.
     
-    my $join_list = $self->generateJoinList('c', $tables);
+    my ($join_list) = $self->generateJoinList('c', $self->{select_tables});
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -335,15 +308,16 @@ sub fetchMultiple {
     }
     
     # Generate the main query.
-    
+
     my $filter_list = join(' and ', @filters);
     
     if ( $self->{op} eq 'summary' and $self->{params}{level} == 2 ) 
     {
-	my $fields = $tables->{c} ? $SUMMARY_2A : $SUMMARY_2;
+	my $base_fields = $tables->{c} ? $SUMMARY_2A : $SUMMARY_2;
+	$base_fields .= ', ' . $fields if $fields;
 	
 	$self->{main_sql} = "
-	SELECT $calc $fields $extra_fields
+	SELECT $calc $base_fields
 	FROM coll_bins as s $join_list
 	WHERE $filter_list
 	GROUP BY s.bin_id
@@ -353,10 +327,11 @@ sub fetchMultiple {
     
     elsif ( $self->{op} eq 'summary' ) 
     {
-	my $fields = $tables->{c} ? $SUMMARY_1A : $SUMMARY_1;
+	my $base_fields = $tables->{c} ? $SUMMARY_1A : $SUMMARY_1;
+	$base_fields .= ', ' . $fields if $fields;
 	
 	$self->{main_sql} = "
-	SELECT $calc $fields $extra_fields
+	SELECT $calc $base_fields
 	FROM clusters as s $join_list
 	WHERE $filter_list
 	GROUP BY s.clust_id
@@ -367,7 +342,7 @@ sub fetchMultiple {
     else
     {
 	$self->{main_sql} = "
-	SELECT $calc $LIST_FIELDS $extra_fields
+	SELECT $calc $fields
 	FROM coll_matrix as c join collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
@@ -376,6 +351,8 @@ sub fetchMultiple {
 	ORDER BY c.collection_no
 	$limit";
     }
+    
+    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
     
     # Then prepare and execute the main query and the secondary query.
     
@@ -476,91 +453,6 @@ sub fetchMultiple {
     
 #     $output .= '  </Collection>' . "\n";
 # }
-
-
-# generateQueryFields ( fields )
-# 
-# The parameter 'fields' should be a hash whose keys are strings, or a
-# comma-separated list of strings.
-# 
-# This routine returns a field string and a hash which lists extra tables to
-# be joined in the query.
-
-sub generateQueryFields {
-
-    my ($self, $fields_ref, $tables_ref) = @_;
-    
-    # Return the default if our parameter is undefined.
-    
-    unless ( ref $fields_ref eq 'ARRAY' )
-    {
-	return '';
-    }
-    
-    # Now go through the list of strings and add the appropriate fields and
-    # tables for each.
-    
-    my $fields = '';
-    
-    foreach my $inc (@$fields_ref)
-    {
-	if ( $inc eq 'bin' )
-	{
-	    $fields .= $BIN_FIELDS;
-	}
-	
-	elsif ( $inc eq 'ref' )
-	{
-	    $fields .= $REF_FIELDS;
-	    $tables_ref->{ref} = 1;
-	}
-	
-	elsif ( $inc eq 'pers' )
-	{
-	    $fields .= $PERS_FIELDS;
-	    $tables_ref->{ppa} = 1;
-	    $tables_ref->{ppe} = 1;
-	}
-	
-	elsif ( $inc eq 'loc' )
-	{
-	    $fields .= $LOC_FIELDS;
-	}
-	
-	elsif ( $inc eq 'time' )
-	{
-	    $fields .= $TIME_FIELDS;
-	    $tables_ref->{int} = 1;
-	}
-	
-	elsif ( $inc eq 'taxa' )
-	{
-	    # nothing needed here
-	}
-	
-	elsif ( $inc eq 'occ' )
-	{
-	    # nothing needed here
-	}
-	
-	elsif ( $inc eq 'det' )
-	{
-	    #$fields .= $DETAIL_FIELDS;
-	}
-	
-	elsif ( $inc eq 'ext' )
-	{
-	    $fields .= $EXT_FIELDS;
-	}
-	
-	else
-	{
-	    carp "unrecognized value '$inc' for option 'fields'";
-	}
-    }
-    
-    return $fields;
-}
 
 
 # generateQueryFilters ( tables )
@@ -725,10 +617,11 @@ sub generateJoinList {
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = $mt.reference_no\n" 
-	if $tables->{ref};
-    $join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.early_int_no
-		JOIN interval_map as li on li.interval_no = $mt.late_int_no\n"
-	if $tables->{int};
+	if $tables->{r};
+    $join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.early_int_no\n"
+	if $tables->{ei};
+    $join_list .= "JOIN interval_map as li on li.interval_no = $mt.late_int_no\n"
+	if $tables->{li};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = $mt.authorizer_no\n"
 	if $tables->{ppa};
     $join_list .= "LEFT JOIN person as ppe on ppe.person_no = $mt.enterer_no\n"

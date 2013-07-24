@@ -140,8 +140,8 @@ sub parseRankParam {
 
 # setOutputList ( )
 # 
-# Determine the list of output rules for this query, based on the 'show'
-# parameter and the output format.
+# Determine the list of selection, processing and output rules for this query,
+# based on the 'show' parameter and the output format.
 
 sub setOutputList {
 
@@ -180,24 +180,42 @@ sub setOutputList {
     # Now set the actual list of output fields for the basic query operation
     # and each of the requested sections.
     
-    my @output_list;
-    my @proc_list;
+    my (@select_list, @proc_list, @output_list, %tables);
+    
+    my $class = ref $self;
+    
+    no strict 'refs';
     
     foreach my $section ($self->{op}, @show)
     {
 	next unless $section;
+	
+	my $select_conf = ${"${class}::SELECT"}{$section};
+	my $tables_conf = ${"${class}::TABLES"}{$section};
+	my $proc_conf = ${"${class}::PROC"}{$section};
+	my $output_conf = ${"${class}::OUTPUT"}{$section};
+	
+	push @select_list, $select_conf if defined $select_conf and not ref $select_conf;
+	
+	if ( ref $tables_conf eq 'ARRAY' ) {
+	    map { $tables{$_} = 1 } @$tables_conf;
+	} elsif ( $tables_conf ) {
+	    $tables{$tables_conf} = 1;
+	}
+	
+	push @proc_list, @$proc_conf if ref $proc_conf eq 'ARRAY';
 	
 	push @output_list, grep {
 
 	    0 if $vocab eq 'dwc' and not exists $_->{dwc};
 	    0 if $vocab eq 'com' and not exists $_->{com};
 	    1;
-		
-	} $self->getOutputFields($section);
-	
-	push @proc_list, $self->getProcFields($section);
+	    
+	} @$output_conf if ref $output_conf eq 'ARRAY';
     }
     
+    $self->{select_list} = \@select_list;
+    $self->{select_tables} = \%tables;
     $self->{output_list} = \@output_list;
     $self->{proc_list} = \@proc_list if @proc_list;
 }
@@ -312,7 +330,7 @@ sub generateCompoundResult {
     # not, the result set is empty and we need to return the relevant header
     # and footer.
     
-    unless ( defined $self->{main_sth} )
+    unless ( $self->{main_sth} or $self->{main_result} )
     {
 	return $self->emitHeader() . $self->emitFooter();
     }
@@ -354,9 +372,42 @@ sub generateCompoundResult {
     # a possibility, we also test whether the output size is larger than our
     # threshold for streaming.
     
-    else
+    elsif ( $self->{main_sth} )
     {
 	while ( $row = $sth->fetchrow_hashref )
+	{
+	    # For each row, we start by calling the processRecord method (in case
+	    # the query class has overridden it) and then call generateRecord to
+	    # generate the actual output.
+	    
+	    $self->processRecord($row, $self->{proc_list});
+	    my $row_output = $self->emitRecord($row, $first_row);
+	    $output .= $row_output;
+	    
+	    $first_row = 0;
+	    $self->{row_count}++;
+	    
+	    # If streaming is a possibility, check whether we have passed the
+	    # threshold for result size.  If so, then we need to immediately
+	    # generate the header and stash it along with the output so far.  We
+	    # then return false, which should lead to a subsequent call to
+	    # streamResult().
+	    
+	    if ( defined $options{can_stream} and $self->{should_stream} ne 'no' and
+		 (length($output) > $STREAM_THRESHOLD or $self->{should_stream} eq 'yes') )
+	    {
+		$self->{stashed_output} = $self->emitHeader(streamed => 1) . $output;
+		return;
+	    }
+	}
+    }
+    
+    # If our results were already fetched, then we just process and emit them
+    # one at a time.
+    
+    elsif ( ref $self->{main_result} eq 'ARRAY' )
+    {
+	while ( $row = shift @{$self->{main_result}} )
 	{
 	    # For each row, we start by calling the processRecord method (in case
 	    # the query class has overridden it) and then call generateRecord to
@@ -422,12 +473,26 @@ sub streamResult {
     # Then generate the remaining output.  We don't have to worry about
     # 'is_first', because we know that we're past the first row already.
     
-    while ( $row = $sth->fetchrow_hashref )
+    if ( $sth )
     {
-	$self->processRecord($row, $self->{proc_list});
-	$self->{row_count}++;
-	my $output = $self->emitRecord($row);
-	$writer->write( encode_utf8($output) ) if defined $output and $output ne '';
+	while ( $row = $sth->fetchrow_hashref )
+	{
+	    $self->processRecord($row, $self->{proc_list});
+	    $self->{row_count}++;
+	    my $output = $self->emitRecord($row);
+	    $writer->write( encode_utf8($output) ) if defined $output and $output ne '';
+	}
+    }
+    
+    elsif ( $self->{main_result} )
+    {
+	while ( $row = shift @{$self->{main_result}} )
+	{
+	    $self->processRecord($row, $self->{proc_list});
+	    $self->{row_count}++;
+	    my $output = $self->emitRecord($row);
+	    $writer->write( encode_utf8($output) ) if defined $output and $output ne '';
+	}
     }
     
     # Call the finishOutput() method, and send whatever if returns (if
