@@ -120,6 +120,7 @@ sub fetchSingle {
     
     push @fields, 'ref' if $self->{show}{ref};
     push @fields, 'attr' if $self->{show}{attr};
+    push @fields, 'size' if $self->{show}{size};
     push @fields, 'kingdom' if $self->{show}{code};
     
     $options->{fields} = \@fields;
