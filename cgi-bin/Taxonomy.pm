@@ -452,6 +452,13 @@ our ($COMMENT_FIELDS) = ", a.comments";
 
 our ($SIZE_FIELDS) = ", v.taxon_size as size, v.extant_size as extant_size";
 
+# The "app" fields describe the first and last appearance of the taxon in our
+# database.
+
+our ($APP_FIELDS) = ", v.first_early_int_no as firstapp_ei, v.first_late_int_no as firstapp_li, v.last_early_int_no as lastapp_ei, v.last_last_int_no as lastapp_li";
+
+our ($APP_LONG_FIELDS) = ", fei.interval_name as firstapp_ei, fli.interval_name as firstapp_li, lei.interval_name as lastapp_ei, lli.interval_name as lastapp_li, fei.base_age as firstapp_ea, fli.top_age as firstapp_la, lei.base_age as lastapp_ea, lli.top_age as lastapp_la";
+
 # The following hash is used by the return option 'id_table'.
 
 our(%TAXON_FIELD) = ('lft' => 1, 'rgt' => 1, 'depth' => 1, 'opinion_no' => 1,
@@ -3106,7 +3113,7 @@ sub getTaxa {
     unless ( $rel eq 'all_taxa' )
     {
 	$base_nos = $self->generateBaseNos($base_taxa);
-	return unless ref $base_nos and %$base_nos > 0;
+	return unless ref $base_nos and %$base_nos;
     }
     
     # Set option defaults.
@@ -5568,6 +5575,22 @@ sub generateQueryFields {
 	    $tables{v} = 1;
 	}
 	
+	elsif ( $inc eq 'app' )
+	{
+	    $fields .= $APP_FIELDS;
+	    $tables{v} = 1;
+	}
+	
+	elsif ( $inc eq 'applong' )
+	{
+	    $fields .= $APP_LONG_FIELDS;
+	    $tables{v} = 1;
+	    $tables{fei} = 1;
+	    $tables{fli} = 1;
+	    $tables{lei} = 1;
+	    $tables{lli} = 1;
+	}
+	
 	else
 	{
 	    carp "unrecognized value '$inc' for option 'fields'";
@@ -5723,6 +5746,14 @@ sub generateExtraJoins {
 	if $tables->{ca};
     $extra_joins .= "LEFT JOIN $attrs_table as v on v.orig_no = $main_table.orig_no\n"
 	if $tables->{v};
+    $extra_joins .= "LEFT JOIN interval_map as fei on fei.older_seq = v.first_early_int_no\n"
+	if $tables->{fei};
+    $extra_joins .= "LEFT JOIN interval_map as fli on fli.older_seq = v.first_late_int_no\n"
+	if $tables->{fli};
+    $extra_joins .= "LEFT JOIN interval_map as lei on lei.younger_seq = v.last_early_int_no\n"
+	if $tables->{fei};
+    $extra_joins .= "LEFT JOIN interval_map as lli on lli.younger_seq = v.last_late_int_no\n"
+	if $tables->{fli};
     
     if ( $tables->{pa} and $main_table !~ /^o/ )
     {

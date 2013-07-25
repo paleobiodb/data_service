@@ -23,7 +23,7 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "A positive integer that uniquely identifies this taxonomic name"},
     { rec => 'orig_no', com => 'qid',
         doc => "A positive integer that uniquely identifies the taxonomic concept"},
-    { rec => 'record_type', com => 'typ', value => 'tax', value_dwc => 'Taxon',
+    { rec => 'record_type', com => 'typ', com_value => 'tax', dwc_value => 'Taxon', value => 'taxon',
         doc => "The type of this object: 'tax' for a taxonomic name" },
     { rec => 'taxon_rank', dwc => 'taxonRank', com => 'rnk',
 	doc => "The taxonomic rank of this name" },
@@ -31,22 +31,38 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "The scientific name of this taxon" },
     { rec => 'common_name', dwc => 'vernacularName', com => 'nm2',
         doc => "The common (vernacular) name of this taxon, if any" },
-    { rec => 'attribution', dwc => 'scientificNameAuthorship', com => 'att', 
+    { rec => 'attribution', dwc => 'scientificNameAuthorship', show => 'attr', com => 'att', 
 	doc => "The attribution (author and year) of this taxonomic name" },
     { rec => 'parent_no', dwc => 'parentNameUsageID', com => 'par', 
 	doc => "The identifier of the parent taxonomic concept, if any" },
     { rec => 'synonym_no', dwc => 'acceptedNameUsageID', pbdb => 'senior_no', com => 'snr', dedup => 'orig_no',
         doc => "The identifier of the senior synonym of this taxonomic concept, if any" },
-    { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', json_list => 1,
+    { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', show => 'ref', json_list => 1,
 	doc => "The reference from which this name was entered into the database (as formatted text)" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
 	doc => "The identifier of the primary reference associated with the taxon" },
     { rec => 'extant', com => 'ext', 
         doc => "True if this taxon is extant on earth today, false if not, not present if unrecorded" },
-    { rec => 'size', com => 'siz',
+    { rec => 'size', com => 'siz', show => 'size',
         doc => "The total number of taxa in the database that are contained within this taxon, including itself" },
-    { rec => 'extant_size', com => 'exs',
+    { rec => 'extant_size', com => 'exs', show => 'size',
         doc => "The total number of extant taxa in the database that are contained within this taxon, including itself" },
+    { rec => 'firstapp_ei', com => 'fei', show => 'applong',
+        doc => "The name of the interval for the first appearance of this taxon in this database" },
+    { rec => 'firstapp_li', com => 'fli', show => 'applong', dedup => 'firstapp_ei',
+        doc => "The end of the interval range for the first appearance of this taxon in this database" },
+    { rec => 'lastapp_ei', com => 'lei', show => 'applong',
+        doc => "The name of the interval for the last appearance of this taxon in this database" },
+    { rec => 'lastapp_li', com => 'lli', show => 'applong', dedup => 'lastapp_ei',
+        doc => "The end of the interval range for the last appearance of this taxon in this database" },
+    { rec => 'firstapp_ea', com => 'fea', show => 'applong',
+        doc => "The early age bound for the first appearance of this taxon in this database" },
+    { rec => 'firstapp_la', com => 'fla', show => 'applong', 
+        doc => "The late age bound for the first appearance of this taxon in this database" },
+    { rec => 'lastapp_ea', com => 'lea', show => 'applong',
+        doc => "The early age bound for the last appearance of this taxon in this database" },
+    { rec => 'lastapp_la', com => 'lla', show => 'applong', 
+        doc => "The late age bound for the last appearance of this taxon in this database" },
    ];
 
 $PROC{attr} = 
@@ -121,6 +137,8 @@ sub fetchSingle {
     push @fields, 'ref' if $self->{show}{ref};
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
+    push @fields, 'app' if $self->{show}{app};
+    push @fields, 'applong' if $self->{show}{applong};
     push @fields, 'kingdom' if $self->{show}{code};
     
     $options->{fields} = \@fields;
@@ -161,6 +179,8 @@ sub fetchMultiple {
     push @fields, 'ref' if $self->{show}{ref};
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
+    push @fields, 'app' if $self->{show}{app};
+    push @fields, 'applong' if $self->{show}{applong};
     push @fields, 'kingdom' if $self->{show}{code};
     
     $options->{fields} = \@fields;

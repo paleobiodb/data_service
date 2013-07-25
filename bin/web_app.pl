@@ -27,7 +27,7 @@ use IntervalQuery;
 
 our($DEBUG);
 
-if ( $ARGV[0] eq 'GET' )
+if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
 {
     $DEBUG = 1;
 }
@@ -83,7 +83,7 @@ ruleset '1.1:taxon_filter' =>
     [optional => 'depth', POS_VALUE];
 
 ruleset '1.1:taxon_display' => 
-    [optional => 'show', LIST_PERMISSIVE('ref','attr','time','coll','phyl','size','det','all')],
+    [optional => 'show', LIST_PERMISSIVE('ref','attr','time','app','applong','coll','phyl','size','det','all')],
     [optional => 'exact', FLAG_VALUE];
 
 ruleset '1.1:taxa/single' => 

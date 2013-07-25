@@ -22,7 +22,7 @@ $OUTPUT{single} = $OUTPUT{list} =
    [
     { rec => 'interval_no', com => 'oid',
 	doc => "A positive integer that uniquely identifies this interval"},
-    { rec => 'record_type', com => 'typ', value => 'int', 
+    { rec => 'record_type', com => 'typ', com_value => 'int', value => 'interval',
         doc => "The type of this object: 'int' for an interval" },
     { rec => 'interval_name', com => 'nam',
 	doc => "The name of this interval" },

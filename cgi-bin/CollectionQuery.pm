@@ -37,7 +37,7 @@ $OUTPUT{single} = $OUTPUT{list} =
    [
     { rec => 'collection_no', dwc => 'collectionID', com => 'oid',
 	doc => "A positive integer that uniquely identifies the collection"},
-    { rec => 'record_type', com => 'typ', value => 'col', value_dwc => 'Occurrence',
+    { rec => 'record_type', com => 'typ', com_value => 'col', dwc_value => 'Occurrence', value => 'collection',
         doc => "The type of this object: 'col' for a collection" },
     { rec => 'lng', dwc => 'decimalLongitude', com => 'lng',
 	doc => "The longitude at which the collection is located (in degrees)" },

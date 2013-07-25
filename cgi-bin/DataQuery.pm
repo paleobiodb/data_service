@@ -177,6 +177,14 @@ sub setOutputList {
     
     $self->{vocab} = $vocab;
     
+    # Quote all output fields if we are directed to.  A level of 2 means to
+    # quote everything, 1 means only quote fields that contain commas or newlines
+    
+    if ( $self->{output_format} eq 'csv' )
+    {
+	$self->{quoted} = $self->{params}{quoted} ? 2 : 1;
+    }
+    
     # Now set the actual list of output fields for the basic query operation
     # and each of the requested sections.
     
@@ -205,13 +213,18 @@ sub setOutputList {
 	
 	push @proc_list, @$proc_conf if ref $proc_conf eq 'ARRAY';
 	
-	push @output_list, grep {
-
-	    0 if $vocab eq 'dwc' and not exists $_->{dwc};
-	    0 if $vocab eq 'com' and not exists $_->{com};
-	    1;
+	foreach my $f ( ref $output_conf eq 'ARRAY' ? @$output_conf : () )
+	{
+	    next if $f->{show} and not $self->{show}{$f->{show}};
+	    next if $vocab eq 'dwc' and not exists $f->{dwc};
+	    next if $vocab eq 'com' and not exists $f->{com};
+	    next if $self->{output_format} eq 'json' and $f->{no_json};
+	    next if $self->{output_format} eq 'xml' and $f->{no_xml};
+	    next if $self->{output_format} eq 'txt' and $f->{no_txt};
+	    next if $self->{output_format} eq 'csv' and $f->{no_txt};
 	    
-	} @$output_conf if ref $output_conf eq 'ARRAY';
+	    push @output_list, $f;
+	}
     }
     
     $self->{select_list} = \@select_list;
@@ -732,7 +745,9 @@ sub emitHeaderText {
     
     # Otherwise, we go through the output list and collect up the field names. 
     
-    my (@fields) = map { $_->{rec} } @{$self->{output_list}};
+    my $vocab = $self->{vocab};
+    
+    my (@fields) = map { $_->{$vocab} || $_->{rec} } @{$self->{output_list}};
     
     # Now put them all together into one line.
     
@@ -834,7 +849,13 @@ sub constructObjectJSON {
     
 	# Process the value according to the rule
 	
-	if ( ref $f->{code} eq 'CODE' )
+	if ( $f->{use_each} and ref $value eq 'ARRAY' )
+	{
+	    my $rule = $f->{rule} || $f;
+	    $value = $self->constructArrayJSON($value, $rule);
+	}
+	
+	elsif ( ref $f->{code} eq 'CODE' )
 	{
 	    if ( $f->{use_main} ) {
 		$value = json_clean($f->{code}($self, $record, $f));
@@ -939,6 +960,70 @@ sub constructArrayJSON {
 }
 
 
+# emitRecordText ( )
+# 
+# Generate the proper output for a single record in txt or csv format.
+
+sub emitRecordText {
+    
+    my ($self, $record) = @_;
+    
+    # Start the output.
+    
+    my @values;
+    my $vocab = $self->{vocab};
+    
+    foreach my $f ( @{$self->{output_list}} )
+    {
+	my $field = $f->{rec};
+	my $sep = $f->{txt_list} || ',';
+	
+	# Process the rule to generate a value for each output rule, which may
+	# be empty.  If a code ref was supplied, call that routine or apply
+	# that hash.  If a list of values is found, join them using the
+	# indicated separator.
+	
+	my $value = defined $record->{$field} ? $record->{$field} : '';
+	
+	# If a specific value was defined, use that instead of the field value.
+	
+	$value = $f->{value} if defined $f->{value};
+	$value = $f->{"${vocab}_value"} if defined $f->{"${vocab}_value"};
+    
+	if ( ref $f->{code} eq 'CODE' )
+	{
+	    if ( $f->{use_main} ) {
+		$value = $f->{code}($self, $record, $f);
+	    } elsif ( $f->{use_each} and ref $value eq 'ARRAY' ) {
+		my @list = map { $f->{code}($self, $_, $f) } @$value;
+		$value = join($sep, @list);
+	    } else {
+		$value = $f->{code}($self, $value, $f);
+	    }
+	}
+	
+	elsif ( ref $f->{code} eq 'HASH' )
+	{
+	    if ( $f->{use_each} and ref $value eq 'ARRAY' ) {
+		my @list = map { $f->{code}{$_} } @$value;
+		$value = join($sep, @list);
+	    } else {
+		$value = $f->{code}{$value};
+	    }
+	}
+	
+	elsif ( ref $value eq 'ARRAY' )
+	{
+	    $value = join($sep, @$value);
+	}
+	
+	push @values, $value;
+    }
+    
+    return $self->generateTextLine(@values);
+}
+
+
 # emitFooter ( )
 # 
 # Generate the proper footer for the requested output format.
@@ -952,7 +1037,7 @@ sub emitFooter {
 	return $self->emitFooterJSON(@options);
     }
     
-    elsif ( $self->{output_format} eq 'txt' )
+    elsif ( $self->{output_format} eq 'txt' or $self->{output_format} eq 'csv' )
     {
 	return $self->emitFooterText(@options);
     }
@@ -1060,7 +1145,7 @@ sub finishOutput {
 sub generateTextLine {
 
     my $self = shift;
-    my $quoted = $self->{params}{quoted};
+    my $quoted = $self->{quoted};
     my $term = $self->{params}{linebreak} eq 'cr' ? "\n" : "\r\n";
     
     if ( $self->{output_format} eq 'csv' )
@@ -1146,7 +1231,7 @@ sub json_clean {
     # Do another quick check for okay characters.  If there's nothing exotic,
     # just return the quoted value.
     
-    return '"' . $string . '"' unless $string =~ /[^a-zA-Z0-9 _.,;:-]/;
+    return '"' . $string . '"' unless $string =~ /[^a-zA-Z0-9 _.,;:<>-]/;
     
     # Otherwise, we need to do some longer processing.
     
@@ -1215,7 +1300,7 @@ sub csv_clean {
     # return the quoted value.
     
     return $quoted ? '"' . $string . '"' : $string
-	unless $string =~ /^[a-zA-Z0-9 _.;:-]/;
+	unless $string =~ /[^a-zA-Z0-9 _.;:<>-]/;
     
     # Otherwise, we need to do some longer processing.
     
@@ -1226,7 +1311,7 @@ sub csv_clean {
     
     # Next, double all quotes and textify whitespace control characters
     
-    $string =~ s/("|'|\n|\t|\r)/$TXTESCAPE{$1}/ge;
+    $string =~ s/("|'|\n|\r)/$TXTESCAPE{$1}/ge;
     
     # Finally, delete all other control characters (they shouldn't be in the
     # database in the first place, but unfortunately some rows do contain
@@ -1234,7 +1319,7 @@ sub csv_clean {
     
     $string =~ s/[\0-\037\177]//g;
     
-    return '"' . $string . '"';
+    return $quoted ? '"' . $string . '"' : $string;
 }
 
 
@@ -1255,7 +1340,7 @@ sub txt_clean {
     # Do a quick check for okay characters.  If there's nothing exotic, just
     # return the value as-is.
     
-    return $string unless $string =~ /^[a-zA-Z0-9 _.,;:-]/;
+    return $string unless $string =~ /^[a-zA-Z0-9 _.,;:<>-]/;
     
     # Otherwise, we need to do some longer processing.
     
