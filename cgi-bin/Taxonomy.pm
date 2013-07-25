@@ -5746,13 +5746,13 @@ sub generateExtraJoins {
 	if $tables->{ca};
     $extra_joins .= "LEFT JOIN $attrs_table as v on v.orig_no = $main_table.orig_no\n"
 	if $tables->{v};
-    $extra_joins .= "LEFT JOIN interval_map as fei on fei.older_seq = v.first_early_int_no\n"
+    $extra_joins .= "LEFT JOIN interval_map as fei on fei.older_seq = v.first_early_int_seq\n"
 	if $tables->{fei};
-    $extra_joins .= "LEFT JOIN interval_map as fli on fli.older_seq = v.first_late_int_no\n"
+    $extra_joins .= "LEFT JOIN interval_map as fli on fli.older_seq = v.first_late_int_seq\n"
 	if $tables->{fli};
-    $extra_joins .= "LEFT JOIN interval_map as lei on lei.younger_seq = v.last_early_int_no\n"
+    $extra_joins .= "LEFT JOIN interval_map as lei on lei.younger_seq = v.last_early_int_seq\n"
 	if $tables->{fei};
-    $extra_joins .= "LEFT JOIN interval_map as lli on lli.younger_seq = v.last_late_int_no\n"
+    $extra_joins .= "LEFT JOIN interval_map as lli on lli.younger_seq = v.last_late_int_seq\n"
 	if $tables->{fli};
     
     if ( $tables->{pa} and $main_table !~ /^o/ )
