@@ -387,7 +387,7 @@ sub generateCompoundResult {
     
     elsif ( $self->{main_sth} )
     {
-	while ( $row = $sth->fetchrow_hashref )
+	while ( $row = $self->{main_sth}->fetchrow_hashref )
 	{
 	    # For each row, we start by calling the processRecord method (in case
 	    # the query class has overridden it) and then call generateRecord to

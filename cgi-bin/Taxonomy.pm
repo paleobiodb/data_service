@@ -455,7 +455,7 @@ our ($SIZE_FIELDS) = ", v.taxon_size as size, v.extant_size as extant_size";
 # The "app" fields describe the first and last appearance of the taxon in our
 # database.
 
-our ($APP_FIELDS) = ", v.first_early_int_no as firstapp_ei, v.first_late_int_no as firstapp_li, v.last_early_int_no as lastapp_ei, v.last_last_int_no as lastapp_li";
+our ($APP_FIELDS) = ", v.first_early_int_seq as firstapp_ei, v.first_late_int_seq as firstapp_li, v.last_early_int_seq as lastapp_ei, v.last_last_int_seq as lastapp_li";
 
 our ($APP_LONG_FIELDS) = ", fei.interval_name as firstapp_ei, fli.interval_name as firstapp_li, lei.interval_name as lastapp_ei, lli.interval_name as lastapp_li, fei.base_age as firstapp_ea, fli.top_age as firstapp_la, lei.base_age as lastapp_ea, lli.top_age as lastapp_la";
 

@@ -24,8 +24,8 @@ $OUTPUT{single} = $OUTPUT{list} =
     { rec => 'orig_no', com => 'qid',
         doc => "A positive integer that uniquely identifies the taxonomic concept"},
     { rec => 'record_type', com => 'typ', com_value => 'tax', dwc_value => 'Taxon', value => 'taxon',
-        doc => "The type of this object: 'tax' for a taxonomic name" },
-    { rec => 'taxon_rank', dwc => 'taxonRank', com => 'rnk',
+        doc => "The type of this object: {value} for a taxonomic name" },
+    { rec => 'taxon_rank', dwc => 'taxonRank', com => 'rnk', 
 	doc => "The taxonomic rank of this name" },
     { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
 	doc => "The scientific name of this taxon" },
@@ -41,27 +41,29 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "The reference from which this name was entered into the database (as formatted text)" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
 	doc => "The identifier of the primary reference associated with the taxon" },
-    { rec => 'extant', com => 'ext', 
+    { rec => 'extant', com => 'ext', dwc => 'isExtant',
         doc => "True if this taxon is extant on earth today, false if not, not present if unrecorded" },
     { rec => 'size', com => 'siz', show => 'size',
         doc => "The total number of taxa in the database that are contained within this taxon, including itself" },
     { rec => 'extant_size', com => 'exs', show => 'size',
         doc => "The total number of extant taxa in the database that are contained within this taxon, including itself" },
-    { rec => 'firstapp_ei', com => 'fei', show => 'applong',
+    { rec => 'firstapp_ei', com => 'fei', dwc => 'firstAppearanceEarlyInterval', show => 'applong',
         doc => "The name of the interval for the first appearance of this taxon in this database" },
-    { rec => 'firstapp_li', com => 'fli', show => 'applong', dedup => 'firstapp_ei',
+    { rec => 'firstapp_li', com => 'fli', dwc => 'firstAppearanceLateIneterval', show => 'applong', 
+        dedup => 'firstapp_ei',
         doc => "The end of the interval range for the first appearance of this taxon in this database" },
-    { rec => 'lastapp_ei', com => 'lei', show => 'applong',
+    { rec => 'lastapp_ei', com => 'lei', dwc => 'lastAppearanceEarlyInterval', show => 'applong',
         doc => "The name of the interval for the last appearance of this taxon in this database" },
-    { rec => 'lastapp_li', com => 'lli', show => 'applong', dedup => 'lastapp_ei',
+    { rec => 'lastapp_li', com => 'lli', dwc => 'lastAppearanceLateInterval', show => 'applong', 
+        dedup => 'lastapp_ei',
         doc => "The end of the interval range for the last appearance of this taxon in this database" },
-    { rec => 'firstapp_ea', com => 'fea', show => 'applong',
+    { rec => 'firstapp_ea', com => 'fea', dwc => 'firstAppearanceEarlyAge', show => 'applong',
         doc => "The early age bound for the first appearance of this taxon in this database" },
-    { rec => 'firstapp_la', com => 'fla', show => 'applong', 
+    { rec => 'firstapp_la', com => 'fla', dwc => 'firstAppearanceLateAge', show => 'applong', 
         doc => "The late age bound for the first appearance of this taxon in this database" },
-    { rec => 'lastapp_ea', com => 'lea', show => 'applong',
+    { rec => 'lastapp_ea', com => 'lea', dwc => 'lastAppearanceEarlyAge', show => 'applong',
         doc => "The early age bound for the last appearance of this taxon in this database" },
-    { rec => 'lastapp_la', com => 'lla', show => 'applong', 
+    { rec => 'lastapp_la', com => 'lla', dwc => 'lastAppearanceLateAge', show => 'applong', 
         doc => "The late age bound for the last appearance of this taxon in this database" },
    ];
 
@@ -208,15 +210,12 @@ sub fetchMultiple {
     
     elsif ( $self->{params}{id} or $self->{params}{rel} eq 'all_taxa' )
     {
+	$options->{return} = 'stmt';
 	my $id_list = $self->{params}{id};
 	my $rel = $self->{params}{rel} || 'self';
 	
-	my @result_list = $taxonomy->getTaxa($rel, $id_list, $options);
-	return unless @result_list;
-	
-	$self->{main_result} = \@result_list;
-	$self->{result_count} = scalar(@result_list);
-	return 1;
+	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);
+	return $self->{main_sth};
     }
     
     # Otherwise, we have an empty result.
