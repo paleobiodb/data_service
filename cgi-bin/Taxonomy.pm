@@ -798,6 +798,11 @@ If this option is specified, the value must be a positive integer.  The number
 of results returned will be no more than this number.  If the value is
 undefined, no limit is placed on the results.
 
+=item count
+
+If this option is specified, the SQL query is formulated to allow a result
+count to be generated.
+
 =back
 
 =cut
@@ -1328,6 +1333,8 @@ sub getTaxaByName {
 	$limit_expr = "LIMIT " . ($lim + 0);
     }
     
+    my $count_expr = $options->{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    
     my $filter_expr = join(' and ', @filter_list);
     my $extra_joins = $self->generateExtraJoins('a', $extra_tables, $select);
     
@@ -1335,7 +1342,7 @@ sub getTaxaByName {
     
     if ( $return eq 'id' )
     {
-	return $self->getTaxaIdsByName($filter_expr, [], $select, $order_expr, $limit_expr,
+	return $self->getTaxaIdsByName($filter_expr, [], $select, $order_expr, $limit_expr, $count_expr,
 				       $extra_joins, $options);
     }
     
@@ -1354,7 +1361,7 @@ sub getTaxaByName {
 	    unless $order_expr;
 	
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $search_table as s JOIN $auth_table as a using (taxon_no)
 			JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table o using (opinion_no)
@@ -1365,7 +1372,7 @@ sub getTaxaByName {
     elsif ( lc $options->{substitute_senior} eq 'above_genus' )
     {
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM (SELECT a.taxon_rank, t2.orig_no, t2.synonym_no
 		      FROM $search_table as s JOIN $auth_table as a2 using (taxon_no)
 				JOIN $tree_table as t2 using (orig_no)
@@ -1391,7 +1398,7 @@ sub getTaxaByName {
 		"JOIN $tree_table as t using (orig_no)";
 	
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $search_table as s JOIN $auth_table as a2 on s.match_no = a2.taxon_no
 			$join_string
 			JOIN $auth_table as a ON a.taxon_no = t.${select}_no
@@ -1400,6 +1407,18 @@ sub getTaxaByName {
 		WHERE $filter_expr
 		GROUP BY a.orig_no $order_expr $limit_expr";
     }
+    
+    # If we were asked to return a stmt handle, do so.
+    
+    if ( $return eq 'stmt' )
+    {
+	my ($stmt) = $dbh->prepare($SQL_STRING);
+	$stmt->execute();
+	
+	return $stmt;
+    }
+    
+    # Otherwise, execute the query and generate a full result list.
     
     my $result_list = $dbh->selectall_arrayref($SQL_STRING, { Slice => {} });
     
@@ -1432,7 +1451,7 @@ sub getTaxaByName {
 
 sub getTaxaIdsByName {
 
-    my ($self, $filter_expr, $param_list, $select, $order_expr, $limit_expr, $extra_joins, $options) = @_;
+    my ($self, $filter_expr, $param_list, $select, $order_expr, $limit_expr, $count_expr, $extra_joins, $options) = @_;
     
     # Prepare to fetch the requested information.
     
@@ -1448,7 +1467,7 @@ sub getTaxaIdsByName {
 	    unless $order_expr;
 	
 	$SQL_STRING = "
-		SELECT a.taxon_no
+		SELECT $count_expr a.taxon_no
 		FROM $search_table as s JOIN $auth_table as a on s.match_no = a.taxon_no
 			JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table o using (opinion_no)
@@ -1460,7 +1479,7 @@ sub getTaxaIdsByName {
     elsif ( lc $options->{senior} eq 'above_genus' )
     {
 	$SQL_STRING = "
-		SELECT distinct t.${select}_no
+		SELECT $count_expr distinct t.${select}_no
 		FROM (SELECT a.taxon_rank, t2.orig_no, t2.synonym_no
 		      FROM $search_table as s JOIN $auth_table as a2 on s.match_no = a2.taxon_no
 				JOIN $tree_table as t2 using (orig_no)
@@ -1484,7 +1503,7 @@ sub getTaxaIdsByName {
 		"JOIN $tree_table as t using (orig_no)";
 	
 	$SQL_STRING = "
-		SELECT distinct t.${select}_no
+		SELECT $count_expr distinct t.${select}_no
 		FROM $search_table as s JOIN $auth_table as a on s.match_no = a.taxon_no
 			$join_string
 			LEFT JOIN $opinion_table o on o.opinion_no = t.opinion_no
@@ -1865,6 +1884,16 @@ sub getTaxaByReference {
     my $filter_expr = join(' and ', @filter_list);
     my $extra_joins = $self->generateExtraJoins('a', $extra_tables, $select);
     
+    my $count_expr = $options->{count} ? '' : '';
+    my $limit_expr = '';
+    
+    if ( defined $options->{limit} )
+    {
+	my $lim = $options->{limit};
+	$lim =~ tr/0-9//dc;
+	$limit_expr = "LIMIT " . ($lim + 0);
+    }
+    
     # If we are asked to return only taxon_no values, just do that.
     
     if ( $return eq 'id' )
@@ -1882,24 +1911,24 @@ sub getTaxaByReference {
     if ( $basis eq 'authorities' and $select eq 'exact' )
     {
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
 			LEFT JOIN refs as r using (reference_no)
 			LEFT JOIN $opinion_table as o on t.opinion_no = o.opinion_no
 			$extra_joins
-		WHERE $filter_expr";
+		WHERE $filter_expr $limit_expr";
     }
     
     elsif ( $basis eq 'authorities' )
     {
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN refs as r on a.reference_no = r.reference_no
 			LEFT JOIN $opinion_table as o on t.opinion_no = o.opinion_no
 			$extra_joins
-		WHERE $filter_expr";
+		WHERE $filter_expr $limit_expr";
     }
     
     elsif ( $basis eq 'opinions' and $select eq 'exact' )
@@ -1908,13 +1937,13 @@ sub getTaxaByReference {
 	$query_fields .= ', if(a.taxon_no=o.child_spelling_no,o.parent_spelling_no,null) as parent_spelling_no';
 	
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
 			JOIN $opinion_table as o on
 				(a.taxon_no = o.child_spelling_no or a.taxon_no = o.parent_spelling_no)
 			LEFT JOIN refs as r on (a.reference_no = r.reference_no)
 			$extra_joins
-		WHERE $filter_expr";
+		WHERE $filter_expr $limit_expr";
     }
     
     elsif ( $basis eq 'opinions' )
@@ -1923,14 +1952,14 @@ sub getTaxaByReference {
 	$query_fields .= ', if(a.taxon_no=o.child_spelling_no,o.parent_spelling_no,null) as parent_spelling_no';
 	
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			JOIN $opinion_table as o on
 				(a2.taxon_no = o.child_spelling_no or a2.taxon_no = o.parent_spelling_no)
 			LEFT JOIN refs as r on (a.reference_no = r.reference_no)
 			$extra_joins
-		WHERE $filter_expr";
+		WHERE $filter_expr $limit_expr";
     }
     
     else
@@ -3312,7 +3341,6 @@ sub getTaxa {
     
     my $order_expr = '';
     my $group_expr = '';
-    my $limit_expr = '';
     
     if ( defined $options->{order} and $return ne 'count' )
     {
@@ -3356,12 +3384,7 @@ sub getTaxa {
     
     # And the limit if necessary.
     
-    if ( defined $options->{limit} )
-    {
-	my $lim = $options->{limit};
-	$lim =~ tr/0-9//dc;
-	$limit_expr = "LIMIT " . ($lim + 0);
-    }
+    my ($count_expr, $limit_expr) = $self->generateCountLimitExpr($options);
     
     # Add any extra fields and filters that were explicitly specified
     
@@ -3430,7 +3453,7 @@ sub getTaxa {
 	$filter_expr =~ s/a2\./a\./g;
 	
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table as o using (opinion_no)
 			$extra_joins
@@ -3448,7 +3471,7 @@ sub getTaxa {
 	    unless $order_expr;
 	
 	$SQL_STRING = "
-		SELECT $query_fields, n.spelling_reason
+		SELECT $count_expr $query_fields, n.spelling_reason
 		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
 			LEFT JOIN $opinion_table as o using (opinion_no)
 			JOIN $name_table as n on n.orig_no = a2.orig_no
@@ -3464,7 +3487,7 @@ sub getTaxa {
     elsif ( $rel eq 'originals' )
     {
 	$SQL_STRING = "
-		SELECT $query_fields, n.spelling_reason
+		SELECT $count_expr $query_fields, n.spelling_reason
 		FROM $auth_table as a2 JOIN $auth_table as a on a.taxon_no = a2.orig_no
 			JOIN $tree_table as t on t.orig_no = a2.orig_no
 			LEFT JOIN $opinion_table as o using (opinion_no)
@@ -3480,7 +3503,7 @@ sub getTaxa {
     elsif ( $rel eq 'current' )
     {
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t using (orig_no)
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o using (opinion_no)
@@ -3504,7 +3527,7 @@ sub getTaxa {
 	if ( $select eq 'all' )
 	{
 	    $SQL_STRING = "
-		SELECT $query_fields, n.spelling_reason, if(a.orig_no = a2.orig_no, 1, 0) as is_base
+		SELECT $count_expr $query_fields, n.spelling_reason, if(a.orig_no = a2.orig_no, 1, 0) as is_base
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.${synonym_select}_no = t2.synonym_no
 			JOIN $name_table as n on n.orig_no = t.orig_no
@@ -3518,7 +3541,7 @@ sub getTaxa {
 	else
 	{
 	    $SQL_STRING = "
-		SELECT $query_fields, if(a.orig_no = a2.orig_no, 1, 0) as is_base
+		SELECT $count_expr $query_fields, if(a.orig_no = a2.orig_no, 1, 0) as is_base
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.${synonym_select}_no = t2.synonym_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
@@ -3541,7 +3564,7 @@ sub getTaxa {
 	if ( $select eq 'all' )
 	{
 	    $SQL_STRING = "
-		SELECT $query_fields, n.spelling_reason
+		SELECT $count_expr $query_fields, n.spelling_reason
 		FROM $auth_table as a JOIN $name_table as n using (taxon_no)
 			JOIN $tree_table as t on t.orig_no = n.orig_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
@@ -3554,7 +3577,7 @@ sub getTaxa {
 	else
 	{
 	    $SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a JOIN $tree_table as t on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o on o.opinion_no = t.opinion_no
 			$extra_joins
@@ -3577,7 +3600,7 @@ sub getTaxa {
 	if ( $select eq 'all' )
 	{
 	    $SQL_STRING = "
-		SELECT $query_fields, n.spelling_reason
+		SELECT $count_expr $query_fields, n.spelling_reason
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
 				$level_filter
@@ -3594,7 +3617,7 @@ sub getTaxa {
 	else
 	{
 	    $SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $tree_table as t on t.lft >= t2.lft and t.lft <= t2.rgt
 				$level_filter
@@ -3613,7 +3636,7 @@ sub getTaxa {
     elsif ( $rel eq 'classifications' )
     {
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			JOIN $opinion_table as o2 using (opinion_no)
 			JOIN $tree_table as t on t.orig_no = o2.parent_no
@@ -3636,7 +3659,7 @@ sub getTaxa {
 		 "JOIN $tree_table as t on t.orig_no = t2.parent_no";
 
 	$SQL_STRING = "
-		SELECT $query_fields
+		SELECT $count_expr $query_fields
 		FROM $auth_table as a2 JOIN $tree_table as t2 using (orig_no)
 			$parent_join
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
@@ -3680,7 +3703,7 @@ sub getTaxa {
 		 "$tree_table as t JOIN ancestry_temp as s on s.orig_no = t.orig_no";
 	
 	$SQL_STRING = "
-		SELECT $query_fields, pt.${select}_no as parent_taxon_no
+		SELECT $count_expr $query_fields, pt.${select}_no as parent_taxon_no
 		FROM $t_join
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table as o ON o.opinion_no = t.opinion_no
@@ -5791,6 +5814,39 @@ sub generateExtraJoins {
     return $extra_joins;
 }
 
+
+# generateCountLimitExpr ( options )
+# 
+# Generate the SQL query modifiers indicated by the specified options
+
+sub generateCountLimitExpr {
+    
+    my ($self, $options) = @_;
+    
+    my $count_expr = $options->{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    
+    my $limit_expr = '';
+    
+    my $limit = $options->{limit};
+    my $offset = $options->{offset};
+    
+    if ( defined $offset and $offset > 0 )
+    {
+	$offset += 0;
+	$limit = $limit eq 'all' ? 10000000 : $limit + 0;
+	return ($count_expr, "LIMIT $offset,$limit");
+    }
+    
+    elsif ( defined $limit and $limit ne 'all' )
+    {
+	return ($count_expr, "LIMIT " . ($limit + 0));
+    }
+    
+    else
+    {
+	return ($count_expr, '');
+    }
+}
 
 # generateExcludeFilter ( table, exclusion )
 # 

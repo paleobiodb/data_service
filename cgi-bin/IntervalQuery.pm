@@ -16,9 +16,10 @@ use Carp qw(carp croak);
 
 our (%SELECT, %OUTPUT, %PROC, %TABLES);
 
-$SELECT{single} = $SELECT{list} = "i.interval_no, i.interval_name, i.abbrev, i.level, i.parent_no, i.color, i.base_age, i.top_age, i.reference_no";
+$SELECT{single} = $SELECT{list} = $SELECT{hierarchy} =
+    "i.interval_no, i.interval_name, i.abbrev, i.level, i.parent_no, i.color, i.base_age, i.top_age, i.reference_no";
 
-$OUTPUT{single} = $OUTPUT{list} = 
+$OUTPUT{single} = $OUTPUT{list} = $OUTPUT{hierarchy} =
    [
     { rec => 'interval_no', com => 'oid',
 	doc => "A positive integer that uniquely identifies this interval"},
@@ -30,7 +31,7 @@ $OUTPUT{single} = $OUTPUT{list} =
         doc => "The standard abbreviation for the interval name, if any" },
     { rec => 'level', com => 'lvl',
         doc => "The level of this interval: eon=1, era=2, period=3, epoch=4, age=5" },
-    { rec => 'parent_no', com => 'par',
+    { rec => 'parent_no', com => 'pid',
         doc => "The identifier of the parent interval" },
     { rec => 'color', com => 'col',
         doc => "The standard color for displaying this interval" },
@@ -60,7 +61,8 @@ $OUTPUT{ref} =
 our (%DOC_ORDER);
 
 $DOC_ORDER{'single'} = ['single', 'ref'];
-$DOC_ORDER{'list'} = ['single', 'ref'];
+$DOC_ORDER{'list'} = ['list', 'ref'];
+$DOC_ORDER{'hierarchy'} = ['hierarchy', 'ref'];
 
 
 # fetchSingle ( )
@@ -126,10 +128,36 @@ sub fetchMultiple {
     my $tables = {};
     my $calc = '';
     
+    # If we were asked for a hierarchy, indicate that we will need to process
+    # the result set before sending it.
+    
+    $self->{process_resultset} = \&generateHierarchy if $self->{op} eq 'hierarchy';
+    
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
     my @filters = "i.level is not null";
+    
+    if ( exists $self->{params}{min_ma} )
+    {
+	my $min = $self->{params}{min_ma} - 0.01;
+	push @filters, "i.top_age >= $min";
+    }
+    
+    if ( exists $self->{params}{max_ma} )
+    {
+	my $max = $self->{params}{max_ma} + 0.01;
+	push @filters, "i.base_age <= $max";
+    }
+    
+    # Get the results in the specified order
+    
+    my $order_expr = "ORDER BY i.level, i.top_age";
+    
+    if ( $self->{params}{order} eq 'older' )
+    {
+	$order_expr = "ORDER BY i.level, i.base_age desc";
+    }
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -159,7 +187,7 @@ sub fetchMultiple {
 	SELECT $calc $fields
 	FROM interval_map as i $join_list
 	WHERE $filter_list
-	ORDER BY i.level, i.top_age
+	$order_expr
 	$limit";
     
     # Then prepare and execute the main query and the secondary query.
@@ -200,5 +228,57 @@ sub generateJoinList {
     return $join_list;
 }
 
+
+# generateHierarchy ( rows )
+# 
+# Arrange the rows into a hierarchy.  This is only called on requests
+# which use the 'hierarchy' route.
+
+sub generateHierarchy {
+
+    my ($self, $rowref) = @_;
+    
+    return $rowref unless $self->{output_format} eq 'json';
+    
+    my @toplevel = ();
+    my %row = ();
+    
+    foreach my $r ( @$rowref )
+    {
+	$r->{hier_child} ||= [];
+	$row{$r->{interval_no}} = $r;
+	
+	if ( $r->{level} == 1 )
+	{
+	    push @toplevel, $r;
+	}
+	
+	else
+	{
+	    my $parent_no = $r->{parent_no};
+	    $row{$parent_no}{hier_child} ||= [];
+	    push @{$row{$parent_no}{hier_child}}, $r;
+	}
+    }
+    
+    return \@toplevel;
+}
+
+
+# initOutput ( )
+# 
+# This routine is used in case we are generating hierarchical output, setting
+# up the necessary data structures to do so.  If we are just generating a
+# list, this is irrelevant but harmless.
+
+sub initOutput {
+
+    my ($self) = @_;
+    
+    $self->{tree_stack} = [];
+    $self->{comma_stack} = [];
+    
+    return;
+}
 
 1;

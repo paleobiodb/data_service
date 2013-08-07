@@ -169,16 +169,23 @@ ruleset '1.1:colls/summary' =>
     [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
+ruleset '1.1:interval_selector' => 
+    [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
+    [param => 'min_ma', REAL_VALUE(0)],
+    [param => 'max_ma', REAL_VALUE(0)];
+
 ruleset '1.1:intervals' => 
-    [allow => '1.1:common_params'],
-    [allow => '1.1:common_display'];
+    [allow => '1.1:interval_selector'],
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
 
 # Send app pages
 
-get '/app/:filename' => sub {
+get '/testapp/:filename' => sub {
     
+    $DB::single = 1;
     my $filename = param "filename";
-    return send_file("app/$filename", streaming => 1);
+    return send_file("testapp/$filename", streaming => 1);
 };
 
 
@@ -297,6 +304,13 @@ get '/data1.1/intervals/list.:ct' => sub {
     queryMultiple('IntervalQuery', v => '1.1',
 		  validation => '1.1:intervals',
 		  op => 'list');
+};
+
+get '/data1.1/intervals/hierarchy.:ct' => sub {
+    
+    queryMultiple('IntervalQuery', v => '1.1',
+		  validation => '1.1:intervals',
+		  op => 'hierarchy');
 };
 
 # Any other URL beginning with '/data1.1/' is an error.

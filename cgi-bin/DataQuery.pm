@@ -368,16 +368,19 @@ sub generateCompoundResult {
 	    push @rows, $row;
 	}
 	
-	$self->processResultSet(\@rows);
+	my $newrows = $self->{process_resultset}(\@rows);
 	
-	foreach my $row (@rows)
+	if ( ref $newrows eq 'ARRAY' )
 	{
-	    $self->processRecord($row, $self->{proc_list});
-	    my $row_output = $self->emitRecord($row, is_first => $first_row);
-	    $output .= $row_output;
-	    
-	    $first_row = 0;
-	    $self->{row_count}++;
+	    foreach my $row (@$newrows)
+	    {
+		$self->processRecord($row, $self->{proc_list});
+		my $row_output = $self->emitRecord($row, is_first => $first_row);
+		$output .= $row_output;
+		
+		$first_row = 0;
+		$self->{row_count}++;
+	    }
 	}
     }
     
@@ -898,6 +901,16 @@ sub constructObjectJSON {
 	}
     }
     
+    # If this record has hierarchical children, process them now.
+    
+    if ( exists $record->{hier_child} )
+    {
+	my $children = $self->constructArrayJSON($record->{hier_child}, $rulespec);
+	$outrec .= ',"children":' . $children;
+    }
+    
+    # Now return the record.
+
     return "$outrec}";
 }
 
@@ -922,7 +935,12 @@ sub constructArrayJSON {
     
     foreach my $elt ( @$arrayref )
     {
-	if ( ref $f->{code} eq 'CODE' )
+	if ( ref $rulespec eq 'ARRAY' )
+	{
+	    $value = constructObjectJSON($elt, $rulespec);
+	}
+	
+	elsif ( ref $f->{code} eq 'CODE' )
 	{
 	    $value = json_clean($f->{code}($elt, $rulespec));
 	}
