@@ -141,7 +141,7 @@ sub parseRankParam {
 # setOutputList ( )
 # 
 # Determine the list of selection, processing and output rules for this query,
-# based on the 'show' parameter and the output format.
+# based on the 'show' parameter, the operation and the output format.
 
 sub setOutputList {
 
@@ -177,6 +177,10 @@ sub setOutputList {
     
     $self->{vocab} = $vocab;
     
+    # Figure out which operation we are executing
+    
+    my $op = $self->{op};
+    
     # Quote all output fields if we are directed to.  A level of 2 means to
     # quote everything, 1 means only quote fields that contain commas or newlines
     
@@ -198,10 +202,10 @@ sub setOutputList {
     {
 	next unless $section;
 	
-	my $select_conf = ${"${class}::SELECT"}{$section};
-	my $tables_conf = ${"${class}::TABLES"}{$section};
-	my $proc_conf = ${"${class}::PROC"}{$section};
-	my $output_conf = ${"${class}::OUTPUT"}{$section};
+	my $select_conf = ${"{class}::SELECT"}{"${op}_${section}"} || ${"${class}::SELECT"}{$section};
+	my $tables_conf = ${"${class}::TABLES"}{"${op}_${section}"} || ${"${class}::TABLES"}{$section};
+	my $proc_conf = ${"${class}::PROC"}{"${op}_${section}"} || ${"${class}::PROC"}{$section};
+	my $output_conf = ${"${class}::OUTPUT"}{"${op}_${section}"} || ${"${class}::OUTPUT"}{$section};
 	
 	push @select_list, $select_conf if defined $select_conf and not ref $select_conf;
 	

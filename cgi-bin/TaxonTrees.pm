@@ -4125,9 +4125,9 @@ sub computeCollectionTables {
 		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
 			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_st_seq
 			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_st_seq
-			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_st_seq and i.top_age < ei.top_age
+			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_st_seq and i.top_age <= ei.top_age + 0.01
 				and i.level = li.level
-		WHERE li.level <= ei.level";
+		WHERE li.level <= ei.level and i.interval_no <> 0";
     
     $result = $dbh->do($sql);
     
@@ -4137,11 +4137,7 @@ sub computeCollectionTables {
 			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_st_seq
 			JOIN $INTERVAL_MAP as i on i.older_seq >= m.early_st_seq and i.base_age > li.base_age
 				and i.level = ei.level
-		WHERE li.level > ei.level";
-    
-    $result = $dbh->do($sql);
-    
-    $sql = "DELETE FROM $COLL_INTS_WORK WHERE interval_no = 0";
+		WHERE li.level > ei.level and i.interval_no <> 0";
     
     $result = $dbh->do($sql);
     
@@ -4199,6 +4195,8 @@ sub computeCollectionTables {
 		clust_id int unsigned,
 		n_colls int unsigned,
 		n_occs int unsigned,
+		early_st_seq int unsigned not null,
+		late_st_seq int unsigned not null,
 		lng float,
 		lat float,
 		lng_min float,
@@ -4212,10 +4210,12 @@ sub computeCollectionTables {
     my ($sql, $result);
     
     $sql = "	INSERT IGNORE INTO $COLL_BINS_WORK
-			(bin_lng, bin_lat, bin_id, n_colls, n_occs, lng, lat, 
+			(bin_lng, bin_lat, bin_id, n_colls, n_occs, 
+			 early_st_seq, late_st_seq, lng, lat,
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
-		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs), avg(lng), avg(lat),
+		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs),
+		       min(early_st_seq), min(late_st_seq), avg(lng), avg(lat),
 		       round(min(lng),2) as lng_min, round(max(lng),2) as lng_max,
 		       round(min(lat),2) as lat_min, round(max(lat),2) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
@@ -4237,6 +4237,8 @@ sub computeCollectionTables {
 		clust_id int unsigned not null,
 		n_colls int unsigned,
 		n_occs int unsigned,
+		early_st_seq int unsigned not null,
+		late_st_seq int unsigned not null,
 		lng float,
 		lat float,
 		lng_min float,
@@ -4392,6 +4394,8 @@ sub computeCollectionTables {
     $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
 		(SELECT clust_id, sum(n_colls) as n_colls,
 			sum(n_occs) as n_occs,
+			min(early_st_seq) as early_st_seq,
+			min(late_st_seq) as late_st_seq,
 			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
 			min(lng_min) as lng_min, max(lng_max) as lng_max,
 			min(lat_min) as lat_min, max(lat_max) as lat_max,
@@ -4399,6 +4403,7 @@ sub computeCollectionTables {
 		FROM $COLL_BINS_WORK GROUP BY clust_id) as agg
 			using (clust_id)
 		SET k.n_colls = agg.n_colls, k.n_occs = agg.n_occs,
+		    k.early_st_seq = agg.early_st_seq, k.late_st_seq = agg.late_st_seq,
 		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
 		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,
 		    k.lat_min = agg.lat_min, k.lat_max = agg.lat_max";
@@ -4407,25 +4412,28 @@ sub computeCollectionTables {
     
     # Finally, we swap in the new tables for the old ones.
     
-    logMessage(2, "activating tables '$COLL_MATRIX', '$COLL_BINS', '$COLL_CLUST'");
+    logMessage(2, "activating tables '$COLL_MATRIX', '$COLL_BINS', '$COLL_CLUST', '$COLL_INTS'");
     
     # Compute the backup names of all the tables to be activated
     
     my $coll_matrix_bak = "${COLL_MATRIX}_bak";
     my $coll_bins_bak = "${COLL_BINS}_bak";
     my $coll_clust_bak = "${COLL_CLUST}_bak";
+    my $coll_ints_bak = "${COLL_INTS}_bak";
     
     # Delete any old tables that might have been left around.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_matrix_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_bins_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_clust_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $coll_ints_bak");
     
     # Do the swap.
     
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_MATRIX LIKE $COLL_MATRIX_WORK");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_BINS LIKE $COLL_BINS_WORK");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_CLUST LIKE $COLL_CLUST_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_INTS LIKE $COLL_INTS_WORK");
     
     $result = $dbh->do("RENAME TABLE
 			    $COLL_MATRIX to $coll_matrix_bak,
@@ -4433,13 +4441,16 @@ sub computeCollectionTables {
 			    $COLL_BINS to $coll_bins_bak,
 			    $COLL_BINS_WORK to $COLL_BINS,
 			    $COLL_CLUST to $coll_clust_bak,
-			    $COLL_CLUST_WORK to $COLL_CLUST");
+			    $COLL_CLUST_WORK to $COLL_CLUST,
+			    $COLL_INTS to $coll_ints_bak,
+			    $COLL_INTS_WORK to $COLL_INTS");
     
     # Delete the old tables.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_matrix_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_bins_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $coll_clust_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $coll_ints_bak");
     
     my $a = 1;		# We can stop here when debugging
 }
@@ -5031,11 +5042,12 @@ sub computeIntervalTables {
     
     $sql = "INSERT IGNORE INTO $CONTAINER_MAP_WORK
 		SELECT p.early_seq, p.late_seq, i.interval_no
-		FROM (SELECT ei.older_seq as early_seq, li.younger_seq as late_seq 
-			FROM $INTERVAL_MAP_WORK as ei JOIN $INTERVAL_MAP_WORK as li where ei.level is not null
-			    and li.level is not null 
-			    and (ei.base_age > li.base_age or ei.top_age > li.top_age)) as p
-		    JOIN $INTERVAL_MAP_WORK as i on i.younger_seq <= p.late_seq and i.older_seq <= p.early_seq
+		FROM (SELECT ei.older_seq as early_seq, ei.base_age as base_age,
+			     li.younger_seq as late_seq, li.top_age as top_age
+			FROM $INTERVAL_MAP_WORK as ei JOIN $INTERVAL_MAP_WORK as li
+			WHERE ei.level is not null and li.level is not null 
+			    and (ei.base_age >= li.base_age or ei.top_age >= li.top_age)) as p
+		    JOIN $INTERVAL_MAP_WORK as i on i.base_age >= p.base_age and i.top_age <= p.top_age
 		        and i.level is not null
 		ORDER BY i.level desc";
     

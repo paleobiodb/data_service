@@ -16,9 +16,9 @@ use Carp qw(carp croak);
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
 
-$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
@@ -49,6 +49,8 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "An arbitrary name which identifies the collection, not necessarily unique" },
     { rec => 'collection_subset', com => 'nm2',
 	doc => "If this collection is a part of another one, this field specifies which part" },
+    { rec => 'n_occs', com => 'noc',
+        doc => "The number of occurrences in this collection" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
         doc => "The identifier(s) of the references from which this data was entered" },
    ];
@@ -104,20 +106,23 @@ $OUTPUT{attr} =
 	doc => "The reference(s) associated with this collection (pubyr and authors only)" },
    ];
 
-$SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age";
+$SELECT{summary_time} = "ei.base_age as early_age, li.top_age as late_age, icm.container_no";
 
-$TABLES{time} = ['ei', 'li'];
+$SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age, icm.container_no";
+#, group_concat(ci.interval_no) as interval_list";
+
+$TABLES{time} = ['ei', 'li', 'icm', 'ci'];
 
 $OUTPUT{time} =
    [
-    { rec => 'early_int', com => 'int',
-	doc => "The geologic time range associated with this collection, or the period that begins the range if {late_int} is also given" },
-    { rec => 'late_int', com => 'lin', dedup => 'early_int',
-	doc => "The period that ends the geologic time range associated with this collection" },
     { rec => 'early_age', com => 'eag',
 	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
     { rec => 'late_age', com => 'lag',
 	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
+    { rec => 'container_no', com => 'cxi',
+        doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
+    { rec => 'interval_list', com => 'ilt',
+        doc => "A list of standard intervals covering the time range associated with this collection" },
    ];
 
 $SELECT{pers} = "authorizer_no, ppa.name as authorizer, enterer_no, ppe.name as enterer";
@@ -172,6 +177,14 @@ $OUTPUT{ext} =
     { rec => 'std_dev', com => 'std', doc => "The standard deviation of the coordinates in this cluster" },
    ];
 
+$OUTPUT{det} = 
+   [
+    { rec => 'early_int', com => 'int',
+	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if {late_int} is also given" },
+    { rec => 'late_int', com => 'lin', dedup => 'early_int',
+	doc => "The interval that ends the specific geologic time range associated with this collection" },
+   ];
+
 our (%DOC_ORDER);
 
 $DOC_ORDER{'single'} = ['single', 'ref', 'time', 'loc', 'rem'];
@@ -214,7 +227,7 @@ sub fetchSingle {
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
-        WHERE c.collection_no = $id and access_level = 0
+        WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
     
     print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
@@ -279,13 +292,14 @@ sub fetchMultiple {
     
     my $tables = {};
     my $calc = '';
+    my $mt = $self->{op} eq 'summary' ? 's' : 'c';
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
     my @filters = $self->generateQueryFilters($dbh, $tables);
     
-    push @filters, "access_level = 0";
+    push @filters, "$mt.access_level = 0";
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -294,7 +308,7 @@ sub fetchMultiple {
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $self->{select_tables});
+    my ($join_list) = $self->generateJoinList($mt, $self->{select_tables});
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -618,14 +632,30 @@ sub generateJoinList {
 	if $tables->{t};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = $mt.reference_no\n" 
 	if $tables->{r};
-    $join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.early_int_no\n"
-	if $tables->{ei};
-    $join_list .= "JOIN interval_map as li on li.interval_no = $mt.late_int_no\n"
-	if $tables->{li};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = $mt.authorizer_no\n"
 	if $tables->{ppa};
     $join_list .= "LEFT JOIN person as ppe on ppe.person_no = $mt.enterer_no\n"
 	if $tables->{ppe};
+    
+    if ( $self->{op} eq 'summary' )
+    {
+	$join_list .= "JOIN interval_map as ei on ei.older_seq = $mt.early_st_seq\n"
+	    if $tables->{ei};
+	$join_list .= "JOIN interval_map as li on li.younger_seq = $mt.late_st_seq\n"
+	    if $tables->{li};
+    }
+    
+    else
+    {
+	$join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.early_int_no\n"
+	    if $tables->{ei};
+	$join_list .= "JOIN interval_map as li on li.interval_no = $mt.late_int_no\n"
+	    if $tables->{li};
+    }
+    
+    $join_list .= "LEFT JOIN interval_container_map as icm 
+			on icm.early_seq = $mt.early_st_seq and icm.late_seq = $mt.late_st_seq\n"
+	if $tables->{icm};
     
     return $join_list;
 }
