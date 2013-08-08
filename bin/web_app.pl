@@ -161,7 +161,7 @@ ruleset '1.1:summary_selector' =>
 
 ruleset '1.1:summary_display' => 
     [param => 'level', INT_VALUE(1,2), { default => 1 }],
-    [param => 'show', LIST_VALUE('ext', 'all')];
+    [param => 'show', LIST_VALUE('ext','time','all')];
 
 ruleset '1.1:colls/summary' => 
     [allow => '1.1:summary_selector'],

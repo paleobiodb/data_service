@@ -214,7 +214,7 @@ sub fetchSingle {
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
-        WHERE c.collection_no = $id
+        WHERE c.collection_no = $id and access_level = 0
 	GROUP BY c.collection_no";
     
     print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
@@ -285,7 +285,7 @@ sub fetchMultiple {
     
     my @filters = $self->generateQueryFilters($dbh, $tables);
     
-    push @filters, "1=1" unless @filters;
+    push @filters, "access_level = 0";
     
     # Determine which fields and tables are needed to display the requested
     # information.
