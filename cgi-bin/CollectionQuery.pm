@@ -16,17 +16,17 @@ use Carp qw(carp croak);
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
 
-$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
 $SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng";
+our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
-our ($SUMMARY_1A) = "s.clust_id as sum_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng";
+our ($SUMMARY_1A) = "s.clust_id as sum_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng, icm.container_no";
 
-our ($SUMMARY_2) = "s.bin_id as sum_id, s.clust_id, s.n_colls, s.n_occs, s.lat, s.lng";
+our ($SUMMARY_2) = "s.bin_id as sum_id, s.clust_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
-our ($SUMMARY_2A) = "s.bin_id as sum_id, s.clust_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng";
+our ($SUMMARY_2A) = "s.bin_id as sum_id, s.clust_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng, icm.container_no";
 
 $PROC{single} = $PROC{list} =
    [
@@ -51,9 +51,13 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "If this collection is a part of another one, this field specifies which part" },
     { rec => 'n_occs', com => 'noc',
         doc => "The number of occurrences in this collection" },
+    { rec => 'container_no', com => 'cxi',
+        doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
         doc => "The identifier(s) of the references from which this data was entered" },
    ];
+
+$TABLES{single} = $TABLES{list} = $TABLES{summary} = ['icm'];
 
 $OUTPUT{summary} = 
    [
@@ -65,6 +69,8 @@ $OUTPUT{summary} =
     { rec => 'n_occs', com => 'noc', doc => "The number of occurrences in this cluster" },
     { rec => 'lng', com => 'lng', doc => "The longitude of the centroid of this cluster" },
     { rec => 'lat', com => 'lat', doc => "The latitude of the centroid of this cluster" },
+    { rec => 'container_no', com => 'cxi',
+        doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
    ];
 
 $SELECT{bin} = "c.bin_id, c.clust_id";
@@ -108,9 +114,9 @@ $OUTPUT{attr} =
 
 $SELECT{summary_time} = "ei.base_age as early_age, li.top_age as late_age, icm.container_no";
 
-$SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age, icm.container_no, group_concat(distinct ci.interval_no) as interval_list";
+$SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age, group_concat(distinct ci.interval_no) as interval_list";
 
-$TABLES{time} = ['ei', 'li', 'icm', 'ci'];
+$TABLES{time} = ['ei', 'li', 'ci'];
 
 $OUTPUT{time} =
    [
@@ -118,8 +124,6 @@ $OUTPUT{time} =
 	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
     { rec => 'late_age', com => 'lag',
 	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
-    { rec => 'container_no', com => 'cxi',
-        doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
     { rec => 'interval_list', com => 'lti', json_list_literal => 1,
         doc => "A minimal list of standard intervals covering the time range associated with this collection" },
    ];
