@@ -18,7 +18,7 @@ our (%SELECT, %TABLES, %PROC, %OUTPUT);
 
 $SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
