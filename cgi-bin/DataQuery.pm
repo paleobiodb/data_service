@@ -887,6 +887,18 @@ sub constructObjectJSON {
 	    $value = $self->constructArrayJSON([$value], $f);
 	}
 	
+	elsif ( $f->{json_list_literal} )
+	{
+	    if ( $value =~ /^(?:\d+,)*\d+$/ )
+	    {
+		$value = '[' . $value . ']';
+	    }
+	    else
+	    {
+		$value = '[]';
+	    }
+	}
+	
 	elsif ( ref $record->{$field} eq 'HASH' )
 	{
 	    my $rule = $f->{rule} || $f;

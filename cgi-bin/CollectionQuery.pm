@@ -58,7 +58,7 @@ $OUTPUT{single} = $OUTPUT{list} =
 $OUTPUT{summary} = 
    [
     { rec => 'sum_id', com => 'oid', doc => "A positive integer that identifies the cluster" },
-    { rec => 'clust_id', com => 'cnt', doc => "A positive integer that identifies the containing cluster, if any" },
+    { rec => 'clust_id', com => 'cl1', doc => "A positive integer that identifies the containing cluster, if any" },
     { rec => 'record_type', com => 'typ', value => 'clu',
         doc => "The type of this object: 'clu' for a collection cluster" },
     { rec => 'n_colls', com => 'nco', doc => "The number of collections in cluster" },
@@ -108,8 +108,7 @@ $OUTPUT{attr} =
 
 $SELECT{summary_time} = "ei.base_age as early_age, li.top_age as late_age, icm.container_no";
 
-$SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age, icm.container_no";
-#, group_concat(ci.interval_no) as interval_list";
+$SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age, icm.container_no, group_concat(distinct ci.interval_no) as interval_list";
 
 $TABLES{time} = ['ei', 'li', 'icm', 'ci'];
 
@@ -121,8 +120,8 @@ $OUTPUT{time} =
 	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
     { rec => 'container_no', com => 'cxi',
         doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
-    { rec => 'interval_list', com => 'ilt',
-        doc => "A list of standard intervals covering the time range associated with this collection" },
+    { rec => 'interval_list', com => 'lti', json_list_literal => 1,
+        doc => "A minimal list of standard intervals covering the time range associated with this collection" },
    ];
 
 $SELECT{pers} = "authorizer_no, ppa.name as authorizer, enterer_no, ppe.name as enterer";
@@ -618,7 +617,7 @@ sub generateJoinList {
     # Some tables imply others.
     
     $tables->{o} = 1 if $tables->{t};
-    $tables->{c} = $self->{params}{level} if $tables->{o} and $self->{op} eq 'summary';
+    $tables->{c} = $self->{params}{level} if ($tables->{o} or $tables->{ci}) and $self->{op} eq 'summary';
     
     # Create the necessary join expressions.
     
@@ -636,6 +635,8 @@ sub generateJoinList {
 	if $tables->{ppa};
     $join_list .= "LEFT JOIN person as ppe on ppe.person_no = $mt.enterer_no\n"
 	if $tables->{ppe};
+    $join_list .= "LEFT JOIN coll_ints as ci on ci.collection_no = c.collection_no\n"
+	if $tables->{ci};
     
     if ( $self->{op} eq 'summary' )
     {
