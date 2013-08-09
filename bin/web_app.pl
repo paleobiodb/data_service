@@ -24,6 +24,7 @@ use TaxonQuery;
 use TreeQuery;
 use CollectionQuery;
 use IntervalQuery;
+use ConfigQuery;
 
 our($DEBUG);
 
@@ -179,6 +180,10 @@ ruleset '1.1:intervals' =>
     [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
+ruleset '1.1:config' =>
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
 # Send app pages
 
 get '/testapp/:filename' => sub {
@@ -227,6 +232,13 @@ get qr{/data([^/]*)(/[^.]+)?} => sub {
 
 
 # Now we have the version 1.1 routes
+
+get '/data1.1/config.:ct' => sub {
+    
+    querySingle('ConfigQuery', v => '1.1',
+		validation => '1.1:config',
+		op => 'single');
+};
 
 get '/data1.1/taxa/single.:ct' => sub {
 
