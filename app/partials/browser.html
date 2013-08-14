@@ -1,0 +1,31 @@
+<div class="container">
+  <div class="row">
+    <div class="col-2">
+      The Paleobiology Database
+    </div>
+    <div class="col-10">
+      <div id="pbdb_map">
+	<p>[The map goes here]</p>
+      </div>
+      <div id="pbdb_time">
+	<p>[The time bar goes here]</p>
+      </div>
+      <div class="boundedSection" name="pbdb_phylo">
+	<form ng-submit="nameEntered()">
+	  <p style="margin-top: 0px">Enter a taxonomic name: <input type="text" size="40" ng-model="name_entry" />
+	  <!--<button ng-click="selectName()">Select</button>--></p>
+	</form>
+	<div class="taxonParent">
+	</div>
+	<div class="focalTaxon" name="focal_taxon_box">
+	  <p class="taxonTitle" ng-bind="taxonTitle(focal_taxon)"></p>
+	</div>
+	<div class="taxonChildren" name="taxon_children">
+	  <p ng-repeat="taxon in focal_taxon.chl">
+	  <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a> - {{taxon.siz}}
+	  </p>
+	</div>
+      </div>
+    </div>
+  </div>
+</div>
