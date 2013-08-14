@@ -2,6 +2,16 @@
 
 /* Controllers */
 
+function Browser($scope, $http) {
+
+    $scope.name_entry = '';
+
+
+};
+
+
+
+
 var interval_data = { oid: 0, color: "#000000", nam: "Geological Time", children: [] };
 var interval_hash = { 0: interval_data };
 

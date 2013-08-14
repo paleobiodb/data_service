@@ -459,6 +459,8 @@ our ($APP_FIELDS) = ", v.first_early_int_seq as firstapp_ei, v.first_late_int_se
 
 our ($APP_LONG_FIELDS) = ", fei.interval_name as firstapp_ei, fli.interval_name as firstapp_li, lei.interval_name as lastapp_ei, lli.interval_name as lastapp_li, fei.base_age as firstapp_ea, fli.top_age as firstapp_la, lei.base_age as lastapp_ea, lli.top_age as lastapp_la";
 
+our ($APP_FIRST_FIELDS) = ", fei.base_age as firstapp_ea, fli.top_age as firstapp_la";
+
 # The following hash is used by the return option 'id_table'.
 
 our(%TAXON_FIELD) = ('lft' => 1, 'rgt' => 1, 'depth' => 1, 'opinion_no' => 1,
@@ -1369,7 +1371,7 @@ sub getTaxaByName {
 		WHERE $filter_expr
 		$order_expr $limit_expr";
     }
-    elsif ( lc $options->{substitute_senior} eq 'above_genus' )
+    elsif ( defined $options->{substitute_senior} && lc $options->{substitute_senior} eq 'above_genus' )
     {
 	$SQL_STRING = "
 		SELECT $count_expr $query_fields
@@ -5612,6 +5614,14 @@ sub generateQueryFields {
 	    $tables{fli} = 1;
 	    $tables{lei} = 1;
 	    $tables{lli} = 1;
+	}
+	
+	elsif ( $inc eq 'appfirst' )
+	{
+	    $fields .= $APP_FIRST_FIELDS;
+	    $tables{v} = 1;
+	    $tables{fei} = 1;
+	    $tables{fli} = 1;
 	}
 	
 	else

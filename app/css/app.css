@@ -28,3 +28,21 @@
   content: "";
   padding: 0;
 }
+
+.boundedSection {
+    border: 1px solid black;
+    padding: 5px;
+}
+
+.focalTaxon {
+    
+    text-align: center;
+    border: 1px solid gray;
+    padding: 3px;
+    width: 50%;
+}
+
+.taxonTitle {
+
+    margin: 0 auto;
+}

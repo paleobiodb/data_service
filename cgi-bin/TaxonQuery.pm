@@ -21,9 +21,9 @@ $OUTPUT{single} = $OUTPUT{list} =
    [
     { rec => 'taxon_no', dwc => 'taxonID', com => 'oid',
 	doc => "A positive integer that uniquely identifies this taxonomic name"},
-    { rec => 'orig_no', com => 'qid',
+    { rec => 'orig_no', com => 'gid',
         doc => "A positive integer that uniquely identifies the taxonomic concept"},
-    { rec => 'record_type', com => 'typ', com_value => 'tax', dwc_value => 'Taxon', value => 'taxon',
+    { rec => 'record_type', com => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => 'taxon',
         doc => "The type of this object: {value} for a taxonomic name" },
     { rec => 'taxon_rank', dwc => 'taxonRank', com => 'rnk', 
 	doc => "The taxonomic rank of this name" },
@@ -76,6 +76,25 @@ $PROC{attr} =
 $PROC{ref} =
    [
     { rec => 'r_al1', set => 'pubref', use_main => 1, code => \&DataQuery::generateReference },
+   ];
+
+$OUTPUT{nav} =
+   [
+    { rec => 'parent_name', com => 'prl', dwc => 'parentNameUsage',
+        doc => "The name of the parent taxonomic concept, if any" },
+    { rec => 'children', com => 'chl', use_each => 1,
+        doc => "The immediate children of this taxonomic concept, if any",
+        rule => [ { rec => 'taxon_no', com => 'oid', dwc => 'taxonID' },
+		  { rec => 'orig_no', com => 'gid' },
+		  { rec => 'record_type', com => 'typ', com_value => 'txn' },
+		  { rec => 'taxon_rank', com => 'rnk', dwc => 'taxonRank' },
+		  { rec => 'taxon_name', com => 'nam', dwc => 'scientificName' },
+		  { rec => 'synonym_no', com => 'snr', pbdb => 'senior_no', 
+			dwc => 'acceptedNameUsageID', dedup => 'orig_no' },
+		  { rec => 'size', com => 'siz' },
+		  { rec => 'extant_size', com => 'exs' },
+		  { rec => 'firstapp_ea', com => 'fea' },
+		]},
    ];
 
 
@@ -136,6 +155,8 @@ sub fetchSingle {
     
     my @fields;
     
+    push @fields, 'link' if $self->{show}{nav};
+    push @fields, 'parent' if $self->{show}{nav};
     push @fields, 'ref' if $self->{show}{ref};
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
@@ -145,13 +166,18 @@ sub fetchSingle {
     
     $options->{fields} = \@fields;
     
-    # If we aren't asked for the exact taxon, choose the senior synonym.
+    # If we were asked for the senior synonym, choose it.
     
-    my $rel = $self->{params}{exact} ? 'self' : 'senior';
+    my $rel = $self->{params}{senior} ? 'senior' : 'self';
     
     # Next, fetch basic info about the taxon.
     
     ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $options);
+    
+    # If we were asked for 'nav' info, also show the immediate children.
+    
+    $self->{main_record}{children} = 
+	[ $taxonomy->getTaxa('children', $taxon_no, { fields => ['size', 'appfirst'] } ) ];
     
     return 1;
 }

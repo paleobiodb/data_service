@@ -953,7 +953,7 @@ sub constructArrayJSON {
     {
 	if ( ref $rulespec eq 'ARRAY' )
 	{
-	    $value = constructObjectJSON($elt, $rulespec);
+	    $value = $self->constructObjectJSON($elt, $rulespec);
 	}
 	
 	elsif ( ref $f->{code} eq 'CODE' )

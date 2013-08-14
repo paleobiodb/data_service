@@ -84,7 +84,7 @@ ruleset '1.1:taxon_filter' =>
     [optional => 'depth', POS_VALUE];
 
 ruleset '1.1:taxon_display' => 
-    [optional => 'show', LIST_PERMISSIVE('ref','attr','time','app','applong','coll','phyl','size','det','all')],
+    [optional => 'show', LIST_PERMISSIVE('ref','attr','time','app','applong','coll','phyl','size','nav','det','all')],
     [optional => 'exact', FLAG_VALUE];
 
 ruleset '1.1:taxa/single' => 
