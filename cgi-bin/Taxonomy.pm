@@ -461,6 +461,8 @@ our ($APP_LONG_FIELDS) = ", fei.interval_name as firstapp_ei, fli.interval_name 
 
 our ($APP_FIRST_FIELDS) = ", fei.base_age as firstapp_ea, fli.top_age as firstapp_la";
 
+our ($INT_PHYLO_FIELDS) = ", pi.kingdom_no, pi.kingdom, pi.phylum_no, pi.phylum, pi.class_no, pi.class, pi.order_no, pi.order, pi.family_no, pi.family";
+
 # The following hash is used by the return option 'id_table'.
 
 our(%TAXON_FIELD) = ('lft' => 1, 'rgt' => 1, 'depth' => 1, 'opinion_no' => 1,
@@ -5624,6 +5626,12 @@ sub generateQueryFields {
 	    $tables{fli} = 1;
 	}
 	
+	elsif ( $inc eq 'phylo' )
+	{
+	    $fields .= $INT_PHYLO_FIELDS;
+	    $tables{pi} = 1;
+	}
+	
 	else
 	{
 	    carp "unrecognized value '$inc' for option 'fields'";
@@ -5787,6 +5795,8 @@ sub generateExtraJoins {
 	if $tables->{fei};
     $extra_joins .= "LEFT JOIN interval_map as lli on lli.younger_seq = v.last_late_int_seq\n"
 	if $tables->{fli};
+    $extra_joins .= "LEFT JOIN taxon_ints as pi on pi.ints_no = t.ints_no\n"
+	if $tables->{pi};
     
     if ( $tables->{pa} and $main_table !~ /^o/ )
     {

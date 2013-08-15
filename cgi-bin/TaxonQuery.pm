@@ -82,6 +82,17 @@ $OUTPUT{nav} =
    [
     { rec => 'parent_name', com => 'prl', dwc => 'parentNameUsage',
         doc => "The name of the parent taxonomic concept, if any" },
+    { rec => 'kingdom_no', com => 'kgn', doc => "The identifier of the kingdom in which this taxon occurs" },
+    { rec => 'kingdom', com => 'kgl', doc => "The name of the kingdom in which this taxon occurs" },
+    { rec => 'phylum_no', com => 'phn', doc => "The identifier of the phylum in which this taxon occurs" },
+    { rec => 'phylum', com => 'phl', doc => "The name of the phylum in which this taxon occurs" },
+    { rec => 'class_no', com => 'cln', doc => "The identifier of the class in which this taxon occurs" },
+    { rec => 'class', com => 'cll', doc => "The name of the class in which this taxon occurs" },
+    { rec => 'order_no', com => 'odn', doc => "The identifier of the order in which this taxon occurs" },
+    { rec => 'order', com => 'odl', doc => "The name of the order in which this taxon occurs" },
+    { rec => 'family_no', com => 'fmn', doc => "The identifier of the family in which this taxon occurs" },
+    { rec => 'family', com => 'fml', doc => "The name of the family in which this taxon occurs" },
+
     { rec => 'children', com => 'chl', use_each => 1,
         doc => "The immediate children of this taxonomic concept, if any",
         rule => [ { rec => 'taxon_no', com => 'oid', dwc => 'taxonID' },
@@ -157,6 +168,7 @@ sub fetchSingle {
     
     push @fields, 'link' if $self->{show}{nav};
     push @fields, 'parent' if $self->{show}{nav};
+    push @fields, 'phylo' if $self->{show}{nav};
     push @fields, 'ref' if $self->{show}{ref};
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
