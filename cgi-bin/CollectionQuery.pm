@@ -22,11 +22,15 @@ $SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.la
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
-our ($SUMMARY_1A) = "s.clust_id as sum_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng, icm.container_no";
+our ($SUMMARY_1C) = "s.clust_id as sum_id, count(distinct c.collection_no) as n_colls, sum(c.n_occs) as n_occs, s.lat, s.lng, icm.container_no";
+
+our ($SUMMARY_1M) = "s.clust_id as sum_id, count(distinct c.collection_no) as n_colls, count(distinct m.occurrence_no) as n_occs, s.lat, s.lng, icm.container_no";
 
 our ($SUMMARY_2) = "s.bin_id as sum_id, s.clust_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
-our ($SUMMARY_2A) = "s.bin_id as sum_id, s.clust_id, count(distinct collection_no) as n_colls, count(distinct occurrence_no) as n_occs, s.lat, s.lng, icm.container_no";
+our ($SUMMARY_2C) = "s.bin_id as sum_id, s.clust_id, count(distinct c.collection_no) as n_colls, sum(c.n_occs) as n_occs, s.lat, s.lng, icm.container_no";
+
+our ($SUMMARY_2M) = "s.bin_id as sum_id, s.clust_id, count(distinct c.collection_no) as n_colls, count(distinct m.occurrence_no) as n_occs, s.lat, s.lng, icm.container_no";
 
 $PROC{single} = $PROC{list} =
    [
@@ -293,14 +297,13 @@ sub fetchMultiple {
     
     my $dbh = $self->{dbh};
     
-    my $tables = {};
     my $calc = '';
     my $mt = $self->{op} eq 'summary' ? 's' : 'c';
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generateQueryFilters($dbh, $tables);
+    my @filters = $self->generateQueryFilters($dbh, $mt, $self->{select_tables});
     
     push @filters, "$mt.access_level = 0";
     
@@ -330,7 +333,9 @@ sub fetchMultiple {
     
     if ( $self->{op} eq 'summary' and $self->{params}{level} == 2 ) 
     {
-	my $base_fields = $tables->{c} ? $SUMMARY_2A : $SUMMARY_2;
+	my $base_fields = $self->{select_tables}{m} ? $SUMMARY_2M : 
+			  $self->{select_tables}{c} ? $SUMMARY_2C :
+						      $SUMMARY_2;
 	$base_fields .= ', ' . $fields if $fields;
 	
 	$self->{main_sql} = "
@@ -344,7 +349,9 @@ sub fetchMultiple {
     
     elsif ( $self->{op} eq 'summary' ) 
     {
-	my $base_fields = $tables->{c} ? $SUMMARY_1A : $SUMMARY_1;
+	my $base_fields = $self->{select_tables}{m} ? $SUMMARY_1M : 
+			  $self->{select_tables}{c} ? $SUMMARY_1C :
+						      $SUMMARY_1;
 	$base_fields .= ', ' . $fields if $fields;
 	
 	$self->{main_sql} = "
@@ -479,7 +486,7 @@ sub fetchMultiple {
 
 sub generateQueryFilters {
 
-    my ($self, $dbh, $tables_ref) = @_;
+    my ($self, $dbh, $mt, $tables_ref) = @_;
     
     my @filters;
     
@@ -502,12 +509,12 @@ sub generateQueryFilters {
 	
 	if ( $first_bin >= 200000000 )
 	{
-	    push @filters, "c.bin_id in ($list)";
+	    push @filters, "$mt.bin_id in ($list)";
 	}
 	
 	elsif ( $first_bin >= 1000000 )
 	{
-	    push @filters, "c.clust_id in ($list)";
+	    push @filters, "$mt.clust_id in ($list)";
 	}
     }
     
@@ -589,12 +596,14 @@ sub generateQueryFilters {
     if ( defined $min_age and $min_age > 0 )
     {
 	my $min_filt = $self->{params}{time_strict} ? "c.late_age" : "c.early_age";
+	$tables_ref->{c} = 1;
 	push @filters, "$min_filt > $min_age";
     }
     
     if ( defined $max_age and $max_age > 0 )
     {
 	my $max_filt = $self->{params}{time_strict} ? "c.early_age" : "c.late_age";
+	$tables_ref->{c} = 1;
 	push @filters, "$max_filt < $max_age";
     }
     
