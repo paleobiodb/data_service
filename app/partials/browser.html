@@ -11,20 +11,35 @@
 	<p>[The time bar goes here]</p>
       </div>
       <div class="boundedSection" name="pbdb_phylo">
+	
 	<form ng-submit="nameEntered()">
 	  <p style="margin-top: 0px">Enter a taxonomic name: <input type="text" size="40" ng-model="name_entry" />
 	  <!--<button ng-click="selectName()">Select</button>--></p>
 	</form>
-	<div class="taxonParent">
+	
+	<div class="taxonParents">
+	  <p ng-repeat="taxon in focal_parents">
+	  <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>
+	  </p>
 	</div>
+	
 	<div class="focalTaxon" name="focal_taxon_box">
 	  <p class="taxonTitle" ng-bind="taxonTitle(focal_taxon)"></p>
+	  <!--<div class="subTaxonList">
+	    <p>{{focal_taxon.phc}} phyla</p>
+	    <p>{{focal_taxon.clc}} classes</p>
+	    <p>{{focal_taxon.odc}} orders</p>
+	    <p>{{focal_taxon.fmc}} families</p>
+	    <p>{{focal_taxon.gnc}} genera</p>
+	  </div>-->
 	</div>
-	<div class="taxonChildren" name="taxon_children">
+	
+	<div class="taxonChildren">
 	  <p ng-repeat="taxon in focal_taxon.chl">
 	  <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a> - {{taxon.siz}}
 	  </p>
 	</div>
+	
       </div>
     </div>
   </div>

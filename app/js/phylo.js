@@ -14,7 +14,7 @@ var pbdb_phylo_service = angular.module('phyloService', []);
 //     return new_service;
 // }]);
 
-pbdb_phylo_service.factory('taxonomy', ['$http', function($http) {
+pbdb_phylo_service.factory('phyloData', ['$http', function($http) {
     function listTaxaByName(name, success_fn, error_fn)
     {
 	$http.get('/data1.1/taxa/list.json?name=' + name).success(success_fn).error(error_fn);

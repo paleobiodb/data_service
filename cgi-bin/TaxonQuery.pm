@@ -78,24 +78,7 @@ $PROC{ref} =
     { rec => 'r_al1', set => 'pubref', use_main => 1, code => \&DataQuery::generateReference },
    ];
 
-$OUTPUT{nav} =
-   [
-    { rec => 'parent_name', com => 'prl', dwc => 'parentNameUsage',
-        doc => "The name of the parent taxonomic concept, if any" },
-    { rec => 'kingdom_no', com => 'kgn', doc => "The identifier of the kingdom in which this taxon occurs" },
-    { rec => 'kingdom', com => 'kgl', doc => "The name of the kingdom in which this taxon occurs" },
-    { rec => 'phylum_no', com => 'phn', doc => "The identifier of the phylum in which this taxon occurs" },
-    { rec => 'phylum', com => 'phl', doc => "The name of the phylum in which this taxon occurs" },
-    { rec => 'class_no', com => 'cln', doc => "The identifier of the class in which this taxon occurs" },
-    { rec => 'class', com => 'cll', doc => "The name of the class in which this taxon occurs" },
-    { rec => 'order_no', com => 'odn', doc => "The identifier of the order in which this taxon occurs" },
-    { rec => 'order', com => 'odl', doc => "The name of the order in which this taxon occurs" },
-    { rec => 'family_no', com => 'fmn', doc => "The identifier of the family in which this taxon occurs" },
-    { rec => 'family', com => 'fml', doc => "The name of the family in which this taxon occurs" },
-
-    { rec => 'children', com => 'chl', use_each => 1,
-        doc => "The immediate children of this taxonomic concept, if any",
-        rule => [ { rec => 'taxon_no', com => 'oid', dwc => 'taxonID' },
+my $child_rule = [ { rec => 'taxon_no', com => 'oid', dwc => 'taxonID' },
 		  { rec => 'orig_no', com => 'gid' },
 		  { rec => 'record_type', com => 'typ', com_value => 'txn' },
 		  { rec => 'taxon_rank', com => 'rnk', dwc => 'taxonRank' },
@@ -105,7 +88,47 @@ $OUTPUT{nav} =
 		  { rec => 'size', com => 'siz' },
 		  { rec => 'extant_size', com => 'exs' },
 		  { rec => 'firstapp_ea', com => 'fea' },
-		]},
+		];
+
+$OUTPUT{nav} =
+   [
+    { rec => 'parent_name', com => 'prl', dwc => 'parentNameUsage',
+        doc => "The name of the parent taxonomic concept, if any" },
+    { rec => 'parent_rank', com => 'prr', doc => "The rank of the parent taxonomic concept, if any" },
+    { rec => 'kingdom_no', com => 'kgn', doc => "The identifier of the kingdom in which this taxon occurs" },
+    { rec => 'kingdom', com => 'kgl', doc => "The name of the kingdom in which this taxon occurs" },
+    { rec => 'phylum_no', com => 'phn', doc => "The identifier of the phylum in which this taxon occurs" },
+    { rec => 'phylum', com => 'phl', doc => "The name of the phylum in which this taxon occurs" },
+    { rec => 'phylum_count', com => 'phc', doc => "The number of phyla within this taxon" },
+    { rec => 'class_no', com => 'cln', doc => "The identifier of the class in which this taxon occurs" },
+    { rec => 'class', com => 'cll', doc => "The name of the class in which this taxon occurs" },
+    { rec => 'class_count', com => 'clc', doc => "The number of classes within this taxon" },
+    { rec => 'order_no', com => 'odn', doc => "The identifier of the order in which this taxon occurs" },
+    { rec => 'order', com => 'odl', doc => "The name of the order in which this taxon occurs" },
+    { rec => 'order_count', com => 'odc', doc => "The number of orders within this taxon" },
+    { rec => 'family_no', com => 'fmn', doc => "The identifier of the family in which this taxon occurs" },
+    { rec => 'family', com => 'fml', doc => "The name of the family in which this taxon occurs" },
+    { rec => 'family_count', com => 'fmc', doc => "The number of families within this taxon" },
+    { rec => 'genus_count', com => 'gnc', doc => "The number of genera within this taxon" },
+    
+    { rec => 'children', com => 'chl', use_each => 1,
+        doc => "The immediate children of this taxonomic concept, if any",
+        rule => $child_rule },
+    { rec => 'phylum_list', com => 'phs', use_each => 1,
+        doc => "A list of the phyla within this taxonomic concept",
+        rule => $child_rule },
+    { rec => 'class_list', com => 'cls', use_each => 1,
+        doc => "A list of the classes within this taxonomic concept",
+        rule => $child_rule },
+    { rec => 'order_list', com => 'ods', use_each => 1,
+        doc => "A list of the orders within this taxonomic concept",
+        rule => $child_rule },
+    { rec => 'family_list', com => 'fms', use_each => 1,
+        doc => "A list of the families within this taxonomic concept",
+        rule => $child_rule },
+    { rec => 'genus_list', com => 'gns', use_each => 1,
+        doc => "A list of the genera within this taxonomic concept",
+        rule => $child_rule },
    ];
 
 
@@ -169,6 +192,7 @@ sub fetchSingle {
     push @fields, 'link' if $self->{show}{nav};
     push @fields, 'parent' if $self->{show}{nav};
     push @fields, 'phylo' if $self->{show}{nav};
+    push @fields, 'counts' if $self->{show}{nav};
     push @fields, 'ref' if $self->{show}{ref};
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
@@ -186,10 +210,38 @@ sub fetchSingle {
     
     ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $options);
     
-    # If we were asked for 'nav' info, also show the immediate children.
+    # If we were asked for 'nav' info, also show the various categories
+    # of subtaxa.
     
-    $self->{main_record}{children} = 
-	[ $taxonomy->getTaxa('children', $taxon_no, { fields => ['size', 'appfirst'] } ) ];
+    if ( $self->{show}{nav} )
+    {
+	my $r = $self->{main_record};
+	
+	unless ( $r->{phylum_no} or $r->{classical_rank} == 20 )
+	{
+	    $r->{phylum_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'phylum', fields => ['size', 'appfirst'] } ) ];
+	}
+	
+	unless ( $r->{class_no} or $r->{classical_rank} == 17 )
+	{
+	    $r->{class_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'class', fields => ['size', 'appfirst'] } ) ];
+	}
+	
+	unless ( $r->{order_no} or $r->{classical_rank} == 13 )
+	{
+	    $r->{order_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'order', fields => ['size', 'appfirst'] } ) ];
+	}
+	
+	unless ( $r->{order_no} or $r->{classical_rank} == 9 )
+	{
+	    $r->{family_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'family', fields => ['size', 'appfirst'] } ) ];
+	}
+	
+	$r->{genus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'genus', fields => ['size', 'appfirst'] } ) ];
+	
+	$r->{children} = 
+	    [ $taxonomy->getTaxa('children', $taxon_no, { fields => ['size', 'appfirst'] } ) ];
+    }
     
     return 1;
 }
