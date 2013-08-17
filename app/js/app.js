@@ -13,14 +13,14 @@ pbdb_app.config(['$routeProvider', function($routeProvider) {
     $routeProvider.otherwise({redirectTo: '/view=mtp'});
   }]);
 
-pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'taxonomy', 
-				function($scope, $routeParams, $location, taxonomy) {
+pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloData', 
+				function($scope, $routeParams, $location, phyloData) {
     
     browser_scope = $scope;	// for debugging
     $scope.name_entry = '';
     
     $scope.taxonTitle = function(t) {
-	return taxonomy.taxonTitle(t);
+	return phyloData.taxonTitle(t);
     };
     
     $scope.taxonRoute2 = function(t) {
@@ -35,7 +35,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'taxonomy
     
     $scope.nameEntered = function() {
 	if ( this.name_entry.length > 0 ) {
-	    taxonomy.listTaxaByName(this.name_entry, $scope.foundEnteredName, $scope.errorEnteredName);
+	    phyloData.listTaxaByName(this.name_entry, $scope.foundEnteredName, $scope.errorEnteredName);
 	}
     };
     
@@ -43,7 +43,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'taxonomy
 	if ( data.records.length > 0 ) {
 	    $scope.name_entry = '';
 	    $scope.focal_taxon = data.records[0];
-	    taxonomy.getTaxon(data.records[0].oid, { show: 'nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
+	    phyloData.getTaxon(data.records[0].oid, { show: 'attr,nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
 	} else {
 	    $scope.errorEnteredName({ error: "nothing found" });
 	}
@@ -51,13 +51,14 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'taxonomy
     
     $scope.jumpTaxon = function(taxon) {
 	$scope.focal_taxon = taxon;
-	taxonomy.getTaxon(taxon.oid, { show: 'nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
+	phyloData.getTaxon(taxon.oid, { show: 'attr,nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
     };
     
     $scope.finishJumpTaxon = function(data) {
 	if ( data.records.length > 0 ) {
 	    $scope.focal_taxon = data.records[0];
 	    $scope.focal_parents = computeParentList(data.records[0]);
+	    $scope.focal_subsect = computeChildList(data.records[0]);
 	    $location.path($scope.taxonRoute2($scope.focal_taxon));
 	} else {
 	    $scope.errorEnteredName({ error: "nothing found" });
@@ -105,7 +106,43 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'taxonomy
 	
 	return parent_list;
     }
-    
+   
+    function computeChildList(taxon) {
+	var section_list = [];
+	
+	if ( taxon.chl )
+	{
+	    section_list.push({ section: "immediate subtaxa", size: taxon.chl.length, taxa: taxon.chl });
+	}
+	
+	if ( taxon.phs )
+	{
+	    section_list.push({ section: "phyla", size: taxon.phc, taxa: taxon.phs });
+	}
+	
+	if (taxon.cls )
+	{
+	    section_list.push({ section: "classes", size: taxon.clc, taxa: taxon.cls });
+	}
+	
+	if (taxon.ods )
+	{
+	    section_list.push({ section: "orders", size: taxon.odc, taxa: taxon.ods });
+	}
+	
+	if (taxon.fms )
+	{
+	    section_list.push({ section: "families", size: taxon.fmc, taxa: taxon.fms });
+	}
+	
+	if ( taxon.gns )
+	{
+	    section_list.push({ section: "genera", size: taxon.gnc, taxa: taxon.gns });
+	}
+	
+	return section_list;
+    };				    
+				    
     $scope.errorEnteredName = function(e) {
 	$scope.error_object = e;
 	alert('An error occurred: ' + e);
@@ -113,7 +150,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'taxonomy
     
     if ( $routeParams.phylo_selector )
     {
-	taxonomy.getTaxon($routeParams.phylo_selector, { show: 'nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
+	phyloData.getTaxon($routeParams.phylo_selector, { show: 'attr,nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
     }
     
 

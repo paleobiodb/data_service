@@ -14,7 +14,7 @@
 	
 	<form ng-submit="nameEntered()">
 	  <p style="margin-top: 0px">Enter a taxonomic name: <input type="text" size="40" ng-model="name_entry" />
-	  <!--<button ng-click="selectName()">Select</button>--></p>
+	  <button ng-click="nameEntered()">Select</button></p>
 	</form>
 	
 	<div class="taxonParents">
@@ -25,18 +25,16 @@
 	
 	<div class="focalTaxon" name="focal_taxon_box">
 	  <p class="taxonTitle" ng-bind="taxonTitle(focal_taxon)"></p>
-	  <!--<div class="subTaxonList">
-	    <p>{{focal_taxon.phc}} phyla</p>
-	    <p>{{focal_taxon.clc}} classes</p>
-	    <p>{{focal_taxon.odc}} orders</p>
-	    <p>{{focal_taxon.fmc}} families</p>
-	    <p>{{focal_taxon.gnc}} genera</p>
-	  </div>-->
+	  <p class="taxonAttr" ng-bind="focal_taxon.att"></p>
 	</div>
 	
 	<div class="taxonChildren">
-	  <p ng-repeat="taxon in focal_taxon.chl">
-	  <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a> - {{taxon.siz}}
+	  <p ng-repeat="s in focal_subsect">
+	  <!--<a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a> - {{taxon.siz}}-->
+	  {{s.size}} {{s.section}}:<br>
+	    <span ng-repeat="taxon in s.taxa">
+	      <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>&nbsp;
+	    </span>
 	  </p>
 	</div>
 	

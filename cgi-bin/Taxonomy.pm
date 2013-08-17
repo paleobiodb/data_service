@@ -14,14 +14,14 @@ use Try::Tiny;
 use strict;
 
 
-our (%TAXONOMIC_RANK) = ( 'max' => 26, 'informal' => 26, 'unranked_clade' => 25, 'unranked' => 25, 
-			 'kingdom' => 23, 'subkingdom' => 22,
-			 'superphylum' => 21, 'phylum' => 20, 'subphylum' => 19,
-			 'superclass' => 18, 'class' => 17, 'subclass' => 16,
-			 'infraclass' => 15, 'superorder' => 14, 'order' => 13, 
-			 'suborder' => 12, 'infraorder' => 11, 'superfamily' => 10,
-			 'family' => 9, 'subfamily' => 8, 'tribe' => 7, 'subtribe' => 6,
-			 'genus' => 5, 'subgenus' => 4, 'species' => 3, 'subspecies' => 2, 'min' => 2 );
+our (%TAXONOMIC_RANK) = ( 'max' => 26, 26 => 26, 'informal' => 26, 'unranked_clade' => 25, 'unranked' => 25, 25 => 25,
+			 'kingdom' => 23, 23 => 23, 'subkingdom' => 22, 22 => 22,
+			 'superphylum' => 21, 21 => 21, 'phylum' => 20, 20 => 20, 'subphylum' => 19, 19 => 19,
+			 'superclass' => 18, 18 => 18, 'class' => 17, 17 => 17, 'subclass' => 16, 16 => 16,
+			 'infraclass' => 15, 15 => 15, 'superorder' => 14, 14 => 14, 'order' => 13, 13 => 13,
+			 'suborder' => 12, 12 => 12, 'infraorder' => 11, 11 => 11, 'superfamily' => 10, 10 => 10,
+			 'family' => 9, 9 => 9, 'subfamily' => 8, 8 => 8, 'tribe' => 7, 7 => 7, 'subtribe' => 6, 6 => 6,
+			 'genus' => 5, 5 => 5, 'subgenus' => 4, 4 => 4, 'species' => 3, 3 => 3, 'subspecies' => 2, 2 => 2, 'min' => 2 );
 
 our (%NOM_CODE) = ( 'iczn' => 1, 'phylocode' => 2, 'icn' => 3, 'icnb' => 4 );
 
@@ -344,7 +344,7 @@ sub new {
 
 # The "basic" fields are always returned.
 
-our ($AUTH_BASIC_FIELDS) = "a.taxon_name as exact_name, a.taxon_no, a.taxon_rank, a.common_name, a.extant, a.orig_no, o.status, o.parent_no as classification_no, a.reference_no, t.name as taxon_name";
+our ($AUTH_BASIC_FIELDS) = "a.taxon_name as exact_name, a.taxon_no, a.taxon_rank, a.common_name, a.extant, a.orig_no, o.status, o.parent_no as classification_no, a.reference_no, t.name as taxon_name, t.rank";
 
 our ($OPINION_BASIC_FIELDS) = "o.opinion_no, o.reference_no, o.status, o.phylogenetic_status, o.spelling_reason, o.child_no, o.child_spelling_no, o.parent_no, o.parent_spelling_no";
 
@@ -461,9 +461,9 @@ our ($APP_LONG_FIELDS) = ", fei.interval_name as firstapp_ei, fli.interval_name 
 
 our ($APP_FIRST_FIELDS) = ", fei.base_age as firstapp_ea, fli.top_age as firstapp_la";
 
-our ($INT_PHYLO_FIELDS) = ", pi.classical_rank, pi.kingdom_no, pi.kingdom, pi.phylum_no, pi.phylum, pi.class_no, pi.class, pi.order_no, pi.order, pi.family_no, pi.family";
+our ($INT_PHYLO_FIELDS) = ", pi.kingdom_no, pi.kingdom, pi.phylum_no, pi.phylum, pi.class_no, pi.class, pi.order_no, pi.order, pi.family_no, pi.family";
 
-our ($COUNT_PHYLO_FIELDS) = ", pc.phylum_count, pc.class_count, pc.order_count, pc.family_count, pc.genus_count, pc.subgenus_count, pc.species_count";
+our ($COUNT_PHYLO_FIELDS) = ", pc.phylum_count, pc.class_count, pc.order_count, pc.family_count, pc.genus_count, pc.species_count";
 
 # The following hash is used by the return option 'id_table'.
 

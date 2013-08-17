@@ -25,7 +25,7 @@ $OUTPUT{single} = $OUTPUT{list} =
         doc => "A positive integer that uniquely identifies the taxonomic concept"},
     { rec => 'record_type', com => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => 'taxon',
         doc => "The type of this object: {value} for a taxonomic name" },
-    { rec => 'taxon_rank', dwc => 'taxonRank', com => 'rnk', 
+    { rec => 'rank', dwc => 'taxonRank', com => 'rnk', 
 	doc => "The taxonomic rank of this name" },
     { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
 	doc => "The scientific name of this taxon" },
@@ -129,7 +129,16 @@ $OUTPUT{nav} =
     { rec => 'genus_list', com => 'gns', use_each => 1,
         doc => "A list of the genera within this taxonomic concept",
         rule => $child_rule },
-   ];
+    { rec => 'subgenus_list', com => 'sgs', use_each => 1,
+        doc => "A list of the subgenera within this taxonomic concept",
+        rule => $child_rule },
+    { rec => 'species_list', com => 'sps', use_each => 1,
+        doc => "A list of the species within this taxonomic concept",
+        rule => $child_rule },
+     { rec => 'subspecies_list', com => 'sss', use_each => 1,
+        doc => "A list of the subspecies within this taxonomic concept",
+        rule => $child_rule },
+  ];
 
 
 # fetchSingle ( )
@@ -217,30 +226,50 @@ sub fetchSingle {
     {
 	my $r = $self->{main_record};
 	
-	unless ( $r->{phylum_no} or $r->{classical_rank} == 20 )
+	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
 	{
-	    $r->{phylum_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'phylum', fields => ['size', 'appfirst'] } ) ];
+	    $r->{phylum_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
+						     { limit => 10, order => 'size.desc', rank => 20, fields => ['size', 'appfirst'] } ) ];
 	}
 	
-	unless ( $r->{class_no} or $r->{classical_rank} == 17 )
+	unless ( $r->{class_no} or $r->{rank} <= 17 )
 	{
-	    $r->{class_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'class', fields => ['size', 'appfirst'] } ) ];
+	    $r->{class_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
+						    { limit => 10, order => 'size.desc', rank => 17, fields => ['size', 'appfirst'] } ) ];
 	}
 	
-	unless ( $r->{order_no} or $r->{classical_rank} == 13 )
+	unless ( $r->{order_no} or $r->{rank} <= 13 )
 	{
-	    $r->{order_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'order', fields => ['size', 'appfirst'] } ) ];
+	    $r->{order_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
+						    { limit => 10, order => 'size.desc', rank => 13, fields => ['size', 'appfirst'] } ) ];
 	}
 	
-	unless ( $r->{order_no} or $r->{classical_rank} == 9 )
+	unless ( $r->{family_no} or $r->{rank} <= 9 )
 	{
-	    $r->{family_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'family', fields => ['size', 'appfirst'] } ) ];
+	    $r->{family_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
+						     { limit => 10, order => 'size.desc', rank => 9, fields => ['size', 'appfirst'] } ) ];
 	}
 	
-	$r->{genus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, { limit => 10, rank => 'genus', fields => ['size', 'appfirst'] } ) ];
+	if ( $r->{rank} > 5 )
+	{
+	    $r->{genus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
+						    { limit => 10, order => 'size.desc', rank => 5, fields => ['size', 'appfirst'] } ) ];
+	}
+	
+	if ( $r->{rank} == 5 )
+	{
+	    $r->{subgenus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
+						       { limit => 10, order => 'size.desc', rank => 4, fields => ['size', 'appfirst'] } ) ];
+	}
+	
+	if ( $r->{rank} == 5 or $r->{rank} == 4 )
+	{
+	    $r->{species_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
+						       { limit => 10, order => 'size.desc', rank => 3, fields => ['size', 'appfirst'] } ) ];
+	}
 	
 	$r->{children} = 
-	    [ $taxonomy->getTaxa('children', $taxon_no, { fields => ['size', 'appfirst'] } ) ];
+	    [ $taxonomy->getTaxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => ['size', 'appfirst'] } ) ];
     }
     
     return 1;
