@@ -596,14 +596,14 @@ sub generateQueryFilters {
     if ( defined $min_age and $min_age > 0 )
     {
 	my $min_filt = $self->{params}{time_strict} ? "c.late_age" : "c.early_age";
-	$tables_ref->{c} = 1;
+	$tables_ref->{c} = 1 unless $mt eq 'c';
 	push @filters, "$min_filt > $min_age";
     }
     
     if ( defined $max_age and $max_age > 0 )
     {
 	my $max_filt = $self->{params}{time_strict} ? "c.early_age" : "c.late_age";
-	$tables_ref->{c} = 1;
+	$tables_ref->{c} = 1 unless $mt eq 'c';
 	push @filters, "$max_filt < $max_age";
     }
     
