@@ -1,4 +1,4 @@
-#
+
 # CollectionQuery
 # 
 # A class that returns information from the PaleoDB database about a single
@@ -22,15 +22,14 @@ $SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.la
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
-our ($SUMMARY_1C) = "s.clust_id as sum_id, count(distinct c.collection_no) as n_colls, sum(c.n_occs) as n_occs, s.lat, s.lng, icm.container_no";
-
-our ($SUMMARY_1M) = "s.clust_id as sum_id, count(distinct c.collection_no) as n_colls, count(distinct m.occurrence_no) as n_occs, s.lat, s.lng, icm.container_no";
-
 our ($SUMMARY_2) = "s.bin_id as sum_id, s.clust_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
-our ($SUMMARY_2C) = "s.bin_id as sum_id, s.clust_id, count(distinct c.collection_no) as n_colls, sum(c.n_occs) as n_occs, s.lat, s.lng, icm.container_no";
+our ($SUMMARY_S) = "s.clust_id, s.n_colls, s.n_occs, s.lat, s.lng, s.early_seq, s.late_seq";
 
-our ($SUMMARY_2M) = "s.bin_id as sum_id, s.clust_id, count(distinct c.collection_no) as n_colls, count(distinct m.occurrence_no) as n_occs, s.lat, s.lng, icm.container_no";
+our ($SUMMARY_C) = "s.clust_id, count(distinct c.collection_no) as n_colls, sum(c.n_occs) as n_occs, s.lat, s.lng, min(c.early_seq) as early_seq, min(c.late_seq) as late_seq";
+
+our ($SUMMARY_M) = "s.clust_id, count(distinct c.collection_no) as n_colls, count(distinct m.occurrence_no) as n_occs, s.lat, s.lng, min(c.early_seq) as early_seq, min(c.late_seq) as late_seq";
+
 
 $PROC{single} = $PROC{list} =
    [
@@ -173,7 +172,7 @@ $OUTPUT{rem} =
 	doc => "Any additional remarks that were entered about the colection"},
    ];
 
-$SELECT{ext} = "s.lng_min, s.lng_max, s.lat_min, s.lat_max, s.std_dev";
+$SELECT{ext} = "s.lng_min, lng_max, s.lat_min, s.lat_max, s.std_dev";
 
 $OUTPUT{ext} =
    [
@@ -303,18 +302,18 @@ sub fetchMultiple {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generateQueryFilters($dbh, $mt, $self->{select_tables});
+    my $filter_tables = {};
+    
+    my @filters = $self->generateQueryFilters($dbh, $mt, $filter_tables);
     
     push @filters, "$mt.access_level = 0";
+    
+    my $filter_string = join(' and ', @filters);
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
     my $fields = join(', ', @{$self->{select_list}});
-    
-    # Determine the necessary joins.
-    
-    my ($join_list) = $self->generateJoinList($mt, $self->{select_tables});
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -327,50 +326,63 @@ sub fetchMultiple {
 	$calc = 'SQL_CALC_FOUND_ROWS';
     }
     
-    # Generate the main query.
-
-    my $filter_list = join(' and ', @filters);
+    # If the operation is 'summary', generate a query on the summary tables.
     
-    if ( $self->{op} eq 'summary' and $self->{params}{level} == 2 ) 
+    if ( $self->{op} eq 'summary' ) 
     {
-	my $base_fields = $self->{select_tables}{m} ? $SUMMARY_2M : 
-			  $self->{select_tables}{c} ? $SUMMARY_2C :
-						      $SUMMARY_2;
+	my ($base_fields, $inner_query_fields, $summary_table, $group_field, $base_joins, $inner_query_joins);
+	
+	if ( $self->{params}{level} == 2 )
+	{
+	    $base_fields = $SUMMARY_2;
+	    $summary_table = 'coll_bins';
+	    $group_field = 'bin_id';
+	}
+	
+	else
+	{
+	    $base_fields = $SUMMARY_1;
+	    $summary_table = 'clusters';
+	    $group_field = 'clust_id';
+	}
+	
 	$base_fields .= ', ' . $fields if $fields;
+	
+	$base_joins = $self->generateJoinList('s', $self->{select_tables});
+	
+	$inner_query_fields = $filter_tables->{m} ? $SUMMARY_M : 
+			      $filter_tables->{c} ? $SUMMARY_C :
+						    $SUMMARY_S;
+	
+	$inner_query_fields .= ", s.bin_id" if $self->{params}{level} == 2;
+	
+	$inner_query_joins = $self->generateJoinList('s', $filter_tables, $group_field);
 	
 	$self->{main_sql} = "
 	SELECT $calc $base_fields
-	FROM coll_bins as s $join_list
-	WHERE $filter_list
-	GROUP BY s.bin_id
-	ORDER BY s.bin_id
-	$limit";
+	FROM (SELECT $inner_query_fields
+	      FROM $summary_table as s $inner_query_joins
+	      WHERE $filter_string
+	      GROUP BY s.$group_field
+	      ORDER BY s.$group_field
+	      $limit) as s
+		$base_joins";
     }
     
-    elsif ( $self->{op} eq 'summary' ) 
-    {
-	my $base_fields = $self->{select_tables}{m} ? $SUMMARY_1M : 
-			  $self->{select_tables}{c} ? $SUMMARY_1C :
-						      $SUMMARY_1;
-	$base_fields .= ', ' . $fields if $fields;
-	
-	$self->{main_sql} = "
-	SELECT $calc $base_fields
-	FROM clusters as s $join_list
-	WHERE $filter_list
-	GROUP BY s.clust_id
-	ORDER BY s.clust_id
-	$limit";
-    }
+    # If the operation is 'list', generate a query on the collection matrix
     
     else
     {
+	my ($base_joins);
+	
+	$base_joins = $self->generateJoinList($mt, $self->{select_tables});
+	
 	$self->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_matrix as c join collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
-		$join_list
-        WHERE $filter_list
+		$base_joins
+        WHERE $filter_string
 	GROUP BY c.collection_no
 	ORDER BY c.collection_no
 	$limit";
@@ -552,6 +564,25 @@ sub generateQueryFilters {
 	$tables_ref->{o} = 1;
     }
     
+    # Check for parameters 'person_no', 'person_name'
+    
+    elsif ( $self->{params}{person_no} )
+    {
+	if ( ref $self->{params}{person_no} eq 'ARRAY' )
+	{
+	    my $person_string = join(q{,}, @{$self->{params}{person_no}} );
+	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
+	    $tables_ref->{c} = 1;
+	}
+	
+	else
+	{
+	    my $person_string = $self->{params}{person_no};
+	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
+	    $tables_ref->{c} = 1;
+	}
+    }
+    
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax'
     
     if ( defined $self->{params}{lngmin} )
@@ -619,7 +650,7 @@ sub generateQueryFilters {
 
 sub generateJoinList {
 
-    my ($self, $mt, $tables) = @_;
+    my ($self, $mt, $tables, $summary_join_field) = @_;
     
     my $join_list = '';
     
@@ -630,14 +661,12 @@ sub generateJoinList {
     # Some tables imply others.
     
     $tables->{o} = 1 if $tables->{t};
-    $tables->{c} = $self->{params}{level} if ($tables->{o} or $tables->{ci}) and $self->{op} eq 'summary';
+    $tables->{c} = 1 if ($tables->{o} or $tables->{ci}) and $self->{op} eq 'summary';
     
     # Create the necessary join expressions.
     
-    $join_list .= "JOIN coll_matrix as c using (bin_id)\n"
-	if defined $tables->{c} && $tables->{c} == 2;
-    $join_list .= "JOIN coll_matrix as c using (clust_id)\n"
-	if defined $tables->{c} && $tables->{c} == 1;
+    $join_list .= "JOIN coll_matrix as c using ($summary_join_field)\n"
+	if $tables->{c} and defined $summary_join_field;
     $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
 	if $tables->{o};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
@@ -653,9 +682,9 @@ sub generateJoinList {
     
     if ( $self->{op} eq 'summary' )
     {
-	$join_list .= "JOIN interval_map as ei on ei.older_seq = $mt.early_st_seq\n"
+	$join_list .= "JOIN interval_map as ei on ei.older_seq = $mt.early_seq\n"
 	    if $tables->{ei};
-	$join_list .= "JOIN interval_map as li on li.younger_seq = $mt.late_st_seq\n"
+	$join_list .= "JOIN interval_map as li on li.younger_seq = $mt.late_seq\n"
 	    if $tables->{li};
     }
     
@@ -667,9 +696,11 @@ sub generateJoinList {
 	    if $tables->{li};
     }
     
-    $join_list .= "LEFT JOIN interval_container_map as icm 
-			on icm.early_seq = $mt.early_st_seq and icm.late_seq = $mt.late_st_seq\n"
-	if $tables->{icm};
+    if ( $tables->{icm} )
+    {
+	$join_list .= "LEFT JOIN interval_container_map as icm 
+			on icm.early_seq = $mt.early_seq and icm.late_seq = $mt.late_seq\n"
+    }
     
     return $join_list;
 }

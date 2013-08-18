@@ -4246,12 +4246,14 @@ sub computeCollectionTables {
 		cc char(2),
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
-		early_st_seq int unsigned not null,
-		late_st_seq int unsigned not null,
+		early_seq smallint unsigned not null,
+		late_seq smallint unsigned not null,
 		early_age float,
 		late_age float,
 		n_occs int unsigned not null,
 		reference_no int unsigned not null,
+		authorizer_no int unsigned not null,
+		enterer_no int unsigned not null,
 		access_level tinyint unsigned not null) Engine=MYISAM");
     
     logMessage(2, "    inserting collections...");
@@ -4259,13 +4261,14 @@ sub computeCollectionTables {
     $sql = "	INSERT INTO $COLL_MATRIX_WORK
 		       (collection_no, bin_lng, bin_lat, lng, lat, loc, cc,
 			early_int_no, late_int_no, early_age, late_age, 
-			reference_no, access_level)
+			reference_no, authorizer_no, enterer_no, access_level)
 		SELECT c.collection_no, 
 			if(c.lng between -180.0 and 180.0, floor((c.lng+180.0)/$FINE_BIN_SIZE), null) as bin_lng,
 			if(c.lat between -90.0 and 90.0, floor((c.lat+90.0)/$FINE_BIN_SIZE), null) as bin_lat,
 			c.lng, c.lat, point(c.lng, c.lat), map.cc,
 			imax.interval_no, imin.interval_no,
 			imax.base_age, imin.top_age, c.reference_no,
+			c.authorizer_no, c.enterer_no,
 			case c.access_level
 				when 'database members' then if(c.release_date < now(), 0, 1)
 				when 'research group' then if(c.release_date < now(), 0, 2)
@@ -4310,7 +4313,7 @@ sub computeCollectionTables {
 		JOIN $INTERVAL_MAP as ei2 on ei2.interval_no = ei.early_st_no
 		JOIN $INTERVAL_MAP as li on li.interval_no = m.late_int_no
 		JOIN $INTERVAL_MAP as li2 on li2.interval_no = li.late_st_no
-	    SET m.early_st_seq = ei2.older_seq, m.late_st_seq = li2.younger_seq";
+	    SET m.early_seq = ei2.older_seq, m.late_seq = li2.younger_seq";
     
     $result = $dbh->do($sql);
     
@@ -4328,9 +4331,9 @@ sub computeCollectionTables {
     
     $sql = "INSERT IGNORE INTO $COLL_INTS_WORK
 		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
-			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_st_seq
-			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_st_seq
-			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_st_seq and i.top_age <= ei.top_age + 0.01
+			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_seq
+			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_seq
+			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_seq and i.top_age <= ei.top_age + 0.01
 				and i.level = li.level
 		WHERE li.level <= ei.level and i.interval_no <> 0";
     
@@ -4338,9 +4341,9 @@ sub computeCollectionTables {
     
     $sql = "INSERT IGNORE INTO $COLL_INTS_WORK
 		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
-			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_st_seq
-			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_st_seq
-			JOIN $INTERVAL_MAP as i on i.older_seq >= m.early_st_seq and i.base_age > li.base_age
+			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_seq
+			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_seq
+			JOIN $INTERVAL_MAP as i on i.older_seq >= m.early_seq and i.base_age > li.base_age
 				and i.level = ei.level
 		WHERE li.level > ei.level and i.interval_no <> 0";
     
@@ -4400,8 +4403,8 @@ sub computeCollectionTables {
 		clust_id int unsigned,
 		n_colls int unsigned,
 		n_occs int unsigned,
-		early_st_seq int unsigned not null,
-		late_st_seq int unsigned not null,
+		early_seq int unsigned not null,
+		late_seq int unsigned not null,
 		lng float,
 		lat float,
 		lng_min float,
@@ -4416,11 +4419,11 @@ sub computeCollectionTables {
     
     $sql = "	INSERT IGNORE INTO $COLL_BINS_WORK
 			(bin_lng, bin_lat, bin_id, n_colls, n_occs, 
-			 early_st_seq, late_st_seq, lng, lat,
+			 early_seq, late_seq, lng, lat,
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
 		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs),
-		       min(early_st_seq), min(late_st_seq), avg(lng), avg(lat),
+		       min(early_seq), min(late_seq), avg(lng), avg(lat),
 		       round(min(lng),2) as lng_min, round(max(lng),2) as lng_max,
 		       round(min(lat),2) as lat_min, round(max(lat),2) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
@@ -4442,8 +4445,8 @@ sub computeCollectionTables {
 		clust_id int unsigned not null,
 		n_colls int unsigned,
 		n_occs int unsigned,
-		early_st_seq int unsigned not null,
-		late_st_seq int unsigned not null,
+		early_seq int unsigned not null,
+		late_seq int unsigned not null,
 		lng float,
 		lat float,
 		lng_min float,
@@ -4599,8 +4602,8 @@ sub computeCollectionTables {
     $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
 		(SELECT clust_id, sum(n_colls) as n_colls,
 			sum(n_occs) as n_occs,
-			min(early_st_seq) as early_st_seq,
-			min(late_st_seq) as late_st_seq,
+			min(early_seq) as early_seq,
+			min(late_seq) as late_seq,
 			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
 			min(lng_min) as lng_min, max(lng_max) as lng_max,
 			min(lat_min) as lat_min, max(lat_max) as lat_max,
@@ -4608,7 +4611,7 @@ sub computeCollectionTables {
 		FROM $COLL_BINS_WORK GROUP BY clust_id) as agg
 			using (clust_id)
 		SET k.n_colls = agg.n_colls, k.n_occs = agg.n_occs,
-		    k.early_st_seq = agg.early_st_seq, k.late_st_seq = agg.late_st_seq,
+		    k.early_seq = agg.early_seq, k.late_seq = agg.late_seq,
 		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
 		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,
 		    k.lat_min = agg.lat_min, k.lat_max = agg.lat_max";
@@ -4689,16 +4692,20 @@ sub computeOccurrenceTables {
 				reid_no int unsigned not null,
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
-				reference_no int unsigned not null) ENGINE=MyISAM");
+				reference_no int unsigned not null,
+				authorizer_no int unsigned not null,
+				enterer_no int unsigned not null) ENGINE=MyISAM");
     
     # Add one row for every occurrence in the database.
     
     logMessage(2, "    inserting occurrences...");
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
-		       (occurrence_no, collection_no, taxon_no, orig_no, reference_no)
+		       (occurrence_no, collection_no, taxon_no, orig_no, reference_no,
+			authorizer_no, enterer_no)
 		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no,
-			if(o.reference_no > 0, o.reference_no, c.reference_no)
+			if(o.reference_no > 0, o.reference_no, c.reference_no,
+			o.authorizer_no, o.enterer_no)
 		FROM occurrences as o JOIN collections as c using (collection_no)
 			LEFT JOIN authorities as a using (taxon_no)";
     
