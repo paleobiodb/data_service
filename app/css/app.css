@@ -44,5 +44,12 @@
 
 .taxonTitle {
 
+    font-weight: bold;
     margin: 0 auto;
+}
+
+.taxonAttr {
+    
+    font-style: italic;
+    martin: 0 auto;
 }

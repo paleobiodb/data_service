@@ -162,6 +162,7 @@ our (%NAME_TABLE) = ("taxon_trees" => "taxon_names");
 our (%ATTRS_TABLE) = ("taxon_trees" => "taxon_attrs");
 our (%SEARCH_TABLE) = ("taxon_trees" => "taxon_search");
 our (%INTS_TABLE) = ("taxon_trees" => "taxon_ints");
+our (%COUNTS_TABLE) = ("taxon_trees" => "taxon_counts");
 
 our (%AUTH_TABLE) = ("taxon_trees" => "authorities");
 our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
@@ -190,6 +191,7 @@ our $NAME_WORK = "nn";
 our $ATTRS_WORK = "vn";
 our $SEARCH_WORK = "sn";
 our $INTS_WORK = "intn";
+our $COUNTS_WORK = "cntn";
 our $OPINION_WORK = "opn";
 our $COLL_MATRIX_WORK = "cmn";
 our $COLL_INTS_WORK = "cin";
@@ -1296,12 +1298,13 @@ sub createWorkingTables {
 			       (orig_no int unsigned not null,
 				name varchar(80) not null,
 				rank tinyint not null,
+				op_rank tinyint not null,
 				imp boolean not null,
 				spelling_no int unsigned not null,
-				trad_no int unsigned not null,
 				valid_no int unsigned not null,
 				synonym_no int unsigned not null,
 				parent_no int unsigned not null,
+				parsen_no int unsigned not null,
 				opinion_no int unsigned not null,
 				ints_no int unsigned not null,
 				lft int,
@@ -1531,15 +1534,15 @@ sub computeSpelling {
 		WHERE a2.taxon_rank <> 'unranked clade' and a2.taxon_name = a.taxon_name
 		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
-    logMessage(2, "    setting trad_no");
+    # logMessage(2, "    setting trad_no");
     
-    $result = $dbh->do("UPDATE $TREE_WORK SET trad_no = spelling_no");
-    $result = $dbh->do("UPDATE $TREE_WORK t JOIN $TRAD_AUX s USING (orig_no)
-			SET t.trad_no = s.spelling_no");
+    # $result = $dbh->do("UPDATE $TREE_WORK SET trad_no = spelling_no");
+    # $result = $dbh->do("UPDATE $TREE_WORK t JOIN $TRAD_AUX s USING (orig_no)
+    # 			SET t.trad_no = s.spelling_no");
     
-    logMessage(2, "    indexing trad_no");
+    # logMessage(2, "    indexing trad_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (trad_no)");
+    # $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (trad_no)");
     
     # We then copy the selected name and rank into $TREE_TABLE.  We use the
     # traditional rank instead of the currently accepted one, because 'unranked clade'
@@ -1547,8 +1550,8 @@ sub computeSpelling {
     
     logMessage(2, "    setting name and rank");
     
-    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on taxon_no = trad_no
-			SET t.name = a.taxon_name, t.rank = a.taxon_rank");
+    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on taxon_no = spelling_no
+			SET t.name = a.taxon_name, t.rank = a.taxon_rank, t.op_rank = a.taxon_rank");
     
     # Then we can compute the name table, which records the best opinion
     # and spelling reason for each taxonomic name.
@@ -2185,7 +2188,7 @@ sub computeHierarchy {
     
     logMessage(2, "    setting opinion_no");
     
-    $result = $dbh->do("UPDATE $TREE_WORK t JOIN $CLASSIFY_AUX c USING (orig_no)
+    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $CLASSIFY_AUX as c USING (orig_no)
 			SET t.opinion_no = c.opinion_no");
     
     logMessage(2, "    indexing opinion_no");
@@ -2200,15 +2203,26 @@ sub computeHierarchy {
     logMessage(2, "    setting parent_no");
     
     $result = $dbh->do("
-		UPDATE $TREE_WORK t JOIN $TREE_WORK t2 ON t2.orig_no = t.synonym_no
+		UPDATE $TREE_WORK as t JOIN $TREE_WORK as t2 ON t2.orig_no = t.synonym_no
 		    JOIN $OPINION_CACHE o ON o.opinion_no = t2.opinion_no
 		SET t.parent_no = o.parent_no");
     
     # Once we have set parent_no for all concepts, we can efficiently index it.
-    
+     
     logMessage(2, "    indexing parent_no");
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parent_no)");
+    
+    # Then we can set and index parsen_no, which points to the senior synonym
+    # of the parent taxon.
+    
+    logMessage(2, "    setting parsen_no");
+    
+    $result = $dbh->do("
+		UPDATE $TREE_WORK as t JOIN $TREE_WORK as t2 ON t2.orig_no = t.parent_no
+		SET t.parsen_no = t2.synonym_no");
+    
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parsen_no)");
     
     my $a = 1;
     
@@ -3116,7 +3130,7 @@ sub computeIntermediates {
     
     $result = $dbh->do("DROP TABLE IF EXISTS $INTS_WORK");
     $result = $dbh->do("CREATE TABLE $INTS_WORK
-			       (ints_no int unsigned,
+			       (ints_no int unsigned primary key,
 				kingdom_no int unsigned,
 				kingdom varchar(80),
 				phylum_no int unsigned,
@@ -3126,16 +3140,16 @@ sub computeIntermediates {
 				order_no int unsigned,
 				`order` varchar(80),
 				family_no int unsigned,
-				family varchar(80),
-				primary key (ints_no)) ENGINE=MYISAM");
+				family varchar(80)) ENGINE=MYISAM");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $INTS_AUX");
     $result = $dbh->do("CREATE TABLE $INTS_AUX
 			       (orig_no int unsigned,
-				parent_no int unsigned,
+				parsen_no int unsigned,
 				depth int unsigned,
 				taxon_name varchar(80),
-				current_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
+				current_rank tinyint not null,
+				aux_rank tinyint not null,
 				was_phylum smallint,
 				not_phylum smallint,
 				phylum_yr smallint,
@@ -3148,23 +3162,21 @@ sub computeIntermediates {
 				primary key (orig_no)) ENGINE=MYISAM");
     
     # We first compute an auxiliary table to help in the computation.  We
-    # insert a row for each taxonomic concept above genus level, listing the
-    # current name and rank, as well as tree depth and parent link.
+    # insert a row for each non-junior taxonomic concept above genus level,
+    # listing the current name and rank, as well as tree depth and parent
+    # link.
     
     $SQL_STRING = "
-		INSERT INTO $INTS_AUX (orig_no, parent_no, depth, taxon_name, current_rank)
-		SELECT a.orig_no, t2.synonym_no, t.depth, a.taxon_name, a.taxon_rank
-		FROM $auth_table as a JOIN $TREE_WORK as t on a.taxon_no = t.spelling_no
-			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t.parent_no
-		WHERE a.taxon_rank > 5 and t.orig_no = t.synonym_no";
+		INSERT INTO $INTS_AUX (orig_no, parsen_no, depth, taxon_name, current_rank)
+		SELECT t.orig_no, t.parsen_no, t.depth, t.name, t.op_rank
+		FROM $TREE_WORK as t
+		WHERE t.op_rank > 5 and t.orig_no = t.synonym_no";
     
     $result = $dbh->do($SQL_STRING);
     
     # Then, for each concept, we fill in a count of opinions which in the past
     # assigned the rank of 'phylum', 'class' or 'order' to the concept,
-    # vs. those which didn't.  We add an ugly hack to count 'Chordata' as a
-    # phylum, even though it is (at the time this comment was written) not
-    # recorded as such in this database.
+    # vs. those which didn't.
     
     logMessage(2, "    counting phyla");
     
@@ -3172,7 +3184,7 @@ sub computeIntermediates {
 		UPDATE $INTS_AUX as k JOIN
 		       (SELECT a.orig_no, count(*) as c, min(if(a.pubyr<>'', a.pubyr, 9999)) as pubyr
 			FROM $auth_table as a JOIN $opinion_cache as o on a.taxon_no = o.child_spelling_no
-			WHERE taxon_rank = 'phylum' or taxon_name = 'Chordata'
+			WHERE taxon_rank = 'phylum'
 			GROUP BY a.orig_no) as op using (orig_no)
 		SET k.was_phylum = op.c, k.not_phylum = 0, k.phylum_yr = op.pubyr";
     
@@ -3239,11 +3251,11 @@ sub computeIntermediates {
     
     $SQL_STRING = "
 		INSERT INTO $INTS_WORK (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
-		SELECT orig_no, if(current_rank in ('kingdom', 'subkingdom'), orig_no, null),
-			if(current_rank = 'phylum' or was_phylum > 0, orig_no, null),
-			if(current_rank = 'class' or was_class > 0, orig_no, null),
-			if(current_rank = 'order' or was_order > 0, orig_no, null),
-			if(current_rank = 'family' or taxon_name like '%idae', orig_no, null)
+		SELECT orig_no, if(current_rank in (22,23), orig_no, null),
+			if(current_rank = 20 or was_phylum > 0, orig_no, null),
+			if(current_rank = 17 or was_class > 0, orig_no, null),
+			if(current_rank = 13 or was_order > 0, orig_no, null),
+			if(current_rank = 9 or (current_rank in (6,7,8,10,25) and taxon_name like '%idae'), orig_no, null)
 		FROM $INTS_AUX WHERE depth = 1";
     
     $dbh->do($SQL_STRING);
@@ -3262,18 +3274,129 @@ sub computeIntermediates {
 	$SQL_STRING = "
 		INSERT INTO $INTS_WORK (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
 		SELECT k.orig_no,
-			if(k.current_rank = 'kingdom' or (k.current_rank = 'subkingdom' and ifnull(p.kingdom_no, 1) = 1), k.orig_no, p.kingdom_no) as nk,
-			if(k.current_rank in ('phylum','superphylum') or (k.current_rank = 'subphylum' and p.phylum_no is null) or k.was_phylum - k.not_phylum > ifnull(xp.was_phylum - xp.not_phylum, 0), k.orig_no, p.phylum_no) as np,
-			if(k.current_rank = 'class' or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), k.orig_no, p.class_no) as nc,
-			if(k.current_rank = 'order' or k.was_order - k.not_order > ifnull(xo.was_order - xo.not_order, 0), k.orig_no, p.order_no) as no,
-			if(k.current_rank = 'family' or k.taxon_name like '%idae', k.orig_no, p.family_no) as nf
-		FROM $INTS_AUX as k JOIN $INTS_WORK as p on p.ints_no = k.parent_no
+			if(k.current_rank = 23 or (k.current_rank = 22 and ifnull(p.kingdom_no, 1) = 1), k.orig_no, p.kingdom_no) as nk,
+			if(k.current_rank in (20,21) or (k.current_rank = 19 and p.phylum_no is null) or k.was_phylum - k.not_phylum > ifnull(xp.was_phylum - xp.not_phylum, 0), k.orig_no, p.phylum_no) as np,
+			if(k.current_rank = 17 or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), k.orig_no, p.class_no) as nc,
+			if(k.current_rank = 13 or k.was_order - k.not_order > ifnull(xo.was_order - xo.not_order, 0), k.orig_no, p.order_no) as no,
+			if(k.current_rank = 9 or k.taxon_name like '%idae', k.orig_no, p.family_no) as nf
+		FROM $INTS_AUX as k JOIN $INTS_WORK as p on p.ints_no = k.parsen_no
 			LEFT JOIN $INTS_AUX as xp on xp.orig_no = p.phylum_no
 			LEFT JOIN $INTS_AUX as xc on xc.orig_no = p.class_no
 			LEFT JOIN $INTS_AUX as xo on xo.orig_no = p.order_no
 		WHERE k.depth = $depth";
 	
-	$dbh->do($SQL_STRING);
+	$result = $dbh->do($SQL_STRING);
+	
+	$SQL_STRING = "
+		UPDATE $INTS_WORK as i JOIN $INTS_AUX as k on i.ints_no = k.orig_no
+				JOIN $INTS_WORK as p on p.ints_no = k.parsen_no
+		SET k.aux_rank = if(ifnull(i.kingdom_no, 0) <> ifnull(p.kingdom_no, 0), 23,
+				if(ifnull(i.phylum_no, 0) <> ifnull(p.phylum_no, 0), 20,
+				 if(ifnull(i.class_no, 0) <> ifnull(p.class_no, 0), 17,
+				  if(ifnull(i.order_no, 0) <> ifnull(p.order_no, 0), 13,
+				   if(ifnull(i.family_no,0) <> ifnull(p.family_no, 0), 9, 0)))))
+		WHERE k.depth = $depth";
+	
+	$result = $dbh->do($SQL_STRING);
+    }
+    
+    # Then link this table up to the main table.  We start by setting
+    # ints_no = orig_no for each row in $TREE_WORK that corresponds to a row in
+    # $INTS_WORK.
+    
+    logMessage(2, "    linking to tree table...");
+    
+    $SQL_STRING = "UPDATE $TREE_WORK as t join $INTS_WORK as k on t.orig_no = k.ints_no
+		   SET t.ints_no = t.orig_no";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    # Then we go through $TREE_WORK in tree sequence order.  For any row that
+    # has ints_no = 0 we set it to the most recently encountered non-zero value.
+    # Thus, the row for each genus, species, etc. points to the row for the
+    # most specific containing taxon in $INTS_WORK.
+    
+    $SQL_STRING = "UPDATE $TREE_WORK
+		   SET ints_no = if(ints_no > 0, \@a := ints_no, \@a)
+		   ORDER by lft";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    # We now look for anomalies generated by the algorithm:
+    
+    # Find everything considered as a family that is higher up the tree than
+    # an order, and remove it from the $INTS_WORK table.
+    
+    $SQL_STRING = "SELECT distinct family_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
+		   WHERE aux_rank = 13 and family_no is not null";
+    
+    my $family_list = $dbh->selectcol_arrayref($SQL_STRING);
+    
+    if ( ref $family_list eq 'ARRAY' and @$family_list > 0 )
+    {
+	my $family_string = join(q{,}, @$family_list);
+	
+	$SQL_STRING = "UPDATE $INTS_WORK SET family_no = null
+		       WHERE family_no in ($family_string)";
+	
+	$result = $dbh->do($SQL_STRING);
+	
+	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(op_rank=9, 25, op_rank)
+		       WHERE orig_no in ($family_string) and rank = 9";
+	
+	$result = $dbh->do($SQL_STRING);
+	
+	logMessage(2, "    removed " . scalar(@$family_list) . " anomalous rank 'family' assignments");
+    }
+    
+    # Find everything considered as an order that is higher up the tree than a
+    # class, and remove it from the $INTS_WORK table.
+    
+    $SQL_STRING = "SELECT distinct order_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
+		   WHERE aux_rank = 17 and order_no is not null";
+    
+    my $order_list = $dbh->selectcol_arrayref($SQL_STRING);
+    
+    if ( ref $order_list eq 'ARRAY' and @$order_list > 0 )
+    {
+	my $order_string = join(q{,}, @$order_list);
+	
+	$SQL_STRING = "UPDATE $INTS_WORK SET order_no = null
+		       WHERE order_no in ($order_string)";
+	
+	$result = $dbh->do($SQL_STRING);
+	
+	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(op_rank=13, 25, op_rank)
+		       WHERE orig_no in ($order_string) and rank = 13";
+	
+	$result = $dbh->do($SQL_STRING);
+	
+	logMessage(2, "    removed " . scalar(@$order_list) . " anomalous rank 'order' assignments");
+    }
+    
+    # Find everything considered as a class that is higher up the tree than a
+    # phylum, and remove it from the $INTS_WORK table.
+    
+    $SQL_STRING = "SELECT distinct class_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
+		   WHERE aux_rank = 20 and class_no is not null";
+    
+    my $class_list = $dbh->selectcol_arrayref($SQL_STRING);
+    
+    if ( ref $class_list eq 'ARRAY' and @$class_list > 0 )
+    {
+	my $class_string = join(q{,}, @$class_list);
+	
+	$SQL_STRING = "UPDATE $INTS_WORK SET class_no = null
+		       WHERE class_no in ($class_string)";
+	
+	$result = $dbh->do($SQL_STRING);
+	
+	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(op_rank=17, 25, op_rank)
+		       WHERE orig_no in ($class_string) and rank = 17";
+	
+	$result = $dbh->do($SQL_STRING);
+	
+	logMessage(2, "    removed " . scalar(@$class_list) . " anomalous 'class' assignments");
     }
     
     # Then fill in the name of each classification taxon.  This will enable
@@ -3295,27 +3418,109 @@ sub computeIntermediates {
     
     $result = $dbh->do($SQL_STRING);
     
-    # Finally, link this table up to the main table.  We start by setting
-    # ic_no = orig_no for each row in $TREE_WORK that corresponds to a row in
-    # $INTS_WORK.
+    # Now we add some extra indices
     
-    logMessage(2, "    linking to tree table...");
+    logMessage(2, "    indexing by classical rank, kingdom, phylum, class, order, family");
     
-    $SQL_STRING = "UPDATE $TREE_WORK as t join $INTS_WORK as k on t.orig_no = k.ints_no
-		   SET t.ints_no = t.orig_no";
+    $dbh->do("ALTER TABLE $INTS_WORK add key (kingdom_no)");
+    $dbh->do("ALTER TABLE $INTS_WORK add key (phylum_no)");
+    $dbh->do("ALTER TABLE $INTS_WORK add key (class_no)");
+    $dbh->do("ALTER TABLE $INTS_WORK add key (order_no)");
+    $dbh->do("ALTER TABLE $INTS_WORK add key (family_no)");
+    
+    # Then we need to compute the number of species, subgenera, genera, tribes,
+    # families, orders, classes and phyla at each level.
+    
+    logMessage(2, "    computing subtaxon counts");
+    
+    # Start by initializing the counts.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $COUNTS_WORK");
+    $result = $dbh->do("CREATE TABLE $COUNTS_WORK
+			       (orig_no int unsigned,
+				imm_count int unsigned not null,
+				is_phylum tinyint unsigned not null,
+				phylum_count int unsigned not null,
+				is_class tinyint unsigned not null,
+				class_count int unsigned not null,
+				is_order tinyint unsigned not null,
+				order_count int unsigned not null,
+				is_family tinyint unsigned not null,
+				family_count int unsigned not null,
+				is_genus tinyint unsigned not null,
+				genus_count int unsigned not null,
+				is_species tinyint unsigned not null,
+				species_count int unsigned not null,
+				primary key (orig_no)) ENGINE=MYISAM");
+    
+    $SQL_STRING = "INSERT INTO $COUNTS_WORK
+		   SELECT orig_no, 0, 
+			rank=20, 0, 
+			rank=17, 0, 
+			rank=13, 0, 
+			rank=9, 0,
+			rank=5, 0, 
+			rank=3, 0
+		   FROM $TREE_WORK
+		   WHERE synonym_no = orig_no";
     
     $result = $dbh->do($SQL_STRING);
     
-    # Then we go through $TREE_WORK in tree sequence order.  For any row that
-    # has ic_no = 0 we set it to the most recently encountered non-zero value.
-    # Thus, the row for each genus, species, etc. points to the row for the
-    # most specific containing taxon in $INTS_WORK.
+    # $SQL_STRING = "UPDATE $INTS_WORK as i JOIN 
+    # 			(SELECT ints_no, count(*) as genus_count FROM $TREE_WORK
+    # 			 WHERE rank = 5 GROUP BY ints_no) as g using (ints_no)
+    # 		   SET i.genus_count = g.genus_count";
     
-    $SQL_STRING = "UPDATE $TREE_WORK
-		   SET ints_no = if(ints_no > 0, \@a := ints_no, \@a)
-		   ORDER by lft";
+    # $result = $dbh->do($SQL_STRING);
     
-    $result = $dbh->do($SQL_STRING);
+    # Then iterate up the $COUNTS_WORK table by level from bottom to top,
+    # summing each kind of taxon.
+    
+    foreach my $depth (reverse 2..$max_depth)
+    {
+	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
+	
+	$SQL_STRING = "
+		UPDATE $COUNTS_WORK as c JOIN
+		(SELECT t.parsen_no,
+			count(*) as imm_count,
+			sum(c.is_species) + sum(c.species_count) as species_count,
+			sum(c.is_genus) + sum(c.genus_count) as genus_count,
+			sum(c.is_family) + sum(c.family_count) as family_count,
+			sum(c.is_order) + sum(c.order_count) as order_count,
+			sum(c.is_class) + sum(c.class_count) as class_count,
+			sum(c.is_phylum) + sum(c.phylum_count) as phylum_count
+		 FROM $COUNTS_WORK as c JOIN $TREE_WORK as t using (orig_no)
+		 WHERE t.depth = $depth
+		 GROUP BY t.parsen_no) as nc on c.orig_no = nc.parsen_no
+		SET c.imm_count = nc.imm_count,
+		    c.species_count = nc.species_count,
+		    c.genus_count = nc.genus_count,
+		    c.family_count = nc.family_count,
+		    c.class_count = nc.class_count,
+		    c.order_count = nc.order_count,
+		    c.phylum_count = nc.phylum_count";
+	
+	$result = $dbh->do($SQL_STRING);
+	
+	$SQL_STRING = "
+		UPDATE $TREE_WORK as t JOIN $COUNTS_WORK as c using (orig_no)
+			LEFT JOIN $INTS_AUX as k using (orig_no)
+		SET t.rank = case
+				when k.aux_rank = 20 and c.phylum_count = 0 then 20
+				when k.aux_rank = 17 and c.class_count = 0 then 17
+				when k.aux_rank = 13 and c.order_count = 0 then 13
+				when k.aux_rank = 9 and c.family_count = 0 then 9
+				else 25
+			     end,
+		    c.is_phylum = if(k.aux_rank = 20 and c.phylum_count = 0, 1, 0),
+		    c.is_class = if(k.aux_rank = 17 and c.class_count = 0, 1, 0),
+		    c.is_order = if(k.aux_rank = 13 and c.order_count = 0, 1, 0),
+		    c.is_family = if(k.aux_rank = 9 and c.family_count = 0, 1, 0)
+		WHERE t.rank = 25 and t.depth = $depth - 1";
+	
+	$result = $dbh->do($SQL_STRING);
+    }
     
     my $a = 1;
 }
@@ -4041,12 +4246,14 @@ sub computeCollectionTables {
 		cc char(2),
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
-		early_st_seq int unsigned not null,
-		late_st_seq int unsigned not null,
+		early_seq smallint unsigned not null,
+		late_seq smallint unsigned not null,
 		early_age float,
 		late_age float,
 		n_occs int unsigned not null,
 		reference_no int unsigned not null,
+		authorizer_no int unsigned not null,
+		enterer_no int unsigned not null,
 		access_level tinyint unsigned not null) Engine=MYISAM");
     
     logMessage(2, "    inserting collections...");
@@ -4054,13 +4261,14 @@ sub computeCollectionTables {
     $sql = "	INSERT INTO $COLL_MATRIX_WORK
 		       (collection_no, bin_lng, bin_lat, lng, lat, loc, cc,
 			early_int_no, late_int_no, early_age, late_age, 
-			reference_no, access_level)
+			reference_no, authorizer_no, enterer_no, access_level)
 		SELECT c.collection_no, 
 			if(c.lng between -180.0 and 180.0, floor((c.lng+180.0)/$FINE_BIN_SIZE), null) as bin_lng,
 			if(c.lat between -90.0 and 90.0, floor((c.lat+90.0)/$FINE_BIN_SIZE), null) as bin_lat,
 			c.lng, c.lat, point(c.lng, c.lat), map.cc,
 			imax.interval_no, imin.interval_no,
 			imax.base_age, imin.top_age, c.reference_no,
+			c.authorizer_no, c.enterer_no,
 			case c.access_level
 				when 'database members' then if(c.release_date < now(), 0, 1)
 				when 'research group' then if(c.release_date < now(), 0, 2)
@@ -4105,7 +4313,7 @@ sub computeCollectionTables {
 		JOIN $INTERVAL_MAP as ei2 on ei2.interval_no = ei.early_st_no
 		JOIN $INTERVAL_MAP as li on li.interval_no = m.late_int_no
 		JOIN $INTERVAL_MAP as li2 on li2.interval_no = li.late_st_no
-	    SET m.early_st_seq = ei2.older_seq, m.late_st_seq = li2.younger_seq";
+	    SET m.early_seq = ei2.older_seq, m.late_seq = li2.younger_seq";
     
     $result = $dbh->do($sql);
     
@@ -4123,9 +4331,9 @@ sub computeCollectionTables {
     
     $sql = "INSERT IGNORE INTO $COLL_INTS_WORK
 		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
-			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_st_seq
-			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_st_seq
-			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_st_seq and i.top_age <= ei.top_age + 0.01
+			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_seq
+			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_seq
+			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_seq and i.top_age <= ei.top_age + 0.01
 				and i.level = li.level
 		WHERE li.level <= ei.level and i.interval_no <> 0";
     
@@ -4133,9 +4341,9 @@ sub computeCollectionTables {
     
     $sql = "INSERT IGNORE INTO $COLL_INTS_WORK
 		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
-			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_st_seq
-			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_st_seq
-			JOIN $INTERVAL_MAP as i on i.older_seq >= m.early_st_seq and i.base_age > li.base_age
+			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_seq
+			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_seq
+			JOIN $INTERVAL_MAP as i on i.older_seq >= m.early_seq and i.base_age > li.base_age
 				and i.level = ei.level
 		WHERE li.level > ei.level and i.interval_no <> 0";
     
@@ -4195,8 +4403,8 @@ sub computeCollectionTables {
 		clust_id int unsigned,
 		n_colls int unsigned,
 		n_occs int unsigned,
-		early_st_seq int unsigned not null,
-		late_st_seq int unsigned not null,
+		early_seq int unsigned not null,
+		late_seq int unsigned not null,
 		lng float,
 		lat float,
 		lng_min float,
@@ -4211,11 +4419,11 @@ sub computeCollectionTables {
     
     $sql = "	INSERT IGNORE INTO $COLL_BINS_WORK
 			(bin_lng, bin_lat, bin_id, n_colls, n_occs, 
-			 early_st_seq, late_st_seq, lng, lat,
+			 early_seq, late_seq, lng, lat,
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
 		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs),
-		       min(early_st_seq), min(late_st_seq), avg(lng), avg(lat),
+		       min(early_seq), min(late_seq), avg(lng), avg(lat),
 		       round(min(lng),2) as lng_min, round(max(lng),2) as lng_max,
 		       round(min(lat),2) as lat_min, round(max(lat),2) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
@@ -4237,8 +4445,8 @@ sub computeCollectionTables {
 		clust_id int unsigned not null,
 		n_colls int unsigned,
 		n_occs int unsigned,
-		early_st_seq int unsigned not null,
-		late_st_seq int unsigned not null,
+		early_seq int unsigned not null,
+		late_seq int unsigned not null,
 		lng float,
 		lat float,
 		lng_min float,
@@ -4394,8 +4602,8 @@ sub computeCollectionTables {
     $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
 		(SELECT clust_id, sum(n_colls) as n_colls,
 			sum(n_occs) as n_occs,
-			min(early_st_seq) as early_st_seq,
-			min(late_st_seq) as late_st_seq,
+			min(early_seq) as early_seq,
+			min(late_seq) as late_seq,
 			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
 			min(lng_min) as lng_min, max(lng_max) as lng_max,
 			min(lat_min) as lat_min, max(lat_max) as lat_max,
@@ -4403,7 +4611,7 @@ sub computeCollectionTables {
 		FROM $COLL_BINS_WORK GROUP BY clust_id) as agg
 			using (clust_id)
 		SET k.n_colls = agg.n_colls, k.n_occs = agg.n_occs,
-		    k.early_st_seq = agg.early_st_seq, k.late_st_seq = agg.late_st_seq,
+		    k.early_seq = agg.early_seq, k.late_seq = agg.late_seq,
 		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
 		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,
 		    k.lat_min = agg.lat_min, k.lat_max = agg.lat_max";
@@ -4484,16 +4692,20 @@ sub computeOccurrenceTables {
 				reid_no int unsigned not null,
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
-				reference_no int unsigned not null) ENGINE=MyISAM");
+				reference_no int unsigned not null,
+				authorizer_no int unsigned not null,
+				enterer_no int unsigned not null) ENGINE=MyISAM");
     
     # Add one row for every occurrence in the database.
     
     logMessage(2, "    inserting occurrences...");
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
-		       (occurrence_no, collection_no, taxon_no, orig_no, reference_no)
+		       (occurrence_no, collection_no, taxon_no, orig_no, reference_no,
+			authorizer_no, enterer_no)
 		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no,
-			if(o.reference_no > 0, o.reference_no, c.reference_no)
+			if(o.reference_no > 0, o.reference_no, c.reference_no,
+			o.authorizer_no, o.enterer_no)
 		FROM occurrences as o JOIN collections as c using (collection_no)
 			LEFT JOIN authorities as a using (taxon_no)";
     
@@ -5153,8 +5365,9 @@ sub activateNewTaxonomyTables {
     my $name_table = $NAME_TABLE{$tree_table};
     my $attrs_table = $ATTRS_TABLE{$tree_table};
     my $ints_table = $INTS_TABLE{$tree_table};
+    my $counts_table = $COUNTS_TABLE{$tree_table};
     
-    logMessage(2, "activating tables '$tree_table', '$search_table', '$name_table', '$attrs_table', '$ints_table' (i)");
+    logMessage(2, "activating tables '$tree_table', '$search_table', '$name_table', '$attrs_table', '$ints_table', '$counts_table' (i)");
     
     # Compute the backup names of all the tables to be activated
     
@@ -5163,6 +5376,7 @@ sub activateNewTaxonomyTables {
     my $name_bak = "${name_table}_bak";
     my $attrs_bak = "${attrs_table}_bak";
     my $ints_bak = "${ints_table}_bak";
+    my $counts_bak = "${counts_table}_bak";
     
     # Delete any backup tables that might still be around
     
@@ -5171,6 +5385,7 @@ sub activateNewTaxonomyTables {
     $result = $dbh->do("DROP TABLE IF EXISTS $name_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $attrs_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $ints_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $counts_bak");
     
     # Create dummy versions of any of the main tables that might be currently
     # missing (otherwise the rename will fail; the dummies will be deleted
@@ -5181,6 +5396,7 @@ sub activateNewTaxonomyTables {
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $name_table LIKE $NAME_WORK");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $attrs_table LIKE $ATTRS_WORK");
     $result = $dbh->do("CREATE TABLE IF NOT EXISTS $ints_table LIKE $INTS_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $counts_table LIKE $COUNTS_WORK");
     
     # Now do the Atomic Table Swap (tm)
     
@@ -5194,7 +5410,9 @@ sub activateNewTaxonomyTables {
 			    $attrs_table to $attrs_bak,
 			    $ATTRS_WORK to $attrs_table,
 			    $ints_table to $ints_bak,
-			    $INTS_WORK to $ints_table";
+			    $INTS_WORK to $ints_table,
+			    $counts_table to $counts_bak,
+			    $COUNTS_WORK to $counts_table";
     
     $result = $dbh->do($SQL_STRING);
     
@@ -5205,6 +5423,7 @@ sub activateNewTaxonomyTables {
     $result = $dbh->do("DROP TABLE IF EXISTS $name_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $attrs_bak");
     $result = $dbh->do("DROP TABLE IF EXISTS $ints_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $counts_bak");
     
     # Delete the auxiliary tables too, unless we were told to keep them.
     

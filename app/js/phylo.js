@@ -14,7 +14,16 @@ var pbdb_phylo_service = angular.module('phyloService', []);
 //     return new_service;
 // }]);
 
-pbdb_phylo_service.factory('taxonomy', ['$http', function($http) {
+pbdb_phylo_service.factory('phyloData', ['$http', function($http) {
+    
+    var rankMap = { 25: "unranked", 23: "kingdom", 22: "subkingdom",
+		    21: "superphylum", 20: "phylum", 19: "subphylum",
+		    18: "superclass", 17: "class", 16: "subclass", 15: "infraclass",
+		    14: "superorder", 13: "order", 12: "suborder", 11: "infraorder",
+		    10: "superfamily", 9: "family", 8: "subfamily",
+		    7: "tribe", 6: "subtribe", 5: "genus", 4: "subgenus",
+		    3: "species", 2: "subspecies" };
+    
     function listTaxaByName(name, success_fn, error_fn)
     {
 	$http.get('/data1.1/taxa/list.json?name=' + name).success(success_fn).error(error_fn);
@@ -30,10 +39,15 @@ pbdb_phylo_service.factory('taxonomy', ['$http', function($http) {
 	$http.get('/data1.1/taxa/single.json?id=' + id + extra).success(success_fn).error(error_fn);
     }
     
+    function rankLabel(rank)
+    {
+	return rankMap[rank] || rank;
+    }
+    
     function taxonTitle(taxon)
     {
 	if ( typeof taxon == "object" ) {
-	    return taxon.nam + ' (' + taxon.rnk + ')';
+	    return taxon.nam + ' (' + rankLabel(taxon.rnk) + ')';
 	} else {
 	    return '';
 	}
@@ -41,6 +55,7 @@ pbdb_phylo_service.factory('taxonomy', ['$http', function($http) {
     
     return { listTaxaByName: listTaxaByName, 
 	     getTaxon: getTaxon,
+	     rankLabel: rankLabel,
 	     taxonTitle: taxonTitle
 	   };
 }]);
