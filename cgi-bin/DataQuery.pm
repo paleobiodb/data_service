@@ -13,6 +13,7 @@ use strict;
 
 use JSON;
 use Encode;
+use Scalar::Util qw(reftype);
 
 
 our ($CURRENT_VERSION) = '1.1';
@@ -825,7 +826,7 @@ sub constructObjectJSON {
     
     # Go through the rule list, generating the fields one by one.
     
-    foreach my $f (ref $rulespec eq 'ARRAY' ? @$rulespec : $rulespec)
+    foreach my $f (reftype $rulespec && reftype $rulespec eq 'ARRAY' ? @$rulespec : $rulespec)
     {
 	# Skip rules which are not valid in this vocabulary.
 	
@@ -856,13 +857,13 @@ sub constructObjectJSON {
     
 	# Process the value according to the rule
 	
-	if ( $f->{use_each} and ref $value eq 'ARRAY' )
+	if ( $f->{use_each} and reftype $value && reftype $value eq 'ARRAY' )
 	{
 	    my $rule = $f->{rule} || $f;
 	    $value = $self->constructArrayJSON($value, $rule);
 	}
 	
-	elsif ( ref $f->{code} eq 'CODE' )
+	elsif ( reftype $f->{code} && reftype $f->{code} eq 'CODE' )
 	{
 	    if ( $f->{use_main} ) {
 		$value = json_clean($f->{code}($self, $record, $f));
@@ -871,12 +872,12 @@ sub constructObjectJSON {
 	    }
 	}
 	
-	elsif ( ref $f->{code} eq 'HASH' )
+	elsif ( reftype $f->{code} && reftype $f->{code} eq 'HASH' )
 	{
 	    $value = json_clean($f->{code}{$value});
 	}
 	
-	elsif ( ref $value eq 'ARRAY' )
+	elsif ( reftype $value && reftype $value eq 'ARRAY' )
 	{
 	    my $rule = $f->{rule} || $f;
 	    $value = $self->constructArrayJSON($value, $rule);
@@ -899,7 +900,7 @@ sub constructObjectJSON {
 	    }
 	}
 	
-	elsif ( ref $record->{$field} eq 'HASH' )
+	elsif ( reftype $record->{$field} && reftype $record->{$field} eq 'HASH' )
 	{
 	    my $rule = $f->{rule} || $f;
 	    $value = $self->constructObjectJSON($value, $rule);
@@ -935,7 +936,7 @@ sub constructArrayJSON {
 
     my ($self, $arrayref, $rulespec) = @_;
     
-    my $f = $rulespec if ref $rulespec and ref $rulespec ne 'ARRAY';
+    my $f = $rulespec if reftype $rulespec && reftype $rulespec ne 'ARRAY';
     
     # Start with an empty string.
     
@@ -951,17 +952,17 @@ sub constructArrayJSON {
     
     foreach my $elt ( @$arrayref )
     {
-	if ( ref $rulespec eq 'ARRAY' )
+	if ( reftype $rulespec && reftype $rulespec eq 'ARRAY' )
 	{
 	    $value = $self->constructObjectJSON($elt, $rulespec);
 	}
 	
-	elsif ( ref $f->{code} eq 'CODE' )
+	elsif ( reftype $f->{code} && reftype $f->{code} eq 'CODE' )
 	{
 	    $value = json_clean($f->{code}($elt, $rulespec));
 	}
 	
-	elsif ( ref $f->{code} eq 'HASH' )
+	elsif ( reftype $f->{code} && reftype $f->{code} eq 'HASH' )
 	{
 	    $value = json_clean($f->{code}{$elt});
 	}
@@ -972,7 +973,7 @@ sub constructArrayJSON {
 	    $value = $self->constructArrayJSON($elt, $subrule);
 	}
 	
-	elsif ( ref $elt eq 'HASH' )
+	elsif ( reftype $elt && reftype $elt eq 'HASH' )
 	{
 	    my $subrule = $f->{rule} || $rulespec;
 	    $value = $self->constructObjectJSON($elt, $subrule);
@@ -1028,7 +1029,7 @@ sub emitRecordText {
 	{
 	    if ( $f->{use_main} ) {
 		$value = $f->{code}($self, $record, $f);
-	    } elsif ( $f->{use_each} and ref $value eq 'ARRAY' ) {
+	    } elsif ( $f->{use_each} && reftype $value && reftype $value eq 'ARRAY' ) {
 		my @list = map { $f->{code}($self, $_, $f) } @$value;
 		$value = join($sep, @list);
 	    } else {
@@ -1038,7 +1039,7 @@ sub emitRecordText {
 	
 	elsif ( ref $f->{code} eq 'HASH' )
 	{
-	    if ( $f->{use_each} and ref $value eq 'ARRAY' ) {
+	    if ( $f->{use_each} && reftype $value && reftype $value eq 'ARRAY' ) {
 		my @list = map { $f->{code}{$_} } @$value;
 		$value = join($sep, @list);
 	    } else {
@@ -1046,7 +1047,7 @@ sub emitRecordText {
 	    }
 	}
 	
-	elsif ( ref $value eq 'ARRAY' )
+	elsif ( reftype $value && reftype $value eq 'ARRAY' )
 	{
 	    $value = join($sep, @$value);
 	}

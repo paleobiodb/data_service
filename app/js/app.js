@@ -80,39 +80,44 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
 	var parent_list = [];
 	var last_oid = 0;
 	
-	if ( taxon.kgl && taxon.kgn && taxon.kgn != taxon.gid )
+	if ( taxon.kgt && taxon.kgn && taxon.kgn != taxon.gid )
 	{
-	    parent_list.push({ oid: taxon.kgn, rnk: 'kingdom*', nam: taxon.kgl });
+	    taxon.kgt.rnk = 'kingdom*';
+	    parent_list.push(taxon.kgt);
 	    last_oid = taxon.kgn;
 	}
 	
 	if ( taxon.phl && taxon.phn && taxon.phn != taxon.gid )
 	{
-	    parent_list.push({ oid: taxon.phn, rnk: 'phylum*', nam: taxon.phl });
+	    taxon.pht.rnk = 'phylum*';
+	    parent_list.push(taxon.pht);
 	    last_oid = taxon.phn;
 	}
 	
 	if ( taxon.cll && taxon.cln && taxon.cln != taxon.gid )
 	{
-	    parent_list.push({ oid: taxon.cln, rnk: 'class*', nam: taxon.cll });
+	    taxon.clt.rnk = 'class*';
+	    parent_list.push(taxon.clt);
 	    last_oid = taxon.cln;
 	}
 	
 	if ( taxon.odl && taxon.odn && taxon.odn != taxon.gid )
 	{
-	    parent_list.push({ oid: taxon.odn, rnk: 'order*', nam: taxon.odl });
+	    taxon.odt.rnk = 'order*';
+	    parent_list.push(taxon.odt);
 	    last_oid = taxon.odn;
 	}
 	
 	if ( taxon.fml && taxon.fmn && taxon.fmn != taxon.gid )
 	{
-	    parent_list.push({ oid: taxon.fmn, rnk: 'family*', nam: taxon.fml });
+	    taxon.fmt.rnk = 'family*';
+	    parent_list.push(taxon.fmt);
 	    last_oid = taxon.fmn;
 	}
 	
-	if ( taxon.prl && taxon.par != last_oid )
+	if ( taxon.prt && taxon.par != last_oid )
 	{
-	    parent_list.push({ oid: taxon.par, nam: taxon.prl, rnk: taxon.prr, imm: 1 });
+	    parent_list.push(taxon.prt);
 	}
 	
 	return parent_list;
