@@ -206,6 +206,7 @@ sub fetchSingle {
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
     push @fields, 'app' if $self->{show}{app};
+    push @fields, 'appfirst' if $self->{show}{appfirst};
     push @fields, 'applong' if $self->{show}{applong};
     push @fields, 'kingdom' if $self->{show}{code};
     
@@ -240,20 +241,23 @@ sub fetchSingle {
 	
 	unless ( $r->{order_no} or $r->{rank} <= 13 )
 	{
+	    my $order = $r->{order_count} < 100 ? 'size.desc' : undef;
 	    $r->{order_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						    { limit => 10, order => 'size.desc', rank => 13, fields => ['size', 'appfirst'] } ) ];
+						    { limit => 10, order => $order, rank => 13, fields => ['size', 'appfirst'] } ) ];
 	}
 	
 	unless ( $r->{family_no} or $r->{rank} <= 9 )
 	{
+	    my $order = $r->{order_count} < 100 ? 'size.desc' : undef;
 	    $r->{family_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						     { limit => 10, order => 'size.desc', rank => 9, fields => ['size', 'appfirst'] } ) ];
+						     { limit => 10, order => $order, rank => 9, fields => ['size', 'appfirst'] } ) ];
 	}
 	
 	if ( $r->{rank} > 5 )
 	{
+	    my $order = $r->{order_count} < 100 ? 'size.desc' : undef;
 	    $r->{genus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						    { limit => 10, order => 'size.desc', rank => 5, fields => ['size', 'appfirst'] } ) ];
+						    { limit => 10, order => $order, rank => 5, fields => ['size', 'appfirst'] } ) ];
 	}
 	
 	if ( $r->{rank} == 5 )
@@ -302,6 +306,7 @@ sub fetchMultiple {
     push @fields, 'size' if $self->{show}{size};
     push @fields, 'app' if $self->{show}{app};
     push @fields, 'applong' if $self->{show}{applong};
+    push @fields, 'appfirst' if $self->{show}{appfirst};
     push @fields, 'kingdom' if $self->{show}{code};
     
     $options->{fields} = \@fields;
@@ -309,6 +314,12 @@ sub fetchMultiple {
     # Specify the other query options according to the query parameters.
     
     $options->{exact} = 1 if $self->{params}{exact};
+    
+    my $limit = $self->{params}{limit};
+    my $offset = $self->{params}{offset};
+    
+    $options->{limit} = $limit if defined $limit;
+    $options->{offset} = $offset if defined $offset;
     
     # If the parameter 'name' was given, then we are listing taxa by name.
     
@@ -332,6 +343,11 @@ sub fetchMultiple {
 	$options->{return} = 'stmt';
 	my $id_list = $self->{params}{id};
 	my $rel = $self->{params}{rel} || 'self';
+	
+	if ( defined $self->{params}{rank} )
+	{
+	    $options->{rank} = $self->{params}{rank};
+	}
 	
 	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);
 	return $self->{main_sth};
@@ -369,6 +385,14 @@ sub validNameSpec {
     
     return;	# for now
     
+}
+
+
+sub validRankSpec {
+    
+    my ($value, $context) = @_;
+    
+    return;
 }
 
 

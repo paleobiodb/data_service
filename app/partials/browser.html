@@ -1,7 +1,13 @@
 <div class="container">
   <div class="row">
     <div class="col-2">
-      The Paleobiology Database
+      <p>The Paleobiology Database</p>
+      <p>&nbsp;</p>
+      <p>&nbsp;</p>
+      <select ng-model="subTaxonOrder">
+	<option value="size.desc">Size</option>
+	<option value="name">Alphabetical</option>
+      </select>
     </div>
     <div class="col-10">
       <div id="pbdb_map">
@@ -30,9 +36,9 @@
 	
 	<div class="taxonChildren">
 	  <p ng-repeat="s in focal_subsect">
-	  <!--<a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a> - {{taxon.siz}}-->
-	  {{s.size}} {{s.section}}:<br>
-	    <span ng-repeat="taxon in s.taxa">
+	  {{s.size}} {{s.section}}: &nbsp;&nbsp;
+	    <b><a ng-show="showAllIsVisible(s)" ng-click="showAllSubTaxa(s)">show all...</a></b><br/>
+	    <span ng-repeat="taxon in s.taxa | orderBy:subTaxonOrderGetter">
 	      <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>&nbsp;
 	    </span>
 	  </p>

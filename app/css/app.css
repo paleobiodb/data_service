@@ -37,6 +37,7 @@
 .focalTaxon {
     
     text-align: center;
+    margin: 0 auto;
     border: 1px solid gray;
     padding: 3px;
     width: 50%;
@@ -52,4 +53,9 @@
     
     font-style: italic;
     martin: 0 auto;
+}
+
+.taxonParents {
+
+    text-align: center;
 }
