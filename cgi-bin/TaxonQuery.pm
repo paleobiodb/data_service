@@ -221,11 +221,40 @@ sub fetchSingle {
     ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $options);
     
     # If we were asked for 'nav' info, also show the various categories
-    # of subtaxa.
+    # of subtaxa and whether or not each of the parents are extinct.
     
     if ( $self->{show}{nav} )
     {
 	my $r = $self->{main_record};
+	
+	# First get taxon records for all of the relevant supertaxa.
+	
+	if ( $r->{kingdom_no} )
+	{
+	    $r->{kingdom_txn} = $taxonomy->getTaxon($r->{kingdom_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{phylum_no} )
+	{
+	    $r->{phylum_txn} = $taxonomy->getTaxon($r->{phylum_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{class_no} )
+	{
+	    $r->{class_txn} = $taxonomy->getTaxon($r->{class_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{order_no} )
+	{
+	    $r->{order_txn} = $taxonomy->getTaxon($r->{order_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{family_no} )
+	{
+	    $r->{family_txn} = $taxonomy->getTaxon($r->{family_no}, { fields => ['size'] });
+	}
+	
+	# Then add the various lists of subtaxa.
 	
 	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
 	{

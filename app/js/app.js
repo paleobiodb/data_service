@@ -52,8 +52,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     $scope.foundEnteredName = function(data) {
 	if ( data.records.length > 0 ) {
 	    $scope.name_entry = '';
-	    $scope.focal_taxon = data.records[0];
-	    phyloData.getTaxon(data.records[0].oid, { show: 'attr,nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
+	    $scope.jumpTaxon(data.records[0]);
 	} else {
 	    $scope.errorEnteredName({ error: "nothing found" });
 	}
@@ -62,7 +61,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     $scope.jumpTaxon = function(taxon) {
 	$scope.focal_taxon = taxon;
 	focal_taxon = taxon;
-	phyloData.getTaxon(taxon.oid, { show: 'attr,nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
+	phyloData.getTaxon(taxon.oid, { show: 'attr,nav,applong' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
     };
     
     $scope.finishJumpTaxon = function(data) {
@@ -122,7 +121,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     function computeChildList(taxon) {
 	var section_list = [];
 	
-	if ( taxon.chl && taxon.rnk > 5 && ( taxon.chl.length == 0 || !taxon.gns || taxon.chl.length != taxon.gns.length ) )
+	if ( taxon.chl && taxon.rnk > 5 && ( taxon.chl.length == 0 || !taxon.gns || taxon.chl.length != taxon.gnc ) )
 	{
 	    section_list.push({ section: "immediate subtaxa", size: taxon.chl.length, 
 				offset: 0, order: 'size.desc', taxa: taxon.chl });
@@ -203,14 +202,16 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
 	alert('An error occurred: ' + e);
     };
     
-    if ( $routeParams.phylo_selector )
+    var phylo_selector = $routeParams.phylo_selector;
+    
+    if ( phylo_selector )
     {
-	phyloData.getTaxon($routeParams.phylo_selector, { show: 'attr,nav' }, $scope.finishJumpTaxon);
+    	phyloData.getTaxon(phylo_selector, { show: 'attr,nav,applong' }, $scope.finishJumpTaxon);
     }
-    else
-    {
-	phyloData.getTaxon(1, { show: 'attr,nav' }, $scope.finishJumpTaxon);
-    }
+    // else
+    // {
+    // 	phyloData.getTaxon(1, { show: 'attr,nav' }, $scope.finishJumpTaxon);
+    // }
     
 }]);
 
