@@ -26,7 +26,8 @@ pbdb_phylo_service.factory('phyloData', ['$http', function($http) {
     
     function listTaxaByName(name, success_fn, error_fn)
     {
-	$http.get('/data1.1/taxa/list.json?name=' + name).success(success_fn).error(error_fn);
+	var url = '/data1.1/taxa/list.json?name=' + name;
+	$http.get(url).success(success_fn).error(error_fn);
     }
     
     function getTaxon(id, options, success_fn, error_fn)
@@ -36,7 +37,8 @@ pbdb_phylo_service.factory('phyloData', ['$http', function($http) {
 	{
 	    extra = extra + '&show=' + options.show;
 	}
-	$http.get('/data1.1/taxa/single.json?id=' + id + extra).success(success_fn).error(error_fn);
+	var url = '/data1.1/taxa/single.json?id=' + id + extra;
+	$http.get(url).success(success_fn).error(error_fn);
     }
     
     function getSubtaxa(id, rank, offset, limit, success_fn, error_fn)
@@ -55,7 +57,8 @@ pbdb_phylo_service.factory('phyloData', ['$http', function($http) {
 	
 	if ( rank > 0 )
 	{
-	    $http.get('/data1.1/taxa/list.json?id=' + id + lim_str + '&show=size,appfirst&rel=all_children&rank=' + rank).success(success_fn).error(error_fn);
+	    var url = '/data1.1/taxa/list.json?id=' + id + lim_str + '&show=size,appfirst&rel=all_children&rank=' + rank;
+	    $http.get(url).success(success_fn).error(error_fn);
 	}
     }
     

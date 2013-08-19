@@ -95,19 +95,25 @@ $OUTPUT{nav} =
     { rec => 'parent_name', com => 'prl', dwc => 'parentNameUsage',
         doc => "The name of the parent taxonomic concept, if any" },
     { rec => 'parent_rank', com => 'prr', doc => "The rank of the parent taxonomic concept, if any" },
+    { rec => 'parent_txn', com => 'prt', rule => $child_rule },
     { rec => 'kingdom_no', com => 'kgn', doc => "The identifier of the kingdom in which this taxon occurs" },
     { rec => 'kingdom', com => 'kgl', doc => "The name of the kingdom in which this taxon occurs" },
+    { rec => 'kingdom_txn', com => 'kgt', rule => $child_rule },
     { rec => 'phylum_no', com => 'phn', doc => "The identifier of the phylum in which this taxon occurs" },
     { rec => 'phylum', com => 'phl', doc => "The name of the phylum in which this taxon occurs" },
+    { rec => 'phylum_txn', com => 'pht', rule => $child_rule },
     { rec => 'phylum_count', com => 'phc', doc => "The number of phyla within this taxon" },
     { rec => 'class_no', com => 'cln', doc => "The identifier of the class in which this taxon occurs" },
     { rec => 'class', com => 'cll', doc => "The name of the class in which this taxon occurs" },
+    { rec => 'class_txn', com => 'clt', rule => $child_rule },
     { rec => 'class_count', com => 'clc', doc => "The number of classes within this taxon" },
     { rec => 'order_no', com => 'odn', doc => "The identifier of the order in which this taxon occurs" },
     { rec => 'order', com => 'odl', doc => "The name of the order in which this taxon occurs" },
+    { rec => 'order_txn', com => 'odt', rule => $child_rule },
     { rec => 'order_count', com => 'odc', doc => "The number of orders within this taxon" },
     { rec => 'family_no', com => 'fmn', doc => "The identifier of the family in which this taxon occurs" },
     { rec => 'family', com => 'fml', doc => "The name of the family in which this taxon occurs" },
+    { rec => 'family_txn', com => 'fmt', rule => $child_rule },
     { rec => 'family_count', com => 'fmc', doc => "The number of families within this taxon" },
     { rec => 'genus_count', com => 'gnc', doc => "The number of genera within this taxon" },
     
@@ -221,11 +227,45 @@ sub fetchSingle {
     ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $options);
     
     # If we were asked for 'nav' info, also show the various categories
-    # of subtaxa.
+    # of subtaxa and whether or not each of the parents are extinct.
     
     if ( $self->{show}{nav} )
     {
 	my $r = $self->{main_record};
+	
+	# First get taxon records for all of the relevant supertaxa.
+	
+	if ( $r->{kingdom_no} )
+	{
+	    $r->{kingdom_txn} = $taxonomy->getTaxon($r->{kingdom_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{phylum_no} )
+	{
+	    $r->{phylum_txn} = $taxonomy->getTaxon($r->{phylum_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{class_no} )
+	{
+	    $r->{class_txn} = $taxonomy->getTaxon($r->{class_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{order_no} )
+	{
+	    $r->{order_txn} = $taxonomy->getTaxon($r->{order_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{family_no} )
+	{
+	    $r->{family_txn} = $taxonomy->getTaxon($r->{family_no}, { fields => ['size'] });
+	}
+	
+	if ( $r->{parent_no} )
+	{
+	    $r->{parent_txn} = $taxonomy->getTaxon($r->{parent_no}, { fields => ['size'] });
+	}
+	
+	# Then add the various lists of subtaxa.
 	
 	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
 	{

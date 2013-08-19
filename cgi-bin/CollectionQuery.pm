@@ -16,9 +16,9 @@ use Carp qw(carp croak);
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
 
-$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
@@ -42,6 +42,7 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "A positive integer that uniquely identifies the collection"},
     { rec => 'record_type', com => 'typ', com_value => 'col', dwc_value => 'Occurrence', value => 'collection',
         doc => "The type of this object: 'col' for a collection" },
+    { rec => 'formation', com => 'fmm', doc => "The formation in which this collection was found" },
     { rec => 'lng', dwc => 'decimalLongitude', com => 'lng',
 	doc => "The longitude at which the collection is located (in degrees)" },
     { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
