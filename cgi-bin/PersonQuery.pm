@@ -14,7 +14,7 @@ use base 'DataQuery';
 use Carp qw(carp croak);
 
 
-our (%OUTPUT, %SELECT);
+our (%OUTPUT, %SELECT, %TABLES);
 
 $SELECT{single} = $SELECT{list} = "p.person_no, p.name, p.country, p.institution, p.email, p.is_authorizer";
 
@@ -34,6 +34,23 @@ $OUTPUT{single} = $OUTPUT{list} =
       doc => "The person's e-mail address" },
    ];
 
+$SELECT{toprank} = "p.person_no, p.name, p.country, p.institution";
+
+$TABLES{toprank} = ['c'];
+
+$OUTPUT{toprank} =
+   [
+    { rec => 'person_no', com => 'oid',
+      doc => "A positive integer that uniquely identifies this database contributor" },
+    { rec => 'record_type', com => 'typ', com_value => 'prs', value => 'person',
+      doc => "The type of this object: {value} for a database contributor" },
+    { rec => 'name', com => 'nam',
+      doc => "The person's name" },
+    { rec => 'institution', com => 'ist',
+      doc => "The person's institution" },
+    { rec => 'country', com => 'ctr',
+      doc => "The database contributor's country" },
+   ];
 
 # fetchSingle ( )
 # 
@@ -103,30 +120,56 @@ sub fetchMultiple {
     # Get a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
+    my $op = $self->{op};
     
     my $calc = '';
-    
-    # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
-    
-    my @filters = $self->generateQueryFilters('p', $self->{select_tables});
-    
-    push @filters, "1=1" unless @filters;
-    
-    my $filter_string = join(q{ and }, @filters);
+    my $limit = '';
+    my $order = '';
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
     my $fields = join(', ', @{$self->{select_list}});
     
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my (@filters, $tables);
+    
+    if ( $op eq 'toprank' )
+    {
+	@filters = CollectionQuery::generateQueryFilters($self, 'c', $self->{select_tables});
+	
+	if ( defined $self->{params}{subject} && $self->{params}{subject} eq 'occs' )
+	{
+	    $fields .= ", count(o.occurrence_no) as instance_count";
+	    $self->{select_tables}{o} = 1;
+	}
+	else
+	{
+	    $fields .= ", count(c.collection_no) as instance_count";
+	}
+	
+	$order = 'GROUP BY p.person_no ORDER BY instance_count DESC';
+	$limit = 'LIMIT 10';
+    }
+    
+    else
+    {
+	@filters = $self->generateQueryFilters('p', $self->{select_tables});
+	
+	# If a query limit has been specified, modify the query accordingly.
+	
+	$limit = $self->generateLimitClause();
+    }
+    
+    push @filters, "1=1" unless @filters;
+    
+    my $filter_string = join(q{ and }, @filters);
+    
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $self->{select_tables});
-    
-    # If a query limit has been specified, modify the query accordingly.
-    
-    my $limit = $self->generateLimitClause();
+    my ($join_list) = $self->generateJoinList('p', $self->{select_tables});
     
     # If we were asked to count rows, modify the query accordingly
     
@@ -142,7 +185,7 @@ sub fetchMultiple {
 	FROM person as p
 		$join_list
         WHERE $filter_string
-	$limit";
+	$order $limit";
     
     print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
     
@@ -181,8 +224,30 @@ sub generateQueryFilters {
 }
 
 sub generateJoinList {
-
-    return '';
+    
+    my ($self, $mt, $tables) = @_;
+    
+    my $join_list = '';
+    
+    # Return an empty string unless we actually have some joins to make
+    
+    return $join_list unless ref $tables eq 'HASH' and %$tables;
+    
+    # Some tables imply others.
+    
+    $tables->{o} = 1 if $tables->{t};
+    $tables->{c} = 1 if $tables->{o};
+    
+    # Create the necessary join expressions.
+    
+    $join_list .= "JOIN coll_matrix as c on p.person_no = c.authorizer_no\n"
+	if $tables->{c};
+    $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
+	if $tables->{o};
+    $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
+	if $tables->{t};
+    
+    return $join_list;
 }
 
 
