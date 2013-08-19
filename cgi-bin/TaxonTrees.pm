@@ -4704,8 +4704,8 @@ sub computeOccurrenceTables {
 		       (occurrence_no, collection_no, taxon_no, orig_no, reference_no,
 			authorizer_no, enterer_no)
 		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no,
-			if(o.reference_no > 0, o.reference_no, c.reference_no,
-			o.authorizer_no, o.enterer_no)
+			if(o.reference_no > 0, o.reference_no, c.reference_no),
+			o.authorizer_no, o.enterer_no
 		FROM occurrences as o JOIN collections as c using (collection_no)
 			LEFT JOIN authorities as a using (taxon_no)";
     

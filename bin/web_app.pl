@@ -148,6 +148,14 @@ ruleset '1.1:colls/summary' =>
     [allow => '1.1:summary_display'],
     [allow => '1.1:common_params'];
 
+ruleset '1.1:toprank_selector' =>
+    [param => 'show', LIST_PERMISSIVE('formation', 'ref', 'author')];
+
+ruleset '1.1:colls/toprank' => 
+    [require => '1.1:main_selector'],
+    [require => '1.1:toprank_selector'],
+    [allow => '1.1:common_params'];
+
 ruleset '1.1:interval_selector' => 
     [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
     [param => 'min_ma', REAL_VALUE(0)],
@@ -172,10 +180,6 @@ ruleset '1.1:people/single' =>
 
 ruleset '1.1:people/list' => 
     [require => '1.1:person_selector'],
-    [allow => '1.1:common_params'];
-
-ruleset '1.1:people/toprank' => 
-    [require => '1.1:main_selector'],
     [allow => '1.1:common_params'];
 
 ruleset '1.1:refs_specifier' => 
@@ -301,6 +305,13 @@ get '/data1.1/colls/all.:ct' => sub {
 		  op => 'list');
 };
 
+get '/data1.1/colls/toprank.:ct' => sub {
+
+    queryMultiple('CollectionQuery', v => '1.1',
+		  validation => '1.1:colls/toprank',
+		  op => 'toprank');
+};
+
 get '/data1.1/colls/summary.:ct' => sub {
 
     queryMultiple('CollectionQuery', v => '1.1',
@@ -334,12 +345,6 @@ get '/data1.1/people/list.:ct' => sub {
     
     queryMultiple('PersonQuery', v => '1.1',
 		  validation => '1.1:people/list', op => 'list');
-};
-
-get '/data1.1/people/toprank.:ct' => sub {
-    
-    queryMultiple('PersonQuery', v => '1.1',
-		  validation => '1.1:people/toprank', op => 'toprank');
 };
 
 get '/data1.1/people/single.:ct' => sub {

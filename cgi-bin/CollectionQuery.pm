@@ -77,6 +77,30 @@ $OUTPUT{summary} =
         doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
    ];
 
+$SELECT{toprank} = "sum(c.n_occs) as n_occs, count(*) as n_colls";
+
+$OUTPUT{toprank} = 
+   [
+    { rec => 'n_occs', com => 'noc' },
+    { rec => 'n_colls', com => 'nco' },
+   ];
+
+$SELECT{formation} = "ifnull(cc.formation, 'none specified') as formation";
+
+$OUTPUT{formation} =
+   [
+    { rec => 'formation', com => 'fmm' },
+   ];
+
+$SELECT{author} = "concat(r.author1init, ' ', r.author1last) as main_author";
+
+$TABLES{author} = ['r'];
+
+$OUTPUT{author} =
+   [
+    { rec => 'main_author', com => 'aut' },
+   ];
+
 $SELECT{bin} = "c.bin_id, c.clust_id";
 
 $OUTPUT{bin} = 
@@ -370,13 +394,43 @@ sub fetchMultiple {
 		$base_joins";
     }
     
+    # If the operation is 'toprank', generate a query on the collection matrix
+    # joined with whichever other tables are relevant
+
+    elsif ( $self->{op} eq 'toprank' )
+    {
+	foreach my $t ( keys %$filter_tables )
+	{
+	    $self->{select_tables}{$t} = 1;
+	}
+	
+	my $base_joins = $self->generateJoinList($mt, $self->{select_tables});
+	
+	my $group_field = $self->{show}{formation} ? 'formation' :
+			  $self->{show}{author}    ? 'main_author' :
+			  $self->{show}{ref}	   ? 'c.reference_no' : '';
+	
+	die "No group field specified" unless $group_field;
+	
+	$self->{main_sql} = "
+	SELECT $calc $fields
+	FROM coll_matrix as c join collections as cc using (collection_no)
+		$base_joins
+	WHERE $filter_string
+	GROUP BY $group_field
+	ORDER BY n_occs DESC $limit";
+    }
+    
     # If the operation is 'list', generate a query on the collection matrix
     
     else
     {
-	my ($base_joins);
+	foreach my $t ( keys %$filter_tables )
+	{
+	    $self->{select_tables}{$t} = 1;
+	}
 	
-	$base_joins = $self->generateJoinList($mt, $self->{select_tables});
+	my $base_joins = $self->generateJoinList($mt, $self->{select_tables});
 	
 	$self->{main_sql} = "
 	SELECT $calc $fields
