@@ -5,6 +5,7 @@
 //angular.module('myApp', ['myApp.filters', 'myApp.services', 'myApp.directives', 'myApp.controllers']).
 var pbdb_app = angular.module('PBDBDemo', ['PBDBDemo.filters', 'PBDBDemo.services', 'PBDBDemo.directives', 'phyloService']);
 var browser_scope;
+var focal_taxon;
 
 pbdb_app.config(['$routeProvider', function($routeProvider) {
     $routeProvider.when('/phylo=:phylo_selector', { templateUrl: 'partials/browser.html', controller: 'Browser' });
@@ -18,6 +19,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     
     browser_scope = $scope;	// for debugging
     $scope.name_entry = '';
+    $scope.subTaxonOrder = 'size.desc';
     
     $scope.taxonTitle = function(t) {
 	return phyloData.taxonTitle(t);
@@ -31,6 +33,14 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
 	    route += '/phylo=' + t.gid;
 	}
 	return route;
+    };
+    
+    $scope.subTaxonOrderGetter = function(taxon) {
+	if ( $scope.subTaxonOrder == 'size.desc' ) {
+	    return 1000000 - taxon.siz;
+	} else {
+	    return taxon.nam;
+	}
     };
     
     $scope.nameEntered = function() {
@@ -51,12 +61,14 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     
     $scope.jumpTaxon = function(taxon) {
 	$scope.focal_taxon = taxon;
+	focal_taxon = taxon;
 	phyloData.getTaxon(taxon.oid, { show: 'attr,nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
     };
     
     $scope.finishJumpTaxon = function(data) {
 	if ( data.records.length > 0 ) {
 	    $scope.focal_taxon = data.records[0];
+	    focal_taxon = data.records[0];
 	    $scope.focal_parents = computeParentList(data.records[0]);
 	    $scope.focal_subsect = computeChildList(data.records[0]);
 	    $location.path($scope.taxonRoute2($scope.focal_taxon));
@@ -110,39 +122,82 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     function computeChildList(taxon) {
 	var section_list = [];
 	
-	if ( taxon.chl )
+	if ( taxon.chl && taxon.rnk > 5 && ( taxon.chl.length == 0 || !taxon.gns || taxon.chl.length != taxon.gns.length ) )
 	{
-	    section_list.push({ section: "immediate subtaxa", size: taxon.chl.length, taxa: taxon.chl });
+	    section_list.push({ section: "immediate subtaxa", size: taxon.chl.length, 
+				offset: 0, order: 'size.desc', taxa: taxon.chl });
 	}
 	
 	if ( taxon.phs )
 	{
-	    section_list.push({ section: "phyla", size: taxon.phc, taxa: taxon.phs });
+	    section_list.push({ section: "phyla", size: taxon.phc, rank: 20, 
+				offset: 0, max: 10, order: 'size.desc', taxa: taxon.phs });
 	}
 	
 	if (taxon.cls )
 	{
-	    section_list.push({ section: "classes", size: taxon.clc, taxa: taxon.cls });
+	    section_list.push({ section: "classes", size: taxon.clc, rank: 17, 
+				offset: 0, max: 10, order: 'size.desc', taxa: taxon.cls });
 	}
 	
 	if (taxon.ods )
 	{
-	    section_list.push({ section: "orders", size: taxon.odc, taxa: taxon.ods });
+	    section_list.push({ section: "orders", size: taxon.odc, rank: 13, 
+				offset: 0, max: 10, order: 'size.desc', taxa: taxon.ods });
 	}
 	
 	if (taxon.fms )
 	{
-	    section_list.push({ section: "families", size: taxon.fmc, taxa: taxon.fms });
+	    section_list.push({ section: "families", size: taxon.fmc, rank: 9, 
+				offset: 0, max: 10, order: 'size.desc', taxa: taxon.fms });
 	}
 	
 	if ( taxon.gns )
 	{
-	    section_list.push({ section: "genera", size: taxon.gnc, taxa: taxon.gns });
+	    section_list.push({ section: "genera", size: taxon.gnc, rank: 5, 
+				offset: 0, max: 10, order: 'size.desc', taxa: taxon.gns });
+	}
+	
+	if ( taxon.sgs && taxon.sgs.length > 0 )
+	{
+	    section_list.push({ section: "subgenera", size: taxon.gnc, rank: 4, 
+				offset: 0, max: 10, order: 'size.desc', taxa: taxon.sgs });
+	}
+	
+	if ( taxon.sps && taxon.sps.length > 0 )
+	{
+	    section_list.push({ section: "species", size: taxon.sps.length, rank: 3, 
+				offset: 0, max: 10, order: 'size.desc', taxa: taxon.sps });
+	}
+	
+	if ( taxon.sss && taxon.sss.length > 0 )
+	{
+	    section_list.push({ section: "subspecies", size: taxon.sss.length, rank: 2, 
+				offset: 0, max: 10, order: 'size.desc', taxa: taxon.sss });
 	}
 	
 	return section_list;
-    };				    
-				    
+    };
+    
+    $scope.showAllSubTaxa = function(s) {
+	
+	function finishSubTaxa (data) {
+	    if ( data.records.length > 0 )
+	    {
+		s.taxa = data.records;
+	    }	    
+	};
+	
+	if ( typeof s == "object" )
+	{
+	    phyloData.getSubtaxa(focal_taxon.oid, s.rank, 0, 100, finishSubTaxa);
+	}
+    }
+    
+    $scope.showAllIsVisible = function(s) {
+	return (s.size > s.taxa.length);
+    }
+    
     $scope.errorEnteredName = function(e) {
 	$scope.error_object = e;
 	alert('An error occurred: ' + e);
@@ -150,10 +205,12 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     
     if ( $routeParams.phylo_selector )
     {
-	phyloData.getTaxon($routeParams.phylo_selector, { show: 'attr,nav' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
+	phyloData.getTaxon($routeParams.phylo_selector, { show: 'attr,nav' }, $scope.finishJumpTaxon);
     }
-    
-
+    else
+    {
+	phyloData.getTaxon(1, { show: 'attr,nav' }, $scope.finishJumpTaxon);
+    }
     
 }]);
 

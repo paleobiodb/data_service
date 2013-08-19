@@ -24,6 +24,7 @@ use TaxonQuery;
 use TreeQuery;
 use CollectionQuery;
 use IntervalQuery;
+use PersonQuery;
 use ConfigQuery;
 
 our($DEBUG);
@@ -84,7 +85,7 @@ ruleset '1.1:taxon_filter' =>
     [optional => 'depth', POS_VALUE];
 
 ruleset '1.1:taxon_display' => 
-    [optional => 'show', LIST_PERMISSIVE('ref','attr','time','app','applong','coll','phyl','size','nav','det','all')],
+    [optional => 'show', LIST_PERMISSIVE('ref','attr','time','app','applong','appfirst','coll','phyl','size','nav','det','all')],
     [optional => 'exact', FLAG_VALUE];
 
 ruleset '1.1:taxa/single' => 
@@ -183,6 +184,30 @@ ruleset '1.1:intervals' =>
     [allow => '1.1:common_params'];
 
 ruleset '1.1:config' =>
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:person_selector' => 
+    [param => 'name', STRING_VALUE];
+
+ruleset '1.1:person_specifier' => 
+    [param => 'id', POS_VALUE, { alias => 'person_id' }];
+
+ruleset '1.1:people/list' => 
+    [require => '1.1:person_selector'],
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:people/single' => 
+    [allow => '1.1:person_specifier'],
+    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:refs_specifier' => 
+    [param => 'id', POS_VALUE, { alias => 'ref_id' }];
+
+ruleset '1.1:refs/single' => 
+    [require => '1.1:refs_specifier'],
     [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
@@ -325,6 +350,25 @@ get '/data1.1/intervals/hierarchy.:ct' => sub {
     queryMultiple('IntervalQuery', v => '1.1',
 		  validation => '1.1:intervals',
 		  op => 'hierarchy');
+};
+
+get '/data1.1/people/list.:ct' => sub {
+    
+    queryMultiple('PersonQuery', v => '1.1',
+		  validation => '1.1:people/list', op => 'list');
+};
+
+get '/data1.1/people/single.:ct' => sub {
+
+    querySingle('PersonQuery', v => '1.1',
+		  validation => '1.1:people/single', op => 'single');
+};
+
+get '/data1.1/people/:id.:ct' => sub {
+    
+    returnErrorResult({}, "404 Not found") unless params('id') =~ /^[0-9]+$/;
+    querySingle('PersonQuery', v => '1.1',
+		validation => '1.1:people/single', op => 'single');
 };
 
 # Any other URL beginning with '/data1.1/' is an error.

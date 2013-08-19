@@ -39,6 +39,26 @@ pbdb_phylo_service.factory('phyloData', ['$http', function($http) {
 	$http.get('/data1.1/taxa/single.json?id=' + id + extra).success(success_fn).error(error_fn);
     }
     
+    function getSubtaxa(id, rank, offset, limit, success_fn, error_fn)
+    {
+	var lim_str = '';
+	
+	if ( typeof offset == "number" )
+	{
+	    lim_str += '&offset=' + offset;
+	}
+	
+	if ( typeof limit == "number" )
+	{
+	    lim_str += '&limit=' + limit;
+	}
+	
+	if ( rank > 0 )
+	{
+	    $http.get('/data1.1/taxa/list.json?id=' + id + lim_str + '&show=size,appfirst&rel=all_children&rank=' + rank).success(success_fn).error(error_fn);
+	}
+    }
+    
     function rankLabel(rank)
     {
 	return rankMap[rank] || rank;
@@ -55,6 +75,7 @@ pbdb_phylo_service.factory('phyloData', ['$http', function($http) {
     
     return { listTaxaByName: listTaxaByName, 
 	     getTaxon: getTaxon,
+	     getSubtaxa: getSubtaxa,
 	     rankLabel: rankLabel,
 	     taxonTitle: taxonTitle
 	   };

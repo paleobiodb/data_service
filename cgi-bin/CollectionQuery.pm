@@ -304,7 +304,7 @@ sub fetchMultiple {
     
     my $filter_tables = {};
     
-    my @filters = $self->generateQueryFilters($dbh, $mt, $filter_tables);
+    my @filters = $self->generateQueryFilters($mt, $filter_tables);
     
     push @filters, "$mt.access_level = 0";
     
@@ -498,8 +498,9 @@ sub fetchMultiple {
 
 sub generateQueryFilters {
 
-    my ($self, $dbh, $mt, $tables_ref) = @_;
+    my ($self, $mt, $tables_ref) = @_;
     
+    my $dbh = $self->{dbh};
     my @filters;
     
     # Check for parameter 'id'
