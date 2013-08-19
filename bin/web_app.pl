@@ -51,14 +51,32 @@ ruleset '1.1:common_params' =>
     [optional => 'limit', ENUM_VALUE('all'),
       { error => "acceptable values for 'limit' are a positive integer, 0, or 'all'" } ],
     [optional => 'offset', POS_ZERO_VALUE],
-    [optional => 'count', FLAG_VALUE];
-
-ruleset '1.1:common_display' =>
+    [optional => 'count', FLAG_VALUE],
     [optional => 'vocab', ENUM_VALUE('dwc', 'com', 'pbdb')],
     # The following are only relevant for .csv and .txt output
     [optional => 'quoted', FLAG_VALUE],
     [optional => 'no_header', FLAG_VALUE],
     [optional => 'linebreak', ENUM_VALUE('cr','crlf'), { default => 'crlf' }];
+
+ruleset '1.1:main_selector' =>
+    [param => 'bin_id', INT_LIST_PERMISSIVE(1)],
+    [param => 'taxon_name', \&TaxonQuery::validNameSpec],
+    [param => 'taxon_id', INT_LIST_PERMISSIVE(1)],
+    [param => 'base_name', \&TaxonQuery::validNameSpec],
+    [param => 'base_id', INT_LIST_PERMISSIVE(1)],
+    [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
+    [param => 'person_no', INT_LIST_PERMISSIVE(1)],
+    [param => 'lngmin', REAL_VALUE('-180.0','180.0')],
+    [param => 'lngmax', REAL_VALUE('-180.0','180.0')],
+    [param => 'latmin', REAL_VALUE('-90.0','90.0')],
+    [param => 'latmax', REAL_VALUE('-90.0','90.0')],
+    [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
+	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
+    [param => 'loc', STRING_VALUE],		# This should be a geometry in WKT format
+    [param => 'min_ma', REAL_VALUE(0)],
+    [param => 'max_ma', REAL_VALUE(0)],
+    [param => 'interval', STRING_VALUE],
+    [optional => 'time_strict', FLAG_VALUE];
 
 ruleset '1.1:taxon_specifier' => 
     [param => 'name', \&TaxonQuery::validNameSpec, { alias => 'taxon_name' }],
@@ -92,7 +110,6 @@ ruleset '1.1:taxa/single' =>
     [require => '1.1:taxon_specifier',
 	{ error => "you must specify either 'name' or 'id'" }],
     [allow => '1.1:taxon_display'],
-    [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
 ruleset '1.1:taxa/list' => 
@@ -100,7 +117,6 @@ ruleset '1.1:taxa/list' =>
 	{ error => "you must specify one of 'name', 'id', 'status', 'base_name', 'base_id', 'leaf_name', 'leaf_id'" }],
     [allow => '1.1:taxon_filter'],
     [allow => '1.1:taxon_display'],
-    [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
 ruleset '1.1:coll_specifier' =>
@@ -108,24 +124,7 @@ ruleset '1.1:coll_specifier' =>
 
 ruleset '1.1:coll_selector' =>
     [param => 'id', INT_LIST_PERMISSIVE(1), { alias => 'coll_id' }],
-    [param => 'bin_id', INT_LIST_PERMISSIVE(1)],
-    [param => 'taxon_name', \&TaxonQuery::validNameSpec],
-    [param => 'taxon_id', INT_LIST_PERMISSIVE(1)],
-    [param => 'base_name', \&TaxonQuery::validNameSpec],
-    [param => 'base_id', INT_LIST_PERMISSIVE(1)],
-    [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
-    [param => 'person_no', INT_LIST_PERMISSIVE(1)],
-    [param => 'lngmin', REAL_VALUE('-180.0','180.0')],
-    [param => 'lngmax', REAL_VALUE('-180.0','180.0')],
-    [param => 'latmin', REAL_VALUE('-90.0','90.0')],
-    [param => 'latmax', REAL_VALUE('-90.0','90.0')],
-    [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
-	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
-    [param => 'loc', STRING_VALUE],		# This should be a geometry in WKT format
-    [param => 'min_ma', REAL_VALUE(0)],
-    [param => 'max_ma', REAL_VALUE(0)],
-    [param => 'interval', STRING_VALUE],
-    [optional => 'time_strict', FLAG_VALUE];
+    [allow => '1.1:main_selector'];
 
 ruleset '1.1:coll_display' =>
     [param => 'show', LIST_PERMISSIVE('bin','ref','sref','loc','time','taxa','occ','det')];
@@ -133,44 +132,20 @@ ruleset '1.1:coll_display' =>
 ruleset '1.1:colls/single' => 
     [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
     [allow => '1.1:coll_display'],
-    [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
 ruleset '1.1:colls/list' => 
     [allow => '1.1:coll_selector'],
     [allow => '1.1:coll_display'],
-    [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
-
-ruleset '1.1:summary_selector' =>
-    [param => 'id', INT_LIST_PERMISSIVE(1), { alias => 'coll_id' }],
-    [param => 'bin_id', INT_LIST_PERMISSIVE(1)],
-    [param => 'taxon_name', \&TaxonQuery::validNameSpec],
-    [param => 'taxon_id', INT_LIST_PERMISSIVE(1)],
-    [param => 'base_name', \&TaxonQuery::validNameSpec],
-    [param => 'base_id', INT_LIST_PERMISSIVE(1)],
-    [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
-    [param => 'person_no', INT_LIST_PERMISSIVE(1)],
-    [param => 'lngmin', REAL_VALUE],
-    [param => 'lngmax', REAL_VALUE],
-    [param => 'latmin', REAL_VALUE],
-    [param => 'latmax', REAL_VALUE],
-    [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
-	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
-    [param => 'loc', STRING_VALUE],		# This should be a geometry in WKT format
-    [param => 'min_ma', REAL_VALUE(0)],
-    [param => 'max_ma', REAL_VALUE(0)],
-    [param => 'interval', STRING_VALUE],
-    [optional => 'time_strict', FLAG_VALUE];
 
 ruleset '1.1:summary_display' => 
     [param => 'level', INT_VALUE(1,2), { default => 1 }],
     [param => 'show', LIST_VALUE('ext','time','all')];
 
 ruleset '1.1:colls/summary' => 
-    [allow => '1.1:summary_selector'],
+    [allow => '1.1:coll_selector'],
     [allow => '1.1:summary_display'],
-    [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
 ruleset '1.1:interval_selector' => 
@@ -180,11 +155,9 @@ ruleset '1.1:interval_selector' =>
 
 ruleset '1.1:intervals' => 
     [allow => '1.1:interval_selector'],
-    [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
 ruleset '1.1:config' =>
-    [allow => '1.1:common_display'],
     [allow => '1.1:common_params'];
 
 ruleset '1.1:person_selector' => 
@@ -193,14 +166,16 @@ ruleset '1.1:person_selector' =>
 ruleset '1.1:person_specifier' => 
     [param => 'id', POS_VALUE, { alias => 'person_id' }];
 
-ruleset '1.1:people/list' => 
-    [require => '1.1:person_selector'],
-    [allow => '1.1:common_display'],
-    [allow => '1.1:common_params'];
-
 ruleset '1.1:people/single' => 
     [allow => '1.1:person_specifier'],
-    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:people/list' => 
+    [require => '1.1:person_selector'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:people/toprank' => 
+    [require => '1.1:main_selector'],
     [allow => '1.1:common_params'];
 
 ruleset '1.1:refs_specifier' => 
@@ -208,7 +183,10 @@ ruleset '1.1:refs_specifier' =>
 
 ruleset '1.1:refs/single' => 
     [require => '1.1:refs_specifier'],
-    [allow => '1.1:common_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:refs/toprank' => 
+    [require => '1.1:main_selector'],
     [allow => '1.1:common_params'];
 
 # Send app pages
@@ -356,6 +334,12 @@ get '/data1.1/people/list.:ct' => sub {
     
     queryMultiple('PersonQuery', v => '1.1',
 		  validation => '1.1:people/list', op => 'list');
+};
+
+get '/data1.1/people/toprank.:ct' => sub {
+    
+    queryMultiple('PersonQuery', v => '1.1',
+		  validation => '1.1:people/toprank', op => 'toprank');
 };
 
 get '/data1.1/people/single.:ct' => sub {

@@ -25,7 +25,7 @@
 	
 	<div class="taxonParents">
 	  <p ng-repeat="taxon in focal_parents">
-	  <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>
+	  <a href="#{{taxonRoute2(taxon)}}" ng-class="{immediateParent: $last}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>
 	  </p>
 	</div>
 	

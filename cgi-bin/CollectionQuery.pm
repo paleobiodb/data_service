@@ -546,7 +546,7 @@ sub generateQueryFilters {
     
     elsif ( $taxon_no )
     {
-	(@taxa) = $self->{taxonomy}->getRelatedTaxa('self', $taxon_no, { fields => 'lft' });
+	(@taxa) = $self->{taxonomy}->getTaxa('self', $taxon_no, { fields => 'lft' });
     }
     
     # Then construct the necessary filters
@@ -628,14 +628,16 @@ sub generateQueryFilters {
     if ( defined $min_age and $min_age > 0 )
     {
 	my $min_filt = $self->{params}{time_strict} ? "c.late_age" : "c.early_age";
-	$tables_ref->{c} = 1 unless $mt eq 'c';
+	$tables_ref->{c} = 1;
+	$min_age -= 0.001;
 	push @filters, "$min_filt > $min_age";
     }
     
     if ( defined $max_age and $max_age > 0 )
     {
 	my $max_filt = $self->{params}{time_strict} ? "c.early_age" : "c.late_age";
-	$tables_ref->{c} = 1 unless $mt eq 'c';
+	$tables_ref->{c} = 1;
+	$max_age += 0.001;
 	push @filters, "$max_filt < $max_age";
     }
     
