@@ -1,52 +1,49 @@
-<div class="container">
-  <div class="row">
-    <div class="col-2">
-      <p>The Paleobiology Database</p>
-      <p>&nbsp;</p>
-      <p>&nbsp;</p>
-      <select ng-model="subTaxonOrder">
-	<option value="size.desc">Size</option>
-	<option value="name">Alphabetical</option>
-      </select>
-    </div>
-    <div class="col-10">
-      <div id="pbdb_map">
-	<p>[The map goes here]</p>
-      </div>
-      <div id="pbdb_time">
-	<p>[The time bar goes here]</p>
-      </div>
-      <div class="boundedSection" name="pbdb_phylo">
-	
-	<form ng-submit="nameEntered()">
-	  <p style="margin-top: 0px">Enter a taxonomic name: <input type="text" size="40" ng-model="name_entry" />
-	  <button ng-click="nameEntered()">Select</button></p>
-	</form>
-	
-	<div class="taxonParents">
-	  <p ng-repeat="taxon in focal_parents">
-	  <a href="#{{taxonRoute2(taxon)}}" ng-class="{immediateParent: $last, extinct: taxon.exs==0 }" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>
-	  </p>
-	</div>
-	
-	<div class="focalTaxon" ng-class="{ extinct: focal_taxon.ext=='no' }" name="focal_taxon_box">
-	  <p class="taxonTitle" ng-bind="taxonTitle(focal_taxon)"></p>
-	  <p class="taxonAttr" ng-bind="focal_taxon.att"></p>
-	  <p class="laAttr" ng-bind="taxonFirstapp(focal_taxon)"></p>
-	  <p class="laAttr" ng-bind="taxonLastapp(focal_taxon)"></p>
-	</div>
-	
-	<div class="taxonChildren">
-	  <p ng-repeat="s in focal_subsect">
-	  {{s.size}} {{s.section}}: &nbsp;&nbsp;
-	    <b><a ng-show="showAllIsVisible(s)" ng-click="showAllSubTaxa(s)">show all...</a></b><br/>
-	    <span ng-class="{ extinct: taxon.exs==0 }" ng-repeat="taxon in s.taxa | orderBy:subTaxonOrderGetter">
-	      <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>&nbsp;
-	    </span>
-	  </p>
-	</div>
-	
-      </div>
-    </div>
+<div class="boundedSection" name="pbdb_phylo">
+  <form ng-submit="nameEntered()">
+    <input type="text" class="form-control" id="taxonInput" ng-model="name_entry" placeholder="Enter a taxonomic name:"/>
+  </form>
+
+  <div class="focalTaxon" ng-class="{ extinct: focal_taxon.ext=='no' }" name="focal_taxon_box">
+    <table class="table table-hover">
+      <tr ng-repeat="taxon in focal_parents">
+        <td>
+          <a href="#{{taxonRoute2(taxon)}}" ng-class="{immediateParent: $last, extinct: taxon.exs==0 }" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>
+        </td>
+      </tr>
+      <tr class="active">
+        <td>
+          <p class="taxonTitle" ng-bind="taxonTitle(focal_taxon)"></p>
+          <p class="taxonAttr" ng-bind="focal_taxon.att"></p>
+          <a id="showTaxonOnMap" href=""><i class="icon-globe icon-2x"></i></a>
+          <a id="exclude" href="">Exclude</a>
+        </td>
+      </tr>
+    </table>
+
+  </div>
+
+  <div class="taxonChildren">
+    <p ng-repeat="s in focal_subsect">
+    {{s.size}} {{s.section}}: &nbsp;&nbsp;
+      <b><a ng-show="showAllIsVisible(s)" ng-click="showAllSubTaxa(s)">show all...</a></b><br/>
+      <span ng-class="{ extinct: taxon.exs==0 }" ng-repeat="taxon in s.taxa | orderBy:subTaxonOrderGetter">
+        <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>&nbsp;
+      </span>
+    </p>
+    <a id="clearTaxa" href="javascript:updateTaxon()"><i class="icon-eraser"></i>Clear map</a>
   </div>
 </div>
+<!--
+<table class="table table-condensed table-hover" ng-repeat="s in focal_subsect">
+  <thead>
+    <tr>
+      <th>{{s.size}} {{s.section}}: &nbsp;&nbsp;</th>
+      <th><a ng-show="showAllIsVisible(s)" ng-click="showAllSubTaxa(s)">show all...</a></th>
+    </tr>
+  </thead>
+  <tr ng-class="{ extinct: taxon.exs==0 }" ng-repeat="taxon in s.taxa | orderBy:subTaxonOrderGetter">
+    <td>
+      <a href="#{{taxonRoute2(taxon)}}" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>
+    </td>
+  </tr>
+</table>-->
