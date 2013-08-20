@@ -106,7 +106,7 @@ function reconstruct(year) {
     //var gPlatesReq = 'http://gplates.gps.caltech.edu:8080/recon_points/?time=' + requestYear + '&points="' + buildWKT(shortResponse) + '"&output=geojson';
     //var gPlatesReq = 'http://gplates.gps.caltech.edu:8080/recon_points/?time=' + requestYear + '&points="' + buildWKT(response.records) + '"&output=geojson';
 
-    var gPlatesReqData = '&time=' + requestYear + '&points="' + buildWKT(response.records) + '"&output=geojson';
+    var gPlatesReqData = '&time=' + requestYear + '&points="' + buildWKT(response.records) + '"&output=topojson';
 
     d3.xhr('http://gplates.gps.caltech.edu:8080/recon_points/')
       .header("Content-type", "application/x-www-form-urlencoded")
@@ -115,11 +115,13 @@ function reconstruct(year) {
           console.log("Gplates error - ", err);
           return alert("GPlates could not complete the request");
         }
+        console.log("Got gplates response");
         var gPlatesResponse = JSON.parse(result.response);
-        /*var keys = Object.keys(gPlatesResponse.objects),
+
+        var keys = Object.keys(gPlatesResponse.objects),
             key = keys[0];
-            rotatedPoints = topojson.feature(gPlatesResponse, gPlatesResponse.objects[key]);*/
-            rotatedPoints = gPlatesResponse;
+            rotatedPoints = topojson.feature(gPlatesResponse, gPlatesResponse.objects[key]);
+           // rotatedPoints = gPlatesResponse;
 /*
       });
 
@@ -134,10 +136,11 @@ function reconstruct(year) {
       rotatedPoints = resp;*/
 
       d3.json("plates/plate" + requestYear + ".json", function(er, topoPlates) {
+        console.log("plates loaded");
         var geojsonPlates = topojson.feature(topoPlates, topoPlates.objects["plates" + requestYear]);
         d3.select("#map").style("display", "none");
         d3.select("#reconstructMap").style("display","block");
-        plateLayer = new L.geoJson(geojsonPlates, {
+        var plateLayer = L.geoJson(geojsonPlates, {
           style: {
             "color": "#000",
             "fillColor": "#FEFBFB",
@@ -146,7 +149,7 @@ function reconstruct(year) {
           }
         }).addTo(reconstructMap);
 
-        pointLayer = new L.geoJson(rotatedPoints, {
+        var pointLayer = L.geoJson(rotatedPoints, {
           pointToLayer: function(feature, latlng) {
             return L.circleMarker(latlng, {
               radius: 10
@@ -160,7 +163,7 @@ function reconstruct(year) {
           }
         }).addTo(reconstructMap);
 
-        lastRequestYear = requestYear;
+        reconstructMap.invalidateSize();
 
         // Uncheck the checkbox
         document.getElementById("reconstructBox").checked = false;
@@ -210,12 +213,15 @@ function updateAuthors() {
     url += '&exclude_id=' + exclude.oid;
   }
 
-  if (typeof selectedInterval != 'undefined') {
-      url += '&interval=' + selectedInterval;
-    }
   d3.json(url, function(err, result) {
+
     d3.select('.credits').html('');
-    for(var i=1;i<6;i++) {
+    if (result.records > 5) {
+      var length = 6;
+    } else {
+      var length = result.records.length;
+    }
+    for(var i=1;i<length;i++) {
       if (i == 5) {
         d3.select('.credits')
           .append('p').attr('class', 'rank').text(result.records[i].aut);
@@ -224,6 +230,7 @@ function updateAuthors() {
           .append('p').attr('class', 'rank').text(result.records[i].aut + " | ");
       }
     }
+
   });
 }
 
