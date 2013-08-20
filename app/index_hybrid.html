@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="PBDBDemo">
+  <head>
+    <title>PaleoDB Prototype</title>
+
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, width=device-width">
+    <meta name="author" content="John J Czaplewski"/>
+
+    <link href="css/bootstrap.min.css" rel="stylesheet"/>
+    <link href="//netdna.bootstrapcdn.com/font-awesome/3.2.1/css/font-awesome.css" rel="stylesheet"/>
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.6.3/leaflet.css" />
+    <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'/>
+    <link href='http://fonts.googleapis.com/css?family=Raleway' rel='stylesheet' type='text/css'/>
+    <link href="css/index.css" rel="stylesheet"/>
+
+
+    <!-- angular -->
+    <link rel="stylesheet" href="css/app.css"/>
+    <!--        -->
+
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="col-12">
+          <div id="brand">
+            <h2 class="title"><t id="the">The</t> Paleobiology <t id="database">Database</t></h2>
+            <h4 class="title tagline">Organizing the history of life</h4>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+      	<div class="col-lg-12" id="graphics">
+          <div id="map"></div>
+          <div id="reconstructMap"></div>
+          <div id="window" class="col-3 col-offset-9">
+            <table class="table-hover table-condensed" id="clusterTable"></table>
+          </div>
+          <div id="chart"></div>
+          <div id="smallChart"></div>
+        </div> <!-- End col-12 -->
+        <div class="col-lg-3" id="taxaBrowser">
+          <div ng-view></div>
+        </div>
+      </div> <!-- End row -->
+
+      <div class="row">
+        <div class="col-12" id="stats">
+          <div class="statContainer" style="border-left:none;">
+            <h3>1,138,938</h3>
+            <h5>taxonomic occurrences</h5>
+          </div>
+          <div class="statContainer">
+            <h3>149,131</h3>
+            <h5>fossil collections</h5>
+          </div>
+          <div class="statContainer">
+            <h3>275,188</h3>
+            <h5>taxa</h5>
+          </div>
+          <div class="statContainer">
+            <h3>47,689</h3>
+            <h5>references</h5>
+          </div>
+          <div class="statContainer contrib">
+            <h3>339</h3>
+            <h5>scientists</h5>
+          </div>
+          <div class="statContainer contrib">
+            <h3>131</h3>
+            <h5>institutions</h5>
+          </div>
+          <div class="statContainer contrib">
+            <h3>24</h3>
+            <h5>countries</h5>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="row">
+          <div class="col-12" style="display:table;">
+            <div class="footerNavContainer">
+              <a href="#" class="footerNav text-muted">Full search</a>
+            </div>
+            <div class="footerNavContainer">
+              <a href="#" class="footerNav text-muted">Download</a>
+            </div>
+            <div class="footerNavContainer">
+              <a href="#" class="footerNav text-muted">Analyze</a>
+            </div>
+            <div class="footerNavContainer">
+              <a href="http://paleodb.geology.wisc.edu/cgi-bin/bridge.pl?page=paleodbFAQ" class="footerNav text-muted">About</a>
+            </div>
+            <div class="footerNavContainer">
+              <a href="#" class="footerNav text-muted">Log in</a>
+            </div>
+            <div class="footerNavContainer">
+              <a class="footerNav text-muted socialMedia" href="https://www.facebook.com/PaleoDB"><i class="icon-facebook"></i></a>
+            </div>
+            <div class="footerNavContainer">
+              <a class="footerNav text-muted socialMedia" href="https://twitter.com/PaleoDB"><i class="icon-twitter"></i></a>
+            </div>
+            <div class="footerNavContainer">
+              <a class="footerNav text-muted socialMedia" href="#"><i class="icon-github"></i></a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div> <!-- End container -->
+      
+    <script src="http://cdn.leafletjs.com/leaflet-0.6.3/leaflet.js"></script>
+    <script src="http://d3js.org/d3.v3.min.js"></script>
+    <script src="http://d3js.org/topojson.v1.min.js"></script>
+
+    
+    <!-- angular -->
+    <script src="lib/angular/angular.js"></script>
+    <script src="js/phylo.js"></script>
+    <script src="js/services.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/controllers.js"></script>
+    <script src="js/filters.js"></script>
+    <script src="js/directives.js"></script>
+    <!--        -->
+
+    <script src="js/index.js"></script>
+
+  </body>
+</html>
