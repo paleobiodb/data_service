@@ -35,6 +35,32 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
 	return route;
     };
     
+    $scope.taxonFirstapp = function(t) {
+	if ( typeof t == "undefined" ) { return ''; }
+	if ( typeof t.fea == "undefined" ) { return 'No occurrences in this database' };
+	var fa_str = 'First app. in this database: ' + t.fea + ' - ' + t.fla + ' Ma (' + t.fei;
+	if ( t.fli )
+	{
+	    fa_str += ' - ' + t.fli;
+	}
+	fa_str += ')';
+	return fa_str;
+    };
+    
+    $scope.taxonLastapp = function(t) {
+	if ( typeof t == "undefined" ) { return ''; }
+	if ( t.exs && t.exs > 0 ) { return ''; }
+	if ( t.ext == 'yes' ) { return ''; }
+	if ( typeof t.lea == "undefined" ) { return '' };
+	var la_str = 'Last app. in this database: ' + t.lea + ' - ' + t.lla + ' Ma (' + t.lei;
+	if ( t.lli )
+	{
+	    la_str += ' - ' + t.lli;
+	}
+	la_str += ')';
+	return la_str;
+    };
+    
     $scope.subTaxonOrderGetter = function(taxon) {
 	if ( $scope.subTaxonOrder == 'size.desc' ) {
 	    return 1000000 - taxon.siz;
@@ -61,7 +87,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     $scope.jumpTaxon = function(taxon) {
 	$scope.focal_taxon = taxon;
 	focal_taxon = taxon;
-	phyloData.getTaxon(taxon.oid, { show: 'attr,nav,applong' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
+	phyloData.getTaxon(taxon.oid, { show: 'attr,nav,size,applong' }, $scope.finishJumpTaxon, $scope.errorEnteredName);
     };
     
     $scope.finishJumpTaxon = function(data) {
@@ -211,7 +237,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
     
     if ( phylo_selector )
     {
-    	phyloData.getTaxon(phylo_selector, { show: 'attr,nav,applong' }, $scope.finishJumpTaxon);
+    	phyloData.getTaxon(phylo_selector, { show: 'attr,nav,size,applong' }, $scope.finishJumpTaxon);
     }
     // else
     // {

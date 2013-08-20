@@ -50,7 +50,11 @@ sub read_config {
     
     my $filename = "config/pbdb.conf";
     my $cf;
-    open $cf, "<$filename" or die "Can not open $filename\n";
+    unless ( open $cf, "<$filename" )
+    {
+	carp "Can not open $filename\n";
+	return;
+    }
     while(my $line = readline($cf)) {
         chomp($line);
         if ($line =~ /^\s*(\w+)\s*=\s*(.*)$/) {
