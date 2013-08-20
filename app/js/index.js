@@ -198,6 +198,19 @@ function updateAuthors() {
   var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/toprank.json?show=author&lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&limit=6';
 
   if (typeof selectedInterval != 'undefined') {
+    url += '&interval=' + selectedInterval;
+  }
+  if (typeof personFilter != 'undefined') {
+    url += '&person_no=' + personFilter;
+  }
+  if (typeof taxon != 'undefined') {
+    url += '&base_id=' + taxon.oid;
+  }
+  if (typeof exclude != 'undefined') {
+    url += '&exclude_id=' + exclude.oid;
+  }
+
+  if (typeof selectedInterval != 'undefined') {
       url += '&interval=' + selectedInterval;
     }
   d3.json(url, function(err, result) {
