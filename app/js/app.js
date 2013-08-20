@@ -96,7 +96,7 @@ pbdb_app.controller('Browser', ['$scope', '$routeParams', '$location', 'phyloDat
 	    focal_taxon = data.records[0];
 	    // WARNING: Duct tape
 	    d3.select("#showTaxonOnMap").attr('href', 'javascript:updateTaxon("' + focal_taxon.oid + '")');
-	    d3.select("#exclude").attr('href', 'javascript:exclude("' + focal_taxon.oid + '")');
+	    d3.select("#exclude").attr('href', 'javascript:excludeTaxon("' + focal_taxon.oid + '")');
 	    //
 	    $scope.focal_parents = computeParentList(data.records[0]);
 	    $scope.focal_subsect = computeChildList(data.records[0]);
