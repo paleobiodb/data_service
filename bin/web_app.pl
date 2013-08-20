@@ -128,6 +128,7 @@ ruleset '1.1:coll_selector' =>
     [allow => '1.1:main_selector'];
 
 ruleset '1.1:coll_display' =>
+    [param => 'level', INT_VALUE(1,2)],
     [param => 'show', LIST_PERMISSIVE('bin','ref','sref','loc','time','taxa','occ','det')];
 
 ruleset '1.1:colls/single' => 
