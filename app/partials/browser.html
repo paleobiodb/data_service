@@ -3,7 +3,7 @@
     <input type="text" class="form-control" id="taxonInput" ng-model="name_entry" placeholder="Enter a taxonomic name:"/>
   </form>
 
-  <div class="focalTaxon" ng-class="{ extinct: focal_taxon.ext=='no' }" name="focal_taxon_box">
+  <div class="focalTaxon" ng-class="{ extinct: focal_taxon.exs==0 }" name="focal_taxon_box">
     <table class="table table-hover">
       <tr ng-repeat="taxon in focal_parents">
         <td>
@@ -14,6 +14,8 @@
         <td>
           <p class="taxonTitle" ng-bind="taxonTitle(focal_taxon)"></p>
           <p class="taxonAttr" ng-bind="focal_taxon.att"></p>
+          <p class="laAttr" ng-bind="taxonFirstapp(focal_taxon)"></p>
+          <p class="laAttr" ng-bind="taxonLastapp(focal_taxon)"></p>
           <a id="showTaxonOnMap" href=""><i class="icon-globe icon-2x"></i></a>
           <a id="exclude" href="">Exclude</a>
         </td>
