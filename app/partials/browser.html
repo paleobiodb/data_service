@@ -3,13 +3,18 @@
     <input type="text" class="form-control" id="taxonInput" ng-model="name_entry" placeholder="Enter a taxonomic name:"/>
   </form>
 
-  <div class="focalTaxon" ng-class="{ extinct: focal_taxon.exs==0 }" name="focal_taxon_box">
+  <div name="focal_taxon_box">
     <table class="table table-hover">
       <tr ng-repeat="taxon in focal_parents">
         <td>
           <a href="#{{taxonRoute2(taxon)}}" ng-class="{immediateParent: $last, extinct: taxon.exs==0 }" ng-click="jumpTaxon(taxon)">{{taxonTitle(taxon)}}</a>
         </td>
       </tr>
+    </table>
+  </div>
+
+  <div class="focalTaxon" ng-class="{ extinct: focal_taxon.exs==0 }" name="focal_taxon_box">
+    <table class="table table-hover">
       <tr class="active">
         <td>
           <p class="taxonTitle" ng-bind="taxonTitle(focal_taxon)"></p>
