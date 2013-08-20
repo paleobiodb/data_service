@@ -28,31 +28,46 @@
   content: "";
   padding: 0;
 }
+#taxonInput {
+  margin-bottom: 10px;
+}
+a:hover {
+  cursor: pointer;
+}
 
 .boundedSection {
-    border: 1px solid black;
+    border: 1px solid #ccc;
     padding: 5px;
+    border-radius: 6px;
+    -webkit-border-radius:6px;
+    -moz-border-radius:6px;
 }
 
 .focalTaxon {
-    
     text-align: center;
     margin: 0 auto;
-    border: 1px solid gray;
+    /*border: 1px solid gray;*/
     padding: 3px;
-    width: 50%;
+    
+    /*width: 50%;*/
 }
-
+#clearTaxa {
+  
+}
 .taxonTitle {
-
+    display: inline;
     font-weight: bold;
     margin: 0 auto;
+    margin-right:10px;
+    font-size: 17px;
 }
 
 .taxonAttr {
-    
+    display: inline;
     font-style: italic;
-    martin: 0 auto;
+    margin: 0 auto;
+    margin-right:10px;
+    font-size: 15px;
 }
 
 .taxonParents {
@@ -76,4 +91,9 @@
     text-align: left;
     margin-left: 10px;
     margin-bottom: 0px;
+
+}
+
+.table thead>tr>th, .table tbody>tr>th, .table tfoot>tr>th, .table thead>tr>td, .table tbody>tr>td, .table tfoot>tr>td {
+  border-top: none;
 }
