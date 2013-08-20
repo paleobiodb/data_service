@@ -32,7 +32,10 @@
 	<div class="focalTaxon" ng-class="{ extinct: focal_taxon.ext=='no' }" name="focal_taxon_box">
 	  <p class="taxonTitle" ng-bind="taxonTitle(focal_taxon)"></p>
 	  <p class="taxonAttr" ng-bind="focal_taxon.att"></p>
+	  <p class="laAttr" ng-bind="taxonFirstapp(focal_taxon)"></p>
+	  <p class="laAttr" ng-bind="taxonLastapp(focal_taxon)"></p>
 	</div>
+
 	
 	<div class="taxonChildren">
 	  <p ng-repeat="s in focal_subsect">

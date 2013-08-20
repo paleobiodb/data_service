@@ -5795,13 +5795,21 @@ sub generateExtraJoins {
 	if $tables->{ca};
     $extra_joins .= "LEFT JOIN $attrs_table as v on v.orig_no = $main_table.orig_no\n"
 	if $tables->{v};
-    $extra_joins .= "LEFT JOIN interval_map as fei on fei.older_seq = v.first_early_int_seq\n"
+    $extra_joins .= "LEFT JOIN interval_map as fei2 on fei2.older_seq = v.first_early_int_seq\n"
 	if $tables->{fei};
-    $extra_joins .= "LEFT JOIN interval_map as fli on fli.older_seq = v.first_late_int_seq\n"
+    $extra_joins .= "LEFT JOIN interval_map as fei on fei.interval_no = fei2.early_st_no\n"
+	if $tables->{fei};
+    $extra_joins .= "LEFT JOIN interval_map as fli2 on fli2.older_seq = v.first_late_int_seq\n"
 	if $tables->{fli};
-    $extra_joins .= "LEFT JOIN interval_map as lei on lei.younger_seq = v.last_early_int_seq\n"
-	if $tables->{fei};
-    $extra_joins .= "LEFT JOIN interval_map as lli on lli.younger_seq = v.last_late_int_seq\n"
+    $extra_joins .= "LEFT JOIN interval_map as fli on fli.interval_no = fli2.late_st_no\n"
+	if $tables->{fli};
+    $extra_joins .= "LEFT JOIN interval_map as lei2 on lei2.younger_seq = v.last_early_int_seq\n"
+	if $tables->{lei};
+    $extra_joins .= "LEFT JOIN interval_map as lei on lei.interval_no = lei2.early_st_no\n"
+	if $tables->{lei};
+    $extra_joins .= "LEFT JOIN interval_map as lli2 on lli2.younger_seq = v.last_late_int_seq\n"
+	if $tables->{fli};
+    $extra_joins .= "LEFT JOIN interval_map as lli on lli.interval_no = lli2.late_st_no\n"
 	if $tables->{fli};
     $extra_joins .= "LEFT JOIN taxon_ints as pi on pi.ints_no = t.ints_no\n"
 	if $tables->{pi};

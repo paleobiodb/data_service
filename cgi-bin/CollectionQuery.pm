@@ -586,25 +586,35 @@ sub generateQueryFilters {
 	}
     }
     
-    # Check for parameters 'taxon_name', 'base_name', 'taxon_id', 'base_id'
+    # Check for parameters 'taxon_name', 'base_name', 'taxon_id', 'base_id',
+    # 'exclude_name', 'exclude_id'
     
     my $taxon_name = $self->{params}{taxon_name} || $self->{params}{base_name};
     my $taxon_no = $self->{params}{taxon_id} || $self->{params}{base_id};
-    my @taxa;
+    my $exclude_no = $self->{params}{exclude_id};
+    my (@taxa, @exclude_taxa);
     
-    # First get the relevant taxon records
+    # First get the relevant taxon records for all included taxa
     
     if ( $taxon_name )
     {
-	(@taxa) = $self->{taxonomy}->getTaxaByName($taxon_name, { fields => 'lft' });
+	@taxa = $self->{taxonomy}->getTaxaByName($taxon_name, { fields => 'lft' });
     }
     
     elsif ( $taxon_no )
     {
-	(@taxa) = $self->{taxonomy}->getTaxa('self', $taxon_no, { fields => 'lft' });
+	@taxa = $self->{taxonomy}->getTaxa('self', $taxon_no, { fields => 'lft' });
     }
     
-    # Then construct the necessary filters
+    # Then get the records for excluded taxa.  But only if there are any
+    # included taxa in the first place.
+    
+    if ( $exclude_no )
+    {
+	@exclude_taxa = $self->{taxonomy}->getTaxa('self', $exclude_no, { fields => 'lft' });
+    }
+    
+    # Then construct the necessary filters for included taxa
     
     if ( @taxa and ($self->{params}{base_name} or $self->{params}{base_id}) )
     {
@@ -618,6 +628,14 @@ sub generateQueryFilters {
 	my $taxon_list = join ',', map { $_->{orig_no} } @taxa;
 	push @filters, "o.orig_no in ($taxon_list)";
 	$tables_ref->{o} = 1;
+    }
+    
+    # ...and for excluded taxa 
+    
+    if ( @exclude_taxa and @taxa )
+    {
+	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
+	$tables_ref->{t} = 1;
     }
     
     # Check for parameters 'person_no', 'person_name'

@@ -65,6 +65,7 @@ ruleset '1.1:main_selector' =>
     [param => 'base_name', \&TaxonQuery::validNameSpec],
     [param => 'base_id', INT_LIST_PERMISSIVE(1)],
     [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
+    [param => 'exclude_id', INT_LIST_PERMISSIVE(1)],
     [param => 'person_no', INT_LIST_PERMISSIVE(1)],
     [param => 'lngmin', REAL_VALUE('-180.0','180.0')],
     [param => 'lngmax', REAL_VALUE('-180.0','180.0')],
