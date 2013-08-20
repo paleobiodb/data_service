@@ -278,6 +278,7 @@ function refresh(year) {
       if (typeof exclude != 'undefined') {
         url += '&exclude_id=' + exclude.oid;
       }
+      updateDownloadLink(url, zoom);
       getBins(url, 1, zoom);
     } else if (zoom > 3 && zoom < 7 ) {
       var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=2&limit=99999';
@@ -293,6 +294,7 @@ function refresh(year) {
       if (typeof exclude != 'undefined') {
         url += '&exclude_id=' + exclude.oid;
       }
+      updateDownloadLink(url, zoom);
       getBins(url, 2, zoom);
     } else {
       var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/list.json?lngmin=' + sw.lng + '&lngmax='
@@ -309,6 +311,7 @@ function refresh(year) {
       if (typeof exclude != 'undefined') {
         url += '&exclude_id=' + exclude.oid;
       }
+      updateDownloadLink(url, zoom);
       getCollections(url, 3, zoom);
     }
   } else {
@@ -320,6 +323,22 @@ function refresh(year) {
   }
   
 } // End function update
+
+function updateDownloadLink(url, zoom) {
+  d3.select("#download")
+    .on("click", function() {
+      if (zoom > 6) {
+        // hacky mchackerson
+        var link = url.replace("summary.json", "list.txt");
+        link = link.replace("list.json", "list.txt");
+        link = link.replace("&level=1", "");
+        link = link.replace("&level=2", "");
+        window.open(link);
+      } else {
+        alert("Please zoom in to the individual collection level and try downloading again");
+      }
+    });
+}
 
 function selectBaseMap(zoom) {
   if (zoom < 5) {
@@ -1505,9 +1524,10 @@ function filterByPerson(name) {
 
   var toolToggler = L.control({position:'topleft'});
   toolToggler.onAdd = function(map) {
-  var div = L.DomUtil.create('div', 'customControl toolToggler');
-  div.innerHTML += '<form action=""><input id="viewByTimeBox" type="checkbox" value="1"/>Filter by time<br><input id="reconstructBox" type="checkbox" value="1"/>Rotate view by interval</form>';
-  return div;
+    var div = L.DomUtil.create('div', 'customControl toolToggler');
+    console.log("tired");
+    div.innerHTML += '<form action=""><input id="viewByTimeBox" type="checkbox" value="1"/>Filter by time<br><input id="reconstructBox" type="checkbox" value="1"/>Rotate view by interval</form><div id="download" class="btn btn-success btn-xs">Download view</div>';
+    return div;
   }
   toolToggler.addTo(map);
 

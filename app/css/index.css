@@ -35,6 +35,9 @@ a:hover {
   left: 40%;
   color: white;
 }
+#download {
+  margin-top:8px;
+}
 .bins {
   fill: #EFEE69;
   stroke: none;
