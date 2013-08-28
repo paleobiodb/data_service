@@ -178,6 +178,8 @@ our $TAXON_SUMMARY = "taxon_summary";
 our $REF_SUMMARY = "ref_summary";
 our $INTERVAL_MAP = "interval_map";
 our $CONTAINER_MAP = "interval_container_map";
+our $CLASSIC_TREE_CACHE = "taxa_tree_cache";
+our $CLASSIC_LIST_CACHE = "taxa_list_cache";
 
 # Working table names - when the taxonomy tables are rebuilt, they are rebuilt
 # using the following table names.  The last step of the rebuild is to replace
@@ -202,6 +204,8 @@ our $TAXON_SUMMARY_WORK = "tsn";
 our $REF_SUMMARY_WORK = "rsn";
 our $INTERVAL_MAP_WORK = "imn";
 our $CONTAINER_MAP_WORK = "icn";
+our $TREE_CACHE_WORK = "ttcn";
+our $LIST_CACHE_WORK = "tlcn";
 
 # Auxiliary table names - these tables are creating during the process of
 # computing the main tables, and then discarded.
@@ -4327,7 +4331,7 @@ sub computeCollectionTables {
     $dbh->do("CREATE TABLE $COLL_INTS_WORK (
 		collection_no int unsigned not null,
 		interval_no int unsigned not null,
-		unique key (collection_no, interval_no))");
+		unique key (collection_no, interval_no)) ENGINE=MYISAM");
     
     $sql = "INSERT IGNORE INTO $COLL_INTS_WORK
 		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
@@ -4463,7 +4467,7 @@ sub computeCollectionTables {
     
     $dbh->do("CREATE TABLE $CLUST_AUX (
 		bin_id int unsigned primary key,
-		clust_id int unsigned not null)");
+		clust_id int unsigned not null) ENGINE=MYISAM");
     
     # We must now seed the k-means algorithm by choosing an initial set of
     # collections.  This set will determine the number of clusters in the
@@ -5483,6 +5487,142 @@ sub activateTreeTables {
     my $a = 1;		# we can stop here when debugging
 }
 
+
+# computeTaxaCacheTables ( dbh, tree_table )
+# 
+# Rebuild the tables 'taxa_tree_cache' and 'taxa_list_cache' using the
+# specified tree table.  This allows the old pbdb code to function properly
+# using the recomputed taxonomy tree.
+
+sub computeTaxaCacheTables {
+
+    my ($dbh, $tree_table) = @_;
+    
+    my ($auth_table) = $AUTH_TABLE{$tree_table};
+    
+    my $result;
+    
+    # Create a new working table for taxa_tree_cache
+    
+    logMessage(2, "computing tree cache and list cache tables");
+    
+    logMessage(2, "    creating tree cache");
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $TREE_CACHE_WORK");
+    
+    $result = $dbh->do("
+	CREATE TABLE $TREE_CACHE_WORK
+	       (taxon_no int unsigned primary key,
+		lft int unsigned not null,
+		rgt int unsigned not null,
+		spelling_no int unsigned not null,
+		synonym_no int unsigned not null,
+		opinion_no int unsigned not null,
+		max_interval_no int unsigned not null,
+		min_interval_no int unsigned not null,
+		mass float) ENGINE=MYISAM");
+    
+    # Populate it using the authorities table and taxon_trees table
+    
+    logMessage(2, "    populating tree cache");
+    
+    $result = $dbh->do("
+	INSERT INTO $TREE_CACHE_WORK (taxon_no, lft, rgt, spelling_no, synonym_no, opinion_no)
+	SELECT a.taxon_no, t.lft, t.rgt, t.spelling_no, t.synonym_no, t.opinion_no
+	FROM $auth_table as a JOIN $tree_table as t using (orig_no)");
+    
+    # Add the necessar indices
+    
+    logMessage(2, "    indexing tree cache");
+    
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (lft)");
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (rgt)");
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (spelling_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (synonym_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (opinion_no)");
+    
+    # Create a new working table for taxa_list_cache
+    
+    logMessage(2, "    creating list cache");
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $LIST_CACHE_WORK");
+    
+    $result = $dbh->do("
+	CREATE TABLE $LIST_CACHE_WORK
+	       (parent_no int unsigned not null,
+		child_no int unsigned not null,
+		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
+    
+    # Populate it using the taxon_trees table, 
+    
+    logMessage(2, "    populating list cache");
+    
+    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $tree_table");
+    
+    foreach my $depth (reverse 2..$max_depth)
+    {
+	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
+	
+	$result = $dbh->do("
+		INSERT INTO $LIST_CACHE_WORK (parent_no, child_no)
+		SELECT t.parent_no, l.child_no
+		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
+		WHERE t.depth = $depth");
+	
+	$result = $dbh->do("
+		INSERT INTO $LIST_CACHE_WORK (parent_no, child_no)
+		SELECT t.parent_no, t.orig_no
+		FROM $tree_table as t
+		WHERE t.depth = $depth");
+    }
+    
+    # Update it to show spelling_no values instead of the corresponding
+    # orig_no values.
+    
+    logMessage(2, "    setting spelling_no values");
+    
+    $result = $dbh->do("
+		UPDATE $LIST_CACHE_WORK as l
+			JOIN $tree_table as pt on pt.orig_no = l.parent_no
+			JOIN $tree_table as ct on ct.orig_no = l.child_no
+		SET l.parent_no = pt.spelling_no,
+		    l.child_no = ct.spelling_no");
+    
+    # Add the necessary indices
+    
+    logMessage(2, "    indexing list cache");
+    
+    $result = $dbh->do("ALTER TABLE $LIST_CACHE_WORK add index (parent_no)");
+    
+    # Now swap in the new tables.
+    
+    logMessage(2, "   activating tables '$CLASSIC_TREE_CACHE', '$CLASSIC_LIST_CACHE'");
+    
+    # Compute the backup names of all the tables to be activated
+    
+    my $tree_bak = "${CLASSIC_TREE_CACHE}_bak";
+    my $list_bak = "${CLASSIC_LIST_CACHE}_bak";
+    
+    # Drop those tables if any are still around
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $list_bak");
+    
+    # Recreate any of the existing tables that may not exist for some reason
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_TREE_CACHE like $TREE_CACHE_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_LIST_CACHE like $LIST_CACHE_WORK");
+    
+    # Now swap in the new tables
+    
+    $result = $dbh->do("RENAME TABLE
+		$CLASSIC_TREE_CACHE to $tree_bak,
+		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE,
+		$CLASSIC_LIST_CACHE to $list_bak,
+		$LIST_CACHE_WORK to $CLASSIC_LIST_CACHE");
+    
+    my $a = 1;	# We can stop here when debugging
+}
 
 # check ( dbh )
 # 

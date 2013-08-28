@@ -27,6 +27,7 @@ TaxonTrees::computeCollectionCounts($dbh) if $options{v};
 TaxonTrees::createRankMap($dbh) if $options{r};
 TaxonTrees::buildTables($dbh, 'taxon_trees', { msg_level => 2 }, $options{T}) 
     if $options{t} or $options{T};
+TaxonTrees::computeTaxaCacheTables($dbh, 'taxon_trees') if $options{k};
 
 print "done rebuilding caches\n";
 
