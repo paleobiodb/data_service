@@ -3825,6 +3825,17 @@ sub computeAttrsTable {
     my $auth_table = $AUTH_TABLE{$tree_table};
     my $opinion_cache = $OPINION_CACHE{$tree_table};
     
+    # Create the taxon summary table if it doesn't already exist.
+    
+    $result = $dbh->do("CREATE TABLE UNLESS EXISTS $TAXON_SUMMARY (
+				orig_no int unsigned primary key,
+				n_occs int unsigned not null,
+				n_colls int unsigned not null,
+				first_early_int_seq int unsigned not null,
+				first_late_int_seq int unsigned not null,
+				last_early_int_seq int unsigned not null,
+				last_late_int_seq int unsigned not null) ENGINE=MyISAM");
+    
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.
     
