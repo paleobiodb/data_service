@@ -23,6 +23,13 @@ our (%TAXONOMIC_RANK) = ( 'max' => 26, 26 => 26, 'informal' => 26, 'unranked_cla
 			 'family' => 9, 9 => 9, 'subfamily' => 8, 8 => 8, 'tribe' => 7, 7 => 7, 'subtribe' => 6, 6 => 6,
 			 'genus' => 5, 5 => 5, 'subgenus' => 4, 4 => 4, 'species' => 3, 3 => 3, 'subspecies' => 2, 2 => 2, 'min' => 2 );
 
+our (%RANK_STRING) = ( 26 => 'informal', 25 => 'unranked clade', 23 => 'kingdom', 22 => 'subkingdom', 
+		       21 => 'superphylum', 20 => 'phylum', 19 => 'subphylum', 
+		       18 => 'superclass', 17 => 'class', 16 => 'subclass', 15 => 'infraclass',
+		       14 => 'superorder', 13 => 'order', 12 => 'suborder', 11 => 'infraorder',
+		       10 => 'superfamily', 9 => 'family', 8 => 'subfamily', 7 => 'tribe', 6 => 'subtribe',
+		       5 => 'genus', 4 => 'subgenus', 3 => 'species', 2 => 'subspecies' );
+
 our (%NOM_CODE) = ( 'iczn' => 1, 'phylocode' => 2, 'icn' => 3, 'icnb' => 4 );
 
 our (%TREE_TABLE_ID) = ( 'taxon_trees' => 1 );
@@ -344,7 +351,7 @@ sub new {
 
 # The "basic" fields are always returned.
 
-our ($AUTH_BASIC_FIELDS) = "a.taxon_name as exact_name, a.taxon_no, a.taxon_rank, a.common_name, a.extant, a.orig_no, o.status, o.parent_no as classification_no, a.reference_no, t.name as taxon_name, t.rank";
+our ($AUTH_BASIC_FIELDS) = "a.taxon_name as exact_name, a.taxon_no, a.taxon_rank, a.common_name, v.is_extant, a.orig_no, o.status, o.parent_no as classification_no, a.reference_no, t.name as taxon_name, t.rank";
 
 our ($OPINION_BASIC_FIELDS) = "o.opinion_no, o.reference_no, o.status, o.phylogenetic_status, o.spelling_reason, o.child_no, o.child_spelling_no, o.parent_no, o.parent_spelling_no";
 
@@ -1253,7 +1260,7 @@ sub getTaxaByName {
     # based on the specified options.
     
     my $query_fields = $AUTH_BASIC_FIELDS;
-    my $extra_tables = {};
+    my $extra_tables = {v => 1};
     
     if ( defined $options->{fields} and $return ne 'id' )
     {
@@ -1858,7 +1865,7 @@ sub getTaxaByReference {
     }
     
     my $query_fields = $AUTH_BASIC_FIELDS;
-    my $extra_tables = {};
+    my $extra_tables = {v => 1};
     
     if ( $status ne 'all' )
     {
@@ -2220,7 +2227,7 @@ sub getTaxaByOpinions {
     my (@filter_list);
     
     my $query_fields = $AUTH_BASIC_FIELDS;
-    my $extra_tables = {};
+    my $extra_tables = {v => 1};
     
     if ( $base_no > 0 )
     {
@@ -2553,7 +2560,7 @@ sub getRelatedTaxon {
     $select = 'spelling' if $select eq 'current';
     
     my $query_fields = $AUTH_BASIC_FIELDS;
-    my $extra_tables = {};
+    my $extra_tables = {v => 1};
     
     if ( defined $options->{fields} and $return ne 'id' )
     {
@@ -3154,7 +3161,7 @@ sub getTaxa {
     # Set option defaults.
     
     my $query_fields = $AUTH_BASIC_FIELDS;
-    my $extra_tables = {};
+    my $extra_tables = {v => 1};
     
     $options ||= {};
     
@@ -3197,6 +3204,7 @@ sub getTaxa {
 	 and $return ne 'id_table' and $return ne 'count' )
     {
 	($query_fields, $extra_tables) = $self->generateQueryFields($options->{fields});
+	$extra_tables->{v} = 1;
     }
     
     if ( $rel eq 'all_parents' or $rel eq 'common_ancestor' )

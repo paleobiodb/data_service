@@ -3827,7 +3827,7 @@ sub computeAttrsTable {
     
     # Create the taxon summary table if it doesn't already exist.
     
-    $result = $dbh->do("CREATE TABLE UNLESS EXISTS $TAXON_SUMMARY (
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_SUMMARY (
 				orig_no int unsigned primary key,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,

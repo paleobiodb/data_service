@@ -216,10 +216,34 @@ sub setOutputList {
 	    $tables{$tables_conf} = 1;
 	}
 	
-	push @proc_list, @$proc_conf if ref $proc_conf eq 'ARRAY';
+	foreach my $f ( ref $proc_conf eq 'ARRAY' ? @$proc_conf : () )
+	{
+	    die "Error: bad proc specification in '$section', must be a hash" unless reftype $f && reftype $f eq 'HASH';
+	    next if $self->{output_format} eq 'json' and $f->{no_json};
+	    next if $self->{output_format} eq 'xml' and $f->{no_xml};
+	    next if $self->{output_format} eq 'txt' and $f->{no_txt};
+	    next if $self->{output_format} eq 'csv' and $f->{no_txt};
+	    
+	    my $out_f = { %$f };
+	    	    
+	    if ( defined $out_f->{"${vocab}_code"} )
+	    {
+		$out_f->{code} = $out_f->{"${vocab}_code"};
+		delete $out_f->{"${vocab}_code"};
+	    }
+
+	    if ( defined $out_f->{"${vocab}_rec"} )
+	    {
+		$out_f->{code} = $out_f->{"${vocab}_rec"};
+		delete $out_f->{"${vocab}_rec"};
+	    }
+	    
+	    push @proc_list, $out_f;	    
+	}
 	
 	foreach my $f ( ref $output_conf eq 'ARRAY' ? @$output_conf : () )
 	{
+	    die "Error: bad output specification in '$section', must be a hash" unless reftype $f && reftype $f eq 'HASH';
 	    next if $f->{show} and not $self->{show}{$f->{show}};
 	    next if $vocab eq 'dwc' and not exists $f->{dwc};
 	    next if $vocab eq 'com' and not exists $f->{com};
@@ -228,7 +252,27 @@ sub setOutputList {
 	    next if $self->{output_format} eq 'txt' and $f->{no_txt};
 	    next if $self->{output_format} eq 'csv' and $f->{no_txt};
 	    
-	    push @output_list, $f;
+	    my $out_f = { %$f };
+	    
+	    if ( defined $out_f->{"${vocab}_value"} )
+	    {
+		$out_f->{value} = $out_f->{"${vocab}_value"};
+		delete $out_f->{"${vocab}_value"};
+	    }
+	    
+	    if ( defined $out_f->{"${vocab}_code"} )
+	    {
+		$out_f->{code} = $out_f->{"${vocab}_code"};
+		delete $out_f->{"${vocab}_code"};
+	    }
+
+	    if ( defined $out_f->{"${vocab}_rec"} )
+	    {
+		$out_f->{code} = $out_f->{"${vocab}_rec"};
+		delete $out_f->{"${vocab}_rec"};
+	    }
+	    
+	    push @output_list, $out_f;
 	}
     }
     
@@ -551,7 +595,7 @@ sub processRecord {
 	
 	# First figure out the result of the processing step
 	
-	if ( ref $p->{code} eq 'CODE' )
+	if ( reftype $p->{code} and reftype $p->{code} eq 'CODE' )
 	{
 	    if ( $p->{use_main} )
 	    {
@@ -569,19 +613,19 @@ sub processRecord {
 	    }
 	}
 	
-	elsif ( $p->{split} )
+	elsif ( defined $p->{split} and $p->{split} ne '' )
 	{
 	    @result = split $p->{split}, $record->{$field};
 	}
 	
-	elsif ( $p->{subfield} )
+	elsif ( $p->{subfield} and reftype $record->{$field} )
 	{
-	    if ( ref $record->{$field} eq 'ARRAY' )
+	    if ( reftype $record->{$field} eq 'ARRAY' )
 	    {
 		@result = map { $_->{$p->{subfield}} if ref $_ eq 'HASH'; } @{$record->{$field}};
 	    }
 	    
-	    elsif  ( ref $record->{$field} eq 'HASH' )
+	    elsif  ( reftype $record->{$field} eq 'HASH' )
 	    {
 		@result = $record->{$field}{$p->{subfield}};
 	    }
@@ -853,8 +897,7 @@ sub constructObjectJSON {
 	# If a specific value was defined, use that instead of the field value.
 	
 	$value = $f->{value} if defined $f->{value};
-	$value = $f->{"${vocab}_value"} if defined $f->{"${vocab}_value"};
-    
+	
 	# Process the value according to the rule
 	
 	if ( $f->{use_each} and reftype $value && reftype $value eq 'ARRAY' )
@@ -1023,9 +1066,8 @@ sub emitRecordText {
 	# If a specific value was defined, use that instead of the field value.
 	
 	$value = $f->{value} if defined $f->{value};
-	$value = $f->{"${vocab}_value"} if defined $f->{"${vocab}_value"};
-    
-	if ( ref $f->{code} eq 'CODE' )
+	
+	if ( reftype $f->{code} and reftype $f->{code} eq 'CODE' )
 	{
 	    if ( $f->{use_main} ) {
 		$value = $f->{code}($self, $record, $f);
