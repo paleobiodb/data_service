@@ -37,7 +37,7 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "The identifier of the parent taxonomic concept, if any" },
     { rec => 'synonym_no', dwc => 'acceptedNameUsageID', pbdb => 'senior_no', com => 'snr', dedup => 'orig_no',
         doc => "The identifier of the senior synonym of this taxonomic concept, if any" },
-    { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', show => 'ref', json_list => 1,
+    { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', show => 'ref', json_list => 1, txt_list => "|||",
 	doc => "The reference from which this name was entered into the database (as formatted text)" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
 	doc => "The identifier of the primary reference associated with the taxon" },
