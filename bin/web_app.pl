@@ -53,7 +53,7 @@ ruleset '1.1:common_params' =>
     [optional => 'offset', POS_ZERO_VALUE],
     [optional => 'count', FLAG_VALUE],
     [optional => 'vocab', ENUM_VALUE('dwc', 'com', 'pbdb')],
-    # The following are only relevant for .csv and .txt output
+    # The following are only relevant for .csv and .tsv/.txt output
     [optional => 'quoted', FLAG_VALUE],
     [optional => 'no_header', FLAG_VALUE],
     [optional => 'linebreak', ENUM_VALUE('cr','crlf'), { default => 'crlf' }];

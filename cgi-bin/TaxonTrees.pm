@@ -4255,16 +4255,16 @@ sub computeCollectionTables {
 		bin_lat smallint unsigned not null,
 		bin_id int unsigned,
 		clust_id int unsigned,
-		lng float,
-		lat float,
+		lng decimal(9,6),
+		lat decimal(9,6),
 		loc point not null,
 		cc char(2),
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
 		early_seq smallint unsigned not null,
 		late_seq smallint unsigned not null,
-		early_age float,
-		late_age float,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
 		n_occs int unsigned not null,
 		reference_no int unsigned not null,
 		authorizer_no int unsigned not null,
@@ -4420,12 +4420,12 @@ sub computeCollectionTables {
 		n_occs int unsigned,
 		early_seq int unsigned not null,
 		late_seq int unsigned not null,
-		lng float,
-		lat float,
-		lng_min float,
-		lng_max float,
-		lat_min float,
-		lat_max float,
+		lng decimal(9,6),
+		lat decimal(9,6),
+		lng_min decimal(9,6),
+		lng_max decimal(9,6),
+		lat_min decimal(9,6),
+		lat_max decimal(9,6),
 		std_dev float,
 		access_level tinyint unsigned not null,
 		unique key (bin_lng, bin_lat)) Engine=MyISAM");
@@ -4439,8 +4439,8 @@ sub computeCollectionTables {
 			 access_level)
 		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs),
 		       min(early_seq), min(late_seq), avg(lng), avg(lat),
-		       round(min(lng),2) as lng_min, round(max(lng),2) as lng_max,
-		       round(min(lat),2) as lat_min, round(max(lat),2) as lat_max,
+		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
+		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
 		       min(access_level)
 		FROM $COLL_MATRIX_WORK
@@ -4462,12 +4462,12 @@ sub computeCollectionTables {
 		n_occs int unsigned,
 		early_seq int unsigned not null,
 		late_seq int unsigned not null,
-		lng float,
-		lat float,
-		lng_min float,
-		lng_max float,
-		lat_min float,
-		lat_max float,
+		lng decimal(9,6),
+		lat decimal(9,6),
+		lng_min decimal(9,6),
+		lng_max decimal(9,6),
+		lat_min decimal(9,6),
+		lat_max decimal(9,6),
 		std_dev float,
 		access_level tinyint unsigned,
 		unique key (clust_lng, clust_lat)) Engine=MyISAM");
@@ -4872,6 +4872,22 @@ sub computeOccurrenceTables {
 }
 
 
+# computeTaxonProminenceTables ( dbh )
+# 
+# Use the occurrence matrix, the collection matrix, and the taxon trees to
+# compute summary tables for the prevalence and diversity of phyla and classes
+# throughout space and time.
+
+sub computeTaxonProminenceTables {
+
+    my ($dbh) = @_;
+    
+    
+
+
+
+}
+
 
 # createCountryMap ( dbh, force )
 # 
@@ -5136,8 +5152,8 @@ sub computeIntervalTables {
 		late_st_no int unsigned not null,
 		older_seq int unsigned not null,
 		younger_seq int unsigned not null,
-		base_age float not null,
-		top_age float not null,
+		base_age decimal(9,5) not null,
+		top_age decimal(9,5) not null,
 		color varchar(10),
 		reference_no int unsigned not null,
 		INDEX (interval_name),
@@ -5218,8 +5234,8 @@ sub computeIntervalTables {
 			level tinyint unsigned not null,
 			early_no int unsigned not null,
 			late_no int unsigned not null,
-			early_age float,
-			late_age float) Engine=MyISAM");
+			early_age decimal(9,5),
+			late_age decimal(9,5)) Engine=MyISAM");
     
     $result = $dbh->do("DROP TABLE IF EXISTS intervals_aux_2");
     
@@ -5233,8 +5249,8 @@ sub computeIntervalTables {
     {
 	$sql = "INSERT INTO intervals_aux (interval_no, level, early_no, late_no, early_age, late_age)
 		SELECT i.interval_no, $level, ei.interval_no as early_no, li.interval_no as late_no, ei.base_age, li.top_age
-		FROM $INTERVAL_MAP_WORK as i JOIN $INTERVAL_MAP_WORK as li on li.top_age <= i.top_age + 0.1 and li.base_age >= i.top_age + 0.1
-			JOIN $INTERVAL_MAP_WORK as ei on ei.base_age >= i.base_age - 0.1 and ei.top_age <= i.base_age - 0.1
+		FROM $INTERVAL_MAP_WORK as i JOIN $INTERVAL_MAP_WORK as li on li.top_age <= i.top_age and li.base_age >= i.top_age 
+			JOIN $INTERVAL_MAP_WORK as ei on ei.base_age >= i.base_age and ei.top_age <= i.base_age
 		WHERE i.level is null and li.level = $level and ei.level = $level";
 
 	$result = $dbh->do($sql);
