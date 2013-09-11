@@ -26,24 +26,29 @@ use PBDBUtil;
 use Permissions;
 use Reclassify;
 use Reference;
+use ReferenceEntry;  # slated for removal
 
 use Collection;
+use CollectionEntry;  # slated for removal
 use Images;
 use TaxonInfo;
 use TimeLookup;
 use Ecology;
 use Measurement;
-use Taxonomy;
+use MeasurementEntry;  # slated for removal
+use TaxaCache;
 use TypoChecker;
+use FossilRecord;
 use Cladogram;
 use Review;
-use NexusfileWeb;
+use NexusfileWeb;  # slated for removal
 
 # god awful Poling modules
-use Opinion;
+use Taxon;  # slated for removal
+use Opinion;  # slated for removal
 use Validation;
 use Debug qw(dbg);
-use Constants qw($WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO $CGI_DEBUG);
+use Constants qw($WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAXA_TREE_CACHE $DB $PAGE_TOP $PAGE_BOTTOM $COLLECTIONS $COLLECTION_NO $OCCURRENCES $OCCURRENCE_NO $CGI_DEBUG $ALLOW_LOGIN);
 
 #*************************************
 # some global variables 
@@ -58,72 +63,13 @@ use Constants qw($WRITE_URL $HOST_URL $HTML_DIR $DATA_DIR $IS_FOSSIL_RECORD $TAX
 #
 
 # Create the CGI, Session, and some other objects.
-
 my $q = new CGI;
-my $session_id = $q->cookie('session_id');
 
 # Make a Transaction Manager object
 my $dbt = new DBTransactionManager();
 
-# Check to see if we should save this request for later debugging.
-
-my $script_path = $ENV{PWD} . '/' . $0;
-my $savedir_path = $script_path;
-$savedir_path =~ s{/cgi-bin/.*}{/saves/};
-
-my $test_path = $script_path;
-$test_path =~ s{/cgi-bin/.*}{/dbgON};
-
-# If we were asked to open a saved argument file, do so.
-
-if ( $ARGV[0] > 0 or $ARGV[0] eq '+' )
-{
-    my ($save_fh, $save_path);
-    
-    if ( $ARGV[0] > 0 )
-    {
-	$save_path = "$savedir_path/q$ARGV[0].txt";
-    }
-    
-    else
-    {
-	my ($max_id);
-	opendir(my $savedir, $savedir_path) || die "can't opendir $savedir_path: $!";
-	map { $max_id = $_ unless $max_id > $_ } map { /([0-9]+)/ } readdir($savedir);
-	
-	$save_path = ">$savedir_path/q" . ($max_id+1) . '.txt';
-    }
-    
-    open ($save_fh, $save_path) || die "can't open $save_path: $!";
-    $q = CGI->new($save_fh);
-    my $cookie_line = <$save_fh>;
-    chomp $cookie_line;
-    if ( $cookie_line =~ /cookie: (.*)/ )
-    {
-	$session_id = $1;
-    }
-}
-
-# Otherwise, if the flag file exists then save the web arguments.
-
-elsif ( -e $test_path )
-{
-    my ($max_id, $save_fh);
-    opendir(my $savedir, $savedir_path) || die "can't opendir $savedir_path: $!";
-    map { $max_id = $_ unless $max_id > $_ } map { /([0-9]+)/ } readdir($savedir);
-    
-    my $save_path = ">$savedir_path/q" . ($max_id+1) . '.txt';
-    open($save_fh, $save_path) || die "can't open $save_path: $!";
-    
-    $q->save($save_fh);
-    print $save_fh "cookie: " . $q->cookie('session_id') . "\n";
-    close $save_fh || die "can't close $save_path: $!";
-}
-
 # Make the session object
-my $s = new Session($dbt,$session_id);
-
-# Now check what action was requested
+my $s = new Session($dbt,$q->cookie('session_id'));
 
 # Check for CGI debugging
 
@@ -143,7 +89,7 @@ if ( $q->param('a') )	{
 	$q->param('action' => $q->param('a') );
 }
 
-if ( $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && $q->param('action') eq "login" )	{
+if ( $HOST_URL !~ /flatpebble|paleodb\.science\.mq\.edu\.au/ && !$ALLOW_LOGIN && $q->param('action') eq "login" )	{
 	print $q->redirect( -url=>"http://paleodb.org/?a=menu&user=Contributor" );
 }
 
@@ -156,10 +102,6 @@ if ( $p >= 10 )	{
 		exit;
 	}
 }
-
-# Select the taxonomic hierarchy we will be using.
-
-my $taxonomy = Taxonomy->new($dbt->dbh, 'taxon_trees');
 
 # Make the HTMLBuilder object - it'll use whatever template dir is appropriate
 my $use_guest = (!$s->isDBMember()) ? 1 : 0;
@@ -494,8 +436,9 @@ sub home	{
 	my $sp = @{$dbt->getData($sql)}[0];
 	$row->{latest_species} = "<i><a href=\"?a=basicTaxonInfo&amp;taxon_no=$sp->{taxon_no}\">$sp->{taxon_name}</a></i>";
 	$row->{latest_species} .= " <a href=\"?a=displayReference&reference_no=$sp->{reference_no}\">".Reference::formatShortRef($sp)."</a>";
-	my @parent_list = $taxonomy->getTaxa('all_parents', $sp);
-	my $sp = Collection::getClassOrderFamily($dbt,\$sp,\@parent_list);
+	my $class_hash = TaxaCache::getParents($dbt,[$sp->{taxon_no}],'array_full');
+	my @class_array = @{$class_hash->{$sp->{taxon_no}}};
+	my $sp = Collection::getClassOrderFamily($dbt,\$sp,\@class_array);
 	$row->{last_species_entry} = lastEntry($sp);
 	$row->{latest_species} .= ( $sp->{common_name} ) ? " [".$sp->{common_name}."]" : "";
 	$sql = "SELECT CONCAT(first_name,' ',last_name) AS name FROM person WHERE person_no=".$sp->{enterer_no};
@@ -503,7 +446,7 @@ sub home	{
 	$row->{type_specimen} = ( $sp->{type_specimen} )  ? "&bull; Type specimen ".$sp->{type_specimen}."<br>" : "";
 	if ( $sp->{type_locality} > 0 )	{
 		$sql = "SELECT collection_name FROM collections WHERE collection_no=".$sp->{type_locality};
-		$row->{type_locality} = "&bull; Type locality <a href=\"?a=basicCollectionSearch&amp;collection_no=".$sp->{type_locality}."\">".${$dbt->getData($sql)}[0]->{collection_name}."</a><br>";
+		$row->{type_locality} = "Type locality <a href=\"?a=basicCollectionSearch&amp;collection_no=".$sp->{type_locality}."\">".${$dbt->getData($sql)}[0]->{collection_name}."</a><br>";
 	}
 
 	# RANDOM GENUS LINKS
@@ -608,7 +551,7 @@ my $row; # place holder
 
 
 # Shows the form for requesting a map
-sub displayBasicMapForm {
+sub basicMapForm {
 	my %vars = ( 'mapsize'=>'100%', 'pointsize1'=>'medium', 'pointshape1'=>'circles', 'dotcolor1'=>'gold', 'dotborder1'=>'no' );
 	print $hbo->stdIncludes($PAGE_TOP);
 	print $hbo->populateHTML('basic_map_form', \%vars);
@@ -616,10 +559,10 @@ sub displayBasicMapForm {
 }
 
 # Shows the form for requesting a map
-sub displayMapForm {
+sub mapForm {
 
 	# List fields that should be preset
-	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'standard (0,0)', 'mapscale'=>'X 1', 'mapwidth'=>'100%', 'mapresolution'=>'fine', 'mapbgcolor'=>'sky blue', 'crustcolor'=>'olive drab', 'crustedgecolor'=>'white', 'gridsize'=>'30', 'gridcolor'=>'light gray', 'gridposition'=>'in back', 'linethickness'=>'medium', 'latlngnocolor'=>'none', 'coastlinecolor'=>'dark green', 'borderlinecolor'=>'green', 'usalinecolor'=>'green', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'gold', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'large', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'no', 'mapsearchfields3'=>'', 'pointsize3'=>'large', 'pointshape3'=>'triangles', 'dotcolor3'=>'red', 'dotborder3'=>'no', 'mapsearchfields4'=>'', 'pointsize4'=>'large', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'no' );
+	my %vars = ( 'mapsize'=>'100%', 'projection'=>'equirectangular', 'maptime'=>'', 'mapfocus'=>'standard (0,0)', 'mapscale'=>'X 1', 'mapwidth'=>'100%', 'mapresolution'=>'fine', 'mapbgcolor'=>'Google blue', 'crustcolor'=>'Google green', 'crustedgecolor'=>'white', 'gridsize'=>'30', 'gridcolor'=>'light gray', 'gridposition'=>'in back', 'linethickness'=>'thin', 'latlngnocolor'=>'none', 'coastlinecolor'=>'gray', 'borderlinecolor'=>'gray', 'usalinecolor'=>'gray', 'pointsize1'=>'large', 'pointshape1'=>'circles', 'dotcolor1'=>'gold', 'dotborder1'=>'no', 'mapsearchfields2'=>'', 'pointsize2'=>'large', 'pointshape2'=>'squares', 'dotcolor2'=>'blue', 'dotborder2'=>'no', 'mapsearchfields3'=>'', 'pointsize3'=>'large', 'pointshape3'=>'triangles', 'dotcolor3'=>'red', 'dotborder3'=>'no', 'mapsearchfields4'=>'', 'pointsize4'=>'large', 'pointshape4'=>'diamonds', 'dotcolor4'=>'green', 'dotborder4'=>'no' );
 
 	# Prefs have higher precedence;
 	my %pref = $s->getPreferences();
@@ -651,7 +594,7 @@ sub displayMapForm {
 sub displayMapOnly	{
 	require Map;
 
-	my $m = Map->new($dbt, $taxonomy, $q, $s);
+	my $m = Map->new($q,$dbt,$s);
 	my ($file,$errors,$warnings) = $m->buildMap();
 }
 
@@ -694,30 +637,30 @@ sub displayMapResults {
         my %settings;
         if ($q->param('mapcolors') eq 'green on white') {
             %settings = (
-                mapbgcolor=>'white',crustcolor=>'olive drab', crustedgecolor=>'none',
-                usalinecolor=>'green', borderlinecolor=>'green', autoborders=>'yes',
-                gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
-                coastlinecolor=>'dark green'
+                mapbgcolor=>'white',crustcolor=>'Google green', crustedgecolor=>'none',
+                usalinecolor=>'gray', borderlinecolor=>'gray', autoborders=>'yes',
+                gridsize=>'30', gridcolor=>'light gray', gridposition=>'in back',
+                coastlinecolor=>'gray'
             );
         } elsif ($q->param('mapcolors') eq 'gray on white') {
             %settings = (
                 mapbgcolor=>'white',crustcolor=>'light gray', crustedgecolor=>'none',
                 usalinecolor=>'light gray', borderlinecolor=>'light gray', autoborders=>'yes',
-                gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
+                gridsize=>'30', gridcolor=>'light gray', gridposition=>'in back',
                 coastlinecolor=>'black'
             );
         } elsif ($q->param('mapcolors') eq 'green on blue') {
             %settings = (
-                mapbgcolor=>'sky blue',crustcolor=>'olive drab', crustedgecolor=>'white',
-                usalinecolor=>'green', borderlinecolor=>'green', autoborders=>'yes',
-                gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
-                coastlinecolor=>'dark green'
+                mapbgcolor=>'Google blue',crustcolor=>'Google green', crustedgecolor=>'white',
+                usalinecolor=>'gray', borderlinecolor=>'gray', autoborders=>'yes',
+                gridsize=>'30', gridcolor=>'light gray', gridposition=>'in back',
+                coastlinecolor=>'gray'
             );
         } else { # outlines only default
             %settings = (
                 mapbgcolor=>'white',crustcolor=>'none', crustedgecolor=>'none',
                 usalinecolor=>'light gray', borderlinecolor=>'light gray', autoborders=>'yes',
-                gridsize=>'30',gridcolor=>'light gray',gridposition=>'in back',
+                gridsize=>'30', gridcolor=>'light gray', gridposition=>'in back',
                 coastlinecolor=>'black'
             );
         }
@@ -726,7 +669,9 @@ sub displayMapResults {
         }
     }
 
-	my $m = Map->new($dbt, $taxonomy, $q, $s);
+        $q->param('action' => '');
+
+	my $m = Map->new($q,$dbt,$s);
 	my ($file,$errors,$warnings) = $m->buildMap();
     if (ref $errors && @$errors) {
         print '<div align="center">'.Debug::printErrors($errors).'</div>';
@@ -774,7 +719,7 @@ sub displayMapOfCollection {
     $q->param('maplng'=>$lngdeg);
     $q->param('pointsize1'=>'auto');
     $q->param('autoborders'=>'yes');
-    my $m = Map->new($dbt, $taxonomy, $q, $s);
+    my $m = Map->new($q,$dbt,$s);
     my ($map_html_path,$errors,$warnings) = $m->buildMap();
 
 
@@ -857,7 +802,7 @@ sub displaySimpleMap {
     $q->param('mapscale'=>'auto');
     $q->param('autoborders'=>'yes');
     $q->param('pointsize1'=>'auto');
-    my $m = Map->new($dbt, $taxonomy, $q, $s);
+    my $m = Map->new($q,$dbt,$s);
     ($map_html_path,$errors,$warnings) = $m->buildMap();
 
     # MAP USES $q->param("taxon_name") to determine what it's doing.
@@ -937,7 +882,7 @@ sub displayDownloadResults {
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $m = Download->new($dbt,$taxonomy,$q,$s,$hbo);
+	my $m = Download->new($dbt,$q,$s,$hbo);
 	$m->buildDownload( );
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -948,7 +893,7 @@ sub emailDownloadFiles	{
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $m = Download->new($dbt,$taxonomy,$q,$s,$hbo);
+	my $m = Download->new($dbt,$q,$s,$hbo);
 	$m->emailDownloadFiles();
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -1010,7 +955,7 @@ sub getTaxonomyXML {
     return if PBDBUtil::checkForBot();
     logRequest($s,$q);
     require DownloadTaxonomy;
-    DownloadTaxonomy::getTaxonomyXML($dbt,$taxonomy,$q,$s,$hbo);
+    DownloadTaxonomy::getTaxonomyXML($dbt,$q,$s,$hbo);
 }
 
 sub displayDownloadTaxonomyResults {
@@ -1020,9 +965,9 @@ sub displayDownloadTaxonomyResults {
     logRequest($s,$q);
     print $hbo->stdIncludes( $PAGE_TOP );
     if ($q->param('output_data') =~ /ITIS/i) {
-        DownloadTaxonomy::displayITISDownload($dbt,$taxonomy,$q,$s);
+        DownloadTaxonomy::displayITISDownload($dbt,$q,$s);
     } else { 
-        DownloadTaxonomy::displayPBDBDownload($dbt,$taxonomy,$q,$s);
+        DownloadTaxonomy::displayPBDBDownload($dbt,$q,$s);
     }
                                               
     print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -1041,7 +986,7 @@ sub displayReportResults {
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $r = Report->new($dbt,$taxonomy,$q,$s);
+	my $r = Report->new($dbt,$q,$s);
 	$r->buildReport();
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -1055,7 +1000,7 @@ sub displayMostCommonTaxa	{
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $r = Report->new($dbt,$taxonomy,$q,$s);
+	my $r = Report->new($dbt,$q,$s);
 	$r->findMostCommonTaxa($dataRowsRef);
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -1076,7 +1021,7 @@ sub fastTaxonCount	{
 	print $hbo->stdIncludes( $PAGE_TOP );
 
 	require Report;
-	Report::fastTaxonCount($dbt,$taxonomy,$q,$s,$hbo);
+	Report::fastTaxonCount($dbt,$q,$s,$hbo);
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
@@ -1089,7 +1034,7 @@ sub countNames	{
 
 	print $hbo->stdIncludes( $PAGE_TOP );
 
-	my $r = Report->new($dbt,$taxonomy,$q,$s);
+	my $r = Report->new($dbt,$q,$s);
 	$r->countNames();
 
 	print $hbo->stdIncludes($PAGE_BOTTOM);
@@ -1201,7 +1146,7 @@ sub displayReferenceForm {
 	}
 
 	print $hbo->stdIncludes($PAGE_TOP);
-	Reference::displayReferenceForm($dbt,$q,$s,$hbo);
+	ReferenceEntry::displayReferenceForm($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -1213,7 +1158,7 @@ sub displayReference {
 
 sub processReferenceForm {
 	print $hbo->stdIncludes($PAGE_TOP);
-	Reference::processReferenceForm($dbt,$q,$s,$hbo);
+	ReferenceEntry::processReferenceForm($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -1247,7 +1192,7 @@ sub quickSearch	{
 	# if basicCollectionSearch finds any match it should exit somehow before
 	#   this point, so try a common name search as a desperation measure
 		if ( $qs !~ /[^A-Za-z' ]/ )	{
-			TaxonInfo::basicTaxonSearch($q,$s,$taxonomy,$dbt,$hbo);
+			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 			exit;
 		}
 	}
@@ -1257,7 +1202,7 @@ sub quickSearch	{
 	# case 3: string is formatted correctly and matches at least one name,
 	#  so search taxa only
 		if ( $t->{'c'} > 0 )	{
-			TaxonInfo::basicTaxonSearch($q,$s,$taxonomy,$dbt,$hbo);
+			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 			exit;
 		}
 	# case 4: search is formatted correctly but does not directly match
@@ -1266,7 +1211,7 @@ sub quickSearch	{
 		else	{
 			my $found = Collection::basicCollectionSearch($dbt,$q,$s,$hbo);
 			$found == 1 ? exit : "";
-			TaxonInfo::basicTaxonSearch($q,$s,$taxonomy,$dbt,$hbo);
+			TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 			exit;
 		}
 	}
@@ -1480,9 +1425,7 @@ sub displayCollResults {
 		}
 
 		$options{'calling_script'} = "displayCollResults";
-		my $p = Permissions->new($s,$dbt);
-		($dataRows,$ofRows,$warnings,$occRows) = 
-		    Collection::getCollections($dbt,$taxonomy,$p,\%options,$fields);
+		($dataRows,$ofRows,$warnings,$occRows) = CollectionEntry::getCollections($dbt,$s,\%options,$fields);
 	}
 
 	# DISPLAY MATCHING COLLECTIONS
@@ -1514,7 +1457,7 @@ sub displayCollResults {
 			if ($q->param('type') eq 'reid')	{
 				displayOccsForReID(\@colls);
 			} else	{
-				Reclassify::displayOccurrenceReclassify($q,$s,$taxonomy,$dbt,$hbo,\@colls);
+				Reclassify::displayOccurrenceReclassify($q,$s,$dbt,$hbo,\@colls);
 			}
 			exit;
 		}
@@ -1996,9 +1939,15 @@ sub processCollectionsSearchForAdd	{
 	$sql .= "c.max_interval_no IN (" . join(',', @intervals) . ") AND ";
 
 	# convert the submitted lat/long values
-	my ($lat,$lng,$latlng_format);
-	($lat,$latlng_format) = Collection::fromMinSec($q->param('latdeg'),$q->param('latmin'),$q->param('latsec'));
-	($lng,$latlng_format) = Collection::fromMinSec($q->param('lngdeg'),$q->param('lngmin'),$q->param('lngsec'));
+	my ($lat,$lng);
+	
+	($lat) = $q->param('latdec') ne '' ?
+	    CollectionEntry::fromDecDeg($q->param('latdeg'), $q->param('latdec')) :
+		    CollectionEntry::fromMinSec($q->param('latdeg'),$q->param('latmin'),$q->param('latsec'));
+	
+	($lng) = $q->param('lngdec') ne '' ?
+	    CollectionEntry::fromDecDeg($q->param('lngdeg'),$q->param('lngdec')) :
+		    CollectionEntry::fromMinSec($q->param('lngdeg'),$q->param('lngmin'),$q->param('lngsec'));
 	
 	# west and south are negative
 	if ( $q->param('latdir') =~ /S/ )	{
@@ -2132,7 +2081,7 @@ sub displayCollectionForm {
     }
 
     print $hbo->stdIncludes($PAGE_TOP);
-    Collection::displayCollectionForm($dbt,$q,$s,$hbo);
+    CollectionEntry::displayCollectionForm($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -2142,14 +2091,14 @@ sub processCollectionForm {
         exit;
     }
     print $hbo->stdIncludes($PAGE_TOP);
-    Collection::processCollectionForm($dbt,$q,$s,$hbo);
+    CollectionEntry::processCollectionForm($dbt,$q,$s,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 
 }
 
 sub displayCollectionDetails {
     logRequest($s,$q);
-    Collection::displayCollectionDetails($dbt,$q,$s,$hbo);
+    CollectionEntry::displayCollectionDetails($dbt,$q,$s,$hbo);
 }
 
 sub rarefyAbundances {
@@ -2258,11 +2207,11 @@ sub processTaxonSearch {
     $options{'get_reference'} = 1;
     # Also match against subgenera if the user didn't explicity state the genus
     $options{'match_subgenera'} = 1;
-    # If we have multiple versions of a name (i.e. Cetacea) but they're really the
-    # same taxa that's been ranged differently, then don't treat it as a homonym, use the original rank
-    unless ($q->param('goal') eq 'authority') {
-        $options{'remove_rank_change'} = 1;
-    }
+
+    # Schroeter originally didn't group variants with this option when users
+    #  were looking for authority entries, but that's actually needless and
+    #  confusing; should have changed it years ago... JA 7.5.13
+    $options{'remove_rank_change'} = 1;
     
     my $goal = $q->param('goal');
     my $taxon_name = $q->param('taxon_name');
@@ -2326,7 +2275,7 @@ sub processTaxonSearch {
                         }
                         my $exists_in_occ = ${$dbt->getData($sql)}[0]->{c};
                         unless ($exists_in_occ) {
-                            my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$taxonomy,$q->param('taxon_name'),"",1)};
+                            my @results = keys %{TypoChecker::taxonTypoCheck($dbt,$q->param('taxon_name'),"",1)};
                             my ($g,$sg,$sp) = Taxon::splitTaxon($q->param('taxon_name'));
                             foreach my $typo (@results) {
                                 my ($t_g,$t_sg,$t_sp) = Taxon::splitTaxon($typo);
@@ -2441,13 +2390,13 @@ sub processTaxonSearch {
         Opinion::displayOpinionChoiceForm($dbt,$s,$q);
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'image') {
         $q->param('taxon_no'=>$results[0]->{'taxon_no'});
-        Images::displayLoadImageForm($dbt,$taxonomy,$q,$s); 
+        Images::displayLoadImageForm($dbt,$q,$s); 
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'ecotaph') {
         $q->param('taxon_no'=>$results[0]->{'taxon_no'});
-        Ecology::populateEcologyForm($dbt, $taxonomy, $hbo, $q, $s, $WRITE_URL);
+        Ecology::populateEcologyForm($dbt, $hbo, $q, $s, $WRITE_URL);
     } elsif (scalar(@results) == 1 && $q->param('goal') eq 'ecovert') {
         $q->param('taxon_no'=>$results[0]->{'taxon_no'});
-        Ecology::populateEcologyForm($dbt, $taxonomy, $hbo, $q, $s, $WRITE_URL);
+        Ecology::populateEcologyForm($dbt, $hbo, $q, $s, $WRITE_URL);
 	# We have more than one matches, or we have 1 match or more and we're adding an authority.
     # Present a list so the user can either pick the taxon,
     # or create a new taxon with the same name as an exisiting taxon
@@ -2773,19 +2722,19 @@ sub searchOccurrenceMisspellingForm {
         exit;
     }
 	print $hbo->stdIncludes($PAGE_TOP);
-	TypoChecker::searchOccurrenceMisspellingForm ($dbt,$taxonomy,$q,$s,$hbo);
+	TypoChecker::searchOccurrenceMisspellingForm ($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub occurrenceMisspellingForm {
 	print $hbo->stdIncludes($PAGE_TOP);
-	TypoChecker::occurrenceMisspellingForm ($dbt,$taxonomy,$q,$s,$hbo);
+	TypoChecker::occurrenceMisspellingForm ($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub submitOccurrenceMisspelling {
 	print $hbo->stdIncludes($PAGE_TOP);
-	TypoChecker::submitOccurrenceMisspelling($dbt,$taxonomy,$q,$s,$hbo);
+	TypoChecker::submitOccurrenceMisspelling($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -2796,11 +2745,11 @@ sub submitOccurrenceMisspelling {
 ## Reclassify stuff
 
 sub startStartReclassifyOccurrences	{
-	Reclassify::startReclassifyOccurrences($q, $s, $taxonomy, $dbt, $hbo);
+	Reclassify::startReclassifyOccurrences($q, $s, $dbt, $hbo);
 }
 
 sub startDisplayOccurrenceReclassify	{
-	Reclassify::displayOccurrenceReclassify($q, $s, $taxonomy, $dbt, $hbo);
+	Reclassify::displayOccurrenceReclassify($q, $s, $dbt, $hbo);
 }
 
 sub startProcessReclassifyForm	{
@@ -2831,7 +2780,7 @@ sub checkTaxonInfo {
         if ( ! $q->param('taxa') )	{
             TaxonInfo::searchForm($hbo,$q,1);
         } else	{
-            TaxonInfo::checkTaxonInfo($dbt, $taxonomy, $q, $s, $hbo);
+            TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
         }
         print $hbo->stdIncludes($PAGE_BOTTOM);
         exit;
@@ -2844,14 +2793,20 @@ sub checkTaxonInfo {
     if ($IS_FOSSIL_RECORD) {
          FossilRecord::submitSearchTaxaForm($dbt,$q,$s,$hbo);
     } else {
-        TaxonInfo::checkTaxonInfo($dbt, $taxonomy, $q, $s, $hbo);
+        TaxonInfo::checkTaxonInfo($q, $s, $dbt, $hbo);
     }
+    print $hbo->stdIncludes($PAGE_BOTTOM);
+}
+
+sub displayTaxonInfoResults {
+    print $hbo->stdIncludes( $PAGE_TOP );
+	TaxonInfo::displayTaxonInfoResults($dbt,$s,$q,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 # JA 3.11.09
 sub basicTaxonInfo	{
-	TaxonInfo::basicTaxonSearch($q,$s,$taxonomy,$dbt,$hbo);
+	TaxonInfo::basicTaxonInfo($q,$s,$dbt,$hbo);
 }
 
 ## END Taxon Info Stuff
@@ -2865,7 +2820,7 @@ sub beginFirstAppearance	{
 
 sub displayFirstAppearance	{
 	print $hbo->stdIncludes( $PAGE_TOP );
-	TaxonInfo::displayFirstAppearance($q, $s, $dbt, $taxonomy, $hbo);
+	TaxonInfo::displayFirstAppearance($q, $s, $dbt, $hbo);
 	print $hbo->stdIncludes( $PAGE_BOTTOM );
 }
 
@@ -2972,7 +2927,7 @@ sub startImage{
 
 sub displayLoadImageForm{
     print $hbo->stdIncludes($PAGE_TOP);
-	Images::displayLoadImageForm($dbt, $taxonomy, $q, $s);
+	Images::displayLoadImageForm($dbt, $q, $s);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -3008,7 +2963,7 @@ sub displayImage {
     } else {
         my $height = $q->param('maxheight');
         my $width = $q->param('maxwidth');
-        Images::displayImage($dbt,$taxonomy,$image_no,$height,$width);
+        Images::displayImage($dbt,$image_no,$height,$width);
     }
     if ($q->param("display_header") eq 'NO') {
         print $hbo->stdIncludes("blank_page_bottom"); 
@@ -3040,12 +2995,12 @@ sub startStartEcologyVertebrateSearch{
 }
 sub startPopulateEcologyForm	{
     print $hbo->stdIncludes($PAGE_TOP);
-	Ecology::populateEcologyForm($dbt, $taxonomy, $hbo, $q, $s, $WRITE_URL);
+	Ecology::populateEcologyForm($dbt, $hbo, $q, $s, $WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 sub startProcessEcologyForm	{
     print $hbo->stdIncludes($PAGE_TOP);
-	Ecology::processEcologyForm($dbt, $taxonomy, $q, $s, $WRITE_URL);
+	Ecology::processEcologyForm($dbt, $q, $s, $WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 ## END Ecology stuff
@@ -3066,25 +3021,25 @@ sub displaySpecimenSearchForm	{
 
 sub submitSpecimenSearch{
     print $hbo->stdIncludes($PAGE_TOP);
-    Measurement::submitSpecimenSearch($dbt,$taxonomy,$hbo,$q,$s,$WRITE_URL);
+    MeasurementEntry::submitSpecimenSearch($dbt,$hbo,$q,$s,$WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub displaySpecimenList {
     print $hbo->stdIncludes($PAGE_TOP);
-    Measurement::displaySpecimenList($dbt,$taxonomy,$hbo,$q,$s,$WRITE_URL);
+    MeasurementEntry::displaySpecimenList($dbt,$hbo,$q,$s,$WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub populateMeasurementForm{
     print $hbo->stdIncludes($PAGE_TOP);
-    Measurement::populateMeasurementForm($dbt,$taxonomy,$hbo,$q,$s,$WRITE_URL);
+    MeasurementEntry::populateMeasurementForm($dbt,$hbo,$q,$s,$WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub processMeasurementForm {
     print $hbo->stdIncludes($PAGE_TOP);
-    Measurement::processMeasurementForm($dbt,$taxonomy,$hbo,$q,$s,$WRITE_URL);
+    MeasurementEntry::processMeasurementForm($dbt,$hbo,$q,$s,$WRITE_URL);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -3185,7 +3140,7 @@ sub classificationForm	{
 }
 sub classify	{
 	return if PBDBUtil::checkForBot();
-	PrintHierarchy::classify($dbt, $taxonomy, $hbo, $s, $q);
+	PrintHierarchy::classify($dbt, $hbo, $s, $q);
 }
 ## END PrintHierarchy stuff
 ##############
@@ -3204,7 +3159,7 @@ sub startProcessSanityCheck	{
 	logRequest($s,$q);
     
 	print $hbo->stdIncludes($PAGE_TOP);
-	SanityCheck::processSanityCheck($dbt, $taxonomy, $hbo, $s, $q);
+	SanityCheck::processSanityCheck($q, $dbt, $hbo, $s);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 ## END SanityCheck stuff
@@ -3634,7 +3589,7 @@ EOF
         }
         my %hash = ();
         @hash{"genus_name","subgenus_name","species_name","genus_reso","subgenus_reso","species_reso"} = split("-_",$taxon_key);
-        my $show_name = Collection::formatOccurrenceTaxonName(\%hash);
+        my $show_name = CollectionEntry::formatOccurrenceTaxonName(\%hash);
         $show_name =~ s/<a href/<a target="_blank" href/;
         my $class = ($i % 2 == 0) ? 'class="darkList"' : '';
         print '<tr '.$class.'><td class="fixedLabel"><div class="fixedLabel">'.
@@ -3940,8 +3895,6 @@ sub processOccurrenceTable {
         
             if ($in_form && $in_db) {
                 # Do an update
-                dbg("UPDATING TAXON:$taxon_key COLLECTION:$collection_no $table.$primary_key=$primary_key_value");
-                dbg("Record:".DumpHash(\%record));
                 my $result = $dbt->updateRecord($s,$table,$primary_key,$primary_key_value,\%record);
                 if ($result > 0) { 
                     push @updated,$collection_no; 
@@ -3950,8 +3903,6 @@ sub processOccurrenceTable {
                 $total_occs++;
             } elsif ($in_form && !$in_db) {
                 # Do an insert
-                dbg("INSERTING TAXON:$taxon_key COLLECTION:$collection_no $table");
-                dbg("Record:".DumpHash(\%record));
                 my ($result,$occurrence_no) = $dbt->insertRecord($s,$table,\%record);
                 push @inserted,$collection_no; 
                 if ($result) {
@@ -3959,17 +3910,15 @@ sub processOccurrenceTable {
                 }
                 $total_occs++;
                 # Add secondary ref
-                Collection::setSecondaryRef($dbt,$collection_no,$session_ref);
+                CollectionEntry::setSecondaryRef($dbt,$collection_no,$session_ref);
             } elsif (!$in_form && $in_db) {
                 # Do a delete
-                dbg("DELETING TAXON:$taxon_key COLLECTION:$collection_no $table.$primary_key=$primary_key_value");
-                dbg("Record:".DumpHash(\%record));
                 $dbt->deleteRecord($s,$table,$primary_key,$primary_key_value);
                 push @deleted,$collection_no; 
             } 
         }
 
-        my $taxon_name = Collection::formatOccurrenceTaxonName({
+        my $taxon_name = CollectionEntry::formatOccurrenceTaxonName({
             'genus_name'=>$genus_name,
             'genus_reso'=>$genus_reso,
             'subgenus_name'=>$subgenus_reso,
@@ -4045,13 +3994,6 @@ sub processOccurrenceTable {
     }
     print '</p></div>';
     print $hbo->stdIncludes('std_page_bottom');
-}
-
-sub DumpHash { 
-    my @k = sort keys %{$_[0]}; 
-    my $t = ''; 
-    $t .= "$_=$_[0]->{$_}," for @k;
-    return $t;
 }
 
 sub generateCollectionLabel {
@@ -4496,7 +4438,7 @@ sub processEditOccurrences {
             push @warnings, "There is no collection number for row $rowno, so it was skipped";
             next; 
         }
-	my $taxon_name = Collection::formatOccurrenceTaxonName(\%fields);
+	my $taxon_name = CollectionEntry::formatOccurrenceTaxonName(\%fields);
 
         if ($fields{'genus_name'} =~ /^\s*$/) {
             if ($fields{$OCCURRENCE_NO} =~ /^\d+$/ && $fields{'reid_no'} != -1) {
@@ -4573,8 +4515,8 @@ sub processEditOccurrences {
 
                 if($old_row->{'reference_no'} != $fields{'reference_no'}) {
                     dbg("calling setSecondaryRef (updating ReID)<br>");
-                    unless(Collection::isRefPrimaryOrSecondary($dbt, $fields{$COLLECTION_NO}, $fields{'reference_no'})){
-                           Collection::setSecondaryRef($dbt,$fields{$COLLECTION_NO},$fields{'reference_no'});
+                    unless(CollectionEntry::isRefPrimaryOrSecondary($dbt, $fields{$COLLECTION_NO}, $fields{'reference_no'})){
+                           CollectionEntry::setSecondaryRef($dbt,$fields{$COLLECTION_NO},$fields{'reference_no'});
                     }
                 }
             }
@@ -4596,8 +4538,8 @@ sub processEditOccurrences {
 #            } elsif ( $return ) {
             $dbt->insertRecord($s,'reidentifications',\%fields);
 
-            unless(Collection::isRefPrimaryOrSecondary($dbt, $fields{$COLLECTION_NO}, $fields{'reference_no'}))	{
-               Collection::setSecondaryRef($dbt,$fields{$COLLECTION_NO}, $fields{'reference_no'});
+            unless(CollectionEntry::isRefPrimaryOrSecondary($dbt, $fields{$COLLECTION_NO}, $fields{'reference_no'}))	{
+               CollectionEntry::setSecondaryRef($dbt,$fields{$COLLECTION_NO}, $fields{'reference_no'});
             }
 #            }
             setMostRecentReID($dbt,$fields{$OCCURRENCE_NO});
@@ -4611,7 +4553,7 @@ sub processEditOccurrences {
                 # We push this onto an array for later processing because we can't delete an occurrence
                 # With reids attached to it, so we want to let any reids be deleted first
                 my $old_row = ${$dbt->getData("SELECT * FROM $OCCURRENCES WHERE $OCCURRENCE_NO=$fields{$OCCURRENCE_NO}")}[0];
-                push @occurrences_to_delete, [$fields{$OCCURRENCE_NO},Collection::formatOccurrenceTaxonName($old_row),$i];
+                push @occurrences_to_delete, [$fields{$OCCURRENCE_NO},CollectionEntry::formatOccurrenceTaxonName($old_row),$i];
             } 
             # CASE 3b: Update record
             else {
@@ -4629,8 +4571,8 @@ sub processEditOccurrences {
 
                 if($old_row->{'reference_no'} != $fields{'reference_no'}) {
                     dbg("calling setSecondaryRef (updating occurrence)<br>");
-                    unless(Collection::isRefPrimaryOrSecondary($dbt, $fields{$COLLECTION_NO}, $fields{'reference_no'}))	{
-                           Collection::setSecondaryRef($dbt,$fields{$COLLECTION_NO}, $fields{'reference_no'});
+                    unless(CollectionEntry::isRefPrimaryOrSecondary($dbt, $fields{$COLLECTION_NO}, $fields{'reference_no'}))	{
+                           CollectionEntry::setSecondaryRef($dbt,$fields{$COLLECTION_NO}, $fields{'reference_no'});
                     }
                 }
             }
@@ -4647,8 +4589,8 @@ sub processEditOccurrences {
                 push @occurrences, $occurrence_no;
             }
 
-            unless(Collection::isRefPrimaryOrSecondary($dbt, $fields{$COLLECTION_NO}, $fields{'reference_no'}))	{
-                   Collection::setSecondaryRef($dbt,$fields{$COLLECTION_NO}, $fields{'reference_no'});
+            unless(CollectionEntry::isRefPrimaryOrSecondary($dbt, $fields{$COLLECTION_NO}, $fields{'reference_no'}))	{
+                   CollectionEntry::setSecondaryRef($dbt,$fields{$COLLECTION_NO}, $fields{'reference_no'});
             }
         }
     }
@@ -4716,9 +4658,9 @@ sub processEditOccurrences {
     if ($q->param('list_collection_no')) {
         my $collection_no = $q->param("list_collection_no");
         my $coll = ${$dbt->getData("SELECT $COLLECTION_NO,reference_no FROM $COLLECTIONS WHERE $COLLECTION_NO=$collection_no")}[0];
-    	$return = Collection::buildTaxonomicList($dbt,$hbo,$s,{$COLLECTION_NO=>$collection_no, 'hide_reference_no'=>$coll->{'reference_no'},'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
+    	$return = CollectionEntry::buildTaxonomicList($dbt,$hbo,$s,{$COLLECTION_NO=>$collection_no, 'hide_reference_no'=>$coll->{'reference_no'},'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
     } else {
-    	$return = Collection::buildTaxonomicList($dbt,$hbo,$s,{'occurrence_list'=>\@occurrences, 'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
+    	$return = CollectionEntry::buildTaxonomicList($dbt,$hbo,$s,{'occurrence_list'=>\@occurrences, 'new_genera'=>\@new_genera, 'new_subgenera'=>\@new_subgenera, 'new_species'=>\@new_species, 'do_reclassify'=>1, 'warnings'=>\@warnings, 'save_links'=>$links });
     }
     if ( ! $return )	{
         print $links;
@@ -4902,7 +4844,7 @@ sub displayOccsForReID {
             # print other reids for the same occurrence
 
             $html .= "<tr><td colspan=100>";
-            my ($table,$classification) = Collection::getReidHTMLTableByOccNum($dbt,$hbo,$s,$row->{'occurrence_no'}, 0);
+            my ($table,$classification) = CollectionEntry::getReidHTMLTableByOccNum($dbt,$hbo,$s,$row->{'occurrence_no'}, 0);
             $html .= "<table>".$table."</table>";
             $html .= "</td></tr>\n";
             #$sth2->finish();
@@ -5100,7 +5042,7 @@ sub displaySearchSectionResults{
     require Confidence;
     logRequest($s,$q);
     print $hbo->stdIncludes($PAGE_TOP);
-    Confidence::displaySearchSectionResults($q, $s, $dbt, $taxonomy, $hbo);
+    Confidence::displaySearchSectionResults($q, $s, $dbt,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5114,7 +5056,7 @@ sub displaySearchSectionForm{
 sub displayTaxaIntervalsForm{
     require Confidence;
     print $hbo->stdIncludes($PAGE_TOP);
-    Confidence::displayTaxaIntervalsForm($q, $s, $dbt, $hbo);
+    Confidence::displayTaxaIntervalsForm($q, $s, $dbt,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5123,7 +5065,7 @@ sub displayTaxaIntervalsResults{
     require Confidence;
     logRequest($s,$q);
     print $hbo->stdIncludes($PAGE_TOP);
-    Confidence::displayTaxaIntervalsResults($q, $s, $dbt, $taxonomy, $hbo);
+    Confidence::displayTaxaIntervalsResults($q, $s, $dbt,$hbo);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5139,7 +5081,7 @@ sub displayStratTaxaForm{
     return if PBDBUtil::checkForBot();
     require Confidence;
     print $hbo->stdIncludes($PAGE_TOP);
-    Confidence::displayStratTaxa($q, $s, $dbt, $taxonomy);
+    Confidence::displayStratTaxa($q, $s, $dbt);
     print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5216,13 +5158,13 @@ sub drawCladogram	{
 # JA 17.1.10
 sub displayReviewForm {
 	print $hbo->stdIncludes($PAGE_TOP);
-	Review::displayReviewForm($dbt,$taxonomy,$q,$s,$hbo);
+	Review::displayReviewForm($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
 sub processReviewForm {
 	print $hbo->stdIncludes($PAGE_TOP);
-	Review::processReviewForm($dbt,$taxonomy,$q,$s,$hbo);
+	Review::processReviewForm($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5234,7 +5176,7 @@ sub listReviews	{
 
 sub showReview	{
 	print $hbo->stdIncludes($PAGE_TOP);
-	Review::showReview($dbt,$taxonomy,$q,$s,$hbo);
+	Review::showReview($dbt,$q,$s,$hbo);
 	print $hbo->stdIncludes($PAGE_BOTTOM);
 }
 
@@ -5355,16 +5297,5 @@ sub listTaxa {
 
 	print $hbo->stdIncludes ($PAGE_BOTTOM);
 }
-
-sub inventoryForm	{
-	Collection::inventoryForm($dbt,$q,$s,$hbo);
-	return;
-}
-
-sub inventoryInfo	{
-	logRequest($s,$q);
-	Collection::inventoryInfo($dbt,$q,$s,$hbo);
-}
-
 
 

@@ -4,6 +4,7 @@ use strict;
 use TypoChecker;
 use CGI::Carp;
 use Data::Dumper;
+use TaxaCache;
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $TAXA_TREE_CACHE);
 
@@ -519,7 +520,7 @@ sub displayOpinionForm {
                 my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$parent_no});
                 $higher_class = "unclassified $taxon->{taxon_rank}";
             }
-            my @spellings = TaxonTrees::listAllSpellings($dbt,$parent_no);
+            my @spellings = TaxonInfo::getAllSpellings($dbt,$parent_no);
             my $sql = "SELECT DISTINCT(taxon_name) FROM authorities WHERE taxon_no IN ('".join("','",@spellings)."') AND taxon_name!='".$parentName."' ORDER BY taxon_name";
             my @names = @{$dbt->getData($sql)};
             my $equals = "";
@@ -655,15 +656,15 @@ sub displayOpinionForm {
 	if (scalar(@child_spelling_nos) > 1 || (scalar(@child_spelling_nos) == 1 && @opinions_to_migrate1)) {
 		$spelling_row .= "<div>";
 		foreach my $child_spelling_no (@child_spelling_nos) {
-			my $parent = TaxonTrees::getParent($dbh,$child_spelling_no);
+			my $parent = TaxaCache::getParent($dbt,$child_spelling_no);
 			my $taxon = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$child_spelling_no},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
 			my $pub_info = Reference::formatShortRef($taxon);
 			my $selected = ($fields{'child_spelling_no'} == $child_spelling_no) ? "CHECKED" : "";
 			$pub_info = ", ".$pub_info if ($pub_info !~ /^\s*$/);
-			my $orig_no = TaxonTrees::listOriginalCombination($dbt,$child_spelling_no);
+			my $orig_no = TaxonInfo::getOriginalCombination($dbt,$child_spelling_no);
 			my $orig_info = "";
 			if ($orig_no != $child_spelling_no) {
-				my $orig = TaxonTrees::getOriginalCombination($dbh, $orig_no);
+				my $orig = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$orig_no});
 				$orig_info = ", originally $orig->{taxon_name}";
 			}
 			$spelling_row .= qq|<input type="radio" name="child_spelling_no" $selected value='$child_spelling_no'> ${childSpellingName}, $taxon->{taxon_rank}${pub_info}${orig_info} <br>\n|;
@@ -978,6 +979,17 @@ sub submitOpinionForm {
     my $childSpellingName = '';
     my $childSpellingRank = '';
     my $createSpelling = 0;
+    # added this check JA 30.5.13
+    # without the check, it was possible to create a duplicate by selecting
+    #  "Create a new ... based off ... with rank ..." even though the name/
+    #  rank combo already existed and was listed right there on the page
+    #  immediately above this line (!)
+    if ($q->param('child_spelling_no') == -1) {
+        my $existing_no = ${$dbt->getData("SELECT taxon_no FROM authorities WHERE taxon_name='".$q->param('new_child_spelling_name')."' AND taxon_rank='".$q->param('new_child_spelling_rank')."'")}[0]->{'taxon_no'};
+        if ( $existing_no )	{
+            $q->param('child_spelling_no' => $existing_no);
+        }
+    }
     if ($q->param('child_spelling_no')) {
         if ($q->param('child_spelling_no') == -1) {
             $createSpelling = 1;
@@ -1346,7 +1358,7 @@ sub submitOpinionForm {
 		# make sure we have a taxon_no for this entry...
 		if (!$fields{'child_no'} ) {
 			croak("Opinion::submitOpinionForm, tried to insert a record without knowing its child_no (original taxon)");
-			return;
+			return;	
 		}
 		
 		($code, $resultOpinionNumber) = $dbt->insertRecord($s,'opinions', \%fields);
@@ -1500,6 +1512,9 @@ sub submitOpinionForm {
 
 # row is an opinion database row and must contain the following fields:
 #   child_no,status,child_spelling_no,parent_spelling_no,opinion_no
+# JA: there's a long-standing bug in here somewhere that causes the spelling
+#  spelling reason to get messed up when original names are changed but I
+#  have no time right now to fix it
 sub resetOriginalNo{
     my ($dbt,$new_orig_no,$row) = @_;
     my $dbh = $dbt->dbh;
@@ -1588,7 +1603,6 @@ sub fixMassEstimates	{
 	my $dbt = shift;
 	my $dbh = shift;
 	my $taxon_no = shift;
-	my $taxonomy;
 	# update body mass estimates for this name and all spellings (because spelling numbers may
 	#  have been added) JA 7.12.10
 	# mass estimates of synonyms are not stored, so if this name is now a synonym the senior
@@ -1609,8 +1623,7 @@ sub fixMassEstimates	{
 		my @in_list = TaxonInfo::getAllSynonyms($dbt,$e);
 		my $sql = "UPDATE $TAXA_TREE_CACHE SET mass=NULL WHERE taxon_no IN (".join(',',@in_list).")";
 		$dbh->do($sql);
-		my @specimens = Measurement::getMeasurements($dbt, $taxonomy, taxon_list => \@in_list,
-							     get_global_specimens => 1);
+		my @specimens = Measurement::getMeasurements($dbt,{'taxon_list'=>\@in_list,'get_global_specimens'=>1});
 		if ( @specimens )	{
 			my $p_table = Measurement::getMeasurementTable(\@specimens);
 			my @m = Measurement::getMassEstimates($dbt,$e,$p_table);
@@ -1646,7 +1659,7 @@ sub displayOpinionChoiceForm {
         
         my $t = Taxon->new($dbt,$child_no);
         print "<div align=\"center\">";
-        print "<p class=\"pageTitle\">Which opinion about ".taxonNameHTML($t)." do you want to edit?</p>\n";
+        print "<p class=\"pageTitle\">Which opinion about ".$t->taxonNameHTML()." do you want to edit?</p>\n";
         
 	    print qq|<div class="displayPanel" style="padding: 1em; margin-left: 3em; margin-right: 3em;">\n|;
         print qq|<div align="left"><ul>|;
@@ -1956,20 +1969,6 @@ sub badNames	{
 	}
 	print "<br>\n<center><a href=\"$WRITE_URL?a=badNameForm\">Search again</a></center>\n";
 	print "</div>\n\n";
-}
-
-
-# return the taxonName for the initially specifed taxon.
-# but with proper italicization
-sub taxonNameHTML {
-    
-    my ($taxon_no) = @_;
-
-    if ($taxon_no->get('taxon_rank') =~ /(?:species|genus)$/) {
-		return "<i>" . $taxon_no->get('taxon_name') . "</i>";
-	} else {
-		return $taxon_no->get('taxon_name');	
-	}
 }
 
 

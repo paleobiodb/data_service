@@ -459,18 +459,11 @@ function doCheckFieldsComponents() {
     <tr>
       <td valign="top" colspan="2"><nobr>Research group(s):</nobr></td>
       <td colspan="2">
-        <input id="research_group" type="hidden" value="" replace="NO">
-        <span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="decapod"> decapod</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="ETE"> ETE</span>
-        <span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="freshwater"> freshwater</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="GCP"> GCP</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="marine invertebrate"> marine invertebrate</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="micropaleontology"> micropaleontology</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="PACED"> PACED</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="paleobotany"> paleobotany</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="paleoentomology"> paleoentomology</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="taphonomy"> taphonomy</span>
-	<span class="verysmall" style="padding-left: 0.5em; white-space: nowrap;"><input id="research_group" type="checkbox" value="vertebrate"> vertebrate</span>
+      <span class="verysmall"><select class="verysmall" id="research_group"></select></span>
+      <span class="verysmall"><select class="verysmall" id="research_group"></select></span>
+      <span class="verysmall"><select class="verysmall" id="research_group"></select></span>
+      <span class="verysmall"><select class="verysmall" id="research_group"></select></span>
+       <input id="research_group" type="hidden" value="" replace="NO">
       </td>
     </tr>
   </table>
@@ -772,10 +765,11 @@ function doCheckFieldsComponents() {
 
   <div style="float: left; clear: both; text-align: left;"> 
 
-  <div style="float: left; clear: both;"><span class="medium required">Primary lithology</span><br>
+  <div style="float: left; clear: both; margin-bottom: 0.5em;">
+  <span class="medium required">Primary lithology</span><br>
   <span class="verysmall">See the <a href="javascript:tipsPopup('/public/tips/lithtips.html')">lithology tip sheet</a></span>
-  </p>
-  <p>&nbsp;
+  </div>
+  <div style="float: left; clear: left; margin-bottom: 0.5em;">&nbsp;
     <span class="verysmall"><select class="verysmall" id="lithification"></select></span>
     <span class="verysmall"><select class="verysmall" id="minor_lithology"></select></span>
     <span class="verysmall"><select class="verysmall" id="minor_lithology"></select></span>
@@ -786,86 +780,77 @@ function doCheckFieldsComponents() {
     Additional <a href="javascript:tipsPopup('/public/tips/lithtips.html')">lithology adjectives</a>:
   </div>
 
-  <div style="whitespace: nowrap;">
+  <div style="float: left; clear: left; whitespace: nowrap;">
       <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
   </div>
-  <div style="whitespace: nowrap;">
+  <div style="float: left; clear: left; whitespace: nowrap;">
       <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj"></select></span>
   </div>
-  <p class="small">&nbsp;Fossils collected from this lithology?&nbsp;<input name="fossilsfrom1" type="checkbox" value="Y"></p>
+  <div class="small" style="float: left; clear: left; margin-bottom: 0.7em; whitespace: nowrap;">
+  &nbsp;Fossils collected from this lithology?&nbsp;<input name="fossilsfrom1" type="checkbox" value="Y">
+  </div>
 
-  <p><span class="medium">Secondary lithology</span></p>
-  <p>&nbsp;
+  <div class="medium" style="float: left; clear: left; margin-bottom: 0.5em;">Secondary lithology</div>
+  <div style="float: left; clear: left; margin-bottom: 0.5em;">&nbsp;
     <span class="verysmall"><select class="verysmall" id="lithification2"></select></span>
     <span class="verysmall"><select class="verysmall" id="minor_lithology2"></select></span>
     <span class="verysmall"><select class="verysmall" id="minor_lithology2"></select></span>
     <span class="verysmall"><select class="verysmall" id="lithology2"></select></span>
-  </p>
+  </div>
   
-  <p class="small" style="margin-bottom: 0.3em;">
+  <div class="small" style="float: left; clear: left; margin-bottom: 0.3em;">
     Additional <a href="javascript:tipsPopup('/public/tips/lithtips.html')">lithology adjectives</a>:
-  </p>
-  <div style="whitespace: nowrap;">
+  </div>
+  <div style="float: left; clear: left; whitespace: nowrap;">
       <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
   </div>
-  <div style="whitespace: nowrap;">
+  <div style="float: left; clear: left; whitespace: nowrap;">
       <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
       <span class="verysmall"><select class="verysmall" id="lithadj2"></select></span>
   </div>
-  <p class="small">&nbsp;Fossils collected from this lithology?&nbsp;<input name="fossilsfrom2" type="checkbox" value="Y"></a></p>
+
+  <div class="small" style="float: left; clear: left; margin-bottom: 0.7em; whitespace: nowrap;">
+  &nbsp;Fossils collected from this lithology?&nbsp;<input name="fossilsfrom2" type="checkbox" value="Y"></a>
+  </div>
   
-  <p>
+  <div style="float: left; clear: left; margin-bottom: 1em;">
   Original, complete description of lithology:<br><textarea id="lithdescript" rows="3" wrap="virtual" cols="80"></textarea>
-  </p>
- 
-  <p class="medium">Environment and setting</p>
-  
-  <table border=0>
-    <tr>
-      <td>
-	<span class="required">Environment:</span>
-        <span class="verysmall"><select class="verysmall" id="environment"></select></span>
-	<span class="verysmall">
-	<br>
-        Read about
-  		<a href="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">carbonate</a>,
-  		<a href="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">siliciclastic</a> or
-  		<a href="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">terrestial</a> environments.&nbsp;&nbsp;
-	</span>
-        <p>
-      </td>
+  </div>
 
-      <td valign=top>
-  	<a href="javascript:tipsPopup('/public/tips/environtips.html#TectonicSetting')">Tectonic setting</a>:<br>
-        <span class="verysmall"><select class="verysmall" id="tectonic_setting"></select></span>
-      </td>
-    </tr>
+  <div style="float: left; clear: left; margin-bottom: 0.5em;">
+    <span class="required">Environment:</span>
+    <span class="verysmall"><select class="verysmall" id="environment"></select></span>
+    <span class="verysmall">
+    <br>
+    Read about
+    <a href="javascript:tipsPopup('/public/tips/environtips.html#Carbonate')">carbonate</a>,
+    <a href="javascript:tipsPopup('/public/tips/environtips.html#SiliciMarine')">siliciclastic</a> or
+    <a href="javascript:tipsPopup('/public/tips/environtips.html#Terrestrial')">terrestial</a> environments.&nbsp;&nbsp;
+    </span>
+  </div>
 
-    <tr>
-      <td valign=top>
-        <p>Glacial or sequence phase: <span class="verysmall"><select class="verysmall" id="seq_strat"></select></span>
-      </td>
-    </tr>
+  <div style="float: left; clear: right;">
+    <a href="javascript:tipsPopup('/public/tips/environtips.html#TectonicSetting')">Tectonic setting</a>:
+    <span class="verysmall"><select class="verysmall" id="tectonic_setting"></select></span>
+  </div>
 
-    <tr>
-      <td valign=top colspan="2">
-      </td>
-    </tr>
-  </table>
-  
-  <p>
+  <div style="float: left; clear: both; margin-bottom: 1em;">
+    Glacial or sequence phase: <span class="verysmall"><select class="verysmall" id="seq_strat"></select></span>
+  </div>
+
+  <div style="float: left; clear: both;">
     Comments on environment and setting:
     <br>
     <textarea id="geology_comments" rows="3" wrap="virtual" cols="80"></textarea>
-  </p>
-  
+  </div>
+
   </div>
 
   <div align="center" style="clear: both; margin-top: 1em;"><span id="page_submit_button"></span></div>

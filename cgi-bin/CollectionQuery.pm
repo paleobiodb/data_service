@@ -146,6 +146,8 @@ $SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.int
 
 $TABLES{time} = ['ei', 'li', 'ci'];
 
+$TABLEs{summary_time} = ['ei', 'li'];
+
 $OUTPUT{time} =
    [
     { rec => 'early_age', com => 'eag',
@@ -154,6 +156,14 @@ $OUTPUT{time} =
 	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
     { rec => 'interval_list', com => 'lti', json_list_literal => 1,
         doc => "A minimal list of standard intervals covering the time range associated with this collection" },
+   ];
+
+$OUTPUT{summary_time} =
+   [
+    { rec => 'early_age', com => 'eag',
+	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
+    { rec => 'late_age', com => 'lag',
+	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
    ];
 
 $SELECT{pers} = "authorizer_no, ppa.name as authorizer, enterer_no, ppe.name as enterer";

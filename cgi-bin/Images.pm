@@ -2,7 +2,8 @@ package Images;
 
 use PBDBUtil;
 use Reference;
-use Taxonomy;
+use TaxaCache;
+use TaxonInfo;
 use Debug qw(dbg);
 use Constants qw($READ_URL $WRITE_URL $HTML_DIR $PAGE_TOP $PAGE_BOTTOM);
 use strict;
@@ -12,12 +13,14 @@ use strict;
 ###
 
 sub displayLoadImageForm{
-    my ($dbt, $taxonomy, $q, $s) = @_;
-    
+    my $dbt = shift;
+    my $q = shift;
+	my $s = shift;
+
 	# Spit out upload html page
 	# list constraints: image size and image type
     my ($taxon_no,$taxon_name);
-    my @results = $taxonomy->getTaxon($q->param('taxon_no'));
+    my @results = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$q->param('taxon_no')});
     if (@results) {
         $taxon_no = $results[0]->{'taxon_no'}; 
         $taxon_name = $results[0]->{'taxon_name'}; 
@@ -297,14 +300,14 @@ sub gallery	{
 
 
 sub displayImage {
-    my ($dbt, $taxonomy, $image_no, $height, $width) = @_;
+    my ($dbt,$image_no,$height,$width) = @_;
 
     my $sql = "SELECT a.taxon_no,a.taxon_name,i.* FROM images i, authorities a where i.taxon_no=a.taxon_no AND i.image_no=$image_no";
     my $row = ${$dbt->getData($sql)}[0];
     if (!$row) {
         print "<div class=errorMessage>Error, no image to display</div>";
     } else {
-        my $ss = $taxonomy->getRelatedTaxon('synonym', $row->{'taxon_no'});
+        my $ss = TaxaCache::getSeniorSynonym($dbt,$row->{'taxon_no'});
         
         print "<div align=\"center\" style=\"padding-top: 20px;\">";
         print "<img src=\"".$row->{'path_to_image'}."\" height=\"$height\" width=\"$width\" border=1><br>\n";

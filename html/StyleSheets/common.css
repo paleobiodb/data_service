@@ -9,7 +9,7 @@ html, body {
 	margin: 0px;
 	padding: 0px;
 	background-color: WhiteSmoke;
-	font-family: Franklin Gothic Book, Corbel, Microsoft PGothic, Gill Sans, sans-serif;
+	font-family: 'Open-Sans', sans-serif;
 	font-size: 1em;
 }
 
@@ -32,6 +32,34 @@ hr {
     height: 1px;
     border: 0;
 }
+#title {
+    position: absolute;
+    display: inline;
+    height:5em;
+    left: 3px;
+    font-size: 18px;
+    color: white;
+    font-family: 'Raleway', sans-serif;
+}
+#logo {
+    height:75px;
+    width:90px;
+}
+#title h2 {
+    display: inline;
+    position: absolute;
+    left: 93px;
+    width: 400px;
+    top:15px;
+}
+#classic {
+    display: inline;
+    position: absolute;
+    top:35px;
+    left:408px;
+    font-size: 14px;
+}
+
 
 /* how should the regular links look? */
 A:link	{ color : Navy; text-decoration:none; }
@@ -133,7 +161,7 @@ H1, H2, H3, H4, H5, H6 {
 
 .outerMainPanel	{
     position: absolute;
-    top: 55px;
+    top: 50px;
     left: 0px;
     width: 58em;
     z-index: 1;
@@ -166,15 +194,13 @@ H1, H2, H3, H4, H5, H6 {
 }
 
 #homeLinks	{
-    min-width: 50em; /* needed because scrolling down when a window is small
+    min-width: 58em; /* needed because scrolling down when a window is small
                           causes the image to be truncated */
     position: absolute;
-    top: 50px;
     left: 0px;
-    margin-left: 8em;
     z-index: 8; 
-    height: 2em;
-    width: 50em;
+    height: 5em;
+    width: 58em;
     border-right: 1px solid DarkGray;
 }
 
@@ -189,7 +215,7 @@ H1, H2, H3, H4, H5, H6 {
 }
 
 .bannerColor	{
-    background-color: #191970;
+    background-color: #268073;
 }
 
 .mobileInfoLink	{
@@ -661,7 +687,7 @@ td.fixedLabel {
 
 #quickSearchDiv	{
     position: absolute;
-    bottom: 0em;
+    bottom: 5px;
     height: 2.1em;
     font-size: 0.9em;
 }
@@ -806,4 +832,44 @@ td.PASTcell,.simpleTableCell{
     font-size: 1.5em;
     padding-bottom: 0.2em;
 }
-
+#recentCol {
+    display:inline-block;
+    position: relative;
+    border-right:1px solid #aaa;
+    padding:20px;
+    width:22em;
+}
+#recentCol > a, ul {
+    font-size: 0.9em;
+}
+#recentCol > ul {
+    margin-left:-20px;
+    margin-top:2px;
+}
+#recentCol > h4 {
+    margin-bottom: 10px
+}
+#recentSpecies {
+    display: inline-block;
+    position: relative;
+    padding:20px;
+    width:22em;
+    margin: auto;
+}
+#recentSpecies > a, ul {
+    font-size: 0.9em;
+}
+#recentSpecies > ul {
+    margin-left:-20px;
+    margin-top:2px;
+}
+#recentSpecies > h4 {
+    margin-bottom: 10px
+}
+#stats {
+    border-top: 1px solid #aaa;
+}
+#message {
+    padding: 40px;
+    border-bottom: 1px solid #aaa;
+}

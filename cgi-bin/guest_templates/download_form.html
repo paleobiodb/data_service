@@ -12,6 +12,7 @@ function marineClick ( ) {
 		frm.zone_deep_subtidal.checked = true;
 		frm.zone_offshore.checked = true;
 		frm.zone_slope_basin.checked = true;
+		frm.zone_unknown.checked = true;
 	} else if ( ! frm.environment_carbonate.checked && ! frm.environment_siliciclastic.checked ) {
 		frm.zone_marginal_marine.checked = false;
 		frm.zone_reef.checked = false;
@@ -19,6 +20,7 @@ function marineClick ( ) {
 		frm.zone_deep_subtidal.checked = false;
 		frm.zone_offshore.checked = false;
 		frm.zone_slope_basin.checked = false;
+		frm.zone_unknown.checked = false;
 	}
 
 }
@@ -134,15 +136,14 @@ You can <a href="%%read_url%%?a=displayDownloadForm&amp;restore_defaults=1">rest
 
 <tr%%row_class_1b%%>
   <td valign=top class="small">
-    Output data:
+    Output data format:
   </td>
   <td>
     <select name="output_data">
       <option value="occurrence list">occurrence list</option>
       <option value="occurrence matrix">occurrence matrix</option>
       <option value="occurrence CONJUNCT">CONJUNCT</option>
-      <option value="genera">genera</option>
-      <option value="species">species</option>
+      <option value="taxonomic list">taxonomic list</option>
       <option value="collections">collections</option>
       <option value="specimens">specimens</option>
     </select>
@@ -158,6 +159,15 @@ You can <a href="%%read_url%%?a=displayDownloadForm&amp;restore_defaults=1">rest
 </td></tr>
 
 <tr%%row_class_1b%%>
+<td valign=top class="small">Taxonomic level:<br>
+</td>
+<td valign=top class="small"><select name=taxonomic_level>
+<option selected>genus</option>
+<option>species</option>
+</select>
+</td></tr>
+
+<tr%%row_class_1a%%>
 <td valign=top class="small"><b>Taxon</b> or taxa to include:<br>
 <small><i>Genus level or above</i></small>
 </td>
@@ -177,13 +187,13 @@ You can <a href="%%read_url%%?a=displayDownloadForm&amp;restore_defaults=1">rest
 <input name=max_interval_name size=20> - <input name=min_interval_name size=20>
 </td></tr>
 
-<tr%%row_class_1a%%>
+<tr%%row_class_1b%%>
 <td valign=top class="small">... or if you want to get counts of occurrences and genera by temporal bin, select a time scale:</td>
 <td valign=top class="small">
 <select name="time_scale"></select>
 </td></tr>
 
-<tr%%row_class_1b%%>
+<tr%%row_class_1a%%>
 <td valign=top class="small">If you selected a scale, you must select a field to be tallied:<br>
 <small><i>If you pick "ecology," you must select ecology categories in the "Occurrence fields" section</i></small></td>
 <td valign=top class="small">
@@ -206,7 +216,7 @@ You can <a href="%%read_url%%?a=displayDownloadForm&amp;restore_defaults=1">rest
 </select>
 </td></tr>
 
-<tr%%row_class_1a%%>
+<tr%%row_class_1b%%>
 <td valign=top class="small">
 Include late Pleistocene and undifferentiated Pleistocene collections in the late Neogene 10 m.y. bin?
 </td>
@@ -217,7 +227,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </select>
 </td></tr>
 
-<tr%%row_class_1b%%>
+<tr%%row_class_1a%%>
 <td valign=top class="small">Data authorizer:</td>
 <td valign="bottom">
 <input name="authorizer_reversed" size=20 onKeyUp="doComplete(event, this, authorizerNames());">
@@ -229,7 +239,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </td>
 </tr>
 
-<tr%%row_class_1a%%>
+<tr%%row_class_1b%%>
 <td valign=top class="small">Research group or project
     <select name="research_group_restricted_to">
         <option value="0">includes</option>
@@ -241,7 +251,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </select>
 </td></tr>
 
-<tr%%row_class_1b%%>
+<tr%%row_class_1a%%>
 <td valign=top class="small" nowrap>Use data records created 
 <select name="created_before_after">
 <option selected>before</option>
@@ -255,7 +265,7 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 </td>
 </tr>
 
-<tr%%row_class_1a%%>
+<tr%%row_class_1b%%>
 <td valign=top class="small" nowrap>Use data records published 
 <select name="published_before_after">
 <option>before</option>
@@ -329,10 +339,11 @@ Include late Pleistocene and undifferentiated Pleistocene collections in the lat
 <nobr><input type=checkbox name="zone_other_terrestrial" value="YES" checked>other terrestrial</nobr><br>
 <nobr><input type=checkbox name="zone_marginal_marine" value="YES" checked>marginal marine</nobr>
 <nobr><input type=checkbox name="zone_reef" value="YES" checked>reef</nobr>
-<nobr><input type=checkbox name="zone_shallow_subtidal" value="YES" checked>shallow subtidal</nobr><br>
-<nobr><input type=checkbox name="zone_deep_subtidal" value="YES" checked>deep subtidal</nobr>
+<nobr><input type=checkbox name="zone_shallow_subtidal" value="YES" checked>shallow subtidal</nobr>
+<nobr><input type=checkbox name="zone_deep_subtidal" value="YES" checked>deep subtidal</nobr><br>
 <nobr><input type=checkbox name="zone_offshore" value="YES" checked>offshore</nobr>
 <nobr><input type=checkbox name="zone_slope_basin" value="YES" checked>slope/basin</nobr>
+<nobr><input type=checkbox name="zone_unknown" value="YES" checked>unspecified marine</nobr>
 </td></tr>
 
 <tr>
@@ -1148,7 +1159,6 @@ location:
   <tr>
     <td><input type=checkbox class="o_basic" name=occurrences_parent_name value="YES">parent name</td>
     <td><input type=checkbox class="o_basic" name=occurrences_subgenus_name value="YES">subgenus name</td>
-    <td><input type=checkbox class="o_basic" name=occurrences_species_name value="YES">species name</td>
     <td><input type=checkbox class="o_basic" name=occurrences_abund value="YES">abundance</td>
   </tr>
 

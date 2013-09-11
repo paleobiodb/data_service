@@ -12,6 +12,7 @@ function marineClick ( ) {
 		frm.zone_deep_subtidal.checked = true;
 		frm.zone_offshore.checked = true;
 		frm.zone_slope_basin.checked = true;
+		frm.zone_unknown.checked = true;
 	} else if ( ! frm.environment_carbonate.checked && ! frm.environment_siliciclastic.checked ) {
 		frm.zone_marginal_marine.checked = false;
 		frm.zone_reef.checked = false;
@@ -19,6 +20,7 @@ function marineClick ( ) {
 		frm.zone_deep_subtidal.checked = false;
 		frm.zone_offshore.checked = false;
 		frm.zone_slope_basin.checked = false;
+		frm.zone_unknown.checked = false;
 	}
 
 }
@@ -124,15 +126,14 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 
 <tr%%row_class_1b%%>
   <td valign=top class="small">
-    Output data:
+    Output data format:
   </td>
   <td>
     <select name="output_data">
       <option value="occurrence list">occurrence list</option>
       <option value="occurrence matrix">occurrence matrix</option>
       <option value="occurrence CONJUNCT">CONJUNCT</option>
-      <option value="genera">genera</option>
-      <option value="species">species</option>
+      <option value="taxonomic list">taxonomic list</option>
       <option value="collections">collections</option>
       <option value="specimens">specimens</option>
     </select>
@@ -148,13 +149,22 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 </td></tr>
 
 <tr%%row_class_1b%%>
+<td valign=top class="small">Taxonomic level:<br>
+</td>
+<td valign=top class="small"><select name=taxonomic_level>
+<option selected>genus</option>
+<option>species</option>
+</select>
+</td></tr>
+
+<tr%%row_class_1a%%>
 <td valign=top class="small">Taxon or taxa to include:<br>
 <small><i>Genus level or above</i></small>
 </td>
 <td valign=top class="small">
 <textarea name=taxon_name rows=2 cols=40></textarea></td></tr>
 
-<tr%%row_class_1a%%>
+<tr%%row_class_1b%%>
 <td valign=top class="small">Oldest and youngest intervals <small><i>(by name or by age in Ma)</i></small>:</td>
 <td valign=top class="small">
 <input name=max_interval_name size=20> - <input name=min_interval_name size=20>
@@ -213,10 +223,11 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 <nobr><input type=checkbox name="zone_other_terrestrial" value="YES" checked>other terrestrial</nobr><br>
 <nobr><input type=checkbox name="zone_marginal_marine" value="YES" checked>marginal marine</nobr>
 <nobr><input type=checkbox name="zone_reef" value="YES" checked>reef</nobr>
-<nobr><input type=checkbox name="zone_shallow_subtidal" value="YES" checked>shallow subtidal</nobr><br>
-<nobr><input type=checkbox name="zone_deep_subtidal" value="YES" checked>deep subtidal</nobr>
+<nobr><input type=checkbox name="zone_shallow_subtidal" value="YES" checked>shallow subtidal</nobr>
+<nobr><input type=checkbox name="zone_deep_subtidal" value="YES" checked>deep subtidal</nobr><br>
 <nobr><input type=checkbox name="zone_offshore" value="YES" checked>offshore</nobr>
 <nobr><input type=checkbox name="zone_slope_basin" value="YES" checked>slope/basin</nobr>
+<nobr><input type=checkbox name="zone_unknown" value="YES" checked>unspecified marine</nobr>
 </td></tr>
 
 <tr>
@@ -481,7 +492,6 @@ To compute a diversity curve, you need to check off either "period," "epoch," "C
 
   <tr>
     <td><input type=checkbox class="o_basic" name=occurrences_subgenus_name value="YES">subgenus name</td>
-    <td><input type=checkbox class="o_basic" name=occurrences_species_name value="YES">species name</td>
     <td><input type=checkbox class="o_basic" name=occurrences_abund value="YES">abundance</td>
     <td><input type=checkbox class="o_basic" name=occurrences_comments value="YES">comments</td>
   </tr>
