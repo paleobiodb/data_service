@@ -1995,12 +1995,13 @@ sub linkSynonyms {
 # 
 # We start with the set of classification opinions chosen by
 # computeSynonymy(), but we then recompute all of the ones that specify
-# hierarchy (the 'belongs to' opinions).  This time, we consider all of the
-# opinions for each senior synonym along with all of the opinions for its
-# immediate junior synonyms, and choose the most recent and reliable from that
-# set.  Note that we leave out nomina dubia, nomina vana, nomina nuda, nomina
-# oblita, and invalid subgroups, because an opinion on any of those shouldn't
-# affect the senior concept.
+# hierarchy (the 'belongs to' opinions).  This time, for each taxon at the
+# genus level and above we consider all of the opinions for each senior
+# synonym along with all of the opinions for its immediate junior synonyms,
+# and choose the most recent and reliable from that set.  Note that we leave
+# out nomina dubia, nomina vana, nomina nuda, nomina oblita, and invalid
+# subgroups, because an opinion on any of those shouldn't affect the senior
+# concept.
 # 
 # After this is done, we must check for cycles using the same procedure as
 # computeSynonymy().  Only then can we set the parent_no field of $TREE_WORK.
@@ -2032,18 +2033,18 @@ sub computeHierarchy {
 				 primary key (junior_no),
 				 key (senior_no)) ENGINE=MYISAM");
     
-    # First, we add all immediately junior synonyms, but only subjective and
-    # objective synonyms and replaced taxa.  We leave out nomina dubia, nomina
-    # vana, nomina nuda, nomina oblita, and invalid subgroups, because an
-    # opinion on any of those shouldn't affect the senior taxon.  The last
-    # clause excludes chained junior synonyms.
+    # We consider all junior synonyms of genera and above, but only subjective
+    # and objective synonyms and replaced taxa.  We leave out nomina dubia,
+    # nomina vana, nomina nuda, nomina oblita, and invalid subgroups, because
+    # an opinion on any of those shouldn't affect the senior taxon.
     
     $result = $dbh->do("INSERT IGNORE INTO $SYNONYM_AUX
-			SELECT t.orig_no, t.synonym_no
-			FROM $TREE_WORK t JOIN $CLASSIFY_AUX c USING (orig_no)
+			SELECT c.orig_no, c.parent_no
+			FROM $CLASSIFY_AUX as c JOIN $TREE_WORK as t on t.orig_no = c.orig_no
+				JOIN $TREE_WORK as t2 on t2.orig_no = c.parent_no
 			WHERE c.status in ('subjective synonym of', 'objective synonym of',
 						'replaced by')
-				and t.synonym_no = c.parent_no");
+				and t.rank >= 5 and t2.rank >= 5");
     
     # Next, we add entries for all of the senior synonyms, because of course
     # their own opinions are considered as well.
@@ -2052,8 +2053,9 @@ sub computeHierarchy {
     			SELECT DISTINCT senior_no, senior_no
 			FROM $SYNONYM_AUX");
     
-    # Next, we delete the classification opinion for each taxon in
-    # $SYNONYM_AUX.
+    # Next, we delete the classification opinion for each taxon that is
+    # represented as a senior_no in $SYNONYM_AUX.  This will clear the way for
+    # recomputing the classification of these taxa.
     
     $result = $dbh->do("DELETE QUICK FROM $CLASSIFY_AUX
 			USING $CLASSIFY_AUX JOIN $SYNONYM_AUX
@@ -2437,8 +2439,8 @@ sub adjustHierarchicalNames {
 				new_name varchar(80) not null) ENGINE=MYISAM");
     
     # The first thing we need to do is to fix subgenus names.  All of these
-    # must match the genus under which they are immediately classified, or its
-    # senior synonym if the immediate genus is a junior synonym.
+    # which are themselves senior synonyms must match the senior synonym of
+    # the genus under which they are immediately classified.
     
     $SQL_STRING = "
 		INSERT INTO $ADJUST_AUX (orig_no, new_name)
@@ -2449,7 +2451,7 @@ sub adjustHierarchicalNames {
 			JOIN $TREE_WORK as p1 on p1.orig_no = t.parent_no
 			JOIN $TREE_WORK as t1 on t1.orig_no = p1.synonym_no 
 				and p1.rank = 5
-		WHERE t.rank = 4";
+		WHERE t.rank = 4 and t.orig_no = t.synonym_no";
     
     $result = $dbh->do($SQL_STRING);
     
@@ -2487,7 +2489,7 @@ sub adjustHierarchicalNames {
 			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = p2.synonym_no
 			LEFT JOIN $TREE_WORK as p3 on p3.orig_no = p2.parent_no
 			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = p3.synonym_no
-		WHERE t.rank in (2, 3) and
+		WHERE t.rank in (2, 3) and t.orig_no = t.synonym_no and
 			(p1.rank in (4,5) or p2.rank in (4,5) or p3.rank in (4,5))";
     
     $result = $dbh->do($SQL_STRING);

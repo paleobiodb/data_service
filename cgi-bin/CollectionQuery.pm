@@ -146,7 +146,7 @@ $SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.int
 
 $TABLES{time} = ['ei', 'li', 'ci'];
 
-$TABLEs{summary_time} = ['ei', 'li'];
+$TABLES{summary_time} = ['ei', 'li'];
 
 $OUTPUT{time} =
    [
