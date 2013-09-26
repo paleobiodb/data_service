@@ -4779,6 +4779,10 @@ sub computeOccurrenceTables {
 				last_early_int_seq int unsigned not null,
 				last_late_int_seq int unsigned not null) ENGINE=MyISAM");
     
+    # Look for the lower and upper bounds for the interval range in which each taxon
+    # occurs.  But ignore intervals at the period level and above, except for
+    # precambrian and quaternary.  They are not just specific enough.
+    
     $sql = "	INSERT INTO $TAXON_SUMMARY_WORK (orig_no, n_occs, n_colls,
 			first_early_int_seq, first_late_int_seq, last_early_int_seq, last_late_int_seq)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
@@ -4786,6 +4790,8 @@ sub computeOccurrenceTables {
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN interval_map as ei on ei.interval_no = c.early_int_no
 			JOIN interval_map as li on li.interval_no = c.late_int_no
+		WHERE (ei.level is null or ei.level > 3 or (ei.level = 3 and (ei.top_age >= 541.0 or ei.base_age <= 2.6))) and
+		      (li.level is null or li.level > 3 or (li.level = 3 and (li.top_age >= 541.0 or li.base_age <= 2.6)))
 		GROUP BY m.orig_no";
     
     $count = $dbh->do($sql);
