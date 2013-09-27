@@ -3833,10 +3833,10 @@ sub computeAttrsTable {
 				orig_no int unsigned primary key,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
-				first_early_int_seq int unsigned not null,
-				first_late_int_seq int unsigned not null,
-				last_early_int_seq int unsigned not null,
-				last_late_int_seq int unsigned not null) ENGINE=MyISAM");
+				first_early_age decimal(9,5),
+				first_late_age decimal(9,5),
+				last_early_age decimal(9,5),
+				last_late_age decimal(9,5)) ENGINE=MyISAM");
     
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.
@@ -3855,10 +3855,10 @@ sub computeAttrsTable {
 				n_colls int unsigned not null,
 				min_body_mass float,
 				max_body_mass float,
-				first_early_int_seq int unsigned,
-				first_late_int_seq int unsigned,
-				last_early_int_seq int unsigned,
-				last_late_int_seq int unsigned,
+				first_early_age decimal(9,5),
+				first_late_age decimal(9,5),
+				last_early_age decimal(9,5),
+				last_late_age decimal(9,5),
 				not_trace boolean,
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
@@ -3868,22 +3868,22 @@ sub computeAttrsTable {
     $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
-			 first_early_int_seq, first_late_int_seq, last_early_int_seq, last_late_int_seq,
+			 first_early_age, first_late_age, last_early_age, last_late_age,
 			 not_trace)
 		SELECT a.orig_no,
 			t.valid_no = t.synonym_no as is_valid,
 			(t.orig_no = t.synonym_no) or (t.orig_no = t.valid_no) as is_senior,
 			case coalesce(a.extant) 
 				when 'yes' then 1 when 'no' then 0 else null end as is_extant,
-			0, 0, 0, 0, occ.n_occs, 0,
+			0, 0, 0, 0, tsum.n_occs, 0,
 			coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
 			coalesce(e.maximum_body_mass, e.body_mass_estimate) as max,
-			occ.first_early_int_seq, occ.first_late_int_seq,
-			occ.last_early_int_seq, occ.last_late_int_seq,
+			tsum.first_early_age, tsum.first_late_age,
+			tsum.last_early_age, tsum.last_late_age,
 			(a.preservation <> 'trace' or a.preservation is null)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
-			LEFT JOIN $TAXON_SUMMARY as occ using (orig_no)
+			LEFT JOIN $TAXON_SUMMARY as tsum using (orig_no)
 		GROUP BY a.orig_no";
     
     $result = $dbh->do($sql);
@@ -3900,20 +3900,20 @@ sub computeAttrsTable {
 			max(v.max_body_mass) as max_body_mass,
 			sum(v.n_occs) as n_occs,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace,
-			min(v.first_early_int_seq) as first_early_int_seq,
-			min(v.first_late_int_seq) as first_late_int_seq,
-			min(v.last_early_int_seq) as last_early_int_seq,
-			min(v.last_late_int_seq) as last_late_int_seq
+			max(v.first_early_age) as first_early_age,
+			max(v.first_late_age) as first_late_age,
+			min(v.last_early_age) as last_early_age,
+			min(v.last_late_age) as last_late_age
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
 			v.n_occs = nv.n_occs,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.first_early_int_seq = nv.first_early_int_seq,
-			v.first_late_int_seq = nv.first_late_int_seq,
-			v.last_early_int_seq = nv.last_early_int_seq,
-			v.last_late_int_seq = nv.last_late_int_seq,
+			v.first_early_age = nv.first_early_age,
+			v.first_late_age = nv.first_late_age,
+			v.last_early_age = nv.last_early_age,
+			v.last_late_age = nv.last_late_age,
 			v.not_trace = nv.not_trace";
     
     $result = $dbh->do($sql);
@@ -3973,22 +3973,22 @@ sub computeAttrsTable {
 	my $sql = "
 		UPDATE $ATTRS_WORK as v JOIN
 		(SELECT t.parent_no,
-			coalesce(least(min(v.first_early_int_seq), pv.first_early_int_seq), 
-				min(v.first_early_int_seq), pv.first_early_int_seq) as first_early_int_seq,
-			coalesce(least(min(v.first_late_int_seq), pv.first_late_int_seq), 
-				min(v.first_late_int_seq), pv.first_late_int_seq) as first_late_int_seq,
-			coalesce(least(min(v.last_early_int_seq), pv.last_early_int_seq), 
-				min(v.last_early_int_seq), pv.last_early_int_seq) as last_early_int_seq,
-			coalesce(least(min(v.last_late_int_seq), pv.last_late_int_seq), 
-				min(v.last_late_int_seq), pv.last_late_int_seq) as last_late_int_seq
+			coalesce(greatest(max(v.first_early_age), pv.first_early_age), 
+				max(v.first_early_age), pv.first_early_age) as first_early_age,
+			coalesce(greatest(max(v.first_late_age), pv.first_late_age), 
+				max(v.first_late_age), pv.first_late_age) as first_late_age,
+			coalesce(least(min(v.last_early_age), pv.last_early_age), 
+				min(v.last_early_age), pv.last_early_age) as last_early_age,
+			coalesce(least(min(v.last_late_age), pv.last_late_age), 
+				min(v.last_late_age), pv.last_late_age) as last_late_age
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no
 		 WHERE t.depth = $child_depth and v.is_valid and v.is_senior and v.not_trace
 		 GROUP BY t.parent_no) as nv on v.orig_no = nv.parent_no
-		SET	v.first_early_int_seq = nv.first_early_int_seq,
-			v.first_late_int_seq = nv.first_late_int_seq,
-			v.last_early_int_seq = nv.last_early_int_seq,
-			v.last_late_int_seq = nv.last_late_int_seq";
+		SET	v.first_early_age = nv.first_early_age,
+			v.first_late_age = nv.first_late_age,
+			v.last_early_age = nv.last_early_age,
+			v.last_late_age = nv.last_late_age";
 	
 	$result = $dbh->do($sql);
 	
@@ -4008,10 +4008,10 @@ sub computeAttrsTable {
 			sum(v.n_occs) as n_occs,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
-			min(v.first_early_int_seq) as first_early_int_seq,
-			min(v.first_late_int_seq) as first_late_int_seq,
-			min(v.last_early_int_seq) as last_early_int_seq,
-			min(v.last_late_int_seq) as last_late_int_seq,
+			max(v.first_early_age) as first_early_age,
+			max(v.first_late_age) as first_late_age,
+			min(v.last_early_age) as last_early_age,
+			min(v.last_late_age) as last_late_age,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and v.is_valid
@@ -4024,10 +4024,10 @@ sub computeAttrsTable {
 			v.n_occs = nv.n_occs,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.first_early_int_seq = nv.first_early_int_seq,
-			v.first_late_int_seq = nv.first_late_int_seq,
-			v.last_early_int_seq = nv.last_early_int_seq,
-			v.last_late_int_seq = nv.last_late_int_seq,
+			v.first_early_age = nv.first_early_age,
+			v.first_late_age = nv.first_late_age,
+			v.last_early_age = nv.last_early_age,
+			v.last_late_age = nv.last_late_age,
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
@@ -4046,10 +4046,10 @@ sub computeAttrsTable {
 			sum(v.n_occs) as n_occs,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
-			min(v.first_early_int_seq) as first_early_int_seq,
-			min(v.first_late_int_seq) as first_late_int_seq,
-			min(v.last_early_int_seq) as last_early_int_seq,
-			min(v.last_late_int_seq) as last_late_int_seq,
+			max(v.first_early_age) as first_early_age,
+			max(v.first_late_age) as first_late_age,
+			min(v.last_early_age) as last_early_age,
+			min(v.last_late_age) as last_late_age,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and t.valid_no <> t.synonym_no
@@ -4062,10 +4062,10 @@ sub computeAttrsTable {
 			v.n_occs = nv.n_occs,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.first_early_int_seq = nv.first_early_int_seq,
-			v.first_late_int_seq = nv.first_late_int_seq,
-			v.last_early_int_seq = nv.last_early_int_seq,
-			v.last_late_int_seq = nv.last_late_int_seq,
+			v.first_early_age = nv.first_early_age,
+			v.first_late_age = nv.first_late_age,
+			v.last_early_age = nv.last_early_age,
+			v.last_late_age = nv.last_late_age,
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
@@ -4110,10 +4110,10 @@ sub computeAttrsTable {
 			v.n_occs = sv.n_occs,
 			v.min_body_mass = sv.min_body_mass,
 			v.max_body_mass = sv.max_body_mass,
-			v.first_early_int_seq = sv.first_early_int_seq,
-			v.first_late_int_seq = sv.first_late_int_seq,
-			v.last_early_int_seq = sv.last_early_int_seq,
-			v.last_late_int_seq = sv.last_late_int_seq,
+			v.first_early_age = sv.first_early_age,
+			v.first_late_age = sv.first_late_age,
+			v.last_early_age = sv.last_early_age,
+			v.last_late_age = sv.last_late_age,
 			v.not_trace = sv.not_trace");
     
     # We can stop here when debugging.
@@ -4709,6 +4709,8 @@ sub computeOccurrenceTables {
 				reid_no int unsigned not null,
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
+				base_age decimal(9,5),
+				top_age decimal(9,5),
 				reference_no int unsigned not null,
 				authorizer_no int unsigned not null,
 				enterer_no int unsigned not null) ENGINE=MyISAM");
@@ -4718,12 +4720,14 @@ sub computeOccurrenceTables {
     logMessage(2, "    inserting occurrences...");
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
-		       (occurrence_no, collection_no, taxon_no, orig_no, reference_no,
+		       (occurrence_no, collection_no, taxon_no, orig_no, base_age, top_age, reference_no,
 			authorizer_no, enterer_no)
-		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no,
+		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no, ei.base_age, li.top_age,
 			if(o.reference_no > 0, o.reference_no, c.reference_no),
 			o.authorizer_no, o.enterer_no
 		FROM occurrences as o JOIN collections as c using (collection_no)
+			LEFT JOIN interval_map as ei on ei.interval_no = c.max_interval_no
+			LEFT JOIN interval_map as li on li.interval_no = if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
 			LEFT JOIN authorities as a using (taxon_no)";
     
     $count = $dbh->do($sql);
@@ -4774,19 +4778,19 @@ sub computeOccurrenceTables {
 				orig_no int unsigned primary key,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
-				first_early_int_seq int unsigned not null,
-				first_late_int_seq int unsigned not null,
-				last_early_int_seq int unsigned not null,
-				last_late_int_seq int unsigned not null) ENGINE=MyISAM");
+				first_early_age decimal(9,5),
+				first_late_age decimal(9,5),
+				last_early_age decimal(9,5),
+				last_late_age decimal(9,5)) ENGINE=MyISAM");
     
     # Look for the lower and upper bounds for the interval range in which each taxon
     # occurs.  But ignore intervals at the period level and above, except for
     # precambrian and quaternary.  They are not just specific enough.
     
     $sql = "	INSERT INTO $TAXON_SUMMARY_WORK (orig_no, n_occs, n_colls,
-			first_early_int_seq, first_late_int_seq, last_early_int_seq, last_late_int_seq)
+			first_early_age, first_late_age, last_early_age, last_late_age)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
-			min(ei.older_seq), min(li.older_seq), min(ei.younger_seq), min(li.younger_seq)
+			max(ei.base_age), max(li.top_age), min(ei.base_age), min(li.top_age)
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN interval_map as ei on ei.interval_no = c.early_int_no
 			JOIN interval_map as li on li.interval_no = c.late_int_no
@@ -4818,13 +4822,13 @@ sub computeOccurrenceTables {
 				reference_no int unsigned primary key,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
-				early_int_seq int unsigned not null,
-				late_int_seq int unsigned not null) ENGINE=MyISAM");
+				early_age decimal(9,5),
+				late_age decimal(9,5)) ENGINE=MyISAM");
     
     $sql = "	INSERT INTO $REF_SUMMARY_WORK (reference_no, n_occs, n_colls,
-			early_int_seq, late_int_seq)
+			early_age, late_age)
 		SELECT m.reference_no, count(*), count(distinct collection_no),
-			min(ei.older_seq), min(li.younger_seq)
+			max(ei.base_age), min(li.top_age)
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN interval_map as ei on ei.interval_no = c.early_int_no
 			JOIN interval_map as li on li.interval_no = c.late_int_no
