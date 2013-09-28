@@ -4725,9 +4725,9 @@ sub computeOccurrenceTables {
 		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no, ei.base_age, li.top_age,
 			if(o.reference_no > 0, o.reference_no, c.reference_no),
 			o.authorizer_no, o.enterer_no
-		FROM occurrences as o JOIN collections as c using (collection_no)
-			LEFT JOIN interval_map as ei on ei.interval_no = c.max_interval_no
-			LEFT JOIN interval_map as li on li.interval_no = if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
+		FROM occurrences as o JOIN coll_matrix as c using (collection_no)
+			LEFT JOIN interval_map as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN interval_map as li on li.interval_no = c.late_int_no
 			LEFT JOIN authorities as a using (taxon_no)";
     
     $count = $dbh->do($sql);
@@ -4738,7 +4738,8 @@ sub computeOccurrenceTables {
     # reidentification if any.
     
     $sql = "	UPDATE $OCC_MATRIX_WORK as m
-			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no and re.most_recent = 'YES'
+			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no 
+				and re.most_recent = 'YES'
 			JOIN authorities as a on a.taxon_no = re.taxon_no
 		SET m.reid_no = re.reid_no,
 		    m.taxon_no = re.taxon_no,
@@ -4770,46 +4771,73 @@ sub computeOccurrenceTables {
     
     logMessage(2, "    summarizing by taxon");
     
-    # Then create working tables which will become the new occurrence summary
+    # Then create working tables which will become the new taxon summary
     # table and reference summary table.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $TAXON_SUMMARY_WORK");
     $result = $dbh->do("CREATE TABLE $TAXON_SUMMARY_WORK (
 				orig_no int unsigned primary key,
+				lft int unsigned not null,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
 				first_early_age decimal(9,5),
 				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
-				last_late_age decimal(9,5)) ENGINE=MyISAM");
+				last_late_age decimal(9,5),
+				first_occ int unsigned,
+				last_occ int unsigned) ENGINE=MyISAM");
     
     # Look for the lower and upper bounds for the interval range in which each taxon
-    # occurs.  But ignore intervals at the period level and above, except for
-    # precambrian and quaternary.  They are not just specific enough.
+    # occurs.  But ignore intervals at the period level and above (except for
+    # precambrian and quaternary).  They are not just specific enough.
     
-    $sql = "	INSERT INTO $TAXON_SUMMARY_WORK (orig_no, n_occs, n_colls,
+    $sql = "	INSERT INTO $TAXON_SUMMARY_WORK (orig_no, lft, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age)
-		SELECT m.orig_no, count(*), count(distinct collection_no),
+		SELECT m.orig_no, t.lft, count(*), count(distinct collection_no),
 			max(ei.base_age), max(li.top_age), min(ei.base_age), min(li.top_age)
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
+			JOIN taxon_trees as t using (orig_no)
 			JOIN interval_map as ei on ei.interval_no = c.early_int_no
 			JOIN interval_map as li on li.interval_no = c.late_int_no
-		WHERE (ei.level is null or ei.level > 3 or (ei.level = 3 and (ei.top_age >= 541.0 or ei.base_age <= 2.6))) and
-		      (li.level is null or li.level > 3 or (li.level = 3 and (li.top_age >= 541.0 or li.base_age <= 2.6)))
-		GROUP BY m.orig_no";
+		WHERE (ei.level is null or ei.level > 3 or
+				(ei.level = 3 and (ei.top_age >= 541.0 or ei.base_age <= 2.6))) and
+		      (li.level is null or li.level > 3 or 
+				(li.level = 3 and (li.top_age >= 541.0 or li.base_age <= 2.6)))
+		GROUP BY m.orig_no
+		HAVING m.orig_no > 0";
     
     $count = $dbh->do($sql);
     
     logMessage(2, "      $count taxa");
     
+    # Now that we have the age bounds for the first and last occurrence, we
+    # can select a candidate first and last occurrence for each taxon (from
+    # among all of the occurrences in the earliest/latest time interval in
+    # which that taxon is recorded).
+    
+    logMessage(2, "    finding first and last occurrences");
+    
+    $sql = "	UPDATE $TAXON_SUMMARY_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
+		SET s.first_occ = o.occurrence_no WHERE o.top_age >= s.first_late_age";
+    
+    $count = $dbh->do($sql);
+    
+    $sql = "	UPDATE $TAXON_SUMMARY_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
+		SET s.last_occ = o.occurrence_no WHERE o.base_age <= s.last_early_age";
+    
+    $count = $dbh->do($sql);
+    
     # Then index the symmary table by earliest and latest interval number, so
     # that we can quickly query for which taxa began or ended at a particular
-    # time. 
+    # time.
     
     logMessage(2, "    indexing the summary table");
     
-    $result = $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (n_occs)");
-    $result = $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (n_colls)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (lft)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (first_early_age)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (first_late_age)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (last_early_age)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (last_late_age)");
     
     # We now summarize the occurrence matrix by reference_no.  For each
     # reference, we record the range of time periods it covers, plus the
@@ -4845,6 +4873,8 @@ sub computeOccurrenceTables {
     
     $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (n_occs)");
     $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (n_colls)");
+    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (early_age)");
+    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (late_age)");
     
     # Now swap in the new tables:
     
