@@ -4350,7 +4350,7 @@ sub computeCollectionTables {
 		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
 			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_seq
 			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_seq
-			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_seq and i.top_age <= ei.top_age + 0.01
+			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_seq and i.top_age <= ei.top_age
 				and i.level = li.level
 		WHERE li.level <= ei.level and i.interval_no <> 0";
     
