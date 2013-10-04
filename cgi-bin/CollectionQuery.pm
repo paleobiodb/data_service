@@ -619,7 +619,7 @@ sub generateQueryFilters {
     # Then get the records for excluded taxa.  But only if there are any
     # included taxa in the first place.
     
-    if ( $exclude_no )
+    if ( $exclude_no && $exclude_no ne 'undefined' )
     {
 	@exclude_taxa = $self->{taxonomy}->getTaxa('self', $exclude_no, { fields => 'lft' });
     }
@@ -710,18 +710,28 @@ sub generateQueryFilters {
     
     if ( defined $min_age and $min_age > 0 )
     {
-	my $min_filt = $self->{params}{time_strict} ? "c.late_age" : "c.early_age";
 	$tables_ref->{c} = 1;
-	$min_age -= 0.001;
-	push @filters, "$min_filt > $min_age";
+	if ( $self->{params}{time_strict} )
+	{
+	    push @filters, "c.late_age >= $min_age";
+	}
+	else
+	{
+	    push @filters, "c.early_age > $min_age";
+	}
     }
     
     if ( defined $max_age and $max_age > 0 )
     {
-	my $max_filt = $self->{params}{time_strict} ? "c.early_age" : "c.late_age";
 	$tables_ref->{c} = 1;
-	$max_age += 0.001;
-	push @filters, "$max_filt < $max_age";
+	if ( $self->{params}{time_strict} )
+	{
+	    push @filters, "c.early_age <= $max_age";
+	}
+	else
+	{
+	    push @filters, "c.late_age < $max_age";
+	}
     }
     
     # Return the list
