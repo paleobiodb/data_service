@@ -1,0 +1,17 @@
+
+=encoding utf8
+
+=head1 PBDB Data Service: <% title %>
+
+This page describes L<version <% version %>|/data<% version %>/> of the service.
+
+<% content %>
+
+=head2 AUTHOR
+
+This service is provided by the L<Paleobiology Database|http://testpaleodb.geology.wisc.edu/>, 
+hosted by the L<University of Wisconsin-Madison|http://www.wisc.edu/>.
+
+If you have questions about this service, please contact 
+<% settings.appauthor %> <L<<% settings.appauthoremail %>|mailto:<% settings.appauthoremail %>>>.
+

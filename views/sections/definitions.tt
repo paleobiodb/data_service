@@ -1,0 +1,19 @@
+<%- BLOCK params %>
+<% IF done_params; RETURN; ELSE; SET done_params = 1; END %>
+
+=head2 PARAMETERS
+
+<% param_doc %>
+
+<% END -%>
+
+
+
+<%- BLOCK response %>
+<% IF done_response; RETURN; ELSE; SET done_response = 1; END %>
+
+=head2 RESPONSE
+
+<% response_doc %>
+
+<% END -%>
