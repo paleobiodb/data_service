@@ -38,10 +38,6 @@ Examples:
 
 L</data1.1/colls/list.txt?base_name=Cetacea&interval=Miocene&show=ref,loc,time>
 
-=item *
-
-L</data1.1/colls/list.json?name=Dascillidae&rel=all_parents>
-
 =back
 
 =item Summary clusters | L</data1.1/colls/summary|/data1.1/colls/summary_doc.html>
