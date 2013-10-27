@@ -1,6 +1,6 @@
 #!/opt/local/bin/perl
 
-use lib '../cgi-bin', 'cgi-bin';
+use lib '../lib', 'lib', '../cgi-bin', 'cgi-bin';
 use DBConnection;
 use TaxonTrees;
 use Taxonomy;

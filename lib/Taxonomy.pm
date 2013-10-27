@@ -338,7 +338,8 @@ sub new {
 		 name_table => $NAME_TABLE{$table_name},
 		 search_table => $SEARCH_TABLE{$table_name},
 		 opinion_table => $OPINION_TABLE{$table_name},
-		 opinion_cache => $OPINION_CACHE{$table_name} };
+		 opinion_cache => $OPINION_CACHE{$table_name},
+	         scratch_table => 'ancestry_scratch' };
     
     bless $self, $class;
     
@@ -396,11 +397,6 @@ our ($PARENT_FIELDS) = ", pa.taxon_name as parent_name, pa.taxon_rank as parent_
 # opinions).  They describe the taxon whose position is assigned by the opinion.
 
 our ($CHILD_FIELDS) = ", ca.taxon_name as child_name, ca.taxon_rank as child_rank";
-
-# The "kingdom" field is returned if we are asked for 'kingdom'.  It specifies
-# which kingdom of life a taxon is part of.
-
-our ($KINGDOM_FIELDS) = ", t.kingdom";
 
 # The "extant" fields are returned if we are asked for 'extant'.  These fields
 # are computed from 'extant' field of the authorities table by propagating
@@ -462,11 +458,7 @@ our ($SIZE_FIELDS) = ", v.taxon_size as size, v.extant_size as extant_size";
 # The "app" fields describe the first and last appearance of the taxon in our
 # database.
 
-our ($APP_FIELDS) = ", v.first_early_int_seq as firstapp_ei, v.first_late_int_seq as firstapp_li, v.last_early_int_seq as lastapp_ei, v.last_last_int_seq as lastapp_li";
-
-our ($APP_LONG_FIELDS) = ", fei.interval_name as firstapp_ei, fli.interval_name as firstapp_li, lei.interval_name as lastapp_ei, lli.interval_name as lastapp_li, fei.base_age as firstapp_ea, fli.top_age as firstapp_la, lei.base_age as lastapp_ea, lli.top_age as lastapp_la";
-
-our ($APP_FIRST_FIELDS) = ", fei.base_age as firstapp_ea, fli.top_age as firstapp_la";
+our ($APP_FIELDS) = ", v.first_early_age as firstapp_ea, v.first_late_age as firstapp_la, v.last_early_age as lastapp_ea, v.last_late_age as lastapp_la";
 
 our ($INT_PHYLO_FIELDS) = ", pi.kingdom_no, pi.kingdom, pi.phylum_no, pi.phylum, pi.class_no, pi.class, pi.order_no, pi.order, pi.family_no, pi.family";
 
@@ -550,11 +542,6 @@ describe the taxon being assigned to.
 
 Includes the fields 'child_name' and 'child_rank', which are only valid for
 opinions.  These fields describe the taxon being assigned.
-
-=item kingdom
-
-Includes the field 'kingdom', indicating the kingdom of life into which each
-taxon is placed.
 
 =item extant
 
@@ -1260,11 +1247,12 @@ sub getTaxaByName {
     # based on the specified options.
     
     my $query_fields = $AUTH_BASIC_FIELDS;
-    my $extra_tables = {v => 1};
+    my $extra_tables;
     
     if ( defined $options->{fields} and $return ne 'id' )
     {
 	($query_fields, $extra_tables) = $self->generateQueryFields($options->{fields});
+	$extra_tables->{v} = 1;
     }
     
     if ( $status ne 'all' )
@@ -2252,6 +2240,7 @@ sub getTaxaByOpinions {
     if ( defined $options->{fields} and not $return eq 'id' )
     {
 	($query_fields, $extra_tables) = $self->generateQueryFields($options->{fields});
+	$extra_tables->{v} = 1;
     }
     
     # Add in 'base_no' if appropriate
@@ -2565,6 +2554,7 @@ sub getRelatedTaxon {
     if ( defined $options->{fields} and $return ne 'id' )
     {
 	($query_fields, $extra_tables) = $self->generateQueryFields($options->{fields});
+	$extra_tables->{v} = 1;
     }
     
     my $extra_joins = $self->generateExtraJoins('a', $extra_tables, $select);
@@ -2689,7 +2679,7 @@ sub getRelatedTaxon {
 	$self->computeAncestry({ $base_no => 1 });
 	
 	$SQL_STRING = "
-		SELECT $query_fields, v.extant_children as child_count, s.gen
+		SELECT $query_fields, v.extant_children as child_count, s.is_base
 		FROM $tree_table as t JOIN ancestry_temp as s using (orig_no)
 			JOIN $attrs_table as v on v.orig_no = t.orig_no
 			JOIN $auth_table as a on a.taxon_no = t.${select}_no
@@ -2819,7 +2809,7 @@ sub getRelatedTaxonId {
 	$self->computeAncestry({ $base_no => 1 });
 	
 	$SQL_STRING = "
-		SELECT t.${select}_no as taxon_no, v.extant_children as child_count, s.gen
+		SELECT t.${select}_no as taxon_no, v.extant_children as child_count, s.is_base
 		FROM $tree_table as t JOIN ancestry_temp as s using (orig_no)
 			JOIN $attrs_table as v on v.orig_no = t.orig_no
 		ORDER BY t.lft DESC";
@@ -2832,7 +2822,7 @@ sub getRelatedTaxonId {
 	
 	foreach my $t (@$result_list)
 	{
-	    last if $t->{child_count} > 1 and $t->{gen} > 1;
+	    last if $t->{child_count} > 1 and not $t->{is_base};
 	    $pan_taxon_no = $t->{taxon_no};
 	}
 	
@@ -3241,7 +3231,7 @@ sub getTaxa {
     {
 	if ( $rel eq 'all_parents' )
 	{
-	    push @filter_list, "s.gen > 1";
+	    push @filter_list, "not s.is_base";
 	}
 	
 	elsif ( $rel eq 'all_children' )
@@ -3706,7 +3696,7 @@ sub getTaxa {
 	if ( $rel eq 'common_ancestor' )
 	{
 	    $query_fields .= ', t.lft, t.rgt' unless $query_fields =~ / t\.lft/;
-	    $query_fields .= ', s.gen';
+	    $query_fields .= ', s.is_base';
 	}
 	
 	# We need a slightly different query if the option 'senior' was specified.
@@ -3833,7 +3823,7 @@ sub getTaxa {
 	
 	foreach my $t (@$result_list)
 	{
-	    if ( $t->{gen} == 1 )
+	    if ( $t->{is_base} )
 	    {
 		$min = $t->{lft} if $t->{lft} < $min or !defined $min;
 		$max = $t->{lft} if $t->{lft} > $max;
@@ -5547,11 +5537,6 @@ sub generateQueryFields {
 	    $tables{pa} = 1;
 	}
 	
-	elsif ( $inc eq 'kingdom' )
-	{
-	    $fields .= $KINGDOM_FIELDS;
-	}
-	
 	elsif ( $inc eq 'extant' )
 	{
 	    $fields .= $EXTANT_FIELDS;
@@ -5616,24 +5601,6 @@ sub generateQueryFields {
 	{
 	    $fields .= $APP_FIELDS;
 	    $tables{v} = 1;
-	}
-	
-	elsif ( $inc eq 'applong' )
-	{
-	    $fields .= $APP_LONG_FIELDS;
-	    $tables{v} = 1;
-	    $tables{fei} = 1;
-	    $tables{fli} = 1;
-	    $tables{lei} = 1;
-	    $tables{lli} = 1;
-	}
-	
-	elsif ( $inc eq 'appfirst' )
-	{
-	    $fields .= $APP_FIRST_FIELDS;
-	    $tables{v} = 1;
-	    $tables{fei} = 1;
-	    $tables{fli} = 1;
 	}
 	
 	elsif ( $inc eq 'phylo' )
@@ -6535,8 +6502,7 @@ sub computeAncestry {
     my $dbh = $self->{dbh};
     my $auth_table = $self->{auth_table};
     my $tree_table = $self->{tree_table};
-    my $scratch_table = $self->{ancestry_scratch};
-    my $compute_ancestry = $self->{ancestry_procedure};
+    my $scratch_table = $self->{scratch_table};
     
     my $result;
     
@@ -6544,15 +6510,17 @@ sub computeAncestry {
     # $scratch_table and convey it past the table locks.
     
     $result = $dbh->do("DROP TABLE IF EXISTS ancestry_temp");
-    $result = $dbh->do("CREATE TEMPORARY TABLE ancestry_temp LIKE $scratch_table");
+    $result = $dbh->do("CREATE TEMPORARY TABLE ancestry_temp (
+				orig_no int unsigned primary key,
+				is_base tinyint unsigned) Engine=MyISAM");
     
     # Lock the tables that will be used by the stored procedure
     # "compute_ancestry".
     
     $result = $dbh->do("LOCK TABLES $scratch_table WRITE,
 				    $scratch_table as s WRITE,
-				    $auth_table as a WRITE,
-				    $tree_table as t WRITE,
+				    $auth_table READ,
+				    $tree_table READ,
 				    ancestry_temp WRITE");
     
     # We need a try block to make sure that the table locks are released
@@ -6560,29 +6528,13 @@ sub computeAncestry {
     
     try
     {
-	# Clear the scratch table.  We do this at start instead of at end
-	# because it is unavoidably a global table and it is not easy to
-	# guarantee that it will get cleared in all cases if errors occur.
-	
-	$result = $dbh->do("DELETE FROM $scratch_table");
-	
-	# Then seed the scratch table with the starting taxon_no values (one
-	# or more).
-	
-	my $values = join(',', map { "($_, 1)" } keys %$base_nos);
-	
-	$result = $dbh->do("INSERT IGNORE INTO $scratch_table VALUES $values");
-	
-	# Now call a stored procedure which iteratively inserts the
-	# parents of the taxa in $scratch_table back into it until the
-	# top of the taxonomic hierarchy is reached.
-	
-	$result = $dbh->do("CALL $compute_ancestry(0)");
+	my $taxon_nos = join(',', keys %$base_nos);
+	$result = $dbh->do("CALL compute_ancestry('$auth_table','$tree_table', '$taxon_nos')");
 	
 	# Finally, copy the information out of $scratch_table to a
 	# temporary table so that we can release the locks.
 	
-	$result = $dbh->do("INSERT INTO ancestry_temp SELECT * FROM $scratch_table");	    
+	$result = $dbh->do("INSERT INTO ancestry_temp SELECT * FROM $scratch_table"); 
     }
     
     finally {
@@ -6806,7 +6758,7 @@ use Carp (qw/carp croak/);
 # Universal accessor.  If we can't find the desired field, emit a warning and
 # return undefined.
 
-sub get {
+sub getSelf {
     my ($self, $fieldname) = @_;
     
     if ( exists $self->{$fieldname} )

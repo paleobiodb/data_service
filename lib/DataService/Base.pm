@@ -70,7 +70,7 @@ sub warn {
 
 sub set_response {
 
-    my ($self) = @_;
+    my ($self, $format, $vocab, $op, @output_args) = @_;
     
     my $valid = $self->{valid};
     
@@ -79,24 +79,37 @@ sub set_response {
 
     my (@show, %show);
     
-    if ( ref $valid->value('show') eq 'ARRAY' )
+    foreach my $o ( @output_args )
     {
-	foreach my $p ( @{$valid->value('show')} )
+	next unless $o;
+	my @sections;
+	
+	if ( ref $o eq 'ARRAY' )
 	{
-	    next if $show{$p};
-	    $show{$p} = 1;
-	    push @show, $p;
+	    @sections = @$o;
+	}
+	
+	elsif ( not ref $o )
+	{
+	    @sections = split /\s*,\s*/, $o;
+	}
+	
+	foreach my $s (@sections)
+	{
+	    next if $show{$s};
+	    $show{$s} = 1;
+	    push @show, $s;
 	}
     }
     
     $self->{show} = \%show;
     $self->{show_order} = \@show;
-    $self->{output_format} = $valid->value('output_format');
+    $self->{output_format} = $format;
     
     # Set the vocabulary according to the 'vocab' parameter, or defaulting to
     # the best vocabulary for the content type.
     
-    my $vocab = $valid->value('vocab') ||
+    $vocab ||=
 	
 	($self->{output_format} eq 'json' ? 'com' :
 	 $self->{output_format} eq 'xml' ? 'dwc' :
@@ -107,22 +120,15 @@ sub set_response {
     # Figure out which operation we are executing
     
     my $class = ref $self;
-    my $op = $self->{op};
-    my $main_section = 'basic';
     
     no strict 'refs';
-    
-    if ( exists ${"${class}::OUTPUT"}{$op} )
-    {
-	$main_section = $op;
-    }
     
     # Quote all output fields if we are directed to.  A level of 2 means to
     # quote everything, 1 means only quote fields that contain commas or newlines
     
     if ( $self->{output_format} eq 'csv' )
     {
-	$self->{quoted} = $valid->value('quoted') ? 2 : 1;
+	$self->{quoted} = 2;
     }
     
     # Now set the actual list of output fields for the basic query operation
@@ -130,11 +136,11 @@ sub set_response {
     
     my (@select_list, @proc_list, @output_list, %tables);   
     
-    foreach my $section ($main_section, @show)
+    foreach my $section (@show)
     {
 	next unless $section;
 	
-	my $select_conf = ${"{class}::SELECT"}{"${op}_${section}"} || ${"${class}::SELECT"}{$section};
+	my $select_conf = ${"${class}::SELECT"}{"${op}_${section}"} || ${"${class}::SELECT"}{$section};
 	my $tables_conf = ${"${class}::TABLES"}{"${op}_${section}"} || ${"${class}::TABLES"}{$section};
 	my $proc_conf = ${"${class}::PROC"}{"${op}_${section}"} || ${"${class}::PROC"}{$section};
 	my $output_conf = ${"${class}::OUTPUT"}{"${op}_${section}"} || ${"${class}::OUTPUT"}{$section};
@@ -262,28 +268,20 @@ sub document_response {
     
     my $doc_string;
     
-    if ( $format eq 'pod' )
+    my $field_count = scalar(@vocab_list);
+    my $field_string = join ' / ', @vocab_list;
+    
+    if ( $field_count > 1 )
     {
-	my $field_count = scalar(@vocab_list);
-	my $field_string = join ' / ', @vocab_list;
-	
-	if ( $field_count > 1 )
-	{
-	    $doc_string .= "=over 4\n\n";
-	    $doc_string .= "=for pod_extra table_header Field name*/$field_count | Section | Description\n\n";
-	    $doc_string .= "=item $field_string\n\n";
-	}
-	
-	else
-	{
-	    $doc_string .= "=over 4\n\n";
-	    $doc_string .= "=for pod_extra table_header Field name / Section / Description\n\n";
-	}
+	$doc_string .= "=over 4\n\n";
+	$doc_string .= "=for pod_extra table_header Field name*/$field_count | Section | Description\n\n";
+	$doc_string .= "=item $field_string\n\n";
     }
     
     else
     {
-	$doc_string = $self->output_html_header(\@vocab_list);
+	$doc_string .= "=over 4\n\n";
+	$doc_string .= "=for pod_extra table_header Field name / Section / Description\n\n";
     }
     
     foreach my $section (@sections)
@@ -297,15 +295,7 @@ sub document_response {
 	
 	foreach my $r (@$output_list)
 	{
-	    if ( $format eq 'pod' )
-	    {
-		$doc_string .= $self->output_pod_field($name, \@vocab_list, $r);
-	    }
-	    
-	    else
-	    {
-		$doc_string .= $self->output_html_field($name, \@vocab_list, $r);
-	    }
+	    $doc_string .= $self->document_field($name, \@vocab_list, $r);
 	}
     }
     
@@ -315,63 +305,7 @@ sub document_response {
 }
 
 
-sub output_html_header {
-    
-    my ($self, $vocab) = @_;
-    
-    my $cols = scalar(@$vocab);
-    my $rowspan = $cols > 1 ? 'rowspan="2"' : '';
-    
-    my $header = <<END_HEADER;
-=begin html
-
-<table class="response">
-<tr class="resp_head"><td colspan="$cols">Field name</td>
-<td $rowspan>Section</td>
-<td $rowspan>Description</td></tr>
-END_HEADER
-    
-    if ( $cols > 1 )
-    {
-	$header .= "<tr class=\"resp_head\">\n";
-	
-	foreach my $v (@$vocab)
-	{
-	    my $f = $v eq 'rec' ? 'pbdb' : $v;
-	    $header .= "<td>$f</td>";
-	}
-	
-	$header .= "</tr>\n";
-    }
-    
-    return $header;
-}
-
-
-sub output_html_field {
-
-    my ($self, $section_name, $vocab_list, $r) = @_;
-    
-    my $line = "<tr>\n";
-    my $descrip = $r->{doc} || "&nbsp;";
-    
-    $section_name = $r->{show} if $r->{show};
-    
-    foreach my $v ( @$vocab_list )
-    {
-	my $field_name = $r->{$v} || "<i>n/a</i>";
-	$line .= "<td class=\"field_name\">$field_name</td>\n";
-    }
-    
-    $line .= "<td>$section_name</td>\n";
-    $line .= "<td>$descrip</td>\n";
-    $line .= "</tr>\n";
-    
-    return $line;
-}
-
-
-sub output_pod_field {
+sub document_field {
     
     my ($self, $section_name, $vocab_list, $r) = @_;
     
@@ -635,7 +569,7 @@ sub stream_result {
     my $sth = $self->{main_sth};
     my $row;
     
-    PBDB_Data::debug_msg("STREAMING");
+    print STDERR "STREAMING\n";
     
     # First send out the partial output previously stashed by
     # generateCompoundResult().

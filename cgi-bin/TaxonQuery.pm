@@ -162,6 +162,7 @@ sub fetchSingle {
     
     my $dbh = $self->{dbh};
     my $taxonomy = $self->{taxonomy};
+    my $valid = $self->{params};
     my $taxon_no;
     
     # Then figure out which taxon we are looking for.  If we have a taxon_no,
@@ -169,26 +170,26 @@ sub fetchSingle {
     
     my $not_found_msg = '';
     
-    if ( $self->{params}{id} )
+    if ( $valid->value('id') )
     {    
-	$taxon_no = $self->{params}{id};
+	$taxon_no = $valid->value('id');
 	$not_found_msg = "Taxon number $taxon_no was not found in the database";
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
     
-    elsif ( defined $self->{params}{name} )
+    elsif ( defined $valid->value('name') )
     {
-	$not_found_msg = "Taxon '$self->{params}{name}' was not found in the database";
+	$not_found_msg = "Taxon '$valid->value('name')' was not found in the database";
 	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id' };
 	
-	if ( defined $self->{params}{rank} )
+	if ( defined $valid->value('rank') )
 	{
-	    $name_select->{rank} = $self->{params}{rank};
+	    $name_select->{rank} = $valid->value('rank');
 	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
 	}
 	
-	($taxon_no) = $taxonomy->getTaxaByName($self->{params}{name}, $name_select);
+	($taxon_no) = $taxonomy->getTaxaByName($valid->value('name'), $name_select);
     }
     
     # If we haven't found a record, the result set will be empty.
@@ -220,7 +221,7 @@ sub fetchSingle {
     
     # If we were asked for the senior synonym, choose it.
     
-    my $rel = $self->{params}{senior} ? 'senior' : 'self';
+    my $rel = $valid->value('senior') ? 'senior' : 'self';
     
     # Next, fetch basic info about the taxon.
     
@@ -333,6 +334,7 @@ sub fetchMultiple {
     
     my $dbh = $self->{dbh};
     my $taxonomy = $self->{taxonomy};
+    my $valid = $self->{params};
     my $taxon_no;
     
     # First, figure out what info we need to provide
@@ -353,8 +355,8 @@ sub fetchMultiple {
     
     # Specify the other query options according to the query parameters.
     
-    my $limit = $self->{params}{limit};
-    my $offset = $self->{params}{offset};
+    my $limit = $valid->value('limit');
+    my $offset = $valid->value('offset');
     
     $options->{limit} = $limit if defined $limit;
     $options->{offset} = $offset if defined $offset;
@@ -364,12 +366,12 @@ sub fetchMultiple {
     
     my @name_matches;
     
-    if ( $self->{params}{name} )
+    if ( $valid->value('name') )
     {
-	my $name = $self->{params}{name};
+	my $name = $valid->value('name');
 	
 	my $options = { order => 'size.desc' };
-	$options->{exact} = 1 if $self->{params}{exact};
+	$options->{exact} = 1 if $valid->value('exact');
     	
 	@name_matches = $taxonomy->getTaxaByName($name, $options);
 	return unless @name_matches;
@@ -378,7 +380,7 @@ sub fetchMultiple {
     # If a name was given and the relationship is 'self' (or not specified,
     # being the default) then just return the list of matches.
     
-    if ( $self->{params}{name} and $self->{params}{rel} eq 'self' )
+    if ( $valid->value('name') and $valid->value('rel') eq 'self' )
     {
 	$self->{main_result} = \@name_matches;
 	$self->{result_count} = scalar(@name_matches);
@@ -388,15 +390,15 @@ sub fetchMultiple {
     # If a name was given and some other relationship was specified, use the
     # first name found.
     
-    elsif ( $self->{params}{name} )
+    elsif ( $valid->value('name') )
     {
 	$options->{return} = 'stmt';
 	my $id = $name_matches[0]{orig_no};
-	my $rel = $self->{params}{rel} || 'self';
+	my $rel = $valid->value('rel') || 'self';
 	
-	if ( defined $self->{params}{rank} )
+	if ( defined $valid->value('rank') )
 	{
-	    $options->{rank} = $self->{params}{rank};
+	    $options->{rank} = $valid->value('rank');
 	}
 	
 	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id, $options);
@@ -405,15 +407,15 @@ sub fetchMultiple {
     
     # Otherwise, we are listing taxa by relationship.
     
-    elsif ( $self->{params}{id} or $self->{params}{rel} eq 'all_taxa' )
+    elsif ( $valid->value('id') or $valid->value('rel') eq 'all_taxa' )
     {
 	$options->{return} = 'stmt';
-	my $id_list = $self->{params}{id};
-	my $rel = $self->{params}{rel} || 'self';
+	my $id_list = $valid->value('id');
+	my $rel = $valid->value('rel') || 'self';
 	
-	if ( defined $self->{params}{rank} )
+	if ( defined $valid->value('rank') )
 	{
-	    $options->{rank} = $self->{params}{rank};
+	    $options->{rank} = $valid->value('rank');
 	}
 	
 	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);

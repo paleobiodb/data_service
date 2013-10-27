@@ -12,25 +12,22 @@ use strict;
 package PBDB_Data;
 
 use Dancer;
-use Dancer::Plugin::Database;
-use Dancer::Plugin::StreamData;
-use Dancer::Plugin::Validate;
+
+use HTTP::Validate qw( :validators );
 use Template;
 use Try::Tiny;
 use Scalar::Util qw(blessed);
 #use Pod::Simple::HTML;
 #use Pod::Simple::Text;
 
-use PodParser;
+use DataService;
 
-use Taxonomy;
-use DataQuery;
-use TaxonQuery;
-use TreeQuery;
-use CollectionQuery;
-use IntervalQuery;
-use PersonQuery;
-use ConfigQuery;
+use ConfigData;
+use IntervalData;
+use TaxonData;
+use CollectionData;
+use PersonData;
+
 
 
 # If we were called from the command line with 'GET' as the first argument,
@@ -40,53 +37,76 @@ if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
 {
     set apphandler => 'Debug';
     set logger => 'console';
+    
+    our($DEBUG) = 1;
 }
 
 
-# Map paths to attributes
+# Instantiate the request validator.
 
-our (%ROUTE_ATTRS);
+my $dv = HTTP::Validate->new();
 
-use subs qw(setupRoute setupDirectory);
+# Instantiate the data service.
+
+my $ds = DataService->new({ validator => $dv,
+			    response_selector => 'show',
+			    default_limit => 500,
+			    stream_threshold => 20480,
+			    public_access => 1,
+			    needs_dbh => 1 });
+
 
 # Specify the parameters we will accept, and the acceptable value types for
 # each of them.
 
-ruleset '1.1:common_params' => 
-    "The following parameters can be used with all requests:",
-    [content_type => 'ct', 'json', 'xml', 'txt=text/tab-separated-values', 'csv', 
-	{ key => 'output_format' }],
+ruleset $dv '1.1:common_params' => 
+    "The following parameter is used with most requests:",
+    [param => 'show', ANY_VALUE],
+    "Return extra result fields in addition to the basic fields.  The value should be a comma-separated",
+    "list of values corresponding to the sections listed in the response documentation for the URL path",
+    "that you are using.  If you include, e.g. 'app', then all of the fields whose section is C<app>",
+    "will be included in the result set.\n",
+    "You can use this parameter to tailor the result to your particular needs.",
+    "If you do not include it then you will usually get back only the fields",
+    "labelled C<basic>.  For more information, see the documentation pages",
+    "for the individual URL paths.", "=back",
+    "!!The following parameters can be used with all requests:",
+    [content_type => 'ct', 'json', 'xml', 'txt=text/plain', 'tsv=text/tab-separated-values', 'csv', 
+    	{ key => 'output_format' }],
     [optional => 'limit', POS_ZERO_VALUE, ENUM_VALUE('all'), 
       { error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
 	default => 500 } ],
-    "Limits the number of records returned.  The value may be a positive integer, zero, or 'all'.  Defaults to 500.",
+    "Limits the number of records returned.  The value may be a positive integer, zero, or C<all>.  Defaults to 500.",
     [optional => 'offset', POS_ZERO_VALUE],
     "Returned records start at this offset in the result set.  The value may be a positive integer or zero.",
     [optional => 'count', FLAG_VALUE],
-    "If specified, then the response includes the number of records found and the number returned.  This is ignored for CSV and TSV formats.",
+    "If specified, then the response includes the number of records found and the number returned.",
+    "This is ignored for the text formats (csv, tsv, txt) because they provide no way to fit this information in.",
     [optional => 'vocab', ENUM_VALUE('dwc', 'com', 'pbdb')],
-    "Selects the vocabulary used to name the fields in the response.  Possible values include:", "=over",
-    "=item pbdb", "PBDB classic field names.  This is the default for CSV and TSV responses.",
-    "=item dwc", "Darwin Core element names, plus a few invented by us.  This is the default for XML responses.",
+    "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
+    "you want to override the default vocabulary for your selected format.",
+    "Possible values include:", "=over",
+    "=item pbdb", "The PBDB classic field names.  This is the default for text format responses (csv, tsv, txt).",
+    "=item dwc", "Darwin Core element names.  This is the default for XML responses.",
+    "Note that many fields are not represented in this vocabulary, because of limitations of the Darwin Core element set.",
     "=item com", "3-character abbreviated (\"compact\") field names.  This is the default for JSON responses.",
-    "!!The following parameters are only relevant to the CSV and TSV formats:",
-    [optional => 'quoted', FLAG_VALUE],
-    "If specified, then CSV fields are always quoted.",
+    "!!The following parameters are only relevant to the text formats (csv, tsv, txt):",
     [optional => 'no_header', FLAG_VALUE],
     "If specified, then the header line (which gives the field names) is omitted.",
     [optional => 'linebreak', ENUM_VALUE('cr','crlf'), { default => 'crlf' }],
-    "Specifies the linebreak character sequences.  The value may be either 'cr' or 'crlf', and defaults to the latter.";
+    "Specifies the linebreak character sequence.  The value may be either 'cr' or 'crlf', and defaults to the latter.",
+    [ignore => 'splat'];
 
-ruleset '1.1:main_selector' =>
+ruleset $dv '1.1:main_selector' =>
     "The following parameters can be used to specify which records to return.  Except as specified below, you can use these in combination:",
     [param => 'bin_id', INT_VALUE, { list => ',' }],
     "Return only records associated with the specified collection summary (geographic) bin.",
-    [param => 'taxon_name', \&TaxonQuery::validNameSpec],
+    [param => 'taxon_name', \&TaxonData::validNameSpec],
     "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
     [param => 'taxon_id', POS_VALUE, { list => ','}],
     "Return only records associated with the specified taxonomic name(s), specified by numeric identifier.",
     "You may specify multiple identifiers, separated by commas.",
-    [param => 'base_name', \&TaxonQuery::validNameSpec, { list => ',' }],
+    [param => 'base_name', \&TaxonData::validNameSpec, { list => ',' }],
     "Return only records associated with the specified taxonomic name(s), or I<any of their children>.",
     "You may specify multiple names, separated by commas.",
     [param => 'base_id', POS_VALUE, { list => ',' }],
@@ -98,14 +118,16 @@ ruleset '1.1:main_selector' =>
     "Do not return any records whose associated taxonomic name is a child of the given name, specified by numeric identifier.",
     [param => 'person_no', POS_VALUE, { list => ','}],
     "Return only records whose entry was authorized by the given person or people, specified by numeric identifier.",
-    [param => 'lngmin', DECI_VALUE('-180.0','180.0')],
+    [param => 'lngmin', DECI_VALUE],
     "",
-    [param => 'lngmax', DECI_VALUE('-180.0','180.0')],
+    [param => 'lngmax', DECI_VALUE],
     "",
-    [param => 'latmin', DECI_VALUE('-90.0','90.0')],
+    [param => 'latmin', DECI_VALUE],
     "",
-    [param => 'latmax', DECI_VALUE('-90.0','90.0')],
+    [param => 'latmax', DECI_VALUE],
     "Return only records whose geographic location falls within the given bounding box.",
+    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
+    "Two adjacent bounding boxes if the range crosses the antimeridian",
     "Note that if you specify one of these parameters then you must specify all four of them.",
     [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
 	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
@@ -121,127 +143,261 @@ ruleset '1.1:main_selector' =>
     "If this parameter is specified, then return only records whose temporal locality falls strictly within the specified interval.",
     "Otherwise, all records whose temporal locality overlaps the specified interval will be returned";
 
-ruleset '1.1:coll_specifier' =>
-    [param => 'id', POS_VALUE, { alias => 'coll_id' }];
+ruleset $dv '1.1:coll_specifier' =>
+    [param => 'id', POS_VALUE, { alias => 'coll_id' }],
+    "The identifier of the collection you wish to retrieve";
 
-ruleset '1.1:coll_selector' =>
-    [param => 'id', INT_VALUE, { list => ',', alias => 'coll_id' }];
+ruleset $dv '1.1:coll_selector' =>
+    "You can use the following parameter if you wish to retrieve information about",
+    "a known list of collections, or to filter a known list against other criteria such as location or time.",
+    "Only the records which match the other parameters that you specify will be returned.",
+    [param => 'id', INT_VALUE, { list => ',', alias => 'coll_id' }],
+    "A comma-separated list of collection identifiers.";
 
-ruleset '1.1:coll_display' =>
-    [param => 'level', POS_VALUE],
-    [param => 'show', ENUM_VALUE('bin','ref','sref','loc','time','taxa','occ','det'), { list => ',' }];
+ruleset $dv '1.1:coll_display' =>
+    "The following parameter indicates which information should be returned about each resulting name:",
+    [param => 'show', ENUM_VALUE('bin','ref','sref','loc','time','taxa'), { list => ',' }],
+    "The value of this parameter should be a comma-separated list of section names drawn",
+    "From the list given below.  It defaults to C<basic>.";
 
-ruleset '1.1:colls/single' => 
+ruleset $dv '1.1/colls/single' => 
     [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
     [allow => '1.1:coll_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
     [allow => '1.1:common_params'];
 
-ruleset '1.1:colls/list' => 
+ruleset $dv '1.1/colls/list' => 
     [allow => '1.1:coll_selector'],
     [allow => '1.1:main_selector'],
     [allow => '1.1:coll_display'],
     "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
     [allow => '1.1:common_params'];
 
-ruleset '1.1:summary_display' => 
+ruleset $dv '1.1:summary_display' => 
     [param => 'level', POS_VALUE, { default => 1 }],
     [param => 'show', ENUM_VALUE('ext','time','all'), { list => ',' }];
 
-ruleset '1.1:colls/summary' => 
+ruleset $dv '1.1/colls/summary' => 
     [allow => '1.1:coll_selector'],
     [allow => '1.1:main_selector'],
     [allow => '1.1:summary_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
     [allow => '1.1:common_params'];
 
-ruleset '1.1:toprank_selector' =>
+ruleset $dv '1.1:toprank_selector' =>
     [param => 'show', ENUM_VALUE('formation', 'ref', 'author'), { list => ',' }];
 
-ruleset '1.1:colls/toprank' => 
+ruleset $dv '1.1:colls/toprank' => 
     [require => '1.1:main_selector'],
     [require => '1.1:toprank_selector'],
     [allow => '1.1:common_params'];
 
-ruleset '1.1:taxon_specifier' => 
-    [param => 'name', \&TaxonQuery::validNameSpec, { alias => 'taxon_name' }],
+ruleset $dv '1.1:taxon_specifier' => 
+    [param => 'name', \&TaxonData::validNameSpec, { alias => 'taxon_name' }],
+    "Return information about the most fundamental taxonomic name matching this string.",
+    "The C<%> character may be used as a wildcard.",
     [param => 'id', POS_VALUE, { alias => 'taxon_id' }],
-    [at_most_one => 'name', 'id', 'taxon_id'],
-    [optional => 'rank', \&TaxonQuery::validRankSpec],
+    "Return information about the taxonomic name corresponding to this identifier.",
+    [at_most_one => 'name', 'id'],
+    "!!You may not specify both C<name> and C<identifier> in the same query.",
+    [optional => 'rank', \&TaxonData::validRankSpec],
     [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact'),
       { default => 'current' } ];
 
-ruleset '1.1:taxon_selector' =>
-    [param => 'name', \&TaxonQuery::validNameSpec, { alias => 'taxon_name' }],
+ruleset $dv '1.1:taxon_selector' =>
+    "The following parameters are used to indicate a base taxon or taxa:",
+    [param => 'name', \&TaxonData::validNameSpec, { alias => 'taxon_name', list => "," }],
+    "Select the most fundamental taxon corresponding to the specified name(s).",
+    "To specify more than one, separate them by commas.",
+    "The C<%> character may be used as a wildcard.",
     [param => 'id', POS_VALUE, { list => ',', alias => 'base_id' }],
+    "Selects the taxa corresponding to the specified identifier(s).",
+    "You may specify more than one, separated by commas.",
+    "!!The following parameters indicate which related taxonomic names to return:",
     [param => 'rel', ENUM_VALUE('self', 'synonyms', 'children', 'all_children', 
 				'parents', 'all_parents', 'common_ancestor', 'all_taxa'),
       { default => 'self' } ],
+    "Accepted values include:", "=over 4",
+    "=item self", "Return information about the base taxon or taxa themselves.  This is the default.",
+    "=item synonyms", "Return information about all synonyms of the base taxon or taxa.",
+    "=item children", "Return information about the immediate children of the base taxon or taxa.",
+    "=item all_children", "Return information about all taxa contained within the base taxon or taxa.",
+    "=item parents", "Return information about the immediate parent of each base taxon.",
+    "=item all_parents", "Return information about all taxa which contain any of the base taxa.",
+    "=item common_ancestor", "Return information about the common ancestor of all of the base taxa.",
+    "=item all_taxa", "Return information about all taxa in the database.",
+    "You need not specify either C<name> or C<id> in this case.",
+    "Use with caution, because the maximum data set returned may be as much as 80 MB.",
     [param => 'status', ENUM_VALUE('valid', 'senior', 'invalid', 'all'),
       { default => 'valid' } ],
+    "Return only names that have the specified status.  Accepted values include:", "=over 4",
+    "=item valid", "Return only valid names.  This is the default.",
+    "=item senior", "Return only valid names that are not junior synonyms",
+    "=item invalid", "Return only invalid names (e.g. nomen dubia).",
+    "=item all", "Return all names.",
     [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact', 'all'),
       { default => 'current' } ];
 
-ruleset '1.1:taxon_filter' => 
-    [optional => 'rank', \&TaxonQuery::validRankSpec],
+ruleset $dv '1.1:taxon_filter' => 
+    "The following parameters further filter the list of return values:",
+    [optional => 'rank', \&TaxonData::validRankSpec],
+    "Return only taxonomic names at the specified rank (e.g. 'genus').",
     [optional => 'extant', BOOLEAN_VALUE],
+    "Return only extant or non-extant taxa.  Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
     [optional => 'depth', POS_VALUE];
 
-ruleset '1.1:taxon_display' => 
-    [optional => 'show', ENUM_VALUE('ref','attr','time','app','applong',
-				    'appfirst','coll','phyl','size',
-				    'nav','det','all'),
+ruleset $dv '1.1:taxon_display' => 
+    "The following parameter indicates which information should be returned about each resulting name:",
+    [optional => 'show', ENUM_VALUE('basic','full','ref','attr','app','applong',
+				    'appfirst','size','nav'),
 	{ list => ','}],
+    "This parameter specifies what fields should be returned.  For the full list of fields,",
+    "See the L<RESPONSE|#RESPONSE> section.  Its value should be a comma-separated list",
+    "of section names, and defaults to C<basic>.",
     [optional => 'exact', FLAG_VALUE];
 
-ruleset '1.1/taxa/single' => 
+ruleset $dv '1.1/taxa/single' => 
     [require => '1.1:taxon_specifier',
 	{ error => "you must specify either 'name' or 'id'" }],
     [allow => '1.1:taxon_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
     [allow => '1.1:common_params'];
 
-ruleset '1.1/taxa/list' => 
+ruleset $dv '1.1/taxa/list' => 
     [require => '1.1:taxon_selector',
 	{ error => "you must specify one of 'name', 'id', 'status', 'base_name', 'base_id', 'leaf_name', 'leaf_id'" }],
     [allow => '1.1:taxon_filter'],
     [allow => '1.1:taxon_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
     [allow => '1.1:common_params'];
 
-ruleset '1.1:interval_selector' => 
+ruleset $dv '1.1:interval_selector' => 
     [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
     [param => 'min_ma', DECI_VALUE(0)],
     [param => 'max_ma', DECI_VALUE(0)];
 
-ruleset '1.1/intervals' => 
+ruleset $dv '1.1:interval_specifier' =>
+    [param => 'id', POS_VALUE],
+    "Returns the interval corresponding to the specified identifier";
+
+ruleset $dv '1.1/intervals/list' => 
     [allow => '1.1:interval_selector'],
     [allow => '1.1:common_params'];
 
-ruleset '1.1/config' =>
+ruleset $dv '1.1/intervals/single' => 
+    [allow => '1.1:interval_specifier'],
+    [allow => '1.1:common_params'];
+
+ruleset $dv '1.1/config' =>
     "!> You can use any of the L<common parameters|/data.1.1/common_doc.html> with this request.", 
     [allow => '1.1:common_params'];
 
-ruleset '1.1:person_selector' => 
+ruleset $dv '1.1:person_selector' => 
     [param => 'name', ANY_VALUE];
 
-ruleset '1.1:person_specifier' => 
+ruleset $dv '1.1:person_specifier' => 
     [param => 'id', POS_VALUE, { alias => 'person_id' }];
 
-ruleset '1.1/people/single' => 
+ruleset $dv '1.1/people/single' => 
     [allow => '1.1:person_specifier'],
     [allow => '1.1:common_params'];
 
-ruleset '1.1/people/list' => 
+ruleset $dv '1.1/people/list' => 
     [require => '1.1:person_selector'],
     [allow => '1.1:common_params'];
 
-ruleset '1.1:refs_specifier' => 
+ruleset $dv '1.1:refs_specifier' => 
     [param => 'id', POS_VALUE, { alias => 'ref_id' }];
 
-ruleset '1.1/refs/single' => 
+ruleset $dv '1.1/refs/single' => 
     [require => '1.1:refs_specifier'],
     [allow => '1.1:common_params'];
 
-ruleset '1.1/refs/toprank' => 
+ruleset $dv '1.1/refs/toprank' => 
     [require => '1.1:main_selector'],
     [allow => '1.1:common_params'];
+
+
+# Configure the routes
+# ====================
+
+define_directory $ds '1.1' => { output => 'basic' };
+
+# Miscellaneous
+
+define_route $ds '1.1/config' => { class => 'ConfigData',
+				   op => 'get',
+				   docresp => 'basic',
+				 };
+
+define_route $ds '1.1/common' => { ruleset => '1.1:common_params',
+				   doctitle => 'common parameters' };
+
+define_route $ds '1.1/json' => { doctitle => 'JSON format' };
+
+define_route $ds '1.1/xml' => { doctitle => 'XML format' };
+
+define_route $ds '1.1/text' => { doctitle => 'text formats' };
+
+# Intervals
+
+define_directory $ds '1.1/intervals' => { class => 'IntervalData',
+					  docresp => 'basic,ref' };
+
+define_route $ds '1.1/intervals/single' => { op => 'get' };
+
+define_route $ds '1.1/intervals/list' => { op => 'list' };
+
+# Taxa
+
+define_directory $ds '1.1/taxa' => { class => 'TaxonData',
+				     docresp => 'basic,ref,attr,size,app,nav' };
+
+define_route $ds '1.1/taxa/single' => { op => 'get' };
+
+define_route $ds '1.1/taxa/list' => { op => 'list' };
+
+# Collections
+
+define_directory $ds '1.1/colls' => { class => 'CollectionData' };
+
+define_route $ds '1.1/colls/single' => { op => 'get', 
+					 output => 'single',
+				         docresp => 'bin,ref,sref,loc,time,taxa'};
+
+define_route $ds '1.1/colls/list' => { op => 'list', 
+				       output => 'list',
+				       docresp => 'bin,ref,sref,loc,time,taxa' };
+
+define_route $ds '1.1/colls/summary' => { op => 'summary', 
+					  output => 'summary',
+					  docresp => 'summary,ext,summary_time' };
+
+# Occurrences
+
+define_directory $ds '1.1/occs' => { class => 'OccurrenceData' };
+
+define_route $ds '1.1/occs/single' => { op => 'get' };
+
+define_route $ds '1.1/occs/list' => { op => 'list' };
+
+# People
+
+define_directory $ds '1.1/people' => { class => 'PersonData' };
+
+define_route $ds '1.1/people/single' => { op => 'get' };
+
+define_route $ds '1.1/people/list' => { op => 'list' };
+
+# References
+
+define_directory $ds '1.1/refs' => { class => 'ReferenceData' };
+
+define_route $ds '1.1/refs/single' => { op => 'get' };
+
+define_route $ds '1.1/refs/list' => { op => 'list' };
+
+
 
 # Send app pages
 
@@ -249,7 +405,7 @@ get '/testapp/:filename' => sub {
     
     $DB::single = 1;
     my $filename = param "filename";
-    return send_file("testapp/$filename", streaming => 1, callbacks => {});
+    return send_file("testapp/$filename", streaming => 1);
 };
 
 
@@ -257,17 +413,17 @@ get '/app/:filename' => sub {
     
     $DB::single = 1;
     my $filename = param "filename";
-    return send_file("app/$filename", streaming => 1, callbacks => {});
+    return send_file("app/$filename", streaming => 1);
 };
 
 
 # Send style sheets
 
-get '/data:v/css/:filename' => sub {
+get qr{ ^ /data [\d.]* /css/(.*) }xs => sub {
     
     $DB::single = 1;
-    my $filename = param "filename";
-    send_file("css/$filename", streaming => 1, callbacks => {});
+    my ($filename) = splat;
+    send_file("css/$filename", streaming => 1);
 };
 
 
@@ -289,14 +445,14 @@ get qr{/data(/.*)} => sub {
 get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* )
 	  (?: ( index | \w+_doc ) \. ( html | pod ) )? $ }xs => sub {
 	    
-    my ($path, $last, $ct) = splat;
+    my ($path, $last, $suffix) = splat;
     
     $DB::single = 1;
     $path .= $last unless !defined $last || $last eq 'index';
     $path =~ s{/$}{};
     $path =~ s{_doc}{};
     
-    sendDocumentation({ path => $path, ct => $ct });
+    $ds->send_documentation( $path, { format => $suffix } );
 };
 
 
@@ -306,46 +462,29 @@ get qr{ ^ /data ( \d+ \. \d+ (?: / [^/.]+ )* $ ) } => sub {
     
     $DB::single = 1;
     
-    sendDocumentation({ path => $path, ct => 'html' });
+    $ds->send_documentation( $path, { format => 'html' } );
 };
 
 
-# get qr{/data1.1(/.+)\.(html?|pod)} => sub {
+# Any path that ends in a suffix is a request for an operation.
+
+get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
     
-#     $DB::single = 1;
-#     my ($path, $ct) = @_;
-#     sendDocumentation(v => '1.1', path => $path, ct => $ct);
-# };
-
-# get qr{/data1.1(/[^.]+)?} => sub {
+    my ($path, $suffix) = splat;
     
-#     $DB::single = 1;
-#     my ($path) = @_;
-#     sendDocumentation(v => '1.1', $path, ct => 'html');
-# };
-
-
-# Now we have the version 1.1 routes:
-
-# Base and miscellaneous
-
-get '/data1.1/config.:ct' => sub {
+    $DB::single = 1;
     
-    querySingle({ class => 'ConfigQuery', 
-		  params => '1.1/config',
-		  op => 'single' });
+    # If the path ends in a number, replace it by 'ID' and add the parameter
+    # as 'id'.
+    
+    if ( $path =~ qr{ (\d+) $ }xs )
+    {
+	params->{id} = $1;
+	$path =~ s{\d+$}{single};
+    }
+    
+    $ds->execute_operation( $path, { format => $suffix } );
 };
-
-setupDirectory '1.1';
-
-setupRoute '1.1/config' =>
-   {
-    class => 'ConfigQuery',
-    op => 'single',
-    output => ['single'],
-   };
-
-setupDirectory '1.1/taxa';
 
 
 
@@ -372,820 +511,143 @@ setupDirectory '1.1/taxa';
 # 			path => '1.1/taxa/index' });
 # };
 
-get '/data1.1/taxa/single.:ct' => sub {
+# get '/data1.1/taxa/single.:ct' => sub {
 
-    querySingle({ class => 'TaxonQuery',
-		  path => '1.1/taxa/single',
-		  op => 'single' });
-};
+#     querySingle({ class => 'TaxonQuery',
+# 		  path => '1.1/taxa/single',
+# 		  op => 'single' });
+# };
 
-get '/data1.1/taxa/single_doc.:ct' => sub {
+# get '/data1.1/taxa/single_doc.:ct' => sub {
     
-    sendDocumentation({ class => 'TaxonQuery',
-			path => '1.1/taxa/single',
-		        output => ['single', 'nav'] });
-};
+#     sendDocumentation({ class => 'TaxonQuery',
+# 			path => '1.1/taxa/single',
+# 		        output => ['single', 'nav'] });
+# };
 
-get '/data1.1/taxa/list.:ct' => sub {
+# get '/data1.1/taxa/list.:ct' => sub {
 
-    queryMultiple({ class => 'TaxonQuery',
-		    path => '1.1/taxa/list',
-		    op => 'list' });
-};
+#     queryMultiple({ class => 'TaxonQuery',
+# 		    path => '1.1/taxa/list',
+# 		    op => 'list' });
+# };
 
-get '/data1.1/taxa/all.:ct' => sub {
+# get '/data1.1/taxa/all.:ct' => sub {
 
-    queryMultiple({ class => 'TaxonQuery',
-		    path => '1.1/taxa/list',
-		    op => 'list' });
-};
+#     queryMultiple({ class => 'TaxonQuery',
+# 		    path => '1.1/taxa/list',
+# 		    op => 'list' });
+# };
 
-get '/data1.1/taxa/hierarchy.:ct' => sub {
+# get '/data1.1/taxa/hierarchy.:ct' => sub {
 
-    queryMultiple({ class => 'TaxonQuery',
-		    path => '1.1/taxa/list',
-		    op => 'hierarchy' });
-};
+#     queryMultiple({ class => 'TaxonQuery',
+# 		    path => '1.1/taxa/list',
+# 		    op => 'hierarchy' });
+# };
 
-get '/data1.1/taxa/:id.:ct' => sub {
+# get '/data1.1/taxa/:id.:ct' => sub {
 
-    querySingle({ class => 'TaxonQuery',
-		  path => '1.1/taxa/single',
-		  op => 'single' });
-};
+#     querySingle({ class => 'TaxonQuery',
+# 		  path => '1.1/taxa/single',
+# 		  op => 'single' });
+# };
 
-# Collections
+# # Collections
 
-get '/data1.1/colls/single.:ct' => sub {
+# get '/data1.1/colls/single.:ct' => sub {
     
-    querySingle('CollectionQuery', v => '1.1',
-		validation => '1.1/colls/single',
-		op => 'single');
-};
+#     querySingle('CollectionQuery', v => '1.1',
+# 		validation => '1.1/colls/single',
+# 		op => 'single');
+# };
 
-get '/data1.1/colls/list.:ct' => sub {
+# get '/data1.1/colls/list.:ct' => sub {
 
-    queryMultiple('CollectionQuery', v => '1.1',
-		  validation => '1.1/colls/list',
-		  op => 'list');
-};
+#     queryMultiple('CollectionQuery', v => '1.1',
+# 		  validation => '1.1/colls/list',
+# 		  op => 'list');
+# };
 
-get '/data1.1/colls/list_doc.:ct' => sub {
+# get '/data1.1/colls/list_doc.:ct' => sub {
 
-    sendDocumentation({ class => 'CollectionQuery',
-			path => '1.1/colls/list',
-			output => ['single', 'attr', 'ref', 'author', 'bin', 'formation'] });
+#     sendDocumentation({ class => 'CollectionQuery',
+# 			path => '1.1/colls/list',
+# 			output => ['single', 'attr', 'ref', 'author', 'bin', 'formation'] });
     
-};
+# };
 
-get '/data1.1/colls/all.:ct' => sub {
+# get '/data1.1/colls/all.:ct' => sub {
 
-    queryMultiple('CollectionQuery', v => '1.1',
-		  validation => '1.1/colls/list',
-		  op => 'list');
-};
+#     queryMultiple('CollectionQuery', v => '1.1',
+# 		  validation => '1.1/colls/list',
+# 		  op => 'list');
+# };
 
-get '/data1.1/colls/toprank.:ct' => sub {
+# get '/data1.1/colls/toprank.:ct' => sub {
 
-    queryMultiple('CollectionQuery', v => '1.1',
-		  validation => '1.1/colls/toprank',
-		  op => 'toprank');
-};
+#     queryMultiple('CollectionQuery', v => '1.1',
+# 		  validation => '1.1/colls/toprank',
+# 		  op => 'toprank');
+# };
 
-get '/data1.1/colls/summary.:ct' => sub {
+# get '/data1.1/colls/summary.:ct' => sub {
 
-    queryMultiple('CollectionQuery', v => '1.1',
-		  validation => '1.1/colls/summary',
-		  op => 'summary');
-};
+#     queryMultiple('CollectionQuery', v => '1.1',
+# 		  validation => '1.1/colls/summary',
+# 		  op => 'summary');
+# };
 
-get '/data1.1/colls/:id.:ct' => sub {
+# get '/data1.1/colls/:id.:ct' => sub {
     
-    returnErrorResult({}, "404 Not found") unless params('id') =~ /^[0-9]+$/;
-    querySingle('CollectionQuery', v => '1.1',
-		validation => '1.1/colls/single',
-		op => 'single');
-};
+#     returnErrorResult({}, "404 Not found") unless params('id') =~ /^[0-9]+$/;
+#     querySingle('CollectionQuery', v => '1.1',
+# 		validation => '1.1/colls/single',
+# 		op => 'single');
+# };
 
-get '/data1.1/intervals/list.:ct' => sub {
+# get '/data1.1/intervals/list.:ct' => sub {
 
-    queryMultiple('IntervalQuery', v => '1.1',
-		  validation => '1.1/intervals',
-		  op => 'list');
-};
+#     queryMultiple('IntervalQuery', v => '1.1',
+# 		  validation => '1.1/intervals',
+# 		  op => 'list');
+# };
 
-get '/data1.1/intervals/hierarchy.:ct' => sub {
+# get '/data1.1/intervals/hierarchy.:ct' => sub {
     
-    queryMultiple('IntervalQuery', v => '1.1',
-		  validation => '1.1/intervals',
-		  op => 'hierarchy');
-};
+#     queryMultiple('IntervalQuery', v => '1.1',
+# 		  validation => '1.1/intervals',
+# 		  op => 'hierarchy');
+# };
 
-get '/data1.1/people/list.:ct' => sub {
+# get '/data1.1/people/list.:ct' => sub {
     
-    queryMultiple('PersonQuery', v => '1.1',
-		  validation => '1.1/people/list', op => 'list');
-};
+#     queryMultiple('PersonQuery', v => '1.1',
+# 		  validation => '1.1/people/list', op => 'list');
+# };
 
-get '/data1.1/people/single.:ct' => sub {
+# get '/data1.1/people/single.:ct' => sub {
 
-    querySingle('PersonQuery', v => '1.1',
-		  validation => '1.1/people/single', op => 'single');
-};
+#     querySingle('PersonQuery', v => '1.1',
+# 		  validation => '1.1/people/single', op => 'single');
+# };
 
-get '/data1.1/people/:id.:ct' => sub {
+# get '/data1.1/people/:id.:ct' => sub {
     
-    returnErrorResult({}, "404 Not found") unless params('id') =~ /^[0-9]+$/;
-    querySingle('PersonQuery', v => '1.1',
-		validation => '1.1/people/single', op => 'single');
-};
+#     returnErrorResult({}, "404 Not found") unless params('id') =~ /^[0-9]+$/;
+#     querySingle('PersonQuery', v => '1.1',
+# 		validation => '1.1/people/single', op => 'single');
+# };
 
 # Any other URL beginning with '/data1.1/' is an error.
-
-get qr{/data1\.1/(.*)} => sub {
-
-    my ($path) = splat;
-    $DB::single = 1;
-    returnErrorResult({}, "404 Not found");
-};
-
-
-# Now we try the version 1.0 URLs
-
-# require "web_app10.pm";
-    
-
-# Anything that falls through to here is a bad request
 
 get qr{(.*)} => sub {
 
     my ($path) = splat;
     $DB::single = 1;
-    returnErrorResult({}, "404 Not found");
+    $ds->error_result("", "html", "404 The resource you requested was not found.");
 };
 
-
-# querySingle ( class, attrs )
-# 
-# Execute a single-result query on the given class, using the parameters
-# specified by the current request.  The attributes provided are used to
-# generate a query object.  The attribute 'validation' 
-
-sub querySingle {
-
-    my ($attrs) = @_;
-    
-    my ($class, $query, $result);
-    
-    try {
-	
-	# Queries are safe to access from anywhere, without regard to browser
-	# controls, because they do not have any side effects on either server or
-	# client.
-	
-	header "Access-Control-Allow-Origin" => "*";
-	
-	$DB::single = 1;
-	
-	# Create a new query object, from the specified class.
-	
-	$class = $attrs->{class};
-	$query = $class->new(database(), $attrs);
-	
-	# Validate and clean the parameters.  If an error occurs,
-	# an error response will be generated automatically.
-	
-	$query->{params} = validate_request($attrs->{ruleset}, params);
-	
-	# Determine the output fields and vocabulary.
-	
-	$query->setOutputList();
-	
-	# Execute the query and generate the result.
-	
-	$query->fetchSingle();
-	$result = $query->generateSingleResult();
-    }
-    
-    # If an error occurs, return an appropriate error response to the client.
-    
-    catch {
-
-	$result = returnErrorResult($query, $_);
-    };
-    
-    # Send the result back to the client.
-    
-    return $result;
-}
-
-
-# queryMultiple ( class, attrs )
-# 
-# Execute a multiple-result query on the given class, using the parameters
-# specified by the current request.  Those derived from the URL path are in
-# %attrs, those from the URL arguments are in %$params.
-
-sub queryMultiple {
-    
-    my ($attrs) = @_;
-    
-    my ($class, $query, $result);
-    
-    try {
-	
-	# Queries are safe to access from anywhere, without regard to browser
-	# controls, because they do not have any side effects on either server or
-	# client.
-	
-	header "Access-Control-Allow-Origin" => "*";
-	
-	$DB::single = 1;
-	
-	# Create a new query object, from the specified class.
-	
-	$class = $attrs->{class};
-	$query = $class->new(database(), $attrs);
-	
-	# Validate and clean the parameters.  If an error occurs,
-	# an error response will be generated automatically.
-	
-	$query->{params} = validate_request($attrs->{ruleset}, params);
-	
-	# Determine the output fields and vocabulary.
-	
-	$query->setOutputList();
-	
-	# Execute the query and generate the result.
-	
-	$query->fetchMultiple();
-	
-	# If the server supports streaming, call generateCompoundResult with
-	# can_stream => 1 and see if it returns any data or not.  If it does
-	# return data, send it back to the client as the response content.  An
-	# undefined result is a signal that we should stream the data by
-	# calling stream_data (imported from Dancer::Plugin::StreamData).
-	
-	if ( server_supports_streaming )
-	{
-	    $result = $query->generateCompoundResult( can_stream => 1 ) or
-		stream_data( $query, 'streamResult' );
-	}
-	
-	# If the server does not support streaming, we just generate the result
-	# and return it.
-	
-	else
-	{
-	    $result = $query->generateCompoundResult();
-	}
-    }
-    
-    # If an error occurs, pass it to returnErrorResult.
-    
-    catch {
-	
-	$result = returnErrorResult($query, $_);
-    };
-    
-    return $result;
-}
-
-
-sub setupRoute {
-    
-    my ($path, $attrs) = @_;
-    
-    $ROUTE_ATTRS{$path} = $attrs || {};
-}
-
-
-sub setupDirectory {
-    
-    my ($path, $attrs) = @_;
-    
-    $ROUTE_ATTRS{$path} = $attrs || {};
-    $ROUTE_ATTRS{$path}{is_directory} = 1;
-}
-
-
-# sendDocumentation ( attrs )
-# 
-# Respond with a documentation message corresponding to the specified attributes.
-
-sub sendDocumentation {
-    
-    my ($attrs) = @_;
-    
-    my $path = $attrs->{path};
-    my $format = $attrs->{ct} || 'html';
-    
-    my $ruleset = $attrs->{ruleset} || $ROUTE_ATTRS{$path}{ruleset} || $path;
-    my $class = $attrs->{class} || $ROUTE_ATTRS{$path}{class};
-    my $output = $attrs->{output} || $ROUTE_ATTRS{$path}{output};
-    my $docfile = $attrs->{file} || $ROUTE_ATTRS{$path}{docfile};
-    my $title = $attrs->{title} || $ROUTE_ATTRS{$path}{title};
-    
-    header "Access-Control-Allow-Origin" => "*";
-    
-    my ($version, $display_path);
-    
-    if ( $path =~ qr{ ^ ( \d+ \. \d+ ) }xs )
-    {
-	$version = $1;
-    }
-    
-    $DB::single = 1;
-    
-    # Compute the string that is used to display the path being documented,
-    # and the version string.
-    
-    # !!! send an error response unless we have a version
-    
-    if ( $ROUTE_ATTRS{$path}{is_directory} )
-    {
-	$title ||= "/data$path/";
-	$docfile ||= "${path}/index.tt";
-    }
-    
-    else
-    {
-	$title ||= "/data$path";
-	$docfile ||= "${path}_doc.tt";
-    }
-
-    # Now pull up the documentation file for the given path and assemble it
-    # together with elements describing the parameters and output fields.
-    
-    set layout => 'doc_1_1';
-    
-    my $viewdir = config->{views};
-    
-    unless ( -e "$viewdir/$docfile" )
-    {
-	$docfile = "$version/error.tt";
-    }
-    
-    my $param_doc = document_params($ruleset) if $ruleset;
-    my $response_doc = $class->output_pod('pod', $output) if $class && $output;
-    
-    my $doc_string = template $docfile, { version => $version, 
-					  param_doc => $param_doc,
-					  response_doc => $response_doc,
-					  title => $title };
-    
-    # If POD format was requested, return the documentation as is.
-    
-    if ( $format eq 'pod' )
-    {
-	content_type 'text/plain';
-	return $doc_string;
-    }
-    
-    # Otherwise, convert the POD to HTML and return that.
-    
-    else
-    {
-	my $doc_html;
-    	# my $parser = new Pod::Simple::HTML;
-	# $parser->html_css('/data/css/dsdoc.css');
-	# $parser->output_string(\$doc_html);
-	# $parser->parse_string_document($doc_string);
-	
-	my $parser = new PodParser;
-	$parser->init_doc;
-	$parser->parse_pod($doc_string);
-	
-	$doc_html = $parser->generate_html({ css => '/data/css/dsdoc.css', tables => 1 });
-	
-	content_type 'text/html';
-	return $doc_html;
-    }
-}
-
-
-sub processDocumentation {
-    
-    my ($doc_ref) = @_;
-    
-    my $output = '';
-    my $table_level = 0;
-    
-    foreach my $line (split(/\n/, $$doc_ref))
-    {
-	unless ( $line =~ qr{ <d }x )
-	{
-	    $output .= $line . "\n";
-	    next;
-	}
-	
-	if ( $line =~ s{ < dl ( [^>]* ) > }{<table$1>}x )
-	{
-	    $table_level++;
-	}
-	
-	#$line =~ s{ < dt ( [^>]* ) > }{<tr><td$1>}x;
-	#$line =~ s{ < /dt > }{</td>}x;
-	#$line =~ s{ < dd ( [^>]* ) > }{<td$1>}x;
-	#$line =~ s{ < /dd > }{</td></tr>}x;
-	
-	if ( $line =~ s{ </dl> }{</table>}x )
-	{
-	    $table_level--;
-	}
-	
-	$output .= $line . "\n";
-    }
-    
-    return $output;
-}
-
-
-
-# showUsage ( path )
-# 
-# Show a usage message (i.e. manual page) corresponding to the specified path.
-
-sub showUsage {
-
-    my ($path) = @_;
-    
-    content_type 'text/html; charset=utf-8';
-    
-    $DB::single = 1;
-    
-    my ($v) = param "v";
-    $v = $DataQuery::CURRENT_VERSION unless defined $v and $DataQuery::VERSION_ACCEPTED{$v};
-    
-    my $pod = getHelpText({ v => $v }, $path);
-    my $html;
-    
-    if ( param "pod" )
-    {
-	$html = $pod;
-    }
-    
-    else
-    {
-	my $parser = new Pod::Simple::HTML;
-	$parser->html_css('/data/css/dsdoc.css');
-	$parser->output_string(\$html);
-	$parser->parse_string_document($pod);
-    }
-    
-    return $html;
-}
-
-
-# setContentType ( ct )
-# 
-# If the parameter is one of 'xml' or 'json', set content type of the response
-# appropriately.  Otherwise, send back a status of 415 "Unknown Media Type".
-
-sub setContentType {
-    
-    my ($ct) = @_;
-    
-    if ( $ct eq 'xml' )
-    {
-	content_type 'text/xml; charset=utf-8';
-    }
-    
-    elsif ( $ct eq 'json' )
-    {
-	content_type 'application/json; charset=utf-8';
-    }
-    
-    elsif ( $ct eq 'html' )
-    {
-	content_type 'text/html; charset=utf-8';
-    }
-    
-    elsif ( $ct eq 'csv' )
-    {
-	content_type 'text/csv; charset=utf-8';
-    }
-    
-    elsif ( $ct eq 'txt' )
-    {
-	content_type 'text/plain; charset=utf-8';
-    }
-    
-    else
-    {
-	content_type 'text/plain';
-	status(415);
-	halt("Unknown Media Type: '$ct' is not supported by this application; use '.json', '.xml', '.csv' or '.txt' instead");
-    }
-}
-
-
-# returnErrorResult ( message )
-# 
-# This method is called if an exception occurs during execution of a route
-# subroutine.  If $exception is a blessed reference, then we pass it on (this
-# is necessary for streaming to work properly).
-# 
-# If it is a string that starts with a 4xx HTTP result code, we nip that off
-# and send the rest as the result.
-# 
-# Otherwise, we log it and send back a generic error message with a result
-# code of 500 "server error".
-# 
-# If the content type is 'json', then we send a JSON object with the field
-# "error" giving the error message.  Otherwise, we just send a plain text
-# message.
-
-sub returnErrorResult {
-
-    my ($query, $exception) = @_;
-    my ($code) = 500;
-    
-    # If the exception is a blessed reference, pass it on.  It's most likely a
-    # signal from one part of Dancer to another.
-    
-    if ( blessed $exception )
-    {
-	die $exception;
-    }
-    
-    # Otherwise, if it's a string that starts with 4xx, break that out as the
-    # HTTP result code.
-    
-    if ( defined $exception and $exception =~ /^(4\d+)\s+(.*)/ )
-    {
-	$code = $1;
-	$exception = $2;
-    }
-    
-    # Otherwise, log the message and change the message to a generic one.
-    
-    else
-    {
-	print STDERR "\n=============\nCaught an error at " . scalar(gmtime) . ":\n";
-	print STDERR $exception;
-	print STDERR "=============\n";
-	$exception = "A server error occurred during processing of this request.  Please notify the administrator of this website.";
-    }
-    
-    # If the message is 'help', display the help message for this route.
-    
-    if ( $exception =~ /^help/ )
-    {
-	my $pod = 'HELP'; #getHelpText($query, $label);
-	my $parser;
-	
-	if ( $query->{show_pod} )
-	{
-	    $exception = $pod;
-	}
-	
-	elsif ( $query->{ct} eq 'html' )
-	{
-	    $parser = new Pod::Simple::HTML;
-	    $parser->html_css('/data/css/dsdoc.css');
-	    $exception = '';
-	    $parser->output_string(\$exception);
-	    $parser->parse_string_document($pod);
-	}
-	else
-	{
-	    $parser = new Pod::Simple::Text;
-	    $exception = '';
-	    $parser->output_string(\$exception);
-	    $parser->parse_string_document($pod);
-	}
-	
-    }
-    
-    # Send back JSON results as an object with field 'error'.
-    
-    if ( defined $query->{params}{ct} and $query->{params}{ct} eq 'json' )
-    {
-	status($code);
-	header "Access-Control-Allow-Origin" => "*";
-	
-	my $error_obj = { 'error' => $exception };
-	
-	if ( defined $query->{warnings} and $query->{warnings} > 0 )
-	{
-	    $error_obj->{warnings} = $query->{warnings};
-	}
-	
-	return to_json($error_obj) . "\n";
-    }
-    
-    # A content type of HTML means we were asked for some documentation.
-    
-    elsif ( defined $query->{params}{ct} and $query->{params}{ct} eq 'html' )
-    {
-	status(200);
-	content_type 'text/html';
-	return $exception . "\n";
-    }
-    
-    # Everything else gets a plain text message.
-    
-    else
-    {
-	content_type 'text/plain';
-	status($code);
-	return $exception . "\n";
-    }
-}
-
-
-# getHelpText ( query, label )
-# 
-# Assemble a help message using the text stored in $HELP_TEXT{$label} together
-# with parameter information retrieved from $query.
-
-# sub getHelpText {
-    
-#     my ($query, $label, @args) = @_;
-    
-#     my ($v) = param "v";
-#     $v = $DataQuery::CURRENT_VERSION unless defined $v and $DataQuery::VERSION_ACCEPTED{$v};
-    
-#     my $text = $HELP_TEXT{$label . $v} || $HELP_TEXT{$label} ||
-# 	"Undefined help message for '$label'.  Please contact the system administrator of this website.";
-    
-#     $text =~ s/\[(.*?)\]/substHelpText($query, $1, \@args)/eg;
-    
-#     return $text;
-# }
-
-
-# sub substHelpText {
-    
-#     my ($query, $variable, $args) = @_;
-    
-#     if ( $variable eq 'URL' )
-#     {
-# 	return request->uri;
-#     }
-    
-#     elsif ( $variable eq 'CT' )
-#     {
-# 	return param "ct";
-#     }
-    
-#     elsif ( $variable eq 'V' )
-#     {
-# 	return $query->{v};
-#     }
-    
-#     elsif ( $variable =~ /^(\d+)$/ )
-#     {
-# 	return $args->[$1-1] if ref $args eq 'ARRAY' and defined $args->[$1-1];
-# 	return '';
-#     }
-    
-#     elsif ( $variable =~ /^URL:(.*)/ )
-#     {
-# 	my ($path) = $1;
-# 	my ($v) = $query->{v};
-# 	my ($orig) = request->uri;
-# 	my ($hostname) = config->{hostname};
-# 	my ($port) = config->{hostport};
-# 	my ($base) = 'http://' . $hostname;
-# 	$base .= ":$port" if defined $port and $port ne '' and $port ne '80';
-# 	my ($tag) = '';
-	
-# 	if ( $path =~ /^([BP])(\d.*)/ )
-# 	{
-# 	    if ( $1 eq 'B' )
-# 	    {
-# 		$orig = '/data1.0';
-# 	    }
-# 	    else
-# 	    {
-# 		$orig = '/data';
-# 	    }
-# 	    $path = '/';
-# 	}
-	
-# 	if ( $path =~ /\.CT/ )
-# 	{
-# 	    if ( $orig =~ /(\.json|\.xml|\.html)/ )
-# 	    {
-# 		my $suffix = $1;
-# 		$path =~ s/\.CT/$suffix/;
-# 	    }
-# 	}
-	
-# 	if ( $path =~ /(.*?)(\#\w+)$/ )
-# 	{
-# 	    $path = $1;
-# 	    $tag = $2;
-# 	}
-	
-# 	if ( $orig =~ m{^/data\d} )
-# 	{
-# 	    return $base . "/data${v}${path}${tag}";
-# 	}
-	
-# 	elsif ( $path =~ /\?/ )
-# 	{
-# 	    return $base . "/data${path}&v=$v${tag}";
-# 	}
-	
-# 	else
-# 	{
-# 	    return $base . "/data${path}?v=$v${tag}";
-# 	}
-#     }
-    
-#     elsif ( $variable =~ /^XML:(.*)/ )
-#     {
-# 	return $1 if params->{ct} eq 'xml';
-# 	return '';
-#     }
-    
-#     elsif ( $variable =~ /^JSON:(.*)/ )
-#     {
-# 	return $1 if params->{ct} eq 'json';
-# 	return '';
-#     }
-    
-#     elsif ( $variable =~ /^PARAMS(?::(.*))?/ )
-#     {
-# 	my $param_string = $query->describeParameters();
-# 	my $label = $1 || "PARAMETERS";
-	
-# 	if ( defined $param_string && $param_string ne '' )
-# 	{
-# 	    return "=head2 $label\n\n$param_string";
-# 	}
-# 	else
-# 	{
-# 	    return '';
-# 	}
-#     }
-    
-#     elsif ( $variable =~ /^REQS(?::(.*))?/ )
-#     {
-# 	my $req_string = $query->describeRequirements();
-# 	my $label = $1 || "REQUIREMENTS";
-	
-# 	if ( defined $req_string && $req_string ne '' )
-# 	{
-# 	    return "=head2 $label\n\n$req_string";
-# 	}
-# 	else
-# 	{
-# 	    return '';
-# 	}
-#     }
-    
-#     elsif ($variable eq 'RESPONSE' )
-#     {
-# 	my $field_string = $query->describeFields();
-# 	my $label = "RESPONSE";
-	
-# 	if ( defined $field_string && $field_string ne '' )
-# 	{
-# 	    my $string = getHelpText($query, 'RESPONSE') . $field_string;
-# 	    return $string;
-# 	}
-# 	else
-# 	{
-# 	    return getHelpText($query, 'RESPONSE_NOFIELDS');
-# 	}
-#     }
-    
-#     elsif ( $variable eq 'HEADER' or $variable eq 'FOOTER' )
-#     {
-# 	my $string = getHelpText($query, $variable);
-# 	return $string;
-#     }
-    
-#     elsif ( $variable =~ /^HEADER:(.*)/ )
-#     {
-# 	my $label = $1;
-	
-# 	if ( $label eq 'URL' )
-# 	{
-# 	    $label = substHelpText($query, 'URL');
-# 	}
-
-# 	$label = ": $label";
-	
-# 	my $string = getHelpText($query, 'HEADER', $label);
-# 	return $string;
-#     }
-    
-#     else
-#     {
-# 	return "[$variable]";
-#     }
-# }
-
-
-sub debug_msg {
-    
-    debug(@_);
-}
 
 1;
 

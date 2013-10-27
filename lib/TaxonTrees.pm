@@ -4420,6 +4420,8 @@ sub computeCollectionTables {
 		clust_id int unsigned,
 		n_colls int unsigned,
 		n_occs int unsigned,
+		early_age decimal(9,5),
+		late_age decimal(9,5), 
 		early_seq int unsigned not null,
 		late_seq int unsigned not null,
 		lng decimal(9,6),
@@ -4436,10 +4438,12 @@ sub computeCollectionTables {
     
     $sql = "	INSERT IGNORE INTO $COLL_BINS_WORK
 			(bin_lng, bin_lat, bin_id, n_colls, n_occs, 
+			 early_age, late_age, 
 			 early_seq, late_seq, lng, lat,
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
 		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs),
+		       max(early_age), min(late_age),
 		       min(early_seq), min(late_seq), avg(lng), avg(lat),
 		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
 		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
@@ -4462,6 +4466,8 @@ sub computeCollectionTables {
 		clust_id int unsigned not null,
 		n_colls int unsigned,
 		n_occs int unsigned,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
 		early_seq int unsigned not null,
 		late_seq int unsigned not null,
 		lng decimal(9,6),
@@ -4619,6 +4625,8 @@ sub computeCollectionTables {
     $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
 		(SELECT clust_id, sum(n_colls) as n_colls,
 			sum(n_occs) as n_occs,
+			max(early_age) as early_age,
+			min(late_age) as late_age,
 			min(early_seq) as early_seq,
 			min(late_seq) as late_seq,
 			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
@@ -4628,6 +4636,7 @@ sub computeCollectionTables {
 		FROM $COLL_BINS_WORK GROUP BY clust_id) as agg
 			using (clust_id)
 		SET k.n_colls = agg.n_colls, k.n_occs = agg.n_occs,
+		    k.early_age = agg.early_age, k.late_age = agg.late_age,
 		    k.early_seq = agg.early_seq, k.late_seq = agg.late_seq,
 		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
 		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,

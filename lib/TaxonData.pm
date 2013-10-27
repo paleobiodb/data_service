@@ -58,30 +58,20 @@ $OUTPUT{basic} =
     { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', show => 'ref', json_list => 1, txt_list => "|||",
 	doc => "The reference from which this name was entered into the database (as formatted text)" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
-	doc => "The identifier of the primary reference associated with the taxon" },
+	doc => "A list of identifiers indicating the source document(s) from which this name was entered." },
     { rec => 'is_extant', com => 'ext', dwc => 'isExtant',
         doc => "True if this taxon is extant on earth today, false if not, not present if unrecorded" },
     { rec => 'size', com => 'siz', show => 'size',
         doc => "The total number of taxa in the database that are contained within this taxon, including itself" },
     { rec => 'extant_size', com => 'exs', show => 'size',
         doc => "The total number of extant taxa in the database that are contained within this taxon, including itself" },
-    { rec => 'firstapp_ei', com => 'fei', dwc => 'firstAppearanceEarlyInterval', show => 'applong',
-        doc => "The name of the interval for the first appearance of this taxon in this database" },
-    { rec => 'firstapp_li', com => 'fli', dwc => 'firstAppearanceLateIneterval', show => 'applong', 
-        dedup => 'firstapp_ei',
-        doc => "The end of the interval range for the first appearance of this taxon in this database" },
-    { rec => 'lastapp_ei', com => 'lei', dwc => 'lastAppearanceEarlyInterval', show => 'applong',
-        doc => "The name of the interval for the last appearance of this taxon in this database" },
-    { rec => 'lastapp_li', com => 'lli', dwc => 'lastAppearanceLateInterval', show => 'applong', 
-        dedup => 'lastapp_ei',
-        doc => "The end of the interval range for the last appearance of this taxon in this database" },
-    { rec => 'firstapp_ea', com => 'fea', dwc => 'firstAppearanceEarlyAge', show => 'applong',
+    { rec => 'firstapp_ea', com => 'fea', dwc => 'firstAppearanceEarlyAge', show => 'app',
         doc => "The early age bound for the first appearance of this taxon in this database" },
-    { rec => 'firstapp_la', com => 'fla', dwc => 'firstAppearanceLateAge', show => 'applong', 
+    { rec => 'firstapp_la', com => 'fla', dwc => 'firstAppearanceLateAge', show => 'app', 
         doc => "The late age bound for the first appearance of this taxon in this database" },
-    { rec => 'lastapp_ea', com => 'lea', dwc => 'lastAppearanceEarlyAge', show => 'applong',
+    { rec => 'lastapp_ea', com => 'lea', dwc => 'lastAppearanceEarlyAge', show => 'app',
         doc => "The early age bound for the last appearance of this taxon in this database" },
-    { rec => 'lastapp_la', com => 'lla', dwc => 'lastAppearanceLateAge', show => 'applong', 
+    { rec => 'lastapp_la', com => 'lla', dwc => 'lastAppearanceLateAge', show => 'app', 
         doc => "The late age bound for the last appearance of this taxon in this database" },
    ];
 
@@ -223,17 +213,15 @@ sub get {
     
     my @fields;
     
-    push @fields, 'link' if $self->{show}{nav};
-    push @fields, 'parent' if $self->{show}{nav};
-    push @fields, 'phylo' if $self->{show}{nav};
-    push @fields, 'counts' if $self->{show}{nav};
     push @fields, 'ref' if $self->{show}{ref};
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
     push @fields, 'app' if $self->{show}{app};
-    push @fields, 'appfirst' if $self->{show}{appfirst};
-    push @fields, 'applong' if $self->{show}{applong};
-    push @fields, 'kingdom' if $self->{show}{code};
+    
+    push @fields, 'link' if $self->{show}{nav};
+    push @fields, 'parent' if $self->{show}{nav};
+    push @fields, 'phylo' if $self->{show}{nav};
+    push @fields, 'counts' if $self->{show}{nav};
     
     $options->{fields} = \@fields;
     
@@ -289,50 +277,50 @@ sub get {
 	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
 	{
 	    $r->{phylum_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						     { limit => 10, order => 'size.desc', rank => 20, fields => ['size', 'appfirst'] } ) ];
+						     { limit => 10, order => 'size.desc', rank => 20, fields => ['size', 'app'] } ) ];
 	}
 	
 	unless ( $r->{class_no} or $r->{rank} <= 17 )
 	{
 	    $r->{class_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						    { limit => 10, order => 'size.desc', rank => 17, fields => ['size', 'appfirst'] } ) ];
+						    { limit => 10, order => 'size.desc', rank => 17, fields => ['size', 'app'] } ) ];
 	}
 	
 	unless ( $r->{order_no} or $r->{rank} <= 13 )
 	{
 	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
 	    $r->{order_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						    { limit => 10, order => $order, rank => 13, fields => ['size', 'appfirst'] } ) ];
+						    { limit => 10, order => $order, rank => 13, fields => ['size', 'app'] } ) ];
 	}
 	
 	unless ( $r->{family_no} or $r->{rank} <= 9 )
 	{
 	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
 	    $r->{family_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						     { limit => 10, order => $order, rank => 9, fields => ['size', 'appfirst'] } ) ];
+						     { limit => 10, order => $order, rank => 9, fields => ['size', 'app'] } ) ];
 	}
 	
 	if ( $r->{rank} > 5 )
 	{
 	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
 	    $r->{genus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						    { limit => 10, order => $order, rank => 5, fields => ['size', 'appfirst'] } ) ];
+						    { limit => 10, order => $order, rank => 5, fields => ['size', 'app'] } ) ];
 	}
 	
 	if ( $r->{rank} == 5 )
 	{
 	    $r->{subgenus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						       { limit => 10, order => 'size.desc', rank => 4, fields => ['size', 'appfirst'] } ) ];
+						       { limit => 10, order => 'size.desc', rank => 4, fields => ['size', 'app'] } ) ];
 	}
 	
 	if ( $r->{rank} == 5 or $r->{rank} == 4 )
 	{
 	    $r->{species_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						       { limit => 10, order => 'size.desc', rank => 3, fields => ['size', 'appfirst'] } ) ];
+						       { limit => 10, order => 'size.desc', rank => 3, fields => ['size', 'app'] } ) ];
 	}
 	
 	$r->{children} = 
-	    [ $taxonomy->getTaxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => ['size', 'appfirst'] } ) ];
+	    [ $taxonomy->getTaxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => ['size', 'app'] } ) ];
     }
     
     return 1;
@@ -351,8 +339,8 @@ sub list {
     my ($self) = @_;
     
     my $dbh = $self->{dbh};
-    my $taxonomy = $self->{taxonomy};
-    my $valid = $self->{params};
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $valid = $self->{valid};
     my $taxon_no;
     
     # First, figure out what info we need to provide
@@ -365,9 +353,11 @@ sub list {
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
     push @fields, 'app' if $self->{show}{app};
-    push @fields, 'applong' if $self->{show}{applong};
-    push @fields, 'appfirst' if $self->{show}{appfirst};
-    push @fields, 'kingdom' if $self->{show}{code};
+    
+    push @fields, 'link' if $self->{show}{nav};
+    push @fields, 'parent' if $self->{show}{nav};
+    push @fields, 'phylo' if $self->{show}{nav};
+    push @fields, 'counts' if $self->{show}{nav};
     
     $options->{fields} = \@fields;
     
@@ -423,7 +413,18 @@ sub list {
 	return $self->{main_sth};
     }
     
-    # Otherwise, we are listing taxa by relationship.
+    # Otherwise, we are listing taxa by relationship.  If we are asked for
+    # 'common_ancestor', then we have to process the result further.
+    
+    elsif ( $valid->value('rel') eq 'common_ancestor' )
+    {
+	$options->{return} = 'list';
+	my $id_list = $valid->value('id');
+	
+	($self->{main_record}) = $taxonomy->getTaxa('common_ancestor', $id_list, $options);
+    }
+    
+    # Otherwise, we just 
     
     elsif ( $valid->value('id') or $valid->value('rel') eq 'all_taxa' )
     {

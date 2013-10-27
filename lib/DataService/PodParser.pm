@@ -822,7 +822,7 @@ sub generate_html_open_item {
 	my $text = $self->generate_html_content($node->{content});
 	$text =~ s/ \)$//;
 	
-	my @fields = split qr{ +[()/|] +}, $text;
+	my @fields = split qr{ [()/|] }, $text;
 	
 	if ( $self->{expect_subhead} )
 	{
@@ -950,11 +950,13 @@ sub generate_html_content {
     {
 	my $code = $content->{code};
 	my $subcont = $content->{content} || '';
-	my $target = $content->{target} || $content->{content} || '';
+	my $href = $content->{target} || $content->{content} || '';
 	
 	if ( $code eq 'L' )
 	{
-	    return "<a class=\"pod_link\" href=\"$target\">$subcont</a>";
+	    my $target = $href =~ qr{ ^ \w+ : }xs ? 'target="_blank"' : '';
+	    
+	    return "<a class=\"pod_link\" $target href=\"$href\">$subcont</a>";
 	}
 	
 	elsif ( $code eq 'I' or $code eq 'F' )

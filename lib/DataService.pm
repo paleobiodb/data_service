@@ -327,15 +327,15 @@ sub send_documentation {
     
     if ( $self->{is_directory}{$path} )
     {
-	$doctitle ||= "/data$path/";
-	$docfile ||= "${path}/index.tt";
+	$doctitle //= "/data$path/";
+	$docfile //= "${path}/index.tt";
     }
     
     else
     {
-	$doctitle ||= "/data$path";
-	$docfile ||= "${path}_doc.tt";
-	$docresp ||= $op;
+	$doctitle //= "/data$path";
+	$docfile //= "${path}_doc.tt";
+	$docresp //= $op;
     }
     
     # All documentation is public, so gets the maximally permissive CORS header.
@@ -436,9 +436,10 @@ register 'execute_operation' => sub {
 	
 	my $validator = $self->{validator};
 	my $ruleset = $attrs->{ruleset} || $self->route_attr($path, 'ruleset');
-	my $needs_dbh = $attrs->{needs_dbh} || $self->route_attr($path, 'needs_dbh');
+	my $output = $attrs->{output} // $self->route_attr($path, 'output');
+	my $arg = $attrs->{arg} // $self->route_attr($path, 'arg');
+	my $needs_dbh = $attrs->{needs_dbh} // $self->route_attr($path, 'needs_dbh') // $self->{needs_dbh};
 	
-	$needs_dbh = $self->{needs_dbh} if !defined $needs_dbh;
 	$ruleset = $path if !defined $ruleset && $validator->ruleset_defined($path);
 	
 	# Set the response content type and access control header
@@ -482,11 +483,11 @@ register 'execute_operation' => sub {
 	# Determine the output fields and vocabulary, based on the parameters
 	# already specified.
 	
-	$request->set_response();
+	$request->set_response($format, $request->{params}{vocab}, $op, $output, $request->{params}{show});
 	
 	# Execute the query or other operation.
 	
-	$request->$op;
+	$request->$op();
 	
 	# If we have a single main record, then we return it.
 	
