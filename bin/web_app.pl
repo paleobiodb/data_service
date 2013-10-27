@@ -289,7 +289,7 @@ ruleset $dv '1.1/intervals/single' =>
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1/config' =>
-    "!> You can use any of the L<common parameters|/data.1.1/common_doc.html> with this request.", 
+    "!> You can use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1:person_selector' => 
