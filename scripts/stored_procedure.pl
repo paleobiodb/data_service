@@ -4,6 +4,9 @@ use lib "../cgi-bin";
 use DBConnection;
 
 
+$Constants::DB_USER = 'root';
+$Constants::DB_PASSWD = $ARGV[0];
+
 my $dbh = DBConnection::connect();
 
 $dbh->do("DROP PROCEDURE IF EXISTS anyopinion");
