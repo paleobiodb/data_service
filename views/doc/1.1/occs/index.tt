@@ -1,0 +1,9 @@
+=head2 DESCRIPTION
+
+The /data1.1/occs routes provide access to information about the
+fossil occurrences represented in the Paleobiology Database.
+
+=head2 SYNOPSIS
+
+B<This URL path is not yet active, but will be soon.>
+

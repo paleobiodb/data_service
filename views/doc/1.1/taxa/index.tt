@@ -1,0 +1,47 @@
+=head2 DESCRIPTION
+
+The /data1.1/taxa routes provide access to taxonomic names stored in the Paleobiology Database.  Names can be selected either by name, by unique identifier, or by their relationship to another name.  For example, it is easy to query for all of the subtaxa of a given taxon.
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+=over 4
+
+=for pod_extra table_header Class* | Documentation | Description
+
+=item Single names | L</data1.1/taxa/single|/data1.1/taxa/single_doc.html>
+
+Returns information about a single taxonomic name, identified either by name or by identifier.  Examples:
+
+=over 4
+
+=item *
+
+L</data1.1/taxa/single.json?id=69296&show=attr>
+
+=item *
+
+L</data1.1/taxa/single.txt?name=Dascillidae>
+
+=back
+
+=item Lists of names | L</data1.1/taxa/list|/data1.1/taxa/list_doc.html>
+
+Returns information about multiple taxonomic names.  This function can be used
+to query for all of the children or parents of a given taxon, among other operations.
+Examples:
+
+=over 4
+
+=item *
+
+L</data1.1/taxa/list.txt?id=69296&rel=all_children&show=ref>
+
+=item *
+
+L</data1.1/taxa/list.json?name=Dascillidae&rel=all_parents>
+
+=back
+
+=back

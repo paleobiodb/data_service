@@ -1,0 +1,12 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This path returns information useful for configuring client applications.  It
+is designed specifically for the PBDB Navigator application, but may be useful
+to other applications as well.
+
+<% PROCESS params %>
+
+<% PROCESS response %>
+

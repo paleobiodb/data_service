@@ -1,0 +1,10 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This path returns information about a single collection record form the Paleobiology Database.
+
+<% PROCESS params %>
+
+<% PROCESS response %>
+
