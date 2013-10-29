@@ -12,8 +12,9 @@
     <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.6.3/leaflet.css" />
     <link href='http://fonts.googleapis.com/css?family=Open+Sans' rel='stylesheet' type='text/css'/>
     <link href='http://fonts.googleapis.com/css?family=Raleway' rel='stylesheet' type='text/css'/>
+    
     <link href="css/index.css" rel="stylesheet"/>
-
+    <link href="css/timescale.css" rel="stylesheet"/>
 
     <!-- angular -->
     <link rel="stylesheet" href="css/app.css"/>
@@ -24,88 +25,138 @@
   <body>
     <div class="container">
       <div class="row">
-        <div class="col-12">
-          <div id="brand">
-            <h2 class="title"><t id="the">The</t> Paleobiology <t id="database">Database</t></h2>
-            <h4 class="title tagline">Organizing the history of life</h4>
+        <div class="col-12" id="brand" style="display:table;">
+          <div class="navContainer" id="pbdbTitle">
+            <h2 class="title">PBDB Navigator</h2>
           </div>
+          <!--
+          <div class="navContainer">
+            <a href="http://paleodb.geology.wisc.edu/cgi-bin/bridge.pl?page=paleodbFAQ" class="footerNav text-muted">About</a>
+          </div>
+          <div class="navContainer">
+            <a href="#" class="footerNav text-muted">API</a>
+          </div>
+          <div class="navContainer">
+            <a href="#" class="footerNav text-muted">Log in</a>
+          </div>
+          <div class="navContainer logo">
+            <a class="footerNav text-muted socialMedia" href="https://www.facebook.com/PaleoDB"><i class="icon-facebook"></i></a>
+          </div>
+          <div class="navContainer logo">
+            <a class="footerNav text-muted socialMedia" href="https://twitter.com/PaleoDB"><i class="icon-twitter"></i></a>
+          </div>
+          <div class="navContainer logo">
+            <a class="footerNav text-muted socialMedia" href="#"><i class="icon-github"></i></a>
+          </div>
+        -->
         </div>
       </div>
       <div class="row">
       	<div class="col-lg-12" id="graphics">
+          <div class="filters">
+            <p>Filters:</p>
+            <div id="selectedInterval" class="filter"></div>
+            <div id="personFilter" class="filter"></div>
+            <div id="taxon" class="filter"></div>
+          </div>
+          <div id="mapControls">
+            <div class="customControl buttons leaflet-control">
+              <div class="zoom-in mapCtrl">+</div>
+              <div class="zoom-out mapCtrl">&#8211;</div>
+              <!--<div class="layers"></div>-->
+              <div class="time mapCtrl"><i class="icon-time icon-2x"></i></div>
+              <div class="rotate mapCtrl"></div>
+              <div class="userFilter mapCtrl"><i class="icon-user icon-2x"></i></div>
+            </div>
+            <!--<div class="customControl layerToggler leaflet-control">
+              <form action="">
+                <input type="radio" name="layer" value="point" onclick="point();" checked>     Point<br>
+                <input type="radio" name="layer" value="heat" onclick="heat();">     Heat
+              </form>
+            </div>-->
+            <div class="customControl timeToggler leaflet-control">
+              <form action="">
+                <input id="viewByTimeBox" type="checkbox" value="1"/>Filter by time
+              </form>
+            </div>
+            <div class="customControl reconstructToggler leaflet-control">
+              <form action="">
+                <input id="reconstructBox" type="checkbox" value="1"/>Rotate view by interval
+              </form>
+            </div>
+            <div class="customControl userToggler leaflet-control">
+              <form onSubmit="return filterByPerson()">
+                <input type="text" id="personInput" placeholder="Enter a name"/>
+                <button type="submit" class="btn btn-success btn-xs">Filter</button>
+              </form>
+            </div>
+            <div id="infoContainer">
+              <div class="info leaflet-control"></div>
+            </div>
+          </div>
+          <div id="svgMap"></div>
           <div id="map"></div>
-          <div id="reconstructMap"></div>
+          <div id="reconstructMap">
+            <div id='reconstructMapInfo'>
+              <a href='http://gplates.org' target='_blank'>
+                <img id='gplatesLogo' src='css/gplates_icon.jpg'>
+              </a>
+              <p id="gplatesText">via GPlates</p>
+              <div id="reconstructMapStats">
+                <h3 id="interval"></h3>
+                <h5 id='age'></h5>
+              </div>
+              <div id="reconstructMapReference"></div>
+              <a id='mapSwitch' href='#'><i class=icon-circle-arrow-left icon-2x></i> Back to main map</a><br>
+            </div>
+          </div>
           <div id="window" class="col-3 col-offset-9">
             <table class="table-hover table-condensed" id="clusterTable"></table>
           </div>
-          <div id="chart"></div>
-          <div id="smallChart"></div>
+          <div id="timescale"></div>
         </div> <!-- End col-12 -->
         <div class="col-lg-3" id="taxaBrowser">
           <div ng-view></div>
         </div>
       </div> <!-- End row -->
 
-      <div class="row">
+      <!--<div class="row">
         <div class="col-12" id="stats">
           <div class="statContainer" style="border-left:none;">
-            <h3>1,138,938</h3>
-            <h5>taxonomic occurrences</h5>
+            <h4>1,138,938</h4>
+            <p>taxonomic occurrences</p>
           </div>
           <div class="statContainer">
-            <h3>149,131</h3>
-            <h5>fossil collections</h5>
+            <h4>149,131</h4>
+            <p>fossil collections</p>
           </div>
           <div class="statContainer">
-            <h3>275,188</h3>
-            <h5>taxa</h5>
+            <h4>275,188</h4>
+            <p>taxa</p>
           </div>
           <div class="statContainer">
-            <h3>47,689</h3>
-            <h5>references</h5>
+            <h4>47,689</h4>
+            <p>references</p>
           </div>
           <div class="statContainer contrib">
-            <h3>339</h3>
-            <h5>scientists</h5>
+            <h4>339</h4>
+            <p>scientists</p>
           </div>
           <div class="statContainer contrib">
-            <h3>131</h3>
-            <h5>institutions</h5>
+            <h4>131</h4>
+            <p>institutions</p>
           </div>
           <div class="statContainer contrib">
-            <h3>24</h3>
-            <h5>countries</h5>
+            <h4>24</h4>
+            <p>countries</p>
           </div>
         </div>
-      </div>
+      </div>-->
 
-      <footer>
+      <!--<footer>
         <div class="row">
           <div class="col-12" style="display:table;">
-            <div class="footerNavContainer">
-              <a href="#" class="footerNav text-muted">Full search</a>
-            </div>
-            <div class="footerNavContainer">
-              <a href="#" class="footerNav text-muted">Download</a>
-            </div>
-            <div class="footerNavContainer">
-              <a href="#" class="footerNav text-muted">Analyze</a>
-            </div>
-            <div class="footerNavContainer">
-              <a href="http://paleodb.geology.wisc.edu/cgi-bin/bridge.pl?page=paleodbFAQ" class="footerNav text-muted">About</a>
-            </div>
-            <div class="footerNavContainer">
-              <a href="#" class="footerNav text-muted">Log in</a>
-            </div>
-            <div class="footerNavContainer">
-              <a class="footerNav text-muted socialMedia" href="https://www.facebook.com/PaleoDB"><i class="icon-facebook"></i></a>
-            </div>
-            <div class="footerNavContainer">
-              <a class="footerNav text-muted socialMedia" href="https://twitter.com/PaleoDB"><i class="icon-twitter"></i></a>
-            </div>
-            <div class="footerNavContainer">
-              <a class="footerNav text-muted socialMedia" href="#"><i class="icon-github"></i></a>
-            </div>
+
           </div>
         </div>
       </footer>
@@ -114,6 +165,9 @@
     <script src="http://cdn.leafletjs.com/leaflet-0.6.3/leaflet.js"></script>
     <script src="http://d3js.org/d3.v3.min.js"></script>
     <script src="http://d3js.org/topojson.v1.min.js"></script>
+    <script src="http://d3js.org/d3.geo.projection.v0.min.js"></script>
+     <script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+    <script src="js/bootstrap.min.js"></script>
 
     
     <!-- angular -->
@@ -126,6 +180,7 @@
     <script src="js/directives.js"></script>
     <!--        -->
 
+    <script src="js/timescale.js"></script>
     <script src="js/index.js"></script>
 
   </body>

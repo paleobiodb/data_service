@@ -1,0 +1,400 @@
+html,body {
+  height: 100%;
+}
+a:hover {
+  text-decoration: none;
+}
+.row { 
+  margin-left: 0;
+  margin-right: 0;
+}
+#wrap {
+  min-height: 100%;
+  height: auto !important;
+  height: 100%;
+  margin: 0 auto -5em;
+  padding: 0 0 5em;
+}
+.footerBreak {
+  height:0.35em;
+}
+#footerMenu {
+  text-align: center;
+  background-color: #282d32;
+  color:whitesmoke;
+}
+footer {
+  height: 5em;
+  background-color: #474c50;
+  color:whitesmoke;
+  text-align: center;
+}
+footer > p {
+  display:inline;
+  line-height:4.5em;
+}
+footer > p > a {
+  color: #999999;
+}
+footer > p > a:hover {
+  color: steelblue;
+}
+.navbar {
+  margin-bottom: 0;
+  width:100%;
+  position: fixed;
+  top:0;
+  left:0;
+  font-family: 'Raleway', sans-serif;
+  padding:0.5em;
+}
+.dropdown-menu>li>a:hover, .dropdown-menu>li>a:focus {
+  background-color: rgba(71,76,80,0.93);
+}
+.navbar-default {
+  background-color: rgba(71,76,80,0.93);
+  z-index: 1;
+  border-color: rgba(0,0,0,0);
+}
+.navbar-default .navbar-brand {
+  color: whitesmoke;
+}
+.navbar-default .navbar-nav>li>a {
+  color: whitesmoke;
+}
+.navbar-default .navbar-nav>.dropdown>a .caret {
+  border-top-color: whitesmoke;
+  border-bottom-color: whitesmoke;
+}
+.navbar-default .navbar-brand:hover, .navbar-default .navbar-brand:focus {
+  color: whitesmoke;
+}
+.navbar-default .navbar-nav>li>a:hover, .navbar-default .navbar-nav>li>a:focus {
+  color: whitesmoke;
+}
+/* root.html */
+.container {
+  width: auto;
+  padding: 0 1em;
+}
+.jumbotron {
+  background-color: rgba(0,0,0,0);
+  margin-bottom: 0;
+  background-image: url("/css/img/clear_map.jpg");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  border-radius: 0;
+}
+.wrapper {
+  font-family: 'Raleway', sans-serif;
+  text-align: center;
+  background-color: rgba(245,245,245,0.75);
+  padding:1.8em 0;
+}
+.wrapper > h2 {
+  font-family: 'Raleway', sans-serif;
+  font-size: 3em;
+}
+.wrapper > a {
+  text-align: center;
+}
+#pbdbLink > img {
+  border-radius:0;
+  height:2em;
+}
+#the {
+  font-size: 0.5em;
+}
+#catBar {
+  text-align: center;
+  background-color:#eee;
+}
+.category {
+  padding:1.5em;
+  display: inline;
+  cursor: pointer;
+}
+.category > h2 {
+  display: inline;
+}
+.category > h2 > a > i {
+  margin-right:5px;
+}
+.category > h2 > a {
+  color:#000;
+}
+.statBox {
+  background-color:#aaa;
+  color:whitesmoke;
+  border-left: 1px dashed whitesmoke;
+  text-align: center;
+  padding:1em 0;
+  font-family: 'Open-sans', sans-serif;
+}
+.statLink {
+  color:whitesmoke;
+}
+#about:hover {
+  background-color: #9DC2A6;
+}
+#api:hover {
+  background-color: #47C7EA;
+}
+#apps:hover {
+  background-color: #F4ED2F;
+}
+.info {
+  position: relative;
+  width:100%;
+  padding: 8em 0;
+  display: block;
+  height: auto;
+  overflow: hidden;
+}
+.infoInner {
+  padding:50px;
+}
+.infoInner > p {
+  color:#666;
+  line-height: 1.7em;
+}
+.logo {
+  text-align: center;
+  margin-top:7em;
+}
+.icon-10x {
+  font-size: 10em;
+  /* Hack for Nexus 7 
+  display: block;
+  width: 200px;*/
+}
+#welcomeBackground {
+  position: absolute;
+  height:300%;
+  width:100%;
+  background-color: rgba(0,0,0,0.8);
+  z-index: 2;
+  display:none;
+  top:0;
+}
+#welcome {
+  height:auto;
+  width:75%;
+  background-color: rgba(245,245,245,0.95);
+  position: absolute;
+  z-index: 3;
+  padding-top:10%;
+  padding-bottom:10%;
+  padding-left:15%;
+  padding-right:15%;
+  color:#000;
+  font-family: 'Open Sans', sans-serif;
+  display:none;
+  left:12.5%;
+  top:12.5%;
+  overflow: hidden;
+  border-radius: 6px;
+}
+#close {
+  position: absolute;
+  float:right;
+  top:0;
+  right:5%;
+  color:#000;
+  cursor: pointer;
+}
+/* general page styles */
+.pageHeader {
+  background-color: whitesmoke;
+  margin-bottom: 3em;
+  border-bottom: 1px solid #ddd;
+  padding: 3em;
+}
+.pageTitle {
+  vertical-align: middle;
+}
+.pageTitle > h2 {
+  margin-top: 3em;
+}
+/* apps.html */
+.appGallery {
+  text-align: center;
+  margin-bottom: 4em;
+}
+.appGallery > h4 {
+  margin-top:4px;
+  margin-bottom: -1px;
+}
+.appGallery > h4 > a {
+  color: #333;
+}
+.appGallery > h4 > a:hover {
+  color: steelblue;
+}
+.appGallery > a > img {
+  height:150px;
+  border-radius: 1.9em;
+}
+/* people.html */
+.people-type {
+  height:50px;
+  padding-left: 0;
+  color:whitesmoke;
+  text-align: center;
+  vertical-align: middle;
+}
+.people-type > h4 {
+  font-size: 2vw;
+}
+.people-type-bar {
+  bottom: 0;
+  height: 5px;
+  width: 100%;
+  background-color: #000;
+  position: absolute;
+  display: none;
+}
+#execCommittee {
+  background-color: #985144;
+}
+#advisoryBoard {
+  background-color: #8DA0CB;
+}
+#techTeam {
+  background-color: #489FB2;
+}
+#community {
+  background-color: #2CA25F;
+  cursor: pointer;
+}
+#members {
+  background-color: #2CA25F;
+  height:100px;
+  vertical-align: middle;
+  color:whitesmoke;
+}
+#members > h2 {
+  line-height: 100px;
+  margin-left:10px;
+}
+#peopleChart {
+  text-align: center;
+}
+#peopleChart > svg > g > text {
+  fill: whitesmoke;
+  font-size: 12px;
+}
+#peopleChartLegend {
+  text-align: left;
+}
+.peopleCircle:hover {
+  font-weight: bold;
+}
+circle {
+  stroke: #fff;
+  cursor: pointer;
+}
+.leader {
+  stroke:#000;
+  stroke-width:4px;
+}
+.land:hover {
+  fill:#2CA25F;
+}
+#memberTable {
+  height:450px;
+  overflow: scroll;
+}
+#memberMap {
+  margin-bottom: 60px;
+}
+.pageRow {
+  padding-left: 3em;
+}
+.pageHeaderIcon {
+  float:right;
+  margin-right:2em;
+  margin-top:-1.5em;
+}
+.footerBreak {
+  width: 33.33%;
+  display: inline-block;
+  margin-bottom: -4px;
+}
+@media screen and (min-width: 768px) {
+  .container > .jumbotron { 
+    margin-left: 0;
+    margin-right: 0;
+  }
+  .jumbotron {
+    padding-top:8em;
+    padding-bottom: 8em;
+  }
+}
+@media screen and (max-width: 767px) {
+  .info {
+    padding: 3em 0;
+  }
+  .infoText {
+    width:100%;
+  }
+  .infoLogo {
+    display: none;
+  }
+  .jumbotron {
+    margin-top:2em;
+  }
+}
+@media screen and (max-width: 580px) {
+  #stats {
+    display: none;
+  }
+  .people-type {
+    width:50%;
+  }
+  .people-type > h4 {
+    font-size: 14px;
+  }
+  footer {
+    padding:10px;
+    height:7em;
+  }
+  footer > p {
+    line-height: 0;
+  }
+}
+@media screen and (max-width: 480px) {
+  #catBar {
+    display: none;
+  }
+  .jumbotron {
+    background-image: none;
+    padding:0;
+  }
+  .wrapper > h2 {
+    font-size: 2em;
+  }
+  .pageHeaderIcon {
+    display: none;
+  }
+  .pageRow {
+    padding-right: 3em;
+  }
+  
+  #welcome {
+    width:100%;
+    padding-left: 9%;
+    left:0;
+    top:0;
+    border-radius: 0;
+  }
+  #welcomeBackground {
+    height: 350%;
+  }
+}
+@media screen and (max-width: 400px) {
+  .people-type > h4 {
+    font-size: 11px;
+  }
+}

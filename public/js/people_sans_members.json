@@ -1,0 +1,42 @@
+{
+	"name":"People",
+	"children": [
+		{
+			"name":"Executive Committee",
+			"children": [
+			{"name":"Martin Aberhan", "institute":"Museum fur Naturkunde, Berlin", "ints":"level-bottom communities, Mesozoic bivalves"},
+			{"name":"Kay Behrensmeyer", "institute":"Smithsonian Institution", "ints":"Evolution of Terrestrial Ecosystems data"},
+			{"name":"Richard Butler", "institute":"LMU Munchen", "ints":"Permian-Jurassic terrestrial vertebrates, pterosaurs, dinosaurs"},
+			{"name":"Matthew Carrano", "institute":"Smithsonian Institution", "ints":"dinosaurs, Mesozoic terrestrial vertebrates, marine reptiles, pterosaurs, Mesozoic mammals"},
+			{"name":"Matthew Clapham", "institute":"University of California, Santa Cruz", "ints":"Permian-Triassic marine invertebrates, fossil insects, Pennsylvanian-Jurassic fish"},
+			{"name":"Austin Hendy", "institute":"University of Florida", "ints":"Cenozoic molluscs, Cretaceous ammonoids, Cambrian marine invertebrates, body size"},
+			{"name":"Carlos Jaramillo", "institute":"Smithsonian Tropical Research Institute", "ints":"Mesozoic and Cenozoic plants and vertebrates of South America and tropical latitudes"},
+			{"name":"Wolfgang Kiessling", "institute":"Universitat Erlangen", "ints":"reefs, corals, radiolarians, Triassic-Jurassic marine invertebrates"},
+			{"name":"Carrie Schweitzer", "institute":"Kent State University", "ints":"fossil crabs, lobsters and shrimps; Decapoda"},
+			{"name":"Jocelyn Sessa", "role":"Committee Secretary", "institute":"Smithsonian Institution (Secretary of the Committee)", "ints":"Cretaceous through Cenozoic marine molluscs, climate reconstruction"},
+			{"name":"Mark Uhen", "role":"Committee Chair", "institute":"George Mason University (Chair of the Committee)", "ints":"marine mammals and birds, Eocene and Oligocene vertebrates, fossils of the Mid-Atlantic states"},
+			{"name":"Loic Villier", "institute":"Universite Pierre et Marie Curie", "ints":"echinoderms other than crinoids and blastozoans"},
+			{"name":"Peter Wagner", "institute":"Smithsonian Institution ", "ints":"Paleozoic gastropods"}
+			]
+		},{
+			"name":"Tech Team",
+			"children": [
+			{"name": "John Czaplewski", "institute": "University of Wisconsin - Madison", "ints":"Javascript"},
+			{"name": "Michael McClennen", "institute": "University of Wisconsin - Madison", "ints":"Perl"},
+			{"name": "Shanan Peters", "institute": "University of Wisconsin - Madison", "ints":"Macrostrat"},
+			{"name": "Puneet Kishor", "institute": "University of Wisconsin - Madison / Creative Commons", "ints":"Perl"}
+			]
+		}, {
+			"name": "Advisory Board",
+			"children": [
+			{"name": "James Crampton", "institute": "GNS Science", "ints": ""},
+			{"name": "Doug Erwin", "institute": "Smithsonian Institution", "ints": ""},
+			{"name": "Steve Holland", "institute": "University of Georgia", "ints": ""},
+			{"name": "Charles Marshall", "role":"Advisory Board Chair", "institute": "University of California - Berkeley (Advisory Board Chair)", "ints": ""},
+			{"name": "Jenny McElwain", "institute": "University College Dublin", "ints": ""},
+			{"name": "Arnie Miller", "institute": "University of Cincinnati", "ints": ""},
+			{"name": "Andy Purvis", "institute": "Imperial College London", "ints": ""}
+			]
+		}
+	]
+}

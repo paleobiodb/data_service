@@ -11,7 +11,7 @@ var http = require('http'),
     exec = require('child_process').exec;
 
 // Keep track of the year
-var i = 0;
+var i = 250;
 
 getJSON();
 
@@ -43,7 +43,7 @@ function getJSON() {
                       fs.unlink('tempjson/plates' + i + '.json');
                       console.log("Year " , i, " was converted to TopoJSON");
                       i += 1;
-                      if (i < 251) {
+                      if (i < 601) {
                         getJSON();
                       } else {
                         console.log("Done");
