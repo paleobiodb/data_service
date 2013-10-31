@@ -1,0 +1,133 @@
+<div class="jumbotron">
+  <div class="container">
+    <div class="wrapper">
+      <h2><t id="the">The</t> Paleobiology Database</h2>
+      <p>Revealing the history of life</p>
+      <button type="button" class="btn btn-warning" id="viewWelcome" style="height:42px;">Curious to know more?</button>
+      <a style="color:whitesmoke;" href="/cgi-bin/bridge.pl" class="btn btn-info" id="pbdbLink">Go to PBDB Classic <img src="css/img/PaleoDB_logo_clear.png" alt="pbdb_logo"></a>
+
+    </div>
+  </div>
+</div>
+<div class="row" id="stats">
+  <div class="col-sm-2 statBox" style="border-left:none;">48,159 <br>references</div>
+  <div class="col-sm-2 statBox">278,539<br>taxa</div>
+  <div class="col-sm-2 statBox">151,043 <br>collections</div>
+  <div class="col-sm-2 statBox">1,149,626 <br>occurrences</div>
+  <div class="col-sm-2 statBox"><a href="#/people" class="statLink">358 <br>scientists</a></div>
+  <div class="col-sm-2 statBox"><a href="#/people/#map" class="statLink">24 <br>countries</a></div>
+</div>
+<div class="row" id="catBar">
+  <div class="col-sm-4 category" id="about">
+    <h2>
+      <a onclick="scrollTo('aboutInfo')">
+        <i class="icon-question-sign"></i>About
+      </a>
+    </h2>
+  </div>
+  <div class="col-sm-4 category" id="api">
+    <h2>
+      <a onclick="scrollTo('apiInfo')">
+        <i class="icon-code"></i>API
+      </a>
+    </h2>
+  </div>
+  <div class="col-sm-4 category" id="apps">
+    <h2>
+      <a onclick="scrollTo('appInfo')">
+        <i class="icon-bar-chart"></i>Apps
+      </a>
+    </h2>
+  </div>
+</div>
+
+<div class="row info" id="aboutInfo">
+  <div class="col-sm-6 infoText">
+    <div class="infoInner">
+      <h2>About</h2>
+      <p>Thanks to our membership, which includes 350 scientists from 133 institutions in 24 countries, the Paleobiology Database is able to provide scientists and the public with information about the fossil record. The database is currently undergoing a major renovation to better serve its users. Stay tuned! In the meantime, check out the <a href="#/faq">FAQ</a> and the <a href="#/people">people</a> who make this database possible.</p>
+    </div>
+  </div>
+  <div class="col-sm-6 infoLogo">
+    <div class="inner logo">
+      <i class="icon-question-sign icon-10x"></i>
+    </div>
+  </div>
+</div>
+
+<div class="row info" id="apiInfo">
+  <div class="col-sm-6 infoLogo">
+    <div class="inner logo">
+      <i class="icon-code icon-10x"></i>
+    </div>
+  </div>
+  <div class="col-sm-6 infoText">
+    <div class="infoInner">
+      <h2>API</h2>
+      <p>The Paleobiology Database Application Programming Interface (API) gives scientists, students, and developers programmatic access to taxonomic, spatial, and temporal data contained within the database. To get started building your own application for data analysis, visualization, or acquisition, head over to the <a href="/data1.1/">API documentation</a>.</p>
+    </div>
+  </div>
+</div>
+
+<div class="row info" id="appInfo">
+  <div class="col-sm-6 infoText">
+    <div class="infoInner">
+      <h2>Apps</h2>
+      <p>Built on the Paleobiology Database API, there are many applications that put our data to use. Can't find an application that fits your needs or matches your vision? Check out the <a href="/data1.1/">API documentation</a> and learn how to build your own application. When you are ready to share your work, submit your application to our <a href="#/apps">app gallery</a> so that we can help spread the word.</p>
+    </div>
+  </div>
+  <div class="col-sm-6 infoLogo">
+    <div class="inner logo">
+      <i class="icon-bar-chart icon-10x"></i>
+    </div>
+  </div>
+</div>
+
+<div id="welcomeBackground"></div>
+<div id="welcome">
+  <div id="close"><h2>X</h2></div>
+  <div>
+    Friends, visitors, and members of the Paleobiology Database:
+    <br><br>
+    Welcome to the new Paleobiology Database! 
+    <br><br>
+    We have a new temporary look and feel to the site. We’ll be trying out several new designs in the near future, so don’t be surprised if you see a new design the next time you visit.
+    <br><br>
+    Besides a new look, some more significant changes will soon arrive to the PaleoDB. <a href="#/about" class="welcomeLink">Our IT team</a> is developing numerous exciting new features, including an API that will empower you to develop websites, mobile applications, desktop applications, and analytical scripts that directly access the rich public data within the PaleoDB. Check back in the <a href="#/api" class="welcomeLink">API section</a> for updates about our progress, and feel free to look at some applications in the <a href="#/apps" class="welcomeLink">Apps section</a>.
+    <br><br>
+    <a href="#/people" class="welcomeLink">We are all</a> excited about the new directions PaleoDB is heading. We aim to be the premier place for hosting and obtaining paleobiological data that are of use to paleontologists, students, and the world. Please <a href="#/contact" class="welcomeLink">give us your feedback</a> so that we can learn more about how you use our data, and how to make our service better fit your needs.
+    <br><br>
+    For additional details about these changes, please read more <a href="#/letter" class="welcomeLink">here</a>.
+  </div>
+</div>
+
+<script type="text/javascript">
+$("#close").on("click", function() {
+  $("#welcome").css("display", "none");
+  $("#welcomeBackground").css("display", "none");
+});
+
+$("#viewWelcome").on("click", function() {
+  $("#welcome").css("display", "block");
+  $("#welcomeBackground").css("display", "block");
+});
+
+$(".welcomeLink").on("click", function() {
+  $("#welcome").css("display", "none");
+  $("#welcomeBackground").css("display", "none");
+});
+
+
+$("#about").on("click", function() {
+  scrollTo("aboutInfo");
+});
+$("#api").on("click", function() {
+  scrollTo("apiInfo");
+});
+$("#apps").on("click", function() {
+  scrollTo("appInfo");
+});
+$("#pbdbLink").on("click", function() {
+  window.location.href = "/cgi-bin/bridge.pl";
+})
+</script>

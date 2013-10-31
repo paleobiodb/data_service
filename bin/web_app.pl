@@ -277,6 +277,36 @@ ruleset $dv '1.1:interval_selector' =>
     [param => 'min_ma', DECI_VALUE(0)],
     [param => 'max_ma', DECI_VALUE(0)];
 
+ruleset '1.1:coll_specifier' =>
+    [param => 'id', POS_VALUE, { alias => 'coll_id' }];
+
+ruleset '1.1:coll_selector' =>
+    [param => 'id', INT_LIST_PERMISSIVE(1), { alias => 'coll_id' }],
+    [allow => '1.1:main_selector'];
+
+ruleset '1.1:coll_display' =>
+    [param => 'level', INT_VALUE(1,2)],
+    [param => 'show', LIST_PERMISSIVE('bin','ref','sref','loc','time','taxa','occ','det')];
+
+ruleset '1.1:colls/single' => 
+    [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
+    [allow => '1.1:coll_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:colls/list' => 
+    [allow => '1.1:coll_selector'],
+    [allow => '1.1:coll_display'],
+    [allow => '1.1:common_params'];
+
+ruleset '1.1:summary_display' => 
+    [param => 'level', INT_VALUE(1,2), { default => 1 }],
+    [param => 'show', LIST_VALUE('ext','time','all')];
+
+ruleset '1.1:colls/summary' => 
+    [allow => '1.1:coll_selector'],
+    [allow => '1.1:summary_display'],
+    [allow => '1.1:common_params'];
+
 ruleset $dv '1.1:interval_specifier' =>
     [param => 'id', POS_VALUE],
     "Returns the interval corresponding to the specified identifier";

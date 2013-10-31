@@ -1,24 +1,158 @@
-// D3 hack to make sure rectangles in the time scale highlight properly
-d3.selection.prototype.moveToFront = function() {
-  return this.each(function(){
-    this.parentNode.appendChild(this);
-  });
-};
-
 // Global variables
-var mapType, map, stamen, stamenLabels, g, interval_hash, exlude;
+var map, stamen, stamenLabels, g, exlude;
+
+var filters = {"selectedInterval": "", "personFilter": {"id":"", "name": ""}, "taxon": [], "exist": {"selectedInterval" : false, "personFilter": false, "taxon": false}};
 
 function reconstruct(year) {
-  // TODO: 
-  // 3. Break large requests up into multiple
-
-  //updateAuthors();
-
   console.log("reconstruct start");
 
+  var requestYear = parseInt((year.eag + year.lag) / 2),
+      fill = year.col;
+
+  if(parseInt(d3.select("#map").style("height")) > 0) {
+    rotateBbox(requestYear);
+  }
+ 
+  var scale = d3.scale.linear()
+    .domain([1, 4140])
+    .range([4, 30]);
+
+  var zoom = map.getZoom();
+
+  d3.select("#reconstructMap").select("svg").remove();
+
+  if (requestYear < 201) {
+    d3.select("#reconstructMapReference").html("<p>Seton, M., R.D. Müller, S. Zahirovic, C. Gaina, T.H. Torsvik, G. Shephard, A. Talsma, M. Gurnis, M. Turner, S. Maus, M. Chandler. 2012. Global continental and ocean basin reconstructions since 200 Ma. <i>Earth-Science Reviews </i>113:212-270.</p>");
+  } else {
+    d3.select("#reconstructMapReference").html("<p>Wright, N. S. Zahirovic, R.D. Müller, M. Seton. 2013. Towards community-driven paleogeographic reconstructions: intergrating open-access paleogeographic and paleobiology data with plate tectonics. <i>Biogeosciences </i>10:1529-1541.</p>");
+  }
+
+  d3.select('#interval').text(year.nam);
+  d3.select('#age').text(requestYear + " Ma");
+
+  var filename = year.nam.split(' ').join('_');
+
+  d3.json("collections/" + filename + ".json", function(error, response) {
+    console.log("first req made");
+    response.records.forEach(function(d) {
+      d.LatLng = new L.LatLng(d.lat,d.lng)
+    });
+    if (zoom < 3) {
+      refreshMollweide(response);
+    } else {
+      d3.selectAll(".bins").remove();
+      d3.selectAll(".clusters").remove();
+      addBins(response, 2, zoom);
+    }
+
+    d3.json("plates/plate" + requestYear + ".json", function(er, topoPlates) {
+        console.log("plates loaded");
+        var geojsonPlates = topojson.feature(topoPlates, topoPlates.objects["plates" + requestYear]);
+
+        d3.select("#map").style("display", "none");
+        d3.select("#svgMap").style("display", "none");
+        d3.selectAll(".mapCtrl").style("display", "none");
+        d3.select(".filters").style("display", "none");
+        d3.select("#reconstructMap").style("display","block");
+        timeScale.highlight(year.nam);
+
+      d3.json("rotatedIntervals/" + filename + ".json", function(err, result) {
+        var gPlatesResponse = result;
+
+        var keys = Object.keys(gPlatesResponse.objects),
+            key = keys[0];
+            rotatedPoints = topojson.feature(gPlatesResponse, gPlatesResponse.objects[key]);
+
+        rotatedPoints.features.forEach(function(d) {
+          for (var i=0;i<response.records.length;i++) {
+            if (parseInt(d.properties.NAME) == response.records[i].oid) {
+              d.properties.nco = response.records[i].nco;
+              d.properties.noc = response.records[i].noc;
+              d.properties.oid = response.records[i].oid;
+            }
+          }
+        });
+
+        var height = window.innerHeight * 0.60,
+            width = window.innerWidth;
+
+        var projection = d3.geo.hammer()
+            .scale(165)
+            .translate([width / 2, height / 2])
+            .precision(.1);
+         
+        var path = d3.geo.path()
+            .projection(projection);
+
+        var svg = d3.select("#reconstructMap").append("svg")
+          .attr("height", height)
+          .attr("width", width);
+
+        svg.append("defs").append("path")
+          .datum({type: "Sphere"})
+          .attr("id", "sphere")
+          .attr("d", path);
+
+        svg.append("use")
+            .attr("class", "stroke")
+            .attr("xlink:href", "#sphere");
+
+        svg.append("use")
+            .attr("class", "fill")
+            .attr("xlink:href", "#sphere");
+
+        svg.selectAll(".plates")
+          .data(geojsonPlates.features)
+          .enter().append("path")
+          .attr("class", "plates")
+          .attr("d", path);
+
+        svg.selectAll(".points")
+          .data(rotatedPoints.features)
+          .enter().append("circle")
+          .attr("class", "collection")
+          .style("fill", fill)
+          .attr("r", function(d) { return scale(d.properties.nco); })
+          .attr("cx", function(d) {
+            var coords = projection(d.geometry.coordinates);
+            return coords[0];
+          })
+          .attr("cy", function(d) {
+            var coords = projection(d.geometry.coordinates);
+            return coords[1];
+          })
+          .on("mouseover", function(d) {
+            d3.select(".info")
+              .html("Bin ID: " + d.properties.oid + "<br>Number of collections: " + d.properties.nco + "<br>Number of occurrences: " + d.properties.noc)
+              .style("display", "block");
+          })
+          .on("click", function(d) {
+            d3.select(".info")
+              .html("Bin ID: " + d.properties.oid + "<br>Number of collections: " + d.properties.nco + "<br>Number of occurrences: " + d.properties.noc)
+              .style("display", "block");
+          })
+          .on("mouseout", function(d) {
+            d3.select(".info")
+              .html("")
+              .style("display", "none");
+          });
+
+          // Uncheck the checkbox
+          document.getElementById("reconstructBox").checked = false;
+          d3.select(".rotate").style("background-color", "");
+          document.getElementById("viewByTimeBox").checked = false;
+          d3.select(".time").style("background-color", "");
+        
+      }); // End plate callback
+    }); // End rotated points callback
+  }); // end nonrotated point callback
+}
+function rotateBbox(year) {
   var bounds = map.getBounds(),
       sw = bounds._southWest,
+      se = bounds.getSouthEast(),
       ne = bounds._northEast,
+      nw = bounds.getNorthWest(),
       zoom = map.getZoom();
 
    // Make sure bad requests aren't made
@@ -27,153 +161,61 @@ function reconstruct(year) {
   ne.lng = (ne.lng > 180) ? 180 : ne.lng;
   ne.lat = (ne.lat > 90) ? 90 : ne.lat;
 
-  var requestYear = parseInt((year.eag + year.lag) / 2),
-      fill = year.col;
+  var requestString = "POINT(" + sw.lat + " " + sw.lng + " a" + "),POINT(" + nw.lat + " " + nw.lng + " b" + "),POINT(" + ne.lat + " " + ne.lng + " c" + "),POINT(" + se.lat + " " + se.lng + " d)";
 
-  if (Object.keys(reconstructMap._layers).length > 1) {
-    for(i in reconstructMap._layers) {
-      if(reconstructMap._layers[i]._path != undefined) {
-        reconstructMap.removeLayer(reconstructMap._layers[i]);
-      }
-    }
-  }
+  var geojson = {"type":"FeatureCollection", "features": [{"geometry":{"type":"Polygon", "coordinates": [[[sw.lat, sw.lng], [nw.lat,nw.lng], [ne.lat,ne.lng], se.lat,se.lng]]}, "type": "Feature", "properties": {}}]};
 
-  d3.select('#age')
-    .text(requestYear + " Ma");
- 
-  if (zoom < 5) {
-    var type = 'clusters';
-    var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=1&limit=9999999&interval=' + year.nam;
-    if (typeof personFilter != 'undefined') {
-      url += '&person_no=' + personFilter;
-    }
-    if (typeof taxon != 'undefined') {
-      url += '&base_id=' + taxon.oid;
-    }
-  } else if (zoom > 4 && zoom < 8 ) {
-    var type = 'clusters';
-    var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=2&limit=999999&interval=' + year.nam;
-    if (typeof personFilter != 'undefined') {
-      url += '&person_no=' + personFilter;
-    }
-    if (typeof taxon != 'undefined') {
-      url += '&base_id=' + taxon.oid;
-    }
-  } else {
-    var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/list.json?lngmin=' + sw.lng + '&lngmax='
-       + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&max_ma=' + year.eag + '&min_ma=' + year.lag + '&limit=999999';
-    if (typeof personFilter != 'undefined') {
-      url += '&person_no=' + personFilter;
-    }
-    if (typeof taxon != 'undefined') {
-      url += '&base_id=' + taxon.oid;
-    }
-  }
+  requestString = encodeURI(requestString);
+  var gPlatesReqData = '&time=' + year + '&points="' + requestString + '"&output=topojson';
 
-  var keepers = [];
-
-  d3.json(url, function(error, response) {
-    console.log("first req made");
-//////////
-/*    var numberPoints = response.records.length;
-    var numberOfRequests = Math.ceil(numberPoints / 21);
-
-    var start = 0,
-        end = 21;
-
-    var rotatedPoints ={"type": "FeatureCollection", "features": []};
-    for(var j=0; j < numberOfRequests; j++) {
-      var subset = [];
-      for(var k=start; k < end; k++) {
-        subset.push(response.records[k]);
-      }
-      var gPlatesReq = 'http://gplates.gps.caltech.edu:8080/recon_points/?time=' + requestYear + '&points="' + buildWKT(subset) + '"&output=topojson';
-      d3.json(gPlatesReq, function(err, result) {
-        var keys = Object.keys(result.objects),
-            key = keys[0],
-            rotatedSubset = topojson.feature(result, result.objects[key]);
-
-        rotatedPoints.features.push(rotatedSubset.features);
-      });
-      start += 21;
-      end += 21;
-    }*/
-////////////
-    //var shortResponse = [];
-    //for (var i = 0; i < 20; i++) {
-    //  shortResponse.push(response.records[i])
-    //};
-    //var gPlatesReq = 'http://gplates.gps.caltech.edu:8080/recon_points/?time=' + requestYear + '&points="' + buildWKT(shortResponse) + '"&output=geojson';
-    //var gPlatesReq = 'http://gplates.gps.caltech.edu:8080/recon_points/?time=' + requestYear + '&points="' + buildWKT(response.records) + '"&output=geojson';
-
-    var gPlatesReqData = '&time=' + requestYear + '&points="' + buildWKT(response.records) + '"&output=topojson';
-
-    d3.xhr('http://gplates.gps.caltech.edu:8080/recon_points/')
-      .header("Content-type", "application/x-www-form-urlencoded")
-      .post(gPlatesReqData, function(err, result) {
-        if (err) {
-          console.log("Gplates error - ", err);
-          return alert("GPlates could not complete the request");
-        }
-        console.log("Got gplates response");
-        var gPlatesResponse = JSON.parse(result.response);
-
-        var keys = Object.keys(gPlatesResponse.objects),
-            key = keys[0];
-            rotatedPoints = topojson.feature(gPlatesResponse, gPlatesResponse.objects[key]);
-           // rotatedPoints = gPlatesResponse;
-/*
-      });
-
-    d3.json(gPlatesReq, function(err, resp) {
+  d3.xhr('http://gplates.gps.caltech.edu:8080/recon_points/')
+    .header("Content-type", "application/x-www-form-urlencoded")
+    .post(gPlatesReqData, function(err, result) {
       if (err) {
         console.log("Gplates error - ", err);
         return alert("GPlates could not complete the request");
       }
-     // var keys = Object.keys(resp.objects),
-     //     key = keys[0];
-         // rotatedPoints = topojson.feature(resp, resp.objects[key]);
-      rotatedPoints = resp;*/
+      console.log("Got gplates response");
+      var gPlatesResponse = JSON.parse(result.response);
 
-      d3.json("plates/plate" + requestYear + ".json", function(er, topoPlates) {
-        console.log("plates loaded");
-        var geojsonPlates = topojson.feature(topoPlates, topoPlates.objects["plates" + requestYear]);
-        d3.select("#map").style("display", "none");
-        d3.select("#reconstructMap").style("display","block");
-        var plateLayer = L.geoJson(geojsonPlates, {
-          style: {
-            "color": "#000",
-            "fillColor": "#FEFBFB",
-            "weight": 1,
-            "fillOpacity": 1
-          }
-        }).addTo(reconstructMap);
+      var keys = Object.keys(gPlatesResponse.objects),
+          key = keys[0];
+          rotatedPoints = topojson.feature(gPlatesResponse, gPlatesResponse.objects[key]);
 
-        var pointLayer = L.geoJson(rotatedPoints, {
-          pointToLayer: function(feature, latlng) {
-            return L.circleMarker(latlng, {
-              radius: 10
-            });
-          },
-          style: {
-            "color" : fill,
-            "weight": 0,
-            "fillColor" : fill,
-            "fillOpacity" : 0.7
-          }
-        }).addTo(reconstructMap);
+      function compare(a,b) {
+        if (a.properties.NAME < b.properties.NAME)
+           return -1;
+        if (a.properties.NAME > b.properties.NAME)
+          return 1;
+        return 0;
+      }
+      rotatedPoints.features.sort(compare);
 
-        reconstructMap.invalidateSize();
+      var bbox = {"type":"FeatureCollection", "features": [{"geometry":{"type":"Polygon", "coordinates": [[rotatedPoints.features[0].geometry.coordinates, rotatedPoints.features[1].geometry.coordinates, rotatedPoints.features[2].geometry.coordinates, rotatedPoints.features[3].geometry.coordinates, rotatedPoints.features[3].geometry.coordinates]]}, "type": "Feature", "properties": {}}]};
 
-        // Uncheck the checkbox
-        document.getElementById("reconstructBox").checked = false;
-        
-      });
-      
+      var svg = d3.select("#reconstructMap").select("svg");
+
+      var height = window.innerHeight * 0.60,
+          width = window.innerWidth;
+
+      var projection = d3.geo.hammer()
+          .scale(165)
+          .translate([width / 2, height / 2])
+          .precision(.1);
+       
+      var path = d3.geo.path()
+          .projection(projection);
+
+      svg.selectAll(".bbox")
+        .data(bbox.features)
+        .enter().append("path")
+        .attr("fill", "none")
+        .attr("stroke", "#ccc")
+        .attr("stroke-dasharray", "5,5")
+        .attr("stroke-width", 2)
+        .attr("opacity", 1)
+        .attr("d", path);
     });
-
-  });
-
 }
 
 function buildWKT(data) {
@@ -186,73 +228,206 @@ function buildWKT(data) {
   return requestString;
 }
 
-function updateAuthors() {
-  var bounds = map.getBounds(),
-      sw = bounds._southWest,
-      ne = bounds._northEast,
-      zoom = map.getZoom();
-
-   // Make sure bad requests aren't made
-  sw.lng = (sw.lng < -180) ? -180 : sw.lng;
-  sw.lat = (sw.lat < -90) ? -90 : sw.lat;
-  ne.lng = (ne.lng > 180) ? 180 : ne.lng;
-  ne.lat = (ne.lat > 90) ? 90 : ne.lat;
-
-  var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/toprank.json?show=author&lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&limit=6';
-
-  if (typeof selectedInterval != 'undefined') {
-    url += '&interval=' + selectedInterval;
+function updateFilterList(type) {
+  switch(type){
+    case "selectedInterval":
+      d3.select("#selectedInterval")
+        .style("display", "inline-block")
+        .html(filters.selectedInterval + '<button type="button" class="close" aria-hidden="true">&times;</button>');
+      break;
+    case "personFilter":
+      d3.select("#personFilter")
+        .style("display", "inline-block")
+        .html(filters.personFilter.name + '<button type="button" class="close" aria-hidden="true">&times;</button>');
+      break;
+    case "taxon":
+     // url += '&base_id=' + filters.taxon.oid;
+      break;
   }
-  if (typeof personFilter != 'undefined') {
-    url += '&person_no=' + personFilter;
-  }
-  if (typeof taxon != 'undefined') {
-    url += '&base_id=' + taxon.oid;
-  }
-  if (typeof exclude != 'undefined') {
-    url += '&exclude_id=' + exclude.oid;
-  }
-
-  d3.json(url, function(err, result) {
-
-    d3.select('.credits').html('');
-    if (result.records > 5) {
-      var length = 6;
-    } else {
-      var length = result.records.length;
-    }
-    for(var i=1;i<length;i++) {
-      if (i == 5) {
-        d3.select('.credits')
-          .append('p').attr('class', 'rank').text(result.records[i].aut);
-      } else {
-        d3.select('.credits')
-          .append('p').attr('class', 'rank').text(result.records[i].aut + " | ");
-      }
-    }
-
-  });
+  refreshFilterHandlers();
 }
 
-// function that updates what is currently viewed on the map
-function refresh(year) {
-  updateAuthors();
-  // Delete any existing markers
-  d3.selectAll(".bins").remove();
-  d3.selectAll(".clusters").remove();
-  // Clear the heatmap, if it exists
-  if (Object.keys(map._layers).length > 1) {
-    for(i in map._layers) {
-      if(map._layers[i]._path != undefined) {
-        map.removeLayer(map._layers[i]);
+function parseURL(url) {
+  var count = 0;
+  for (key in filters.exist) {
+    if (filters.exist.hasOwnProperty(key)) {
+      if (filters.exist[key] == true) {
+        switch(key) {
+          case "selectedInterval":
+            url += '&interval=' + filters.selectedInterval;
+            break;
+          case "personFilter":
+            url += '&person_no=' + filters.personFilter.id;
+            break;
+          case "taxon":
+            url += '&base_id=' + filters.taxon.oid;
+            break;
+        }
+        count += 1;
       }
     }
+  }
+  if (count > 0) {
+    d3.select(".filters").style("display", "block");
+  } else {
+    d3.select(".filters").style("display", "none");
+  }
+  return url;
+}
+function refreshMollweide(data) {
+  d3.selectAll(".bins").remove();
+
+  var scale = d3.scale.linear()
+    .domain([1, 4240])
+    .range([4, 15]);
+
+  var width = window.innerWidth,
+    height = window.innerHeight * 0.60;
+
+  var projection = d3.geo.hammer()
+      .scale(165)
+      .translate([width / 2, height / 2])
+      .precision(.1);
+
+  var path = d3.geo.path()
+      .projection(projection);
+
+  var projsvg = d3.select("#svgMap").select("svg"),
+      zoom = 2;
+  // Add the bins to the map
+  projsvg.selectAll(".circle")
+    .data(data.records)
+    .enter().append("circle")
+    .attr("class", "bins")
+    .style("fill", function(d) { return (interval_hash[d.cxi]) ? interval_hash[d.cxi].col : "#000"; })
+    .attr("id", function(d) { return "p" + d.cxi; })
+    .attr("r", function(d) { return scale(d.nco)*multiplier(zoom); })
+    .attr("cx", function(d) {
+      var coords = projection([d.lng, d.lat]);
+      return coords[0];
+    })
+    .attr("cy", function(d) {
+      var coords = projection([d.lng, d.lat]);
+      return coords[1];
+    })
+    .on("mouseover", function(d) {
+      d3.select(".info")
+        .html("Number of collections: " + d.nco + "<br>Number of occurrences: " + d.noc)
+        .style("display", "block");
+      timeScale.highlight(this);
+    })
+    .on("click", function(d) {
+      d3.select(".info")
+        .html("Number of collections: " + d.nco + "<br>Number of occurrences: " + d.noc)
+        .style("display", "block");
+      timeScale.highlight(this);
+    })
+    .on("mouseout", function(d) {
+      d3.select(".info")
+        .html("")
+        .style("display", "none");
+      timeScale.unhighlight()
+    });
+
+}
+
+function datelineQuery(lvl) {
+  var bounds = map.getBounds(),
+      sw = bounds._southWest,
+      ne = bounds._northEast,
+      zoom = map.getZoom();
+
+  sw.lng = (sw.lng < -180) ? sw.lng + 360 : sw.lng;
+  sw.lat = (sw.lat < -90) ? -90 : sw.lat;
+  ne.lng = (ne.lng > 180) ? ne.lng - 360 : ne.lng;
+  ne.lat = (ne.lat > 90) ? 90 : ne.lat;
+
+  bounds = map.getBounds();
+  var west;
+  if (bounds._southWest.lng < -180) {
+    west = true;
+    ne.lng = 180;
+  }
+  if (bounds._northEast.lng > 180) {
+    west = false;
+    sw.lng = -180;
+  }
+
+  switch(lvl) {
+    case 1: 
+      var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=1&limit=999999';
+      url = parseURL(url);
+      d3.json(url, function(error, response) {
+        var data = response;
+        data.records.forEach(function(d) {
+          if (west) {
+            d.LatLng = new L.LatLng(d.lat,d.lng - 360);
+          } else {
+            d.LatLng = new L.LatLng(d.lat,d.lng + 360);
+          }
+        });
+        addBins(data, 1, zoom);
+      });
+      break;
+    case 2:
+      var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=2&limit=99999';
+      url = parseURL(url);
+      d3.json(url, function(error, response) {
+        var data = response;
+        data.records.forEach(function(d) {
+          if (west) {
+            d.LatLng = new L.LatLng(d.lat,d.lng - 360);
+          } else {
+            d.LatLng = new L.LatLng(d.lat,d.lng + 360);
+          }
+        });
+        addBins(data, 2, zoom);
+      });
+      break;
+    case 3:
+      var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/list.json?lngmin=' + sw.lng + '&lngmax='
+       + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&limit=99999999';
+       url = parseURL(url);
+      break;
+  }
+}
+// function that updates what is currently viewed on the map
+function refresh(year) {
+  // Delete any existing markers
+  if (parseInt(d3.select("#map").style("height")) < 1) {
+    var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=-180&lngmax=180&latmin=-90&latmax=90&level=1&limit=999999';
+    url = parseURL(url);
+
+    d3.json(url, function(error, data) { 
+      refreshMollweide(data);
+    });
+    return;
   }
 
   var bounds = map.getBounds(),
       sw = bounds._southWest,
       ne = bounds._northEast,
       zoom = map.getZoom();
+
+  if (prevne.lat > ne.lat && prevne.lng > ne.lng && prevsw.lat < sw.lat && prevsw.lng < sw.lng) {
+    if (prevzoom < 4 && zoom > 3) {
+      // refresh
+    } else if (prevzoom < 7 && zoom > 6) {
+      //refresh
+    } else {
+      var points = d3.selectAll(".bins");
+      if (zoom > 6) {
+        var clusters = d3.selectAll(".clusters");
+        return redraw(points, clusters);
+      } else {
+        return redraw(points);
+      }
+      
+    }
+  }
+  prevsw = sw;
+  prevne = ne;
+  prevzoom = zoom;
 
   // Make sure bad requests aren't made
   sw.lng = (sw.lng < -180) ? -180 : sw.lng;
@@ -262,64 +437,54 @@ function refresh(year) {
 
   // See if labels should be applied or not
   selectBaseMap(zoom);
-  if (mapType == "points") {
-      // Depending on the zoom level, call a different service from PaleoDB, feed it a bounding box, and pass it to function getData
-    if (zoom < 4) {
-      var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=1&limit=999999';
-      if (typeof selectedInterval != 'undefined') {
-        url += '&interval=' + selectedInterval;
-      }
-      if (typeof personFilter != 'undefined') {
-        url += '&person_no=' + personFilter;
-      }
-      if (typeof taxon != 'undefined') {
-        url += '&base_id=' + taxon.oid;
-      }
-      if (typeof exclude != 'undefined') {
-        url += '&exclude_id=' + exclude.oid;
-      }
-      getBins(url, 1, zoom);
-    } else if (zoom > 3 && zoom < 7 ) {
-      var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=2&limit=99999';
-      if (typeof selectedInterval != 'undefined') {
-        url += '&interval=' + selectedInterval;
-      }
-      if (typeof personFilter != 'undefined') {
-        url += '&person_no=' + personFilter;
-      }
-      if (typeof taxon != 'undefined') {
-        url += '&base_id=' + taxon.oid;
-      }
-      if (typeof exclude != 'undefined') {
-        url += '&exclude_id=' + exclude.oid;
-      }
-      getBins(url, 2, zoom);
-    } else {
-      var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/list.json?lngmin=' + sw.lng + '&lngmax='
-         + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&limit=99999999';
-      if (typeof selectedInterval != 'undefined') {
-        url += '&interval=' + selectedInterval;
-      }
-      if (typeof personFilter != 'undefined') {
-        url += '&person_no=' + personFilter;
-      }
-      if (typeof taxon != 'undefined') {
-        url += '&base_id=' + taxon.oid;
-      }
-      if (typeof exclude != 'undefined') {
-        url += '&exclude_id=' + exclude.oid;
-      }
-      getCollections(url, 3, zoom);
+
+  d3.selectAll(".bins").remove();
+  d3.selectAll(".clusters").remove();
+
+  bounds = map.getBounds();
+
+  // Depending on the zoom level, call a different service from PaleoDB, feed it a bounding box, and pass it to function getData
+  if (zoom < 4) {
+    var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=1&limit=999999';
+
+    if (bounds._southWest.lng < -180 || bounds._northEast.lng > 180) {
+      datelineQuery(1);
     }
+    // Make requests here and pass result to specific functions
+
+    //updateDownloadLink(url, zoom);
+    d3.json(parseURL(url), function(error, data) {
+      data.records.forEach(function(d) {
+        d.LatLng = new L.LatLng(d.lat,d.lng)
+      });
+      addBins(data, 1, zoom);
+    });
+  } else if (zoom > 3 && zoom < 7 ) {
+    var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=2&limit=99999';
+
+    if (bounds._southWest.lng < -180 || bounds._northEast.lng > 180) {
+      datelineQuery(2);
+    }
+
+    //updateDownloadLink(url, zoom);
+    d3.json(parseURL(url), function(error, data) {
+      data.records.forEach(function(d) {
+        d.LatLng = new L.LatLng(d.lat,d.lng)
+      });
+      addBins(data, 2, zoom);
+    });
   } else {
-    if (zoom < 5) {
-      buildHeatMap(1, 5);
-    } else {
-      buildHeatMap(2, 0.5);
+    var url = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/list.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&limit=99999999';
+
+    if (sw.lng < -180 || ne.lng > 180) {
+      datelineQuery(3);
     }
+
+    //updateDownloadLink(url, zoom);
+    getCollections(parseURL(url), 3, zoom);
   }
-  
-} // End function update
+
+} // End function refresh
 
 function selectBaseMap(zoom) {
   if (zoom < 5) {
@@ -342,138 +507,48 @@ function selectBaseMap(zoom) {
   }
 }
 
-function buildHeatMap(level, degr) {
-  var bounds = map.getBounds(),
-      sw = bounds._southWest,
-      ne = bounds._northEast;
-
-  // Make sure bad requests aren't made
-  sw.lng = (sw.lng < -180) ? -180 : sw.lng;
-  sw.lat = (sw.lat < -90) ? -90 : sw.lat;
-  ne.lng = (ne.lng > 180) ? 180 : ne.lng;
-  ne.lat = (ne.lat > 90) ? 90 : ne.lat;
-
-  var source = 'http://testpaleodb.geology.wisc.edu/data1.1/colls/summary.json?lngmin=' + sw.lng + '&lngmax=' + ne.lng + '&latmin=' + sw.lat + '&latmax=' + ne.lat + '&level=' + level + '&limit=9999999';
-
-  d3.json(source, function(error, data) {
-    var bins = data.records;
-
-    var grid = {"type":"FeatureCollection","features":[]};
-
-    for (var i = Math.floor(sw.lng); i < ne.lng ; i += degr) {
-      for (var j = Math.floor(sw.lat); j < ne.lat; j += degr) {
-        var square = {"type":"Feature","id": getID(i, j, level, degr),"properties":{"id": getID(i, j, level, degr)},"geometry":{"type":"Polygon","coordinates":[[[i,j],[degr+i, j],[degr+i, degr+j],[i,degr+j]]]}};
-
-        for (var z = 0; z < bins.length; z++) {
-          if (bins[z].oid == square.properties.id) {
-            square.properties.noc = bins[z].noc;
-            square.properties.nco = bins[z].nco;
-          }
-        }
-        grid.features.push(square);
+function addBins(data, level, zoom) {
+  // Add the bins to the map
+  var points = g.selectAll(".circle")
+    .data(data.records)
+    .enter().append("circle")
+    .attr("class", "bins")
+    .style("fill", function(d) { return (interval_hash[d.cxi]) ? interval_hash[d.cxi].col : "#000"; })
+    .attr("id", function(d) { return "p" + d.cxi; })
+    .on("mouseover", function(d) {
+      d3.select(".info")
+        .html("Number of collections: " + d.nco + "<br>Number of occurrences: " + d.noc)
+        .style("display", "block");
+      timeScale.highlight(this);
+    })
+    .on("click", function(d) {
+      d3.select(".info")
+        .html("Number of collections: " + d.nco + "<br>Number of occurrences: " + d.noc)
+        .style("display", "block");
+      timeScale.highlight(this);
+    })
+    .on("mouseout", function(d) {
+      d3.select(".info")
+        .html("")
+        .style("display", "none");
+      timeScale.unhighlight()
+    })
+    .on("dblclick", function(d) {
+      if (level == 1) {
+        map.setView(d.LatLng, 6);
+      } else if (level == 2) {
+        map.setView(d.LatLng, 8);
       }
-    }
-
-    var geojson = L.geoJson(grid, {
-      style: function(feature) {
-        if (feature.properties.nco) {
-          return {color:"#777", weight: 0, fillColor: getFill(feature.properties.noc, level), fillOpacity: 0.5};
-        } else {
-          return {color:"#fff", weight: 0, fillColor: "#fff", fillOpacity: 0.0};
-        }
-      }
-    }).addTo(map);
-  });
-}
-// get the fill shade for the heat map
-function getFill(d, level) {
-  var minColor = '#f7fcf5',
-      maxColor = '#00441b';
-
-  switch(level) {
-    case 1:
-      var scale = d3.scale.linear()
-        .domain([0, 1000])
-        .range([minColor, maxColor]);
-      var color = (scale(d) != '#000000') ? scale(d) : maxColor;
-      return (scale(d) != '#000000') ? scale(d) : maxColor;
-
-    case 2:
-      var scale = d3.scale.pow()
-        .domain([0, 600])
-        .range([minColor, maxColor]);
-      return (scale(d) != '#000000') ? scale(d) : maxColor;
-  }
-}
-// Calculate bin ID
-function getID(x, y, level, degr) {
-  switch(level) {
-    case 1:
-      var id = 1000000 + Math.floor((x+180)/degr) * 1000 + Math.floor((y+90)/degr);
-      return id;
-    case 2:
-      var id = 200000000 + Math.floor((x+180)/degr) * 10000 + Math.floor((y+90)/degr);
-      return id;
-  } 
-}
-
-function getBins(source, level, zoom) {
-  d3.json(source, function(error, response) {
-    var data = response;
-    // Create a Leaflet LatLng object for each bin
-    data.records.forEach(function(d) {
-      d.LatLng = new L.LatLng(d.lat,d.lng)
     });
-    // Create a different scale depending on the level of binning
-    if (level == 1) {
-      var scale = d3.scale.linear()
-        .domain([1, 4140])
-        .range([4, 30]);
-    } else if (level == 2) {
-      var scale = d3.scale.log()
-        .domain([1, 400])
-        .range([4,30]);
-    }
-    // Add the bins to the map
-    var points = g.selectAll(".circle")
-      .data(data.records)
-      .enter().append("circle")
-      .attr("class", "bins")
-      .style("fill", function(d) { return (interval_hash[d.cxi]) ? interval_hash[d.cxi].col : "#000"; })
-      .attr("id", function(d) { return "p" + d.cxi; })
-      .attr("r", function(d) { return scale(d.nco)*multiplier(zoom); })
-      .on("mouseover", function(d) {
-        d3.select(".info")
-          .html("Number of collections: " + d.nco + "<br>Number of occurrences: " + d.noc)
-          .style("display", "block");
-        highlightRect(this);
-      })
-      .on("click", function(d) {
-        d3.select(".info")
-          .html("Number of collections: " + d.nco + "<br>Number of occurrences: " + d.noc)
-          .style("display", "block");
-        highlightRect(this);
-      })
-      .on("mouseout", function(d) {
-        d3.select(".info")
-          .html("")
-          .style("display", "none");
-        unhighlightRect(this);
-      })
-      .on("dblclick", function(d) {
-        if (level == 1) {
-          map.setView(d.LatLng, 6);
-        } else if (level == 2) {
-          map.setView(d.LatLng, 8);
-        }
-      });
 
-    // Update the SVG positioning
-    redraw(points);
-  });
+  // Update the SVG positioning
+  redraw(points);
 }
 
 function getCollections(source, level, zoom) {
+  d3.selectAll(".bins").remove();
+  d3.selectAll(".clusters").remove();
+
   // Make an AJAX request to PaleoDB
   d3.json(source, function(error, data) {
     // Many collections share the same coordinates, making it necessary to create clusters of like coordinates
@@ -547,28 +622,23 @@ function getCollections(source, level, zoom) {
       d.noc = d3.sum(totalOccurrences);
     });
 
-    var scale = d3.scale.linear()
-      .domain([1, 50])
-      .range([12, 30]);
-
     var clusterPoints = g.selectAll(".clusters")
       .data(clusters)
       .enter().append("circle")
       .attr("class", "clusters")
       .attr("id", function(d) { return "p" + d.members[0].cxi; })
       .style("fill", function(d) { return interval_hash[d.cxi].col; })
-      .attr("r", function(d) { return scale(d.members.length); })
       .on("mouseover", function(d) {
         d3.select(".info")
           .html(d.members.length + " collections<br>" + interval_hash[d.cxi].nam + "<br>" + d.noc + " occurrences")
           .style("display", "block");
-        highlightRect(this);
+        timeScale.highlight(this);
       })
       .on("mouseout", function(d) {
         d3.select(".info")
           .html("")
           .style("display", "none");
-        unhighlightRect(this);
+        timeScale.unhighlight();
       })
       .on("click", function(d) {
         d3.select("#clusterTable")
@@ -591,16 +661,16 @@ function getCollections(source, level, zoom) {
             d3.select(".info")
               .html(e.nam + "<br>" + interval_hash[e.cxi].nam + "<br>" + e.noc + " occurrences")
               .style("display", "block");
-            highlightRect(e, true);
+            timeScale.highlight(e);
           })
           .on("mouseout", function(e) {
-            unhighlightRect(e, true);
+            timeScale.unhighlight();
           })
           .on("click", function(e) {
             d3.select(".info")
-              .html(e.nam + "<br>" + e.int)
-              .style("display", "block")
-            highlightRect(this);
+              .html(e.nam + "<br>" + interval_hash[e.cxi].nam + "<br>" + e.noc + " occurrences")
+              .style("display", "block");
+            timeScale.highlight(e);
           });
       });
 
@@ -609,79 +679,59 @@ function getCollections(source, level, zoom) {
       .enter().append("circle")
       .attr("id", function(d) { return "p" + d.cxi })
       .attr("class", "bins")
-      .attr("r", 12)
-      .style("fill", function(d) { return interval_hash[d.cxi].col; })
+      .style("fill", function(d) { return (interval_hash[d.cxi]) ? interval_hash[d.cxi].col : "#000"; })
       .on("mouseover", function(d) {
         d3.select(".info")
           .html(d.nam + "<br>" + interval_hash[d.cxi].nam + "<br>" + d.noc + " occurrences")
           .style("display", "block");
-        highlightRect(this);
+        timeScale.highlight(this);
       })
       .on("click", function(d) {
         d3.select(".info")
           .html(d.nam + "<br>" + interval_hash[d.cxi].nam + "<br>" + d.noc + " occurrences")
           .style("display", "block");
-        highlightRect(this);
+        timeScale.highlight(this);
       })
       .on("mouseout", function(d) {
         d3.select(".info")
           .html("")
           .style("display", "none");
-        unhighlightRect(this);
+        timeScale.unhighlight();
       });
 
-    redraw(points, clusterPoints, "collections");
+    redraw(points, clusterPoints);
   });
 }
-/*
-d3.xhr('http://gplates.gps.caltech.edu:8080/recon_points/')
-  .header("Content-type", "application/x-www-form-urlencoded")
-  .post('?time=69&points="POINT(-44.0287%20-89.476%201000009)"&output=topojson', function(err, result) {console.log(result.response)});
 
-d3.json('http://gplates.gps.caltech.edu:8080/recon_points/', function(err, result) {
-  console.log(result);
-})
-.header("Content-Type","application/x-www-form-urlencoded")
-.send('POST', '?time=69&points="POINT(-44.0287%20-89.476%201000009)"&output=topojson');
-
-curl -i --data 'time=80&points="POINT(-44 -89 testpt)"&output=geojson' 'http://gplates.gps.caltech.edu:8080/recon_points/'*/
-
-// TODO change these functions to accept an ID instead of a fill
-function highlightRect(d, table) {
-  // TODO highlight using lti instead of cxi - highlight all intervals contained in collection
-  // Make sure everything is reset (especially important for touch interfaces that don't have a mouseout)
-  d3.selectAll("rect").style("stroke", "#fff");
-  if (table) {
-    d3.selectAll("rect#t" + d.cxi).style("stroke", "#000").moveToFront();
-    d3.selectAll("#l" + d.cxi).moveToFront();
-    d3.selectAll(".abbr").moveToFront();
-  } else {
-    var id = d3.select(d).attr("id");
-    id = id.replace("p", "");
-    d3.selectAll("rect#t" + id).style("stroke", "#000").moveToFront();
-    d3.selectAll("#l" + id).moveToFront();
-    d3.selectAll(".abbr").moveToFront();
-  }
-}
-function unhighlightRect(d, table) {
-  if (table) {
-    d3.selectAll("rect#t" + d.cxi).style("stroke", "#fff");
-  } else {
-    var id = d3.select(d).attr("id");
-    id = id.replace("p", "");
-    d3.selectAll("rect#t" + id).style("stroke", "#fff");
-  }
-}
 // Adjust the positioning of the SVG elements relative to the map frame
-function redraw(points, clusterPoints, type) {
+function redraw(points, clusterPoints) {
+  var zoom = map.getZoom();
+  if (zoom < 4) {
+    var scale = d3.scale.linear()
+      .domain([1, 4140])
+      .range([4, 30]);
+  } else if (zoom > 3 && zoom < 7 ) {
+    var scale = d3.scale.log()
+      .domain([1, 400])
+      .range([4,30]);
+  } else {
+    var scale = d3.scale.linear()
+      .domain([1, 50])
+      .range([12, 30]);
+  }
   points.attr("cx",function(d) { return map.latLngToLayerPoint(d.LatLng).x});
   points.attr("cy",function(d) { return map.latLngToLayerPoint(d.LatLng).y});
-  if (type == "collections") {
+  if (clusterPoints) {
     clusterPoints.attr("cx",function(d) { return map.latLngToLayerPoint(d.LatLng).x});
     clusterPoints.attr("cy",function(d) { return map.latLngToLayerPoint(d.LatLng).y});
+    clusterPoints.attr("r", function(d) { return scale(d.members.length); })
+    points.attr("r", 12);
+  } else {
+    points.attr("r", function(d) { return scale(d.nco)*multiplier(zoom); });
   }
 }
 // Adjust the size of the markers depending on zoom level
+// TODO turn this into a hash
 function multiplier(zoom) {
   switch(zoom) {
     case 2:
@@ -716,717 +766,82 @@ function arrayObjectIndexOf(myArray, searchTerm, property) {
   return -1;
 }
 
-/////////////////////
-
-function buildTimeChart() {
-  var w = 960,
-      h = 180,
-      x = d3.scale.linear().range([0, w]),
-      y = d3.scale.linear().range([0, h]);
-
-  // Create the SVG for the chart
-  var time = d3.select("#chart").append("svg:svg")
-      .attr("width", w)
-      .attr("height", h)
-      .attr("id", "geologicTime")
-      .append("g")
-      .attr("id", "chartGroup");
-
-  // Load the time scale data
-  d3.json("http://testpaleodb.geology.wisc.edu/data1.1/intervals/list.json?order=older&max_ma=4000", function(error, result) {
-    var data = { oid: 0, col: "#000000", nam: "Geologic Time", children: [] };
-    interval_hash = { 0: data };
-    for(var i=0; i < result.records.length; i++) {
-      var r = result.records[i];
-      r.children = [];
-      r.pid = r.pid || 0;
-      r.abr = r.abr || r.nam.charAt(0); 
-      r.total = r.eag - r.lag;
-      interval_hash[r.oid] = r;
-      interval_hash[r.pid].children.push(r);
-    }
-      // Create a new d3 partition layout
-    var partition = d3.layout.partition()
-        .sort(function(d) { d3.ascending(d)})
-        .value(function(d) { return d.total; });
-    // Create the rectangles
-    var rect = time.selectAll("rect")
-        .data(partition.nodes(data))
-      .enter().append("svg:rect")
-        .attr("x", function(d) { return x(d.x); })
-        .attr("y", function(d) { return y(d.y); })
-        .attr("width", function(d) { return x(d.dx); })
-        .attr("height", function(d) { return y(d.dy); })
-        .attr("fill", function(d) { return d.col || "#000000" })
-        .attr("id", function(d) { return "t" + d.oid; })
-        .on("click", rectTrans);
-    
-      // Add the full labels
-    var labelsFull = time.selectAll("fullName")
-        .data(partition.nodes(data))
-      .enter().append("svg:foreignObject")
-        .attr("x", function(d) { return labelX(d) })
-        .attr("y", function(d) { return y(d.y) + 3;})
-        .attr("width", function(d) { return 150; })
-        .attr("height", function(d) { return y(d.dy); })
-        .text(function(d) { return d.nam; })
-        .attr("class", function(d) { return "fullName level" + d.lvl; })
-        .attr("id", function(d) { return "l" + d.oid; })
-        .on("click", rectTrans);
-
-      // Add the abbreviations
-    var labelsAbbr = time.selectAll("abbreviations")
-        .data(partition.nodes(data))
-      .enter().append("svg:foreignObject")
-        .attr("x", function(d) { return labelAbbrX(d); })
-        .attr("y", function(d) { return y(d.y) + 3;})
-        .attr("width", function(d) { return 30; })
-        .attr("height", function(d) { return y(d.dy); })
-        .text(function(d) { return d.abr || d.nam.charAt(0); })
-        .attr("class", function(d) { return "abbr level" + d.lvl; })
-        .on("click", rectTrans);
-
-    // Position the labels for the first time
-    labelLevels(interval_hash[0]);
-
-    // Otherwise it's black on black...
-    d3.selectAll('.fullName').filter(function(d, i) {
-      return d.nam == "Geologic Time";
-    }).style("color", "#fff"); 
-    // Open to Phanerozoic 
-    rectTrans(interval_hash[751])
-  }); // End json callback
-} // end buildTimeChart()
-
-// Function that controls when which labels should be displayed
-function labelLevels(d) {
-  // Position all the parent labels in the middle of the scale
-  if (typeof d.parent != 'undefined') {
-    var depth = d.depth,
-        loc = "d.parent";
-    for (var i=0; i<depth;i++) {
-      var parent = eval(loc).nam;
-      d3.selectAll('.abbr').filter(function(d, i) {
-        return d.nam === parent;
-      }).attr("x", 430);
-      d3.selectAll('.fullName').filter(function(d, i) {
-        return d.nam === parent;
-      }).attr("x", 430);
-      loc += ".parent";
-    }
-    d3.selectAll('.abbr').filter(function(d, i) {
-      return d.nam === parent;
-    }).attr("x", 430);
-    d3.selectAll('.fullName').filter(function(d, i) {
-      return d.nam === parent;
-    }).attr("x", 430);
-  }
-  //console.log(d);
-  switch (d.lvl) {
-    case 'undefined': 
-      d3.selectAll('.level1').style("display", "block");
-      d3.selectAll('.level2, .level3, .level4, .level5').style("display", "none");
-      d3.selectAll('.abbr.level1').style("display", "none");
-      d3.selectAll('.abbr.level2').style("display", "block");
-      break;
-    case 1:
-      d3.selectAll('.level1, .level2').style("display", "block");
-      d3.selectAll('.level3, .level4, .level5').style("display", "none");
-      d3.selectAll('.abbr.level3').style("display", "block");
-      d3.selectAll('.abbr.level1, .abbr.level2').style("display", "none");
-      d3.selectAll('.abbr').filter(function(d, i) {
-        return d.abr === "Q";
-      }).style("display", "none");
-      break;
-    case 2:
-      d3.selectAll('.level1, .level2, .level3').style("display", "block");
-      d3.selectAll('.level4, .level5').style("display", "none");
-      d3.selectAll('.abbr.level4').style("display", "block");
-      d3.selectAll('.abbr.level1, .abbr.level2, .abbr.level3').style("display", "none");
-
-      d3.selectAll('.fullName').filter(function(d, i) {
-        return d.nam === "Quaternary";
-      }).style("display", "none");
-
-      d3.selectAll('.abbr').filter(function(d, i) {
-        return d.abr === "Q";
-      }).style("display", "block");
-
-      d3.selectAll('.abbr').filter(function(d, i) {
-        return d.abr === "H";
-      }).style("display", "none");
-      break;
-    case 3:
-      d3.selectAll('.level1, .level2, .level3, .level4').style("display", "block");
-      d3.selectAll('.level5').style("display", "none");
-      d3.selectAll('.abbr.level5').style("display", "block");
-      d3.selectAll('.abbr.level4, .abbr.level3, .abbr.level2').style("display", "none");
-
-      d3.selectAll('.fullName').filter(function(d, i) {
-        return d.nam === "Holocene";
-      }).style("display", "none");
-
-      d3.selectAll('.abbr').filter(function(d, i) {
-        return d.abr === "H";
-      }).style("display", "block");
-      break;
-    case 4:
-      d3.selectAll('.level1, .level2, .level3, .level4, .level5').style("display", "block");
-      d3.selectAll('.abbr').style("display", "none");
-      if (d.nam != "Holocene") {
-        d3.selectAll('.fullName').filter(function(d, i) {
-          return d.nam === "Holocene";
-        }).style("display", "none");
-
-        d3.selectAll('.abbr').filter(function(d, i) {
-          return d.abr === "H";
-        }).style("display", "block");
-      }
-      break;
-    case 5:
-      d3.selectAll('.level1, .level2, .level3, .level4, .level5').style("display", "block");
-      d3.selectAll('.abbr').style("display", "none");
-      break;
-    default:
-      d3.selectAll('.level1').style("display", "block");
-      d3.selectAll('.level2, .level3, .level4, .level5').style("display", "none");
-      d3.selectAll('.abbr.level1').style("display", "none");
-      d3.selectAll('.abbr.level2').style("display", "block");
-      break;
-  }
-} // end labelLevels()
-
-function labelAbbrX(d) {
-  var xPos = parseFloat(d3.select("#t" + d.oid).attr("width"))/2 + parseFloat(d3.select("#t" + d.oid).attr("x"));
-  switch(d.nam) {
-    case "Eoarchean":
-      return xPos - 5;
-      break;
-    case "Paleoarchean":
-      return xPos - 2;
-      break;
-    case "Mesoarchean":
-      return xPos - 5;
-      break;
-    case "Neoarchean":
-      return xPos - 3;
-      break;
-    case "Paleozoic":
-      return xPos - 4;
-      break;
-    case "Cenozoic":
-      return xPos - 8;
-      break;
-    case "Mesozoic":
-      return xPos - 5;
-      break;
-    case "Cambrian":
-      return xPos - 6;
-      break;
-    case "Ordovician":
-      return xPos - 3;
-      break;
-    case "Silurian":
-      return xPos - 4;
-      break;
-    case "Devonian":
-      return xPos - 5;
-      break;
-    case "Series 2":
-      return xPos - 3;
-      break;
-    case "Series 3":
-      return xPos - 3;
-      break;
-    case "Furongian":
-      return xPos - 3;
-      break;
-    case "Early Ordovician":
-      return xPos - 3;
-      break;
-    case "Middle Ordovician":
-      return xPos - 5;
-      break;
-    case "Late Ordovician":
-      return xPos - 4;
-      break;
-    case "Hirnantian":
-      return xPos - 5;
-      break;
-    case "Llandovery":
-      return xPos - 3;
-      break;
-    case "Wenlock":
-      return xPos - 6;
-      break;
-    case "Ludlow":
-      return xPos - 4;
-      break;
-    case "Pridoli":
-      return xPos - 5;
-      break;
-    case "Kasimovian":
-      return xPos - 4;
-      break;
-    case "Gzhelian":
-      return xPos - 5;
-      break;
-    case "Guadalupian":
-      return xPos - 5;
-      break;
-    case "Lopingian":
-      return xPos - 3;
-      break;
-    case "Middle Devonian":
-      return xPos - 6;
-      break;
-    case "Triassic":
-      return xPos - 5;
-      break;
-    case "Early Triassic":
-      return xPos - 5;
-      break;
-    case "Middle Triassic":
-      return xPos - 5;
-      break;
-    case "Late Triassic":
-      return xPos - 5;
-      break;
-    case "Middle Jurassic":
-      return xPos - 5;
-      break;
-    case "Hettangian":
-      return xPos - 5;
-      break;
-    case "Aalenian":
-      return xPos - 3;
-      break;
-    case "Bajocian":
-      return xPos - 4;
-      break;
-    case "Bathonian":
-      return xPos - 4;
-      break;
-    case "Callovian":
-      return xPos - 5;
-      break;
-    case "Berriasian":
-      return xPos - 3;
-      break;
-    case "Valanginian":
-      return xPos - 2;
-      break;
-    case "Hauterivian":
-      return xPos - 4;
-      break;
-    case "Barremian":
-      return xPos - 3;
-      break;
-    case "Aptian":
-      return xPos - 5;
-      break;
-    case "Albian":
-      return xPos - 5;
-      break;
-    case "Cenomanian":
-      return xPos - 3;
-      break;
-    case "Turonian":
-      return xPos - 3;
-      break;
-    case "Coniacian":
-      return xPos - 4;
-      break;
-    case "Santonian":
-      return xPos - 4;
-      break;
-    case "Campanian":
-      return xPos - 3;
-      break;
-    case "Maastrichtian":
-      return xPos - 5;
-      break;
-    case "Neogene":
-      return xPos - 8;
-      break;
-    case "Quaternary":
-      return xPos - 6;
-      break;
-    case "Holocene":
-      return xPos - 7;
-      break;
-    case "Bartonian":
-      return xPos - 3;
-      break;
-    case "Priabonian":
-      return xPos - 3;
-      break;
-    default:
-      return xPos;
-      break;
-  }
-} // end labelAbbrX()
-function labelX(d) {
-  var xPos = parseFloat(d3.select("#t" + d.oid).attr("width"))/2 + parseFloat(d3.select("#t" + d.oid).attr("x"));
-  switch (d.nam) {
-    case "Phanerozoic":
-      return xPos - 35;
-      break;
-    case "Paleozoic":
-      return xPos - 35;
-      break;
-    case "Cambrian":
-      return xPos - 25;
-      break;
-    case "Terreneuvian":
-      return xPos - 40;
-      break;
-    case "Series 2":
-      return xPos - 25;
-      break;
-    case "Series 3":
-      return xPos - 25;
-      break;
-    case "Furongian": 
-      return xPos - 30;
-      break;
-    case "Ordovician":
-      return xPos - 34;
-      break;
-    case "Silurian":
-      return xPos - 25;
-      break;
-    case "Devonian":
-      return xPos - 30;
-      break;
-    case "Carboniferous":
-      return xPos - 44;
-      break;
-    case "Permian":
-      return xPos - 24;
-      break;
-    case "Cenozoic":
-      return xPos - 30;
-      break;
-    case "Middle Ordovician":
-      return xPos - 67;
-      break;
-    case "Late Ordovician":
-      return xPos - 55;
-      break;
-    case "Late Ordovician":
-      return xPos - 39;
-      break;
-    case "Wenlock":
-      return xPos - 33;
-      break;
-    case "Ludlow":
-      return xPos - 25;
-      break;
-    case "Pridoli":
-      return xPos - 20;
-      break;
-    case "Pragian":
-      return xPos - 25;
-      break;
-    case "Kasimovian":
-      return xPos - 35;
-      break;
-    case "Gzhelian":
-      return xPos - 30;
-      break;
-    case "Moscovian":
-      return xPos - 35;
-      break;
-    case "Bashkirian":
-      return xPos - 30;
-      break;
-    case "Lopingian":
-      return xPos - 32;
-      break;
-    case "Asselian":
-      return xPos - 25;
-      break;
-    case "Sakmarian":
-      return xPos - 32;
-      break;
-    case "Kungurian":
-      return xPos - 35;
-      break;
-    case "Triassic":
-      return xPos - 25;
-      break;
-    case "Early Triassic":
-      return xPos - 42;
-      break;
-    case "Jurassic":
-      return xPos - 20;
-      break;
-    case "Hettangian":
-      return xPos - 35;
-      break;
-    case "Aalenian":
-      return xPos - 25;
-      break;
-    case "Bajocian":
-      return xPos - 25;
-      break;
-    case "Bathonian":
-      return xPos - 30;
-      break;
-    case "Callovian":
-      return xPos - 30;
-      break;
-    case "Berriasian":
-      return xPos - 32;
-      break;
-    case "Valanginian":
-      return xPos - 33;
-      break;
-    case "Hauterivian":
-      return xPos - 36;
-      break;
-    case "Barremian":
-      return xPos - 32;
-      break;
-    case "Aptian":
-      return xPos - 25;
-      break;
-    case "Albian":
-      return xPos - 25;
-      break;
-    case "Cenomanian":
-      return xPos - 35;
-      break;
-    case "Turonian":
-      return xPos - 25;
-      break;
-    case "Coniacian":
-      return xPos - 30;
-      break;
-    case "Santonian":
-      return xPos - 32;
-      break;
-    case "Campanian":
-      return xPos - 40;
-      break;
-    case "Maastrichtian":
-      return xPos - 35;
-      break;
-    case "Cretaceous":
-      return xPos - 40;
-      break;
-    case "Bartonian":
-      return xPos - 27;
-      break;
-    case "Priabonian":
-      return xPos - 30;
-      break;
-    case "Lutetian":
-      return xPos - 25;
-      break;
-    case "Ypresian":
-      return xPos - 30;
-      break;
-    case "Gelasian":
-      return xPos - 30;
-      break;
-    case "Middle":
-      return xPos - 25;
-      break;
-    case "Late":
-      return xPos -12;
-      break;
-    default: 
-      return xPos - 50;
-  }
-} // end labelX()
-
-// Function to handle the zooming action
-function rectTrans(d) {
-  // if box is checked...
-  // if box is checked...
-  var timeFilterCheck = document.getElementById('viewByTimeBox').checked;
-  if (timeFilterCheck) {
-    selectedInterval = d.nam;
-    refresh(d);
-  }
-
-  var reconstructCheck = document.getElementById('reconstructBox').checked;
-  if (reconstructCheck){
-    var requestYear = parseInt((d.eag + d.lag) / 2);
-    if (d.depth < 3) {
-      return alert("Please select a period or finer interval");
-    } else if (requestYear > 250) {
-      return alert("Please select an interval younger than 250 MA");
-    } else {
-      reconstruct(d);
-    }
-  }
-
-  // var n keeps track of the transition
-  var n = 0,
-    w = 960,
-    h = 120,
-    x = d3.scale.linear().range([0, w]),
-    y = d3.scale.linear().range([0, h]),
-    rect = d3.selectAll("rect");
-
-  x.domain([d.x, d.x + d.dx]);
-
-  // When complete, calls labelTrans() 
-  rect.transition()
-  .duration(750)
-  .each(function(){ ++n; })
-  .attr("x", function(d) { return x(d.x); })
-  .attr("width", function(d) { return x(d.x + d.dx) - x(d.x); })
-  .each("end", function() { if (!--n) labelTrans(d)});
-}
-
-// Function that handles label placement while zooming
-// Depends on the result of rectTrans(), so executed only after rectTrans() is complete
-function labelTrans(d) {
-  // var n keeps track of the transition
-  console.log(d);
-  var n = 0,
-    w = 960,
-    h = 120,
-    x = d3.scale.linear().range([0, w]),
-    y = d3.scale.linear().range([0, h]),
-    labelsFull = d3.selectAll(".fullName"),
-    labelsAbbr = d3.selectAll(".abbr");
-
-  x.domain([d.x, d.x + d.dx]);
-
-  // Move the full names
-  labelsFull.transition()
-  .duration(300)
-  .each(function(){ ++n; })
-  .attr("x", function(d) { return labelX(d); })
-  .attr("width", function(d) { return 120; })
-  .attr("height", function(d) { return y(d.y + d.dy) - y(d.y); })
-  .each("end", function() { if (!--n) labelLevels(d)});
-
-  // Move the abbreviations
-  labelsAbbr.transition()
-  .duration(300)
-  .each(function(){ ++n; })
-  .attr("x", function(d) { return labelAbbrX(d); })
-  .attr("width", function(d) { return 23;})
-  .attr("height", function(d) { return y(d.y + d.dy) - y(d.y); })
-  .each("end", function() { if (!--n) labelLevels(d)});
-
-  var current = d3.selectAll('.fullName').filter(function(e, i) {
-      return e.nam == d.nam;
-    }).insert("i").attr("class", "icon-globe icon2x");
-  //.append('<i class="icon-globe icon2x"></i>');
-}
-function updateTaxon(id) {
-  if (!id) {
-    taxon = '';
-    exclude = '';
-    refresh();
-  } else {
-    taxon = {oid: id};
-    refresh();
-  }
-}
-
-function excludeTaxon(id) {
-  console.log(exclude);
-  if (!id) {
-    exclude = '';
-    refresh();
-  } else {
-    exclude = {oid: id};
-    console.log(exclude);
-    refresh();
-  }
-  
-}
 function sizeChange() {
   d3.select("#map")
     .style("height", function(d) {
-      return window.innerHeight * 0.50 + "px";
+      return window.innerHeight * 0.60 + "px";
     });
   map.invalidateSize();
 
+  d3.select("#svgMap")
+    .style("height", function(d) {
+      return window.innerHeight * 0.60 + "px";
+    });
+
   d3.select("#reconstructMap")
     .style("height", function(d) {
-      return window.innerHeight * 0.50 + "px";
+      return window.innerHeight * 0.60 + "px";
     });
-  reconstructMap.invalidateSize();
+
+  d3.select("#infoContainer")
+    .style("height", function() {
+      return window.innerHeight * 0.60 + "px";
+    });
 
   d3.select("#window")
     .style("height", function(d) {
       return parseInt(d3.select("#map").style("height")) - 16 + "px";
     });
-
-  d3.select("#chartGroup")
-    .attr("transform", function(d) {
-      return "scale(" + parseInt(d3.select("#chart").style("width"))/961 + ")";
-    });
-
-  d3.select("#geologicTime")
-    .style("width", function(d) {
-      return d3.select("#chart").style("width");
-     })
+  
+  d3.selectAll(".taxa")
     .style("height", function(d) {
-      return parseInt(d3.select("#chart").style("width")) * 0.20 + "px";
+      //console.log((parseInt(d3.select("#map").style("height")) - 26)/15);
+      return (parseInt(d3.select("#map").style("height")) - 26)/15 + "px";
+    })
+    .style("width", function(d) {
+      return (parseInt(d3.select("#map").style("height")) - 26)/15 + "px";
     });
-}
 
-function point() {
-  mapType = "points";
-  return refresh();
-}
-function heat() {
-  mapType = "heat";
-  return refresh();
+  timeScale.sizeChange();
 }
 
 function filterByPerson(name) {
-  /*if (name) {
-    if (name == 'none') {
-      personFilter = '';
-      refresh();
-      return false;
+  var person = d3.select("#personInput").property("value");
+  d3.json('http://testpaleodb.geology.wisc.edu/data1.1/people/list.json?name=' + person, function(err, result) {
+    if (err || result.records.length < 1) {
+      return alert("No people with that name found. Please try again.");
     }
-    var person = name;
-    d3.json('http://testpaleodb.geology.wisc.edu/data1.1/people/list.json?name=' + person, function(err, result) {
-      if (err || result.records.length < 1) {
-        return alert("No people with that name found. Please try again.");
-      }
-      personFilter = result.records[0].oid;
-      console.log("Filtering by ", personFilter);
-      refresh();
-      return false;
-    });
-  }*/
-  var checked = document.getElementById("personFilterBox").checked;
-  if (checked == true) {
-    var person = d3.select("#personInput").property("value");
-    d3.json('http://testpaleodb.geology.wisc.edu/data1.1/people/list.json?name=' + person, function(err, result) {
-      if (err || result.records.length < 1) {
-        return alert("No people with that name found. Please try again.");
-      }
-      personFilter = result.records[0].oid;
-      console.log("Filtering by ", personFilter);
-      refresh();
-      return false;
-    });
-  } else {
-    personFilter = '';
-    console.log("not checked");
+    filters.exist.personFilter = true;
+    filters.personFilter.id = result.records[0].oid;
+    filters.personFilter.name = result.records[0].nam;
+    console.log("Filtering by ", filters.personFilter.name);
+    updateFilterList("personFilter");
+    d3.select(".userToggler").style("display", "none");
+    refresh();
     return false;
-  }
+  });
   return false;
+}
+
+function refreshFilterHandlers() {
+  d3.selectAll(".close").on("click", function() {
+    var parent = d3.select(this).node().parentNode;
+    parent = d3.select(parent);
+    parent.style("display", "none").html("");
+    var type = parent.attr("id");
+    filters.exist[type] = false;
+    refresh();
+  });
 }
 
 // Initialize the map and time scale on load
 (function() {
-  // Set the initial map type
-  mapType = "points";
+  // Time scale
+  timeScale.init("timescale");
+
+  prevsw = {"lng": 0, "lat": 0};
+  prevne = {"lng": 0, "lat": 0};
+  prevzoom = 3;
 
   // Init the leaflet map
   map = new L.Map('map', {
@@ -1437,22 +852,6 @@ function filterByPerson(name) {
     zoomControl: false
   });
 
-  reconstructMap = new L.Map('reconstructMap', {
-    center: new L.LatLng(7, 0),
-    zoom: 2,
-    maxZoom:10,
-    minZoom: 2,
-    zoomControl: false
-  });
-
-  var reconstructMapControl = L.control({position: 'topleft'});
-  reconstructMapControl.onAdd = function(map) {
-    var div = L.DomUtil.create('div', 'customControl');
-    div.innerHTML += "<div id='reconstructMapInfo'><a href='http://gplates.org' target='_blank'><img id='gplatesLogo' src='css/gplates_icon.jpg'></a><h4 id='age'></h4><p>via GPlates</p></div><a id='mapSwitch' href='#''><i class=icon-circle-arrow-left icon-2x></i> Back to main map</a>";
-    return div;
-  }
-  reconstructMapControl.addTo(reconstructMap);
-
   var attrib = 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data © <a href="http://openstreetmap.org">OpenStreetMap</a> contributors';
 
   stamen = new L.TileLayer('http://{s}.tile.stamen.com/toner-background/{z}/{x}/{y}.png', {attribution: attrib}).addTo(map);
@@ -1461,88 +860,114 @@ function filterByPerson(name) {
 
   map.on("moveend", function() {
     d3.select("#window").style("display", "none");
-    d3.select(".layerToggler").style("display", "none");
+    //d3.select(".layerToggler").style("display", "none");
     d3.selectAll("rect").style("stroke", "#fff");
-    d3.select(".info")
-      .style("display", "none");
+    d3.select(".info").style("display", "none");
+
+    var zoom = map.getZoom();
+    if (zoom < 3) {
+      mapHeight = d3.select("#map").style("height");
+      d3.select("#map").style("height", 0);
+      d3.select("#svgMap").style("display", "block");
+      d3.selectAll("path").attr("d", path);
+    }
 
     refresh();
     
   });
+  d3.select("#map").style("height", 0);
 
-  var credits = new L.control({position: 'bottomleft'});
-  credits.onAdd = function(map) {
-    var div = L.DomUtil.create('div', 'info credits');
-    return div;
+  var width = window.innerWidth,
+      height = window.innerHeight * 0.60;
+  
+  var projection = d3.geo.hammer()
+    .scale(165)
+    .translate([width / 2, height / 2])
+    .precision(.1);
+
+  var mercator = d3.geo.mercator()
+    .scale(165)
+    .precision(.1)
+    .translate([width / 2, height / 2]);
+
+  var path = d3.geo.path()
+    .projection(projection);
+
+  function changeMaps(mouse) {
+    var coords = mouse,
+      projected = mercator.invert(coords);
+
+    d3.select("#svgMap").style("display", "none");
+    d3.select("#map").style("height", mapHeight);
+    map.invalidateSize();
+
+    map.setView([parseInt(projected[1]), parseInt(projected[0])], 3, {animate:false});
   }
-  credits.addTo(map);
 
-  // Add a div to house mouseover data
-  var info = L.control({position: 'bottomleft'});
-  info.onAdd = function (map) {
-    var div = L.DomUtil.create('div', 'info');
-    return div;
-  }
-  info.addTo(map);
+  var zoom = d3.behavior.zoom()
+    .on("zoom",function() {
+      if (d3.event.sourceEvent.wheelDelta > 0) {
+        changeMaps(d3.mouse(this));
+      }
+    });
 
-  var controlContent = '<div class="zoom-in">+</div><div class="zoom-out">&#8211;</div><div class="layers"></div><div class="tools"><i class="icon-wrench icon-2x"></i></div><div class="userFilter"><i class="icon-user icon-2x"></i></div>';
+  var projsvg = d3.select("#svgMap").append("svg")
+    .attr("width", width)
+    .attr("height", height)
+    .call(zoom)
+    .on("click", function() {
+      changeMaps(d3.mouse(this));
+    });
 
-  var controls = L.control({position: 'topleft'});
-  controls.onAdd = function(map) {
-  var div = L.DomUtil.create('div', 'customControl buttons');
-  div.innerHTML += controlContent;
-  return div;
-  }
-  controls.addTo(map);
+  projsvg.append("defs").append("path")
+    .datum({type: "Sphere"})
+    .attr("id", "sphere")
+    .attr("d", path);
 
-  var layerToggler = L.control({position:'topleft'});
-  layerToggler.onAdd = function(map) {
-  var div = L.DomUtil.create('div', 'customControl layerToggler');
-  div.innerHTML += '<form action=""><input type="radio" name="layer" value="point" onclick="point();" checked>     Point<br><input type="radio" name="layer" value="heat" onclick="heat();">     Heat</form>';
-  return div;
-  }
-  layerToggler.addTo(map);
+  projsvg.append("use")
+    .attr("class", "fill")
+    .attr("xlink:href", "#sphere");
 
-  var toolToggler = L.control({position:'topleft'});
-  toolToggler.onAdd = function(map) {
-  var div = L.DomUtil.create('div', 'customControl toolToggler');
-  div.innerHTML += '<form action=""><input id="viewByTimeBox" type="checkbox" value="1"/>Filter by time<br><input id="reconstructBox" type="checkbox" value="1"/>Rotate view by interval</form>';
-  return div;
-  }
-  toolToggler.addTo(map);
+  d3.json("countries_1e5.json", function(error, data) {
+    projsvg.append("path")
+      .datum(topojson.feature(data, data.objects.countries))
+      .attr("class", "countries")
+      .attr("d", path);
 
-  var userToggler = L.control({position:'topleft'});
-  userToggler.onAdd = function(map) {
-  var div = L.DomUtil.create('div', 'customControl userToggler');
-  div.innerHTML += '<form onSubmit="return filterByPerson()"><input id="personFilterBox" type="checkbox" value="1"/>Filter by person<br><input type="text" id="personInput"/><button type="submit" class="btn btn-success btn-xs">Filter</button></form>';
-  return div;
-  }
-  userToggler.addTo(map);
-
+  });
+ /*
   var taxaToggler = L.control({position: 'topright'});
   taxaToggler.onAdd = function(map) {
     var div = L.DomUtil.create('div', 'customControl taxaToggler');
-    div.innerHTML += '<div><i class="icon-bug icon-2x"></i></div>';
+    div.innerHTML += '<div data-toggle="tooltip" title="Tyranasaurus" data-placement="left" class="taxa" id="trex"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Bacteria" data-placement="left" class="taxa" id="bacteria"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Lecanorales" data-placement="left" class="taxa" id="lecanorales"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Opisthokonta" data-placement="left" class="taxa" id="opisthokonta"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Plant" data-placement="left" class="taxa" id="plant"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Rotaria" data-placement="left" class="taxa" id="rotaria"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Starfish" data-placement="left" class="taxa" id="starfish"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Thysanura" data-placement="left" class="taxa" id="thysanura"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Tree" data-placement="left" class="taxa" id="tree"></div>';
+    div.innerHTML += '<br><div data-toggle="tooltip" title="Trilobita" data-placement="left" class="taxa" id="trilobita"></div>';
     return div;
   }
   taxaToggler.addTo(map);
 
-  // attach handlers for layer toggler
-  d3.select(".layers")
-    .on("click", function(d) {
-      var visible = d3.select(".layerToggler").style("display");
-      if (visible == "block") {
-        d3.select(".layerToggler").style("display", "none");
-      } else {
-        d3.select(".layerToggler").style("display", "block");
-      }
-    });
+  $('.taxa').tooltip();*/
 
   // Attach handlers for zoom-in and zoom-out buttons
-  d3.select(".zoom-in")
-    .on("click",function() {
+  d3.select(".zoom-in").on("click", function() {
+    if (parseInt(d3.select("#map").style("height")) < 1) {
+      d3.event.stopPropagation();
+      d3.select("#svgMap").style("display", "none");
+      d3.select("#map").style("height", mapHeight);
+      map.invalidateSize();
+
+      map.setView([7,0], 3, {animate:false});
+    } else {
       map.zoomIn();
-    });
+    }
+  });
   d3.select(".zoom-out")
     .on("click",function() {
       map.zoomOut();
@@ -1551,7 +976,15 @@ function filterByPerson(name) {
   d3.select("#mapSwitch")
     .on("click", function() {
       d3.select("#map").style("display", "block");
+      d3.select(".filters").style("display", "block");
+      //d3.select("#mapControls").style("display", "block");
+      d3.selectAll(".mapCtrl").style("display", "block");
       d3.select("#reconstructMap").style("display","none");
+      timeScale.unhighlight();
+
+      if(parseInt(d3.select("#map").style("height")) < 1) {
+        d3.select("#svgMap").style("display", "block");
+      }
     });
 
   d3.select(".tools")
@@ -1564,15 +997,39 @@ function filterByPerson(name) {
       }
     });
 
-  d3.select("#viewByTimeBox")
+  d3.select(".rotate")
+    .on("click", function() {
+      var rotateChecked = document.getElementById("reconstructBox").checked,
+          timeChecked = document.getElementById("viewByTimeBox").checked;
+      if (rotateChecked == true) {
+        console.log("unchecking box");
+        document.getElementById("reconstructBox").checked = false;
+        d3.select(".rotate").style("background-color", "");
+      } else {
+        if (timeChecked == false) {
+          document.getElementById("viewByTimeBox").checked = true;
+          d3.select(".time").style("background-color", "#ccc");
+        }
+        console.log("checking box");
+        document.getElementById("reconstructBox").checked = true;
+        d3.select(".rotate").style("background-color", "#ccc");
+        //filters.selectedInterval = '';
+        //refresh();
+      }
+    });
+
+  d3.select(".time")
     .on("click", function() {
       var checked = document.getElementById("viewByTimeBox").checked;
       if (checked == true) {
-        console.log("checked");
+        console.log("unchecking box");
+        document.getElementById("viewByTimeBox").checked = false;
+        d3.select(".time").style("background-color", "");
       } else {
-        console.log("not checked");
-        selectedInterval = '';
-        refresh();
+        console.log("checking box");
+        document.getElementById("viewByTimeBox").checked = true;
+        d3.select(".time").style("background-color", "#ccc");
+        filters.selectedInterval = '';
       }
     });
 
@@ -1588,16 +1045,13 @@ function filterByPerson(name) {
 
   d3.select("#personFilterBox")
     .on("click", function() {
-
       var checked = document.getElementById("personFilterBox").checked;
-      if (checked == true) {
-        // something
-      } else {
-        personFilter = '';
+      if (checked !== true) {
+        filters.personFilter = '';
         refresh();
       }
     });
-
+/*
   d3.select(".taxaToggler")
     .on("click", function() {
       console.log("clicked");
@@ -1611,7 +1065,24 @@ function filterByPerson(name) {
         d3.select("#graphics").attr("class", "col-lg-9");
         sizeChange();
       }
-    });
+    });*/
+
+  $('.rotate').tooltip({
+    placement:'right',
+    title:'Click, then select interval to rotate to paleo coordinates'
+  });
+  $('.time').tooltip({
+    placement:'right',
+    title:'Click, then select interval to filter map'
+  });
+  $('.userFilter').tooltip({
+    placement:'right',
+    title:'Filter by user'
+  });
+  $('.layers').tooltip({
+    placement:'right',
+    title:'Change symbology'
+  });
 
   //attach window resize listener to the window
   d3.select(window).on("resize", sizeChange);
@@ -1628,8 +1099,7 @@ function filterByPerson(name) {
   }
   setTimeout(hideMap, 500);
 
-  buildTimeChart();
-  refresh();
+ // refresh();
   setTimeout(sizeChange, 100);
   setTimeout(sizeChange, 100);
 })();
