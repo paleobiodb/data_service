@@ -1,5 +1,5 @@
 #
-# PersonQuery
+# PersonData
 # 
 # A class that returns information from the PaleoDB database about a single
 # registered database user or a category of users.  This is a subclass of
@@ -7,18 +7,19 @@
 # 
 # Author: Michael McClennen
 
-package PersonQuery;
+package PersonData;
 
 use strict;
-use base 'DataQuery';
+use base 'DataService::Base';
+
 use Carp qw(carp croak);
 
 
 our (%OUTPUT, %SELECT, %TABLES);
 
-$SELECT{single} = $SELECT{list} = "p.person_no, p.name, p.country, p.institution, p.email, p.is_authorizer";
+$SELECT{basic} = $SELECT{basic} = "p.person_no, p.name, p.country, p.institution, p.email, p.is_authorizer";
 
-$OUTPUT{single} = $OUTPUT{list} = 
+$OUTPUT{basic} = $OUTPUT{basic} = 
    [
     { rec => 'person_no', com => 'oid',
       doc => "A positive integer that uniquely identifies this database contributor" },
@@ -52,7 +53,7 @@ $OUTPUT{toprank} =
       doc => "The database contributor's country" },
    ];
 
-# fetchSingle ( )
+# get ( )
 # 
 # Query for all relevant information about the requested taxon.
 # 
@@ -61,7 +62,7 @@ $OUTPUT{toprank} =
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
-sub fetchSingle {
+sub get {
 
     my ($self) = @_;
     
@@ -106,14 +107,14 @@ sub fetchSingle {
 }
 
 
-# fetchMultiple ( )
+# list ( )
 # 
 # Query the database for basic info about all taxa satisfying the conditions
 # previously specified by a call to setParameters.
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
-sub fetchMultiple {
+sub list {
 
     my ($self) = @_;
     
