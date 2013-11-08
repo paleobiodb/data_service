@@ -55,19 +55,23 @@ if ( $ENV{'HTTP_USER_AGENT'} =~ /Mobile/i && $ENV{'HTTP_USER_AGENT'} !~ /iPad/i 
 
 
 sub read_conf {
-    my $base_dir = $FindBin::RealBin;
-    $base_dir =~ s/\/(upload|cgi-bin|scripts|html)(\/.*)*$/\/config/;
-    my $filename = "$base_dir/pbdb.conf";
-    my $cf;
-    open $cf, "<$filename" or die "Can not open $filename\n";
-    my %conf = ();
-    while(my $line = readline($cf)) {
-        chomp($line);
-        if ($line =~ /^\s*(\w+)\s*=\s*(.*)$/) {
-            $conf{uc($1)} = $2; 
-        }
+    
+ FILE:
+    foreach my $filename ('config/pbdb.conf', '../config/pbdb.conf')
+    {
+	open(my $cf, '<', $filename) or next FILE;
+	
+	my %conf = ();
+	while(my $line = readline($cf)) {
+	    chomp($line);
+	    if ($line =~ /^\s*(\w+)\s*=\s*(.*)$/) {
+		$conf{uc($1)} = $2; 
+	    }
+	}
+	return \%conf;
     }
-    return \%conf;
+    
+    die "Could not open configuration file (tried 'config/pbdb.conf', '../config/pbdb.conf').";
 }
 
 1;

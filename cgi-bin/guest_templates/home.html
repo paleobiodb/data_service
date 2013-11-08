@@ -1,166 +1,30 @@
-<script language="JavaScript" type="text/javascript">
-<!--
-
-function introPanel(id)	{
-        for ( i = 1; i <= 4; i++ )	{
-		document.getElementById('introPanel'+i).style.display = 'none';
-		document.getElementById('navBall'+i).style.color = 'LightGray';
-	}
-	document.getElementById('introPanel'+id).style.display = 'block';
-	document.getElementById('navBall'+id).style.color = 'Black';
-}
-
-//-->
-</script>
-
-<div style="overflow: hidden;">
-
-<!-- left third -->
-<div style="float: left; clear: none; margin-top: 2em; margin-left: 2%; width: 32%; padding-left: 1em; border-left: 1px solid LightGray;">
-
-<div style="float: left; clear: left; margin-left: 0.5em; height: 13em; width: 16.75em; overflow: hidden; padding-top: 1em; border:1px solid Black;">
-  <span id="random_names"></span>
-</div>
-
-<div style="float: left; clear: left; margin-top: 0.75em; margin-left: 1em; margin-bottom: 0.25em;">
-<div style="float: left; clear: none; padding-top: 2px;"><a href="https://twitter.com/PaleoDB" class="twitter-follow-button" data-show-count="false" data-size="large">Follow @PaleoDB</a></div>
-<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src="//platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
-<div style="float: left; clear: none; margin-left: 2em;"><a href="http://www.facebook.com/PaleoDB"><img alt="FB" src="/public/images/facebook-box-blue-7.jpg"></a></div>
-</div>
-
-<div style="float: left; margin: 0.5em; padding-top: 0.5em; border-top: 1px solid LightGray;">
-  <div class="large" style="float: left; clear: both; margin-bottom: 0.5em;">Papers in press</div>
-  <div class="small" style="float: left; clear: both;">
-  <span id="in_press"></span>
+  <div id="message">
+    <!-- Messsage from the board goes here -->
+    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis molestie vitae mauris sed vulputate. Proin sollicitudin tincidunt magna, nec lobortis tellus. Fusce bibendum, augue eu porta aliquet, eros odio sagittis mauris, ut molestie sem velit a ante. Aliquam accumsan elit sit amet ligula pulvinar, sit amet hendrerit nulla vulputate. Fusce orci mauris, pretium vel hendrerit quis, pharetra non sem. Praesent ut sapien a tellus dictum ultrices non id magna. Vestibulum lobortis ligula at nisi gravida pellentesque. Nullam erat turpis, pretium eu lorem eu, ultricies vestibulum lectus.<br><br>
+    <!-- End exec message -->
   </div>
-  <div class="small" style="float: left; clear: both;"><a href="?a=publications"><i>see more</i></a></div>
-</div>
 
-<!-- end left third -->
-</div>
-
-<!-- center third -->
-<div style="float: left; clear: right; width: 35%; margin-top: 2em; margin-left: 2%; padding-left: 1em; border-left: 1px solid LightGray;">
-
-<div class="introTextBox" id="introPanel1">
-<p class="huge">Welcome to our site</p>
-<div style="margin-bottom: 0.4em;">
-The Paleobiology Database seeks to provide researchers and the public with information about the entire fossil record.
-It has expanded continuously since 2000 thanks to the efforts of <span id="enterer_total"></span> paleontologists from around the world.
-</div>
-
-<div>
-You can use the site to find out about <span class="infoLink"><a href="?a=displaySearchColls&amp;type=view">fossil collections</a></span>,
-<span class="infoLink"><a href="?a=beginTaxonInfo">individual plants and animals</a></span>,
-<span class="infoLink"><a href="?a=classificationForm">taxonomic groups</a></span>,
-<span class="infoLink"><a href="?a=displaySearchRefs&amp;type=view">references to publications</a></span>,
-<span class="infoLink"><a href="?a=displaySearchStrataForm">stratigraphic units</a></span>,
-<span class="infoLink"><a href="?a=searchScale">time scales</a></span>, and
-<span class="infoLink"><a href="/cgi-bin/?a=displayInterval&amp;interval_no=33">time intervals</a></span>.
-</div>
-
-<!--
-<div style="margin-top: 0.4em;">
-Yes, you can <b><a href="?page=workshop_2013">apply now</a></b> for the 2013 analytical methods workshop!
-</div>
--->
-
-</div>
-
-<div class="introTextBox" id="introPanel2">
-<p class="huge">Use our data</p>
-<p>
-Tools on the site also let you generate
-<span class="infoLink"><a href="?a=displayBasicMapForm">paleomaps</a></span>,
-<span class="infoLink"><a href="?a=displayReportForm">data summary tables</a></span>,
-<span class="infoLink"><a href="?a=displaySearchColls&amp;type=most_common">lists of common taxa</a></span>,
-<span class="infoLink"><a href="?a=beginFirstAppearance">first appearances</a></span>,
-<span class="infoLink"><a href="?a=displayCurveForm">diversity curves</a></span>,
-<span class="infoLink"><a href="?a=displaySearchColls&amp;type=analyze_abundance">ecological statistics</a></span>,
-<span class="infoLink"><a href="/cgi-bin/?a=displayTaxaIntervalsForm">time scale confidence intervals</a></span>,
-<span class="infoLink"><a href="?a=displaySearchSectionForm">stratigraphic confidence intervals</a></span>, and (just for fun)
-<span class="infoLink"><a href="?page=word_odds_form">paper title stats</a></span>.
-</p>
-<p>
-All of our data can be downloaded, including
-<span class="infoLink"><a href="?a=displayBasicDownloadForm">collection, occurrence, or specimen records</a></span>,
-<span class="infoLink"><a href="?a=displayDownloadTaxonomyForm">taxonomic names and opinions</a></span>,
-<span class="infoLink"><a href="?a=displayDownloadMeasurementsForm">measurements of specimens</a></span>, and
-<span class="infoLink"><a href="?a=displayDownloadNeptuneForm">Neptune occurrences</a></span>.
-</p>
-</div>
-
-<div class="introTextBox" id="introPanel3">
-<p class="huge">Other resources</p>
-<p>
-Students may want to see our
-<span class="infoLink"><a href="?page=animations">paleogeographic animations</a></span>,
-<span class="infoLink"><a href="?page=globes">virtual globes</a></span>, and
-lists of <span class="infoLink"><a href="?page=dinosaurs">dinosaur facts and figures</a></span>, or learn about a
-<span class="infoLink"><a href="?a=checkTaxonInfo&amp;match=random">random species</a></span>.
-</p>
-
-<p>
-Professional researchers are encouraged to <span class="infoLink"><a href="?page=join_us">join the Database</a></span> and students may want to apply for the
-<span class="infoLink"><a href="?page=workshop_2013">2013 analytical methods workshop</a></span>.
-</p>
-</div>
-
-<div class="introTextBox" id="introPanel4">
-<p class="huge">More about us</p>
-<p>
-The Paleobiology Database is housed at <span class="infoLink"><a href="http://paleodb.science.mq.edu.au">Macquarie University</a></span> and overseen by the <a href="?page=EC">major data contributors</a>, with daily supervision by <a href="http://bio.mq.edu.au/~jalroy/">John Alroy</a> and software development at <span class="infoLink"><a target="_blank" href="http://geoscience.wisc.edu/geoscience/">the University of Wisconsin-Madison</a> which also maintains a <a href="http://paleodb.geology.wisc.edu">mirror</a> of this site.</span>.
-You may want to read our <span class="infoLink"><a href="?page=paleodbFAQ">FAQ</a></span> and our lists of
-<span class="infoLink"><a href="?a=showAuthorizers">participating researchers</a></span>,
-<span class="infoLink"><a href="?a=showInstitutions">participating institutions</a></span>,
-<span class="infoLink"><a href="?page=OSA">Online Systematics Archives</a></span>, and
-<span class="infoLink"><a href="?a=publications">official publications</a></span>.
-</p>
-</div>
-
-<div style="text-align: center;">
-<span class="introNavBall" id="navBall1" onClick="introPanel(1)" style="color: B
-lack;">&bull;</span><span class="introNavBall" id="navBall2" onClick="introPanel(2)">&bull;</span>
-<span class="introNavBall" id="navBall3" onClick="introPanel(3)">&bull;</span>
-<span class="introNavBall" id="navBall4" onClick="introPanel(4)">&bull;</span>
-</div>
-
-<!-- end intro text boxes -->
-
-
-<div class="large" style="margin-bottom: 0.75em; padding-top: 0.5em; padding-bottom: 0.5em; border-top: 1px solid LightGray;">Most recently entered collection</div>
-
-<div class="small" style="margin-left: 0.5em; margin-bottom: 1em;">
+  <div id="recentCol">
+    <h4>Most recently entered collection</h4>
   <div style="margin-bottom: 0.5em;"><span id="latest_collection"></span></div>
-  &bull; <span id="last_timeplace"></span><br>
-  &bull; Entered <span id="last_coll_entry"></span> by <span id="last_coll_enterer"></span><br>
-  &bull; Described by <span id="last_coll_ref"></span>
-</div>
+  <ul>
+    <li><span id="last_timeplace"></span></li>
+    <li>Entered <span id="last_coll_entry"></span> by <span id="last_coll_enterer"></span></li>
+    <li>Described by <span id="last_coll_ref"></span></li>
+  </ul>
+  </div>
 
-<div class="large" style="margin-bottom: 0.75em; padding-top: 0.5em; border-top: 1px solid LightGray;">Most recently entered species</div>
-<div class="small" style="margin-left: 0.5em;">
+  <div id="recentSpecies">
+    <h4>Most recently entered species</h4>
   <div style="margin-bottom: 0.5em;"><span id="latest_species"></span></div>
-  &bull; Entered <span id="last_species_entry"></span> by <span id="last_species_enterer"></span><br>
-  <span id="type_specimen"></span>
-  <span id="type_locality"></span>
-</div>
+  <ul>
+    <li>Entered <span id="last_species_entry"></span> by <span id="last_species_enterer"></span></li>
+    <li><span id="type_specimen"></span></li>
+    <li><span id="type_locality"></span></li>
+  </ul>
+  </div>
 
-<!-- end center third -->
-</div>
-
-<!-- right third -->
-<div style="float: left; clear: right; width: 21%; margin-top: 2em; margin-left: 2%; padding-left: 1em; border-left: 1px solid LightGray;">
-
-<div style="float: left; clear: left; width: 12em;">
-  <div class="large" style="margin-left: 0.6em; margin-bottom: 0.75em;">Top contributors<br>this month</div>
-  <div class="small"><span id="enterer_names"></span></div>
-</div>
-
-<!-- end right third -->
-</div>
-
-<!-- basic stats running across bottom -->
-<div style="float: left; clear: both; width: 52.2em; height: 3em; margin-top: 1em; margin-left: 1.2em; margin-bottom: 1em; padding-top: 0.5em; padding-left: 1em; border-top: 1px solid LightGray; border-bottom: 1px solid LightGray;">
+  <div id="stats">
 Totals right now: <a href="?a=displaySearchRefs&amp;type=view"><span id="reference_total"></span> references</a>
 &bull; <a href="?a=beginTaxonInfo"><span id="taxon_total"></span> taxa</a>
 &bull; <a href="?a=displaySearchColls&amp;type=view"><span id="collection_total"></span> fossil collections</a>
@@ -168,41 +32,5 @@ Totals right now: <a href="?a=displaySearchRefs&amp;type=view"><span id="referen
 &nbsp;&nbsp;contributed by <a href="?a=showAuthorizers"><span id="enterer_total"></span> scientists</a> from
  <a href="?a=showInstitutions"><span id="institution_total"></span> institutions</a> in
  <a href="?a=showInstitutions"><span id="country_total"></span> countries</a>
-</div>
-
-<!-- end basic stats -->
-
-<div style="position: relative; float: left; clear: right; height: 64px; width: 54em; background-color: white; border: none;">
-  <div class="homeImage">
-    <a href="?a=basicTaxonInfo&amp;taxon_no=38494"><img alt="Pterodactylus" src="/public/bannerimages/Pterodactylus.gif" height="44"></a>
-  </div>
-  <div class="homeImage">
-    <a href="?a=basicTaxonInfo&amp;taxon_no=56059"><img alt="Aralia" src="/public/bannerimages/Aralia.gif" height="44"></a>
-  </div>
-  <div class="homeImage">
-    <a href="?a=basicTaxonInfo&amp;taxon_no=30745"><img alt="Agelacrinites" src="/public/bannerimages/Agelacrinites.jpg" height="44"></a>
-  </div>
-  <div class="homeImage">
-    <a href="?a=basicTaxonInfo&amp;taxon_no=40870"><img alt="Mesopithecus" src="/public/bannerimages/Mesopithecus.jpg" height="44"></a>
-  </div>
-  <div class="homeImage">
-    <a href="?a=basicTaxonInfo&amp;taxon_no=94364"><img alt="Neolenus" src="/public/bannerimages/Neolenus.gif" height="44"></a>
-  </div>
-  <div class="homeImage">
-    <img alt="Xiphacantha" src="/public/bannerimages/Xiphacantha.gif" height="44">
-  </div>
-  <div class="homeImage">
-    <a href="?a=basicTaxonInfo&amp;taxon_no=210644"><img alt="Microdon" src="/public/bannerimages/Microdon.jpg" height="44"></a>
-  </div>
-  <div class="homeImage">
-    <a href="?a=basicTaxonInfo&amp;taxon_no=8801"><img alt="Eunema" src="/public/bannerimages/Eunema.jpg" height="44"></a>
-  </div>
-</div>
-
-
-<div style="position: absolute; bottom: 0px; right: 0px;">
-  <a href="?a=listCollections"><span style="font-size: 0.25em; color: #F0F0F0;">list collections</span></a> <a href="?a=listTaxa"><span style="font-size: 0.25em; color: #F0F0F0;">list taxa</span></a>
-</div>
-
 </div>
 

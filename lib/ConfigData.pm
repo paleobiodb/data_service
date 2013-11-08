@@ -6,10 +6,10 @@
 # 
 # Author: Michael McClennen
 
-package ConfigQuery;
+package ConfigData;
 
 use strict;
-use base 'DataQuery';
+use base 'DataService::Base';
 
 use Carp qw(carp croak);
 
@@ -20,23 +20,18 @@ read_config();
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
 
-$OUTPUT{single} = 
+$OUTPUT{basic} = 
    [
     { rec => 'bin_size', com => 'bns',
 	doc => "A list of bin sizes, in degrees.  All bins are aligned on 0-0 latitude and longitude.  The length of the list is the number of available summary levels." }
    ];
 
-our (%DOC_ORDER);
 
-$DOC_ORDER{'single'} = ['single'];
-
-
-# fetchSingle ( )
+# get ( )
 # 
-# Query for all relevant information about the collection specified by the
-# 'id' parameter.  Returns true if the query succeeded, false otherwise.
+# Return configuration information.
 
-sub fetchSingle {
+sub get {
 
     my ($self) = @_;
     

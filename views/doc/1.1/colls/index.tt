@@ -1,0 +1,56 @@
+=head2 DESCRIPTION
+
+The /data1.1/colls routes provide access to information about the
+fossil collections represented in the Paleobiology Database.  These
+collections may be selected by a variety of criteria including: name,
+location, age, enterer, and taxonomic identification.
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+=over 4
+
+=for pod_extra table_header Class* | Documentation | Description
+
+=item Single collections | L</data1.1/colls/single|/data1.1/colls/single_doc.html>
+
+Returns information about a single collection, selected by identifier.  For example:
+
+=over 4
+
+=item *
+
+L</data1.1/colls/single.json?id=50068&show=loc,time>
+
+=back
+
+=item Lists of collections | L</data1.1/colls/list|/data1.1/colls/list_doc.html>
+
+Returns information about multiple collections, selected according to the parameters
+you provide.
+
+Examples:
+
+=over 4
+
+=item *
+
+L</data1.1/colls/list.txt?base_name=Cetacea&interval=Miocene&show=ref,loc,time>
+
+=back
+
+=item Summary clusters | L</data1.1/colls/summary|/data1.1/colls/summary_doc.html>
+
+Returns information about geographic clusters of collections, selected according
+to the parameters you provide.  Examples:
+
+=over 4
+
+=item *
+
+L</data1.1/colls/summary.json?lngmin=0.0&lngmax=15.0&latmin=0.0&latmax=15.0&level=2>
+
+=back
+
+=back

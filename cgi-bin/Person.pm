@@ -1,7 +1,7 @@
 package Person;
 use Constants qw($READ_URL $WRITE_URL $IS_FOSSIL_RECORD $PAGE_TOP $PAGE_BOTTOM);
 use strict;
-#use Reference;
+use Reference;
 
 # replaces old admin.pl code JA 22.3.13
 sub personForm	{
@@ -19,51 +19,58 @@ sub personForm	{
 		exit;
 	}
 
-	my @fields = ('title','action');
+	my @fields = ('title');
 	my @values;
-
-	my $sql = "SELECT * FROM person WHERE ";
-	my ($first,$init,$last,$person_no);
-	# brute-force out a name
-	# looks like first last
-	if ( $name =~ /[a-z]+, [A-Za-z]+/ )	{
-		($last,$init) = split /, /,$name;
-	}
-	# looks like first last
-	elsif ( $name =~ /[a-z]+(\.|) [A-Za-z]+/ )	{
-		($init,$last) = split / /,$name;
-	}
-	# try straight match on last name
-	else	{
-		($init,$last) = ("%%",$name);
-	}
-	$init =~ s/\'/\\'/g;
-	$last =~ s/\'/\\'/g;
-	if ( $init !~ /\./ )	{
-		$sql .= " first_name LIKE '$init' AND last_name='$last'";
-	} else	{
-		$init =~ s/([A-Za-z])(.*)/$1./;
-		$sql .= " name='$init $last'";
-	}
-
-	# if there are multiple matches the first one will be returned
-	if ( $init && $last )	{
-		$person_no = ${$dbt->getData($sql)}[0]->{'person_no'};
-	}
-
 	my $person;
-	if ( $q->param('person_no') > 0 )	{
-		$person_no = $q->param('person_no');
-	}
-	if ( $person_no > 0 )	{
-		$sql = "SELECT * FROM person WHERE person_no=".$person_no;
-		$person = ${$dbt->getData($sql)}[0];
-		push @values , ($person->{first_name}." ".$person->{last_name},"editPerson");
-	} elsif ( $person_no == 0 && $q->param('action') ne "addPerson" )	{
-		main::menu($q->param('name')." isn't in the system");
-		exit;
+
+	if ( $error ne "" )	{
+		push @values , "Sorry &mdash; try again";
 	} else	{
-		push @values , ("Add a person","addPerson");
+		my $sql = "SELECT * FROM person WHERE ";
+		my ($first,$init,$last,$person_no);
+		# brute-force out a name
+		# looks like first last
+		if ( $name =~ /[a-z]+, [A-Za-z]+/ )	{
+			($last,$init) = split /, /,$name;
+		}
+		# looks like first first
+		elsif ( $name =~ /[a-z]+(\.|) [A-Za-z]+/ )	{
+			($init,$last) = split / /,$name;
+		}
+		# try straight match on last name
+		else	{
+			($init,$last) = ("%%",$name);
+		}
+		$init =~ s/\'/\\'/g;
+		$last =~ s/\'/\\'/g;
+		if ( $init !~ /\./ )	{
+			$sql .= " first_name LIKE '$init' AND last_name='$last'";
+		} else	{
+			$init =~ s/([A-Za-z])(.*)/$1./;
+			$sql .= " name='$init $last'";
+		}
+
+		# if there are multiple matches the first one will be returned
+		if ( $init && $last )	{
+			$person_no = ${$dbt->getData($sql)}[0]->{'person_no'};
+		}
+
+		if ( $q->param('person_no') > 0 )	{
+			$person_no = $q->param('person_no');
+		}
+		if ( $person_no > 0 )	{
+			$sql = "SELECT * FROM person WHERE person_no=".$person_no;
+			$person = ${$dbt->getData($sql)}[0];
+			push @values , $person->{first_name}." ".$person->{last_name};
+			push @fields , "action";
+			push @values , "editPerson";
+		} elsif ( $person_no == 0 && $q->param('action') ne "personForm" )	{
+			main::menu($q->param('name')." isn't in the system");
+			exit;
+		} else	{
+			push @values , "Add a person";
+			$q->param('action' => 'addPerson');
+		}
 	}
 	print $hbo->stdIncludes($PAGE_TOP);
 	if ( $person )	{
@@ -92,7 +99,11 @@ sub personForm	{
 sub addPerson	{
 	my ($dbt,$hbo,$s,$q) = @_;
 	my ($fields,$values) = checkPersonData($dbt,$hbo,$s,$q);
-	$dbt->dbh->do("INSERT INTO person(".join(",",@$fields).") VALUES ('".join("','",@$values)."')");
+	my $sql = "INSERT INTO person(".join(",",@$fields).") VALUES ('".join("','",@$values)."')";
+	$sql =~ s/'NULL'/NULL/g;
+	$dbt->dbh->do($sql);
+	my $no = ${$dbt->getData("SELECT MAX(person_no) AS no FROM person")}[0]->{no};
+	$dbt->dbh->do("UPDATE person SET created=now(),modified=now() WHERE person_no=$no");
 	main::menu($q->param('first_name')." ".$q->param('last_name')."'s record has been added");
 }
 
@@ -101,9 +112,10 @@ sub editPerson	{
 	my ($dbt,$hbo,$s,$q) = @_;
 	my ($fields,$values) = checkPersonData($dbt,$hbo,$s,$q);
 	for my $i ( 0..$#$fields )	{
-		$$fields[$i] .= ( $$values[$i] ne "NULL" ) ? "='".$$values[$i]."'" : "=NULL";
+		$$fields[$i] .= ( $$values[$i] ne "" ) ? "='".$$values[$i]."'" : "=NULL";
 	}
-	my $sql = "UPDATE person SET last_action=last_action,".join(',',@$fields)." WHERE person_no=".$q->param('person_no');
+	my $sql = "UPDATE person SET last_action=last_action,modified=now(),".join(',',@$fields)." WHERE person_no=".$q->param('person_no');
+	$sql =~ s/'NULL'/NULL/g;
 	$dbt->dbh->do($sql);
 	main::menu($q->param('first_name')." ".$q->param('last_name')."'s record has been updated");
 }
@@ -115,6 +127,13 @@ sub checkPersonData	{
 	$sth->execute();
 	my $cols = $sth->fetchall_arrayref({});
 	$sth->finish();
+
+	# role is a bunch of pulldowns
+	my @groups;
+	for my $r ( $q->param('research_group') )	{
+		push @groups , $r;
+	}
+	$q->param('research_group' => join(',',@groups));
 
 	# role is a bunch of checkboxes
 	my @roles;
@@ -498,6 +517,10 @@ sub homePageEntererList	{
 		$r->{'institution'} =~ s/(University of )(.)(.*)(, |-| - )/U$2 /;
 		$r->{'institution'} =~ s/Natural History Museum/NHM/;
                 $r->{'institution'} =~ s/(Mus.*)(, .*)/$1/;
+		# enforce abbreviation of four-word institution names
+		if ( scalar @{[$r->{'institution'} =~ / /g]} > 2 )	{
+                	$r->{'institution'} =~ s/[^A-Z]//g;
+		}
 		$html .= "<div class=\"verysmall enteringNow\">$r->{'first_name'} $r->{'last_name'}<br>$r->{'institution'}</div>\n";
 	}
 	return $html;

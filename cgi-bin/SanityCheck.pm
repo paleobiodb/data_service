@@ -7,8 +7,7 @@ use strict;
 # 15.5.07 JA
 
 sub processSanityCheck	{
-    
-	my ($dbt, $taxonomy, $hbo, $s, $q) = @_;
+	my ($q,$dbt,$hbo,$s) = @_;
 
 	my $sql;
 	my %plural = ('order' => 'orders', 'family' => 'families', 'genus' => 'genera');
@@ -28,7 +27,8 @@ sub processSanityCheck	{
 	if ( ! $q->param('taxon_name') )	{
 		$error_message = "You must enter a taxon name.";
 	} else	{
-		my $row = $taxonomy->getTaxaByName($q->param('taxon_name'), { fields => 'lft' });
+		$sql = "SELECT lft,rgt,taxon_rank rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='" . $q->param('taxon_name') ."'";
+		my $row = @{$dbt->getData($sql)}[0];
 		$lft = $row->{lft};
 		$rgt = $row->{rgt};
 		if ( ! $lft )	{
@@ -39,7 +39,8 @@ sub processSanityCheck	{
 			$error_message = $q->param('taxon_name') . " is not a higher taxon.";
 		}
 		if ( $q->param('excluded_taxon') )	{
-		    $row = $taxonomy->getTaxaByName($q->param('excluded_taxon'), { fields => 'lft' });
+			$sql = "SELECT lft,rgt,taxon_rank rank FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='" . $q->param('excluded_taxon') ."'";
+			$row = @{$dbt->getData($sql)}[0];
 			$lftrgt2 .= " AND (lft<" . $row->{lft} . " OR rgt>" . $row->{rgt} . ")";
 			if ( ! $row->{lft} )	{
 				$error_message .= " \"" . $q->param('excluded_taxon') . "\" is not in the Database.";
@@ -59,17 +60,11 @@ sub processSanityCheck	{
 
 	# many disused names are not marked as invalid and still include higher
 	#  taxa not marked as valid, we need to identify them the hard way
-	$sql = "SELECT a.taxon_no no,taxon_rank,taxon_name,lft,rgt
-		FROM authorities a JOIN $taxonomy->{tree_table} t on a.taxon_no = t.spelling_no
-		WHERE lft>$lft AND rgt<$rgt $lftrgt2 AND t.orig_no=t.synonym_no
-			AND taxon_rank IN ('genus','family','order')
-		ORDER BY taxon_rank";
+	$sql = "SELECT a.taxon_no no,taxon_rank,taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') ORDER BY taxon_rank";
 	my @rows = @{$dbt->getData($sql)};
 	# we need all taxa because we'll check occurrences later, so synonyms
 	#  and taxa at all ranks are okay here
-	$sql = "SELECT a.taxon_no no,taxon_rank,lft,rgt
-		FROM authorities a JOIN $taxonomy->{tree_table} t on a.taxon_no = t.spelling_no
-		WHERE lft>=$lft AND rgt<=$rgt $lftrgt2";
+	$sql = "SELECT a.taxon_no no,taxon_rank,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>=$lft AND rgt<=$rgt $lftrgt2";
 	my @rows2 = @{$dbt->getData($sql)};
 	my %disused;
 	my %belongsto;
@@ -96,9 +91,7 @@ sub processSanityCheck	{
 	}
 	
 	# author and year known
-	$sql = "SELECT taxon_rank rank,count(*) c
-		FROM authorities a JOIN $taxonomy->{tree_table} t on a.orig_no = t.spelling_no
-		WHERE lft>$lft AND rgt<$rgt $lftrgt2 AND t.orig_no=t.synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority='YES' OR (author1last IS NOT NULL AND author1last!='')) GROUP BY taxon_rank";
+	$sql = "SELECT taxon_rank rank,count(*) c FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority='YES' OR (author1last IS NOT NULL AND author1last!='')) GROUP BY taxon_rank";
 	my @rows = @{$dbt->getData($sql)};
 	my %authorknown;
 	for my $r ( @rows )	{
@@ -106,9 +99,7 @@ sub processSanityCheck	{
 	}
 
 	# author and year not known - don't group, we need the names
-	$sql = "SELECT taxon_name name,taxon_rank rank,lft,rgt
-		FROM authorities a JOIN $taxonomy->{tree_table} t on a.taxon_no = t.spelling_no
-		WHERE lft>$lft AND rgt<$rgt $lftrgt2 AND t.orig_no=t.synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
+	$sql = "SELECT taxon_name name,taxon_rank rank,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (ref_is_authority!='YES' AND (author1last IS NULL OR author1last=''))";
 	my @rows2 = @{$dbt->getData($sql)};
 	my %authorunknown;
 	for my $r ( @rows2 )	{
@@ -157,9 +148,7 @@ sub processSanityCheck	{
 	#  position saved earlier
 	# while we're at it, we count taxa missing extant data and taxa
 	#  where the primary ref is not the authority
-	$sql = "SELECT lft,rgt,taxon_rank rank,taxon_name name,extant,ref_is_authority
-		FROM authorities a JOIN $taxonomy->{tree_table} t on a.taxon_no = t.spelling_no
-		WHERE lft>$lft AND rgt<$rgt $lftrgt2 AND t.orig_no=t.synonym_no AND taxon_rank IN ('genus','family','order') GROUP BY t.taxon_no";
+	$sql = "SELECT lft,rgt,taxon_rank rank,taxon_name name,extant,ref_is_authority FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no and lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') GROUP BY t.taxon_no";
 	my @rows = @{$dbt->getData($sql)};
 	my %LR;
 	my %extant;
@@ -180,15 +169,9 @@ sub processSanityCheck	{
 			$dataneeded3{$row->{rank}}{$row->{name}}++;
 		}
 	}
-	$sql = "SELECT lft,rgt,t.taxon_no no
-		FROM occurrences o JOIN $taxonomy->{auth_table} as a using (taxon_no)
-			JOIN $taxonomy->{tree_table} as t using (orig_no)
-		WHERE t.lft>$lft AND t.rgt<$rgt $lftrgt2 GROUP BY t.orig_no";
+	$sql = "SELECT lft,rgt,t.taxon_no no FROM occurrences o,$TAXA_TREE_CACHE t WHERE o.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 GROUP BY t.taxon_no";
 	my @rows = @{$dbt->getData($sql)};
-	$sql = "SELECT lft,rgt,t.taxon_no no
-		FROM reidentifications r JOIN $taxonomy->{auth_table} as a using (taxon_no)
-			JOIN $taxonomy->{tree_table} as t using (orig_no)
-		WHERE t.lft>$lft AND t.rgt<$rgt $lftrgt2 GROUP BY t.taxon_no";
+	$sql = "SELECT lft,rgt,t.taxon_no no FROM reidentifications r,$TAXA_TREE_CACHE t WHERE r.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 GROUP BY t.taxon_no";
 	push @rows , @{$dbt->getData($sql)};
 	my %sampled;
 	for my $row ( @rows )	{
@@ -261,8 +244,7 @@ sub processSanityCheck	{
 	# this is tricky because the NAFMSD data uploaded on 23.1.02 overlapped
 	#  with Carroll, so we have to assume that names published before 1988
 	#  actually are in Carroll
-	$sql = "SELECT taxon_rank rank,taxon_name name,child_no no
-		FROM refs r,opinions o,authorities a,$taxonomy->{tree_table} t WHERE r.reference_no=a.reference_no AND child_no=a.taxon_no AND a.taxon_no=t.spelling_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.orig_no=t.synonym_no AND taxon_rank IN ('genus','family','order') AND (o.reference_no IN (5022,6930,4783,7584) OR (a.created<20030124000000 AND ((a.pubyr<1988 AND a.pubyr>1700) OR (r.pubyr<1988 AND r.pubyr>1700)))) GROUP BY child_no";
+	$sql = "SELECT taxon_rank rank,taxon_name name,child_no no FROM refs r,opinions o,authorities a,$TAXA_TREE_CACHE t WHERE r.reference_no=a.reference_no AND child_no=a.taxon_no AND a.taxon_no=t.taxon_no AND lft>$lft AND rgt<$rgt $lftrgt2 AND t.taxon_no=synonym_no AND taxon_rank IN ('genus','family','order') AND (o.reference_no IN (5022,6930,4783,7584) OR (a.created<20030124000000 AND ((a.pubyr<1988 AND a.pubyr>1700) OR (r.pubyr<1988 AND r.pubyr>1700)))) GROUP BY child_no";
 	@rows = @{$dbt->getData($sql)};
 	my %compendium;
 	my %uncompendium;

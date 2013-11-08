@@ -4,6 +4,9 @@ use lib "../cgi-bin";
 use DBConnection;
 
 
+$Constants::DB_USER = 'root';
+$Constants::DB_PASSWD = $ARGV[0];
+
 my $dbh = DBConnection::connect();
 
 $dbh->do("DROP PROCEDURE IF EXISTS anyopinion");
@@ -131,26 +134,31 @@ $dbh->do("CREATE PROCEDURE bestopinion (t int unsigned)
 # authority table and tree table to use, respectively.  The third parameter
 # should be a comma-separated list of taxon_no values.
 
+$dbh->do("DROP TABLE IF EXISTS ancestry_scratch");
+$dbh->do("CREATE TABLE ancestry_scratch (orig_no int unsigned primary key, is_base tinyint unsigned) Engine=MyISAM");
+
 $dbh->do("DROP PROCEDURE IF EXISTS compute_ancestry");
 $dbh->do("CREATE PROCEDURE compute_ancestry (auth_table varchar(80), tree_table varchar(80), taxon_nos varchar(32000))
 	BEGIN
 		# Clear the scratch table
 		DELETE FROM ancestry_scratch;
 		# Insert the taxonomic concepts specified by 'taxon_nos'
-		SET \@stmt1 = CONCAT('INSERT INTO ancestry_scratch SELECT orig_no FROM ',
+		SET \@stmt1 = CONCAT('INSERT INTO ancestry_scratch SELECT orig_no, 1 FROM ',
 				     auth_table, ' WHERE taxon_no in(', taxon_nos, ')');
 		PREPARE seed_table FROM \@stmt1;
 		EXECUTE seed_table;
 		# Now iterate adding parents to the table until no more are to
 		# be found.
-		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_scratch SELECT parent_no ',
-				     'FROM ancestry_scratch JOIN ', tree_table, ' using (orig_no) ',
+		SET \@stmt2 = CONCAT('INSERT IGNORE INTO ancestry_scratch SELECT parent_no, 0 ',
+				     'FROM ancestry_scratch as s JOIN ', tree_table, ' using (orig_no) ',
 				     'WHERE parent_no > 0');
 		PREPARE compute_parents	FROM \@stmt2;
 		SET \@cnt = 1;
-		WHILE \@cnt > 0 DO
+		SET \@bound = 1;
+		WHILE \@cnt > 0 AND \@bound < 100 DO
 			EXECUTE compute_parents;
 			SET \@cnt = ROW_COUNT();
+			SET \@bound = \@bound + 1;
 		END WHILE;
 	END");
 

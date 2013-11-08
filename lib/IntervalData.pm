@@ -6,20 +6,20 @@
 # 
 # Author: Michael McClennen
 
-package IntervalQuery;
+package IntervalData;
 
 use strict;
-use base 'DataQuery';
+use base 'DataService::Base';
 
 use Carp qw(carp croak);
 
 
 our (%SELECT, %OUTPUT, %PROC, %TABLES);
 
-$SELECT{single} = $SELECT{list} = $SELECT{hierarchy} =
+$SELECT{basic} =
     "i.interval_no, i.interval_name, i.abbrev, i.level, i.parent_no, i.color, i.base_age, i.top_age, i.reference_no";
 
-$OUTPUT{single} = $OUTPUT{list} = $OUTPUT{hierarchy} =
+$OUTPUT{basic} =
    [
     { rec => 'interval_no', com => 'oid',
 	doc => "A positive integer that uniquely identifies this interval"},
@@ -49,7 +49,7 @@ $TABLES{ref} = 'r';
 
 $PROC{ref} = 
    [
-    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&DataQuery::generateReference },
+    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&DataService::Base::generateReference },
    ];
 
 $OUTPUT{ref} =
@@ -58,19 +58,14 @@ $OUTPUT{ref} =
 	doc => "The reference(s) associated with this collection (as formatted text)" },
    ];
 
-our (%DOC_ORDER);
-
-$DOC_ORDER{'single'} = ['single', 'ref'];
-$DOC_ORDER{'list'} = ['list', 'ref'];
-$DOC_ORDER{'hierarchy'} = ['hierarchy', 'ref'];
 
 
-# fetchSingle ( )
+# get ( )
 # 
 # Query for all relevant information about the collection specified by the
 # 'id' parameter.  Returns true if the query succeeded, false otherwise.
 
-sub fetchSingle {
+sub get {
 
     my ($self) = @_;
     
@@ -111,13 +106,13 @@ sub fetchSingle {
 }
 
 
-# fetchMultiple ( )
+# list ( )
 # 
 # Query the database for basic info about all intervals.
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
-sub fetchMultiple {
+sub list {
 
     my ($self) = @_;
     

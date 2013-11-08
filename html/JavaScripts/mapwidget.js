@@ -6,9 +6,9 @@
 // First create a new subclass of Openlayers.Control.  This class will be
 // instantiated to create a control for intercepting map clicks.
 
-document.write('<script src="http://maps.google.com/maps?file=api&amp;v=2&amp;key=AIzaSyCG1j8oI62sQAXWRutBVCKmo4FvsQuonnw"></script>');
+document.write('<script src="//maps.googleapis.com/maps/api/js?key=AIzaSyD6TGm3WxrylUiXBxJ4cgxV-fufIu6jWks&sensor=false"></script>');
 
-OpenLayers.Control.Click = OpenLayers.Class(OpenLayers.Control, {                
+OpenLayers.Control.Click = OpenLayers.Class(OpenLayers.Control, {
     defaultHandlerOptions: {
         'single': true,
         'double': false,

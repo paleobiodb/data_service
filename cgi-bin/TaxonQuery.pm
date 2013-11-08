@@ -25,7 +25,7 @@ $OUTPUT{single} = $OUTPUT{list} =
         doc => "A positive integer that uniquely identifies the taxonomic concept"},
     { rec => 'record_type', com => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => 'taxon',
         doc => "The type of this object: {value} for a taxonomic name" },
-    { rec => 'rank', dwc => 'taxonRank', com => 'rnk', 
+    { rec => 'rank', dwc => 'taxonRank', com => 'rnk', pbdb_code => \%Taxonomy::RANK_STRING,
 	doc => "The taxonomic rank of this name" },
     { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
 	doc => "The scientific name of this taxon" },
@@ -37,11 +37,11 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "The identifier of the parent taxonomic concept, if any" },
     { rec => 'synonym_no', dwc => 'acceptedNameUsageID', pbdb => 'senior_no', com => 'snr', dedup => 'orig_no',
         doc => "The identifier of the senior synonym of this taxonomic concept, if any" },
-    { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', show => 'ref', json_list => 1,
+    { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', show => 'ref', json_list => 1, txt_list => "|||",
 	doc => "The reference from which this name was entered into the database (as formatted text)" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
 	doc => "The identifier of the primary reference associated with the taxon" },
-    { rec => 'extant', com => 'ext', dwc => 'isExtant',
+    { rec => 'is_extant', com => 'ext', dwc => 'isExtant',
         doc => "True if this taxon is extant on earth today, false if not, not present if unrecorded" },
     { rec => 'size', com => 'siz', show => 'size',
         doc => "The total number of taxa in the database that are contained within this taxon, including itself" },
@@ -162,6 +162,7 @@ sub fetchSingle {
     
     my $dbh = $self->{dbh};
     my $taxonomy = $self->{taxonomy};
+    my $valid = $self->{params};
     my $taxon_no;
     
     # Then figure out which taxon we are looking for.  If we have a taxon_no,
@@ -169,26 +170,26 @@ sub fetchSingle {
     
     my $not_found_msg = '';
     
-    if ( $self->{params}{id} )
+    if ( $valid->value('id') )
     {    
-	$taxon_no = $self->{params}{id};
+	$taxon_no = $valid->value('id');
 	$not_found_msg = "Taxon number $taxon_no was not found in the database";
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
     
-    elsif ( defined $self->{params}{name} )
+    elsif ( defined $valid->value('name') )
     {
-	$not_found_msg = "Taxon '$self->{params}{name}' was not found in the database";
+	$not_found_msg = "Taxon '$valid->value('name')' was not found in the database";
 	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id' };
 	
-	if ( defined $self->{params}{rank} )
+	if ( defined $valid->value('rank') )
 	{
-	    $name_select->{rank} = $self->{params}{rank};
+	    $name_select->{rank} = $valid->value('rank');
 	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
 	}
 	
-	($taxon_no) = $taxonomy->getTaxaByName($self->{params}{name}, $name_select);
+	($taxon_no) = $taxonomy->getTaxaByName($valid->value('name'), $name_select);
     }
     
     # If we haven't found a record, the result set will be empty.
@@ -220,7 +221,7 @@ sub fetchSingle {
     
     # If we were asked for the senior synonym, choose it.
     
-    my $rel = $self->{params}{senior} ? 'senior' : 'self';
+    my $rel = $valid->value('senior') ? 'senior' : 'self';
     
     # Next, fetch basic info about the taxon.
     
@@ -281,21 +282,21 @@ sub fetchSingle {
 	
 	unless ( $r->{order_no} or $r->{rank} <= 13 )
 	{
-	    my $order = $r->{order_count} < 100 ? 'size.desc' : undef;
+	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
 	    $r->{order_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
 						    { limit => 10, order => $order, rank => 13, fields => ['size', 'appfirst'] } ) ];
 	}
 	
 	unless ( $r->{family_no} or $r->{rank} <= 9 )
 	{
-	    my $order = $r->{order_count} < 100 ? 'size.desc' : undef;
+	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
 	    $r->{family_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
 						     { limit => 10, order => $order, rank => 9, fields => ['size', 'appfirst'] } ) ];
 	}
 	
 	if ( $r->{rank} > 5 )
 	{
-	    my $order = $r->{order_count} < 100 ? 'size.desc' : undef;
+	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
 	    $r->{genus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
 						    { limit => 10, order => $order, rank => 5, fields => ['size', 'appfirst'] } ) ];
 	}
@@ -333,6 +334,7 @@ sub fetchMultiple {
     
     my $dbh = $self->{dbh};
     my $taxonomy = $self->{taxonomy};
+    my $valid = $self->{params};
     my $taxon_no;
     
     # First, figure out what info we need to provide
@@ -353,40 +355,67 @@ sub fetchMultiple {
     
     # Specify the other query options according to the query parameters.
     
-    $options->{exact} = 1 if $self->{params}{exact};
-    
-    my $limit = $self->{params}{limit};
-    my $offset = $self->{params}{offset};
+    my $limit = $valid->value('limit');
+    my $offset = $valid->value('offset');
     
     $options->{limit} = $limit if defined $limit;
     $options->{offset} = $offset if defined $offset;
     
-    # If the parameter 'name' was given, then we are listing taxa by name.
+    # If the parameter 'name' was given, then fetch all matching taxa.  Order
+    # them in descending order by size.
     
-    if ( $self->{params}{name} )
+    my @name_matches;
+    
+    if ( $valid->value('name') )
     {
-	my $name = $self->{params}{name};
+	my $name = $valid->value('name');
 	
-	my @result_list = $taxonomy->getTaxaByName($name, $options);
-	return unless @result_list;
-	
-	$self->{main_result} = \@result_list;
-	$self->{result_count} = scalar(@result_list);
+	my $options = { order => 'size.desc' };
+	$options->{exact} = 1 if $valid->value('exact');
+    	
+	@name_matches = $taxonomy->getTaxaByName($name, $options);
+	return unless @name_matches;
+    }
+    
+    # If a name was given and the relationship is 'self' (or not specified,
+    # being the default) then just return the list of matches.
+    
+    if ( $valid->value('name') and $valid->value('rel') eq 'self' )
+    {
+	$self->{main_result} = \@name_matches;
+	$self->{result_count} = scalar(@name_matches);
 	return 1;
     }
     
-    # Otherwise, if the parameter 'id' was given, then we are listing
-    # taxa by relationship.
+    # If a name was given and some other relationship was specified, use the
+    # first name found.
     
-    elsif ( $self->{params}{id} or $self->{params}{rel} eq 'all_taxa' )
+    elsif ( $valid->value('name') )
     {
 	$options->{return} = 'stmt';
-	my $id_list = $self->{params}{id};
-	my $rel = $self->{params}{rel} || 'self';
+	my $id = $name_matches[0]{orig_no};
+	my $rel = $valid->value('rel') || 'self';
 	
-	if ( defined $self->{params}{rank} )
+	if ( defined $valid->value('rank') )
 	{
-	    $options->{rank} = $self->{params}{rank};
+	    $options->{rank} = $valid->value('rank');
+	}
+	
+	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id, $options);
+	return $self->{main_sth};
+    }
+    
+    # Otherwise, we are listing taxa by relationship.
+    
+    elsif ( $valid->value('id') or $valid->value('rel') eq 'all_taxa' )
+    {
+	$options->{return} = 'stmt';
+	my $id_list = $valid->value('id');
+	my $rel = $valid->value('rel') || 'self';
+	
+	if ( defined $valid->value('rank') )
+	{
+	    $options->{rank} = $valid->value('rank');
 	}
 	
 	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);
@@ -712,1052 +741,6 @@ sub determineFirstAppearance {
     {
 	$row->{$field} = $results->{$field};
     }
-}
-
-
-# calculateFirstAppearance ( dbh, taxon_no, params )
-# 
-# Calculate the first appearance data for the specified taxon, using the
-# specified parameters.  The first parameter must be either a valid session
-# record, which is used to determine which collections we have access to, or
-# else a dbh (when this routine is called from the data service
-# application). In the latter case, we must generate a dummy session record.
-
-sub calculateFirstAppearance {
-    
-    my ($dbh, $taxon_no, $params) = @_;
-    
-    # If we were given a session record, look up the dbt and dbh.  Otherwise,
-    # generate a dummy session record.
-    
-    # my ($s, $dbt, $dbh);
-    
-    # if ( ref $session_param eq 'Session' )
-    # {
-    # 	$s = $session_param;
-    # 	$dbt = $s->{dbt};
-    # 	$dbh = $s->{dbt}{dbh};
-    # }
-    
-    # else
-    # {
-    # 	$dbh = $session_param;
-    # 	$dbt = DBTransactionManager->new($dbh);
-    # 	$s = bless { logged_in => 0, dbt => $dbt }, 'Session';
-    # }
-    
-    # Figure default parameter values.
-    
-    $params ||= {};
-    $params->{taxonomic_precision} ||= 'any';
-    
-    # Determine excluded taxa, if any.
-    
-    # my ($sql, $field, $name, $exclude);
-    
-    # if ( $params->{exclude} )
-    # {
-    # 	my $names = $params->{exclude};
-    # 	$names =~ s/[^A-Za-z]/ /g;
-    # 	$names =~ s/  / /g;
-    # 	$names =~ s/  / /g;
-    # 	$names =~ s/ /','/g;
-    # 	$sql = "SELECT a.taxon_no,a.taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_name IN ('".$names."') AND a.taxon_no=t.spelling_no GROUP BY lft,rgt ORDER BY lft";
-    # 	my @nos = @{$dbt->getData($sql)};
-    # 	$exclude .= " AND (rgt<$_->{'lft'} OR lft>$_->{'rgt'})" foreach @nos;
-    # }
-    
-    # First get all subtaxa.
-    
-    my $sql = " SELECT t.lft, t.rgt, a.taxon_rank, a.extant 
-		FROM authorities as a JOIN taxa_tree_cache as t using (taxon_no)
-		WHERE a.taxon_no = $taxon_no";
-    
-    my ($lft, $rgt, $rank, $extant) = $dbh->selectrow_array($sql);
-    
-    unless ( $lft )
-    {
-	return { error => 'No matching taxon found.' };
-    }
-    
-    unless ( $rgt >= $lft + 1 or $rank =~ /genus|species/ )
-    {
-	return { error => 'No classified subtaxa found.' };
-    }
-    
-    # Determine the proper query based on the parameters
-    # 'taxonomic_precision', 'types_only', and 'type_body_part'.
-    
-    $sql = "SELECT a.taxon_no,taxon_name,taxon_rank,extant,preservation,type_locality,lft,rgt,synonym_no
-		FROM authorities a JOIN taxa_tree_cache as t USING (taxon_no)
-		WHERE lft>=".$lft." AND rgt<=".$rgt." ORDER BY lft";
-    my @allsubtaxa = @{$dbh->selectall_arrayref($sql, { Slice => {} })};
-    my @subtaxa;
-    
-    if ( $params->{taxonomic_precision} =~ /^any/ )
-    {
-	@subtaxa = @allsubtaxa;
-    }
-    
-    elsif ( $params->{taxonomic_precision} =~ /species|genus|family/ )
-    {
-	my @ranks = ('subspecies','species');
-	if ( $params->{taxonomic_precision} =~ /genus or species/ )	{
-	    push @ranks , ('subgenus','genus');
-	} elsif ( $params->{taxonomic_precision} =~ /family/ )	{
-	    push @ranks , ('subgenus','genus','tribe','subfamily','family');
-	}
-	$sql = "SELECT a.taxon_no,taxon_name,type_locality,extant,preservation,lft,rgt
-		FROM authorities as a join taxa_tree_cache as t using (taxon_no)
-		WHERE a.taxon_no=t.taxon_no AND lft>".$lft." AND rgt<".$rgt." AND taxon_rank IN ('".join("','",@ranks)."')";
-	
-	if ( $params->{types_only} )
-	{
-	    $sql .= " AND type_locality>0";
-	}
-	
-	if ( $params->{type_body_part} )
-	{
-	    my $parts;
-	    if ( $params->{type_body_part} =~ /multiple teeth/i )	{
-		$parts = "'skeleton','partial skeleton','skull','partial skull','maxilla','mandible','teeth'";
-	    } elsif ( $params->{type_body_part} =~ /skull/i )	{
-		$parts = "'skeleton','partial skeleton','skull','partial skull'";
-	    } elsif ( $params->{type_body_part} =~ /skeleton/i )	{
-		$parts = "'skeleton','partial skeleton'";
-	    }
-	    $sql .= " AND type_body_part IN (".$parts.")";
-	}
-	my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
-	@subtaxa = @$result;
-    }
-    
-    else
-    {
-	warn "Invalid value '$params->{taxonomic_precision}' for parameter 'taxonomic_precision'";
-	return { error => 'Internal error' }
-    }
-    
-    # See if this taxon is extant (if either it or any of its subtaxa is so
-    # marked). 
-    
-    if ( $extant ne 'yes' )	{
-	for my $t ( @allsubtaxa )	{
-	    if ( defined $t->{extant} and $t->{extant} eq 'yes' )
-	    {
-		$extant = "yes";
-		last;
-	    }
-	}
-    }
-    
-    # Remove trace fossils from @subtaxa, unless the parameter 'traces' is
-    # true.  The 'preservation' attribute is inherited from parent to child if
-    # no value is specified for the child.
-    
-    unless ( $params->{traces} )
-    {
-    	my %istrace;
-    	for my $i ( 0..$#allsubtaxa )
-    	{
-    	    my $st = $allsubtaxa[$i];
-    	    if ( defined $st->{preservation} and $st->{preservation} eq "trace" )
-    	    {
-    		$istrace{$st->{'taxon_no'}}++;
-    		# find parents by descending
-    		# overall parent is innocent until proven guilty
-    	    } elsif ( ! $st->{'preservation'} && $st->{'lft'} >= $lft )	{
-    		my $j = $i-1;
-    		# first part means "not parent"
-    		while ( ( $allsubtaxa[$j]->{'rgt'} < $st->{'lft'} || 
-    			  ! $allsubtaxa[$j]->{'preservation'} ) && $j > 0 )
-    		{
-    		    $j--;
-    		}
-    		if ( defined $allsubtaxa[$j]{preservation} and $allsubtaxa[$j]{preservation} eq "trace" )
-    		{
-    		    $istrace{$st->{'taxon_no'}}++;
-    		}
-    	    }
-    	}
-    	my @nontraces;
-    	for my $st ( @subtaxa )
-    	{
-    	    if ( ! $istrace{$st->{'taxon_no'}} )	{
-    		push @nontraces , $st;
-    	    }
-    	}
-    	@subtaxa = @nontraces;
-    }
-    
-    # Now that we've got a good list of taxa, find all matching collections.
-    
-    my $taxa = join(',', map { $_->{taxon_no} } @subtaxa);
-    
-    $sql = "    SELECT c.collection_no, c.max_interval_no, c.min_interval_no
-		FROM collections as c JOIN 
-			(SELECT o.collection_no FROM occurrences as o
-				LEFT JOIN reidentifications as re ON re.occurrence_no = o.occurrence_no
-			WHERE re.reid_no is null and o.taxon_no in ($taxa)
-			UNION 
-			SELECT o.collection_no FROM occurrences as o
-				JOIN reidentifications as re ON re.occurrence_no = o.occurrence_no
-			WHERE re.most_recent='YES' and re.taxon_no in ($taxa)) as m
-				ON c.collection_no = m.collection_no
-		WHERE (c.access_level = 'the public' or c.release_date <= now())
-		GROUP BY c.collection_no";
-    
-    my $colls = $dbh->selectall_arrayref($sql, { Slice => {} });
-    
-    # my $options = {};
-    # if ( $params->{types_only} )
-    # {
-    # 	for my $st ( @subtaxa )	{
-    # 	    if ( $st->{type_locality} > 0 ) { $options->{collection_list} .= ",".$st->{type_locality}; }
-    # 	}
-    # 	$options->{collection_list} =~ s/^,//;
-    # 	$options->{'species_reso'} = ["n. sp."];
-    # }
-    
-    # we could use getCollectionsSet but it would be overkill
-    # my $fields = ['max_interval_no','min_interval_no','collection_no','collection_name','country','state','geogscale','formation','member','stratscale','lithification','minor_lithology','lithology1','lithification2','minor_lithology2','lithology2','environment'];
-    
-    # if ( ! $params->{Africa} || ! $params->{Antarctica} || ! $params->{Asia} || ! $params->{Australia} || ! $params->{Europe} || ! $params->{'North America'} || ! $params->{'South America'} )
-    # {
-    # 	my @list = grep $params->{$1}, ('Africa', 'Antarctica', 'Asia', 'Australia', 'Europe',
-    # 					'North America', 'South America' );
-    # 	$options->{'country'} = join(':', @list);
-    # }
-    
-    # my @in_list = map $_->{taxon_no}, @subtaxa;
-    # $options->{taxon_list} = \@in_list;
-    
-    # $options->{permission_type} = 'read';
-    # $options->{geogscale} = $params->{geogscale};
-    # $options->{stratscale} = $params->{stratscale};
-    # if ( $params->{minimum_age} > 0 )	{
-    # 	$options->{max_interval} = 999;
-    # 	$options->{min_interval} = $params->{minimum_age};
-    # }
-    
-    # my ($colls) = Collection::getCollections($dbt, $s, $options, $fields);
-    unless ( @$colls )	{
-	return { error =>  "No occurrences of this taxon match the search criteria" };
-    }
-    
-    my @intervals = intervalData($dbh, $colls);
-    my %interval_hash = map { ($_->{interval_no}, $_) } @intervals;
-    
-    if ( defined $params->{temporal_precision} )
-    {
-	my @newcolls;
-	for my $coll (@$colls) 
-	{
-	    if ( $interval_hash{$coll->{'max_interval_no'}}->{'base_age'} -  $interval_hash{$coll->{'max_interval_no'}}->{'top_age'} <= $params->{temporal_precision} )	{
-		push @newcolls , $coll;
-	    }
-	}
-	$colls = \@newcolls;
-    }
-    
-    if ( ! @$colls )
-    {
-	return { error => "No occurrences of this taxon have sufficiently precise age data" };
-    }
-    
-    my $ncoll = scalar(@$colls);
-    
-    # AGE RANGE/CONFIDENCE INTERVAL CALCULATION
-    
-    my ($lb, $ub, $max_no, $minfirst, $maxlast, $min_no) = getAgeRange($dbh, $colls);
-    my ($first_interval_top, @firsts, @rages, @ages, @gaps);
-    my $TRIALS = int( 10000 / scalar(@$colls) );
-    
-    for my $coll (@$colls)
-    {
-	my ($collmax,$collmin,$last_name) = ("","","");
-	$collmax = $interval_hash{$coll->{'max_interval_no'}}{'base_age'};
-	# IMPORTANT: the collection's max age is truncated at the
-	#   taxon's max first appearance
-	if ( $collmax > $lb )	{
-	    $collmax = $lb;
-	}
-	if ( $coll->{'min_interval_no'} == 0 )	{
-	    $collmin = $interval_hash{$coll->{'max_interval_no'}}{'top_age'};
-	    $last_name = $interval_hash{$coll->{'max_interval_no'}}{'interval_name'};
-	} else	{
-	    $collmin = $interval_hash{$coll->{'min_interval_no'}}{'top_age'};
-	    $last_name = $interval_hash{$coll->{'min_interval_no'}}{'interval_name'};
-	}
-	# $coll->{'maximum Ma'} = $collmax;
-	# $coll->{'minimum Ma'} = $collmin;
-	# $coll->{'midpoint Ma'} = ( $collmax + $collmin ) / 2;
-	if ( $minfirst == $collmin )	{
-	    # if ( $coll->{'state'} && $coll->{'country'} eq "United States" )	{
-	    # 	$coll->{'country'} = "US (".$coll->{'state'}.")";
-	    # }
-	    $first_interval_top = $last_name;
-	    push @firsts , $coll;
-	}
-	# # randomization to break ties and account for uncertainty in
-	# #  age estimates
-	# for my $t ( 1..$TRIALS )
-	# {
-	#     push @{$rages[$t]} , rand($collmax - $collmin) + $collmin;
-	# }
-    }
-    
-    my $first_interval_base = $interval_hash{$max_no}{interval_name};
-    my $last_interval = $interval_hash{$min_no}{interval_name};
-    if ( $first_interval_base =~ /an$/ )	{
-	$first_interval_base = "the ".$first_interval_base;
-    }
-    if ( $first_interval_top =~ /an$/ )	{
-	$first_interval_top = "the ".$first_interval_top;
-    }
-    if ( $last_interval =~ /an$/ )	{
-	$last_interval = "the ".$last_interval;
-    }
-    
-    my $agerange = $lb - $ub;;
-    if ( defined $params->{minimum_age} and $params->{minimum_age} > 0 )	{
-	$agerange = $lb - $params->{minimum_age};
-    }
-    
-    # for my $t ( 1..$TRIALS )	{
-    # 	@{$rages[$t]} = sort { $b <=> $a } @{$rages[$t]};
-    # }
-    # for my $i ( 0..$#{$rages[1]} )	{
-    # 	my $x = 0;
-    # 	for my $t ( 1..$TRIALS )	{
-    # 	    $x += $rages[$t][$i];
-    # 	}
-    # 	push @ages , $x / $TRIALS;
-    # }
-    # for my $i ( 0..$#ages-1 )	{
-    # 	push @gaps , $ages[$i] - $ages[$i+1];
-    # }
-    # # shortest to longest
-    # @gaps = sort { $a <=> $b } @gaps;
-    
-    # Now construct the output record.
-    
-    my $result = { firstapp_max => $first_interval_base,
-		   firstapp_max_ma => sprintf("%.1f", $lb),
-		   firstapp_min => $first_interval_top,
-		   firstapp_min_ma => sprintf("%.1f", $minfirst),
-		   lastapp => $last_interval,
-		   lastapp_ma => sprintf("%.1f", $ub),
-		   extant => $extant,
-		   firstapp_ncoll => $ncoll,
-		   firstapp_agerange => $agerange,
-		 };
-    
-    # If more than one collection was found, add confidence intervals.
-    
-    # if ( $ncoll > 1 )
-    # {
-    # 	$result->{ci_labels} = [0.50, 0.90, 0.95, 0.99];
-    # 	$result->{ci_continuous} = [Strauss2($lb, $ncoll, 0.50, 0.90, 0.95, 0.99)];
-    # 	$result->{ci_percentile} = [percentile2($lb, \@gaps, 0.50, 0.90, 0.95, 0.99)];
-    # 	$result->{ci_oldest_gap} = [Solow2($lb, \@ages, 0.50, 0.90, 0.95, 0.99)];
-	
-    # 	# Determine if there are rank-order correlations between time and gap size.
-	
-    # 	# convert to ranks by manipulating an array of objects
-    # 	my @gapdata;
-    # 	for my $i ( 0..$#ages-1 )
-    # 	{
-    # 	    $gapdata[$i]->{'age'} = $ages[$i];
-    # 	    $gapdata[$i]->{'gap'} = $ages[$i] - $ages[$i+1];
-    # 	}
-    # 	@gapdata = sort { $b->{'age'} <=> $a->{'age'} } @gapdata;
-    # 	for my $i ( 0..$#ages-1 )
-    # 	{
-    # 	    $gapdata[$i]->{'agerank'} = $i;
-    # 	}
-    # 	@gapdata = sort { $b->{'gap'} <=> $a->{'gap'} } @gapdata;
-    # 	for my $i ( 0..$#ages-1 )
-    # 	{
-    # 		$gapdata[$i]->{'gaprank'} = $i;
-    # 	}
-
-    # 	my ($n,$mx,$my,$sx,$sy,$cov);
-    # 	$n = $#ages;
-    # 	if ( $n > 9 )
-    # 	{
-    # 	    for my $i ( 0..$#ages-1 )
-    # 	    {
-    # 		$mx += $gapdata[$i]->{'agerank'};
-    # 		$my += $gapdata[$i]->{'gaprank'};
-    # 	    }
-    # 	    $mx /= $n;
-    # 	    $my /= $n;
-    # 	    for my $i ( 0..$#ages-1 )
-    # 	    {
-    # 		$sx += ($gapdata[$i]->{'agerank'} - $mx)**2;
-    # 		$sy += ($gapdata[$i]->{'gaprank'} - $my)**2;
-    # 		$cov += ($gapdata[$i]->{'agerank'} - $mx) * ( $gapdata[$i]->{'gaprank'} - $my);
-    # 	    }
-    # 	    $sx = sqrt( $sx / ( $n - 1 ) );
-    # 	    $sy = sqrt( $sy / ( $n - 1 ) );
-    # 	    my $r = $cov / ( ( $n - 1 ) * $sx * $sy );
-    # 	    my $t = $r / sqrt( ( 1 - $r**2 ) / ( $n - 2 ) );
-	    
-    # 	    $result->{time_gap_r} = $r;
-    # 	    $result->{time_gap_t} = $t;
-    # 	    # for n > 9, the p < 0.001 critical values range from 3.291 to 4.587
-    # 	}
-    # }
-    
-    return $result;
-}
-
-
-sub intervalData {
-    
-    my ($dbh, $colls) = @_;
-    
-    my %is_no;
-    $is_no{$_->{'max_interval_no'}}++ foreach @$colls;
-    $is_no{$_->{'min_interval_no'}}++ foreach @$colls;
-    delete $is_no{0};
-    my $sql = "SELECT TRIM(CONCAT(i.eml_interval,' ',i.interval_name)) AS interval_name,i.interval_no,base_age,top_age FROM intervals i,interval_lookup l WHERE i.interval_no=l.interval_no AND i.interval_no IN (".join(',',keys %is_no).")";
-    return @{$dbh->selectall_arrayref($sql, { Slice => {} })};
-}
-
-
-sub getAgeRange	{
-	my ($dbh,$colls) = @_;
-	
-	return unless (@$colls);
-	
-	my $coll_list = join(',', map { $_ ->{'collection_no'} } @$colls);
-	
-	# get the youngest base age of any collection including this taxon
-	# ultimately, the range's top must be this young or younger
-	my $sql = "SELECT base_age AS maxtop FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN ($coll_list) ORDER BY base_age ASC LIMIT 1";
-	my ($maxTop) = $dbh->selectrow_array($sql);
-	
-	# likewise the oldest top age
-	# the range's base must be this old or older
-	# the top is the top of the max_interval for collections having
-	#  no separate max and min ages, but is the top of the min_interval
-	#  for collections having different max and min ages
-	$sql = "SELECT top_age AS minbase FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN ($coll_list)) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN ($coll_list))) AS ages ORDER BY top_age DESC LIMIT 1";
-	my ($minBase) = $dbh->selectrow_array($sql);
-
-	# now get the range top
-	# note that the range top is the top of some collection's min_interval
-	$sql = "SELECT MAX(top_age) top FROM ((SELECT top_age FROM collections,interval_lookup WHERE min_interval_no=0 AND max_interval_no=interval_no AND collection_no IN ($coll_list) AND top_age<$maxTop) UNION (SELECT top_age FROM collections,interval_lookup WHERE min_interval_no>0 AND min_interval_no=interval_no AND collection_no IN ($coll_list) AND top_age<$maxTop)) AS tops";
-	my ($top) = $dbh->selectrow_array($sql);
-	
-	# and the range base
-	$sql = "SELECT MIN(base_age) base FROM collections,interval_lookup WHERE max_interval_no=interval_no AND collection_no IN ($coll_list) AND base_age>$minBase LIMIT 1";
-	my ($base) = $dbh->selectrow_array($sql);
-	
-	my (%is_max,%is_min);
-	for my $c ( @$colls )	{
-		$is_max{$c->{'max_interval_no'}}++;
-		if ( $c->{'min_interval_no'} > 0 )	{
-			$is_min{$c->{'min_interval_no'}}++;
-		} else	{
-			$is_min{$c->{'max_interval_no'}}++;
-		}
-	}
-
-	# get the ID of the shortest interval whose base is equal to the
-	#  range base and explicitly includes an occurrence
-	$sql = "SELECT interval_no FROM interval_lookup WHERE interval_no IN (".join(',',keys %is_max).") AND base_age=$base ORDER BY top_age DESC LIMIT 1";
-	my $oldest_interval_no = $dbh->selectrow_array($sql);
-
-	# ditto for the shortest interval defining the top
-	# only the ID number is needed
-	$sql = "SELECT interval_no FROM interval_lookup WHERE interval_no IN (".join(',',keys %is_min).") AND top_age=$top ORDER BY base_age ASC LIMIT 1";
-	my $youngest_interval_no = ${$dbh->selectcol_arrayref($sql)}[0];
-
-	return($base,$top,$oldest_interval_no,$minBase,$maxTop,$youngest_interval_no);
-}
-
-
-# Generaterecord ( row, options )
-# 
-# Return a string representing one row of the result, in the selected output
-# format.  The option 'is_first' indicates that this is the first
-# record, which is significant for JSON output (it controls whether or not to
-# output an initial comma, in that case).
-
-sub generateRecord {
-
-    my ($self, $row, %options) = @_;
-    
-    # If the content type is 'xml', then we need to check whether the result
-    # includes a list of parents.  If so, because of the inflexibility of XML
-    # and Darwin Core, we cannot output a hierarchical list.  The best we can
-    # do is to output all of the parent records first, before the main record
-    # (see http://eol.org/api/docs/hierarchy_entries).
-    
-    if ( $self->{output_format} eq 'xml' )
-    {
-	my $output = '';
-	
-	# If there are any parents, output them first with the "short record"
-	# flag to indicate that many of the fields should be elided.  These
-	# are not the primary object of the query, so less information needs
-	# to be provided about them.
-	
-	if ( defined $self->{parents} && ref $self->{parents} eq 'ARRAY' )
-	{
-	    foreach my $parent_row ( @{$self->{parents}} )
-	    {
-		$output .= $self->emitTaxonXML($parent_row, 1);
-	    }
-	}
-    
-	# Now, we output the main record.
-	
-	$output .= $self->emitTaxonXML($row, 0);
-	
-	return $output;
-    }
-    
-    # If the content type is 'txt', then we emit the record as a text line.
-    
-    elsif ( $self->{output_format} eq 'txt' or $self->{output_format} eq 'csv' )
-    {
-	my $output = $self->emitTaxonText($row);
-	return $output;
-    }
-    
-    # Otherwise, it must be JSON.  In that case, we need to insert a comma if
-    # this is not the first record.  The subroutine emitTaxonJSON() will also
-    # output the parent records, if there are any, as a sub-array.
-    
-    my $insert = ($options{is_first} ? '' : ',');
-    
-    return $insert . $self->emitTaxonJSON($row, $self->{parents});
-}
-
-
-# emitTaxonXML ( row, short_record )
-# 
-# Returns a string representing the given record (row) in Darwin Core XML
-# format.  If 'short_record' is true, suppress certain fields.
-
-my %fixbracket = ( '((' => '<', '))' => '>' );
-
-sub emitTaxonXML {
-    
-    no warnings;
-    
-    my ($self, $row, $short_record) = @_;
-    my $output = '';
-    my @remarks = ();
-    
-    my $taxon_no = $self->{generate_urns}
-	? DataQuery::generateURN($row->{taxon_no}, 'taxon_no')
-	    : $row->{taxon_no};
-    
-    $output .= '  <dwc:Taxon>' . "\n";
-    $output .= '    <dwc:taxonID>' . $taxon_no . '</dwc:taxonID>' . "\n";
-    $output .= '    <dwc:taxonRank>' . $row->{taxon_rank} . '</dwc:taxonRank>' . "\n";
-    
-    # Taxon names shouldn't contain any invalid characters, but just in case...
-    
-    $output .= '    <dwc:scientificName>' . DataQuery::xml_clean($row->{taxon_name}) . 
-	'</dwc:scientificName>' . "\n";
-    
-    # species have extra fields to indicate which genus, etc. they belong to
-    
-    if ( $row->{taxon_rank} =~ /species/ && !$short_record ) {
-	my ($genus, $subgenus, $species, $subspecies) = interpretSpeciesName($row->{taxon_name});
-	$output .= '    <dwc:genus>' . $genus . '</dwc:genus>' . "\n" if defined $genus;
-	$output .= '    <dwc:subgenus>' . $subgenus . '</dwc:subgenus>' . "\n" if defined $subgenus;
-	$output .= '    <dwc:specificEpithet>' . $species . '</dwc:specificEpithet>' . "\n" if defined $species;
-	$output .= '    <dwc:infraSpecificEpithet>' . $subspecies . '</dwc:infraSpecificEpithet>' if defined $subspecies;
-    }
-    
-    if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
-	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
-	 ( $self->{rooted_result} and ref $self->{root_taxa} and 
-	   $self->{root_taxa}{$row->{taxon_no}} ) )
-    {
-	my $parent_no = $self->{generate_urns}
-	    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
-		: $row->{parent_no};
-	
-	$output .= '    <dwc:parentNameUsageID>' . $parent_no . '</dwc:parentNameUsageID>' . "\n";
-    }
-    
-    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and $self->{show_parent_names} and not
-	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
-	 ( $self->{rooted_result} and ref $self->{root_taxa} and 
-	   $self->{root_taxa}{$row->{taxon_no}} ) )
-    {
-    	$output .= '    <dwc:parentNameUsage>' . DataQuery::xml_clean($row->{parent_name}) . 
-	    '</dwc:parentNameUsage>' . "\n";
-    }
-    
-    if ( defined $row->{attribution} && $row->{attribution} ne '' )
-    {
-	$output .= '    <dwc:scientificNameAuthorship>' . DataQuery::xml_clean($row->{attribution}) .
-	    '</dwc:scientificNameAuthorship>' . "\n";
-    }
-    
-    if ( defined $row->{author1} && $row->{author1} ne '' ) {
-	my $authorship = formatAuthorName($row->{author1}, $row->{author2}, $row->{otherauthors},
-					  $row->{pubyr});
-	$authorship = "($authorship)" if defined $row->{orig_no} &&
-	    $row->{orig_no} > 0 && $row->{orig_no} != $row->{taxon_no};
-	$authorship = DataQuery::xml_clean($authorship);
-	$output .= '    <dwc:scientificNameAuthorship>' . $authorship . '</dwc:scientificNameAuthorship>' . "\n";
-    }
-    
-    if ( defined $row->{taxonomic} ) {
-	$output .= '    <dwc:taxonomicStatus>' . $row->{taxonomic} . '</dwc:taxonomicStatus>' . "\n";
-    }
-    
-    if ( defined $row->{nomenclatural} ) {
-	$output .= '    <dwc:nomenclaturalStatus>' . $row->{nomenclatural} . '</dwc:nomenclaturalStatus>' . "\n";
-    }
-    
-    if ( defined $row->{nom_code} ) {
-	$output .= '    <dwc:nomenclaturalCode>' . $row->{nom_code} . '</dwc:nomenclaturalCode>' . "\n";
-    }
-    
-    if ( defined $row->{accepted_no} ) {
-	my $accepted_no = $self->{generate_urns}
-	    ? DataQuery::generateURN($row->{accepted_no}, 'taxon_no')
-		: $row->{accepted_no};
-	
-	$output .= '    <dwc:acceptedNameUsageID>' . $accepted_no . '</dwc:acceptedNameUsageID>' . "\n";
-    }
-    
-    if ( defined $row->{accepted_name} ) {
-	# taxon names shouldn't contain any wide characters, but just in case...
-	$output .= '    <dwc:acceptedNameUsage>' . DataQuery::xml_clean($row->{accepted_name}) . 
-	    '</dwc:acceptedNameUsage>' . "\n";
-    }
-    
-    if ( defined $row->{pubref} ) {
-	my $pubref = DataQuery::xml_clean($row->{pubref});
-	# We now need to translate, i.e. ((b)) to <b>.  This is done after
-	# xml_clean, because otherwise <b> would be turned into &lt;b&gt;
-	if ( $pubref =~ /\(\(/ )
-	{
-	    #$row->{pubref} =~ s/(\(\(|\)\))/$fixbracket{$1}/eg;
-	    #actually, we're just going to take them out for now
-	    $pubref =~ s/\(\(\/?\w*\)\)//g;
-	}
-	$output .= '    <dwc:namePublishedIn>' . $pubref . '</dwc:namePublishedIn>' . "\n";
-    }
-    
-    if ( defined $row->{common_name} && $row->{common_name} ne '' ) {
-	$output .= '    <dwc:vernacularName xml:lang="en">' . 
-	    DataQuery::xml_clean($row->{common_name}) . '</dwc:vernacularName>' . "\n";
-    }
-    
-    if ( defined $row->{extant} and $row->{extant} =~ /(yes|no)/i ) {
-	push @remarks, "extant: $1";
-    }
-    
-    if ( @remarks ) {
-	my $remarks = join('; ', @remarks);
-	$output .= '    <dwc:taxonRemarks>' . $remarks . '</dwc:taxonRemarks>' . "\n";
-    }
-    
-    $output .= '  </dwc:Taxon>' . "\n";
-}
-
-
-# emitTaxonText ( row )
-# 
-# Return a string representing hte given record (row) in text format,
-# according to a predetermined list of fields.
-
-sub emitTaxonText {
-
-    my ($self, $row) = @_;
-    
-    my (@output);
-    
-    # Now process each field one at a time, building up the output list as we go.
-    
-    foreach my $field (@{$self->{field_list}})
-    {
-	# First determine the value, according to the field name.
-	
-	my $value;
-	
-	if ( $field eq 'taxonID' )
-	{
-	    $value = $self->{generate_urns}
-		? DataQuery::generateURN($row->{taxon_no}, 'taxon_no')
-		    : $row->{taxon_no};
-	}
-	
-	elsif ( $field eq 'taxonRank' )
-	{
-	    $value = $row->{taxon_rank};
-	}
-	
-	elsif ( $field eq 'scientificName' )
-	{
-	    $value = DataQuery::xml_clean($row->{taxon_name})
-		if defined $row->{taxon_name};
-	    
-	    # If we are generating the 'eol_core' format, we must include the
-	    # attribution after the name.
-	    
-	    if ( $self->{eol_core} && defined $row->{attribution} )
-	    {
-		$value .= ' ' . DataQuery::xml_clean($row->{attribution});
-	    }
-	}
-	
-	elsif ( $field eq 'parentNameUsageID' )
-	{
-	    if ( defined $row->{parent_no} and $row->{parent_no} > 0 and not
-		 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
-		 ( $self->{rooted_result} and ref $self->{root_taxa} and
-		   $self->{root_taxa}{$row->{taxon_no}} ) )
-	    {
-		$value = $self->{generate_urns}
-		    ? DataQuery::generateURN($row->{parent_no}, 'taxon_no')
-			: $row->{parent_no};
-	    }
-	}
-	
-	elsif ( $field eq 'parentNameUsage' )
-	{
-	    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and not
-		 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
-		 ( $self->{rooted_result} and ref $self->{root_taxa} and
-		   $self->{root_taxa}{$row->{taxon_no}} ) )
-	    {
-		$value = DataQuery::xml_clean($row->{parent_name});
-	    }
-	}
-	
-	elsif ( $field eq 'acceptedNameUsageID' )
-	{
-	    if ( defined $row->{accepted_no} and $row->{accepted_no} > 0 )
-	    {
-		$value = $self->{generate_urns}
-		    ? DataQuery::generateURN($row->{accepted_no}, 'taxon_no')
-			: $row->{accepted_no};
-	    }
-	}
-	
-	elsif ( $field eq 'acceptedNameUsage' )
-	{
-	    if ( defined $row->{accepted_name} and $row->{accepted_name} ne '' )
-	    {
-		$value = DataQuery::xml_clean($row->{accepted_name});
-	    }
-	}
-	
-	elsif ( $field eq 'taxonomicStatus' )
-	{
-	    $value = $row->{taxonomic};
-	}
-	
-	elsif ( $field eq 'nomenclaturalStatus' )
-	{
-	    $value = $row->{nomenclatural};
-	}
-	
-	elsif ( $field eq 'nomenclaturalCode' )
-	{
-	    $value = $row->{nom_code};
-	}
-	
-	elsif ( $field eq 'nameAccordingTo' )
-	{
-	    $value = DataQuery::xml_clean($row->{attribution})
-		if defined $row->{attribution};
-	}
-	
-	elsif ( $field eq 'namePublishedIn' )
-	{
-	    $value = DataQuery::xml_clean($row->{pubref})
-		if defined $row->{pubref};
-	    
-	    # We now need to translate, i.e. ((b)) to <b>.  This is done after
-	    # xml_clean, because otherwise <b> would be turned into &lt;b&gt;
-	    if ( defined $value and $value =~ /\(\(/ )
-	    {
-		$value =~ s/(\(\(|\)\))/$fixbracket{$1}/eg;
-	    }
-	}
-	
-	elsif ( $field eq 'vernacularName' )
-	{
-	    $value = DataQuery::xml_clean($row->{common_name}) 
-		if defined $row->{common_name};
-	}
-	
-	elsif ( $field eq 'extant' )
-	{
-	    $value = $row->{extant} if defined $row->{extant};
-	}
-	
-	elsif ( $field eq 'taxonRemarks' )
-	{
-	    if ( defined $row->{extant} && $row->{extant} =~ /\w/ )
-	    {
-		$value = "extant: $row->{extant}";
-	    }
-	}
-	
-	elsif ( $field eq 'firstAppearanceMinMa' )
-	{
-	    $value = $row->{firstapp_min_ma} if defined $row->{firstapp_min_ma};
-	}
-	
-	elsif ( $field eq 'firstAppearanceMin' )
-	{
-	    $value = $row->{firstapp_min} if defined $row->{firstapp_min};
-	}
-	
-	elsif ( $field eq 'firstAppearanceMaxMa' )
-	{
-	    $value = $row->{firstapp_max_ma} if defined $row->{firstapp_max_ma};
-	}
-	
-	elsif ( $field eq 'firstAppearanceMax' )
-	{
-	    $value = $row->{firstapp_max} if defined $row->{firstapp_max};
-	}
-	
-	elsif ( $field eq 'lastAppearanceMa' )
-	{
-	    $value = $row->{lastapp_ma} if defined $row->{lastapp_ma};
-	}
-	
-	elsif ( $field eq 'lastAppearance' )
-	{
-	    $value = $row->{lastapp} if defined $row->{lastapp};
-	}
-	
-	elsif ( $field eq 'appearanceNColl' )
-	{
-	    $value = $row->{firstapp_ncoll} if defined $row->{firstapp_ncoll};
-	}
-	
-	elsif ( $field eq 'ageRange' )
-	{
-	    $value = $row->{firstapp_agerange} if defined $row->{firstapp_agerange};
-	}
-	
-	# Then append the value to the output list, or the empty string if
-	# there is no value (or if, for some reason, it is a reference).  This is
-	# necessary because each line has to have the same fields in the same
-	# columns, even if some values are missing.
-	
-	if ( defined $value and ref $value eq '' )
-	{
-	    push @output, $value;
-	}
-	
-	else
-	{
-	    push @output, '';
-	}
-    }
-    
-    # Now generate and return a line of text from the @output array.
-    
-    my $line = $self->generateTextLine(@output);
-    return $line;
-}
-
-# emitTaxonJSON ( row, parents, short_record )
-# 
-# Return a string representing the given taxon record (row) in JSON format.
-# If 'parents' is specified, it should be an array of hashes each representing
-# a parent taxon record.  If 'short_record' is true, then some fields will be
-# suppressed.
-
-sub emitTaxonJSON {
-    
-    no warnings;
-    
-    my ($self, $row, $parents, $short_record) = @_;
-    
-    my $output = '';
-    
-    $output .= '{"taxonID":"' . $row->{taxon_no} . '"'; 
-    $output .= ',"taxonRank":"' . $row->{taxon_rank} . '"';
-    $output .= ',"scientificName":"' . DataQuery::json_clean($row->{taxon_name}) . '"';
-    
-    if ( defined $row->{attribution} && $row->{attribution} ne '' )
-    {
-	$output .= ',"scientificNameAuthorship":"' . DataQuery::json_clean($row->{attribution}) . '"';
-    }
-    
-    if ( defined $row->{author1} && $row->{author1} ne '' ) {
-	my $authorship = formatAuthorName($row->{author1}, $row->{author2}, $row->{otherauthors},
-					  $row->{pubyr});
-	$authorship = "($authorship)" if defined $row->{orig_no} &&
-	    $row->{orig_no} > 0 && $row->{orig_no} != $row->{taxon_no};
-	$output .= ',"scientificNameAuthorship":"' . DataQuery::json_clean($authorship) . '"';
-    }
-    
-    if ( defined $row->{parent_no} && $row->{parent_no} > 0 and not
-	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
-	 ( $self->{rooted_result} and ref $self->{root_taxa} and
-	   $self->{root_taxa}{$row->{taxon_no}} ) )
-    {
-	$output .= ',"parentNameUsageID":"' . $row->{parent_no} . '"';
-    }
-    
-    if ( defined $row->{parent_name} and $row->{parent_name} ne '' and $self->{show_parent_names} and not
-	 ( $self->{suppress_synonym_parents} and defined $row->{accepted_no} ) and not
-	 ( $self->{rooted_result} and ref $self->{root_taxa} and
-	   $self->{root_taxa}{$row->{taxon_no}} ) )
-    {
-	$output .= ',"parentNameUsage":"' . DataQuery::json_clean($row->{parent_name}) . '"';
-    }
-    
-    if ( defined $row->{taxonomic} ) {
-	$output .= ',"taxonomicStatus":"' . $row->{taxonomic} . '"';
-    }
-    
-    if ( defined $row->{nomenclatural} ) {
-	$output .= ',"nomenclaturalStatus":"' . $row->{nomenclatural} . '"';
-    }
-    
-    if ( defined $row->{nom_code} ) {
-	$output .= ',"nomenclaturalCode":"' . $row->{nom_code} . '"';
-    }
-    
-    if ( defined $row->{accepted_no} ) {
-	$output .= ',"acceptedNameUsageID":"' . $row->{accepted_no} . '"';
-    }
-    
-    if ( defined $row->{accepted_name} ) {
-	$output .= ',"acceptedNameUsage":"' . DataQuery::json_clean($row->{accepted_name}) . '"';
-    }
-    
-    if ( defined $row->{pubref} )
-    {
-	$output .= ',"namePublishedIn":"' . DataQuery::json_clean($row->{pubref}) . '"';
-    }
-    
-    if ( defined $row->{common_name} ne '' && $row->{common_name} ne '' ) {
-	$output .= ',"vernacularName":"' . DataQuery::json_clean($row->{common_name}) . '"';
-    }
-    
-    if ( defined $row->{extant} and $row->{extant} =~ /(yes|no)/i ) {
-	$output .= ',"extant":"' . $1 . '"';
-    }
-    
-    if ( defined $row->{firstapp_min} )
-    {
-	$output .= ',"firstAppearanceMin":"' . $row->{firstapp_min} . '"';
-	$output .= ',"firstAppearanceMinMa":"' . $row->{firstapp_min_ma} . '"';
-    }
-    
-    if ( defined $row->{firstapp_max} )
-    {
-	$output .= ',"firstAppearanceMax":"' . $row->{firstapp_max} . '"';
-	$output .= ',"firstAppearanceMaxMa":"' . $row->{firstapp_max_ma} . '"';
-    }
-    
-    if ( defined $row->{lastapp} )
-    {
-	$output .= ',"lastAppearance":"' . $row->{lastapp} . '"';
-	$output .= ',"lastAppearanceMa":"' . $row->{lastapp_ma} . '"';
-    }
-    
-    if ( defined $row->{lastapp_min} )
-    {
-	$output .= ',"lastAppearanceMin":"' . $row->{lastapp_min} . '"';
-	$output .= ',"lastAppearanceMinMa":"' . $row->{lastapp_min_ma} . '"';
-    }
-    
-    if ( defined $row->{lastapp_max} )
-    {
-	$output .= ',"lastAppearanceMin":"' . $row->{lastapp_max} . '"';
-	$output .= ',"lastAppearanceMinMa":"' . $row->{lastapp_max_ma} . '"';
-    }
-    
-    if ( defined $row->{firstapp_ncoll} )
-    {
-	$output .= ',"appearanceNColl":"' . $row->{firstapp_ncoll} . '"';
-    }
-    
-    if ( defined $row->{firstapp_agerange} )
-    {
-	$output .= ',"ageRange":"' . $row->{firstapp_agerange} . '"';
-    }
-    
-    if ( defined $row->{firstapp_oldest_gap} )
-    {
-	$output .= ',"oldestGap":"' . $row->{firstapp_oldest_gap} . '"';
-    }
-    
-    if ( defined $parents && ref $parents eq 'ARRAY' )
-    {
-	my $is_first_parent = 1;
-	$output .= ',"ancestors":[';
-	
-	foreach my $parent_row ( @{$self->{parents}} )
-	{
-	    $output .= ( $is_first_parent ? "\n" : "\n," );
-	    $output .= $self->emitTaxonJSON($parent_row);
-	    $is_first_parent = 0;
-	}
-	
-	$output .= ']';
-    }
-    
-    $output .= "}";
-    return $output;
-}
-
-
-# formatAuthorName ( author1last, author2last, otherauthors, pubyr, orig_no )
-# 
-# Format the given info into a single string that can be output as the
-# attribution of a taxon.
-
-sub formatAuthorName {
-    
-    no warnings;
-    
-    my ($author1last, $author2last, $otherauthors, $pubyr) = @_;
-    
-    my $a1 = defined $author1last ? $author1last : '';
-    my $a2 = defined $author2last ? $author2last : '';
-    
-    $a1 =~ s/( Jr)|( III)|( II)//;
-    $a1 =~ s/\.$//;
-    $a1 =~ s/,$//;
-    $a1 =~ s/\s*$//;
-    $a2 =~ s/( Jr)|( III)|( II)//;
-    $a2 =~ s/\.$//;
-    $a2 =~ s/,$//;
-    $a2 =~ s/\s*$//;
-    
-    my $shortRef = $a1;
-    
-    if ( $otherauthors ne '' ) {
-        $shortRef .= " et al.";
-    } elsif ( $a2 ) {
-        # We have at least 120 refs where the author2last is 'et al.'
-        if ( $a2 !~ /^et al/i ) {
-            $shortRef .= " and $a2";
-        } else {
-            $shortRef .= " et al.";
-        }
-    }
-    if ($pubyr) {
-	$shortRef .= " " . $pubyr;
-    }
-    
-    return $shortRef;
 }
 
 

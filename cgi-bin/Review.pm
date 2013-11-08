@@ -9,9 +9,8 @@ use strict;
 
 # 17-18.1.10 JA
 
-sub displayReviewForm {
-    
-    my ($dbt, $taxonomy, $q, $s, $hbo) = @_;
+sub displayReviewForm	{
+	my ($dbt,$q,$s,$hbo) = @_;
 
 	# enterers may not create pages (sorry)
 	if ( $s->get('enterer') ne $s->get('authorizer') )	{
@@ -53,8 +52,8 @@ sub displayReviewForm {
 
 		# grab taxon name
 		if ( $vars{'taxon_no'} > 0 )	{
-		    my $taxon_info = $taxonomy->getTaxon($vars{'taxon_no'});
-		    $vars{taxon} = $taxon_info->{taxon_name};
+			$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".$vars{'taxon_no'};
+			$vars{'taxon'} = ${$dbt->getData($sql)}[0]->{'taxon_name'};
 		}
 
 		# grab interval name
@@ -132,7 +131,7 @@ sub displayReviewForm {
 
 
 sub processReviewForm	{
-	my ($dbt,$taxonomy,$q,$s,$hbo) = @_;
+	my ($dbt,$q,$s,$hbo) = @_;
 	my $dbh = $dbt->dbh;
 
 	my %vars = $q->Vars();
@@ -141,10 +140,10 @@ sub processReviewForm	{
 
 	my ($taxon_no,$error);
 	if ( $vars{'taxon'} )	{
-	    # assumes you mean the biggest one if there are homonyms
-	    my $taxon_no = $taxonomy->getTaxaByName($vars{taxon}, 
-						{ id => 1, order => 'size.desc' });
-	    # error if taxon not found
+	# assumes you mean the biggest one if there are homonyms
+		$sql = "SELECT a.taxon_no FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name='".$vars{'taxon'}."' ORDER BY rgt-lft DESC LIMIT 1";
+		$taxon_no = ${$dbt->getData($sql)}[0]->{'taxon_no'};
+	# error if taxon not found
 	 	if ( $taxon_no == 0 )	{
 			$error = "WARNING: the taxon name '".$vars{'taxon'}."' doesn't exist in the database!";
 		}
@@ -152,7 +151,7 @@ sub processReviewForm	{
 	}
 
 	if ( $q->param('preview') =~ /y/i )	{
-		showReview($dbt,$taxonomy,$q,$s,$hbo,$error);
+		showReview($dbt,$q,$s,$hbo,$error);
 		return;
 	}
 
@@ -218,7 +217,7 @@ sub processReviewForm	{
 		}
 	}
 
-	showReview($dbt,$taxonomy,$q,$s,$hbo,$error);
+	showReview($dbt,$q,$s,$hbo,$error);
 
 }
 
@@ -257,7 +256,7 @@ sub listReviews	{
 
 
 sub showReview	{
-	my ($dbt,$taxonomy,$q,$s,$hbo,$error) = @_;
+	my ($dbt,$q,$s,$hbo,$error) = @_;
 
 	my %keywords;
 	my @keyword_vars = ('personage','interval','region','taxon');
@@ -331,8 +330,8 @@ sub showReview	{
 			$review->{'interval'} = ${$dbt->getData($sql)}[0]->{'interval_name'};
 		}
 		if ( $review->{'taxon_no'} > 0 )	{
-		    my $taxon_info = $taxonomy->getTaxon($review->{taxon_no});
-		    $review->{'taxon'} = $taxon_info->{'taxon_name'};
+			$sql = "SELECT taxon_name FROM authorities WHERE taxon_no=".$review->{'taxon_no'};
+			$review->{'taxon'} = ${$dbt->getData($sql)}[0]->{'taxon_name'};
 		}
 		for my $k ( @keyword_vars )	{
 			$keywords{$k} = $review->{$k};
@@ -418,11 +417,11 @@ sub showReview	{
 		if ( $goal ne "submit" )	{
 			$isthere = `ls $HTML_DIR$maplink`;
 			if ( $isthere !~ /[A-Za-z]\.[a-z]/ )	{
-				makeMap($dbt,$taxonomy,$q,$s,$hbo,join('_',@tags));
+				makeMap($dbt,$q,$s,$hbo,join('_',@tags));
 				$isthere = `ls $HTML_DIR$maplink`;
 			}
 		} else	{
-			makeMap($dbt,$taxonomy,$q,$s,$hbo,join('_',@tags));
+			makeMap($dbt,$q,$s,$hbo,join('_',@tags));
 			$isthere = `ls $HTML_DIR$maplink`;
 		}
 		if ( $isthere =~ /[A-Za-z]\.[a-z]/ )	{
@@ -566,7 +565,7 @@ sub insertImage	{
 }
 
 sub makeMap	{
-	my ($dbt,$taxonomy,$q,$s,$hbo,$maplink) = @_;
+	my ($dbt,$q,$s,$hbo,$maplink) = @_;
 
 
 	# everything left must be cleaned up
@@ -583,9 +582,8 @@ sub makeMap	{
 	$unmatched{$_}++ foreach @tags;
 
 	# taxon names take precedence because they are common
-	
-	my @matches = $taxonomy->getTaxaByName(\%unmatched,
-					{ fields => 'lft', order => 'size.desc' });
+	my $sql = "SELECT a.taxon_no,taxon_name,lft,rgt FROM authorities a,$TAXA_TREE_CACHE t WHERE a.taxon_no=t.taxon_no AND taxon_name IN ('". join("','",keys %unmatched) ."') ORDER BY rgt-lft DESC";
+	my @matches = @{$dbt->getData($sql)};
 	my %seen;
 	if ( @matches )	{
 		# need to remove duplicates by hand (oh well)
@@ -600,12 +598,14 @@ sub makeMap	{
 				delete $unmatched{$m->{'taxon_name'}};
 			}
 		}
-		my @in_list = $taxonomy->getTaxa('all_children', $taxon, { id => 1 });
+		my @in_list;
+		$sql = "SELECT taxon_no FROM $TAXA_TREE_CACHE WHERE lft>=".$taxon->{'lft'}." AND rgt<=".$taxon->{'rgt'};
+		push @in_list , $_->{'taxon_no'} foreach @{$dbt->getData($sql)};
 		$options{'taxon_list'} = \@in_list;
 	}
 
 	# interval names are the next best guess (and fast to search)
-	my $sql = "SELECT interval_no,interval_name FROM intervals WHERE interval_name IN ('". join("','",keys %unmatched) ."')";
+	$sql = "SELECT interval_no,interval_name FROM intervals WHERE interval_name IN ('". join("','",keys %unmatched) ."')";
 	@matches = @{$dbt->getData($sql)};
 	%seen = ();
 	for my $m ( @matches )	{
@@ -667,7 +667,7 @@ sub makeMap	{
 		print "<center><p class=\"small\" style=\"margin-bottom: 2em;\">WARNING: ".join("; ",@errors)."</p></center>\n\n";
 	}
 	require Map;
-	my $m = Map->new($dbt, $taxonomy, $q, $s);
+	my $m = Map->new($q,$dbt,$s);
 	my ($map_html_path,$errors,$warnings) = $m->buildMap('dataSet'=>$colls);
 
 	my $count = `cat $HTML_DIR/public/maps/gifcount`;

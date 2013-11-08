@@ -1,0 +1,11 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This path returns information about taxonomic names stored in the Paleobiology
+Database, selected according to their relationship with one or more base taxa.
+
+<% PROCESS params %>
+
+<% PROCESS response %>
+

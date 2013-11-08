@@ -2,25 +2,19 @@ package Download;
 
 use PBDBUtil;
 use TimeLookup;
-use Taxonomy;
+use TaxonInfo;
 use Validation;
 use Ecology;
+use Taxon;
 use DBTransactionManager;
-use Taxonomy;
-use Person;
-use Measurement;
+use TaxaCache;
 use Reference;
-use Text::CSV_XS;
 use URI::Escape;
 use Mail::Mailer;
 use Class::Date(now);
-use Constants qw($READ_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE);
+use Constants qw($READ_URL $HTML_DIR $DATA_DIR $TAXA_TREE_CACHE $TAXA_LIST_CACHE);
 
 use strict;
-
-use CGI::Carp;
-use Data::Dumper;
-
 
 # Flags and constants
 my $DEBUG=0;
@@ -45,6 +39,7 @@ my @continents = ('North America','South America','Europe','Africa','Antarctica'
 my @paleocontinents = ('paleo Africa','paleo Antarctica','Arabia','paleo Australia','Baltica','Barentsia','Caribbean','Cimmeria','Costa Rica-Panama','Eastern Avalonia','Eastern USA','India','Japan','Kazakhstania','Laurentia','New Zealand','North Britain','North China','Precordillera','Shan-Thai','Siberia','paleo South America','South China','Southern Europe','Stikinia','Western Avalonia','Wrangellia','Yucatan');
 my (@checkedcontinents,@uncheckedcontinents,@checkedpaleocontinents);
 my @reso_types_group = ('aff.','cf.','ex gr.','new','sensu lato','?','"','informal','other');
+my (%parents,%subgenus,%extant,%name,%rank,%spelling,%synonym,%nomen);
 
 my $OUT_HTTP_DIR = "/public/downloads";
 my $OUT_FILE_DIR = $HTML_DIR.$OUT_HTTP_DIR;
@@ -54,20 +49,8 @@ my $matrix_limit = 5000;
 my $cites = "<div style=\"font-size: 0.75em; text-indent: -1em; margin-left: 1em; padding-left: 2em; padding-right: 2em;\">";
 
 sub new {
-    my ($class,$dbt,$taxonomy,$q,$s,$hbo) = @_;
+    my ($class,$dbt,$q,$s,$hbo) = @_;
     my $dbh = $dbt->dbh;
-    my $sepChar = ',';
-    
-    if($q->param('output_format') =~ /tab/i) {
-        $sepChar = "\t";
-    } 
-    
-    my $csv = Text::CSV_XS->new({
-        'quote_char'  => '"',
-        'escape_char' => '"',
-        'sep_char'    => $sepChar,
-        'binary'      => 1
-    });
 
     my $name = ($s->get("enterer")) ? $s->get("enterer") : $q->param("yourname");
     my $filename = PBDBUtil::getFilename($name);
@@ -77,13 +60,11 @@ sub new {
 
     my $self = {'dbh'=>$dbh,
                 'dbt'=>$dbt,
-		'taxonomy'=>$taxonomy,
                 'q'=>$q,
                 't'=>$t,
                 'p'=>$p,
                 's'=>$s,
                 'hbo'=>$hbo, 
-                'csv'=>$csv, 
                 'setup_query_fields_called'=>0,
                 'filename'=>$filename};
     bless $self, $class;
@@ -228,7 +209,9 @@ sub buildDownload {
             $vars{'keywords'} = "KW ";
             $vars{'keywords'} .= ( $q->param($_) ) ? $q->param($_)."<br>" : "" foreach ('max_interval_name','min_interval_name','taxon_name');
         }
-        $vars{'major_contributor_list'} .= sprintf "<li>$first{$_} $last{$_} (%.1f%%)</li>\n",$byauth{$_} foreach @authnos;
+        $vars{'major_contributor_list'} .= sprintf "<li>$first{$_} $last{$_} (%d hours = %.1f%%)</li>\n",$byauth{$_} * $hours / 100,$byauth{$_} foreach @authnos;
+	# only print "authorized" for the first contributor
+	$vars{'major_contributor_list'} =~ s/ hours / hours authorized /;
         my $interval = ( $q->param('max_interval_name') ) ? " ".$q->param('max_interval_name') : "";
         $interval .= ( $q->param('min_interval_name') ) ? " to ".$q->param('min_interval_name') : "";
         $vars{'title'} = ( $q->param('taxon_name') ) ? "Taxonomic occurrences of$interval ".$q->param('taxon_name') : "Taxonomic occurrences";
@@ -397,19 +380,25 @@ sub checkInput {
         push @errors , "You must pull down a 'Download only the following' value if you want to use this option";
     }
     
-    if (@errors) {
-        my $errorString = "<li>" . join('<li>',@errors);
-        $q->param('error_message' => $errorString );
-        if ( $q->param('form_type') eq "full" )	{
-            main::displayDownloadForm();
-        } else	{
-            main::displayBasicDownloadForm();
-        }
+    if ( @errors )	{
+        errors($q,\@errors);
         return 0;
-    } 
+    }
     return 1;
 }
 
+# pulled out for reuse by queryDatabase JA 31.5.12
+sub errors	{
+    my ($q,$errors) = @_;
+    my $errorString = "<li>" . join('</li><li>',@$errors) . "</li>";
+    $q->param( 'error_message' => $errorString );
+    if ( $q->param('form_type') eq "full" )	{
+        main::displayDownloadForm();
+    } else	{
+        main::displayBasicDownloadForm();
+    }
+    return;
+}
 
 # Prints out the options which the user selected in summary form.
 sub retellOptions {
@@ -600,7 +589,7 @@ sub retellOptions {
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("occurrence_count_qualifier")." than",$q->param("occurrence_count")." occurrences") if (int($q->param("occurrence_count")));
     $html .= $self->retellOptionsRow ( "Exclude collections with ".$q->param("abundance_count_qualifier")." than",$q->param("abundance_count")." specimens/individuals") if (int($q->param("abundance_count")));
 
-    if ($q->param('output_data') =~ /occurrence|genera|species/) {
+    if ($q->param('output_data') =~ /occurrence|taxonomic.list/) {
         $html .= $self->retellOptionsRow ( "Lump occurrences of same genus of same collection?","yes") if ($q->param('lump_genera') eq 'YES');
         $html .= $self->retellOptionsRow ( "Replace genus names with subgenus names?","yes") if ($q->param("split_subgenera") eq 'YES');
         $html .= $self->retellOptionsRow ( "Replace names with reidentifications?","no") if ($q->param('repace_with_reid') eq 'NO');
@@ -651,7 +640,7 @@ sub retellOptions {
         if ($q->param('output_data') =~ /occurrence/) {
             foreach my $field ( @occTaxonFieldNames) {
                 if( $q->param ( "occurrences_".$field ) ){ 
-                    if ($field =~ /parent_name|family_name|order_name|class_name/) {
+                    if ($field =~ /(class|order|family|parent)_name/) {
                         push ( @occFields, $field );
                     } else {
                         push ( @occFields, "occurrences_".$field ); 
@@ -673,13 +662,14 @@ sub retellOptions {
                     push ( @occFields, "original_".$field ); 
                 }
             }
-        } elsif ($q->param('output_data') eq 'genera') {
+        } elsif ($q->param('output_data') =~ /taxonomic_list/ && $q->param('taxonomic_level') =~ /genus/) {
             push @occFields, 'genus_name';
-        } elsif ($q->param('output_data') eq 'species') {
+        } elsif ($q->param('output_data') =~ /taxonomic_list/) {
             push @occFields, 'genus_name';
             push @occFields, 'subgenus_name' if ($q->param('occurrences_subgenus_name'));
             push @occFields, 'species_name';
         }
+        push @occFields, 'extant' if ($q->param('occurrences_extant'));
 
         push @occFields, ('author1init','author1last') if ($q->param('occurrences_first_author'));
         push @occFields, ('author2init','author2last') if ($q->param('occurrences_second_author'));
@@ -690,7 +680,6 @@ sub retellOptions {
         push @occFields, 'type_body_part' if ($q->param('occurrences_type_body_part'));
         push @occFields, 'type_locality' if ($q->param('occurrences_type_locality'));
         push @occFields, 'form_taxon' if ($q->param('occurrences_form_taxon'));
-        push @occFields, 'extant' if ($q->param('occurrences_extant'));
         push @occFields, 'common_name' if ($q->param('occurrences_common_name'));
 
         if (@occFields) {
@@ -1245,9 +1234,6 @@ sub getLithologyString    {
     return $lith_sql;
 }
 
-# A bad thing about this, and the lithology checkboxes: 
-# they don't add up right now, there are environment/lithologies that don't go into any
-# of the categories, so the 4 checkboxes checked individually don't add up to all four check boxes checked (fetch all).
 sub getEnvironmentString{
     my $self = shift;
     my $q = $self->{'q'};
@@ -1256,7 +1242,7 @@ sub getEnvironmentString{
 
     # ignore zone fields if only terrestrial plus all four terrestrial zones
     #  are unchecked, regardless of unknown JA 15.12.08
-    if ( $q->param("environment_carbonate") && $q->param("environment_siliciclastic") && ! $q->param("environment_terrestrial") && ! $q->param("zone_lacustrine") && ! $q->param("zone_fluvial") && ! $q->param("zone_karst") && ! $q->param("zone_other_terrestrial") && $q->param("zone_marginal_marine") && $q->param("zone_reef") && $q->param("zone_shallow_subtidal") && $q->param("zone_deep_subtidal") && $q->param("zone_offshore") && $q->param("zone_slope_basin") ) {
+    if ( $q->param("environment_carbonate") && $q->param("environment_siliciclastic") && ! $q->param("environment_terrestrial") && ! $q->param("zone_lacustrine") && ! $q->param("zone_fluvial") && ! $q->param("zone_karst") && ! $q->param("zone_other_terrestrial") && $q->param("zone_marginal_marine") && $q->param("zone_reef") && $q->param("zone_shallow_subtidal") && $q->param("zone_deep_subtidal") && $q->param("zone_offshore") && $q->param("zone_slope_basin") && $q->param("zone_unknown") ) {
         $q->param("zone_lacustrine" => "YES");
         $q->param("zone_fluvial" => "YES");
         $q->param("zone_karst" => "YES");
@@ -1264,13 +1250,14 @@ sub getEnvironmentString{
     }
 
     # likewise with marine environments, regardless of unknown
-    if ( ! $q->param("environment_carbonate") && ! $q->param("environment_siliciclastic") && $q->param("environment_terrestrial") && $q->param("zone_lacustrine") && $q->param("zone_fluvial") && $q->param("zone_karst") && $q->param("zone_other_terrestrial") && ! $q->param("zone_marginal_marine") && ! $q->param("zone_reef") && ! $q->param("zone_shallow_subtidal") && ! $q->param("zone_deep_subtidal") && ! $q->param("zone_offshore") && ! $q->param("zone_slope_basin") ) {
+    if ( ! $q->param("environment_carbonate") && ! $q->param("environment_siliciclastic") && $q->param("environment_terrestrial") && $q->param("zone_lacustrine") && $q->param("zone_fluvial") && $q->param("zone_karst") && $q->param("zone_other_terrestrial") && ! $q->param("zone_marginal_marine") && ! $q->param("zone_reef") && ! $q->param("zone_shallow_subtidal") && ! $q->param("zone_deep_subtidal") && ! $q->param("zone_offshore") && ! $q->param("zone_slope_basin") && ! $q->param("zone_unknown") ) {
         $q->param("zone_marginal_marine" => "YES");
         $q->param("zone_reef" => "YES");
         $q->param("zone_shallow_subtidal" => "YES");
         $q->param("zone_deep_subtidal" => "YES");
         $q->param("zone_offshore" => "YES");
         $q->param("zone_slope_basin" => "YES");
+        $q->param("zone_unknown" => "YES");
     }
 
     my $env_sql = '';
@@ -1297,8 +1284,7 @@ sub getEnvironmentString{
             return qq| c.environment IN ($environment)|;
         }
     } else {
-        if (! $q->param("environment_carbonate") || ! $q->param("environment_siliciclastic") || 
-        ! $q->param("environment_terrestrial") || ! $q->param("environment_unknown") )	{
+        if (! $q->param("environment_carbonate") || ! $q->param("environment_siliciclastic") || ! $q->param("environment_terrestrial"))	{
             my $carbonate_str = join(",", map {"'".$_."'"} $hbo->getList('environment_carbonate'));
             my $siliciclastic_str = join(",", map {"'".$_."'"} $hbo->getList('environment_siliciclastic'));
             my $terrestrial_str = join(",", map {"'".$_."'"} $hbo->getList('environment_terrestrial'));
@@ -1314,23 +1300,20 @@ sub getEnvironmentString{
             if ( $q->param("environment_terrestrial") ) {
                 $env_sql .= " OR c.environment IN ($terrestrial_str)";
             }
-            if ( $q->param("environment_unknown")) {
-                $env_sql .= " OR c.environment = '' OR c.environment IS NULL"; 
-            }
             $env_sql =~ s/^ OR//;
             if ($env_sql) {
                 $env_sql = '('.$env_sql.')';
             }
         }
-        if ( ! $q->param("zone_lacustrine") || ! $q->param("zone_fluvial") || ! $q->param("zone_karst") || ! $q->param("zone_other_terrestrial") || ! $q->param("zone_marginal_marine") || ! $q->param("zone_reef") || ! $q->param("zone_shallow_subtidal") || ! $q->param("zone_deep_subtidal") || ! $q->param("zone_offshore") || ! $q->param("zone_slope_basin") ) {
+        if ( ! $q->param("zone_lacustrine") || ! $q->param("zone_fluvial") || ! $q->param("zone_karst") || ! $q->param("zone_other_terrestrial") || ! $q->param("zone_marginal_marine") || ! $q->param("zone_reef") || ! $q->param("zone_shallow_subtidal") || ! $q->param("zone_deep_subtidal") || ! $q->param("zone_offshore") || ! $q->param("zone_slope_basin") || ! $q->param("zone_unknown") ) {
             my @lists;
             my $zone_sql = " c.environment IN (";
-            for my $z ( 'lacustrine','fluvial','karst','other_terrestrial','marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin' )	{
+            for my $z ( 'lacustrine','fluvial','karst','other_terrestrial','marginal_marine','reef','shallow_subtidal','deep_subtidal','offshore','slope_basin','unknown' )	{
                 if ( $q->param("zone_".$z) )	{
                     push @lists , join(",", map {"'".$_."'"} $hbo->getList('zone_'.$z));
                 }
             }
-            if ( $q->param("zone_marginal_marine") && $q->param("zone_reef") && $q->param("zone_shallow_subtidal") && $q->param("zone_deep_subtidal") && $q->param("zone_offshore") && $q->param("zone_slope_basin") )	{
+            if ( $q->param("zone_marginal_marine") && $q->param("zone_reef") && $q->param("zone_shallow_subtidal") && $q->param("zone_deep_subtidal") && $q->param("zone_offshore") && $q->param("zone_slope_basin") && ! $q->param("zone_unknown") )	{
                 push @lists , "'coastal indet.','deltaic indet.'";
             }
             if ( @lists )	{
@@ -1347,6 +1330,12 @@ sub getEnvironmentString{
         }
    }
 
+    # whoops, clause needs to be at the end JA 15.4.13
+    if ( $q->param("environment_unknown") && $env_sql ) {
+        $env_sql = "($env_sql OR c.environment = '' OR c.environment IS NULL)"; 
+    } elsif ( ! $q->param("environment_carbonate") && ! $q->param("environment_siliciclastic") && ! $q->param("environment_terrestrial") && $q->param("environment_unknown") ) {
+        $env_sql = "(c.environment = '' OR c.environment IS NULL)"; 
+    }
     return $env_sql;
 }
 
@@ -1379,7 +1368,7 @@ sub getGeogscaleString{
         if ( $geogscales )    {
             $geogscales = qq| c.geogscale IN ($geogscales) |;
             if ( $q->param('geogscale_unknown')) {
-                $geogscales = " (".$geogscales."OR c.geog`scale IS NULL)";
+                $geogscales = " (".$geogscales."OR c.geogscale IS NULL)";
             }
         }
     }
@@ -1621,8 +1610,13 @@ sub getOccurrencesWhereClause {
     }
     if ($plantOrganFieldCount != 0 && $plantOrganFieldCount != scalar(@plantOrganFieldNames)) {
         my $plant_organs = join(",", @includedPlantOrgans);
-        push @occ_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
-        push @reid_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
+        if ( $q->param('plant_organ_unassigned') eq 'YES' )	{
+            push @occ_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs) OR (o.plant_organ IS NULL AND o.plant_organ2 IS NULL))";
+            push @reid_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs) OR (o.plant_organ IS NULL AND o.plant_organ2 IS NULL))";
+        } else	{
+            push @occ_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
+            push @reid_where, "(o.plant_organ IN ($plant_organs) OR o.plant_organ2 IN ($plant_organs))";
+        }
     }  
 
 # I'm not sure this is going to work if reidentifications are not used
@@ -1821,20 +1815,129 @@ sub getSubsetString {
     return $str;
 }
 
+# JA 29-31.5.13
+# replaces a long section of code that used to be towards the end of
+#  queryDatabase
+# returns name, rank, senior synonym, current spelling, parents, and extant for
+#  all taxa appearing in the occurrences
+# this function is quite fast, and most of the hangtime in downloads is actually
+#  related to the main occurrence table query
+sub fastClassificationLookups	{
+	my ($dbt,$include_taxa,$subtaxa) = @_;
+	my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$include_taxa);
+
+	my %used;
+	$used{$_}++ foreach @$subtaxa;
+
+	# get the spellings and senior synonyms first
+	my @tree_info = @{$dbt->getData("SELECT taxon_no,spelling_no,synonym_no FROM $TAXA_TREE_CACHE WHERE taxon_no IN (".join(',',keys %used).")")};
+	for my $t ( @tree_info )	{
+		$synonym{$t->{$_}} = $t->{synonym_no} foreach ('taxon_no','spelling_no','synonym_no');
+		$spelling{$t->{$_}} = $t->{spelling_no} foreach ('taxon_no','spelling_no');
+		$spelling{$t->{synonym_no}} = $t->{synonym_no};
+		$used{$t->{spelling_no}}++;
+		$used{$t->{synonym_no}}++;
+	}
+
+	# get basic info for all used taxa including their current spellings and
+	#  senior synonyms
+	my @all_subtaxa = @{$dbt->getData("SELECT taxon_no,taxon_name,taxon_rank,extant FROM authorities WHERE taxon_no IN (".join(',',keys %used).")")};
+	for my $s ( @all_subtaxa )	{
+		$name{$s->{taxon_no}} = $s->{taxon_name};
+		$rank{$s->{taxon_no}} = $s->{taxon_rank};
+		$extant{$s->{taxon_no}} = $s->{extant};
+		if ( $rank{$s->{taxon_no}} =~ /^(class|order|family|genus|subgenus)$/ )	{
+			$parents{$s->{taxon_no}}{$s->{taxon_rank}} = $s->{taxon_no};
+		}
+	}
+
+	# get all the parents at ranks of interest
+	# this will override bogus parent-of-self values for invalid names
+	#  that were just computed above
+	# the lowest-ranking family (or whatever) will be kept if there are
+	#  nested parents of the same rank because the parents are checked
+	#  from highest to lowest
+	delete $used{''};
+	my @parent_child = @{$dbt->getData("SELECT taxon_name,taxon_rank,parent_no,child_no FROM authorities a,$TAXA_LIST_CACHE l WHERE taxon_no=parent_no AND child_no IN (".join(',',keys %used).") AND taxon_rank IN ('class','order','family','genus','subgenus') AND child_no!=parent_no")};
+	$parents{$_->{child_no}}{$_->{taxon_rank}} = $_->{parent_no} foreach @parent_child;
+	my %used_anywhere = %used;
+	for my $p ( @parent_child )	{
+		my $no = $p->{parent_no};
+		$name{$no} = $p->{taxon_name};
+		$rank{$no} = $p->{taxon_rank};
+		$used_anywhere{$no}++;
+	}
+
+	# an entirely different method is needed to get immediate parents
+	my @immediates = @{$dbt->getData("SELECT taxon_name,taxon_rank,a.taxon_no parent_no,t.taxon_no child_no,status FROM authorities a,$TAXA_TREE_CACHE t,opinions o WHERE a.taxon_no=parent_spelling_no AND t.opinion_no=o.opinion_no AND t.taxon_no IN (".join(',',keys %used).")")};
+	for my $p ( @immediates )	{
+		my $no = $p->{parent_no};
+		$name{$no} = $p->{taxon_name};
+		$rank{$no} = $p->{taxon_rank};
+		$used_anywhere{$no}++;
+		$parents{$p->{child_no}}{'immediate'} = $no;
+		# nomina dubia etc. have to be tracked because their species
+		#  names shouldn't be salvaged later on JA 10.6.13
+		if ( $p->{status} =~ /nomen/ )	{
+			$nomen{$p->{child_no}}++;
+		}
+	}
+
+	# record stripped subgenus names if relevant
+	for my $no ( keys %used )	{
+		if ( $parents{$no}{'subgenus'} )	{
+			$subgenus{$no} = $name{$parents{$no}{'subgenus'}};
+			$subgenus{$no} =~ s/[A-Z][a-z]* \(//;
+			$subgenus{$no} =~ s/\)//;
+			# the subgenus of a subgenus is itself (just in case)
+			$subgenus{$parents{$no}{'subgenus'}} = $subgenus{$no};
+		}
+	}
+
+	# if the full name of a "valid" species is inconsistent with the valid
+	#  genus or subgenus then something is wrong and this module should
+	#  treat it as invalid and equivalent to the genus
+	# most of these cases involve molluscan species that have most
+	#  recently been assigned to a "genus" that itself is now treated as
+	#  subgenus; if so, then the species' status hasn't been looked into and
+	#  its correct Latin gender can't be determined
+	for my $no ( keys %used )	{
+		my $sen = $synonym{$no};
+		if ( $rank{$sen} =~ /species/ )	{
+			my ($g,$sg,$s,$ss) = Taxon::splitTaxon($name{$sen});
+			if ( $g ne $name{$parents{$sen}{'genus'}} || ( $g." (".$sg.")" ne $name{$parents{$sen}{'subgenus'}} && $name{$parents{$sen}{'subgenus'}} ) )	{
+				$synonym{$no} = $parents{$no}{'genus'};
+				$spelling{$no} = $parents{$no}{'genus'};
+				delete $subgenus{$no};
+			}
+		}
+	}
+
+	# determine extant values for parents at ranks of interest
+	my @extants = @{$dbt->getData("SELECT parent_no FROM authorities a,authorities a2,$TAXA_LIST_CACHE l WHERE a.taxon_no=parent_no AND a2.taxon_no=child_no AND child_no IN (".join(',',keys %used_anywhere).") AND a2.extant='yes' AND a.taxon_rank IN ('class','order','family','genus','subgenus','species','subspecies') AND child_no!=parent_no GROUP BY parent_no")};
+	$extant{$_->{parent_no}} = 'yes' foreach @extants;
+	delete $extant{''};
+
+	# likewise for focal taxa based on their children
+	my @extants = @{$dbt->getData("SELECT parent_no FROM authorities a,authorities a2,$TAXA_LIST_CACHE l WHERE a.taxon_no=parent_no AND a2.taxon_no=child_no AND parent_no IN (".join(',',keys %used).") AND a2.extant='yes' AND child_no!=parent_no GROUP BY parent_no")};
+	$extant{$_->{parent_no}} = 'yes' foreach @extants;
+	delete $extant{''};
+
+	return;
+}
+
 
 # Assembles and executes the query.  Does a join between the occurrences and
 # collections tables, filters the results against the appropriate 
 # cgi-bin/data/classdata/ file if necessary, does another select for all fields
 # from the refs table for any as-yet-unqueried ref, and writes out the data.
 sub queryDatabase {
-    
     my $self = shift;
     my $q = $self->{'q'};
     my $p = $self->{'p'}; #Permissions object
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
-    my $taxonomy = $self->{'taxonomy'};
-    
+
     if ( $q->param('occurrences_abund') )	{
         $q->param('occurrences_abund_value' => 'YES');
         $q->param('occurrences_abund_unit' => 'YES');
@@ -1849,7 +1952,6 @@ sub queryDatabase {
     ###########################################################################
 
     my (@fields,@where,@occ_where,@reid_where,$taxon_where,@tables,@from,@groupby,@left_joins);
-
 
     @fields = ('c.authorizer_no','c.authorizer AS `c.authorizer`','c.license','c.reference_no','c.collection_no','c.research_group','c.access_level',"DATE_FORMAT(c.release_date, '%Y%m%d') rd_short",'CONCAT(c.enterer_no," ",TO_DAYS(c.created),HOUR(c.created)) AS personhour','c.upload');
     @tables = ('collections c');
@@ -1901,12 +2003,12 @@ sub queryDatabase {
     # We'll want to join with the reid ids if we're hitting the occurrences table,
     # or if we're getting collections and filtering using the taxon_no in the occurrences table
     # or excluding collections based on occurrence or abundance counts
-    my $join_reids = ($q->param('output_data') =~ /occurrence|genera|species/ || $q->param('taxon_name') || $q->param('exclude_taxon_name') || $q->param('occurrence_count') || $q->param('abundance_count')) ? 1 : 0;
+    my $join_reids = ($q->param('output_data') =~ /occurrence|taxonomic.list/ || $q->param('taxon_name') || $q->param('exclude_taxon_name') || $q->param('occurrence_count') || $q->param('abundance_count')) ? 1 : 0;
     if ($join_reids) {
         push @tables, 'occurrences o';
         unshift @where, 'c.collection_no = o.collection_no';
 
-        if ($q->param('output_data') =~ /occurrence|genera|species/) {
+        if ($q->param('output_data') =~ /occurrence|taxonomic.list/) {
             push @fields, 'o.occurrence_no AS `o.occurrence_no`', 
                        'o.reference_no AS `o.reference_no`', 
                        'o.genus_reso AS `o.genus_reso`', 
@@ -2012,7 +2114,7 @@ sub queryDatabase {
     # This is important: don't group by genus_name for the obvious cases, 
     # Do the grouping in PERL, since otherwise we can't get a list of references
     # nor can we filter out old reids and rows that don't pass permissions.
-    if ( $q->param('output_data') =~ /genera|species|occurrence/ )    {
+    if ( $q->param('output_data') =~ /occurrence|taxonomic.list/ )    {
         if ( $q->param('replace_with_reid') ne 'NO' )   {
             push @groupby, 'o.occurrence_no,re.reid_no';
         } else {
@@ -2030,7 +2132,7 @@ sub queryDatabase {
         push @form_errors, "No valid search terms were entered.";
     }
 
-    
+
     # Assemble the final SQL
     my $sql;
     if ($join_reids) {
@@ -2096,10 +2198,7 @@ sub queryDatabase {
         $sql .= " ORDER BY collection_no";
     }
 
-    $self->dbg("<b>Occurrences query:</b><br>\n$sql<br>");
-
     if (@form_errors) {
-#        print Debug::printErrors(\@form_errors);
         return ([],[]);
     } 
 
@@ -2109,7 +2208,7 @@ sub queryDatabase {
     # Changed to use prebuild lookup table PS
     my $time_lookup;
     my @time_fields = ();
-    if ($q->param("output_data") !~ /genera|species/) {
+    if ($q->param("output_data") !~ /taxonomic_list/) {
         push @time_fields, 'period_name' if ($q->param('collections_period'));
         push @time_fields, 'subepoch_name'  if ($q->param('collections_subepoch'));
         push @time_fields, 'epoch_name'  if ($q->param('collections_epoch'));
@@ -2127,7 +2226,7 @@ sub queryDatabase {
     }
 
 	# get the PBDB 10 m.y. bin names for the collections JA 3.3.04
-	if ( ($q->param('collections_10_my_bin') && $q->param("output_data") !~ /genera|species/) || $q->param('compendium_ranges') eq 'NO' ) {
+	if ( ($q->param('collections_10_my_bin') && $q->param("output_data") !~ /taxonomic_list/) || $q->param('compendium_ranges') eq 'NO' ) {
 		push @time_fields, 'ten_my_bin'  if ($q->param('collections_10_my_bin'));
 	}
 	if (@time_fields) {
@@ -2155,11 +2254,8 @@ sub queryDatabase {
     ###########################################################################
 
     my $sth = $dbh->prepare($sql); #|| die $self->dbg("Prepare query failed ($!)<br>");
-
     $sth->execute();
  
-    $self->dbg($sth->rows()." rows returned.<br>");
-
     # See if rows okay by permissions module
     my @dataRows = ( );
     my $limit = 10000000;
@@ -2173,224 +2269,75 @@ sub queryDatabase {
     $p->getReadRows ( $sth, \@dataRows, $limit, \$ofRows );
 
     $sth->finish();
-    $self->dbg("Rows that passed Permissions: number of rows $ofRows, length of dataRows array: ".@dataRows."<br>");
+
+    if ( scalar @dataRows == 0 )	{
+        errors($q,["No matching data records were found"]);
+        return 0;
+    }
 
     ###########################################################################
     #  Tally some data we will need later
     ###########################################################################
 
-    # Create a hash of all unique taxon numbers found.
+    # get as many numbers as possible in case the higher taxon needs
+    #  to be guessed 
     my %all_taxa = ();
-    
     foreach my $row (@dataRows) {
-        if ($row->{'re.taxon_no'}) {
-            $all_taxa{$row->{'re.taxon_no'}} = 1;
-        }
-        if ($row->{'o.taxon_no'}) {
-            $all_taxa{$row->{'o.taxon_no'}} = 1;
+        for my $no ( $row->{'o.taxon_no'},$row->{'re.taxon_no'} )	{
+            if ( $no > 0 )	{
+                $all_taxa{$no} = 1;
+            }
         }
     }
-    
-    # If the user directed that names be replaced by their senior synonyms, do that.
-    
-    my %ss_taxon_no = ();
-    my %ss_taxon_names = ();
-    my %ss_taxon_rank = ();
-    my %misspelling = ();
-    
-    if (@dataRows && %all_taxa && $q->param("replace_with_ss") ne 'NO' &&
-        $q->param('output_data') =~ /occurrence|genera|species/)
-    {
-	my @result_list = $taxonomy->getTaxa('seniors', \%all_taxa, { fields => 'link' });
-	
-	foreach my $row (@result_list)
-	{
-	    $all_taxa{$row->{synonym_no}} = 1;
-	    $ss_taxon_no{$row->{taxon_no}} = $row->{synonym_no};
-	    my @name_bits = $taxonomy->splitTaxonName($row->{taxon_name});
-	    $ss_taxon_names{$row->{taxon_no}} = \@name_bits;
-	    $ss_taxon_rank{$row->{taxon_no}} = $row->{taxon_rank};
-	}
-    }
-    
     my @taxon_nos = keys %all_taxa;
-    my %genus_no;
+
+    # absolutely essential call JA 29.5.13
+    if ( @taxon_nos )	{
+        fastClassificationLookups($dbt,$q->param('taxon_name'),\@taxon_nos);
+    }
+
+    # section moved below the above from above the above because senior
+    #  synonyms need to be classified as well JA 13.8.06
+    foreach my $row (@dataRows) {
+        for my $no ( $row->{'o.taxon_no'},$row->{'re.taxon_no'} )	{
+            if ( $no > 0 )	{
+                if ( $synonym{$no} > 0 )	{
+                    $all_taxa{$synonym{$no}} = 1;
+                }
+                if ( $parents{$no}{'genus'} > 0 )	{
+                    $all_taxa{$parents{$no}{'genus'}} = 1;
+                }
+                if ( $parents{$no}{'subgenus'} > 0 )	{
+                    $all_taxa{$parents{$no}{'subgenus'}} = 1;
+                }
+            }
+        }
+    }
+
+    my @taxon_nos = keys %all_taxa;
 
     # Ecotaph/preservation/parent data
-    my %genus_class;
-    my $master_class;
-    my $ecotaph;
+    my %ecotaph;
     my %all_genera;
     my @preservation = $q->param('preservation');
     my $get_preservation = 0;
-    if (@dataRows && $q->param("output_data") =~ /occurrence|genera|species/)
-    { 
+    if (@dataRows && $q->param("output_data") =~ /occurrence|taxonomic.list/) { 
         if ((@preservation > 0 && @preservation < 3) ||
             $q->param('occurrences_preservation')) {
             $get_preservation = 1;
         }
-	
-        if ( @taxon_nos && ( @ecoFields || $get_preservation ||
-            $q->param("replace_with_ss") ne 'NO' ||
-            $q->param('extant_extinct') =~ /extant|extinct/i ||
-            $q->param("occurrences_class_name") eq "YES" || 
-            $q->param("occurrences_order_name") eq "YES" || 
-            $q->param("occurrences_family_name") eq "YES" ||
-            $q->param("occurrences_parent_name") eq "YES" ||
-            $q->param("occurrences_type_body_part") ||
-            $q->param("occurrences_type_specimen") ||
-            $q->param("occurrences_type_locality") ||
-            $q->param("occurrences_form_taxon") ||
-            $q->param("occurrences_extant") ||
-            $q->param("occurrences_common_name") ||
-            $q->param("occurrences_first_author") eq "YES" ||
-            $q->param("occurrences_second_author") eq "YES" ||
-            $q->param("occurrences_other_authors") eq "YES" ||
-            $q->param("occurrences_year_named") eq "YES" ) )
-	{
-            # Determine all species whose immediate parents are genera
-	    
-	    my %genus_class;
-	    
-	    my @result_list = $taxonomy->getTaxa('parents', \@taxon_nos, 
-						 { rank => 'genus', select => 'spelling' });
-	    
-	    foreach my $row (@result_list)
-	    {
-		my $new_row = { taxon_no => $row->{base_no},
-				opinion_parent_no => $row->{taxon_no},
-				parent_spelling_no => $row->{taxon_no},
-				parent_synonym_no => $row->{synonym_no},
-				parent_name => $row->{taxon_name},
-				parent_rank => $row->{taxon_rank} };
-		
-		$genus_class{$row->{base_no}} = $new_row;
-	    }
-	    
-	    # Then determine all species whose immediate parents are subgenera
-	    
-	    my %subgenus_class;
-	    
-	    @result_list = $taxonomy->getTaxa('parents', \@taxon_nos, 
-					      { rank => 'subgenus', select => 'spelling' });
-	    
-	    foreach my $row (@result_list)
-	    {
-		my $new_row = { taxon_no => $row->{base_no},
-				opinion_parent_no => $row->{taxon_no},
-				parent_spelling_no => $row->{taxon_no},
-				parent_synonym_no => $row->{synonym_no},
-				parent_name => $row->{taxon_name},
-				parent_rank => $row->{taxon_rank} };
-		
-		$subgenus_class{$row->{base_no}} = $new_row;
-	    }
-	    
-            # We need to map subgenera to genera using a proper lookup because
-            # the genus name of a subgenus could be misspelt
-	    
-            my @subgenus_nos = map { $subgenus_class{$_}->{parent_synonym_no} } keys %subgenus_class;
-	    
-            if ( @subgenus_nos )
-	    {
-		@result_list = $taxonomy->getTaxa('parents', \@subgenus_nos, 
-						  { rank => 'genus', select => 'spelling' });
-		
-		foreach my $row (@result_list)
-		{
-		    my $new_row = { taxon_no => $row->{base_no},
-				    opinion_parent_no => $row->{taxon_no},
-				    parent_spelling_no => $row->{taxon_no},
-				    parent_synonym_no => $row->{synonym_no},
-				    parent_name => $row->{taxon_name},
-				    parent_rank => $row->{taxon_rank} };
-		    
-		    $genus_class{$row->{base_no}} = $new_row;
-		}
-		
-		# more importantly, here we figure out the genus of each species
-		# now placed in a subgenus
-		
-                $genus_class{$_} = $genus_class{$subgenus_class{$_}->{'parent_synonym_no'}}
-		    foreach keys %subgenus_class;
-		
-                for my $n ( keys %subgenus_class )     
-		{
-                    $genus_class{$n}->{'taxon_no'} = $n;
-                    $genus_class{$n}->{'opinion_parent_no'} = $subgenus_class{$n}->{'opinion_parent_no'};
-                    $genus_class{$n}->{'subgenus'} = $subgenus_class{$n}->{'parent_name'};
-                    $genus_class{$n}->{'subgenus'} =~ s/[A-Z][a-z]* \(//;
-                    $genus_class{$n}->{'subgenus'} =~ s/\)//;
-                }
-		
-                push @taxon_nos, @subgenus_nos;
-            }
-	    
-            # any species or subgenus currently placed in an invalid genus
-            # is a synonym by definition
-	    
-            for my $no ( keys %genus_class )
-	    {
-                if ( $genus_class{$no}->{'parent_spelling_no'} != $genus_class{$no}->{'parent_synonym_no'} )	{
-                    $ss_taxon_no{$no} = $genus_class{$no}->{'parent_synonym_no'};
-                    push @{$ss_taxon_names{$no}} , $genus_class{$no}->{'parent_name'};
-                    $ss_taxon_rank{$no} = $genus_class{$no}->{'parent_rank'};
-                    $misspelling{$no} = "";
-                }
-            }
-	    
-	    # will need the genus number for figuring out "extant"
-	    
-            my @temp_nos = @taxon_nos;
-	    
-            for my $no ( @taxon_nos )
-	    {
-                if ( $genus_class{$no}->{'parent_synonym_no'} )	{
-                    push @temp_nos , $genus_class{$no}->{'parent_synonym_no'};
-                    $genus_no{$no} = $genus_class{$no}->{'parent_synonym_no'};
-                }
-            }
-	    
-            @taxon_nos = @temp_nos;
-        }
 
-        # get the higher order names associated with each genus name,
-        #   then set the ecotaph values by running up the hierarchy
-	
-        if ( @ecoFields || $get_preservation ||
-            $q->param('extant_extinct') =~ /extant|extinct/i ||
-            $q->param("occurrences_class_name") eq "YES" || 
-            $q->param("occurrences_order_name") eq "YES" || 
-            $q->param("occurrences_family_name") eq "YES" ||
-            $q->param("occurrences_parent_name") eq "YES" ||
-            $q->param('occurrences_extant') =~ /y/i )
-	{
-	    $ecotaph = Ecology::getEcology($dbt, $taxonomy, \@taxon_nos, \@ecoFields, 
-					   { get_preservation => 1 });
-	    
-	    # We also need a hash keyed off of the taxon_no values, with which
-	    # we can follow up the parent chain.  The following call now produces a
-	    # linked-list structure rather than a hash of arrays.  MM 2012-11-18
-	    
-	    $master_class = $taxonomy->getTaxa('all_parents', \@taxon_nos, 
-					       { hash => 'base' });
+        # set the ecotaph values by running up the hierarchy
+        # greatly compacted JA 29.5.13
+        if ( @ecoFields || $get_preservation )	{
+            my %master_class=%{TaxaCache::getParents($dbt,\@taxon_nos,'array_full')};
+            %ecotaph = %{Ecology::getEcology($dbt,\%master_class,\@ecoFields,0,$get_preservation)};
         }
     }
-    
-    # Type specimen numbers, body part, extant, and common name data
-    my %taxon_rank_lookup;
-    my %first_author_lookup;
-    my %second_author_lookup;
-    my %other_authors_lookup;
-    my %year_named_lookup;
-    my %type_specimen_lookup;
-    my %body_part_lookup;
-    my %type_locality_lookup;
-    my %form_taxon_lookup;
-    my %extant_lookup;
-    my %common_name_lookup;
-    if (($q->param('extant_extinct') =~ /extant|extinct/i ||
-        $q->param("occurrences_first_author") ||
+
+    # Type specimen numbers, body part, and common name data
+    my %authority;
+    if (( $q->param("occurrences_first_author") ||
         $q->param("occurrences_second_author") ||
         $q->param("occurrences_other_authors") ||
         $q->param("occurrences_year_named") ||
@@ -2398,57 +2345,47 @@ sub queryDatabase {
         $q->param("occurrences_type_body_part") ||
         $q->param("occurrences_type_locality") ||
         $q->param("occurrences_form_taxon") ||
-        $q->param("occurrences_extant") ||
         $q->param("occurrences_common_name")) &&
-        $q->param('output_data') =~ /occurrence|genera|species/)
-    {
-        if (%all_taxa)
-	{
-	    # you need the data for all taxa with the same current spelling as any
-	    #  taxon in the current data set, i.e., all variant combinations etc.
-	    
-            my @result_list = $taxonomy->getTaxa('spellings', \@taxon_nos, 
-						 { fields => ['attr','specimen'], 
-						   distinct => 1 });
-	    
-            foreach my $row (@result_list)
-	    {
-                my $no = $row->{'taxon_no'};
-                $taxon_rank_lookup{$no} = $row->{'taxon_rank'};
-                if ( $row->{'a_ai1'} )	{
-                    $first_author_lookup{$no} = $row->{'a_ai1'} . " " .$row->{'a_al1'};
-                } else	{
-                    $first_author_lookup{$no} = $row->{'a_al1'};
-                }
-                if ( $row->{'a_ai2'} )	{
-                    $second_author_lookup{$no} = $row->{'a_ai2'} . " " .$row->{'a_al2'};
-                } else	{
-                    $second_author_lookup{$no} = $row->{'a_al2'};
-                }
-                $other_authors_lookup{$no} = $row->{'a_ao'};
-                $year_named_lookup{$no} = $row->{'a_pubyr'};
-                $type_specimen_lookup{$no} = $row->{'type_specimen'};
-                $body_part_lookup{$no} = $row->{'type_body_part'};
-                $type_locality_lookup{$no} = $row->{'type_locality'};
-                $form_taxon_lookup{$no} = $row->{'form_taxon'};
-                $extant_lookup{$no} = $row->{'extant'};
-                $common_name_lookup{$no} = $row->{'common_name'};
+        $q->param('output_data') =~ /occurrence|taxonomic.list/ ) {
+        if (%all_taxa) {
+
+        # you need the data for all taxa with the same current spelling as any
+        #  taxon in the current data set, i.e., all variant combinations etc.
+        # previously done by joining taxa_tree_cache to itself in the call
+        #  below, but this is incredibly inefficient and two hits is faster
+        #  JA 22.5.08
+            my @spelling_nos = ();
+            my $sql = "SELECT DISTINCT spelling_no FROM $TAXA_TREE_CACHE WHERE taxon_no IN (".join(',',@taxon_nos).")";
+            foreach my $row (@{$dbt->getData($sql)}) {
+                push @spelling_nos, $row->{'spelling_no'};
             }
-	    
+
+            my $sql = "SELECT t.taxon_no,if(a.ref_is_authority='YES',r.author1init,a.author1init) a1i,if(a.ref_is_authority='YES',r.author1last,a.author1last) a1l,if(a.ref_is_authority='YES',r.author2init,a.author2init) a2i,if(a.ref_is_authority='YES',r.author2last,a.author2last) a2l,if(a.ref_is_authority='YES',r.otherauthors,a.otherauthors) other_authors,if(a.ref_is_authority='YES',r.pubyr,a.pubyr) year_named,a.type_specimen,a.type_body_part,a.type_locality,a.form_taxon type_form_taxon,a.common_name FROM $TAXA_TREE_CACHE t, authorities a, refs r WHERE t.spelling_no IN (".join(',',@spelling_nos).") AND t.taxon_no=a.taxon_no AND a.reference_no=r.reference_no";
+
+            foreach my $row (@{$dbt->getData($sql)}) {
+                my $no = $row->{'taxon_no'};
+                $authority{$no}{$_} = $row->{$_} foreach ('taxon_no','other_authors','year_named','type_specimen','type_body_part','type_locality','type_form_taxon','common_name');
+                if ( $row->{'a1i'} )	{
+                    $authority{$no}{'first_author'} = $row->{'a1i'} . " " .$row->{'a1l'};
+                } else	{
+                    $authority{$no}{'first_author'} = $row->{'a1l'};
+                }
+                if ( $row->{'a2i'} )	{
+                    $authority{$no}{'second_author'} = $row->{'a2i'} . " " .$row->{'a2l'};
+                } else	{
+                    $authority{$no}{'second_author'} = $row->{'a2l'};
+                }
+            }
             # if the user does not want species names, the occurrence species
             #  name is irrelevant and the occurrence should inherit values for
             #  the genus name
-            if ( $q->param('occurrences_species_name') ne "YES" )	{
-                for my $species_no ( keys %genus_no )	{
-                    $taxon_rank_lookup{$species_no} = $taxon_rank_lookup{$genus_no{$species_no}};
-                    $first_author_lookup{$species_no} = $first_author_lookup{$genus_no{$species_no}};
-                    $second_author_lookup{$species_no} = $second_author_lookup{$genus_no{$species_no}};
-                    $other_authors_lookup{$species_no} = $other_authors_lookup{$genus_no{$species_no}};
-                    $year_named_lookup{$species_no} = $year_named_lookup{$genus_no{$species_no}};
-                    $type_specimen_lookup{$species_no} = $type_specimen_lookup{$genus_no{$species_no}};
-                    $body_part_lookup{$species_no} = $body_part_lookup{$genus_no{$species_no}};
-                    $extant_lookup{$species_no} = $extant_lookup{$genus_no{$species_no}};
-                    $common_name_lookup{$species_no} = $common_name_lookup{$genus_no{$species_no}};
+            # rewritten JA 29.5.13
+            if ( $q->param('taxonomic_level') !~ /species/ )	{
+                my @nos = keys %authority;
+                for my $no ( @nos )	{
+                    if ( $rank{$no} =~ /species/ )	{
+                        $authority{$no} = $authority{$parents{$no}{'genus'}};
+                    }
                 }
             }
         }
@@ -2561,7 +2498,7 @@ sub queryDatabase {
     ###########################################################################
 
     my %occs_by_taxa;
-    if ($q->param('output_data') =~ /occurrence|genera|species/) {
+    if ($q->param('output_data') =~ /occurrence|taxonomic.list/) {
         # Do integer compares is quite a bit faster than q-> calls, so set that up here
         my $replace_with_ss = ($q->param("replace_with_ss") ne 'NO') ? 1 : 0;
         my $replace_with_reid = ($q->param("replace_with_reid") ne 'NO') ? 1 : 0;
@@ -2601,24 +2538,24 @@ sub queryDatabase {
             # even possibly okay names are now checked because of the chaotic
             #  mismatches between occurrence and authority data created by
             #  fuzzy matching of subgenus names JA 20.12.08
-            if ($replace_with_ss && $ss_taxon_no{$row->{'o.taxon_no'}})	{
-                my $no = $ss_taxon_no{$row->{'o.taxon_no'}};
-                my ($genus,$subgenus,$species,$subspecies) = @{$ss_taxon_names{$row->{'o.taxon_no'}}};
+            if ($replace_with_ss && $synonym{$row->{'o.taxon_no'}})	{
+                my $no = $synonym{$row->{'o.taxon_no'}};
+                my ($genus,$subgenus,$species,$subspecies) = Taxon::splitTaxon($name{$synonym{$row->{'o.taxon_no'}}});
                 # genus or subgenus could be wrong if the species' current
                 #  spelling disagrees with the rank of its parent, e.g., it's
                 #  correctly spelled Yus yus but Yus is a subgenus of Xus
                 # case 1: the current genus should be a subgenus
-                if ( $genus eq $genus_class{$no}->{'subgenus'} )	{
-                    $genus = $genus_class{$no}->{'parent_name'};
-                    $subgenus = $genus_class{$no}->{'subgenus'};
+                if ( $genus eq $subgenus{$no} )	{
+                    $subgenus = $genus;
+                    $genus = $name{$parents{$no}{'genus'}};
                 }
                 # case 2: the current subgenus should be a genus
-                elsif ( $subgenus && $subgenus eq $genus_class{$no}->{'parent_name'} )	{
-                    $genus = $genus_class{$no}->{'parent_name'};
+                elsif ( $subgenus && $subgenus eq $name{$parents{$no}{'genus'}} )	{
+                    $genus = $subgenus;
                     $subgenus = "";
                 }
                 # free pass for unclassified species within classified genera
-                if ( ! $species && $row->{'o.species_name'} =~ /^[a-z]*$/ && $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus/ )	{
+                if ( ! $species && $row->{'o.species_name'} =~ /^[a-z]*$/ && $rank{$synonym{$row->{'o.taxon_no'}}} =~ /genus/ && $nomen{$row->{'o.taxon_no'}} == 0 )	{
                     $species = $row->{'o.species_name'};
                 # same for subgenera (certainly don't do this for classified
                 #  species, whose correct subgenera are known)
@@ -2631,13 +2568,13 @@ sub queryDatabase {
                 if ( $rowspecies !~ /^[a-z]*$/ )	{
                     $rowspecies = "";
                 }
-                if ( $q->param('indet') ne 'YES' && ( $row->{'o.genus_reso'} eq "informal" || ( ! $species && $ss_taxon_rank{$row->{'o.taxon_no'}} eq "" ) || ( $ss_taxon_rank{$row->{'o.taxon_no'}} ne "" && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus|species/ ) ) )	{
+                if ( $q->param('indet') ne 'YES' && ( $row->{'o.genus_reso'} eq "informal" || ( ! $species && $rank{$synonym{$row->{'o.taxon_no'}}} eq "" ) || ( $rank{$synonym{$row->{'o.taxon_no'}}} ne "" && $rank{$synonym{$row->{'o.taxon_no'}}} !~ /genus|species/ ) ) )	{
                     next;
 		}
                 if ( $q->param('sp') eq 'NO' && ( ! $species || $row->{'o.species_reso'} eq "informal" ) )	{
                     next;
                 }
-                if ( $genus ne $row->{'o.genus_name'} || $subgenus ne $row->{'o.subgenus_name'} || $species ne $rowspecies || ( $species !~ /indet\./ && $ss_taxon_rank{$row->{'o.taxon_no'}} ne "" && $ss_taxon_rank{$row->{'o.taxon_no'}} !~ /genus|species/ ) )	{
+                if ( $genus ne $row->{'o.genus_name'} || $subgenus ne $row->{'o.subgenus_name'} || $species ne $rowspecies || ( $species !~ /indet\./ && $rank{$synonym{$row->{'o.taxon_no'}}} ne "" && $rank{$synonym{$row->{'o.taxon_no'}}} !~ /genus|species/ ) )	{
                     foreach my $field ('genus_name','subgenus_name','species_name','subspecies_name','genus_reso','subgenus_reso','species_reso','taxon_no')	{
                         if ( ! $row->{'or.'.$field} )	{
                             $row->{'or.'.$field} = $row->{'o.'.$field};
@@ -2648,39 +2585,20 @@ sub queryDatabase {
                         $row->{'o.subgenus_name'} = $subgenus;
                         $row->{'o.species_name'} = $species;
                         $row->{'o.subspecies_name'} = $subspecies;
-                    } elsif ( $ss_taxon_rank{$row->{'o.taxon_no'}} =~ /genus|species/ )	{
+                    } elsif ( $rank{$synonym{$row->{'o.taxon_no'}}} =~ /genus|species/ )	{
                         $row->{'o.subgenus_name'} = $subgenus;
                         $row->{'o.species_name'} = "sp.";
                     } else	{
                         $row->{'o.subgenus_name'} = "";
                         $row->{'o.species_name'} = "indet.";
                     }
-                    if ( ! $misspelling{$row->{'or.taxon_no'}} )	{
+                    if ( $spelling{$row->{'o.taxon_no'}} > 0 && $spelling{$row->{'o.taxon_no'}} != $spelling{$row->{'or.taxon_no'}} )	{
                         $row->{'o.genus_reso'} = "";
                         $row->{'o.subgenus_reso'} = "";
                         $row->{'o.species_reso'} = "";
                     }
                     $row->{'o.taxon_no'} = $no;
                 }
-            }
-
-            # even a valid genus and/or subgenus name may be misspelt!
-            # JA 20.12.08
-            # at this point, species names and resos exist only if both the
-            #  genus and the species are valid, so ignore them
-            my $no = $row->{'o.taxon_no'};
-            if ( $genus_class{$no} && $genus_class{$no}->{'parent_spelling_no'} == $genus_class{$no}->{'parent_synonym_no'} && $genus_class{$no}->{'parent_spelling_no'} != $genus_class{$no}->{'opinion_parent_no'} && $genus_class{$no}->{'parent_name'} ne $row->{'o.genus_name'} )	{
-                if ( ! $row->{'or.genus_name'} )	{
-                    foreach my $field ('genus_name','subgenus_name','species_name','subspecies_name','genus_reso','subgenus_reso','species_reso','taxon_no')	{
-                        $row->{'or.'.$field} = $row->{'o.'.$field};
-                    }
-                }
-                $row->{'o.genus_name'} = $genus_class{$no}->{'parent_name'};
-            }
-
-            # raise subgenera to genus level JA 18.8.04
-            if ( $split_subgenera && $row->{'o.subgenus_name'} ) {
-                $row->{'o.genus_name'} = $row->{'o.subgenus_name'};
             }
 
             # get rid of occurrences of genera either (1) not in the
@@ -2693,13 +2611,13 @@ sub queryDatabase {
             }
 
             if ($get_preservation) {
-                my $preservation = $ecotaph->{$row->{'o.taxon_no'}}{'preservation'};
+                my $preservation = $ecotaph{$row->{'o.taxon_no'}}{'preservation'};
                 if ($preservation eq 'trace') {
                     next unless ($get_ichno);
                 } else {
                     next unless ($get_regular);
                 }
-                if ($ecotaph->{$row->{'o.taxon_no'}}{'form_taxon'} eq 'yes') {
+                if ($ecotaph{$row->{'o.taxon_no'}}{'form_taxon'} eq 'yes') {
                     next unless ($get_form);
                 }
             }
@@ -2721,69 +2639,36 @@ sub queryDatabase {
 
             # "extant" calculations must be done here to allow correct
             #   lumping below
-            if ( ( $q->param('occurrences_extant') || $q->param('extant_extinct') =~ /extant|extinct/i ) && $row->{'o.taxon_no'} > 0 )	{
-                # confusing logic here, badly screwed up before JA 9.1.08
-                # record extant values only in two cases:
-                #  (1) output is species, rank is species, and extant is
-                #   marked for this species name
-                if ( $q->param('occurrences_species_name') =~ /yes/i && $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" && $extant_lookup{$row->{'o.taxon_no'}} =~ /[A-Za-z]/ )	{
-                    $row->{'extant'} = $extant_lookup{$row->{'o.taxon_no'}};
-                #  (2) output is not species, and rank is marked for the
-                #   taxon_no or the parent genus of a species
-                } elsif ( $q->param('occurrences_species_name') !~ /yes/i )	{
-                    $row->{'extant'} = $extant_lookup{$row->{'o.taxon_no'}};
-                    # the genus value needs to override any species value if
-                    #  the species is extinct or unknown but the genus is known,
-                    #   because (1) the occurrence is always "extant" if the
-                    #   genus is, and (2) any genus value should override a
-                    #   missing value
-		    
-		    # Note: this was changed from an array traversal to a
-		    # linked-list traversal.  MM 2012-11-18
-                    if ( $taxon_rank_lookup{$row->{'o.taxon_no'}} =~ "species" && $row->{'extant'} !~ /y/i && $master_class->{$row->{'o.taxon_no'}} )
-		    {
-			my $index_row = $master_class->{$row->{'o.taxon_no'}};
-			while ( $index_row->{parent_taxon_no} > 0 and
-				$index_row->{taxon_rank} =~ /species|subgenus/ )
-			{
-			    $index_row = $master_class->{$index_row->{parent_taxon_no}};
-			}
-			
-			if ( $index_row->{taxon_rank} eq 'genus' )
-			{
-			    if ( $extant_lookup{$index_row->{taxon_no}} )
-			    {
-				$row->{extant} = $extant_lookup{$index_row->{taxon_no}};
-			    }
-			}
-		    }
+            # entirely rewritten JA 29.5.13
+
+            # in most cases the fastClassificationLookups value is fine
+            $row->{'genus_extant'} = $extant{$parents{$row->{'o.taxon_no'}}{'genus'}};
+            if ( $rank{$synonym{$row->{'o.taxon_no'}}} =~ /species/ )	{
+                $row->{'species_extant'} = $extant{$synonym{$row->{'o.taxon_no'}}};
+            }
+
+            # raise subgenera to genus level JA 18.8.04
+            # genus_extant is based on the subgenus if possible 30.5.13 JA
+            # note that the literal content of the subgenus field isn't used
+            #  because the name might be bogus
+            if ( $split_subgenera && $parents{$row->{'o.taxon_no'}}{'subgenus'} ) {
+                $row->{'o.genus_name'} = $subgenus{$parents{$row->{'o.taxon_no'}}{'subgenus'}};
+                if ( $extant{$parents{$row->{'o.taxon_no'}}{'subgenus'}} ne $extant{$parents{$row->{'o.taxon_no'}}{'genus'}} )	{
+                    $row->{'genus_extant'} = $extant{$parents{$row->{'o.taxon_no'}}{'subgenus'}};
                 }
             }
 
-            # get parent extant values if extant values are wanted at all 31.3.11
-            # WARNING: we are taking recorded values at, well, face value even
-            #  though many higher taxa are unmarked because:
-            #  (1) few users actually care about these data,
-            #  (2) most unmarked taxa are in fact extinct, and
-            #  (3) the data are virtually complete for tetrapods, at least
-<<<<<<< HEAD
-	    
-	    # Note: this was changed from an array traversal to a linked-list
-	    # traversal.  MM 2012-11-18
-	    
-            if ( $q->param('occurrences_extant') && $master_class->{$row->{'o.taxon_no'}})
-	    {
-		my $index_row = $master_class->{$row->{'o.taxon_no'}};
-		while ( $index_row->{parent_taxon_no} > 0 )
-		{
-		    $index_row = $master_class->{$index_row->{parent_taxon_no}};
-                    $row->{'o.family_extant'} = $index_row->{extant} if ( $index_row->{taxon_rank} eq "family" );
-                    $row->{'o.order_extant'} = $index_row->{extant} if ( $index_row->{taxon_rank} eq "order" );
-                    $row->{'o.class_extant'} = $index_row->{extant} if ( $index_row->{taxon_rank} eq "class" );
-                }
+            # get parent extant values if extant values are wanted at all
+            #   31.3.11
+            # greatly compacted JA 29.5.13
+            if ( $q->param('occurrences_extant') && $row->{'o.taxon_no'} > 0 )	{
+                $row->{'o.class_extant'} = $extant{$parents{$row->{'o.taxon_no'}}{'class'}};
+                $row->{'o.order_extant'} = $extant{$parents{$row->{'o.taxon_no'}}{'order'}};
+                $row->{'o.family_extant'} = $extant{$parents{$row->{'o.taxon_no'}}{'family'}};
+                $row->{'o.parent_extant'} = $extant{$parents{$row->{'o.taxon_no'}}{'immediate'}};
             }
+
         }
-	
         @dataRows = @temp;
         
         ###########################################################################
@@ -2835,7 +2720,7 @@ sub queryDatabase {
         my @temp;
         if ( $q->param('extant_extinct') =~ /extant/i )	{
           foreach my $row ( @dataRows ) {
-            if ( $row->{'extant'} =~ /y/i )	{
+            if ( $row->{'genus_extant'} =~ /y/i || $row->{'species_extant'} =~ /y/i )	{
               push @temp , $row;
             }
           }
@@ -2843,7 +2728,7 @@ sub queryDatabase {
         # WARNING: assumes extinct until proven extant
         else	{
           foreach my $row ( @dataRows ) {
-            if ( $row->{'extant'} !~ /y/i )	{
+            if ( $row->{'genus_extant'} !~ /y/i && $row->{'species_extant'} !~ /y/i )	{
               push @temp , $row;
             }
           }
@@ -2863,23 +2748,24 @@ sub queryDatabase {
     my @allDataRows = @dataRows;
     foreach my $row ( @dataRows ) {
         my $lump = 0;
-        if (($q->param('output_data') =~ /genera|species/ || $q->param('lump_genera') eq 'YES')) {
+        if (($q->param('output_data') =~ /taxonomic_list/ || $q->param('lump_genera') eq 'YES')) {
             my $genus_string;
             if ($q->param('lump_genera') eq 'YES') {
                 $genus_string = $row->{'collection_no'};
             }
           
-            if ($q->param('output_data') =~ /species/i) {
+            if ($q->param('taxonomic_level') =~ /species/i) {
                 $genus_string .= $row->{'o.genus_name'}.$row->{'o.species_name'};
             } else {
                 $genus_string .= $row->{'o.genus_name'};
             }
             if ($lumpgenusref{$genus_string}) {
                 $lump++;
-            # an occurrence (or genus) is always extant if anything lumped
-            #  into it is
-                if ( $row->{'extant'} =~ /y/i )	{
-                    $lumpgenusref{$genus_string}->{'extant'} = "yes";
+                if ( $row->{'genus_extant'} =~ /y/i )	{
+                    $lumpgenusref{$genus_string}->{'genus_extant'} = "yes";
+                }
+                if ($q->param('taxonomic_level') =~ /species/i && $row->{'species_extant'} =~ /y/i )	{
+                    $lumpgenusref{$genus_string}->{'species_extant'} = "yes";
                 }
                 if ( $row->{'o.abund_unit'} =~ /(^specimens$)|(^individuals$)/ && $row->{'o.abund_value'} > 0 )	{
             # don't need to do this if you're lumping by other things, because
@@ -2923,7 +2809,7 @@ sub queryDatabase {
             if ( $q->param('lump_by_interval') eq 'YES' )    {
             # the user has to ask for this field specifically or the lumping
             #  will always be by interval no
-                if ( ! $row->{'c.max_ma'} )	{
+                if ( ! $q->param('collections_max_ma') )	{
                     $lump_string .= $row->{'c.max_interval_no'}."|".$row->{'c.min_interval_no'};
                 } else	{
                     $lump_string .= $row->{'c.max_ma'}."|".$row->{'c.min_ma'};
@@ -2980,7 +2866,7 @@ sub queryDatabase {
 
             my $genus_string;
 
-            if ($q->param('occurrences_species_name') =~ /yes/i) {
+            if ($q->param('taxonomic_level') =~ /species/i) {
                 $genus_string = $row->{'o.genus_name'}.$row->{'o.species_name'};
             } else {
                 $genus_string = $row->{'o.genus_name'};
@@ -3027,57 +2913,28 @@ sub queryDatabase {
 
 
     # Sort by
-    if ($q->param('output_data') =~ /^(?:genera|species)$/) {
+    if ($q->param('output_data') =~ /^(?:taxonomic_list)$/) {
         @dataRows = sort { $a->{'o.genus_name'} cmp $b->{'o.genus_name'} ||
                            $a->{'o.species_name'} cmp $b->{'o.species_name'}} @dataRows;
     }
 
     # main pass through the results set
     my $acceptedCount = 0;
-    foreach my $row ( @dataRows )
-    {
-        if ($q->param('output_data') =~ /occurrence|genera|species/)
-	{
+    foreach my $row ( @dataRows )	{
+
+        if ($q->param('output_data') =~ /occurrence|taxonomic.list/) {
             # Setup up family/name/class fields
+            # greatly simplified JA 29.5.13
             if (($q->param("occurrences_class_name") eq "YES" || 
                 $q->param("occurrences_order_name") eq "YES" ||
                 $q->param("occurrences_family_name") eq "YES" ||
                 $q->param("occurrences_parent_name") eq "YES") &&
-                $row->{'o.taxon_no'} > 0 && $master_class->{$row->{'o.taxon_no'}})
-	    {
-		my $index_row = $master_class->{$row->{'o.taxon_no'}};
-		
-		while ( $index_row->{parent_taxon_no} > 0 )
-		{
-		    $index_row = $master_class->{$index_row->{parent_taxon_no}};
-		    
-                    if ( $index_row->{'taxon_rank'} !~ /species|genus/ && ! $row->{'o.parent_name'} )	{
-                        $row->{'o.parent_name'} = $index_row->{'taxon_name'};
-                        $row->{'o.parent_rank'} = $index_row->{'taxon_rank'};
-                    }
-                    if ($index_row->{'taxon_rank'} eq 'family' && ! $row->{'o.family_name'}) {
-                        $row->{'o.family_name'} = $index_row->{'taxon_name'};
-                    } elsif ($index_row->{'taxon_rank'} eq 'order' && ! $row->{'o.order_name'}) {
-                        $row->{'o.order_name'} = $index_row->{'taxon_name'};
-                    } elsif ($index_row->{'taxon_rank'} eq 'class') {
-                        $row->{'o.class_name'} = $index_row->{'taxon_name'};
-                        last;
-                    }
-                }
-		
-                # Get higher order names for indets as well parent_name
-                # doesn't apply, it's useful only for genera and species 
-		
-                if ($row->{'o.species_name'} =~ /indet/ && $row->{'o.taxon_no'}) {
-                    my $taxon = $taxonomy->getTaxon($row->{'o.taxon_no'});
-                    if ($taxon->{'taxon_rank'} eq 'family') {
-                        $row->{'o.family_name'} = $taxon->{'taxon_name'};
-                    } elsif ($taxon->{'taxon_rank'} eq 'order') {
-                        $row->{'o.order_name'} = $taxon->{'taxon_name'};
-                    } elsif ($taxon->{'taxon_rank'} eq 'class') {
-                        $row->{'o.class_name'} = $taxon->{'taxon_name'};
-                    }
-                }
+                $row->{'o.taxon_no'} > 0 && $parents{$row->{'o.taxon_no'}}) {
+                    $row->{'o.parent_name'} = $name{$parents{$row->{'o.taxon_no'}}{'immediate'}};
+                    $row->{'o.parent_rank'} = $rank{$parents{$row->{'o.taxon_no'}}{'immediate'}};
+                    $row->{'o.class_name'} = $name{$parents{$row->{'o.taxon_no'}}{'class'}};
+                    $row->{'o.order_name'} = $name{$parents{$row->{'o.taxon_no'}}{'order'}};
+                    $row->{'o.family_name'} = $name{$parents{$row->{'o.taxon_no'}}{'family'}};
             }
 
             if ($q->param('occurrences_first_author') || $q->param('occurrences_second_author') || $q->param('occurrences_other_authors') || $q->param('occurrences_year_named') || $q->param('occurrences_type_specimen') || $q->param('occurrences_type_body_part') || $q->param('occurrences_type_locality') || $q->param('occurrences_form_taxon') || $q->param('occurrences_common_name')) {
@@ -3094,26 +2951,19 @@ sub queryDatabase {
             #  names JA 27.1.08 (screwed this up on a first pass 6.11.07)
             # this check is a little loose because it will prevent inheritance
             #  for some informal names, but that's no tragedy
-                if ( ( $taxon_rank_lookup{$taxon_no} eq "species" || $row->{'o.species_name'} =~ /indet\.|sp\.|spp\.|[^a-z]/ ) || $q->param('occurrences_species_name') ne "YES" )	{
-                    $row->{'first_author'} = $first_author_lookup{$taxon_no};
-                    $row->{'second_author'} = $second_author_lookup{$taxon_no};
-                    $row->{'other_authors'} = $other_authors_lookup{$taxon_no};
-                    $row->{'year_named'} = $year_named_lookup{$taxon_no};
-                    $row->{'type_specimen'} = $type_specimen_lookup{$taxon_no};
-                    $row->{'type_body_part'} = $body_part_lookup{$taxon_no};
-                    $row->{'type_locality'} = $type_locality_lookup{$taxon_no};
-                    $row->{'type_form_taxon'} = $form_taxon_lookup{$taxon_no};
+                if ( ( $rank{$taxon_no} eq "species" || $row->{'o.species_name'} =~ /indet\.|sp\.|spp\.|[^a-z]/ ) || $q->param('taxonomic_level') !~ /species/ )	{
+                    $row->{$_} = $authority{$taxon_no}{$_} foreach ('first_author','second_author','other_authors','year_named','type_specimen','type_body_part','type_locality','type_form_taxon');
                 }
             # common names are never a problem
-                $row->{'common_name'} = $common_name_lookup{$taxon_no};
+                $row->{'common_name'} = $authority{$taxon_no}{'common_name'};
             }
 
             # Set up the ecology fields
             foreach (@ecoFields,'preservation','form_taxon') {
-                if ($ecotaph->{$row->{'or.taxon_no'}}{$_} !~ /^\s*$/) {
-                    $row->{$_} = $ecotaph->{$row->{'or.taxon_no'}}{$_};
-                } elsif ($ecotaph->{$row->{'o.taxon_no'}}{$_} !~ /^\s*$/) {
-                    $row->{$_} = $ecotaph->{$row->{'o.taxon_no'}}{$_};
+                if ($ecotaph{$row->{'or.taxon_no'}}{$_} !~ /^\s*$/) {
+                    $row->{$_} = $ecotaph{$row->{'or.taxon_no'}}{$_};
+                } elsif ($ecotaph{$row->{'o.taxon_no'}}{$_} !~ /^\s*$/) {
+                    $row->{$_} = $ecotaph{$row->{'o.taxon_no'}}{$_};
                 } else {
                     $row->{$_} = '';
                 }
@@ -3197,11 +3047,9 @@ sub queryDatabase {
     return (\@dataRows,\@allDataRows,$dataRowsSize);
 }
 
-
 sub printCSV {
     my $self = shift;
     my $results = shift;
-    my $csv = $self->{'csv'};
     my $q = $self->{'q'};
 
     my $ext = 'csv';
@@ -3213,9 +3061,9 @@ sub printCSV {
     my $filename = $self->{'filename'};
     if ( $q->param("output_data") eq 'collections') {
         $mainFile = "$filename-collections.$ext";
-    } elsif ( $q->param("output_data") eq 'genera') {
+    } elsif ( $q->param('output_data') eq 'taxonomic list' && $q->param('taxonomic_level') eq 'genera') {
         $mainFile = "$filename-genera.$ext";
-    } elsif ( $q->param("output_data") eq 'species') {
+    } elsif ( $q->param('output_data') eq 'taxonomic list' && $q->param('taxonomic_level') eq 'species') {
         $mainFile = "$filename-species.$ext";
     } else {
         $mainFile = "$filename-occs.$ext";
@@ -3238,7 +3086,7 @@ sub printCSV {
     # these are required, users must understand where the data come from
     #  and what the terms of use are JA 20.11.12
     push @header,('c.authorizer','license');
-    if ($q->param('output_data') =~ /occurrence|genera|species/) {
+    if ($q->param('output_data') =~ /occurrence|taxonomic.list/) {
         push @header, 'o.class_name' if ($q->param("occurrences_class_name") eq 'YES');
         push @header, 'o.class_extant' if ( $q->param("occurrences_class_name") eq 'YES' && $q->param('occurrences_extant') eq 'YES');
         push @header, 'o.order_name' if ($q->param("occurrences_order_name") eq 'YES');
@@ -3248,10 +3096,12 @@ sub printCSV {
         push @header, 'o.parent_rank' if ($q->param("occurrences_parent_name") eq 'YES');
         push @header, 'o.parent_name' if ($q->param("occurrences_parent_name") eq 'YES');
         push @header, 'o.parent_extant' if ( $q->param("occurrences_parent_name") eq 'YES' && $q->param('occurrences_extant') eq 'YES');
+        push @header, 'genus_extant' if ( $q->param('occurrences_extant') eq 'YES');
+        push @header, 'species_extant' if ( $q->param('taxonomic_level') =~ /species/i && $q->param('occurrences_extant') eq 'YES');
     }      
-    if ($q->param('output_data') =~ /genera/) {
+    if ($q->param('output_data') =~ /taxonomic.list/ && $q->param('taxonomic_level') =~ /genera/) {
         push @header, 'o.genus_name';
-    } elsif ($q->param('output_data') =~ /species/) {
+    } elsif ($q->param('output_data') =~ /taxonomic.list/ && $q->param('taxonomic_level') =~ /species/) {
         push @header, 'o.genus_name';
         push @header, 'o.subgenus_name' if ($q->param("occurrences_subgenus_name") eq "YES");
         push @header, 'o.species_name';
@@ -3278,7 +3128,7 @@ sub printCSV {
         }
     }
 
-    if ($q->param('output_data') =~ /first_author|second_author|other_authors|year_named|occurrence|genera|species/) {
+    if ($q->param('output_data') =~ /first_author|second_author|other_authors|year_named|occurrence|taxonomic.list/) {
         push @header,@ecoFields;
         push @header,'first_author' if ($q->param("occurrences_first_author"));
         push @header,'second_author' if ($q->param("occurrences_second_author"));
@@ -3289,7 +3139,6 @@ sub printCSV {
         push @header,'type_body_part' if ($q->param("occurrences_type_body_part"));
         push @header,'type_locality' if ($q->param("occurrences_type_locality"));
         push @header,'form_taxon' if ($q->param("occurrences_form_taxon"));
-        push @header,'extant' if ($q->param("occurrences_extant"));
         push @header,'common_name' if ($q->param("occurrences_common_name"));
     }
        
@@ -3325,7 +3174,7 @@ sub printCSV {
             $v =~ s/^(o|or|re|c)\.//;
         }
         $v =~ s/^e\.//;
-        if ($q->param("output_data") =~ /genera|species/) {
+        if ($q->param("output_data") =~ /taxonomic_list/) {
             $v =~ s/^[a-z]+\.//g;
         }
         push @printedHeader,$v;
@@ -3355,7 +3204,6 @@ sub printMatrix {
     my $self = shift;
     my $results = shift;
     my $dbt = $self->{'dbt'};
-    my $csv = $self->{'csv'};
     my $q = $self->{'q'};
 
     my $ext = 'csv';
@@ -3431,7 +3279,6 @@ sub printMatrix {
     push @occHeader,'type_body_part' if ($q->param("occurrences_type_body_part"));
     push @occHeader,'type_locality' if ($q->param("occurrences_type_locality"));
     push @occHeader,'form_taxon' if ($q->param("occurrences_form_taxon"));
-    push @occHeader,'extant' if ($q->param("occurrences_extant"));
     push @occHeader,'common_name' if ($q->param("occurrences_common_name"));
     push @printedOccHeader,@ecoFields;
     push @printedOccHeader,'first_author' if ($q->param("occurrences_first_author"));
@@ -3443,7 +3290,6 @@ sub printMatrix {
     push @printedOccHeader,'type_body_part' if ($q->param("occurrences_type_body_part"));
     push @printedOccHeader,'type_locality' if ($q->param("occurrences_type_locality"));
     push @printedOccHeader,'form_taxon' if ($q->param("occurrences_form_taxon"));
-    push @printedOccHeader,'extant' if ($q->param("occurrences_extant"));
     push @printedOccHeader,'common_name' if ($q->param("occurrences_common_name"));
 
     my %matrix;
@@ -3553,7 +3399,6 @@ sub printMatrix {
 sub printCONJUNCT {
     my $self = shift;
     my $results = shift;
-    my $csv = $self->{'csv'};
     my $q = $self->{'q'};
 
     my $filename = $self->{'filename'};
@@ -3701,7 +3546,6 @@ sub printRefsFile {
     my $results = shift;
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
-    my $csv = $self->{'csv'};
 
     # Open the file handlea we're going to use or die
     my $filename = $self->{'filename'};
@@ -3774,7 +3618,7 @@ sub printRefsFile {
             printf REFSFILE "%s\n",$refLine;
             $ref_count++;
 	    
-	    my $refout = Reference::formatRISRef($dbt, $row);
+	    my $refout = ReferenceEntry::formatRISRef($dbt, $row);
 	    if ( $refout =~ /PARSE ERROR/ )
 	    {
 		push @ris_bad_list, $row->{reference_no};
@@ -3835,7 +3679,6 @@ sub printAbundFile {
     my $self = shift;
     my $results = shift;
     my $q = $self->{'q'};
-    my $csv = $self->{'csv'};
 
     # Open the file handle we're going to use or die
     my $filename = $self->{'filename'};
@@ -3861,7 +3704,7 @@ sub printAbundFile {
     foreach my $row (@$results) {
         my $taxa_key = $row->{'o.genus_name'};
         # cumulate number of collections including each genus
-        if ($q->param('occurrences_species_name') =~ /yes/i) {
+        if ($q->param('taxonomic_level') =~ /species/i) {
             $taxa_key .= "|".$row->{'o.species_name'};
         } 
         $occs_by_taxa{$taxa_key}++;
@@ -3901,7 +3744,7 @@ sub printAbundFile {
     my %new_range_min;
     foreach my $row (@$results) {
         my $taxa_key = $row->{'o.genus_name'};
-        if ($q->param('occurrences_species_name') =~ /yes/i) {
+        if ($q->param('taxonomic_level') =~ /species/i) {
             $taxa_key .= "|".$row->{'o.species_name'};
         }
         if ( $row->{'c.ma_max'} == $row->{'c.ma_min'} && $row->{'c.ma_max'} )	{
@@ -3924,7 +3767,7 @@ sub printAbundFile {
     # This list of genera is needed abundance file far below
     my @rangeline = ();
     push @rangeline, 'genus';
-    if ($q->param('occurrences_species_name') =~ /YES/i) {
+    if ($q->param('taxonomic_level') =~ /species/i) {
         push @rangeline, 'species';
     }
     push @rangeline, 'base of range (Ma)','top of range (Ma)','collections','with abundances','geometric mean abundance';
@@ -3933,7 +3776,7 @@ sub printAbundFile {
     my @taxa = sort keys %occs_by_taxa;
     foreach my $taxon ( @taxa ) {
         @rangeline = ();
-        if ($q->param('occurrences_species_name') =~ /YES/i) {
+        if ($q->param('taxonomic_level') =~ /species/i) {
             my ($genus,$species)=split(/\|/,$taxon);
             push @rangeline, $genus, $species, $new_range_max{$taxon}, $new_range_min{$taxon}, $occs_by_taxa{$taxon}, sprintf("%d",$number_of_counts{$taxon});
         } else {
@@ -3956,7 +3799,6 @@ sub printScaleFile {
     my $self = shift;
     my $results = shift;
     my $q = $self->{'q'};
-    my $csv = $self->{'csv'};
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
 
@@ -3994,7 +3836,7 @@ sub printScaleFile {
             $interval = $max_lookup;
         }
         my $bin_key = $row->{'o.genus_name'};
-        if ($q->param("occurrences_species_name") eq 'YES') {
+        if ($q->param("taxonomic_level") =~ /species/) {
             $bin_key .="_".$row->{'o.species_name'};
         } 
         # only use occurrences from collections that map into exactly one bin
@@ -4015,7 +3857,6 @@ sub printScaleFile {
             if ( $q->param('binned_field') eq "ecology" )    {
                 # special processing for ecology data
                 $row_value= $row->{$q->param('ecology1')}; 
-                #$ecotaph{$bin_key}{$ecoFields[0]};
             } else {
                 # default processing
                 if ($q->param('binned_field') =~ /plant_organ/) {
@@ -4051,7 +3892,7 @@ sub printScaleFile {
     # now print the results
     my @scaleline;
     push @scaleline, 'interval','lower boundary','upper boundary','midpoint','total occurrences';
-    if ($q->param("occurrences_species_name") eq 'YES') {
+    if ($q->param("taxonomic_level") =~ /species/) {
         push @scaleline, 'total species';
     } else {
         push @scaleline, 'total genera';
@@ -4156,7 +3997,7 @@ sub setupQueryFields {
 
     # Setup default parameters
     $q->param('output_format'=>'csv') if ($q->param('output_format') !~ /csv|tab/i);
-    $q->param('output_data'=>'occurrence list') if ($q->param('output_data') !~ /collections|occurrence|genera|species/);
+    $q->param('output_data'=>'occurrence list') if ($q->param('output_data') !~ /collections|occurrence|taxonomic.list/);
 
     if ($q->param('output_data') =~ /conjunct/i) {
         $q->param("collections_regionalbed"=>"YES");
@@ -4264,16 +4105,16 @@ sub setupQueryFields {
     }
     
     # Need to get the species_name field as well
-    if ($q->param('output_data') =~ /species/) {
+    # this step is crucial given that there's now a level field but no separate
+    #  species_name field 10.6.13 JA
+    if ($q->param('taxonomic_level') =~ /species/) {
+        $q->param('occurrences_species_reso'=>'YES');
         $q->param('occurrences_species_name'=>'YES');
     }
 
     # Get these related fields as well
     if ($q->param('occurrences_subgenus_name')) {
         $q->param('occurrences_subgenus_reso'=>'YES');
-    }
-    if ($q->param('occurrences_species_name')) {
-        $q->param('occurrences_species_reso'=>'YES');
     }
 
     # Required fields
@@ -4312,7 +4153,7 @@ sub setupQueryFields {
 
     # Generate these fields on the fly
     @ecoFields = ();
-    if ($q->param('output_data') =~ /occurrence|genera|species/) {
+    if ($q->param('output_data') =~ /occurrence|taxonomic.list/) {
         for(1..6) {
             if ($q->param("ecology$_")) {
                 push @ecoFields, $q->param("ecology$_");
@@ -4321,13 +4162,20 @@ sub setupQueryFields {
     }
 }
 
-sub formatRow {
-    my $self = shift;
-    my $csv = $self->{'csv'};
-
-    if ( $csv->combine ( @_ ) ) {
-        return $csv->string();
-    }
+# CSV_XS sometimes (always?) fails to add quotations when there are single
+#  quotes and I honestly don't care why, so I'm trashing it in favor of
+#  regexps that do the same thing just as well (thank you)
+#  JA 12.4.13
+sub formatRow	{
+	my $self = shift;
+	my $q = $self->{'q'};
+	s/"/""/g foreach @_;
+	s/^(.*|)([,"' \n])(.*|)$/"$1$2$3"/g foreach @_;
+	if ( $q->param('output_format') =~ /tab/i )	{
+		return join "\t",@_;
+	} else	{
+		return join ',',@_;
+	}
 }
 
 # renamed from getGenusNames to getTaxonString to reflect changes in how this works PS 01/06/2004
@@ -4338,26 +4186,25 @@ sub formatRow {
 # in the getChildren function by passing in stuff to exclude.   
 sub getTaxonString {
     my $self = shift;
-    my $taxon_names = shift;
-    my $exclude_taxon_names = shift;
+    my $taxon_name = shift;
+    my $exclude_taxon_name = shift;
     my $q = $self->{'q'};
     my $dbt = $self->{'dbt'};
     my $dbh = $self->{'dbh'};
-    my $taxonomy = $self->{'taxonomy'};
-    
+
     my @taxon_nos_unique;
     my $taxon_nos_string;
     my $genus_names_string;
 
-    my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$taxon_names);
-    my @exclude_taxa = split(/\s*[, \t\n-:;]{1}\s*/,$exclude_taxon_names);
+    my @taxa = split(/\s*[, \t\n-:;]{1}\s*/,$taxon_name);
+    my @exclude_taxa = split(/\s*[, \t\n-:;]{1}\s*/,$exclude_taxon_name);
 
     my (@sql_or_bits,@sql_and_bits);
     my %taxon_nos_unique = ();
     if (@taxa) {
         my @exclude_taxon_nos = ();
         foreach my $taxon (@exclude_taxa) {
-            my @taxon_nos = $taxonomy->getTaxaByName($taxon, { select => 'orig', id => 1 });
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon,'','lump');
             if (scalar(@taxon_nos) == 0) {
                 push @sql_and_bits, "table.genus_name NOT LIKE ".$dbh->quote($taxon);
             } else	{
@@ -4365,12 +4212,11 @@ sub getTaxonString {
             }
         }
         foreach my $taxon (@taxa) {
-            my @taxon_nos = $taxonomy->getTaxaByName($taxon, { select => 'orig', id => 1 });
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon,'','lump');
             if (scalar(@taxon_nos) == 0) {
                 push @sql_or_bits, "table.genus_name LIKE ".$dbh->quote($taxon);
             } else	{
-                my @all_taxon_nos = $taxonomy->getTaxa('all_children', $taxon_nos[0], 
-						       { exclude => \@exclude_taxon_nos, id => 1 });
+                my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0],'','',\@exclude_taxon_nos);
                 # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
                 @taxon_nos_unique{@all_taxon_nos} = ();
             }
@@ -4379,15 +4225,16 @@ sub getTaxonString {
             push @sql_or_bits, "table.taxon_no IN (".join(", ",keys(%taxon_nos_unique)).")";
         }
     } elsif (@exclude_taxa) {
+        my @exclude_taxon_nos = ();
         foreach my $taxon (@exclude_taxa) {
-            my @taxon_nos = $taxonomy->getTaxaByName($taxon, { select => 'orig', id => 1 });
+            my @taxon_nos = TaxonInfo::getTaxonNos($dbt,$taxon,'','lump');
             if (scalar(@taxon_nos) == 0) {
                 push @sql_or_bits, "table.genus_name NOT LIKE ".$dbh->quote($taxon);
             } else	{
-                my @exclude_taxon_nos = $taxonomy->getTaxa('all_children', $taxon_nos[0], 
-							   { id => 1 });
+                push @exclude_taxon_nos, $taxon_nos[0];
+                my @all_taxon_nos = TaxaCache::getChildren($dbt,$taxon_nos[0],'','',\@exclude_taxon_nos);
                 # Uses hash slices to set the keys to be equal to unique taxon_nos.  Like a mathematical UNION.
-                @taxon_nos_unique{@exclude_taxon_nos} = ();
+                @taxon_nos_unique{@all_taxon_nos} = ();
             }
         }
         if (%taxon_nos_unique) {

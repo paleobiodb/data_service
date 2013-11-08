@@ -34,6 +34,7 @@ use strict;
     zone_deep_subtidal=>['transition zone/lower shoreface','deep subtidal ramp','deep subtidal shelf','deep subtidal indet.'],
     zone_offshore=>['offshore ramp','offshore shelf','offshore indet.','prodelta','offshore'],
     zone_slope_basin=>['slope','basinal (carbonate)','basinal (siliceous)','submarine fan','basinal (siliciclastic)','basinal (siliceous)','basinal (carbonate)','deep-water indet.'],
+    zone_unknown=>['marine indet.','carbonate indet.','coastal indet.','deltaic indet.'],
     # Map form parameters 
     mapsize=>[ '50%', '75%', '100%', '125%', '150%' ],
     projection=>[ 'Eckert IV', 'equirectangular', 'Mollweide', 'orthographic' ],
@@ -45,12 +46,11 @@ mapwidth=>['100%','90%','80%','75%','70%','60%','50%'],
     gridsize=>['none', '45 degrees', '30 degrees', '22.5 degrees', '15 degrees', '10 degrees', '5 degrees', '2 degrees', '1 degree'],
     gridposition=>[ 'in front', 'in back' ],
     linethickness=>[ 'thin', 'medium', 'thick' ],
-    mapcolors=>['white','black','gray','light gray','heat colors','red to green','red','dark red','pink','deep pink','violet','orchid','magenta','dark violet','purple','slate blue','teal','cyan','turquoise','steel blue','sky blue','dodger blue','royal blue','blue','dark blue','lime','light green','sea green','green','dark green','olive drab','olive','orange red','dark orange','orange','gold','yellow','medium yellow','tan','sandy brown','chocolate','saddle brown','sienna','brown'],
+    mapcolors=>['white','black','gray','light gray','heat colors','red to green','red','dark red','pink','deep pink','violet','orchid','magenta','dark violet','purple','Google blue','slate blue','teal','cyan','turquoise','steel blue','sky blue','dodger blue','royal blue','blue','dark blue','Google green','lime','light green','sea green','green','dark green','olive drab','olive','orange red','dark orange','orange','gold','yellow','medium yellow','tan','sandy brown','chocolate','saddle brown','sienna','brown'],
     pointsize=>[ 'tiny', 'very small', 'small', 'medium', 'large', 'very large', 'huge', 'proportional'],
     pointshape=>[ 'circles', 'crosses', 'diamonds', 'squares', 'stars', 'triangles'],
     dotborder=>[ 'no', 'black', 'white' ],
     mapsearchfields=>[ 'research group', 'country', 'state/province', 'time interval', 'formation', 'lithology', 'paleoenvironment', 'taxon' ],
-    research_group=>['', 'decapod','divergence', 'GCP', 'marine invertebrate', 'micropaleontology', 'paleobotany', 'paleoentomology', 'taphonomy', 'vertebrate', 'ETE', '5%', '1%', 'PACED', 'PGAP'],
 
     simplecolors=>['','black','gray','red','pink','purple','blue','green','orange','yellow'],
     linescalings=>['x 1','x 2','x 3','x 5','x 10','x 20','x 30','x 50','x 100'],
@@ -139,6 +139,7 @@ sub new {
    
     # This block 'installs' a code reference in $select_lists to generate the list on the fly when its needed
     my %table_enums = (
+        'person'=> ['research_group'],
         'cladograms' => ['source'],
         'authorities' => ['taxon_rank','preservation','form_taxon','extant'],
         'opinions' => ['status','basis','phylogenetic_status','diagnosis_given'],

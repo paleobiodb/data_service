@@ -1,24 +1,41 @@
 #!/opt/local/bin/perl
 
-use lib "../cgi-bin";
+use lib '../lib', 'lib', '../cgi-bin', 'cgi-bin';
 use DBConnection;
 use TaxonTrees;
 use Taxonomy;
 use Getopt::Std;
 
+my %options;
+
+# First parse option switches
+
+getopts('tT:mbivrk', \%options);
+
+# If we were given an argument, then use that as the database name
+# overrriding what was in the configuration file.
+
+my $db_name = shift;
+$Constants::SQL_DB = $db_name if $db_name;
+
+# Connect to the database, and create a new Taxonomy object.
+
 my $dbh = DBConnection::connect();
 
 my $t = Taxonomy->new($dbh, 'taxon_trees');
 
-my %options;
-
-getopts('tT:mbivrk', \%options);
-#getopts('abcdefghikxmMyt', \%options);
+# Now make sure that the 'orig_no' field is set for each entry in the
+# authorities table.
 
 ensureOrig($dbh);
 populateOrig($dbh);
 
+# Initialize the output-message subsystem
+
 TaxonTrees::initMessages(2);
+
+# Call the routines that build the various caches, depending upon the options
+# that were specified.
 
 TaxonTrees::computeIntervalTables($dbh, 1) if $options{i};
 TaxonTrees::computeCollectionTables($dbh) if $options{b};
@@ -27,8 +44,13 @@ TaxonTrees::computeCollectionCounts($dbh) if $options{v};
 TaxonTrees::createRankMap($dbh) if $options{r};
 TaxonTrees::buildTables($dbh, 'taxon_trees', { msg_level => 2 }, $options{T}) 
     if $options{t} or $options{T};
+TaxonTrees::computeTaxaCacheTables($dbh, 'taxon_trees') if $options{k};
 
 print "done rebuilding caches\n";
+
+# Done!
+
+exit;
 
 
 

@@ -28,6 +28,8 @@ our ($STREAM_THRESHOLD) = 20480;	# If the result is above this size,
                                         # and the server is capable of
                                         # streaming, then it will be streamed.
 
+our (@VOCABULARIES) = ('rec', 'com', 'dwc');
+
 our (%TAXONOMIC_RANK) = ( 'max' => 26, 'informal' => 26, 'unranked_clade' => 25, 'unranked' => 25, 
 			 'kingdom' => 23, 'subkingdom' => 22,
 			 'superphylum' => 21, 'phylum' => 20, 'subphylum' => 19,
@@ -44,14 +46,14 @@ our (%RANK_STRING) = ( 26 => 'informal', 25 => 'unranked clade', 23 => 'kingdom'
 		       10 => 'superfamily', 9 => 'family', 8 => 'subfamily', 7 => 'tribe', 
 		       6 => 'subtribe', 5 => 'genus', 4 => 'subgenus', 3 => 'species', 2 => 'subspecies');
 
-# new ( dbh, version )
+# new ( dbh, attrs )
 # 
 # Generate a new query object, using the given database handle and any other
 # attributes that are specified.
 
 sub new {
     
-    my ($class, $dbh, %fields) = @_;
+    my ($class, $dbh, $attrs) = @_;
     
     # First select a Taxonomy to use in satisfying this query (not all queries
     # actually need this).
@@ -60,7 +62,7 @@ sub new {
     
     # Now create a query record.
     
-    my $self = { dbh => $dbh, taxonomy => $taxonomy, %fields };
+    my $self = { dbh => $dbh, taxonomy => $taxonomy, %$attrs };
     
     # Bless it into the proper class and return it.
     
@@ -84,78 +86,26 @@ sub warn {
 }
 
 
-# parseRankParam ( param_value, param_name )
-# 
-# Parse $param_value into a list of rank specifiers and return that list.  If
-# the syntax of the value is not correct, throw an exception mentioning $param_name.
-
-sub parseRankParam {
-    
-    my ($self, $param_value, $param_name) = @_;
-    
-    my (@value_list) = split(/[,\s]+/, lc $param_value);
-    my (@rank_list);
-    
-    foreach my $v (@value_list)
-    {
-	next if $v eq '';
-	$v = lc $v;
-	
-	if ( $v =~ /^(\w*)\s*[-:]\s*(\w*)$/ )
-	{
-	    my $lower = $1 || 'min';
-	    my $upper = $2 || 'max';
-	    
-	    unless ( $TAXONOMIC_RANK{$lower} )
-	    {
-		die "400 Unrecognized value '$lower' for '$param_name'.\n";
-	    }
-	    
-	    unless ( $TAXONOMIC_RANK{$upper} )
-	    {
-		die "400 Unrecognized value '$upper' for '$param_name'.\n";
-	    }
-	    
-	    unless ( $TAXONOMIC_RANK{$lower} <= $TAXONOMIC_RANK{$upper} )
-	    {
-		die "400 Bad range '$lower-$upper' for '$param_name'.\n";
-	    }
-	    
-	    push @rank_list, [$TAXONOMIC_RANK{$lower}, $TAXONOMIC_RANK{$upper}];
-	}
-	
-	elsif ( $TAXONOMIC_RANK{$v} )
-	{
-	    push @rank_list, $TAXONOMIC_RANK{$v};
-	}
-	
-	else
-	{
-	    die "400 Unrecognized value '$v' for '$param_name'.\n";
-	}
-    }
-    
-    return \@rank_list;
-}
-
-
 # setOutputList ( )
 # 
 # Determine the list of selection, processing and output rules for this query,
-# based on the 'show' parameter, the operation and the output format.
+# based on the 'show' parameter, the operation and the output format.  The
+# parameter 'valid' must be an object of type HTTP::Validate::Response.
 
 sub setOutputList {
 
     my ($self) = @_;
+    
+    my $valid = $self->{params};
     
     # Set 'show' and 'show_order' based on the value of the 'show' parameter.
     # Make sure that 'show_order' contains no duplicates.
 
     my (@show, %show);
     
-    if ( ref $self->{params}{show} eq 'ARRAY' )
+    if ( ref $valid->value('show') eq 'ARRAY' )
     {
-	foreach my $p ( @{$self->{params}{show}} )
+	foreach my $p ( @{$valid->value('show')} )
 	{
 	    next if $show{$p};
 	    $show{$p} = 1;
@@ -165,12 +115,12 @@ sub setOutputList {
     
     $self->{show} = \%show;
     $self->{show_order} = \@show;
-    $self->{output_format} = $self->{params}{output_format};
+    $self->{output_format} = $valid->value('output_format');
     
     # Set the vocabulary according to the 'vocab' parameter, or defaulting to
     # the best vocabulary for the content type.
     
-    my $vocab = $self->{params}{vocab} ||
+    my $vocab = $valid->value('vocab') ||
 	
 	($self->{output_format} eq 'json' ? 'com' :
 	 $self->{output_format} eq 'xml' ? 'dwc' :
@@ -187,7 +137,7 @@ sub setOutputList {
     
     if ( $self->{output_format} eq 'csv' )
     {
-	$self->{quoted} = $self->{params}{quoted} ? 2 : 1;
+	$self->{quoted} = $valid->value('quoted') ? 2 : 1;
     }
     
     # Now set the actual list of output fields for the basic query operation
@@ -216,10 +166,34 @@ sub setOutputList {
 	    $tables{$tables_conf} = 1;
 	}
 	
-	push @proc_list, @$proc_conf if ref $proc_conf eq 'ARRAY';
+	foreach my $f ( ref $proc_conf eq 'ARRAY' ? @$proc_conf : () )
+	{
+	    die "Error: bad proc specification in '$section', must be a hash" unless reftype $f && reftype $f eq 'HASH';
+	    next if $self->{output_format} eq 'json' and $f->{no_json};
+	    next if $self->{output_format} eq 'xml' and $f->{no_xml};
+	    next if $self->{output_format} eq 'txt' and $f->{no_txt};
+	    next if $self->{output_format} eq 'csv' and $f->{no_txt};
+	    
+	    my $out_f = { %$f };
+	    	    
+	    if ( defined $out_f->{"${vocab}_code"} )
+	    {
+		$out_f->{code} = $out_f->{"${vocab}_code"};
+		delete $out_f->{"${vocab}_code"};
+	    }
+
+	    if ( defined $out_f->{"${vocab}_rec"} )
+	    {
+		$out_f->{code} = $out_f->{"${vocab}_rec"};
+		delete $out_f->{"${vocab}_rec"};
+	    }
+	    
+	    push @proc_list, $out_f;	    
+	}
 	
 	foreach my $f ( ref $output_conf eq 'ARRAY' ? @$output_conf : () )
 	{
+	    die "Error: bad output specification in '$section', must be a hash" unless reftype $f && reftype $f eq 'HASH';
 	    next if $f->{show} and not $self->{show}{$f->{show}};
 	    next if $vocab eq 'dwc' and not exists $f->{dwc};
 	    next if $vocab eq 'com' and not exists $f->{com};
@@ -228,7 +202,27 @@ sub setOutputList {
 	    next if $self->{output_format} eq 'txt' and $f->{no_txt};
 	    next if $self->{output_format} eq 'csv' and $f->{no_txt};
 	    
-	    push @output_list, $f;
+	    my $out_f = { %$f };
+	    
+	    if ( defined $out_f->{"${vocab}_value"} )
+	    {
+		$out_f->{value} = $out_f->{"${vocab}_value"};
+		delete $out_f->{"${vocab}_value"};
+	    }
+	    
+	    if ( defined $out_f->{"${vocab}_code"} )
+	    {
+		$out_f->{code} = $out_f->{"${vocab}_code"};
+		delete $out_f->{"${vocab}_code"};
+	    }
+
+	    if ( defined $out_f->{"${vocab}_rec"} )
+	    {
+		$out_f->{code} = $out_f->{"${vocab}_rec"};
+		delete $out_f->{"${vocab}_rec"};
+	    }
+	    
+	    push @output_list, $out_f;
 	}
     }
     
@@ -236,6 +230,167 @@ sub setOutputList {
     $self->{select_tables} = \%tables;
     $self->{output_list} = \@output_list;
     $self->{proc_list} = \@proc_list if @proc_list;
+}
+
+
+# output_pod ( )
+# 
+# Generate documentation in POD format describing the available output
+# options.  This can be returned in one of two ways: as an HTML table, or as
+# native POD.
+
+sub output_pod {
+    
+    my ($self, $format, $section_list) = @_;
+    
+    my @sections = ref $section_list eq 'ARRAY' ? @$section_list : 'single';
+    my %vocab_check = map { $_ => 1 } @VOCABULARIES;
+    my $class = ref $self || $self;
+    
+    no strict 'refs';
+    
+    # First run through the sections and determine which vocabularies are
+    # active. 
+    
+ SECTION:
+    foreach my $section (@sections)
+    {
+	next unless $section;
+	
+	my $output_list = ${"${class}::OUTPUT"}{$section};
+	next unless ref $output_list eq 'ARRAY';
+	
+	foreach my $r ( @$output_list )
+	{
+	    foreach my $v (keys %vocab_check)
+	    {
+		delete $vocab_check{$v} if $r->{$v};
+	    }
+	    
+	    last SECTION unless keys %vocab_check;
+	}	
+    }
+    
+    my @vocab_list = grep { ! $vocab_check{$_} } @VOCABULARIES;
+    
+    # Now generate the documentation.
+    
+    my $doc_string;
+    
+    if ( $format eq 'pod' )
+    {
+	my $field_count = scalar(@vocab_list);
+	my $field_string = join ' / ', @vocab_list;
+	
+	$doc_string .= "=for html <!-- table_head=Field name[$field_count] / Section / Description -->\n\n";
+	$doc_string .= "=over 4\n\n";
+	$doc_string .= "=item $field_string\n\n";
+    }
+    
+    else
+    {
+	$doc_string = $self->output_html_header(\@vocab_list);
+    }
+    
+    foreach my $section (@sections)
+    {
+	next unless $section;
+	
+	my $output_list = ${"${class}::OUTPUT"}{$section};
+	next unless ref $output_list eq 'ARRAY';
+	
+	my $name = $section eq $sections[0] ? 'basic' : $section;
+	
+	foreach my $r (@$output_list)
+	{
+	    if ( $format eq 'pod' )
+	    {
+		$doc_string .= $self->output_pod_field($name, \@vocab_list, $r);
+	    }
+	    
+	    else
+	    {
+		$doc_string .= $self->output_html_field($name, \@vocab_list, $r);
+	    }
+	}
+    }
+    
+    $doc_string .= $format eq 'pod' ? "=back\n\n" : "</table>\n\n=end html\n\n";
+    
+    return $doc_string;
+}
+
+
+sub output_html_header {
+    
+    my ($self, $vocab) = @_;
+    
+    my $cols = scalar(@$vocab);
+    my $rowspan = $cols > 1 ? 'rowspan="2"' : '';
+    
+    my $header = <<END_HEADER;
+=begin html
+
+<table class="response">
+<tr class="resp_head"><td colspan="$cols">Field name</td>
+<td $rowspan>Section</td>
+<td $rowspan>Description</td></tr>
+END_HEADER
+    
+    if ( $cols > 1 )
+    {
+	$header .= "<tr class=\"resp_head\">\n";
+	
+	foreach my $v (@$vocab)
+	{
+	    my $f = $v eq 'rec' ? 'pbdb' : $v;
+	    $header .= "<td>$f</td>";
+	}
+	
+	$header .= "</tr>\n";
+    }
+    
+    return $header;
+}
+
+
+sub output_html_field {
+
+    my ($self, $section_name, $vocab_list, $r) = @_;
+    
+    my $line = "<tr>\n";
+    my $descrip = $r->{doc} || "&nbsp;";
+    
+    $section_name = $r->{show} if $r->{show};
+    
+    foreach my $v ( @$vocab_list )
+    {
+	my $field_name = $r->{$v} || "<i>n/a</i>";
+	$line .= "<td class=\"field_name\">$field_name</td>\n";
+    }
+    
+    $line .= "<td>$section_name</td>\n";
+    $line .= "<td>$descrip</td>\n";
+    $line .= "</tr>\n";
+    
+    return $line;
+}
+
+
+sub output_pod_field {
+    
+    my ($self, $section_name, $vocab_list, $r) = @_;
+    
+    my @names = map { $r->{$_} || '' } @$vocab_list;
+    my $names = join ' / ', @names;
+    
+    $section_name = $r->{show} if $r->{show};
+    
+    my $descrip = $r->{doc} || "";
+    
+    my $line = "\n=item $names ( $section_name )\n\n$descrip\n";
+    
+    return $line;
 }
 
 
@@ -551,7 +706,7 @@ sub processRecord {
 	
 	# First figure out the result of the processing step
 	
-	if ( ref $p->{code} eq 'CODE' )
+	if ( reftype $p->{code} and reftype $p->{code} eq 'CODE' )
 	{
 	    if ( $p->{use_main} )
 	    {
@@ -569,19 +724,19 @@ sub processRecord {
 	    }
 	}
 	
-	elsif ( $p->{split} )
+	elsif ( defined $p->{split} and $p->{split} ne '' )
 	{
 	    @result = split $p->{split}, $record->{$field};
 	}
 	
-	elsif ( $p->{subfield} )
+	elsif ( $p->{subfield} and reftype $record->{$field} )
 	{
-	    if ( ref $record->{$field} eq 'ARRAY' )
+	    if ( reftype $record->{$field} eq 'ARRAY' )
 	    {
 		@result = map { $_->{$p->{subfield}} if ref $_ eq 'HASH'; } @{$record->{$field}};
 	    }
 	    
-	    elsif  ( ref $record->{$field} eq 'HASH' )
+	    elsif  ( reftype $record->{$field} eq 'HASH' )
 	    {
 		@result = $record->{$field}{$p->{subfield}};
 	    }
@@ -667,6 +822,7 @@ sub emitHeaderJSON {
 
     my ($self, %options) = @_;
     
+    my $valid = $self->{params};
     my $json = JSON->new->allow_nonref;
     
     my $output = '{' . "\n";
@@ -688,9 +844,9 @@ sub emitHeaderJSON {
     # Check if we have been asked to report the result count, and if it is
     # available.
     
-    if ( defined $self->{params}{count} and defined $self->{result_count} )
+    if ( defined $valid->value('count') and defined $self->{result_count} )
     {
-	my $limit = $self->{params}{limit};
+	my $limit = $valid->value('limit');
 	my $returned = $limit eq 'all' ? $self->{result_count} : 
 	    $limit < $self->{result_count} ? $limit : $self->{result_count};
 	
@@ -747,9 +903,11 @@ sub emitHeaderText {
 
     my ($self) = @_;
     
+    my $valid = $self->{params};
+    
     # Skip the header if we are directed to do so.
     
-    return '' if $self->{params}{no_header};
+    return '' if $valid->value('no_header');
     
     # Otherwise, we go through the output list and collect up the field names. 
     
@@ -853,8 +1011,7 @@ sub constructObjectJSON {
 	# If a specific value was defined, use that instead of the field value.
 	
 	$value = $f->{value} if defined $f->{value};
-	$value = $f->{"${vocab}_value"} if defined $f->{"${vocab}_value"};
-    
+	
 	# Process the value according to the rule
 	
 	if ( $f->{use_each} and reftype $value && reftype $value eq 'ARRAY' )
@@ -1023,9 +1180,8 @@ sub emitRecordText {
 	# If a specific value was defined, use that instead of the field value.
 	
 	$value = $f->{value} if defined $f->{value};
-	$value = $f->{"${vocab}_value"} if defined $f->{"${vocab}_value"};
-    
-	if ( ref $f->{code} eq 'CODE' )
+	
+	if ( reftype $f->{code} and reftype $f->{code} eq 'CODE' )
 	{
 	    if ( $f->{use_main} ) {
 		$value = $f->{code}($self, $record, $f);
@@ -1180,8 +1336,10 @@ sub finishOutput {
 sub generateTextLine {
 
     my $self = shift;
+    
+    my $valid = $self->{params};
     my $quoted = $self->{quoted};
-    my $term = $self->{params}{linebreak} eq 'cr' ? "\n" : "\r\n";
+    my $term = $valid->value('linebreak') eq 'cr' ? "\n" : "\r\n";
     
     if ( $self->{output_format} eq 'csv' )
     {
@@ -1402,8 +1560,9 @@ sub generateLimitClause {
 
     my ($self) = @_;
     
-    my $limit = $self->{params}{limit};
-    my $offset = $self->{params}{offset};
+    my $valid = $self->{params};
+    my $limit = $valid->value('limit');
+    my $offset = $valid->value('offset');
     
     if ( defined $offset and $offset > 0 )
     {

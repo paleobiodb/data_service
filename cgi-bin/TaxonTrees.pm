@@ -178,6 +178,8 @@ our $TAXON_SUMMARY = "taxon_summary";
 our $REF_SUMMARY = "ref_summary";
 our $INTERVAL_MAP = "interval_map";
 our $CONTAINER_MAP = "interval_container_map";
+our $CLASSIC_TREE_CACHE = "taxa_tree_cache";
+our $CLASSIC_LIST_CACHE = "taxa_list_cache";
 
 # Working table names - when the taxonomy tables are rebuilt, they are rebuilt
 # using the following table names.  The last step of the rebuild is to replace
@@ -202,6 +204,8 @@ our $TAXON_SUMMARY_WORK = "tsn";
 our $REF_SUMMARY_WORK = "rsn";
 our $INTERVAL_MAP_WORK = "imn";
 our $CONTAINER_MAP_WORK = "icn";
+our $TREE_CACHE_WORK = "ttcn";
+our $LIST_CACHE_WORK = "tlcn";
 
 # Auxiliary table names - these tables are creating during the process of
 # computing the main tables, and then discarded.
@@ -1991,12 +1995,13 @@ sub linkSynonyms {
 # 
 # We start with the set of classification opinions chosen by
 # computeSynonymy(), but we then recompute all of the ones that specify
-# hierarchy (the 'belongs to' opinions).  This time, we consider all of the
-# opinions for each senior synonym along with all of the opinions for its
-# immediate junior synonyms, and choose the most recent and reliable from that
-# set.  Note that we leave out nomina dubia, nomina vana, nomina nuda, nomina
-# oblita, and invalid subgroups, because an opinion on any of those shouldn't
-# affect the senior concept.
+# hierarchy (the 'belongs to' opinions).  This time, for each taxon at the
+# genus level and above we consider all of the opinions for each senior
+# synonym along with all of the opinions for its immediate junior synonyms,
+# and choose the most recent and reliable from that set.  Note that we leave
+# out nomina dubia, nomina vana, nomina nuda, nomina oblita, and invalid
+# subgroups, because an opinion on any of those shouldn't affect the senior
+# concept.
 # 
 # After this is done, we must check for cycles using the same procedure as
 # computeSynonymy().  Only then can we set the parent_no field of $TREE_WORK.
@@ -2028,18 +2033,18 @@ sub computeHierarchy {
 				 primary key (junior_no),
 				 key (senior_no)) ENGINE=MYISAM");
     
-    # First, we add all immediately junior synonyms, but only subjective and
-    # objective synonyms and replaced taxa.  We leave out nomina dubia, nomina
-    # vana, nomina nuda, nomina oblita, and invalid subgroups, because an
-    # opinion on any of those shouldn't affect the senior taxon.  The last
-    # clause excludes chained junior synonyms.
+    # We consider all junior synonyms of genera and above, but only subjective
+    # and objective synonyms and replaced taxa.  We leave out nomina dubia,
+    # nomina vana, nomina nuda, nomina oblita, and invalid subgroups, because
+    # an opinion on any of those shouldn't affect the senior taxon.
     
     $result = $dbh->do("INSERT IGNORE INTO $SYNONYM_AUX
-			SELECT t.orig_no, t.synonym_no
-			FROM $TREE_WORK t JOIN $CLASSIFY_AUX c USING (orig_no)
+			SELECT c.orig_no, c.parent_no
+			FROM $CLASSIFY_AUX as c JOIN $TREE_WORK as t on t.orig_no = c.orig_no
+				JOIN $TREE_WORK as t2 on t2.orig_no = c.parent_no
 			WHERE c.status in ('subjective synonym of', 'objective synonym of',
 						'replaced by')
-				and t.synonym_no = c.parent_no");
+				and t.rank >= 5 and t2.rank >= 5");
     
     # Next, we add entries for all of the senior synonyms, because of course
     # their own opinions are considered as well.
@@ -2048,8 +2053,9 @@ sub computeHierarchy {
     			SELECT DISTINCT senior_no, senior_no
 			FROM $SYNONYM_AUX");
     
-    # Next, we delete the classification opinion for each taxon in
-    # $SYNONYM_AUX.
+    # Next, we delete the classification opinion for each taxon that is
+    # represented as a senior_no in $SYNONYM_AUX.  This will clear the way for
+    # recomputing the classification of these taxa.
     
     $result = $dbh->do("DELETE QUICK FROM $CLASSIFY_AUX
 			USING $CLASSIFY_AUX JOIN $SYNONYM_AUX
@@ -2433,8 +2439,8 @@ sub adjustHierarchicalNames {
 				new_name varchar(80) not null) ENGINE=MYISAM");
     
     # The first thing we need to do is to fix subgenus names.  All of these
-    # must match the genus under which they are immediately classified, or its
-    # senior synonym if the immediate genus is a junior synonym.
+    # which are themselves senior synonyms must match the senior synonym of
+    # the genus under which they are immediately classified.
     
     $SQL_STRING = "
 		INSERT INTO $ADJUST_AUX (orig_no, new_name)
@@ -2445,7 +2451,7 @@ sub adjustHierarchicalNames {
 			JOIN $TREE_WORK as p1 on p1.orig_no = t.parent_no
 			JOIN $TREE_WORK as t1 on t1.orig_no = p1.synonym_no 
 				and p1.rank = 5
-		WHERE t.rank = 4";
+		WHERE t.rank = 4 and t.orig_no = t.synonym_no";
     
     $result = $dbh->do($SQL_STRING);
     
@@ -2483,7 +2489,7 @@ sub adjustHierarchicalNames {
 			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = p2.synonym_no
 			LEFT JOIN $TREE_WORK as p3 on p3.orig_no = p2.parent_no
 			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = p3.synonym_no
-		WHERE t.rank in (2, 3) and
+		WHERE t.rank in (2, 3) and t.orig_no = t.synonym_no and
 			(p1.rank in (4,5) or p2.rank in (4,5) or p3.rank in (4,5))";
     
     $result = $dbh->do($SQL_STRING);
@@ -3821,6 +3827,17 @@ sub computeAttrsTable {
     my $auth_table = $AUTH_TABLE{$tree_table};
     my $opinion_cache = $OPINION_CACHE{$tree_table};
     
+    # Create the taxon summary table if it doesn't already exist.
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_SUMMARY (
+				orig_no int unsigned primary key,
+				n_occs int unsigned not null,
+				n_colls int unsigned not null,
+				first_early_age decimal(9,5),
+				first_late_age decimal(9,5),
+				last_early_age decimal(9,5),
+				last_late_age decimal(9,5)) ENGINE=MyISAM");
+    
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.
     
@@ -3838,10 +3855,10 @@ sub computeAttrsTable {
 				n_colls int unsigned not null,
 				min_body_mass float,
 				max_body_mass float,
-				first_early_int_seq int unsigned,
-				first_late_int_seq int unsigned,
-				last_early_int_seq int unsigned,
-				last_late_int_seq int unsigned,
+				first_early_age decimal(9,5),
+				first_late_age decimal(9,5),
+				last_early_age decimal(9,5),
+				last_late_age decimal(9,5),
 				not_trace boolean,
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
@@ -3851,22 +3868,22 @@ sub computeAttrsTable {
     $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
-			 first_early_int_seq, first_late_int_seq, last_early_int_seq, last_late_int_seq,
+			 first_early_age, first_late_age, last_early_age, last_late_age,
 			 not_trace)
 		SELECT a.orig_no,
 			t.valid_no = t.synonym_no as is_valid,
 			(t.orig_no = t.synonym_no) or (t.orig_no = t.valid_no) as is_senior,
 			case coalesce(a.extant) 
 				when 'yes' then 1 when 'no' then 0 else null end as is_extant,
-			0, 0, 0, 0, occ.n_occs, 0,
+			0, 0, 0, 0, tsum.n_occs, 0,
 			coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
 			coalesce(e.maximum_body_mass, e.body_mass_estimate) as max,
-			occ.first_early_int_seq, occ.first_late_int_seq,
-			occ.last_early_int_seq, occ.last_late_int_seq,
+			tsum.first_early_age, tsum.first_late_age,
+			tsum.last_early_age, tsum.last_late_age,
 			(a.preservation <> 'trace' or a.preservation is null)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
-			LEFT JOIN $TAXON_SUMMARY as occ using (orig_no)
+			LEFT JOIN $TAXON_SUMMARY as tsum using (orig_no)
 		GROUP BY a.orig_no";
     
     $result = $dbh->do($sql);
@@ -3883,20 +3900,20 @@ sub computeAttrsTable {
 			max(v.max_body_mass) as max_body_mass,
 			sum(v.n_occs) as n_occs,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace,
-			min(v.first_early_int_seq) as first_early_int_seq,
-			min(v.first_late_int_seq) as first_late_int_seq,
-			min(v.last_early_int_seq) as last_early_int_seq,
-			min(v.last_late_int_seq) as last_late_int_seq
+			max(v.first_early_age) as first_early_age,
+			max(v.first_late_age) as first_late_age,
+			min(v.last_early_age) as last_early_age,
+			min(v.last_late_age) as last_late_age
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
 			v.n_occs = nv.n_occs,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.first_early_int_seq = nv.first_early_int_seq,
-			v.first_late_int_seq = nv.first_late_int_seq,
-			v.last_early_int_seq = nv.last_early_int_seq,
-			v.last_late_int_seq = nv.last_late_int_seq,
+			v.first_early_age = nv.first_early_age,
+			v.first_late_age = nv.first_late_age,
+			v.last_early_age = nv.last_early_age,
+			v.last_late_age = nv.last_late_age,
 			v.not_trace = nv.not_trace";
     
     $result = $dbh->do($sql);
@@ -3956,22 +3973,22 @@ sub computeAttrsTable {
 	my $sql = "
 		UPDATE $ATTRS_WORK as v JOIN
 		(SELECT t.parent_no,
-			coalesce(least(min(v.first_early_int_seq), pv.first_early_int_seq), 
-				min(v.first_early_int_seq), pv.first_early_int_seq) as first_early_int_seq,
-			coalesce(least(min(v.first_late_int_seq), pv.first_late_int_seq), 
-				min(v.first_late_int_seq), pv.first_late_int_seq) as first_late_int_seq,
-			coalesce(least(min(v.last_early_int_seq), pv.last_early_int_seq), 
-				min(v.last_early_int_seq), pv.last_early_int_seq) as last_early_int_seq,
-			coalesce(least(min(v.last_late_int_seq), pv.last_late_int_seq), 
-				min(v.last_late_int_seq), pv.last_late_int_seq) as last_late_int_seq
+			coalesce(greatest(max(v.first_early_age), pv.first_early_age), 
+				max(v.first_early_age), pv.first_early_age) as first_early_age,
+			coalesce(greatest(max(v.first_late_age), pv.first_late_age), 
+				max(v.first_late_age), pv.first_late_age) as first_late_age,
+			coalesce(least(min(v.last_early_age), pv.last_early_age), 
+				min(v.last_early_age), pv.last_early_age) as last_early_age,
+			coalesce(least(min(v.last_late_age), pv.last_late_age), 
+				min(v.last_late_age), pv.last_late_age) as last_late_age
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no
 		 WHERE t.depth = $child_depth and v.is_valid and v.is_senior and v.not_trace
 		 GROUP BY t.parent_no) as nv on v.orig_no = nv.parent_no
-		SET	v.first_early_int_seq = nv.first_early_int_seq,
-			v.first_late_int_seq = nv.first_late_int_seq,
-			v.last_early_int_seq = nv.last_early_int_seq,
-			v.last_late_int_seq = nv.last_late_int_seq";
+		SET	v.first_early_age = nv.first_early_age,
+			v.first_late_age = nv.first_late_age,
+			v.last_early_age = nv.last_early_age,
+			v.last_late_age = nv.last_late_age";
 	
 	$result = $dbh->do($sql);
 	
@@ -3991,10 +4008,10 @@ sub computeAttrsTable {
 			sum(v.n_occs) as n_occs,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
-			min(v.first_early_int_seq) as first_early_int_seq,
-			min(v.first_late_int_seq) as first_late_int_seq,
-			min(v.last_early_int_seq) as last_early_int_seq,
-			min(v.last_late_int_seq) as last_late_int_seq,
+			max(v.first_early_age) as first_early_age,
+			max(v.first_late_age) as first_late_age,
+			min(v.last_early_age) as last_early_age,
+			min(v.last_late_age) as last_late_age,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and v.is_valid
@@ -4007,10 +4024,10 @@ sub computeAttrsTable {
 			v.n_occs = nv.n_occs,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.first_early_int_seq = nv.first_early_int_seq,
-			v.first_late_int_seq = nv.first_late_int_seq,
-			v.last_early_int_seq = nv.last_early_int_seq,
-			v.last_late_int_seq = nv.last_late_int_seq,
+			v.first_early_age = nv.first_early_age,
+			v.first_late_age = nv.first_late_age,
+			v.last_early_age = nv.last_early_age,
+			v.last_late_age = nv.last_late_age,
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
@@ -4029,10 +4046,10 @@ sub computeAttrsTable {
 			sum(v.n_occs) as n_occs,
 			min(v.min_body_mass) as min_body_mass,
 			max(v.max_body_mass) as max_body_mass,
-			min(v.first_early_int_seq) as first_early_int_seq,
-			min(v.first_late_int_seq) as first_late_int_seq,
-			min(v.last_early_int_seq) as last_early_int_seq,
-			min(v.last_late_int_seq) as last_late_int_seq,
+			max(v.first_early_age) as first_early_age,
+			max(v.first_late_age) as first_late_age,
+			min(v.last_early_age) as last_early_age,
+			min(v.last_late_age) as last_late_age,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and t.valid_no <> t.synonym_no
@@ -4045,10 +4062,10 @@ sub computeAttrsTable {
 			v.n_occs = nv.n_occs,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
-			v.first_early_int_seq = nv.first_early_int_seq,
-			v.first_late_int_seq = nv.first_late_int_seq,
-			v.last_early_int_seq = nv.last_early_int_seq,
-			v.last_late_int_seq = nv.last_late_int_seq,
+			v.first_early_age = nv.first_early_age,
+			v.first_late_age = nv.first_late_age,
+			v.last_early_age = nv.last_early_age,
+			v.last_late_age = nv.last_late_age,
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
@@ -4093,10 +4110,10 @@ sub computeAttrsTable {
 			v.n_occs = sv.n_occs,
 			v.min_body_mass = sv.min_body_mass,
 			v.max_body_mass = sv.max_body_mass,
-			v.first_early_int_seq = sv.first_early_int_seq,
-			v.first_late_int_seq = sv.first_late_int_seq,
-			v.last_early_int_seq = sv.last_early_int_seq,
-			v.last_late_int_seq = sv.last_late_int_seq,
+			v.first_early_age = sv.first_early_age,
+			v.first_late_age = sv.first_late_age,
+			v.last_early_age = sv.last_early_age,
+			v.last_late_age = sv.last_late_age,
 			v.not_trace = sv.not_trace");
     
     # We can stop here when debugging.
@@ -4240,16 +4257,16 @@ sub computeCollectionTables {
 		bin_lat smallint unsigned not null,
 		bin_id int unsigned,
 		clust_id int unsigned,
-		lng float,
-		lat float,
+		lng decimal(9,6),
+		lat decimal(9,6),
 		loc point not null,
 		cc char(2),
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
 		early_seq smallint unsigned not null,
 		late_seq smallint unsigned not null,
-		early_age float,
-		late_age float,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
 		n_occs int unsigned not null,
 		reference_no int unsigned not null,
 		authorizer_no int unsigned not null,
@@ -4327,13 +4344,13 @@ sub computeCollectionTables {
     $dbh->do("CREATE TABLE $COLL_INTS_WORK (
 		collection_no int unsigned not null,
 		interval_no int unsigned not null,
-		unique key (collection_no, interval_no))");
+		unique key (collection_no, interval_no)) ENGINE=MYISAM");
     
     $sql = "INSERT IGNORE INTO $COLL_INTS_WORK
 		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
 			JOIN $INTERVAL_MAP as li on li.younger_seq = m.late_seq
 			JOIN $INTERVAL_MAP as ei on ei.older_seq = m.early_seq
-			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_seq and i.top_age <= ei.top_age + 0.01
+			JOIN $INTERVAL_MAP as i on i.younger_seq >= m.late_seq and i.top_age <= ei.top_age
 				and i.level = li.level
 		WHERE li.level <= ei.level and i.interval_no <> 0";
     
@@ -4403,14 +4420,16 @@ sub computeCollectionTables {
 		clust_id int unsigned,
 		n_colls int unsigned,
 		n_occs int unsigned,
+		early_age decimal(9,5),
+		late_age decimal(9,5), 
 		early_seq int unsigned not null,
 		late_seq int unsigned not null,
-		lng float,
-		lat float,
-		lng_min float,
-		lng_max float,
-		lat_min float,
-		lat_max float,
+		lng decimal(9,6),
+		lat decimal(9,6),
+		lng_min decimal(9,6),
+		lng_max decimal(9,6),
+		lat_min decimal(9,6),
+		lat_max decimal(9,6),
 		std_dev float,
 		access_level tinyint unsigned not null,
 		unique key (bin_lng, bin_lat)) Engine=MyISAM");
@@ -4419,13 +4438,15 @@ sub computeCollectionTables {
     
     $sql = "	INSERT IGNORE INTO $COLL_BINS_WORK
 			(bin_lng, bin_lat, bin_id, n_colls, n_occs, 
+			 early_age, late_age, 
 			 early_seq, late_seq, lng, lat,
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
 		SELECT bin_lng, bin_lat, bin_id, count(*), sum(n_occs),
+		       max(early_age), min(late_age),
 		       min(early_seq), min(late_seq), avg(lng), avg(lat),
-		       round(min(lng),2) as lng_min, round(max(lng),2) as lng_max,
-		       round(min(lat),2) as lat_min, round(max(lat),2) as lat_max,
+		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
+		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
 		       min(access_level)
 		FROM $COLL_MATRIX_WORK
@@ -4445,14 +4466,16 @@ sub computeCollectionTables {
 		clust_id int unsigned not null,
 		n_colls int unsigned,
 		n_occs int unsigned,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
 		early_seq int unsigned not null,
 		late_seq int unsigned not null,
-		lng float,
-		lat float,
-		lng_min float,
-		lng_max float,
-		lat_min float,
-		lat_max float,
+		lng decimal(9,6),
+		lat decimal(9,6),
+		lng_min decimal(9,6),
+		lng_max decimal(9,6),
+		lat_min decimal(9,6),
+		lat_max decimal(9,6),
 		std_dev float,
 		access_level tinyint unsigned,
 		unique key (clust_lng, clust_lat)) Engine=MyISAM");
@@ -4463,7 +4486,7 @@ sub computeCollectionTables {
     
     $dbh->do("CREATE TABLE $CLUST_AUX (
 		bin_id int unsigned primary key,
-		clust_id int unsigned not null)");
+		clust_id int unsigned not null) ENGINE=MYISAM");
     
     # We must now seed the k-means algorithm by choosing an initial set of
     # collections.  This set will determine the number of clusters in the
@@ -4602,6 +4625,8 @@ sub computeCollectionTables {
     $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
 		(SELECT clust_id, sum(n_colls) as n_colls,
 			sum(n_occs) as n_occs,
+			max(early_age) as early_age,
+			min(late_age), as late_age,
 			min(early_seq) as early_seq,
 			min(late_seq) as late_seq,
 			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
@@ -4611,6 +4636,7 @@ sub computeCollectionTables {
 		FROM $COLL_BINS_WORK GROUP BY clust_id) as agg
 			using (clust_id)
 		SET k.n_colls = agg.n_colls, k.n_occs = agg.n_occs,
+		    k.early_age = agg.early_age, k.late_age = agg.late_age,
 		    k.early_seq = agg.early_seq, k.late_seq = agg.late_seq,
 		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
 		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,
@@ -4692,6 +4718,8 @@ sub computeOccurrenceTables {
 				reid_no int unsigned not null,
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
+				base_age decimal(9,5),
+				top_age decimal(9,5),
 				reference_no int unsigned not null,
 				authorizer_no int unsigned not null,
 				enterer_no int unsigned not null) ENGINE=MyISAM");
@@ -4701,12 +4729,14 @@ sub computeOccurrenceTables {
     logMessage(2, "    inserting occurrences...");
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
-		       (occurrence_no, collection_no, taxon_no, orig_no, reference_no,
+		       (occurrence_no, collection_no, taxon_no, orig_no, base_age, top_age, reference_no,
 			authorizer_no, enterer_no)
-		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no,
+		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no, ei.base_age, li.top_age,
 			if(o.reference_no > 0, o.reference_no, c.reference_no),
 			o.authorizer_no, o.enterer_no
-		FROM occurrences as o JOIN collections as c using (collection_no)
+		FROM occurrences as o JOIN coll_matrix as c using (collection_no)
+			LEFT JOIN interval_map as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN interval_map as li on li.interval_no = c.late_int_no
 			LEFT JOIN authorities as a using (taxon_no)";
     
     $count = $dbh->do($sql);
@@ -4717,7 +4747,8 @@ sub computeOccurrenceTables {
     # reidentification if any.
     
     $sql = "	UPDATE $OCC_MATRIX_WORK as m
-			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no and re.most_recent = 'YES'
+			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no 
+				and re.most_recent = 'YES'
 			JOIN authorities as a on a.taxon_no = re.taxon_no
 		SET m.reid_no = re.reid_no,
 		    m.taxon_no = re.taxon_no,
@@ -4749,40 +4780,73 @@ sub computeOccurrenceTables {
     
     logMessage(2, "    summarizing by taxon");
     
-    # Then create working tables which will become the new occurrence summary
+    # Then create working tables which will become the new taxon summary
     # table and reference summary table.
     
     $result = $dbh->do("DROP TABLE IF EXISTS $TAXON_SUMMARY_WORK");
     $result = $dbh->do("CREATE TABLE $TAXON_SUMMARY_WORK (
 				orig_no int unsigned primary key,
+				lft int unsigned not null,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
-				first_early_int_seq int unsigned not null,
-				first_late_int_seq int unsigned not null,
-				last_early_int_seq int unsigned not null,
-				last_late_int_seq int unsigned not null) ENGINE=MyISAM");
+				first_early_age decimal(9,5),
+				first_late_age decimal(9,5),
+				last_early_age decimal(9,5),
+				last_late_age decimal(9,5),
+				first_occ int unsigned,
+				last_occ int unsigned) ENGINE=MyISAM");
     
-    $sql = "	INSERT INTO $TAXON_SUMMARY_WORK (orig_no, n_occs, n_colls,
-			first_early_int_seq, first_late_int_seq, last_early_int_seq, last_late_int_seq)
-		SELECT m.orig_no, count(*), count(distinct collection_no),
-			min(ei.older_seq), min(li.older_seq), min(ei.younger_seq), min(li.younger_seq)
+    # Look for the lower and upper bounds for the interval range in which each taxon
+    # occurs.  But ignore intervals at the period level and above (except for
+    # precambrian and quaternary).  They are not just specific enough.
+    
+    $sql = "	INSERT INTO $TAXON_SUMMARY_WORK (orig_no, lft, n_occs, n_colls,
+			first_early_age, first_late_age, last_early_age, last_late_age)
+		SELECT m.orig_no, t.lft, count(*), count(distinct collection_no),
+			max(ei.base_age), max(li.top_age), min(ei.base_age), min(li.top_age)
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
+			JOIN taxon_trees as t using (orig_no)
 			JOIN interval_map as ei on ei.interval_no = c.early_int_no
 			JOIN interval_map as li on li.interval_no = c.late_int_no
-		GROUP BY m.orig_no";
+		WHERE (ei.level is null or ei.level > 3 or
+				(ei.level = 3 and (ei.top_age >= 541.0 or ei.base_age <= 2.6))) and
+		      (li.level is null or li.level > 3 or 
+				(li.level = 3 and (li.top_age >= 541.0 or li.base_age <= 2.6)))
+		GROUP BY m.orig_no
+		HAVING m.orig_no > 0";
     
     $count = $dbh->do($sql);
     
     logMessage(2, "      $count taxa");
     
+    # Now that we have the age bounds for the first and last occurrence, we
+    # can select a candidate first and last occurrence for each taxon (from
+    # among all of the occurrences in the earliest/latest time interval in
+    # which that taxon is recorded).
+    
+    logMessage(2, "    finding first and last occurrences");
+    
+    $sql = "	UPDATE $TAXON_SUMMARY_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
+		SET s.first_occ = o.occurrence_no WHERE o.top_age >= s.first_late_age";
+    
+    $count = $dbh->do($sql);
+    
+    $sql = "	UPDATE $TAXON_SUMMARY_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
+		SET s.last_occ = o.occurrence_no WHERE o.base_age <= s.last_early_age";
+    
+    $count = $dbh->do($sql);
+    
     # Then index the symmary table by earliest and latest interval number, so
     # that we can quickly query for which taxa began or ended at a particular
-    # time. 
+    # time.
     
     logMessage(2, "    indexing the summary table");
     
-    $result = $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (n_occs)");
-    $result = $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (n_colls)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (lft)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (first_early_age)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (first_late_age)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (last_early_age)");
+    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (last_late_age)");
     
     # We now summarize the occurrence matrix by reference_no.  For each
     # reference, we record the range of time periods it covers, plus the
@@ -4795,13 +4859,13 @@ sub computeOccurrenceTables {
 				reference_no int unsigned primary key,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
-				early_int_seq int unsigned not null,
-				late_int_seq int unsigned not null) ENGINE=MyISAM");
+				early_age decimal(9,5),
+				late_age decimal(9,5)) ENGINE=MyISAM");
     
     $sql = "	INSERT INTO $REF_SUMMARY_WORK (reference_no, n_occs, n_colls,
-			early_int_seq, late_int_seq)
+			early_age, late_age)
 		SELECT m.reference_no, count(*), count(distinct collection_no),
-			min(ei.older_seq), min(li.younger_seq)
+			max(ei.base_age), min(li.top_age)
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN interval_map as ei on ei.interval_no = c.early_int_no
 			JOIN interval_map as li on li.interval_no = c.late_int_no
@@ -4818,6 +4882,8 @@ sub computeOccurrenceTables {
     
     $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (n_occs)");
     $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (n_colls)");
+    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (early_age)");
+    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (late_age)");
     
     # Now swap in the new tables:
     
@@ -4856,6 +4922,22 @@ sub computeOccurrenceTables {
     $result = $dbh->do("DROP TABLE IF EXISTS $ref_summary_bak");
 }
 
+
+# computeTaxonProminenceTables ( dbh )
+# 
+# Use the occurrence matrix, the collection matrix, and the taxon trees to
+# compute summary tables for the prevalence and diversity of phyla and classes
+# throughout space and time.
+
+sub computeTaxonProminenceTables {
+
+    my ($dbh) = @_;
+    
+    
+
+
+
+}
 
 
 # createCountryMap ( dbh, force )
@@ -5121,8 +5203,8 @@ sub computeIntervalTables {
 		late_st_no int unsigned not null,
 		older_seq int unsigned not null,
 		younger_seq int unsigned not null,
-		base_age float not null,
-		top_age float not null,
+		base_age decimal(9,5) not null,
+		top_age decimal(9,5) not null,
 		color varchar(10),
 		reference_no int unsigned not null,
 		INDEX (interval_name),
@@ -5203,8 +5285,8 @@ sub computeIntervalTables {
 			level tinyint unsigned not null,
 			early_no int unsigned not null,
 			late_no int unsigned not null,
-			early_age float,
-			late_age float) Engine=MyISAM");
+			early_age decimal(9,5),
+			late_age decimal(9,5)) Engine=MyISAM");
     
     $result = $dbh->do("DROP TABLE IF EXISTS intervals_aux_2");
     
@@ -5218,8 +5300,8 @@ sub computeIntervalTables {
     {
 	$sql = "INSERT INTO intervals_aux (interval_no, level, early_no, late_no, early_age, late_age)
 		SELECT i.interval_no, $level, ei.interval_no as early_no, li.interval_no as late_no, ei.base_age, li.top_age
-		FROM $INTERVAL_MAP_WORK as i JOIN $INTERVAL_MAP_WORK as li on li.top_age <= i.top_age + 0.1 and li.base_age >= i.top_age + 0.1
-			JOIN $INTERVAL_MAP_WORK as ei on ei.base_age >= i.base_age - 0.1 and ei.top_age <= i.base_age - 0.1
+		FROM $INTERVAL_MAP_WORK as i JOIN $INTERVAL_MAP_WORK as li on li.top_age <= i.top_age and li.base_age >= i.top_age 
+			JOIN $INTERVAL_MAP_WORK as ei on ei.base_age >= i.base_age and ei.top_age <= i.base_age
 		WHERE i.level is null and li.level = $level and ei.level = $level";
 
 	$result = $dbh->do($sql);
@@ -5483,6 +5565,142 @@ sub activateTreeTables {
     my $a = 1;		# we can stop here when debugging
 }
 
+
+# computeTaxaCacheTables ( dbh, tree_table )
+# 
+# Rebuild the tables 'taxa_tree_cache' and 'taxa_list_cache' using the
+# specified tree table.  This allows the old pbdb code to function properly
+# using the recomputed taxonomy tree.
+
+sub computeTaxaCacheTables {
+
+    my ($dbh, $tree_table) = @_;
+    
+    my ($auth_table) = $AUTH_TABLE{$tree_table};
+    
+    my $result;
+    
+    # Create a new working table for taxa_tree_cache
+    
+    logMessage(2, "computing tree cache and list cache tables");
+    
+    logMessage(2, "    creating tree cache");
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $TREE_CACHE_WORK");
+    
+    $result = $dbh->do("
+	CREATE TABLE $TREE_CACHE_WORK
+	       (taxon_no int unsigned primary key,
+		lft int unsigned not null,
+		rgt int unsigned not null,
+		spelling_no int unsigned not null,
+		synonym_no int unsigned not null,
+		opinion_no int unsigned not null,
+		max_interval_no int unsigned not null,
+		min_interval_no int unsigned not null,
+		mass float) ENGINE=MYISAM");
+    
+    # Populate it using the authorities table and taxon_trees table
+    
+    logMessage(2, "    populating tree cache");
+    
+    $result = $dbh->do("
+	INSERT INTO $TREE_CACHE_WORK (taxon_no, lft, rgt, spelling_no, synonym_no, opinion_no)
+	SELECT a.taxon_no, t.lft, t.rgt, t.spelling_no, t.synonym_no, t.opinion_no
+	FROM $auth_table as a JOIN $tree_table as t using (orig_no)");
+    
+    # Add the necessar indices
+    
+    logMessage(2, "    indexing tree cache");
+    
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (lft)");
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (rgt)");
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (spelling_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (synonym_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_CACHE_WORK add index (opinion_no)");
+    
+    # Create a new working table for taxa_list_cache
+    
+    logMessage(2, "    creating list cache");
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $LIST_CACHE_WORK");
+    
+    $result = $dbh->do("
+	CREATE TABLE $LIST_CACHE_WORK
+	       (parent_no int unsigned not null,
+		child_no int unsigned not null,
+		PRIMARY KEY (child_no, parent_no)) ENGINE=MYISAM");
+    
+    # Populate it using the taxon_trees table, 
+    
+    logMessage(2, "    populating list cache");
+    
+    my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $tree_table");
+    
+    foreach my $depth (reverse 2..$max_depth)
+    {
+	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
+	
+	$result = $dbh->do("
+		INSERT INTO $LIST_CACHE_WORK (parent_no, child_no)
+		SELECT t.parent_no, l.child_no
+		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
+		WHERE t.depth = $depth");
+	
+	$result = $dbh->do("
+		INSERT INTO $LIST_CACHE_WORK (parent_no, child_no)
+		SELECT t.parent_no, t.orig_no
+		FROM $tree_table as t
+		WHERE t.depth = $depth");
+    }
+    
+    # Update it to show spelling_no values instead of the corresponding
+    # orig_no values.
+    
+    logMessage(2, "    setting spelling_no values");
+    
+    $result = $dbh->do("
+		UPDATE $LIST_CACHE_WORK as l
+			JOIN $tree_table as pt on pt.orig_no = l.parent_no
+			JOIN $tree_table as ct on ct.orig_no = l.child_no
+		SET l.parent_no = pt.spelling_no,
+		    l.child_no = ct.spelling_no");
+    
+    # Add the necessary indices
+    
+    logMessage(2, "    indexing list cache");
+    
+    $result = $dbh->do("ALTER TABLE $LIST_CACHE_WORK add index (parent_no)");
+    
+    # Now swap in the new tables.
+    
+    logMessage(2, "   activating tables '$CLASSIC_TREE_CACHE', '$CLASSIC_LIST_CACHE'");
+    
+    # Compute the backup names of all the tables to be activated
+    
+    my $tree_bak = "${CLASSIC_TREE_CACHE}_bak";
+    my $list_bak = "${CLASSIC_LIST_CACHE}_bak";
+    
+    # Drop those tables if any are still around
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
+    $result = $dbh->do("DROP TABLE IF EXISTS $list_bak");
+    
+    # Recreate any of the existing tables that may not exist for some reason
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_TREE_CACHE like $TREE_CACHE_WORK");
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $CLASSIC_LIST_CACHE like $LIST_CACHE_WORK");
+    
+    # Now swap in the new tables
+    
+    $result = $dbh->do("RENAME TABLE
+		$CLASSIC_TREE_CACHE to $tree_bak,
+		$TREE_CACHE_WORK to $CLASSIC_TREE_CACHE,
+		$CLASSIC_LIST_CACHE to $list_bak,
+		$LIST_CACHE_WORK to $CLASSIC_LIST_CACHE");
+    
+    my $a = 1;	# We can stop here when debugging
+}
 
 # check ( dbh )
 # 

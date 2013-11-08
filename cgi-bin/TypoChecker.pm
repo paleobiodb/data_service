@@ -2,7 +2,7 @@ package TypoChecker;
 
 use Debug qw(dbg);
 use Data::Dumper;
-use Collection;
+use CollectionEntry;
 use Person;
 use PBDBUtil;
 use Constants qw($READ_URL $WRITE_URL);
@@ -13,7 +13,7 @@ $TypoChecker::edit_distance = 3;
 # start the process to get to the reclassify occurrences page
 # modelled after startAddEditOccurrences
 sub searchOccurrenceMisspellingForm {
-	my ($dbt,$taxonomy,$q,$s,$hbo,$message,$no_header) = @_;
+	my ($dbt,$q,$s,$hbo,$message,$no_header) = @_;
     my $dbh = $dbt->dbh;
 
 
@@ -42,7 +42,7 @@ sub searchOccurrenceMisspellingForm {
 sub getNameData {
     my ($dbt,$name,$period_lookup,$period_order,$can_modify) = @_;
     my $dbh = $dbt->dbh;
-    my ($g,$sg,$sp,$ssp) = Taxonomy::splitTaxonName($name);
+    my ($g,$sg,$sp,$ssp) = Taxon::splitTaxon($name);
     my $where = 'o.genus_name='.$dbh->quote($g); 
     if ($sg || $sp) {
         if ($sg) {
@@ -126,7 +126,7 @@ sub getNameData {
 # We will want to get occurrences that fall outside the filter, and we'll have to do a separate query at a later date
 # Also, much of the filtering options can't be applied until we get a list of suggesstions
 sub occurrenceMisspellingForm {
-	my ($dbt,$taxonomy,$q,$s,$hbo) = @_;
+	my ($dbt,$q,$s,$hbo) = @_;
     my $dbh = $dbt->dbh;
 
     my $show_detail = $q->param('show_detail');
@@ -135,14 +135,14 @@ sub occurrenceMisspellingForm {
     # indet and sp)
     my @names;
     if ($q->param('taxon_name')) {
-        my $names_hash = taxonTypoCheck($dbt,$taxonomy,$q->param("taxon_name"));
+        my $names_hash = taxonTypoCheck($dbt,$q->param("taxon_name"));
         @names = keys(%{$names_hash});
         push @names, $q->param('taxon_name');
     } else {
         my %options = $q->Vars();
         # Do a looser match against occurrences/reids tables only
         $options{'limit'} = 10000000;
-        my ($dataRows,$ofRows,$warnings) = Collection::getCollections($dbt,$s,\%options,['collection_no']);  
+        my ($dataRows,$ofRows,$warnings) = CollectionEntry::getCollections($dbt,$s,\%options,['collection_no']);  
         my @collection_nos = map {$_->{'collection_no'}} @$dataRows;
 
         my $fields = 'a.taxon_rank,a.taxon_name,o.genus_reso,o.genus_name,o.subgenus_reso,o.subgenus_name,o.species_reso,o.species_name,o.taxon_no';
@@ -215,13 +215,13 @@ sub occurrenceMisspellingForm {
         my $displayed_results = 0;
         for (my $i = $offset; $i < ($offset+$limit+$skip_other+$skip_unclassified+$skip_genus_classified) && $i < $name_count; $i++) {
             my $name = $names[$i];
-            my ($g,$sg,$sp) = Taxonomy::splitTaxonName($name);
+            my ($g,$sg,$sp) = Taxon::splitTaxon($name);
            
             # Useful below
-            my @taxa = $taxonomy->getTaxaByName($g, { id => 1 });
+            my @taxa = TaxonInfo::getTaxa($dbt,{'taxon_name'=>$g},['taxon_no']);
             my $genus_is_classified = (@taxa) ? 1 : 0;
 
-            my $suggest_hash = taxonTypoCheck($dbt,$taxonomy,$name,$genus_is_classified);
+            my $suggest_hash = taxonTypoCheck($dbt,$name,$genus_is_classified);
 
             # Grab the suggesstion list now and determine if we want to continue
             my @suggestions = keys(%{$suggest_hash});
@@ -328,7 +328,7 @@ sub occurrenceMisspellingForm {
         if ($displayed_results == 0 && $page_no == 0) {
             my $message = "<div align=\"center\"><p class=\"pageTitle\">No results to display, please search again</p></div>";
             print "</form>";
-            searchOccurrenceMisspellingForm($dbt,$taxonomy,$q,$s,$hbo,$message,1);
+            searchOccurrenceMisspellingForm($dbt,$q,$s,$hbo,$message,1);
             return;
         } else {
             print '<br><br><input type="submit" name="submit" value="Fix misspellings">';
@@ -390,7 +390,7 @@ sub occurrenceMisspellingForm {
         print '</form><br><br>';
     } else {
             my $message = "<div align=\"center\"><p class=\"pageTitle\">No results to display, please search again</p></div>";
-            searchOccurrenceMisspellingForm($dbt,$taxonomy,$q,$s,$hbo,$message);
+            searchOccurrenceMisspellingForm($dbt,$q,$s,$hbo,$message);
     }
 }
 
@@ -399,11 +399,11 @@ sub occurrenceMisspellingForm {
 # then we have to feed right back into the form though
 #
 sub submitOccurrenceMisspelling {
-	my ($dbt,$taxonomy,$q,$s,$hbo) = @_;
+	my ($dbt,$q,$s,$hbo) = @_;
     my $dbh = $dbt->dbh;
 
     if ($q->param('submit') =~ /get next/i) {
-        occurrenceMisspellingForm($dbt,$taxonomy,$q,$s,$hbo);
+        occurrenceMisspellingForm($dbt,$q,$s,$hbo);
     } else {
         my @exec_list = $q->param('execute_list');
         my $authorizer_no = $s->get('authorizer_no');
@@ -428,8 +428,8 @@ sub submitOccurrenceMisspelling {
             next if ($reid_list !~ /^[, \d]*$/);
             if ($old_name && $new_name && $old_name ne $new_name) {
                 $count++;
-                my ($g1,$sg1,$sp1,$ssp1) = $taxonomy->splitTaxonName($old_name);
-                my ($g2,$sg2,$sp2,$ssp2) = $taxonomy->splitTaxonName($new_name);
+                my ($g1,$sg1,$sp1,$ssp1) = Taxon::splitTaxon($old_name);
+                my ($g2,$sg2,$sp2,$ssp2) = Taxon::splitTaxon($new_name);
                 my ($g1_q,$sg1_q,$sp1_q) = ($dbh->quote($g1),$dbh->quote($sg1),$dbh->quote($sp1));
                 my ($g2_q,$sg2_q,$sp2_q) = ($dbh->quote($g2),$dbh->quote($sg2),$dbh->quote($sp2));
 
@@ -452,7 +452,7 @@ sub submitOccurrenceMisspelling {
                     push @set_fields, "species_name=IF(species_name IS NULL,$sp2_q,REPLACE(species_name,$sp1_q,$sp2_q))";
                     $new_actual_name .= " $sp2";
                 }
-                my $best_taxon_no = $taxonomy->getTaxaBestMatch(['',$g2,'',$sg2,'',$sp2], { id => 1 });
+                my $best_taxon_no = Taxon::getBestClassification($dbt,'',$g2,'',$sg2,'',$sp2);
                 push @set_fields,"modifier_no=$enterer_no","modifier=".$dbh->quote($s->get("enterer")),"taxon_no=$best_taxon_no";
                 my $mod_count = 0;
                 if ($occ_list) {
@@ -514,12 +514,12 @@ sub submitOccurrenceMisspelling {
 
 
 sub taxonTypoCheck {
-    my ($dbt,$taxonomy,$name,$genus_is_classified,$authority_only) = @_;
+    my ($dbt,$name,$genus_is_classified,$authority_only) = @_;
     my $dbh = $dbt->dbh;
     return () if (!$name);
     $name =~ s/^\s*//;
 
-    my ($g,$sg,$sp,$ssp) = $taxonomy->splitTaxonName($name);
+    my ($g,$sg,$sp,$ssp) = Taxon::splitTaxon($name);
 
     my %names = ();
     unless ($authority_only) {
@@ -569,7 +569,7 @@ sub taxonTypoCheck {
                 $names{$_->{'taxon_name'}}{'match_quality'} = 3;
             }
         } else {
-            my ($tg,$tsg,$tsp) = $taxonomy->splitTaxonName($_->{'taxon_name'});
+            my ($tg,$tsg,$tsp) = Taxon::splitTaxon($_->{'taxon_name'});
             if ($names{$tg}) {
                 $names{$_->{'taxon_name'}} = {'match_quality'=>2};
             } else {

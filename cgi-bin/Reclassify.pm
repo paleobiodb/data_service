@@ -1,7 +1,6 @@
 package Reclassify;
 
 use strict;
-use TaxonEdit;
 use URI::Escape;
 use CGI qw(escapeHTML);
 use Debug qw(dbg);
@@ -12,7 +11,7 @@ use Constants qw($READ_URL $WRITE_URL $DB $COLLECTIONS $COLLECTION_NO $OCCURRENC
 # start the process to get to the reclassify occurrences page
 # modelled after startAddEditOccurrences
 sub startReclassifyOccurrences	{
-	my ($q, $s, $taxonomy, $dbt, $hbo) = @_;
+	my ($q,$s,$dbt,$hbo) = @_;
     my $dbh = $dbt->dbh;
 
 	if (!$s->isDBMember()) {
@@ -22,7 +21,7 @@ sub startReclassifyOccurrences	{
 	} elsif ( $q->param("collection_no") )	{
         # if they have the collection number, they'll immediately go to the
         #  reclassify page
-		displayOccurrenceReclassify($q, $s, $taxonomy, $dbt, $hbo);
+		displayOccurrenceReclassify($q,$s,$dbt,$hbo);
 	} else	{
         my %vars = $q->Vars();
         $vars{'enterer_me'} = $s->get('enterer_reversed');
@@ -44,7 +43,7 @@ sub startReclassifyOccurrences	{
 # print a list of the taxa in the collection with pulldowns indicating
 #  alternative classifications
 sub displayOccurrenceReclassify	{
-    my ($q,$s,$taxonomy,$dbt,$hbo,$collections_ref) = @_;
+    my ($q,$s,$dbt,$hbo,$collections_ref) = @_;
     my $dbh = $dbt->dbh;
     my @collections = ();
     @collections = @$collections_ref if ($collections_ref);
@@ -153,7 +152,7 @@ my $editable = 1;
 			if ( $o->{species_reso} !~ /informal/ && $o->{species_name} !~ /^sp\./ && $o->{species_name} !~ /^indet\./)	{
 				$taxon_name .= " " . $o->{species_name};
 			}
-            my @all_matches = $taxonomy->getTaxaBestMatch($o);
+            my @all_matches = Taxon::getBestClassification($dbt,$o);
 
 			# now print the name and the pulldown of authorities
 			if ( @all_matches )	{
@@ -229,9 +228,9 @@ my $editable = 1;
 				#  an occurrence or reID
 				print "<td>&nbsp;&nbsp;\n";
                 if ($o->{reid_no}) {
-                    print classificationSelect($dbt,$taxonomy,$o->{reid_no},1,$editable,\@all_matches,$o->{taxon_no},$description);
+                    print classificationSelect($dbt,$o->{reid_no},1,$editable,\@all_matches,$o->{taxon_no},$description);
                 } else {
-                    print classificationSelect($dbt,$taxonomy,$o->{$OCCURRENCE_NO},0,$editable,\@all_matches,$o->{taxon_no},$description);
+                    print classificationSelect($dbt,$o->{$OCCURRENCE_NO},0,$editable,\@all_matches,$o->{taxon_no},$description);
                 }
                 print "</td>\n";
 				print "</tr>\n";
@@ -438,7 +437,7 @@ sub processReclassifyForm	{
 }
 
 sub classificationSelect {
-    my ($dbt,$taxonomy,$key_no,$is_reid,$editable,$matches,$taxon_no,$description) = @_;
+    my ($dbt,$key_no,$is_reid,$editable,$matches,$taxon_no,$description) = @_;
 
     my $disabled = ($editable) ?  '' : 'DISABLED';
 
@@ -457,9 +456,9 @@ sub classificationSelect {
                  
     # populate the select list of authorities
     foreach my $m (@$matches) {
-        my $t = $taxonomy->getTaxon($m->{taxon_no}, { fields => 'oldattr' });
+        my $t = TaxonInfo::getTaxa($dbt,{'taxon_no'=>$m->{'taxon_no'}},['taxon_no','taxon_name','taxon_rank','author1last','author2last','otherauthors','pubyr']);
         # have to format the authority data
-        my $authority = TaxonEdit::formatTaxon($dbt,$t);
+        my $authority = Taxon::formatTaxon($dbt,$t);
 
         $html .= "<option value=\"" . $t->{taxon_no} . "+" . escapeHTML($authority) . "\"";
         if ($t->{taxon_no} eq $taxon_no) {

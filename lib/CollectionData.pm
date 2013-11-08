@@ -1,17 +1,20 @@
 
-# CollectionQuery
+# CollectionData
 # 
 # A class that returns information from the PaleoDB database about a single
 # collection or a category of collections.  This is a subclass of PBDataQuery.
 # 
 # Author: Michael McClennen
 
-package CollectionQuery;
+package CollectionData;
 
 use strict;
-use base 'DataQuery';
+use base 'DataService::Base';
+
+use Taxonomy;
 
 use Carp qw(carp croak);
+use POSIX qw(floor ceil);
 
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
@@ -36,7 +39,7 @@ $PROC{single} = $PROC{list} =
     { rec => 'sec_ref_nos', add => 'reference_no', split => ',' },
    ];
 
-$OUTPUT{single} = $OUTPUT{list} = 
+$OUTPUT{single} = $OUTPUT{list} =
    [
     { rec => 'collection_no', dwc => 'collectionID', com => 'oid',
 	doc => "A positive integer that uniquely identifies the collection"},
@@ -47,7 +50,7 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "The longitude at which the collection is located (in degrees)" },
     { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
 	doc => "The latitude at which the collection is located (in degrees)" },
-    { rec => 'llp', com => 'prc', use_main => 1, code => \&CollectionQuery::generateBasisCode,
+    { rec => 'llp', com => 'prc', use_main => 1, code => \&CollectionData::generateBasisCode,
         doc => "A two-letter code indicating the basis and precision of the geographic coordinates." },
     { rec => 'collection_name', dwc => 'collectionCode', com => 'nam',
 	doc => "An arbitrary name which identifies the collection, not necessarily unique" },
@@ -66,7 +69,7 @@ $TABLES{single} = $TABLES{list} = $TABLES{summary} = ['icm'];
 $OUTPUT{summary} = 
    [
     { rec => 'sum_id', com => 'oid', doc => "A positive integer that identifies the cluster" },
-    { rec => 'clust_id', com => 'cl1', doc => "A positive integer that identifies the containing cluster, if any" },
+    { rec => 'clust_id', com => 'lv1', doc => "A positive integer that identifies the containing cluster, if any" },
     { rec => 'record_type', com => 'typ', value => 'clu',
         doc => "The type of this object: 'clu' for a collection cluster" },
     { rec => 'n_colls', com => 'nco', doc => "The number of collections in cluster" },
@@ -115,8 +118,8 @@ $TABLES{ref} = 'r';
 
 $PROC{ref} = 
    [
-    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&DataQuery::generateReference },
-    { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&DataQuery::generateReference },
+    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&DataService::Base::generateReference },
+    { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&DataService::Base::generateReference },
    ];
 
 $OUTPUT{ref} =
@@ -146,14 +149,28 @@ $SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.int
 
 $TABLES{time} = ['ei', 'li', 'ci'];
 
+$TABLES{summary_time} = ['ei', 'li'];
+
 $OUTPUT{time} =
    [
     { rec => 'early_age', com => 'eag',
 	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
     { rec => 'late_age', com => 'lag',
 	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
+    { rec => 'early_int', com => 'int',
+	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if C<late_int> is also given" },
+    { rec => 'late_int', com => 'lin', dedup => 'early_int',
+	doc => "The interval that ends the specific geologic time range associated with this collection" },
     { rec => 'interval_list', com => 'lti', json_list_literal => 1,
         doc => "A minimal list of standard intervals covering the time range associated with this collection" },
+   ];
+
+$OUTPUT{summary_time} =
+   [
+    { rec => 'early_age', com => 'eag',
+	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
+    { rec => 'late_age', com => 'lag',
+	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
    ];
 
 $SELECT{pers} = "authorizer_no, ppa.name as authorizer, enterer_no, ppe.name as enterer";
@@ -208,14 +225,6 @@ $OUTPUT{ext} =
     { rec => 'std_dev', com => 'std', doc => "The standard deviation of the coordinates in this cluster" },
    ];
 
-$OUTPUT{det} = 
-   [
-    { rec => 'early_int', com => 'int',
-	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if {late_int} is also given" },
-    { rec => 'late_int', com => 'lin', dedup => 'early_int',
-	doc => "The interval that ends the specific geologic time range associated with this collection" },
-   ];
-
 our (%DOC_ORDER);
 
 $DOC_ORDER{'single'} = ['single', 'ref', 'time', 'loc', 'rem'];
@@ -228,13 +237,14 @@ $DOC_ORDER{'summary'} = ();
 # Query for all relevant information about the collection specified by the
 # 'id' parameter.  Returns true if the query succeeded, false otherwise.
 
-sub fetchSingle {
+sub get {
 
     my ($self) = @_;
     
     # Get a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # Make sure we have a valid id number.
     
@@ -306,6 +316,14 @@ sub fetchSingle {
 }
 
 
+sub summary {
+    
+    my ($self) = @_;
+    
+    return $self->list('summary');
+}
+
+
 # fetchMultiple ( )
 # 
 # Query the database for basic info about all collections satisfying the
@@ -313,16 +331,18 @@ sub fetchSingle {
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
-sub fetchMultiple {
+sub list {
 
-    my ($self) = @_;
+    my ($self, $arg) = @_;
     
     # Get a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
     
     my $calc = '';
-    my $mt = $self->{op} eq 'summary' ? 's' : 'c';
+    my $mt = defined $arg && $arg eq 'summary' ? 's' : 'c';
+    
+    $self->{op} = $arg || 'list';
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -353,7 +373,7 @@ sub fetchMultiple {
     
     # If the operation is 'summary', generate a query on the summary tables.
     
-    if ( $self->{op} eq 'summary' ) 
+    if ( defined $arg && $arg eq 'summary' ) 
     {
 	my ($base_fields, $inner_query_fields, $summary_table, $group_field, $base_joins, $inner_query_joins);
 	
@@ -381,6 +401,9 @@ sub fetchMultiple {
 	
 	$inner_query_fields .= ", s.bin_id" if $self->{params}{level} == 2;
 	
+	$inner_query_fields .= ", s.lng_min, s.lng_max, s.lat_min, s.lat_max, s.std_dev"
+	    if $base_fields =~ /lng_min/;
+	
 	$inner_query_joins = $self->generateJoinList('s', $filter_tables, $group_field);
 	
 	$self->{main_sql} = "
@@ -397,7 +420,7 @@ sub fetchMultiple {
     # If the operation is 'toprank', generate a query on the collection matrix
     # joined with whichever other tables are relevant
 
-    elsif ( $self->{op} eq 'toprank' )
+    elsif ( defined $arg && $arg eq 'toprank' )
     {
 	foreach my $t ( keys %$filter_tables )
 	{
@@ -499,6 +522,14 @@ sub fetchMultiple {
 }
 
 
+sub summmary {
+
+    my ($self) = @_;
+    
+    return $self->list('summary');
+}
+
+
 # emitCollectionXML ( row, short_record )
 # 
 # Returns a string representing the given record (row) in Darwin Core XML
@@ -556,6 +587,7 @@ sub generateQueryFilters {
     my ($self, $mt, $tables_ref) = @_;
     
     my $dbh = $self->{dbh};
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
     
     # Check for parameter 'id'
@@ -598,20 +630,20 @@ sub generateQueryFilters {
     
     if ( $taxon_name )
     {
-	@taxa = $self->{taxonomy}->getTaxaByName($taxon_name, { fields => 'lft' });
+	@taxa = $taxonomy->getTaxaByName($taxon_name, { fields => 'lft' });
     }
     
     elsif ( $taxon_no )
     {
-	@taxa = $self->{taxonomy}->getTaxa('self', $taxon_no, { fields => 'lft' });
+	@taxa = $taxonomy->getTaxa('self', $taxon_no, { fields => 'lft' });
     }
     
     # Then get the records for excluded taxa.  But only if there are any
     # included taxa in the first place.
     
-    if ( $exclude_no )
+    if ( $exclude_no && $exclude_no ne 'undefined' )
     {
-	@exclude_taxa = $self->{taxonomy}->getTaxa('self', $exclude_no, { fields => 'lft' });
+	@exclude_taxa = $taxonomy->getTaxa('self', $exclude_no, { fields => 'lft' });
     }
     
     # Then construct the necessary filters for included taxa
@@ -666,15 +698,63 @@ sub generateQueryFilters {
 	my $y1 = $self->{params}{latmin};
 	my $y2 = $self->{params}{latmax};
 	
-	if ( $self->{op} eq 'summary' )
+	# If the latitude coordinates do not fall between -180 and 180, adjust
+	# them so that they do.
+	
+	if ( $x1 < -180.0 )
 	{
-	    push @filters, "s.lng between $x1 and $x2 and s.lat between $y1 and $y2";
+	    $x1 = $x1 + ( floor( (180.0 - $x1) / 360.0) * 360.0);
 	}
+	
+	if ( $x2 < -180.0 )
+	{
+	    $x2 = $x2 + ( floor( (180.0 - $x2) / 360.0) * 360.0);
+	}
+	
+	if ( $x1 > 180.0 )
+	{
+	    $x1 = $x1 - ( floor( ($x1 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	if ( $x2 > 180.0 )
+	{
+	    $x2 = $x2 - ( floor( ($x2 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	# If $x1 < $x2, then we query on a single bounding box defined by
+	# those coordinates.
+	
+	if ( $x1 < $x2 )
+	{
+	    if ( defined $self->{op} && $self->{op} eq 'summary' )
+	    {
+		push @filters, "s.lng between $x1 and $x2 and s.lat between $y1 and $y2";
+	    }
+	    
+	    else
+	    {
+		my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
+		push @filters, "mbrwithin(loc, geomfromtext($polygon))";
+	    }
+	}
+	
+	# Otherwise, our bounding box crosses the antimeridian and so must be
+	# split in two.  The latitude bounds must always be between -90 and
+	# 90, regardless.
 	
 	else
 	{
-	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
-	    push @filters, "mbrwithin(loc, geomfromtext($polygon))";
+	    if ( defined $self->{op} && $self->{op} eq 'summary' )
+	    {
+		push @filters, "(s.lng between $x1 and 180.0 or s.lng between -180.0 and $x2) and s.lat between $y1 and $y2";
+	    }
+	    
+	    else
+	    {
+		my $polygon1 = "'POLYGON(($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))'";
+		my $polygon2 = "'POLYGON((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1))'";
+		push @filters, "(mbrwithin(loc, geomfromtext($polygon1)) or mbrwithin(loc, geomfromtext($polygon2)))";
+	    }
 	}
     }
     
@@ -700,18 +780,28 @@ sub generateQueryFilters {
     
     if ( defined $min_age and $min_age > 0 )
     {
-	my $min_filt = $self->{params}{time_strict} ? "c.late_age" : "c.early_age";
 	$tables_ref->{c} = 1;
-	$min_age -= 0.001;
-	push @filters, "$min_filt > $min_age";
+	if ( $self->{params}{time_strict} )
+	{
+	    push @filters, "c.late_age >= $min_age";
+	}
+	else
+	{
+	    push @filters, "c.early_age > $min_age";
+	}
     }
     
     if ( defined $max_age and $max_age > 0 )
     {
-	my $max_filt = $self->{params}{time_strict} ? "c.early_age" : "c.late_age";
 	$tables_ref->{c} = 1;
-	$max_age += 0.001;
-	push @filters, "$max_filt < $max_age";
+	if ( $self->{params}{time_strict} )
+	{
+	    push @filters, "c.early_age <= $max_age";
+	}
+	else
+	{
+	    push @filters, "c.late_age < $max_age";
+	}
     }
     
     # Return the list
