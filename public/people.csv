@@ -1,0 +1,248 @@
+id	latitude	longitude	last	first	 role	institute	 hours_aut	continent
+1	55.710794	37.577814	Zhuravlev	Andrey	authorizer	All-Russian Geological Research Institute	34	Europe
+131	40.780411	-73.974037	Hopkins	Melanie	authorizer	American Museum of Natural History	259	North America
+2	40.780411	-73.974037	Meng	Jin	authorizer	American Museum of Natural History		North America
+3	40.780411	-73.974037	Sessa	Jocelyn	authorizer-officer-student	American Museum of Natural History	311	North America
+4	33.4239497	-111.9285488	Herrmann	Achim	authorizer	Arizona State University		North America
+5	44.318036	-69.776218	Churchill-Dickson	Lisa	authorizer	Augusta  Maine		North America
+11	48.147518	11.563548	Rauhut	Oliver	authorizer	Bayerische Staatssammlung für Paläontologie und Geologie	10	Europe
+6	41.775318	-88.09465	Novack-Gottshall	Phil	authorizer-student	Benedictine University	159	North America
+7	46.250259	7.012295	Cavin	Lionel	authorizer	Bex  Switzerland	3	Europe
+8	42.125393	-76.082649	Stein	Bill	authorizer	Binghamton University	344	North America
+9	42.5814756	-114.4745644	Davydov	Vladimir	authorizer	Boise State University		North America
+12	35.45063	-99.170181	Foss	Scott	authorizer	Bureau of Land Management		North America
+13	37.769979	-122.466288	Blackburn	David	authorizer	California Academy of Sciences		North America
+14	33.882591	-117.884911	Bonuso	Nicole	authorizer-student	California State University - Fullerton	94	North America
+15	51.4874	-3.1803	Pearson	Paul	authorizer	Cardiff University		Europe
+16	40.443218	-79.949951	Beard	Chris	authorizer	Carnegie Museum of Natural History	69	North America
+17	40.443218	-79.949951	Lamanna	Matthew	authorizer	Carnegie Museum of Natural History		North America
+18	41.50433	-81.609581	Croft	Darin	authorizer	Case Western Reserve University	133	North America
+20	47.278141	4.181775	Eble	Gunther	authorizer	CNRS  Université de Bourgogne		Europe
+19	46.801403	5.09827	Fara	Emmanuel	authorizer	CNRS  Université de Bourgogne	160	Europe
+21	44.563782	-69.66037	Gastaldo	Robert	authorizer	Colby College	77	North America
+22	45.354925	-117.229924	Davis	Richard	authorizer	College of Mount St. Joseph		North America
+24	37.275551	-76.708961	Layou	Karen	authorizer-student	College of William and Mary	30	North America
+23	37.275551	-76.708961	Lockwood	Rowan	authorizer	College of William and Mary		North America
+25	42.448068	-76.4752145	Niklas	Karl	authorizer	Cornell University		North America
+55	50.81089	8.77458	Amler	Michael	authorizer	der Philipps-Universität Marburg		Europe
+26	36.0011067	-78.9375913	Kay	Richard	authorizer	Duke University		North America
+27	42.2512764	-83.627415	LoDuca	Steven	authorizer	Eastern Michigan University		North America
+28	-18.57752	-45.451344	Liparini	Alexandre	authorizer	Federal University of Minas Gerais		South America
+29	41.865028	-87.617363	Lidgard	Scott	authorizer	Field Museum of Natural History		North America
+30	41.865028	-87.617363	Parham	James	authorizer	Field Museum of Natural History	3	North America
+31	-35.024479	138.571075	Prideaux	Gavin	authorizer	Flinders University	8	Oceania
+32	30.4416857	-84.2919732	Wise	Woody	authorizer	Florida State University		North America
+33	40.04748	-76.317913	Harnik	Paul	authorizer	Franklin and Marshall College	2	North America
+34	51.4667	4.9833	Tomasovych	Adam	authorizer-student	Geological Institute SAS	13	Europe
+35	55.67631	12.569355	Harper	David	authorizer	Geologisk Museum  Koebenhavn		Europe
+36	38.82822	-77.309792	Uhen	Mark	authorizer-officer	George Mason University	4541	North America
+37	42.3741886	-71.1165876	Bambach	Richard	authorizer	Harvard University		North America
+38	42.3741886	-71.1165876	Knoll	Andy	authorizer	Harvard University		North America
+39	33.981249	130.92012	Tsubamoto	Takehisa	authorizer	Hayashibara Museum of Natural Sciences	18	Asia
+40	42.7885224	-86.1040287	Bodenbender	Brian	authorizer	Hope College		North America
+41	47.4811164	19.085473	Pálfy	József	authorizer	Hungarian Natural History Museum	466	Europe
+42	39.739256	-89.504093	Grimm	Eric	authorizer	Illinois State Museum		North America
+43	51.498131	-0.17543	Mannion	Philip	authorizer	Imperial College London	959	Europe
+44	39.1691355	-86.5149053	Maples	Chris	authorizer	Indiana University		North America
+45	26.9584541	80.9981086	Srivastava	Ashwini	authorizer	Integral University	55	Asia
+46	42.026112	-93.648331	Cervato	Cinzia	authorizer	Iowa State University	142	North America
+47	42.583302	13.8833	Palombo	Maria Rita	authorizer	Istituto di Geologia Ambientale e Geoingegneria		Europe
+50	41.1490629	-81.3414649	Feldmann	Rodney	authorizer	Kent State University		North America
+51	41.1490629	-81.3414649	Schweitzer	Carrie	authorizer	Kent State University	628	North America
+52	53.402901	-2.97302	Bishop	Laura	authorizer	Liverpool John Moores University		Europe
+53	53.402901	-2.97302	Turner	Alan	authorizer	Liverpool John Moores University	437	Europe
+10	48.147518	11.563548	Nützel	Alexander	authorizer	Ludwig Maximilians Universität München	8	Europe
+56	44.920139	-93.143478	Rogers	Ray	authorizer	Macalester College	2	North America
+58	-33.7821306	151.0983048	Alroy	John	authorizer-officer	Macquarie University	7847	Oceania
+57	-33.7821306	151.0983048	Kosnik	Matt	authorizer	Macquarie University	843	Oceania
+59	38.4231429	-82.4292749	O Keefe	Robin	authorizer	Marshall University	3	North America
+60	42.3588667	-71.0938246	Cohen	Phoebe	authorizer	Massachusetts Institute of Technology	15	North America
+61	43.040482	-87.92157	Sheehan	Peter	authorizer	Milwaukee Public Museum	1	North America
+62	43.040482	-87.92157	Watkins	Rodney	authorizer	Milwaukee Public Museum		North America
+63	45.8985235	-64.3735234	Finkel	Zoe	authorizer	Mount Allison University		North America
+64	45.158678	3.43799	Lacombat	Frédéric	authorizer	Musée de paléontologie de Chilhac	3	Europe
+69	52.5300896	13.3793837	Aberhan	Martin	authorizer	Museum für Naturkunde	1615	Europe
+68	52.5300896	13.3793837	Fröbisch	Jörg	authorizer	Museum für Naturkunde	83	Europe
+70	52.5300896	13.3793837	Korn	Dieter	authorizer	Museum für Naturkunde	50	Europe
+67	52.5300896	13.3793837	Kröger	Björn	authorizer	Museum für Naturkunde	469	Europe
+65	52.5300896	13.3793837	Lazarus	David	authorizer	Museum für Naturkunde	12	Europe
+66	52.5300896	13.3793837	Mueller	Johannes	authorizer	Museum für Naturkunde	1233	Europe
+71	-38.3517042	141.608176	Schmidt	Rolf	authorizer	Museum Victoria		Oceania
+48	32.05514	118.778381	Kido	Erika	authorizer	Nanjing Institute of Geology and Palaeontology	11	Asia
+72	32.05514	118.778381	Lin	Alex	authorizer	Nanjing Institute of Geology and Palaeontology	85	Asia
+73	38.9955286	-77.0965751	Hotton	Carol	authorizer	National Center for Biotechnology Information	3	North America
+74	32.058889	-98.206158	Doweld	Alexander	authorizer	National Institute of Carpology	46	North America
+75	36.81565	-76.249544	Lane	Rich	authorizer	National Science Foundation		North America
+127	-38.424194	-63.584806	Balseiro	Diego	authorizer	National Scientific and Technical Research Council	Argentina	South America
+79	51.496715	-0.1763672	Barrett	Paul	authorizer	Natural History Museum		Europe
+81	51.496715	-0.1763672	Edgecombe	Greg	authorizer	Natural History Museum		Europe
+78	51.496715	-0.1763672	Feist-Burkhardt	Susanne	authorizer	Natural History Museum	1	Europe
+80	51.496715	-0.1763672	Kenrick	Paul	authorizer	Natural History Museum		Europe
+77	51.496715	-0.1763672	Smith	Andrew	authorizer	Natural History Museum	9	Europe
+76	51.496715	-0.1763672	Young	Jeremy	authorizer	Natural History Museum		Europe
+82	51.496715	-0.1763672	Nicholson	David	authorizer	Natural History Museum  London		Europe
+244	56.15554	11.63398	Cuny	Gilles	authorizer	Natural History Museum of Denmark		Europe
+83	34.0170887	-118.2887598	Wang	Xiaoming	authorizer	Natural History Museum of Los Angeles	12	North America
+85	52.165791	4.47352	Meijer	Hanneke	authorizer	Naturalis	3	Europe
+84	52.165791	4.47352	van den Hoek Ostende	Lars	authorizer	Naturalis	724	Europe
+86	46.7340955	11.2888015	Kustatscher	Evelyn	authorizer	Naturmuseum Südtirol		Europe
+87	32.935436	-103.637497	Williamson	Thomas	authorizer	New Mexico Museum of Natural History and Science	6	North America
+88	43.416183	-73.698906	Beatty	Brian	authorizer	New York College of Osteopathic Medicine	22	North America
+90	35.7846633	-78.6820946	Ksepka	Daniel	authorizer	North Carolina State University	5	North America
+89	35.7846633	-78.6820946	Mickle	James	authorizer	North Carolina State University		North America
+91	-18.482265	133.500862	Kruse	Pierre	authorizer	Northern Territory Geological Survey		Oceania
+93	40.004372	-83.017693	Ausich	William	authorizer	Ohio State University	1	North America
+94	40.004372	-83.017693	Horn	David	authorizer	Ohio State University	2	North America
+92	40.004372	-83.017693	Hunter	John	authorizer	Ohio State University	99	North America
+95	39.3250972	-82.0990854	Stigall	Alycia	authorizer	Ohio University	339	North America
+96	42.500561	-83.026859	Allmon	Warren	authorizer	Paleontological Research Institution		North America
+97	40.80389	-77.857498	Patzkowsky	Mark	authorizer	Penn State	965	North America
+98	40.80389	-77.857498	Wilf	Peter	authorizer	Penn State	225	North America
+99	40.428832	-86.91323	Zinsmeister	William	authorizer	Purdue University	2	North America
+100	50.8364076	4.3763703	Gouwy	Sofie	authorizer	Royal Belgian Institute of Natural Sciences	90	Europe
+101	53.366051	-6.271346	Nagalingum	Nathalie	authorizer	Royal Botanic Gardens and Domain Trust	18	Europe
+102	43.668072	-79.394348	Vavrek	Matthew	authorizer	Royal Ontario Museum	9	North America
+103	40.5009561	-74.4473434	Katz	Mimi	authorizer	Rutgers University		North America
+104	44.942139	-93.100021	Curry Rogers	Kristi	authorizer	Science Museum of Minnesota		North America
+108	38.888519	-77.025238	Behrensmeyer	Anna	authorizer	Smithsonian Institution	488	North America
+107	38.888519	-77.025238	Carrano	Matt	authorizer	Smithsonian Institution	5573	North America
+110	38.888519	-77.025238	DiMichele	Bill	authorizer	Smithsonian Institution	2	North America
+106	38.888519	-77.025238	Erwin	Doug	authorizer	Smithsonian Institution	10	North America
+113	38.888519	-77.025238	Huber	Brian	authorizer	Smithsonian Institution		North America
+111	38.888519	-77.025238	Johnson	Kirk	authorizer	Smithsonian Institution	64	North America
+109	38.888519	-77.025238	Labandeira	Conrad	authorizer	Smithsonian Institution	50	North America
+105	38.888519	-77.025238	Wagner	Pete	authorizer	Smithsonian Institution	3369	North America
+115	38.888519	-77.025238	Whatley	Robin	authorizer-student	Smithsonian Institution	78	North America
+112	38.888519	-77.025238	Wing	Scott	authorizer	Smithsonian Institution	128	North America
+114	38.888519	-77.025238	Zamora	Samuel	authorizer	Smithsonian Institution		North America
+116	9.3518726	-82.256763	Jaramillo	Carlos	authorizer	Smithsonian Tropical Research Institute	1212	North America
+117	44.076248	-103.207352	Boyd	Clint	authorizer	South Dakota School of Mines and Technology		North America
+118	44.076248	-103.207352	Kowalski	Elizabeth	authorizer-student	South Dakota School of Mines and Technology	104	North America
+174	37.4274745	-122.169719	Boyce	Kevin	authorizer	Stanford University	2	North America
+119	37.4274745	-122.169719	Heim	Noel	authorizer	Stanford University	115	North America
+120	42.5894149	-76.199384	McRoberts	Chris	authorizer	SUNY Cortland		North America
+121	40.9148018	-73.1203892	O Leary	Maureen	authorizer	SUNY Stony Brook	1	North America
+122	55.164709	14.96658	Werdelin	Lars	authorizer	Swedish Museum of Natural History		Europe
+123	43.039398	-76.134499	Ivany	Linda	authorizer	Syracuse University	407	North America
+124	30.6031264	-96.3623524	Olszewski	Tom	authorizer	Texas A&M	317	North America
+125	30.6031264	-96.3623524	Raymond	Anne	authorizer	Texas A&M	83	North America
+126	-34.919399	138.603516	García-Bellido	Diego	authorizer	The University of Adelaide		Oceania
+128	-34.909801	-57.925289	Aguirre	Marina	authorizer	Universidad Nacional de la Plata		South America
+129	-18.57752	-45.451344	Cozzuol	Mario	authorizer	Universidade Federal de Minas Gerais	1	South America
+139	41.5028528	2.1035104	Malchus	Nikolaus	authorizer	Universitat Autònoma de Barcelona		Europe
+133	53.10788	8.85257	Kucera	Michal	authorizer	Universität Bremen		Europe
+130	49.587582	11.015085	Senowbari-Daryan	Baba	authorizer	Universität Erlangen		Europe
+140	49.575291	11.02725	Fürsich	Franz	authorizer	Universität Erlangen-Nürnberg	792	Europe
+141	49.575291	11.02725	Kiessling	Wolfgang	authorizer	Universität Erlangen-Nürnberg	11006	Europe
+142	41.146641	1.11842	Rivals	Florent	authorizer	Universitat Rovira i Virgili	1	Europe
+134	48.212818	16.36125	Kriwet	Juergen	authorizer	Universität Wien	79	Europe
+143	44.39719	26.1124	Lazar	Iuliana	authorizer	Universitatea din Bucuresti	4	Europe
+136	43.2930152	5.3581369	Bulot	Luc	authorizer	Université d'Aix-Marseille	92	Europe
+144	47.278141	4.181775	Lefebvre	Bertrand	authorizer	Université de Bourgogne		Europe
+145	50.6068468	3.135942	Danelian	Taniel	authorizer	Université des Sciences et Technologies de Lille 1	72	Europe
+137	48.888588	2.266267	Cecca	Fabrizio	authorizer	Université Pierre et Marie Curie	19	Europe
+138	48.888588	2.266267	Crasquin	Sylvie	authorizer	Université Pierre et Marie Curie	49	Europe
+146	48.846062	2.35519	Villier	Loïc	authorizer	Université Pierre et Marie Curie	1714	Europe
+147	52.088932	5.115405	Visscher	Henk	authorizer	Universiteit Utrecht		Europe
+151	51.5224603	-0.1326326	Bell	Mark	authorizer	University College London	75	Europe
+148	51.5224603	-0.1326326	Bown	Paul	authorizer	University College London	13	Europe
+150	51.5224603	-0.1326326	Goswami	Anjali	authorizer	University College London		Europe
+149	51.5224603	-0.1326326	Lees	Jackie	authorizer	University College London		Europe
+152	41.077961	-81.509758	Park	Lisa	authorizer	University of Akron	22	North America
+153	32.231651	-110.956772	Rees	Allister	authorizer	University of Arizona	657	North America
+54	52.44973	-1.92697	Butler	Richard	authorizer	University of Birmingham	1144	Europe
+154	52.44973	-1.92697	Jardine	Phillip	authorizer	University of Birmingham		Europe
+156	51.459202	-2.6041	Benton	Mike	authorizer	University of Bristol		Europe
+135	51.459202	-2.6041	De Baets	Kenneth	authorizer	University of Bristol		Europe
+155	51.459202	-2.6041	Ruta	Marcello	authorizer	University of Bristol	1	Europe
+157	51.459202	-2.6041	Young	Mark	authorizer	University of Bristol	1	Europe
+161	37.872101	-122.264847	Finnegan	Seth	authorizer	University of California  Berkeley	185	North America
+160	37.872101	-122.264847	Holroyd	Pat	authorizer	University of California  Berkeley	46	North America
+159	37.872101	-122.264847	Looy	Cindy	authorizer	University of California  Berkeley	291	North America
+158	37.847195	-122.286049	Marshall	Charles	authorizer	University of California  Berkeley	59	North America
+162	37.872101	-122.264847	Pyenson	Nick	authorizer-student	University of California  Berkeley		North America
+163	38.546699	-121.744576	Motani	Ryosuke	authorizer	University of California  Davis		North America
+164	34.068921	-118.4451812	Jacobs	Dave	authorizer	University of California  Los Angeles		North America
+165	33.973287	-117.3281109	Hughes	Nigel	authorizer	University of California  Riverside	21	North America
+166	32.715695	-117.161719	Roy	Kaustuv	authorizer	University of California  San Diego		North America
+168	34.41481	-119.839592	Oakley	Todd	authorizer	University of California  Santa Barbara	1	North America
+169	34.41481	-119.839592	Plachetzki	David	authorizer	University of California  Santa Barbara		North America
+167	34.41481	-119.839592	Tiffney	Bruce	authorizer	University of California  Santa Barbara	225	North America
+170	36.9913856	-122.0608718	Clapham	Matthew	authorizer-student	University of California  Santa Cruz	10988	North America
+171	52.205246	0.116633	Benson	Roger	authorizer	University of Cambridge	671	Europe
+172	52.205246	0.116633	Liu	Alex	authorizer	University of Cambridge		Europe
+173	-43.522968	172.582947	Will	Oliver	authorizer	University of Canterbury	3	Oceania
+180	41.790051	-87.598892	Coates	Michael	authorizer	University of Chicago		North America
+175	41.790051	-87.598892	Foote	Michael	authorizer	University of Chicago	826	North America
+176	41.790051	-87.598892	Jablonski	Dave	authorizer	University of Chicago	31	North America
+179	41.790051	-87.598892	Kidwell	Sue	authorizer	University of Chicago		North America
+182	41.790051	-87.598892	Krug	Zack	authorizer-student	University of Chicago		North America
+177	41.790051	-87.598892	Raup	Dave	authorizer	University of Chicago		North America
+178	41.790051	-87.598892	Sepkoski	Jack	authorizer	University of Chicago	94	North America
+181	41.790051	-87.598892	Webster	Mark	authorizer	University of Chicago		North America
+183	39.1306	-84.520554	Brett	Carl	authorizer	University of Cincinnati		North America
+186	39.1306	-84.520554	Deline	Brad	authorizer	University of Cincinnati	7	North America
+185	39.1306	-84.520554	Meyer	Dave	authorizer	University of Cincinnati		North America
+184	39.1306	-84.520554	Miller	Arnold	authorizer	University of Cincinnati	2410	North America
+187	38.913689	-104.77298	Smith	Dena	authorizer	University of Colorado	344	North America
+188	49.587582	11.015085	Teichert	Sebastian	authorizer	University of Erlangen		Europe
+191	29.645264	-82.346394	Hendy	Austin	authorizer-student	University of Florida	5564	North America
+189	29.645264	-82.346394	Kowalewski	Michal	authorizer	University of Florida	29	North America
+190	29.645264	-82.346394	Wang	Hongshan	authorizer	University of Florida	156	North America
+192	33.957619	-83.375168	Holland	Steven	authorizer	University of Georgia	886	North America
+193	55.88224	-4.27634	McGowan	Alistair	authorizer-student	University of Glasgow	276	Europe
+132	51.54006	9.93424	Arp	Gernot	authorizer	University of Göttingen		Europe
+49	47.034653	15.460598	Suttner	Thomas	authorizer	University of Graz	3	Europe
+194	60.17116	24.93258	Fortelius	Mikael	authorizer	University of Helsinki		Europe
+195	41.8700726	-87.6716747	Plotnick	Roy	authorizer	University of Illinois at Chicago	48	North America
+196	40.106319	-88.23259	Marcot	Jonathan	authorizer	University of Illinois at Urbana-Champaign	2	North America
+198	41.58586	-93.633013	Brochu	Chris	authorizer	University of Iowa		North America
+199	41.68169	-91.556702	Budd	Nancy	authorizer	University of Iowa	1	North America
+197	41.58586	-93.633013	Sims	Hallie	authorizer	University of Iowa	535	North America
+200	38.957439	-95.245651	Casey	Michelle	authorizer	University of Kansas		North America
+201	38.957439	-95.245651	Farrell	Una	authorizer	University of Kansas		North America
+202	50.640799	5.575175	Fischer	Valentin	authorizer	University of Liège	1	Europe
+203	53.466141	-2.23372	Jepson	James	authorizer	University of Manchester	6	Europe
+204	25.704781	-80.292839	Klaus	James	authorizer	University of Miami		North America
+206	42.320068	-83.230789	Sallan	Lauren	authorizer	University of Michigan	4	North America
+205	42.320068	-83.230789	Smith	Selena	authorizer	University of Michigan		North America
+207	46.861649	-113.981583	Stanley	George	authorizer	University of Montana	102	North America
+209	40.8111479	-96.628457	Head	Jason	authorizer	University of Nebraska - Lincoln	304	North America
+208	40.8111479	-96.628457	Harwood	Dave	authorizer	University of Nebraska – Lincoln		North America
+210	43.132332	-70.920021	Clyde	Will	authorizer	University of New Hampshire	172	North America
+211	-33.917332	151.22876	Ebach	Malte	authorizer	University of New South Wales		Oceania
+212	35.909199	-79.043671	Gensel	Pat	authorizer	University of North Carolina	200	North America
+213	47.919689	-97.048782	Hartman	Joseph	authorizer	University of North Dakota		North America
+214	35.208248	-97.445602	Lupia	Rick	authorizer	University of Oklahoma	275	North America
+215	44.045158	-123.074951	Retallack	Greg	authorizer	University of Oregon		North America
+216	59.929239	10.853335	Liow	Lee Hsiang	authorizer	University of Oslo		Europe
+218	51.75462	-1.25504	Joomun	Sarah	authorizer	University of Oxford		Europe
+217	51.75462	-1.25504	Lloyd	Graeme	authorizer-student	University of Oxford	62	Europe
+219	39.95219	-75.191711	Pfefferkorn	Hermann	authorizer	University of Pennsylvania	39	North America
+220	26.62291	73.879433	Pandey	Dhirendra Kumar	authorizer	University of Rajasthan	2	Asia
+221	53.381031	-1.48912	Morris	Jennifer	authorizer	University of Sheffield		Europe
+223	42.78249	-96.925819	Dahdul	Wasila	authorizer	University of South Dakota	62	North America
+224	42.78249	-96.925819	Dececchi	Alex	authorizer-student-technician	University of South Dakota		North America
+222	42.78249	-96.925819	Mabee	Paula	authorizer	University of South Dakota		North America
+225	28.064381	-82.41407	Harries	Peter	authorizer	University of South Florida	87	North America
+226	34.0223383	-118.2851232	Bottjer	David	authorizer	University of Southern California	383	North America
+227	58.375135	26.73306	Vinn	Olev	authorizer	University of Tartu	11	Europe
+228	35.953041	-83.926819	McKinney	Mike	authorizer	University of Tennessee		North America
+229	30.2863653	-97.7337792	Bell	Chris	authorizer	University of Texas at Austin	39	North America
+230	30.2863653	-97.7337792	Reed	Denne	authorizer-student	University of Texas at Austin	12	North America
+231	43.62141	-79.674774	Reisz	Robert	authorizer	University of Toronto at Mississauga	20	North America
+232	40.765221	-111.844254	Ekdale	Tony	authorizer	University of Utah	11	North America
+233	47.6554211	-122.3061342	Sidor	Chris	authorizer	University of Washington	19	North America
+234	43.075871	-89.397614	Goring	Simon	authorizer	University of Wisconsin-Madison		North America
+235	43.075871	-89.397614	Peters	Shanan	authorizer-student	University of Wisconsin-Madison	235	North America
+236	59.886995	17.6625	Ebbestad	Jan Ove R.	authorizer	Uppsala Universitet		Europe
+237	46.7319374	-117.154422	Webster	Gary	authorizer	Washington State University	3	North America
+238	41.551689	-72.665802	Royer	Dana	authorizer	Wesleyan University	34	North America
+239	39.6361396	-79.9559358	Kammer	Thomas	authorizer	West Virginia University		North America
+240	48.7387998	-122.484692	Hansen	Thor	authorizer	Western Washington University	29	North America
+241	41.306568	-72.929283	Utrup	Jessica	authorizer	Yale Peabody Museum	5	North America
+243	41.306568	-72.929283	Krause	Rich	authorizer-student	Yale University	49	North America
+242	41.306568	-72.929283	Laflamme	Marc	authorizer	Yale University	61	North America
+246	38.888519	-77.025238	Baron-Szabo	Rosemarie	authorizer		7	North America
+247	43.075871	-89.397614	Gass	Kenneth	authorizer		5	North America
+245	43.075871	-89.397614	Schneider	Jay	authorizer			North America
