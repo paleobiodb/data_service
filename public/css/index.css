@@ -320,7 +320,6 @@ circle {
 .footerBreak {
   width: 33.33%;
   display: inline-block;
-  margin-bottom: -4px;
 }
 @media screen and (min-width: 768px) {
   .container > .jumbotron { 
