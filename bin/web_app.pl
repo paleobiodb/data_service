@@ -60,7 +60,7 @@ my $ds = DataService->new({ validator => $dv,
 # each of them.
 
 ruleset $dv '1.1:common_params' => 
-    "The following parameter can be used with most requests:",
+    "The following parameter is used with most requests:",
     [param => 'show', ANY_VALUE],
     "Return extra result fields in addition to the basic fields.  The value should be a comma-separated",
     "list of values corresponding to the sections listed in the response documentation for the URL path",
@@ -90,7 +90,7 @@ ruleset $dv '1.1:common_params' =>
     "=item dwc", "Darwin Core element names.  This is the default for XML responses.",
     "Note that many fields are not represented in this vocabulary, because of limitations of the Darwin Core element set.",
     "=item com", "3-character abbreviated (\"compact\") field names.  This is the default for JSON responses.",
-    "!!The following parameters are only relevant to the L<text formats|/data1.1/text_doc.html> (csv, tsv, txt):",
+    "!!The following parameters are only relevant to the text formats (csv, tsv, txt):",
     [optional => 'no_header', FLAG_VALUE],
     "If specified, then the header line (which gives the field names) is omitted.",
     [optional => 'linebreak', ENUM_VALUE('cr','crlf'), { default => 'crlf' }],
@@ -155,8 +155,7 @@ ruleset $dv '1.1:coll_selector' =>
     "A comma-separated list of collection identifiers.";
 
 ruleset $dv '1.1:coll_display' =>
-    [ignore => 'level'],
-    "!!The following parameter indicates which information should be returned about each resulting name:",
+    "The following parameter indicates which information should be returned about each resulting name:",
     [param => 'show', ENUM_VALUE('bin','ref','sref','loc','time','taxa'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
     "From the list given below.  It defaults to C<basic>.";
@@ -276,36 +275,6 @@ ruleset $dv '1.1:interval_selector' =>
     [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
     [param => 'min_ma', DECI_VALUE(0)],
     [param => 'max_ma', DECI_VALUE(0)];
-
-ruleset '1.1:coll_specifier' =>
-    [param => 'id', POS_VALUE, { alias => 'coll_id' }];
-
-ruleset '1.1:coll_selector' =>
-    [param => 'id', INT_LIST_PERMISSIVE(1), { alias => 'coll_id' }],
-    [allow => '1.1:main_selector'];
-
-ruleset '1.1:coll_display' =>
-    [param => 'level', INT_VALUE(1,2)],
-    [param => 'show', LIST_PERMISSIVE('bin','ref','sref','loc','time','taxa','occ','det')];
-
-ruleset '1.1:colls/single' => 
-    [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
-    [allow => '1.1:coll_display'],
-    [allow => '1.1:common_params'];
-
-ruleset '1.1:colls/list' => 
-    [allow => '1.1:coll_selector'],
-    [allow => '1.1:coll_display'],
-    [allow => '1.1:common_params'];
-
-ruleset '1.1:summary_display' => 
-    [param => 'level', INT_VALUE(1,2), { default => 1 }],
-    [param => 'show', LIST_VALUE('ext','time','all')];
-
-ruleset '1.1:colls/summary' => 
-    [allow => '1.1:coll_selector'],
-    [allow => '1.1:summary_display'],
-    [allow => '1.1:common_params'];
 
 ruleset $dv '1.1:interval_specifier' =>
     [param => 'id', POS_VALUE],
