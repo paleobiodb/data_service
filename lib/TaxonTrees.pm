@@ -181,6 +181,8 @@ our $OCC_MATRIX = "occ_matrix";
 our $TAXON_SUMMARY = "taxon_summary";
 our $REF_SUMMARY = "ref_summary";
 our $INTERVAL_DATA = "interval_data";
+our $SCALE_DATA = "scale_data";
+our $SCALE_LEVEL_DATA = "scale_level_data";
 our $INTERVAL_MAP = "interval_map";
 our $CLASSIC_TREE_CACHE = "taxa_tree_cache";
 our $CLASSIC_LIST_CACHE = "taxa_list_cache";
@@ -5427,7 +5429,9 @@ sub computeIntervalMap {
 		cx_int_no int unsigned not null,
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
-		PRIMARY KEY (scale_no, early_age, late_age)) Engine=MyISAM");
+		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
+    
+    logMessage(2, "    computing containing intervals");
     
     $sql = "INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
 		SELECT s.scale_no, p.early_age, p.late_age, i.interval_no
@@ -5441,35 +5445,70 @@ sub computeIntervalMap {
     
     $result = $dbh->do($sql);
     
+    logMessage(2, "      found $result age start/end pairs");
+    
     # Now, for each of these entries we need to see if a range of intervals in
     # a finer level of the scale can more precisely bracket the age range.  To
     # do this, we will need an auxiliary table.
     
+    logMessage(2, "    computing interval brackets for null transformations...");
+    
     $dbh->do("DROP TABLE IF EXISTS interval_map_aux");
     
     $dbh->do("CREATE TABLE interval_map_aux (
-		scale_no smallint unsigned not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
-		level tinyint unsigned not null,
-		early_no int unsigned not null,
-		late_no int unsigned not null,
-		early_age decimal(9,5),
-		late_age decimal(9,5)) Engine=MyISAM");
+		level smallint unsigned not null,
+		base_age decimal(9,5),
+		top_age decimal(9,5),
+		early_int_no int unsigned not null,
+		late_int_no int unsigned not null,
+		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
     
-    foreach my $level (1..5)
-    {
-	$sql = "INSERT INTO intervals_aux (interval_no, level, early_no, late_no, early_age, late_age)
-		SELECT i.interval_no, $level, ei.interval_no as early_no, li.interval_no as late_no, ei.base_age, li.top_age
-		FROM $INTERVAL_DATA as i JOIN $INTERVAL_DATA as li on li.top_age <= i.top_age and li.base_age >= i.top_age 
-			JOIN $INTERVAL_DATA as ei on ei.base_age >= i.base_age and ei.top_age <= i.base_age
-		WHERE i.level is null and li.level = $level and ei.level = $level";
-	
-	$result = $dbh->do($sql);
-    }
+    # Every interval that belongs to a time scale is, of course, represented
+    # by itself when the target timescale is its own.
     
+    $sql = "INSERT IGNORE INTO interval_map_aux
+		(scale_no, early_age, late_age, level, early_int_no, late_int_no)
+	    SELECT i.scale_no, i.base_age, i.top_age, i.level, i.interval_no, i.interval_no
+	    FROM $INTERVAL_DATA as i
+	    WHERE i.scale_no is not null and i.scale_no <> 0";
     
+    $result = $dbh->do($sql);
     
+    # For all other combinations of start and end ages, we consider all possible
+    # sets of bracketing intervals (those which overlap the beginning and end
+    # points), and choose for each time scale the one which brackets the
+    # interval most closely.  Ties are broken by lowest level number.
+    
+    logMessage(2, "    computing interval brackets for all other start/end pairs...");
+    
+    $sql = "INSERT IGNORE INTO interval_map_aux 
+		(scale_no, early_age, late_age, level, base_age, top_age, early_int_no, late_int_no)
+	    SELECT s.scale_no, p.early_age, p.late_age, s.level,
+		ei.base_age, li.top_age, ei.interval_no, li.interval_no
+	    FROM $SCALE_LEVEL_DATA as s
+		JOIN (SELECT ei.base_age as early_age, li.top_age as late_age
+			FROM $INTERVAL_DATA as ei JOIN $INTERVAL_DATA as li
+			WHERE (ei.base_age >= li.base_age or ei.top_age >= li.top_age)) as p
+		JOIN $INTERVAL_DATA as ei on ei.scale_no = s.scale_no and ei.level = s.level and
+			p.early_age between ei.base_age and ei.top_age
+		JOIN $INTERVAL_DATA as li on li.scale_no = s.scale_no and li.level = s.level and
+			li.base_age >= p.late_age and li.top_age <= p.late_age
+	    ORDER BY (ei.base_age - li.top_age), s.level";
+    
+    $result = $dbh->do($sql);
+    
+    # Then copy these results into $INTERVAL_MAP_WORK.
+    
+    logMessage(2, "    setting interval bracket numbers...");
+    
+    $sql = "UPDATE $INTERVAL_MAP_WORK as w
+		JOIN interval_map_aux as ima using (early_age, late_age, scale_no)
+	    SET w.early_int_no = ima.early_int_no,
+		w.late_int_no = ima.late_int_no";
+    
+    $result = $dbh->do($sql);
     
     # # First sequence the intervals from oldest to youngest.
     
@@ -5496,120 +5535,122 @@ sub computeIntervalMap {
     # Now figure out the standard equivalents for non-standard intervals.
     # This involves the creation of two additional tables.
     
-    logMessage(2, "    mapping non-standard intervals to standard ones...");
+    # logMessage(2, "    mapping non-standard intervals to standard ones...");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS intervals_aux");
+    # $result = $dbh->do("DROP TABLE IF EXISTS intervals_aux");
     
-    $result = $dbh->do("
-		CREATE TABLE intervals_aux (
-			interval_no int unsigned not null,
-			level tinyint unsigned not null,
-			early_no int unsigned not null,
-			late_no int unsigned not null,
-			early_age decimal(9,5),
-			late_age decimal(9,5)) Engine=MyISAM");
+    # $result = $dbh->do("
+    # 		CREATE TABLE intervals_aux (
+    # 			interval_no int unsigned not null,
+    # 			level tinyint unsigned not null,
+    # 			early_no int unsigned not null,
+    # 			late_no int unsigned not null,
+    # 			early_age decimal(9,5),
+    # 			late_age decimal(9,5)) Engine=MyISAM");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS intervals_aux_2");
+    # $result = $dbh->do("DROP TABLE IF EXISTS intervals_aux_2");
     
-    $result = $dbh->do("
-		CREATE TABLE intervals_aux_2 (
-			interval_no int unsigned primary key,
-			early_no int unsigned not null,
-			late_no int unsigned not null) Engine=MyISAM");
+    # $result = $dbh->do("
+    # 		CREATE TABLE intervals_aux_2 (
+    # 			interval_no int unsigned primary key,
+    # 			early_no int unsigned not null,
+    # 			late_no int unsigned not null) Engine=MyISAM");
     
-    foreach my $level (1..5)
-    {
-	$sql = "INSERT INTO intervals_aux (interval_no, level, early_no, late_no, early_age, late_age)
-		SELECT i.interval_no, $level, ei.interval_no as early_no, li.interval_no as late_no, ei.base_age, li.top_age
-		FROM $INTERVAL_DATA as i JOIN $INTERVAL_DATA as li on li.top_age <= i.top_age and li.base_age >= i.top_age 
-			JOIN $INTERVAL_DATA as ei on ei.base_age >= i.base_age and ei.top_age <= i.base_age
-		WHERE i.level is null and li.level = $level and ei.level = $level";
+    # foreach my $level (1..5)
+    # {
+    # 	$sql = "INSERT INTO intervals_aux (interval_no, level, early_no, late_no, early_age, late_age)
+    # 		SELECT i.interval_no, $level, ei.interval_no as early_no, li.interval_no as late_no, ei.base_age, li.top_age
+    # 		FROM $INTERVAL_DATA as i JOIN $INTERVAL_DATA as li on li.top_age <= i.top_age and li.base_age >= i.top_age 
+    # 			JOIN $INTERVAL_DATA as ei on ei.base_age >= i.base_age and ei.top_age <= i.base_age
+    # 		WHERE i.level is null and li.level = $level and ei.level = $level";
 	
-	$result = $dbh->do($sql);
-    }
+    # 	$result = $dbh->do($sql);
+    # }
     
-    $sql = "INSERT IGNORE INTO intervals_aux_2
-	    SELECT interval_no, early_no, late_no from intervals_aux
-	    ORDER BY (early_age - late_age), level";
+    # $sql = "INSERT IGNORE INTO intervals_aux_2
+    # 	    SELECT interval_no, early_no, late_no from intervals_aux
+    # 	    ORDER BY (early_age - late_age), level";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    $result = $dbh->do("LOCK TABLES
-				$INTERVAL_DATA WRITE,
-				$INTERVAL_DATA as i WRITE, 
-				intervals_aux_2 as a WRITE");
+    # $result = $dbh->do("LOCK TABLES
+    # 				$INTERVAL_DATA WRITE,
+    # 				$INTERVAL_DATA as i WRITE, 
+    # 				intervals_aux_2 as a WRITE");
     
-    $sql = "UPDATE $INTERVAL_DATA as i JOIN intervals_aux_2 as a using (interval_no)
-	    SET i.early_st_no = a.early_no, i.late_st_no = a.late_no";
+    # $sql = "UPDATE $INTERVAL_DATA as i JOIN intervals_aux_2 as a using (interval_no)
+    # 	    SET i.early_st_no = a.early_no, i.late_st_no = a.late_no";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "      updated $result rows.");
+    # logMessage(2, "      updated $result rows.");
     
-    $sql = "UPDATE $INTERVAL_DATA SET early_st_no = interval_no, late_st_no = interval_no
-	    WHERE level is not null";
+    # $sql = "UPDATE $INTERVAL_DATA SET early_st_no = interval_no, late_st_no = interval_no
+    # 	    WHERE level is not null";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    $result = $dbh->do("UNLOCK TABLES");
+    # $result = $dbh->do("UNLOCK TABLES");
     
-    # Then create a "container map" which for each possible starting and
-    # ending point in the standard interval set determines the most specific
-    # containing interval.  This is used to generate a single containing
-    # interval for collections and clusters.
+    # # Then create a "container map" which for each possible starting and
+    # # ending point in the standard interval set determines the most specific
+    # # containing interval.  This is used to generate a single containing
+    # # interval for collections and clusters.
     
-    logMessage(2, "    computing interval container map...");
+    # logMessage(2, "    computing interval container map...");
     
-    $dbh->do("DROP TABLE IF EXISTS $INTERVAL_MAP_WORK");
+    # $dbh->do("DROP TABLE IF EXISTS $INTERVAL_MAP_WORK");
     
-    $dbh->do("CREATE TABLE $INTERVAL_MAP_WORK (
-		scale_id smallint unsigned not null,
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		interval_no int unsigned not null,
-		PRIMARY KEY (scale_id, early_age, late_age)) Engine=MyISAM");
+    # $dbh->do("CREATE TABLE $INTERVAL_MAP_WORK (
+    # 		scale_id smallint unsigned not null,
+    # 		early_age decimal(9,5),
+    # 		late_age decimal(9,5),
+    # 		interval_no int unsigned not null,
+    # 		PRIMARY KEY (scale_id, early_age, late_age)) Engine=MyISAM");
     
-    $sql = "INSERT IGNORE INTO $INTERVAL_MAP_WORK
-		SELECT 1, p.early_age, p.late_age, i.interval_no
-		FROM (SELECT ei.base_age as early_age, li.top_age as late_age
-			FROM $INTERVAL_DATA as ei JOIN $INTERVAL_DATA as li
-			WHERE (ei.base_age >= li.base_age or ei.top_age >= li.top_age)) as p
-		    JOIN $INTERVAL_DATA as i on i.base_age >= p.early_age and i.top_age <= p.late_age
-		        and i.level is not null
-		ORDER BY i.level desc";
+    # $sql = "INSERT IGNORE INTO $INTERVAL_MAP_WORK
+    # 		SELECT 1, p.early_age, p.late_age, i.interval_no
+    # 		FROM (SELECT ei.base_age as early_age, li.top_age as late_age
+    # 			FROM $INTERVAL_DATA as ei JOIN $INTERVAL_DATA as li
+    # 			WHERE (ei.base_age >= li.base_age or ei.top_age >= li.top_age)) as p
+    # 		    JOIN $INTERVAL_DATA as i on i.base_age >= p.early_age and i.top_age <= p.late_age
+    # 		        and i.level is not null
+    # 		ORDER BY i.level desc";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
     # Now swap in the new tables.
     
-    logMessage(2, "activating table '$INTERVAL_MAP'");
+    activateTables($dbh, $INTERVAL_MAP_WORK => $INTERVAL_MAP);
     
-    # Compute the backup names of all the tables to be activated
+    # logMessage(2, "activating table '$INTERVAL_MAP'");
     
-    #my $interval_map_bak = "${INTERVAL_DATA}_bak";
-    my $container_map_bak = "${INTERVAL_MAP}_bak";
+    # # Compute the backup names of all the tables to be activated
     
-    # Delete any old tables that might have been left around.
+    # #my $interval_map_bak = "${INTERVAL_DATA}_bak";
+    # my $container_map_bak = "${INTERVAL_MAP}_bak";
     
-    #$result = $dbh->do("DROP TABLE IF EXISTS $interval_map_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $container_map_bak");
+    # # Delete any old tables that might have been left around.
     
-    # Do the swap.
+    # #$result = $dbh->do("DROP TABLE IF EXISTS $interval_map_bak");
+    # $result = $dbh->do("DROP TABLE IF EXISTS $container_map_bak");
     
-    #$result = $dbh->do("CREATE TABLE IF NOT EXISTS $INTERVAL_DATA LIKE $INTERVAL_DATA_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $INTERVAL_MAP LIKE $INTERVAL_MAP_WORK");
+    # # Do the swap.
     
-    $result = $dbh->do("RENAME TABLE
-			    $INTERVAL_MAP to $container_map_bak,
-			    $INTERVAL_MAP_WORK to $INTERVAL_MAP");
+    # #$result = $dbh->do("CREATE TABLE IF NOT EXISTS $INTERVAL_DATA LIKE $INTERVAL_DATA_WORK");
+    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $INTERVAL_MAP LIKE $INTERVAL_MAP_WORK");
     
-	#		    $INTERVAL_DATA to $interval_map_bak,
-	#		    $INTERVAL_DATA_WORK to $INTERVAL_DATA,
+    # $result = $dbh->do("RENAME TABLE
+    # 			    $INTERVAL_MAP to $container_map_bak,
+    # 			    $INTERVAL_MAP_WORK to $INTERVAL_MAP");
     
-    # Delete the old tables.
+    # 	#		    $INTERVAL_DATA to $interval_map_bak,
+    # 	#		    $INTERVAL_DATA_WORK to $INTERVAL_DATA,
     
-    #$result = $dbh->do("DROP TABLE IF EXISTS $interval_map_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $container_map_bak");
+    # # Delete the old tables.
+    
+    # #$result = $dbh->do("DROP TABLE IF EXISTS $interval_map_bak");
+    # $result = $dbh->do("DROP TABLE IF EXISTS $container_map_bak");
     
     my $a = 1;		# we can stop here when debugging
 }
