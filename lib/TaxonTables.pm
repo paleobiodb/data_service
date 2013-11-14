@@ -1,8 +1,28 @@
 # 
 # The Paleobiology Database
 # 
-#   TaxonTrees.pm
+#   TaxonTables.pm
 # 
+
+package TaxonTables;
+
+use strict;
+
+# Modules needed
+
+use Carp qw(carp croak);
+use Try::Tiny;
+
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
+
+use CoreFunction qw(activateTables);
+use ConsoleLog qw(initMessages logMessage);
+use OccurrenceTables qw($OCC_MATRIX $OCC_TAXON);
+
+use base 'Exporter';
+
+our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig computeGenSp);
+
 
 =head1 NAME
 
@@ -134,58 +154,11 @@ hierarchy should look like.
 
 =cut
 
-package TaxonTrees;
-
-# Modules needed
-
-use Carp qw(carp croak);
-use Try::Tiny;
-
-use strict;
-
-
-# Controlling variables for debug messages
-
-our $MSG_TAG = 'unknown';
-our $MSG_LEVEL = 1;
-
-# Default bin sizes
-
-our $FINE_BIN_SIZE = 0.5;
-our $COARSE_BIN_SIZE = 10.0;
-
 # Main table names - if new entries are ever added to @TREE_TABLE_LIST,
 # corresponding entries should be added to the hashes immediately below.  Each
 # new tree table should have its own distinct name table, attrs table, etc.
 # They could either point to the same authorities, opinions, etc. tables or to
 # different ones depending upon the purpose for adding them to the system.
-
-our (@TREE_TABLE_LIST) = ("taxon_trees");
-
-our (%NAME_TABLE) = ("taxon_trees" => "taxon_names");
-our (%ATTRS_TABLE) = ("taxon_trees" => "taxon_attrs");
-our (%SEARCH_TABLE) = ("taxon_trees" => "taxon_search");
-our (%INTS_TABLE) = ("taxon_trees" => "taxon_ints");
-our (%COUNTS_TABLE) = ("taxon_trees" => "taxon_counts");
-
-our (%AUTH_TABLE) = ("taxon_trees" => "authorities");
-our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
-our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
-our (%REFS_TABLE) = ("taxon_trees" => "refs");
-
-our $COLL_MATRIX = "coll_matrix";
-our $COLL_INTS = "coll_ints";
-our $COLL_BINS = "coll_bins";
-our $COLL_CLUST = "clusters";
-our $OCC_MATRIX = "occ_matrix";
-our $TAXON_SUMMARY = "taxon_summary";
-our $REF_SUMMARY = "ref_summary";
-our $INTERVAL_DATA = "interval_data";
-our $SCALE_DATA = "scale_data";
-our $SCALE_LEVEL_DATA = "scale_level_data";
-our $INTERVAL_MAP = "interval_map";
-our $CLASSIC_TREE_CACHE = "taxa_tree_cache";
-our $CLASSIC_LIST_CACHE = "taxa_list_cache";
 
 # Working table names - when the taxonomy tables are rebuilt, they are rebuilt
 # using the following table names.  The last step of the rebuild is to replace
@@ -201,14 +174,6 @@ our $SEARCH_WORK = "sn";
 our $INTS_WORK = "intn";
 our $COUNTS_WORK = "cntn";
 our $OPINION_WORK = "opn";
-our $COLL_MATRIX_WORK = "cmn";
-our $COLL_INTS_WORK = "cin";
-our $COLL_BINS_WORK = "cbn";
-our $COLL_CLUST_WORK = "kmcn";
-our $OCC_MATRIX_WORK = "omn";
-our $TAXON_SUMMARY_WORK = "tsn";
-our $REF_SUMMARY_WORK = "rsn";
-our $INTERVAL_MAP_WORK = "icn";
 our $TREE_CACHE_WORK = "ttcn";
 our $LIST_CACHE_WORK = "tlcn";
 
@@ -223,17 +188,10 @@ our $CLASSIFY_AUX = "class_aux";
 our $ADJUST_AUX = "adjust_aux";
 our $SPECIES_AUX = "species_aux";
 our $INTS_AUX = "ints_aux";
-our $COLL_AUX = "coll_aux";
-our $CLUST_AUX = "clust_aux";
 
 # Additional tables
 
 our $QUEUE_TABLE = "taxon_queue";
-our $COUNTRY_MAP = "country_map";
-
-# Template files
-
-our $INTERVAL_DATA_FILE = "system/interval_map.sql";
 
 # Other variables and constants
 
@@ -598,7 +556,7 @@ sub maintenance {
 	    logMessage(1, "Rebuilding table '$table'");
 	    
 	    eval {
-		buildTables($dbh, $table, $options);
+		buildTaxonTables($dbh, $table, $options);
 	    };
 	    
 	    # If an error occurred, we need to note this.
@@ -746,7 +704,7 @@ sub maintenance {
 }
 
 
-# buildTables ( dbh, tree_table, options, msg_level )
+# buildTaxonTables ( dbh, tree_table, options, msg_level )
 # 
 # Builds 'tree_table' and its associated tables from scratch, using only the
 # information in $AUTH_TABLE and $OPINIONS_TABLE.  If the 'msg_level'
@@ -758,17 +716,14 @@ sub maintenance {
 # The $step_control parameter is for debugging only.  If specified it must be
 # a hash reference that will control which steps are taken.
 
-sub buildTables {
+sub buildTaxonTables {
 
     my ($dbh, $tree_table, $options, $steps) = @_;
     
     $options ||= {};
     my $step_control;
     
-    # First, set the variables that control log output and also determine
-    # which tables will be computed.
-    
-    $MSG_TAG = 'Rebuild';
+    # First, determine which tables will be computed.
     
     my @steps = split(//, $steps || 'Aabcdefghi');
     $step_control->{$_} = 1 foreach @steps;
@@ -872,13 +827,13 @@ sub updateTables {
     my ($dbh, $tree_table, $concept_list, $opinion_list, $options) = @_;
     
     $options ||= {};
-    my $search_table = $SEARCH_TABLE{$tree_table};
+    my $search_table = $TAXON_TABLE{$tree_table}{search};
     
     my %update_concepts;	# list of concepts to be updated
     
     # First, set the variables that control log output.
     
-    $MSG_TAG = 'Update'; $MSG_LEVEL = $options->{msg_level} || 1;
+    #$MSG_TAG = 'Update'; $MSG_LEVEL = $options->{msg_level} || 1;
     
     # If we have been notified that concept membership has changed, then all
     # of these changed concepts must be updated in the taxon tree tables.
@@ -1049,7 +1004,7 @@ sub buildOpinionCache {
     
     logMessage(2, "building opinion cache (a)");
     
-    my $OPINION_CACHE = $OPINION_CACHE{$tree_table};
+    my $OPINION_CACHE = $TAXON_TABLE{$tree_table}{opcache};
     
     # In order to minimize interference with any other threads which might
     # need to access the opinion cache, we create a new table and then rename
@@ -1120,15 +1075,15 @@ sub updateOpinionCache {
     
     my $opfilter = join ',', @$opinion_list;
     
-    $result = $dbh->do("LOCK TABLE $OPINION_TABLE{$tree_table} as o read,
-				   $REFS_TABLE{$tree_table} as r read,
-				   $AUTH_TABLE{$tree_table} as a1 read,
-				   $AUTH_TABLE{$tree_table} as a2 read,
-				   $OPINION_CACHE{$tree_table} write");
+    $result = $dbh->do("LOCK TABLE $TAXON_TABLE{$tree_table}{opinions} as o read,
+				   $TAXON_TABLE{$tree_table}{refs} as r read,
+				   $TAXON_TABLE{$tree_table}{authorities} as a1 read,
+				   $TAXON_TABLE{$tree_table}{authorities} as a2 read,
+				   $TAXON_TABLE{$tree_table}{opcache} write");
     
-    $result = $dbh->do("DELETE FROM $OPINION_CACHE{$tree_table} WHERE opinion_no in ($opfilter)");
+    $result = $dbh->do("DELETE FROM $TAXON_TABLE{$tree_table}{opcache} WHERE opinion_no in ($opfilter)");
     
-    populateOpinionCache($dbh, $OPINION_CACHE{$tree_table}, $tree_table, $opfilter);
+    populateOpinionCache($dbh, $TAXON_TABLE{$tree_table}{opcache}, $tree_table, $opfilter);
     
     $result = $dbh->do("UNLOCK TABLES");
     
@@ -1176,10 +1131,10 @@ sub populateOpinionCache {
 				ELSE 2 END)) AS ri,
 			if(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr,
 			o.status, o.spelling_reason, null
-		FROM $OPINION_TABLE{$tree_table} as o
-			LEFT JOIN $REFS_TABLE{$tree_table} as r using (reference_no)
-			JOIN $AUTH_TABLE{$tree_table} as a1 on a1.taxon_no = o.child_spelling_no
-			LEFT JOIN $AUTH_TABLE{$tree_table} as a2 on a2.taxon_no = o.parent_spelling_no
+		FROM $TAXON_TABLE{$tree_table}{opinions} as o
+			LEFT JOIN $TAXON_TABLE{$tree_table}{refs} as r using (reference_no)
+			JOIN $TAXON_TABLE{$tree_table}{authorities} as a1 on a1.taxon_no = o.child_spelling_no
+			LEFT JOIN $TAXON_TABLE{$tree_table}{authorities} as a2 on a2.taxon_no = o.parent_spelling_no
 		$filter_clause
 		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
     
@@ -1207,7 +1162,7 @@ sub getOpinionConcepts {
     
     my $new_op_data = $dbh->prepare("
 		SELECT child_no, parent_no
-		FROM $OPINION_TABLE{$tree_table} WHERE opinion_no in $opfilter");
+		FROM $TAXON_TABLE{$tree_table}{opinions} WHERE opinion_no in $opfilter");
     
     $new_op_data->execute();
     
@@ -1221,7 +1176,7 @@ sub getOpinionConcepts {
     
     my $old_op_data = $dbh->prepare("
 		SELECT orig_no, parent_no
-		FROM $OPINION_CACHE{$tree_table} WHERE opinion_no in $opfilter");
+		FROM $TAXON_TABLE{$tree_table}{opcache} WHERE opinion_no in $opfilter");
     
     $old_op_data->execute();
     
@@ -1248,9 +1203,9 @@ sub updateOpinionConcepts {
     
     my $result;
     
-    my $auth_table = $AUTH_TABLE{$tree_table};
-    my $opinion_cache = $OPINION_CACHE{$tree_table};
-    my $opinion_table = $OPINION_TABLE{$tree_table};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
+    my $opinion_table = $TAXON_TABLE{$tree_table}{opinions};
     
     logMessage(2, "updating opinion cache to reflect concept changes");
     
@@ -1301,7 +1256,7 @@ sub createWorkingTables {
     
     logMessage(2, "creating working tables (a)");
     
-    my $auth_table = $AUTH_TABLE{$tree_table};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
     # First create $TREE_WORK, which will hold one row for every concept that
     # is being updated.
@@ -1319,6 +1274,8 @@ sub createWorkingTables {
 				parent_no int unsigned not null,
 				parsen_no int unsigned not null,
 				opinion_no int unsigned not null,
+				species_no int unsigned,
+				genus_no int unsigned,
 				ints_no int unsigned not null,
 				lft int,
 				rgt int,
@@ -1378,8 +1335,8 @@ sub computeSpelling {
     
     logMessage(2, "computing currently accepted spelling relation (b)");
     
-    my $opinion_cache = $OPINION_CACHE{$tree_table};
-    my $auth_table = $AUTH_TABLE{$tree_table};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
     # In order to select the currently accepted name for each taxonomic
     # concept, we first need to determine which taxonomic names are marked as
@@ -1614,7 +1571,7 @@ sub expandToJuniors {
     
     my ($dbh, $tree_table) = @_;
     
-    my $opinion_cache = $OPINION_CACHE{$tree_table};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     
     # We need to repeat the following process until no new rows are added, so
     # that junior synonyms of junior synonyms, etc. also get added.
@@ -1700,7 +1657,7 @@ sub computeSynonymy {
     
     logMessage(2, "computing synonymy relation (c)");
 
-    my $OPINION_CACHE = $OPINION_CACHE{$tree_table};
+    my $OPINION_CACHE = $TAXON_TABLE{$tree_table}{opcache};
     
     # We start by choosing the "classification opinion" for each concept in
     # $TREE_WORK.  We use the same mechanism as we did previously with the
@@ -1893,7 +1850,7 @@ sub expandToSeniors {
     
     my ($count, $result);
     
-    my $OPINION_CACHE = $OPINION_CACHE{$tree_table};
+    my $OPINION_CACHE = $TAXON_TABLE{$tree_table}{opcache};
     
     # We need to repeat the following process until no new rows are added, so
     # that senior synonyms of senior synonyms, etc. also get added
@@ -2025,7 +1982,7 @@ sub computeHierarchy {
     
     logMessage(2, "computing hierarchy relation (d)");
     
-    my $OPINION_CACHE = $OPINION_CACHE{$tree_table};
+    my $OPINION_CACHE = $TAXON_TABLE{$tree_table}{opcache};
     
     # We already have the $CLASSIFY_AUX relation, but we need to adjust it by
     # grouping together all of the opinions for each senior synonym and its
@@ -2413,7 +2370,7 @@ sub linkParents {
     $result = $dbh->do("
 		UPDATE $TREE_WORK t
 		    JOIN $TREE_WORK t2 ON t2.orig_no = t.synonym_no
-		    JOIN $OPINION_CACHE{$tree_table} o ON o.opinion_no = t2.opinion_no
+		    JOIN $TAXON_TABLE{$tree_table}{opcache} o ON o.opinion_no = t2.opinion_no
 		    JOIN $tree_table m ON m.orig_no = o.parent_no
 		SET t.parent_no = m.synonym_no
 		WHERE t.parent_no = 0 and o.parent_no != 0");
@@ -3042,9 +2999,9 @@ sub updateSecondaryTables {
     
     my $result;
     
-    my $auth_table = $AUTH_TABLE{$tree_table};
-    my $search_table = $SEARCH_TABLE{$tree_table};
-    my $name_table = $NAME_TABLE{$tree_table};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    my $search_table = $TAXON_TABLE{$tree_table}{search};
+    my $name_table = $TAXON_TABLE{$tree_table}{names};
     
     # For $search_table, we need to remove all entries that correspond to
     # taxonomic concepts in $TREE_WORK.  We then add in everything from
@@ -3140,8 +3097,8 @@ sub computeIntermediates {
 
     logMessage(2, "computing intermediate classification (f)");
     
-    my $auth_table = $AUTH_TABLE{$tree_table};
-    my $opinion_cache = $OPINION_CACHE{$tree_table};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     
     $result = $dbh->do("DROP TABLE IF EXISTS $INTS_WORK");
     $result = $dbh->do("CREATE TABLE $INTS_WORK
@@ -3541,6 +3498,37 @@ sub computeIntermediates {
 }
 
 
+# computeGenSp ( dbh )
+# 
+# For each taxon at the rank of genus or below, indicate its genus and
+# species.  This is easy to do, we simply have to look at most 3 levels up the
+# hierarchy.
+
+sub computeGenSp {
+    
+    my ($dbh, $tree_table) = @_;
+    
+    my ($sql, $result);
+    
+    logMessage (2, "    computing genus and species (f1)");
+    
+    $sql = "	UPDATE $tree_table as t
+			LEFT JOIN $tree_table as p1 on p1.orig_no = t.parsen_no
+			LEFT JOIN $tree_table as p2 on p2.orig_no = p1.parsen_no
+			LEFT JOIN $tree_table as p3 on p3.orig_no = p2.parsen_no
+		SET t.species_no = if(t.rank = 3, t.orig_no, 
+				   if(p1.rank = 3, p1.orig_no, null)),
+		    t.genus_no = if(t.rank = 5, t.orig_no,
+				 if(p1.rank = 5, p1.orig_no,
+				 if(p2.rank = 5, p2.orig_no,
+				 if(p3.rank = 5, p3.orig_no, null))))";
+    
+    $result = $dbh->do($sql);
+    
+    my $a = 1;		# we can stop here when debugging.
+}
+
+
 # computeSearchTable ( dbh )
 # 
 # Create a table through which taxa can be efficiently and completely found by
@@ -3566,7 +3554,7 @@ sub computeSearchTable {
     
     my ($result);
     
-    my $auth_table = $AUTH_TABLE{$tree_table};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
     $result = $dbh->do("DROP TABLE IF EXISTS $SEARCH_WORK");
     $result = $dbh->do("CREATE TABLE $SEARCH_WORK
@@ -3757,7 +3745,7 @@ sub updateSearchTable {
     
     my $result;
     
-    my $auth_table = $AUTH_TABLE{$tree_table};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
     # We start by copying all higher taxa into the search table.
     
@@ -3833,12 +3821,12 @@ sub computeAttrsTable {
     
     my ($result, $sql);
     
-    my $auth_table = $AUTH_TABLE{$tree_table};
-    my $opinion_cache = $OPINION_CACHE{$tree_table};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     
     # Create the taxon summary table if it doesn't already exist.
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_SUMMARY (
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OCC_TAXON (
 				orig_no int unsigned primary key,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
@@ -3892,7 +3880,7 @@ sub computeAttrsTable {
 			(a.preservation <> 'trace' or a.preservation is null)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
-			LEFT JOIN $TAXON_SUMMARY as tsum using (orig_no)
+			LEFT JOIN $OCC_TAXON as tsum using (orig_no)
 		GROUP BY a.orig_no";
     
     $result = $dbh->do($sql);
@@ -4224,861 +4212,6 @@ sub computeCollectionCounts {
 
 
 
-# computeCollectionTables ( dbh, cluster_flag, bin_list )
-# 
-# Compute the collection matrix.  If the $bin_list argument is not empty,
-# also compute collection bin tables at the specified resolutions.  If
-# $cluster_flag is true, then execute k-means clustering on any bin level
-# for which that attribute is specified.
-
-sub computeCollectionTables {
-
-    my ($dbh, $cluster_flag, $bin_list) = @_;
-    
-    my ($result, $sql);
-    
-    $MSG_TAG = "Rebuild";
-    
-    # Make sure that the country code lookup table and interval map are the
-    # database.
-    
-    createCountryMap($dbh);
-    loadIntervalTables($dbh);
-    
-    # If we were given a list of bins, make sure it is formatted properly.
-    
-    my @bin_reso;
-    my @bin_tables;
-    my @coll_tables = ($COLL_MATRIX_WORK => $COLL_MATRIX);
-    my $bin_lines = '';
-    my $level = 1;
-    
-    if ( ref $bin_list eq 'ARRAY' )
-    {
-	foreach my $bin (@$bin_list)
-	{
-	    if ( defined $bin->{resolution} && $bin->{resolution} > 0 )
-	    {
-		push @bin_reso, $bin->{resolution};
-		$bin_lines .= "bin_id_$level int unsigned not null,\n";
-		$level++;
-	    }
-	}
-    }
-    
-    # Now create a clean working table which will become the new collection
-    # matrix.
-    
-    logMessage(1, "rebuilding collection tables");
-    
-    $dbh->do("DROP TABLE IF EXISTS $COLL_MATRIX_WORK");
-    
-    $dbh->do("CREATE TABLE $COLL_MATRIX_WORK (
-		collection_no int unsigned primary key,
-		$bin_lines
-		clust_id int unsigned not null,
-		lng decimal(9,6),
-		lat decimal(9,6),
-		loc point not null,
-		cc char(2),
-		early_int_no int unsigned not null,
-		late_int_no int unsigned not null,
-		cx_int_no int unsigned not null,
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		n_occs int unsigned not null,
-		n_spec int unsigned not null,
-		reference_no int unsigned not null,
-		authorizer_no int unsigned not null,
-		enterer_no int unsigned not null,
-		access_level tinyint unsigned not null) Engine=MYISAM");
-    
-    logMessage(2, "    inserting collections...");
-    
-    $sql = "	INSERT INTO $COLL_MATRIX_WORK
-		       (collection_no, lng, lat, loc, cc,
-			early_int_no, late_int_no,
-			reference_no, authorizer_no, enterer_no, access_level)
-		SELECT c.collection_no, c.lng, c.lat, 
-			if(c.lng is null or c.lat is null, point(1000.0, 1000.0), point(c.lng, c.lat)), 
-			map.cc,
-			c.max_interval_no, if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no),
-			c.reference_no,	c.authorizer_no, c.enterer_no,
-			case c.access_level
-				when 'database members' then if(c.release_date < now(), 0, 1)
-				when 'research group' then if(c.release_date < now(), 0, 2)
-				when 'authorizer only' then if(c.release_date < now(), 0, 2)
-				else 0
-			end
-		FROM collections as c
-			LEFT JOIN country_map as map on map.name = c.country";
-    
-    my $count = $dbh->do($sql);
-    
-    logMessage(2, "      $count collections");
-    
-    # Count the number of occurrences in each collection.
-    
-    logMessage(2, "    counting occurrences for each collection");
-    
-    $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN
-		(SELECT collection_no, count(*) as n_occs
-		FROM occurrences GROUP BY collection_no) as sum using (collection_no)
-	    SET m.n_occs = sum.n_occs";
-    
-    $result = $dbh->do($sql);
-    
-    logMessage(2, "    setting age ranges...");
-    
-    # Set the age boundaries for each collection.
-    
-    $sql = "UPDATE $COLL_MATRIX_WORK as m
-		JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
-		JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
-		LEFT JOIN $INTERVAL_MAP as icm on icm.early_age = ei.base_age
-			and icm.late_age = li.top_age
-	    SET m.early_age = ei.base_age,
-		m.late_age = li.top_age,
-		m.cx_int_no = icm.interval_no
-	    WHERE ei.base_age >= li.base_age";
-    
-    $result = $dbh->do($sql);
-    
-    # Interchange the early/late intervals if they were given in the wrong order.
-    
-    $sql = "UPDATE $COLL_MATRIX_WORK as m
-		JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
-		JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
-		LEFT JOIN $INTERVAL_MAP as icm on icm.early_age = ei.base_age
-			and icm.late_age = li.top_age
-	    SET m.early_int_no = (\@tmp := early_int_no), early_int_no = late_int_no, late_int_no = \@tmp,
-		m.early_age = li.base_age,
-		m.late_age = ei.top_age,
-		m.cx_int_no = icm.interval_no
-	    WHERE ei.base_age < li.base_age";
-    
-    $result = $dbh->do($sql);
-    
-    # Assign the collections to bins at the various binning levels.
-    
-    if ( @bin_reso )
-    {
-	logMessage(2, "    assigning collections to bins...");
-	
-	$sql = "UPDATE $COLL_MATRIX_WORK SET";
-	
-	foreach my $i (0..$#bin_reso)
-	{
-	    my $level = $i + 1;
-	    my $reso = $bin_reso[$i];
-	    
-	    next unless $level > 0 && $reso > 0;
-	    
-	    logMessage(2, "      bin level $level: $reso degrees square");
-	    
-	    my $id_base = $reso < 1.0 ? $level . '00000000' : $level . '000000';
-	    my $lng_base = $reso < 1.0 ? $level . '0000' : $level . '000';
-	    
-	    $sql .= $i > 0 ? ",\n" : "\n";
-	    
-	    $sql .= "bin_id_$level = if(lng between -180.0 and 180.0 and lat between -90.0 and 90.0,
-			$id_base + $lng_base * floor((lng+180.0)/$reso) + floor((lat+90.0)/$reso), 0)\n";
-	}
-	
-	$result = $dbh->do($sql);
-    }
-    
-    # Now that the table is full, we can add the necessary indices much more
-    # efficiently than if we had defined them at the start.
-    
-    foreach my $i (0..$#bin_reso)
-    {
-	my $level = $i + 1;
-	my $reso = $bin_reso[$i];
-	
-	next unless $level > 0 && $reso > 0;
-	
-	logMessage(2, "    indexing by bin level $level...");
-	
-	$result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (bin_id_$level)");
-    }
-    
-    logMessage(2, "    indexing by geographic coordinates (spatial)...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (loc)");
-    
-    logMessage(2, "    indexing by geographic coordinates (separate)...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (lng, lat)");
-    
-    logMessage(2, "    indexing by country...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (cc)");
-    
-    logMessage(2, "    indexing by reference_no...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (reference_no)");
-    
-    logMessage(2, "    indexing by chronological interval...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_int_no)");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_int_no)");
-    
-    logMessage(2, "    indexing by early and late age...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_age)");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_age)");
-    
-    # We then create a summary table for each binning level, counting the
-    # number of collections and occurrences in each bin and computing the
-    # centroid and age boundaries (adjusted to the standard intervals).
-    
-    my $parent_lines = '';
-    my $set_lines = '';
-    
-    foreach my $i (0..$#bin_reso)
-    {
-	my $level = $i + 1;
-	my $reso = $bin_reso[$i];
-	
-	next unless $level > 0 && $reso > 0;
-	
-	push @bin_tables, "${COLL_BINS}_$level";
-	push @coll_tables, ("${COLL_BINS_WORK}_${level}" => "${COLL_BINS}_$level");
-	
-	logMessage(2, "    creating summary table for bin level $level...");
-	
-	$dbh->do("DROP TABLE IF EXISTS ${COLL_BINS_WORK}_${level}");
-	
-	$dbh->do("CREATE TABLE ${COLL_BINS_WORK}_${level} (
-		bin_id int unsigned not null,
-		$parent_lines
-		clust_id int unsigned,
-		n_colls int unsigned,
-		n_occs int unsigned,
-		early_age decimal(9,5),
-		late_age decimal(9,5), 
-		cx_int_no int unsigned not null,
-		lng decimal(9,6),
-		lat decimal(9,6),
-		lng_min decimal(9,6),
-		lng_max decimal(9,6),
-		lat_min decimal(9,6),
-		lat_max decimal(9,6),
-		std_dev float,
-		access_level tinyint unsigned not null,
-		unique key (bin_id)) Engine=MyISAM");
-    
-	my ($sql, $result);
-	
-	$sql = "INSERT IGNORE INTO ${COLL_BINS_WORK}_${level}
-			(bin_id, n_colls, n_occs, 
-			 early_age, late_age, 
-			 lng, lat,
-			 lng_min, lng_max, lat_min, lat_max, std_dev,
-			 access_level)
-		SELECT bin_id_$level, count(*), sum(n_occs),
-		       max(early_age), min(late_age),
-		       avg(lng), avg(lat),
-		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
-		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
-		       sqrt(var_pop(lng)+var_pop(lat)),
-		       min(access_level)
-		FROM $COLL_MATRIX_WORK
-		GROUP BY bin_id_$level";
-    
-	$result = $dbh->do($sql);
-	
-	logMessage(2, "      generated $result non-empty bins.");
-	
-	if ( $set_lines )
-	{
-	    logMessage(2, "      computing containing bins...");
-	    
-	    $sql = "UPDATE ${COLL_BINS_WORK}_${level} SET
-			$set_lines";
-	    
-	    $result = $dbh->do($sql);
-	}
-	
-	logMessage(2, "      computing containing intervals...");
-	
-	$sql = "UPDATE ${COLL_BINS_WORK}_${level} as b
-		JOIN $INTERVAL_MAP as icm on icm.early_age = b.early_age
-			and icm.late_age = b.late_age
-		SET b.cx_int_no = icm.interval_no";
-	
-	$result = $dbh->do($sql);
-	
-	$parent_lines .= "		parent_id_$level int unsigned not null,\n";
-	
-	my $id_base = $reso < 1.0 ? $level . '00000000' : $level . '000000';
-	my $lng_base = $reso < 1.0 ? $level . '0000' : $level . '000';
-	
-	$set_lines .= ",\n" if $set_lines;
-	$set_lines .= "parent_id_$level = if(lng between -180.0 and 180.0 and lat between -90.0 and 90.0,
-			$id_base + $lng_base * floor((lng+180.0)/$reso) + floor((lat+90.0)/$reso), 0)\n";
-    }
-    
-    # Now we create a new table for quick look-up of the top-level bins 
-    
-    # Finally, we swap in the new tables for the old ones.
-    
-    activateTables($dbh, @coll_tables);
-    
-    my $a = 1;		# We can stop here when debugging
-}
-
-
-sub other_stuff {
-    
-    my ($dbh, $bin_list) = @_;
-    
-    my ($sql, $result);
-    
-    # We then group the collections into fine-resolution bins with integer
-    # coordinates, taking the centroid of each bin and counting the number of
-    # collections that fall within it.  We will be able to use this set of
-    # bins to generate medium-scale maps, in order to reduce the number of
-    # data points that need to be displayed.  We will also use this set of
-    # bins as the individual data points for the k-means algorithm, which will
-    # allow us to efficiently generate the coarse-grained clusters that we
-    # need for displaying global maps.
-    
-
-    # Next, we create a table to describe the coarse clusters.
-    
-    $dbh->do("DROP TABLE IF EXISTS $COLL_CLUST_WORK");
-    
-    $dbh->do("CREATE TABLE $COLL_CLUST_WORK (
-		clust_lng smallint unsigned not null,
-		clust_lat smallint unsigned not null,
-		clust_id int unsigned not null,
-		n_colls int unsigned,
-		n_occs int unsigned,
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		early_seq int unsigned not null,
-		late_seq int unsigned not null,
-		lng decimal(9,6),
-		lat decimal(9,6),
-		lng_min decimal(9,6),
-		lng_max decimal(9,6),
-		lat_min decimal(9,6),
-		lat_max decimal(9,6),
-		std_dev float,
-		access_level tinyint unsigned,
-		unique key (clust_lng, clust_lat)) Engine=MyISAM");
-    
-    # And finally, an auxiliary table for use in computing cluster assignments
-    
-    $dbh->do("DROP TABLE IF EXISTS $CLUST_AUX");
-    
-    $dbh->do("CREATE TABLE $CLUST_AUX (
-		bin_id int unsigned primary key,
-		clust_id int unsigned not null) ENGINE=MYISAM");
-    
-    # We must now seed the k-means algorithm by choosing an initial set of
-    # collections.  This set will determine the number of clusters in the
-    # final result, and its geographical distribution will have a dramatic
-    # influence on the shape of the final set of clusters.  So we need to
-    # choose carefully.  We want to limit the maximum geographic extent of any
-    # particular cluster, and to ensure that geographically isolated
-    # collections are always formed into their own clusters.  To accomplish
-    # this, we re-bin the collections more coarsely into 5-degree-square bins
-    # (still with integer coordinates) and choose as our initial cluster
-    # coordinates the centroid of each bin (note that this requires a weighted
-    # average of the centroids of the constituent bins weighted by the number
-    # of collections in each one).  The number of non-empty bins will then
-    # determine the number of clusters.  We won't fill in the number of
-    # collections for each cluster until later, because the k-means algorithm
-    # will move collections from cluster to cluster until it stabilizes.
-    
-    my $bin_ratio = $FINE_BIN_SIZE / $COARSE_BIN_SIZE;
-    
-    $sql = "	INSERT IGNORE INTO $COLL_CLUST_WORK (clust_lng, clust_lat, lng, lat)
-		SELECT clust_lng, clust_lat, 
-		       sum(lng * n_colls)/sum(n_colls), sum(lat * n_colls)/sum(n_colls)
-		FROM (SELECT floor(bin_lng * $bin_ratio) as clust_lng,
-			     floor(bin_lat * $bin_ratio) as clust_lat,
-			     lng, lat, n_colls FROM $COLL_BINS_WORK) as c
-		GROUP BY clust_lng, clust_lat";
-    
-    $result = $dbh->do($sql);
-    
-    logMessage(2, "    seeded the cluster table with $result data points (bins)");
-    
-    $result = $dbh->do("UPDATE $COLL_CLUST_WORK SET clust_id = 1000000 + clust_lng * 1000 + clust_lat");
-    
-    # Now we make initial assignments of bins to clusters, by assigning each
-    # bin to the cluster whose centroid is closest to it (which may be on the
-    # other side of a coarse-bin boundary).  We use the $CLUST_AUX table along
-    # with an ORDER BY clause to select the closest cluster for each bin, and
-    # then copy the cluster identifiers clust_lng and clust_lat back into
-    # $COLL_BINS_WORK.
-    
-    logMessage(2, "    assigning bins to clusters...");
-    
-    $sql = "	INSERT IGNORE INTO $CLUST_AUX
-		SELECT b.bin_id, k.clust_id
-		FROM $COLL_BINS_WORK as b JOIN $COLL_CLUST_WORK as k
-			on k.clust_lng between floor(bin_lng * $bin_ratio)-1
-				and floor(bin_lng * $bin_ratio)+1
-			and k.clust_lat between floor(bin_lat * $bin_ratio)-1
-				and floor(bin_lat * $bin_ratio)+1
-		ORDER BY POW(k.lat-b.lat,2)+POW(k.lng-b.lng,2) ASC";
-    
-    $dbh->do($sql);
-    
-    $sql = "    UPDATE $COLL_BINS_WORK as cb JOIN $CLUST_AUX as k using (bin_id)
-		SET cb.clust_id = k.clust_id";
-    
-    # $sql = "	UPDATE $COLL_BINS_WORK as c SET c.clust_no = 
-    # 		(SELECT k.clust_no from $COLL_CLUST_WORK as k 
-    # 		 ORDER BY POW(k.lat-c.lat, 2) + POW(k.lng-c.lng, 2) ASC LIMIT 1)";
-    
-    my ($rows_changed) = $dbh->do($sql);
-    my ($bound) = 0;
-    
-    # Then we update the centroid of each cluster and recompute the cluster
-    # assignments.  Repeat until no points move to a different cluster, or at
-    # most the specified number of rounds.
-    
-    while ( $rows_changed > 0 and $bound < 10 )
-    {
-	# Compute the centroid of each cluster based on the data points (bins)
-	# assigned to it.
-	
-	logMessage(2, "    computing cluster centroids...");
-	
-	$sql = "UPDATE $COLL_CLUST_WORK as k JOIN 
-		(SELECT clust_id,
-			sum(lng * n_colls)/sum(n_colls) as lng_avg,
-			sum(lat * n_colls)/sum(n_colls) as lat_avg
-		 FROM $COLL_BINS_WORK GROUP BY clust_id) as cluster
-			using (clust_id)
-		SET k.lng = cluster.lng_avg, k.lat = cluster.lat_avg";
-	
-	$result = $dbh->do($sql);
-	
-	# Then reassign each point (bin) to the closest cluster.
-	
-	logMessage(2, "    recomputing cluster assignments...");
-	
-	$dbh->do("DELETE FROM $CLUST_AUX");
-	
-	$sql = "INSERT IGNORE INTO $CLUST_AUX
-		SELECT b.bin_id, k.clust_id
-		FROM $COLL_BINS_WORK as b JOIN $COLL_CLUST_WORK as k
-			on k.clust_lng between floor(bin_lng * $bin_ratio)-1
-				and floor(bin_lng * $bin_ratio)+1
-			and k.clust_lat between floor(bin_lat * $bin_ratio)-1
-				and floor(bin_lat * $bin_ratio)+1
-		ORDER BY POW(k.lat-b.lat,2)+POW(k.lng-b.lng,2) ASC";
-	
-	$dbh->do($sql);
-	
-	$sql = "UPDATE $COLL_BINS_WORK as cb JOIN $CLUST_AUX as k using (bin_id)
-		SET cb.clust_id = k.clust_id";
-	
-	# $sql = "UPDATE $COLL_BINS_WORK as c SET c.clust_no = 
-	# 	(SELECT k.clust_no from $COLL_CLUST_WORK as k 
-	# 	 ORDER BY POW(k.lat-c.lat,2)+POW(k.lng-c.lng,2) ASC LIMIT 1)";
-	
-	($rows_changed) = $dbh->do($sql);
-	
-	logMessage(2, "    $rows_changed rows changed");
-	
-	$bound++;
-    }
-    
-    logMessage(2, "    setting collection cluster numbers...");
-    
-    # Now that we have a stable assignment of bins to clusters, we can record
-    # the cluster assignments for each individual collection.
-    
-    $sql = "	UPDATE $COLL_MATRIX_WORK as c 
-		JOIN $COLL_BINS_WORK as cb using (bin_id)
-		SET c.clust_id = cb.clust_id";
-    
-    $result = $dbh->do($sql);
-    
-    $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD INDEX (clust_id)");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (clust_id)");
-    
-    # Now we can compute the total number of collections and occurrences, the
-    # geographic extent, the access level, and the standard deviation for each
-    # cluster (the cluster centroids have already been computed above).
-    
-    logMessage(2, "   setting collection statistics for each cluster...");
-    
-    $sql = "    UPDATE $COLL_CLUST_WORK as k JOIN
-		(SELECT clust_id, sum(n_colls) as n_colls,
-			sum(n_occs) as n_occs,
-			max(early_age) as early_age,
-			min(late_age) as late_age,
-			min(early_seq) as early_seq,
-			min(late_seq) as late_seq,
-			sqrt(var_pop(lng)+var_pop(lat)) as std_dev,
-			min(lng_min) as lng_min, max(lng_max) as lng_max,
-			min(lat_min) as lat_min, max(lat_max) as lat_max,
-			min(access_level) as access_level
-		FROM $COLL_BINS_WORK GROUP BY clust_id) as agg
-			using (clust_id)
-		SET k.n_colls = agg.n_colls, k.n_occs = agg.n_occs,
-		    k.early_age = agg.early_age, k.late_age = agg.late_age,
-		    k.early_seq = agg.early_seq, k.late_seq = agg.late_seq,
-		    k.std_dev = agg.std_dev, k.access_level = agg.access_level,
-		    k.lng_min = agg.lng_min, k.lng_max = agg.lng_max,
-		    k.lat_min = agg.lat_min, k.lat_max = agg.lat_max";
-    
-    $result = $dbh->do($sql);
-    
-    # Then look up the sequence numbers
-    
-    # $sql = "UPDATE $COLL_MATRIX_WORK as m
-    # 		JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
-    # 		JOIN $INTERVAL_DATA as ei2 on ei2.interval_no = ei.early_st_no
-    # 		JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
-    # 		JOIN $INTERVAL_DATA as li2 on li2.interval_no = li.late_st_no
-    # 	    SET m.early_seq = ei2.older_seq, m.late_seq = li2.younger_seq";
-    
-    # $result = $dbh->do($sql);
-    
-    # Then we can create a table to indicate which collections correspond to
-    # which intervals from the standard set.
-    
-    logMessage(2, "    computing collection interval table...");
-    
-    $dbh->do("DROP TABLE IF EXISTS $COLL_INTS_WORK");
-    
-    $dbh->do("CREATE TABLE $COLL_INTS_WORK (
-		collection_no int unsigned not null,
-		interval_no int unsigned not null,
-		unique key (collection_no, interval_no)) ENGINE=MYISAM");
-    
-    $sql = "INSERT IGNORE INTO $COLL_INTS_WORK
-		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
-			JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
-			JOIN $INTERVAL_DATA as sli on sli.interval_no = li.late_st_no
-			JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
-			JOIN $INTERVAL_DATA as sei on sei.interval_no = ei.early_st_no
-			JOIN $INTERVAL_DATA as i on i.level = sli.level and
-				i.top_age >= sli.top_age and i.top_age <= sei.top_age
-		WHERE sli.level >= sei.level";
-    
-    $result = $dbh->do($sql);
-    
-    $sql = "INSERT IGNORE INTO $COLL_INTS_WORK
-		SELECT m.collection_no, i.interval_no FROM $COLL_MATRIX_WORK as m
-			JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
-			JOIN $INTERVAL_DATA as sli on sli.interval_no = li.late_st_no
-			JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
-			JOIN $INTERVAL_DATA as sei on sei.interval_no = ei.early_st_no
-			JOIN $INTERVAL_DATA as i on i.level = sei.level and
-				i.base_age >= sli.base_age and i.base_age >= sei.base_age
-		WHERE sli.level > sei.level";
-    
-    $result = $dbh->do($sql);
-    
-    # Finally, we swap in the new tables for the old ones.
-    
-    logMessage(2, "activating tables '$COLL_MATRIX', '$COLL_BINS', '$COLL_CLUST', '$COLL_INTS'");
-    
-    # Compute the backup names of all the tables to be activated
-    
-    my $coll_matrix_bak = "${COLL_MATRIX}_bak";
-    my $coll_bins_bak = "${COLL_BINS}_bak";
-    my $coll_clust_bak = "${COLL_CLUST}_bak";
-    my $coll_ints_bak = "${COLL_INTS}_bak";
-    
-    # Delete any old tables that might have been left around.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $coll_matrix_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $coll_bins_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $coll_clust_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $coll_ints_bak");
-    
-    # Do the swap.
-    
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_MATRIX LIKE $COLL_MATRIX_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_BINS LIKE $COLL_BINS_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_CLUST LIKE $COLL_CLUST_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_INTS LIKE $COLL_INTS_WORK");
-    
-    $result = $dbh->do("RENAME TABLE
-			    $COLL_MATRIX to $coll_matrix_bak,
-			    $COLL_MATRIX_WORK to $COLL_MATRIX,
-			    $COLL_BINS to $coll_bins_bak,
-			    $COLL_BINS_WORK to $COLL_BINS,
-			    $COLL_CLUST to $coll_clust_bak,
-			    $COLL_CLUST_WORK to $COLL_CLUST,
-			    $COLL_INTS to $coll_ints_bak,
-			    $COLL_INTS_WORK to $COLL_INTS");
-    
-    # Delete the old tables.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $coll_matrix_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $coll_bins_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $coll_clust_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $coll_ints_bak");
-    
-    my $a = 1;		# We can stop here when debugging
-}
-
-
-
-#Group the set of collections into bins, on two different levels of
-# resolution.  The fine-grained resolution is generated by simply binning the
-# collections into bins of size $FINE_BIN_SIZE (expressed in degrees of
-# latitude/longitude), while the coarse-grained resolution is generated by
-# apply the k-means clustering algorithm to the set of fine bins.  One cluster
-# is generated for each non-empty square of size $COARSE_BIN_SIZE on the
-# surface of the earth, but the clusters may overlap the coarse bin
-# boundaries.  This process generates a tractable set of data points (order of
-# magitude close to 1000) for displaying large-scale and medium-scale maps of
-# our collections.  This routine is called whenever the set of clusters needs
-# to be initially generated or completely rebuilt.  Otherwise,
-# updateCollectionBins() can be used to add newly entered collections to the
-# existing cluster tables.
-
-
-
-
-
-# computeOccurrenceTables ( dbh, options )
-# 
-# Compute the occurrence matrix, recording which taxonomic concepts are
-# associated with which collections in which geological and chronological
-# locations.  This table is used to satisfy the bulk of the queries from the
-# front-end application.  This function also computes an occurrence summary
-# table, summarizing occurrence information by taxon.
-
-sub computeOccurrenceTables {
-    
-    my ($dbh, $options) = @_;
-    
-    my ($sql, $result, $count);
-    
-    $MSG_TAG = "Rebuild";
-    
-    # Create a clean working table which will become the new occurrence
-    # matrix.
-    
-    logMessage(1, "Rebuilding occurrence tables");
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $OCC_MATRIX_WORK");
-    $result = $dbh->do("CREATE TABLE $OCC_MATRIX_WORK (
-				occurrence_no int unsigned primary key,
-				collection_no int unsigned not null,
-				reid_no int unsigned not null,
-				taxon_no int unsigned not null,
-				orig_no int unsigned not null,
-				base_age decimal(9,5),
-				top_age decimal(9,5),
-				reference_no int unsigned not null,
-				authorizer_no int unsigned not null,
-				enterer_no int unsigned not null) ENGINE=MyISAM");
-    
-    # Add one row for every occurrence in the database.
-    
-    logMessage(2, "    inserting occurrences...");
-    
-    $sql = "	INSERT INTO $OCC_MATRIX_WORK
-		       (occurrence_no, collection_no, taxon_no, orig_no, base_age, top_age, reference_no,
-			authorizer_no, enterer_no)
-		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no, ei.base_age, li.top_age,
-			if(o.reference_no > 0, o.reference_no, c.reference_no),
-			o.authorizer_no, o.enterer_no
-		FROM occurrences as o JOIN coll_matrix as c using (collection_no)
-			LEFT JOIN interval_map as ei on ei.interval_no = c.early_int_no
-			LEFT JOIN interval_map as li on li.interval_no = c.late_int_no
-			LEFT JOIN authorities as a using (taxon_no)";
-    
-    $count = $dbh->do($sql);
-    
-    logMessage(2, "      $count occurrences");
-    
-    # Update each occurrence entry as necessary to take into account the latest
-    # reidentification if any.
-    
-    $sql = "	UPDATE $OCC_MATRIX_WORK as m
-			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no 
-				and re.most_recent = 'YES'
-			JOIN authorities as a on a.taxon_no = re.taxon_no
-		SET m.reid_no = re.reid_no,
-		    m.taxon_no = re.taxon_no,
-		    m.orig_no = a.orig_no,
-		    m.reference_no = if(re.reference_no > 0, re.reference_no, m.reference_no)";
-    
-    $count = $dbh->do($sql);
-    
-    logMessage(2, "      $count re-identifications");
-    
-    # Add some indices to the main occurrence relation, which is more
-    # efficient to do now that the table is populated.
-    
-    logMessage(2, "    indexing by collection");
-    
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (collection_no)");
-    
-    logMessage(2, "    indexing by taxonomic concept");
-    
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (orig_no)");
-    
-    logMessage(2, "    indexing by reference_no");
-    
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (reference_no)");
-    
-    # We now summarize the occurrence matrix by taxon.  We use the older_seq and
-    # younger_seq interval identifications instead of interval_no, in order
-    # that we can use the min() function to find the temporal bounds for each taxon.
-    
-    logMessage(2, "    summarizing by taxon");
-    
-    # Then create working tables which will become the new taxon summary
-    # table and reference summary table.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $TAXON_SUMMARY_WORK");
-    $result = $dbh->do("CREATE TABLE $TAXON_SUMMARY_WORK (
-				orig_no int unsigned primary key,
-				lft int unsigned not null,
-				n_occs int unsigned not null,
-				n_colls int unsigned not null,
-				first_early_age decimal(9,5),
-				first_late_age decimal(9,5),
-				last_early_age decimal(9,5),
-				last_late_age decimal(9,5),
-				first_occ int unsigned,
-				last_occ int unsigned) ENGINE=MyISAM");
-    
-    # Look for the lower and upper bounds for the interval range in which each taxon
-    # occurs.  But ignore intervals at the period level and above (except for
-    # precambrian and quaternary).  They are not just specific enough.
-    
-    $sql = "	INSERT INTO $TAXON_SUMMARY_WORK (orig_no, lft, n_occs, n_colls,
-			first_early_age, first_late_age, last_early_age, last_late_age)
-		SELECT m.orig_no, t.lft, count(*), count(distinct collection_no),
-			max(ei.base_age), max(li.top_age), min(ei.base_age), min(li.top_age)
-		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
-			JOIN taxon_trees as t using (orig_no)
-			JOIN interval_map as ei on ei.interval_no = c.early_int_no
-			JOIN interval_map as li on li.interval_no = c.late_int_no
-		WHERE (ei.level is null or ei.level > 3 or
-				(ei.level = 3 and (ei.top_age >= 541.0 or ei.base_age <= 2.6))) and
-		      (li.level is null or li.level > 3 or 
-				(li.level = 3 and (li.top_age >= 541.0 or li.base_age <= 2.6)))
-		GROUP BY m.orig_no
-		HAVING m.orig_no > 0";
-    
-    $count = $dbh->do($sql);
-    
-    logMessage(2, "      $count taxa");
-    
-    # Now that we have the age bounds for the first and last occurrence, we
-    # can select a candidate first and last occurrence for each taxon (from
-    # among all of the occurrences in the earliest/latest time interval in
-    # which that taxon is recorded).
-    
-    logMessage(2, "    finding first and last occurrences");
-    
-    $sql = "	UPDATE $TAXON_SUMMARY_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
-		SET s.first_occ = o.occurrence_no WHERE o.top_age >= s.first_late_age";
-    
-    $count = $dbh->do($sql);
-    
-    $sql = "	UPDATE $TAXON_SUMMARY_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
-		SET s.last_occ = o.occurrence_no WHERE o.base_age <= s.last_early_age";
-    
-    $count = $dbh->do($sql);
-    
-    # Then index the symmary table by earliest and latest interval number, so
-    # that we can quickly query for which taxa began or ended at a particular
-    # time.
-    
-    logMessage(2, "    indexing the summary table");
-    
-    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (lft)");
-    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (first_early_age)");
-    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (first_late_age)");
-    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (last_early_age)");
-    $dbh->do("ALTER TABLE $TAXON_SUMMARY_WORK ADD INDEX (last_late_age)");
-    
-    # We now summarize the occurrence matrix by reference_no.  For each
-    # reference, we record the range of time periods it covers, plus the
-    # number of occurrences and collections that refer to it.
-    
-    logMessage(2, "    summarizing by reference_no");
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $REF_SUMMARY_WORK");
-    $result = $dbh->do("CREATE TABLE $REF_SUMMARY_WORK (
-				reference_no int unsigned primary key,
-				n_occs int unsigned not null,
-				n_colls int unsigned not null,
-				early_age decimal(9,5),
-				late_age decimal(9,5)) ENGINE=MyISAM");
-    
-    $sql = "	INSERT INTO $REF_SUMMARY_WORK (reference_no, n_occs, n_colls,
-			early_age, late_age)
-		SELECT m.reference_no, count(*), count(distinct collection_no),
-			max(ei.base_age), min(li.top_age)
-		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
-			JOIN interval_map as ei on ei.interval_no = c.early_int_no
-			JOIN interval_map as li on li.interval_no = c.late_int_no
-		GROUP BY m.reference_no";
-    
-    $count = $dbh->do($sql);
-    
-    logMessage(2, "      $count references");
-    
-    # Then index the reference summary table by numbers of collections and
-    # occurrences, so that we can quickly query for the most heavily used ones.
-    
-    logMessage(2, "    indexing the summary table");
-    
-    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (n_occs)");
-    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (n_colls)");
-    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (early_age)");
-    $result = $dbh->do("ALTER TABLE $REF_SUMMARY_WORK ADD INDEX (late_age)");
-    
-    # Now swap in the new tables:
-    
-    logMessage(2, "activating tables '$OCC_MATRIX', '$TAXON_SUMMARY', '$REF_SUMMARY'");
-    
-    # Compute the backup names of all the tables to be activated
-    
-    my $occ_matrix_bak = "${OCC_MATRIX}_bak";
-    my $taxon_summary_bak = "${TAXON_SUMMARY}_bak";
-    my $ref_summary_bak = "${REF_SUMMARY}_bak";
-    
-    # Delete any old tables that might have been left around.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $occ_matrix_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $taxon_summary_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $ref_summary_bak");
-    
-    # Do the swap.
-    
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $OCC_MATRIX LIKE $OCC_MATRIX_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_SUMMARY LIKE $TAXON_SUMMARY_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $REF_SUMMARY LIKE $REF_SUMMARY_WORK");
-    
-    $result = $dbh->do("RENAME TABLE
-			    $OCC_MATRIX to $occ_matrix_bak,
-			    $OCC_MATRIX_WORK to $OCC_MATRIX,
-			    $TAXON_SUMMARY to $taxon_summary_bak,
-			    $TAXON_SUMMARY_WORK to $TAXON_SUMMARY,
-			    $REF_SUMMARY to $ref_summary_bak,
-			    $REF_SUMMARY_WORK to $REF_SUMMARY");
-    
-    # Delete the old tables.
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $occ_matrix_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $taxon_summary_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $ref_summary_bak");
-}
-
-
 # computeTaxonProminenceTables ( dbh )
 # 
 # Use the occurrence matrix, the collection matrix, and the taxon trees to
@@ -5093,566 +4226,6 @@ sub computeTaxonProminenceTables {
 
 
 
-}
-
-
-# createCountryMap ( dbh, force )
-# 
-# Create the country_map table if it does not already exist.
-# Still need to fix: Zaire, U.A.E., UAE, Czechoslovakia, Netherlands Antilles
-
-sub createCountryMap {
-
-    my ($dbh, $force) = @_;
-    
-    # First make sure we have a clean table.
-    
-    if ( $force )
-    {
-	$dbh->do("DROP TABLE IF EXISTS $COUNTRY_MAP");
-    }
-    
-    $dbh->do("CREATE TABLE IF NOT EXISTS $COUNTRY_MAP (
-		cc char(2) primary key,
-		continent char(2),
-		name varchar(80) not null,
-		INDEX (name),
-		INDEX (continent)) Engine=MyISAM");
-    
-    # Then populate it if necessary.
-    
-    my ($count) = $dbh->selectrow_array("SELECT count(*) FROM $COUNTRY_MAP");
-    
-    return if $count;
-    
-    logMessage(2, "    rebuilding country map");
-    
-    $dbh->do("INSERT INTO $COUNTRY_MAP (cc, continent, name) VALUES
-	('AU', 'AU', 'Australia'),
-	('DZ', 'AF', 'Algeria'),
-	('AO', 'AF', 'Angola'),
-	('BW', 'AF', 'Botswana'),
-	('CM', 'AF', 'Cameroon'),
-	('CV', 'AF', 'Cape Verde'),
-	('TD', 'AF', 'Chad'),
-	('CG', 'AF', 'Congo-Brazzaville'),
-	('CD', 'AF', 'Congo-Kinshasa'),
-	('CI', 'AF', 'Cote D\\'Ivoire'),
-	('DJ', 'AF', 'Djibouti'),
-	('EG', 'AF', 'Egypt'),
-	('ER', 'AF', 'Eritrea'),
-	('ET', 'AF', 'Ethiopia'),
-	('GA', 'AF', 'Gabon'),
-	('GH', 'AF', 'Ghana'),
-	('GN', 'AF', 'Guinea'),
-	('KE', 'AF', 'Kenya'),
-	('LS', 'AF', 'Lesotho'),
-	('LY', 'AF', 'Libya'),
-	('MW', 'AF', 'Malawi'),
-	('ML', 'AF', 'Mali'),
-	('MR', 'AF', 'Mauritania'),
-	('MA', 'AF', 'Morocco'),
-	('MZ', 'AF', 'Mozambique'),
-	('NA', 'AF', 'Namibia'),
-	('NE', 'AF', 'Niger'),
-	('NG', 'AF', 'Nigeria'),
-	('SH', 'AF', 'Saint Helena'),
-	('SN', 'AF', 'Senegal'),
-	('SO', 'AF', 'Somalia'),
-	('ZA', 'AF', 'South Africa'),
-	('SD', 'AF', 'Sudan'),
-	('SZ', 'AF', 'Swaziland'),
-	('TZ', 'AF', 'Tanzania'),
-	('TG', 'AF', 'Togo'),
-	('TN', 'AF', 'Tunisia'),
-	('UG', 'AF', 'Uganda'),
-	('EH', 'AF', 'Western Sahara'),
-	('ZM', 'AF', 'Zambia'),
-	('ZW', 'AF', 'Zimbabwe'),
-	('AR', 'SA', 'Argentina'),
-	('BO', 'SA', 'Bolivia'),
-	('BR', 'SA', 'Brazil'),
-	('CL', 'SA', 'Chile'),
-	('CO', 'SA', 'Colombia'),
-	('EC', 'SA', 'Ecuador'),
-	('FA', 'SA', 'Falkland Islands (Malvinas)'),
-	('GY', 'SA', 'Guyana'),
-	('PY', 'SA', 'Paraguay'),
-	('PE', 'SA', 'Peru'),
-	('SR', 'SA', 'Suriname'),
-	('UY', 'SA', 'Uruguay'),
-	('VE', 'SA', 'Venezuela'),
-	('AE', 'AS', 'United Arab Emirates'),
-	('AM', 'AS', 'Armenia'),
-	('AZ', 'AS', 'Azerbaijan'),
-	('BH', 'AS', 'Bahrain'),
-	('KH', 'AS', 'Cambodia'),
-	('TL', 'AS', 'East Timor'),
-	('GE', 'AS', 'Georgia'),
-	('ID', 'AS', 'Indonesia'),
-	('IR', 'AS', 'Iran'),
-	('IQ', 'AS', 'Iraq'),
-	('IL', 'AS', 'Israel'),
-	('JO', 'AS', 'Jordan'),
-	('KW', 'AS', 'Kuwait'),
-	('KG', 'AS', 'Kyrgyzstan'),
-	('LB', 'AS', 'Lebanon'),
-	('KP', 'AS', 'North Korea'),
-	('OM', 'AS', 'Oman'),
-	('PS', 'AS', 'Palestinian Territory'),
-	('QA', 'AS', 'Qatar'),
-	('SA', 'AS', 'Saudi Arabia'),
-	('KR', 'AS', 'South Korea'),
-	('SY', 'AS', 'Syria'),
-	('TR', 'AS', 'Turkey'),
-	('YE', 'AS', 'Yemen'),
-	('AF', 'AS', 'Afghanistan'),
-	('BD', 'AS', 'Bangladesh'),
-	('BT', 'AS', 'Bhutan'),
-	('IN', 'AS', 'India'),
-	('KZ', 'AS', 'Kazakstan'),
-	('MY', 'AS', 'Malaysia'),
-	('MM', 'AS', 'Myanmar'),
-	('NP', 'AS', 'Nepal'),
-	('PK', 'AS', 'Pakistan'),
-	('PH', 'AS', 'Philippines'),
-	('LK', 'AS', 'Sri Lanka'),
-	('TW', 'AS', 'Taiwan'),
-	('TJ', 'AS', 'Tajikistan'),
-	('TH', 'AS', 'Thailand'),
-	('TM', 'AS', 'Turkmenistan'),
-	('TU', 'AS', 'Tuva'),
-	('UZ', 'AS', 'Uzbekistan'),
-	('VN', 'AS', 'Vietnam'),
-	('CN', 'AS', 'China'),
-	('HK', 'AS', 'Hong Kong'),
-	('JP', 'AS', 'Japan'),
-	('MN', 'AS', 'Mongolia'),
-	('LA', 'AS', 'Laos'),
-	('AA', 'AA', 'Antarctica'),
-	('AL', 'EU', 'Albania'),
-	('AT', 'EU', 'Austria'),
-	('BY', 'EU', 'Belarus'),
-	('BE', 'EU', 'Belgium'),
-	('BG', 'EU', 'Bulgaria'),
-	('HR', 'EU', 'Croatia'),
-	('CY', 'EU', 'Cyprus'),
-	('CZ', 'EU', 'Czech Republic'),
-	('DK', 'EU', 'Denmark'),
-	('EE', 'EU', 'Estonia'),
-	('FI', 'EU', 'Finland'),
-	('FR', 'EU', 'France'),
-	('DE', 'EU', 'Germany'),
-	('GR', 'EU', 'Greece'),
-	('HU', 'EU', 'Hungary'),
-	('IS', 'EU', 'Iceland'),
-	('IE', 'EU', 'Ireland'),
-	('IT', 'EU', 'Italy'),
-	('LV', 'EU', 'Latvia'),
-	('LT', 'EU', 'Lithuania'),
-	('LU', 'EU', 'Luxembourg'),
-	('MK', 'EU', 'Macedonia'),
-	('MT', 'EU', 'Malta'),
-	('MD', 'EU', 'Moldova'),
-	('NL', 'EU', 'Netherlands'),
-	('NO', 'EU', 'Norway'),
-	('PL', 'EU', 'Poland'),
-	('PT', 'EU', 'Portugal'),
-	('RO', 'EU', 'Romania'),
-	('RU', 'EU', 'Russian Federation'),
-	('SM', 'EU', 'San Marino'),
-	('RS', 'EU', 'Serbia and Montenegro'),
-	('SK', 'EU', 'Slovakia'),
-	('SI', 'EU', 'Slovenia'),
-	('ES', 'EU', 'Spain'),
-	('SJ', 'EU', 'Svalbard and Jan Mayen'),
-	('SE', 'EU', 'Sweden'),
-	('CH', 'EU', 'Switzerland'),
-	('UA', 'EU', 'Ukraine'),
-	('UK', 'EU', 'United Kingdom'),
-	('BA', 'EU', 'Bosnia and Herzegovina'),
-	('GL', 'NA', 'Greenland'),
-	('US', 'NA', 'United States'),
-	('CA', 'NA', 'Canada'),
-	('MX', 'NA', 'Mexico'),
-	('AI', 'NA', 'Anguilla'),
-	('AG', 'NA', 'Antigua and Barbuda'),
-	('BS', 'NA', 'Bahamas'),
-	('BB', 'NA', 'Barbados'),
-	('BM', 'NA', 'Bermuda'),
-	('KY', 'NA', 'Cayman Islands'),
-	('CU', 'NA', 'Cuba'),
-	('DO', 'NA', 'Dominican Republic'),
-	('GP', 'NA', 'Guadeloupe'),
-	('HT', 'NA', 'Haiti'),
-	('JM', 'NA', 'Jamaica'),
-	('PR', 'NA', 'Puerto Rico'),
-	('BZ', 'NA', 'Belize'),
-	('CR', 'NA', 'Costa Rica'),
-	('SV', 'NA', 'El Salvador'),
-	('GD', 'NA', 'Grenada'),
-	('GT', 'NA', 'Guatemala'),
-	('HN', 'NA', 'Honduras'),
-	('NI', 'NA', 'Nicaragua'),
-	('PA', 'NA', 'Panama'),
-	('TT', 'NA', 'Trinidad and Tobago'),
-	('AW', 'NA', 'Aruba'),
-	('CW', 'NA', 'Curaçao'),
-	('SX', 'NA', 'Sint Maarten'),
-	('CK', 'OC', 'Cook Islands'),
-	('FJ', 'OC', 'Fiji'),
-	('PF', 'OC', 'French Polynesia'),
-	('GU', 'OC', 'Guam'),
-	('MH', 'OC', 'Marshall Islands'),
-	('NC', 'OC', 'New Caledonia'),
-	('NZ', 'OC', 'New Zealand'),
-	('MP', 'OC', 'Northern Mariana Islands'),
-	('PW', 'OC', 'Palau'),
-	('PG', 'OC', 'Papua New Guinea'),
-	('PN', 'OC', 'Pitcairn'),
-	('TO', 'OC', 'Tonga'),
-	('TV', 'OC', 'Tuvalu'),
-	('UM', 'OC', 'United States Minor Outlying Islands'),
-	('VU', 'OC', 'Vanuatu'),
-	('TF', 'IO', 'French Southern Territories'),
-	('MG', 'IO', 'Madagascar'),
-	('MV', 'IO', 'Maldives'),
-	('MU', 'IO', 'Mauritius'),
-	('YT', 'IO', 'Mayotte'),
-	('SC', 'IO', 'Seychelles')");
-}
-
-
-# loadIntervalTables ( dbh, force )
-# 
-# Unless the 'interval_map' table exists and has data in it, load it from the
-# template file on disk.  If the parameter $force is true, then load the table
-# regardless and replace any existing data.
-
-sub loadIntervalTables {
-
-    my ($dbh, $force) = @_;
-    
-    # Unless $force was specified, check whether the table already exists and
-    # contains data.
-    
-    my $result;
-    
-    unless ( $force )
-    {
-	try {
-	    $result = $dbh->do("SELECT COUNT(*) FROM $INTERVAL_DATA");
-	};
-	
-	return if $result;
-    }
-    
-    # If we get here, we need to load the table from disk.  So attempt to open the
-    # file and read in the contents.
-    
-    logMessage(2, "loading interval table from interval_map.sql...");
-    
-    my $result = open(my $interval_fh, "<", $INTERVAL_DATA_FILE);
-    
-    unless ( $result )
-    {
-	warn "Could not open file $INTERVAL_DATA_FILE: $!";
-	$result = open($interval_fh, "<", "../$INTERVAL_DATA_FILE");
-    }
-    
-    die "Could not open file ../$INTERVAL_DATA_FILE: $!"
-	unless $result;
-    
-    my @contents = <$interval_fh>;
-    
-    close $interval_fh;
-    
-    die "Interval file was empty or could not be read." unless @contents;
-    
-    my $statement = '';
-    my $result;
-    
-    foreach my $line (@contents)
-    {
-	# Skip blank lines and comments
-	
-	next if $line =~ qr{ ^ -- | ^ /\* }xs;
-	next unless $line =~ qr{ \w }xs;
-	
-	# Everything else gets appended to the current statement.
-	
-	$statement .= $line;
-	
-	# If the line ends in a semicolon, execute the statement.
-	
-	if ( $line =~ qr{ ;$ }xs )
-	{
-	    $result = $dbh->do($statement);
-	    $statement = '';
-	}
-    }
-}
-
-
-# computeIntervalMap ( dbh )
-# 
-# Generage a map that takes each possible start and end point from the
-# interval_data table along with a destination scale_no and produces a single
-# containing interval from that time scale plus a start and end interval
-# number from that time scale that most precisely brackets the given start and
-# end point.  This table can be used to map any time range (whose start and
-# end points appear somewhere in the interval_data table) to any of the time
-# scales in the database.
-
-sub computeIntervalMap {
-
-    my ($dbh) = @_;
-    
-    my ($sql, $result, $count);
-    
-    # First make sure that we have an interval table and scale table to draw from.
-    
-    loadIntervalTables($dbh);
-    
-    logMessage(2, "computing interval map");
-    
-    # Then create a new working map table.  For each possible combination of
-    # start and end ages and each possible scale, insert a row if a containing
-    # interval exists for that age range in that scale.
-    
-    $dbh->do("DROP TABLE IF EXISTS $INTERVAL_MAP_WORK");
-    
-    $dbh->do("CREATE TABLE $INTERVAL_MAP_WORK (
-		scale_no smallint unsigned not null,
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		cx_int_no int unsigned not null,
-		early_int_no int unsigned not null,
-		late_int_no int unsigned not null,
-		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
-    
-    logMessage(2, "    computing containing intervals");
-    
-    $sql = "INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
-		SELECT s.scale_no, p.early_age, p.late_age, i.interval_no
-		FROM (SELECT ei.base_age as early_age, li.top_age as late_age
-			FROM $INTERVAL_DATA as ei JOIN $INTERVAL_DATA as li
-			WHERE (ei.base_age >= li.base_age or ei.top_age >= li.top_age)) as p
-		    JOIN $SCALE_DATA as s
-		    JOIN $INTERVAL_DATA as i on i.base_age >= p.early_age and i.top_age <= p.late_age
-		        and i.scale_no = s.scale_no
-		ORDER BY i.level desc";
-    
-    $result = $dbh->do($sql);
-    
-    logMessage(2, "      found $result age start/end pairs");
-    
-    # Now, for each of these entries we need to see if a range of intervals in
-    # a finer level of the scale can more precisely bracket the age range.  To
-    # do this, we will need an auxiliary table.
-    
-    logMessage(2, "    computing interval brackets for null transformations...");
-    
-    $dbh->do("DROP TABLE IF EXISTS interval_map_aux");
-    
-    $dbh->do("CREATE TABLE interval_map_aux (
-		early_age decimal(9,5),
-		late_age decimal(9,5),
-		level smallint unsigned not null,
-		base_age decimal(9,5),
-		top_age decimal(9,5),
-		early_int_no int unsigned not null,
-		late_int_no int unsigned not null,
-		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
-    
-    # Every interval that belongs to a time scale is, of course, represented
-    # by itself when the target timescale is its own.
-    
-    $sql = "INSERT IGNORE INTO interval_map_aux
-		(scale_no, early_age, late_age, level, early_int_no, late_int_no)
-	    SELECT i.scale_no, i.base_age, i.top_age, i.level, i.interval_no, i.interval_no
-	    FROM $INTERVAL_DATA as i
-	    WHERE i.scale_no is not null and i.scale_no <> 0";
-    
-    $result = $dbh->do($sql);
-    
-    # For all other combinations of start and end ages, we consider all possible
-    # sets of bracketing intervals (those which overlap the beginning and end
-    # points), and choose for each time scale the one which brackets the
-    # interval most closely.  Ties are broken by lowest level number.
-    
-    logMessage(2, "    computing interval brackets for all other start/end pairs...");
-    
-    $sql = "INSERT IGNORE INTO interval_map_aux 
-		(scale_no, early_age, late_age, level, base_age, top_age, early_int_no, late_int_no)
-	    SELECT s.scale_no, p.early_age, p.late_age, s.level,
-		ei.base_age, li.top_age, ei.interval_no, li.interval_no
-	    FROM $SCALE_LEVEL_DATA as s
-		JOIN (SELECT ei.base_age as early_age, li.top_age as late_age
-			FROM $INTERVAL_DATA as ei JOIN $INTERVAL_DATA as li
-			WHERE (ei.base_age >= li.base_age or ei.top_age >= li.top_age)) as p
-		JOIN $INTERVAL_DATA as ei on ei.scale_no = s.scale_no and ei.level = s.level and
-			p.early_age between ei.base_age and ei.top_age
-		JOIN $INTERVAL_DATA as li on li.scale_no = s.scale_no and li.level = s.level and
-			li.base_age >= p.late_age and li.top_age <= p.late_age
-	    ORDER BY (ei.base_age - li.top_age), s.level";
-    
-    $result = $dbh->do($sql);
-    
-    # Then copy these results into $INTERVAL_MAP_WORK.
-    
-    logMessage(2, "    setting interval bracket numbers...");
-    
-    $sql = "UPDATE $INTERVAL_MAP_WORK as w
-		JOIN interval_map_aux as ima using (early_age, late_age, scale_no)
-	    SET w.early_int_no = ima.early_int_no,
-		w.late_int_no = ima.late_int_no";
-    
-    $result = $dbh->do($sql);
-    
-    # # First sequence the intervals from oldest to youngest.
-    
-    # logMessage(2, "    sequencing interval map...");
-    
-    # $result = $dbh->do("LOCK TABLES $INTERVAL_DATA WRITE");
-    
-    # $result = $dbh->do("SET \@interval_seq := 0");
-    # $result = $dbh->do("UPDATE $INTERVAL_DATA
-    # 			SET younger_seq = (\@interval_seq := \@interval_seq + 1)
-    # 			ORDER BY top_age asc, base_age asc");
-    
-    # logMessage(2, "      younger_seq: updated $result rows.");
-    
-    # $result = $dbh->do("SET \@interval_seq := 0");
-    # $result = $dbh->do("UPDATE $INTERVAL_DATA
-    # 			SET older_seq = (\@interval_seq := \@interval_seq + 1)
-    # 			ORDER BY base_age desc, top_age desc");
-    
-    # logMessage(2, "      older_seq: updated $result rows.");
-    
-    # $result = $dbh->do("UNLOCK TABLES");
-    
-    # Now figure out the standard equivalents for non-standard intervals.
-    # This involves the creation of two additional tables.
-    
-    # logMessage(2, "    mapping non-standard intervals to standard ones...");
-    
-    # $result = $dbh->do("DROP TABLE IF EXISTS intervals_aux");
-    
-    # $result = $dbh->do("
-    # 		CREATE TABLE intervals_aux (
-    # 			interval_no int unsigned not null,
-    # 			level tinyint unsigned not null,
-    # 			early_no int unsigned not null,
-    # 			late_no int unsigned not null,
-    # 			early_age decimal(9,5),
-    # 			late_age decimal(9,5)) Engine=MyISAM");
-    
-    # $result = $dbh->do("DROP TABLE IF EXISTS intervals_aux_2");
-    
-    # $result = $dbh->do("
-    # 		CREATE TABLE intervals_aux_2 (
-    # 			interval_no int unsigned primary key,
-    # 			early_no int unsigned not null,
-    # 			late_no int unsigned not null) Engine=MyISAM");
-    
-    # foreach my $level (1..5)
-    # {
-    # 	$sql = "INSERT INTO intervals_aux (interval_no, level, early_no, late_no, early_age, late_age)
-    # 		SELECT i.interval_no, $level, ei.interval_no as early_no, li.interval_no as late_no, ei.base_age, li.top_age
-    # 		FROM $INTERVAL_DATA as i JOIN $INTERVAL_DATA as li on li.top_age <= i.top_age and li.base_age >= i.top_age 
-    # 			JOIN $INTERVAL_DATA as ei on ei.base_age >= i.base_age and ei.top_age <= i.base_age
-    # 		WHERE i.level is null and li.level = $level and ei.level = $level";
-	
-    # 	$result = $dbh->do($sql);
-    # }
-    
-    # $sql = "INSERT IGNORE INTO intervals_aux_2
-    # 	    SELECT interval_no, early_no, late_no from intervals_aux
-    # 	    ORDER BY (early_age - late_age), level";
-    
-    # $result = $dbh->do($sql);
-    
-    # $result = $dbh->do("LOCK TABLES
-    # 				$INTERVAL_DATA WRITE,
-    # 				$INTERVAL_DATA as i WRITE, 
-    # 				intervals_aux_2 as a WRITE");
-    
-    # $sql = "UPDATE $INTERVAL_DATA as i JOIN intervals_aux_2 as a using (interval_no)
-    # 	    SET i.early_st_no = a.early_no, i.late_st_no = a.late_no";
-    
-    # $result = $dbh->do($sql);
-    
-    # logMessage(2, "      updated $result rows.");
-    
-    # $sql = "UPDATE $INTERVAL_DATA SET early_st_no = interval_no, late_st_no = interval_no
-    # 	    WHERE level is not null";
-    
-    # $result = $dbh->do($sql);
-    
-    # $result = $dbh->do("UNLOCK TABLES");
-    
-    # # Then create a "container map" which for each possible starting and
-    # # ending point in the standard interval set determines the most specific
-    # # containing interval.  This is used to generate a single containing
-    # # interval for collections and clusters.
-    
-    # logMessage(2, "    computing interval container map...");
-    
-    # $dbh->do("DROP TABLE IF EXISTS $INTERVAL_MAP_WORK");
-    
-    # $dbh->do("CREATE TABLE $INTERVAL_MAP_WORK (
-    # 		scale_id smallint unsigned not null,
-    # 		early_age decimal(9,5),
-    # 		late_age decimal(9,5),
-    # 		interval_no int unsigned not null,
-    # 		PRIMARY KEY (scale_id, early_age, late_age)) Engine=MyISAM");
-    
-    # $sql = "INSERT IGNORE INTO $INTERVAL_MAP_WORK
-    # 		SELECT 1, p.early_age, p.late_age, i.interval_no
-    # 		FROM (SELECT ei.base_age as early_age, li.top_age as late_age
-    # 			FROM $INTERVAL_DATA as ei JOIN $INTERVAL_DATA as li
-    # 			WHERE (ei.base_age >= li.base_age or ei.top_age >= li.top_age)) as p
-    # 		    JOIN $INTERVAL_DATA as i on i.base_age >= p.early_age and i.top_age <= p.late_age
-    # 		        and i.level is not null
-    # 		ORDER BY i.level desc";
-    
-    # $result = $dbh->do($sql);
-    
-    # Now swap in the new tables.
-    
-    activateTables($dbh, $INTERVAL_MAP_WORK => $INTERVAL_MAP);
-    
-    # logMessage(2, "activating table '$INTERVAL_MAP'");
-    
-    # # Compute the backup names of all the tables to be activated
-    
-    # #my $interval_map_bak = "${INTERVAL_DATA}_bak";
-    # my $container_map_bak = "${INTERVAL_MAP}_bak";
-    
-    # # Delete any old tables that might have been left around.
-    
-    # #$result = $dbh->do("DROP TABLE IF EXISTS $interval_map_bak");
-    # $result = $dbh->do("DROP TABLE IF EXISTS $container_map_bak");
-    
-    # # Do the swap.
-    
-    # #$result = $dbh->do("CREATE TABLE IF NOT EXISTS $INTERVAL_DATA LIKE $INTERVAL_DATA_WORK");
-    # $result = $dbh->do("CREATE TABLE IF NOT EXISTS $INTERVAL_MAP LIKE $INTERVAL_MAP_WORK");
-    
-    # $result = $dbh->do("RENAME TABLE
-    # 			    $INTERVAL_MAP to $container_map_bak,
-    # 			    $INTERVAL_MAP_WORK to $INTERVAL_MAP");
-    
-    # 	#		    $INTERVAL_DATA to $interval_map_bak,
-    # 	#		    $INTERVAL_DATA_WORK to $INTERVAL_DATA,
-    
-    # # Delete the old tables.
-    
-    # #$result = $dbh->do("DROP TABLE IF EXISTS $interval_map_bak");
-    # $result = $dbh->do("DROP TABLE IF EXISTS $container_map_bak");
-    
-    my $a = 1;		# we can stop here when debugging
 }
 
 
@@ -5718,11 +4291,11 @@ sub activateNewTaxonomyTables {
     
     # Determine the names of subordinate tables
     
-    my $search_table = $SEARCH_TABLE{$tree_table};
-    my $name_table = $NAME_TABLE{$tree_table};
-    my $attrs_table = $ATTRS_TABLE{$tree_table};
-    my $ints_table = $INTS_TABLE{$tree_table};
-    my $counts_table = $COUNTS_TABLE{$tree_table};
+    my $search_table = $TAXON_TABLE{$tree_table}{search};
+    my $name_table = $TAXON_TABLE{$tree_table}{names};
+    my $attrs_table = $TAXON_TABLE{$tree_table}{attrs};
+    my $ints_table = $TAXON_TABLE{$tree_table}{ints};
+    my $counts_table = $TAXON_TABLE{$tree_table}{counts};
     
     logMessage(2, "activating tables '$tree_table', '$search_table', '$name_table', '$attrs_table', '$ints_table', '$counts_table' (i)");
     
@@ -5841,17 +4414,17 @@ sub activateTreeTables {
 }
 
 
-# computeTaxaCacheTables ( dbh, tree_table )
+# buildTaxaCacheTables ( dbh, tree_table )
 # 
 # Rebuild the tables 'taxa_tree_cache' and 'taxa_list_cache' using the
 # specified tree table.  This allows the old pbdb code to function properly
 # using the recomputed taxonomy tree.
 
-sub computeTaxaCacheTables {
+sub buildTaxaCacheTables {
 
     my ($dbh, $tree_table) = @_;
     
-    my ($auth_table) = $AUTH_TABLE{$tree_table};
+    my ($auth_table) = $TAXON_TABLE{$tree_table}{authorities};
     
     my $result;
     
@@ -5978,76 +4551,6 @@ sub computeTaxaCacheTables {
 }
 
 
-# activate_tables ( dbh, table_list )
-# 
-# The table list should be a list with alternating work table name and active
-# table name.  Each work table is safely substituted for the corresponding
-# active table.
-
-sub activateTables {
-    
-    my ($dbh, @table_list) = @_;
-    
-    my @work_tables;
-    my @active_tables;
-    my %active_table;
-    my %backup_table;
-    
-    my ($sql, $result);
-    
-    while ( @table_list )
-    {
-	my $work_table = shift @table_list;
-	my $active_table = shift @table_list;
-	
-	push @work_tables, $work_table;
-	push @active_tables, $active_table;
-	$active_table{$work_table} = $active_table;
-	$backup_table{$work_table} = "${active_table}_bak";
-    }
-    
-    my $activate_string = join("', '", @active_tables);
-    
-    logMessage(2, "activating tables '$activate_string'");
-    
-    # Delete any old backup tables that might have been left around.  Create
-    # empty active tables if any of them don't exist, so that the atomic table
-    # swap won't throw an error.
-    
-    foreach my $t (@work_tables)
-    {
-	$result = $dbh->do("DROP TABLE IF EXISTS $backup_table{$t}");
-	$result = $dbh->do("CREATE TABLE IF NOT EXISTS $active_table{$t} LIKE $t");
-    }
-    
-    # Now construct an SQL statement that will swap in all of the tables at
-    # the same time.
-    
-    my $rename_lines = '';
-    
-    foreach my $t (@work_tables)
-    {
-	$rename_lines .= ",\n" if $rename_lines;
-	$rename_lines .= "	$active_table{$t} to $backup_table{$t},\n";
-	$rename_lines .= "	$t to $active_table{$t}";
-    }
-    
-    $sql = "RENAME TABLE\n$rename_lines";
-    
-    $result = $dbh->do($sql);
-    
-    # Then delete the backup tables.
-    
-    foreach my $t (@work_tables)
-    {
-	$result = $dbh->do("DROP TABLE IF EXISTS $backup_table{$t}");
-    }
-    
-    my $a = 1;		# We can stop here when debugging
-}
-
-
-
 # check ( dbh )
 # 
 # Check the integrity of $TREE_TABLE.  Return true if the table is okay.  If
@@ -6061,12 +4564,12 @@ sub check {
     my $result;
     my $options ||= {};
     
-    my $auth_table = $AUTH_TABLE{$tree_table};
-    my $opinion_cache = $OPINION_CACHE{$tree_table};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     
     # First, set the variables that control log output.
     
-    $MSG_TAG = 'Check'; $MSG_LEVEL = $options->{msg_level} || 1;
+    #$MSG_TAG = 'Check'; $MSG_LEVEL = $options->{msg_level} || 1;
     
     # Then, clear the error list.
     
@@ -6316,41 +4819,103 @@ sub check {
 }
 
 
+
+# ensureOrig ( dbh )
+# 
+# Unless the authorities table has an 'orig_no' field, create one.
+
+sub ensureOrig {
+    
+    my ($dbh) = @_;
+    
+    # Check the table definition, and return if it already has 'orig_no'.
+    
+    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE authorities"); 
+    
+    return if $table_definition =~ /`orig_no` int/;
+    
+    print STDERR "Creating 'orig_no' field...\n";
+    
+    # Create the 'orig_no' field.
+    
+    $dbh->do("ALTER TABLE authorities
+	      ADD COLUMN orig_no INT UNSIGNED NOT NULL AFTER taxon_no");
+    
+    return;
+}
+
+
+# populateOrig ( dbh )
+# 
+# If there are any entries where 'orig_no' is not set, fill them in.
+
+sub populateOrig {
+
+    my ($dbh) = @_;
+    
+    # First make sure that we have a field to populate.
+    
+    ensureOrig($dbh);
+    
+    # Check to see if we have any unset orig_no entries, and return if we do
+    # not.
+    
+    my ($count) = $dbh->selectrow_array("
+	SELECT count(*) from authorities
+	WHERE orig_no = 0");
+    
+    return unless $count > 0;
+    
+    # Populate all unset orig_no entries.  This algorithm is taken from
+    # TaxonInfo::getOriginalCombination() in the old code.
+    
+    print STDERR "Populating 'orig_no' field...\n";
+    
+    $count = $dbh->do("
+	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_spelling_no
+	SET a.orig_no = o.child_no WHERE a.orig_no = 0");
+    
+    print STDERR "   child_spelling_no: $count\n";
+    
+    $count = $dbh->do("
+	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_no
+	SET a.orig_no = o.child_no WHERE a.orig_no = 0");
+    
+    print STDERR "   child_no: $count\n";
+    
+    $count = $dbh->do("
+	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_spelling_no
+	SET a.orig_no = o.parent_no WHERE a.orig_no = 0");
+        
+    print STDERR "   parent_spelling_no: $count\n";
+    
+    $count = $dbh->do("
+	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_no
+	SET a.orig_no = o.parent_no WHERE a.orig_no = 0");
+    
+    print STDERR "   parent_no: $count\n";
+    
+    $count = $dbh->do("
+	UPDATE authorities as a
+	SET a.orig_no = a.taxon_no WHERE a.orig_no = 0");
+    
+    print STDERR "   self: $count\n";
+    
+    # Index the field, unless there is already an index.
+    
+    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE authorities"); 
+    
+    return if $table_definition =~ /KEY `orig_no`/;
+    
+    $dbh->do("ALTER TABLE authorities
+              ADD KEY (orig_no)");
+    
+    print STDERR "  done.\n";
+}
+
+
+
 # UTILITY ROUTINES
-
-# initMessages ( msg_level )
-# 
-# Initialize a timer, so that we can tell how long each step takes.  Also set
-# the $MSG_LEVEL parameter.  
-
-our ($START_TIME);
-
-sub initMessages {
-    
-    my ($level) = @_;
-    
-    $MSG_LEVEL = $level if defined $level;    
-    $START_TIME = time;
-}
-
-
-# logMessage ( level, message )
-# 
-# If $level is greater than or equal to the package variable $MSG_LEVEL, then
-# print $message to standard error.
-
-sub logMessage {
-
-    my ($level, $message) = @_;
-    
-    return if $level > $MSG_LEVEL;
-    
-    my $elapsed = time - $START_TIME;    
-    my $elapsed_str = sprintf("%2dm %2ds", $elapsed / 60, $elapsed % 60);
-    
-    print STDERR "$MSG_TAG: [ $elapsed_str ]  $message\n";
-}
-
 
 # The following routines are intended only for debugging.
 

@@ -1,26 +1,44 @@
 #!/opt/local/bin/perl
+# 
+# build_tables.pl
+# 
+# Build (or rebuild) the tables necessary for the "new" version of the
+# Paleobiology Database.  These tables all depend upon the contents of the
+# "old" tables.
 
 use lib '../lib', 'lib';
 use Getopt::Std;
 
-use DBHandle;
-use TaxonTrees;
+# The following modules are all part of the "new" pbdb.
+
+use CoreFunction qw(connectDB
+		    configData);
+use ConsoleLog qw(initMessages
+		  logMessage);
+use IntervalTables qw(loadIntervalData
+		      buildIntervalMap);
+use CollectionTables qw(buildCollectionTables);
+use OccurrenceTables qw(buildOccurrenceTables);
+use TaxonTables qw(populateOrig
+		   buildTaxonTables
+		   buildTaxaCacheTables computeGenSp);
 use Taxonomy;
+use DiversityTables qw(buildDiversityTables);
+
+
+# First parse option switches.  If we were given an argument, then use that as
+# the database name overriding what was in the configuration file.
 
 my %options;
 
-# First parse option switches
-
-getopts('tT:mbckuivry', \%options);
-
-# If we were given an argument, then use that as the database name
-# overrriding what was in the configuration file.
+getopts('tT:mbcKuivryd', \%options);
 
 my $cmd_line_db_name = shift;
 
+
 # Get a database handle and a taxonomy object.
 
-my $dbh = DBHandle->connect($cmd_line_db_name);
+my $dbh = connectDB("config.yml", $cmd_line_db_name);
 
 my $t = Taxonomy->new($dbh, 'taxon_trees');
 
@@ -28,28 +46,100 @@ my $t = Taxonomy->new($dbh, 'taxon_trees');
 
 $DB::single = 1;
 
-# Now make sure that the 'orig_no' field is set for each entry in the
-# authorities table.
-
-ensureOrig($dbh);
-populateOrig($dbh);
 
 # Initialize the output-message subsystem
 
-TaxonTrees::initMessages(2);
+initMessages(2, 'Rebuild');
+
 
 # Call the routines that build the various caches, depending upon the options
 # that were specified.
 
-TaxonTrees::loadIntervalTables($dbh, 1) if $options{i};
-TaxonTrees::computeIntervalMap($dbh) if $options{u};
-TaxonTrees::computeCollectionTables($dbh, $options{k}, $CONFIG->{bins}) if $options{c};
-TaxonTrees::computeOccurrenceTables($dbh) if $options{m};
-TaxonTrees::computeCollectionCounts($dbh) if $options{v};
-TaxonTrees::createRankMap($dbh) if $options{r};
-TaxonTrees::buildTables($dbh, 'taxon_trees', { msg_level => 2 }, $options{T}) 
-    if $options{t} or $options{T};
-TaxonTrees::computeTaxaCacheTables($dbh, 'taxon_trees') if $options{y};
+my $interval_data = $options{i};
+my $interval_map = $options{u};
+my $rank_map = $options{r};
+
+my $collection_tables = $options{c};
+my $occurrence_tables = $options{m};
+
+my $taxon_tables = $options{t} or $options{T};
+my $taxon_steps = $options{T};
+my $old_taxon_tables = $options{y};
+my $diversity_tables = $options{d};
+
+my $options = { taxon_steps => $options{T},
+		colls_cluster => $options{k} };
+
+
+# The option -i causes a forced reload of the interval data from the source
+# data files.  Otherwise, do a (non-forced) call to LoadIntervalData if any
+# function has been selected that requires it.
+
+if ( $interval_data )
+{
+    loadIntervalData($dbh, 1);
+}
+
+elsif ( $interval_map || $collection_tables || $occurrence_tables || $taxon_tables )
+{
+    loadIntervalData($dbh);
+}
+
+# The option -u causes the interval map tables to be (re)computed.
+
+if ( $interval_map )
+{
+    buildIntervalMap($dbh);
+}
+
+# The option -r causes the taxon rank map to be (re)generated.
+
+if ( $rank_map )
+{
+    createRankMap($dbh);
+}
+
+# The option -c causes the collection tables to be (re)computed.
+
+if ( $collection_tables )
+{
+    my $bins = configData('bins');
+    buildCollectionTables($dbh, $bins, $options);
+}
+
+# The option -m causes the occurrence tables to be (re)computed.
+
+if ( $occurrence_tables )
+{
+    buildOccurrenceTables($dbh, $options);
+}
+
+# The option -t or -T causes the taxonomy tables to be (re)computed.  If -T
+# was specified, its value should be a sequence of steps (a-h) to be carried
+# out. 
+
+if ( $taxon_tables )
+{
+    populateOrig($dbh);
+    buildTaxonTables($dbh, 'taxon_trees', $options);
+}
+
+
+# The option -y causes the "classic" taxa_tree_cache table to be computed.
+
+if ( $old_taxon_tables )
+{
+    buildTaxaCacheTables($dbh, 'taxon_trees');
+}
+
+
+# temp
+
+if ( $diversity_tables )
+{
+    buildDiversityTables($dbh, 'taxon_trees');
+}
+
 
 print "done rebuilding tables\n";
 
@@ -59,91 +149,3 @@ exit;
 
 
 
-# ensureOrig ( dbh )
-# 
-# Unless the authorities table has an 'orig_no' field, create one.
-
-sub ensureOrig {
-    
-    my ($dbh) = @_;
-    
-    # Check the table definition, and return if it already has 'orig_no'.
-    
-    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE authorities"); 
-    
-    return if $table_definition =~ /`orig_no` int/;
-    
-    print STDERR "Creating 'orig_no' field...\n";
-    
-    # Create the 'orig_no' field.
-    
-    $dbh->do("ALTER TABLE authorities
-	      ADD COLUMN orig_no INT UNSIGNED NOT NULL AFTER taxon_no");
-    
-    return;
-}
-
-
-# createOrig ( dbh )
-# 
-# If there are any entries where 'orig_no' is not set, fill them in.
-
-sub populateOrig {
-
-    my ($dbh) = @_;
-    
-    # Check to see if we have any unset orig_no entries, and return if we do
-    # not.
-    
-    my ($count) = $dbh->selectrow_array("
-	SELECT count(*) from authorities
-	WHERE orig_no = 0");
-    
-    return unless $count > 0;
-    
-    # Populate all unset orig_no entries.  This algorithm is taken from
-    # TaxonInfo::getOriginalCombination() in the old code.
-    
-    print STDERR "Populating 'orig_no' field...\n";
-    
-    $count = $dbh->do("
-	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_spelling_no
-	SET a.orig_no = o.child_no WHERE a.orig_no = 0");
-    
-    print STDERR "   child_spelling_no: $count\n";
-    
-    $count = $dbh->do("
-	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.child_no
-	SET a.orig_no = o.child_no WHERE a.orig_no = 0");
-    
-    print STDERR "   child_no: $count\n";
-    
-    $count = $dbh->do("
-	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_spelling_no
-	SET a.orig_no = o.parent_no WHERE a.orig_no = 0");
-        
-    print STDERR "   parent_spelling_no: $count\n";
-    
-    $count = $dbh->do("
-	UPDATE authorities as a JOIN opinions as o on a.taxon_no = o.parent_no
-	SET a.orig_no = o.parent_no WHERE a.orig_no = 0");
-    
-    print STDERR "   parent_no: $count\n";
-    
-    $count = $dbh->do("
-	UPDATE authorities as a
-	SET a.orig_no = a.taxon_no WHERE a.orig_no = 0");
-    
-    print STDERR "   self: $count\n";
-    
-    # Index the field, unless there is already an index.
-    
-    my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE authorities"); 
-    
-    return if $table_definition =~ /KEY `orig_no`/;
-    
-    $dbh->do("ALTER TABLE authorities
-              ADD KEY (orig_no)");
-    
-    print STDERR "  done.\n";
-}
