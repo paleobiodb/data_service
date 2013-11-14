@@ -782,6 +782,8 @@ sub buildTaxonTables {
     # this time we also update species and subgenus names stored in the tree
     # table.
     
+    computeGenSp($dbh, $tree_table) if $step_control->{f};
+    
     computeSearchTable($dbh, $tree_table) if $step_control->{g};
     
     # Next, compute the attributes table that keeps track of inherited

@@ -18,7 +18,7 @@ use ConsoleLog qw(initMessages
 use IntervalTables qw(loadIntervalData
 		      buildIntervalMap);
 use CollectionTables qw(buildCollectionTables);
-use OccurrenceTables qw(buildOccurrenceTables);
+use OccurrenceTables qw(buildOccurrenceTables updateOccLft);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables
 		   buildTaxaCacheTables computeGenSp);
@@ -122,6 +122,7 @@ if ( $taxon_tables )
 {
     populateOrig($dbh);
     buildTaxonTables($dbh, 'taxon_trees', $options);
+    updateOccLft($dbh);
 }
 
 

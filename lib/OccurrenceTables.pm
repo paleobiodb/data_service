@@ -109,6 +109,11 @@ sub buildOccurrenceTables {
     
     $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (orig_no)");
     
+    logMessage(2, "    indexing by age boundaries...");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (base_age)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (top_age)");
+    
     logMessage(2, "    indexing by reference_no...");
     
     $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (reference_no)");
@@ -268,8 +273,18 @@ sub updateOccLft {
     
     my ($sql, $result);
     
+    # First make sure we have a table to update.
+    
+    try {
+	$result = $dbh->do("SELECT count(*) FROM $OCC_TAXON");
+    };
+    
+    return unless $result;
+    
     my $TREE_TABLE = $TREE_TABLE_LIST[0];
     my $bound_clause = '';
+    
+    logMessage(2, "    updating 'lft' field of '$OCC_TAXON'");
     
     my $low_bound = $low + 0;
     my $high_bound = $high + 0;
@@ -284,6 +299,8 @@ sub updateOccLft {
 		$bound_clause";
     
     $result = $dbh->do($sql);
+    
+    logMessage(2, "      $result entries updated");
     
     my $a = 1;		# we can stop here when debugging;
 }
