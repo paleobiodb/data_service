@@ -11,6 +11,7 @@ package CollectionData;
 use strict;
 use base 'DataService::Base';
 
+use CollectionTables qw($COLL_MATRIX $COLL_BINS);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -19,9 +20,7 @@ use POSIX qw(floor ceil);
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
 
-$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
-
-$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{basic} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, ei.interval_name as early_int, li.interval_name as late_int, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
 our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
 
@@ -58,13 +57,15 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "If this collection is a part of another one, this field specifies which part" },
     { rec => 'n_occs', com => 'noc',
         doc => "The number of occurrences in this collection" },
-    { rec => 'container_no', com => 'cxi',
-        doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
+    { rec => 'early_int', com => 'int', pbdb => 'interval',
+	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if C<end_interval> is also given" },
+    { rec => 'late_int', com => 'oli', pbdb => 'end_interval', dedup => 'early_int',
+	doc => "The interval that ends the specific geologic time range associated with this collection" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
         doc => "The identifier(s) of the references from which this data was entered" },
    ];
 
-$TABLES{single} = $TABLES{list} = $TABLES{summary} = ['icm'];
+$TABLES{single} = $TABLES{list} = $TABLES{summary} = ['ei', 'li'];
 
 $OUTPUT{summary} = 
    [
@@ -157,12 +158,12 @@ $OUTPUT{time} =
 	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
     { rec => 'late_age', com => 'lag',
 	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
-    { rec => 'early_int', com => 'int',
-	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if C<late_int> is also given" },
-    { rec => 'late_int', com => 'lin', dedup => 'early_int',
-	doc => "The interval that ends the specific geologic time range associated with this collection" },
-    { rec => 'interval_list', com => 'lti', json_list_literal => 1,
-        doc => "A minimal list of standard intervals covering the time range associated with this collection" },
+    { rec => 'cx_int_no', com => 'cxi',
+        doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
+    { rec => 'early_int_range', com => 'eir',
+	doc => "The beginning of a range of standard intervals closely bracketing the time range associated with this collection" },
+    { rec => 'late_int_range', com => 'lir',
+	doc => "The end of a range of standard intervals closely bracketing the time range associated with this collection" },
    ];
 
 $OUTPUT{summary_time} =
@@ -244,7 +245,6 @@ sub get {
     # Get a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # Make sure we have a valid id number.
     
@@ -265,7 +265,7 @@ sub get {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM coll_matrix as c JOIN collections as cc using (collection_no)
+	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id and c.access_level = 0
@@ -860,12 +860,6 @@ sub generateJoinList {
 	    if $tables->{ei};
 	$join_list .= "JOIN interval_map as li on li.interval_no = $mt.late_int_no\n"
 	    if $tables->{li};
-    }
-    
-    if ( $tables->{icm} )
-    {
-	$join_list .= "LEFT JOIN interval_container_map as icm 
-			on icm.early_seq = $mt.early_seq and icm.late_seq = $mt.late_seq\n"
     }
     
     return $join_list;

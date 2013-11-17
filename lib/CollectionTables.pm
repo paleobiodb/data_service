@@ -10,7 +10,7 @@ use strict;
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildCollectionTables $COLL_MATRIX $COLL_BINS $COLL_INT_BINS);
+our (@EXPORT_OK) = qw(buildCollectionTables $COLL_MATRIX $COLL_BINS $COLL_INT_BINS $COUNTRY_MAP);
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -27,8 +27,8 @@ our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
 our $COLL_INTS_WORK = "cin";
 
-our $CLUST_AUX = "clust_aux";
 our $COUNTRY_MAP = "country_map";
+our $CLUST_AUX = "clust_aux";
 
 # Constants
 
@@ -499,6 +499,10 @@ sub applyClustering {
     
 	$result = $dbh->do($sql);
     }
+    
+    # Clean up the auxiliary table.
+    
+    $dbh->do("DROP TABLE IF EXISTS $CLUST_AUX");
     
     my $a = 1;	# we can stop here when debugging
 }

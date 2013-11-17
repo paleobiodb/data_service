@@ -187,7 +187,6 @@ sub loadSQLFile {
     # and comments.  Execute each statement in turn.
     
     my $statement = '';
-    my $result;
     
     foreach my $line (@contents)
     {

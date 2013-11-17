@@ -362,11 +362,11 @@ define_route $ds '1.1/taxa/list' => { op => 'list' };
 define_directory $ds '1.1/colls' => { class => 'CollectionData' };
 
 define_route $ds '1.1/colls/single' => { op => 'get', 
-					 output => 'single',
+					 output => 'basic',
 				         docresp => 'bin,ref,sref,loc,time,taxa'};
 
 define_route $ds '1.1/colls/list' => { op => 'list', 
-				       output => 'list',
+				       output => 'basic',
 				       docresp => 'bin,ref,sref,loc,time,taxa' };
 
 define_route $ds '1.1/colls/summary' => { op => 'summary', 

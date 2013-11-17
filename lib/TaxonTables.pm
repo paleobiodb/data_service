@@ -718,9 +718,10 @@ sub maintenance {
 
 sub buildTaxonTables {
 
-    my ($dbh, $tree_table, $options, $steps) = @_;
+    my ($dbh, $tree_table, $options) = @_;
     
     $options ||= {};
+    my $steps = $options->{taxon_steps};
     my $step_control;
     
     # First, determine which tables will be computed.
@@ -3500,7 +3501,7 @@ sub computeIntermediates {
 }
 
 
-# computeGenSp ( dbh )
+# computeGenSp ( dbh, tree_table )
 # 
 # For each taxon at the rank of genus or below, indicate its genus and
 # species.  This is easy to do, we simply have to look at most 3 levels up the
@@ -3514,10 +3515,10 @@ sub computeGenSp {
     
     logMessage (2, "    computing genus and species (f1)");
     
-    $sql = "	UPDATE $tree_table as t
-			LEFT JOIN $tree_table as p1 on p1.orig_no = t.parsen_no
-			LEFT JOIN $tree_table as p2 on p2.orig_no = p1.parsen_no
-			LEFT JOIN $tree_table as p3 on p3.orig_no = p2.parsen_no
+    $sql = "	UPDATE $TREE_WORK as t
+			LEFT JOIN $TREE_WORK as p1 on p1.orig_no = t.parsen_no
+			LEFT JOIN $TREE_WORK as p2 on p2.orig_no = p1.parsen_no
+			LEFT JOIN $TREE_WORK as p3 on p3.orig_no = p2.parsen_no
 		SET t.species_no = if(t.rank = 3, t.orig_no, 
 				   if(p1.rank = 3, p1.orig_no, null)),
 		    t.genus_no = if(t.rank = 5, t.orig_no,
@@ -3858,6 +3859,8 @@ sub computeAttrsTable {
 				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
 				last_late_age decimal(9,5),
+				early_occ int unsigned,
+				late_occ int unsigned,
 				not_trace boolean,
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
@@ -3868,6 +3871,7 @@ sub computeAttrsTable {
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
 			 first_early_age, first_late_age, last_early_age, last_late_age,
+			 early_occ, late_occ,
 			 not_trace)
 		SELECT a.orig_no,
 			t.valid_no = t.synonym_no as is_valid,
@@ -3879,6 +3883,7 @@ sub computeAttrsTable {
 			coalesce(e.maximum_body_mass, e.body_mass_estimate) as max,
 			tsum.first_early_age, tsum.first_late_age,
 			tsum.last_early_age, tsum.last_late_age,
+			tsum.early_occ, tsum.late_occ,
 			(a.preservation <> 'trace' or a.preservation is null)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
@@ -3902,7 +3907,9 @@ sub computeAttrsTable {
 			max(v.first_early_age) as first_early_age,
 			max(v.first_late_age) as first_late_age,
 			min(v.last_early_age) as last_early_age,
-			min(v.last_late_age) as last_late_age
+			min(v.last_late_age) as last_late_age,
+			coalesce(v.early_occ) as early_occ,
+			coalesce(v.late_occ) as late_occ,
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
@@ -3913,6 +3920,8 @@ sub computeAttrsTable {
 			v.first_late_age = nv.first_late_age,
 			v.last_early_age = nv.last_early_age,
 			v.last_late_age = nv.last_late_age,
+			v.early_occ = nv.early_occ,
+			v.late_occ = nv.late_occ,
 			v.not_trace = nv.not_trace";
     
     $result = $dbh->do($sql);

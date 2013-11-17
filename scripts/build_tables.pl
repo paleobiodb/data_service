@@ -62,7 +62,7 @@ my $rank_map = $options{r};
 my $collection_tables = $options{c};
 my $occurrence_tables = $options{m};
 
-my $taxon_tables = $options{t} or $options{T};
+my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
 my $old_taxon_tables = $options{y};
 my $diversity_tables = $options{d};
