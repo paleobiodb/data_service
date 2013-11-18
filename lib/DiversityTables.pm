@@ -25,30 +25,16 @@ use base 'Exporter';
 
 our (@EXPORT_OK) = qw(buildDiversityTables $DIV_SAMPLED_STD $DIV_SAMPLED_10);
 
-our $DIV_INT_RAW = 'div_int_raw';
-our $DIV_10_RAW = 'div_10_raw';
-
-our $DIV_INT_MATRIX = 'div_int_matrix';
-our $DIV_10_MATRIX = 'div_10_matrix';
-
+our $DIV_RAW = 'div_raw';
 our $DIV_SAMPLED = 'div_sampled';
-our $DIV_SAMPLED_10MY = 'div_sampled_10';
+our $DIV_RANGE = 'div_range';
 
-our $DIV_INT_RAW_WORK = 'dirn';
-our $DIV_10_RAW_WORK = 'dtrn';
-
-our $DIV_INT_MATRIX_WORK = 'dimn';
-our $DIV_10_MATRIX_WORK = 'dtmn';
-
-our $DIV_SAMPLED_WORK = 'dssn';
+our $DIV_RAW_WORK = 'dwn';
+our $DIV_SAMPLED_WORK = 'dsn';
+our $DIV_RANGE_WORK = 'drn';
 
 our $DIV_AUX = 'div_aux';
-our $SPECIES_AUX = 'species_aux';
-our $GENUS_AUX = 'genus_aux';
-our $FAMILY_AUX = 'family_aux';
 
-my $TREE_TABLE = $TREE_TABLE_LIST[0];
-my $INTS_TABLE = $TAXON_TABLE{$TREE_TABLE}{ints};
 
 # buildDiversityTables ( dbh )
 # 
@@ -56,7 +42,7 @@ my $INTS_TABLE = $TAXON_TABLE{$TREE_TABLE}{ints};
 
 sub buildDiversityTables {
 
-    my ($dbh, $tree_table) = @_;
+    my ($dbh, $tree_table, $skip_raw) = @_;
     
     my ($sql, $result);
     
@@ -69,266 +55,162 @@ sub buildDiversityTables {
     
     # First create an auxiliary table for use below.
     
-    $dbh->do("DROP TABLE IF EXISTS $DIV_AUX");
-    
-    $dbh->do("
-	CREATE TABLE $DIV_AUX (
-		interval_no int unsigned not null,
-		higher_no int unsigned not null,
-		PRIMARY KEY (interval_no, higher_no))");
-    
-    logMessage(1, "Building diversity tables");
-    
-    logMessage(2, "    tabulating occurrences by interval...");
-    
-    $dbh->do("DROP TABLE IF EXISTS $DIV_INT_RAW_WORK");
-    
-    $dbh->do("
-	CREATE TABLE $DIV_INT_RAW_WORK (
-		interval_no int unsigned not null,
-		occurrence_no int unsigned not null,
-		species_no int unsigned not null,
-		genus_no int unsigned not null,
-		family_no int unsigned not null,
-		ints_no int unsigned not null,
-		prob float)");
-    
-    $result = $dbh->do("
-	INSERT INTO $DIV_INT_RAW_WORK
-	SELECT i.interval_no, m.occurrence_no,
-	       t.species_no, t.genus_no, g.family_no, t.ints_no,
-	       if(m.base_age <= i.base_age and m.top_age >= i.top_age, 1.0,
-	       if(m.base_age <= i.base_age, (m.base_age-i.top_age)/(m.base_age-m.top_age),
-	       if(m.top_age >= i.top_age, (i.base_age-m.top_age)/(m.base_age-m.top_age),
-					  (i.base_age-i.top_age)/(m.base_age-m.top_age)))) as prob
-	FROM occ_matrix as m JOIN interval_data as i on m.top_age < i.base_age and m.base_age > i.top_age
-		JOIN taxon_trees as t using (orig_no)
-		JOIN taxon_ints as g using (ints_no)
-	WHERE t.ints_no > 0 and i.scale_no > 0");
-    
-    logMessage(2, "    found $result rows.");
-    
-    logMessage(2, "    summarizing occurrences by interval...");
-    
-    $dbh->do("DROP TABLE IF EXISTS $DIV_INT_MATRIX_WORK");
-    
-    $dbh->do("
-	CREATE TABLE $DIV_INT_MATRIX_WORK (
-		interval_no int unsigned not null,
-		orig_no int unsigned not null,
-		higher_no int unsigned not null,
-		rank tinyint unsigned not null,
-		lft int unsigned not null,
-		occurrence_no int unsigned not null,
-		prob float,
-		PRIMARY KEY (interval_no, orig_no, higher_no))");
-    
-    $result = $dbh->do("
-	INSERT INTO $DIV_INT_MATRIX_WORK (interval_no, orig_no, higher_no, rank, occurrence_no, prob)
-	SELECT interval_no, family_no, 0, $TAXON_RANK{family}, coalesce(occurrence_no),
-	       if(max(prob) = 1.0, 1.0, 1.0 - exp(sum(log(1.0-prob)))) as prob
-	FROM $DIV_INT_RAW_WORK
-	WHERE family_no > 0
-	GROUP BY interval_no, family_no
-	ORDER BY NULL");
-    
-    logMessage(2, "      found $result occurrences of families.");
-    
-    $result = $dbh->do("
-	INSERT INTO $DIV_INT_MATRIX_WORK (interval_no, orig_no, higher_no, rank, occurrence_no, prob)
-	SELECT interval_no, genus_no, ints_no, $TAXON_RANK{genus}, coalesce(occurrence_no),
-	       if(max(prob) = 1.0, 1.0, 1.0 - exp(sum(log(1.0-prob)))) as prob
-	FROM $DIV_INT_RAW_WORK
-	WHERE genus_no > 0
-	GROUP BY interval_no, genus_no
-	ORDER BY NULL");
-    
-    logMessage(2, "      found $result occurrences of genera.");
-    
-    $result = $dbh->do("DELETE FROM $DIV_AUX");
-    
-    $result = $dbh->do("
-	INSERT IGNORE INTO $DIV_AUX
-	SELECT interval_no, higher_no
-	FROM $DIV_INT_MATRIX_WORK as d
-	WHERE rank = $TAXON_RANK{genus}");
-    
-    $result = $dbh->do("
-	INSERT INTO $DIV_INT_MATRIX_WORK (interval_no, orig_no, higher_no, rank, occurrence_no, prob)
-	SELECT d.interval_no, 0, ints_no, $TAXON_RANK{genus}, coalesce(occurrence_no), 
-	       if(max(prob) = 1.0, 1.0, 1.0 - exp(sum(log(1.0-prob)))) as prob
-	FROM $DIV_INT_RAW_WORK as d
-		LEFT JOIN $DIV_AUX as a on a.interval_no = d.interval_no and a.higher_no = d.ints_no
-	WHERE a.higher_no is null
-	GROUP BY d.interval_no, d.ints_no
-	ORDER BY NULL");
-    
-    logMessage(2, "      found $result implied occurrences of genera.");
-    
-    $result = $dbh->do("
-	INSERT INTO $DIV_INT_MATRIX_WORK (interval_no, orig_no, higher_no, rank, occurrence_no, prob)
-	SELECT interval_no, species_no, genus_no, $TAXON_RANK{species}, coalesce(occurrence_no),
-	       if(max(prob) = 1.0, 1.0, 1.0 - exp(sum(log(1.0-prob)))) as prob
-	FROM $DIV_INT_RAW_WORK
-	WHERE species_no > 0
-	GROUP BY interval_no, species_no
-	ORDER BY NULL");
-    
-    logMessage(2, "      found $result occurrences of species.");
-    
-    $result = $dbh->do("DELETE FROM $DIV_AUX");
-    
-    $result = $dbh->do("
-	INSERT IGNORE INTO $DIV_AUX
-	SELECT interval_no, higher_no
-	FROM $DIV_INT_MATRIX_WORK as d
-	WHERE rank = $TAXON_RANK{species}");
-    
-    $result = $dbh->do("
-	INSERT INTO $DIV_INT_MATRIX_WORK (interval_no, orig_no, higher_no, rank, occurrence_no, prob)
-	SELECT d.interval_no, 0, genus_no, $TAXON_RANK{species}, coalesce(occurrence_no), 
-	       if(max(prob) = 1.0, 1.0, 1.0 - exp(sum(log(1.0-prob)))) as prob
-	FROM $DIV_INT_RAW_WORK as d
-		LEFT JOIN $DIV_AUX as a on a.interval_no = d.interval_no and a.higher_no = d.genus_no
-	WHERE a.higher_no is null
-	GROUP BY d.interval_no, d.genus_no
-	ORDER BY NULL");
-    
-    logMessage(2, "      found $result implied occurrences of species.");
-    
-    logMessage(2, "    setting tree sequence numbers...");
-    
-    $result = $dbh->do("
-	UPDATE $DIV_INT_MATRIX_WORK as d JOIN $TREE_TABLE as t using (orig_no)
-	SET d.lft = t.lft");
-    
-    
-    
-    # logMessage(2, "    sampled diversity by interval");
-    
-    # $dbh->do("DROP TABLE IF EXISTS $DIV_INT_WORK");
+    # $dbh->do("DROP TABLE IF EXISTS $DIV_AUX");
     
     # $dbh->do("
-    # 	CREATE TABLE $DIV_INT_WORK (
+    # 	CREATE TABLE $DIV_AUX (
     # 		interval_no int unsigned not null,
-    # 		ints_no int unsigned not null,
-    # 		lft int unsigned not null,
-    # 		n_species int unsigned not null,
-    # 		n_sp_prob decimal(18,9),
-    # 		n_genera int unsigned not null,
-    # 		n_gn_prob decimal(18,9),
-    # 		PRIMARY KEY (interval_no, ints_no)");
+    # 		higher_no int unsigned not null,
+    # 		PRIMARY KEY (interval_no, higher_no))");
     
-    # $result = $dbh->do("
-    # 	INSERT INTO $DIV_INT_WORK (m.interval_no, m.ints_no, t.lft, n_genera)
-    # 	SELECT interval_no, sum(distinct species_no), sum(distinct genus_no)
-    # 	FROM $DIV_INT_MATRIX_WORK as m JOIN $TREE_TABLE as t on t.orig_no = m.ints_no
-    # 	WHERE prob = 1.0 and genus_no > 0
-    # 	GROUP BY interval_no
-    # 	ORDER BY NULL");
+    logMessage(1, "Building diversity tables");
+
+    unless ( $skip_raw )
+    {
+	logMessage(2, "    tabulating occurrences by interval...");
+	
+	$dbh->do("DROP TABLE IF EXISTS $DIV_RAW_WORK");
+	
+	$dbh->do("
+    	CREATE TABLE $DIV_RAW_WORK (
+    		interval_no int unsigned not null,
+    		occurrence_no int unsigned not null,
+    		species_no int unsigned not null,
+    		genus_no int unsigned not null,
+    		ints_no int unsigned not null,
+    		prob float,
+		early_prob float,
+		late_prob float)");
+	
+	$result = $dbh->do("
+    	INSERT INTO $DIV_RAW_WORK
+    	SELECT i.interval_no, m.occurrence_no,
+	       t.species_no, t.genus_no, t.ints_no,
+	       -- sample prob
+    	       if(m.base_age <= i.base_age and m.top_age >= i.top_age, 1.0,
+    	       if(m.base_age <= i.base_age, (m.base_age-i.top_age)/(m.base_age-m.top_age),
+    	       if(m.top_age >= i.top_age, (i.base_age-m.top_age)/(m.base_age-m.top_age),
+    					  (i.base_age-i.top_age)/(m.base_age-m.top_age)))) as prob,
+	       -- early prob
+	       if(m.top_age >= i.top_age, 1.0, 
+			(m.base_age-i.top_age)/(m.base_age-m.top_age)) as early_prob,
+	       -- late prob
+	       if(m.base_age <= i.base_age, 1.0,
+			(i.base_age-m.top_age)/(m.base_age-m.top_age))
+    	FROM occ_matrix as m JOIN interval_data as i on m.top_age < i.base_age and m.base_age > i.top_age
+    		JOIN $TREE_TABLE as t using (orig_no)
+    	WHERE t.ints_no > 0 and i.scale_no > 0");
+	
+	logMessage(2, "    found $result rows.");
+	
+	logMessage(2, "    indexing by interval_no...");
+	
+	$dbh->do("ALTER TABLE $DIV_RAW_WORK ADD INDEX (interval_no)");
+    }
     
-    # # logMessage(2, "    indexing table...");
+    # logMessage(2, "    summarizing occurrences by interval for sampled statistics...");
     
-    # # $dbh->do("ALTER TABLE $DIV_INT_RAW_WORK ADD KEY (interval_no)");
-    # # $dbh->do("ALTER TABLE $DIV_INT_RAW_WORK ADD KEY (interval_no)");
-    # # $dbh->do("ALTER TABLE $DIV_INT_RAW_WORK ADD KEY (interval_no)");
-    # # $dbh->do("ALTER TABLE $DIV_INT_RAW_WORK ADD KEY (interval_no)");
+    # $dbh->do("DROP TABLE IF EXISTS $DIV_SAMPLED_WORK");
     
-    # logMessage(2, "    tabulating occurrences by 10 My bin...");
-    
-    # $dbh->do("DROP TABLE IF EXISTS $DIV_10_RAW_WORK");
-    
-    # $dbh->do("CREATE TABLE $DIV_10_RAW_WORK (
-    # 		bin_age int unsigned not null,
-    # 		occurrence_no int unsigned not null,
-    # 		species_no int unsigned not null,
-    # 		genus_no int unsigned not null,
-    # 		ints_no int unsigned not null,
-    # 		coded_prob float)");
-    
-    # $result = $dbh->do("
-    # 	INSERT INTO $DIV_10_RAW_WORK
-    # 	SELECT i.base_age, m.occurrence_no,
-    # 	       t.species_no, t.genus_no, t.ints_no,
-    # 	       if(m.base_age <= i.base_age and m.top_age >= i.top_age, 1e9,
-    # 	       if(m.base_age <= i.base_age, log((i.top_age-m.top_age)/(m.base_age-m.top_age)),
-    # 	       if(m.top_age >= i.top_age, log((m.base_age-i.base_age)/(m.base_age-m.top_age)),
-    # 	       log((m.base_age-i.base_age+i.top_age-m.top_age)/(m.base_age-m.top_age))))) as coded_prob
-    # 	FROM occ_matrix as m JOIN ten_my_bins as i on m.top_age < i.base_age and m.base_age > i.top_age
-    # 		JOIN taxon_trees as t using (orig_no)
-    # 	WHERE t.ints_no > 0");
-    
-    # logMessage(2, "    found $result rows.");
-    
-    
-    
-    # logMessage(2, "    sampled, standard epochs and ages...");
-    
-    # $dbh->do("DROP TABLE IF EXISTS $SAMPLED_STD_WORK");
-    
-    # $dbh->do("CREATE TABLE $SAMPLED_STD_WORK (
+    # $dbh->do("
+    # 	CREATE TABLE $DIV_SAMPLED_WORK (
+    # 		interval_no int unsigned not null,
     # 		orig_no int unsigned not null,
     # 		lft int unsigned not null,
-    # 		interval_no int unsigned not null,
-    # 		continent char(2),
-    # 		n_species int unsigned not null,
-    # 		n_genera int unsigned not null,
-    # 		PRIMARY KEY (orig_no, interval_no, continent),
-    # 		KEY (lft, interval_no))");
+    # 		rank tinyint unsigned not null,
+    # 		occurrence_no int unsigned not null,
+    # 		prob float,
+    # 		PRIMARY KEY (interval_no, orig_no))");
     
-    # $sql = "	INSERT INTO $SAMPLED_STD_WORK (orig_no, interval_no, continent, int_frac, n_species, n_genera)
-    # 		SELECT  t.ints_no, i.interval_no, cm.continent,
-    # 			count(distinct species_no) as n_species,
-    # 			count(distinct genus_no) as n_genera,
-    # 		FROM $OCC_MATRIX as m JOIN $INTERVAL_DATA as i on m.top_age <= i.top_age and m.base_age >= i.base_age
-    # 			JOIN $TREE_TABLE as t using (orig_no)
-    # 			JOIN $COLL_MATRIX as c using (collection_no)
-    # 			LEFT JOIN $COUNTRY_MAP as cm using (cc)
-    # 		WHERE i.scale_no = 1 and i.level in (4, 5) and t.ints_no > 0
-    # 		GROUP BY t.ints_no, i.interval_no, cm.continent";    
+    # $result = $dbh->do("
+    # 	INSERT INTO $DIV_SAMPLED_WORK (interval_no, orig_no, rank, occurrence_no, prob)
+    # 	SELECT interval_no, ints_no, $TAXON_RANK{unranked}, coalesce(occurrence_no),
+    # 	       if(max(prob) = 1.0, 1.0, 1.0 - exp(sum(log(1.0-prob)))) as prob
+    # 	FROM $DIV_INT_RAW_WORK
+    # 	WHERE ints_no > 0
+    # 	GROUP BY interval_no, ints_no
+    # 	ORDER BY NULL");
     
-    # $result = $dbh->do($sql);
+    # logMessage(2, "      found $result identifications of higher taxa in specific intervals.");
     
-    # #		FROM $OCC_MATRIX as m JOIN $INTERVAL_DATA as i on m.base_age <= i.base_age and m.top_age >= i.top_age
-
-    # logMessage(2, "      $result rows");
+    # $result = $dbh->do("
+    # 	INSERT INTO $DIV_SAMPLED_WORK (interval_no, orig_no, rank, occurrence_no, prob)
+    # 	SELECT interval_no, genus_no, $TAXON_RANK{genus}, coalesce(occurrence_no),
+    # 	       if(max(prob) = 1.0, 1.0, 1.0 - exp(sum(log(1.0-prob)))) as prob
+    # 	FROM $DIV_INT_RAW_WORK
+    # 	WHERE genus_no > 0
+    # 	GROUP BY interval_no, genus_no
+    # 	ORDER BY NULL");
     
-    # logMessage(2, "    indexing by tree sequence...");
+    # logMessage(2, "      found $result identifications of genera in specific intervals.");
     
-    # $sql = "	UPDATE $SAMPLED_STD_WORK as w JOIN $TREE_TABLE as t using (orig_no)
-    # 		SET w.lft = t.lft";
+    # $result = $dbh->do("
+    # 	INSERT INTO $DIV_SAMPLED_WORK (interval_no, orig_no, rank, occurrence_no, prob)
+    # 	SELECT interval_no, species_no, $TAXON_RANK{species}, coalesce(occurrence_no),
+    # 	       if(max(prob) = 1.0, 1.0, 1.0 - exp(sum(log(1.0-prob)))) as prob
+    # 	FROM $DIV_INT_RAW_WORK
+    # 	WHERE species_no > 0
+    # 	GROUP BY interval_no, species_no
+    # 	ORDER BY NULL");
     
-    # $result = $dbh->do($sql);
+    # logMessage(2, "      found $result identifications of species in specific intervals.");
     
-    # $sql = "    INSERT INTO $SAMPLED_STD_WORK (base_no, interval_no, n_species, n_genera, n_families)
-    # 		SELECT cl.order_no, i.interval_no,
-    # 			count(distinct species_no) as n_species,
-    # 			count(distinct genus_no) as n_genera,
-    # 			count(distinct family_no) as n_families
-    # 		FROM $OCC_MATRIX as m JOIN $INTERVAL_DATA as i on m.base_age <= i.base_age and m.top_age >= i.top_age
-    # 			JOIN $TREE_TABLE as t using (orig_no)
-    # 			JOIN $INTS_TABLE as cl using (ints_no)
-    # 		WHERE i.scale_no = 1 and i.level in (4, 5) and cl.order_no is not null
-    # 		GROUP BY cl.order_no, i.interval_no";
+    # logMessage(2, "    setting tree sequence numbers...");
     
-    # $result = $dbh->do($sql);
+    # $result = $dbh->do("
+    # 	UPDATE $DIV_SAMPLED_WORK as d JOIN $TREE_TABLE as t using (orig_no)
+    # 	SET d.lft = t.lft");
     
-    # logMessage(2, "      $result order/interval rows");
+    # Now range-through.
     
-    # $sql = "    INSERT INTO $SAMPLED_STD_WORK (base_no, interval_no, n_species, n_genera, n_families)
-    # 		SELECT cl.class_no, i.interval_no,
-    # 			count(distinct species_no) as n_species,
-    # 			count(distinct genus_no) as n_genera,
-    # 			count(distinct family_no) as n_families
-    # 		FROM $OCC_MATRIX as m JOIN $INTERVAL_DATA as i on m.base_age <= i.base_age and m.top_age >= i.top_age
-    # 			JOIN $TREE_TABLE as t using (orig_no)
-    # 			JOIN $INTS_TABLE as cl using (ints_no)
-    # 		WHERE i.scale_no = 1 and i.level in (4, 5) and cl.order_no is not null
-    # 		GROUP BY cl.class_no, i.interval_no";
+    logMessage(2, "    summarizing occurrences by interval for range-through statistics...");
     
-    # $result = $dbh->do($sql);
+    $dbh->do("DROP TABLE IF EXISTS $DIV_RANGE_WORK");
     
-    # logMessage(2, "      $result class/interval rows");
+    $dbh->do("
+	CREATE TABLE $DIV_RANGE_WORK (
+		scale_no smallint unsigned not null,
+		level smallint unsigned not null,
+		orig_no int unsigned not null,
+		lft int unsigned not null,
+		rank tinyint unsigned not null,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
+		early_age_08 decimal(9,5),
+		late_age_08 decimal(9,5),
+		early_age_05 decimal(9,5),
+		late_age_05 decimal(9,5),
+		-- early_prob_age decimal(9,5),
+		-- min_prob float,
+		-- late_prob_age decimal(9,5),
+		-- max_prob float,
+		early_occ_no int unsigned not null,
+		late_occ_no int unsigned not null,
+		PRIMARY KEY (scale_no, level, orig_no))");
+    
+    $result = $dbh->do("
+	INSERT INTO $DIV_RANGE_WORK (scale_no, level, orig_no, rank,
+				     early_age, late_age,
+				     early_age_08, late_age_08,
+				     early_age_05, late_age_05,
+				     early_occ_no, late_occ_no)
+	SELECT i.scale_no, i.level, genus_no, $TAXON_RANK{genus},
+	       if(prob >= 1.0, i.base_age, null), if(early_prob >= 1.0, i.top_age, null),
+	       if(prob >= 0.8, i.base_age, null), if(early_prob >= 0.8, i.top_age, null),
+	       i.base_age, i.top_age,
+	       occurrence_no, occurrence_no
+	FROM $DIV_RAW_WORK as w JOIN interval_data as i using (interval_no)
+	WHERE genus_no > 0 and (prob >= 0.5 or early_prob >= 0.8 or late_prob >= 0.5)
+	ORDER BY i.base_age desc
+	ON DUPLICATE KEY UPDATE
+		early_age = if(w.early_prob >= 1.0 and early_age is null, i.base_age, early_age),
+		late_age = if(w.late_prob >= 1.0, i.top_age, late_age),
+		early_age_08 = if(w.early_prob >= 0.8 and early_age_08 is null, i.base_age, early_age_08),
+		late_age_08 = if(w.late_prob >= 0.8, i.top_age, late_age_08),
+		late_age_05 = if(w.late_prob >= 0.5, i.top_age, late_age_05),
+		late_occ_no = w.occurrence_no");
+    
+    logMessage(2, "    found $result rows.");
     
     my $a = 1;		# We can stop here when debugging.
 }

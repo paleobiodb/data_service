@@ -31,7 +31,7 @@ use DiversityTables qw(buildDiversityTables);
 
 my %options;
 
-getopts('tT:mbcKuivryd', \%options);
+getopts('tT:mbcKuivryds', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -138,7 +138,7 @@ if ( $old_taxon_tables )
 
 if ( $diversity_tables )
 {
-    buildDiversityTables($dbh, 'taxon_trees');
+    buildDiversityTables($dbh, 'taxon_trees', $options{s});
 }
 
 
