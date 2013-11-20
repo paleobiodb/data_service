@@ -13,11 +13,14 @@ use base 'DataService::Base';
 
 use Carp qw(carp croak);
 
+use PBDBData qw(generateReference);
+use IntervalTables qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_LEVEL_DATA);
+
 
 our (%SELECT, %OUTPUT, %PROC, %TABLES);
 
 $SELECT{basic} =
-    "i.interval_no, i.interval_name, i.abbrev, i.level, i.parent_no, i.color, i.base_age, i.top_age, i.reference_no";
+    "i.interval_no, i.interval_name, i.abbrev, i.scale_no, i.level, i.parent_no, i.color, i.base_age, i.top_age, i.reference_no";
 
 $OUTPUT{basic} =
    [
@@ -25,12 +28,12 @@ $OUTPUT{basic} =
 	doc => "A positive integer that uniquely identifies this interval"},
     { rec => 'record_type', com => 'typ', com_value => 'int', value => 'interval',
         doc => "The type of this object: 'int' for an interval" },
+    { rec => 'scales', com => 'sca',
+        doc => "The time scale(s) and level(s) with which this interval is associated" },
     { rec => 'interval_name', com => 'nam',
 	doc => "The name of this interval" },
     { rec => 'abbrev', com => 'abr',
         doc => "The standard abbreviation for the interval name, if any" },
-    { rec => 'level', com => 'lvl',
-        doc => "The level of this interval: eon=1, era=2, period=3, epoch=4, age=5" },
     { rec => 'parent_no', com => 'pid',
         doc => "The identifier of the parent interval" },
     { rec => 'color', com => 'col',
@@ -41,6 +44,11 @@ $OUTPUT{basic} =
         doc => "The early age boundary of this interval (in Ma)" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
         doc => "The identifier(s) of the references from which this data was entered" },
+   ];
+
+$PROC{basic} = 
+   [
+    { rec => 'scale_no', add => 'scales', use_main => 1, code => \&generateScaleEntry },
    ];
 
 $SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
@@ -62,7 +70,7 @@ $OUTPUT{ref} =
 
 # get ( )
 # 
-# Query for all relevant information about the collection specified by the
+# Query for all relevant information about the interval specified by the
 # 'id' parameter.  Returns true if the query succeeded, false otherwise.
 
 sub get {
@@ -82,7 +90,7 @@ sub get {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = join(', ', @{$self->{select_list}});
+    my $fields = $self->generate_query_fields('i');
     
     # Determine the necessary joins.
     
@@ -92,9 +100,11 @@ sub get {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM interval_map as i $join_list
+	FROM $INTERVAL_DATA as i $join_list
         WHERE i.interval_no = $id
 	GROUP BY i.interval_no";
+    
+    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
@@ -108,7 +118,7 @@ sub get {
 
 # list ( )
 # 
-# Query the database for basic info about all intervals.
+# Query the database for basic info about all specified intervals.
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
@@ -131,7 +141,18 @@ sub list {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = "i.level is not null";
+    my @filters;
+    
+    if ( defined $self->{params}{scale} and $self->{params}{scale} eq 'all' )
+    {
+	push @filters, "i.level is not null";
+    }
+    
+    elsif ( ref $self->{params}{scale} eq 'ARRAY' )
+    {
+	my $filter_string = join(',', @{$self->{params}{scale}});
+	push @filters, "i.scale_no in ($filter_string)";
+    }
     
     if ( exists $self->{params}{min_ma} )
     {
@@ -157,7 +178,7 @@ sub list {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = join(', ', @{$self->{select_list}});
+    my $fields = $self->generate_query_fields('i');
     
     # Determine the necessary joins.
     
@@ -180,10 +201,12 @@ sub list {
     
     $self->{main_sql} = "
 	SELECT $calc $fields
-	FROM interval_map as i $join_list
+	FROM $INTERVAL_DATA as i $join_list
 	WHERE $filter_list
 	$order_expr
 	$limit";
+    
+    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
     
     # Then prepare and execute the main query and the secondary query.
     
@@ -221,6 +244,18 @@ sub generateJoinList {
 	if $tables->{r};
     
     return $join_list;
+}
+
+
+# generateScaleEntry ( )
+# 
+# Return a list of (scale_no, level).
+
+sub generateScaleEntry {
+    
+    my ($self, $rowref) = @_;
+    
+    return [$rowref->{scale_no}, $rowref->{level}];
 }
 
 

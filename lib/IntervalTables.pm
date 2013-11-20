@@ -17,7 +17,7 @@ use ConsoleLog qw(logMessage);
 use base 'Exporter';
 
 our(@EXPORT_OK) = qw(loadIntervalData buildIntervalMap $INTERVAL_DATA $INTERVAL_MAP
-		     $INTERVAL_BRACKET $SCALE_DATA $SCALE_LEVEL_DATA $TEN_MY_BINS);
+		     $INTERVAL_BRACKET $SCALE_DATA $SCALE_LEVEL_DATA);
 
 
 # Table and file names
@@ -27,7 +27,6 @@ our $SCALE_DATA = "scale_data";
 our $SCALE_LEVEL_DATA = "scale_level_data";
 our $INTERVAL_BRACKET = "interval_bracket";
 our $INTERVAL_MAP = "interval_map";
-our $TEN_MY_BINS = "ten_my_bins";
 
 our $INTERVAL_MAP_WORK = "imn";
 our $INTERVAL_BRACKET_WORK = "ibn";

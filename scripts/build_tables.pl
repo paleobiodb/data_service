@@ -96,7 +96,7 @@ if ( $interval_map )
 
 if ( $rank_map )
 {
-    createRankMap($dbh);
+    TaxonTables::createRankMap($dbh);
 }
 
 # The option -c causes the collection tables to be (re)computed.

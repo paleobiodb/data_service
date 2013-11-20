@@ -10,7 +10,7 @@ use strict;
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildCollectionTables $COLL_MATRIX $COLL_BINS $COLL_INT_BINS $COUNTRY_MAP);
+our (@EXPORT_OK) = qw(buildCollectionTables $COLL_MATRIX $COLL_BINS $COLL_INT_BINS $COUNTRY_MAP @BIN_LEVEL);
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -21,7 +21,7 @@ use ConsoleLog qw(logMessage);
 
 our $COLL_MATRIX = "coll_matrix";
 our $COLL_BINS = "coll_bins";
-our $COLL_INTS = "coll_ints";
+our $COLL_INT_BINS = "coll_int_bins";
 
 our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
@@ -29,6 +29,8 @@ our $COLL_INTS_WORK = "cin";
 
 our $COUNTRY_MAP = "country_map";
 our $CLUST_AUX = "clust_aux";
+
+our @BIN_LEVEL;
 
 # Constants
 
@@ -56,8 +58,10 @@ sub buildCollectionTables {
     
     my @bin_reso;
     my @bin_tables;
-    my @coll_tables = ($COLL_MATRIX_WORK => $COLL_MATRIX);
+    #my @coll_tables = ($COLL_MATRIX_WORK => $COLL_MATRIX);
     my $bin_lines = '';
+    #my $parent_lines = '';
+    #my $next_line = '';
     my $level = 0;
     
     if ( ref $bin_list eq 'ARRAY' )
@@ -68,7 +72,10 @@ sub buildCollectionTables {
 	    
 	    $level++;
 	    push @bin_reso, $bin->{resolution};
+	    push @BIN_LEVEL, $bin;
 	    $bin_lines .= "bin_id_$level int unsigned not null,\n";
+	    #$parent_lines .= $next_line;
+	    #$next_line = "bin_id_$level int unsigned not null,\n";
 	}
     }
     
@@ -228,35 +235,18 @@ sub buildCollectionTables {
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_age)");
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_age)");
     
-    # We then create a summary table for each binning level, counting the
+    # We then create summary table for each binning level, counting the
     # number of collections and occurrences in each bin and computing the
     # centroid and age boundaries (adjusted to the standard intervals).
     
-    my $parent_lines = '';
-    my $set_lines = '';
-    my @index_stmts;
+    logMessage(2, "    creating geography/time summary table...");
     
-    foreach my $i (0..$#bin_reso)
-    {
-	my $level = $i + 1;
-	my $reso = $bin_reso[$i];
-	
-	next unless $level > 0 && $reso > 0;
-	
-	my $BIN_TABLE = "${COLL_BINS}_${level}";
-	my $WORK_TABLE = "${COLL_BINS_WORK}_${level}";
-	
-	push @bin_tables, $BIN_TABLE;
-	push @coll_tables, ($WORK_TABLE => $BIN_TABLE);
-	
-	logMessage(2, "    creating summary table for bin level $level...");
-	
-	$dbh->do("DROP TABLE IF EXISTS $WORK_TABLE");
-	
-	$dbh->do("CREATE TABLE $WORK_TABLE (
+    $dbh->do("DROP TABLE IF EXISTS $COLL_BINS_WORK");
+    
+    $dbh->do("CREATE TABLE $COLL_BINS_WORK (
 		bin_id int unsigned not null,
-		$parent_lines
-		clust_id int unsigned,
+		bin_level tinyint unsigned,
+		interval_no int unsigned not null,
 		n_colls int unsigned,
 		n_occs int unsigned,
 		early_age decimal(9,5),
@@ -270,87 +260,86 @@ sub buildCollectionTables {
 		lat_max decimal(9,6),
 		std_dev float,
 		access_level tinyint unsigned not null,
-		unique key (bin_id)) Engine=MyISAM");
+		primary key (bin_id, interval_no)) Engine=MyISAM");
     
-	my ($sql, $result);
+    my $set_lines = '';
+    my @index_stmts;
+    
+    # Now summarize at each level in turn.
+    
+    foreach my $i (0..$#bin_reso)
+    {
+	my $level = $i + 1;
+	my $reso = $bin_reso[$i];
 	
-	$sql = "INSERT IGNORE INTO $WORK_TABLE
-			(bin_id, n_colls, n_occs, 
-			 early_age, late_age, 
-			 lng, lat,
+	next unless $level > 0 && $reso > 0;
+	
+	logMessage(2, "      summarizing at level $level by geography...");
+	
+	$sql = "INSERT IGNORE INTO $COLL_BINS_WORK
+			(bin_id, bin_level, interval_no,
+			 n_colls, n_occs, early_age, late_age, lng, lat,
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
-		SELECT bin_id_$level, count(*), sum(n_occs),
+		SELECT bin_id_$level, $level, 0, count(*), sum(n_occs),
 		       max(early_age), min(late_age),
 		       avg(lng), avg(lat),
 		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
 		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
 		       min(access_level)
-		FROM $COLL_MATRIX_WORK
+		FROM $COLL_MATRIX_WORK as m
 		GROUP BY bin_id_$level";
-    
+	
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "      generated $result non-empty bins.");
 	
-	$sql = "UPDATE $WORK_TABLE set loc =
-			if(lng is null or lat is null, point(1000.0, 1000.0), point(lng, lat))";
+	logMessage(2, "      summarizing at level $level by geography and interval...");
+	
+	$sql = "INSERT IGNORE INTO $COLL_BINS_WORK
+			(bin_id, bin_level, interval_no,
+			 n_colls, n_occs, early_age, late_age, lng, lat,
+			 lng_min, lng_max, lat_min, lat_max, std_dev,
+			 access_level)
+		SELECT bin_id_$level, $level, interval_no, count(*), sum(n_occs),
+		       max(early_age), min(late_age),
+		       avg(lng), avg(lat),
+		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
+		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
+		       sqrt(var_pop(lng)+var_pop(lat)),
+		       min(access_level)
+		FROM $COLL_MATRIX_WORK as m JOIN $INTERVAL_DATA as i on i.scale_no > 0
+		WHERE m.early_age <= i.base_age and m.late_age >= i.top_age
+		-- WHERE m.early_age > i.top_age and m.late_age < i.base_age
+		GROUP BY interval_no, bin_id_$level";
 	
 	$result = $dbh->do($sql);
 	
-	if ( $set_lines )
-	{
-	    logMessage(2, "      computing containing bins...");
-	    
-	    $sql = "UPDATE $WORK_TABLE SET
-			$set_lines";
-	    
-	    $result = $dbh->do($sql);
-	    
-	    foreach my $stmt ( @index_stmts )
-	    {
-		$result = $dbh->do("ALTER TABLE $WORK_TABLE $stmt");
-	    }
-	}
-	
-	# Now index the table just created
-	
-	logMessage(2, "      indexing summary table...");
-	
-	$result = $dbh->do("ALTER TABLE $WORK_TABLE ADD SPATIAL INDEX (loc)");
-	$result = $dbh->do("ALTER TABLE $WORK_TABLE ADD INDEX (lng, lat)");
-	$result = $dbh->do("ALTER TABLE $WORK_TABLE ADD INDEX (early_age)");
-	$result = $dbh->do("ALTER TABLE $WORK_TABLE ADD INDEX (late_age)");
-	$parent_lines .= "		bin_id_$level int unsigned not null,\n";
-	
-	my $id_base = $reso < 1.0 ? $level . '00000000' : $level . '000000';
-	my $lng_base = $reso < 1.0 ? $level . '0000' : $level . '000';
-	
-	$set_lines .= ",\n" if $set_lines;
-	$set_lines .= "bin_id_$level = if(lng between -180.0 and 180.0 and lat between -90.0 and 90.0,
-			$id_base + $lng_base * floor((lng+180.0)/$reso) + floor((lat+90.0)/$reso), 0)\n";
-	
-	push @index_stmts, "ADD INDEX (bin_id_$level)";
+	logMessage(2, "      generated $result non-empty bins.");
     }
+    
+    logMessage(2, "    setting geographic locations...");
+    
+    $sql = "UPDATE $COLL_BINS_WORK set loc =
+		if(lng is null or lat is null, point(1000.0, 1000.0), point(lng, lat))";
+    
+    $result = $dbh->do($sql);
+    
+    # Now index the table just created
+    
+    logMessage(2, "    indexing summary table...");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD SPATIAL INDEX (loc)");
+    $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD INDEX (interval_no, lng, lat)");
     
     # If we were asked to apply the K-means clustering algorithm, do so now.
     
-    applyClustering($dbh, $bin_list) if $options->{colls_cluster} and @bin_reso;
-    
-    # Now we create a new table for quick look-up of the top-level bins
-    # restricted to different intervals.
-    
-    if ( @bin_reso )
-    {
-	buildIntRestrictTable($dbh);
-	push @bin_tables, $COLL_INTS;
-	push @coll_tables, ($COLL_INTS_WORK => $COLL_INTS);
-    }
+    # applyClustering($dbh, $bin_list) if $options->{colls_cluster} and @bin_reso;
     
     # Finally, we swap in the new tables for the old ones.
     
-    activateTables($dbh, @coll_tables);
+    activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS);
     
     my $a = 1;		# We can stop here when debugging
 }
@@ -505,81 +494,6 @@ sub applyClustering {
     $dbh->do("DROP TABLE IF EXISTS $CLUST_AUX");
     
     my $a = 1;	# we can stop here when debugging
-}
-
-
-# buildIntRestrictTable ( dbh )
-# 
-# Build a table that lists the statistics for each of the top-level bins
-# restricted to each possible interval from all of the time scales known to
-# the database.  This allows the Navigator interface to quickly display the
-# top-level world map of collections from a given time interval.
-
-sub buildIntRestrictTable {
-    
-    my ($dbh) = @_;
-    
-    my ($sql, $result);
-    
-    # First make sure we have a clean working table.
-    
-    $dbh->do("DROP TABLE IF EXISTS $COLL_INTS_WORK");
-    
-    $dbh->do("CREATE TABLE $COLL_INTS_WORK (
-		bin_id int unsigned not null,
-		interval_no int unsigned not null,
-		n_colls int unsigned,
-		n_occs int unsigned,
-		early_age decimal(9,5),
-		late_age decimal(9,5), 
-		lng decimal(9,6),
-		lat decimal(9,6),
-		loc geometry not null,
-		lng_min decimal(9,6),
-		lng_max decimal(9,6),
-		lat_min decimal(9,6),
-		lat_max decimal(9,6),
-		std_dev float,
-		access_level tinyint unsigned not null,
-		unique key (interval_no, bin_id)) Engine=MyISAM");
-    
-    # Then fill it by joining the already-computed bin level 1 table to the
-    # interval data table.
-    
-    logMessage(2, "    building interval-restricted summary table...");
-    
-    $sql = "	INSERT IGNORE INTO $COLL_INTS_WORK
-			(bin_id, interval_no, n_colls, n_occs, 
-			 early_age, late_age, 
-			 lng, lat,
-			 lng_min, lng_max, lat_min, lat_max, std_dev,
-			 access_level)
-		SELECT bin_id_1, interval_no, count(*), sum(n_occs),
-		       max(early_age), min(late_age),
-		       avg(lng), avg(lat),
-		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
-		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
-		       sqrt(var_pop(lng)+var_pop(lat)),
-		       min(access_level)
-		FROM $COLL_MATRIX_WORK as m JOIN $INTERVAL_DATA as i on i.scale_no > 0
-		WHERE m.early_age > i.top_age and m.late_age < i.base_age 
-		GROUP BY interval_no, bin_id_1";
-    
-    $result = $dbh->do($sql);
-
-    $sql = "UPDATE $COLL_INTS_WORK set loc =
-		if(lng is null or lat is null, point(1000.0, 1000.0), point(lng, lat))";
-    
-    $result = $dbh->do($sql);
-    
-    logMessage(2, "    indexing interval-restricted summary table...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_INTS_WORK ADD SPATIAL INDEX (loc)");
-    $result = $dbh->do("ALTER TABLE $COLL_INTS_WORK ADD INDEX (lng, lat)");
-    $result = $dbh->do("ALTER TABLE $COLL_INTS_WORK ADD INDEX (early_age)");
-    $result = $dbh->do("ALTER TABLE $COLL_INTS_WORK ADD INDEX (late_age)");
-    
-    my $a = 1;		# we can stop here when debugging
 }
 
 

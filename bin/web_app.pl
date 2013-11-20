@@ -116,7 +116,7 @@ ruleset $dv '1.1:main_selector' =>
     "!!Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
     [param => 'exclude_id', POS_VALUE, { list => ','}],
     "Do not return any records whose associated taxonomic name is a child of the given name, specified by numeric identifier.",
-    [param => 'person_no', POS_VALUE, { list => ','}],
+    [param => 'person_id', POS_VALUE, { list => ','}],
     "Return only records whose entry was authorized by the given person or people, specified by numeric identifier.",
     [param => 'lngmin', DECI_VALUE],
     "",
@@ -137,11 +137,14 @@ ruleset $dv '1.1:main_selector' =>
     "Return only records whose temporal locality is at least this old, specified in Ma.",
     [param => 'max_ma', DECI_VALUE(0)],
     "Return only records whose temporal locality is at most this old, specified in Ma.",
+    [param => 'interval_id', POS_VALUE],
+    "Return only records whose temporal locality falls within the given geologic time interval, specified by numeric identifier.  This interval must be associated with a time scale in this database.",
     [param => 'interval', ANY_VALUE],
     "Return only records whose temporal locality falls within the named geologic time interval.",
-    [optional => 'time_strict', FLAG_VALUE],
-    "If this parameter is specified, then return only records whose temporal locality falls strictly within the specified interval.",
-    "Otherwise, all records whose temporal locality overlaps the specified interval will be returned";
+    [at_most_one => 'interval_id', 'interval'],
+    [optional => 'time_overlap', FLAG_VALUE],
+    "If this parameter is specified, then return all records whose temporal locality overlaps the specified time interval.",
+    "Otherwise, only records whose temporal locality falls strictly within the specified interval will be returned";
 
 ruleset $dv '1.1:coll_specifier' =>
     [param => 'id', POS_VALUE, { alias => 'coll_id' }],
@@ -156,9 +159,10 @@ ruleset $dv '1.1:coll_selector' =>
 
 ruleset $dv '1.1:coll_display' =>
     "The following parameter indicates which information should be returned about each resulting name:",
-    [param => 'show', ENUM_VALUE('bin','ref','sref','loc','time','taxa'), { list => ',' }],
+    [param => 'show', ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem','all'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
-    "From the list given below.  It defaults to C<basic>.";
+    "From the list given below.  It defaults to C<basic>.",
+    [ignore => 'level'];
 
 ruleset $dv '1.1/colls/single' => 
     [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
@@ -248,7 +252,7 @@ ruleset $dv '1.1:taxon_filter' =>
 
 ruleset $dv '1.1:taxon_display' => 
     "The following parameter indicates which information should be returned about each resulting name:",
-    [optional => 'show', ENUM_VALUE('basic','full','ref','attr','app','applong',
+    [optional => 'show', ENUM_VALUE('ref','attr','app','applong',
 				    'appfirst','size','nav'),
 	{ list => ','}],
     "This parameter specifies what fields should be returned.  For the full list of fields,",
@@ -272,9 +276,12 @@ ruleset $dv '1.1/taxa/list' =>
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1:interval_selector' => 
-    [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
+    [param => 'scale', POS_VALUE, { list => ',' }],
+    "Return intervals from the specified time scale(s) should be returned.",
     [param => 'min_ma', DECI_VALUE(0)],
-    [param => 'max_ma', DECI_VALUE(0)];
+    [param => 'max_ma', DECI_VALUE(0)],
+    [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
+    "Return the intervals in order starting as specified.  Possible values include 'older', 'younger'.  Defaults to 'younger'.";
 
 ruleset $dv '1.1:interval_specifier' =>
     [param => 'id', POS_VALUE],
