@@ -19,7 +19,7 @@ use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
 use CollectionTables qw($COLL_MATRIX $COUNTRY_MAP);
 use OccurrenceTables qw($OCC_MATRIX $OCC_TAXON);
-use IntervalTables qw($INTERVAL_DATA $SCALE_LEVEL_DATA $INTERVAL_MAP $TEN_MY_BINS);
+use IntervalTables qw($INTERVAL_DATA $SCALE_LEVEL_DATA $INTERVAL_MAP);
 
 use base 'Exporter';
 
