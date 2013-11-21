@@ -166,8 +166,8 @@ sub buildIntervalMap {
 		early_age decimal(9,5),
 		late_age decimal(9,5),
 		cx_int_no int unsigned not null,
-		early_int_range int unsigned not null,
-		late_int_range int unsigned not null,
+		early_int_no int unsigned not null,
+		late_int_no int unsigned not null,
 		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
     
     logMessage(2, "    computing containing intervals");
@@ -221,13 +221,13 @@ sub buildIntervalMap {
     
     $sql = "UPDATE $INTERVAL_MAP_WORK as i JOIN
 		(SELECT i.early_age, i.late_age, i.scale_no,
-			ei.interval_no as early_int_range, li.interval_no as late_int_range
+			ei.interval_no as early_int_no, li.interval_no as late_int_no
 		 FROM $INTERVAL_MAP_WORK as i
 		     JOIN $INTERVAL_BRACKET_WORK as ei on ei.age = i.early_age and ei.scale_no = i.scale_no
 		     JOIN $INTERVAL_BRACKET_WORK as li on li.age = i.late_age and li.scale_no = i.scale_no
 		 WHERE ei.level = li.level ORDER BY (ei.base_age - li.top_age), ei.level) as b
 			using (early_age, late_age, scale_no)
-	    SET i.early_int_range = b.early_int_range, i.late_int_range = b.late_int_range";
+	    SET i.early_int_no = b.early_int_no, i.late_int_no = b.late_int_no";
     
     $result = $dbh->do($sql);
     

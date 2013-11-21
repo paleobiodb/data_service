@@ -156,13 +156,13 @@ sub list {
     
     if ( exists $self->{params}{min_ma} )
     {
-	my $min = $self->{params}{min_ma} - 0.01;
+	my $min = $self->{params}{min_ma};
 	push @filters, "i.top_age >= $min";
     }
     
     if ( exists $self->{params}{max_ma} )
     {
-	my $max = $self->{params}{max_ma} + 0.01;
+	my $max = $self->{params}{max_ma};
 	push @filters, "i.base_age <= $max";
     }
     
