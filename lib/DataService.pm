@@ -50,7 +50,7 @@ sub new {
     
     my $selector = $options->{response_selector} || 'fields';
     my $needs_dbh = $options->{needs_dbh};
-    my $public = $options->{public};
+    my $public_access = $options->{public_access};
     my $validator = $options->{validator};
     my $default_limit = $options->{default_limit} || 500;
     my $stream_threshold = $options->{stream_threshold} || 20480;
@@ -60,7 +60,7 @@ sub new {
     my $instance = {
 		    validator => $validator,
 		    response_selector => $selector,
-		    public_access => $public,
+		    public_access => $public_access,
 		    needs_dbh => $needs_dbh,
 		    default_limit => $default_limit,
 		    stream_threshold => $stream_threshold,
