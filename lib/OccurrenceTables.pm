@@ -19,7 +19,7 @@ use IntervalTables qw($INTERVAL_DATA);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
-our (@EXPORT_OK) = qw(buildOccurrenceTables buildDiversityTables updateOccLft
+our (@EXPORT_OK) = qw(buildOccurrenceTables buildDiversityTables
 		      $OCC_MATRIX $OCC_TAXON $OCC_REF $DIV_SAMPLE);
 
 our $OCC_MATRIX = "occ_matrix";
@@ -130,7 +130,6 @@ sub buildOccurrenceTables {
     $result = $dbh->do("DROP TABLE IF EXISTS $OCC_TAXON_WORK");
     $result = $dbh->do("CREATE TABLE $OCC_TAXON_WORK (
 				orig_no int unsigned primary key,
-				lft int unsigned not null,
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
 				first_early_age decimal(9,5),
@@ -140,36 +139,15 @@ sub buildOccurrenceTables {
 				early_occ int unsigned,
 				late_occ int unsigned) ENGINE=MyISAM");
     
-    # If the taxonomy tables have already been created, use the main one as
-    # the source for the 'lft' field.
-    
-    my $main_tree_table = $TREE_TABLE_LIST[0];
-    my $tree_result;
-    my $tree_field = '';
-    my $tree_select = '';
-    my $tree_join = '';
-    
-    try {
-	$tree_result = $dbh->do("SELECT COUNT(*) FROM $main_tree_table");
-    };
-    
-    if ( $tree_result )
-    {
-	$tree_field = 'lft, ';
-	$tree_select = 't.lft, ';
-	$tree_join = "LEFT JOIN $main_tree_table as t using (orig_no)";
-    }
-    
     # Look for the lower and upper bounds for the interval range in which each taxon
     # occurs.  But ignore intervals at the period level and above (except for
     # precambrian and quaternary).  They are not just specific enough.
     
-    $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, $tree_field n_occs, n_colls,
+    $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age)
-		SELECT m.orig_no, $tree_select count(*), count(distinct collection_no),
+		SELECT m.orig_no, count(*), count(distinct collection_no),
 			max(ei.base_age), max(li.top_age), min(ei.base_age), min(li.top_age)
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
-			$tree_join
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 		WHERE (ei.level is null or ei.level > 3 or
@@ -206,7 +184,6 @@ sub buildOccurrenceTables {
     
     logMessage(2, "      indexing the summary table...");
     
-    $dbh->do("ALTER TABLE $OCC_TAXON_WORK ADD INDEX (lft)");
     $dbh->do("ALTER TABLE $OCC_TAXON_WORK ADD INDEX (first_early_age)");
     $dbh->do("ALTER TABLE $OCC_TAXON_WORK ADD INDEX (first_late_age)");
     $dbh->do("ALTER TABLE $OCC_TAXON_WORK ADD INDEX (last_early_age)");
@@ -257,52 +234,6 @@ sub buildOccurrenceTables {
     
     
     my $a = 1;		# we can stop here when debugging.
-}
-
-
-# updateOccLft ( dbh, low, high )
-# 
-# Update the 'lft' numbers in the $OCC_TAXON table.  This should be called
-# whenever the main taxon table is modified.  The parameter $low and $high, if
-# specified, should be bounds indicating the range of values which need to be
-# recomputed.
-
-sub updateOccLft {
-    
-    my ($dbh, $low, $high) = @_;
-    
-    my ($sql, $result);
-    
-    # First make sure we have a table to update.
-    
-    try {
-	$result = $dbh->do("SELECT count(*) FROM $OCC_TAXON");
-    };
-    
-    return unless $result;
-    
-    my $TREE_TABLE = $TREE_TABLE_LIST[0];
-    my $bound_clause = '';
-    
-    logMessage(2, "    updating 'lft' field of '$OCC_TAXON'");
-    
-    my $low_bound = $low + 0;
-    my $high_bound = $high + 0;
-    
-    if ( $low > 0 && $high > 0 )
-    {
-	$bound_clause = "WHERE o.lft between $low and $high";
-    }
-    
-    $sql = "	UPDATE $OCC_TAXON as o JOIN $TREE_TABLE as t using (orig_no)
-		SET o.lft = t.lft
-		$bound_clause";
-    
-    $result = $dbh->do($sql);
-    
-    logMessage(2, "      $result entries updated");
-    
-    my $a = 1;		# we can stop here when debugging;
 }
 
 
