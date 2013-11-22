@@ -3911,7 +3911,7 @@ sub computeAttrsTable {
 			min(v.last_early_age) as last_early_age,
 			min(v.last_late_age) as last_late_age,
 			coalesce(v.early_occ) as early_occ,
-			coalesce(v.late_occ) as late_occ,
+			coalesce(v.late_occ) as late_occ
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
