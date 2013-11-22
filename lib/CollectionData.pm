@@ -708,6 +708,8 @@ sub generateQueryFilters {
     
     my $min_age = $self->{params}{min_ma};
     my $max_age = $self->{params}{max_ma};
+    my $interval_no;
+    my $scale_no;
     my $interval_specified = 0;
     
     if ( $self->{params}{interval_id} )
@@ -734,15 +736,24 @@ sub generateQueryFilters {
     {
 	my $quoted_name = $dbh->quote($self->{params}{interval});
 	
-	my $sql = "SELECT base_age, top_age FROM $INTERVAL_DATA
+	my $sql = "SELECT base_age, top_age, interval_no, scale_no FROM $INTERVAL_DATA
 		   WHERE interval_name like $quoted_name";
 	
-	($max_age, $min_age) = $dbh->selectrow_array($sql);
+	($max_age, $min_age, $interval_no, $scale_no) = $dbh->selectrow_array($sql);
+	
+	if ( $scale_no )
+	{
+	    $max_age = undef;
+	    $min_age = undef;
+	    $interval_specified = 1;
+	    push @filters, "interval_no = $interval_no";
+	}
     }
     
     if ( defined $min_age and $min_age > 0 )
     {
 	$tables_ref->{c} = 1;
+	$interval_specified = 1;
 	if ( $self->{params}{time_overlap} )
 	{
 	    push @filters, "c.early_age > $min_age";
@@ -756,6 +767,7 @@ sub generateQueryFilters {
     if ( defined $max_age and $max_age > 0 )
     {
 	$tables_ref->{c} = 1;
+	$interval_specified = 1;
 	if ( $self->{params}{time_strict} )
 	{
 	    push @filters, "c.early_age <= $max_age";

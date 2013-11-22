@@ -3836,7 +3836,9 @@ sub computeAttrsTable {
 				first_early_age decimal(9,5),
 				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
-				last_late_age decimal(9,5)) ENGINE=MyISAM");
+				last_late_age decimal(9,5),
+				early_occ int unsigned,
+				late_occ int unsigned) ENGINE=MyISAM");
     
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.

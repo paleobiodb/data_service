@@ -585,8 +585,6 @@ sub stream_result {
     my $sth = $self->{main_sth};
     my $row;
     
-    print STDERR "STREAMING\n";
-    
     # First send out the partial output previously stashed by
     # generateCompoundResult().
     

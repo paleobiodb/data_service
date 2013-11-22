@@ -97,6 +97,7 @@ if ( $interval_map )
 if ( $rank_map )
 {
     TaxonTables::createRankMap($dbh);
+    CollectionTables::createCountryMap($dbh, 1);
 }
 
 # The option -c causes the collection tables to be (re)computed.
