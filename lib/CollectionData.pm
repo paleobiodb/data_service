@@ -704,7 +704,7 @@ sub generateQueryFilters {
 	push @filters, "st_within($mt.loc, geomfromtext($self->{params}{loc})";
     }
     
-    # Check for parameters 'min_ma', 'max_ma', 'interval'
+    # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'
     
     my $min_age = $self->{params}{min_ma};
     my $max_age = $self->{params}{max_ma};

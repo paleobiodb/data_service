@@ -11,6 +11,8 @@ package ConfigData;
 use strict;
 use base 'DataService::Base';
 
+use CollectionTables qw($CONTINENT_DATA);
+
 use Carp qw(carp croak);
 
 
@@ -24,6 +26,7 @@ $OUTPUT{basic} =
 
 
 our (@BIN_RESO);
+our ($CONTINENTS);
 
 # configure ( )
 # 
@@ -33,6 +36,8 @@ our (@BIN_RESO);
 sub configure {
     
     my ($self, $dbh, $config) = @_;
+    
+    # Get the list of geographical cluster resolutions from the configuration file.
     
     if ( ref $config->{bins} eq 'ARRAY' )
     {
@@ -46,6 +51,10 @@ sub configure {
 	    push @BIN_RESO, $bin->{resolution};
 	}
     }
+    
+    # Get the list of continents from the database.
+    
+    my $sql = "SELECT continent, name FROM $CONTINENT_DATA";
 }
 
 

@@ -80,7 +80,7 @@ if ( $interval_data )
     loadIntervalData($dbh, 1);
 }
 
-elsif ( $interval_map || $collection_tables || $occurrence_tables || $taxon_tables )
+elsif ( $interval_map || $collection_tables || $occurrence_tables )
 {
     loadIntervalData($dbh);
 }
