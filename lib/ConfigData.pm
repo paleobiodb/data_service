@@ -11,11 +11,9 @@ package ConfigData;
 use strict;
 use base 'DataService::Base';
 
+use CollectionTables qw($CONTINENT_DATA);
+
 use Carp qw(carp croak);
-
-
-our (%CONFIG);
-read_config();
 
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
@@ -27,6 +25,39 @@ $OUTPUT{basic} =
    ];
 
 
+our (@BIN_RESO);
+our ($CONTINENTS);
+
+# configure ( )
+# 
+# This routine is called by the DataService module, and is passed the
+# configuration data as a hash ref.
+
+sub configure {
+    
+    my ($self, $dbh, $config) = @_;
+    
+    # Get the list of geographical cluster resolutions from the configuration file.
+    
+    if ( ref $config->{bins} eq 'ARRAY' )
+    {
+	my $bin_level = 0;
+	
+	foreach my $bin (@{$config->{bins}})
+	{
+	    $bin_level++;
+	    
+	    next unless $bin->{resolution} > 0;
+	    push @BIN_RESO, $bin->{resolution};
+	}
+    }
+    
+    # Get the list of continents from the database.
+    
+    my $sql = "SELECT continent, name FROM $CONTINENT_DATA";
+}
+
+
 # get ( )
 # 
 # Return configuration information.
@@ -35,27 +66,9 @@ sub get {
 
     my ($self) = @_;
     
-    $self->{main_record} = { bin_size => [ $CONFIG{COARSE_BIN_SIZE}, $CONFIG{FINE_BIN_SIZE} ] };
+    $self->{main_record} = { bin_size => \@BIN_RESO };
     return 1;
 }
 
-
-
-sub read_config {
-    
-    my $filename = "config/pbdb.conf";
-    my $cf;
-    unless ( open $cf, "<$filename" )
-    {
-	carp "Can not open $filename\n";
-	return;
-    }
-    while(my $line = readline($cf)) {
-        chomp($line);
-        if ($line =~ /^\s*(\w+)\s*=\s*(.*)$/) {
-            $CONFIG{uc($1)} = $2; 
-        }
-    }
-}
 
 1;

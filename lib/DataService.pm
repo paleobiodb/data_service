@@ -50,7 +50,7 @@ sub new {
     
     my $selector = $options->{response_selector} || 'fields';
     my $needs_dbh = $options->{needs_dbh};
-    my $public = $options->{public};
+    my $public_access = $options->{public_access};
     my $validator = $options->{validator};
     my $default_limit = $options->{default_limit} || 500;
     my $stream_threshold = $options->{stream_threshold} || 20480;
@@ -60,7 +60,7 @@ sub new {
     my $instance = {
 		    validator => $validator,
 		    response_selector => $selector,
-		    public_access => $public,
+		    public_access => $public_access,
 		    needs_dbh => $needs_dbh,
 		    default_limit => $default_limit,
 		    stream_threshold => $stream_threshold,
@@ -113,6 +113,14 @@ sub define_route {
     {
 	$self->{parent}{$path} = $parent;
     }    
+    
+    # If one of the attributes is 'class', make sure that the class is
+    # configured. 
+    
+    if ( $attrs->{class} )
+    {
+	$self->configure_class($attrs->{class})
+    }
 }
 
 register 'setup_route' => \&setup_route;
@@ -156,6 +164,14 @@ sub define_directory {
     if ( my $parent = $self->find_parent($path) )
     {
 	$self->{parent}{$path} = $parent;
+    }
+    
+    # If one of the attributes is 'class', make sure that the class is
+    # configured. 
+    
+    if ( $attrs->{class} )
+    {
+	$self->configure_class($attrs->{class})
     }
 }
 
@@ -273,6 +289,33 @@ sub route_attr {
     # If no value can be found, give up.
     
     return;
+}
+
+
+# configure_class ( class )
+# 
+# If the specified class has a 'configure' method, call it.  Pass it a
+# database handle and the Dancer configuration hash.
+
+sub configure_class {
+    
+    my ($self, $class) = @_;
+    
+    # If we have already configured this class, return.
+    
+    return if $self->{class}{$class};
+    
+    # Record that we have configured this class.
+    
+    $self->{class}{$class} = 1;
+    
+    # If the class has a configuration method, call it.
+    
+    if ( $class->can('configure') )
+    {
+	print "Configuring $class\n";
+	$class->configure(database(), Dancer::config);
+    }
 }
 
 
