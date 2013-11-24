@@ -449,7 +449,7 @@ sub generate_compound_result {
     # not, the result set is empty and we need to return the relevant header
     # and footer.
     
-    unless ( $self->{main_sth} or $self->{main_result} )
+    unless ( ref $self->{main_sth} or ref $self->{main_result} )
     {
 	return $self->emitHeader() . $self->emitFooter();
     }
@@ -469,9 +469,17 @@ sub generate_compound_result {
     {
 	my @rows;
 	
-	while ( $row = $sth->fetchrow_hashref )
+	if ( $self->{main_sth} )
 	{
-	    push @rows, $row;
+	    while ( $row = $self->{main_sth}->fetchrow_hashref )
+	    {
+		push @rows, $row;
+	    }
+	}
+	
+	else
+	{
+	    @rows = @{$self->{main_result}}
 	}
 	
 	my $newrows = $self->{process_resultset}(\@rows);

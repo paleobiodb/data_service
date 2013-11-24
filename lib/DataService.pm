@@ -542,7 +542,7 @@ register 'execute_operation' => sub {
 	# If we have a main statement handle, then read records from it and
 	# generate a compound response.
 	
-	if ( exists $request->{main_sth} )
+	if ( exists $request->{main_sth} or exists $request->{main_result} )
 	{
 	    # If the server supports streaming, call generate_compound_result with
 	    # can_stream => 1 and see if it returns any data or not.  If it does
