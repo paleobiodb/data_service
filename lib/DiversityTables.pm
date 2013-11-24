@@ -19,7 +19,7 @@ use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
 use CollectionTables qw($COLL_MATRIX $COUNTRY_MAP);
 use OccurrenceTables qw($OCC_MATRIX $OCC_TAXON);
-use IntervalTables qw($INTERVAL_DATA $SCALE_LEVEL_DATA $INTERVAL_MAP);
+use IntervalTables qw($INTERVAL_DATA $SCALE_LEVEL_DATA $SCALE_DATA $SCALE_MAP $INTERVAL_MAP);
 
 use base 'Exporter';
 
@@ -98,6 +98,7 @@ sub buildDiversityTables {
 	       if(m.base_age <= i.base_age, 1.0,
 			(i.base_age-m.top_age)/(m.base_age-m.top_age))
     	FROM occ_matrix as m JOIN $INTERVAL_DATA as i on m.top_age < i.base_age and m.base_age > i.top_age
+		JOIN $SCALE_MAP as sm using (interval_no)
 		JOIN $SCALE_LEVEL_DATA as s using (scale_no, level)
     		JOIN $TREE_TABLE as t using (orig_no)
     	WHERE t.ints_no > 0 and s.sample");
@@ -195,12 +196,12 @@ sub buildDiversityTables {
 				     early_age_08, late_age_08,
 				     early_age_05, late_age_05,
 				     early_occ_no, late_occ_no)
-	SELECT i.scale_no, i.level, genus_no, $TAXON_RANK{genus},
+	SELECT sm.scale_no, sm.level, genus_no, $TAXON_RANK{genus},
 	       if(prob >= 1.0, i.base_age, null), if(early_prob >= 1.0, i.top_age, null),
 	       if(prob >= 0.8, i.base_age, null), if(early_prob >= 0.8, i.top_age, null),
 	       i.base_age, i.top_age,
 	       occurrence_no, occurrence_no
-	FROM $DIV_RAW_WORK as w JOIN $INTERVAL_DATA as i using (interval_no)
+	FROM $DIV_RAW_WORK as w JOIN $INTERVAL_DATA as i using (interval_no) JOIN $SCALE_DATA as sm using (interval_no)
 	WHERE genus_no > 0 and (prob >= 0.5 or early_prob >= 0.8 or late_prob >= 0.5)
 	ORDER BY i.base_age desc
 	ON DUPLICATE KEY UPDATE

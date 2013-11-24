@@ -16,7 +16,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use IntervalTables qw($INTERVAL_DATA $INTERVAL_MAP);
+use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
 use ConsoleLog qw(logMessage);
 
 our $COLL_MATRIX = "coll_matrix";
@@ -310,9 +310,9 @@ sub buildCollectionTables {
 		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
 		       sqrt(var_pop(lng)+var_pop(lat)),
 		       min(access_level)
-		FROM $COLL_MATRIX_WORK as m JOIN $INTERVAL_DATA as i on i.scale_no > 0
+		FROM $COLL_MATRIX_WORK as m JOIN $INTERVAL_DATA as i
+			JOIN $SCALE_MAP as s using (interval_no)
 		WHERE m.early_age <= i.base_age and m.late_age >= i.top_age
-		-- WHERE m.early_age > i.top_age and m.late_age < i.base_age
 		GROUP BY interval_no, bin_id_$level";
 	
 	$result = $dbh->do($sql);

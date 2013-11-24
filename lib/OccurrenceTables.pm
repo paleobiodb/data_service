@@ -139,9 +139,9 @@ sub buildOccurrenceTables {
 				early_occ int unsigned,
 				late_occ int unsigned) ENGINE=MyISAM");
     
-    # Look for the lower and upper bounds for the interval range in which each taxon
-    # occurs.  But ignore intervals at the period level and above (except for
-    # precambrian and quaternary).  They are not just specific enough.
+    # Look for the lower and upper bounds for the interval range in which each
+    # taxon occurs.  But ignore intervals that span more than 40 million years.
+    # They are not just specific enough.
     
     $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age)
@@ -150,10 +150,7 @@ sub buildOccurrenceTables {
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
-		WHERE (ei.level is null or ei.level > 3 or
-				(ei.level = 3 and (ei.top_age >= 541.0 or ei.base_age <= 2.6))) and
-		      (li.level is null or li.level > 3 or 
-				(li.level = 3 and (li.top_age >= 541.0 or li.base_age <= 2.6)))
+		WHERE ei.base_age - li.top_age <= 40
 		GROUP BY m.orig_no
 		HAVING m.orig_no > 0";
     

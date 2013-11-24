@@ -13,7 +13,7 @@ use base 'DataService::Base';
 
 use PBDBData;
 use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
-use IntervalTables qw($INTERVAL_DATA $INTERVAL_MAP);
+use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -613,18 +613,18 @@ sub generateQueryFilters {
     
     # Check for parameters 'person_no', 'person_name'
     
-    elsif ( $self->{params}{person_no} )
+    if ( $self->{params}{person_id} )
     {
-	if ( ref $self->{params}{person_no} eq 'ARRAY' )
+	if ( ref $self->{params}{person_id} eq 'ARRAY' )
 	{
-	    my $person_string = join(q{,}, @{$self->{params}{person_no}} );
+	    my $person_string = join(q{,}, @{$self->{params}{person_id}} );
 	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
 	    $tables_ref->{c} = 1;
 	}
 	
 	else
 	{
-	    my $person_string = $self->{params}{person_no};
+	    my $person_string = $self->{params}{person_id};
 	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
 	    $tables_ref->{c} = 1;
 	}
@@ -736,8 +736,9 @@ sub generateQueryFilters {
     {
 	my $quoted_name = $dbh->quote($self->{params}{interval});
 	
-	my $sql = "SELECT base_age, top_age, interval_no, scale_no FROM $INTERVAL_DATA
-		   WHERE interval_name like $quoted_name";
+	my $sql = "SELECT base_age, top_age, interval_no, scale_no
+		   FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
+		   WHERE interval_name like $quoted_name ORDER BY scale_no";
 	
 	($max_age, $min_age, $interval_no, $scale_no) = $dbh->selectrow_array($sql);
 	

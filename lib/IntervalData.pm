@@ -14,13 +14,13 @@ use base 'DataService::Base';
 use Carp qw(carp croak);
 
 use PBDBData qw(generateReference);
-use IntervalTables qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_LEVEL_DATA);
+use IntervalTables qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA);
 
 
 our (%SELECT, %OUTPUT, %PROC, %TABLES);
 
 $SELECT{basic} =
-    "i.interval_no, i.interval_name, i.abbrev, i.scale_no, i.level, i.parent_no, i.color, i.base_age, i.top_age, i.reference_no";
+    "i.interval_no, i.interval_name, i.abbrev, sm.scale_no, sm.level, sm.parent_no, sm.color, i.base_age, i.top_age, i.reference_no";
 
 $OUTPUT{basic} =
    [
@@ -28,6 +28,10 @@ $OUTPUT{basic} =
 	doc => "A positive integer that uniquely identifies this interval"},
     { rec => 'record_type', com => 'typ', com_value => 'int', value => 'interval',
         doc => "The type of this object: 'int' for an interval" },
+    { rec => 'scale_no', com => 'sid',
+	doc => "The time scale in which this interval lies.  An interval may be reported more than once, as a member of different time scales" },
+    { rec => 'level', com => 'lvl',
+        doc => "The level within the time scale to which this interval belongs" },
     { rec => 'scales', com => 'sca',
         doc => "The time scale(s) and level(s) with which this interval is associated" },
     { rec => 'interval_name', com => 'nam',
@@ -100,7 +104,8 @@ sub get {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM $INTERVAL_DATA as i $join_list
+	FROM $INTERVAL_DATA as i LEFT JOIN $SCALE_MAP as sm using (interval_no)
+		$join_list
         WHERE i.interval_no = $id
 	GROUP BY i.interval_no";
     
@@ -145,13 +150,21 @@ sub list {
     
     if ( defined $self->{params}{scale} and $self->{params}{scale} eq 'all' )
     {
-	push @filters, "i.level is not null";
+	push @filters, "sm.level is not null";
     }
     
-    elsif ( ref $self->{params}{scale} eq 'ARRAY' )
+    elsif ( ref $self->{params}{scale_id} eq 'ARRAY' )
     {
-	my $filter_string = join(',', @{$self->{params}{scale}});
-	push @filters, "i.scale_no in ($filter_string)";
+	my $filter_string = join(',', @{$self->{params}{scale_id}});
+	
+	if ( $filter_string =~ /all/ )
+	{
+	    push @filters, "sm.scale_no is not null";
+	}
+	else
+	{
+	    push @filters, "sm.scale_no in ($filter_string)";
+	}
     }
     
     if ( exists $self->{params}{min_ma} )
@@ -166,14 +179,13 @@ sub list {
 	push @filters, "i.base_age <= $max";
     }
     
+    push @filters, "1=1" unless @filters;
+    
     # Get the results in the specified order
     
-    my $order_expr = "ORDER BY i.level, i.top_age";
-    
-    if ( $self->{params}{order} eq 'older' )
-    {
-	$order_expr = "ORDER BY i.level, i.base_age desc";
-    }
+    my $order_expr = $self->{params}{order} eq 'younger' ?
+	"ORDER BY sm.scale_no, sm.level, i.top_age" :
+	    "ORDER BY sm.scale_no, sm.level, i.base_age desc";
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -201,7 +213,8 @@ sub list {
     
     $self->{main_sql} = "
 	SELECT $calc $fields
-	FROM $INTERVAL_DATA as i $join_list
+	FROM $INTERVAL_DATA as i LEFT JOIN $SCALE_MAP as sm using (interval_no)
+		$join_list
 	WHERE $filter_list
 	$order_expr
 	$limit";

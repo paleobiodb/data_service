@@ -17,7 +17,7 @@ use ConsoleLog qw(logMessage);
 use base 'Exporter';
 
 our(@EXPORT_OK) = qw(loadIntervalData buildIntervalMap $INTERVAL_DATA $INTERVAL_MAP
-		     $INTERVAL_BRACKET $SCALE_DATA $SCALE_LEVEL_DATA);
+		     $INTERVAL_BRACKET $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP);
 
 
 # Table and file names
@@ -25,6 +25,7 @@ our(@EXPORT_OK) = qw(loadIntervalData buildIntervalMap $INTERVAL_DATA $INTERVAL_
 our $INTERVAL_DATA = "interval_data";
 our $SCALE_DATA = "scale_data";
 our $SCALE_LEVEL_DATA = "scale_level_data";
+our $SCALE_MAP = "scale_map";
 our $INTERVAL_BRACKET = "interval_bracket";
 our $INTERVAL_MAP = "interval_map";
 
@@ -34,8 +35,6 @@ our $INTERVAL_BRACKET_WORK = "ibn";
 # Template files
 
 our $INTERVAL_DATA_FILE = "system/interval_data.sql";
-our $SCALE_DATA_FILE = "system/scale_data.sql";
-
 
 
 =head1 NAME
@@ -91,17 +90,12 @@ sub loadIntervalData {
     # Unless $force was specified, check whether the table already exists and
     # contains data.
     
-    my $scale_result;
-    my $interval_result;
+    my $result;
     
     unless ( $force )
     {
 	try {
-	    $scale_result = $dbh->do("SELECT COUNT(*) FROM $SCALE_DATA");
-	};
-	
-	try {
-	    $interval_result = $dbh->do("SELECT COUNT(*) FROM $INTERVAL_DATA");
+	    $result = $dbh->do("SELECT COUNT(*) FROM $INTERVAL_DATA");
 	};
     }
     
@@ -110,16 +104,9 @@ sub loadIntervalData {
     
     my $update = 0;
     
-    if ( $force or not $scale_result )
+    if ( $force or not $result )
     {
-	logMessage(2, "loading scale data table from system/scale_data.sql...");
-	loadSQLFile($dbh, $SCALE_DATA_FILE);
-	$update = 1;
-    }
-    
-    if ( $force or not $interval_result )
-    {
-	logMessage(2, "loading interval data table from system/interval_data.sql...");
+	logMessage(2, "loading tables from system/interval_data.sql...");
 	loadSQLFile($dbh, $INTERVAL_DATA_FILE);
 	$update = 1;
     }
@@ -165,26 +152,56 @@ sub buildIntervalMap {
 		scale_no smallint unsigned not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
-		cx_int_no int unsigned not null,
-		early_int_no int unsigned not null,
-		late_int_no int unsigned not null,
+		cx_int_no int unsigned not null default 0,
+		early_int_no int unsigned,
+		late_int_no int unsigned,
 		PRIMARY KEY (early_age, late_age, scale_no)) Engine=MyISAM");
     
     logMessage(2, "    computing containing intervals");
     
-    $sql = "INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
-		SELECT s.scale_no, p.early_age, p.late_age, i.interval_no
-		FROM (SELECT ei.base_age as early_age, li.top_age as late_age
-			FROM $INTERVAL_DATA as ei JOIN $INTERVAL_DATA as li
-			WHERE (ei.base_age >= li.base_age or ei.top_age >= li.top_age)) as p
-		    JOIN $SCALE_DATA as s
-		    LEFT JOIN $INTERVAL_DATA as i on i.base_age >= p.early_age and i.top_age <= p.late_age
-		        and i.scale_no = s.scale_no
-		ORDER BY i.level desc";
+    $sql = "	INSERT IGNORE $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
+		SELECT i.scale_no, i.base_age, i.top_age, 
+		       (SELECT cxi.interval_no 
+			FROM $INTERVAL_DATA as cxi JOIN $SCALE_MAP as sm using (interval_no)
+			WHERE cxi.base_age >= i.base_age and cxi.top_age <= i.top_age 
+				and sm.scale_no = i.scale_no
+			ORDER BY level desc limit 1) as cx_int_no
+		FROM (SELECT distinct s.scale_no, ei.base_age, li.top_age
+		      FROM scale_data as s JOIN interval_data as ei JOIN interval_data as li
+		      WHERE ei.base_age > li.top_age and
+			ei.base_age <= s.base_age and li.top_age >= s.top_age) as i";
     
     $result = $dbh->do($sql);
     
     logMessage(2, "      found $result age start/end pairs");
+    
+    $sql = "	INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
+		SELECT i.scale_no, i.base_age, i.base_age,
+		       (SELECT cxi.interval_no 
+			FROM interval_data as cxi JOIN $SCALE_MAP as sm using (interval_no)
+			WHERE cxi.base_age >= i.base_age and cxi.top_age <= i.base_age 
+				and sm.scale_no = i.scale_no
+			ORDER BY level desc limit 1) as cx_int_no
+		FROM (SELECT distinct s.scale_no, i.base_age
+		      FROM scale_data as s JOIN interval_data as i
+		      WHERE i.base_age <= s.base_age and i.base_age >= s.top_age) as i";
+    
+    $result = $dbh->do($sql);
+    
+    $sql = "	INSERT IGNORE INTO $INTERVAL_MAP_WORK (scale_no, early_age, late_age, cx_int_no)
+		SELECT i.scale_no, i.top_age, i.top_age,
+		       (SELECT cxi.interval_no 
+			FROM interval_data as cxi JOIN $SCALE_MAP as sm using (interval_no)
+			WHERE cxi.base_age >= i.top_age and cxi.top_age <= i.top_age 
+				and sm.scale_no = i.scale_no
+			ORDER BY level desc limit 1) as cx_int_no
+		FROM (SELECT distinct s.scale_no, i.top_age
+		      FROM scale_data as s JOIN interval_data as i
+		      WHERE i.top_age <= s.base_age and i.top_age >= s.top_age) as i";
+    
+    $result += $dbh->do($sql);
+    
+    logMessage(2, "      found $result age boundary points");
     
     # Now, for each of these entries we need to see if a range of intervals in
     # a finer level of the scale can more precisely bracket the age range.  To
@@ -206,10 +223,11 @@ sub buildIntervalMap {
 		KEY (interval_no)) Engine=MyISAM");
     
     $sql = "INSERT IGNORE INTO $INTERVAL_BRACKET_WORK
-	    SELECT a.age, bi.interval_no, bi.scale_no, bi.level, bi.base_age, bi.top_age FROM $INTERVAL_DATA as bi
+	    SELECT a.age, bi.interval_no, sm.scale_no, sm.level, bi.base_age, bi.top_age
+	    FROM $INTERVAL_DATA as bi JOIN $SCALE_MAP as sm using (interval_no)
 		JOIN (SELECT distinct base_age as age FROM $INTERVAL_DATA UNION
 		      SELECT distinct top_age as age FROM $INTERVAL_DATA) as a
-	    WHERE a.age between bi.top_age and bi.base_age and bi.scale_no > 0";
+	    WHERE a.age between bi.top_age and bi.base_age";
     
     $result = $dbh->do($sql);
     

@@ -279,8 +279,11 @@ ruleset $dv '1.1/taxa/list' =>
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1:interval_selector' => 
-    [param => 'scale', POS_VALUE, { list => ',' }],
+    [param => 'scale_id', POS_VALUE, ENUM_VALUE('all'), 
+	{ list => ',', alias => 'scale',
+	  error => "the value of {param} should be a list of positive integers or 'all'" }],
     "Return intervals from the specified time scale(s) should be returned.",
+    "The value of this parameter should be a list of positive integers or 'all'",
     [param => 'min_ma', DECI_VALUE(0)],
     [param => 'max_ma', DECI_VALUE(0)],
     [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
