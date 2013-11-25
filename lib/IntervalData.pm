@@ -28,12 +28,10 @@ $OUTPUT{basic} =
 	doc => "A positive integer that uniquely identifies this interval"},
     { rec => 'record_type', com => 'typ', com_value => 'int', value => 'interval',
         doc => "The type of this object: 'int' for an interval" },
-    { rec => 'scale_no', com => 'sid',
+    { rec => 'scale_no', com => 'sca',
 	doc => "The time scale in which this interval lies.  An interval may be reported more than once, as a member of different time scales" },
     { rec => 'level', com => 'lvl',
         doc => "The level within the time scale to which this interval belongs" },
-    { rec => 'scales', com => 'sca',
-        doc => "The time scale(s) and level(s) with which this interval is associated" },
     { rec => 'interval_name', com => 'nam',
 	doc => "The name of this interval" },
     { rec => 'abbrev', com => 'abr',
@@ -48,11 +46,6 @@ $OUTPUT{basic} =
         doc => "The early age boundary of this interval (in Ma)" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
         doc => "The identifier(s) of the references from which this data was entered" },
-   ];
-
-$PROC{basic} = 
-   [
-    { rec => 'scale_no', add => 'scales', use_main => 1, code => \&generateScaleEntry },
    ];
 
 $SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
