@@ -248,6 +248,8 @@ sub get {
     
     my $fields = $self->generate_query_fields('c');
     
+    $self->adjustCoordinates(\$fields);
+    
     # Determine the necessary joins.
     
     my ($join_list) = $self->generateJoinList('c', $self->{select_tables});
@@ -344,6 +346,8 @@ sub summary {
     
     my $fields = $self->generate_query_fields('s');
     
+    $self->adjustCoordinates(\$fields);
+    
     my $summary_joins .= $self->generateJoinList('s', $self->{select_tables});
     
     $summary_joins = "RIGHT JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n" . $summary_joins
@@ -422,6 +426,8 @@ sub list {
     # information.
     
     my $fields = $self->generate_query_fields('c');
+    
+    $self->adjustCoordinates(\$fields);
     
     # If the operation is 'toprank', generate a query on the collection matrix
     # joined with whichever other tables are relevant
@@ -639,7 +645,7 @@ sub generateQueryFilters {
 	my $y1 = $self->{params}{latmin};
 	my $y2 = $self->{params}{latmax};
 	
-	# If the latitude coordinates do not fall between -180 and 180, adjust
+	# If the longitude coordinates do not fall between -180 and 180, adjust
 	# them so that they do.
 	
 	if ( $x1 < -180.0 )
@@ -787,6 +793,66 @@ sub generateQueryFilters {
     # Return the list
     
     return @filters;
+}
+
+
+# adjustCoordinates ( fields_ref )
+# 
+# Alter the output coordinate fields to match the longitude/latitude bounds.
+
+sub adjustCoordinates {
+
+    my ($self, $fields_ref) = @_;
+    
+    my $x1 = $self->{params}{lngmin};
+    my $x2 = $self->{params}{lngmax};
+    
+    # Adjust the output coordinates to fall within the range indicated by the
+    # input parameters.
+    
+    my $x1_offset = 0;
+    my $x2_offset = 0;
+    
+    if ( $x1 < -180.0 )
+    {
+	$x1_offset = -1 * floor( (180.0 - $x1) / 360.0) * 360.0;
+    }
+    
+    elsif ( $x1 > 180.0 )
+    {
+	$x1_offset = floor( ($x1 + 180.0) / 360.0 ) * 360.0;
+    }
+    
+    if ( $x2 < -180.0 )
+    {
+	$x2_offset = -1 * floor( (180.0 - $x2) / 360.0) * 360.0;
+    }
+    
+    elsif ( $x2 > 180.0 )
+    {
+	$x2_offset = floor( ($x2 + 180.0) / 360.0 ) * 360.0;
+    }
+    
+    # Now make sure we have an actual expression.
+    
+    $x1_offset = "+$x1_offset" unless $x1_offset < 0;
+    $x2_offset = "+$x2_offset" unless $x2_offset < 0;
+    
+    # If the longitude bounds do not cross the antimeridian, we just need to
+    # add the specified offset.
+    
+    if ( $x1_offset == $x2_offset )
+    {
+	$$fields_ref =~ s/([a-z]\.lng)/\1$x1_offset as lng/;
+    }
+    
+    # Otherwise, we have to use one offset for positive coords and the other
+    # for negative ones.
+    
+    else
+    {
+	$$fields_ref =~ s/([a-z]\.lng)/if(\1<0,\1$x2_offset,\1$x1_offset) as lng/;
+    }
 }
 
 
