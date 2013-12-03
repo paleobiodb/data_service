@@ -38,6 +38,8 @@ $OUTPUT{basic} =
 	doc => "The attribution (author and year) of this taxonomic name" },
     { rec => 'pubyr', dwc => 'namePublishedInYear', com => 'pby', show => 'attr', 
         doc => "The year in which this name was published" },
+    { rec => 'status', com => 'sta',
+        doc => "The taxonomic status of this name" },
     { rec => 'parent_no', dwc => 'parentNameUsageID', com => 'par', 
 	doc => "The identifier of the parent taxonomic concept, if any" },
     { rec => 'synonym_no', dwc => 'acceptedNameUsageID', pbdb => 'senior_no', com => 'snr', dedup => 'orig_no',
@@ -365,7 +367,7 @@ sub list {
     {
 	my $name = $valid->value('name');
 	
-	my $options = { order => 'size.desc' };
+	my $options = { %$options, order => 'size.desc' };
 	$options->{exact} = 1 if $valid->value('exact');
     	
 	@name_matches = $taxonomy->getTaxaByName($name, $options);

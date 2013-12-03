@@ -843,7 +843,7 @@ sub adjustCoordinates {
     
     if ( $x1_offset == $x2_offset )
     {
-	$$fields_ref =~ s/([a-z]\.lng)/\1$x1_offset as lng/;
+	$$fields_ref =~ s/([a-z]\.lng)/$1$x1_offset as lng/;
     }
     
     # Otherwise, we have to use one offset for positive coords and the other
@@ -851,7 +851,7 @@ sub adjustCoordinates {
     
     else
     {
-	$$fields_ref =~ s/([a-z]\.lng)/if(\1<0,\1$x2_offset,\1$x1_offset) as lng/;
+	$$fields_ref =~ s/([a-z]\.lng)/if($1<0,$1$x2_offset,$1$x1_offset) as lng/;
     }
 }
 
