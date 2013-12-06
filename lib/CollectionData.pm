@@ -800,14 +800,11 @@ sub generateMainFilters {
 	    $interval_specified = 1;
 	}
 	
-	else
-	{
-	    my $sql = "
+	my $sql = "
 		SELECT base_age, top_age FROM $INTERVAL_DATA
 		WHERE interval_no = $interval_no";
 	    
-	    ($max_age, $min_age) = $dbh->selectrow_array($sql);
-	}
+	($max_age, $min_age) = $dbh->selectrow_array($sql);
     }
     
     if ( $self->{params}{interval} )
@@ -820,11 +817,9 @@ sub generateMainFilters {
 	
 	($max_age, $min_age, $interval_no, $scale_no) = $dbh->selectrow_array($sql);
 	
-	if ( $op eq 'summary' and not $self->{params}{time_overlap} )
+	if ( $op eq 'summary' and not $self->{params}{time_overlap} and $scale_no )
 	{
 	    push @filters, "s.interval_no = $interval_no";
-	    $max_age = undef;
-	    $min_age = undef;
 	    $interval_specified = 1;
 	}
     }
@@ -847,7 +842,7 @@ sub generateMainFilters {
     {
 	$tables_ref->{c} = 1;
 	$interval_specified = 1;
-	if ( $self->{params}{time_strict} )
+	if ( $self->{params}{time_overlap} )
 	{
 	    push @filters, "c.early_age <= $max_age";
 	}
