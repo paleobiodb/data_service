@@ -644,6 +644,13 @@ sub generateMainFilters {
 	$tables_ref->{o} = 1;
     }
     
+    # If no matching taxa were found, add a filter clause that will return no results.
+    
+    elsif ( $taxon_name || $taxon_no )
+    {
+	push @filters, "o.orig_no = -1";
+    }
+    
     # ...and for excluded taxa 
     
     if ( @exclude_taxa and @taxa )
@@ -758,7 +765,7 @@ sub generateMainFilters {
 	
 	if ( $op eq 'summary' and not $self->{params}{time_overlap} )
 	{
-	    push @filters, "interval_no = $interval_no";
+	    push @filters, "s.interval_no = $interval_no";
 	    $interval_specified = 1;
 	}
 	
@@ -782,12 +789,12 @@ sub generateMainFilters {
 	
 	($max_age, $min_age, $interval_no, $scale_no) = $dbh->selectrow_array($sql);
 	
-	if ( $scale_no )
+	if ( $op eq 'summary' and not $self->{params}{time_overlap} )
 	{
+	    push @filters, "s.interval_no = $interval_no";
 	    $max_age = undef;
 	    $min_age = undef;
 	    $interval_specified = 1;
-	    push @filters, "interval_no = $interval_no";
 	}
     }
     
@@ -837,6 +844,8 @@ sub generateMainFilters {
 sub adjustCoordinates {
 
     my ($self, $fields_ref) = @_;
+    
+    return unless $self->{params}{lngmin};
     
     my $x1 = $self->{params}{lngmin};
     my $x2 = $self->{params}{lngmax};
