@@ -326,7 +326,8 @@ sub summary {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generateQueryFilters('summary', 's', $self->{select_tables});
+    my @filters = $self->generateMainFilters('summary', 's', $self->{select_tables});
+    push @filters, $self->generateCollFilters($self->{select_tables});
     
     push @filters, "s.access_level = 0";
     push @filters, "s.bin_level = $bin_level";
@@ -393,7 +394,7 @@ sub summary {
 # list ( )
 # 
 # Query the database for basic info about all collections satisfying the
-# conditions previously specified (i.e. by a call to setParameters).
+# conditions specified by the query parameters.
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
@@ -408,7 +409,8 @@ sub list {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generateQueryFilters('list', 'c', $self->{select_tables});
+    my @filters = $self->generateMainFilters('list', 'c', $self->{select_tables});
+    push @filters, $self->generateCollFilters($self->{select_tables});
     
     push @filters, "c.access_level = 0";
     
@@ -524,17 +526,22 @@ sub list {
 }
 
 
-# generateQueryFilters ( tables )
+# generateCollFilters ( tables_ref )
 # 
-# Generate a list of filter clauses that will be used to generate the
-# appropriate result set.
+# Generate a list of filter clauses that will be used to compute the
+# appropriate result set.  This routine handles only parameters that are specific
+# to collections.
+# 
+# Any additional tables that are needed will be added to the hash specified by
+# $tables_ref.  The parameter $op is the operation being carried out, while
+# $mt indicates the main table on which to join ('c' for coll_matrix, 's' for
+# coll_bins, 'o' for occ_matrix).
 
-sub generateQueryFilters {
+sub generateCollFilters {
 
-    my ($self, $op, $mt, $tables_ref) = @_;
+    my ($self, $tables_ref) = @_;
     
     my $dbh = $self->{dbh};
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
     
     # Check for parameter 'id'
@@ -545,6 +552,34 @@ sub generateQueryFilters {
 	my $id_list = join(',', @{$self->{params}{id}});
 	push @filters, "c.collection_no in ($id_list)";
     }
+    
+    elsif ( $self->{params}{id} )
+    {
+	push @filters, "c.collection_no = $self->{params}{id}";
+    }
+    
+    return @filters;
+}
+
+
+# generateMainFilters ( op, mt, tables_ref )
+# 
+# Generate a list of filter clauses that will be used to generate the
+# appropriate result set.  This routine handles parameters that are part of
+# the 'main_selector' ruleset, applicable to both collections and occurrences.
+# 
+# Any additional tables that are needed will be added to the hash specified by
+# $tables_ref.  The parameter $op is the operation being carried out, while
+# $mt indicates the main table on which to join ('c' for coll_matrix, 's' for
+# coll_bins, 'o' for occ_matrix).
+
+sub generateMainFilters {
+
+    my ($self, $op, $mt, $tables_ref) = @_;
+    
+    my $dbh = $self->{dbh};
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my @filters;
     
     # Check for parameter 'bin_id'
     
@@ -698,16 +733,15 @@ sub generateQueryFilters {
 	    
 	    # else
 	    # {
-		my $polygon1 = "'POLYGON(($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))'";
-		my $polygon2 = "'POLYGON((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1))'";
-		push @filters, "(mbrwithin($mt.loc, geomfromtext($polygon1)) or mbrwithin($mt.loc, geomfromtext($polygon2)))";
+		my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1)),((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
+		push @filters, "contains(geomfromtext($polygon), $mt.loc)";
 	    #}
 	}
     }
     
     if ( $self->{params}{loc} )
     {
-	push @filters, "st_within($mt.loc, geomfromtext($self->{params}{loc})";
+	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
     }
     
     # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'
@@ -879,7 +913,7 @@ sub generateJoinList {
     
     $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
 	if $tables->{o};
-    $join_list .= "JOIN taxon_trees as t ignore index (primary) using (orig_no)\n"
+    $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n" 
 	if $tables->{r};

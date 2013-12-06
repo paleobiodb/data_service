@@ -26,6 +26,7 @@ use ConfigData;
 use IntervalData;
 use TaxonData;
 use CollectionData;
+use OccurrenceData;
 use PersonData;
 
 
@@ -99,13 +100,16 @@ ruleset $dv '1.1:common_params' =>
 
 ruleset $dv '1.1:main_selector' =>
     "The following parameters can be used to specify which records to return.  Except as specified below, you can use these in combination:",
-    [param => 'clust_id', INT_VALUE, { list => ',' }],
+    [param => 'clust_id', POS_VALUE, { list => ',' }],
     "Return only records associated with the specified geographic clusters.",
     [param => 'taxon_name', \&TaxonData::validNameSpec],
     "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
     [param => 'taxon_id', POS_VALUE, { list => ','}],
     "Return only records associated with the specified taxonomic name(s), specified by numeric identifier.",
     "You may specify multiple identifiers, separated by commas.",
+    [param => 'taxon_actual', FLAG_VALUE],
+    "Return only records that were actually identified with the specified taxonomic name, not those which match due to synonymy",
+    "or other correspondences between taxa",
     [param => 'base_name', \&TaxonData::validNameSpec, { list => ',' }],
     "Return only records associated with the specified taxonomic name(s), or I<any of their children>.",
     "You may specify multiple names, separated by commas.",
@@ -161,8 +165,8 @@ ruleset $dv '1.1:coll_selector' =>
     "A comma-separated list of collection identifiers.";
 
 ruleset $dv '1.1:coll_display' =>
-    "The following parameter indicates which information should be returned about each resulting name:",
-    [param => 'show', ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem','all'), { list => ',' }],
+    "The following parameter indicates which information should be returned about each resulting collection:",
+    [param => 'show', ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
     "From the list given below.  It defaults to C<basic>.",
     [ignore => 'level'];
@@ -182,7 +186,7 @@ ruleset $dv '1.1/colls/list' =>
 
 ruleset $dv '1.1:summary_display' => 
     [param => 'level', POS_VALUE, { default => 1 }],
-    [param => 'show', ENUM_VALUE('ext','time','all'), { list => ',' }];
+    [param => 'show', ENUM_VALUE('ext','time'), { list => ',' }];
 
 ruleset $dv '1.1/colls/summary' => 
     [allow => '1.1:coll_selector'],
@@ -197,6 +201,36 @@ ruleset $dv '1.1:toprank_selector' =>
 ruleset $dv '1.1:colls/toprank' => 
     [require => '1.1:main_selector'],
     [require => '1.1:toprank_selector'],
+    [allow => '1.1:common_params'];
+
+ruleset $dv '1.1:occ_specifier' =>
+    [param => 'id', POS_VALUE, { alias => 'occ_id' }],
+    "The identifier of the occurrence you wish to retrieve";
+
+ruleset $dv '1.1:occ_selector' =>
+    [param => 'id', POS_VALUE, { list => ',', alias => 'occ_id' }],
+    "Return occurrences identified by the specified identifier(s).  The value of this parameter may be a comma-separated list.",
+    [param => 'coll_id', POS_VALUE, { list => ',' }],
+    "Return occurences associated with the specified collections.  The value of this parameter may be a single collection",
+    "identifier or a comma-separated list.";
+
+ruleset $dv '1.1:occ_display' =>
+    "The following parameter indicates which information should be returned about each resulting occurrence:",
+    [param => 'show', ENUM_VALUE('attr','ref','ent','geo','loc','coll','time','rem'), { list => ',' }],
+    "The value of this parameter should be a comma-separated list of section names drawn",
+    "From the list given below.  It defaults to C<basic>.",
+    [ignore => 'level'];
+
+ruleset $dv '1.1/occs/single' =>
+    [require => '1.1:occ_specifier', { error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" }],
+    [allow => '1.1:occ_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
+    [allow => '1.1:common_params'];
+
+ruleset $dv '1.1/occs/list' => 
+    [require_one => '1.1:occ_selector', '1.1:main_selector'],
+    [allow => '1.1:occ_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1:taxon_specifier' => 
@@ -372,14 +406,13 @@ define_route $ds '1.1/taxa/list' => { op => 'list' };
 
 # Collections
 
-define_directory $ds '1.1/colls' => { class => 'CollectionData' };
+define_directory $ds '1.1/colls' => { class => 'CollectionData',
+				      output => 'basic' };
 
 define_route $ds '1.1/colls/single' => { op => 'get', 
-					 output => 'basic',
 				         docresp => 'bin,ref,sref,loc,time,taxa'};
 
 define_route $ds '1.1/colls/list' => { op => 'list', 
-				       output => 'basic',
 				       docresp => 'bin,ref,sref,loc,time,taxa' };
 
 define_route $ds '1.1/colls/summary' => { op => 'summary', 
@@ -388,7 +421,8 @@ define_route $ds '1.1/colls/summary' => { op => 'summary',
 
 # Occurrences
 
-define_directory $ds '1.1/occs' => { class => 'OccurrenceData' };
+define_directory $ds '1.1/occs' => { class => 'OccurrenceData',
+				     output => 'basic' };
 
 define_route $ds '1.1/occs/single' => { op => 'get' };
 

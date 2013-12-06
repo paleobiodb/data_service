@@ -59,10 +59,10 @@ sub buildCollectionTables {
     
     my @bin_reso;
     my @bin_tables;
-    #my @coll_tables = ($COLL_MATRIX_WORK => $COLL_MATRIX);
+    
     my $bin_lines = '';
-    #my $parent_lines = '';
-    #my $next_line = '';
+    my $parent_lines = '';
+    my $next_line = '';
     my $level = 0;
     
     if ( ref $bin_list eq 'ARRAY' )
@@ -75,8 +75,8 @@ sub buildCollectionTables {
 	    push @bin_reso, $bin->{resolution};
 	    push @BIN_LEVEL, $bin;
 	    $bin_lines .= "bin_id_$level int unsigned not null,\n";
-	    #$parent_lines .= $next_line;
-	    #$next_line = "bin_id_$level int unsigned not null,\n";
+	    $next_line = "bin_id_$level int unsigned not null,\n";
+	    $parent_lines .= $next_line;
 	}
     }
     
@@ -247,6 +247,7 @@ sub buildCollectionTables {
     $dbh->do("CREATE TABLE $COLL_BINS_WORK (
 		bin_id int unsigned not null,
 		bin_level tinyint unsigned,
+		$bin_lines
 		interval_no int unsigned not null,
 		n_colls int unsigned,
 		n_occs int unsigned,
