@@ -716,7 +716,7 @@ sub generateMainFilters {
 	    # else
 	    # {
 		my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
-		push @filters, "mbrwithin($mt.loc, geomfromtext($polygon))";
+		push @filters, "contains(geomfromtext($polygon), $mt.loc)";
 	    # }
 	}
 	
