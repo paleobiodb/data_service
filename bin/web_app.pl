@@ -410,10 +410,10 @@ define_directory $ds '1.1/colls' => { class => 'CollectionData',
 				      output => 'basic' };
 
 define_route $ds '1.1/colls/single' => { op => 'get', 
-				         docresp => 'bin,ref,sref,loc,time,taxa'};
+				         docresp => 'bin,ref,sref,loc,time,taxa,ent'};
 
 define_route $ds '1.1/colls/list' => { op => 'list', 
-				       docresp => 'bin,ref,sref,loc,time,taxa' };
+				       docresp => 'bin,ref,sref,loc,time,taxa,ent' };
 
 define_route $ds '1.1/colls/summary' => { op => 'summary', 
 					  output => 'summary',
@@ -424,9 +424,11 @@ define_route $ds '1.1/colls/summary' => { op => 'summary',
 define_directory $ds '1.1/occs' => { class => 'OccurrenceData',
 				     output => 'basic' };
 
-define_route $ds '1.1/occs/single' => { op => 'get' };
+define_route $ds '1.1/occs/single' => { op => 'get',
+				        docresp => 'basic,coll,ref,geo,loc,time,ent' };
 
-define_route $ds '1.1/occs/list' => { op => 'list' };
+define_route $ds '1.1/occs/list' => { op => 'list',
+				      docresp => 'basic,coll,ref,geo,loc,time,ent' };
 
 # People
 

@@ -21,6 +21,7 @@ use POSIX qw(floor ceil);
 
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
+our ($MAX_BIN_LEVEL) = 0;
 
 $SELECT{basic} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, ei.interval_name as early_int, li.interval_name as late_int, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
@@ -91,6 +92,7 @@ $OUTPUT{bin} =
    [
     { rec => 'bin_id_1', com => 'lv1', doc => "The identifier of the level-1 cluster in which this collection is located" },
     { rec => 'bin_id_2', com => 'lv2', doc => "The identifier of the level-2 cluster in which this collection is located" },
+    { rec => 'bin_id_3', com => 'lv3', doc => "The identifier of the level-3 cluster in which this collection is located" },
    ];
 
 $SELECT{attr} = "r.author1init as a_ai1, r.author1last as a_al1, r.author2init as a_ai2, r.author2last as a_al2, r.otherauthors as a_oa, r.pubyr as a_pubyr";
@@ -118,7 +120,7 @@ $OUTPUT{ref} =
 	doc => "The reference(s) associated with this collection (as formatted text)" },
    ];
 
-$SELECT{loc} = "cc.country, cc.state, cc.county";
+$SELECT{loc} = "cc.country, cc.state, cc.county, cc.geogscale";
 
 $OUTPUT{loc} = 
    [
@@ -128,6 +130,8 @@ $OUTPUT{loc} =
 	doc => "The state or province in which this collection is located [not available for all collections]" },
     { rec => 'county', com => 'cny',
 	doc => "The county in which this collection is located [not available for all collections]" },
+    { rec => 'geogscale', com => 'gsc',
+        doc => "The geographic scale of this collection." },
    ];
 
 $SELECT{ext} = "s.lng_min, lng_max, s.lat_min, s.lat_max, s.std_dev";
@@ -220,6 +224,7 @@ sub configure {
 	
 	$SELECT{get_bin} = $bin_string if $bin_string ne '';
 	$SELECT{list_bin} = $bin_string if $bin_string ne '';
+	$MAX_BIN_LEVEL = $bin_level;
     }
 }
 
@@ -581,22 +586,48 @@ sub generateMainFilters {
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
     
-    # Check for parameter 'bin_id'
+    # Check for parameter 'clust_id'
     
-    if ( ref $self->{params}{bin_id} eq 'ARRAY' )
+    if ( ref $self->{params}{clust_id} eq 'ARRAY' )
     {
-	my @bins = grep { $_ > 0 } @{$self->{params}{bin_id}};
-	my $first_bin = $bins[0];
-	my $list = join(',', @bins);
+	# If there aren't any bins, include a filter that will return no
+	# results. 
 	
-	if ( $first_bin >= 200000000 )
+	if ( $MAX_BIN_LEVEL == 0 )
 	{
-	    push @filters, "c.bin_id_2 in ($list)";
+	    push @filters, "c.collection_no = 0";
 	}
 	
-	elsif ( $first_bin >= 1000000 )
+	elsif ( $op eq 'summary' )
 	{
-	    push @filters, "c.bin_id_1 in ($list)";
+	    my @clusters = grep { $_ > 0 } @{$self->{params}{clust_id}};
+	    my $list = join(q{,}, @clusters);
+	    push @filters, "s.bin_id in ($list)";
+	}
+	
+	else
+	{
+	    my %clusters;
+	    my @clust_filters;
+	    
+	    foreach my $cl (@{$self->{params}{clust_id}})
+	    {
+		my $cl1 = substr($cl, 0, 1);
+		push @{$clusters{$cl1}}, $cl if $cl1 =~ /[0-9]/;
+	    }
+	    
+	    foreach my $k (keys %clusters)
+	    {
+		next unless @{$clusters{$k}};
+		my $list = join(q{,}, @{$clusters{$k}});
+		push @clust_filters, "c.bin_id_$k in ($list)";
+	    }
+	    
+	    # If no valid filter was generated, then add one that will return
+	    # 0 results.
+	    
+	    push @clust_filters, "c.collection_no = 0" unless @clust_filters;
+	    push @filters, @clust_filters;
 	}
     }
     
