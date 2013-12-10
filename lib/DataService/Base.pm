@@ -182,6 +182,7 @@ sub set_response {
 	{
 	    die "Error: bad output specification in '$section', must be a hash" unless reftype $f && reftype $f eq 'HASH';
 	    next if $f->{show} and not $self->{show}{$f->{show}};
+	    next if $f->{no_show} and $self->{show}{$f->{show}};
 	    next if $vocab eq 'dwc' and not exists $f->{dwc};
 	    next if $vocab eq 'com' and not exists $f->{com};
 	    next if $self->{output_format} eq 'json' and $f->{no_json};
