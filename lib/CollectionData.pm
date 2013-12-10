@@ -13,7 +13,7 @@ use base 'DataService::Base';
 
 use PBDBData;
 use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
-use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
+use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -38,7 +38,8 @@ $OUTPUT{basic} =
 	doc => "A positive integer that uniquely identifies the collection"},
     { rec => 'record_type', com => 'typ', com_value => 'col', dwc_value => 'Occurrence', value => 'collection',
         doc => "The type of this object: 'col' for a collection" },
-    { rec => 'formation', com => 'fmm', doc => "The formation in which this collection was found" },
+    { rec => 'formation', com => 'fmm', no_show => 'strat',
+      doc => "The formation in which this collection was found" },
     { rec => 'lng', dwc => 'decimalLongitude', com => 'lng',
 	doc => "The longitude at which the collection is located (in degrees)" },
     { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
@@ -163,16 +164,24 @@ $OUTPUT{time} =
 	doc => "The end of a range of intervals from the selected timescale that most closely brackets the time range associated with this collection or cluster (with C<early_int_no>)" },
    ];
 
-$SELECT{ent} = "\$mt.authorizer_no, ppa.name as authorizer, \$mt.enterer_no, ppe.name as enterer";
+$SELECT{ent} = "\$mt.authorizer_no, ppa.name as authorizer, \$mt.enterer_no, ppe.name as enterer, \$mt.modifier_no, ppm.name as modifier";
 
-$TABLES{ent} = ['ppa', 'ppe'];
+$TABLES{ent} = ['ppa', 'ppe', 'ppm'];
 
 $OUTPUT{ent} = 
    [
     { rec => 'authorizer_no', com => 'ath', 
-      doc => 'The identifier of the database member who authorized the entry of this record.' },
-    { rec => 'enterer_no', com => 'ent',
-      doc => 'The identifier of the database member who entered this record.' },
+      doc => 'The identifier of the database contributor who authorized the entry of this record.' },
+    { rec => 'authorizer', vocab => 'pbdb', 
+      doc => 'The name of the database contributor who authorized the entry of this record.' },
+    { rec => 'enterer_no', com => 'ent', dedup => 'authorizer_no',
+      doc => 'The identifier of the database contributor who entered this record.' },
+    { rec => 'enterer', vocab => 'pbdb', 
+      doc => 'The name of the database contributor who entered this record.' },
+    { rec => 'modifier_no', com => 'mfr', dedup => 'authorizer_no',
+      doc => 'The identifier of the database contributor who last modified this record.' },
+    { rec => 'modifier', vocab => 'pbdb', 
+      doc => 'The name of the database contributor who last modified this record.' },
    ];
 
 $OUTPUT{taxa} = 
@@ -194,10 +203,46 @@ $OUTPUT{taxa} =
     }
    ];
 
+$SELECT{crmod} = "o.created, o.modified";
+
+$OUTPUT{crmod} = 
+   [
+    { rec => 'created', com => 'dcr',
+      doc => "The date and time at which this record was created." },
+    { rec => 'modified', com => 'dmd',
+      doc => "The date and time at which this record was last modified." },
+   ];
+
 $OUTPUT{rem} = 
    [
     { rec => 'collection_aka', dwc => 'collectionRemarks', com => 'crm', xml_list => '; ',
 	doc => "Any additional remarks that were entered about the colection"},
+   ];
+
+$SELECT{strat} = "cc.member, cc.stratscale, cc.stratcomments";
+
+$OUTPUT{strat} = 
+   [
+    { rec => 'formation', com => 'frm',
+      doc => "The formation in which the collection was found" },
+    { rec => 'member', com => 'mmb', 
+      doc => "The member in which the collection was found" },
+    { rec => 'stratscale', com => 'ssc',
+      doc => "The stratigraphic scale of the collection" },
+    { rec => 'stratcomments', com => 'scm',
+      doc => "Stratigraphic comments/notes about the collection, if any" },
+   ];
+
+$SELECT{stratext} = "cc.zone, cc.geological_group, cc.localsection, cc.localbed, cc.localorder, cc.regionalsection, cc.regionalbed, cc.regionalorder";
+
+$OUTPUT{stratext} = 
+   [
+    { rec => 'zone', com => 'zon', 
+      doc => "The zone in which the collection was found" },
+    { rec => 'geological_group', com => 'ggr',
+      doc => "The geological group in which the collection was found" },
+    { rec => 'localsection', com => 'lsc',
+      doc => "The local section in which the collection was found" },
    ];
 
 
@@ -585,6 +630,7 @@ sub generateMainFilters {
     my $dbh = $self->{dbh};
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
+    my $non_geo_filter;
     
     # Check for parameter 'clust_id'
     
@@ -666,6 +712,7 @@ sub generateMainFilters {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{t} = 1;
+	$non_geo_filter = 1;
     }
     
     elsif ( @taxa )
@@ -673,6 +720,7 @@ sub generateMainFilters {
 	my $taxon_list = join ',', map { $_->{orig_no} } @taxa;
 	push @filters, "o.orig_no in ($taxon_list)";
 	$tables_ref->{o} = 1;
+	$non_geo_filter = 1;
     }
     
     # If no matching taxa were found, add a filter clause that will return no results.
@@ -699,6 +747,7 @@ sub generateMainFilters {
 	    my $person_string = join(q{,}, @{$self->{params}{person_id}} );
 	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
 	    $tables_ref->{c} = 1;
+	    $non_geo_filter = 1;
 	}
 	
 	else
@@ -706,6 +755,7 @@ sub generateMainFilters {
 	    my $person_string = $self->{params}{person_id};
 	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
 	    $tables_ref->{c} = 1;
+	    $non_geo_filter = 1;
 	}
     }
     
@@ -782,79 +832,179 @@ sub generateMainFilters {
 	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
     }
     
-    # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'
+    # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
+    # If no time rule was given, it defaults to 'buffer'.
     
-    my $min_age = $self->{params}{min_ma};
-    my $max_age = $self->{params}{max_ma};
-    my $interval_no;
-    my $scale_no;
-    my $interval_specified = 0;
+    my $time_rule = $self->{params}{timerule} || 'buffer';
+    my $summary_interval = 0;
+    my ($early_age, $late_age, $early_bound, $late_bound);
     
-    if ( $self->{params}{interval_id} )
+    # If an interval was specified, use that.
+    
+    if ( $self->{params}{interval_id} or $self->{params}{interval} )
     {
-	my $interval_no = $self->{params}{interval_id} + 0;
+	my ($interval_no, $scale_no, $level);
 	
-	if ( $op eq 'summary' and not $self->{params}{time_overlap} )
+	# First figure out the parameters of the specified interval
+	
+	if ( $self->{params}{interval_id} )
 	{
-	    push @filters, "s.interval_no = $interval_no";
-	    $interval_specified = 1;
+	    $interval_no = $self->{params}{interval_id} + 0;
+	    
+	    my $sql = "
+		SELECT early_age, late_age, scale_no, level, early_bound, late_bound
+		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
+			JOIN $INTERVAL_BUFFER using (interval_no)
+		WHERE interval_no = $interval_no ORDER BY scale_no LIMIT 1";
+	    
+	    ($early_age, $late_age, $scale_no, $level, $early_bound, $late_bound) = $dbh->selectrow_array($sql);
 	}
 	
-	my $sql = "
-		SELECT base_age, top_age FROM $INTERVAL_DATA
-		WHERE interval_no = $interval_no";
+	else
+	{
+	    my $quoted_name = $dbh->quote($self->{params}{interval});
 	    
-	($max_age, $min_age) = $dbh->selectrow_array($sql);
-    }
-    
-    if ( $self->{params}{interval} )
-    {
-	my $quoted_name = $dbh->quote($self->{params}{interval});
-	
-	my $sql = "SELECT base_age, top_age, interval_no, scale_no
+	    my $sql = "SELECT early_age, late_age, interval_no, scale_no, early_bound, late_bound
 		   FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
+			JOIN $INTERVAL_BUFFER using (interval_no)
 		   WHERE interval_name like $quoted_name ORDER BY scale_no";
 	
-	($max_age, $min_age, $interval_no, $scale_no) = $dbh->selectrow_array($sql);
+	    ($early_age, $late_age, $interval_no, $scale_no, $early_bound, $late_bound) = $dbh->selectrow_array($sql);
+	}
 	
-	if ( $op eq 'summary' and not $self->{params}{time_overlap} and $scale_no )
+	# If the requestor wants to override the time bounds, do that.
+	
+	if ( defined $self->{params}{earlybuffer} )
 	{
-	    push @filters, "s.interval_no = $interval_no";
-	    $interval_specified = 1;
+	    $early_bound = $early_age + $self->{params}{earlybuffer};
+	}
+	
+	if ( defined $self->{params}{latebuffer} )
+	{
+	    $late_bound = $late_age - $self->{params}{latebuffer};
+	    $late_bound = 0 if $late_bound < 0;
+	}
+	
+	# If we are querying for summary clusters, we can use the cluster
+	# table row corresponding to that interval number.  Unless we are
+	# using the 'overlap' rule, in which case we need the unrestricted
+	# cluster table row (the one for interval_no = 0).
+	
+	if ( $op eq 'summary' and $time_rule ne 'overlap' )
+	{
+	    $summary_interval = $interval_no;
 	}
     }
     
-    if ( defined $min_age and $min_age > 0 )
+    # Otherwise, if a range of years was specified, use that.
+    
+    elsif ( defined $self->{params}{max_ma} and defined $self->{params}{min_ma} )
     {
-	$tables_ref->{c} = 1;
-	$interval_specified = 1;
-	if ( $self->{params}{time_overlap} )
+	my $range = $self->{params}{max_ma} - $self->{params}{min_ma};
+	my $buffer = $range * 0.5;
+	
+	$early_age = $self->{params}{max_ma} + 0;
+	$early_bound = defined $self->{params}{earlybuffer} ? 
+		$early_age + $self->{params}{earlybuffer} :
+		    $early_age + $buffer;
+	
+	$late_age = $self->{params}{min_ma} + 0;
+	$late_bound = defined $self->{params}{latebuffer} ?
+	    $late_age - $self->{params}{latebuffer} :
+		$late_age - $buffer;
+	
+	$late_bound = 0 if $late_bound < 0;
+    }
+    
+    # Otherwise, handle either a min or max filter alone.
+    
+    else
+    {
+	if ( defined $self->{params}{max_ma} )
 	{
-	    push @filters, "c.early_age > $min_age";
+	    $early_age = $self->{params}{max_ma} + 0;
+	    $early_bound = $early_age;
 	}
-	else
+	
+	if ( defined $self->{params}{min_ma} )
 	{
-	    push @filters, "c.late_age >= $min_age";
+	    $late_age = $self->{params}{min_ma} + 0;
+	    $late_bound = $late_age;
 	}
     }
     
-    if ( defined $max_age and $max_age > 0 )
+    # Now, if we are summarizing then add the appropriate interval filter.
+    
+    if ( $op eq 'summary' )
     {
-	$tables_ref->{c} = 1;
-	$interval_specified = 1;
-	if ( $self->{params}{time_overlap} )
-	{
-	    push @filters, "c.early_age <= $max_age";
-	}
-	else
-	{
-	    push @filters, "c.late_age < $max_age";
-	}
+	push @filters, "s.interval_no = $summary_interval";
     }
     
-    if ( $op eq 'summary' and not $interval_specified )
+    # Then, if a time filter was specified and we need one, apply it.  If we
+    # are were given a summary interval and no non-geographic filters were
+    # specified, then we don't need one because the necessary filtering has
+    # already been done by selecting the appropriate interval_no in the summary table.
+    
+    if ( defined $early_age or defined $late_age )
     {
-	push @filters, "s.interval_no = 0";
+	unless ( $op eq 'summary' and not $non_geo_filter and $time_rule eq 'buffer' )
+	{
+	    $tables_ref->{c} = 1;
+	    
+	    # The exact filter we use will depend upon the time rule that was
+	    # selected.
+	    
+	    if ( $time_rule eq 'contain' )
+	    {
+		if ( defined $late_age and $late_age > 0 )
+		{
+		    push @filters, "c.late_age >= $late_age";
+		}
+		
+		if ( defined $early_age and $early_age > 0 )
+		{
+		    push @filters, "c.early_age <= $early_age";
+		}
+	    }
+	    
+	    elsif ( $time_rule eq 'overlap' )
+	    {
+		if ( defined $late_age and $late_age > 0 )
+		{
+		    push @filters, "c.early_age > $late_age";
+		}
+		
+		if ( defined $early_age and $early_age > 0 )
+		{
+		    push @filters, "c.late_age < $early_age";
+		}
+	    }
+	    
+	    else # $time_rule eq 'buffer'
+	    {
+		if ( defined $late_age and defined $early_age and 
+		     defined $late_bound and defined $early_bound )
+		{
+		    push @filters, "c.early_age <= $early_bound and c.late_age >= $late_bound";
+		    push @filters, "(c.early_age < $early_bound or c.late_age > $late_bound)";
+		    push @filters, "c.early_age > $late_age";
+		    push @filters, "c.late_age < $early_age";
+		}
+		
+		else
+		{
+		    if ( defined $late_age and defined $late_bound )
+		    {
+			push @filters, "c.late_age >= $late_bound and c.early_age > $late_age";
+		    }
+		    
+		    if ( defined $early_age and defined $early_bound )
+		    {
+			push @filters, "c.early_age <= $early_bound and c.late_age < $early_age";
+		    }
+		}
+	    }
+	}
     }
     
     # Return the list
@@ -956,6 +1106,8 @@ sub generateJoinList {
 	if $tables->{ppa};
     $join_list .= "LEFT JOIN person as ppe on ppe.person_no = c.enterer_no\n"
 	if $tables->{ppe};
+    $join_list .= "LEFT JOIN person as ppm on ppm.person_no = c.modifier_no\n"
+	if $tables->{ppm};
     $join_list .= "LEFT JOIN $INTERVAL_MAP as im on im.early_age = $mt.early_age and im.late_age = $mt.late_age and scale_no = 1\n"
 	if $tables->{im};
     

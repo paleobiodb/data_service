@@ -87,17 +87,17 @@ sub buildDiversityTables {
     	SELECT i.interval_no, m.occurrence_no,
 	       t.species_no, t.genus_no, t.ints_no,
 	       -- sample prob
-    	       if(m.base_age <= i.base_age and m.top_age >= i.top_age, 1.0,
-    	       if(m.base_age <= i.base_age, (m.base_age-i.top_age)/(m.base_age-m.top_age),
-    	       if(m.top_age >= i.top_age, (i.base_age-m.top_age)/(m.base_age-m.top_age),
-    					  (i.base_age-i.top_age)/(m.base_age-m.top_age)))) as prob,
+    	       if(m.early_age <= i.early_age and m.late_age >= i.late_age, 1.0,
+    	       if(m.early_age <= i.early_age, (m.early_age-i.late_age)/(m.early_age-m.late_age),
+    	       if(m.late_age >= i.late_age, (i.early_age-m.late_age)/(m.early_age-m.late_age),
+    					  (i.early_age-i.late_age)/(m.early_age-m.late_age)))) as prob,
 	       -- early prob
-	       if(m.top_age >= i.top_age, 1.0, 
-			(m.base_age-i.top_age)/(m.base_age-m.top_age)) as early_prob,
+	       if(m.late_age >= i.late_age, 1.0, 
+			(m.early_age-i.late_age)/(m.early_age-m.late_age)) as early_prob,
 	       -- late prob
-	       if(m.base_age <= i.base_age, 1.0,
-			(i.base_age-m.top_age)/(m.base_age-m.top_age))
-    	FROM occ_matrix as m JOIN $INTERVAL_DATA as i on m.top_age < i.base_age and m.base_age > i.top_age
+	       if(m.early_age <= i.early_age, 1.0,
+			(i.early_age-m.late_age)/(m.early_age-m.late_age))
+    	FROM occ_matrix as m JOIN $INTERVAL_DATA as i on m.late_age < i.early_age and m.early_age > i.late_age
 		JOIN $SCALE_MAP as sm using (interval_no)
 		JOIN $SCALE_LEVEL_DATA as s using (scale_no, level)
     		JOIN $TREE_TABLE as t using (orig_no)
@@ -197,19 +197,19 @@ sub buildDiversityTables {
 				     early_age_05, late_age_05,
 				     early_occ_no, late_occ_no)
 	SELECT sm.scale_no, sm.level, genus_no, $TAXON_RANK{genus},
-	       if(prob >= 1.0, i.base_age, null), if(early_prob >= 1.0, i.top_age, null),
-	       if(prob >= 0.8, i.base_age, null), if(early_prob >= 0.8, i.top_age, null),
-	       i.base_age, i.top_age,
+	       if(prob >= 1.0, i.early_age, null), if(early_prob >= 1.0, i.late_age, null),
+	       if(prob >= 0.8, i.early_age, null), if(early_prob >= 0.8, i.late_age, null),
+	       i.early_age, i.late_age,
 	       occurrence_no, occurrence_no
 	FROM $DIV_RAW_WORK as w JOIN $INTERVAL_DATA as i using (interval_no) JOIN $SCALE_DATA as sm using (interval_no)
 	WHERE genus_no > 0 and (prob >= 0.5 or early_prob >= 0.8 or late_prob >= 0.5)
-	ORDER BY i.base_age desc
+	ORDER BY i.early_age desc
 	ON DUPLICATE KEY UPDATE
-		early_age = if(w.early_prob >= 1.0 and early_age is null, i.base_age, early_age),
-		late_age = if(w.late_prob >= 1.0, i.top_age, late_age),
-		early_age_08 = if(w.early_prob >= 0.8 and early_age_08 is null, i.base_age, early_age_08),
-		late_age_08 = if(w.late_prob >= 0.8, i.top_age, late_age_08),
-		late_age_05 = if(w.late_prob >= 0.5, i.top_age, late_age_05),
+		early_age = if(w.early_prob >= 1.0 and early_age is null, i.early_age, early_age),
+		late_age = if(w.late_prob >= 1.0, i.late_age, late_age),
+		early_age_08 = if(w.early_prob >= 0.8 and early_age_08 is null, i.early_age, early_age_08),
+		late_age_08 = if(w.late_prob >= 0.8, i.late_age, late_age_08),
+		late_age_05 = if(w.late_prob >= 0.5, i.late_age, late_age_05),
 		late_occ_no = w.occurrence_no");
     
     logMessage(2, "    found $result rows.");

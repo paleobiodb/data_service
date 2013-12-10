@@ -148,10 +148,23 @@ ruleset $dv '1.1:main_selector' =>
     "Return only records whose temporal locality falls within the given geologic time interval, specified by numeric identifier.",
     [param => 'interval', ANY_VALUE],
     "Return only records whose temporal locality falls within the named geologic time interval.",
-    [at_most_one => 'interval_id', 'interval'],
-    [optional => 'time_overlap', FLAG_VALUE],
-    "If this parameter is specified, then return all records whose temporal locality overlaps the specified time interval.",
-    "Otherwise, only records whose temporal locality falls strictly within the specified interval will be returned";
+    [at_most_one => 'interval_id', 'interval', 'min_ma'],
+    [at_most_one => 'interval_id', 'interval', 'max_ma'],
+    [optional => 'timerule', ENUM_VALUE('contain','overlap','buffer')],
+    "Resolve temporal locality according to the specified rule:", "=over 4",
+    "=item contain", "Return only collections whose temporal locality is strictly contained in the specified time range.",
+    "=item overlap", "Return only collections whose temporal locality overlaps the specified time range.",
+    "=item buffer", "Return only collections whose temporal locality overlaps the specified range and is contained",
+    "within the specified time range plus a buffer on either side.  If an interval from one of the timescales known to the database is",
+    "given, then the default buffer will be the intervals immediately preceding and following at the same level.",
+    "Otherwise, the buffer will default to 10 million years on either side.  This can be overridden using the parameters",
+    "C<earlybuffer> and C<latebuffer>.  This is the default value for this option.",
+    [optional => 'earlybuffer', POS_VALUE],
+    "Override the default buffer period for the beginning of the time range when resolving temporal locality.",
+    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
+    [optional => 'latebuffer', POS_VALUE],
+    "Override the default buffer period for the end of the time range when resolving temporal locality.",
+    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).";
 
 ruleset $dv '1.1:coll_specifier' =>
     [param => 'id', POS_VALUE, { alias => 'coll_id' }],
@@ -166,7 +179,7 @@ ruleset $dv '1.1:coll_selector' =>
 
 ruleset $dv '1.1:coll_display' =>
     "The following parameter indicates which information should be returned about each resulting collection:",
-    [param => 'show', ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem'), { list => ',' }],
+    [param => 'show', ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem','crmod'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
     "From the list given below.  It defaults to C<basic>.",
     [ignore => 'level'];
@@ -216,7 +229,7 @@ ruleset $dv '1.1:occ_selector' =>
 
 ruleset $dv '1.1:occ_display' =>
     "The following parameter indicates which information should be returned about each resulting occurrence:",
-    [param => 'show', ENUM_VALUE('attr','ref','ent','geo','loc','coll','time','rem'), { list => ',' }],
+    [param => 'show', ENUM_VALUE('attr','ref','ent','geo','loc','coll','time','rem','crmod'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
     "From the list given below.  It defaults to C<basic>.",
     [ignore => 'level'];
@@ -410,10 +423,10 @@ define_directory $ds '1.1/colls' => { class => 'CollectionData',
 				      output => 'basic' };
 
 define_route $ds '1.1/colls/single' => { op => 'get', 
-				         docresp => 'bin,ref,sref,loc,time,taxa,ent'};
+				         docresp => 'bin,ref,sref,loc,time,taxa,ent,crmod'};
 
 define_route $ds '1.1/colls/list' => { op => 'list', 
-				       docresp => 'bin,ref,sref,loc,time,taxa,ent' };
+				       docresp => 'bin,ref,sref,loc,time,taxa,ent,crmod' };
 
 define_route $ds '1.1/colls/summary' => { op => 'summary', 
 					  output => 'summary',
@@ -425,10 +438,10 @@ define_directory $ds '1.1/occs' => { class => 'OccurrenceData',
 				     output => 'basic' };
 
 define_route $ds '1.1/occs/single' => { op => 'get',
-				        docresp => 'basic,coll,ref,geo,loc,time,ent' };
+				        docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' };
 
 define_route $ds '1.1/occs/list' => { op => 'list',
-				      docresp => 'basic,coll,ref,geo,loc,time,ent' };
+				      docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' };
 
 # People
 

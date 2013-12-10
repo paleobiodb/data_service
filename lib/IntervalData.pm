@@ -20,7 +20,7 @@ use IntervalTables qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE
 our (%SELECT, %OUTPUT, %PROC, %TABLES);
 
 $SELECT{basic} =
-    "i.interval_no, i.interval_name, i.abbrev, sm.scale_no, sm.level, sm.parent_no, sm.color, i.base_age, i.top_age, i.reference_no";
+    "i.interval_no, i.interval_name, i.abbrev, sm.scale_no, sm.level, sm.parent_no, sm.color, i.early_age, i.late_age, i.reference_no";
 
 $OUTPUT{basic} =
    [
@@ -40,9 +40,9 @@ $OUTPUT{basic} =
         doc => "The identifier of the parent interval" },
     { rec => 'color', com => 'col',
         doc => "The standard color for displaying this interval" },
-    { rec => 'top_age', com => 'lag',
+    { rec => 'late_age', com => 'lag',
         doc => "The late age boundary of this interval (in Ma)" },
-    { rec => 'base_age', com => 'eag',
+    { rec => 'early_age', com => 'eag',
         doc => "The early age boundary of this interval (in Ma)" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
         doc => "The identifier(s) of the references from which this data was entered" },
@@ -163,13 +163,13 @@ sub list {
     if ( exists $self->{params}{min_ma} )
     {
 	my $min = $self->{params}{min_ma};
-	push @filters, "i.top_age >= $min";
+	push @filters, "i.late_age >= $min";
     }
     
     if ( exists $self->{params}{max_ma} )
     {
 	my $max = $self->{params}{max_ma};
-	push @filters, "i.base_age <= $max";
+	push @filters, "i.early_age <= $max";
     }
     
     push @filters, "1=1" unless @filters;
@@ -177,8 +177,8 @@ sub list {
     # Get the results in the specified order
     
     my $order_expr = $self->{params}{order} eq 'younger' ?
-	"ORDER BY sm.scale_no, sm.level, i.top_age" :
-	    "ORDER BY sm.scale_no, sm.level, i.base_age desc";
+	"ORDER BY sm.scale_no, sm.level, i.late_age" :
+	    "ORDER BY sm.scale_no, sm.level, i.early_age desc";
     
     # Determine which fields and tables are needed to display the requested
     # information.

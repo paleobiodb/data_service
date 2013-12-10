@@ -16,16 +16,14 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
+use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use ConsoleLog qw(logMessage);
 
 our $COLL_MATRIX = "coll_matrix";
 our $COLL_BINS = "coll_bins";
-our $COLL_INT_BINS = "coll_int_bins";
 
 our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
-our $COLL_INTS_WORK = "cin";
 
 our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
@@ -148,9 +146,9 @@ sub buildCollectionTables {
     $sql = "UPDATE $COLL_MATRIX_WORK as m
 		JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
 		JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
-	    SET m.early_age = ei.base_age,
-		m.late_age = li.top_age
-	    WHERE ei.base_age >= li.base_age";
+	    SET m.early_age = ei.early_age,
+		m.late_age = li.late_age
+	    WHERE ei.early_age >= li.early_age";
     
     $result = $dbh->do($sql);
     
@@ -160,9 +158,9 @@ sub buildCollectionTables {
 		JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
 		JOIN $INTERVAL_DATA as li on li.interval_no = m.late_int_no
 	    SET m.early_int_no = (\@tmp := early_int_no), early_int_no = late_int_no, late_int_no = \@tmp,
-		m.early_age = li.base_age,
-		m.late_age = ei.top_age
-	    WHERE ei.base_age < li.base_age";
+		m.early_age = li.early_age,
+		m.late_age = ei.late_age
+	    WHERE ei.early_age < li.early_age";
     
     $result = $dbh->do($sql);
     
@@ -305,7 +303,8 @@ sub buildCollectionTables {
 			 lng_min, lng_max, lat_min, lat_max, std_dev,
 			 access_level)
 		SELECT bin_id_$level, $level, interval_no, count(*), sum(n_occs),
-		       max(early_age), min(late_age),
+		       if(max(m.early_age) > i.early_age, i.early_age, max(m.early_age)),
+		       if(min(m.late_age) < i.late_age, i.late_age, min(m.late_age)),
 		       avg(lng), avg(lat),
 		       round(min(lng),5) as lng_min, round(max(lng),5) as lng_max,
 		       round(min(lat),5) as lat_min, round(max(lat),5) as lat_max,
@@ -313,7 +312,10 @@ sub buildCollectionTables {
 		       min(access_level)
 		FROM $COLL_MATRIX_WORK as m JOIN $INTERVAL_DATA as i
 			JOIN $SCALE_MAP as s using (interval_no)
-		WHERE m.early_age <= i.base_age and m.late_age >= i.top_age
+			JOIN $INTERVAL_BUFFER as ib using (interval_no)
+		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
+			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
+			and (m.early_age > i.late_age or m.late_age < i.early_age)
 		GROUP BY interval_no, bin_id_$level";
 	
 	$result = $dbh->do($sql);

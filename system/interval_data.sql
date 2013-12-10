@@ -26,13 +26,13 @@ CREATE TABLE `interval_data` (
   `interval_no` int(10) unsigned NOT NULL,
   `interval_name` varchar(80) NOT NULL,
   `abbrev` varchar(10) DEFAULT NULL,
-  `base_age` decimal(9,5) DEFAULT NULL,
-  `top_age` decimal(9,5) DEFAULT NULL,
+  `early_age` decimal(9,5) DEFAULT NULL,
+  `late_age` decimal(9,5) DEFAULT NULL,
   `reference_no` int(10) unsigned NOT NULL,
   PRIMARY KEY (`interval_no`),
   KEY `interval_name` (`interval_name`),
-  KEY `base_age` (`base_age`),
-  KEY `top_age` (`top_age`)
+  KEY `early_age` (`early_age`),
+  KEY `late_age` (`late_age`)
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -57,8 +57,8 @@ CREATE TABLE `scale_data` (
   `scale_no` smallint(5) unsigned NOT NULL,
   `scale_name` varchar(80) NOT NULL,
   `levels` tinyint(3) unsigned NOT NULL,
-  `base_age` decimal(9,5) DEFAULT NULL,
-  `top_age` decimal(9,5) DEFAULT NULL,
+  `early_age` decimal(9,5) DEFAULT NULL,
+  `late_age` decimal(9,5) DEFAULT NULL,
   `default_color` varchar(10) DEFAULT NULL,
   `reference_no` int(10) unsigned NOT NULL,
   PRIMARY KEY (`scale_no`)

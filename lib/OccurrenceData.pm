@@ -25,7 +25,7 @@ use POSIX qw(floor ceil);
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
 
-$SELECT{basic} = "o.occurrence_no, o.collection_no, o.taxon_no as actual_no, a.taxon_name as actual_name, ts.spelling_no as taxon_no, ts.name as taxon_name, ts.rank as taxon_rank, o.base_age as early_age, o.top_age as late_age, o.reference_no";
+$SELECT{basic} = "o.occurrence_no, o.collection_no, o.taxon_no as actual_no, a.taxon_name as actual_name, ts.spelling_no as taxon_no, ts.name as taxon_name, ts.rank as taxon_rank, o.early_age, o.late_age, o.reference_no";
 
 $TABLES{basic} = ['t', 'ts'];
 
@@ -140,20 +140,34 @@ $OUTPUT{time} =
 	doc => "The end of a range of intervals from the selected timescale that most closely brackets the time range associated with this occurrence (with C<early_int_no>)" },
    ];
 
-$SELECT{ent} = "o.authorizer_no, ppa.name as authorizer, o.enterer_no, ppe.name as enterer";
+$SELECT{ent} = "o.authorizer_no, ppa.name as authorizer, o.enterer_no, ppe.name as enterer, o.modifier_no, ppm.name as modifier";
 
-$TABLES{ent} = ['ppa', 'ppe'];
+$TABLES{ent} = ['ppa', 'ppe', 'ppm'];
 
 $OUTPUT{ent} = 
    [
-    { rec => 'authorizer_no', com => 'ath',
+    { rec => 'authorizer_no', com => 'ath', 
       doc => 'The identifier of the database contributor who authorized the entry of this record.' },
     { rec => 'authorizer', vocab => 'pbdb', 
       doc => 'The name of the database contributor who authorized the entry of this record.' },
-    { rec => 'enterer_no', com => 'ent',
+    { rec => 'enterer_no', com => 'ent', dedup => 'authorizer_no',
       doc => 'The identifier of the database contributor who entered this record.' },
     { rec => 'enterer', vocab => 'pbdb', 
       doc => 'The name of the database contributor who entered this record.' },
+    { rec => 'modifier_no', com => 'mfr', dedup => 'authorizer_no',
+      doc => 'The identifier of the database contributor who last modified this record.' },
+    { rec => 'modifier', vocab => 'pbdb', 
+      doc => 'The name of the database contributor who last modified this record.' },
+   ];
+
+$SELECT{crmod} = "o.created, o.modified";
+
+$OUTPUT{crmod} = 
+   [
+    { rec => 'created', com => 'dcr',
+      doc => "The date and time at which this record was created." },
+    { rec => 'modified', com => 'dmd',
+      doc => "The date and time at which this record was last modified." },
    ];
 
 $OUTPUT{rem} = 
@@ -370,14 +384,16 @@ sub generateJoinList {
 	if $tables->{ppa};
     $join_list .= "LEFT JOIN person as ppe on ppe.person_no = c.enterer_no\n"
 	if $tables->{ppe};
+    $join_list .= "LEFT JOIN person as ppm on ppm.person_no = c.modifier_no\n"
+	if $tables->{ppm};
     $join_list .= "LEFT JOIN $INTERVAL_MAP as im on im.early_age = $mt.early_age and im.late_age = $mt.late_age and scale_no = 1\n"
 	if $tables->{im};
     
-    $join_list .= "LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = $mt.early_int_no\n"
+    $join_list .= "LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = o.early_int_no\n"
 	if $tables->{ei};
-    $join_list .= "LEFT JOIN $INTERVAL_DATA as li on li.interval_no = $mt.late_int_no\n"
+    $join_list .= "LEFT JOIN $INTERVAL_DATA as li on li.interval_no = o.late_int_no\n"
 	if $tables->{li};
-        
+    
     return $join_list;
 }
 

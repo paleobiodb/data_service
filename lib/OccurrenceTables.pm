@@ -57,8 +57,8 @@ sub buildOccurrenceTables {
 				reid_no int unsigned not null,
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
-				base_age decimal(9,5),
-				top_age decimal(9,5),
+				early_age decimal(9,5),
+				late_age decimal(9,5),
 				reference_no int unsigned not null,
 				authorizer_no int unsigned not null,
 				enterer_no int unsigned not null) ENGINE=MyISAM");
@@ -68,9 +68,9 @@ sub buildOccurrenceTables {
     logMessage(2, "    inserting occurrences...");
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
-		       (occurrence_no, collection_no, taxon_no, orig_no, base_age, top_age, reference_no,
+		       (occurrence_no, collection_no, taxon_no, orig_no, early_age, late_age, reference_no,
 			authorizer_no, enterer_no)
-		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no, ei.base_age, li.top_age,
+		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no, ei.early_age, li.late_age,
 			if(o.reference_no > 0, o.reference_no, c.reference_no),
 			o.authorizer_no, o.enterer_no
 		FROM occurrences as o JOIN coll_matrix as c using (collection_no)
@@ -111,8 +111,8 @@ sub buildOccurrenceTables {
     
     logMessage(2, "    indexing by age boundaries...");
     
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (base_age)");
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (top_age)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (early_age)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (late_age)");
     
     logMessage(2, "    indexing by reference_no...");
     
@@ -146,11 +146,11 @@ sub buildOccurrenceTables {
     $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
-			max(ei.base_age), max(li.top_age), min(ei.base_age), min(li.top_age)
+			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age)
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
-		WHERE ei.base_age - li.top_age <= 40
+		WHERE ei.early_age - li.late_age <= 40
 		GROUP BY m.orig_no
 		HAVING m.orig_no > 0";
     
@@ -166,12 +166,12 @@ sub buildOccurrenceTables {
     logMessage(2, "      finding first and last occurrences...");
     
     $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
-		SET s.early_occ = o.occurrence_no WHERE o.top_age >= s.first_late_age";
+		SET s.early_occ = o.occurrence_no WHERE o.late_age >= s.first_late_age";
     
     $count = $dbh->do($sql);
     
     $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
-		SET s.late_occ = o.occurrence_no WHERE o.base_age <= s.last_early_age";
+		SET s.late_occ = o.occurrence_no WHERE o.early_age <= s.last_early_age";
     
     $count = $dbh->do($sql);
     
@@ -203,7 +203,7 @@ sub buildOccurrenceTables {
     $sql = "	INSERT INTO $OCC_REF_WORK (reference_no, n_occs, n_colls,
 			early_age, late_age)
 		SELECT m.reference_no, count(*), count(distinct collection_no),
-			max(ei.base_age), min(li.top_age)
+			max(ei.early_age), min(li.late_age)
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
