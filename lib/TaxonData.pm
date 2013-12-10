@@ -13,24 +13,9 @@ package TaxonData;
 use base 'DataService::Base';
 use Carp qw(carp croak);
 
+use PBDBData qw(generateReference generateAttribution);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_RANK %RANK_STRING);
 use Taxonomy;
-
-our (%TAXONOMIC_RANK) = ( 'max' => 26, 'informal' => 26, 'unranked_clade' => 25, 'unranked' => 25, 
-			 'kingdom' => 23, 'subkingdom' => 22,
-			 'superphylum' => 21, 'phylum' => 20, 'subphylum' => 19,
-			 'superclass' => 18, 'class' => 17, 'subclass' => 16,
-			 'infraclass' => 15, 'superorder' => 14, 'order' => 13, 
-			 'suborder' => 12, 'infraorder' => 11, 'superfamily' => 10,
-			 'family' => 9, 'subfamily' => 8, 'tribe' => 7, 'subtribe' => 6,
-			 'genus' => 5, 'subgenus' => 4, 'species' => 3, 'subspecies' => 2, 'min' => 2 );
-
-our (%RANK_STRING) = ( 26 => 'informal', 25 => 'unranked clade', 23 => 'kingdom',
-		       22 => 'subkingdom', 21 => 'superphylum', 20 => 'phylum', 19 => 'subphylum',
-		       18 => 'superclass', 17 => 'class', 16 => 'subclass', 15 => 'infraclass',
-		       14 => 'superorder', 13 => 'order', 12 => 'suborder', 11 => 'infraorder',
-		       10 => 'superfamily', 9 => 'family', 8 => 'subfamily', 7 => 'tribe', 
-		       6 => 'subtribe', 5 => 'genus', 4 => 'subgenus', 3 => 'species', 2 => 'subspecies');
-
 
 
 our (%OUTPUT, %PROC);
@@ -43,14 +28,18 @@ $OUTPUT{basic} =
         doc => "A positive integer that uniquely identifies the taxonomic concept"},
     { rec => 'record_type', com => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => 'taxon',
         doc => "The type of this object: {value} for a taxonomic name" },
-    { rec => 'rank', dwc => 'taxonRank', com => 'rnk', pbdb_code => \%Taxonomy::RANK_STRING,
+    { rec => 'rank', dwc => 'taxonRank', com => 'rnk', pbdb_code => \%RANK_STRING,
 	doc => "The taxonomic rank of this name" },
     { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
 	doc => "The scientific name of this taxon" },
     { rec => 'common_name', dwc => 'vernacularName', com => 'nm2',
         doc => "The common (vernacular) name of this taxon, if any" },
-    { rec => 'attribution', dwc => 'scientificNameAuthorship', show => 'attr', com => 'att', 
+    { rec => 'attribution', dwc => 'scientificNameAuthorship', com => 'att', show => 'attr',
 	doc => "The attribution (author and year) of this taxonomic name" },
+    { rec => 'pubyr', dwc => 'namePublishedInYear', com => 'pby', show => 'attr', 
+        doc => "The year in which this name was published" },
+    { rec => 'status', com => 'sta',
+        doc => "The taxonomic status of this name" },
     { rec => 'parent_no', dwc => 'parentNameUsageID', com => 'par', 
 	doc => "The identifier of the parent taxonomic concept, if any" },
     { rec => 'synonym_no', dwc => 'acceptedNameUsageID', pbdb => 'senior_no', com => 'snr', dedup => 'orig_no',
@@ -77,13 +66,13 @@ $OUTPUT{basic} =
 
 $PROC{attr} = 
    [
-    { rec => 'a_al1', set => 'attribution', use_main => 1, code => \&DataQuery::generateAttribution },
+    { rec => 'a_al1', set => 'attribution', use_main => 1, code => \&generateAttribution },
     { rec => 'a_pubyr', set => 'pubyr' },
    ];
 
 $PROC{ref} =
    [
-    { rec => 'r_al1', set => 'pubref', use_main => 1, code => \&DataQuery::generateReference },
+    { rec => 'r_al1', set => 'pubref', use_main => 1, code => \&generateReference },
    ];
 
 my $child_rule = [ { rec => 'taxon_no', com => 'oid', dwc => 'taxonID' },
@@ -155,7 +144,7 @@ $OUTPUT{nav} =
   ];
 
 
-# fetchSingle ( )
+# get ( )
 # 
 # Query for all relevant information about the requested taxon.
 # 
@@ -378,7 +367,7 @@ sub list {
     {
 	my $name = $valid->value('name');
 	
-	my $options = { order => 'size.desc' };
+	my $options = { %$options, order => 'size.desc' };
 	$options->{exact} = 1 if $valid->value('exact');
     	
 	@name_matches = $taxonomy->getTaxaByName($name, $options);

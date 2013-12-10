@@ -26,6 +26,7 @@ use ConfigData;
 use IntervalData;
 use TaxonData;
 use CollectionData;
+use OccurrenceData;
 use PersonData;
 
 
@@ -99,24 +100,27 @@ ruleset $dv '1.1:common_params' =>
 
 ruleset $dv '1.1:main_selector' =>
     "The following parameters can be used to specify which records to return.  Except as specified below, you can use these in combination:",
-    [param => 'bin_id', INT_VALUE, { list => ',' }],
-    "Return only records associated with the specified collection summary (geographic) bin.",
+    [param => 'clust_id', POS_VALUE, { list => ',' }],
+    "Return only records associated with the specified geographic clusters.",
     [param => 'taxon_name', \&TaxonData::validNameSpec],
     "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
     [param => 'taxon_id', POS_VALUE, { list => ','}],
     "Return only records associated with the specified taxonomic name(s), specified by numeric identifier.",
     "You may specify multiple identifiers, separated by commas.",
+    [param => 'taxon_actual', FLAG_VALUE],
+    "Return only records that were actually identified with the specified taxonomic name, not those which match due to synonymy",
+    "or other correspondences between taxa",
     [param => 'base_name', \&TaxonData::validNameSpec, { list => ',' }],
     "Return only records associated with the specified taxonomic name(s), or I<any of their children>.",
     "You may specify multiple names, separated by commas.",
     [param => 'base_id', POS_VALUE, { list => ',' }],
     "Return only records associated with the specified taxonomic name(s), specified by numeric identifier, or I<any of their children>.",
-    "You may specify multiple identifiers, separated by commas",
+    "You may specify multiple identifiers, separated by commas.",
+    "Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
     [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
-    "!!Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
     [param => 'exclude_id', POS_VALUE, { list => ','}],
-    "Do not return any records whose associated taxonomic name is a child of the given name, specified by numeric identifier.",
-    [param => 'person_no', POS_VALUE, { list => ','}],
+    "Exclude any records whose associated taxonomic name is a child of the given name or names, specified by numeric identifier.",
+    [param => 'person_id', POS_VALUE, { list => ','}],
     "Return only records whose entry was authorized by the given person or people, specified by numeric identifier.",
     [param => 'lngmin', DECI_VALUE],
     "",
@@ -127,21 +131,40 @@ ruleset $dv '1.1:main_selector' =>
     [param => 'latmax', DECI_VALUE],
     "Return only records whose geographic location falls within the given bounding box.",
     "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
-    "Two adjacent bounding boxes if the range crosses the antimeridian",
+    "two adjacent bounding boxes if the range crosses the antimeridian",
     "Note that if you specify one of these parameters then you must specify all four of them.",
     [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
 	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
     [param => 'loc', ANY_VALUE],		# This should be a geometry in WKT format
-    "Return only records whose geographic location falls within the specified region, specified in WKT format.",
+    "Return only records whose geographic location falls within the specified geometry, specified in WKT format.",
+    [param => 'continent', ANY_VALUE],
+    "Return only records whose geographic location falls within the specified continents.  The list of accepted",
+    "continents can be retrieved via L</data1.1/config>.",
     [param => 'min_ma', DECI_VALUE(0)],
     "Return only records whose temporal locality is at least this old, specified in Ma.",
     [param => 'max_ma', DECI_VALUE(0)],
     "Return only records whose temporal locality is at most this old, specified in Ma.",
+    [param => 'interval_id', POS_VALUE],
+    "Return only records whose temporal locality falls within the given geologic time interval, specified by numeric identifier.",
     [param => 'interval', ANY_VALUE],
     "Return only records whose temporal locality falls within the named geologic time interval.",
-    [optional => 'time_strict', FLAG_VALUE],
-    "If this parameter is specified, then return only records whose temporal locality falls strictly within the specified interval.",
-    "Otherwise, all records whose temporal locality overlaps the specified interval will be returned";
+    [at_most_one => 'interval_id', 'interval', 'min_ma'],
+    [at_most_one => 'interval_id', 'interval', 'max_ma'],
+    [optional => 'timerule', ENUM_VALUE('contain','overlap','buffer')],
+    "Resolve temporal locality according to the specified rule:", "=over 4",
+    "=item contain", "Return only collections whose temporal locality is strictly contained in the specified time range.",
+    "=item overlap", "Return only collections whose temporal locality overlaps the specified time range.",
+    "=item buffer", "Return only collections whose temporal locality overlaps the specified range and is contained",
+    "within the specified time range plus a buffer on either side.  If an interval from one of the timescales known to the database is",
+    "given, then the default buffer will be the intervals immediately preceding and following at the same level.",
+    "Otherwise, the buffer will default to 10 million years on either side.  This can be overridden using the parameters",
+    "C<earlybuffer> and C<latebuffer>.  This is the default value for this option.",
+    [optional => 'earlybuffer', POS_VALUE],
+    "Override the default buffer period for the beginning of the time range when resolving temporal locality.",
+    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
+    [optional => 'latebuffer', POS_VALUE],
+    "Override the default buffer period for the end of the time range when resolving temporal locality.",
+    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).";
 
 ruleset $dv '1.1:coll_specifier' =>
     [param => 'id', POS_VALUE, { alias => 'coll_id' }],
@@ -155,10 +178,11 @@ ruleset $dv '1.1:coll_selector' =>
     "A comma-separated list of collection identifiers.";
 
 ruleset $dv '1.1:coll_display' =>
-    "The following parameter indicates which information should be returned about each resulting name:",
-    [param => 'show', ENUM_VALUE('bin','ref','sref','loc','time','taxa'), { list => ',' }],
+    "The following parameter indicates which information should be returned about each resulting collection:",
+    [param => 'show', ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem','crmod'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
-    "From the list given below.  It defaults to C<basic>.";
+    "From the list given below.  It defaults to C<basic>.",
+    [ignore => 'level'];
 
 ruleset $dv '1.1/colls/single' => 
     [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
@@ -175,7 +199,7 @@ ruleset $dv '1.1/colls/list' =>
 
 ruleset $dv '1.1:summary_display' => 
     [param => 'level', POS_VALUE, { default => 1 }],
-    [param => 'show', ENUM_VALUE('ext','time','all'), { list => ',' }];
+    [param => 'show', ENUM_VALUE('ext','time'), { list => ',' }];
 
 ruleset $dv '1.1/colls/summary' => 
     [allow => '1.1:coll_selector'],
@@ -190,6 +214,36 @@ ruleset $dv '1.1:toprank_selector' =>
 ruleset $dv '1.1:colls/toprank' => 
     [require => '1.1:main_selector'],
     [require => '1.1:toprank_selector'],
+    [allow => '1.1:common_params'];
+
+ruleset $dv '1.1:occ_specifier' =>
+    [param => 'id', POS_VALUE, { alias => 'occ_id' }],
+    "The identifier of the occurrence you wish to retrieve";
+
+ruleset $dv '1.1:occ_selector' =>
+    [param => 'id', POS_VALUE, { list => ',', alias => 'occ_id' }],
+    "Return occurrences identified by the specified identifier(s).  The value of this parameter may be a comma-separated list.",
+    [param => 'coll_id', POS_VALUE, { list => ',' }],
+    "Return occurences associated with the specified collections.  The value of this parameter may be a single collection",
+    "identifier or a comma-separated list.";
+
+ruleset $dv '1.1:occ_display' =>
+    "The following parameter indicates which information should be returned about each resulting occurrence:",
+    [param => 'show', ENUM_VALUE('attr','ref','ent','geo','loc','coll','time','rem','crmod'), { list => ',' }],
+    "The value of this parameter should be a comma-separated list of section names drawn",
+    "From the list given below.  It defaults to C<basic>.",
+    [ignore => 'level'];
+
+ruleset $dv '1.1/occs/single' =>
+    [require => '1.1:occ_specifier', { error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" }],
+    [allow => '1.1:occ_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
+    [allow => '1.1:common_params'];
+
+ruleset $dv '1.1/occs/list' => 
+    [require_one => '1.1:occ_selector', '1.1:main_selector'],
+    [allow => '1.1:occ_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1:taxon_specifier' => 
@@ -248,7 +302,7 @@ ruleset $dv '1.1:taxon_filter' =>
 
 ruleset $dv '1.1:taxon_display' => 
     "The following parameter indicates which information should be returned about each resulting name:",
-    [optional => 'show', ENUM_VALUE('basic','full','ref','attr','app','applong',
+    [optional => 'show', ENUM_VALUE('ref','attr','app','applong',
 				    'appfirst','size','nav'),
 	{ list => ','}],
     "This parameter specifies what fields should be returned.  For the full list of fields,",
@@ -272,9 +326,15 @@ ruleset $dv '1.1/taxa/list' =>
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1:interval_selector' => 
-    [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
+    [param => 'scale_id', POS_VALUE, ENUM_VALUE('all'), 
+	{ list => ',', alias => 'scale',
+	  error => "the value of {param} should be a list of positive integers or 'all'" }],
+    "Return intervals from the specified time scale(s) should be returned.",
+    "The value of this parameter should be a list of positive integers or 'all'",
     [param => 'min_ma', DECI_VALUE(0)],
-    [param => 'max_ma', DECI_VALUE(0)];
+    [param => 'max_ma', DECI_VALUE(0)],
+    [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
+    "Return the intervals in order starting as specified.  Possible values include 'older', 'younger'.  Defaults to 'younger'.";
 
 ruleset $dv '1.1:interval_specifier' =>
     [param => 'id', POS_VALUE],
@@ -359,15 +419,14 @@ define_route $ds '1.1/taxa/list' => { op => 'list' };
 
 # Collections
 
-define_directory $ds '1.1/colls' => { class => 'CollectionData' };
+define_directory $ds '1.1/colls' => { class => 'CollectionData',
+				      output => 'basic' };
 
 define_route $ds '1.1/colls/single' => { op => 'get', 
-					 output => 'single',
-				         docresp => 'bin,ref,sref,loc,time,taxa'};
+				         docresp => 'bin,ref,sref,loc,time,taxa,ent,crmod'};
 
 define_route $ds '1.1/colls/list' => { op => 'list', 
-				       output => 'list',
-				       docresp => 'bin,ref,sref,loc,time,taxa' };
+				       docresp => 'bin,ref,sref,loc,time,taxa,ent,crmod' };
 
 define_route $ds '1.1/colls/summary' => { op => 'summary', 
 					  output => 'summary',
@@ -375,11 +434,14 @@ define_route $ds '1.1/colls/summary' => { op => 'summary',
 
 # Occurrences
 
-define_directory $ds '1.1/occs' => { class => 'OccurrenceData' };
+define_directory $ds '1.1/occs' => { class => 'OccurrenceData',
+				     output => 'basic' };
 
-define_route $ds '1.1/occs/single' => { op => 'get' };
+define_route $ds '1.1/occs/single' => { op => 'get',
+				        docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' };
 
-define_route $ds '1.1/occs/list' => { op => 'list' };
+define_route $ds '1.1/occs/list' => { op => 'list',
+				      docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' };
 
 # People
 

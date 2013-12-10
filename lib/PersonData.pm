@@ -17,10 +17,10 @@ use Carp qw(carp croak);
 
 our (%OUTPUT, %SELECT, %TABLES);
 
-$SELECT{basic} = $SELECT{basic} = "p.person_no, p.name, p.country, p.institution, p.email, p.is_authorizer";
+$SELECT{basic} = "p.person_no, p.name, p.country, p.institution, p.email, p.is_authorizer";
 
-$OUTPUT{basic} = $OUTPUT{basic} = 
-   [
+$OUTPUT{basic} = 
+ [
     { rec => 'person_no', com => 'oid',
       doc => "A positive integer that uniquely identifies this database contributor" },
     { rec => 'record_type', com => 'typ', com_value => 'prs', value => 'person',
@@ -79,7 +79,7 @@ sub get {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = join(', ', @{$self->{select_list}});
+    my $fields = $self->generate_query_fields('p');
     
     # Determine the necessary joins.
     
@@ -130,7 +130,7 @@ sub list {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = join(', ', @{$self->{select_list}});
+    my $fields = $self->generate_query_fields('p');
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.

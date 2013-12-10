@@ -19,4 +19,5 @@ plugins:
       username: 'pbdbuser'
       password: 'pbdbpwd'
       dbi_params:
+        RaiseError: 1
         AutoCommit: 1

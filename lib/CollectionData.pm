@@ -1,4 +1,3 @@
-
 # CollectionData
 # 
 # A class that returns information from the PaleoDB database about a single
@@ -9,8 +8,12 @@
 package CollectionData;
 
 use strict;
+
 use base 'DataService::Base';
 
+use PBDBData;
+use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
+use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -18,34 +21,25 @@ use POSIX qw(floor ceil);
 
 
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
+our ($MAX_BIN_LEVEL) = 0;
 
-$SELECT{single} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.collection_aka, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$SELECT{basic} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, ei.interval_name as early_int, li.interval_name as late_int, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-$SELECT{list} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, icm.container_no, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
+$TABLES{basic} = ['ei', 'li'];
 
-our ($SUMMARY_1) = "s.clust_id as sum_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
-
-our ($SUMMARY_2) = "s.bin_id as sum_id, s.clust_id, s.n_colls, s.n_occs, s.lat, s.lng, icm.container_no";
-
-our ($SUMMARY_S) = "s.clust_id, s.n_colls, s.n_occs, s.lat, s.lng, s.early_seq, s.late_seq";
-
-our ($SUMMARY_C) = "s.clust_id, count(distinct c.collection_no) as n_colls, sum(c.n_occs) as n_occs, s.lat, s.lng, min(c.early_seq) as early_seq, min(c.late_seq) as late_seq";
-
-our ($SUMMARY_M) = "s.clust_id, count(distinct c.collection_no) as n_colls, count(distinct m.occurrence_no) as n_occs, s.lat, s.lng, min(c.early_seq) as early_seq, min(c.late_seq) as late_seq";
-
-
-$PROC{single} = $PROC{list} =
+$PROC{basic} = 
    [
     { rec => 'sec_ref_nos', add => 'reference_no', split => ',' },
    ];
 
-$OUTPUT{single} = $OUTPUT{list} =
+$OUTPUT{basic} =
    [
     { rec => 'collection_no', dwc => 'collectionID', com => 'oid',
 	doc => "A positive integer that uniquely identifies the collection"},
     { rec => 'record_type', com => 'typ', com_value => 'col', dwc_value => 'Occurrence', value => 'collection',
         doc => "The type of this object: 'col' for a collection" },
-    { rec => 'formation', com => 'fmm', doc => "The formation in which this collection was found" },
+    { rec => 'formation', com => 'fmm', no_show => 'strat',
+      doc => "The formation in which this collection was found" },
     { rec => 'lng', dwc => 'decimalLongitude', com => 'lng',
 	doc => "The longitude at which the collection is located (in degrees)" },
     { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
@@ -56,28 +50,33 @@ $OUTPUT{single} = $OUTPUT{list} =
 	doc => "An arbitrary name which identifies the collection, not necessarily unique" },
     { rec => 'collection_subset', com => 'nm2',
 	doc => "If this collection is a part of another one, this field specifies which part" },
+    { rec => 'attribution', dwc => 'recordedBy', com => 'att', show => 'attr',
+	doc => "The attribution (author and year) of this collection name" },
+    { rec => 'pubyr', com => 'pby', show => 'attr',
+	doc => "The year in which this collection was published" },
     { rec => 'n_occs', com => 'noc',
         doc => "The number of occurrences in this collection" },
-    { rec => 'container_no', com => 'cxi',
-        doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
+    { rec => 'early_int', com => 'oei', pbdb => 'early_interval',
+	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if C<end_interval> is also given" },
+    { rec => 'late_int', com => 'oli', pbdb => 'late_interval', dedup => 'early_int',
+	doc => "The interval that ends the specific geologic time range associated with this collection" },
     { rec => 'reference_no', com => 'rid', json_list => 1,
         doc => "The identifier(s) of the references from which this data was entered" },
    ];
 
-$TABLES{single} = $TABLES{list} = $TABLES{summary} = ['icm'];
+$SELECT{summary} = "s.bin_id, s.n_colls, s.n_occs, s.lat, s.lng";
 
 $OUTPUT{summary} = 
    [
-    { rec => 'sum_id', com => 'oid', doc => "A positive integer that identifies the cluster" },
-    { rec => 'clust_id', com => 'lv1', doc => "A positive integer that identifies the containing cluster, if any" },
+    { rec => 'bin_id', com => 'oid', doc => "A positive integer that identifies the cluster" },
+    { rec => 'bin_id_1', com => 'lv1', doc => "A positive integer that identifies the containing level-1 cluster, if any" },
+    { rec => 'bin_id_2', com => 'lv2', doc => "A positive integer that identifies the containing level-2 cluster, if any" },
     { rec => 'record_type', com => 'typ', value => 'clu',
         doc => "The type of this object: 'clu' for a collection cluster" },
     { rec => 'n_colls', com => 'nco', doc => "The number of collections in cluster" },
     { rec => 'n_occs', com => 'noc', doc => "The number of occurrences in this cluster" },
     { rec => 'lng', com => 'lng', doc => "The longitude of the centroid of this cluster" },
     { rec => 'lat', com => 'lat', doc => "The latitude of the centroid of this cluster" },
-    { rec => 'container_no', com => 'cxi',
-        doc => "The identifier of the most specific standard interval covering the entire time range associated with this collection" },
    ];
 
 $SELECT{toprank} = "sum(c.n_occs) as n_occs, count(*) as n_colls";
@@ -88,28 +87,22 @@ $OUTPUT{toprank} =
     { rec => 'n_colls', com => 'nco' },
    ];
 
-$SELECT{formation} = "ifnull(cc.formation, 'none specified') as formation";
-
-$OUTPUT{formation} =
-   [
-    { rec => 'formation', com => 'fmm' },
-   ];
-
-$SELECT{author} = "concat(r.author1init, ' ', r.author1last) as main_author";
-
-$TABLES{author} = ['r'];
-
-$OUTPUT{author} =
-   [
-    { rec => 'main_author', com => 'aut' },
-   ];
-
-$SELECT{bin} = "c.bin_id, c.clust_id";
+$SELECT{bin} = undef;
 
 $OUTPUT{bin} = 
    [
-    { rec => 'clust_id', com => 'lv1', doc => "The identifier of the level-1 cluster in which this collection is located" },
-    { rec => 'bin_id', com => 'lv2', doc => "The identifier of the level-2 cluster in which this collection is located" },
+    { rec => 'bin_id_1', com => 'lv1', doc => "The identifier of the level-1 cluster in which this collection is located" },
+    { rec => 'bin_id_2', com => 'lv2', doc => "The identifier of the level-2 cluster in which this collection is located" },
+    { rec => 'bin_id_3', com => 'lv3', doc => "The identifier of the level-3 cluster in which this collection is located" },
+   ];
+
+$SELECT{attr} = "r.author1init as a_ai1, r.author1last as a_al1, r.author2init as a_ai2, r.author2last as a_al2, r.otherauthors as a_oa, r.pubyr as a_pubyr";
+
+$TABLES{attr} = ['r'];
+
+$PROC{attr} = [
+    { rec => 'a_al1', set => 'attribution', use_main => 1, code => \&PBDBData::generateAttribution },
+    { rec => 'a_pubyr', set => 'pubyr' },
    ];
 
 $SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
@@ -118,66 +111,17 @@ $TABLES{ref} = 'r';
 
 $PROC{ref} = 
    [
-    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&DataService::Base::generateReference },
-    { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&DataService::Base::generateReference },
+    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&PBDBData::generateReference },
+    { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&PBDBData::generateReference },
    ];
 
 $OUTPUT{ref} =
    [
-    #{ rec => 'r_pubyr', com => 'pby',
-    #	doc => "The year of publication of the primary reference associated with this collection" },
-    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => '; ',
+    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => "\n\n",
 	doc => "The reference(s) associated with this collection (as formatted text)" },
    ];
 
-$SELECT{attr} = "r.author1init as a_ai1, r.author1last as a_al1, r.author2init as a_ai2, r.author2last as a_al2, r.otherauthors as a_oa, r.pubyr as a_pubyr";
-
-$TABLES{attr} = 'r';
-
-$OUTPUT{attr} = 
-   [
-    { rec => 'r_pubyr', com => 'pby',
-	doc => "The year of publication of the primary reference associated with this collection" },
-    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', 
-        json_list => 1, xml_list => '; ',
-	doc => "The reference(s) associated with this collection (pubyr and authors only)" },
-   ];
-
-$SELECT{summary_time} = "ei.base_age as early_age, li.top_age as late_age, icm.container_no";
-
-$SELECT{time} = "ei.interval_name as early_int, ei.base_age as early_age, li.interval_name as late_int, li.top_age as late_age, group_concat(distinct ci.interval_no) as interval_list";
-
-$TABLES{time} = ['ei', 'li', 'ci'];
-
-$TABLES{summary_time} = ['ei', 'li'];
-
-$OUTPUT{time} =
-   [
-    { rec => 'early_age', com => 'eag',
-	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
-    { rec => 'late_age', com => 'lag',
-	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
-    { rec => 'early_int', com => 'int',
-	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if C<late_int> is also given" },
-    { rec => 'late_int', com => 'lin', dedup => 'early_int',
-	doc => "The interval that ends the specific geologic time range associated with this collection" },
-    { rec => 'interval_list', com => 'lti', json_list_literal => 1,
-        doc => "A minimal list of standard intervals covering the time range associated with this collection" },
-   ];
-
-$OUTPUT{summary_time} =
-   [
-    { rec => 'early_age', com => 'eag',
-	doc => "The early bound of the geologic time range associated with this collection (in Ma)" },
-    { rec => 'late_age', com => 'lag',
-	doc => "The late bound of the geologic time range associated with this collection (in Ma)" },
-   ];
-
-$SELECT{pers} = "authorizer_no, ppa.name as authorizer, enterer_no, ppe.name as enterer";
-
-$TABLES{pers} = ['ppa', 'ppe'];
-
-$SELECT{loc} = "cc.country, cc.state, cc.county";
+$SELECT{loc} = "cc.country, cc.state, cc.county, cc.geogscale";
 
 $OUTPUT{loc} = 
    [
@@ -187,6 +131,57 @@ $OUTPUT{loc} =
 	doc => "The state or province in which this collection is located [not available for all collections]" },
     { rec => 'county', com => 'cny',
 	doc => "The county in which this collection is located [not available for all collections]" },
+    { rec => 'geogscale', com => 'gsc',
+        doc => "The geographic scale of this collection." },
+   ];
+
+$SELECT{ext} = "s.lng_min, lng_max, s.lat_min, s.lat_max, s.std_dev";
+
+$OUTPUT{ext} =
+   [
+    { rec => 'lng_min', com => 'lg1', doc => "The mimimum longitude for collections in this bin or cluster" },
+    { rec => 'lng_max', com => 'lg2', doc => "The maximum longitude for collections in this bin or cluster" },
+    { rec => 'lat_min', com => 'la1', doc => "The mimimum latitude for collections in this bin or cluster" },
+    { rec => 'lat_max', com => 'la2', doc => "The maximum latitude for collections in this bin or cluster" },
+    { rec => 'std_dev', com => 'std', doc => "The standard deviation of the coordinates in this cluster" },
+   ];
+
+$SELECT{time} = "\$mt.early_age, \$mt.late_age, im.cx_int_no, im.early_int_no, im.late_int_no";
+
+$TABLES{time} = ['im'];
+
+$OUTPUT{time} =
+   [
+    { rec => 'early_age', com => 'eag',
+	doc => "The early bound of the geologic time range associated with this collection or cluster (in Ma)" },
+    { rec => 'late_age', com => 'lag',
+	doc => "The late bound of the geologic time range associated with this collection or cluster (in Ma)" },
+    { rec => 'cx_int_no', com => 'cxi',
+        doc => "The identifier of the most specific single interval from the selected timescale that covers the entire time range associated with this collection or cluster." },
+    { rec => 'early_int_no', com => 'ein',
+	doc => "The beginning of a range of intervals from the selected timescale that most closely brackets the time range associated with this collection or cluster (with C<late_int_no>)" },
+    { rec => 'late_int_no', com => 'lin',
+	doc => "The end of a range of intervals from the selected timescale that most closely brackets the time range associated with this collection or cluster (with C<early_int_no>)" },
+   ];
+
+$SELECT{ent} = "\$mt.authorizer_no, ppa.name as authorizer, \$mt.enterer_no, ppe.name as enterer, \$mt.modifier_no, ppm.name as modifier";
+
+$TABLES{ent} = ['ppa', 'ppe', 'ppm'];
+
+$OUTPUT{ent} = 
+   [
+    { rec => 'authorizer_no', com => 'ath', 
+      doc => 'The identifier of the database contributor who authorized the entry of this record.' },
+    { rec => 'authorizer', vocab => 'pbdb', 
+      doc => 'The name of the database contributor who authorized the entry of this record.' },
+    { rec => 'enterer_no', com => 'ent', dedup => 'authorizer_no',
+      doc => 'The identifier of the database contributor who entered this record.' },
+    { rec => 'enterer', vocab => 'pbdb', 
+      doc => 'The name of the database contributor who entered this record.' },
+    { rec => 'modifier_no', com => 'mfr', dedup => 'authorizer_no',
+      doc => 'The identifier of the database contributor who last modified this record.' },
+    { rec => 'modifier', vocab => 'pbdb', 
+      doc => 'The name of the database contributor who last modified this record.' },
    ];
 
 $OUTPUT{taxa} = 
@@ -208,31 +203,78 @@ $OUTPUT{taxa} =
     }
    ];
 
+$SELECT{crmod} = "o.created, o.modified";
+
+$OUTPUT{crmod} = 
+   [
+    { rec => 'created', com => 'dcr',
+      doc => "The date and time at which this record was created." },
+    { rec => 'modified', com => 'dmd',
+      doc => "The date and time at which this record was last modified." },
+   ];
+
 $OUTPUT{rem} = 
    [
     { rec => 'collection_aka', dwc => 'collectionRemarks', com => 'crm', xml_list => '; ',
 	doc => "Any additional remarks that were entered about the colection"},
    ];
 
-$SELECT{ext} = "s.lng_min, lng_max, s.lat_min, s.lat_max, s.std_dev";
+$SELECT{strat} = "cc.member, cc.stratscale, cc.stratcomments";
 
-$OUTPUT{ext} =
+$OUTPUT{strat} = 
    [
-    { rec => 'lng_min', com => 'lg1', doc => "The mimimum longitude for collections in this bin or cluster" },
-    { rec => 'lng_max', com => 'lg2', doc => "The maximum longitude for collections in this bin or cluster" },
-    { rec => 'lat_min', com => 'la1', doc => "The mimimum latitude for collections in this bin or cluster" },
-    { rec => 'lat_max', com => 'la2', doc => "The maximum latitude for collections in this bin or cluster" },
-    { rec => 'std_dev', com => 'std', doc => "The standard deviation of the coordinates in this cluster" },
+    { rec => 'formation', com => 'frm',
+      doc => "The formation in which the collection was found" },
+    { rec => 'member', com => 'mmb', 
+      doc => "The member in which the collection was found" },
+    { rec => 'stratscale', com => 'ssc',
+      doc => "The stratigraphic scale of the collection" },
+    { rec => 'stratcomments', com => 'scm',
+      doc => "Stratigraphic comments/notes about the collection, if any" },
    ];
 
-our (%DOC_ORDER);
+$SELECT{stratext} = "cc.zone, cc.geological_group, cc.localsection, cc.localbed, cc.localorder, cc.regionalsection, cc.regionalbed, cc.regionalorder";
 
-$DOC_ORDER{'single'} = ['single', 'ref', 'time', 'loc', 'rem'];
-$DOC_ORDER{'list'} = ();
-$DOC_ORDER{'summary'} = ();
+$OUTPUT{stratext} = 
+   [
+    { rec => 'zone', com => 'zon', 
+      doc => "The zone in which the collection was found" },
+    { rec => 'geological_group', com => 'ggr',
+      doc => "The geological group in which the collection was found" },
+    { rec => 'localsection', com => 'lsc',
+      doc => "The local section in which the collection was found" },
+   ];
 
 
-# fetchSingle ( )
+# configure ( )
+# 
+# This routine is called by the DataService module, and is passed the
+# configuration data as a hash ref.
+
+sub configure {
+    
+    my ($self, $dbh, $config) = @_;
+    
+    if ( ref $config->{bins} eq 'ARRAY' )
+    {
+	my $bin_string = '';
+	my $bin_level = 0;
+	
+	foreach (@{$config->{bins}})
+	{
+	    $bin_level++;
+	    $bin_string .= ", " if $bin_string;
+	    $bin_string .= "bin_id_$bin_level";
+	}
+	
+	$SELECT{get_bin} = $bin_string if $bin_string ne '';
+	$SELECT{list_bin} = $bin_string if $bin_string ne '';
+	$MAX_BIN_LEVEL = $bin_level;
+    }
+}
+
+
+# get ( )
 # 
 # Query for all relevant information about the collection specified by the
 # 'id' parameter.  Returns true if the query succeeded, false otherwise.
@@ -244,7 +286,6 @@ sub get {
     # Get a database handle by which we can make queries.
     
     my $dbh = $self->{dbh};
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # Make sure we have a valid id number.
     
@@ -255,7 +296,9 @@ sub get {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = join(', ', @{$self->{select_list}});
+    my $fields = $self->generate_query_fields('c');
+    
+    $self->adjustCoordinates(\$fields);
     
     # Determine the necessary joins.
     
@@ -265,7 +308,7 @@ sub get {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM coll_matrix as c JOIN collections as cc using (collection_no)
+	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id and c.access_level = 0
@@ -281,7 +324,7 @@ sub get {
     
     # If we were directed to show references, grab any secondary references.
     
-    if ( $self->{show}{ref} or $self->{show}{sref} )
+    if ( $self->{show}{ref} )
     {
 	my $extra_fields = $SELECT{ref};
 	
@@ -298,8 +341,10 @@ sub get {
     
     if ( $self->{show}{taxa} )
     {
-	my $auth_table = $self->{taxonomy}{auth_table};
-	my $tree_table = $self->{taxonomy}{tree_table};
+	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+	
+	my $auth_table = $taxonomy->{auth_table};
+	my $tree_table = $taxonomy->{tree_table};
 	
 	$self->{aux_sql}[1] = "
 	SELECT DISTINCT t.spelling_no as taxon_no, t.name as taxon_name, rm.rank as taxon_rank, 
@@ -320,14 +365,86 @@ sub summary {
     
     my ($self) = @_;
     
-    return $self->list('summary');
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $self->{dbh};
+    
+    # Figure out which bin level we are being asked for.  The default is 1.    
+
+    my $bin_level = $self->{params}{level} || 1;
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters = $self->generateMainFilters('summary', 's', $self->{select_tables});
+    push @filters, $self->generateCollFilters($self->{select_tables});
+    
+    push @filters, "s.access_level = 0";
+    push @filters, "s.bin_level = $bin_level";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $self->generateLimitClause();
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $fields = $self->generate_query_fields('s');
+    
+    $self->adjustCoordinates(\$fields);
+    
+    my $summary_joins .= $self->generateJoinList('s', $self->{select_tables});
+    
+    $summary_joins = "RIGHT JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n" . $summary_joins
+	if $self->{select_tables}{c} or $self->{select_tables}{o};
+    
+    if ( $self->{select_tables}{o} )
+    {
+	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
+	$fields =~ s/s.n_occs/count(distinct o.occurrence_no) as n_occs/;
+    }
+    
+    elsif ( $self->{select_tables}{c} )
+    {
+	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
+	$fields =~ s/s.n_occs/sum(c.n_occs) as n_occs/;
+    }
+    
+    $self->{main_sql} = "
+		SELECT $calc $fields
+		FROM $COLL_BINS as s $summary_joins
+		WHERE $filter_string
+		GROUP BY s.bin_id
+		ORDER BY s.bin_id $limit";
+    
+    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
+    
+    # Then prepare and execute the query..
+    
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
+    $self->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    if ( $calc )
+    {
+	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
+    }
+    
+    return 1;
 }
 
 
-# fetchMultiple ( )
+# list ( )
 # 
 # Query the database for basic info about all collections satisfying the
-# conditions previously specified (i.e. by a call to setParameters).
+# conditions specified by the query parameters.
 # 
 # Returns true if the fetch succeeded, false if an error occurred.
 
@@ -339,26 +456,15 @@ sub list {
     
     my $dbh = $self->{dbh};
     
-    my $calc = '';
-    my $mt = defined $arg && $arg eq 'summary' ? 's' : 'c';
-    
-    $self->{op} = $arg || 'list';
-    
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my $filter_tables = {};
+    my @filters = $self->generateMainFilters('list', 'c', $self->{select_tables});
+    push @filters, $self->generateCollFilters($self->{select_tables});
     
-    my @filters = $self->generateQueryFilters($mt, $filter_tables);
-    
-    push @filters, "$mt.access_level = 0";
+    push @filters, "c.access_level = 0";
     
     my $filter_string = join(' and ', @filters);
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    my $fields = join(', ', @{$self->{select_list}});
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -366,68 +472,21 @@ sub list {
     
     # If we were asked to count rows, modify the query accordingly
     
-    if ( $self->{params}{count} )
-    {
-	$calc = 'SQL_CALC_FOUND_ROWS';
-    }
+    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
     
-    # If the operation is 'summary', generate a query on the summary tables.
+    # Determine which fields and tables are needed to display the requested
+    # information.
     
-    if ( defined $arg && $arg eq 'summary' ) 
-    {
-	my ($base_fields, $inner_query_fields, $summary_table, $group_field, $base_joins, $inner_query_joins);
-	
-	if ( $self->{params}{level} == 2 )
-	{
-	    $base_fields = $SUMMARY_2;
-	    $summary_table = 'coll_bins';
-	    $group_field = 'bin_id';
-	}
-	
-	else
-	{
-	    $base_fields = $SUMMARY_1;
-	    $summary_table = 'clusters';
-	    $group_field = 'clust_id';
-	}
-	
-	$base_fields .= ', ' . $fields if $fields;
-	
-	$base_joins = $self->generateJoinList('s', $self->{select_tables});
-	
-	$inner_query_fields = $filter_tables->{m} ? $SUMMARY_M : 
-			      $filter_tables->{c} ? $SUMMARY_C :
-						    $SUMMARY_S;
-	
-	$inner_query_fields .= ", s.bin_id" if $self->{params}{level} == 2;
-	
-	$inner_query_fields .= ", s.lng_min, s.lng_max, s.lat_min, s.lat_max, s.std_dev"
-	    if $base_fields =~ /lng_min/;
-	
-	$inner_query_joins = $self->generateJoinList('s', $filter_tables, $group_field);
-	
-	$self->{main_sql} = "
-	SELECT $calc $base_fields
-	FROM (SELECT $inner_query_fields
-	      FROM $summary_table as s $inner_query_joins
-	      WHERE $filter_string
-	      GROUP BY s.$group_field
-	      ORDER BY s.$group_field
-	      $limit) as s
-		$base_joins";
-    }
+    my $fields = $self->generate_query_fields('c');
+    
+    $self->adjustCoordinates(\$fields);
     
     # If the operation is 'toprank', generate a query on the collection matrix
     # joined with whichever other tables are relevant
 
-    elsif ( defined $arg && $arg eq 'toprank' )
+    if ( defined $arg && $arg eq 'toprank' )
     {
-	foreach my $t ( keys %$filter_tables )
-	{
-	    $self->{select_tables}{$t} = 1;
-	}
-	
-	my $base_joins = $self->generateJoinList($mt, $self->{select_tables});
+	my $base_joins = $self->generateJoinList('c', $self->{select_tables});
 	
 	my $group_field = $self->{show}{formation} ? 'formation' :
 			  $self->{show}{author}    ? 'main_author' :
@@ -448,12 +507,7 @@ sub list {
     
     else
     {
-	foreach my $t ( keys %$filter_tables )
-	{
-	    $self->{select_tables}{$t} = 1;
-	}
-	
-	my $base_joins = $self->generateJoinList($mt, $self->{select_tables});
+	my $base_joins = $self->generateJoinList('c', $self->{select_tables});
 	
 	$self->{main_sql} = "
 	SELECT $calc $fields
@@ -522,72 +576,22 @@ sub list {
 }
 
 
-sub summmary {
-
-    my ($self) = @_;
-    
-    return $self->list('summary');
-}
-
-
-# emitCollectionXML ( row, short_record )
+# generateCollFilters ( tables_ref )
 # 
-# Returns a string representing the given record (row) in Darwin Core XML
-# format.  If 'short_record' is true, suppress certain fields.
-
-# sub emitCollectionXML {
-    
-#     no warnings;
-    
-#     my ($self, $row) = @_;
-#     my $output = '';
-#     my @remarks = ();
-    
-#     $output .= '  <Collection>' . "\n";
-#     $output .= '    <dwc:collectionID>' . $row->{collection_no} . '</dwc:collectionID>' . "\n";
-    
-#     $output .= '    <dwc:collectionCode>' . DataQuery::xml_clean($row->{collection_name}) . 
-# 	'</dwc:collectionCode>' . "\n";
-    
-#     if ( defined $row->{lat} )
-#     {
-# 	$output .= '    <dwc:decimalLongitude>' . $row->{lng} . '</dwc:decimalLongitude>' . "\n";
-# 	$output .= '    <dwc:decimalLatitude>' . $row->{lat} . '</dwc:decimalLatitude>' . "\n";
-#     }
-    
-#     if ( ref $row->{taxa} eq 'ARRAY' and @{$row->{taxa}} )
-#     {
-# 	$output .= '    <dwc:associatedTaxa>';
-# 	$output .= DataQuery::xml_clean(join(', ', map { $_->{taxon_name} } @{$row->{taxa}}));
-# 	$output .= '</dwc:associatedTaxa>' . "\n";
-#     }
-    
-#     if ( defined $row->{pubref} )
-#     {
-# 	my $pubref = DataQuery::xml_clean($row->{pubref});
-# 	$output .= '    <dwc:associatedReferences>' . $pubref . '</dwc:associatedReferences>' . "\n";
-#     }
-    
-#     if ( @remarks ) {
-# 	$output .= '    <collectionRemarks>' . DataQuery::xml_clean(join('; ', @remarks)) . 
-# 	    '</collectionRemarks>' . "\n";
-#     }
-    
-#     $output .= '  </Collection>' . "\n";
-# }
-
-
-# generateQueryFilters ( tables )
+# Generate a list of filter clauses that will be used to compute the
+# appropriate result set.  This routine handles only parameters that are specific
+# to collections.
 # 
-# Generate a list of filter clauses that will be used to generate the
-# appropriate result set.
+# Any additional tables that are needed will be added to the hash specified by
+# $tables_ref.  The parameter $op is the operation being carried out, while
+# $mt indicates the main table on which to join ('c' for coll_matrix, 's' for
+# coll_bins, 'o' for occ_matrix).
 
-sub generateQueryFilters {
+sub generateCollFilters {
 
-    my ($self, $mt, $tables_ref) = @_;
+    my ($self, $tables_ref) = @_;
     
     my $dbh = $self->{dbh};
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
     
     # Check for parameter 'id'
@@ -599,22 +603,77 @@ sub generateQueryFilters {
 	push @filters, "c.collection_no in ($id_list)";
     }
     
-    # Check for parameter 'bin_id'
-    
-    if ( ref $self->{params}{bin_id} eq 'ARRAY' )
+    elsif ( $self->{params}{id} )
     {
-	my @bins = grep { $_ > 0 } @{$self->{params}{bin_id}};
-	my $first_bin = $bins[0];
-	my $list = join(',', @bins);
+	push @filters, "c.collection_no = $self->{params}{id}";
+    }
+    
+    return @filters;
+}
+
+
+# generateMainFilters ( op, mt, tables_ref )
+# 
+# Generate a list of filter clauses that will be used to generate the
+# appropriate result set.  This routine handles parameters that are part of
+# the 'main_selector' ruleset, applicable to both collections and occurrences.
+# 
+# Any additional tables that are needed will be added to the hash specified by
+# $tables_ref.  The parameter $op is the operation being carried out, while
+# $mt indicates the main table on which to join ('c' for coll_matrix, 's' for
+# coll_bins, 'o' for occ_matrix).
+
+sub generateMainFilters {
+
+    my ($self, $op, $mt, $tables_ref) = @_;
+    
+    my $dbh = $self->{dbh};
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my @filters;
+    my $non_geo_filter;
+    
+    # Check for parameter 'clust_id'
+    
+    if ( ref $self->{params}{clust_id} eq 'ARRAY' )
+    {
+	# If there aren't any bins, include a filter that will return no
+	# results. 
 	
-	if ( $first_bin >= 200000000 )
+	if ( $MAX_BIN_LEVEL == 0 )
 	{
-	    push @filters, "$mt.bin_id in ($list)";
+	    push @filters, "c.collection_no = 0";
 	}
 	
-	elsif ( $first_bin >= 1000000 )
+	elsif ( $op eq 'summary' )
 	{
-	    push @filters, "$mt.clust_id in ($list)";
+	    my @clusters = grep { $_ > 0 } @{$self->{params}{clust_id}};
+	    my $list = join(q{,}, @clusters);
+	    push @filters, "s.bin_id in ($list)";
+	}
+	
+	else
+	{
+	    my %clusters;
+	    my @clust_filters;
+	    
+	    foreach my $cl (@{$self->{params}{clust_id}})
+	    {
+		my $cl1 = substr($cl, 0, 1);
+		push @{$clusters{$cl1}}, $cl if $cl1 =~ /[0-9]/;
+	    }
+	    
+	    foreach my $k (keys %clusters)
+	    {
+		next unless @{$clusters{$k}};
+		my $list = join(q{,}, @{$clusters{$k}});
+		push @clust_filters, "c.bin_id_$k in ($list)";
+	    }
+	    
+	    # If no valid filter was generated, then add one that will return
+	    # 0 results.
+	    
+	    push @clust_filters, "c.collection_no = 0" unless @clust_filters;
+	    push @filters, @clust_filters;
 	}
     }
     
@@ -653,6 +712,7 @@ sub generateQueryFilters {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{t} = 1;
+	$non_geo_filter = 1;
     }
     
     elsif ( @taxa )
@@ -660,6 +720,14 @@ sub generateQueryFilters {
 	my $taxon_list = join ',', map { $_->{orig_no} } @taxa;
 	push @filters, "o.orig_no in ($taxon_list)";
 	$tables_ref->{o} = 1;
+	$non_geo_filter = 1;
+    }
+    
+    # If no matching taxa were found, add a filter clause that will return no results.
+    
+    elsif ( $taxon_name || $taxon_no )
+    {
+	push @filters, "o.orig_no = -1";
     }
     
     # ...and for excluded taxa 
@@ -672,20 +740,22 @@ sub generateQueryFilters {
     
     # Check for parameters 'person_no', 'person_name'
     
-    elsif ( $self->{params}{person_no} )
+    if ( $self->{params}{person_id} )
     {
-	if ( ref $self->{params}{person_no} eq 'ARRAY' )
+	if ( ref $self->{params}{person_id} eq 'ARRAY' )
 	{
-	    my $person_string = join(q{,}, @{$self->{params}{person_no}} );
+	    my $person_string = join(q{,}, @{$self->{params}{person_id}} );
 	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
 	    $tables_ref->{c} = 1;
+	    $non_geo_filter = 1;
 	}
 	
 	else
 	{
-	    my $person_string = $self->{params}{person_no};
+	    my $person_string = $self->{params}{person_id};
 	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
 	    $tables_ref->{c} = 1;
+	    $non_geo_filter = 1;
 	}
     }
     
@@ -698,7 +768,7 @@ sub generateQueryFilters {
 	my $y1 = $self->{params}{latmin};
 	my $y2 = $self->{params}{latmax};
 	
-	# If the latitude coordinates do not fall between -180 and 180, adjust
+	# If the longitude coordinates do not fall between -180 and 180, adjust
 	# them so that they do.
 	
 	if ( $x1 < -180.0 )
@@ -726,16 +796,16 @@ sub generateQueryFilters {
 	
 	if ( $x1 < $x2 )
 	{
-	    if ( defined $self->{op} && $self->{op} eq 'summary' )
-	    {
-		push @filters, "s.lng between $x1 and $x2 and s.lat between $y1 and $y2";
-	    }
+	    # if ( defined $self->{op} && $self->{op} eq 'summary' )
+	    # {
+	    # 	push @filters, "s.lng between $x1 and $x2 and s.lat between $y1 and $y2";
+	    # }
 	    
-	    else
-	    {
+	    # else
+	    # {
 		my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
-		push @filters, "mbrwithin(loc, geomfromtext($polygon))";
-	    }
+		push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	    # }
 	}
 	
 	# Otherwise, our bounding box crosses the antimeridian and so must be
@@ -744,69 +814,264 @@ sub generateQueryFilters {
 	
 	else
 	{
-	    if ( defined $self->{op} && $self->{op} eq 'summary' )
-	    {
-		push @filters, "(s.lng between $x1 and 180.0 or s.lng between -180.0 and $x2) and s.lat between $y1 and $y2";
-	    }
+	    # if ( defined $self->{op} && $self->{op} eq 'summary' )
+	    # {
+	    # 	push @filters, "(s.lng between $x1 and 180.0 or s.lng between -180.0 and $x2) and s.lat between $y1 and $y2";
+	    # }
 	    
-	    else
-	    {
-		my $polygon1 = "'POLYGON(($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))'";
-		my $polygon2 = "'POLYGON((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1))'";
-		push @filters, "(mbrwithin(loc, geomfromtext($polygon1)) or mbrwithin(loc, geomfromtext($polygon2)))";
-	    }
+	    # else
+	    # {
+		my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1)),((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
+		push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	    #}
 	}
     }
     
     if ( $self->{params}{loc} )
     {
-	push @filters, "st_within(loc, geomfromtext($self->{params}{loc})";
+	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
     }
     
-    # Check for parameters 'min_ma', 'max_ma', 'interval'
+    # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
+    # If no time rule was given, it defaults to 'buffer'.
     
-    my $min_age = $self->{params}{min_ma};
-    my $max_age = $self->{params}{max_ma};
+    my $time_rule = $self->{params}{timerule} || 'buffer';
+    my $summary_interval = 0;
+    my ($early_age, $late_age, $early_bound, $late_bound);
     
-    if ( $self->{params}{interval} )
+    # If an interval was specified, use that.
+    
+    if ( $self->{params}{interval_id} or $self->{params}{interval} )
     {
-	my $quoted_name = $dbh->quote($self->{params}{interval});
+	my ($interval_no, $scale_no, $level);
 	
-	my $sql = "SELECT base_age, top_age FROM interval_map
-		   WHERE interval_name like $quoted_name";
+	# First figure out the parameters of the specified interval
 	
-	($max_age, $min_age) = $dbh->selectrow_array($sql);
-    }
-    
-    if ( defined $min_age and $min_age > 0 )
-    {
-	$tables_ref->{c} = 1;
-	if ( $self->{params}{time_strict} )
+	if ( $self->{params}{interval_id} )
 	{
-	    push @filters, "c.late_age >= $min_age";
+	    $interval_no = $self->{params}{interval_id} + 0;
+	    
+	    my $sql = "
+		SELECT early_age, late_age, scale_no, level, early_bound, late_bound
+		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
+			JOIN $INTERVAL_BUFFER using (interval_no)
+		WHERE interval_no = $interval_no ORDER BY scale_no LIMIT 1";
+	    
+	    ($early_age, $late_age, $scale_no, $level, $early_bound, $late_bound) = $dbh->selectrow_array($sql);
 	}
+	
 	else
 	{
-	    push @filters, "c.early_age > $min_age";
+	    my $quoted_name = $dbh->quote($self->{params}{interval});
+	    
+	    my $sql = "SELECT early_age, late_age, interval_no, scale_no, early_bound, late_bound
+		   FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
+			JOIN $INTERVAL_BUFFER using (interval_no)
+		   WHERE interval_name like $quoted_name ORDER BY scale_no";
+	
+	    ($early_age, $late_age, $interval_no, $scale_no, $early_bound, $late_bound) = $dbh->selectrow_array($sql);
+	}
+	
+	# If the requestor wants to override the time bounds, do that.
+	
+	if ( defined $self->{params}{earlybuffer} )
+	{
+	    $early_bound = $early_age + $self->{params}{earlybuffer};
+	}
+	
+	if ( defined $self->{params}{latebuffer} )
+	{
+	    $late_bound = $late_age - $self->{params}{latebuffer};
+	    $late_bound = 0 if $late_bound < 0;
+	}
+	
+	# If we are querying for summary clusters, we can use the cluster
+	# table row corresponding to that interval number.  Unless we are
+	# using the 'overlap' rule, in which case we need the unrestricted
+	# cluster table row (the one for interval_no = 0).
+	
+	if ( $op eq 'summary' and $time_rule ne 'overlap' )
+	{
+	    $summary_interval = $interval_no;
 	}
     }
     
-    if ( defined $max_age and $max_age > 0 )
+    # Otherwise, if a range of years was specified, use that.
+    
+    elsif ( defined $self->{params}{max_ma} and defined $self->{params}{min_ma} )
     {
-	$tables_ref->{c} = 1;
-	if ( $self->{params}{time_strict} )
+	my $range = $self->{params}{max_ma} - $self->{params}{min_ma};
+	my $buffer = $range * 0.5;
+	
+	$early_age = $self->{params}{max_ma} + 0;
+	$early_bound = defined $self->{params}{earlybuffer} ? 
+		$early_age + $self->{params}{earlybuffer} :
+		    $early_age + $buffer;
+	
+	$late_age = $self->{params}{min_ma} + 0;
+	$late_bound = defined $self->{params}{latebuffer} ?
+	    $late_age - $self->{params}{latebuffer} :
+		$late_age - $buffer;
+	
+	$late_bound = 0 if $late_bound < 0;
+    }
+    
+    # Otherwise, handle either a min or max filter alone.
+    
+    else
+    {
+	if ( defined $self->{params}{max_ma} )
 	{
-	    push @filters, "c.early_age <= $max_age";
+	    $early_age = $self->{params}{max_ma} + 0;
+	    $early_bound = $early_age;
 	}
-	else
+	
+	if ( defined $self->{params}{min_ma} )
 	{
-	    push @filters, "c.late_age < $max_age";
+	    $late_age = $self->{params}{min_ma} + 0;
+	    $late_bound = $late_age;
+	}
+    }
+    
+    # Now, if we are summarizing then add the appropriate interval filter.
+    
+    if ( $op eq 'summary' )
+    {
+	push @filters, "s.interval_no = $summary_interval";
+    }
+    
+    # Then, if a time filter was specified and we need one, apply it.  If we
+    # are were given a summary interval and no non-geographic filters were
+    # specified, then we don't need one because the necessary filtering has
+    # already been done by selecting the appropriate interval_no in the summary table.
+    
+    if ( defined $early_age or defined $late_age )
+    {
+	unless ( $op eq 'summary' and not $non_geo_filter and $time_rule eq 'buffer' )
+	{
+	    $tables_ref->{c} = 1;
+	    
+	    # The exact filter we use will depend upon the time rule that was
+	    # selected.
+	    
+	    if ( $time_rule eq 'contain' )
+	    {
+		if ( defined $late_age and $late_age > 0 )
+		{
+		    push @filters, "c.late_age >= $late_age";
+		}
+		
+		if ( defined $early_age and $early_age > 0 )
+		{
+		    push @filters, "c.early_age <= $early_age";
+		}
+	    }
+	    
+	    elsif ( $time_rule eq 'overlap' )
+	    {
+		if ( defined $late_age and $late_age > 0 )
+		{
+		    push @filters, "c.early_age > $late_age";
+		}
+		
+		if ( defined $early_age and $early_age > 0 )
+		{
+		    push @filters, "c.late_age < $early_age";
+		}
+	    }
+	    
+	    else # $time_rule eq 'buffer'
+	    {
+		if ( defined $late_age and defined $early_age and 
+		     defined $late_bound and defined $early_bound )
+		{
+		    push @filters, "c.early_age <= $early_bound and c.late_age >= $late_bound";
+		    push @filters, "(c.early_age < $early_bound or c.late_age > $late_bound)";
+		    push @filters, "c.early_age > $late_age";
+		    push @filters, "c.late_age < $early_age";
+		}
+		
+		else
+		{
+		    if ( defined $late_age and defined $late_bound )
+		    {
+			push @filters, "c.late_age >= $late_bound and c.early_age > $late_age";
+		    }
+		    
+		    if ( defined $early_age and defined $early_bound )
+		    {
+			push @filters, "c.early_age <= $early_bound and c.late_age < $early_age";
+		    }
+		}
+	    }
 	}
     }
     
     # Return the list
     
     return @filters;
+}
+
+
+# adjustCoordinates ( fields_ref )
+# 
+# Alter the output coordinate fields to match the longitude/latitude bounds.
+
+sub adjustCoordinates {
+
+    my ($self, $fields_ref) = @_;
+    
+    return unless $self->{params}{lngmin};
+    
+    my $x1 = $self->{params}{lngmin};
+    my $x2 = $self->{params}{lngmax};
+    
+    # Adjust the output coordinates to fall within the range indicated by the
+    # input parameters.
+    
+    my $x1_offset = 0;
+    my $x2_offset = 0;
+    
+    if ( $x1 < -180.0 )
+    {
+	$x1_offset = -1 * floor( (180.0 - $x1) / 360.0) * 360.0;
+    }
+    
+    elsif ( $x1 > 180.0 )
+    {
+	$x1_offset = floor( ($x1 + 180.0) / 360.0 ) * 360.0;
+    }
+    
+    if ( $x2 < -180.0 )
+    {
+	$x2_offset = -1 * floor( (180.0 - $x2) / 360.0) * 360.0;
+    }
+    
+    elsif ( $x2 > 180.0 )
+    {
+	$x2_offset = floor( ($x2 + 180.0) / 360.0 ) * 360.0;
+    }
+    
+    # Now make sure we have an actual expression.
+    
+    $x1_offset = "+$x1_offset" unless $x1_offset < 0;
+    $x2_offset = "+$x2_offset" unless $x2_offset < 0;
+    
+    # If the longitude bounds do not cross the antimeridian, we just need to
+    # add the specified offset.
+    
+    if ( $x1_offset == $x2_offset )
+    {
+	$$fields_ref =~ s/([a-z]\.lng)/$1$x1_offset as lng/;
+    }
+    
+    # Otherwise, we have to use one offset for positive coords and the other
+    # for negative ones.
+    
+    else
+    {
+	$$fields_ref =~ s/([a-z]\.lng)/if($1<0,$1$x2_offset,$1$x1_offset) as lng/;
+    }
 }
 
 
@@ -827,47 +1092,30 @@ sub generateJoinList {
     # Some tables imply others.
     
     $tables->{o} = 1 if $tables->{t};
-    $tables->{c} = 1 if ($tables->{o} or $tables->{ci}) and $self->{op} eq 'summary';
+    $tables->{c} = 1 if $tables->{o};
     
     # Create the necessary join expressions.
     
-    $join_list .= "JOIN coll_matrix as c using ($summary_join_field)\n"
-	if $tables->{c} and defined $summary_join_field;
     $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
 	if $tables->{o};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t};
-    $join_list .= "LEFT JOIN refs as r on r.reference_no = $mt.reference_no\n" 
+    $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n" 
 	if $tables->{r};
-    $join_list .= "LEFT JOIN person as ppa on ppa.person_no = $mt.authorizer_no\n"
+    $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
 	if $tables->{ppa};
-    $join_list .= "LEFT JOIN person as ppe on ppe.person_no = $mt.enterer_no\n"
+    $join_list .= "LEFT JOIN person as ppe on ppe.person_no = c.enterer_no\n"
 	if $tables->{ppe};
-    $join_list .= "LEFT JOIN coll_ints as ci on ci.collection_no = c.collection_no\n"
-	if $tables->{ci};
+    $join_list .= "LEFT JOIN person as ppm on ppm.person_no = c.modifier_no\n"
+	if $tables->{ppm};
+    $join_list .= "LEFT JOIN $INTERVAL_MAP as im on im.early_age = $mt.early_age and im.late_age = $mt.late_age and scale_no = 1\n"
+	if $tables->{im};
     
-    if ( $self->{op} eq 'summary' )
-    {
-	$join_list .= "JOIN interval_map as ei on ei.older_seq = $mt.early_seq\n"
-	    if $tables->{ei};
-	$join_list .= "JOIN interval_map as li on li.younger_seq = $mt.late_seq\n"
-	    if $tables->{li};
-    }
-    
-    else
-    {
-	$join_list .= "JOIN interval_map as ei on ei.interval_no = $mt.early_int_no\n"
-	    if $tables->{ei};
-	$join_list .= "JOIN interval_map as li on li.interval_no = $mt.late_int_no\n"
-	    if $tables->{li};
-    }
-    
-    if ( $tables->{icm} )
-    {
-	$join_list .= "LEFT JOIN interval_container_map as icm 
-			on icm.early_seq = $mt.early_seq and icm.late_seq = $mt.late_seq\n"
-    }
-    
+    $join_list .= "LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = $mt.early_int_no\n"
+	if $tables->{ei};
+    $join_list .= "LEFT JOIN $INTERVAL_DATA as li on li.interval_no = $mt.late_int_no\n"
+	if $tables->{li};
+        
     return $join_list;
 }
 
