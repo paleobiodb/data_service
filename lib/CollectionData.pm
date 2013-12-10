@@ -590,8 +590,8 @@ sub fixTimeOutput {
     
     my ($self, $record) = @_;
     
-    $record->{early_age} =~ s/0+$//;
-    $record->{late_age} =~ s/0+$//;
+    $record->{early_age} =~ s/\.?0+$//;
+    $record->{late_age} =~ s/\.?0+$//;
 }
 
 
