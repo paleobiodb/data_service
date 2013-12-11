@@ -44,4 +44,20 @@ L</data1.1/taxa/list.json?name=Dascillidae&rel=all_parents>
 
 =back
 
+=item Auto-completion | L</data1.1/taxa/auto|/data1.1/taxa/auto_doc.html>
+
+Returns a list of names matching the given prefix or partial name.  Examples:
+
+=over 4
+
+=item *
+
+L</data1.1/taxa/auto.json?name=h. sap&limit=10>
+
+=item *
+
+L</data1.1/taxa/auto.json?name=cani&limit=10>
+
+=back
+
 =back

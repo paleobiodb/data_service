@@ -325,6 +325,13 @@ ruleset $dv '1.1/taxa/list' =>
     "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
     [allow => '1.1:common_params'];
 
+ruleset $dv '1.1/taxa/auto' =>
+    [param => 'name', ANY_VALUE],
+    "A partial name or prefix.  It must have at least 3 significant characters, and may include both a genus",
+    "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex",
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
+    [allow => '1.1:common_params'];
+
 ruleset $dv '1.1/taxa/thumb' =>
     [content_type => 'ct', 'png=image/png', { key => 'output_format' }],
     [ignore => 'splat'],
@@ -426,6 +433,10 @@ define_directory $ds '1.1/taxa' => { class => 'TaxonData',
 define_route $ds '1.1/taxa/single' => { op => 'get' };
 
 define_route $ds '1.1/taxa/list' => { op => 'list' };
+
+define_route $ds '1.1/taxa/auto' => { op => 'auto', 
+				      output => 'auto',
+				      docresp => 'auto' };
 
 define_route $ds '1.1/taxa/thumb' => { op => 'getThumb' };
 

@@ -149,6 +149,20 @@ $OUTPUT{img} =
      doc => "If this value is non-zero, you can use it to construct image URLs using L</data1.1/taxa/thumb_doc|/data1.1/taxa/thumb> and L</data1.1/taxa/icon_doc|/data1.1/taxa/icon>." },
   ];
 
+$OUTPUT{auto} = 
+   [
+    { rec => 'taxon_no', dwc => 'taxonID', com => 'oid',
+	doc => "A positive integer that uniquely identifies this taxonomic name"},
+    { rec => 'record_type', com => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => 'taxon',
+        doc => "The type of this object: {value} for a taxonomic name" },
+    { rec => 'taxon_rank', dwc => 'taxonRank', com => 'rnk', com_code => \%TAXON_RANK,
+	doc => "The taxonomic rank of this name" },
+    { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
+	doc => "The scientific name of this taxon" },
+    { rec => 'n_occs', com => 'noc',
+        doc => "The number of occurrences of this taxon in the database" },
+   ];
+
 
 # get ( )
 # 
@@ -443,6 +457,86 @@ sub list {
     {
 	return;
     }
+}
+
+
+# auto ( )
+# 
+# Return an auto-complete list, given a partial name.
+
+sub auto {
+    
+    my ($self) = @_;
+    
+    my $dbh = $self->{dbh};
+    my $partial = $self->{params}{name};
+    
+    my $search_table = $TAXON_TABLE{taxon_trees}{search};
+    my $attrs_table = $TAXON_TABLE{taxon_trees}{attrs};
+    
+    my $sql;
+    
+    # Strip out any characters that don't appear in names.  But allow SQL wildcards.
+    
+    $partial =~ tr/[a-zA-Z_%. ]//dc;
+    
+    # Construct and execute an SQL statement.
+    
+    my $limit = $self->generateLimitClause();
+    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    
+    # If we are given a genus (possibly abbreviated), generate a search on
+    # genus and species name.
+    
+    if ( $partial =~ qr{^([a-zA-Z_]+)([.%])? +([a-zA-Z_]+)} )
+    {
+	my $genus = $2 ? $dbh->quote("$1%") : $dbh->quote($1);
+	my $species = $dbh->quote("$3%");
+	
+	$sql = "SELECT $calc concat(genus, ' ', taxon_name) as taxon_name, taxon_rank, match_no as taxon_no, n_occs
+		FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
+		WHERE genus like $genus and taxon_name like $species ORDER BY n_occs desc $limit";
+    }
+    
+    # If we are given a single name followed by one or more spaces and nothing
+    # else, take it as a genus name.
+    
+    elsif ( $partial =~ qr{^([a-zA-Z]+)([.%])? +$} )
+    {
+	my $genus = $2 ? $dbh->quote("$1%") : $dbh->quote($1);
+	
+	$sql = "SELECT $calc concat(genus, ' ', taxon_name) as taxon_name, taxon_rank, match_no as taxon_no, n_occs
+		FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
+		WHERE genus like $genus ORDER BY n_occs desc $limit";
+    }
+    
+    # Otherwise, if it has no spaces then just search for the name.  Turn all
+    # periods into wildcards.
+    
+    elsif ( $partial =~ qr{^[a-zA-Z_%.]+$} )
+    {
+	return if length($partial) < 3;
+	
+	$partial =~ s/\./%/g;
+	
+	my $name = $dbh->quote("$partial%");
+	
+	$sql = "SELECT $calc if(genus <> '', concat(genus, ' ', taxon_name), taxon_name) as taxon_name, taxon_rank, match_no as taxon_no, n_occs
+	        FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
+	        WHERE taxon_name like $name ORDER BY n_occs desc $limit";
+    }
+    
+    $self->{main_sth} = $dbh->prepare($sql);
+    $self->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    if ( $calc )
+    {
+	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
+    }
+    
+    return 1;
 }
 
 
