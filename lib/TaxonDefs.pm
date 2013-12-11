@@ -22,6 +22,7 @@ $TAXON_TABLE{taxon_trees} = {
     search => 'taxon_search',
     ints => 'taxon_ints',
     counts => 'taxon_counts',
+    images => 'taxon_images',
     
     authorities => 'authorities',
     opinions => 'opinions',

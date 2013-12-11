@@ -405,6 +405,16 @@ sub generate_single_result {
 	    $self->emitFooter();
     }
     
+    # If we have a single piece of data, use that.  Assume that the formatting
+    # has already been taken care of.
+    
+    elsif ( defined $self->{main_data} )
+    {
+	my $ct = $self->{valid}->content_type();
+	Dancer::SharedData->response->content_type($ct) if $ct;
+	return $self->{main_data};
+    }
+    
     # Otherwise, we have an empty result set.
     
     else

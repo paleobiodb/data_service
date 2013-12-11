@@ -14,7 +14,7 @@ use base 'DataService::Base';
 use Carp qw(carp croak);
 
 use PBDBData qw(generateReference generateAttribution);
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_RANK %RANK_STRING);
+use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use Taxonomy;
 
 
@@ -143,6 +143,12 @@ $OUTPUT{nav} =
         rule => $child_rule },
   ];
 
+$OUTPUT{img} = 
+  [
+   { rec => 'image_no', com => 'img', 
+     doc => "If this value is non-zero, you can use it to construct image URLs using L</data1.1/taxa/thumb_doc|/data1.1/taxa/thumb> and L</data1.1/taxa/icon_doc|/data1.1/taxa/icon>." },
+  ];
+
 
 # get ( )
 # 
@@ -206,6 +212,7 @@ sub get {
     push @fields, 'attr' if $self->{show}{attr};
     push @fields, 'size' if $self->{show}{size};
     push @fields, 'app' if $self->{show}{app};
+    push @fields, 'img' if $self->{show}{img};
     
     push @fields, 'link' if $self->{show}{nav};
     push @fields, 'parent' if $self->{show}{nav};
@@ -436,6 +443,48 @@ sub list {
     {
 	return;
     }
+}
+
+
+# getThumb ( )
+# 
+# Fetch a thumbnail given a taxon_no value.
+
+sub getThumb {
+    
+    my ($self) = @_;
+    
+    my $dbh = $self->{dbh};
+    my $TAXON_IMAGES = $TAXON_TABLE{taxon_trees}{images};
+    
+    my $orig_no = $self->{params}{id};
+    
+    my $sql = "SELECT thumb FROM $TAXON_IMAGES
+	       WHERE orig_no = $orig_no and priority >= 0
+	       ORDER BY priority desc LIMIT 1";
+    
+    ($self->{main_data}) = $dbh->selectrow_array($sql);
+}
+
+
+# getIcon ( )
+# 
+# Fetch an icon given a taxon_no value.
+
+sub getIcon {
+
+    my ($self) = @_;
+    
+    my $dbh = $self->{dbh};
+    my $TAXON_IMAGES = $TAXON_TABLE{taxon_trees}{images};
+    
+    my $orig_no = $self->{params}{id};
+    
+    my $sql = "SELECT icon FROM $TAXON_IMAGES
+	       WHERE orig_no = $orig_no and priority >= 0
+	       ORDER BY priority desc LIMIT 1";
+    
+    ($self->{main_data}) = $dbh->selectrow_array($sql);
 }
 
 

@@ -485,12 +485,6 @@ register 'execute_operation' => sub {
 	
 	$ruleset = $path if !defined $ruleset && $validator->ruleset_defined($path);
 	
-	# Set the response content type and access control header
-	# appropriately for this request.
-	
-	$self->set_response_content_type($path, $format);
-	$self->set_access_control_header($path, $attrs);
-	
 	# Marshall that attributes needed for the operation, including a
 	# database handle if one is needed.
 	
@@ -523,6 +517,12 @@ register 'execute_operation' => sub {
 	    $request->{valid} = $result;
 	}
 	
+	# Set the response content type and access control header
+	# appropriately for this request.
+	
+	$self->set_response_content_type($path, $format) if $MEDIA_TYPE{$format};
+	$self->set_access_control_header($path, $attrs);
+	
 	# Determine the output fields and vocabulary, based on the parameters
 	# already specified.
 	
@@ -532,9 +532,9 @@ register 'execute_operation' => sub {
 	
 	$request->$op();
 	
-	# If we have a single main record, then we return it.
+	# If we have a single main record or data, then we return it.
 	
-	if ( exists $request->{main_record} )
+	if ( exists $request->{main_record} or exists $request->{main_data} )
 	{
 	    return $request->generate_single_result();
 	}
@@ -654,7 +654,7 @@ sub error_result {
     else
     {
 	$code = 500;
-	error("Error on path $path: $error");
+	#error("Error on path $path: $error");
 	@errors = "A server error occurred.  Please contact the server administrator.";
     }
     

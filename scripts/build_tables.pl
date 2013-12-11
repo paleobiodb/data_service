@@ -22,6 +22,7 @@ use OccurrenceTables qw(buildOccurrenceTables);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables
 		   buildTaxaCacheTables computeGenSp);
+use TaxonPics qw(getPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables);
 
@@ -31,7 +32,7 @@ use DiversityTables qw(buildDiversityTables);
 
 my %options;
 
-getopts('tT:mbcKuivryds', \%options);
+getopts('tT:mbcKuivrydspf', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -55,9 +56,11 @@ initMessages(2, 'Rebuild');
 # Call the routines that build the various caches, depending upon the options
 # that were specified.
 
+my $force = $options{f};
 my $interval_data = $options{i};
 my $interval_map = $options{u};
 my $rank_map = $options{r};
+my $taxon_pics = $options{p};
 
 my $collection_tables = $options{c};
 my $occurrence_tables = $options{m};
@@ -133,6 +136,13 @@ if ( $old_taxon_tables )
     buildTaxaCacheTables($dbh, 'taxon_trees');
 }
 
+
+# The option -p causes taxon pictures to be fetched from phylopic.org
+
+if ( $taxon_pics )
+{
+    getPics($dbh, 'tree_table', $force);
+}
 
 # temp
 
