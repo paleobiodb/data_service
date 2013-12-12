@@ -384,7 +384,7 @@ sub summary {
     my @filters = $self->generateMainFilters('summary', 's', $self->{select_tables});
     push @filters, $self->generateCollFilters($self->{select_tables});
     
-    push @filters, "s.access_level = 0";
+    push @filters, "c.access_level = 0";
     push @filters, "s.bin_level = $bin_level";
     
     my $filter_string = join(' and ', @filters);
