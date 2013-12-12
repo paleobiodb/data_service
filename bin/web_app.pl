@@ -325,6 +325,23 @@ ruleset $dv '1.1/taxa/list' =>
     "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
     [allow => '1.1:common_params'];
 
+ruleset $dv '1.1/taxa/auto' =>
+    [param => 'name', ANY_VALUE],
+    "A partial name or prefix.  It must have at least 3 significant characters, and may include both a genus",
+    "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex",
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
+    [allow => '1.1:common_params'];
+
+ruleset $dv '1.1/taxa/thumb' =>
+    [content_type => 'ct', 'png=image/png', { key => 'output_format' }],
+    [ignore => 'splat'],
+    [param => 'id', POS_VALUE];
+
+ruleset $dv '1.1/taxa/icon' =>
+    [content_type => 'ct', 'png=image/png', { key => 'output_format' }],
+    [ignore => 'splat'],
+    [param => 'id', POS_VALUE];
+
 ruleset $dv '1.1:interval_selector' => 
     [param => 'scale_id', POS_VALUE, ENUM_VALUE('all'), 
 	{ list => ',', alias => 'scale',
@@ -416,6 +433,14 @@ define_directory $ds '1.1/taxa' => { class => 'TaxonData',
 define_route $ds '1.1/taxa/single' => { op => 'get' };
 
 define_route $ds '1.1/taxa/list' => { op => 'list' };
+
+define_route $ds '1.1/taxa/auto' => { op => 'auto', 
+				      output => 'auto',
+				      docresp => 'auto' };
+
+define_route $ds '1.1/taxa/thumb' => { op => 'getThumb' };
+
+define_route $ds '1.1/taxa/icon' => { op => 'getIcon' };
 
 # Collections
 
@@ -531,7 +556,7 @@ get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
     
     $DB::single = 1;
     
-    # If the path ends in a number, replace it by 'ID' and add the parameter
+    # If the path ends in a number, replace it by 'single' and add the parameter
     # as 'id'.
     
     if ( $path =~ qr{ (\d+) $ }xs )

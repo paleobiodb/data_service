@@ -315,7 +315,7 @@ sub buildCollectionTables {
 			JOIN $INTERVAL_BUFFER as ib using (interval_no)
 		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
 			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
-			and (m.early_age > i.late_age or m.late_age < i.early_age)
+			and (m.early_age > i.late_age and m.late_age < i.early_age)
 		GROUP BY interval_no, bin_id_$level";
 	
 	$result = $dbh->do($sql);

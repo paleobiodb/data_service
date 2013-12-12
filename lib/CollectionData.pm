@@ -164,6 +164,11 @@ $OUTPUT{time} =
 	doc => "The end of a range of intervals from the selected timescale that most closely brackets the time range associated with this collection or cluster (with C<early_int_no>)" },
    ];
 
+$PROC{time} = 
+   [
+    { rec => 'early_age', use_main => 1, code => \&fixTimeOutput },
+   ];
+
 $SELECT{ent} = "\$mt.authorizer_no, ppa.name as authorizer, \$mt.enterer_no, ppe.name as enterer, \$mt.modifier_no, ppm.name as modifier";
 
 $TABLES{ent} = ['ppa', 'ppe', 'ppm'];
@@ -573,6 +578,20 @@ sub list {
     # }
     
     return 1;
+}
+
+
+# fixTimeOutput ( record )
+# 
+# Adjust the time output by truncating unneeded digits and adding
+# default containing-interval values.
+
+sub fixTimeOutput {
+    
+    my ($self, $record) = @_;
+    
+    $record->{early_age} =~ s/\.?0+$//;
+    $record->{late_age} =~ s/\.?0+$//;
 }
 
 

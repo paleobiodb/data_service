@@ -339,6 +339,7 @@ sub new {
 		 search_table => $SEARCH_TABLE{$table_name},
 		 opinion_table => $OPINION_TABLE{$table_name},
 		 opinion_cache => $OPINION_CACHE{$table_name},
+		 image_table => 'taxon_images',
 	         scratch_table => 'ancestry_scratch' };
     
     bless $self, $class;
@@ -463,6 +464,8 @@ our ($APP_FIELDS) = ", v.first_early_age as firstapp_ea, v.first_late_age as fir
 our ($INT_PHYLO_FIELDS) = ", pi.kingdom_no, pi.kingdom, pi.phylum_no, pi.phylum, pi.class_no, pi.class, pi.order_no, pi.order, pi.family_no, pi.family";
 
 our ($COUNT_PHYLO_FIELDS) = ", pc.phylum_count, pc.class_count, pc.order_count, pc.family_count, pc.genus_count, pc.species_count";
+
+our ($IMG_FIELDS) = ", (SELECT orig_no FROM taxon_images as ti WHERE ti.orig_no = t.orig_no and priority >= 0 LIMIT 1) as image_no";
 
 # The following hash is used by the return option 'id_table'.
 
@@ -5591,6 +5594,12 @@ sub generateQueryFields {
 	    $fields .= $COMMENT_FIELDS;
 	}
 	
+	elsif ( $inc eq 'img' )
+	{
+	    $fields .= $IMG_FIELDS;
+	    $tables{ti} = 1;
+	}
+	
 	elsif ( $inc eq 'size' )
 	{
 	    $fields .= $SIZE_FIELDS;
@@ -5751,6 +5760,7 @@ sub generateExtraJoins {
     my $auth_table = $self->{auth_table};
     my $tree_table = $self->{tree_table};
     my $attrs_table = $self->{attrs_table};
+    my $image_table = $self->{image_table};
     
     my $extra_joins = '';
     
@@ -5790,6 +5800,8 @@ sub generateExtraJoins {
 	if $tables->{pi};
     $extra_joins .= "LEFT JOIN taxon_counts as pc on pc.orig_no = t.orig_no\n"
 	if $tables->{pc};
+#    $extra_joins .= "LEFT JOIN (SELECT orig_no as image_no FROM $image_table as ti WHERE ti.orig_no = t.orig_no and priority >= 0 ORDER BY priority desc LIMIT 1) as ti\n"
+#	if $tables->{ti};
     
     if ( $tables->{pa} and $main_table !~ /^o/ )
     {
