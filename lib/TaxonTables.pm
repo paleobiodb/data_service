@@ -26,7 +26,7 @@ our (@EXPORT_OK) = qw(buildTaxonTables buildTaxaCacheTables populateOrig compute
 
 =head1 NAME
 
-TaxonTrees
+TaxonTables
 
 =head1 SYNOPSIS
 

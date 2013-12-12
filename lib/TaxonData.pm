@@ -159,6 +159,8 @@ $OUTPUT{auto} =
 	doc => "The taxonomic rank of this name" },
     { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
 	doc => "The scientific name of this taxon" },
+    { rec => 'misspelling', com => 'msp',
+        doc => "If this name is marked as a misspelling, then this field will be included with the value '1'" },
     { rec => 'n_occs', com => 'noc',
         doc => "The number of occurrences of this taxon in the database" },
    ];
@@ -472,6 +474,7 @@ sub auto {
     my $partial = $self->{params}{name};
     
     my $search_table = $TAXON_TABLE{taxon_trees}{search};
+    my $names_table = $TAXON_TABLE{taxon_trees}{names};
     my $attrs_table = $TAXON_TABLE{taxon_trees}{attrs};
     
     my $sql;
@@ -485,16 +488,19 @@ sub auto {
     my $limit = $self->generateLimitClause();
     my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
     
+    my $fields = "taxon_rank, match_no as taxon_no, n_occs, if(spelling_reason = 'misspelling', 1, null) as misspelling";
+    
     # If we are given a genus (possibly abbreviated), generate a search on
     # genus and species name.
     
-    if ( $partial =~ qr{^([a-zA-Z_]+)([.%])? +([a-zA-Z_]+)} )
+    if ( $partial =~ qr{^([a-zA-Z_]+)(\.|[.%]? +)([a-zA-Z_]+)} )
     {
 	my $genus = $2 ? $dbh->quote("$1%") : $dbh->quote($1);
 	my $species = $dbh->quote("$3%");
 	
-	$sql = "SELECT $calc concat(genus, ' ', taxon_name) as taxon_name, taxon_rank, match_no as taxon_no, n_occs
+	$sql = "SELECT $calc concat(genus, ' ', taxon_name) as taxon_name, $fields
 		FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
+			JOIN $names_table as n on n.taxon_no = s.match_no
 		WHERE genus like $genus and taxon_name like $species ORDER BY n_occs desc $limit";
     }
     
@@ -505,8 +511,9 @@ sub auto {
     {
 	my $genus = $2 ? $dbh->quote("$1%") : $dbh->quote($1);
 	
-	$sql = "SELECT $calc concat(genus, ' ', taxon_name) as taxon_name, taxon_rank, match_no as taxon_no, n_occs
+	$sql = "SELECT $calc concat(genus, ' ', taxon_name) as taxon_name, $fields
 		FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
+			JOIN $names_table as n on n.taxon_no = s.match_no
 		WHERE genus like $genus ORDER BY n_occs desc $limit";
     }
     
@@ -521,10 +528,15 @@ sub auto {
 	
 	my $name = $dbh->quote("$partial%");
 	
-	$sql = "SELECT $calc if(genus <> '', concat(genus, ' ', taxon_name), taxon_name) as taxon_name, taxon_rank, match_no as taxon_no, n_occs
+	$sql = "SELECT $calc if(genus <> '', concat(genus, ' ', taxon_name), taxon_name) as taxon_name, $fields
 	        FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
+			JOIN $names_table as n on n.taxon_no = s.match_no
 	        WHERE taxon_name like $name ORDER BY n_occs desc $limit";
     }
+    
+    $self->{main_sql} = $sql;
+    
+    print $sql . "\n\n" if $PBDB_Data::DEBUG;
     
     $self->{main_sth} = $dbh->prepare($sql);
     $self->{main_sth}->execute();
