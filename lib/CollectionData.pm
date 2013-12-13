@@ -384,11 +384,6 @@ sub summary {
     my @filters = $self->generateMainFilters('summary', 's', $self->{select_tables});
     push @filters, $self->generateCollFilters($self->{select_tables});
     
-    push @filters, "c.access_level = 0";
-    push @filters, "s.bin_level = $bin_level";
-    
-    my $filter_string = join(' and ', @filters);
-    
     # If a query limit has been specified, modify the query accordingly.
     
     my $limit = $self->generateLimitClause();
@@ -420,6 +415,11 @@ sub summary {
 	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
 	$fields =~ s/s.n_occs/sum(c.n_occs) as n_occs/;
     }
+    
+    push @filters, $self->{select_tables}{c} ? "c.access_level = 0" : "s.access_level = 0";
+    push @filters, "s.bin_level = $bin_level";
+    
+    my $filter_string = join(' and ', @filters);
     
     $self->{main_sql} = "
 		SELECT $calc $fields

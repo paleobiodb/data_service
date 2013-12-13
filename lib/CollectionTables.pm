@@ -179,10 +179,13 @@ sub buildCollectionTables {
 	    
 	    next unless $level > 0 && $reso > 0;
 	    
+	    die "invalid resolution $reso: must evenly divide 360 degrees"
+		unless int(360/$reso) == 360/$reso;
+	    
 	    logMessage(2, "      bin level $level: $reso degrees square");
 	    
 	    my $id_base = $reso < 1.0 ? $level . '00000000' : $level . '000000';
-	    my $lng_base = $reso < 1.0 ? $level . '0000' : $level . '000';
+	    my $lng_base = $reso < 1.0 ? '10000' : '1000';
 	    
 	    $sql .= $i > 0 ? ",\n" : "\n";
 	    
@@ -295,6 +298,15 @@ sub buildCollectionTables {
 	
 	logMessage(2, "      generated $result non-empty bins.");
 	
+	# Add a special row indicating the bin resolution for each level.
+	
+	my $coded_reso = 360 / $reso;
+	
+	$sql = "REPLACE INTO $COLL_BINS_WORK (bin_id, interval_no, bin_level, n_colls)
+		VALUES ($level, 999999, $level, $coded_reso)";
+	
+	$result = $dbh->do($sql);
+	
 	logMessage(2, "      summarizing at level $level by geography and interval...");
 	
 	$sql = "INSERT IGNORE INTO $COLL_BINS_WORK
@@ -323,7 +335,7 @@ sub buildCollectionTables {
 	logMessage(2, "      generated $result non-empty bins.");
     }
     
-    logMessage(2, "    setting geographic locations...");
+    logMessage(2, "    setting point geometries for spatial index...");
     
     $sql = "UPDATE $COLL_BINS_WORK set loc =
 		if(lng is null or lat is null, point(1000.0, 1000.0), point(lng, lat))";

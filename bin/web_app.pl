@@ -366,6 +366,9 @@ ruleset $dv '1.1/intervals/single' =>
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1/config' =>
+    [param => 'show', ENUM_VALUE('geosum', 'ranks', 'all'), { list => ',', default => 'all' }],
+    "The value of this parameter should be a comma-separated list of section names drawn",
+    "From the list given below.  It defaults to 'all'.",
     "!> You can use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
     [allow => '1.1:common_params'];
 
@@ -403,8 +406,9 @@ define_directory $ds '1.1' => { output => 'basic' };
 # Miscellaneous
 
 define_route $ds '1.1/config' => { class => 'ConfigData',
+				   output => undef,
 				   op => 'get',
-				   docresp => 'basic',
+				   docresp => 'geosum,ranks',
 				 };
 
 define_route $ds '1.1/common' => { ruleset => '1.1:common_params',
@@ -502,7 +506,7 @@ get qr{ ^ /data [\d.]* /css/(.*) }xs => sub {
     
     $DB::single = 1;
     my ($filename) = splat;
-    send_file("css/$filename", streaming => 1);
+    send_file("css/$filename");
 };
 
 

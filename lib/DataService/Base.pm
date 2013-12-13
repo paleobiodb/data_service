@@ -74,6 +74,12 @@ sub set_response {
     
     my $valid = $self->{valid};
     
+    # Figure out which operation we are executing
+    
+    my $class = ref $self;
+    
+    no strict 'refs';
+    
     # Set 'show' and 'show_order' based on the value of the 'show' parameter.
     # Make sure that 'show_order' contains no duplicates.
 
@@ -98,7 +104,19 @@ sub set_response {
 	{
 	    next if $show{$s};
 	    $show{$s} = 1;
-	    push @show, $s;
+	    
+	    if ( exists ${"${class}::GROUP"}{$s} )
+	    {
+		foreach my $ss (@{${"${class}::GROUP"}{$s}})
+		{
+		    $show{$ss} = 1;
+		    push @show, $ss;
+		}
+	    }
+	    else
+	    {
+		push @show, $s;
+	    }
 	}
     }
     
@@ -116,12 +134,6 @@ sub set_response {
 	 'pbdb');
     
     $self->{vocab} = $vocab;
-    
-    # Figure out which operation we are executing
-    
-    my $class = ref $self;
-    
-    no strict 'refs';
     
     # Quote all output fields if we are directed to.  A level of 2 means to
     # quote everything, 1 means only quote fields that contain commas or newlines
@@ -292,7 +304,7 @@ sub document_response {
 	my $output_list = ${"${class}::OUTPUT"}{$section};
 	next unless ref $output_list eq 'ARRAY';
 	
-	my $name = $section eq $sections[0] ? 'basic' : $section;
+	my $name = $section;
 	
 	foreach my $r (@$output_list)
 	{
