@@ -368,7 +368,7 @@ ruleset $dv '1.1/intervals/single' =>
 ruleset $dv '1.1/config' =>
     [param => 'show', ENUM_VALUE('geosum', 'ranks', 'all'), { list => ',', default => 'all' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
-    "From the list given below.  It defaults to 'all'.",
+    "From the list given below, or 'all'.  It defaults to 'all'.",
     "!> You can use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
     [allow => '1.1:common_params'];
 

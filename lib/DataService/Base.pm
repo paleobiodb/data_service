@@ -283,6 +283,7 @@ sub document_response {
     
     my $field_count = scalar(@vocab_list);
     my $field_string = join ' / ', @vocab_list;
+    $field_string =~ s/rec/pbdb/;
     
     if ( $field_count > 1 )
     {

@@ -23,30 +23,22 @@ $GROUP{all} = ['geosum', 'ranks'];
 
 $OUTPUT{geosum} = 
    [
-    { rec => 'summary_levels', com => 'sum', rule => 
-	[
-	 { rec => 'bin_level', com => 'lvl',
-	   doc => "The bin level" },
-	 { rec => 'degrees', com => 'deg', 
-	   doc => "The size of each cluster in degrees.  Each level of clustering is aligned so that 0 lat and 0 lng fall on cluster boundaries" },
-	 { rec => 'count', com => 'cnt',
-	   doc => "The number of summary bins at each level" },
-	 { rec => 'max_colls', com => 'mco',
-	   doc => "The maximum nmber of collections in any bin at this level" },
-	 { rec => 'max_occs', com => 'moc',
-	   doc => "The maximum number of occurrences in any bin at this level" },
-	], 
-      doc => "A list of geographic summary (clustering) levels.  The length of the list is the number of available summary levels." },
+    { rec => 'bin_level', com => 'lvl',
+      doc => "Cluster level, starting at 1" },
+    { rec => 'degrees', com => 'deg', 
+      doc => "The size of each cluster in degrees.  Each level of clustering is aligned so that 0 lat and 0 lng fall on cluster boundaries, and the cluster size must evenly divide 180." },
+    { rec => 'count', com => 'cnt',
+      doc => "The number of summary clusters at this level" },
+    { rec => 'max_colls', com => 'mco',
+      doc => "The maximum nmber of collections in any cluster at this level (can be used for scaling cluster indicators)" },
+    { rec => 'max_occs', com => 'moc',
+      doc => "The maximum number of occurrences in any cluster at this level (can be used for scaling cluster indicators)" },
    ];
 
 $OUTPUT{ranks} = 
    [
-    { rec => 'taxonomic_ranks', com => 'trn', rule => 
-	[
-	 { rec => 'rank', com => 'rnk', doc => 'Taxonomic rank' },
-	 { rec => 'code', com => 'cod', doc => 'Numeric code' },
-	],
-      doc => "A list of taxonomic ranks used in the database, with the equivalent numeric codes used in compact (i.e. JSON) responses." },
+    { rec => 'rank', com => 'rnk', doc => 'Taxonomic rank' },
+    { rec => 'code', com => 'cod', doc => 'Numeric code used for this rank in compact (i.e. JSON) responses' },
    ];
 
 
@@ -98,9 +90,11 @@ sub get {
 
     my ($self) = @_;
     
-    $self->{main_record} = { summary_levels => $BINS,
-			     taxonomic_ranks => $RANKS,
-			     continents => $CONTINENTS };
+    $self->{main_result} = [];
+    
+    push @{$self->{main_result}}, @$BINS if $self->{show}{geosum};
+    push @{$self->{main_result}}, @$RANKS if $self->{show}{ranks};
+    
     return 1;
 }
 

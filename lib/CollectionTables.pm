@@ -179,8 +179,8 @@ sub buildCollectionTables {
 	    
 	    next unless $level > 0 && $reso > 0;
 	    
-	    die "invalid resolution $reso: must evenly divide 360 degrees"
-		unless int(360/$reso) == 360/$reso;
+	    die "invalid resolution $reso: must evenly divide 180 degrees"
+		unless int(180/$reso) == 180/$reso;
 	    
 	    logMessage(2, "      bin level $level: $reso degrees square");
 	    
