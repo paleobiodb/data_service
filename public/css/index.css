@@ -99,7 +99,10 @@ footer > p > a:hover {
 .wrapper > a {
   text-align: center;
 }
-#pbdbLink > img {
+.splashMainButton {
+  color:whitesmoke;
+}
+.splashMainButton > img {
   border-radius:0;
   height:2em;
 }
