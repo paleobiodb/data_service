@@ -6,6 +6,20 @@ This path returns information useful for configuring client applications.  It
 is designed specifically for the PBDB Navigator application, but may be useful
 to other applications as well.
 
+=head3 Examples:
+
+=over 4
+
+=item *
+
+L</data1.1/config.json>
+
+=item *
+
+L</data1.1/config.txt?show=geosum>
+
+=back
+
 <% PROCESS params %>
 
 <% PROCESS response %>
