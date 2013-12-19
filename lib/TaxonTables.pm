@@ -4548,7 +4548,7 @@ sub buildTaxaCacheTables {
     logMessage(2, "    setting spelling_no values");
     
     $result = $dbh->do("
-		UPDATE $LIST_CACHE_WORK as l
+		UPDATE IGNORE $LIST_CACHE_WORK as l
 			JOIN $tree_table as pt on pt.orig_no = l.parent_no
 			JOIN $tree_table as ct on ct.orig_no = l.child_no
 		SET l.parent_no = pt.spelling_no,
