@@ -72,7 +72,8 @@ ruleset $dv '1.1:common_params' =>
     "labelled C<basic>.  For more information, see the documentation pages",
     "for the individual URL paths.", "=back",
     "!!The following parameters can be used with all requests:",
-    [content_type => 'ct', 'json', 'xml', 'txt=text/plain', 'tsv=text/tab-separated-values', 'csv', 
+    [content_type => 'ct', 'json', 'xml', 'txt=text/plain', 'tsv=text/tab-separated-values', 
+	'csv', 'ris=application/x-Research-Info-Systems',
     	{ key => 'output_format' }],
     [optional => 'limit', POS_ZERO_VALUE, ENUM_VALUE('all'), 
       { error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
@@ -191,6 +192,13 @@ ruleset $dv '1.1/colls/single' =>
     [allow => '1.1:common_params'];
 
 ruleset $dv '1.1/colls/list' => 
+    [allow => '1.1:coll_selector'],
+    [allow => '1.1:main_selector'],
+    [allow => '1.1:coll_display'],
+    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
+    [allow => '1.1:common_params'];
+
+ruleset $dv '1.1/colls/refs' =>
     [allow => '1.1:coll_selector'],
     [allow => '1.1:main_selector'],
     [allow => '1.1:coll_display'],

@@ -37,20 +37,30 @@ getopts('tT:mbcKuivrydspf', \%options);
 my $cmd_line_db_name = shift;
 
 
+# Initialize the output-message subsystem
+
+initMessages(2, 'Rebuild');
+
 # Get a database handle and a taxonomy object.
 
 my $dbh = connectDB("config.yml", $cmd_line_db_name);
+
+# Verify the database that we are rebuilding.
+
+if ( $dbh->{Name} =~ /database=([^;]+)/ )
+{
+    logMessage(1, "Using database: $1");
+}
+else
+{
+    logMessage(1, "Using connect string: $dbh->{Name}");
+}
 
 my $t = Taxonomy->new($dbh, 'taxon_trees');
 
 # If we are debugging, stop here.
 
 $DB::single = 1;
-
-
-# Initialize the output-message subsystem
-
-initMessages(2, 'Rebuild');
 
 
 # Call the routines that build the various caches, depending upon the options
@@ -115,6 +125,7 @@ if ( $collection_tables )
 
 if ( $occurrence_tables )
 {
+    populateOrig($dbh);
     buildOccurrenceTables($dbh, $options);
 }
 
