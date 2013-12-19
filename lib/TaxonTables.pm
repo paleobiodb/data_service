@@ -1120,8 +1120,10 @@ sub populateOpinionCache {
     # information, not the opinions table.
     
     $result = $dbh->do("INSERT INTO $table_name
-		SELECT o.opinion_no, a1.orig_no, o.child_spelling_no, a2.orig_no,
-			o.parent_spelling_no, 
+		SELECT o.opinion_no, a1.orig_no,
+			if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no), 
+			a2.orig_no,
+			if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no),
 			IF ((o.basis != '' AND o.basis IS NOT NULL), CASE o.basis
  			WHEN 'second hand' THEN 1
 			WHEN 'stated without evidence' THEN 2
@@ -1136,8 +1138,10 @@ sub populateOpinionCache {
 			o.status, o.spelling_reason, null
 		FROM $TAXON_TABLE{$tree_table}{opinions} as o
 			LEFT JOIN $TAXON_TABLE{$tree_table}{refs} as r using (reference_no)
-			JOIN $TAXON_TABLE{$tree_table}{authorities} as a1 on a1.taxon_no = o.child_spelling_no
-			LEFT JOIN $TAXON_TABLE{$tree_table}{authorities} as a2 on a2.taxon_no = o.parent_spelling_no
+			JOIN $TAXON_TABLE{$tree_table}{authorities} as a1
+				on a1.taxon_no = if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no)
+			LEFT JOIN $TAXON_TABLE{$tree_table}{authorities} as a2
+				on a2.taxon_no = if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no)
 		$filter_clause
 		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
     
@@ -3861,6 +3865,7 @@ sub computeAttrsTable {
 				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
 				last_late_age decimal(9,5),
+				precise_age boolean,
 				early_occ int unsigned,
 				late_occ int unsigned,
 				not_trace boolean,
@@ -3873,7 +3878,7 @@ sub computeAttrsTable {
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
 			 first_early_age, first_late_age, last_early_age, last_late_age,
-			 early_occ, late_occ,
+			 precise_age, early_occ, late_occ,
 			 not_trace)
 		SELECT a.orig_no,
 			t.valid_no = t.synonym_no as is_valid,
@@ -3883,9 +3888,11 @@ sub computeAttrsTable {
 			0, 0, 0, 0, tsum.n_occs, 0,
 			coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
 			coalesce(e.maximum_body_mass, e.body_mass_estimate) as max,
-			tsum.first_early_age, tsum.first_late_age,
-			tsum.last_early_age, tsum.last_late_age,
-			tsum.early_occ, tsum.late_occ,
+			if(tsum.precise_age, tsum.first_early_age, null),
+			if(tsum.precise_age, tsum.first_late_age, null),
+			if(tsum.precise_age, tsum.last_early_age, null),
+			if(tsum.precise_age, tsum.last_late_age, null),
+			tsum.precise_age, tsum.early_occ, tsum.late_occ,
 			(a.preservation <> 'trace' or a.preservation is null)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
@@ -3910,6 +3917,7 @@ sub computeAttrsTable {
 			max(v.first_late_age) as first_late_age,
 			min(v.last_early_age) as last_early_age,
 			min(v.last_late_age) as last_late_age,
+			max(v.precise_age) as precise_age,
 			coalesce(v.early_occ) as early_occ,
 			coalesce(v.late_occ) as late_occ
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
@@ -3922,6 +3930,7 @@ sub computeAttrsTable {
 			v.first_late_age = nv.first_late_age,
 			v.last_early_age = nv.last_early_age,
 			v.last_late_age = nv.last_late_age,
+			v.precise_age = nv.precise_age,
 			v.early_occ = nv.early_occ,
 			v.late_occ = nv.late_occ,
 			v.not_trace = nv.not_trace";
@@ -3990,7 +3999,8 @@ sub computeAttrsTable {
 			coalesce(least(min(v.last_early_age), pv.last_early_age), 
 				min(v.last_early_age), pv.last_early_age) as last_early_age,
 			coalesce(least(min(v.last_late_age), pv.last_late_age), 
-				min(v.last_late_age), pv.last_late_age) as last_late_age
+				min(v.last_late_age), pv.last_late_age) as last_late_age,
+			if(pv.precise_age = true, true, max(v.precise_age)) as precise_age
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no
 		 WHERE t.depth = $child_depth and v.is_valid and v.is_senior and v.not_trace
@@ -3998,7 +4008,8 @@ sub computeAttrsTable {
 		SET	v.first_early_age = nv.first_early_age,
 			v.first_late_age = nv.first_late_age,
 			v.last_early_age = nv.last_early_age,
-			v.last_late_age = nv.last_late_age";
+			v.last_late_age = nv.last_late_age,
+			v.precise_age = nv.precise_age";
 	
 	$result = $dbh->do($sql);
 	
@@ -4022,6 +4033,7 @@ sub computeAttrsTable {
 			max(v.first_late_age) as first_late_age,
 			min(v.last_early_age) as last_early_age,
 			min(v.last_late_age) as last_late_age,
+			max(v.precise_age) as precise_age,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and v.is_valid
@@ -4038,6 +4050,7 @@ sub computeAttrsTable {
 			v.first_late_age = nv.first_late_age,
 			v.last_early_age = nv.last_early_age,
 			v.last_late_age = nv.last_late_age,
+			v.precise_age = nv.precise_age,
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
@@ -4060,6 +4073,7 @@ sub computeAttrsTable {
 			max(v.first_late_age) as first_late_age,
 			min(v.last_early_age) as last_early_age,
 			min(v.last_late_age) as last_late_age,
+			max(v.precise_age) as precise_age,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and t.valid_no <> t.synonym_no
@@ -4076,15 +4090,16 @@ sub computeAttrsTable {
 			v.first_late_age = nv.first_late_age,
 			v.last_early_age = nv.last_early_age,
 			v.last_late_age = nv.last_late_age,
+			v.precise_age = nv.precise_age,
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
     }
     
     # Finally, we iterate from the top of the tree back down, computing those
-    # attributes that propagate downward.  For the time being, the only one of
-    # these is a value of extant=0 (which overrides any values of
-    # extant=null).
+    # attributes that propagate downward.  For now, these include:
+    # - a value of extant=0 (which overrides any values of extant=null)
+    # - first/last ages (which override any null values)
     
     for (my $row = 2; $row <= $max_depth; $row++)
     {
@@ -4094,9 +4109,20 @@ sub computeAttrsTable {
 	
 	my $sql = "
 		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-			JOIN $TREE_WORK as t2 on t2.orig_no = t.parent_no and t.depth = $row
-			JOIN $ATTRS_WORK as pv on pv.orig_no = t.synonym_no
+			JOIN $ATTRS_WORK as pv on pv.orig_no = t.parsen_no and t.depth = $row
 		SET v.is_extant = 0 WHERE pv.is_extant = 0";
+	
+	$dbh->do($sql);
+	
+	my $sql = "
+		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+			JOIN $ATTRS_WORK as pv on pv.orig_no = t.parsen_no and t.depth = $row
+		SET v.first_early_age = pv.first_early_age,
+		    v.first_late_age = pv.first_late_age,
+		    v.last_early_age = pv.last_early_age,
+		    v.last_late_age = pv.last_late_age,
+		    v.precise_age = false
+		WHERE not(v.precise_age) and pv.first_early_age is not null";
 	
 	$dbh->do($sql);
     }
@@ -4124,6 +4150,7 @@ sub computeAttrsTable {
 			v.first_late_age = sv.first_late_age,
 			v.last_early_age = sv.last_early_age,
 			v.last_late_age = sv.last_late_age,
+			v.precise_age = sv.precise_age,
 			v.not_trace = sv.not_trace");
     
     # We can stop here when debugging.

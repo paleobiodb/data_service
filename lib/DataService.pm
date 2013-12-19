@@ -313,7 +313,7 @@ sub configure_class {
     
     if ( $class->can('configure') )
     {
-	print "Configuring $class\n";
+	print STDERR "Configuring $class\n";
 	$class->configure(database(), Dancer::config);
     }
 }

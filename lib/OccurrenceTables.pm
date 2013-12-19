@@ -136,12 +136,13 @@ sub buildOccurrenceTables {
 				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
 				last_late_age decimal(9,5),
+				precise_age boolean default true,
 				early_occ int unsigned,
 				late_occ int unsigned) ENGINE=MyISAM");
     
     # Look for the lower and upper bounds for the interval range in which each
-    # taxon occurs.  But ignore intervals that span more than 40 million years.
-    # They are not just specific enough.
+    # taxon occurs.  Start by ignoring intervals that span more than 40 million years,
+    # because they are not precise enough for first/last appearance calculations.
     
     $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age)
@@ -157,6 +158,27 @@ sub buildOccurrenceTables {
     $count = $dbh->do($sql);
     
     logMessage(2, "      $count taxa");
+    
+    # Then we need to go back and add in the taxa that are only known from
+    # occurrences with non-precise ages (i.e. range > 40 my).
+    
+    $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
+			first_early_age, first_late_age, last_early_age, last_late_age,
+			precise_age)
+		SELECT m.orig_no, count(*), count(distinct collection_no),
+			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
+			false
+		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
+			LEFT JOIN $OCC_TAXON_WORK as m1 using (orig_no)
+			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
+			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+		WHERE m1.orig_no is null
+		GROUP BY m.orig_no
+		HAVING m.orig_no > 0";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      $count taxa without highly specific ages");
     
     # Now that we have the age bounds for the first and last occurrence, we
     # can select a candidate first and last occurrence for each taxon (from
