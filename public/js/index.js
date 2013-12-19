@@ -53,8 +53,22 @@ Path.map("#/contact").to(function(){
     $("#content").load("pages/contact.html");
 }).enter(updatePage);
 
-Path.map("#/faq").to(function(){
-    $("#content").load("pages/faq.html");
+Path.map("#/faq(/:item)").to(function() {
+    var div = this.params.item;
+    if (div) {
+      $("#content").load("pages/faq.html", function() {
+        $(".questions li a").click(function(event) {
+          event.preventDefault();
+        });
+        scrollTo(div);
+      });
+    } else {
+      $("#content").load("pages/faq.html", function() {
+        $(".questions li a").click(function(event) {
+          event.preventDefault();
+        });
+      });
+    }
 }).enter(updatePage);
 
 Path.map("#/people").to(function(){
