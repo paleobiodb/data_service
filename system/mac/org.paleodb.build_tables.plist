@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.paleodb.build_tables</string>
+	<key>UserName</key>
+	<string>mmcclenn</string>
+        <key>WorkingDirectory</key>
+        <string>/Library/WebServer/pbdb-new</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>scripts/build_tables.pl -cmt</string>
+	</array>
+	<key>StandardOutPath</key>
+	<string>/Library/WebServer/pbdb-new/logs/build_tables.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Library/WebServer/pbdb-new/logs/build_tables.log</string>
+        <key>StartCalendarInterval</key>
+        <dict>
+                <key>Minute</key>
+                <integer>0</integer>
+                <key>Hour</key>
+                <integer>1</integer>
+        </dict>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>

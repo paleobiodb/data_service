@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.paleodb.dataservice</string>
+        <key>WorkingDirectory</key>
+        <string>/Library/WebServer/pbdb-new</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>bin/data_service.pl</string>
+	</array>
+	<key>KeepAlive</key>
+	<true/>
+</dict>
+</plist>
