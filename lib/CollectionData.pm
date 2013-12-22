@@ -105,7 +105,7 @@ $PROC{attr} = [
     { rec => 'a_pubyr', set => 'pubyr' },
    ];
 
-$SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp";
+$SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype, r.language as r_language, r.doi as r_doi";
 
 $TABLES{ref} = 'r';
 
@@ -208,7 +208,7 @@ $OUTPUT{taxa} =
     }
    ];
 
-$SELECT{crmod} = "o.created, o.modified";
+$SELECT{crmod} = "\$mt.created, \$mt.modified";
 
 $OUTPUT{crmod} = 
    [
@@ -250,6 +250,58 @@ $OUTPUT{stratext} =
       doc => "The local section in which the collection was found" },
    ];
 
+$SELECT{refbase} = "r.reference_no, " . $SELECT{refs} . ", r.comments as r_comments";
+
+$PROC{formatted} = 
+   [
+    { rec => 'r_al1', set => 'formatted', use_main => 1, code => \&PBDBData::generateReference },
+   ];
+
+$OUTPUT{refbase} = 
+   [
+    { rec => 'formatted', com => 'ref',
+	doc => "Formatted reference" },
+    { rec => 'r_ai1', com => 'ai1', pbdb => 'author1init', no_show => 'formonly',
+        doc => "First initial of the first author" },
+    { rec => 'r_al1', com => 'al1', pbdb => 'author1last', no_show => 'formonly',
+        doc => "Last name of the second author" },
+    { rec => 'r_ai2', com => 'ai2', pbdb => 'author2init', no_show => 'formonly',
+        doc => "First initial of the second author" },
+    { rec => 'r_al2', com => 'al2', pbdb => 'author2last', no_show => 'formonly',
+        doc => "Last name of the second author" },
+    { rec => 'r_oa', com => 'oau', pbdb => 'otherauthors', no_show => 'formonly',
+        doc => "The names of the remaining authors" },
+    { rec => 'r_pubyr', com => 'pby', pbdb => 'pubyr', no_show => 'formonly',
+        doc => "The year in which the document was published" },
+    { rec => 'r_reftitle', com => 'tit', pbdb => 'reftitle', no_show => 'formonly',
+        doc => "The title of the document" },
+    { rec => 'r_pubtitle', com => 'pbt', pbdb => 'pubtitle', no_show => 'formonly',
+        doc => "The title of the publication in which the document appears" },
+    { rec => 'r_editors', com => 'eds', pbdb => 'editors', no_show => 'formonly',
+        doc => "Names of the editors, if any" },
+    { rec => 'r_pubvol', com => 'vol', pbdb => 'pubvol', no_show => 'formonly',
+        doc => "The volume number, if any" },
+    { rec => 'r_pubno', com => 'num', pbdb => 'pubno', no_show => 'formonly',
+        doc => "The series number within the volume, if any" },
+    { rec => 'r_fp', com => 'pgf', pbdb => 'firstpage', no_show => 'formonly',
+        doc => "First page number" },
+    { rec => 'r_lp', com => 'pgl', pbdb => 'lastpage', no_show => 'formonly',
+        doc => "Last page number" },
+    { rec => 'r_pubtype', com => 'pbt', pbdb => 'publication_type', no_show => 'formonly',
+        doc => "Publication type" },
+    { rec => 'r_language', com => 'lng', pbdb => 'language', no_show => 'formonly',
+        doc => "Language" },
+    { rec => 'r_doi', com => 'doi', pbdb => 'doi',
+        doc => "The DOI for this document, if known" },
+    { rec => 'r_comments', com => 'cmt', pbdb => 'comments',
+        doc => "Additional comments about this reference, if any" },
+   ];
+
+$OUTPUT{cmt} = 
+   [
+    { rec => 'r_comments', com => 'cmt', pbdb => 'comments',
+        doc => "Additional comments about this reference, if any" },
+   ];
 
 # configure ( )
 # 

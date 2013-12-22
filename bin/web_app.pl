@@ -198,10 +198,17 @@ ruleset $dv '1.1/colls/list' =>
     "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
     [allow => '1.1:common_params'];
 
+ruleset $dv '1.1:refs_display' =>
+    "The following parameter indicates which information should be returned about each resulting collection:",
+    [param => 'show', ENUM_VALUE('rem','crmod'), { list => ',' }],
+    "The value of this parameter should be a comma-separated list of section names drawn",
+    "From the list given below.  It defaults to C<refbasic>.",
+    [ignore => 'level'];
+
 ruleset $dv '1.1/colls/refs' =>
     [allow => '1.1:coll_selector'],
     [allow => '1.1:main_selector'],
-    [allow => '1.1:coll_display'],
+    [allow => '1.1:refs_display'],
     "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
     [allow => '1.1:common_params'];
 
