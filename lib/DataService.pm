@@ -9,10 +9,11 @@
 
 use strict;
 
-package DataService;
+package Web::DataService;
 
-use DataService::Base;
-use DataService::PodParser;
+use Web::DataService::Query;
+use Web::DataService::Output;
+use Web::DataService::PodParser;
 
 #use Dancer qw( :syntax );
 use Dancer::Plugin;
@@ -22,7 +23,9 @@ use Dancer::Plugin::StreamData;
 use Carp qw( croak );
 use Scalar::Util qw( reftype blessed weaken );
 
-# Create a default instance, for use when this module is used in a
+our ($DEFAULT_COUNT) = 1;
+
+# Create a default instance, for when this module is used in a
 # non-object-oriented fashion.
 
 my ($DEFAULT_INSTANCE) = __PACKAGE__->new();
@@ -37,6 +40,9 @@ my (%MEDIA_TYPE) =
     );
 
 
+# Methods
+# =======
+
 # new ( class, attrs )
 # 
 # Create a new data service instance.  If the second argument is provided, it
@@ -46,25 +52,42 @@ sub new {
     
     my ($class, $options) = @_;
     
-    # Determine option values.
+    # Determine option values.  Start from the Dancer configuration file.
+    
+    my $config = Dancer::config;
     
     my $selector = $options->{response_selector} || 'fields';
     my $needs_dbh = $options->{needs_dbh};
-    my $public_access = $options->{public_access};
-    my $validator = $options->{validator};
-    my $default_limit = $options->{default_limit} || 500;
-    my $stream_threshold = $options->{stream_threshold} || 20480;
+    my $public_access = $options->{public_access} || $config->{public_access};
+    my $default_limit = $options->{default_limit} || $config->{default_limit} || 500;
+    my $stream_threshold = $options->{stream_threshold} || $config->{stream_threshold} || 20480;
+    my $name = $options->{name} || $config->{name};
     
-    # Create a new instance.
+    unless ( $name )
+    {
+	$name = 'Data Service' . ( $DEFAULT_COUNT > 1 ? $DEFAULT_COUNT : '' );
+	$DEFAULT_COUNT++;
+    }
+    
+    # Create a new HTTP::Validate object so that we can do parameter
+    # validations.
+    
+    my $validator = HTTP::Validate->new();
+    
+    $validator->validation_settings(allow_unrecognized => 1) if $options->{allow_unrecognized);
+    
+    # Create a new DataService object, and return it:
     
     my $instance = {
+		    name => $name,
 		    validator => $validator,
 		    response_selector => $selector,
 		    public_access => $public_access,
 		    needs_dbh => $needs_dbh,
 		    default_limit => $default_limit,
 		    stream_threshold => $stream_threshold,
-		    route_attrs => {},
+		    path_attrs => {},
+		    vocabulary => {},
 		   };
     
     # Return the new instance
@@ -74,89 +97,148 @@ sub new {
 }
 
 
-# define_route ( path, attrs )
+# define_directory ( path, attrs... )
 # 
-# Set up a "route" entry, representing a route which can be used to access the
-# serice.  The specified attributes will be used to select and carry out the
-# proper operation when this route is used, as well as to construct the
-# documentation page for this route.
-
-sub define_route {
-    
-    my ($self, $path, $attrs);
-    
-    # If we were called as a method, use the object on which we were called.
-    # Otherwise, use the globally defined one.
-    
-    if ( ref $_[0] && blessed $_[0] )
-    {
-	($self, $path, $attrs) = @_;
-    }
-    
-    else
-    {
-	$self = $DEFAULT_INSTANCE;
-	($path, $attrs) = @_;
-    }
-    
-    # Make sure that this route wasn't already defined by a previous call, and
-    # set the attributes as specified.
-    
-    croak "path '$path' was already defined" if defined $self->{route_attrs}{$path};
-    
-    $self->{route_attrs}{$path} = $attrs || {};
-    
-    # See if a partial path for this route was defined as a directory.  If so,
-    # link it up so that attributes will inherit.
-    
-    if ( my $parent = $self->find_parent($path) )
-    {
-	$self->{parent}{$path} = $parent;
-    }    
-    
-    # If one of the attributes is 'class', make sure that the class is
-    # configured. 
-    
-    if ( $attrs->{class} )
-    {
-	$self->configure_class($attrs->{class})
-    }
-}
-
-register 'setup_route' => \&setup_route;
-
-
-# define_directory ( path, attrs )
-# 
-# Set up a "directory" entry, representing a partial path.  All routes that
-# start with this path will inherit any attributes here.  This partial path
-# may (or may not) correspond to a documentation page.
+# Set up a "directory" entry, representing a partial URL path.  All paths
+# that extend this one will inherit any attributes defined here.  This partial
+# path may (or may not) correspond to a documentation page.
 
 sub define_directory {
     
-    my ($self, $path, $attrs);
+    my ($self);
     
     # If we were called as a method, use the object on which we were called.
     # Otherwise, use the globally defined one.
     
-    if ( ref $_[0] && blessed $_[0] )
+    if ( blessed $_[0] && $_[0]->isa('Web::DataService') )
     {
-	($self, $path, $attrs) = @_;
+	$self = shift;
     }
     
     else
     {
 	$self = $DEFAULT_INSTANCE;
-	($path, $attrs) = @_;
     }
     
-    # Make sure this path was not already defined by a previous call, and set
-    # the attributes as specified.
+    my ($package, $filename, $line) = caller;
+    my ($last_node);
     
-    croak "path '$path' was already defined" if defined $self->{route_attrs}{$path};
+    # Now we go through the rest of the arguments.  Hashrefs define new
+    # directories, while strings add to the documentation of the directory
+    # whose definition they follow.
     
-    $self->{route_attrs}{$path} = $attrs || {};
-    $self->{is_directory}{$path} = 1;
+    foreach my $item (@_)
+    {
+	# A hashref defines a new directory.
+	
+	if ( ref $item eq 'HASH' )
+	{
+	    $last_node = $self->define_node($item, $filename, $line, 1);
+	}
+	
+	elsif ( not ref $item )
+	{
+	    $self->add_node_doc($last_node, $item);
+	}
+	
+	else
+	{
+	    croak "the arguments to 'define_directory' must be hashrefs and strings";
+	}
+    }
+    
+    croak "the arguments to 'define_directory' must include a hashref of attributes"
+	unless $last_node;
+}
+
+register 'define_directory' => \&define_directory;
+
+# define_path ( path, attrs... )
+# 
+# Set up a "path" entry, representing a complete path.  This path should have
+# a documentation page, but if one is not defined a template page will be used
+# along with any documentation strings given in this call.
+
+sub define_path {
+    
+    my ($self);
+    
+    # If we were called as a method, use the object on which we were called.
+    # Otherwise, use the globally defined one.
+    
+    if ( blessed $_[0] && $_[0]->isa('Web::DataService') )
+    {
+	$self = shift;
+    }
+    
+    else
+    {
+	$self = $DEFAULT_INSTANCE;
+    }
+    
+    my ($package, $filename, $line) = caller;
+    my ($last_node);
+    
+    # Now we go through the rest of the arguments.  Hashrefs define new
+    # directories, while strings add to the documentation of the directory
+    # whose definition they follow.
+    
+    foreach my $item (@_)
+    {
+	# A hashref defines a new directory.
+	
+	if ( ref $item eq 'HASH' )
+	{
+	    $last_node = $self->define_node($item, $filename, $line);
+	}
+	
+	elsif ( not ref $item )
+	{
+	    $self->add_node_doc($last_node, $item);
+	}
+	
+	else
+	{
+	    croak "the arguments to 'define_directory' must be hashrefs and strings";
+	}
+    }
+    
+    croak "the arguments to 'define_directory' must include a hashref of attributes"
+	unless $last_node;
+}
+
+register 'define_path' => \&define_path;
+
+
+# define_node ( attrs, filename, line, is_directory )
+# 
+# Define a node according to the given parameters.
+
+sub define_node {
+
+    my ($self, $attrs, $filename, $line, $is_directory) = @_;
+    
+    # Make sure the attributes include 'path'.
+    
+    my $path = $attrs->{path};
+    
+    croak "the attributes must include 'path'" unless defined $path;
+    
+    # Make sure this path was not already defined by a previous call.
+    
+    if ( defined $self->{path_attrs}{$path} )
+    {
+	my $filename = $self->{path_attrs}{$path}{filename};
+	my $line = $self->{path_attrs}{$path}{line};
+	croak "path '$path' was already defined at line $line of $filename";
+    }
+    
+    # Now set the attributes.
+    
+    $self->{path_attrs}{$path} = $attrs;
+    $self->{path_attrs}{$path}{filename} = $filename;
+    $self->{path_attrs}{$path}{line} = $line;
+    $self->{is_directory}{$path} = 1 if $is_directory;
     
     # See if a partial path for this route was itself defined as a directory.
     # If so, link it up so that attributes will inherit.
@@ -173,9 +255,10 @@ sub define_directory {
     {
 	$self->configure_class($attrs->{class})
     }
+    
+    croak "the arguments must include a hashref of attributes"
+	unless $last_node;
 }
-
-register 'setup_directory' => \&setup_directory;
 
 
 # find_parent ( path )
@@ -204,11 +287,11 @@ sub find_parent {
 }
 
 
-# route_defined ( path )
+# path_defined ( path )
 # 
 # Return true if the specified path has been defined, false otherwise.
 
-sub route_defined {
+sub path_defined {
 
     my ($self, $path);
     
@@ -226,19 +309,19 @@ sub route_defined {
 	($path) = @_;
     }
     
-    return $self->{route_attrs}{$path};
+    return $self->{path_attrs}{$path};
 }
 
-register 'route_defined' => \&route_defined;
+register 'path_defined' => \&path_defined;
 
 
-# route_attr ( path, key )
+# path_attr ( path, key )
 # 
 # Return the specified attribute for the given path.  If not found in the
 # record for the path, look in the records corresponding to its parents if
 # any. 
 
-sub route_attr {
+sub path_attr {
     
     my ($self, $path, $key) = @_;
     
@@ -261,9 +344,9 @@ sub route_attr {
     # If the path is defined and has the specified key, return the
     # corresponding value.
     
-    if ( exists $self->{route_attrs}{$path}{$key} )
+    if ( exists $self->{path_attrs}{$path}{$key} )
     {
-	return $self->{route_attrs}{$path}{$key};
+	return $self->{path_attrs}{$path}{$key};
     }
     
     # Otherwise, we try to find a parent.
@@ -275,9 +358,9 @@ sub route_attr {
     
     while ( $parent )
     {
-	if ( exists $self->{route_attrs}{$parent}{$key} )
+	if ( exists $self->{path_attrs}{$parent}{$key} )
 	{
-	    return $self->{route_attrs}{$parent}{$key};
+	    return $self->{path_attrs}{$parent}{$key};
 	}
 	
 	else
@@ -292,6 +375,286 @@ sub route_attr {
 }
 
 
+# define_vocabulary ( attrs... )
+# 
+# Define one or more vocabularies of field names for data service responses.
+
+sub define_vocabulary {
+
+    my ($self);
+    
+    # If we were called as a method, use the object on which we were called.
+    # Otherwise, use the globally defined one.
+    
+    if ( blessed $_[0] && $_[0]->isa('Web::DataService') )
+    {
+	$self = shift;
+    }
+    
+    else
+    {
+	$self = $DEFAULT_INSTANCE;
+    }
+    
+    #my ($package, $filename, $line) = caller;
+    my ($last_node);
+    
+    # Now we go through the rest of the arguments.  Hashrefs define new
+    # vocabularies, while strings add to the documentation of the vocabulary
+    # whose definition they follow.
+    
+    foreach my $item (@_)
+    {
+	# A hashref defines a new vocabulary.
+	
+	if ( ref $item eq 'HASH' )
+	{
+	    # Make sure the attributes include 'name'.
+	    
+	    my $name = $item->{name}; 
+	    
+	    croak "the attributes must include 'name'" unless defined $name;
+	    
+	    # Make sure this vocabulary was not already defined by a previous call,
+	    # and set the attributes as specified.
+	    
+	    croak "vocabulary '$name' was already defined" if defined $self->{vocabulary}{$name};
+	    
+	    # Now set the attributes.
+	    
+	    $self->{vocabulary}{$name} = $item;
+	    $last_node = $item;
+	}
+	
+	# A scalar is taken to be a documentation string.
+	
+	elsif ( not ref $item )
+	{
+	    $self->add_node_doc($last_node, $item);
+	}
+	
+	else
+	{
+	    croak "the arguments to 'define_vocabulary' must be hashrefs and strings";
+	}
+    }    
+    
+    croak "the arguments must include a hashref of attributes"
+	unless $last_node;
+}
+
+
+# document_vocabulary ( )
+# 
+# Return a string containing POD documentation of the vocabulary
+# possibilities. 
+
+sub document_vocabulary {
+    
+    my ($self) = @_;
+    
+    return '' unless ref $self->{vocabulary} eq 'ARRAY';
+    
+    my $doc = "=over 4\n\n";
+    
+    foreach my $v (@{$self->{vocabulary}})
+    {
+	$doc .= "=item $v->{name}\n\n";
+	$doc .= "$v->{doc}\n\n";
+    }
+    
+    $doc .= "=back\n\n";
+    
+    return $doc;
+}
+
+
+# define_format ( attrs... )
+# 
+# Define one or more formats for data service responses.
+
+sub define_format {
+
+    my ($self);
+    
+    # If we were called as a method, use the object on which we were called.
+    # Otherwise, use the globally defined one.
+    
+    if ( blessed $_[0] && $_[0]->isa('Web::DataService') )
+    {
+	$self = shift;
+    }
+    
+    else
+    {
+	$self = $DEFAULT_INSTANCE;
+    }
+    
+    my ($last_node);
+    
+    # Now we go through the rest of the arguments.  Hashrefs define new
+    # vocabularies, while strings add to the documentation of the vocabulary
+    # whose definition they follow.
+    
+    foreach my $item (@_)
+    {
+	# A hashref defines a new vocabulary.
+	
+	if ( ref $item eq 'HASH' )
+	{
+	    # Make sure the attributes include 'name'.
+	    
+	    my $name = $item->{name}; 
+	    
+	    croak "the attributes must include 'name'" unless defined $name;
+	    
+	    # Make sure this format was not already defined by a previous call,
+	    # and set the attributes as specified.
+	    
+	    croak "format '$name' was already defined" if defined $self->{format}{$name};
+	    
+	    # Now set the attributes.
+	    
+	    $self->{format}{$name} = $item;
+	    $last_node = $item;
+	}
+	
+	# A scalar is taken to be a documentation string.
+	
+	elsif ( not ref $item )
+	{
+	    $self->add_node_doc($last_node, $item);
+	}
+	
+	else
+	{
+	    croak "the arguments to 'define_format' must be hashrefs and strings";
+	}
+    }    
+    
+    croak "the arguments must include a hashref of attributes"
+	unless $last_node;
+}
+
+
+# document_formats ( )
+# 
+# Return a string containing POD documentation of the vocabulary
+# possibilities. 
+
+sub document_formats {
+    
+    my ($self) = @_;
+    
+    return '' unless ref $self->{format} eq 'ARRAY';
+    
+    my $doc = "=over 4\n\n";
+    
+    foreach my $v (@{$self->{format}})
+    {
+	$doc .= "=item $v->{name}\n\n";
+	$doc .= "$v->{doc}\n\n";
+    }
+    
+    $doc .= "=back\n\n";
+    
+    return $doc;
+}
+
+
+# define_ruleset ( name, rule... )
+# 
+# Define a ruleset under the given name.  This is just a wrapper around the
+# subroutine HTTP::Validate::ruleset.
+
+sub define_ruleset {
+    
+    my ($self);
+    
+    # If we were called as a method, use the object on which we were called.
+    # Otherwise, use the globally defined one.
+    
+    if ( blessed $_[0] && $_[0]->isa('Web::DataService') )
+    {
+	$self = shift;
+    }
+    
+    else
+    {
+	$self = $DEFAULT_INSTANCE;
+    }
+    
+    unshift @_, $self->{validator};
+    
+    goto &HTTP::Validate::ruleset;
+}
+
+
+# define_output ( name, rule... )
+# 
+# Define an "output section" under the given name.  This comprises a set of
+# field specifications which are used to generate output records.  This
+# section is defined in relation to the class from which this routine has been
+# called, for later use in query operations using that class.
+
+sub define_output {
+
+    my ($self);
+    
+    # If we were called as a method, use the object on which we were called.
+    # Otherwise, use the globally defined one.
+    
+    if ( blessed $_[0] && $_[0]->isa('Web::DataService') )
+    {
+	$self = shift;
+    }
+    
+    else
+    {
+	$self = $DEFAULT_INSTANCE;
+    }
+    
+    # Now figure out which package we are being called from.  The output
+    # section being defined will be stored under this package name.  If we
+    # were not called from a subclass of Web::DataService::Query, then store
+    # this information under Web::DataService::Query so that it will be
+    # available to all packages.
+    
+    my ($package) = caller;
+    
+    unless ( $package->isa('Web::DataService::Query') )
+    {
+	$package = 'Web::DataService::Query';
+    }
+    
+    # Now adjust the argument list and call define_output_section
+    
+    unshift @_, $package;
+    unshift @_, $self;
+    
+    goto &define_output_section;
+}
+
+
+# add_node_doc ( node, doc_string )
+# 
+# Add the specified documentation string to the specified node.
+
+sub add_node_doc {
+    
+    my ($self, $node, $doc) = @_;
+    
+    return unless defined $doc and $doc ne '';
+    
+    croak "only strings may be added to documentation: '$doc' is not valid"
+	if ref $doc;
+    
+    $node->{doc} = '' unless defined $node->{doc};
+    $node->{doc} .= "\n" if $node->{doc} ne '';
+    $node->{doc} .= $doc;
+}
+
+
 # configure_class ( class )
 # 
 # If the specified class has a 'configure' method, call it.  Pass it a
@@ -303,18 +666,18 @@ sub configure_class {
     
     # If we have already configured this class, return.
     
-    return if $self->{class}{$class};
+    return if $self->{configured}{$class};
     
     # Record that we have configured this class.
     
-    $self->{class}{$class} = 1;
+    $self->{configured}{$class} = 1;
     
     # If the class has a configuration method, call it.
     
     if ( $class->can('configure') )
     {
-	print STDERR "Configuring $class\n" if $PBDB_Data::DEBUG;
-	$class->configure(database(), Dancer::config);
+	print STDERR "Configuring $class for data service $self->{name}\n" if $PBDB_Data::DEBUG;
+	$class->configure($self, Dancer::config, database());
     }
 }
 
@@ -328,7 +691,7 @@ sub configure_class {
 # documentation template is found, it will be used.  The attributes can be
 # overridden using the second parameter, which must be a hash ref.
 
-sub send_documentation {
+sub generate_documentation {
     
     my ($self, $path, $attrs);
     
@@ -350,16 +713,16 @@ sub send_documentation {
     
     # Now extract the proper attributes.
     
-    my $format = $attrs->{format} || $self->route_attr($path, 'format') || 'html';
+    my $format = $attrs->{format} || $self->path_attr($path, 'format') || 'html';
     
-    my $class = $attrs->{class} || $self->route_attr($path, 'class');
-    my $op = $attrs->{op} || $self->route_attr($path, 'op');
-    my $ruleset = $attrs->{ruleset} || $self->route_attr($path, 'ruleset') || $path;
-    my $docresp = $attrs->{docresp} || $self->route_attr($path, 'docresp');
-    my $doctitle = $attrs->{doctitle} || $self->route_attr($path, 'doctitle');
-    my $docfile = $attrs->{docfile} || $self->route_attr($path, 'docfile');
-    my $doclayout = $attrs->{doclayout} || $self->route_attr($path, 'doclayout') || 'doc_main.tt';
-    my $docerror = $attrs->{docerror} || $self->route_attr($path, 'docerror') || 'doc_error.tt';
+    my $class = $attrs->{class} || $self->path_attr($path, 'class');
+    my $op = $attrs->{op} || $self->path_attr($path, 'op');
+    my $ruleset = $attrs->{ruleset} || $self->path_attr($path, 'ruleset') || $path;
+    my $docresp = $attrs->{docresp} || $self->path_attr($path, 'docresp');
+    my $doctitle = $attrs->{doctitle} || $self->path_attr($path, 'doctitle');
+    my $docfile = $attrs->{docfile} || $self->path_attr($path, 'docfile');
+    my $doclayout = $attrs->{doclayout} || $self->path_attr($path, 'doclayout') || 'doc_main.tt';
+    my $docerror = $attrs->{docerror} || $self->path_attr($path, 'docerror') || 'doc_error.tt';
     
     my ($version) = $path =~ qr{ ^ ( \d+ \. \d+ ) }xs;
     
@@ -381,7 +744,7 @@ sub send_documentation {
 	$docresp //= $op;
     }
     
-    # All documentation is public, so gets the maximally permissive CORS header.
+    # All documentation is public, so set the maximally permissive CORS header.
     
     Dancer::header "Access-Control-Allow-Origin" => "*";
     
@@ -464,9 +827,9 @@ register 'execute_operation' => sub {
 	
 	# Determine the attributes that will define this operation.
 	
-	$format = $attrs->{format} || $self->route_attr($path, 'format');
-	$class = $attrs->{class} || $self->route_attr($path, 'class');
-	$op = $attrs->{op} || $self->route_attr($path, 'op');
+	$format = $attrs->{format} || $self->path_attr($path, 'format');
+	$class = $attrs->{class} || $self->path_attr($path, 'class');
+	$op = $attrs->{op} || $self->path_attr($path, 'op');
 	
 	# Return an error result if we are missing any of the necessary
 	# attributes. 
@@ -478,10 +841,10 @@ register 'execute_operation' => sub {
 	# Determine additional attributes relevant to this operation type.
 	
 	my $validator = $self->{validator};
-	my $ruleset = $attrs->{ruleset} || $self->route_attr($path, 'ruleset');
-	my $output = $attrs->{output} // $self->route_attr($path, 'output');
-	my $arg = $attrs->{arg} // $self->route_attr($path, 'arg');
-	my $needs_dbh = $attrs->{needs_dbh} // $self->route_attr($path, 'needs_dbh') // $self->{needs_dbh};
+	my $ruleset = $attrs->{ruleset} || $self->path_attr($path, 'ruleset');
+	my $output = $attrs->{output} // $self->path_attr($path, 'output');
+	my $arg = $attrs->{arg} // $self->path_attr($path, 'arg');
+	my $needs_dbh = $attrs->{needs_dbh} // $self->path_attr($path, 'needs_dbh') // $self->{needs_dbh};
 	
 	$ruleset = $path if !defined $ruleset && $validator->ruleset_defined($path);
 	

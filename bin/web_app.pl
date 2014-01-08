@@ -13,14 +13,11 @@ package PBDB_Data;
 
 use Dancer;
 
-use HTTP::Validate qw( :validators );
 use Template;
 use Try::Tiny;
 use Scalar::Util qw(blessed);
-#use Pod::Simple::HTML;
-#use Pod::Simple::Text;
 
-use DataService;
+use Web::DataService qw( :validators );
 
 use ConfigData;
 use IntervalData;
@@ -32,74 +29,124 @@ use PersonData;
 
 
 # If we were called from the command line with 'GET' as the first argument,
-# then assume we are running in debug mode.
+# then assume that we have been called for debugging purposes.
 
 if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
 {
     set apphandler => 'Debug';
     set logger => 'console';
+    set show_errors => 0;
     
     our($DEBUG) = 1;
 }
 
 
-# Instantiate the request validator.
+# Start by instantiating the data service.
+# ========================================
 
-my $dv = HTTP::Validate->new();
+# Many of the configuration parameters are set by entries in config.yml.
 
-# Instantiate the data service.
-
-my $ds = DataService->new({ validator => $dv,
-			    response_selector => 'show',
-			    default_limit => 500,
-			    stream_threshold => 20480,
+my $ds = DataService->new({ response_selector => 'show',
 			    public_access => 1,
-			    needs_dbh => 1 });
+			    uses_dbh => 1 });
 
 
-# Specify the parameters we will accept, and the acceptable value types for
-# each of them.
+# Then call methods from the DataService class to
+# define the shape and behavior of the data service.
+# ==================================================
 
-ruleset $dv '1.1:common_params' => 
-    "The following parameter is used with most requests:",
-    [param => 'show', ANY_VALUE],
-    "Return extra result fields in addition to the basic fields.  The value should be a comma-separated",
-    "list of values corresponding to the sections listed in the response documentation for the URL path",
-    "that you are using.  If you include, e.g. 'app', then all of the fields whose section is C<app>",
-    "will be included in the result set.\n",
-    "You can use this parameter to tailor the result to your particular needs.",
-    "If you do not include it then you will usually get back only the fields",
-    "labelled C<basic>.  For more information, see the documentation pages",
-    "for the individual URL paths.", "=back",
+# We start by defining the vocabularies that are available for describing the
+# data returned by this service.
+
+$ds->define_vocabulary(
+    { name => 'pbdb',
+      default_field_names => 1 },
+        "The Paleobiology Database field names.  This vocabulary is the",
+	"default for text format responses (tsv, csv, txt).",
+    { name => 'com' },
+        "3-character abbreviated (\"compact\") field names.",
+        "This is the default for JSON responses.",
+    { name => 'dwc' },
+        "Darwin Core element names.  This is the default for XML responses.",
+        "Note that many fields are not represented in this vocabulary,",
+        "because of limitations of the Darwin Core element set.");
+
+
+# Then we define the formats in which data can be returned.
+
+$ds->define_format(
+    { name => 'json', content_type => 'application/json',
+      default_vocabulary => 'com' },
+	"The JSON format is intended primarily to support client applications,",
+	"including the PBDB Navigator.  Response fields are named using compact",
+	"3-character field names.",
+    { name => 'xml', content_type => 'text/xml',
+      default_vocabulary => 'dwc' },
+	"The XML format is intended primarily to support data interchange with",
+	"other databases, using the Darwin Core element set.",
+    { name => 'txt', content_type => 'text/plain', 
+      default_vocabulary => 'pbdb' },
+        "The text formats (txt, tsv, csv) are intended primarily for researchers",
+	"downloading data from the database.  These downloads can easily be",
+	"loaded into spreadsheets or other analysis tools.  The field names are",
+	"taken from the PBDB Classic interface, for compatibility with existing",
+	"tools and analytical procedures."
+    { name => 'tsv', content_type => 'text/tab-separated-values',
+      default_vocabulary => 'pbdb' },
+        "The text formats (txt, tsv, csv) are intended primarily for researchers",
+	"downloading data from the database.  These downloads can easily be",
+	"loaded into spreadsheets or other analysis tools.  The field names are",
+	"taken from the PBDB Classic interface, for compatibility with existing",
+	"tools and analytical procedures."
+    { name => 'csv', content_type => 'text/csv',
+      default_vocabulary => 'pbdb' },
+        "The text formats (txt, tsv, csv) are intended primarily for researchers",
+	"downloading data from the database.  These downloads can easily be",
+	"loaded into spreadsheets or other analysis tools.  The field names are",
+	"taken from the PBDB Classic interface, for compatibility with existing",
+	"tools and analytical procedures."
+    { name => 'ris', content_type => 'application/x-research-info-systems' },
+	"The L<RIS format|http://en.wikipedia.org/wiki/RIS_(file_format)> is a",
+	"common format for bibliographic references.");
+
+# Next, we define the parameters we will accept, and the acceptable values
+# for each of them.
+
+$ds->define_ruleset('1.1:common_params' => 
+       "The following parameter is used with most requests:",
+    { param => 'show', valid => ANY_VALUE },
+       "Return extra result fields in addition to the basic fields.  The value should be a comma-separated",
+       "list of values corresponding to the sections listed in the response documentation for the URL path",
+       "that you are using.  If you include, e.g. 'app', then all of the fields whose section is C<app>",
+       "will be included in the result set.",
+       "You can use this parameter to tailor the result to your particular needs.",
+       "If you do not include it then you will usually get back only the fields",
+       "labelled C<basic>.  For more information, see the documentation pages",
+       "for the individual URL paths.",
     "!!The following parameters can be used with all requests:",
-    [content_type => 'ct', 'json', 'xml', 'txt=text/plain', 'tsv=text/tab-separated-values', 
-	'csv', 'ris=application/x-Research-Info-Systems',
-    	{ key => 'output_format' }],
-    [optional => 'limit', POS_ZERO_VALUE, ENUM_VALUE('all'), 
-      { error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
-	default => 500 } ],
-    "Limits the number of records returned.  The value may be a positive integer, zero, or C<all>.  Defaults to 500.",
-    [optional => 'offset', POS_ZERO_VALUE],
-    "Returned records start at this offset in the result set.  The value may be a positive integer or zero.",
-    [optional => 'count', FLAG_VALUE],
-    "If specified, then the response includes the number of records found and the number returned.",
-    "This is ignored for the text formats (csv, tsv, txt) because they provide no way to fit this information in.",
-    [optional => 'vocab', ENUM_VALUE('dwc', 'com', 'pbdb')],
-    "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
-    "you want to override the default vocabulary for your selected format.",
-    "Possible values include:", "=over",
-    "=item pbdb", "The PBDB classic field names.  This is the default for text format responses (csv, tsv, txt).",
-    "=item dwc", "Darwin Core element names.  This is the default for XML responses.",
-    "Note that many fields are not represented in this vocabulary, because of limitations of the Darwin Core element set.",
-    "=item com", "3-character abbreviated (\"compact\") field names.  This is the default for JSON responses.",
+    { optional => 'limit', valid => [POS_ZERO_VALUE, ENUM_VALUE('all')], 
+      error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
+	default => 500 },
+       "Limits the number of records returned.  The value may be a positive integer, zero, or C<all>.  Defaults to 500.",
+    { optional => 'offset', valid => POS_ZERO_VALUE },
+       "Returned records start at this offset in the result set.  The value may be a positive integer or zero.",
+    { optional => 'count', valid => FLAG_VALUE },
+       "If specified, then the response includes the number of records found and the number returned.",
+       "For more information about how this information is encoded, see the documentation pages",
+       "for the various response formats.",
+    { optional => 'vocab', valid => ENUM_VALUE('dwc', 'com', 'pbdb') },
+       "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
+       "you want to override the default vocabulary for your selected format.",
+       "Possible values include:", $self->document_vocabulary()
     "!!The following parameters are only relevant to the text formats (csv, tsv, txt):",
-    [optional => 'no_header', FLAG_VALUE],
-    "If specified, then the header line (which gives the field names) is omitted.",
-    [optional => 'linebreak', ENUM_VALUE('cr','crlf'), { default => 'crlf' }],
-    "Specifies the linebreak character sequence.  The value may be either 'cr' or 'crlf', and defaults to the latter.",
-    [ignore => 'splat'];
+    { optional => 'no_header', valid => FLAG_VALUE },
+       "If specified, then the header line (which gives the field names) is omitted.",
+    { optional => 'linebreak', valid => ENUM_VALUE('cr','crlf'), default => 'crlf' },
+       "Specifies the linebreak character sequence.",
+       "The value may be either 'cr' or 'crlf', and defaults to the latter.",
+    { ignore => 'splat' });
 
-ruleset $dv '1.1:main_selector' =>
+$ds->define_ruleset('1.1:main_selector' =>
     "The following parameters can be used to specify which records to return.  Except as specified below, you can use these in combination:",
     [param => 'clust_id', POS_VALUE, { list => ',' }],
     "Return only records associated with the specified geographic clusters.",
@@ -165,103 +212,103 @@ ruleset $dv '1.1:main_selector' =>
     "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
     [optional => 'latebuffer', POS_VALUE],
     "Override the default buffer period for the end of the time range when resolving temporal locality.",
-    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).";
+    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).");
 
-ruleset $dv '1.1:coll_specifier' =>
+$ds->define_ruleset('1.1:coll_specifier' =>
     [param => 'id', POS_VALUE, { alias => 'coll_id' }],
-    "The identifier of the collection you wish to retrieve";
+    "The identifier of the collection you wish to retrieve");
 
-ruleset $dv '1.1:coll_selector' =>
+$ds->define_ruleset('1.1:coll_selector' =>
     "You can use the following parameter if you wish to retrieve information about",
     "a known list of collections, or to filter a known list against other criteria such as location or time.",
     "Only the records which match the other parameters that you specify will be returned.",
     [param => 'id', INT_VALUE, { list => ',', alias => 'coll_id' }],
-    "A comma-separated list of collection identifiers.";
+    "A comma-separated list of collection identifiers.");
 
-ruleset $dv '1.1:coll_display' =>
+$ds->define_ruleset('1.1:coll_display' =>
     "The following parameter indicates which information should be returned about each resulting collection:",
     [param => 'show', ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem','crmod'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
     "From the list given below.  It defaults to C<basic>.",
-    [ignore => 'level'];
+    [ignore => 'level']);
 
-ruleset $dv '1.1/colls/single' => 
+$ds->define_ruleset('1.1/colls/single' => 
     [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
     [allow => '1.1:coll_display'],
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
 
-ruleset $dv '1.1/colls/list' => 
+$ds->define_ruleset('1.1/colls/list' => 
     [allow => '1.1:coll_selector'],
     [allow => '1.1:main_selector'],
     [allow => '1.1:coll_display'],
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
 
-ruleset $dv '1.1:refs_display' =>
+$ds->define_ruleset('1.1:refs_display' =>
     "The following parameter indicates which information should be returned about each resulting collection:",
-    [param => 'show', ENUM_VALUE('rem','crmod'), { list => ',' }],
+    [param => 'show', ENUM_VALUE('formatted','comments','crmod'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
     "From the list given below.  It defaults to C<refbasic>.",
-    [ignore => 'level'];
+    [ignore => 'level']);
 
-ruleset $dv '1.1/colls/refs' =>
+$ds->define_ruleset('1.1/colls/refs' =>
     [allow => '1.1:coll_selector'],
     [allow => '1.1:main_selector'],
     [allow => '1.1:refs_display'],
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
 
-ruleset $dv '1.1:summary_display' => 
+$ds->define_ruleset('1.1:summary_display' => 
     [param => 'level', POS_VALUE, { default => 1 }],
-    [param => 'show', ENUM_VALUE('ext','time'), { list => ',' }];
+    [param => 'show', ENUM_VALUE('ext','time'), { list => ',' }]);
 
-ruleset $dv '1.1/colls/summary' => 
+$ds->define_ruleset('1.1/colls/summary' => 
     [allow => '1.1:coll_selector'],
     [allow => '1.1:main_selector'],
     [allow => '1.1:summary_display'],
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
 
-ruleset $dv '1.1:toprank_selector' =>
-    [param => 'show', ENUM_VALUE('formation', 'ref', 'author'), { list => ',' }];
+$ds->define_ruleset('1.1:toprank_selector' =>
+    [param => 'show', ENUM_VALUE('formation', 'ref', 'author'), { list => ',' }]);
 
-ruleset $dv '1.1:colls/toprank' => 
+$ds->define_ruleset('1.1:colls/toprank' => 
     [require => '1.1:main_selector'],
     [require => '1.1:toprank_selector'],
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params']);
 
-ruleset $dv '1.1:occ_specifier' =>
+$ds->define_ruleset('1.1:occ_specifier' =>
     [param => 'id', POS_VALUE, { alias => 'occ_id' }],
-    "The identifier of the occurrence you wish to retrieve";
+    "The identifier of the occurrence you wish to retrieve");
 
-ruleset $dv '1.1:occ_selector' =>
+$ds->define_ruleset('1.1:occ_selector' =>
     [param => 'id', POS_VALUE, { list => ',', alias => 'occ_id' }],
     "Return occurrences identified by the specified identifier(s).  The value of this parameter may be a comma-separated list.",
     [param => 'coll_id', POS_VALUE, { list => ',' }],
     "Return occurences associated with the specified collections.  The value of this parameter may be a single collection",
-    "identifier or a comma-separated list.";
+    "identifier or a comma-separated list.");
 
-ruleset $dv '1.1:occ_display' =>
+$ds->define_ruleset('1.1:occ_display' =>
     "The following parameter indicates which information should be returned about each resulting occurrence:",
     [param => 'show', ENUM_VALUE('attr','ref','ent','geo','loc','coll','time','rem','crmod'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
     "From the list given below.  It defaults to C<basic>.",
-    [ignore => 'level'];
+    [ignore => 'level']);
 
-ruleset $dv '1.1/occs/single' =>
+$ds->define_ruleset('1.1/occs/single' =>
     [require => '1.1:occ_specifier', { error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" }],
     [allow => '1.1:occ_display'],
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
 
-ruleset $dv '1.1/occs/list' => 
+$ds->define_ruleset('1.1/occs/list' => 
     [require_one => '1.1:occ_selector', '1.1:main_selector'],
     [allow => '1.1:occ_display'],
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request",
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
 
-ruleset $dv '1.1:taxon_specifier' => 
+$ds->define_ruleset('1.1:taxon_specifier' => 
     [param => 'name', \&TaxonData::validNameSpec, { alias => 'taxon_name' }],
     "Return information about the most fundamental taxonomic name matching this string.",
     "The C<%> character may be used as a wildcard.",
@@ -271,9 +318,9 @@ ruleset $dv '1.1:taxon_specifier' =>
     "!!You may not specify both C<name> and C<identifier> in the same query.",
     [optional => 'rank', \&TaxonData::validRankSpec],
     [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact'),
-      { default => 'current' } ];
+      { default => 'current' } ]);
 
-ruleset $dv '1.1:taxon_selector' =>
+$ds->define_ruleset('1.1:taxon_selector' =>
     "The following parameters are used to indicate a base taxon or taxa:",
     [param => 'name', \&TaxonData::validNameSpec, { alias => 'taxon_name', list => "," }],
     "Select the most fundamental taxon corresponding to the specified name(s).",
@@ -305,17 +352,17 @@ ruleset $dv '1.1:taxon_selector' =>
     "=item invalid", "Return only invalid names (e.g. nomen dubia).",
     "=item all", "Return all names.",
     [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact', 'all'),
-      { default => 'current' } ];
+      { default => 'current' } ]);
 
-ruleset $dv '1.1:taxon_filter' => 
+$ds->define_ruleset('1.1:taxon_filter' => 
     "The following parameters further filter the list of return values:",
     [optional => 'rank', \&TaxonData::validRankSpec],
     "Return only taxonomic names at the specified rank (e.g. 'genus').",
     [optional => 'extant', BOOLEAN_VALUE],
     "Return only extant or non-extant taxa.  Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
-    [optional => 'depth', POS_VALUE];
+    [optional => 'depth', POS_VALUE]);
 
-ruleset $dv '1.1:taxon_display' => 
+$ds->define_ruleset('1.1:taxon_display' => 
     "The following parameter indicates which information should be returned about each resulting name:",
     [optional => 'show', ENUM_VALUE('ref','attr','app','applong',
 				    'appfirst','size','nav'),
@@ -323,41 +370,41 @@ ruleset $dv '1.1:taxon_display' =>
     "This parameter specifies what fields should be returned.  For the full list of fields,",
     "See the L<RESPONSE|#RESPONSE> section.  Its value should be a comma-separated list",
     "of section names, and defaults to C<basic>.",
-    [optional => 'exact', FLAG_VALUE];
+    [optional => 'exact', FLAG_VALUE]);
 
-ruleset $dv '1.1/taxa/single' => 
+$ds->define_ruleset('1.1/taxa/single' => 
     [require => '1.1:taxon_specifier',
 	{ error => "you must specify either 'name' or 'id'" }],
-    [allow => '1.1:taxon_display'],
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
-    [allow => '1.1:common_params'];
+    [allow => '1.1:taxon_display'], 
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
 
-ruleset $dv '1.1/taxa/list' => 
+$ds->define_ruleset('1.1/taxa/list' => 
     [require => '1.1:taxon_selector',
 	{ error => "you must specify one of 'name', 'id', 'status', 'base_name', 'base_id', 'leaf_name', 'leaf_id'" }],
     [allow => '1.1:taxon_filter'],
-    [allow => '1.1:taxon_display'],
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
-    [allow => '1.1:common_params'];
+    [allow => '1.1:taxon_display'], 
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
 
-ruleset $dv '1.1/taxa/auto' =>
+$ds->define_ruleset('1.1/taxa/auto' =>
     [param => 'name', ANY_VALUE],
     "A partial name or prefix.  It must have at least 3 significant characters, and may include both a genus",
-    "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex",
-    "!> You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
-    [allow => '1.1:common_params'];
+    "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex", 
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
 
-ruleset $dv '1.1/taxa/thumb' =>
+$ds->define_ruleset('1.1/taxa/thumb' =>
     [content_type => 'ct', 'png=image/png', { key => 'output_format' }],
     [ignore => 'splat'],
-    [param => 'id', POS_VALUE];
+    [param => 'id', POS_VALUE]);
 
-ruleset $dv '1.1/taxa/icon' =>
+$ds->define_ruleset('1.1/taxa/icon' =>
     [content_type => 'ct', 'png=image/png', { key => 'output_format' }],
     [ignore => 'splat'],
-    [param => 'id', POS_VALUE];
+    [param => 'id', POS_VALUE]);
 
-ruleset $dv '1.1:interval_selector' => 
+$ds->define_ruleset('1.1:interval_selector' => 
     [param => 'scale_id', POS_VALUE, ENUM_VALUE('all'), 
 	{ list => ',', alias => 'scale',
 	  error => "the value of {param} should be a list of positive integers or 'all'" }],
@@ -366,156 +413,182 @@ ruleset $dv '1.1:interval_selector' =>
     [param => 'min_ma', DECI_VALUE(0)],
     [param => 'max_ma', DECI_VALUE(0)],
     [param => 'order', ENUM_VALUE('older', 'younger'), { default => 'younger' }],
-    "Return the intervals in order starting as specified.  Possible values include 'older', 'younger'.  Defaults to 'younger'.";
+    "Return the intervals in order starting as specified.  Possible values include ",
+    "'older', 'younger'.  Defaults to 'younger'.");
 
-ruleset $dv '1.1:interval_specifier' =>
+$ds->define_ruleset('1.1:interval_specifier' =>
     [param => 'id', POS_VALUE],
-    "Returns the interval corresponding to the specified identifier";
+    "Returns the interval corresponding to the specified identifier");
 
-ruleset $dv '1.1/intervals/list' => 
+$ds->define_ruleset('1.1/intervals/list' => 
     [allow => '1.1:interval_selector'],
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params']);
 
-ruleset $dv '1.1/intervals/single' => 
+$ds->define_ruleset('1.1/intervals/single' => 
     [allow => '1.1:interval_specifier'],
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params']);
 
-ruleset $dv '1.1/config' =>
+$ds->define_ruleset('1.1/config' =>
     [param => 'show', ENUM_VALUE('geosum', 'ranks', 'all'), { list => ',', default => 'all' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
-    "From the list given below, or 'all'.  It defaults to 'all'.",
-    "!> You can use any of the L<common parameters|/data1.1/common_doc.html> with this request.", 
-    [allow => '1.1:common_params'];
+    "From the list given below, or 'all'.  It defaults to 'all'.", 
+    [allow => '1.1:common_params'],
+    "!>You can use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
 
-ruleset $dv '1.1:person_selector' => 
-    [param => 'name', ANY_VALUE];
+$ds->define_ruleset('1.1:person_selector' => 
+    [param => 'name', ANY_VALUE]);
 
-ruleset $dv '1.1:person_specifier' => 
-    [param => 'id', POS_VALUE, { alias => 'person_id' }];
+$ds->define_ruleset('1.1:person_specifier' => 
+    [param => 'id', POS_VALUE, { alias => 'person_id' }]);
 
-ruleset $dv '1.1/people/single' => 
+$ds->define_ruleset('1.1/people/single' => 
     [allow => '1.1:person_specifier'],
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params']);
 
-ruleset $dv '1.1/people/list' => 
+$ds->define_ruleset('1.1/people/list' => 
     [require => '1.1:person_selector'],
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params']);
 
-ruleset $dv '1.1:refs_specifier' => 
-    [param => 'id', POS_VALUE, { alias => 'ref_id' }];
+$ds->define_ruleset('1.1:refs_specifier' => 
+    [param => 'id', POS_VALUE, { alias => 'ref_id' }]);
 
-ruleset $dv '1.1/refs/single' => 
+$ds->define_ruleset('1.1/refs/single' => 
     [require => '1.1:refs_specifier'],
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params']);
 
-ruleset $dv '1.1/refs/toprank' => 
+$ds->define_ruleset('1.1/refs/toprank' => 
     [require => '1.1:main_selector'],
-    [allow => '1.1:common_params'];
+    [allow => '1.1:common_params']);
 
 
-# Configure the routes
-# ====================
+# Define the routes that our data service accepts.  We start with the root of
+# the hierarchy, which must be a version number.
 
-define_directory $ds '1.1' => { output => 'basic' };
+$ds->define_directory({ path => '1.1', 
+			output => 'basic' });
 
-# Miscellaneous
+# We then define some miscellaneous routes
 
-define_route $ds '1.1/config' => { class => 'ConfigData',
-				   output => undef,
-				   op => 'get',
-				   docresp => 'geosum,ranks',
-				 };
+$ds->define_path({ path => '1.1/config',
+		   class => 'ConfigData',
+		   output => undef,
+		   op => 'get',
+		   docresp => 'geosum,ranks'});
 
-define_route $ds '1.1/common' => { ruleset => '1.1:common_params',
-				   doctitle => 'common parameters' };
+$ds->define_path({ path => '1.1/common',
+		   ruleset => '1.1:common_params',
+		   doctitle => 'common parameters' });
 
-define_route $ds '1.1/json' => { doctitle => 'JSON format' };
+$ds->define_path({ path => '1.1/json',
+		   doctitle => 'JSON format' });
 
-define_route $ds '1.1/xml' => { doctitle => 'XML format' };
+$ds->define_path({ path => '1.1/xml',
+		   doctitle => 'XML format' });
 
-define_route $ds '1.1/text' => { doctitle => 'text formats' };
+$ds->define_path({ path => '1.1/text',
+		   doctitle => 'text formats' });
 
 # Intervals
 
-define_directory $ds '1.1/intervals' => { class => 'IntervalData',
-					  docresp => 'basic,ref' };
+$ds->define_directory({ path => '1.1/intervals',
+			class => 'IntervalData',
+			docresp => 'basic,ref' });
 
-define_route $ds '1.1/intervals/single' => { op => 'get' };
+$ds->define_path({ path => '1.1/intervals/single',
+		   op => 'get' });
 
-define_route $ds '1.1/intervals/list' => { op => 'list' };
+$ds->define_path({ path => '1.1/intervals/list',
+		   op => 'list' });
 
 # Taxa
 
-define_directory $ds '1.1/taxa' => { class => 'TaxonData',
-				     docresp => 'basic,ref,attr,size,app,nav' };
+$ds->define_directory({ path => '1.1/taxa',
+			class => 'TaxonData',
+			docresp => 'basic,ref,attr,size,app,nav' });
 
-define_route $ds '1.1/taxa/single' => { op => 'get' };
+$ds->define_path({ path => '1.1/taxa/single',
+		   op => 'get' });
 
-define_route $ds '1.1/taxa/list' => { op => 'list' };
+$ds->define_path({ path => '1.1/taxa/list',
+		   op => 'list' });
 
-define_route $ds '1.1/taxa/auto' => { op => 'auto', 
-				      output => 'auto',
-				      docresp => 'auto' };
+$ds->define_path({ path => '1.1/taxa/auto',
+		   op => 'auto', 
+		   output => 'auto',
+		   docresp => 'auto' });
 
-define_route $ds '1.1/taxa/thumb' => { op => 'getThumb' };
+$ds->define_path({ path => '1.1/taxa/thumb',
+		   op => 'getThumb' });
 
-define_route $ds '1.1/taxa/icon' => { op => 'getIcon' };
+$ds->define_path({ path => '1.1/taxa/icon',
+		   op => 'getIcon' });
 
 # Collections
 
-define_directory $ds '1.1/colls' => { class => 'CollectionData',
-				      output => 'basic' };
+$ds->define_directory({ path => '1.1/colls',
+			class => 'CollectionData',
+			output => 'basic' });
 
-define_route $ds '1.1/colls/single' => { op => 'get', 
-				         docresp => 'bin,ref,sref,loc,time,taxa,ent,crmod'};
+$ds->define_path({ path => '1.1/colls/single',
+		   op => 'get',
+		   docresp => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod'});
+		 
+$ds->define_path({ path => '1.1/colls/list',
+		   op => 'list', 
+		   docresp => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod' });
 
-define_route $ds '1.1/colls/list' => { op => 'list', 
-				       docresp => 'bin,ref,sref,loc,time,taxa,ent,crmod' };
+$ds->define_path({ path => '1.1/colls/summary'
+		   op => 'summary', 
+		   output => 'summary',
+		   docresp => 'summary,ext,summary_time' });
 
-define_route $ds '1.1/colls/summary' => { op => 'summary', 
-					  output => 'summary',
-					  docresp => 'summary,ext,summary_time' };
+$ds->define_path({ path => '1.1/colls/refs',
+		   op => 'refs',
+		   output => 'refbase',
+		   docresp => 'refbase,formatted,comments' });
 
 # Occurrences
 
-define_directory $ds '1.1/occs' => { class => 'OccurrenceData',
-				     output => 'basic' };
+$ds->define_directory({ path => '1.1/occs',
+			class => 'OccurrenceData',
+			output => 'basic' });
 
-define_route $ds '1.1/occs/single' => { op => 'get',
-				        docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' };
+$ds->define_path({ path => '1.1/occs/single',
+		   op => 'get',
+		   docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' });
 
-define_route $ds '1.1/occs/list' => { op => 'list',
-				      docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' };
+$ds->define_path({ path => '1.1/occs/list',
+		   op => 'list',
+		   docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' });
 
 # People
 
-define_directory $ds '1.1/people' => { class => 'PersonData' };
+$ds->define_directory({ path => '1.1/people',
+			class => 'PersonData' });
 
-define_route $ds '1.1/people/single' => { op => 'get' };
+$ds->define_path({ path => '1.1/people/single', 
+		   op => 'get' });
 
-define_route $ds '1.1/people/list' => { op => 'list' };
+$ds->define_path({ path => '1.1/people/list',
+		   op => 'list' });
 
 # References
 
-define_directory $ds '1.1/refs' => { class => 'ReferenceData' };
+$ds->define_directory({ path => '1.1/refs',
+			class => 'ReferenceData' });
 
-define_route $ds '1.1/refs/single' => { op => 'get' };
+$ds->define_path({ path => '1.1/refs/single',
+		   op => 'get' });
 
-define_route $ds '1.1/refs/list' => { op => 'list' };
-
-
-
-# Send app pages
-
-get '/testapp/:filename' => sub {
-    
-    $DB::single = 1;
-    my $filename = param "filename";
-    return send_file("testapp/$filename", streaming => 1);
-};
+$ds->define_path({ path => '1.1/refs/list',
+		   op => 'list' };
 
 
-# Send style sheets
+# Now we configure a set of Dancer routes to serve
+# the data, documentation, stylesheets, etc.
+# ================================================
+
+# Any URL starting with /data/css indicates a stylesheet
 
 get qr{ ^ /data [\d.]* /css/(.*) }xs => sub {
     
@@ -525,7 +598,7 @@ get qr{ ^ /data [\d.]* /css/(.*) }xs => sub {
 };
 
 
-# Any path starting with /data/... or just /data should display the list of
+# Any other URL starting with /data/... or just /data should display the list of
 # available versions.
 
 get qr{ ^ /data (?: / $ | / .* \. ( html | pod ) )? $ }xs => sub {
@@ -533,15 +606,14 @@ get qr{ ^ /data (?: / $ | / .* \. ( html | pod ) )? $ }xs => sub {
     my ($path, $suffix) = splat;
     
     $DB::single = 1;
-    $ds->send_documentation( "/version_list.tt", { format => $suffix } );
+    $ds->generate_documentation( "/version_list.tt", { format => $suffix } );
 };
 
 
-# If the given URL asks for documentation, provide that as best we can.  If
-# the given path does not correspond to any known documentation, we provide
-# a page explaining what went wrong and providing the proper URLs.
-
-# Any path that is not interpreted above might be a request for documentation.
+# Any URL starting with /data<version> and ending in either .html, .pod, or no
+# suffix at all is interpreted as a request for documentation.  If the given
+# path does not correspond to any known documentation, we provide a page
+# explaining what went wrong and providing the proper URLs.
 
 get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* )
 	  (?: ( index | \w+_doc ) \. ( html | pod ) )? $ }xs => sub {
@@ -553,7 +625,7 @@ get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* )
     $path =~ s{/$}{};
     $path =~ s{_doc}{};
     
-    $ds->send_documentation( $path, { format => $suffix } );
+    $ds->generate_documentation( $path, { format => $suffix } );
 };
 
 
@@ -563,11 +635,12 @@ get qr{ ^ /data ( \d+ \. \d+ (?: / [^/.]+ )* $ ) }xs => sub {
     
     $DB::single = 1;
     
-    $ds->send_documentation( $path, { format => 'html' } );
+    $ds->generate_documentation( $path, { format => 'html' } );
 };
 
 
-# Any path that ends in a suffix is a request for an operation.
+# Any path that ends in a suffix (other than .html or .pod) is a request for an
+# operation.
 
 get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
     
@@ -588,159 +661,7 @@ get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
 };
 
 
-
-# get '/data1.1/config_doc.:ct' => sub {
-    
-#     sendDocumentation({ path => '1.1/config',
-# 			file => '1.1/config_doc.tt',
-# 			class => 'ConfigQuery',
-# 		        output => ['single'] });
-# };
-
-# get '/data1.1/common_doc.:ct' => sub {
-
-#     sendDocumentation({ params => '1.1:common_params', 
-# 			file => '1.1/common_doc.tt',
-# 			title => 'common parameters' });
-# };
-
-# Taxa
-
-# get qr{/data1.1/taxa(?:|/|/index.html?)} => sub {
-
-#     sendDocumentation({ class => 'TaxonQuery',
-# 			path => '1.1/taxa/index' });
-# };
-
-# get '/data1.1/taxa/single.:ct' => sub {
-
-#     querySingle({ class => 'TaxonQuery',
-# 		  path => '1.1/taxa/single',
-# 		  op => 'single' });
-# };
-
-# get '/data1.1/taxa/single_doc.:ct' => sub {
-    
-#     sendDocumentation({ class => 'TaxonQuery',
-# 			path => '1.1/taxa/single',
-# 		        output => ['single', 'nav'] });
-# };
-
-# get '/data1.1/taxa/list.:ct' => sub {
-
-#     queryMultiple({ class => 'TaxonQuery',
-# 		    path => '1.1/taxa/list',
-# 		    op => 'list' });
-# };
-
-# get '/data1.1/taxa/all.:ct' => sub {
-
-#     queryMultiple({ class => 'TaxonQuery',
-# 		    path => '1.1/taxa/list',
-# 		    op => 'list' });
-# };
-
-# get '/data1.1/taxa/hierarchy.:ct' => sub {
-
-#     queryMultiple({ class => 'TaxonQuery',
-# 		    path => '1.1/taxa/list',
-# 		    op => 'hierarchy' });
-# };
-
-# get '/data1.1/taxa/:id.:ct' => sub {
-
-#     querySingle({ class => 'TaxonQuery',
-# 		  path => '1.1/taxa/single',
-# 		  op => 'single' });
-# };
-
-# # Collections
-
-# get '/data1.1/colls/single.:ct' => sub {
-    
-#     querySingle('CollectionQuery', v => '1.1',
-# 		validation => '1.1/colls/single',
-# 		op => 'single');
-# };
-
-# get '/data1.1/colls/list.:ct' => sub {
-
-#     queryMultiple('CollectionQuery', v => '1.1',
-# 		  validation => '1.1/colls/list',
-# 		  op => 'list');
-# };
-
-# get '/data1.1/colls/list_doc.:ct' => sub {
-
-#     sendDocumentation({ class => 'CollectionQuery',
-# 			path => '1.1/colls/list',
-# 			output => ['single', 'attr', 'ref', 'author', 'bin', 'formation'] });
-    
-# };
-
-# get '/data1.1/colls/all.:ct' => sub {
-
-#     queryMultiple('CollectionQuery', v => '1.1',
-# 		  validation => '1.1/colls/list',
-# 		  op => 'list');
-# };
-
-# get '/data1.1/colls/toprank.:ct' => sub {
-
-#     queryMultiple('CollectionQuery', v => '1.1',
-# 		  validation => '1.1/colls/toprank',
-# 		  op => 'toprank');
-# };
-
-# get '/data1.1/colls/summary.:ct' => sub {
-
-#     queryMultiple('CollectionQuery', v => '1.1',
-# 		  validation => '1.1/colls/summary',
-# 		  op => 'summary');
-# };
-
-# get '/data1.1/colls/:id.:ct' => sub {
-    
-#     returnErrorResult({}, "404 Not found") unless params('id') =~ /^[0-9]+$/;
-#     querySingle('CollectionQuery', v => '1.1',
-# 		validation => '1.1/colls/single',
-# 		op => 'single');
-# };
-
-# get '/data1.1/intervals/list.:ct' => sub {
-
-#     queryMultiple('IntervalQuery', v => '1.1',
-# 		  validation => '1.1/intervals',
-# 		  op => 'list');
-# };
-
-# get '/data1.1/intervals/hierarchy.:ct' => sub {
-    
-#     queryMultiple('IntervalQuery', v => '1.1',
-# 		  validation => '1.1/intervals',
-# 		  op => 'hierarchy');
-# };
-
-# get '/data1.1/people/list.:ct' => sub {
-    
-#     queryMultiple('PersonQuery', v => '1.1',
-# 		  validation => '1.1/people/list', op => 'list');
-# };
-
-# get '/data1.1/people/single.:ct' => sub {
-
-#     querySingle('PersonQuery', v => '1.1',
-# 		  validation => '1.1/people/single', op => 'single');
-# };
-
-# get '/data1.1/people/:id.:ct' => sub {
-    
-#     returnErrorResult({}, "404 Not found") unless params('id') =~ /^[0-9]+$/;
-#     querySingle('PersonQuery', v => '1.1',
-# 		validation => '1.1/people/single', op => 'single');
-# };
-
-# Any other URL beginning with '/data1.1/' is an error.
+# Any other URL is an error.
 
 get qr{(.*)} => sub {
 
@@ -748,9 +669,6 @@ get qr{(.*)} => sub {
     $DB::single = 1;
     $ds->error_result("", "html", "404 The resource you requested was not found.");
 };
-
-
-1;
 
 
 dance;

@@ -11,7 +11,7 @@ package PBDBData;
 use strict;
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(generateAttribution generateReference);
+our (@EXPORT_OK) = qw(generateAttribution generateReference generateRISReference);
 
 
 
@@ -198,6 +198,250 @@ sub generateReference {
     
     return $longref if $longref ne '';
     return;
+}
+
+
+# Given an object representing a PaleoDB reference, return a representation of
+# that reference in RIS format (text).
+
+sub formatRISRef {
+    
+    my ($dbt, $ref) = @_;
+    
+    return '' unless ref $ref;
+    
+    my $output = '';
+    my $refno = $ref->{reference_no};
+    my $pubtype = $ref->{publication_type};
+    my $reftitle = $ref->{reftitle} || '';
+    my $pubtitle = $ref->{pubtitle} || '';
+    my $pubyr = $ref->{pubyr} || '';
+    my $misc = '';
+    
+    # First, figure out what type of publication the reference refers to.
+    # Depending upon publication type, generate the proper RIS data record.
+    
+    if ( $pubtype eq 'journal article' or $pubtype eq 'serial monograph' )
+    {
+	$output .= risLine('TY', 'JOUR');
+    }
+    
+    elsif ( $pubtype eq 'book chapter' or ($pubtype eq 'book/book chapter' and 
+					   defined $ref->{editors} and $ref->{editors} ne '' ) )
+    {
+	$output .= risLine('TY', 'CHAP');
+    }
+    
+    elsif ( $pubtype eq 'book' or $pubtype eq 'book/book chapter' or $pubtype eq 'compendium' 
+	    or $pubtype eq 'guidebook' )
+    {
+	$output .= risLine('TY', 'BOOK');
+    }
+    
+    elsif ( $pubtype eq 'serial monograph' )
+    {
+	$output .= risLine('TY', 'SER');
+    }
+    
+    elsif ( $pubtype eq 'Ph.D. thesis' or $pubtype eq 'M.S. thesis' )
+    {
+	$output .= risLine('TY', 'THES');
+	$misc = $pubtype;
+    }
+    
+    elsif ( $pubtype eq 'abstract' )
+    {
+	$output .= risLine('TY', 'ABST');
+    }
+    
+    elsif ( $pubtype eq 'news article' )
+    {
+	$output .= risLine('TY', 'NEWS');
+    }
+    
+    elsif ( $pubtype eq 'unpublished' )
+    {
+	$output .= risLine('TY', 'UNPD');
+    }
+    
+    else
+    {
+	$output .= risLine('TY', 'GEN');
+    }
+    
+    # The following fields are common to all types:
+    
+    $output .= risLine('ID', "paleodb:ref:$refno");
+    $output .= risLine('DB', "Paleobiology Database");
+    
+    $output .= risAuthor('AU', $ref->{author1last}, $ref->{author1init})  if $ref->{author1last};
+    $output .= risAuthor('AU', $ref->{author2last}, $ref->{author2init}) if $ref->{author2last};
+    $output .= risOtherAuthors('AU', $ref->{otherauthors}) if $ref->{otherauthors};
+    $output .= risOtherAuthors('A2', $ref->{editors}) if $ref->{editors};
+    
+    $output .= risYear('PY', $pubyr) if $pubyr > 0;
+    $output .= risLine('TI', $reftitle);
+    $output .= risLine('T2', $pubtitle);
+    $output .= risLine('M1', $misc) if $misc;
+    $output .= risLine('VL', $ref->{pubvol}) if $ref->{pubvol};
+    $output .= risLine('IS', $ref->{pubno}) if $ref->{pubno};
+    $output .= risLine('PB', $ref->{publisher}) if $ref->{publisher};
+    $output .= risLine('CY', $ref->{pubcity}) if $ref->{pubcity};
+    
+    if ( defined $ref->{refpages} and $ref->{refpages} ne '' )
+    {
+	if ( $ref->{refpages} =~ /^(\d+)-(\d+)$/ )
+	{
+	    $output .= risLine('SP', $1);
+	    $output .= risLine('EP', $2);
+	}
+	else
+	{
+	    $output .= risLine('SP', $ref->{refpages});
+	}
+    }
+    
+    else
+    {
+	$output .= risLine('SP', $ref->{firstpage}) if $ref->{firstpage};
+	$output .= risLine('EP', $ref->{lastpage}) if $ref->{lastpage};
+    }
+    
+    $output .= risLine('N1', $ref->{comments}) if defined $ref->{comments} and $ref->{comments} ne '';
+    $output .= risLine('LA', $ref->{language}) if defined $ref->{language} and $ref->{language} ne '';
+    $output .= risLine('DO', $ref->{doi}) if defined $ref->{doi} and $ref->{doi} ne '';
+    
+    $output .= risLine('ER');
+    
+    return $output;
+}
+
+
+# Generate an arbitrary line in RIS format, given a tag and a value.  The value
+# may be empty.
+
+sub risLine {
+    
+    my ($tag, $value) = @_;
+    
+    $value ||= '';
+    $tag = "\nTY" if $tag eq 'TY';
+    
+    return "$tag  - $value\n";
+}
+
+
+# Generate an "author" line in RIS format, given a tag (which may be 'AU' for
+# author, 'A2' for editor, etc.), and the three components of a name: last,
+# first, and suffix.  The first and suffix may be null.
+
+sub risAuthor {
+    
+    my ($tag, $last, $init, $suffix) = @_;
+    
+    $init ||= '';
+    $init =~ s/ //g;
+    $suffix ||= '';
+    
+    # If the last name includes a suffix, split it out
+    
+    if ( $last =~ /^(.*),\s*(.*)/ or $last =~ /^(.*)\s+(jr.?|iii|iv)$/i or $last =~ /^(.*)\s+\((jr.?|iii|iv)\)$/ )
+    {
+	$last = $1;
+	$suffix = $2;
+	if ( $suffix =~ /^([sSjJ])/ ) { $suffix = $1 . "r."; }
+    }
+    
+    # Generate the appropriate line, depending upon which of the three components
+    # are non-empty.
+    
+    if ( $suffix ne '' )
+    {
+	return "$tag  - $last,$init,$suffix\n";
+    }
+    
+    elsif ( $init ne '' )
+    {
+	return "$tag  - $last,$init\n";
+    }
+    
+    else
+    {
+	return "$tag  - $last\n";
+    }
+}
+
+
+# Generate a "date" line in RIS format, given a tag and year, month and day
+# values.  The month and day values may be null.  An optional "other" value
+# may also be included, which can be arbitrary text.
+
+sub risYear {
+
+    my ($tag, $year, $month, $day, $other) = @_;
+    
+    my $date = sprintf("%04d", $year + 0) . "/";
+    
+    $date .= sprintf("%02d", $month + 0) if defined $month and $month > 0;
+    $date .= "/";
+    
+    $date .= sprintf("%02d", $day + 0) if defined $day and $day > 0;
+    $date .= "/";
+    
+    $date .= $other if defined $other;
+    
+    return "$tag  - $date\n";
+}
+
+
+# Generate one or more "author" lines in RIS format, given a tag and a value
+# which represents one or more names separated by commas.  This is a bit
+# tricky, because we need to split out name suffixes such as 'jr' and 'iii'.
+# If we come upon something we can't handle, we generate a line whose value is
+# 'PARSE ERROR'.
+
+sub risOtherAuthors {
+
+    my ($tag, $otherauthors) = @_;
+    
+    $otherauthors =~ s/^\s+//;
+    
+    my $init = '';
+    my $last = '';
+    my $suffix = '';
+    my $output = '';
+    
+    while ( $otherauthors =~ /[^,\s]/ )
+    {
+	if ( $otherauthors =~ /^(\w\.)\s*(.*)/ )
+	{
+	    $init .= $1;
+	    $otherauthors = $2;
+	}
+	
+	elsif ( $otherauthors =~ /^([^,]+)(?:,\s+(.*))?/ )
+	{
+	    $last = $1;
+	    $otherauthors = $2;
+	    
+	    if ( $otherauthors =~ /^(\w\w+\.?)(?:,\s+(.*))$/ )
+	    {
+		$suffix = $1;
+		$otherauthors = $2;
+	    }
+	    
+	    $output .= risAuthor($tag, $last, $init, $suffix);
+	    $init = $last = $suffix = '';
+	}
+	
+	else
+	{
+	    $output .= risLine($tag, "PARSE ERROR");
+	    last;
+	}
+    }
+    
+    return $output;
 }
 
 

@@ -9,7 +9,7 @@ package CollectionData;
 
 use strict;
 
-use base 'DataService::Base';
+use base 'DataService::Query';
 
 use PBDBData;
 use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
@@ -23,294 +23,15 @@ use POSIX qw(floor ceil);
 our (%SELECT, %TABLES, %PROC, %OUTPUT);
 our ($MAX_BIN_LEVEL) = 0;
 
-$SELECT{basic} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, ei.interval_name as early_int, li.interval_name as late_int, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
-
-$TABLES{basic} = ['ei', 'li'];
-
-$PROC{basic} = 
-   [
-    { rec => 'sec_ref_nos', add => 'reference_no', split => ',' },
-   ];
-
-$OUTPUT{basic} =
-   [
-    { rec => 'collection_no', dwc => 'collectionID', com => 'oid',
-	doc => "A positive integer that uniquely identifies the collection"},
-    { rec => 'record_type', com => 'typ', com_value => 'col', dwc_value => 'Occurrence', value => 'collection',
-        doc => "The type of this object: 'col' for a collection" },
-    { rec => 'formation', com => 'fmm', no_show => 'strat',
-      doc => "The formation in which this collection was found" },
-    { rec => 'lng', dwc => 'decimalLongitude', com => 'lng',
-	doc => "The longitude at which the collection is located (in degrees)" },
-    { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
-	doc => "The latitude at which the collection is located (in degrees)" },
-    { rec => 'llp', com => 'prc', use_main => 1, code => \&CollectionData::generateBasisCode,
-        doc => "A two-letter code indicating the basis and precision of the geographic coordinates." },
-    { rec => 'collection_name', dwc => 'collectionCode', com => 'nam',
-	doc => "An arbitrary name which identifies the collection, not necessarily unique" },
-    { rec => 'collection_subset', com => 'nm2',
-	doc => "If this collection is a part of another one, this field specifies which part" },
-    { rec => 'attribution', dwc => 'recordedBy', com => 'att', show => 'attr',
-	doc => "The attribution (author and year) of this collection name" },
-    { rec => 'pubyr', com => 'pby', show => 'attr',
-	doc => "The year in which this collection was published" },
-    { rec => 'n_occs', com => 'noc',
-        doc => "The number of occurrences in this collection" },
-    { rec => 'early_int', com => 'oei', pbdb => 'early_interval',
-	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if C<end_interval> is also given" },
-    { rec => 'late_int', com => 'oli', pbdb => 'late_interval', dedup => 'early_int',
-	doc => "The interval that ends the specific geologic time range associated with this collection" },
-    { rec => 'reference_no', com => 'rid', json_list => 1,
-        doc => "The identifier(s) of the references from which this data was entered" },
-   ];
-
-$SELECT{summary} = "s.bin_id, s.n_colls, s.n_occs, s.lat, s.lng";
-
-$OUTPUT{summary} = 
-   [
-    { rec => 'bin_id', com => 'oid', doc => "A positive integer that identifies the cluster" },
-    { rec => 'bin_id_1', com => 'lv1', doc => "A positive integer that identifies the containing level-1 cluster, if any" },
-    { rec => 'bin_id_2', com => 'lv2', doc => "A positive integer that identifies the containing level-2 cluster, if any" },
-    { rec => 'record_type', com => 'typ', value => 'clu',
-        doc => "The type of this object: 'clu' for a collection cluster" },
-    { rec => 'n_colls', com => 'nco', doc => "The number of collections in cluster" },
-    { rec => 'n_occs', com => 'noc', doc => "The number of occurrences in this cluster" },
-    { rec => 'lng', com => 'lng', doc => "The longitude of the centroid of this cluster" },
-    { rec => 'lat', com => 'lat', doc => "The latitude of the centroid of this cluster" },
-   ];
-
-$SELECT{toprank} = "sum(c.n_occs) as n_occs, count(*) as n_colls";
-
-$OUTPUT{toprank} = 
-   [
-    { rec => 'n_occs', com => 'noc' },
-    { rec => 'n_colls', com => 'nco' },
-   ];
-
-$SELECT{bin} = undef;
-
-$OUTPUT{bin} = 
-   [
-    { rec => 'bin_id_1', com => 'lv1', doc => "The identifier of the level-1 cluster in which this collection is located" },
-    { rec => 'bin_id_2', com => 'lv2', doc => "The identifier of the level-2 cluster in which this collection is located" },
-    { rec => 'bin_id_3', com => 'lv3', doc => "The identifier of the level-3 cluster in which this collection is located" },
-   ];
-
-$SELECT{attr} = "r.author1init as a_ai1, r.author1last as a_al1, r.author2init as a_ai2, r.author2last as a_al2, r.otherauthors as a_oa, r.pubyr as a_pubyr";
-
-$TABLES{attr} = ['r'];
-
-$PROC{attr} = [
-    { rec => 'a_al1', set => 'attribution', use_main => 1, code => \&PBDBData::generateAttribution },
-    { rec => 'a_pubyr', set => 'pubyr' },
-   ];
-
-$SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype, r.language as r_language, r.doi as r_doi";
-
-$TABLES{ref} = 'r';
-
-$PROC{ref} = 
-   [
-    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&PBDBData::generateReference },
-    { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&PBDBData::generateReference },
-   ];
-
-$OUTPUT{ref} =
-   [
-    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => "\n\n",
-	doc => "The reference(s) associated with this collection (as formatted text)" },
-   ];
-
-$SELECT{loc} = "cc.country, cc.state, cc.county, cc.geogscale";
-
-$OUTPUT{loc} = 
-   [
-    { rec => 'country', com => 'cc2',
-	doc => "The country in which this collection is located (ISO-3166-1 alpha-2)" },
-    { rec => 'state', com => 'sta',
-	doc => "The state or province in which this collection is located [not available for all collections]" },
-    { rec => 'county', com => 'cny',
-	doc => "The county in which this collection is located [not available for all collections]" },
-    { rec => 'geogscale', com => 'gsc',
-        doc => "The geographic scale of this collection." },
-   ];
-
-$SELECT{ext} = "s.lng_min, lng_max, s.lat_min, s.lat_max, s.std_dev";
-
-$OUTPUT{ext} =
-   [
-    { rec => 'lng_min', com => 'lg1', doc => "The mimimum longitude for collections in this bin or cluster" },
-    { rec => 'lng_max', com => 'lg2', doc => "The maximum longitude for collections in this bin or cluster" },
-    { rec => 'lat_min', com => 'la1', doc => "The mimimum latitude for collections in this bin or cluster" },
-    { rec => 'lat_max', com => 'la2', doc => "The maximum latitude for collections in this bin or cluster" },
-    { rec => 'std_dev', com => 'std', doc => "The standard deviation of the coordinates in this cluster" },
-   ];
-
-$SELECT{time} = "\$mt.early_age, \$mt.late_age, im.cx_int_no, im.early_int_no, im.late_int_no";
-
-$TABLES{time} = ['im'];
-
-$OUTPUT{time} =
-   [
-    { rec => 'early_age', com => 'eag',
-	doc => "The early bound of the geologic time range associated with this collection or cluster (in Ma)" },
-    { rec => 'late_age', com => 'lag',
-	doc => "The late bound of the geologic time range associated with this collection or cluster (in Ma)" },
-    { rec => 'cx_int_no', com => 'cxi',
-        doc => "The identifier of the most specific single interval from the selected timescale that covers the entire time range associated with this collection or cluster." },
-    { rec => 'early_int_no', com => 'ein',
-	doc => "The beginning of a range of intervals from the selected timescale that most closely brackets the time range associated with this collection or cluster (with C<late_int_no>)" },
-    { rec => 'late_int_no', com => 'lin',
-	doc => "The end of a range of intervals from the selected timescale that most closely brackets the time range associated with this collection or cluster (with C<early_int_no>)" },
-   ];
-
-$PROC{time} = 
-   [
-    { rec => 'early_age', use_main => 1, code => \&fixTimeOutput },
-   ];
-
-$SELECT{ent} = "\$mt.authorizer_no, ppa.name as authorizer, \$mt.enterer_no, ppe.name as enterer, \$mt.modifier_no, ppm.name as modifier";
-
-$TABLES{ent} = ['ppa', 'ppe', 'ppm'];
-
-$OUTPUT{ent} = 
-   [
-    { rec => 'authorizer_no', com => 'ath', 
-      doc => 'The identifier of the database contributor who authorized the entry of this record.' },
-    { rec => 'authorizer', vocab => 'pbdb', 
-      doc => 'The name of the database contributor who authorized the entry of this record.' },
-    { rec => 'enterer_no', com => 'ent', dedup => 'authorizer_no',
-      doc => 'The identifier of the database contributor who entered this record.' },
-    { rec => 'enterer', vocab => 'pbdb', 
-      doc => 'The name of the database contributor who entered this record.' },
-    { rec => 'modifier_no', com => 'mfr', dedup => 'authorizer_no',
-      doc => 'The identifier of the database contributor who last modified this record.' },
-    { rec => 'modifier', vocab => 'pbdb', 
-      doc => 'The name of the database contributor who last modified this record.' },
-   ];
-
-$OUTPUT{taxa} = 
-   [
-    { rec => 'taxa', com => 'tax',
-      doc => "A list of records describing the taxa that have been identified as appearing in this collection",
-      rule => [{ rec => 'taxon_name', com => 'tna',
-		 doc => "The scientific name of the taxon" },
-	       { rec => 'taxon_rank', com => 'trn',
-		 doc => "The taxonomic rank" },
-	       { rec => 'taxon_no', com => 'tid',
-		 doc => "A positive integer that uniquely identifies the taxon" },
-	       { rec => 'ident_name', com => 'ina', dedup => 'taxon_name',
-		 doc => "The name under which the occurrence was actually identified" },
-	       { rec => 'ident_rank', com => 'irn', dedup => 'taxon_rank',
-		 doc => "The taxonomic rank as actually identified" },
-	       { rec => 'ident_no', com => 'iid', dedup => 'taxon_no',
-		 doc => "A positive integer that uniquely identifies the name as identified" }]
-    }
-   ];
-
-$SELECT{crmod} = "\$mt.created, \$mt.modified";
-
-$OUTPUT{crmod} = 
-   [
-    { rec => 'created', com => 'dcr',
-      doc => "The date and time at which this record was created." },
-    { rec => 'modified', com => 'dmd',
-      doc => "The date and time at which this record was last modified." },
-   ];
-
-$OUTPUT{rem} = 
-   [
-    { rec => 'collection_aka', dwc => 'collectionRemarks', com => 'crm', xml_list => '; ',
-	doc => "Any additional remarks that were entered about the colection"},
-   ];
-
-$SELECT{strat} = "cc.member, cc.stratscale, cc.stratcomments";
-
-$OUTPUT{strat} = 
-   [
-    { rec => 'formation', com => 'frm',
-      doc => "The formation in which the collection was found" },
-    { rec => 'member', com => 'mmb', 
-      doc => "The member in which the collection was found" },
-    { rec => 'stratscale', com => 'ssc',
-      doc => "The stratigraphic scale of the collection" },
-    { rec => 'stratcomments', com => 'scm',
-      doc => "Stratigraphic comments/notes about the collection, if any" },
-   ];
-
-$SELECT{stratext} = "cc.zone, cc.geological_group, cc.localsection, cc.localbed, cc.localorder, cc.regionalsection, cc.regionalbed, cc.regionalorder";
-
-$OUTPUT{stratext} = 
-   [
-    { rec => 'zone', com => 'zon', 
-      doc => "The zone in which the collection was found" },
-    { rec => 'geological_group', com => 'ggr',
-      doc => "The geological group in which the collection was found" },
-    { rec => 'localsection', com => 'lsc',
-      doc => "The local section in which the collection was found" },
-   ];
-
-$SELECT{refbase} = "r.reference_no, " . $SELECT{refs} . ", r.comments as r_comments";
-
-$PROC{formatted} = 
-   [
-    { rec => 'r_al1', set => 'formatted', use_main => 1, code => \&PBDBData::generateReference },
-   ];
-
-$OUTPUT{refbase} = 
-   [
-    { rec => 'formatted', com => 'ref',
-	doc => "Formatted reference" },
-    { rec => 'r_ai1', com => 'ai1', pbdb => 'author1init', no_show => 'formonly',
-        doc => "First initial of the first author" },
-    { rec => 'r_al1', com => 'al1', pbdb => 'author1last', no_show => 'formonly',
-        doc => "Last name of the second author" },
-    { rec => 'r_ai2', com => 'ai2', pbdb => 'author2init', no_show => 'formonly',
-        doc => "First initial of the second author" },
-    { rec => 'r_al2', com => 'al2', pbdb => 'author2last', no_show => 'formonly',
-        doc => "Last name of the second author" },
-    { rec => 'r_oa', com => 'oau', pbdb => 'otherauthors', no_show => 'formonly',
-        doc => "The names of the remaining authors" },
-    { rec => 'r_pubyr', com => 'pby', pbdb => 'pubyr', no_show => 'formonly',
-        doc => "The year in which the document was published" },
-    { rec => 'r_reftitle', com => 'tit', pbdb => 'reftitle', no_show => 'formonly',
-        doc => "The title of the document" },
-    { rec => 'r_pubtitle', com => 'pbt', pbdb => 'pubtitle', no_show => 'formonly',
-        doc => "The title of the publication in which the document appears" },
-    { rec => 'r_editors', com => 'eds', pbdb => 'editors', no_show => 'formonly',
-        doc => "Names of the editors, if any" },
-    { rec => 'r_pubvol', com => 'vol', pbdb => 'pubvol', no_show => 'formonly',
-        doc => "The volume number, if any" },
-    { rec => 'r_pubno', com => 'num', pbdb => 'pubno', no_show => 'formonly',
-        doc => "The series number within the volume, if any" },
-    { rec => 'r_fp', com => 'pgf', pbdb => 'firstpage', no_show => 'formonly',
-        doc => "First page number" },
-    { rec => 'r_lp', com => 'pgl', pbdb => 'lastpage', no_show => 'formonly',
-        doc => "Last page number" },
-    { rec => 'r_pubtype', com => 'pbt', pbdb => 'publication_type', no_show => 'formonly',
-        doc => "Publication type" },
-    { rec => 'r_language', com => 'lng', pbdb => 'language', no_show => 'formonly',
-        doc => "Language" },
-    { rec => 'r_doi', com => 'doi', pbdb => 'doi',
-        doc => "The DOI for this document, if known" },
-    { rec => 'r_comments', com => 'cmt', pbdb => 'comments',
-        doc => "Additional comments about this reference, if any" },
-   ];
-
-$OUTPUT{cmt} = 
-   [
-    { rec => 'r_comments', com => 'cmt', pbdb => 'comments',
-        doc => "Additional comments about this reference, if any" },
-   ];
 
 # configure ( )
 # 
-# This routine is called by the DataService module, and is passed the
-# configuration data as a hash ref.
+# This routine is called by the DataService module as a class method, and is passed
+# the configuration data as a hash ref.
 
 sub configure {
     
-    my ($self, $dbh, $config) = @_;
+    my ($class, $ds, $config, $dbh) = @_;
     
     if ( ref $config->{bins} eq 'ARRAY' )
     {
@@ -328,6 +49,255 @@ sub configure {
 	$SELECT{list_bin} = $bin_string if $bin_string ne '';
 	$MAX_BIN_LEVEL = $bin_level;
     }
+    
+    $ds->define_output( 'basic' =>
+      { select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
+		   'c.lat', 'c.lng', 'cc.latlng_basis as llb', 'cc.latlng_precision as llp',
+		   'c.n_occs', 'ei.interval_name as early_int', 'li.interval_name as late_int',
+		   'c.reference_no', 'group_concat(sr.reference_no) as sec_ref_nos'] },
+      { proc => 'sec_ref_nos', add => 'reference_no', split => ',' },
+      { field => 'collection_no', dwc_field => 'collectionID', com_field => 'oid' },
+	  "A positive integer that uniquely identifies the collection",
+      { field => 'record_type', value => 'collection', com_field => 'typ', com_value => 'col', 
+	dwc_value => 'Occurrence' },
+	  "type of this object: 'col' for a collection",
+      { field => 'formation', com_field => 'fmm', if_section => 'strat' },
+	  "The formation in which this collection was found",
+      { field => 'lng', dwc_field => 'decimalLongitude', com_field => 'lng' },
+	  "The longitude at which the collection is located (in degrees)",
+      { field => 'lat', dwc_field => 'decimalLatitude', com_field => 'lat' },
+	  "The latitude at which the collection is located (in degrees)",
+      { field => 'llp', com_field => 'prc', use_main => 1, 
+	code => \&CollectionData::generateBasisCode },
+	  "A two-letter code indicating the basis and precision of the geographic coordinates.",
+      { field => 'collection_name', dwc_field => 'collectionCode', com_field => 'nam' },
+	  "An arbitrary name which identifies the collection, not necessarily unique",
+      { field => 'collection_subset', com_field => 'nm2' },
+	  "If this collection is a part of another one, this field specifies which part",
+      { field => 'attribution', dwc_field => 'recordedBy', com_field => 'att', if_section => 'attr' },
+	  "The attribution (author and year) of this collection name",
+      { field => 'pubyr', com_field => 'pby', if_section => 'attr' },
+	  "The year in which this collection was published",
+      { field => 'n_occs', com_field => 'noc' },
+	  "The number of occurrences in this collection",
+      { field => 'early_interval', com_field => 'oei', pbdb_field => 'early_interval' },
+	  "The specific geologic time range associated with this collection (not necessarily a",
+	  "standard interval), or the interval that begins the range if C<late_inervalt> is also given",
+      { field => 'late_interval', com_field => 'oli', pbdb_field => 'late_interval', dedup => 'early_interval' },
+	  "The interval that ends the specific geologic time range associated with this collection",
+      { field => 'reference_no', com_field => 'rid', json_list => 1 },
+	  "The identifier(s) of the references from which this data was entered");
+    
+    $ds->define_output( 'summary' =>
+      { select => ['s.bin_id', 's.n_colls', 's.n_occs', 's.lat', 's.lng'] },
+      { field => 'bin_id', com_field => 'oid' }, 
+	  "A positive integer that identifies the cluster",
+      { field => 'bin_id_1', com_field => 'lv1' }, 
+	  "A positive integer that identifies the containing level-1 cluster, if any",
+      { field => 'bin_id_2', com_field => 'lv2' }, 
+	  "A positive integer that identifies the containing level-2 cluster, if any",
+      { field => 'record_type', com_field => 'typ', value => 'clu' },
+	  "The type of this object: 'clu' for a collection cluster",
+      { field => 'n_colls', com_field => 'nco' },
+	  "The number of collections in cluster",
+      { field => 'n_occs', com_field => 'noc' },
+	  "The number of occurrences in this cluster",
+      { field => 'lng', com_field => 'lng' },
+	  "The longitude of the centroid of this cluster",
+      { field => 'lat', com_field => 'lat' },
+	  "The latitude of the centroid of this cluster");
+
+    #defined_fields $ds 'toprank' =>
+    #	{ select, "sum(c.n_occs) as n_occs, count(*) as n_colls" };
+
+    $ds->define_output( 'bin' =>
+      { field => 'bin_id_1', com_field => 'lv1' },
+	  "The identifier of the level-1 cluster in which this collection is located",
+      { field => 'bin_id_2', com_field => 'lv2' },
+	  "The identifier of the level-2 cluster in which this collection is located",
+      { field => 'bin_id_3', com_field => 'lv3' },
+	  "The identifier of the level-3 cluster in which this collection is located");
+    
+    $ds->define_output( 'attr' =>
+      { select => ['r.author1init as a_ai1', 'r.author1last as a_al1', 'r.author2init as a_ai2', 
+		   'r.author2last as a_al2', 'r.otherauthors as a_oa', 'r.pubyr as a_pubyr'] },
+      { tables => 'r' },
+      { proc => 'a_al1', set => 'attribution', use_main => 1, 
+	code => \&PBDBData::generateAttribution },
+      { proc => 'a_pubyr', set => 'pubyr' });
+    
+    $ds->define_output( 'ref' =>
+      { select => ['r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
+		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
+		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
+		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
+		   'r.language as r_language', 'r.doi as r_doi'] },
+      { tables => 'r' },
+      { proc => 'r_al1', add => 'ref_list', use_main => 1, code => \&PBDBData::generateReference },
+      { proc => 'sec_refs', add => 'ref_list', use_each => 1, code => \&PBDBData::generateReference },
+      { field => 'ref_list', pbdb_field => 'references', dwc_field => 'associatedReferences', 
+	com_field => 'ref', xml_list => "\n\n" }
+	  "The reference(s) associated with this collection (as formatted text)");
+    
+    $ds->define_output( 'loc' =>
+      { select => ['cc.country', 'cc.state', 'cc.county', 'cc.geogscale'] },
+      { field => 'country', com_field => 'cc2' },
+	  "The country in which this collection is located (ISO-3166-1 alpha-2)",
+      { field => 'state', com_field => 'sta' },
+	  "The state or province in which this collection is located [not available for all collections]",
+      { field => 'county', com_field => 'cny' },
+	  "The county in which this collection is located [not available for all collections]",
+      { field => 'geogscale', com_field => 'gsc' },
+	  "The geographic scale of this collection.");
+
+    $ds->define_output( 'ext' =>
+      { select => ['s.lng_min', 'lng_max', 's.lat_min', 's.lat_max', 's.std_dev'] },
+      { field => 'lng_min', com_field => 'lg1' },
+	  "The mimimum longitude for collections in this bin or cluster",
+      { field => 'lng_max', com_field => 'lg2' },
+	  "The maximum longitude for collections in this bin or cluster",
+      { field => 'lat_min', com_field => 'la1' },
+	  "The mimimum latitude for collections in this bin or cluster",
+      { field => 'lat_max', com_field => 'la2' },
+	  "The maximum latitude for collections in this bin or cluster",
+      { field => 'std_dev', com_field => 'std' },
+	  "The standard deviation of the coordinates in this cluster");
+
+    $ds->define_output( 'time' =>
+      { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'] },
+      { tables => 'im' },
+      { proc => 'early_age', use_main => 1, code => \&fixTimeOutput },
+      { field => 'early_age', com_field => 'eag' },
+	  "The early bound of the geologic time range associated with this collection or cluster (in Ma)",
+      { field => 'late_age', com_field => 'lag' },
+	  "The late bound of the geologic time range associated with this collection or cluster (in Ma)",
+      { field => 'cx_int_no', com_field => 'cxi' },
+	  "The identifier of the most specific single interval from the selected timescale that",
+	  "covers the entire time range associated with this collection or cluster.",
+      { field => 'early_int_no', com_field => 'ein' },
+	  "The beginning of a range of intervals from the selected timescale that most closely",
+	  "brackets the time range associated with this collection or cluster (with C<late_int_no>)",
+      { field => 'late_int_no', com_field => 'lin' },
+	  "The end of a range of intervals from the selected timescale that most closely brackets",
+	  "the time range associated with this collection or cluster (with C<early_int_no>)");
+
+    $ds->define_output( 'ent' =>
+      { select => ['$mt.authorizer_no', 'ppa.name as authorizer', '$mt.enterer_no', 
+		   'ppe.name as enterer', '$mt.modifier_no', 'ppm.name as modifier'] },
+      { tables => ['ppa', 'ppe', 'ppm'] },
+      { field => 'authorizer_no', com_field => 'ath' },
+	  "The identifier of the database contributor who authorized the entry of this record.",
+      { field => 'authorizer', vocab => 'pbdb' },
+	  "The name of the database contributor who authorized the entry of this record.",
+      { field => 'enterer_no', com_field => 'ent', dedup => 'authorizer_no' },
+	  "The identifier of the database contributor who entered this record.",
+      { field => 'enterer', vocab => 'pbdb' },
+	  "The name of the database contributor who entered this record.",
+      { field => 'modifier_no', com_field => 'mfr', dedup => 'authorizer_no' },
+	  "The identifier of the database contributor who last modified this record.",
+      { field => 'modifier', vocab => 'pbdb' },
+	  "The name of the database contributor who last modified this record.");
+    
+    $ds->define_output( 'taxon_record' =>
+      { field => 'taxon_name', com_field => 'tna' },
+	  "The scientific name of the taxon",
+      { field => 'taxon_rank', com_field => 'trn' },
+	  "The taxonomic rank",
+      { field => 'taxon_no', com_field => 'tid' },
+	  "A positive integer that uniquely identifies the taxon",
+      { field => 'ident_name', com_field => 'ina', dedup => 'taxon_name' },
+	  "The name under which the occurrence was actually identified",
+      { field => 'ident_rank', com_field => 'irn', dedup => 'taxon_rank' },
+	  "The taxonomic rank as actually identified",
+      { field => 'ident_no', com_field => 'iid', dedup => 'taxon_no' },
+	  "A positive integer that uniquely identifies the name as identified");
+
+    $ds->define_output( 'taxa' =>
+      { field => 'taxa', com_field => 'tax', rule => 'taxon_record' },
+	  "A list of records describing the taxa that have been identified",
+	  "as appearing in this collection");
+    
+    $ds->define_output( 'crmod' =>
+      { select => ['$mt.created', '$mt.modified'] },
+      { field => 'created', com_field => 'dcr' },
+	  "The date and time at which this record was created.",
+      { field => 'modified', com_field => 'dmd' },
+	  "The date and time at which this record was last modified.");
+
+    $ds->define_output( 'rem' =>
+      { field => 'collection_aka', dwc_field => 'collectionRemarks', com_field => 'crm', 
+	xml_list => '; ' },
+	  "Any additional remarks that were entered about the colection");
+
+    $ds->define_output( 'strat' =>
+      { select => ['cc.member', 'cc.stratscale', 'cc.stratcomments'] },
+      { field => 'formation', com_field => 'frm' },
+	  "The formation in which the collection was found",
+      { field => 'member', com_field => 'mmb' },
+	  "The member in which the collection was found",
+      { field => 'stratscale', com_field => 'ssc' },
+	  "The stratigraphic scale of the collection",
+      { field => 'stratcomments', com_field => 'scm' },
+	  "Stratigraphic comments/notes about the collection, if any");
+
+    $ds->define_output( 'stratext' =>
+      { select => ['cc.zone', 'cc.geological_group', 'cc.localsection', 'cc.localbed', 
+		   'cc.localorder', 'cc.regionalsection', 'cc.regionalbed', 'cc.regionalorder'] },
+      { field => 'zone', com_field => 'zon' }, 
+	  "The zone in which the collection was found",
+      { field => 'geological_group', com_field => 'ggr' },
+	  "The geological group in which the collection was found",
+      { field => 'localsection', com_field => 'lsc' },
+	  "The local section in which the collection was found");
+
+    $ds->define_output( 'refbase' =>
+      { select => ['r.reference_no', '[ref:select]', 'r.comments as r_comments'] },
+      { proc => 'r_al1', set => 'formatted', use_main => 1, code => \&PBDBData::generateReference },
+      { field => 'reference_no', com_field => 'rid' }, 
+	  "Numeric identifier for this document reference in the database",
+      { field => 'record_type', com_field => 'typ', com_value => 'ref', value => 'reference' },
+	  "The type of this object: 'ref' for a document reference",
+      { field => 'formatted', com_field => 'ref' },
+	  "Formatted reference",
+      { field => 'r_ai1', com_field => 'ai1', pbdb_field => 'author1init', not_section => 'formonly' },
+	  "First initial of the first author",
+      { field => 'r_al1', com_field => 'al1', pbdb_field => 'author1last', not_section => 'formonly' },
+	  "Last name of the second author",
+      { field => 'r_ai2', com_field => 'ai2', pbdb_field => 'author2init', not_section => 'formonly' },
+	  "First initial of the second author",
+      { field => 'r_al2', com_field => 'al2', pbdb_field => 'author2last', not_section => 'formonly' },
+	  "Last name of the second author",
+      { field => 'r_oa', com_field => 'oau', pbdb_field => 'otherauthors', not_section => 'formonly' },
+	  "The names of the remaining authors",
+      { field => 'r_pubyr', com_field => 'pby', pbdb_field => 'pubyr', not_section => 'formonly' },
+	  "The year in which the document was published",
+      { field => 'r_reftitle', com_field => 'tit', pbdb_field => 'reftitle', not_section => 'formonly' },
+	  "The title of the document",
+      { field => 'r_pubtitle', com_field => 'pbt', pbdb_field => 'pubtitle', not_section => 'formonly' },
+	  "The title of the publication in which the document appears",
+      { field => 'r_editors', com_field => 'eds', pbdb_field => 'editors', not_section => 'formonly' },
+	  "Names of the editors, if any",
+      { field => 'r_pubvol', com_field => 'vol', pbdb_field => 'pubvol', not_section => 'formonly' },
+	  "The volume number, if any",
+      { field => 'r_pubno', com_field => 'num', pbdb_field => 'pubno', not_section => 'formonly' },
+	  "The series number within the volume, if any",
+      { field => 'r_fp', com_field => 'pgf', pbdb_field => 'firstpage', not_section => 'formonly' },
+	  "First page number",
+      { field => 'r_lp', com_field => 'pgl', pbdb_field => 'lastpage', not_section => 'formonly' },
+	  "Last page number",
+      { field => 'r_pubtype', com_field => 'pbt', pbdb_field => 'publication_type', not_section => 'formonly' },
+	  "Publication type",
+      { field => 'r_language', com_field => 'lng', pbdb_field => 'language', not_section => 'formonly' },
+	  "Language",
+      { field => 'r_doi', com_field => 'doi', pbdb_field => 'doi' },
+	  "The DOI for this document, if known",
+      { field => 'r_comments', com_field => 'cmt', pbdb_field => 'comments' },
+	  "Additional comments about this reference, if any");
+
+    $ds->define_output( 'comments' =>
+      { field => 'r_comments', com_field => 'cmt', pbdb_field => 'comments' },
+	  "Additional comments about this reference, if any");
 }
 
 
@@ -632,6 +602,74 @@ sub list {
     return 1;
 }
 
+
+# refs ( )
+# 
+# Query the database for info about the references for all collections
+# satisfying the conditions specified by the query parameters.
+# 
+# Returns true if the fetch succeeded, false if an error occurred.
+
+sub refs {
+    
+    my ($self) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $self->{dbh};
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters = $self->generateMainFilters('list', 'c', $self->{select_tables});
+    push @filters, $self->generateCollFilters($self->{select_tables});
+    
+    push @filters, "c.access_level = 0";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $self->generateLimitClause();
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $fields = $self->generate_query_fields('r');
+    
+    $self->adjustCoordinates(\$fields);
+    
+    my $base_joins = $self->generateJoinList('c', $self->{select_tables});
+    
+    $self->{main_sql} = "
+	SELECT $calc $fields
+	FROM refs as r JOIN
+	       (SELECT DISTINCT sr.reference_no
+		FROM coll_matrix as c join collections as cc using (collection_no)
+			LEFT JOIN secondary_refs as sr using (collection_no)
+			$base_joins
+		WHERE $filter_string) as cr using (reference_no)
+	$limit";
+    
+    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
+    
+    # Then prepare and execute the main query and the secondary query.
+    
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
+    $self->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    if ( $calc )
+    {
+	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
+    }
+
+}
 
 # fixTimeOutput ( record )
 # 
@@ -1152,7 +1190,7 @@ sub adjustCoordinates {
 
 sub generateJoinList {
 
-    my ($self, $mt, $tables, $summary_join_field) = @_;
+    my ($self, $mt, $tables) = @_;
     
     my $join_list = '';
     
@@ -1171,7 +1209,7 @@ sub generateJoinList {
 	if $tables->{o};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t};
-    $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n" 
+    $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n"
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
 	if $tables->{ppa};

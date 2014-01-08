@@ -1,4 +1,4 @@
-#
+# 
 # This is a home-grown POD-to-HTML translator, because Pod::Simple::HTML does
 # not work properly.
 # 
@@ -188,7 +188,7 @@ sub parse_pod {
 	    
 	    else
 	    {
-		$self->add_error(undef, "unrecognized command: =$cmd");
+		$self->add_error("unrecognized command: =$cmd");
 		$self->add_content($content);
 	    }
 	}
@@ -206,12 +206,12 @@ sub parse_pod {
     
     if ( $self->{list_level} )
     {
-	$self->add_error(undef, "unclosed =over section");
+	$self->add_error("unclosed =over section");
     }
     
     if ( $self->{format_level} )
     {
-	$self->add_error(undef, "unclosed =begin section");
+	$self->add_error("unclosed =begin section");
     }
 }
 
@@ -255,7 +255,7 @@ sub add_heading {
     
     if ( $self->{list_level} )
     {
-	$self->add_error(undef, "you are either missing a =back, or you put a =head in the wrong place");
+	$self->add_error("you are either missing a =back, or you put a =head in the wrong place");
 	$self->end_list while $self->{list_level};
     }
     
@@ -283,7 +283,7 @@ sub add_item {
     
     unless ( $self->{list_level} )
     {
-	$self->add_error(undef, "misplaced =item: should not occur except between =over and =back");
+	$self->add_error("misplaced =item: should not occur except between =over and =back");
 	$self->add_list(4);
     }
     
@@ -317,7 +317,7 @@ sub end_list {
     
     unless ( $self->{list_level} )
     {
-	$self->add_error(undef, "you have a mismatched =back here");
+	$self->add_error("you have a mismatched =back here");
 	return;
     }
     
@@ -419,16 +419,22 @@ sub add_directive {
 
     my ($self, $directive) = @_;
     
-    if ( $directive =~ /^table_header\s+(.*)/ )
+    if ( $directive =~ /^(table_header|no_header)\s+(.*)/ )
     {
-	my $header = $1;
+	my $cmd = $1;
+	my $header = $2;
 	my @columns = split qr{ \s+ \| \s+ }x, $header;
 	
 	return unless $self->{list_level};
 	$self->{stack}[-1]{header_spec} = \@columns;
+	$self->{stack}[-1]{no_header} = 1 if $cmd eq 'no_header';
+    }
+    
+    else
+    {
+	$self->add_error("invalid directive '$directive'");
     }
 }
-
 
 
 sub decode_content {
@@ -515,16 +521,14 @@ sub decode_content {
 }
 
 
-
 sub add_error {
     
-    my ($self, $line_no, $errmsg) = @_;
+    my ($self, $errmsg) = @_;
     
-    $line_no ||= $self->{line_no};
-    push @{$self->{errors}}, { line_no => $line_no, msg => $errmsg };
+    push @{$self->{errors}}, { line_no => $self->{line_no}, msg => $errmsg };
+    
+    $self->add_node({ type => 'error', content => $errmsg });
 }
-
-
 
 
 sub generate_html {
@@ -571,6 +575,11 @@ sub generate_html {
 	$output .= $self->generate_html_node($node);
     }
     
+    # If any error messages occurred, note this now.
+    
+    $output .= "\n<h2>Errors occurred when generating this document.  Check the HTML source for details.</h2>\n\n"
+	if $self->{errors};
+    
     $output .= "\n</body>\n";
     $output .= "</html>\n";
     
@@ -614,6 +623,11 @@ sub generate_html_node {
 	{
 	    $output .= $self->generate_html_literal($node->{body});
 	}
+    }
+    
+    elsif ( $node->{type} eq 'error' )
+    {
+	$output .= $self->generate_html_error($node);
     }
     
     else
@@ -683,7 +697,7 @@ sub generate_html_open_list {
 	if ( ref $node->{header_spec} eq 'ARRAY' )
 	{
 	    $self->configure_html_list($node, @{$node->{header_spec}});
-	    $output .= $self->generate_html_list_header($node);
+	    $output .= $self->generate_html_list_header($node) unless $node->{no_header};
 	}
 	
 	return $output;
@@ -1038,4 +1052,12 @@ sub generate_html_literal {
     }
     
     return $output
+}
+
+
+sub generate_html_error {
+
+    my ($self, $node) = @_;
+    
+    return "\n<!-- ERROR: $node->{content} -->\n";
 }
