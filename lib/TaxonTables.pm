@@ -4113,18 +4113,6 @@ sub computeAttrsTable {
 		SET v.is_extant = 0 WHERE pv.is_extant = 0";
 	
 	$dbh->do($sql);
-	
-	my $sql = "
-		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-			JOIN $ATTRS_WORK as pv on pv.orig_no = t.parsen_no and t.depth = $row
-		SET v.first_early_age = pv.first_early_age,
-		    v.first_late_age = pv.first_late_age,
-		    v.last_early_age = pv.last_early_age,
-		    v.last_late_age = pv.last_late_age,
-		    v.precise_age = false
-		WHERE not(v.precise_age) and pv.first_early_age is not null";
-	
-	$dbh->do($sql);
     }
     
     # Now we have to copy the attributes of senior synonyms to all of their

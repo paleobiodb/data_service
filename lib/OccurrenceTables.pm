@@ -154,7 +154,7 @@ sub buildOccurrenceTables {
 			first_early_age, last_early_age, first_late_age, last_late_age,
 			precise_age)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
-			max(ei.early_age), min(ei.early_age), max(li.late_age), min(li.late_age),
+			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
 			true
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
