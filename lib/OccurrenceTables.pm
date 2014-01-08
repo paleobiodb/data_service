@@ -15,7 +15,7 @@ use Try::Tiny;
 
 use CoreFunction qw(activateTables);
 use CollectionTables qw($COLL_MATRIX);
-use IntervalTables qw($INTERVAL_DATA);
+use IntervalTables qw($INTERVAL_DATA $SCALE_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
@@ -133,25 +133,40 @@ sub buildOccurrenceTables {
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
 				first_early_age decimal(9,5),
-				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
+				first_late_age decimal(9,5),
 				last_late_age decimal(9,5),
 				precise_age boolean default true,
 				early_occ int unsigned,
 				late_occ int unsigned) ENGINE=MyISAM");
     
     # Look for the lower and upper bounds for the interval range in which each
-    # taxon occurs.  Start by ignoring intervals that span more than 40 million years,
-    # because they are not precise enough for first/last appearance calculations.
+    # taxon occurs.  Start by ignoring occurrences dated to an epoch, era or
+    # period (except for Ediacaran and Quaternary) or to an interval that
+    # spans more than 30 million years, because these are not precise enough for
+    # first/last appearance calculations.
+    
+    # This is not the approach we ultimately want to take: we will need to
+    # revisit this procedure, and figure out a better way to determine
+    # first/last appearance ranges (as probability curves, perhaps?)
     
     $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
-			first_early_age, first_late_age, last_early_age, last_late_age)
+			first_early_age, last_early_age, first_late_age, last_late_age,
+			precise_age)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
-			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age)
+			max(ei.early_age), min(ei.early_age), max(li.late_age), min(li.late_age),
+			true
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
-		WHERE ei.early_age - li.late_age <= 40
+			LEFT JOIN $SCALE_MAP as es on es.interval_no = ei.interval_no
+			LEFT JOIN $SCALE_MAP as ls on ls.interval_no = li.interval_no
+		WHERE (ei.early_age - li.late_age <= 30 and li.late_age >= 20) or
+		      (ei.early_age - li.late_age <= 20 and li.late_age < 20) or
+		      (es.scale_no = 1 and es.level in (4,5) and ei.early_age - li.late_age <= 50) or
+		      (ls.scale_no = 1 and ls.level in (4,5) and ei.early_age - li.late_age <= 50) or
+		      (es.scale_no = 1 and es.level = 3 and ei.early_age < 3) or
+		      (ls.scale_no = 1 and ls.level = 3 and li.late_age >= 540)
 		GROUP BY m.orig_no
 		HAVING m.orig_no > 0";
     
@@ -162,17 +177,15 @@ sub buildOccurrenceTables {
     # Then we need to go back and add in the taxa that are only known from
     # occurrences with non-precise ages (i.e. range > 40 my).
     
-    $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
+    $sql = "	INSERT IGNORE INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age,
 			precise_age)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
 			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
 			false
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
-			LEFT JOIN $OCC_TAXON_WORK as m1 using (orig_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
-		WHERE m1.orig_no is null
 		GROUP BY m.orig_no
 		HAVING m.orig_no > 0";
     
@@ -197,7 +210,7 @@ sub buildOccurrenceTables {
     
     $count = $dbh->do($sql);
     
-    # Then index the symmary table by earliest and latest interval number, so
+    # Then index the summary table by earliest and latest interval number, so
     # that we can quickly query for which taxa began or ended at a particular
     # time.
     
