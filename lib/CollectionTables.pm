@@ -10,7 +10,10 @@ use strict;
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildCollectionTables $COLL_MATRIX $COLL_BINS $COLL_INT_BINS $COUNTRY_MAP $CONTINENT_DATA @BIN_LEVEL);
+our (@EXPORT_OK) = qw(buildCollectionTables $COLL_MATRIX $COLL_BINS $COLL_INT_BINS
+		      $COUNTRY_MAP $CONTINENT_DATA @BIN_LEVEL $PROTECTED_LAND
+		      createProtLandTable startProtLandInsert insertProtLandRecord
+		      finishProtLandInsert);
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -28,6 +31,9 @@ our $COLL_BINS_WORK = "cbn";
 our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
 our $CLUST_AUX = "clust_aux";
+
+our $PROTECTED_LAND = "protected_land";
+our $PROTECTED_WORK = "pln";
 
 our @BIN_LEVEL;
 
@@ -516,7 +522,6 @@ sub applyClustering {
 # Createcountrymap ( dbh, force )
 # 
 # Create the country_map table if it does not already exist.
-# Still need to fix: Zaire, U.A.E., UAE, Czechoslovakia, Netherlands Antilles
 
 sub createCountryMap {
 
@@ -577,6 +582,7 @@ sub createCountryMap {
 	('SN', 'AFR', 'Senegal'),
 	('SO', 'AFR', 'Somalia'),
 	('ZA', 'AFR', 'South Africa'),
+	('SS', 'AFR', 'South Sudan'),
 	('SD', 'AFR', 'Sudan'),
 	('SZ', 'AFR', 'Swaziland'),
 	('TZ', 'AFR', 'Tanzania'),
@@ -762,4 +768,216 @@ sub createCountryMap {
 }
 
 
+# deleteProtLandData ( dbh, cc, category )
+# 
+# Delete all of the protected land data corresponding to the specified country
+# code and category.  Specify 'all' for $cc to delete all data.  If no
+# category is given, then delete all records corresponding to the given cc.
+
+sub deleteProtLandData {
+    
+    my ($dbh, $cc, $category) = @_;
+    
+    # Make sure we have a proper country code.
+    
+    croak "you must specify a country code" unless $cc;
+    
+    my $quoted_cc = $dbh->quote($cc);
+    my $quoted_cat = $dbh->quote($category) if $category;
+    
+    my ($sql, $result, $count);
+    
+    # Disable the index, then delete the data, then re-enable it.  This will
+    # be much faster than deleting the rows from the index one at a time.
+    
+    $result = $dbh->do("ALTER TABLE $PROTECTED_LAND DISABLE KEYS");
+    
+    # If the country code was given as 'all', just delete every record.
+    
+    if ( $cc eq 'all' )
+    {
+	$result = $dbh->do("DELETE FROM $PROTECTED_LAND");
+    }
+    
+    # If a category was given, delete all records whose cc and category match
+    # the specified arguments.
+    
+    elsif ( $quoted_cat )
+    {
+	$result = $dbh->do("DELETE FROM $PROTECTED_LAND
+			    WHERE cc=$quoted_cc and category=$quoted_cat");
+    }
+    
+    # Otherwise, delete all records whose cc matches the specified argument.
+    
+    else
+    {
+	$result = $dbh->do("DELETE FROM $PROTECTED_LAND
+			    WHERE cc=$quoted_cc");
+    }
+    
+    $result = $dbh->do("ALTER TABLE $PROTECTED_LAND ENABLE KEYS");
+}
+
+
+my (%PROT_LAND_CC, %PROT_LAND_CAT, $BAD_COUNT);
+
+# startProtLandInsert ( dbh )
+# 
+# Prepare to insert protected land data.  This involves creating a working
+# table into which the records will be put before being copied to the main
+# table. 
+
+sub startProtLandInsert {
+    
+    my ($dbh) = @_;
+    
+    my ($result);
+    
+    # Create a working table.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $PROTECTED_WORK");
+    
+    $result = $dbh->do("
+		CREATE TABLE $PROTECTED_WORK (
+			shape GEOMETRY not null,
+			cc char(2) not null,
+			category varchar(10) not null) Engine=MyISAM");
+    
+    # Empty the hash that keeps track of what countries we are loading data
+    # for. 
+    
+    %PROT_LAND_CC = ();
+    %PROT_LAND_CAT = ();
+    $BAD_COUNT = 0;
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+# insertProtLandRecord ( dbh, cc, category, wkt )
+# 
+# Insert a new shape record with the specified attributes.  The parameter
+# $wkt should be a string representing a polygon in WKT format.
+
+sub insertProtLandRecord {
+    
+    my ($dbh, $cc, $category, $wkt) = @_;
+    
+    my ($result, $sql);
+    
+    # Suppress warning messages when inserting records.
+    
+    local($dbh->{RaiseError} = 0);
+    
+    # Make sure we have a properly quoted string for the country code and
+    # category.  This also makes sure that we have a record of which ones were
+    # mentioned in this insert operation.
+    
+    $category ||= '';
+    
+    my $quoted_cc = $PROT_LAND_CC{$cc} || ($PROT_LAND_CC{$cc} = $dbh->quote($cc));
+    my $quoted_cat = $PROT_LAND_CAT{$category} || ($PROT_LAND_CAT{$category} = $dbh->quote($category));
+    
+    # Insert the record into the working table.
+    
+    $sql = "	INSERT INTO $PROTECTED_WORK (cc, category, shape)
+		VALUES ($quoted_cc, $quoted_cat, PolyFromText('$wkt'))";
+    
+    eval {
+	$result = $dbh->do($sql);
+    };
+    
+    unless ( $result )
+    {
+	$BAD_COUNT++;
+    }
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+# finishProtLandInsert( dbh, cc_list, category_list )
+# 
+# Copy everything from the working table into the main protected-land table.
+# If $cc_list and/or $category_list are not empty (they should each be a
+# listref or hashref), then first delete everything that corresponds to one of
+# those values.  $category_list is ignored if $cc_list is empty.
+
+sub finishProtLandInsert {
+    
+    my ($dbh, $cc_list, $category_list) = @_;
+    
+    my ($result, $sql, @where);
+    
+    logMessage(2, "    skipped $BAD_COUNT bad polygons.") if $BAD_COUNT > 0;
+    
+    # First collect up the lists of country codes and possibly categories to
+    # delete.  Establish clauses that will exclude these when copying the data
+    # over to the new table.
+    
+    my @ccs = @$cc_list if ref $cc_list eq 'ARRAY';
+    @ccs    = keys %$cc_list if ref $cc_list eq 'HASH';
+    
+    my @cats = @$category_list if ref $category_list eq 'ARRAY';
+    @cats    = keys %$category_list if ref $category_list eq 'HASH';
+    
+    if ( @ccs )
+    {
+	my $exclude_clause = '';
+	$exclude_clause .= 'cc not in (';
+	$exclude_clause .= join(q{,}, map { $dbh->quote($_) } @ccs);
+	$exclude_clause .= ')';
+	
+	if ( @cats )
+	{
+	    $exclude_clause .= ' or category not in (';
+	    $exclude_clause .= join(q{,}, map { $dbh->quote($_) } @cats);
+	    $exclude_clause .= ')';
+	}
+	
+	push @where, $exclude_clause if $exclude_clause;
+    }
+    
+    my $where = '';
+    $where .= 'WHERE ' . join(q{ and }, @where) . "\n" if @where;
+    
+    # Now check to see if we have an existing table that has any records in it.
+    
+    my $old_record_count;
+    
+    eval {
+	local($dbh->{PrintError}) = 0;
+	
+	($old_record_count) = $dbh->selectrow_array("SELECT count(*) FROM $PROTECTED_LAND");
+    };
+    
+    # If we do, add all of the existing data to the working table, except for
+    # what is specified to exclude.
+    
+    if ( $old_record_count )
+    {
+	$sql = "INSERT INTO $PROTECTED_WORK (shape, cc, category)
+		SELECT shape, cc, category
+		FROM $PROTECTED_LAND
+		$where";
+	
+	$result = $dbh->do($sql);
+    }
+    
+    # Index the table.
+    
+    logMessage(2, "indexing by coordinates...");
+    
+    $result = $dbh->do("ALTER TABLE $PROTECTED_WORK ADD SPATIAL INDEX (shape)");
+    
+    logMessage(2, "indexing by cc and category...");
+    
+    $result = $dbh->do("ALTER TABLE $PROTECTED_WORK ADD INDEX (cc, category)");
+    
+    # Now activate the working table as the new protected land table.
+    
+    activateTables($dbh, $PROTECTED_WORK => $PROTECTED_LAND);
+}
+    
 1;
