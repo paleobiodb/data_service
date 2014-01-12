@@ -46,7 +46,9 @@ if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
 
 # Many of the configuration parameters are set by entries in config.yml.
 
-my $ds = DataService->new({ response_selector => 'show',
+my $ds = DataService->new({ path_prefix => '/data',.
+			    output_param => 'show',
+			    vocab_param => 'vocab',
 			    public_access => 1,
 			    uses_dbh => 1 });
 
@@ -58,9 +60,9 @@ my $ds = DataService->new({ response_selector => 'show',
 # We start by defining the vocabularies that are available for describing the
 # data returned by this service.
 
-$ds->define_vocabulary(
+$ds->define_vocab(
     { name => 'pbdb',
-      default_field_names => 1 },
+      use_field_names => 1 },
         "The Paleobiology Database field names.  This vocabulary is the",
 	"default for text format responses (tsv, csv, txt).",
     { name => 'com' },
@@ -76,30 +78,30 @@ $ds->define_vocabulary(
 
 $ds->define_format(
     { name => 'json', content_type => 'application/json',
-      default_vocabulary => 'com' },
+      default_vocab => 'com' },
 	"The JSON format is intended primarily to support client applications,",
 	"including the PBDB Navigator.  Response fields are named using compact",
 	"3-character field names.",
     { name => 'xml', content_type => 'text/xml',
-      default_vocabulary => 'dwc' },
+      default_vocab => 'dwc' },
 	"The XML format is intended primarily to support data interchange with",
 	"other databases, using the Darwin Core element set.",
     { name => 'txt', content_type => 'text/plain', 
-      default_vocabulary => 'pbdb' },
+      default_vocab => 'pbdb' },
         "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	"downloading data from the database.  These downloads can easily be",
 	"loaded into spreadsheets or other analysis tools.  The field names are",
 	"taken from the PBDB Classic interface, for compatibility with existing",
 	"tools and analytical procedures."
     { name => 'tsv', content_type => 'text/tab-separated-values',
-      default_vocabulary => 'pbdb' },
+      default_vocab => 'pbdb' },
         "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	"downloading data from the database.  These downloads can easily be",
 	"loaded into spreadsheets or other analysis tools.  The field names are",
 	"taken from the PBDB Classic interface, for compatibility with existing",
 	"tools and analytical procedures."
     { name => 'csv', content_type => 'text/csv',
-      default_vocabulary => 'pbdb' },
+      default_vocab => 'pbdb' },
         "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	"downloading data from the database.  These downloads can easily be",
 	"loaded into spreadsheets or other analysis tools.  The field names are",
@@ -134,10 +136,10 @@ $ds->define_ruleset('1.1:common_params' =>
        "If specified, then the response includes the number of records found and the number returned.",
        "For more information about how this information is encoded, see the documentation pages",
        "for the various response formats.",
-    { optional => 'vocab', valid => ENUM_VALUE('dwc', 'com', 'pbdb') },
+    { optional => 'vocab', valid => $ds->vocab_rule },
        "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
        "you want to override the default vocabulary for your selected format.",
-       "Possible values include:", $self->document_vocabulary()
+       "Possible values include:", $ds->vocab_doc,
     "!!The following parameters are only relevant to the text formats (csv, tsv, txt):",
     { optional => 'no_header', valid => FLAG_VALUE },
        "If specified, then the header line (which gives the field names) is omitted.",
@@ -461,38 +463,30 @@ $ds->define_ruleset('1.1/refs/toprank' =>
     [allow => '1.1:common_params']);
 
 
-# Define the routes that our data service accepts.  We start with the root of
-# the hierarchy, which must be a version number.
+# Then define the URL paths that our data service accepts.  We start with the
+# root of the hierarchy, which is a protocol version number.  The following
+# calls define version 1.1 of this data servive.
 
-$ds->define_directory({ path => '1.1', 
-			output => 'basic' });
+$ds->define_path({ path => '1.1', 
+		   version => '1.1',
+		   allow_format => 'json,csv,tsv,txt',
+		   output => 'basic' });
 
-# We then define some miscellaneous routes
+# Configuration. This path is used by clients who need to configure themselves
+# based on parameters supplied by the data service.
 
 $ds->define_path({ path => '1.1/config',
 		   class => 'ConfigData',
 		   output => undef,
 		   op => 'get',
-		   docresp => 'geosum,ranks'});
+		   output_doc => 'geosum,ranks'});
 
-$ds->define_path({ path => '1.1/common',
-		   ruleset => '1.1:common_params',
-		   doctitle => 'common parameters' });
+# Intervals.  These paths are used to fetch information about geological time
+# intervals known to the database.
 
-$ds->define_path({ path => '1.1/json',
-		   doctitle => 'JSON format' });
-
-$ds->define_path({ path => '1.1/xml',
-		   doctitle => 'XML format' });
-
-$ds->define_path({ path => '1.1/text',
-		   doctitle => 'text formats' });
-
-# Intervals
-
-$ds->define_directory({ path => '1.1/intervals',
-			class => 'IntervalData',
-			docresp => 'basic,ref' });
+$ds->define_path({ path => '1.1/intervals',
+		   class => 'IntervalData',
+		   output_doc => 'basic,ref' });
 
 $ds->define_path({ path => '1.1/intervals/single',
 		   op => 'get' });
@@ -500,11 +494,14 @@ $ds->define_path({ path => '1.1/intervals/single',
 $ds->define_path({ path => '1.1/intervals/list',
 		   op => 'list' });
 
-# Taxa
+# Taxa.  These paths are used to fetch information about biological taxa known
+# to the database.
 
-$ds->define_directory({ path => '1.1/taxa',
-			class => 'TaxonData',
-			docresp => 'basic,ref,attr,size,app,nav' });
+$ds->define_path({ path => '1.1/taxa',
+		   class => 'TaxonData',
+		   allow_format => '+xml',
+		   allow_vocab => '+dwc',
+		   output_doc => 'basic,ref,attr,size,app,nav' });
 
 $ds->define_path({ path => '1.1/taxa/single',
 		   op => 'get' });
@@ -514,57 +511,67 @@ $ds->define_path({ path => '1.1/taxa/list',
 
 $ds->define_path({ path => '1.1/taxa/auto',
 		   op => 'auto', 
+		   allow_format => 'json',
 		   output => 'auto',
-		   docresp => 'auto' });
+		   output_doc => 'auto' });
 
 $ds->define_path({ path => '1.1/taxa/thumb',
+		   allow_format => 'json',
+		   allow_vocab => 'com',
 		   op => 'getThumb' });
 
 $ds->define_path({ path => '1.1/taxa/icon',
+		   allow_format => 'json',
+		   allow_vocab => 'com',
 		   op => 'getIcon' });
 
-# Collections
+# Collections.  These paths are used to fetch information about fossil
+# collections known to the database.
 
-$ds->define_directory({ path => '1.1/colls',
-			class => 'CollectionData',
-			output => 'basic' });
+$ds->define_path({ path => '1.1/colls',
+		   class => 'CollectionData',
+		   allow_format => '+xml',
+		   output => 'basic' });
 
 $ds->define_path({ path => '1.1/colls/single',
 		   op => 'get',
-		   docresp => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod'});
+		   output_doc => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod'});
 		 
 $ds->define_path({ path => '1.1/colls/list',
 		   op => 'list', 
-		   docresp => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod' });
+		   output_doc => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod' });
 
 $ds->define_path({ path => '1.1/colls/summary'
 		   op => 'summary', 
 		   output => 'summary',
-		   docresp => 'summary,ext,summary_time' });
+		   output_doc => 'summary,ext,summary_time' });
 
 $ds->define_path({ path => '1.1/colls/refs',
 		   op => 'refs',
+		   allow_format => '+ris,-xml',
 		   output => 'refbase',
-		   docresp => 'refbase,formatted,comments' });
+		   output_doc => 'refbase,formatted,comments' });
 
-# Occurrences
+# Occurrences.  These paths are used to fetch information about fossil
+# occurrences known to the database.
 
-$ds->define_directory({ path => '1.1/occs',
-			class => 'OccurrenceData',
-			output => 'basic' });
+$ds->define_path({ path => '1.1/occs',
+		   class => 'OccurrenceData',
+		   allow_format => '+xml',
+		   output => 'basic' });
 
 $ds->define_path({ path => '1.1/occs/single',
 		   op => 'get',
-		   docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' });
+		   output_doc => 'basic,coll,ref,geo,loc,time,ent,crmod' });
 
 $ds->define_path({ path => '1.1/occs/list',
 		   op => 'list',
-		   docresp => 'basic,coll,ref,geo,loc,time,ent,crmod' });
+		   output_doc => 'basic,coll,ref,geo,loc,time,ent,crmod' });
 
 # People
 
-$ds->define_directory({ path => '1.1/people',
-			class => 'PersonData' });
+$ds->define_path({ path => '1.1/people',
+		   class => 'PersonData' });
 
 $ds->define_path({ path => '1.1/people/single', 
 		   op => 'get' });
@@ -574,8 +581,9 @@ $ds->define_path({ path => '1.1/people/list',
 
 # References
 
-$ds->define_directory({ path => '1.1/refs',
-			class => 'ReferenceData' });
+$ds->define_path({ path => '1.1/refs',
+		   allow_format => '+ris',
+		   class => 'ReferenceData' });
 
 $ds->define_path({ path => '1.1/refs/single',
 		   op => 'get' });
@@ -583,14 +591,31 @@ $ds->define_path({ path => '1.1/refs/single',
 $ds->define_path({ path => '1.1/refs/list',
 		   op => 'list' };
 
+# The following paths are used only for documentation
+
+$ds->define_path({ path => '1.1/common',
+		   ruleset => '1.1:common_params',
+		   doc_title => 'common parameters' });
+
+$ds->define_path({ path => '1.1/json',
+		   doc_title => 'JSON format' });
+
+$ds->define_path({ path => '1.1/xml',
+		   doc_title => 'XML format' });
+
+$ds->define_path({ path => '1.1/text',
+		   doc_title => 'text formats' });
+
 
 # Now we configure a set of Dancer routes to serve
 # the data, documentation, stylesheets, etc.
 # ================================================
 
+my ($PREFIX) = $ds->get_path_prefix;
+
 # Any URL starting with /data/css indicates a stylesheet
 
-get qr{ ^ /data [\d.]* /css/(.*) }xs => sub {
+get qr{ ^ $PREFIX [\d.]* /css/(.*) }xs => sub {
     
     $DB::single = 1;
     my ($filename) = splat;
@@ -601,12 +626,14 @@ get qr{ ^ /data [\d.]* /css/(.*) }xs => sub {
 # Any other URL starting with /data/... or just /data should display the list of
 # available versions.
 
-get qr{ ^ /data (?: / $ | / .* \. ( html | pod ) )? $ }xs => sub {
+get qr{ ^ $PREFIX ( / | / .* )? $ }xs => sub {
     
-    my ($path, $suffix) = splat;
+    my ($path) = splat;
     
     $DB::single = 1;
-    $ds->generate_documentation( "/version_list.tt", { format => $suffix } );
+    my $format = 'pod' if $path =~ /\.pod$/;
+    
+    return $ds->document_path("/version_list.tt", $format);
 };
 
 
@@ -615,8 +642,8 @@ get qr{ ^ /data (?: / $ | / .* \. ( html | pod ) )? $ }xs => sub {
 # path does not correspond to any known documentation, we provide a page
 # explaining what went wrong and providing the proper URLs.
 
-get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* )
-	  (?: ( index | \w+_doc ) \. ( html | pod ) )? $ }xs => sub {
+get qr{ ^ $PREFIX ( \d+ \. \d+ / (?: [^/.]* / )* )
+	          ( index | \w+_doc ) \. ( html | pod ) $ }xs => sub {
 	    
     my ($path, $last, $suffix) = splat;
     
@@ -625,24 +652,24 @@ get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* )
     $path =~ s{/$}{};
     $path =~ s{_doc}{};
     
-    $ds->generate_documentation( $path, { format => $suffix } );
+    return $ds->document_path($path, $suffix);
 };
 
 
-get qr{ ^ /data ( \d+ \. \d+ (?: / [^/.]+ )* $ ) }xs => sub {
+get qr{ ^ $PREFIX ( \d+ \. \d+ (?: / [^/.]+ )* $ ) }xs => sub {
     
     my ($path) = splat;
     
     $DB::single = 1;
     
-    $ds->generate_documentation( $path, { format => 'html' } );
+    return $ds->document_path($path, 'html');
 };
 
 
-# Any path that ends in a suffix (other than .html or .pod) is a request for an
+# Any path that ends in a suffix other than .html or .pod is a request for an
 # operation.
 
-get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
+get qr{ ^ $PREFIX ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
     
     my ($path, $suffix) = splat;
     
@@ -657,7 +684,13 @@ get qr{ ^ /data ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
 	$path =~ s{\d+$}{single};
     }
     
-    $ds->execute_operation( $path, { format => $suffix } );
+    # Abort if this path is not valid for execution
+    
+    forward unless $ds->can_execute_path($path);
+    
+    # Execute the specified request
+    
+    return $ds->execute_path($path, $suffix);
 };
 
 

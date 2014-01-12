@@ -157,24 +157,20 @@ sub parse_pod {
 	    
 	    elsif ( $cmd eq 'for' )
 	    {
-		if ( $content =~ qr{ ^ (\w+) \s+ (.*) }x )
+		if ( $content =~ qr{ ^ pp_ }x )
 		{
-		    if ( $1 eq 'pod_extra' )
-		    {
-			$self->add_directive($2);
-		    }
-		    
-		    else
-		    {
-			$self->add_format($1);
-			$self->add_content($2);
-		    }
+		    $self->add_directive($2);
 		}
 		
-		else
+		elsif ( $content =~ qr{ ^ (\w+) \s+ (.*) }x )
 		{
-		    $self->add_format('unknown');
-		    $self->add_content($content);
+		    $self->add_format($1);
+		    $self->add_content($2);
+		}
+		
+		elsif ( $content =~ qr{ ^ (\w+) $ } )
+		{
+		    $self->add_format($1);
 		}
 	    }
 	    
@@ -419,15 +415,15 @@ sub add_directive {
 
     my ($self, $directive) = @_;
     
-    if ( $directive =~ /^(table_header|no_header)\s+(.*)/ )
+    if ( $directive =~ /^(pp_table_(no_)?header)\s+(.*)/ )
     {
 	my $cmd = $1;
-	my $header = $2;
-	my @columns = split qr{ \s+ \| \s+ }x, $header;
+	my $column_spec = $2;
+	my @columns = split qr{ \s+ \| \s+ }x, $column_spec;
 	
 	return unless $self->{list_level};
-	$self->{stack}[-1]{header_spec} = \@columns;
-	$self->{stack}[-1]{no_header} = 1 if $cmd eq 'no_header';
+	$self->{stack}[-1]{column_spec} = \@columns;
+	$self->{stack}[-1]{no_header} = 1 if $cmd eq 'pp_table_no_header';
     }
     
     else
@@ -694,9 +690,9 @@ sub generate_html_open_list {
 	push @{$self->{html_stack}}, "<table>";
 	my $output = "<table class=\"$class\">\n";
 	
-	if ( ref $node->{header_spec} eq 'ARRAY' )
+	if ( ref $node->{column_spec} eq 'ARRAY' )
 	{
-	    $self->configure_html_list($node, @{$node->{header_spec}});
+	    $self->configure_html_list($node, @{$node->{column_spec}});
 	    $output .= $self->generate_html_list_header($node) unless $node->{no_header};
 	}
 	

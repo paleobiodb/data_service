@@ -9,9 +9,9 @@ package CollectionData;
 
 use strict;
 
-use base 'DataService::Query';
+use parent 'Web::DataService::Request';
 
-use PBDBData;
+use CommonData qw(generateReference generateAttribution);
 use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
 use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use Taxonomy;
@@ -54,7 +54,8 @@ sub configure {
       { select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
 		   'c.lat', 'c.lng', 'cc.latlng_basis as llb', 'cc.latlng_precision as llp',
 		   'c.n_occs', 'ei.interval_name as early_int', 'li.interval_name as late_int',
-		   'c.reference_no', 'group_concat(sr.reference_no) as sec_ref_nos'] },
+		   'c.reference_no', 'group_concat(sr.reference_no) as sec_ref_nos'], 
+	tables => ['ei', 'li', 'sr'] },
       { proc => 'sec_ref_nos', add => 'reference_no', split => ',' },
       { field => 'collection_no', dwc_field => 'collectionID', com_field => 'oid' },
 	  "A positive integer that uniquely identifies the collection",
@@ -120,10 +121,10 @@ sub configure {
     
     $ds->define_output( 'attr' =>
       { select => ['r.author1init as a_ai1', 'r.author1last as a_al1', 'r.author2init as a_ai2', 
-		   'r.author2last as a_al2', 'r.otherauthors as a_oa', 'r.pubyr as a_pubyr'] },
-      { tables => 'r' },
+		   'r.author2last as a_al2', 'r.otherauthors as a_oa', 'r.pubyr as a_pubyr'],
+        tables => ['r'] },
       { proc => 'a_al1', set => 'attribution', use_main => 1, 
-	code => \&PBDBData::generateAttribution },
+	code => \&generateAttribution },
       { proc => 'a_pubyr', set => 'pubyr' });
     
     $ds->define_output( 'ref' =>
@@ -132,10 +133,10 @@ sub configure {
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
 		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
-		   'r.language as r_language', 'r.doi as r_doi'] },
-      { tables => 'r' },
-      { proc => 'r_al1', add => 'ref_list', use_main => 1, code => \&PBDBData::generateReference },
-      { proc => 'sec_refs', add => 'ref_list', use_each => 1, code => \&PBDBData::generateReference },
+		   'r.language as r_language', 'r.doi as r_doi'],
+	tables => ['r'] },
+      { proc => 'r_al1', add => 'ref_list', use_main => 1, code => \&generateReference },
+      { proc => 'sec_refs', add => 'ref_list', use_each => 1, code => \&generateReference },
       { field => 'ref_list', pbdb_field => 'references', dwc_field => 'associatedReferences', 
 	com_field => 'ref', xml_list => "\n\n" }
 	  "The reference(s) associated with this collection (as formatted text)");
@@ -165,8 +166,8 @@ sub configure {
 	  "The standard deviation of the coordinates in this cluster");
 
     $ds->define_output( 'time' =>
-      { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'] },
-      { tables => 'im' },
+      { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
+	tables => ['im'] },
       { proc => 'early_age', use_main => 1, code => \&fixTimeOutput },
       { field => 'early_age', com_field => 'eag' },
 	  "The early bound of the geologic time range associated with this collection or cluster (in Ma)",
@@ -253,7 +254,7 @@ sub configure {
 
     $ds->define_output( 'refbase' =>
       { select => ['r.reference_no', '[ref:select]', 'r.comments as r_comments'] },
-      { proc => 'r_al1', set => 'formatted', use_main => 1, code => \&PBDBData::generateReference },
+      { proc => 'r_al1', set => 'formatted', use_main => 1, code => \&generateReference },
       { field => 'reference_no', com_field => 'rid' }, 
 	  "Numeric identifier for this document reference in the database",
       { field => 'record_type', com_field => 'typ', com_value => 'ref', value => 'reference' },

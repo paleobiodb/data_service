@@ -6,10 +6,10 @@
 
 
 
-package PBDBData;
+package CommonData;
 
 use strict;
-use base 'Exporter';
+use parent 'Exporter';
 
 our (@EXPORT_OK) = qw(generateAttribution generateReference generateRISReference);
 
