@@ -161,8 +161,7 @@ sub buildOccurrenceTables {
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 			LEFT JOIN $SCALE_MAP as es on es.interval_no = ei.interval_no
 			LEFT JOIN $SCALE_MAP as ls on ls.interval_no = li.interval_no
-		WHERE (ei.early_age - li.late_age <= 30 and li.late_age >= 20) or
-		      (ei.early_age - li.late_age <= 20 and li.late_age < 20) or
+		WHERE (ei.early_age - li.late_age <= 30 ) or
 		      (es.scale_no = 1 and es.level in (4,5) and ei.early_age - li.late_age <= 50) or
 		      (ls.scale_no = 1 and ls.level in (4,5) and ei.early_age - li.late_age <= 50) or
 		      (es.scale_no = 1 and es.level = 3 and ei.early_age < 3) or
