@@ -10,10 +10,10 @@ use strict;
 
 package TaxonData;
 
-use base 'DataService::Base';
+use base 'Web::DataService::Request';
 use Carp qw(carp croak);
 
-use PBDBData qw(generateReference generateAttribution);
+use CommonData qw(generateReference generateAttribution);
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use Taxonomy;
 

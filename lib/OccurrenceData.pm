@@ -9,9 +9,9 @@ package OccurrenceData;
 
 use strict;
 
-use base 'DataService::Base';
+use parent 'Web::DataService::Request';
 
-use PBDBData;
+use CommonData;
 use OccurrenceTables qw($OCC_MATRIX);
 use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
 use CollectionData;

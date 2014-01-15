@@ -9,7 +9,7 @@
 package ConfigData;
 
 use strict;
-use base 'DataService::Base';
+use base 'Web::DataService::Request';
 
 use CollectionTables qw($CONTINENT_DATA $COLL_BINS);
 use TaxonDefs qw(%TAXON_RANK %RANK_STRING);

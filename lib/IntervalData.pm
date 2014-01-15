@@ -9,11 +9,11 @@
 package IntervalData;
 
 use strict;
-use base 'DataService::Base';
+use base 'Web::DataService::Request';
 
 use Carp qw(carp croak);
 
-use PBDBData qw(generateReference);
+use CommonData qw(generateReference);
 use IntervalTables qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA);
 
 

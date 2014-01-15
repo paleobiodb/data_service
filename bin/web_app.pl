@@ -27,6 +27,12 @@ use OccurrenceData;
 use PersonData;
 
 
+# Start by instantiating the data service.
+# ========================================
+
+# Many of the configuration parameters are set by entries in config.yml.
+
+my $ds = DataService->new({ path_prefix => '/data' });
 
 # If we were called from the command line with 'GET' as the first argument,
 # then assume that we have been called for debugging purposes.
@@ -37,20 +43,8 @@ if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
     set logger => 'console';
     set show_errors => 0;
     
-    our($DEBUG) = 1;
+    $ds->{DEBUG} = 1;
 }
-
-
-# Start by instantiating the data service.
-# ========================================
-
-# Many of the configuration parameters are set by entries in config.yml.
-
-my $ds = DataService->new({ path_prefix => '/data',.
-			    output_param => 'show',
-			    vocab_param => 'vocab',
-			    public_access => 1,
-			    uses_dbh => 1 });
 
 
 # Then call methods from the DataService class to
@@ -92,21 +86,21 @@ $ds->define_format(
 	"downloading data from the database.  These downloads can easily be",
 	"loaded into spreadsheets or other analysis tools.  The field names are",
 	"taken from the PBDB Classic interface, for compatibility with existing",
-	"tools and analytical procedures."
+	"tools and analytical procedures.",
     { name => 'tsv', content_type => 'text/tab-separated-values',
       default_vocab => 'pbdb' },
         "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	"downloading data from the database.  These downloads can easily be",
 	"loaded into spreadsheets or other analysis tools.  The field names are",
 	"taken from the PBDB Classic interface, for compatibility with existing",
-	"tools and analytical procedures."
+	"tools and analytical procedures.",
     { name => 'csv', content_type => 'text/csv',
       default_vocab => 'pbdb' },
         "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	"downloading data from the database.  These downloads can easily be",
 	"loaded into spreadsheets or other analysis tools.  The field names are",
 	"taken from the PBDB Classic interface, for compatibility with existing",
-	"tools and analytical procedures."
+	"tools and analytical procedures.",
     { name => 'ris', content_type => 'application/x-research-info-systems' },
 	"The L<RIS format|http://en.wikipedia.org/wiki/RIS_(file_format)> is a",
 	"common format for bibliographic references.");
@@ -469,16 +463,23 @@ $ds->define_ruleset('1.1/refs/toprank' =>
 
 $ds->define_path({ path => '1.1', 
 		   version => '1.1',
+		   public_access => 1,
+		   output_param => 'show',
+		   vocab_param => 'vocab',
+		   limit_param => 'limit',
+		   count_param => 'count',
+		   default_limit => 500,
 		   allow_format => 'json,csv,tsv,txt',
-		   output => 'basic' });
+		   base_output => 'basic' });
 
 # Configuration. This path is used by clients who need to configure themselves
 # based on parameters supplied by the data service.
 
 $ds->define_path({ path => '1.1/config',
 		   class => 'ConfigData',
-		   output => undef,
-		   op => 'get',
+		   base_output => undef,
+		   method => 'get',
+		   uses_dbh => 1,
 		   output_doc => 'geosum,ranks'});
 
 # Intervals.  These paths are used to fetch information about geological time
@@ -486,13 +487,14 @@ $ds->define_path({ path => '1.1/config',
 
 $ds->define_path({ path => '1.1/intervals',
 		   class => 'IntervalData',
+		   uses_dbh => 1,
 		   output_doc => 'basic,ref' });
 
 $ds->define_path({ path => '1.1/intervals/single',
-		   op => 'get' });
+		   method => 'get' });
 
 $ds->define_path({ path => '1.1/intervals/list',
-		   op => 'list' });
+		   method => 'list' });
 
 # Taxa.  These paths are used to fetch information about biological taxa known
 # to the database.
@@ -501,29 +503,30 @@ $ds->define_path({ path => '1.1/taxa',
 		   class => 'TaxonData',
 		   allow_format => '+xml',
 		   allow_vocab => '+dwc',
+		   uses_dbh => 1,
 		   output_doc => 'basic,ref,attr,size,app,nav' });
 
 $ds->define_path({ path => '1.1/taxa/single',
-		   op => 'get' });
+		   method => 'get' });
 
 $ds->define_path({ path => '1.1/taxa/list',
-		   op => 'list' });
+		   method => 'list' });
 
 $ds->define_path({ path => '1.1/taxa/auto',
-		   op => 'auto', 
+		   method => 'auto', 
 		   allow_format => 'json',
-		   output => 'auto',
+		   base_output => 'auto',
 		   output_doc => 'auto' });
 
 $ds->define_path({ path => '1.1/taxa/thumb',
 		   allow_format => 'json',
 		   allow_vocab => 'com',
-		   op => 'getThumb' });
+		   method => 'getThumb' });
 
 $ds->define_path({ path => '1.1/taxa/icon',
 		   allow_format => 'json',
 		   allow_vocab => 'com',
-		   op => 'getIcon' });
+		   method => 'getIcon' });
 
 # Collections.  These paths are used to fetch information about fossil
 # collections known to the database.
@@ -531,25 +534,26 @@ $ds->define_path({ path => '1.1/taxa/icon',
 $ds->define_path({ path => '1.1/colls',
 		   class => 'CollectionData',
 		   allow_format => '+xml',
-		   output => 'basic' });
+		   uses_dbh => 1,
+		   base_output => 'basic' });
 
 $ds->define_path({ path => '1.1/colls/single',
-		   op => 'get',
+		   method => 'get',
 		   output_doc => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod'});
 		 
 $ds->define_path({ path => '1.1/colls/list',
-		   op => 'list', 
+		   method => 'list', 
 		   output_doc => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod' });
 
-$ds->define_path({ path => '1.1/colls/summary'
-		   op => 'summary', 
-		   output => 'summary',
+$ds->define_path({ path => '1.1/colls/summary',
+		   method => 'summary', 
+		   base_output => 'summary',
 		   output_doc => 'summary,ext,summary_time' });
 
 $ds->define_path({ path => '1.1/colls/refs',
-		   op => 'refs',
+		   method => 'refs',
 		   allow_format => '+ris,-xml',
-		   output => 'refbase',
+		   base_output => 'refbase',
 		   output_doc => 'refbase,formatted,comments' });
 
 # Occurrences.  These paths are used to fetch information about fossil
@@ -558,38 +562,41 @@ $ds->define_path({ path => '1.1/colls/refs',
 $ds->define_path({ path => '1.1/occs',
 		   class => 'OccurrenceData',
 		   allow_format => '+xml',
-		   output => 'basic' });
+		   uses_dbh => 1,
+		   base_output => 'basic' });
 
 $ds->define_path({ path => '1.1/occs/single',
-		   op => 'get',
+		   method => 'get',
 		   output_doc => 'basic,coll,ref,geo,loc,time,ent,crmod' });
 
 $ds->define_path({ path => '1.1/occs/list',
-		   op => 'list',
+		   method => 'list',
 		   output_doc => 'basic,coll,ref,geo,loc,time,ent,crmod' });
 
 # People
 
 $ds->define_path({ path => '1.1/people',
-		   class => 'PersonData' });
+		   class => 'PersonData',
+		   uses_dbh => 1 });
 
 $ds->define_path({ path => '1.1/people/single', 
-		   op => 'get' });
+		   method => 'get' });
 
 $ds->define_path({ path => '1.1/people/list',
-		   op => 'list' });
+		   method => 'list' });
 
 # References
 
 $ds->define_path({ path => '1.1/refs',
+		   class => 'ReferenceData',
 		   allow_format => '+ris',
-		   class => 'ReferenceData' });
+		   uses_dbh => 1 });
 
 $ds->define_path({ path => '1.1/refs/single',
-		   op => 'get' });
+		   method => 'get' });
 
 $ds->define_path({ path => '1.1/refs/list',
-		   op => 'list' };
+		   method => 'list' });
 
 # The following paths are used only for documentation
 
