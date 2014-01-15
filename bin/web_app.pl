@@ -32,7 +32,7 @@ use PersonData;
 
 # Many of the configuration parameters are set by entries in config.yml.
 
-my $ds = DataService->new({ path_prefix => '/data' });
+my $ds = Web::DataService->new({ path_prefix => '/data' });
 
 # If we were called from the command line with 'GET' as the first argument,
 # then assume that we have been called for debugging purposes.
@@ -76,7 +76,7 @@ $ds->define_format(
 	"The JSON format is intended primarily to support client applications,",
 	"including the PBDB Navigator.  Response fields are named using compact",
 	"3-character field names.",
-    { name => 'xml', content_type => 'text/xml',
+    { name => 'xml', disabled => 1, content_type => 'text/xml',
       default_vocab => 'dwc' },
 	"The XML format is intended primarily to support data interchange with",
 	"other databases, using the Darwin Core element set.",
@@ -101,7 +101,7 @@ $ds->define_format(
 	"loaded into spreadsheets or other analysis tools.  The field names are",
 	"taken from the PBDB Classic interface, for compatibility with existing",
 	"tools and analytical procedures.",
-    { name => 'ris', content_type => 'application/x-research-info-systems' },
+    { name => 'ris', disabled => 1, content_type => 'application/x-research-info-systems' },
 	"The L<RIS format|http://en.wikipedia.org/wiki/RIS_(file_format)> is a",
 	"common format for bibliographic references.");
 
@@ -480,7 +480,7 @@ $ds->define_path({ path => '1.1/config',
 		   base_output => undef,
 		   method => 'get',
 		   uses_dbh => 1,
-		   output_doc => 'geosum,ranks'});
+		   doc_output => 'geosum,ranks'});
 
 # Intervals.  These paths are used to fetch information about geological time
 # intervals known to the database.
@@ -488,7 +488,7 @@ $ds->define_path({ path => '1.1/config',
 $ds->define_path({ path => '1.1/intervals',
 		   class => 'IntervalData',
 		   uses_dbh => 1,
-		   output_doc => 'basic,ref' });
+		   doc_output => 'basic,ref' });
 
 $ds->define_path({ path => '1.1/intervals/single',
 		   method => 'get' });
@@ -504,7 +504,7 @@ $ds->define_path({ path => '1.1/taxa',
 		   allow_format => '+xml',
 		   allow_vocab => '+dwc',
 		   uses_dbh => 1,
-		   output_doc => 'basic,ref,attr,size,app,nav' });
+		   doc_output => 'basic,ref,attr,size,app,nav' });
 
 $ds->define_path({ path => '1.1/taxa/single',
 		   method => 'get' });
@@ -516,7 +516,7 @@ $ds->define_path({ path => '1.1/taxa/auto',
 		   method => 'auto', 
 		   allow_format => 'json',
 		   base_output => 'auto',
-		   output_doc => 'auto' });
+		   doc_output => 'auto' });
 
 $ds->define_path({ path => '1.1/taxa/thumb',
 		   allow_format => 'json',
@@ -539,22 +539,22 @@ $ds->define_path({ path => '1.1/colls',
 
 $ds->define_path({ path => '1.1/colls/single',
 		   method => 'get',
-		   output_doc => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod'});
+		   doc_output => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod'});
 		 
 $ds->define_path({ path => '1.1/colls/list',
 		   method => 'list', 
-		   output_doc => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod' });
+		   doc_output => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod' });
 
 $ds->define_path({ path => '1.1/colls/summary',
 		   method => 'summary', 
 		   base_output => 'summary',
-		   output_doc => 'summary,ext,summary_time' });
+		   doc_output => 'summary,ext,summary_time' });
 
 $ds->define_path({ path => '1.1/colls/refs',
 		   method => 'refs',
 		   allow_format => '+ris,-xml',
 		   base_output => 'refbase',
-		   output_doc => 'refbase,formatted,comments' });
+		   doc_output => 'refbase,formatted,comments' });
 
 # Occurrences.  These paths are used to fetch information about fossil
 # occurrences known to the database.
@@ -567,11 +567,11 @@ $ds->define_path({ path => '1.1/occs',
 
 $ds->define_path({ path => '1.1/occs/single',
 		   method => 'get',
-		   output_doc => 'basic,coll,ref,geo,loc,time,ent,crmod' });
+		   doc_output => 'basic,coll,ref,geo,loc,time,ent,crmod' });
 
 $ds->define_path({ path => '1.1/occs/list',
 		   method => 'list',
-		   output_doc => 'basic,coll,ref,geo,loc,time,ent,crmod' });
+		   doc_output => 'basic,coll,ref,geo,loc,time,ent,crmod' });
 
 # People
 

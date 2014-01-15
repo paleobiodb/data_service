@@ -238,7 +238,7 @@ sub configure_output {
 	    next RECORD if $r->{not_vocab}
 		and check_value($r->{not_vocab}, $vocab);
 	    
-	    next RECORD if $require_vocab and not exists $r->{${vocab}_name};
+	    next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
 	    
 	    # If the record type is 'select', add to the selection list, the
 	    # selection hash, and the tables hash.
@@ -356,7 +356,7 @@ sub configure_section {
     my $vocab = $request->{vocab};
     my $require_vocab = 1 if $vocab and not $self->{vocab}{$vocab}{use_field_names};
     
-    my $output_list = $self->get_output_list($class, $section);
+    my $output_list = $self->get_output_list($class, $section_name);
     
     # If no list is available, indicate this in the routine record and return
     # false.  Whichever routine called us will be responsible for generating an
@@ -380,10 +380,10 @@ sub configure_section {
 	# Evaluate dependency on the output section list
 	
 	next RECORD if $r->{if_section} 
-	    and not check_set($r->{if_section}, \%section);
+	    and not check_set($r->{if_section}, $request->{section_set});
 	
 	next RECORD if $r->{not_section}
-	    and check_set($r->{not_section}, \%section);
+	    and check_set($r->{not_section}, $request->{section_set});
 	
 	# Evaluate dependency on the output format
 	
@@ -395,7 +395,7 @@ sub configure_section {
 	
 	# Evaluate dependency on the vocabulary
 	
-	next RECORD if $require_vocab and not exists $r->{${vocab}_name};
+	next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
 	
 	# If the record type is 'output', add a record to the output list.
 	# The attributes 'name' (the output name) and 'field' (the raw
@@ -409,20 +409,12 @@ sub configure_section {
 	    {
 		if ( $FIELD_KEY{$key} )
 		{
-		    $field->{$key} = $r->{$key};
+		    $output->{$key} = $r->{$key};
 		}
 		
-		elsif ( $key =~ qr{ ^ (\w+) _ (name|value|code|rule) $ }x )
+		elsif ( $key =~ qr{ ^ (\w+) _ (name|value|rule) $ }x )
 		{
-		    $field->{$2} = $r->{$key} if $vocab eq $1;
-		}
-		
-		elsif ( $key =~ qr{ ^ (\w+) _format $ }x && ref $r->{$key} eq 'HASH' && $format eq $1 )
-		{
-		    foreach my $k2 ( %{$r->{$key}} )
-		    {
-			$field->{$k2} = $r->{$key}{$k2};
-		    }
+		    $output->{$2} = $r->{$key} if $vocab eq $1;
 		}
 		
 		else
@@ -436,9 +428,9 @@ sub configure_section {
 	
 	# If the record type is 'proc', add a record to the proc list.
 	
-	elsif ( defined $r->{proc} )
+	elsif ( defined $r->{set} )
 	{
-	    my $proc = { field => $r->{proc} };
+	    my $proc = { set => $r->{set} };
 	    
 	    foreach my $key ( qw(code set add split subfield) )
 	    {
@@ -535,24 +527,32 @@ sub document_field {
 }
 
 
-# process_record ( request, record )
+# process_record ( request, record, steps )
 # 
 # Execute any per-record processing steps that have been defined for this
 # record. 
 
 sub process_record {
     
-    my ($self, $request, $record) = @_;
+    my ($self, $request, $record, $steps) = @_;
     
     # If there are no processing steps to do, return immediately.
     
-    return unless ref $self->{proc_list} eq 'ARRAY' and @{$self->{proc_list}};
+    return unless ref $steps eq 'ARRAY' and @$steps;
     
-    # Now go through the steps one by one.
+    # Otherwise go through the steps one by one.
     
-    foreach my $p ( @{$self->{proc_list}} )
+    foreach my $p ( @$steps )
     {
-	my $field = $p->{field};
+	# Figure out which field (if any) we are affecting.
+	
+	my $set_field = $p->{set};
+	
+	# Figure out which field (if any) we are looking at.  Skip this
+	# processing step if the source field is empty, unless the attribute
+	# 'always' is set.
+	
+	my $source_field = $p->{from} || $p->{from_each};
 	
 	# Skip any processing step if the record does not have a non-empty
 	# value in the corresponding field (unless the 'always' attribute is
@@ -560,94 +560,125 @@ sub process_record {
 	
 	unless ( $p->{always} )
 	{
-	    next unless defined $record->{$field} && $record->{field} ne '';
+	    next unless defined $record->{$source_field} && $record->{source_field} ne '';
+	    next if ref $record->{$source_field} eq 'ARRAY' && ! @{$record->{$source_field}};
 	}
 	
-	# Now generate a list of results, according to the attributes of this
+	if ( $p->{if_field} )
+	{
+	    my $cond_field = $p->{if_field};
+	    next unless defined $record->{$cond_field} && $record->{cond_field} ne '';
+	    next if ref $record->{$cond_field} eq 'ARRAY' && ! @{$record->{$cond_field}};
+	}
+	
+	# Now generate a list of result values, according to the attributes of this
 	# processing step.
 	
 	my @result;
 	
 	# If we have a 'code' attribute, then call it.
 	
-	if ( ref $p->{code} and reftype $p->{code} eq 'CODE' )
+	if ( ref $p->{code} eq 'CODE' )
 	{
-	    if ( $p->{use_main} )
+	    if ( $p->{from_each} )
 	    {
-		@result = $p->{code}($self, $record, $p);
+		@result = map { $p->{code}($self, $_, $p) } @{$record->{$source_field}};
 	    }
 	    
-	    elsif ( $p->{use_each} and ref $record->{$field} eq 'ARRAY' )
+	    elsif ( $p->{from} )
 	    {
-		@result = map { $p->{code}($self, $_, $p) } @{$record->{$field}};
+		@result = $p->{code}($self, $record->{$source_field}, $p);
 	    }
 	    
 	    else
 	    {
-		@result = $p->{code}($self, $record->{$field}, $p);
+		@result = $p->{code}($self, $record, $p);
 	    }
 	}
 	
-	elsif ( defined $p->{split} and $p->{split} ne '' )
-	{
-	    @result = split $p->{split}, $record->{$field};
-	}
+	# If we have a 'lookup' attribute, then use it.
 	
-	elsif ( $p->{subfield} and reftype $record->{$field} )
+	elsif ( ref $p->{lookup} eq 'HASH' )
 	{
-	    if ( reftype $record->{$field} eq 'ARRAY' )
+	    if ( $p->{from_each} )
 	    {
-		@result = map { $_->{$p->{subfield}} if ref $_ eq 'HASH'; } @{$record->{$field}};
+		@result = map { $p->{lookup}{$_} } @{$record->{$source_field}};
 	    }
 	    
-	    elsif  ( reftype $record->{$field} eq 'HASH' )
+	    elsif ( $p->{from} )
 	    {
-		@result = $record->{$field}{$p->{subfield}};
+		@result = $p->{code}{$record->{$source_field}};
+	    }
+	    
+	    else
+	    {
+		@result = $p->{code}{$record->{$set_field}};
 	    }
 	}
 	
-	elsif ( ref $record->{$field} eq 'ARRAY' )
+	# If we have a 'split' attribute, then use it.
+	
+	elsif ( defined $p->{split} )
 	{
-	    @result = @{$record->{$field}};
+	    if ( $p->{from_each} && ref $record->{$source_field} eq 'ARRAY' )
+	    {
+		@result = map { split($p->{split}, $_) } @{$record->{$source_field}};
+	    }
+	    
+	    elsif ( $p->{from} && ! ref $record->{$source_field} )
+	    {
+		@result = split $p->{split}, $record->{$source_field};
+	    }
+	}
+	
+	# If we have a 'join' attribute, then use it.
+	
+	elsif ( defined $p->{join} )
+	{
+	    if ( ref $record->{$source_field} eq 'ARRAY' )
+	    {
+		@result = join($p->{join}, @{$record->{$source_field}});
+	    }
+	}
+	
+	# If the value of 'set' is '*', then we're done.  This is generally
+	# only used to call a procedure with side effects.
+	
+	next if $set_field eq '*';
+	
+	# Otherwise, use the value to modify the specified field of the record.
+	
+	# If the attribute 'append' is set, then append to the specified field.
+	# Convert the value to an array if it isn't already.
+	
+        if ( $p->{append} )
+	{
+	    $record->{$set_field} = [ $record->{$set_field} ] if defined $record->{$set_field}
+		and ref $record->{$set_field} ne 'ARRAY';
+	    
+	    push @{$record->{$set_field}}, @result;
 	}
 	
 	else
 	{
-	    @result = $record->{$field};
-	}
-	
-	# Then add it or set it to the specified field.
-	
-        if ( $p->{add} )
-	{
-	    my $res = $p->{add};
-	    $record->{$res} = [ $record->{$res} ] if defined $record->{$res}
-		and ref $record->{$res} ne 'ARRAY';
-	    
-	    push @{$record->{$res}}, @result;
-	}
-	
-	elsif ( $p->{set} )
-	{
-	    my $res = $p->{set};
 	    if ( @result == 1 )
 	    {
-		($record->{$res}) = @result;
+		($record->{$set_field}) = @result;
 	    }
 	    
 	    elsif ( @result > 1 )
 	    {
-		$record->{$res} = \@result;
+		$record->{$set_field} = \@result;
 	    }
 	    
 	    elsif ( not $p->{always} )
 	    {
-		delete $record->{$res};
+		delete $record->{$set_field};
 	    }
 	    
 	    else
 	    {
-		$record->{$res} = '';
+		$record->{$set_field} = '';
 	    }
 	}
     }    
@@ -670,16 +701,21 @@ sub generate_single_result {
     my $format_class = $self->{format}{$format}{class};
     
     croak "could not generate a result in format '$format': no implementing class"
-	unless $class;
+	unless $format_class;
     
-    # Call the appropriate methods from this class to generate the header,
-    # data, and footer.  If there are any processing steps to do, then do them.
+    # Generate the initial part of the output, before the first record.
     
     my $output = $format_class->emit_header($request);
     
-    $self->process_record($request, $self->{main_record});
+    # If there are any processing steps to do, then do them.
+    
+    $self->process_record($request, $self->{main_record}, $self->{proc_list});
+    
+    # Generate the output corresponding to our single record.
     
     $output .= $format_class->emit_record($request, $request->{main_record});
+    
+    # Generate the final part of the output, after the last record.
     
     $output .= $format_class->emit_footer($request);
     
@@ -699,7 +735,7 @@ sub generate_compound_result {
 
     my ($self, $request) = @_;
     
-    $options ||= {};
+    my $stream_threshold = $self->{stream_threshold};
     
     # $$$ init output...
     
@@ -713,9 +749,9 @@ sub generate_compound_result {
     my $format_class = $self->{format}{$format}{class};
     
     croak "could not generate a result in format '$format': no implementing class"
-	unless $class;
+	unless $format_class;
     
-    # Generate the header.
+    # Generate the initial part of the output, before the first record.
     
     my $output = $format_class->emit_header($request);
     
@@ -729,13 +765,16 @@ sub generate_compound_result {
     
     while ( my $row = $self->next_row($request) )
     {
-	$self->process_record($request, $row);
+	# If there are any processing steps to do, then process this record.
 	
-	$output .= $format_class->emit_separator($request) if $emit_rs;
+	$self->process_record($request, $row, $request->{proc_list});
 	
-	$output .= $format_class->emit_record($request, $row, $row_opts);
+	# Generate the output for this record, preceded by a record separator if
+	# it is not the first record.
 	
-	$emit_rs = 1;
+	$output .= $format_class->emit_separator($request) if $emit_rs;	$emit_rs = 1;
+	
+	$output .= $format_class->emit_record($request, $row);
 	
 	# If streaming is a possibility, check whether we have passed the
 	# threshold for result size.  If so, then we need to immediately
@@ -754,7 +793,7 @@ sub generate_compound_result {
     # If we get here, then we did not initiate streaming.  So add the
     # footer and return the output data.
     
-    # $$$ finish output...
+    # Generate the final part of the output, after the last record.
     
     $output .= $format_class->emit_footer($request);
     
@@ -818,10 +857,13 @@ sub stream_compound_result {
     
     my $self = $request->{ds};
     
-    # We know that we're already past the first row, since this routine is
-    # only called from within generate_compound_result.
+    # Determine the output format and figure out which class implements it.
     
-    my $row_opts = { first_row => 0 };
+    my $format = $request->{format};
+    my $format_class = $self->{format}{$format}{class};
+    
+    croak "could not generate a result in format '$format': no implementing class"
+	unless $format_class;
     
     # First send out the partial output previously stashed by
     # generate_compound_result().
@@ -832,13 +874,21 @@ sub stream_compound_result {
     
     while ( my $row = $self->next_row($request) )
     {
-	$self->process_record($request, $row);
+	# If there are any processing steps to do, then process this record.
 	
-	my $output = $format_class->emit_record($request, $row, $row_opts);
+	$self->process_record($request, $row, $request->{proc_list});
+	
+	# Generate the output for this record, preceded by a record separator
+	# since we are always past the first record once we have switched over
+	# to streaming.
+	
+	my $output = $format_class->emit_separator($request);
+	
+	$output .= $format_class->emit_record($request, $row);
 	
 	$writer->write( encode_utf8($output) ) if defined $output and $output ne '';
     }
-
+    
     # finish output...
     
     # my $final = $self->finishOutput();

@@ -73,7 +73,33 @@ sub configure_output {
     my $self = shift;
     my $ds = $self->{ds};
     
-    $ds->configure_query_output($self);
+    return $ds->configure_query_output($self);
+}
+
+
+# configure_section ( section_name )
+# 
+# Set up a list of processing and output steps for the given section.
+
+sub configure_section {
+    
+    my ($self, $section_name) = @_;
+    my $ds = $self->{ds};
+    
+    return $ds->configure_section($self, $section_name);
+}
+
+
+# process_record ( record, steps )
+# 
+# Process the specified record using the specified steps.
+
+sub process_record {
+    
+    my ($self, $record, $steps) = @_;
+    my $ds = $self->{ds};
+    
+    return $ds->process_record($self, $record, $steps);
 }
 
 

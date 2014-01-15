@@ -137,7 +137,7 @@ sub configure {
 	tables => ['r'] },
       { set => 'ref_list', code => \&generateReference },
       { set => 'ref_list', append => 1, from_each => 'sec_refs', code => \&generateReference },
-      { set => 'ref_list', join => "\n\n" if_format => 'text,xml' },
+      { set => 'ref_list', join => "\n\n", if_format => 'txt,tsv,csv,xml' },
       { output => 'ref_list', pbdb_name => 'references', dwc_name => 'associatedReferences', com_name => 'ref' },
 	  "The reference(s) associated with this collection (as formatted text)");
     
@@ -227,7 +227,7 @@ sub configure {
 	  "The date and time at which this record was last modified.");
     
     $ds->define_output( 'rem' =>
-      { set => 'collection_aka', join => '; ', if_format => 'text,xml' },
+      { set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
       { output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
 	  "Any additional remarks that were entered about the colection");
     

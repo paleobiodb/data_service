@@ -27,6 +27,7 @@ croak "This module requires HTTP::Validate version 0.30 or later" unless $HTTP::
 #use Dancer qw( :syntax );
 use Dancer::Plugin;
 use Dancer::Plugin::Database;
+use Dancer::Plugin::StreamData;
 
 BEGIN {
     our (@KEYWORDS) = qw(define_vocab document_vocab
@@ -103,7 +104,7 @@ sub new {
 		    validator => $validator,
 		    public_access => $public_access,
 		    default_limit => $default_limit,
-		    streaming_available => server_supports_streaming,
+		    # streaming_available => server_supports_streaming,
 		    streaming_threshold => $streaming_threshold,
 		    path_attrs => {},
 		    vocab => { 'default' => 
@@ -637,7 +638,7 @@ sub document_vocab {
 our (%FORMAT_DEF) = (name => 'ignore',
 		     default_vocab => 'single',
 		     content_type => 'single',
-		     class => 'single',
+		     module => 'single',
 		     doc => 'single',
 		     disabled => 'single');
 
@@ -682,6 +683,10 @@ sub define_format {
 	    
 	    croak "define_format: the attributes must include 'name'" unless defined $name;
 	    
+	    # Skip this definition if the attribute 'disabled' is set.
+	    
+	    next if $item->{disabled};
+	    
 	    # Make sure this format was not already defined by a previous call.
 	    
 	    croak "define_format: '$name' was already defined" if defined $self->{format}{$name};
@@ -689,6 +694,9 @@ sub define_format {
 	    # Create a new record to represent this format and check the attributes.
 	    
 	    my $record = bless { name => $name }, 'Web::DataService::Format';
+	    
+	    $record->{is_complex} = 1 if $name eq 'json';
+	    $record->{is_flat} = 1 if $name eq 'csv' || $name eq 'tsv' || $name eq 'txt' || $name eq 'xml';
 	    
 	    foreach my $k ( keys %$item )
 	    {
@@ -702,12 +710,6 @@ sub define_format {
 			unless ref $self->{vocab}{$v};
 		}
 		
-		elsif ( $k eq 'class' )
-		{
-		    croak "define_format: you must include the module '$v' with 'use' or 'require', and it must implement the function 'emit_record'"
-			unless $v->can('emit_record');
-		}
-		
 		$record->{$k} = $item->{$k};
 	    }
 	    
@@ -716,10 +718,18 @@ sub define_format {
 	    croak "define_format: you must specify an HTTP content type using the attribute 'content_type'"
 		unless $record->{content_type};
 	    
-	    $record->{class} ||= $FORMAT_CLASS{$name};
+	    $record->{module} ||= $FORMAT_CLASS{$name};
 	    
-	    croak "define_format: you must specify a class to implement this format using the attribute 'class'"
-		unless $record->{class};
+	    croak "define_format: you must specify a class to implement this format using the attribute 'module'"
+		unless $record->{module};
+	    
+	    # Make sure that the module is loaded.
+	    
+	    my $filename = $record->{module};
+	    $filename =~ s{::}{/}g;
+	    $filename .= '.pm';
+	    
+	    require $filename;
 	    
 	    # Now store it as a response format for this data service.
 	    
