@@ -1,7 +1,7 @@
 #
 # Web::DataService::JSON
 # 
-# 
+# This module is responsible for generating data responses in JSON format.
 # 
 # Author: Michael McClennen
 
@@ -15,47 +15,57 @@ use Scalar::Util qw(reftype);
 use Carp qw(croak);
 
 
-# emit_header ( request )
+# emit_header ( request, field_list )
 # 
-# Return the proper initial string for a JSON result.
+# Return the initial text of a JSON result.
 
 sub emit_header {
 
-    my ($class, $request) = @_;
+    my ($class, $request, $field_list) = @_;
     
     my $output = '{' . "\n";
     
     # Check if we have any warning messages to convey
     
-    if ( my $w = $request->warnings )
+    if ( my @msgs = $request->warnings )
     {
 	my $json = JSON->new->allow_nonref;
-	$output .= '"warnings":' . $json->encode($w) . ",\n";
+	$output .= '"warnings":' . $json->encode(\@msgs) . ",\n";
     }
     
     # Check if we have been asked to report the result count, and if it is
     # available.
     
-    if ( $request->{show_count} and defined $request->{result_count} )
+    if ( $request->display_counts )
     {
-	my $returned = $request->{return_count};
-	my $offset = $request->{result_offset};
+	my $counts = $request->result_counts;
 	
-	$output .= '"records_found":' . ($request->{result_count} + 0) . ",\n";
-	$output .= '"records_returned":' . ($returned + 0) . ",\n";
-	$output .= '"starting_index":' . ($offset + 0) . ",\n" if $offset > 0;
+	$output .= '"records_found":' . json_clean($counts->{found}) . ",\n";
+	$output .= '"records_returned":' . json_clean($counts->{returned}) . ",\n";
+	$output .= '"record_offset":' . json_clean($counts->{offset}) . ",\n" if $counts->{offset} > 0;
     }
     
     # The actual data will go into an array, in a field called "records".
     
-    $output .= '"records": [';
+    $output .= qq<"records": [\n>;
     return $output;
+}
+
+
+# emit_separator ( )
+# 
+# Return the record separator string.  This will be output between each
+# record, but not before the first one.
+
+sub emit_separator {
+    
+    return ",\n";
 }
 
 
 # emit_footer ( )
 # 
-# Return a proper final string for a JSON result.
+# Return a final text for a JSON result.
 
 sub emit_footer {
     
@@ -65,54 +75,36 @@ sub emit_footer {
 }
 
 
-# emit_separator ( )
-# 
-# Return the record separator string, if any.
-
-sub emit_separator {
-    
-    return ",\n";
-}
-
-
 # emit_record ( )
 # 
 # Return the formatted output for a single record in JSON.
 
 sub emit_record {
     
-    my ($class, $request, $record, $record_opts) = @_;
+    my ($class, $request, $record, $field_list) = @_;
     
-    # Start the output.
-    
-    my $output = $record_opts->{first_row} ? "\n" : ",\n";
-    
-    # Write out the object data in JSON.
-    
-    $output .= $class->construct_object($request, $record, $request->{output_list});
-    
-    return $output;
+    return $class->construct_object($request, $record, $field_list);
 }
 
 
-# construct_object ( request, record, rule )
+# construct_object ( request, record, field_list )
 # 
-# Generate a hash based on the given record and the specified rule (or rules,
-# as an array ref).
+# Generate text that expresses the given record in JSON according to the given
+# list of output field specifications.
 
 sub construct_object {
 
-    my ($class, $request, $record, $rulespec) = @_;
+    my ($class, $request, $record, $field_list) = @_;
     
     # Start with an empty string.
     
     my $outrec = '{';
     my $sep = '';
     
-    # Go through the rule list, generating the fields one by one.  $rulespec
+    # Go through the rule list, generating the fields one by one.  $field_list
     # may be either an array of rule records or a single one.
     
-    foreach my $f (reftype $rulespec && reftype $rulespec eq 'ARRAY' ? @$rulespec : $rulespec)
+    foreach my $f (reftype $field_list && reftype $field_list eq 'ARRAY' ? @$field_list : $field_list)
     {
 	# Skip any field that is empty, unless 'always' or 'value' is set.
 	
@@ -200,7 +192,7 @@ sub construct_object {
     
     if ( exists $record->{hier_child} )
     {
-	my $children = $class->construct_array($record->{hier_child}, $rulespec);
+	my $children = $class->construct_array($record->{hier_child}, $field_list);
 	$outrec .= ',"children":' . $children;
     }
     
@@ -212,11 +204,16 @@ sub construct_object {
 }
 
 
+# construct_array ( request, arrayref, field_list )
+# 
+# Generate text that expresses the given array of values in JSON according to
+# the given list of field specifications.
+
 sub construct_array {
 
-    my ($class, $request, $arrayref, $rulespec) = @_;
+    my ($class, $request, $arrayref, $field_list) = @_;
     
-    my $f = $rulespec if reftype $rulespec && reftype $rulespec ne 'ARRAY';
+    my $f = $field_list if reftype $field_list && reftype $field_list ne 'ARRAY';
     
     # Start with an empty string.
     
@@ -232,13 +229,13 @@ sub construct_array {
     {
 	if ( reftype $elt && reftype $elt eq 'ARRAY' )
 	{
-	    $value = $class->construct_array($request, $elt, $rulespec);
+	    $value = $class->construct_array($request, $elt, $field_list);
 	}
 	
 	elsif ( reftype $elt && reftype $elt eq 'HASH' )
 	{
-	    next unless $rulespec;
-	    $value = $class->construct_object($request, $elt, $rulespec);
+	    next unless $field_list;
+	    $value = $class->construct_object($request, $elt, $field_list);
 	}
 	
 	elsif ( ref $elt )
@@ -295,15 +292,13 @@ sub json_clean {
     # Turn any numeric character references into actual Unicode characters.
     # The database does contain some of these.
     
+    # DANGER: this should probably generate Perl wide characters instead!!! $$$
+    
     $string =~ s/&\#(\d)+;/pack("U", $1)/eg;
     
     # Next, escape all backslashes, double-quotes and whitespace control characters
     
     $string =~ s/(\\|\"|\n|\t|\r)/$ESCAPE{$1}/ge;
-    
-    # Translate ((b)) into <b> and ((i)) into <i>
-    
-    #$string =~ s/\(\(([bi])\)\)/<$1>/ge;
     
     # Finally, delete all other control characters (they shouldn't be in the
     # database in the first place, but unfortunately some rows do contain
@@ -312,27 +307,6 @@ sub json_clean {
     $string =~ s/[\0-\037\177]//g;
     
     return '"' . $string . '"';
-}
-
-
-sub json_clean_simple {
-    
-    my ($string) = @_;
-    
-    # Return an empty string unless the value is defined.
-    
-    return '' unless defined $string;
-    
-    # Otherwise, we need to do some longer processing.
-    
-    # Turn any numeric character references into actual Unicode characters.
-    # The database does contain some of these.  Also take out all control
-    # characters, which shouldn't be in there either.
-    
-    $string =~ s/&\#(\d)+;/pack("U", $1)/eg;
-    $string =~ s/[\0-\037\177]//g;
-    
-    return $string;
 }
 
 

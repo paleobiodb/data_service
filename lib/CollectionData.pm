@@ -56,7 +56,6 @@ sub configure {
 		   'c.n_occs', 'ei.interval_name as early_int', 'li.interval_name as late_int',
 		   'c.reference_no', 'group_concat(sr.reference_no) as sec_ref_nos'], 
 	tables => ['ei', 'li', 'sr'] },
-      { set => 'reference_no', append => 1, from => 'sec_ref_nos', split => ',' },
       { output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	  "A positive integer that uniquely identifies the collection",
       { output => 'record_type', value => 'collection', com_name => 'typ', com_value => 'col', 
@@ -86,7 +85,7 @@ sub configure {
 	  "standard interval), or the interval that begins the range if C<late_inervalt> is also given",
       { output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	  "The interval that ends the specific geologic time range associated with this collection",
-      { set => 'reference_no', split => ',', if_format => 'json' },
+      { set => 'reference_no', append => 1, from => 'sec_ref_nos', split => ',' },
       { output => 'reference_no', com_name => 'rid' },
 	  "The identifier(s) of the references from which this data was entered");
     
@@ -185,19 +184,19 @@ sub configure {
 
     $ds->define_output( 'ent' =>
       { select => ['$mt.authorizer_no', 'ppa.name as authorizer', '$mt.enterer_no', 
-		   'ppe.name as enterer', '$mt.modifier_no', 'ppm.name as modifier'] },
-      { tables => ['ppa', 'ppe', 'ppm'] },
-      { output => 'authorizer_no', com_name => 'ath' },
+		   'ppe.name as enterer', '$mt.modifier_no', 'ppm.name as modifier'],
+	tables => ['ppa', 'ppe', 'ppm'] },
+      { output => 'authorizer_no', com_name => 'ath', if_format => 'json' },
 	  "The identifier of the database contributor who authorized the entry of this record.",
-      { output => 'authorizer', vocab => 'pbdb' },
+      { output => 'authorizer', if_format => 'csv,tsv,txt' },
 	  "The name of the database contributor who authorized the entry of this record.",
-      { output => 'enterer_no', com_name => 'ent', dedup => 'authorizer_no' },
+      { output => 'enterer_no', com_name => 'ent', dedup => 'authorizer_no', if_format => 'json' },
 	  "The identifier of the database contributor who entered this record.",
-      { output => 'enterer', vocab => 'pbdb' },
+      { output => 'enterer', if_format => 'csv,tsv,txt' },
 	  "The name of the database contributor who entered this record.",
-      { output => 'modifier_no', com_name => 'mfr', dedup => 'authorizer_no' },
+      { output => 'modifier_no', com_name => 'mfr', dedup => 'authorizer_no', if_format => 'json' },
 	  "The identifier of the database contributor who last modified this record.",
-      { output => 'modifier', vocab => 'pbdb' },
+      { output => 'modifier', if_format => 'csv,tsv,txt' },
 	  "The name of the database contributor who last modified this record.");
     
     $ds->define_output( 'taxon_record' =>

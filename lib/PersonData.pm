@@ -10,7 +10,7 @@
 package PersonData;
 
 use strict;
-use base 'DataService::Base';
+use parent 'Web::DataService::Request';
 
 use Carp qw(carp croak);
 

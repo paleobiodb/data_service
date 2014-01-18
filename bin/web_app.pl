@@ -32,7 +32,8 @@ use PersonData;
 
 # Many of the configuration parameters are set by entries in config.yml.
 
-my $ds = Web::DataService->new({ path_prefix => '/data' });
+my $ds = Web::DataService->new({ name => 'Paleobiodb Data',
+				 path_prefix => '/data' });
 
 # If we were called from the command line with 'GET' as the first argument,
 # then assume that we have been called for debugging purposes.
@@ -44,6 +45,7 @@ if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
     set show_errors => 0;
     
     $ds->{DEBUG} = 1;
+    $ds->{ONE_REQUEST} = 1;
 }
 
 
@@ -101,7 +103,8 @@ $ds->define_format(
 	"loaded into spreadsheets or other analysis tools.  The field names are",
 	"taken from the PBDB Classic interface, for compatibility with existing",
 	"tools and analytical procedures.",
-    { name => 'ris', disabled => 1, content_type => 'application/x-research-info-systems' },
+    { name => 'ris', disabled => 1, content_type => 'application/x-research-info-systems',
+      module => 'RIS.pm'},
 	"The L<RIS format|http://en.wikipedia.org/wiki/RIS_(file_format)> is a",
 	"common format for bibliographic references.");
 
@@ -110,7 +113,7 @@ $ds->define_format(
 
 $ds->define_ruleset('1.1:common_params' => 
        "The following parameter is used with most requests:",
-    { param => 'show', valid => ANY_VALUE },
+    { optional => 'show', valid => ANY_VALUE, warn => "the parameter '{param}' is not valid for this URL path" },
        "Return extra result fields in addition to the basic fields.  The value should be a comma-separated",
        "list of values corresponding to the sections listed in the response documentation for the URL path",
        "that you are using.  If you include, e.g. 'app', then all of the fields whose section is C<app>",
@@ -130,10 +133,10 @@ $ds->define_ruleset('1.1:common_params' =>
        "If specified, then the response includes the number of records found and the number returned.",
        "For more information about how this information is encoded, see the documentation pages",
        "for the various response formats.",
-    { optional => 'vocab', valid => $ds->vocab_rule },
+    { optional => 'vocab', valid => $ds->valid_vocab },
        "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
        "you want to override the default vocabulary for your selected format.",
-       "Possible values include:", $ds->vocab_doc,
+       "Possible values include:", $ds->document_vocab,
     "!!The following parameters are only relevant to the text formats (csv, tsv, txt):",
     { optional => 'no_header', valid => FLAG_VALUE },
        "If specified, then the header line (which gives the field names) is omitted.",
@@ -468,6 +471,7 @@ $ds->define_path({ path => '1.1',
 		   vocab_param => 'vocab',
 		   limit_param => 'limit',
 		   count_param => 'count',
+		   uses_dbh => 1,
 		   default_limit => 500,
 		   allow_format => 'json,csv,tsv,txt',
 		   base_output => 'basic' });
@@ -477,9 +481,8 @@ $ds->define_path({ path => '1.1',
 
 $ds->define_path({ path => '1.1/config',
 		   class => 'ConfigData',
-		   base_output => undef,
 		   method => 'get',
-		   uses_dbh => 1,
+		   base_output => '',
 		   doc_output => 'geosum,ranks'});
 
 # Intervals.  These paths are used to fetch information about geological time
@@ -487,7 +490,6 @@ $ds->define_path({ path => '1.1/config',
 
 $ds->define_path({ path => '1.1/intervals',
 		   class => 'IntervalData',
-		   uses_dbh => 1,
 		   doc_output => 'basic,ref' });
 
 $ds->define_path({ path => '1.1/intervals/single',
@@ -501,9 +503,8 @@ $ds->define_path({ path => '1.1/intervals/list',
 
 $ds->define_path({ path => '1.1/taxa',
 		   class => 'TaxonData',
-		   allow_format => '+xml',
+		   #allow_format => '+xml',
 		   allow_vocab => '+dwc',
-		   uses_dbh => 1,
 		   doc_output => 'basic,ref,attr,size,app,nav' });
 
 $ds->define_path({ path => '1.1/taxa/single',
@@ -533,8 +534,7 @@ $ds->define_path({ path => '1.1/taxa/icon',
 
 $ds->define_path({ path => '1.1/colls',
 		   class => 'CollectionData',
-		   allow_format => '+xml',
-		   uses_dbh => 1,
+		   #allow_format => '+xml',
 		   base_output => 'basic' });
 
 $ds->define_path({ path => '1.1/colls/single',
@@ -561,8 +561,7 @@ $ds->define_path({ path => '1.1/colls/refs',
 
 $ds->define_path({ path => '1.1/occs',
 		   class => 'OccurrenceData',
-		   allow_format => '+xml',
-		   uses_dbh => 1,
+		   #allow_format => '+xml',
 		   base_output => 'basic' });
 
 $ds->define_path({ path => '1.1/occs/single',
@@ -587,16 +586,16 @@ $ds->define_path({ path => '1.1/people/list',
 
 # References
 
-$ds->define_path({ path => '1.1/refs',
-		   class => 'ReferenceData',
-		   allow_format => '+ris',
-		   uses_dbh => 1 });
+# $ds->define_path({ path => '1.1/refs',
+# 		   class => 'ReferenceData',
+# 		   allow_format => '+ris',
+# 		   uses_dbh => 1 });
 
-$ds->define_path({ path => '1.1/refs/single',
-		   method => 'get' });
+# $ds->define_path({ path => '1.1/refs/single',
+# 		   method => 'get' });
 
-$ds->define_path({ path => '1.1/refs/list',
-		   method => 'list' });
+# $ds->define_path({ path => '1.1/refs/list',
+# 		   method => 'list' });
 
 # The following paths are used only for documentation
 
@@ -691,13 +690,17 @@ get qr{ ^ $PREFIX ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
 	$path =~ s{\d+$}{single};
     }
     
-    # Abort if this path is not valid for execution
+    # Execute the path if allowed, otherwise indicate a bad request.
     
-    forward unless $ds->can_execute_path($path);
+    if ( $ds->can_execute_path($path) )
+    {
+	return $ds->execute_path($path, $suffix);
+    }
     
-    # Execute the specified request
-    
-    return $ds->execute_path($path, $suffix);
+    else
+    {
+	$ds->error_result("", "html", "404 The resource you requested was not found.");
+    }
 };
 
 

@@ -20,9 +20,9 @@ use Web::DataService::Request;
 use Web::DataService::Output;
 use Web::DataService::PodParser;
 
-use HTTP::Validate;
+use HTTP::Validate qw( :validators );
 
-croak "This module requires HTTP::Validate version 0.30 or later" unless $HTTP::Validate::VERSION >= 0.30;
+HTTP::Validate->VERSION(0.32);
 
 #use Dancer qw( :syntax );
 use Dancer::Plugin;
@@ -30,7 +30,7 @@ use Dancer::Plugin::Database;
 use Dancer::Plugin::StreamData;
 
 BEGIN {
-    our (@KEYWORDS) = qw(define_vocab document_vocab
+    our (@KEYWORDS) = qw(define_vocab valid_vocab document_vocab
 			 define_format document_format
 			 define_path document_path path_defined
 			 define_ruleset define_output
@@ -44,22 +44,13 @@ BEGIN {
     );
 }
 
-our ($DEFAULT_COUNT) = 1;
 
 # Create a default instance, for when this module is used in a
 # non-object-oriented fashion.
 
-my ($DEFAULT_INSTANCE) = __PACKAGE__->new();
+my $DEFAULT_INSTANCE = __PACKAGE__->new({ name => 'Default' });
 
-my (%MEDIA_TYPE) = 
-    ('html' => 'text/html',
-     'xml' => 'text/xml',
-     'txt' => 'text/plain',
-     'tsv' => 'text/tab-separated-values',
-     'csv' => 'text/csv',
-     'json' => 'application/json',
-    );
-
+my $DEFAULT_COUNT = 0;
 
 # Methods
 # =======
@@ -85,8 +76,8 @@ sub new {
     
     unless ( $name )
     {
-	$name = 'Data Service' . ( $DEFAULT_COUNT > 1 ? $DEFAULT_COUNT : '' );
 	$DEFAULT_COUNT++;
+	$name = 'Data Service' . ( $DEFAULT_COUNT > 1 ? " $DEFAULT_COUNT" : "" );
     }
     
     # Create a new HTTP::Validate object so that we can do parameter
@@ -152,8 +143,6 @@ sub define_path {
     
     my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
     
-    my ($path, $attrs) = @_;
-    
     my ($package, $filename, $line) = caller;
     
     my ($last_node);
@@ -171,7 +160,8 @@ sub define_path {
 	    croak "a path definition must include the attribute 'path'"
 		unless defined $item->{path} and $item->{path} ne '';
 	    
-	    $last_node = $self->create_path_node($path, $item, $filename, $line);
+	    $last_node = $self->create_path_node($item, $filename, $line)
+		unless defined $item->{disabled};
 	}
 	
 	elsif ( not ref $item )
@@ -185,7 +175,7 @@ sub define_path {
 	}
     }
     
-    croak "the arguments to 'define_path' must include a hashref of attributes"
+    croak "the arguments to 'define_path' must include at least one hashref of attributes"
 	unless $last_node;
 }
 
@@ -194,14 +184,20 @@ register 'define_path' => \&define_path;
 
 our (%NODE_DEF) = ( path => 'ignore',
 		    class => 'single',
-		    op => 'single',
+		    method => 'single',
 		    ruleset => 'single',
 		    base_output => 'list',
 		    doc_output => 'list',
+		    uses_dbh => 'single',
+		    version => 'single',
+		    public_access => 'single',
 		    output_param => 'single',
 		    vocab_param => 'single',
 		    limit_param => 'single',
+		    offset_param => 'single',
 		    count_param => 'single',
+		    no_head_param => 'single',
+		    linebreak_param => 'single',
 		    default_limit => 'single',
 		    allow_format => 'set',
 		    allow_vocab => 'set',
@@ -216,7 +212,9 @@ our (%NODE_DEF) = ( path => 'ignore',
 
 sub create_path_node {
 
-    my ($self, $path, $new_attrs, $filename, $line) = @_;
+    my ($self, $new_attrs, $filename, $line) = @_;
+    
+    my $path = $new_attrs->{path};
     
     # Make sure this path was not already defined by a previous call.
     
@@ -240,14 +238,14 @@ sub create_path_node {
     
     my $parent_attrs;
     
-    if ( $path =~ qr{ ^ (.+) / [^/]+ } )
+    if ( $path =~ qr{ ^ (.+) / [^/]+ }x )
     {
 	$parent_attrs = $self->{path_attrs}{$1};
 	croak "path '$path' is invalid because '$1' must be defined first"
 	    unless reftype $parent_attrs && reftype $parent_attrs eq 'HASH';
     }
     
-    elsif ( $path =~ qr{ ^ [^/]+ $ } )
+    elsif ( $path =~ qr{ ^ [^/]+ $ }x )
     {
 	$parent_attrs = $self->{path_attrs}{'/'};
     }
@@ -259,7 +257,13 @@ sub create_path_node {
     
     # If no parent attributes are found we start with some defaults.
     
-    $parent_attrs ||= { vocab_param => 'vocab', output_param => 'show' };
+    $parent_attrs ||= { vocab_param => 'vocab', 
+			output_param => 'show',
+			limit_param => 'limit',
+			offset_param => 'offset',
+			count_param => 'count',
+			no_head_param => 'no_header',
+			linebreak_param => 'linebreak' };
     
     # Now go through the parent attributes and copy into the new node.  We
     # only need to copy one level down, since the attributes are not going to
@@ -268,6 +272,8 @@ sub create_path_node {
     
     foreach my $key ( keys %$parent_attrs )
     {
+	next unless defined $NODE_DEF{$key};
+	
 	if ( $NODE_DEF{$key} eq 'single' )
 	{
 	    $path_attrs->{$key} = $parent_attrs->{$key};
@@ -294,6 +300,8 @@ sub create_path_node {
 	
 	my $value = $new_attrs->{$key};
 	
+	next unless defined $value;
+	
 	# If the attribute takes a single value, then set the value as
 	# specified.
 	
@@ -309,7 +317,7 @@ sub create_path_node {
 	
 	elsif ( $NODE_DEF{$key} eq 'set' )
 	{
-	    my @values = split( qr{\s*,\s*}, $value );
+	    my @values = ref $value eq 'ARRAY' ? @$value : split( qr{\s*,\s*}, $value );
 	    
 	    if ( $value =~ qr{ ^ [+-] }x )
 	    {
@@ -352,7 +360,7 @@ sub create_path_node {
 	
 	elsif ( $NODE_DEF{$key} eq 'list' )
 	{
-	    my @values = split( qr{\s*,\s*}, $value );
+	    my @values = ref $value eq 'ARRAY' ? @$value : split( qr{\s*,\s*}, $value );
 	    
 	    if ( $value =~ qr{ ^ [+-] }x )
 	    {
@@ -438,24 +446,21 @@ sub create_path_node {
 	}
     }
     
-    # If no ruleset was specified, default to the path name.
-    
-    unless ( $path_attrs->{ruleset} )
-    {
-	$path_attrs->{ruleset} = $path;
-    }
-    
     # Install the node.
     
     $self->{path_attrs}{$path} = $path_attrs;
     
     # If one of the attributes is 'class', make sure that the class is
-    # configured. 
+    # configured, unless we are in "one request" mode.
     
-    if ( $path_attrs->{class} )
+    if ( $path_attrs->{class} and not $self->{ONE_REQUEST} )
     {
 	$self->configure_class($path_attrs->{class})
     }
+    
+    # Now return the new node.
+    
+    return $path_attrs;
 }
 
 
@@ -556,7 +561,7 @@ sub define_vocab {
 	    
 	    my $name = $item->{name}; 
 	    
-	    croak "could not define vocabulary: no name specified" unless $name;
+	    croak "could not define vocabulary: you must include the attribute 'name'" unless $name;
 	    
 	    # Make sure this vocabulary was not already defined by a previous call,
 	    # and set the attributes as specified.
@@ -567,13 +572,14 @@ sub define_vocab {
 	    # Remove the default vocabulary, because it is only used if no
 	    # other vocabularies are defined.
 	    
-	    if ( $self->{vocab}{default}{_default} )
+	    if ( $self->{vocab}{default}{_default} and not $item->{disabled} )
 	    {
 		delete $self->{vocab}{default};
 		shift @{$self->{vocab_list}};
 	    }
 	    
-	    # Now install the new vocabulary.
+	    # Now install the new vocabulary.  But don't add it to the list if
+	    # the 'disabled' attribute is set.
 	    
 	    $self->{vocab}{$name} = $item;
 	    push @{$self->{vocab_list}}, $name unless $item->{disabled};
@@ -598,6 +604,22 @@ sub define_vocab {
 }
 
 
+# validate_vocab ( )
+# 
+# Return a code reference (actually a reference to a closure) that can be used
+# in a parameter rule to validate a vocaubulary-selecting parameter.  All
+# non-disabled vocabularies are included.
+
+sub valid_vocab {
+    
+    my ($self) = @_;
+    
+    # The ENUM_VALUE subroutine is defined by HTTP::Validate.pm.
+    
+    return ENUM_VALUE(@{$self->{vocab_list}});
+}
+
+
 # document_vocab ( name )
 # 
 # Return a string containing POD documentation of the vocabulary
@@ -616,7 +638,8 @@ sub document_vocab {
 	return $self->{vocab}{$name}{doc};
     }
     
-    # Otherwise, document the entire list of vocabularies in POD format.
+    # Otherwise, document the entire list of enabled vocabularies in POD
+    # format.
     
     my $doc = "=over 4\n\n";
     
@@ -683,10 +706,6 @@ sub define_format {
 	    
 	    croak "define_format: the attributes must include 'name'" unless defined $name;
 	    
-	    # Skip this definition if the attribute 'disabled' is set.
-	    
-	    next if $item->{disabled};
-	    
 	    # Make sure this format was not already defined by a previous call.
 	    
 	    croak "define_format: '$name' was already defined" if defined $self->{format}{$name};
@@ -708,6 +727,9 @@ sub define_format {
 		{
 		    croak "define_format: unknown vocabulary '$v'"
 			unless ref $self->{vocab}{$v};
+		    
+		    croak "define_format: cannot default to disabled vocabulary '$v'"
+			if $self->{vocab}{$v}{disabled} and not $item->{disabled};
 		}
 		
 		$record->{$k} = $item->{$k};
@@ -715,23 +737,26 @@ sub define_format {
 	    
 	    $record->{content_type} ||= $FORMAT_CT{$name};
 	    
-	    croak "define_format: you must specify an HTTP content type using the attribute 'content_type'"
+	    croak "define_format: you must specify an HTTP content type for format '$name' using the attribute 'content_type'"
 		unless $record->{content_type};
 	    
 	    $record->{module} ||= $FORMAT_CLASS{$name};
 	    
-	    croak "define_format: you must specify a class to implement this format using the attribute 'module'"
+	    croak "define_format: you must specify a class to implement format '$name' using the attribute 'module'"
 		unless $record->{module};
 	    
-	    # Make sure that the module is loaded.
+	    # Make sure that the module is loaded, unless the format is disabled.
 	    
-	    my $filename = $record->{module};
-	    $filename =~ s{::}{/}g;
-	    $filename .= '.pm';
+	    unless ( $record->{disabled} )
+	    {
+		my $filename = $record->{module};
+		$filename =~ s{::}{/}g;
+		$filename .= '.pm' unless $filename =~ /\.pm$/;
+		
+		require $filename;
+	    }
 	    
-	    require $filename;
-	    
-	    # Now store it as a response format for this data service.
+	    # Now store the record as a response format for this data service.
 	    
 	    $self->{format}{$name} = $record;
 	    push @{$self->{format_list}}, $name unless $record->{disabled};
@@ -747,11 +772,11 @@ sub define_format {
 	
 	else
 	{
-	    croak "the arguments to 'define_format' must be hashrefs and strings";
+	    croak "define_format: the arguments to this routine must be hashrefs and strings";
 	}
     }    
     
-    croak "the arguments must include a hashref of attributes"
+    croak "define_format: you must include at least one hashref of attributes"
 	unless $last_node;
 }
 
@@ -809,7 +834,7 @@ sub define_ruleset {
     
     unshift @_, $self->{validator};
     
-    goto &HTTP::Validate::ruleset;
+    goto &HTTP::Validate::define_ruleset;
 }
 
 
@@ -901,21 +926,22 @@ sub configure_class {
     
     no strict 'refs';
     
-    foreach my $super ( @{"$class::ISA"} )
+    foreach my $super ( @{"${class}::ISA"} )
     {
 	if ( $super->isa('Web::DataService::Request') )
 	{
 	    $self->{super_class}{$class} = $super;
+	    $self->configure_class($super) unless $super eq 'Web::DataService::Request';;
 	    last;
 	}
     }
     
     # If the class has a configuration method, call it.
     
-    if ( $class->can('configure') )
+    if ( $class->can('initialize') )
     {
-	print STDERR "Configuring $class for data service $self->{name}\n" if $self->{DEBUG};
-	$class->configure($self, Dancer::config, database());
+	print STDERR "Initializing $class for data service $self->{name}\n" if $self->{DEBUG};
+	$class->initialize($self, Dancer::config, database());
     }
 }
 
@@ -937,7 +963,7 @@ sub can_execute_path {
     # Now check whether we have the necessary attributes.
     
     return defined $self->{path_attrs}{$path}{class} &&
-	   defined $self->{path_attrs}{$path}{op};
+	   defined $self->{path_attrs}{$path}{method};
 }
 
 
@@ -965,8 +991,10 @@ sub execute_path {
 	# First check to see that the specified format is valid for the
 	# specified path.
 	
+	my $path_attrs = $self->{path_attrs}{$path};
+	
 	unless ( defined $format && ref $self->{format}{$format} &&
-		 $self->{path_attrs}{$path}{allow_format}{$format} )
+		 $path_attrs->{allow_format}{$format} )
 	{
 	    return $self->error_result($path, $format, "415")
 	}
@@ -975,12 +1003,16 @@ sub execute_path {
 	# valid.  This should always succeed, because the 'class' and 'method'
 	# attributes were checked when the path was defined.
 	
-	my $class = $self->{path_attrs}{$path}{class};
-	my $method = $self->{path_attrs}{$path}{method};
-	my $arg = $self->{path_attrs}{$path}{arg};
+	my $class = $path_attrs->{class};
+	my $method = $path_attrs->{method};
+	my $arg = $path_attrs->{arg};
 	
 	croak "cannot execute path '$path': invalid class '$class' and method '$method'"
 	    unless $class->isa('Web::DataService::Request') && $class->can($method);
+	
+	# Configure the class if we are in 'one request' mode.
+	
+	$self->configure_class($class) if $self->{ONE_REQUEST};
 	
 	# Create a new object to represent this request, and bless it into the
 	# correct class.  Add a database handle if the 'uses_dbh' attribute was
@@ -992,18 +1024,19 @@ sub execute_path {
 			method => $method,
 			arg => $arg };
 	
-	$request->{dbh} = database() if $self->{path_attrs}{$path}{uses_dbh};
+	$request->{dbh} = database() if $path_attrs->{uses_dbh};
 	
 	bless $request, $class;
 	
 	# If a ruleset was specified, then validate and clean the parameters.
 	
 	my $validator = $self->{validator};
-	my $ruleset = $self->{path_attrs}{$path}{ruleset};
+	my $ruleset = defined $path_attrs->{ruleset} && $path_attrs->{ruleset} ne '' ? 
+	    $path_attrs->{ruleset} : $path;
 	
 	if ( $validator->ruleset_defined($ruleset) )
 	{
-	    my $result = $validator->validate_params($ruleset, Dancer::params);
+	    my $result = $validator->check_params($ruleset, Dancer::params);
 	    
 	    if ( $result->errors )
 	    {
@@ -1014,18 +1047,40 @@ sub execute_path {
 	    $request->{params} = $result->values;
 	}
 	
+	# Determine the result limit and offset, if any.
+	
+	$request->{result_limit} = 
+	    defined $request->{params}{$path_attrs->{limit_param}}
+		? $request->{params}{$path_attrs->{limit_param}}
+		    : $path_attrs->{default_limit} || $self->{default_limit} || 'all';
+	
+	$request->{result_offset} = 
+	    defined $request->{params}{$path_attrs->{offset_param}}
+		? $request->{params}{$path_attrs->{offset_param}} : 0;
+	
 	# Set the vocabulary and output section list using the validated
 	# parameters, so that we can properly configure the output.
 	
-	my $vocab_param = $self->{path_attrs}{$path}{vocab_param};
-	my $output_param = $self->{path_attrs}{$path}{output_param};
-	my $base_output = $self->{path_attrs}{$path}{base_output};
+	my $output_param = $path_attrs->{output_param};
 	
-	$request->{vocab} = $request->{params}{$vocab_param};
+	$request->{vocab} = $request->{params}{$path_attrs->{vocab_param}} || 
+	    $self->{format}{$format}{default_vocab} || $self->{vocab_list}[0];
+	
+	$request->{base_output} = $path_attrs->{base_output};
 	$request->{extra_output} = $request->{params}{$output_param};
-	$request->{base_output} = $request->{path_attrs}{$path}{base_output};
+	
+	# Determine whether we should show the optional header information in
+	# the result.
+	
+	$request->{display_header} = $request->{params}{$path_attrs->{no_head_param}} ? 0 : 1;
+	$request->{display_counts} = $request->{params}{$path_attrs->{count_param}} ? 1 : 0;
+	$request->{linebreak_cr} = 
+	    defined $request->{params}{$path_attrs->{linebreak_param}} &&
+		$request->{params}{$path_attrs->{linebreak_param}} eq 'cr' ? 1 : 0;
 	
 	# Once we have processed the parameters, we can configure the output.
+	
+	$DB::single = 1;
 	
 	$self->configure_output($request);
 	
@@ -1040,21 +1095,22 @@ sub execute_path {
 	$request->$method();
 	
 	# The next steps depend upon how the query operation chooses to return
-	# its data.  It may set any one of the following fields in the request
-	# object: 
+	# its data.  It must set at most one of the following fields in the
+	# request object, as described:
+	# 
+	# main_data		A scalar, containing data which is to be 
+	#			returned as-is without further processing.
 	# 
 	# main_record		A hashref, representing a single record to be
 	#			returned according to the output format.
 	# 
-	# main_data		A scalar ref containing data, to be
-	#			returned as a blob.
-	# 
-	# main_result		A listref of hashrefs, representing multiple
+	# main_result		A list of hashrefs, representing multiple
 	#			records to be returned according to the output
 	# 			format.
 	# 
-	# main_sth		A DBI statement handle, from which the
-	#			records to be output may be read.
+	# main_sth		A DBI statement handle, from which all 
+	#			records that can be read should be returned
+	#			according to the output format.
 	
 	if ( ref $request->{main_record} )
 	{
@@ -1071,7 +1127,7 @@ sub execute_path {
 	    return $request->{main_data};
 	}
 	
-	# Otherwise, we have an empty result set
+	# If none of these fields are set, then the result set is empty.
 	
 	else
 	{
@@ -1213,8 +1269,8 @@ sub set_response_headers {
     
     # Set the content type based on the format.
     
-    my $ct = $self->{format}{$format};
-    Dancer::content_type $ct;
+    my $ct = $self->{format}{$format}{content_type};
+    Dancer::content_type $ct if $ct;
     
     return;
 }
@@ -1240,7 +1296,7 @@ sub error_result {
     # extract the error and warning messages.  In this case, the error code
     # should be "400 bad request".
     
-    if ( ref $error eq 'HTTP::Validate::Response' )
+    if ( ref $error eq 'HTTP::Validate::Result' )
     {
 	@errors = $error->errors;
 	@warnings = $error->warnings;
@@ -1264,6 +1320,7 @@ sub error_result {
     {
 	$code = 500;
 	#error("Error on path $path: $error");
+	warn $error;
 	@errors = "A server error occurred.  Please contact the server administrator.";
     }
     
@@ -1274,8 +1331,9 @@ sub error_result {
 	my $error = qq<"error": [\n> . join(qq<",\n">, @errors) . qq<"\n]\n>;
 	$error .= qq<, "warn": [\n"> . join(qq<",\n">, @warnings) . qq<"\n]\n> if @warnings;
 	
+	Dancer::content_type('application/json');
 	Dancer::status($code);
-	Dancer::halt( "{ $error }" );
+	return "{ $error }";
     }
     
     # Otherwise, generate a generic HTML response (we'll add template
@@ -1300,8 +1358,9 @@ $warning
 </body></html>
 END_BODY
     
+	Dancer::content_type('text/html');
 	Dancer::status($code);
-	Dancer::halt($body);
+	return $body;
     }
 }
 

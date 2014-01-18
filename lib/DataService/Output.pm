@@ -1,4 +1,4 @@
-#
+
 # DataService::Output
 # 
 # 
@@ -7,7 +7,7 @@
 
 use strict;
 
-package DataService;
+package Web::DataService;
 
 use Encode;
 use Scalar::Util qw(reftype);
@@ -73,7 +73,7 @@ sub define_output_section {
 	# If the type is 'field', then any subsequent documentation strings
 	# will be added to that record.
 	
-	$last_node = $item if $type eq 'field';
+	$last_node = $item if $type eq 'output';
 	
 	# Add the record to the output list.
 	
@@ -82,35 +82,56 @@ sub define_output_section {
 }
 
 
-our %OUTPUT_KEY = ('output' => 2, 'set' => 2, 'select' => 2, 'filter' => 2,
-		   split => 1, add => 1, dedup => 1, use_each => 1, use_main => 1, tables => 1, 
+our %OUTPUT_KEY = (output => 2, set => 2, select => 2, filter => 2, include => 2,
+		   dedup => 1, name => 1, value => 1, always => 1, rule => 1,
 		   if_section => 1, not_section => 1, if_format => 1, not_format => 1,
-		   name => 1, value => 1, list => 1, subsection => 1);
+		   from => 1, from_each => 1, append => 1, code => 1, lookup => 1,
+		   split => 1, join => 1, tables => 1, doc => 1);
 
-our %FIELD_KEY = (always => 1, value => 1, dedup => 1, use_each => 1, use_main => 1, subsection => 1,
-		  list => 1);
+our %FIELD_KEY = (dedup => 1, name => 1, value => 1, always => 1, rule => 1, doc => 1);
 
 sub check_output_record {
     
     my ($self, $record) = @_;
     
-    my $type;
+    my ($name, $type) = ('', '');
     
     foreach my $k (keys %$record)
     {
-	croak "unrecognized key '$k' in define_output record"
-	    unless exists $OUTPUT_KEY{$k};
-	
-	if ( $OUTPUT_KEY{$k} == 2 )
+	if ( defined $OUTPUT_KEY{$k} )
 	{
-	    croak "you cannot have both keys '$type' and '$k' in a define_output record"
-		if $type;
-	    
-	    $type = $k;
+	    if ( $OUTPUT_KEY{$k} == 2 )
+	    {
+		croak "define_output: you cannot have both keys '$type' and '$k'"
+		    if $type;
+		
+		$type = $k;
+		$name = $record->{$k};
+	    }
 	}
     }
     
-    croak "each record passed to define_output must include one key from the following list: 'output', 'set', 'select', 'filter'"
+    foreach my $k (keys %$record)
+    {
+	if ( defined $OUTPUT_KEY{$k} )
+	{
+	    # no problem
+	}
+	
+	elsif ( $k =~ qr{ ^ (\w+) _ (name|value) $ }x )
+	{
+	    croak "define_output: unknown format or vocab '$1' in '$k' in '$type' record"
+		unless defined $self->{vocab}{$1} || defined $self->{format}{$1};
+	}
+	
+	else
+	{
+	    croak "define_output: unrecognized attribute '$k' in '$type' record";
+	}
+    }
+    
+    croak "each record passed to define_output must include one attribute from the \
+following list: 'include', 'output', 'set', 'select', 'filter'"
 	unless $type;
     
     return $type;
@@ -170,11 +191,11 @@ sub configure_output {
     my $require_vocab = 1 if $vocab and not $self->{vocab}{$vocab}{use_field_names};
     
     my @sections = @{$request->{base_output}} if ref $request->{base_output} eq 'ARRAY';
+    push @sections, $request->{base_output} unless ref $request->{base_output};
     push @sections, @{$request->{extra_output}} if ref $request->{extra_output} eq 'ARRAY';
+    push @sections, $request->{extra_output} unless ref $request->{extra_output};
     
     my %section = map { $_ => 1 } @sections;
-    
-    my %uniq_section;
     
     $request->{select_list} = [];
     $request->{select_hash} = {};
@@ -183,7 +204,7 @@ sub configure_output {
     $request->{proc_list} = [];
     $request->{field_list} = [];
     $request->{section_proc} = {};
-    $request->{section_output} = {};
+    $request->{section_set} = {};
     
     # Then go through the list of output sections to be used for this query.
     
@@ -211,8 +232,10 @@ sub configure_output {
 	# Now go through the output list for this section and collect up
 	# all records that are selected for this query.
 	
+	my @list = @$output_list;
+	
     RECORD:
-	foreach my $r ( @$output_list )
+	while ( my $r = shift @list )
 	{
 	    # Evaluate dependency on the output section list
 	    
@@ -238,7 +261,21 @@ sub configure_output {
 	    next RECORD if $r->{not_vocab}
 		and check_value($r->{not_vocab}, $vocab);
 	    
-	    next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
+	    # If the record type is 'include', immediately include the list
+	    # from the specified section.
+	    
+	    if ( defined $r->{include} )
+	    {
+		my $new_sect = $r->{include};
+		
+		next RECORD if $request->{section_set}{$new_sect};
+		$request->{section_set}{$new_sect} = 1;
+
+		my $new_list = $self->get_output_list($class, $new_sect);
+		
+		unshift @list, @$new_list if ref $new_list eq 'ARRAY';
+		next RECORD;
+	    }
 	    
 	    # If the record type is 'select', add to the selection list, the
 	    # selection hash, and the tables hash.
@@ -302,7 +339,9 @@ sub configure_output {
 	    
 	    elsif ( defined $r->{output} )
 	    {
-		my $field = { output => $r->{field}, name => $r->{field} };
+		next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
+		
+		my $field = { field => $r->{output}, name => $r->{output} };
 		
 		foreach my $key ( keys %$r )
 		{
@@ -316,7 +355,7 @@ sub configure_output {
 			$field->{$2} = $r->{$key} if $1 eq $vocab || $1 eq $format;
 		    }
 		    
-		    else
+		    elsif ( $key ne 'output' )
 		    {
 			warn "Warning: unknown key '$key' in output record\n";
 		    }
@@ -395,7 +434,11 @@ sub configure_section {
 	
 	# Evaluate dependency on the vocabulary
 	
-	next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
+	next RECORD if $r->{if_vocab}
+	    and not check_value($r->{if_vocab}, $vocab);
+	
+	next RECORD if $r->{not_vocab}
+	    and check_value($r->{not_vocab}, $vocab);
 	
 	# If the record type is 'output', add a record to the output list.
 	# The attributes 'name' (the output name) and 'field' (the raw
@@ -403,7 +446,9 @@ sub configure_section {
 	    
 	if ( defined $r->{output} )
 	{
-	    my $output = { output => $r->{output}, name => $r->{output} };
+	    next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
+	
+	    my $output = { field => $r->{output}, name => $r->{output} };
 	    
 	    foreach my $key ( keys %$r )
 	    {
@@ -417,7 +462,7 @@ sub configure_section {
 		    $output->{$2} = $r->{$key} if $vocab eq $1;
 		}
 		
-		else
+		elsif ( $key ne 'output' )
 		{
 		    warn "Warning: unknown key '$key' in output record\n";
 		}
@@ -426,7 +471,7 @@ sub configure_section {
 	    push @output_list, $output;
 	}
 	
-	# If the record type is 'proc', add a record to the proc list.
+	# If the record type is 'set', add a record to the proc list.
 	
 	elsif ( defined $r->{set} )
 	{
@@ -451,6 +496,54 @@ sub configure_section {
     return 1;
 }
 
+
+# check_value ( list, value )
+# 
+# Return true if $list is equal to $value, or if it is a list and one if its
+# items is equal to $value.
+
+sub check_value {
+    
+    my ($list, $value) = @_;
+    
+    return 1 if $list eq $value;
+    
+    if ( ref $list eq 'ARRAY' )
+    {
+	foreach my $item (@$list)
+	{
+	    return 1 if $item eq $value;
+	}
+    }
+    
+    return;
+}
+
+
+# check_set ( list, set )
+# 
+# The parameter $set must be a hashref.  Return true if $list is one of the
+# keys of $set, or if it $list is a list and one of its items is a key in
+# $set.  A key only counts if it has a true value.
+
+sub check_set {
+    
+    my ($list, $set) = @_;
+    
+    return unless ref $set eq 'HASH';
+    
+    return 1 if $set->{$list};
+    
+    if ( ref $list eq 'ARRAY' )
+    {
+	foreach my $item (@$list)
+	{
+	    return 1 if $set->{$item};
+	}
+    }
+    
+    return;
+}
 
 # document_response ( path, section_list )
 # 
@@ -698,26 +791,32 @@ sub generate_single_result {
     # Determine the output format and figure out which class implements it.
     
     my $format = $request->{format};
-    my $format_class = $self->{format}{$format}{class};
+    my $format_class = $self->{format}{$format}{module};
     
-    croak "could not generate a result in format '$format': no implementing class"
+    die "could not generate a result in format '$format': no implementing module was found"
 	unless $format_class;
+    
+    # Get the lists that specify how to process each record and which fields
+    # to output.
+    
+    my $proc_list = $request->{proc_list};
+    my $field_list = $request->{field_list};
     
     # Generate the initial part of the output, before the first record.
     
-    my $output = $format_class->emit_header($request);
+    my $output = $format_class->emit_header($request, $field_list);
     
     # If there are any processing steps to do, then do them.
     
-    $self->process_record($request, $self->{main_record}, $self->{proc_list});
+    $self->process_record($request, $self->{main_record}, $proc_list);
     
     # Generate the output corresponding to our single record.
     
-    $output .= $format_class->emit_record($request, $request->{main_record});
+    $output .= $format_class->emit_record($request, $request->{main_record}, $field_list);
     
     # Generate the final part of the output, after the last record.
     
-    $output .= $format_class->emit_footer($request);
+    $output .= $format_class->emit_footer($request, $field_list);
     
     return $output;
 }
@@ -746,39 +845,72 @@ sub generate_compound_result {
     # Determine the output format and figure out which class implements it.
     
     my $format = $request->{format};
-    my $format_class = $self->{format}{$format}{class};
+    my $format_class = $self->{format}{$format}{module};
     
-    croak "could not generate a result in format '$format': no implementing class"
+    die "could not generate a result in format '$format': no implementing module was found"
 	unless $format_class;
+    
+    # Get the lists that specify how to process each record and which fields
+    # to output.
+    
+    my $proc_list = $request->{proc_list};
+    my $field_list = $request->{field_list};
+    
+    # If we have an explicit result list, then we know the count.
+    
+    $request->{result_count} = scalar(@{$request->{main_result}})
+	if ref $request->{main_result};
     
     # Generate the initial part of the output, before the first record.
     
-    my $output = $format_class->emit_header($request);
+    my $output = $format_class->emit_header($request, $field_list);
     
-    # A record separator is emitted before every record but the first.
+    # A record separator is emitted before every record except the first.  If
+    # this format class does not define a record separator, use the empty
+    # string.
+    
+    $request->{rs} = $format_class->can('emit_separator') ?
+	$format_class->emit_separator($request) : '';
     
     my $emit_rs = 0;
     
-    # Fetch and process each output record in turn.  If output streaming is
+    $request->{actual_count} = 0;
+    
+    # If an offset was specified and the result method didn't handle this
+    # itself, then skip the specified number of records.
+    
+    if ( defined $request->{result_offset} && $request->{result_offset} > 0
+	 && ! $request->{offset_handled} )
+    {
+	$self->next_record($request) foreach 1..$request->{result_offset};
+    }
+    
+    # Now fetch and process each output record in turn.  If output streaming is
     # available and our total output size exceeds the threshold, switch over
     # to streaming.
     
-    while ( my $row = $self->next_row($request) )
+    while ( my $record = $self->next_record($request) )
     {
 	# If there are any processing steps to do, then process this record.
 	
-	$self->process_record($request, $row, $request->{proc_list});
+	$self->process_record($request, $record, $proc_list);
 	
 	# Generate the output for this record, preceded by a record separator if
 	# it is not the first record.
 	
-	$output .= $format_class->emit_separator($request) if $emit_rs;	$emit_rs = 1;
+	$output .= $request->{rs} if $emit_rs; $emit_rs = 1;
 	
-	$output .= $format_class->emit_record($request, $row);
+	$output .= $format_class->emit_record($request, $record, $field_list);
+	
+	# Keep count of the output records, and stop if we have exceeded the
+	# limit. 
+	
+	last if $request->{result_limit} ne 'all' && 
+	    ++$request->{actual_count} >= $request->{result_limit};
 	
 	# If streaming is a possibility, check whether we have passed the
 	# threshold for result size.  If so, then we need to immediately
-	# stash the output generated so far and call stream_data.  That
+	# stash the output generated so far and call stream_data.  Doing that
 	# will cause the current function to be aborted, followed by an
 	# automatic call to &stream_result (defined below).
 	
@@ -795,7 +927,7 @@ sub generate_compound_result {
     
     # Generate the final part of the output, after the last record.
     
-    $output .= $format_class->emit_footer($request);
+    $output .= $format_class->emit_footer($request, $field_list);
     
     return $output;
 }
@@ -810,9 +942,9 @@ sub generate_compound_result {
 	
     # 	if ( $self->{main_sth} )
     # 	{
-    # 	    while ( $row = $self->{main_sth}->fetchrow_hashref )
+    # 	    while ( $record = $self->{main_sth}->fetchrow_hashref )
     # 	    {
-    # 		push @rows, $row;
+    # 		push @rows, $record;
     # 	    }
     # 	}
 	
@@ -825,11 +957,11 @@ sub generate_compound_result {
 	
     # 	if ( ref $newrows eq 'ARRAY' )
     # 	{
-    # 	    foreach my $row (@$newrows)
+    # 	    foreach my $record (@$newrows)
     # 	    {
-    # 		$self->processRecord($row, $self->{proc_list});
-    # 		my $row_output = $self->emitRecord($row, is_first => $first_row);
-    # 		$output .= $row_output;
+    # 		$self->processRecord($record, $self->{proc_list});
+    # 		my $record_output = $self->emitRecord($record, is_first => $first_row);
+    # 		$output .= $record_output;
 		
     # 		$first_row = 0;
     # 		$self->{row_count}++;
@@ -872,21 +1004,27 @@ sub stream_compound_result {
     
     # Then process the remaining rows.
     
-    while ( my $row = $self->next_row($request) )
+    while ( my $record = $self->next_record($request) )
     {
 	# If there are any processing steps to do, then process this record.
 	
-	$self->process_record($request, $row, $request->{proc_list});
+	$self->process_record($request, $record, $request->{proc_list});
 	
 	# Generate the output for this record, preceded by a record separator
 	# since we are always past the first record once we have switched over
 	# to streaming.
 	
-	my $output = $format_class->emit_separator($request);
+	my $output = $request->{rs};
 	
-	$output .= $format_class->emit_record($request, $row);
+	$output .= $format_class->emit_record($request, $record);
 	
 	$writer->write( encode_utf8($output) ) if defined $output and $output ne '';
+	
+	# Keep count of the output records, and stop if we have exceeded the
+	# limit. 
+	
+	last if $request->{result_limit} ne 'all' && 
+	    ++$request->{actual_count} >= $request->{result_limit};
     }
     
     # finish output...
@@ -903,22 +1041,30 @@ sub stream_compound_result {
 }
 
 
-# next_row ( request )
+# next_record ( request )
 # 
-# Return the next row to be output for the given request.
+# Return the next record to be output for the given request.
 
-sub next_row {
+sub next_record {
     
     my ($self, $request) = @_;
     
-    if ( ref $request->{main_sth} )
-    {
-	return $request->{main_sth}->fetchrow_hashref
-    }
+    # If the result limit is 0, return nothing.
     
-    elsif ( ref $request->{main_result} eq 'ARRAY' )
+    return if $request->{result_limit} eq '0';
+    
+    # If we have a 'main_result' array, return the next item in it.
+    
+    if ( ref $request->{main_result} eq 'ARRAY' )
     {
 	return shift @{$request->{main_result}};
+    }
+    
+    # If we have a 'main_sth' statement handle, read the next item from it.
+    
+    elsif ( ref $request->{main_sth} )
+    {
+	return $request->{main_sth}->fetchrow_hashref
     }
     
     else
