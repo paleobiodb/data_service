@@ -14,6 +14,9 @@ package Web::DataService::Request;
 use Scalar::Util qw(reftype);
 
 
+# CLASS METHODS
+# -------------
+
 # new ( dbh, attrs )
 # 
 # Generate a new query object, using the given database handle and any other
@@ -42,25 +45,55 @@ sub new {
 }
 
 
-# define_output ( ds, section, specification... )
+# define_output_map ( specification... )
 # 
-# Define an output section for this class, for the specified data service.  If
-# none is specified, use the default instance.  This must be called as a class method!
+# Define a map which associates output blocks with values of the 'show'
+# parameter.  This can be used to automatically generate a validator function
+# and parameter documentation.
 
-sub define_output {
+sub define_output_map {
     
-    my $ds;
-    
-    # If the first argument is not a data service.
-    
-    unless ( ref $_[0] and $_[0]->isa('Web::Dataservice') )
-    {
-	unshift @_, $Web::DataService::DEFAULT_INSTANCE;
-    }
-    
-    goto &Web::DataService::define_output_section;
+    goto &Web::DataService::define_output_map;
 }
 
+
+# define_block ( block_name, specification... )
+# 
+# Define an output block, using the default data service instance.  This must be
+# called as a class method!
+
+sub define_block {
+    
+    my $class = shift;
+    
+    goto &Web::DataService::define_block;
+}
+
+
+# output_map_validator ( )
+# 
+# Return a reference to a validator routine (a closure, actually) which will
+# accept the list of output sections defined in the output map for this class.
+
+sub output_map_validator {
+
+    goto &Web::DataService::output_map_validator;
+}
+
+
+# document_output_map ( )
+# 
+# Return a documentation string in POD format, documenting the blocks that are
+# included in the output map for this class.
+
+sub document_output_map {
+
+    goto &Web::DataService::document_output_map;
+}
+
+
+# INSTANCE METHODS
+# ----------------
 
 # configure_output ( )
 # 
@@ -77,16 +110,57 @@ sub configure_output {
 }
 
 
-# configure_section ( section_name )
+# configure_block ( section_name )
 # 
 # Set up a list of processing and output steps for the given section.
 
-sub configure_section {
+sub configure_block {
     
     my ($self, $section_name) = @_;
     my $ds = $self->{ds};
     
     return $ds->configure_section($self, $section_name);
+}
+
+
+# base_block_list ( )
+# 
+# Return the base list of output blocks for this request (this is an attribute
+# of the request path).
+
+sub base_block_list {
+    
+    my ($self) = @_;
+    
+    my $ds = $self->{ds};
+    my $path = $self->{path};
+    
+    my $base_output = $self->{path_attrs}{$path}{base_output};
+    
+    return @$base_output if ref $base_output eq 'ARRAY';
+    return;
+}
+
+
+# extra_block_list ( )
+# 
+# Return the list of output blocks selected by the 'show' parameter (or the
+# corresponding parameter name specified for this data service).
+
+sub extra_block_list {
+    
+    my ($self) = @_;
+    
+    my $ds = $self->{ds};
+    my $path = $self->{path};
+    
+    my $param = $self->{path_attrs}{$path}{output_param};
+    
+    my $extra_output = $self->{params}{$param};
+    
+    return @$extra_output if ref $extra_output eq 'ARRAY';
+    return $extra_output if defined $extra_output;
+    return;
 }
 
 
@@ -99,6 +173,78 @@ sub section_set {
     my ($self) = @_;
     
     return $self->{section_set};
+}
+
+
+# select_list ( subst )
+# 
+# Return a list of strings derived from the 'select' records passed to
+# define_output.  The parameter $subst, if given, should be a hash of
+# substitutions to be made on the resulting strings.
+
+sub select_list {
+    
+    my ($self, $subst) = @_;
+    
+    my @fields = @{$self->{select_list}};
+    
+    return unless @fields && defined $subst && ref $subst eq 'HASH';
+    
+    foreach my $f (@fields)
+    {
+	$f =~ s/\$(\w+)/$subst->{$1}/g;
+    }
+    
+    return @fields;
+}
+
+
+# select_string ( subst )
+# 
+# Return the select list (see above) joined into a comma-separated string.
+
+sub select_string {
+    
+    my ($self, $subst) = @_;
+    
+    return join(', ', $self->select_list($subst));    
+}
+
+
+# tables_hash ( )
+# 
+# Return a hashref whose keys are the values of the 'tables' attributes in
+# 'select' records passed to define_output.
+
+sub tables_hash {
+    
+    my ($self) = @_;
+    
+    return $self->{tables_hash};
+}
+
+
+# filter_hash ( )
+# 
+# Return a hashref derived from 'filter' records passed to define_output.
+
+sub filter_hash {
+    
+    my ($self) = @_;
+    
+    return $self->{filter_hash};
+}
+
+
+# debug ( )
+# 
+# Return true if we are in debug mode.
+
+sub debug {
+    
+    my ($self) = @_;
+    
+    return $self->{ds}{DEBUG};
 }
 
 
@@ -152,7 +298,7 @@ sub sql_limit_clause {
     
     my ($self, $will_handle) = @_;
     
-    $self->{offset_handled} = 1 if $will_handle;
+    $self->{offset_handled} = $will_handle ? 1 : 0;
     
     my $limit = $self->{result_limit};
     my $offset = $self->{result_offset} || 0;
@@ -187,6 +333,38 @@ sub sql_count_clause {
 }
 
 
+# sql_count_rows ( )
+# 
+# If we were asked to get the result count, execute an SQL statement that will
+# do so.
+
+sub sql_count_rows {
+    
+    my ($self) = @_;
+    
+    if ( $self->{display_counts} )
+    {
+	($self->{result_count}) = $self->{dbh}->selectrow_array("SELECT FOUND_ROWS()");
+    }
+    
+    return $self->{result_count};
+}
+
+
+# set_result_count ( count )
+# 
+# This method should be called if the backend database does not implement the
+# SQL FOUND_ROWS() function.  The database should be queried as to the result
+# count, and the resulting number passed as a parameter to this method.
+
+sub set_result_count {
+    
+    my ($self, $count) = @_;
+    
+    $self->{result_count} = $count;
+}
+
+
 # add_warning ( message )
 # 
 # Add a warning message to this request object, which will be returned as part
@@ -194,12 +372,12 @@ sub sql_count_clause {
 
 sub add_warning {
 
-    my ($self, $message) = @_;
+    my $self = shift;
     
-    return unless defined $message and $message ne '';
-    
-    $self->{warnings} = [] unless defined $self->{warnings};
-    push @{$self->{warnings}}, $message;
+    foreach my $m (@_)
+    {
+	push @{$self->{warnings}}, $m if defined $m && $m ne '';
+    }
 }
 
 
@@ -256,9 +434,9 @@ sub display_counts {
 # returned	the number of records actually returned
 # offset	the number of records skipped before the first returned one
 # 
-# These counts reflect any use or the 'limit' and 'offset' parameters in the
-# request, or whichever corresponding parameter names were configured for this
-# data service.
+# These counts reflect the values given for the 'limit' and 'offset' parameters in
+# the request, or whichever substitute parameter names were configured for
+# this data service.
 # 
 # If no counts are available, empty strings are returned for all values.
 
@@ -266,16 +444,37 @@ sub result_counts {
 
     my ($self) = @_;
     
+    # Start with a default hashref with empty fields.  This is what will be returned
+    # if no information is available.
+    
     my $r = { found => $self->{result_count} // '',
 	      returned => $self->{result_count} // '',
 	      offset => $self->{result_offset} // '' };
     
-    if ( defined $self->{result_count} && defined $self->{result_limit} 
-	 && $self->{result_limit} ne 'all'
-	 && $self->{result_count} > $self->{result_limit} )
+    # If no result count was given, just return the default hashref.
+    
+    return $r unless defined $self->{result_count};
+    
+    # Otherwise, figure out the start and end of the output window.
+    
+    my $window_start = defined $self->{result_offset} && $self->{result_offset} > 0 ?
+	$self->{result_offset} : 0;
+    
+    my $window_end = $self->{result_count};
+    
+    # If the offset and limit together don't stretch to the end of the result
+    # set, adjust the window end.
+    
+    if ( defined $self->{result_limit} && $self->{result_limit} ne 'all' &&
+	 $window_start + $self->{result_limit} < $window_end )
     {
-	$r->{returned} = $self->{result_limit};
+	$window_end = $window_start + $self->{result_limit};
     }
+    
+    # The number of records actually returned is the length of the output
+    # window. 
+    
+    $r->{returned} = $window_end - $window_start;
     
     return $r;
 }

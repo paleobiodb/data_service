@@ -109,7 +109,37 @@ sub emit_record {
     # field, we take either the explicitly specified value or the value of the
     # specified field from the record.
     
-    my @values = map { $_->{value} // $record->{$_->{field}} } @$field_list;
+    my @values;
+    
+    foreach my $f ( @$field_list )
+    {
+	my $v = '';
+	
+	# First figure out what each value should be
+	
+	if ( defined $f->{value} )
+	{
+	    $v = $f->{value};
+	}
+	
+	elsif ( defined $f->{field} && defined $record->{$f->{field}} )
+	{
+	    $v = $record->{$f->{field}};
+	}
+	
+	# If the value is an array, join it into a string.  If no joining
+	# string was specified, use a comma.
+	
+	if ( ref $v eq 'ARRAY' )
+	{
+	    my $join = $f->{text_join} // q{,};
+	    $v = join($join, @$v);
+	}
+	
+	# Now add the value to the list.
+	
+	push @values, $v;
+    }
     
     return $class->generate_line($request, @values);
 }

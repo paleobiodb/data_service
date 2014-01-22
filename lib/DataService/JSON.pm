@@ -14,6 +14,10 @@ use Encode;
 use Scalar::Util qw(reftype);
 use Carp qw(croak);
 
+use parent 'Exporter';
+
+our @EXPORT_OK = qw(json_list_value json_clean);
+
 
 # emit_header ( request, field_list )
 # 
@@ -29,8 +33,14 @@ sub emit_header {
     
     if ( my @msgs = $request->warnings )
     {
-	my $json = JSON->new->allow_nonref;
-	$output .= '"warnings":' . $json->encode(\@msgs) . ",\n";
+	$output .= qq<"warnings":[\n>;
+	my $sep = '';
+	foreach my $m (@msgs)
+	{
+	    $output .= $sep; $sep = ",\n";
+	    $output .= json_clean($m);
+	}
+	$output .= qq<\n],\n>;
     }
     
     # Check if we have been asked to report the result count, and if it is
@@ -119,6 +129,11 @@ sub construct_object {
 	next if $f->{dedup} and defined $record->{$field} and defined $record->{$f->{dedup}}
 	    and $record->{$field} eq $record->{$f->{dedup}};
 	
+	# Skip any field with a 'if_field' attribute if the corresponding
+	# field does not have a true value.
+	
+	next if $f->{if_field} and not $record->{$f->{if_field}};
+	
 	# Start with the initial value for this field.  If it contains a
 	# 'value' attribute, use that.  Otherwise, use the indicated field
 	# value from the current record.  If that is not defined, use the
@@ -183,8 +198,8 @@ sub construct_object {
 	
 	my $outkey = $f->{name};
 	
-	$outrec .= qq{$sep"$outkey":$value"};
-	$sep = ',';
+	$outrec .= qq<$sep"$outkey":$value>;
+	$sep = q<,>;
     }
     
     # If this record has hierarchical children, process them now.  (Do we
@@ -193,12 +208,12 @@ sub construct_object {
     if ( exists $record->{hier_child} )
     {
 	my $children = $class->construct_array($record->{hier_child}, $field_list);
-	$outrec .= ',"children":' . $children;
+	$outrec .= qq<,"children":$children>;
     }
     
     # Now finish the output string and return it.
     
-    $outrec .= "}";
+    $outrec .= '}';
     
     return $outrec;
 }
@@ -261,6 +276,27 @@ sub construct_array {
 }
 
 
+# json_list_value ( key, @values )
+# 
+# Return a string representing a JSON key with a list of values.  This is used
+# for generating error and warning keys.
+
+sub json_list_value {
+    
+    my ($key, @values) = @_;
+    
+    my $output = qq<"$key": [>;
+    my $sep = "\n";
+    
+    foreach my $m (@values)
+    {
+	$output .= $sep; $sep = q<,\n>;
+	$output .= json_clean($m);
+    }
+    
+    $output .= qq<\n]>;
+}
+
 # json_clean ( string )
 # 
 # Given a string value, return an equivalent string value that will be valid
@@ -292,9 +328,9 @@ sub json_clean {
     # Turn any numeric character references into actual Unicode characters.
     # The database does contain some of these.
     
-    # DANGER: this should probably generate Perl wide characters instead!!! $$$
+    # WARNING: this decoding needs to be checked. $$$
     
-    $string =~ s/&\#(\d)+;/pack("U", $1)/eg;
+    $string =~ s/&\#(\d)+;/decode_utf8(pack("U", $1))/eg;
     
     # Next, escape all backslashes, double-quotes and whitespace control characters
     

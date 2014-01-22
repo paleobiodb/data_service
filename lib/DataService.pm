@@ -19,6 +19,7 @@ use Scalar::Util qw( reftype blessed weaken );
 use Web::DataService::Request;
 use Web::DataService::Output;
 use Web::DataService::PodParser;
+use Web::DataService::JSON qw(json_list_value);
 
 use HTTP::Validate qw( :validators );
 
@@ -34,7 +35,7 @@ BEGIN {
 			 define_format document_format
 			 define_path document_path path_defined
 			 define_ruleset define_output
-			 configure_class can_execute_path execute_path error_result);
+			 initialize_class can_execute_path execute_path error_result);
     
     our (@EXPORT_OK) = (@KEYWORDS, @HTTP::Validate::VALIDATORS);
     
@@ -157,7 +158,7 @@ sub define_path {
 	
 	if ( ref $item eq 'HASH' )
 	{
-	    croak "a path definition must include the attribute 'path'"
+	    croak "define_path: a path definition must include the attribute 'path'"
 		unless defined $item->{path} and $item->{path} ne '';
 	    
 	    $last_node = $self->create_path_node($item, $filename, $line)
@@ -171,11 +172,11 @@ sub define_path {
 	
 	else
 	{
-	    croak "the arguments to 'define_path' must be hashrefs and strings";
+	    croak "define_path: arguments must be hashrefs and strings";
 	}
     }
     
-    croak "the arguments to 'define_path' must include at least one hashref of attributes"
+    croak "define_path: arguments must include at least one hashref of attributes"
 	unless $last_node;
 }
 
@@ -191,6 +192,7 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    uses_dbh => 'single',
 		    version => 'single',
 		    public_access => 'single',
+		    also_initialize => 'set',
 		    output_param => 'single',
 		    vocab_param => 'single',
 		    limit_param => 'single',
@@ -199,6 +201,7 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    no_head_param => 'single',
 		    linebreak_param => 'single',
 		    default_limit => 'single',
+		    streaming_theshold => 'single',
 		    allow_format => 'set',
 		    allow_vocab => 'set',
 		    doc_file => 'single',
@@ -222,7 +225,7 @@ sub create_path_node {
     {
 	my $filename = $self->{path_attrs}{$path}{_filename};
 	my $line = $self->{path_attrs}{$path}{_line};
-	croak "path '$path' was already defined at line $line of $filename";
+	croak "define_path: '$path' was already defined at line $line of $filename";
     }
     
     # Create a new node to hold the path attributes.
@@ -241,7 +244,7 @@ sub create_path_node {
     if ( $path =~ qr{ ^ (.+) / [^/]+ }x )
     {
 	$parent_attrs = $self->{path_attrs}{$1};
-	croak "path '$path' is invalid because '$1' must be defined first"
+	croak "define_path: '$path' is not a valid path because '$1' must be defined first"
 	    unless reftype $parent_attrs && reftype $parent_attrs eq 'HASH';
     }
     
@@ -262,7 +265,7 @@ sub create_path_node {
 			limit_param => 'limit',
 			offset_param => 'offset',
 			count_param => 'count',
-			no_head_param => 'no_header',
+			no_head_param => 'noheader',
 			linebreak_param => 'linebreak' };
     
     # Now go through the parent attributes and copy into the new node.  We
@@ -295,7 +298,7 @@ sub create_path_node {
     
     foreach my $key ( keys %$new_attrs )
     {
-	croak "unknown key '$key' in path definition"
+	croak "define_path: unknown attribute '$key'"
 	    unless $NODE_DEF{$key};
 	
 	my $value = $new_attrs->{$key};
@@ -325,7 +328,7 @@ sub create_path_node {
 		{
 		    next unless defined $v && $v ne '';
 		    
-		    croak "invalid value '$v', must start with + or -"
+		    croak "define_path: invalid value '$v', must start with + or -"
 			unless $v =~ qr{ ^ ([+-]) (.*) }x;
 		    
 		    if ( $1 eq '-' )
@@ -346,7 +349,7 @@ sub create_path_node {
 		{
 		    next unless defined $v && $v ne '';
 		    
-		    croak "invalid value '$v', cannot start with + or -"
+		    croak "define_path: invalid value '$v', cannot start with + or -"
 			if $v =~ qr{ ^\+ | ^\- }x;
 		    
 		    $path_attrs->{$key}{$v} = 1;
@@ -368,7 +371,7 @@ sub create_path_node {
 		{
 		    next unless defined $v && $v ne '';
 		    
-		    croak "invalid value '$v', must start with + or -"
+		    croak "define_path: invalid value '$v', must start with + or -"
 			unless $v =~ qr{ ^ ([+-]) (.*) }x;
 		    
 		    if ( $1 eq '-' )
@@ -392,7 +395,7 @@ sub create_path_node {
 		{
 		    next unless defined $v && $v ne '';
 		    
-		    croak "invalid value '$v', cannot start with + or -"
+		    croak "define_path: invalid value '$v', cannot start with + or -"
 			if $v =~ qr{ ^\+ | ^\- }x;
 		    
 		    push @{$path_attrs->{$key}}, $v;
@@ -408,14 +411,14 @@ sub create_path_node {
     
     my $class = $path_attrs->{class};
     
-    croak "invalid class '$class': must be a subclass of 'Web::DataService::Request'"
+    croak "define_path: invalid class '$class', must be a subclass of 'Web::DataService::Request'"
 	if defined $class and not $class->isa('Web::DataService::Request');
     
     # Throw an error if 'op' doesn't specify an existing method of this class.
     
     my $op = $path_attrs->{op};
     
-    croak "invalid op '$op': must be a method of class '$class'"
+    croak "define_path: invalid op '$op', must be a method of class '$class'"
 	if defined $op and not $class->can($op);
     
     # Throw an error if any of the specified formats fails to match an
@@ -426,7 +429,7 @@ sub create_path_node {
     {
 	foreach my $f ( keys %{$path_attrs->{allow_format}} )
 	{
-	    croak "invalid value '$f' for format: no such format has been defined for this data service"
+	    croak "define_path: invalid value '$f' for format, no such format has been defined for this data service"
 		unless ref $self->{format}{$f};
 
 	    my $dv = $self->{format}{$f}{default_vocab};
@@ -441,7 +444,7 @@ sub create_path_node {
     {
 	foreach my $v ( keys %{$path_attrs->{vocab}} )
 	{
-	    croak "invalid value '$v' for vocab: no such vocabulary has been defined for this data service"
+	    croak "define_path: invalid value '$v' for vocab, no such vocabulary has been defined for this data service"
 		unless ref $self->{vocab}{$v};
 	}
     }
@@ -451,11 +454,11 @@ sub create_path_node {
     $self->{path_attrs}{$path} = $path_attrs;
     
     # If one of the attributes is 'class', make sure that the class is
-    # configured, unless we are in "one request" mode.
+    # initialized unless we are in "one request" mode.
     
     if ( $path_attrs->{class} and not $self->{ONE_REQUEST} )
     {
-	$self->configure_class($path_attrs->{class})
+	$self->initialize_class($path_attrs->{class})
     }
     
     # Now return the new node.
@@ -846,22 +849,12 @@ sub define_ruleset {
 # called, for later use in query operations using that class.
 
 sub define_output {
-
-    my ($self);
     
     # If we were called as a method, use the object on which we were called.
     # Otherwise, use the globally defined one.
     
-    if ( blessed $_[0] && $_[0]->isa('Web::DataService') )
-    {
-	$self = shift;
-    }
-    
-    else
-    {
-	$self = $DEFAULT_INSTANCE;
-    }
-    
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+
     # Now figure out which package we are being called from.  The output
     # section being defined will be stored under this package name.  If we
     # were not called from a subclass of Web::DataService::Request, then store
@@ -884,6 +877,40 @@ sub define_output {
 }
 
 
+# define_output_setup ( rule... )
+# 
+# Like 'define_output', but specifies a set of rules to apply at the
+# beginning of the output process, before any other sections are applied.
+
+sub define_output_setup {
+
+    # If we were called as a method, use the object on which we were called.
+    # Otherwise, use the globally defined one.
+    
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+
+    # Now figure out which package we are being called from.  The output
+    # section being defined will be stored under this package name.  If we
+    # were not called from a subclass of Web::DataService::Request, then store
+    # this information under Web::DataService::Request so that it will be
+    # available to all packages.
+    
+    my ($package) = caller;
+    
+    unless ( $package->isa('Web::DataService::Request') )
+    {
+	$package = 'Web::DataService::Request';
+    }
+    
+    # Now adjust the argument list and call define_output_section
+    
+    unshift @_, '_init_';
+    unshift @_, $package;
+    unshift @_, $self;
+    
+    goto &define_output_section;    
+}
+
 # add_node_doc ( node, doc_string )
 # 
 # Add the specified documentation string to the specified node.
@@ -903,40 +930,42 @@ sub add_node_doc {
 }
 
 
-# configure_class ( class )
+# initialize_class ( class )
 # 
-# If the specified class has a 'configure' method, call it.  Pass it a
-# database handle and the Dancer configuration hash.
+# If the specified class has an 'initialize' method, call it.  Recursively
+# initialize its parent class as well.  But make sure that the initialization
+# method is called only once for any particular class.  It is passed a
+# reference to the data service, a database handle, and the Dancer
+# configuration hash.
 
-sub configure_class {
+sub initialize_class {
     
     my ($self, $class) = @_;
     
-    # If we have already configured this class, return.
+    no strict 'refs';
     
-    return if $self->{configured}{$class};
+    # If we have already initialized this class, there is nothing else we need
+    # to do.
     
-    # Record that we have configured this class.
-    
-    $self->{configured}{$class} = 1;
+    return if ${"${class}::_INITIALIZED"};
+    ${"${class}::_INITIALIZED"} = 1;
     
     # If this class has an immediate parent which is a subclass of
-    # Web::DataService::Request, record that so that we can search for inherited
-    # output sections.
-    
-    no strict 'refs';
+    # Web::DataService::Request, initialize it first (unless, of course, it
+    # has already been initialized).  Also record the relationship so that we
+    # can search for inherited output sections.
     
     foreach my $super ( @{"${class}::ISA"} )
     {
 	if ( $super->isa('Web::DataService::Request') )
 	{
 	    $self->{super_class}{$class} = $super;
-	    $self->configure_class($super) unless $super eq 'Web::DataService::Request';;
+	    $self->initialize_class($super) unless $super eq 'Web::DataService::Request';;
 	    last;
 	}
     }
     
-    # If the class has a configuration method, call it.
+    # If the class has an initialization method, call it.
     
     if ( $class->can('initialize') )
     {
@@ -994,6 +1023,7 @@ sub execute_path {
 	my $path_attrs = $self->{path_attrs}{$path};
 	
 	unless ( defined $format && ref $self->{format}{$format} &&
+		 ! $self->{format}{$format}{disabled} &&
 		 $path_attrs->{allow_format}{$format} )
 	{
 	    return $self->error_result($path, $format, "415")
@@ -1010,9 +1040,21 @@ sub execute_path {
 	croak "cannot execute path '$path': invalid class '$class' and method '$method'"
 	    unless $class->isa('Web::DataService::Request') && $class->can($method);
 	
-	# Configure the class if we are in 'one request' mode.
+	# If we are in 'one request' mode, initialize the class plus all of
+	# the classes it requires.
 	
-	$self->configure_class($class) if $self->{ONE_REQUEST};
+	if ( $self->{ONE_REQUEST} )
+	{
+	    if ( ref $path_attrs->{also_initialize} eq 'ARRAY' )
+	    {
+		foreach my $c ( @{$path_attrs->{also_initialize}} )
+		{
+		    $self->initialize_class($c);
+		}
+	    }
+	    
+	    $self->initialize_class($class);
+	}
 	
 	# Create a new object to represent this request, and bless it into the
 	# correct class.  Add a database handle if the 'uses_dbh' attribute was
@@ -1041,6 +1083,11 @@ sub execute_path {
 	    if ( $result->errors )
 	    {
 		return $self->error_result($path, $format, $result);
+	    }
+	    
+	    elsif ( $result->warnings )
+	    {
+		$request->add_warning($result->warnings);
 	    }
 	    
 	    $request->{valid} = $result;
@@ -1078,15 +1125,17 @@ sub execute_path {
 	    defined $request->{params}{$path_attrs->{linebreak_param}} &&
 		$request->{params}{$path_attrs->{linebreak_param}} eq 'cr' ? 1 : 0;
 	
-	# Once we have processed the parameters, we can configure the output.
+	# Set the HTTP response headers appropriately for this request.
+	
+	$self->set_response_headers($path, $format);
+	
+	# Now that the parameters have been processed, we can configure the
+	# output.  This tells us what information we have been requested
+	# to display, and how to query for it.
 	
 	$DB::single = 1;
 	
 	$self->configure_output($request);
-	
-	# Set the HTTP response headers appropriately for this request.
-	
-	$self->set_response_headers($path, $format);
 	
 	# Now execute the query operation.  This is the central step of this
 	# entire routine; everything before and after is in support of this
@@ -1094,9 +1143,10 @@ sub execute_path {
 	
 	$request->$method();
 	
-	# The next steps depend upon how the query operation chooses to return
-	# its data.  It must set at most one of the following fields in the
-	# request object, as described:
+	# Then we use the output configuration and the result of the query
+	# operation to generate the actual output.  How we do this depends
+	# upon how the query operation chooses to return its data.  It must
+	# set one of the following fields in the request object, as described:
 	# 
 	# main_data		A scalar, containing data which is to be 
 	#			returned as-is without further processing.
@@ -1111,6 +1161,10 @@ sub execute_path {
 	# main_sth		A DBI statement handle, from which all 
 	#			records that can be read should be returned
 	#			according to the output format.
+	# 
+	# It is okay for main_result and main_sth to both be set, in which
+	# case the records in the former will be sent first and then the
+	# latter will be read.
 	
 	if ( ref $request->{main_record} )
 	{
@@ -1119,7 +1173,10 @@ sub execute_path {
 	
 	elsif ( ref $request->{main_sth} or ref $request->{main_result} )
 	{
-	    return $self->generate_compound_result($request);
+	    my $threshold = $self->{path_attrs}{$path}{streaming_threshold} || $self->{streaming_threshold}
+		if $self->{streaming_available} and not $request->{do_not_stream};
+	    
+	    return $self->generate_compound_result($request, $threshold);
 	}
 	
 	elsif ( ref $request->{main_data} )
@@ -1163,6 +1220,8 @@ sub document_path {
     
     my ($path, $format) = @_;
     
+    my $path_attrs = $self->{path_attrs}{$path};
+    
     $DB::single = 1;
     
     # We start by determining the filename for the documentation template.  If
@@ -1170,7 +1229,7 @@ sub document_path {
     # appended.  If that does not exist, try appending '/index.tt'.
     
     my $viewdir = Dancer::config->{views};
-    my $doc_file = $self->{path_attrs}{$path}{doc_file};
+    my $doc_file = $path_attrs->{doc_file};
     
     unless ( $doc_file )
     {
@@ -1185,15 +1244,15 @@ sub document_path {
 	}
     }
     
-    unless ( -r "$viewdir/doc/$doc_file" )
+    unless ( $doc_file && -r "$viewdir/doc/$doc_file" )
     {
-	$doc_file = $self->{path_attrs}{$path}{doc_error_file} || $self->{doc_error_file} || 'doc_error.tt';
+	$doc_file = $path_attrs->{doc_error_file} || $self->{doc_error_file} || 'doc_error.tt';
     }
     
     # Then assemble the variables used to fill in the template:
     
-    my $vars = { doc_title => $self->{path_attrs}{$path}{doc_title},
-		 ds_version => $self->{path_attrs}{$path}{version} || $self->{version},
+    my $vars = { doc_title => $path_attrs->{doc_title},
+		 ds_version => $path_attrs->{version} || $self->{version},
 	         param_doc => '',
 	         response_doc => '' };
     
@@ -1201,7 +1260,8 @@ sub document_path {
     # is found, then state that no parameters are accepted.
     
     my $validator = $self->{validator};
-    my $ruleset = $self->{path_attrs}{$path}{ruleset};
+    my $ruleset = defined $path_attrs->{ruleset} && $path_attrs->{ruleset} ne '' ? 
+	$path_attrs->{ruleset} : $path;
     
     if ( $validator->ruleset_defined($ruleset) )
     {
@@ -1210,16 +1270,37 @@ sub document_path {
     
     else
     {
-	$vars->{param_doc} ||= "I<This path does not take any parameters>";
+	$vars->{param_doc} = "I<This path does not take any parameters>";
     }
     
-    # Add the documentation for the response.
+    # If this path is associated with an implementing class, and if at least
+    # one section was specified for documentation, then document the
+    # response. If no 'allow_vocab' attribute was given for this path, then
+    # all vocabularies are allowed.
     
-    $vars->{response_doc} = $self->document_response($path);
+    my $class = $self->{path_attrs}{$path}{class};
+    my $doc_output = $self->{path_attrs}{$path}{doc_output};
+    my $allow_vocab = $self->{path_attrs}{$path}{allow_vocab} || $self->{vocab};
+    
+    if ( $class && ref $doc_output eq 'ARRAY' && @$doc_output )
+    {
+	# Initialize the class if we are in 'one request' mode.
+	
+	$self->initialize_class($class) if $self->{ONE_REQUEST};
+	
+	# Generate response documentation
+	
+	$vars->{response_doc} = $self->document_response($class, $allow_vocab, $doc_output);
+    }
+    
+    else
+    {
+	$vars->{response_doc} = "I<This path does not implement any response>";
+    }
     
     # Now select the appropriate layout and execute the template.
     
-    my $doc_layout = $self->{path_attrs}{$path}{doc_layout} || $self->{doc_layout} || 'doc_main.tt';
+    my $doc_layout = $path_attrs->{doc_layout} || $self->{doc_layout} || 'doc_main.tt';
     
     Dancer::set layout => $doc_layout;
     
@@ -1231,7 +1312,7 @@ sub document_path {
     
     # If POD format was requested, return the documentation as is.
     
-    if ( $format eq 'pod' )
+    if ( defined $format && $format eq 'pod' )
     {
 	Dancer::content_type 'text/plain';
 	return $doc_string;
@@ -1241,7 +1322,7 @@ sub document_path {
     
     else
     {
-	my $parser = DataService::PodParser->new();
+	my $parser = Web::DataService::PodParser->new();
 	
 	$parser->parse_pod($doc_string);
 	
@@ -1328,8 +1409,8 @@ sub error_result {
     
     if ( $format eq 'json' )
     {
-	my $error = qq<"error": [\n> . join(qq<",\n">, @errors) . qq<"\n]\n>;
-	$error .= qq<, "warn": [\n"> . join(qq<",\n">, @warnings) . qq<"\n]\n> if @warnings;
+	my $error = json_list_value("errors", @errors);
+	$error .= ",\n" . json_list_value("warnings", @warnings) if @warnings;
 	
 	Dancer::content_type('application/json');
 	Dancer::status($code);
@@ -1342,13 +1423,18 @@ sub error_result {
     else
     {
 	my $text = $CODE_STRING{$code};
-	my $error = '';
+	my $error = "<ul>\n";
 	my $warning = '';
 	
-	$error .= "<h3>$_</h3>\n" foreach @errors;
+	$error .= "<li>$_</li>\n" foreach @errors;
+	$error .= "</ul>\n";
 	
-	$warning .= "<h2>Warnings:</h2>\n" if @warnings;
-	$warning .= "<h3>$_</h3>\n" foreach @warnings;
+	if ( @warnings )
+	{
+	    $warning .= "<h2>Warnings:</h2>\n<ul>\n";
+	    $warning .= "<li>$_</li>\n" foreach @warnings;
+	    $warning .= "</ul>\n";
+	}
 	
 	my $body = <<END_BODY;
 <html><head><title>$code $text</title></head>

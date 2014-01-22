@@ -11,6 +11,8 @@ use strict;
 
 use parent 'Web::DataService::Request';
 
+use Web::DataService qw( :validators );
+
 use CommonData qw(generateReference generateAttribution);
 use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
 use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
@@ -20,18 +22,20 @@ use Carp qw(carp croak);
 use POSIX qw(floor ceil);
 
 
-our (%SELECT, %TABLES, %PROC, %OUTPUT);
 our ($MAX_BIN_LEVEL) = 0;
 
 
-# configure ( )
+# initialize ( )
 # 
-# This routine is called by the DataService module as a class method, and is passed
-# the configuration data as a hash ref.
+# This routine is called once by Web::DataService in order to initialize this
+# class.
 
-sub configure {
+sub initialize {
     
     my ($class, $ds, $config, $dbh) = @_;
+    
+    # First read the configuration information that describes how the
+    # collections are organized into summary clusters (bins).
     
     if ( ref $config->{bins} eq 'ARRAY' )
     {
@@ -45,15 +49,77 @@ sub configure {
 	    $bin_string .= "bin_id_$bin_level";
 	}
 	
-	$SELECT{get_bin} = $bin_string if $bin_string ne '';
-	$SELECT{list_bin} = $bin_string if $bin_string ne '';
 	$MAX_BIN_LEVEL = $bin_level;
     }
+    
+    # Then define rulesets to interpret the parmeters used with operations
+    # defined by this class.
+    
+    $ds->define_ruleset('1.1:coll_specifier' =>
+	{ param => 'id', valid => POS_VALUE, alias => 'coll_id' },
+	    "The identifier of the collection you wish to retrieve");
+    
+    $ds->define_ruleset('1.1:coll_selector' =>
+	"You can use the following parameter if you wish to retrieve information about",
+	"a known list of collections, or to filter a known list against other criteria such as location or time.",
+	"Only the records which match the other parameters that you specify will be returned.",
+	{ param => 'id', valid => INT_VALUE, list => ',', alias => 'coll_id' },
+	    "A comma-separated list of collection identifiers.");
+    
+    $ds->define_ruleset('1.1:coll_display' =>
+	"The following parameter indicates which information should be returned about each resulting collection:",
+	{ param => 'show', list => q{,},
+	  valid => ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem','crmod') },
+	    "The value of this parameter should be a comma-separated list of section names drawn",
+	    "From the list given below.  Section C<basic> is always included.",
+	{ ignore => 'level' });
+    
+    $ds->define_ruleset('1.1/colls/single' => 
+    	{ require => '1.1:coll_specifier', 
+	  error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" },
+    	{ allow => '1.1:coll_display' },
+    	{ allow => '1.1:common_params' },
+	    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+
+    $ds->define_ruleset('1.1/colls/list' => 
+    	{ allow => '1.1:coll_selector' },
+    	{ allow => '1.1:main_selector' },
+    	{ allow => '1.1:coll_display' },
+    	{ allow => '1.1:common_params' },
+	    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+    
+    $ds->define_ruleset('1.1/colls/refs' =>
+    	{ allow => '1.1:coll_selector' },
+    	{ allow => '1.1:main_selector' },
+    	{ allow => '1.1:refs_display' },
+    	{ allow => '1.1:common_params' },
+	    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+    
+    $ds->define_ruleset('1.1:summary_display' => 
+	{ param => 'level', valid => POS_VALUE, default => 1 },
+	{ param => 'show', valid => ENUM_VALUE('ext','time'), list => ',' });
+    
+    $ds->define_ruleset('1.1/colls/summary' => 
+    	{ allow => '1.1:coll_selector' },
+    	{ allow => '1.1:main_selector' },
+    	{ allow => '1.1:summary_display' },
+    	{ allow => '1.1:common_params' },
+	    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+    
+    $ds->define_ruleset('1.1:toprank_selector' =>
+	{ param => 'show', valid => ENUM_VALUE('formation', 'ref', 'author'), list => ',' });
+    
+    $ds->define_ruleset('1.1:colls/toprank' => 
+    	{ require => '1.1:main_selector' },
+    	{ require => '1.1:toprank_selector' },
+    	{ allow => '1.1:common_params' });
+    
+    # Then define output sections to express the resulting data.
     
     $ds->define_output( 'basic' =>
       { select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
 		   'c.lat', 'c.lng', 'cc.latlng_basis as llb', 'cc.latlng_precision as llp',
-		   'c.n_occs', 'ei.interval_name as early_int', 'li.interval_name as late_int',
+		   'c.n_occs', 'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		   'c.reference_no', 'group_concat(sr.reference_no) as sec_ref_nos'], 
 	tables => ['ei', 'li', 'sr'] },
       { output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
@@ -67,7 +133,7 @@ sub configure {
 	  "The longitude at which the collection is located (in degrees)",
       { output => 'lat', dwc_name => 'decimalLatitude', com_name => 'lat' },
 	  "The latitude at which the collection is located (in degrees)",
-      { set => 'llp', code => \&generateBasisCode },
+      { set => 'llp', from_record => 1, code => \&generateBasisCode },
       { output => 'llp', com_name => 'prc' },
 	  "A two-letter code indicating the basis and precision of the geographic coordinates.",
       { output => 'collection_name', dwc_name => 'collectionCode', com_name => 'nam' },
@@ -86,7 +152,7 @@ sub configure {
       { output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	  "The interval that ends the specific geologic time range associated with this collection",
       { set => 'reference_no', append => 1, from => 'sec_ref_nos', split => ',' },
-      { output => 'reference_no', com_name => 'rid' },
+      { output => 'reference_no', com_name => 'rid', text_join => ', ' },
 	  "The identifier(s) of the references from which this data was entered");
     
     $ds->define_output( 'summary' =>
@@ -123,7 +189,7 @@ sub configure {
       { select => ['r.author1init as a_ai1', 'r.author1last as a_al1', 'r.author2init as a_ai2', 
 		   'r.author2last as a_al2', 'r.otherauthors as a_oa', 'r.pubyr as a_pubyr'],
         tables => ['r'] },
-      { set => 'attribution', code => \&generateAttribution },
+      { set => 'attribution', from_record => 1, code => \&generateAttribution },
       { set => 'pubyr', from => 'a_pubyr', });
     
     $ds->define_output( 'ref' =>
@@ -134,10 +200,10 @@ sub configure {
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
-      { set => 'ref_list', code => \&generateReference },
-      { set => 'ref_list', append => 1, from_each => 'sec_refs', code => \&generateReference },
-      { set => 'ref_list', join => "\n\n", if_format => 'txt,tsv,csv,xml' },
-      { output => 'ref_list', pbdb_name => 'references', dwc_name => 'associatedReferences', com_name => 'ref' },
+      { set => 'ref_list', from_record => 1, code => \&generateReference },
+      #{ set => 'ref_list', append => 1, from_each => 'sec_refs', code => \&generateReference },
+      #{ set => 'ref_list', join => "\n\n", if_format => 'txt,tsv,csv,xml' },
+      { output => 'ref_list', pbdb_name => 'primary_reference', dwc_name => 'associatedReferences', com_name => 'ref' },
 	  "The reference(s) associated with this collection (as formatted text)");
     
     $ds->define_output( 'loc' =>
@@ -323,13 +389,13 @@ sub get {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->generate_query_fields('c');
+    my $fields = join(', ', $self->select_list({ mt => 'c' }));
     
     $self->adjustCoordinates(\$fields);
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $self->{select_tables});
+    my ($join_list) = $self->generateJoinList('c', $self->tables_hash);
     
     # Generate the main query.
     
@@ -341,7 +407,7 @@ sub get {
         WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
     
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
+    print $self->{main_sql} . "\n\n" if $self->debug;
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
@@ -351,18 +417,18 @@ sub get {
     
     # If we were directed to show references, grab any secondary references.
     
-    if ( $self->{show}{ref} )
-    {
-	my $extra_fields = $SELECT{ref};
+    # if ( $self->{show}{ref} )
+    # {
+    # 	my $extra_fields = $request->select_list('ref');
 	
-        $self->{aux_sql}[0] = "
-        SELECT sr.reference_no, $extra_fields
-        FROM secondary_refs as sr JOIN refs as r using (reference_no)
-        WHERE sr.collection_no = $id
-	ORDER BY sr.reference_no";
+    #     $self->{aux_sql}[0] = "
+    #     SELECT sr.reference_no, $extra_fields
+    #     FROM secondary_refs as sr JOIN refs as r using (reference_no)
+    #     WHERE sr.collection_no = $id
+    # 	ORDER BY sr.reference_no";
         
-        $self->{main_record}{sec_refs} = $dbh->selectall_arrayref($self->{aux_sql}[0], { Slice => {} });
-    }
+    #     $self->{main_record}{sec_refs} = $dbh->selectall_arrayref($self->{aux_sql}[0], { Slice => {} });
+    # }
     
     # If we were directed to show associated taxa, grab them too.
     
@@ -403,25 +469,25 @@ sub summary {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generateMainFilters('summary', 's', $self->{select_tables});
-    push @filters, $self->generateCollFilters($self->{select_tables});
+    my @filters = $self->generateMainFilters('summary', 's', $self->tables_hash);
+    push @filters, $self->generateCollFilters($self->tables_hash);
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $self->generateLimitClause();
+    my $limit = $self->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    my $calc = $self->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->generate_query_fields('s');
+    my $fields = $self->select_string({ mt => 's' });
     
     $self->adjustCoordinates(\$fields);
     
-    my $summary_joins .= $self->generateJoinList('s', $self->{select_tables});
+    my $summary_joins .= $self->generateJoinList('s', $self->tables_hash);
     
     $summary_joins = "RIGHT JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n" . $summary_joins
 	if $self->{select_tables}{c} or $self->{select_tables}{o};
@@ -450,7 +516,7 @@ sub summary {
 		GROUP BY s.bin_id
 		ORDER BY s.bin_id $limit";
     
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
+    print $self->{main_sql} . "\n\n" if $self->debug;
     
     # Then prepare and execute the query..
     
@@ -459,10 +525,7 @@ sub summary {
     
     # If we were asked to get the count, then do so
     
-    if ( $calc )
-    {
-	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
-    }
+    $self->sql_count_rows;
     
     return 1;
 }
@@ -486,8 +549,8 @@ sub list {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generateMainFilters('list', 'c', $self->{select_tables});
-    push @filters, $self->generateCollFilters($self->{select_tables});
+    my @filters = $self->generateMainFilters('list', 'c', $self->tables_hash);
+    push @filters, $self->generateCollFilters($self->tables_hash);
     
     push @filters, "c.access_level = 0";
     
@@ -495,16 +558,16 @@ sub list {
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $self->generateLimitClause();
+    my $limit = $self->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    my $calc = $self->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->generate_query_fields('c');
+    my $fields = $self->select_string({ mt => 'c' });
     
     $self->adjustCoordinates(\$fields);
     
@@ -513,7 +576,7 @@ sub list {
 
     if ( defined $arg && $arg eq 'toprank' )
     {
-	my $base_joins = $self->generateJoinList('c', $self->{select_tables});
+	my $base_joins = $self->generateJoinList('c', $self->tables_hash);
 	
 	my $group_field = $self->{show}{formation} ? 'formation' :
 			  $self->{show}{author}    ? 'main_author' :
@@ -534,7 +597,7 @@ sub list {
     
     else
     {
-	my $base_joins = $self->generateJoinList('c', $self->{select_tables});
+	my $base_joins = $self->generateJoinList('c', $self->tables_hash);
 	
 	$self->{main_sql} = "
 	SELECT $calc $fields
@@ -547,7 +610,7 @@ sub list {
 	$limit";
     }
     
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
+    print $self->{main_sql} . "\n\n" if $self->debug;
     
     # Then prepare and execute the main query and the secondary query.
     
@@ -556,48 +619,7 @@ sub list {
     
     # If we were asked to get the count, then do so
     
-    if ( $calc )
-    {
-	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
-    }
-    
-    # If we were directed to show references, grab any secondary references.
-    
-    # if ( $self->{show}{ref} or $self->{show}{sref} )
-    # {
-    # 	my (@fields) = 'sref' if $self->{show}{sref};
-    # 	@fields = 'ref' if $self->{show}{ref};
-	
-    # 	($extra_fields) = $self->generateQueryFields(\@fields);
-	
-    # 	$self->{aux_sql}[0] = "
-    # 	SELECT s.reference_no $extra_fields
-    # 	FROM secondary_refs as s JOIN refs as r using (reference_no)
-    # 	WHERE s.collection_no = ?";
-	
-    # 	$self->{aux_sth}[0] = $dbh->prepare($self->{aux_sql}[0]);
-    # 	$self->{aux_sth}[0]->execute();
-    # }
-    
-    # If we were directed to show associated taxa, construct an SQL statement
-    # that will be used to grab that list.
-    
-    # if ( $self->{show}{taxa} )
-    # {
-    # 	my $auth_table = $self->{taxonomy}{auth_table};
-    # 	my $tree_table = $self->{taxonomy}{tree_table};
-	
-    # 	$self->{aux_sql}[1] = "
-    # 	SELECT DISTINCT t.spelling_no as taxon_no, t.name as taxon_name, rm.rank as taxon_rank, 
-    # 		a.taxon_no as ident_no, a.taxon_name as ident_name, a.taxon_rank as ident_rank
-    # 	FROM occ_matrix as o JOIN $auth_table as a USING (taxon_no)
-    # 		LEFT JOIN $tree_table as t on t.orig_no = o.orig_no
-    # 		LEFT JOIN rank_map as rm on rm.rank_no = t.rank
-    # 	WHERE o.collection_no = ? ORDER BY t.lft ASC";
-		
-    # 	$self->{aux_sth}[1] = $dbh->prepare($self->{aux_sql}[1]);
-    # 	$self->{aux_sth}[1]->execute();
-    # }
+    $self->sql_count_rows;
     
     return 1;
 }
@@ -655,7 +677,7 @@ sub refs {
 		WHERE $filter_string) as cr using (reference_no)
 	$limit";
     
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
+    print $self->{main_sql} . "\n\n" if $self->debug;
     
     # Then prepare and execute the main query and the secondary query.
     

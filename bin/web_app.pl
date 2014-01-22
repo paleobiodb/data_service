@@ -9,8 +9,6 @@
 
 use strict;
 
-package PBDB_Data;
-
 use Dancer;
 
 use Template;
@@ -64,7 +62,7 @@ $ds->define_vocab(
     { name => 'com' },
         "3-character abbreviated (\"compact\") field names.",
         "This is the default for JSON responses.",
-    { name => 'dwc' },
+    { name => 'dwc', disabled => 1 },
         "Darwin Core element names.  This is the default for XML responses.",
         "Note that many fields are not represented in this vocabulary,",
         "because of limitations of the Darwin Core element set.");
@@ -112,16 +110,16 @@ $ds->define_format(
 # for each of them.
 
 $ds->define_ruleset('1.1:common_params' => 
-       "The following parameter is used with most requests:",
-    { optional => 'show', valid => ANY_VALUE, warn => "the parameter '{param}' is not valid for this URL path" },
-       "Return extra result fields in addition to the basic fields.  The value should be a comma-separated",
-       "list of values corresponding to the sections listed in the response documentation for the URL path",
-       "that you are using.  If you include, e.g. 'app', then all of the fields whose section is C<app>",
-       "will be included in the result set.",
-       "You can use this parameter to tailor the result to your particular needs.",
-       "If you do not include it then you will usually get back only the fields",
-       "labelled C<basic>.  For more information, see the documentation pages",
-       "for the individual URL paths.",
+    #    "The following parameter is used with most requests:",
+    # { optional => 'show', valid => ANY_VALUE, warn => "the parameter '{param}' is not valid for this URL path" },
+    #    "Return extra result fields in addition to the basic fields.  The value should be a comma-separated",
+    #    "list of values corresponding to the sections listed in the response documentation for the URL path",
+    #    "that you are using.  If you include, e.g. 'app', then all of the fields whose section is C<app>",
+    #    "will be included in the result set.",
+    #    "You can use this parameter to tailor the result to your particular needs.",
+    #    "If you do not include it then you will usually get back only the fields",
+    #    "labelled C<basic>.  For more information, see the documentation pages",
+    #    "for the individual URL paths.",
     "!!The following parameters can be used with all requests:",
     { optional => 'limit', valid => [POS_ZERO_VALUE, ENUM_VALUE('all')], 
       error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
@@ -213,69 +211,12 @@ $ds->define_ruleset('1.1:main_selector' =>
     "Override the default buffer period for the end of the time range when resolving temporal locality.",
     "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).");
 
-$ds->define_ruleset('1.1:coll_specifier' =>
-    [param => 'id', POS_VALUE, { alias => 'coll_id' }],
-    "The identifier of the collection you wish to retrieve");
-
-$ds->define_ruleset('1.1:coll_selector' =>
-    "You can use the following parameter if you wish to retrieve information about",
-    "a known list of collections, or to filter a known list against other criteria such as location or time.",
-    "Only the records which match the other parameters that you specify will be returned.",
-    [param => 'id', INT_VALUE, { list => ',', alias => 'coll_id' }],
-    "A comma-separated list of collection identifiers.");
-
-$ds->define_ruleset('1.1:coll_display' =>
-    "The following parameter indicates which information should be returned about each resulting collection:",
-    [param => 'show', ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem','crmod'), { list => ',' }],
-    "The value of this parameter should be a comma-separated list of section names drawn",
-    "From the list given below.  It defaults to C<basic>.",
-    [ignore => 'level']);
-
-$ds->define_ruleset('1.1/colls/single' => 
-    [require => '1.1:coll_specifier', { error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" }],
-    [allow => '1.1:coll_display'],
-    [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
-
-$ds->define_ruleset('1.1/colls/list' => 
-    [allow => '1.1:coll_selector'],
-    [allow => '1.1:main_selector'],
-    [allow => '1.1:coll_display'],
-    [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
-
 $ds->define_ruleset('1.1:refs_display' =>
     "The following parameter indicates which information should be returned about each resulting collection:",
     [param => 'show', ENUM_VALUE('formatted','comments','crmod'), { list => ',' }],
     "The value of this parameter should be a comma-separated list of section names drawn",
     "From the list given below.  It defaults to C<refbasic>.",
     [ignore => 'level']);
-
-$ds->define_ruleset('1.1/colls/refs' =>
-    [allow => '1.1:coll_selector'],
-    [allow => '1.1:main_selector'],
-    [allow => '1.1:refs_display'],
-    [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
-
-$ds->define_ruleset('1.1:summary_display' => 
-    [param => 'level', POS_VALUE, { default => 1 }],
-    [param => 'show', ENUM_VALUE('ext','time'), { list => ',' }]);
-
-$ds->define_ruleset('1.1/colls/summary' => 
-    [allow => '1.1:coll_selector'],
-    [allow => '1.1:main_selector'],
-    [allow => '1.1:summary_display'],
-    [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
-
-$ds->define_ruleset('1.1:toprank_selector' =>
-    [param => 'show', ENUM_VALUE('formation', 'ref', 'author'), { list => ',' }]);
-
-$ds->define_ruleset('1.1:colls/toprank' => 
-    [require => '1.1:main_selector'],
-    [require => '1.1:toprank_selector'],
-    [allow => '1.1:common_params']);
 
 $ds->define_ruleset('1.1:occ_specifier' =>
     [param => 'id', POS_VALUE, { alias => 'occ_id' }],
@@ -427,13 +368,6 @@ $ds->define_ruleset('1.1/intervals/single' =>
     [allow => '1.1:interval_specifier'],
     [allow => '1.1:common_params']);
 
-$ds->define_ruleset('1.1/config' =>
-    [param => 'show', ENUM_VALUE('geosum', 'ranks', 'all'), { list => ',', default => 'all' }],
-    "The value of this parameter should be a comma-separated list of section names drawn",
-    "From the list given below, or 'all'.  It defaults to 'all'.", 
-    [allow => '1.1:common_params'],
-    "!>You can use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
-
 $ds->define_ruleset('1.1:person_selector' => 
     [param => 'name', ANY_VALUE]);
 
@@ -474,6 +408,7 @@ $ds->define_path({ path => '1.1',
 		   uses_dbh => 1,
 		   default_limit => 500,
 		   allow_format => 'json,csv,tsv,txt',
+		   allow_vocab => 'pbdb,com',
 		   base_output => 'basic' });
 
 # Configuration. This path is used by clients who need to configure themselves
@@ -534,7 +469,7 @@ $ds->define_path({ path => '1.1/taxa/icon',
 
 $ds->define_path({ path => '1.1/colls',
 		   class => 'CollectionData',
-		   #allow_format => '+xml',
+		   allow_format => '+xml',
 		   base_output => 'basic' });
 
 $ds->define_path({ path => '1.1/colls/single',
@@ -553,6 +488,7 @@ $ds->define_path({ path => '1.1/colls/summary',
 $ds->define_path({ path => '1.1/colls/refs',
 		   method => 'refs',
 		   allow_format => '+ris,-xml',
+		   #also_initialize => 'ReferenceData',
 		   base_output => 'refbase',
 		   doc_output => 'refbase,formatted,comments' });
 
@@ -632,7 +568,7 @@ get qr{ ^ $PREFIX [\d.]* /css/(.*) }xs => sub {
 # Any other URL starting with /data/... or just /data should display the list of
 # available versions.
 
-get qr{ ^ $PREFIX ( / | / .* )? $ }xs => sub {
+get qr{ ^ $PREFIX ( / | $ ) }xs => sub {
     
     my ($path) = splat;
     
@@ -649,7 +585,7 @@ get qr{ ^ $PREFIX ( / | / .* )? $ }xs => sub {
 # explaining what went wrong and providing the proper URLs.
 
 get qr{ ^ $PREFIX ( \d+ \. \d+ / (?: [^/.]* / )* )
-	          ( index | \w+_doc ) \. ( html | pod ) $ }xs => sub {
+	          (?: ( index | \w+_doc ) \. ( html | pod ) )? $ }xs => sub {
 	    
     my ($path, $last, $suffix) = splat;
     

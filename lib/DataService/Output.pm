@@ -16,38 +16,121 @@ use Carp qw(croak);
 use Dancer::Plugin::StreamData;
 
 
-# define_output_section ( package, name, specification... )
-# 
-# Define an output section with the specified name for the specified class,
-# using the given specification records.
+our (%MAP_DEF) = (name => 'type',
+		  block => 'single',
+		  disabled => 'single');
 
-sub define_output_section {
+our ($BLOCK_REGEXP) = qr{ ^ [\w:/]+ $ }x;
+
+our ($DEFAULT_INSTANCE);
+
+# define_output_map ( package, specification... )
+# 
+# Define a map a map that specifies which output blocks will be used by the
+# specified class, associating with each one a value for the 'show' parameter.
+
+sub define_output_map {
+
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+    my $class = shift;
+    
+    # Make sure that we were given a valid class
+    
+    croak "define_output_map: the first argument must be the name of a subclass of Web::DataService::Request"
+	unless $class->isa("Web::DataService::Request");
+    
+    # Initialize the output map for the specified class.
+    
+    $self->{output_map}{$class} = {};
+    $self->{output_map_list}{$class} = [];
+    
+    # Then process the records one by one.  Make sure to throw am error if we
+    # find an invalid record.
+    
+    my $last_node;
+    
+    foreach my $item (@_)
+    {
+	# A scalar is interpreted as a documentation string.
+	
+	unless ( ref $item )
+	{
+	    $self->add_node_doc($last_node, $item);
+	    next;
+	}
+	
+	# Any item that is not a hashref or a scalar is an error.
+	
+	unless ( ref $item eq 'HASH' )
+	{
+	    croak "define_output_map: arguments must be hashrefs or scalars";
+	}
+	
+	# Check for invalid attributes.
+	
+	foreach my $k ( keys %$item )
+	{
+	    croak "define_output_map: unknown attribute '$k'"
+		unless defined $MAP_DEF{$k};
+	}
+	
+	# Check that we have a name and a block.
+	
+	my $name = $item->{name} // '';
+	my $block = $item->{block} // '';
+	
+	unless ( defined $name && defined $block )
+	{
+	    croak "define_output_map: you must include the attributes 'name' and 'block' in each hashref";
+	}
+	
+	unless ( $name =~ qr{ ^ [a-z_]+ $ }x )
+	{
+	    croak "define_output_map: invalid value '$name' for 'name'";
+	}
+	
+	unless ( $name =~ $BLOCK_REGEXP )
+	{
+	    croak "define_output_map: invalid value '$block' for 'block'";
+	}
+	
+	push @{$self->{output_map_list}{$class}}, $item unless $item->{disabled};
+	$self->{output_map}{$class}{$name} = $item;
+    }
+}
+
+
+# define_block ( name, specification... )
+# 
+# Define an output block with the specified name, using the given
+# specification records.
+
+sub define_block {
     
     my $self = shift;
-    my $class = shift;
     my $name = shift;
     
     # Check to make sure that we were given a valid name.
     
     if ( ref $name )
     {
-	croak "the first argument to 'define_output' must be an output section name";
+	croak "define_block: the first argument must be an output block name";
     }
     
-    elsif ( $name !~ /^\w+$/ )
+    elsif ( $name !~ $BLOCK_REGEXP )
     {
-	croak "invalid output section name '$name'";
+	croak "define_block: invalid block name '$name'";
     }
     
-    # Initialize the output list for the specified class and section name.
+    # Initialize the block list for the specified block.
     
-    $self->{output_list}{$class}{$name} = [];
+    $self->{block_list}{$name} = [];
     
     # Then process the records one by one.  Make sure to throw an error if we
     # find a record whose type is ambiguous or that is otherwise invalid.  Each
     # record gets put in a list that is stored under the section name.
     
-    my ($last_node);
+    my $last_node;
     
     foreach my $item (@_)
     {
@@ -75,60 +158,130 @@ sub define_output_section {
 	
 	$last_node = $item if $type eq 'output';
 	
-	# Add the record to the output list.
+	# Add the record to the appropriate list.
 	
-	push @{$self->{output_list}{$class}{$name}}, $item;
+	if ( $type eq 'include' )
+	{
+	    push @{$self->{include_list}{$name}}, $item;
+	}
+	
+	else
+	{
+	    push @{$self->{block_list}{$name}}, $item;
+	}
     }
 }
 
 
+our %OUTPUT_DEF = (output => 'type',
+		   set => 'type',
+		   select => 'type',
+		   filter => 'type',
+		   include => 'type',
+		   require => 'type',
+		   if_section => 'set',
+		   not_section => 'set',
+		   if_vocab => 'set',
+		   not_vocab => 'set',
+		   if_format => 'set',
+		   not_format => 'set',
+		   if_field => 'single',
+		   not_field => 'single',
+		   if_code => 'code',
+		   dedup => 'single',
+		   value => 'single',
+		   always => 'single',
+		   text_join => 'single',
+		   xml_join => 'single',
+		   rule => 'single',
+		   from => 'single',
+		   from_each => 'single',
+		   from_record => 'single',
+		   append => 'single',
+		   code => 'code',
+		   lookup => 'hash',
+		   split => 'regexp',
+		   join => 'single',
+		   tables => 'set',
+		   doc => 'single');
+
 our %OUTPUT_KEY = (output => 2, set => 2, select => 2, filter => 2, include => 2,
 		   dedup => 1, name => 1, value => 1, always => 1, rule => 1,
 		   if_section => 1, not_section => 1, if_format => 1, not_format => 1,
+		   if_field => 1, not_field => 1, if_code => 1, from_record => 1,
 		   from => 1, from_each => 1, append => 1, code => 1, lookup => 1,
-		   split => 1, join => 1, tables => 1, doc => 1);
+		   split => 1, join => 1, tables => 1, doc => 1, insert => 1);
 
-our %FIELD_KEY = (dedup => 1, name => 1, value => 1, always => 1, rule => 1, doc => 1);
+our %FIELD_KEY = (dedup => 1, value => 1, always => 1, rule => 1, if_field => 1, text_join => 1, xml_join => 1, doc => 1);
+
+our %PROC_KEY = (set => 1, append => 1, from => 1, from_each => 1, from_record => 1,
+		 code => 1, lookup => 1, split => 1, join => 1, subfield => 1);
 
 sub check_output_record {
     
     my ($self, $record) = @_;
     
-    my ($name, $type) = ('', '');
+    my $type = '';
     
     foreach my $k (keys %$record)
     {
-	if ( defined $OUTPUT_KEY{$k} )
-	{
-	    if ( $OUTPUT_KEY{$k} == 2 )
-	    {
-		croak "define_output: you cannot have both keys '$type' and '$k'"
-		    if $type;
-		
-		$type = $k;
-		$name = $record->{$k};
-	    }
-	}
-    }
-    
-    foreach my $k (keys %$record)
-    {
-	if ( defined $OUTPUT_KEY{$k} )
-	{
-	    # no problem
-	}
+	my $v = $record->{$k};
 	
-	elsif ( $k =~ qr{ ^ (\w+) _ (name|value) $ }x )
+	if ( $k =~ qr{ ^ (\w+) _ (name|value) $ }x )
 	{
-	    croak "define_output: unknown format or vocab '$1' in '$k' in '$type' record"
+	    croak "define_output: unknown format or vocab '$1' in '$k'"
 		unless defined $self->{vocab}{$1} || defined $self->{format}{$1};
 	}
 	
-	else
+	elsif ( ! defined $OUTPUT_DEF{$k} )
 	{
-	    croak "define_output: unrecognized attribute '$k' in '$type' record";
+	    croak "define_output: unrecognized attribute '$k'";
+	}
+	
+	elsif ( $OUTPUT_DEF{$k} eq 'type' )
+	{
+	    croak "define_output: you cannot have both attributes '$type' and '$k' in one record"
+		if $type;
+	    
+	    $type = $k;
+	}
+	
+	elsif ( $OUTPUT_DEF{$k} eq 'single' )
+	{
+	    croak "define_output: the value of '$k' must be a scalar" if ref $v;
+	}
+	
+	elsif ( $OUTPUT_DEF{$k} eq 'set' )
+	{
+	    croak "define_output: the value of '$k' must be an array ref or string"
+		if ref $v && reftype $v ne 'ARRAY';
+	    
+	    unless ( ref $v )
+	    {
+		$v = [ split(qr{\s*,\s*}, $v) ];
+	    }
+	}
+	
+	elsif ( $OUTPUT_DEF{$k} eq 'code' )
+	{
+	    croak "define_output: the value of '$k' must be a code ref"
+		unless ref $v && reftype $v eq 'CODE';
+	}
+	
+	elsif ( $OUTPUT_DEF{$k} eq 'hash' )
+	{
+	    croak "define_output: the value of '$k' must be a hash ref"
+		unless ref $v && reftype $v eq 'HASH';
+	}
+	
+	elsif ( $OUTPUT_DEF{$k} eq 'regexp' )
+	{
+	    croak "define_output: the value of '$k' must be a regexp or string"
+		if ref $v && reftype $v ne 'REGEXP';
 	}
     }
+    
+    # Now make sure that each record has a 'type' attribute.
     
     croak "each record passed to define_output must include one attribute from the \
 following list: 'include', 'output', 'set', 'select', 'filter'"
@@ -138,34 +291,36 @@ following list: 'include', 'output', 'set', 'select', 'filter'"
 }
 
 
-# get_output_list ( section )
-# 
-# Return the output list for the specified section.
+# # get_output_list ( list, section )
+# # 
+# # Return the output list for the specified section.
 
-sub get_output_list {
+# sub get_block {
 
-    my ($self, $class, $section) = @_;
+#     my ($self, $class, $list, $section) = @_;
     
-    die "get_output_list: no output section was specified" unless $section;
-    die "get_output_list: invalid class '$class'" unless $class->isa('Web::DataService::Request');
+#     die "get_output_list: invalid list '$list'" unless $list eq 'output_list' or $list eq 'include_list';
     
-    # If this class or any of its superclasses has defined this section,
-    # then we use that definition.  Otherwise, put out a warning and go on
-    # to the next section.
+#     die "get_output_list: no output section was specified" unless $section;
+#     die "get_output_list: invalid class '$class'" unless $class->isa('Web::DataService::Request');
     
-    my $loop_bound = 0;
+#     # If this class or any of its superclasses has defined this section,
+#     # then we use that definition.  Otherwise, put out a warning and go on
+#     # to the next section.
     
-    until ( ref $self->{output_list}{$class}{$section} )
-    {
-	$class = $self->{super_class}{$class} or return;
-	die "problem with class configuration" if ++$loop_bound > 10;
-    }
+#     my $loop_bound = 0;
     
-    return $self->{output_list}{$class}{$section};
-}
+#     until ( ref $self->{$list}{$class}{$section} )
+#     {
+# 	$class = $self->{super_class}{$class} or return;
+# 	die "problem with class configuration" if ++$loop_bound > 10;
+#     }
+    
+#     return $self->{$list}{$class}{$section};
+# }
 
 
-# configure_query_output ( request )
+# configure_output ( request )
 # 
 # Determine the list of selection, processing and output rules for the
 # specified query, based on the query's attributes.  These attributes include: 
@@ -190,12 +345,19 @@ sub configure_output {
     my $vocab = $request->{vocab};
     my $require_vocab = 1 if $vocab and not $self->{vocab}{$vocab}{use_field_names};
     
-    my @sections = @{$request->{base_output}} if ref $request->{base_output} eq 'ARRAY';
-    push @sections, $request->{base_output} unless ref $request->{base_output};
-    push @sections, @{$request->{extra_output}} if ref $request->{extra_output} eq 'ARRAY';
-    push @sections, $request->{extra_output} unless ref $request->{extra_output};
+    # Use the appropriate output map to determine which output blocks we will
+    # be using to express the result of this request.
     
-    my %section = map { $_ => 1 } @sections;
+    # Start with the base block list defined for the request path.
+    
+    my @blocks = $request->base_block_list;
+    push @blocks, $request->extra_block_list;
+    
+    unless ( @blocks )
+    {
+	$request->add_warning("no output blocks were specified for this request");
+	return;
+    }
     
     $request->{select_list} = [];
     $request->{select_hash} = {};
@@ -203,47 +365,98 @@ sub configure_output {
     $request->{filter_hash} = {};
     $request->{proc_list} = [];
     $request->{field_list} = [];
-    $request->{section_proc} = {};
-    $request->{section_set} = {};
+    $request->{block_set} = { map { $_ => 1 } @blocks };
     
-    # Then go through the list of output sections to be used for this query.
+    # First scan through the list of output blocks and check for include_list
+    # entries.  This allows us to know before the rest of the processing
+    # exactly which blocks are included.
     
- SECTION:
-    foreach my $section (@sections)
+    my %uniq_block;
+    
+ INCLUDE_BLOCK:
+    foreach my $block (@blocks)
     {
-	# Make sure that each section is only processed once, even if it is
-	# listed more than once.
+	# Make sure that each block is checked only once.
 	
-	next if $request->{section_set}{$section};
-	$request->{section_set}{$section} = 1;
+	next if $uniq_block{$block}; $uniq_block{$block} = 1;
 	
-	# Generate a warning if the specified section does not exist, but do
-	# not abort the request.
+	my $include_list = $self->{include_list}{$block};
+	next unless ref $include_list eq 'ARRAY';
 	
-	my $output_list = $self->get_output_list($class, $section);
-	
-	unless ( $output_list )
-	{
-	    warn "undefined output section '$section' for path '$request->{path}'\n";
-	    $request->add_warning("undefined output section '$section'");
-	    next SECTION;
-	}
-	
-	# Now go through the output list for this section and collect up
-	# all records that are selected for this query.
-	
-	my @list = @$output_list;
-	
-    RECORD:
-	while ( my $r = shift @list )
+      INCLUDE_RECORD:
+	foreach my $r ( @$include_list )
 	{
 	    # Evaluate dependency on the output section list
 	    
-	    next RECORD if $r->{if_section} 
-		and not check_set($r->{if_section}, \%section);
+	    next INCLUDE_RECORD if $r->{if_section} 
+		and not check_set($r->{if_section}, $request->{section_set});
 	    
-	    next RECORD if $r->{not_section}
-		and check_set($r->{not_section}, \%section);
+	    next INCLUDE_RECORD if $r->{not_section}
+		and check_set($r->{not_section}, $request->{section_set});
+	    
+	    # Evaluate dependency on the output format
+	    
+	    next INCLUDE_RECORD if $r->{if_format}
+		and not check_value($r->{if_format}, $format);
+	    
+	    next INCLUDE_RECORD if $r->{not_format}
+		and check_value($r->{not_format}, $format);
+	    
+	    # Evaluate dependency on the vocabulary
+	    
+	    next INCLUDE_RECORD if $r->{if_vocab}
+		and not check_value($r->{if_vocab}, $vocab);
+	    
+	    next INCLUDE_RECORD if $r->{not_vocab}
+		and check_value($r->{not_vocab}, $vocab);
+	    
+	    # Now add the specified block.
+	    
+	    my $new_block = $r->{include};
+	    
+	    push @blocks, $new_block;
+	    $request->{block_set}{$new_block} = 1;
+	}
+    }
+    
+    # Now run through all of the blocks we have identified and collect up the
+    # various kinds of records they contain.
+    
+    %uniq_block = ();
+    
+ BLOCK:
+    foreach my $block (@blocks)
+    {
+	# Make sure that each block is only processed once, even if it is
+	# listed more than once.
+	
+	next if $uniq_block{$block}; $uniq_block{$block} = 1;
+	
+	# Generate a warning if the specified block does not exist, but do
+	# not abort the request.
+	
+	my $block_list = $self->{block_list}{$block};
+	
+	unless ( ref $block_list eq 'ARRAY' )
+	{
+	    warn "undefined output block '$block' for path '$request->{path}'\n";
+	    $request->add_warning("undefined output block '$block'");
+	    next BLOCK;
+	}
+	
+	# Now go through the output list for this block and collect up
+	# all records that are selected for this query.
+	
+    RECORD:
+	foreach my $r ( @$block_list )
+	{
+	    # Evaluate dependency on the output block list
+	    
+	    next RECORD if $r->{if_block} 
+		and not check_set($r->{if_block}, $request->{block_set});
+	    
+	    next RECORD if $r->{not_block}
+		and check_set($r->{not_block}, $request->{block_set});
 	    
 	    # Evaluate dependency on the output format
 	    
@@ -260,22 +473,6 @@ sub configure_output {
 	    
 	    next RECORD if $r->{not_vocab}
 		and check_value($r->{not_vocab}, $vocab);
-	    
-	    # If the record type is 'include', immediately include the list
-	    # from the specified section.
-	    
-	    if ( defined $r->{include} )
-	    {
-		my $new_sect = $r->{include};
-		
-		next RECORD if $request->{section_set}{$new_sect};
-		$request->{section_set}{$new_sect} = 1;
-
-		my $new_list = $self->get_output_list($class, $new_sect);
-		
-		unshift @list, @$new_list if ref $new_list eq 'ARRAY';
-		next RECORD;
-	    }
 	    
 	    # If the record type is 'select', add to the selection list, the
 	    # selection hash, and the tables hash.
@@ -325,9 +522,17 @@ sub configure_output {
 	    {
 		my $proc = { set => $r->{set} };
 		
-		foreach my $key ( qw(code set add split subfield) )
+		foreach my $key ( keys %$r )
 		{
-		    $proc->{$key} = $r->{$key} if exists $r->{$key};
+		    if ( $PROC_KEY{$key} )
+		    {
+			$proc->{$key} = $r->{$key};
+		    }
+		    
+		    else
+		    {
+			warn "Warning: unknown key '$key' in proc record\n";
+		    }
 		}
 		
 		push @{$request->{proc_list}}, $proc;
@@ -368,61 +573,60 @@ sub configure_output {
 }    
 
 
-# configure_section ( request, section_name )
+# configure_block ( request, block_name )
 # 
-# Given a section name, determine the list of output fields and proc fields
+# Given a block name, determine the list of output fields and proc fields
 # (if any) that are defined for it.  This is used primarily to configure
-# sections referred to via 'rule' attributes.
+# blocks referred to via 'rule' attributes.
 # 
-# These lists are stored under the keys 'section_proc' and 'section_output' in
-# the request record.  If the appropriate keys are already present, do
-# nothing.
+# These lists are stored under the keys 'block_proc_list' and
+# 'block_field_list' in the request record.  If these have already been filled
+# in for this block, do nothing.
 
-sub configure_section {
+sub configure_block {
 
-    my ($self, $request, $section_name) = @_;
+    my ($self, $request, $block_name) = @_;
     
     # Return immediately if the relevant lists have already been computed
     # and cached (even if they are empty).
     
-    return 1 if exists $request->{section_output}{$section_name};
+    return 1 if exists $request->{block_field_list}{$block_name};
     
-    # Otherwise, we need to compute them.  Start by determining the relevant
-    # attributes of the request and looking up the master output list for this
-    # section.
+    # Otherwise, we need to compute both lists.  Start by determining the
+    # relevant attributes of the request and looking up the output list
+    # for this block.
     
-    my $class = ref $request;
     my $vocab = $request->{vocab};
     my $require_vocab = 1 if $vocab and not $self->{vocab}{$vocab}{use_field_names};
     
-    my $output_list = $self->get_output_list($class, $section_name);
+    my $block_list = $self->{block_list}{$block_name};
     
-    # If no list is available, indicate this in the routine record and return
+    # If no list is available, indicate this to the request object and return
     # false.  Whichever routine called us will be responsible for generating an
     # error or warning if appropriate.
     
-    unless ( ref $output_list eq 'ARRAY' )
+    unless ( ref $block_list eq 'ARRAY' )
     {
-	$request->{section_output} = undef;
-	$request->{section_proc} = undef;
+	$request->{block_field_list} = undef;
+	$request->{block_proc_list} = undef;
 	return;
     }
     
     # Go through each record in the list, throwing out the ones that don't
-    # apply and assorting the ones that do.
+    # apply and assigning the ones that do.
     
-    my (@output_list, @proc_list);
+    my (@field_list, @proc_list);
     
  RECORD:
-    foreach my $r ( @$output_list )
+    foreach my $r ( @$block_list )
     {
-	# Evaluate dependency on the output section list
+	# Evaluate dependency on the output block list
 	
-	next RECORD if $r->{if_section} 
-	    and not check_set($r->{if_section}, $request->{section_set});
+	next RECORD if $r->{if_block} 
+	    and not check_set($r->{if_block}, $request->{block_set});
 	
-	next RECORD if $r->{not_section}
-	    and check_set($r->{not_section}, $request->{section_set});
+	next RECORD if $r->{not_block}
+	    and check_set($r->{not_block}, $request->{block_set});
 	
 	# Evaluate dependency on the output format
 	
@@ -440,7 +644,7 @@ sub configure_section {
 	next RECORD if $r->{not_vocab}
 	    and check_value($r->{not_vocab}, $vocab);
 	
-	# If the record type is 'output', add a record to the output list.
+	# If the record type is 'output', add a record to the field list.
 	# The attributes 'name' (the output name) and 'field' (the raw
 	# field name) are both set to the indicated name by default.
 	    
@@ -468,7 +672,7 @@ sub configure_section {
 		}
 	    }
 	    
-	    push @output_list, $output;
+	    push @field_list, $output;
 	}
 	
 	# If the record type is 'set', add a record to the proc list.
@@ -490,8 +694,8 @@ sub configure_section {
     
     # Now cache the results.
     
-    $request->{section_output}{$section_name} = \@output_list;
-    $request->{section_proc}{$section_name} = \@proc_list;
+    $request->{block_field_list}{$block_name} = \@field_list;
+    $request->{block_proc_list}{$block_name} = \@proc_list;
     
     return 1;
 }
@@ -545,55 +749,81 @@ sub check_set {
     return;
 }
 
-# document_response ( path, section_list )
+# document_response ( path, block_list )
 # 
 # Generate documentation in POD format describing the available output fields.
-# The parameter $section_list can be either a reference to a list of section
-# names, or a comma-separated list in a scalar.
+# The parameter $block_list must be a reference to a list of block names,
+# while $allowed_vocab must be a reference to a hash whose keys are vocabulary
+# names.
 
 sub document_response {
     
-    my ($self, $path) = @_;
+    my ($self, $class, $allowed_vocab, $block_list) = @_;
     
-    # First determine the relevant attributes of the path to be documented.
+    # First determine the set of output blocks to document, or return
+    # immediately if there are none.
     
-    my $class = $self->{path_attrs}{$path}{class};
-    my @sections = @{$self->{path_attrs}{$path}{output_doc}};
+    return unless ref $block_list eq 'ARRAY' && @$block_list;
     
-    my $allow_vocab = $self->{path_attrs}{$path}{allow_vocab};
-    my @vocab_list = grep { $allow_vocab->{$_} } @{$self->{vocab_list}};
+    # Next determine the set of vocabularies to document, or return
+    # immediately if there are none.
     
-    # Now generate the documentation.
+    return "I<No output vocabularies were selected for this path>"
+	unless ref $allowed_vocab eq 'HASH' && keys %$allowed_vocab;
     
-    my $doc_string;
+    my @vocab_list = grep { $allowed_vocab->{$_} && 
+			    ref $self->{vocab}{$_} &&
+			    ! $self->{vocab}{$_}{disabled} } @{$self->{vocab_list}};
     
+    return "I<No output vocabularies were selected for this path>"
+	unless @vocab_list;
+    
+    # Now generate the header for the documentation, in POD format.  We
+    # include the special "=for pp_table_header" line to give PodParser.pm the
+    # information it needs to generate an HTML table.
+    
+    my $doc_string = '';
     my $field_count = scalar(@vocab_list);
     my $field_string = join ' / ', @vocab_list;
-    $field_string =~ s/rec/pbdb/;
     
     if ( $field_count > 1 )
     {
 	$doc_string .= "=over 4\n\n";
-	$doc_string .= "=for pp_table_header Field name*/$field_count | Section | Description\n\n";
+	$doc_string .= "=for pp_table_header Field name*/$field_count | Block | Description\n\n";
 	$doc_string .= "=item $field_string\n\n";
     }
     
     else
     {
 	$doc_string .= "=over 4\n\n";
-	$doc_string .= "=for pp_table_header Field name / Section / Description\n\n";
+	$doc_string .= "=for pp_table_header Field name / Block / Description\n\n";
     }
     
-    foreach my $section (@sections)
+    # Run through each block one at a time, documenting all of the fields in
+    # the corresponding field list.
+    
+    my %uniq_block;
+    
+    foreach my $b (@$block_list)
     {
-	next unless $section;
+	# Look up the block name in the output map for this class to get the
+	# global block name.
 	
-	my $output_list = $self->get_output_list($class, $section);
+	next unless ref $self->{output_map}{$class}{$b} eq 'HASH';
+	
+	my $block = $self->{output_map}{$class}{$b}{block};
+	
+	# Make sure to only process each block once, even if it is listed more
+	# than once.
+	
+	next if $uniq_block{$block}; $uniq_block{$block} = 1;
+	
+	my $output_list = $self->{block_list}{$block};
 	next unless ref $output_list eq 'ARRAY';
 	
 	foreach my $r (@$output_list)
 	{
-	    $doc_string .= $self->document_field($section, \@vocab_list, $r);
+	    $doc_string .= $self->document_field($block, \@vocab_list, $r);
 	}
     }
     
@@ -605,16 +835,26 @@ sub document_response {
 
 sub document_field {
     
-    my ($self, $section_name, $vocab_list, $r) = @_;
+    my ($self, $block_name, $vocab_list, $r) = @_;
     
-    my @names = map { $r->{$_} || '' } @$vocab_list;
+    my @names;
+    
+    foreach my $v ( @$vocab_list )
+    {
+	my $n = defined $r->{"${v}_name"}	    ? $r->{"${v}_name"}
+	      : $self->{vocab}{$v}{use_field_names} ? $r->{output}
+	      :					      '';
+	
+	push @names, $n
+    }
+    
     my $names = join ' / ', @names;
     
-    $section_name = $r->{show} if $r->{show};
+    $block_name = $r->{show} if $r->{show};
     
     my $descrip = $r->{doc} || "";
     
-    my $line = "\n=item $names ( $section_name )\n\n$descrip\n";
+    my $line = "\n=item $names ( $block_name )\n\n$descrip\n";
     
     return $line;
 }
@@ -637,7 +877,8 @@ sub process_record {
     
     foreach my $p ( @$steps )
     {
-	# Figure out which field (if any) we are affecting.
+	# Figure out which field (if any) we are affecting.  A value of '*'
+	# means to use the entire record (only relevant with 'code').
 	
 	my $set_field = $p->{set};
 	
@@ -651,17 +892,24 @@ sub process_record {
 	# value in the corresponding field (unless the 'always' attribute is
 	# set).
 	
-	unless ( $p->{always} )
+	if ( $source_field && ! $p->{always} )
 	{
-	    next unless defined $record->{$source_field} && $record->{source_field} ne '';
+	    next unless defined $record->{$source_field} && $record->{$source_field} ne '';
 	    next if ref $record->{$source_field} eq 'ARRAY' && ! @{$record->{$source_field}};
 	}
 	
-	if ( $p->{if_field} )
+	# Skip this processing step based on a conditional field value, if one
+	# is defined.
+	
+	if ( my $cond_field = $p->{if_field} )
 	{
-	    my $cond_field = $p->{if_field};
-	    next unless defined $record->{$cond_field} && $record->{cond_field} ne '';
+	    next unless defined $record->{$cond_field} && $record->{$cond_field} ne '';
 	    next if ref $record->{$cond_field} eq 'ARRAY' && ! @{$record->{$cond_field}};
+	}
+	
+	elsif ( $cond_field = $p->{not_field} )
+	{
+	    next if defined $record->{$cond_field} && $record->{$cond_field} ne '';
 	}
 	
 	# Now generate a list of result values, according to the attributes of this
@@ -673,9 +921,16 @@ sub process_record {
 	
 	if ( ref $p->{code} eq 'CODE' )
 	{
-	    if ( $p->{from_each} )
+	    if ( $p->{from_record} || $set_field eq '*' )
 	    {
-		@result = map { $p->{code}($self, $_, $p) } @{$record->{$source_field}};
+		@result = $p->{code}($self, $record, $p);
+	    }
+	    
+	    elsif ( $p->{from_each} )
+	    {
+		@result = map { $p->{code}($self, $_, $p) } 
+		    (ref $record->{$source_field} eq 'ARRAY' ? 
+		     @{$record->{$source_field}} : $record->{$source_field});
 	    }
 	    
 	    elsif ( $p->{from} )
@@ -685,7 +940,7 @@ sub process_record {
 	    
 	    else
 	    {
-		@result = $p->{code}($self, $record, $p);
+		@result = $p->{code}($self, $record->{$set_field}, $p);
 	    }
 	}
 	
@@ -695,17 +950,25 @@ sub process_record {
 	{
 	    if ( $p->{from_each} )
 	    {
-		@result = map { $p->{lookup}{$_} } @{$record->{$source_field}};
+		if ( ref $record->{$source_field} eq 'ARRAY' )
+		{
+		    @result = map { $p->{lookup}{$_} } @{$record->{$source_field}};
+		}
+		elsif ( ! ref $record->{$source_field} )
+		{
+		    @result = $p->{lookup}{$record->{$source_field}};
+		}
 	    }
 	    
 	    elsif ( $p->{from} )
 	    {
-		@result = $p->{code}{$record->{$source_field}};
+		@result = $p->{lookup}{$record->{$source_field}}
+		    unless ref $record->{$source_field};
 	    }
 	    
-	    else
+	    elsif ( $set_field ne '*' && ! ref $record->{$set_field} )
 	    {
-		@result = $p->{code}{$record->{$set_field}};
+		@result = $p->{lookup}{$record->{$set_field}};
 	    }
 	}
 	
@@ -713,14 +976,28 @@ sub process_record {
 	
 	elsif ( defined $p->{split} )
 	{
-	    if ( $p->{from_each} && ref $record->{$source_field} eq 'ARRAY' )
+	    if ( $p->{from_each} )
 	    {
-		@result = map { split($p->{split}, $_) } @{$record->{$source_field}};
+		if ( ref $record->{$source_field} eq 'ARRAY' )
+		{
+		    @result = map { split($p->{split}, $_) } @{$record->{$source_field}};
+		}
+		elsif ( ! ref $record->{$source_field} )
+		{
+		    @result = split($p->{split}, $record->{$source_field});
+		}
 	    }
 	    
-	    elsif ( $p->{from} && ! ref $record->{$source_field} )
+	    elsif ( $p->{from} )
 	    {
-		@result = split $p->{split}, $record->{$source_field};
+		@result = split $p->{split}, $record->{$source_field}
+		    unless ref $record->{$source_field};
+	    }
+	    
+	    elsif ( $set_field ne '*' )
+	    {
+		@result = split $p->{split}, $record->{$set_field}
+		    unless ref $record->{$set_field} eq 'ARRAY';
 	    }
 	}
 	
@@ -728,9 +1005,16 @@ sub process_record {
 	
 	elsif ( defined $p->{join} )
 	{
-	    if ( ref $record->{$source_field} eq 'ARRAY' )
+	    if ( $source_field )
 	    {
-		@result = join($p->{join}, @{$record->{$source_field}});
+		@result = join($p->{join}, @{$record->{$source_field}})
+		    if ref $record->{$source_field} eq 'ARRAY';
+	    }
+	    
+	    elsif ( $set_field ne '*' )
+	    {
+		@result = join($p->{join}, @{$record->{$set_field}})
+		    if ref $record->{$set_field} eq 'ARRAY';
 	    }
 	}
 	
@@ -832,9 +1116,7 @@ sub generate_single_result {
 
 sub generate_compound_result {
 
-    my ($self, $request) = @_;
-    
-    my $stream_threshold = $self->{stream_threshold};
+    my ($self, $request, $streaming_threshold) = @_;
     
     # $$$ init output...
     
@@ -914,8 +1196,7 @@ sub generate_compound_result {
 	# will cause the current function to be aborted, followed by an
 	# automatic call to &stream_result (defined below).
 	
-	if ( $self->{streaming_available} and not $request->{do_not_stream} and
-	     length($output) > $stream_threshold )
+	if ( defined $streaming_threshold && length($output) > $streaming_threshold )
 	{
 	    $request->{stashed_output} = $output;
 	    Dancer::Plugin::StreamData::stream_data($request, &stream_compound_result);
@@ -1043,24 +1324,30 @@ sub stream_compound_result {
 
 # next_record ( request )
 # 
-# Return the next record to be output for the given request.
+# Return the next record to be output for the given request.  If
+# $self->{main_result} is set, use that first.  Once that is exhausted (or if
+# it was never set) then if $result->{main_sth} is set then read records from
+# it until exhausted.
 
 sub next_record {
     
     my ($self, $request) = @_;
     
-    # If the result limit is 0, return nothing.
+    # If the result limit is 0, return nothing.  This prevents any records
+    # from being returned.
     
     return if $request->{result_limit} eq '0';
     
-    # If we have a 'main_result' array, return the next item in it.
+    # If we have a 'main_result' array with something in it, return the next
+    # item in it.
     
-    if ( ref $request->{main_result} eq 'ARRAY' )
+    if ( ref $request->{main_result} eq 'ARRAY' and @{$request->{main_result}} )
     {
 	return shift @{$request->{main_result}};
     }
     
-    # If we have a 'main_sth' statement handle, read the next item from it.
+    # Otherwise, if we have a 'main_sth' statement handle, read the next item
+    # from it.
     
     elsif ( ref $request->{main_sth} )
     {

@@ -16,7 +16,7 @@ accepted and the data fields returned by each.
 
 =over 4
 
-=for pod_extra table_header Class* | Documentation | Description
+=for pp_table_header Class* | Documentation | Description
 
 =item Fossil Collections | L</data1.1/colls/>
 
@@ -106,7 +106,7 @@ By using the appropriate suffix, you can choose to retrieve any of the available
 
 =over 4
 
-=for pod_extra table_header Format | Suffix | Documentation | Description
+=for pp_table_header Format | Suffix | Documentation | Description
 
 =item JSON | C<json> | L<JSON response|/data1.1/json_doc.html>
 
