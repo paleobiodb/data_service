@@ -45,50 +45,55 @@ sub new {
 }
 
 
-# define_output_map ( specification... )
+# define_valueset ( name, specification... )
 # 
-# Define a map which associates output blocks with values of the 'show'
-# parameter.  This can be used to automatically generate a validator function
-# and parameter documentation.
+# Define a list of parameter values, with optional "internal" values and
+# documentation.  This can be used to automatically generate a validator
+# function and parameter documentation, using the routines below.
+# 
+# The names of valuesets must be unique within a single data service.
 
-sub define_output_map {
+sub define_valueset {
     
-    goto &Web::DataService::define_output_map;
+    my $self = shift;
+    goto &Web::DataService::define_valueset;
 }
 
 
-# define_block ( block_name, specification... )
+# document_valueset ( )
+# 
+# Return a string in POD format documenting the values listed in the named
+# valueset.  Values can be excluded from the documentation by placing !# at
+# the beginning of the documentation string.
+
+sub document_valueset {
+    
+    my $self = shift;
+    goto &Web::DataService::document_valueset;
+}
+
+
+# get_validator ( name )
+# 
+# Return a reference to a validator routine (a closure, actually) which will
+# accept the list of values defined in the named valueset.
+
+sub valueset_validator {
+
+    my $self = shift
+    goto &Web::DataService::valueset_validator;
+}
+
+
+# define_block ( name, specification... )
 # 
 # Define an output block, using the default data service instance.  This must be
 # called as a class method!
 
 sub define_block {
     
-    my $class = shift;
-    
+    my $self = shift;
     goto &Web::DataService::define_block;
-}
-
-
-# output_map_validator ( )
-# 
-# Return a reference to a validator routine (a closure, actually) which will
-# accept the list of output sections defined in the output map for this class.
-
-sub output_map_validator {
-
-    goto &Web::DataService::output_map_validator;
-}
-
-
-# document_output_map ( )
-# 
-# Return a documentation string in POD format, documenting the blocks that are
-# included in the output map for this class.
-
-sub document_output_map {
-
-    goto &Web::DataService::document_output_map;
 }
 
 
@@ -164,7 +169,7 @@ sub extra_block_list {
 }
 
 
-# section_set ( )
+# output_set ( )
 # 
 # Return a hash of the output sections being shown for this request.
 

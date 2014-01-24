@@ -21,6 +21,7 @@ use ConfigData;
 use IntervalData;
 use TaxonData;
 use CollectionData;
+use CollectionSummary;
 use OccurrenceData;
 use PersonData;
 
@@ -45,7 +46,6 @@ if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
     $ds->{DEBUG} = 1;
     $ds->{ONE_REQUEST} = 1;
 }
-
 
 # Then call methods from the DataService class to
 # define the shape and behavior of the data service.
@@ -120,7 +120,7 @@ $ds->define_ruleset('1.1:common_params' =>
     #    "If you do not include it then you will usually get back only the fields",
     #    "labelled C<basic>.  For more information, see the documentation pages",
     #    "for the individual URL paths.",
-    "!!The following parameters can be used with all requests:",
+    ">The following parameters can be used with all requests:",
     { optional => 'limit', valid => [POS_ZERO_VALUE, ENUM_VALUE('all')], 
       error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
 	default => 500 },
@@ -135,81 +135,13 @@ $ds->define_ruleset('1.1:common_params' =>
        "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
        "you want to override the default vocabulary for your selected format.",
        "Possible values include:", $ds->document_vocab,
-    "!!The following parameters are only relevant to the text formats (csv, tsv, txt):",
+    ">The following parameters are only relevant to the text formats (csv, tsv, txt):",
     { optional => 'no_header', valid => FLAG_VALUE },
        "If specified, then the header line (which gives the field names) is omitted.",
     { optional => 'linebreak', valid => ENUM_VALUE('cr','crlf'), default => 'crlf' },
        "Specifies the linebreak character sequence.",
        "The value may be either 'cr' or 'crlf', and defaults to the latter.",
     { ignore => 'splat' });
-
-$ds->define_ruleset('1.1:main_selector' =>
-    "The following parameters can be used to specify which records to return.  Except as specified below, you can use these in combination:",
-    [param => 'clust_id', POS_VALUE, { list => ',' }],
-    "Return only records associated with the specified geographic clusters.",
-    [param => 'taxon_name', \&TaxonData::validNameSpec],
-    "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
-    [param => 'taxon_id', POS_VALUE, { list => ','}],
-    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier.",
-    "You may specify multiple identifiers, separated by commas.",
-    [param => 'taxon_actual', FLAG_VALUE],
-    "Return only records that were actually identified with the specified taxonomic name, not those which match due to synonymy",
-    "or other correspondences between taxa",
-    [param => 'base_name', \&TaxonData::validNameSpec, { list => ',' }],
-    "Return only records associated with the specified taxonomic name(s), or I<any of their children>.",
-    "You may specify multiple names, separated by commas.",
-    [param => 'base_id', POS_VALUE, { list => ',' }],
-    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier, or I<any of their children>.",
-    "You may specify multiple identifiers, separated by commas.",
-    "Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
-    [at_most_one => 'taxon_name', 'taxon_id', 'base_name', 'base_id'],
-    [param => 'exclude_id', POS_VALUE, { list => ','}],
-    "Exclude any records whose associated taxonomic name is a child of the given name or names, specified by numeric identifier.",
-    [param => 'person_id', POS_VALUE, { list => ','}],
-    "Return only records whose entry was authorized by the given person or people, specified by numeric identifier.",
-    [param => 'lngmin', DECI_VALUE],
-    "",
-    [param => 'lngmax', DECI_VALUE],
-    "",
-    [param => 'latmin', DECI_VALUE],
-    "",
-    [param => 'latmax', DECI_VALUE],
-    "Return only records whose geographic location falls within the given bounding box.",
-    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
-    "two adjacent bounding boxes if the range crosses the antimeridian",
-    "Note that if you specify one of these parameters then you must specify all four of them.",
-    [together => 'lngmin', 'lngmax', 'latmin', 'latmax',
-	{ error => "you must specify all of 'lngmin', 'lngmax', 'latmin', 'latmax' if you specify any of them" }],
-    [param => 'loc', ANY_VALUE],		# This should be a geometry in WKT format
-    "Return only records whose geographic location falls within the specified geometry, specified in WKT format.",
-    [param => 'continent', ANY_VALUE],
-    "Return only records whose geographic location falls within the specified continents.  The list of accepted",
-    "continents can be retrieved via L</data1.1/config>.",
-    [param => 'min_ma', DECI_VALUE(0)],
-    "Return only records whose temporal locality is at least this old, specified in Ma.",
-    [param => 'max_ma', DECI_VALUE(0)],
-    "Return only records whose temporal locality is at most this old, specified in Ma.",
-    [param => 'interval_id', POS_VALUE],
-    "Return only records whose temporal locality falls within the given geologic time interval, specified by numeric identifier.",
-    [param => 'interval', ANY_VALUE],
-    "Return only records whose temporal locality falls within the named geologic time interval.",
-    [at_most_one => 'interval_id', 'interval', 'min_ma'],
-    [at_most_one => 'interval_id', 'interval', 'max_ma'],
-    [optional => 'timerule', ENUM_VALUE('contain','overlap','buffer')],
-    "Resolve temporal locality according to the specified rule:", "=over 4",
-    "=item contain", "Return only collections whose temporal locality is strictly contained in the specified time range.",
-    "=item overlap", "Return only collections whose temporal locality overlaps the specified time range.",
-    "=item buffer", "Return only collections whose temporal locality overlaps the specified range and is contained",
-    "within the specified time range plus a buffer on either side.  If an interval from one of the timescales known to the database is",
-    "given, then the default buffer will be the intervals immediately preceding and following at the same level.",
-    "Otherwise, the buffer will default to 10 million years on either side.  This can be overridden using the parameters",
-    "C<earlybuffer> and C<latebuffer>.  This is the default value for this option.",
-    [optional => 'earlybuffer', POS_VALUE],
-    "Override the default buffer period for the beginning of the time range when resolving temporal locality.",
-    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
-    [optional => 'latebuffer', POS_VALUE],
-    "Override the default buffer period for the end of the time range when resolving temporal locality.",
-    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).");
 
 $ds->define_ruleset('1.1:refs_display' =>
     "The following parameter indicates which information should be returned about each resulting collection:",
@@ -218,36 +150,6 @@ $ds->define_ruleset('1.1:refs_display' =>
     "From the list given below.  It defaults to C<refbasic>.",
     [ignore => 'level']);
 
-$ds->define_ruleset('1.1:occ_specifier' =>
-    [param => 'id', POS_VALUE, { alias => 'occ_id' }],
-    "The identifier of the occurrence you wish to retrieve");
-
-$ds->define_ruleset('1.1:occ_selector' =>
-    [param => 'id', POS_VALUE, { list => ',', alias => 'occ_id' }],
-    "Return occurrences identified by the specified identifier(s).  The value of this parameter may be a comma-separated list.",
-    [param => 'coll_id', POS_VALUE, { list => ',' }],
-    "Return occurences associated with the specified collections.  The value of this parameter may be a single collection",
-    "identifier or a comma-separated list.");
-
-$ds->define_ruleset('1.1:occ_display' =>
-    "The following parameter indicates which information should be returned about each resulting occurrence:",
-    [param => 'show', ENUM_VALUE('attr','ref','ent','geo','loc','coll','time','rem','crmod'), { list => ',' }],
-    "The value of this parameter should be a comma-separated list of section names drawn",
-    "From the list given below.  It defaults to C<basic>.",
-    [ignore => 'level']);
-
-$ds->define_ruleset('1.1/occs/single' =>
-    [require => '1.1:occ_specifier', { error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" }],
-    [allow => '1.1:occ_display'],
-    [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
-
-$ds->define_ruleset('1.1/occs/list' => 
-    [require_one => '1.1:occ_selector', '1.1:main_selector'],
-    [allow => '1.1:occ_display'],
-    [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
-
 $ds->define_ruleset('1.1:taxon_specifier' => 
     [param => 'name', \&TaxonData::validNameSpec, { alias => 'taxon_name' }],
     "Return information about the most fundamental taxonomic name matching this string.",
@@ -255,7 +157,7 @@ $ds->define_ruleset('1.1:taxon_specifier' =>
     [param => 'id', POS_VALUE, { alias => 'taxon_id' }],
     "Return information about the taxonomic name corresponding to this identifier.",
     [at_most_one => 'name', 'id'],
-    "!!You may not specify both C<name> and C<identifier> in the same query.",
+    ">You may not specify both C<name> and C<id> in the same query.",
     [optional => 'rank', \&TaxonData::validRankSpec],
     [optional => 'spelling', ENUM_VALUE('orig', 'current', 'exact'),
       { default => 'current' } ]);
@@ -269,7 +171,7 @@ $ds->define_ruleset('1.1:taxon_selector' =>
     [param => 'id', POS_VALUE, { list => ',', alias => 'base_id' }],
     "Selects the taxa corresponding to the specified identifier(s).",
     "You may specify more than one, separated by commas.",
-    "!!The following parameters indicate which related taxonomic names to return:",
+    ">The following parameters indicate which related taxonomic names to return:",
     [param => 'rel', ENUM_VALUE('self', 'synonyms', 'children', 'all_children', 
 				'parents', 'all_parents', 'common_ancestor', 'all_taxa'),
       { default => 'self' } ],
@@ -317,7 +219,7 @@ $ds->define_ruleset('1.1/taxa/single' =>
 	{ error => "you must specify either 'name' or 'id'" }],
     [allow => '1.1:taxon_display'], 
     [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    "^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
 
 $ds->define_ruleset('1.1/taxa/list' => 
     [require => '1.1:taxon_selector',
@@ -325,14 +227,14 @@ $ds->define_ruleset('1.1/taxa/list' =>
     [allow => '1.1:taxon_filter'],
     [allow => '1.1:taxon_display'], 
     [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    "^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
 
 $ds->define_ruleset('1.1/taxa/auto' =>
     [param => 'name', ANY_VALUE],
     "A partial name or prefix.  It must have at least 3 significant characters, and may include both a genus",
     "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex", 
     [allow => '1.1:common_params'],
-    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    "^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
 
 $ds->define_ruleset('1.1/taxa/thumb' =>
     [content_type => 'ct', 'png=image/png', { key => 'output_format' }],
@@ -389,10 +291,13 @@ $ds->define_ruleset('1.1/refs/single' =>
     [require => '1.1:refs_specifier'],
     [allow => '1.1:common_params']);
 
-$ds->define_ruleset('1.1/refs/toprank' => 
-    [require => '1.1:main_selector'],
-    [allow => '1.1:common_params']);
+#$ds->define_ruleset('1.1/refs/toprank' => 
+#    [require => '1.1:main_selector'],
+#    [allow => '1.1:common_params']);
 
+
+
+$ds->initialize_class('CommonData');
 
 # Then define the URL paths that our data service accepts.  We start with the
 # root of the hierarchy, which is a protocol version number.  The following
@@ -408,8 +313,7 @@ $ds->define_path({ path => '1.1',
 		   uses_dbh => 1,
 		   default_limit => 500,
 		   allow_format => 'json,csv,tsv,txt',
-		   allow_vocab => 'pbdb,com',
-		   base_output => 'basic' });
+		   allow_vocab => 'pbdb,com' });
 
 # Configuration. This path is used by clients who need to configure themselves
 # based on parameters supplied by the data service.
@@ -418,7 +322,7 @@ $ds->define_path({ path => '1.1/config',
 		   class => 'ConfigData',
 		   method => 'get',
 		   base_output => '',
-		   doc_output => 'geosum,ranks'});
+		   output_selector => '1.1:config:show'});
 
 # Intervals.  These paths are used to fetch information about geological time
 # intervals known to the database.
@@ -469,21 +373,23 @@ $ds->define_path({ path => '1.1/taxa/icon',
 
 $ds->define_path({ path => '1.1/colls',
 		   class => 'CollectionData',
-		   allow_format => '+xml',
-		   base_output => 'basic' });
+		   allow_format => '+xml' });
 
 $ds->define_path({ path => '1.1/colls/single',
 		   method => 'get',
+		   base_output => '1.1/colls:basic',
 		   doc_output => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod'});
 		 
 $ds->define_path({ path => '1.1/colls/list',
-		   method => 'list', 
+		   method => 'list',
+		   base_output => '1.1/colls:basic', 
 		   doc_output => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod' });
 
 $ds->define_path({ path => '1.1/colls/summary',
-		   method => 'summary', 
-		   base_output => 'summary',
-		   doc_output => 'summary,ext,summary_time' });
+		   class => 'CollectionSummary',
+		   method => 'summary',
+		   base_output => '1.1/colls:summary',
+		   doc_output => 'basic,ext,time' });
 
 $ds->define_path({ path => '1.1/colls/refs',
 		   method => 'refs',

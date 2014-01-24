@@ -16,38 +16,52 @@ use Carp qw(croak);
 use Dancer::Plugin::StreamData;
 
 
-our (%MAP_DEF) = (name => 'type',
-		  block => 'single',
-		  disabled => 'single');
+our (%VALUESET_DEF) = (name => 'single',
+		       value => 'single',
+		       disabled => 'single');
 
-our ($BLOCK_REGEXP) = qr{ ^ [\w:/]+ $ }x;
+our ($NAME_REGEXP) = qr{ ^ [\w:/.-]+ $ }xs;
 
 our ($DEFAULT_INSTANCE);
 
-# define_output_map ( package, specification... )
+# define_valueset ( name, specification... )
 # 
-# Define a map a map that specifies which output blocks will be used by the
-# specified class, associating with each one a value for the 'show' parameter.
+# Define a list of parameter values, with optional "internal" values and
+# documentation.  This can be used to automatically generate a validator
+# function and parameter documentation, using the routines below.
+# 
+# The names of valuesets must be unique within a single data service.
 
-sub define_output_map {
+sub define_valueset {
 
     my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-    my $class = shift;
+    my $name = shift;
     
-    # Make sure that we were given a valid class
+    # Make sure the name is unique.
     
-    croak "define_output_map: the first argument must be the name of a subclass of Web::DataService::Request"
-	unless $class->isa("Web::DataService::Request");
+    croak "define_valueset: the first argument must be a valid name"
+	unless defined $name && ! ref $name && $name =~ $NAME_REGEXP;
     
-    # Initialize the output map for the specified class.
+    croak "define_valueset: '$name' was already defined at $self->{valueset}{$name}{defined_at}"
+	if ref $self->{valueset}{$name};
     
-    $self->{output_map}{$class} = {};
-    $self->{output_map_list}{$class} = [];
+    # Create a new valueset.
     
-    # Then process the records one by one.  Make sure to throw am error if we
-    # find an invalid record.
+    my ($package, $filename, $line) = caller;
     
-    my $last_node;
+    my $vs = { name => $name,
+	       defined_at => "line $line of $filename",
+	       value => {},
+	       value_list => [],
+	       doc_list => [] };
+    
+    bless $vs, 'Web::DataService::Valueset';
+    
+    # Then process the records and documentation strings one by one.  Throw an
+    # exception if we find an invalid record.
+    
+    my $doc_node;
+    my @doc_lines;
     
     foreach my $item (@_)
     {
@@ -55,48 +69,114 @@ sub define_output_map {
 	
 	unless ( ref $item )
 	{
-	    $self->add_node_doc($last_node, $item);
+	    $self->add_doc($vs, $item) if defined $item;
 	    next;
 	}
 	
 	# Any item that is not a hashref or a scalar is an error.
 	
-	unless ( ref $item eq 'HASH' )
+	unless ( ref $item && reftype $item eq 'HASH' )
 	{
-	    croak "define_output_map: arguments must be hashrefs or scalars";
+	    croak "define_valueset: arguments must be hashrefs and documentation strings";
 	}
+	
+	# Add the item to the documentation list.
+	
+	$self->add_doc($vs, $item);
 	
 	# Check for invalid attributes.
 	
 	foreach my $k ( keys %$item )
 	{
-	    croak "define_output_map: unknown attribute '$k'"
-		unless defined $MAP_DEF{$k};
+	    croak "define_valueset: unknown attribute '$k'"
+		unless defined $VALUESET_DEF{$k};
 	}
 	
-	# Check that we have a name and a block.
+	# Check that each item defines a value.
 	
-	my $name = $item->{name} // '';
-	my $block = $item->{block} // '';
+	my $value = $item->{value};
 	
-	unless ( defined $name && defined $block )
-	{
-	    croak "define_output_map: you must include the attributes 'name' and 'block' in each hashref";
-	}
+	croak "define_output_map: you must include a nonempty 'value' in each hashref"
+	    unless defined $value && $value ne '';
 	
-	unless ( $name =~ qr{ ^ [a-z_]+ $ }x )
-	{
-	    croak "define_output_map: invalid value '$name' for 'name'";
-	}
-	
-	unless ( $name =~ $BLOCK_REGEXP )
-	{
-	    croak "define_output_map: invalid value '$block' for 'block'";
-	}
-	
-	push @{$self->{output_map_list}{$class}}, $item unless $item->{disabled};
+	push @{$self->{output_map_list}{$class}}, $name if $item->{show};
 	$self->{output_map}{$class}{$name} = $item;
+	$last_node = $item;
     }
+    
+    # Process the documentation for the last item defined, if any.
+    
+    $self->process_doc($vs);
+}
+
+
+# valueset_validator ( class )
+# 
+# Return a reference to a validator routine (a closure, actually) which will
+# accept the list of output sections defined in the output map for the
+# specified class. $$$$
+
+sub valueset_validator {
+
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+    my $name = shift;
+    
+    # If an output map was defined, return an enumeration validator that
+    # accepts any of the block keys.
+    
+    if ( ref $self->{output_map_list}{$class} eq 'ARRAY' && @{$self->{output_map_list}{$class}} )
+    {    
+	return ENUM_VALUE( @{$self->{output_map_list}{$class}} );
+    }
+    
+    # Otherwise, return a reference to a routine which will always return an
+    # error. 
+    
+    else
+    {
+	return \&no_map_validator;
+    }    
+}
+
+
+sub no_map_validator {
+
+    return { error => "No valid output blocks have been defined for this request path." };
+}
+
+
+# document_valueset ( name )
+# 
+# Return a documentation string in POD format, documenting the blocks that are
+# included in the output map for this class. $$$
+
+sub document_valueset {
+
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+    my $class = shift;
+    
+    # If no output map was defined, return an explanatory message. 
+    
+    unless ( ref $self->{output_map_list}{$class} eq 'ARRAY' )
+    {
+	return "=over 4\n\n=item I<No valid output blocks have been defined for this request path.>\n\n=back";
+    }
+    
+    # Otherwise, go through the valid blocks and construct a documentation
+    # string.
+    
+    my $doc = "\n=over 4\n";
+    
+    foreach my $b ( @{$self->{output_map_list}{$class}} )
+    {
+	$doc .= "\n=item $b\n";
+	$doc .= "\n$self->{output_map}{$class}{$b}{doc}\n"
+	    if defined $self->{output_map}{$class}{$b}{doc};
+    }
+    
+    $doc .= "\n=back";
+    
+    return $doc;
 }
 
 
@@ -107,7 +187,7 @@ sub define_output_map {
 
 sub define_block {
     
-    my $self = shift;
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
     my $name = shift;
     
     # Check to make sure that we were given a valid name.
@@ -749,6 +829,319 @@ sub check_set {
     return;
 }
 
+
+# add_doc ( node, item )
+# 
+# Add the specified item to the documentation list for the specified node.
+# The item can be either a string or a record (hashref).
+
+sub add_doc {
+
+    my ($self, $node, $item) = @_;
+    
+    # If the item is a record, close any currently pending documentation and
+    # start a new "pending" list.  We need to do this because subsequent items
+    # may document the record we were just called with.
+    
+    if ( ref $item )
+    {
+	croak "cannot add non-hash object to documentation"
+	    unless reftype $item eq 'HASH';
+	
+	$self->process_doc($node);
+	push @{$node->{doc_pending}}, $item;
+    }
+    
+    # If this is a string starting with one of the special characters, then
+    # handle it properly.
+    
+    elsif ( $item =~ qr{ ^ ([\#>!]) }xs )
+    {
+	# If >, then close any currently pending documentation and start a new
+	# "pending" list.  This list will be processed as an ordinary
+	# paragraph, because it does not start with a record.
+	
+	if ( $1 eq '>' )
+	{
+	    $self->process_doc($node);
+	    push @{$node->{doc_pending}}, substr($item,1) if $item ne '>';
+	}
+	
+	# If #, then discard all pending documentation.  This will cause any
+	# pending record to be elided from the documentation.
+	
+	elsif ( $1 eq '#' )
+	{
+	    $self->process_doc($node);
+	}
+	
+	# If !, then add the remainder of the line to the "pending" list.
+	# The ! prevents the next character from being interpreted specially.
+	
+	else
+	{
+	    push @{$node->{doc_pending}}, substr($item,1) if $item ne '!';
+	}
+    }
+    
+    # Otherwise, just add this string to the "pending" list.
+    
+    else
+    {
+	push @{$node->{doc_pending}}, $item;
+    }
+}
+
+
+# process_doc ( node )
+# 
+# Process all pending documentation items.
+
+sub process_doc {
+
+    my ($self, $node) = @_;
+    
+    # Return immediately unless we have something pending.
+    
+    return unless ref $node->{doc_pending} eq 'ARRAY' && @{$node->{doc_pending}};
+    
+    # Discard all pending documentation if the first item is '=IGNORE'.
+    
+    if ( $node->{doc_pending}[0] eq '=IGNORE' )
+    {
+	@{$node->{doc_pending}} = ();
+	return;
+    }
+    
+    # If the "pending" list starts with an item record, take that off first.
+    # Everything else on the list should be a string.
+    
+    my $primary_item = shift @{$node->{doc_pending}} if ref $node->{doc_pending}[0];
+    
+    # Put the rest of the documentation items together into a single
+    # string, which may contain a series of Pod paragraphs.
+    
+    my $body = '';
+    my $last_pod;
+    my $this_pod;
+    
+    while (my $line = shift @{$node->{doc_pending}})
+    {
+	# If this line starts with =, then it needs extra spacing.
+	
+	my $this_pod = $line =~ qr{ ^ = }x;
+	
+	# If $body already has something in it, add a newline first.  Add
+	# two if this line starts with =, or if the previously added line
+	# did, so that we get a new paragraph.
+	
+	if ( $body ne '' )
+	{
+	    $body .= "\n" if $last_pod || $this_pod;
+	    $body .= "\n";
+	}
+	
+	$body .= $line;
+	$last_pod = $this_pod;
+    }
+    
+    # Then add the documentation to the node's documentation list.  If there
+    # is no primary item, add the body as an ordinary paragraph.
+    
+    unless ( defined $primary_item )
+    {
+	push @{$rs->{doc_list}}, clean_doc($body);
+    }
+    
+    # Otherwise, attach the body to the primary item and add it to the list.
+    
+    else
+    {
+	$item->{doc} = clean_doc($body, 1);
+	push @{$rs->{doc_list}}, $primary_item;
+    }
+}
+
+
+# clean_doc ( )
+# 
+# Make sure that the indicated string is valid POD.  In particular, if there
+# are any unclosed =over sections, close them at the end.  Throw an exception
+# if we find an =item before the first =over or a =head inside an =over.
+
+sub clean_doc {
+
+    my ($docstring, $item_body) = @_;
+    
+    my $list_level = 0;
+    
+    while ( $docstring =~ / ^ (=[a-z]+) /gmx )
+    {
+	if ( $1 eq '=over' )
+	{
+	    $list_level++;
+	}
+	
+	elsif ( $1 eq '=back' )
+	{
+	    $list_level--;
+	    croak "invalid POD string: =back does not match any =over" if $list_level < 0;
+	}
+	
+	elsif ( $1 eq '=item' )
+	{
+	    croak "invalid POD string: =item outside of =over" if $list_level == 0;
+	}
+	
+	elsif ( $1 eq '=head' )
+	{
+	    croak "invalid POD string: =head inside =over" if $list_level > 0 || $item_body;
+	}
+    }
+    
+    $docstring .= "\n\n=back" x $list_level;
+    
+    return $docstring;
+}
+
+
+# document_node ( node, state )
+# 
+# Return a documentation string for the given node, in Pod format.  This will
+# consist of a main item list that may start and stop, possibly with ordinary
+# Pod paragraphs in between list chunks.  If this node contains any 'include'
+# records, the lists for those nodes will be recursively interpolated into the
+# main list.  Sublists can only occur if they are explicitly included in the
+# documentation strings for individual node records.
+# 
+# If the $state parameter is given, it must be a hashref containing any of the
+# following keys:
+# 
+# namespace	A hash ref in which included nodes may be looked up by name.
+#		If this is not given, then 'include' records are ignored.
+# 
+# items_only	If true, then ordinary paragraphs will be ignored and a single
+#		uninterrupted item list will be generated.
+# 
+
+sub document_node {
+    
+    my ($node, $state) = @_;
+    
+    # Return the empty string unless documentation has been added to this
+    # node. 
+    
+    return '' unless ref $node && ref $node->{doc_list} eq 'ARRAY';
+    
+    # Make sure we have a state record, if we were not passed one.
+    
+    $state ||= {};
+    
+    # Make sure that we process each node only once, if it should happen
+    # to be included multiple times.  Also keep track of our recursion level.
+    
+    return if $state->{processed}{$node->{name}};
+    
+    $state->{processed}{$rs->{name}} = 1;
+    $state->{level}++;
+    
+    # Go through the list of documentation items, treating each one as a Pod
+    # paragraph.  That means that they will be separated from each other by a
+    # blank line.  List control paragraphs "=over" and "=back" will be added
+    # as necessary to start and stop the main item list.
+    
+    my $doc = '';
+    
+ ITEM:
+    foreach my $item ( @{$node->{doc_list}} )
+    {
+	# A string is added as an ordinary paragraph.  The main list is closed
+	# if it is open.  But the item is skipped if we were given the
+	# 'items_only' flag.
+	
+	unless ( ref $item )
+	{
+	    next ITEM if $state->{items_only};
+	    
+	    if ( $state->{in_list} )
+	    {
+		$doc .= "\n\n" if $doc ne '';
+		$doc .= "=back";
+		$state->{in_list} = 0;
+	    }
+	    
+	    $doc .= "\n\n" if $doc ne '' && $item ne '';
+	    $doc .= $item;
+	}
+	
+	# An 'include' record inserts the documentation for the specified
+	# node.  This does not necessarily end the list, only if the include
+	# record itself has a documentation string.  Skip the inclusion if no
+	# hashref was provided for looking up item names.
+	
+	elsif ( defined $item->{include} )
+	{
+	    next ITEM unless ref $state->{namespace} && reftype $state->{namespace} eq 'HASH';
+	    
+	    if ( defined $item->{doc} and $item->{doc} ne '' and not $state->{items_only} )
+	    {
+		if ( $state->{in_list} )
+		{
+		    $doc .= "\n\n" if $doc ne '';
+		    $doc .= "=back";
+		    $state->{in_list} = 0;
+		}
+		
+		$doc .= "\n\n" if $doc ne '';
+		$doc .= $item->{doc};
+	    }
+	    
+	    my $included_node = $state->{namespace}{$item->{include}};
+	    
+	    next unless ref $included_node && reftype $included_node eq 'HASH';
+	    
+	    my $subdoc = $self->document_node($included_node, $state);
+	    
+	    $doc .= "\n\n" if $doc ne '' && $subdoc ne '';
+	    $doc .= $subdoc;
+	}
+	
+	# Any other record is added as a list item.  Try to figure out the
+	# item name as best we can.
+	
+	else
+	{
+	    my $name = ref $item eq 'Web::DataService::Valueset' ? $item->{value}
+		     : defined $item->{name}			 ? $item->{name};
+	    
+	    $name ||= '';
+	    
+	    unless ( $state->{in_list} )
+	    {
+		$doc .= "\n\n" if $doc ne '';
+		$doc .= "=over";
+		$state->{in_list} = 1;
+	    }
+	    
+	    $doc .= "\n\n=item $name";
+	}
+    }
+    
+    # If we get to the end of the top-level ruleset and we are still in a
+    # list, close it.  Also make sure that our resulting documentation string
+    # ends with a newline.
+    
+    if ( --$state->{level} == 0 )
+    {
+	$doc .= "\n\n=back" if $state->{in_list};
+	$state->{in_list} = 0;
+	$doc .= "\n";
+    }
+    
+    return $doc;
+}
+
+
 # document_response ( path, block_list )
 # 
 # Generate documentation in POD format describing the available output fields.
@@ -813,6 +1206,8 @@ sub document_response {
 	
 	my $block = $self->{output_map}{$class}{$b}{block};
 	
+	warn "unknown block key '$b'" unless defined $block;
+	
 	# Make sure to only process each block once, even if it is listed more
 	# than once.
 	
@@ -823,7 +1218,8 @@ sub document_response {
 	
 	foreach my $r (@$output_list)
 	{
-	    $doc_string .= $self->document_field($block, \@vocab_list, $r);
+	    next unless defined $r->{output};
+	    $doc_string .= $self->document_field($b, \@vocab_list, $r);
 	}
     }
     

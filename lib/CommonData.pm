@@ -15,6 +15,19 @@ our (@EXPORT_OK) = qw(generateAttribution generateReference generateRISReference
 
 
 
+sub initialize {
+    
+    my ($class, $ds, $config, $dbh) = @_;
+    
+    $ds->define_block( '1.1/common:crmod' =>
+      { select => ['$mt.created', '$mt.modified'] },
+      { output => 'created', com_name => 'dcr' },
+	  "The date and time at which this record was created.",
+      { output => 'modified', com_name => 'dmd' },
+	  "The date and time at which this record was last modified.");
+    
+}
+
 # generateAttribution ( )
 # 
 # Generate an attribution string for the given record.  This relies on the

@@ -23,7 +23,7 @@ use Web::DataService::JSON qw(json_list_value);
 
 use HTTP::Validate qw( :validators );
 
-HTTP::Validate->VERSION(0.32);
+HTTP::Validate->VERSION(0.34);
 
 #use Dancer qw( :syntax );
 use Dancer::Plugin;
@@ -34,7 +34,7 @@ BEGIN {
     our (@KEYWORDS) = qw(define_vocab valid_vocab document_vocab
 			 define_format document_format
 			 define_path document_path path_defined
-			 define_ruleset define_output
+			 define_ruleset define_output_map define_block
 			 initialize_class can_execute_path execute_path error_result);
     
     our (@EXPORT_OK) = (@KEYWORDS, @HTTP::Validate::VALIDATORS);
@@ -106,6 +106,8 @@ sub new {
 		    format => {},
 		    format_list => [],
 		   };
+    
+    $instance->{DEBUG} = 1 if $config->{ds_debug};
     
     # Return the new instance
     
@@ -841,76 +843,6 @@ sub define_ruleset {
 }
 
 
-# define_output ( name, rule... )
-# 
-# Define an "output section" under the given name.  This comprises a set of
-# field specifications which are used to generate output records.  This
-# section is defined in relation to the class from which this routine has been
-# called, for later use in query operations using that class.
-
-sub define_output {
-    
-    # If we were called as a method, use the object on which we were called.
-    # Otherwise, use the globally defined one.
-    
-    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-
-    # Now figure out which package we are being called from.  The output
-    # section being defined will be stored under this package name.  If we
-    # were not called from a subclass of Web::DataService::Request, then store
-    # this information under Web::DataService::Request so that it will be
-    # available to all packages.
-    
-    my ($package) = caller;
-    
-    unless ( $package->isa('Web::DataService::Request') )
-    {
-	$package = 'Web::DataService::Request';
-    }
-    
-    # Now adjust the argument list and call define_output_section
-    
-    unshift @_, $package;
-    unshift @_, $self;
-    
-    goto &define_output_section;
-}
-
-
-# define_output_setup ( rule... )
-# 
-# Like 'define_output', but specifies a set of rules to apply at the
-# beginning of the output process, before any other sections are applied.
-
-sub define_output_setup {
-
-    # If we were called as a method, use the object on which we were called.
-    # Otherwise, use the globally defined one.
-    
-    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-
-    # Now figure out which package we are being called from.  The output
-    # section being defined will be stored under this package name.  If we
-    # were not called from a subclass of Web::DataService::Request, then store
-    # this information under Web::DataService::Request so that it will be
-    # available to all packages.
-    
-    my ($package) = caller;
-    
-    unless ( $package->isa('Web::DataService::Request') )
-    {
-	$package = 'Web::DataService::Request';
-    }
-    
-    # Now adjust the argument list and call define_output_section
-    
-    unshift @_, '_init_';
-    unshift @_, $package;
-    unshift @_, $self;
-    
-    goto &define_output_section;    
-}
-
 # add_node_doc ( node, doc_string )
 # 
 # Add the specified documentation string to the specified node.
@@ -1031,6 +963,7 @@ sub execute_path {
 	
 	# Then do a basic sanity check to make sure that the operation is
 	# valid.  This should always succeed, because the 'class' and 'method'
+
 	# attributes were checked when the path was defined.
 	
 	my $class = $path_attrs->{class};

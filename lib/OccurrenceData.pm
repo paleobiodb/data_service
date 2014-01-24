@@ -11,6 +11,8 @@ use strict;
 
 use parent 'Web::DataService::Request';
 
+use Web::DataService qw(:validators);
+
 use CommonData;
 use OccurrenceTables qw($OCC_MATRIX);
 use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
@@ -184,9 +186,39 @@ $OUTPUT{rem} =
 
 sub configure {
     
-    my ($self, $dbh, $config) = @_;
+    my ($self, $ds, $dbh, $config) = @_;
     
-    # No configuration needed.
+$ds->define_ruleset('1.1:occ_specifier' =>
+    [param => 'id', POS_VALUE, { alias => 'occ_id' }],
+    "The identifier of the occurrence you wish to retrieve");
+
+$ds->define_ruleset('1.1:occ_selector' =>
+    [param => 'id', POS_VALUE, { list => ',', alias => 'occ_id' }],
+    "Return occurrences identified by the specified identifier(s).  The value of this parameter may be a comma-separated list.",
+    [param => 'coll_id', POS_VALUE, { list => ',' }],
+    "Return occurences associated with the specified collections.  The value of this parameter may be a single collection",
+    "identifier or a comma-separated list.");
+
+$ds->define_ruleset('1.1:occ_display' =>
+    "The following parameter indicates which information should be returned about each resulting occurrence:",
+    [param => 'show', ENUM_VALUE('attr','ref','ent','geo','loc','coll','time','rem','crmod'), { list => ',' }],
+    "The value of this parameter should be a comma-separated list of section names drawn",
+    "From the list given below.  It defaults to C<basic>.",
+    [ignore => 'level']);
+
+$ds->define_ruleset('1.1/occs/single' =>
+    [require => '1.1:occ_specifier', { error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" }],
+    [allow => '1.1:occ_display'],
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+
+$ds->define_ruleset('1.1/occs/list' => 
+    [require_one => '1.1:occ_selector', '1.1:main_selector'],
+    [allow => '1.1:occ_display'],
+    [allow => '1.1:common_params'],
+    "!>You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+
+
 }
 
 
