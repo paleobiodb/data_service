@@ -60,26 +60,26 @@ sub initialize {
 	{ include => '1.1:config:geosum' },
 	{ include => '1.1:config:ranks' });
     
-    # Then define a value map to allow these blocks to be selected by the client.
+    # Then define a value set to allow these blocks to be selected by the client.
     
-    $ds->define_valueset('1.1:config:show' =>
-	{ value => 'geosum', result => '1.1:config:geosum' },
+    $ds->define_set('1.1:config:show' =>
+	{ value => 'geosum', maps_to => '1.1:config:geosum' },
 	    "Return information about the levels of geographic clustering defined in this database.",
-	{ value => 'ranks', result => '1.1:config:ranks' },
+	{ value => 'ranks', maps_to => '1.1:config:ranks' },
 	    "Return information about the taxonomic ranks defined in this database.",
-	{ value => 'all', result => '1.1:config:all' },
+	{ value => 'all', maps_to => '1.1:config:all' },
 	    "Return both of the above sets of information.",
 	    "This is generally useful only with C<json> format.");
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.
     
-    $ds->define_ruleset('1.1/config' =>
-	{ param => 'show', valid => $ds->validate_valueset('1.1:config:show'),
+    $ds->define_ruleset('1.1:config' =>
+	{ param => 'show', valid => $ds->valid_set('1.1:config:show'),
 	  list => q{,}, default => 'all' },
 	    "The value of this parameter should be a comma-separated list of block names drawn",
 	    "From following list.  It defaults to C<all>.", 
-	    $ds->document_valueset('1.1:config:show'),
+	    $ds->document_set('1.1:config:show'),
 	{ allow => '1.1:common_params' },
 	    "^You can use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
     

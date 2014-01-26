@@ -16,46 +16,50 @@ use Carp qw(croak);
 use Dancer::Plugin::StreamData;
 
 
-our (%VALUESET_DEF) = (name => 'single',
-		       value => 'single',
-		       disabled => 'single');
+our (%SET_DEF) = (value => 'single',
+		  maps_to => 'single',
+		  fixed => 'single',
+		  disabled => 'single',
+		  undoc => 'single');
 
 our ($NAME_REGEXP) = qr{ ^ [\w:/.-]+ $ }xs;
 
 our ($DEFAULT_INSTANCE);
 
-# define_valueset ( name, specification... )
+# define_set ( name, specification... )
 # 
-# Define a list of parameter values, with optional "internal" values and
-# documentation.  This can be used to automatically generate a validator
-# function and parameter documentation, using the routines below.
+# Define a set of values, with optional value map and documentation.  Such
+# sets can be used to define and document acceptable parameter values,
+# document data values, and many other uses.
 # 
-# The names of valuesets must be unique within a single data service.
+# The names of sets must be unique within a single data service.
 
-sub define_valueset {
+sub define_set {
 
     my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
     my $name = shift;
     
     # Make sure the name is unique.
     
-    croak "define_valueset: the first argument must be a valid name"
+    croak "define_set: the first argument must be a valid name"
 	unless defined $name && ! ref $name && $name =~ $NAME_REGEXP;
     
-    croak "define_valueset: '$name' was already defined at $self->{valueset}{$name}{defined_at}"
+    croak "define_set: '$name' was already defined at $self->{valueset}{$name}{defined_at}"
 	if ref $self->{valueset}{$name};
     
-    # Create a new valueset.
+    # Create a new set object.
     
     my ($package, $filename, $line) = caller;
     
     my $vs = { name => $name,
 	       defined_at => "line $line of $filename",
 	       value => {},
-	       value_list => [],
+	       list => [],
 	       doc_list => [] };
     
-    bless $vs, 'Web::DataService::Valueset';
+    bless $vs, 'Web::DataService::Set';
+    
+    $self->{set}{$name} = $vs;
     
     # Then process the records and documentation strings one by one.  Throw an
     # exception if we find an invalid record.
@@ -73,14 +77,14 @@ sub define_valueset {
 	    next;
 	}
 	
-	# Any item that is not a hashref or a scalar is an error.
+	# Any item that is not a record or a scalar is an error.
 	
 	unless ( ref $item && reftype $item eq 'HASH' )
 	{
-	    croak "define_valueset: arguments must be hashrefs and documentation strings";
+	    croak "define_set: arguments must be records (hash refs) and documentation strings";
 	}
 	
-	# Add the item to the documentation list.
+	# Add the record to the documentation list.
 	
 	$self->add_doc($vs, $item);
 	
@@ -88,97 +92,137 @@ sub define_valueset {
 	
 	foreach my $k ( keys %$item )
 	{
-	    croak "define_valueset: unknown attribute '$k'"
-		unless defined $VALUESET_DEF{$k};
+	    croak "define_set: unknown attribute '$k'"
+		unless defined $SET_DEF{$k};
 	}
 	
-	# Check that each item defines a value.
+	# Check that each reord contains an actual value, and that these
+	# values do not repeat.
 	
 	my $value = $item->{value};
 	
-	croak "define_output_map: you must include a nonempty 'value' in each hashref"
+	croak "define_set: you must specify a nonempty 'value' key in each record"
 	    unless defined $value && $value ne '';
 	
-	push @{$self->{output_map_list}{$class}}, $name if $item->{show};
-	$self->{output_map}{$class}{$name} = $item;
-	$last_node = $item;
+	croak "define_set: value '$value' cannot be defined twice";
+	
+	# Add the value to the various lists it belongs to, and to the hash
+	# containing all defined values.
+	
+	push @{$vs->{enabled}}, $value unless $item->{disabled};
+	push @{$vs->{unfixed}}, $value unless $item->{disabled} || $item->{fixed};
+	$vs->{value}{$value} = $item;
     }
     
-    # Process the documentation for the last item defined, if any.
+    # Finish the documentation for this object.
     
     $self->process_doc($vs);
+    
+    # Get a list of just those items that are not disabled or undocumented. 
+    
+    push @{$vs->{doc_enabled}}, grep { ! $vs->{value}{$value}{undoc} } @{$vs->{enabled}};
+    push @{$vs->{doc_unfixed}}, grep { ! $vs->{value}{$value}{undoc} } @{$vs->{unfixed}};
 }
 
 
-# valueset_validator ( class )
+# valid_set ( set_name, variety )
 # 
-# Return a reference to a validator routine (a closure, actually) which will
-# accept the list of output sections defined in the output map for the
-# specified class. $$$$
+# Return a reference to a validator routine (actualy a closure) which will
+# accept the list of values defined for the specified set.  The parameter
+# $variety can be either 'enabled', 'unfixed', or 'documented'.  If defaults
+# to 'unfixed'.
 
-sub valueset_validator {
+sub valid_set {
 
     my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-    my $name = shift;
+    my ($set_name, $variety) = @_;
     
-    # If an output map was defined, return an enumeration validator that
-    # accepts any of the block keys.
+    $variety ||= 'unfixed';
     
-    if ( ref $self->{output_map_list}{$class} eq 'ARRAY' && @{$self->{output_map_list}{$class}} )
-    {    
-	return ENUM_VALUE( @{$self->{output_map_list}{$class}} );
+    # If this is a valid set and 
+    
+    my $vs = $self->{set}{$name};
+    
+    croak "unknown set '$set_name'" unless ref $vs eq 'Web::DataService::Set';
+    
+    # If there is at least one value of the indicated variety, return an
+    # enumeration validator.
+    
+    if ( ref $vs->{$variety} eq 'ARRAY' && @{$vs->{$variety}} )
+    {
+	return ENUM_VALUE( @{$vs->{$variety}} );
     }
     
     # Otherwise, return a reference to a routine which will always return an
-    # error. 
+    # error.
     
-    else
-    {
-	return \&no_map_validator;
-    }    
+    return \&bad_set_validator;
 }
 
 
-sub no_map_validator {
+sub bad_set_validator {
 
-    return { error => "No valid output blocks have been defined for this request path." };
+    return { error => "No valid values have been defined for {param}." };
 }
 
 
-# document_valueset ( name )
+# document_set ( set_name, variety )
 # 
-# Return a documentation string in POD format, documenting the blocks that are
-# included in the output map for this class. $$$
+# Return a string in Pod format documenting the values that were assigned to
+# this set.
 
-sub document_valueset {
+sub document_set {
 
     my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-    my $class = shift;
+    my ($name, $variety) = @_;
     
-    # If no output map was defined, return an explanatory message. 
+    # Look up a set object using the given name.  If none could be found,
+    # return an explanatory message.
     
-    unless ( ref $self->{output_map_list}{$class} eq 'ARRAY' )
-    {
-	return "=over 4\n\n=item I<No valid output blocks have been defined for this request path.>\n\n=back";
-    }
+    my $vs = $self->{set}{$name};
     
-    # Otherwise, go through the valid blocks and construct a documentation
-    # string.
+    return "=over\n\n=item I<Could not find the specified set>\n\n=back"
+	unless ref $vs eq 'Web::DataService::Set';
     
-    my $doc = "\n=over 4\n";
+    # If it exists and has documentation, return that.
     
-    foreach my $b ( @{$self->{output_map_list}{$class}} )
-    {
-	$doc .= "\n=item $b\n";
-	$doc .= "\n$self->{output_map}{$class}{$b}{doc}\n"
-	    if defined $self->{output_map}{$class}{$b}{doc};
-    }
+    my $doc = $self->document_node($vs, $variety);
     
-    $doc .= "\n=back";
+    return $doc if defined $doc && $doc ne '';
     
-    return $doc;
+    # If no documentation was found, that means that no values were enabled
+    # for this set.
+    
+    return "=over\n\n=item I<No valid values have been assigned.>\n\n=back";
 }
 
+
+# get_set_map_list ( set_name, variety )
+# 
+# Return the list of 'map_to' values for the specified set.  The parameter
+# $variety can be either 'enabled', 'unfixed', or 'documented'.  It defaults
+# to 'enabled'.
+
+sub get_set_map_list {
+
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+    my ($set_name, $variety) = @_;
+    
+    $variety ||= 'enabled';
+    
+    my $set = $self->{set}{$set_name}
+    
+    return unless ref $set eq 'Web::DataService::Set';
+    
+    my $value_list = $vs->{$variety} || return;
+    
+    return grep { defined $_ } map { $vs->{value}{$_}{maps_to} } @$value_list;
+}
+
+
+sub define_output_map {
+
+}
 
 # define_block ( name, specification... )
 # 
@@ -197,7 +241,7 @@ sub define_block {
 	croak "define_block: the first argument must be an output block name";
     }
     
-    elsif ( $name !~ $BLOCK_REGEXP )
+    elsif ( $name !~ $NAME_REGEXP )
     {
 	croak "define_block: invalid block name '$name'";
     }
@@ -872,7 +916,7 @@ sub add_doc {
 	
 	elsif ( $1 eq '#' )
 	{
-	    $self->process_doc($node);
+	    $self->process_doc($node, 'undoc');
 	}
 	
 	# If !, then add the remainder of the line to the "pending" list.
@@ -899,24 +943,27 @@ sub add_doc {
 
 sub process_doc {
 
-    my ($self, $node) = @_;
+    my ($self, $node, $disposition) = @_;
     
     # Return immediately unless we have something pending.
     
     return unless ref $node->{doc_pending} eq 'ARRAY' && @{$node->{doc_pending}};
     
-    # Discard all pending documentation if the first item is '=IGNORE'.
-    
-    if ( $node->{doc_pending}[0] eq '=IGNORE' )
-    {
-	@{$node->{doc_pending}} = ();
-	return;
-    }
-    
     # If the "pending" list starts with an item record, take that off first.
     # Everything else on the list should be a string.
     
     my $primary_item = shift @{$node->{doc_pending}} if ref $node->{doc_pending}[0];
+    
+    # Discard all pending documentation if the primary item is disabled or
+    # marked with a '#'.  In the latter case, note this in the item record.
+    
+    if ( $primary_item->{disabled} or $primary_item->{undoc} or
+	 $disposition eq 'undoc' )
+    {
+	@{$node->{doc_pending}} = ();
+	$primary_item->{undoc} => 1 if $disposition eq 'undoc';
+	return;
+    }
     
     # Put the rest of the documentation items together into a single
     # string, which may contain a series of Pod paragraphs.
@@ -950,15 +997,15 @@ sub process_doc {
     
     unless ( defined $primary_item )
     {
-	push @{$rs->{doc_list}}, clean_doc($body);
+	push @{$node->{doc_list}}, clean_doc($body);
     }
     
     # Otherwise, attach the body to the primary item and add it to the list.
     
     else
     {
-	$item->{doc} = clean_doc($body, 1);
-	push @{$rs->{doc_list}}, $primary_item;
+	$primary_item->{doc} = clean_doc($body, 1);
+	push @{$node->{doc_list}}, $primary_item;
     }
 }
 
@@ -1026,7 +1073,7 @@ sub clean_doc {
 
 sub document_node {
     
-    my ($node, $state) = @_;
+    my ($self, $node, $state) = @_;
     
     # Return the empty string unless documentation has been added to this
     # node. 
@@ -1042,7 +1089,7 @@ sub document_node {
     
     return if $state->{processed}{$node->{name}};
     
-    $state->{processed}{$rs->{name}} = 1;
+    $state->{processed}{$node->{name}} = 1;
     $state->{level}++;
     
     # Go through the list of documentation items, treating each one as a Pod
@@ -1111,8 +1158,9 @@ sub document_node {
 	
 	else
 	{
-	    my $name = ref $item eq 'Web::DataService::Valueset' ? $item->{value}
-		     : defined $item->{name}			 ? $item->{name};
+	    my $name = ref $node eq 'Web::DataService::Set' ? $item->{value}
+		     : defined $item->{name}		    ? $item->{name}
+							    : '';
 	    
 	    $name ||= '';
 	    
@@ -1124,6 +1172,7 @@ sub document_node {
 	    }
 	    
 	    $doc .= "\n\n=item $name";
+	    $doc .= "\n\n$item->{doc}" if defined $item->{doc} && $item->{doc} ne '';
 	}
     }
     
@@ -1142,21 +1191,29 @@ sub document_node {
 }
 
 
-# document_response ( path, block_list )
+# document_response ( allowed_vocab, output_map )
 # 
-# Generate documentation in POD format describing the available output fields.
-# The parameter $block_list must be a reference to a list of block names,
-# while $allowed_vocab must be a reference to a hash whose keys are vocabulary
-# names.
+# Generate documentation in Pod format describing the available output fields.
+# The parameter $allowed_vocab must be a reference to a hash whose keys are
+# vocabulary names.  The second must be either a single block name or an array
+# of them.  The third must name either an output set or an array of block
+# names. 
 
 sub document_response {
     
-    my ($self, $class, $allowed_vocab, $block_list) = @_;
+    my ($self, $allowed_vocab, $output_map) = @_;
     
     # First determine the set of output blocks to document, or return
     # immediately if there are none.
     
-    return unless ref $block_list eq 'ARRAY' && @$block_list;
+    my @block_keys = ref $base_output eq 'ARRAY' ? @$base_output : $base_output;
+    
+    if ( ref $output_set eq 'Web::DataService::Set' )
+    {
+	push @block_keys, $self->get_set_map_list($output_set, 'documented');
+    }
+    
+    return "I<No output blocks were defined for this path>" unless @block_list;
     
     # Next determine the set of vocabularies to document, or return
     # immediately if there are none.
@@ -1171,7 +1228,7 @@ sub document_response {
     return "I<No output vocabularies were selected for this path>"
 	unless @vocab_list;
     
-    # Now generate the header for the documentation, in POD format.  We
+    # Now generate the header for the documentation, in Pod format.  We
     # include the special "=for pp_table_header" line to give PodParser.pm the
     # information it needs to generate an HTML table.
     
@@ -1197,17 +1254,8 @@ sub document_response {
     
     my %uniq_block;
     
-    foreach my $b (@$block_list)
+    foreach my $block (@block_list)
     {
-	# Look up the block name in the output map for this class to get the
-	# global block name.
-	
-	next unless ref $self->{output_map}{$class}{$b} eq 'HASH';
-	
-	my $block = $self->{output_map}{$class}{$b}{block};
-	
-	warn "unknown block key '$b'" unless defined $block;
-	
 	# Make sure to only process each block once, even if it is listed more
 	# than once.
 	

@@ -320,9 +320,7 @@ $ds->define_path({ path => '1.1',
 
 $ds->define_path({ path => '1.1/config',
 		   class => 'ConfigData',
-		   method => 'get',
-		   base_output => '',
-		   output_selector => '1.1:config:show'});
+		   method => 'get');
 
 # Intervals.  These paths are used to fetch information about geological time
 # intervals known to the database.
@@ -377,25 +375,22 @@ $ds->define_path({ path => '1.1/colls',
 
 $ds->define_path({ path => '1.1/colls/single',
 		   method => 'get',
-		   base_output => '1.1/colls:basic',
-		   doc_output => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod'});
+		   output_map => '1.1:colls:basic_map'});
 		 
 $ds->define_path({ path => '1.1/colls/list',
 		   method => 'list',
-		   base_output => '1.1/colls:basic', 
-		   doc_output => 'basic,bin,ref,sref,loc,time,taxa,ent,crmod' });
+		   output_map => '1.1:colls:basic_map'});
 
 $ds->define_path({ path => '1.1/colls/summary',
 		   class => 'CollectionSummary',
 		   method => 'summary',
-		   base_output => '1.1/colls:summary',
-		   doc_output => 'basic,ext,time' });
+		   output_map => '1.1:colls:summary_map'});
 
 $ds->define_path({ path => '1.1/colls/refs',
 		   method => 'refs',
 		   allow_format => '+ris,-xml',
 		   #also_initialize => 'ReferenceData',
-		   base_output => 'refbase',
+		   output_map => '1.1:refs:map',
 		   doc_output => 'refbase,formatted,comments' });
 
 # Occurrences.  These paths are used to fetch information about fossil

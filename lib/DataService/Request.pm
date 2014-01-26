@@ -53,10 +53,10 @@ sub new {
 # 
 # The names of valuesets must be unique within a single data service.
 
-sub define_valueset {
+sub define_set {
     
     my $self = shift;
-    goto &Web::DataService::define_valueset;
+    goto &Web::DataService::define_set;
 }
 
 
@@ -66,10 +66,10 @@ sub define_valueset {
 # valueset.  Values can be excluded from the documentation by placing !# at
 # the beginning of the documentation string.
 
-sub document_valueset {
+sub document_set {
     
     my $self = shift;
-    goto &Web::DataService::document_valueset;
+    goto &Web::DataService::document_set;
 }
 
 
@@ -78,10 +78,10 @@ sub document_valueset {
 # Return a reference to a validator routine (a closure, actually) which will
 # accept the list of values defined in the named valueset.
 
-sub valueset_validator {
+sub valid_set {
 
-    my $self = shift
-    goto &Web::DataService::valueset_validator;
+    my $self = shift;
+    goto &Web::DataService::valid_set;
 }
 
 
@@ -96,6 +96,13 @@ sub define_block {
     goto &Web::DataService::define_block;
 }
 
+
+# define_output_map ( dummy )
+
+sub define_output_map {
+
+
+}
 
 # INSTANCE METHODS
 # ----------------

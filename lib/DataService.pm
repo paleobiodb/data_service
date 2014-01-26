@@ -1003,13 +1003,15 @@ sub execute_path {
 	
 	bless $request, $class;
 	
-	# If a ruleset was specified, then validate and clean the parameters.
+	# Check to see if there is a ruleset corresponding to this path.  If
+	# a ruleset name was explicitly provided, use that.
 	
 	my $validator = $self->{validator};
-	my $ruleset = defined $path_attrs->{ruleset} && $path_attrs->{ruleset} ne '' ? 
-	    $path_attrs->{ruleset} : $path;
+	my $ruleset = $self->determine_ruleset($path, $path_attrs->{ruleset});
 	
-	if ( $validator->ruleset_defined($ruleset) )
+	# 
+	
+	if ( $ruleset )
 	{
 	    my $result = $validator->check_params($ruleset, Dancer::params);
 	    
@@ -1154,8 +1156,25 @@ sub document_path {
     my ($path, $format) = @_;
     
     my $path_attrs = $self->{path_attrs}{$path};
+    my $class = $self->{path_attrs}{$path}{class};
     
     $DB::single = 1;
+    
+    # If we are in 'one request' mode, initialize the class plus all of
+    # the classes it requires.
+    
+    if ( $self->{ONE_REQUEST} )
+    {
+	if ( ref $path_attrs->{also_initialize} eq 'ARRAY' )
+	{
+	    foreach my $c ( @{$path_attrs->{also_initialize}} )
+	    {
+		$self->initialize_class($c);
+	    }
+	}
+	
+	$self->initialize_class($class);
+    }
     
     # We start by determining the filename for the documentation template.  If
     # the filename was not explicitly specified, try the path with '_doc.tt'
@@ -1192,44 +1211,20 @@ sub document_path {
     # Add the documentation for the parameters.  If no corresponding ruleset
     # is found, then state that no parameters are accepted.
     
-    my $validator = $self->{validator};
-    my $ruleset = defined $path_attrs->{ruleset} && $path_attrs->{ruleset} ne '' ? 
-	$path_attrs->{ruleset} : $path;
+    my $ruleset = $self->determine_ruleset($path, $path_attrs->{ruleset});
+
+    $vars->{param_doc} = 
+	$ruleset ? $self->{validator}->document_params($ruleset)
+	         : "I<This path does not take any parameters>";
     
-    if ( $validator->ruleset_defined($ruleset) )
-    {
-	$vars->{param_doc} = $validator->document_params($ruleset)
-    }
+    # Add the documentation for the response.  If no 'allow_vocab' attribute
+    # was given for this path, then all vocabularies are allowed.
     
-    else
-    {
-	$vars->{param_doc} = "I<This path does not take any parameters>";
-    }
-    
-    # If this path is associated with an implementing class, and if at least
-    # one section was specified for documentation, then document the
-    # response. If no 'allow_vocab' attribute was given for this path, then
-    # all vocabularies are allowed.
-    
-    my $class = $self->{path_attrs}{$path}{class};
-    my $doc_output = $self->{path_attrs}{$path}{doc_output};
+    my $output_map = $self->determine_output_map($path, $path_attrs->{output_map});
     my $allow_vocab = $self->{path_attrs}{$path}{allow_vocab} || $self->{vocab};
     
-    if ( $class && ref $doc_output eq 'ARRAY' && @$doc_output )
-    {
-	# Initialize the class if we are in 'one request' mode.
-	
-	$self->initialize_class($class) if $self->{ONE_REQUEST};
-	
-	# Generate response documentation
-	
-	$vars->{response_doc} = $self->document_response($class, $allow_vocab, $doc_output);
-    }
-    
-    else
-    {
-	$vars->{response_doc} = "I<This path does not implement any response>";
-    }
+    $vars->{response_doc} = $self->document_response($allow_vocab, $output_map) ||
+	"I<This path does not implement any response>";
     
     # Now select the appropriate layout and execute the template.
     
@@ -1267,6 +1262,93 @@ sub document_path {
 }
 
 register 'document_path' => \&document_path;
+
+
+# determine_ruleset ( path, ruleset )
+# 
+# Determine the ruleset that should apply to the given path.  If $ruleset is
+# given, then use that if it is defined or throw an exception if not.
+# Otherwise, try the path with slashes turned into commas.
+
+sub determine_ruleset {
+    
+    my ($self, $path, $ruleset) = @_;
+    
+    my $validator = $self->{validator};
+    
+    # If a ruleset name was explicitly given, then use that or throw an
+    # exception if not defined.
+    
+    if ( defined $ruleset and $ruleset ne '' )
+    {
+	croak "unknown ruleset '$ruleset' for path $path"
+	    unless $validator->ruleset_defined($ruleset);
+	
+	return $ruleset;
+    }
+    
+    # If the ruleset was explicitly specified as '', do not process the
+    # parameters for this path.
+    
+    elsif ( defined $ruleset )
+    {
+	return;
+    }
+    
+    # Otherwise, try the path with / replaced by :.  If that is not defined,
+    # then return empty.  The parameters for this path will not be processed.
+    
+    else
+    {
+	$path =~ s{/}{:}g;
+	
+	return $path if $validator->ruleset_defined($path);
+	return; # empty if not defined.
+    }
+}
+
+
+# determine_output_map {
+# 
+# If an explicit output_map is given, then use that if defined or throw an
+# error.  Otherwise, try the path with slashes turned into colons and ':map'
+# appended.
+
+sub determine_output_map {
+
+    my ($self, $path, $output_map) = @_;
+    
+    # If an output_set name was explicitly given, then use that or throw an
+    # exception if not defined.
+    
+    if ( defined $output_map and $output_map ne '' )
+    {
+	croak "unknown output set '$output_map' for path $path"
+	    unless ref $self->{set}{$output_map} eq 'Web::DataService::Set';
+	
+	return $output_map;
+    }
+    
+    # If the outputset was explicitly specified as '', then this path does not
+    # use one.
+    
+    elsif ( defined $output_map )
+    {
+	return;
+    }
+    
+    # Otherwise, try the path with / changed to : but return empty if this is
+    # not found.  Not all paths need an output set.
+    
+    else
+    {
+	$path =~ s{/}{:}g;
+	$path .= ':map';
+	
+	return $path if ref $self->{set}{$path} eq 'Web::DataService::Set';
+	return; # empty if not defined.
+    }   
+}
 
 
 sub set_response_headers {

@@ -54,26 +54,27 @@ sub initialize {
     
     # Then define an output map.
     
-    $ds->define_output_map($class =>
-	{ name => 'bin', block => '1.1/colls:bin', show => 1 },
+    $ds->define_set('1.1:colls:basic_map' =>
+        { value => 'basic', maps_to => '1.1:colls:basic', fixed => 1 },
+	{ value => 'bin', maps_to => '1.1/colls:bin' },
 	    "List the geographic clusters to which each collection belongs.",
-        { name => 'attr', block => '1.1/colls:attr', show => 1 },
+        { value => 'attr', maps_to => '1.1/colls:attr' },
 	    "Include the attribution of each collection: the author name(s) from",
 	    "the primary reference, and the year of publication.",
-        { name => 'ref', block => '1.1/colls:ref', show => 1 },
+        { value => 'ref', maps_to => '1.1/colls:ref' },
 	    "Include the primary reference for each collection, as formatted text.",
-        { name => 'loc', block => '1.1/colls:loc', show => 1 },
+        { value => 'loc', maps_to => '1.1/colls:loc' },
 	    "Include additional information about the location from which each",
 	    "collection was taken.",
-        { name => 'ext', block => '1.1/colls:ext', show => 1 },
+        { value => 'ext', maps_to => '1.1/colls:ext' },
 	    "Include additional information about the geographic extent of each",
 	    "cluster.",
-        { name => 'time', block => '1.1/colls:time', show => 1 },
+        { value => 'time', maps_to => '1.1/colls:time' },
 	    "Include additional information about the temporal extent of each",
 	    "collection or cluster.",
-        { name => 'crmod', block => '1.1/common:crmod', show => 1 },
+        { value => 'crmod', maps_to => '1.1/common:crmod' },
 	    "Include the C<created> and C<modified> timestamps for each collection",
-        { name => 'rem', block => '1.1/colls:rem', show => 1 },
+        { value => 'rem', maps_to => '1.1/colls:rem' },
 	    "Include any additional remarks that were entered about the collection.");
     
     # Then define output sections to express the resulting data.
@@ -373,9 +374,11 @@ sub initialize {
     $ds->define_ruleset('1.1:coll_display' =>
 	"The following parameter indicates which information should be returned about each resulting collection:",
 	{ param => 'show', list => q{,},
-	  valid => ENUM_VALUE('bin','attr','ref','ent','loc','time','taxa','rem','crmod') },
-	    "The value of this parameter should be a comma-separated list of section names drawn",
-	    "From the list given below.  Section C<basic> is always included.",
+	  valid => $ds->valid_set('1.1:colls:basic_map') },
+	    "This parameter is used to select additional information to be returned"
+	    "along with the basic record for each collection.  Its value should be"
+	    "one or more of the following, separated by commas:",
+	    $ds->document_set('1.1:colls:basic_map'),
 	{ ignore => 'level' });
     
     $ds->define_ruleset('1.1/colls/single' => 
