@@ -8,6 +8,8 @@
 
 package CommonData;
 
+use Web::DataService qw(:validators);
+
 use strict;
 use parent 'Exporter';
 
@@ -19,7 +21,34 @@ sub initialize {
     
     my ($class, $ds, $config, $dbh) = @_;
     
-    $ds->define_block( '1.1/common:crmod' =>
+    $ds->define_ruleset('1.1:common_params' => 
+	"The following parameters can be used with most requests:",
+	{ optional => 'limit', valid => [POS_ZERO_VALUE, ENUM_VALUE('all')], 
+	  error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
+	  default => 500 },
+	    "Limits the number of records returned.  The value may be a positive integer, zero, or C<all>.",
+	    "It defaults to 500, in order to prevent people from accidentally sending requests that",
+	    "might generate megabytes of data in response.  If you really want the entire result set,",
+		"specify <limit=all>.",
+	{ optional => 'offset', valid => POS_ZERO_VALUE },
+	    "Returned records start at this offset in the result set.  The value may be a positive integer or zero.",
+	{ optional => 'count', valid => FLAG_VALUE },
+	    "If specified, then the response includes the number of records found and the number returned.",
+	    "For more information about how this information is encoded, see the documentation pages",
+	    "for the various response formats.",
+	{ optional => 'vocab', valid => $ds->valid_vocab },
+	    "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
+	    "you want to override the default vocabulary for your selected format.",
+	    "Possible values depend upon the particular URL path, and include:", $ds->document_vocab,
+	">The following parameters are only relevant to the text formats (.csv, .tsv, .txt):",
+	{ optional => 'no_header', valid => FLAG_VALUE },
+	    "If specified, then the header line which gives the field names is omitted.",
+	{ optional => 'linebreak', valid => ENUM_VALUE('cr','crlf'), default => 'crlf' },
+	    "Specifies the linebreak character sequence.",
+	    "The value may be either 'cr' or 'crlf', and defaults to the latter.",
+	{ ignore => 'splat' });
+
+    $ds->define_block( '1.1:common:crmod' =>
       { select => ['$mt.created', '$mt.modified'] },
       { output => 'created', com_name => 'dcr' },
 	  "The date and time at which this record was created.",

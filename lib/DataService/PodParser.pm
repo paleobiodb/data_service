@@ -1010,7 +1010,8 @@ sub generate_text_content {
 	
 	foreach my $subnode ( @$content )
 	{
-	    $output .= $self->generate_text_content($subnode);
+	    my $suboutput = $self->generate_text_content($subnode);
+	    $output .= $suboutput if defined $suboutput;
 	}
 	
 	return $output;

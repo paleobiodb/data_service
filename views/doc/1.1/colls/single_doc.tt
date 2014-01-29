@@ -2,9 +2,25 @@
 
 =head2 DESCRIPTION
 
-This path returns information about a single collection record form the Paleobiology Database.
+This URL path returns information about a single collection record from the Paleobiology Database.
+
+Examples:
+
+=over 4
+
+=item *
+
+L</data1.1/colls/single.json?id=1003&show=loc,time,crmod>
+
+=item *
+
+L</data1.1/colls/single.txt?id=1003>
+
+=back
 
 <% PROCESS params %>
+
+<% PROCESS methods %>
 
 <% PROCESS response %>
 

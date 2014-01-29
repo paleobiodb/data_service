@@ -52,34 +52,31 @@ sub initialize {
 	$MAX_BIN_LEVEL = $bin_level;
     }
     
-    # Then define an output map.
+    # Define an output map listing the blocks of information that can be
+    # returned by the operations in this class.
     
     $ds->define_set('1.1:colls:basic_map' =>
         { value => 'basic', maps_to => '1.1:colls:basic', fixed => 1 },
-	{ value => 'bin', maps_to => '1.1/colls:bin' },
-	    "List the geographic clusters to which each collection belongs.",
-        { value => 'attr', maps_to => '1.1/colls:attr' },
-	    "Include the attribution of each collection: the author name(s) from",
+	{ value => 'bin', maps_to => '1.1:colls:bin' },
+	    "The list of geographic clusters to which the collection belongs.",
+        { value => 'attr', maps_to => '1.1:colls:attr' },
+	    "The attribution of the collection: the author name(s) from",
 	    "the primary reference, and the year of publication.",
-        { value => 'ref', maps_to => '1.1/colls:ref' },
-	    "Include the primary reference for each collection, as formatted text.",
-        { value => 'loc', maps_to => '1.1/colls:loc' },
-	    "Include additional information about the location from which each",
-	    "collection was taken.",
-        { value => 'ext', maps_to => '1.1/colls:ext' },
-	    "Include additional information about the geographic extent of each",
-	    "cluster.",
-        { value => 'time', maps_to => '1.1/colls:time' },
-	    "Include additional information about the temporal extent of each",
-	    "collection or cluster.",
-        { value => 'crmod', maps_to => '1.1/common:crmod' },
-	    "Include the C<created> and C<modified> timestamps for each collection",
-        { value => 'rem', maps_to => '1.1/colls:rem' },
-	    "Include any additional remarks that were entered about the collection.");
+        { value => 'ref', maps_to => '1.1:colls:ref' },
+	    "The primary reference for the collection, as formatted text.",
+        { value => 'loc', maps_to => '1.1:colls:loc' },
+	    "Additional information about the geographic locality of the collection",
+        { value => 'time', maps_to => '1.1:colls:time' },
+	    "Additional information about the temporal locality of the",
+	    "collection.",
+        { value => 'crmod', maps_to => '1.1:colls:crmod' },
+	    "The C<created> and C<modified> timestamps for the collection",
+        { value => 'rem', maps_to => '1.1:colls:rem' },
+	    "Any additional remarks that were entered about the collection.");
     
-    # Then define output sections to express the resulting data.
+    # Then define the output blocks that it mentions.
     
-    $ds->define_block( '1.1/colls:basic' =>
+    $ds->define_block( '1.1:colls:basic' =>
       { select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
 		   'c.lat', 'c.lng', 'cc.latlng_basis as llb', 'cc.latlng_precision as llp',
 		   'c.n_occs', 'ei.interval_name as early_interval', 'li.interval_name as late_interval',
@@ -90,7 +87,7 @@ sub initialize {
       { output => 'record_type', value => 'collection', com_name => 'typ', com_value => 'col', 
 	dwc_value => 'Occurrence' },
 	  "type of this object: 'col' for a collection",
-      { output => 'formation', com_name => 'fmm', if_section => 'strat' },
+      { output => 'formation', com_name => 'fmm', if_block => 'strat' },
 	  "The formation in which this collection was found",
       { output => 'lng', dwc_name => 'decimalLongitude', com_name => 'lng' },
 	  "The longitude at which the collection is located (in degrees)",
@@ -103,9 +100,9 @@ sub initialize {
 	  "An arbitrary name which identifies the collection, not necessarily unique",
       { output => 'collection_subset', com_name => 'nm2' },
 	  "If this collection is a part of another one, this field specifies which part",
-      { output => 'attribution', dwc_name => 'recordedBy', com_name => 'att', if_section => 'attr' },
+      { output => 'attribution', dwc_name => 'recordedBy', com_name => 'att', if_block => 'attr' },
 	  "The attribution (author and year) of this collection name",
-      { output => 'pubyr', com_name => 'pby', if_section => 'attr' },
+      { output => 'pubyr', com_name => 'pby', if_block => 'attr' },
 	  "The year in which this collection was published",
       { output => 'n_occs', com_name => 'noc' },
 	  "The number of occurrences in this collection",
@@ -121,7 +118,7 @@ sub initialize {
     #defined_fields $ds 'toprank' =>
     #	{ select, "sum(c.n_occs) as n_occs, count(*) as n_colls" };
 
-    $ds->define_block( '1.1/colls:bin' =>
+    $ds->define_block( '1.1:colls:bin' =>
       { output => 'bin_id_1', com_name => 'lv1' },
 	  "The identifier of the level-1 cluster in which this collection is located",
       { output => 'bin_id_2', com_name => 'lv2' },
@@ -129,14 +126,14 @@ sub initialize {
       { output => 'bin_id_3', com_name => 'lv3' },
 	  "The identifier of the level-3 cluster in which this collection is located");
     
-    $ds->define_block( '1.1/colls:attr' =>
+    $ds->define_block( '1.1:colls:attr' =>
       { select => ['r.author1init as a_ai1', 'r.author1last as a_al1', 'r.author2init as a_ai2', 
 		   'r.author2last as a_al2', 'r.otherauthors as a_oa', 'r.pubyr as a_pubyr'],
         tables => ['r'] },
       { set => 'attribution', from_record => 1, code => \&generateAttribution },
       { set => 'pubyr', from => 'a_pubyr', });
     
-    $ds->define_block( '1.1/colls:ref' =>
+    $ds->define_block( '1.1:colls:ref' =>
       { select => ['r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
 		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
 		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
@@ -150,7 +147,7 @@ sub initialize {
       { output => 'ref_list', pbdb_name => 'primary_reference', dwc_name => 'associatedReferences', com_name => 'ref' },
 	  "The primary reference associated with this collection (as formatted text)");
     
-    $ds->define_block( '1.1/colls:loc' =>
+    $ds->define_block( '1.1:colls:loc' =>
       { select => ['cc.country', 'cc.state', 'cc.county', 'cc.geogscale'] },
       { output => 'country', com_name => 'cc2' },
 	  "The country in which this collection is located (ISO-3166-1 alpha-2)",
@@ -161,7 +158,7 @@ sub initialize {
       { output => 'geogscale', com_name => 'gsc' },
 	  "The geographic scale of this collection.");
 
-    $ds->define_block( '1.1/colls:time' =>
+    $ds->define_block( '1.1:colls:time' =>
       { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
 	tables => ['im'] },
       { set => '*', code => \&fixTimeOutput },
@@ -179,7 +176,7 @@ sub initialize {
 	  "The end of a range of intervals from the selected timescale that most closely brackets",
 	  "the time range associated with this collection or cluster (with C<early_int_no>)");
 
-    $ds->define_block( '1.1/colls:ent' =>
+    $ds->define_block( '1.1:colls:ent' =>
       { select => ['$mt.authorizer_no', 'ppa.name as authorizer', '$mt.enterer_no', 
 		   'ppe.name as enterer', '$mt.modifier_no', 'ppm.name as modifier'],
 	tables => ['ppa', 'ppe', 'ppm'] },
@@ -215,12 +212,12 @@ sub initialize {
 	  "A list of records describing the taxa that have been identified",
 	  "as appearing in this collection");
     
-    $ds->define_block( '1.1/colls:rem' =>
+    $ds->define_block( '1.1:colls:rem' =>
       { set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
       { output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
 	  "Any additional remarks that were entered about the colection");
     
-    $ds->define_block( '1.1/colls:strat' =>
+    $ds->define_block( '1.1:colls:strat' =>
       { select => ['cc.member', 'cc.stratscale', 'cc.stratcomments'] },
       { output => 'formation', com_name => 'frm' },
 	  "The formation in which the collection was found",
@@ -231,7 +228,7 @@ sub initialize {
       { output => 'stratcomments', com_name => 'scm' },
 	  "Stratigraphic comments/notes about the collection, if any");
 
-    $ds->define_block( '1.1/colls:stratext' =>
+    $ds->define_block( '1.1:colls:stratext' =>
       { select => ['cc.zone', 'cc.geological_group', 'cc.localsection', 'cc.localbed', 
 		   'cc.localorder', 'cc.regionalsection', 'cc.regionalbed', 'cc.regionalorder'] },
       { output => 'zone', com_name => 'zon' }, 
@@ -241,7 +238,7 @@ sub initialize {
       { output => 'localsection', com_name => 'lsc' },
 	  "The local section in which the collection was found");
 
-    $ds->define_block( '1.1/colls:refbase' =>
+    $ds->define_block( '1.1:colls:refbase' =>
       { select => ['r.reference_no', '[ref]', 'r.comments as r_comments'] },
       { set => 'formatted', code => \&generateReference },
       { output => 'reference_no', com_name => 'rid' }, 
@@ -250,35 +247,35 @@ sub initialize {
 	  "The type of this object: 'ref' for a document reference",
       { output => 'formatted', com_name => 'ref' },
 	  "Formatted reference",
-      { output => 'r_ai1', com_name => 'ai1', pbdb_name => 'author1init', not_section => 'formonly' },
+      { output => 'r_ai1', com_name => 'ai1', pbdb_name => 'author1init', not_block => 'formonly' },
 	  "First initial of the first author",
-      { output => 'r_al1', com_name => 'al1', pbdb_name => 'author1last', not_section => 'formonly' },
+      { output => 'r_al1', com_name => 'al1', pbdb_name => 'author1last', not_block => 'formonly' },
 	  "Last name of the second author",
-      { output => 'r_ai2', com_name => 'ai2', pbdb_name => 'author2init', not_section => 'formonly' },
+      { output => 'r_ai2', com_name => 'ai2', pbdb_name => 'author2init', not_block => 'formonly' },
 	  "First initial of the second author",
-      { output => 'r_al2', com_name => 'al2', pbdb_name => 'author2last', not_section => 'formonly' },
+      { output => 'r_al2', com_name => 'al2', pbdb_name => 'author2last', not_block => 'formonly' },
 	  "Last name of the second author",
-      { output => 'r_oa', com_name => 'oau', pbdb_name => 'otherauthors', not_section => 'formonly' },
+      { output => 'r_oa', com_name => 'oau', pbdb_name => 'otherauthors', not_block => 'formonly' },
 	  "The names of the remaining authors",
-      { output => 'r_pubyr', com_name => 'pby', pbdb_name => 'pubyr', not_section => 'formonly' },
+      { output => 'r_pubyr', com_name => 'pby', pbdb_name => 'pubyr', not_block => 'formonly' },
 	  "The year in which the document was published",
-      { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', not_section => 'formonly' },
+      { output => 'r_reftitle', com_name => 'tit', pbdb_name => 'reftitle', not_block => 'formonly' },
 	  "The title of the document",
-      { output => 'r_pubtitle', com_name => 'pbt', pbdb_name => 'pubtitle', not_section => 'formonly' },
+      { output => 'r_pubtitle', com_name => 'pbt', pbdb_name => 'pubtitle', not_block => 'formonly' },
 	  "The title of the publication in which the document appears",
-      { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', not_section => 'formonly' },
+      { output => 'r_editors', com_name => 'eds', pbdb_name => 'editors', not_block => 'formonly' },
 	  "Names of the editors, if any",
-      { output => 'r_pubvol', com_name => 'vol', pbdb_name => 'pubvol', not_section => 'formonly' },
+      { output => 'r_pubvol', com_name => 'vol', pbdb_name => 'pubvol', not_block => 'formonly' },
 	  "The volume number, if any",
-      { output => 'r_pubno', com_name => 'num', pbdb_name => 'pubno', not_section => 'formonly' },
+      { output => 'r_pubno', com_name => 'num', pbdb_name => 'pubno', not_block => 'formonly' },
 	  "The series number within the volume, if any",
-      { output => 'r_fp', com_name => 'pgf', pbdb_name => 'firstpage', not_section => 'formonly' },
+      { output => 'r_fp', com_name => 'pgf', pbdb_name => 'firstpage', not_block => 'formonly' },
 	  "First page number",
-      { output => 'r_lp', com_name => 'pgl', pbdb_name => 'lastpage', not_section => 'formonly' },
+      { output => 'r_lp', com_name => 'pgl', pbdb_name => 'lastpage', not_block => 'formonly' },
 	  "Last page number",
-      { output => 'r_pubtype', com_name => 'pbt', pbdb_name => 'publication_type', not_section => 'formonly' },
+      { output => 'r_pubtype', com_name => 'pbt', pbdb_name => 'publication_type', not_block => 'formonly' },
 	  "Publication type",
-      { output => 'r_language', com_name => 'lng', pbdb_name => 'language', not_section => 'formonly' },
+      { output => 'r_language', com_name => 'lng', pbdb_name => 'language', not_block => 'formonly' },
 	  "Language",
       { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi' },
 	  "The DOI for this document, if known",
@@ -289,13 +286,20 @@ sub initialize {
       { output => 'r_comments', com_name => 'cmt', pbdb_name => 'comments' },
 	  "Additional comments about this reference, if any");
     
+    $ds->define_block( '1.1:colls:crmod' =>
+      { select => ['cc.created', 'cc.modified'] },
+      { output => 'created', com_name => 'dcr' },
+	  "The date and time at which this record was created.",
+      { output => 'modified', com_name => 'dmd' },
+	  "The date and time at which this record was last modified.");
+    
     # Finally, define rulesets to interpret the parmeters used with operations
     # defined by this class.
     
     $ds->define_ruleset('1.1:main_selector' =>
-    "The following parameters can be used to specify which records to return.  Except as specified below, you can use these in combination:",
     [param => 'clust_id', POS_VALUE, { list => ',' }],
     "Return only records associated with the specified geographic clusters.",
+    "You may specify one or more cluster ids, separated by commas.",
     [param => 'taxon_name', \&TaxonData::validNameSpec],
     "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
     [param => 'taxon_id', POS_VALUE, { list => ','}],
@@ -317,11 +321,8 @@ sub initialize {
     [param => 'person_id', POS_VALUE, { list => ','}],
     "Return only records whose entry was authorized by the given person or people, specified by numeric identifier.",
     [param => 'lngmin', DECI_VALUE],
-    "#",
     [param => 'lngmax', DECI_VALUE],
-    "#",
     [param => 'latmin', DECI_VALUE],
-    "#",
     [param => 'latmax', DECI_VALUE],
     "Return only records whose geographic location falls within the given bounding box.",
     "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
@@ -346,9 +347,9 @@ sub initialize {
     [at_most_one => 'interval_id', 'interval', 'max_ma'],
     [optional => 'timerule', ENUM_VALUE('contain','overlap','buffer')],
     "Resolve temporal locality according to the specified rule:", "=over 4",
-    "=item contain", "Return only collections whose temporal locality is strictly contained in the specified time range.",
-    "=item overlap", "Return only collections whose temporal locality overlaps the specified time range.",
-    "=item buffer", "Return only collections whose temporal locality overlaps the specified range and is contained",
+    "=item contain", "Return only records whose temporal locality is strictly contained in the specified time range.",
+    "=item overlap", "Return only records whose temporal locality overlaps the specified time range.",
+    "=item buffer", "Return only records whose temporal locality overlaps the specified range and is contained",
     "within the specified time range plus a buffer on either side.  If an interval from one of the timescales known to the database is",
     "given, then the default buffer will be the intervals immediately preceding and following at the same level.",
     "Otherwise, the buffer will default to 10 million years on either side.  This can be overridden using the parameters",
@@ -361,42 +362,48 @@ sub initialize {
     "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).");
 
     $ds->define_ruleset('1.1:coll_specifier' =>
+	"The following required parameter selects a record to retrieve:",
 	{ param => 'id', valid => POS_VALUE, alias => 'coll_id' },
 	    "The identifier of the collection you wish to retrieve");
     
     $ds->define_ruleset('1.1:coll_selector' =>
-	"You can use the following parameter if you wish to retrieve information about",
-	"a known list of collections, or to filter a known list against other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
 	{ param => 'id', valid => INT_VALUE, list => ',', alias => 'coll_id' },
 	    "A comma-separated list of collection identifiers.");
     
     $ds->define_ruleset('1.1:coll_display' =>
-	"The following parameter indicates which information should be returned about each resulting collection:",
+	"You can use the following parameter to request additional information about each",
+	"retrieved collection:",
 	{ param => 'show', list => q{,},
 	  valid => $ds->valid_set('1.1:colls:basic_map') },
-	    "This parameter is used to select additional information to be returned"
-	    "along with the basic record for each collection.  Its value should be"
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each collection.  Its value should be",
 	    "one or more of the following, separated by commas:",
 	    $ds->document_set('1.1:colls:basic_map'),
 	{ ignore => 'level' });
     
-    $ds->define_ruleset('1.1/colls/single' => 
+    $ds->define_ruleset('1.1:colls:single' => 
     	{ require => '1.1:coll_specifier', 
 	  error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" },
     	{ allow => '1.1:coll_display' },
     	{ allow => '1.1:common_params' },
 	    "^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
 
-    $ds->define_ruleset('1.1/colls/list' => 
+    $ds->define_ruleset('1.1:colls:list' => 
+	">You can use the following parameter if you wish to retrieve information about",
+	"a known list of collections, or to filter a known list against other criteria such as location or time.",
+	"Only the records which match the other parameters that you specify will be returned.",
     	{ allow => '1.1:coll_selector' },
+        ">The following parameters can be used to query for collections by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.",
     	{ allow => '1.1:main_selector' },
     	{ allow => '1.1:coll_display' },
     	{ allow => '1.1:common_params' },
-	    "^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
     
-    $ds->define_ruleset('1.1/colls/refs' =>
+    $ds->define_ruleset('1.1:colls:refs' =>
     	{ allow => '1.1:coll_selector' },
+    ">The following parameters can be used to specify which records to return.",
+    "Except as specified below, you can use these in any combination:",
     	{ allow => '1.1:main_selector' },
     	{ allow => '1.1:refs_display' },
     	{ allow => '1.1:common_params' },
@@ -453,7 +460,7 @@ sub get {
         WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
     
-    print $self->{main_sql} . "\n\n" if $self->debug;
+    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
@@ -671,8 +678,8 @@ sub fixTimeOutput {
     
     my ($self, $record) = @_;
     
-    $record->{early_age} =~ s/\.?0+$//;
-    $record->{late_age} =~ s/\.?0+$//;
+    $record->{early_age} =~ s/\.?0+$// if defined $record->{early_age};
+    $record->{late_age} =~ s/\.?0+$// if defined $record->{late_age};
 }
 
 

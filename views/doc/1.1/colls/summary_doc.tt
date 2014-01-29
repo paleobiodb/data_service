@@ -10,5 +10,7 @@ is returned in the C<bns> field.
 
 <% PROCESS params %>
 
+<% PROCESS methods %>
+
 <% PROCESS response %>
 

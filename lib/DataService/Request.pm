@@ -118,7 +118,7 @@ sub configure_output {
     my $self = shift;
     my $ds = $self->{ds};
     
-    return $ds->configure_query_output($self);
+    return $ds->configure_output($self);
 }
 
 
@@ -180,11 +180,11 @@ sub extra_block_list {
 # 
 # Return a hash of the output sections being shown for this request.
 
-sub section_set {
+sub output_set {
 
     my ($self) = @_;
     
-    return $self->{section_set};
+    return $self->{block_set};
 }
 
 

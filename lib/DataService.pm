@@ -16,6 +16,8 @@ package Web::DataService;
 use Carp qw( croak );
 use Scalar::Util qw( reftype blessed weaken );
 
+use Web::DataService::Format;
+use Web::DataService::Vocabulary;
 use Web::DataService::Request;
 use Web::DataService::Output;
 use Web::DataService::PodParser;
@@ -52,6 +54,9 @@ BEGIN {
 my $DEFAULT_INSTANCE = __PACKAGE__->new({ name => 'Default' });
 
 my $DEFAULT_COUNT = 0;
+
+our @HTTP_METHOD_LIST = ('GET', 'HEAD', 'POST', 'PUT', 'DELETE');
+
 
 # Methods
 # =======
@@ -191,6 +196,7 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    ruleset => 'single',
 		    base_output => 'list',
 		    doc_output => 'list',
+		    output_map => 'single',
 		    uses_dbh => 'single',
 		    version => 'single',
 		    public_access => 'single',
@@ -204,6 +210,7 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    linebreak_param => 'single',
 		    default_limit => 'single',
 		    streaming_theshold => 'single',
+		    allow_method => 'set',
 		    allow_format => 'set',
 		    allow_vocab => 'set',
 		    doc_file => 'single',
@@ -268,7 +275,8 @@ sub create_path_node {
 			offset_param => 'offset',
 			count_param => 'count',
 			no_head_param => 'noheader',
-			linebreak_param => 'linebreak' };
+			linebreak_param => 'linebreak',
+		        allow_method => { GET => 1 } };
     
     # Now go through the parent attributes and copy into the new node.  We
     # only need to copy one level down, since the attributes are not going to
@@ -528,306 +536,6 @@ sub get_path_attr {
 }
 
 
-# define_vocab ( attrs... )
-# 
-# Define one or more vocabularies of field names for data service responses.
-
-sub define_vocab {
-
-    my ($self);
-    
-    # If we were called as a method, use the object on which we were called.
-    # Otherwise, use the globally defined one.
-    
-    if ( blessed $_[0] && $_[0]->isa('Web::DataService') )
-    {
-	$self = shift;
-    }
-    
-    else
-    {
-	$self = $DEFAULT_INSTANCE;
-    }
-    
-    #my ($package, $filename, $line) = caller;
-    my ($last_node);
-    
-    # Now we go through the rest of the arguments.  Hashrefs define new
-    # vocabularies, while strings add to the documentation of the vocabulary
-    # whose definition they follow.
-    
-    foreach my $item (@_)
-    {
-	# A hashref defines a new vocabulary.
-	
-	if ( ref $item eq 'HASH' )
-	{
-	    # Make sure the attributes include 'name'.
-	    
-	    my $name = $item->{name}; 
-	    
-	    croak "could not define vocabulary: you must include the attribute 'name'" unless $name;
-	    
-	    # Make sure this vocabulary was not already defined by a previous call,
-	    # and set the attributes as specified.
-	    
-	    croak "vocabulary '$name' was already defined" if defined $self->{vocab}{$name}
-		and not $self->{vocab}{$name}{_default};
-	    
-	    # Remove the default vocabulary, because it is only used if no
-	    # other vocabularies are defined.
-	    
-	    if ( $self->{vocab}{default}{_default} and not $item->{disabled} )
-	    {
-		delete $self->{vocab}{default};
-		shift @{$self->{vocab_list}};
-	    }
-	    
-	    # Now install the new vocabulary.  But don't add it to the list if
-	    # the 'disabled' attribute is set.
-	    
-	    $self->{vocab}{$name} = $item;
-	    push @{$self->{vocab_list}}, $name unless $item->{disabled};
-	    $last_node = $item;
-	}
-	
-	# A scalar is taken to be a documentation string.
-	
-	elsif ( not ref $item )
-	{
-	    $self->add_node_doc($last_node, $item);
-	}
-	
-	else
-	{
-	    croak "the arguments to 'define_vocab' must be hashrefs and strings";
-	}
-    }
-    
-    croak "the arguments must include a hashref of attributes"
-	unless $last_node;
-}
-
-
-# validate_vocab ( )
-# 
-# Return a code reference (actually a reference to a closure) that can be used
-# in a parameter rule to validate a vocaubulary-selecting parameter.  All
-# non-disabled vocabularies are included.
-
-sub valid_vocab {
-    
-    my ($self) = @_;
-    
-    # The ENUM_VALUE subroutine is defined by HTTP::Validate.pm.
-    
-    return ENUM_VALUE(@{$self->{vocab_list}});
-}
-
-
-# document_vocab ( name )
-# 
-# Return a string containing POD documentation of the vocabulary
-# possibilities.  If a name is specified, return the documentation string for
-# that vocabulary only.
-
-sub document_vocab {
-    
-    my ($self, $name) = @_;
-    
-    # Otherwise, if a single vocabulary name was given, return its
-    # documentation string if any.
-    
-    if ( $name )
-    {
-	return $self->{vocab}{$name}{doc};
-    }
-    
-    # Otherwise, document the entire list of enabled vocabularies in POD
-    # format.
-    
-    my $doc = "=over 4\n\n";
-    
-    $doc .= "=for pp_table_no_header Name* | Documentation\n\n";
-    
-    foreach my $v (@{$self->{vocab_list}})
-    {
-	my $vrec = $self->{vocab}{$v};
-	
-	$doc .= "=item $vrec->{name}\n\n";
-	$doc .= "$vrec->{doc}\n\n" if $vrec->{doc};
-    }
-    
-    $doc .= "=back\n\n";
-    
-    return $doc;
-}
-
-our (%FORMAT_DEF) = (name => 'ignore',
-		     default_vocab => 'single',
-		     content_type => 'single',
-		     module => 'single',
-		     doc => 'single',
-		     disabled => 'single');
-
-our (%FORMAT_CT) = (json => 'application/json',
-		    txt => 'text/plain',
-		    tsv => 'text/tab-separated-values',
-		    csv => 'text/csv',
-		    xml => 'text/xml');
-
-our (%FORMAT_CLASS) = (json => 'Web::DataService::JSON',
-		       txt => 'Web::DataService::Text',
-		       tsv => 'Web::DataService::Text',
-		       csv => 'Web::DataService::Text',
-		       xml => 'Web::DataService::XML');
-
-# define_format ( attrs... )
-# 
-# Define one or more formats for data service responses.
-
-sub define_format {
-
-    # If we were called as a method, use the object on which we were called.
-    # Otherwise, use the globally defined one.
-    
-    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-    
-    my ($last_node);
-    
-    # Now we go through the rest of the arguments.  Hashrefs define new
-    # vocabularies, while strings add to the documentation of the vocabulary
-    # whose definition they follow.
-    
-    foreach my $item (@_)
-    {
-	# A hashref defines a new vocabulary.
-	
-	if ( ref $item eq 'HASH' )
-	{
-	    # Make sure the attributes include 'name'.
-	    
-	    my $name = $item->{name}; 
-	    
-	    croak "define_format: the attributes must include 'name'" unless defined $name;
-	    
-	    # Make sure this format was not already defined by a previous call.
-	    
-	    croak "define_format: '$name' was already defined" if defined $self->{format}{$name};
-	    
-	    # Create a new record to represent this format and check the attributes.
-	    
-	    my $record = bless { name => $name }, 'Web::DataService::Format';
-	    
-	    $record->{is_complex} = 1 if $name eq 'json';
-	    $record->{is_flat} = 1 if $name eq 'csv' || $name eq 'tsv' || $name eq 'txt' || $name eq 'xml';
-	    
-	    foreach my $k ( keys %$item )
-	    {
-		croak "define_format: invalid attribute '$k'" unless $FORMAT_DEF{$k};
-		
-		my $v = $item->{$k};
-		
-		if ( $k eq 'default_vocab' )
-		{
-		    croak "define_format: unknown vocabulary '$v'"
-			unless ref $self->{vocab}{$v};
-		    
-		    croak "define_format: cannot default to disabled vocabulary '$v'"
-			if $self->{vocab}{$v}{disabled} and not $item->{disabled};
-		}
-		
-		$record->{$k} = $item->{$k};
-	    }
-	    
-	    $record->{content_type} ||= $FORMAT_CT{$name};
-	    
-	    croak "define_format: you must specify an HTTP content type for format '$name' using the attribute 'content_type'"
-		unless $record->{content_type};
-	    
-	    $record->{module} ||= $FORMAT_CLASS{$name};
-	    
-	    croak "define_format: you must specify a class to implement format '$name' using the attribute 'module'"
-		unless $record->{module};
-	    
-	    # Make sure that the module is loaded, unless the format is disabled.
-	    
-	    unless ( $record->{disabled} )
-	    {
-		my $filename = $record->{module};
-		$filename =~ s{::}{/}g;
-		$filename .= '.pm' unless $filename =~ /\.pm$/;
-		
-		require $filename;
-	    }
-	    
-	    # Now store the record as a response format for this data service.
-	    
-	    $self->{format}{$name} = $record;
-	    push @{$self->{format_list}}, $name unless $record->{disabled};
-	    $last_node = $record;
-	}
-	
-	# A scalar is taken to be a documentation string.
-	
-	elsif ( not ref $item )
-	{
-	    $self->add_node_doc($last_node, $item);
-	}
-	
-	else
-	{
-	    croak "define_format: the arguments to this routine must be hashrefs and strings";
-	}
-    }    
-    
-    croak "define_format: you must include at least one hashref of attributes"
-	unless $last_node;
-}
-
-
-# document_format ( name )
-# 
-# Return a string containing POD documentation of the response formats that
-# have been defined for this data service.  If a format name is given, return
-# just the documentation for that format.
-
-sub document_format {
-    
-    my ($self, $name) = @_;
-    
-    # If no formats have been defined, return undef.
-    
-    return unless ref $self->{format_list} eq 'ARRAY';
-    
-    # Otherwise, if a single format name was given, return its
-    # documentation string if any.
-    
-    if ( $name )
-    {
-	return $self->{format}{$name}{doc};
-    }
-    
-    # Otherwise, document the entire list of formats in POD format.
-    
-    my $doc = "=over 4\n\n";
-    
-    $doc .= "=for pp_table_no_header Name* | Documentation\n\n";
-    
-    foreach my $f (@{$self->{format_list}})
-    {
-	my $frec = $self->{format}{$f};
-	
-	$doc .= "=item $frec->{name}\n\n";
-	$doc .= "fvrec->{doc}\n\n" if $frec->{doc};
-    }
-    
-    $doc .= "=back\n\n";
-    
-    return $doc;
-}
-
-
 # define_ruleset ( name, rule... )
 # 
 # Define a ruleset under the given name.  This is just a wrapper around the
@@ -963,13 +671,12 @@ sub execute_path {
 	
 	# Then do a basic sanity check to make sure that the operation is
 	# valid.  This should always succeed, because the 'class' and 'method'
-
 	# attributes were checked when the path was defined.
 	
 	my $class = $path_attrs->{class};
 	my $method = $path_attrs->{method};
 	my $arg = $path_attrs->{arg};
-	
+		
 	croak "cannot execute path '$path': invalid class '$class' and method '$method'"
 	    unless $class->isa('Web::DataService::Request') && $class->can($method);
 	
@@ -1032,24 +739,27 @@ sub execute_path {
 	# Determine the result limit and offset, if any.
 	
 	$request->{result_limit} = 
+	    defined $path_attrs->{limit_param} &&
 	    defined $request->{params}{$path_attrs->{limit_param}}
 		? $request->{params}{$path_attrs->{limit_param}}
 		    : $path_attrs->{default_limit} || $self->{default_limit} || 'all';
 	
 	$request->{result_offset} = 
+	    defined $path_attrs->{offset_param} &&
 	    defined $request->{params}{$path_attrs->{offset_param}}
 		? $request->{params}{$path_attrs->{offset_param}} : 0;
 	
 	# Set the vocabulary and output section list using the validated
 	# parameters, so that we can properly configure the output.
 	
-	my $output_param = $path_attrs->{output_param};
-	
 	$request->{vocab} = $request->{params}{$path_attrs->{vocab_param}} || 
 	    $self->{format}{$format}{default_vocab} || $self->{vocab_list}[0];
 	
-	$request->{base_output} = $path_attrs->{base_output};
-	$request->{extra_output} = $request->{params}{$output_param};
+	my $map_name = $path_attrs->{output_map};
+	
+	$request->{output_map} = $self->{set}{$map_name} if defined $map_name;
+	$request->{optional_output} = $request->{params}{$path_attrs->{output_param}}
+	    if defined $path_attrs->{output_param};
 	
 	# Determine whether we should show the optional header information in
 	# the result.
@@ -1201,12 +911,22 @@ sub document_path {
 	$doc_file = $path_attrs->{doc_error_file} || $self->{doc_error_file} || 'doc_error.tt';
     }
     
+    my $doc_title = $path_attrs->{doc_title};
+    my $ds_version = $path_attrs->{version} || $self->{version};
+    
+    unless ( $doc_title )
+    {
+	$doc_title = $path;
+	$doc_title =~ s/^$ds_version//;
+    }
+    
     # Then assemble the variables used to fill in the template:
     
-    my $vars = { doc_title => $path_attrs->{doc_title},
-		 ds_version => $path_attrs->{version} || $self->{version},
-	         param_doc => '',
-	         response_doc => '' };
+    my $vars = { path => $path,
+		 doc_title => $doc_title,
+		 ds_version => $ds_version,
+		 vocab_param => $path_attrs->{vocab_param},
+		 output_param => $path_attrs->{output_param} };
     
     # Add the documentation for the parameters.  If no corresponding ruleset
     # is found, then state that no parameters are accepted.
@@ -1217,14 +937,46 @@ sub document_path {
 	$ruleset ? $self->{validator}->document_params($ruleset)
 	         : "I<This path does not take any parameters>";
     
+    # Document which methods are valid for this path.
+    
+    my @http_methods = $self->list_http_methods($path);
+    $vars->{http_method_list} = join(', ', map { "C<$_>" } @http_methods);
+    
     # Add the documentation for the response.  If no 'allow_vocab' attribute
     # was given for this path, then all vocabularies are allowed.
     
     my $output_map = $self->determine_output_map($path, $path_attrs->{output_map});
     my $allow_vocab = $self->{path_attrs}{$path}{allow_vocab} || $self->{vocab};
     
-    $vars->{response_doc} = $self->document_response($allow_vocab, $output_map) ||
-	"I<This path does not implement any response>";
+    $vars->{response_doc} = $self->document_response($path, $allow_vocab, $output_map)
+	if defined $output_map && $output_map ne '';
+    
+    my @fixed_blocks = $self->list_fixed_blocks($path, $output_map);
+    my @optional_blocks = $self->list_optional_blocks($path, $output_map);
+    
+    $vars->{fixed_blocks} = scalar(@fixed_blocks);
+    $vars->{fixed_list} = join(', ', map { "I<$_>" } @fixed_blocks);
+    $vars->{optional_blocks} = scalar(@optional_blocks);
+    $vars->{optional_list} = join(', ', map { "I<$_>" } @optional_blocks);
+    
+    # Add the documentation for the allowed formats and vocabularies.
+    
+    $vars->{format_doc} = $self->document_allowed_formats($path);
+    $vars->{vocab_doc} = $self->document_allowed_vocab($path);
+    
+    # Add the labels and links for the navigation trail.
+    
+    my @path = split qr{/}, $path;
+    my $link = $self->{path_prefix} . shift @path;
+    my @trail = ($link, $link);
+    
+    foreach my $comp (@path)
+    {
+	$link .= "/$comp";
+	push @trail, ($comp, $link);
+    }
+    
+    $vars->{trail_list} = \@trail;
     
     # Now select the appropriate layout and execute the template.
     
@@ -1262,6 +1014,58 @@ sub document_path {
 }
 
 register 'document_path' => \&document_path;
+
+
+# generate_path_link ( path, title )
+# 
+# Generate a link in Pod format to the documentation for the given path.  If
+# $title is defined, use that as the link title.  Otherwise, if the path has a
+# 'doc_title' attribute, use that.
+# 
+# If something goes wrong, generate a warning and return the empty string.
+
+sub generate_path_link {
+    
+    my ($self, $path, $title) = @_;
+    
+    return '' unless defined $path && $path ne '';
+    
+    # Make sure this path is defined.
+    
+    my $path_attrs = $self->{path_attrs}{$path};
+    
+    unless ( $path_attrs )
+    {
+	warn "cannot generate link to unknown path '$path'";
+	return '';
+    }
+    
+    # Get the correct title for the link.
+    
+    $title //= $path_attrs->{doc_title};
+    
+    # Transform the path into a valid URL.
+    
+    if ( defined $self->{path_prefix} && $self->{path_prefix} ne '' )
+    {
+	$path = "$self->{path_prefix}$path";
+    }
+    
+    unless ( $path =~ qr{/$}x )
+    {
+	$path .= "_doc.html";
+    }
+    
+    if ( defined $title && $title ne '' )
+    {
+	return "L<$title|$path>";
+    }
+    
+    else
+    {
+	return "L<$path>";
+    }
+}
 
 
 # determine_ruleset ( path, ruleset )

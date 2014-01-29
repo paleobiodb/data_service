@@ -3,10 +3,24 @@
 
 =head2 PARAMETERS
 
+<%- IF param_doc %>
 <% param_doc %>
-
+<%- ELSE -%>
+I<This request does not accept any parameters>.
+<% END -%>
 <% END -%>
 
+
+<%- BLOCK methods %>
+
+=head2 METHODS
+
+<% IF http_method_list %>
+You can use the following HTTP methods with this URL path: <% http_method_list %>
+<%- ELSE -%>
+Warning: no valid HTTP methods were defined for this URL.
+<% END -%>
+<% END -%>
 
 
 <%- BLOCK response %>
@@ -14,6 +28,56 @@
 
 =head2 RESPONSE
 
-<% response_doc %>
-
+<%- IF response_doc %>
+The response to an HTTP request on this path will consistst of fields from the following list. 
+<%- IF fixed_blocks %>
+<%- IF fixed_blocks > 1 %>
+The blocks <% fixed_list %> are always present.
+<%- ELSE -%>
+The block <% fixed_list %> is always present.
+<%- END -%>
+<%- IF optional_blocks %>
+The others may be selected using the parameter C<<% output_param %>>.
 <% END -%>
+<%- ELSE -%>
+You can select the output blocks to be returned using the parameter C<<% output_param %>>.
+<% END -%>
+
+<% response_doc %>
+<% PROCESS formats %>
+<% PROCESS vocabularies %>
+<% ELSE %>
+I<No response was defined for this path>
+<% END -%>
+<% END -%>
+
+
+<%- BLOCK formats %>
+
+=head2 FORMATS
+
+<% IF format_doc %>
+The following formats are available for this path.  You can select any
+of them by using the appropriate path suffix.
+
+<% format_doc %>
+<%- ELSE -%>
+I<No response formats were defined for this path.>
+<% END -%>
+<% END -%>
+
+
+<%- BLOCK vocabularies %>
+
+=head2 VOCABULARIES
+
+<% IF vocab_doc %>
+The following response vocabularies are available for this path.  If you wish the response
+to use a vocabulary other than the default for the selected format, you can use the C<<% vocab_param %>> parameter.
+
+<% vocab_doc %>
+<%- ELSE -%>
+I<No vocabularies were defined for this path.>
+<% END -%>
+<% END -%>
+

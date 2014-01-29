@@ -24,7 +24,7 @@ our (%SET_DEF) = (value => 'single',
 
 our ($NAME_REGEXP) = qr{ ^ [\w:/.-]+ $ }xs;
 
-our ($DEFAULT_INSTANCE);
+our ($DEFAULT_INSTANCE, @HTTP_METHOD_LIST);
 
 # define_set ( name, specification... )
 # 
@@ -104,13 +104,15 @@ sub define_set {
 	croak "define_set: you must specify a nonempty 'value' key in each record"
 	    unless defined $value && $value ne '';
 	
-	croak "define_set: value '$value' cannot be defined twice";
+	croak "define_set: value '$value' cannot be defined twice"
+	    if exists $vs->{value}{$value};
 	
 	# Add the value to the various lists it belongs to, and to the hash
 	# containing all defined values.
 	
 	push @{$vs->{enabled}}, $value unless $item->{disabled};
 	push @{$vs->{unfixed}}, $value unless $item->{disabled} || $item->{fixed};
+	push @{$vs->{fixed}}, $value if $item->{fixed} && ! $item->{disabled};
 	$vs->{value}{$value} = $item;
     }
     
@@ -118,10 +120,11 @@ sub define_set {
     
     $self->process_doc($vs);
     
-    # Get a list of just those items that are not disabled or undocumented. 
+    # Get a list of just those items that are not disabled or undocumented.
     
-    push @{$vs->{doc_enabled}}, grep { ! $vs->{value}{$value}{undoc} } @{$vs->{enabled}};
-    push @{$vs->{doc_unfixed}}, grep { ! $vs->{value}{$value}{undoc} } @{$vs->{unfixed}};
+    push @{$vs->{doc_enabled}}, grep { ! $vs->{value}{$_}{undoc} } @{$vs->{enabled}};
+    push @{$vs->{doc_unfixed}}, grep { ! $vs->{value}{$_}{undoc} } @{$vs->{unfixed}};
+    push @{$vs->{doc_fixed}}, grep { ! $vs->{value}{$_}{undoc} } @{$vs->{fixed}};
 }
 
 
@@ -139,9 +142,7 @@ sub valid_set {
     
     $variety ||= 'unfixed';
     
-    # If this is a valid set and 
-    
-    my $vs = $self->{set}{$name};
+    my $vs = $self->{set}{$set_name};
     
     croak "unknown set '$set_name'" unless ref $vs eq 'Web::DataService::Set';
     
@@ -210,9 +211,9 @@ sub get_set_map_list {
     
     $variety ||= 'enabled';
     
-    my $set = $self->{set}{$set_name}
+    my $vs = $self->{set}{$set_name};
     
-    return unless ref $set eq 'Web::DataService::Set';
+    return unless ref $vs eq 'Web::DataService::Set';
     
     my $value_list = $vs->{$variety} || return;
     
@@ -303,8 +304,8 @@ our %OUTPUT_DEF = (output => 'type',
 		   filter => 'type',
 		   include => 'type',
 		   require => 'type',
-		   if_section => 'set',
-		   not_section => 'set',
+		   if_block => 'set',
+		   not_block => 'set',
 		   if_vocab => 'set',
 		   not_vocab => 'set',
 		   if_format => 'set',
@@ -472,12 +473,10 @@ sub configure_output {
     # Use the appropriate output map to determine which output blocks we will
     # be using to express the result of this request.
     
-    # Start with the base block list defined for the request path.
+    my $output_map = $request->{output_map};
+    my @keys = $self->output_block_list($request);
     
-    my @blocks = $request->base_block_list;
-    push @blocks, $request->extra_block_list;
-    
-    unless ( @blocks )
+    unless ( @keys )
     {
 	$request->add_warning("no output blocks were specified for this request");
 	return;
@@ -489,7 +488,7 @@ sub configure_output {
     $request->{filter_hash} = {};
     $request->{proc_list} = [];
     $request->{field_list} = [];
-    $request->{block_set} = { map { $_ => 1 } @blocks };
+    $request->{block_set} = { map { $_ => 1 } @keys };
     
     # First scan through the list of output blocks and check for include_list
     # entries.  This allows us to know before the rest of the processing
@@ -498,8 +497,11 @@ sub configure_output {
     my %uniq_block;
     
  INCLUDE_BLOCK:
-    foreach my $block (@blocks)
+    foreach my $key (@keys)
     {
+	my $block = $output_map->{value}{$key}{maps_to};
+	next unless $block;
+	
 	# Make sure that each block is checked only once.
 	
 	next if $uniq_block{$block}; $uniq_block{$block} = 1;
@@ -538,7 +540,7 @@ sub configure_output {
 	    
 	    my $new_block = $r->{include};
 	    
-	    push @blocks, $new_block;
+	    push @keys, $new_block;
 	    $request->{block_set}{$new_block} = 1;
 	}
     }
@@ -549,8 +551,11 @@ sub configure_output {
     %uniq_block = ();
     
  BLOCK:
-    foreach my $block (@blocks)
+    foreach my $key (@keys)
     {
+	my $block = $output_map->{value}{$key}{maps_to};
+	next unless $block;
+	
 	# Make sure that each block is only processed once, even if it is
 	# listed more than once.
 	
@@ -695,6 +700,34 @@ sub configure_output {
 	}
     }
 }    
+
+
+# output_block_list ( request )
+# 
+# Figure out the list of output block keys to be used in evaluating the
+# specified request.
+
+sub output_block_list {
+    
+    my ($self, $request) = @_;
+    
+    my $path = $request->{path};
+    
+    # Start with the fixed blocks.
+    
+    my $output_map = $request->{output_map};
+    
+    my @keys = @{$output_map->{fixed}};
+    
+    # Then add the optional blocks.
+    
+    my $output_param = $self->{path_attrs}{$path}{output_param};
+    
+    push @keys, @{$request->{params}{$output_param}}
+	if defined $output_param and ref $request->{params}{$output_param} eq 'ARRAY';
+    
+    return @keys;
+}
 
 
 # configure_block ( request, block_name )
@@ -957,11 +990,13 @@ sub process_doc {
     # Discard all pending documentation if the primary item is disabled or
     # marked with a '#'.  In the latter case, note this in the item record.
     
+    $disposition //= '';
+    
     if ( $primary_item->{disabled} or $primary_item->{undoc} or
 	 $disposition eq 'undoc' )
     {
 	@{$node->{doc_pending}} = ();
-	$primary_item->{undoc} => 1 if $disposition eq 'undoc';
+	$primary_item->{undoc} = 1 if $disposition eq 'undoc';
 	return;
     }
     
@@ -1191,7 +1226,7 @@ sub document_node {
 }
 
 
-# document_response ( allowed_vocab, output_map )
+# document_response ( path, allowed_vocab, output_map )
 # 
 # Generate documentation in Pod format describing the available output fields.
 # The parameter $allowed_vocab must be a reference to a hash whose keys are
@@ -1201,32 +1236,55 @@ sub document_node {
 
 sub document_response {
     
-    my ($self, $allowed_vocab, $output_map) = @_;
+    my ($self, $path, $allowed_vocab, $output_map) = @_;
+    
+    # If no output map was given, no documentation can be generated.
+    
+    unless ( defined $output_map && $output_map ne '' )
+    {
+	warn "No output map was defined for path '$path'" if $self->{DEBUG};
+	return "";
+    }
     
     # First determine the set of output blocks to document, or return
     # immediately if there are none.
     
-    my @block_keys = ref $base_output eq 'ARRAY' ? @$base_output : $base_output;
+    my $map = ref $output_map eq 'Web::DataService::Set' ? $output_map
+	    : ref $output_map				 ? ''
+							 : $self->{set}{$output_map};
     
-    if ( ref $output_set eq 'Web::DataService::Set' )
+    unless ( $map )
     {
-	push @block_keys, $self->get_set_map_list($output_set, 'documented');
+	warn "unknown output map '$output_map' for path $path" if $self->{DEBUG};
+	return "";
     }
     
-    return "I<No output blocks were defined for this path>" unless @block_list;
+    my @block_list = @{$map->{doc_enabled}};
+    
+    unless ( @block_list )
+    {
+	warn "No output blocks were enabled for output map '$output_map'" if $self->{DEBUG};
+	return "";
+    }
     
     # Next determine the set of vocabularies to document, or return
     # immediately if there are none.
     
-    return "I<No output vocabularies were selected for this path>"
-	unless ref $allowed_vocab eq 'HASH' && keys %$allowed_vocab;
+    unless ( ref $allowed_vocab eq 'HASH' && keys %$allowed_vocab )
+    {
+	warn "No output vocabularies were selected for path '$path'" if $self->{DEBUG};
+	return "";
+    }
     
     my @vocab_list = grep { $allowed_vocab->{$_} && 
 			    ref $self->{vocab}{$_} &&
 			    ! $self->{vocab}{$_}{disabled} } @{$self->{vocab_list}};
     
-    return "I<No output vocabularies were selected for this path>"
-	unless @vocab_list;
+    unless ( @vocab_list )
+    {
+	warn "No output vocabularies were selected for path '$path'" if $self->{DEBUG};
+	return "";
+    }
     
     # Now generate the header for the documentation, in Pod format.  We
     # include the special "=for pp_table_header" line to give PodParser.pm the
@@ -1246,7 +1304,7 @@ sub document_response {
     else
     {
 	$doc_string .= "=over 4\n\n";
-	$doc_string .= "=for pp_table_header Field name / Block / Description\n\n";
+	$doc_string .= "=for pp_table_header Field name / Output block / Description\n\n";
     }
     
     # Run through each block one at a time, documenting all of the fields in
@@ -1254,20 +1312,22 @@ sub document_response {
     
     my %uniq_block;
     
-    foreach my $block (@block_list)
+    foreach my $key (@block_list)
     {
+	my $block_name = $map->{value}{$key}{maps_to};
+	
 	# Make sure to only process each block once, even if it is listed more
 	# than once.
 	
-	next if $uniq_block{$block}; $uniq_block{$block} = 1;
+	next if $uniq_block{$block_name}; $uniq_block{$block_name} = 1;
 	
-	my $output_list = $self->{block_list}{$block};
+	my $output_list = $self->{block_list}{$block_name};
 	next unless ref $output_list eq 'ARRAY';
 	
 	foreach my $r (@$output_list)
 	{
 	    next unless defined $r->{output};
-	    $doc_string .= $self->document_field($b, \@vocab_list, $r);
+	    $doc_string .= $self->document_field($key, \@vocab_list, $r);
 	}
     }
     
@@ -1279,7 +1339,7 @@ sub document_response {
 
 sub document_field {
     
-    my ($self, $block_name, $vocab_list, $r) = @_;
+    my ($self, $block_key, $vocab_list, $r) = @_;
     
     my @names;
     
@@ -1294,13 +1354,76 @@ sub document_field {
     
     my $names = join ' / ', @names;
     
-    $block_name = $r->{show} if $r->{show};
-    
     my $descrip = $r->{doc} || "";
     
-    my $line = "\n=item $names ( $block_name )\n\n$descrip\n";
+    my $line = "\n=item $names ( $block_key )\n\n$descrip\n";
     
     return $line;
+}
+
+
+# list_fixed_blocks ( path, output_map )
+# 
+# Return a list of the fixed blocks defined by the specified output map.
+
+sub list_fixed_blocks {
+    
+    my ($self, $path, $output_map) = @_;
+    
+    # If no output map was given, no documentation can be generated.
+    
+    return '' unless defined $output_map && $output_map ne '';
+    
+    # First determine the set of output blocks to document, or return
+    # immediately if there are none.
+    
+    unless ( ref $output_map eq 'Web::DataService::Set' )
+    {
+	$output_map = $self->{set}{$output_map} || 
+	    croak "unknown output map '$output_map' for path $path";
+    }
+    
+    return @{$output_map->{doc_fixed}};
+}
+
+
+# list_optional_blocks ( path, output_map )
+# 
+# Return a list of the optional blocks defined by the specified
+# output map.
+
+sub list_optional_blocks {
+    
+    my ($self, $path, $output_map) = @_;
+    
+    # If no output map was given, no documentation can be generated.
+    
+    return '' unless defined $output_map && $output_map ne '';
+    
+    # First determine the set of output blocks to document, or return
+    # immediately if there are none.
+    
+    unless ( ref $output_map eq 'Web::DataService::Set' )
+    {
+	$output_map = $self->{set}{$output_map} || 
+	    croak "unknown output map '$output_map' for path $path";
+    }
+    
+    return @{$output_map->{doc_unfixed}};
+}
+
+
+# list_http_methods ( path )
+# 
+# Return a list of the HTTP methods defined for this path.
+
+sub list_http_methods {
+    
+    my ($self, $path) = @_;
+    
+    my $method = $self->{path_attrs}{$path}{allow_method};
+    
+    return grep { $method->{$_} } @HTTP_METHOD_LIST;
 }
 
 

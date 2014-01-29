@@ -17,6 +17,7 @@ use Scalar::Util qw(blessed);
 
 use Web::DataService qw( :validators );
 
+use CommonData;
 use ConfigData;
 use IntervalData;
 use TaxonData;
@@ -55,14 +56,15 @@ if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
 # data returned by this service.
 
 $ds->define_vocab(
-    { name => 'pbdb',
+    { name => 'pbdb', title => 'PaleoDB field names',
       use_field_names => 1 },
-        "The Paleobiology Database field names.  This vocabulary is the",
-	"default for text format responses (tsv, csv, txt).",
-    { name => 'com' },
-        "3-character abbreviated (\"compact\") field names.",
+        "The original Paleobiology Database field names, augmented by some",
+	"additional new fields.  This vocabulary is the",
+	"default for text format responses (.tsv, .csv, .txt).",
+    { name => 'com', title => 'Compact field names' },
+        "3-character abbreviated field names.",
         "This is the default for JSON responses.",
-    { name => 'dwc', disabled => 1 },
+    { name => 'dwc', title => 'Darwin Core', disabled => 1 },
         "Darwin Core element names.  This is the default for XML responses.",
         "Note that many fields are not represented in this vocabulary,",
         "because of limitations of the Darwin Core element set.");
@@ -72,22 +74,26 @@ $ds->define_vocab(
 
 $ds->define_format(
     { name => 'json', content_type => 'application/json',
+      doc_path => '1.1/json', title => 'JSON',
       default_vocab => 'com' },
 	"The JSON format is intended primarily to support client applications,",
 	"including the PBDB Navigator.  Response fields are named using compact",
 	"3-character field names.",
-    { name => 'xml', disabled => 1, content_type => 'text/xml',
+    { name => 'xml', disabled => 1, content_type => 'text/xml', title => 'XML',
+      doc_path => '1.1/xml',
       default_vocab => 'dwc' },
 	"The XML format is intended primarily to support data interchange with",
 	"other databases, using the Darwin Core element set.",
-    { name => 'txt', content_type => 'text/plain', 
+    { name => 'txt', content_type => 'text/plain',
+      doc_path => '1.1/text', title => 'tab-separated text',
       default_vocab => 'pbdb' },
         "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	"downloading data from the database.  These downloads can easily be",
 	"loaded into spreadsheets or other analysis tools.  The field names are",
 	"taken from the PBDB Classic interface, for compatibility with existing",
 	"tools and analytical procedures.",
-    { name => 'tsv', content_type => 'text/tab-separated-values',
+    { name => 'tsv', content_type => 'text/tab-separated-values', 
+      doc_path => '1.1/text', title => 'tab-separated text',
       default_vocab => 'pbdb' },
         "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	"downloading data from the database.  These downloads can easily be",
@@ -95,6 +101,7 @@ $ds->define_format(
 	"taken from the PBDB Classic interface, for compatibility with existing",
 	"tools and analytical procedures.",
     { name => 'csv', content_type => 'text/csv',
+      doc_path => '1.1/text', title => 'comma-separated text',
       default_vocab => 'pbdb' },
         "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	"downloading data from the database.  These downloads can easily be",
@@ -102,6 +109,7 @@ $ds->define_format(
 	"taken from the PBDB Classic interface, for compatibility with existing",
 	"tools and analytical procedures.",
     { name => 'ris', disabled => 1, content_type => 'application/x-research-info-systems',
+      doc_path => '1.1/ris', title => 'RIS',
       module => 'RIS.pm'},
 	"The L<RIS format|http://en.wikipedia.org/wiki/RIS_(file_format)> is a",
 	"common format for bibliographic references.");
@@ -109,39 +117,7 @@ $ds->define_format(
 # Next, we define the parameters we will accept, and the acceptable values
 # for each of them.
 
-$ds->define_ruleset('1.1:common_params' => 
-    #    "The following parameter is used with most requests:",
-    # { optional => 'show', valid => ANY_VALUE, warn => "the parameter '{param}' is not valid for this URL path" },
-    #    "Return extra result fields in addition to the basic fields.  The value should be a comma-separated",
-    #    "list of values corresponding to the sections listed in the response documentation for the URL path",
-    #    "that you are using.  If you include, e.g. 'app', then all of the fields whose section is C<app>",
-    #    "will be included in the result set.",
-    #    "You can use this parameter to tailor the result to your particular needs.",
-    #    "If you do not include it then you will usually get back only the fields",
-    #    "labelled C<basic>.  For more information, see the documentation pages",
-    #    "for the individual URL paths.",
-    ">The following parameters can be used with all requests:",
-    { optional => 'limit', valid => [POS_ZERO_VALUE, ENUM_VALUE('all')], 
-      error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
-	default => 500 },
-       "Limits the number of records returned.  The value may be a positive integer, zero, or C<all>.  Defaults to 500.",
-    { optional => 'offset', valid => POS_ZERO_VALUE },
-       "Returned records start at this offset in the result set.  The value may be a positive integer or zero.",
-    { optional => 'count', valid => FLAG_VALUE },
-       "If specified, then the response includes the number of records found and the number returned.",
-       "For more information about how this information is encoded, see the documentation pages",
-       "for the various response formats.",
-    { optional => 'vocab', valid => $ds->valid_vocab },
-       "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
-       "you want to override the default vocabulary for your selected format.",
-       "Possible values include:", $ds->document_vocab,
-    ">The following parameters are only relevant to the text formats (csv, tsv, txt):",
-    { optional => 'no_header', valid => FLAG_VALUE },
-       "If specified, then the header line (which gives the field names) is omitted.",
-    { optional => 'linebreak', valid => ENUM_VALUE('cr','crlf'), default => 'crlf' },
-       "Specifies the linebreak character sequence.",
-       "The value may be either 'cr' or 'crlf', and defaults to the latter.",
-    { ignore => 'splat' });
+$ds->initialize_class('CommonData');
 
 $ds->define_ruleset('1.1:refs_display' =>
     "The following parameter indicates which information should be returned about each resulting collection:",
@@ -320,7 +296,9 @@ $ds->define_path({ path => '1.1',
 
 $ds->define_path({ path => '1.1/config',
 		   class => 'ConfigData',
-		   method => 'get');
+		   method => 'get',
+		   output_map => '1.1:config:get_map',
+		   doc_title => 'Client configuration' });
 
 # Intervals.  These paths are used to fetch information about geological time
 # intervals known to the database.
@@ -371,7 +349,8 @@ $ds->define_path({ path => '1.1/taxa/icon',
 
 $ds->define_path({ path => '1.1/colls',
 		   class => 'CollectionData',
-		   allow_format => '+xml' });
+		   allow_format => '+xml',
+		   doc_title => 'Fossil collections' });
 
 $ds->define_path({ path => '1.1/colls/single',
 		   method => 'get',
@@ -447,7 +426,7 @@ $ds->define_path({ path => '1.1/xml',
 		   doc_title => 'XML format' });
 
 $ds->define_path({ path => '1.1/text',
-		   doc_title => 'text formats' });
+		   doc_title => 'Text formats' });
 
 
 # Now we configure a set of Dancer routes to serve

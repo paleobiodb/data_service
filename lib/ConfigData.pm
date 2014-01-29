@@ -34,54 +34,65 @@ sub initialize {
     
     my ($class, $ds, $config, $dbh) = @_;
     
-    # We start by defining the output blocks which will be used for this class.
+    # We start by defining an output map that lists the output blocks to be
+    # used in generating responses for the operation defined by this class.
+    # Each block is assigned a short key.
+    
+    $ds->define_set('1.1:config:get_map' =>
+	{ value => 'clusters', maps_to => '1.1:config:geosum' },
+	    "Returns information about the levels of geographic clustering defined in this database.",
+	{ value => 'ranks', maps_to => '1.1:config:ranks' },
+	    "Returns information about the taxonomic ranks defined in this database.",
+	{ value => 'continents', maps_to => '1.1:config:continents' },
+	    "Returns information about the continents known to this database.",
+	{ value => 'all', maps_to => '1.1:config:all' },
+	    "Return all of the above blocks of information.",
+	    "This is generally useful only with C<json> format.");
+    
+    # Next, define these output blocks.
     
     $ds->define_block('1.1:config:geosum' =>
-	{ output => 'bin_level', com_name => 'lvl' },
+	{ output => 'cluster_level', com_name => 'lvl' },
 	    "Cluster level, starting at 1",
 	{ output => 'degrees', com_name => 'deg' },
-	    "The size of each cluster in degrees.  Each level of clustering is aligned so that",
-	    "0 lat and 0 lng fall on cluster boundaries, and the cluster size must evenly divide 180.",
+	    "The width and height of the area represented by each cluster, in degrees.  Each level of clustering is aligned so that",
+	    "0 lat and 0 lng fall on cluster boundaries, and the cluster width/height must evenly divide 90.",
 	{ output => 'count', com_name => 'cnt' },
-	    "The number of summary clusters at this level",
+	    "The approximate number of summary clusters at this level.",
 	{ output => 'max_colls', com_name => 'mco' },
 	    "The maximum nmber of collections in any cluster at this level (can be used for scaling cluster indicators)",
 	{ output => 'max_occs', com_name => 'moc' },
 	    "The maximum number of occurrences in any cluster at this level (can be used for scaling cluster indicators)");
     
     $ds->define_block('1.1:config:ranks' =>
-	{ output => 'rank', com_name => 'rnk' },
+	{ output => 'taxonomic_rank', com_name => 'rnk' },
 	    "Taxonomic rank",
-	{ output => 'code', com_name => 'cod' },
-	    "Numeric code used for this rank in responses using the 'com' vocabulary,",
-	    "which is the default for json format");
+	{ output => 'rank_code', com_name => 'cod' },
+	    "Numeric code representing this rank in responses using the 'com' vocabulary,",
+	    "which is the default for C<json> format");
+    
+    $ds->define_block('1.1:config:continents' =>
+	{ output => 'continent_name', com_name => 'nam' },
+	    "Continent name",
+	{ output => 'continent_code', com_name => 'cod' },
+	    "The code used to indicate this continent when selecting fossil occurrences by continent");
     
     $ds->define_block('1.1:config:all',
-	{ include => '1.1:config:geosum' },
-	{ include => '1.1:config:ranks' });
-    
-    # Then define a value set to allow these blocks to be selected by the client.
-    
-    $ds->define_set('1.1:config:show' =>
-	{ value => 'geosum', maps_to => '1.1:config:geosum' },
-	    "Return information about the levels of geographic clustering defined in this database.",
-	{ value => 'ranks', maps_to => '1.1:config:ranks' },
-	    "Return information about the taxonomic ranks defined in this database.",
-	{ value => 'all', maps_to => '1.1:config:all' },
-	    "Return both of the above sets of information.",
-	    "This is generally useful only with C<json> format.");
+	{ include => 'clusters' },
+	{ include => 'ranks' },
+	{ include => 'continents' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.
     
     $ds->define_ruleset('1.1:config' =>
-	{ param => 'show', valid => $ds->valid_set('1.1:config:show'),
-	  list => q{,}, default => 'all' },
-	    "The value of this parameter should be a comma-separated list of block names drawn",
-	    "From following list.  It defaults to C<all>.", 
-	    $ds->document_set('1.1:config:show'),
+	"The following URL parameters are accepted for this path:",
+	{ param => 'show', valid => $ds->valid_set('1.1:config:get_map'),
+	  list => q{,} },
+	    "The value of this parameter selects which information to return:",
+	    $ds->document_set('1.1:config:get_map'),
 	{ allow => '1.1:common_params' },
-	    "^You can use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
     
     # Now gather the information that will be reported by this module.  It
     # won't change, so for the sake of efficiency we get it once at startup.
@@ -89,7 +100,7 @@ sub initialize {
     # Get the list of geographical cluster data from the $COLL_BINS table.
     
     my $sql = "
-	SELECT b.bin_level, count(*) as count, max(n_colls) as max_colls, max(n_occs) as max_occs, 
+	SELECT b.bin_level as cluster_level, count(*) as count, max(n_colls) as max_colls, max(n_occs) as max_occs, 
 		(SELECT 360.0/n_colls FROM $COLL_BINS as x
 		 WHERE bin_level = b.bin_level and interval_no = 999999) as degrees
 	FROM $COLL_BINS as b where interval_no = 0 GROUP BY bin_level";
@@ -103,13 +114,13 @@ sub initialize {
     foreach my $r ($TAXON_RANK{min}..$TAXON_RANK{max})
     {
 	next unless exists $RANK_STRING{$r};
-	push @$RANKS, { code => $r, rank => $RANK_STRING{$r} };
+	push @$RANKS, { rank_code => $r, taxonomic_rank => $RANK_STRING{$r} };
     }
     
     # Get the list of continents from the database.
     
     $CONTINENTS = $dbh->selectall_arrayref("
-	SELECT continent as code, name FROM $CONTINENT_DATA", { Slice => {} });
+	SELECT continent as continent_code, name as continent_name FROM $CONTINENT_DATA", { Slice => {} });
 }
 
 
@@ -128,8 +139,9 @@ sub get {
     
     $self->{main_result} = [];
     
-    push @{$self->{main_result}}, @$BINS if $show->{geosum};
+    push @{$self->{main_result}}, @$BINS if $show->{clusters};
     push @{$self->{main_result}}, @$RANKS if $show->{ranks};
+    push @{$self->{main_result}}, @$CONTINENTS if $show->{continents};
     
     if ( my $offset = $self->result_offset(1) )
     {
