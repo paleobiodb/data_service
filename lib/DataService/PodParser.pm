@@ -756,6 +756,8 @@ sub configure_html_list {
 	my $cols = 1;
 	my $term = 0;
 	
+	my $column_rec = {};
+	
 	if ( $col =~ qr{ ^ (.*) / (\d+) $ }x )
 	{
 	    $col = $1;
@@ -770,11 +772,16 @@ sub configure_html_list {
 	if ( $col =~ qr{ (.*) \* $ }x )
 	{
 	    $col = $1;
-	    $term = 1;
+	    $column_rec->{term} = 1;
+	}
+	
+	if ( $col =~ qr{ (.*) !anchor\(([^)]+)\) $ }x )
+	{
+	    $col = $1;
+	    $column_rec->{anchor} = $2;
 	}
 	
 	my $head_rec = { name => $col, span => $span };
-	my $column_rec = { term => $term };
 	
 	push @{$node->{heads}}, $head_rec;
 	push @{$node->{columns}}, $column_rec foreach (1..$cols);
@@ -861,6 +868,7 @@ sub generate_html_open_item {
 		my $text = $fields[$i] || '';
 		my $col = $list_node->{columns}[$i];
 		my $class = $col->{term} ? $termclass : $defclass;
+		$text = $self->generate_html_anchor($text, $col->{anchor}) if $col->{anchor};		
 		$output .= "<td class=\"$class\">$text</td>";
 	    }
 	    
@@ -991,6 +999,19 @@ sub generate_html_content {
 	    return "&$subcont;";
 	}
     }
+}
+
+
+sub generate_html_anchor {
+    
+    my ($self, $content, $prefix) = @_;
+    
+    return $content if $self->{anchor_hash}{$content};
+    $self->{anchor_hash}{$content} = 1;
+    
+    $prefix //= '';
+    
+    return qq{<a name="$prefix$content">$content</a>};
 }
 
 

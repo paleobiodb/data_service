@@ -144,7 +144,11 @@ sub valid_set {
     
     my $vs = $self->{set}{$set_name};
     
-    croak "unknown set '$set_name'" unless ref $vs eq 'Web::DataService::Set';
+    unless ( ref $vs eq 'Web::DataService::Set' )
+    {
+	warn "unknown set '$set_name'";
+	return \&bad_set_validator;
+    }
     
     # If there is at least one value of the indicated variety, return an
     # enumeration validator.
@@ -177,6 +181,8 @@ sub document_set {
     my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
     my ($name, $variety) = @_;
     
+    $variety ||= 'unfixed';
+    
     # Look up a set object using the given name.  If none could be found,
     # return an explanatory message.
     
@@ -185,16 +191,25 @@ sub document_set {
     return "=over\n\n=item I<Could not find the specified set>\n\n=back"
 	unless ref $vs eq 'Web::DataService::Set';
     
-    # If it exists and has documentation, return that.
+    return "=over\n\n=item I<The specified set does not contain any items>\n\n=back"
+	unless ref $vs->{$variety} eq 'ARRAY' && @{$vs->{$variety}};
     
-    my $doc = $self->document_node($vs, $variety);
+    # Now return the documentation in Pod format.
     
-    return $doc if defined $doc && $doc ne '';
+    my $doc = "=over\n\n";
     
-    # If no documentation was found, that means that no values were enabled
-    # for this set.
+    foreach my $name (@{$vs->{$variety}})
+    {
+	my $rec = $vs->{value}{$name};
+	next if $rec->{undoc};
+	
+	$doc .= "=item $rec->{value}\n\n";
+	$doc .= "$rec->{doc}\n\n" if defined $rec->{doc} && $rec->{doc} ne '';
+    }
     
-    return "=over\n\n=item I<No valid values have been assigned.>\n\n=back";
+    $doc .= "=back";
+    
+    return $doc;
 }
 
 
@@ -222,7 +237,8 @@ sub get_set_map_list {
 
 
 sub define_output_map {
-
+    
+    goto \&define_set;
 }
 
 # define_block ( name, specification... )
@@ -251,11 +267,13 @@ sub define_block {
     
     $self->{block_list}{$name} = [];
     
+    # Create a new block object.
+    
+    my $block = {};
+    
     # Then process the records one by one.  Make sure to throw an error if we
     # find a record whose type is ambiguous or that is otherwise invalid.  Each
     # record gets put in a list that is stored under the section name.
-    
-    my $last_node;
     
     foreach my $item (@_)
     {
@@ -263,7 +281,7 @@ sub define_block {
 	
 	unless ( ref $item )
 	{
-	    $self->add_node_doc($last_node, $item);
+	    $self->add_doc($block, $item);
 	    next;
 	}
 	
@@ -281,7 +299,7 @@ sub define_block {
 	# If the type is 'field', then any subsequent documentation strings
 	# will be added to that record.
 	
-	$last_node = $item if $type eq 'output';
+	$self->add_doc($block, $item) if $type eq 'output';
 	
 	# Add the record to the appropriate list.
 	
@@ -295,6 +313,8 @@ sub define_block {
 	    push @{$self->{block_list}{$name}}, $item;
 	}
     }
+    
+    $self->process_doc($block);
 }
 
 
@@ -318,6 +338,7 @@ our %OUTPUT_DEF = (output => 'type',
 		   always => 'single',
 		   text_join => 'single',
 		   xml_join => 'single',
+		   show_as_list => 'single',
 		   rule => 'single',
 		   from => 'single',
 		   from_each => 'single',
@@ -325,21 +346,21 @@ our %OUTPUT_DEF = (output => 'type',
 		   append => 'single',
 		   code => 'code',
 		   lookup => 'hash',
+		   default => 'single',
 		   split => 'regexp',
 		   join => 'single',
 		   tables => 'set',
 		   doc => 'single');
 
-our %OUTPUT_KEY = (output => 2, set => 2, select => 2, filter => 2, include => 2,
-		   dedup => 1, name => 1, value => 1, always => 1, rule => 1,
-		   if_section => 1, not_section => 1, if_format => 1, not_format => 1,
-		   if_field => 1, not_field => 1, if_code => 1, from_record => 1,
-		   from => 1, from_each => 1, append => 1, code => 1, lookup => 1,
-		   split => 1, join => 1, tables => 1, doc => 1, insert => 1);
+our %SELECT_KEY = (select => 1, tables => 1);
 
-our %FIELD_KEY = (dedup => 1, value => 1, always => 1, rule => 1, if_field => 1, text_join => 1, xml_join => 1, doc => 1);
+our %FIELD_KEY = (dedup => 1, value => 1, always => 1, rule => 1, if_field => 1, 
+		  if_block => 1, not_block => 1, text_join => 1, xml_join => 1, 
+		  doc => 1, show_as_list => 1);
 
 our %PROC_KEY = (set => 1, append => 1, from => 1, from_each => 1, from_record => 1,
+		 if_vocab => 1, not_vocab => 1, if_block => 1, not_block => 1,
+	         if_format => 1, not_format => 1, if_field => 1, not_field => 1,
 		 code => 1, lookup => 1, split => 1, join => 1, subfield => 1);
 
 sub check_output_record {
@@ -383,7 +404,7 @@ sub check_output_record {
 	    
 	    unless ( ref $v )
 	    {
-		$v = [ split(qr{\s*,\s*}, $v) ];
+		$record->{$k} = [ split(qr{\s*,\s*}, $v) ];
 	    }
 	}
 	
@@ -450,11 +471,10 @@ following list: 'include', 'output', 'set', 'select', 'filter'"
 # Determine the list of selection, processing and output rules for the
 # specified query, based on the query's attributes.  These attributes include: 
 # 
-# - the class
-# - the operation
+# - the output map
 # - the output format
 # - the output vocabulary
-# - the selected output sections
+# - the selected output keys
 # 
 # Depending upon the attributes of the various output records, all, some or
 # none of them may be relevant to a particular query.
@@ -470,15 +490,16 @@ sub configure_output {
     my $vocab = $request->{vocab};
     my $require_vocab = 1 if $vocab and not $self->{vocab}{$vocab}{use_field_names};
     
-    # Use the appropriate output map to determine which output blocks we will
-    # be using to express the result of this request.
+    # Use the appropriate output map and the list of output keys that were
+    # specified in the URL to determine which output blocks we will be using
+    # to express the result of this request.
     
     my $output_map = $request->{output_map};
-    my @keys = $self->output_block_list($request);
+    my @keys = $self->output_key_list($request);
     
     unless ( @keys )
     {
-	$request->add_warning("no output blocks were specified for this request");
+	$request->add_warning("No output blocks were specified for this request.");
 	return;
     }
     
@@ -488,20 +509,33 @@ sub configure_output {
     $request->{filter_hash} = {};
     $request->{proc_list} = [];
     $request->{field_list} = [];
-    $request->{block_set} = { map { $_ => 1 } @keys };
+    $request->{block_keys} = {};
+    $request->{block_hash} = {};
     
-    # First scan through the list of output blocks and check for include_list
-    # entries.  This allows us to know before the rest of the processing
-    # exactly which blocks are included.
+    # First figure out which block goes with each key, and add each key and
+    # the name of the associated block (if any) to the relevant hash.
+        
+    my @blocks;
+    
+    foreach my $key (@keys)
+    {
+	my $block = $output_map->{value}{$key}{maps_to};
+	$request->{block_keys}{$key} = 1;
+	$request->{block_hash}{$key} = 1;
+	$request->{block_hash}{$block} = 1 if $block;
+	push @blocks, $block if $block;
+    }
+    
+    # Then scan through the list of blocks and check for include_list
+    # entries, and add the included blocks to the list as well.  This
+    # allows us to know before the rest of the processing exactly which blocks
+    # are included.
     
     my %uniq_block;
     
  INCLUDE_BLOCK:
-    foreach my $key (@keys)
+    foreach my $block (@blocks)
     {
-	my $block = $output_map->{value}{$key}{maps_to};
-	next unless $block;
-	
 	# Make sure that each block is checked only once.
 	
 	next if $uniq_block{$block}; $uniq_block{$block} = 1;
@@ -514,11 +548,11 @@ sub configure_output {
 	{
 	    # Evaluate dependency on the output section list
 	    
-	    next INCLUDE_RECORD if $r->{if_section} 
-		and not check_set($r->{if_section}, $request->{section_set});
+	    next INCLUDE_RECORD if $r->{if_block} 
+		and not check_set($r->{if_block}, $request->{block_hash});
 	    
-	    next INCLUDE_RECORD if $r->{not_section}
-		and check_set($r->{not_section}, $request->{section_set});
+	    next INCLUDE_RECORD if $r->{not_block}
+		and check_set($r->{not_block}, $request->{block_hash});
 	    
 	    # Evaluate dependency on the output format
 	    
@@ -536,12 +570,34 @@ sub configure_output {
 	    next INCLUDE_RECORD if $r->{not_vocab}
 		and check_value($r->{not_vocab}, $vocab);
 	    
-	    # Now add the specified block.
+	    # If the 'include' record specified a key, figure out its
+	    # corresponding block if any.
 	    
-	    my $new_block = $r->{include};
+	    my ($include_key, $include_block);
 	    
-	    push @keys, $new_block;
-	    $request->{block_set}{$new_block} = 1;
+	    if ( ref $output_map->{value}{$r->{include}} )
+	    {
+		$include_key = $r->{include};
+		$include_block = $output_map->{value}{$include_key}{maps_to};
+	    }
+	    
+	    else
+	    {
+		$include_block = $r->{include};
+	    }
+	    
+	    # Modify the record so that we know what block to include in the
+	    # loop below.
+	    
+	    $r->{include_block} = $include_block if $include_block;
+	    
+	    # Now add the specified key and block to the output hash, if they
+	    # are defined.  Add it to @keys as well, so that it will get
+	    # checked to see if it includes any 'include' records.
+	    
+	    $request->{block_keys}{$include_key} = 1 if $include_key;
+	    $request->{block_hash}{$include_block} = 1 if $include_block;
+	    push @blocks, $include_block if $include_block;
 	}
     }
     
@@ -551,11 +607,8 @@ sub configure_output {
     %uniq_block = ();
     
  BLOCK:
-    foreach my $key (@keys)
+    foreach my $block (@blocks)
     {
-	my $block = $output_map->{value}{$key}{maps_to};
-	next unless $block;
-	
 	# Make sure that each block is only processed once, even if it is
 	# listed more than once.
 	
@@ -576,16 +629,18 @@ sub configure_output {
 	# Now go through the output list for this block and collect up
 	# all records that are selected for this query.
 	
+	my @records = @$block_list;
+	
     RECORD:
-	foreach my $r ( @$block_list )
+	while ( my $r = shift @records )
 	{
 	    # Evaluate dependency on the output block list
 	    
 	    next RECORD if $r->{if_block} 
-		and not check_set($r->{if_block}, $request->{block_set});
+		and not check_set($r->{if_block}, $request->{block_hash});
 	    
 	    next RECORD if $r->{not_block}
-		and check_set($r->{not_block}, $request->{block_set});
+		and check_set($r->{not_block}, $request->{block_hash});
 	    
 	    # Evaluate dependency on the output format
 	    
@@ -606,35 +661,39 @@ sub configure_output {
 	    # If the record type is 'select', add to the selection list, the
 	    # selection hash, and the tables hash.
 	    
-	    if ( defined $r->{select} )
+	    if ( $r->{select} )
 	    {
-		if ( ref $r->{select} )
+		croak "value of 'select' must be a string or array"
+		    if ref $r->{select} && ref $r->{select} ne 'ARRAY';
+		
+		my @select = ref $r->{select} ? @{$r->{select}}
+					      : split qr{\s*,\s*}, $r->{select};
+		
+		foreach my $s ( @select )
 		{
-		    foreach my $s ( @{$r->{select}} )
-		    {
-			next if exists $request->{select_hash}{$s};
-			$request->{select_hash}{$s} = 1;
-			push @{$request->{select_list}}, $s;
-		    }
+		    next if exists $request->{select_hash}{$s};
+		    $request->{select_hash}{$s} = 1;
+		    push @{$request->{select_list}}, $s;
 		}
 		
-		elsif ( ! exists $request->{select_hash}{$r->{select}} )
+		if ( $r->{tables} )
 		{
-		    $request->{select_hash}{$r->{select}} = 1;
-		    push @{$request->{select_list}}, $r->{select};
-		}
-		
-		if ( ref $r->{tables} )
-		{
-		    foreach my $t ( @{$r->{tables}} )
+		    croak "value of 'tables' must be a string or array"
+			if ref $r->{tables} && ref $r->{tables} ne 'ARRAY';
+		    
+		    my @tables = ref $r->{tables} ? @{$r->{tables}}
+						  : split qr{\s*,\s*}, $r->{tables};
+		    
+		    foreach my $t ( @tables )
 		    {
 			$request->{tables_hash}{$t} = 1;
 		    }
 		}
 		
-		elsif ( defined $r->{tables} )
+		foreach my $k ( keys %$r )
 		{
-		    $request->{tables_hash}{$r->{tables}} = 1;
+		    warn "ignored invalid key '$k' in 'select' record"
+			unless $SELECT_KEY{$k};
 		}
 	    }
 	    
@@ -676,17 +735,24 @@ sub configure_output {
 		next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
 		
 		my $field = { field => $r->{output}, name => $r->{output} };
+		my ($vs_value, $vs_name);
 		
 		foreach my $key ( keys %$r )
 		{
 		    if ( $FIELD_KEY{$key} )
 		    {
-			$field->{$key} = $r->{$key};
+			$field->{$key} = $r->{$key}
+			    unless ($key eq 'value' && $vs_value) || ($key eq 'name' && $vs_name);
 		    }
 		    
 		    elsif ( $key =~ qr{ ^ (\w+) _ (name|value) $ }x )
 		    {
-			$field->{$2} = $r->{$key} if $1 eq $vocab || $1 eq $format;
+			if ( $1 eq $vocab || $1 eq $format )
+			{
+			    $field->{$2} = $r->{$key};
+			    $vs_value = 1 if $2 eq 'value';
+			    $vs_name = 1 if $2 eq 'name';
+			} 
 		    }
 		    
 		    elsif ( $key ne 'output' )
@@ -697,17 +763,51 @@ sub configure_output {
 		
 		push @{$request->{field_list}}, $field;
 	    }
+	    
+	    # If the record type is 'include', then add the specified records
+	    # to the list immediately.  If no 'include_block' was
+	    # specified, that means that the specified key did not correspond
+	    # to any block.  So we can ignore it in that case.
+	    
+	    elsif ( defined $r->{include_block} )
+	    {
+		# If we have already processed this block, then skip it.  A
+		# block can only be included once per request.  If we haven't
+		# processed it yet, mark it so that it will be skipped if it
+		# comes up again.
+		
+		my $include_block = $r->{include_block};
+		next RECORD if $uniq_block{$include_block};
+		$uniq_block{$include_block} = 1;
+		
+		# Get the list of block records, or add a warning if no block
+		# was defined under that name.
+		
+		my $include_list = $self->{block_list}{$block};
+		
+		unless ( ref $include_list eq 'ARRAY' )
+		{
+		    warn "undefined output block '$include_block' for path '$request->{path}'\n";
+		    $request->add_warning("undefined output block '$include_block'");
+		    next RECORD;
+		}
+		
+		# Now add the included block's records to the front of the
+		# record list.
+		
+		unshift @records, @$include_list;
+	    }
 	}
     }
-}    
+}
 
 
-# output_block_list ( request )
+# output_key_list ( request )
 # 
 # Figure out the list of output block keys to be used in evaluating the
 # specified request.
 
-sub output_block_list {
+sub output_key_list {
     
     my ($self, $request) = @_;
     
@@ -717,7 +817,7 @@ sub output_block_list {
     
     my $output_map = $request->{output_map};
     
-    my @keys = @{$output_map->{fixed}};
+    my @keys = @{$output_map->{fixed}} if ref $output_map->{fixed} eq 'ARRAY';
     
     # Then add the optional blocks.
     
@@ -970,7 +1070,7 @@ sub add_doc {
 }
 
 
-# process_doc ( node )
+# process_doc ( node, disposition )
 # 
 # Process all pending documentation items.
 
@@ -1297,7 +1397,7 @@ sub document_response {
     if ( $field_count > 1 )
     {
 	$doc_string .= "=over 4\n\n";
-	$doc_string .= "=for pp_table_header Field name*/$field_count | Block | Description\n\n";
+	$doc_string .= "=for pp_table_header Field name*/$field_count | Block!anchor(block:) | Description\n\n";
 	$doc_string .= "=item $field_string\n\n";
     }
     
@@ -1315,6 +1415,9 @@ sub document_response {
     foreach my $key (@block_list)
     {
 	my $block_name = $map->{value}{$key}{maps_to};
+	next unless $block_name;
+	
+	next if $map->{value}{$key}{undoc};
 	
 	# Make sure to only process each block once, even if it is listed more
 	# than once.
@@ -1331,7 +1434,7 @@ sub document_response {
 	}
     }
     
-    $doc_string .= "=back\n\n";
+    $doc_string .= "\n=back\n\n";
     
     return $doc_string;
 }
@@ -1355,6 +1458,18 @@ sub document_field {
     my $names = join ' / ', @names;
     
     my $descrip = $r->{doc} || "";
+    
+    if ( defined $r->{if_block} )
+    {
+	if ( ref $r->{if_block} eq 'ARRAY' )
+	{
+	    $block_key = join(', ', @{$r->{if_block}});
+	}
+	else
+	{
+	    $block_key = $r->{if_block};
+	}
+    }
     
     my $line = "\n=item $names ( $block_key )\n\n$descrip\n";
     
@@ -1453,13 +1568,13 @@ sub process_record {
 	# processing step if the source field is empty, unless the attribute
 	# 'always' is set.
 	
-	my $source_field = $p->{from} || $p->{from_each};
+	my $source_field = $p->{from} || $p->{from_each} || $p->{set};
 	
 	# Skip any processing step if the record does not have a non-empty
 	# value in the corresponding field (unless the 'always' attribute is
 	# set).
 	
-	if ( $source_field && ! $p->{always} )
+	if ( $source_field && ! $p->{always} && ! $p->{from_record} )
 	{
 	    next unless defined $record->{$source_field} && $record->{$source_field} ne '';
 	    next if ref $record->{$source_field} eq 'ARRAY' && ! @{$record->{$source_field}};
@@ -1490,24 +1605,24 @@ sub process_record {
 	{
 	    if ( $p->{from_record} || $set_field eq '*' )
 	    {
-		@result = $p->{code}($self, $record, $p);
+		@result = $p->{code}($request, $record, $p);
 	    }
 	    
 	    elsif ( $p->{from_each} )
 	    {
-		@result = map { $p->{code}($self, $_, $p) } 
+		@result = map { $p->{code}($request, $_, $p) } 
 		    (ref $record->{$source_field} eq 'ARRAY' ? 
 		     @{$record->{$source_field}} : $record->{$source_field});
 	    }
 	    
 	    elsif ( $p->{from} )
 	    {
-		@result = $p->{code}($self, $record->{$source_field}, $p);
+		@result = $p->{code}($request, $record->{$source_field}, $p);
 	    }
 	    
 	    else
 	    {
-		@result = $p->{code}($self, $record->{$set_field}, $p);
+		@result = $p->{code}($request, $record->{$set_field}, $p);
 	    }
 	}
 	
@@ -1519,23 +1634,23 @@ sub process_record {
 	    {
 		if ( ref $record->{$source_field} eq 'ARRAY' )
 		{
-		    @result = map { $p->{lookup}{$_} } @{$record->{$source_field}};
+		    @result = map { $p->{lookup}{$_} // $p->{default} } @{$record->{$source_field}};
 		}
 		elsif ( ! ref $record->{$source_field} )
 		{
-		    @result = $p->{lookup}{$record->{$source_field}};
+		    @result = $p->{lookup}{$record->{$source_field}} // $p->{default};
 		}
 	    }
 	    
 	    elsif ( $p->{from} )
 	    {
-		@result = $p->{lookup}{$record->{$source_field}}
+		@result = $p->{lookup}{$record->{$source_field}} // $p->{default}
 		    unless ref $record->{$source_field};
 	    }
 	    
 	    elsif ( $set_field ne '*' && ! ref $record->{$set_field} )
 	    {
-		@result = $p->{lookup}{$record->{$set_field}};
+		@result = $p->{lookup}{$record->{$set_field}} // $p->{default} if defined $record->{$set_field};
 	    }
 	}
 	
@@ -1558,13 +1673,13 @@ sub process_record {
 	    elsif ( $p->{from} )
 	    {
 		@result = split $p->{split}, $record->{$source_field}
-		    unless ref $record->{$source_field};
+		    if defined $record->{$source_field} && ! ref $record->{$source_field};
 	    }
 	    
 	    elsif ( $set_field ne '*' )
 	    {
 		@result = split $p->{split}, $record->{$set_field}
-		    unless ref $record->{$set_field} eq 'ARRAY';
+		    if defined $record->{$set_field} && ! ref $record->{$set_field};
 	    }
 	}
 	
@@ -1642,10 +1757,14 @@ sub generate_single_result {
     # Determine the output format and figure out which class implements it.
     
     my $format = $request->{format};
-    my $format_class = $self->{format}{$format}{module};
+    my $format_class = $self->{format}{$format}{class};
     
     die "could not generate a result in format '$format': no implementing module was found"
 	unless $format_class;
+    
+    # Set the result count to 1, in case the client asked for it.
+    
+    $request->{result_count} = 1;
     
     # Get the lists that specify how to process each record and which fields
     # to output.
@@ -1659,7 +1778,7 @@ sub generate_single_result {
     
     # If there are any processing steps to do, then do them.
     
-    $self->process_record($request, $self->{main_record}, $proc_list);
+    $self->process_record($request, $request->{main_record}, $proc_list);
     
     # Generate the output corresponding to our single record.
     
@@ -1694,7 +1813,7 @@ sub generate_compound_result {
     # Determine the output format and figure out which class implements it.
     
     my $format = $request->{format};
-    my $format_class = $self->{format}{$format}{module};
+    my $format_class = $self->{format}{$format}{class};
     
     die "could not generate a result in format '$format': no implementing module was found"
 	unless $format_class;
@@ -1940,17 +2059,17 @@ sub generate_empty_result {
     # Determine the output format and figure out which class implements it.
     
     my $format = $request->{format};
-    my $class = $self->{format}{$format}{module};
+    my $format_class = $self->{format}{$format}{class};
     
     croak "could not generate a result in format '$format': no implementing class"
-	unless $class;
+	unless $format_class;
     
     # Call the appropriate methods from this class to generate the header,
     # and footer.
     
-    my $output = $class->emit_header($request);
+    my $output = $format_class->emit_header($request);
     
-    $output .= emit_footer($request);
+    $output .= $format_class->emit_footer($request);
     
     return $output;
 }

@@ -29,6 +29,8 @@ our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
 our $CLUST_AUX = "clust_aux";
 
+our $PROTECTED_LAND = "protected_land";
+
 our @BIN_LEVEL;
 
 # Constants
@@ -93,6 +95,7 @@ sub buildCollectionTables {
 		lat decimal(9,6),
 		loc geometry not null,
 		cc char(2),
+		protected varchar(255),
 		early_age decimal(9,5),
 		late_age decimal(9,5),
 		early_int_no int unsigned not null,
@@ -100,8 +103,6 @@ sub buildCollectionTables {
 		n_occs int unsigned not null,
 		n_spec int unsigned not null,
 		reference_no int unsigned not null,
-		authorizer_no int unsigned not null,
-		enterer_no int unsigned not null,
 		access_level tinyint unsigned not null) Engine=MYISAM");
     
     logMessage(2, "    inserting collections...");
@@ -109,12 +110,12 @@ sub buildCollectionTables {
     $sql = "	INSERT INTO $COLL_MATRIX_WORK
 		       (collection_no, lng, lat, loc, cc,
 			early_int_no, late_int_no,
-			reference_no, authorizer_no, enterer_no, access_level)
+			reference_no, access_level)
 		SELECT c.collection_no, c.lng, c.lat, 
 			if(c.lng is null or c.lat is null, point(1000.0, 1000.0), point(c.lng, c.lat)), 
 			map.cc,
 			c.max_interval_no, if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no),
-			c.reference_no,	c.authorizer_no, c.enterer_no,
+			c.reference_no,
 			case c.access_level
 				when 'database members' then if(c.release_date < now(), 0, 1)
 				when 'research group' then if(c.release_date < now(), 0, 2)
@@ -139,9 +140,9 @@ sub buildCollectionTables {
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "    setting age ranges...");
-    
     # Set the age boundaries for each collection.
+    
+    logMessage(2, "    setting age ranges...");
     
     $sql = "UPDATE $COLL_MATRIX_WORK as m
 		JOIN $INTERVAL_DATA as ei on ei.interval_no = m.early_int_no
@@ -161,6 +162,30 @@ sub buildCollectionTables {
 		m.early_age = li.early_age,
 		m.late_age = ei.late_age
 	    WHERE ei.early_age < li.early_age";
+    
+    $result = $dbh->do($sql);
+    
+    # Determine which collections fall into protected land.
+    
+    logMessage(2, "    determining protection status of collections...");
+    
+    $dbh->do("DROP TABLE IF EXISTS protected_aux");
+    
+    $dbh->do("CREATE TABLE protected_aux (
+		collection_no int unsigned not null primary key,
+		category varchar(255)) Engine=MyISAM");
+    
+    $sql = "INSERT INTO protected_aux
+	    SELECT collection_no, group_concat(category)
+	    FROM coll_matrix as m join protected_land as p on st_within(m.loc, p.shape)
+	    GROUP BY collection_no";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      setting protection attribute...");
+    
+    $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN protected_aux as p using (collection_no)
+	    SET m.protected = p.category";
     
     $result = $dbh->do($sql);
     
@@ -356,6 +381,8 @@ sub buildCollectionTables {
     # Finally, we swap in the new tables for the old ones.
     
     activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS);
+    
+    $dbh->do("DROP TABLE IF EXISTS protected_aux");
     
     my $a = 1;		# We can stop here when debugging
 }

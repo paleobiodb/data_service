@@ -1,7 +1,7 @@
 #
 # ConfigQuery
 # 
-# A class that returns information from the PaleoDB database about the
+# A s that returns information from the PaleoDB database about the
 # parameters necessary to properly handle the data returned by other queries.
 # 
 # Author: Michael McClennen
@@ -16,6 +16,7 @@ use TaxonDefs qw(%TAXON_RANK %RANK_STRING);
 
 use Carp qw(carp croak);
 
+our (@REQUIRES_CLASS) = qw(CommonData);
 
 # Variables to store the configuration information.
 
@@ -32,7 +33,7 @@ our ($BINS, $RANKS, $CONTINENTS);
 
 sub initialize {
     
-    my ($class, $ds, $config, $dbh) = @_;
+    my ($class, $ds) = @_;
     
     # We start by defining an output map that lists the output blocks to be
     # used in generating responses for the operation defined by this class.
@@ -52,6 +53,8 @@ sub initialize {
     # Next, define these output blocks.
     
     $ds->define_block('1.1:config:geosum' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'clu', if_field => 'cluster_level' },
+	    "The configuration section: 'clu' for clusters",
 	{ output => 'cluster_level', com_name => 'lvl' },
 	    "Cluster level, starting at 1",
 	{ output => 'degrees', com_name => 'deg' },
@@ -65,6 +68,8 @@ sub initialize {
 	    "The maximum number of occurrences in any cluster at this level (can be used for scaling cluster indicators)");
     
     $ds->define_block('1.1:config:ranks' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'trn', if_field => 'taxonomic_rank' },
+	    "The configuration section: 'trn' for taxonomic ranks",
 	{ output => 'taxonomic_rank', com_name => 'rnk' },
 	    "Taxonomic rank",
 	{ output => 'rank_code', com_name => 'cod' },
@@ -72,6 +77,8 @@ sub initialize {
 	    "which is the default for C<json> format");
     
     $ds->define_block('1.1:config:continents' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'con', if_field => 'continent_name' },
+	    "The configuration section: 'con' for continents",
 	{ output => 'continent_name', com_name => 'nam' },
 	    "Continent name",
 	{ output => 'continent_code', com_name => 'cod' },
@@ -98,6 +105,8 @@ sub initialize {
     # won't change, so for the sake of efficiency we get it once at startup.
     
     # Get the list of geographical cluster data from the $COLL_BINS table.
+    
+    my $dbh = $ds->get_dbh;
     
     my $sql = "
 	SELECT b.bin_level as cluster_level, count(*) as count, max(n_colls) as max_colls, max(n_occs) as max_occs, 
@@ -135,13 +144,11 @@ sub get {
 
     my ($self) = @_;
     
-    my $show = $self->output_set;
-    
     $self->{main_result} = [];
     
-    push @{$self->{main_result}}, @$BINS if $show->{clusters};
-    push @{$self->{main_result}}, @$RANKS if $show->{ranks};
-    push @{$self->{main_result}}, @$CONTINENTS if $show->{continents};
+    push @{$self->{main_result}}, @$BINS if $self->output_key('clusters');
+    push @{$self->{main_result}}, @$RANKS if $self->output_key('ranks');
+    push @{$self->{main_result}}, @$CONTINENTS if $self->output_key('continents');
     
     if ( my $offset = $self->result_offset(1) )
     {

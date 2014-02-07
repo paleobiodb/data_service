@@ -1,12 +1,13 @@
 #
 # Web::DataService::Text
 # 
-# This module is responsible for generating data responses in any of three
-# formats: 
+# This module is responsible for putting data responses into either
+# tab-separated text or comma-separated text format.  It is used when
+# the user selects any of the following three format strings:
 # 
 # csv	comma-separated text
 # tsv	tab-separated text
-# txt	tab-separated text, to be shown directly in a browser tab
+# txt	comma-separated text, to be shown directly in a browser tab
 # 
 # Author: Michael McClennen
 
@@ -22,8 +23,8 @@ use Carp qw(croak);
 
 # emit_header ( request, field_list )
 # 
-# Display any initial text that is necessary for a text format response.  This
-# will be output according to the format specified in the request
+# Generate any initial text that is necessary for a text format response.  This
+# will be formatted according to the format suffix specified in the request
 # (comma-separated or tab-separated).
 
 sub emit_header {
@@ -37,6 +38,49 @@ sub emit_header {
     
     return $output unless $request->display_header;
     
+    # If the user has specified that the source of this data be shown, add
+    # some header lines to convey this.
+    
+    if ( $request->display_source )
+    {
+	my $source = $request->get_data_source;
+	my $base = $source->{base_url};
+	my $url_rest = $request->get_request_url;
+	
+	my $data_url = $base . $url_rest;
+	my $doc_url = $base . $request->get_request_path . "_doc.html";
+	
+	$output .= $class->emit_line($request, "Data Source:", $source->{name});
+	$output .= $class->emit_line($request, "Data Source URL:", $base . '/');
+	$output .= $class->emit_line($request, "Data License:", $source->{license});
+	$output .= $class->emit_line($request, "Data License URL:", $source->{license_url});
+	$output .= $class->emit_line($request, "Documentation URL:", $doc_url);
+	$output .= $class->emit_line($request, "Data URL:", $data_url);
+	$output .= $class->emit_line($request, "Access Time:", $source->{access_time});
+	$output .= $class->emit_line($request, "Parameters:");
+	
+	my @display = $request->params_for_display;
+	
+	while ( @display )
+	{
+	    my $param = shift @display;
+	    my $value = shift @display;
+	    
+	    next unless defined $param && $param ne '';
+	    $value //= '';
+	    
+	    if ( ref $value eq 'ARRAY' )
+	    {
+		$output .= $class->emit_line($request, '', $param, @$value);
+	    }
+	    
+	    else
+	    {
+		$output .= $class->emit_line($request, '', $param, $value);
+	    }
+	}
+    }
+    
     # If the user has directed that result counts are to be shown, and if any
     # are available to show, then add those at the very top.
     
@@ -44,17 +88,25 @@ sub emit_header {
     {
 	my $counts = $request->result_counts;
 	
-	$output .= $class->generate_line($request, "Records found", "Records returned", "Starting index");
-	$output .= $class->generate_line($request, $counts->{found}, $counts->{returned}, $counts->{offset});
+	$output .= $class->emit_line($request, "Records Found:", $counts->{found});
+	$output .= $class->emit_line($request, "Records Returned:", $counts->{returned});
+	$output .= $class->generate-line($request, "Starting Index:", $counts->{offset})
+	    if defined $counts->{offset} && $counts->{offset} > 0;
     }
     
     # If any warnings were generated on this request, add them in next.
     
     if ( my @msgs = $request->warnings )
     {
-	$output .= $class->generate_line($request, "WARNINGS");
-	$output .= $class->generate_line($request, $_) foreach @msgs;
-	$output .= $class->generate_line($request, "END OF WARNINGS");
+	$output .= $class->emit_line($request, "Warning:", $_) foreach @msgs;
+    }
+    
+    # If any header material was generated, add a line to introduce the start
+    # of the actual data.
+    
+    if ( $output ne '' )
+    {
+	$output .= $class->emit_line($request, "Records:");
     }
     
     # Now, if any output fields were specified for this request, list them in
@@ -64,14 +116,14 @@ sub emit_header {
     {
 	my @fields = map { $_->{name} } @$field_list;
 	
-	$output .= $class->generate_line($request, @fields);
+	$output .= $class->emit_line($request, @fields);
     }
     
     # Otherwise, note that no fields are available.
     
     else
     {
-	$output .= $class->generate_line($request, "THIS REQUEST DID NOT GENERATE ANY OUTPUT FIELDS");
+	$output .= $class->emit_line($request, "THIS REQUEST DID NOT GENERATE ANY OUTPUT RECORDS");
     }
     
     # Return the text that we have generated.
@@ -91,7 +143,7 @@ sub emit_footer {
 }
 
 
-# emit_record (request, record )
+# emit_record (request, record, field_list)
 # 
 # Return a text line expressing a single record, according to the format
 # specified in the request (comma-separated or tab-separated) and the
@@ -132,7 +184,7 @@ sub emit_record {
 	
 	if ( ref $v eq 'ARRAY' )
 	{
-	    my $join = $f->{text_join} // q{,};
+	    my $join = $f->{text_join} // q{, };
 	    $v = join($join, @$v);
 	}
 	
@@ -141,29 +193,29 @@ sub emit_record {
 	push @values, $v;
     }
     
-    return $class->generate_line($request, @values);
+    return $class->emit_line($request, @values);
 }
 
 
-# generate_line ( request, values... )
+# emit_line ( request, values... )
 # 
 # Generate an output line containing the given values.
 
-sub generate_line {
+sub emit_line {
 
     my $class = shift;
     my $request = shift;
     
     my $term = $request->linebreak_cr ? "\n" : "\r\n";
     
-    if ( $request->output_format eq 'csv' )
+    if ( $request->output_format eq 'tsv' )
     {
-	return join(',', map { csv_clean($_) } @_) . $term;
+	return join("\t", map { tsv_clean($_) } @_) . $term;
     }
     
     else
     {
-	return join("\t", map { txt_clean($_) } @_) . $term;
+	return join(',', map { csv_clean($_) } @_) . $term;
     }
 }
 
@@ -211,13 +263,13 @@ sub csv_clean {
 }
 
 
-# txt_clean ( string )
+# tsv_clean ( string )
 # 
 # Given a string value, return an equivalent string value that will be valid
-# as part of a csv-format result.  If 'quoted' is true, then all fields will
+# as part of a tsv-format result.  If 'quoted' is true, then all fields will
 # be quoted.  Otherwise, only those which contain commas or quotes will be.
 
-sub txt_clean {
+sub tsv_clean {
 
     my ($string, $quoted) = @_;
     

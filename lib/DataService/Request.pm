@@ -45,6 +45,33 @@ sub new {
 }
 
 
+# get_config ( )
+# 
+# Get the Dancer configuration object, providing access to the configuration
+# directives for this data service.
+
+sub get_config {
+    
+    return Web::DataService->get_config;
+}
+
+
+# get_dbh ( )
+# 
+# Get a database handle, assuming that the proper directives are present in
+# the config.yml file to allow a connection to be made.
+
+sub get_dbh {
+    
+    my ($self) = @_;
+    
+    return $self->{dbh} if ref $self->{dbh};
+    
+    $self->{dbh} = Web::DataService->get_dbh;
+    return $self->{dbh};
+}
+
+
 # define_valueset ( name, specification... )
 # 
 # Define a list of parameter values, with optional "internal" values and
@@ -100,8 +127,9 @@ sub define_block {
 # define_output_map ( dummy )
 
 sub define_output_map {
-
-
+    
+    my $self = shift;
+    goto &Web::DataService::define_set;
 }
 
 # INSTANCE METHODS
@@ -131,60 +159,27 @@ sub configure_block {
     my ($self, $section_name) = @_;
     my $ds = $self->{ds};
     
-    return $ds->configure_section($self, $section_name);
+    return $ds->configure_block($self, $section_name);
 }
 
 
-# base_block_list ( )
+# output_key ( key )
 # 
-# Return the base list of output blocks for this request (this is an attribute
-# of the request path).
+# Return true if the specified output key was selected for this request.
 
-sub base_block_list {
-    
-    my ($self) = @_;
-    
-    my $ds = $self->{ds};
-    my $path = $self->{path};
-    
-    my $base_output = $self->{path_attrs}{$path}{base_output};
-    
-    return @$base_output if ref $base_output eq 'ARRAY';
-    return;
+sub output_key {
+
+    return $_[0]->{block_keys}{$_[1]};
 }
 
 
-# extra_block_list ( )
+# output_block ( name )
 # 
-# Return the list of output blocks selected by the 'show' parameter (or the
-# corresponding parameter name specified for this data service).
+# Return true if the named block is selected for the current request.
 
-sub extra_block_list {
-    
-    my ($self) = @_;
-    
-    my $ds = $self->{ds};
-    my $path = $self->{path};
-    
-    my $param = $self->{path_attrs}{$path}{output_param};
-    
-    my $extra_output = $self->{params}{$param};
-    
-    return @$extra_output if ref $extra_output eq 'ARRAY';
-    return $extra_output if defined $extra_output;
-    return;
-}
+sub block_selected {
 
-
-# output_set ( )
-# 
-# Return a hash of the output sections being shown for this request.
-
-sub output_set {
-
-    my ($self) = @_;
-    
-    return $self->{block_set};
+    return $_[0]->{block_hash}{$_[1]};
 }
 
 
@@ -198,16 +193,29 @@ sub select_list {
     
     my ($self, $subst) = @_;
     
-    my @fields = @{$self->{select_list}};
+    my @fields = @{$self->{select_list}} if ref $self->{select_list} eq 'ARRAY';
     
-    return unless @fields && defined $subst && ref $subst eq 'HASH';
-    
-    foreach my $f (@fields)
+    if ( defined $subst && ref $subst eq 'HASH' )
     {
-	$f =~ s/\$(\w+)/$subst->{$1}/g;
+	foreach my $f (@fields)
+	{
+	    $f =~ s/\$(\w+)/$subst->{$1}/g;
+	}
     }
     
     return @fields;
+}
+
+
+# select_hash ( subst )
+# 
+# Return the same set of strings as select_list, but in the form of a hash.
+
+sub select_hash {
+
+    my ($self, $subst) = @_;
+    
+    return map { $_ => 1} $self->select_list($subst);
 }
 
 
@@ -236,6 +244,28 @@ sub tables_hash {
 }
 
 
+# add_table ( name )
+# 
+# Add the specified name to the table hash.
+
+sub add_table {
+
+    my ($self, $table_name, $real_name) = @_;
+    
+    if ( defined $real_name )
+    {
+	if ( $self->{tables_hash}{"\$$table_name"} )
+	{
+	    $self->{tables_hash}{$real_name} = 1;
+	}
+    }
+    else
+    {
+	$self->{tables_hash}{$table_name} = 1;
+    }
+}
+
+
 # filter_hash ( )
 # 
 # Return a hashref derived from 'filter' records passed to define_output.
@@ -245,6 +275,37 @@ sub filter_hash {
     my ($self) = @_;
     
     return $self->{filter_hash};
+}
+
+
+# clean_param ( name )
+# 
+# Return the cleaned value of the named parameter, or the empty string if it
+# doesn't exist.
+
+sub clean_param {
+    
+    my ($self, $name) = @_;
+    
+    return '' unless ref $self->{valid};
+    return $self->{valid}->value($name) // '';
+}
+
+
+# clean_param_list ( name )
+# 
+# Return a list of all the cleaned values of the named parameter, or the empty
+# list if it doesn't exist.
+
+sub clean_param_list {
+    
+    my ($self, $name) = @_;
+    
+    return unless ref $self->{valid};
+    my $value = $self->{valid}->value($name);
+    return @$value if ref $value eq 'ARRAY';
+    return unless defined $value;
+    return $value;
 }
 
 
@@ -427,6 +488,16 @@ sub display_header {
 }
 
 
+# display_source
+# 
+# Return true if the data soruce should be displayed, false otherwise.
+
+sub display_source {
+    
+    return $_[0]->{display_source};    
+}
+
+
 # display_counts
 # 
 # Return true if the result count should be displayed along with the data,
@@ -435,6 +506,118 @@ sub display_header {
 sub display_counts {
 
     return $_[0]->{display_counts};
+}
+
+
+# get_data_source
+# 
+# Return the following pieces of information:
+# - The name of the data source
+# - The license under which the data is made available
+
+sub get_data_source {
+    
+    return Web::DataService->get_data_source;
+}
+
+
+# get_request_url
+# 
+# Return the raw (unparsed) request URL
+
+sub get_request_url {
+
+    return Web::DataService->get_request_url;
+}
+
+
+# get_request_path
+# 
+# Return the URL path for this request (just the path, no format suffix or
+# parameters)
+
+sub get_request_path {
+    
+    my $ds = $_[0]->{ds};
+    
+    return $ds->{path_prefix} . $_[0]->{path};
+}
+
+
+# params_for_display
+# 
+# Return a list of (parameter, value) pairs for use in constructing response
+# headers.  These are the cleaned parameter values, not the raw ones.
+
+sub params_for_display {
+    
+    my $self = $_[0];
+    my $ds = $self->{ds};
+    my $validator = $ds->{validator};
+    my $rs_name = $self->{rs_name};
+    my $path = $self->{path};
+    
+    # First get the list of all parameters allowed for this result.  We will
+    # then go through them in order to ensure a known order of presentation.
+    
+    my @param_list = list_ruleset_params($validator, $rs_name, {});
+    
+    # Now filter this list.  For each parameter that has a value, add its name
+    # and value to the display list.
+    
+    my @display;
+    
+    foreach my $p ( @param_list )
+    {
+	# Skip parameters that don't have a value.
+	
+	next unless defined $self->{params}{$p};
+	
+	# Skip the 'showsource' parameter itself, plus a few more.
+	
+	next if $p eq $ds->{path_attrs}{$path}{showsource_param} ||
+	    $p eq $ds->{path_attrs}{$path}{textresult_param} ||
+		$p eq $ds->{path_attrs}{$path}{linebreak_param} ||
+		    $p eq $ds->{path_attrs}{$path}{count_param} ||
+			$p eq $ds->{path_attrs}{$path}{nohead_param};
+	
+	# Others get included along with their value(s).
+	
+	push @display, $p, $self->{params}{$p};
+    }
+    
+    return @display;
+}
+
+
+sub list_ruleset_params {
+    
+    my ($validator, $rs_name, $uniq) = @_;
+    
+    return if $uniq->{$rs_name}; $uniq->{$rs_name} = 1;
+    
+    my $rs = $validator->{RULESETS}{$rs_name};
+    return unless ref $rs eq 'HTTP::Validate::Ruleset';
+    
+    my @params;
+    
+    foreach my $rule ( @{$rs->{rules}} )
+    {
+	if ( $rule->{type} eq 'param' )
+	{
+	    push @params, $rule->{param};
+	}
+	
+	elsif ( $rule->{type} eq 'include' )
+	{
+	    foreach my $name ( @{$rule->{ruleset}} )
+	    {
+		push @params, list_ruleset_params($validator, $name, $uniq);
+	    }
+	}
+    }
+    
+    return @params;
 }
 
 

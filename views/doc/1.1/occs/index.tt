@@ -1,6 +1,6 @@
 =head2 DESCRIPTION
 
-The /data1.1/occs routes provide access to information about the
+The URL paths described in this section provide access to information about the
 fossil occurrences represented in the Paleobiology Database.  These
 occurrences may be selected by a variety of criteria including: name,
 location, age, enterer, and taxonomic identification.
@@ -11,9 +11,9 @@ The following URL paths are available:
 
 =over 4
 
-=for pod_extra table_header Class* | Documentation | Description
+=for pp_table_header Class* | Path | Description
 
-=item Single occurrences | L</data1.1/occs/single|/data1.1/occs/single_doc.html>
+=item L<Single occurrences|/data1.1/occs/single> | L</data1.1/occs/single>
 
 Returns information about a single collection, selected by identifier.  For example:
 
@@ -25,18 +25,29 @@ L</data1.1/occs/single.json?id=1001&show=loc>
 
 =back
 
-=item Lists of occurrences | L</data1.1/occs/list|/data1.1/occs/list_doc.html>
+=item L<Lists of occurrences|/data1.1/occs/list> | L</data1.1/occs/list>
 
 Returns information about multiple occurrences, selected according to the parameters
-you provide.
-
-Examples:
+you provide.  For example:
 
 =over 4
 
 =item *
 
 L</data1.1/occs/list.txt?base_name=Cetacea&interval=Miocene&show=loc,time>
+
+=back
+
+=item L<References|/data1.1/occs/refs> | L</data1.1/occs/refs>
+
+Returns information about the bibliographic references associated with occurrences,
+selected according to the parameters you provide.  For example:
+
+=over
+
+=item *
+
+L</data1.1/occs/refs.ris?base_name=Cetacea&interval=Miocene&textresult>
 
 =back
 

@@ -15,11 +15,16 @@ use parent 'Exporter';
 
 our (@EXPORT_OK) = qw(generateAttribution generateReference generateRISReference);
 
+my $remember_ds;		# for use by datetime_value()
 
+
+our (%PERSON_NAME);
 
 sub initialize {
     
-    my ($class, $ds, $config, $dbh) = @_;
+    my ($class, $ds) = @_;
+    
+    $remember_ds = $ds;
     
     $ds->define_ruleset('1.1:common_params' => 
 	"The following parameters can be used with most requests:",
@@ -29,33 +34,303 @@ sub initialize {
 	    "Limits the number of records returned.  The value may be a positive integer, zero, or C<all>.",
 	    "It defaults to 500, in order to prevent people from accidentally sending requests that",
 	    "might generate megabytes of data in response.  If you really want the entire result set,",
-		"specify <limit=all>.",
+		"specify C<limit=all>.",
 	{ optional => 'offset', valid => POS_ZERO_VALUE },
 	    "Returned records start at this offset in the result set.  The value may be a positive integer or zero.",
+	    "You can use this parameter along with C<limit> to return a large result set in many smaller chunks.",
 	{ optional => 'count', valid => FLAG_VALUE },
-	    "If specified, then the response includes the number of records found and the number returned.",
+	    "If this parameter is specified, then the response includes a header stating",
+	    "the number of records that match the query and the number of records actually returned.",
 	    "For more information about how this information is encoded, see the documentation pages",
-	    "for the various response formats.",
+	    "for the various L<response formats|/data1.1/formats>.  This parameter does not need any value.",
+	{ optional => 'showsource', valid => FLAG_VALUE },
+	    "If this parameter is specified, then the response will include a header containing",
+	    "a variety of information including:", "=over",
+	    "=item *", "The source of the data",
+	    "=item *", "The license under which it is provided",
+	    "=item *", "The date and time at which the data was accessed",
+	    "=item *", "The URL and parameters used to generate this result set",
+	    "=back",
+	    "This is particularly useful for responses that will be saved to disk for later analysis",
+	    "and use.  This extra information will serve to document the criteria by which data are included",
+	    "in the result set, the time at which the result was generated, and will contain a URL",
+	    "which can be used to re-run the query at a later time.",
+	    "For more information about how this information is encoded, see the documentation pages",
+	    "for the various L<response formats|/data1.1/formats>.  This parameter does not need any value.",
+	{ optional => 'textresult', valid => FLAG_VALUE },
+	    "If specified, then the result will be given a content type of 'text/plain'.",
+	    "With most browsers, that will cause the result to be displayed directly",
+	    "instead of saved to disk.  This parameter does not need any value.",
+	{ optional => 'markrefs', valid => FLAG_VALUE },
+	    "If specified, then formatted references will be marked up with E<lt>bE<gt> and E<lt>iE<gt> tags.",
+	    "This parameter does not need a value.",
 	{ optional => 'vocab', valid => $ds->valid_vocab },
 	    "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
 	    "you want to override the default vocabulary for your selected format.",
 	    "Possible values depend upon the particular URL path, and include:", $ds->document_vocab,
 	">The following parameters are only relevant to the text formats (.csv, .tsv, .txt):",
-	{ optional => 'no_header', valid => FLAG_VALUE },
+	{ optional => 'noheader', valid => FLAG_VALUE },
 	    "If specified, then the header line which gives the field names is omitted.",
-	{ optional => 'linebreak', valid => ENUM_VALUE('cr','crlf'), default => 'crlf' },
-	    "Specifies the linebreak character sequence.",
+	    "This parameter does not need any value.",
+	{ optional => 'linebreak', valid => ENUM_VALUE('cr','crlf') },
+	    "Specifies the character sequence used to terminate each line.",
 	    "The value may be either 'cr' or 'crlf', and defaults to the latter.",
 	{ ignore => 'splat' });
-
-    $ds->define_block( '1.1:common:crmod' =>
-      { select => ['$mt.created', '$mt.modified'] },
-      { output => 'created', com_name => 'dcr' },
+    
+    $ds->define_ruleset('1.1:common:select_crmod' =>
+	{ param => 'created_before', valid => \&datetime_value },
+	    "Select only records that were created before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'created_since', valid => \&datetime_value },
+	    "Select only records that were created on or after the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'modified_before', valid => \&datetime_value },
+	    "Select only records that were last modified before the specified L<date or date/time|/data1.1/datetime>.",
+	{ param => 'modified_since', valid => \&datetime_value },
+	    "Select only records that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
+    
+    $ds->define_block('1.1:common:crmod' =>
+	{ select => ['$bt.created', '$bt.modified'], tables => '$bt' },
+	{ output => 'created', com_name => 'dcr' },
 	  "The date and time at which this record was created.",
-      { output => 'modified', com_name => 'dmd' },
+	{ output => 'modified', com_name => 'dmd' },
 	  "The date and time at which this record was last modified.");
     
+    $ds->define_ruleset('1.1:common:select_ent' =>
+	{ param => 'authorized_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records that were authorized by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'entered_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records that were entered by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'modified_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records that were authorized by the specified person,",
+	    "indicated by name or identifier",
+	{ param => 'touched_by', valid => ANY_VALUE, list => ',' },
+	    "Select only records that were either authorized, entered or modified by",
+	    "the specified person, indicated by name or identifier");
+    
+    $ds->define_block('1.1:common:ent' =>
+	{ select => ['$bt.authorizer_no', '$bt.enterer_no', '$bt.modifier_no'], tables => '$bt' },
+	{ output => 'authorizer_no', com_name => 'ath' },
+	    "The identifier of the person who authorized the entry of this record",
+	{ output => 'enterer_no', com_name => 'ent' },
+	    "The identifier of the person who actually entered this record.",
+	{ output => 'modifier_no', com_name => 'mdf' },
+	    "The identifier of the person who last modified this record, if it has been modified.");
+    
+    $ds->define_block('1.1:common:entname' =>
+	{ select => ['$bt.authorizer_no', '$bt.enterer_no', 
+		     '$bt.modifier_no'], tables => ['$bt'] },
+	{ set => 'authorizer', lookup => \%PERSON_NAME, default => 'unknown' },
+	{ set => 'enterer', lookup => \%PERSON_NAME, default => 'unknown' },
+	{ set => 'modifier', lookup => \%PERSON_NAME, default => 'unknown' },
+	{ output => 'authorizer', com_name => 'ath' },
+	    "The name of the person who authorized the entry of this record",
+	{ output => 'enterer', com_name => 'ent' },
+	    "The name of the person who actually entered this record",
+	{ output => 'modifier', com_name => 'mdf' },
+	    "The name of the person who last modified this record, if it has been modified.");
+    
+    # Now fill in the %PERSON_NAME hash.
+    
+    my $dbh = $ds->get_dbh;
+    
+    my $values = $dbh->selectcol_arrayref("SELECT person_no, reversed_name FROM person",
+					  { Columns => [1, 2] });
+    
+    %PERSON_NAME = @$values;
 }
+
+
+# datetime_value ( )
+# 
+# Validate a date or date/time value.
+
+my (%UNIT_MAP) = ( d => 'DAY', m => 'MINUTE', h => 'HOUR', w =>'WEEK', M => 'MONTH', Y => 'YEAR' );
+
+sub datetime_value {
+    
+    my ($value, $context) = @_;
+    
+    my $dbh = $remember_ds->get_dbh;
+    my $quoted = $dbh->quote($value);
+    my $clean;
+    
+    # If we were given a number of days/hours, then treat that as "ago".
+    
+    if ( $value =~ /^(\d+)([mhdwMY])$/xs )
+    {
+	if ( $2 eq 'm' || $2 eq 'h' )
+	{
+	    ($clean) = $dbh->selectrow_array("SELECT DATE_SUB(NOW(), INTERVAL $1 $UNIT_MAP{$2})");
+	}
+	
+	else
+	{
+	    ($clean) = $dbh->selectrow_array("SELECT DATE_SUB(CURDATE(), INTERVAL $1 $UNIT_MAP{$2})");
+	}
+    }
+    
+    else {
+	($clean) = $dbh->selectrow_array("SELECT CONVERT($quoted, datetime)");
+    }
+    
+    if ( $clean )
+    {
+	return { value => "'$clean'" };
+    }
+    
+    else
+    {
+	return { error => "the value of {param} must be a valid date or date/time as defined by the MySQL database (was {value})" };
+    }
+}
+
+
+# generate_crmod_filters ( table_name )
+# 
+# Generate the proper filters to select records by date created/modified.
+
+sub generate_crmod_filters {
+
+    my ($self, $table_name, $tables_hash) = @_;
+    
+    my @filters;
+    
+    if ( my $dt = $self->clean_param('created_since') )
+    {
+	push @filters, "$table_name.created >= $dt";
+    }
+    
+    if ( my $dt = $self->clean_param('created_before') )
+    {
+	push @filters, "$table_name.created < $dt";
+    }
+    
+    if ( my $dt = $self->clean_param('modified_since') )
+    {
+	push @filters, "$table_name.modified >= $dt";
+    }
+    
+    if ( my $dt = $self->clean_param('modified_before') )
+    {
+	push @filters, "$table_name.modified >= $dt";
+    }
+    
+    $tables_hash->{$table_name} = 1 if @filters && ref $tables_hash eq 'HASH';
+    
+    return @filters;
+}
+
+
+# generate_ent_filters ( table_name )
+# 
+# Generate the proper filters to select records by authorizer/enterer/modifier
+# name or number.
+
+sub generate_ent_filters {
+    
+    my ($self, $table_name, $tables_hash) = @_;
+    
+    my @filters;
+    
+    # First go through the parameters and figure out if we have names or
+    # identifiers.  Convert all names into identifiers.
+    
+    if ( my $value = $self->clean_param('authorized_by') )
+    {
+	push @filters, ent_filter($self, $table_name, 'authorizer_no', $value);
+    }
+    
+    if ( my $value = $self->clean_param('entered_by') )
+    {
+	push @filters, ent_filter($self, $table_name, 'enterer_no', $value);
+    }
+    
+    if ( my $value = $self->clean_param('modified_by') )
+    {
+	push @filters, ent_filter($self, $table_name, 'modifier_no', $value);
+    }
+    
+    if ( my $value = $self->clean_param('touched_by') )
+    {
+	push @filters, ent_filter($self, $table_name, 'touched', $value);
+    }
+    
+    $tables_hash->{$table_name} = 1 if @filters && ref $tables_hash eq 'HASH';
+        
+    return @filters;
+}
+
+
+sub ent_filter {
+    
+    my ($self, $tn, $param, $person_value) = @_;
+
+    my $dbh = $self->get_dbh;
+    my @values = ref $person_value eq 'ARRAY' ? @$person_value : $person_value;
+    my @ids;
+    
+    # Go through each of the names in the list.  Any names we find get looked
+    # up in the database.
+    
+    foreach my $p ( @values )
+    {
+	if ( $p =~ /^\d+$/ )
+	{
+	    push @ids, $p;
+	}
+	
+	else
+	{
+	    my $quoted = $dbh->quote("$p%");
+	    my $values = $dbh->selectcol_arrayref("
+		SELECT person_no, name FROM person
+		WHERE name like $quoted or reversed_name like $quoted", { Columns => [1, 2] });
+	    
+	    if ( defined $values && @$values < 3 )
+	    {
+		push @ids, $values->[0];
+	    }
+	    
+	    elsif ( defined $values )
+	    {
+		my @ambiguous;
+		
+		while ( @$values )
+		{
+		    shift @$values;
+		    push @ambiguous, "'" . shift(@$values) . "'";
+		}
+		
+		my $list = join(', ', @ambiguous);
+		$self->add_warning("Ambiguous name: '$p' could match any of the following names: $list");
+	    }
+	    
+	    else
+	    {
+		$self->add_warning("Unknown name: '$p' is not a name known to this database");
+	    }
+	}
+    }
+    
+    # Now generate a filter expression using the ids.  If we have no
+    # identifiers, return a string which will select nothing.  This is the
+    # proper response because the client clearly wanted to filter by identifier.
+    
+    my $id_list = join(',', @ids);
+    return "$tn.authorizer_no = 0" unless $id_list;
+    
+    if ( $param eq 'touched' )
+    {
+	return "($tn.authorizer_no in ($id_list) or $tn.enterer_no in ($id_list) or $tn.modifier_no in ($id_list))";
+    }
+    
+    else
+    {
+	return "$tn.$param in ($id_list)";
+    }
+}
+
 
 # generateAttribution ( )
 # 
@@ -101,389 +376,6 @@ sub generateAttribution {
     }
     
     return;
-}
-
-
-# generateReference ( )
-# 
-# Generate a reference string for the given record.  This relies on the
-# fields "r_al1", "r_ai1", "r_al2", "r_ai2", "r_ao", "r_pubyr", "r_reftitle",
-# "r_pubtitle", "r_pubvol", "r_pubno".
-# 
-
-sub generateReference {
-
-    my ($self, $row) = @_;
-    
-    # First format the author string.  This includes stripping extra periods
-    # from initials and dealing with "et al" where it occurs.
-    
-    my $ai1 = $row->{r_ai1} || '';
-    my $al1 = $row->{r_al1} || '';
-    
-    $ai1 =~ s/\.//g;
-    $ai1 =~ s/([A-Za-z])/$1./g;
-    
-    my $auth1 = $ai1;
-    $auth1 .= ' ' if $ai1 ne '' && $al1 ne '';
-    $auth1 .= $al1;
-    
-    my $ai2 = $row->{r_ai2} || '';
-    my $al2 = $row->{r_al2} || '';
-    
-    $ai2 =~ s/\.//g;
-    $ai2 =~ s/([A-Za-z])/$1./g;
-    
-    my $auth2 = $ai2;
-    $auth2 .= ' ' if $ai2 ne '' && $al2 ne '';
-    $auth2 .= $al2;
-    
-    my $auth3 = $row->{r_ao} || '';
-    
-    $auth3 =~ s/\.//g;
-    $auth3 =~ s/\b(\w)\b/$1./g;
-    
-    # Then construct the author string
-    
-    my $authorstring = $auth1;
-    
-    if ( $auth2 =~ /et al/ )
-    {
-	$authorstring .= " $auth2";
-    }
-    elsif ( $auth2 ne '' && $auth3 ne '' )
-    {
-	$authorstring .= ", $auth2";
-	if ( $auth3 =~ /et al/ )
-	{
-	    $authorstring .= " $auth3";
-	}
-	else
-	{
-	    $authorstring .= ", and $auth3";
-	}
-    }
-    elsif ( $auth2 )
-    {
-	$authorstring .= " and $auth2";
-    }
-    
-    # Now start building the reference with authorstring, publication year,
-    # reference title and publication title
-    
-    my $longref = $authorstring;
-    
-    if ( $authorstring ne '' )
-    {
-	$longref .= '.' unless $authorstring =~ /\.$/;
-	$longref .= ' ';
-    }
-    
-    my $pubyr = $row->{r_pubyr} || '';
-    
-    if ( $pubyr ne '' )
-    {
-	$longref .= "$pubyr. ";
-    }
-    
-    my $reftitle = $row->{r_reftitle} || '';
-    
-    if ( $reftitle ne '' )
-    {
-	$longref .= $reftitle;
-	$longref .= '.' unless $reftitle =~ /\.$/;
-	$longref .= ' ';
-    }
-    
-    my $pubtitle = $row->{r_pubtitle} || '';
-    my $editors = $row->{r_editors} || '';
-    
-    if ( $pubtitle ne '' )
-    {
-	my $pubstring = "<i>$pubtitle</i>";
-	
-	if ( $editors =~ /,| and / )
-	{
-	    $pubstring = " In $editors (eds.), $pubstring";
-	}
-	elsif ( $editors )
-	{
-	    $pubstring = " In $editors (ed.), $pubstring";
-	}
-	
-	$longref .= $pubstring . " ";
-    }
-    
-    # Now add volume and page number information if available
-    
-    my $pubvol = $row->{r_pubvol} || '';
-    my $pubno = $row->{r_pubno} || '';
-    
-    if ( $pubvol ne '' || $pubno ne '' )
-    {
-	$longref .= '<b>';
-	$longref .= $pubvol if $pubvol ne '';
-	$longref .= "($pubno)" if $pubno ne '';
-	$longref .= '</b>';
-    }
-    
-    my $fp = $row->{r_fp} || '';
-    my $lp = $row->{r_lp} || '';
-    
-    if ( ($pubvol ne '' || $pubno ne '') && ($fp ne '' || $lp ne '') )
-    {
-	$longref .= ':';
-	$longref .= $fp if $fp ne '';
-	$longref .= '-' if $fp ne '' && $lp ne '';
-	$longref .= $lp if $lp ne '';
-    }
-    
-    return $longref if $longref ne '';
-    return;
-}
-
-
-# Given an object representing a PaleoDB reference, return a representation of
-# that reference in RIS format (text).
-
-sub formatRISRef {
-    
-    my ($dbt, $ref) = @_;
-    
-    return '' unless ref $ref;
-    
-    my $output = '';
-    my $refno = $ref->{reference_no};
-    my $pubtype = $ref->{publication_type};
-    my $reftitle = $ref->{reftitle} || '';
-    my $pubtitle = $ref->{pubtitle} || '';
-    my $pubyr = $ref->{pubyr} || '';
-    my $misc = '';
-    
-    # First, figure out what type of publication the reference refers to.
-    # Depending upon publication type, generate the proper RIS data record.
-    
-    if ( $pubtype eq 'journal article' or $pubtype eq 'serial monograph' )
-    {
-	$output .= risLine('TY', 'JOUR');
-    }
-    
-    elsif ( $pubtype eq 'book chapter' or ($pubtype eq 'book/book chapter' and 
-					   defined $ref->{editors} and $ref->{editors} ne '' ) )
-    {
-	$output .= risLine('TY', 'CHAP');
-    }
-    
-    elsif ( $pubtype eq 'book' or $pubtype eq 'book/book chapter' or $pubtype eq 'compendium' 
-	    or $pubtype eq 'guidebook' )
-    {
-	$output .= risLine('TY', 'BOOK');
-    }
-    
-    elsif ( $pubtype eq 'serial monograph' )
-    {
-	$output .= risLine('TY', 'SER');
-    }
-    
-    elsif ( $pubtype eq 'Ph.D. thesis' or $pubtype eq 'M.S. thesis' )
-    {
-	$output .= risLine('TY', 'THES');
-	$misc = $pubtype;
-    }
-    
-    elsif ( $pubtype eq 'abstract' )
-    {
-	$output .= risLine('TY', 'ABST');
-    }
-    
-    elsif ( $pubtype eq 'news article' )
-    {
-	$output .= risLine('TY', 'NEWS');
-    }
-    
-    elsif ( $pubtype eq 'unpublished' )
-    {
-	$output .= risLine('TY', 'UNPD');
-    }
-    
-    else
-    {
-	$output .= risLine('TY', 'GEN');
-    }
-    
-    # The following fields are common to all types:
-    
-    $output .= risLine('ID', "paleodb:ref:$refno");
-    $output .= risLine('DB', "Paleobiology Database");
-    
-    $output .= risAuthor('AU', $ref->{author1last}, $ref->{author1init})  if $ref->{author1last};
-    $output .= risAuthor('AU', $ref->{author2last}, $ref->{author2init}) if $ref->{author2last};
-    $output .= risOtherAuthors('AU', $ref->{otherauthors}) if $ref->{otherauthors};
-    $output .= risOtherAuthors('A2', $ref->{editors}) if $ref->{editors};
-    
-    $output .= risYear('PY', $pubyr) if $pubyr > 0;
-    $output .= risLine('TI', $reftitle);
-    $output .= risLine('T2', $pubtitle);
-    $output .= risLine('M1', $misc) if $misc;
-    $output .= risLine('VL', $ref->{pubvol}) if $ref->{pubvol};
-    $output .= risLine('IS', $ref->{pubno}) if $ref->{pubno};
-    $output .= risLine('PB', $ref->{publisher}) if $ref->{publisher};
-    $output .= risLine('CY', $ref->{pubcity}) if $ref->{pubcity};
-    
-    if ( defined $ref->{refpages} and $ref->{refpages} ne '' )
-    {
-	if ( $ref->{refpages} =~ /^(\d+)-(\d+)$/ )
-	{
-	    $output .= risLine('SP', $1);
-	    $output .= risLine('EP', $2);
-	}
-	else
-	{
-	    $output .= risLine('SP', $ref->{refpages});
-	}
-    }
-    
-    else
-    {
-	$output .= risLine('SP', $ref->{firstpage}) if $ref->{firstpage};
-	$output .= risLine('EP', $ref->{lastpage}) if $ref->{lastpage};
-    }
-    
-    $output .= risLine('N1', $ref->{comments}) if defined $ref->{comments} and $ref->{comments} ne '';
-    $output .= risLine('LA', $ref->{language}) if defined $ref->{language} and $ref->{language} ne '';
-    $output .= risLine('DO', $ref->{doi}) if defined $ref->{doi} and $ref->{doi} ne '';
-    
-    $output .= risLine('ER');
-    
-    return $output;
-}
-
-
-# Generate an arbitrary line in RIS format, given a tag and a value.  The value
-# may be empty.
-
-sub risLine {
-    
-    my ($tag, $value) = @_;
-    
-    $value ||= '';
-    $tag = "\nTY" if $tag eq 'TY';
-    
-    return "$tag  - $value\n";
-}
-
-
-# Generate an "author" line in RIS format, given a tag (which may be 'AU' for
-# author, 'A2' for editor, etc.), and the three components of a name: last,
-# first, and suffix.  The first and suffix may be null.
-
-sub risAuthor {
-    
-    my ($tag, $last, $init, $suffix) = @_;
-    
-    $init ||= '';
-    $init =~ s/ //g;
-    $suffix ||= '';
-    
-    # If the last name includes a suffix, split it out
-    
-    if ( $last =~ /^(.*),\s*(.*)/ or $last =~ /^(.*)\s+(jr.?|iii|iv)$/i or $last =~ /^(.*)\s+\((jr.?|iii|iv)\)$/ )
-    {
-	$last = $1;
-	$suffix = $2;
-	if ( $suffix =~ /^([sSjJ])/ ) { $suffix = $1 . "r."; }
-    }
-    
-    # Generate the appropriate line, depending upon which of the three components
-    # are non-empty.
-    
-    if ( $suffix ne '' )
-    {
-	return "$tag  - $last,$init,$suffix\n";
-    }
-    
-    elsif ( $init ne '' )
-    {
-	return "$tag  - $last,$init\n";
-    }
-    
-    else
-    {
-	return "$tag  - $last\n";
-    }
-}
-
-
-# Generate a "date" line in RIS format, given a tag and year, month and day
-# values.  The month and day values may be null.  An optional "other" value
-# may also be included, which can be arbitrary text.
-
-sub risYear {
-
-    my ($tag, $year, $month, $day, $other) = @_;
-    
-    my $date = sprintf("%04d", $year + 0) . "/";
-    
-    $date .= sprintf("%02d", $month + 0) if defined $month and $month > 0;
-    $date .= "/";
-    
-    $date .= sprintf("%02d", $day + 0) if defined $day and $day > 0;
-    $date .= "/";
-    
-    $date .= $other if defined $other;
-    
-    return "$tag  - $date\n";
-}
-
-
-# Generate one or more "author" lines in RIS format, given a tag and a value
-# which represents one or more names separated by commas.  This is a bit
-# tricky, because we need to split out name suffixes such as 'jr' and 'iii'.
-# If we come upon something we can't handle, we generate a line whose value is
-# 'PARSE ERROR'.
-
-sub risOtherAuthors {
-
-    my ($tag, $otherauthors) = @_;
-    
-    $otherauthors =~ s/^\s+//;
-    
-    my $init = '';
-    my $last = '';
-    my $suffix = '';
-    my $output = '';
-    
-    while ( $otherauthors =~ /[^,\s]/ )
-    {
-	if ( $otherauthors =~ /^(\w\.)\s*(.*)/ )
-	{
-	    $init .= $1;
-	    $otherauthors = $2;
-	}
-	
-	elsif ( $otherauthors =~ /^([^,]+)(?:,\s+(.*))?/ )
-	{
-	    $last = $1;
-	    $otherauthors = $2;
-	    
-	    if ( $otherauthors =~ /^(\w\w+\.?)(?:,\s+(.*))$/ )
-	    {
-		$suffix = $1;
-		$otherauthors = $2;
-	    }
-	    
-	    $output .= risAuthor($tag, $last, $init, $suffix);
-	    $init = $last = $suffix = '';
-	}
-	
-	else
-	{
-	    $output .= risLine($tag, "PARSE ERROR");
-	    last;
-	}
-    }
-    
-    return $output;
 }
 
 

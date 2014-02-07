@@ -1,4 +1,4 @@
-The following services are obsolete and are retained only for compatibility with older applications: L<version 1.0|/data1.0/>.
+The following services are obsolete and should no longer be used: version 1.0 (/data1.0).
 
 =head2 DESCRIPTION
 
@@ -16,35 +16,41 @@ accepted and the data fields returned by each.
 
 =over 4
 
-=for pp_table_header Class* | Documentation | Description
+=for pp_table_header Class | Description
 
-=item Fossil Collections | L</data1.1/colls/>
+=item L<Fossil Occurrences|/data1.1/occs/>
 
-A fossil collection is somewhat loosely defined as a set of fossils collected
-by a single person from a single site.  Each collection has a geographic
+A fossil occurence represents the occurrence of a particular organism
+at a particular location in time and space.  Each occurrence is a
+member of a single fossil collection, and has a taxonomic
+identification which may be more or less specific.
+
+=item L<Fossil Collections|/data1.1/colls/>
+
+A fossil collection is somewhat loosely defined as a set of fossil occurrences
+that are co-located geographically and temporally.  Each collection has a geographic
 location, stratigraphic context, and age estimate.
 
-=item Fossil Occurrences | L</data1.1/occs/>
-
-A fossil occurence represents the occurrence of a particular organism at a 
-particular location in time and space.  Each occurrence is tied to a single collection,
-and has a taxonomic identification which may be more or less specific.
-
-=item Taxonomic names | L</data1.1/taxa/>
+=item L<Taxonomic names|/data1.1/taxa/>
 
 The taxonomic names stored in the database are arranged hierarchically.  Our
 tree of life is quite complete down to the class level, and reasonably
 complete down to the suborder level.  Below that, coverage varies.  Many parts
 of the tree have been completely entered, while others are sparser.
 
-=item Geologic time intervals | L</data1.1/intervals/>
+=item L<Time intervals|/data1.1/intervals/>
 
-The international standard geologic time intervals are included with their
-start and end dates as listed in the 
-L<GSA Geologic Time Scale|http://www.geosociety.org/science/timescale/> 
-(version 4.0/2012).  Many other named intervals are included as well.
+The database lists almost every geologic time interval in current use, including the
+standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>
+(L<v2013-1|http://www.stratigraphy.org/index.php/ics-chart-timescale>).
 
-=item Configuration | L</data1.1/config|/data1.1/config_doc.html>
+=item L<Bibliographic references|/data1.1/refs_doc.html>
+
+Each fossil occurrence, fossil collection and taxonomic name in the database is associated with
+one or more bibliographic references, identifying the source from which this information was
+entered.
+
+=item L<Client configuration|/data1.1/config_doc.html>
 
 This class provides information about the structure, encoding and organization
 of the information in the database.  It is designed to enable the easy configuration
@@ -61,11 +67,16 @@ of existing data.
 =head2 USAGE
 
 You can access this service by making HTTP requests whose URLs conform
-to a simple scheme. For example, consider the following URL:
+to a simple scheme.  In most cases each URL maps to a single database query,
+and the body of the response represents some or all of the resulting records.
+For a description of how this information is encoded, see the
+documentation for the various L<output formats|/data1.1/formats>.
+
+For example, consider the following URL:
 
     /data1.1/taxa/single.json?name=Dascillidae&show=attr
 
-An HTTP GET request using this URL would return information about the taxon 'Dascillidae' (soft-bodied plant beetles). The components of this URL are as follows:
+An HTTP GET request using this URL would return information about the taxon Dascillidae (soft-bodied plant beetles). The components of this URL are as follows:
 
 =over 4
 
@@ -108,20 +119,20 @@ By using the appropriate suffix, you can choose to retrieve any of the available
 
 =for pp_table_header Format | Suffix | Documentation | Description
 
-=item JSON | C<json> | L<JSON response|/data1.1/json_doc.html>
+=item JSON | C<json> | L<JSON response|/data1.1/formats/json_doc.html>
 
 L<Javascript Object Notation|http://en.wikipedia.org/wiki/Json> (JSON) is the most commonly used format for
 data communication on the Web. Our JSON responses use short
 (3-character) field names in order to minimize the amount of data
 returned.
 
-=item XML | C<xml> | L<XML response|/data1.1/xml_doc.html>
+=item XML | C<xml> | L<XML response|/data1.1/formats/xml_doc.html>
 
 Our XML responses use L<Darwin Core|http://www.tdwg.org/standards/450/> element names. 
 Unfortunately, many of our data fields have no counterpart in the Darawin Core element set and
 thus cannot be included in responses of this type.
 
-=item tab-separated text | C<tsv> C<txt> | L<Text response|/data1.1/text_doc.html>
+=item tab-separated text | C<tsv> C<txt> | L<Text response|/data1.1/formats/text_doc.html>
 
 This format produces files that are very similar to the download files
 from the classic PBDB. The same field names are used, so that you can
@@ -129,7 +140,7 @@ compare results with previous PBDB downloads and use the same analysis
 tools. Results in this format can be easily loaded into most
 spreadsheet software for futher processing and analysis.
 
-=item comma-separated text | C<csv> | L<Text response|/data1.1/text_doc.html>
+=item comma-separated text | C<csv> | L<Text response|/data1.1/formats/text_doc.html>
 
 This format is identical to the tab-separated format, but with fields
 quoted and separated by commas. It can be similarly loaded into most

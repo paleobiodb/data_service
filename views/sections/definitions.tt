@@ -57,7 +57,7 @@ I<No response was defined for this path>
 =head2 FORMATS
 
 <% IF format_doc %>
-The following formats are available for this path.  You can select any
+The following response formats are available for this URL path.  You can select any
 of them by using the appropriate path suffix.
 
 <% format_doc %>
@@ -72,8 +72,8 @@ I<No response formats were defined for this path.>
 =head2 VOCABULARIES
 
 <% IF vocab_doc %>
-The following response vocabularies are available for this path.  If you wish the response
-to use a vocabulary other than the default for the selected format, you can use the C<<% vocab_param %>> parameter.
+The following response vocabularies are available for this URL path.  If you want
+a vocabulary other than the default for the selected format, you can use the C<<% vocab_param %>> parameter.
 
 <% vocab_doc %>
 <%- ELSE -%>

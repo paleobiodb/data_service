@@ -15,15 +15,18 @@ package Web::DataService;
 
 use Carp qw( croak );
 use Scalar::Util qw( reftype blessed weaken );
+use POSIX qw( strftime );
 
 use Web::DataService::Format;
 use Web::DataService::Vocabulary;
+use Web::DataService::Cache;
 use Web::DataService::Request;
 use Web::DataService::Output;
 use Web::DataService::PodParser;
 use Web::DataService::JSON qw(json_list_value);
 
 use HTTP::Validate qw( :validators );
+
 
 HTTP::Validate->VERSION(0.34);
 
@@ -35,8 +38,11 @@ use Dancer::Plugin::StreamData;
 BEGIN {
     our (@KEYWORDS) = qw(define_vocab valid_vocab document_vocab
 			 define_format document_format
+			 define_cache
+			 define_set valid_set document_set
 			 define_path document_path path_defined
 			 define_ruleset define_output_map define_block
+			 get_config get_dbh
 			 initialize_class can_execute_path execute_path error_result);
     
     our (@EXPORT_OK) = (@KEYWORDS, @HTTP::Validate::VALIDATORS);
@@ -206,10 +212,13 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    limit_param => 'single',
 		    offset_param => 'single',
 		    count_param => 'single',
-		    no_head_param => 'single',
+		    nohead_param => 'single',
 		    linebreak_param => 'single',
+		    showsource_param => 'single',
+		    textresult_param => 'single',
 		    default_limit => 'single',
 		    streaming_theshold => 'single',
+		    use_cache => 'single',
 		    allow_method => 'set',
 		    allow_format => 'set',
 		    allow_vocab => 'set',
@@ -274,8 +283,10 @@ sub create_path_node {
 			limit_param => 'limit',
 			offset_param => 'offset',
 			count_param => 'count',
-			no_head_param => 'noheader',
+			nohead_param => 'noheader',
 			linebreak_param => 'linebreak',
+			textresult_param => 'textresult',
+			showsource_param => 'showsource',
 		        allow_method => { GET => 1 } };
     
     # Now go through the parent attributes and copy into the new node.  We
@@ -592,26 +603,93 @@ sub initialize_class {
     
     # If this class has an immediate parent which is a subclass of
     # Web::DataService::Request, initialize it first (unless, of course, it
-    # has already been initialized).  Also record the relationship so that we
-    # can search for inherited output sections.
+    # has already been initialized).
     
     foreach my $super ( @{"${class}::ISA"} )
     {
-	if ( $super->isa('Web::DataService::Request') )
+	if ( $super->isa('Web::DataService::Request') && $super ne 'Web::DataService::Request' )
 	{
-	    $self->{super_class}{$class} = $super;
-	    $self->initialize_class($super) unless $super eq 'Web::DataService::Request';;
-	    last;
+	    $self->initialize_class($super);
 	}
     }
     
-    # If the class has an initialization method, call it.
+    # If this class requires that one or more other classes be initialized
+    # first, then do so (unless they have already been initialized).
+    
+    if ( defined @{"${class}::REQUIRES_CLASS"} )
+    {
+	foreach my $required ( @{"${class}::REQUIRES_CLASS"} )
+	{
+	    $self->initialize_class($required);
+	}
+    }
+    
+    # If the class has an initialization routine, call it.
     
     if ( $class->can('initialize') )
     {
 	print STDERR "Initializing $class for data service $self->{name}\n" if $self->{DEBUG};
-	$class->initialize($self, Dancer::config, database());
+	eval { &{"${class}::initialize"}($class, $self) };
+	die $@ if $@ && $@ !~ /^Can't locate object method "initialize_class"/;
     }
+    
+    my $a = 1; # we can stop here when debugging
+}
+
+
+# get_data_source ( )
+# 
+# Return the following pieces of information:
+# - The name of the data source
+# - The license under which the data is made available
+
+sub get_data_source {
+    
+    my $config = Dancer::config();
+    my $access_time = strftime("%a %F %T GMT", gmtime);
+    
+    return { name => $config->{data_source}, 
+	     data_provider => $config->{data_provider} || $config->{data_source},
+	     data_source => $config->{data_source} || '',
+	     base_url => Dancer::request->uri_base(), 
+	     license => $config->{data_license}, 
+	     license_url => $config->{data_license_url},
+	     access_time => $access_time };
+}
+
+
+# get_config ( )
+# 
+# Return the Dancer configuration object, which provides access to the
+# configuration directives for this data service.
+
+sub get_config {
+    
+    my $config = Dancer::config();
+    return $config;
+}
+
+
+# get_dbh ( )
+# 
+# Return a database handle, assuming that the proper configuration directives
+# were included to enable a connection to be made.
+
+sub get_dbh {
+    
+    my $dbh = database();
+    return $dbh;
+}
+
+
+# get_request_url ( )
+# 
+# Return the URL that generated the current request
+
+sub get_request_url {
+    
+    my $request_url = Dancer::request->uri();
+    return $request_url;
 }
 
 
@@ -685,20 +763,11 @@ sub execute_path {
 	
 	if ( $self->{ONE_REQUEST} )
 	{
-	    if ( ref $path_attrs->{also_initialize} eq 'ARRAY' )
-	    {
-		foreach my $c ( @{$path_attrs->{also_initialize}} )
-		{
-		    $self->initialize_class($c);
-		}
-	    }
-	    
 	    $self->initialize_class($class);
 	}
 	
 	# Create a new object to represent this request, and bless it into the
-	# correct class.  Add a database handle if the 'uses_dbh' attribute was
-	# set.
+	# correct class.
 	
 	my $request = { ds => $self,
 			path => $path,
@@ -706,17 +775,14 @@ sub execute_path {
 			method => $method,
 			arg => $arg };
 	
-	$request->{dbh} = database() if $path_attrs->{uses_dbh};
-	
 	bless $request, $class;
 	
-	# Check to see if there is a ruleset corresponding to this path.  If
-	# a ruleset name was explicitly provided, use that.
+	# Check to see if there is a ruleset corresponding to this path.  If a
+	# ruleset name was explicitly provided, use that.  Otherwise, check to
+	# see if there is a ruleset corresponding to the path.
 	
 	my $validator = $self->{validator};
 	my $ruleset = $self->determine_ruleset($path, $path_attrs->{ruleset});
-	
-	# 
 	
 	if ( $ruleset )
 	{
@@ -732,8 +798,14 @@ sub execute_path {
 		$request->add_warning($result->warnings);
 	    }
 	    
+	    $request->{rs_name} = $ruleset;
 	    $request->{valid} = $result;
 	    $request->{params} = $result->values;
+	}
+	
+	else
+	{
+	    die "No ruleset could be found for path $path";
 	}
 	
 	# Determine the result limit and offset, if any.
@@ -764,15 +836,16 @@ sub execute_path {
 	# Determine whether we should show the optional header information in
 	# the result.
 	
-	$request->{display_header} = $request->{params}{$path_attrs->{no_head_param}} ? 0 : 1;
+	$request->{display_header} = $request->{params}{$path_attrs->{nohead_param}} ? 0 : 1;
+	$request->{display_source} = $request->{params}{$path_attrs->{showsource_param}} ? 1 : 0;
 	$request->{display_counts} = $request->{params}{$path_attrs->{count_param}} ? 1 : 0;
 	$request->{linebreak_cr} = 
-	    defined $request->{params}{$path_attrs->{linebreak_param}} &&
+	    $request->{params}{$path_attrs->{linebreak_param}} &&
 		$request->{params}{$path_attrs->{linebreak_param}} eq 'cr' ? 1 : 0;
 	
 	# Set the HTTP response headers appropriately for this request.
 	
-	$self->set_response_headers($path, $format);
+	$self->set_response_headers($request);
 	
 	# Now that the parameters have been processed, we can configure the
 	# output.  This tells us what information we have been requested
@@ -833,7 +906,7 @@ sub execute_path {
 	
 	else
 	{
-	    return generate_empty_result($request);
+	    return $self->generate_empty_result($request);
 	}
     }
     
@@ -1157,7 +1230,7 @@ sub determine_output_map {
 
 sub set_response_headers {
     
-    my ($self, $path, $format) = @_;
+    my ($self, $request) = @_;
     
     # If this is a public-access data service, we add a universal CORS header.
     # At some point we need to add provision for authenticated access.
@@ -1167,10 +1240,30 @@ sub set_response_headers {
 	Dancer::header "Access-Control-Allow-Origin" => "*";
     }
     
-    # Set the content type based on the format.
+    # If the parameter 'textresult' was given, set the content type to
+    # 'text/plain' which will cause the response to be displayed in a browser
+    # tab. 
     
-    my $ct = $self->{format}{$format}{content_type};
-    Dancer::content_type $ct if $ct;
+    if ( $request->{params}{textresult} )
+    {
+	Dancer::content_type 'text/plain';
+    }
+    
+    # Otherwise, set the content type based on the format.
+    
+    else
+    {
+	my $format = $request->{format};
+	my $ct = $self->{format}{$format}{content_type} || 'text/plain';
+	my $disp = $self->{format}{$format}{disposition};
+	
+	Dancer::content_type $ct;
+	
+	if ( defined $disp && $disp eq 'attachment' )
+	{
+	    Dancer::header 'Content-Disposition' => qq{attachment; filename="paleobiodb.$format"};
+	}
+    }
     
     return;
 }
@@ -1228,10 +1321,12 @@ sub error_result {
     
     if ( $format eq 'json' )
     {
-	my $error = json_list_value("errors", @errors);
+	$error = '"status_code": ' . $code;
+	$error .= ",\n" . json_list_value("errors", @errors);
 	$error .= ",\n" . json_list_value("warnings", @warnings) if @warnings;
 	
 	Dancer::content_type('application/json');
+	Dancer::header "Access-Control-Allow-Origin" => "*";
 	Dancer::status($code);
 	return "{ $error }";
     }
@@ -1264,6 +1359,7 @@ $warning
 END_BODY
     
 	Dancer::content_type('text/html');
+	Dancer::header "Access-Control-Allow-Origin" => "*";
 	Dancer::status($code);
 	return $body;
     }

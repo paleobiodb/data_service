@@ -3,10 +3,16 @@
 =head2 DESCRIPTION
 
 This path returns information about geographic clusters of collections from the Paleobiology Database.
-These clusters are defined in order to facilitate the generation of maps at low resolutions.  At least two levels
-of clusters are defined, with level 1 being the lowest resolution.  You can use the
-L</data1.1/config|/data1.1/config_doc.html> URL path to get a list of the available summary levels; this information
-is returned in the C<bns> field.
+These clusters are defined in order to facilitate the generation of maps at low resolutions.  You can make a
+L<config|/data1.1/config> request in order to get a list of the available summary levels.  For example:
+
+=over
+
+=item *
+
+L</data1.1/config.json?show=clusters>
+
+=back
 
 <% PROCESS params %>
 

@@ -1,7 +1,7 @@
 #
 # Web::DataService::JSON
 # 
-# This module is responsible for generating data responses in JSON format.
+# This module is responsible for putting data responses into JSON format.
 # 
 # Author: Michael McClennen
 
@@ -29,6 +29,66 @@ sub emit_header {
     
     my $output = '{' . "\n";
     
+    # Check if we have been asked to report the data source and parameters.
+    
+    if ( $request->display_source )
+    {
+	my $source = $request->get_data_source;
+	my $base = $source->{base_url};
+	my $url_rest = $request->get_request_url;
+	
+	my $data_url = $base . $url_rest;
+	my $doc_url = $base . $request->get_request_path . "_doc.html";
+	
+	$output .= '"data_source":' . json_clean($source->{name}) . ",\n";
+	$output .= '"data_source_url":' . json_clean($base . '/') . ",\n";
+	$output .= '"data_license":' . json_clean($source->{license}) . ",\n";
+	$output .= '"data_license_url":' . json_clean($source->{license_url}) . ",\n";
+	$output .= '"documentation_url":' . json_clean($doc_url) . ",\n";
+	$output .= '"data_url":' . json_clean($data_url) . ",\n";
+	$output .= '"access_time":' . json_clean($source->{access_time}) . ",\n";
+	$output .= '"parameters":{' . "\n";
+	
+	my @display = $request->params_for_display;
+	my $sep = '';
+	
+	while ( @display )
+	{
+	    my $param = shift @display;
+	    my $value = shift @display;
+	    
+	    next unless defined $param && $param ne '';
+	    $value //= '';
+	    
+	    $output .= $sep; $sep = ",\n";
+	    
+	    if ( ref $value eq 'ARRAY' )
+	    {
+		$output .= json_list_value($param, @$value);
+	    }
+	    
+	    else
+	    {
+		$output .= qq<"$param":"$value">;
+	    }
+	}
+	
+	$output .= "\n},\n";
+    }
+    
+    # Check if we have been asked to report the result count, and if it is
+    # available.
+    
+    if ( $request->display_counts )
+    {
+	my $counts = $request->result_counts;
+	
+	$output .= '"records_found":' . json_clean($counts->{found}) . ",\n";
+	$output .= '"records_returned":' . json_clean($counts->{returned}) . ",\n";
+	$output .= '"record_offset":' . json_clean($counts->{offset}) . ",\n"
+	    if defined $counts->{offset} && $counts->{offset} > 0;
+    }
+    
     # Check if we have any warning messages to convey
     
     if ( my @msgs = $request->warnings )
@@ -41,18 +101,6 @@ sub emit_header {
 	    $output .= json_clean($m);
 	}
 	$output .= qq<\n],\n>;
-    }
-    
-    # Check if we have been asked to report the result count, and if it is
-    # available.
-    
-    if ( $request->display_counts )
-    {
-	my $counts = $request->result_counts;
-	
-	$output .= '"records_found":' . json_clean($counts->{found}) . ",\n";
-	$output .= '"records_returned":' . json_clean($counts->{returned}) . ",\n";
-	$output .= '"record_offset":' . json_clean($counts->{offset}) . ",\n" if $counts->{offset} > 0;
     }
     
     # The actual data will go into an array, in a field called "records".
@@ -75,7 +123,7 @@ sub emit_separator {
 
 # emit_footer ( )
 # 
-# Return a final text for a JSON result.
+# Return the final text for a JSON result.
 
 sub emit_footer {
     
@@ -93,16 +141,16 @@ sub emit_record {
     
     my ($class, $request, $record, $field_list) = @_;
     
-    return $class->construct_object($request, $record, $field_list);
+    return $class->emit_object($request, $record, $field_list);
 }
 
 
-# construct_object ( request, record, field_list )
+# emit_object ( request, record, field_list )
 # 
 # Generate text that expresses the given record in JSON according to the given
 # list of output field specifications.
 
-sub construct_object {
+sub emit_object {
 
     my ($class, $request, $record, $field_list) = @_;
     
@@ -150,40 +198,66 @@ sub construct_object {
 	
 	if ( defined $f->{rule} )
 	{
-	    $request->configure_section($f->{rule});
+	    $request->configure_block($f->{rule});
 	    
-	    my $output_list = $request->{section_output}{$f->{rule}};
-	    my $proc_list = $request->{section_proc}{$f->{rule}};
+	    my $output_list = $request->{block_field_list}{$f->{rule}};
+	    my $proc_list = $request->{block_proc_list}{$f->{rule}};
 	    
-	    if ( ref $value eq 'HASH' )
+	    if ( ref $value && reftype $value eq 'HASH' )
 	    {
 		$request->process_record($value, $proc_list) if $proc_list && @$proc_list;
-		$value = $class->construct_object($request, $value, $output_list) if $output_list && @$output_list;
+		
+		if ( $output_list && @$output_list )
+		{
+		    $value = $class->emit_object($request, $value, $output_list);
+		}
+		else
+		{
+		    $value = json_clean($value);
+		}
 	    }
 	    
 	    # If instead the value is an arrayref then apply the rule to each item
 	    # in the list.
 	    
-	    elsif ( ref $value eq 'ARRAY' )
+	    elsif ( ref $value && reftype $value eq 'ARRAY' )
 	    {
 		if ( $proc_list && @$proc_list )
 		{
 		    foreach my $v ( @$value )
 		    {
-			$request->process_record($v, $proc_list);
+			$request->process_record($v, $proc_list) if $proc_list;
 		    }
 		}
 		
-		$value = $class->construct_array($request, $value, $output_list) if $output_list && @$output_list;
+		if ( $output_list && @$output_list )
+		{
+		    $value = $class->emit_array($request, $value, $output_list);
+		}
+		else
+		{
+		    $value = json_clean($value);
+		}
+	    }
+	    
+	    else
+	    {
+		$value = json_clean($value);
 	    }
 	}
 	
 	# Otherwise, if the value is an arrayref then we generate output for
-	# an array.
+	# an array.  If the field is marked "show_as_list", then do this even
+	# if there is only one value.
 	
 	elsif ( ref $value eq 'ARRAY' )
 	{
-	    $value = $class->construct_array($request, $value);
+	    $value = $class->emit_array($request, $value);
+	}
+	
+	elsif ( $f->{show_as_list} )
+	{
+	    $value = $class->emit_array($request, [ $value ]);
 	}
 	
 	# Otherwise just use the value.
@@ -207,7 +281,7 @@ sub construct_object {
     
     if ( exists $record->{hier_child} )
     {
-	my $children = $class->construct_array($record->{hier_child}, $field_list);
+	my $children = $class->emit_array($record->{hier_child}, $field_list);
 	$outrec .= qq<,"children":$children>;
     }
     
@@ -219,12 +293,12 @@ sub construct_object {
 }
 
 
-# construct_array ( request, arrayref, field_list )
+# emit_array ( request, arrayref, field_list )
 # 
 # Generate text that expresses the given array of values in JSON according to
 # the given list of field specifications.
 
-sub construct_array {
+sub emit_array {
 
     my ($class, $request, $arrayref, $field_list) = @_;
     
@@ -244,13 +318,13 @@ sub construct_array {
     {
 	if ( reftype $elt && reftype $elt eq 'ARRAY' )
 	{
-	    $value = $class->construct_array($request, $elt, $field_list);
+	    $value = $class->emit_array($request, $elt, $field_list);
 	}
 	
 	elsif ( reftype $elt && reftype $elt eq 'HASH' )
 	{
 	    next unless $field_list;
-	    $value = $class->construct_object($request, $elt, $field_list);
+	    $value = $class->emit_object($request, $elt, $field_list);
 	}
 	
 	elsif ( ref $elt )
@@ -286,16 +360,17 @@ sub json_list_value {
     my ($key, @values) = @_;
     
     my $output = qq<"$key": [>;
-    my $sep = "\n";
+    my $sep = '';
     
     foreach my $m (@values)
     {
-	$output .= $sep; $sep = q<,\n>;
+	$output .= $sep; $sep = ', ';
 	$output .= json_clean($m);
     }
     
-    $output .= qq<\n]>;
+    $output .= qq<]>;
 }
+
 
 # json_clean ( string )
 # 
