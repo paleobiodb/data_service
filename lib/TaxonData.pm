@@ -391,16 +391,16 @@ sub get {
     
     my @fields;
     
-    push @fields, 'ref' if $self->{block_set}{ref};
-    push @fields, 'attr' if $self->{block_set}{attr};
-    push @fields, 'size' if $self->{block_set}{size};
-    push @fields, 'app' if $self->{block_set}{app};
-    push @fields, 'img' if $self->{block_set}{img};
+    push @fields, 'ref' if $self->output_key('ref');
+    push @fields, 'attr' if $self->output_key('attr');
+    push @fields, 'size' if $self->output_key('size');
+    push @fields, 'app' if $self->output_key('app');
+    push @fields, 'img' if $self->output_key('img');
     
-    push @fields, 'link' if $self->{block_set}{nav};
-    push @fields, 'parent' if $self->{block_set}{nav};
-    push @fields, 'phylo' if $self->{block_set}{nav};
-    push @fields, 'counts' if $self->{block_set}{nav};
+    push @fields, 'link' if $self->output_key('nav');
+    push @fields, 'parent' if $self->output_key('nav');
+    push @fields, 'phylo' if $self->output_key('nav');
+    push @fields, 'counts' if $self->output_key('nav');
     
     $options->{fields} = \@fields;
     
@@ -415,7 +415,7 @@ sub get {
     # If we were asked for 'nav' info, also show the various categories
     # of subtaxa and whether or not each of the parents are extinct.
     
-    if ( $self->{block_set}{nav} )
+    if ( $self->output_key('nav') )
     {
 	my $r = $self->{main_record};
 	
@@ -557,15 +557,15 @@ sub list {
     
     # my @fields = $self->select_list();
     
-    # push @fields, 'ref' if $self->{block_set}{ref};
-    # push @fields, 'attr' if $self->{block_set}{attr};
-    # push @fields, 'size' if $self->{block_set}{size};
-    # push @fields, 'app' if $self->{block_set}{app};
+    # push @fields, 'ref' if $self->output_key('ref');
+    # push @fields, 'attr' if $self->output_key('attr');
+    # push @fields, 'size' if $self->output_key('size');
+    # push @fields, 'app' if $self->output_key('app');
     
-    # push @fields, 'link' if $self->{block_set}{nav};
-    # push @fields, 'parent' if $self->{block_set}{nav};
-    # push @fields, 'phylo' if $self->{block_set}{nav};
-    # push @fields, 'counts' if $self->{block_set}{nav};
+    # push @fields, 'link' if $self->output_key('nav');
+    # push @fields, 'parent' if $self->output_key('nav');
+    # push @fields, 'phylo' if $self->output_key('nav');
+    # push @fields, 'counts' if $self->output_key('nav');
     
     # $options->{fields} = \@fields;
     
