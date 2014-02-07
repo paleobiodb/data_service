@@ -1,0 +1,45 @@
+=head2 DESCRIPTION
+
+The URL paths documented in this section provide access to information about the
+geological time intervals represented in the Paleobiology Database.  These include
+the standard international set defined by the
+L<International Commission on Stratigraphy|http://http://www.stratigraphy.org/>
+(L<v2013-1|http://www.stratigraphy.org/index.php/ics-chart-timescale>) and many
+others as well.
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+=over 4
+
+=for pp_table_header Class* | Documentation | Description
+
+=item Single intervals | L</data1.1/intervals/single|/data1.1/intervals/single_doc.html>
+
+Returns information about a single interval, selected by identifier.  For example:
+
+=over 4
+
+=item *
+
+L</data1.1/intervals/single.json?id=16>
+
+=back
+
+=item Lists of intervals | L</data1.1/intervals/list|/data1.1/intervals/list_doc.html>
+
+Returns information about multiple intervals, selected according to the parameters
+you provide.
+
+Examples:
+
+=over 4
+
+=item *
+
+L</data1.1/intervals/list.txt?scale=1>
+
+=back
+
+=back

@@ -1,0 +1,238 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This page describes the JSON response format in detail.
+
+=head2 SYNOPSIS
+
+The JSON (L<JavaScript Object Notation|http://en.wikipedia.org/wiki/Json>)
+format is selected by ending a URL path with the suffix C<.json>.  This format
+is very flexible, and is intended for use by web applications built on top of
+this data service as well as for transmitting content to and from other
+databases.  JSON responses are always encoded in UTF-8.
+
+The body of a response in this format consists of a single JSON object,
+containing one or more of the following fields:
+
+=over
+
+=for pp_table_header Field | Description
+
+=item C<records>
+
+The value of this field is an array of objects, each representing a record
+from the database.
+
+This field will always be present if the URL path and parameters are
+interpreted to be a valid query, but the array may be empty if the query does
+not match any records.
+
+=item C<records_found>
+
+This field will be present if the parameter L<count|/data1.1/common> was specified.  Its
+value will be the number of records matched by the main query.
+
+=item C<records_returned>
+
+This field will be present if the paramter L<count|/data1.1/common> was specified.  Its
+value will be the number of records actually returned.  This may be less than
+the total number of records found, because the size of the result set is
+limited by default to 500.  You can override this using the L<limit|/data1.1/common>
+parameter.
+
+=item C<record_offset>
+
+This field will be present if the parameter L<count|/data1.1/common> was specified, and if
+the parameter L<offset|/data1.1/common> was specified with a value greater than zero.  The
+value in the second column will be the number of records that were skipped at the beginning
+of the result set.
+
+=item C<data_source>
+
+This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+Its value will be the name of this data source.
+
+=item C<data_source_url>
+
+This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+Its value will be the base URL for this data source.
+
+=item C<data_license>
+
+This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+Its value will be the license under which this data is provided.
+
+=item C<data_license_url>
+
+This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+Its value will be a URL from which the terms of the license may be fetched.
+
+=item C<documentation_url>
+
+This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+Its value will be a URL that provides documentation about the URL path
+used to fetch this data.  This URL will document both the parameters and the response fields.
+This information may be helpful in guiding the later interpretation of this data.
+
+=item C<data_url>
+
+This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+Its value will be the actual URL that was used to fetch this data.
+If this dataset is saved to disk, the included field will allow someone to later repeat this query.
+
+=item C<access_time>
+
+This field will be present if the parameter L<showsource|/data1.1/common> was specified.
+Its value will be the date and time time (GMT) at which this data
+was accessed.  If this dataset is saved to disk, the included field will enable it to be
+compared with other datasets on the basis of access time.
+
+=item C<parameters>
+
+This field will be present if the parameter L<showsource|/data1.1/common> was specified.  Its
+value will be an object whose fields represent the parameters and values that were used to 
+generate this result.  If this dataset is saved to disk, the parameter information may be 
+helpful in documenting how the data was selected, what it includes, and what it does not include.
+
+=item C<warnings>
+
+This field will be present if any warnings were generated during the execution
+of the query.  Its value will be an array of strings, each representing a
+warning message.
+
+=item C<errors>
+
+This field will be present if a fatal error condition was encountered.  Its
+value will be an array of strings, each representing an error message.  In general,
+if this field is present then none of the others will be.
+
+=item C<status_code>
+
+This field will be present if the HTTP status code is anything other than
+200.  Its value will be one of the following:
+
+=over
+
+=item 400
+
+One or more of the URL parameters was invalid.  The reasons will be given by
+the field C<errors>.  This request should not be repeated without
+modification.
+
+=item 401
+
+This request requires authentication.  Note that the authentication module has
+not yet been added to the data service, so you should not be seeing this yet. 
+
+=item 404
+
+The URL path was invalid.  This request should not be repeated without
+modification.
+
+=item 500
+
+An internal error occurred.  If this condition persists, you should contact
+the server administrator.  Otherwise, the request may be resubmitted later.
+
+=back
+
+=back
+
+For example, consider the following URL path:
+
+=over
+
+=item *
+
+L</data1.1/colls/single.json?id=1003>
+
+=back
+
+The body of the response is as follows:
+
+    {
+        "records": [
+            {
+                "oid": 1003,
+                "typ": "collection",
+                "lng": -94.804169,
+                "lat": 37.331112,
+                "prc": "seconds",
+                "nam": "USGS 7848-Cherokee Co., Kansas",
+                "noc": 1,
+                "oei": "Desmoinesian",
+                "rid": 33
+            }
+        ]
+    }
+
+This body is made up of an object containing the field "records", whose value is an array.
+Each element of the array represents a single record fetched from the
+database.  The definitions of the various fields can be found on the
+documentation page for this URL path: L</data1.1/colls/single|/data1.1/colls/single#RESPONSE>.
+
+Many URL paths will, of course, return multiple records.  For example:
+
+=over
+
+=item *
+
+L</data1.1/config.json?show=clusters&count>
+
+=back
+
+    {
+	"records_found": 3,
+	"records_returned": 3,
+	"records": [
+	    {
+		"lvl": 1,
+		"deg": 6,
+		"cnt": 779,
+		"mco": 3516,
+		"moc": 37500
+	    },
+	    {
+		"lvl": 2,
+		"deg": 2,
+		"cnt": 3439,
+		"mco": 1416,
+		"moc": 13135
+	    },
+	    {
+		"lvl": 3,
+		"deg": 0.5,
+		"cnt": 14734,
+		"mco": 915,
+		"moc": 11999
+	    }
+	]
+    }
+
+This response body contains multiple records, but is otherwise structured
+identically.  Note the presence of the C<count> parameter, which causes the
+inclusion of the fields C<records_found> and C<records_returned>.
+
+Finally, consider the following URL:
+
+=over
+
+=item *
+
+L</data1.1/colls/list.json?lngmin=50.0&show=foo>
+
+=back
+
+    {
+	"status_code": 400,
+	"errors": [
+	    "you must specify both of 'lngmin' and 'lngmax' if you specify either of them"
+	],
+	"warnings": [
+	    "bad value 'foo' for 'show': must be one of 'bin', 'attr', 'ref', 'loc', 'time', 'crmod', 'rem'"
+	]
+    }
+
+This response body conveys both an error and a warning, along with a status
+code of 400 (Bad Request) which indicates a problem with the URL parameters.
