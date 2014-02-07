@@ -799,6 +799,8 @@ sub configure_output {
 	    }
 	}
     }
+    
+    my $a = 1;	# We can stop here when debugging
 }
 
 

@@ -210,7 +210,7 @@ sub initialize {
 	  "the time range associated with the collection or cluster (with C<early_int_no>)");
     
     $ds->define_block('1.1:colls:strat' =>
-	{ select => ['cc.formation', 'cc.geological_group', 'cc.member'] },
+	{ select => ['cc.formation', 'cc.geological_group', 'cc.member'], tables => 'cc' },
 	{ output => 'formation', com_name => 'sfm' },
 	    "The stratigraphic formation in which the collection is located, if known",
 	{ output => 'geological_group', pbdb_name => 'stratgroup', com_name => 'sgr' },
@@ -222,7 +222,7 @@ sub initialize {
 	{ include => '1.1:colls:strat' },
 	{ select => [ qw(cc.zone cc.localsection cc.localbed cc.localorder
 		         cc.regionalsection cc.regionalbed cc.regionalorder
-		         cc.stratscale cc.stratcomments) ] },
+		         cc.stratscale cc.stratcomments) ], tables => 'cc' },
 	{ output => 'stratscale', com_name => 'ssc' },
 	    "The stratigraphic range covered by this collection",
 	{ output => 'zone', com_name => 'szn' },
@@ -244,7 +244,7 @@ sub initialize {
     
     $ds->define_block('1.1:colls:lith' =>
 	{ select => [ qw(cc.lithdescript cc.lithification cc.minor_lithology cc.lithology1
-			 cc.lithification2 cc.minor_lithology2 cc.lithology2) ] },
+			 cc.lithification2 cc.minor_lithology2 cc.lithology2) ], tables => 'cc' },
 	{ output => 'lithdescript', com_name => 'ldc' },
 	    "Detailed description of the collection site in terms of lithology",
 	{ output => 'lithology1', com_name => 'lt1' },
@@ -270,11 +270,11 @@ sub initialize {
 	    "Whether or not fossils were taken from the second described lithology");
     
     $ds->define_block('1.1:colls:lithext' =>
-	{ select => [ qw(cc.lithadj cc.fossilsfrom1 cc.lithadj2 cc.fossilsfrom2) ] },
+	{ select => [ qw(cc.lithadj cc.fossilsfrom1 cc.lithadj2 cc.fossilsfrom2) ], tables => 'cc' },
 	{ include => '1.1:colls:lith' });
     
     $ds->define_block('1.1:colls:geo' =>
-	{ select => [ qw(cc.environment cc.tectonic_setting cc.geology_comments) ] },
+	{ select => [ qw(cc.environment cc.tectonic_setting cc.geology_comments) ], tables => 'cc' },
 	{ output => 'environment', com_name => 'env' },
 	    "The paleoenvironment of the collection site",
 	{ output => 'tectonic_setting', com_name => 'tec' },

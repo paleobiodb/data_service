@@ -115,8 +115,7 @@ sub initialize {
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'late_age', com_name => 'lag' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
-	{ set => 'reference_no', split => ', ' },
-	{ output => 'reference_no', com_name => 'rid', text_join => ', ' },
+	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier(s) of the references from which this data was entered");
     
     $ds->define_block( '1.1:occs:geo' =>
