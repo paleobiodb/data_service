@@ -101,7 +101,7 @@ sub initialize {
       { select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
 		   'c.lat', 'c.lng', 'cc.latlng_basis as llb', 'cc.latlng_precision as llp',
 		   'c.n_occs', 'ei.interval_name as early_interval', 'li.interval_name as late_interval',
-		   'c.reference_no', 'group_concat(sr.reference_no) as sec_ref_nos'], 
+		   'c.reference_no', 'group_concat(sr.reference_no) as reference_nos'], 
 	tables => ['cc', 'ei', 'li', 'sr'] },
       { output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	  "A positive integer that uniquely identifies the collection",
@@ -132,8 +132,8 @@ sub initialize {
 	  "standard interval), or the interval that begins the range if C<late_interval> is also given",
       { output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	  "The interval that ends the specific geologic time range associated with the collection",
-      { set => 'reference_no', append => 1, from => 'sec_ref_nos', split => ',' },
-      { output => 'reference_no', com_name => 'rid', text_join => '; ' },
+      { set => 'reference_no', from_record => 1, code => \&set_collection_refs },
+      { output => 'reference_no', com_name => 'rid', text_join => ', ' },
 	  "The identifier(s) of the references from which this data was entered");
     
     $ds->define_block('1.1:colls:bin' =>
@@ -1454,6 +1454,33 @@ sub generateJoinList {
 	if $tables->{li};
         
     return $join_list;
+}
+
+
+# set_collection_references ( record )
+# 
+# Set the reference_no field based on reference_no and reference_nos.  The
+# latter holds all of the reference numbers as a comma-separated list, the
+# former holds the primary reference number which should always be reported
+# first.  The result must be a listref, even if there is only one reference
+# number reported.
+
+sub set_collection_refs {
+    
+    my ($self, $record) = @_;
+    
+    my @refs = split qr{,}, $record->{reference_nos};
+    
+    foreach my $i (0..$#refs)
+    {
+	if ( $refs[$i] == $record->{reference_no} )
+	{
+	    splice(@refs, $i, 1);
+	    unshift @refs, $record->{reference_no};
+	}
+    }
+    
+    return \@refs;
 }
 
 

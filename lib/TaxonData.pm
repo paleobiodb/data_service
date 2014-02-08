@@ -692,8 +692,8 @@ sub auto {
     
     my ($self) = @_;
     
-    my $dbh = $self->{dbh};
-    my $partial = $self->{params}{name};
+    my $dbh = $self->get_dbh;
+    my $partial = $self->clean_param('name');
     
     my $search_table = $TAXON_TABLE{taxon_trees}{search};
     my $names_table = $TAXON_TABLE{taxon_trees}{names};
@@ -707,8 +707,8 @@ sub auto {
     
     # Construct and execute an SQL statement.
     
-    my $limit = $self->generateLimitClause();
-    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    my $limit = $self->sql_limit_clause(1);
+    my $calc = $self->sql_count_clause;
     
     my $fields = "taxon_rank, match_no as taxon_no, n_occs, if(spelling_reason = 'misspelling', 1, null) as misspelling";
     
@@ -762,15 +762,6 @@ sub auto {
     
     $self->{main_sth} = $dbh->prepare($sql);
     $self->{main_sth}->execute();
-    
-    # If we were asked to get the count, then do so
-    
-    if ( $calc )
-    {
-	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
-    }
-    
-    return 1;
 }
 
 

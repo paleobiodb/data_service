@@ -128,26 +128,6 @@ $ds->define_cache(
     { name => '1.1:colls', check_entry => \&CollectionData::cache_still_good });
 
 
-# Next, we define the parameters we will accept, and the acceptable values
-# for each of them.
-
-$ds->initialize_class('CommonData');
-
-$ds->define_ruleset('1.1:person_selector' => 
-    [param => 'name', ANY_VALUE]);
-
-$ds->define_ruleset('1.1:person_specifier' => 
-    [param => 'id', POS_VALUE, { alias => 'person_id' }]);
-
-$ds->define_ruleset('1.1/people/single' => 
-    [allow => '1.1:person_specifier'],
-    [allow => '1.1:common_params']);
-
-$ds->define_ruleset('1.1/people/list' => 
-    [require => '1.1:person_selector'],
-    [allow => '1.1:common_params']);
-
-
 # Then define the URL paths that our data service accepts.  We start with the
 # root of the hierarchy, which is a protocol version number.  The following
 # calls define version 1.1 of this data servive.
@@ -267,7 +247,8 @@ $ds->define_path({ path => '1.1/intervals/list',
 
 $ds->define_path({ path => '1.1/people',
 		   class => 'PersonData',
-		   uses_dbh => 1 });
+		   output_block => '1.1:people:basic',
+		   doc_title => 'Database contributors' });
 
 $ds->define_path({ path => '1.1/people/single', 
 		   method => 'get' });

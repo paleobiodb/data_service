@@ -1,4 +1,4 @@
-
+# 
 # DataService::Output
 # 
 # 
@@ -495,9 +495,10 @@ sub configure_output {
     # to express the result of this request.
     
     my $output_map = $request->{output_map};
+    my $output_block = $request->{output_block};
     my @keys = $self->output_key_list($request);
     
-    unless ( @keys )
+    unless ( @keys || $output_block )
     {
 	$request->add_warning("No output blocks were specified for this request.");
 	return;
@@ -525,6 +526,8 @@ sub configure_output {
 	$request->{block_hash}{$block} = 1 if $block;
 	push @blocks, $block if $block;
     }
+    
+    push @blocks, $output_block if $output_block;
     
     # Then scan through the list of blocks and check for include_list
     # entries, and add the included blocks to the list as well.  This

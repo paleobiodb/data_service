@@ -203,6 +203,7 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    base_output => 'list',
 		    doc_output => 'list',
 		    output_map => 'single',
+		    output_block => 'single',
 		    uses_dbh => 'single',
 		    version => 'single',
 		    public_access => 'single',
@@ -830,6 +831,8 @@ sub execute_path {
 	my $map_name = $path_attrs->{output_map};
 	
 	$request->{output_map} = $self->{set}{$map_name} if defined $map_name;
+	$request->{output_block} = $path_attrs->{output_block} 
+	    if defined $path_attrs->{output_block} && $path_attrs->{output_block} ne '';
 	$request->{optional_output} = $request->{params}{$path_attrs->{output_param}}
 	    if defined $path_attrs->{output_param};
 	
