@@ -1,0 +1,31 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This path returns information about a single time scale record from the Paleobiology Database.  For
+simple time scales, a single record is returned per scale.  Some time scales (the International standard in particular)
+are divided into multiple levels.
+
+In this case, the result is different depending upon the format.  For text formats (i.e. C<.txt>), one record is
+returned per level.  For a JSON result, one record is returned per scale, with sub-records for each level.
+
+For example:
+
+=over
+
+=item *
+
+L</data1.1/scales/single.txt?id=1>
+
+=item *
+
+L</data1.1/scales/single.json?id=1>
+
+=back
+
+<% PROCESS params %>
+
+<% PROCESS methods %>
+
+<% PROCESS response %>
+

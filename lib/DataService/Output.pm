@@ -263,13 +263,13 @@ sub define_block {
 	croak "define_block: invalid block name '$name'";
     }
     
-    # Initialize the block list for the specified block.
-    
-    $self->{block_list}{$name} = [];
-    
     # Create a new block object.
     
-    my $block = {};
+    my $block = { name => $name,
+		  include_list => [],
+		  output_list => [] };
+    
+    $self->{block}{$name} = bless $block, 'Web::DataService::Block';
     
     # Then process the records one by one.  Make sure to throw an error if we
     # find a record whose type is ambiguous or that is otherwise invalid.  Each
@@ -305,12 +305,12 @@ sub define_block {
 	
 	if ( $type eq 'include' )
 	{
-	    push @{$self->{include_list}{$name}}, $item;
+	    push @{$self->{block}{$name}{include_list}}, $item;
 	}
 	
 	else
 	{
-	    push @{$self->{block_list}{$name}}, $item;
+	    push @{$self->{block}{$name}{output_list}}, $item;
 	}
     }
     
@@ -355,13 +355,13 @@ our %OUTPUT_DEF = (output => 'type',
 our %SELECT_KEY = (select => 1, tables => 1);
 
 our %FIELD_KEY = (dedup => 1, value => 1, always => 1, rule => 1, if_field => 1, 
-		  if_block => 1, not_block => 1, text_join => 1, xml_join => 1, 
-		  doc => 1, show_as_list => 1);
+		  not_field => 1, if_block => 1, not_block => 1, if_format => 1, not_format => 1,
+		  text_join => 1, xml_join => 1, doc => 1, show_as_list => 1);
 
 our %PROC_KEY = (set => 1, append => 1, from => 1, from_each => 1, from_record => 1,
 		 if_vocab => 1, not_vocab => 1, if_block => 1, not_block => 1,
 	         if_format => 1, not_format => 1, if_field => 1, not_field => 1,
-		 code => 1, lookup => 1, split => 1, join => 1, subfield => 1);
+		 code => 1, lookup => 1, split => 1, join => 1, subfield => 1, default => 1);
 
 sub check_output_record {
     
@@ -494,9 +494,11 @@ sub configure_output {
     # specified in the URL to determine which output blocks we will be using
     # to express the result of this request.
     
-    my $output_map = $request->{output_map};
-    my $output_block = $request->{output_block};
-    my @keys = $self->output_key_list($request);
+    my $output_map = $self->get_output_map($request->{output_name});
+    my @keys = $self->get_output_keys($request, $output_map)
+	if $output_map;
+    my $output_block = $request->{output_name}
+	if $self->get_output_block($request->{output_name});
     
     unless ( @keys || $output_block )
     {
@@ -543,7 +545,7 @@ sub configure_output {
 	
 	next if $uniq_block{$block}; $uniq_block{$block} = 1;
 	
-	my $include_list = $self->{include_list}{$block};
+	my $include_list = $self->{block}{$block}{include_list};
 	next unless ref $include_list eq 'ARRAY';
 	
       INCLUDE_RECORD:
@@ -620,7 +622,7 @@ sub configure_output {
 	# Generate a warning if the specified block does not exist, but do
 	# not abort the request.
 	
-	my $block_list = $self->{block_list}{$block};
+	my $block_list = $self->{block}{$block}{output_list};
 	
 	unless ( ref $block_list eq 'ARRAY' )
 	{
@@ -722,7 +724,7 @@ sub configure_output {
 		    
 		    else
 		    {
-			warn "Warning: unknown key '$key' in proc record\n";
+			carp "Warning: unknown key '$key' in proc record\n";
 		    }
 		}
 		
@@ -786,9 +788,9 @@ sub configure_output {
 		# Get the list of block records, or add a warning if no block
 		# was defined under that name.
 		
-		my $include_list = $self->{block_list}{$block};
+		my $add_list = $self->{block}{$include_block}{output_list};
 		
-		unless ( ref $include_list eq 'ARRAY' )
+		unless ( ref $add_list eq 'ARRAY' )
 		{
 		    warn "undefined output block '$include_block' for path '$request->{path}'\n";
 		    $request->add_warning("undefined output block '$include_block'");
@@ -798,7 +800,7 @@ sub configure_output {
 		# Now add the included block's records to the front of the
 		# record list.
 		
-		unshift @records, @$include_list;
+		unshift @records, @$add_list;
 	    }
 	}
     }
@@ -807,20 +809,58 @@ sub configure_output {
 }
 
 
-# output_key_list ( request )
+# get_output_map ( name )
 # 
-# Figure out the list of output block keys to be used in evaluating the
-# specified request.
+# If the specified name is the name of an output map, return a reference to
+# the map.  Otherwise, return undefined.
 
-sub output_key_list {
+sub get_output_map {
     
-    my ($self, $request) = @_;
+    my ($self, $output_name) = @_;
+    
+    if ( ref $self->{set}{$output_name} eq 'Web::DataService::Set' )
+    {
+	return $self->{set}{$output_name};
+    }
+    
+    return;
+}
+
+
+# get_output_block ( name )
+# 
+# If the specified name is the name of an output block, return a reference to
+# the block.  Otherwise, return empty.
+
+sub get_output_block {
+
+    my ($self, $output_name) = @_;
+    
+    if ( ref $self->{block}{$output_name} eq 'Web::DataService::Block' )
+    {
+	return $self->{block}{$output_name};
+    }
+    
+    return;
+}
+
+
+# get_output_keys ( request, map )
+# 
+# Figure out which output keys have been selected for the specified request,
+# using the specified output map.
+
+sub get_output_keys {
+    
+    my ($self, $request, $output_map) = @_;
     
     my $path = $request->{path};
     
-    # Start with the fixed blocks.
+    # Return empty unless we have a map.
     
-    my $output_map = $request->{output_map};
+    return unless ref $output_map eq 'Web::DataService::Set';
+    
+    # Start with the fixed blocks.
     
     my @keys = @{$output_map->{fixed}} if ref $output_map->{fixed} eq 'ARRAY';
     
@@ -861,7 +901,7 @@ sub configure_block {
     my $vocab = $request->{vocab};
     my $require_vocab = 1 if $vocab and not $self->{vocab}{$vocab}{use_field_names};
     
-    my $block_list = $self->{block_list}{$block_name};
+    my $block_list = $self->{block}{$block_name}{output_list};
     
     # If no list is available, indicate this to the request object and return
     # false.  Whichever routine called us will be responsible for generating an
@@ -1331,63 +1371,65 @@ sub document_node {
 }
 
 
-# document_response ( path, allowed_vocab, output_map )
+# document_response ( path, allowed_vocab, output_name )
 # 
-# Generate documentation in Pod format describing the available output fields.
-# The parameter $allowed_vocab must be a reference to a hash whose keys are
-# vocabulary names.  The second must be either a single block name or an array
-# of them.  The third must name either an output set or an array of block
-# names. 
+# Generate documentation in Pod format describing the available output fields
+# for the specified URL path.  The parameter $allowed_vocab must be a reference to
+# a hash whose keys are vocabulary names.  The parameter $output_name of them.
+# The third must name either an output set or an array of block names.
 
 sub document_response {
     
-    my ($self, $path, $allowed_vocab, $output_map) = @_;
+    my ($self, $path, $output_name) = @_;
     
-    # If no output map was given, no documentation can be generated.
+    # First figure out if the specified output name is the name of an output
+    # map.  If so, we document all of the visible items.
     
-    unless ( defined $output_map && $output_map ne '' )
+    my $output_map = $self->{set}{$output_name}
+	if ref $self->{set}{$output_name} eq 'Web::DataService::Set';
+    
+    my @keys = @{$output_map->{doc_enabled}}
+	if $output_map && ref $output_map->{doc_enabled} eq 'ARRAY';
+    
+    my %block_map = map { $_ => $output_map->{value}{$_}{maps_to} } @keys
+	if $output_map;
+    
+    # If there was no output map, or it didn't include any visible items, then
+    # see if the output name specifies a block instead.
+    
+    if ( ! @keys && ref $self->{block}{$output_name} eq 'Web::DataService::Block' )
     {
-	warn "No output map was defined for path '$path'" if $self->{DEBUG};
-	return "";
+	@keys = 'basic';
+	$block_map{'basic'} = $output_name;
     }
     
-    # First determine the set of output blocks to document, or return
-    # immediately if there are none.
+    # If we still don't have any output blocks, we cannot generate any documentation.
     
-    my $map = ref $output_map eq 'Web::DataService::Set' ? $output_map
-	    : ref $output_map				 ? ''
-							 : $self->{set}{$output_map};
-    
-    unless ( $map )
-    {
-	warn "unknown output map '$output_map' for path $path" if $self->{DEBUG};
-	return "";
-    }
-    
-    my @block_list = @{$map->{doc_enabled}};
-    
-    unless ( @block_list )
+    unless ( @keys )
     {
 	warn "No output blocks were enabled for output map '$output_map'" if $self->{DEBUG};
 	return "";
     }
     
-    # Next determine the set of vocabularies to document, or return
-    # immediately if there are none.
+    # Next determine the set of vocabularies that are allowed for this path.
+    # If none are specifically selected for this path, then all of the
+    # vocabularies defined for this data service are allowed.
     
-    unless ( ref $allowed_vocab eq 'HASH' && keys %$allowed_vocab )
+    my $vocabularies = $self->{path_attrs}{$path}{allow_vocab} || $self->{vocab};
+    
+    unless ( ref $vocabularies eq 'HASH' && keys %$vocabularies )
     {
-	warn "No output vocabularies were selected for path '$path'" if $self->{DEBUG};
+	warn "No output vocabularies were selected for path '$path'" if $self->debug;
 	return "";
     }
     
-    my @vocab_list = grep { $allowed_vocab->{$_} && 
+    my @vocab_list = grep { $vocabularies->{$_} && 
 			    ref $self->{vocab}{$_} &&
 			    ! $self->{vocab}{$_}{disabled} } @{$self->{vocab_list}};
     
     unless ( @vocab_list )
     {
-	warn "No output vocabularies were selected for path '$path'" if $self->{DEBUG};
+	warn "No output vocabularies were selected for path '$path'" if $self->debug;
 	return "";
     }
     
@@ -1417,19 +1459,22 @@ sub document_response {
     
     my %uniq_block;
     
-    foreach my $key (@block_list)
+    foreach my $key (@keys)
     {
-	my $block_name = $map->{value}{$key}{maps_to};
-	next unless $block_name;
+	# Skip any keys that don't map to a visible block.  The 'undoc'
+	# attribute indicates an undocumented block that shouldn't be shown.
 	
-	next if $map->{value}{$key}{undoc};
+	my $block_name = $block_map{$key};
+	
+	next unless $block_name;
+	next if ref $output_map && $output_map->{value}{$key}{undoc};
 	
 	# Make sure to only process each block once, even if it is listed more
 	# than once.
 	
 	next if $uniq_block{$block_name}; $uniq_block{$block_name} = 1;
 	
-	my $output_list = $self->{block_list}{$block_name};
+	my $output_list = $self->{block}{$block_name}{output_list};
 	next unless ref $output_list eq 'ARRAY';
 	
 	foreach my $r (@$output_list)
@@ -1482,28 +1527,39 @@ sub document_field {
 }
 
 
-# list_fixed_blocks ( path, output_map )
+# list_fixed_blocks ( path, output_name )
 # 
 # Return a list of the fixed blocks defined by the specified output map.
 
 sub list_fixed_blocks {
     
-    my ($self, $path, $output_map) = @_;
+    my ($self, $path, $output_name) = @_;
     
-    # If no output map was given, no documentation can be generated.
+    # Return empty unless we were given an output name.
     
-    return '' unless defined $output_map && $output_map ne '';
+    return unless defined $output_name && $output_name ne '';
     
-    # First determine the set of output blocks to document, or return
-    # immediately if there are none.
+    # If the output name corresponds to an output map, return the set of fixed
+    # blocks defined there.
     
-    unless ( ref $output_map eq 'Web::DataService::Set' )
+    if ( ref $self->{set}{$output_name} eq 'Web::DataService::Set' )
     {
-	$output_map = $self->{set}{$output_map} || 
-	    croak "unknown output map '$output_map' for path $path";
+	return @{$self->{set}{$output_name}{doc_fixed}}
+	    if ref $self->{set}{$output_name}{doc_fixed} eq 'ARRAY';
+	return;		# return empty otherwise
     }
     
-    return @{$output_map->{doc_fixed}};
+    # Otherwise if the output name corresponds to an output block, return the
+    # string 'basic'.
+    
+    if ( ref $self->{block}{$output_name} eq 'Web::DataService::Block' )
+    {
+	return 'basic';
+    }
+    
+    # Otherwise, return the empty list.
+    
+    return;
 }
 
 
@@ -1514,22 +1570,23 @@ sub list_fixed_blocks {
 
 sub list_optional_blocks {
     
-    my ($self, $path, $output_map) = @_;
+    my ($self, $path, $output_name) = @_;
     
-    # If no output map was given, no documentation can be generated.
+    # Return empty unless we were given an output name.
     
-    return '' unless defined $output_map && $output_map ne '';
+    return unless defined $output_name && $output_name ne '';
     
     # First determine the set of output blocks to document, or return
     # immediately if there are none.
     
-    unless ( ref $output_map eq 'Web::DataService::Set' )
+    if ( ref $self->{set}{$output_name} eq 'Web::DataService::Set' )
     {
-	$output_map = $self->{set}{$output_map} || 
-	    croak "unknown output map '$output_map' for path $path";
+	return @{$self->{set}{$output_name}{doc_unfixed}}
+	    if ref $self->{set}{$output_name}{doc_unfixed} eq 'ARRAY';
+	return;	# return empty otherwise
     }
     
-    return @{$output_map->{doc_unfixed}};
+    return;
 }
 
 

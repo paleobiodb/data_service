@@ -16,6 +16,7 @@ package Web::DataService;
 use Carp qw( croak );
 use Scalar::Util qw( reftype blessed weaken );
 use POSIX qw( strftime );
+use Try::Tiny;
 
 use Web::DataService::Format;
 use Web::DataService::Vocabulary;
@@ -202,8 +203,7 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    ruleset => 'single',
 		    base_output => 'list',
 		    doc_output => 'list',
-		    output_map => 'single',
-		    output_block => 'single',
+		    output => 'single',
 		    uses_dbh => 'single',
 		    version => 'single',
 		    public_access => 'single',
@@ -828,13 +828,7 @@ sub execute_path {
 	$request->{vocab} = $request->{params}{$path_attrs->{vocab_param}} || 
 	    $self->{format}{$format}{default_vocab} || $self->{vocab_list}[0];
 	
-	my $map_name = $path_attrs->{output_map};
-	
-	$request->{output_map} = $self->{set}{$map_name} if defined $map_name;
-	$request->{output_block} = $path_attrs->{output_block} 
-	    if defined $path_attrs->{output_block} && $path_attrs->{output_block} ne '';
-	$request->{optional_output} = $request->{params}{$path_attrs->{output_param}}
-	    if defined $path_attrs->{output_param};
+	$request->{output_name} = $self->determine_output_name($path, $path_attrs->{output});
 	
 	# Determine whether we should show the optional header information in
 	# the result.
@@ -916,7 +910,6 @@ sub execute_path {
     # If an error occurs, return an appropriate error response to the client.
     
     catch {
-
 	return $self->error_result($path, $format, $_);
     };
 };
@@ -941,154 +934,163 @@ sub document_path {
     
     my ($path, $format) = @_;
     
-    my $path_attrs = $self->{path_attrs}{$path};
-    my $class = $self->{path_attrs}{$path}{class};
+    # Do all of the processing in a 'try' block so that if an error occurs we
+    # can return an appropriate message.
     
-    $DB::single = 1;
-    
-    # If we are in 'one request' mode, initialize the class plus all of
-    # the classes it requires.
-    
-    if ( $self->{ONE_REQUEST} )
-    {
-	if ( ref $path_attrs->{also_initialize} eq 'ARRAY' )
+    try {
+	
+	my $path_attrs = $self->{path_attrs}{$path};
+	my $class = $self->{path_attrs}{$path}{class};
+	
+	$DB::single = 1;
+	
+	# If we are in 'one request' mode, initialize the class plus all of
+	# the classes it requires.
+	
+	if ( $self->{ONE_REQUEST} )
 	{
-	    foreach my $c ( @{$path_attrs->{also_initialize}} )
+	    if ( ref $path_attrs->{also_initialize} eq 'ARRAY' )
 	    {
-		$self->initialize_class($c);
+		foreach my $c ( @{$path_attrs->{also_initialize}} )
+		{
+		    $self->initialize_class($c);
+		}
+	    }
+	    
+	    $self->initialize_class($class);
+	}
+	
+	# We start by determining the filename for the documentation template.  If
+	# the filename was not explicitly specified, try the path with '_doc.tt'
+	# appended.  If that does not exist, try appending '/index.tt'.
+	
+	my $viewdir = Dancer::config->{views};
+	my $doc_file = $path_attrs->{doc_file};
+	
+	unless ( $doc_file )
+	{
+	    if ( -e "$viewdir/doc/${path}_doc.tt" )
+	    {
+		$doc_file = "${path}_doc.tt";
+	    }
+	    
+	    elsif ( -e "$viewdir/doc/${path}/index.tt" )
+	    {
+		$doc_file = "${path}/index.tt";
 	    }
 	}
 	
-	$self->initialize_class($class);
-    }
-    
-    # We start by determining the filename for the documentation template.  If
-    # the filename was not explicitly specified, try the path with '_doc.tt'
-    # appended.  If that does not exist, try appending '/index.tt'.
-    
-    my $viewdir = Dancer::config->{views};
-    my $doc_file = $path_attrs->{doc_file};
-    
-    unless ( $doc_file )
-    {
-	if ( -e "$viewdir/doc/${path}_doc.tt" )
+	unless ( $doc_file && -r "$viewdir/doc/$doc_file" )
 	{
-	    $doc_file = "${path}_doc.tt";
+	    $doc_file = $path_attrs->{doc_error_file} || $self->{doc_error_file} || 'doc_error.tt';
 	}
 	
-	elsif ( -e "$viewdir/doc/${path}/index.tt" )
+	my $doc_title = $path_attrs->{doc_title};
+	my $ds_version = $path_attrs->{version} || $self->{version};
+	
+	unless ( $doc_title )
 	{
-	    $doc_file = "${path}/index.tt";
+	    $doc_title = $path;
+	    $doc_title =~ s/^$ds_version//;
+	}
+	
+	# Then assemble the variables used to fill in the template:
+	
+	my $vars = { path => $path,
+		     doc_title => $doc_title,
+		     ds_version => $ds_version,
+		     vocab_param => $path_attrs->{vocab_param},
+		     output_param => $path_attrs->{output_param} };
+	
+	# Add the documentation for the parameters.  If no corresponding ruleset
+	# is found, then state that no parameters are accepted.
+	
+	my $ruleset = $self->determine_ruleset($path, $path_attrs->{ruleset});
+	
+	$vars->{param_doc} = 
+	    $ruleset ? $self->{validator}->document_params($ruleset)
+		: "I<This path does not take any parameters>";
+	
+	# Document which methods are valid for this path.
+	
+	my @http_methods = $self->list_http_methods($path);
+	$vars->{http_method_list} = join(', ', map { "C<$_>" } @http_methods);
+	
+	# Add the documentation for the response.  If no 'allow_vocab' attribute
+	# was given for this path, then all vocabularies are allowed.
+	
+	my $output_name = $self->determine_output_name($path, $path_attrs->{output});
+	
+	$vars->{response_doc} = $self->document_response($path, $output_name);
+	
+	
+	my @fixed_blocks = $self->list_fixed_blocks($path, $output_name);
+	my @optional_blocks = $self->list_optional_blocks($path, $output_name);
+	
+	$vars->{fixed_blocks} = scalar(@fixed_blocks);
+	$vars->{fixed_list} = join(', ', map { "I<$_>" } @fixed_blocks);
+	$vars->{optional_blocks} = scalar(@optional_blocks);
+	$vars->{optional_list} = join(', ', map { "I<$_>" } @optional_blocks);
+	
+	# Add the documentation for the allowed formats and vocabularies.
+	
+	$vars->{format_doc} = $self->document_allowed_formats($path);
+	$vars->{vocab_doc} = $self->document_allowed_vocab($path);
+	
+	# Add the labels and links for the navigation trail.
+	
+	my @path = split qr{/}, $path;
+	my $link = $self->{path_prefix} . shift @path;
+	my @trail = ($link, $link);
+	
+	foreach my $comp (@path)
+	{
+	    $link .= "/$comp";
+	    push @trail, ($comp, $link);
+	}
+	
+	$vars->{trail_list} = \@trail;
+	
+	# Now select the appropriate layout and execute the template.
+	
+	my $doc_layout = $path_attrs->{doc_layout} || $self->{doc_layout} || 'doc_main.tt';
+	
+	Dancer::set layout => $doc_layout;
+	
+	my $doc_string = Dancer::template( "doc/$doc_file", $vars );
+	
+	# All documentation is public, so set the maximally permissive CORS header.
+	
+	Dancer::header "Access-Control-Allow-Origin" => "*";
+	
+	# If POD format was requested, return the documentation as is.
+	
+	if ( defined $format && $format eq 'pod' )
+	{
+	    Dancer::content_type 'text/plain';
+	    return $doc_string;
+	}
+	
+	# Otherwise, convert the POD to HTML using the PodParser and return the result.
+	
+	else
+	{
+	    my $parser = Web::DataService::PodParser->new();
+	    
+	    $parser->parse_pod($doc_string);
+	    
+	    my $doc_html = $parser->generate_html({ css => '/data/css/dsdoc.css', tables => 1 });
+	    
+	    Dancer::content_type 'text/html';
+	    return $doc_html;
 	}
     }
     
-    unless ( $doc_file && -r "$viewdir/doc/$doc_file" )
-    {
-	$doc_file = $path_attrs->{doc_error_file} || $self->{doc_error_file} || 'doc_error.tt';
-    }
-    
-    my $doc_title = $path_attrs->{doc_title};
-    my $ds_version = $path_attrs->{version} || $self->{version};
-    
-    unless ( $doc_title )
-    {
-	$doc_title = $path;
-	$doc_title =~ s/^$ds_version//;
-    }
-    
-    # Then assemble the variables used to fill in the template:
-    
-    my $vars = { path => $path,
-		 doc_title => $doc_title,
-		 ds_version => $ds_version,
-		 vocab_param => $path_attrs->{vocab_param},
-		 output_param => $path_attrs->{output_param} };
-    
-    # Add the documentation for the parameters.  If no corresponding ruleset
-    # is found, then state that no parameters are accepted.
-    
-    my $ruleset = $self->determine_ruleset($path, $path_attrs->{ruleset});
-
-    $vars->{param_doc} = 
-	$ruleset ? $self->{validator}->document_params($ruleset)
-	         : "I<This path does not take any parameters>";
-    
-    # Document which methods are valid for this path.
-    
-    my @http_methods = $self->list_http_methods($path);
-    $vars->{http_method_list} = join(', ', map { "C<$_>" } @http_methods);
-    
-    # Add the documentation for the response.  If no 'allow_vocab' attribute
-    # was given for this path, then all vocabularies are allowed.
-    
-    my $output_map = $self->determine_output_map($path, $path_attrs->{output_map});
-    my $allow_vocab = $self->{path_attrs}{$path}{allow_vocab} || $self->{vocab};
-    
-    $vars->{response_doc} = $self->document_response($path, $allow_vocab, $output_map)
-	if defined $output_map && $output_map ne '';
-    
-    my @fixed_blocks = $self->list_fixed_blocks($path, $output_map);
-    my @optional_blocks = $self->list_optional_blocks($path, $output_map);
-    
-    $vars->{fixed_blocks} = scalar(@fixed_blocks);
-    $vars->{fixed_list} = join(', ', map { "I<$_>" } @fixed_blocks);
-    $vars->{optional_blocks} = scalar(@optional_blocks);
-    $vars->{optional_list} = join(', ', map { "I<$_>" } @optional_blocks);
-    
-    # Add the documentation for the allowed formats and vocabularies.
-    
-    $vars->{format_doc} = $self->document_allowed_formats($path);
-    $vars->{vocab_doc} = $self->document_allowed_vocab($path);
-    
-    # Add the labels and links for the navigation trail.
-    
-    my @path = split qr{/}, $path;
-    my $link = $self->{path_prefix} . shift @path;
-    my @trail = ($link, $link);
-    
-    foreach my $comp (@path)
-    {
-	$link .= "/$comp";
-	push @trail, ($comp, $link);
-    }
-    
-    $vars->{trail_list} = \@trail;
-    
-    # Now select the appropriate layout and execute the template.
-    
-    my $doc_layout = $path_attrs->{doc_layout} || $self->{doc_layout} || 'doc_main.tt';
-    
-    Dancer::set layout => $doc_layout;
-    
-    my $doc_string = Dancer::template( "doc/$doc_file", $vars );
-    
-    # All documentation is public, so set the maximally permissive CORS header.
-    
-    Dancer::header "Access-Control-Allow-Origin" => "*";
-    
-    # If POD format was requested, return the documentation as is.
-    
-    if ( defined $format && $format eq 'pod' )
-    {
-	Dancer::content_type 'text/plain';
-	return $doc_string;
-    }
-    
-    # Otherwise, convert the POD to HTML using the PodParser and return the result.
-    
-    else
-    {
-	my $parser = Web::DataService::PodParser->new();
-	
-	$parser->parse_pod($doc_string);
-	
-	my $doc_html = $parser->generate_html({ css => '/data/css/dsdoc.css', tables => 1 });
-	
-	Dancer::content_type 'text/html';
-	return $doc_html;
-    }
+    catch {
+	return $self->error_result($path, $format, $_);
+    };
 }
-
+	
 register 'document_path' => \&document_path;
 
 
@@ -1188,31 +1190,41 @@ sub determine_ruleset {
 }
 
 
-# determine_output_map {
+# determine_output_name {
 # 
-# If an explicit output_map is given, then use that if defined or throw an
-# error.  Otherwise, try the path with slashes turned into colons and ':map'
-# appended.
+# If an explicit output name is given, then use that if it corresponds to a
+# defined map or block or throw an error otherwise.  If not, try the path with
+# slashes turned into colons and ':output_map' appended.
 
-sub determine_output_map {
+sub determine_output_name {
 
-    my ($self, $path, $output_map) = @_;
+    my ($self, $path, $output_name) = @_;
     
-    # If an output_set name was explicitly given, then use that or throw an
-    # exception if not defined.
+    # If an output name was explicitly given, then see if it corresponds to a
+    # known output map or output block.  Otherwise, throw an exception.
     
-    if ( defined $output_map and $output_map ne '' )
+    if ( defined $output_name and $output_name ne '' )
     {
-	croak "unknown output set '$output_map' for path $path"
-	    unless ref $self->{set}{$output_map} eq 'Web::DataService::Set';
+	if ( ref $self->{set}{$output_name} eq 'Web::DataService::Set' )
+	{
+	    return $output_name;
+	}
 	
-	return $output_map;
+	elsif ( ref $self->{block}{$output_name} eq 'Web::DataService::Block' )
+	{
+	    return $output_name;
+	}
+	
+	else
+	{
+	    croak "no block or set is defined as '$output_name' for path $path";
+	}
     }
     
     # If the outputset was explicitly specified as '', then this path does not
     # use one.
     
-    elsif ( defined $output_map )
+    elsif ( defined $output_name )
     {
 	return;
     }
@@ -1223,9 +1235,10 @@ sub determine_output_map {
     else
     {
 	$path =~ s{/}{:}g;
-	$path .= ':map';
+	$path .= ':output_map';
 	
-	return $path if ref $self->{set}{$path} eq 'Web::DataService::Set';
+	return "$path:output_map" if ref $self->{set}{"$path:output_map"} eq 'Web::DataService::Set';
+	return "$path:basic" if ref $self->{block}{"$path:basic"} eq 'Web::DataService::Block';
 	return; # empty if not defined.
     }   
 }
@@ -1238,7 +1251,9 @@ sub set_response_headers {
     # If this is a public-access data service, we add a universal CORS header.
     # At some point we need to add provision for authenticated access.
     
-    if ( $self->{public_access} )
+    my $path = $request->{path};
+    
+    if ( $self->{path_attrs}{$path}{public_access} )
     {
 	Dancer::header "Access-Control-Allow-Origin" => "*";
     }

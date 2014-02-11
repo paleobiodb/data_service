@@ -151,7 +151,7 @@ $ds->define_path({ path => '1.1',
 $ds->define_path({ path => '1.1/config',
 		   class => 'ConfigData',
 		   method => 'get',
-		   output_map => '1.1:config:get_map',
+		   output => '1.1:config:get_map',
 		   doc_title => 'Client configuration' });
 
 # Occurrences.  These paths are used to fetch information about fossil
@@ -164,16 +164,16 @@ $ds->define_path({ path => '1.1/occs',
 
 $ds->define_path({ path => '1.1/occs/single',
 		   method => 'get',
-		   output_map => '1.1:occs:basic_map' });
+		   output => '1.1:occs:basic_map' });
 
 $ds->define_path({ path => '1.1/occs/list',
 		   method => 'list',
-		   output_map => '1.1:occs:basic_map' });
+		   output => '1.1:occs:basic_map' });
 
 $ds->define_path({ path => '1.1/occs/refs',
 		   method => 'refs',
 		   allow_format => '+ris,-xml',
-	           output_map => '1.1:refs:output_map' });
+	           output => '1.1:refs:output_map' });
 
 # Collections.  These paths are used to fetch information about fossil
 # collections known to the database.
@@ -185,21 +185,21 @@ $ds->define_path({ path => '1.1/colls',
 
 $ds->define_path({ path => '1.1/colls/single',
 		   method => 'get',
-		   output_map => '1.1:colls:basic_map'});
+		   output => '1.1:colls:basic_map'});
 		 
 $ds->define_path({ path => '1.1/colls/list',
 		   method => 'list',
-		   output_map => '1.1:colls:basic_map'});
+		   output => '1.1:colls:basic_map'});
 
 $ds->define_path({ path => '1.1/colls/summary',
 		   class => 'CollectionSummary',
 		   method => 'summary',
-		   output_map => '1.1:colls:summary_map'});
+		   output => '1.1:colls:summary_map'});
 
 $ds->define_path({ path => '1.1/colls/refs',
 		   method => 'refs',
 		   allow_format => '+ris',
-	           output_map => '1.1:refs:output_map' });
+	           output => '1.1:refs:output_map' });
 
 # Taxa.  These paths are used to fetch information about biological taxa known
 # to the database.
@@ -208,7 +208,7 @@ $ds->define_path({ path => '1.1/taxa',
 		   class => 'TaxonData',
 		   allow_format => '+xml',
 		   allow_vocab => '+dwc',
-		   output_map => '1.1:taxa:output_map' });
+		   output => '1.1:taxa:output_map' });
 
 $ds->define_path({ path => '1.1/taxa/single',
 		   method => 'get' });
@@ -219,7 +219,7 @@ $ds->define_path({ path => '1.1/taxa/list',
 $ds->define_path({ path => '1.1/taxa/auto',
 		   method => 'auto', 
 		   allow_format => 'json',
-		   output_map => '1.1:taxa:auto_map' });
+		   output => '1.1:taxa:auto_map' });
 
 $ds->define_path({ path => '1.1/taxa/thumb',
 		   allow_format => 'png',
@@ -229,13 +229,14 @@ $ds->define_path({ path => '1.1/taxa/icon',
 		   allow_format => 'png',
 		   method => 'get_icon' });
 
-# Intervals.  These paths are used to fetch information about geological time
-# intervals known to the database.
+
+# Time scales and intervals.  These paths are used to fetch information about
+# geological time scales and time intervals known to the database.
 
 $ds->define_path({ path => '1.1/intervals',
 		   class => 'IntervalData',
-		   output_map => '1.1:intervals:basic_map',
-		   doc_title => 'Geological Time Intervals' });
+		   output => '1.1:intervals:basic',
+		   doc_title => 'Geological Time Scales and Time Intervals' });
 
 $ds->define_path({ path => '1.1/intervals/single',
 		   method => 'get' });
@@ -243,11 +244,24 @@ $ds->define_path({ path => '1.1/intervals/single',
 $ds->define_path({ path => '1.1/intervals/list',
 		   method => 'list' });
 
-# People
+$ds->define_path({ path => '1.1/scales',
+		   class => 'IntervalData',
+		   output => '1.1:scales:basic',
+		   doc_title => 'Geological Time Scales' });
+
+$ds->define_path({ path => '1.1/scales/single',
+		   method => 'list_scales' });
+
+$ds->define_path({ path => '1.1/scales/list',
+		   method => 'list_scales' });
+
+
+
+# People.  These paths are used to fetch the names of database contributors.
 
 $ds->define_path({ path => '1.1/people',
 		   class => 'PersonData',
-		   output_block => '1.1:people:basic',
+		   output => '1.1:people:basic',
 		   doc_title => 'Database contributors' });
 
 $ds->define_path({ path => '1.1/people/single', 
@@ -261,7 +275,7 @@ $ds->define_path({ path => '1.1/people/list',
 $ds->define_path({ path => '1.1/refs',
  		   class => 'ReferenceData',
 		   allow_format => '+ris',
- 		   output_map => '1.1:refs:output_map'});
+ 		   output => '1.1:refs:output_map'});
 
 $ds->define_path({ path => '1.1/refs/single',
  		   method => 'get' });

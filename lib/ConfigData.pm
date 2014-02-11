@@ -41,11 +41,11 @@ sub initialize {
     
     $ds->define_set('1.1:config:get_map' =>
 	{ value => 'clusters', maps_to => '1.1:config:geosum' },
-	    "Returns information about the levels of geographic clustering defined in this database.",
+	    "Return information about the levels of geographic clustering defined in this database.",
 	{ value => 'ranks', maps_to => '1.1:config:ranks' },
-	    "Returns information about the taxonomic ranks defined in this database.",
+	    "Return information about the taxonomic ranks defined in this database.",
 	{ value => 'continents', maps_to => '1.1:config:continents' },
-	    "Returns information about the continents known to this database.",
+	    "Return information about the continents known to this database.",
 	{ value => 'all', maps_to => '1.1:config:all' },
 	    "Return all of the above blocks of information.",
 	    "This is generally useful only with C<json> format.");
@@ -75,7 +75,7 @@ sub initialize {
 	{ output => 'rank_code', com_name => 'cod' },
 	    "Numeric code representing this rank in responses using the 'com' vocabulary,",
 	    "which is the default for C<json> format");
-    
+        
     $ds->define_block('1.1:config:continents' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'con', if_field => 'continent_name' },
 	    "The configuration section: 'con' for continents",

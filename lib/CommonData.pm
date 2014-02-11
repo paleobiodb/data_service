@@ -120,9 +120,9 @@ sub initialize {
     $ds->define_block('1.1:common:entname' =>
 	{ select => ['$bt.authorizer_no', '$bt.enterer_no', 
 		     '$bt.modifier_no'], tables => ['$bt'] },
-	{ set => 'authorizer', lookup => \%PERSON_NAME, default => 'unknown' },
-	{ set => 'enterer', lookup => \%PERSON_NAME, default => 'unknown' },
-	{ set => 'modifier', lookup => \%PERSON_NAME, default => 'unknown' },
+	{ set => 'authorizer', from => 'authorizer_no', lookup => \%PERSON_NAME, default => 'unknown' },
+	{ set => 'enterer', from => 'enterer_no', lookup => \%PERSON_NAME, default => 'unknown' },
+	{ set => 'modifier', from => 'modifier_no', lookup => \%PERSON_NAME, default => 'unknown' },
 	{ output => 'authorizer', com_name => 'ath' },
 	    "The name of the person who authorized the entry of this record",
 	{ output => 'enterer', com_name => 'ent' },

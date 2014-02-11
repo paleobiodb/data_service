@@ -1457,7 +1457,7 @@ sub generateJoinList {
 }
 
 
-# set_collection_references ( record )
+# set_collection_refs ( record )
 # 
 # Set the reference_no field based on reference_no and reference_nos.  The
 # latter holds all of the reference numbers as a comma-separated list, the

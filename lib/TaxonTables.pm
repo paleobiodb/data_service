@@ -2530,13 +2530,13 @@ sub computeTreeSequence {
 	push @{$nodes->{$parent_no}{children}}, $child_no if $parent_no > 0;
     }
     
-    # Now we create the "main" tree, starting with taxon 1 'Eukaryota' at the
-    # top of the tree with sequence=1 and depth=1.  The variable $next gets
+    # Now we create the "main" tree, starting with taxon 28595 'Life' at the
+    # top of the tree with sequence=1 and depth=1.  The variable $seq gets
     # the sequence number with which we should start the next tree.
     
-    logMessage(2, "    sequencing tree rooted at 'Eukaryota'");
+    logMessage(2, "    sequencing tree rooted at 'Life'");
     
-    my $seq = assignSequence($nodes, 1, 1, 1);
+    my $seq = assignSequence($nodes, 28595, 1, 1);
     
     # Next, we go through all of the other taxa.  When we find a taxon with no
     # parent that we haven't visited yet, we create a new tree with it as the
@@ -2664,6 +2664,8 @@ sub assignSequence {
     # be bad!)
     
     my $node = $nodes->{$orig_no};
+    
+    logMessage(0, "NODE $orig_no : parent => $node->{parent_no} seq => $seq");
     
     unless ( exists $node->{lft} )
     {
@@ -4545,14 +4547,21 @@ sub buildTaxaCacheTables {
     # Update it to show spelling_no values instead of the corresponding
     # orig_no values.
     
-    logMessage(2, "    setting spelling_no values");
+    logMessage(2, "    setting parent spelling_no values");
     
     $result = $dbh->do("
 		UPDATE IGNORE $LIST_CACHE_WORK as l
 			JOIN $tree_table as pt on pt.orig_no = l.parent_no
-			JOIN $tree_table as ct on ct.orig_no = l.child_no
-		SET l.parent_no = pt.spelling_no,
-		    l.child_no = ct.spelling_no");
+		SET l.parent_no = pt.spelling_no");
+    
+    logMessage(2, "    adding entries for child spellings");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
+		SELECT l.parent_no, a.taxon_no
+		FROM $auth_table as a JOIN $LIST_CACHE_WORK as l on l.child_no = a.orig_no");
+    
+    logMessage(2, "      $result new entries.");
     
     # Add the necessary indices
     

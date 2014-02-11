@@ -117,6 +117,7 @@ sub summary {
     # Get a database handle by which we can make queries.
     
     my $dbh = $self->get_dbh;
+    my $tables = $self->tables_hash;
     
     # Figure out which bin level we are being asked for.  The default is 1.    
 
@@ -125,8 +126,8 @@ sub summary {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generateMainFilters('summary', 's', $self->tables_hash);
-    push @filters, $self->generateCollFilters($self->tables_hash);
+    my @filters = $self->generateMainFilters('summary', 's', $tables);
+    push @filters, $self->generateCollFilters($tables);
     
     # If a query limit has been specified, modify the query accordingly.
     
@@ -146,7 +147,7 @@ sub summary {
     my $summary_joins .= $self->generateJoinList('s', $self->tables_hash);
     
     $summary_joins = "RIGHT JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n" . $summary_joins
-	if $self->{select_tables}{c} or $self->{select_tables}{o};
+	if $tables->{c} or $tables->{o};
     
     if ( $self->{select_tables}{o} )
     {

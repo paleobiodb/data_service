@@ -106,15 +106,16 @@ sub initialize {
 	{ output => 'actual_no', com_name => 'ati', pbdb_name => 'actual_taxon_no', dedup => 'taxon_no' },
 	    "The identifier corresponding to the actual taxonomic name",
 	{ set => '*', code => \&CollectionData::fixTimeOutput },
-        { output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
+	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	    "The specific geologic time range associated with this collection (not necessarily a",
 	    "standard interval), or the interval that begins the range if C<late_inervalt> is also given",
-        { output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
+	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	    "The interval that ends the specific geologic time range associated with this collection",
 	{ output => 'early_age', com_name => 'eag' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'late_age', com_name => 'lag' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
+	{ set => 'reference_no', append => 1 },
 	{ output => 'reference_no', com_name => 'rid' },
 	    "The identifier(s) of the references from which this data was entered");
     
