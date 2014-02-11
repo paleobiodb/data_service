@@ -200,6 +200,7 @@ register 'define_path' => \&define_path;
 our (%NODE_DEF) = ( path => 'ignore',
 		    class => 'single',
 		    method => 'single',
+		    arg => 'single',
 		    ruleset => 'single',
 		    base_output => 'list',
 		    doc_output => 'list',
@@ -856,7 +857,7 @@ sub execute_path {
 	# entire routine; everything before and after is in support of this
 	# call.
 	
-	$request->$method();
+	$request->$method($arg);
 	
 	# Then we use the output configuration and the result of the query
 	# operation to generate the actual output.  How we do this depends

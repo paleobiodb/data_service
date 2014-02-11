@@ -1382,6 +1382,8 @@ sub document_response {
     
     my ($self, $path, $output_name) = @_;
     
+    return '' unless defined $output_name && $output_name ne '';
+    
     # First figure out if the specified output name is the name of an output
     # map.  If so, we document all of the visible items.
     

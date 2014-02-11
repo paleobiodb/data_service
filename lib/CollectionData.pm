@@ -14,7 +14,7 @@ use parent 'Web::DataService::Request';
 use Web::DataService qw( :validators );
 
 use CommonData qw(generateReference generateAttribution);
-use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
+use CollectionTables qw($COLL_MATRIX $COLL_BINS $COLL_STRATA @BIN_LEVEL);
 use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use Taxonomy;
 
@@ -306,6 +306,24 @@ sub initialize {
       { output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
 	  "Any additional remarks that were entered about the collection");
     
+    # Then define an output block for displaying stratigraphic results
+    
+    $ds->define_block('1.1:colls:strata' =>
+	{ select => ['cs.name', 'cs.rank', 'count(*) as n_colls', 'sum(n_occs) as n_occs'] },
+	{ output => 'record_type', com_name => 'typ', value => 'stratum', com_value => 'str' },
+	    "The type of this record: 'str' for a stratum",
+	{ output => 'name', com_name => 'nam' },
+	    "The name of the stratum",
+	{ output => 'rank', com_name => 'rnk' },
+	    "The rank of the stratum: formation, group or member",
+	{ output => 'n_colls', com_name => 'nco' },
+	    "The number of fossil collections in the database that are associated with this stratum.",
+	    "Note that if your search is limited to a particular geographic area, then",
+	    "only collections within the selected area are counted.",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The number of fossil occurrences in the database that are associated with this stratum.",
+	    "The above note about geographic area selection also applies.");
+    
     # Finally, define rulesets to interpret the parmeters used with operations
     # defined by this class.
     
@@ -501,6 +519,36 @@ sub initialize {
     	{ require => '1.1:toprank_selector' },
     	{ allow => '1.1:common_params' });
     
+    $ds->define_ruleset('1.1:strata:selector' =>
+	{ param => 'name', valid => ANY_VALUE },
+	    "A full or partial name.  You can use % and _ as wildcards, but the query",
+	    "will be very slow if you put a wildcard at the beginning",
+	{ optional => 'rank', valid => ENUM_VALUE('formation','group','member') },
+	    "Return only strata of the specified rank: formation, group or member",
+	{ param => 'lngmin', valid => DECI_VALUE },
+	{ param => 'lngmax', valid => DECI_VALUE },
+	{ param => 'latmin', valid => DECI_VALUE },
+	{ param => 'latmax', valid => DECI_VALUE },
+	    "Return only strata associated with some occurrence whose geographic location falls within the given bounding box.",
+	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
+	    "two adjacent bounding boxes if the range crosses the antimeridian.",
+	    "Note that if you specify C<lngmin> then you must also specify C<lngmax>.",
+	{ together => ['lngmin', 'lngmax'],
+	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
+	{ param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
+	    "Return only strata associated with some occurrence whose geographic location falls",
+	    "within the specified geometry, specified in WKT format.");
+    
+    $ds->define_ruleset('1.1:strata:list' =>
+	{ require => '1.1:strata:selector' },
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    
+    $ds->define_ruleset('1.1:strata:auto' =>
+	{ require => '1.1:strata:selector' },
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+
 }
 
 
@@ -663,8 +711,6 @@ sub list {
     # If we were asked to get the count, then do so
     
     $self->sql_count_rows;
-    
-    return 1;
 }
 
 
@@ -752,6 +798,68 @@ sub refs {
 }
 
 
+# strata ( arg )
+# 
+# Query the database for geological strata.  If the arg is 'auto', then treat
+# this query as an auto-completion request.
+
+sub strata {
+    
+    my ($self, $arg) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $self->get_dbh;
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my $tables = $self->tables_hash;
+    
+    my @filters = $self->generateMainFilters('list', 'cs', $tables);
+    push @filters, $self->generateStrataFilters($tables, $arg);
+    push @filters, "1=1" unless @filters;
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # Modify the query according to the common parameters.
+    
+    my $limit = $self->sql_limit_clause(1);
+    my $calc = $self->sql_count_clause;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $fields = $self->select_string({ mt => 'cs' });
+    
+    #$self->adjustCoordinates(\$fields);
+    
+    # Determine if any extra tables need to be joined in.
+    
+    my $base_joins = $self->generateJoinList('cs', $tables);
+    
+    $self->{main_sql} = "
+	SELECT $calc $fields
+	FROM coll_strata as cs
+		$base_joins
+        WHERE $filter_string
+	GROUP BY cs.name, cs.rank
+	ORDER BY cs.name
+	$limit";
+    
+    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
+    
+    # Then prepare and execute the main query and the secondary query.
+    
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
+    $self->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    $self->sql_count_rows;
+}
+
+
 # fixTimeOutput ( record )
 # 
 # Adjust the time output by truncating unneeded digits.
@@ -795,6 +903,40 @@ sub generateCollFilters {
     elsif ( $self->{params}{id} )
     {
 	push @filters, "c.collection_no = $self->{params}{id}";
+    }
+    
+    return @filters;
+}
+
+
+# generateStrataFilters ( tables_ref, $is_auto )
+# 
+# Generate a list of filter clauses that will help to select the appropriate
+# set of records.  This routine only handles parameters that are specific to
+# strata.  If $is_auto is 'auto', then add a % wildcard to the end of the name.
+
+sub generateStrataFilters {
+
+    my ($self, $tables_ref, $is_auto) = @_;
+    
+    my $dbh = $self->get_dbh;
+    my @filters;
+    
+    # Check for parameter 'name'.
+    
+    if ( my $name = $self->clean_param('name') )
+    {
+	$name .= '%' if $is_auto eq 'auto';
+	my $quoted = $dbh->quote($name);
+	push @filters, "cs.name like $quoted";
+    }
+    
+    # Check for parameter 'rank'.
+    
+    if ( my $rank = $self->clean_param('rank') )
+    {
+	my $quoted = $dbh->quote($rank);
+	push @filters, "cs.rank = $quoted";
     }
     
     return @filters;

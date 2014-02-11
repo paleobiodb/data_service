@@ -44,6 +44,11 @@ The database lists almost every geologic time interval in current use, including
 standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>
 (L<v2013-1|http://www.stratigraphy.org/index.php/ics-chart-timescale>).
 
+=item L<Geological strata|/data1.1/strata/>
+
+Every fossil collection in the database is categorized by the formation in which it occurs, and
+many by group and member.
+
 =item L<Bibliographic references|/data1.1/refs_doc.html>
 
 Each fossil occurrence, fossil collection and taxonomic name in the database is associated with

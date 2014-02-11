@@ -201,6 +201,22 @@ $ds->define_path({ path => '1.1/colls/refs',
 		   allow_format => '+ris',
 	           output => '1.1:refs:output_map' });
 
+# Strata.  These paths are used to fetch information abot geological strata
+# known to the database.
+
+$ds->define_path({ path => '1.1/strata',
+		   class => 'CollectionData',
+		   doc_title => 'Geological strata' });
+
+$ds->define_path({ path => '1.1/strata/list',
+		   method => 'strata',
+		   output => '1.1:colls:strata' });
+
+$ds->define_path({ path => '1.1/strata/auto',
+		   method => 'strata',
+		   arg => 'auto',
+		   output => '1.1:colls:strata' });
+
 # Taxa.  These paths are used to fetch information about biological taxa known
 # to the database.
 

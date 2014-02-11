@@ -17,7 +17,7 @@ use ConsoleLog qw(initMessages
 		  logMessage);
 use IntervalTables qw(loadIntervalData
 		      buildIntervalMap);
-use CollectionTables qw(buildCollectionTables);
+use CollectionTables qw(buildCollectionTables buildStrataTables);
 use OccurrenceTables qw(buildOccurrenceTables);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables
@@ -78,7 +78,7 @@ my $occurrence_tables = $options{m};
 my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
 my $old_taxon_tables = $options{y};
-my $diversity_tables = $options{d};
+my $strata_tables = $options{s};
 
 my $options = { taxon_steps => $options{T},
 		colls_cluster => $options{k} };
@@ -157,9 +157,9 @@ if ( $taxon_pics )
 
 # temp
 
-if ( $diversity_tables )
+if ( $strata_tables )
 {
-    buildDiversityTables($dbh, 'taxon_trees', $options{s});
+    buildStrataTables($dbh);
 }
 
 

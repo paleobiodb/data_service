@@ -10,7 +10,7 @@ use strict;
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(buildCollectionTables $COLL_MATRIX $COLL_BINS $COLL_INT_BINS $COUNTRY_MAP $CONTINENT_DATA @BIN_LEVEL);
+our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA @BIN_LEVEL);
 
 use Carp qw(carp croak);
 use Try::Tiny;
@@ -21,9 +21,11 @@ use ConsoleLog qw(logMessage);
 
 our $COLL_MATRIX = "coll_matrix";
 our $COLL_BINS = "coll_bins";
+our $COLL_STRATA = "coll_strata";
 
 our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
+our $COLL_STRATA_WORK = "csn";
 
 our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
@@ -378,15 +380,162 @@ sub buildCollectionTables {
     
     # applyClustering($dbh, $bin_list) if $options->{colls_cluster} and @bin_reso;
     
+    # Then we build a table listing all of the different geological strata.
+    
+    buildStrataTables($dbh);
+    
     # Finally, we swap in the new tables for the old ones.
     
-    activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS);
+    activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS,
+		         $COLL_STRATA_WORK => $COLL_STRATA);
     
     $dbh->do("DROP TABLE IF EXISTS protected_aux");
     
     my $a = 1;		# We can stop here when debugging
 }
 
+
+# buildStrataTables
+# 
+# Compute a table that can be used to query for geological strata by some
+# combination of partial name and geographic coordinates.
+
+sub buildStrataTables {
+    
+    my ($dbh, $options) = @_;
+    
+    $options ||= {};
+    my $coll_matrix = $COLL_MATRIX;
+    
+    # Create a new working table.
+    
+    $dbh->do("DROP TABLE IF EXISTS $COLL_STRATA_WORK");
+    
+    $dbh->do("CREATE TABLE $COLL_STRATA_WORK (
+		name varchar(255) not null,
+		rank enum('formation', 'group', 'member') not null,
+		maybe boolean not null,
+		collection_no int unsigned not null,
+		n_occs int unsigned not null,
+		loc geometry not null) Engine=MyISAM");
+    
+    # Fill it from the collections and coll_matrix tables.
+    
+    logMessage(2, "    computing stratum table...");
+    
+    my ($sql, $result);
+    
+    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
+		SELECT formation, 'formation', collection_no, n_occs, loc
+		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		WHERE formation <> ''";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      $result formations");
+    
+    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
+		SELECT geological_group, 'group', collection_no, n_occs, loc
+		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		WHERE geological_group <> ''";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      $result groups");
+    
+    $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
+		SELECT member, 'member', collection_no, n_occs, loc
+		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		WHERE member <> ''";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      $result members");
+    
+    logMessage(2, "    cleaning stratum names...");
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET name = replace(name, '\"', '')";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result quote-marks");
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET name = left(name, length(name)-3)
+		WHERE name like '\%Fm.' or name like '\%Mb.'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result final 'Fm./Mb.'");
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET name = left(name, length(name)-9)
+		WHERE name like '\%Formation'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result final 'Formation'");
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET name = left(name, length(name)-5)
+		WHERE name like '\%Group'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result final 'Group'");
+    
+    $sql = "    UPDATE $COLL_STRATA_WORK
+		SET name = substring(name, 2), maybe = true
+		WHERE name like '?%'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result initial question-marks");
+    
+    $sql = "	UPDATE $COLL_STRATA_WORK
+		SET name = left(name, length(name)-1), maybe = true
+		WHERE name like '%?'";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      removed $result final question-marks");
+    
+    $sql = "	UPDATE $COLL_STRATA_WORK
+		SET name = replace(name, '(?)', ''), maybe = true
+		WHERE name like '%(?)%'";
+    
+    $result = $dbh->do($sql);
+    
+    $sql = "	UPDATE $COLL_STRATA_WORK
+		SET name = replace(name, '?', ''), maybe = true
+		WHERE name like '%?%'";
+    
+    $result += $dbh->do($sql);
+    
+    logMessage(2, "      removed $result middle question-marks");
+    
+    $sql = "	UPDATE $COLL_STRATA_WORK
+		SET name = trim(name)";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "    trimmed $result names");
+    
+    logMessage(2, "    indexing by name...");
+    
+    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (name)");
+    
+    logMessage(2, "    indexing by collection_no...");
+    
+    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD INDEX (collection_no)");
+    
+    logMessage(2, "    indexing by geographic location...");
+    
+    $dbh->do("ALTER TABLE $COLL_STRATA_WORK ADD SPATIAL INDEX (loc)");
+    
+    #activateTables($dbh, $COLL_STRATA_WORK => $COLL_STRATA);
+}
 
 
 # applyClustering ( bin_list )
