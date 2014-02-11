@@ -144,10 +144,14 @@ sub summary {
     
     $self->adjustCoordinates(\$fields);
     
-    my $summary_joins .= $self->generateJoinList('s', $self->tables_hash);
+    my $summary_joins = '';
     
-    $summary_joins = "RIGHT JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n" . $summary_joins
-	if $tables->{c} or $tables->{o};
+    $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
+	if $tables->{c} || $tables->{cc} || $tables->{t} || $tables->{o};
+    
+    $summary_joins .= "JOIN collections as cc using (collection_no)" if $tables->{cc};
+    
+    $summary_joins .= $self->generateJoinList('s', $tables);
     
     if ( $self->{select_tables}{o} )
     {

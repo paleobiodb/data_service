@@ -1163,10 +1163,13 @@ sub generateMainFilters {
 	}
     }
     
-    # Now, if we are summarizing then add the appropriate interval filter.
+    # Now, if we are summarizing then add the appropriate interval filter.  If
+    # $summary_interval is not an integer (i.e. the client didn't specify a
+    # valid interval), use -1 instead which will cause the result set to be empty.
     
     if ( $op eq 'summary' )
     {
+	$summary_interval = '-1' unless $summary_interval =~ qr{^[0-9]+$};
 	push @filters, "s.interval_no = $summary_interval";
     }
     
