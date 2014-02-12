@@ -552,6 +552,18 @@ sub generateOccFilters {
 	push @filters, "o.collection_no = $self->{params}{coll_id}";
     }
     
+    # Check for parameters 'person_no', 'person_name'
+    
+    if ( my $person_id = $self->clean_param('person_id') )
+    {
+	my $person_string = ref $person_id eq 'ARRAY' ? join(q{,}, @$person_id)
+			  : defined $person_id	      ? $person_id
+			  :				-1;
+	
+	push @filters, "(oc.authorizer_no in ($person_string) or oc.enterer_no in ($person_string))";
+	$tables_ref->{oc} = 1;
+    }
+    
     return @filters;
 }
 

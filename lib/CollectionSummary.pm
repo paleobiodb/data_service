@@ -149,7 +149,7 @@ sub summary {
     $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
 	if $tables->{c} || $tables->{cc} || $tables->{t} || $tables->{o};
     
-    $summary_joins .= "JOIN collections as cc using (collection_no)" if $tables->{cc};
+    $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
     
     $summary_joins .= $self->generateJoinList('s', $tables);
     

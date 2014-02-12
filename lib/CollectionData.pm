@@ -891,18 +891,32 @@ sub generateCollFilters {
     my $dbh = $self->get_dbh;
     my @filters;
     
-    # Check for parameter 'id'
+    # Check for parameter 'id', If the parameter was given but no value was
+    # found, then add a clause that will generate an empty result set.
     
-    if ( ref $self->{params}{id} eq 'ARRAY' and
-	 @{$self->{params}{id}} )
+    my $id = $self->clean_param('id');
+    
+    if ( ref $id eq 'ARRAY' and @$id )
     {
-	my $id_list = join(',', @{$self->{params}{id}});
+	my $id_list = join(',', @$id);
 	push @filters, "c.collection_no in ($id_list)";
     }
     
-    elsif ( $self->{params}{id} )
+    elsif ( defined $id && $id ne '' )
     {
-	push @filters, "c.collection_no = $self->{params}{id}";
+	push @filters, "c.collection_no = $id";
+    }
+    
+    # Check for parameters 'person_no', 'person_name'
+    
+    if ( my $person_id = $self->clean_param('person_id') )
+    {
+	my $person_string = ref $person_id eq 'ARRAY' ? join(q{,}, @$person_id)
+			  :				$person_id;
+	
+	push @filters, "(cc.authorizer_no in ($person_string) or cc.enterer_no in ($person_string))";
+	$tables_ref->{cc} = 1;
+	$tables_ref->{non_geo_filter} = 1;
     }
     
     return @filters;
@@ -961,7 +975,6 @@ sub generateMainFilters {
     my $dbh = $self->get_dbh;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
-    my $non_geo_filter;
     
     # Check for parameter 'clust_id'
     
@@ -1043,7 +1056,7 @@ sub generateMainFilters {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{t} = 1;
-	$non_geo_filter = 1;
+	$tables_ref->{non_geo_filter} = 1;
     }
     
     elsif ( @taxa )
@@ -1051,7 +1064,7 @@ sub generateMainFilters {
 	my $taxon_list = join ',', map { $_->{orig_no} } @taxa;
 	push @filters, "o.orig_no in ($taxon_list)";
 	$tables_ref->{o} = 1;
-	$non_geo_filter = 1;
+	$tables_ref->{non_geo_filter} = 1;
     }
     
     # If no matching taxa were found, add a filter clause that will return no results.
@@ -1067,27 +1080,6 @@ sub generateMainFilters {
     {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
 	$tables_ref->{t} = 1;
-    }
-    
-    # Check for parameters 'person_no', 'person_name'
-    
-    if ( $self->{params}{person_id} )
-    {
-	if ( ref $self->{params}{person_id} eq 'ARRAY' )
-	{
-	    my $person_string = join(q{,}, @{$self->{params}{person_id}} );
-	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
-	    $tables_ref->{c} = 1;
-	    $non_geo_filter = 1;
-	}
-	
-	else
-	{
-	    my $person_string = $self->{params}{person_id};
-	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
-	    $tables_ref->{c} = 1;
-	    $non_geo_filter = 1;
-	}
     }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax'
@@ -1322,7 +1314,7 @@ sub generateMainFilters {
     
     if ( defined $early_age or defined $late_age )
     {
-	unless ( $op eq 'summary' and not $non_geo_filter and $time_rule eq 'buffer' )
+	unless ( $op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer' )
 	{
 	    $tables_ref->{c} = 1;
 	    
