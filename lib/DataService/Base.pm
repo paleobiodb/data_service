@@ -9,7 +9,7 @@
 
 use strict;
 
-package DataService::Base;
+package DataService::Query;
 
 use JSON;
 use Encode;
@@ -18,40 +18,12 @@ use Scalar::Util qw(reftype);
 
 our (@VOCABULARIES) = ('rec', 'com', 'dwc');
 
-# new ( dbh, attrs )
-# 
-# Generate a new query object, using the given database handle and any other
-# attributes that are specified.
-
-sub new {
-    
-    my ($class, $attrs) = @_;
-    
-    # Now create a query record.
-    
-    my $self = { };
-    
-    if ( ref $attrs eq 'HASH' )
-    {
-	foreach my $key ( %$attrs )
-	{
-	    $self->{$key} = $attrs->{$key};
-	}
-    }
-    
-    # Bless it into the proper class and return it.
-    
-    bless $self, $class;
-    return $self;
-}
-
-
 # warn ( message )
 # 
 # Add a warning message to this query object, which will be returned as part
 # of the output.
 
-sub warn {
+sub add_warning {
 
     my ($self, $message) = @_;
     

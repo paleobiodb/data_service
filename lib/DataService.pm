@@ -9,33 +9,64 @@
 
 use strict;
 
-package DataService;
+require 5.012;
 
-use DataService::Base;
-use DataService::PodParser;
+package Web::DataService;
+
+use Carp qw( croak );
+use Scalar::Util qw( reftype blessed weaken );
+use POSIX qw( strftime );
+use Try::Tiny;
+
+use Web::DataService::Format;
+use Web::DataService::Vocabulary;
+use Web::DataService::Cache;
+use Web::DataService::Request;
+use Web::DataService::Output;
+use Web::DataService::PodParser;
+use Web::DataService::JSON qw(json_list_value);
+
+use HTTP::Validate qw( :validators );
+
+
+HTTP::Validate->VERSION(0.34);
 
 #use Dancer qw( :syntax );
 use Dancer::Plugin;
 use Dancer::Plugin::Database;
 use Dancer::Plugin::StreamData;
 
-use Carp qw( croak );
-use Scalar::Util qw( reftype blessed weaken );
+BEGIN {
+    our (@KEYWORDS) = qw(define_vocab valid_vocab document_vocab
+			 define_format document_format
+			 define_cache
+			 define_set valid_set document_set
+			 define_path document_path path_defined
+			 define_ruleset define_output_map define_block
+			 get_config get_dbh
+			 initialize_class can_execute_path execute_path error_result);
+    
+    our (@EXPORT_OK) = (@KEYWORDS, @HTTP::Validate::VALIDATORS);
+    
+    our (%EXPORT_TAGS) = (
+	keywords => \@KEYWORDS,
+        validators => \@HTTP::Validate::VALIDATORS
+    );
+}
 
-# Create a default instance, for use when this module is used in a
+
+# Create a default instance, for when this module is used in a
 # non-object-oriented fashion.
 
-my ($DEFAULT_INSTANCE) = __PACKAGE__->new();
+my $DEFAULT_INSTANCE = __PACKAGE__->new({ name => 'Default' });
 
-my (%MEDIA_TYPE) = 
-    ('html' => 'text/html',
-     'xml' => 'text/xml',
-     'txt' => 'text/plain',
-     'tsv' => 'text/tab-separated-values',
-     'csv' => 'text/csv',
-     'json' => 'application/json',
-    );
+my $DEFAULT_COUNT = 0;
 
+our @HTTP_METHOD_LIST = ('GET', 'HEAD', 'POST', 'PUT', 'DELETE');
+
+
+# Methods
+# =======
 
 # new ( class, attrs )
 # 
@@ -46,26 +77,49 @@ sub new {
     
     my ($class, $options) = @_;
     
-    # Determine option values.
+    # Determine option values.  Start from the Dancer configuration file.
     
-    my $selector = $options->{response_selector} || 'fields';
-    my $needs_dbh = $options->{needs_dbh};
-    my $public_access = $options->{public_access};
-    my $validator = $options->{validator};
-    my $default_limit = $options->{default_limit} || 500;
-    my $stream_threshold = $options->{stream_threshold} || 20480;
+    my $config = Dancer::config;
     
-    # Create a new instance.
+    my $path_prefix = $options->{path_prefix} || '/';
+    my $public_access = $options->{public_access} || $config->{public_access};
+    my $default_limit = $options->{default_limit} || $config->{default_limit} || 500;
+    my $streaming_threshold = $options->{streaming_threshold} || $config->{streaming_threshold} || 20480;
+    my $name = $options->{name} || $config->{name};
+    
+    unless ( $name )
+    {
+	$DEFAULT_COUNT++;
+	$name = 'Data Service' . ( $DEFAULT_COUNT > 1 ? " $DEFAULT_COUNT" : "" );
+    }
+    
+    # Create a new HTTP::Validate object so that we can do parameter
+    # validations.
+    
+    my $validator = HTTP::Validate->new();
+    
+    $validator->validation_settings(allow_unrecognized => 1) if $options->{allow_unrecognized};
+    
+    # Create a new DataService object, and return it:
     
     my $instance = {
+		    name => $name,
+		    path_prefix => $path_prefix,
 		    validator => $validator,
-		    response_selector => $selector,
 		    public_access => $public_access,
-		    needs_dbh => $needs_dbh,
 		    default_limit => $default_limit,
-		    stream_threshold => $stream_threshold,
-		    route_attrs => {},
+		    # streaming_available => server_supports_streaming,
+		    streaming_threshold => $streaming_threshold,
+		    path_attrs => {},
+		    vocab => { 'default' => 
+			       { name => 'default', use_field_names => 1, _default => 1,
+				 doc => "The default vocabulary consists of the underlying field names" } },
+		    vocab_list => [ 'default' ],
+		    format => {},
+		    format_list => [],
 		   };
+    
+    $instance->{DEBUG} = 1 if $config->{ds_debug};
     
     # Return the new instance
     
@@ -74,141 +128,373 @@ sub new {
 }
 
 
-# define_route ( path, attrs )
-# 
-# Set up a "route" entry, representing a route which can be used to access the
-# serice.  The specified attributes will be used to select and carry out the
-# proper operation when this route is used, as well as to construct the
-# documentation page for this route.
+# accessor methods for the various attributes:
 
-sub define_route {
+sub get_path_prefix {
     
-    my ($self, $path, $attrs);
+    return $_[0]->{path_prefix};
+}
+
+sub get_attr {
+    
+    return $_[0]->{$_[1]};
+}
+
+
+# define_path ( path, attrs... )
+# 
+# Set up a "path" entry, representing a complete or partial URL path.  This
+# path should have a documentation page, but if one is not defined a template
+# page will be used along with any documentation strings given in this call.
+# Any path which represents an operation must be given an 'op' attribute.
+# 
+# An error will be signalled unless the "parent" path is already defined.  In
+# other words, you cannot define 'a/b/c' unless 'a/b' is defined first.
+
+sub define_path {
     
     # If we were called as a method, use the object on which we were called.
     # Otherwise, use the globally defined one.
     
-    if ( ref $_[0] && blessed $_[0] )
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+    
+    my ($package, $filename, $line) = caller;
+    
+    my ($last_node);
+    
+    # Now we go through the rest of the arguments.  Hashrefs define new
+    # directories, while strings add to the documentation of the directory
+    # whose definition they follow.
+    
+    foreach my $item (@_)
     {
-	($self, $path, $attrs) = @_;
+	# A hashref defines a new directory.
+	
+	if ( ref $item eq 'HASH' )
+	{
+	    croak "define_path: a path definition must include the attribute 'path'"
+		unless defined $item->{path} and $item->{path} ne '';
+	    
+	    $last_node = $self->create_path_node($item, $filename, $line)
+		unless defined $item->{disabled};
+	}
+	
+	elsif ( not ref $item )
+	{
+	    $self->add_node_doc($last_node, $item);
+	}
+	
+	else
+	{
+	    croak "define_path: arguments must be hashrefs and strings";
+	}
     }
     
-    else
+    croak "define_path: arguments must include at least one hashref of attributes"
+	unless $last_node;
+}
+
+register 'define_path' => \&define_path;
+
+
+our (%NODE_DEF) = ( path => 'ignore',
+		    class => 'single',
+		    method => 'single',
+		    arg => 'single',
+		    ruleset => 'single',
+		    base_output => 'list',
+		    doc_output => 'list',
+		    output => 'single',
+		    uses_dbh => 'single',
+		    version => 'single',
+		    public_access => 'single',
+		    also_initialize => 'set',
+		    output_param => 'single',
+		    vocab_param => 'single',
+		    limit_param => 'single',
+		    offset_param => 'single',
+		    count_param => 'single',
+		    nohead_param => 'single',
+		    linebreak_param => 'single',
+		    showsource_param => 'single',
+		    textresult_param => 'single',
+		    default_limit => 'single',
+		    streaming_theshold => 'single',
+		    use_cache => 'single',
+		    allow_method => 'set',
+		    allow_format => 'set',
+		    allow_vocab => 'set',
+		    doc_file => 'single',
+		    doc_title => 'single' );
+
+# create_path_node ( attrs, filename, line )
+# 
+# Create a new node representing the specified path.  Attributes are
+# inherited, as follows: 'a/b/c' inherits from 'a/b', while 'a' inherits the
+# defaults set for the data service as a whole.
+
+sub create_path_node {
+
+    my ($self, $new_attrs, $filename, $line) = @_;
+    
+    my $path = $new_attrs->{path};
+    
+    # Make sure this path was not already defined by a previous call.
+    
+    if ( defined $self->{path_attrs}{$path} )
     {
-	$self = $DEFAULT_INSTANCE;
-	($path, $attrs) = @_;
+	my $filename = $self->{path_attrs}{$path}{_filename};
+	my $line = $self->{path_attrs}{$path}{_line};
+	croak "define_path: '$path' was already defined at line $line of $filename";
     }
     
-    # Make sure that this route wasn't already defined by a previous call, and
-    # set the attributes as specified.
+    # Create a new node to hold the path attributes.
     
-    croak "path '$path' was already defined" if defined $self->{route_attrs}{$path};
+    my $path_attrs = { _filename => $filename, _line => $line };
     
-    $self->{route_attrs}{$path} = $attrs || {};
+    # If the path has a valid prefix, start with the prefix path's attributes
+    # as a base.  Assume the attribute values are all valid, since they were
+    # checked when the prefix path was defined (not sure if this is always
+    # going to be a correct assumption).  Throw an error if the prefix path is
+    # not already defined, except that we do not require the root '/' to be
+    # explicitly defined.
     
-    # See if a partial path for this route was defined as a directory.  If so,
-    # link it up so that attributes will inherit.
+    my $parent_attrs;
     
-    if ( my $parent = $self->find_parent($path) )
+    if ( $path =~ qr{ ^ (.+) / [^/]+ }x )
     {
-	$self->{parent}{$path} = $parent;
-    }    
+	$parent_attrs = $self->{path_attrs}{$1};
+	croak "define_path: '$path' is not a valid path because '$1' must be defined first"
+	    unless reftype $parent_attrs && reftype $parent_attrs eq 'HASH';
+    }
+    
+    elsif ( $path =~ qr{ ^ [^/]+ $ }x )
+    {
+	$parent_attrs = $self->{path_attrs}{'/'};
+    }
+    
+    elsif ( $path ne '/' )
+    {
+	croak "invalid path '$path'";
+    }
+    
+    # If no parent attributes are found we start with some defaults.
+    
+    $parent_attrs ||= { vocab_param => 'vocab', 
+			output_param => 'show',
+			limit_param => 'limit',
+			offset_param => 'offset',
+			count_param => 'count',
+			nohead_param => 'noheader',
+			linebreak_param => 'linebreak',
+			textresult_param => 'textresult',
+			showsource_param => 'showsource',
+		        allow_method => { GET => 1 } };
+    
+    # Now go through the parent attributes and copy into the new node.  We
+    # only need to copy one level down, since the attributes are not going to
+    # be any deeper than that (this may need to be revisited if the attribute
+    # system gets more complicated).
+    
+    foreach my $key ( keys %$parent_attrs )
+    {
+	next unless defined $NODE_DEF{$key};
+	
+	if ( $NODE_DEF{$key} eq 'single' )
+	{
+	    $path_attrs->{$key} = $parent_attrs->{$key};
+	}
+	
+	elsif ( $NODE_DEF{$key} eq 'set' and ref $parent_attrs->{$key} eq 'HASH' )
+	{
+	    $path_attrs->{$key} = { %{$parent_attrs->{$key}} };
+	}
+	
+	elsif ( $NODE_DEF{$key} eq 'list' and ref $parent_attrs->{$key} eq 'ARRAY' )
+	{
+	    $path_attrs->{$key} = [ @{$parent_attrs->{$key}} ];
+	}
+    }
+    
+    # Then apply the newly specified attributes, overriding or modifying any
+    # equivalent attributes inherited from the parent.
+    
+    foreach my $key ( keys %$new_attrs )
+    {
+	croak "define_path: unknown attribute '$key'"
+	    unless $NODE_DEF{$key};
+	
+	my $value = $new_attrs->{$key};
+	
+	next unless defined $value;
+	
+	# If the attribute takes a single value, then set the value as
+	# specified.
+	
+	if ( $NODE_DEF{$key} eq 'single' )
+	{
+	    $path_attrs->{$key} = $value;
+	}
+	
+	# If the attribute takes a set value, then turn a string value into a
+	# hash whose keys are the individual values.  If the value begins with + or
+	# -, then add or delete values as indicated.  Otherwise, substitute
+	# the given set.
+	
+	elsif ( $NODE_DEF{$key} eq 'set' )
+	{
+	    my @values = ref $value eq 'ARRAY' ? @$value : split( qr{\s*,\s*}, $value );
+	    
+	    if ( $value =~ qr{ ^ [+-] }x )
+	    {
+		foreach my $v (@values)
+		{
+		    next unless defined $v && $v ne '';
+		    
+		    croak "define_path: invalid value '$v', must start with + or -"
+			unless $v =~ qr{ ^ ([+-]) (.*) }x;
+		    
+		    if ( $1 eq '-' )
+		    {
+			delete $path_attrs->{$key}{$2};
+		    }
+		    
+		    else
+		    {
+			$path_attrs->{$key}{$2} = 1;
+		    }
+		}
+	    }
+	    
+	    else
+	    {
+		foreach my $v (@values)
+		{
+		    next unless defined $v && $v ne '';
+		    
+		    croak "define_path: invalid value '$v', cannot start with + or -"
+			if $v =~ qr{ ^\+ | ^\- }x;
+		    
+		    $path_attrs->{$key}{$v} = 1;
+		}
+	    }
+	}
+	
+	# If the attribute takes a list value, then turn a string value into a
+	# list.  If the value begins with + or -, then add or delete values as
+	# indicated.  Otherwise, substitute the given list.
+	
+	elsif ( $NODE_DEF{$key} eq 'list' )
+	{
+	    my @values = ref $value eq 'ARRAY' ? @$value : split( qr{\s*,\s*}, $value );
+	    
+	    if ( $value =~ qr{ ^ [+-] }x )
+	    {
+		foreach my $v (@values)
+		{
+		    next unless defined $v && $v ne '';
+		    
+		    croak "define_path: invalid value '$v', must start with + or -"
+			unless $v =~ qr{ ^ ([+-]) (.*) }x;
+		    
+		    if ( $1 eq '-' )
+		    {
+			$path_attrs->{$key} = [ grep { $_ ne $2 } @{$path_attrs->{$key}} ];
+		    }
+		    
+		    else
+		    {
+			push @{$path_attrs->{$key}}, $2
+			    unless grep { $_ eq $2 } @{$path_attrs->{$key}};
+		    }
+		}
+	    }
+	    
+	    else
+	    {
+		$path_attrs->{$key} = [];
+		
+		foreach my $v (@values)
+		{
+		    next unless defined $v && $v ne '';
+		    
+		    croak "define_path: invalid value '$v', cannot start with + or -"
+			if $v =~ qr{ ^\+ | ^\- }x;
+		    
+		    push @{$path_attrs->{$key}}, $v;
+		}
+	    }
+	}
+    }
+    
+    # Now check the attributes to make sure they are consistent:
+    
+    # Throw an error if 'class' doesn't specify an existing subclass of
+    # Web::DataService::Request.
+    
+    my $class = $path_attrs->{class};
+    
+    croak "define_path: invalid class '$class', must be a subclass of 'Web::DataService::Request'"
+	if defined $class and not $class->isa('Web::DataService::Request');
+    
+    # Throw an error if 'op' doesn't specify an existing method of this class.
+    
+    my $op = $path_attrs->{op};
+    
+    croak "define_path: invalid op '$op', must be a method of class '$class'"
+	if defined $op and not $class->can($op);
+    
+    # Throw an error if any of the specified formats fails to match an
+    # existing format.  If any of the formats has a default vocabulary, add it
+    # to the vocabulary list.
+    
+    if ( ref $path_attrs->{allow_format} )
+    {
+	foreach my $f ( keys %{$path_attrs->{allow_format}} )
+	{
+	    croak "define_path: invalid value '$f' for format, no such format has been defined for this data service"
+		unless ref $self->{format}{$f};
+
+	    my $dv = $self->{format}{$f}{default_vocab};
+	    $path_attrs->{allow_vocab}{$dv} = 1 if $dv;
+	}
+    }
+    
+    # Throw an error if any of the specified vocabularies fails to match an
+    # existing vocabulary.
+    
+    if ( ref $path_attrs->{allow_vocab} )
+    {
+	foreach my $v ( keys %{$path_attrs->{vocab}} )
+	{
+	    croak "define_path: invalid value '$v' for vocab, no such vocabulary has been defined for this data service"
+		unless ref $self->{vocab}{$v};
+	}
+    }
+    
+    # Install the node.
+    
+    $self->{path_attrs}{$path} = $path_attrs;
     
     # If one of the attributes is 'class', make sure that the class is
-    # configured. 
+    # initialized unless we are in "one request" mode.
     
-    if ( $attrs->{class} )
+    if ( $path_attrs->{class} and not $self->{ONE_REQUEST} )
     {
-	$self->configure_class($attrs->{class})
-    }
-}
-
-register 'setup_route' => \&setup_route;
-
-
-# define_directory ( path, attrs )
-# 
-# Set up a "directory" entry, representing a partial path.  All routes that
-# start with this path will inherit any attributes here.  This partial path
-# may (or may not) correspond to a documentation page.
-
-sub define_directory {
-    
-    my ($self, $path, $attrs);
-    
-    # If we were called as a method, use the object on which we were called.
-    # Otherwise, use the globally defined one.
-    
-    if ( ref $_[0] && blessed $_[0] )
-    {
-	($self, $path, $attrs) = @_;
+	$self->initialize_class($path_attrs->{class})
     }
     
-    else
-    {
-	$self = $DEFAULT_INSTANCE;
-	($path, $attrs) = @_;
-    }
+    # Now return the new node.
     
-    # Make sure this path was not already defined by a previous call, and set
-    # the attributes as specified.
-    
-    croak "path '$path' was already defined" if defined $self->{route_attrs}{$path};
-    
-    $self->{route_attrs}{$path} = $attrs || {};
-    $self->{is_directory}{$path} = 1;
-    
-    # See if a partial path for this route was itself defined as a directory.
-    # If so, link it up so that attributes will inherit.
-    
-    if ( my $parent = $self->find_parent($path) )
-    {
-	$self->{parent}{$path} = $parent;
-    }
-    
-    # If one of the attributes is 'class', make sure that the class is
-    # configured. 
-    
-    if ( $attrs->{class} )
-    {
-	$self->configure_class($attrs->{class})
-    }
-}
-
-register 'setup_directory' => \&setup_directory;
-
-
-# find_parent ( path )
-# 
-# This utility routine finds the longest partial path of the given route that
-# was defined as a directory.  If one is found, it is returned.  Otherwise,
-# returns false.
-
-sub find_parent {
-
-    my ($self, $path) = @_;
-    
-    # Iteratively remove the last path component and see if it matches a
-    # defined directory.
-    
-    while ( $path =~ qr{ ^ (.*) / [^/]+ $ }xs )
-    {
-	return $1 if $self->{is_directory}{$1};
-	$path = $1;
-    }
-    
-    # Check '/' as a last resort, otherwise give up.
-    
-    return "/" if $path ne "/" && $self->{is_directory}{"/"};
-    return;
+    return $path_attrs;
 }
 
 
-# route_defined ( path )
+# path_defined ( path )
 # 
 # Return true if the specified path has been defined, false otherwise.
 
-sub route_defined {
+sub path_defined {
 
     my ($self, $path);
     
@@ -226,19 +512,17 @@ sub route_defined {
 	($path) = @_;
     }
     
-    return $self->{route_attrs}{$path};
+    return $self->{path_attrs}{$path};
 }
 
-register 'route_defined' => \&route_defined;
+register 'path_defined' => \&path_defined;
 
 
-# route_attr ( path, key )
+# get_path_attr ( path, key )
 # 
-# Return the specified attribute for the given path.  If not found in the
-# record for the path, look in the records corresponding to its parents if
-# any. 
+# Return the specified attribute for the given path.
 
-sub route_attr {
+sub get_path_attr {
     
     my ($self, $path, $key) = @_;
     
@@ -261,359 +545,769 @@ sub route_attr {
     # If the path is defined and has the specified key, return the
     # corresponding value.
     
-    if ( exists $self->{route_attrs}{$path}{$key} )
-    {
-	return $self->{route_attrs}{$path}{$key};
-    }
-    
-    # Otherwise, we try to find a parent.
-    
-    my $parent = $self->{parent}{$path} || $self->find_parent($path);
-    
-    # Recursively check the parent and its parents.  If any of them has the
-    # specified key, return the corresponding value.
-    
-    while ( $parent )
-    {
-	if ( exists $self->{route_attrs}{$parent}{$key} )
-	{
-	    return $self->{route_attrs}{$parent}{$key};
-	}
-	
-	else
-	{
-	    $parent = $self->{parent}{$parent};
-	}
-    }
-    
-    # If no value can be found, give up.
-    
-    return;
+    return $self->{path_attrs}{$path}{$key};
 }
 
 
-# configure_class ( class )
+# define_ruleset ( name, rule... )
 # 
-# If the specified class has a 'configure' method, call it.  Pass it a
-# database handle and the Dancer configuration hash.
+# Define a ruleset under the given name.  This is just a wrapper around the
+# subroutine HTTP::Validate::ruleset.
 
-sub configure_class {
+sub define_ruleset {
+    
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+    
+    unshift @_, $self->{validator};
+    
+    goto &HTTP::Validate::define_ruleset;
+}
+
+
+# add_node_doc ( node, doc_string )
+# 
+# Add the specified documentation string to the specified node.
+
+sub add_node_doc {
+    
+    my ($self, $node, $doc) = @_;
+    
+    return unless defined $doc and $doc ne '';
+    
+    croak "only strings may be added to documentation: '$doc' is not valid"
+	if ref $doc;
+    
+    $node->{doc} = '' unless defined $node->{doc};
+    $node->{doc} .= "\n" if $node->{doc} ne '';
+    $node->{doc} .= $doc;
+}
+
+
+# initialize_class ( class )
+# 
+# If the specified class has an 'initialize' method, call it.  Recursively
+# initialize its parent class as well.  But make sure that the initialization
+# method is called only once for any particular class.  It is passed a
+# reference to the data service, a database handle, and the Dancer
+# configuration hash.
+
+sub initialize_class {
     
     my ($self, $class) = @_;
     
-    # If we have already configured this class, return.
+    no strict 'refs';
     
-    return if $self->{class}{$class};
+    # If we have already initialized this class, there is nothing else we need
+    # to do.
     
-    # Record that we have configured this class.
+    return if ${"${class}::_INITIALIZED"};
+    ${"${class}::_INITIALIZED"} = 1;
     
-    $self->{class}{$class} = 1;
+    # If this class has an immediate parent which is a subclass of
+    # Web::DataService::Request, initialize it first (unless, of course, it
+    # has already been initialized).
     
-    # If the class has a configuration method, call it.
-    
-    if ( $class->can('configure') )
+    foreach my $super ( @{"${class}::ISA"} )
     {
-	print STDERR "Configuring $class\n" if $PBDB_Data::DEBUG;
-	$class->configure(database(), Dancer::config);
+	if ( $super->isa('Web::DataService::Request') && $super ne 'Web::DataService::Request' )
+	{
+	    $self->initialize_class($super);
+	}
     }
+    
+    # If this class requires that one or more other classes be initialized
+    # first, then do so (unless they have already been initialized).
+    
+    if ( defined @{"${class}::REQUIRES_CLASS"} )
+    {
+	foreach my $required ( @{"${class}::REQUIRES_CLASS"} )
+	{
+	    $self->initialize_class($required);
+	}
+    }
+    
+    # If the class has an initialization routine, call it.
+    
+    if ( $class->can('initialize') )
+    {
+	print STDERR "Initializing $class for data service $self->{name}\n" if $self->{DEBUG};
+	eval { &{"${class}::initialize"}($class, $self) };
+	die $@ if $@ && $@ !~ /^Can't locate object method "initialize_class"/;
+    }
+    
+    my $a = 1; # we can stop here when debugging
 }
 
 
-# send_documentation ( path, attrs )
+# get_data_source ( )
 # 
-# Respond with a documentation message corresponding to the specified path.
-# If attrbutes have been previously registered for this path using either of
-# the functions setup_route or setup_directory, then those attributes are used
-# to select and format the documentation.  Otherwise, if a corresponding
-# documentation template is found, it will be used.  The attributes can be
-# overridden using the second parameter, which must be a hash ref.
+# Return the following pieces of information:
+# - The name of the data source
+# - The license under which the data is made available
 
-sub send_documentation {
+sub get_data_source {
     
-    my ($self, $path, $attrs);
+    my $config = Dancer::config();
+    my $access_time = strftime("%a %F %T GMT", gmtime);
+    
+    return { name => $config->{data_source}, 
+	     data_provider => $config->{data_provider} || $config->{data_source},
+	     data_source => $config->{data_source} || '',
+	     base_url => Dancer::request->uri_base(), 
+	     license => $config->{data_license}, 
+	     license_url => $config->{data_license_url},
+	     access_time => $access_time };
+}
+
+
+# get_config ( )
+# 
+# Return the Dancer configuration object, which provides access to the
+# configuration directives for this data service.
+
+sub get_config {
+    
+    my $config = Dancer::config();
+    return $config;
+}
+
+
+# get_dbh ( )
+# 
+# Return a database handle, assuming that the proper configuration directives
+# were included to enable a connection to be made.
+
+sub get_dbh {
+    
+    my $dbh = database();
+    return $dbh;
+}
+
+
+# get_request_url ( )
+# 
+# Return the URL that generated the current request
+
+sub get_request_url {
+    
+    my $request_url = Dancer::request->uri();
+    return $request_url;
+}
+
+
+# can_execute_path ( path, format )
+# 
+# Return true if the path can be used for a request, i.e. if it has a class
+# and operation defined.  Return false otherwise.
+
+sub can_execute_path {
     
     # If we were called as a method, use the object on which we were called.
     # Otherwise, use the globally defined one.
     
-    if ( ref $_[0] && blessed $_[0] )
-    {
-	($self, $path, $attrs) = @_;
-    }
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
     
-    else
-    {
-	$self = $DEFAULT_INSTANCE;
-	($path, $attrs) = @_;
-    }
+    my ($path) = @_;
     
-    $DB::single = 1;
+    # Now check whether we have the necessary attributes.
     
-    # Now extract the proper attributes.
-    
-    my $format = $attrs->{format} || $self->route_attr($path, 'format') || 'html';
-    
-    my $class = $attrs->{class} || $self->route_attr($path, 'class');
-    my $op = $attrs->{op} || $self->route_attr($path, 'op');
-    my $ruleset = $attrs->{ruleset} || $self->route_attr($path, 'ruleset') || $path;
-    my $docresp = $attrs->{docresp} || $self->route_attr($path, 'docresp');
-    my $doctitle = $attrs->{doctitle} || $self->route_attr($path, 'doctitle');
-    my $docfile = $attrs->{docfile} || $self->route_attr($path, 'docfile');
-    my $doclayout = $attrs->{doclayout} || $self->route_attr($path, 'doclayout') || 'doc_main.tt';
-    my $docerror = $attrs->{docerror} || $self->route_attr($path, 'docerror') || 'doc_error.tt';
-    
-    my ($version) = $path =~ qr{ ^ ( \d+ \. \d+ ) }xs;
-    
-    my $validator = $self->{validator};
-    
-    # Set the title and documentation filename, if they were not already
-    # defined.
-    
-    if ( $self->{is_directory}{$path} )
-    {
-	$doctitle //= "/data$path/";
-	$docfile //= "${path}/index.tt";
-    }
-    
-    else
-    {
-	$doctitle //= "/data$path";
-	$docfile //= "${path}_doc.tt";
-	$docresp //= $op;
-    }
-    
-    # All documentation is public, so gets the maximally permissive CORS header.
-    
-    Dancer::header "Access-Control-Allow-Origin" => "*";
-    
-    # Now pull up the documentation file for the given path and assemble it
-    # together with elements describing the parameters and output fields.
-    
-    Dancer::set layout => $doclayout;
-    
-    my $viewdir = Dancer::config->{views};
-    
-    unless ( -e "$viewdir/doc/$docfile" )
-    {
-	$docfile = $docerror;
-    }
-    
-    my $param_doc = $validator->document_params($ruleset) if $ruleset;
-    my $response_doc = $class->document_response($docresp) if $class && $docresp;
-    
-    my $doc_string = Dancer::template( "doc/$docfile", { version => $version, 
-						param_doc => $param_doc,
-						response_doc => $response_doc,
-						title => $doctitle });
-    
-    # If POD format was requested, return the documentation as is.
-    
-    if ( $format eq 'pod' )
-    {
-	Dancer::content_type 'text/plain';
-	return $doc_string;
-    }
-    
-    # Otherwise, convert the POD to HTML using the PodParser and return the result.
-    
-    else
-    {
-	my $parser = DataService::PodParser->new();
-	
-	$parser->parse_pod($doc_string);
-	
-	my $doc_html = $parser->generate_html({ css => '/data/css/dsdoc.css', tables => 1 });
-	
-	Dancer::content_type 'text/html';
-	return $doc_html;
-    }
+    return defined $self->{path_attrs}{$path}{class} &&
+	   defined $self->{path_attrs}{$path}{method};
 }
 
-register 'send_documentation' => \&send_documentation;
 
-
-# execute_operation ( path, attrs )
+# execute_path ( path, format )
 # 
-# Execute the operation corresponding to the attributes of the given path.
-# These attributes can be overridden by means of the second argument, which
-# must be a hash ref.
+# Execute the operation corresponding to the attributes of the given path, and
+# return the resulting data in the specified format.
 
-register 'execute_operation' => sub {
-    
-    my ($self, $path, $attrs);
+sub execute_path {
     
     # If we were called as a method, use the object on which we were called.
     # Otherwise, use the globally defined one.
     
-    if ( ref $_[0] && blessed $_[0] )
-    {
-	($self, $path, $attrs) = @_;
-    }
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
     
-    else
-    {
-	$self = $DEFAULT_INSTANCE;
-	($path, $attrs) = @_;
-    }
+    my ($path, $format) = @_;
     
-    my ($format, $class, $op);
-    my ($request, $result);
+    my ($request, $req_output);
+    
+    # Do all of the processing in a try block, so that if an error occurs we
+    # can respond with an appropriate error page.
     
     try {
 	
 	$DB::single = 1;
 	
-	# Determine the attributes that will define this operation.
+	# First check to see that the specified format is valid for the
+	# specified path.
 	
-	$format = $attrs->{format} || $self->route_attr($path, 'format');
-	$class = $attrs->{class} || $self->route_attr($path, 'class');
-	$op = $attrs->{op} || $self->route_attr($path, 'op');
+	my $path_attrs = $self->{path_attrs}{$path};
 	
-	# Return an error result if we are missing any of the necessary
-	# attributes. 
+	unless ( defined $format && ref $self->{format}{$format} &&
+		 ! $self->{format}{$format}{disabled} &&
+		 $path_attrs->{allow_format}{$format} )
+	{
+	    return $self->error_result($path, $format, "415")
+	}
 	
-	croak "execute_operation: format is undefined" unless $format;
-	croak "execute_operation: class is undefined" unless $class;
-	croak "execute_operation: op is undefined" unless $op;
+	# Then do a basic sanity check to make sure that the operation is
+	# valid.  This should always succeed, because the 'class' and 'method'
+	# attributes were checked when the path was defined.
 	
-	# Determine additional attributes relevant to this operation type.
+	my $class = $path_attrs->{class};
+	my $method = $path_attrs->{method};
+	my $arg = $path_attrs->{arg};
+		
+	croak "cannot execute path '$path': invalid class '$class' and method '$method'"
+	    unless $class->isa('Web::DataService::Request') && $class->can($method);
+	
+	# If we are in 'one request' mode, initialize the class plus all of
+	# the classes it requires.
+	
+	if ( $self->{ONE_REQUEST} )
+	{
+	    $self->initialize_class($class);
+	}
+	
+	# Create a new object to represent this request, and bless it into the
+	# correct class.
+	
+	$request = { ds => $self,
+		     path => $path,
+		     format => $format,
+		     method => $method,
+		     arg => $arg };
+	
+	bless $request, $class;
+	
+	# Check to see if there is a ruleset corresponding to this path.  If a
+	# ruleset name was explicitly provided, use that.  Otherwise, check to
+	# see if there is a ruleset corresponding to the path.
 	
 	my $validator = $self->{validator};
-	my $ruleset = $attrs->{ruleset} || $self->route_attr($path, 'ruleset');
-	my $output = $attrs->{output} // $self->route_attr($path, 'output');
-	my $arg = $attrs->{arg} // $self->route_attr($path, 'arg');
-	my $needs_dbh = $attrs->{needs_dbh} // $self->route_attr($path, 'needs_dbh') // $self->{needs_dbh};
+	my $ruleset = $self->determine_ruleset($path, $path_attrs->{ruleset});
 	
-	$ruleset = $path if !defined $ruleset && $validator->ruleset_defined($path);
-	
-	# Marshall that attributes needed for the operation, including a
-	# database handle if one is needed.
-	
-	$attrs->{op} = $op;
-	$attrs->{class} = $class;
-	$attrs->{dbh} = database() if $needs_dbh;
-	$attrs->{service} = $self;
-	
-	weaken $attrs->{service};	# Don't block garbage collection
-	
-	# Create a new query object of the specified class, using the
-	# specified attributes.
-	
-	$request = $class->new($attrs);
-	
-	# If a ruleset was specified, then validate and clean the parameters.
-	# If an error occurs, an error response will be generated
-	# automatically.
-	
-	if ( defined $ruleset )
+	if ( $ruleset )
 	{
-	    my $result = $validator->validate_params($ruleset, Dancer::params, { ct => $format });
+	    my $result = $validator->check_params($ruleset, Dancer::params);
 	    
 	    if ( $result->errors )
 	    {
 		return $self->error_result($path, $format, $result);
 	    }
 	    
-	    $request->{params} = $result->values;
+	    elsif ( $result->warnings )
+	    {
+		$request->add_warning($result->warnings);
+	    }
+	    
+	    $request->{rs_name} = $ruleset;
 	    $request->{valid} = $result;
+	    $request->{params} = $result->values;
 	}
-	
-	# Set the response content type and access control header
-	# appropriately for this request.
-	
-	$self->set_response_content_type($path, $format) if $MEDIA_TYPE{$format};
-	$self->set_access_control_header($path, $attrs);
-	
-	# Determine the output fields and vocabulary, based on the parameters
-	# already specified.
-	
-	$request->set_response($format, $request->{params}{vocab}, $op, $output, $request->{params}{show});
-	
-	# Execute the query or other operation.
-	
-	$request->$op();
-	
-	# If we have a single main record or data, then we return it.
-	
-	if ( exists $request->{main_record} or exists $request->{main_data} )
-	{
-	    return $request->generate_single_result();
-	}
-	
-	# If we have a main statement handle, then read records from it and
-	# generate a compound response.
-	
-	if ( exists $request->{main_sth} or exists $request->{main_result} )
-	{
-	    # If the server supports streaming, call generate_compound_result with
-	    # can_stream => 1 and see if it returns any data or not.  If it does
-	    # return data, send it back to the client as the response content.  An
-	    # undefined result is a signal that we should stream the data by
-	    # calling stream_data (imported from Dancer::Plugin::StreamData).
-	    
-	    if ( server_supports_streaming )
-	    {
-		$result = $request->generate_compound_result( can_stream => 1 ) or
-		    stream_data( $request, 'stream_result' );
-		
-		return $result;
-	    }
-	    
-	    # If the server does not support streaming, we just generate the result
-	    # and return it.
-	    
-	    else
-	    {
-		return $request->generate_compound_result();
-	    }
-	}
-	
-	# Otherwise, return a "not found" error
 	
 	else
 	{
-	    return $self->error_result($path, $format, "404 The requested resource was not found.");
+	    die "No ruleset could be found for path $path";
+	}
+	
+	# Determine the result limit and offset, if any.
+	
+	$request->{result_limit} = 
+	    defined $path_attrs->{limit_param} &&
+	    defined $request->{params}{$path_attrs->{limit_param}}
+		? $request->{params}{$path_attrs->{limit_param}}
+		    : $path_attrs->{default_limit} || $self->{default_limit} || 'all';
+	
+	$request->{result_offset} = 
+	    defined $path_attrs->{offset_param} &&
+	    defined $request->{params}{$path_attrs->{offset_param}}
+		? $request->{params}{$path_attrs->{offset_param}} : 0;
+	
+	# Set the vocabulary and output section list using the validated
+	# parameters, so that we can properly configure the output.
+	
+	$request->{vocab} = $request->{params}{$path_attrs->{vocab_param}} || 
+	    $self->{format}{$format}{default_vocab} || $self->{vocab_list}[0];
+	
+	$request->{output_name} = $self->determine_output_name($path, $path_attrs->{output});
+	
+	# Determine whether we should show the optional header information in
+	# the result.
+	
+	$request->{display_header} = $request->{params}{$path_attrs->{nohead_param}} ? 0 : 1;
+	$request->{display_source} = $request->{params}{$path_attrs->{showsource_param}} ? 1 : 0;
+	$request->{display_counts} = $request->{params}{$path_attrs->{count_param}} ? 1 : 0;
+	$request->{linebreak_cr} = 
+	    $request->{params}{$path_attrs->{linebreak_param}} &&
+		$request->{params}{$path_attrs->{linebreak_param}} eq 'cr' ? 1 : 0;
+	
+	# Set the HTTP response headers appropriately for this request.
+	
+	$self->set_response_headers($request);
+	
+	# Now that the parameters have been processed, we can configure the
+	# output.  This tells us what information we have been requested
+	# to display, and how to query for it.
+	
+	$DB::single = 1;
+	
+	$self->configure_output($request);
+	
+	# Now execute the query operation.  This is the central step of this
+	# entire routine; everything before and after is in support of this
+	# call.
+	
+	$request->$method($arg);
+	
+	# If we are in debug mode, print out the main sql statement.
+	
+	if ( $self->{DEBUG} && defined $request->{main_sql} )
+	{
+	    print STDERR $request->{main_sql} . "\n\n";
+	    $req_output = 1;
+	}
+	
+	# Then we use the output configuration and the result of the query
+	# operation to generate the actual output.  How we do this depends
+	# upon how the query operation chooses to return its data.  It must
+	# set one of the following fields in the request object, as described:
+	# 
+	# main_data		A scalar, containing data which is to be 
+	#			returned as-is without further processing.
+	# 
+	# main_record		A hashref, representing a single record to be
+	#			returned according to the output format.
+	# 
+	# main_result		A list of hashrefs, representing multiple
+	#			records to be returned according to the output
+	# 			format.
+	# 
+	# main_sth		A DBI statement handle, from which all 
+	#			records that can be read should be returned
+	#			according to the output format.
+	# 
+	# It is okay for main_result and main_sth to both be set, in which
+	# case the records in the former will be sent first and then the
+	# latter will be read.
+	
+	if ( ref $request->{main_record} )
+	{
+	    return $self->generate_single_result($request);
+	}
+	
+	elsif ( ref $request->{main_sth} or ref $request->{main_result} )
+	{
+	    my $threshold = $self->{path_attrs}{$path}{streaming_threshold} || $self->{streaming_threshold}
+		if $self->{streaming_available} and not $request->{do_not_stream};
+	    
+	    return $self->generate_compound_result($request, $threshold);
+	}
+	
+	elsif ( defined $request->{main_data} )
+	{
+	    return $request->{main_data};
+	}
+	
+	# If none of these fields are set, then the result set is empty.
+	
+	else
+	{
+	    return $self->generate_empty_result($request);
 	}
     }
     
     # If an error occurs, return an appropriate error response to the client.
     
     catch {
-
+	
+	if ( $self->{DEBUG} && defined $request->{main_sql} && ! $req_output )
+	{
+	    print STDERR $request->{main_sql} . "\n\n";
+	    $req_output = 1;
+	}
+	
 	return $self->error_result($path, $format, $_);
     };
 };
 
+register 'execute_path' => \&execute_path;
 
-sub set_access_control_header {
+
+# document_path ( path, format )
+# 
+# Generate and return a documentation page corresponding to the specified
+# path, in the specified format.  The accepted formats are 'html' and 'pod'.
+# 
+# If a documentation template corresponding to the specified path is found, it
+# will be used.  Otherwise, a default template will be used.
+
+sub document_path {
     
-    my ($self, $path, $attrs) = @_;
+    # If we were called as a method, use the object on which we were called.
+    # Otherwise, use the globally defined one.
     
-    if ( $self->{public_access} )
+    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+    
+    my ($path, $format) = @_;
+    
+    # Do all of the processing in a 'try' block so that if an error occurs we
+    # can return an appropriate message.
+    
+    try {
+	
+	my $path_attrs = $self->{path_attrs}{$path};
+	my $class = $self->{path_attrs}{$path}{class};
+	
+	$DB::single = 1;
+	
+	# If we are in 'one request' mode, initialize the class plus all of
+	# the classes it requires.
+	
+	if ( $self->{ONE_REQUEST} )
+	{
+	    if ( ref $path_attrs->{also_initialize} eq 'ARRAY' )
+	    {
+		foreach my $c ( @{$path_attrs->{also_initialize}} )
+		{
+		    $self->initialize_class($c);
+		}
+	    }
+	    
+	    $self->initialize_class($class);
+	}
+	
+	# We start by determining the filename for the documentation template.  If
+	# the filename was not explicitly specified, try the path with '_doc.tt'
+	# appended.  If that does not exist, try appending '/index.tt'.
+	
+	my $viewdir = Dancer::config->{views};
+	my $doc_file = $path_attrs->{doc_file};
+	
+	unless ( $doc_file )
+	{
+	    if ( -e "$viewdir/doc/${path}_doc.tt" )
+	    {
+		$doc_file = "${path}_doc.tt";
+	    }
+	    
+	    elsif ( -e "$viewdir/doc/${path}/index.tt" )
+	    {
+		$doc_file = "${path}/index.tt";
+	    }
+	}
+	
+	unless ( $doc_file && -r "$viewdir/doc/$doc_file" )
+	{
+	    $doc_file = $path_attrs->{doc_error_file} || $self->{doc_error_file} || 'doc_error.tt';
+	}
+	
+	my $doc_title = $path_attrs->{doc_title};
+	my $ds_version = $path_attrs->{version} || $self->{version};
+	
+	unless ( $doc_title )
+	{
+	    $doc_title = $path;
+	    $doc_title =~ s/^$ds_version//;
+	}
+	
+	# Then assemble the variables used to fill in the template:
+	
+	my $vars = { path => $path,
+		     doc_title => $doc_title,
+		     ds_version => $ds_version,
+		     vocab_param => $path_attrs->{vocab_param},
+		     output_param => $path_attrs->{output_param} };
+	
+	# Add the documentation for the parameters.  If no corresponding ruleset
+	# is found, then state that no parameters are accepted.
+	
+	my $ruleset = $self->determine_ruleset($path, $path_attrs->{ruleset});
+	
+	$vars->{param_doc} = 
+	    $ruleset ? $self->{validator}->document_params($ruleset)
+		: "I<This path does not take any parameters>";
+	
+	# Document which methods are valid for this path.
+	
+	my @http_methods = $self->list_http_methods($path);
+	$vars->{http_method_list} = join(', ', map { "C<$_>" } @http_methods);
+	
+	# Add the documentation for the response.  If no 'allow_vocab' attribute
+	# was given for this path, then all vocabularies are allowed.
+	
+	my $output_name = $self->determine_output_name($path, $path_attrs->{output});
+	
+	$vars->{response_doc} = $self->document_response($path, $output_name);
+	
+	
+	my @fixed_blocks = $self->list_fixed_blocks($path, $output_name);
+	my @optional_blocks = $self->list_optional_blocks($path, $output_name);
+	
+	$vars->{fixed_blocks} = scalar(@fixed_blocks);
+	$vars->{fixed_list} = join(', ', map { "I<$_>" } @fixed_blocks);
+	$vars->{optional_blocks} = scalar(@optional_blocks);
+	$vars->{optional_list} = join(', ', map { "I<$_>" } @optional_blocks);
+	
+	# Add the documentation for the allowed formats and vocabularies.
+	
+	$vars->{format_doc} = $self->document_allowed_formats($path);
+	$vars->{vocab_doc} = $self->document_allowed_vocab($path);
+	
+	# Add the labels and links for the navigation trail.
+	
+	my @path = split qr{/}, $path;
+	my $link = $self->{path_prefix} . shift @path;
+	my @trail = ($link, $link);
+	
+	foreach my $comp (@path)
+	{
+	    $link .= "/$comp";
+	    push @trail, ($comp, $link);
+	}
+	
+	$vars->{trail_list} = \@trail;
+	
+	# Now select the appropriate layout and execute the template.
+	
+	my $doc_layout = $path_attrs->{doc_layout} || $self->{doc_layout} || 'doc_main.tt';
+	
+	Dancer::set layout => $doc_layout;
+	
+	my $doc_string = Dancer::template( "doc/$doc_file", $vars );
+	
+	# All documentation is public, so set the maximally permissive CORS header.
+	
+	Dancer::header "Access-Control-Allow-Origin" => "*";
+	
+	# If POD format was requested, return the documentation as is.
+	
+	if ( defined $format && $format eq 'pod' )
+	{
+	    Dancer::content_type 'text/plain';
+	    return $doc_string;
+	}
+	
+	# Otherwise, convert the POD to HTML using the PodParser and return the result.
+	
+	else
+	{
+	    my $parser = Web::DataService::PodParser->new();
+	    
+	    $parser->parse_pod($doc_string);
+	    
+	    my $doc_html = $parser->generate_html({ css => '/data/css/dsdoc.css', tables => 1 });
+	    
+	    Dancer::content_type 'text/html';
+	    return $doc_html;
+	}
+    }
+    
+    catch {
+	return $self->error_result($path, $format, $_);
+    };
+}
+	
+register 'document_path' => \&document_path;
+
+
+# generate_path_link ( path, title )
+# 
+# Generate a link in Pod format to the documentation for the given path.  If
+# $title is defined, use that as the link title.  Otherwise, if the path has a
+# 'doc_title' attribute, use that.
+# 
+# If something goes wrong, generate a warning and return the empty string.
+
+sub generate_path_link {
+    
+    my ($self, $path, $title) = @_;
+    
+    return '' unless defined $path && $path ne '';
+    
+    # Make sure this path is defined.
+    
+    my $path_attrs = $self->{path_attrs}{$path};
+    
+    unless ( $path_attrs )
+    {
+	warn "cannot generate link to unknown path '$path'";
+	return '';
+    }
+    
+    # Get the correct title for the link.
+    
+    $title //= $path_attrs->{doc_title};
+    
+    # Transform the path into a valid URL.
+    
+    if ( defined $self->{path_prefix} && $self->{path_prefix} ne '' )
+    {
+	$path = "$self->{path_prefix}$path";
+    }
+    
+    unless ( $path =~ qr{/$}x )
+    {
+	$path .= "_doc.html";
+    }
+    
+    if ( defined $title && $title ne '' )
+    {
+	return "L<$title|$path>";
+    }
+    
+    else
+    {
+	return "L<$path>";
+    }
+}
+
+
+# determine_ruleset ( path, ruleset )
+# 
+# Determine the ruleset that should apply to the given path.  If $ruleset is
+# given, then use that if it is defined or throw an exception if not.
+# Otherwise, try the path with slashes turned into commas.
+
+sub determine_ruleset {
+    
+    my ($self, $path, $ruleset) = @_;
+    
+    my $validator = $self->{validator};
+    
+    # If a ruleset name was explicitly given, then use that or throw an
+    # exception if not defined.
+    
+    if ( defined $ruleset and $ruleset ne '' )
+    {
+	croak "unknown ruleset '$ruleset' for path $path"
+	    unless $validator->ruleset_defined($ruleset);
+	
+	return $ruleset;
+    }
+    
+    # If the ruleset was explicitly specified as '', do not process the
+    # parameters for this path.
+    
+    elsif ( defined $ruleset )
+    {
+	return;
+    }
+    
+    # Otherwise, try the path with / replaced by :.  If that is not defined,
+    # then return empty.  The parameters for this path will not be processed.
+    
+    else
+    {
+	$path =~ s{/}{:}g;
+	
+	return $path if $validator->ruleset_defined($path);
+	return; # empty if not defined.
+    }
+}
+
+
+# determine_output_name {
+# 
+# If an explicit output name is given, then use that if it corresponds to a
+# defined map or block or throw an error otherwise.  If not, try the path with
+# slashes turned into colons and ':output_map' appended.
+
+sub determine_output_name {
+
+    my ($self, $path, $output_name) = @_;
+    
+    # If an output name was explicitly given, then see if it corresponds to a
+    # known output map or output block.  Otherwise, throw an exception.
+    
+    if ( defined $output_name and $output_name ne '' )
+    {
+	if ( ref $self->{set}{$output_name} eq 'Web::DataService::Set' )
+	{
+	    return $output_name;
+	}
+	
+	elsif ( ref $self->{block}{$output_name} eq 'Web::DataService::Block' )
+	{
+	    return $output_name;
+	}
+	
+	else
+	{
+	    croak "no block or set is defined as '$output_name' for path $path";
+	}
+    }
+    
+    # If the outputset was explicitly specified as '', then this path does not
+    # use one.
+    
+    elsif ( defined $output_name )
+    {
+	return;
+    }
+    
+    # Otherwise, try the path with / changed to : but return empty if this is
+    # not found.  Not all paths need an output set.
+    
+    else
+    {
+	$path =~ s{/}{:}g;
+	$path .= ':output_map';
+	
+	return "$path:output_map" if ref $self->{set}{"$path:output_map"} eq 'Web::DataService::Set';
+	return "$path:basic" if ref $self->{block}{"$path:basic"} eq 'Web::DataService::Block';
+	return; # empty if not defined.
+    }   
+}
+
+
+sub set_response_headers {
+    
+    my ($self, $request) = @_;
+    
+    # If this is a public-access data service, we add a universal CORS header.
+    # At some point we need to add provision for authenticated access.
+    
+    my $path = $request->{path};
+    
+    if ( $self->{path_attrs}{$path}{public_access} )
     {
 	Dancer::header "Access-Control-Allow-Origin" => "*";
     }
     
-    # At some point we need to add provision for authenticated access.
+    # If the parameter 'textresult' was given, set the content type to
+    # 'text/plain' which will cause the response to be displayed in a browser
+    # tab. 
+    
+    if ( $request->{params}{textresult} )
+    {
+	Dancer::content_type 'text/plain';
+    }
+    
+    # Otherwise, set the content type based on the format.
+    
+    else
+    {
+	my $format = $request->{format};
+	my $ct = $self->{format}{$format}{content_type} || 'text/plain';
+	my $disp = $self->{format}{$format}{disposition};
+	
+	Dancer::content_type $ct;
+	
+	if ( defined $disp && $disp eq 'attachment' )
+	{
+	    Dancer::header 'Content-Disposition' => qq{attachment; filename="paleobiodb.$format"};
+	}
+    }
     
     return;
 }
 
 
-sub set_response_content_type {
-    
-    my ($self, $path, $format) = @_;
-    
-    unless ( $MEDIA_TYPE{$format} )
-    {
-	$self->error_result($path, 'html', "415");
-    }
-    
-    Dancer::content_type $MEDIA_TYPE{$format};
-}
-
-
 my %CODE_STRING = ( 400 => "Bad Request", 
 		    404 => "Not Found", 
+		    415 => "Invalid Media Type",
 		    500 => "Server Error" );
 
 # error_result ( path, format, error )
@@ -631,7 +1325,7 @@ sub error_result {
     # extract the error and warning messages.  In this case, the error code
     # should be "400 bad request".
     
-    if ( ref $error eq 'HTTP::Validate::Response' )
+    if ( ref $error eq 'HTTP::Validate::Result' )
     {
 	@errors = $error->errors;
 	@warnings = $error->warnings;
@@ -655,6 +1349,7 @@ sub error_result {
     {
 	$code = 500;
 	#error("Error on path $path: $error");
+	warn $error;
 	@errors = "A server error occurred.  Please contact the server administrator.";
     }
     
@@ -662,11 +1357,14 @@ sub error_result {
     
     if ( $format eq 'json' )
     {
-	my $error = 'error: [' . "\n\"" . join("\",\n\"", @errors) . "\"\n]\n";
-	$error .= ", warn: [\"\n" . join("\",\n\"", @warnings) . "\"\n]\n" if @warnings;
+	$error = '"status_code": ' . $code;
+	$error .= ",\n" . json_list_value("errors", @errors);
+	$error .= ",\n" . json_list_value("warnings", @warnings) if @warnings;
 	
+	Dancer::content_type('application/json');
+	Dancer::header "Access-Control-Allow-Origin" => "*";
 	Dancer::status($code);
-	Dancer::halt( "{ $error }" );
+	return "{ $error }";
     }
     
     # Otherwise, generate a generic HTML response (we'll add template
@@ -675,13 +1373,18 @@ sub error_result {
     else
     {
 	my $text = $CODE_STRING{$code};
-	my $error = '';
+	my $error = "<ul>\n";
 	my $warning = '';
 	
-	$error .= "<h3>$_</h3>\n" foreach @errors;
+	$error .= "<li>$_</li>\n" foreach @errors;
+	$error .= "</ul>\n";
 	
-	$warning .= "<h2>Warnings:</h2>\n" if @warnings;
-	$warning .= "<h3>$_</h3>\n" foreach @warnings;
+	if ( @warnings )
+	{
+	    $warning .= "<h2>Warnings:</h2>\n<ul>\n";
+	    $warning .= "<li>$_</li>\n" foreach @warnings;
+	    $warning .= "</ul>\n";
+	}
 	
 	my $body = <<END_BODY;
 <html><head><title>$code $text</title></head>
@@ -691,8 +1394,10 @@ $warning
 </body></html>
 END_BODY
     
+	Dancer::content_type('text/html');
+	Dancer::header "Access-Control-Allow-Origin" => "*";
 	Dancer::status($code);
-	Dancer::halt($body);
+	return $body;
     }
 }
 

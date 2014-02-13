@@ -14,16 +14,21 @@ use Carp qw(carp croak);
 use LWP::UserAgent;
 use JSON qw(from_json);
 
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
+use CoreFunction qw(activateTables);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE);
 
-use ConsoleLog qw(initMessages logMessage);
+use ConsoleLog qw(logMessage);
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(getPics $TAXON_IMAGES);
+our (@EXPORT_OK) = qw(getPics selectPics $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS);
 
+our ($PHYLOPICS) = 'phylopics';
+our ($PHYLOPIC_NAMES) = 'phylopic_names';
+our ($PHYLOPIC_CHOICE) = 'phylopic_choice';
+our ($TAXON_PICS) = 'taxon_pics';
 
-our ($TAXON_IMAGES) = 'taxon_images';
+our ($TAXON_PICS_WORK) = 'tpn';
 
 
 # getPics ( dbh )
@@ -44,14 +49,14 @@ sub getPics {
     # the table, use a date that will cause all available images to be fetched.
     
     my ($since_date) = $dbh->selectrow_array("
-		SELECT cast(modified as date) FROM $TAXON_IMAGES
+		SELECT cast(modified as date) FROM $PHYLOPICS
 		WHERE uid = 'LAST_FETCH'");
     
-    $since_date ||= "2013-12-01";
+    $since_date ||= "2001-01-01";
     
     # List all images modified since that date.
     
-    logMessage(2, "    listing new images...");
+    logMessage(2, "    listing new phylopics...");
     
     my $ua = LWP::UserAgent->new();
     $ua->agent("Paleobiology Database/0.1");
@@ -78,19 +83,17 @@ sub getPics {
     
     return unless $raw_count > 0;
     
-    # Mark the date of last fetch.
+    # Mark the date of last fetch.  We subtract 2 minutes in case a new
+    # phylopic came in while we were decoding the JSON response above.
     
-    $dbh->do("REPLACE INTO $TAXON_IMAGES (uid, modified) VALUES ('LAST_FETCH', now())");
+    $dbh->do("INSERT IGNORE INTO $PHYLOPICS (uid, modified) VALUES ('LAST_FETCH', date_sub(now(), interval 2 minute))");
+    $dbh->do("UPDATE $PHYLOPICS SET modified = date_sub(now(), interval 2 minute) WHERE uid = 'LAST_FETCH'");
     
-    # Go through the records, rejecting those which are not in the public
-    # domain, or which do not have any associated taxa.  Also ignore any that
-    # are below the family level.
-    
-    my (@fetch_list);
+    # Go through the records, and store one record for each pic and an
+    # associated record for each name.
     
     foreach my $r ( @{$list->{result}} )
     {
-	next unless $r->{licenseURL} =~ qr{publicdomain|licenses/by/};
 	next unless ref $r->{taxa} eq 'ARRAY';
 	
 	my $uid = $dbh->quote($r->{uid});
@@ -99,90 +102,149 @@ sub getPics {
 	my $license = $dbh->quote($r->{licenseURL});
 	my $pd = $license =~ /pub/ ? 1 : 0;
 	
-	my @names;
+	# Create a new record, or update the existing one.  We try an update
+	# first and if that doesn't match any rows then we do a replace (just
+	# to forestall any strange errors, it's better to create a new record
+	# than to die with a "duplicate key" error.  But our goal is to not
+	# create new records if we don't have to, so that the image_no values
+	# don't change.
+	
+	my $result = $dbh->do("
+		UPDATE $PHYLOPICS
+		SET modified = $modified, credit = $credit, license = $license
+		WHERE uid = $uid");
+	
+	if ( $result =~ /^0/ )
+	{
+	    $dbh->do("
+		REPLACE INTO $PHYLOPICS (uid, modified, credit, license)
+		VALUES ($uid, $modified, $credit, $license)");
+	}
+	
+	logMessage(2, "      found image $uid modified $modified");
+	
+	# Make sure we have an image_no value for this record.
+	
+	my ($image_no) = $dbh->selectrow_array("
+		SELECT image_no FROM $PHYLOPICS WHERE uid = $uid");
+	
+	next unless $image_no;
+	
+	# Fetch the binary data for the thumbnail.
+	
+	my $url = "http://phylopic.org/assets/images/submissions/$r->{uid}.thumb.png";
+	my $req = HTTP::Request->new(GET => $url );
+	
+	my $response = $ua->request($req);
+	
+	if ( $response->is_success )
+	{
+	    my $content = $response->content;
+	    
+	    my $stmt = $dbh->prepare("UPDATE $PHYLOPICS SET thumb = ? WHERE UID = $uid");
+	    $result = $stmt->execute($response->content);
+	}
+	
+	else
+	{
+	    logMessage(2, "        thumb FAILED: $url");
+	    return;
+	}
+	
+	# Fetch the binary data for the icon.
+	
+	$url = "http://phylopic.org/assets/images/submissions/$r->{uid}.icon.png";
+	$req = HTTP::Request->new(GET => $url );
+	
+	$response = $ua->request($req);
+	
+	if ( $response->is_success )
+	{
+	    my $content = $response->content;
+	    
+	    my $stmt = $dbh->prepare("UPDATE $PHYLOPICS SET icon = ? WHERE UID = $uid");
+	    $result = $stmt->execute($response->content);
+	}
+	
+	else
+	{
+	    logMessage(2, "        icon FAILED: $url");
+	    return;
+	}
+	
+	# Figure out which taxonomic names, if any, this pic is associated
+	# with.  Delete all of the existing ones and store a new set.
+	
+	$result = $dbh->do("DELETE FROM PHYLOPIC_NAMES WHERE uid = $uid");
 	
 	foreach my $t ( @{$r->{taxa}} )
 	{
 	    my $name = $t->{canonicalName}{string};
+	    my $name_len = $t->{canonicalName}{citationStart};
 	    
-	    # Ignore all but the first word of each name, since we are not
-	    # interested in individual species and also need to chop off the
-	    # attribution.
+	    next unless defined $name && $name ne '';
 	    
-	    if ( $name =~ /^([^ ]+)/ )
+	    # Split off the attribution from the taxonomic name.
+	    
+	    my ($taxon_name, $taxon_attr);
+	    
+	    if ( $name_len > 0 )
 	    {
-		push @names, "'$1'";
+		$taxon_name = $dbh->quote(substr($name, 0, $name_len - 1));
+		$taxon_attr = $dbh->quote(substr($name, $name_len));
 	    }
-	}
-	
-	my $name_string = join(q{,}, @names);
-	
-	my $result = $dbh->selectall_arrayref("
-		SELECT orig_no, taxon_rank, taxon_name FROM authorities
-		WHERE taxon_name in ($name_string) and taxon_rank >= 9
-		GROUP BY orig_no", { Slice => {} });
-	
-	next unless ref $result eq 'ARRAY';
-	
-	foreach my $p ( @$result )
-	{
-	    my $orig_no = $p->{orig_no};
-	    my $name = $p->{taxon_name};
-	    my $rank = $p->{taxon_rank};
 	    
-	    logMessage(2, "      found pic for $rank $name ($orig_no)");
-	    
-	    # Create a new record, or update the existing one.
+	    else
+	    {
+		$taxon_name = $dbh->quote($name);
+		$taxon_attr = "''";
+	    }
 	    
 	    $result = $dbh->do("
-		REPLACE INTO $TAXON_IMAGES (uid, orig_no, modified, credit, license, pd)
-		VALUES ($uid, $orig_no, $modified, $credit, $license, $pd)");
-	    
-	    # Fetch the binary data for the thumbnail.
-	    
-	    my $url = "http://phylopic.org/assets/images/submissions/$r->{uid}.thumb.png";
-	    my $req = HTTP::Request->new(GET => $url );
-	    
-	    my $response = $ua->request($req);
-	    
-	    if ( $response->is_success )
-	    {
-		my $content = $response->content;
-		
-		my $stmt = $dbh->prepare("UPDATE $TAXON_IMAGES SET thumb = ? WHERE UID = $uid");
-		$result = $stmt->execute($response->content);
-		logMessage(2, "        set thumb.");
-	    }
-	    
-	    else
-	    {
-		logMessage(2, "        thumb FAILED: $url");
-		return;
-	    }
-	    
-	    # Fetch the binary data for the icon.
-	    
-	    my $url = "http://phylopic.org/assets/images/submissions/$r->{uid}.icon.png";
-	    my $req = HTTP::Request->new(GET => $url );
-	    
-	    my $response = $ua->request($req);
-	    
-	    if ( $response->is_success )
-	    {
-		my $content = $response->content;
-		
-		my $stmt = $dbh->prepare("UPDATE $TAXON_IMAGES SET icon = ? WHERE UID = $uid");
-		$result = $stmt->execute($response->content);
-		logMessage(2, "        set icon.");
-	    }
-	    
-	    else
-	    {
-		logMessage(2, "        icon FAILED: $url");
-		return;
-	    }
+		INSERT IGNORE INTO $PHYLOPIC_NAMES (uid, taxon_name, taxon_attr)
+		VALUES ($uid, $taxon_name, $taxon_attr)");
 	}
     }
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+# selectPics ( dbh )
+# 
+# Select a single image per taxon.
+
+sub selectPics {
+    
+    my ($dbh) = @_;
+    
+    logMessage(2, "    selecting the phylopic for each taxon...");
+    
+    my ($result, $sql);
+    
+    # Create a working table with which to do our selection.
+    
+    $dbh->do("DROP TABLE IF EXISTS $TAXON_PICS_WORK");
+    
+    $dbh->do("CREATE TABLE $TAXON_PICS_WORK (
+		orig_no int unsigned primary key,
+		image_no int unsigned not null,
+		priority tinyint) Engine=MyISAM");
+    
+    # Select images by priority number, or by earlier modification date
+    # otherwise.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $TAXON_PICS_WORK
+		SELECT a.orig_no, p.image_no, pc.priority
+		FROM $PHYLOPIC_NAMES as n JOIN $PHYLOPICS as p using (uid)
+			JOIN authorities as a using (taxon_name)
+			LEFT JOIN $PHYLOPIC_CHOICE as pc using (orig_no, uid)
+		ORDER BY pc.priority desc, p.modified asc");
+    
+    # Activate the new table.
+    
+    activateTables($dbh, $TAXON_PICS_WORK => $TAXON_PICS);
 }
 
 
@@ -198,19 +260,38 @@ sub ensureTable {
     
     if ( $force )
     {
-	$dbh->do("DROP TABLE IF EXISTS $TAXON_IMAGES");
+	$dbh->do("DROP TABLE IF EXISTS $PHYLOPICS");
+	$dbh->do("DROP TABLE IF EXISTS $PHYLOPIC_NAMES");
+	$dbh->do("DROP TABLE IF EXISTS $PHYLOPIC_CHOICE");
     }
     
-    $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_IMAGES (
+    $dbh->do("CREATE TABLE IF NOT EXISTS $PHYLOPICS (
 		uid varchar(80) primary key,
-		orig_no int unsigned not null,
-		priority tinyint not null,
+		image_no int unsigned auto_increment not null,
 		modified datetime,
 		credit varchar(255),
 		license varchar(255),
-		pd boolean,
 		thumb blob,
-		icon blob) Engine=MyISAM");
+		icon blob,
+		key (image_no)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+    
+    $dbh->do("INSERT INTO $PHYLOPICS (uid, modified)
+	      VALUES ('LAST_FETCH', '2001-01-01')") if $force;
+    
+    $dbh->do("CREATE TABLE IF NOT EXISTS $PHYLOPIC_NAMES (
+		uid varchar(80) not null,
+		taxon_name varchar(100) not null,
+		taxon_attr varchar(100) not null,
+		unique key (uid, taxon_name, taxon_attr),
+		key (uid),
+		key (taxon_name)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+    
+    $dbh->do("CREATE TABLE IF NOT EXISTS $PHYLOPIC_CHOICE (
+		orig_no int unsigned not null,
+		uid varchar(80) not null,
+		priority tinyint not null,
+		unique key (orig_no, uid),
+		key (uid)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     my $a = 1;	# we can stop here when debugging
 }

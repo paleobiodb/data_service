@@ -154,14 +154,15 @@ sub buildOccurrenceTables {
 			first_early_age, last_early_age, first_late_age, last_late_age,
 			precise_age)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
-			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
+			max(ei.early_age), max(ei.late_age), min(li.early_age), min(li.late_age),
 			true
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 			LEFT JOIN $SCALE_MAP as es on es.interval_no = ei.interval_no
 			LEFT JOIN $SCALE_MAP as ls on ls.interval_no = li.interval_no
-		WHERE (ei.early_age - li.late_age <= 30 ) or
+		WHERE (ei.early_age - li.late_age <= 30 and li.late_age >= 20) or
+		      (ei.early_age - li.late_age <= 20 and li.late_age < 20) or
 		      (es.scale_no = 1 and es.level in (4,5) and ei.early_age - li.late_age <= 50) or
 		      (ls.scale_no = 1 and ls.level in (4,5) and ei.early_age - li.late_age <= 50) or
 		      (es.scale_no = 1 and es.level = 3 and ei.early_age < 3) or

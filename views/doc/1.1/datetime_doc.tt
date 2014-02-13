@@ -1,0 +1,76 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This page describes the values that can be passed to parameters that take a date/time value such as C<created_since>.
+
+=head2 USAGE
+
+These parameters will take any date or datetime value that is acceptable to the MySQL database.  For example:
+
+=over
+
+=item *
+
+C<created_since=2014-01-01 12:34>
+
+=item *
+
+C<modified_since=2014-01-01>
+
+=item *
+
+C<modified_before=14.01.01>
+
+=back
+
+You can also specify a number of "days ago", "minutes ago", etc.  These values consist of a number immediately followed by one of the following letters:
+
+=over
+
+=for pp_table_header Letter | Unit
+
+=item m
+
+minutes
+
+=item h
+
+hours
+
+=item d
+
+days
+
+=item w
+
+weeks
+
+=item M
+
+months
+
+=item Y
+
+years
+
+=back
+
+For example:
+
+=over
+
+=item *
+
+C<created_since=0d> would select records created today.
+
+=item *
+
+C<modified_since=24h> would select records modified within the past 24 hours.
+
+=item *
+
+C<created_before=2Y> would select records created more than 2 years ago.
+
+=back
+

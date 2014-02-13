@@ -1,0 +1,12 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This path returns information about the bibliographic references associated with fossil collections from the database.
+
+<% PROCESS params %>
+
+<% PROCESS methods %>
+
+<% PROCESS response %>
+

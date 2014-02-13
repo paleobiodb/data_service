@@ -9,308 +9,36 @@ package CollectionData;
 
 use strict;
 
-use base 'DataService::Base';
+use parent 'Web::DataService::Request';
 
-use PBDBData;
-use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
+use Web::DataService qw( :validators );
+
+use CommonData qw(generateReference generateAttribution);
+use CollectionTables qw($COLL_MATRIX $COLL_BINS $COLL_STRATA @BIN_LEVEL);
 use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use Taxonomy;
 
 use Carp qw(carp croak);
 use POSIX qw(floor ceil);
 
+our (@REQUIRES_CLASS) = qw(CommonData ReferenceData);
 
-our (%SELECT, %TABLES, %PROC, %OUTPUT);
 our ($MAX_BIN_LEVEL) = 0;
 
-$SELECT{basic} = "c.collection_no, cc.collection_name, cc.collection_subset, cc.formation, c.lat, c.lng, cc.latlng_basis as llb, cc.latlng_precision as llp, c.n_occs, ei.interval_name as early_int, li.interval_name as late_int, c.reference_no, group_concat(sr.reference_no) as sec_ref_nos";
 
-$TABLES{basic} = ['ei', 'li'];
-
-$PROC{basic} = 
-   [
-    { rec => 'sec_ref_nos', add => 'reference_no', split => ',' },
-   ];
-
-$OUTPUT{basic} =
-   [
-    { rec => 'collection_no', dwc => 'collectionID', com => 'oid',
-	doc => "A positive integer that uniquely identifies the collection"},
-    { rec => 'record_type', com => 'typ', com_value => 'col', dwc_value => 'Occurrence', value => 'collection',
-        doc => "The type of this object: 'col' for a collection" },
-    { rec => 'formation', com => 'fmm', no_show => 'strat',
-      doc => "The formation in which this collection was found" },
-    { rec => 'lng', dwc => 'decimalLongitude', com => 'lng',
-	doc => "The longitude at which the collection is located (in degrees)" },
-    { rec => 'lat', dwc => 'decimalLatitude', com => 'lat',
-	doc => "The latitude at which the collection is located (in degrees)" },
-    { rec => 'llp', com => 'prc', use_main => 1, code => \&CollectionData::generateBasisCode,
-        doc => "A two-letter code indicating the basis and precision of the geographic coordinates." },
-    { rec => 'collection_name', dwc => 'collectionCode', com => 'nam',
-	doc => "An arbitrary name which identifies the collection, not necessarily unique" },
-    { rec => 'collection_subset', com => 'nm2',
-	doc => "If this collection is a part of another one, this field specifies which part" },
-    { rec => 'attribution', dwc => 'recordedBy', com => 'att', show => 'attr',
-	doc => "The attribution (author and year) of this collection name" },
-    { rec => 'pubyr', com => 'pby', show => 'attr',
-	doc => "The year in which this collection was published" },
-    { rec => 'n_occs', com => 'noc',
-        doc => "The number of occurrences in this collection" },
-    { rec => 'early_int', com => 'oei', pbdb => 'early_interval',
-	doc => "The specific geologic time range associated with this collection (not necessarily a standard interval), or the interval that begins the range if C<end_interval> is also given" },
-    { rec => 'late_int', com => 'oli', pbdb => 'late_interval', dedup => 'early_int',
-	doc => "The interval that ends the specific geologic time range associated with this collection" },
-    { rec => 'reference_no', com => 'rid', json_list => 1,
-        doc => "The identifier(s) of the references from which this data was entered" },
-   ];
-
-$SELECT{summary} = "s.bin_id, s.n_colls, s.n_occs, s.lat, s.lng";
-
-$OUTPUT{summary} = 
-   [
-    { rec => 'bin_id', com => 'oid', doc => "A positive integer that identifies the cluster" },
-    { rec => 'bin_id_1', com => 'lv1', doc => "A positive integer that identifies the containing level-1 cluster, if any" },
-    { rec => 'bin_id_2', com => 'lv2', doc => "A positive integer that identifies the containing level-2 cluster, if any" },
-    { rec => 'record_type', com => 'typ', value => 'clu',
-        doc => "The type of this object: 'clu' for a collection cluster" },
-    { rec => 'n_colls', com => 'nco', doc => "The number of collections in cluster" },
-    { rec => 'n_occs', com => 'noc', doc => "The number of occurrences in this cluster" },
-    { rec => 'lng', com => 'lng', doc => "The longitude of the centroid of this cluster" },
-    { rec => 'lat', com => 'lat', doc => "The latitude of the centroid of this cluster" },
-   ];
-
-$SELECT{toprank} = "sum(c.n_occs) as n_occs, count(*) as n_colls";
-
-$OUTPUT{toprank} = 
-   [
-    { rec => 'n_occs', com => 'noc' },
-    { rec => 'n_colls', com => 'nco' },
-   ];
-
-$SELECT{bin} = undef;
-
-$OUTPUT{bin} = 
-   [
-    { rec => 'bin_id_1', com => 'lv1', doc => "The identifier of the level-1 cluster in which this collection is located" },
-    { rec => 'bin_id_2', com => 'lv2', doc => "The identifier of the level-2 cluster in which this collection is located" },
-    { rec => 'bin_id_3', com => 'lv3', doc => "The identifier of the level-3 cluster in which this collection is located" },
-   ];
-
-$SELECT{attr} = "r.author1init as a_ai1, r.author1last as a_al1, r.author2init as a_ai2, r.author2last as a_al2, r.otherauthors as a_oa, r.pubyr as a_pubyr";
-
-$TABLES{attr} = ['r'];
-
-$PROC{attr} = [
-    { rec => 'a_al1', set => 'attribution', use_main => 1, code => \&PBDBData::generateAttribution },
-    { rec => 'a_pubyr', set => 'pubyr' },
-   ];
-
-$SELECT{ref} = "r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype, r.language as r_language, r.doi as r_doi";
-
-$TABLES{ref} = 'r';
-
-$PROC{ref} = 
-   [
-    { rec => 'r_al1', add => 'ref_list', use_main => 1, code => \&PBDBData::generateReference },
-    { rec => 'sec_refs', add => 'ref_list', use_each => 1, code => \&PBDBData::generateReference },
-   ];
-
-$OUTPUT{ref} =
-   [
-    { rec => 'ref_list', pbdb => 'references', dwc => 'associatedReferences', com => 'ref', xml_list => "\n\n",
-	doc => "The reference(s) associated with this collection (as formatted text)" },
-   ];
-
-$SELECT{loc} = "cc.country, cc.state, cc.county, cc.geogscale";
-
-$OUTPUT{loc} = 
-   [
-    { rec => 'country', com => 'cc2',
-	doc => "The country in which this collection is located (ISO-3166-1 alpha-2)" },
-    { rec => 'state', com => 'sta',
-	doc => "The state or province in which this collection is located [not available for all collections]" },
-    { rec => 'county', com => 'cny',
-	doc => "The county in which this collection is located [not available for all collections]" },
-    { rec => 'geogscale', com => 'gsc',
-        doc => "The geographic scale of this collection." },
-   ];
-
-$SELECT{ext} = "s.lng_min, lng_max, s.lat_min, s.lat_max, s.std_dev";
-
-$OUTPUT{ext} =
-   [
-    { rec => 'lng_min', com => 'lg1', doc => "The mimimum longitude for collections in this bin or cluster" },
-    { rec => 'lng_max', com => 'lg2', doc => "The maximum longitude for collections in this bin or cluster" },
-    { rec => 'lat_min', com => 'la1', doc => "The mimimum latitude for collections in this bin or cluster" },
-    { rec => 'lat_max', com => 'la2', doc => "The maximum latitude for collections in this bin or cluster" },
-    { rec => 'std_dev', com => 'std', doc => "The standard deviation of the coordinates in this cluster" },
-   ];
-
-$SELECT{time} = "\$mt.early_age, \$mt.late_age, im.cx_int_no, im.early_int_no, im.late_int_no";
-
-$TABLES{time} = ['im'];
-
-$OUTPUT{time} =
-   [
-    { rec => 'early_age', com => 'eag',
-	doc => "The early bound of the geologic time range associated with this collection or cluster (in Ma)" },
-    { rec => 'late_age', com => 'lag',
-	doc => "The late bound of the geologic time range associated with this collection or cluster (in Ma)" },
-    { rec => 'cx_int_no', com => 'cxi',
-        doc => "The identifier of the most specific single interval from the selected timescale that covers the entire time range associated with this collection or cluster." },
-    { rec => 'early_int_no', com => 'ein',
-	doc => "The beginning of a range of intervals from the selected timescale that most closely brackets the time range associated with this collection or cluster (with C<late_int_no>)" },
-    { rec => 'late_int_no', com => 'lin',
-	doc => "The end of a range of intervals from the selected timescale that most closely brackets the time range associated with this collection or cluster (with C<early_int_no>)" },
-   ];
-
-$PROC{time} = 
-   [
-    { rec => 'early_age', use_main => 1, code => \&fixTimeOutput },
-   ];
-
-$SELECT{ent} = "\$mt.authorizer_no, ppa.name as authorizer, \$mt.enterer_no, ppe.name as enterer, \$mt.modifier_no, ppm.name as modifier";
-
-$TABLES{ent} = ['ppa', 'ppe', 'ppm'];
-
-$OUTPUT{ent} = 
-   [
-    { rec => 'authorizer_no', com => 'ath', 
-      doc => 'The identifier of the database contributor who authorized the entry of this record.' },
-    { rec => 'authorizer', vocab => 'pbdb', 
-      doc => 'The name of the database contributor who authorized the entry of this record.' },
-    { rec => 'enterer_no', com => 'ent', dedup => 'authorizer_no',
-      doc => 'The identifier of the database contributor who entered this record.' },
-    { rec => 'enterer', vocab => 'pbdb', 
-      doc => 'The name of the database contributor who entered this record.' },
-    { rec => 'modifier_no', com => 'mfr', dedup => 'authorizer_no',
-      doc => 'The identifier of the database contributor who last modified this record.' },
-    { rec => 'modifier', vocab => 'pbdb', 
-      doc => 'The name of the database contributor who last modified this record.' },
-   ];
-
-$OUTPUT{taxa} = 
-   [
-    { rec => 'taxa', com => 'tax',
-      doc => "A list of records describing the taxa that have been identified as appearing in this collection",
-      rule => [{ rec => 'taxon_name', com => 'tna',
-		 doc => "The scientific name of the taxon" },
-	       { rec => 'taxon_rank', com => 'trn',
-		 doc => "The taxonomic rank" },
-	       { rec => 'taxon_no', com => 'tid',
-		 doc => "A positive integer that uniquely identifies the taxon" },
-	       { rec => 'ident_name', com => 'ina', dedup => 'taxon_name',
-		 doc => "The name under which the occurrence was actually identified" },
-	       { rec => 'ident_rank', com => 'irn', dedup => 'taxon_rank',
-		 doc => "The taxonomic rank as actually identified" },
-	       { rec => 'ident_no', com => 'iid', dedup => 'taxon_no',
-		 doc => "A positive integer that uniquely identifies the name as identified" }]
-    }
-   ];
-
-$SELECT{crmod} = "\$mt.created, \$mt.modified";
-
-$OUTPUT{crmod} = 
-   [
-    { rec => 'created', com => 'dcr',
-      doc => "The date and time at which this record was created." },
-    { rec => 'modified', com => 'dmd',
-      doc => "The date and time at which this record was last modified." },
-   ];
-
-$OUTPUT{rem} = 
-   [
-    { rec => 'collection_aka', dwc => 'collectionRemarks', com => 'crm', xml_list => '; ',
-	doc => "Any additional remarks that were entered about the colection"},
-   ];
-
-$SELECT{strat} = "cc.member, cc.stratscale, cc.stratcomments";
-
-$OUTPUT{strat} = 
-   [
-    { rec => 'formation', com => 'frm',
-      doc => "The formation in which the collection was found" },
-    { rec => 'member', com => 'mmb', 
-      doc => "The member in which the collection was found" },
-    { rec => 'stratscale', com => 'ssc',
-      doc => "The stratigraphic scale of the collection" },
-    { rec => 'stratcomments', com => 'scm',
-      doc => "Stratigraphic comments/notes about the collection, if any" },
-   ];
-
-$SELECT{stratext} = "cc.zone, cc.geological_group, cc.localsection, cc.localbed, cc.localorder, cc.regionalsection, cc.regionalbed, cc.regionalorder";
-
-$OUTPUT{stratext} = 
-   [
-    { rec => 'zone', com => 'zon', 
-      doc => "The zone in which the collection was found" },
-    { rec => 'geological_group', com => 'ggr',
-      doc => "The geological group in which the collection was found" },
-    { rec => 'localsection', com => 'lsc',
-      doc => "The local section in which the collection was found" },
-   ];
-
-$SELECT{refbase} = "r.reference_no, " . $SELECT{refs} . ", r.comments as r_comments";
-
-$PROC{formatted} = 
-   [
-    { rec => 'r_al1', set => 'formatted', use_main => 1, code => \&PBDBData::generateReference },
-   ];
-
-$OUTPUT{refbase} = 
-   [
-    { rec => 'formatted', com => 'ref',
-	doc => "Formatted reference" },
-    { rec => 'r_ai1', com => 'ai1', pbdb => 'author1init', no_show => 'formonly',
-        doc => "First initial of the first author" },
-    { rec => 'r_al1', com => 'al1', pbdb => 'author1last', no_show => 'formonly',
-        doc => "Last name of the second author" },
-    { rec => 'r_ai2', com => 'ai2', pbdb => 'author2init', no_show => 'formonly',
-        doc => "First initial of the second author" },
-    { rec => 'r_al2', com => 'al2', pbdb => 'author2last', no_show => 'formonly',
-        doc => "Last name of the second author" },
-    { rec => 'r_oa', com => 'oau', pbdb => 'otherauthors', no_show => 'formonly',
-        doc => "The names of the remaining authors" },
-    { rec => 'r_pubyr', com => 'pby', pbdb => 'pubyr', no_show => 'formonly',
-        doc => "The year in which the document was published" },
-    { rec => 'r_reftitle', com => 'tit', pbdb => 'reftitle', no_show => 'formonly',
-        doc => "The title of the document" },
-    { rec => 'r_pubtitle', com => 'pbt', pbdb => 'pubtitle', no_show => 'formonly',
-        doc => "The title of the publication in which the document appears" },
-    { rec => 'r_editors', com => 'eds', pbdb => 'editors', no_show => 'formonly',
-        doc => "Names of the editors, if any" },
-    { rec => 'r_pubvol', com => 'vol', pbdb => 'pubvol', no_show => 'formonly',
-        doc => "The volume number, if any" },
-    { rec => 'r_pubno', com => 'num', pbdb => 'pubno', no_show => 'formonly',
-        doc => "The series number within the volume, if any" },
-    { rec => 'r_fp', com => 'pgf', pbdb => 'firstpage', no_show => 'formonly',
-        doc => "First page number" },
-    { rec => 'r_lp', com => 'pgl', pbdb => 'lastpage', no_show => 'formonly',
-        doc => "Last page number" },
-    { rec => 'r_pubtype', com => 'pbt', pbdb => 'publication_type', no_show => 'formonly',
-        doc => "Publication type" },
-    { rec => 'r_language', com => 'lng', pbdb => 'language', no_show => 'formonly',
-        doc => "Language" },
-    { rec => 'r_doi', com => 'doi', pbdb => 'doi',
-        doc => "The DOI for this document, if known" },
-    { rec => 'r_comments', com => 'cmt', pbdb => 'comments',
-        doc => "Additional comments about this reference, if any" },
-   ];
-
-$OUTPUT{cmt} = 
-   [
-    { rec => 'r_comments', com => 'cmt', pbdb => 'comments',
-        doc => "Additional comments about this reference, if any" },
-   ];
-
-# configure ( )
+# initialize ( )
 # 
-# This routine is called by the DataService module, and is passed the
-# configuration data as a hash ref.
+# This routine is called once by Web::DataService in order to initialize this
+# class.
 
-sub configure {
+sub initialize {
     
-    my ($self, $dbh, $config) = @_;
+    my ($class, $ds) = @_;
+    
+    # First read the configuration information that describes how the
+    # collections are organized into summary clusters (bins).
+    
+    my $config = $ds->get_config;
     
     if ( ref $config->{bins} eq 'ARRAY' )
     {
@@ -324,10 +52,503 @@ sub configure {
 	    $bin_string .= "bin_id_$bin_level";
 	}
 	
-	$SELECT{get_bin} = $bin_string if $bin_string ne '';
-	$SELECT{list_bin} = $bin_string if $bin_string ne '';
 	$MAX_BIN_LEVEL = $bin_level;
     }
+    
+    # Define an output map listing the blocks of information that can be
+    # returned by the operations in this class.
+    
+    $ds->define_output_map('1.1:colls:basic_map' =>
+        { value => 'basic', maps_to => '1.1:colls:basic', fixed => 1 },
+	{ value => 'bin', maps_to => '1.1:colls:bin' },
+	    "The list of geographic clusters to which the collection belongs.",
+        { value => 'attr', maps_to => '1.1:colls:attr' },
+	    "The attribution of the collection: the author name(s) from",
+	    "the primary reference, and the year of publication.",
+        { value => 'ref', maps_to => '1.1:refs:primary' },
+	    "The primary reference for the collection, as formatted text.",
+        { value => 'loc', maps_to => '1.1:colls:loc' },
+	    "Additional information about the geographic locality of the collection",
+	{ value => 'prot', maps_to => '1.1:colls:prot' },
+	    "Indicate whether the collection is on protected land",
+        { value => 'time', maps_to => '1.1:colls:time' },
+	    "Additional information about the temporal locality of the",
+	    "collection.",
+	{ value => 'strat', maps_to => '1.1:colls:strat' },
+	    "Basic information about the stratigraphic context of the collection.",
+	{ value => 'stratext', maps_to => '1.1:colls:stratext' },
+	    "Detailed information about the stratigraphic context of collection.",
+	    "This includes all of the information from C<strat> plus extra fields.",
+	{ value => 'lith', maps_to => '1.1:colls:lith' },
+	    "Basic information about the lithological context of the collection.",
+	{ value => 'lithext', maps_to => '1.1:colls:lithext' },
+	    "Detailed information about the lithological context of the collection.",
+	    "This includes all of the information from C<lith> plus extra fields.",
+	{ value => 'geo', maps_to => '1.1:colls:geo' },
+	    "Information about the geological context of the collection",
+        { value => 'rem', maps_to => '1.1:colls:rem' },
+	    "Any additional remarks that were entered about the collection.",
+	{ value => 'ent', maps_to => '1.1:common:ent' },
+	    "The identifiers of the people who authorized, entered and modified this record",
+	{ value => 'entname', maps_to => '1.1:common:entname' },
+	    "The names of the people who authorized, entered and modified this record",
+        { value => 'crmod', maps_to => '1.1:common:crmod' },
+	    "The C<created> and C<modified> timestamps for the collection record");
+    
+    # Then define the output blocks that it mentions.
+    
+    $ds->define_block('1.1:colls:basic' =>
+      { select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
+		   'c.lat', 'c.lng', 'cc.latlng_basis as llb', 'cc.latlng_precision as llp',
+		   'c.n_occs', 'ei.interval_name as early_interval', 'li.interval_name as late_interval',
+		   'c.reference_no', 'group_concat(sr.reference_no) as reference_nos'], 
+	tables => ['cc', 'ei', 'li', 'sr'] },
+      { output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
+	  "A positive integer that uniquely identifies the collection",
+      { output => 'record_type', value => 'collection', com_name => 'typ', com_value => 'col', 
+	dwc_value => 'Occurrence' },
+	  "type of this object: 'col' for a collection",
+      { output => 'formation', com_name => 'sfm', not_block => 'strat' },
+	  "The formation in which the collection was found",
+      { output => 'lng', dwc_name => 'decimalLongitude', com_name => 'lng' },
+	  "The longitude at which the collection is located (in degrees)",
+      { output => 'lat', dwc_name => 'decimalLatitude', com_name => 'lat' },
+	  "The latitude at which the collection is located (in degrees)",
+      { set => 'llp', from_record => 1, code => \&generateBasisCode },
+      { output => 'llp', com_name => 'prc' },
+	  "A two-letter code indicating the basis and precision of the geographic coordinates.",
+      { output => 'collection_name', dwc_name => 'collectionCode', com_name => 'nam' },
+	  "An arbitrary name which identifies the collection, not necessarily unique",
+      { output => 'collection_subset', com_name => 'nm2' },
+	  "If the collection is a part of another one, this field specifies which part",
+      { output => 'attribution', dwc_name => 'recordedBy', com_name => 'att', if_block => 'attr' },
+	  "The attribution (author and year) of the collection",
+      { output => 'pubyr', com_name => 'pby', if_block => 'attr' },
+	  "The year in which the collection was published",
+      { output => 'n_occs', com_name => 'noc' },
+	  "The number of occurrences in the collection",
+      { output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
+	  "The specific geologic time range associated with the collection (not necessarily a",
+	  "standard interval), or the interval that begins the range if C<late_interval> is also given",
+      { output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
+	  "The interval that ends the specific geologic time range associated with the collection",
+      { set => 'reference_no', from_record => 1, code => \&set_collection_refs },
+      { output => 'reference_no', com_name => 'rid', text_join => ', ' },
+	  "The identifier(s) of the references from which this data was entered");
+    
+    $ds->define_block('1.1:colls:bin' =>
+      { output => 'bin_id_1', com_name => 'lv1' },
+	  "The identifier of the level-1 cluster in which the collection is located",
+      { output => 'bin_id_2', com_name => 'lv2' },
+	  "The identifier of the level-2 cluster in which the collection is located",
+      { output => 'bin_id_3', com_name => 'lv3' },
+	  "The identifier of the level-2 cluster in which the collection is located",
+      { output => 'bin_id_4', com_name => 'lv4' },
+	  "The identifier of the level-2 cluster in which the collection is located",
+      { output => 'bin_id_5', com_name => 'lv5' },
+	  "The identifier of the level-3 cluster in which the collection is located");
+
+    
+    $ds->define_block('1.1:colls:attr' =>
+        { select => ['r.author1init as a_ai1', 'r.author1last as a_al1', 'r.author2init as a_ai2', 
+	  	     'r.author2last as a_al2', 'r.otherauthors as a_oa', 'r.pubyr as a_pubyr'],
+          tables => ['r'] },
+        { set => 'attribution', from_record => 1, code => \&generateAttribution },
+        { set => 'pubyr', from => 'a_pubyr' });
+    
+    $ds->define_block('1.1:colls:ref' =>
+      { select => ['r.author1init as r_ai1', 'r.author1last as r_al1', 'r.author2init as r_ai2', 
+		   'r.author2last as r_al2', 'r.otherauthors as r_oa', 'r.pubyr as r_pubyr', 
+		   'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
+		   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
+		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
+		   'r.language as r_language', 'r.doi as r_doi'],
+	tables => ['r'] },
+      { set => 'ref_list', from_record => 1, code => \&generateReference },
+      #{ set => 'ref_list', append => 1, from_each => 'sec_refs', code => \&generateReference },
+      #{ set => 'ref_list', join => "\n\n", if_format => 'txt,tsv,csv,xml' },
+      { output => 'ref_list', pbdb_name => 'primary_reference', dwc_name => 'associatedReferences', com_name => 'ref' },
+	  "The primary reference associated with the collection (as formatted text)");
+    
+    $ds->define_block('1.1:colls:loc' =>
+      { select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale'],
+	tables => ['cc'] },
+      { output => 'cc', com_name => 'cc2' },
+	  "The country in which the collection is located, encoded as",
+	  "L<ISO-3166-1 alpha-2|https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
+      { output => 'state', com_name => 'sta' },
+	  "The state or province in which the collection is located, if known",
+      { output => 'county', com_name => 'cny' },
+	  "The county or municipal area in which the collection is located, if known",
+      { output => 'geogscale', com_name => 'gsc' },
+	  "The geographic scale of the collection.");
+    
+    $ds->define_block('1.1:colls:prot' =>
+	{ select => ['c.cc', 'c.protected'] },
+	{ output => 'cc', com_name => 'cc2', not_block => 'loc' },
+	    "The country in which the collection is located, encoded as",
+	    "L<ISO-3166-1 alpha-2|https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
+	{ output => 'protected', com_name => 'ptd' },
+	    "The protected status of the land on which the collection is located, if any");
+    
+    $ds->define_block('1.1:colls:time' =>
+      { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
+	tables => ['im'] },
+      { set => '*', code => \&fixTimeOutput },
+      { output => 'early_age', com_name => 'eag' },
+	  "The early bound of the geologic time range associated with the collection or cluster (in Ma)",
+      { output => 'late_age', com_name => 'lag' },
+	  "The late bound of the geologic time range associated with the collection or cluster (in Ma)",
+      { output => 'cx_int_no', com_name => 'cxi' },
+	  "The identifier of the most specific single interval from the selected timescale that",
+	  "covers the entire time range associated with the collection or cluster.",
+      { output => 'early_int_no', com_name => 'ein' },
+	  "The beginning of a range of intervals from the selected timescale that most closely",
+	  "brackets the time range associated with the collection or cluster (with C<late_int_no>)",
+      { output => 'late_int_no', com_name => 'lin' },
+	  "The end of a range of intervals from the selected timescale that most closely brackets",
+	  "the time range associated with the collection or cluster (with C<early_int_no>)");
+    
+    $ds->define_block('1.1:colls:strat' =>
+	{ select => ['cc.formation', 'cc.geological_group', 'cc.member'], tables => 'cc' },
+	{ output => 'formation', com_name => 'sfm' },
+	    "The stratigraphic formation in which the collection is located, if known",
+	{ output => 'geological_group', pbdb_name => 'stratgroup', com_name => 'sgr' },
+	    "The stratigraphic group in which the collection is located, if known",
+	{ output => 'member', com_name => 'smb' },
+	    "The stratigraphic member in which the collection is located, if known");
+    
+    $ds->define_block('1.1:colls:stratext' =>
+	{ include => '1.1:colls:strat' },
+	{ select => [ qw(cc.zone cc.localsection cc.localbed cc.localorder
+		         cc.regionalsection cc.regionalbed cc.regionalorder
+		         cc.stratscale cc.stratcomments) ], tables => 'cc' },
+	{ output => 'stratscale', com_name => 'ssc' },
+	    "The stratigraphic range covered by this collection",
+	{ output => 'zone', com_name => 'szn' },
+	    "The stratigraphic zone in which the collection is located, if known",
+	{ output => 'localsection', com_name => 'sls' },
+	    "The local section in which the collection is located, if known",
+	{ output => 'localbed', com_name => 'slb' },
+	    "The local bed in which the collection is located, if known",
+	{ output => 'localorder', com_name => 'slo' },
+	    "The order in which local beds were described, if known",
+	{ output => 'regionalsection', com_name => 'srs' },
+	    "The regional section in which the collection is located, if known",
+	{ output => 'regionalbed', com_name => 'srb' },
+	    "The regional bed in which the collection is located, if known",
+	{ output => 'regionalorder', com_name => 'sro' },
+	    "The order in which regional beds were described, if known",
+	{ output => 'stratcomments', com_name => 'scm' },
+	    "Additional comments about the stratigraphic context of the collection, if any");
+    
+    $ds->define_block('1.1:colls:lith' =>
+	{ select => [ qw(cc.lithdescript cc.lithification cc.minor_lithology cc.lithology1
+			 cc.lithification2 cc.minor_lithology2 cc.lithology2) ], tables => 'cc' },
+	{ output => 'lithdescript', com_name => 'ldc' },
+	    "Detailed description of the collection site in terms of lithology",
+	{ output => 'lithology1', com_name => 'lt1' },
+	    "The first lithology described for the collection site; the database can",
+	    "represent up to two different lithologies per collection",
+	{ output => 'lithadj', pbdb_name => 'lithadj1', com_name => 'la1', if_block => 'lithext' },
+	    "Adjective(s) describing the first lithology",
+	{ output => 'lithification', pbdb_name => 'lithification1', com_name => 'lf1' },
+	    "Lithification state of the first lithology described for the site",
+	{ output => 'minor_lithology', pbdb_name => 'minor_lithology1', com_name => 'lm1' },
+	    "Minor lithology associated with the first lithology described for the site",
+	{ output => 'fossilsfrom1', com_name => 'ff1', if_block => 'lithext' },
+	    "Whether or not fossils were taken from the first described lithology",
+	{ output => 'lithology2', com_name => 'lt2' },
+	    "The second lithology described for the collection site, if any",
+	{ output => 'lithadj2', com_name => 'la2', if_block => 'lithext' },
+	    "Adjective(s) describing the second lithology, if any",
+	{ output => 'lithification2', com_name => 'lf2' },
+	    "Lithification state of the second lithology described for the site.  See above for values.",
+	{ output => 'minor_lithology2', com_name => 'lm2' },
+	    "Minor lithology associated with the second lithology described for the site, if any",
+	{ output => 'fossilsfrom2', com_name => 'ff2', if_block => 'lithext' },
+	    "Whether or not fossils were taken from the second described lithology");
+    
+    $ds->define_block('1.1:colls:lithext' =>
+	{ select => [ qw(cc.lithadj cc.fossilsfrom1 cc.lithadj2 cc.fossilsfrom2) ], tables => 'cc' },
+	{ include => '1.1:colls:lith' });
+    
+    $ds->define_block('1.1:colls:geo' =>
+	{ select => [ qw(cc.environment cc.tectonic_setting cc.geology_comments) ], tables => 'cc' },
+	{ output => 'environment', com_name => 'env' },
+	    "The paleoenvironment of the collection site",
+	{ output => 'tectonic_setting', com_name => 'tec' },
+	    "The tectonic setting of the collection site",
+	{ output => 'geology_comments', com_name => 'gcm' },
+	    "General comments about the geology of the collection site");
+    
+    $ds->define_block('taxon_record' =>
+      { output => 'taxon_name', com_name => 'tna' },
+	  "The scientific name of the taxon",
+      { output => 'taxon_rank', com_name => 'trn' },
+	  "The taxonomic rank",
+      { output => 'taxon_no', com_name => 'tid' },
+	  "A positive integer that uniquely identifies the taxon",
+      { output => 'ident_name', com_name => 'ina', dedup => 'taxon_name' },
+	  "The name under which the occurrence was actually identified",
+      { output => 'ident_rank', com_name => 'irn', dedup => 'taxon_rank' },
+	  "The taxonomic rank as actually identified",
+      { output => 'ident_no', com_name => 'iid', dedup => 'taxon_no' },
+	  "A positive integer that uniquely identifies the name as identified");
+
+    $ds->define_block( '1.1:colls:taxa' =>
+      { output => 'taxa', com_name => 'tax', rule => 'taxon_record' },
+	  "A list of records describing the taxa that have been identified",
+	  "as appearing in the collection");
+    
+    $ds->define_block( '1.1:colls:rem' =>
+      { set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
+      { output => 'collection_aka', dwc_name => 'collectionRemarks', com_name => 'crm' },
+	  "Any additional remarks that were entered about the collection");
+    
+    # Then define an output block for displaying stratigraphic results
+    
+    $ds->define_block('1.1:colls:strata' =>
+	{ select => ['cs.name', 'cs.rank', 'count(*) as n_colls', 'sum(n_occs) as n_occs'] },
+	{ output => 'record_type', com_name => 'typ', value => 'stratum', com_value => 'str' },
+	    "The type of this record: 'str' for a stratum",
+	{ output => 'name', com_name => 'nam' },
+	    "The name of the stratum",
+	{ output => 'rank', com_name => 'rnk' },
+	    "The rank of the stratum: formation, group or member",
+	{ output => 'n_colls', com_name => 'nco' },
+	    "The number of fossil collections in the database that are associated with this stratum.",
+	    "Note that if your search is limited to a particular geographic area, then",
+	    "only collections within the selected area are counted.",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The number of fossil occurrences in the database that are associated with this stratum.",
+	    "The above note about geographic area selection also applies.");
+    
+    # Finally, define rulesets to interpret the parmeters used with operations
+    # defined by this class.
+    
+    $ds->define_set('1.1:colls:order' =>
+	{ value => 'earlyage' },
+	    "Results are ordered chronologically by early age bound, oldest to youngest unless you add C<.asc>",
+	{ value => 'earlyage.asc', undoc => 1 },
+	{ value => 'earlyage.desc', undoc => 1 },
+	{ value => 'lateage' },
+	    "Results are ordered chronologically by late age bound, oldest to youngest unless you add C<.asc>",
+	{ value => 'lateage.asc', undoc => 1 },
+	{ value => 'lateage.desc', undoc => 1 },
+	{ value => 'agespread' },
+	    "Results are ordered based on the difference between the early and late age bounds, starting",
+	    "with occurrences with the largest spread (least precise temporal resolution) unless you add C<.asc>",
+	{ value => 'agespread.asc', undoc => 1 },
+	{ value => 'agespread.desc', undoc => 1 },
+	{ value => 'formation' },
+	    "Results are ordered by the stratigraphic formation in which they were found, sorted alphabetically.",
+	{ value => 'formation.asc', undoc => 1 },
+	{ value => 'formation.desc', undoc => 1 },
+	{ value => 'stratgroup' },
+	    "Results are ordered by the stratigraphic group in which they were found, sorted alphabetically.",
+	{ value => 'stratgroup.asc', undoc => 1 },
+	{ value => 'stratgroup.desc', undoc => 1 },
+	{ value => 'member' },
+	    "Results are ordered by the stratigraphic member in which they were found, sorted alphabetically.",
+	{ value => 'member.asc', undoc => 1 },
+	{ value => 'member.desc', undoc => 1 },
+	{ value => 'created' },
+	    "Results are ordered by the date the record was created, most recent first",
+	    "unless you add C<.asc>.",
+	{ value => 'created.asc', undoc => 1 },
+	{ value => 'created.desc', undoc => 1 },
+	{ value => 'modified' },
+	    "Results are ordered by the date the record was last modified",
+	    "most recent first unless you add C<.asc>",
+	{ value => 'modified.asc', undoc => 1 },
+	{ value => 'modified.desc', undoc => 1 });
+    
+    $ds->define_ruleset('1.1:main_selector' =>
+	{ param => 'clust_id', valid => POS_VALUE, list => ',' },
+	    "Return only records associated with the specified geographic clusters.",
+	    "You may specify one or more cluster ids, separated by commas.",
+	{ param => 'taxon_name', valid => \&TaxonData::validNameSpec },
+	    "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
+	{ param => 'taxon_id', valid => POS_VALUE, list => ','},
+	    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier.",
+	    "You may specify multiple identifiers, separated by commas.",
+	{ param => 'taxon_actual', valid => FLAG_VALUE },
+	    "If this parameter is specified, then only records that were actually identified with the",
+	    "specified taxonomic name and not those which match due to synonymy",
+	    "or other correspondences between taxa.  This is a flag parameter, which does not need any value.",
+	{ param => 'base_name', valid => \&TaxonData::validNameSpec, list => ',' },
+	    "Return only records associated with the specified taxonomic name(s), or I<any of their children>.",
+	    "You may specify multiple names, separated by commas.",
+	{ param => 'base_id', valid => POS_VALUE, list => ',' },
+	    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier, or I<any of their children>.",
+	    "You may specify multiple identifiers, separated by commas.",
+	    "Note that you may specify at most one of 'taxon_name', 'taxon_id', 'base_name', 'base_id'.",
+	{ at_most_one => ['taxon_name', 'taxon_id', 'base_name', 'base_id'] },
+	{ param => 'exclude_id', valid => POS_VALUE, list => ','},
+	    "Exclude any records whose associated taxonomic name is a child of the given name or names, specified by numeric identifier.",
+	{ param => 'person_id', valid => POS_VALUE, list => ','},
+	    "Return only records whose entry was authorized by the given person or people, specified by numeric identifier.",
+	{ param => 'lngmin', valid => DECI_VALUE },
+	{ param => 'lngmax', valid => DECI_VALUE },
+	{ param => 'latmin', valid => DECI_VALUE },
+	{ param => 'latmax', valid => DECI_VALUE },
+	    "Return only records whose geographic location falls within the given bounding box.",
+	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
+	    "two adjacent bounding boxes if the range crosses the antimeridian.",
+	    "Note that if you specify C<lngmin> then you must also specify C<lngmax>.",
+	{ together => ['lngmin', 'lngmax'],
+	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
+	{ param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
+	    "Return only records whose geographic location falls within the specified geometry, specified in WKT format.",
+	{ param => 'continent', valid => ANY_VALUE, list => ',' },
+	    "Return only records whose geographic location falls within the specified continent(s).  The list of accepted",
+	    "continents can be retrieved via a L<config|/data1.1/config> request.",
+	{ param => 'formation', valid => ANY_VALUE, list => ',' },
+	    "Return only records that fall within the named stratigraphic formation(s).  You may",
+	    "specify more than one, separated by commas.",
+	{ param => 'stratgroup', valid => ANY_VALUE, list => ',' },
+	    "Return only records that fall within the named stratigraphic group(s).  You may",
+	    "specify more than one, separated by commas.",
+	{ param => 'member', valid => ANY_VALUE, list => ',' },
+	    "Return only records that fall within the named stratigraphic member(s).  You may",
+	    "specify more than one, separated by commas.",
+	{ param => 'min_ma', valid => DECI_VALUE(0) },
+	    "Return only records whose temporal locality is at least this old, specified in Ma.",
+	{ param => 'max_ma', valid => DECI_VALUE(0) },
+	    "Return only records whose temporal locality is at most this old, specified in Ma.",
+	{ param => 'interval_id', valid => POS_VALUE },
+	    "Return only records whose temporal locality falls within the given geologic time interval, specified by numeric identifier.",
+	{ param => 'interval', valid => ANY_VALUE },
+	    "Return only records whose temporal locality falls within the named geologic time interval.",
+	{ at_most_one => ['interval_id', 'interval', 'min_ma'] },
+	{ at_most_one => ['interval_id', 'interval', 'max_ma'] },
+	{ optional => 'timerule', valid => ENUM_VALUE('contain','overlap','buffer') },
+	    "Resolve temporal locality according to the specified rule:", "=over 4",
+	    "=item contain", "Return only records whose temporal locality is strictly contained in the specified time range.",
+	    "=item overlap", "Return only records whose temporal locality overlaps the specified time range.",
+	    "=item buffer", "Return only records whose temporal locality overlaps the specified range and is contained",
+	    "within the specified time range plus a buffer on either side.  If an interval from one of the timescales known to the database is",
+	    "given, then the default buffer will be the intervals immediately preceding and following at the same level.",
+	    "Otherwise, the buffer will default to 10 million years on either side.  This can be overridden using the parameters",
+	    "C<earlybuffer> and C<latebuffer>.  This is the default value for this option.",
+	{ optional => 'earlybuffer', valid => POS_VALUE },
+	    "Override the default buffer period for the beginning of the time range when resolving temporal locality.",
+	    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
+	{ optional => 'latebuffer', valid => POS_VALUE },
+	    "Override the default buffer period for the end of the time range when resolving temporal locality.",
+	    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).");
+
+    $ds->define_ruleset('1.1:colls:specifier' =>
+	{ param => 'id', valid => POS_VALUE, alias => 'coll_id' },
+	    "The identifier of the collection you wish to retrieve (REQUIRED)");
+    
+    $ds->define_ruleset('1.1:colls:selector' =>
+	{ param => 'id', valid => INT_VALUE, list => ',', alias => 'coll_id' },
+	    "A comma-separated list of collection identifiers.");
+    
+    $ds->define_ruleset('1.1:colls:display' =>
+	"You can use the following parameter to request additional information about each",
+	"retrieved collection:",
+	{ optional => 'show', list => q{,},
+	  valid => $ds->valid_set('1.1:colls:basic_map') },
+	    "Selects additional information to be returned",
+	    "along with the basic record for each collection.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	    $ds->document_set('1.1:colls:basic_map'),
+	{ optional => 'order', valid => $ds->valid_set('1.1:colls:order'), split => ',' },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
+	    $ds->document_set('1.1:colls:order'),
+	    "If no order is specified, results are sorted by collection identifier.",
+	{ ignore => 'level' });
+    
+    $ds->define_ruleset('1.1:colls:single' => 
+	"The following required parameter selects a record to retrieve:",
+    	{ require => '1.1:colls:specifier', 
+	  error => "you must specify a collection identifier, either in the URL or with the 'id' parameter" },
+    	{ allow => '1.1:colls:display' },
+    	{ allow => '1.1:common_params' },
+        "^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+
+    $ds->define_ruleset('1.1:colls:list' => 
+	">You can use the following parameter if you wish to retrieve information about",
+	"a known list of collections, or to filter a known list against other criteria such as location or time.",
+	"Only the records which match the other parameters that you specify will be returned.",
+    	{ allow => '1.1:colls:selector' },
+        ">The following parameters can be used to query for collections by a variety of criteria.",
+	"Except as noted below, you may use these in any combination.",
+	"These parameters can all be used to select either occurrences, collections, or associated references.",
+   	{ allow => '1.1:main_selector' },
+	{ allow => '1.1:common:select_crmod' },
+	{ allow => '1.1:common:select_ent' },
+	{ require_any => ['1.1:colls:selector', '1.1:main_selector',
+			  '1.1:common:select_crmod', '1.1:common:select_ent'] },
+	">You can also specify any of the following parameters:",
+    	{ allow => '1.1:colls:display' },
+    	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+    
+    $ds->define_ruleset('1.1:colls:refs' =>
+	">You can use the following parameters if you wish to retrieve the references associated",
+	"with a known list of collections, or to filter a known list against",
+	"other criteria such as location or time.",
+	"Only the records which match the other parameters that you specify will be returned.",
+	{ allow => '1.1:colls:selector' },
+        ">The following parameters can be used to retrieve the references associated with occurrences",
+	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
+	"These parameters can all be used to select either occurrences, collections, or associated references.",
+	{ allow => '1.1:main_selector' },
+	{ allow => '1.1:common:select_crmod' },
+	{ allow => '1.1:common:select_ent' },
+	{ require_any => ['1.1:colls:selector', '1.1:main_selector',
+			  '1.1:common:select_crmod', '1.1:common:select_ent'] },
+	">You can also specify any of the following parameters:",
+	{ allow => '1.1:refs:filter' },
+	{ allow => '1.1:refs:display' },
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.",
+	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
+	"the name of the primary author.");
+    
+    $ds->define_ruleset('1.1:toprank_selector' =>
+	{ param => 'show', valid => ENUM_VALUE('formation', 'ref', 'author'), list => ',' });
+    
+    $ds->define_ruleset('1.1:colls/toprank' => 
+    	{ require => '1.1:main_selector' },
+    	{ require => '1.1:toprank_selector' },
+    	{ allow => '1.1:common_params' });
+    
+    $ds->define_ruleset('1.1:strata:selector' =>
+	{ param => 'name', valid => ANY_VALUE },
+	    "A full or partial name.  You can use % and _ as wildcards, but the query",
+	    "will be very slow if you put a wildcard at the beginning",
+	{ optional => 'rank', valid => ENUM_VALUE('formation','group','member') },
+	    "Return only strata of the specified rank: formation, group or member",
+	{ param => 'lngmin', valid => DECI_VALUE },
+	{ param => 'lngmax', valid => DECI_VALUE },
+	{ param => 'latmin', valid => DECI_VALUE },
+	{ param => 'latmax', valid => DECI_VALUE },
+	    "Return only strata associated with some occurrence whose geographic location falls within the given bounding box.",
+	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
+	    "two adjacent bounding boxes if the range crosses the antimeridian.",
+	    "Note that if you specify C<lngmin> then you must also specify C<lngmax>.",
+	{ together => ['lngmin', 'lngmax'],
+	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
+	{ param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
+	    "Return only strata associated with some occurrence whose geographic location falls",
+	    "within the specified geometry, specified in WKT format.");
+    
+    $ds->define_ruleset('1.1:strata:list' =>
+	{ require => '1.1:strata:selector' },
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    
+    $ds->define_ruleset('1.1:strata:auto' =>
+	{ require => '1.1:strata:selector' },
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+
 }
 
 
@@ -342,7 +563,7 @@ sub get {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->{dbh};
+    my $dbh = $self->get_dbh;
     
     # Make sure we have a valid id number.
     
@@ -353,13 +574,13 @@ sub get {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->generate_query_fields('c');
+    my $fields = join(', ', $self->select_list({ mt => 'c', bt => 'cc' }));
     
     $self->adjustCoordinates(\$fields);
     
     # Determine the necessary joins.
     
-    my ($join_list) = $self->generateJoinList('c', $self->{select_tables});
+    my ($join_list) = $self->generateJoinList('c', $self->tables_hash);
     
     # Generate the main query.
     
@@ -371,8 +592,6 @@ sub get {
         WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
     
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
-    
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
     # Abort if we couldn't retrieve the record.
@@ -381,18 +600,18 @@ sub get {
     
     # If we were directed to show references, grab any secondary references.
     
-    if ( $self->{show}{ref} )
-    {
-	my $extra_fields = $SELECT{ref};
+    # if ( $self->{show}{ref} )
+    # {
+    # 	my $extra_fields = $request->select_list('ref');
 	
-        $self->{aux_sql}[0] = "
-        SELECT sr.reference_no, $extra_fields
-        FROM secondary_refs as sr JOIN refs as r using (reference_no)
-        WHERE sr.collection_no = $id
-	ORDER BY sr.reference_no";
+    #     $self->{aux_sql}[0] = "
+    #     SELECT sr.reference_no, $extra_fields
+    #     FROM secondary_refs as sr JOIN refs as r using (reference_no)
+    #     WHERE sr.collection_no = $id
+    # 	ORDER BY sr.reference_no";
         
-        $self->{main_record}{sec_refs} = $dbh->selectall_arrayref($self->{aux_sql}[0], { Slice => {} });
-    }
+    #     $self->{main_record}{sec_refs} = $dbh->selectall_arrayref($self->{aux_sql}[0], { Slice => {} });
+    # }
     
     # If we were directed to show associated taxa, grab them too.
     
@@ -418,86 +637,6 @@ sub get {
 }
 
 
-sub summary {
-    
-    my ($self) = @_;
-    
-    # Get a database handle by which we can make queries.
-    
-    my $dbh = $self->{dbh};
-    
-    # Figure out which bin level we are being asked for.  The default is 1.    
-
-    my $bin_level = $self->{params}{level} || 1;
-    
-    # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
-    
-    my @filters = $self->generateMainFilters('summary', 's', $self->{select_tables});
-    push @filters, $self->generateCollFilters($self->{select_tables});
-    
-    # If a query limit has been specified, modify the query accordingly.
-    
-    my $limit = $self->generateLimitClause();
-    
-    # If we were asked to count rows, modify the query accordingly
-    
-    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    my $fields = $self->generate_query_fields('s');
-    
-    $self->adjustCoordinates(\$fields);
-    
-    my $summary_joins .= $self->generateJoinList('s', $self->{select_tables});
-    
-    $summary_joins = "RIGHT JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n" . $summary_joins
-	if $self->{select_tables}{c} or $self->{select_tables}{o};
-    
-    if ( $self->{select_tables}{o} )
-    {
-	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
-	$fields =~ s/s.n_occs/count(distinct o.occurrence_no) as n_occs/;
-    }
-    
-    elsif ( $self->{select_tables}{c} )
-    {
-	$fields =~ s/s.n_colls/count(distinct c.collection_no) as n_colls/;
-	$fields =~ s/s.n_occs/sum(c.n_occs) as n_occs/;
-    }
-    
-    push @filters, $self->{select_tables}{c} ? "c.access_level = 0" : "s.access_level = 0";
-    push @filters, "s.bin_level = $bin_level";
-    
-    my $filter_string = join(' and ', @filters);
-    
-    $self->{main_sql} = "
-		SELECT $calc $fields
-		FROM $COLL_BINS as s $summary_joins
-		WHERE $filter_string
-		GROUP BY s.bin_id
-		ORDER BY s.bin_id $limit";
-    
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
-    
-    # Then prepare and execute the query..
-    
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
-    
-    # If we were asked to get the count, then do so
-    
-    if ( $calc )
-    {
-	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
-    }
-    
-    return 1;
-}
-
-
 # list ( )
 # 
 # Query the database for basic info about all collections satisfying the
@@ -511,13 +650,17 @@ sub list {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->{dbh};
+    my $dbh = $self->get_dbh;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = $self->generateMainFilters('list', 'c', $self->{select_tables});
-    push @filters, $self->generateCollFilters($self->{select_tables});
+    my $tables = $self->tables_hash;
+    
+    my @filters = $self->generateMainFilters('list', 'c', $tables);
+    push @filters, $self->generateCollFilters($tables);
+    push @filters, CommonData::generate_crmod_filters($self, 'cc', $tables);
+    push @filters, CommonData::generate_ent_filters($self, 'cc', $tables);
     
     push @filters, "c.access_level = 0";
     
@@ -525,59 +668,36 @@ sub list {
     
     # If a query limit has been specified, modify the query accordingly.
     
-    my $limit = $self->generateLimitClause();
+    my $limit = $self->sql_limit_clause(1);
     
     # If we were asked to count rows, modify the query accordingly
     
-    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    my $calc = $self->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->generate_query_fields('c');
+    my $fields = $self->select_string({ mt => 'c', bt => 'cc' });
     
     $self->adjustCoordinates(\$fields);
     
-    # If the operation is 'toprank', generate a query on the collection matrix
-    # joined with whichever other tables are relevant
-
-    if ( defined $arg && $arg eq 'toprank' )
-    {
-	my $base_joins = $self->generateJoinList('c', $self->{select_tables});
-	
-	my $group_field = $self->{show}{formation} ? 'formation' :
-			  $self->{show}{author}    ? 'main_author' :
-			  $self->{show}{ref}	   ? 'c.reference_no' : '';
-	
-	die "No group field specified" unless $group_field;
-	
-	$self->{main_sql} = "
-	SELECT $calc $fields
-	FROM coll_matrix as c join collections as cc using (collection_no)
-		$base_joins
-	WHERE $filter_string
-	GROUP BY $group_field
-	ORDER BY n_occs DESC $limit";
-    }
+    # Determine the order in which the results should be returned.
     
-    # If the operation is 'list', generate a query on the collection matrix
+    my $order_clause = $self->generate_order_clause($tables, { at => 'c', bt => 'cc' }) || 'c.collection_no';
     
-    else
-    {
-	my $base_joins = $self->generateJoinList('c', $self->{select_tables});
+    # Determine if any extra tables need to be joined in.
+    
+    my $base_joins = $self->generateJoinList('c', $self->tables_hash);
 	
-	$self->{main_sql} = "
+    $self->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_matrix as c join collections as cc using (collection_no)
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no
-	ORDER BY c.collection_no
+	ORDER BY $order_clause
 	$limit";
-    }
-    
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
     
     # Then prepare and execute the main query and the secondary query.
     
@@ -586,64 +706,162 @@ sub list {
     
     # If we were asked to get the count, then do so
     
-    if ( $calc )
-    {
-	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
-    }
+    $self->sql_count_rows;
+}
+
+
+# refs ( )
+# 
+# Query the database for the references associated with occurrences satisfying
+# the conditions specified by the parameters.
+
+sub refs {
+
+    my ($self) = @_;
     
-    # If we were directed to show references, grab any secondary references.
+    # Get a database handle by which we can make queries.
     
-    # if ( $self->{show}{ref} or $self->{show}{sref} )
-    # {
-    # 	my (@fields) = 'sref' if $self->{show}{sref};
-    # 	@fields = 'ref' if $self->{show}{ref};
-	
-    # 	($extra_fields) = $self->generateQueryFields(\@fields);
-	
-    # 	$self->{aux_sql}[0] = "
-    # 	SELECT s.reference_no $extra_fields
-    # 	FROM secondary_refs as s JOIN refs as r using (reference_no)
-    # 	WHERE s.collection_no = ?";
-	
-    # 	$self->{aux_sth}[0] = $dbh->prepare($self->{aux_sql}[0]);
-    # 	$self->{aux_sth}[0]->execute();
-    # }
+    my $dbh = $self->get_dbh;
     
-    # If we were directed to show associated taxa, construct an SQL statement
-    # that will be used to grab that list.
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
     
-    # if ( $self->{show}{taxa} )
-    # {
-    # 	my $auth_table = $self->{taxonomy}{auth_table};
-    # 	my $tree_table = $self->{taxonomy}{tree_table};
-	
-    # 	$self->{aux_sql}[1] = "
-    # 	SELECT DISTINCT t.spelling_no as taxon_no, t.name as taxon_name, rm.rank as taxon_rank, 
-    # 		a.taxon_no as ident_no, a.taxon_name as ident_name, a.taxon_rank as ident_rank
-    # 	FROM occ_matrix as o JOIN $auth_table as a USING (taxon_no)
-    # 		LEFT JOIN $tree_table as t on t.orig_no = o.orig_no
-    # 		LEFT JOIN rank_map as rm on rm.rank_no = t.rank
-    # 	WHERE o.collection_no = ? ORDER BY t.lft ASC";
-		
-    # 	$self->{aux_sth}[1] = $dbh->prepare($self->{aux_sql}[1]);
-    # 	$self->{aux_sth}[1]->execute();
-    # }
+    my $inner_tables = {};
     
-    return 1;
+    my @filters = CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
+    push @filters, $self->generateCollFilters($inner_tables);
+    push @filters, CommonData::generate_crmod_filters($self, 'cc', $inner_tables);
+    push @filters, CommonData::generate_ent_filters($self, 'cc', $inner_tables);
+    
+    push @filters, "c.access_level = 0";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # Construct another set of filter expressions to act on the references.
+    
+    my @ref_filters = $self->ReferenceData::generate_filters($self->tables_hash);
+    push @ref_filters, "1=1" unless @ref_filters;
+    
+    my $ref_filter_string = join(' and ', @ref_filters);
+    
+    # Figure out the order in which we should return the references.  If none
+    # is selected by the options, sort by rank descending.
+    
+    my $order = ReferenceData::generate_order_clause($self, { rank_table => 's' }) ||
+	"r.author1last, r.author1init";
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $self->sql_limit_clause(1);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $self->sql_count_clause;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $fields = $self->select_string({ mt => 'r', bt => 'r' });
+    
+    $self->adjustCoordinates(\$fields);
+    
+    my $inner_join_list = $self->generateJoinList('c', $inner_tables);
+    my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
+    
+    $self->{main_sql} = "
+	SELECT $calc $fields, s.reference_rank FROM refs as r JOIN
+	   (SELECT sr.reference_no, count(*) as reference_rank
+	    FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
+		LEFT JOIN secondary_refs as sr using (collection_no)
+		$inner_join_list
+            WHERE $filter_string
+	    GROUP BY sr.reference_no) as s using (reference_no)
+	$outer_join_list
+	WHERE $ref_filter_string
+	ORDER BY $order
+	$limit";
+    
+    # Then prepare and execute the main query.
+    
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
+    $self->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    $self->sql_count_rows;
+}
+
+
+# strata ( arg )
+# 
+# Query the database for geological strata.  If the arg is 'auto', then treat
+# this query as an auto-completion request.
+
+sub strata {
+    
+    my ($self, $arg) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $self->get_dbh;
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my $tables = $self->tables_hash;
+    
+    my @filters = $self->generateMainFilters('list', 'cs', $tables);
+    push @filters, $self->generateStrataFilters($tables, $arg);
+    push @filters, "1=1" unless @filters;
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # Modify the query according to the common parameters.
+    
+    my $limit = $self->sql_limit_clause(1);
+    my $calc = $self->sql_count_clause;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $fields = $self->select_string({ mt => 'cs' });
+    
+    #$self->adjustCoordinates(\$fields);
+    
+    # Determine if any extra tables need to be joined in.
+    
+    my $base_joins = $self->generateJoinList('cs', $tables);
+    
+    $self->{main_sql} = "
+	SELECT $calc $fields
+	FROM coll_strata as cs
+		$base_joins
+        WHERE $filter_string
+	GROUP BY cs.name, cs.rank
+	ORDER BY cs.name
+	$limit";
+    
+    # Then prepare and execute the main query and the secondary query.
+    
+    $self->{main_sth} = $dbh->prepare($self->{main_sql});
+    $self->{main_sth}->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    $self->sql_count_rows;
 }
 
 
 # fixTimeOutput ( record )
 # 
-# Adjust the time output by truncating unneeded digits and adding
-# default containing-interval values.
+# Adjust the time output by truncating unneeded digits.
 
 sub fixTimeOutput {
     
     my ($self, $record) = @_;
     
-    $record->{early_age} =~ s/\.?0+$//;
-    $record->{late_age} =~ s/\.?0+$//;
+    $record->{early_age} =~ s/\.?0+$// if defined $record->{early_age};
+    $record->{late_age} =~ s/\.?0+$// if defined $record->{late_age};
 }
 
 
@@ -662,21 +880,69 @@ sub generateCollFilters {
 
     my ($self, $tables_ref) = @_;
     
-    my $dbh = $self->{dbh};
+    my $dbh = $self->get_dbh;
     my @filters;
     
-    # Check for parameter 'id'
+    # Check for parameter 'id', If the parameter was given but no value was
+    # found, then add a clause that will generate an empty result set.
     
-    if ( ref $self->{params}{id} eq 'ARRAY' and
-	 @{$self->{params}{id}} )
+    my $id = $self->clean_param('id');
+    
+    if ( ref $id eq 'ARRAY' and @$id )
     {
-	my $id_list = join(',', @{$self->{params}{id}});
+	my $id_list = join(',', @$id);
 	push @filters, "c.collection_no in ($id_list)";
     }
     
-    elsif ( $self->{params}{id} )
+    elsif ( defined $id && $id ne '' )
     {
-	push @filters, "c.collection_no = $self->{params}{id}";
+	push @filters, "c.collection_no = $id";
+    }
+    
+    # Check for parameters 'person_no', 'person_name'
+    
+    if ( my $person_id = $self->clean_param('person_id') )
+    {
+	my $person_string = ref $person_id eq 'ARRAY' ? join(q{,}, @$person_id)
+			  :				$person_id;
+	
+	push @filters, "(cc.authorizer_no in ($person_string) or cc.enterer_no in ($person_string))";
+	$tables_ref->{cc} = 1;
+	$tables_ref->{non_geo_filter} = 1;
+    }
+    
+    return @filters;
+}
+
+
+# generateStrataFilters ( tables_ref, $is_auto )
+# 
+# Generate a list of filter clauses that will help to select the appropriate
+# set of records.  This routine only handles parameters that are specific to
+# strata.  If $is_auto is 'auto', then add a % wildcard to the end of the name.
+
+sub generateStrataFilters {
+
+    my ($self, $tables_ref, $is_auto) = @_;
+    
+    my $dbh = $self->get_dbh;
+    my @filters;
+    
+    # Check for parameter 'name'.
+    
+    if ( my $name = $self->clean_param('name') )
+    {
+	$name .= '%' if $is_auto eq 'auto';
+	my $quoted = $dbh->quote($name);
+	push @filters, "cs.name like $quoted";
+    }
+    
+    # Check for parameter 'rank'.
+    
+    if ( my $rank = $self->clean_param('rank') )
+    {
+	my $quoted = $dbh->quote($rank);
+	push @filters, "cs.rank = $quoted";
     }
     
     return @filters;
@@ -698,10 +964,9 @@ sub generateMainFilters {
 
     my ($self, $op, $mt, $tables_ref) = @_;
     
-    my $dbh = $self->{dbh};
+    my $dbh = $self->get_dbh;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
-    my $non_geo_filter;
     
     # Check for parameter 'clust_id'
     
@@ -783,7 +1048,7 @@ sub generateMainFilters {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{t} = 1;
-	$non_geo_filter = 1;
+	$tables_ref->{non_geo_filter} = 1;
     }
     
     elsif ( @taxa )
@@ -791,7 +1056,7 @@ sub generateMainFilters {
 	my $taxon_list = join ',', map { $_->{orig_no} } @taxa;
 	push @filters, "o.orig_no in ($taxon_list)";
 	$tables_ref->{o} = 1;
-	$non_geo_filter = 1;
+	$tables_ref->{non_geo_filter} = 1;
     }
     
     # If no matching taxa were found, add a filter clause that will return no results.
@@ -807,27 +1072,6 @@ sub generateMainFilters {
     {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
 	$tables_ref->{t} = 1;
-    }
-    
-    # Check for parameters 'person_no', 'person_name'
-    
-    if ( $self->{params}{person_id} )
-    {
-	if ( ref $self->{params}{person_id} eq 'ARRAY' )
-	{
-	    my $person_string = join(q{,}, @{$self->{params}{person_id}} );
-	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
-	    $tables_ref->{c} = 1;
-	    $non_geo_filter = 1;
-	}
-	
-	else
-	{
-	    my $person_string = $self->{params}{person_id};
-	    push @filters, "(c.authorizer_no in ($person_string) or c.enterer_no in ($person_string))";
-	    $tables_ref->{c} = 1;
-	    $non_geo_filter = 1;
-	}
     }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax'
@@ -901,6 +1145,47 @@ sub generateMainFilters {
     if ( $self->{params}{loc} )
     {
 	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
+    }
+    
+    # Check for parameters 'formation', 'stratgroup', 'member'
+    
+    if ( my @formations = $self->clean_param_list('formation') )
+    {
+	foreach my $f (@formations)
+	{
+	    $f =~ s/%/.*/g;
+	    $f =~ s/_/./g;
+	}
+	my $pattern = '^(' . join('|', @formations) . ')$';
+	my $quoted = $dbh->quote($pattern);
+	push @filters, "cc.formation rlike $quoted";
+	$tables_ref->{cc} = 1;
+    }
+    
+    if ( my @stratgroups = $self->clean_param_list('stratgroup') )
+    {
+	foreach my $f (@stratgroups)
+	{
+	    $f =~ s/%/.*/g;
+	    $f =~ s/_/./g;
+	}
+	my $pattern = '^(' . join('|', @stratgroups) . ')$';
+	my $quoted = $dbh->quote($pattern);
+	push @filters, "cc.geological_group rlike $quoted";
+	$tables_ref->{cc} = 1;
+    }
+    
+    if ( my @members = $self->clean_param_list('member') )
+    {
+	foreach my $f (@members)
+	{
+	    $f =~ s/%/.*/g;
+	    $f =~ s/_/./g;
+	}
+	my $pattern = '^(' . join('|', @members) . ')$';
+	my $quoted = $dbh->quote($pattern);
+	push @filters, "cc.member rlike $quoted";
+	$tables_ref->{cc} = 1;
     }
     
     # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
@@ -1004,10 +1289,13 @@ sub generateMainFilters {
 	}
     }
     
-    # Now, if we are summarizing then add the appropriate interval filter.
+    # Now, if we are summarizing then add the appropriate interval filter.  If
+    # $summary_interval is not an integer (i.e. the client didn't specify a
+    # valid interval), use -1 instead which will cause the result set to be empty.
     
     if ( $op eq 'summary' )
     {
+	$summary_interval = '-1' unless $summary_interval =~ qr{^[0-9]+$};
 	push @filters, "s.interval_no = $summary_interval";
     }
     
@@ -1018,7 +1306,7 @@ sub generateMainFilters {
     
     if ( defined $early_age or defined $late_age )
     {
-	unless ( $op eq 'summary' and not $non_geo_filter and $time_rule eq 'buffer' )
+	unless ( $op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer' )
 	{
 	    $tables_ref->{c} = 1;
 	    
@@ -1146,13 +1434,120 @@ sub adjustCoordinates {
 }
 
 
+# generate_order_clause ( options )
+# 
+# Return the order clause for the list of references, or the empty string if
+# none was selected.  If the option 'allow_taxon' is true, then allow ordering
+# based on taxon.
+
+sub generate_order_clause {
+    
+    my ($self, $tables, $options) = @_;
+    
+    $options ||= {};
+    my $at = $options->{at} || 'c';
+    my $bt = $options->{bt} || 'cc';
+    my $tt = $options->{tt};
+    
+    my $order = $self->clean_param('order');
+    my @terms = ref $order eq 'ARRAY' ? @$order : $order;
+    my @exprs;
+    
+    # Now generate the corresponding expression for each term.
+    
+    foreach my $term ( @terms )
+    {
+	my $dir = '';
+	next unless $term;
+	
+	if ( $term =~ /^(\w+)[.](asc|desc)$/ )
+	{
+	    $term = $1;
+	    $dir = $2;
+	}
+	
+	if ( $term eq 'earlyage' )
+	{
+	    $dir ||= 'desc';
+	    push @exprs, "$at.early_age $dir";
+	    $tables->{$at} = 1;
+	}
+	
+	elsif ( $term eq 'lateage' )
+	{
+	    $dir ||= 'desc';
+	    push @exprs, "$at.late_age $dir";
+	    $tables->{$at} = 1;
+	}
+	
+	elsif ( $term eq 'agespread' )
+	{
+	    push @exprs, "($at.early_age - $at.late_age) $dir",
+	    $tables->{$at} = 1;
+	}
+	
+	elsif ( $term eq 'taxon' && $tt )
+	{
+	    push @exprs, "$tt.lft $dir";
+	    $tables->{$tt} = 1;
+	}
+	
+	elsif ( $term eq 'reso' && $tt )
+	{
+	    $dir ||= 'desc';
+	    push @exprs, "$tt.rank $dir";
+	    $tables->{$tt} = 1;
+	}
+	
+	elsif ( $term eq 'formation' )
+	{
+	    push @exprs, "cc.formation $dir";
+	    $tables->{cc} = 1;
+	}
+	
+	elsif ( $term eq 'stratgroup' )
+	{
+	    push @exprs, "cc.geological_group $dir";
+	    $tables->{cc} = 1;
+	}
+	
+	elsif ( $term eq 'member' )
+	{
+	    push @exprs, "cc.member $dir";
+	    $tables->{cc} = 1;
+	}
+	
+	elsif ( $term eq 'created' )
+	{
+	    $dir ||= 'desc';
+	    push @exprs, "$bt.reference_no $dir";
+	    $tables->{$bt} = 1;
+	}
+	
+	elsif ( $term eq 'modified' )
+	{
+	    $dir ||= 'desc';
+	    push @exprs, "$bt.modified $dir";
+	    $tables->{$bt} = 1;
+	}
+	
+	else
+	{
+	    die "400 bad value for parameter 'order' (was '$term')";
+	}
+    }
+    
+    return join(', ', @exprs);
+}
+
+
 # generateJoinList ( tables )
 # 
 # Generate the actual join string indicated by the table hash.
 
 sub generateJoinList {
 
-    my ($self, $mt, $tables, $summary_join_field) = @_;
+    my ($self, $mt, $tables) = @_;
     
     my $join_list = '';
     
@@ -1171,7 +1566,7 @@ sub generateJoinList {
 	if $tables->{o};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t};
-    $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n" 
+    $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n"
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"
 	if $tables->{ppa};
@@ -1188,6 +1583,33 @@ sub generateJoinList {
 	if $tables->{li};
         
     return $join_list;
+}
+
+
+# set_collection_refs ( record )
+# 
+# Set the reference_no field based on reference_no and reference_nos.  The
+# latter holds all of the reference numbers as a comma-separated list, the
+# former holds the primary reference number which should always be reported
+# first.  The result must be a listref, even if there is only one reference
+# number reported.
+
+sub set_collection_refs {
+    
+    my ($self, $record) = @_;
+    
+    my @refs = split qr{,}, $record->{reference_nos};
+    
+    foreach my $i (0..$#refs)
+    {
+	if ( $refs[$i] == $record->{reference_no} )
+	{
+	    splice(@refs, $i, 1);
+	    unshift @refs, $record->{reference_no};
+	}
+    }
+    
+    return \@refs;
 }
 
 
@@ -1217,5 +1639,23 @@ sub generateBasisCode {
     
     return $BASIS_CODE{$record->{llb}||''} . $PREC_CODE{$record->{llp}||''};
 }
+
+
+
+# cache_still_good ( key, created )
+# 
+# Return true if the specified cache entry should be treated as still good,
+# false otherwise.  The parameter $created will be the epoch time when the
+# entry was created.
+
+sub cache_still_good {
+    
+    my ($key, $created) = @_;
+    
+    # For the moment, the cache entries stay good until they naturally expire.
+    
+    return 1;
+}
+
 
 1;

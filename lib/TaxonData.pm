@@ -10,176 +10,360 @@ use strict;
 
 package TaxonData;
 
-use base 'DataService::Base';
+use base 'Web::DataService::Request';
 use Carp qw(carp croak);
+use Try::Tiny;
 
-use PBDBData qw(generateReference generateAttribution);
+use Web::DataService qw(:validators);
+
+use CommonData qw(generateReference generateAttribution);
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
+use TaxonPics qw($PHYLOPICS);
 use Taxonomy;
 
+our (@REQUIRES_CLASS) = qw(CommonData);
 
-our (%OUTPUT, %PROC);
+# This routine is called by the data service in order to initialize this
+# class.
 
-$OUTPUT{basic} = 
-   [
-    { rec => 'taxon_no', dwc => 'taxonID', com => 'oid',
-	doc => "A positive integer that uniquely identifies this taxonomic name"},
-    { rec => 'orig_no', com => 'gid',
-        doc => "A positive integer that uniquely identifies the taxonomic concept"},
-    { rec => 'record_type', com => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => 'taxon',
-        doc => "The type of this object: {value} for a taxonomic name" },
-    { rec => 'rank', dwc => 'taxonRank', com => 'rnk', pbdb_code => \%RANK_STRING,
-	doc => "The taxonomic rank of this name" },
-    { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
-	doc => "The scientific name of this taxon" },
-    { rec => 'common_name', dwc => 'vernacularName', com => 'nm2',
-        doc => "The common (vernacular) name of this taxon, if any" },
-    { rec => 'attribution', dwc => 'scientificNameAuthorship', com => 'att', show => 'attr',
-	doc => "The attribution (author and year) of this taxonomic name" },
-    { rec => 'pubyr', dwc => 'namePublishedInYear', com => 'pby', show => 'attr', 
-        doc => "The year in which this name was published" },
-    { rec => 'status', com => 'sta',
-        doc => "The taxonomic status of this name" },
-    { rec => 'parent_no', dwc => 'parentNameUsageID', com => 'par', 
-	doc => "The identifier of the parent taxonomic concept, if any" },
-    { rec => 'synonym_no', dwc => 'acceptedNameUsageID', pbdb => 'senior_no', com => 'snr', dedup => 'orig_no',
-        doc => "The identifier of the senior synonym of this taxonomic concept, if any" },
-    { rec => 'pubref', com => 'ref', dwc => 'namePublishedIn', show => 'ref', json_list => 1, txt_list => "|||",
-	doc => "The reference from which this name was entered into the database (as formatted text)" },
-    { rec => 'reference_no', com => 'rid', json_list => 1,
-	doc => "A list of identifiers indicating the source document(s) from which this name was entered." },
-    { rec => 'is_extant', com => 'ext', dwc => 'isExtant',
-        doc => "True if this taxon is extant on earth today, false if not, not present if unrecorded" },
-    { rec => 'size', com => 'siz', show => 'size',
-        doc => "The total number of taxa in the database that are contained within this taxon, including itself" },
-    { rec => 'extant_size', com => 'exs', show => 'size',
-        doc => "The total number of extant taxa in the database that are contained within this taxon, including itself" },
-    { rec => 'firstapp_ea', com => 'fea', dwc => 'firstAppearanceEarlyAge', show => 'app',
-        doc => "The early age bound for the first appearance of this taxon in this database" },
-    { rec => 'firstapp_la', com => 'fla', dwc => 'firstAppearanceLateAge', show => 'app', 
-        doc => "The late age bound for the first appearance of this taxon in this database" },
-    { rec => 'lastapp_ea', com => 'lea', dwc => 'lastAppearanceEarlyAge', show => 'app',
-        doc => "The early age bound for the last appearance of this taxon in this database" },
-    { rec => 'lastapp_la', com => 'lla', dwc => 'lastAppearanceLateAge', show => 'app', 
-        doc => "The late age bound for the last appearance of this taxon in this database" },
-   ];
-
-$PROC{attr} = 
-   [
-    { rec => 'a_al1', set => 'attribution', use_main => 1, code => \&generateAttribution },
-    { rec => 'a_pubyr', set => 'pubyr' },
-   ];
-
-$PROC{ref} =
-   [
-    { rec => 'r_al1', set => 'pubref', use_main => 1, code => \&generateReference },
-   ];
-
-my $child_rule = [ { rec => 'taxon_no', com => 'oid', dwc => 'taxonID' },
-		  { rec => 'orig_no', com => 'gid' },
-		  { rec => 'record_type', com => 'typ', com_value => 'txn' },
-		  { rec => 'taxon_rank', com => 'rnk', dwc => 'taxonRank' },
-		  { rec => 'taxon_name', com => 'nam', dwc => 'scientificName' },
-		  { rec => 'synonym_no', com => 'snr', pbdb => 'senior_no', 
-			dwc => 'acceptedNameUsageID', dedup => 'orig_no' },
-		  { rec => 'size', com => 'siz' },
-		  { rec => 'extant_size', com => 'exs' },
-		  { rec => 'firstapp_ea', com => 'fea' },
-		];
-
-$OUTPUT{nav} =
-   [
-    { rec => 'parent_name', com => 'prl', dwc => 'parentNameUsage',
-        doc => "The name of the parent taxonomic concept, if any" },
-    { rec => 'parent_rank', com => 'prr', doc => "The rank of the parent taxonomic concept, if any" },
-    { rec => 'parent_txn', com => 'prt', rule => $child_rule },
-    { rec => 'kingdom_no', com => 'kgn', doc => "The identifier of the kingdom in which this taxon occurs" },
-    { rec => 'kingdom', com => 'kgl', doc => "The name of the kingdom in which this taxon occurs" },
-    { rec => 'kingdom_txn', com => 'kgt', rule => $child_rule },
-    { rec => 'phylum_no', com => 'phn', doc => "The identifier of the phylum in which this taxon occurs" },
-    { rec => 'phylum', com => 'phl', doc => "The name of the phylum in which this taxon occurs" },
-    { rec => 'phylum_txn', com => 'pht', rule => $child_rule },
-    { rec => 'phylum_count', com => 'phc', doc => "The number of phyla within this taxon" },
-    { rec => 'class_no', com => 'cln', doc => "The identifier of the class in which this taxon occurs" },
-    { rec => 'class', com => 'cll', doc => "The name of the class in which this taxon occurs" },
-    { rec => 'class_txn', com => 'clt', rule => $child_rule },
-    { rec => 'class_count', com => 'clc', doc => "The number of classes within this taxon" },
-    { rec => 'order_no', com => 'odn', doc => "The identifier of the order in which this taxon occurs" },
-    { rec => 'order', com => 'odl', doc => "The name of the order in which this taxon occurs" },
-    { rec => 'order_txn', com => 'odt', rule => $child_rule },
-    { rec => 'order_count', com => 'odc', doc => "The number of orders within this taxon" },
-    { rec => 'family_no', com => 'fmn', doc => "The identifier of the family in which this taxon occurs" },
-    { rec => 'family', com => 'fml', doc => "The name of the family in which this taxon occurs" },
-    { rec => 'family_txn', com => 'fmt', rule => $child_rule },
-    { rec => 'family_count', com => 'fmc', doc => "The number of families within this taxon" },
-    { rec => 'genus_count', com => 'gnc', doc => "The number of genera within this taxon" },
+sub initialize {
     
-    { rec => 'children', com => 'chl', use_each => 1,
-        doc => "The immediate children of this taxonomic concept, if any",
-        rule => $child_rule },
-    { rec => 'phylum_list', com => 'phs', use_each => 1,
-        doc => "A list of the phyla within this taxonomic concept",
-        rule => $child_rule },
-    { rec => 'class_list', com => 'cls', use_each => 1,
-        doc => "A list of the classes within this taxonomic concept",
-        rule => $child_rule },
-    { rec => 'order_list', com => 'ods', use_each => 1,
-        doc => "A list of the orders within this taxonomic concept",
-        rule => $child_rule },
-    { rec => 'family_list', com => 'fms', use_each => 1,
-        doc => "A list of the families within this taxonomic concept",
-        rule => $child_rule },
-    { rec => 'genus_list', com => 'gns', use_each => 1,
-        doc => "A list of the genera within this taxonomic concept",
-        rule => $child_rule },
-    { rec => 'subgenus_list', com => 'sgs', use_each => 1,
-        doc => "A list of the subgenera within this taxonomic concept",
-        rule => $child_rule },
-    { rec => 'species_list', com => 'sps', use_each => 1,
-        doc => "A list of the species within this taxonomic concept",
-        rule => $child_rule },
-     { rec => 'subspecies_list', com => 'sss', use_each => 1,
-        doc => "A list of the subspecies within this taxonomic concept",
-        rule => $child_rule },
-  ];
+    my ($class, $ds) = @_;
+    
+    # First define an output map to specify which output blocks are going to
+    # be used to generate output from the operations defined in this class.
+    
+    $ds->define_output_map('1.1:taxa:output_map' =>
+	{ value => 'basic', maps_to => '1.1:taxa:basic', fixed => 1 },
+	{ value => 'attr', maps_to => '1.1:taxa:attr' },
+	    "The attribution of this taxon (author and year)",
+	# { value => 'ref', maps_to => '1.1:common:ref' },
+	#     "The source from which this taxon was entered into the database",
+	{ value => 'app', maps_to => '1.1:taxa:app' },
+	    "The age of first and last appearance of this taxon from the occurrences",
+	    "recorded in this database",
+	{ value => 'size', maps_to => '1.1:taxa:size' },
+	    "The number of subtaxa appearing in this database",
+	{ value => 'nav', maps_to => '1.1:taxa:nav' },
+	    "Additional information for the PBDB Navigator taxon browser.",
+	    "This block should only be selected in conjunction with the JSON format.",
+	{ value => 'img', maps_to => '1.1:taxa:img' },
+	    "The identifier of the phylopic image (if any) associated with this taxon",
+	{ value => 'ent', maps_to => '1.1:common:ent' },
+	    "The identifiers of the people who authorized, entered and modified this record",
+	{ value => 'entname', maps_to => '1.1:common:entname' },
+	    "The names of the people who authorized, entered and modified this record",
+        { value => 'crmod', maps_to => '1.1:common:crmod' },
+	    "The C<created> and C<modified> timestamps for the collection record");
+    
+    # Define a second map to handle the URL path /data1.1/taxa/auto, used to
+    # implement auto-completion.
+    
+    $ds->define_output_map('1.1:taxa:auto_map' =>
+	{ value => 'basic', maps_to => '1.1:taxa:auto', fixed => 1 });
+    
+    # Now define all of the output blocks that were not defined elsewhere.
+    
+    $ds->define_block('1.1:taxa:basic' =>
+	{ select => 'link' },
+	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
+	    "A positive integer that uniquely identifies this taxonomic name",
+	{ output => 'orig_no', com_name => 'gid' },
+	    "A positive integer that uniquely identifies the taxonomic concept",
+	{ output => 'record_type', com_name => 'typ', com_value => 'txn', 
+	  dwc_value => 'Taxon', value => 'taxon' },
+	    "The type of this record.  By vocabulary:", "=over",
+	    "=item pbdb", "taxon", "=item com", "txn", "=item dwc", "Taxon", "=back",
+	{ set => 'rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
+	{ output => 'rank', dwc_name => 'taxonRank', com_name => 'rnk' },
+	    "The rank of this taxon, ranging from subspecies up to kingdom",
+	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
+	    "The scientific name of this taxon",
+	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2' },
+	    "The common (vernacular) name of this taxon, if any",
+	{ set => 'attribution', if_field => 'a_al1', from_record => 1, 
+	  code => \&generateAttribution },
+	{ output => 'attribution', if_block => 'attr', 
+	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
+	    "The attribution (author and year) of this taxonomic name",
+	{ output => 'pubyr', if_block => 'attr', 
+	  dwc_name => 'namePublishedInYear', com_name => 'pby' },
+	    "The year in which this name was published",
+	{ output => 'status', com_name => 'sta' },
+	    "The taxonomic status of this name",
+	{ output => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par' }, 
+	    "The identifier of the parent taxonomic concept, if any",
+	{ output => 'synonym_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'senior_no', 
+	  com_name => 'snr', dedup => 'orig_no' },
+	    "The identifier of the senior synonym of this taxonomic concept, if any",
+	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
+	    "A list of identifiers indicating the source document(s) from which this name was entered.",
+	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
+	    "True if this taxon is extant on earth today, false if not, not present if unrecorded");
+    
+    $ds->define_block('1.1:taxa:attr' =>
+	{ select => 'attr' });
+    
+    $ds->define_block('1.1:taxa:size' =>
+	{ select => 'size' },
+	{ output => 'size', com_name => 'siz' },
+	    "The total number of taxa in the database that are contained within this taxon, including itself",
+	{ output => 'extant_size', com_name => 'exs' },
+	    "The total number of extant taxa in the database that are contained within this taxon, including itself");
+    
+    $ds->define_block('1.1:taxa:app' =>
+	{ select => 'app' },
+	{ output => 'firstapp_ea', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
+	  if_block => 'app' },
+	    "The early age bound for the first appearance of this taxon in the database",
+	{ output => 'firstapp_la', com_name => 'fla', dwc_name => 'firstAppearanceLateAge', 
+	  if_block => 'app' }, 
+	    "The late age bound for the first appearance of this taxon in the database",
+	{ output => 'lastapp_ea', com_name => 'lea', dwc_name => 'lastAppearanceEarlyAge',
+	  if_block => 'app' },
+	    "The early age bound for the last appearance of this taxon in the database",
+	{ output => 'lastapp_la', com_name => 'lla', dwc_name => 'lastAppearanceLateAge',
+	  if_block => 'app' }, 
+	    "The late age bound for the last appearance of this taxon in the database");
+    
+    $ds->define_block('1.1:taxa:subtaxon' =>
+	{ output => 'taxon_no', com_name => 'oid', dwc_name => 'taxonID' },
+	{ output => 'orig_no', com_name => 'gid' },
+	{ output => 'record_type', com_name => 'typ', com_value => 'txn' },
+	{ output => 'taxon_rank', com_name => 'rnk', dwc_name => 'taxonRank' },
+	{ output => 'taxon_name', com_name => 'nam', dwc_name => 'scientificName' },
+	{ output => 'synonym_no', com_name => 'snr', pbdb_name => 'senior_no', 
+	  dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
+	{ output => 'size', com_name => 'siz' },
+	{ output => 'extant_size', com_name => 'exs' },
+	{ output => 'firstapp_ea', com_name => 'fea' });
 
-$OUTPUT{img} = 
-  [
-   { rec => 'image_no', com => 'img', 
-     doc => "If this value is non-zero, you can use it to construct image URLs using L</data1.1/taxa/thumb_doc|/data1.1/taxa/thumb> and L</data1.1/taxa/icon_doc|/data1.1/taxa/icon>." },
-  ];
+    $ds->define_block('1.1:taxa:nav' =>
+	{ select => ['link', 'parent', 'phylo', 'counts'] },
+	{ output => 'parent_name', com_name => 'prl', dwc_name => 'parentNameUsage' },
+	    "The name of the parent taxonomic concept, if any",
+	{ output => 'parent_rank', com_name => 'prr' },
+	    "The rank of the parent taxonomic concept, if any",
+	{ output => 'parent_txn', com_name => 'prt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'kingdom_no', com_name => 'kgn' },
+	    "The identifier of the kingdom in which this taxon occurs",
+	{ output => 'kingdom', com_name => 'kgl' },
+	    "The name of the kingdom in which this taxon occurs",
+	{ output => 'kingdom_txn', com_name => 'kgt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'phylum_no', com_name => 'phn' },
+	    "The identifier of the phylum in which this taxon occurs",
+	{ output => 'phylum', com_name => 'phl' },
+	    "The name of the phylum in which this taxon occurs",
+	{ output => 'phylum_txn', com_name => 'pht', rule => '1.1:taxa:subtaxon' },
+	{ output => 'phylum_count', com_name => 'phc' },
+	    "The number of phyla within this taxon",
+	{ output => 'class_no', com_name => 'cln' },
+	    "The identifier of the class in which this taxon occurs",
+	{ output => 'class', com_name => 'cll' },
+	    "The name of the class in which this taxon occurs",
+	{ output => 'class_txn', com_name => 'clt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'class_count', com_name => 'clc' },
+	    "The number of classes within this taxon",
+	{ output => 'order_no', com_name => 'odn' },
+	    "The identifier of the order in which this taxon occurs",
+	{ output => 'order', com_name => 'odl' },
+	    "The name of the order in which this taxon occurs",
+	{ output => 'order_txn', com_name => 'odt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'order_count', com_name => 'odc' },
+	    "The number of orders within this taxon",
+	{ output => 'family_no', com_name => 'fmn' },
+	    "The identifier of the family in which this taxon occurs",
+	{ output => 'family', com_name => 'fml' },
+	    "The name of the family in which this taxon occurs",
+	{ output => 'family_txn', com_name => 'fmt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'family_count', com_name => 'fmc' },
+	    "The number of families within this taxon",
+	{ output => 'genus_count', com_name => 'gnc' },
+	    "The number of genera within this taxon",
+    
+	{ output => 'children', com_name => 'chl', rule => '1.1:taxa:subtaxon' },
+	    "The immediate children of this taxonomic concept, if any",
+	{ output => 'phylum_list', com_name => 'phs', rule => '1.1:taxa:subtaxon' },
+	    "A list of the phyla within this taxonomic concept",
+	{ output => 'class_list', com_name => 'cls', rule => '1.1:taxa:subtaxon' },
+	    "A list of the classes within this taxonomic concept",
+	{ output => 'order_list', com_name => 'ods', rule => '1.1:taxa:subtaxon' },
+	    "A list of the orders within this taxonomic concept",
+	{ output => 'family_list', com_name => 'fms', rule => '1.1:taxa:subtaxon' },
+	    "A list of the families within this taxonomic concept",
+	{ output => 'genus_list', com_name => 'gns', rule => '1.1:taxa:subtaxon' },
+	    "A list of the genera within this taxonomic concept",
+	{ output => 'subgenus_list', com_name => 'sgs', rule => '1.1:taxa:subtaxon' },
+	    "A list of the subgenera within this taxonomic concept",
+	{ output => 'species_list', com_name => 'sps', rule => '1.1:taxa:subtaxon' },
+	    "A list of the species within this taxonomic concept",
+ 	{ output => 'subspecies_list', com_name => 'sss', rule => '1.1:taxa:subtaxon' },
+	    "A list of the subspecies within this taxonomic concept");
+    
+    $ds->define_block('1.1:taxa:img' =>
+	{ select => 'img' },
+	{ output => 'image_no', com_name => 'img' },
+    	    "If this value is non-zero, you can use it to construct image URLs",
+	    "using L</data1.1/taxa/thumb_doc|/data1.1/taxa/thumb> and L</data1.1/taxa/icon_doc|/data1.1/taxa/icon>.");
+    
+    $ds->define_block('1.1:taxa:auto' =>
+	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
+	    "A positive integer that uniquely identifies this taxonomic name",
+	{ output => 'record_type', com_name => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => 'taxon' },
+	    "The type of this object: {value} for a taxonomic name",
+	{ set => 'taxon_rank', if_vocab => 'com', lookup => \%TAXON_RANK },
+	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
+	    "The taxonomic rank of this name",
+	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
+	    "The scientific name of this taxon",
+	{ output => 'misspelling', com_name => 'msp' },
+	    "If this name is marked as a misspelling, then this field will be included with the value '1'",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The number of occurrences of this taxon in the database");
+    
+    $ds->define_block('1.1:taxa:imagedata' =>
+	{ select => [ 'image_no', 'uid', 'modified', 'credit', 'license' ] },
+	{ output => 'image_no', com_name => 'oid' },
+	    "A unique identifier for this image, generated locally by this database",
+	{ output => 'type', value => 'image', com_name => 'typ', com_value => 'img' },
+	    "The type of this record: 'img' for an image",
+	{ output => 'uid', com_name => 'uid' },
+	    "A unique identifier for this image generated by phylopic.org",
+	{ output => 'modified', com_name => 'dmd' },
+	    "The date and time at which this image was last modified on phylopic.org",
+	{ output => 'credit', com_name => 'crd' },
+	    "The name to which this image should be credited if used",
+	{ output => 'license', com_name => 'lic' },
+	    "A URL giving the license terms under which this image may be used");
+    
+    # Finally, we define some rulesets to specify the parameters accepted by
+    # the operations defined in this class.
+    
+    $ds->define_ruleset('1.1:taxa:specifier' => 
+	{ param => 'name', valid => \&TaxonData::validNameSpec, 
+	  alias => 'taxon_name' },
+	    "Return information about the most fundamental taxonomic name matching this string.",
+	    "The C<%> and C<_> characters may be used as wildcards.",
+	{ param => 'id', valid => POS_VALUE, 
+	  alias => 'taxon_id' },
+	    "Return information about the taxonomic name corresponding to this identifier.",
+	{ at_most_one => ['name', 'id'] },
+	    "You may not specify both C<name> and C<id> in the same query.");
+    
+    $ds->define_set('1.1:taxa:rel' =>
+	{ value => 'self' },
+	    "Select just the base taxon or taxa themselves.  This is the default.",
+	{ value => 'synonyms' },
+	    "Select all synonyms of the base taxon or taxa.",
+	{ value => 'children' },
+	    "Select the taxa immediately contained within the base taxon or taxa.",
+	{ value => 'all_children' },
+	    "Select all taxa contained within the base taxon or taxa.",
+	{ value => 'parents' },
+	    "Select the immediate containing taxa of the base taxon or taxa.",
+	{ value => 'all_parents' },
+	    "Select all taxa that contain the base taxon or taxa.",
+	{ value => 'common_ancestor' },
+	    "Select the most specific taxon that contains all of the base taxa",
+	{ value => 'all_taxa' },
+	    "Select all of the taxa in the database.  In this case you do not have",
+	    "to specify C<name> or C<id>.  Use with caution, because the maximum",
+	    "data set returned may be as much as 80 MB.");
+    
+    $ds->define_set('1.1:taxa:status' =>
+	{ value => 'valid' },
+	    "Select only taxonomically valid names",
+	{ value => 'senior' },
+	    "Select only taxonomically valid names that are not junior synonyms",
+	{ value => 'invalid' },
+	    "Select only taxonomically invalid names, e.g. nomina dubia",
+	{ value => 'all' },
+	    "Select all taxonomic names matching the other specified criteria");
+    
+    $ds->define_ruleset('1.1:taxa:selector' =>
+	"The following parameters are used to indicate a base taxon or taxa:",
+	{ param => 'name', valid => \&TaxonData::validNameSpec, list => ",", 
+	  alias => 'taxon_name' },
+	    "Select the all taxa matching each of the specified name(s).",
+	    "To specify more than one, separate them by commas.",
+	    "The C<%> character may be used as a wildcard.",
+	{ param => 'id', valid => POS_VALUE, list => ',', 
+	  alias => 'base_id' },
+	    "Selects the taxa corresponding to the specified identifier(s).",
+	    "You may specify more than one, separated by commas.",
+	{ optional => 'exact', valid => FLAG_VALUE },
+	    "If this parameter is specified, then the taxon exactly matching",
+	    "the specified name or identifier is selected, rather than the",
+	    "senior synonym which is the default.",
+	">The following parameters indicate which related taxonomic names to return:",
+	{ param => 'rel', valid => $ds->valid_set('1.1:taxa:rel'), default => 'self' },
+	    "Accepted values include:", $ds->document_set('1.1:taxa:rel'),
+	{ param => 'status', valid => $ds->valid_set('1.1:taxa:status'), default => 'valid' },
+	    "Return only names that have the specified status.  Accepted values include:",
+	    $ds->document_set('1.1:taxa:status'));
+    
+    $ds->define_ruleset('1.1:taxa:filter' => 
+	"The following parameters further filter the list of return values:",
+	{ optional => 'rank', valid => \&TaxonData::validRankSpec },
+	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
+	{ optional => 'extant', valid => BOOLEAN_VALUE },
+	    "Return only extant or non-extant taxa.",
+	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
+	{ optional => 'depth', valid => POS_VALUE },
+	    "Return only taxa no more than the specified number of levels above or",
+	     "below the base taxa in the hierarchy");
+    
+    $ds->define_ruleset('1.1:taxa:display' => 
+	"The following parameter indicates which information should be returned about each resulting name:",
+	{ optional => 'show', valid => $ds->valid_set('1.1:taxa:output_map'), list => ','},
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each taxon.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	    $ds->document_set('1.1:taxa:output_map'));
 
-$OUTPUT{auto} = 
-   [
-    { rec => 'taxon_no', dwc => 'taxonID', com => 'oid',
-	doc => "A positive integer that uniquely identifies this taxonomic name"},
-    { rec => 'record_type', com => 'typ', com_value => 'txn', dwc_value => 'Taxon', value => 'taxon',
-        doc => "The type of this object: {value} for a taxonomic name" },
-    { rec => 'taxon_rank', dwc => 'taxonRank', com => 'rnk', com_code => \%TAXON_RANK,
-	doc => "The taxonomic rank of this name" },
-    { rec => 'taxon_name', dwc => 'scientificName', com => 'nam',
-	doc => "The scientific name of this taxon" },
-    { rec => 'misspelling', com => 'msp',
-        doc => "If this name is marked as a misspelling, then this field will be included with the value '1'" },
-    { rec => 'n_occs', com => 'noc',
-        doc => "The number of occurrences of this taxon in the database" },
-   ];
+    $ds->define_ruleset('1.1:taxa:single' => 
+	{ require => '1.1:taxa:specifier',
+	  error => "you must specify either 'name' or 'id'" },
+	{ allow => '1.1:taxa:display' }, 
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    
+    $ds->define_ruleset('1.1:taxa:list' => 
+	{ require => '1.1:taxa:selector',
+	  error => "you must specify either of 'name', 'id'" },
+	{ allow => '1.1:taxa:filter' },
+	{ allow => '1.1:taxa:display' }, 
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    
+    $ds->define_ruleset('1.1:taxa:auto' =>
+	{ param => 'name', valid => ANY_VALUE },
+	    "A partial name or prefix.  It must have at least 3 significant characters, and may include both a genus",
+	    "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex", 
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    
+    $ds->define_ruleset('1.1:taxa:thumb' =>
+	{ param => 'id', valid => POS_VALUE},
+	    "A positive number identifying a taxon image",
+	{ optional => 'exact', valid => FLAG_VALUE },
+	{ ignore => 'splat' });
+    
+    $ds->define_ruleset('1.1:taxa:icon' =>
+	{ require => '1.1:taxa:thumb' });
+}
 
 
 # get ( )
 # 
-# Query for all relevant information about the requested taxon.
-# 
-# Options may have been set previously by methods of this class or of the
-# parent class DataQuery.
-# 
-# Returns true if the fetch succeeded, false if an error occurred.
+# Return a single taxon record, specified by name or number.  If name, then
+# return the matching taxon with the largest size.
 
 sub get {
 
     my ($self) = @_;
     
-    my $dbh = $self->{dbh};
+    my $dbh = $self->get_dbh;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my $valid = $self->{valid};
     my $taxon_no;
@@ -200,7 +384,7 @@ sub get {
     elsif ( defined $valid->value('name') )
     {
 	$not_found_msg = "Taxon '$valid->value('name')' was not found in the database";
-	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id' };
+	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
 	
 	if ( defined $valid->value('rank') )
 	{
@@ -220,35 +404,37 @@ sub get {
     
     # Now add the fields necessary to show the requested info.
     
-    my $options = {};
+    my $options = $self->generate_query_options;
     
-    my @fields;
+    # my @fields;
     
-    push @fields, 'ref' if $self->{show}{ref};
-    push @fields, 'attr' if $self->{show}{attr};
-    push @fields, 'size' if $self->{show}{size};
-    push @fields, 'app' if $self->{show}{app};
-    push @fields, 'img' if $self->{show}{img};
+    # push @fields, 'ref' if $self->output_key('ref');
+    # push @fields, 'attr' if $self->output_key('attr');
+    # push @fields, 'size' if $self->output_key('size');
+    # push @fields, 'app' if $self->output_key('app');
+    # push @fields, 'img' if $self->output_key('img');
     
-    push @fields, 'link' if $self->{show}{nav};
-    push @fields, 'parent' if $self->{show}{nav};
-    push @fields, 'phylo' if $self->{show}{nav};
-    push @fields, 'counts' if $self->{show}{nav};
+    # push @fields, 'link' if $self->output_key('nav');
+    # push @fields, 'parent' if $self->output_key('nav');
+    # push @fields, 'phylo' if $self->output_key('nav');
+    # push @fields, 'counts' if $self->output_key('nav');
     
-    $options->{fields} = \@fields;
+    # $options->{fields} = \@fields;
     
     # If we were asked for the senior synonym, choose it.
     
-    my $rel = $valid->value('senior') ? 'senior' : 'self';
+    my $rel = $valid->value('exact') ? 'self' : 'senior';
     
     # Next, fetch basic info about the taxon.
     
     ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $options);
     
+    $self->{main_sql} = $Taxonomy::SQL_STRING;
+    
     # If we were asked for 'nav' info, also show the various categories
     # of subtaxa and whether or not each of the parents are extinct.
     
-    if ( $self->{show}{nav} )
+    if ( $self->output_key('nav') )
     {
 	my $r = $self->{main_record};
 	
@@ -339,7 +525,38 @@ sub get {
 }
 
 
-# fetchMultiple ( )
+# match ( )
+# 
+# Query the database for basic info about all taxa matching the specified name
+# or names (as well as any other conditions specified by the parameters).
+
+sub match {
+    
+    my ($self) = @_;
+    
+    my $dbh = $self->get_dbh;
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    # Make sure we have at least one valid name.
+    
+    my $name = $self->clean_param('name');
+    
+    return unless defined $name && $name ne '';
+    
+    # Figure out the proper query options.
+    
+    my $options = $self->generate_query_options();
+    
+    # Get the list of matches.
+    
+    my @name_matches = $taxonomy->getTaxaByName($name, $options);
+    
+    $self->{main_result} = \@name_matches if scalar(@name_matches);
+    $self->{result_count} = scalar(@name_matches);
+}
+
+
+# list ( )
 # 
 # Query the database for basic info about all taxa satisfying the conditions
 # previously specified by a call to setParameters.
@@ -350,115 +567,139 @@ sub list {
 
     my ($self) = @_;
     
-    my $dbh = $self->{dbh};
+    my $dbh = $self->get_dbh;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
-    my $valid = $self->{valid};
-    my $taxon_no;
     
     # First, figure out what info we need to provide
     
-    my $options = {};
+    my $options = $self->generate_query_options();
     
-    my @fields = ('link');
+    # my @fields = $self->select_list();
     
-    push @fields, 'ref' if $self->{show}{ref};
-    push @fields, 'attr' if $self->{show}{attr};
-    push @fields, 'size' if $self->{show}{size};
-    push @fields, 'app' if $self->{show}{app};
+    # push @fields, 'ref' if $self->output_key('ref');
+    # push @fields, 'attr' if $self->output_key('attr');
+    # push @fields, 'size' if $self->output_key('size');
+    # push @fields, 'app' if $self->output_key('app');
     
-    push @fields, 'link' if $self->{show}{nav};
-    push @fields, 'parent' if $self->{show}{nav};
-    push @fields, 'phylo' if $self->{show}{nav};
-    push @fields, 'counts' if $self->{show}{nav};
+    # push @fields, 'link' if $self->output_key('nav');
+    # push @fields, 'parent' if $self->output_key('nav');
+    # push @fields, 'phylo' if $self->output_key('nav');
+    # push @fields, 'counts' if $self->output_key('nav');
     
-    $options->{fields} = \@fields;
+    # $options->{fields} = \@fields;
     
     # Specify the other query options according to the query parameters.
     
-    my $limit = $valid->value('limit');
-    my $offset = $valid->value('offset');
+    # my $limit = $self->clean_param('limit');
+    # my $offset = $self->clean_param('offset');
+    # my $count = $self->clean_param('count');
     
-    $options->{limit} = $limit if defined $limit;
-    $options->{offset} = $offset if defined $offset;
+    # $options->{limit} = $limit if defined $limit;	# we need 'defined' because $limit may be 0
+    # $options->{offset} = $offset if $offset;
+    # $options->{count} = 1 if $count;
     
     # If the parameter 'name' was given, then fetch all matching taxa.  Order
     # them in descending order by size.
     
-    my @name_matches;
+    my @taxon_list;
     
-    if ( $valid->value('name') )
+    if ( $self->clean_param('name') )
     {
-	my $name = $valid->value('name');
+	my $name = $self->clean_param('name');
+	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
 	
-	my $options = { %$options, order => 'size.desc' };
-	$options->{exact} = 1 if $valid->value('exact');
-    	
-	@name_matches = $taxonomy->getTaxaByName($name, $options);
-	return unless @name_matches;
+	@taxon_list = $taxonomy->getTaxaByName($name, $name_select);
+	return unless @taxon_list;
     }
+    
+    # Now do the main query and return a result:
     
     # If a name was given and the relationship is 'self' (or not specified,
     # being the default) then just return the list of matches.
     
-    if ( $valid->value('name') and $valid->value('rel') eq 'self' )
+    if ( $self->clean_param('name') and $self->clean_param('rel') eq 'self' )
     {
-	$self->{main_result} = \@name_matches;
-	$self->{result_count} = scalar(@name_matches);
-	return 1;
+	my @result = $taxonomy->getTaxa('self', \@taxon_list, $options);
+	$self->{main_result} = \@result;
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{result_count} = scalar(@result);
     }
     
     # If a name was given and some other relationship was specified, use the
-    # first name found.
+    # first matching name.
     
-    elsif ( $valid->value('name') )
+    elsif ( $self->clean_param('name') )
     {
 	$options->{return} = 'stmt';
-	my $id = $name_matches[0]{orig_no};
-	my $rel = $valid->value('rel') || 'self';
-	
-	if ( defined $valid->value('rank') )
-	{
-	    $options->{rank} = $valid->value('rank');
-	}
+	my $id = $taxon_list[0];
+	my $rel = $self->clean_param('rel') || 'self';
 	
 	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id, $options);
-	return $self->{main_sth};
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->sql_count_rows;
     }
     
     # Otherwise, we are listing taxa by relationship.  If we are asked for
-    # 'common_ancestor', then we have to process the result further.
+    # 'common_ancestor', we have just one result.
     
-    elsif ( $valid->value('rel') eq 'common_ancestor' )
+    elsif ( $self->clean_param('rel') eq 'common_ancestor' )
     {
 	$options->{return} = 'list';
-	my $id_list = $valid->value('id');
+	my $id_list = $self->clean_param('id');
 	
-	($self->{main_record}) = $taxonomy->getTaxa('common_ancestor', $id_list, $options);
+	($self->{main_record}) = $taxonomy->getTaxa('common_ancestor', $id_list, $options);	
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->sql_count_rows;
     }
     
-    # Otherwise, we just 
+    # Otherwise, we just call getTaxa and return the result. 
     
-    elsif ( $valid->value('id') or $valid->value('rel') eq 'all_taxa' )
+    elsif ( $self->clean_param('id') or $self->clean_param('rel') eq 'all_taxa' )
     {
 	$options->{return} = 'stmt';
-	my $id_list = $valid->value('id');
-	my $rel = $valid->value('rel') || 'self';
-	
-	if ( defined $valid->value('rank') )
-	{
-	    $options->{rank} = $valid->value('rank');
-	}
+	my $id_list = $self->clean_param('id');
+	my $rel = $self->clean_param('rel') || 'self';
 	
 	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);
-	return $self->{main_sth};
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->sql_count_rows;
     }
     
     # Otherwise, we have an empty result.
     
-    else
-    {
-	return;
-    }
+    return;
+}
+
+
+# generate_query_options ( )
+# 
+# Return an options hash, based on the parameters, which can be passed to
+# getTaxaByName or getTaxa.
+
+sub generate_query_options {
+    
+    my ($self) = @_;
+    
+    my @fields = $self->select_list();
+    my $limit = $self->result_limit;
+    my $offset = $self->result_offset(1);
+    
+    my $options = { fields => \@fields,
+		    order => 'size.desc' };
+    
+    $options->{limit} = $limit if defined $limit;	# $limit may be 0
+    $options->{offset} = $offset if $offset;
+    $options->{count} = 1 if $self->clean_param('count');
+    
+    my $exact = $self->clean_param('exact');
+    my $extant = $self->clean_param('extant');
+    my $rank = $self->clean_param('rank');
+    
+    $options->{exact} = 1 if $exact;
+    $options->{extant} = $extant if $extant ne '';	# $extant may be 0, 1, or undefined
+    $options->{rank} = $rank if $rank ne '';
+    
+    return $options;
 }
 
 
@@ -470,8 +711,8 @@ sub auto {
     
     my ($self) = @_;
     
-    my $dbh = $self->{dbh};
-    my $partial = $self->{params}{name};
+    my $dbh = $self->get_dbh;
+    my $partial = $self->clean_param('name');
     
     my $search_table = $TAXON_TABLE{taxon_trees}{search};
     my $names_table = $TAXON_TABLE{taxon_trees}{names};
@@ -485,8 +726,8 @@ sub auto {
     
     # Construct and execute an SQL statement.
     
-    my $limit = $self->generateLimitClause();
-    my $calc = $self->{params}{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    my $limit = $self->sql_limit_clause(1);
+    my $calc = $self->sql_count_clause;
     
     my $fields = "taxon_rank, match_no as taxon_no, n_occs, if(spelling_reason = 'misspelling', 1, null) as misspelling";
     
@@ -536,61 +777,65 @@ sub auto {
     
     $self->{main_sql} = $sql;
     
-    print $sql . "\n\n" if $PBDB_Data::DEBUG;
+    print STDERR $sql . "\n\n" if $self->debug;
     
     $self->{main_sth} = $dbh->prepare($sql);
     $self->{main_sth}->execute();
+}
+
+
+# get_image ( )
+# 
+# Given an id (image_no) value, return the corresponding image if the format
+# is 'png', and information about it if the format is 'json'.
+
+sub get_image {
     
-    # If we were asked to get the count, then do so
+    my ($self, $type) = @_;
     
-    if ( $calc )
+    $type ||= '';
+    
+    my $dbh = $self->get_dbh;
+    my ($sql, $result);
+    
+    croak "invalid type '$type' for get_image"
+	unless $type eq 'icon' || $type eq 'thumb';
+    
+    my $image_no = $self->clean_param('id');
+    my $format = $self->output_format;
+    
+    # If the output format is 'png', then query for the image.  If found,
+    # return it in $self->{main_data}.  Otherwise, we throw a 404 error.
+    
+    if ( $format eq 'png' )
     {
-	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
+	$self->{main_sql} = "
+		SELECT $type FROM $PHYLOPICS as p
+		WHERE image_no = $image_no";
+	
+	($self->{main_data}) = $dbh->selectrow_array($self->{main_sql});
+	
+	return if $self->{main_data};
+	die "404 Image not found\n";	# otherwise
     }
     
-    return 1;
-}
-
-
-# getThumb ( )
-# 
-# Fetch a thumbnail given a taxon_no value.
-
-sub getThumb {
+    # If the output format is 'json' or one of the text formats, then query
+    # for information about the image.  Return immediately regardless of
+    # whether or not a record was found.  If not, an empty response will be
+    # generated.
     
-    my ($self) = @_;
-    
-    my $dbh = $self->{dbh};
-    my $TAXON_IMAGES = $TAXON_TABLE{taxon_trees}{images};
-    
-    my $orig_no = $self->{params}{id};
-    
-    my $sql = "SELECT thumb FROM $TAXON_IMAGES
-	       WHERE orig_no = $orig_no and priority >= 0
-	       ORDER BY priority desc LIMIT 1";
-    
-    ($self->{main_data}) = $dbh->selectrow_array($sql);
-}
-
-
-# getIcon ( )
-# 
-# Fetch an icon given a taxon_no value.
-
-sub getIcon {
-
-    my ($self) = @_;
-    
-    my $dbh = $self->{dbh};
-    my $TAXON_IMAGES = $TAXON_TABLE{taxon_trees}{images};
-    
-    my $orig_no = $self->{params}{id};
-    
-    my $sql = "SELECT icon FROM $TAXON_IMAGES
-	       WHERE orig_no = $orig_no and priority >= 0
-	       ORDER BY priority desc LIMIT 1";
-    
-    ($self->{main_data}) = $dbh->selectrow_array($sql);
+    else
+    {
+	my $fields = $self->select_string();
+	
+	$self->{main_sql} = "
+		SELECT $fields FROM $PHYLOPICS
+		WHERE image_no = $image_no";
+	
+	$self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+	
+	return;
+    }
 }
 
 

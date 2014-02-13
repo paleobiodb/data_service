@@ -1,0 +1,186 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This page describes the RIS response format in detail.
+
+=head2 SYNOPSIS
+
+The RIS (L<Research Information Systems|http://en.wikipedia.org/wiki/RIS_(file_format)>)
+format is selected by ending a URL path with the suffix C<.ris>.  This format
+was defined originally by Research Information Systems, Inc., and has since
+become one of the most widely used formats for handling bibliographic references.
+
+This format is not very flexible.  There is no way to include comments, file
+attributes, or any information other than reference entries.  As a result, if
+you generate this file with the parameters C<showsource> and/or C<count>, it
+will contain one or more dummy entries at the top that convey this requested
+information.
+
+The first few lines of the file are defined by the file format, and provide
+some general information:
+
+=over
+
+=for pp_table_no_header Tag | Value
+
+=item Provider:
+
+The Paleobiology Database
+
+=item Content:
+
+text/plain; charset="utf-8"
+
+=back
+
+=head3 Optional header entries
+
+If you have specified the parameter C<showsource>, then the following two
+dummy entries will appear at the beginning of the file.  See the
+L<file format|http://en.wikipedia.org/wiki/RIS_(file_format)> for details of
+how these entries are encoded.
+
+=over
+
+=for pp_table_no_header Tag | Value
+
+=item TY
+
+GEN
+
+=item TI
+
+Data Source
+
+=item UR
+
+The exact URL that was used to generate the contents of this file
+
+=item Y2
+
+The date and time at which this file was generated
+
+=item KW
+
+The parameter value(s) that were used to generate the contents of this file.
+One of these lines will be present for each separate parameter.
+
+=back
+
+The following entry will also be included if you specify C<showsource>.  A
+second entry is necessary because the RIS specification allows only one C<UR>
+tag per entry.
+
+=over
+
+=for pp_table_no_header Tag | Value
+
+=item TY
+
+GEN
+
+=item TI
+
+Documentation
+
+=item UR
+
+The documentation page for the URL path that was used to generate the contents of
+this file.  This page will describe the parameters accepted, and how they are
+used to determine the result set.  It will also describe the fields that make
+up the result.
+
+=back
+
+If you specify the parameter C<count>, the following dummy entry is also added
+at the beginning of the file.  It specifies the number of records in the
+result set, along with the number actually returned.  This may be smaller
+depending on the value of the C<limit> and C<offset> parameters.
+
+=over
+
+=for pp_table_no_header Tag | Value
+
+=item TY
+
+GEN
+
+=item TI
+
+Record Counts
+
+=item KW
+
+Records Found = I<the total number of records in the result set>
+
+=item KW
+
+Records Returned = I<the number of records actually returned>
+
+=back
+
+=head3 Regular entries
+
+Following these dummy header entries, the remainder of the entries in the file
+make up the result set.  Each of these entries will contain lines with some
+or all of the following tags, depending upon what information is
+stored in the database about each reference.
+
+=over
+
+=for pp_table_header Tag | Description
+
+=item TY
+
+The publication type, i.e. C<JOUR> for a journal or C<BOOK> for a book
+
+=item ID
+
+A unique identifier for this reference
+
+=item TI
+
+The title of the work
+
+=item T2
+
+The secondary title, i.e. the title of the journal or monograph series in
+which the work appears
+
+=item AU
+
+The author(s) of the work.  One of these lines will be present for each
+listed author
+
+=item A2
+
+The editor(s) of the work.  One of these lines will be present for each
+listed editor
+
+=item PY
+
+The year of publication
+
+=item VL
+
+The volume number, if any
+
+=item IS
+
+The issue number, if any
+
+=item SP
+
+The first page
+
+=item EP
+
+The last page
+
+=item LA
+
+The languge of the work
+
+=back
+

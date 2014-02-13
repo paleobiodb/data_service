@@ -8,7 +8,7 @@ The following URL paths are available:
 
 =over 4
 
-=for pod_extra table_header Class* | Documentation | Description
+=for pp_table_header Class* | Documentation | Description
 
 =item Single names | L</data1.1/taxa/single|/data1.1/taxa/single_doc.html>
 

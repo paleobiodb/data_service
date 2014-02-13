@@ -465,7 +465,7 @@ our ($INT_PHYLO_FIELDS) = ", pi.kingdom_no, pi.kingdom, pi.phylum_no, pi.phylum,
 
 our ($COUNT_PHYLO_FIELDS) = ", pc.phylum_count, pc.class_count, pc.order_count, pc.family_count, pc.genus_count, pc.species_count";
 
-our ($IMG_FIELDS) = ", (SELECT orig_no FROM taxon_images as ti WHERE ti.orig_no = t.orig_no and priority >= 0 LIMIT 1) as image_no";
+our ($IMG_FIELDS) = ", v.image_no";
 
 # The following hash is used by the return option 'id_table'.
 
@@ -5597,7 +5597,7 @@ sub generateQueryFields {
 	elsif ( $inc eq 'img' )
 	{
 	    $fields .= $IMG_FIELDS;
-	    $tables{ti} = 1;
+	    $tables{v} = 1;
 	}
 	
 	elsif ( $inc eq 'size' )

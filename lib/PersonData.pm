@@ -10,48 +10,62 @@
 package PersonData;
 
 use strict;
-use base 'DataService::Base';
+use parent 'Web::DataService::Request';
+
+use Web::DataService qw(:validators);
 
 use Carp qw(carp croak);
 
 
-our (%OUTPUT, %SELECT, %TABLES);
 
-$SELECT{basic} = "p.person_no, p.name, p.country, p.institution, p.email, p.is_authorizer";
+# initialize ( )
+# 
+# This routine is called by the data service to initialize this class.
 
-$OUTPUT{basic} = 
- [
-    { rec => 'person_no', com => 'oid',
-      doc => "A positive integer that uniquely identifies this database contributor" },
-    { rec => 'record_type', com => 'typ', com_value => 'prs', value => 'person',
-      doc => "The type of this object: {value} for a database contributor" },
-    { rec => 'name', com => 'nam',
-      doc => "The person's name" },
-    { rec => 'institution', com => 'ist',
-      doc => "The person's institution" },
-    { rec => 'country', com => 'ctr',
-      doc => "The database contributor's country" },
-    { rec => 'email', com => 'eml',
-      doc => "The person's e-mail address" },
-   ];
+sub initialize {
 
-$SELECT{toprank} = "p.person_no, p.name, p.country, p.institution";
+    my ($class, $ds) = @_;
+    
+    # First define an output map.
+    
+    $ds->define_output_map('1.1:people:output_map' =>
+	{ value => 'basic', maps_to => '1.1:people:basic', fixed => 1 });
+    
+    # Then the output block(s).
+    
+    $ds->define_block('1.1:people:basic' =>
+	{ select => [ qw(p.person_no p.name p.country p.institution
+			 p.email p.is_authorizer) ] },
+	{ output => 'person_no', com_name => 'oid' },
+	    "A positive integer that uniquely identifies this database contributor",
+	{ output => 'record_type', com_name => 'typ', com_value => 'prs', value => 'person' },
+	    "The type of this object: {value} for a database contributor",
+	{ output => 'name', com_name => 'nam' },
+	    "The person's name",
+	{ output => 'institution', com_name => 'ist' },
+	    "The person's institution",
+	{ output => 'country', com_name => 'ctr' },
+	    "The database contributor's country");
+    
+    # Then some rulesets.
+    
+    $ds->define_ruleset('1.1:people:specifier' => 
+	{ param => 'id', valid => POS_VALUE, alias => 'person_id' },
+	    "The numeric identifier of the person to select");
 
-$TABLES{toprank} = ['c'];
+    $ds->define_ruleset('1.1:people:selector' => 
+	{ param => 'name', valid => ANY_VALUE },
+	    "A name, in either order: 'J. Smith' or 'Smith, J.' with C<%> as a wildcard");
 
-$OUTPUT{toprank} =
-   [
-    { rec => 'person_no', com => 'oid',
-      doc => "A positive integer that uniquely identifies this database contributor" },
-    { rec => 'record_type', com => 'typ', com_value => 'prs', value => 'person',
-      doc => "The type of this object: {value} for a database contributor" },
-    { rec => 'name', com => 'nam',
-      doc => "The person's name" },
-    { rec => 'institution', com => 'ist',
-      doc => "The person's institution" },
-    { rec => 'country', com => 'ctr',
-      doc => "The database contributor's country" },
-   ];
+    $ds->define_ruleset('1.1:people:single' => 
+	{ allow => '1.1:people:specifier' },
+	{ allow => '1.1:common_params' });
+    
+    $ds->define_ruleset('1.1:people:list' => 
+	{ require => '1.1:people:selector' },
+	{ allow => '1.1:common_params' });
+}
+    
 
 # get ( )
 # 
@@ -68,11 +82,11 @@ sub get {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->{dbh};
+    my $dbh = $self->get_dbh;
     
     # Make sure we have a valid id number.
     
-    my $id = $self->{params}{id};
+    my $id = $self->clean_param('id');
     
     die "Bad identifier '$id'" unless defined $id and $id =~ /^\d+$/;
     
@@ -93,17 +107,9 @@ sub get {
 		$join_list
         WHERE p.person_no = $id";
     
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
+    print $self->{main_sql} . "\n\n" if $self->debug;
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
-    
-    # Abort if we couldn't retrieve the record.
-    
-    return unless $self->{main_record};
-    
-    # Return true otherwise.
-
-    return 1;
 }
 
 
@@ -120,89 +126,47 @@ sub list {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->{dbh};
-    my $op = $self->{op};
-    
-    my $calc = '';
-    my $limit = '';
-    my $order = '';
+    my $dbh = $self->get_dbh;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->generate_query_fields('p');
+    my $fields = $self->select_string('p');
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
     my (@filters, $tables);
     
-    if ( $op eq 'toprank' )
-    {
-	@filters = CollectionQuery::generateQueryFilters($self, 'c', $self->{select_tables});
-	
-	if ( defined $self->{params}{subject} && $self->{params}{subject} eq 'occs' )
-	{
-	    $fields .= ", count(o.occurrence_no) as instance_count";
-	    $self->{select_tables}{o} = 1;
-	}
-	else
-	{
-	    $fields .= ", count(c.collection_no) as instance_count";
-	}
-	
-	$order = 'GROUP BY p.person_no ORDER BY instance_count DESC';
-	$limit = 'LIMIT 10';
-    }
-    
-    else
-    {
-	@filters = $self->generateQueryFilters('p', $self->{select_tables});
-	
-	# If a query limit has been specified, modify the query accordingly.
-	
-	$limit = $self->generateLimitClause();
-    }
-    
+    @filters = $self->generateQueryFilters('p', $self->{select_tables});
     push @filters, "1=1" unless @filters;
     
     my $filter_string = join(q{ and }, @filters);
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $self->sql_limit_clause(1);
+    my $count = $self->sql_count_clause;
     
     # Determine the necessary joins.
     
     my ($join_list) = $self->generateJoinList('p', $self->{select_tables});
     
-    # If we were asked to count rows, modify the query accordingly
-    
-    if ( $self->{params}{count} )
-    {
-	$calc = 'SQL_CALC_FOUND_ROWS';
-    }
-    
     # Generate the main query
     
     $self->{main_sql} = "
-	SELECT $calc $fields
+	SELECT $count $fields
 	FROM person as p
 		$join_list
         WHERE $filter_string
-	$order $limit";
+	ORDER BY p.reversed_name $limit";
     
-    print $self->{main_sql} . "\n\n" if $PBDB_Data::DEBUG;
+    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
     
     # Then prepare and execute the main query and the secondary query.
     
     $self->{main_sth} = $dbh->prepare($self->{main_sql});
     $self->{main_sth}->execute();
-    
-    # If we were asked to get the count, then do so
-    
-    if ( $calc )
-    {
-	($self->{result_count}) = $dbh->selectrow_array("SELECT FOUND_ROWS()");
-    }
-    
-    return 1;
 }
 
 

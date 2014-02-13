@@ -1,17 +1,56 @@
+<%- PERL %>
+    
+    # The purpose of this block is to generate the "navigation trail" that appears just after
+    # the initial heading on the documentation page.  You will probably want to customize this
+    # for your own data service.
+    
+    my $version = $stash->get('ds_version');
+    my $list = $stash->get('trail_list');
+    
+    unless ( ref $list eq 'ARRAY' )
+    {
+	$stash->set('trail', "=head3 Data service version $version");
+        return;
+    }
+    
+    # The first component gives the data service version number, with a link to the
+    # base documentation page.
+    
+    my $label = shift @$list;
+    my $link = shift @$list;
+    my $trail = "=head3 Data service L<version $version|$link>";
+    
+    # Then add the rest of the path components, separated by a '>'.
+    # all but the last are links to their respective pages.
+    
+    while (@$list)
+    {
+        $label = shift @$list;
+	$link = shift @$list;
+	if ( @$list ) {
+	    $trail .= " E<gt> L<$label|$link>";
+        } else {
+	    $trail .= " E<gt> $label";
+	}
+    }
+    
+    $stash->set('trail', $trail);
+    
+<% END -%>
 
 =encoding utf8
 
-=head1 PBDB Data Service: <% title %>
+=head1 PBDB Data Service: <% doc_title %>
 
-This page describes L<version <% version %>|/data<% version %>/> of the service.
+<% trail or '' %>
 
 <% content %>
 
 =head2 AUTHOR
 
-This service is provided by the L<Paleobiology Database|http://testpaleodb.geology.wisc.edu/>, 
-hosted by the L<University of Wisconsin-Madison|http://www.wisc.edu/>.
+This service is provided by the L<Paleobiology Database|http://paleobiodb.org/>, 
+hosted by the L<Department of Geoscience|http://geoscience.wisc.edu/geoscience/>
+at the L<University of Wisconsin-Madison|http://www.wisc.edu/>.
 
 If you have questions about this service, please contact 
 <% settings.appauthor %> <L<<% settings.appauthoremail %>|mailto:<% settings.appauthoremail %>>>.
-

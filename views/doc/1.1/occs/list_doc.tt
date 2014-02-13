@@ -6,5 +6,7 @@ This path returns information about occurrence records stored in the Paleobiolog
 
 <% PROCESS params %>
 
+<% PROCESS methods %>
+
 <% PROCESS response %>
 

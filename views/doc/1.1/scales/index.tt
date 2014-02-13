@@ -1,0 +1,43 @@
+=head2 DESCRIPTION
+
+The URL paths documented in this section provide access to information about the
+geological time scales represented in the Paleobiology Database. 
+These include the standard international set defined by the
+L<International Commission on Stratigraphy|http://http://www.stratigraphy.org/>
+(L<v2013-1|http://www.stratigraphy.org/index.php/ics-chart-timescale>) and many
+others as well.
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+=over
+
+=for pp_table_header Class* | Documentation | Description
+
+=item L<Single time scales|/data1.1/scales/single> | L</data1.1/scales/single>
+
+Returns information about a single time scale, selected by identifier.  For example:
+
+=over
+
+=item *
+
+L</data1.1/scales/single.json?id=1>
+
+=back
+
+=item L<Multiple time scales|/data1.1/scales/list> | L</data1.1/scales/list>
+
+Returns information about multiple time scales.  To get a list of all of the available
+scales, use this path with no parameters as follows:
+
+=over
+
+=item *
+
+L</data1.1/scales/list.json>
+
+=back
+
+=back

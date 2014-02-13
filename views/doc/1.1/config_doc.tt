@@ -12,15 +12,17 @@ to other applications as well.
 
 =item *
 
-L</data1.1/config.json>
+L</data1.1/config.json?show=all>
 
 =item *
 
-L</data1.1/config.txt?show=geosum>
+L</data1.1/config.txt?show=clusters>
 
 =back
 
 <% PROCESS params %>
+
+<% PROCESS methods %>
 
 <% PROCESS response %>
 

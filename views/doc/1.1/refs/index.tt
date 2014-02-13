@@ -1,0 +1,63 @@
+=head2 DESCRIPTION
+
+Almost every piece of data stored in the Paleobiology Database has an associated
+bibliographic reference, indicating the source from which it was originally entered.
+The URL paths described here provide access to these references.
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+=over 4
+
+=for pp_table_header Class* | Path | Description
+
+=item L<Single references|/data1.1/refs/single> | L</data1.1/refs/single>
+
+Returns information about a single reference, selected by identifier.  For example:
+
+=over 4
+
+=item *
+
+L</data1.1/refs/single.json?id=6930&show=both>
+
+=back
+
+=item L<Lists of references|/data1.1/refs/list> | L</data1.1/refs/list>
+
+Returns information about multiple references, selected according to the parameters
+you provide.  For example:
+
+=over 4
+
+=item *
+
+L</data1.1/refs/list.txt?author="Sepkoski">
+
+=back
+
+=item L<References for occurrences|/data1.1/occs/refs> | L</data1.1/occs/refs>
+
+Returns information about the references from which the selected occurrence
+data were entered.
+
+=over
+
+=item *
+
+L</data1.1/occs/refs.ris?base_name=Cetacea&interval=Miocene>
+
+=back
+
+=item L<References for collections|/data1.1/colls/refs> | L</data1.1/colls/refs>
+
+Returns information about the references from which the selected collection
+data were entered.
+
+=item L<References for taxa|/data1.1/taxa/refs> | L</data1.1/taxa/refs>
+
+Returns information about the references from which the selected taxonomic
+names were entered.
+
+=back
