@@ -238,12 +238,14 @@ $ds->define_path({ path => '1.1/taxa/auto',
 		   output => '1.1:taxa:auto_map' });
 
 $ds->define_path({ path => '1.1/taxa/thumb',
-		   allow_format => 'png',
+		   allow_format => '+png',
+		   output => '1.1:taxa:imagedata',
 		   method => 'get_image',
 		   arg => 'thumb' });
 
 $ds->define_path({ path => '1.1/taxa/icon',
-		   allow_format => 'png',
+		   allow_format => '+png',
+		   output => '1.1:taxa:imagedata',
 		   method => 'get_image',
 		   arg => 'icon' });
 

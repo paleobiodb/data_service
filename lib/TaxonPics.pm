@@ -153,10 +153,10 @@ sub getPics {
 	
 	# Fetch the binary data for the icon.
 	
-	my $url = "http://phylopic.org/assets/images/submissions/$r->{uid}.icon.png";
-	my $req = HTTP::Request->new(GET => $url );
+	$url = "http://phylopic.org/assets/images/submissions/$r->{uid}.icon.png";
+	$req = HTTP::Request->new(GET => $url );
 	
-	my $response = $ua->request($req);
+	$response = $ua->request($req);
 	
 	if ( $response->is_success )
 	{

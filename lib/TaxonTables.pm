@@ -3894,7 +3894,7 @@ sub computeAttrsTable {
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
 			 first_early_age, first_late_age, last_early_age, last_late_age,
-			 precise_age, early_occ, late_occ, not_trace, pic.image_no, pic.priority)
+			 precise_age, early_occ, late_occ, not_trace, image_no)
 		SELECT a.orig_no,
 			t.valid_no = t.synonym_no as is_valid,
 			(t.orig_no = t.synonym_no) or (t.orig_no = t.valid_no) as is_senior,
@@ -3909,7 +3909,7 @@ sub computeAttrsTable {
 			if(tsum.precise_age, tsum.last_late_age, null),
 			tsum.precise_age, tsum.early_occ, tsum.late_occ,
 			(a.preservation <> 'trace' or a.preservation is null),
-			if(pic.priority <> -1, pic.image_no, null)
+			if(pic.priority is null or pic.priority <> -1, pic.image_no, null)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
 			LEFT JOIN $OCC_TAXON as tsum using (orig_no)

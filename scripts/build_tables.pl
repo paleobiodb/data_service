@@ -136,6 +136,7 @@ if ( $occurrence_tables )
 if ( $taxon_tables )
 {
     populateOrig($dbh);
+    selectPics($dbh);
     buildTaxonTables($dbh, 'taxon_trees', $options);
 }
 
@@ -153,7 +154,6 @@ if ( $old_taxon_tables )
 if ( $taxon_pics )
 {
     getPics($dbh, 'tree_table', $force);
-    selectPics($dbh);
 }
 
 # temp
