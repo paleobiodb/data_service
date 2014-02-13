@@ -334,8 +334,6 @@ sub get {
         WHERE o.occurrence_no = $id and c.access_level = 0
 	GROUP BY o.occurrence_no";
     
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
-    
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
     # Abort if we couldn't retrieve the record.
@@ -410,8 +408,6 @@ sub list {
 	GROUP BY o.occurrence_no
 	ORDER BY $order_clause
 	$limit";
-    
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
     
     # Then prepare and execute the main query.
     
@@ -494,8 +490,6 @@ sub refs {
 	WHERE $ref_filter_string
 	ORDER BY $order
 	$limit";
-    
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
     
     # Then prepare and execute the main query.
     

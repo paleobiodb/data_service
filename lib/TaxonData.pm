@@ -12,6 +12,7 @@ package TaxonData;
 
 use base 'Web::DataService::Request';
 use Carp qw(carp croak);
+use Try::Tiny;
 
 use Web::DataService qw(:validators);
 
@@ -217,7 +218,14 @@ sub initialize {
 	    "If this name is marked as a misspelling, then this field will be included with the value '1'",
 	{ output => 'n_occs', com_name => 'noc' },
 	    "The number of occurrences of this taxon in the database");
-
+    
+    $ds->define_block('1.1:taxa:imagedata' =>
+	{ output => 'orig_no', com_name => 'oid' },
+	    "An identifier corresponding to the taxon with which this image is associated",
+	{ output => 'type', value => 'image', com_name => 'typ', com_value => 'img' },
+	    "The type of this record: 'img' for an image",
+	{ output => 'uid', value => 'uid', });
+    
     # Finally, we define some rulesets to specify the parameters accepted by
     # the operations defined in this class.
     
@@ -328,12 +336,11 @@ sub initialize {
     $ds->define_ruleset('1.1:taxa:thumb' =>
 	{ param => 'id', valid => POS_VALUE},
 	    "A positive number identifying a taxon image",
+	{ optional => 'exact', valid => FLAG_VALUE },
 	{ ignore => 'splat' });
     
-    $ds->define_ruleset('1.1/taxa/icon' =>
-	{ param => 'id', valid => POS_VALUE},
-	    "A positive number identifying a taxon image",
-	{ ignore => 'splat' });
+    $ds->define_ruleset('1.1:taxa:icon' =>
+	{ require => '1.1:taxa:thumb' });
 }
 
 
@@ -765,24 +772,125 @@ sub auto {
 }
 
 
-# get_thumb ( )
+# get_image ( )
 # 
-# Fetch a thumbnail given a taxon_no value.
+# Given a taxon_no value, return the image corresponding to the taxon if it
+# has one.  Otherwise, return the image corresponding to the most specific
+# containing taxon that has an image.
 
-sub get_thumb {
+sub get_image {
     
-    my ($self) = @_;
+    my ($self, $type) = @_;
     
-    my $dbh = $self->{dbh};
-    my $TAXON_IMAGES = $TAXON_TABLE{taxon_trees}{images};
+    $type ||= '';
     
-    my $orig_no = $self->{params}{id};
+    my $dbh = $self->get_dbh;
+    my $taxon_images = $TAXON_TABLE{taxon_trees}{images};
+    my ($sql, $result);
     
-    my $sql = "SELECT thumb FROM $TAXON_IMAGES
-	       WHERE orig_no = $orig_no and priority >= 0
-	       ORDER BY priority desc LIMIT 1";
+    croak "invalid type '$type' for get_image"
+	unless $type eq 'icon' || $type eq 'thumb';
     
-    ($self->{main_data}) = $dbh->selectrow_array($sql);
+    my $taxon_no = $self->clean_param('id');
+    
+    # First see if the specified taxon itself has an image.  If so, return it.
+    
+    if ( $self->output_format eq 'png' )
+    {
+	$self->{main_sql} = "
+		SELECT $type FROM $taxon_images as ti join authorities as a using (orig_no)
+	        WHERE taxon_no = $taxon_no and ti.priority >= 0
+	        ORDER BY ti.priority desc LIMIT 1";
+	
+	($self->{main_data}) = $dbh->selectrow_array($self->{main_sql});
+	
+	return if $self->{main_data};
+    }
+    
+    else
+    {
+	$self->{main_sql} = "
+		SELECT orig_no, uid, modified, credit, license, pd
+		FROM $taxon_images as ti join authorities as a using (orig_no)
+		WHERE taxon_no = $taxon_no and ti.priority >= 0
+		ORDER BY ti.priority desc LIMIT 1";
+	
+	$self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+	
+	return if $self->{main_record};
+    }
+    
+    # If the specified taxon does not have an image, then try the parent taxa
+    # unless the parameter 'exact' was specified.
+    
+    unless ( $self->clean_param('exact') )
+    {
+	my $auth_table = $TAXON_TABLE{taxon_trees}{auth_table} || 'authorities';
+	my $tree_table = 'taxon_trees';
+	
+	# In order to use the 'compute_ancestry' procedure, we need to lock the
+	# scratch table.  This is regrettably necessary, because of the limitation
+	# in MySQL that a stored procedure cannot refer to a temporary table more
+	# than once in any statement.
+	
+	$result = $dbh->do("LOCK TABLES $auth_table READ,
+				    $tree_table READ,
+				    ancestry_scratch WRITE,
+				    ancestry_scratch as s WRITE,
+				    taxon_images as ti READ");
+	
+	# We need a try block to make sure that the table locks are released
+	# no matter what else happens.
+	
+	my ($orig_no);
+	
+	try
+	{
+	    $result = $dbh->do("CALL compute_ancestry('$auth_table','$tree_table', '$taxon_no')");
+	    
+	    ($orig_no) = $dbh->selectrow_array("
+		SELECT ti.orig_no
+		FROM taxon_images as ti JOIN ancestry_scratch using (orig_no)
+			JOIN $tree_table using (orig_no)
+		ORDER BY $tree_table.depth desc LIMIT 1");
+	}
+	    
+	finally {
+	    $dbh->do("UNLOCK TABLES");
+	    print STDERR "ERROR: $_[0]\n" if @_;
+	    die @_ if @_;
+	};
+	
+	if ( $self->output_format eq 'png' )
+	{
+	    $self->{main_sql} = "
+		SELECT $type FROM $taxon_images as ti
+		WHERE orig_no = $orig_no and ti.priority >= 0
+		ORDER BY ti.priority desc LIMIT 1";
+	    
+	    ($self->{main_data}) = $dbh->selectrow_array($self->{main_sql});
+	    
+	    return if $self->{main_data};
+	}
+	
+	else
+	{
+	    $self->{main_sql} = "
+		SELECT orig_no, uid, modified, credit, license, pd
+		FROM $taxon_images as ti join authorities as a using (orig_no)
+		WHERE taxon_no = $taxon_no and ti.priority >= 0
+		ORDER BY ti.priority desc LIMIT 1";
+	
+	    $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+	    
+	    return if $self->{main_record};
+	}
+    }
+    
+    # If no image was found, then return a 404 error if the format is 'png'
+    # and an empty result otherwise.
+    
+    die "404 Not Found\n" if $self->output_format eq 'png';
 }
 
 
@@ -794,7 +902,7 @@ sub get_icon {
 
     my ($self) = @_;
     
-    my $dbh = $self->{dbh};
+    my $dbh = $self->get_dbh;
     my $TAXON_IMAGES = $TAXON_TABLE{taxon_trees}{images};
     
     my $orig_no = $self->{params}{id};

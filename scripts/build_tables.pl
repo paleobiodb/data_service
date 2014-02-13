@@ -22,7 +22,7 @@ use OccurrenceTables qw(buildOccurrenceTables);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables
 		   buildTaxaCacheTables computeGenSp);
-use TaxonPics qw(getPics);
+use TaxonPics qw(getPics selectPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables);
 
@@ -153,6 +153,7 @@ if ( $old_taxon_tables )
 if ( $taxon_pics )
 {
     getPics($dbh, 'tree_table', $force);
+    selectPics($dbh);
 }
 
 # temp

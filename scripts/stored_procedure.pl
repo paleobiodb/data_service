@@ -1,6 +1,7 @@
 #!/opt/local/bin/perl
 
 use lib "../cgi-bin";
+use lib "cgi-bin";
 use DBConnection;
 
 
@@ -14,6 +15,15 @@ $dbh->do("CREATE PROCEDURE anyopinion ( t int unsigned )
 	BEGIN
 		SELECT * FROM opinions
 		WHERE child_no = t or child_spelling_no = t or parent_no = t or parent_spelling_no = t;
+	END");
+
+$dbh->do("DROP PROCEDURE IF EXISTS vauth");
+$dbh->do("CREATE PROCEDURE vauth (clause varchar(255))
+	BEGIN
+		SET \@clause = clause;
+		SET \@stmt = concat('SELECT a.taxon_no, a.orig_no, a.taxon_name, a.taxon_rank, concat(if(a.ref_is_authority = \"YES\", r.author1last, a.author1last), \" \", if(a.ref_is_authority = \"YES\", r.pubyr, a.pubyr)) as attr from authorities as a join refs as r using (reference_no) WHERE ', \@clause);
+		PREPARE vauth_stmt FROM \@stmt;
+		EXECUTE vauth_stmt;
 	END");
 
 $dbh->do("DROP PROCEDURE IF EXISTS taxoninfo");

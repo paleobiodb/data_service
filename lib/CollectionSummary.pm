@@ -177,8 +177,6 @@ sub summary {
 		GROUP BY s.bin_id
 		ORDER BY s.bin_id $limit";
     
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
-    
     # Then prepare and execute the query..
     
     $self->{main_sth} = $dbh->prepare($self->{main_sql});

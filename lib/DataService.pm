@@ -730,6 +730,8 @@ sub execute_path {
     
     my ($path, $format) = @_;
     
+    my ($request, $req_output);
+    
     # Do all of the processing in a try block, so that if an error occurs we
     # can respond with an appropriate error page.
     
@@ -771,11 +773,11 @@ sub execute_path {
 	# Create a new object to represent this request, and bless it into the
 	# correct class.
 	
-	my $request = { ds => $self,
-			path => $path,
-			format => $format,
-			method => $method,
-			arg => $arg };
+	$request = { ds => $self,
+		     path => $path,
+		     format => $format,
+		     method => $method,
+		     arg => $arg };
 	
 	bless $request, $class;
 	
@@ -859,6 +861,14 @@ sub execute_path {
 	
 	$request->$method($arg);
 	
+	# If we are in debug mode, print out the main sql statement.
+	
+	if ( $self->{DEBUG} && defined $request->{main_sql} )
+	{
+	    print STDERR $request->{main_sql} . "\n\n";
+	    $req_output = 1;
+	}
+	
 	# Then we use the output configuration and the result of the query
 	# operation to generate the actual output.  How we do this depends
 	# upon how the query operation chooses to return its data.  It must
@@ -895,7 +905,7 @@ sub execute_path {
 	    return $self->generate_compound_result($request, $threshold);
 	}
 	
-	elsif ( ref $request->{main_data} )
+	elsif ( defined $request->{main_data} )
 	{
 	    return $request->{main_data};
 	}
@@ -911,6 +921,13 @@ sub execute_path {
     # If an error occurs, return an appropriate error response to the client.
     
     catch {
+	
+	if ( $self->{DEBUG} && defined $request->{main_sql} && ! $req_output )
+	{
+	    print STDERR $request->{main_sql} . "\n\n";
+	    $req_output = 1;
+	}
+	
 	return $self->error_result($path, $format, $_);
     };
 };

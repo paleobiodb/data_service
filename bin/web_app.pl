@@ -239,11 +239,13 @@ $ds->define_path({ path => '1.1/taxa/auto',
 
 $ds->define_path({ path => '1.1/taxa/thumb',
 		   allow_format => 'png',
-		   method => 'get_thumb' });
+		   method => 'get_image',
+		   arg => 'thumb' });
 
 $ds->define_path({ path => '1.1/taxa/icon',
 		   allow_format => 'png',
-		   method => 'get_icon' });
+		   method => 'get_image',
+		   arg => 'icon' });
 
 
 # Time scales and intervals.  These paths are used to fetch information about

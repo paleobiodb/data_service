@@ -14,6 +14,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
+use TaxonPics qw($TAXON_PICS $PHYLOPICS);
 
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
@@ -1537,6 +1538,13 @@ sub computeSpelling {
     
     # First put in all of the names we've selected above.
     
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $NAME_WORK
+			       (taxon_no int unsigned not null,
+				orig_no int unsigned not null,
+				spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
+				opinion_no int unsigned not null,
+				PRIMARY KEY (taxon_no)) ENGINE=MYISAM");
+    
     $result = $dbh->do("
 		INSERT IGNORE INTO $NAME_WORK
 		SELECT s.spelling_no, s.orig_no, o.spelling_reason, o.opinion_no
@@ -2664,8 +2672,6 @@ sub assignSequence {
     # be bad!)
     
     my $node = $nodes->{$orig_no};
-    
-    logMessage(0, "NODE $orig_no : parent => $node->{parent_no} seq => $seq");
     
     unless ( exists $node->{lft} )
     {
@@ -3846,6 +3852,13 @@ sub computeAttrsTable {
 				early_occ int unsigned,
 				late_occ int unsigned) ENGINE=MyISAM");
     
+    # Same for the image selection table.
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_PICS (
+		orig_no int unsigned primary key,
+		image_no int unsigned not null,
+		priority tinyint) Engine=MyISAM");
+    
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.
     
@@ -3871,6 +3884,7 @@ sub computeAttrsTable {
 				early_occ int unsigned,
 				late_occ int unsigned,
 				not_trace boolean,
+				image_no int unsigned,
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
     # Prime the table with the values actually stored in the authorities
@@ -3880,8 +3894,7 @@ sub computeAttrsTable {
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
 			 first_early_age, first_late_age, last_early_age, last_late_age,
-			 precise_age, early_occ, late_occ,
-			 not_trace)
+			 precise_age, early_occ, late_occ, not_trace, pic.image_no, pic.priority)
 		SELECT a.orig_no,
 			t.valid_no = t.synonym_no as is_valid,
 			(t.orig_no = t.synonym_no) or (t.orig_no = t.valid_no) as is_senior,
@@ -3895,10 +3908,12 @@ sub computeAttrsTable {
 			if(tsum.precise_age, tsum.last_early_age, null),
 			if(tsum.precise_age, tsum.last_late_age, null),
 			tsum.precise_age, tsum.early_occ, tsum.late_occ,
-			(a.preservation <> 'trace' or a.preservation is null)
+			(a.preservation <> 'trace' or a.preservation is null),
+			if(pic.priority <> -1, pic.image_no, null)
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
 			LEFT JOIN $OCC_TAXON as tsum using (orig_no)
+			LEFT JOIN $TAXON_PICS as pic using (orig_no)
 		GROUP BY a.orig_no";
     
     $result = $dbh->do($sql);
@@ -3921,7 +3936,8 @@ sub computeAttrsTable {
 			min(v.last_late_age) as last_late_age,
 			max(v.precise_age) as precise_age,
 			coalesce(v.early_occ) as early_occ,
-			coalesce(v.late_occ) as late_occ
+			coalesce(v.late_occ) as late_occ,
+			coalesce(v.image_no) as image_no
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
 		SET     v.is_extant = nv.is_extant,
@@ -3935,7 +3951,8 @@ sub computeAttrsTable {
 			v.precise_age = nv.precise_age,
 			v.early_occ = nv.early_occ,
 			v.late_occ = nv.late_occ,
-			v.not_trace = nv.not_trace";
+			v.not_trace = nv.not_trace,
+			v.image_no = nv.image_no";
     
     $result = $dbh->do($sql);
     
@@ -4102,6 +4119,7 @@ sub computeAttrsTable {
     # attributes that propagate downward.  For now, these include:
     # - a value of extant=0 (which overrides any values of extant=null)
     # - first/last ages (which override any null values)
+    # - image_no values
     
     for (my $row = 2; $row <= $max_depth; $row++)
     {
@@ -4125,6 +4143,13 @@ sub computeAttrsTable {
 		    v.last_late_age = pv.last_late_age,
 		    v.precise_age = false
 		WHERE not(v.precise_age) and pv.first_early_age is not null";
+	
+	$dbh->do($sql);
+	
+	my $sql = "
+		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+			JOIN $ATTRS_WORK as pv on pv.orig_no = t.parsen_no and t.depth = $row
+		SET v.image_no = pv.image_no WHERE v.image_no is null or v.image_no = 0";
 	
 	$dbh->do($sql);
     }
@@ -4496,8 +4521,9 @@ sub buildTaxaCacheTables {
     
     $result = $dbh->do("
 	INSERT INTO $TREE_CACHE_WORK (taxon_no, lft, rgt, spelling_no, synonym_no, opinion_no)
-	SELECT a.taxon_no, t.lft, t.rgt, t.spelling_no, t.synonym_no, t.opinion_no
-	FROM $auth_table as a JOIN $tree_table as t using (orig_no)");
+	SELECT a.taxon_no, t.lft, t.rgt, t.spelling_no, t2.spelling_no, t.opinion_no
+	FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+		JOIN $tree_table as t2 on t2.orig_no = t.synonym_no");
     
     # Add the necessar indices
     

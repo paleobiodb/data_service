@@ -592,8 +592,6 @@ sub get {
         WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
     
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
-    
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
     # Abort if we couldn't retrieve the record.
@@ -701,8 +699,6 @@ sub list {
 	ORDER BY $order_clause
 	$limit";
     
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
-    
     # Then prepare and execute the main query and the secondary query.
     
     $self->{main_sth} = $dbh->prepare($self->{main_sql});
@@ -785,8 +781,6 @@ sub refs {
 	ORDER BY $order
 	$limit";
     
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
-    
     # Then prepare and execute the main query.
     
     $self->{main_sth} = $dbh->prepare($self->{main_sql});
@@ -846,8 +840,6 @@ sub strata {
 	GROUP BY cs.name, cs.rank
 	ORDER BY cs.name
 	$limit";
-    
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
     
     # Then prepare and execute the main query and the secondary query.
     
