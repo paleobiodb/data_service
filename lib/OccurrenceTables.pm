@@ -133,8 +133,8 @@ sub buildOccurrenceTables {
 				n_occs int unsigned not null,
 				n_colls int unsigned not null,
 				first_early_age decimal(9,5),
-				last_early_age decimal(9,5),
 				first_late_age decimal(9,5),
+				last_early_age decimal(9,5),
 				last_late_age decimal(9,5),
 				precise_age boolean default true,
 				early_occ int unsigned,
@@ -151,7 +151,7 @@ sub buildOccurrenceTables {
     # first/last appearance ranges (as probability curves, perhaps?)
     
     $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
-			first_early_age, last_early_age, first_late_age, last_late_age,
+			first_early_age, first_late_age, last_early_age, last_late_age,
 			precise_age)
 		SELECT m.orig_no, count(*), count(distinct collection_no),
 			max(ei.early_age), max(ei.late_age), min(li.early_age), min(li.late_age),

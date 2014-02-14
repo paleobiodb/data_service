@@ -14,7 +14,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
-use TaxonPics qw($TAXON_PICS $PHYLOPICS);
+use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS);
 
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
@@ -3854,10 +3854,7 @@ sub computeAttrsTable {
     
     # Same for the image selection table.
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_PICS (
-		orig_no int unsigned primary key,
-		image_no int unsigned not null,
-		priority tinyint) Engine=MyISAM");
+    selectPics($dbh);
     
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.
@@ -3889,6 +3886,8 @@ sub computeAttrsTable {
     
     # Prime the table with the values actually stored in the authorities
     # table, ecotaph table and first appearance tables.
+    
+    logMessage(2, "    seeding table with initial taxon information...");
     
     $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
@@ -4118,7 +4117,7 @@ sub computeAttrsTable {
     # Finally, we iterate from the top of the tree back down, computing those
     # attributes that propagate downward.  For now, these include:
     # - a value of extant=0 (which overrides any values of extant=null)
-    # - first/last ages (which override any null values)
+    # - first/last ages (which override any imprecise values)
     # - image_no values
     
     for (my $row = 2; $row <= $max_depth; $row++)
