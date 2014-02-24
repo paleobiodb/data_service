@@ -222,15 +222,21 @@ $ds->define_path({ path => '1.1/strata/auto',
 
 $ds->define_path({ path => '1.1/taxa',
 		   class => 'TaxonData',
-		   allow_format => '+xml',
-		   allow_vocab => '+dwc',
 		   output => '1.1:taxa:output_map' });
 
 $ds->define_path({ path => '1.1/taxa/single',
+		   allow_format => '+xml',
+		   allow_vocab => '+dwc',
 		   method => 'get' });
 
 $ds->define_path({ path => '1.1/taxa/list',
+		   allow_format => '+xml',
+		   allow_vocab => '+dwc',
 		   method => 'list' });
+
+$ds->define_path({ path => '1.1/taxa/refs',
+		   output => '1.1:refs:output_map',
+		   method => 'list_refs' });
 
 $ds->define_path({ path => '1.1/taxa/auto',
 		   method => 'auto', 
@@ -248,6 +254,10 @@ $ds->define_path({ path => '1.1/taxa/icon',
 		   output => '1.1:taxa:imagedata',
 		   method => 'get_image',
 		   arg => 'icon' });
+
+$ds->define_path({ path => '1.1/taxa/list_images',
+		   output => '1.1:taxa:imagedata',
+		   method => 'list_images' });
 
 
 # Time scales and intervals.  These paths are used to fetch information about
@@ -326,6 +336,9 @@ $ds->define_path({ path => '1.1/formats/text',
 
 $ds->define_path({ path => '1.1/formats/ris',
 		   doc_title => "RIS format" });
+
+$ds->define_path({ path => '1.1/formats/png',
+		   doc_title => 'PNG format' });
 
 
 # Now we configure a set of Dancer routes to serve

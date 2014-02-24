@@ -60,4 +60,26 @@ L</data1.1/taxa/auto.json?name=cani&limit=10>
 
 =back
 
+=item Phylopics | L</data1.1/taxa/icon> L</data1.1/taxa/thumb>
+
+Returns an image to represent the taxon.  These images are sourced from L<phylopic.org>, 
+and come in two versions: a 64x64 thumbnail (black silhouette), and a 32x32 icon (blue silhouette).
+For example:
+
+=over
+
+=item *
+
+L</data1.1/taxa/thumb.png?id=910>
+
+=for html <img src="/data1.1/taxa/thumb.png?id=910">
+
+=item *
+
+L</data1.1/taxa/thumb.json?id=910>
+
+=for html <img src="/data1.1/taxa/icon.png?id=910">
+
+=back
+
 =back

@@ -662,6 +662,14 @@ sub generate_html_list {
 	    $output .= $self->generate_html_para($subnode);
 	}
 	
+	elsif ( $subnode->{type} eq 'format' )
+	{
+	    if ( $subnode->{format} eq 'html' )
+	    {
+		$output .= $self->generate_html_literal($subnode->{body});
+	    }
+	}
+	
 	elsif ( $subnode->{type} eq 'verbatim' )
 	{
 	    $output .= $self->generate_html_verbatim($subnode);

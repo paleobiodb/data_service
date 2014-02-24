@@ -1,0 +1,19 @@
+<% PROCESS sections/definitions.tt %>
+
+=head2 DESCRIPTION
+
+This URL path returns taxon images from the paleobiology database, or information about those images.
+These images are sourced from L<phylopic.org|http://phylopic.org/>, 
+and come in two versions: a 64x64 thumbnail (black silhouette), and a 32x32 icon (blue silhouette).
+
+This path fetches the thumbnail, while L</data1.1/taxa/icon> fetches the icon.
+
+With a suffix of C<.png>, this path fetches the image itself.  With a suffix of C<.json>, C<.txt>, etc.,
+it returns the information documented below.
+
+<% PROCESS params %>
+
+<% PROCESS methods %>
+
+<% PROCESS response %>
+

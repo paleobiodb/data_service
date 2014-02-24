@@ -46,6 +46,20 @@ sub initialize {
 	{ value => 'crmod', maps_to => '1.1:common:crmod' },
 	    "Include the creation and modification times for this record");
     
+    # Output sets:
+    
+    $ds->define_set('1.1:refs:reftype' =>
+	{ value => 'authority' },
+	    "An authority reference gives the original source for a taxonomic name",
+	{ value => 'classification' },
+	    "A classification reference gives the source for a classification opinion",
+	{ value => 'opinion' },
+	    "An opinion reference gives the source for a non-classification opinion",
+	{ value => 'occurrence' },
+	    "An occurrence reference gives the source for a fossil occurrence",
+	{ value => 'collection' },
+	    "A collection reference gives the source for a fossil collection.");
+    
     # Then some output blocks:
     
     # One block for the reference routes themselves.
@@ -60,10 +74,14 @@ sub initialize {
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
       { set => 'formatted', from_record => 1, code => \&format_reference },
+      { set => 'ref_type', from_record => 1, code => \&set_reference_type },
       { output => 'reference_no', com_name => 'oid' }, 
 	  "Numeric identifier for this document reference in the database",
       { output => 'record_type', com_name => 'typ', com_value => 'ref', value => 'reference' },
 	  "The type of this object: 'ref' for a document reference",
+      { output => 'ref_type', com_name => 'rtp' },
+	  "The type of reference this is.  Values can include one or more of the following:",
+	  $ds->document_set('1.1:refs:reftype'),
       { output => 'reference_rank', com_name => 'rct' },
 	  "The number of records (occurrences, taxa, etc. depending upon which URL path you used) associated with this reference",
       { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
@@ -691,5 +709,44 @@ sub format_reference {
     return;
 }
 
+
+# set_reference_type ( )
+# 
+# Set the ref_type field for a reference record.  This is based on fields
+# such as 'is_auth', etc.
+
+sub set_reference_type {
+    
+    my ($request, $record) = @_;
+    
+    my @types;
+    
+    if ( $record->{is_auth} )
+    {
+	push @types, 'authority';
+    }
+    
+    if ( $record->{is_class} )
+    {
+	push @types, 'classification';
+    }
+    
+    if ( $record->{is_opinion} && ! $record->{is_class} )
+    {
+	push @types, 'opinion';
+    }
+    
+    if ( $record->{is_occ} )
+    {
+	push @types, 'occurrence';
+    }
+    
+    if ( $record->{is_coll} )
+    {
+	push @types, 'collection';
+    }
+    
+    return join(',', @types);
+}
 
 1;

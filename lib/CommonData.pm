@@ -110,16 +110,15 @@ sub initialize {
     
     $ds->define_block('1.1:common:ent' =>
 	{ select => ['$bt.authorizer_no', '$bt.enterer_no', '$bt.modifier_no'], tables => '$bt' },
-	{ output => 'authorizer_no', com_name => 'ath' },
+	{ output => 'authorizer_no', com_name => 'ati', if_block => 'ent,entname' },
 	    "The identifier of the person who authorized the entry of this record",
-	{ output => 'enterer_no', com_name => 'ent' },
+	{ output => 'enterer_no', com_name => 'eni', if_block => 'ent,entname' },
 	    "The identifier of the person who actually entered this record.",
-	{ output => 'modifier_no', com_name => 'mdf' },
+	{ output => 'modifier_no', com_name => 'mdi', if_block => 'ent,entname' },
 	    "The identifier of the person who last modified this record, if it has been modified.");
     
     $ds->define_block('1.1:common:entname' =>
-	{ select => ['$bt.authorizer_no', '$bt.enterer_no', 
-		     '$bt.modifier_no'], tables => ['$bt'] },
+	{ select => ['$bt.authorizer_no', '$bt.enterer_no', '$bt.modifier_no'], tables => '$bt' },
 	{ set => 'authorizer', from => 'authorizer_no', lookup => \%PERSON_NAME, default => 'unknown' },
 	{ set => 'enterer', from => 'enterer_no', lookup => \%PERSON_NAME, default => 'unknown' },
 	{ set => 'modifier', from => 'modifier_no', lookup => \%PERSON_NAME, default => 'unknown' },

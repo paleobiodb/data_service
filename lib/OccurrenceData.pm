@@ -16,7 +16,7 @@ use Web::DataService qw(:validators);
 
 use CommonData;
 use OccurrenceTables qw($OCC_MATRIX);
-use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL);
+use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL $COUNTRY_MAP);
 use CollectionData;
 use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_RANK %RANK_STRING);
@@ -328,8 +328,7 @@ sub get {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		JOIN authorities as a using (taxon_no)
+	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE o.occurrence_no = $id and c.access_level = 0
 	GROUP BY o.occurrence_no";
@@ -401,13 +400,14 @@ sub list {
     
     $self->{main_sql} = "
 	SELECT $calc $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		JOIN authorities as a using (taxon_no)
+	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY o.occurrence_no
 	ORDER BY $order_clause
 	$limit";
+    
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
     
     # Then prepare and execute the main query.
     
@@ -479,10 +479,9 @@ sub refs {
     my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
     
     $self->{main_sql} = "
-	SELECT $calc $fields, s.reference_rank FROM refs as r JOIN
+	SELECT $calc $fields, s.reference_rank FROM refs as r, 1 as is_occ JOIN
 	   (SELECT o.reference_no, count(*) as reference_rank
-	    FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		JOIN authorities as a using (taxon_no)
+	    FROM $OCC_MATRIX as o STRAJOIN $COLL_MATRIX as c using (collection_no)
 		$inner_join_list
             WHERE $filter_string
 	    GROUP BY o.reference_no) as s using (reference_no)
@@ -490,6 +489,8 @@ sub refs {
 	WHERE $ref_filter_string
 	ORDER BY $order
 	$limit";
+    
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
     
     # Then prepare and execute the main query.
     
@@ -578,10 +579,12 @@ sub generateJoinList {
     
     # Create the necessary join expressions.
     
-    $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
-	if $tables->{oc};
     $join_list .= "JOIN collections as cc on c.collection_no = cc.collection_no\n"
 	if $tables->{cc};
+    $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
+	if $tables->{oc};
+    $join_list .= "JOIN authorities as a on a.taxon_no = o.taxon_no\n";
+    
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
 	if $tables->{t};
     $join_list .= "LEFT JOIN taxon_trees as ts on ts.orig_no = t.synonym_no\n"
@@ -603,6 +606,8 @@ sub generateJoinList {
 	if $tables->{ei};
     $join_list .= "LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no\n"
 	if $tables->{li};
+    $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc"
+	if $tables->{ccmap};
     
     return $join_list;
 }

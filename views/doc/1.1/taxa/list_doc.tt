@@ -7,5 +7,7 @@ Database, selected according to their relationship with one or more base taxa.
 
 <% PROCESS params %>
 
+<% PROCESS methods %>
+
 <% PROCESS response %>
 

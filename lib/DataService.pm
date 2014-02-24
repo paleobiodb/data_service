@@ -29,7 +29,7 @@ use Web::DataService::JSON qw(json_list_value);
 use HTTP::Validate qw( :validators );
 
 
-HTTP::Validate->VERSION(0.34);
+HTTP::Validate->VERSION(0.35);
 
 #use Dancer qw( :syntax );
 use Dancer::Plugin;
@@ -790,7 +790,10 @@ sub execute_path {
 	
 	if ( $ruleset )
 	{
-	    my $result = $validator->check_params($ruleset, Dancer::params);
+	    my $context = { ds => $self, request => $request };
+	    my $params = Dancer::params;
+	    
+	    my $result = $validator->check_params($ruleset, $context, $params);
 	    
 	    if ( $result->errors )
 	    {
@@ -861,14 +864,6 @@ sub execute_path {
 	
 	$request->$method($arg);
 	
-	# If we are in debug mode, print out the main sql statement.
-	
-	if ( $self->{DEBUG} && defined $request->{main_sql} )
-	{
-	    print STDERR $request->{main_sql} . "\n\n";
-	    $req_output = 1;
-	}
-	
 	# Then we use the output configuration and the result of the query
 	# operation to generate the actual output.  How we do this depends
 	# upon how the query operation chooses to return its data.  It must
@@ -921,12 +916,6 @@ sub execute_path {
     # If an error occurs, return an appropriate error response to the client.
     
     catch {
-	
-	if ( $self->{DEBUG} && defined $request->{main_sql} && ! $req_output )
-	{
-	    print STDERR $request->{main_sql} . "\n\n";
-	    $req_output = 1;
-	}
 	
 	return $self->error_result($path, $format, $_);
     };

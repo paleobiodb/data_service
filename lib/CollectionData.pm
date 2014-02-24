@@ -14,17 +14,17 @@ use parent 'Web::DataService::Request';
 use Web::DataService qw( :validators );
 
 use CommonData qw(generateReference generateAttribution);
-use CollectionTables qw($COLL_MATRIX $COLL_BINS $COLL_STRATA @BIN_LEVEL);
+use CollectionTables qw($COLL_MATRIX $COLL_BINS $COLL_STRATA @BIN_LEVEL $COUNTRY_MAP);
 use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use Taxonomy;
 
 use Carp qw(carp croak);
 use POSIX qw(floor ceil);
 
-our (@REQUIRES_CLASS) = qw(CommonData ReferenceData);
+our (@REQUIRES_CLASS) = qw(CommonData ConfigData ReferenceData);
 
 our ($MAX_BIN_LEVEL) = 0;
-
+our (%COUNTRY_NAME, %CONTINENT_NAME);
 
 # initialize ( )
 # 
@@ -53,6 +53,18 @@ sub initialize {
 	}
 	
 	$MAX_BIN_LEVEL = $bin_level;
+    }
+    
+    # Then get a list of countries and continents.
+    
+    foreach my $r ( @$ConfigData::COUNTRIES )
+    {
+	$COUNTRY_NAME{$r->{cc}} = $r->{name};
+    }
+    
+    foreach my $r ( @$ConfigData::CONTINENTS )
+    {
+	$CONTINENT_NAME{$r->{continent_code}} = $r->{continent_name};
     }
     
     # Define an output map listing the blocks of information that can be
@@ -401,7 +413,10 @@ sub initialize {
 	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
 	{ param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
 	    "Return only records whose geographic location falls within the specified geometry, specified in WKT format.",
-	{ param => 'continent', valid => ANY_VALUE, list => ',' },
+	{ param => 'country', valid => \&valid_country, list => ',', alias => 'cc', bad_value => '_' },
+	    "Return only records whose geographic location falls within the specified country or countries.",
+	    "The value of this parameter should be one or more two-character country codes as a comma-separated list.",
+	{ param => 'continent', valid => \&valid_continent, list => ',', bad_value => '_' },
 	    "Return only records whose geographic location falls within the specified continent(s).  The list of accepted",
 	    "continents can be retrieved via a L<config|/data1.1/config> request.",
 	{ param => 'formation', valid => ANY_VALUE, list => ',' },
@@ -586,7 +601,7 @@ sub get {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
+	FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc using on cc.collection_no = c.collection_no
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id and c.access_level = 0
@@ -691,13 +706,15 @@ sub list {
 	
     $self->{main_sql} = "
 	SELECT $calc $fields
-	FROM coll_matrix as c join collections as cc using (collection_no)
+	FROM coll_matrix as c STRAIGHT_JOIN collections as cc on cc.collection_no = c.collection_no
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no
 	ORDER BY $order_clause
 	$limit";
+    
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
     
     # Then prepare and execute the main query and the secondary query.
     
@@ -771,7 +788,7 @@ sub refs {
     $self->{main_sql} = "
 	SELECT $calc $fields, s.reference_rank FROM refs as r JOIN
 	   (SELECT sr.reference_no, count(*) as reference_rank
-	    FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
+	    FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc on cc.collection_no = c.collection_no
 		LEFT JOIN secondary_refs as sr using (collection_no)
 		$inner_join_list
             WHERE $filter_string
@@ -780,6 +797,8 @@ sub refs {
 	WHERE $ref_filter_string
 	ORDER BY $order
 	$limit";
+    
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
     
     # Then prepare and execute the main query.
     
@@ -840,6 +859,8 @@ sub strata {
 	GROUP BY cs.name, cs.rank
 	ORDER BY cs.name
 	$limit";
+    
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
     
     # Then prepare and execute the main query and the secondary query.
     
@@ -1072,6 +1093,35 @@ sub generateMainFilters {
     {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
 	$tables_ref->{t} = 1;
+    }
+    
+    # Check for parameters 'continent', 'country'
+    
+    if ( my @ccs = $self->clean_param_list('country') )
+    {
+	if ( $ccs[0] eq '_' )
+	{
+	    push @filters, "c.collection_no = 0";
+	}
+	else
+	{
+	    my $cc_list = "'" . join("','", @ccs) . "'";
+	    push @filters, "c.cc in ($cc_list)";
+	}
+    }
+    
+    if ( my @continents = $self->clean_param_list('continent') )
+    {
+	if ( $continents[0] eq '_' )
+	{
+	    push @filters, "c.collection_no = 0";
+	}
+	else
+	{
+	    my $cont_list = "'" . join("','", @continents) . "'";
+	    push @filters, "ccmap.continent in ($cont_list)";
+	    $tables_ref->{ccmap} = 1;
+	}
     }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax'
@@ -1581,7 +1631,9 @@ sub generateJoinList {
 	if $tables->{ei};
     $join_list .= "LEFT JOIN $INTERVAL_DATA as li on li.interval_no = $mt.late_int_no\n"
 	if $tables->{li};
-        
+    $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc"
+	if $tables->{ccmap};
+    
     return $join_list;
 }
 
@@ -1641,6 +1693,56 @@ sub generateBasisCode {
 }
 
 
+# valid_country ( )
+# 
+# Validate values for the 'country' parameter.
+
+my $country_error = "bad value {value} for {param}: must be a country code from ISO-3166-1 alpha-2";
+
+sub valid_country {
+    
+    my ($value, $context) = @_;
+    
+    # Start with a simple syntactic check.
+    
+    return { error => $country_error }
+	unless $value =~ /^[a-zA-Z]{2}$/;
+    
+    # Then check it against the database.
+    
+    my $valid = exists $COUNTRY_NAME{uc $value};
+    
+    return $valid ? { value => uc $value }
+		  : { error => $country_error };
+}
+
+
+# valid_continent ( )
+# 
+# Validate values for the 'continent' parameter.
+
+sub valid_continent {
+    
+    my ($value, $context) = @_;
+    
+    # Start with a simple syntactic check.
+    
+    return { error => continent_error() }
+	unless $value =~ /^[a-zA-Z]{3}$/;
+    
+    # Then check it against the database.
+    
+    my $valid = exists $CONTINENT_NAME{uc $value};
+    
+    return $valid ? { value => uc $value }
+		  : { error => continent_error() };
+}
+
+sub continent_error {
+    
+    my $list = "'" . join("', '", keys %CONTINENT_NAME) . "'";
+    return "bad value {value} for {param}, must be one of: $list";
+}
 
 # cache_still_good ( key, created )
 # 

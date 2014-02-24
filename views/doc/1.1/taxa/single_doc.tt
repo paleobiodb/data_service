@@ -6,5 +6,7 @@ This path returns information about individual taxonomic names stored in the Pal
 
 <% PROCESS params %>
 
+<% PROCESS methods %>
+
 <% PROCESS response %>
 

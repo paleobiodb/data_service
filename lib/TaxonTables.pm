@@ -1025,6 +1025,7 @@ sub buildOpinionCache {
 			   pubyr varchar(4),
 			   status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 			   spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
+			   reference_no int unsigned not null,
 			   suppress boolean,
 			   UNIQUE KEY (opinion_no),
 			   KEY (suppress)) ENGINE=MYISAM");
@@ -1136,7 +1137,7 @@ sub populateOpinionCache {
 				WHEN 'stated with evidence' THEN 3
 				ELSE 2 END)) AS ri,
 			if(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr,
-			o.status, o.spelling_reason, null
+			o.status, o.spelling_reason, o.reference_no, null
 		FROM $TAXON_TABLE{$tree_table}{opinions} as o
 			LEFT JOIN $TAXON_TABLE{$tree_table}{refs} as r using (reference_no)
 			JOIN $TAXON_TABLE{$tree_table}{authorities} as a1
@@ -2209,6 +2210,8 @@ sub computeHierarchy {
 		UPDATE $TREE_WORK as t JOIN $TREE_WORK as t2 ON t2.orig_no = t.parent_no
 		SET t.parsen_no = t2.synonym_no");
     
+    logMessage(2, "    indexing parsen_no");
+    
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parsen_no)");
     
     my $a = 1;
@@ -2687,6 +2690,10 @@ sub assignSequence {
 	{
 	    foreach my $child_no ( @{$node->{children}} )
 	    {
+		my $child_node = $nodes->{$child_no};
+		my $child_depth = $depth;
+		$child_depth += 1 if $node->{parent_no} != $child_node->{parent_no};
+		
 		$seq = assignSequence($nodes, $child_no, $seq + 1, $depth + 1);
 	    }
 	}

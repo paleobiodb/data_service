@@ -170,29 +170,41 @@ sub buildCollectionTables {
     
     $result = $dbh->do($sql);
     
-    # Determine which collections fall into protected land.
+    # Determine which collections fall into protected land, if that data is available.
     
-    logMessage(2, "    determining protection status of collections...");
+    my ($prot_available) = eval {
+	$dbh->selectrow_array("SELECT count(*) FROM protected_land");
+    };
     
-    $dbh->do("DROP TABLE IF EXISTS protected_aux");
-    
-    $dbh->do("CREATE TABLE protected_aux (
+    if ( $prot_available > 0 )
+    {
+	logMessage(2, "    determining protection status of collections...");
+	
+	$dbh->do("DROP TABLE IF EXISTS protected_aux");
+	
+	$dbh->do("CREATE TABLE protected_aux (
 		collection_no int unsigned not null primary key,
 		category varchar(255)) Engine=MyISAM");
-    
-    $sql = "INSERT INTO protected_aux
+	
+	$sql = "INSERT INTO protected_aux
 	    SELECT collection_no, group_concat(category)
 	    FROM coll_matrix as m join protected_land as p on st_within(m.loc, p.shape)
 	    GROUP BY collection_no";
-    
-    $result = $dbh->do($sql);
-    
-    logMessage(2, "      setting protection attribute...");
-    
-    $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN protected_aux as p using (collection_no)
+	
+	$result = $dbh->do($sql);
+	
+	logMessage(2, "      setting protection attribute...");
+	
+	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN protected_aux as p using (collection_no)
 	    SET m.protected = p.category";
     
-    $result = $dbh->do($sql);
+	$result = $dbh->do($sql);
+    }
+    
+    else
+    {
+	logMessage(2, "    SKIPPING protected land: table 'protected_land' not found");
+    }
     
     # Assign the collections to bins at the various binning levels.
     

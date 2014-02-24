@@ -467,6 +467,8 @@ our ($COUNT_PHYLO_FIELDS) = ", pc.phylum_count, pc.class_count, pc.order_count, 
 
 our ($IMG_FIELDS) = ", v.image_no";
 
+our ($REF_BASIC_FIELDS) = "r.reference_no, r.author1init as r_ai1, r.author1last as r_al1, r.author2init as r_ai2, r.author2last as r_al2, r.otherauthors as r_oa, r.pubyr as r_pubyr, r.reftitle as r_reftitle, r.pubtitle as r_pubtitle, r.editors as r_editors, r.pubvol as r_pubvol, r.pubno as r_pubno, r.firstpage as r_fp, r.lastpage as r_lp, r.publication_type as r_pubtype, r.language as r_language, r.doi as r_doi";
+
 # The following hash is used by the return option 'id_table'.
 
 our(%TAXON_FIELD) = ('lft' => 1, 'rgt' => 1, 'depth' => 1, 'opinion_no' => 1,
@@ -4493,6 +4495,682 @@ sub getTaxaIds {
 	{
 	    return @$taxon_nos;
 	}
+    }
+}
+
+
+=head3 getTaxonReferences ( relationship, base_taxa, options )
+
+This method returns a list of references associated with the taxa
+corresponding to the arguments.  If no matching taxa are found, it returns an
+empty list.  The parameter C<base_taxa> may be either a taxon number or a
+Taxon object, an array of either of these, or a hash whose keys are taxon
+numbers.
+
+In addition to the basic fields that are returned by all of the methods of
+this class, the field C<base_no> will be included where appropriate to
+indicate which of the base taxa each returned taxon is related to.
+
+Other tables can be joined to the query, by means of the options
+'join_tables', 'extra_fields' and 'extra_filters'.
+
+Possible relationships are:
+
+=over 4
+
+=item self
+
+Returns the references associated with the specified base taxa.
+
+=item all_children
+
+Returns a list of objects representing all the taxa contained within the base
+taxon or taxa (all of their descendants).
+
+=back
+
+Possible options are:
+
+=over 4 
+
+=item return
+
+Specifies the manner in which the matching taxa will be returned.  Recognized
+values for this method are: 'list', 'hash', 'base', 'id', 'id_table', 'count'.
+
+=item select
+
+Specifies which kinds of associated references are returned.  The default
+is 'both'.  Possible values include:
+
+=over
+
+=item authority
+
+Returns the references associated with the authority records for the
+selected taxa.
+
+=item classification
+
+Returns only the references associated with the classifying opinions for the
+selected taxa.
+
+=item both
+
+Returns the references associated with the authority records and/or the
+classifying opinions for the selected taxa.  This is the default if the option
+is not specified.
+
+=item opinions
+
+Returns the references associated with all opinions about the selected taxa.
+
+=item all
+
+Returns the references associated with the authority records and all opinions
+for the selected taxa.
+
+=back
+
+=item status
+
+Return only taxa which have the specified status (see above).  It defaults to
+'all' for relationship 'spellings', and 'valid' otherwise.
+
+=item extant
+
+Return only taxa whose extancy corresponds to the value of this option (see above).
+
+=item type_body_part
+
+Return only taxa whose 'type_body_part' attribute matches one or more of the
+specified values.
+
+=item preservation
+
+Return only taxa whose 'preservation' attribute matches one or more of the
+specified values.
+
+=item rank
+
+Returns only taxa which match the specified rank or ranks (see above).
+
+=item author
+
+This option filters the list of resulting taxa, returning only those that
+match the author name given as the value of the option.  The value of this
+option should be a last name only, and selects taxa which match in the 'first
+author' or 'second author' fields.  The value can either be a single name, a
+comma-separated list, or a listref.
+
+=item pubyr
+
+This option filters the list of resulting taxa, returning only those that
+match the publication year given as the value of the option.  This match is done
+according to the 'pubyr_rel' option if specified, or an exact match otherwise.
+
+=item pubyr_rel
+
+This option affects the way in which the 'pubyr' option is interpreted, and
+otherwise has no effect.  Possible values are '<', '<=', '=', '>=', '>', '<>',
+'before', 'after', and 'exact'.
+
+=item person_no
+
+This option filters the list of resulting taxa, returning only those that have
+been touched by the person or people given by the value of the option.  The
+value can either be a single person_no value, a comma-separated list of them,
+or a listref.  The filter is done according to the value of the option
+'person_rel' if specified, or 'all' if not.
+
+=item person_rel
+
+This option affects the way in which the 'person' option is interpreted, and
+otherwise has no effect.  Possible values are 'all', 'authorizer', 'enterer',
+'modifier', and 'authorizer_enterer'.  Taxa are selected only if any of the
+people specified by the 'person' option have touched them in the role or roles
+specified by this option.
+
+=item created
+
+This option filters the list of resulting taxa, returning only those for which
+the 'created' date on the record relates to the date specified by the value of
+this option according to 'created_rel'.  If the latter option was not
+specified, it defaults to 'after'.
+
+=item created_rel
+
+This option affects the way in which the 'created' option is interpreted, and
+otherwise has no effect.  Possible values are '<', 'before', '>=', 'after'.
+
+=item modified
+
+This option filters the list of resulting taxa, returning only those for which
+the 'modified' date on the record relates to the date specified by the value
+of this option according to 'modified_rel'.  If the latter option was not
+specified, it defaults to 'after'.
+
+=item modified_rel
+
+This option affects the way in which the 'modified' option is interpreted, and
+otherwise has no effect.  Possible values are '<', 'before', '>=', 'after'.
+
+=item exclude
+
+If specified, then the indicated taxa and all of their children are excluded
+from the returned list.  This option is only valid for relationships
+'children', 'all_children' and 'all_taxa'.  The value of this option can be
+either a single taxon_no value or a comma-separated list, a taxon object, or a
+listref, or an object previously generated by C<generateExclusion>.
+
+=item exclude_self
+
+If specified, then the base taxon or taxa are excluded from the returned
+list.  By default, they are included.
+
+=item order
+
+If specified, the list of references is ordered by the specified criteria.  If
+'.desc' is appended to the value, they are ranked in descending order.
+Otherwise, they are ranked in ascending order.  Possible values include:
+
+=over 4
+
+=item author
+
+Results are ordered alphabetically by author name.
+
+=item pubyr
+
+Results are ordered by year of publication.
+
+=item rank
+
+Results are ordered by the number of associated taxa.
+
+=item pubtitle
+
+Results are ordered alphabetically by publication title.
+
+=item created
+
+Results are ordered by the date the record was created.
+
+=item modified
+
+Results are ordered by the date the record was last modified.
+
+=back
+
+If not specified, the order of the returned references will be alphabetical by
+author name.
+
+=item spelling
+
+Taxonomic names will be treated according to the specified rule (see above).
+The accepted values for this method are 'current' and 'all'.  If this
+option is not specified, it defaults to 'current'.
+
+=back
+
+=cut
+ 
+sub getTaxonReferences {
+    
+    my ($self, $parameter, $base_taxa, $options) = @_;
+    
+    # Check arguments.  Only throw an error if we were given a reference but
+    # couldn't find a taxon number.  If we were passed the undefined value or
+    # a taxon number of zero, carp a warning and return undefined.
+    
+    my $rel = lc $parameter;
+    
+    my $base_nos = $self->generateBaseNos($base_taxa);
+    return unless ref $base_nos and %$base_nos;
+    
+    # Set option defaults.
+    
+    my $extra_tables = {};
+    
+    $options ||= {};
+    
+    my $return = defined $options->{return} ? lc $options->{return} : 'list';
+    
+    my $status = 'valid';
+    
+    if ( defined $options->{status} and $options->{status} ne '' )
+    {
+	$status = lc $options->{status};
+    }
+    
+    else
+    {
+	$status = 'valid';
+    }
+    
+    my $spelling = defined $options->{spelling} && $options->{spelling} ne '' ? 
+	lc $options->{spelling} : 'current';
+    
+    unless ( $spelling eq 'current' or $spelling eq 'trad' or $spelling eq 'all' )
+    {
+	croak "invalid value '$options->{spelling}' for option 'spelling'";
+    }
+    
+    $spelling = 'spelling' if $spelling eq 'current';
+    
+    my $select = defined $options->{select} && $options->{select} ne '' ? 
+	lc $options->{select} : 'both';
+    
+    unless ( $select eq 'authority' or $select eq 'classification' or $select eq 'both'
+	     or $select eq 'opinions' or $select eq 'all' )
+    {
+	croak "invalid value '$options->{select}' for option 'select'";
+    }
+    
+    # Set filter clauses based on the specified options
+    
+    my (@filter_list, @param_list);
+    my ($quick_count) = 1;
+    
+    if ( scalar(keys %$base_nos) == 1 )
+    {
+	my ($base_no) = keys %$base_nos;
+	push @filter_list, "a2.taxon_no = $base_no";
+    }
+    
+    else
+    {
+	push @filter_list, 'a2.taxon_no in (' . join(',', keys %$base_nos) . ')';
+    }
+    
+    if ( $options->{exclude_self} && $rel eq 'all_children' )
+    {
+	push @filter_list, "t.lft != t2.lft";
+    }
+    
+    if ( defined $options->{exclude} && $rel eq 'all_children' )
+    {
+	push @filter_list, $self->generateExcludeFilter('t', $options->{exclude});
+	$quick_count = 0;
+    }
+    
+    if ( $status ne 'all' )
+    {
+	push @filter_list, $self->generateStatusFilter('o', $status);
+    }
+    
+    if ( defined $options->{rank} )
+    {
+	push @filter_list, $self->generateRankFilter('a', $options->{rank});
+	$quick_count = 0;
+    }
+    
+    if ( defined $options->{extant} )
+    {
+	push @filter_list, $self->generateExtantFilter('v', $options->{extant});
+	$extra_tables->{v} = 1;
+    }
+    
+    if ( defined $options->{author} )
+    {
+	push @filter_list, $self->generateAuthorFilter('a', $options->{author});
+	$quick_count = 0;
+    }
+    
+    if ( defined $options->{pubyr} )
+    {
+	push @filter_list, $self->generatePubyrFilter('a', $options->{pubyr},
+						      $options->{pubyr_rel});
+	$quick_count = 0;
+    }
+    
+    if ( defined $options->{type_body_part} )
+    {
+	push @filter_list, $self->generateAttributeFilter('a', 'type_body_part', 'type_body_part',
+							  $options->{type_body_part});
+    }
+    
+    if ( defined $options->{preservation} )
+    {
+	push @filter_list, $self->generateAttributeFilter('a', 'preservation', 'preservation',
+							  $options->{preservation});
+    }
+    
+    if ( defined $options->{created} )
+    {
+	push @filter_list, $self->generateDateFilter('a.created', $options->{created},
+						     $options->{created_rel});
+	$quick_count = 0;
+    }
+    
+    if ( defined $options->{modified} )
+    {
+	push @filter_list, $self->generateDateFilter('a.modified', $options->{modified},
+						     $options->{modified_rel});
+	$quick_count = 0;
+    }
+    
+    if ( defined $options->{person_no} )
+    {
+	push @filter_list, $self->generatePersonFilter('a', $options->{person_no},
+						       $options->{person_rel});
+	$quick_count = 0;
+    }
+    
+    if ( $spelling eq 'current' )
+    {
+	push @filter_list, 'a.taxon_no = t.spelling_no';
+    }
+    
+    # Select the order in which the results will be returned, as well as the
+    # grouping and the limit if any.
+    
+    my $order_expr = '';
+    
+    # if ( defined $options->{order} and $return ne 'count' )
+    # {
+    # 	my $direction = $options->{order} =~ /\.desc$/ ? 'DESC' : 'ASC';
+		
+    # 	if ( $options->{order} =~ /^size/ )
+    # 	{
+    # 	    $extra_tables->{v} = 1;
+    # 	    $order_expr = "ORDER BY v.taxon_size $direction";
+    # 	}
+	
+    # 	elsif ( $options->{order} =~ /^name/ )
+    # 	{
+    # 	    $order_expr = "ORDER BY a.taxon_name $direction";
+    # 	}
+	
+    # 	elsif ( $options->{order} =~ /^lft/ )
+    # 	{
+    # 	    $order_expr = "ORDER BY t.lft $direction";
+    # 	}
+	
+    # 	else
+    # 	{
+    # 	    croak "invalid value '$options->{order}' for option 'order'";
+    # 	}
+    # }
+    
+    # And the limit if necessary.
+    
+    my ($count_expr, $limit_expr) = $self->generateCountLimitExpr($options);
+    
+    # Compute the necessary expressions to build the query
+    
+    my $dbh = $self->{dbh};
+    my $tree_table = $self->{tree_table};
+    my $auth_table = $self->{auth_table};
+    my $name_table = $self->{name_table};
+    my $opinion_cache = $self->{opinion_cache};
+    
+    my $filter_expr = join(' and ', @filter_list);
+    $filter_expr = "WHERE $filter_expr" if $filter_expr ne '';
+    my $extra_joins = $self->generateExtraJoins('a', $extra_tables, $spelling, $options);
+    
+    $order_expr = 'ORDER BY r.author1last, r.author1init, r.author2last, r.author2init'
+	if $order_expr eq '';
+    
+    my $group_expr = 'GROUP BY r.reference_no';
+    
+    my $query_fields = $REF_BASIC_FIELDS . ", count(distinct t.orig_no) as reference_rank";
+    my $opinions_join = "LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no\n";
+    my $ref_selector = '';
+    
+    if ( $select eq 'authority'	)
+    {
+	$ref_selector = 'r.reference_no = a.reference_no';
+	$query_fields .= ", 1 as is_auth";
+    }
+    
+    elsif ( $select eq 'classification' )
+    {
+	$ref_selector = 'r.reference_no = o.reference_no';
+	$query_fields .= ", 1 as is_class";
+    }
+    
+    elsif ( $select eq 'opinions' )
+    {
+	$ref_selector = 'r.reference_no = o.reference_no || r.reference_no = oa.reference_no';
+	$query_fields .= ", sum(if(r.reference_no = o.reference_no, 1, null)) as is_class";
+	$query_fields .= ", 1 as is_opinion";
+	$opinions_join = "LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no\n" .
+	    "LEFT JOIN $opinion_cache as oa on oa.child_spelling_no = a.taxon_no\n";
+    }
+    
+    elsif ( $select eq 'both' )
+    {
+	$ref_selector = '(r.reference_no = a.reference_no or r.reference_no = o.reference_no)';
+	$query_fields .= ", sum(if(r.reference_no = a.reference_no, 1, null)) as is_auth";
+	$query_fields .= ", sum(if(r.reference_no = o.reference_no, 1, null)) as is_class";
+    }
+    
+    elsif ( $select eq 'all' )
+    {
+	$ref_selector = '(r.reference_no = a.reference_no or r.reference_no = o.reference_no)';
+	$query_fields .= ", sum(if(r.reference_no = a.reference_no, 1, null)) as is_auth";
+	$query_fields .= ", sum(if(r.reference_no = o.reference_no and o.opinion_no = t.opinion_no, 1, null)) as is_class";
+	$query_fields .= ", sum(if(r.reference_no = o.reference_no, 1, null)) as is_opinion";
+	$opinions_join = "LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no\n" .
+	    "LEFT JOIN $opinion_cache as oa on oa.child_spelling_no = a.taxon_no\n";
+    }
+    
+    else
+    {
+	croak "unrecognized value '$select' for option 'select'";
+    }
+    
+    # Now, get ready to do the query.  If we were asked for just the count, just do
+    # that.  If we were asked for just the reference_nos, just do that.
+    
+    if ( $return eq 'count' )
+    {
+	$query_fields = 'count(distinct reference_no) as count';
+	$group_expr = '';
+    }
+    
+    elsif ( $return eq 'id' or $return eq 'id_table' )
+    {
+	$query_fields = 'r.reference_no';
+    }
+    
+    # For parameter 'self', we just select the references associated with the
+    # indicated taxa.  If spelling=current, a filter was added above.
+    
+    if ( $rel eq 'self' )
+    {
+	$filter_expr =~ s/a2\./a\./g;
+	
+	$SQL_STRING = "
+		SELECT $count_expr $query_fields
+		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+			$opinions_join
+			JOIN refs as r on $ref_selector
+			$extra_joins
+		$filter_expr
+		$group_expr $order_expr $limit_expr";
+    }
+    
+    # For parameter 'all_children', we need a two-level join on the tree table.
+    
+    elsif ( $rel eq 'all_children' )
+    {
+	$SQL_STRING = "
+		SELECT $count_expr $query_fields
+		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+			JOIN $tree_table as t2 on t.lft >= t2.lft and t.lft <= t2.rgt
+			JOIN $auth_table as a2 on a2.orig_no = t2.orig_no
+			$opinions_join
+			JOIN refs as r on $ref_selector
+			$extra_joins
+		$filter_expr
+		$group_expr $order_expr $limit_expr";
+    }
+    
+    else
+    {
+	croak "invalid relationship '$parameter'";
+    }
+    print STDERR $SQL_STRING . "\n\n";
+    # Now execute the indicated query!!!  If we are asked to return a
+    # statement handle, do so.
+    
+    if ( $return eq 'stmt' )
+    {
+	my ($stmt) = $dbh->prepare($SQL_STRING);
+	$stmt->execute();
+	
+	return $stmt;
+    }
+    
+    # Otherwise, generate a result list.
+    #print STDERR $SQL_STRING . "\n\n";
+    
+    my $result_list = $dbh->selectall_arrayref($SQL_STRING, { Slice => {} });
+    
+    # If we didn't get any results, return nothing.
+    
+    unless ( ref $result_list eq 'ARRAY' and @$result_list )
+    {
+	return;
+    }
+    
+    # For some of the relationships, we need to do some post-processing:
+    
+    # For 'juniors', we must separate junior from senior synonyms.
+    
+    if ( $rel eq 'juniors' )
+    {
+	my (%taxon, %is_junior, @juniors);
+	
+	# First build a hash table of orig_no values.  These correspond to the
+	# classification_no values, and thus can be used to follow synonym
+	# chains.
+	
+	foreach my $t (@$result_list)
+	{
+	    $taxon{$t->{orig_no}} = $t;
+	}
+	
+	# Then, for each taxon number, follow its synonym chain.  If we find a
+	# base taxon or known junior synonym, everything in the chain up to that
+	# point is a junior synonym.  If not, everything in the chain up to
+	# that point is a senior synonym.
+	
+	foreach my $t (@$result_list)
+	{
+	    # If we've already decided the status of this taxon, skip to the
+	    # next one.
+	    
+	    next if defined $is_junior{$t->{orig_no}};
+	    
+	    # Otherwise, follow the classification links until we either find
+	    # a base taxon, or a known junior synonym, or the end of the
+	    # chain.
+	    
+	    my @so_far = ($t);
+	    my $i = $taxon{$t->{classification_no}};
+	    
+	    while ( defined $i )
+	    {
+		last if $i->{is_base} or $is_junior{$i->{orig_no}};
+		push @so_far, $i;
+		$i = $taxon{$i->{classification_no}};
+	    }
+	    
+	    # If we aren't at the end of the chain, we must have found a base
+	    # taxon or known junior synonym.  So everything we have
+	    # encountered so far was a junior synonym.  Otherwise, everything
+	    # we have encountered so far is known not to be a junior synonym.
+	    
+	    foreach my $u (@so_far)
+	    {
+		if ( defined $i )
+		{
+		    $is_junior{$u->{orig_no}} = 1;
+		    push @juniors, $u;
+		}
+		else
+		{
+		    $is_junior{$u->{orig_no}} = 0;
+		}
+	    }
+	}
+	
+	$result_list = \@juniors;
+    }
+    
+    # For 'common_ancestor', we must go through the list and find the most recent
+    # common ancestor.
+    
+    elsif ( $rel eq 'common_ancestor' )
+    {
+	# First find the minimum and maximum tree sequence values for the base
+	# taxa.
+	
+	my $min;
+	my $max = 0;
+	my $common_ancestor;
+	
+	foreach my $t (@$result_list)
+	{
+	    if ( $t->{is_base} )
+	    {
+		$min = $t->{lft} if $t->{lft} < $min or !defined $min;
+		$max = $t->{lft} if $t->{lft} > $max;
+	    }
+	}
+	
+	# Then find the latest taxon which encompasses all of the base taxa.
+	
+	foreach my $t (reverse @$result_list)
+	{
+	    $common_ancestor = $t if $t->{lft} <= $min and $t->{rgt} >= $max;
+	}
+	
+	# The result list should be just that taxon.
+	
+	@$result_list = $common_ancestor;
+    }
+    
+    # Now bless all of the objects that we found (if any) into the proper
+    # package.  If the option 'hash' was specified, we construct a hash
+    # reference.  Otherwise, we return the list.
+    
+    my %hashref;
+    
+    if ( $return eq 'base' and $rel ne 'all_parents' )
+    {
+	foreach my $t (@$result_list)
+	{
+	    bless $t, 'Taxon';
+	    $hashref{$t->{base_no}} ||= [];
+	    push @{$hashref{$t->{base_no}}}, $t;
+	}
+	
+	return \%hashref;
+    }
+    
+    elsif ( $return eq 'hash' or $return eq 'base' )
+    {
+	foreach my $t (@$result_list)
+	{
+	    bless $t, 'Taxon';
+	    $hashref{$t->{taxon_no}} = $t;
+	}
+	
+	return \%hashref;
+    }
+    
+    else
+    {
+	foreach my $t (@$result_list)
+	{
+	    bless $t, 'Taxon';
+	}
+
+	return @$result_list;
     }
 }
 
