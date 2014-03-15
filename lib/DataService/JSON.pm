@@ -83,6 +83,7 @@ sub emit_header {
     {
 	my $counts = $request->result_counts;
 	
+	$output .= '"elapsed_time":' . sprintf("%.3g", $request->{elapsed}) . ",\n";
 	$output .= '"records_found":' . json_clean($counts->{found}) . ",\n";
 	$output .= '"records_returned":' . json_clean($counts->{returned}) . ",\n";
 	$output .= '"record_offset":' . json_clean($counts->{offset}) . ",\n"
@@ -181,6 +182,11 @@ sub emit_object {
 	# field does not have a true value.
 	
 	next if $f->{if_field} and not $record->{$f->{if_field}};
+	
+	# Skip any field with a 'not_field' attribute if the corresponding
+	# field has a true value.
+	
+	next if $f->{not_field} and $record->{$f->{not_field}};
 	
 	# Start with the initial value for this field.  If it contains a
 	# 'value' attribute, use that.  Otherwise, use the indicated field
@@ -390,8 +396,7 @@ sub json_clean {
     
     # Do a quick check for numbers.  If it matches, return the value as-is.
     
-    return $string if $string =~
-    /^-?(?:[0-9]+|[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:[Ee]-?\d+)?$/;
+    return $string if $string =~ qr{ ^ -? (?: [1-9][0-9]* | 0 ) (?: \. [0-9]+ )? (?: [Ee] -? [0-9]+ )? $ }x;
     
     # Do another quick check for okay characters.  If there's nothing exotic,
     # just return the quoted value.

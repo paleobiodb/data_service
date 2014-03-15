@@ -80,11 +80,11 @@ sub initialize {
     $ds->define_ruleset('1.1:common:select_crmod' =>
 	{ param => 'created_before', valid => \&datetime_value },
 	    "Select only records that were created before the specified L<date or date/time|/data1.1/datetime>.",
-	{ param => 'created_since', valid => \&datetime_value },
+	{ param => 'created_after', valid => \&datetime_value, alias => 'created_since' },
 	    "Select only records that were created on or after the specified L<date or date/time|/data1.1/datetime>.",
 	{ param => 'modified_before', valid => \&datetime_value },
 	    "Select only records that were last modified before the specified L<date or date/time|/data1.1/datetime>.",
-	{ param => 'modified_since', valid => \&datetime_value },
+	{ param => 'modified_after', valid => \&datetime_value, alias => 'modified_since' },
 	    "Select only records that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
     
     $ds->define_block('1.1:common:crmod' =>
@@ -195,7 +195,7 @@ sub generate_crmod_filters {
     
     my @filters;
     
-    if ( my $dt = $self->clean_param('created_since') )
+    if ( my $dt = $self->clean_param('created_after') )
     {
 	push @filters, "$table_name.created >= $dt";
     }
@@ -205,7 +205,7 @@ sub generate_crmod_filters {
 	push @filters, "$table_name.created < $dt";
     }
     
-    if ( my $dt = $self->clean_param('modified_since') )
+    if ( my $dt = $self->clean_param('modified_after') )
     {
 	push @filters, "$table_name.modified >= $dt";
     }

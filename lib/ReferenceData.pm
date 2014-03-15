@@ -49,16 +49,19 @@ sub initialize {
     # Output sets:
     
     $ds->define_set('1.1:refs:reftype' =>
-	{ value => 'authority' },
+	{ value => 'auth' },
 	    "An authority reference gives the original source for a taxonomic name",
-	{ value => 'classification' },
-	    "A classification reference gives the source for a classification opinion",
-	{ value => 'opinion' },
-	    "An opinion reference gives the source for a non-classification opinion",
-	{ value => 'occurrence' },
-	    "An occurrence reference gives the source for a fossil occurrence",
-	{ value => 'collection' },
-	    "A collection reference gives the source for a fossil collection.");
+	{ value => 'class' },
+	    "A classification reference is the source for a classification opinion",
+	{ value => 'opin' },
+	    "An opinion reference is the source for an opinion that is not used for",
+	    "classification because it is not the most recent",
+	{ value => 'occ' },
+	    "An occurrence reference is the source for a fossil occurrence",
+	{ value => 'prim' },
+	    "A primary collection reference is marked as the primary source for a fossil collection",
+	{ value => 'coll' },
+	    "A collection reference is an additional source for a fossil collection.");
     
     # Then some output blocks:
     
@@ -80,8 +83,8 @@ sub initialize {
       { output => 'record_type', com_name => 'typ', com_value => 'ref', value => 'reference' },
 	  "The type of this object: 'ref' for a document reference",
       { output => 'ref_type', com_name => 'rtp' },
-	  "The type of reference this is.  Values can include one or more of the following:",
-	  $ds->document_set('1.1:refs:reftype'),
+	  "The type of reference represented by this object.  Values can include one or more of the following,",
+	  "as a comma-separated list:", $ds->document_set('1.1:refs:reftype'),
       { output => 'reference_rank', com_name => 'rct' },
 	  "The number of records (occurrences, taxa, etc. depending upon which URL path you used) associated with this reference",
       { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
@@ -723,27 +726,32 @@ sub set_reference_type {
     
     if ( $record->{is_auth} )
     {
-	push @types, 'authority';
+	push @types, 'auth';
     }
     
     if ( $record->{is_class} )
     {
-	push @types, 'classification';
+	push @types, 'class';
     }
     
     if ( $record->{is_opinion} && ! $record->{is_class} )
     {
-	push @types, 'opinion';
+	push @types, 'opin';
     }
     
     if ( $record->{is_occ} )
     {
-	push @types, 'occurrence';
+	push @types, 'occ';
     }
     
-    if ( $record->{is_coll} )
+    if ( $record->{is_primary} )
     {
-	push @types, 'collection';
+	push @types, 'prim';
+    }
+    
+    elsif ( $record->{is_coll} )
+    {
+	push @types, 'coll';
     }
     
     return join(',', @types);

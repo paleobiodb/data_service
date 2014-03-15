@@ -17,6 +17,7 @@ use Carp qw( croak );
 use Scalar::Util qw( reftype blessed weaken );
 use POSIX qw( strftime );
 use Try::Tiny;
+use Time::HiRes;
 
 use Web::DataService::Format;
 use Web::DataService::Vocabulary;
@@ -858,11 +859,20 @@ sub execute_path {
 	
 	$self->configure_output($request);
 	
+	# Prepare to time the query operation.
+	
+	my (@starttime) = Time::HiRes::gettimeofday();
+	
 	# Now execute the query operation.  This is the central step of this
 	# entire routine; everything before and after is in support of this
 	# call.
 	
 	$request->$method($arg);
+	
+	# Determine how long the query took.
+	
+	my (@endtime) = Time::HiRes::gettimeofday();
+	$request->{elapsed} = Time::HiRes::tv_interval(\@starttime, \@endtime);
 	
 	# Then we use the output configuration and the result of the query
 	# operation to generate the actual output.  How we do this depends

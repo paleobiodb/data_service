@@ -88,6 +88,7 @@ sub emit_header {
     {
 	my $counts = $request->result_counts;
 	
+	$output .= $class->emit_line($request, "Elapsed Time:", sprintf("%.3g", $request->{elapsed}));
 	$output .= $class->emit_line($request, "Records Found:", $counts->{found});
 	$output .= $class->emit_line($request, "Records Returned:", $counts->{returned});
 	$output .= $class->generate-line($request, "Starting Index:", $counts->{offset})
@@ -178,6 +179,12 @@ sub emit_record {
 	{
 	    $v = $record->{$f->{field}};
 	}
+	
+	# Cancel out the value if this field has the 'if_field' or 'not_field'
+	# attribute and the corresponding condition is true.
+	
+	$v = '' if $f->{if_field} and not $record->{$f->{if_field}};
+	$v = '' if $f->{not_field} and $record->{$f->{not_field}};
 	
 	# If the value is an array, join it into a string.  If no joining
 	# string was specified, use a comma.

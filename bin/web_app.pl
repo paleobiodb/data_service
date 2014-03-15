@@ -236,7 +236,11 @@ $ds->define_path({ path => '1.1/taxa/list',
 
 $ds->define_path({ path => '1.1/taxa/refs',
 		   output => '1.1:refs:output_map',
-		   method => 'list_refs' });
+		   method => 'list',
+		   arg => 'refs' });
+
+$ds->define_path({ path => '1.1/taxa/match',
+		   method => 'match' });
 
 $ds->define_path({ path => '1.1/taxa/auto',
 		   method => 'auto', 

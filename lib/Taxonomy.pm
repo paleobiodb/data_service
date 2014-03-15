@@ -3830,14 +3830,14 @@ sub getTaxa {
 	{
 	    if ( $t->{is_base} )
 	    {
-		$min = $t->{lft} if $t->{lft} < $min or !defined $min;
-		$max = $t->{lft} if $t->{lft} > $max;
+		$min = $t->{lft} if !defined $min or $t->{lft} < $min;
+		$max = $t->{lft} if !defined $max or $t->{lft} > $max;
 	    }
 	}
 	
 	# Then find the latest taxon which encompasses all of the base taxa.
 	
-	foreach my $t (reverse @$result_list)
+	foreach my $t (@$result_list)
 	{
 	    $common_ancestor = $t if $t->{lft} <= $min and $t->{rgt} >= $max;
 	}
@@ -4857,7 +4857,7 @@ sub getTaxonReferences {
 	$quick_count = 0;
     }
     
-    if ( $spelling eq 'current' )
+    if ( $spelling ne 'all' )
     {
 	push @filter_list, 'a.taxon_no = t.spelling_no';
     }
@@ -4865,7 +4865,8 @@ sub getTaxonReferences {
     # Select the order in which the results will be returned, as well as the
     # grouping and the limit if any.
     
-    my $order_expr = '';
+    my $order_expr = 'ORDER BY r.author1last, r.author1init, r.author2last, r.author2init';
+    my $group_expr = 'GROUP BY r.reference_no';
     
     # if ( defined $options->{order} and $return ne 'count' )
     # {
@@ -4897,7 +4898,8 @@ sub getTaxonReferences {
     
     my ($count_expr, $limit_expr) = $self->generateCountLimitExpr($options);
     
-    # Compute the necessary expressions to build the query
+    # Now, get ready to do the query.  We need to compute the various parts of
+    # the SQL expression, so that they can be put together below.
     
     my $dbh = $self->{dbh};
     my $tree_table = $self->{tree_table};
@@ -4907,67 +4909,21 @@ sub getTaxonReferences {
     
     my $filter_expr = join(' and ', @filter_list);
     $filter_expr = "WHERE $filter_expr" if $filter_expr ne '';
+    
+    my $inner_joins;
     my $extra_joins = $self->generateExtraJoins('a', $extra_tables, $spelling, $options);
     
-    $order_expr = 'ORDER BY r.author1last, r.author1init, r.author2last, r.author2init'
-	if $order_expr eq '';
+    # If we were asked for just the count, just do that.  If we were asked for
+    # just the reference_nos, just do that.  Otherwise, we need the full
+    # reference information.
     
-    my $group_expr = 'GROUP BY r.reference_no';
-    
-    my $query_fields = $REF_BASIC_FIELDS . ", count(distinct t.orig_no) as reference_rank";
-    my $opinions_join = "LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no\n";
-    my $ref_selector = '';
-    
-    if ( $select eq 'authority'	)
-    {
-	$ref_selector = 'r.reference_no = a.reference_no';
-	$query_fields .= ", 1 as is_auth";
-    }
-    
-    elsif ( $select eq 'classification' )
-    {
-	$ref_selector = 'r.reference_no = o.reference_no';
-	$query_fields .= ", 1 as is_class";
-    }
-    
-    elsif ( $select eq 'opinions' )
-    {
-	$ref_selector = 'r.reference_no = o.reference_no || r.reference_no = oa.reference_no';
-	$query_fields .= ", sum(if(r.reference_no = o.reference_no, 1, null)) as is_class";
-	$query_fields .= ", 1 as is_opinion";
-	$opinions_join = "LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no\n" .
-	    "LEFT JOIN $opinion_cache as oa on oa.child_spelling_no = a.taxon_no\n";
-    }
-    
-    elsif ( $select eq 'both' )
-    {
-	$ref_selector = '(r.reference_no = a.reference_no or r.reference_no = o.reference_no)';
-	$query_fields .= ", sum(if(r.reference_no = a.reference_no, 1, null)) as is_auth";
-	$query_fields .= ", sum(if(r.reference_no = o.reference_no, 1, null)) as is_class";
-    }
-    
-    elsif ( $select eq 'all' )
-    {
-	$ref_selector = '(r.reference_no = a.reference_no or r.reference_no = o.reference_no)';
-	$query_fields .= ", sum(if(r.reference_no = a.reference_no, 1, null)) as is_auth";
-	$query_fields .= ", sum(if(r.reference_no = o.reference_no and o.opinion_no = t.opinion_no, 1, null)) as is_class";
-	$query_fields .= ", sum(if(r.reference_no = o.reference_no, 1, null)) as is_opinion";
-	$opinions_join = "LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no\n" .
-	    "LEFT JOIN $opinion_cache as oa on oa.child_spelling_no = a.taxon_no\n";
-    }
-    
-    else
-    {
-	croak "unrecognized value '$select' for option 'select'";
-    }
-    
-    # Now, get ready to do the query.  If we were asked for just the count, just do
-    # that.  If we were asked for just the reference_nos, just do that.
+    my $query_fields;
     
     if ( $return eq 'count' )
     {
 	$query_fields = 'count(distinct reference_no) as count';
 	$group_expr = '';
+	$order_expr = '';
     }
     
     elsif ( $return eq 'id' or $return eq 'id_table' )
@@ -4975,47 +4931,125 @@ sub getTaxonReferences {
 	$query_fields = 'r.reference_no';
     }
     
+    else
+    {
+	$query_fields = $REF_BASIC_FIELDS . ", count(distinct orig_no) as reference_rank";
+    }
+    
     # For parameter 'self', we just select the references associated with the
-    # indicated taxa.  If spelling=current, a filter was added above.
+    # indicated taxa.  If spelling=current was specified, an appropriate
+    # filter was already added above. For parameter 'all_children', we join on
+    # taxon_trees twice in order to cover an entire taxonomic subtree.
     
     if ( $rel eq 'self' )
     {
 	$filter_expr =~ s/a2\./a\./g;
-	
-	$SQL_STRING = "
-		SELECT $count_expr $query_fields
-		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
-			$opinions_join
-			JOIN refs as r on $ref_selector
-			$extra_joins
-		$filter_expr
-		$group_expr $order_expr $limit_expr";
+	$inner_joins = "$auth_table as a JOIN $tree_table as t using (orig_no)";
     }
-    
-    # For parameter 'all_children', we need a two-level join on the tree table.
     
     elsif ( $rel eq 'all_children' )
     {
-	$SQL_STRING = "
-		SELECT $count_expr $query_fields
-		FROM $auth_table as a JOIN $tree_table as t using (orig_no)
+	$inner_joins = "$auth_table as a JOIN $tree_table as t using (orig_no)
 			JOIN $tree_table as t2 on t.lft >= t2.lft and t.lft <= t2.rgt
-			JOIN $auth_table as a2 on a2.orig_no = t2.orig_no
-			$opinions_join
-			JOIN refs as r on $ref_selector
-			$extra_joins
-		$filter_expr
-		$group_expr $order_expr $limit_expr";
+			JOIN $auth_table as a2 on a2.orig_no = t2.orig_no";
     }
     
     else
     {
-	croak "invalid relationship '$parameter'";
+	croak "invalid value '$rel' for 'relationship' parameter";
     }
-    print STDERR $SQL_STRING . "\n\n";
-    # Now execute the indicated query!!!  If we are asked to return a
-    # statement handle, do so.
     
+    # Now we put the query together depending upon which type of references
+    # are being selected.  We start with the "inner query" which retrieves the
+    # necessary set of reference_no values along with some columns that
+    # indicate what type of reference each one corresponds to.  Below, we will
+    # wrap that in an "outer query" which actually retrieves the necessary information.
+    
+    my $inner_query;
+    
+    if ( $select eq 'authority'	)
+    {
+	$inner_query = "SELECT a.reference_no, t.orig_no
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr";
+	$query_fields .= ", 1 as is_auth";
+    }
+    
+    elsif ( $select eq 'classification' )
+    {
+	$inner_query = "SELECT o.reference_no, t.orig_no
+		FROM $inner_joins
+			JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr";
+	$query_fields .= ", 1 as is_class";
+    }
+    
+    elsif ( $select eq 'opinions' )
+    {
+	$inner_query = "SELECT o.reference_no, t.orig_no, 1 as is_class
+		FROM $inner_joins
+			JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr
+		UNION
+		SELECT oa.reference_no, a.orig_no, 0 as is_class
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+			JOIN $opinion_cache as oa on oa.child_spelling_no = a.taxon_no
+		$filter_expr";
+	$query_fields .= ", sum(is_class) as is_class, 1 as is_opinion";
+    }
+    
+    elsif ( $select eq 'both' )
+    {
+	$inner_query = "SELECT a.reference_no, t.orig_no, 1 as is_auth, 0 as is_class
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr
+		UNION
+		SELECT o.reference_no, t.orig_no, 0 as is_auth, 1 as is_class
+		FROM $inner_joins
+			JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr";
+	$query_fields .= ", sum(is_auth) as is_auth, sum(is_class) as is_class";
+    }
+    
+    elsif ( $select eq 'all' )
+    {
+	$inner_query = "SELECT a.reference_no, t.orig_no, 1 as is_auth, 0 as is_class, 0 as is_opinion
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr
+		UNION
+		SELECT o.reference_no, t.orig_no, 0 as is_auth, 1 as is_class, 1 as is_opinion
+		FROM $inner_joins
+			JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr
+		UNION
+		SELECT oa.reference_no, a.orig_no, 0 as is_auth, 0 as is_class, 1 as is_opinion
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+			JOIN $opinion_cache as oa on oa.child_spelling_no = a.taxon_no
+		$filter_expr";
+	$query_fields .= ", sum(is_auth) as is_auth, sum(is_class) as is_class, sum(is_opinion) as is_opinion";
+    }
+    
+    else
+    {
+	croak "unrecognized value '$select' for option 'select'";
+    }
+    
+    # Now construct the full query using what we constructed above as a subquery.
+    
+    $SQL_STRING = "
+	SELECT $count_expr $query_fields
+	FROM refs as r JOIN
+	($inner_query) as s where r.reference_no = s.reference_no
+	$group_expr $order_expr $limit_expr";
+    
+    # Then execute the query!!!  If we are asked to return a
+    # statement handle, do so.
+    # print STDERR $SQL_STRING . "\n\n";
     if ( $return eq 'stmt' )
     {
 	my ($stmt) = $dbh->prepare($SQL_STRING);
@@ -5036,127 +5070,15 @@ sub getTaxonReferences {
 	return;
     }
     
-    # For some of the relationships, we need to do some post-processing:
-    
-    # For 'juniors', we must separate junior from senior synonyms.
-    
-    if ( $rel eq 'juniors' )
-    {
-	my (%taxon, %is_junior, @juniors);
-	
-	# First build a hash table of orig_no values.  These correspond to the
-	# classification_no values, and thus can be used to follow synonym
-	# chains.
-	
-	foreach my $t (@$result_list)
-	{
-	    $taxon{$t->{orig_no}} = $t;
-	}
-	
-	# Then, for each taxon number, follow its synonym chain.  If we find a
-	# base taxon or known junior synonym, everything in the chain up to that
-	# point is a junior synonym.  If not, everything in the chain up to
-	# that point is a senior synonym.
-	
-	foreach my $t (@$result_list)
-	{
-	    # If we've already decided the status of this taxon, skip to the
-	    # next one.
-	    
-	    next if defined $is_junior{$t->{orig_no}};
-	    
-	    # Otherwise, follow the classification links until we either find
-	    # a base taxon, or a known junior synonym, or the end of the
-	    # chain.
-	    
-	    my @so_far = ($t);
-	    my $i = $taxon{$t->{classification_no}};
-	    
-	    while ( defined $i )
-	    {
-		last if $i->{is_base} or $is_junior{$i->{orig_no}};
-		push @so_far, $i;
-		$i = $taxon{$i->{classification_no}};
-	    }
-	    
-	    # If we aren't at the end of the chain, we must have found a base
-	    # taxon or known junior synonym.  So everything we have
-	    # encountered so far was a junior synonym.  Otherwise, everything
-	    # we have encountered so far is known not to be a junior synonym.
-	    
-	    foreach my $u (@so_far)
-	    {
-		if ( defined $i )
-		{
-		    $is_junior{$u->{orig_no}} = 1;
-		    push @juniors, $u;
-		}
-		else
-		{
-		    $is_junior{$u->{orig_no}} = 0;
-		}
-	    }
-	}
-	
-	$result_list = \@juniors;
-    }
-    
-    # For 'common_ancestor', we must go through the list and find the most recent
-    # common ancestor.
-    
-    elsif ( $rel eq 'common_ancestor' )
-    {
-	# First find the minimum and maximum tree sequence values for the base
-	# taxa.
-	
-	my $min;
-	my $max = 0;
-	my $common_ancestor;
-	
-	foreach my $t (@$result_list)
-	{
-	    if ( $t->{is_base} )
-	    {
-		$min = $t->{lft} if $t->{lft} < $min or !defined $min;
-		$max = $t->{lft} if $t->{lft} > $max;
-	    }
-	}
-	
-	# Then find the latest taxon which encompasses all of the base taxa.
-	
-	foreach my $t (reverse @$result_list)
-	{
-	    $common_ancestor = $t if $t->{lft} <= $min and $t->{rgt} >= $max;
-	}
-	
-	# The result list should be just that taxon.
-	
-	@$result_list = $common_ancestor;
-    }
-    
-    # Now bless all of the objects that we found (if any) into the proper
-    # package.  If the option 'hash' was specified, we construct a hash
-    # reference.  Otherwise, we return the list.
+    # If we are returning a result list, bless all of the objects into the
     
     my %hashref;
     
-    if ( $return eq 'base' and $rel ne 'all_parents' )
+    if ( $return eq 'hash' or $return eq 'base' )
     {
 	foreach my $t (@$result_list)
 	{
-	    bless $t, 'Taxon';
-	    $hashref{$t->{base_no}} ||= [];
-	    push @{$hashref{$t->{base_no}}}, $t;
-	}
-	
-	return \%hashref;
-    }
-    
-    elsif ( $return eq 'hash' or $return eq 'base' )
-    {
-	foreach my $t (@$result_list)
-	{
-	    bless $t, 'Taxon';
+	    bless $t, 'Reference';
 	    $hashref{$t->{taxon_no}} = $t;
 	}
 	
@@ -5167,9 +5089,9 @@ sub getTaxonReferences {
     {
 	foreach my $t (@$result_list)
 	{
-	    bless $t, 'Taxon';
+	    bless $t, 'Reference';
 	}
-
+	
 	return @$result_list;
     }
 }
@@ -6599,7 +6521,7 @@ sub generateStatusFilter {
     
     elsif ( $status eq 'senior' )
     {
-	return "$table.status = 'belongs_to'";
+	return "$table.status = 'belongs to'";
     }
     
     elsif ( $status eq 'invalid' )

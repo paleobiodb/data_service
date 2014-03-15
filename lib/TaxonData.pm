@@ -21,7 +21,7 @@ use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use TaxonPics qw($PHYLOPICS $PHYLOPIC_NAMES);
 use Taxonomy;
 
-our (@REQUIRES_CLASS) = qw(CommonData);
+our (@REQUIRES_CLASS) = qw(CommonData ReferenceData);
 
 # This routine is called by the data service in order to initialize this
 # class.
@@ -44,6 +44,9 @@ sub initialize {
 	    "recorded in this database",
 	{ value => 'size', maps_to => '1.1:taxa:size' },
 	    "The number of subtaxa appearing in this database",
+	{ value => 'phylo', maps_to => '1.1:taxa:phylo' },
+	    "The phylogenetic classification of this taxon: kingdom, phylum, class, order, family.",
+	    "This information is also included in the C<nav> block, so do not specify both at once.",
 	{ value => 'nav', maps_to => '1.1:taxa:nav' },
 	    "Additional information for the PBDB Navigator taxon browser.",
 	    "This block should only be selected in conjunction with the JSON format.",
@@ -138,7 +141,20 @@ sub initialize {
 	{ output => 'size', com_name => 'siz' },
 	{ output => 'extant_size', com_name => 'exs' },
 	{ output => 'firstapp_ea', com_name => 'fea' });
-
+    
+    $ds->define_block('1.1:taxa:phylo' =>
+	{ select => 'phylo' },
+	{ output => 'kingdom', com_name => 'kgl' },
+	    "The name of the kingdom in which this taxon occurs",
+	{ output => 'phylum', com_name => 'phl' },
+	    "The name of the phylum in which this taxon occurs",
+	{ output => 'class', com_name => 'cll' },
+	    "The name of the class in which this taxon occurs",
+	{ output => 'order', com_name => 'odl' },
+	    "The name of the order in which this taxon occurs",
+	{ output => 'family', com_name => 'fml' },
+	    "The name of the family in which this taxon occurs");
+    
     $ds->define_block('1.1:taxa:nav' =>
 	{ select => ['link', 'parent', 'phylo', 'counts'] },
 	{ output => 'parent_name', com_name => 'prl', dwc_name => 'parentNameUsage' },
@@ -301,17 +317,28 @@ sub initialize {
 	    "Select the references associated with both the authority records and all opinions on",
 	    "these taxa");
     
+    $ds->define_set('1.1:taxa:refspelling' =>
+	{ value => 'current' },
+	    "Select only the references associated with the currently accepted spelling of each taxonomic name",
+	{ value => 'all' },
+	    "Select the references associated with all spellings of each taxonomic name");
+    
     $ds->define_ruleset('1.1:taxa:selector' =>
 	"The following parameters are used to indicate a base taxon or taxa:",
-	{ param => 'name', valid => \&TaxonData::validNameSpec, list => ",", 
+	{ param => 'name', valid => \&TaxonData::validNameSpec, list => ',', 
 	  alias => 'taxon_name' },
 	    "Select the all taxa matching each of the specified name(s).",
 	    "To specify more than one, separate them by commas.",
 	    "The C<%> character may be used as a wildcard.",
-	{ param => 'id', valid => POS_VALUE, list => ',', 
-	  alias => 'base_id' },
+	{ param => 'base_name', valid => \&TaxonData::validNameSpec, list => ',' },
+	    "Selects all taxa matching each of the specified name(s), plus",
+	    "all of their subtaxa.  Equivalent to specifying C<rel=all_children>.",
+	{ param => 'id', valid => POS_VALUE, list => ',' },
 	    "Selects the taxa corresponding to the specified identifier(s).",
 	    "You may specify more than one, separated by commas.",
+	{ param => 'base_id', valid => POS_VALUE, list => ',' },
+	    "Selects all taxa corresponding to the specified identifier(s), plus",
+	    "all of their subtaxa.  Equivalent to specifying C<rel=all_children>.",
 	{ optional => 'exact', valid => FLAG_VALUE },
 	    "If this parameter is specified, then the taxon exactly matching",
 	    "the specified name or identifier is selected, rather than the",
@@ -368,7 +395,11 @@ sub initialize {
 			  '1.1:common:select_crmod', '1.1:common:select_ent'] },
 	">You can also specify any of the following parameters:",
 	{ optional => 'select', valid => $ds->valid_set('1.1:taxa:refselect') },
-	    $ds->document_set('1.1:taxa:refselect'),
+	    "You can use this parameter to specify which kinds of references to retrieve.",
+	    "The accepted values include:", $ds->document_set('1.1:taxa:refselect'),
+	{ optional => 'spelling', valid => $ds->valid_set('1.1:taxa:refspelling') },
+	    "You can use this parameter to specify which variants of the matching taxonomic name(s) to retrieve.",
+	    "The accepted values include:", $ds->document_set('1.1:taxa:refspelling'),
 	{ allow => '1.1:refs:filter' },
 	{ allow => '1.1:refs:display' },
 	{ allow => '1.1:common_params' },
@@ -376,8 +407,24 @@ sub initialize {
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
 	"the name of the primary author.");
     
+    $ds->define_ruleset('1.1:taxa:match' =>
+	{ param => 'name', valid => \&TaxonData::validNameSpec, list => ',', alias => 'taxon_name' },
+	    "A valid taxonomic name, or a common abbreviation such as 'T. rex'.",
+	    "The name may include the wildcard characters % and _.",
+	{ optional => 'rank', valid => \&TaxonData::validRankSpec },
+	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
+	{ optional => 'extant', valid => BOOLEAN_VALUE },
+	    "Return only extant or non-extant taxa.",
+	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
+	{ param => 'status', valid => $ds->valid_set('1.1:taxa:status'), default => 'valid' },
+	    "Return only names that have the specified status.  Accepted values include:",
+	    $ds->document_set('1.1:taxa:status'),
+	{ allow => '1.1:taxa:display' }, 
+	{ allow => '1.1:common_params' },
+	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+    
     $ds->define_ruleset('1.1:taxa:auto' =>
-	{ param => 'name', valid => ANY_VALUE },
+	{ param => 'name', valid => ANY_VALUE, alias => 'taxon_name' },
 	    "A partial name or prefix.  It must have at least 3 significant characters, and may include both a genus",
 	    "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex", 
 	{ allow => '1.1:common_params' },
@@ -583,6 +630,121 @@ sub get {
 }
 
 
+# list ( )
+# 
+# Query the database for basic info about all taxa matching the specified
+# parameters.  If the argument 'refs' is given, then return matching
+# references instead of matching taxa.
+
+sub list {
+
+    my ($self, $arg) = @_;
+    
+    my $dbh = $self->get_dbh;
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
+    # First, figure out what info we need to provide
+    
+    my $options = $self->generate_query_options();
+    
+    # Then, figure out which taxa we are looking for.
+    
+    my $name_list = $self->clean_param('name');
+    my $id_list = $self->clean_param('id');
+    my $rel = $self->clean_param('rel');
+    
+    if ( my $base_name = $self->clean_param('base_name') )
+    {
+	$name_list = $base_name;
+	$rel ||= 'all_children';
+    }
+    
+    elsif ( my $base_id = $self->clean_param('base_id') )
+    {
+	$id_list = $base_id;
+	$rel ||= 'all_children';
+    }
+    
+    # If we are listing by name (as opposed to id) then go through each name and
+    # find the largest matching taxon.
+    
+    if ( $name_list )
+    {
+	my @names = ref $name_list eq 'ARRAY' ? @$name_list : $name_list;
+	my @ids;
+	my $name_options = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
+	
+	foreach my $name (@names)
+	{
+	    push @ids, $taxonomy->getTaxaByName($name, $name_options);
+	}
+	
+	return unless @ids;
+	$id_list = \@ids;
+    }
+    
+    # Now do the main query and return a result:
+    
+    # If the argument is 'refs', then return matching references.
+    
+    if ( defined $arg && $arg eq 'refs' && $rel eq 'self' )
+    {
+	my @result = $taxonomy->getTaxonReferences('self', $id_list, $options);
+	$self->{main_result} = \@result;
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{result_count} = scalar(@result);
+    }
+    
+    elsif ( defined $arg && $arg eq 'refs' )
+    {
+	$options->{return} = 'stmt';
+	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id_list, $options);
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->sql_count_rows;
+    }
+    
+    # Otherwise, return matching taxa.  If the relationship is 'self' (the
+    # default) then just return the list of matches.
+    
+    elsif ( $rel eq 'self' )
+    {
+	my @result = $taxonomy->getTaxa('self', $id_list, $options);
+	$self->{main_result} = \@result;
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{result_count} = scalar(@result);
+    }
+    
+    # If the relationship is 'common_ancestor', we have just one result.
+    
+    elsif ( $rel eq 'common_ancestor' )
+    {
+	$options->{return} = 'list';
+	
+	($self->{main_record}) = $taxonomy->getTaxa('common_ancestor', $id_list, $options);	
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{result_count} = defined $self->{main_record} ? 1 : 0;
+    }
+    
+    # Otherwise, we just call getTaxa and return the result.
+    
+    else
+    {
+	$options->{return} = 'stmt';
+	my $rel = $self->clean_param('rel') || 'self';
+	
+	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);
+	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->sql_count_rows;
+    }
+    
+    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
+    
+    # Otherwise, we have an empty result.
+    
+    return;
+}
+
+
 # match ( )
 # 
 # Query the database for basic info about all taxa matching the specified name
@@ -597,113 +759,26 @@ sub match {
     
     # Make sure we have at least one valid name.
     
-    my $name = $self->clean_param('name');
+    my $name_list = $self->clean_param('name');
     
-    return unless defined $name && $name ne '';
+    return unless $name_list;
     
     # Figure out the proper query options.
     
     my $options = $self->generate_query_options();
     
+    $options->{exact} = 1;
+    
     # Get the list of matches.
     
-    my @name_matches = $taxonomy->getTaxaByName($name, $options);
+    my @name_matches = $taxonomy->getTaxaByName($name_list, $options);
     
     $self->{main_result} = \@name_matches if scalar(@name_matches);
     $self->{result_count} = scalar(@name_matches);
 }
 
 
-# list ( )
-# 
-# Query the database for basic info about all taxa matching the specified
-# parameters.
-
-sub list {
-
-    my ($self) = @_;
-    
-    my $dbh = $self->get_dbh;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
-    
-    # First, figure out what info we need to provide
-    
-    my $options = $self->generate_query_options();
-    
-    # If the parameter 'name' was given, then fetch all matching taxa.  Order
-    # them in descending order by size.
-    
-    my @taxon_list;
-    
-    if ( $self->clean_param('name') )
-    {
-	my $name = $self->clean_param('name');
-	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
-	
-	@taxon_list = $taxonomy->getTaxaByName($name, $name_select);
-	return unless @taxon_list;
-    }
-    
-    # Now do the main query and return a result:
-    
-    # If a name was given and the relationship is 'self' (or not specified,
-    # being the default) then just return the list of matches.
-    
-    if ( $self->clean_param('name') and $self->clean_param('rel') eq 'self' )
-    {
-	my @result = $taxonomy->getTaxa('self', \@taxon_list, $options);
-	$self->{main_result} = \@result;
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
-	$self->{result_count} = scalar(@result);
-    }
-    
-    # If a name was given and some other relationship was specified, use the
-    # first matching name.
-    
-    elsif ( $self->clean_param('name') )
-    {
-	$options->{return} = 'stmt';
-	my $id = $taxon_list[0];
-	my $rel = $self->clean_param('rel') || 'self';
-	
-	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id, $options);
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
-	$self->sql_count_rows;
-    }
-    
-    # Otherwise, we are listing taxa by relationship.  If we are asked for
-    # 'common_ancestor', we have just one result.
-    
-    elsif ( $self->clean_param('rel') eq 'common_ancestor' )
-    {
-	$options->{return} = 'list';
-	my $id_list = $self->clean_param('id');
-	
-	($self->{main_record}) = $taxonomy->getTaxa('common_ancestor', $id_list, $options);	
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
-	$self->sql_count_rows;
-    }
-    
-    # Otherwise, we just call getTaxa and return the result. 
-    
-    elsif ( $self->clean_param('id') or $self->clean_param('rel') eq 'all_taxa' )
-    {
-	$options->{return} = 'stmt';
-	my $id_list = $self->clean_param('id');
-	my $rel = $self->clean_param('rel') || 'self';
-	
-	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
-	$self->sql_count_rows;
-    }
-    
-    # Otherwise, we have an empty result.
-    
-    return;
-}
-
-
-# list ( )
+# list_refs ( )
 # 
 # Query the database for basic info about all references associated with taxa
 # that meet the specified parameters.
@@ -769,9 +844,6 @@ sub list_refs {
 	$options->{return} = 'stmt';
 	my $id_list = $self->clean_param('id');
 	
-	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id_list, $options);
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
-	$self->sql_count_rows;
     }
     
     # Otherwise, we have an empty result.
@@ -805,12 +877,14 @@ sub generate_query_options {
     my $rank = $self->clean_param('rank');
     my $status = $self->clean_param('status');
     my $select = $self->clean_param('select');
+    my $spelling = $self->clean_param('spelling');
     
     $options->{exact} = 1 if $exact;
     $options->{extant} = $extant if $extant ne '';	# $extant may be 0, 1, or undefined
     $options->{rank} = $rank if $rank ne '';
     $options->{status} = $status if $status ne '';
     $options->{select} = $select if $select ne '';
+    $options->{spelling} = $spelling if $spelling ne '';
     
     return $options;
 }

@@ -619,193 +619,217 @@ sub configure_output {
 	
 	next if $uniq_block{$block}; $uniq_block{$block} = 1;
 	
-	# Generate a warning if the specified block does not exist, but do
-	# not abort the request.
+	# Add this block to the output configuration.
 	
-	my $block_list = $self->{block}{$block}{output_list};
-	
-	unless ( ref $block_list eq 'ARRAY' )
-	{
-	    warn "undefined output block '$block' for path '$request->{path}'\n";
-	    $request->add_warning("undefined output block '$block'");
-	    next BLOCK;
-	}
-	
-	# Now go through the output list for this block and collect up
-	# all records that are selected for this query.
-	
-	my @records = @$block_list;
-	
-    RECORD:
-	while ( my $r = shift @records )
-	{
-	    # Evaluate dependency on the output block list
-	    
-	    next RECORD if $r->{if_block} 
-		and not check_set($r->{if_block}, $request->{block_hash});
-	    
-	    next RECORD if $r->{not_block}
-		and check_set($r->{not_block}, $request->{block_hash});
-	    
-	    # Evaluate dependency on the output format
-	    
-	    next RECORD if $r->{if_format}
-		and not check_value($r->{if_format}, $format);
-	    
-	    next RECORD if $r->{not_format}
-		and check_value($r->{not_format}, $format);
-	    
-	    # Evaluate dependency on the vocabulary
-	    
-	    next RECORD if $r->{if_vocab}
-		and not check_value($r->{if_vocab}, $vocab);
-	    
-	    next RECORD if $r->{not_vocab}
-		and check_value($r->{not_vocab}, $vocab);
-	    
-	    # If the record type is 'select', add to the selection list, the
-	    # selection hash, and the tables hash.
-	    
-	    if ( $r->{select} )
-	    {
-		croak "value of 'select' must be a string or array"
-		    if ref $r->{select} && ref $r->{select} ne 'ARRAY';
-		
-		my @select = ref $r->{select} ? @{$r->{select}}
-					      : split qr{\s*,\s*}, $r->{select};
-		
-		foreach my $s ( @select )
-		{
-		    next if exists $request->{select_hash}{$s};
-		    $request->{select_hash}{$s} = 1;
-		    push @{$request->{select_list}}, $s;
-		}
-		
-		if ( $r->{tables} )
-		{
-		    croak "value of 'tables' must be a string or array"
-			if ref $r->{tables} && ref $r->{tables} ne 'ARRAY';
-		    
-		    my @tables = ref $r->{tables} ? @{$r->{tables}}
-						  : split qr{\s*,\s*}, $r->{tables};
-		    
-		    foreach my $t ( @tables )
-		    {
-			$request->{tables_hash}{$t} = 1;
-		    }
-		}
-		
-		foreach my $k ( keys %$r )
-		{
-		    warn "ignored invalid key '$k' in 'select' record"
-			unless $SELECT_KEY{$k};
-		}
-	    }
-	    
-	    # If the record type is 'filter', add to the filter hash.
-	    
-	    elsif ( defined $r->{filter} )
-	    {
-		$request->{filter_hash}{$r->{filter}} = $r->{value};
-	    }
-	    
-	    # If the record type is 'set', add a record to the process list.
-	    
-	    elsif ( defined $r->{set} )
-	    {
-		my $proc = { set => $r->{set} };
-		
-		foreach my $key ( keys %$r )
-		{
-		    if ( $PROC_KEY{$key} )
-		    {
-			$proc->{$key} = $r->{$key};
-		    }
-		    
-		    else
-		    {
-			carp "Warning: unknown key '$key' in proc record\n";
-		    }
-		}
-		
-		push @{$request->{proc_list}}, $proc;
-	    }
-	    
-	    # If the record type is 'output', add a record to the field list.
-	    # The attributes 'name' (the output name) and 'field' (the raw
-	    # field name) are both set to the indicated name by default.
-	    
-	    elsif ( defined $r->{output} )
-	    {
-		next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
-		
-		my $field = { field => $r->{output}, name => $r->{output} };
-		my ($vs_value, $vs_name);
-		
-		foreach my $key ( keys %$r )
-		{
-		    if ( $FIELD_KEY{$key} )
-		    {
-			$field->{$key} = $r->{$key}
-			    unless ($key eq 'value' && $vs_value) || ($key eq 'name' && $vs_name);
-		    }
-		    
-		    elsif ( $key =~ qr{ ^ (\w+) _ (name|value) $ }x )
-		    {
-			if ( $1 eq $vocab || $1 eq $format )
-			{
-			    $field->{$2} = $r->{$key};
-			    $vs_value = 1 if $2 eq 'value';
-			    $vs_name = 1 if $2 eq 'name';
-			} 
-		    }
-		    
-		    elsif ( $key ne 'output' )
-		    {
-			warn "Warning: unknown key '$key' in output record\n";
-		    }
-		}
-		
-		push @{$request->{field_list}}, $field;
-	    }
-	    
-	    # If the record type is 'include', then add the specified records
-	    # to the list immediately.  If no 'include_block' was
-	    # specified, that means that the specified key did not correspond
-	    # to any block.  So we can ignore it in that case.
-	    
-	    elsif ( defined $r->{include_block} )
-	    {
-		# If we have already processed this block, then skip it.  A
-		# block can only be included once per request.  If we haven't
-		# processed it yet, mark it so that it will be skipped if it
-		# comes up again.
-		
-		my $include_block = $r->{include_block};
-		next RECORD if $uniq_block{$include_block};
-		$uniq_block{$include_block} = 1;
-		
-		# Get the list of block records, or add a warning if no block
-		# was defined under that name.
-		
-		my $add_list = $self->{block}{$include_block}{output_list};
-		
-		unless ( ref $add_list eq 'ARRAY' )
-		{
-		    warn "undefined output block '$include_block' for path '$request->{path}'\n";
-		    $request->add_warning("undefined output block '$include_block'");
-		    next RECORD;
-		}
-		
-		# Now add the included block's records to the front of the
-		# record list.
-		
-		unshift @records, @$add_list;
-	    }
-	}
+	$self->add_output_block($request, $block);
     }
     
     my $a = 1;	# We can stop here when debugging
+}
+
+
+# add_output_block ( request, block_name )
+# 
+# Add the specified block to the output configuration for the specified
+# request. 
+
+sub add_output_block {
+
+    my ($self, $request, $block_name) = @_;
+    
+    # Generate a warning if the specified block does not exist, but do
+    # not abort the request.
+    
+    my $block_list = $self->{block}{$block_name}{output_list};
+    
+    unless ( ref $block_list eq 'ARRAY' )
+    {
+	warn "undefined output block '$block_name' for path '$request->{path}'\n";
+	$request->add_warning("undefined output block '$block_name'");
+	return;
+    }
+    
+    # Extract the relevant request attributes.
+    
+    my $class = ref $request;
+    my $format = $request->{format};
+    my $vocab = $request->{vocab};
+    my $require_vocab = 1 if $vocab and not $self->{vocab}{$vocab}{use_field_names};
+    
+    # Now go through the output list for this block and collect up
+    # all records that are selected for this query.
+    
+    my @records = @$block_list;
+    
+ RECORD:
+    while ( my $r = shift @records )
+    {
+	# Evaluate dependency on the output block list
+	
+	next RECORD if $r->{if_block} 
+	    and not check_set($r->{if_block}, $request->{block_hash});
+	
+	next RECORD if $r->{not_block}
+	    and check_set($r->{not_block}, $request->{block_hash});
+	
+	# Evaluate dependency on the output format
+	
+	next RECORD if $r->{if_format}
+	    and not check_value($r->{if_format}, $format);
+	
+	next RECORD if $r->{not_format}
+	    and check_value($r->{not_format}, $format);
+	
+	# Evaluate dependency on the vocabulary
+	
+	next RECORD if $r->{if_vocab}
+	    and not check_value($r->{if_vocab}, $vocab);
+	
+	next RECORD if $r->{not_vocab}
+	    and check_value($r->{not_vocab}, $vocab);
+	
+	# If the record type is 'select', add to the selection list, the
+	# selection hash, and the tables hash.
+	
+	if ( $r->{select} )
+	{
+	    croak "value of 'select' must be a string or array"
+		if ref $r->{select} && ref $r->{select} ne 'ARRAY';
+	    
+	    my @select = ref $r->{select} ? @{$r->{select}}
+		: split qr{\s*,\s*}, $r->{select};
+	    
+	    foreach my $s ( @select )
+	    {
+		next if exists $request->{select_hash}{$s};
+		$request->{select_hash}{$s} = 1;
+		push @{$request->{select_list}}, $s;
+	    }
+	    
+	    if ( $r->{tables} )
+	    {
+		croak "value of 'tables' must be a string or array"
+		    if ref $r->{tables} && ref $r->{tables} ne 'ARRAY';
+		
+		my @tables = ref $r->{tables} ? @{$r->{tables}}
+		    : split qr{\s*,\s*}, $r->{tables};
+		
+		foreach my $t ( @tables )
+		{
+		    $request->{tables_hash}{$t} = 1;
+		}
+	    }
+	    
+	    foreach my $k ( keys %$r )
+	    {
+		warn "ignored invalid key '$k' in 'select' record"
+		    unless $SELECT_KEY{$k};
+	    }
+	}
+	
+	# If the record type is 'filter', add to the filter hash.
+	
+	elsif ( defined $r->{filter} )
+	{
+	    $request->{filter_hash}{$r->{filter}} = $r->{value};
+	}
+	
+	# If the record type is 'set', add a record to the process list.
+	
+	elsif ( defined $r->{set} )
+	{
+	    my $proc = { set => $r->{set} };
+	    
+	    foreach my $key ( keys %$r )
+	    {
+		if ( $PROC_KEY{$key} )
+		{
+		    $proc->{$key} = $r->{$key};
+		}
+		
+		else
+		{
+		    carp "Warning: unknown key '$key' in proc record\n";
+		}
+	    }
+	    
+	    push @{$request->{proc_list}}, $proc;
+	}
+	
+	# If the record type is 'output', add a record to the field list.
+	# The attributes 'name' (the output name) and 'field' (the raw
+	# field name) are both set to the indicated name by default.
+	
+	elsif ( defined $r->{output} )
+	{
+	    next RECORD if $require_vocab and not exists $r->{"${vocab}_name"};
+	    
+	    my $field = { field => $r->{output}, name => $r->{output} };
+	    my ($vs_value, $vs_name);
+	    
+	    foreach my $key ( keys %$r )
+	    {
+		if ( $FIELD_KEY{$key} )
+		{
+		    $field->{$key} = $r->{$key}
+			unless ($key eq 'value' && $vs_value) || ($key eq 'name' && $vs_name);
+		}
+		
+		elsif ( $key =~ qr{ ^ (\w+) _ (name|value) $ }x )
+		{
+		    if ( $1 eq $vocab || $1 eq $format )
+		    {
+			$field->{$2} = $r->{$key};
+			$vs_value = 1 if $2 eq 'value';
+			$vs_name = 1 if $2 eq 'name';
+		    } 
+		}
+		
+		elsif ( $key ne 'output' )
+		{
+		    warn "Warning: unknown key '$key' in output record\n";
+		}
+	    }
+	    
+	    push @{$request->{field_list}}, $field;
+	}
+	
+	# If the record type is 'include', then add the specified records
+	# to the list immediately.  If no 'include_block' was
+	# specified, that means that the specified key did not correspond
+	# to any block.  So we can ignore it in that case.
+	
+	elsif ( defined $r->{include_block} )
+	{
+	    # If we have already processed this block, then skip it.  A
+	    # block can only be included once per request.  If we haven't
+	    # processed it yet, mark it so that it will be skipped if it
+	    # comes up again.
+	    
+	    my $include_block = $r->{include_block};
+	    next RECORD if $request->{block_hash}{$include_block};
+	    $request->{block_hash}{$include_block} = 1;
+	    
+	    # Get the list of block records, or add a warning if no block
+	    # was defined under that name.
+	    
+	    my $add_list = $self->{block}{$include_block}{output_list};
+	    
+	    unless ( ref $add_list eq 'ARRAY' )
+	    {
+		warn "undefined output block '$include_block' for path '$request->{path}'\n";
+		$request->add_warning("undefined output block '$include_block'");
+		next RECORD;
+	    }
+	    
+	    # Now add the included block's records to the front of the
+	    # record list.
+	    
+	    unshift @records, @$add_list;
+	}
+    }
+    
+    my $a = 1;	# we can stop here when debugging
 }
 
 

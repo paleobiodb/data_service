@@ -150,16 +150,29 @@ sub configure_output {
 }
 
 
-# configure_block ( section_name )
+# configure_block ( block_name )
 # 
 # Set up a list of processing and output steps for the given section.
 
 sub configure_block {
     
-    my ($self, $section_name) = @_;
+    my ($self, $block_name) = @_;
     my $ds = $self->{ds};
     
-    return $ds->configure_block($self, $section_name);
+    return $ds->configure_block($self, $block_name);
+}
+
+
+# add_output_block ( block_name )
+# 
+# Add the specified block to the output configuration for the current request.
+
+sub add_output_block {
+    
+    my ($self, $block_name) = @_;
+    my $ds = $self->{ds};
+    
+    return $ds->add_output_block($self, $block_name);
 }
 
 

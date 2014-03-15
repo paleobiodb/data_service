@@ -376,6 +376,14 @@ sub initialize {
 	{ value => 'modified.asc', undoc => 1 },
 	{ value => 'modified.desc', undoc => 1 });
     
+    $ds->define_set('1.1:colls:ident_select' =>
+	{ value => 'latest' },
+	    "Return the most recently published identification of each selected occurrence",
+	{ value => 'orig' },
+	    "Return the originally published identification of each selected occurence",
+	{ value => 'all' },
+	    "Return all identifications of each selected occurrence, each as a separate record");
+    
     $ds->define_ruleset('1.1:main_selector' =>
 	{ param => 'clust_id', valid => POS_VALUE, list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
@@ -399,6 +407,10 @@ sub initialize {
 	{ at_most_one => ['taxon_name', 'taxon_id', 'base_name', 'base_id'] },
 	{ param => 'exclude_id', valid => POS_VALUE, list => ','},
 	    "Exclude any records whose associated taxonomic name is a child of the given name or names, specified by numeric identifier.",
+	{ param => 'ident', valid => $ds->valid_set('1.1:colls:ident_select') },
+	    "If more than one taxonomic identification is recorded for the selected occurrences",
+	    "this parameter specifies which are to be returned.  Values include:",
+	    $ds->document_set('1.1:colls:ident_select'),
 	{ param => 'person_id', valid => POS_VALUE, list => ','},
 	    "Return only records whose entry was authorized by the given person or people, specified by numeric identifier.",
 	{ param => 'lngmin', valid => DECI_VALUE },
@@ -601,8 +613,8 @@ sub get {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc using on cc.collection_no = c.collection_no
-		LEFT JOIN secondary_refs as sr using (collection_no)
+	FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
+		LEFT JOIN secondary_refs as sr on c.collection_no = sr.collection_no
 		$join_list
         WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
@@ -706,8 +718,8 @@ sub list {
 	
     $self->{main_sql} = "
 	SELECT $calc $fields
-	FROM coll_matrix as c STRAIGHT_JOIN collections as cc on cc.collection_no = c.collection_no
-		LEFT JOIN secondary_refs as sr using (collection_no)
+	FROM coll_matrix as c JOIN collections as cc on cc.collection_no = c.collection_no
+		LEFT JOIN secondary_refs as sr on c.collection_no = sr.collection_no
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no
@@ -786,13 +798,13 @@ sub refs {
     my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
     
     $self->{main_sql} = "
-	SELECT $calc $fields, s.reference_rank FROM refs as r JOIN
-	   (SELECT sr.reference_no, count(*) as reference_rank
-	    FROM $COLL_MATRIX as c STRAIGHT_JOIN collections as cc on cc.collection_no = c.collection_no
-		LEFT JOIN secondary_refs as sr using (collection_no)
+	SELECT $calc $fields, s.reference_rank, is_primary, 1 as is_coll
+	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
+	    FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
+		LEFT JOIN secondary_refs as sr on c.collection_no = sr.collection_no
 		$inner_join_list
             WHERE $filter_string
-	    GROUP BY sr.reference_no) as s using (reference_no)
+	    GROUP BY sr.reference_no) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
 	$outer_join_list
 	WHERE $ref_filter_string
 	ORDER BY $order
@@ -1046,7 +1058,12 @@ sub generateMainFilters {
     
     if ( $taxon_name )
     {
-	@taxa = $taxonomy->getTaxaByName($taxon_name, { fields => 'lft' });
+	#my (@starttime) = Time::HiRes::gettimeofday();
+	@taxa = $taxonomy->getTaxaByName($taxon_name, { fields => 'lft', common => 1 });
+	#my (@endtime) = Time::HiRes::gettimeofday();
+	#my $elapsed = Time::HiRes::tv_interval(\@starttime, \@endtime);
+	#print STDERR $Taxonomy::SQL_STRING . "\n\n";
+	#print STDERR "Name Query Elapsed: $elapsed\n\n";
     }
     
     elsif ( $taxon_no )
@@ -1068,7 +1085,7 @@ sub generateMainFilters {
     {
 	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @taxa;
 	push @filters, "($taxon_filters)";
-	$tables_ref->{t} = 1;
+	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
     }
     
@@ -1080,19 +1097,111 @@ sub generateMainFilters {
 	$tables_ref->{non_geo_filter} = 1;
     }
     
-    # If no matching taxa were found, add a filter clause that will return no results.
+    # If a name was given and no matching taxa were found, we need to query by
+    # genus_name/species_name instead.
     
-    elsif ( $taxon_name || $taxon_no )
+    elsif ( $taxon_name )
+    {
+	my @exact_genera;
+	my @name_clauses;
+	
+	foreach my $name (ref $taxon_name eq 'ARRAY' ? @$taxon_name : $taxon_name)
+	{
+	    if ( $name =~ qr{ ^\s*([A-Za-z_.%]+)(?:\s+\(([A-Za-z_.%]+)\))?(?:\s+([A-Za-z_.%]+))?(?:\s+([A-Za-z_.%]+))? }xs )
+	    {
+		my @name_filters;
+		
+		my $main = $1;
+		my $subgenus = $2 if defined $2;
+		my $species = (defined $4 ? "$3 $4" : $3) if defined $3;
+		
+		$main =~ s/\./%/g;
+		$subgenus =~ s/\./%/g if defined $subgenus;
+		$species =~ s/\./%/g if defined $species;
+		
+		unless ( $subgenus || $species || $main =~ /[%_]/ )
+		{
+		    push @exact_genera, $dbh->quote($main);
+		    next;
+		}
+		
+		my $quoted_genus = $dbh->quote($main);
+		push @name_filters, "o.genus_name like $quoted_genus";
+		
+		if ( $subgenus )
+		{
+		    my $quoted_subgenus = $dbh->quote($subgenus);
+		    push @name_filters, "o.subgenus_name like $quoted_subgenus";
+		}
+		
+		if ( $species )
+		{
+		    my $quoted_species = $dbh->quote($species);
+		    push @name_filters, "o.species_name like $quoted_species";
+		}
+		
+		if ( @name_filters > 1 )
+		{
+		    push @name_clauses, '(' . join(' and ', @name_filters) . ')';
+		}
+		
+		elsif ( @name_filters )
+		{
+		    push @name_clauses, $name_filters[0];
+		}
+	    }
+	}
+	
+	# All of the exact genus names can be combined into a single 'in' clause.
+	
+	if ( @exact_genera )
+	{
+	    my $list = join(',', @exact_genera);
+	    push @name_clauses, "o.genus_name in ($list)";
+	}
+	
+	# If we have more than one clause, add their disjunction to the filter
+	# list.  We need to add table 'oc' to the join set, and we also set
+	# the 'unknown_taxon' flag so that the code for generating the query
+	# string will know to do any necessary reformatting.
+	
+	if ( @name_clauses > 1 )
+	{
+	    push @filters, '(' . join(' or ', @name_clauses) . ')';
+	}
+	
+	# If we have a single clause, just add it to the filter list.
+	
+	elsif ( @name_clauses )
+	{
+	    push @filters, $name_clauses[0];
+	}
+	
+	# If we did not find any valid names, then add a filter clause that
+	# will guarantee an empty result set.
+	
+	else
+	{
+	    push @filters, "o.orig_no = -1";
+	}
+	
+	$tables_ref->{o} = 1;
+    }
+    
+    # If a number was given but it does not exist in the hierarchy, add a
+    # filter that will guarantee no results.
+    
+    elsif ( $taxon_no )
     {
 	push @filters, "o.orig_no = -1";
     }
-    
+
     # ...and for excluded taxa 
     
     if ( @exclude_taxa and @taxa )
     {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
-	$tables_ref->{t} = 1;
+	$tables_ref->{tf} = 1;
     }
     
     # Check for parameters 'continent', 'country'
@@ -1607,15 +1716,17 @@ sub generateJoinList {
     
     # Some tables imply others.
     
-    $tables->{o} = 1 if $tables->{t};
+    $tables->{o} = 1 if $tables->{t} || $tables->{tf} || $tables->{oc};
     $tables->{c} = 1 if $tables->{o};
     
     # Create the necessary join expressions.
     
-    $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
+    $join_list .= "JOIN occ_matrix as o on o.collection_no = c.collection_no\n"
 	if $tables->{o};
+    $join_list .= "JOIN occurrences as oc on oc.occurrence_no = o.occurrence_no\n"
+	if $tables->{oc};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
-	if $tables->{t};
+	if $tables->{t} || $tables->{tf};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n"
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"

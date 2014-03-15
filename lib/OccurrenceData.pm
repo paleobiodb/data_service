@@ -84,31 +84,42 @@ sub initialize {
     # CollectionData.pm 
     
     $ds->define_block('1.1:occs:basic' =>
-	{ select => ['o.occurrence_no', 'o.collection_no',
-		     'ts.spelling_no as taxon_no', 'ts.name as taxon_name', 'ts.rank as taxon_rank', 
+	{ select => ['o.occurrence_no', 'o.reid_no', 'o.latest_ident', 'o.collection_no', 'o.taxon_no',
+		     'ts.spelling_no as matched_no', 'ts.name as matched_name', 'ts.rank as matched_rank', 'ts.lft as tree_seq',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
+		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso', 'o.species_name', 'o.species_reso',
 		     'o.early_age', 'o.late_age', 'o.reference_no'],
-	  tables => ['t', 'ts', 'ei', 'li'] },
+	  tables => ['o', 't', 'ts', 'ei', 'li'] },
+	{ set => '*', from_record => 1, code => \&process_basic_record },
 	{ output => 'occurrence_no', dwc_name => 'occurrenceID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies the occurrence",
 	{ output => 'record_type', value => 'occurrence', com_name => 'typ', com_value => 'occ', 
 	  dwc_value => 'Occurrence',  },
 	    "The type of this object: 'occ' for an occurrence",
+	{ output => 'reid_no', com_name => 'eid', if_field => 'reid_no' },
+	    "If this occurrence was reidentified, a positive integer that uniquely identifies the reidentification",
+	{ output => 'superseded', com_name => 'sps', value => 1, not_field => 'latest_ident' },
+	    "The value of this field will be true if this occurrence was later identified under a different taxon",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
 	    "The identifier of the collection with which this occurrence is associated.",
 	{ output => 'taxon_name', com_name => 'tna', dwc_name => 'associatedTaxa' },
-	    "The taxonomic name by which this occurrence is identified, with synonymy taken",
-	    "into account.  This may be a synonym or alternate spelling of the name by which",
-	    "it was actually identified.  To get the actual identification, use the C<show>",
-	    "parameter to select the C<ident> block.  This field may be empty if the",
-	    "identified taxonomic name was never entered into the taxonomic hierarchy",
-	    "stored in this database.  If so, then we have no",
-	    "information about the taxonomic classification of this occurrence.",
-	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	    "The taxonomic name by which this occurrence is identified",
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
-	    "The taxonomic rank of this name",
+	    "The taxonomic rank of the name, if this can be determined",
+	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
 	{ output => 'taxon_no', com_name => 'tid' },
-	    "The unique identifier of this name.",
+	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
+	    "the name was never entered into the taxonomic hierarchy stored in this database and",
+	    "we have no further information about the classification of this occurrence.",
+	{ output => 'matched_name', com_name => 'mna', dedup => 'taxon_base' },
+	    "The senior synonym and/or currently accepted spelling of the closest matching name in",
+	    "the database to the identified taxonomic name, if any is known, and if this name",
+	    "is different from the value of C<taxon_name>.",
+	{ output => 'matched_rank', com_name => 'mra', dedup => 'taxon_rank' },
+	    "The taxonomic rank of the matched name, if different from the value of C<taxon_rank>",
+	{ output => 'matched_no', com_name => 'mid', if_field => 'mid', dedup => 'taxon_no' },
+	    "The unique identifier of the closest matching name in the database to the identified",
+	    "taxonomic name, if any is known.",
 	{ set => '*', code => \&CollectionData::fixTimeOutput },
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	    "The specific geologic time range associated with this collection (not necessarily a",
@@ -125,13 +136,18 @@ sub initialize {
 	    "The identifier(s) of the references from which this data was entered");
     
     $ds->define_block('1.1:occs:ident' =>
-	{ select => ['oc.genus_name', 'oc.genus_reso', 'oc.species_name', 'oc.species_reso'],
-	  tables => 'oc' },
+	{ select => ['o.genus_name', 'o.genus_reso', 'o.subgenus_name',
+		     'o.subgenus_reso', 'o.species_name', 'o.species_reso'],
+	  tables => 'o' },
 	{ output => 'genus_name', com_name => 'idt' },
 	    "The taxonomic name (less species) by which this occurrence was identified.",
 	    "This is often a genus, but may be a higher taxon.",
 	{ output => 'genus_reso', com_name => 'rst' },
 	    "The resolution of this taxonomic name, i.e. C<sensu lato> or C<aff.>",
+	{ output => 'subgenus_name', com_name => 'idf' },
+	    "The subgenus name (if any) by which this occurrence was identified",
+	{ output => 'subgenus_reso', com_name => 'rsf' },
+	    "The resolution of the subgenus name, i.e. C<informal> or C<n. subgen.>",
 	{ output => 'species_name', com_name => 'ids' },
 	    "The species name (if any) by which this occurrence was identified",
 	{ output => 'species_reso', com_name => 'rss' },
@@ -364,8 +380,8 @@ sub list {
     
     my @filters = CollectionData::generateMainFilters($self, 'list', 'c', $tables);
     push @filters, OccurrenceData::generateOccFilters($self, $tables);
-    push @filters, CommonData::generate_crmod_filters($self, 'oc', $tables);
-    push @filters, CommonData::generate_ent_filters($self, 'oc', $tables);
+    push @filters, CommonData::generate_crmod_filters($self, 'o', $tables);
+    push @filters, CommonData::generate_ent_filters($self, 'o', $tables);
     
     push @filters, "c.access_level = 0";
     
@@ -384,6 +400,8 @@ sub list {
     # Determine which fields and tables are needed to display the requested
     # information.
     
+    $self->add_output_block('1.1:occs:unknown_taxon') if $tables->{unknown_taxon};
+    
     my $fields = $self->select_string({ mt => 'o', bt => 'oc' });
     
     $self->adjustCoordinates(\$fields);
@@ -394,16 +412,19 @@ sub list {
     
     my $order_clause = $self->generate_order_clause($tables, { at => 'c', bt => 'cc', tt => $tt }) || 'o.occurrence_no';
     
-    # Determine if any extra tables need to be joined in.
+    # Determine which extra tables, if any, must be joined to the query.  Then
+    # construct the query.
     
-    my $join_list = $self->generateJoinList('c', $self->tables_hash);
+    my $join_list = $self->generateJoinList('c', $tables);
+    
+    my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
     
     $self->{main_sql} = "
 	SELECT $calc $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
-	GROUP BY o.occurrence_no
+	GROUP BY o.occurrence_no $extra_group
 	ORDER BY $order_clause
 	$limit";
     
@@ -439,6 +460,8 @@ sub refs {
     my $inner_tables = {};
     
     my @filters = CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
+    push @filters, CommonData::generate_crmod_filters($self, 'o');
+    push @filters, CommonData::generate_ent_filters($self, 'o');
     push @filters, $self->generateOccFilters($inner_tables);
     
     push @filters, "c.access_level = 0";
@@ -448,8 +471,6 @@ sub refs {
     # Construct another set of filter expressions to act on the references.
     
     my @ref_filters = ReferenceData::generate_filters($self, $self->tables_hash);
-    push @ref_filters, CommonData::generate_crmod_filters($self, 'r');
-    push @ref_filters, CommonData::generate_ent_filters($self, 'r');
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -479,15 +500,14 @@ sub refs {
     my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
     
     $self->{main_sql} = "
-	SELECT $calc $fields, s.reference_rank FROM refs as r, 1 as is_occ JOIN
-	   (SELECT o.reference_no, count(*) as reference_rank
-	    FROM $OCC_MATRIX as o STRAJOIN $COLL_MATRIX as c using (collection_no)
+	SELECT $calc $fields, count(distinct occurrence_no) as reference_rank, 1 as is_occ
+	FROM (SELECT o.reference_no, o.occurrence_no
+	    FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 		$inner_join_list
-            WHERE $filter_string
-	    GROUP BY o.reference_no) as s using (reference_no)
+            WHERE $filter_string) as s STRAIGHT_JOIN refs as r on r.reference_no = s.reference_no
 	$outer_join_list
 	WHERE $ref_filter_string
-	ORDER BY $order
+	GROUP BY r.reference_no ORDER BY $order
 	$limit";
     
     print STDERR "$self->{main_sql}\n\n" if $self->debug;
@@ -559,6 +579,27 @@ sub generateOccFilters {
 	$tables_ref->{oc} = 1;
     }
     
+    # Check for parameter 'ident'.  In cases of reidentified occurrences, it
+    # specifies which identifications should be returned.  The default is
+    # 'latest'.
+    
+    my $ident = $self->clean_param('ident');
+    
+    if ( $ident eq 'orig' )
+    {
+	push @filters, "o.reid_no = 0";
+    }
+    
+    elsif ( $ident eq 'all' )
+    {
+	$tables_ref->{group_by_reid} = 1;
+    }
+    
+    else # default: 'latest'
+    {
+	push @filters, "o.latest_ident = true";
+    }
+    
     return @filters;
 }
 
@@ -583,10 +624,10 @@ sub generateJoinList {
 	if $tables->{cc};
     $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
-    $join_list .= "JOIN authorities as a on a.taxon_no = o.taxon_no\n";
-    
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
-	if $tables->{t};
+	if $tables->{tf};
+    $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
+	if $tables->{t} && ! $tables->{tf};
     $join_list .= "LEFT JOIN taxon_trees as ts on ts.orig_no = t.synonym_no\n"
 	if $tables->{ts};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
@@ -612,5 +653,66 @@ sub generateJoinList {
     return $join_list;
 }
 
+
+# process_basic_record ( )
+# 
+# If the taxonomic name stored in the occurrence record is not linked in to
+# the taxonomic hierarchy, construct it using the genus_name, genus_reso,
+# species_name and species_reso fields.  Also figure out the taxonomic rank if
+# possible.
+
+sub process_basic_record {
+    
+    my ($request, $record) = @_;
+    
+    # If the taxonomic name field is empty, try to construct one.  Build this
+    # in two versions: with and without the 'reso' fields.
+    
+    unless ( $record->{taxon_name} )
+    {
+	my $taxon_name = $record->{genus_name} || 'unknown';
+	$taxon_name .= " $record->{genus_reso}" if $record->{genus_reso};
+	my $taxon_base = $record->{genus_name} || 'unknown';
+	
+	if ( $record->{subgenus_name} )
+	{
+	    $taxon_name .= " ($record->{subgenus_name}";
+	    $taxon_name .= " $record->{subgenus_reso}" if $record->{subgenus_reso};
+	    $taxon_name .= ")";
+	    $taxon_base .= " ($record->{subgenus_name})";
+	}
+	
+	if ( $record->{species_name} )
+	{
+	    $taxon_name .= " $record->{species_name}";
+	    $taxon_name .= " $record->{species_reso}" if $record->{species_reso};
+	    $taxon_base .= " $record->{species_name}" if $record->{species_name} !~ /\.$/;
+	}
+	
+	$record->{taxon_name} = $taxon_name;
+	$record->{taxon_base} = $taxon_base;
+    }
+    
+    # If the taxonomic rank field is empty, try to determine one.
+    
+    unless ( $record->{taxon_rank} )
+    {
+	if ( defined $record->{species_name} && $record->{species_name} =~ qr{[a-z]$} )
+	{
+	    $record->{taxon_rank} = 3;
+	}
+	
+	elsif ( defined $record->{subgenus_name} && $record->{subgenus_name} =~ qr{[a-z]$} )
+	{
+	    $record->{taxon_rank} = 4;
+	}
+	
+	elsif ( defined $record->{genus_name} && defined $record->{matched_name} && 
+		$record->{genus_name} eq $record->{matched_name} )
+	{
+	    $record->{taxon_rank} = $record->{matched_rank};
+	}
+    }
+}
 
 1;

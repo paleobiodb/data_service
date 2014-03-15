@@ -199,6 +199,9 @@ our $QUEUE_TABLE = "taxon_queue";
 our (@TREE_ERRORS);
 my ($REPORT_THRESHOLD) = 20;
 
+our ($SYNONYM_STATUS) = "'subjective synonym of', 'objective synonym of', 'misspelling of', 'replaced by'";
+our ($VALID_STATUS) = "'belongs to', 'subjective synonym of', 'objective synonym of', 'misspelling of', 'replaced by'";
+
 # This is used for proper signal handling
 
 my ($ABORT) = 0;
@@ -1040,7 +1043,9 @@ sub buildOpinionCache {
     # Then index the newly populated opinion cache.
     
     $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (orig_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (child_spelling_no)");
     $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (parent_no)");
+    $result = $dbh->do("ALTER TABLE $OPINION_WORK ADD KEY (parent_spelling_no)");
     
     # Now, we remove any backup table that might have been left in place, and
     # swap in the new table using an atomic rename operation
@@ -1274,11 +1279,11 @@ sub createWorkingTables {
     $result = $dbh->do("CREATE TABLE $TREE_WORK 
 			       (orig_no int unsigned not null,
 				name varchar(80) not null,
+				imp boolean not null,
 				rank tinyint not null,
 				op_rank tinyint not null,
-				imp boolean not null,
+				status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 				spelling_no int unsigned not null,
-				valid_no int unsigned not null,
 				synonym_no int unsigned not null,
 				parent_no int unsigned not null,
 				parsen_no int unsigned not null,
@@ -1711,7 +1716,7 @@ sub computeSynonymy {
     my $synonym_opinions = $dbh->prepare("
 		SELECT orig_no, parent_no, opinion_no, ri, pubyr
 		FROM $CLASSIFY_AUX
-		WHERE status != 'belongs to' AND parent_no != 0");
+		WHERE status in ($VALID_STATUS) AND parent_no != 0");
     
     $synonym_opinions->execute();
     
@@ -1826,26 +1831,19 @@ sub computeSynonymy {
     }
     
     # Now that we have broken all of the cycles in $CLASSIFY_AUX, we can
-    # fill in synonym_no and valid_no in $TREE_WORK.
+    # fill in the synonym_no field of $TREE_WORK.
     
-    logMessage(2, "    setting synonym_no and valid_no");
+    logMessage(2, "    setting synonym_no");
     
-    $result = $dbh->do("UPDATE $TREE_WORK as t LEFT JOIN $CLASSIFY_AUX as b using (orig_no)
-			SET t.synonym_no = if(status <> 'belongs to' and b.parent_no > 0,
-					      b.parent_no, orig_no),
-			    t.valid_no = if(status in ('subjective synonym of',
-						       'objective synonym of',
-						       'replaced by') and b.parent_no > 0,
-					    b.parent_no, orig_no)");
+    $result = $dbh->do("
+	UPDATE $TREE_WORK as t LEFT JOIN $CLASSIFY_AUX as b using (orig_no)
+	SET t.synonym_no = if(b.status in ($SYNONYM_STATUS) and b.parent_no > 0, b.parent_no, orig_no)");
     
-    # Now that we have set synonym_no and valid_no, we can efficiently index them.
-    
-    logMessage(2, "    indexing synonym_no and valid_no");
+    logMessage(2, "    indexing synonym_no");
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (synonym_no)");
-    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (valid_no)");
     
-    return;
+    my $a = 1;	# we can stop here when debugging
 }
 
 
@@ -1948,32 +1946,31 @@ sub linkSynonyms {
     
     # Then the same for valid_no
     
-    $count = 0;
+    # $count = 0;
     
-    do
-    {
-	$result = $dbh->do("
-		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
-		    on t1.valid_no = t2.orig_no and t1.valid_no != t2.valid_no
-		SET t1.valid_no = t2.valid_no");
-    }
-	while $result > 0 && ++$count < 20;
+    # do
+    # {
+    # 	$result = $dbh->do("
+    # 		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
+    # 		    on t1.valid_no = t2.orig_no and t1.valid_no != t2.valid_no
+    # 		SET t1.valid_no = t2.valid_no");
+    # }
+    # 	while $result > 0 && ++$count < 20;
     
-    if ( $count >= 20 )
-    {
-	logMessage(0,"WARNING - possible synonymy cycle detected during synonym linking");
-    }
+    # if ( $count >= 20 )
+    # {
+    # 	logMessage(0,"WARNING - possible synonymy cycle detected during synonym linking");
+    # }
     
-    
-    return;
+    my $a = 1;	# we can stop here when debugging
 }
 
 
 # computeHierarchy ( dbh )
 # 
-# Fill in the opinion_no and parent_no fields of $TREE_WORK.  This determines
-# the classification of each taxonomic concept represented in $TREE_WORK, and
-# thus the Hierarchy relation as well.
+# Fill in the opinion_no, status, parent_no and parsen_no fields of
+# $TREE_WORK.  This determines the classification of each taxonomic concept
+# represented in $TREE_WORK, and thus determines the Hierarchy relation.
 # 
 # We start with the set of classification opinions chosen by
 # computeSynonymy(), but we then recompute all of the ones that specify
@@ -2024,9 +2021,7 @@ sub computeHierarchy {
 			SELECT c.orig_no, c.parent_no
 			FROM $CLASSIFY_AUX as c JOIN $TREE_WORK as t on t.orig_no = c.orig_no
 				JOIN $TREE_WORK as t2 on t2.orig_no = c.parent_no
-			WHERE c.status in ('subjective synonym of', 'objective synonym of',
-						'replaced by')
-				and t.rank >= 5 and t2.rank >= 5");
+			WHERE c.status in ($SYNONYM_STATUS) and t.rank >= 5 and t2.rank >= 5");
     
     # Next, we add entries for all of the senior synonyms, because of course
     # their own opinions are considered as well.
@@ -2172,16 +2167,17 @@ sub computeHierarchy {
 	logMessage(1, "    found " . scalar(@breaks) . " cycle(s)");
     }
     
-    # Now we can set and then index opinion_no.
+    # Now we can set and then index opinion_no and status.
     
-    logMessage(2, "    setting opinion_no");
+    logMessage(2, "    setting opinion_no and status");
     
     $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $CLASSIFY_AUX as c USING (orig_no)
-			SET t.opinion_no = c.opinion_no");
+			SET t.opinion_no = c.opinion_no, t.status = c.status");
     
-    logMessage(2, "    indexing opinion_no");
+    logMessage(2, "    indexing opinion_no and status");
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (opinion_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (status)");
     
     # Now we can set parent_no.  All concepts in a synonym group will share
     # the same parent, so we need to join a second copy of $TREE_WORK to look
@@ -2214,9 +2210,7 @@ sub computeHierarchy {
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parsen_no)");
     
-    my $a = 1;
-    
-    return;
+    my $a = 1;	# we can stop here when debugging
 }
 
 
@@ -2513,7 +2507,6 @@ sub computeTreeSequence {
     my $result;
     
     my $nodes = {};
-    my $count = 0;
     
     logMessage(2, "traversing and marking taxon trees (e)");
     
@@ -2523,21 +2516,30 @@ sub computeTreeSequence {
     # that we can do the sequence computation in Perl (because SQL is just not
     # a powerful enough language to do this efficiently).
     
-    my $fetch_hierarchy = $dbh->prepare("SELECT orig_no, rank, synonym_no, parent_no
-					   FROM $TREE_WORK");
+    my $fetch_hierarchy = $dbh->prepare("
+	SELECT t.orig_no, t.rank, c.parent_no,
+	       if(c.status in ($SYNONYM_STATUS), 1, 0) as is_junior
+	FROM $TREE_WORK as t JOIN $CLASSIFY_AUX as c using (orig_no)");
     
     $fetch_hierarchy->execute();
     
-    while ( my ($child_no, $taxon_rank, $synonym_no, $parent_no) = $fetch_hierarchy->fetchrow_array() )
+    # Then we turn each row of $TREE_WORK into a node.  The contents of each
+    # node indicate which taxon is its immediate parent (the senior synonym if
+    # it is a junior synonym, or the containing taxon otherwise), the
+    # taxonomic rank, and whether or not it is a junior synonym.
+    
+    while ( my ($child_no, $taxon_rank, $parent_no, $is_junior) = $fetch_hierarchy->fetchrow_array() )
     {
-	my $immediate_parent = $child_no != $synonym_no ? $synonym_no : $parent_no;
-	$nodes->{$child_no} = { parent_no => $immediate_parent, rank => $taxon_rank };
-	$count++;
+	$nodes->{$child_no} = { imm_parent => $parent_no, 
+				rank => $taxon_rank, 
+				is_junior => $is_junior };
     }
+    
+    # Then go through the nodes and create a 'children' list for each one.
     
     foreach my $child_no (keys %$nodes)
     {
-	my $parent_no = $nodes->{$child_no}{parent_no};
+	my $parent_no = $nodes->{$child_no}{imm_parent};
 	push @{$nodes->{$parent_no}{children}}, $child_no if $parent_no > 0;
     }
     
@@ -2559,7 +2561,7 @@ sub computeTreeSequence {
  taxon:
     foreach my $orig_no (keys %$nodes)
     {
-	next if $nodes->{$orig_no}{parent_no} > 0;	# skip any taxa that aren't roots
+	next if $nodes->{$orig_no}{imm_parent} > 0;	# skip any taxa that aren't roots
 	next if $nodes->{$orig_no}{lft} > 0;		# skip any that we've already inserted
 	
 	$seq = assignSequence($nodes, $orig_no, $seq + 1, 1);
@@ -2684,17 +2686,17 @@ sub assignSequence {
 	$node->{depth} = $depth;
 	
 	# If this taxon has children, we must then iterate through them and
-	# insert each one (and all its descendants) into the tree.
+	# insert each one (and all its descendants) into the tree.  All taxa
+	# that are synonyms of each other should have the same depth.
 	
 	if ( exists $node->{children} )
 	{
 	    foreach my $child_no ( @{$node->{children}} )
 	    {
 		my $child_node = $nodes->{$child_no};
-		my $child_depth = $depth;
-		$child_depth += 1 if $node->{parent_no} != $child_node->{parent_no};
+		my $child_depth = $child_node->{is_junior} ? $depth : $depth + 1;
 		
-		$seq = assignSequence($nodes, $child_no, $seq + 1, $depth + 1);
+		$seq = assignSequence($nodes, $child_no, $seq + 1, $child_depth);
 	    }
 	}
 	
@@ -3902,9 +3904,9 @@ sub computeAttrsTable {
 			 first_early_age, first_late_age, last_early_age, last_late_age,
 			 precise_age, early_occ, late_occ, not_trace, image_no)
 		SELECT a.orig_no,
-			t.valid_no = t.synonym_no as is_valid,
-			(t.orig_no = t.synonym_no) or (t.orig_no = t.valid_no) as is_senior,
-			case coalesce(a.extant) 
+			if(t.status in ($VALID_STATUS), 1, 0) as is_valid,
+			if(t.status not in ($SYNONYM_STATUS), 1, 0) as is_senior,
+			case a.extant
 				when 'yes' then 1 when 'no' then 0 else null end as is_extant,
 			0, 0, 0, 0, tsum.n_occs, 0,
 			coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
@@ -4038,10 +4040,7 @@ sub computeAttrsTable {
 	
 	$result = $dbh->do($sql);
 	
-	# Then coalesce attributes across synonym groups among the parents.
-	# We use synonym_no instead of valid_no, because we want to count
-	# children of invalid subgroups, etc. as being part of their valid
-	# containing taxon.
+	# Then coalesce attributes across synonym groups.
 	
 	$sql = "
 		UPDATE $ATTRS_WORK as v JOIN 
@@ -4083,42 +4082,42 @@ sub computeAttrsTable {
 	# However, we also want to sum these up using valid_no, so that
 	# invalid subgroups, etc. will have accurate counts.
 	
-	$sql = "
-		UPDATE $ATTRS_WORK as v JOIN 
-		(SELECT t.valid_no,
-			if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
-			sum(v.extant_children) as extant_children_sum,
-			sum(v.distinct_children) as distinct_children_sum,
-			sum(v.extant_size) as extant_size_sum,
-			sum(v.taxon_size) as taxon_size_sum,
-			sum(v.n_occs) as n_occs,
-			min(v.min_body_mass) as min_body_mass,
-			max(v.max_body_mass) as max_body_mass,
-			max(v.first_early_age) as first_early_age,
-			max(v.first_late_age) as first_late_age,
-			min(v.last_early_age) as last_early_age,
-			min(v.last_late_age) as last_late_age,
-			max(v.precise_age) as precise_age,
-			if(sum(v.not_trace) > 0, 1, 0) as not_trace
-		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-		WHERE t.depth = $depth and t.valid_no <> t.synonym_no
-		GROUP BY t.valid_no) as nv on v.orig_no = nv.valid_no
-		SET     v.is_extant = nv.is_extant,
-			v.extant_children = nv.extant_children_sum,
-			v.distinct_children = nv.distinct_children_sum,
-			v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
-			v.taxon_size = nv.taxon_size_sum + 1,
-			v.n_occs = nv.n_occs,
-			v.min_body_mass = nv.min_body_mass,
-			v.max_body_mass = nv.max_body_mass,
-			v.first_early_age = nv.first_early_age,
-			v.first_late_age = nv.first_late_age,
-			v.last_early_age = nv.last_early_age,
-			v.last_late_age = nv.last_late_age,
-			v.precise_age = nv.precise_age,
-			v.not_trace = nv.not_trace";
+	# $sql = "
+	# 	UPDATE $ATTRS_WORK as v JOIN 
+	# 	(SELECT t.valid_no,
+	# 		if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
+	# 		sum(v.extant_children) as extant_children_sum,
+	# 		sum(v.distinct_children) as distinct_children_sum,
+	# 		sum(v.extant_size) as extant_size_sum,
+	# 		sum(v.taxon_size) as taxon_size_sum,
+	# 		sum(v.n_occs) as n_occs,
+	# 		min(v.min_body_mass) as min_body_mass,
+	# 		max(v.max_body_mass) as max_body_mass,
+	# 		max(v.first_early_age) as first_early_age,
+	# 		max(v.first_late_age) as first_late_age,
+	# 		min(v.last_early_age) as last_early_age,
+	# 		min(v.last_late_age) as last_late_age,
+	# 		max(v.precise_age) as precise_age,
+	# 		if(sum(v.not_trace) > 0, 1, 0) as not_trace
+	# 	FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+	# 	WHERE t.depth = $depth and t.valid_no <> t.synonym_no
+	# 	GROUP BY t.valid_no) as nv on v.orig_no = nv.valid_no
+	# 	SET     v.is_extant = nv.is_extant,
+	# 		v.extant_children = nv.extant_children_sum,
+	# 		v.distinct_children = nv.distinct_children_sum,
+	# 		v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
+	# 		v.taxon_size = nv.taxon_size_sum + 1,
+	# 		v.n_occs = nv.n_occs,
+	# 		v.min_body_mass = nv.min_body_mass,
+	# 		v.max_body_mass = nv.max_body_mass,
+	# 		v.first_early_age = nv.first_early_age,
+	# 		v.first_late_age = nv.first_late_age,
+	# 		v.last_early_age = nv.last_early_age,
+	# 		v.last_late_age = nv.last_late_age,
+	# 		v.precise_age = nv.precise_age,
+	# 		v.not_trace = nv.not_trace";
 	
-	$result = $dbh->do($sql);
+	# $result = $dbh->do($sql);
     }
     
     # Finally, we iterate from the top of the tree back down, computing those
@@ -4161,16 +4160,13 @@ sub computeAttrsTable {
     }
     
     # Now we have to copy the attributes of senior synonyms to all of their
-    # junior synonyms.  We use valid_no rather than synonym_no, because a
-    # junior synonym should only take on the attributes of another taxon that
-    # it is substantially equivalent to.  We don't want, say, a nomen dubium
-    # to have the same attributes as its containing taxon.
+    # junior synonyms.
     
     logMessage(2, "    setting attributes for junior synonyms");
     
     $result = $dbh->do("
 		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t on v.orig_no = t.orig_no
-			JOIN $ATTRS_WORK as sv on sv.orig_no = t.valid_no and sv.orig_no <> v.orig_no
+			JOIN $ATTRS_WORK as sv on sv.orig_no = t.synonym_no and sv.orig_no <> v.orig_no
 		SET	v.is_extant = sv.is_extant,
 			v.extant_children = sv.extant_children,
 			v.distinct_children = sv.distinct_children,
@@ -4564,13 +4560,13 @@ sub buildTaxaCacheTables {
 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
 	
 	$result = $dbh->do("
-		INSERT INTO $LIST_CACHE_WORK (parent_no, child_no)
+		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
 		SELECT t.parent_no, l.child_no
 		FROM $tree_table as t JOIN $LIST_CACHE_WORK as l on t.orig_no = l.parent_no
 		WHERE t.depth = $depth");
 	
 	$result = $dbh->do("
-		INSERT INTO $LIST_CACHE_WORK (parent_no, child_no)
+		INSERT IGNORE INTO $LIST_CACHE_WORK (parent_no, child_no)
 		SELECT t.parent_no, t.orig_no
 		FROM $tree_table as t
 		WHERE t.depth = $depth");

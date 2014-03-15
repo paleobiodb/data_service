@@ -1053,7 +1053,7 @@ sub insertProtLandRecord {
     
     # Suppress warning messages when inserting records.
     
-    local($dbh->{RaiseError} = 0);
+    local($dbh->{RaiseError}) = 0;
     
     # Make sure we have a properly quoted string for the country code and
     # category.  This also makes sure that we have a record of which ones were

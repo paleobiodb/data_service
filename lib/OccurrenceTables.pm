@@ -20,13 +20,15 @@ use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
 our (@EXPORT_OK) = qw(buildOccurrenceTables buildDiversityTables
-		      $OCC_MATRIX $OCC_TAXON $OCC_REF $DIV_SAMPLE);
+		      $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF $DIV_SAMPLE);
 
 our $OCC_MATRIX = "occ_matrix";
+our $OCC_EXTRA = "occ_extra";
 our $OCC_TAXON = "occ_taxon";
 our $OCC_REF = "occ_ref";
 
 our $OCC_MATRIX_WORK = "omn";
+our $OCC_EXTRA_WORK = "oen";
 our $OCC_TAXON_WORK = "otn";
 our $OCC_REF_WORK = "orn";
 
@@ -43,7 +45,7 @@ sub buildOccurrenceTables {
     
     my ($dbh, $options) = @_;
     
-    my ($sql, $result, $count);
+    my ($sql, $result, $count, $extra);
     
     # Create a clean working table which will become the new occurrence
     # matrix.
@@ -52,58 +54,130 @@ sub buildOccurrenceTables {
     
     $result = $dbh->do("DROP TABLE IF EXISTS $OCC_MATRIX_WORK");
     $result = $dbh->do("CREATE TABLE $OCC_MATRIX_WORK (
-				occurrence_no int unsigned primary key,
-				collection_no int unsigned not null,
+				occurrence_no int unsigned not null,
 				reid_no int unsigned not null,
+				collection_no int unsigned not null,
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
+				latest_ident boolean not null,
+				genus_name varchar(255),
+				genus_reso varchar(255),
+				subgenus_name varchar(255),
+				subgenus_reso varchar(255),
+				species_name varchar(255),
+				species_reso varchar(255),
+				plant_organ varchar(255),
+				plant_organ2 varchar(255),
 				early_age decimal(9,5),
 				late_age decimal(9,5),
 				reference_no int unsigned not null,
 				authorizer_no int unsigned not null,
-				enterer_no int unsigned not null) ENGINE=MyISAM");
+				enterer_no int unsigned not null,
+				modifier_no int unsigned not null,
+				created timestamp null,
+				modified timestamp null,
+				primary key (occurrence_no, reid_no)) ENGINE=MyISAM");
     
-    # Add one row for every occurrence in the database.
+    $result = $dbh->do("DROP TABLE IF EXISTS $OCC_EXTRA_WORK");
+    $result = $dbh->do("CREATE TABLE $OCC_EXTRA_WORK (
+				occurrence_no int unsigned not null,
+				reid_no int unsigned not null,
+				abund_value varchar(255),
+				abund_unit varchar(255),
+				comments text,
+				primary key (occurrence_no, reid_no)) ENGINE=MyISAM");
+    
+    # Add one row for every occurrence in the database, to both $OCC_MATRIX
+    # and $OCC_EXTRA.
     
     logMessage(2, "    inserting occurrences...");
     
     $sql = "	INSERT INTO $OCC_MATRIX_WORK
-		       (occurrence_no, collection_no, taxon_no, orig_no, early_age, late_age, reference_no,
-			authorizer_no, enterer_no)
-		SELECT o.occurrence_no, o.collection_no, o.taxon_no, a.orig_no, ei.early_age, li.late_age,
+		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
+			genus_name, genus_reso, subgenus_name, subgenus_reso, 
+			species_name, species_reso, plant_organ, plant_organ2,
+			early_age, late_age, reference_no,
+			authorizer_no, enterer_no, modifier_no, created, modified)
+		SELECT o.occurrence_no, 0, true, o.collection_no, o.taxon_no, a.orig_no, 
+			o.genus_name, o.genus_reso, o.subgenus_name, o.subgenus_reso,
+			o.species_name, o.species_reso, o.plant_organ, o.plant_organ2,
+			ei.early_age, li.late_age,
 			if(o.reference_no > 0, o.reference_no, c.reference_no),
-			o.authorizer_no, o.enterer_no
+			o.authorizer_no, o.enterer_no, o.modifier_no, o.created, o.modified
 		FROM occurrences as o JOIN coll_matrix as c using (collection_no)
+			LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
+			LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+			LEFT JOIN authorities as a using (taxon_no)";
+    
+    $extra = $dbh->do($sql);
+    
+    $sql = "	INSERT INTO $OCC_EXTRA_WORK
+		       (occurrence_no, reid_no, comments, abund_value, abund_unit)
+		SELECT o.occurrence_no, 0, o.comments, o.abund_value, o.abund_unit
+		FROM occurrences as o";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      $count occurrences");
+    
+    # Then add one row for every reidentification in the database, to both
+    # $OCC_MATRIX and $OCC_EXTRA
+    
+    $sql = "	INSERT INTO $OCC_MATRIX_WORK
+		       (occurrence_no, reid_no, latest_ident, collection_no, taxon_no, orig_no,
+			genus_name, genus_reso, subgenus_name, subgenus_reso,
+			species_name, species_reso, plant_organ,
+			early_age, late_age, reference_no,
+			authorizer_no, enterer_no, modifier_no, created, modified)
+		SELECT re.occurrence_no, re.reid_no, if(re.most_recent = 'YES', 1, 0), re.collection_no, re.taxon_no, a.orig_no, 
+			re.genus_name, re.genus_reso, re.subgenus_name, re.subgenus_reso,
+			re.species_name, re.species_reso, re.plant_organ,
+			ei.early_age, li.late_age, re.reference_no,
+			re.authorizer_no, re.enterer_no, re.modifier_no, re.created, re.modified
+		FROM reidentifications as re JOIN coll_matrix as c using (collection_no)
 			LEFT JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			LEFT JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 			LEFT JOIN authorities as a using (taxon_no)";
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "      $count occurrences");
+    $sql = "	INSERT INTO $OCC_EXTRA_WORK
+		       (occurrence_no, reid_no, comments)
+		SELECT re.occurrence_no, re.reid_no, re.comments
+		FROM reidentifications as re";
     
-    # Update each occurrence entry as necessary to take into account the latest
-    # reidentification if any.
+    $extra = $dbh->do($sql);
+    
+    logMessage(2, "      $count re-identifications");
+    
+    # For each reidentification, the corresponding record in occ_matrix drawn
+    # from the original occurrence record needs to be "de-selected".
+    
+    logMessage(2, "    updating re-identified occurrences...");
     
     $sql = "	UPDATE $OCC_MATRIX_WORK as m
 			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no 
 				and re.most_recent = 'YES'
-			JOIN authorities as a on a.taxon_no = re.taxon_no
-		SET m.reid_no = re.reid_no,
-		    m.taxon_no = re.taxon_no,
-		    m.orig_no = a.orig_no,
-		    m.reference_no = if(re.reference_no > 0, re.reference_no, m.reference_no)";
+		SET m.latest_ident = false WHERE m.reid_no = 0";
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "      $count re-identifications");
-    
-    # Add some indices to the main occurrence relation, which is more
+    # Now add some indices to the main occurrence relation, which is more
     # efficient to do now that the table is populated.
+    
+    logMessage(2, "    indexing by selection...");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX selection (occurrence_no, selected)");
     
     logMessage(2, "    indexing by collection...");
     
     $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (collection_no)");
+    
+    logMessage(2, "    indexing by taxonomic identification...");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (genus_name)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (subgenus_name)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (species_name)");
     
     logMessage(2, "    indexing by taxonomic concept...");
     
@@ -118,11 +192,22 @@ sub buildOccurrenceTables {
     
     $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (reference_no)");
     
+    logMessage(2, "    indexing by person...");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (authorizer_no)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (enterer_no)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (modifier_no)");
+    
+    logMessage(2, "    indexing by timestamp...");
+    
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (created)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (modified)");
+    
     # We now summarize the occurrence matrix by taxon.  We use the older_seq and
     # younger_seq interval identifications instead of interval_no, in order
     # that we can use the min() function to find the temporal bounds for each taxon.
     
-    logMessage(2, "    summarizing by taxon...");
+    logMessage(2, "    summarizing by taxonomic concept...");
     
     # Then create working tables which will become the new taxon summary
     # table and reference summary table.
@@ -261,9 +346,9 @@ sub buildOccurrenceTables {
     # Now swap in the new tables.
     
     activateTables($dbh, $OCC_MATRIX_WORK => $OCC_MATRIX,
+			 $OCC_EXTRA_WORK => $OCC_EXTRA,
 		         $OCC_TAXON_WORK => $OCC_TAXON,
 			 $OCC_REF_WORK => $OCC_REF);
-    
     
     my $a = 1;		# we can stop here when debugging.
 }
