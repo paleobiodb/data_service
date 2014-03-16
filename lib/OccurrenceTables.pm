@@ -167,7 +167,7 @@ sub buildOccurrenceTables {
     
     logMessage(2, "    indexing by selection...");
     
-    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX selection (occurrence_no, selected)");
+    $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX selection (occurrence_no, latest_ident)");
     
     logMessage(2, "    indexing by collection...");
     
