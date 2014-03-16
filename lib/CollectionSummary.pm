@@ -147,7 +147,7 @@ sub summary {
     my $summary_joins = '';
     
     $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
-	if $tables->{c} || $tables->{cc} || $tables->{t} || $tables->{o};
+	if $tables->{c} || $tables->{cc} || $tables->{t} || $tables->{o} || $tables->{oc} || $tables->{tf};
     
     $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
     
@@ -178,6 +178,8 @@ sub summary {
 		ORDER BY s.bin_id $limit";
     
     # Then prepare and execute the query..
+    
+    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
     
     $self->{main_sth} = $dbh->prepare($self->{main_sql});
     $self->{main_sth}->execute();

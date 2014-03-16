@@ -1721,9 +1721,9 @@ sub generateJoinList {
     
     # Create the necessary join expressions.
     
-    $join_list .= "JOIN occ_matrix as o on o.collection_no = c.collection_no\n"
+    $join_list .= "JOIN occ_matrix as o using (collection_no)\n"
 	if $tables->{o};
-    $join_list .= "JOIN occurrences as oc on oc.occurrence_no = o.occurrence_no\n"
+    $join_list .= "JOIN occurrences as oc using (occurrence_no)\n"
 	if $tables->{oc};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t} || $tables->{tf};
