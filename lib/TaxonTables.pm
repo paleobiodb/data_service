@@ -4934,8 +4934,15 @@ sub populateOrig {
     
     ensureOrig($dbh);
     
-    # Check to see if we have any unset orig_no entries, and return if we do
-    # not.
+    # Start by zeroing any orig_no entries that no longer correspond to
+    # taxon_no values.
+    
+    $dbh->do("
+	UPDATE authorities as a LEFT JOIN authorities as a2 on a2.taxon_no = a.orig_no
+	SET a.orig_no = 0 WHERE a2.taxon_no is null");
+    
+    # Then check to see if we have any unset orig_no entries, and return if we
+    # do not.
     
     my ($count) = $dbh->selectrow_array("
 	SELECT count(*) from authorities

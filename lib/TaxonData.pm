@@ -570,9 +570,10 @@ sub get {
 	    $r->{family_txn} = $taxonomy->getTaxon($r->{family_no}, { fields => ['size'] });
 	}
 	
-	if ( $r->{parent_no} )
+	if ( $r->{parsen_no} || $r->{parent_no} )
 	{
-	    $r->{parent_txn} = $taxonomy->getTaxon($r->{parent_no}, { fields => ['size'] });
+	    my $parent_no = $r->{parsen_no} || $r->{parent_no};
+	    $r->{parent_txn} = $taxonomy->getTaxon($parent_no, { fields => ['size'] });
 	}
 	
 	# Then add the various lists of subtaxa.

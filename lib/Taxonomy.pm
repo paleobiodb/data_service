@@ -377,7 +377,7 @@ our ($REF_FIELDS) = ", r.author1init as r_ai1, r.author1last as r_al1, r.author2
 # The "link" fields are returned additionally if we are asked for 'link'.
 # They describe how a taxon is linked to others in the tree.
 
-our ($LINK_FIELDS) = ", t.spelling_no, t.synonym_no, t.parent_no";
+our ($LINK_FIELDS) = ", t.spelling_no, t.synonym_no, t.parent_no, t.parsen_no";
 
 # The "orig" fields are returned additionally if we are asked for 'orig'.
 # They specify the original name and rank of a taxon.
