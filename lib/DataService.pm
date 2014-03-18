@@ -208,6 +208,7 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    output => 'single',
 		    uses_dbh => 'single',
 		    version => 'single',
+		    subvers => 'single',
 		    public_access => 'single',
 		    also_initialize => 'set',
 		    output_param => 'single',
@@ -1003,7 +1004,8 @@ sub document_path {
 	}
 	
 	my $doc_title = $path_attrs->{doc_title};
-	my $ds_version = $path_attrs->{version} || $self->{version};
+	my $ds_version = $path_attrs->{version} || $self->{version} || '';
+	my $ds_subvers = $path_attrs->{subvers} || $self->{subvers} || '';
 	
 	unless ( $doc_title )
 	{
@@ -1016,6 +1018,7 @@ sub document_path {
 	my $vars = { path => $path,
 		     doc_title => $doc_title,
 		     ds_version => $ds_version,
+		     ds_subvers => $ds_subvers,
 		     vocab_param => $path_attrs->{vocab_param},
 		     output_param => $path_attrs->{output_param} };
 	

@@ -431,7 +431,7 @@ sub initialize {
 	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
     
     $ds->define_ruleset('1.1:taxa:thumb' =>
-	{ param => 'image', valid => POS_VALUE },
+	{ param => 'id', valid => POS_VALUE },
 	    "A positive number identifying a taxon image",
 	{ ignore => 'splat' });
     
@@ -1001,6 +1001,8 @@ sub get_image {
 		SELECT $type FROM $PHYLOPICS as p
 		WHERE image_no = $image_no";
 	
+	print STDERR "$self->{main_sql}\n\n" if $self->debug;
+	
 	($self->{main_data}) = $dbh->selectrow_array($self->{main_sql});
 	
 	return if $self->{main_data};
@@ -1019,6 +1021,8 @@ sub get_image {
 	$self->{main_sql} = "
 		SELECT $fields FROM $PHYLOPICS
 		WHERE image_no = $image_no";
+	
+	print STDERR "$self->{main_sql}\n\n" if $self->debug;
 	
 	$self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
 	

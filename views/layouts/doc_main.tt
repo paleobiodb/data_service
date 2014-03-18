@@ -5,11 +5,13 @@
     # for your own data service.
     
     my $version = $stash->get('ds_version');
+    my $subvers = $stash->get('ds_subvers');
     my $list = $stash->get('trail_list');
     
     unless ( ref $list eq 'ARRAY' )
     {
-	$stash->set('trail', "=head3 Data service version $version");
+	$version .= " ($subvers)" if $version && $subvers;
+	$stash->set('trail', "=head3 Data service version $version") if $version;
         return;
     }
     
@@ -18,7 +20,9 @@
     
     my $label = shift @$list;
     my $link = shift @$list;
-    my $trail = "=head3 Data service L<version $version|$link>";
+    my $trail = $version && $subvers ? "=head3 Data service L<version $version|$link> ($subvers)"
+	      : $version	     ? "=head3 Data service L<version $version|$link>"
+				     : "=head3 Data service";
     
     # Then add the rest of the path components, separated by a '>'.
     # all but the last are links to their respective pages.

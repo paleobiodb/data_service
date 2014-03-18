@@ -1,0 +1,16 @@
+The following versions of this data service are available:
+
+=over
+
+=for pp_table_header Version* | Description
+
+=item L</data1.1/>
+
+This is the most current version.
+
+=item L</data1.0/>
+
+This is obsolete, and is no longer active.
+
+=back
+

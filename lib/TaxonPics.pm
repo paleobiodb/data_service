@@ -43,7 +43,7 @@ sub getPics {
     my ($list);
     my ($raw_count) = 0;
     
-    ensureTable($dbh, $force);
+    ensureTables($dbh, $force);
     
     # Figure out the date of the last fetch that we did.  If no images are in
     # the table, use a date that will cause all available images to be fetched.
@@ -248,11 +248,11 @@ sub selectPics {
 }
 
 
-# ensureTable ( dbh )
+# ensureTables ( dbh )
 # 
 # If the proper table does not exist, create it.
 
-sub ensureTable {
+sub ensureTables {
 
     my ($dbh, $force) = @_;
     

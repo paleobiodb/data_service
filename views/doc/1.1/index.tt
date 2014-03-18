@@ -1,4 +1,4 @@
-The following services are obsolete and should no longer be used: version 1.0 (/data1.0).
+This is the current version of the data service, and should be used for all new applications.
 
 =head2 DESCRIPTION
 

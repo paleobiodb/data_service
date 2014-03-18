@@ -59,6 +59,19 @@ L</data1.1/colls/list.txt?base_name=Cetacea&interval=Miocene&show=ref,loc,time>
 
 =back
 
+=item References | L</data1.1/colls/refs>
+
+Returns information about the bibliographic references associated with collections,
+selected according to the parameters you provide.  For example:
+
+=over
+
+=item *
+
+L</data1.1/colls/refs.ris?lngmin=0&lngmax=15&latmin=0&latmax=15&textresult>
+
+=back
+
 =item Summary clusters | L</data1.1/colls/summary|/data1.1/colls/summary_doc.html>
 
 Returns information about geographic clusters of collections, selected according

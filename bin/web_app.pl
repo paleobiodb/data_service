@@ -134,6 +134,7 @@ $ds->define_cache(
 
 $ds->define_path({ path => '1.1', 
 		   version => '1.1',
+		   subvers => 'b2',
 		   public_access => 1,
 		   output_param => 'show',
 		   vocab_param => 'vocab',
@@ -344,6 +345,18 @@ $ds->define_path({ path => '1.1/formats/ris',
 $ds->define_path({ path => '1.1/formats/png',
 		   doc_title => 'PNG format' });
 
+# Finally, the list of data service versions
+
+$ds->define_path({ path => '1.0',
+		   version => '1.0',
+		   subvers => 'a1',
+		   doc_title => 'Documentation' });
+
+$ds->define_path({ path => 'versions', 
+		   version => '',
+		   public_access => 1,
+		   doc_title => 'Versions' });
+
 
 # Now we configure a set of Dancer routes to serve
 # the data, documentation, stylesheets, etc.
@@ -371,7 +384,8 @@ get qr{ ^ $PREFIX ( / | $ ) }xs => sub {
     $DB::single = 1;
     my $format = 'pod' if $path =~ /\.pod$/;
     
-    return $ds->document_path("/version_list.tt", $format);
+    return $ds->document_path("/versions", $format);
+
 };
 
 
