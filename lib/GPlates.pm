@@ -146,7 +146,7 @@ sub updatePaleocoords {
 	my $mid = $record->{mid_age};
 	my $late = $record->{late_age};
 	
-	$self->{new_coods}{$coll_no} = [$lng, $lat];
+	$self->{new_coords}{$coll_no} = [$lng, $lat];
 	push @{$self->{source_points}{$early}}, [$coll_no, 'early', $lng, $lat];
 	push @{$self->{source_points}{$mid}}, [$coll_no, 'mid', $lng, $lat];
 	push @{$self->{source_points}{$late}}, [$coll_no, 'late', $lng, $lat];
