@@ -479,7 +479,7 @@ sub ensureTables {
 		collection_no int unsigned primary key,
 		present_lng decimal(9,6),
 		present_lat decimal(9,6),
-		early_age int unsigned),
+		early_age int unsigned,
 		early_lng decimal(9,6),
 		early_lat decimal(9,6),
 		early_plate_id int unsigned,
