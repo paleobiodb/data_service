@@ -19,8 +19,8 @@ use GPlates qw(ensureTables updateGPlatesCoords);
 
 my ($replace_table, $update_all, $min_age, $max_age, $debug);
 
-GetOptions("replace_table|R" => \$replace_table,
-	   "update_all|a" => \$update_all,
+GetOptions("replace-table|R" => \$replace_table,
+	   "update-all|a" => \$update_all,
 	   "min-age=i" => \$min_age,
 	   "max-age=i" => \$max_age,
 	   "debug" => \$debug);

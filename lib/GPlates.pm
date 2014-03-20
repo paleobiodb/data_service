@@ -49,6 +49,8 @@ sub updateGPlatesCoords {
     
     my ($sql, $result, @filters);
     
+    ensureTables($dbh);
+    
     logMessage(1, "Updating paleocoordinates");
     
     # If the option 'update_all' was specified, then we start by clearing the
