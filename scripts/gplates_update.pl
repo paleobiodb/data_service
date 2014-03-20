@@ -12,7 +12,7 @@ use Getopt::Long qw(:config bundling no_auto_abbrev);
 
 use CoreFunction qw(connectDB);
 use ConsoleLog qw(initMessages logMessage logTimestamp);
-use GPlates qw(ensureTables updateGPlatesCoords);
+use GPlates qw(ensureTables updatePaleocoords);
 
 # First parse option switches.  If we were given an argument, then use that as
 # the database name overriding what was in the configuration file.
@@ -62,10 +62,10 @@ if ( $replace_table )
 
 # Update the coordinates.
 
-updateGPlatesCoords($dbh, { update_all => $update_all,
-			    min_age => $min_age,
-			    max_age => $max_age,
-			    debug => $debug });
+updatePaleocoords($dbh, { update_all => $update_all,
+			  min_age => $min_age,
+			  max_age => $max_age,
+			  debug => $debug });
 
 logTimestamp();
 
