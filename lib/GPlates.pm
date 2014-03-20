@@ -103,7 +103,7 @@ sub updatePaleocoords {
     logMessage(2, "    querying for collections whose paleocoords must be computed fresh...");
     
     @filters = ();
-    push @filters, "c.lat is not null", "c.lng is not null";
+    push @filters, "c.lat <= 90", "c.lat >= -90", "c.lng <= 180", "c.lng >= -180";
     push @filters, "ei.late_age >= $min_age" if defined $min_age;
     push @filters, "li.early_age <= $max_age" if defined $max_age;
     push @filters, "(c.lat <> p.present_lat or c.lng <> p.present_lng or p.present_lat is null or p.present_lng is null)";
@@ -163,6 +163,7 @@ sub updatePaleocoords {
     logMessage(2, "    querying for missing or incorrect entries in paleocoords table...");
     
     @filters = ();
+    push @filters, "c.lat <= 90", "c.lat >= -90", "c.lng <= 180", "c.lng >= -180";
     push @filters, "ei.late_age >= $min_age" if defined $min_age;
     push @filters, "li.early_age <= $max_age" if defined $max_age;
     
@@ -401,17 +402,19 @@ sub makeGPlatesRequest {
 	# be retried.  If the option $debug is true, write the response
 	# content to an error file.
 	
-	if ( $self->{debug} )
-	{
-	    $self->{debg_count}++;
-	    open(OUTFILE, ">gpfail.$self->{debg_count}.html");
-	    print OUTFILE $resp->content;
-	    close OUTFILE;
-	}
-	
 	my $code = $resp->code;
 	logMessage(2, "      REQUEST FAILED WITH CODE '$code'");
 	$self->{fail_count}++;
+	
+	if ( $self->{debug} )
+	{
+	    $self->{debug_count}++;
+	    open(OUTFILE, ">gpfail.$self->{debug_count}.html");
+	    print OUTFILE $resp->content;
+	    close OUTFILE;
+	    logMessage(2, "      DEBUG FILE 'gpfail.$self->{debug_count}.html' created");
+	}
+	
 	return;
     }
     
