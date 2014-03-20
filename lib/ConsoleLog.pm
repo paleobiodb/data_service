@@ -10,7 +10,7 @@ use strict;
 
 use base qw(Exporter);
 
-our (@EXPORT_OK) = qw(initMessages logMessage);
+our (@EXPORT_OK) = qw(initMessages logMessage logTimestamp);
 
 
 # Controlling variables for debug messages
@@ -54,5 +54,22 @@ sub logMessage {
     print STDERR "$MSG_TAG: [ $elapsed_str ]  $message\n";
 }
 
+
+# logTimestamp ( gmt )
+# 
+# Print a timestamp to standard error.  If the first parameter is the string
+# 'gmt', then use GMT instead of localtime.
+
+sub logTimestamp {
+    
+    my $param = lc $_[0];
+    
+    my $now = $param eq 'gmt' ? gmtime : localtime;
+    
+    my $elapsed = time - $START_TIME;    
+    my $elapsed_str = sprintf("%2dm %2ds", $elapsed / 60, $elapsed % 60);
+    
+    print STDERR "$MSG_TAG: [ $elapsed_str ]  $now\n";
+}
 
 1;
