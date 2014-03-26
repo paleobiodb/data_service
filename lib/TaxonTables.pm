@@ -18,7 +18,7 @@ use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS);
 
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
-use OccurrenceTables qw($OCC_MATRIX $OCC_TAXON);
+use TableDefs qw($OCC_MATRIX $OCC_TAXON);
 
 use base 'Exporter';
 

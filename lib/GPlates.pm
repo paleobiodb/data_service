@@ -10,17 +10,18 @@ use strict;
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(ensureTables updatePaleocoords);
+our (@EXPORT_OK) = qw(updatePaleocoords ensureTables readPlateData);
 
 use Carp qw(carp croak);
 use Try::Tiny;
 use JSON;
 use LWP::UserAgent;
 
+use TableDefs qw($PALEOCOORDS $GEOPLATES $COLLECTIONS $COLL_MATRIX $INTERVAL_DATA);
 use ConsoleLog qw(initMessages logMessage);
-use IntervalTables qw($INTERVAL_DATA);
 
-our ($PALEOCOORDS) = 'paleocoords';
+
+our ($GEOPLATES_WORK) = 'gpn';
 
 our ($RETRY_LIMIT) = 3;
 our ($RETRY_INTERVAL) = 5;
@@ -54,6 +55,10 @@ sub updatePaleocoords {
     
     bless $self, 'GPlates';
     
+    ($self->{coll_matrix_exists}) = eval {
+	$dbh->selectrow_array("SELECT count(*) FROM $COLL_MATRIX");
+    };
+    
     # Then process the other options.
     
     my $min_age = $options->{min_age} + 0 if defined $options->{min_age} && $options->{min_age} > 0;
@@ -85,8 +90,6 @@ sub updatePaleocoords {
     
     else
     {
-	logMessage(2, "    deleting paleocoords from collections with nulled coordinates...");
-	
 	$sql = "DELETE FROM $PALEOCOORDS
 		USING collections as c join $PALEOCOORDS using (collection_no)
 		WHERE c.lat is null or c.lng is null";
@@ -96,97 +99,79 @@ sub updatePaleocoords {
 	logMessage(2, "      found $result such collections") if $result > 0;
     }
     
-    # Now we query for all collections whose records in the $PALEOCOORDS table
+    # Now we look for collections whose records in the $PALEOCOORDS table
     # are either missing or store different coordinates than the current
-    # collection coordinates.  These records must be recomputed completely.
+    # collection coordinates.  For each one, we add a fresh (empty) record.
     
-    logMessage(2, "    querying for collections whose paleocoords must be computed fresh...");
+    my @age_filter = ();
+    push @age_filter, "ei.late_age >= $min_age" if defined $min_age;
+    push @age_filter, "li.early_age <= $max_age" if defined $max_age;
     
-    @filters = ();
-    push @filters, "c.lat <= 90", "c.lat >= -90", "c.lng <= 180", "c.lng >= -180";
-    push @filters, "ei.late_age >= $min_age" if defined $min_age;
-    push @filters, "li.early_age <= $max_age" if defined $max_age;
-    push @filters, "(c.lat <> p.present_lat or c.lng <> p.present_lng or p.present_lat is null or p.present_lng is null)";
+    my $age_filter = join(' and ', @age_filter);
+    $age_filter = "and $age_filter" if $age_filter;
     
-    my $filter_string = join(' and ', @filters);
+    $sql =     "REPLACE INTO $PALEOCOORDS (collection_no, present_lng, present_lat, early_age, mid_age, late_age)
+		SELECT c.collection_no, c.lng, c.lat, 
+		       round(ei.early_age,0), round(li.late_age,0),
+		       round((ei.early_age + li.late_age)/2,0)
+		FROM $COLLECTIONS as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
+			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.max_interval_no
+			JOIN $INTERVAL_DATA as li on li.interval_no = if(c.min_interval_no > 0, 
+									 c.min_interval_no,
+									 c.max_interval_no)
+		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0 and
+		      (c.lat <> p.present_lat or c.lng <> p.present_lng or 
+		       p.present_lat is null or p.present_lng is null or
+		       round(ei.early_age,0) <> p.early_age or round(li.late_age,0) <> p.late_age)
+		       $age_filter";
     
-    $filter_string = "WHERE $filter_string" if $filter_string;
+    print STDERR $sql . "\n\n" if $self->{debug};
     
-    $sql = "SELECT c.collection_no, c.lng, c.lat,
-		round(ei.early_age,0) as early_age,
-		round((ei.early_age + li.late_age)/2, 0) as mid_age,
-		round(li.late_age,0) as late_age
-	    FROM collections as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
-		JOIN $INTERVAL_DATA as ei on ei.interval_no = c.max_interval_no
-		JOIN $INTERVAL_DATA as li on li.interval_no = if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
-	    $filter_string";
+    my $count = $dbh->do($sql);
+    
+    # my $sth = $dbh->prepare($sql);
+    
+    # $sth->execute();
+    
+    # my $count = 0;
+    
+    # # For each collection found, we put 3 records into $self->{source_points},
+    # # corresponding to the beginning, midpoint, and end of its age range.
+    # # Each of these rotations will need to be computed.  We also create a
+    # # record in $self->{new_coords}, indicting that a new row will have to be
+    # # created in $PALEOCOORDS with the indicated coordinates.
+    
+    # while ( my $record = $sth->fetchrow_hashref )
+    # {
+    # 	$count += 3;
+	
+    # 	my $coll_no = $record->{collection_no};
+    # 	my $lng = $record->{lng};
+    # 	my $lat = $record->{lat};	    
+    # 	my $early = $record->{early_age};
+    # 	my $mid = $record->{mid_age};
+    # 	my $late = $record->{late_age};
+	
+    # 	$self->{new_coords}{$coll_no} = [$lng, $lat];
+    # 	push @{$self->{source_points}{$early}}, [$coll_no, 'early', $lng, $lat];
+    # 	push @{$self->{source_points}{$mid}}, [$coll_no, 'mid', $lng, $lat];
+    # 	push @{$self->{source_points}{$late}}, [$coll_no, 'late', $lng, $lat];
+    # }
+    
+    logMessage(2, "    found $count collections to recompute") if $count > 0;
+    
+    # Next, we need to query for all records in $PALEOCOORDS that have missing
+    # entries (including the ones just added).
+    
+    $sql =     "SELECT p.collection_no, p.present_lng, p.present_lat,
+		       early_age, mid_age, late_age,
+		       early_lng, mid_lng, late_lng
+		FROM $PALEOCOORDS as p 
+		WHERE early_lng is null or mid_lng is null or late_lng is null";
     
     print STDERR $sql . "\n\n" if $self->{debug};
     
     my $sth = $dbh->prepare($sql);
-    
-    $sth->execute();
-    
-    my $count = 0;
-    
-    # For each collection found, we put 3 records into $self->{source_points},
-    # corresponding to the beginning, midpoint, and end of its age range.
-    # Each of these rotations will need to be computed.  We also create a
-    # record in $self->{new_coords}, indicting that a new row will have to be
-    # created in $PALEOCOORDS with the indicated coordinates.
-    
-    while ( my $record = $sth->fetchrow_hashref )
-    {
-	$count += 3;
-	
-	my $coll_no = $record->{collection_no};
-	my $lng = $record->{lng};
-	my $lat = $record->{lat};	    
-	my $early = $record->{early_age};
-	my $mid = $record->{mid_age};
-	my $late = $record->{late_age};
-	
-	$self->{new_coords}{$coll_no} = [$lng, $lat];
-	push @{$self->{source_points}{$early}}, [$coll_no, 'early', $lng, $lat];
-	push @{$self->{source_points}{$mid}}, [$coll_no, 'mid', $lng, $lat];
-	push @{$self->{source_points}{$late}}, [$coll_no, 'late', $lng, $lat];
-    }
-    
-    logMessage(2, "      found $count entries to compute");
-    
-    # Next, we need to query for any records in $PALEOCOORDS that have missing
-    # or incorrect entries.  These are either due to server failures during a
-    # previous execution of this program, or to changes in the age ranges for
-    # some collection.  In either case, the bad entries will need to be
-    # recomputed.
-    
-    logMessage(2, "    querying for missing or incorrect entries in paleocoords table...");
-    
-    @filters = ();
-    push @filters, "c.lat <= 90", "c.lat >= -90", "c.lng <= 180", "c.lng >= -180";
-    push @filters, "ei.late_age >= $min_age" if defined $min_age;
-    push @filters, "li.early_age <= $max_age" if defined $max_age;
-    
-    my $filter_string = join(' and ', @filters);
-    
-    $filter_string = "WHERE $filter_string" if $filter_string;
-    
-    $sql = "SELECT c.collection_no, c.lng, c.lat,
-		round(ei.early_age,0) as early_age,
-		round((ei.early_age + li.late_age)/2, 0) as mid_age,
-		round(li.late_age,0) as late_age,
-		round(p.early_age,0) as p_early, round(p.mid_age,0) as p_mid, round(p.late_age,0) as p_late
-	    FROM collections as c JOIN $PALEOCOORDS as p
-		    on c.collection_no = p.collection_no and c.lng = p.present_lng and c.lat = p.present_lat
-		JOIN $INTERVAL_DATA as ei on ei.interval_no = c.max_interval_no
-		JOIN $INTERVAL_DATA as li on li.interval_no = if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no)
-	    $filter_string
-	    HAVING round(p_early,0) <> early_age or round(p_mid,0) <> mid_age or round(p_late,0) <> late_age
-			or p_early is null or p_late is null or p_mid is null";
-    
-    print STDERR $sql . "\n\n" if $self->{debug};
-    
-    $sth = $dbh->prepare($sql);
     
     $sth->execute();
         
@@ -195,40 +180,32 @@ sub updatePaleocoords {
     while ( my $record = $sth->fetchrow_hashref )
     {
 	my $coll_no = $record->{collection_no};
-	my $lng = $record->{lng};
-	my $lat = $record->{lat};	    
-	my $early = $record->{early_age};
-	my $mid = $record->{mid_age};
-	my $late = $record->{late_age};
+	my $lng = $record->{present_lng};
+	my $lat = $record->{present_lat};	    
+	my $early_age = $record->{early_age};
+	my $mid_age = $record->{mid_age};
+	my $late_age = $record->{late_age};
 	
-	if ( ! defined $record->{p_early} || $record->{p_early} != $early )
+	if ( ! defined $record->{early_lng} )
 	{
-	    push @{$self->{source_points}{$early}}, [$coll_no, 'early', $lng, $lat];
+	    push @{$self->{source_points}{$early_age}}, [$coll_no, 'early', $lng, $lat];
 	    $count++;
 	}
 	
-	if ( ! defined $record->{p_mid} || $record->{p_mid} != $mid )
+	if ( ! defined $record->{mid_lng} )
 	{
-	    push @{$self->{source_points}{$mid}}, [$coll_no, 'mid', $lng, $lat];
+	    push @{$self->{source_points}{$mid_age}}, [$coll_no, 'mid', $lng, $lat];
 	    $count++;
 	}
 	
-	if ( ! defined $record->{p_late} || $record->{p_late} != $late )
+	if ( ! defined $record->{late_lng} )
 	{
-	    push @{$self->{source_points}{$late}}, [$coll_no, 'late', $lng, $lat];
+	    push @{$self->{source_points}{$late_age}}, [$coll_no, 'late', $lng, $lat];
 	    $count++;
 	}
     }
     
-    logMessage(2, "      found $count entries to update");
-    
-    # Now that we have identified the records in $PALEOCOORDS that need to be
-    # updated, we can put a new record into the table for each collection that
-    # was found by the first query above.  We needed to wait until after the
-    # second query, because all of these new records will have nulls in them
-    # that would otherwise have been counted again by that second query.
-    
-    $self->createNewRecords();
+    logMessage(2, "    found $count entries to update");
     
     # At this point, we need to prepare the SQL statements that will be used
     # to update entries in the table.
@@ -298,6 +275,9 @@ sub updatePaleocoords {
 }
 
 
+# The following routines are internally used methods, and are not exported:
+# =========================================================================
+
 sub createNewRecords {
     
     my ($self) = @_;
@@ -334,22 +314,52 @@ sub prepareStatements {
     my $sql;
     
     $sql = "UPDATE $PALEOCOORDS
-	    SET early_age = ?, early_lng = ?, early_lat = ?, early_plate_id = ?
+	    SET early_age = ?, early_lng = ?, early_lat = ?, plate_no = ?
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{early_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $PALEOCOORDS
-	    SET mid_age = ?, mid_lng = ?, mid_lat = ?, mid_plate_id = ?
+	    SET mid_age = ?, mid_lng = ?, mid_lat = ?, plate_no = ?
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{mid_sth} = $dbh->prepare($sql);
     
     $sql = "UPDATE $PALEOCOORDS
-	    SET late_age = ?, late_lng = ?, late_lat = ?, late_plate_id = ?
+	    SET late_age = ?, late_lng = ?, late_lat = ?, plate_no = ?
 	    WHERE collection_no = ? LIMIT 1";
     
     $self->{late_sth} = $dbh->prepare($sql);
+    
+    if ( $self->{coll_matrix_exists} )
+    {
+	$sql = "UPDATE $COLL_MATRIX as c JOIN $PALEOCOORDS as pc using (collection_no)
+		SET c.plate_no = pc.plate_no,
+		    c.early_loc = if(pc.early_lng is null or pc.early_lat is null, 
+				     point(1000.0, 1000.0),
+				     point(pc.early_lng, pc.early_lat))
+		WHERE collection_no = ?";
+	
+	$self->{cm_early_sth} = $dbh->prepare($sql);
+	
+	$sql = "UPDATE $COLL_MATRIX as c JOIN $PALEOCOORDS as pc using (collection_no)
+		SET c.plate_no = pc.plate_no,
+		    c.mid_loc = if(pc.mid_lng is null or pc.mid_lat is null, 
+				     point(1000.0, 1000.0),
+				     point(pc.mid_lng, pc.mid_lat))
+		WHERE collection_no = ?";
+	
+	$self->{cm_mid_sth} = $dbh->prepare($sql);
+	
+	$sql = "UPDATE $COLL_MATRIX as c JOIN $PALEOCOORDS as pc using (collection_no)
+		SET c.plate_no = pc.plate_no,
+		    c.late_loc = if(pc.late_lng is null or pc.late_lat is null, 
+				     point(1000.0, 1000.0),
+				     point(pc.late_lng, pc.late_lat))
+		WHERE collection_no = ?";
+	
+	$self->{cm_late_sth} = $dbh->prepare($sql);
+    }
     
     return;
 }
@@ -453,6 +463,9 @@ sub processResponse {
 	my $key = $feature->{properties}{NAME};
 	my $plate_id = $feature->{properties}{PLATE_ID};
 	
+	next unless $lng =~ qr{ -? \d+ (?: \. \d* ) $ }x;
+	next unless $lat =~ qr{ -? \d+ (?: \. \d* ) $ }x;
+	
 	$self->updateOneEntry($key, $age, $lng, $lat, $plate_id);
 	
 	# If this is the first request, and the response includes age
@@ -496,8 +509,22 @@ sub updateOneEntry {
 		   : undef;
     
     $select_sth->execute($age, $lng, $lat, $plate_id, $coll_no);
+    
+    if ( $self->{coll_matrix_exists} )
+    {
+	$select_sth = $selector eq '0' ? $self->{cm_early_sth}
+		    : $selector eq '1' ? $self->{cm_mid_sth}
+		    : $selector eq '2' ? $self->{cm_late_sth}
+		    : undef;
+	
+	$select_sth->execute($coll_no);
+    }
+    
     $self->{update_count}++;
 }
+
+# ==============
+# end of methods
 
 
 # ensureTables ( dbh, force )
@@ -519,27 +546,116 @@ sub ensureTables {
     if ( $force )
     {
 	$dbh->do("DROP TABLE IF EXISTS $PALEOCOORDS");
+	$dbh->do("DROP TABLE IF EXISTS $GEOPLATES");
     }
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $PALEOCOORDS (
 		collection_no int unsigned primary key,
 		present_lng decimal(9,6),
 		present_lat decimal(9,6),
+		plate_no int unsigned,
 		early_age int unsigned,
 		early_lng decimal(9,6),
 		early_lat decimal(9,6),
-		early_plate_id int unsigned,
 		mid_age int unsigned,
 		mid_lng decimal(9,6),
 		mid_lat decimal(9,6),
-		mid_plate_id int unsigned,
 		late_age int unsigned,
 		late_lng decimal(9,6),
-		late_lat decimal(9,6),
-		late_plate_id int unsigned) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		late_lat decimal(9,6)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+    
+    $dbh->do("CREATE TABLE IF NOT EXISTS $GEOPLATES (
+		plate_no int unsigned primary key,
+		abbrev varchar(10) not null,
+		name varchar(255) not null,
+		key (abbrev),
+		key (name)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     my $a = 1;	# we can stop here when debugging
 }
 
+
+# readPlateData ( dbh )
+# 
+# Read a data file in JSON format from standard input and parse plate ids and
+# names from it.  Replace the contents of $GEOPLATES from this data.
+
+sub readPlateData {
+
+    my ($dbh) = @_;
+    
+    ensureTables($dbh);
+    
+    # Prepare an SQL statement to insert property names.
+    
+    my $insert_sth = $dbh->prepare("
+		REPLACE INTO $GEOPLATES (plate_no, abbrev, name)
+		VALUES (?, ?, ?)");
+    
+    # Read data line-by-line from standard input.
+    
+    my $buffer = "";
+    my $plate_count = 0;
+    my %found_plate;	
+    
+    while (<>)
+    {
+	$buffer .= $_;
+    }
+    
+    # If $buffer starts with '{', then assume it contains geojson.
+    
+    if ( $buffer =~ /^\s*\{/ )
+    {
+	my $result = decode_json($buffer);
+	
+	# Then scan the list of features looking for property lists.  We ignore
+	# plates that we have seen once already, because many of the plates are
+	# mentioned multiple times.
+	
+	my $features = $result->{features};
+	
+	unless ( defined $features )
+	{
+	    logMessage(1, "    NO FEATURES FOUND: ABORTING");
+	    return;
+	}
+	
+	foreach my $f ( @$features )
+	{
+	    my $prop = $f->{properties};
+	    
+	    my $id = $prop->{PLATE_ID};
+	    my $name = $prop->{NAME};
+	    
+	    next unless $id ne '' && $name ne '';
+	    next if $found_plate{$id};
+	    
+	    $insert_sth->execute($id, '', $name);
+	    $found_plate{$id} = 1;
+	}
+    }
+    
+    # Otherwise, assume it is plain text.
+    
+    else
+    {
+	while ( $buffer =~ / (\d\d\d) \s+ ([A-Z0-9]+) \s+ ([a-zA-Z][^\r\n]+) /xsg )
+	{
+	    my $plate_id = $1;
+	    my $plate_abbrev = $2;
+	    my $plate_name = $3;
+	    
+	    $insert_sth->execute($plate_id, $plate_abbrev, $plate_name);
+	    $found_plate{$plate_id} = 1;
+	}
+    }
+    
+    my $plate_count = scalar(keys %found_plate);
+    
+    logMessage(2, "    found $plate_count plates");
+    
+    my $a = 1;	# we can stop here when debugging
+}
 
 1;

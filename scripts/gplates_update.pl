@@ -12,18 +12,19 @@ use Getopt::Long qw(:config bundling no_auto_abbrev);
 
 use CoreFunction qw(connectDB);
 use ConsoleLog qw(initMessages logMessage logTimestamp);
-use GPlates qw(ensureTables updatePaleocoords);
+use GPlates qw(ensureTables updatePaleocoords readPlateData);
 
 # First parse option switches.  If we were given an argument, then use that as
 # the database name overriding what was in the configuration file.
 
-my ($replace_table, $update_all, $min_age, $max_age, $debug);
+my ($replace_table, $update_all, $min_age, $max_age, $read_plates, $debug);
 
 GetOptions("replace-table|R" => \$replace_table,
 	   "update-all|a" => \$update_all,
 	   "min-age=i" => \$min_age,
 	   "max-age=i" => \$max_age,
-	   "debug" => \$debug);
+	   "read-plate-data" => \$read_plates,
+	   "debug" => \$debug) or die;
 
 my $cmd_line_db_name = shift @ARGV;
 
@@ -60,7 +61,19 @@ if ( $replace_table )
     ensureTables($dbh, 1);
 }
 
-# Update the coordinates.
+
+# If --read-plate-data was specified, then read and parse plate data in
+# geojson format from standard input.
+
+if ( $read_plates )
+{
+    logMessage(1, "Reading plate data from standard input");
+    readPlateData($dbh);
+    exit;
+}
+
+
+# Otherwise, update the coordinates.
 
 updatePaleocoords($dbh, { update_all => $update_all,
 			  min_age => $min_age,

@@ -11,24 +11,18 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
+use TableDefs qw($INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
+		 $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP);
 use CoreFunction qw(activateTables loadSQLFile);
 use ConsoleLog qw(logMessage);
 
 use base 'Exporter';
 
 our(@EXPORT_OK) = qw(loadIntervalData buildIntervalMap $INTERVAL_DATA $INTERVAL_MAP
-		     $INTERVAL_BRACKET $INTERVAL_BUFFER $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP);
+		    );
 
 
 # Table and file names
-
-our $INTERVAL_DATA = "interval_data";
-our $SCALE_DATA = "scale_data";
-our $SCALE_LEVEL_DATA = "scale_level_data";
-our $SCALE_MAP = "scale_map";
-our $INTERVAL_BRACKET = "interval_bracket";
-our $INTERVAL_MAP = "interval_map";
-our $INTERVAL_BUFFER = "interval_buffer";
 
 our $INTERVAL_MAP_WORK = "imn";
 our $INTERVAL_BRACKET_WORK = "ibn";

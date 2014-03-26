@@ -14,19 +14,13 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use CoreFunction qw(activateTables);
-use CollectionTables qw($COLL_MATRIX);
-use IntervalTables qw($INTERVAL_DATA $SCALE_MAP);
+use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF $DIV_SAMPLE
+		 $INTERVAL_DATA $SCALE_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
-our (@EXPORT_OK) = qw(buildOccurrenceTables buildDiversityTables
-		      $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF $DIV_SAMPLE);
-
-our $OCC_MATRIX = "occ_matrix";
-our $OCC_EXTRA = "occ_extra";
-our $OCC_TAXON = "occ_taxon";
-our $OCC_REF = "occ_ref";
-
+our (@EXPORT_OK) = qw(buildOccurrenceTables buildDiversityTables);
+		      
 our $OCC_MATRIX_WORK = "omn";
 our $OCC_EXTRA_WORK = "oen";
 our $OCC_TAXON_WORK = "otn";

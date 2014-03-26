@@ -11,8 +11,8 @@ use strict;
 
 use parent 'CollectionData';
 
-use Web::DataService qw( :validators );
-use CollectionTables qw( $COLL_MATRIX $COLL_BINS );
+use Web::DataService qw(:validators);
+use TableDefs qw($COLL_MATRIX $COLL_BINS);
 
 
 

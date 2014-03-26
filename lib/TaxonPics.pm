@@ -218,6 +218,16 @@ sub selectPics {
     
     my ($dbh) = @_;
     
+    my ($phylopics) = eval {
+	$dbh->selectrow_array("SELECT count(*) from $PHYLOPICS");
+    };
+    
+    unless ( $phylopics > 0 )
+    {
+	logMessage(2, "    skipping phylopics because table '$PHYLOPICS' does not exist in this database");
+	return;
+    }
+    
     logMessage(2, "    selecting the phylopic for each taxon...");
     
     my ($result, $sql);

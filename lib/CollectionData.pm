@@ -14,8 +14,8 @@ use parent 'Web::DataService::Request';
 use Web::DataService qw( :validators );
 
 use CommonData qw(generateReference generateAttribution);
-use CollectionTables qw($COLL_MATRIX $COLL_BINS $COLL_STRATA @BIN_LEVEL $COUNTRY_MAP);
-use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
+use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -83,6 +83,8 @@ sub initialize {
 	    "Additional information about the geographic locality of the collection",
 	{ value => 'prot', maps_to => '1.1:colls:prot' },
 	    "Indicate whether the collection is on protected land",
+	{ value => 'pcoords', maps_to => '1.1:colls:pcoords' },
+	    "Paleocoordinates of the collection at the time the fossils were laid down",
         { value => 'time', maps_to => '1.1:colls:time' },
 	    "Additional information about the temporal locality of the",
 	    "collection.",
@@ -202,6 +204,22 @@ sub initialize {
 	    "L<ISO-3166-1 alpha-2|https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
 	{ output => 'protected', com_name => 'ptd' },
 	    "The protected status of the land on which the collection is located, if any");
+    
+    $ds->define_block('1.1:colls:pcoords' =>
+	{ select => ['round(pc.mid_lat,2) as paleolat', 'round(pc.mid_lng,2) as paleolng', 'gp.abbrev as geoplate'],
+	  tables => ['pc', 'gp'] },
+	{ output => 'paleolng', com_name => 'pln' },
+	    "The paleolongitude of the collection, evaluated at the midpoint of the its",
+	    "time interval.  To use the beginning or end of the time interval,",
+	    "use the parameter C<pcis>.",
+	{ output => 'paleolat', com_name => 'pla' },
+	    "The paleolatitude of the collection, evaluated at the midpoint of the its",
+	    "time interval.  To use the beginning or end of the time interval,",
+	    "use the parameter C<pcis>.",
+	{ output => 'geoplate', com_name => 'gpl' },
+	    "The identifier (abbreviation) of the geological plate on which the collection lies, from the",
+	    "L<list|ftp://ftp.earthbyte.org/earthbyte/GPlates/SampleData/FeatureCollections/Rotations/Global_EarthByte_PlateIDs_20071218.pdf>",
+	    "established by the L<Earthbyte Group|http://www.earthbyte.org/>.");
     
     $ds->define_block('1.1:colls:time' =>
       { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
@@ -384,6 +402,14 @@ sub initialize {
 	{ value => 'all' },
 	    "Return all identifications of each selected occurrence, each as a separate record");
     
+    $ds->define_set('1.1:colls:pcis' =>
+	{ value => 'start' },
+	    "When selecting or displaying paleocoordinates, use the start of each collection's time interval",
+	{ value => 'end' },
+	    "When selecting or displaying paleocoordinates, use the end of each collection's time interval",
+	{ value => 'mid' },
+	    "When selecting or displaying paleocoordinates, use the midpoint of each collection's time interval");
+    
     $ds->define_ruleset('1.1:main_selector' =>
 	{ param => 'clust_id', valid => POS_VALUE, list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
@@ -415,16 +441,59 @@ sub initialize {
 	    "Return only records whose entry was authorized by the given person or people, specified by numeric identifier.",
 	{ param => 'lngmin', valid => DECI_VALUE },
 	{ param => 'lngmax', valid => DECI_VALUE },
+	    "Return only records whose present longitude falls within the given bounds.",
+	    "If you specify one of these parameters then you must specify both.",
+	    "If you provide bounds outside of the range -180\N{U+00B0} to 180\N{U+00B0}, they will be",
+	    "wrapped into the proper range.  For example, if you specify C<lngmin=270 & lngmax=360>,",
+	    "the query will be processed as if you had said C<lngmin=-90 & lngmax=0 >.  In this",
+	    "case, all longitude values in the query result will be adjusted to fall within the actual",
+	    "numeric range you specified.",
 	{ param => 'latmin', valid => DECI_VALUE },
+	    "Return only records whose present latitude is at least the given value.",
 	{ param => 'latmax', valid => DECI_VALUE },
-	    "Return only records whose geographic location falls within the given bounding box.",
-	    "The longitude boundaries will be normalized to fall between -180 and 180, and will generate",
-	    "two adjacent bounding boxes if the range crosses the antimeridian.",
-	    "Note that if you specify C<lngmin> then you must also specify C<lngmax>.",
+	    "Return only records whose present latitude is at most the given value.",
+	{ together => ['lngmin', 'lngmax'],
+	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
+	{ param => 'lngmin', valid => DECI_VALUE },
+	{ param => 'lngmax', valid => DECI_VALUE },
+	    "Return only records whose present longitude falls within the given bounds.",
+	    "If you specify one of these parameters then you must specify both.",
+	    "If you provide bounds outside of the range -180\N{U+00B0} to 180\N{U+00B0}, they will be",
+	    "wrapped into the proper range.  For example, if you specify C<lngmin=270 & lngmax=360>,",
+	    "the query will be processed as if you had said C<lngmin=-90 & lngmax=0 >.  In this",
+	    "case, all longitude values in the query result will be adjusted to fall within the",
+	    "numeric range you specified.  Your range will be evaluated correctly even if it crosses",
+	    "the antimeridian.",
+	{ param => 'latmin', valid => DECI_VALUE(-90,90) },
+	    "Return only records whose present latitude is at least the given value.",
+	{ param => 'latmax', valid => DECI_VALUE(-90,90) },
+	    "Return only records whose present latitude is at most the given value.",
 	{ together => ['lngmin', 'lngmax'],
 	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
 	{ param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
-	    "Return only records whose geographic location falls within the specified geometry, specified in WKT format.",
+	    "Return only records whose present location (longitude and latitude) falls within",
+	    "the specified shape, which must be given in L<WKT|https://en.wikipedia.org/wiki/Well-known_text> format.",
+	{ param => 'p_lngmin', valid => DECI_VALUE },
+	{ param => 'p_lngmax', valid => DECI_VALUE },
+	    "Return only records whose paleolongitude falls within the given bounds,",
+	    "evaluated at the midpoint of each collection's time interval.  To evaluate at the",
+	    "beginning or end instead, use the parameter C<pcis>.  Otherwise, these parameters",
+	    "are evaluated in the same way as C<lngmin> and C<lngmax> (see above).",
+	{ param => 'p_latmin', valid => DECI_VALUE(-90,90) },
+	    "Return only records whose paleolatitude is at least the given value (see C<p_lngmax>).",
+	{ param => 'p_latmax', valid => DECI_VALUE(-90,90) },
+	    "Return only records whose paleolatitude is at most the given value (see C<p_lngmax>).",
+	{ param => 'p_loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
+	    "Return only records whose paleolongitude and paleolatitude fall within",
+	    "the specified shape, which must be given in L<WKT|https://en.wikipedia.org/wiki/Well-known_text> format.",
+	    "The paleocoordinates are evaluated at the midpoint of each collection's time interval, unless",
+	    "you also specify the parameter C<pcis>.",
+	{ param => 'plate', valid => ANY_VALUE, list => "," },
+	    "Return only records located on the specified geological plate(s).  Values may",
+	    "be either plate numbers or abbreviations from the",
+	    "L<list|ftp://ftp.earthbyte.org/earthbyte/GPlates/SampleData/FeatureCollections/Rotations/Global_EarthByte_PlateIDs_20071218.pdf>",
+	    "established by the L<Earthbyte Group|http://www.earthbyte.org/>.  Multiple values must",
+	    "be separated by commas.",
 	{ param => 'country', valid => \&valid_country, list => ',', alias => 'cc', bad_value => '_' },
 	    "Return only records whose geographic location falls within the specified country or countries.",
 	    "The value of this parameter should be one or more two-character country codes as a comma-separated list.",
@@ -464,8 +533,11 @@ sub initialize {
 	    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
 	{ optional => 'latebuffer', valid => POS_VALUE },
 	    "Override the default buffer period for the end of the time range when resolving temporal locality.",
-	    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).");
-
+	    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
+	{ optional => 'pcis', valid => $ds->valid_set('1.1:colls:pcis') },
+	    "When selecting or displaying paleocoordinates, select which part of a collection's tiem interval",
+	    "to use.  Accepted values are: C<start>, C<end>, and C<mid> (the default)");
+    
     $ds->define_ruleset('1.1:colls:specifier' =>
 	{ param => 'id', valid => POS_VALUE, alias => 'coll_id' },
 	    "The identifier of the collection you wish to retrieve (REQUIRED)");
@@ -611,6 +683,8 @@ sub get {
     
     # Generate the main query.
     
+    $self->adjustPCIntervals(\$fields, \$join_list) if $self->clean_param('pcis');
+    
     $self->{main_sql} = "
 	SELECT $fields
 	FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
@@ -715,7 +789,9 @@ sub list {
     # Determine if any extra tables need to be joined in.
     
     my $base_joins = $self->generateJoinList('c', $self->tables_hash);
-	
+
+    $self->adjustPCIntervals(\$fields, \$filter_string, \$base_joins, \$order_clause) if $self->clean_param('pcis');
+    
     $self->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_matrix as c JOIN collections as cc on cc.collection_no = c.collection_no
@@ -797,6 +873,8 @@ sub refs {
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
     my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
     
+    $self->adjustPCIntervals(\$inner_join_list, \$filter_string) if $self->clean_param('pcis');
+    
     $self->{main_sql} = "
 	SELECT $calc $fields, s.reference_rank, is_primary, 1 as is_coll
 	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
@@ -862,6 +940,8 @@ sub strata {
     # Determine if any extra tables need to be joined in.
     
     my $base_joins = $self->generateJoinList('cs', $tables);
+    
+    $self->adjustPCIntervals(\$filter_string, \$base_joins) if $self->clean_param('pcis');
     
     $self->{main_sql} = "
 	SELECT $calc $fields
@@ -1233,14 +1313,17 @@ sub generateMainFilters {
 	}
     }
     
-    # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax'
+    # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
     
-    if ( defined $self->{params}{lngmin} )
+    my $x1 = $self->clean_param('lngmin');
+    my $x2 = $self->clean_param('lngmax');
+    my $y1 = $self->clean_param('latmin');
+    my $y2 = $self->clean_param('latmax');
+    
+    if ( defined $x1 && defined $x2 )
     {
-	my $x1 = $self->{params}{lngmin};
-	my $x2 = $self->{params}{lngmax};
-	my $y1 = $self->{params}{latmin};
-	my $y2 = $self->{params}{latmax};
+	$y1 //= -90.0;
+	$y2 //= 90.0;
 	
 	# If the longitude coordinates do not fall between -180 and 180, adjust
 	# them so that they do.
@@ -1270,16 +1353,8 @@ sub generateMainFilters {
 	
 	if ( $x1 < $x2 )
 	{
-	    # if ( defined $self->{op} && $self->{op} eq 'summary' )
-	    # {
-	    # 	push @filters, "s.lng between $x1 and $x2 and s.lat between $y1 and $y2";
-	    # }
-	    
-	    # else
-	    # {
-		my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
-		push @filters, "contains(geomfromtext($polygon), $mt.loc)";
-	    # }
+	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
+	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
 	}
 	
 	# Otherwise, our bounding box crosses the antimeridian and so must be
@@ -1288,17 +1363,89 @@ sub generateMainFilters {
 	
 	else
 	{
-	    # if ( defined $self->{op} && $self->{op} eq 'summary' )
-	    # {
-	    # 	push @filters, "(s.lng between $x1 and 180.0 or s.lng between -180.0 and $x2) and s.lat between $y1 and $y2";
-	    # }
-	    
-	    # else
-	    # {
-		my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1)),((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
-		push @filters, "contains(geomfromtext($polygon), $mt.loc)";
-	    #}
+	    my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))," .
+					"((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
+	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
 	}
+    }
+    
+    elsif ( defined $y1 || defined $y2 )
+    {
+	$y1 //= -90;
+	$y2 //= 90;
+	
+	my $polygon = "'POLYGON((-180.0 $y1,180.0 $y1,180.0 $y2,-180.0 $y2,-180.0 $y1))'";
+	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+    }
+    
+    if ( $self->{params}{loc} )
+    {
+	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
+    }
+    
+    # Check for parameters 'p_lngmin', 'p_lngmax', 'p_latmin', 'p_latmax', 'p_loc',
+    
+    my $px1 = $self->clean_param('lngmin');
+    my $px2 = $self->clean_param('lngmax');
+    my $py1 = $self->clean_param('latmin');
+    my $py2 = $self->clean_param('latmax');
+    
+    if ( defined $px1 && defined $px2 )
+    {
+	$py1 //= -90.0;
+	$py2 //= 90.0;
+	
+	# If the longitude coordinates do not fall between -180 and 180, adjust
+	# them so that they do.
+	
+	if ( $px1 < -180.0 )
+	{
+	    $px1 = $px1 + ( floor( (180.0 - $px1) / 360.0) * 360.0);
+	}
+	
+	if ( $px2 < -180.0 )
+	{
+	    $px2 = $px2 + ( floor( (180.0 - $px2) / 360.0) * 360.0);
+	}
+	
+	if ( $px1 > 180.0 )
+	{
+	    $px1 = $px1 - ( floor( ($px1 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	if ( $px2 > 180.0 )
+	{
+	    $px2 = $px2 - ( floor( ($px2 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	# If $px1 < $px2, then we query on a single bounding box defined by
+	# those coordinates.
+	
+	if ( $px1 < $px2 )
+	{
+	    my $polygon = "'POLYGON(($px1 $py1,$px2 $py1,$px2 $py2,$px1 $py2,$px1 $py1))'";
+	    push @filters, "contains(geomfromtext($polygon), pc.early_loc)";
+	}
+	
+	# Otherwise, our bounding box crosses the antimeridian and so must be
+	# split in two.  The latitude bounds must always be between -90 and
+	# 90, regardless.
+	
+	else
+	{
+	    my $polygon = "'MULTIPOLYGON((($px1 $py1,180.0 $py1,180.0 $py2,$px1 $py2,$px1 $py1))," .
+					"((-180.0 $py1,$px2 $py1,$px2 $py2,-180.0 $py2,-180.0 $py1)))'";
+	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+	}
+    }
+    
+    elsif ( defined $py1 || defined $py2 )
+    {
+	$py1 //= -90;
+	$py2 //= 90;
+	
+	my $polygon = "'POLYGON((-180.0 $py1,180.0 $py1,180.0 $py2,-180.0 $py2,-180.0 $py1))'";
+	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
     }
     
     if ( $self->{params}{loc} )
@@ -1593,6 +1740,40 @@ sub adjustCoordinates {
 }
 
 
+# adjustPCIntervals ( string... )
+# 
+# Adjust the specified strings (portions of SQL statements) to reflect the
+# proper interval endpoint when selecting or displaying paleocoordinates.
+
+sub adjustPCIntervals {
+    
+    my ($self, @stringrefs) = @_;
+    
+    # Each of the subsequent arguments are references to strings to be
+    # altered.
+    
+    my $selector = $self->clean_param('pcis');
+    
+    if ( $selector eq 'start' )
+    {
+	foreach my $sref (@stringrefs)
+	{
+	    $$sref =~ s/\.mid_(lng|lat|plate_id)/\.early_$1/g;
+	}
+    }
+    
+    elsif ( $selector eq 'end' )
+    {
+	foreach my $sref (@stringrefs)
+	{
+	    $$sref =~ s/\.mid_(lng|lat|plate_id)/\.late_$1/g;
+	}
+    }
+    
+    my $a = 1;	# we can stop here when debugging
+}    
+
+
 # generate_order_clause ( options )
 # 
 # Return the order clause for the list of references, or the empty string if
@@ -1727,6 +1908,10 @@ sub generateJoinList {
 	if $tables->{oc};
     $join_list .= "JOIN taxon_trees as t using (orig_no)\n"
 	if $tables->{t} || $tables->{tf};
+    $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
+	if $tables->{pc};
+    $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
+	if $tables->{gp};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = c.reference_no\n"
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"

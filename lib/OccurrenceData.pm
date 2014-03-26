@@ -15,10 +15,9 @@ use parent 'CollectionData';
 use Web::DataService qw(:validators);
 
 use CommonData;
-use OccurrenceTables qw($OCC_MATRIX);
-use CollectionTables qw($COLL_MATRIX $COLL_BINS @BIN_LEVEL $COUNTRY_MAP);
+use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
 use CollectionData;
-use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_RANK %RANK_STRING);
 use Taxonomy;
 
@@ -53,6 +52,8 @@ sub initialize {
 	    "Additional information about the geographic locality of the occurrence",
 	{ value => 'prot', maps_to => '1.1:colls:prot' },
 	    "Indicate whether the containing collection is on protected land",
+	{ value => 'pcoords', maps_to => '1.1:colls:pcoords' },
+	    "Paleocoordinates of the collection at the time the fossils were laid down",
         { value => 'time', maps_to => '1.1:colls:time' },
 	    "Additional information about the temporal locality of the occurrence",
 	{ value => 'strat', maps_to => '1.1:colls:strat' },
@@ -340,6 +341,8 @@ sub get {
     
     my ($join_list) = $self->generateJoinList('c', $self->tables_hash);
     
+    $self->adjustPCIntervals(\$fields, \$join_list) if $self->clean_param('pcis');
+    
     # Generate the main query.
     
     $self->{main_sql} = "
@@ -418,6 +421,8 @@ sub list {
     my $join_list = $self->generateJoinList('c', $tables);
     
     my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
+    
+    $self->adjustPCIntervals(\$fields, \$join_list, \$order_clause) if $self->clean_param('pcis');
     
     $self->{main_sql} = "
 	SELECT $calc $fields
@@ -498,6 +503,8 @@ sub refs {
     
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
     my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
+    
+    $self->adjustPCIntervals(\$inner_join_list, \$filter_string) if $self->clean_param('pcis');
     
     $self->{main_sql} = "
 	SELECT $calc $fields, count(distinct occurrence_no) as reference_rank, 1 as is_occ
@@ -632,6 +639,10 @@ sub generateJoinList {
 	if $tables->{ts};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
 	if $tables->{ph};
+    $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
+	if $tables->{pc};
+    $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
+	if $tables->{gp};
     $join_list .= "LEFT JOIN refs as r on r.reference_no = o.reference_no\n" 
 	if $tables->{r};
     $join_list .= "LEFT JOIN person as ppa on ppa.person_no = c.authorizer_no\n"

@@ -16,7 +16,7 @@ use Web::DataService qw( :validators );
 use Carp qw(carp croak);
 
 use CommonData qw(generateReference);
-use IntervalTables qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA);
+use TableDefs qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA);
 
 our (@REQUIRES_CLASS) = qw(CommonData);
 
