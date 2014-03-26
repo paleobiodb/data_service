@@ -3897,7 +3897,7 @@ sub computeAttrsTable {
     # table, ecotaph table and first appearance tables.  Also add information
     # from $TAXON_PICS if that table exists and has contents.
     
-    my ($pic_expr, $pic_join) = ('', '');
+    my ($pic_field, $pic_expr, $pic_join) = ('', '', '');
     
     my ($taxon_pics) = eval {
 	$dbh->selectrow_array("SELECT count(*) FROM $TAXON_PICS");
@@ -3905,6 +3905,7 @@ sub computeAttrsTable {
     
     if ( $taxon_pics > 0 )
     {
+	$pic_field = ", image_no";
 	$pic_expr = ", if(pic.priority is null or pic.priority <> -1, pic.image_no, null)";
 	$pic_join = "LEFT JOIN $TAXON_PICS as pic using (orig_no)";
     }
@@ -3915,7 +3916,7 @@ sub computeAttrsTable {
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
 			 first_early_age, first_late_age, last_early_age, last_late_age,
-			 precise_age, early_occ, late_occ, not_trace, image_no)
+			 precise_age, early_occ, late_occ, not_trace $pic_field)
 		SELECT a.orig_no,
 			if(t.status in ($VALID_STATUS), 1, 0) as is_valid,
 			if(t.status not in ($SYNONYM_STATUS), 1, 0) as is_senior,
