@@ -3894,7 +3894,20 @@ sub computeAttrsTable {
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
     # Prime the table with the values actually stored in the authorities
-    # table, ecotaph table and first appearance tables.
+    # table, ecotaph table and first appearance tables.  Also add information
+    # from $TAXON_PICS if that table exists and has contents.
+    
+    my ($pic_expr, $pic_join) = ('', '');
+    
+    my ($taxon_pics) = eval {
+	$dbh->selectrow_array("SELECT count(*) FROM $TAXON_PICS");
+    };
+    
+    if ( $taxon_pics > 0 )
+    {
+	$pic_expr = ", if(pic.priority is null or pic.priority <> -1, pic.image_no, null)";
+	$pic_join = "LEFT JOIN $TAXON_PICS as pic using (orig_no)";
+    }
     
     logMessage(2, "    seeding table with initial taxon information...");
     
@@ -3916,12 +3929,12 @@ sub computeAttrsTable {
 			if(tsum.precise_age, tsum.last_early_age, null),
 			if(tsum.precise_age, tsum.last_late_age, null),
 			tsum.precise_age, tsum.early_occ, tsum.late_occ,
-			(a.preservation <> 'trace' or a.preservation is null),
-			if(pic.priority is null or pic.priority <> -1, pic.image_no, null)
+			(a.preservation <> 'trace' or a.preservation is null)
+			$pic_expr
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN ecotaph as e using (taxon_no)
 			LEFT JOIN $OCC_TAXON as tsum using (orig_no)
-			LEFT JOIN $TAXON_PICS as pic using (orig_no)
+			$pic_join
 		GROUP BY a.orig_no";
     
     $result = $dbh->do($sql);
