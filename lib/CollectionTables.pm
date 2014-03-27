@@ -192,7 +192,7 @@ sub buildCollectionTables {
 	
 	$sql = "INSERT INTO protected_aux
 	    SELECT collection_no, group_concat(category)
-	    FROM coll_matrix as m join protected_land as p on st_within(m.loc, p.shape)
+	    FROM $COLL_MATRIX_WORK as m join protected_land as p on st_within(m.loc, p.shape)
 	    GROUP BY collection_no";
 	
 	$result = $dbh->do($sql);
@@ -207,7 +207,8 @@ sub buildCollectionTables {
     
     else
     {
-	logMessage(2, "    SKIPPING protected land: table 'protected_land' not found");
+	logMessage(2, "    skipping protected land information: table 'protected_land'");
+	logMessage(2, "        does not exist or contains no data");
     }
     
     # Assign the collections to bins at the various binning levels.
@@ -446,7 +447,7 @@ sub buildStrataTables {
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
 		SELECT formation, 'formation', collection_no, n_occs, loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE formation <> ''";
     
     $result = $dbh->do($sql);
@@ -455,7 +456,7 @@ sub buildStrataTables {
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
 		SELECT geological_group, 'group', collection_no, n_occs, loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE geological_group <> ''";
     
     $result = $dbh->do($sql);
@@ -464,7 +465,7 @@ sub buildStrataTables {
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
 		SELECT member, 'member', collection_no, n_occs, loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE member <> ''";
     
     $result = $dbh->do($sql);

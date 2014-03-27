@@ -153,7 +153,7 @@ sub buildOccurrenceTables {
     # For each reidentification, the corresponding record in occ_matrix drawn
     # from the original occurrence record needs to be "de-selected".
     
-    logMessage(2, "    updating re-identified occurrences...");
+    logMessage(2, "    marking superceded identifications...");
     
     $sql = "	UPDATE $OCC_MATRIX_WORK as m
 			JOIN reidentifications as re on re.occurrence_no = m.occurrence_no 
@@ -161,6 +161,8 @@ sub buildOccurrenceTables {
 		SET m.latest_ident = false WHERE m.reid_no = 0";
     
     $count = $dbh->do($sql);
+    
+    logMessage(2, "      $count superceded identifications");
     
     # Now add some indices to the main occurrence relation, which is more
     # efficient to do now that the table is populated.
@@ -238,7 +240,7 @@ sub buildOccurrenceTables {
     $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age,
 			precise_age)
-		SELECT m.orig_no, count(*), count(distinct collection_no),
+		SELECT m.orig_no, count(*), 0,
 			max(ei.early_age), max(ei.late_age), min(li.early_age), min(li.late_age),
 			true
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
@@ -246,12 +248,13 @@ sub buildOccurrenceTables {
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 			LEFT JOIN $SCALE_MAP as es on es.interval_no = ei.interval_no
 			LEFT JOIN $SCALE_MAP as ls on ls.interval_no = li.interval_no
-		WHERE (ei.early_age - li.late_age <= 30 and li.late_age >= 20) or
+		WHERE latest_ident and
+		      ((ei.early_age - li.late_age <= 30 and li.late_age >= 20) or
 		      (ei.early_age - li.late_age <= 20 and li.late_age < 20) or
 		      (es.scale_no = 1 and es.level in (4,5) and ei.early_age - li.late_age <= 50) or
 		      (ls.scale_no = 1 and ls.level in (4,5) and ei.early_age - li.late_age <= 50) or
 		      (es.scale_no = 1 and es.level = 3 and ei.early_age < 3) or
-		      (ls.scale_no = 1 and ls.level = 3 and li.late_age >= 540)
+		      (ls.scale_no = 1 and ls.level = 3 and li.late_age >= 540))
 		GROUP BY m.orig_no
 		HAVING m.orig_no > 0";
     
@@ -265,12 +268,13 @@ sub buildOccurrenceTables {
     $sql = "	INSERT IGNORE INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age,
 			precise_age)
-		SELECT m.orig_no, count(*), count(distinct collection_no),
+		SELECT m.orig_no, count(*), 0,
 			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
 			false
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+		WHERE latest_ident
 		GROUP BY m.orig_no
 		HAVING m.orig_no > 0";
     
@@ -286,12 +290,12 @@ sub buildOccurrenceTables {
     logMessage(2, "      finding first and last occurrences...");
     
     $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
-		SET s.early_occ = o.occurrence_no WHERE o.late_age >= s.first_late_age";
+		SET s.early_occ = o.occurrence_no WHERE o.late_age >= s.first_late_age and latest_ident";
     
     $count = $dbh->do($sql);
     
     $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
-		SET s.late_occ = o.occurrence_no WHERE o.early_age <= s.last_early_age";
+		SET s.late_occ = o.occurrence_no WHERE o.early_age <= s.last_early_age and latest_ident";
     
     $count = $dbh->do($sql);
     
@@ -310,7 +314,7 @@ sub buildOccurrenceTables {
     # reference, we record the range of time periods it covers, plus the
     # number of occurrences and collections that refer to it.
     
-    logMessage(2, "      summarizing by reference_no...");
+    logMessage(2, "    summarizing by reference_no...");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $OCC_REF_WORK");
     $result = $dbh->do("CREATE TABLE $OCC_REF_WORK (
@@ -327,6 +331,7 @@ sub buildOccurrenceTables {
 		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+		WHERE latest_ident
 		GROUP BY m.reference_no";
     
     $count = $dbh->do($sql);
@@ -336,7 +341,7 @@ sub buildOccurrenceTables {
     # Then index the reference summary table by numbers of collections and
     # occurrences, so that we can quickly query for the most heavily used ones.
     
-    logMessage(2, "      indexing the summary table...");
+    logMessage(2, "    indexing the summary table...");
     
     $result = $dbh->do("ALTER TABLE $OCC_REF_WORK ADD INDEX (n_occs)");
     $result = $dbh->do("ALTER TABLE $OCC_REF_WORK ADD INDEX (n_colls)");

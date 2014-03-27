@@ -219,6 +219,7 @@ sub selectPics {
     my ($dbh) = @_;
     
     my ($phylopics) = eval {
+	local($dbh->{PrintError}) = 0;
 	$dbh->selectrow_array("SELECT count(*) from $PHYLOPICS");
     };
     

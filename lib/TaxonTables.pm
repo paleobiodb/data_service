@@ -3893,52 +3893,120 @@ sub computeAttrsTable {
 				image_no int unsigned,
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
-    # Prime the table with the values actually stored in the authorities
-    # table, ecotaph table and first appearance tables.  Also add information
-    # from $TAXON_PICS if that table exists and has contents.
-    
-    my ($pic_field, $pic_expr, $pic_join) = ('', '', '');
-    
-    my ($taxon_pics) = eval {
-	$dbh->selectrow_array("SELECT count(*) FROM $TAXON_PICS");
-    };
-    
-    if ( $taxon_pics > 0 )
-    {
-	$pic_field = ", image_no";
-	$pic_expr = ", if(pic.priority is null or pic.priority <> -1, pic.image_no, null)";
-	$pic_join = "LEFT JOIN $TAXON_PICS as pic using (orig_no)";
-    }
+    # Prime the new table with values from the authorities table and
+    # tree table.
     
     logMessage(2, "    seeding table with initial taxon information...");
     
     $sql = "    INSERT IGNORE INTO $ATTRS_WORK 
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
-			 extant_size, taxon_size, n_occs, n_colls, min_body_mass, max_body_mass, 
-			 first_early_age, first_late_age, last_early_age, last_late_age,
-			 precise_age, early_occ, late_occ, not_trace $pic_field)
+			 extant_size, taxon_size, n_colls, n_occs, not_trace)
 		SELECT a.orig_no,
 			if(t.status in ($VALID_STATUS), 1, 0) as is_valid,
 			if(t.status not in ($SYNONYM_STATUS), 1, 0) as is_senior,
-			case a.extant
-				when 'yes' then 1 when 'no' then 0 else null end as is_extant,
-			0, 0, 0, 0, tsum.n_occs, 0,
-			coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
-			coalesce(e.maximum_body_mass, e.body_mass_estimate) as max,
-			if(tsum.precise_age, tsum.first_early_age, null),
-			if(tsum.precise_age, tsum.first_late_age, null),
-			if(tsum.precise_age, tsum.last_early_age, null),
-			if(tsum.precise_age, tsum.last_late_age, null),
-			tsum.precise_age, tsum.early_occ, tsum.late_occ,
-			(a.preservation <> 'trace' or a.preservation is null)
-			$pic_expr
+			sum(if(a.extant = 'yes', 1, if(a.extant = 'no', 0, null))) as is_extant,
+			0, 0, 0, 0, 0, 0, a.preservation <> 'trace' or a.preservation is null
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
-			LEFT JOIN ecotaph as e using (taxon_no)
-			LEFT JOIN $OCC_TAXON as tsum using (orig_no)
-			$pic_join
 		GROUP BY a.orig_no";
     
     $result = $dbh->do($sql);
+    
+    logMessage(2, "      added $result rows.");
+    
+    $sql = "    UPDATE $ATTRS_WORK
+		SET is_extant = 1 WHERE is_extant > 1";
+    
+    $result = $dbh->do($sql);
+    
+    # Test whether the $OCC_TAXON table exists and has any entries in it.  If
+    # so, add information from that table into $ATTRS_WORK.
+    
+    my ($occ_taxon) = eval {
+	local($dbh->{PrintError}) = 0;
+	$dbh->selectrow_array("SELECT count(*) FROM $OCC_TAXON");
+    };
+    
+    if ( $occ_taxon > 0 )
+    {
+	logMessage(2, "      adding taxon summary information from table '$OCC_TAXON'...");
+	
+	$sql = "UPDATE $ATTRS_WORK as v JOIN $OCC_TAXON as tsum using (orig_no)
+		SET v.n_occs = tsum.n_occs,
+		    v.first_early_age = if(tsum.precise_age, tsum.first_early_age, null),
+		    v.first_late_age = if(tsum.precise_age, tsum.first_late_age, null),
+		    v.last_early_age = if(tsum.precise_age, tsum.last_early_age, null),
+		    v.last_late_age = if(tsum.precise_age, tsum.last_late_age, null),
+		    v.precise_age = tsum.precise_age,
+		    v.early_occ = tsum.early_occ,
+		    v.late_occ = tsum.late_occ";
+	
+	$result = $dbh->do($sql);
+	
+	logMessage(2, "      updated $result rows.");
+    }
+    
+    else
+    {
+	logMessage(2, "      skipping taxon summary information: table '$OCC_TAXON'");
+	logMessage(2, "          does not exist or does not contain any rows");
+    }
+    
+    # Test whether the ecotaph table exists and has any entries in it.  If so,
+    # add information from that table into $ATTRS_WORK.
+    
+    my ($ecotaph) = eval {
+	local($dbh->{PrintError}) = 0;
+	$dbh->selectrow_array("SELECT count(*) FROM ecotaph");
+    };
+    
+    if ( $ecotaph > 0 )
+    {
+	logMessage(2, "      adding body mass information from table 'ecotaph'...");
+	
+	$sql = "UPDATE $ATTRS_WORK as v JOIN
+		   (SELECT a.orig_no, coalesce(e.minimum_body_mass, e.body_mass_estimate) as min,
+			   coalesce(e.maximum_body_mass, e.body_mass_estimate) as max
+		    FROM $auth_table as a JOIN ecotaph as e using (taxon_no)
+		    GROUP BY a.orig_no) as e using (orig_no)
+		SET v.min_body_mass = e.min,
+		    v.max_body_mass = e.max";
+	
+	$result = $dbh->do($sql);
+	
+	logMessage(2, "      updated $result rows.");
+    }
+    
+    else
+    {
+	logMessage(2, "      skipping body mass information: table 'ecotaph'");
+	logMessage(2, "          does not exist or does not contain any rows");
+    }
+    
+    # Test whether the $TAXON_PICS table exists and has any entries in it.  If
+    # so, add information from that table into $ATTRS_WORK.
+    
+    my ($taxon_pics) = eval {
+	local($dbh->{PrintError}) = 0;
+	$dbh->selectrow_array("SELECT count(*) FROM $TAXON_PICS");
+    };
+    
+    if ( $taxon_pics > 0 )
+    {
+	logMessage(2, "      adding taxon picture information from table '$TAXON_PICS'...");
+	
+	$sql = "UPDATE $ATTRS_WORK as v JOIN $TAXON_PICS as pic using (orig_no)
+		SET v.image_no = if(pic.priority is null or pic.priority <> -1, pic.image_no, null)";
+	
+	$result = $dbh->do($sql);	
+	
+	logMessage(2, "      updated $result rows.");
+    }
+    
+    else
+    {
+	logMessage(2, "      skipping taxon picture information: table '$TAXON_PICS'");
+	logMessage(2, "          does not exist or does not contain any rows");
+    }
     
     # Then coalesce the basic attributes across each synonym group, using
     # these to set the attributes for the senior synonym in each group.
@@ -4009,6 +4077,8 @@ sub computeAttrsTable {
 					min(v.min_body_mass), pv.min_body_mass) as min_body_mass, 
 			coalesce(greatest(max(v.max_body_mass), pv.max_body_mass),
 					max(v.max_body_mass), pv.max_body_mass) as max_body_mass,
+			coalesce(pv.early_occ, max(v.early_occ)) as early_occ,
+			coalesce(pv.late_occ, max(v.late_occ)) as late_occ,
 			if(sum(v.not_trace) > 0, 1, pv.not_trace) as not_trace
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no 
@@ -4022,6 +4092,8 @@ sub computeAttrsTable {
 			v.taxon_size = nv.taxon_size,
 			v.min_body_mass = nv.min_body_mass,
 			v.max_body_mass = nv.max_body_mass,
+			v.early_occ = nv.early_occ,
+			v.late_occ = nv.late_occ,
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
@@ -4072,6 +4144,8 @@ sub computeAttrsTable {
 			min(v.last_early_age) as last_early_age,
 			min(v.last_late_age) as last_late_age,
 			max(v.precise_age) as precise_age,
+			max(v.early_occ) as early_occ,
+			max(v.late_occ) as late_occ,
 			if(sum(v.not_trace) > 0, 1, 0) as not_trace
 		FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 		WHERE t.depth = $depth and v.is_valid
@@ -4089,6 +4163,8 @@ sub computeAttrsTable {
 			v.last_early_age = nv.last_early_age,
 			v.last_late_age = nv.last_late_age,
 			v.precise_age = nv.precise_age,
+			v.early_occ = nv.early_occ,
+			v.late_occ = nv.late_occ,
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
@@ -4194,6 +4270,8 @@ sub computeAttrsTable {
 			v.last_early_age = sv.last_early_age,
 			v.last_late_age = sv.last_late_age,
 			v.precise_age = sv.precise_age,
+			v.early_occ = sv.early_occ,
+			v.late_occ = sv.late_occ,
 			v.not_trace = sv.not_trace");
     
     # We can stop here when debugging.
