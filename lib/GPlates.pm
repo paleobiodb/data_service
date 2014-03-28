@@ -334,28 +334,19 @@ sub prepareStatements {
     if ( $self->{coll_matrix_exists} )
     {
 	$sql = "UPDATE $COLL_MATRIX as c JOIN $PALEOCOORDS as pc using (collection_no)
-		SET c.plate_no = pc.plate_no,
-		    c.early_loc = if(pc.early_lng is null or pc.early_lat is null, 
-				     point(1000.0, 1000.0),
-				     point(pc.early_lng, pc.early_lat))
+		SET c.g_plate_no = pc.plate_no
 		WHERE collection_no = ?";
 	
 	$self->{cm_early_sth} = $dbh->prepare($sql);
 	
 	$sql = "UPDATE $COLL_MATRIX as c JOIN $PALEOCOORDS as pc using (collection_no)
-		SET c.plate_no = pc.plate_no,
-		    c.mid_loc = if(pc.mid_lng is null or pc.mid_lat is null, 
-				     point(1000.0, 1000.0),
-				     point(pc.mid_lng, pc.mid_lat))
+		SET c.g_plate_no = pc.plate_no
 		WHERE collection_no = ?";
 	
 	$self->{cm_mid_sth} = $dbh->prepare($sql);
 	
 	$sql = "UPDATE $COLL_MATRIX as c JOIN $PALEOCOORDS as pc using (collection_no)
-		SET c.plate_no = pc.plate_no,
-		    c.late_loc = if(pc.late_lng is null or pc.late_lat is null, 
-				     point(1000.0, 1000.0),
-				     point(pc.late_lng, pc.late_lat))
+		SET c.g_plate_no = pc.plate_no
 		WHERE collection_no = ?";
 	
 	$self->{cm_late_sth} = $dbh->prepare($sql);

@@ -95,10 +95,6 @@ sub buildCollectionTables {
 		g_plate_no smallint unsigned not null,
 		s_plate_no smallint unsigned not null,
 		loc geometry not null,
-		s_loc geometry not null,
-		early_loc geometry not null,
-		mid_loc geometry not null,
-		late_loc geometry not null,
 		cc char(2),
 		protected varchar(255),
 		early_age decimal(9,5),
@@ -211,14 +207,12 @@ sub buildCollectionTables {
 	logMessage(2, "    skipping protection status: table 'protected_land' not found");
     }
     
-    # Setting paleocoordinates using the Scotese model
+    # Setting plate_no using the Scotese model
     
-    logMessage(2, "    setting paleocoordinates using Scotese model...");
+    logMessage(2, "    setting geoplates using Scotese model...");
     
     $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $COLLECTIONS as cc using (collection_no)
-	    SET m.s_plate_no = cc.plate,
-		m.s_loc = if(cc.paleolng is null or cc.paleolat is null,
-			     point(1000.0, 1000.0), point(cc.paleolng, cc.paleolat))";
+	    SET m.s_plate_no = cc.plate";
     
     $result = $dbh->do($sql);
     
@@ -230,26 +224,17 @@ sub buildCollectionTables {
     
     if ( $paleo_available )
     {
-	logMessage(2, "    setting paleocoordinates using GPlates...");
+	logMessage(2, "    setting geoplates using GPlates...");
 	
 	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $PALEOCOORDS as pc using (collection_no)
-		SET m.g_plate_no = pc.plate_no,
-		    m.early_loc = if(pc.early_lng is null or pc.early_lat is null, 
-				     point(1000.0, 1000.0),
-				     point(pc.early_lng, pc.early_lat)),
-		    m.mid_loc = if(pc.mid_lng is null or pc.mid_lat is null,
-				   point(1000.0, 1000.0),
-				   point(pc.mid_lng, pc.mid_lat)),
-		    m.late_loc = if(pc.late_lng is null or pc.late_lat is null,
-				    point(1000.0, 1000.0),
-				    point(pc.late_lng, pc.late_lat))";
+		SET m.g_plate_no = pc.plate_no";
 	
 	$result = $dbh->do($sql);
     }
     
     else
     {
-	logMessage(2, "    skipping paleocoordinates from GPlates: table '$PALEOCOORDS' not found");
+	logMessage(2, "    skipping geoplates from GPlates: table '$PALEOCOORDS' not found");
     }
     
     # Assign the collections to bins at the various binning levels.
@@ -299,22 +284,10 @@ sub buildCollectionTables {
 	$result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (bin_id_$level)");
     }
     
-    logMessage(2, "    indexing by present coordinates (spatial)...");
+    logMessage(2, "    indexing by geographic coordinates (spatial)...");
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (loc)");
-    
-    logMessage(2, "    indexing by paleo coordinates (spatial)...");
-    
-    $result = $dbh->do("UPDATE $COLL_MATRIX_WORK SET early_loc = point(1000,1000)
-			WHERE x(early_loc) is null");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (early_loc)");
-    $result = $dbh->do("UPDATE $COLL_MATRIX_WORK SET mid_loc = point(1000,1000)
-			WHERE x(mid_loc) is null");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (mid_loc)");
-    $result = $dbh->do("UPDATE $COLL_MATRIX_WORK SET late_loc = point(1000,1000)
-			WHERE x(late_loc) is null");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (late_loc)");
-    
+        
     logMessage(2, "    indexing by country...");
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (cc)");
