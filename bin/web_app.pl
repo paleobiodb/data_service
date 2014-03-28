@@ -134,7 +134,7 @@ $ds->define_cache(
 
 $ds->define_path({ path => '1.1', 
 		   version => '1.1',
-		   subvers => 'b2',
+		   subvers => 'b3',
 		   public_access => 1,
 		   output_param => 'show',
 		   vocab_param => 'vocab',
