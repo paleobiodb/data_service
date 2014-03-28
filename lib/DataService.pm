@@ -222,6 +222,11 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    textresult_param => 'single',
 		    default_limit => 'single',
 		    streaming_theshold => 'single',
+		    init_request_hook => 'hook',
+		    post_params_hook => 'hook',
+		    post_configure_hook => 'hook',
+		    post_operation_hook => 'hook',
+		    pre_output_hook => 'hook',
 		    use_cache => 'single',
 		    allow_method => 'set',
 		    allow_format => 'set',
@@ -302,7 +307,7 @@ sub create_path_node {
     {
 	next unless defined $NODE_DEF{$key};
 	
-	if ( $NODE_DEF{$key} eq 'single' )
+	if ( $NODE_DEF{$key} eq 'single' or $NODE_DEF{$key} eq 'hook' )
 	{
 	    $path_attrs->{$key} = $parent_attrs->{$key};
 	}
@@ -338,10 +343,20 @@ sub create_path_node {
 	    $path_attrs->{$key} = $value;
 	}
 	
-	# If the attribute takes a set value, then turn a string value into a
-	# hash whose keys are the individual values.  If the value begins with + or
-	# -, then add or delete values as indicated.  Otherwise, substitute
-	# the given set.
+	# If it takes a hook value, then throw an error unless the value is a
+	# code reference.
+	
+	elsif ( $NODE_DEF{$key} eq 'hook' )
+	{
+	    croak "define_path: ($key) invalid value '$value', must be a code ref or string"
+		unless ref $value eq 'CODE' || ! ref $value;
+	    $path_attrs->{$key} = $value;
+	}
+	
+	# If the attribute takes a set value, then turn a string value
+	# into a hash whose keys are the individual values.  If the value
+	# begins with + or -, then add or delete values as indicated.
+	# Otherwise, substitute the given set.
 	
 	elsif ( $NODE_DEF{$key} eq 'set' )
 	{
@@ -353,7 +368,7 @@ sub create_path_node {
 		{
 		    next unless defined $v && $v ne '';
 		    
-		    croak "define_path: invalid value '$v', must start with + or -"
+		    croak "define_path: ($key) invalid value '$v', must start with + or -"
 			unless $v =~ qr{ ^ ([+-]) (.*) }x;
 		    
 		    if ( $1 eq '-' )
@@ -374,7 +389,7 @@ sub create_path_node {
 		{
 		    next unless defined $v && $v ne '';
 		    
-		    croak "define_path: invalid value '$v', cannot start with + or -"
+		    croak "define_path: ($key) invalid value '$v', cannot start with + or -"
 			if $v =~ qr{ ^\+ | ^\- }x;
 		    
 		    $path_attrs->{$key}{$v} = 1;
@@ -396,7 +411,7 @@ sub create_path_node {
 		{
 		    next unless defined $v && $v ne '';
 		    
-		    croak "define_path: invalid value '$v', must start with + or -"
+		    croak "define_path: ($key) invalid value '$v', must start with + or -"
 			unless $v =~ qr{ ^ ([+-]) (.*) }x;
 		    
 		    if ( $1 eq '-' )
@@ -420,7 +435,7 @@ sub create_path_node {
 		{
 		    next unless defined $v && $v ne '';
 		    
-		    croak "define_path: invalid value '$v', cannot start with + or -"
+		    croak "define_path: ($key) invalid value '$v', cannot start with + or -"
 			if $v =~ qr{ ^\+ | ^\- }x;
 		    
 		    push @{$path_attrs->{$key}}, $v;
@@ -439,12 +454,12 @@ sub create_path_node {
     croak "define_path: invalid class '$class', must be a subclass of 'Web::DataService::Request'"
 	if defined $class and not $class->isa('Web::DataService::Request');
     
-    # Throw an error if 'op' doesn't specify an existing method of this class.
+    # Throw an error if 'method' doesn't specify an existing method of this class.
     
-    my $op = $path_attrs->{op};
+    my $method = $path_attrs->{method};
     
-    croak "define_path: invalid op '$op', must be a method of class '$class'"
-	if defined $op and not $class->can($op);
+    croak "define_path: '$method' must be a method of class '$class'"
+	if defined $method and not $class->can($method);
     
     # Throw an error if any of the specified formats fails to match an
     # existing format.  If any of the formats has a default vocabulary, add it
@@ -697,6 +712,28 @@ sub get_request_url {
 }
 
 
+# call_hook ( hook, request, arg... )
+# 
+# Call the specified hook.  If it is specified as a code reference, call it
+# with the request as the first parameter followed by any subsequent
+# arguments.  If it is a string, call it as a method of the request object. 
+
+sub call_hook {
+    
+    my ($self, $hook, $request, @args) = @_;
+    
+    if ( ref $hook eq 'CODE' )
+    {
+	&$hook($request, $self, @args);
+    }
+    
+    else
+    {
+	$request->$hook($self, @args);
+    }
+}
+
+
 # can_execute_path ( path, format )
 # 
 # Return true if the path can be used for a request, i.e. if it has a class
@@ -741,10 +778,30 @@ sub execute_path {
 	
 	$DB::single = 1;
 	
-	# First check to see that the specified format is valid for the
-	# specified path.
-	
 	my $path_attrs = $self->{path_attrs}{$path};
+	my $params = Dancer::params;
+	
+	# Create a new object to represent this request, and bless it into the
+	# correct class.
+	
+	$request = { ds => $self,
+		     path => $path,
+		     format => $format,
+		     class => $path_attrs->{class},
+		     method => $path_attrs->{method},
+		     arg => $path_attrs->{arg},
+		     public_access => $path_attrs->{public_access}
+		   };
+	
+	bless $request, $path_attrs->{class};
+	
+	# If an init_request hook was specified for this path, call it now.
+	
+	$self->call_hook($path_attrs->{init_request_hook}, $request, $params)
+	    if $path_attrs->{init_request_hook};
+	
+	# Then check to see that the specified format is valid for the
+	# specified path.
 	
 	unless ( defined $format && ref $self->{format}{$format} &&
 		 ! $self->{format}{$format}{disabled} &&
@@ -753,49 +810,26 @@ sub execute_path {
 	    return $self->error_result($path, $format, "415")
 	}
 	
-	# Then do a basic sanity check to make sure that the operation is
-	# valid.  This should always succeed, because the 'class' and 'method'
-	# attributes were checked when the path was defined.
-	
-	my $class = $path_attrs->{class};
-	my $method = $path_attrs->{method};
-	my $arg = $path_attrs->{arg};
-		
-	croak "cannot execute path '$path': invalid class '$class' and method '$method'"
-	    unless $class->isa('Web::DataService::Request') && $class->can($method);
-	
 	# If we are in 'one request' mode, initialize the class plus all of
-	# the classes it requires.
+	# the classes it requires.  If we are not in this mode, then all of
+	# the classes will have been previously initialized.
 	
 	if ( $self->{ONE_REQUEST} )
 	{
-	    $self->initialize_class($class);
+	    $self->initialize_class($request->{class});
 	}
 	
-	# Create a new object to represent this request, and bless it into the
-	# correct class.
+	# Check to see if there is a ruleset corresponding to this path.  If
+	# not, then the request is rejected.
 	
-	$request = { ds => $self,
-		     path => $path,
-		     format => $format,
-		     method => $method,
-		     arg => $arg };
+	$request->{rs_name} //= $self->determine_ruleset($path, $path_attrs->{ruleset})
+	    or die "No ruleset could be found for path $path";
 	
-	bless $request, $class;
-	
-	# Check to see if there is a ruleset corresponding to this path.  If a
-	# ruleset name was explicitly provided, use that.  Otherwise, check to
-	# see if there is a ruleset corresponding to the path.
-	
-	my $validator = $self->{validator};
-	my $ruleset = $self->determine_ruleset($path, $path_attrs->{ruleset});
-	
-	if ( $ruleset )
+	if ( $request->{rs_name} )
 	{
 	    my $context = { ds => $self, request => $request };
-	    my $params = Dancer::params;
 	    
-	    my $result = $validator->check_params($ruleset, $context, $params);
+	    my $result = $self->{validator}->check_params($request->{rs_name}, $context, $params);
 	    
 	    if ( $result->errors )
 	    {
@@ -807,15 +841,20 @@ sub execute_path {
 		$request->add_warning($result->warnings);
 	    }
 	    
-	    $request->{rs_name} = $ruleset;
 	    $request->{valid} = $result;
 	    $request->{params} = $result->values;
 	}
 	
 	else
 	{
-	    die "No ruleset could be found for path $path";
+	    $request->{valid} = undef;
+	    $request->{params} = $params;
 	}
+	
+	# If a post_params_hook is defined for this path, call it.
+	
+	$self->call_hook($path_attrs->{post_params_hook}, $request)
+	    if $path_attrs->{post_params_hook};
 	
 	# Determine the result limit and offset, if any.
 	
@@ -856,9 +895,12 @@ sub execute_path {
 	# output.  This tells us what information we have been requested
 	# to display, and how to query for it.
 	
-	$DB::single = 1;
-	
 	$self->configure_output($request);
+	
+	# If a post_configure_hook is defined for this path, call it.
+	
+	$self->call_hook($path_attrs->{post_configure_hook}, $request)
+	    if $path_attrs->{post_configure_hook};
 	
 	# Prepare to time the query operation.
 	
@@ -868,12 +910,26 @@ sub execute_path {
 	# entire routine; everything before and after is in support of this
 	# call.
 	
+	my $method = $request->{method};
+	my $arg = $request->{arg};
+	
 	$request->$method($arg);
 	
 	# Determine how long the query took.
 	
 	my (@endtime) = Time::HiRes::gettimeofday();
 	$request->{elapsed} = Time::HiRes::tv_interval(\@starttime, \@endtime);
+	
+	# If a post_operation_hook is defined for this path, call it.
+	
+	$self->call_hook($path_attrs->{post_operation_hook}, $request)
+	    if $path_attrs->{post_operation_hook};
+	
+	# If a pre_output_hook is defined for this path, save it in the
+	# request object so it can be called at the appropriate time.
+	
+	$request->{pre_output_hook} = $path_attrs->{pre_output_hook}
+	    if $path_attrs->{pre_output_hook};
 	
 	# Then we use the output configuration and the result of the query
 	# operation to generate the actual output.  How we do this depends

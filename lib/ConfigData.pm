@@ -11,7 +11,7 @@ package ConfigData;
 use strict;
 use base 'Web::DataService::Request';
 
-use CollectionTables qw($CONTINENT_DATA $COLL_BINS $COUNTRY_MAP);
+use TableDefs qw($CONTINENT_DATA $COLL_BINS $COUNTRY_MAP);
 use TaxonDefs qw(%TAXON_RANK %RANK_STRING);
 
 use Carp qw(carp croak);

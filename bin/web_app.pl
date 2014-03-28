@@ -165,10 +165,12 @@ $ds->define_path({ path => '1.1/occs',
 
 $ds->define_path({ path => '1.1/occs/single',
 		   method => 'get',
+		   post_configure_hook => 'prune_field_list',
 		   output => '1.1:occs:basic_map' });
 
 $ds->define_path({ path => '1.1/occs/list',
 		   method => 'list',
+		   post_configure_hook => 'prune_field_list',
 		   output => '1.1:occs:basic_map' });
 
 $ds->define_path({ path => '1.1/occs/refs',
@@ -186,10 +188,12 @@ $ds->define_path({ path => '1.1/colls',
 
 $ds->define_path({ path => '1.1/colls/single',
 		   method => 'get',
+		   post_configure_hook => 'prune_field_list',
 		   output => '1.1:colls:basic_map'});
 		 
 $ds->define_path({ path => '1.1/colls/list',
 		   method => 'list',
+		   post_configure_hook => 'prune_field_list',
 		   output => '1.1:colls:basic_map'});
 
 $ds->define_path({ path => '1.1/colls/summary',

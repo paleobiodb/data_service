@@ -17,9 +17,8 @@ use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK);
 
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
-use CollectionTables qw($COLL_MATRIX $COUNTRY_MAP);
-use OccurrenceTables qw($OCC_MATRIX $OCC_TAXON);
-use IntervalTables qw($INTERVAL_DATA $SCALE_LEVEL_DATA $SCALE_DATA $SCALE_MAP $INTERVAL_MAP);
+use TableDefs qw($COLL_MATRIX $COUNTRY_MAP $OCC_MATRIX $OCC_TAXON
+		 $INTERVAL_DATA $SCALE_LEVEL_DATA $SCALE_DATA $SCALE_MAP $INTERVAL_MAP);
 
 use base 'Exporter';
 

@@ -11,32 +11,27 @@ use strict;
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables
-		      deleteProtLandData startProtLandInsert insertProtLandRecord finishProtLandInsert
-		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA @BIN_LEVEL);
+		      deleteProtLandData startProtLandInsert insertProtLandRecord finishProtLandInsert);
 
 use Carp qw(carp croak);
 use Try::Tiny;
 
+use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA
+		 $COUNTRY_MAP $CONTINENT_DATA
+		 $PALEOCOORDS $GEOPLATES
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use CoreFunction qw(activateTables);
-use IntervalTables qw($INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 use ConsoleLog qw(logMessage);
-
-our $COLL_MATRIX = "coll_matrix";
-our $COLL_BINS = "coll_bins";
-our $COLL_STRATA = "coll_strata";
 
 our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
 our $COLL_STRATA_WORK = "csn";
 
-our $COUNTRY_MAP = "country_map";
-our $CONTINENT_DATA = "continent_data";
 our $CLUST_AUX = "clust_aux";
 
 our $PROTECTED_LAND = "protected_land";
 our $PROTECTED_WORK = "pln";
 
-our @BIN_LEVEL;
 
 # Constants
 
@@ -78,7 +73,6 @@ sub buildCollectionTables {
 	    
 	    $level++;
 	    push @bin_reso, $bin->{resolution};
-	    push @BIN_LEVEL, $bin;
 	    $bin_lines .= "bin_id_$level int unsigned not null,\n";
 	    $next_line = "bin_id_$level int unsigned not null,\n";
 	    $parent_lines .= $next_line;
@@ -98,11 +92,9 @@ sub buildCollectionTables {
 		clust_id int unsigned not null,
 		lng decimal(9,6),
 		lat decimal(9,6),
+		g_plate_no smallint unsigned not null,
+		s_plate_no smallint unsigned not null,
 		loc geometry not null,
-		gp_lng decimal(9,6),
-		gp_lat decimal(9,6),
-		gp_loc geometry not null,
-		gp_plate_id int unsigned not null,
 		cc char(2),
 		protected varchar(255),
 		early_age decimal(9,5),
@@ -110,7 +102,6 @@ sub buildCollectionTables {
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
 		n_occs int unsigned not null,
-		n_spec int unsigned not null,
 		reference_no int unsigned not null,
 		access_level tinyint unsigned not null) Engine=MYISAM");
     
@@ -120,7 +111,7 @@ sub buildCollectionTables {
 		       (collection_no, lng, lat, loc, cc,
 			early_int_no, late_int_no,
 			reference_no, access_level)
-		SELECT c.collection_no, c.lng, c.lat, 
+		SELECT c.collection_no, c.lng, c.lat,
 			if(c.lng is null or c.lat is null, point(1000.0, 1000.0), point(c.lng, c.lat)), 
 			map.cc,
 			c.max_interval_no, if(c.min_interval_no > 0, c.min_interval_no, c.max_interval_no),
@@ -180,35 +171,70 @@ sub buildCollectionTables {
 	$dbh->selectrow_array("SELECT count(*) FROM protected_land");
     };
     
-    if ( $prot_available > 0 )
+    if ( $prot_available )
     {
-	logMessage(2, "    determining protection status of collections...");
+	logMessage(2, "    determining location information...");
 	
-	$dbh->do("DROP TABLE IF EXISTS protected_aux");
+	updateLocationTable($dbh);
 	
-	$dbh->do("CREATE TABLE protected_aux (
-		collection_no int unsigned not null primary key,
-		category varchar(255)) Engine=MyISAM");
+	$result = $dbh->do("
+		UPDATE $COLL_MATRIX_WORK as m JOIN $COLL_LOC as cl using (collection_no)
+		SET m.protected = cl.protected");
 	
-	$sql = "INSERT INTO protected_aux
-	    SELECT collection_no, group_concat(category)
-	    FROM $COLL_MATRIX_WORK as m join protected_land as p on st_within(m.loc, p.shape)
-	    GROUP BY collection_no";
+	# $dbh->do("DROP TABLE IF EXISTS protected_aux");
 	
-	$result = $dbh->do($sql);
+	# $dbh->do("CREATE TABLE protected_aux (
+	# 	collection_no int unsigned not null primary key,
+	# 	category varchar(255)) Engine=MyISAM");
 	
-	logMessage(2, "      setting protection attribute...");
+	# $sql = "INSERT INTO protected_aux
+	#     SELECT collection_no, group_concat(category)
+	#     FROM coll_matrix as m join protected_land as p on st_within(m.loc, p.shape)
+	#     GROUP BY collection_no";
 	
-	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN protected_aux as p using (collection_no)
-	    SET m.protected = p.category";
+	# $result = $dbh->do($sql);
+	
+	# logMessage(2, "      setting protection attribute...");
+	
+	# $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN protected_aux as p using (collection_no)
+	#     SET m.protected = p.category";
     
+	# $result = $dbh->do($sql);
+    }
+    
+    else
+    {
+	logMessage(2, "    skipping protection status: table 'protected_land' not found");
+    }
+    
+    # Setting plate_no using the Scotese model
+    
+    logMessage(2, "    setting geoplates using Scotese model...");
+    
+    $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $COLLECTIONS as cc using (collection_no)
+	    SET m.s_plate_no = cc.plate";
+    
+    $result = $dbh->do($sql);
+    
+    # Setting paleocoordinates using GPlates, if available
+    
+    my ($paleo_available) = eval {
+	$dbh->selectrow_array("SELECT count(*) from $PALEOCOORDS");
+    };
+    
+    if ( $paleo_available )
+    {
+	logMessage(2, "    setting geoplates using GPlates...");
+	
+	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $PALEOCOORDS as pc using (collection_no)
+		SET m.g_plate_no = pc.plate_no";
+	
 	$result = $dbh->do($sql);
     }
     
     else
     {
-	logMessage(2, "    skipping protected land information: table 'protected_land'");
-	logMessage(2, "        does not exist or contains no data");
+	logMessage(2, "    skipping geoplates from GPlates: table '$PALEOCOORDS' not found");
     }
     
     # Assign the collections to bins at the various binning levels.
@@ -261,11 +287,7 @@ sub buildCollectionTables {
     logMessage(2, "    indexing by geographic coordinates (spatial)...");
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (loc)");
-    
-    logMessage(2, "    indexing by geographic coordinates (separate)...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (lng, lat)");
-    
+        
     logMessage(2, "    indexing by country...");
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (cc)");
@@ -273,11 +295,6 @@ sub buildCollectionTables {
     logMessage(2, "    indexing by reference_no...");
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (reference_no)");
-    
-    logMessage(2, "    indexing by chronological interval...");
-    
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (early_int_no)");
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (late_int_no)");
     
     logMessage(2, "    indexing by early and late age...");
     
@@ -415,6 +432,99 @@ sub buildCollectionTables {
 }
 
 
+sub updateLocationTable {
+    
+    my ($dbh) = @_;
+    
+    my ($sql, $result, $count);
+    
+    # Make sure that we have a clean table in which to store lookup results.
+    
+    $dbh->do("CREATE TABLE IF NOT EXISTS $COLL_LOC (
+		collection_no int unsigned primary key,
+		lng decimal(9,6),
+		lat decimal(9,6),
+		cc char(2),
+		protected varchar(255)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+    
+    # If there is anything in the table, delete from it any row corresponding
+    # to a collection whose coordinates have been nulled out.  This will occur
+    # exceedingly rarely if ever, but is a boundary case we need to check.
+    
+    $sql =     "DELETE cl FROM $COLLECTIONS as c JOIN $COLL_LOC as cl using (collection_no)
+		WHERE c.lng not between -180.0 and 180.0 or c.lng is null or
+		      c.lat not between -90.0 and 90.0 or c.lat is null";
+    
+    $result = $dbh->do($sql);
+    
+    if ( $result > 0 )
+    {
+	logMessage(2, "      deleted $result records corresponding to collections with invalid coordinates");
+    }
+    
+    # Then add a fresh row to the table for every collection that has valid
+    # coordinates but either doesn't already appear there or or has different
+    # coordinates than appear there.  Any row already there will be replaced,
+    # as it is not valid any more (i.e. its collection's longitude and/or
+    # latitude have been modified).
+    
+    $sql = "	REPLACE INTO $COLL_LOC (collection_no, cc, lat, lng)
+		SELECT c.collection_no, c.cc, c.lat, c.lng
+		FROM $COLL_MATRIX_WORK as c LEFT JOIN $COLL_LOC as cl using (collection_no)
+		WHERE c.lng between -180.0 and 180.0 and c.lng is not null and
+		      c.lat between -90.0 and 90.0 and c.lat is not null and
+		      (c.lng <> cl.lng or cl.lng is null or
+		       c.lat <> cl.lat or cl.lat is null)";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      added $result new rows to the table")
+	if $result > 0;
+    
+    # Prepare some statements.
+
+    my $lookup_sth = $dbh->prepare("
+		SELECT group_concat(category)
+		FROM protected_land as p
+		WHERE st_within(point(?,?), p.shape)");
+    
+    my $update_sth = $dbh->prepare("
+		UPDATE $COLL_LOC SET protected = ?
+		WHERE collection_no = ?");
+    
+    # Then search for records where 'protection' is null.  These have
+    # been newly added, and need to be looked up.
+    
+    my $fetch_sth = $dbh->prepare("
+		SELECT collection_no, lng, lat FROM $COLL_LOC
+		WHERE protected is null");
+    
+    $fetch_sth->execute();
+    $count = 0;
+    
+    # For each of these records, look up the protection status and set it.
+    
+    while ( my ($coll_no, $lng, $lat) = $fetch_sth->fetchrow_array() )
+    {
+	my ($prot) = $dbh->selectrow_array($lookup_sth, {}, $lng, $lat);
+	
+	$prot ||= '';	# if the result is null, set it to the empty string
+	
+	$update_sth->execute($prot, $coll_no);
+	$count++;
+	
+	#     SELECT collection_no, group_concat(category)
+	#     FROM coll_matrix as m join protected_land as p on st_within(m.loc, p.shape)
+	#     GROUP BY collection_no";
+
+    }
+    
+    logMessage(2, "      updated $count entries");
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
 # buildStrataTables
 # 
 # Compute a table that can be used to query for geological strata by some
@@ -443,7 +553,7 @@ sub buildStrataTables {
     
     logMessage(2, "    computing stratum table...");
     
-    my ($sql, $result);
+    my ($sql, $result, $count);
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
 		SELECT formation, 'formation', collection_no, n_occs, loc
@@ -1026,13 +1136,12 @@ sub startProtLandInsert {
     
     # Create a working table.
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $PROTECTED_WORK");
+    $dbh->do("DROP TABLE IF EXISTS $PROTECTED_WORK");
     
-    $result = $dbh->do("
-		CREATE TABLE $PROTECTED_WORK (
-			shape GEOMETRY not null,
-			cc char(2) not null,
-			category varchar(10) not null) Engine=MyISAM");
+    $dbh->do("CREATE TABLE $PROTECTED_WORK (
+		shape GEOMETRY not null,
+		cc char(2) not null,
+		category varchar(10) not null) Engine=MyISAM");
     
     # Empty the hash that keeps track of what countries we are loading data
     # for. 
