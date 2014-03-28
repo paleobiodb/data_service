@@ -1318,7 +1318,7 @@ sub generateMainFilters {
     my $y1 = $self->clean_param('latmin');
     my $y2 = $self->clean_param('latmax');
     
-    if ( defined $x1 && defined $x2 )
+    if ( $x1 ne '' && $x2 ne '' )
     {
 	$y1 //= -90.0;
 	$y2 //= 90.0;
@@ -1367,7 +1367,7 @@ sub generateMainFilters {
 	}
     }
     
-    elsif ( defined $y1 || defined $y2 )
+    elsif ( $y1 ne '' || $y2 ne '' )
     {
 	$y1 //= -90;
 	$y2 //= 90;
