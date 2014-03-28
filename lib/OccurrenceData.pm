@@ -50,10 +50,11 @@ sub initialize {
 	    "Additional information about the taxonomic classification of the occurence",
         { value => 'loc', maps_to => '1.1:colls:loc' },
 	    "Additional information about the geographic locality of the occurrence",
+	{ value => 'paleoloc', maps_to => '1.1:colls:paleoloc' },
+	    "Information about the paleogeographic locality of the occurrence,",
+	    "evaluated according to the model specified by the parameter C<pgm>.",
 	{ value => 'prot', maps_to => '1.1:colls:prot' },
 	    "Indicate whether the containing collection is on protected land",
-	{ value => 'pcoords', maps_to => '1.1:colls:pcoords' },
-	    "Paleocoordinates of the collection at the time the fossils were laid down",
         { value => 'time', maps_to => '1.1:colls:time' },
 	    "Additional information about the temporal locality of the occurrence",
 	{ value => 'strat', maps_to => '1.1:colls:strat' },
@@ -99,7 +100,7 @@ sub initialize {
 	    "The type of this object: 'occ' for an occurrence",
 	{ output => 'reid_no', com_name => 'eid', if_field => 'reid_no' },
 	    "If this occurrence was reidentified, a positive integer that uniquely identifies the reidentification",
-	{ output => 'superseded', com_name => 'sps', value => 1, not_field => 'latest_ident' },
+	{ output => 'superceded', com_name => 'sps', value => 1, not_field => 'latest_ident' },
 	    "The value of this field will be true if this occurrence was later identified under a different taxon",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
 	    "The identifier of the collection with which this occurrence is associated.",
@@ -162,9 +163,9 @@ sub initialize {
 	    "The name of the family in which this occurrence is classified",
 	{ output => 'family_no', com_name => 'fmn' },
 	    "The identifier of the family in which this occurrence is classified",
-	{ output => 'order', com_name => 'odn' },
+	{ output => 'order', com_name => 'odl' },
 	    "The name of the order in which this occurrence is classified",
-	{ output => 'order_no', com_name => 'odl' },
+	{ output => 'order_no', com_name => 'odn' },
 	    "The identifier of the order in which this occurrence is classified",
 	{ output => 'class', com_name => 'cll' },
 	    "The name of the class in which this occurrence is classified",
@@ -222,6 +223,10 @@ sub initialize {
 	    "Results are ordered by the geological member in which they were found, sorted alphabetically.",
 	{ value => 'member.asc', undoc => 1 },
 	{ value => 'member.desc', undoc => 1 },
+	{ value => 'plate' },
+	    "Results are ordered by the geological plate on which they are located, sorted numerically by identifier.",
+	{ value => 'plate.asc', undoc => 1 },
+	{ value => 'plate.desc', undoc => 1 },
 	{ value => 'created' },
 	    "Results are ordered by the date the record was created, most recent first",
 	    "unless you add C<.asc>.",
@@ -337,11 +342,12 @@ sub get {
     
     my $fields = join(', ', $self->select_list({ mt => 'o', bt => 'oc' }));
     
+    $self->adjustCoordinates(\$fields);
+    $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
+    
     # Determine the necessary joins.
     
     my ($join_list) = $self->generateJoinList('c', $self->tables_hash);
-    
-    $self->adjustPCIntervals(\$fields, \$join_list) if $self->clean_param('pcis');
     
     # Generate the main query.
     
@@ -408,7 +414,8 @@ sub list {
     my $fields = $self->select_string({ mt => 'o', bt => 'oc' });
     
     $self->adjustCoordinates(\$fields);
-    
+    $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
+        
     # Determine the order in which the results should be returned.
     
     my $tt = $tables->{ts} ? 'ts' : 't';
@@ -421,8 +428,6 @@ sub list {
     my $join_list = $self->generateJoinList('c', $tables);
     
     my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
-    
-    $self->adjustPCIntervals(\$fields, \$join_list, \$order_clause) if $self->clean_param('pcis');
     
     $self->{main_sql} = "
 	SELECT $calc $fields
@@ -503,8 +508,6 @@ sub refs {
     
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
     my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
-    
-    $self->adjustPCIntervals(\$inner_join_list, \$filter_string) if $self->clean_param('pcis');
     
     $self->{main_sql} = "
 	SELECT $calc $fields, count(distinct occurrence_no) as reference_rank, 1 as is_occ

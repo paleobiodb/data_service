@@ -555,14 +555,14 @@ sub ensureTables {
 		present_lat decimal(9,6),
 		plate_no int unsigned,
 		early_age int unsigned,
-		early_lng decimal(9,6),
-		early_lat decimal(9,6),
+		early_lng decimal(5,2),
+		early_lat decimal(5,2),
 		mid_age int unsigned,
-		mid_lng decimal(9,6),
-		mid_lat decimal(9,6),
+		mid_lng decimal(5,2),
+		mid_lat decimal(5,2),
 		late_age int unsigned,
-		late_lng decimal(9,6),
-		late_lat decimal(9,6)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
+		late_lng decimal(5,2),
+		late_lat decimal(5,2)) Engine=MyISAM CHARACTER SET utf8 COLLATE utf8_unicode_ci");
     
     $dbh->do("CREATE TABLE IF NOT EXISTS $GEOPLATES (
 		plate_no int unsigned primary key,

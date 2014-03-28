@@ -92,8 +92,10 @@ sub buildCollectionTables {
 		clust_id int unsigned not null,
 		lng decimal(9,6),
 		lat decimal(9,6),
-		plate_no int unsigned not null,
-		present_loc geometry not null,
+		g_plate_no smallint unsigned not null,
+		s_plate_no smallint unsigned not null,
+		loc geometry not null,
+		s_loc geometry not null,
 		early_loc geometry not null,
 		mid_loc geometry not null,
 		late_loc geometry not null,
@@ -104,14 +106,13 @@ sub buildCollectionTables {
 		early_int_no int unsigned not null,
 		late_int_no int unsigned not null,
 		n_occs int unsigned not null,
-		n_spec int unsigned not null,
 		reference_no int unsigned not null,
 		access_level tinyint unsigned not null) Engine=MYISAM");
     
     logMessage(2, "    inserting collections...");
     
     $sql = "	INSERT INTO $COLL_MATRIX_WORK
-		       (collection_no, lng, lat, present_loc, cc,
+		       (collection_no, lng, lat, loc, cc,
 			early_int_no, late_int_no,
 			reference_no, access_level)
 		SELECT c.collection_no, c.lng, c.lat,
@@ -207,10 +208,21 @@ sub buildCollectionTables {
     
     else
     {
-	logMessage(2, "    SKIPPING protected land: table 'protected_land' not found");
+	logMessage(2, "    skipping protection status: table 'protected_land' not found");
     }
     
-    # Setting paleocoordinates, if available
+    # Setting paleocoordinates using the Scotese model
+    
+    logMessage(2, "    setting paleocoordinates using Scotese model...");
+    
+    $sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $COLLECTIONS as cc using (collection_no)
+	    SET m.s_plate_no = cc.plate,
+		m.s_loc = if(cc.paleolng is null or cc.paleolat is null,
+			     point(1000.0, 1000.0), point(cc.paleolng, cc.paleolat))";
+    
+    $result = $dbh->do($sql);
+    
+    # Setting paleocoordinates using GPlates, if available
     
     my ($paleo_available) = eval {
 	$dbh->selectrow_array("SELECT count(*) from $PALEOCOORDS");
@@ -218,10 +230,10 @@ sub buildCollectionTables {
     
     if ( $paleo_available )
     {
-	logMessage(2, "    setting paleocoordinates...");
+	logMessage(2, "    setting paleocoordinates using GPlates...");
 	
 	$sql = "UPDATE $COLL_MATRIX_WORK as m JOIN $PALEOCOORDS as pc using (collection_no)
-		SET m.plate_no = pc.plate_no,
+		SET m.g_plate_no = pc.plate_no,
 		    m.early_loc = if(pc.early_lng is null or pc.early_lat is null, 
 				     point(1000.0, 1000.0),
 				     point(pc.early_lng, pc.early_lat)),
@@ -237,7 +249,7 @@ sub buildCollectionTables {
     
     else
     {
-	logMessage(2, "    SKIPPING paleocoordinates: table '$PALEOCOORDS' not found");
+	logMessage(2, "    skipping paleocoordinates from GPlates: table '$PALEOCOORDS' not found");
     }
     
     # Assign the collections to bins at the various binning levels.
@@ -289,7 +301,7 @@ sub buildCollectionTables {
     
     logMessage(2, "    indexing by present coordinates (spatial)...");
     
-    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (present_loc)");
+    $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (loc)");
     
     logMessage(2, "    indexing by paleo coordinates (spatial)...");
     
@@ -571,8 +583,8 @@ sub buildStrataTables {
     my ($sql, $result, $count);
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
-		SELECT formation, 'formation', collection_no, n_occs, present_loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		SELECT formation, 'formation', collection_no, n_occs, loc
+		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE formation <> ''";
     
     $result = $dbh->do($sql);
@@ -580,8 +592,8 @@ sub buildStrataTables {
     logMessage(2, "      $result formations");
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
-		SELECT geological_group, 'group', collection_no, n_occs, present_loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		SELECT geological_group, 'group', collection_no, n_occs, loc
+		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE geological_group <> ''";
     
     $result = $dbh->do($sql);
@@ -589,8 +601,8 @@ sub buildStrataTables {
     logMessage(2, "      $result groups");
     
     $sql = "	INSERT INTO $COLL_STRATA_WORK (name, rank, collection_no, n_occs, loc)
-		SELECT member, 'member', collection_no, n_occs, present_loc
-		FROM $coll_matrix as c JOIN collections as cc using (collection_no)
+		SELECT member, 'member', collection_no, n_occs, loc
+		FROM $COLL_MATRIX_WORK as c JOIN collections as cc using (collection_no)
 		WHERE member <> ''";
     
     $result = $dbh->do($sql);

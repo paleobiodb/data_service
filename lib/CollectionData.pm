@@ -81,10 +81,11 @@ sub initialize {
 	    "The primary reference for the collection, as formatted text.",
         { value => 'loc', maps_to => '1.1:colls:loc' },
 	    "Additional information about the geographic locality of the collection",
+	{ value => 'paleoloc', maps_to => '1.1:colls:paleoloc' },
+	    "Information about the paleogeographic locality of the collection,",
+	    "evaluated according to the model(s) specified by the parameter C<pgm>.",
 	{ value => 'prot', maps_to => '1.1:colls:prot' },
 	    "Indicate whether the collection is on protected land",
-	{ value => 'pcoords', maps_to => '1.1:colls:pcoords' },
-	    "Paleocoordinates of the collection at the time the fossils were laid down",
         { value => 'time', maps_to => '1.1:colls:time' },
 	    "Additional information about the temporal locality of the",
 	    "collection.",
@@ -197,6 +198,43 @@ sub initialize {
       { output => 'geogscale', com_name => 'gsc' },
 	  "The geographic scale of the collection.");
     
+    $ds->define_block('1.1:colls:paleoloc' =>
+	{ select => 'PALEOCOORDS' },
+	{ output => 'paleomodel', com_name => 'pm1' },
+	    "The primary model specified by the parameter C<pgm>.  This",
+	    "field will only be included if more than one model is indicated.",
+	{ output => 'paleolng', com_name => 'pln' },
+	    "The paleolongitude of the collection, evaluated according to the",
+	    "primary model indicated by the parameter C<pgm>.",
+	{ output => 'paleolat', com_name => 'pla' },
+	    "The paleolatitude of the collection, evaluated according to the",
+	    "primary model indicated by the parameter C<pgm>.",
+	{ output => 'geoplate', com_name => 'gpl' },
+	    "The numeric identifier of the geological plate on which the collection lies,",
+	    "evaluated according to the primary model indicated by the parameter C<pgm>",
+	{ output => 'paleomodel2', com_name => 'pm2' },
+	    "An alternate model specified by the parameter C<pgm>.  This",
+	    "field will only be included if more than one model is indicated.",
+	    "There may also be C<paleomodel3>, etc.",
+	{ output => 'paleolng2', com_name => 'pn2' },
+	    "An alternate paleolongitude for the collection, if the C<pgm> parameter",
+	    "indicates more than one model.  There may also be C<paleolng3>, etc.",
+	{ output => 'paleolat2', com_name => 'pa2' },
+	    "An alternate paleolatitude for the collection, if the C<pgm> parameter",
+	    "indicates more than one model.  There may also be C<paleolat3>, etc.",
+	{ output => 'geoplate2', com_name => 'gp2' },
+	    "An alternate geological plate identifier, if the C<pgm> parameter",
+	    "indicates more than one model.  There may also be C<geoplate3>, etc.",
+	{ output => 'paleomodel3', com_name => 'pm3' }, "#",
+	{ output => 'paleolng3', com_name => 'pn3' }, "#",
+	{ output => 'paleolat3', com_name => 'pa3' }, "#",
+	{ output => 'paleomodel4', com_name => 'pm4' }, "#",
+	{ output => 'paleolng4', com_name => 'pn4' }, "#",
+	{ output => 'paleolat4', com_name => 'pa4' }, "#");
+    
+#	    "L<list|ftp://ftp.earthbyte.org/earthbyte/GPlates/SampleData/FeatureCollections/Rotations/Global_EarthByte_PlateIDs_20071218.pdf>",
+#	    "established by the L<Earthbyte Group|http://www.earthbyte.org/>.");
+    
     $ds->define_block('1.1:colls:prot' =>
 	{ select => ['c.cc', 'c.protected'] },
 	{ output => 'cc', com_name => 'cc2', not_block => 'loc' },
@@ -204,22 +242,6 @@ sub initialize {
 	    "L<ISO-3166-1 alpha-2|https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
 	{ output => 'protected', com_name => 'ptd' },
 	    "The protected status of the land on which the collection is located, if any");
-    
-    $ds->define_block('1.1:colls:pcoords' =>
-	{ select => ['round(pc.mid_lat,2) as paleolat', 'round(pc.mid_lng,2) as paleolng', 'gp.abbrev as geoplate'],
-	  tables => ['pc', 'gp'] },
-	{ output => 'paleolng', com_name => 'pln' },
-	    "The paleolongitude of the collection, evaluated at the midpoint of the its",
-	    "time interval.  To use the beginning or end of the time interval,",
-	    "use the parameter C<pcis>.",
-	{ output => 'paleolat', com_name => 'pla' },
-	    "The paleolatitude of the collection, evaluated at the midpoint of the its",
-	    "time interval.  To use the beginning or end of the time interval,",
-	    "use the parameter C<pcis>.",
-	{ output => 'geoplate', com_name => 'gpl' },
-	    "The identifier (abbreviation) of the geological plate on which the collection lies, from the",
-	    "L<list|ftp://ftp.earthbyte.org/earthbyte/GPlates/SampleData/FeatureCollections/Rotations/Global_EarthByte_PlateIDs_20071218.pdf>",
-	    "established by the L<Earthbyte Group|http://www.earthbyte.org/>.");
     
     $ds->define_block('1.1:colls:time' =>
       { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
@@ -383,6 +405,10 @@ sub initialize {
 	    "Results are ordered by the stratigraphic member in which they were found, sorted alphabetically.",
 	{ value => 'member.asc', undoc => 1 },
 	{ value => 'member.desc', undoc => 1 },
+	{ value => 'plate' },
+	    "Results are ordered by the geological plate on which they are located, sorted numerically by identifier.",
+	{ value => 'plate.asc', undoc => 1 },
+	{ value => 'plate.desc', undoc => 1 },
 	{ value => 'created' },
 	    "Results are ordered by the date the record was created, most recent first",
 	    "unless you add C<.asc>.",
@@ -402,13 +428,22 @@ sub initialize {
 	{ value => 'all' },
 	    "Return all identifications of each selected occurrence, each as a separate record");
     
-    $ds->define_set('1.1:colls:pcis' =>
-	{ value => 'start' },
-	    "When selecting or displaying paleocoordinates, use the start of each collection's time interval",
-	{ value => 'end' },
-	    "When selecting or displaying paleocoordinates, use the end of each collection's time interval",
-	{ value => 'mid' },
-	    "When selecting or displaying paleocoordinates, use the midpoint of each collection's time interval");
+    $ds->define_set('1.1:colls:pgmodel' =>
+	{ value => 'scotese' },
+	    "Use the paleogeographic model defined by L<C. R. Scotese|http://scotese.com/> (2002), which is the",
+	    "one that this database has been using historically.",
+	{ value => 'gplates' },
+	    "Use the paleogeographic model defined by the GPlates software from the",
+	    "L<EarthByte group|http://www.earthbyte.org/>.  By default, the coordinates",
+	    "for each collection are calculated at the midpoint of its age range.",
+	{ value => 'gp_early' },
+	    "Use the GPlates model, calculating the rotations at the early end of each",
+	    "collection's age range",
+	{ value => 'gp_mid' },
+	    "A synonym for the value C<gplates>.",
+	{ value => 'gp_late' },
+	    "Use the GPlates model, calculating the rotations at the late end of each",
+	    "collection's age range");
     
     $ds->define_ruleset('1.1:main_selector' =>
 	{ param => 'clust_id', valid => POS_VALUE, list => ',' },
@@ -454,46 +489,18 @@ sub initialize {
 	    "Return only records whose present latitude is at most the given value.",
 	{ together => ['lngmin', 'lngmax'],
 	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
-	{ param => 'lngmin', valid => DECI_VALUE },
-	{ param => 'lngmax', valid => DECI_VALUE },
-	    "Return only records whose present longitude falls within the given bounds.",
-	    "If you specify one of these parameters then you must specify both.",
-	    "If you provide bounds outside of the range -180\N{U+00B0} to 180\N{U+00B0}, they will be",
-	    "wrapped into the proper range.  For example, if you specify C<lngmin=270 & lngmax=360>,",
-	    "the query will be processed as if you had said C<lngmin=-90 & lngmax=0 >.  In this",
-	    "case, all longitude values in the query result will be adjusted to fall within the",
-	    "numeric range you specified.  Your range will be evaluated correctly even if it crosses",
-	    "the antimeridian.",
-	{ param => 'latmin', valid => DECI_VALUE(-90,90) },
-	    "Return only records whose present latitude is at least the given value.",
-	{ param => 'latmax', valid => DECI_VALUE(-90,90) },
-	    "Return only records whose present latitude is at most the given value.",
-	{ together => ['lngmin', 'lngmax'],
-	  error => "you must specify both of 'lngmin' and 'lngmax' if you specify either of them" },
 	{ param => 'loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
 	    "Return only records whose present location (longitude and latitude) falls within",
 	    "the specified shape, which must be given in L<WKT|https://en.wikipedia.org/wiki/Well-known_text> format.",
-	{ param => 'p_lngmin', valid => DECI_VALUE },
-	{ param => 'p_lngmax', valid => DECI_VALUE },
-	    "Return only records whose paleolongitude falls within the given bounds,",
-	    "evaluated at the midpoint of each collection's time interval.  To evaluate at the",
-	    "beginning or end instead, use the parameter C<pcis>.  Otherwise, these parameters",
-	    "are evaluated in the same way as C<lngmin> and C<lngmax> (see above).",
-	{ param => 'p_latmin', valid => DECI_VALUE(-90,90) },
-	    "Return only records whose paleolatitude is at least the given value (see C<p_lngmax>).",
-	{ param => 'p_latmax', valid => DECI_VALUE(-90,90) },
-	    "Return only records whose paleolatitude is at most the given value (see C<p_lngmax>).",
-	{ param => 'p_loc', valid => ANY_VALUE },		# This should be a geometry in WKT format
-	    "Return only records whose paleolongitude and paleolatitude fall within",
-	    "the specified shape, which must be given in L<WKT|https://en.wikipedia.org/wiki/Well-known_text> format.",
-	    "The paleocoordinates are evaluated at the midpoint of each collection's time interval, unless",
-	    "you also specify the parameter C<pcis>.",
-	{ param => 'plate', valid => ANY_VALUE, list => "," },
-	    "Return only records located on the specified geological plate(s).  Values may",
-	    "be either plate numbers or abbreviations from the",
-	    "L<list|ftp://ftp.earthbyte.org/earthbyte/GPlates/SampleData/FeatureCollections/Rotations/Global_EarthByte_PlateIDs_20071218.pdf>",
-	    "established by the L<Earthbyte Group|http://www.earthbyte.org/>.  Multiple values must",
-	    "be separated by commas.",
+	{ param => 'plate', valid => POS_VALUE, list => "," },
+	    "Return only records located on the specified geological plate(s), according",
+	    "to the primary paleogeographic model specified by the parameter C<pgm>.  The value of",
+	    "this parameter may be a comma-separated list of numeric plate identifiers.",
+	{ optional => 'pgm', valid => $ds->valid_set('1.1:colls:pgmodel'), list => "," },
+	    "Specify which paleogeographic model(s) to use when evaluating paleocoordinates.",
+	    "You may specify one or more from the following list, separated by commas.",
+	    "If you do not specify a value for this parameter, the default model is C<gplates>.",
+	    $ds->document_set('1.1:colls:pgmodel'),
 	{ param => 'country', valid => \&valid_country, list => ',', alias => 'cc', bad_value => '_' },
 	    "Return only records whose geographic location falls within the specified country or countries.",
 	    "The value of this parameter should be one or more two-character country codes as a comma-separated list.",
@@ -533,10 +540,7 @@ sub initialize {
 	    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
 	{ optional => 'latebuffer', valid => POS_VALUE },
 	    "Override the default buffer period for the end of the time range when resolving temporal locality.",
-	    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).",
-	{ optional => 'pcis', valid => $ds->valid_set('1.1:colls:pcis') },
-	    "When selecting or displaying paleocoordinates, select which part of a collection's tiem interval",
-	    "to use.  Accepted values are: C<start>, C<end>, and C<mid> (the default)");
+	    "The value is given in millions of years.  This option is only relevant if C<timerule> is C<buffer> (which is the default).");
     
     $ds->define_ruleset('1.1:colls:specifier' =>
 	{ param => 'id', valid => POS_VALUE, alias => 'coll_id' },
@@ -673,17 +677,16 @@ sub get {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = join(', ', $self->select_list({ mt => 'c', bt => 'cc' }));
+    my $fields = $self->select_string({ mt => 'c', bt => 'cc' });
     
     $self->adjustCoordinates(\$fields);
+    $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
     
     # Determine the necessary joins.
     
     my ($join_list) = $self->generateJoinList('c', $self->tables_hash);
     
     # Generate the main query.
-    
-    $self->adjustPCIntervals(\$fields, \$join_list) if $self->clean_param('pcis');
     
     $self->{main_sql} = "
 	SELECT $fields
@@ -781,6 +784,7 @@ sub list {
     my $fields = $self->select_string({ mt => 'c', bt => 'cc' });
     
     $self->adjustCoordinates(\$fields);
+    $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
     
     # Determine the order in which the results should be returned.
     
@@ -789,8 +793,6 @@ sub list {
     # Determine if any extra tables need to be joined in.
     
     my $base_joins = $self->generateJoinList('c', $self->tables_hash);
-
-    $self->adjustPCIntervals(\$fields, \$filter_string, \$base_joins, \$order_clause) if $self->clean_param('pcis');
     
     $self->{main_sql} = "
 	SELECT $calc $fields
@@ -873,8 +875,6 @@ sub refs {
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
     my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
     
-    $self->adjustPCIntervals(\$inner_join_list, \$filter_string) if $self->clean_param('pcis');
-    
     $self->{main_sql} = "
 	SELECT $calc $fields, s.reference_rank, is_primary, 1 as is_coll
 	FROM (SELECT sr.reference_no, count(*) as reference_rank, if(sr.reference_no = c.reference_no, 1, 0) as is_primary
@@ -940,8 +940,6 @@ sub strata {
     # Determine if any extra tables need to be joined in.
     
     my $base_joins = $self->generateJoinList('cs', $tables);
-    
-    $self->adjustPCIntervals(\$filter_string, \$base_joins) if $self->clean_param('pcis');
     
     $self->{main_sql} = "
 	SELECT $calc $fields
@@ -1383,75 +1381,96 @@ sub generateMainFilters {
 	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
     }
     
+    # Check for parameter 'plate'
+    
+    if ( $self->{params}{plate} )
+    {
+	my $plate_list = join(q{,}, $self->clean_param_list('plate'));
+	my ($primary_model) = $self->clean_param_list('pgm');
+	$primary_model //= 'gplates';
+	
+	if ( $plate_list && $primary_model eq 'scotese' )
+	{
+	    push @filters, "cc.plate in ($plate_list)";
+	    $tables_ref->{cc} = 1;
+	}
+	
+	elsif ( $plate_list )
+	{
+	    push @filters, "pc.plate_no in ($plate_list)";
+	    $tables_ref->{pc} = 1;
+	}
+    }
+    
     # Check for parameters 'p_lngmin', 'p_lngmax', 'p_latmin', 'p_latmax', 'p_loc',
     
-    my $px1 = $self->clean_param('lngmin');
-    my $px2 = $self->clean_param('lngmax');
-    my $py1 = $self->clean_param('latmin');
-    my $py2 = $self->clean_param('latmax');
+    # my $px1 = $self->clean_param('lngmin');
+    # my $px2 = $self->clean_param('lngmax');
+    # my $py1 = $self->clean_param('latmin');
+    # my $py2 = $self->clean_param('latmax');
     
-    if ( defined $px1 && defined $px2 )
-    {
-	$py1 //= -90.0;
-	$py2 //= 90.0;
+    # if ( defined $px1 && defined $px2 )
+    # {
+    # 	$py1 //= -90.0;
+    # 	$py2 //= 90.0;
 	
-	# If the longitude coordinates do not fall between -180 and 180, adjust
-	# them so that they do.
+    # 	# If the longitude coordinates do not fall between -180 and 180, adjust
+    # 	# them so that they do.
 	
-	if ( $px1 < -180.0 )
-	{
-	    $px1 = $px1 + ( floor( (180.0 - $px1) / 360.0) * 360.0);
-	}
+    # 	if ( $px1 < -180.0 )
+    # 	{
+    # 	    $px1 = $px1 + ( floor( (180.0 - $px1) / 360.0) * 360.0);
+    # 	}
 	
-	if ( $px2 < -180.0 )
-	{
-	    $px2 = $px2 + ( floor( (180.0 - $px2) / 360.0) * 360.0);
-	}
+    # 	if ( $px2 < -180.0 )
+    # 	{
+    # 	    $px2 = $px2 + ( floor( (180.0 - $px2) / 360.0) * 360.0);
+    # 	}
 	
-	if ( $px1 > 180.0 )
-	{
-	    $px1 = $px1 - ( floor( ($px1 + 180.0) / 360.0 ) * 360.0);
-	}
+    # 	if ( $px1 > 180.0 )
+    # 	{
+    # 	    $px1 = $px1 - ( floor( ($px1 + 180.0) / 360.0 ) * 360.0);
+    # 	}
 	
-	if ( $px2 > 180.0 )
-	{
-	    $px2 = $px2 - ( floor( ($px2 + 180.0) / 360.0 ) * 360.0);
-	}
+    # 	if ( $px2 > 180.0 )
+    # 	{
+    # 	    $px2 = $px2 - ( floor( ($px2 + 180.0) / 360.0 ) * 360.0);
+    # 	}
 	
-	# If $px1 < $px2, then we query on a single bounding box defined by
-	# those coordinates.
+    # 	# If $px1 < $px2, then we query on a single bounding box defined by
+    # 	# those coordinates.
 	
-	if ( $px1 < $px2 )
-	{
-	    my $polygon = "'POLYGON(($px1 $py1,$px2 $py1,$px2 $py2,$px1 $py2,$px1 $py1))'";
-	    push @filters, "contains(geomfromtext($polygon), pc.early_loc)";
-	}
+    # 	if ( $px1 < $px2 )
+    # 	{
+    # 	    my $polygon = "'POLYGON(($px1 $py1,$px2 $py1,$px2 $py2,$px1 $py2,$px1 $py1))'";
+    # 	    push @filters, "contains(geomfromtext($polygon), pc.early_loc)";
+    # 	}
 	
-	# Otherwise, our bounding box crosses the antimeridian and so must be
-	# split in two.  The latitude bounds must always be between -90 and
-	# 90, regardless.
+    # 	# Otherwise, our bounding box crosses the antimeridian and so must be
+    # 	# split in two.  The latitude bounds must always be between -90 and
+    # 	# 90, regardless.
 	
-	else
-	{
-	    my $polygon = "'MULTIPOLYGON((($px1 $py1,180.0 $py1,180.0 $py2,$px1 $py2,$px1 $py1))," .
-					"((-180.0 $py1,$px2 $py1,$px2 $py2,-180.0 $py2,-180.0 $py1)))'";
-	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
-	}
-    }
+    # 	else
+    # 	{
+    # 	    my $polygon = "'MULTIPOLYGON((($px1 $py1,180.0 $py1,180.0 $py2,$px1 $py2,$px1 $py1))," .
+    # 					"((-180.0 $py1,$px2 $py1,$px2 $py2,-180.0 $py2,-180.0 $py1)))'";
+    # 	    push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+    # 	}
+    # }
     
-    elsif ( defined $py1 || defined $py2 )
-    {
-	$py1 //= -90;
-	$py2 //= 90;
+    # elsif ( defined $py1 || defined $py2 )
+    # {
+    # 	$py1 //= -90;
+    # 	$py2 //= 90;
 	
-	my $polygon = "'POLYGON((-180.0 $py1,180.0 $py1,180.0 $py2,-180.0 $py2,-180.0 $py1))'";
-	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
-    }
+    # 	my $polygon = "'POLYGON((-180.0 $py1,180.0 $py1,180.0 $py2,-180.0 $py2,-180.0 $py1))'";
+    # 	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
+    # }
     
-    if ( $self->{params}{loc} )
-    {
-	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
-    }
+    # if ( $self->{params}{loc} )
+    # {
+    # 	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
+    # }
     
     # Check for parameters 'formation', 'stratgroup', 'member'
     
@@ -1740,6 +1759,81 @@ sub adjustCoordinates {
 }
 
 
+# selectPaleoModel ( fields_ref, tables_ref )
+# 
+# Adjust the field list and table hash to select the proper paleocoordinate
+# fields according to the parameter 'pgm'.
+
+sub selectPaleoModel {
+    
+    my ($self, $fields_ref, $tables_ref) = @_;
+    
+    # Go through each specified paleogeographicmodel and construct a list of the necessary
+    # fields.  If no models were specified, use 'gplates' as the default.
+    
+    my @models = $self->clean_param_list('pgm');
+    
+    @models = 'gplates' unless @models;
+    
+    my (@fields, %plate_version_shown);
+    my ($lng_field, $lat_field, $plate_field, $model_field);
+    my ($model_no, $model_label);
+    
+    foreach my $model (@models)
+    {
+	$model_no++;
+	$model_label = $model_no > 1 ? $model_no : '';
+	
+	$lng_field = 'paleolng' . $model_label;
+	$lat_field = 'paleolat' . $model_label;
+	$plate_field = 'geoplate' . $model_label;
+	$model_field = 'paleomodel' . $model_label;
+	
+	if ( $model eq 'scotese' )
+	{
+	    push @fields, "cc.paleolng as $lng_field", "cc.paleolat as $lat_field";
+	    push @fields, "cc.plate as $plate_field" unless $plate_version_shown{'scotese'};
+	    push @fields, "'scotese' as $model_field" if @models > 1;
+	    $tables_ref->{cc} = 1;
+	    $plate_version_shown{'scotese'} = 1;
+	}
+	
+	elsif ( $model eq 'gplates' || $model eq 'gp_mid' )
+	{
+	    push @fields, "pc.mid_lng as $lng_field", "pc.mid_lat as $lat_field";
+	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "'gp_mid' as $model_field" if @models > 1;
+	    $tables_ref->{pc} = 1;
+	    $plate_version_shown{'gplates'} = 1;
+	}
+	
+	elsif ( $model eq 'gp_early' )
+	{
+	    push @fields, "pc.early_lng as $lng_field", "pc.early_lat as $lat_field";
+	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "'gp_early' as $model_field" if @models > 1;
+	    $tables_ref->{pc} = 1;
+	    $plate_version_shown{'gplates'} = 1;
+	}
+	
+	elsif ( $model eq 'gp_late' )
+	{
+	    push @fields, "pc.late_lng as $lng_field", "pc.late_lat as $lat_field";
+	    push @fields, "pc.plate_no as $plate_field" unless $plate_version_shown{'gplates'};
+	    push @fields, "'gp_late' as $model_field" if @models > 1;
+	    $tables_ref->{pc} = 1;
+	    $plate_version_shown{'gplates'} = 1;
+	}
+    }
+    
+    # Now substitute this list into the field string.
+    
+    my $paleofields = join(", ", @fields);
+    
+    $$fields_ref =~ s/PALEOCOORDS/$paleofields/;
+}
+
+
 # adjustPCIntervals ( string... )
 # 
 # Adjust the specified strings (portions of SQL statements) to reflect the
@@ -1777,8 +1871,7 @@ sub adjustPCIntervals {
 # generate_order_clause ( options )
 # 
 # Return the order clause for the list of references, or the empty string if
-# none was selected.  If the option 'allow_taxon' is true, then allow ordering
-# based on taxon.
+# none was selected.
 
 sub generate_order_clause {
     
@@ -1855,6 +1948,24 @@ sub generate_order_clause {
 	{
 	    push @exprs, "cc.member $dir";
 	    $tables->{cc} = 1;
+	}
+	
+	elsif ( $term eq 'plate' )
+	{
+	    my ($pgm) = $self->clean_param_list('pgm');
+	    $pgm //= 'gplates';
+	    
+	    if ( $pgm eq 'scotese' )
+	    {
+		push @exprs, "cc.plate $dir";
+		$tables->{cc} = 1;
+	    }
+	    
+	    else
+	    {
+		push @exprs, "pc.plate_no $dir";
+		$tables->{pc} = 1;
+	    }
 	}
 	
 	elsif ( $term eq 'created' )
@@ -2039,6 +2150,49 @@ sub continent_error {
     my $list = "'" . join("', '", keys %CONTINENT_NAME) . "'";
     return "bad value {value} for {param}, must be one of: $list";
 }
+
+
+# prune_field_list ( )
+# 
+# This routine is called as a hook after the request is configured.  It
+# deletes any unnecessary fields from the field list, so they will not show up
+# in fixed-format output.
+
+sub prune_field_list {
+    
+    my ($self) = @_;
+    
+    my $field_list = $self->output_field_list;
+    
+    # If the '1.1:colls:paleoloc' block is selected, then trim any unused
+    # fields.
+    
+    if ( $self->block_selected('1.1:colls:paleoloc') )
+    {
+	my (@pgmodels) = $self->clean_param_list('pgm');
+	my $model_count = scalar(@pgmodels) || 1;
+	
+	my @good_fields;
+	
+	foreach my $f ( @$field_list )
+	{
+	    if ( defined $f->{field} && $f->{field} =~ /^(?:paleolat|paleolng|paleomodel|geoplate)(\d)/ )
+	    {
+		next if $1 > $model_count;
+	    }
+	    
+	    push @good_fields, $f;
+	}
+	
+	if ( scalar(@good_fields) < scalar(@$field_list) )
+	{
+	    @$field_list = @good_fields;
+	}
+    }
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
 
 # cache_still_good ( key, created )
 # 

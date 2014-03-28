@@ -356,7 +356,7 @@ our %SELECT_KEY = (select => 1, tables => 1);
 
 our %FIELD_KEY = (dedup => 1, value => 1, always => 1, rule => 1, if_field => 1, 
 		  not_field => 1, if_block => 1, not_block => 1, if_format => 1, not_format => 1,
-		  text_join => 1, xml_join => 1, doc => 1, show_as_list => 1);
+		  text_join => 1, xml_join => 1, doc => 1, show_as_list => 1, undoc => 1);
 
 our %PROC_KEY = (set => 1, append => 1, from => 1, from_each => 1, from_record => 1,
 		 if_vocab => 1, not_vocab => 1, if_block => 1, not_block => 1,
@@ -1506,7 +1506,8 @@ sub document_response {
 	foreach my $r (@$output_list)
 	{
 	    next unless defined $r->{output};
-	    $doc_string .= $self->document_field($key, \@vocab_list, $r);
+	    $doc_string .= $self->document_field($key, \@vocab_list, $r)
+		unless $r->{undoc};
 	}
     }
     
@@ -1868,6 +1869,11 @@ sub generate_single_result {
     
     $self->process_record($request, $request->{main_record}, $proc_list);
     
+    # If there is a pre_output_hook defined for this path, call it now.
+    
+    $self->call_hook($request->{pre_output_hook}, $request, $request->{main_record})
+	if $request->{pre_output_hook};
+    
     # Generate the output corresponding to our single record.
     
     $output .= $format_class->emit_record($request, $request->{main_record}, $field_list);
@@ -1951,6 +1957,11 @@ sub generate_compound_result {
 	
 	$self->process_record($request, $record, $proc_list);
 	
+	# If there is a pre_output_hook defined for this path, call it now.
+	
+	$self->call_hook($request->{pre_output_hook}, $request, $request->{main_record})
+	    if $request->{pre_output_hook};
+	
 	# Generate the output for this record, preceded by a record separator if
 	# it is not the first record.
 	
@@ -1959,7 +1970,7 @@ sub generate_compound_result {
 	$output .= $format_class->emit_record($request, $record, $field_list);
 	
 	# Keep count of the output records, and stop if we have exceeded the
-	# limit. 
+	# limit.
 	
 	last if $request->{result_limit} ne 'all' && 
 	    ++$request->{actual_count} >= $request->{result_limit};
@@ -2064,6 +2075,11 @@ sub stream_compound_result {
 	# If there are any processing steps to do, then process this record.
 	
 	$self->process_record($request, $record, $request->{proc_list});
+	
+	# If there is a pre_output_hook defined for this path, call it now.
+	
+	$self->call_hook($request->{pre_output_hook}, $request, $request->{main_record})
+	    if $request->{pre_output_hook};
 	
 	# Generate the output for this record, preceded by a record separator
 	# since we are always past the first record once we have switched over

@@ -322,6 +322,18 @@ sub clean_param_list {
 }
 
 
+# output_field_list ( )
+# 
+# Return the output field list for this request.  This is the actual list, not
+# a copy, so it can be manipulated.
+
+sub output_field_list {
+    
+    my ($self) = @_;
+    return $self->{field_list};
+}
+
+
 # debug ( )
 # 
 # Return true if we are in debug mode.
