@@ -32,7 +32,7 @@ use DiversityTables qw(buildDiversityTables);
 
 my %options;
 
-getopts('tT:mbcKuivrydspf', \%options);
+getopts('tT:mbcKUIvrydspf', \%options);
 
 my $cmd_line_db_name = shift;
 
