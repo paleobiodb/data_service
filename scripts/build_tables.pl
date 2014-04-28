@@ -32,7 +32,7 @@ use DiversityTables qw(buildDiversityTables);
 
 my %options;
 
-getopts('tT:mbcKUIvrydspf', \%options);
+getopts('tT:mbcKUuIivrydspf', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -67,8 +67,8 @@ $DB::single = 1;
 # that were specified.
 
 my $force = $options{f};
-my $interval_data = $options{i};
-my $interval_map = $options{u};
+my $interval_data = $options{I};
+my $interval_map = $options{U};
 my $rank_map = $options{r};
 my $taxon_pics = $options{p};
 
