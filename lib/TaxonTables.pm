@@ -1537,6 +1537,10 @@ sub computeSpelling {
     $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on taxon_no = spelling_no
 			SET t.name = a.taxon_name, t.rank = a.taxon_rank, t.op_rank = a.taxon_rank");
     
+    logMessage(2, "    indexing by name");
+    
+    $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (name)");
+    
     # Then we can compute the name table, which records the best opinion
     # and spelling reason for each taxonomic name.
     
