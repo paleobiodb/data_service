@@ -19,7 +19,7 @@ use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF $DIV_SA
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
-our (@EXPORT_OK) = qw(buildOccurrenceTables buildDiversityTables);
+our (@EXPORT_OK) = qw(buildOccurrenceTables buildTaxonSummaryTable buildDiversityTables);
 		      
 our $OCC_MATRIX_WORK = "omn";
 our $OCC_EXTRA_WORK = "oen";
@@ -199,9 +199,31 @@ sub buildOccurrenceTables {
     $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (created)");
     $result = $dbh->do("ALTER TABLE $OCC_MATRIX_WORK ADD INDEX (modified)");
     
-    # We now summarize the occurrence matrix by taxon.  We use the older_seq and
-    # younger_seq interval identifications instead of interval_no, in order
-    # that we can use the min() function to find the temporal bounds for each taxon.
+    # Then activate the new tables.
+    
+    activateTables($dbh, $OCC_MATRIX_WORK => $OCC_MATRIX,
+			 $OCC_EXTRA_WORK => $OCC_EXTRA);
+    
+    # Create tables summarizing the occurrences by taxon and reference.
+    
+    buildTaxonSummaryTable($dbh, $options);
+    buildReferenceSummaryTable($dbh, $options);
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+# buildTaxonSummaryTable ( dbh, options )
+# 
+# Create a table to summarize the occurrences by taxon.
+
+sub buildTaxonSummaryTable {
+
+    my ($dbh, $options) = @_;
+    
+    my ($sql, $result, $count);
+    
+    $options ||= {};
     
     logMessage(2, "    summarizing by taxonomic concept...");
     
@@ -227,6 +249,25 @@ sub buildOccurrenceTables {
     # spans more than 30 million years, because these are not precise enough for
     # first/last appearance calculations.
     
+    # The age thresholds can be adjusted by means of the $options hash.
+    
+    logMessage(2, "      a \"precise\" age is counted as:");
+    
+    my $epoch_bound = $options->{epoch_bound} || 50;
+    my $interval_bound = $options->{interval_bound} || 30;
+    my $levels = "4,5";
+    
+    if ( $options->{accept_periods} )
+    {
+	$levels = "3,4,5";
+	logMessage(2, "      - any period (or range of periods) not greater than $epoch_bound My");
+    }
+    
+    logMessage(2,"      - any epoch/stage (or range of epochs/stages) not greater than $epoch_bound My");
+    logMessage(2,"      - any other interval range not greater than $interval_bound My");
+    logMessage(2,"      - the Quaternary period");
+    logMessage(2,"      - any Precambrian period, epoch or stage");
+    
     # This is not the approach we ultimately want to take: we will need to
     # revisit this procedure, and figure out a better way to determine
     # first/last appearance ranges (as probability curves, perhaps?)
@@ -235,29 +276,33 @@ sub buildOccurrenceTables {
 			first_early_age, first_late_age, last_early_age, last_late_age,
 			precise_age)
 		SELECT m.orig_no, count(*), 0,
-			max(ei.early_age), max(ei.late_age), min(li.early_age), min(li.late_age),
+			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
 			true
-		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 			LEFT JOIN $SCALE_MAP as es on es.interval_no = ei.interval_no
 			LEFT JOIN $SCALE_MAP as ls on ls.interval_no = li.interval_no
 		WHERE latest_ident and
-		      ((ei.early_age - li.late_age <= 30 and li.late_age >= 20) or
+		      ((ei.early_age - li.late_age <= $interval_bound and li.late_age >= 20) or
 		      (ei.early_age - li.late_age <= 20 and li.late_age < 20) or
-		      (es.scale_no = 1 and es.level in (4,5) and ei.early_age - li.late_age <= 50) or
-		      (ls.scale_no = 1 and ls.level in (4,5) and ei.early_age - li.late_age <= 50) or
+		      (es.scale_no = 1 and es.level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
+		      (ls.scale_no = 1 and ls.level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
 		      (es.scale_no = 1 and es.level = 3 and ei.early_age < 3) or
 		      (ls.scale_no = 1 and ls.level = 3 and li.late_age >= 540))
 		GROUP BY m.orig_no
 		HAVING m.orig_no > 0";
     
+    # print "SQL:\n$sql\n";
+    # exit;
+    
     $count = $dbh->do($sql);
     
-    logMessage(2, "      $count taxa");
+    logMessage(2, "      found $count taxa with precise ages");
     
     # Then we need to go back and add in the taxa that are only known from
-    # occurrences with non-precise ages (i.e. range > 40 my).
+    # occurrences with non-precise ages (those for which all of the
+    # occurrences were skipped by the above SQL statement).
     
     $sql = "	INSERT IGNORE INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
 			first_early_age, first_late_age, last_early_age, last_late_age,
@@ -265,7 +310,7 @@ sub buildOccurrenceTables {
 		SELECT m.orig_no, count(*), 0,
 			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
 			false
-		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 		WHERE latest_ident
@@ -274,21 +319,21 @@ sub buildOccurrenceTables {
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "      $count taxa without highly specific ages");
+    logMessage(2, "      found $count taxa without precise ages");
     
     # Now that we have the age bounds for the first and last occurrence, we
     # can select a candidate first and last occurrence for each taxon (from
     # among all of the occurrences in the earliest/latest time interval in
     # which that taxon is recorded).
     
-    logMessage(2, "      finding first and last occurrences...");
+    logMessage(2, "    finding first and last occurrences...");
     
-    $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
+    $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX as o using (orig_no)
 		SET s.early_occ = o.occurrence_no WHERE o.late_age >= s.first_late_age and latest_ident";
     
     $count = $dbh->do($sql);
     
-    $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX_WORK as o using (orig_no)
+    $sql = "	UPDATE $OCC_TAXON_WORK as s JOIN $OCC_MATRIX as o using (orig_no)
 		SET s.late_occ = o.occurrence_no WHERE o.early_age <= s.last_early_age and latest_ident";
     
     $count = $dbh->do($sql);
@@ -297,12 +342,32 @@ sub buildOccurrenceTables {
     # that we can quickly query for which taxa began or ended at a particular
     # time.
     
-    logMessage(2, "      indexing the summary table...");
+    logMessage(2, "    indexing the summary table...");
     
     $dbh->do("ALTER TABLE $OCC_TAXON_WORK ADD INDEX (first_early_age)");
     $dbh->do("ALTER TABLE $OCC_TAXON_WORK ADD INDEX (first_late_age)");
     $dbh->do("ALTER TABLE $OCC_TAXON_WORK ADD INDEX (last_early_age)");
     $dbh->do("ALTER TABLE $OCC_TAXON_WORK ADD INDEX (last_late_age)");
+    
+    # Now swap in the new table.
+    
+    activateTables($dbh, $OCC_TAXON_WORK => $OCC_TAXON);
+    
+    my $a = 1;	# we can stop here when debugging
+}
+
+
+# buildReferenceSummaryTable ( dbh, options )
+# 
+# Create a table summarizing the occurences by reference.
+
+sub buildReferenceSummaryTable {
+    
+    my ($dbh, $options) = @_;
+    
+    my ($sql, $result, $count);
+    
+    $options ||= {};
     
     # We now summarize the occurrence matrix by reference_no.  For each
     # reference, we record the range of time periods it covers, plus the
@@ -322,7 +387,7 @@ sub buildOccurrenceTables {
 			early_age, late_age)
 		SELECT m.reference_no, count(*), count(distinct collection_no),
 			max(ei.early_age), min(li.late_age)
-		FROM $OCC_MATRIX_WORK as m JOIN $COLL_MATRIX as c using (collection_no)
+		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 		WHERE latest_ident
@@ -342,12 +407,9 @@ sub buildOccurrenceTables {
     $result = $dbh->do("ALTER TABLE $OCC_REF_WORK ADD INDEX (early_age)");
     $result = $dbh->do("ALTER TABLE $OCC_REF_WORK ADD INDEX (late_age)");
     
-    # Now swap in the new tables.
+    # Now swap in the new table.
     
-    activateTables($dbh, $OCC_MATRIX_WORK => $OCC_MATRIX,
-			 $OCC_EXTRA_WORK => $OCC_EXTRA,
-		         $OCC_TAXON_WORK => $OCC_TAXON,
-			 $OCC_REF_WORK => $OCC_REF);
+    activateTables($dbh, $OCC_REF_WORK => $OCC_REF);
     
     my $a = 1;		# we can stop here when debugging.
 }

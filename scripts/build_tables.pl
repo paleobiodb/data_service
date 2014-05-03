@@ -18,9 +18,9 @@ use ConsoleLog qw(initMessages
 use IntervalTables qw(loadIntervalData
 		      buildIntervalMap);
 use CollectionTables qw(buildCollectionTables buildStrataTables);
-use OccurrenceTables qw(buildOccurrenceTables);
+use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable);
 use TaxonTables qw(populateOrig
-		   buildTaxonTables
+		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
 use TaxonPics qw(getPics);
 use Taxonomy;
@@ -32,7 +32,7 @@ use DiversityTables qw(buildDiversityTables);
 
 my %options;
 
-getopts('tT:mbcKUuIivrydspf', \%options);
+getopts('tT:OmR:bcKUuIivrydspf', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -74,6 +74,7 @@ my $taxon_pics = $options{p};
 
 my $collection_tables = $options{c};
 my $occurrence_tables = $options{m};
+my $occurrence_reso = $options{R};
 
 my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
@@ -81,7 +82,8 @@ my $old_taxon_tables = $options{y};
 my $strata_tables = $options{s};
 
 my $options = { taxon_steps => $options{T},
-		colls_cluster => $options{k} };
+		colls_cluster => $options{k},
+		no_rebuild_cache => $options{O} };
 
 
 # The option -i causes a forced reload of the interval data from the source
@@ -121,13 +123,44 @@ if ( $collection_tables )
     buildCollectionTables($dbh, $bins, $options);
 }
 
-# The option -m causes the occurrence tables to be (re)computed.
+# The option -m causes the occurrence tables to be (re)computed.  -R also
+# triggers this.
+
+my ($occ_options);
+
+if ( $occurrence_reso )
+{
+    $occurrence_reso //= '';
+    
+    if ( $occurrence_reso =~ qr{p}x )
+    {
+	$occ_options->{accept_periods} = 1;
+    }
+    
+    if ( $occurrence_reso =~ qr{^[^/\d]*(\d+)}x )
+    {
+	$occ_options->{epoch_bound} = $1;
+    }
+    
+    if ( $occurrence_reso =~ qr{/(\d+)}x )
+    {
+	$occ_options->{interval_bound} = $1;
+    }
+}
 
 if ( $occurrence_tables )
 {
     populateOrig($dbh);
-    buildOccurrenceTables($dbh, $options);
+    buildOccurrenceTables($dbh, $occ_options);
 }
+
+elsif ( $occurrence_reso )
+{
+    populateOrig($dbh);
+    buildTaxonSummaryTable($dbh, $occ_options);
+    rebuildAttrsTable($dbh, 'taxon_trees');
+}
+
 
 # The option -t or -T causes the taxonomy tables to be (re)computed.  If -T
 # was specified, its value should be a sequence of steps (a-h) to be carried
