@@ -2524,7 +2524,8 @@ sub computeTreeSequence {
     my $fetch_hierarchy = $dbh->prepare("
 	SELECT t.orig_no, t.rank, c.parent_no,
 	       if(c.status in ($SYNONYM_STATUS), 1, 0) as is_junior
-	FROM $TREE_WORK as t JOIN $CLASSIFY_AUX as c using (orig_no)");
+	FROM $TREE_WORK as t JOIN $CLASSIFY_AUX as c using (orig_no)
+	ORDER BY t.name");
     
     $fetch_hierarchy->execute();
     
@@ -3161,6 +3162,12 @@ sub computeIntermediates {
 				not_order smallint,
 				order_yr smallint,
 				primary key (orig_no)) ENGINE=MYISAM");
+    
+    # As an atrocious hack, I am forcing 'Mammalia' to be a class.
+    
+    $SQL_STRING = "UPDATE $TREE_WORK SET rank = 17, op_rank = 17 WHERE name = 'Mammalia' LIMIT 1";
+    
+    $result = $dbh->do($SQL_STRING);
     
     # We first compute an auxiliary table to help in the computation.  We
     # insert a row for each non-junior taxonomic concept above genus level,

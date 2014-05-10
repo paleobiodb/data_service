@@ -3361,6 +3361,24 @@ sub getTaxa {
 	    $order_expr = "ORDER BY v.taxon_size $direction";
 	}
 	
+	elsif ( $options->{order} =~ /^extant_size/ )
+	{
+	    $extra_tables->{v} = 1;
+	    $order_expr = "ORDER BY v.extant_size $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^extant/ )
+	{
+	    $extra_tables->{v} = 1;
+	    $order_expr = "ORDER BY v.is_extant $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^n_occs/ )
+	{
+	    $extra_tables->{v} = 1;
+	    $order_expr = "ORDER BY v.n_occs $direction";
+	}
+	
 	elsif ( $options->{order} =~ /^name/ )
 	{
 	    $order_expr = "ORDER BY a.taxon_name $direction";
@@ -3369,6 +3387,39 @@ sub getTaxa {
 	elsif ( $options->{order} =~ /^lft/ )
 	{
 	    $order_expr = "ORDER BY t.lft $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^firstapp/ )
+	{
+	    $extra_tables->{v} = 1;
+	    $order_expr = "ORDER BY v.first_early_age $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^lastapp/ )
+	{
+	    $extra_tables->{v} = 1;
+	    $order_expr = "ORDER BY v.last_late_age $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^agespan/ )
+	{
+	    $extra_tables->{v} = 1;
+	    $order_expr = "ORDER BY (v.first_early_age - v.last_late_age) $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^created/ )
+	{
+	    $order_expr = "ORDER BY a.created $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^created/ )
+	{
+	    $order_expr = "ORDER BY a.modified $direction";
+	}
+	
+	elsif ( $options->{order} =~ /^pubyr/ )
+	{
+	    $order_expr = "ORDER BY a.pubyr $direction";
 	}
 	
 	else

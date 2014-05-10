@@ -10,7 +10,7 @@ The following URL paths are available:
 
 =for pp_table_header Class* | Documentation | Description
 
-=item Single names | L</data1.1/taxa/single|/data1.1/taxa/single_doc.html>
+=item Single taxon | L</data1.1/taxa/single|/data1.1/taxa/single_doc.html>
 
 Returns information about a single taxonomic name, identified either by name or by identifier.  Examples:
 
@@ -26,9 +26,9 @@ L</data1.1/taxa/single.txt?name=Dascillidae>
 
 =back
 
-=item Lists of names | L</data1.1/taxa/list|/data1.1/taxa/list_doc.html>
+=item Lists of taxa | L</data1.1/taxa/list|/data1.1/taxa/list_doc.html>
 
-Returns information about multiple taxonomic names.  This function can be used
+Returns information about multiple taxonomic names.  This path could be used
 to query for all of the children or parents of a given taxon, among other operations.
 Examples:
 
@@ -41,6 +41,19 @@ L</data1.1/taxa/list.txt?id=69296&rel=all_children&show=ref>
 =item *
 
 L</data1.1/taxa/list.json?name=Dascillidae&rel=all_parents>
+
+=back
+
+=item Taxa from fossil occurrences | L</data1.1/occs/taxa|/data1.1/occs/taxa_doc.html>
+
+Returns information about the taxonomic identifications from a specified set of fossil occurrences.  This
+path could be used, for example, to get a list of the known genera of rodents from the Miocene in South America.
+
+=over 4
+
+=item *
+
+L</data1.1/occs/taxa.json?continent=SOA&interval=Miocene&base_name=Rodentia&rank=genus>
 
 =back
 
@@ -62,7 +75,7 @@ L</data1.1/taxa/auto.json?name=cani&limit=10>
 
 =item Phylopics | L</data1.1/taxa/icon> L</data1.1/taxa/thumb>
 
-Returns an image to represent the taxon.  These images are sourced from L<phylopic.org>, 
+Returns an image to represent the specified taxon.  These images are sourced from L<phylopic.org>, 
 and come in two versions: a 64x64 thumbnail (black silhouette), and a 32x32 icon (blue silhouette).
 For example:
 

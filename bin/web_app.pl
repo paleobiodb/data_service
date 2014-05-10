@@ -15,31 +15,53 @@ use Template;
 use Try::Tiny;
 use Scalar::Util qw(blessed);
 
-use Web::DataService qw( :validators );
+use Web::DataService;
 
-use CommonData;
-use ConfigData;
-use IntervalData;
-use TaxonData;
-use CollectionData;
-use CollectionSummary;
-use OccurrenceData;
-use ReferenceData;
-use PersonData;
+require Data_1_1::Main;
+require Data_1_2::Main;
 
 
-# Start by instantiating the data service.
-# ========================================
+# We begin by instantiating a data service object, and then specify the
+# subservices (i.e. data service versions) that we will be providing.  The
+# subservices themselves are be defined in the following files:
+# 
+#     Data_1_1/Main.pm
+#     Data_1_2/Main.pm
+#     etc.
 
-# Many of the configuration parameters are set by entries in config.yml.
+my $ds = Web::DataService->new(
+    { name => 'data',
+      title => 'PaleobioDB Data',
+      path_prefix => 'data',
+      doc_path => 'doc/root' });
 
-my $ds = Web::DataService->new({ name => 'Paleobiodb Data',
-				 path_prefix => '/data' });
+$ds->define_subservice(
+    { name => 'data1.2',
+      label => '1.1',
+      path_prefix => 'data1.2',
+      doc_path => 'doc/1.2',
+      package => 'Data_1_2' },
+	"This is the development version of the data service.  New features are introduced into",
+	"this version, and the interface may change unpredictably.",
+    { name => 'data1.1',
+      label => '1.1',
+      path_prefix => 'data1.1',
+      doc_path => 'doc/1.1',
+      package => 'Data_1_1' },
+	"This is the current stable version of the data service.  The interface is guaranteed",
+        "not to change, except possibly for extremely important bug fixes.  In such a case,",
+	"every effort would be made not to change anything that would break any existing applications.",
+    { name => 'data1.0',
+      label => '1.0',
+      path => 'data1.0' },
+      doc_path => 'doc/1.0',
+	"I<This version is obsolete, and has been discontinued.>");
 
-# If we were called from the command line with 'GET' as the first argument,
-# then assume that we have been called for debugging purposes.
 
-if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
+# If we were called from the command line with 'GET' or 'SHOW' as the first
+# argument, then assume that we have been called for debugging purposes.
+
+if ( defined $ARGV[0] and ( lc $ARGV[0] eq 'get' or lc $ARGV[0] eq 'show' ) )
 {
     set apphandler => 'Debug';
     set logger => 'console';
@@ -49,383 +71,81 @@ if ( defined $ARGV[0] and $ARGV[0] eq 'GET' )
     $ds->{ONE_REQUEST} = 1;
 }
 
-# Then call methods from the DataService class to
-# define the shape and behavior of the data service.
-# ==================================================
 
-# We start by defining the vocabularies that are available for describing the
-# data returned by this service.
+# Then, we set things up so that a request on any path starting with "/data/" will
+# return a documentation page listing the available versions.
 
-$ds->define_vocab(
-    { name => 'pbdb', title => 'PaleoDB field names',
-      use_field_names => 1 },
-        "The original Paleobiology Database field names, augmented by some",
-	"additional new fields.  This vocabulary is the",
-	"default for text format responses (.tsv, .csv, .txt).",
-    { name => 'com', title => 'Compact field names' },
-        "3-character abbreviated field names.",
-        "This is the default for JSON responses.",
-    { name => 'dwc', title => 'Darwin Core', disabled => 1 },
-        "Darwin Core element names.  This is the default for XML responses.",
-        "Note that many fields are not represented in this vocabulary,",
-        "because of limitations of the Darwin Core element set.");
-
-
-# Then we define the formats in which data can be returned.
-
-$ds->define_format(
-    { name => 'json', content_type => 'application/json',
-      doc_path => '1.1/formats/json', title => 'JSON',
-      default_vocab => 'com' },
-	"The JSON format is intended primarily to support client applications,",
-	"including the PBDB Navigator.  Response fields are named using compact",
-	"3-character field names.",
-    { name => 'xml', disabled => 1, content_type => 'text/xml', title => 'XML',
-      doc_path => '1.1/xml',
-      default_vocab => 'dwc' },
-	"The XML format is intended primarily to support data interchange with",
-	"other databases, using the Darwin Core element set.",
-    { name => 'txt', content_type => 'text/plain',
-      doc_path => '1.1/formats/text', title => 'comma-separated text',
-      default_vocab => 'pbdb' },
-        "The text formats (txt, tsv, csv) are intended primarily for researchers",
-	"downloading data from the database.  These downloads can easily be",
-	"loaded into spreadsheets or other analysis tools.  The field names are",
-	"taken from the PBDB Classic interface, for compatibility with existing",
-	"tools and analytical procedures.",
-    { name => 'csv', content_type => 'text/csv',
-      disposition => 'attachment',
-      doc_path => '1.1/formats/text', title => 'comma-separated text',
-      default_vocab => 'pbdb' },
-        "The text formats (txt, tsv, csv) are intended primarily for researchers",
-	"downloading data from the database.  These downloads can easily be",
-	"loaded into spreadsheets or other analysis tools.  The field names are",
-	"taken from the PBDB Classic interface, for compatibility with existing",
-	"tools and analytical procedures.",
-    { name => 'tsv', content_type => 'text/tab-separated-values', 
-      disposition => 'attachment',
-      doc_path => '1.1/formats/text', title => 'tab-separated text',
-      default_vocab => 'pbdb' },
-        "The text formats (txt, tsv, csv) are intended primarily for researchers",
-	"downloading data from the database.  These downloads can easily be",
-	"loaded into spreadsheets or other analysis tools.  The field names are",
-	"taken from the PBDB Classic interface, for compatibility with existing",
-	"tools and analytical procedures.",
-    { name => 'ris', content_type => 'application/x-research-info-systems',
-      doc_path => '1.1/formats/ris', title => 'RIS', disposition => 'attachment',
-      class => 'RISFormat'},
-	"The L<RIS format|http://en.wikipedia.org/wiki/RIS_(file_format)> is a",
-	"common format for bibliographic references.",
-    { name => 'png', content_type => 'image/png', class => '',
-      doc_path => '1.1/formats/png', title => 'PNG' },
-	"The PNG suffix is used with a few URL paths to fetch images stored",
-	"in the database.");
-
-
-# Define caches (CHI namespaces) that will be used to satisfy queries whenever possible.
-
-$ds->define_cache(
-    { name => '1.1:colls', check_entry => \&CollectionData::cache_still_good });
-
-
-# Then define the URL paths that our data service accepts.  We start with the
-# root of the hierarchy, which is a protocol version number.  The following
-# calls define version 1.1 of this data servive.
-
-$ds->define_path({ path => '1.1', 
-		   version => '1.1',
-		   subvers => 'b3',
+$ds->define_path({ path => '/', 
 		   public_access => 1,
-		   output_param => 'show',
-		   vocab_param => 'vocab',
-		   limit_param => 'limit',
-		   count_param => 'count',
-		   uses_dbh => 1,
-		   default_limit => 500,
-		   allow_format => 'json,csv,tsv,txt',
-		   allow_vocab => 'pbdb,com',
+		   collapse_path => 'version',
 		   doc_title => 'Documentation' });
 
-# Configuration. This path is used by clients who need to configure themselves
-# based on parameters supplied by the data service.
+# Any URL starting with /data/css indicates a common stylesheet, and the same for
+# /data1.1/css and so on.
 
-$ds->define_path({ path => '1.1/config',
-		   class => 'ConfigData',
-		   method => 'get',
-		   output => '1.1:config:get_map',
-		   doc_title => 'Client configuration' });
+$ds->define_path({ path => 'css',
+		   send_files => 1,
+		   file_path => 'public/css' });
 
-# Occurrences.  These paths are used to fetch information about fossil
-# occurrences known to the database.
 
-$ds->define_path({ path => '1.1/occs',
-		   class => 'OccurrenceData',
-		   allow_format => '+xml',
-		   doc_title => 'Fossil occurrences' });
+# Next we configure a set of Dancer routes to recognize URL paths.  These should be
+# rolled into DataService.pm at some point, but I do not want to do that until I get a
+# better idea of how flexible they will need to be.  For now, people should be able to
+# customize them.
 
-$ds->define_path({ path => '1.1/occs/single',
-		   method => 'get',
-		   post_configure_hook => 'prune_field_list',
-		   output => '1.1:occs:basic_map' });
+# ============
 
-$ds->define_path({ path => '1.1/occs/list',
-		   method => 'list',
-		   post_configure_hook => 'prune_field_list',
-		   output => '1.1:occs:basic_map' });
+# Any URL ending in 'index.html', 'index.pod', '_doc.html', '_doc.pod' is interpreted as
+# a request for documentation.
 
-$ds->define_path({ path => '1.1/occs/refs',
-		   method => 'refs',
-		   allow_format => '+ris,-xml',
-	           output => '1.1:refs:output_map' });
+get qr{
+	^ / ?				# ignore initial '/'
+        ( (?> (?: [^/]+ / )* ) )	# capture the path 
+	( index | [^/]+ _doc )		# followed by either 'index' or '*_doc'
+	[.]				# followed by a .
+	( html | pod ) $		# and ending with either 'html' or 'pod'
+  }xs => 
 
-# Collections.  These paths are used to fetch information about fossil
-# collections known to the database.
-
-$ds->define_path({ path => '1.1/colls',
-		   class => 'CollectionData',
-		   use_cache => '1.1:colls',
-		   doc_title => 'Fossil collections' });
-
-$ds->define_path({ path => '1.1/colls/single',
-		   method => 'get',
-		   post_configure_hook => 'prune_field_list',
-		   output => '1.1:colls:basic_map'});
-		 
-$ds->define_path({ path => '1.1/colls/list',
-		   method => 'list',
-		   post_configure_hook => 'prune_field_list',
-		   output => '1.1:colls:basic_map'});
-
-$ds->define_path({ path => '1.1/colls/summary',
-		   class => 'CollectionSummary',
-		   method => 'summary',
-		   output => '1.1:colls:summary_map'});
-
-$ds->define_path({ path => '1.1/colls/refs',
-		   method => 'refs',
-		   allow_format => '+ris',
-	           output => '1.1:refs:output_map' });
-
-# Strata.  These paths are used to fetch information abot geological strata
-# known to the database.
-
-$ds->define_path({ path => '1.1/strata',
-		   class => 'CollectionData',
-		   doc_title => 'Geological strata' });
-
-$ds->define_path({ path => '1.1/strata/list',
-		   method => 'strata',
-		   output => '1.1:colls:strata' });
-
-$ds->define_path({ path => '1.1/strata/auto',
-		   method => 'strata',
-		   arg => 'auto',
-		   output => '1.1:colls:strata' });
-
-# Taxa.  These paths are used to fetch information about biological taxa known
-# to the database.
-
-$ds->define_path({ path => '1.1/taxa',
-		   class => 'TaxonData',
-		   output => '1.1:taxa:output_map' });
-
-$ds->define_path({ path => '1.1/taxa/single',
-		   allow_format => '+xml',
-		   allow_vocab => '+dwc',
-		   method => 'get' });
-
-$ds->define_path({ path => '1.1/taxa/list',
-		   allow_format => '+xml',
-		   allow_vocab => '+dwc',
-		   method => 'list' });
-
-$ds->define_path({ path => '1.1/taxa/refs',
-		   output => '1.1:refs:output_map',
-		   method => 'list',
-		   arg => 'refs' });
-
-$ds->define_path({ path => '1.1/taxa/match',
-		   method => 'match' });
-
-$ds->define_path({ path => '1.1/taxa/auto',
-		   method => 'auto', 
-		   allow_format => 'json',
-		   output => '1.1:taxa:auto_map' });
-
-$ds->define_path({ path => '1.1/taxa/thumb',
-		   allow_format => '+png',
-		   output => '1.1:taxa:imagedata',
-		   method => 'get_image',
-		   arg => 'thumb' });
-
-$ds->define_path({ path => '1.1/taxa/icon',
-		   allow_format => '+png',
-		   output => '1.1:taxa:imagedata',
-		   method => 'get_image',
-		   arg => 'icon' });
-
-$ds->define_path({ path => '1.1/taxa/list_images',
-		   output => '1.1:taxa:imagedata',
-		   method => 'list_images' });
-
-
-# Time scales and intervals.  These paths are used to fetch information about
-# geological time scales and time intervals known to the database.
-
-$ds->define_path({ path => '1.1/intervals',
-		   class => 'IntervalData',
-		   output => '1.1:intervals:basic',
-		   doc_title => 'Geological Time Scales and Time Intervals' });
-
-$ds->define_path({ path => '1.1/intervals/single',
-		   method => 'get' });
-
-$ds->define_path({ path => '1.1/intervals/list',
-		   method => 'list' });
-
-$ds->define_path({ path => '1.1/scales',
-		   class => 'IntervalData',
-		   output => '1.1:scales:basic',
-		   doc_title => 'Geological Time Scales' });
-
-$ds->define_path({ path => '1.1/scales/single',
-		   method => 'list_scales' });
-
-$ds->define_path({ path => '1.1/scales/list',
-		   method => 'list_scales' });
-
-
-
-# People.  These paths are used to fetch the names of database contributors.
-
-$ds->define_path({ path => '1.1/people',
-		   class => 'PersonData',
-		   output => '1.1:people:basic',
-		   doc_title => 'Database contributors' });
-
-$ds->define_path({ path => '1.1/people/single', 
-		   method => 'get' });
-
-$ds->define_path({ path => '1.1/people/list',
-		   method => 'list' });
-
-# References
-
-$ds->define_path({ path => '1.1/refs',
- 		   class => 'ReferenceData',
-		   allow_format => '+ris',
- 		   output => '1.1:refs:output_map'});
-
-$ds->define_path({ path => '1.1/refs/single',
- 		   method => 'get' });
-
-$ds->define_path({ path => '1.1/refs/list',
-		   method => 'list' });
-
-# The following paths are used only for documentation
-
-$ds->define_path({ path => '1.1/common',
-		   ruleset => '1.1:common_params',
-		   doc_title => 'common parameters' });
-
-$ds->define_path({ path => '1.1/datetime',
-		   doc_title => 'Selecting records by date and time' });
-
-$ds->define_path({ path => '1.1/formats',
-		   doc_title => 'Formats and Vocabularies' });
-
-$ds->define_path({ path => '1.1/formats/json',
-		   doc_title => 'JSON format' });
-
-$ds->define_path({ path => '1.1/formats/xml',
-		   doc_title => 'XML format' });
-
-$ds->define_path({ path => '1.1/formats/text',
-		   doc_title => 'Text formats' });
-
-$ds->define_path({ path => '1.1/formats/ris',
-		   doc_title => "RIS format" });
-
-$ds->define_path({ path => '1.1/formats/png',
-		   doc_title => 'PNG format' });
-
-# Finally, the list of data service versions
-
-$ds->define_path({ path => '1.0',
-		   version => '1.0',
-		   subvers => 'a1',
-		   doc_title => 'Documentation' });
-
-$ds->define_path({ path => 'versions', 
-		   version => '',
-		   public_access => 1,
-		   doc_title => 'Versions' });
-
-
-# Now we configure a set of Dancer routes to serve
-# the data, documentation, stylesheets, etc.
-# ================================================
-
-my ($PREFIX) = $ds->get_path_prefix;
-
-# Any URL starting with /data/css indicates a stylesheet
-
-get qr{ ^ $PREFIX [\d.]* /css/(.*) }xs => sub {
-    
-    $DB::single = 1;
-    my ($filename) = splat;
-    send_file("css/$filename");
-};
-
-
-# Any other URL starting with /data/... or just /data should display the list of
-# available versions.
-
-get qr{ ^ $PREFIX ( / | $ ) }xs => sub {
-    
-    my ($path) = splat;
-    
-    $DB::single = 1;
-    my $format = 'pod' if $path =~ /\.pod$/;
-    
-    return $ds->document_path("/versions", $format);
-
-};
-
-
-# Any URL starting with /data<version> and ending in either .html, .pod, or no
-# suffix at all is interpreted as a request for documentation.  If the given
-# path does not correspond to any known documentation, we provide a page
-# explaining what went wrong and providing the proper URLs.
-
-get qr{ ^ $PREFIX ( \d+ \. \d+ / (?: [^/.]* / )* )
-	          (?: ( index | \w+_doc ) \. ( html | pod ) )? $ }xs => sub {
-	    
+sub {
+	
     my ($path, $last, $suffix) = splat;
     
     $DB::single = 1;
-    $path .= $last unless !defined $last || $last eq 'index';
-    $path =~ s{/$}{};
-    $path =~ s{_doc}{};
     
-    return $ds->document_path($path, $suffix);
+    # If the last component ends in _doc, append its initial string to the path.
+    
+    $path //= '';
+    $path .= $1 if $last =~ qr{ (.*) _doc $ }xs;
+    
+    # Figure out which subservice (if any) should be handling this.
+    
+    my ($ss, $sp) = $ds->select_service($path);
+    
+    # Return the documentation corresponding this path if any is available,
+    # otherwise indicate a bad request.
+    
+    if ( $ss->can_document_path($sp) )
+    {
+	return $ss->document_path($sp, $suffix);
+    }
+    
+    else
+    {
+	$ss->error_result("", "html", "404 The resource you requested was not found.");
+    }
 };
 
 
-get qr{ ^ $PREFIX ( \d+ \. \d+ (?: / [^/.]+ )* $ ) }xs => sub {
-    
-    my ($path) = splat;
-    
-    $DB::single = 1;
-    
-    return $ds->document_path($path, 'html');
-};
+# Any other URL that ends in a filetype suffix (including .html or .pod) is interpreted
+# as a request to execute an operation, with the suffix specifying the result format.
 
+get qr{ 
+	^ / ?				# ignore initial '/'
+        ( (?> (?: [^/]+ / )* ) [^/.]+ )	# capture the path, including the last component
+	[.] ( [^/.]+ ) $		# capture the suffix
+  }xs =>
 
-# Any path that ends in a suffix other than .html or .pod is a request for an
-# operation.
-
-get qr{ ^ $PREFIX ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
+sub {
     
     my ($path, $suffix) = splat;
     
@@ -440,11 +160,45 @@ get qr{ ^ $PREFIX ( \d+ \. \d+ / (?: [^/.]* / )* \w+ ) \. (\w+) }xs => sub {
 	$path =~ s{\d+$}{single};
     }
     
+    # Figure out which subservice (if any) should be handling this.
+    
+    my ($ss, $sp) = $ds->select_service($path);
+    
     # Execute the path if allowed, otherwise indicate a bad request.
     
-    if ( $ds->can_execute_path($path) )
+    if ( $ss->can_execute_path($sp) )
     {
-	return $ds->execute_path($path, $suffix);
+	return $ss->execute_path($sp, $suffix);
+    }
+    
+    else
+    {
+	$ss->error_result("", "html", "404 The resource you requested was not found.");
+    }
+};
+
+
+# Any URL which does not end in a filetype suffix is interpreted as a request for
+# documentation.
+
+get qr{ 
+	^ / ?				    # ignore initial '/'
+        ( (?> (?: [^/]+ / )* [^/.]* ) )	$   # capture the path with optional last component
+  }xs =>
+
+sub {
+    
+    my ($path) = splat;
+    
+    $DB::single = 1;
+    
+    # Figure out which subservice (if any) should be handling this.
+    
+    my ($ss, $sp) = $ds->select_service($path);
+    
+    if ( $ds->can_document_path($path) )
+    {
+	return $ds->document_path($path, 'html');
     }
     
     else

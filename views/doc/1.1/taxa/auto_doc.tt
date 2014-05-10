@@ -6,6 +6,8 @@ This can be used to implement autocompletion of taxonomic names in a client appl
 typed as the C<name> parameter, and select how many results you wish to display using C<limit>.  The results are sorted
 by number of occurrences in the database, with the most prevalent at the top.
 
+Note that C<name> must have at least 3 characters, or no results will be returned.
+
 <% PROCESS params %>
 
 <% PROCESS response %>

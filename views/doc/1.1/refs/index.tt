@@ -37,7 +37,7 @@ L</data1.1/refs/list.txt?author="Sepkoski">
 
 =back
 
-=item L<References for occurrences|/data1.1/occs/refs> | L</data1.1/occs/refs>
+=item L<References by occurrence|/data1.1/occs/refs> | L</data1.1/occs/refs>
 
 Returns information about the references from which the selected occurrence
 data were entered.

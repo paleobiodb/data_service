@@ -59,7 +59,7 @@ BEGIN {
 # Create a default instance, for when this module is used in a
 # non-object-oriented fashion.
 
-my $DEFAULT_INSTANCE = __PACKAGE__->new({ name => 'Default' });
+my $DEFAULT_INSTANCE = __PACKAGE__->new({ name => 'data_service' });
 
 my $DEFAULT_COUNT = 0;
 
@@ -71,74 +71,200 @@ our @HTTP_METHOD_LIST = ('GET', 'HEAD', 'POST', 'PUT', 'DELETE');
 
 # new ( class, attrs )
 # 
-# Create a new data service instance.  If the second argument is provided, it
-# must be a hash ref specifying options for the service as a whole.
+# Create a new data service instance.  The second argument must be a hash of
+# attribute values.  It may contain any of the attributes specified in
+# %DS_DEF, and must always contain 'name'.  Any values specified in the Dancer
+# configuration file are applied as well, unless they are overridden by the
+# attributes given here.  Configuration values can appear either as
+# sub-entries under the data service name, or as top-level entries, with
+# precedence given to the former.
+# 
+# If the attribute 'parent' is given, its value must be an existing data
+# service object.  The new object then represents a subservice of the parent.
+
+
+my (%DS_DEF) = ( 'name' => 'single',
+		 'version' => 'single',
+		 'label' => 'single',
+		 'title' => 'single',
+		 'parent' => 'single',
+		 'doc' => 'single',
+		 'package' => 'single',
+		 'path_prefix' => 'single',
+		 'public_access' => 'single',
+		 'default_limit' => 'single',
+		 'streaming_threshold' => 'single',
+		 'allow_unrecognized' => 'single',
+		 'doc_path' => 'single' );
+
+my (%DS_DEFAULT) = ( 'default_limit' => 500, 
+		     'streaming_threshold' => 20480 );
 
 sub new {
     
-    my ($class, $options) = @_;
+    my ($class, $attrs) = @_;
     
-    # Determine option values.  Start from the Dancer configuration file.
-    
+    my $instance = {};
     my $config = Dancer::config;
     
-    my $path_prefix = $options->{path_prefix} || '/';
-    my $public_access = $options->{public_access} || $config->{public_access};
-    my $default_limit = $options->{default_limit} || $config->{default_limit} || 500;
-    my $streaming_threshold = $options->{streaming_threshold} || $config->{streaming_threshold} || 20480;
-    my $name = $options->{name} || $config->{name};
+    croak "Each data service must be given a set of attributes"
+	unless ref $attrs && reftype $attrs eq 'HASH';
     
-    unless ( $name )
+    # Ensure that we have a non-empty name.
+    
+    croak "Each data service must be given a 'name' attribute"
+	unless defined $attrs->{name} && $attrs->{name} ne '';
+    
+    my $name = $attrs->{name};
+    my $name_config = $config->{$name};
+    $name_config = {} unless ref $name_config && reftype $name_config eq 'HASH';
+    
+    # If 'parent' is given, ensure that it is another DataService instance.
+    
+    if ( defined $attrs->{parent} )
     {
-	$DEFAULT_COUNT++;
-	$name = 'Data Service' . ( $DEFAULT_COUNT > 1 ? " $DEFAULT_COUNT" : "" );
+	croak "The attribute 'parent', if given, must be another Web::DataService object"
+	    unless ref $attrs->{parent} eq 'Web::DataService';
+    }
+    
+    # Determine attribute values.  Any values found in the Dancer configuration
+    # file serve as defaults, and %DS_DEFAULT values are used if nothing else
+    # is specified.
+    
+    foreach my $key ( keys %DS_DEF )
+    {
+	my $value = $attrs->{$key};
+	$value //= $name_config->{$key} // $config->{$key} // $DS_DEFAULT{$key}
+	    unless $key eq 'parent';
+	
+	$instance->{$key} = $value if defined $value;
+    }
+    
+    # The label and title default to the name, if not otherwise specified.
+    
+    $instance->{label} //= $instance->{name};
+    $instance->{title} //= $instance->{name};
+    
+    # Create a pattern for recognizing paths, unless one has been specifically provided.
+    
+    if ( $attrs->{path_prefix} && ! $instance->{path_re} )
+    {
+	$instance->{path_re} = qr{ ^ [/]? $attrs->{path_prefix} (?: [/] (.*) | $ ) }xs;
     }
     
     # Create a new HTTP::Validate object so that we can do parameter
     # validations.
     
-    my $validator = HTTP::Validate->new();
+    $instance->{validator} = HTTP::Validate->new();
     
-    $validator->validation_settings(allow_unrecognized => 1) if $options->{allow_unrecognized};
+    $instance->{validator}->validation_settings(allow_unrecognized => 1)
+	if $instance->{allow_unrecognized};
     
-    # Create a new DataService object, and return it:
+    # Create a default vocabulary, to be used in case no others are defined.
     
-    my $instance = {
-		    name => $name,
-		    path_prefix => $path_prefix,
-		    validator => $validator,
-		    public_access => $public_access,
-		    default_limit => $default_limit,
-		    # streaming_available => server_supports_streaming,
-		    streaming_threshold => $streaming_threshold,
-		    path_attrs => {},
-		    vocab => { 'default' => 
-			       { name => 'default', use_field_names => 1, _default => 1,
-				 doc => "The default vocabulary consists of the underlying field names" } },
-		    vocab_list => [ 'default' ],
-		    format => {},
-		    format_list => [],
-		   };
+    $instance->{vocab} = { 'default' => 
+			   { name => 'default', use_field_names => 1, _default => 1,
+			     doc => "The default vocabulary consists of the underlying field names" } };
+    
+    $instance->{vocab_list} = [ 'default' ];
+    
+    # Add a few other necessary fields.
+    
+    $instance->{path_attrs} = {};
+    $instance->{format} = {};
+    $instance->{format_list} = [];
+    $instance->{subservice} = {};
+    $instance->{subservice_list} = [];
     
     $instance->{DEBUG} = 1 if $config->{ds_debug};
     
-    # Return the new instance
+    # Bless the new instance, and link it in to its parent if necessary.
     
     bless $instance, $class;
+    
+    if ( $instance->{parent} )
+    {
+	my $parent = $instance->{parent};
+	
+	$parent->{subservice}{$name} = $instance;
+	push @{$parent->{subservice_list}}, $instance;
+    }
+    
+    # Initialize the service.
+    
+    if ( $instance->{package} )
+    {
+	my $class = $instance->{package};
+	$class->initialize($instance);
+    }
+    
+    # Return the new instance.
+    
     return $instance;
 }
 
 
 # accessor methods for the various attributes:
 
-sub get_path_prefix {
-    
-    return $_[0]->{path_prefix};
-}
-
 sub get_attr {
     
     return $_[0]->{$_[1]};
+}
+
+
+# set_version ( v )
+# 
+# Set the 'version' attribute of this data service
+
+sub set_version {
+    
+    my ($self, $v) = @_;
+    
+    $self->{version} = $v;
+    return $self;
+}
+
+
+# define_subservice ( attrs... )
+# 
+# Define one or more subservices of this data service.  This routine cannot be
+# used except as an object method.
+
+sub define_subservice { 
+
+    my ($self) = shift;
+    
+    my ($last_node);
+    
+    # We go through the arguments one by one.  Hashrefs define new
+    # subservices, while strings add to the documentation of the subservice
+    # whose definition they follow.
+    
+    foreach my $item (@_)
+    {
+	# A hashref defines a new subservice.
+	
+	if ( ref $item eq 'HASH' )
+	{
+	    $item->{parent} = $self;
+	    
+	    $last_node = Web::DataService->new($item)
+		unless defined $item->{disabled};
+	}
+	
+	elsif ( not ref $item )
+	{
+	    $self->add_node_doc($last_node, $item);
+	}
+	
+	else
+	{
+	    croak "define_subservice: arguments must be hashrefs and strings";
+	}
+    }
+    
+    croak "define_subservice: arguments must include at least one hashref of attributes"
+	unless $last_node;
 }
 
 
@@ -174,7 +300,7 @@ sub define_path {
 	if ( ref $item eq 'HASH' )
 	{
 	    croak "define_path: a path definition must include the attribute 'path'"
-		unless defined $item->{path} and $item->{path} ne '';
+		unless defined $item->{path} && $item->{path} ne '';
 	    
 	    $last_node = $self->create_path_node($item, $filename, $line)
 		unless defined $item->{disabled};
@@ -199,6 +325,9 @@ register 'define_path' => \&define_path;
 
 
 our (%NODE_DEF) = ( path => 'ignore',
+		    collapse_path => 'single',
+		    send_files => 'single',
+		    file_path => 'single',
 		    class => 'single',
 		    method => 'single',
 		    arg => 'single',
@@ -734,6 +863,38 @@ sub call_hook {
 }
 
 
+# select_service ( path )
+# 
+# Returns the data service instance for this path, followed by the processed
+# path (i.e. with the prefix removed).
+
+sub select_service {
+    
+    my ($self, $path) = @_;
+    
+    # If there are any subservices, check them first.
+    
+    foreach my $ss ( @{$self->{subservice_list}} )
+    {
+	if ( $path =~ $ss->{path_re} )
+	{
+	    return ($ss, $1);
+	}
+    }
+    
+    # Otherwise, try the main service.
+    
+    if ( $path =~ $self->{path_re} )
+    {
+	return ($self, $1);
+    }
+    
+    # Otherwise, return the path unchanged.
+    
+    return ($self, $path);
+}
+
+
 # can_execute_path ( path, format )
 # 
 # Return true if the path can be used for a request, i.e. if it has a class
@@ -989,6 +1150,20 @@ sub execute_path {
 };
 
 register 'execute_path' => \&execute_path;
+
+
+# can_document_path ( path )
+# 
+# Return true if the path has any attributes defined for it at all.  In this
+# case, we can at least generate a template documentation page even if nothing
+# else is available.  Return false otherwise.
+
+sub can_document_path {
+    
+    my ($self, $path) = @_;
+    
+    return defined $self->{path_attrs}{$path};
+}
 
 
 # document_path ( path, format )
