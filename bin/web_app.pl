@@ -35,22 +35,10 @@ my $ds = Web::DataService->new(
       path_prefix => 'data',
       doc_path => 'doc/root' });
 
-$ds->define_subservice(
-    { name => 'data1.2',
-      label => '1.1',
-      path_prefix => 'data1.2',
-      doc_path => 'doc/1.2',
-      package => 'Data_1_2' },
-	"This is the development version of the data service.  New features are introduced into",
-	"this version, and the interface may change unpredictably.",
-    { name => 'data1.1',
-      label => '1.1',
-      path_prefix => 'data1.1',
-      doc_path => 'doc/1.1',
-      package => 'Data_1_1' },
-	"This is the current stable version of the data service.  The interface is guaranteed",
-        "not to change, except possibly for extremely important bug fixes.  In such a case,",
-	"every effort would be made not to change anything that would break any existing applications.",
+Data_1_1::setup($ds);
+Data_1_2::setup($ds);
+
+my $ds0 = $ds->define_subservice(
     { name => 'data1.0',
       label => '1.0',
       path => 'data1.0' },

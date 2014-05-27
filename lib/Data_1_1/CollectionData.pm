@@ -57,12 +57,12 @@ sub initialize {
     
     # Then get a list of countries and continents.
     
-    foreach my $r ( @$ConfigData::COUNTRIES )
+    foreach my $r ( @$Data_1_1::ConfigData::COUNTRIES )
     {
 	$COUNTRY_NAME{$r->{cc}} = $r->{name};
     }
     
-    foreach my $r ( @$ConfigData::CONTINENTS )
+    foreach my $r ( @$Data_1_1::ConfigData::CONTINENTS )
     {
 	$CONTINENT_NAME{$r->{continent_code}} = $r->{continent_name};
     }
@@ -130,15 +130,16 @@ sub initialize {
 		   'c.reference_no', 'group_concat(sr.reference_no) as reference_nos'], 
 	tables => ['cc', 'ei', 'li', 'sr'] },
       { output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
-	  "A positive integer that uniquely identifies the collection",
+	  "A unique identifier for the collection.  For now, these are positive integers,",
+	  "but this might change and should B<not be relied on>.",
       { output => 'record_type', value => 'collection', com_name => 'typ', com_value => 'col', 
 	dwc_value => 'Occurrence' },
 	  "type of this object: 'col' for a collection",
       { output => 'formation', com_name => 'sfm', not_block => 'strat' },
 	  "The formation in which the collection was found",
-      { output => 'lng', dwc_name => 'decimalLongitude', com_name => 'lng' },
+      { output => 'lng', dwc_name => 'decimalLongitude', com_name => 'lng', data_type => 'dec' },
 	  "The longitude at which the collection is located (in degrees)",
-      { output => 'lat', dwc_name => 'decimalLatitude', com_name => 'lat' },
+      { output => 'lat', dwc_name => 'decimalLatitude', com_name => 'lat', data_type => 'dec' },
 	  "The latitude at which the collection is located (in degrees)",
       { set => 'llp', from_record => 1, code => \&generateBasisCode },
       { output => 'llp', com_name => 'prc' },
@@ -149,9 +150,9 @@ sub initialize {
 	  "If the collection is a part of another one, this field specifies which part",
       { output => 'attribution', dwc_name => 'recordedBy', com_name => 'att', if_block => 'attr' },
 	  "The attribution (author and year) of the collection",
-      { output => 'pubyr', com_name => 'pby', if_block => 'attr' },
+      { output => 'pubyr', com_name => 'pby', if_block => 'attr', data_type => 'pos' },
 	  "The year in which the collection was published",
-      { output => 'n_occs', com_name => 'noc' },
+      { output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	  "The number of occurrences in the collection",
       { output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	  "The specific geologic time range associated with the collection (not necessarily a",
@@ -160,7 +161,8 @@ sub initialize {
 	  "The interval that ends the specific geologic time range associated with the collection",
       { set => 'reference_no', from_record => 1, code => \&set_collection_refs },
       { output => 'reference_no', com_name => 'rid', text_join => ', ' },
-	  "The identifier(s) of the references from which this data was entered");
+	  "The identifier(s) of the references from which this data was entered.  For",
+	  "now these are positive integers, but this could change and should B<not be relied on>.");
     
     $ds->define_block('1.1:colls:bin' =>
       { output => 'bin_id_1', com_name => 'lv1' },
@@ -214,23 +216,24 @@ sub initialize {
 	{ output => 'paleomodel', com_name => 'pm1' },
 	    "The primary model specified by the parameter C<pgm>.  This",
 	    "field will only be included if more than one model is indicated.",
-	{ output => 'paleolng', com_name => 'pln' },
+	{ output => 'paleolng', com_name => 'pln', data_type => 'dec' },
 	    "The paleolongitude of the collection, evaluated according to the",
 	    "primary model indicated by the parameter C<pgm>.",
-	{ output => 'paleolat', com_name => 'pla' },
+	{ output => 'paleolat', com_name => 'pla', data_type => 'dec' },
 	    "The paleolatitude of the collection, evaluated according to the",
 	    "primary model indicated by the parameter C<pgm>.",
 	{ output => 'geoplate', com_name => 'gpl' },
-	    "The numeric identifier of the geological plate on which the collection lies,",
-	    "evaluated according to the primary model indicated by the parameter C<pgm>",
+	    "The identifier of the geological plate on which the collection lies,",
+	    "evaluated according to the primary model indicated by the parameter C<pgm>.",
+	    "This might be either a number or a string.",
 	{ output => 'paleomodel2', com_name => 'pm2' },
 	    "An alternate model specified by the parameter C<pgm>.  This",
 	    "field will only be included if more than one model is indicated.",
 	    "There may also be C<paleomodel3>, etc.",
-	{ output => 'paleolng2', com_name => 'pn2' },
+	{ output => 'paleolng2', com_name => 'pn2', data_type => 'dec' },
 	    "An alternate paleolongitude for the collection, if the C<pgm> parameter",
 	    "indicates more than one model.  There may also be C<paleolng3>, etc.",
-	{ output => 'paleolat2', com_name => 'pa2' },
+	{ output => 'paleolat2', com_name => 'pa2', data_type => 'dec' },
 	    "An alternate paleolatitude for the collection, if the C<pgm> parameter",
 	    "indicates more than one model.  There may also be C<paleolat3>, etc.",
 	{ output => 'geoplate2', com_name => 'gp2' },
@@ -258,9 +261,9 @@ sub initialize {
       { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
 	tables => ['im'] },
       { set => '*', code => \&fixTimeOutput },
-      { output => 'early_age', com_name => 'eag' },
+      { output => 'early_age', com_name => 'eag', data_type => 'dec' },
 	  "The early bound of the geologic time range associated with the collection or cluster (in Ma)",
-      { output => 'late_age', com_name => 'lag' },
+      { output => 'late_age', com_name => 'lag', data_type => 'dec' },
 	  "The late bound of the geologic time range associated with the collection or cluster (in Ma)",
       { output => 'cx_int_no', com_name => 'cxi' },
 	  "The identifier of the most specific single interval from the selected timescale that",
@@ -351,13 +354,14 @@ sub initialize {
       { output => 'taxon_rank', com_name => 'trn' },
 	  "The taxonomic rank",
       { output => 'taxon_no', com_name => 'tid' },
-	  "A positive integer that uniquely identifies the taxon",
+	  "A unique identifier for the taxon.  These are currently positive integers,",
+	  "but this could change and should B<not be relied on>.",
       { output => 'ident_name', com_name => 'ina', dedup => 'taxon_name' },
 	  "The name under which the occurrence was actually identified",
       { output => 'ident_rank', com_name => 'irn', dedup => 'taxon_rank' },
 	  "The taxonomic rank as actually identified",
       { output => 'ident_no', com_name => 'iid', dedup => 'taxon_no' },
-	  "A positive integer that uniquely identifies the name as identified");
+	  "A unique identifier for the taxonomic name.");
 
     $ds->define_block( '1.1:colls:taxa' =>
       { output => 'taxa', com_name => 'tax', rule => 'taxon_record' },
@@ -379,11 +383,11 @@ sub initialize {
 	    "The name of the stratum",
 	{ output => 'rank', com_name => 'rnk' },
 	    "The rank of the stratum: formation, group or member",
-	{ output => 'n_colls', com_name => 'nco' },
+	{ output => 'n_colls', com_name => 'nco', data_type => 'pos' },
 	    "The number of fossil collections in the database that are associated with this stratum.",
 	    "Note that if your search is limited to a particular geographic area, then",
 	    "only collections within the selected area are counted.",
-	{ output => 'n_occs', com_name => 'noc' },
+	{ output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	    "The number of fossil occurrences in the database that are associated with this stratum.",
 	    "The above note about geographic area selection also applies.");
     
@@ -392,39 +396,40 @@ sub initialize {
     $ds->define_block( '1.1:colls:summary' =>
       { select => ['s.bin_id', 's.n_colls', 's.n_occs', 's.lat', 's.lng'] },
       { output => 'bin_id', com_name => 'oid' }, 
-	  "A positive integer that identifies the cluster",
+	  "A unique identifier for the cluster.  For now, these are positive",
+	  "integers, but this might change and should B<not be relied on>.",
       { output => 'bin_id_1', com_name => 'lv1' }, 
-	  "A positive integer that identifies the containing level-1 cluster, if any",
+	  "The identifier of the containing level-1 cluster, if any",
       { output => 'bin_id_2', com_name => 'lv2' }, 
-	  "A positive integer that identifies the containing level-2 cluster, if any",
+	  "The identifier of the containing level-2 cluster, if any",
       { output => 'bin_id_3', com_name => 'lv3' },
-	  "A positive integer that identifies the containing level-3 cluster, if any",
+	  "The identifier of the containing level-3 cluster, if any",
       { output => 'bin_id_4', com_name => 'lv4' },
-	  "A positive integer that identifies the containing level-4 cluster, if any",
+	  "The identifier of the containing level-4 cluster, if any",
       { output => 'record_type', com_name => 'typ', value => 'clu' },
 	  "The type of this object: 'clu' for a collection cluster",
-      { output => 'n_colls', com_name => 'nco' },
-	  "The number of collections in cluster",
-      { output => 'n_occs', com_name => 'noc' },
+      { output => 'n_colls', com_name => 'nco', data_type => 'pos' },
+	  "The number of collections in this cluster",
+      { output => 'n_occs', com_name => 'noc', data_type => 'pos' },
 	  "The number of occurrences in this cluster",
-      { output => 'lng', com_name => 'lng' },
+      { output => 'lng', com_name => 'lng', data_type => 'dec' },
 	  "The longitude of the centroid of this cluster",
-      { output => 'lat', com_name => 'lat' },
+      { output => 'lat', com_name => 'lat', data_type => 'dec' },
 	  "The latitude of the centroid of this cluster");
     
     # Plus one for summary cluster extent
     
     $ds->define_block( '1.1:colls:ext' =>
       { select => ['s.lng_min', 'lng_max', 's.lat_min', 's.lat_max', 's.std_dev'] },
-      { output => 'lng_min', com_name => 'lg1' },
+      { output => 'lng_min', com_name => 'lg1', data_type => 'dec' },
 	  "The mimimum longitude for collections in this cluster",
-      { output => 'lng_max', com_name => 'lg2' },
+      { output => 'lng_max', com_name => 'lg2', data_type => 'dec' },
 	  "The maximum longitude for collections in this cluster",
-      { output => 'lat_min', com_name => 'la1' },
+      { output => 'lat_min', com_name => 'la1', data_type => 'dec' },
 	  "The mimimum latitude for collections in this cluster",
-      { output => 'lat_max', com_name => 'la2' },
+      { output => 'lat_max', com_name => 'la2', data_type => 'dec' },
 	  "The maximum latitude for collections in this cluster",
-      { output => 'std_dev', com_name => 'std' },
+      { output => 'std_dev', com_name => 'std', data_type => 'dec' },
 	  "The standard deviation of the coordinates in this cluster");
     
     # Finally, define rulesets to interpret the parmeters used with operations
@@ -502,7 +507,7 @@ sub initialize {
 	{ param => 'clust_id', valid => POS_VALUE, list => ',' },
 	    "Return only records associated with the specified geographic clusters.",
 	    "You may specify one or more cluster ids, separated by commas.",
-	{ param => 'taxon_name', valid => \&TaxonData::validNameSpec },
+	{ param => 'taxon_name', valid => \&Data_1_1::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s).  You may specify multiple names, separated by commas.",
 	{ param => 'taxon_id', valid => POS_VALUE, list => ','},
 	    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier.",
@@ -511,7 +516,7 @@ sub initialize {
 	    "If this parameter is specified, then only records that were actually identified with the",
 	    "specified taxonomic name and not those which match due to synonymy",
 	    "or other correspondences between taxa.  This is a flag parameter, which does not need any value.",
-	{ param => 'base_name', valid => \&TaxonData::validNameSpec, list => ',' },
+	{ param => 'base_name', valid => \&Data_1_1::TaxonData::validNameSpec, list => ',' },
 	    "Return only records associated with the specified taxonomic name(s), I<including subtaxa>.",
 	    "You may specify multiple names, separated by commas.",
 	{ param => 'base_id', valid => POS_VALUE, list => ',' },
@@ -843,8 +848,8 @@ sub list {
     
     my @filters = $self->generateMainFilters('list', 'c', $tables);
     push @filters, $self->generateCollFilters($tables);
-    push @filters, CommonData::generate_crmod_filters($self, 'cc', $tables);
-    push @filters, CommonData::generate_ent_filters($self, 'cc', $tables);
+    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'cc', $tables);
+    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'cc', $tables);
     
     push @filters, "c.access_level = 0";
     
@@ -1002,10 +1007,10 @@ sub refs {
     
     my $inner_tables = {};
     
-    my @filters = CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
+    my @filters = Data_1_1::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
     push @filters, $self->generateCollFilters($inner_tables);
-    push @filters, CommonData::generate_crmod_filters($self, 'cc', $inner_tables);
-    push @filters, CommonData::generate_ent_filters($self, 'cc', $inner_tables);
+    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'cc', $inner_tables);
+    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'cc', $inner_tables);
     
     push @filters, "c.access_level = 0";
     
@@ -1013,7 +1018,7 @@ sub refs {
     
     # Construct another set of filter expressions to act on the references.
     
-    my @ref_filters = $self->ReferenceData::generate_filters($self->tables_hash);
+    my @ref_filters = $self->Data_1_1::ReferenceData::generate_filters($self->tables_hash);
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -1021,7 +1026,7 @@ sub refs {
     # Figure out the order in which we should return the references.  If none
     # is selected by the options, sort by rank descending.
     
-    my $order = ReferenceData::generate_order_clause($self, { rank_table => 's' }) ||
+    my $order = Data_1_1::ReferenceData::generate_order_clause($self, { rank_table => 's' }) ||
 	"r.author1last, r.author1init";
     
     # If a query limit has been specified, modify the query accordingly.
@@ -1040,7 +1045,7 @@ sub refs {
     $self->adjustCoordinates(\$fields);
     
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
+    my $outer_join_list = $self->Data_1_1::ReferenceData::generate_join_list($self->tables_hash);
     
     $self->{main_sql} = "
 	SELECT $calc $fields, s.reference_rank, is_primary, 1 as is_coll

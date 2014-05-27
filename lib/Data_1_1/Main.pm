@@ -18,21 +18,26 @@ use Data_1_1::ReferenceData;
 use Data_1_1::PersonData;
 
 
-# initialize ( class, ds )
+# setup ( ds )
 # 
-# This method is automatically called by the Web::DataService package, in
-# order to initialize the subservice that implements data service 1.1.  The
-# calls made here define the shape and behavior of this subservice.
+# This routine is called from the main program, in order to set up version 1.1
+# of the data service.  The main service object is provided as a parameter.
 
-sub initialize {
+sub setup {
 
-    my ($class, $ds1) = @_;
+    my ($ds) = @_;
     
-    # We start by setting the (sub-)version number.  This should be changed
-    # whenever a substantive change is made to this subservice, which is why
-    # this call is placed here rather than in the main file.
-    
-    $ds1->set_version('b4');
+    my $ds1 = $ds->define_subservice(
+	{ name => 'data1.1',
+	  label => '1.1',
+	  version => 'b4',
+	  path_prefix => 'data1.1',
+	  ruleset_prefix => '1.1:',
+	  doc_path => 'doc/1.1',
+	  package => 'Data_1_1' },
+	    "This is the current stable version of the data service.  The interface is guaranteed",
+            "not to change, except possibly for extremely important bug fixes.  In such a case,",
+	    "every effort would be made not to change anything that would break any existing applications.");
     
     # We then define the vocabularies that will be used to label the data
     # fields returned by this service.

@@ -3598,7 +3598,7 @@ sub computeSearchTable {
     
     logMessage(2, "computing search table (g)");
     
-    my ($result);
+    my ($result, $count);
     
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
@@ -3607,22 +3607,28 @@ sub computeSearchTable {
 			       (genus varchar(80) not null,
 				taxon_name varchar(80) not null,
 				taxon_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
-				match_no int unsigned not null,
-				result_no int unsigned not null,
+				taxon_no int unsigned not null,
+				orig_no int unsigned not null,
+				synonym_no int unsigned not null,
+				is_current boolean not null,
 				is_exact boolean not null,
+				common char(2) not null,
 				KEY (taxon_name, genus),
-				UNIQUE KEY (match_no, genus)) ENGINE=MYISAM");
+				UNIQUE KEY (taxon_no, genus, common)) ENGINE=MYISAM");
     
     # We start by copying all higher taxa into the search table.  That's the
     # easy part.
     
-    logMessage(2, "    adding higher taxa");
+    logMessage(2, "    adding higher taxa...");
     
-    $result = $dbh->do("
-		INSERT INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
-		SELECT null, taxon_name, taxon_rank, taxon_no, synonym_no, 1
-		FROM $auth_table as a join $TREE_WORK as t using (orig_no)
-		WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
+    $count = $dbh->do("
+	INSERT INTO $SEARCH_WORK (taxon_name, taxon_rank, taxon_no, orig_no, 
+				  synonym_no, is_current, is_exact)
+	SELECT taxon_name, taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
+	WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
+    
+    logMessage(2, "      found $count names");
     
     # The subgenera are a bit trickier, because most (but not all) are named
     # as "Genus (Subgenus)".  The following expression will extract the
@@ -3630,52 +3636,60 @@ sub computeSearchTable {
     # (incorrect) names that lack a subgenus component by simply returning the
     # whole name.
     
-    logMessage(2, "    adding subgenera");
+    logMessage(2, "    adding subgenera...");
     
-    $result = $dbh->do("
-		INSERT INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
-		SELECT substring_index(taxon_name, ' ', 1),
-			trim(trailing ')' from substring_index(taxon_name,'(',-1)),
-		        taxon_rank, taxon_no, synonym_no, 1
-		FROM $auth_table as a join $TREE_WORK as t using (orig_no)
-		WHERE taxon_rank = 'subgenus'");
+    $count = $dbh->do("
+	INSERT INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+				  synonym_no, is_current, is_exact)
+	SELECT substring_index(taxon_name, ' ', 1),
+		trim(trailing ')' from substring_index(taxon_name,'(',-1)),
+	        taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
+	WHERE taxon_rank = 'subgenus'");
+    
+    logMessage(2, "      found $count names");
     
     # For species and sub-species, we split off the first component of each
     # name as the genus name and add the resulting entries to the table.  Note
     # that some species names also have a subgenus component which has to be
     # split out as well.
     
-    logMessage(2, "    adding species by name");
+    logMessage(2, "    adding species by name...");
     
-    # Species which don't have a subgenus
+    # Species which aren't in a subgenus
     
-    $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
-		SELECT substring_index(taxon_name, ' ', 1),
-			trim(substring(taxon_name, locate(' ', taxon_name)+1)),
-			taxon_rank, taxon_no, orig_no, 1
-		FROM $auth_table WHERE taxon_rank in ('species', 'subspecies')
-			and taxon_name not like '%(%'");
+    $count = $dbh->do("
+	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+					 synonym_no, is_current, is_exact)
+	SELECT substring_index(taxon_name, ' ', 1),
+		trim(substring(taxon_name, locate(' ', taxon_name)+1)),
+		taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
+	WHERE taxon_rank in ('species', 'subspecies') and taxon_name not like '%(%'");
     
     # Species which do have a subgenus
     
-    $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
-		SELECT substring_index(taxon_name, ' ', 1),
-			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-			taxon_rank, taxon_no, orig_no, 1
-		FROM $auth_table WHERE taxon_rank in ('species', 'subspecies')
-			and taxon_name like '%(%'");
+    $count += $dbh->do("
+	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+					 synonym_no, is_current, is_exact)
+	SELECT substring_index(taxon_name, ' ', 1),
+		trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+		taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
+	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
     
     # And again with the subgenus name treated as if it was a genus
     
-    $result = $dbh->do("
-		INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
-		SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1),
-			trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-			taxon_rank, taxon_no, orig_no, 1
-		FROM $auth_table WHERE taxon_rank in ('species', 'subspecies')
-			and taxon_name like '%(%'");
+    $count += $dbh->do("
+	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+					 synonym_no, is_current, is_exact)
+	SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1),
+		trim(substring(taxon_name, locate(') ', taxon_name)+2)),
+		taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
+	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
+    
+    logMessage(2, "      found $count names");
     
     # Now comes the really tricky part.  For the purposes of "loose matching"
     # we also want to list each species under any genera and subgenera
@@ -3686,14 +3700,14 @@ sub computeSearchTable {
     # In order to do this efficiently, we first need to create an auxiliary
     # table associating each species and subspecies with a genus/subgenus.
     
-    logMessage(2, "    adding species by hierarchy");
+    logMessage(2, "    adding species with synonym genera...");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $SPECIES_AUX");
     $result = $dbh->do("CREATE TABLE $SPECIES_AUX
 			       (genus varchar(80) not null,
 				taxon_name varchar(80) not null,
-				match_no int unsigned not null,
-				result_no int unsigned not null,
+				taxon_no int unsigned not null,
+				orig_no int unsigned not null,
 				unique key (taxon_name, genus)) ENGINE=MYISAM");
     
     # Now for each species and subspecies, create an entry corresponding to each
@@ -3701,8 +3715,9 @@ sub computeSearchTable {
     # current senior synonym of the species/subspecies.
     
     $SQL_STRING = "
-		INSERT IGNORE INTO $SPECIES_AUX (match_no, result_no, genus, taxon_name)
-		SELECT a.taxon_no, t.synonym_no, ifnull(p1.taxon_name, ifnull(p2.taxon_name, p3.taxon_name)),
+		INSERT IGNORE INTO $SPECIES_AUX (taxon_no, orig_no, genus, taxon_name)
+		SELECT a.taxon_no, a.orig_no,
+			ifnull(p1.taxon_name, ifnull(p2.taxon_name, p3.taxon_name)),
 			if(a.taxon_name like '%(%',
 			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
 			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
@@ -3727,8 +3742,8 @@ sub computeSearchTable {
     # subgenus (if any).
     
     $SQL_STRING = "
-		INSERT IGNORE INTO $SPECIES_AUX (match_no, result_no, genus, taxon_name)
-		SELECT a.taxon_no, t.synonym_no,
+		INSERT IGNORE INTO $SPECIES_AUX (taxon_no, orig_no, genus, taxon_name)
+		SELECT a.taxon_no, a.orig_no,
 			ifnull(trim(trailing ')' from substring_index(p1.taxon_name,'(',-1)),
 			       trim(trailing ')' from substring_index(p2.taxon_name,'(',-1))),
 			if(a.taxon_name like '%(%',
@@ -3756,21 +3771,42 @@ sub computeSearchTable {
     # only want to do loose matching where there isn't already an exact match.
     
     $SQL_STRING = "
-		DELETE $SPECIES_AUX
-		FROM $SPECIES_AUX JOIN $SEARCH_WORK
-			on $SPECIES_AUX.genus = $SEARCH_WORK.genus and
-			   $SPECIES_AUX.taxon_name = $SEARCH_WORK.taxon_name";
+	DELETE $SPECIES_AUX
+	FROM $SPECIES_AUX JOIN $SEARCH_WORK
+		on $SPECIES_AUX.genus = $SEARCH_WORK.genus and
+		   $SPECIES_AUX.taxon_name = $SEARCH_WORK.taxon_name";
     
     $result = $dbh->do($SQL_STRING);
     
     # Then generate new entries in $SEARCH_WORK.
     
     $SQL_STRING = "
-		INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, match_no, result_no, is_exact)
-		SELECT sx.genus, sx.taxon_name, a.taxon_rank, sx.match_no, sx.result_no, 0
-		FROM $SPECIES_AUX as sx JOIN $auth_table as a on a.taxon_no = sx.match_no";
+	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
+					 synonym_no, is_current, is_exact)
+	SELECT sx.genus, sx.taxon_name, a.taxon_rank, sx.taxon_no, sx.orig_no,
+	       t.synonym_no, (t.spelling_no = sx.taxon_no), 0
+	FROM $SPECIES_AUX as sx JOIN $auth_table as a on a.taxon_no = sx.taxon_no
+		JOIN $TREE_WORK as t on sx.orig_no = t.orig_no";
     
-    $result = $dbh->do($SQL_STRING);
+    $count = $dbh->do($SQL_STRING);
+    
+    logMessage(2, "      found $count implied names");
+    
+    # Next, we add all of the common names.  Each of these gets a 'language'
+    # value, to distinguish them from latin names.
+    
+    logMessage(2, "    adding common names...");
+    
+    $SQL_STRING = "
+	INSERT IGNORE INTO $SEARCH_WORK (taxon_name, taxon_rank, taxon_no, orig_no,
+					 synonym_no, is_current, is_exact, common)
+	SELECT common_name, rank, spelling_no, orig_no, synonym_no, 0, 1, 'EN'
+	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
+	WHERE common_name <> '' and taxon_no = spelling_no";
+    
+    $count = $dbh->do($SQL_STRING);
+    
+    logMessage(2, "      found $count names");
     
     # We can stop here when debugging.
     

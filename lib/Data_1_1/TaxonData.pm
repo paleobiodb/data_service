@@ -265,7 +265,7 @@ sub initialize {
     # the operations defined in this class.
     
     $ds->define_ruleset('1.1:taxa:specifier' => 
-	{ param => 'name', valid => \&TaxonData::validNameSpec, 
+	{ param => 'name', valid => \&Data_1_1::TaxonData::validNameSpec, 
 	  alias => 'taxon_name' },
 	    "Return information about the most fundamental taxonomic name matching this string.",
 	    "The C<%> and C<_> characters may be used as wildcards.",
@@ -414,12 +414,12 @@ sub initialize {
     
     $ds->define_ruleset('1.1:taxa:selector' =>
 	"The following parameters are used to indicate a base taxon or taxa:",
-	{ param => 'name', valid => \&TaxonData::validNameSpec, list => ',', 
+	{ param => 'name', valid => \&Data_1_1::TaxonData::validNameSpec, list => ',', 
 	  alias => 'taxon_name' },
 	    "Select the all taxa matching each of the specified name(s).",
 	    "To specify more than one, separate them by commas.",
 	    "The C<%> character may be used as a wildcard.",
-	{ param => 'base_name', valid => \&TaxonData::validNameSpec, list => ',' },
+	{ param => 'base_name', valid => \&Data_1_1::TaxonData::validNameSpec, list => ',' },
 	    "Selects all taxa matching each of the specified name(s), plus",
 	    "all of their subtaxa.  Equivalent to specifying C<rel=all_children>.",
 	{ param => 'id', valid => POS_VALUE, list => ',' },
@@ -441,7 +441,7 @@ sub initialize {
     
     $ds->define_ruleset('1.1:taxa:filter' => 
 	"The following parameters further filter the list of return values:",
-	{ optional => 'rank', valid => \&TaxonData::validRankSpec },
+	{ optional => 'rank', valid => \&Data_1_1::TaxonData::validRankSpec },
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
@@ -512,10 +512,10 @@ sub initialize {
 	"the name of the primary author.");
     
     $ds->define_ruleset('1.1:taxa:match' =>
-	{ param => 'name', valid => \&TaxonData::validNameSpec, list => ',', alias => 'taxon_name' },
+	{ param => 'name', valid => \&Data_1_1::TaxonData::validNameSpec, list => ',', alias => 'taxon_name' },
 	    "A valid taxonomic name, or a common abbreviation such as 'T. rex'.",
 	    "The name may include the wildcard characters % and _.",
-	{ optional => 'rank', valid => \&TaxonData::validRankSpec },
+	{ optional => 'rank', valid => \&Data_1_1::TaxonData::validRankSpec },
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
@@ -956,6 +956,170 @@ sub list_refs {
     return;
 }
 
+
+# get_taxa_by_name ( names, options )
+# 
+# Given a taxon name (or list of names), return either a list of ids or a
+# range expression that can be used to select the corresponding taxa.
+
+our ($NAME_SQL) = '';
+
+sub get_taxa_by_name {
+
+    my ($self, $names, $options) = @_;
+    
+    $options ||= {};
+    
+    # We start with some common query clauses, depending on the options.
+    
+    my (@clauses);
+    my $limit_string = '';
+    my $fields = 't.orig_no';
+    
+    if ( ! defined $options->{common} )
+    {
+	push @clauses, "common is null";
+    }
+    
+    elsif ( $options->{common} eq 'only' )
+    {
+	push @clauses, "common eq 'EN'";
+    }
+    
+    # And result type
+    
+    if ( $options->{range} )
+    {
+	$fields = 't.lft, t.rgt';
+	$limit_string = 'ORDER BY taxon_size desc LIMIT 1';
+    }
+    
+    elsif ( ! $options->{all_names} )
+    {
+	$limit_string = 'ORDER BY taxon_size desc LIMIT 1';
+    }
+    
+    # The names might be given as a list, a hash, or a single string (in which
+    # case it will be split into comma-separated items).
+    
+    my @name_list;
+    
+    if ( ref $names eq 'ARRAY' )
+    {
+	@name_list = @$names;
+    }
+    
+    elsif ( ref $names eq 'HASH' )
+    {
+	@name_list = keys %$names;
+    }
+    
+    elsif ( ref $names )
+    {
+	croak "get_taxa_by_name: parameter 'names' may not be a blessed reference";
+    }
+    
+    else
+    {
+	@name_list = split( qr{\s*,\s*}, $names );
+    }
+    
+    # Now that we have a list, we evaluate the names one by one.
+    
+    my (@result);
+    
+    foreach my $tn ( @name_list )
+    {
+	my @filters;
+	
+	# We start by removing any bad characters and trimming leading and
+	# trailing spaces.  Also translate all whitespace to a single space
+	# and '.' to the wildcard '%'.  For example, "T.  rex" goes to
+	# "T% rex";
+	
+	$tn =~ s/^\s+//;
+	$tn =~ s/\s+$//;
+	$tn =~ s/\s+/ /g;
+	$tn =~ s/\./% /g;
+	$tn =~ tr{a-zA-Z%_: }{}cd;
+	
+	# If we have a selection prefix, evaluate and return it.
+	
+	if ( $tn =~ qr{ ^ (.+) : \s* (.+) }xs )
+	{
+	    my $prefix = $1;
+	    $tn = $2;
+	    
+	    if ( $prefix =~ /[a-zA-Z]/ )
+	    {
+		my $filter = $self->get_taxon_range($prefix, { range => 1 });  
+		# $$$$ prefix must be a single name, not binomial
+		push @filters, $filter if $filter;
+	    }
+	}
+	
+	# Now, we determine the query necessary to find each name.
+	
+	# If we have a species name, we need to filter on both genus and
+	# species name.  The name is not valid unless we have at least one
+	# alphabetic character in the genus and one in the species.
+	
+	if ( $n =~ qr{ ^ ([^\s]+) \s+ (.*) }xs )
+	{
+	    my $genus = $1;
+	    my $species = $2;
+	    
+	    next unless $genus =~ /[a-zA-Z]/ && $species =~ /[a-zA-Z]/;
+	    
+	    # We don't have to quote these, because we have already eliminated
+	    # all characters except alphabetic and wildcards.
+	    
+	    push @filters, "genus like '$genus'";
+	    push @filters, "taxon_name like '$species'";
+	}
+	
+	# If we have a higher taxon name, we just need to filter on that.  The
+	# name is not valid unless it contains at least two alphabetic
+	# characters. 
+	
+	elsif ( $n =~ qr{ ^ ([^\s]+) $ }xs )
+	{
+	    my $higher = $1;
+	    
+	    next unless $higher =~ qr< [a-zA-Z]{2} >xs;
+	    
+	    push @filters, "taxon_name like '$higher'";
+	}
+	
+	# Otherwise, we have an invalid name so just skip it.
+	
+	else
+	{
+	    next;
+	}
+	
+	# Now, construct the query.
+	
+	my $filter_string = join(' and ', @clauses, @filters);
+	$filter_string = '1=1' unless $filter_string;
+	
+	$NAME_SQL = "
+		SELECT $fields
+		FROM taxon_search as s join taxon_trees as t on t.orig_no = s.synonym_no
+			join taxon_attrs as v on v.orig_no = t.orig_no
+		WHERE $filter_string
+		$limit_string";
+	
+	if ( $
+	
+	my (@results) = $dbh->sel
+	
+    }
+    
+}
+
+
+# valid_name_spec ( name )
 
 # generate_query_options ( )
 # 

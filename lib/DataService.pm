@@ -91,6 +91,7 @@ my (%DS_DEF) = ( 'name' => 'single',
 		 'doc' => 'single',
 		 'package' => 'single',
 		 'path_prefix' => 'single',
+		 'ruleset_prefix' => 'single',
 		 'public_access' => 'single',
 		 'default_limit' => 'single',
 		 'streaming_threshold' => 'single',
@@ -190,12 +191,12 @@ sub new {
 	push @{$parent->{subservice_list}}, $instance;
     }
     
-    # Initialize the service.
+    # Initialize the service, if an 'initialize' method was defined.
     
     if ( $instance->{package} )
     {
 	my $class = $instance->{package};
-	$class->initialize($instance);
+	$class->initialize($instance) if $class->can('initialize');
     }
     
     # Return the new instance.
@@ -265,6 +266,8 @@ sub define_subservice {
     
     croak "define_subservice: arguments must include at least one hashref of attributes"
 	unless $last_node;
+    
+    return $last_node;
 }
 
 
@@ -1004,6 +1007,17 @@ sub execute_path {
 	    
 	    $request->{valid} = $result;
 	    $request->{params} = $result->values;
+	    
+	    if ( $self->{DEBUG} )
+	    {
+		print STDERR "Params:\n";
+		foreach my $p ( $result->keys )
+		{
+		    my $value = $result->value($p);
+		    $value = join(', ', @$value) if ref $value eq 'ARRAY';
+		    print STDERR "$p = $value\n";
+		}
+	    }
 	}
 	
 	else
@@ -1412,7 +1426,7 @@ sub determine_ruleset {
     # If a ruleset name was explicitly given, then use that or throw an
     # exception if not defined.
     
-    if ( defined $ruleset and $ruleset ne '' )
+    if ( $ruleset )
     {
 	croak "unknown ruleset '$ruleset' for path $path"
 	    unless $validator->ruleset_defined($ruleset);
@@ -1434,6 +1448,9 @@ sub determine_ruleset {
     else
     {
 	$path =~ s{/}{:}g;
+	
+	$path = $self->{ruleset_prefix} . $path
+	    if defined $self->{ruleset_prefix} && $self->{ruleset_prefix} ne '';
 	
 	return $path if $validator->ruleset_defined($path);
 	return; # empty if not defined.

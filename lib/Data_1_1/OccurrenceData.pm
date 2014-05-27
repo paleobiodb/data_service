@@ -123,7 +123,7 @@ sub initialize {
 	{ output => 'matched_no', com_name => 'mid', if_field => 'mid', dedup => 'taxon_no' },
 	    "The unique identifier of the closest matching name in the database to the identified",
 	    "taxonomic name, if any is known.",
-	{ set => '*', code => \&CollectionData::fixTimeOutput },
+	{ set => '*', code => \&Data_1_1::CollectionData::fixTimeOutput },
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	    "The specific geologic time range associated with this collection (not necessarily a",
 	    "standard interval), or the interval that begins the range if C<late_interval> is also given",
@@ -411,10 +411,10 @@ sub list {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = CollectionData::generateMainFilters($self, 'list', 'c', $tables);
-    push @filters, OccurrenceData::generateOccFilters($self, $tables);
-    push @filters, CommonData::generate_crmod_filters($self, 'o', $tables);
-    push @filters, CommonData::generate_ent_filters($self, 'o', $tables);
+    my @filters = Data_1_1::CollectionData::generateMainFilters($self, 'list', 'c', $tables);
+    push @filters, Data_1_1::OccurrenceData::generateOccFilters($self, $tables);
+    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'o', $tables);
+    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'o', $tables);
     
     push @filters, "c.access_level = 0";
     
@@ -493,9 +493,9 @@ sub refs {
     
     my $inner_tables = {};
     
-    my @filters = CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
-    push @filters, CommonData::generate_crmod_filters($self, 'o');
-    push @filters, CommonData::generate_ent_filters($self, 'o');
+    my @filters = Data_1_1::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
+    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'o');
+    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'o');
     push @filters, $self->generateOccFilters($inner_tables);
     
     push @filters, "c.access_level = 0";
@@ -504,7 +504,7 @@ sub refs {
     
     # Construct another set of filter expressions to act on the references.
     
-    my @ref_filters = ReferenceData::generate_filters($self, $self->tables_hash);
+    my @ref_filters = Data_1_1::ReferenceData::generate_filters($self, $self->tables_hash);
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -512,7 +512,7 @@ sub refs {
     # Figure out the order in which we should return the references.  If none
     # is selected by the options, sort by rank descending.
     
-    my $order = $self->ReferenceData::generate_order_clause({ rank_table => 's' }) ||
+    my $order = $self->Data_1_1::ReferenceData::generate_order_clause({ rank_table => 's' }) ||
 	"r.author1last, r.author1init";
     
     # If a query limit has been specified, modify the query accordingly.
@@ -531,7 +531,7 @@ sub refs {
     $self->adjustCoordinates(\$fields);
     
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $self->ReferenceData::generate_join_list($self->tables_hash);
+    my $outer_join_list = $self->Data_1_1::ReferenceData::generate_join_list($self->tables_hash);
     
     $self->{main_sql} = "
 	SELECT $calc $fields, count(distinct occurrence_no) as reference_rank, 1 as is_occ
@@ -576,9 +576,9 @@ sub taxa {
     my $inner_tables = { t => 1 };
     my $outer_tables = { at => 1 };
     
-    my @filters = CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
-    push @filters, CommonData::generate_crmod_filters($self, 'o');
-    push @filters, CommonData::generate_ent_filters($self, 'o');
+    my @filters = Data_1_1::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
+    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'o');
+    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'o');
     push @filters, $self->generateOccFilters($inner_tables);
     
     push @filters, "c.access_level = 0";
@@ -587,7 +587,7 @@ sub taxa {
     
     # Construct another set of filter expressions to act on the taxa.
     
-    my @taxa_filters = $self->TaxonData::generate_filters($outer_tables);
+    my @taxa_filters = $self->Data_1_1::TaxonData::generate_filters($outer_tables);
     push @taxa_filters, "1=1" unless @taxa_filters;
     
     my $taxa_filter_string = join(' and ', @taxa_filters);
@@ -603,7 +603,7 @@ sub taxa {
     # Figure out the order in which we should return the taxa.  If none
     # is selected by the options, sort by the tree sequence number.
     
-    my $order_expr = $self->TaxonData::generate_order_clause($outer_tables, {rank_table => 's'});
+    my $order_expr = $self->Data_1_1::TaxonData::generate_order_clause($outer_tables, {rank_table => 's'});
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -612,16 +612,16 @@ sub taxa {
     my $INTS_TABLE = $TAXON_TABLE{$TREE_TABLE}{ints};
     my $AUTH_TABLE = $TAXON_TABLE{$TREE_TABLE}{authorities};
     
-    my $fields = $self->TaxonData::generate_query_fields($outer_tables, 1);
+    my $fields = $self->Data_1_1::TaxonData::generate_query_fields($outer_tables, 1);
 	# $self->select_string({ mt => 'a', bt => 'a' });
     
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $self->TaxonData::generate_join_list($outer_tables, $TREE_TABLE);
+    my $outer_join_list = $self->Data_1_1::TaxonData::generate_join_list($outer_tables, $TREE_TABLE);
     
     # Depending upon the summary level, we need to use different templates to generate the query.
     
     my $summary_rank = $self->clean_param('rank');
-    my $summary_expr = $self->TaxonData::generate_summary_expr($summary_rank, 'o', 't', 'i');
+    my $summary_expr = $self->Data_1_1::TaxonData::generate_summary_expr($summary_rank, 'o', 't', 'i');
     
     if ( $summary_rank eq 'exact' or $summary_rank eq 'ident' )
     {

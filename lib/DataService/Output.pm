@@ -339,6 +339,7 @@ our %OUTPUT_DEF = (output => 'type',
 		   text_join => 'single',
 		   xml_join => 'single',
 		   show_as_list => 'single',
+		   data_type => 'single',
 		   rule => 'single',
 		   from => 'single',
 		   from_each => 'single',
@@ -356,7 +357,7 @@ our %SELECT_KEY = (select => 1, tables => 1);
 
 our %FIELD_KEY = (dedup => 1, value => 1, always => 1, rule => 1, if_field => 1, 
 		  not_field => 1, if_block => 1, not_block => 1, if_format => 1, not_format => 1,
-		  text_join => 1, xml_join => 1, doc => 1, show_as_list => 1, undoc => 1);
+		  text_join => 1, xml_join => 1, dtype => 1, doc => 1, show_as_list => 1, undoc => 1);
 
 our %PROC_KEY = (set => 1, append => 1, from => 1, from_each => 1, from_record => 1,
 		 if_vocab => 1, not_vocab => 1, if_block => 1, not_block => 1,

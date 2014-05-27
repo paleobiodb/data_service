@@ -296,8 +296,8 @@ sub list {
     # in order to select the proper result set.
     
     my @filters = $self->generate_filters();
-    push @filters, CommonData::generate_crmod_filters($self, 'r');
-    push @filters, CommonData::generate_ent_filters($self, 'r');
+    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'r');
+    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'r');
     
     my $filter_string = join(' and ', @filters);
     
@@ -396,12 +396,12 @@ sub generate_filters {
     
     if ( my $authorname = $self->clean_param('author') )
     {
-	push @filters, $self->ReferenceData::generate_auth_filter($authorname, 'author');
+	push @filters, $self->Data_1_1::ReferenceData::generate_auth_filter($authorname, 'author');
     }
     
     if ( my $authorname = $self->clean_param('primary') )
     {
-	push @filters, $self->ReferenceData::generate_auth_filter($authorname, 'primary');
+	push @filters, $self->Data_1_1::ReferenceData::generate_auth_filter($authorname, 'primary');
     }
     
     if ( my $title = $self->clean_param('title') )
