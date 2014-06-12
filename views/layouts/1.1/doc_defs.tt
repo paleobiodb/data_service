@@ -1,13 +1,17 @@
+<%- BLOCK trail %>
+<% SET base_url = request.get_base_url %>
+<% SET trail_base = "Data Service L<$ds_label|$base_url>" %>
+<% IF ds_version; SET trail_base = "$trail_base ($ds_version)"; END %>
+<% SET rest = request.list_navtrail %>
+=head3 <% trail_base %> E<GT> <% rest %>
+<% END -%>
+
 <%- BLOCK params %>
 <% IF done_params; RETURN; ELSE; SET done_params = 1; END %>
 
 =head2 PARAMETERS
 
-<%- IF param_doc %>
-<% param_doc %>
-<%- ELSE -%>
-I<This request does not accept any parameters>.
-<% END -%>
+<% GET request.document_params or "I<This request does not accept any parameters>" %>
 <% END -%>
 
 

@@ -15,35 +15,30 @@ use Template;
 use Try::Tiny;
 use Scalar::Util qw(blessed);
 
-use Web::DataService;
+use Web::DataService::Dancer;
 
+require Data_1_0::Main;
 require Data_1_1::Main;
 require Data_1_2::Main;
 
 
 # We begin by instantiating a data service object, and then specify the
 # subservices (i.e. data service versions) that we will be providing.  The
-# subservices themselves are be defined in the following files:
+# subservices themselves are defined in the following files:
 # 
 #     Data_1_1/Main.pm
 #     Data_1_2/Main.pm
 #     etc.
 
-my $ds = Web::DataService->new(
+my $ds_root = Web::DataService::Dancer->new(
     { name => 'data',
       title => 'PaleobioDB Data',
       path_prefix => 'data',
-      doc_path => 'doc/root' });
+      doc_dir => 'doc/root' });
 
-Data_1_1::setup($ds);
-Data_1_2::setup($ds);
-
-my $ds0 = $ds->define_subservice(
-    { name => 'data1.0',
-      label => '1.0',
-      path => 'data1.0' },
-      doc_path => 'doc/1.0',
-	"I<This version is obsolete, and has been discontinued.>");
+Data_1_0::setup($ds_root);
+Data_1_1::setup($ds_root);
+Data_1_2::setup($ds_root);
 
 
 # If we were called from the command line with 'GET' or 'SHOW' as the first
@@ -55,25 +50,25 @@ if ( defined $ARGV[0] and ( lc $ARGV[0] eq 'get' or lc $ARGV[0] eq 'show' ) )
     set logger => 'console';
     set show_errors => 0;
     
-    $ds->{DEBUG} = 1;
-    $ds->{ONE_REQUEST} = 1;
+    $ds_root->{DEBUG} = 1;
+    $ds_root->{ONE_REQUEST} = 1;
 }
 
 
 # Then, we set things up so that a request on any path starting with "/data/" will
 # return a documentation page listing the available versions.
 
-$ds->define_path({ path => '/', 
-		   public_access => 1,
-		   collapse_path => 'version',
-		   doc_title => 'Documentation' });
+$ds_root->define_path({ path => '/', 
+			public_access => 1,
+			collapse_path => 'version',
+			doc_title => 'Documentation' });
 
 # Any URL starting with /data/css indicates a common stylesheet, and the same for
 # /data1.1/css and so on.
 
-$ds->define_path({ path => 'css',
-		   send_files => 1,
-		   file_path => 'public/css' });
+$ds_root->define_path({ path => 'css',
+			send_files => 1,
+			file_dir => 'css' });
 
 
 # Next we configure a set of Dancer routes to recognize URL paths.  These should be
@@ -82,6 +77,17 @@ $ds->define_path({ path => 'css',
 # customize them.
 
 # ============
+
+get qr{ ^ (.*) $ }xs => sub {
+    
+    my ($path) = splat;
+    
+    #$DB::single = 1;
+    
+    my $request = $ds_root->new_request(undef, $path);
+    return $request->execute;
+};
+
 
 # Any URL ending in 'index.html', 'index.pod', '_doc.html', '_doc.pod' is interpreted as
 # a request for documentation.
@@ -105,21 +111,21 @@ sub {
     $path //= '';
     $path .= $1 if $last =~ qr{ (.*) _doc $ }xs;
     
-    # Figure out which subservice (if any) should be handling this.
+    # Generate a request object.
     
-    my ($ss, $sp) = $ds->select_service($path);
+    my $request = $ds_root->new_request_old(undef, $path, $suffix);
     
-    # Return the documentation corresponding this path if any is available,
+    # Return the documentation corresponding to this path if any is available,
     # otherwise indicate a bad request.
     
-    if ( $ss->can_document_path($sp) )
+    if ( $request->can_document )
     {
-	return $ss->document_path($sp, $suffix);
+	return $request->document;
     }
     
     else
     {
-	$ss->error_result("", "html", "404 The resource you requested was not found.");
+	$request->error_result("", "html", "404 The resource you requested was not found.");
     }
 };
 
@@ -148,20 +154,21 @@ sub {
 	$path =~ s{\d+$}{single};
     }
     
-    # Figure out which subservice (if any) should be handling this.
+    # Generate a new request object, which also involves figuring out which
+    # subservice (if any) should be handling this request.
     
-    my ($ss, $sp) = $ds->select_service($path);
+    my $request = $ds_root->new_request_old(undef, $path, $suffix);
     
     # Execute the path if allowed, otherwise indicate a bad request.
     
-    if ( $ss->can_execute_path($sp) )
+    if ( $request->can_execute )
     {
-	return $ss->execute_path($sp, $suffix);
+	return $request->execute;
     }
     
     else
     {
-	$ss->error_result("", "html", "404 The resource you requested was not found.");
+	$request->error_result("", "html", "404 The resource you requested was not found.");
     }
 };
 
@@ -180,18 +187,19 @@ sub {
     
     $DB::single = 1;
     
-    # Figure out which subservice (if any) should be handling this.
+    # Generate a new request object, which also involves figuring out which
+    # subservice (if any) should be handling this request.
     
-    my ($ss, $sp) = $ds->select_service($path);
+    my $request = $ds_root->new_request_old(undef, $path, 'html');
     
-    if ( $ds->can_document_path($path) )
+    if ( $request->can_document )
     {
-	return $ds->document_path($path, 'html');
+	return $request->document;
     }
     
     else
     {
-	$ds->error_result("", "html", "404 The resource you requested was not found.");
+	$request->error_result("", "html", "404 The resource you requested was not found.");
     }
 };
 
@@ -202,6 +210,8 @@ get qr{(.*)} => sub {
 
     my ($path) = splat;
     $DB::single = 1;
+    
+    my ($ds, $path_remainder) = $ds_root->select_service($path);
     $ds->error_result("", "html", "404 The resource you requested was not found.");
 };
 

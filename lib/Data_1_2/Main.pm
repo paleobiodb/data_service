@@ -34,7 +34,7 @@ sub setup {
 	  version => 'a1',
 	  path_prefix => 'data1.2',
 	  ruleset_prefix => '1.2:',
-	  doc_path => 'doc/1.2',
+	  doc_dir => 'doc/1.2',
 	  package => 'Data_1_2' },
 	    "This is the development version of the data service.  New features are introduced into",
 	    "this version, and the interface may change unpredictably.");
@@ -365,7 +365,7 @@ sub setup {
     # And finally, stylesheets and such
     
     $ds2->define_path({ path => 'css',
-			file_path => 'public/css',
+			file_dir => 'public/css',
 			send_files => 1 });
 
 };

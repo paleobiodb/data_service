@@ -7,14 +7,15 @@
 # Author: Michael McClennen
 
 use strict;
+use lib qw(lib);
 
 package Data_1_1::TaxonData;
+
+use Web::DataService qw(:validators);
 
 use base 'Web::DataService::Request';
 use Carp qw(carp croak);
 use Try::Tiny;
-
-use Web::DataService qw(:validators);
 
 use Data_1_1::CommonData qw(generateReference generateAttribution);
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
@@ -969,12 +970,16 @@ sub get_taxa_by_name {
     my ($self, $names, $options) = @_;
     
     $options ||= {};
+    my $dbh = $self->get_dbh;
     
     # We start with some common query clauses, depending on the options.
     
     my (@clauses);
+    my $order_string = 'ORDER BY v.taxon_size';
     my $limit_string = '';
     my $fields = 't.orig_no';
+    
+    # Do we accept common names?
     
     if ( ! defined $options->{common} )
     {
@@ -986,17 +991,47 @@ sub get_taxa_by_name {
 	push @clauses, "common eq 'EN'";
     }
     
-    # And result type
+    # Invalid names?
+    
+    my $status = $options->{status} // 'valid';
+    
+    if ( $status eq 'valid' )
+    {
+	push @clauses, "status in ('belongs to', 'objective synonym of', 'subjective synonym of')";
+    }
+    
+    elsif ( $status eq 'senior' )
+    {
+	push @clauses, "status in ('belongs to')";
+    }
+    
+    elsif ( $status eq 'invalid' )
+    {
+	push @clauses, "status not in ('belongs to', 'objective synonym of', 'subjective synonym of')";
+    }
+    
+    elsif ( $status ne 'any' )
+    {
+	push @clauses, "status = 'bad_value'";
+    }
+    
+    # Number of results
+    
+    unless ( $options->{all_names} )
+    {
+	$limit_string = "LIMIT 1";
+    }
+    
+    # Result fields
     
     if ( $options->{range} )
     {
-	$fields = 't.lft, t.rgt';
-	$limit_string = 'ORDER BY taxon_size desc LIMIT 1';
+	$fields = "t.lft, t.rgt";
     }
     
-    elsif ( ! $options->{all_names} )
+    else
     {
-	$limit_string = 'ORDER BY taxon_size desc LIMIT 1';
+	$fields = "s.name as match_name, t.name as taxon_name, t.rank as taxon_rank, t.status, v.taxon_size, t.orig_no, t.trad_no as taxon_no";
     }
     
     # The names might be given as a list, a hash, or a single string (in which
@@ -1028,6 +1063,7 @@ sub get_taxa_by_name {
     
     my (@result);
     
+ NAME:
     foreach my $tn ( @name_list )
     {
 	my @filters;
@@ -1043,19 +1079,37 @@ sub get_taxa_by_name {
 	$tn =~ s/\./% /g;
 	$tn =~ tr{a-zA-Z%_: }{}cd;
 	
-	# If we have a selection prefix, evaluate and return it.
+	# If we have a selection prefix, evaluate it and add the proper range
+	# filter.
 	
-	if ( $tn =~ qr{ ^ (.+) : \s* (.+) }xs )
+	if ( $tn =~ qr { [:] }xs )
 	{
-	    my $prefix = $1;
-	    $tn = $2;
+	    my $range = '';
 	    
-	    if ( $prefix =~ /[a-zA-Z]/ )
+	    while ( $tn =~ qr{ ^ ([^:]+) : \s* (.*) }xs )
 	    {
-		my $filter = $self->get_taxon_range($prefix, { range => 1 });  
-		# $$$$ prefix must be a single name, not binomial
-		push @filters, $filter if $filter;
+		my $prefix = $1;
+		$tn = $2;
+		
+		# A prefix is only valid if it's a single word.  Otherwise, we
+		# skip this name entirely because with an invalid prefix it cannot
+		# evaluate to any actual name entry.
+		
+		if ( $prefix =~ qr{ ^ \s* ([a-zA-Z][a-zA-Z%]+) \s* $ }xs )
+		{
+		    $range = $self->get_taxon_range($1, $range);  
+		}
+		
+		else
+		{
+		    next NAME;
+		}
 	    }
+	    
+	    # If we get here, we have evaluated all prefixes.  So add the
+	    # resulting range to the list of filters.
+	    
+	    push @filters, $range if $range;
 	}
 	
 	# Now, we determine the query necessary to find each name.
@@ -1064,7 +1118,7 @@ sub get_taxa_by_name {
 	# species name.  The name is not valid unless we have at least one
 	# alphabetic character in the genus and one in the species.
 	
-	if ( $n =~ qr{ ^ ([^\s]+) \s+ (.*) }xs )
+	if ( $tn =~ qr{ ^ ([^\s]+) \s+ (.*) }xs )
 	{
 	    my $genus = $1;
 	    my $species = $2;
@@ -1082,7 +1136,7 @@ sub get_taxa_by_name {
 	# name is not valid unless it contains at least two alphabetic
 	# characters. 
 	
-	elsif ( $n =~ qr{ ^ ([^\s]+) $ }xs )
+	elsif ( $tn =~ qr{ ^ ([^\s]+) $ }xs )
 	{
 	    my $higher = $1;
 	    
@@ -1095,7 +1149,7 @@ sub get_taxa_by_name {
 	
 	else
 	{
-	    next;
+	    next NAME;
 	}
 	
 	# Now, construct the query.
@@ -1108,14 +1162,35 @@ sub get_taxa_by_name {
 		FROM taxon_search as s join taxon_trees as t on t.orig_no = s.synonym_no
 			join taxon_attrs as v on v.orig_no = t.orig_no
 		WHERE $filter_string
+		ORDER BY v.taxon_size
 		$limit_string";
 	
-	if ( $
+	my (@records) = $dbh->selectall_arrayref($NAME_SQL, { Slice => {} });
 	
-	my (@results) = $dbh->sel
-	
+	push @result, @records;
     }
     
+    return @result;
+}
+
+
+sub get_taxon_range {
+    
+    my ($self, $name, $range) = @_;
+    
+    my $dbh = $self->get_dbh;
+    my $range_filter = $range ? "and $range" : "";
+    
+    my $sql = "
+		SELECT t.lft, t.rgt
+		FROM taxon_search as s JOIN taxon_trees as t on t.orig_no = s.synonym_no
+			JOIN taxon_attrs as v on v.orig_no = t.orig_no
+		WHERE s.taxon_name like '$name' $range_filter
+		ORDER BY v.taxon_size LIMIT 1";
+    
+    my ($lft, $rgt) = $dbh->selectrow_array($sql);
+    
+    return $lft ? "t.lft between $lft and $rgt" : "t.lft = 0";
 }
 
 

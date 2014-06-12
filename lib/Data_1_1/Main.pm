@@ -21,7 +21,8 @@ use Data_1_1::PersonData;
 # setup ( ds )
 # 
 # This routine is called from the main program, in order to set up version 1.1
-# of the data service.  The main service object is provided as a parameter.
+# of the data service.  The main service object is provided as a parameter,
+# and we instantiate a sub-service object here.
 
 sub setup {
 
@@ -29,11 +30,11 @@ sub setup {
     
     my $ds1 = $ds->define_subservice(
 	{ name => 'data1.1',
-	  label => '1.1',
+	  label => 'version 1.1',
 	  version => 'b4',
 	  path_prefix => 'data1.1',
 	  ruleset_prefix => '1.1:',
-	  doc_path => 'doc/1.1',
+	  doc_dir => 'doc/1.1',
 	  package => 'Data_1_1' },
 	    "This is the current stable version of the data service.  The interface is guaranteed",
             "not to change, except possibly for extremely important bug fixes.  In such a case,",
@@ -121,6 +122,7 @@ sub setup {
     $ds1->define_path({ path => '/', 
 			public_access => 1,
 			output_param => 'show',
+			output_label => 'basic',
 			vocab_param => 'vocab',
 			limit_param => 'limit',
 			count_param => 'count',
@@ -128,6 +130,7 @@ sub setup {
 			default_limit => 500,
 			allow_format => 'json,csv,tsv,txt',
 			allow_vocab => 'pbdb,com',
+			doc_layout => '1.1/doc_new.tt',
 			doc_title => 'Documentation' });
     
     # Configuration. This path is used by clients who need to configure themselves
@@ -136,7 +139,7 @@ sub setup {
     $ds1->define_path({ path => 'config',
 			class => 'Data_1_1::ConfigData',
 			method => 'get',
-			output => '1.1:config:get_map',
+			output_opt => '1.1:config:get_map',
 			doc_title => 'Client configuration' });
 
     # Occurrences.  These paths are used to fetch information about fossil
@@ -150,24 +153,28 @@ sub setup {
     $ds1->define_path({ path => 'occs/single',
 			method => 'get',
 			post_configure_hook => 'prune_field_list',
-			output => '1.1:occs:basic_map',
+			output => '1.1:occs:basic',
+			output_opt => '1.1:occs:basic_map',
 			doc_title => 'Single fossil occurrence'});
     
     $ds1->define_path({ path => 'occs/list',
 			method => 'list',
 			post_configure_hook => 'prune_field_list',
-			output => '1.1:occs:basic_map',
+			output => '1.1:occs:basic',
+			output_opt => '1.1:occs:basic_map',
 			doc_title => 'Lists of fossil occurrences' });
     
     $ds1->define_path({ path => 'occs/refs',
 			method => 'refs',
 			allow_format => '+ris,-xml',
-			output => '1.1:refs:output_map',
+			output => '1.1:refs:basic',
+			output_opt => '1.1:refs:output_map',
 			doc_title => 'Bibliographic references for fossil occurrences' });
     
     $ds1->define_path({ path => 'occs/taxa',
 			method => 'taxa',
-			output => '1.1:taxa:output_map',
+			output => '1.1:taxa:basic',
+			output_opt => '1.1:taxa:output_map',
 			doc_title => 'Taxa from fossil occurrences' });
     
     # Collections.  These paths are used to fetch information about fossil
@@ -192,7 +199,8 @@ sub setup {
     
     $ds1->define_path({ path => 'colls/summary',
 			method => 'summary',
-			output => '1.1:colls:summary_map',
+			output => '1.1:colls:summary',
+			output_opt => '1.1:colls:summary_map',
 			doc_title => 'Geographic clusters of fossil collections' });
     
     $ds1->define_path({ path => 'colls/refs',
@@ -223,7 +231,8 @@ sub setup {
     
     $ds1->define_path({ path => 'taxa',
 			class => 'Data_1_1::TaxonData',
-			output => '1.1:taxa:output_map',
+			output => '1.1:taxa:basic',
+			output_opt => '1.1:taxa:output_map',
 			doc_title => 'Taxonomic names' });
     
     $ds1->define_path({ path => 'taxa/single',
@@ -239,7 +248,8 @@ sub setup {
 			doc_title => 'Lists of taxa' });
     
     $ds1->define_path({ path => 'taxa/refs',
-			output => '1.1:refs:output_map',
+			output => '1.1:refs:basic',
+			output_opt => '1.1:refs:output_map',
 			method => 'list',
 			arg => 'refs',
 			doc_title => 'Bibliographic references for taxa' });
@@ -365,7 +375,7 @@ sub setup {
     # And finally, stylesheets and such
     
     $ds1->define_path({ path => 'css',
-			file_path => 'public/css',
+			file_dir => 'public/css',
 			send_files => 1 });
 
 };

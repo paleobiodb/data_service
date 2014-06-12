@@ -36,7 +36,7 @@ our ($DEFAULT_INSTANCE, @HTTP_METHOD_LIST);
 
 sub define_set {
 
-    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
+    my $self = shift;
     my $name = shift;
     
     # Make sure the name is unique.
@@ -54,8 +54,8 @@ sub define_set {
     my $vs = { name => $name,
 	       defined_at => "line $line of $filename",
 	       value => {},
-	       list => [],
-	       doc_list => [] };
+	       enabled => [],
+	       documented => [] };
     
     bless $vs, 'Web::DataService::Set';
     
@@ -111,8 +111,6 @@ sub define_set {
 	# containing all defined values.
 	
 	push @{$vs->{enabled}}, $value unless $item->{disabled};
-	push @{$vs->{unfixed}}, $value unless $item->{disabled} || $item->{fixed};
-	push @{$vs->{fixed}}, $value if $item->{fixed} && ! $item->{disabled};
 	$vs->{value}{$value} = $item;
     }
     
@@ -120,42 +118,40 @@ sub define_set {
     
     $self->process_doc($vs);
     
-    # Get a list of just those items that are not disabled or undocumented.
+    # Get a list of all items that are neither marked as disabled nor as
+    # undocumented.  This list will be used when generating documentation strings.
     
-    push @{$vs->{doc_enabled}}, grep { ! $vs->{value}{$_}{undoc} } @{$vs->{enabled}};
-    push @{$vs->{doc_unfixed}}, grep { ! $vs->{value}{$_}{undoc} } @{$vs->{unfixed}};
-    push @{$vs->{doc_fixed}}, grep { ! $vs->{value}{$_}{undoc} } @{$vs->{fixed}};
+    @{$vs->{documented}} = grep { ! $vs->{value}{$_}{undoc} } @{$vs->{enabled}};
+    
+    my $a = 1;	# we can stop here when debugging
 }
 
 
-# valid_set ( set_name, variety )
+# valid_set ( name )
 # 
 # Return a reference to a validator routine (actualy a closure) which will
-# accept the list of values defined for the specified set.  The parameter
-# $variety can be either 'enabled', 'unfixed', or 'documented'.  If defaults
-# to 'unfixed'.
+# accept the list of values defined for the specified set.  If the given name
+# does not correspond to any set, the returned routine will reject any value
+# it is given.
 
 sub valid_set {
 
-    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-    my ($set_name, $variety) = @_;
-    
-    $variety ||= 'unfixed';
+    my ($self, $set_name) = @_;
     
     my $vs = $self->{set}{$set_name};
     
     unless ( ref $vs eq 'Web::DataService::Set' )
     {
-	warn "unknown set '$set_name'";
+	print STDERR "WARNING: unknown set '$set_name'";
 	return \&bad_set_validator;
     }
     
-    # If there is at least one value of the indicated variety, return an
-    # enumeration validator.
+    # If there is at least one enabled value for this set, return the
+    # appropriate closure.
     
-    if ( ref $vs->{$variety} eq 'ARRAY' && @{$vs->{$variety}} )
+    if ( ref $vs->{enabled} eq 'ARRAY' && @{$vs->{enabled}} )
     {
-	return ENUM_VALUE( @{$vs->{$variety}} );
+	return ENUM_VALUE( @{$vs->{enabled}} );
     }
     
     # Otherwise, return a reference to a routine which will always return an
@@ -171,34 +167,31 @@ sub bad_set_validator {
 }
 
 
-# document_set ( set_name, variety )
+# document_set ( set_name )
 # 
 # Return a string in Pod format documenting the values that were assigned to
 # this set.
 
 sub document_set {
 
-    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-    my ($name, $variety) = @_;
-    
-    $variety ||= 'unfixed';
+    my ($self, $set_name) = @_;
     
     # Look up a set object using the given name.  If none could be found,
     # return an explanatory message.
     
-    my $vs = $self->{set}{$name};
+    my $vs = $self->{set}{$set_name};
     
     return "=over\n\n=item I<Could not find the specified set>\n\n=back"
 	unless ref $vs eq 'Web::DataService::Set';
     
-    return "=over\n\n=item I<The specified set does not contain any items>\n\n=back"
-	unless ref $vs->{$variety} eq 'ARRAY' && @{$vs->{$variety}};
+    return "=over\n\n=item I<The specified set does not contain any documented items>\n\n=back"
+	unless ref $vs->{documented} eq 'ARRAY' && @{$vs->{documented}};
     
     # Now return the documentation in Pod format.
     
     my $doc = "=over\n\n";
     
-    foreach my $name (@{$vs->{$variety}})
+    foreach my $name (@{$vs->{documented}})
     {
 	my $rec = $vs->{value}{$name};
 	next if $rec->{undoc};
@@ -213,7 +206,7 @@ sub document_set {
 }
 
 
-# get_set_map_list ( set_name, variety )
+# get_set_map_list ( set_name )
 # 
 # Return the list of 'map_to' values for the specified set.  The parameter
 # $variety can be either 'enabled', 'unfixed', or 'documented'.  It defaults
@@ -221,16 +214,13 @@ sub document_set {
 
 sub get_set_map_list {
 
-    my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-    my ($set_name, $variety) = @_;
-    
-    $variety ||= 'enabled';
+    my ($self, $set_name) = @_;
     
     my $vs = $self->{set}{$set_name};
     
     return unless ref $vs eq 'Web::DataService::Set';
     
-    my $value_list = $vs->{$variety} || return;
+    my $value_list = $vs->{enabled} || return;
     
     return grep { defined $_ } map { $vs->{value}{$_}{maps_to} } @$value_list;
 }
@@ -240,6 +230,7 @@ sub define_output_map {
     
     goto \&define_set;
 }
+
 
 # define_block ( name, specification... )
 # 
@@ -784,6 +775,16 @@ sub add_output_block {
 			$vs_value = 1 if $2 eq 'value';
 			$vs_name = 1 if $2 eq 'name';
 		    } 
+		}
+		
+		elsif ( $key eq 'data_type' )
+		{
+		    my $type_value = $r->{$key};
+		    croak "unknown value '$r->{$key}' for data_type: must be one of 'int', 'pos', 'dec'"
+			unless lc $type_value eq 'int' || lc $type_value eq 'pos' ||
+			    lc $type_value eq 'dec';
+		    
+		    push @{$request->{proc_list}}, { check => $r->{output}, type => $r->{$key} };
 		}
 		
 		elsif ( $key ne 'output' )
@@ -1396,58 +1397,85 @@ sub document_node {
 }
 
 
-# document_response ( path, allowed_vocab, output_name )
+# document_response ( )
 # 
 # Generate documentation in Pod format describing the available output fields
-# for the specified URL path.  The parameter $allowed_vocab must be a reference to
-# a hash whose keys are vocabulary names.  The parameter $output_name of them.
-# The third must name either an output set or an array of block names.
+# for the specified URL path.
 
 sub document_response {
     
-    my ($self, $path, $output_name) = @_;
+    my ($self, $path) = @_;
     
-    return '' unless defined $output_name && $output_name ne '';
+    my $ds = $self->{ds};
+    my $attrs = $ds->{path_attrs}{$path};
     
-    # First figure out if the specified output name is the name of an output
-    # map.  If so, we document all of the visible items.
+    my @blocks;
+    my @labels;
     
-    my $output_map = $self->{set}{$output_name}
-	if ref $self->{set}{$output_name} eq 'Web::DataService::Set';
+    # First collect up a list of all of the fixed (non-optional) blocks.
+    # Block names that do not correspond to any defined block are ignored,
+    # with a warning.
     
-    my @keys = @{$output_map->{doc_enabled}}
-	if $output_map && ref $output_map->{doc_enabled} eq 'ARRAY';
+    my @output_list = @{$attrs->{output}} if ref $attrs->{output} eq 'ARRAY';
+    my $fixed_label = $attrs->{output_label} // 'basic';
     
-    my %block_map = map { $_ => $output_map->{value}{$_}{maps_to} } @keys
-	if $output_map;
-    
-    # If there was no output map, or it didn't include any visible items, then
-    # see if the output name specifies a block instead.
-    
-    if ( ! @keys && ref $self->{block}{$output_name} eq 'Web::DataService::Block' )
+    foreach my $block_name ( @output_list )
     {
-	@keys = 'basic';
-	$block_map{'basic'} = $output_name;
+	if ( ref $ds->{block}{$block_name} eq 'Web::DataService::Block' )
+	{
+	    push @blocks, $block_name;
+	    push @labels, $fixed_label;
+	}
+	
+	elsif ( $ds->debug )
+	{
+	    warn "WARNING: block '$block_name' not found";
+	}
     }
     
-    # If we still don't have any output blocks, we cannot generate any documentation.
+    # Then add all of the optional blocks, if an output_opt map was
+    # specified.
     
-    unless ( @keys )
+    my $output_opt = $attrs->{output_opt};
+    
+    if ( $output_opt && ref $self->{set}{$output_opt} eq 'Web::DataService::Set' )
     {
-	warn "No output blocks were enabled for output map '$output_map'" if $self->{DEBUG};
-	return "";
+	my $output_map = $ds->{set}{$output_opt};
+	my @keys = @{$output_map->{documented}} if ref $output_map->{documented} eq 'ARRAY';
+	
+	foreach my $label ( @keys )
+	{
+	    my $block_name = $output_map->{value}{$label}{maps_to};
+	    next unless defined $block_name;
+	    
+	    if ( ref $ds->{block}{$block_name} eq 'Web::DataService::Block' )
+	    {
+		push @blocks, $block_name;
+		push @labels, $label;
+	    }
+	}
     }
     
-    # Next determine the set of vocabularies that are allowed for this path.
-    # If none are specifically selected for this path, then all of the
+    elsif ( $output_opt && $ds->debug )
+    {
+	warn "WARNING: output map '$output_opt' not found";
+    }
+    
+    # If there are no output blocks specified for this path, return an empty
+    # string.
+    
+    return '' unless @blocks;
+    
+    # Otherwise, determine the set of vocabularies that are allowed for this
+    # path.  If none are specifically selected for this path, then all of the
     # vocabularies defined for this data service are allowed.
     
     my $vocabularies = $self->{path_attrs}{$path}{allow_vocab} || $self->{vocab};
     
     unless ( ref $vocabularies eq 'HASH' && keys %$vocabularies )
     {
-	warn "No output vocabularies were selected for path '$path'" if $self->debug;
-	return "";
+	warn "No output vocabularies were selected for path '$path'" if $ds->debug;
+	return '';
     }
     
     my @vocab_list = grep { $vocabularies->{$_} && 
@@ -1478,7 +1506,7 @@ sub document_response {
     else
     {
 	$doc_string .= "=over 4\n\n";
-	$doc_string .= "=for pp_table_header Field name / Output block / Description\n\n";
+	$doc_string .= "=for pp_table_header Field name / Block / Description\n\n";
     }
     
     # Run through each block one at a time, documenting all of the fields in
@@ -1486,15 +1514,10 @@ sub document_response {
     
     my %uniq_block;
     
-    foreach my $key (@keys)
+    foreach my $i (0..$#blocks)
     {
-	# Skip any keys that don't map to a visible block.  The 'undoc'
-	# attribute indicates an undocumented block that shouldn't be shown.
-	
-	my $block_name = $block_map{$key};
-	
-	next unless $block_name;
-	next if ref $output_map && $output_map->{value}{$key}{undoc};
+	my $block_name = $blocks[$i];
+	my $block_label = $labels[$i];
 	
 	# Make sure to only process each block once, even if it is listed more
 	# than once.
@@ -1507,7 +1530,7 @@ sub document_response {
 	foreach my $r (@$output_list)
 	{
 	    next unless defined $r->{output};
-	    $doc_string .= $self->document_field($key, \@vocab_list, $r)
+	    $doc_string .= $self->document_field($block_label, \@vocab_list, $r)
 		unless $r->{undoc};
 	}
     }
@@ -1555,83 +1578,6 @@ sub document_field {
 }
 
 
-# list_fixed_blocks ( path, output_name )
-# 
-# Return a list of the fixed blocks defined by the specified output map.
-
-sub list_fixed_blocks {
-    
-    my ($self, $path, $output_name) = @_;
-    
-    # Return empty unless we were given an output name.
-    
-    return unless defined $output_name && $output_name ne '';
-    
-    # If the output name corresponds to an output map, return the set of fixed
-    # blocks defined there.
-    
-    if ( ref $self->{set}{$output_name} eq 'Web::DataService::Set' )
-    {
-	return @{$self->{set}{$output_name}{doc_fixed}}
-	    if ref $self->{set}{$output_name}{doc_fixed} eq 'ARRAY';
-	return;		# return empty otherwise
-    }
-    
-    # Otherwise if the output name corresponds to an output block, return the
-    # string 'basic'.
-    
-    if ( ref $self->{block}{$output_name} eq 'Web::DataService::Block' )
-    {
-	return 'basic';
-    }
-    
-    # Otherwise, return the empty list.
-    
-    return;
-}
-
-
-# list_optional_blocks ( path, output_map )
-# 
-# Return a list of the optional blocks defined by the specified
-# output map.
-
-sub list_optional_blocks {
-    
-    my ($self, $path, $output_name) = @_;
-    
-    # Return empty unless we were given an output name.
-    
-    return unless defined $output_name && $output_name ne '';
-    
-    # First determine the set of output blocks to document, or return
-    # immediately if there are none.
-    
-    if ( ref $self->{set}{$output_name} eq 'Web::DataService::Set' )
-    {
-	return @{$self->{set}{$output_name}{doc_unfixed}}
-	    if ref $self->{set}{$output_name}{doc_unfixed} eq 'ARRAY';
-	return;	# return empty otherwise
-    }
-    
-    return;
-}
-
-
-# list_http_methods ( path )
-# 
-# Return a list of the HTTP methods defined for this path.
-
-sub list_http_methods {
-    
-    my ($self, $path) = @_;
-    
-    my $method = $self->{path_attrs}{$path}{allow_method};
-    
-    return grep { $method->{$_} } @HTTP_METHOD_LIST;
-}
-
-
 # process_record ( request, record, steps )
 # 
 # Execute any per-record processing steps that have been defined for this
@@ -1649,6 +1595,14 @@ sub process_record {
     
     foreach my $p ( @$steps )
     {
+	# If this step is a 'check' step, then do the check.
+	
+	if ( exists $p->{check} )
+	{
+	    $self->check_field_type($record, $p->{check}, $p->{type}, $p->{subst});
+	    next;
+	}
+	
 	# Figure out which field (if any) we are affecting.  A value of '*'
 	# means to use the entire record (only relevant with 'code').
 	
@@ -1831,6 +1785,57 @@ sub process_record {
 	    }
 	}
     }    
+}
+
+
+# check_field_type ( record, field, type, subst )
+# 
+# Make sure that the specified field matches the specified data type.  If not,
+# substitute the specified value.
+
+sub check_field_type {
+
+    my ($self, $record, $field, $type, $subst) = @_;
+    
+    if ( $type eq 'int' )
+    {
+	return if $record->{$field} =~ qr< ^ -? [1-9][0-9]* $ >x;
+    }
+    
+    elsif ( $type eq 'pos' )
+    {
+	return if $record->{$field} =~ qr< ^ [1-9][0-9]* $ >x;
+    }
+    
+    elsif ( $type eq 'dec' )
+    {
+	return if $record->{$field} =~ qr< ^ -? (?: [1-9][0-9]* (?: \. [0-9]* )? | [0]? \. [0-9]+ | [0] \. ) $ >x;
+    }
+    
+    elsif ( $type eq 'sci' )
+    {
+	return if $record->{$field} =~ qr< ^ -? (?: [1-9][0-9]* \. [0-9]* | [0]? \. [0-9]+ | [0] \. ) (?: [eE] -? [1-9][0-9]* ) $ >x;
+    }
+    
+    # If the data type is something we don't recognize, don't do any check.
+    
+    else
+    {
+	return;
+    }
+    
+    # If we get here, then the value failed the test.  If we were given a
+    # replacement value, substitute it.  Otherwise, just delete the field.
+    
+    if ( defined $subst )
+    {
+	$record->{$field} = $subst;
+    }
+    
+    else
+    {
+	delete $record->{$field};
+    }
 }
 
 

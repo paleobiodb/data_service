@@ -1284,6 +1284,7 @@ sub createWorkingTables {
 				op_rank tinyint not null,
 				status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 				spelling_no int unsigned not null,
+				trad_no int unsigned not null,
 				synonym_no int unsigned not null,
 				parent_no int unsigned not null,
 				parsen_no int unsigned not null,
@@ -1534,7 +1535,7 @@ sub computeSpelling {
     
     logMessage(2, "    setting name and rank");
     
-    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on taxon_no = spelling_no
+    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on taxon_no = trad_no
 			SET t.name = a.taxon_name, t.rank = a.taxon_rank, t.op_rank = a.taxon_rank");
     
     logMessage(2, "    indexing by name");
@@ -3165,7 +3166,7 @@ sub computeIntermediates {
     
     # As an atrocious hack, I am forcing 'Mammalia' to be a class.
     
-    $SQL_STRING = "UPDATE $TREE_WORK SET rank = 17, op_rank = 17 WHERE name = 'Mammalia' LIMIT 1";
+    #$SQL_STRING = "UPDATE $TREE_WORK SET rank = 17, op_rank = 17 WHERE name = 'Mammalia' LIMIT 1";
     
     $result = $dbh->do($SQL_STRING);
     

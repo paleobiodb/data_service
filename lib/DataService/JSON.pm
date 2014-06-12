@@ -33,20 +33,20 @@ sub emit_header {
     
     if ( $request->display_source )
     {
-	my $source = $request->get_data_source;
-	my $base = $source->{base_url};
+	my $info = $request->get_data_source;
+	my $base = $info->{base_url};
 	my $url_rest = $request->get_request_url;
 	
 	my $data_url = $base . $url_rest;
 	my $doc_url = $base . $request->get_request_path . "_doc.html";
 	
-	$output .= '"data_source":' . json_clean($source->{name}) . ",\n";
+	$output .= '"data_source":' . json_clean($info->{data_source}) . ",\n";
 	$output .= '"data_source_url":' . json_clean($base . '/') . ",\n";
-	$output .= '"data_license":' . json_clean($source->{license}) . ",\n";
-	$output .= '"data_license_url":' . json_clean($source->{license_url}) . ",\n";
+	$output .= '"data_license":' . json_clean($info->{license}) . ",\n";
+	$output .= '"data_license_url":' . json_clean($info->{license_url}) . ",\n";
 	$output .= '"documentation_url":' . json_clean($doc_url) . ",\n";
 	$output .= '"data_url":' . json_clean($data_url) . ",\n";
-	$output .= '"access_time":' . json_clean($source->{access_time}) . ",\n";
+	$output .= '"access_time":' . json_clean($info->{access_time}) . ",\n";
 	$output .= '"parameters":{' . "\n";
 	
 	my @display = $request->params_for_display;

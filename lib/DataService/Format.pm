@@ -140,14 +140,13 @@ sub define_format {
 }
 
 
+
 # document_allowed_formats ( path, extended )
 # 
 # Return a string containing POD documentation of the response formats that
-# are allowed for the specified path.  If the path is '/', then document all
+# are allowed for the request path.  If the path is '', then document all
 # of the formats enabled for this data service regardless of whether they are
 # actually allowed for that path.
-# 
-# If $extended is true, then include the text description of each format.
 
 sub document_allowed_formats {
 

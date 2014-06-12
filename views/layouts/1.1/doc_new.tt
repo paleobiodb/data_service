@@ -1,0 +1,18 @@
+<% PROCESS 'layouts/1.1/doc_defs.tt' -%>
+
+=encoding utf8
+
+=head1 PBDB Data Service: <% doc_title %>
+
+<% PROCESS trail %>
+
+<% content %>
+
+=head2 AUTHOR
+
+This service is provided by the L<Paleobiology Database|http://paleobiodb.org/>, 
+hosted by the L<Department of Geoscience|http://geoscience.wisc.edu/geoscience/>
+at the L<University of Wisconsin-Madison|http://www.wisc.edu/>.
+
+If you have questions about this service, please contact 
+<% settings.appauthor %> <L<<% settings.appauthoremail %>|mailto:<% settings.appauthoremail %>>>.

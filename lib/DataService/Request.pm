@@ -1,5 +1,5 @@
 #
-# DataService::Query
+# Web::DataService::Request
 # 
 # A base class that implements a data service for the PaleoDB.  This can be
 # subclassed to produce any necessary data service.  For examples, see
@@ -12,6 +12,7 @@ use strict;
 package Web::DataService::Request;
 
 use Scalar::Util qw(reftype);
+use Carp qw(carp croak);
 
 
 # CLASS METHODS
@@ -45,95 +46,190 @@ sub new {
 }
 
 
-# get_config ( )
-# 
-# Get the Dancer configuration object, providing access to the configuration
-# directives for this data service.
+# INSTANCE METHODS
+# ----------------
 
-sub get_config {
+# execute ( )
+# 
+# Execute this request.
+
+sub execute {
+
+    my ($self) = @_;
     
-    return Web::DataService->get_config;
+    my $ds = $self->{ds};
+    my $path = $self->{path};
+    my $format = $self->{format};
+    my $attrs = $self->{attrs};
+    
+    $DB::single = 1;
+    
+    # First check to see if we should be sending a file.  If so, figure out
+    # the path and send it.
+    
+    if ( $attrs->{send_files} )
+    {
+	my $file_dir = $attrs->{file_dir};
+	my $rest_path = $self->{rest_path};
+	$rest_path .= ".$format" if defined $format;
+	
+	croak "you must specify a directory in which to look for files"
+	    unless defined $file_dir && $file_dir ne '';
+	
+	my $file_name = "$file_dir/$rest_path";
+	
+	$ds->send_file($self->{outer}, $file_name);
+    }
+    
+    # Otherwise, check to see if the requested format is '.pod' or '.html' and
+    # the path ends in 'index' or '*_doc'.  These URL patterns are interpreted
+    # as requests for documentation.
+    
+    elsif ( defined $format && 
+	    ( $format eq 'html' || $format eq 'pod' ) &&
+	    $path =~ qr{ (?: index | [^/]+ _doc ) $ }xs )
+    {
+	# Check to see if we can document this path; if not, return a 404
+	# error.
+	
+	if ( $self->can_document )
+	{
+	    return $self->document;
+	}
+	
+	else
+	{
+	    $ds->error_result("", "html", "404 The resource you requested was not found.");
+	}
+    }
+    
+    # Otherwise, any path that ends in a suffix is interpreted as a request to
+    # execute an operation.  The suffix specifies the desired format for the
+    # result. 
+    
+    elsif ( defined $format )
+    {
+	# If the path ends in a number, replace it by 'single'
+	# and add the parameter as 'id'.
+	
+	#if ( $path =~ qr{ (\d+) $ }xs )
+	#{
+	#    params->{id} = $1;
+	#    $path =~ s{\d+$}{single};
+	#}
+	
+	if ( $self->can_execute )
+	{
+	    return $self->execute;
+	}
+	
+	else
+	{
+	    my $errfmt = $format eq 'json' ? 'json' : 'html';
+	    $self->error_result("", $errfmt, "404 The resource you requested was not found.");
+	}
+    }
+    
+    # Any other path not ending in a suffix is interpreted as a request for
+    # documentation.  If no documentation is available, we return a 404 error.
+    
+    else
+    {
+	if ( $self->can_document )
+	{
+	    return $self->document;
+	}
+	
+	else
+	{
+	    $self->error_result("", "html", "404 The resource you requested was not found.");
+	}
+    }
 }
 
 
-# get_dbh ( )
+# determine_ruleset ( )
 # 
-# Get a database handle, assuming that the proper directives are present in
-# the config.yml file to allow a connection to be made.
+# Determine the ruleset that should apply to this request.  If a ruleset name
+# was explicitly specified for the request path, then use that if it is
+# defined or throw an exception if not.  Otherwise, try the path with slashes
+# turned into commas and the optional ruleset_prefix applied.
 
-sub get_dbh {
+sub determine_ruleset {
     
     my ($self) = @_;
     
-    return $self->{dbh} if ref $self->{dbh};
+    my $ds = $self->{ds};
+    my $validator = $self->{validator};
+    my $path = $self->{path};
+    my $ruleset = $self->{attrs}{ruleset};
     
-    $self->{dbh} = Web::DataService->get_dbh;
-    return $self->{dbh};
-}
-
-
-# define_valueset ( name, specification... )
-# 
-# Define a list of parameter values, with optional "internal" values and
-# documentation.  This can be used to automatically generate a validator
-# function and parameter documentation, using the routines below.
-# 
-# The names of valuesets must be unique within a single data service.
-
-sub define_set {
+    # If a ruleset name was explicitly given, then use that or throw an
+    # exception if not defined.
     
-    my $self = shift;
-    goto &Web::DataService::define_set;
-}
-
-
-# document_valueset ( )
-# 
-# Return a string in POD format documenting the values listed in the named
-# valueset.  Values can be excluded from the documentation by placing !# at
-# the beginning of the documentation string.
-
-sub document_set {
+    if ( defined $ruleset && $ruleset ne '' )
+    {
+	croak "unknown ruleset '$ruleset' for path $path"
+	    unless $validator->ruleset_defined($ruleset);
+	
+	return $ruleset;
+    }
     
-    my $self = shift;
-    goto &Web::DataService::document_set;
-}
-
-
-# get_validator ( name )
-# 
-# Return a reference to a validator routine (a closure, actually) which will
-# accept the list of values defined in the named valueset.
-
-sub valid_set {
-
-    my $self = shift;
-    goto &Web::DataService::valid_set;
-}
-
-
-# define_block ( name, specification... )
-# 
-# Define an output block, using the default data service instance.  This must be
-# called as a class method!
-
-sub define_block {
+    # If the ruleset was explicitly specified as '', do not process the
+    # parameters for this path.
     
-    my $self = shift;
-    goto &Web::DataService::define_block;
-}
-
-
-# define_output_map ( dummy )
-
-sub define_output_map {
+    elsif ( defined $ruleset )
+    {
+	return;
+    }
     
-    my $self = shift;
-    goto &Web::DataService::define_set;
+    # Otherwise, try the path with / replaced by :.  If that is not defined,
+    # then return empty.  The parameters for this path will not be processed.
+    
+    else
+    {
+	$path =~ s{/}{:}g;
+	
+	$path = $self->{ruleset_prefix} . $path
+	    if defined $self->{ruleset_prefix} && $self->{ruleset_prefix} ne '';
+	
+	return $path if $validator->ruleset_defined($path);
+	return; # empty if not defined.
+    }
 }
 
-# INSTANCE METHODS
-# ----------------
+
+# determine_output_names {
+# 
+# Determine the output block(s) and/or map(s) that should be used for this
+# request.  If any output names were explicitly specified for the request
+# path, then use them or throw an error if any are undefined.  Otherwise, try
+# the path with slashes turned into colons and either ':default' or
+# ':default_map' appended.
+
+sub determine_output_names {
+
+    my ($self) = @_;
+    
+    my $ds = $self->{ds};
+    my $path = $self->{path};
+    my @output_list = @{$self->{attrs}{output}} if ref $self->{attrs}{output} eq 'ARRAY';
+    
+    # If any output names were explicitly given, then check to make sure each
+    # one corresponds to a known block or set.  Otherwise, throw an exception.
+    
+    foreach my $output_name ( @output_list )
+    {
+	croak "the string '$output_name' does not correspond to a defined output block or map"
+	    unless ref $ds->{set}{$output_name} eq 'Web::DataService::Set' ||
+		ref $ds->{block}{$output_name} eq 'Web::DataService::Block';
+    }
+    
+    # Return the list.
+    
+    return @output_list;
+}
+
 
 # configure_output ( )
 # 
@@ -708,6 +804,61 @@ sub result_counts {
 sub linebreak_cr {
 
     return $_[0]->{linebreak_cr};
+}
+
+
+
+# get_config ( )
+# 
+# Return a hashref providing access to the configuration directives for this
+# data service.
+
+sub get_config {
+    
+    my ($self) = @_;
+    
+    return $self->{ds}->get_config;
+}
+
+
+# get_dbh ( )
+# 
+# Get a database handle, assuming that the proper directives are present in
+# the config.yml file to allow a connection to be made.
+
+sub get_dbh {
+    
+    my ($self) = @_;
+    
+    return $self->{dbh} if ref $self->{dbh};
+    
+    $self->{dbh} = $self->{ds}->get_dbh;
+    return $self->{dbh};
+}
+
+
+
+# set_access_control ( arg )
+# 
+# Set the CORS access control header according to the argument.
+
+sub set_access_control {
+
+    my ($self, $arg) = @_;
+    
+    $self->{ds}->set_access_control($self->{outer}, $arg);
+}
+
+
+# set_content_type ( type )
+# 
+# Set the content type according to the argument.
+
+sub set_content_type {
+    
+    my ($self, $type) = @_;
+    
+    $self->{ds}->set_content_type($self->{outer}, $type);
 }
 
 

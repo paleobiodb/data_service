@@ -239,12 +239,12 @@ sub initialize {
 	{ output => 'geoplate2', com_name => 'gp2' },
 	    "An alternate geological plate identifier, if the C<pgm> parameter",
 	    "indicates more than one model.  There may also be C<geoplate3>, etc.",
-	{ output => 'paleomodel3', com_name => 'pm3' }, "#",
-	{ output => 'paleolng3', com_name => 'pn3' }, "#",
-	{ output => 'paleolat3', com_name => 'pa3' }, "#",
-	{ output => 'paleomodel4', com_name => 'pm4' }, "#",
-	{ output => 'paleolng4', com_name => 'pn4' }, "#",
-	{ output => 'paleolat4', com_name => 'pa4' }, "#");
+	{ output => 'paleomodel3', com_name => 'pm3' }, "! these do not need to be documented separately...",
+	{ output => 'paleolng3', com_name => 'pn3' }, "!",
+	{ output => 'paleolat3', com_name => 'pa3' }, "!",
+	{ output => 'paleomodel4', com_name => 'pm4' }, "!",
+	{ output => 'paleolng4', com_name => 'pn4' }, "!",
+	{ output => 'paleolat4', com_name => 'pa4' }, "!");
     
 #	    "L<list|ftp://ftp.earthbyte.org/earthbyte/GPlates/SampleData/FeatureCollections/Rotations/Global_EarthByte_PlateIDs_20071218.pdf>",
 #	    "established by the L<Earthbyte Group|http://www.earthbyte.org/>.");
