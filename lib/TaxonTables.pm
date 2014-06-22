@@ -2032,8 +2032,9 @@ sub computeHierarchy {
     # their own opinions are considered as well.
     
     $result = $dbh->do("INSERT IGNORE INTO $SYNONYM_AUX
-    			SELECT DISTINCT senior_no, senior_no
-			FROM $SYNONYM_AUX");
+    			SELECT DISTINCT synonym_no, synonym_no
+			FROM $TREE_WORK
+			WHERE orig_no = synonym_no");
     
     # Next, we delete the classification opinion for each taxon that is known
     # to be a senior synonym.  This will clear the way for recomputing the

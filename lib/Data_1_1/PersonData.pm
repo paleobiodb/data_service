@@ -82,7 +82,7 @@ sub get {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Make sure we have a valid id number.
     
@@ -126,7 +126,7 @@ sub list {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Determine which fields and tables are needed to display the requested
     # information.

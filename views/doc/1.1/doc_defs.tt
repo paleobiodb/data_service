@@ -1,0 +1,155 @@
+<% #
+   # This template belongs to the package Web::DataService, and contains
+   # default definitions for generating documentation pages.
+   # 
+   # You can edit this in order to modify the look of your documentation pages.
+   # If you do so, it is best to leave no empty lines.  Use comments like this
+   # one to separate your code.
+   #
+   # ===========================
+%>
+<%- USE dumper -%>
+<%- SET block_done = { } -%>
+<% #
+   # TRAIL: Add a navigation trail to the page
+   # -----------------------------------------
+%>
+<%- BLOCK TRAIL -%>
+<%- IF block_done.trail; RETURN; ELSE; SET block_done.trail = 1; END -%>
+<%- SET base_url = ds_request.get_base_path -%>
+<%- SET trail = "Data Service L<$ds_label|$base_url>" -%>
+<%- IF ds_version; SET trail = "$trail ($ds_version)"; END -%>
+<%- FOREACH item IN ds_request.list_navtrail -%>
+<%- SET trail = "$trail E<GT> $item" -%>
+<%- END -%>
+=head3 <% trail %>
+<%- END -%>
+<% #
+   # PARAMS: Document the parameters corresponding to this URL path
+   # --------------------------------------------------------------
+%>
+<%- BLOCK PARAMS -%>
+<%- IF block_done.params; RETURN; ELSE; SET block_done.params = 1; END %>
+=head2 PARAMETERS
+
+<% GET ds_request.document_params or "I<This request does not accept any parameters>" -%>
+<% END -%>
+<%- #
+    # METHODS: Document the HTTP methods accepted by this URL path
+    # ------------------------------------------------------------
+%>
+<%- BLOCK METHODS -%>
+<%- IF block_done.methods; RETURN; ELSE; SET block_done.methods = 1; END %>
+=head2 METHODS
+<% SET method_doc = ds_request.list_http_methods('pod') -%>
+<%- IF method_doc %>
+You can use the following HTTP methods with this URL path: <% method_doc %>
+<%- ELSE -%>
+I<Warning: no valid HTTP methods were defined for this URL>
+<%- END -%>
+<%- END -%>
+<% # 
+   # RESPONSE: Document the response fields returned by this URL path
+   # ----------------------------------------------------------------
+%>
+<%- BLOCK RESPONSE -%>
+<%- IF block_done.response; RETURN; ELSE; SET block_done.response = 1; END %>
+=head2 RESPONSE
+
+<% SET response_doc = ds_request.document_response -%>
+<%- IF response_doc -%>
+The response to an HTTP request on this path will consist of fields from the following list. 
+<%- IF fixed_blocks %>
+<%- IF fixed_blocks > 1 %>
+The blocks <% fixed_list %> are always present.
+<%- ELSE -%>
+The block <% fixed_list %> is always present.
+<%- END -%>
+<%- IF optional_blocks %>
+The others may be selected using the parameter C<<% output_param %>>.
+<% END -%>
+<%- ELSE -%>
+You can select the output blocks to be returned using the parameter C<<% output_param %>>.
+<% END -%>
+<% response_doc %>
+<% INCLUDE FORMATS %>
+<% INCLUDE VOCABULARIES %>
+<% ELSE %>
+I<No response was defined for this path>
+<% END -%>
+<% END -%>
+<% #
+   # FORMATS: Document the formats allowed by this URL path
+   # ------------------------------------------------------
+%>
+<%- BLOCK FORMATS -%>
+<%- IF block_done.formats; RETURN; ELSE; SET block_done.formats = 1; END %>
+<%- IF opt_extended; options.extended = 1; END -%>
+=head2 FORMATS
+
+<% SET format_doc = ds_request.document_formats(options) %>
+<% IF format_doc %>
+The following response formats are available for this URL path.  You can select any
+of them by using the appropriate path suffix.
+
+<% format_doc %>
+<%- ELSE -%>
+I<No response formats were defined for this path>
+<%- END -%>
+<%- END -%>
+<% #
+   # ALL_FORMATS: Document the formats available from this data service
+   # ------------------------------------------------------------------
+%>
+<%- BLOCK ALL_FORMATS -%>
+<%- IF block_done.all_formats; RETURN; ELSE; SET block_done.all_formats = 1; END %>
+=head2 FORMATS
+
+The following data formats are available from this service.
+The format of a response is indicated by the suffix of the request URL path.
+Different operations allow different formats, so you will need to check the
+documentation for each operation.
+<% GET ds_request.document_formats(all => 1, extended => 1) %>
+<%- END -%>
+<% #
+   # VOCABULARIES: Document the formats allowed by this URL path
+   # -----------------------------------------------------------
+%>
+<%- BLOCK VOCABULARIES -%>
+<%- IF block_done.vocab; RETURN; ELSE; SET block_done.vocab = 1; END %>
+<%- IF opt_extended; options.extended = 1; END -%>
+=head2 VOCABULARIES
+
+<% SET vocab_doc = ds_request.document_vocab(options) %>
+<% IF vocab_doc %>
+The following response vocabularies are available for this URL path.  If you want
+a vocabulary other than the default for the selected format, you can use the C<<% vocab_param %>> parameter.
+
+<% vocab_doc %>
+<%- ELSE -%>
+I<No vocabularies were defined for this path>
+<% END -%>
+<% END -%>
+<% #
+   # ALL_VOCABULARIES: Document the formats available from this data service
+   # ------------------------------------------------------------------
+%>
+<%- BLOCK ALL_VOCABULARIES -%>
+<%- IF block_done.all_vocab; RETURN; ELSE; SET block_done.all_vocab = 1; END %>
+=head2 VOCABULARIES
+
+The following data vocabularies are currently available. If you wish your responses to be
+expressed in a vocabulary other than the default for your selected format, you can use the
+C<<% vocab_param %>> parameter with one of the values from the following table:
+
+<% GET ds_request.document_vocab(all => 1, extended => 1) %>
+<%- END -%>
+<% #
+   # STANDARD: Include all of the standard blocks for an "operation" page
+   # --------------------------------------------------------------------
+%>
+<%- BLOCK STANDARD %>
+<% INCLUDE PARAMS %>
+<% INCLUDE METHODS %>
+<% INCLUDE RESPONSE %>
+<% END -%>

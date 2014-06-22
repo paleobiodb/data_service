@@ -1,12 +1,6 @@
-<% PROCESS sections/definitions.tt %>
-
 =head2 DESCRIPTION
 
 This path returns information about individual taxonomic names stored in the Paleobiology Database.
 
-<% PROCESS params %>
-
-<% PROCESS methods %>
-
-<% PROCESS response %>
+<% INCLUDE STANDARD %>
 

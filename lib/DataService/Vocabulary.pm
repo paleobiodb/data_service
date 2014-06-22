@@ -118,18 +118,22 @@ sub valid_vocab {
 }
 
 
-# document_allowed_vocab ( path, extended )
+# document_vocab ( path, options )
 # 
-# Return a string containing POD documentation of the response vocabularies that
-# are allowed for the specified path.  If the path is '/', then document all
-# of the vocabularies enabled for this data service regardless of whether they are
-# actually allowed for that path.
+# Return a string containing POD documentation of the response vocabularies
+# that are allowed for the specified path.  If the option 'all' is true, then
+# document all of the vocabularies enabled for this data service regardless of
+# whether they are actually allowed for that path.
 # 
-# If $extended is true, then include the text description of each vocabulary.
+# If the option 'extended' is true, then include the text description of each
+# vocabulary.
 
-sub document_allowed_vocab {
+sub document_vocab {
 
-    my ($self, $path) = @_;
+    my ($self, $path, $options) = @_;
+    
+    $options ||= {};
+    $path //= '/';
     
     # Go through the list of defined vocabularies in order, filtering out
     # those which are not allowed for this path.  The reason for doing it this
@@ -137,8 +141,8 @@ sub document_allowed_vocab {
     # defined, instead of the arbitrary hash order.
     
     my $list = $self->{vocab_list};
-    my $allowed = $path eq '/' ? $self->{vocab}
-			       : $self->{path_attrs}{$path}{allow_vocab};
+    my $allowed = $options->{all} ? $self->{vocab}
+	: $self->{path_attrs}{$path}{allow_vocab};
     
     return '' unless ref $allowed eq 'HASH' && ref $list eq 'ARRAY';
     
@@ -146,19 +150,33 @@ sub document_allowed_vocab {
     
     return '' unless @names;
     
-    my $doc = "=over 4\n\n";
-    #my $ext_header = $extended ? " | Description" : '';
+    my @paths = grep { $self->{vocab}{$_}{doc_path} } @names;
     
-    $doc .= "=for pp_table_header Vocabulary | Name | Description\n\n";
+    my $doc = "=over 4\n\n";
+    my $ext_header = $options->{extended} || ! @paths ? " | Description" : '';
+    my $doc_header = @paths ? " | Documentation" : '';
+    
+    $doc .= "=for pp_table_header Vocabulary* | Name$doc_header$ext_header\n\n";
     
     foreach my $name (@names)
     {
 	my $frec = $self->{vocab}{$name};
 	my $title = $frec->{title} || $frec->{name};
-	#my $doc_link = $self->generate_path_link($frec->{doc_path});
+	my $doc_link = $self->generate_path_link($frec->{doc_path}) if $frec->{doc_path};
 	
-	$doc .= "=item $frec->{title} | C<$frec->{name}>\n\n";
-	$doc .= "$frec->{doc}\n\n" if $frec->{doc};
+	$doc .= "=item $frec->{title} | C<$frec->{name}>";
+	$doc .= " | $doc_link" if $doc_link && @paths && $options->{extended};
+	$doc .= "\n\n";
+
+	if ( $options->{extended} || ! @paths )
+	{
+	    $doc .= "$frec->{doc}\n\n" if $frec->{doc};
+	}
+	
+	elsif ( $doc_link )
+	{
+	    $doc .= "$doc_link\n\n";
+	}
     }
     
     $doc .= "=back";
@@ -173,7 +191,7 @@ sub document_allowed_vocab {
 # possibilities.  If a name is specified, return the documentation string for
 # that vocabulary only.
 
-sub document_vocab {
+sub document_one_vocab {
     
     my ($self, $name) = @_;
     

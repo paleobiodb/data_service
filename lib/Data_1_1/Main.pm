@@ -29,12 +29,12 @@ sub setup {
     my ($ds) = @_;
     
     my $ds1 = $ds->define_subservice(
-	{ name => 'data1.1',
+	{ name => '1.1',
 	  label => 'version 1.1',
 	  version => 'b4',
 	  path_prefix => 'data1.1',
 	  ruleset_prefix => '1.1:',
-	  doc_dir => 'doc/1.1',
+	  doc_templates => 'doc/1.1',
 	  package => 'Data_1_1' },
 	    "This is the current stable version of the data service.  The interface is guaranteed",
             "not to change, except possibly for extremely important bug fixes.  In such a case,",
@@ -46,34 +46,39 @@ sub setup {
     $ds1->define_vocab(
 	{ name => 'pbdb', title => 'PaleobioDB field names',
 	  use_field_names => 1 },
-	    "The original Paleobiology Database field names, augmented by some",
-	    "additional new fields.  This vocabulary is the",
-	    "default for text format responses (.tsv, .csv, .txt).",
+	    "The PBDB vocabulary is derived from the underlying field names and values in the database,",
+	    "augmented by a few new fields. For the most part any response that uses this vocabulary",
+	    "will be directly comparable to downloads from the PBDB Classic interface.",
+	    "This vocabulary is the default for L<text format|/data1.1/formats/text> responses.",
 	{ name => 'com', title => 'Compact field names' },
-	    "3-character abbreviated field names.",
-	    "This is the default for JSON responses.",
+	    "The Compact vocabulary is a set of 3-character field names designed to minimize",
+	    "the size of the response message.  This is the default for L<JSON format|/data1.1/formats/json>",
+	    "responses. Some of the field values are similarly abbreviated, while others are conveyed",
+	    "in their entirety. For details, see the documentation for the individual response fields.",
 	{ name => 'dwc', title => 'Darwin Core', disabled => 1 },
-	    "Darwin Core element names.  This is the default for XML responses.",
-	    "Note that many fields are not represented in this vocabulary,",
-	    "because of limitations in the Darwin Core element set.");
+	    "The Darwin Core vocabulary follows the L<Darwin Core standard|http://www.tdwg.org/standards/450/>",
+	    "set by the L<TDWG|http://www.tdwg.org/>.  This includes both the field names and field values.",
+	    "Because the Darwin Core standard is XML-based, it is very strict.  Many",
+	    "but not all of the fields can be expressed in this vocabulary; those that",
+	    "cannot are unavoidably left out of the response.");
     
     
     # Then the formats in which data can be returned.
     
     $ds1->define_format(
 	{ name => 'json', content_type => 'application/json',
-	  doc_path => '1.1/formats/json', title => 'JSON',
+	  doc_path => 'formats/json', title => 'JSON',
 	  default_vocab => 'com' },
 	    "The JSON format is intended primarily to support client applications,",
 	    "including the PBDB Navigator.  Response fields are named using compact",
 	    "3-character field names.",
 	{ name => 'xml', disabled => 1, content_type => 'text/xml', title => 'XML',
-	  doc_path => '1.1/xml',
+	  doc_path => 'formats/xml',
 	  default_vocab => 'dwc' },
 	    "The XML format is intended primarily to support data interchange with",
 	    "other databases, using the Darwin Core element set.",
 	{ name => 'txt', content_type => 'text/plain',
-	  doc_path => '1.1/formats/text', title => 'comma-separated text',
+	  doc_path => 'formats/text', title => 'comma-separated text',
 	  default_vocab => 'pbdb' },
 	    "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	    "downloading data from the database.  These downloads can easily be",
@@ -82,7 +87,7 @@ sub setup {
 	    "tools and analytical procedures.",
 	{ name => 'csv', content_type => 'text/csv',
 	  disposition => 'attachment',
-	  doc_path => '1.1/formats/text', title => 'comma-separated text',
+	  doc_path => 'formats/text', title => 'comma-separated text',
 	  default_vocab => 'pbdb' },
 	    "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	    "downloading data from the database.  These downloads can easily be",
@@ -91,7 +96,7 @@ sub setup {
 	    "tools and analytical procedures.",
 	{ name => 'tsv', content_type => 'text/tab-separated-values', 
 	  disposition => 'attachment',
-	  doc_path => '1.1/formats/text', title => 'tab-separated text',
+	  doc_path => 'formats/text', title => 'tab-separated text',
 	  default_vocab => 'pbdb' },
 	    "The text formats (txt, tsv, csv) are intended primarily for researchers",
 	    "downloading data from the database.  These downloads can easily be",
@@ -99,12 +104,12 @@ sub setup {
 	    "taken from the PBDB Classic interface, for compatibility with existing",
 	    "tools and analytical procedures.",
 	{ name => 'ris', content_type => 'application/x-research-info-systems',
-	  doc_path => '1.1/formats/ris', title => 'RIS', disposition => 'attachment',
+	  doc_path => 'formats/ris', title => 'RIS', disposition => 'attachment',
 	  class => 'RISFormat'},
 	    "The L<RIS format|http://en.wikipedia.org/wiki/RIS_(file_format)> is a",
 	    "common format for bibliographic references.",
 	{ name => 'png', content_type => 'image/png', class => '',
-	  doc_path => '1.1/formats/png', title => 'PNG' },
+	  doc_path => 'formats/png', title => 'PNG' },
 	    "The PNG suffix is used with a few URL paths to fetch images stored",
 	    "in the database.");
 
@@ -130,7 +135,6 @@ sub setup {
 			default_limit => 500,
 			allow_format => 'json,csv,tsv,txt',
 			allow_vocab => 'pbdb,com',
-			doc_layout => '1.1/doc_new.tt',
 			doc_title => 'Documentation' });
     
     # Configuration. This path is used by clients who need to configure themselves
@@ -188,13 +192,15 @@ sub setup {
     $ds1->define_path({ path => 'colls/single',
 			method => 'get',
 			post_configure_hook => 'prune_field_list',
-			output => '1.1:colls:basic_map',
+			output => '1.1:colls:basic',
+			output_opt => '1.1:colls:basic_map',
 			doc_title => 'Single fossil collection' });
     
     $ds1->define_path({ path => 'colls/list',
 			method => 'list',
 			post_configure_hook => 'prune_field_list',
-			output => '1.1:colls:basic_map',
+			output => '1.1:colls:basic',
+			output_opt => '1.1:colls:basic_map',
 			doc_title => 'Lists of fossil collections' });
     
     $ds1->define_path({ path => 'colls/summary',
@@ -206,7 +212,8 @@ sub setup {
     $ds1->define_path({ path => 'colls/refs',
 			method => 'refs',
 			allow_format => '+ris',
-			output => '1.1:refs:output_map',
+			output => '1.1:refs:basic',
+			output_opt => '1.1:refs:output_map',
 			doc_title => 'Bibliographic references for fossil collections' });
     
     # Strata.  These paths are used to fetch information abot geological strata
@@ -232,19 +239,20 @@ sub setup {
     $ds1->define_path({ path => 'taxa',
 			class => 'Data_1_1::TaxonData',
 			output => '1.1:taxa:basic',
-			output_opt => '1.1:taxa:output_map',
 			doc_title => 'Taxonomic names' });
     
     $ds1->define_path({ path => 'taxa/single',
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
 			method => 'get',
+			output_opt => '1.1:taxa:output_map',
 			doc_title => 'Single taxon' });
     
     $ds1->define_path({ path => 'taxa/list',
 			allow_format => '+xml',
 			allow_vocab => '+dwc',
 			method => 'list',
+			output_opt => '1.1:taxa:output_map',
 			doc_title => 'Lists of taxa' });
     
     $ds1->define_path({ path => 'taxa/refs',
@@ -260,7 +268,7 @@ sub setup {
     $ds1->define_path({ path => 'taxa/auto',
 			method => 'auto', 
 			allow_format => 'json',
-			output => '1.1:taxa:auto_map',
+			output => '1.1:taxa:auto',
 			doc_title => 'Auto-completion for taxonomic names' });
     
     $ds1->define_path({ path => 'taxa/thumb',

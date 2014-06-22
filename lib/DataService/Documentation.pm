@@ -41,25 +41,25 @@ sub can_document {
 
 sub document {
     
-    my ($self) = @_;
+    my ($request) = @_;
+    
+    my $ds = $request->{ds};
+    my $path = $request->{path};
+    my $format = $request->{format};
+    my $attrs = $request->{attrs};
+    my $class = $attrs->{class};
     
     # Do all of the processing in a 'try' block so that if an error occurs we
     # can return an appropriate message.
     
     try {
 	
-	my $ds = $self->{ds};
-	my $path = $self->{path};
-	my $attrs = $self->{attrs};
-	my $class = $attrs->{class};
-	my $format = $attrs->{format};
-	
 	$DB::single = 1;
 	
 	# If we are in 'one request' mode, initialize the class plus all of
 	# the classes it requires.
 	
-	if ( $ds->{ONE_REQUEST} )
+	if ( $Web::DataService::ONE_REQUEST )
 	{
 	    if ( ref $attrs->{also_initialize} eq 'ARRAY' )
 	    {
@@ -76,7 +76,7 @@ sub document {
 	# template.  This may include one or more of: a title, parameters,
 	# response fields, etc.
 	
-	my $vars = { request => $self,
+	my $vars = { ds_request => $request,
 		     path => $path,
 		     doc_title => $attrs->{doc_title} // $path,
 		     ds_label => $ds->{label} // '',
@@ -87,7 +87,7 @@ sub document {
 	
 	# All documentation is public, so set the maximally permissive CORS header.
 	
-	$self->set_access_control("*");
+	$request->set_cors_header($request, "*");
 	
 	# Now determine the location of the template for generating this
 	# documentation page.  If one has not been specified, we try the path
@@ -96,18 +96,48 @@ sub document {
 	# specified for template files.  If none of these template files are
 	# present, we try the documentation error template as a backup.
 	
-	my $doc_dir = $ds->{doc_dir} // "doc";
 	my $doc_suffix = $ds->{template_suffix} // "";
 	
-	my $layout_path = $attrs->{doc_layout} || $ds->{doc_layout} || "doc_main${doc_suffix}";
-	my $error_path = $attrs->{doc_error_template} || $ds->{doc_error_template} || "doc_error${doc_suffix}";
+	#my $layout_path = $attrs->{doc_layout} || $ds->{doc_layout} || "doc_main${doc_suffix}";
+	
+	my $doc_defs = $attrs->{doc_defs} || $ds->{doc_defs} || "doc_defs${doc_suffix}";
+	my $doc_header = $attrs->{doc_header} || $ds->{doc_header};
+	my $doc_footer = $attrs->{doc_footer} || $ds->{doc_footer};
+	my $doc_error = $attrs->{doc_error} || $ds->{doc_error};
+	
+	$doc_defs = $ds->check_doc("doc_defs${doc_suffix}") unless defined $doc_defs;
+	$doc_header = $ds->check_doc("doc_header${doc_suffix}") unless defined $doc_header;
+	$doc_footer = $ds->check_doc("doc_footer${doc_suffix}") unless defined $doc_footer;
+	$doc_error = $ds->check_doc("doc_error${doc_suffix}") unless defined $doc_error;
 	
 	my @template_list;
 	
-	push @template_list, "$doc_dir/$attrs->{doc_template}" if $attrs->{doc_template};
-	push @template_list, "$doc_dir/index${doc_suffix}" if $path eq '';
-	push @template_list, "$doc_dir/${path}/index${doc_suffix}" if $path ne '';
-	push @template_list, "$doc_dir/${path}_doc${doc_suffix}" if $path ne '';
+	push @template_list, $attrs->{doc_template} if defined $attrs->{doc_template} && $attrs->{doc_template} ne '';
+	
+	if ( $path eq '' || $path eq 'index' )
+	{
+	    push @template_list, "index${doc_suffix}";
+	}
+	
+	elsif ( $path =~ qr{ (.*) _doc $ }xs )
+	{
+	    push @template_list, "${path}${doc_suffix}";
+	    push @template_list, "$1/index${doc_suffix}";
+	}
+	
+	elsif ( $path =~ qr{ (.*) / index $ }xs )
+	{
+	    push @template_list, "${1}_doc${doc_suffix}";
+	    push @template_list, "${path}${doc_suffix}";
+	}
+	
+	else
+	{
+	    push @template_list, "${path}_doc${doc_suffix}";
+	    push @template_list, "${path}/index${doc_suffix}";
+	}
+	
+	push @template_list, $doc_error if defined $doc_error && $doc_error ne '';
 	
 	# Try each possible template path in turn.  If a valid template is
 	# found, render it and return the result in the appropriate format.
@@ -115,15 +145,15 @@ sub document {
 	foreach my $template_path ( @template_list )
 	{
 	    next unless defined $template_path;
-	    next unless $ds->template_exists($template_path);
+	    next unless $ds->check_doc($template_path);
 	    
-	    my $doc_string = $ds->render_template($self->{outer}, $template_path, $layout_path, $vars);
+	    my $doc_string = $ds->render_doc($template_path, $doc_defs, $doc_header, $doc_footer, $vars);
 	    
 	    # If POD format was requested, return the documentation as is.
 	    
 	    if ( defined $format && $format eq 'pod' )
 	    {
-		$self->set_content_type('text/plain');
+		$request->set_content_type('text/plain');
 		return $doc_string;
 	    }
 	    
@@ -137,23 +167,19 @@ sub document {
 		
 		my $doc_html = $parser->generate_html({ css => '/data/css/dsdoc.css', tables => 1 });
 		
-		$self->set_content_type('text/html');
+		$request->set_content_type('text/html');
 		return $doc_html;
 	    }
 	}
 	
 	# If no valid template file was found, we return an error result.
 	
-	return $ds->error_result("", $format, "404 The documentation you requested was not found");
+	return $ds->error_result($request, "404 The documentation you requested was not found");
     }
     
     catch {
 
-	my $ds = $self->{ds};
-	my $path = $self->{path};
-	my $format = $self->{format};
-	
-	return $ds->error_result($path, $format, $_);
+	return $ds->error_result($request, $_);
     };
 }
 
@@ -182,39 +208,47 @@ sub list_navtrail {
     my @trail;
     
     my $link = "/" . $ds->{path_prefix} if $ds->{path_prefix};
+    my $count = $#path;
     
     foreach my $component (@path)
     {
-	$link .= "/$component";
-	push @trail, "L<$component|$link>";
+	if ( $count-- == 0 )
+	{
+	    $component =~ s/_doc$//;
+	    push @trail, $component;
+	}
+	else
+	{
+	    $link .= "/$component";
+	    push @trail, "L<$component|$link>";
+	}
     }
     
     return @trail;
 }
 
 
-# get_base_url ( )
-# 
-# Return the base URL for this data service.
-
-sub get_base_url {
-
-    my ($self) = @_;
-    
-    return $self->{ds}->get_base_url;
-}
-
-
-# list_http_methods ( )
+# list_http_methods ( arg )
 # 
 # Return a list of the HTTP methods that are allowed for this request path.
+# If $arg is 'pod', then return the list as a single POD string.
 
 sub list_http_methods {
 
-    my ($self) = @_;
+    my ($self, $arg) = @_;
     
     my $method = $self->{attrs}{allow_method};
-    return grep { $method->{$_} } @Web::DataService::HTTP_METHOD_LIST;
+    my @list = grep { $method->{$_} } @Web::DataService::HTTP_METHOD_LIST;
+    
+    if ( $arg eq 'pod' )
+    {
+	return join(', ', map { "C<$_>" } @list);
+    }
+    
+    else
+    {
+	return @list;
+    }
 }
 
 
@@ -248,43 +282,41 @@ sub document_params {
 
 sub document_response {
     
-    my ($self) = @_;
+    my ($self, $options) = @_;
     
     my $ds = $self->{ds};
     
-    return $ds->document_response($self->{attr_path});
+    return $ds->document_response($self->{attr_path}, $options);
 }
 
 
-# document_allowed_formats ( extended )
+# document_formats ( extended )
 # 
 # Return a string in POD format documenting the formats allowed for the path
 # associated with this request.  If $extended is true, then include a text
 # description of each format.
 
-sub document_allowed_formats {
+sub document_formats {
 
-    my ($self, $extended) = @_;
+    my ($self, $options) = @_;
     
-    my $ds = $self->{ds};
-    
-    return $ds->document_allowed_formats($self->{attr_path}, $extended);
+    return $self->{ds}->document_formats($self->{attr_path}, $options);
 }
 
 
-# document_allowed_vocab ( extended )
+# document_vocab ( extended )
 # 
 # Return a string in POD format documenting the vocabularies allowed for the
 # path associated with this request.  If $extended is true, then include a
 # text description of each vocabulary.
 
-sub document_allowed_vocab {
+sub document_vocab {
     
-    my ($self, $extended) = @_;
+    my ($self, $options) = @_;
     
     my $ds = $self->{ds};
     
-    return $ds->document_allowed_vocab($self->{attr_path}, $extended);
+    return $ds->document_vocab($self->{attr_path}, $options);
 }
 
 
@@ -312,56 +344,6 @@ sub render_template {
 }
 
 
-# generate_path_link ( path, title )
-# 
-# Generate a link in Pod format to the documentation for the given path.  If
-# $title is defined, use that as the link title.  Otherwise, if the path has a
-# 'doc_title' attribute, use that.
-# 
-# If something goes wrong, generate a warning and return the empty string.
-
-sub generate_path_link {
-    
-    my ($self, $path, $title) = @_;
-    
-    return '' unless defined $path && $path ne '';
-    
-    # Make sure this path is defined.
-    
-    my $path_attrs = $self->{path_attrs}{$path};
-    
-    unless ( $path_attrs )
-    {
-	warn "cannot generate link to unknown path '$path'";
-	return '';
-    }
-    
-    # Get the correct title for the link.
-    
-    $title //= $path_attrs->{doc_title};
-    
-    # Transform the path into a valid URL.
-    
-    if ( defined $self->{path_prefix} && $self->{path_prefix} ne '' )
-    {
-	$path = "$self->{path_prefix}$path";
-    }
-    
-    unless ( $path =~ qr{/$}x )
-    {
-	$path .= "_doc.html";
-    }
-    
-    if ( defined $title && $title ne '' )
-    {
-	return "L<$title|$path>";
-    }
-    
-    else
-    {
-	return "L<$path>";
-    }
-}
 
 
 1;

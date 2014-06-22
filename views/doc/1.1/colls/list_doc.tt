@@ -1,12 +1,5 @@
-<% PROCESS sections/definitions.tt %>
-
 =head2 DESCRIPTION
 
 This path returns information about fossil collection records stored in the Paleobiology Database.
 
-<% PROCESS params %>
-
-<% PROCESS methods %>
-
-<% PROCESS response %>
-
+<% INCLUDE STANDARD %>

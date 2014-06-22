@@ -13,7 +13,7 @@ use Encode;
 use Scalar::Util qw(reftype);
 use Carp qw(croak);
 
-use Dancer::Plugin::StreamData;
+#use Dancer::Plugin::StreamData;
 
 
 our (%SET_DEF) = (value => 'single',
@@ -429,35 +429,6 @@ following list: 'include', 'output', 'set', 'select', 'filter'"
 }
 
 
-# # get_output_list ( list, section )
-# # 
-# # Return the output list for the specified section.
-
-# sub get_block {
-
-#     my ($self, $class, $list, $section) = @_;
-    
-#     die "get_output_list: invalid list '$list'" unless $list eq 'output_list' or $list eq 'include_list';
-    
-#     die "get_output_list: no output section was specified" unless $section;
-#     die "get_output_list: invalid class '$class'" unless $class->isa('Web::DataService::Request');
-    
-#     # If this class or any of its superclasses has defined this section,
-#     # then we use that definition.  Otherwise, put out a warning and go on
-#     # to the next section.
-    
-#     my $loop_bound = 0;
-    
-#     until ( ref $self->{$list}{$class}{$section} )
-#     {
-# 	$class = $self->{super_class}{$class} or return;
-# 	die "problem with class configuration" if ++$loop_bound > 10;
-#     }
-    
-#     return $self->{$list}{$class}{$section};
-# }
-
-
 # configure_output ( request )
 # 
 # Determine the list of selection, processing and output rules for the
@@ -480,23 +451,11 @@ sub configure_output {
     my $class = ref $request;
     my $format = $request->{format};
     my $vocab = $request->{vocab};
+    my $attrs = $request->{attrs};
+    my $ds = $request->{ds};
     my $require_vocab = 1 if $vocab and not $self->{vocab}{$vocab}{use_field_names};
     
-    # Use the appropriate output map and the list of output keys that were
-    # specified in the URL to determine which output blocks we will be using
-    # to express the result of this request.
-    
-    my $output_map = $self->get_output_map($request->{output_name});
-    my @keys = $self->get_output_keys($request, $output_map)
-	if $output_map;
-    my $output_block = $request->{output_name}
-	if $self->get_output_block($request->{output_name});
-    
-    unless ( @keys || $output_block )
-    {
-	$request->add_warning("No output blocks were specified for this request.");
-	return;
-    }
+    # Add fields to the request object to hold the output configuration.
     
     $request->{select_list} = [];
     $request->{select_hash} = {};
@@ -507,21 +466,73 @@ sub configure_output {
     $request->{block_keys} = {};
     $request->{block_hash} = {};
     
-    # First figure out which block goes with each key, and add each key and
-    # the name of the associated block (if any) to the relevant hash.
-        
+    # Use the output and output_opt attributes of the request to determine
+    # which output blocks we will be using to express the request result.
+    
+    # We start with 'output', which specifies a list of blocks that are always
+    # included.
+    
+    my @output_list = @{$attrs->{output}} if ref $attrs->{output} eq 'ARRAY';
+    
     my @blocks;
     
-    foreach my $key (@keys)
+    foreach my $block_name ( @output_list )
     {
-	my $block = $output_map->{value}{$key}{maps_to};
-	$request->{block_keys}{$key} = 1;
-	$request->{block_hash}{$key} = 1;
-	$request->{block_hash}{$block} = 1 if $block;
-	push @blocks, $block if $block;
+	if ( ref $self->{block}{$block_name} eq 'Web::DataService::Block' )
+	{
+	    push @blocks, $block_name;
+	}
+	
+	else
+	{
+	    $request->add_warning("Output block '$block_name' not found");
+	}
     }
     
-    push @blocks, $output_block if $output_block;
+    # The attribute 'output_param' gives the name of the parameter used to
+    # select optional blocks.
+
+    my $output_param = $attrs->{output_param};
+    
+    my @keys = @{$request->{params}{$output_param}}
+	if defined $output_param and ref $request->{params}{$output_param} eq 'ARRAY';
+    
+    # The attribute 'output_opt' specifies a map which maps the keys from the
+    # output_param value to block names.  We go through the keys one by one
+    # and add each key and the name of the associated block to the relevant hash.
+    
+    my $output_opt = $attrs->{output_opt};
+    my $output_map = $ds->{set}{$output_opt} if defined $output_opt && 
+	ref $ds->{set}{$output_opt} eq 'Web::DataService::Set';
+    
+    if ( $output_map )
+    {
+	foreach my $key ( @keys )
+	{
+	    my $block = $output_map->{value}{$key}{maps_to};
+	    $request->{block_keys}{$key} = 1;
+	    $request->{block_hash}{$key} = 1;
+	    $request->{block_hash}{$block} = 1 if $block;
+	    push @blocks, $block if $block;
+	    
+	    $request->add_warning("Output block '$block' not found")
+		unless ref $ds->{block}{$block} eq 'Web::DataService::Block';
+	}
+    }
+    
+    elsif ( $output_opt )
+    {
+	$request->add_warning("Output map '$output_opt' not found");
+    }
+    
+    # Now warn the user if no output blocks were specified for this request,
+    # because it means that no output will result.
+    
+    unless ( @blocks )
+    {
+	$request->add_warning("No output blocks were specified for this request.");
+	return;
+    }
     
     # Then scan through the list of blocks and check for include_list
     # entries, and add the included blocks to the list as well.  This
@@ -589,8 +600,7 @@ sub configure_output {
 	    $r->{include_block} = $include_block if $include_block;
 	    
 	    # Now add the specified key and block to the output hash, if they
-	    # are defined.  Add it to @keys as well, so that it will get
-	    # checked to see if it includes any 'include' records.
+	    # are defined.
 	    
 	    $request->{block_keys}{$include_key} = 1 if $include_key;
 	    $request->{block_hash}{$include_block} = 1 if $include_block;
@@ -1103,32 +1113,41 @@ sub add_doc {
     # If this is a string starting with one of the special characters, then
     # handle it properly.
     
-    elsif ( $item =~ qr{ ^ ([\#>!]) }xs )
+    elsif ( $item =~ qr{ ^ ([!^?] | >>?) (.*) }xs )
     {
-	# If >, then close any currently pending documentation and start a new
-	# "pending" list.  This list will be processed as an ordinary
-	# paragraph, because it does not start with a record.
-	
-	if ( $1 eq '>' )
+	# If >>, then close the active documentation section (if any) and
+	# start a new one that is not tied to any rule.  This will generate an
+	# ordinary paragraph starting with the remainder of the line.
+		
+	if ( $1 eq '>>' )
 	{
 	    $self->process_doc($node);
-	    push @{$node->{doc_pending}}, substr($item,1) if $item ne '>';
+	    push @{$node->{doc_pending}}, $2 if $2 ne '';
 	}
 	
-	# If #, then discard all pending documentation.  This will cause any
-	# pending record to be elided from the documentation.
+	# If >, then add to the current documentation a blank line
+	# (which will cause a new paragraph) followed by the remainder
+	# of this line.
 	
-	elsif ( $1 eq '#' )
+	elsif ( $1 eq '>' )
+	{
+	    push @{$node->{doc_pending}}, "\n$2";
+	}
+	
+	# If !, then discard all pending documentation and mark the node as
+	# 'undoc'.  This will cause it to be elided from the documentation.
+	
+	elsif ( $1 eq '!' )
 	{
 	    $self->process_doc($node, 'undoc');
 	}
 	
-	# If !, then add the remainder of the line to the "pending" list.
+	# If ?, then add the remainder of the line to the documentation.
 	# The ! prevents the next character from being interpreted specially.
 	
 	else
 	{
-	    push @{$node->{doc_pending}}, substr($item,1) if $item ne '!';
+	    push @{$node->{doc_pending}}, $2;
 	}
     }
     
@@ -1406,8 +1425,7 @@ sub document_response {
     
     my ($self, $path) = @_;
     
-    my $ds = $self->{ds};
-    my $attrs = $ds->{path_attrs}{$path};
+    my $attrs = $self->{path_attrs}{$path};
     
     my @blocks;
     my @labels;
@@ -1421,13 +1439,13 @@ sub document_response {
     
     foreach my $block_name ( @output_list )
     {
-	if ( ref $ds->{block}{$block_name} eq 'Web::DataService::Block' )
+	if ( ref $self->{block}{$block_name} eq 'Web::DataService::Block' )
 	{
 	    push @blocks, $block_name;
 	    push @labels, $fixed_label;
 	}
 	
-	elsif ( $ds->debug )
+	elsif ( $self->debug )
 	{
 	    warn "WARNING: block '$block_name' not found";
 	}
@@ -1440,7 +1458,7 @@ sub document_response {
     
     if ( $output_opt && ref $self->{set}{$output_opt} eq 'Web::DataService::Set' )
     {
-	my $output_map = $ds->{set}{$output_opt};
+	my $output_map = $self->{set}{$output_opt};
 	my @keys = @{$output_map->{documented}} if ref $output_map->{documented} eq 'ARRAY';
 	
 	foreach my $label ( @keys )
@@ -1448,7 +1466,7 @@ sub document_response {
 	    my $block_name = $output_map->{value}{$label}{maps_to};
 	    next unless defined $block_name;
 	    
-	    if ( ref $ds->{block}{$block_name} eq 'Web::DataService::Block' )
+	    if ( ref $self->{block}{$block_name} eq 'Web::DataService::Block' )
 	    {
 		push @blocks, $block_name;
 		push @labels, $label;
@@ -1456,7 +1474,7 @@ sub document_response {
 	}
     }
     
-    elsif ( $output_opt && $ds->debug )
+    elsif ( $output_opt && $self->debug )
     {
 	warn "WARNING: output map '$output_opt' not found";
     }
@@ -1474,7 +1492,7 @@ sub document_response {
     
     unless ( ref $vocabularies eq 'HASH' && keys %$vocabularies )
     {
-	warn "No output vocabularies were selected for path '$path'" if $ds->debug;
+	warn "No output vocabularies were selected for path '$path'" if $self->debug;
 	return '';
     }
     
@@ -1875,10 +1893,14 @@ sub generate_single_result {
     
     $self->process_record($request, $request->{main_record}, $proc_list);
     
-    # If there is a pre_output_hook defined for this path, call it now.
+    # If there is an output_record_hook defined for this path, call it now.
+    # If it returns false, do not output the record.
     
-    $self->call_hook($request->{pre_output_hook}, $request, $request->{main_record})
-	if $request->{pre_output_hook};
+    if ( $request->{output_record_hook} )
+    {
+	$self->call_hook($request->{output_record_hook}, $request, $request->{main_record})
+	    or return;
+    }
     
     # Generate the output corresponding to our single record.
     
@@ -1963,10 +1985,14 @@ sub generate_compound_result {
 	
 	$self->process_record($request, $record, $proc_list);
 	
-	# If there is a pre_output_hook defined for this path, call it now.
+	# If there is an output_record_hook defined for this path, call it now.
+	# If it returns false, do not output the record.
 	
-	$self->call_hook($request->{pre_output_hook}, $request, $request->{main_record})
-	    if $request->{pre_output_hook};
+	if ( $request->{output_record_hook} )
+	{
+	    $self->call_hook($request->{output_record_hook}, $request, $request->{main_record})
+		or return;
+	}
 	
 	# Generate the output for this record, preceded by a record separator if
 	# it is not the first record.
@@ -2082,10 +2108,14 @@ sub stream_compound_result {
 	
 	$self->process_record($request, $record, $request->{proc_list});
 	
-	# If there is a pre_output_hook defined for this path, call it now.
+	# If there is an output_record_hook defined for this path, call it now.
+	# If it returns false, do not output the record.
 	
-	$self->call_hook($request->{pre_output_hook}, $request, $request->{main_record})
-	    if $request->{pre_output_hook};
+	if ( $request->{output_record_hook} )
+	{
+	    $self->call_hook($request->{output_record_hook}, $request, $request->{main_record})
+		or return;
+	}
 	
 	# Generate the output for this record, preceded by a record separator
 	# since we are always past the first record once we have switched over

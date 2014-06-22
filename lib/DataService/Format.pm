@@ -141,16 +141,19 @@ sub define_format {
 
 
 
-# document_allowed_formats ( path, extended )
+# document_formats ( path, options )
 # 
 # Return a string containing POD documentation of the response formats that
-# are allowed for the request path.  If the path is '', then document all
-# of the formats enabled for this data service regardless of whether they are
-# actually allowed for that path.
+# are allowed for the request path.  If the option 'all' is specified, then
+# document all of the formats enabled for this data service regardless of
+# whether they are actually allowed for that path.  If the option 'extended'
+# is specified, then include the text description of each format.
 
-sub document_allowed_formats {
+sub document_formats {
 
-    my ($self, $path, $extended) = @_;
+    my ($self, $path, $options) = @_;
+    
+    $options ||= {};
     
     # Go through the list of defined formats in order, filtering out those
     # which are not allowed for this path.  The reason for doing it this way
@@ -158,8 +161,8 @@ sub document_allowed_formats {
     # instead of the arbitrary hash order.
     
     my $list = $self->{format_list};
-    my $allowed = $path eq '/' ? $self->{format}
-			       : $self->{path_attrs}{$path}{allow_format};
+    my $allowed = $options->{all} ? $self->{format}
+	: $self->{path_attrs}{$path}{allow_format};
     
     return '' unless ref $allowed eq 'HASH' && ref $list eq 'ARRAY';
     
@@ -167,25 +170,30 @@ sub document_allowed_formats {
     
     return '' unless @names;
     
-    my $doc = "=over 4\n\n";
-    my $ext_header = $extended ? " | Description" : '';
+    my @paths = grep { $self->{format}{$_}{doc_path} } @names;
     
-    $doc .= "=for pp_table_header Format | Suffix | Documentation$ext_header\n\n";
+    my $doc = "=over 4\n\n";
+    my $ext_header = $options->{extended} ? " | Description" : '';
+    my $doc_header = @paths ? " | Documentation" : '';
+    
+    $doc .= "=for pp_table_header Format* | Suffix$doc_header$ext_header\n\n";
     
     foreach my $name (@names)
     {
 	my $frec = $self->{format}{$name};
-	my $doc_link = $self->generate_path_link($frec->{doc_path});
+	my $doc_link = $self->generate_path_link($frec->{doc_path}) if $frec->{doc_path};
 	
-	if ( $extended )
+	$doc .= "=item $frec->{title} | C<.$frec->{name}>";
+	$doc .= " | $doc_link" if $doc_link && @paths && $options->{extended};
+	$doc .= "\n\n";
+	
+	if ( $options->{extended} || ! @paths )
 	{
-	    $doc .= "=item $frec->{title} | C<.$frec->{name}> | $doc_link\n\n";
 	    $doc .= "$frec->{doc}\n\n" if $frec->{doc};
 	}
 	
-	else
+	elsif ( $doc_link )
 	{
-	    $doc .= "=item $frec->{title} | C<.$frec->{name}>\n\n";
 	    $doc .= "$doc_link\n\n";
 	}
     }

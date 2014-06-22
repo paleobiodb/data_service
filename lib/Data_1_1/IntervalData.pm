@@ -161,7 +161,7 @@ sub get {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Make sure we have a valid id number.
     
@@ -211,7 +211,7 @@ sub list {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # If we were asked for a hierarchy, indicate that we will need to process
     # the result set before sending it.
@@ -311,7 +311,7 @@ sub list_scales {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my @filters;
     
     # Get the list of database fields.

@@ -751,7 +751,7 @@ sub get {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Make sure we have a valid id number.
     
@@ -839,7 +839,7 @@ sub list {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -913,7 +913,7 @@ sub summary {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $tables = $self->tables_hash;
     
     # Figure out which bin level we are being asked for.  The default is 1.    
@@ -1000,7 +1000,7 @@ sub refs {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -1084,7 +1084,7 @@ sub strata {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -1163,7 +1163,7 @@ sub generateCollFilters {
 
     my ($self, $tables_ref) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my @filters;
     
     # Check for parameter 'id', If the parameter was given but no value was
@@ -1196,7 +1196,7 @@ sub generateStrataFilters {
 
     my ($self, $tables_ref, $is_auto) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my @filters;
     
     # Check for parameter 'name'.
@@ -1235,7 +1235,7 @@ sub generateMainFilters {
 
     my ($self, $op, $mt, $tables_ref) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
     
@@ -1297,7 +1297,7 @@ sub generateMainFilters {
     if ( $taxon_name )
     {
 	#my (@starttime) = Time::HiRes::gettimeofday();
-	@taxa = $taxonomy->getTaxaByName($taxon_name, { fields => 'lft', common => 1 });
+	@taxa = $self->get_taxa_by_name($taxon_name, { return => 'range', common => 1 });
 	#my (@endtime) = Time::HiRes::gettimeofday();
 	#my $elapsed = Time::HiRes::tv_interval(\@starttime, \@endtime);
 	#print STDERR $Taxonomy::SQL_STRING . "\n\n";

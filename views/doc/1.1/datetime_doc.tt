@@ -1,5 +1,3 @@
-<% PROCESS sections/definitions.tt %>
-
 =head2 DESCRIPTION
 
 This page describes the values that can be passed to parameters that take a date/time value such as C<created_since>.

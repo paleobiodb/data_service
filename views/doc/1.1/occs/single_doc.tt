@@ -1,5 +1,3 @@
-<% PROCESS sections/definitions.tt %>
-
 =head2 DESCRIPTION
 
 This path returns information about a single occurrence record from the Paleobiology Database.
@@ -20,9 +18,4 @@ L</data1.1/occs/single.txt?id=1001&show=loc,crmod>
 
 =back
 
-<% PROCESS params %>
-
-<% PROCESS methods %>
-
-<% PROCESS response %>
-
+<% INCLUDE STANDARD %>

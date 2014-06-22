@@ -1,5 +1,3 @@
-<% PROCESS sections/definitions.tt %>
-
 =head2 DESCRIPTION
 
 This path returns information about a single time interval record from the Paleobiology Database.
@@ -14,9 +12,5 @@ L</data1.1/intervals/single.json?id=16>
 
 =back
 
-<% PROCESS params %>
-
-<% PROCESS methods %>
-
-<% PROCESS response %>
+<% INCLUDE STANDARD %>
 

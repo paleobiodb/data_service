@@ -75,7 +75,7 @@ L</data1.1/taxa/auto.json?name=cani&limit=10>
 
 =item Phylopics | L</data1.1/taxa/icon> L</data1.1/taxa/thumb>
 
-Returns an image to represent the specified taxon.  These images are sourced from L<phylopic.org>, 
+Returns an image to represent the specified taxon.  These images are sourced from L<http://phylopic.org/>, 
 and come in two versions: a 64x64 thumbnail (black silhouette), and a 32x32 icon (blue silhouette).
 For example:
 

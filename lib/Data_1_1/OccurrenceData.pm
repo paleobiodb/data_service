@@ -353,7 +353,7 @@ sub get {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Make sure we have a valid id number.
     
@@ -405,7 +405,7 @@ sub list {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $tables = $self->tables_hash;
     
     # Construct a list of filter expressions that must be added to the query
@@ -486,7 +486,7 @@ sub refs {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -568,7 +568,7 @@ sub taxa {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.

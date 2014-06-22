@@ -1,9 +1,7 @@
-<% PROCESS sections/definitions.tt %>
-
 =head2 DESCRIPTION
 
 This page describes a set of common parameters that can be used with almost any request
 made to this data service.
 
-<% PROCESS params %>
+<% INCLUDE PARAMS %>
 

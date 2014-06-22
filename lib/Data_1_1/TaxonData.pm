@@ -22,7 +22,7 @@ use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use TaxonPics qw($PHYLOPICS $PHYLOPIC_NAMES);
 use Taxonomy;
 
-our (@REQUIRES_CLASS) = qw(CommonData ReferenceData);
+our (@REQUIRES_CLASS) = qw(Data_1_1::CommonData Data_1_1::ReferenceData);
 
 # This routine is called by the data service in order to initialize this
 # class.
@@ -573,7 +573,7 @@ sub get {
 
     my ($self) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my $valid = $self->{valid};
     my $taxon_no;
@@ -599,10 +599,10 @@ sub get {
 	if ( defined $valid->value('rank') )
 	{
 	    $name_select->{rank} = $valid->value('rank');
-	    $not_found_msg .= " at rank '$self->{base_taxon_rank}'";
+	    $not_found_msg .= " at rank '$name_select->{rank}'";
 	}
 	
-	($taxon_no) = $taxonomy->getTaxaByName($valid->value('name'), $name_select);
+	($taxon_no) = $self->get_taxa_by_name($valid->value('name'), $name_select);
     }
     
     # If we haven't found a record, the result set will be empty.
@@ -746,7 +746,7 @@ sub list {
 
     my ($self, $arg) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # First, figure out what info we need to provide
@@ -782,7 +782,7 @@ sub list {
 	
 	foreach my $name (@names)
 	{
-	    push @ids, $taxonomy->getTaxaByName($name, $name_options);
+	    push @ids, $self->get_taxa_by_name($name, $name_options);
 	}
 	
 	return unless @ids;
@@ -860,7 +860,7 @@ sub match {
     
     my ($self) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # Make sure we have at least one valid name.
@@ -877,7 +877,7 @@ sub match {
     
     # Get the list of matches.
     
-    my @name_matches = $taxonomy->getTaxaByName($name_list, $options);
+    my @name_matches = $self->get_taxa_by_name($name_list, $options);
     
     $self->{main_result} = \@name_matches if scalar(@name_matches);
     $self->{result_count} = scalar(@name_matches);
@@ -893,7 +893,7 @@ sub list_refs {
 
     my ($self) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # First, figure out what info we need to provide
@@ -912,7 +912,7 @@ sub list_refs {
 	my $name = $self->clean_param('name');
 	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
 	
-	@taxon_list = $taxonomy->getTaxaByName($name, $name_select);
+	@taxon_list = $self->get_taxa_by_name($name, $name_select);
 	return unless @taxon_list;
     }
     
@@ -970,7 +970,7 @@ sub get_taxa_by_name {
     my ($self, $names, $options) = @_;
     
     $options ||= {};
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # We start with some common query clauses, depending on the options.
     
@@ -983,12 +983,12 @@ sub get_taxa_by_name {
     
     if ( ! defined $options->{common} )
     {
-	push @clauses, "common is null";
+	push @clauses, "common = ''";
     }
     
     elsif ( $options->{common} eq 'only' )
     {
-	push @clauses, "common eq 'EN'";
+	push @clauses, "common = 'EN'";
     }
     
     # Invalid names?
@@ -1024,14 +1024,19 @@ sub get_taxa_by_name {
     
     # Result fields
     
-    if ( $options->{range} )
+    if ( $options->{return} eq 'range' )
     {
 	$fields = "t.lft, t.rgt";
     }
     
+    elsif ( $options->{return} eq 'id' )
+    {
+	$fields = $options->{exact} ? 's.taxon_no' : 't.orig_no';
+    }
+    
     else
     {
-	$fields = "s.name as match_name, t.name as taxon_name, t.rank as taxon_rank, t.status, v.taxon_size, t.orig_no, t.trad_no as taxon_no";
+	$fields = "s.taxon_name as match_name, t.name as taxon_name, t.rank as taxon_rank, t.status, v.taxon_size, t.orig_no, t.trad_no as taxon_no";
     }
     
     # The names might be given as a list, a hash, or a single string (in which
@@ -1165,9 +1170,19 @@ sub get_taxa_by_name {
 		ORDER BY v.taxon_size
 		$limit_string";
 	
-	my (@records) = $dbh->selectall_arrayref($NAME_SQL, { Slice => {} });
+	my $records;
 	
-	push @result, @records;
+	if ( $options->{return} eq 'id' )
+	{
+	    $records = $dbh->selectcol_arrayref($NAME_SQL);
+	}
+	
+	else
+	{
+	    $records = $dbh->selectall_arrayref($NAME_SQL, { Slice => {} });
+	}
+	
+	push @result, @$records if ref $records eq 'ARRAY';
     }
     
     return @result;
@@ -1178,7 +1193,7 @@ sub get_taxon_range {
     
     my ($self, $name, $range) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $range_filter = $range ? "and $range" : "";
     
     my $sql = "
@@ -1292,7 +1307,7 @@ sub auto {
     
     my ($self) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $partial = $self->clean_param('name');
     
     my $search_table = $TAXON_TABLE{taxon_trees}{search};
@@ -1376,7 +1391,7 @@ sub get_image {
     
     $type ||= '';
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my ($sql, $result);
     
     croak "invalid type '$type' for get_image"
@@ -1432,7 +1447,7 @@ sub list_images {
 
     my ($self) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my ($sql, $result);
     
@@ -1447,7 +1462,7 @@ sub list_images {
     {
 	my $name_select = { spelling => 'exact', return => 'id' };
 	
-	@taxon_list = $taxonomy->getTaxaByName($name, $name_select);
+	@taxon_list = $self->get_taxa_by_name($name, $name_select);
 	return unless @taxon_list;
     }
     

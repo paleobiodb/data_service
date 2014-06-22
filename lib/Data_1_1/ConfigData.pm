@@ -106,7 +106,7 @@ sub initialize {
     
     # Get the list of geographical cluster data from the $COLL_BINS table.
     
-    my $dbh = $ds->get_dbh;
+    my $dbh = $ds->get_connection;
     
     my $sql = "
 	SELECT b.bin_level as cluster_level, count(*) as count, max(n_colls) as max_colls, max(n_occs) as max_occs, 

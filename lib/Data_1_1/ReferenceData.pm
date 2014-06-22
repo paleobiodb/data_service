@@ -253,7 +253,7 @@ sub get {
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Make sure we have a valid id number.
     
@@ -290,7 +290,7 @@ sub list {
     
     # Get a database handle by which we can make queries.
 
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -354,7 +354,7 @@ sub generate_filters {
     
     my ($self, $tables_hash) = @_;
     
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my @filters;
     
     if ( my $ids = $self->clean_param('id') )
@@ -428,7 +428,7 @@ sub generate_auth_filter {
     
     my ($firstname, $lastname, $initpat, $lastpat, $fullpat);
     my @authfilters;
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     
     if ( $authorname =~ /(.*)[.] +(.*)/ )
     {

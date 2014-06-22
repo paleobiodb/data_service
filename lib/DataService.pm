@@ -21,12 +21,15 @@ use POSIX qw( strftime );
 use Try::Tiny;
 use Time::HiRes;
 
+#use if $INC{'Dancer'}, 'Web::DataService::FF::Dancer';
+
 use Web::DataService::Format;
 use Web::DataService::Vocabulary;
 use Web::DataService::Cache;
 use Web::DataService::Request;
-use Web::DataService::RequestDoc;
+use Web::DataService::Documentation;
 use Web::DataService::Output;
+use Web::DataService::Render;
 use Web::DataService::PodParser;
 use Web::DataService::JSON qw(json_list_value);
 
@@ -70,44 +73,83 @@ my (%DS_DEF) = ( 'name' => 'single',
 		 'label' => 'single',
 		 'title' => 'single',
 		 'parent' => 'single',
-		 'doc' => 'single',
+		 'foundation_plugin' => 'single',
+		 'templating_plugin' => 'single',
+		 'backend_plugin' => 'single',
 		 'path_prefix' => 'single',
 		 'ruleset_prefix' => 'single',
 		 'public_access' => 'single',
+		 'template' => 'single',
+		 'doc_templates' => 'single',
+		 'output_templates' => 'single',
+		 'doc_defs' => 'single',
+		 'doc_header' => 'single',
+		 'doc_footer' => 'single',
 		 'doc_layout' => 'single',
 		 'default_limit' => 'single',
 		 'streaming_threshold' => 'single',
 		 'allow_unrecognized' => 'single',
 		 'doc_dir' => 'single' );
 
+our ($DEBUG);
+our ($ONE_REQUEST);
+
 my (%DS_DEFAULT) = ( 'default_limit' => 500, 
 		     'streaming_threshold' => 20480 );
 
 sub new {
     
-    my ($class, $attrs) = @_;
-    
-    my $instance = {};
-    my $config = $class->get_config;
+    my ($class_or_parent, $attrs) = @_;
     
     croak "Each data service must be given a set of attributes"
 	unless ref $attrs && reftype $attrs eq 'HASH';
     
-    # Ensure that we have a non-empty name.
+    my $instance = {};
+    
+    # First, make sure we have a valid foundation plugin.  This is necessary
+    # in order to get configuration information.
+    
+    $instance->{foundation_plugin} = $attrs->{foundation_plugin};
+    
+    if ( $instance->{foundation_plugin} )
+    {
+	croak "class '$attrs->{foundation_plugin}' is not a valid foundation plugin: cannot find method 'get_config'"
+	    unless $instance->{foundation_plugin}->can('get_config');
+    }
+    
+    # Otherwise, if 'Dancer.pm' has already been required then install the
+    # corresponding plugin.
+    
+    elsif ( $INC{'Dancer.pm'} )
+    {
+	require Web::DataService::Plugin::Dancer;
+	$instance->{foundation_plugin} = 'Web::DataService::Plugin::Dancer';
+    }
+    
+    else
+    {
+	croak "could not find a foundation framework: try using 'Dancer'";
+    }
+    
+    # Ensure that we have a non-empty name, and retrieve any configuration
+    # directives for this named data service.
     
     croak "Each data service must be given a 'name' attribute"
 	unless defined $attrs->{name} && $attrs->{name} ne '';
     
     my $name = $attrs->{name};
-    my $name_config = $config->{$name};
-    $name_config = {} unless ref $name_config && reftype $name_config eq 'HASH';
+    my $config = $instance->{foundation_plugin}->get_config($name);
     
-    # If 'parent' is given, ensure that it is another DataService instance.
+    # If $class_or_parent is actually a Web::DataService instance, use it as the parent.
     
-    if ( defined $attrs->{parent} )
+    my $parent_attrs = {};
+    my $parent_name = '';
+    
+    if ( ref $class_or_parent && $class_or_parent->isa('Web::DataService') )
     {
-	croak "The attribute 'parent', if given, must be another Web::DataService object"
-	    unless ref $attrs->{parent} && $attrs->{parent}->isa('Web::DataService');
+	$parent_attrs = $class_or_parent;
+	$parent_name = $class_or_parent->{name};
+	$instance->{parent} = $class_or_parent;
     }
     
     # Determine attribute values.  Any values found in the configuration hash
@@ -116,10 +158,7 @@ sub new {
     
     foreach my $key ( keys %DS_DEF )
     {
-	my $value = $attrs->{$key};
-	$value //= $name_config->{$key} // $config->{$key} // $DS_DEFAULT{$key}
-	    unless $key eq 'parent';
-	
+	my $value = $attrs->{$key} // $config->{$key} // $DS_DEFAULT{$key};
 	$instance->{$key} = $value if defined $value;
     }
     
@@ -161,9 +200,102 @@ sub new {
     
     $instance->{DEBUG} = 1 if $config->{ds_debug};
     
+    # Now check to make sure we have rest of the necessary plugins.
+    
+    # If a templating plugin was explicitly specified, check that it is valid. 
+    
+    if ( $instance->{templating_plugin} )
+    {
+	croak "class '$instance->{templating_plugin}' is not a valid templating plugin: cannot find method 'render_template'"
+	    unless $instance->{templating_plugin}->can('render_template');
+    }
+    
+    # Otherwise, if 'Template.pm' has already been required then install the
+    # corresponding plugin.
+    
+    elsif ( $INC{'Template.pm'} )
+    {
+	require Web::DataService::Plugin::TemplateToolkit;
+	$instance->{templating_plugin} = 'Web::DataService::Plugin::TemplateToolkit';
+    }
+    
+    else
+    {
+	warn "WARNING: no templating engine was specified, so documentation pages\n";
+	warn "    and templated output will not be available.\n";
+    }
+    
+    # If we have a templating plugin, instantiate it for documentation and
+    # output.
+    
+    if ( $instance->{templating_plugin} )
+    {
+	my $plugin = $instance->{templating_plugin};
+	my $doc_templates = $instance->{doc_templates} // 'doc';
+	my $output_templates = $instance->{output_templates};
+	
+	# If we were given a directory for documentation templates, initialize
+	# an engine for evaluating them.
+	
+	if ( $doc_templates )
+	{
+	    $doc_templates = $ENV{PWD} . '/' . $doc_templates
+		unless $doc_templates =~ qr{ ^ / }xs;
+	    
+	    croak "$doc_templates: $!" unless -r $doc_templates;
+	    
+	    $instance->{doc_templates} = $doc_templates;
+	    
+	    $instance->{doc_engine} = 
+		$plugin->initialize_engine($instance, $config,
+				       { template_dir => $doc_templates });
+	}
+	
+	# we were given a directory for output templates, initialize an
+	# engine for evaluating them as well.
+    
+	if ( $output_templates )
+	{
+	    $output_templates = $ENV{PWD} . '/' . $output_templates
+		unless $output_templates =~ qr{ ^ / }xs;
+	    
+	    croak "$output_templates: $!" unless -r $output_templates;
+	    
+	    $instance->{output_templates} = $output_templates;
+	    
+	    $instance->{output_engine} =
+		$plugin->initialize_engine($instance, $config,
+				       { template_dir => $output_templates });
+	}
+    }
+    
+    # If a backend plugin was explicitly specified, check that it is valid.
+    
+    if ( $instance->{backend_plugin} )
+    {
+	croak "class 'instance->{backend_plugin}' is not a valid backend plugin: cannot find method 'get_connection'"
+	    unless $instance->{backend_plugin}->can('get_connection');
+    }
+    
+    # Otherwise, if 'Dancer::Plugin::Database' is available then select the
+    # corresponding plugin.
+    
+    elsif ( $INC{'Dancer.pm'} && $INC{'Dancer/Plugin/Database.pm'} )
+    {
+	$instance->{backend_plugin} = 'Web::DataService::Plugin::Dancer';
+    }
+    
+    else
+    {
+	# If no backend plugin is available, then leave this field undefined.
+	# The application must then either add code to the various operation
+	# methods or rely on an 'init_request_hook' to provide access to
+	# backend data.
+    }
+    
     # Bless the new instance, and link it in to its parent if necessary.
     
-    bless $instance, $class;
+    bless $instance, $class_or_parent;
     
     if ( $instance->{parent} )
     {
@@ -173,13 +305,63 @@ sub new {
 	push @{$parent->{subservice_list}}, $instance;
     }
     
-    # Initialize the service, if an 'initialize' method was defined.
+    # Give the various plugins a chance to check and/or modify this instance.
     
-    $instance->initialize() if $instance->can('initialize');
+    $instance->plugin_init('foundation_plugin');
+    $instance->plugin_init('templating_plugin');
+    $instance->plugin_init('backend_plugin');
     
     # Return the new instance.
     
     return $instance;
+}
+
+
+sub plugin_init {
+
+    my ($self, $plugin) = @_;
+    
+    return unless defined $self->{$plugin};
+    return unless $self->{$plugin}->can('initialize_service');
+    
+    $self->{$plugin}->initialize_service($self);
+}
+
+
+sub get_connection {
+    
+    my ($self) = @_;
+    
+    croak "cannot execute get_connection: no backend plugin was defined"
+	unless defined $self->{backend_plugin};
+    return $self->{backend_plugin}->get_connection($self);
+}
+
+
+sub get_config {
+    
+    my ($self, @args) = @_;
+    
+    return $self->{foundation_plugin}->get_config(@args);
+}
+
+
+sub set_mode {
+    
+    my ($self, @modes) = @_;
+    
+    foreach my $mode (@modes)
+    {
+	if ( $mode eq 'debug' )
+	{
+	    $DEBUG = 1;
+	}
+	
+	elsif ( $mode eq 'one_request' )
+	{
+	    $ONE_REQUEST = 1;
+	}
+    }
 }
 
 
@@ -332,16 +514,18 @@ our (%NODE_DEF) = ( path => 'ignore',
 		    textresult_param => 'single',
 		    default_limit => 'single',
 		    streaming_theshold => 'single',
-		    init_request_hook => 'hook',
+		    init_operation_hook => 'hook',
 		    post_params_hook => 'hook',
 		    post_configure_hook => 'hook',
-		    post_operation_hook => 'hook',
-		    pre_output_hook => 'hook',
+		    post_process_hook => 'hook',
+		    output_record_hook => 'hook',
 		    use_cache => 'single',
 		    allow_method => 'set',
 		    allow_format => 'set',
 		    allow_vocab => 'set',
 		    doc_template => 'single',
+		    doc_header => 'list',
+		    doc_footer => 'list',
 		    doc_layout => 'single',
 		    doc_title => 'single' );
 
@@ -607,7 +791,7 @@ sub create_path_node {
     # If one of the attributes is 'class', make sure that the class is
     # initialized unless we are in "one request" mode.
     
-    if ( $path_attrs->{class} and not $self->{ONE_REQUEST} )
+    if ( $path_attrs->{class} and not $ONE_REQUEST )
     {
 	$self->initialize_class($path_attrs->{class})
     }
@@ -728,7 +912,7 @@ sub initialize_class {
     
     if ( $class->can('initialize') )
     {
-	print STDERR "Initializing $class for data service $self->{name}\n" if $self->{DEBUG};
+	print STDERR "Initializing $class for data service $self->{name}\n" if $DEBUG || $self->{DEBUG};
 	eval { &{"${class}::initialize"}($class, $self) };
 	die $@ if $@ && $@ !~ /^Can't locate object method "initialize_class"/;
     }
@@ -794,87 +978,15 @@ sub call_hook {
     
     if ( ref $hook eq 'CODE' )
     {
-	&$hook($request, $self, @args);
+	return &$hook($request, $self, @args);
     }
     
     else
     {
-	$request->$hook($self, @args);
+	return $request->$hook($self, @args);
     }
 }
 
-
-
-# new_request_old ( ref, path, format )
-# 
-# Generate a new request object, using the given parameters.  $outer should be
-# a reference to an "outer" request object that was generated by the
-# underlying framework (i.e. Dancer or Mojolicious) or undef if there is
-# none.  $path should be the path which is being requested, and $format
-# indicates the format in which the result should be returned.
-
-sub new_reques_oldt {
-
-    my ($self, $outer, $path, $format) = @_;
-    
-    # A valid path must be given.
-    
-    croak "a valid path must be provided" unless defined $path && !ref $path;
-    
-    # First, check to see whether this path should be handled by one of the
-    # subservices or by the main data service.  At the same time, extract the
-    # operation path (typically by removing a prefix) to select the set of
-    # attributes to be used in satisfying the request.
-    
-    my ($ds, $op_path) = $self->select_service($path);
-    
-    # To get the attribute path, we start with the given path and chop off
-    # components as necessary until we get to a node that has attributes.  If
-    # we reach the empty string, then the attribute path is '/'.
-    
-    my $attr_path = $op_path;
-    
-    while ( $attr_path ne '' && ! exists $ds->{path_attrs}{$attr_path} )
-    {
-	if ( $attr_path =~ qr{ ^ (.*) / .* }xs )
-	{
-	    $attr_path = $1;
-	}
-	
-	else
-	{
-	    $attr_path = '';
-	}
-    }
-    
-    if ( $attr_path eq '' )
-    {
-	$attr_path = '/';
-    }
-    
-    # Then create a new request object.  Its initial class is
-    # Web::DataService::Request, but this may change later if the request is
-    # executed as an operation.
-    
-    my $request = { ds => $ds,
-		    outer => $outer,
-		    path => $op_path,
-		    attr_path => $attr_path,
-		    format => $format,
-		    attrs => $ds->{path_attrs}{$attr_path}
-		   };
-    
-    bless $request, 'Web::DataService::Request';
-    
-    # Weaken the back-reference to the data service, to avoid a circular data
-    # structure.
-    
-    weaken $request->{ds};
-    
-    # Return the new request object.
-    
-    return $request;
-}
 
 
 # new_request ( outer, path )
@@ -894,77 +1006,36 @@ sub new_request {
     
     # First, check to see whether this path should be handled by one of the
     # subservices or by the main data service.  At the same time, extract the
-    # operation path (typically by removing a prefix) so that we can tell what
-    # to do with this request.
+    # sub-path (typically by removing the prefix corresponding to the selected
+    # sub-service) so that we will be able to properly process the request.
     
-    my ($ds, $op_path) = $self->select_service($path);
+    my ($ds, $sub_path) = $self->select_service($path);
     
-    # If the path has a suffix, start by splitting it off.
+    # Then generate a new request using this path.
     
-    my $suffix;
-    
-    if ( $op_path =~ qr{ ^ (.+) \. (.+) }xs )
-    {
-	$op_path = $1;
-	$suffix = $2;
-    }
-    
-    # To get the attribute path, we start with the given path and chop off
-    # components as necessary until we get to a node that has attributes.  If
-    # we reach the empty string, then the attribute path is '/'.
-    
-    my $attr_path = $op_path;
-    my $rest_path = '';
-    
-    while ( $attr_path ne '' && ! exists $ds->{path_attrs}{$attr_path} )
-    {
-	if ( $attr_path =~ qr{ ^ (.*) / (.*) }xs )
-	{
-	    $attr_path = $1;
-	    if ( $rest_path ne '' )
-	    {
-		$rest_path = "$2/$rest_path";
-	    }
-	    else
-	    {
-		$rest_path = $2;
-	    }
-	}
-	
-	else
-	{
-	    $attr_path = '';
-	}
-    }
-    
-    if ( $attr_path eq '' )
-    {
-	$attr_path = '/';
-    }
-    
-    # Then create a new request object.  Its initial class is
-    # Web::DataService::Request, but this may change later if the request is
-    # executed as an operation.
-    
-    my $request = { ds => $ds,
-		    outer => $outer,
-		    path => $op_path,
-		    attr_path => $attr_path,
-		    rest_path => $rest_path,
-		    format => $suffix,
-		    attrs => $ds->{path_attrs}{$attr_path}
-		   };
-    
-    bless $request, 'Web::DataService::Request';
-    
-    # Weaken the back-reference to the data service, to avoid a circular data
-    # structure.
-    
-    weaken $request->{ds};
+    my $request = Web::DataService::Request->new($ds, $outer, $sub_path);
     
     # Return the new request object.
     
     return $request;
+}
+
+
+# get_base_path ( )
+# 
+# Return the base path for the current data service, derived from the path
+# prefix.  For example, if the path prefix is 'data', the base path is
+# '/data/'. 
+
+sub get_base_path {
+    
+    my ($self) = @_;
+    
+    my $base = '/';
+    $base .= $self->{path_prefix} . '/'
+	if defined $self->{path_prefix} && $self->{path_prefix} ne '';
+    
+    return $base;
 }
 
 
@@ -1000,325 +1071,20 @@ sub select_service {
 }
 
 
-# can_execute_path ( path, format )
-# 
-# Return true if the path can be used for a request, i.e. if it has a class
-# and operation defined.  Return false otherwise.
-
-sub can_execute_path {
-    
-    # If we were called as a method, use the object on which we were called.
-    # Otherwise, use the globally defined one.
-    
-    my ($self, $path) = @_;
-    
-    # Now check whether we have the necessary attributes.
-    
-    return defined $self->{path_attrs}{$path}{class} &&
-	   defined $self->{path_attrs}{$path}{method};
-}
-
-
-# execute_path ( path, format )
-# 
-# Execute the operation corresponding to the attributes of the given path, and
-# return the resulting data in the specified format.
-
-sub execute_path {
-    
-    # If we were called as a method, use the object on which we were called.
-    # Otherwise, use the globally defined one.
-    
-    #my $self = $_[0]->isa('Web::DataService') ? shift : $DEFAULT_INSTANCE;
-    
-    my ($self, $path, $format) = @_;
-    
-    my ($request, $req_output);
-    
-    # Do all of the processing in a try block, so that if an error occurs we
-    # can respond with an appropriate error page.
-    
-    try {
-	
-	$DB::single = 1;
-	
-	my $path_attrs = $self->{path_attrs}{$path};
-	my $params = Dancer::params;
-	
-	# Create a new object to represent this request, and bless it into the
-	# correct class.
-	
-	$request = { ds => $self,
-		     path => $path,
-		     format => $format,
-		     class => $path_attrs->{class},
-		     method => $path_attrs->{method},
-		     arg => $path_attrs->{arg},
-		     public_access => $path_attrs->{public_access}
-		   };
-	
-	bless $request, $path_attrs->{class};
-	
-	# If an init_request hook was specified for this path, call it now.
-	
-	$self->call_hook($path_attrs->{init_request_hook}, $request, $params)
-	    if $path_attrs->{init_request_hook};
-	
-	# Then check to see that the specified format is valid for the
-	# specified path.
-	
-	unless ( defined $format && ref $self->{format}{$format} &&
-		 ! $self->{format}{$format}{disabled} &&
-		 $path_attrs->{allow_format}{$format} )
-	{
-	    return $self->error_result($path, $format, "415")
-	}
-	
-	# If we are in 'one request' mode, initialize the class plus all of
-	# the classes it requires.  If we are not in this mode, then all of
-	# the classes will have been previously initialized.
-	
-	if ( $self->{ONE_REQUEST} )
-	{
-	    $self->initialize_class($request->{class});
-	}
-	
-	# Check to see if there is a ruleset corresponding to this path.  If
-	# not, then the request is rejected.
-	
-	$request->{rs_name} //= $self->determine_ruleset($path, $path_attrs->{ruleset})
-	    or die "No ruleset could be found for path $path";
-	
-	if ( $request->{rs_name} )
-	{
-	    my $context = { ds => $self, request => $request };
-	    
-	    my $result = $self->{validator}->check_params($request->{rs_name}, $context, $params);
-	    
-	    if ( $result->errors )
-	    {
-		return $self->error_result($path, $format, $result);
-	    }
-	    
-	    elsif ( $result->warnings )
-	    {
-		$request->add_warning($result->warnings);
-	    }
-	    
-	    $request->{valid} = $result;
-	    $request->{params} = $result->values;
-	    
-	    if ( $self->{DEBUG} )
-	    {
-		print STDERR "Params:\n";
-		foreach my $p ( $result->keys )
-		{
-		    my $value = $result->value($p);
-		    $value = join(', ', @$value) if ref $value eq 'ARRAY';
-		    print STDERR "$p = $value\n";
-		}
-	    }
-	}
-	
-	else
-	{
-	    $request->{valid} = undef;
-	    $request->{params} = $params;
-	}
-	
-	# If a post_params_hook is defined for this path, call it.
-	
-	$self->call_hook($path_attrs->{post_params_hook}, $request)
-	    if $path_attrs->{post_params_hook};
-	
-	# Determine the result limit and offset, if any.
-	
-	$request->{result_limit} = 
-	    defined $path_attrs->{limit_param} &&
-	    defined $request->{params}{$path_attrs->{limit_param}}
-		? $request->{params}{$path_attrs->{limit_param}}
-		    : $path_attrs->{default_limit} || $self->{default_limit} || 'all';
-	
-	$request->{result_offset} = 
-	    defined $path_attrs->{offset_param} &&
-	    defined $request->{params}{$path_attrs->{offset_param}}
-		? $request->{params}{$path_attrs->{offset_param}} : 0;
-	
-	# Set the vocabulary and output section list using the validated
-	# parameters, so that we can properly configure the output.
-	
-	$request->{vocab} = $request->{params}{$path_attrs->{vocab_param}} || 
-	    $self->{format}{$format}{default_vocab} || $self->{vocab_list}[0];
-	
-	$request->{output_name} = $self->determine_output_name($path, $path_attrs->{output});
-	
-	# Determine whether we should show the optional header information in
-	# the result.
-	
-	$request->{display_header} = $request->{params}{$path_attrs->{nohead_param}} ? 0 : 1;
-	$request->{display_source} = $request->{params}{$path_attrs->{showsource_param}} ? 1 : 0;
-	$request->{display_counts} = $request->{params}{$path_attrs->{count_param}} ? 1 : 0;
-	$request->{linebreak_cr} = 
-	    $request->{params}{$path_attrs->{linebreak_param}} &&
-		$request->{params}{$path_attrs->{linebreak_param}} eq 'cr' ? 1 : 0;
-	
-	# Set the HTTP response headers appropriately for this request.
-	
-	$self->set_response_headers($request);
-	
-	# Now that the parameters have been processed, we can configure the
-	# output.  This tells us what information we have been requested
-	# to display, and how to query for it.
-	
-	$self->configure_output($request);
-	
-	# If a post_configure_hook is defined for this path, call it.
-	
-	$self->call_hook($path_attrs->{post_configure_hook}, $request)
-	    if $path_attrs->{post_configure_hook};
-	
-	# Prepare to time the query operation.
-	
-	my (@starttime) = Time::HiRes::gettimeofday();
-	
-	# Now execute the query operation.  This is the central step of this
-	# entire routine; everything before and after is in support of this
-	# call.
-	
-	my $method = $request->{method};
-	my $arg = $request->{arg};
-	
-	$request->$method($arg);
-	
-	# Determine how long the query took.
-	
-	my (@endtime) = Time::HiRes::gettimeofday();
-	$request->{elapsed} = Time::HiRes::tv_interval(\@starttime, \@endtime);
-	
-	# If a post_operation_hook is defined for this path, call it.
-	
-	$self->call_hook($path_attrs->{post_operation_hook}, $request)
-	    if $path_attrs->{post_operation_hook};
-	
-	# If a pre_output_hook is defined for this path, save it in the
-	# request object so it can be called at the appropriate time.
-	
-	$request->{pre_output_hook} = $path_attrs->{pre_output_hook}
-	    if $path_attrs->{pre_output_hook};
-	
-	# Then we use the output configuration and the result of the query
-	# operation to generate the actual output.  How we do this depends
-	# upon how the query operation chooses to return its data.  It must
-	# set one of the following fields in the request object, as described:
-	# 
-	# main_data		A scalar, containing data which is to be 
-	#			returned as-is without further processing.
-	# 
-	# main_record		A hashref, representing a single record to be
-	#			returned according to the output format.
-	# 
-	# main_result		A list of hashrefs, representing multiple
-	#			records to be returned according to the output
-	# 			format.
-	# 
-	# main_sth		A DBI statement handle, from which all 
-	#			records that can be read should be returned
-	#			according to the output format.
-	# 
-	# It is okay for main_result and main_sth to both be set, in which
-	# case the records in the former will be sent first and then the
-	# latter will be read.
-	
-	if ( ref $request->{main_record} )
-	{
-	    return $self->generate_single_result($request);
-	}
-	
-	elsif ( ref $request->{main_sth} or ref $request->{main_result} )
-	{
-	    my $threshold = $self->{path_attrs}{$path}{streaming_threshold} || $self->{streaming_threshold}
-		if $self->{streaming_available} and not $request->{do_not_stream};
-	    
-	    return $self->generate_compound_result($request, $threshold);
-	}
-	
-	elsif ( defined $request->{main_data} )
-	{
-	    return $request->{main_data};
-	}
-	
-	# If none of these fields are set, then the result set is empty.
-	
-	else
-	{
-	    return $self->generate_empty_result($request);
-	}
-    }
-    
-    # If an error occurs, return an appropriate error response to the client.
-    
-    catch {
-	
-	return $self->error_result($path, $format, $_);
-    };
-};
-
-
-sub set_response_headers {
-    
-    my ($self, $request) = @_;
-    
-    # If this is a public-access data service, we add a universal CORS header.
-    # At some point we need to add provision for authenticated access.
-    
-    my $path = $request->{path};
-    
-    if ( $self->{path_attrs}{$path}{public_access} )
-    {
-	Dancer::header "Access-Control-Allow-Origin" => "*";
-    }
-    
-    # If the parameter 'textresult' was given, set the content type to
-    # 'text/plain' which will cause the response to be displayed in a browser
-    # tab. 
-    
-    if ( $request->{params}{textresult} )
-    {
-	Dancer::content_type 'text/plain';
-    }
-    
-    # Otherwise, set the content type based on the format.
-    
-    else
-    {
-	my $format = $request->{format};
-	my $ct = $self->{format}{$format}{content_type} || 'text/plain';
-	my $disp = $self->{format}{$format}{disposition};
-	
-	Dancer::content_type $ct;
-	
-	if ( defined $disp && $disp eq 'attachment' )
-	{
-	    Dancer::header 'Content-Disposition' => qq{attachment; filename="paleobiodb.$format"};
-	}
-    }
-    
-    return;
-}
-
-
 my %CODE_STRING = ( 400 => "Bad Request", 
 		    404 => "Not Found", 
 		    415 => "Invalid Media Type",
 		    500 => "Server Error" );
 
-# error_result ( path, format, error )
+# error_result ( request, error )
 # 
 # Send an error response back to the client.
 
 sub error_result {
 
-    my ($self, $path, $format, $error) = @_;
+    my ($ds, $request, $error) = @_;
+    
+    my $format = $request->{format};
     
     my ($code);
     my (@errors, @warnings);
@@ -1350,7 +1116,6 @@ sub error_result {
     else
     {
 	$code = 500;
-	#error("Error on path $path: $error");
 	warn $error;
 	@errors = "A server error occurred.  Please contact the server administrator.";
     }
@@ -1363,9 +1128,9 @@ sub error_result {
 	$error .= ",\n" . json_list_value("errors", @errors);
 	$error .= ",\n" . json_list_value("warnings", @warnings) if @warnings;
 	
-	Dancer::content_type('application/json');
-	Dancer::header "Access-Control-Allow-Origin" => "*";
-	Dancer::status($code);
+	$ds->{foundation_plugin}->set_content_type($request, 'application/json');
+	$ds->{foundation_plugin}->set_cors_header($request, "*");
+	$ds->{foundation_plugin}->set_status($request, $code);
 	return "{ $error }";
     }
     
@@ -1396,12 +1161,68 @@ $warning
 </body></html>
 END_BODY
     
-	Dancer::content_type('text/html');
-	Dancer::header "Access-Control-Allow-Origin" => "*";
-	Dancer::status($code);
+	$ds->{foundation_plugin}->set_content_type($request, 'text/html');
+	$ds->{foundation_plugin}->set_cors_header($request, "*");
+	$ds->{foundation_plugin}->set_status($request, $code);
 	return $body;
     }
 }
 
+
+# generate_path_link ( path, title )
+# 
+# Generate a link in Pod format to the documentation for the given path.  If
+# $title is defined, use that as the link title.  Otherwise, if the path has a
+# 'doc_title' attribute, use that.
+# 
+# If something goes wrong, generate a warning and return the empty string.
+
+sub generate_path_link {
+    
+    my ($self, $path, $title) = @_;
+    
+    return '' unless defined $path && $path ne '';
+    
+    # Make sure this path is defined.
+    
+    my $path_attrs = $self->{path_attrs}{$path};
+    
+    unless ( $path_attrs )
+    {
+	warn "cannot generate link to unknown path '$path'";
+	return '';
+    }
+    
+    # Get the correct title for the link.
+    
+    $title //= $path_attrs->{doc_title};
+    
+    # Transform the path into a valid URL.
+    
+    $path = $self->get_base_path . $path;
+    
+    unless ( $path =~ qr{/$}x )
+    {
+	$path .= "_doc.html";
+    }
+    
+    if ( defined $title && $title ne '' )
+    {
+	return "L<$title|$path>";
+    }
+    
+    else
+    {
+	return "L<$path>";
+    }
+}
+
+
+sub debug {
+
+    my ($self) = @_;
+    
+    return $DEBUG || $self->{DEBUG};
+}
 
 1;

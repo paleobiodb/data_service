@@ -1,3 +1,4 @@
+
 =head2 DESCRIPTION
 
 This data service is capable of returning its results in a variety of formats.  This capability
@@ -26,76 +27,7 @@ Processing of data by a custom R module (available soon).
 Each format has a default vocabulary in which its data is expressed.  The
 available formats and vocabularies are discussed below.
 
-=head2 FORMATS
+<% INCLUDE ALL_FORMATS %>
 
-The following formats are currently available, with more to come soon:
+<% INCLUDE ALL_VOCABULARIES %>
 
-=over
-
-=for pp_table_header Format | Suffix | Documentation | Description
-
-=item JSON | C<json> | L<JSON response|/data1.1/formats/json_doc.html>
-
-L<Javascript Object Notation|http://en.wikipedia.org/wiki/Json> (JSON) is the most commonly used format for
-data communication on the Web. Our JSON responses use short
-(3-character) field names in order to minimize the amount of data
-returned.
-
-=item XML | C<xml> | L<XML response|/data1.1/formats/xml_doc.html>
-
-Our XML responses use L<Darwin Core|http://www.tdwg.org/standards/450/> element names. 
-Unfortunately, many of our data fields have no counterpart in the Darwin Core element set and
-thus cannot be included in responses of this type.
-
-=item tab-separated text | C<tsv> C<txt> | L<Text response|/data1.1/formats/text_doc.html>
-
-This format produces files that are very similar to the download files
-from the classic PBDB. The same field names are used, so that you can
-compare results with previous PBDB downloads and use the same analysis
-tools. Results in this format can be easily loaded into most
-spreadsheet software for futher processing and analysis.
-
-=item comma-separated text | C<csv> | L<Text response|/data1.1/formats/text_doc.html>
-
-This format is identical to the tab-separated format, but with fields
-quoted and separated by commas. It can be similarly loaded into most
-spreadsheet software.
-
-=back
-
-=head2 VOCABULARIES
-
-The following vocabularies are currently available, and more can be added if
-necessary.  If you wish your responses to be expressed in a vocabulary other
-than the default for your selected format, you can use the C<vocab> parameter
-with one of the values from the following table:
-
-=over
-
-=for pp_table_header Vocabulary* | Description
-
-=item pbdb
-
-The PBDB vocabulary is derived from the underlying field names and values in
-the database, augmented by a few new fields.  For the most part any response
-that uses this vocabulary will be directly comparable to downloads from the
-PBDB Classic interface.
-
-=item com
-
-The Compact vocabulary is a set of 3-character field names designed to
-minimize the size of the response message.  This is the default used by web
-applications such as the PBDB Navigator.  Some of the field values are
-similarly abbreviated, while others are conveyed in their entirety.  For
-details, see the documentation for the individual response fields.
-
-=item dwc
-
-The Darwin Core vocabulary follows the L<Darwin Core standard|http://www.tdwg.org/standards/450/>
-set by the L<TDWG|http://www.tdwg.org/>.  This includes both the field names and field values.
-
-Because the Darwin Core standard is XML-based, it is very strict.  Many
-but not all of the fields can be expressed in this vocabulary; those that
-cannot are unavoidably left out of the response.
-
-=back

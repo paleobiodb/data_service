@@ -21,8 +21,8 @@ sub setup {
     my $ds0 = $ds->define_subservice(
 	{ name => 'data1.0',
 	  label => '1.0',
-	  path_prefix => 'data1.0' },
-	  doc_dir => 'doc/1.0',
+	  path_prefix => 'data1.0',
+	  doc_templates => 'doc/1.0' },
 	    "I<This version is obsolete, and has been discontinued.>");
 }
 

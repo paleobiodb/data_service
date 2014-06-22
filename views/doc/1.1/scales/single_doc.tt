@@ -1,5 +1,3 @@
-<% PROCESS sections/definitions.tt %>
-
 =head2 DESCRIPTION
 
 This path returns information about a single time scale record from the Paleobiology Database.  For
@@ -23,9 +21,4 @@ L</data1.1/scales/single.json?id=1>
 
 =back
 
-<% PROCESS params %>
-
-<% PROCESS methods %>
-
-<% PROCESS response %>
-
+<% INCLUDE STANDARD %>

@@ -1369,7 +1369,7 @@ sub getTaxaByName {
 	$SQL_STRING = "
 		SELECT $count_expr $query_fields
 		FROM $search_table as s JOIN $auth_table as a using (taxon_no)
-			JOIN $tree_table as t using (orig_no)
+			JOIN $tree_table as t on t.orig_no = s.orig_no
 			LEFT JOIN $opinion_table o using (opinion_no)
 			$extra_joins
 		WHERE $filter_expr
@@ -1381,7 +1381,7 @@ sub getTaxaByName {
 		SELECT $count_expr $query_fields
 		FROM (SELECT a.taxon_rank, t2.orig_no, t2.synonym_no
 		      FROM $search_table as s JOIN $auth_table as a2 using (taxon_no)
-				JOIN $tree_table as t2 using (orig_no)
+				JOIN $tree_table as t2 on t2.orig_no = s.orig_no
 				JOIN $auth_table as a on a.taxon_no = t2.spelling_no
 				LEFT JOIN $opinion_table as o on o.opinion_no = t2.spelling_no
 				$extra_joins
@@ -1400,12 +1400,12 @@ sub getTaxaByName {
 	    unless $order_expr;
 	
 	my $join_string = $options->{senior} ?
-	    "JOIN $tree_table as t2 using (orig_no) JOIN $tree_table as t on t.orig_no = t2.synonym_no" :
-		"JOIN $tree_table as t using (orig_no)";
+	    "JOIN $tree_table as t2 on t2.orig_no = s.orig_no JOIN $tree_table as t on t.orig_no = t2.synonym_no" :
+		"JOIN $tree_table as t on t.orig_no = s.orig_no";
 	
 	$SQL_STRING = "
 		SELECT $count_expr $query_fields
-		FROM $search_table as s JOIN $auth_table as a2 on s.match_no = a2.taxon_no
+		FROM $search_table as s JOIN $auth_table as a2 on s.taxon_no = a2.taxon_no
 			$join_string
 			JOIN $auth_table as a ON a.taxon_no = t.${select}_no
 			LEFT JOIN $opinion_table o on o.opinion_no = t.opinion_no
@@ -1474,8 +1474,8 @@ sub getTaxaIdsByName {
 	
 	$SQL_STRING = "
 		SELECT $count_expr a.taxon_no
-		FROM $search_table as s JOIN $auth_table as a on s.match_no = a.taxon_no
-			JOIN $tree_table as t using (orig_no)
+		FROM $search_table as s JOIN $auth_table as a on s.taxon_no = a.taxon_no
+			JOIN $tree_table as t on t.orig_no = s.orig_no
 			LEFT JOIN $opinion_table o using (opinion_no)
 			$extra_joins
 		WHERE $filter_expr
@@ -1488,7 +1488,7 @@ sub getTaxaIdsByName {
 		SELECT $count_expr distinct t.${select}_no
 		FROM (SELECT a.taxon_rank, t2.orig_no, t2.synonym_no
 		      FROM $search_table as s JOIN $auth_table as a2 on s.match_no = a2.taxon_no
-				JOIN $tree_table as t2 using (orig_no)
+				JOIN $tree_table as t2 on t2.orig_no = s.orig_no
 				JOIN $auth_table as a on a.taxon_no = t2.spelling_no
 				LEFT JOIN $opinion_table as o on o.opinion_no = t2.opinion_no
 				$extra_joins
@@ -1505,8 +1505,8 @@ sub getTaxaIdsByName {
 	    unless $order_expr;
 	
 	my $join_string = $options->{senior} ?
-	    "JOIN $tree_table as t2 using (orig_no) JOIN $tree_table as t on t.orig_no = t2.synonym_no" :
-		"JOIN $tree_table as t using (orig_no)";
+	    "JOIN $tree_table as t2 on t2.orig_no = s.orig_no JOIN $tree_table as t on t.orig_no = t2.synonym_no" :
+		"JOIN $tree_table as t on t.orig_no = s.orig_no";
 	
 	$SQL_STRING = "
 		SELECT $count_expr distinct t.${select}_no

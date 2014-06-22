@@ -131,7 +131,7 @@ sub initialize {
     
     # Now fill in the %PERSON_NAME hash.
     
-    my $dbh = $ds->get_dbh;
+    my $dbh = $ds->get_connection;
     
     my $values = $dbh->selectcol_arrayref("SELECT person_no, reversed_name FROM person",
 					  { Columns => [1, 2] });
@@ -150,7 +150,7 @@ sub datetime_value {
     
     my ($value, $context) = @_;
     
-    my $dbh = $remember_ds->get_dbh;
+    my $dbh = $remember_ds->get_connection;
     my $quoted = $dbh->quote($value);
     my $clean;
     
@@ -265,7 +265,7 @@ sub ent_filter {
     
     my ($self, $tn, $param, $person_value) = @_;
 
-    my $dbh = $self->get_dbh;
+    my $dbh = $self->get_connection;
     my @values = ref $person_value eq 'ARRAY' ? @$person_value : $person_value;
     my @ids;
     

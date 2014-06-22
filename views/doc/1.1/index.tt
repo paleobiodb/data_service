@@ -116,43 +116,9 @@ that control the form of the result.
 
 For now, the only HTTP requests that are accepted are GET requests. Once we allow authentication and data modification, these operations will be carried out by means of POST, PUT and DELETE requests.
 
-=head2 FORMATS
-
-By using the appropriate suffix, you can choose to retrieve any of the available information in any of the available formats:
-
-=over 4
-
-=for pp_table_header Format | Suffix | Documentation | Description
-
-=item JSON | C<json> | L<JSON response|/data1.1/formats/json_doc.html>
-
-L<Javascript Object Notation|http://en.wikipedia.org/wiki/Json> (JSON) is the most commonly used format for
-data communication on the Web. Our JSON responses use short
-(3-character) field names in order to minimize the amount of data
-returned.
-
-=item XML | C<xml> | L<XML response|/data1.1/formats/xml_doc.html>
-
-Our XML responses use L<Darwin Core|http://www.tdwg.org/standards/450/> element names. 
-Unfortunately, many of our data fields have no counterpart in the Darawin Core element set and
-thus cannot be included in responses of this type.
-
-=item tab-separated text | C<tsv> C<txt> | L<Text response|/data1.1/formats/text_doc.html>
-
-This format produces files that are very similar to the download files
-from the classic PBDB. The same field names are used, so that you can
-compare results with previous PBDB downloads and use the same analysis
-tools. Results in this format can be easily loaded into most
-spreadsheet software for futher processing and analysis.
-
-=item comma-separated text | C<csv> | L<Text response|/data1.1/formats/text_doc.html>
-
-This format is identical to the tab-separated format, but with fields
-quoted and separated by commas. It can be similarly loaded into most
-spreadsheet software.
-
-=back
+<% INCLUDE ALL_FORMATS %>
 
 If an error occurs, the response body will be a L<JSON object|/data1.1/json_doc.html> if the URL path suffix is C<json>
 and HTML otherwise.  If the URL path suffix is not recognized, an error of type C<415 Unknown Media Type> will be returned.
 
+<% INCLUDE ALL_VOCABULARIES %>

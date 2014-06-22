@@ -1,13 +1,20 @@
+<%- USE dumper -%>
+<%- SET block_done = { } -%>
+
 <%- BLOCK trail %>
-<% SET base_url = request.get_base_url %>
-<% SET trail_base = "Data Service L<$ds_label|$base_url>" %>
-<% IF ds_version; SET trail_base = "$trail_base ($ds_version)"; END %>
-<% SET rest = request.list_navtrail %>
-=head3 <% trail_base %> E<GT> <% rest %>
+<% IF block_done.trail; RETURN; ELSE; SET blcok_done.trail = 1; END %>
+<% SET base_url = ds_request.get_base_path %>
+<% SET trail = "Data Service L<$ds_label|$base_url>" %>
+<% IF ds_version; SET trail = "$trail ($ds_version)"; END %>
+<% SET foo = ds_request.list_navtrail %>
+<% FOREACH component IN foo %>
+<% SET trail = "$trail E<GT> $component" %>
+<% END %>
+=head3 <% trail %>
 <% END -%>
 
 <%- BLOCK params %>
-<% IF done_params; RETURN; ELSE; SET done_params = 1; END %>
+<% IF block_done.params; RETURN; ELSE; SET blcok_done.params = 1; END %>
 
 =head2 PARAMETERS
 
