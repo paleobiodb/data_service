@@ -1281,7 +1281,7 @@ sub createWorkingTables {
 				name varchar(80) not null,
 				imp boolean not null,
 				rank tinyint not null,
-				op_rank tinyint not null,
+				opinion_rank tinyint not null,
 				status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 				spelling_no int unsigned not null,
 				trad_no int unsigned not null,
@@ -1519,15 +1519,15 @@ sub computeSpelling {
 		WHERE a2.taxon_rank <> 'unranked clade' and a2.taxon_name = a.taxon_name
 		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
-    # logMessage(2, "    setting trad_no");
+    logMessage(2, "    setting trad_no");
     
-    # $result = $dbh->do("UPDATE $TREE_WORK SET trad_no = spelling_no");
-    # $result = $dbh->do("UPDATE $TREE_WORK t JOIN $TRAD_AUX s USING (orig_no)
-    # 			SET t.trad_no = s.spelling_no");
+    $result = $dbh->do("UPDATE $TREE_WORK SET trad_no = spelling_no");
+    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $TRAD_AUX as s USING (orig_no)
+    			SET t.trad_no = s.spelling_no");
     
-    # logMessage(2, "    indexing trad_no");
+    logMessage(2, "    indexing trad_no");
     
-    # $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (trad_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (trad_no)");
     
     # We then copy the selected name and rank into $TREE_TABLE.  We use the
     # traditional rank instead of the currently accepted one, because 'unranked clade'
@@ -1535,8 +1535,11 @@ sub computeSpelling {
     
     logMessage(2, "    setting name and rank");
     
-    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on taxon_no = trad_no
-			SET t.name = a.taxon_name, t.rank = a.taxon_rank, t.op_rank = a.taxon_rank");
+    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on a.taxon_no = t.spelling_no
+			SET t.name = a.taxon_name, t.opinion_rank = a.taxon_rank");
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on a.taxon_no = t.trad_no
+			SET t.rank = a.taxon_rank");
     
     logMessage(2, "    indexing by name");
     
@@ -3165,10 +3168,6 @@ sub computeIntermediates {
 				order_yr smallint,
 				primary key (orig_no)) ENGINE=MYISAM");
     
-    # As an atrocious hack, I am forcing 'Mammalia' to be a class.
-    
-    #$SQL_STRING = "UPDATE $TREE_WORK SET rank = 17, op_rank = 17 WHERE name = 'Mammalia' LIMIT 1";
-    
     $result = $dbh->do($SQL_STRING);
     
     # We first compute an auxiliary table to help in the computation.  We
@@ -3178,9 +3177,9 @@ sub computeIntermediates {
     
     $SQL_STRING = "
 		INSERT INTO $INTS_AUX (orig_no, parsen_no, depth, taxon_name, current_rank)
-		SELECT t.orig_no, t.parsen_no, t.depth, t.name, t.op_rank
+		SELECT t.orig_no, t.parsen_no, t.depth, t.name, t.rank
 		FROM $TREE_WORK as t
-		WHERE t.op_rank > 5 and t.orig_no = t.synonym_no";
+		WHERE t.rank > 5 and t.orig_no = t.synonym_no";
     
     $result = $dbh->do($SQL_STRING);
     
@@ -3361,7 +3360,7 @@ sub computeIntermediates {
 	
 	$result = $dbh->do($SQL_STRING);
 	
-	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(op_rank=9, 25, op_rank)
+	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(opinion_rank=9, 25, opinion_rank)
 		       WHERE orig_no in ($family_string) and rank = 9";
 	
 	$result = $dbh->do($SQL_STRING);
@@ -3386,7 +3385,7 @@ sub computeIntermediates {
 	
 	$result = $dbh->do($SQL_STRING);
 	
-	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(op_rank=13, 25, op_rank)
+	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(opinion_rank=13, 25, opinion_rank)
 		       WHERE orig_no in ($order_string) and rank = 13";
 	
 	$result = $dbh->do($SQL_STRING);
@@ -3411,7 +3410,7 @@ sub computeIntermediates {
 	
 	$result = $dbh->do($SQL_STRING);
 	
-	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(op_rank=17, 25, op_rank)
+	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(opinion_rank=17, 25, opinion_rank)
 		       WHERE orig_no in ($class_string) and rank = 17";
 	
 	$result = $dbh->do($SQL_STRING);

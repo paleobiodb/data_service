@@ -1297,7 +1297,7 @@ sub generateMainFilters {
     if ( $taxon_name )
     {
 	#my (@starttime) = Time::HiRes::gettimeofday();
-	@taxa = $self->get_taxa_by_name($taxon_name, { return => 'range', common => 1 });
+	@taxa = &Data_1_1::TaxonData::get_taxa_by_name($self, $taxon_name, { return => 'range', common => 1 });
 	#my (@endtime) = Time::HiRes::gettimeofday();
 	#my $elapsed = Time::HiRes::tv_interval(\@starttime, \@endtime);
 	#print STDERR $Taxonomy::SQL_STRING . "\n\n";
