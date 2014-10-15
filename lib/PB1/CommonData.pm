@@ -16,9 +16,6 @@ our (@EXPORT_OK) = qw(generateAttribution generateReference generateRISReference
 
 use Moo::Role;
 
-
-my $remember_ds;		# for use by datetime_value()
-
 our (%PERSON_NAME);
 
 
@@ -34,39 +31,12 @@ sub initialize {
     
     my ($class, $ds) = @_;
     
-    $remember_ds = $ds;
-    
-    $ds->define_ruleset('1.1:common_params' => 
+    $ds->define_ruleset('1.1:special_params' => 
 	"The following parameters can be used with most requests:",
-	{ optional => 'limit', valid => [POS_ZERO_VALUE, ENUM_VALUE('all')], 
-	  error => "acceptable values for 'limit' are a positive integer, 0, or 'all'",
-	  default => 500 },
-	    "Limits the number of records returned.  The value may be a positive integer, zero, or C<all>.",
-	    "It defaults to 500, in order to prevent people from accidentally sending requests that",
-	    "might generate megabytes of data in response.  If you really want the entire result set,",
-		"specify C<limit=all>.",
-	{ optional => 'offset', valid => POS_ZERO_VALUE },
-	    "Returned records start at this offset in the result set.  The value may be a positive integer or zero.",
-	    "You can use this parameter along with C<limit> to return a large result set in many smaller chunks.",
-	{ optional => 'count', valid => FLAG_VALUE },
-	    "If this parameter is specified, then the response includes a header stating",
-	    "the number of records that match the query and the number of records actually returned.",
-	    "For more information about how this information is encoded, see the documentation pages",
-	    "for the various L<response formats|/data1.1/formats>.  This parameter does not need any value.",
-	{ optional => 'showsource', valid => FLAG_VALUE },
-	    "If this parameter is specified, then the response will include a header containing",
-	    "a variety of information including:", "=over",
-	    "=item *", "The source of the data",
-	    "=item *", "The license under which it is provided",
-	    "=item *", "The date and time at which the data was accessed",
-	    "=item *", "The URL and parameters used to generate this result set",
-	    "=back",
-	    "This is particularly useful for responses that will be saved to disk for later analysis",
-	    "and use.  This extra information will serve to document the criteria by which data are included",
-	    "in the result set, the time at which the result was generated, and will contain a URL",
-	    "which can be used to re-run the query at a later time.",
-	    "For more information about how this information is encoded, see the documentation pages",
-	    "for the various L<response formats|/data1.1/formats>.  This parameter does not need any value.",
+	{ optional => 'SPECIAL(limit)' },
+	{ optional => 'SPECIAL(offset)' },
+	{ optional => 'SPECIAL(count)' },
+	{ optional => 'SPECIAL(datainfo)' },
 	{ optional => 'textresult', valid => FLAG_VALUE },
 	    "If specified, then the result will be given a content type of 'text/plain'.",
 	    "With most browsers, that will cause the result to be displayed directly",
@@ -74,17 +44,14 @@ sub initialize {
 	{ optional => 'markrefs', valid => FLAG_VALUE },
 	    "If specified, then formatted references will be marked up with E<lt>bE<gt> and E<lt>iE<gt> tags.",
 	    "This parameter does not need a value.",
-	{ optional => 'vocab', valid => $ds->valid_vocab },
-	    "Selects the vocabulary used to name the fields in the response.  You only need to use this if",
-	    "you want to override the default vocabulary for your selected format.",
-	    "Possible values depend upon the particular URL path, and include:", $ds->document_vocab,
-	">The following parameters are only relevant to the text formats (.csv, .tsv, .txt):",
+	{ optional => 'SPECIAL(vocab)' },
+	{ optional => 'SPECIAL(save)' },
+	">>The following parameters are only relevant to the text formats (.csv, .tsv, .txt):",
 	{ optional => 'noheader', valid => FLAG_VALUE },
 	    "If specified, then the header line which gives the field names is omitted.",
-	    "This parameter does not need any value.",
-	{ optional => 'linebreak', valid => ENUM_VALUE('cr','crlf') },
-	    "Specifies the character sequence used to terminate each line.",
-	    "The value may be either 'cr' or 'crlf', and defaults to the latter.",
+	    "This parameter does not need any value.  It is equivalent to \"header=no\".",
+	{ optional => 'SPECIAL(linebreak)', alias => 'lb' },
+	{ optional => 'SPECIAL(header)', undocumented => 1 },
 	{ ignore => 'splat' });
     
     $ds->define_ruleset('1.1:common:select_crmod' =>
@@ -98,7 +65,7 @@ sub initialize {
 	    "Select only records that were modified on or after the specified L<date or date/time|/data1.1/datetime>.");
     
     $ds->define_block('1.1:common:crmod' =>
-	{ select => ['$bt.created', '$bt.modified'], tables => '$bt' },
+	{ select => ['$cd.created', '$cd.modified'], tables => '$cd' },
 	{ output => 'created', com_name => 'dcr' },
 	  "The date and time at which this record was created.",
 	{ output => 'modified', com_name => 'dmd' },
@@ -119,7 +86,7 @@ sub initialize {
 	    "the specified person, indicated by name or identifier");
     
     $ds->define_block('1.1:common:ent' =>
-	{ select => ['$bt.authorizer_no', '$bt.enterer_no', '$bt.modifier_no'], tables => '$bt' },
+	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
 	{ output => 'authorizer_no', com_name => 'ati', if_block => 'ent,entname' },
 	    "The identifier of the person who authorized the entry of this record",
 	{ output => 'enterer_no', com_name => 'eni', if_block => 'ent,entname' },
@@ -128,7 +95,7 @@ sub initialize {
 	    "The identifier of the person who last modified this record, if it has been modified.");
     
     $ds->define_block('1.1:common:entname' =>
-	{ select => ['$bt.authorizer_no', '$bt.enterer_no', '$bt.modifier_no'], tables => '$bt' },
+	{ select => ['$cd.authorizer_no', '$cd.enterer_no', '$cd.modifier_no'], tables => '$cd' },
 	{ set => 'authorizer', from => 'authorizer_no', lookup => \%PERSON_NAME, default => 'unknown' },
 	{ set => 'enterer', from => 'enterer_no', lookup => \%PERSON_NAME, default => 'unknown' },
 	{ set => 'modifier', from => 'modifier_no', lookup => \%PERSON_NAME, default => 'unknown' },
@@ -160,7 +127,7 @@ sub datetime_value {
     
     my ($value, $context) = @_;
     
-    my $dbh = $remember_ds->get_connection;
+    my $dbh = $PBData::ds1->get_connection;
     my $quoted = $dbh->quote($value);
     my $clean;
     
@@ -201,28 +168,28 @@ sub datetime_value {
 
 sub generate_crmod_filters {
 
-    my ($self, $table_name, $tables_hash) = @_;
+    my ($request, $table_name, $tables_hash) = @_;
     
     my @filters;
     
-    if ( my $dt = $self->clean_param('created_after') )
+    if ( my $dt = $request->clean_param('created_after') )
     {
 	push @filters, "$table_name.created >= $dt";
     }
     
-    if ( my $dt = $self->clean_param('created_before') )
+    if ( my $dt = $request->clean_param('created_before') )
     {
 	push @filters, "$table_name.created < $dt";
     }
     
-    if ( my $dt = $self->clean_param('modified_after') )
+    if ( my $dt = $request->clean_param('modified_after') )
     {
 	push @filters, "$table_name.modified >= $dt";
     }
     
-    if ( my $dt = $self->clean_param('modified_before') )
+    if ( my $dt = $request->clean_param('modified_before') )
     {
-	push @filters, "$table_name.modified >= $dt";
+	push @filters, "$table_name.modified < $dt";
     }
     
     $tables_hash->{$table_name} = 1 if @filters && ref $tables_hash eq 'HASH';
@@ -238,31 +205,31 @@ sub generate_crmod_filters {
 
 sub generate_ent_filters {
     
-    my ($self, $table_name, $tables_hash) = @_;
+    my ($request, $table_name, $tables_hash) = @_;
     
     my @filters;
     
     # First go through the parameters and figure out if we have names or
     # identifiers.  Convert all names into identifiers.
     
-    if ( my $value = $self->clean_param('authorized_by') )
+    if ( my $value = $request->clean_param('authorized_by') )
     {
-	push @filters, ent_filter($self, $table_name, 'authorizer_no', $value);
+	push @filters, ent_filter($request, $table_name, 'authorizer_no', $value);
     }
     
-    if ( my $value = $self->clean_param('entered_by') )
+    if ( my $value = $request->clean_param('entered_by') )
     {
-	push @filters, ent_filter($self, $table_name, 'enterer_no', $value);
+	push @filters, ent_filter($request, $table_name, 'enterer_no', $value);
     }
     
-    if ( my $value = $self->clean_param('modified_by') )
+    if ( my $value = $request->clean_param('modified_by') )
     {
-	push @filters, ent_filter($self, $table_name, 'modifier_no', $value);
+	push @filters, ent_filter($request, $table_name, 'modifier_no', $value);
     }
     
-    if ( my $value = $self->clean_param('touched_by') )
+    if ( my $value = $request->clean_param('touched_by') )
     {
-	push @filters, ent_filter($self, $table_name, 'touched', $value);
+	push @filters, ent_filter($request, $table_name, 'touched', $value);
     }
     
     $tables_hash->{$table_name} = 1 if @filters && ref $tables_hash eq 'HASH';
@@ -273,9 +240,9 @@ sub generate_ent_filters {
 
 sub ent_filter {
     
-    my ($self, $tn, $param, $person_value) = @_;
+    my ($request, $tn, $param, $person_value) = @_;
 
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my @values = ref $person_value eq 'ARRAY' ? @$person_value : $person_value;
     my @ids;
     
@@ -312,12 +279,12 @@ sub ent_filter {
 		}
 		
 		my $list = join(', ', @ambiguous);
-		$self->add_warning("Ambiguous name: '$p' could match any of the following names: $list");
+		$request->add_warning("Ambiguous name: '$p' could match any of the following names: $list");
 	    }
 	    
 	    else
 	    {
-		$self->add_warning("Unknown name: '$p' is not a name known to this database");
+		$request->add_warning("Unknown name: '$p' is not a name known to this database");
 	    }
 	}
     }
@@ -348,7 +315,7 @@ sub ent_filter {
 
 sub generateAttribution {
 
-    my ($self, $row) = @_;
+    my ($request, $row) = @_;
     
     my $auth1 = $row->{a_al1} || '';
     my $auth2 = $row->{a_al2} || '';

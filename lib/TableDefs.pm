@@ -15,7 +15,8 @@ our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENC
 		      $PALEOCOORDS $GEOPLATES $COLL_LOC
 		      $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF $DIV_SAMPLE
 		      $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
-		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP);
+		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP
+		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS);
 
 # classic tables
 
@@ -53,5 +54,13 @@ our $SCALE_MAP = "scale_map";
 our $INTERVAL_BRACKET = "interval_bracket";
 our $INTERVAL_MAP = "interval_map";
 our $INTERVAL_BUFFER = "interval_buffer";
+
+# taxon pic tables
+
+our $PHYLOPICS = 'phylopics';
+our $PHYLOPIC_NAMES = 'phylopic_names';
+our $PHYLOPIC_CHOICE = 'phylopic_choice';
+our $TAXON_PICS = 'taxon_pics';
+
 
 1;

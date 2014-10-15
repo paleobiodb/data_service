@@ -1,0 +1,13 @@
+
+=for html <p>&nbsp;</p>
+=for html <div class="banner" id="bottom"><h2 id="contact">CONTACT</h2></div>
+=for pod =head2 CONTACT
+
+This service is provided by the L<Paleobiology Database|http://paleobiodb.org/>, 
+hosted by the L<Department of Geoscience|http://geoscience.wisc.edu/geoscience/>
+at the L<University of Wisconsin-Madison|http://www.wisc.edu/>.
+
+If you have questions about this data service, or wish to report a bug, please
+contact <% request.contact_info.name %> at L<<% request.contact_info.email %>|mailto:<% request.contact_info.email %>>
+
+

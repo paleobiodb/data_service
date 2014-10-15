@@ -1,6 +1,0 @@
-=head2 DESCRIPTION
-
-This path returns information about the bibliographic references associated with fossil collections from the database.
-
-<% INCLUDE STANDARD %>
-

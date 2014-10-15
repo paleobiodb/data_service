@@ -1,0 +1,77 @@
+This is the current version of the data service, and should be used for all new applications.
+
+=head2 DESCRIPTION
+
+The function of this data service is to provide programmatic access to the
+information stored in the Paleobiology Database. Our goal is to make the
+entire database accessible by means of this service, so that anyone can write
+client software that interacts with it.
+
+=head2 SCOPE
+
+This service currently provides access to the following classes of
+information, by means of the indicated URLs. The following links will take you
+to pages which document the individual URL paths, listing the parameters
+accepted and the data fields returned by each.
+
+<% NODELIST %>
+
+For now, this service provides read-only access to the publicly
+available parts of the data. In the future, we plan to add an
+authentication module which will accept login credentials and will
+allow access to protected data, addition of new data, and modification
+of existing data.
+
+=head2 USAGE
+
+You can access this service by making HTTP requests whose URLs conform
+to a simple scheme.  In most cases each URL maps to a single database query,
+and the body of the response represents some or all of the resulting records.
+For a description of how this information is encoded, see the
+documentation for the various L<output formats|node:formats>.
+
+For example, consider the following URL:
+
+    /data1.1/taxa/single.json?name=Dascillidae&show=attr
+
+An HTTP GET request using this URL would return information about the taxon Dascillidae (soft-bodied plant beetles). The components of this URL are as follows:
+
+=over 4
+
+=item /data1.1/taxa/single
+
+The URL path indicates the operation to be carried out. For a GET
+request, it specifies the class of information to be retrieved.
+
+=item json
+
+The path suffix indicates the format in which the results will be
+returned. In this case, the result will be expressed in Javascript
+Object Notation.
+
+=item name=Dascillidae
+
+Some of the parameters are used to construct a database query that
+will retrieve the desired information. This one selects a particular
+taxonomic name.
+
+=item show=attr
+
+Other parameters change or augment the set of information
+returned. This one specifies that in addition to basic information
+about the taxonomic name the result should also include the name's
+attribution.
+
+=back
+
+Each URL path accepts its own set of parameters as well as a set of L<special parameters|node:special>
+that control the form of the result.
+
+For now, the only HTTP requests that are accepted are GET requests. Once we allow authentication and data modification, these operations will be carried out by means of POST, PUT and DELETE requests.
+
+<% FORMAT_SECTION(opt_all=1, opt_extended=1) %>
+
+If an error occurs, the response body will be a L<JSON object|/data1.1/json_doc.html> if the URL path suffix is C<json>
+and HTML otherwise.  If the URL path suffix is not recognized, an error of type C<415 Unknown Media Type> will be returned.
+
+<% VOCAB_SECTION(opt_all=1, opt_extended=1) %>

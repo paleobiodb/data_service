@@ -6,24 +6,22 @@
 # 
 # Author: Michael McClennen
 
-package Data_1_1::OccurrenceData;
-
 use strict;
 
-use parent 'Data_1_1::CollectionData';
+package PB1::OccurrenceData;
 
-use Web::DataService qw(:validators);
-
-use Data_1_1::CommonData;
-use Data_1_1::CollectionData;
+use HTTP::Validate qw(:validators);
 
 use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
+
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use Taxonomy;
 
+use Moo::Role;
 
-our (@REQUIRES_CLASS) = qw(Data_1_1::CommonData Data_1_1::ReferenceData Data_1_1::TaxonData);
+
+our (@REQUIRES_ROLE) = qw(PB1::CommonData PB1::ReferenceData PB1::TaxonData PB1::CollectionData);
 
 
 # initialize ( )
@@ -38,7 +36,6 @@ sub initialize {
     # We start by defining an output map for this class.
     
     $ds->define_output_map('1.1:occs:basic_map' =>
-	{ value => 'basic', maps_to => '1.1:occs:basic', fixed => 1 },
 	{ value => 'coords', maps_to => '1.1:occs:geo' },
 	     "The latitude and longitude of this occurrence",
         { value => 'attr', maps_to => '1.1:colls:attr' },
@@ -93,7 +90,7 @@ sub initialize {
 		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso', 'o.species_name', 'o.species_reso',
 		     'o.early_age', 'o.late_age', 'o.reference_no'],
 	  tables => ['o', 't', 'ts', 'ei', 'li'] },
-	{ set => '*', from_record => 1, code => \&process_basic_record },
+	{ set => '*', from => '*', code => \&process_basic_record },
 	{ output => 'occurrence_no', dwc_name => 'occurrenceID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies the occurrence",
 	{ output => 'record_type', value => 'occurrence', com_name => 'typ', com_value => 'occ', 
@@ -123,7 +120,7 @@ sub initialize {
 	{ output => 'matched_no', com_name => 'mid', if_field => 'mid', dedup => 'taxon_no' },
 	    "The unique identifier of the closest matching name in the database to the identified",
 	    "taxonomic name, if any is known.",
-	{ set => '*', code => \&Data_1_1::CollectionData::fixTimeOutput },
+	{ set => '*', code => \&PB1::CollectionData::fixTimeOutput },
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	    "The specific geologic time range associated with this collection (not necessarily a",
 	    "standard interval), or the interval that begins the range if C<late_interval> is also given",
@@ -190,54 +187,54 @@ sub initialize {
     $ds->define_set('1.1:occs:order' =>
 	{ value => 'earlyage' },
 	    "Results are ordered chronologically by early age bound, oldest to youngest unless you add C<.asc>",
-	{ value => 'earlyage.asc', undoc => 1 },
-	{ value => 'earlyage.desc', undoc => 1 },
+	{ value => 'earlyage.asc', undocumented => 1 },
+	{ value => 'earlyage.desc', undocumented => 1 },
 	{ value => 'lateage' },
 	    "Results are ordered chronologically by late age bound, oldest to youngest unless you add C<.asc>",
-	{ value => 'lateage.asc', undoc => 1 },
-	{ value => 'lateage.desc', undoc => 1 },
+	{ value => 'lateage.asc', undocumented => 1 },
+	{ value => 'lateage.desc', undocumented => 1 },
 	{ value => 'agespan' },
 	    "Results are ordered based on the difference between the early and late age bounds, starting",
 	    "with occurrences with the smallest spread (most precise temporal resolution) unless you add C<.desc>",
-	{ value => 'agespan.asc', undoc => 1 },
-	{ value => 'agespan.desc', undoc => 1 },
+	{ value => 'agespan.asc', undocumented => 1 },
+	{ value => 'agespan.desc', undocumented => 1 },
 	{ value => 'taxon' },
 	    "Results are ordered hierarchically by taxonomic identification.",
 	    "The order of sibling taxa is arbitrary, but children will follow immediately",
 	    "after parents.",
-	{ value => 'taxon.asc', undoc => 1 },
-	{ value => 'taxon.desc', undoc => 1 },
+	{ value => 'taxon.asc', undocumented => 1 },
+	{ value => 'taxon.desc', undocumented => 1 },
 	{ value => 'reso' },
 	    "Results are ordered according to the taxonomic rank to which they are resolved.  Unless",
 	    "you add C<.desc>, this would start with subspecies, species, genus, ...",
-	{ value => 'reso.asc', undoc => 1 },
-	{ value => 'reso.desc', undoc => 1 },
+	{ value => 'reso.asc', undocumented => 1 },
+	{ value => 'reso.desc', undocumented => 1 },
 	{ value => 'formation' },
 	    "Results are ordered by the geological formation in which they were found, sorted alphabetically.",
-	{ value => 'formation.asc', undoc => 1 },
-	{ value => 'formation.desc', undoc => 1 },
+	{ value => 'formation.asc', undocumented => 1 },
+	{ value => 'formation.desc', undocumented => 1 },
 	{ value => 'geogroup' },
 	    "Results are ordered by the geological group in which they were found, sorted alphabetically.",
-	{ value => 'geogroup.asc', undoc => 1 },
-	{ value => 'geogroup.desc', undoc => 1 },
+	{ value => 'geogroup.asc', undocumented => 1 },
+	{ value => 'geogroup.desc', undocumented => 1 },
 	{ value => 'member' },
 	    "Results are ordered by the geological member in which they were found, sorted alphabetically.",
-	{ value => 'member.asc', undoc => 1 },
-	{ value => 'member.desc', undoc => 1 },
+	{ value => 'member.asc', undocumented => 1 },
+	{ value => 'member.desc', undocumented => 1 },
 	{ value => 'plate' },
 	    "Results are ordered by the geological plate on which they are located, sorted numerically by identifier.",
-	{ value => 'plate.asc', undoc => 1 },
-	{ value => 'plate.desc', undoc => 1 },
+	{ value => 'plate.asc', undocumented => 1 },
+	{ value => 'plate.desc', undocumented => 1 },
 	{ value => 'created' },
 	    "Results are ordered by the date the record was created, most recent first",
 	    "unless you add C<.asc>.",
-	{ value => 'created.asc', undoc => 1 },
-	{ value => 'created.desc', undoc => 1 },
+	{ value => 'created.asc', undocumented => 1 },
+	{ value => 'created.desc', undocumented => 1 },
 	{ value => 'modified' },
 	    "Results are ordered by the date the record was last modified",
 	    "most recent first unless you add C<.asc>",
-	{ value => 'modified.asc', undoc => 1 },
-	{ value => 'modified.desc', undoc => 1 });
+	{ value => 'modified.asc', undocumented => 1 },
+	{ value => 'modified.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.1:occs:specifier' =>
 	{ param => 'id', valid => POS_VALUE, alias => 'occ_id' },
@@ -249,19 +246,18 @@ sub initialize {
 	{ param => 'coll_id', valid => POS_VALUE, list => ',' },
 	    "A comma-separated list of collection identifiers.  All occurrences associated with",
 	    "the specified collections are returned, provided they satisfy the other parameters",
-	    "given with this request");
+	    "given with this request.");
     
     $ds->define_ruleset('1.1:occs:display' =>
-	"You can use the following parameter to request additional information about each",
-	"retrieved occurrence.  Some of the additional fields describe the collection",
-	"of which it is a member.",
+	"You can use the following parameters to select what information you wish to retrieve,",
+	"and the order in which you wish to get the records:",
 	{ param => 'show', list => q{,},
 	  valid => $ds->valid_set('1.1:occs:basic_map') },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each occurrence.  Its value should be",
 	    "one or more of the following, separated by commas:",
 	    $ds->document_set('1.1:occs:basic_map'),
-	{ optional => 'order', valid => $ds->valid_set('1.1:occs:order'), split => ',' },
+	{ optional => 'order', valid => '1.1:occs:order', split => ',', no_set_doc => 1 },
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
 	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
 	    $ds->document_set('1.1:occs:order'),
@@ -269,20 +265,21 @@ sub initialize {
 	{ ignore => 'level' });
     
     $ds->define_ruleset('1.1:occs:single' => 
-	"The following required parameter selects a record to retrieve:",
+	"The following parameter selects a record to retrieve:",
     	{ require => '1.1:occs:specifier', 
 	  error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" },
-    	{ allow => '1.1:occs:display' },
-    	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+	">>You may also use the following parameter to specify what information you wish to retrieve:",
+    	{ param => 'SPECIAL(show)', valid => '1.1:occs:basic_map' },
+    	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.1:occs:list' => 
-	">You can use the following parameters if you wish to retrieve information about",
+	"You can use the following parameters if you wish to retrieve information about",
 	"a known list of occurrences or collections, or to filter a known list against",
 	"other criteria such as location or time.",
 	"Only the records which match the other parameters that you specify will be returned.",
 	{ allow => '1.1:occs:selector' },
-        ">The following parameters can be used to query for occurrences by a variety of criteria.",
+        ">>The following parameters can be used to query for occurrences by a variety of criteria.",
 	"Except as noted below, you may use these in any combination.",
 	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
 	{ allow => '1.1:main_selector' },
@@ -290,18 +287,17 @@ sub initialize {
 	{ allow => '1.1:common:select_ent' },
 	{ require_any => ['1.1:occs:selector', '1.1:main_selector',
 			  '1.1:common:select_crmod', '1.1:common:select_ent'] },
-	"You can also specify any of the following parameters:",
 	{ allow => '1.1:occs:display' },
-	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request");
+	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.1:occs:refs' =>
-	">You can use the following parameters if you wish to retrieve the references associated",
+	"You can use the following parameters if you wish to retrieve the references associated",
 	"with a known list of occurrences or collections, or to filter a known list against",
 	"other criteria such as location or time.",
 	"Only the records which match the other parameters that you specify will be returned.",
 	{ allow => '1.1:occs:selector' },
-        ">The following parameters can be used to retrieve the references associated with occurrences",
+        ">>The following parameters can be used to retrieve the references associated with occurrences",
 	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
 	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
 	{ allow => '1.1:main_selector' },
@@ -312,13 +308,11 @@ sub initialize {
 	"You can also specify any of the following parameters:",
 	{ allow => '1.1:refs:filter' },
 	{ allow => '1.1:refs:display' },
-	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.",
-	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
-	"the name of the primary author.");
+	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
 
     $ds->define_ruleset('1.1:occs:taxa' =>
-	">You can use the following parameters if you wish to retrieve the taxa associated",
+	"You can use the following parameters if you wish to retrieve the taxa associated",
 	"with a known list of occurrences or collections, or to filter a known list against",
 	"other criteria such as location or time.",
 	"Only the records which match the other parameters that you specify will be returned.",
@@ -335,9 +329,9 @@ sub initialize {
 	{ allow => '1.1:taxa:summary_selector' },
 	{ allow => '1.1:taxa:occ_filter' },
 	{ allow => '1.1:taxa:display' },
-	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.",
-	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
+	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request",
+	">>If the parameter C<order> is not specified, the results are sorted alphabetically by",
 	"taxonomic name.");    
 }
 
@@ -357,14 +351,16 @@ sub get {
     
     # Make sure we have a valid id number.
     
-    my $id = $self->{params}{id} || '';
+    my $id = $self->clean_param('id');
     
-    die "Bad identifier '$id'" unless defined $self->{params}{id} and $id =~ /^\d+$/;
+    die "Bad identifier '$id'" unless $id and $id =~ /^\d+$/;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = join(', ', $self->select_list({ mt => 'o', bt => 'oc' }));
+    $self->substitute_select( mt => 'o', cd => 'oc' );
+    
+    my $fields = $self->select_string;
     
     $self->adjustCoordinates(\$fields);
     $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
@@ -381,6 +377,8 @@ sub get {
 		$join_list
         WHERE o.occurrence_no = $id and c.access_level = 0
 	GROUP BY o.occurrence_no";
+    
+    print STDERR $self->{main_sql} if $self->debug;
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
@@ -408,13 +406,15 @@ sub list {
     my $dbh = $self->get_connection;
     my $tables = $self->tables_hash;
     
+    $self->substitute_select( mt => 'o', cd => 'oc' );
+    
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = Data_1_1::CollectionData::generateMainFilters($self, 'list', 'c', $tables);
-    push @filters, Data_1_1::OccurrenceData::generateOccFilters($self, $tables);
-    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'o', $tables);
-    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'o', $tables);
+    my @filters = PB1::CollectionData::generateMainFilters($self, 'list', 'c', $tables);
+    push @filters, PB1::OccurrenceData::generateOccFilters($self, $tables);
+    push @filters, PB1::CommonData::generate_crmod_filters($self, 'o', $tables);
+    push @filters, PB1::CommonData::generate_ent_filters($self, 'o', $tables);
     
     push @filters, "c.access_level = 0";
     
@@ -435,7 +435,7 @@ sub list {
     
     $self->add_output_block('1.1:occs:unknown_taxon') if $tables->{unknown_taxon};
     
-    my $fields = $self->select_string({ mt => 'o', bt => 'oc' });
+    my $fields = $self->select_string;
     
     $self->adjustCoordinates(\$fields);
     $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
@@ -444,7 +444,7 @@ sub list {
     
     my $tt = $tables->{ts} ? 'ts' : 't';
     
-    my $order_clause = $self->generate_order_clause($tables, { at => 'c', bt => 'cc', tt => $tt }) || 'o.occurrence_no';
+    my $order_clause = $self->PB1::CollectionData::generate_order_clause($tables, { at => 'c', cd => 'cc', tt => $tt }) || 'o.occurrence_no';
     
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
@@ -488,14 +488,16 @@ sub refs {
     
     my $dbh = $self->get_connection;
     
+    $self->substitute_select( mt => 'r', cd => 'r' );
+    
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
     my $inner_tables = {};
     
-    my @filters = Data_1_1::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
-    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'o');
-    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'o');
+    my @filters = PB1::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
+    push @filters, PB1::CommonData::generate_crmod_filters($self, 'o');
+    push @filters, PB1::CommonData::generate_ent_filters($self, 'o');
     push @filters, $self->generateOccFilters($inner_tables);
     
     push @filters, "c.access_level = 0";
@@ -504,7 +506,7 @@ sub refs {
     
     # Construct another set of filter expressions to act on the references.
     
-    my @ref_filters = Data_1_1::ReferenceData::generate_filters($self, $self->tables_hash);
+    my @ref_filters = PB1::ReferenceData::generate_filters($self, $self->tables_hash);
     push @ref_filters, "1=1" unless @ref_filters;
     
     my $ref_filter_string = join(' and ', @ref_filters);
@@ -512,7 +514,7 @@ sub refs {
     # Figure out the order in which we should return the references.  If none
     # is selected by the options, sort by rank descending.
     
-    my $order = $self->Data_1_1::ReferenceData::generate_order_clause({ rank_table => 's' }) ||
+    my $order = $self->PB1::ReferenceData::generate_order_clause({ rank_table => 's' }) ||
 	"r.author1last, r.author1init";
     
     # If a query limit has been specified, modify the query accordingly.
@@ -526,12 +528,12 @@ sub refs {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->select_string({ mt => 'r', bt => 'r' });
+    my $fields = $self->select_string;
     
     $self->adjustCoordinates(\$fields);
     
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $self->Data_1_1::ReferenceData::generate_join_list($self->tables_hash);
+    my $outer_join_list = $self->PB1::ReferenceData::generate_join_list($self->tables_hash);
     
     $self->{main_sql} = "
 	SELECT $calc $fields, count(distinct occurrence_no) as reference_rank, 1 as is_occ
@@ -576,9 +578,9 @@ sub taxa {
     my $inner_tables = { t => 1 };
     my $outer_tables = { at => 1 };
     
-    my @filters = Data_1_1::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
-    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'o');
-    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'o');
+    my @filters = PB1::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
+    push @filters, PB1::CommonData::generate_crmod_filters($self, 'o');
+    push @filters, PB1::CommonData::generate_ent_filters($self, 'o');
     push @filters, $self->generateOccFilters($inner_tables);
     
     push @filters, "c.access_level = 0";
@@ -587,7 +589,7 @@ sub taxa {
     
     # Construct another set of filter expressions to act on the taxa.
     
-    my @taxa_filters = $self->Data_1_1::TaxonData::generate_filters($outer_tables);
+    my @taxa_filters = $self->PB1::TaxonData::generate_filters($outer_tables);
     push @taxa_filters, "1=1" unless @taxa_filters;
     
     my $taxa_filter_string = join(' and ', @taxa_filters);
@@ -603,7 +605,7 @@ sub taxa {
     # Figure out the order in which we should return the taxa.  If none
     # is selected by the options, sort by the tree sequence number.
     
-    my $order_expr = $self->Data_1_1::TaxonData::generate_order_clause($outer_tables, {rank_table => 's'});
+    my $order_expr = $self->PB1::TaxonData::generate_order_clause($outer_tables, {rank_table => 's'});
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -612,16 +614,15 @@ sub taxa {
     my $INTS_TABLE = $TAXON_TABLE{$TREE_TABLE}{ints};
     my $AUTH_TABLE = $TAXON_TABLE{$TREE_TABLE}{authorities};
     
-    my $fields = $self->Data_1_1::TaxonData::generate_query_fields($outer_tables, 1);
-	# $self->select_string({ mt => 'a', bt => 'a' });
+    my $fields = $self->PB1::TaxonData::generate_query_fields($outer_tables, 1);
     
     my $inner_join_list = $self->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $self->Data_1_1::TaxonData::generate_join_list($outer_tables, $TREE_TABLE);
+    my $outer_join_list = $self->PB1::TaxonData::generate_join_list($outer_tables, $TREE_TABLE);
     
     # Depending upon the summary level, we need to use different templates to generate the query.
     
     my $summary_rank = $self->clean_param('rank');
-    my $summary_expr = $self->Data_1_1::TaxonData::generate_summary_expr($summary_rank, 'o', 't', 'i');
+    my $summary_expr = $self->PB1::TaxonData::generate_summary_expr($summary_rank, 'o', 't', 'i');
     
     if ( $summary_rank eq 'exact' or $summary_rank eq 'ident' )
     {

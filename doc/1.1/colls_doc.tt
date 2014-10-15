@@ -1,0 +1,31 @@
+=head2 DESCRIPTION
+
+The URL paths documented in this section provide access to information about
+the fossil collections represented in the Paleobiology Database.  In the
+context of our database, a "fossil collection" represents a set of fossil
+occurrences co-located geographically and temporally.  In order to belong to a single
+collection the occurrences must have been collected deliberately as a group,
+though not necessarily all on the same occasion.
+
+Using the paths described here, you may query for collections by a variety of
+criteria including: name, location, age, enterer, and taxonomic identification.
+Examples are given below.
+
+=head3 Geographic clustering
+
+In order to facilitate efficient mapping of the worldwide fossil record as
+represented in this database, we have added to the database several levels of
+geographic clusters.  Each cluster represents the aggregate of all the fossil
+collections in a particular area of the globe, and can be used to generate
+maps at low resolutions.
+
+You can query for these clusters using the
+L<summary|/data1.1/colls/summary_doc.html> URL path as indicated below.  The
+L<config|/data1.1/config_doc.html> URL path may be used to get information
+about the levels of clustering defined in the database.
+
+=head2 SYNOPSIS
+
+The following URL paths are available:
+
+<% NODELIST(opt_usage=1) %>

@@ -7,22 +7,22 @@
 # Author: Michael McClennen
 
 use strict;
-use lib qw(lib);
 
-package Data_1_1::TaxonData;
+package PB1::TaxonData;
 
-use Web::DataService qw(:validators);
-
-use base 'Web::DataService::Request';
+use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
-use Try::Tiny;
 
-use Data_1_1::CommonData qw(generateReference generateAttribution);
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
-use TaxonPics qw($PHYLOPICS $PHYLOPIC_NAMES);
+use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES);
 use Taxonomy;
 
-our (@REQUIRES_CLASS) = qw(Data_1_1::CommonData Data_1_1::ReferenceData);
+use Moo::Role;
+
+
+our (@REQUIRES_ROLE) = qw(PB1::CommonData PB1::ReferenceData);
+
+our (%DB_FIELD);
 
 # This routine is called by the data service in order to initialize this
 # class.
@@ -35,7 +35,6 @@ sub initialize {
     # be used to generate output from the operations defined in this class.
     
     $ds->define_output_map('1.1:taxa:output_map' =>
-	{ value => 'basic', maps_to => '1.1:taxa:basic', fixed => 1 },
 	{ value => 'attr', maps_to => '1.1:taxa:attr' },
 	    "The attribution of this taxon (author and year)",
 	# { value => 'ref', maps_to => '1.1:common:ref' },
@@ -61,12 +60,6 @@ sub initialize {
         { value => 'crmod', maps_to => '1.1:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the collection record");
     
-    # Define a second map to handle the URL path /data1.1/taxa/auto, used to
-    # implement auto-completion.
-    
-    $ds->define_output_map('1.1:taxa:auto_map' =>
-	{ value => 'basic', maps_to => '1.1:taxa:auto', fixed => 1 });
-    
     # Now define all of the output blocks that were not defined elsewhere.
     
     $ds->define_block('1.1:taxa:basic' =>
@@ -88,8 +81,8 @@ sub initialize {
 	    "The scientific name of this taxon",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2' },
 	    "The common (vernacular) name of this taxon, if any",
-	{ set => 'attribution', if_field => 'a_al1', from_record => 1, 
-	  code => \&generateAttribution },
+	{ set => 'attribution', if_field => 'a_al1', from => '*', 
+	  code => \&PB1::CommonData::generateAttribution },
 	{ output => 'attribution', if_block => 'attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
@@ -164,67 +157,67 @@ sub initialize {
 	    "The name of the parent taxonomic concept, if any",
 	{ output => 'parent_rank', com_name => 'prr' },
 	    "The rank of the parent taxonomic concept, if any",
-	{ output => 'parent_txn', com_name => 'prt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'parent_txn', com_name => 'prt', sub_record => '1.1:taxa:subtaxon' },
 	{ output => 'kingdom_no', com_name => 'kgn' },
 	    "The identifier of the kingdom in which this taxon occurs",
 	{ output => 'kingdom', com_name => 'kgl' },
 	    "The name of the kingdom in which this taxon occurs",
-	{ output => 'kingdom_txn', com_name => 'kgt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'kingdom_txn', com_name => 'kgt', sub_record => '1.1:taxa:subtaxon' },
 	{ output => 'phylum_no', com_name => 'phn' },
 	    "The identifier of the phylum in which this taxon occurs",
 	{ output => 'phylum', com_name => 'phl' },
 	    "The name of the phylum in which this taxon occurs",
-	{ output => 'phylum_txn', com_name => 'pht', rule => '1.1:taxa:subtaxon' },
+	{ output => 'phylum_txn', com_name => 'pht', sub_record => '1.1:taxa:subtaxon' },
 	{ output => 'phylum_count', com_name => 'phc' },
 	    "The number of phyla within this taxon",
 	{ output => 'class_no', com_name => 'cln' },
 	    "The identifier of the class in which this taxon occurs",
 	{ output => 'class', com_name => 'cll' },
 	    "The name of the class in which this taxon occurs",
-	{ output => 'class_txn', com_name => 'clt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'class_txn', com_name => 'clt', sub_record => '1.1:taxa:subtaxon' },
 	{ output => 'class_count', com_name => 'clc' },
 	    "The number of classes within this taxon",
-	{ output => 'order_no', com_name => 'odl' },
+	{ output => 'order_no', com_name => 'odn' },
 	    "The identifier of the order in which this taxon occurs",
-	{ output => 'order', com_name => 'odn' },
+	{ output => 'order', com_name => 'odl' },
 	    "The name of the order in which this taxon occurs",
-	{ output => 'order_txn', com_name => 'odt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'order_txn', com_name => 'odt', sub_record => '1.1:taxa:subtaxon' },
 	{ output => 'order_count', com_name => 'odc' },
 	    "The number of orders within this taxon",
 	{ output => 'family_no', com_name => 'fmn' },
 	    "The identifier of the family in which this taxon occurs",
 	{ output => 'family', com_name => 'fml' },
 	    "The name of the family in which this taxon occurs",
-	{ output => 'family_txn', com_name => 'fmt', rule => '1.1:taxa:subtaxon' },
+	{ output => 'family_txn', com_name => 'fmt', sub_record => '1.1:taxa:subtaxon' },
 	{ output => 'family_count', com_name => 'fmc' },
 	    "The number of families within this taxon",
 	{ output => 'genus_count', com_name => 'gnc' },
 	    "The number of genera within this taxon",
     
-	{ output => 'children', com_name => 'chl', rule => '1.1:taxa:subtaxon' },
+	{ output => 'children', com_name => 'chl', sub_record => '1.1:taxa:subtaxon' },
 	    "The immediate children of this taxonomic concept, if any",
-	{ output => 'phylum_list', com_name => 'phs', rule => '1.1:taxa:subtaxon' },
+	{ output => 'phylum_list', com_name => 'phs', sub_record => '1.1:taxa:subtaxon' },
 	    "A list of the phyla within this taxonomic concept",
-	{ output => 'class_list', com_name => 'cls', rule => '1.1:taxa:subtaxon' },
+	{ output => 'class_list', com_name => 'cls', sub_record => '1.1:taxa:subtaxon' },
 	    "A list of the classes within this taxonomic concept",
-	{ output => 'order_list', com_name => 'ods', rule => '1.1:taxa:subtaxon' },
+	{ output => 'order_list', com_name => 'ods', sub_record => '1.1:taxa:subtaxon' },
 	    "A list of the orders within this taxonomic concept",
-	{ output => 'family_list', com_name => 'fms', rule => '1.1:taxa:subtaxon' },
+	{ output => 'family_list', com_name => 'fms', sub_record => '1.1:taxa:subtaxon' },
 	    "A list of the families within this taxonomic concept",
-	{ output => 'genus_list', com_name => 'gns', rule => '1.1:taxa:subtaxon' },
+	{ output => 'genus_list', com_name => 'gns', sub_record => '1.1:taxa:subtaxon' },
 	    "A list of the genera within this taxonomic concept",
-	{ output => 'subgenus_list', com_name => 'sgs', rule => '1.1:taxa:subtaxon' },
+	{ output => 'subgenus_list', com_name => 'sgs', sub_record => '1.1:taxa:subtaxon' },
 	    "A list of the subgenera within this taxonomic concept",
-	{ output => 'species_list', com_name => 'sps', rule => '1.1:taxa:subtaxon' },
+	{ output => 'species_list', com_name => 'sps', sub_record => '1.1:taxa:subtaxon' },
 	    "A list of the species within this taxonomic concept",
- 	{ output => 'subspecies_list', com_name => 'sss', rule => '1.1:taxa:subtaxon' },
+ 	{ output => 'subspecies_list', com_name => 'sss', sub_record => '1.1:taxa:subtaxon' },
 	    "A list of the subspecies within this taxonomic concept");
     
     $ds->define_block('1.1:taxa:img' =>
 	{ select => 'img' },
 	{ output => 'image_no', com_name => 'img' },
     	    "If this value is non-zero, you can use it to construct image URLs",
-	    "using L</data1.1/taxa/thumb_doc|/data1.1/taxa/thumb> and L</data1.1/taxa/icon_doc|/data1.1/taxa/icon>.");
+	    "using L<taxa/thumb|node:taxa/thumb> and L<taxa/icon|node:taxa/icon>.");
     
     $ds->define_block('1.1:taxa:auto' =>
 	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
@@ -249,10 +242,10 @@ sub initialize {
 	    "The type of this record: 'img' for an image",
 	{ output => 'taxon_no', com_name => 'tid' },
 	    "The identifier of the taxon with which this image is associated.  This",
-	    "field will only appear in results generated by C</data1.1/taxa/list_images>.",
+	    "field will only appear in results generated by L<taxa/list_images|node:taxa/list_images>.",
 	{ output => 'taxon_name', com_name => 'tna' },
 	    "The taxonomic name with which this image is associated.  This field",
-	    "will only appear in results generated by C</data1.1/taxa/list_images>.",
+	    "will only appear in results generated by L<taxa/list_images|node:taxa/list_images>.",
 	{ output => 'uid', com_name => 'uid' },
 	    "A unique identifier for this image generated by phylopic.org",
 	{ output => 'modified', com_name => 'dmd' },
@@ -266,7 +259,7 @@ sub initialize {
     # the operations defined in this class.
     
     $ds->define_ruleset('1.1:taxa:specifier' => 
-	{ param => 'name', valid => \&Data_1_1::TaxonData::validNameSpec, 
+	{ param => 'name', valid => \&PB1::TaxonData::validNameSpec, 
 	  alias => 'taxon_name' },
 	    "Return information about the most fundamental taxonomic name matching this string.",
 	    "The C<%> and C<_> characters may be used as wildcards.",
@@ -361,66 +354,66 @@ sub initialize {
 	    "Results are ordered hierarchically by taxonomic identification.",
 	    "The order of sibling taxa is arbitrary, but children will always follow",
 	    "after parents.  This is the default.",
-	{ value => 'hierarchy.asc', undoc => 1 },
-	{ value => 'hierarchy.desc', undoc => 1 },
+	{ value => 'hierarchy.asc', undocumented => 1 },
+	{ value => 'hierarchy.desc', undocumented => 1 },
 	{ value => 'name' },
 	    "Results are ordered alphabetically by taxon name.",
-	{ value => 'name.asc', undoc => 1 },
-    	{ value => 'name.desc', undoc => 1 },
+	{ value => 'name.asc', undocumented => 1 },
+    	{ value => 'name.desc', undocumented => 1 },
 	{ value => 'firstapp' },
 	    "Results are ordered chronologically by first appearance, oldest to youngest unless you add C<.asc>",
-	{ value => 'firstapp.asc', undoc => 1 },
-	{ value => 'firstapp.desc', undoc => 1 },
+	{ value => 'firstapp.asc', undocumented => 1 },
+	{ value => 'firstapp.desc', undocumented => 1 },
 	{ value => 'lastapp' },
 	    "Results are ordered chronologically by last appearance, oldest to youngest unless you add C<.asc>",
-	{ value => 'lastapp.asc', undoc => 1 },
-	{ value => 'lastapp.desc', undoc => 1 },
+	{ value => 'lastapp.asc', undocumented => 1 },
+	{ value => 'lastapp.desc', undocumented => 1 },
 	{ value => 'agespan' },
 	    "Results are ordered based on the difference between the first and last appearances, starting",
 	    "with occurrences with the smallest spread (most precise temporal resolution) unless you add C<.desc>",
-	{ value => 'agespan.asc', undoc => 1 },
-	{ value => 'agespan.desc', undoc => 1 },
+	{ value => 'agespan.asc', undocumented => 1 },
+	{ value => 'agespan.desc', undocumented => 1 },
 	{ value => 'n_occs' },
 	    "Results are ordered by the number of fossil occurrences of this taxon entered in this database,",
 	    "largest to smallest unless you add C<.asc>",
-	{ value => 'n_occs.asc', undoc => 1 },
-	{ value => 'n_occs.desc', undoc => 1 },
+	{ value => 'n_occs.asc', undocumented => 1 },
+	{ value => 'n_occs.desc', undocumented => 1 },
 	{ value => 'size' },
 	    "Results are ordered by the number of contained subtaxa, largest to smallest unless you add C<.asc>",
-	{ value => 'size.asc', undoc => 1 },
-	{ value => 'size.desc', undoc => 1 },
+	{ value => 'size.asc', undocumented => 1 },
+	{ value => 'size.desc', undocumented => 1 },
 	{ value => 'extant_size' },
 	    "Results are ordered by the number of extant subtaxa, largest to smallest unless you add C<.asc>",
-	{ value => 'extant_size.asc', undoc => 1 },
-	{ value => 'extant_size.desc', undoc => 1 },
+	{ value => 'extant_size.asc', undocumented => 1 },
+	{ value => 'extant_size.desc', undocumented => 1 },
 	{ value => 'extant' },
 	    "Results are ordered by whether or not the taxon is extant, with extant ones first unless you add C<.asc>",
-	{ value => 'extant.asc', undoc => 1 },
-	{ value => 'extant.desc', undoc => 1 },
+	{ value => 'extant.asc', undocumented => 1 },
+	{ value => 'extant.desc', undocumented => 1 },
 	{ value => 'created' },
 	    "Results are ordered by the date the record was created, most recent first",
 	    "unless you add C<.asc>.",
-	{ value => 'created.asc', undoc => 1 },
-	{ value => 'created.desc', undoc => 1 },
+	{ value => 'created.asc', undocumented => 1 },
+	{ value => 'created.desc', undocumented => 1 },
 	{ value => 'modified' },
 	    "Results are ordered by the date the record was last modified",
 	    "most recent first unless you add C<.asc>",
-	{ value => 'modified.asc', undoc => 1 },
-	{ value => 'modified.desc', undoc => 1 },
+	{ value => 'modified.asc', undocumented => 1 },
+	{ value => 'modified.desc', undocumented => 1 },
 	{ value => 'rank' },
 	    "Results are ordered by the number of associated records, highest first unless you add C<.asc>.",
 	    "This is only useful when querying for taxa associated with occurrences, etc.",
-	{ value => 'rank.asc', undoc => 1 },
-	{ value => 'rank.desc', undoc => 1 });
+	{ value => 'rank.asc', undocumented => 1 },
+	{ value => 'rank.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.1:taxa:selector' =>
 	"The following parameters are used to indicate a base taxon or taxa:",
-	{ param => 'name', valid => \&Data_1_1::TaxonData::validNameSpec, list => ',', 
+	{ param => 'name', valid => \&PB1::TaxonData::validNameSpec, list => ',', 
 	  alias => 'taxon_name' },
 	    "Select the all taxa matching each of the specified name(s).",
 	    "To specify more than one, separate them by commas.",
 	    "The C<%> character may be used as a wildcard.",
-	{ param => 'base_name', valid => \&Data_1_1::TaxonData::validNameSpec, list => ',' },
+	{ param => 'base_name', valid => \&PB1::TaxonData::validNameSpec, list => ',' },
 	    "Selects all taxa matching each of the specified name(s), plus",
 	    "all of their subtaxa.  Equivalent to specifying C<rel=all_children>.",
 	{ param => 'id', valid => POS_VALUE, list => ',' },
@@ -442,7 +435,7 @@ sub initialize {
     
     $ds->define_ruleset('1.1:taxa:filter' => 
 	"The following parameters further filter the list of return values:",
-	{ optional => 'rank', valid => \&Data_1_1::TaxonData::validRankSpec },
+	{ optional => 'rank', valid => \&PB1::TaxonData::validRankSpec },
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
@@ -478,16 +471,16 @@ sub initialize {
 	{ require => '1.1:taxa:specifier',
 	  error => "you must specify either 'name' or 'id'" },
 	{ allow => '1.1:taxa:display' }, 
-	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.1:taxa:list' => 
 	{ require => '1.1:taxa:selector',
 	  error => "you must specify either of 'name', 'id'" },
 	{ allow => '1.1:taxa:filter' },
 	{ allow => '1.1:taxa:display' }, 
-	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.1:taxa:refs' =>
 	">You can use the following parameters if you wish to retrieve the references associated",
@@ -507,16 +500,16 @@ sub initialize {
 	    "The accepted values include:", $ds->document_set('1.1:taxa:refspelling'),
 	{ allow => '1.1:refs:filter' },
 	{ allow => '1.1:refs:display' },
-	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.",
+	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.",
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
 	"the name of the primary author.");
     
     $ds->define_ruleset('1.1:taxa:match' =>
-	{ param => 'name', valid => \&Data_1_1::TaxonData::validNameSpec, list => ',', alias => 'taxon_name' },
+	{ param => 'name', valid => \&PB1::TaxonData::validNameSpec, list => ',', alias => 'taxon_name' },
 	    "A valid taxonomic name, or a common abbreviation such as 'T. rex'.",
 	    "The name may include the wildcard characters % and _.",
-	{ optional => 'rank', valid => \&Data_1_1::TaxonData::validRankSpec },
+	{ optional => 'rank', valid => \&PB1::TaxonData::validRankSpec },
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
@@ -525,19 +518,20 @@ sub initialize {
 	    "Return only names that have the specified status.  Accepted values include:",
 	    $ds->document_set('1.1:taxa:status'),
 	{ allow => '1.1:taxa:display' }, 
-	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.1:taxa:auto' =>
 	{ param => 'name', valid => ANY_VALUE, alias => 'taxon_name' },
 	    "A partial name or prefix.  It must have at least 3 significant characters, and may include both a genus",
 	    "(possibly abbreviated) and a species.  Examples:\n    t. rex, tyra, rex", 
-	{ allow => '1.1:common_params' },
-	"^You can also use any of the L<common parameters|/data1.1/common_doc.html> with this request.");
+	{ allow => '1.1:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.");
     
     $ds->define_ruleset('1.1:taxa:thumb' =>
 	{ param => 'id', valid => POS_VALUE },
 	    "A positive number identifying a taxon image",
+	{ optional => 'SPECIAL(save)' },
 	{ ignore => 'splat' });
     
     $ds->define_ruleset('1.1:taxa:icon' =>
@@ -560,7 +554,23 @@ sub initialize {
 	{ optional => 'depth', valid => POS_VALUE },
 	    "Return only images whose depth in the tree is at most the specified",
 	    "number of levels different from the base taxon or taxa.");
-
+    
+    # Determine which fields are available in this version of the database.
+    
+    my $dbh = $ds->get_connection;
+    
+    my $record;
+    
+    eval {
+	$record = $dbh->selectrow_hashref("SELECT * from $TAXON_TABLE{taxon_trees}{search}");
+    };
+    
+    if ( ref $record eq 'HASH' )
+    {
+	$DB_FIELD{common} = 1 if exists $record->{common};
+	$DB_FIELD{orig_no} = 1 if exists $record->{orig_no};
+	$DB_FIELD{is_current} = 1 if exists $record->{is_current};
+    }
 }
 
 
@@ -644,7 +654,7 @@ sub get {
     # If we were asked for 'nav' info, also show the various categories
     # of subtaxa and whether or not each of the parents are extinct.
     
-    if ( $self->output_key('nav') )
+    if ( $self->has_block('nav') )
     {
 	my $r = $self->{main_record};
 	
@@ -981,19 +991,19 @@ sub get_taxa_by_name {
     
     # Do we accept common names?
     
-    if ( ! defined $options->{common} )
-    {
-	push @clauses, "common = ''";
-    }
-    
-    elsif ( $options->{common} eq 'only' )
+    if ( $DB_FIELD{common} && defined $options->{common} && $options->{common} eq 'only' )
     {
 	push @clauses, "common = 'EN'";
     }
     
+    elsif ( $DB_FIELD{common} && $options->{common} )
+    {
+	push @clauses, "common = ''";
+    }
+    
     # Invalid names?
     
-    my $status = $options->{status} // 'valid';
+    my $status = $options->{status} // 'any';
     
     if ( $status eq 'valid' )
     {
@@ -1026,7 +1036,7 @@ sub get_taxa_by_name {
     
     if ( $options->{return} eq 'range' )
     {
-	$fields = "t.lft, t.rgt";
+	$fields = "t.name, t.lft, t.rgt";
     }
     
     elsif ( $options->{return} eq 'id' )
@@ -1147,7 +1157,7 @@ sub get_taxa_by_name {
 	    
 	    next unless $higher =~ qr< [a-zA-Z]{2} >xs;
 	    
-	    push @filters, "taxon_name like '$higher'";
+	    push @filters, "taxon_name like '$higher' and taxon_rank >= 5";
 	}
 	
 	# Otherwise, we have an invalid name so just skip it.
@@ -1162,13 +1172,18 @@ sub get_taxa_by_name {
 	my $filter_string = join(' and ', @clauses, @filters);
 	$filter_string = '1=1' unless $filter_string;
 	
+	my $s_field = $DB_FIELD{orig_no} ? 'orig_no' : 'result_no';
+	my $current_clause = $DB_FIELD{is_current} ? 's.is_current desc,' : '';
+	
 	$NAME_SQL = "
 		SELECT $fields
-		FROM taxon_search as s join taxon_trees as t on t.orig_no = s.synonym_no
+		FROM taxon_search as s join taxon_trees as t on t.orig_no = s.$s_field
 			join taxon_attrs as v on v.orig_no = t.orig_no
 		WHERE $filter_string
-		ORDER BY v.taxon_size
+		ORDER BY $current_clause v.taxon_size desc
 		$limit_string";
+	
+	print STDERR $NAME_SQL . "\n\n" if $self->debug;
 	
 	my $records;
 	
@@ -1325,7 +1340,10 @@ sub auto {
     my $limit = $self->sql_limit_clause(1);
     my $calc = $self->sql_count_clause;
     
-    my $fields = "taxon_rank, match_no as taxon_no, n_occs, if(spelling_reason = 'misspelling', 1, null) as misspelling";
+    my $result_field = $DB_FIELD{orig_no} ? 's.synonym_no' : 's.result_no';
+    my $match_field = $DB_FIELD{orig_no} ? 's.taxon_no' : 's.match_no';
+    
+    my $fields = "taxon_rank, $match_field as taxon_no, n_occs, if(spelling_reason = 'misspelling', 1, null) as misspelling";
     
     # If we are given a genus (possibly abbreviated), generate a search on
     # genus and species name.
@@ -1336,8 +1354,8 @@ sub auto {
 	my $species = $dbh->quote("$3%");
 	
 	$sql = "SELECT $calc concat(genus, ' ', taxon_name) as taxon_name, $fields
-		FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
-			JOIN $names_table as n on n.taxon_no = s.match_no
+		FROM $search_table as s JOIN $attrs_table as v on v.orig_no = $result_field
+			JOIN $names_table as n on n.taxon_no = $match_field
 		WHERE genus like $genus and taxon_name like $species ORDER BY n_occs desc $limit";
     }
     
@@ -1349,8 +1367,8 @@ sub auto {
 	my $genus = $2 ? $dbh->quote("$1%") : $dbh->quote($1);
 	
 	$sql = "SELECT $calc concat(genus, ' ', taxon_name) as taxon_name, $fields
-		FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
-			JOIN $names_table as n on n.taxon_no = s.match_no
+		FROM $search_table as s JOIN $attrs_table as v on v.orig_no = $result_field
+			JOIN $names_table as n on n.taxon_no = $match_field
 		WHERE genus like $genus ORDER BY n_occs desc $limit";
     }
     
@@ -1366,8 +1384,8 @@ sub auto {
 	my $name = $dbh->quote("$partial%");
 	
 	$sql = "SELECT $calc if(genus <> '', concat(genus, ' ', taxon_name), taxon_name) as taxon_name, $fields
-	        FROM $search_table as s JOIN $attrs_table as v on v.orig_no = s.result_no
-			JOIN $names_table as n on n.taxon_no = s.match_no
+	        FROM $search_table as s JOIN $attrs_table as v on v.orig_no = $result_field
+			JOIN $names_table as n on n.taxon_no = $match_field
 	        WHERE taxon_name like $name ORDER BY n_occs desc $limit";
     }
     

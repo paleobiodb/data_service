@@ -1,0 +1,13 @@
+=encoding utf8
+
+=begin html
+<div class="banner">
+   <img id="logo" src="/images/logo_white.png">
+   <h1 id="title">PBDB Data Service: <% doc_title %></h1>
+</div>
+=end html
+
+=for wds_title PBDB Data Service: <% doc_title %>
+
+<% NAVTRAIL %>
+

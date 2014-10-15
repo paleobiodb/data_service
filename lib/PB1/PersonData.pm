@@ -7,15 +7,15 @@
 # 
 # Author: Michael McClennen
 
-package Data_1_1::PersonData;
-
 use strict;
-use parent 'Web::DataService::Request';
 
-use Web::DataService qw(:validators);
+package PB1::PersonData;
+
+use HTTP::Validate qw(:validators);
 
 use Carp qw(carp croak);
 
+use Moo::Role;
 
 
 # initialize ( )
@@ -26,12 +26,7 @@ sub initialize {
 
     my ($class, $ds) = @_;
     
-    # First define an output map.
-    
-    $ds->define_output_map('1.1:people:output_map' =>
-	{ value => 'basic', maps_to => '1.1:people:basic', fixed => 1 });
-    
-    # Then the output block(s).
+   # Define the basic output block for person data.
     
     $ds->define_block('1.1:people:basic' =>
 	{ select => [ qw(p.person_no p.name p.country p.institution
@@ -59,11 +54,11 @@ sub initialize {
 
     $ds->define_ruleset('1.1:people:single' => 
 	{ allow => '1.1:people:specifier' },
-	{ allow => '1.1:common_params' });
+	{ allow => '1.1:special_params' });
     
     $ds->define_ruleset('1.1:people:list' => 
 	{ require => '1.1:people:selector' },
-	{ allow => '1.1:common_params' });
+	{ allow => '1.1:special_params' });
 }
     
 

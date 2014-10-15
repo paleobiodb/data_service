@@ -15,7 +15,7 @@ use TaxonDefs qw(%TAXON_RANK %RANK_STRING);
 
 use Carp qw(carp croak);
 
-our (@REQUIRES_CLASS) = qw(PB1::CommonData);
+our (@REQUIRES_ROLE) = qw(PB1::CommonData);
 
 use Moo::Role;
 
@@ -150,15 +150,16 @@ sub get {
 
     my ($request) = @_;
     
+    my $show_all; $show_all = 1 if $request->has_block('all');
     my @result;
     
-    push @@result, @$BINS if $request->has_output_block('clusters');
-    push @@result, @$RANKS if $request->has_output_block('ranks');
-    push @@result, @$CONTINENTS if $request->has_output_block('continents');
+    push @result, @$BINS if $request->has_block('clusters') or $show_all;
+    push @result, @$RANKS if $request->has_block('ranks') or $show_all;
+    push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
     
     if ( my $offset = $request->result_offset(1) )
     {
-    	splice(@@result, 0, $offset);
+    	splice(@result, 0, $offset);
     }
     
     $request->list_result(@result);

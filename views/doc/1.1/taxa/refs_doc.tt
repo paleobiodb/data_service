@@ -1,8 +1,0 @@
-=head2 DESCRIPTION
-
-This URL path returns information about the source references associated with 
-taxa in the Paleobiology Database.  You can use the same parameters that are available
-with L</data1.1/taxa/list>, but Reference records are returned instead of Taxon records.
-One record is returned per reference, even if it is associated with multiple taxa.
-
-<% INCLUDE STANDARD %>

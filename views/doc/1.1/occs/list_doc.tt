@@ -1,6 +1,0 @@
-
-=head2 DESCRIPTION
-
-This path returns information about occurrence records stored in the Paleobiology Database.
-
-<% INCLUDE STANDARD %>

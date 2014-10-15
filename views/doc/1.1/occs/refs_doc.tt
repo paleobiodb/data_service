@@ -1,7 +1,0 @@
-=head2 DESCRIPTION
-
-This path returns information about the bibliographic references associated with fossil occurrences from
-the database.  You can pass identical filtering parameters to L</data1.1/occs/list> and to L</data1.1/occs/refs>,
-which will give you both a list of occurrences and also the list of associated references.
-
-<% INCLUDE STANDARD %>

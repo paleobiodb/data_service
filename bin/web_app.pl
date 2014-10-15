@@ -18,13 +18,17 @@ use Web::DataService;
 # If we were called from the command line with 'GET' or 'SHOW' as the first
 # argument, then assume that we have been called for debugging purposes.
 
-if ( defined $ARGV[0] and ( lc $ARGV[0] eq 'get' or lc $ARGV[0] eq 'show' ) )
-{
-    set apphandler => 'Debug';
-    set logger => 'console';
-    set show_errors => 0;
+BEGIN {
+    if ( defined $ARGV[0] and ( lc $ARGV[0] eq 'get' or lc $ARGV[0] eq 'show' ) )
+    {
+	set apphandler => 'Debug';
+	set logger => 'console';
+	set show_errors => 0;
+	
+	Web::DataService->set_mode('debug', 'one_request');
+    }
     
-    Web::DataService->set_mode('debug', 'one_request');
+    Web::DataService->set_mode('debug');
 }
 
 #use PB0::Main;

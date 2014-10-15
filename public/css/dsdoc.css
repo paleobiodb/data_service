@@ -29,3 +29,35 @@ TABLE.pod_list2 TD { border-width: 0; padding: 3px; vertical-align: top; };
 
 TR.resp_head { color: #00A0A0; text-align: center; }
 
+#logo {
+    height: 7em;
+    width: 7em;
+}
+
+#title {
+    display: table-cell;
+    position: relative;
+    font-size: 200%;
+    vertical-align: middle;
+    #left: 0.5em;
+}
+
+#bottom {
+    margin-top: 1em;
+    height: 3em;
+}
+
+#contact {
+    position: relative;
+    left: 0.5em;
+    top: 0.5em;
+    #vertical-align: middle;
+}
+
+.banner {
+    color: white;
+    background-color: #00A0A0;
+    display: table;
+    width: 100%;
+}
+

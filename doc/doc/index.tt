@@ -1,0 +1,34 @@
+
+This is an example data service, built using the Web::DataService framework.  It provides
+information about the historical population of U.S. states, based on data from the
+L<Bureau of the Census|http://www.census.gov/>.
+
+You can use this code as a basis for building your own data services.
+
+=head2 OPERATIONS
+
+The following data service operations are available:
+
+=over
+
+=item L<Single state|node:single>
+
+Returns information about a single state.
+
+=item L<Multiple states|node:list>
+
+Returns information about a list of states matching the specified criteria.
+
+=item L<Regions|node:regions>
+
+Returns the list of regions defined by this data service.
+
+=back
+
+<% FORMATS(opt_extended=1) %>
+
+<% VOCABULARIES(opt_extended=1, opt_all=1) %>
+
+
+
+

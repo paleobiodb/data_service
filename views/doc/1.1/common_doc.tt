@@ -1,7 +1,0 @@
-=head2 DESCRIPTION
-
-This page describes a set of common parameters that can be used with almost any request
-made to this data service.
-
-<% INCLUDE PARAMS %>
-

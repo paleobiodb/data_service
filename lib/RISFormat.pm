@@ -31,15 +31,15 @@ sub emit_header {
     
     my $output = '';
     my $linebreak = "\r\n";
-    my $source = $request->get_data_source;
-    my $base = $source->{base_url};
-    my $url_rest = $request->get_request_url;
+    my $info = $request->data_info;
+    my $base = $request->base_url;
+    my $url_rest = $request->request_url;
     
     # Start by generating the initial lines that start any RIS document.
     
-    $output .= "Provider: $source->{data_provider}$linebreak";
-    $output .= "Database: $source->{data_source}$linebreak"
-	unless $source->{data_provider} eq $source->{data_source};
+    $output .= "Provider: $info->{data_provider}$linebreak";
+    $output .= "Database: $info->{data_source}$linebreak"
+	unless $info->{data_provider} eq $info->{data_source};
     $output .= "Content: text/plain; charset=\"utf-8\"$linebreak";
     $output .= $linebreak;
     
@@ -47,23 +47,18 @@ sub emit_header {
     # then we need to add some dummy reference entries of type 'GEN' (Generic) to
     # represent that information.
     
-    if ( $request->display_source )
+    if ( $request->display_datainfo )
     {
-	my $data_url = $base . $url_rest;
-	my $doc_url = $base . $request->get_request_path . "_doc.html";
-	
-	# The "Data Source" entry gives most of the necessary information.
-	
 	$output .= $class->emit_line('TY', 'GEN');
 	$output .= $class->emit_line('TI', 'Data Source');
-	$output .= $class->emit_line('DP', $source->{data_provider});
-	$output .= $class->emit_line('DB', $source->{data_source})
-	    unless $source->{data_source} eq $source->{data_provider};
+	$output .= $class->emit_line('DP', $info->{data_provider});
+	$output .= $class->emit_line('DB', $info->{data_source})
+	    unless $info->{data_source} eq $info->{data_provider};
 	$output .= $class->emit_line('AB', 'This entry provides the exact URL that was used to generate the contents',
 				     'of this file, along with the access time and the parameter values.',
 				     'The latter are expressed as keywords.');
-	$output .= $class->emit_line('UR', $data_url);
-	$output .= $class->emit_line('Y2', $source->{access_time});
+	$output .= $class->emit_line('UR', $info->{data_url});
+	$output .= $class->emit_line('Y2', $info->{access_time});
 	
 	my @params = $request->params_for_display;
 	
@@ -94,7 +89,7 @@ sub emit_header {
 	$output .= $class->emit_line('AB', 'This entry provides a URL describing the parameters accepted',
 				     'and the output fields produced by the URL that',
 				     'generated the contents of this file.');
-	$output .= $class->emit_line('UR', $doc_url);
+	$output .= $class->emit_line('UR', $info->{documentation_url});
 	$output .= $class->emit_line('ER');
     }
     

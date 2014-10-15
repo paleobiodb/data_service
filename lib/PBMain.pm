@@ -19,6 +19,10 @@ any qr{.*} => sub {
     {
 	params->{header} = "no";
     }
+    elsif ( exists params->{textresult} )
+    {
+	params->{save} = "no";
+    }
     
     return Web::DataService->handle_request(request);
 };
@@ -35,7 +39,7 @@ hook on_handler_exception => sub {
 
 hook after_error_render => sub {
     
-    $ds->error_result(var('error'), var('wds_request'));
+    Web::DataService->error_result(var('error'), var('wds_request'));
 };
 
 

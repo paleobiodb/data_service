@@ -1,5 +1,0 @@
-=head2 DESCRIPTION
-
-This path returns information about fossil collection records stored in the Paleobiology Database.
-
-<% INCLUDE STANDARD %>

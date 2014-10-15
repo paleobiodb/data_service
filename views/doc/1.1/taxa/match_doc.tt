@@ -1,9 +1,0 @@
-=head2 DESCRIPTION
-
-This path returns information about taxonomic names stored in the Paleobiology
-Database matching the specified name.  You can use it to determine all of the
-matches for an ambiguous name.  For example, "Ficus" and "Mesocetus" both
-correspond to multiple valid taxonomic names.
-
-<% INCLUDE STANDARD %>
-

@@ -6,17 +6,15 @@
 # 
 # Author: Michael McClennen
 
-package Data_1_1::ReferenceData;
-
 use strict;
 
-use parent 'Web::DataService::Request';
+package PB1::ReferenceData;
 
-use Web::DataService qw(:validators);
+use HTTP::Validate qw(:validators);
 
-use Data_1_1::CommonData;
+our (@REQUIRES_ROLE) = qw(PB1::CommonData);
 
-our (@REQUIRES_CLASS) = qw(CommonData);
+use Moo::Role;
 
 
 # initialize ( )
@@ -30,7 +28,6 @@ sub initialize {
     # Start by defining an output map.
     
     $ds->define_output_map('1.1:refs:output_map' =>
-	{ value => 'basic', maps_to => '1.1:refs:basic', fixed => 1 },
 	{ value => 'comments' },
 	    "Include any additional comments associated with this reference",
 	{ value => 'formatted' },
@@ -61,7 +58,7 @@ sub initialize {
 	{ value => 'prim' },
 	    "A primary collection reference is marked as the primary source for a fossil collection",
 	{ value => 'coll' },
-	    "A collection reference is an additional source for a fossil collection.");
+	    "A collection reference is an additional source for a fossil collection");
     
     # Then some output blocks:
     
@@ -76,15 +73,17 @@ sub initialize {
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
-      { set => 'formatted', from_record => 1, code => \&format_reference },
-      { set => 'ref_type', from_record => 1, code => \&set_reference_type },
+      { set => 'formatted', from => '*', code => \&format_reference },
+      { set => 'ref_type', from => '*', code => \&set_reference_type },
       { output => 'reference_no', com_name => 'oid' }, 
 	  "Numeric identifier for this document reference in the database",
       { output => 'record_type', com_name => 'typ', com_value => 'ref', value => 'reference' },
 	  "The type of this object: 'ref' for a document reference",
       { output => 'ref_type', com_name => 'rtp' },
-	  "The type of reference represented by this object.  Values can include one or more of the following,",
-	  "as a comma-separated list:", $ds->document_set('1.1:refs:reftype'),
+	  "The type of reference represented by this object.  This field will only appear",
+	  "in the result of queries for occurrence, collection, or taxonomic referenes.",
+	  "Values can include one or more of the following, as a comma-separated list:", 
+	  $ds->document_set('1.1:refs:reftype'),
       { output => 'associated_records', com_name => 'rct' },
 	  "The number of records (occurrences, taxa, etc. depending upon which URL path you used) associated with this reference",
       { output => 'formatted', com_name => 'ref', if_block => 'formatted,both' },
@@ -135,7 +134,7 @@ sub initialize {
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
-      { set => 'ref_text', from_record => 1, code => \&format_reference },
+      { set => 'ref_text', from => '*', code => \&format_reference },
       { output => 'ref_text', pbdb_name => 'primary_reference', dwc_name => 'associatedReferences', 
 	com_name => 'ref' },
 	  "The primary reference associated with this record (as formatted text)");
@@ -148,7 +147,7 @@ sub initialize {
 		   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 		   'r.language as r_language', 'r.doi as r_doi'],
 	tables => ['r'] },
-      { set => 'ref_list', append => 1, from_record => 1, code => \&format_reference },
+      { set => 'ref_list', append => 1, from => '*', code => \&format_reference },
       { set => 'ref_list', append => 1, from => 'sec_refs', code => \&format_reference },
       { output => 'ref_list', pbdb_name => 'all_references', dwc_name => 'associatedReferences', 
 	com_name => 'ref', text_join => '|||' },
@@ -159,31 +158,31 @@ sub initialize {
     $ds->define_set('1.1:refs:order' =>
 	{ value => 'author' },
 	    "Results are ordered alphabetically by the name of the primary author (last, first)",
-	{ value => 'author.asc', undoc => 1 },
-	{ value => 'author.desc', undoc => 1 },
+	{ value => 'author.asc', undocumented => 1 },
+	{ value => 'author.desc', undocumented => 1 },
 	{ value => 'year' },
 	    "Results are ordered by the year of publication",
-	{ value => 'year.asc', undoc => 1 },
-	{ value => 'year.desc', undoc => 1 },
+	{ value => 'year.asc', undocumented => 1 },
+	{ value => 'year.desc', undocumented => 1 },
 	{ value => 'pubtitle' },
 	    "Results are ordered alphabetically by the title of the publication",
-	{ value => 'pubtitle.asc', undoc => 1 },
-	{ value => 'pubtitle.desc', undoc => 1 },
+	{ value => 'pubtitle.asc', undocumented => 1 },
+	{ value => 'pubtitle.desc', undocumented => 1 },
 	{ value => 'created' },
 	    "Results are ordered by the date the record was created, most recent first",
 	    "unless you add C<.asc>.",
-	{ value => 'created.asc', undoc => 1 },
-	{ value => 'created.desc', undoc => 1 },
+	{ value => 'created.asc', undocumented => 1 },
+	{ value => 'created.desc', undocumented => 1 },
 	{ value => 'modified' },
 	    "Results are ordered by the date the record was last modified",
 	    "most recent first unless you add C<.asc>",
-	{ value => 'modified.asc', undoc => 1 },
-	{ value => 'modified.desc', undoc => 1 },
+	{ value => 'modified.asc', undocumented => 1 },
+	{ value => 'modified.desc', undocumented => 1 },
 	{ value => 'rank' },
 	    "Results are ordered by the number of associated records, highest first unless you add C<.asc>.",
 	    "This is only useful when querying for references associated with occurrences, taxa, etc.",
-	{ value => 'rank.asc', undoc => 1 },
-	{ value => 'rank.desc', undoc => 1 });
+	{ value => 'rank.asc', undocumented => 1 },
+	{ value => 'rank.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.1:refs:display' =>
 	{ optional => 'show', valid => $ds->valid_set('1.1:refs:output_map'), list => ',' },
@@ -191,11 +190,6 @@ sub initialize {
 	    "with the basic record.  The value should be a comma-separated list containing",
 	    "one or more of the following values:",
 	    $ds->document_set('1.1:refs:output_map'),
-	{ optional => 'order', valid => $ds->valid_set('1.1:refs:order'), split => ',' },
-	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
-	    $ds->document_set('1.1:refs:order'),
-	    "If no order is specified, results are sorted as indicated below.",
 	{ ignore => 'level' });
     
     $ds->define_ruleset('1.1:refs:specifier' => 
@@ -222,8 +216,8 @@ sub initialize {
     $ds->define_ruleset('1.1:refs:single' => 
     	{ require => '1.1:refs:specifier' },
     	{ allow => '1.1:refs:display' },
-    	{ allow => '1.1:common_params' },
-    	"^You can also use any of the L<common parameters|/data1.1/common_doc.html>");
+    	{ allow => '1.1:special_params' },
+    	"^You can also use any of the L<special parameters|node:special>");
     
     $ds->define_ruleset('1.1:refs:list' =>
 	"You B<must> include at least one of the following parameters:",
@@ -231,12 +225,18 @@ sub initialize {
 	{ allow => '1.1:refs:filter' },
 	{ allow => '1.1:common:select_crmod' },
 	{ allow => '1.1:common:select_ent' },
-	{ require_one => ['1.1:refs:selector', '1.1:refs:filter', 
+	{ require_any => ['1.1:refs:selector', '1.1:refs:filter', 
 			  '1.1:common:select_crmod', '1.1:common:select_ent'] },
 	"You can also specify any of the following parameters:",
     	{ allow => '1.1:refs:display' },
-    	{ allow => '1.1:common_params' },
-    	"^You can also use any of the L<common parameters|/data1.1/common_doc.html>",
+	{ optional => 'order', valid => '1.1:refs:order', split => ',', no_set_doc => 1 },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
+	    $ds->document_set('1.1:refs:order'),
+	    ">If no order is specified, the results are sorted alphabetically according to",
+	    "the name of the primary author.",
+    	{ allow => '1.1:special_params' },
+    	"^You can also use any of the L<special parameters|node:special>",
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
 	"the name of the primary author.");
 }
@@ -264,7 +264,9 @@ sub get {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->select_string({ mt => 'r', cr => 'r' });
+    $self->substitute_select( cd => 'r' );
+    
+    my $fields = $self->select_string;
     
     # Generate the main query.
     
@@ -296,8 +298,8 @@ sub list {
     # in order to select the proper result set.
     
     my @filters = $self->generate_filters();
-    push @filters, Data_1_1::CommonData::generate_crmod_filters($self, 'r');
-    push @filters, Data_1_1::CommonData::generate_ent_filters($self, 'r');
+    push @filters, $self->generate_crmod_filters('r');
+    push @filters, $self->generate_ent_filters('r');
     
     my $filter_string = join(' and ', @filters);
     
@@ -318,7 +320,9 @@ sub list {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $fields = $self->select_string({ mt => 'r', cr => 'r' });
+    $self->substitute_select( cd => 'r' );
+    
+    my $fields = $self->select_string;
     
     my $join_list = $self->generate_join_list();
     
@@ -396,12 +400,12 @@ sub generate_filters {
     
     if ( my $authorname = $self->clean_param('author') )
     {
-	push @filters, $self->Data_1_1::ReferenceData::generate_auth_filter($authorname, 'author');
+	push @filters, $self->generate_auth_filter($authorname, 'author');
     }
     
     if ( my $authorname = $self->clean_param('primary') )
     {
-	push @filters, $self->Data_1_1::ReferenceData::generate_auth_filter($authorname, 'primary');
+	push @filters, $self->generate_auth_filter($authorname, 'primary');
     }
     
     if ( my $title = $self->clean_param('title') )
@@ -552,7 +556,7 @@ sub generate_order_clause {
 	
 	else
 	{
-	    die "400 bad value for parameter 'order': must be one of 'year', 'author', 'id', rank' with optional suffix '.asc' or '.desc' (was '$term')";
+	    die "400 bad value for parameter 'order': must be one of 'year', 'author', 'id', rank' with optional suffix '.asc' or '.desc' (was '$term')\n";
 	}
     }
     
@@ -753,6 +757,8 @@ sub set_reference_type {
     {
 	push @types, 'coll';
     }
+    
+    push @types, 'ref' unless @types;
     
     return join(',', @types);
 }
