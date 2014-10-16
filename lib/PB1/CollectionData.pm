@@ -1640,9 +1640,9 @@ sub generateMainFilters {
     # 	push @filters, "contains(geomfromtext($polygon), $mt.loc)";
     # }
     
-    # if ( $self->{params}{loc} )
+    # if ( $self->{clean_params}{loc} )
     # {
-    # 	push @filters, "contains(geomfromtext($self->{params}{loc}), $mt.loc)";
+    # 	push @filters, "contains(geomfromtext($self->{clean_params}{loc}), $mt.loc)";
     # }
     
     # Check for parameters 'formation', 'stratgroup', 'member'

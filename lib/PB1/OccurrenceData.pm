@@ -709,30 +709,30 @@ sub generateOccFilters {
     
     # Check for parameter 'id'
     
-    if ( ref $self->{params}{id} eq 'ARRAY' and
-	 @{$self->{params}{id}} )
+    if ( ref $self->{clean_params}{id} eq 'ARRAY' and
+	 @{$self->{clean_params}{id}} )
     {
-	my $id_list = join(',', @{$self->{params}{id}});
+	my $id_list = join(',', @{$self->{clean_params}{id}});
 	push @filters, "o.occurrence_no in ($id_list)";
     }
     
-    elsif ( $self->{params}{id} )
+    elsif ( $self->{clean_params}{id} )
     {
-	push @filters, "o.occurrence_no = $self->{params}{id}";
+	push @filters, "o.occurrence_no = $self->{clean_params}{id}";
     }
     
     # Check for parameter 'coll_id'
     
-    if ( ref $self->{params}{coll_id} eq 'ARRAY' and
-	 @{$self->{params}{coll_id}} )
+    if ( ref $self->{clean_params}{coll_id} eq 'ARRAY' and
+	 @{$self->{clean_params}{coll_id}} )
     {
-	my $id_list = join(',', @{$self->{params}{coll_id}});
+	my $id_list = join(',', @{$self->{clean_params}{coll_id}});
 	push @filters, "o.collection_no in ($id_list)";
     }
     
-    elsif ( $self->{params}{coll_id} )
+    elsif ( $self->{clean_params}{coll_id} )
     {
-	push @filters, "o.collection_no = $self->{params}{coll_id}";
+	push @filters, "o.collection_no = $self->{clean_params}{coll_id}";
     }
     
     # Check for parameter 'ident'.  In cases of reidentified occurrences, it

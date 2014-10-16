@@ -174,9 +174,9 @@ sub generateQueryFilters {
     
     # Check for parameter 'name'
     
-    if ( exists $self->{params}{name} )
+    if ( exists $self->{clean_params}{name} )
     {
-	my $name = $dbh->quote($self->{params}{name});
+	my $name = $dbh->quote($self->{clean_params}{name});
 	push @filters, "name like $name or reversed_name like $name";
     }
     
