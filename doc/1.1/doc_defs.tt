@@ -302,4 +302,14 @@
     
     MACRO NAVTRAIL INCLUDE NAVTRAIL;
     
+    # URL: Display a URL according to this service's configuration
+    # ------------------------------------------------------------
+    
+    BLOCK URL;
+        SET url_string = opt_url or request.node_path;
+        GET request.generate_url(url_string);
+    END;
+    
+    MACRO URL(opt_url) INCLUDE URL;
+    
 -%>

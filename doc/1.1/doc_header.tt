@@ -2,7 +2,7 @@
 
 =begin html
 <div class="banner">
-   <img id="logo" src="/classic/images/logo_white.png">
+   <img id="logo" src="<% URL('path:images/logo_white.png') %>">
    <h1 id="title">PBDB Data Service: <% doc_title %></h1>
 </div>
 =end html
