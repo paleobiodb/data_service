@@ -28,7 +28,7 @@ BEGIN {
 	Web::DataService->set_mode('debug', 'one_request');
     }
     
-    Web::DataService->set_mode('debug');
+    Web::DataService->set_mode('debug') if Dancer::config->{ds_debug};
 }
 
 #use PB0::Main;
