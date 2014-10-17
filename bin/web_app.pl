@@ -31,9 +31,9 @@ BEGIN {
     Web::DataService->set_mode('debug') if Dancer::config->{ds_debug};
 }
 
-#use PB0::Main;
+use PB0::Main;
 use PB1::Main;
-#use PB2::Main;
+use PB2::Main;
 
 use PBMain;
 

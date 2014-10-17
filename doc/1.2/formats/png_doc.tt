@@ -1,0 +1,10 @@
+
+=head2 DESCRIPTION
+
+This page describes the PNG response format in detail.
+
+=head2 SYNOPSIS
+
+The L<Portable Network Graphics|http://en.wikipedia.org/wiki/Portable_Network_Graphics>
+format is a graphics format that can be displayed by every web browser.  The response body of a
+PNG result is a single image.

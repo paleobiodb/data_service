@@ -25,7 +25,7 @@ TABLE.response, TABLE.pod_list { border-width: 1; border-style: solid; border-co
 
 TABLE.response TD, TABLE.pod_list TD { border-width: 1; border-style: solid; border-color: #AAAAAA; padding: 6px; }
 
-TABLE.pod_list2 TD { border-width: 0; padding: 3px; vertical-align: top; };
+TABLE.pod_list2 TD { border-width: 0; padding: 3px; vertical-align: top;  };
 
 TR.resp_head { color: #00A0A0; text-align: center; }
 

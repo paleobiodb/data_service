@@ -1,7 +1,10 @@
-This is the B<stable> version of the data service, and should be used for
-production applications.  Any future changes to this version will be
-bug fixes only; new features and capabilities will be added to
-L<version 1.2|/data1.2/>.
+This is the B<development> version of the data service.  New features
+will be added to this version on a regular basis, and the URL paths,
+parameters, and response fields may change in incompatible ways
+without warning.
+
+If you are developing a production application, we recommend that you use 
+the stable L<version 1.1|/data1.1/> of the service instead.
 
 =head2 DESCRIPTION
 
@@ -35,13 +38,13 @@ documentation for the various L<output formats|node:formats>.
 
 For example, consider the following URL:
 
-    /data1.1/taxa/single.json?name=Dascillidae&show=attr
+    /data1.2/taxa/single.json?name=Dascillidae&show=attr
 
 An HTTP GET request using this URL would return information about the taxon Dascillidae (soft-bodied plant beetles). The components of this URL are as follows:
 
 =over 4
 
-=item /data1.1/taxa/single
+=item /data1.2/taxa/single
 
 The URL path indicates the operation to be carried out. For a GET
 request, it specifies the class of information to be retrieved.
