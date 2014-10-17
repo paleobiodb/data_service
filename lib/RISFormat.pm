@@ -37,10 +37,16 @@ sub emit_header {
     
     # Start by generating the initial lines that start any RIS document.
     
-    $output .= "Provider: $info->{data_provider}$linebreak";
-    $output .= "Database: $info->{data_source}$linebreak"
-	unless $info->{data_provider} eq $info->{data_source};
-    $output .= "Content: text/plain; charset=\"utf-8\"$linebreak";
+    $output .= "Provider: $info->{data_provider}$linebreak" if $info->{data_provider};
+    $output .= "Database: $info->{data_source}$linebreak" if $info->{data_source};
+    $output .= "Content: text/plain";
+    
+    my $ds = $request->ds;
+    my $charset = $ds->{_config}{charset};
+    
+    $output .= "; charset=\"$charset\"" if $charset;
+    
+    $output .= $linebreak;
     $output .= $linebreak;
     
     # If we were directed to include the data source and/or record counts,
