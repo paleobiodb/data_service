@@ -116,6 +116,7 @@ use PB1::PersonData;
 			doc_default_op_template => 'operation.tt',
 			allow_format => 'json,csv,tsv,txt',
 			allow_vocab => 'pbdb,com',
+			default_save_filename => 'pbdb_data',
 			title => 'Documentation' });
     
     # Configuration. This path is used by clients who need to configure themselves
@@ -140,7 +141,8 @@ use PB1::PersonData;
 			place => 1,
 			title => 'Fossil occurrences',
 			role => 'PB1::OccurrenceData',
-			allow_format => '+xml' },
+			allow_format => '+xml',
+			default_save_filename => 'pbdb_occs' },
 	"A fossil occurence represents the occurrence of a particular organism at a particular",
 	"location in time and space. Each occurrence is a member of a single fossil collection,",
 	"and has a taxonomic identification which may be more or less specific.");
@@ -177,6 +179,7 @@ use PB1::PersonData;
 			allow_format => '+ris,-xml',
 			output => '1.1:refs:basic',
 			optional_output => '1.1:refs:output_map',
+			default_save_filename => 'pbdb_refs',
 			title => 'Bibliographic references for fossil occurrences' },
 	"This path returns information about the bibliographic references associated with fossil occurrences.",
 	"You can pass identical filtering parameters to L<occs/list|node:occs/list> and to L<occs/refs|node:occs/refs>,",
@@ -188,6 +191,7 @@ use PB1::PersonData;
 			method => 'taxa',
 			output => '1.1:taxa:basic',
 			optional_output => '1.1:taxa:output_map',
+			default_save_filename => 'pbdb_taxa',
 			title => 'Taxa from fossil occurrences' },
 	"This path returns information about the taxonomic names associated with fossil occurrences.",
 	"You can pass identical filtering parameters to L<occs/list|node:occs/list> and to L<occs/taxa|node:occs/taxa>,",
@@ -200,7 +204,7 @@ use PB1::PersonData;
 			place => 1,
 			title => 'Fossil collections',
 			role => 'PB1::CollectionData',
-			use_cache => '1.1:colls' },
+			default_save_filename => 'pbdb_colls' },
 	"A fossil collection is somewhat loosely defined as a set of fossil occurrences that are",
 	"co-located geographically and temporally. Each collection has a geographic location,",
 	"stratigraphic context, and age estimate.");
@@ -245,6 +249,7 @@ use PB1::PersonData;
 			method => 'refs',
 			allow_format => '+ris',
 			output => '1.1:refs:basic',
+			default_save_filename => 'pbdb_refs',
 			optional_output => '1.1:refs:output_map' },
 	"This path returns information about the bibliographic references associated with fossil",
 	"collections.  You can pass identical filtering parameters to L<colls/list|node:colls/list>",
@@ -257,7 +262,8 @@ use PB1::PersonData;
     $ds1->define_node({ path => 'strata',
 			place => 4,
 			title => 'Geological strata',
-			role => 'PB1::CollectionData' },
+			role => 'PB1::CollectionData',
+		        default_save_filename => 'pbdb_strata' },
 	"Every fossil collection in the database is categorized by the formation",
 	"from which it was collected, and many by group and member.");
     
@@ -290,7 +296,8 @@ use PB1::PersonData;
 			place => 2,
 			title => 'Taxonomic names',
 			role => 'PB1::TaxonData',
-			output => '1.1:taxa:basic' },
+			output => '1.1:taxa:basic',
+		        default_save_filename => 'pbdb_taxa' },
 	"The taxonomic names stored in the database are arranged hierarchically.",
 	"Our tree of life is quite complete down to the class level, and reasonably complete",
 	"down to the suborder level. Below that, coverage varies. Many parts of the tree have",
@@ -328,6 +335,7 @@ use PB1::PersonData;
 			method => 'list',
 			arg => 'refs',
 			allow_format => '+ris',
+			default_save_filename => 'pbdb_refs',
 			output => '1.1:refs:basic',
 			optional_output => '1.1:refs:output_map' },
 	"This path returns information about the bibliographic references associated with taxonomic names.",
@@ -360,6 +368,7 @@ use PB1::PersonData;
 			method => 'get_image',
 			arg => 'thumb',
 			allow_format => '+png',
+			default_save_filename => 'pbdb_image',
 			output => '1.1:taxa:imagedata' },
 	"This path returns an image to represent the specified taxon.",
 	"These 64x64 thumbnail images are sourced from L<http://phylopic.org/>.",
@@ -374,6 +383,7 @@ use PB1::PersonData;
 			method => 'get_image',
 			arg => 'icon',
 			allow_format => '+png',
+			default_save_filename => 'pbdb_image',
 			output => '1.1:taxa:imagedata' },
 	"This path returns an image to represent the specified taxon.",
 	"These 32x32 icon (blue silhouette) images are sourced from L<http://phylopic.org/>.",
@@ -393,6 +403,7 @@ use PB1::PersonData;
 			place => 3,
 			role => 'PB1::IntervalData',
 			output => '1.1:intervals:basic',
+			default_save_filename => 'pbdb_intervals',
 			title => 'Geological time intervals and time scales' },
 	"The database lists almost every geologic time interval in current use, including the",
 	"standard set established by the L<International Commission on Stratigraphy|http://www.stratigraphy.org/>",
@@ -424,6 +435,7 @@ use PB1::PersonData;
     $ds1->define_node({ path => 'scales',
 			role => 'PB1::IntervalData',
 			output => '1.1:scales:basic',
+			default_save_filename => 'pbdb_scales',
 			title => 'Geological time scales' });
     
     $ds1->define_node({ path => 'scales/single',
@@ -464,6 +476,7 @@ use PB1::PersonData;
 			title => 'Bibliographic references',
 			role => 'PB1::ReferenceData',
 			allow_format => '+ris',
+			default_save_filename => 'pbdb_refs',
 			output => '1.1:refs:basic',
 		        optional_output => '1.1:refs:output_map' },
 	"Each fossil occurrence, fossil collection and taxonomic name in the database is",

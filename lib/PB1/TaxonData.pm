@@ -407,7 +407,9 @@ sub initialize {
 	{ value => 'rank.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.1:taxa:selector' =>
-	"The following parameters are used to indicate a base taxon or taxa:",
+	"The following parameters are used to select the base set of taxonomic names to return.",
+	"If you wish to download the entire taxonomy, use C<rel=all_taxa> and see also the",
+	"L<limit|node:special#limit> parameter.",
 	{ param => 'name', valid => \&PB1::TaxonData::validNameSpec, list => ',', 
 	  alias => 'taxon_name' },
 	    "Select the all taxa matching each of the specified name(s).",
@@ -427,11 +429,10 @@ sub initialize {
 	    "the specified name or identifier is selected, rather than the",
 	    "senior synonym which is the default.",
 	">The following parameters indicate which related taxonomic names to return:",
-	{ param => 'rel', valid => $ds->valid_set('1.1:taxa:rel'), default => 'self' },
-	    "Accepted values include:", $ds->document_set('1.1:taxa:rel'),
-	{ param => 'status', valid => $ds->valid_set('1.1:taxa:status'), default => 'valid' },
-	    "Return only names that have the specified status.  Accepted values include:",
-	    $ds->document_set('1.1:taxa:status'));
+	{ param => 'rel', valid => '1.1:taxa:rel', default => 'self' },
+	    "Indicates which taxa are to be selected.  Accepted values include:",
+	{ param => 'status', valid => '1.1:taxa:status', default => 'valid' },
+	    "Return only names that have the specified status.  Accepted values include:");
     
     $ds->define_ruleset('1.1:taxa:filter' => 
 	"The following parameters further filter the list of return values:",
@@ -439,7 +440,7 @@ sub initialize {
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
-	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
+	    "Accepted values are: C<yes>, C<no>",
 	{ optional => 'depth', valid => POS_VALUE },
 	    "Return only taxa no more than the specified number of levels above or",
 	     "below the base taxa in the hierarchy");
@@ -447,13 +448,12 @@ sub initialize {
     $ds->define_ruleset('1.1:taxa:occ_filter' =>
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
-	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.");
+	    "Accepted values are: C<yes>, C<no>");
     
     $ds->define_ruleset('1.1:taxa:summary_selector' => 
-	{ optional => 'rank', valid => $ds->valid_set('1.1:taxa:summary_rank'), alias => 'summary_rank',
+	{ optional => 'rank', valid => '1.1:taxa:summary_rank', alias => 'summary_rank',
 	  default => 'ident' },
-	    "Summarize the results by grouping them as follows:",
-	    $ds->document_set('1.1:taxa:summary_rank'));
+	    "Summarize the results by grouping them as follows:");
     
     $ds->define_ruleset('1.1:taxa:display' => 
 	"The following parameter indicates which information should be returned about each resulting name:",
@@ -466,7 +466,7 @@ sub initialize {
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
 	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
 	    $ds->document_set('1.1:taxa:order'));
-
+    
     $ds->define_ruleset('1.1:taxa:single' => 
 	{ require => '1.1:taxa:specifier',
 	  error => "you must specify either 'name' or 'id'" },
@@ -809,6 +809,7 @@ sub list {
 	$self->{main_result} = \@result;
 	$self->{main_sql} = $Taxonomy::SQL_STRING;
 	$self->{result_count} = scalar(@result);
+	return;
     }
     
     elsif ( defined $arg && $arg eq 'refs' )
@@ -817,6 +818,7 @@ sub list {
 	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id_list, $options);
 	$self->{main_sql} = $Taxonomy::SQL_STRING;
 	$self->sql_count_rows;
+	return;
     }
     
     # Otherwise, return matching taxa.  If the relationship is 'self' (the
