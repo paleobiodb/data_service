@@ -34,6 +34,11 @@ sub initialize {
     $ds->define_ruleset('1.1:special_params' => 
 	"The following parameters can be used with most requests:",
 	{ optional => 'SPECIAL(limit)' },
+	    "This parameter limits the number of records returned.  The value may be a",
+	    "positive integer, zero, or C<all>.  I<If not specified, it defaults to 500>.",
+	    "The reason for this is to prevent people from downloading enormous",
+	    "result sets without meaning to.  If you wish the full list of taxa or occurrences",
+	    "(which may exceed 100MB), you can specify C<limit=all>.",
 	{ optional => 'SPECIAL(offset)' },
 	{ optional => 'SPECIAL(count)' },
 	{ optional => 'SPECIAL(datainfo)' },
