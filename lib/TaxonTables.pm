@@ -781,7 +781,7 @@ sub buildTaxonTables {
     # Next, compute the intermediate classification of each taxon: kingdom,
     # phylum, class, order, and family.
     
-    computeIntermediates($dbh, $tree_table) if $step_control->{f};
+    computePhylogeny($dbh, $tree_table) if $step_control->{f};
     
     # Next, compute the name search table using the hierarchy relation.  At
     # this time we also update species and subgenus names stored in the tree
@@ -3089,7 +3089,7 @@ our(@KINGDOM_LIST) = ( 'Metazoa', 'Plantae', 'Metaphytae',
 our(%KINGDOM_LABEL) = ( 'Metaphytae' => 'Plantae' );
 
 
-# computeIntermediates ( dbh )
+# computePhylogeny ( dbh )
 # 
 # Compute the intermediate classification for each taxon: the kingdom, phylum,
 # class, order and family to which it belongs.  Not all taxa have values for
@@ -3124,7 +3124,7 @@ our(%KINGDOM_LABEL) = ( 'Metaphytae' => 'Plantae' );
 # family, we use the most specific taxonomic concept on the way down that is
 # either ranked as a family or whose name ends in 'idae'.
 
-sub computeIntermediates {
+sub computePhylogeny {
     
     my ($dbh, $tree_table) = @_;
     
@@ -3138,6 +3138,7 @@ sub computeIntermediates {
     $result = $dbh->do("DROP TABLE IF EXISTS $INTS_WORK");
     $result = $dbh->do("CREATE TABLE $INTS_WORK
 			       (ints_no int unsigned primary key,
+				common_name varchar(80),
 				kingdom_no int unsigned,
 				kingdom varchar(80),
 				phylum_no int unsigned,
@@ -3155,6 +3156,7 @@ sub computeIntermediates {
 				parsen_no int unsigned,
 				depth int unsigned,
 				taxon_name varchar(80),
+				common_name varchar(80),
 				current_rank tinyint not null,
 				aux_rank tinyint not null,
 				was_phylum smallint,
@@ -3176,9 +3178,9 @@ sub computeIntermediates {
     # link.
     
     $SQL_STRING = "
-		INSERT INTO $INTS_AUX (orig_no, parsen_no, depth, taxon_name, current_rank)
-		SELECT t.orig_no, t.parsen_no, t.depth, t.name, t.rank
-		FROM $TREE_WORK as t
+		INSERT INTO $INTS_AUX (orig_no, parsen_no, depth, taxon_name, common_name, current_rank)
+		SELECT t.orig_no, t.parsen_no, t.depth, t.name, a.common_name, t.rank
+		FROM $TREE_WORK as t join $auth_table as a on a.taxon_no = t.spelling_no
 		WHERE t.rank > 5 and t.orig_no = t.synonym_no";
     
     $result = $dbh->do($SQL_STRING);
@@ -3253,14 +3255,15 @@ sub computeIntermediates {
     
     $result = $dbh->do($SQL_STRING);
     
-    # Now we can fill in the intermediate classification table itself.  We
-    # start by inserting entries for the top (root) of each tree.
+    # Now we can fill in the phylogeny table itself.  We start by inserting
+    # entries for the top (root) of each tree.
     
     logMessage(2, "    setting top level entries");
     
     $SQL_STRING = "
-		INSERT INTO $INTS_WORK (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
-		SELECT orig_no, if(current_rank in (22,23), orig_no, null),
+		INSERT INTO $INTS_WORK (ints_no, common_name, kingdom_no, phylum_no, class_no, order_no, family_no)
+		SELECT orig_no, common_name,
+			if(current_rank in (22,23), orig_no, null),
 			if(current_rank = 20 or was_phylum > 0, orig_no, null),
 			if(current_rank = 17 or was_class > 0, orig_no, null),
 			if(current_rank = 13 or was_order > 0, orig_no, null),
@@ -3281,8 +3284,9 @@ sub computeIntermediates {
 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
 	
 	$SQL_STRING = "
-		INSERT INTO $INTS_WORK (ints_no, kingdom_no, phylum_no, class_no, order_no, family_no)
+		INSERT INTO $INTS_WORK (ints_no, common_name, kingdom_no, phylum_no, class_no, order_no, family_no)
 		SELECT k.orig_no,
+			if(k.common_name <> '', k.common_name, p.common_name),
 			if(k.current_rank = 23 or (k.current_rank = 22 and ifnull(p.kingdom_no, 1) = 1), k.orig_no, p.kingdom_no) as nk,
 			if(k.current_rank in (20,21) or (k.current_rank = 19 and p.phylum_no is null) or k.was_phylum - k.not_phylum > ifnull(xp.was_phylum - xp.not_phylum, 0), k.orig_no, p.phylum_no) as np,
 			if(k.current_rank = 17 or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), k.orig_no, p.class_no) as nc,
