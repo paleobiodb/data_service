@@ -1193,6 +1193,29 @@ sub generateCollFilters {
 	push @filters, "c.collection_no = $id";
     }
     
+    # If our tables include the occurrence matrix, we must check the 'ident'
+    # parameter. 
+    
+    if ( $tables_ref->{o} || $tables_ref->{tf} || $tables_ref->{t} || $tables_ref->{oc} )
+    {
+	my $ident = $self->clean_param('ident');
+	
+	if ( $ident eq 'orig' )
+	{
+	    push @filters, "o.reid_no = 0";
+	}
+	
+	elsif ( $ident eq 'all' )
+	{
+	    # we need do nothing in this case
+	}
+	
+	else # default: 'latest'
+	{
+	    push @filters, "o.latest_ident = true";
+	}
+    }
+    
     return @filters;
 }
 
