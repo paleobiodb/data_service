@@ -172,7 +172,8 @@ our $TREE_WORK = "tn";
 our $NAME_WORK = "nn";
 our $ATTRS_WORK = "vn";
 our $SEARCH_WORK = "sn";
-our $INTS_WORK = "intn";
+our $INTS_WORK = "phyn";
+our $LOWER_WORK = "lown";
 our $COUNTS_WORK = "cntn";
 our $OPINION_WORK = "opn";
 our $TREE_CACHE_WORK = "ttcn";
@@ -786,8 +787,6 @@ sub buildTaxonTables {
     # Next, compute the name search table using the hierarchy relation.  At
     # this time we also update species and subgenus names stored in the tree
     # table.
-    
-    computeGenSp($dbh, $tree_table) if $step_control->{f};
     
     computeSearchTable($dbh, $tree_table) if $step_control->{g};
     
@@ -3130,7 +3129,7 @@ sub computePhylogeny {
     
     my ($result, $sql);
 
-    logMessage(2, "computing intermediate classification (f)");
+    logMessage(2, "computing phylogeny above genus level (f)");
     
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
@@ -3545,36 +3544,87 @@ sub computePhylogeny {
 	$result = $dbh->do($SQL_STRING);
     }
     
-    my $a = 1;
-}
-
-
-# computeGenSp ( dbh, tree_table )
-# 
-# For each taxon at the rank of genus or below, indicate its genus and
-# species.  This is easy to do, we simply have to look at most 3 levels up the
-# hierarchy.
-
-sub computeGenSp {
+    logMessage(2, "computing genera and subgenera (f)");
     
-    my ($dbh, $tree_table) = @_;
+    # Now create a table to hold the "lower" phylogeny information - the genus
+    # and subgenus corresponding to each taxon at or below genus level.
     
-    my ($sql, $result);
+    $result = $dbh->do("DROP TABLE IF EXISTS $LOWER_WORK");
+    $result = $dbh->do("CREATE TABLE $LOWER_WORK
+			       (orig_no int unsigned primary key,
+				rank tinyint not null,
+				genus_no int unsigned,
+				genus varchar(80),
+				subgenus_no int unsigned,
+				subgenus varchar(80)) ENGINE=MYISAM");
     
-    logMessage (2, "    computing genus and species (f1)");
+    logMessage(2, "    adding entries to the lower phylogeny table...");
     
-    $sql = "	UPDATE $TREE_WORK as t
-			LEFT JOIN $TREE_WORK as p1 on p1.orig_no = t.parsen_no
-			LEFT JOIN $TREE_WORK as p2 on p2.orig_no = p1.parsen_no
-			LEFT JOIN $TREE_WORK as p3 on p3.orig_no = p2.parsen_no
-		SET t.species_no = if(t.rank = 3, t.orig_no, 
-				   if(p1.rank = 3, p1.orig_no, null)),
-		    t.genus_no = if(t.rank = 5, t.orig_no,
-				 if(p1.rank = 5, p1.orig_no,
-				 if(p2.rank = 5, p2.orig_no,
-				 if(p3.rank = 5, p3.orig_no, null))))";
+    # Insert all genera into the table
     
-    $result = $dbh->do($sql);
+    $SQL_STRING = "
+		INSERT INTO $LOWER_WORK (orig_no, rank, genus_no, genus)
+		SELECT t.orig_no, t.rank, t.orig_no, t.name
+		FROM $TREE_WORK as t
+		WHERE t.rank = 5";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    logMessage(2, "        added $result genera");
+    
+    # Then all subgenera
+    
+    $SQL_STRING = "
+		INSERT INTO $LOWER_WORK (orig_no, rank, subgenus_no, subgenus, genus_no, genus)
+		SELECT t.orig_no, t.rank, t.orig_no, t.name, t1.orig_no, t1.name
+		FROM $TREE_WORK as t LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parsen_no
+		WHERE t.rank = 4";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    logMessage(2, "        added $result subgenera");
+    
+    # Then all species
+    
+    $SQL_STRING = "
+		INSERT INTO $LOWER_WORK (orig_no, rank, subgenus_no, subgenus, genus_no, genus)
+		SELECT t.orig_no, t.rank,
+		       if(t1.rank = 4, t1.orig_no, null),
+		       if(t1.rank = 4, t1.name, null),
+		       if(t1.rank = 5, t1.orig_no, t2.orig_no),
+		       if(t1.rank = 5, t1.name, t2.name)
+		FROM $TREE_WORK as t JOIN $TREE_WORK as t1 on t1.orig_no = t.parsen_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parsen_no
+		WHERE t.rank = 3";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    logMessage(2, "        added $result species");
+    
+    # Then all subspecies
+    
+    $SQL_STRING = "
+		INSERT INTO $LOWER_WORK (orig_no, rank, subgenus_no, subgenus, genus_no, genus)
+		SELECT t.orig_no, t.rank,
+		       if(t1.rank = 4, t1.orig_no, if(t2.rank = 4, t2.orig_no, null)),
+		       if(t1.rank = 4, t1.name, if(t2.rank = 4, t2.name, null)),
+		       if(t1.rank = 5, t1.orig_no, if(t2.rank = 5, t2.orig_no, t3.orig_no)),
+		       if(t1.rank = 5, t1.name, if(t2.rank = 5, t2.name, t3.name))
+		FROM $TREE_WORK as t JOIN $TREE_WORK as t1 on t1.orig_no = t.parsen_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parsen_no
+			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.parsen_no
+		WHERE t.rank = 2";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    logMessage(2, "        added $result subspecies");
+    
+    # Now index the table
+    
+    logMessage(2, "    indexing the table...");
+    
+    $dbh->do("ALTER TABLE $LOWER_WORK add key (genus_no)");
+    $dbh->do("ALTER TABLE $LOWER_WORK add key (subgenus_no)");
     
     my $a = 1;		# we can stop here when debugging.
 }
@@ -4623,75 +4673,19 @@ sub activateNewTaxonomyTables {
 
     my ($dbh, $tree_table, $keep_temps) = @_;
     
+    # Activate the new tables
+    
+    activateTables($dbh, $TREE_WORK => $tree_table,
+		         $SEARCH_WORK => $TAXON_TABLE{$tree_table}{search},
+			 $NAME_WORK => $TAXON_TABLE{$tree_table}{names},
+			 $ATTRS_WORK => $TAXON_TABLE{$tree_table}{attrs},
+			 $INTS_WORK => $TAXON_TABLE{$tree_table}{ints},
+			 $LOWER_WORK => $TAXON_TABLE{$tree_table}{lower},
+			 $COUNTS_WORK => $TAXON_TABLE{$tree_table}{counts});
+    
+    # Delete the auxiliary tables, unless we were told to keep them.
+    
     my $result;
-    
-    # Determine the names of subordinate tables
-    
-    my $search_table = $TAXON_TABLE{$tree_table}{search};
-    my $name_table = $TAXON_TABLE{$tree_table}{names};
-    my $attrs_table = $TAXON_TABLE{$tree_table}{attrs};
-    my $ints_table = $TAXON_TABLE{$tree_table}{ints};
-    my $counts_table = $TAXON_TABLE{$tree_table}{counts};
-    
-    logMessage(2, "activating tables '$tree_table', '$search_table', '$name_table', '$attrs_table', '$ints_table', '$counts_table' (i)");
-    
-    # Compute the backup names of all the tables to be activated
-    
-    my $tree_bak = "${tree_table}_bak";
-    my $search_bak = "${search_table}_bak";
-    my $name_bak = "${name_table}_bak";
-    my $attrs_bak = "${attrs_table}_bak";
-    my $ints_bak = "${ints_table}_bak";
-    my $counts_bak = "${counts_table}_bak";
-    
-    # Delete any backup tables that might still be around
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $search_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $name_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $attrs_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $ints_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $counts_bak");
-    
-    # Create dummy versions of any of the main tables that might be currently
-    # missing (otherwise the rename will fail; the dummies will be deleted
-    # below anyway, after they are renamed to the backup names).
-    
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $tree_table LIKE $TREE_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $search_table LIKE $SEARCH_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $name_table LIKE $NAME_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $attrs_table LIKE $ATTRS_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $ints_table LIKE $INTS_WORK");
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $counts_table LIKE $COUNTS_WORK");
-    
-    # Now do the Atomic Table Swap (tm)
-    
-    $SQL_STRING =	   "RENAME TABLE
-			    $tree_table to $tree_bak,
-			    $TREE_WORK to $tree_table,
-			    $search_table to $search_bak,
-			    $SEARCH_WORK to $search_table,
-			    $name_table to $name_bak,
-			    $NAME_WORK to $name_table,
-			    $attrs_table to $attrs_bak,
-			    $ATTRS_WORK to $attrs_table,
-			    $ints_table to $ints_bak,
-			    $INTS_WORK to $ints_table,
-			    $counts_table to $counts_bak,
-			    $COUNTS_WORK to $counts_table";
-    
-    $result = $dbh->do($SQL_STRING);
-    
-    # Then we can get rid of the backup tables
-    
-    $result = $dbh->do("DROP TABLE IF EXISTS $tree_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $search_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $name_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $attrs_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $ints_bak");
-    $result = $dbh->do("DROP TABLE IF EXISTS $counts_bak");
-    
-    # Delete the auxiliary tables too, unless we were told to keep them.
     
     unless ( $keep_temps )
     {

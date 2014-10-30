@@ -457,15 +457,13 @@ sub initialize {
     
     $ds->define_ruleset('1.1:taxa:display' => 
 	"The following parameter indicates which information should be returned about each resulting name:",
-	{ optional => 'show', valid => $ds->valid_set('1.1:taxa:output_map'), list => ','},
+	{ optional => 'show', valid => '1.1:taxa:output_map', list => ','},
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each taxon.  Its value should be",
 	    "one or more of the following, separated by commas:",
-	    $ds->document_set('1.1:taxa:output_map'),
-	{ optional => 'order', valid => $ds->valid_set('1.1:taxa:order'), split => ',' },
+	{ optional => 'order', valid => '1.1:taxa:order', split => ',' },
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
-	    $ds->document_set('1.1:taxa:order'));
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:");
     
     $ds->define_ruleset('1.1:taxa:single' => 
 	{ require => '1.1:taxa:specifier',
@@ -492,12 +490,12 @@ sub initialize {
 	{ require_any => ['1.1:taxa:selector', 
 			  '1.1:common:select_crmod', '1.1:common:select_ent'] },
 	">You can also specify any of the following parameters:",
-	{ optional => 'select', valid => $ds->valid_set('1.1:taxa:refselect') },
+	{ optional => 'select', valid => '1.1:taxa:refselect' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
-	    "The accepted values include:", $ds->document_set('1.1:taxa:refselect'),
-	{ optional => 'spelling', valid => $ds->valid_set('1.1:taxa:refspelling') },
+	    "The accepted values include:",
+	{ optional => 'spelling', valid => '1.1:taxa:refspelling' },
 	    "You can use this parameter to specify which variants of the matching taxonomic name(s) to retrieve.",
-	    "The accepted values include:", $ds->document_set('1.1:taxa:refspelling'),
+	    "The accepted values include:",
 	{ allow => '1.1:refs:filter' },
 	{ allow => '1.1:refs:display' },
 	{ allow => '1.1:special_params' },
@@ -514,9 +512,8 @@ sub initialize {
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
 	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
-	{ param => 'status', valid => $ds->valid_set('1.1:taxa:status'), default => 'valid' },
+	{ param => 'status', valid => '1.1:taxa:status', default => 'valid' },
 	    "Return only names that have the specified status.  Accepted values include:",
-	    $ds->document_set('1.1:taxa:status'),
 	{ allow => '1.1:taxa:display' }, 
 	{ allow => '1.1:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");

@@ -21,6 +21,7 @@ $TAXON_TABLE{taxon_trees} = {
     attrs => 'taxon_attrs',
     search => 'taxon_search',
     ints => 'taxon_ints',
+    lower => 'taxon_lower',
     counts => 'taxon_counts',
     images => 'taxon_images',
     

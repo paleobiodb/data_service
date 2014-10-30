@@ -65,10 +65,12 @@ sub initialize {
 	{ value => 'lithext', maps_to => '1.1:colls:lithext' },
 	    "Detailed information about the lithological context of the occurrence.",
 	    "This includes all of the information from C<lith> plus extra fields.",
+	{ value => 'abund', maps_to => '1.1:occs:abund' },
+	    "Information about the abundance of this occurrence in the collection",
 	{ value => 'geo', maps_to => '1.1:colls:geo' },
 	    "Information about the geological context of the occurrence",
         { value => 'rem', maps_to => '1.1:colls:rem' },
-	    "Any additional remarks that were entered about the containing collection.",
+	    "Any additional remarks that were entered about the occurrences and/or its containing collection.",
         { value => 'ref', maps_to => '1.1:refs:primary' },
 	    "The primary reference for the occurrence, as formatted text.",
 	    "If no reference is recorded for this occurrence, the primary reference for its",
@@ -155,8 +157,13 @@ sub initialize {
     
     $ds->define_block('1.1:occs:phylo' =>
 	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
-		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no'],
-	  tables => ['ph', 't'] },
+		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
+		     'tg.name as genus', 'tg.spelling_no as genus_no'],
+	  tables => ['ph', 't', 'tg'] },
+	{ output => 'genus', com_name => 'gnl' },
+	    "The name of the genus in which this occurrence is classified",
+	{ output => 'genus_no', com_name => 'gnn' },
+	    "The identifier of the genus in which this occurrence is classified",
 	{ output => 'family', com_name => 'fml' },
 	    "The name of the family in which this occurrence is classified",
 	{ output => 'family_no', com_name => 'fmn' },
@@ -180,6 +187,13 @@ sub initialize {
 	    "The longitude at which the occurrence was found (in degrees)",
         { output => 'lat', dwc_name => 'decimalLatitude', com_name => 'lat' },
 	    "The latitude at which the occurrence was found (in degrees)");
+    
+    $ds->define_block('1.1:occs:abund' =>
+	{ select => ['oc.abund_unit', 'oc.abund_value'], tables => ['oc'] },
+	{ output => 'abund_value', com_name => 'abv' },
+	    "The abundance of this occurrence within its containing collection",
+	{ output => 'abund_unit', com_name => 'abu' },
+	    "The unit in which this abundance is expressed");
     
     # Then define parameter rulesets to validate the parameters passed to the
     # operations implemented by this class.
@@ -781,11 +795,11 @@ sub generateJoinList {
     $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
-	if $tables->{tf};
-    $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
-	if $tables->{t} && ! $tables->{tf};
+	if $tables->{t} || $tables->{tf};
     $join_list .= "LEFT JOIN taxon_trees as ts on ts.orig_no = t.synonym_no\n"
 	if $tables->{ts};
+    $join_list .= "LEFT JOIN taxon_trees as tg on tg.orig_no = t.genus_no\n"
+	if $tables->{tg};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
 	if $tables->{ph};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"

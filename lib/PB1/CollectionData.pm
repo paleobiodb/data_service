@@ -727,7 +727,7 @@ sub initialize {
 	"The following required parameter selects from one of the available clustering levels:",
 	{ param => 'level', valid => POS_VALUE, default => 1 },
 	    "Return records from the specified cluster level.  You can find out which",
-	    "levels are available by means of the L<config|/data1.1/config_doc.html> URL path.",
+	    "levels are available by means of the L<config|node:config> URL path.",
 	">>You can use the following parameters to query for summary clusters by",
 	"a variety of criteria.  Except as noted below, you may use these in any combination.",
     	{ allow => '1.1:main_selector' },

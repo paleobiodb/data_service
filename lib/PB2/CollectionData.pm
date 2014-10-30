@@ -727,7 +727,7 @@ sub initialize {
 	"The following required parameter selects from one of the available clustering levels:",
 	{ param => 'level', valid => POS_VALUE, default => 1 },
 	    "Return records from the specified cluster level.  You can find out which",
-	    "levels are available by means of the L<config|/data1.1/config_doc.html> URL path.",
+	    "levels are available by means of the L<config|node:config> URL path.",
 	">>You can use the following parameters to query for summary clusters by",
 	"a variety of criteria.  Except as noted below, you may use these in any combination.",
     	{ allow => '1.2:main_selector' },
@@ -1191,6 +1191,29 @@ sub generateCollFilters {
     elsif ( defined $id && $id ne '' )
     {
 	push @filters, "c.collection_no = $id";
+    }
+    
+    # If our tables include the occurrence matrix, we must check the 'ident'
+    # parameter. 
+    
+    if ( $tables_ref->{o} || $tables_ref->{tf} || $tables_ref->{t} || $tables_ref->{oc} )
+    {
+	my $ident = $self->clean_param('ident');
+	
+	if ( $ident eq 'orig' )
+	{
+	    push @filters, "o.reid_no = 0";
+	}
+	
+	elsif ( $ident eq 'all' )
+	{
+	    # we need do nothing in this case
+	}
+	
+	else # default: 'latest'
+	{
+	    push @filters, "o.latest_ident = true";
+	}
     }
     
     return @filters;

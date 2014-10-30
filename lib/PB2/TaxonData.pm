@@ -407,7 +407,9 @@ sub initialize {
 	{ value => 'rank.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.2:taxa:selector' =>
-	"The following parameters are used to indicate a base taxon or taxa:",
+	"The following parameters are used to select the base set of taxonomic names to return.",
+	"If you wish to download the entire taxonomy, use C<rel=all_taxa> and see also the",
+	"L<limit|node:special#limit> parameter.",
 	{ param => 'name', valid => \&PB2::TaxonData::validNameSpec, list => ',', 
 	  alias => 'taxon_name' },
 	    "Select the all taxa matching each of the specified name(s).",
@@ -427,11 +429,10 @@ sub initialize {
 	    "the specified name or identifier is selected, rather than the",
 	    "senior synonym which is the default.",
 	">The following parameters indicate which related taxonomic names to return:",
-	{ param => 'rel', valid => $ds->valid_set('1.2:taxa:rel'), default => 'self' },
-	    "Accepted values include:", $ds->document_set('1.2:taxa:rel'),
-	{ param => 'status', valid => $ds->valid_set('1.2:taxa:status'), default => 'valid' },
-	    "Return only names that have the specified status.  Accepted values include:",
-	    $ds->document_set('1.2:taxa:status'));
+	{ param => 'rel', valid => '1.2:taxa:rel', default => 'self' },
+	    "Indicates which taxa are to be selected.  Accepted values include:",
+	{ param => 'status', valid => '1.2:taxa:status', default => 'valid' },
+	    "Return only names that have the specified status.  Accepted values include:");
     
     $ds->define_ruleset('1.2:taxa:filter' => 
 	"The following parameters further filter the list of return values:",
@@ -439,7 +440,7 @@ sub initialize {
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
-	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
+	    "Accepted values are: C<yes>, C<no>",
 	{ optional => 'depth', valid => POS_VALUE },
 	    "Return only taxa no more than the specified number of levels above or",
 	     "below the base taxa in the hierarchy");
@@ -450,23 +451,20 @@ sub initialize {
 	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.");
     
     $ds->define_ruleset('1.2:taxa:summary_selector' => 
-	{ optional => 'rank', valid => $ds->valid_set('1.2:taxa:summary_rank'), alias => 'summary_rank',
+	{ optional => 'rank', valid => '1.2:taxa:summary_rank', alias => 'summary_rank',
 	  default => 'ident' },
-	    "Summarize the results by grouping them as follows:",
-	    $ds->document_set('1.2:taxa:summary_rank'));
+	    "Summarize the results by grouping them as follows:");
     
     $ds->define_ruleset('1.2:taxa:display' => 
 	"The following parameter indicates which information should be returned about each resulting name:",
-	{ optional => 'show', valid => $ds->valid_set('1.2:taxa:output_map'), list => ','},
+	{ optional => 'show', valid => '1.2:taxa:output_map', list => ','},
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each taxon.  Its value should be",
 	    "one or more of the following, separated by commas:",
-	    $ds->document_set('1.2:taxa:output_map'),
-	{ optional => 'order', valid => $ds->valid_set('1.2:taxa:order'), split => ',' },
+	{ optional => 'order', valid => '1.2:taxa:order', split => ',' },
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
-	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
-	    $ds->document_set('1.2:taxa:order'));
-
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:");
+    
     $ds->define_ruleset('1.2:taxa:single' => 
 	{ require => '1.2:taxa:specifier',
 	  error => "you must specify either 'name' or 'id'" },
@@ -492,12 +490,12 @@ sub initialize {
 	{ require_any => ['1.2:taxa:selector', 
 			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
 	">You can also specify any of the following parameters:",
-	{ optional => 'select', valid => $ds->valid_set('1.2:taxa:refselect') },
+	{ optional => 'select', valid => '1.2:taxa:refselect' },
 	    "You can use this parameter to specify which kinds of references to retrieve.",
-	    "The accepted values include:", $ds->document_set('1.2:taxa:refselect'),
-	{ optional => 'spelling', valid => $ds->valid_set('1.2:taxa:refspelling') },
+	    "The accepted values include:",
+	{ optional => 'spelling', valid => '1.2:taxa:refspelling' },
 	    "You can use this parameter to specify which variants of the matching taxonomic name(s) to retrieve.",
-	    "The accepted values include:", $ds->document_set('1.2:taxa:refspelling'),
+	    "The accepted values include:",
 	{ allow => '1.2:refs:filter' },
 	{ allow => '1.2:refs:display' },
 	{ allow => '1.2:special_params' },
@@ -514,9 +512,8 @@ sub initialize {
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
 	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
-	{ param => 'status', valid => $ds->valid_set('1.2:taxa:status'), default => 'valid' },
+	{ param => 'status', valid => '1.2:taxa:status', default => 'valid' },
 	    "Return only names that have the specified status.  Accepted values include:",
-	    $ds->document_set('1.2:taxa:status'),
 	{ allow => '1.2:taxa:display' }, 
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.");
