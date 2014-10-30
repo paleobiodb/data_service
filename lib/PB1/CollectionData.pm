@@ -877,6 +877,11 @@ sub list {
     $self->adjustCoordinates(\$fields);
     $self->selectPaleoModel(\$fields, $self->tables_hash) if $fields =~ /PALEOCOORDS/;
     
+    if ( $tables->{tf} )
+    {
+	$fields =~ s{ c.n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
+    }
+    
     # Determine the order in which the results should be returned.
     
     my $order_clause = $self->generate_order_clause($tables, { at => 'c', cd => 'cc' }) || 'c.collection_no';
@@ -948,6 +953,12 @@ sub summary {
     my $fields = $self->select_string;
     
     $self->adjustCoordinates(\$fields);
+    
+    if ( $tables->{tf} )
+    {
+	$fields =~ s{ s[.]n_colls }{count(distinct c.collection_no) as n_colls}xs;
+	$fields =~ s{ s[.]n_occs }{count(distinct o.occurrence_no) as n_occs}xs;
+    }
     
     my $summary_joins = '';
     

@@ -28,7 +28,8 @@ BEGIN {
 	Web::DataService->set_mode('debug', 'one_request');
     }
     
-    Web::DataService->set_mode('debug') if Dancer::config->{ds_debug};
+    Web::DataService->set_mode('debug') if Dancer::config->{ds_debug} or
+	    (defined $ARGV[0] and lc $ARGV[0] eq 'debug');
 }
 
 use PB0::Main;
