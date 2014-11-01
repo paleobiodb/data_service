@@ -1115,9 +1115,10 @@ sub generate_diversity_matrix {
     my $ds = $self->ds;
     
     my $scale_no = 1;	# eventually we will add other scale options
+    my %scale_map = ( stage => 5, epoch => 4, period => 3 );
     
     my $scale_level = $self->clean_param('reso');
-    $scale_level = $ds->map_value('1.2:occs:div_reso', $scale_level) if $scale_level;
+    $scale_level = $scale_map{$scale_level} if $scale_level;
     $scale_level ||= 5;
     my $level_key = "L$scale_level";
     
@@ -1260,8 +1261,8 @@ sub generate_diversity_matrix {
 		  extinctions => $extinctions{$age},
 		  singletons => $singletons{$age},
 		  range_throughs => $rangethroughs{$age},
-		  sampled_in_bin => scalar(keys %{$unique_in_bin{$age}}),
-		  n_occs => $occurrences{$age} };
+		  sampled_in_bin => scalar(keys %{$unique_in_bin{$age}}) || 0,
+		  n_occs => $occurrences{$age} || 0 };
 	
 	push @result, $r;
     }
