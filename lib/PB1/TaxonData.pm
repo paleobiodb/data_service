@@ -440,7 +440,7 @@ sub initialize {
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
-	    "Accepted values are: C<yes>, C<no>",
+	    "Accepted values are: C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
 	{ optional => 'depth', valid => POS_VALUE },
 	    "Return only taxa no more than the specified number of levels above or",
 	     "below the base taxa in the hierarchy");
@@ -448,7 +448,7 @@ sub initialize {
     $ds->define_ruleset('1.1:taxa:occ_filter' =>
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
-	    "Accepted values are: C<yes>, C<no>");
+	    "Accepted values are: C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.");
     
     $ds->define_ruleset('1.1:taxa:summary_selector' => 
 	{ optional => 'rank', valid => '1.1:taxa:summary_rank', alias => 'summary_rank',
@@ -511,7 +511,7 @@ sub initialize {
 	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
-	    "Accepted values include C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
+	    "Accepted values are: C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
 	{ param => 'status', valid => '1.1:taxa:status', default => 'valid' },
 	    "Return only names that have the specified status.  Accepted values include:",
 	{ allow => '1.1:taxa:display' }, 
@@ -806,7 +806,6 @@ sub list {
 	$self->{main_result} = \@result;
 	$self->{main_sql} = $Taxonomy::SQL_STRING;
 	$self->{result_count} = scalar(@result);
-	return;
     }
     
     elsif ( defined $arg && $arg eq 'refs' )
@@ -815,7 +814,6 @@ sub list {
 	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id_list, $options);
 	$self->{main_sql} = $Taxonomy::SQL_STRING;
 	$self->sql_count_rows;
-	return;
     }
     
     # Otherwise, return matching taxa.  If the relationship is 'self' (the

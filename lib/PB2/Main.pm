@@ -27,7 +27,7 @@ use PB2::PersonData;
 	  title => 'PBDB Data Service',
 	  version => 'a1',
 	  features => 'standard',
-	  special_params => 'standard, linebreak=linebreak, datainfo=showsource',
+	  special_params => 'standard, count=rowcount',
 	  path_prefix => 'data1.2/',
 	  ruleset_prefix => '1.2:',
 	  doc_template_dir => 'doc/1.2' });
@@ -160,7 +160,8 @@ use PB2::PersonData;
     
     $ds2->define_node({ path => 'occs/list',
 			place => 2,
-			usage => [ "/occs/list.txt?base_name=Cetacea&interval=Miocene&show=loc,time" ],
+			usage => [ "/occs/list.txt?base_name=Cetacea&interval=Miocene&show=loc,time",
+				   "/occs/list.json?base_name=Cetacea&interval=Miocene&show=loc,time" ],
 			method => 'list',
 			post_configure_hook => 'prune_field_list',
 			output => '1.2:occs:basic',
@@ -169,6 +170,16 @@ use PB2::PersonData;
 	"This path returns information about multiple occurrences, selected according to the parameters you provide.",
 	"Depending upon which output blocks you select, the response will contain some",
 	"fields describing the occurrences and some describing the collections to which they belong.");
+    
+    $ds2->define_node({ path => 'occs/diversity',
+			place => 2,
+			usage => [ "/occs/diversity.txt?base_name=Rodentia&count=genera&reso=stage" ],
+			method => 'diversity',
+			output => '1.2:occs:diversity',
+			title => 'Diversity over time' },
+	"This path returns a matrix of fossil diversity over time, based on occurrences selected according to",
+	"the parameters you provide.  You can use any of the parameters that are valid with the",
+	"L<occs/list|node:occs/list> operation to select the set of occurrences to be analyzed.");
     
     $ds2->define_node({ path => 'occs/refs',
 			place => 3,

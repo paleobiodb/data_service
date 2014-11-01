@@ -21,6 +21,11 @@ use Moo::Role;
 no warnings 'numeric';
 
 
+# Store the basic data about each interval and scale.
+
+our (%INTERVAL_DATA, %SCALE_DATA, %SCALE_LEVEL_DATA);
+our (%BOUNDARY_LIST, %BOUNDARY_MAP);
+
 # initialize ( )
 # 
 # This routine is called automatically by the data service to initialize this
@@ -147,6 +152,9 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
+    my $dbh = $ds->get_connection;
+    
+    $class->read_interval_data($dbh);
 }
 
 
@@ -457,6 +465,161 @@ sub generateHierarchy {
     }
     
     return \@toplevel;
+}
+
+
+# read_interval_data ( dbh )
+# 
+# Read the basic interval and scale data from the relevant data tables and
+# install them into package-local variables.
+
+sub read_interval_data {
+    
+    my ($class, $dbh) = @_;
+    
+    # Abort if we have already done this task.
+    
+    return if %INTERVAL_DATA;
+    
+    my (%interval_data);
+    
+    # First read in a list of all the intervals and put them in a hash indexed
+    # by interval_no.
+    
+    my $sql = "SELECT * FROM $INTERVAL_DATA";
+    
+    my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    if ( ref $result eq 'ARRAY' )
+    {
+	my $interval_no;
+	
+	foreach my $i ( @$result )
+	{
+	    next unless $interval_no = $i->{interval_no};
+	    $interval_data{$interval_no} = $i;
+	}
+    }
+    
+    # Then read in a list of all the scales and put them in a hash indexed by
+    # scale_no.
+    
+    $sql = "SELECT * FROM $SCALE_DATA";
+    
+    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    if ( ref $result eq 'ARRAY' )
+    {
+	my $scale_no;
+	
+	foreach my $s ( @$result )
+	{
+	    next unless $scale_no = $s->{scale_no};
+	    $SCALE_DATA{$scale_no} = $s;
+	}
+    }
+    
+    # Then read in a list of the scale levels and fill them in to the
+    # %SCALE_DATA hash.
+    
+    $sql = "SELECT * FROM $SCALE_LEVEL_DATA";
+    
+    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    if ( ref $result eq 'ARRAY' )
+    {
+	my ($scale_no, $level, %sample_list);
+	
+	foreach my $s ( @$result )
+	{
+	    next unless $scale_no = $s->{scale_no};
+	    next unless $level = $s->{level};
+	    $SCALE_LEVEL_DATA{$scale_no}{$level} = $s->{level_name};
+	    push @{$sample_list{$scale_no}}, $level if $s->{sample};
+	}
+	
+	# The 'sample_list' field will be a list of the levels at which
+	# diversity statistics should be counted.  So, for example, for the
+	# standard timescale (scale_no = 1), the "Eon" and "Era" levels are
+	# just too coarse for diversity computations to make any sense.  It
+	# only makes sense to do them at "Period" and below.  We sort the list
+	# from largest to smallest, which means from finest-resolution to coarsest.
+	
+	foreach $scale_no ( keys %SCALE_DATA )
+	{
+	    $SCALE_DATA{$scale_no}{sample_list} = [ map { "L$_" } sort { $b <=> $a } @{$sample_list{$scale_no}} ];
+	}
+    }
+    
+    # Now read in the mapping from interval numbers to scale levels and parent
+    # intervals. 
+    
+    $sql = "SELECT scale_no, level, interval_no, parent_no FROM $SCALE_MAP";
+    
+    $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    if ( ref $result eq 'ARRAY' )
+    {
+	my ($interval_no, $scale_no, $level, $parent_no);
+	
+	foreach my $m ( @$result )
+	{
+	    next unless $scale_no = $m->{scale_no};
+	    next unless $level = $m->{level};
+	    next unless $interval_no = $m->{interval_no};
+	    next unless $parent_no = $m->{parent_no};
+	    
+	    $INTERVAL_DATA{$scale_no}{$interval_no} = { %{$interval_data{$interval_no}}, 
+							parent_no => $parent_no,
+							level => $level + 0,
+						        "L$level" => $interval_no };
+	}
+	
+	# Now compute boundary lists and parent level mappings.
+	
+	foreach $scale_no ( keys %SCALE_DATA )
+	{
+	    my (%boundary_list, %boundary_map);
+	    
+	    foreach $interval_no ( keys %{$INTERVAL_DATA{$scale_no}} )
+	    {
+		my $i = $INTERVAL_DATA{$scale_no}{$interval_no};
+		my $parent_no = $i->{parent_no};
+		my $level = $i->{level};
+		my $boundary_age = $i->{early_age};
+		
+		# Add this interval's boundary to the boundary list and
+		# boundary map for its level.
+		
+		push @{$boundary_list{$level}}, $boundary_age;
+		$boundary_map{$level}{$boundary_age} = $i;
+		
+		# Iteratively compute the level mapping for this interval and
+		# all its parents.  So, for example, if we know that interval
+		# 50 is at level 5 and its parent is 27 which is at level 4,
+		# then the "L5" value for interval 50 is 50 and the "L4" value
+		# is 27.  If the parent of 27 is 18, then the "L3" value for
+		# 50 is 18.  And so on.
+		
+		while ( my $p = $INTERVAL_DATA{$scale_no}{$parent_no} )
+		{
+		    $i->{"L$p->{level}"} = $parent_no;
+		    $parent_no = $p->{parent_no};
+		}
+	    }
+	    
+	    # Now sort each of the boundary lists (oldest to youngest) and
+	    # store them in the appropriate package variable.
+	    
+	    foreach my $level ( keys %boundary_list )
+	    {
+		$BOUNDARY_LIST{$scale_no}{$level} = [ sort { $b <=> $a } @{$boundary_list{$level}} ];
+		$BOUNDARY_MAP{$scale_no}{$level} = $boundary_map{$level};
+	    }
+	}
+    }
+    
+    my $a = 1;	# we can stop here when debugging.
 }
 
 

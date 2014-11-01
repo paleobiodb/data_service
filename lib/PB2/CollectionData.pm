@@ -1901,6 +1901,9 @@ sub generateMainFilters {
 		}
 	    }
 	}
+	
+	$self->{early_age} = $early_age;
+	$self->{late_age} = $late_age;
     }
     
     # Return the list

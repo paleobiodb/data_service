@@ -46,6 +46,9 @@ sub initialize {
 	    "The actual taxonomic name by which this occurrence was identified",
 	{ value => 'phylo', maps_to => '1.2:occs:phylo' },
 	    "Additional information about the taxonomic classification of the occurence",
+	{ value => 'genus', maps_to => '1.2:occs:genus' },
+	    "The genus (if known) and subgenus (if any) corresponding to each occurrence.",
+	    "This is a subset of the information provided by C<phylo>.",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the occurrence",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
@@ -155,14 +158,31 @@ sub initialize {
 	{ output => 'species_reso', com_name => 'rss' },
 	    "The resolution of the species name, i.e. C<sensu lato> or C<n. sp.>");
     
-    $ds->define_block('1.2:occs:phylo' =>
-	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
-		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
-		     'tg.name as genus', 'tg.spelling_no as genus_no'],
-	  tables => ['ph', 't', 'tg'] },
+    $ds->define_block('1.2:occs:genus' =>
+	{ select => ['o.genus_name', 'o.subgenus_name',
+		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
+	  tables => ['t', 'pl'] },
+	{ output => 'subgenus', com_name => 'sgl' },
+	    "The name of the genus in which this occurrence is classified",
+	{ output => 'subgenus_no', com_name => 'sgn' },
+	    "The identifier of the genus in which this occurrence is classified",
 	{ output => 'genus', com_name => 'gnl' },
 	    "The name of the genus in which this occurrence is classified",
 	{ output => 'genus_no', com_name => 'gnn' },
+	    "The identifier of the genus in which this occurrence is classified");
+    
+    $ds->define_block('1.2:occs:phylo' =>
+	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
+		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
+		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
+	  tables => ['ph', 't', 'pl'] },
+	{ output => 'subgenus', com_name => 'sgl', not_block => '1.2:occs:genus' },
+	    "The name of the genus in which this occurrence is classified",
+	{ output => 'subgenus_no', com_name => 'sgn', not_block => '1.2:occs:genus' },
+	    "The identifier of the genus in which this occurrence is classified",
+	{ output => 'genus', com_name => 'gnl', not_block => '1.2:occs:genus' },
+	    "The name of the genus in which this occurrence is classified",
+	{ output => 'genus_no', com_name => 'gnn', not_block => '1.2:occs:genus' },
 	    "The identifier of the genus in which this occurrence is classified",
 	{ output => 'family', com_name => 'fml' },
 	    "The name of the family in which this occurrence is classified",
@@ -195,8 +215,53 @@ sub initialize {
 	{ output => 'abund_unit', com_name => 'abu' },
 	    "The unit in which this abundance is expressed");
     
+    # The following block specifies the output for diversity matrices.
+    
+    $ds->define_block('1.2:occs:diversity' =>
+	{ output => 'interval_no', com_name => 'oid' },
+	    "The identifier of the time interval represented by this record",
+	{ output => 'interval_name', com_name => 'nam' },
+	    "The name of the time interval represented by this record",
+	{ output => 'early_age', com_name => 'eag' },
+	    "The beginning age of this interval, in Ma",
+	{ output => 'originations', com_name => 'dor' },
+	    "The number of distinct taxa whose first occurrence lies in this interval:",
+	    "species, genera, families, or orders,",
+	    "depending upon the value you provided for the parameter C<count>",
+	{ output => 'extinctions', com_name => 'dex' },
+	    "The number of distinct taxa whose last occurrence lies in this interval",
+	{ output => 'singletons', com_name => 'dsg' },
+	    "The number of distinct taxa that are found only in this interval",
+	{ output => 'range_throughs', com_name => 'drt' },
+	    "The number of distinct taxa whose first occurrence falls before",
+	    "this interval and whose last occurrence falls after it",
+	{ output => 'sampled_in_bin', com_name => 'dsb' },
+	    "The number of distinct taxa found in this interval",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The total number of occurrences in this interval");
+    
     # Then define parameter rulesets to validate the parameters passed to the
     # operations implemented by this class.
+    
+    $ds->define_set('1.2:occs:div_count' =>
+	{ value => 'species' },
+	    "Count species",
+	{ value => 'genera' },
+	    "Count genera, regardless of subgenera",
+	{ value => 'genera_plus' },
+	    "Count genera, with subgenera promoted to genera",
+	{ value => 'families' },
+	    "Count families",
+	{ value => 'orders' },
+	    "Count orders");
+    
+    $ds->define_set('1.2:occs:div_reso' =>
+	{ value => 'stage', maps_to => 5 },
+	    "Count by stage",
+	{ value => 'epoch', maps_to => 4 },
+	    "Count by epoch",
+	{ value => 'period', maps_to => 3 },
+	    "Count by period");
     
     $ds->define_set('1.2:occs:order' =>
 	{ value => 'earlyage' },
@@ -266,11 +331,10 @@ sub initialize {
 	"You can use the following parameters to select what information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
 	{ param => 'show', list => q{,},
-	  valid => $ds->valid_set('1.2:occs:basic_map') },
+	  valid => '1.2:occs:basic_map' },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each occurrence.  Its value should be",
 	    "one or more of the following, separated by commas:",
-	    $ds->document_set('1.2:occs:basic_map'),
 	{ optional => 'order', valid => '1.2:occs:order', split => ',', no_set_doc => 1 },
 	    "Specifies the order in which the results are returned.  You can specify multiple values",
 	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:",
@@ -302,6 +366,39 @@ sub initialize {
 	{ require_any => ['1.2:occs:selector', '1.2:main_selector',
 			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
 	{ allow => '1.2:occs:display' },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:div_params' =>
+	{ param => 'count', valid => '1.2:occs:div_count' },
+	    "This parameter specifies the taxonomic level at which to count.  If not",
+	    "specified, it defaults to C<genera>.  The accepted values are:",
+	{ param => 'subgenera', valid => FLAG_VALUE },
+	    "You can use this parameter as a shortcut, equivalent to specifying",
+	    "C<count=genera_plus>.  Just include its name, no value is needed.",
+	{ param => 'ignore_recent', valid => FLAG_VALUE },
+	    "If this parameter is specified, then taxa that are known to be extant",
+	    "are I<not> considered to range through to the present, which is otherwise",
+	    "the default behavior.",
+	{ param => 'reso', valid => '1.2:occs:div_reso' },
+	    "This parameter specifies the temporal resolution at which to count.  If not",
+	    "specified, it defaults to C<stage>.  Accepted values are:");
+    
+    $ds->define_ruleset('1.2:occs:diversity' =>
+	"The following parameters specify what to count and at what temporal resolution:",
+	{ allow => '1.2:occs:div_params' }, 
+        ">>The following parameters select which occurrences to analyze.",
+	"Except as noted below, you may use these in any combination.",
+	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
+	"the exact list of occurrences used to compute this diversity matrix.",
+	{ allow => '1.2:main_selector' },
+	#{ mandatory => 'base_name', errmsg => 'You must include the parameter "base_name", ' .
+	#      'in order to specify the taxonomic range to analyze.' },
+	{ allow => '1.2:common:select_crmod' },
+	{ allow => '1.2:common:select_ent' },
+	{ require_any => ['1.2:main_selector',
+			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	#{ allow => '1.2:occs:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -486,6 +583,124 @@ sub list {
     # If we were asked to get the count, then do so
     
     $self->sql_count_rows;
+}
+
+
+# diversity ( )
+# 
+# Like 'list', but processes the resulting list of occurrences into a
+# diversity matrix.
+
+sub diversity {
+
+    my ($self) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $self->get_connection;
+    my $tables = $self->tables_hash;
+    
+    # Make sure that we have already loaded the interval data.
+    
+    PB2::IntervalData->read_interval_data($dbh);
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters = PB2::CollectionData::generateMainFilters($self, 'list', 'c', $tables);
+    push @filters, PB2::OccurrenceData::generateOccFilters($self, $tables);
+    push @filters, PB2::CommonData::generate_crmod_filters($self, 'o', $tables);
+    push @filters, PB2::CommonData::generate_ent_filters($self, 'o', $tables);
+    
+    push @filters, "c.access_level = 0";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $self->sql_count_clause;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    $tables->{ph} = 1;
+    $tables->{pl} = 1;
+    $tables->{t} = 1;
+    $tables->{im} = 1;
+    
+    my @fields = ('o.occurrence_no', 't.synonym_no', 't.rank', 'im.cx_int_no as interval_no');
+    
+    unless ( $self->clean_param('ignore_recent') )
+    {
+	$tables->{v} = 1;
+	push @fields, 'v.is_extant';
+    }
+    
+    my $count_what = $self->clean_param('count') || 'genera';
+    $count_what = 'genera_plus' if $self->clean_param('subgenera');
+    
+    if ( $count_what eq 'species' )
+    {
+	push @fields, 't.orig_no as taxon1';
+    }
+    
+    elsif ( $count_what eq 'genera' )
+    {
+	push @fields, 'pl.genus_no as taxon1';
+    }
+    
+    elsif ( $count_what eq 'genera_plus' )
+    {
+	push @fields, 'if(pl.subgenus_no, pl.subgenus_no, pl.genus_no) as taxon1';
+    }
+    
+    elsif ( $count_what eq 'families' )
+    {
+	push @fields, 'ph.family_no as taxon1';
+    }
+    
+    elsif ( $count_what eq 'orders' )
+    {
+	push @fields, 'ph.order_no as taxon1';
+    }
+    
+    else
+    {
+	die "400 unknown value '$count_what' for parameter 'count'\n";
+    }
+    
+    my $fields = join(', ', @fields);
+    
+    # Determine which extra tables, if any, must be joined to the query.  Then
+    # construct the query.
+    
+    my $join_list = $self->generateJoinList('c', $tables);
+    
+    my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
+    
+    $self->{main_sql} = "
+	SELECT $calc $fields
+	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+		$join_list
+        WHERE $filter_string
+	GROUP BY o.occurrence_no $extra_group";
+    
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    
+    # Then prepare and execute the main query.
+    
+    my $sth = $dbh->prepare($self->{main_sql});
+    $sth->execute();
+    
+    # If we were asked to get the count, then do so
+    
+    $self->sql_count_rows;
+    
+    # Now fetch all of the rows, and process them into a diversity matrix.
+    
+    my $result = $self->generate_diversity_matrix($sth);
+    
+    $self->list_result($result);
 }
 
 
@@ -797,11 +1012,13 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
 	if $tables->{t} || $tables->{tf};
     $join_list .= "LEFT JOIN taxon_trees as ts on ts.orig_no = t.synonym_no\n"
-	if $tables->{ts};
-    $join_list .= "LEFT JOIN taxon_trees as tg on tg.orig_no = t.genus_no\n"
-	if $tables->{tg};
-    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
+	if $tables->{t};
+    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = ts.orig_no\n"
+	if $tables->{pl};
+    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = ts.ints_no\n"
 	if $tables->{ph};
+    $join_list .= "LEFT JOIN taxon_attrs as v on v.orig_no = t.synonym_no\n"
+	if $tables->{v};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
 	if $tables->{pc};
     $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
@@ -865,6 +1082,7 @@ sub process_basic_record {
 	
 	$record->{taxon_name} = $taxon_name;
 	$record->{taxon_base} = $taxon_base;
+	
     }
     
     # If the taxonomic rank field is empty, try to determine one.
@@ -887,6 +1105,168 @@ sub process_basic_record {
 	    $record->{taxon_rank} = $record->{matched_rank};
 	}
     }
+}
+
+
+sub generate_diversity_matrix {
+
+    my ($self, $sth) = @_;
+    
+    my $ds = $self->ds;
+    
+    my $scale_no = 1;	# eventually we will add other scale options
+    
+    my $scale_level = $self->clean_param('reso');
+    $scale_level = $ds->map_value('1.2:occs:div_reso', $scale_level) if $scale_level;
+    $scale_level ||= 5;
+    my $level_key = "L$scale_level";
+    
+    # We set the $ignore_recent flag if the corresponding parameter was given
+    # a true value.  If it was not specified at all, then we set the flag if
+    # the occurrence selection parameters include a 'late_age' value that is
+    # greater than zero.  That means that recent fossil occurrences have been
+    # skipped, so we set the flag unless told explicitly not to.
+    
+    my $ignore_recent = $self->clean_param('ignore_recent');
+    my $range_end = $self->{late_age} || 0;
+    
+    $ignore_recent //= 1 if $range_end > 0;
+    
+    my $intervals = $PB2::IntervalData::INTERVAL_DATA{$scale_no};
+    my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
+    my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
+    
+    my ($early_age, $late_age, %taxon_first, %taxon_last, %occurrences, %unique_in_bin);
+    my ($imprecise_time_count, $imprecise_taxon_count, %imprecise_interval, %imprecise_taxon, %missing_taxon);
+    
+    # We first scan through the occurrences and record the age (early
+    # boundary) of the interval(s) in which the first and last occurrences of
+    # the taxon appear.  If the taxon is known to be extant, then set the
+    # last occurrence to 0 unless the parameter 'ignore_recent' was given.
+    
+    while ( my $r = $sth->fetchrow_hashref )
+    {
+	my $taxon_no = $r->{taxon1};
+	my $raw_interval = $r->{interval_no};
+	my $interval_no = $intervals->{$raw_interval}{$level_key};
+	
+	# If the interval is less precise than the currently selected
+	# resolution, then we skip this occurrence.
+	
+	unless ( $interval_no )
+	{
+	    $imprecise_interval{$raw_interval}++;
+	    $imprecise_time_count++;
+	    next;
+	}
+	
+	unless ( $taxon_no )
+	{
+	    my $synonym_no = $r->{synonym_no} || 0;
+	    $imprecise_taxon{$synonym_no}++;
+	    $imprecise_taxon_count++;
+	    next;
+	}
+	
+	my $interval_age = $intervals->{$interval_no}{early_age};
+	
+	unless ( defined $taxon_first{$taxon_no} && $taxon_first{$taxon_no} >= $interval_age )
+	{
+	    $taxon_first{$taxon_no} = $interval_age;
+	}
+	
+	if ( $r->{is_extant} && ! $ignore_recent )
+	{
+	    $taxon_last{$taxon_no} = 0;
+	}
+	
+	unless ( defined $taxon_last{$taxon_no} && $taxon_last{$taxon_no} <= $interval_age )
+	{
+	    $taxon_last{$taxon_no} = $interval_age;
+	}
+	
+	$early_age = $interval_age unless defined $early_age && $early_age >= $interval_age;
+	$late_age = $interval_age unless defined $late_age && $late_age <= $interval_age;
+	
+	$occurrences{$interval_age}++;
+	$unique_in_bin{$interval_age}{$taxon_no} ||= 1;
+    }
+    
+    # Now we scan through the interval boundary list for the scale and level
+    # that have been selected, and initialize the counts for every interval in
+    # the range of occurrence.
+    
+    my (%originations, %extinctions, %singletons, %rangethroughs);
+    my (@boundaries, %boundaries, $is_last);
+    
+    foreach my $age ( @$boundary_list )
+    {
+	next if $age > $early_age;
+	
+	push @boundaries, $age;
+	
+	$originations{$age} = 0;
+	$extinctions{$age} = 0;
+	$singletons{$age} = 0;
+	$rangethroughs{$age} = 0;
+	
+	last if $is_last;
+	$is_last = 1 if $age < $late_age;
+    }
+    
+    # Now we scan through the taxa.  For each one, we scan through the
+    # relevant intervals and mark the appropriate counts.  This step takes
+    # time o(MN) where M is the number of taxa and N the number of intervals.
+    
+    foreach my $taxon_no ( keys %taxon_first )
+    {
+	my $first_age = $taxon_first{$taxon_no};
+	my $last_age = $taxon_last{$taxon_no};
+	
+	# If the interval of first appearance is the same as the interval of
+	# last appearance, then this is a singleton.
+	
+	if ( $first_age == $last_age )
+	{
+	    $singletons{$first_age}++;
+	    next;
+	}
+	
+	# Otherwise, we mark the intervals of origination and extinction, and
+	# then scan through the range of intervals between them to mark
+	# rangethroughs.  If the last appearance is the same as the last
+	# interval in the range, we cannot conclude anything about its extinction.
+	
+	$originations{$first_age}++;
+	$extinctions{$last_age}++ if $last_age > $range_end;
+	
+	foreach my $age (@boundaries)
+	{
+	    last if $age <= $last_age;
+	    $rangethroughs{$age}++ if $age < $first_age;
+	}
+    }
+    
+    # Now we scan through the ages again and prepare the data records.
+    
+    my @result;
+    
+    foreach my $age (@boundaries)
+    {
+	my $r = { interval_no => $boundary_map->{$age}{interval_no},
+		  interval_name => $boundary_map->{$age}{interval_name},
+		  early_age => $age,
+		  originations => $originations{$age},
+		  extinctions => $extinctions{$age},
+		  singletons => $singletons{$age},
+		  range_throughs => $rangethroughs{$age},
+		  sampled_in_bin => scalar(keys %{$unique_in_bin{$age}}),
+		  n_occs => $occurrences{$age} };
+	
+	push @result, $r;
+    }
+    
+    $self->list_result(@result);
 }
 
 1;

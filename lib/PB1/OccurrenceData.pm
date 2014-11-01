@@ -46,6 +46,9 @@ sub initialize {
 	    "The actual taxonomic name by which this occurrence was identified",
 	{ value => 'phylo', maps_to => '1.1:occs:phylo' },
 	    "Additional information about the taxonomic classification of the occurence",
+	{ value => 'genus', maps_to => '1.1:occs:genus' },
+	    "The genus (if known) and subgenus (if any) corresponding to each occurrence.",
+	    "This is a subset of the information provided by C<phylo>.",
         { value => 'loc', maps_to => '1.1:colls:loc' },
 	    "Additional information about the geographic locality of the occurrence",
 	{ value => 'paleoloc', maps_to => '1.1:colls:paleoloc' },
@@ -70,7 +73,7 @@ sub initialize {
 	{ value => 'geo', maps_to => '1.1:colls:geo' },
 	    "Information about the geological context of the occurrence",
         { value => 'rem', maps_to => '1.1:colls:rem' },
-	    "Any additional remarks that were entered about the occurrences and/or its containing collection.",
+	    "Any additional remarks that were entered about the containing collection.",
         { value => 'ref', maps_to => '1.1:refs:primary' },
 	    "The primary reference for the occurrence, as formatted text.",
 	    "If no reference is recorded for this occurrence, the primary reference for its",
@@ -155,14 +158,31 @@ sub initialize {
 	{ output => 'species_reso', com_name => 'rss' },
 	    "The resolution of the species name, i.e. C<sensu lato> or C<n. sp.>");
     
-    $ds->define_block('1.1:occs:phylo' =>
-	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
-		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
-		     'tg.name as genus', 'tg.spelling_no as genus_no'],
-	  tables => ['ph', 't', 'tg'] },
+    $ds->define_block('1.1:occs:genus' =>
+	{ select => ['o.genus_name', 'o.subgenus_name',
+		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
+	  tables => ['t', 'pl'] },
+	{ output => 'subgenus', com_name => 'sgl' },
+	    "The name of the genus in which this occurrence is classified",
+	{ output => 'subgenus_no', com_name => 'sgn' },
+	    "The identifier of the genus in which this occurrence is classified",
 	{ output => 'genus', com_name => 'gnl' },
 	    "The name of the genus in which this occurrence is classified",
 	{ output => 'genus_no', com_name => 'gnn' },
+	    "The identifier of the genus in which this occurrence is classified");
+    
+    $ds->define_block('1.1:occs:phylo' =>
+	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
+		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
+		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
+	  tables => ['ph', 't', 'pl'] },
+	{ output => 'subgenus', com_name => 'sgl', not_block => '1.1:occs:genus' },
+	    "The name of the genus in which this occurrence is classified",
+	{ output => 'subgenus_no', com_name => 'sgn', not_block => '1.1:occs:genus' },
+	    "The identifier of the genus in which this occurrence is classified",
+	{ output => 'genus', com_name => 'gnl', not_block => '1.1:occs:genus' },
+	    "The name of the genus in which this occurrence is classified",
+	{ output => 'genus_no', com_name => 'gnn', not_block => '1.1:occs:genus' },
 	    "The identifier of the genus in which this occurrence is classified",
 	{ output => 'family', com_name => 'fml' },
 	    "The name of the family in which this occurrence is classified",
@@ -798,8 +818,8 @@ sub generateJoinList {
 	if $tables->{t} || $tables->{tf};
     $join_list .= "LEFT JOIN taxon_trees as ts on ts.orig_no = t.synonym_no\n"
 	if $tables->{ts};
-    $join_list .= "LEFT JOIN taxon_trees as tg on tg.orig_no = t.genus_no\n"
-	if $tables->{tg};
+    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = t.orig_no\n"
+	if $tables->{pl};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
 	if $tables->{ph};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
@@ -865,6 +885,16 @@ sub process_basic_record {
 	
 	$record->{taxon_name} = $taxon_name;
 	$record->{taxon_base} = $taxon_base;
+	
+	# If we don't have a taxon number, set the genus and subgenus name (if
+	# one was given).
+	
+	unless ( $record->{taxon_no} )
+	{
+	    $record->{genus} ||= $record->{genus_name};
+	    $record->{subgenus} ||= $record->{genus_name} . " (" . $record->{subgenus_name} . ")"
+		if $record->{subgenus_name};
+	}
     }
     
     # If the taxonomic rank field is empty, try to determine one.
