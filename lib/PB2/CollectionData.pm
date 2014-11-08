@@ -482,14 +482,40 @@ sub initialize {
     
     $ds->define_set('1.2:colls:ident_select' =>
 	{ value => 'latest' },
-	    "Return the most recently published identification of each selected occurrence,",
-	    "as long as it matches the other specified criteria.",
+	    "Select the most recently published identification of each selected occurrence,",
+	    "as long as it matches the other specified criteria.  This is the B<default> unless",
+	    "you specify otherwise.",
 	{ value => 'orig' },
-	    "Return the originally published identification of each selected occurence,",
+	    "Select the originally published identification of each selected occurence,",
 	    "as long as it matches the other specified criteria.",
 	{ value => 'all' },
-	    "Return all matching identifications of each selected occurrence, each as a separate record");
+	    "Select all matching identifications of each selected occurrence, each as a separate record");
     
+    $ds->define_set('1.2:colls:timerule' =>
+	{ value => 'contain' },
+	    "Select only records whose temporal locality is strictly contained in the specified time range.",
+	    "This is the most r-estrictive rule.  For diversity output, this rule guarantees that each occurrence",
+	    "will fall into at most one temporal bin, but many occurrences will be ignored because their temporal",
+	    "locality is too wide to fall into any of the bins.",
+	{ value => 'major' },
+	    "Select only records for which at least 50% of the temporal locality range falls within the specified",
+	    "time range.",
+	    "For diversity output, this rule also guarantees that each occurrence will fall into at most one",
+	    "temporal bin.  Many occurrences will be ignored because their temporal locality is more than twice",
+	    "as wide as any of the overlapping bins, but fewer will be ignored than with the C<contain> rule.",
+	{ value => 'buffer' },
+	    "Select only records whose temporal locality overlaps the specified time range and also falls",
+	    "completely within a 'buffer zone' around this range.  This buffer varies by period, and has been",
+	    "set so that occurrences that are dated to the epoch level will be considered to match all of the",
+	    "corresponding stages.  You can override the buffer size using the parameters C<earlybuffer> and",
+	    "C<latebuffer>.  For diversity output, some occurrences will be counted as falling into more",
+	    "than one bin.  Some occurrences will still be ignored, but fewer than with the above rules.",
+	    "This is the B<default> timerule unless you specifically select one.",
+	{ value => 'overlap' },
+	    "Select only records whose temporal locality overlaps the specified time range by any amount.",
+	    "This is the most permissive rule.  For diversity output, every occurrence will be counted.",
+	    "Many will be counted as falling into more than one bin.");
+
     $ds->define_set('1.2:colls:pgmodel' =>
 	{ value => 'scotese' },
 	    "Use the paleogeographic model defined by L<C. R. Scotese|http://scotese.com/> (2002), which is the",
@@ -584,26 +610,27 @@ sub initialize {
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
 	    "Return only records whose temporal locality is at most this old, specified in Ma.",
 	{ param => 'interval_id', valid => POS_VALUE },
-	    "Return only records whose temporal locality falls within the given geologic time interval, specified by numeric identifier.",
+	    "Return only records whose temporal locality falls within the given geologic time interval,",
+	    "specified by numeric identifier.",
 	{ param => 'interval', valid => ANY_VALUE },
 	    "Return only records whose temporal locality falls within the named geologic time interval.",
 	{ at_most_one => ['interval_id', 'interval', 'min_ma'] },
 	{ at_most_one => ['interval_id', 'interval', 'max_ma'] },
-	{ optional => 'timerule', valid => ENUM_VALUE('contain','overlap','buffer') },
-	    "Resolve temporal locality according to the specified rule:", "=over 4",
-	    "=item contain", "Return only records whose temporal locality is strictly contained in the specified time range.",
-	    "=item overlap", "Return only records whose temporal locality overlaps the specified time range by any amount, no matter how small.",
-	    "=item buffer", "Return only records whose temporal locality overlaps the specified range and is contained",
-	    "within the specified time range plus a buffer on either side.  If an interval from one of the timescales known to the database is",
-	    "given, then the default buffer will be the intervals immediately preceding and following at the same level.",
-	    "Otherwise, the buffer will default to 10 million years on either side.  This can be overridden using the parameters",
-	    "C<earlybuffer> and C<latebuffer>.  This is the default value for this option.",
-	{ optional => 'earlybuffer', valid => POS_VALUE },
-	    "Override the default buffer period for the beginning of the time range when resolving temporal locality.",
-	    "The value must be given in millions of years.  This option not relevant if C<timerule> is set to either C<contain> or C<overlap>.",
+	{ optional => 'timerule', valid => '1.2:colls:timerule' },
+	    "Resolve temporal locality according to the specified rule, as listed below.  For lists of",
+	    "occurrences or collections, this rule is applied to determine which records to select if",
+	    "you specify an age range using any of the parameters listed immediately above.",
+	    "For diversity output, this rule is applied to",
+	    "place each occurrence into one or more temporal bins, or to ignore the occcurrence if it",
+	    "does not match any of the bins.  The available rules are:",
+	{ optional => 'timebuffer', valid => POS_VALUE },
+	    "Override the default buffer period for the beginning of the time range when resolving",
+	    "temporal locality.  The value must be given in millions of years.  This parameter",
+	    "is only relevant if C<timerule> is set to C<buffer> or is allowed to default to that value.",
 	{ optional => 'latebuffer', valid => POS_VALUE },
-	    "Override the default buffer period for the end of the time range when resolving temporal locality.",
-	    "The value must be given in millions of years.  This option not relevant if C<timerule> is set to either C<contain> or C<overlap>.");
+	    "Override the default buffer period for the end of the time range when resolving temporal",
+	    "locality.  The value must be given in millions of years.  This parameter is only relevant",
+	    "if C<timerule> is set to C<buffer> or is allowed to default to that value.");
     
     $ds->define_ruleset('1.2:colls:specifier' =>
 	{ param => 'id', valid => POS_VALUE, alias => 'coll_id' },
@@ -1165,8 +1192,12 @@ sub fixTimeOutput {
     
     my ($self, $record) = @_;
     
-    $record->{early_age} =~ s/\.?0+$// if defined $record->{early_age};
-    $record->{late_age} =~ s/\.?0+$// if defined $record->{late_age};
+    no warnings 'uninitialized';
+    
+    $record->{early_age} =~ s{ (?: [.] 0+ $ | ( [.] \d* [1-9] ) 0+ $ ) }{$1}sxe
+	if defined $record->{early_age};
+    $record->{late_age} =~ s{ (?: [.] 0+ $ | ( [.] \d* [1-9] ) 0+ $ ) }{$1}sxe
+	if defined $record->{late_age};
 }
 
 

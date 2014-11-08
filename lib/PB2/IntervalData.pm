@@ -12,7 +12,7 @@ package PB2::IntervalData;
 
 use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
-use TableDefs qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA);
+use TableDefs qw($INTERVAL_DATA $INTERVAL_MAP $SCALE_DATA $SCALE_MAP $SCALE_LEVEL_DATA $INTERVAL_BUFFER);
 
 our (@REQUIRES_ROLE) = qw(PB2::CommonData);
 
@@ -486,7 +486,7 @@ sub read_interval_data {
     # First read in a list of all the intervals and put them in a hash indexed
     # by interval_no.
     
-    my $sql = "SELECT * FROM $INTERVAL_DATA";
+    my $sql = "SELECT * FROM $INTERVAL_DATA join $INTERVAL_BUFFER using (interval_no)";
     
     my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
     

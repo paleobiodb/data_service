@@ -47,7 +47,9 @@ sub initialize {
 	{ value => 'ranks', maps_to => '1.2:config:ranks' },
 	    "Return information about the taxonomic ranks defined in this database.",
 	{ value => 'continents', maps_to => '1.2:config:continents' },
-	    "Return information about the continents known to this database.",
+	    "Return continent names and their corresponding codes.",
+	{ value => 'countries', maps_to => '1.2:config:countries' },
+	    "Return country names and the corresponding ISO-3166-1 country codes",
 	{ value => 'all', maps_to => '1.2:config:all' },
 	    "Return all of the above blocks of information.",
 	    "This is generally useful only with C<json> format.");
@@ -77,7 +79,7 @@ sub initialize {
 	{ output => 'rank_code', com_name => 'cod' },
 	    "Numeric code representing this rank in responses using the 'com' vocabulary,",
 	    "which is the default for C<json> format");
-        
+    
     $ds->define_block('1.2:config:continents' =>
 	{ output => 'config_section', com_name => 'cfg', value => 'con', if_field => 'continent_name' },
 	    "The configuration section: 'con' for continents",
@@ -86,10 +88,22 @@ sub initialize {
 	{ output => 'continent_code', com_name => 'cod' },
 	    "The code used to indicate this continent when selecting fossil occurrences by continent");
     
-    $ds->define_block('1.2:config:all',
+    $ds->define_block('1.2:config:countries' =>
+	{ output => 'config_section', com_name => 'cfg', value => 'cnt', if_field => 'continent_name' },
+	    "The configuration section: 'cnt' for countries",
+	{ output => 'name', name => 'country_name', com_name => 'nam' },
+	    "Country name",
+	{ output => 'cc', name => 'country_code', com_name => 'cod' },
+	    "The code used to indicate this continent when selecting fossil occurrences by country.",
+	    "These are the standard ISO-3166-1 country codes.",
+	{ output => 'continent', com_name => 'con' },
+	    "The code for the continent on which this country is located");
+    
+    $ds->define_block('1.2:config:all' =>
 	{ include => 'clusters' },
 	{ include => 'ranks' },
-	{ include => 'continents' });
+	{ include => 'continents' },
+	{ include => 'countries' });
     
     # Then define a ruleset to interpret the parmeters accepted by operations
     # from this class.
@@ -156,6 +170,7 @@ sub get {
     push @result, @$BINS if $request->has_block('clusters') or $show_all;
     push @result, @$RANKS if $request->has_block('ranks') or $show_all;
     push @result, @$CONTINENTS if $request->has_block('continents') or $show_all;
+    push @result, @$COUNTRIES if $request->has_block('countries') or $show_all;
     
     if ( my $offset = $request->result_offset(1) )
     {

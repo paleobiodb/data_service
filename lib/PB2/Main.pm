@@ -176,10 +176,24 @@ use PB2::PersonData;
 			usage => [ "/occs/diversity.txt?base_name=Rodentia&count=genera&reso=stage" ],
 			method => 'diversity',
 			output => '1.2:occs:diversity',
+			summary => '1.2:occs:diversity:summary',
 			title => 'Diversity over time' },
 	"This path returns a matrix of fossil diversity over time, based on occurrences selected according to",
 	"the parameters you provide.  You can use any of the parameters that are valid with the",
 	"L<occs/list|node:occs/list> operation to select the set of occurrences to be analyzed.");
+    
+    $ds2->extended_doc({ path => 'occs/diversity' },
+	"It is very important to note that the diversity statistics returned by this",
+	"operation reflect only I<the fossil occurrences recorded in this database>, and",
+	"not the entire fossil record.  Note also that any occurrences that",
+	"are insufficiently resolved either temporally or taxonomically are ignored.",
+	"If you wish to apply a different procedure for determining how to count such",
+	"occurrences, we suggest that you use the L<occs/list|node:occs/list> operation",
+	"instead and apply your procedure directly to the returned list of occurrences.",
+	">The field names returned by this operation are derived from the following source:",
+	"M. Foote. The Evolution of Morphological Diversity.",
+	"I<Annual Review of Ecology and Systematics>, Vol. 28 (1997)",
+	"pp. 129-152. L<http://www.jstor.org/stable/2952489>.");
     
     $ds2->define_node({ path => 'occs/refs',
 			place => 3,

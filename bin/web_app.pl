@@ -19,6 +19,9 @@ use Web::DataService;
 # argument, then assume that we have been called for debugging purposes.
 
 BEGIN {
+
+    Web::DataService->VERSION(0.252);
+
     if ( defined $ARGV[0] and ( lc $ARGV[0] eq 'get' or lc $ARGV[0] eq 'show' ) )
     {
 	set apphandler => 'Debug';

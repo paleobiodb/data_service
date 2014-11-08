@@ -13,7 +13,7 @@ package PB2::OccurrenceData;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use Taxonomy;
@@ -224,21 +224,60 @@ sub initialize {
 	    "The name of the time interval represented by this record",
 	{ output => 'early_age', com_name => 'eag' },
 	    "The beginning age of this interval, in Ma",
-	{ output => 'originations', com_name => 'dor' },
-	    "The number of distinct taxa whose first occurrence lies in this interval:",
-	    "species, genera, families, or orders,",
-	    "depending upon the value you provided for the parameter C<count>",
-	{ output => 'extinctions', com_name => 'dex' },
-	    "The number of distinct taxa whose last occurrence lies in this interval",
-	{ output => 'singletons', com_name => 'dsg' },
-	    "The number of distinct taxa that are found only in this interval",
-	{ output => 'range_throughs', com_name => 'drt' },
+	{ output => 'late_age', com_name => 'lag' },
+	    "The ending age of this interval, in Ma",
+	{ output => 'originations', pbdb_name => 'X_Ft', com_name => 'xft' },
+	    "The number of distinct taxa whose first known occurrence lies in this interval,",
+	    "and whose range crosses the top boundary of the interval:",
+	    "either species, genera, families, or orders,",
+	    "depending upon the value you provided for the parameter C<count>.",
+	    "The terminology for this field and the next three comes from:",
+	    "M. Foote. The Evolution of Morphological Diversity.",
+	    "I<Annual Review of Ecology and Systematics>, Vol. 28 (1997)",
+	    "pp. 129-152. L<http://www.jstor.org/stable/2952489>.",
+	{ output => 'extinctions', pbdb_name =>'X_bL', com_name => 'xbl' },
+	    "The number of distinct taxa whose last known occurrence lies in this interval,",
+	    "and whose range crosses the bottom boundary of the interval.",
+	{ output => 'singletons', pbdb_name => 'X_FL', com_name => 'xfl' },
+	    "The number of distinct taxa that are found only in this interval, so",
+	    "that their range of occurrence does not cross either boundary.",
+	{ output => 'range_throughs', pbdb_name => 'X_bt', com_name => 'xbt' },
 	    "The number of distinct taxa whose first occurrence falls before",
-	    "this interval and whose last occurrence falls after it",
+	    "this interval and whose last occurrence falls after it, so that",
+	    "the range of occurrence crosses both boundaries.  Note that",
+	    "these taxa may or may not actually occur within the interval.",
 	{ output => 'sampled_in_bin', com_name => 'dsb' },
-	    "The number of distinct taxa found in this interval",
+	    "The number of distinct taxa found in this interval.  This is",
+	    "equal to the sum of the previous four fields, minus the number",
+	    "of taxa from Xbt that do not actually occur in this interval.",
 	{ output => 'n_occs', com_name => 'noc' },
-	    "The total number of occurrences in this interval");
+	    "The total number of occurrences that are resolved to this interval");
+    
+    # The following block specifies the summary output for diversity matrices.
+    
+    $ds->define_block('1.2:occs:diversity:summary' =>
+	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
+	    "The number of occurrences that were scanned in the process of",
+	    "computing this diversity result.",
+	{ output => 'bin_count', pbdb_name => 'bin_total', com_name => 'tbn' },
+	    "The sum of occurrence counts in all of the bins.  This value may be larger than",
+	    "the number of occurrences scanned, since some may be counted in multiple",
+	    "bins (see C<timerule>).  This value might also be smaller",
+	    "than the number of occurrences scanned, since some occurrences may",
+	    "not have a temporal locality that is precise enough to put in any bin.",
+	{ output => 'imprecise_time', com_name => 'itm' },
+	    "The number of occurrences skipped because their temporal locality",
+	    "was not sufficiently precise.  You can adjust this number by selecting",
+	    "a different time rule and/or a different level of temporal resolution.",
+	{ output => 'imprecise_taxon', com_name => 'itx' },
+	    "The number of occurrences skipped because their taxonomic identification",
+	    "was not sufficiently precise.  You can adjust this number by",
+	    "counting at a higher or lower taxonomic level.",
+	{ output => 'missing_taxon', com_name => 'mtx' },
+	    "The number of occurrences skipped because the taxonomic hierarchy",
+	    "in this database is incomplete.  For example, some genera have not",
+	    "been placed in their proper family, so occurrences in these genera",
+	    "will be skipped if you are counting families.");
     
     # Then define parameter rulesets to validate the parameters passed to the
     # operations implemented by this class.
@@ -247,7 +286,7 @@ sub initialize {
 	{ value => 'species' },
 	    "Count species",
 	{ value => 'genera' },
-	    "Count genera, regardless of subgenera",
+	    "Count genera",
 	{ value => 'genera_plus' },
 	    "Count genera, with subgenera promoted to genera",
 	{ value => 'families' },
@@ -330,8 +369,7 @@ sub initialize {
     $ds->define_ruleset('1.2:occs:display' =>
 	"You can use the following parameters to select what information you wish to retrieve,",
 	"and the order in which you wish to get the records:",
-	{ param => 'show', list => q{,},
-	  valid => '1.2:occs:basic_map' },
+	{ optional => 'show', list => q{,}, valid => '1.2:occs:basic_map' },
 	    "This parameter is used to select additional information to be returned",
 	    "along with the basic record for each occurrence.  Its value should be",
 	    "one or more of the following, separated by commas:",
@@ -347,7 +385,7 @@ sub initialize {
     	{ require => '1.2:occs:specifier', 
 	  error => "you must specify an occurrence identifier, either in the URL or with the 'id' parameter" },
 	">>You may also use the following parameter to specify what information you wish to retrieve:",
-    	{ param => 'SPECIAL(show)', valid => '1.2:occs:basic_map' },
+    	{ optional => 'SPECIAL(show)', valid => '1.2:occs:basic_map' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
@@ -376,10 +414,10 @@ sub initialize {
 	{ param => 'subgenera', valid => FLAG_VALUE },
 	    "You can use this parameter as a shortcut, equivalent to specifying",
 	    "C<count=genera_plus>.  Just include its name, no value is needed.",
-	{ param => 'ignore_recent', valid => FLAG_VALUE },
+	{ param => 'recent', valid => FLAG_VALUE },
 	    "If this parameter is specified, then taxa that are known to be extant",
-	    "are I<not> considered to range through to the present, which is otherwise",
-	    "the default behavior.",
+	    "are considered to range through to the present, regardless of the age",
+	    "of their last known fossil occurrence.",
 	{ param => 'reso', valid => '1.2:occs:div_reso' },
 	    "This parameter specifies the temporal resolution at which to count.  If not",
 	    "specified, it defaults to C<stage>.  Accepted values are:");
@@ -626,11 +664,15 @@ sub diversity {
     $tables->{ph} = 1;
     $tables->{pl} = 1;
     $tables->{t} = 1;
+    $tables->{c} = 1;
     $tables->{im} = 1;
+    $tables->{ei} = 1;
+    $tables->{li} = 1;
     
-    my @fields = ('o.occurrence_no', 't.synonym_no', 't.rank', 'im.cx_int_no as interval_no');
+    my @fields = ('o.occurrence_no', 't.synonym_no', 't.rank', 'im.cx_int_no as interval_no, o.early_age, o.late_age',
+		  'ei.interval_name as early_name', 'li.interval_name as late_name', 'o.genus_name');
     
-    unless ( $self->clean_param('ignore_recent') )
+    if ( $self->clean_param('recent') )
     {
 	$tables->{v} = 1;
 	push @fields, 'v.is_extant';
@@ -639,29 +681,36 @@ sub diversity {
     my $count_what = $self->clean_param('count') || 'genera';
     $count_what = 'genera_plus' if $self->clean_param('subgenera');
     
+    my $count_rank;
+    
     if ( $count_what eq 'species' )
     {
 	push @fields, 't.orig_no as taxon1';
+	$count_rank = 3;
     }
     
     elsif ( $count_what eq 'genera' )
     {
 	push @fields, 'pl.genus_no as taxon1';
+	$count_rank = 5;
     }
     
     elsif ( $count_what eq 'genera_plus' )
     {
 	push @fields, 'if(pl.subgenus_no, pl.subgenus_no, pl.genus_no) as taxon1';
+	$count_rank = 5;
     }
     
     elsif ( $count_what eq 'families' )
     {
 	push @fields, 'ph.family_no as taxon1';
+	$count_rank = 9;
     }
     
     elsif ( $count_what eq 'orders' )
     {
 	push @fields, 'ph.order_no as taxon1';
+	$count_rank = 13;
     }
     
     else
@@ -698,7 +747,7 @@ sub diversity {
     
     # Now fetch all of the rows, and process them into a diversity matrix.
     
-    my $result = $self->generate_diversity_matrix($sth);
+    my $result = $self->generate_diversity_matrix($sth, $count_rank);
     
     $self->list_result($result);
 }
@@ -1110,157 +1159,344 @@ sub process_basic_record {
 
 sub generate_diversity_matrix {
 
-    my ($self, $sth) = @_;
+    my ($self, $sth, $count_rank) = @_;
     
     my $ds = $self->ds;
+    
+    # First figure out which timescale (and thus which list of intervals) we
+    # will be using in order to bin the occurrences.
     
     my $scale_no = 1;	# eventually we will add other scale options
     my %scale_map = ( stage => 5, epoch => 4, period => 3 );
     
     my $scale_level = $self->clean_param('reso');
-    $scale_level = $scale_map{$scale_level} if $scale_level;
-    $scale_level ||= 5;
+    $scale_level = $scale_map{$scale_level} || 5;
     my $level_key = "L$scale_level";
     
-    # We set the $ignore_recent flag if the corresponding parameter was given
-    # a true value.  If it was not specified at all, then we set the flag if
-    # the occurrence selection parameters include a 'late_age' value that is
-    # greater than zero.  That means that recent fossil occurrences have been
-    # skipped, so we set the flag unless told explicitly not to.
+    my $debug_mode = $self->debug;
     
-    my $ignore_recent = $self->clean_param('ignore_recent');
-    my $range_end = $self->{late_age} || 0;
+    # We set the $use_recent flag if the corresponding parameter was given
+    # a true value.
     
-    $ignore_recent //= 1 if $range_end > 0;
+    my $use_recent = $self->clean_param('recent');
+    
+    # Figure out the parameters to use in the binning process.
+    
+    my $timerule = $self->clean_param('timerule') || 'buffer';
+    my $timebuffer = $self->clean_param('timebuffer');
+    
+    # Declare variables to be used in this process.
     
     my $intervals = $PB2::IntervalData::INTERVAL_DATA{$scale_no};
     my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
     my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
     
-    my ($early_age, $late_age, %taxon_first, %taxon_last, %occurrences, %unique_in_bin);
-    my ($imprecise_time_count, $imprecise_taxon_count, %imprecise_interval, %imprecise_taxon, %missing_taxon);
+    my ($starting_age, $ending_age, %taxon_first, %taxon_last, %occurrences, %unique_in_bin);
+    my ($total_count, $imprecise_time_count, $imprecise_taxon_count, $missing_taxon_count, $bin_count);
+    my (%imprecise_interval, %imprecise_taxon);
+    my (%interval_report, %taxon_report);
     
-    # We first scan through the occurrences and record the age (early
-    # boundary) of the interval(s) in which the first and last occurrences of
-    # the taxon appear.  If the taxon is known to be extant, then set the
-    # last occurrence to 0 unless the parameter 'ignore_recent' was given.
+    # Now scan through the occurrences.  We cache the lists of matching
+    # intervals from the selected scale, under the name of the interval(s)
+    # recorded for the occurrence (which may or may not be in the standard
+    # timescale).
     
+    my (%interval_cache);
+    
+ OCCURRENCE:
     while ( my $r = $sth->fetchrow_hashref )
     {
-	my $taxon_no = $r->{taxon1};
-	my $raw_interval = $r->{interval_no};
-	my $interval_no = $intervals->{$raw_interval}{$level_key};
+	$total_count++;
 	
-	# If the interval is less precise than the currently selected
-	# resolution, then we skip this occurrence.
+	# Start by figuring out the interval(s) in which to bin this
+	# occurrence.  Depending upon the value of $timerule, there may be
+	# more than one.
 	
-	unless ( $interval_no )
+	# The first step is to compute the key under which to cache lists of
+	# matching intervals.
+	
+	my $interval_key = $r->{early_name} || 'UNKNOWN';
+	$interval_key .= '-' . $r->{late_name}
+	    if defined $r->{late_name} && defined $r->{early_name} && $r->{late_name} ne $r->{early_name};
+	
+	# If we have already figured out which intervals match this, we're
+	# done.  Otherwise, we must do this computation.
+	
+	my $bins = $interval_cache{$interval_key};
+	
+	my $occ_early = $r->{early_age} + 0;
+	my $occ_late = $r->{late_age} + 0;
+	
+	unless ( $bins )
 	{
-	    $imprecise_interval{$raw_interval}++;
-	    $imprecise_time_count++;
-	    next;
+	    $bins = $interval_cache{$interval_key} = [];
+	    
+	    # Scan the entire list of intervals for the selected timescale,
+	    # looking for those that match according to the value of
+	    # $timerule.
+	    
+	INTERVAL:
+	    foreach my $early_bound ( @$boundary_list )
+	    {
+		# Skip all intervals that do not overlap with the occurrence
+		# range, and stop the scan when we have passed that range.
+		
+		last INTERVAL if $early_bound <= $occ_late;
+		
+		my $int = $boundary_map->{$early_bound};
+		my $late_bound = $int->{late_age};
+		
+		next INTERVAL if $late_bound >= $occ_early;
+		
+		# Skip any interval that is not selected by the specified
+		# timerule.  Note that the 'overlap' timerule includes
+		# everything that overlaps.
+		
+		if ( $timerule eq 'contain' )
+		{
+		    last INTERVAL if $occ_early > $early_bound || $occ_late < $late_bound;
+		}
+		
+		elsif ( $timerule eq 'major' )
+		{
+		    my $overlap;
+		    
+		    if ( $occ_late >= $late_bound )
+		    {
+			if ( $occ_early <= $early_bound )
+			{
+			    $overlap = $occ_early - $occ_late;
+			}
+			
+			else
+			{
+			    $overlap = $early_bound - $occ_late;
+			}
+		    }
+		    
+		    elsif ( $occ_early > $early_bound )
+		    {
+			$overlap = $early_bound - $late_bound;
+		    }
+		    
+		    else
+		    {
+			$overlap = $occ_early - $late_bound;
+		    }
+		    
+		    next INTERVAL if $occ_early != $occ_late && $overlap / ($occ_early - $occ_late) < 0.5;
+		}
+		
+		elsif ( $timerule eq 'buffer' )
+		{
+		    my $buffer = $timebuffer || ($early_bound > 66 ? 12 : 5);
+		    
+		    next INTERVAL if $occ_early > $early_bound + $buffer || 
+			$occ_late < $late_bound - $buffer;
+		}
+		
+		# If we are not skipping this interval, add it to the list.
+		
+		push @$bins, $early_bound;
+		
+		# If we are using timerule 'major' or 'contains', then stop
+		# the scan because each occurrence gets assigned to only one
+		# bin. 
+		
+		last INTERVAL if $timerule eq 'contains' || $timerule eq 'major';
+	    }
 	}
+	
+	# If we did not find at least one bin to assign this occurrence to,
+	# report that fact and go on to the next occurrence.
+	
+	unless ( @$bins )
+	{
+	    $imprecise_time_count++;
+	    $imprecise_interval{$interval_key}++;
+	    if ( $debug_mode )
+	    {
+		$interval_key .= " [$occ_early - $occ_late]";
+		$interval_report{'0 IMPRECISE <= ' . $interval_key}++;
+	    }
+	    next OCCURRENCE;
+	}
+
+	# Otherwise, count this occurrence in each selected bin.  Then adjust
+	# the range of bins that we are reporting to reflect this occurrence.
+	
+	foreach my $b ( @$bins )
+	{
+	    $occurrences{$b}++;
+	    $bin_count++;
+	}
+	
+	$starting_age = $bins->[0] unless defined $starting_age && $starting_age >= $bins->[0];
+	$ending_age = $bins->[-1] unless defined $ending_age && $ending_age <= $bins->[-1];
+	
+	# If we are in debug mode, also count it in the %interval_report hash.
+	
+	if ( $debug_mode )
+	{
+	    my $report_key = join(',', @$bins) . ' <= ' . $interval_key . " [$occ_early - $occ_late]";
+	    $interval_report{$report_key}++;
+	}
+	
+	# Now check to see if the occurrence is taxonomically identified
+	# precisely enough to count further.
+	
+	my $taxon_no = $r->{taxon1};
 	
 	unless ( $taxon_no )
 	{
-	    my $synonym_no = $r->{synonym_no} || 0;
-	    $imprecise_taxon{$synonym_no}++;
-	    $imprecise_taxon_count++;
+	    $taxon_report{$r->{genus_name}}++;
+	    
+	    if ( $r->{rank} > $count_rank )
+	    {
+		$imprecise_taxon_count++;
+	    }
+	    else
+	    {
+		$missing_taxon_count++;
+	    }
+	    
 	    next;
 	}
 	
-	my $interval_age = $intervals->{$interval_no}{early_age};
+	# If this is the oldest occurrence of the taxon that we have found so
+	# far, mark it as originating in the first (oldest) matching bin.
 	
-	unless ( defined $taxon_first{$taxon_no} && $taxon_first{$taxon_no} >= $interval_age )
+	unless ( defined $taxon_first{$taxon_no} && $taxon_first{$taxon_no} >= $bins->[0] )
 	{
-	    $taxon_first{$taxon_no} = $interval_age;
+	    $taxon_first{$taxon_no} = $bins->[0];
 	}
 	
-	if ( $r->{is_extant} && ! $ignore_recent )
+	# If this is the youngest occurrence of the taxon that we have found
+	# so far, mark it as ending in the last (youngest) matching bin.
+	
+	unless ( defined $taxon_last{$taxon_no} && $taxon_last{$taxon_no} <= $bins->[-1] )
+	{
+	    $taxon_last{$taxon_no} = $bins->[-1];
+	}
+	
+	# If the 'recent' parameter was given, and the taxon is known to be
+	# extant, then mark it as ending at the present (0 Ma).
+	
+	if ( $use_recent && $r->{is_extant} )
 	{
 	    $taxon_last{$taxon_no} = 0;
 	}
 	
-	unless ( defined $taxon_last{$taxon_no} && $taxon_last{$taxon_no} <= $interval_age )
+	# Now count the taxon in each selected bin.
+	
+	foreach my $b ( @$bins )
 	{
-	    $taxon_last{$taxon_no} = $interval_age;
+	    $unique_in_bin{$b}{$taxon_no} ||= 1;
 	}
-	
-	$early_age = $interval_age unless defined $early_age && $early_age >= $interval_age;
-	$late_age = $interval_age unless defined $late_age && $late_age <= $interval_age;
-	
-	$occurrences{$interval_age}++;
-	$unique_in_bin{$interval_age}{$taxon_no} ||= 1;
     }
     
-    # Now we scan through the interval boundary list for the scale and level
-    # that have been selected, and initialize the counts for every interval in
-    # the range of occurrence.
+    # At this point we are done scanning the occurrence list.  Unless
+    # $starting_age has a value, we don't have any results.
     
-    my (%originations, %extinctions, %singletons, %rangethroughs);
-    my (@boundaries, %boundaries, $is_last);
+    unless ( $starting_age )
+    {
+	return;
+    }
+    
+    # Now we need to compute the four diversity statistics defined by Foote:
+    # XFt, XFL, XbL, Xbt.  So we start by running through the bins and
+    # initializing the counts.  We also keep track of all the bins between
+    # $starting_age and $ending_age.
+    
+    my (%X_Ft, %X_FL, %X_bL, %X_bt);
+    my (@bins, $is_last);
     
     foreach my $age ( @$boundary_list )
     {
-	next if $age > $early_age;
+	next if $age > $starting_age;
+	last if $age < $ending_age;
 	
-	push @boundaries, $age;
+	push @bins, $age;
 	
-	$originations{$age} = 0;
-	$extinctions{$age} = 0;
-	$singletons{$age} = 0;
-	$rangethroughs{$age} = 0;
-	
-	last if $is_last;
-	$is_last = 1 if $age < $late_age;
+	$X_Ft{$age} = 0;
+	$X_FL{$age} = 0;
+	$X_bL{$age} = 0;
+	$X_bt{$age} = 0;
     }
     
-    # Now we scan through the taxa.  For each one, we scan through the
-    # relevant intervals and mark the appropriate counts.  This step takes
-    # time o(MN) where M is the number of taxa and N the number of intervals.
+    # Then we scan through the taxa.  For each one, we scan through the bins
+    # from the taxon's origination to its ending and mark the appropriate
+    # counts.  This step takes time o(MN) where M is the number of taxa and N
+    # the number of intervals.
     
     foreach my $taxon_no ( keys %taxon_first )
     {
-	my $first_age = $taxon_first{$taxon_no};
-	my $last_age = $taxon_last{$taxon_no};
+	my $first_bin = $taxon_first{$taxon_no};
+	my $last_bin = $taxon_last{$taxon_no};
 	
 	# If the interval of first appearance is the same as the interval of
 	# last appearance, then this is a singleton.
 	
-	if ( $first_age == $last_age )
+	if ( $first_bin == $last_bin )
 	{
-	    $singletons{$first_age}++;
+	    $X_FL{$first_bin}++;
 	    next;
 	}
 	
-	# Otherwise, we mark the intervals of origination and extinction, and
-	# then scan through the range of intervals between them to mark
-	# rangethroughs.  If the last appearance is the same as the last
-	# interval in the range, we cannot conclude anything about its extinction.
+	# Otherwise, we mark the bin where the taxon starts and the bin where
+	# it ends, and then scan through the bins between to mark
+	# rangethroughs.
 	
-	$originations{$first_age}++;
-	$extinctions{$last_age}++ if $last_age > $range_end;
+	$X_Ft{$first_bin}++;
+	$X_bL{$last_bin}++;
 	
-	foreach my $age (@boundaries)
+	foreach my $bin (@bins)
 	{
-	    last if $age <= $last_age;
-	    $rangethroughs{$age}++ if $age < $first_age;
+	    last if $bin <= $last_bin;
+	    $X_bt{$bin}++ if $bin < $first_bin;
 	}
     }
     
-    # Now we scan through the ages again and prepare the data records.
+    # If we are in debug mode, report the interval assignments.
+    
+    if ( $self->debug ) 
+    {
+	# $self->add_warning("Skipped $imprecise_time_count occurrences because of imprecise temporal locality:")
+	#     if $imprecise_time_count;
+	
+	# foreach my $key ( sort { $b cmp $a } keys %interval_report )
+	# {
+	#     $self->add_warning("    $key ($interval_report{$key})");
+	# }
+	
+	foreach my $key ( sort { $a cmp $b } keys %taxon_report )
+	{
+	    $self->add_warning("    $key ($taxon_report{$key})");
+	}
+    }
+    
+    # Add a summary record with counts.
+    
+    $self->summary_data({ total_count => $total_count,
+			  bin_count => $bin_count,
+			  imprecise_time => $imprecise_time_count,
+			  imprecise_taxon => $imprecise_taxon_count,
+			  missing_taxon => $missing_taxon_count });
+    
+    # Now we scan through the bins again and prepare the data records.
     
     my @result;
     
-    foreach my $age (@boundaries)
+    foreach my $age (@bins)
     {
 	my $r = { interval_no => $boundary_map->{$age}{interval_no},
 		  interval_name => $boundary_map->{$age}{interval_name},
 		  early_age => $age,
-		  originations => $originations{$age},
-		  extinctions => $extinctions{$age},
-		  singletons => $singletons{$age},
-		  range_throughs => $rangethroughs{$age},
+		  late_age => $boundary_map->{$age}{late_age},
+		  originations => $X_Ft{$age},
+		  extinctions => $X_bL{$age},
+		  singletons => $X_FL{$age},
+		  range_throughs => $X_bt{$age},
 		  sampled_in_bin => scalar(keys %{$unique_in_bin{$age}}) || 0,
 		  n_occs => $occurrences{$age} || 0 };
 	
