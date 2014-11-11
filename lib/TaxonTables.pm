@@ -3313,13 +3313,13 @@ sub computePhylogeny {
     }
     
     # Then link this table up to the main table.  We start by setting
-    # ints_no = orig_no for each row in $TREE_WORK that corresponds to a row in
+    # ints_no = synonym_no for each row in $TREE_WORK that corresponds to a row in
     # $INTS_WORK.
     
     logMessage(2, "    linking to tree table...");
     
-    $SQL_STRING = "UPDATE $TREE_WORK as t join $INTS_WORK as k on t.orig_no = k.ints_no
-		   SET t.ints_no = t.orig_no";
+    $SQL_STRING = "UPDATE $TREE_WORK as t join $INTS_WORK as k on t.synonym_no = k.ints_no
+		   SET t.ints_no = t.synonym_no";
     
     $result = $dbh->do($SQL_STRING);
     

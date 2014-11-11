@@ -642,6 +642,19 @@ sub diversity {
     
     PB2::IntervalData->read_interval_data($dbh);
     
+    # Set up the diversity-computation options
+    
+    my $options = {};
+    
+    $options->{timerule} = $self->clean_param('timerule') || 'buffer';
+    $options->{timebuffer} = $self->clean_param('timebuffer');
+    
+    my $reso_param = $self->clean_param('reso');
+    
+    my %level_map = ( stage => 5, epoch => 4, period => 3 );
+    
+    $options->{timereso} = $level_map{$reso_param} || 5;
+    
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
@@ -653,10 +666,6 @@ sub diversity {
     push @filters, "c.access_level = 0";
     
     my $filter_string = join(' and ', @filters);
-    
-    # If we were asked to count rows, modify the query accordingly
-    
-    my $calc = $self->sql_count_clause;
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -676,6 +685,7 @@ sub diversity {
     {
 	$tables->{v} = 1;
 	push @fields, 'v.is_extant';
+	$options->{use_recent} = 1;
     }
     
     my $count_what = $self->clean_param('count') || 'genera';
@@ -685,32 +695,136 @@ sub diversity {
     
     if ( $count_what eq 'species' )
     {
-	push @fields, 't.orig_no as taxon1';
-	$count_rank = 3;
+	push @fields, 't.synonym_no as taxon1';
+	$options->{count_rank} = 3;
     }
     
     elsif ( $count_what eq 'genera' )
     {
 	push @fields, 'pl.genus_no as taxon1';
-	$count_rank = 5;
+	$options->{count_rank} = 5;
     }
     
     elsif ( $count_what eq 'genera_plus' )
     {
 	push @fields, 'if(pl.subgenus_no, pl.subgenus_no, pl.genus_no) as taxon1';
-	$count_rank = 5;
+	$options->{count_rank} = 5;
     }
     
     elsif ( $count_what eq 'families' )
     {
 	push @fields, 'ph.family_no as taxon1';
-	$count_rank = 9;
+	$options->{count_rank} = 9;
     }
     
     elsif ( $count_what eq 'orders' )
     {
 	push @fields, 'ph.order_no as taxon1';
-	$count_rank = 13;
+	$options->{count_rank} = 13;
+    }
+    
+    else
+    {
+	die "400 unknown value '$count_what' for parameter 'count'\n";
+    }
+    
+    my $fields = join(', ', @fields);
+    
+    # Determine which extra tables, if any, must be joined to the query.  Then
+    # construct the query.
+    
+    my $join_list = $self->generateJoinList('c', $tables);
+    
+    my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
+    
+    $self->{main_sql} = "
+	SELECT $fields
+	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+		$join_list
+        WHERE $filter_string
+	GROUP BY o.occurrence_no $extra_group";
+    
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    
+    # Then prepare and execute the main query.
+    
+    my $sth = $dbh->prepare($self->{main_sql});
+    $sth->execute();
+    
+    # Now fetch all of the rows, and process them into a diversity matrix.
+    
+    my $result = $self->generate_diversity_matrix($sth, $options);
+    
+    $self->list_result($result);
+}
+
+
+# phylogeny ( )
+# 
+# Like 'list', but processes the resulting list of occurrences into a
+# phylogenetic tree.
+
+sub phylogeny {
+
+    my ($self) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $self->get_connection;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    my $tables = $self->tables_hash;
+    
+    $tables->{ph} = 1;
+    $tables->{t} = 1;
+    $tables->{ts} = 1;
+    $tables->{pl} = 1;
+    
+    # Set up the phylogeny-computation options
+    
+    my $options = {};
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters = PB2::CollectionData::generateMainFilters($self, 'list', 'c', $tables);
+    push @filters, PB2::OccurrenceData::generateOccFilters($self, $tables);
+    push @filters, PB2::CommonData::generate_crmod_filters($self, 'o', $tables);
+    push @filters, PB2::CommonData::generate_ent_filters($self, 'o', $tables);
+    
+    push @filters, "c.access_level = 0";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    my @fields = ('o.occurrence_no', 't.rank', 'ts.name', 'o.genus_name', 'ph.class', 'ph.order',
+		  'ph.family', 'pl.genus', 'pl.subgenus', 't.synonym_no');
+    
+    my $resolution = $self->clean_param('reso') || 'families';
+    
+    if ( $resolution eq 'genera' )
+    {
+	#push @fields, 'ph.order', 'ph.family', 'pl.genus_no as count_taxon';
+	$options->{rank_reso} = 5;
+    }
+    
+    elsif ( $count_what eq 'genera_plus' )
+    {
+	#push @fields, 'ph.order', 'ph.family', 'if(pl.subgenus_no, pl.subgenus_no, pl.genus_no) as count_taxon';
+	$options->{rank_reso} = 5;
+    }
+    
+    elsif ( $count_what eq 'families' )
+    {
+	#push @fields, 'ph.order', 'ph.family_no as count_taxon';
+	$options->{rank_reso} = 9;
+    }
+    
+    elsif ( $count_what eq 'orders' )
+    {
+	#push @fields, 'ph.order_no as count_taxon';
+	$options->{rank_reso} = 13;
     }
     
     else
@@ -741,13 +855,9 @@ sub diversity {
     my $sth = $dbh->prepare($self->{main_sql});
     $sth->execute();
     
-    # If we were asked to get the count, then do so
+    # Now fetch all of the rows, and process them into a phylogenetic tree.
     
-    $self->sql_count_rows;
-    
-    # Now fetch all of the rows, and process them into a diversity matrix.
-    
-    my $result = $self->generate_diversity_matrix($sth, $count_rank);
+    my $result = $self->generate_phylogeny($sth, $options);
     
     $self->list_result($result);
 }
@@ -1061,7 +1171,7 @@ sub generateJoinList {
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
 	if $tables->{t} || $tables->{tf};
     $join_list .= "LEFT JOIN taxon_trees as ts on ts.orig_no = t.synonym_no\n"
-	if $tables->{t};
+	if $tables->{ts};
     $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = ts.orig_no\n"
 	if $tables->{pl};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = ts.ints_no\n"
@@ -1159,31 +1269,22 @@ sub process_basic_record {
 
 sub generate_diversity_matrix {
 
-    my ($self, $sth, $count_rank) = @_;
+    my ($self, $sth, $options) = @_;
     
     my $ds = $self->ds;
     
     # First figure out which timescale (and thus which list of intervals) we
     # will be using in order to bin the occurrences.
     
-    my $scale_no = 1;	# eventually we will add other scale options
-    my %scale_map = ( stage => 5, epoch => 4, period => 3 );
-    
-    my $scale_level = $self->clean_param('reso');
-    $scale_level = $scale_map{$scale_level} || 5;
-    my $level_key = "L$scale_level";
+    my $scale_no = $options->{scale_no} || 1;	# eventually we will add other scale options
+    my $scale_level = $options->{timereso} || 5;
     
     my $debug_mode = $self->debug;
     
-    # We set the $use_recent flag if the corresponding parameter was given
-    # a true value.
-    
-    my $use_recent = $self->clean_param('recent');
-    
     # Figure out the parameters to use in the binning process.
     
-    my $timerule = $self->clean_param('timerule') || 'buffer';
-    my $timebuffer = $self->clean_param('timebuffer');
+    my $timerule = $options->{timerule};
+    my $timebuffer = $options->{timebuffer};
     
     # Declare variables to be used in this process.
     
@@ -1351,7 +1452,7 @@ sub generate_diversity_matrix {
 	{
 	    $taxon_report{$r->{genus_name}}++;
 	    
-	    if ( $r->{rank} > $count_rank )
+	    if ( $r->{rank} > $options->{count_rank} )
 	    {
 		$imprecise_taxon_count++;
 	    }
@@ -1379,10 +1480,10 @@ sub generate_diversity_matrix {
 	    $taxon_last{$taxon_no} = $bins->[-1];
 	}
 	
-	# If the 'recent' parameter was given, and the taxon is known to be
+	# If the 'use_recent' option was given, and the taxon is known to be
 	# extant, then mark it as ending at the present (0 Ma).
 	
-	if ( $use_recent && $r->{is_extant} )
+	if ( $options->{use_recent} && $r->{is_extant} )
 	{
 	    $taxon_last{$taxon_no} = 0;
 	}
@@ -1504,6 +1605,153 @@ sub generate_diversity_matrix {
     }
     
     $self->list_result(@result);
+}
+
+
+sub generate_phylogeny {
+
+    my ($self, $sth, $options) = @_;
+    
+    my $ds = $self->ds;
+    
+    my (%class_occs, %order_occs, %family_occs, %genus_occs, %species_occs);
+    #my (%class_chld, %order_chld, %family_chld, %genus_chld, %species_chld);
+    
+    my $missing_label = 'UNSPECIFIED';
+    
+    # First figure out the level to which we will be resolving the phylogeny.
+    
+    my $reso = $options->{reso} || 9;
+    my $count_rank = $options->{count_rank};
+    my $promote = $options->{promote_subgenera};
+    
+    # Then go through the occurrences one by one.
+    
+ OCCURRENCE:
+    while ( my $r = $sth->fetchrow_hashref )
+    {
+	$total_count++;
+	
+	# First figure out the various counts we will be making.
+	
+	my ($species, $subgenus, $genus, $family, $order, $class);
+	
+	$class = $r->{class} || $missing_label;
+	$order = $r->{order} || $missing_label;
+	$family = $r->{family} || $missing_label;
+	
+	$genus = $r->{subgenus} if $promote;
+	$genus ||= $r->{genus} || $missing_label;
+	
+	$class_occs{$class}++;
+	$order_occs{$class}{$order}++;
+	$family_occs{$class}{$order}{$family}++ if $count_rank <= 9;
+	$genus_occs{$class}{$order}{$family}{$genus}++ if $count_rank <= 5;
+	$species_occs{$class}{$order}{$family}{$genus}{$species}++ if $count_rank <= 3;
+    }
+    
+    # Use the count hashes to generate a list of trees, one for each class.
+    # We will then recursively traverse these trees to generate the output.
+    
+    $reso = 17 if $count_rank == 13 && $reso < 17;
+    $reso = 13 if $count_rank == 9 && $reso < 13;
+    $reso = 9 if $count_rank == 5 && $reso < 9;
+    $reso = 5 if $count_rank == 3 && $reso < 5;
+    
+    my (%root);
+    
+ CLASS:
+    foreach my $class ( keys $class )
+    {
+	my $class_node = { occs => $class_occs{$class}, 
+			   chld => $order_occs{$class} };
+	$class_node->{orders} = 0;
+	$class_node->{families} = 0 if $count_rank <= 9;
+	$class_node->{genera} = 0 if $count_rank <= 5;
+	$class_node->{species} = 0 if $count_rank <= 3;
+	
+	$root{$class} = $class_node;
+	
+    ORDER:
+	foreach my $order ( keys %{$order_occs{$class}} )
+	{
+	    if ( $order ne $missing_label )
+	    {
+		$class_node->{orders}++;
+	    }
+	    
+	    next ORDER unless $count_rank <= 9;
+	    
+	    my $order_node;
+	    
+	    if ( $reso <= 13 )
+	    {
+		$order_node = { occs => $order_occs{$class}{$order},
+				chld => $family_occs{$class}{$order} };
+		$order_node->{families} = 0;
+		$order_node->{genera} = 0 if $count_rank <= 5;
+		$order_node->{species} = 0 if $count_rank <= 3;
+	    }
+	    
+	FAMILY:
+	    foreach my $family ( keys %{$family_occs{$class}{$order}} )
+	    {
+		if ( $family ne $missing_label )
+		{
+		    $class_node->{families}++;
+		    $order_node->{families}++ if $order_node;
+		}
+		
+		next FAMILY unless $count_rank <= 5;
+		
+		my $family_node;
+		
+		if ( $reso <= 9 )
+		{
+		    $family_node = { occs => $famiy_occs{$class}{$order}{$family},
+				     chld => $genus_occs{$class}{$order}{$family} };
+		    $family_node->{genera} = 0;
+		    $family_node->{species} = 0 if $count_rank <= 3;
+		}
+		
+	    GENUS:
+		foreach my $genus ( keys %{$genus_occs{$class}{$order}{$family}} )
+		{
+		    if ( $genus ne $missing_label )
+		    {
+			$class_node->{genera}++;
+			$order_node->{genera}++ if $order_node;
+			$family_node->{genera}++ if $family_node;
+		    }
+		    
+		    next GENUS unless $count_rank <= 3;
+		    
+		    my $genus_node;
+		    
+		    if ( $reso <= 5 )
+		    {
+			$genus_node = { occs => $genus_occs{$class}{$order}{$family}{$genus},
+					chld => $genus_occs{$class}{$order}{$family}{$genus} };
+			
+			$genus_node->{species} = 0 if $count_rank <= 3;
+		    }
+		    
+		SPECIES:
+		   foreach my $species ( keys %{$species_occs{$class}{$order}{$family}{$genus}} )
+		   {
+		       if ( $species ne $missing_label )
+		       {
+			   $class_node->{species}++;
+			   $order_node->{species}++ if $order_node;
+			   $family_node->{species}++ if $family_node;
+			   $genus_node->{species}++ if $genus_node;
+		       }
+		   }
+		}
+	    }
+	}
+    }
+    
 }
 
 1;
