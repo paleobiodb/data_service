@@ -1033,7 +1033,7 @@ sub get_taxa_by_name {
     
     if ( $options->{return} eq 'range' )
     {
-	$fields = "t.name, t.lft, t.rgt";
+	$fields = "t.orig_no, t.name, t.lft, t.rgt";
     }
     
     elsif ( $options->{return} eq 'id' )
@@ -1043,7 +1043,7 @@ sub get_taxa_by_name {
     
     else
     {
-	$fields = "s.taxon_name as match_name, t.name as taxon_name, t.rank as taxon_rank, t.status, v.taxon_size, t.orig_no, t.trad_no as taxon_no";
+	$fields = "s.taxon_name as match_name, t.orig_no, t.name as taxon_name, t.rank as taxon_rank, t.status, v.taxon_size, t.orig_no, t.trad_no as taxon_no";
     }
     
     # The names might be given as a list, a hash, or a single string (in which

@@ -279,20 +279,55 @@ sub initialize {
 	    "been placed in their proper family, so occurrences in these genera",
 	    "will be skipped if you are counting families.");
     
+    # The following block specifies the output for phylogenies.
+    
+    $ds->define_block('1.2:occs:phylogeny' =>
+	{ output => 'taxon_no', com_name => 'oid' },
+	    "The identifier of the taxon represented by this record",
+	{ output => 'parent_no', com_name => 'pid' },
+	    "The identifier of the parent taxon.  You can use this field to assemble",
+	    "these records into one or more taxonomic trees.  A value of 0",
+	    "indicates a root of one of these trees.  By default, records representing",
+	    "classes have a value of 0 in this field.",
+	{ output => 'taxon_rank', com_name => 'rnk' },
+	    "The rank of the taxon represented by this record",
+	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ output => 'taxon_name', com_name => 'nam' },
+	    "The name of the taxon represented by this record",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The number of occurrences of this taxon (or any of its subtaxa) in the",
+	    "set of fossil occurrences being analyzed",
+	{ output => 'n_orders', com_name => 'odc' },
+	    "The number of orders from within this taxon that appear in the set of",
+	    "fossil occurrences being analyzed",
+	{ output => 'n_families', com_name => 'fmc' },
+	    "The number of families from within this taxon that appear in the set of",
+	    "fossil occurrences being analyzed",
+	{ output => 'n_genera', com_name => 'gnc' },
+	    "The number of genera from within this taxon that appear in the set of",
+	    "fossil occurrences being analyzed",
+	{ output => 'n_species', com_name => 'spc' },
+	    "The number of species from within this taxon that appear in the set of",
+	    "fossil occurrences being analyzed");
+    
     # Then define parameter rulesets to validate the parameters passed to the
     # operations implemented by this class.
     
     $ds->define_set('1.2:occs:div_count' =>
 	{ value => 'species' },
-	    "Count species",
+	    "Count species.",
 	{ value => 'genera' },
-	    "Count genera",
+	    "Count genera.  You can also use the value C<genus>.",
+	{ value => 'genus', undocumented => 1 },
 	{ value => 'genera_plus' },
-	    "Count genera, with subgenera promoted to genera",
+	    "Count genera, with subgenera promoted to genera.  You can also use the value C<genus_plus>.",
+	{ value => 'genus_plus', undocumented => 1 },
 	{ value => 'families' },
-	    "Count families",
+	    "Count families.  You can also use the value C<family>.",
+	{ value => 'family', undocumented => 1 },
 	{ value => 'orders' },
-	    "Count orders");
+	    "Count orders.  You can also use the value C<order>.",
+	{ value => 'order', undocumented => 1 });
     
     $ds->define_set('1.2:occs:div_reso' =>
 	{ value => 'stage', maps_to => 5 },
@@ -432,6 +467,32 @@ sub initialize {
 	{ allow => '1.2:main_selector' },
 	#{ mandatory => 'base_name', errmsg => 'You must include the parameter "base_name", ' .
 	#      'in order to specify the taxonomic range to analyze.' },
+	{ allow => '1.2:common:select_crmod' },
+	{ allow => '1.2:common:select_ent' },
+	{ require_any => ['1.2:main_selector',
+			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:phylo_params' =>
+	{ param => 'count', valid => '1.2:occs:div_count' },
+	    "This parameter specifies the taxonomic level at which to count.  If not",
+	    "specified, it defaults to C<genera>.  The accepted values are:",
+	{ param => 'subgenera', valid => FLAG_VALUE },
+	    "You can use this parameter as a shortcut, equivalent to specifying",
+	    "C<count=genera_plus>.  Just include its name, no value is needed.",
+	{ param => 'reso', valid => ANY_VALUE },
+	    "This parameter specifies the temporal resolution at which to count.  If not",
+	    "specified, it defaults to C<families>.  Accepted values are:");
+    
+    $ds->define_ruleset('1.2:occs:phylogeny' =>
+	"The following parameters specify what to count and at what taxonomic resolution:",
+	{ allow => '1.2:occs:phylo_params' }, 
+        ">>The following parameters select which occurrences to analyze.",
+	"Except as noted below, you may use these in any combination.",
+	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
+	"the exact list of occurrences used to compute this phylogeny.",
+	{ allow => '1.2:main_selector' },
 	{ allow => '1.2:common:select_crmod' },
 	{ allow => '1.2:common:select_ent' },
 	{ require_any => ['1.2:main_selector',
@@ -779,12 +840,98 @@ sub phylogeny {
     
     $tables->{ph} = 1;
     $tables->{t} = 1;
-    $tables->{ts} = 1;
+    #$tables->{ts} = 1;
     $tables->{pl} = 1;
     
     # Set up the phylogeny-computation options
     
     my $options = {};
+    
+    my $full = $self->clean_param('full');
+    my $resolution = $self->clean_param('reso') || 'families';
+    my $count_what = $self->clean_param('count') || 'genera';
+    
+    my $get_rank;
+    
+    # Determine the necessary set of query fields.
+    
+    my @fields = ('o.occurrence_no', 't.rank', 't.ints_no', 'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
+    
+    # Add the fields necessary for counting down to the specified rank
+    
+    if ( $count_what eq 'species' )
+    {
+	push @fields, 'ph.family_no', 'pl.genus_no', 'pl.subgenus_no', 'pl.species_no';
+	$options->{count_rank} = 3;
+    }
+    
+    elsif ( $count_what eq 'genera' || $count_what eq 'genus' )
+    {
+	push @fields, 'ph.family_no', 'pl.genus_no';
+	$options->{count_rank} = 5;
+    }
+    
+    elsif ( $count_what eq 'genera_plus' || $count_what eq 'genus_plus' )
+    {
+	push @fields, 'ph.family_no', 'pl.genus_no', 'pl.subgenus_no';
+	$options->{count_rank} = 5;
+	$options->{promote_subgenera} = 1;
+    }
+    
+    elsif ( $count_what eq 'families' || $count_what eq 'family' )
+    {
+	push @fields, 'ph.family_no';
+	$options->{count_rank} = 9;
+    }
+    
+    elsif ( $count_what eq 'orders' || $count_what eq 'order' )
+    {
+	$options->{count_rank} = 13;
+    }
+    
+    else
+    {
+	die "400 unknown value '$count_what' for parameter 'count'\n";
+    }
+    
+    # Add the fields necessary for resolving the phylogeny down to the
+    # specified rank
+    
+    if ( $resolution eq 'species' )
+    {
+	push @fields, 'ph.family', 'ph.genus', 'ph.subgenus', 'ph.species' unless $full;
+	$options->{reso_rank} = 3;
+    }
+    
+    elsif ( $resolution eq 'subgenera' || $resolution eq 'subgenus' )
+    {
+	push @fields, 'ph.family', 'pl.genus', 'pl.subgenus' unless $full;
+	$options->{reso_rank} = 4;
+    }
+    
+    elsif ( $resolution eq 'genera' || $resolution eq 'genus' )
+    {
+	push @fields, 'ph.family', 'pl.genus' unless $full;
+	$options->{reso_rank} = 5;
+    }
+    
+    elsif ( $resolution eq 'families' || $resolution eq 'family' )
+    {
+	push @fields, 'ph.family' unless $full;
+	$options->{reso_rank} = 9;
+    }
+    
+    elsif ( $resolution eq 'orders' || $resolution eq 'order' )
+    {
+	$options->{reso_rank} = 13;
+    }
+    
+    else
+    {
+	die "400 unknown value '$resolution' for parameter 'reso'\n";
+    }
+    
+    my $fields = join(', ', @fields);
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
@@ -798,42 +945,6 @@ sub phylogeny {
     
     my $filter_string = join(' and ', @filters);
     
-    my @fields = ('o.occurrence_no', 't.rank', 'ts.name', 'o.genus_name', 'ph.class', 'ph.order',
-		  'ph.family', 'pl.genus', 'pl.subgenus', 't.synonym_no');
-    
-    my $resolution = $self->clean_param('reso') || 'families';
-    
-    if ( $resolution eq 'genera' )
-    {
-	#push @fields, 'ph.order', 'ph.family', 'pl.genus_no as count_taxon';
-	$options->{rank_reso} = 5;
-    }
-    
-    elsif ( $count_what eq 'genera_plus' )
-    {
-	#push @fields, 'ph.order', 'ph.family', 'if(pl.subgenus_no, pl.subgenus_no, pl.genus_no) as count_taxon';
-	$options->{rank_reso} = 5;
-    }
-    
-    elsif ( $count_what eq 'families' )
-    {
-	#push @fields, 'ph.order', 'ph.family_no as count_taxon';
-	$options->{rank_reso} = 9;
-    }
-    
-    elsif ( $count_what eq 'orders' )
-    {
-	#push @fields, 'ph.order_no as count_taxon';
-	$options->{rank_reso} = 13;
-    }
-    
-    else
-    {
-	die "400 unknown value '$count_what' for parameter 'count'\n";
-    }
-    
-    my $fields = join(', ', @fields);
-    
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
     
@@ -842,7 +953,7 @@ sub phylogeny {
     my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
     
     $self->{main_sql} = "
-	SELECT $calc $fields
+	SELECT $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
@@ -1172,9 +1283,9 @@ sub generateJoinList {
 	if $tables->{t} || $tables->{tf};
     $join_list .= "LEFT JOIN taxon_trees as ts on ts.orig_no = t.synonym_no\n"
 	if $tables->{ts};
-    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = ts.orig_no\n"
+    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = t.orig_no\n"
 	if $tables->{pl};
-    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = ts.ints_no\n"
+    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
 	if $tables->{ph};
     $join_list .= "LEFT JOIN taxon_attrs as v on v.orig_no = t.synonym_no\n"
 	if $tables->{v};
@@ -1608,150 +1719,248 @@ sub generate_diversity_matrix {
 }
 
 
+# The following variables are visible to all of the subroutines in the
+# remainder of this file.  This is done to reduce the number of parameters
+# that must be passed to &count_subtaxa and &add_result_record.
+
+our ($reso_rank, $count_rank, %taxon_name, %uns_count, @result);
+
+
+
 sub generate_phylogeny {
 
     my ($self, $sth, $options) = @_;
     
     my $ds = $self->ds;
     
-    my (%class_occs, %order_occs, %family_occs, %genus_occs, %species_occs);
-    #my (%class_chld, %order_chld, %family_chld, %genus_chld, %species_chld);
-    
-    my $missing_label = 'UNSPECIFIED';
-    
     # First figure out the level to which we will be resolving the phylogeny.
     
-    my $reso = $options->{reso} || 9;
-    my $count_rank = $options->{count_rank};
+    $reso_rank = $options->{reso_rank} || 9;		# visible to called subroutines
+    $count_rank = $options->{count_rank} || 5;		# visible to called subroutines
     my $promote = $options->{promote_subgenera};
+    my $full = $options->{full};
     
-    # Then go through the occurrences one by one.
+    # Make sure we aren't trying to resolve more finely than we are counting.
+    
+    $reso_rank = $count_rank if $reso_rank < $count_rank;
+    
+    # Delete unnecessary output fields, so they won't appear as empty columns
+    # in text-format output.
+    
+    $self->delete_output_field('n_species') if $count_rank > 3;
+    $self->delete_output_field('n_genera') if $count_rank > 5;
+    $self->delete_output_field('n_families') if $count_rank > 9;
+    
+    # Then go through the occurrences one by one, putting together a tree
+    # and counting at the specified taxonomic levels.
+    
+    my (%occ_tree, $total_count);
+    local %taxon_name = ( 0 => '~' );
     
  OCCURRENCE:
     while ( my $r = $sth->fetchrow_hashref )
     {
 	$total_count++;
 	
-	# First figure out the various counts we will be making.
+	# First pin down the various tree levels.
 	
-	my ($species, $subgenus, $genus, $family, $order, $class);
+	my $rank = $r->{rank};
 	
-	$class = $r->{class} || $missing_label;
-	$order = $r->{order} || $missing_label;
-	$family = $r->{family} || $missing_label;
+	my ($species_no, $subgenus_no, $genus_no, $family_no, $order_no, $class_no);
 	
-	$genus = $r->{subgenus} if $promote;
-	$genus ||= $r->{genus} || $missing_label;
+	$class_no = $r->{class_no} || 0;
+	$order_no = $r->{order_no} || 0;
+	$family_no = $r->{family_no} || 0;
 	
-	$class_occs{$class}++;
-	$order_occs{$class}{$order}++;
-	$family_occs{$class}{$order}{$family}++ if $count_rank <= 9;
-	$genus_occs{$class}{$order}{$family}{$genus}++ if $count_rank <= 5;
-	$species_occs{$class}{$order}{$family}{$genus}{$species}++ if $count_rank <= 3;
-    }
-    
-    # Use the count hashes to generate a list of trees, one for each class.
-    # We will then recursively traverse these trees to generate the output.
-    
-    $reso = 17 if $count_rank == 13 && $reso < 17;
-    $reso = 13 if $count_rank == 9 && $reso < 13;
-    $reso = 9 if $count_rank == 5 && $reso < 9;
-    $reso = 5 if $count_rank == 3 && $reso < 5;
-    
-    my (%root);
-    
- CLASS:
-    foreach my $class ( keys $class )
-    {
-	my $class_node = { occs => $class_occs{$class}, 
-			   chld => $order_occs{$class} };
-	$class_node->{orders} = 0;
-	$class_node->{families} = 0 if $count_rank <= 9;
-	$class_node->{genera} = 0 if $count_rank <= 5;
-	$class_node->{species} = 0 if $count_rank <= 3;
+	$genus_no = $r->{subgenus_no} if $promote;
+	$genus_no ||= $r->{genus_no} || 0;
 	
-	$root{$class} = $class_node;
+	$species_no = $r->{species_no} || 0;
 	
-    ORDER:
-	foreach my $order ( keys %{$order_occs{$class}} )
+	# Then create any tree nodes that don't already exist, and increment
+	# the occurrence counts at all levels.
+	
+	my ($class_node, $order_node, $family_node, $genus_node, $species_node);
+	
+	$class_node = $occ_tree{$class_no} //= { rank => 17, occs => 0 };
+	$class_node->{occs}++;
+	$taxon_name{$class_no} //= $r->{class} if !$full && $r->{class};
+	
+	$order_node = $class_node->{chld}{$order_no} //=  { rank => 13, occs => 0 };
+	$order_node->{occs}++;
+	$taxon_name{$order_no} //= $r->{order} if !$full && $r->{order};
+	
+	if ( $count_rank <= 9 && $rank <= 9 )
 	{
-	    if ( $order ne $missing_label )
+	    $family_node = $order_node->{chld}{$family_no} //= { rank => 9, occs => 0 };
+	    $family_node->{occs}++;
+	    $taxon_name{$family_no} //= $r->{family} if !$full && $r->{family};
+	    
+	    if ( $count_rank <= 5 && $rank <= 5 )
 	    {
-		$class_node->{orders}++;
-	    }
-	    
-	    next ORDER unless $count_rank <= 9;
-	    
-	    my $order_node;
-	    
-	    if ( $reso <= 13 )
-	    {
-		$order_node = { occs => $order_occs{$class}{$order},
-				chld => $family_occs{$class}{$order} };
-		$order_node->{families} = 0;
-		$order_node->{genera} = 0 if $count_rank <= 5;
-		$order_node->{species} = 0 if $count_rank <= 3;
-	    }
-	    
-	FAMILY:
-	    foreach my $family ( keys %{$family_occs{$class}{$order}} )
-	    {
-		if ( $family ne $missing_label )
+		$genus_node = $family_node->{chld}{$genus_no} //= { rank => 5, occs => 0 };
+		$genus_node->{occs}++;
+		$taxon_name{$genus_no} //= $r->{genus} if !$full && $r->{genus};
+		$taxon_name{$subgenus_no} //= $r->{subgenus} if !$full && $r->{subgenus};
+		
+		if ( $count_rank <= 3 && $rank <= 3 )
 		{
-		    $class_node->{families}++;
-		    $order_node->{families}++ if $order_node;
-		}
-		
-		next FAMILY unless $count_rank <= 5;
-		
-		my $family_node;
-		
-		if ( $reso <= 9 )
-		{
-		    $family_node = { occs => $famiy_occs{$class}{$order}{$family},
-				     chld => $genus_occs{$class}{$order}{$family} };
-		    $family_node->{genera} = 0;
-		    $family_node->{species} = 0 if $count_rank <= 3;
-		}
-		
-	    GENUS:
-		foreach my $genus ( keys %{$genus_occs{$class}{$order}{$family}} )
-		{
-		    if ( $genus ne $missing_label )
-		    {
-			$class_node->{genera}++;
-			$order_node->{genera}++ if $order_node;
-			$family_node->{genera}++ if $family_node;
-		    }
-		    
-		    next GENUS unless $count_rank <= 3;
-		    
-		    my $genus_node;
-		    
-		    if ( $reso <= 5 )
-		    {
-			$genus_node = { occs => $genus_occs{$class}{$order}{$family}{$genus},
-					chld => $genus_occs{$class}{$order}{$family}{$genus} };
-			
-			$genus_node->{species} = 0 if $count_rank <= 3;
-		    }
-		    
-		SPECIES:
-		   foreach my $species ( keys %{$species_occs{$class}{$order}{$family}{$genus}} )
-		   {
-		       if ( $species ne $missing_label )
-		       {
-			   $class_node->{species}++;
-			   $order_node->{species}++ if $order_node;
-			   $family_node->{species}++ if $family_node;
-			   $genus_node->{species}++ if $genus_node;
-		       }
-		   }
+		    $species_node = $genus_node->{chld}{$species_no} //= { rank => 3, occs => 0 };
+		    $species_node->{occs}++ if $count_rank <= 3;
+		    $taxon_name{$species_no} //= $r->{species} if !$full && $r->{species};
 		}
 	    }
 	}
     }
     
+    # Now that we have the occurrence counts, recursively traverse the tree
+    # and fill in taxon counts at the higher levels (i.e. number of species or
+    # genera).
+    
+    foreach my $class_no ( keys %occ_tree )
+    {
+	count_subtaxa($occ_tree{$class_no});
+    }
+    
+    # Now traverse the tree again and produce the appropriate output.
+    
+    local @result;					# visible to called subroutines
+    local %uns_count;					# visible to called subroutines
+    
+    my (@sorted_classes) = sort { $taxon_name{$a} cmp $taxon_name{$b} } keys %occ_tree;
+    
+    foreach my $class_no ( @sorted_classes )
+    {
+	add_result_record($occ_tree{$class_no}, $class_no, 0);
+    }
+    
+    $self->list_result(@result);
+}
+
+
+# count_subtaxa ( node )
+# 
+# This function recursively counts taxa in all of the subnodes of the given
+# node, and adds up the totals.  Note: the variable $count_rank is local to
+# &generate_phylogeny, from which this routine is called.
+
+sub count_subtaxa {
+    
+    my ($node) = @_;
+    
+    $node->{orders} = 0;
+    $node->{families} = 0 if $count_rank <= 9;
+    $node->{genera} = 0 if $count_rank <= 5;
+    $node->{species} = 0 if $count_rank <= 3;
+    
+    return unless ref $node->{chld};
+    
+    foreach my $child ( values %{$node->{chld}} )
+    {
+	count_subtaxa($child, $count_rank);
+	
+	my $child_orders = $child->{rank} == 13    ? 1
+		         : $child->{orders}        ? $child->{orders}
+					           : 0;
+	
+	$node->{orders} += $child_orders if $node->{rank} > 13;
+	
+	if ( $count_rank <= 9 )
+	{
+	    my $child_families = $child->{rank} == 9    ? 1
+			       : $child->{families}     ? $child->{families}
+						        : 0;
+	    
+	    $node->{families} += $child_families if $node->{rank} > 9;
+	}
+	
+	if ( $count_rank <= 5 )
+	{
+	    my $child_genera = $child->{rank} == 5    ? 1
+			     : $child->{genera}       ? $child->{genera}
+						      : 0;
+	    
+	    $node->{genera} += $child_genera if $node->{rank} > 5;
+	}
+	
+	if ( $count_rank <= 3 )
+	{
+	    my $child_species = $child->{rank} == 3    ? 1
+			      : $child->{species}      ? $child->{species}
+						       : 0;
+	    
+	    $node->{species} += $child_species if $node->{rank} > 3;
+	}
+    }
+}
+
+
+my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
+		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
+		 0 => 'NO_TAXON_SPECIFIED' );
+
+my %uns_prefix = ( 3 => 'UF', 5 => 'UG', 9 => 'UF', 13 => 'UO', 0 => 'UU' );
+
+sub add_result_record {
+    
+    my ($node, $taxon_no, $parent_no) = @_;
+    
+    my $rank = $node->{rank};
+    
+    return if $rank < $reso_rank;
+    
+    my $name = $taxon_name{$taxon_no} || '~';
+    $name = $uns_name{$rank || 0} if $name eq '~';
+    
+    unless ( $taxon_no )
+    {
+	$uns_count{$rank}++;
+	$taxon_no = $uns_prefix{$rank} . $uns_count{$rank};
+    }
+    
+    my $taxon_record = { taxon_no => $taxon_no,
+			 parent_no => $parent_no,
+			 taxon_name => $name,
+			 taxon_rank => $rank,
+		         n_occs => $node->{occs} };
+    
+    $taxon_record->{n_orders} = $node->{orders} if defined $node->{orders} && $rank > 13;
+    $taxon_record->{n_families} = $node->{families} if defined $node->{families} && $rank > 9;
+    $taxon_record->{n_genera} = $node->{genera} if defined $node->{genera} && $rank > 5;
+    $taxon_record->{n_species} = $node->{species} if defined $node->{species} && $rank > 3;
+    
+    push @result, $taxon_record;
+    
+    return if $rank == $reso_rank;
+    
+    my @children = keys %{$node->{chld}};
+    
+    foreach my $child_no ( sort { ($taxon_name{$a} // '~') cmp ($taxon_name{$b} // '~') } @children )
+    {
+	my $child = $node->{chld}{$child_no};
+	next if $child->{rank} < $reso_rank;
+	add_result_record($child, $child_no, $taxon_no);
+    }
+}
+
+
+sub prune_count_fields {
+    
+    my ($self, $count_rank) = @_;
+    
+    my $field_list = $self->output_field_list;
+    
+    my @good_fields;
+    
+    foreach my $f ( @$field_list )
+    {
+	next if $f eq 'n_species' && $count_rank > 3;
+	next if $f eq 'n_genera' && $count_rank > 5;
+	next if $f eq 'n_families' && $count_rank > 9;
+	push @good_fields, $f;
+    }
+    
+    @$field_list = @good_fields;
 }
 
 1;

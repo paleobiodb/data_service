@@ -1403,6 +1403,7 @@ sub generateMainFilters {
 	push @filters, "($taxon_filters)";
 	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
+	$self->{my_base_taxa} = \@taxa;
     }
     
     elsif ( @taxa )
@@ -1411,6 +1412,7 @@ sub generateMainFilters {
 	push @filters, "o.orig_no in ($taxon_list)";
 	$tables_ref->{o} = 1;
 	$tables_ref->{non_geo_filter} = 1;
+	$self->{my_taxa} = \@taxa;
     }
     
     # If a name was given and no matching taxa were found, we need to query by

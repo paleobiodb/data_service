@@ -3178,7 +3178,7 @@ sub computePhylogeny {
     
     $SQL_STRING = "
 		INSERT INTO $INTS_AUX (orig_no, parsen_no, depth, taxon_name, common_name, current_rank)
-		SELECT t.orig_no, t.parsen_no, t.depth, t.name, a.common_name, t.rank
+		SELECT t.synonym_no, t.parsen_no, t.depth, t.name, a.common_name, t.rank
 		FROM $TREE_WORK as t join $auth_table as a on a.taxon_no = t.spelling_no
 		WHERE t.rank > 5 and t.orig_no = t.synonym_no";
     
@@ -3476,7 +3476,7 @@ sub computePhylogeny {
 				primary key (orig_no)) ENGINE=MYISAM");
     
     $SQL_STRING = "INSERT INTO $COUNTS_WORK
-		   SELECT orig_no, 0, 
+		   SELECT synonym_no, 0, 
 			rank=20, 0, 
 			rank=17, 0, 
 			rank=13, 0, 
@@ -3556,7 +3556,9 @@ sub computePhylogeny {
 				genus_no int unsigned,
 				genus varchar(80),
 				subgenus_no int unsigned,
-				subgenus varchar(80)) ENGINE=MYISAM");
+				subgenus varchar(80),
+				species_no int unsigned,
+				species varchar(80)) ENGINE=MYISAM");
     
     logMessage(2, "    adding entries to the lower phylogeny table...");
     
@@ -3587,8 +3589,8 @@ sub computePhylogeny {
     # Then all species
     
     $SQL_STRING = "
-		INSERT INTO $LOWER_WORK (orig_no, rank, subgenus_no, subgenus, genus_no, genus)
-		SELECT t.orig_no, t.rank,
+		INSERT INTO $LOWER_WORK (orig_no, rank, species_no, species, subgenus_no, subgenus, genus_no, genus)
+		SELECT t.orig_no, t.rank, t.synonym_no, t.name,
 		       if(t1.rank = 4, t1.orig_no, null),
 		       if(t1.rank = 4, t1.name, null),
 		       if(t1.rank = 5, t1.orig_no, t2.orig_no),
@@ -3604,8 +3606,10 @@ sub computePhylogeny {
     # Then all subspecies
     
     $SQL_STRING = "
-		INSERT INTO $LOWER_WORK (orig_no, rank, subgenus_no, subgenus, genus_no, genus)
+		INSERT INTO $LOWER_WORK (orig_no, rank, species_no, species, subgenus_no, subgenus, genus_no, genus)
 		SELECT t.orig_no, t.rank,
+		       if(t.rank < 4, t.orig_no, null),
+		       if(t.rank < 4, t.name, null),
 		       if(t1.rank = 4, t1.orig_no, if(t2.rank = 4, t2.orig_no, null)),
 		       if(t1.rank = 4, t1.name, if(t2.rank = 4, t2.name, null)),
 		       if(t1.rank = 5, t1.orig_no, if(t2.rank = 5, t2.orig_no, t3.orig_no)),

@@ -35,8 +35,8 @@ BEGIN {
 	    (defined $ARGV[0] and lc $ARGV[0] eq 'debug');
 }
 
-use PB0::Main;
-use PB1::Main;
+#use PB0::Main;
+#use PB1::Main;
 use PB2::Main;
 
 use PBMain;

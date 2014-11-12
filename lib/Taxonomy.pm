@@ -6632,7 +6632,7 @@ sub generateRankFilter {
     {
 	$rank = lc $rank;
 	
-	if ( $rank =~ /^(>|<|<=|>=)?\s*(.*)/ )
+	if ( $rank =~ /^(>=?|<=?)?\s*(.*)/ )
 	{
 	    carp "invalid taxonomic rank '$2'" unless $TAXONOMIC_RANK{$2};
 	    
