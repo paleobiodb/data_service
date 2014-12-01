@@ -15,7 +15,7 @@ use PB2::CommonData qw(generateAttribution);
 use PB2::ReferenceData qw(format_reference);
 
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PRV_SUMMARY);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -179,7 +179,6 @@ sub initialize {
 	  "The identifier of the level-2 cluster in which the collection is located",
       { output => 'bin_id_5', com_name => 'lv5' },
 	  "The identifier of the level-3 cluster in which the collection is located");
-
     
     $ds->define_block('1.2:colls:attr' =>
         { select => ['r.author1init as a_ai1', 'r.author1last as a_al1', 'r.author2init as a_ai2', 
@@ -366,11 +365,6 @@ sub initialize {
 	  "The taxonomic rank as actually identified",
       { output => 'ident_no', com_name => 'iid', dedup => 'taxon_no' },
 	  "A unique identifier for the taxonomic name.");
-
-    $ds->define_block( '1.2:colls:taxa' =>
-      { output => 'taxa', com_name => 'tax', sub_record => 'taxon_record' },
-	  "A list of records describing the taxa that have been identified",
-	  "as appearing in the collection");
     
     $ds->define_block( '1.2:colls:rem' =>
       { set => 'collection_aka', join => '; ', if_format => 'txt,tsv,csv,xml' },
@@ -546,7 +540,7 @@ sub initialize {
 	    "If this parameter is specified, then only records that were actually identified with the",
 	    "specified taxonomic name and not those which match due to synonymy",
 	    "or other correspondences between taxa.  This is a flag parameter, which does not need any value.",
-	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec, list => ',' },
+	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s), I<including subtaxa>.",
 	    "You may specify multiple names, separated by commas.",
 	{ param => 'base_id', valid => POS_VALUE, list => ',' },
@@ -609,7 +603,7 @@ sub initialize {
 	    "Return only records whose temporal locality is at least this old, specified in Ma.",
 	{ param => 'max_ma', valid => DECI_VALUE(0) },
 	    "Return only records whose temporal locality is at most this old, specified in Ma.",
-	{ param => 'interval_id', valid => POS_VALUE },
+	{ param => 'interval_id', valid => POS_ZERO_VALUE },
 	    "Return only records whose temporal locality falls within the given geologic time interval,",
 	    "specified by numeric identifier.",
 	{ param => 'interval', valid => ANY_VALUE },
@@ -751,7 +745,7 @@ sub initialize {
 	    $ds->document_set('1.2:colls:summary_map'),);
     
     $ds->define_ruleset('1.2:colls:summary' => 
-	"The following required parameter selects from one of the available clustering levels:",
+	"The following parameter selects from one of the available clustering levels:",
 	{ param => 'level', valid => POS_VALUE, default => 1 },
 	    "Return records from the specified cluster level.  You can find out which",
 	    "levels are available by means of the L<config|node:config> URL path.",
@@ -813,47 +807,6 @@ sub get {
 	GROUP BY c.collection_no";
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
-    
-    # Abort if we couldn't retrieve the record.
-    
-    return unless $self->{main_record};
-    
-    # If we were directed to show references, grab any secondary references.
-    
-    # if ( $self->{show}{ref} )
-    # {
-    # 	my $extra_fields = $request->select_list('ref');
-	
-    #     $self->{aux_sql}[0] = "
-    #     SELECT sr.reference_no, $extra_fields
-    #     FROM secondary_refs as sr JOIN refs as r using (reference_no)
-    #     WHERE sr.collection_no = $id
-    # 	ORDER BY sr.reference_no";
-        
-    #     $self->{main_record}{sec_refs} = $dbh->selectall_arrayref($self->{aux_sql}[0], { Slice => {} });
-    # }
-    
-    # If we were directed to show associated taxa, grab them too.
-    
-    if ( $self->has_block('taxa') )
-    {
-	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
-	
-	my $auth_table = $taxonomy->{auth_table};
-	my $tree_table = $taxonomy->{tree_table};
-	
-	$self->{aux_sql}[1] = "
-	SELECT DISTINCT t.spelling_no as taxon_no, t.name as taxon_name, rm.rank as taxon_rank, 
-		a.taxon_no as ident_no, a.taxon_name as ident_name, a.taxon_rank as ident_rank
-	FROM occ_matrix as o JOIN $auth_table as a USING (taxon_no)
-		LEFT JOIN $tree_table as t on t.orig_no = o.orig_no
-		LEFT JOIN rank_map as rm on rm.rank_no = t.rank
-	WHERE o.collection_no = $id ORDER BY t.lft ASC";
-	
-	$self->{main_record}{taxa} = $dbh->selectall_arrayref($self->{aux_sql}[1], { Slice => {} });
-    }
-    
-    return 1;
 }
 
 
@@ -1029,6 +982,89 @@ sub summary {
     # Get the result count, if we were asked to do so.
     
     $self->sql_count_rows;
+    
+    return 1;
+}
+
+
+# prevtaxa ( )
+# 
+# This operation queries for the most-occurring taxa found in the geographic
+# clusters matching the specified parameters.
+
+# $$$$ MUST ADD: alternate query for when summary bins don't work,
+# i.e. 'formation' or 'authorizer'
+# 
+# $$$$ MUST ADD: global query
+
+sub prevtaxa {
+
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    my $tables = $request->tables_hash;
+    
+    # Figure out which bin level we are being asked for.  The default is 1.    
+    
+    my $bin_level = $request->clean_param('level') || 1;
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters = $request->generateMainFilters('summary', 's', $tables);
+    push @filters, $request->generateCollFilters($tables);
+    
+    # If a query limit has been specified, modify the query accordingly.
+    
+    my $limit = $request->sql_limit_clause(1);
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $request->sql_count_clause;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.
+    
+    $request->substitute_select( mt => 's' );
+    
+    my $fields = $request->select_string;
+    
+    $request->adjustCoordinates(\$fields);
+    
+    my $summary_joins = '';
+    
+    $summary_joins .= "JOIN $COLL_MATRIX as c on s.bin_id = c.bin_id_${bin_level}\n"
+	if $tables->{c} || $tables->{cc} || $tables->{o} || $tables->{oc} || $tables->{pc};
+    
+    $summary_joins .= "JOIN collections as cc using (collection_no)\n" if $tables->{cc};
+    
+    my $other_joins .= $request->generateJoinList('s', $tables);
+    
+    push @filters, "s.access_level = 0", "s.bin_level = $bin_level";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    $request->{main_sql} = "
+		SELECT $calc $fields
+		FROM $COLL_BINS as s $summary_joins
+			JOIN $PRV_SUMMARY as ds on ds.bin_id = s.bin_id and ds.interval_no = s.interval_no
+			$other_joins
+		WHERE $filter_string
+		GROUP BY ds.orig_no
+		ORDER BY n_occs desc $limit";
+    
+    # Then prepare and execute the query.
+    
+    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
+    
+    $request->{main_sth} = $dbh->prepare($request->{main_sql});
+    $request->{main_sth}->execute();
+    
+    # Get the result count, if we were asked to do so.
+    
+    $request->sql_count_rows;
     
     return 1;
 }
@@ -1238,7 +1274,8 @@ sub generateCollFilters {
     # If our tables include the occurrence matrix, we must check the 'ident'
     # parameter. 
     
-    if ( $tables_ref->{o} || $tables_ref->{tf} || $tables_ref->{t} || $tables_ref->{oc} )
+    if ( ($tables_ref->{o} || $tables_ref->{tf} || $tables_ref->{t} || $tables_ref->{oc}) &&
+         ! $tables_ref->{ds} )
     {
 	my $ident = $self->clean_param('ident');
 	
@@ -1312,7 +1349,7 @@ sub generateMainFilters {
     my ($self, $op, $mt, $tables_ref) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = $self->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
     my @filters;
     
     # Check for parameter 'clust_id'
@@ -1375,16 +1412,16 @@ sub generateMainFilters {
     if ( $taxon_name )
     {
 	#my (@starttime) = Time::HiRes::gettimeofday();
-	@taxa = &PB2::TaxonData::get_taxa_by_name($self, $taxon_name, { return => 'range', common => 1 });
+	@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
 	#my (@endtime) = Time::HiRes::gettimeofday();
 	#my $elapsed = Time::HiRes::tv_interval(\@starttime, \@endtime);
-	#print STDERR $Taxonomy::SQL_STRING . "\n\n";
+	#print STDERR $TaxonomyOld::SQL_STRING . "\n\n";
 	#print STDERR "Name Query Elapsed: $elapsed\n\n";
     }
     
     elsif ( $taxon_no )
     {
-	@taxa = $taxonomy->getTaxa('self', $taxon_no, { fields => 'lft' });
+	@taxa = $taxonomy->list_taxa($taxon_no, { fields => 'RANGE' });
     }
     
     # Then get the records for excluded taxa.  But only if there are any
@@ -1392,7 +1429,7 @@ sub generateMainFilters {
     
     if ( $exclude_no && $exclude_no ne 'undefined' )
     {
-	@exclude_taxa = $taxonomy->getTaxa('self', $exclude_no, { fields => 'lft' });
+	@exclude_taxa = $taxonomy->list_taxa($exclude_no, { fields => 'RANGE' });
     }
     
     # Then construct the necessary filters for included taxa
@@ -1410,7 +1447,7 @@ sub generateMainFilters {
     {
 	my $taxon_list = join ',', map { $_->{orig_no} } @taxa;
 	push @filters, "o.orig_no in ($taxon_list)";
-	$tables_ref->{o} = 1;
+	$tables_ref->{o} = 1 unless $tables_ref->{ds};
 	$tables_ref->{non_geo_filter} = 1;
 	$self->{my_taxa} = \@taxa;
     }
@@ -1876,7 +1913,8 @@ sub generateMainFilters {
     
     if ( defined $early_age or defined $late_age )
     {
-	unless ( $op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer' )
+	unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer') or
+	         $tables_ref->{ds} )
 	{
 	    $tables_ref->{c} = 1;
 	    
@@ -2256,8 +2294,8 @@ sub generateJoinList {
     
     # Some tables imply others.
     
-    $tables->{o} = 1 if $tables->{t} || $tables->{tf} || $tables->{oc};
-    $tables->{c} = 1 if $tables->{o};
+    $tables->{o} = 1 if ($tables->{t} || $tables->{tf} || $tables->{oc}) && ! $tables->{ds};
+    $tables->{c} = 1 if $tables->{o} || $tables->{pc};
     
     # Create the necessary join expressions.
     

@@ -10,7 +10,10 @@ use strict;
 
 use base 'Exporter';
 
-our (@EXPORT_OK) = qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
+our (@EXPORT_OK) = qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING
+		      %AUTH_TABLE %OPINION_TABLE %OPINION_CACHE %REFS_TABLE
+		      %ATTRS_TABLE %INTS_TABLE %SEARCH_TABLE
+		      $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
 
 our (@TREE_TABLE_LIST) = ('taxon_trees');
 
@@ -23,7 +26,7 @@ $TAXON_TABLE{taxon_trees} = {
     ints => 'taxon_ints',
     lower => 'taxon_lower',
     counts => 'taxon_counts',
-    images => 'taxon_images',
+    images => 'taxon_pics',
     
     authorities => 'authorities',
     opinions => 'opinions',
@@ -50,3 +53,13 @@ our (%RANK_STRING) = ( 26 => 'informal', 25 => 'unranked clade', 23 => 'kingdom'
 		       14 => 'superorder', 13 => 'order', 12 => 'suborder', 11 => 'infraorder',
 		       10 => 'superfamily', 9 => 'family', 8 => 'subfamily', 7 => 'tribe', 
 		       6 => 'subtribe', 5 => 'genus', 4 => 'subgenus', 3 => 'species', 2 => 'subspecies');
+
+our (%NAME_TABLE) = ("taxon_trees" => "taxon_names");
+our (%ATTRS_TABLE) = ("taxon_trees" => "taxon_attrs");
+our (%SEARCH_TABLE) = ("taxon_trees" => "taxon_search");
+our (%INTS_TABLE) = ("taxon_trees" => "taxon_ints");
+
+our (%AUTH_TABLE) = ("taxon_trees" => "authorities");
+our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
+our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
+our (%REFS_TABLE) = ("taxon_trees" => "refs");

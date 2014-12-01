@@ -81,8 +81,6 @@ sub getPics {
     
     logMessage(2, "      fetched $raw_count records.");
     
-    return unless $raw_count > 0;
-    
     # Mark the date of last fetch.  We subtract 2 minutes in case a new
     # phylopic came in while we were decoding the JSON response above.
     
@@ -206,6 +204,20 @@ sub getPics {
 	}
     }
     
+    # Now copy all of the new records into the PHYLOPIC_CHOICE table with
+    # priority=1.  That priority can be adjusted later.
+    
+    logMessage(2, "    adding records to pic choice table...");
+    
+    my $sql = "
+	INSERT IGNORE INTO $PHYLOPIC_CHOICE (orig_no, uid, priority)
+	SELECT t.orig_no, pqn.uid, 1
+	FROM $tree_table as t JOIN $PHYLOPIC_NAMES as pqn on t.name = pqn.taxon_name";
+    
+    my $result = $dbh->do($sql);
+    
+    logMessage(2, "      added $result records");
+    
     my $a = 1;	# we can stop here when debugging
 }
 
@@ -216,7 +228,7 @@ sub getPics {
 
 sub selectPics {
     
-    my ($dbh) = @_;
+    my ($dbh, $tree_table) = @_;
     
     my ($phylopics) = eval {
 	local($dbh->{PrintError}) = 0;
@@ -239,19 +251,17 @@ sub selectPics {
     
     $dbh->do("CREATE TABLE $TAXON_PICS_WORK (
 		orig_no int unsigned primary key,
-		image_no int unsigned not null,
-		priority tinyint) Engine=MyISAM");
+		image_no int unsigned not null) Engine=MyISAM");
     
     # Select images by priority number, or by earlier modification date
     # otherwise.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $TAXON_PICS_WORK
-		SELECT a.orig_no, p.image_no, pc.priority
-		FROM $PHYLOPIC_NAMES as n JOIN $PHYLOPICS as p using (uid)
-			JOIN authorities as a using (taxon_name)
-			LEFT JOIN $PHYLOPIC_CHOICE as pc using (orig_no, uid)
-		ORDER BY pc.priority desc, p.modified asc");
+		INSERT IGNORE INTO $TAXON_PICS_WORK (orig_no, image_no)
+		SELECT orig_no, image_no
+		FROM $PHYLOPIC_CHOICE join $PHYLOPICS using (uid)
+		WHERE priority > 0
+		ORDER BY priority desc");
     
     # Activate the new table.
     

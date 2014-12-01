@@ -22,7 +22,7 @@ use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
-use TaxonPics qw(getPics);
+use TaxonPics qw(getPics selectPics);
 use Taxonomy;
 use DiversityTables qw(buildDiversityTables);
 
@@ -75,6 +75,7 @@ my $taxon_pics = $options{p};
 my $collection_tables = $options{c};
 my $occurrence_tables = $options{m};
 my $occurrence_reso = $options{R};
+my $diversity_tables = $options{d};
 
 my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
@@ -181,11 +182,19 @@ if ( $old_taxon_tables )
 }
 
 
+# The option -d causes the diversity tables to be (re)computed.
+
+if ( $diversity_tables )
+{
+    buildDiversityTables($dbh, 'taxon_trees');
+}
+
 # The option -p causes taxon pictures to be fetched from phylopic.org
 
 if ( $taxon_pics )
 {
-    getPics($dbh, 'tree_table', $force);
+    getPics($dbh, 'taxon_trees', $force);
+    selectPics($dbh, 'taxon_trees');
 }
 
 # temp

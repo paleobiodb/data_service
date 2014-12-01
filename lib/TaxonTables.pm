@@ -14,7 +14,7 @@ use Carp qw(carp croak);
 use Try::Tiny;
 
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
-use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS);
+use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS $PHYLOPIC_CHOICE);
 
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
@@ -1285,11 +1285,10 @@ sub createWorkingTables {
 				spelling_no int unsigned not null,
 				trad_no int unsigned not null,
 				synonym_no int unsigned not null,
+				valid_no int unsigned not null,
 				parent_no int unsigned not null,
 				parsen_no int unsigned not null,
 				opinion_no int unsigned not null,
-				species_no int unsigned,
-				genus_no int unsigned,
 				ints_no int unsigned not null,
 				lft int,
 				rgt int,
@@ -1951,24 +1950,6 @@ sub linkSynonyms {
 	logMessage(0,"WARNING - possible synonymy cycle detected during synonym linking");
     }
     
-    # Then the same for valid_no
-    
-    # $count = 0;
-    
-    # do
-    # {
-    # 	$result = $dbh->do("
-    # 		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
-    # 		    on t1.valid_no = t2.orig_no and t1.valid_no != t2.valid_no
-    # 		SET t1.valid_no = t2.valid_no");
-    # }
-    # 	while $result > 0 && ++$count < 20;
-    
-    # if ( $count >= 20 )
-    # {
-    # 	logMessage(0,"WARNING - possible synonymy cycle detected during synonym linking");
-    # }
-    
     my $a = 1;	# we can stop here when debugging
 }
 
@@ -2218,6 +2199,45 @@ sub computeHierarchy {
     logMessage(2, "    indexing parsen_no");
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parsen_no)");
+    
+    # Finally, we can set and index valid_no.  For valid taxa (senior and
+    # junior synonyms both), it will equal the synonym_no.  For invalid ones,
+    # it will equal the parent.
+    
+    logMessage(2, "    setting valid_no");
+    
+    $result = $dbh->do("
+		UPDATE $TREE_WORK as t
+		SET valid_no = if(status in ($VALID_STATUS) or parsen_no = 0,
+				  synonym_no, parsen_no)");
+    
+    logMessage(2, "    indexing valid_no");
+    
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (valid_no)");
+    
+    # Remove chains, so that each valid_no field points to a valid taxon.  We
+    # repeat the following process until no more rows are affected, with a
+    # limit of 20 to avoid an infinite loop just in case our algorithm above
+    # was faulty and some cycles have slipped through.
+    
+    logMessage(2, "    removing invalidity chains");
+    
+    my $count = 0;
+    my $result;
+    
+    do
+    {
+    	$result = $dbh->do("
+     		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
+     		    on t1.valid_no = t2.orig_no and t1.valid_no != t2.valid_no
+     		SET t1.valid_no = t2.valid_no");
+    }
+    while $result > 0 && ++$count < 20;
+    
+    if ( $count >= 20 )
+    {
+     	logMessage(0,"WARNING - possible invalidity cycle detected during synonym linking");
+    }
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -3137,6 +3157,7 @@ sub computePhylogeny {
     $result = $dbh->do("DROP TABLE IF EXISTS $INTS_WORK");
     $result = $dbh->do("CREATE TABLE $INTS_WORK
 			       (ints_no int unsigned primary key,
+				ints_rank tinyint not null,
 				common_name varchar(80),
 				kingdom_no int unsigned,
 				kingdom varchar(80),
@@ -3283,8 +3304,8 @@ sub computePhylogeny {
 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
 	
 	$SQL_STRING = "
-		INSERT INTO $INTS_WORK (ints_no, common_name, kingdom_no, phylum_no, class_no, order_no, family_no)
-		SELECT k.orig_no,
+		INSERT INTO $INTS_WORK (ints_no, ints_rank, common_name, kingdom_no, phylum_no, class_no, order_no, family_no)
+		SELECT k.orig_no, k.current_rank,
 			if(k.common_name <> '', k.common_name, p.common_name),
 			if(k.current_rank = 23 or (k.current_rank = 22 and ifnull(p.kingdom_no, 1) = 1), k.orig_no, p.kingdom_no) as nk,
 			if(k.current_rank in (20,21) or (k.current_rank = 19 and p.phylum_no is null) or k.was_phylum - k.not_phylum > ifnull(xp.was_phylum - xp.not_phylum, 0), k.orig_no, p.phylum_no) as np,
@@ -3668,7 +3689,7 @@ sub computeSearchTable {
 				taxon_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
-				synonym_no int unsigned not null,
+				valid_no int unsigned not null,
 				is_current boolean not null,
 				is_exact boolean not null,
 				common char(2) not null,
@@ -3682,8 +3703,8 @@ sub computeSearchTable {
     
     $count = $dbh->do("
 	INSERT INTO $SEARCH_WORK (taxon_name, taxon_rank, taxon_no, orig_no, 
-				  synonym_no, is_current, is_exact)
-	SELECT taxon_name, taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+				  valid_no, is_current, is_exact)
+	SELECT taxon_name, taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
@@ -3699,10 +3720,10 @@ sub computeSearchTable {
     
     $count = $dbh->do("
 	INSERT INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-				  synonym_no, is_current, is_exact)
+				  valid_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(trailing ')' from substring_index(taxon_name,'(',-1)),
-	        taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+	        taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank = 'subgenus'");
     
@@ -3719,10 +3740,10 @@ sub computeSearchTable {
     
     $count = $dbh->do("
 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 synonym_no, is_current, is_exact)
+					 valid_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(substring(taxon_name, locate(' ', taxon_name)+1)),
-		taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name not like '%(%'");
     
@@ -3730,10 +3751,10 @@ sub computeSearchTable {
     
     $count += $dbh->do("
 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 synonym_no, is_current, is_exact)
+					 valid_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-		taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
     
@@ -3741,10 +3762,10 @@ sub computeSearchTable {
     
     $count += $dbh->do("
 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 synonym_no, is_current, is_exact)
+					 valid_no, is_current, is_exact)
 	SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1),
 		trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-		taxon_rank, taxon_no, orig_no, synonym_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
     
@@ -3841,9 +3862,9 @@ sub computeSearchTable {
     
     $SQL_STRING = "
 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 synonym_no, is_current, is_exact)
+					 valid_no, is_current, is_exact)
 	SELECT sx.genus, sx.taxon_name, a.taxon_rank, sx.taxon_no, sx.orig_no,
-	       t.synonym_no, (t.spelling_no = sx.taxon_no), 0
+	       t.valid_no, (t.spelling_no = sx.taxon_no), 0
 	FROM $SPECIES_AUX as sx JOIN $auth_table as a on a.taxon_no = sx.taxon_no
 		JOIN $TREE_WORK as t on sx.orig_no = t.orig_no";
     
@@ -3858,8 +3879,8 @@ sub computeSearchTable {
     
     $SQL_STRING = "
 	INSERT IGNORE INTO $SEARCH_WORK (taxon_name, taxon_rank, taxon_no, orig_no,
-					 synonym_no, is_current, is_exact, common)
-	SELECT common_name, rank, spelling_no, orig_no, synonym_no, 0, 1, 'EN'
+					 valid_no, is_current, is_exact, common)
+	SELECT common_name, rank, spelling_no, orig_no, valid_no, 0, 1, 'EN'
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE common_name <> '' and taxon_no = spelling_no";
     
@@ -4019,8 +4040,8 @@ sub computeAttrsTable {
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_colls, n_occs, not_trace)
 		SELECT a.orig_no,
-			if(t.status in ($VALID_STATUS), 1, 0) as is_valid,
-			if(t.status not in ($SYNONYM_STATUS), 1, 0) as is_senior,
+			if(t.valid_no = t.synonym_no, 1, 0) as is_valid,
+			if(t.valid_no = t.orig_no, 1, 0) as is_senior,
 			sum(if(a.extant = 'yes', 1, if(a.extant = 'no', 0, null))) as is_extant,
 			0, 0, 0, 0, 0, 0, a.preservation <> 'trace' or a.preservation is null
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
@@ -4112,7 +4133,7 @@ sub computeAttrsTable {
 	logMessage(2, "      adding taxon picture information from table '$TAXON_PICS'...");
 	
 	$sql = "UPDATE $ATTRS_WORK as v JOIN $TAXON_PICS as pic using (orig_no)
-		SET v.image_no = if(pic.priority is null or pic.priority <> -1, pic.image_no, null)";
+		SET v.image_no = pic.image_no";
 	
 	$result = $dbh->do($sql);	
 	
@@ -5189,7 +5210,8 @@ sub ensureOrig {
 
 # populateOrig ( dbh )
 # 
-# If there are any entries where 'orig_no' is not set, fill them in.
+# If there are any entries where 'orig_no' is not set, fill them in.  Also
+# update the 'refauth' field.
 
 sub populateOrig {
 
@@ -5254,10 +5276,19 @@ sub populateOrig {
     
     my ($table_name, $table_definition) = $dbh->selectrow_array("SHOW CREATE TABLE authorities"); 
     
-    return if $table_definition =~ /KEY `orig_no`/;
+    unless ( $table_definition =~ qr{KEY `orig_no`} )
+    {
+	$dbh->do("ALTER TABLE authorities ADD KEY (orig_no)");
+    }
     
-    $dbh->do("ALTER TABLE authorities
-              ADD KEY (orig_no)");
+    # If the field 'refauth' exists, update it.
+    
+    if ( $table_definition =~ /`refauth`/ )
+    {
+	$count = $dbh->do("UPDATE authorities set refauth = if(ref_is_authority='YES', 1, 0)");
+	
+	print STDERR "Updating 'refauth': $count\n";
+    }
     
     print STDERR "  done.\n";
 }

@@ -6,311 +6,20 @@
 
 package Taxonomy;
 
-#use TaxonTrees;
-
+use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use Carp qw(carp croak);
-use Try::Tiny;
 
 use strict;
+use feature 'unicode_strings';
 
 
-our (%TAXONOMIC_RANK) = ( 'max' => 26, 26 => 26, 'informal' => 26, 'unranked_clade' => 25, 'unranked' => 25, 25 => 25,
-			 'kingdom' => 23, 23 => 23, 'subkingdom' => 22, 22 => 22,
-			 'superphylum' => 21, 21 => 21, 'phylum' => 20, 20 => 20, 'subphylum' => 19, 19 => 19,
-			 'superclass' => 18, 18 => 18, 'class' => 17, 17 => 17, 'subclass' => 16, 16 => 16,
-			 'infraclass' => 15, 15 => 15, 'superorder' => 14, 14 => 14, 'order' => 13, 13 => 13,
-			 'suborder' => 12, 12 => 12, 'infraorder' => 11, 11 => 11, 'superfamily' => 10, 10 => 10,
-			 'family' => 9, 9 => 9, 'subfamily' => 8, 8 => 8, 'tribe' => 7, 7 => 7, 'subtribe' => 6, 6 => 6,
-			 'genus' => 5, 5 => 5, 'subgenus' => 4, 4 => 4, 'species' => 3, 3 => 3, 'subspecies' => 2, 2 => 2, 'min' => 2 );
-
-our (%RANK_STRING) = ( 26 => 'informal', 25 => 'unranked clade', 23 => 'kingdom', 22 => 'subkingdom', 
-		       21 => 'superphylum', 20 => 'phylum', 19 => 'subphylum', 
-		       18 => 'superclass', 17 => 'class', 16 => 'subclass', 15 => 'infraclass',
-		       14 => 'superorder', 13 => 'order', 12 => 'suborder', 11 => 'infraorder',
-		       10 => 'superfamily', 9 => 'family', 8 => 'subfamily', 7 => 'tribe', 6 => 'subtribe',
-		       5 => 'genus', 4 => 'subgenus', 3 => 'species', 2 => 'subspecies' );
-
-our (%NOM_CODE) = ( 'iczn' => 1, 'phylocode' => 2, 'icn' => 3, 'icnb' => 4 );
+our (%NOM_CODE) = ( 'iczn' => 1, 'icn' => 2, 'icnb' => 3 );
 
 our (%TREE_TABLE_ID) = ( 'taxon_trees' => 1 );
 
-our (%KINGDOM_ALIAS) = ( 'metazoa' => 'Metazoa', 'animalia' => 'Metazoa', 'iczn' => 'Metazoa',
-			 'metaphyta' => 'Plantae', 'plantae' => 'Plantae', 'fungi' => 'Fungi',
-			 'bacteria' => 'Bacteria', 'eubacteria' => 'Bacteria', 'archaea' => 'Archaea',
-			 'protista' => 'Eukaryota', 'chromista' => 'Eukaryota', 'unknown' => 'Eukaryota',
-			 'other' => 'Eukaryota' );
-
 our ($SQL_STRING);
 
-# These need to be synchronized with TaxonTrees.pm, or else moved to a
-# separate file that both modules include.
-
-our (@TREE_TABLE_LIST) = ("taxon_trees");
-
-our (%NAME_TABLE) = ("taxon_trees" => "taxon_names");
-our (%ATTRS_TABLE) = ("taxon_trees" => "taxon_attrs");
-our (%SEARCH_TABLE) = ("taxon_trees" => "taxon_search");
-our (%INTS_TABLE) = ("taxon_trees" => "taxon_ints");
-
-our (%AUTH_TABLE) = ("taxon_trees" => "authorities");
-our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
-our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
-our (%REFS_TABLE) = ("taxon_trees" => "refs");
-
-
-=head1 NAME
-
-Taxonomy
-
-=head1 SYNOPSIS
-
-This module is part of the Paleobiology Database Core Application Layer.
-
-An object of this class represents a hierarchically organized set of taxonomic
-names.  The set of names known to the database is stored in the C<authorities>
-table, with primary key C<taxon_no>.  The primary hierarchy is computed from
-the data in the C<authorities> and C<opinions> tables, and is stored in the
-table C<taxon_trees>.  This module can be easily modified to define alternate
-hierarchies as well, generated using different rules, and to store them in
-other tables with the same structure as C<taxon_trees>.  The taxon numbers
-from C<authorities> are used extensively as foreign keys throughout the rest
-of the database, because the taxonomic hierarchy is central to the
-organization of the data.  The hierarchy stored in C<taxon_trees> and related
-tables is also referred to extensively throughout the database code, for
-example in selecting all of the taxa which are descendents of a base taxon.
-
-=head2 Definitions
-
-The most crucial definition necessary to properly understand this class is the
-distinction between I<taxonomic name> and I<taxonomic concept>.  In the course
-of this documentation, we will try to use these terms as appropriate; in cases
-where the proper term is obvious from context, or is ambiguous, we will simply
-use the terms I<taxon> or I<taxa>.
-
-Each distinct taxonomic name/rank combination represented in the database has
-a unique entry in the C<authorities> table, and a primary key (taxon_no)
-assigned to it in that table.  In the documentation for this database, we use
-the term I<taxonomic name> or (alternately I<spelling>) to represent the idea
-"distinct taxonomic name/rank combination".  So, for example, "Rhizopodea" as
-a class and "Rhizopodea" as a phylum are considered to be distinct spellings
-of the same taxonomic concept.  In this case, the taxon's rank was changed at
-some point in the past.  It is also the case that "Cyrnaonyx" and "Cyraonyx"
-are distinct spellings of the same taxonomic concept; one of these names was
-used at some point as a misspelling of the other.
-
-Each distinctly numbered taxonomic name (spelling) is a member of exactly one
-taxonomic concept.  Note, however, that taxonomic names are not necessarily
-unique.  In a few cases, the same name has been used by different people to
-represent different taxonomic concepts.  This is particularly true between
-plants and animals, which are covered by entirely different taxonomic
-namespaces that in some cases overlap (e.g. Ficus). There are also a few cases
-(e.g. Mesocetus) where the general rule of uniqueness within the animal
-kingdom has been violated.
-
-A taxonomic hierarchy is built as follows.  For each taxonomic concept in the
-database, we algorithmically select a "classification opinion" from among the
-entries in the C<opinions> table, representing the most recent and reliable
-taxonomic opinion that specifies a relationship between this taxon and the
-rest of the taxonomic hierarchy.  These classification opinions are then used
-to arrange the taxa into a collection of trees.  Note that the taxa do not
-necessarily form a single tree, because there are a number of fossil taxa for
-which classification opinions have not yet been entered into the database.
-Different taxonomies may use different rules for selecting classification
-opinions, or may use different subsets of the C<authorities> and C<opinions>
-tables.  This process will be described in more detail below.
-
-=head2 Organization of taxa
-
-The C<authorities> table contains one row for each distinct taxonomic name
-(name/rank combination) with C<taxon_no> as primary key.  The C<orig_no> field
-associates each row in C<authorities> with the row representing the original
-spelling of its taxonomic concept.  Thus, the distinct values of C<orig_no>
-identify the distinct taxonomic concepts known to the database.  The
-C<taxon_trees> table contains one row for each taxonomic concept, with
-C<orig_no> as primary key.
-
-The taxonomic names and concepts are organized according to four separate
-relations, based on the data in C<authorities> and C<opinions>.  These
-relations are discussed below; the specification in parentheses after each one
-indicates the table and field in which the relation is stored.
-
-=over 4
-
-=item Taxonomic concept (authorities:orig_no)
-
-This relation groups together all of the taxonomic names (name/rank
-combinations) that represent the same taxonomic concept.  Each row that
-represents an original spelling has C<taxon_no = orig_no>.  When a new
-spelling for a taxon is encountered, or an opinion is entered which changes
-its rank, a new row is created in C<authorities> with the same C<orig_no> but
-different C<taxon_no>.
-
-Note that this relation can be taken as an equivalence relation, whereas two
-spellings have the same C<orig_no> if and only if they represent the same
-taxonomic concept.
-
-=item Accepted name (taxon_trees:spelling_no)
-
-This relation selects from each taxonomic concept the currently accepted
-variant (in other words, the currently accepted name/rank combination).  The
-value of C<spelling_no> for any concept is the C<taxon_no> corresponding to
-the accepted name.  The auxiliary field C<trad_no> records nearly the same
-information, but with traditional taxon ranks given precedence over variants
-that are ranked as 'unranked clade'.
-
-=item Synonymy (taxon_trees:synonym_no)
-
-This relation indicates for each taxonomic concept the taxonomic concept which
-is its most senior synonym.  Two taxa are considered to be synonymous if one
-is a subjective or objective synonym of the other, or was replaced by the
-other, or if one is an invalid subgroup or nomen dubium, nomen vanum or nomen
-nudum inside the other.
-
-The value of C<synonym_no> is the C<orig_no> value of the most senior synonym
-for the given concept group.  This means that all concepts which are synonyms
-of each other will have the same C<synonym_no> but different C<orig_no>, and
-the senior synonym will have C<synonym_no = orig_no>.  This relation can thus
-be taken as an equivalence relation, whereas two concepts have the same
-C<synonym_no> if and only if they are synonymous.  The set of taxonomic
-concepts that share a particular value of C<synonym_no> is called a "synonym
-group".
-
-=item Hierarchy (taxon_trees:parent_no)
-
-This relation associates lower with higher taxa.  It forms a collection of
-trees, because (as noted above) there are a number of higher fossil taxa for
-which no classifying opinion has yet been entered.  Any taxonomic concept for
-which no opinion has been entered will have C<parent_no = 0>.
-
-All concepts which are synonyms of each other will have the same C<parent_no>
-value.  In computing the hierarchy, we consider all opinions on a synonym
-group together.  This relation can also be taken as an equivalence relation,
-whereas two taxonomic concepts have the same C<parent_no> if and only if they
-are siblings of each other.
-
-=back
-
-=head2 Opinions
-
-In addition to the fields listed above, each entry in C<taxon_trees> (or any
-alternative hierarchy tables that may be defined) also has an C<opinion_no>
-field.  This field points to the classification opinion that has been
-algorithmically selected from the available opinions for that taxon.
-
-For a junior synonym, the value of opinion_no will be the opinion which
-specifies its immediately senior synonym.  There may exist synonym chains in
-the database, where A is a junior synonym of B which is a junior synonym of C.
-In any case, the C<synonym_no> field will always point to the most senior
-synonym.
-
-For all taxonomic concepts which are not junior synonyms, the value of
-C<opinion_no> will be the opinion which specifies its immediately higher
-taxon.  Note that this opinion will also specify a particular spelling of the
-higher taxon, which may not be the currently accepted one.  In any case,
-C<parent_no> will always point to the original spelling of the parent taxon.
-
-=head2 Tree structure
-
-In order to facilitate tree printouts and logical operations on the taxonomic
-hierarchy, the entries in C<taxon_trees> are sequenced via preorder tree
-traversal.  This is recorded in the fields C<lft> and C<rgt>.  The C<lft>
-field stores the traversal sequence, and the C<rgt> field of a given entry
-stores the maximum sequence number of the entry and all of its descendants.
-An entry which has no descendants has C<lft> = C<rgt>.  The C<depth> field
-stores the distance of a given entry from the root of its taxon tree, with
-top-level nodes having C<depth> = 1.  All entries which have no parents or
-children will have null values in C<lft>, C<rgt> and C<depth>.
-
-Using these fields, we can formulate simple and efficient SQL queries to fetch
-all of the descendants of a given entry and other similar operations.  For
-more information, see L<http://en.wikipedia.org/wiki/Nested_set_model>.
-
-=head2 Additional Tables
-
-Several auxiliary tables are needed in order to implement the necessary
-functionality for this module.  The tables described here are defined by
-default to work with C<taxon_trees>.  If additional hierarchy tables are later
-added, then additional instances of each of these tables must be defined as
-well.
-
-You will probably not need to refer to these tables directly, but they are
-used by the methods defined for this class.
-
-=over 4
-
-=item taxon_search
-
-This table maps strings representing taxonomic names to the corresponding
-C<taxon_no> values.  It is needed because a simple search on the C<taxon_name>
-field of the C<authorities> table is not sufficiently general.  Using this
-table, one can efficiently search for a species name if the full genus name is
-not known, or if the known genus is actually a junior synonym of the currently
-accepted genus.  Higher taxa can also be found through this table, for full
-generality.
-
-=item taxon_names
-
-This table records additional information about each individual taxonomic
-name, including its spelling status (i.e. whether it is a misspelling, rank
-change, etc.) and the opinion from which this status is taken.
-
-=item taxon_attrs
-
-This table is used to compute hierarchically derived attributes of taxonomic
-concepts, such as mass estimates and extancy.
-
-=item suppress_opinions
-
-You will probably never need to refer to this table, but it is included here
-for completeness.  This table is needed because the synonymy and hierarchy
-relations must be structured as collections of trees.  Unfortunately, the set
-of opinions stored in the database may generate cycles in one or both of these
-relations.  For example, there will be cases in which the best opinion on
-taxon A states that it is a subjective synonym of B, while the best opinion on
-taxon B states that it is a subjective synonym of A.  In order to resolve
-this, the algorithm that computes the synonymy and hierarchy relations breaks
-each cycle by choosing the best (most recent and reliable) opinion from those
-that define the cycle and suppressing any opinion that contradicts the chosen
-one.  The C<suppress_opinions> table records which opinions are so suppressed.
-
-=back
-
-=head2 Algorithm
-
-The algorithm for building or rebuilding a taxonomic hierarchy is given in the
-documentation for C<TaxonTrees.pm>.
-
-=cut
-
-=head1 INTERFACE
-
-I<Note: this is a draft specification, and may change>.
-
-In the following documentation, the parameter C<dbh> is always a database
-handle.  Here are some examples:
-
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
-    
-    my ($base_taxon) = $taxonomy->getTaxaByName('Conus');
-    my $taxon_rank = $base_taxon->{taxon_rank};
-    my $reference = Reference->new($dbt, $base_taxon->{reference_no});
-    
-    my @list = $taxonomy->getTaxa('children', $base_taxon, { return => 'id' });
-    my $child_id_list = '(' . join(',', @list) . ')';
-    
-    my $sth = $dbh->prepare("SELECT some_fields FROM some_table WHERE taxon_no IN $child_id_list");
-    
-    my @lineage = $taxonomy->getTaxa($base_taxon, 'parents');
-    
-    my ($id_table) = $taxonomy->getTaxa('all_children', $base_taxon, { return => 'id_table' });
-    
-    my $result = $dbh->selectall_arrayref("SELECT some_fields FROM $id_table JOIN some_other_table using (taxon_no) WHERE condition");
-    
-    $dbh->do("DROP TABLE $id_table");
-
-=cut
-
-=head2 Class Methods
+our (%FIELD_LIST, %FIELD_TABLES);
 
 =head3 new ( dbh, tree_table_name )
 
@@ -328,25 +37,674 @@ sub new {
 
     my ($class, $dbh, $table_name) = @_;
     
-    croak "unknown tree table '$table_name'" unless $TREE_TABLE_ID{$table_name};
+    my $t = $TAXON_TABLE{$table_name};
+    
+    croak "unknown tree table '$table_name'" unless ref $t;
     croak "bad database handle" unless ref $dbh;
     
     my $self = { dbh => $dbh, 
-		 tree_table => $table_name,
-		 auth_table => $AUTH_TABLE{$table_name},
-		 attrs_table => $ATTRS_TABLE{$table_name},
-		 name_table => $NAME_TABLE{$table_name},
-		 search_table => $SEARCH_TABLE{$table_name},
-		 opinion_table => $OPINION_TABLE{$table_name},
-		 opinion_cache => $OPINION_CACHE{$table_name},
-		 image_table => 'taxon_images',
-	         scratch_table => 'ancestry_scratch' };
-    
+		 TREE_TABLE => $table_name,
+	         ATTRS_TABLE => $t->{attrs},
+		 INTS_TABLE => $t->{ints},
+		 LOWER_TABLE => $t->{lower},
+		 COUNTS_TABLE => $t->{counts},
+		 AUTH_TABLE => $t->{authorities},
+		 OP_TABLE => $t->{opinions},
+		 OP_CACHE => $t->{opcache},
+		 REFS_TABLE => $t->{refs},
+	       };
+        
     bless $self, $class;
     
     return $self;
 }
 
+
+my (%STD_OPTION) = ( fields => 1, min_rank => 1, max_rank => 1, status => 1, return => 1 );
+
+# example: $taxonomy->list_subtree($taxon_no, { status => 'seniors' })
+
+
+my $VALID_TAXON_ID = qr{^[0-9]+$};
+
+# list_subtree ( base_id, options )
+# 
+# Return a reference to a list of records corresponding to the subtree rooted at
+# the specified taxon, or to the empty list if none exists.  This is intended to
+# be a simple routine to cover a common case.  For more flexibility, try
+# &list_taxa or &list_related_taxa.
+
+sub list_subtree {
+
+    my ($taxonomy, $base_no, $options) = @_;
+    
+    # First check the arguments.
+    
+    my $return_type = lc $options->{return} || 'list';
+    
+    croak "list_subtree: first argument must be a taxon identifier\n"
+	if ref $base_no;
+    
+    unless ( $base_no =~ $VALID_TAXON_ID )
+    {
+	return $return_type eq 'listref' ? [] : ();
+    }
+    
+    croak "list_subtree: second argument must be a hashref"
+	if defined $options && ref $options ne 'HASH';
+    $options ||= {};
+    
+    foreach my $key ( keys %$options )
+    {
+	croak "list_subtree: invalid option '$key'\n" unless $STD_OPTION{$key};
+    }
+    
+    # Then generate an SQL statement according to the specified base_no and options.
+    
+    my $tables = {};
+    my @fields = $taxonomy->generate_fields($options->{fields} || 'SIMPLE', $tables);
+    my $fields = join ', ', @fields;
+    
+    my @filters = "base.taxon_no = $base_no";
+    push @filters, $taxonomy->simple_filters($options);
+    my $filters = @filters ? join ' and ', @filters : '1=1';
+    
+    my $joins = $taxonomy->simple_joins('t', $tables);
+    
+    $SQL_STRING = "
+	SELECT $fields
+	FROM $taxonomy->{AUTH_TABLE} as base JOIN $taxonomy->{TREE_TABLE} as tb using (orig_no)
+		JOIN $taxonomy->{TREE_TABLE} as t on t.lft between tb.lft and tb.rgt
+		$joins
+	WHERE $filters
+	ORDER BY t.lft\n";
+    
+    my $result_list = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
+    
+    return $return_type eq 'listref' ? $result_list : @$result_list;
+}
+
+
+sub list_taxa {
+
+    my ($taxonomy, $taxon_nos, $options) = @_;
+    
+    # First check the arguments.
+    
+    my $return_type = lc $options->{return} || 'list';
+    
+    croak "list_taxa: second argument must be a hashref"
+	if defined $options && ref $options ne 'HASH';
+    $options ||= {};
+    
+    foreach my $key ( keys %$options )
+    {
+	croak "list_subtree: invalid option '$key'\n" unless $STD_OPTION{$key};
+    }
+    
+    unless ( $taxon_nos = $taxonomy->generate_id_string($taxon_nos) )
+    {
+	return $return_type eq 'listref' ? [] : ();
+    }
+    
+    my $tables = { has_a => 1 };
+    my @fields = $taxonomy->generate_fields($options->{fields} || 'SIMPLE', $tables);
+    my $fields = join ', ', @fields;
+    
+    my @filters = "a.taxon_no in ($taxon_nos)";
+    push @filters, $taxonomy->simple_filters($options, $tables);
+    my $filters = join( q{ and }, @filters) || '1=1';
+    
+    my $joins = $taxonomy->simple_joins('t', $tables);
+    
+    $SQL_STRING = "
+	SELECT $fields
+	FROM $taxonomy->{AUTH_TABLE} as a JOIN $taxonomy->{TREE_TABLE} as t using (orig_no)
+		$joins
+	WHERE $filters
+	ORDER BY t.lft\n";
+    
+    my $result_list = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
+    
+    return $return_type eq 'listref' ? $result_list : @$result_list;
+}
+
+
+sub resolve_names {
+
+    my ($taxonomy, $names, $options) = @_;
+    
+    # Check the arguments.
+    
+    croak "resolve_names: second argument must be a hashref"
+	if defined $options && ref $options ne 'HASH';
+    $options ||= {};
+    
+    my $return_type = lc $options->{return} || 'list';
+    
+    foreach my $key ( keys %$options )
+    {
+	croak "resolve_names: invalid option '$key'\n"
+	    unless $STD_OPTION{$key} || $key eq 'fields';
+    }
+    
+    # Generate a template query that will be able to find a name.
+    
+    my $tables = {};
+    my @fields = $taxonomy->generate_fields($options->{fields} || 'SEARCH', $tables);
+    
+    my @filters, $taxonomy->simple_filters($options);
+    
+    my $fields = join q{, }, @fields;
+    my $filters = @filters ? join( ' and ', @filters ) . ' and ' : '';
+    my $joins = $taxonomy->simple_joins('t', $tables);
+    
+    my $limit = $options->{all_names} ? "LIMIT 500" : "LIMIT 1";
+    
+    my $top = "
+	SELECT $fields
+	FROM taxon_search as s join taxon_trees as t on t.orig_no = s.orig_no
+		join taxon_attrs as v on v.orig_no = t.orig_no
+	WHERE $filters";
+    
+    my $bottom = "
+	ORDER BY s.is_current desc, s.is_exact desc, v.taxon_size desc $limit";
+    
+    # Then split the argument into a list of distinct names to interpret.
+    
+    my @names = $taxonomy->parse_names($names, $options);
+    my @result;
+    my $range;
+    
+    my $dbh = $taxonomy->{dbh};
+    
+  NAME:
+    foreach my $n ( @names )
+    {
+	if ( $n =~ qr{ ^ lft [ ] between }xs )
+	{
+	    $range = $n;
+	    next NAME;
+	}
+	
+	elsif ( $n eq 'CLEAR_RANGE' )
+	{
+	    $range = undef;
+	    next NAME;
+	}
+	
+	my $exclude;
+	$exclude = 1 if $n =~ s{^\^}{};
+	
+	$n =~ s{[.]}{% }g;
+	
+	if ( $n =~ qr{ ^ ( [A-Za-z_.%]+ )
+			    (?: \s+ \( ( [A-Za-z_.%]+ ) \) )?
+			    (?: \s+    ( [A-Za-z_.%]+ )    )?
+			    (?: \s+    ( [A-Za-z_.%]+ )    )? }xs )
+	{
+	    my $main = $1;
+	    my $subgenus = $2;
+	    my $species = $3;
+	    $species .= " $4" if $4;
+	    
+	    my @clauses;
+	    
+	    if ( $species )
+	    {
+		my $quoted = $dbh->quote($species);
+		push @clauses, "taxon_name like $quoted";
+		
+		$quoted = $dbh->quote($subgenus || $main || '_NOTHING_');
+		push @clauses, "genus like $quoted";
+	    }
+	    
+	    else
+	    {
+		my $quoted = $dbh->quote($subgenus || $main);
+		push @clauses, "taxon_name like $quoted";
+	    }
+	    
+	    push @clauses, "($range)" if $range;
+	    
+	    my $sql = $top . join(' and ', @clauses) . $bottom;
+	    
+	    my $this_result = $dbh->selectall_arrayref($sql, { Slice => {} });
+	    
+	    foreach my $r ( @$this_result )
+	    {
+		$r->{exclude} = 1 if $exclude;
+		push @result, $return_type eq 'id' ? $r->{orig_no} : $r;
+	    }
+	}
+    }
+    
+    return \@result if $return_type eq 'listref';
+    return @result; # otherwise
+    
+    # $$$$ have to deal with range
+    
+    # my @fields;
+    # my $tables = { has_a => 1 };
+    
+    # foreach my $key ( keys %$options )
+    # {
+    # 	if ( $key eq 'fields' )
+    # 	{
+    # 	    @fields = $taxonomy->generate_fields($options->{$key}, $tables);
+    # 	}
+	
+    # 	elsif ( ! $STD_OPTION{$key} )
+    # 	{
+    # 	    croak "list_subtree: invalid option '$key'\n";
+    # 	}
+    # }
+    
+    # my @filters = "a.taxon_no in ($taxon_nos)";
+    # push @filters, $taxonomy->simple_filters($options);
+    
+    # @fields = @{$FIELD_LIST{SIMPLE}} unless @fields;
+    
+    # my $fields = join ', ', @fields;
+    # my $filters = @filters ? join ' and ', @filters : '1=1';
+    # my $joins = $taxonomy->simple_joins('t', $tables);
+    
+    # $SQL_STRING = "
+    # 	SELECT $fields
+    # 	FROM $taxonomy->{AUTH_TABLE} as a JOIN $taxonomy->{TREE_TABLE} as t using (orig_no)
+    # 		$joins
+    # 	WHERE $filters
+    # 	ORDER BY t.lft\n";
+    
+    # my $result_list = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
+    
+    # return $result_list;
+}
+
+
+sub parse_names {
+    
+    my ($taxonomy, $name_string, $base_taxon) = @_;
+    
+    $taxonomy->{bad_names} = undef;
+    $DB::single = 1;
+    my ($range, @taxa);
+    
+  COMPONENT:
+    while ( $name_string )
+    {
+	$name_string =~ s/^[\s,]+//;
+	
+	# If the initial component looks like "something:" or "something{" then
+	# we evaluate the specified name (with a % wildcard appended) and use
+	# it as a base to look up the subsequent components.  For example:
+	# 
+	# - Gastropod:Ficus will resolve to the snail genus, whereas
+	#   Moraceae:Ficus will resolve to the fig genus.
+	# 
+	# - Foram:Agerinia will resolve to the foram genus, whereas
+	#   Primate:Agerinia will resolve to the primate genus.
+	# 
+	# - Gastro:{Ficus, Peri.} would resolve to two genera of snails.
+	
+	if ( $name_string =~ qr< ^ ( [^{,:]* ) [:]? [{] ( [^}]* ) (?: [}] (.*) | $ ) >xs )
+	{
+	    $name_string = $3;
+	    
+	    my $base_string = $1;
+	    my $sub_string = $2;
+	    my $exclude;
+	    
+	    if ( defined $base_string && $base_string =~ s{^\^}{} )
+	    {
+		$exclude = '^';
+	    }
+	    
+	    if ( defined $base_string && $base_string ne '' )
+	    {
+		my $range_string = $taxonomy->resolve_range($base_string);
+		
+		if ( $range_string )
+		{
+		    push @taxa, $range_string;
+		    push @taxa, $taxonomy->parse_substring($sub_string, $exclude);
+		    $range = 1;
+		}
+		
+		next COMPONENT;
+	    }
+	    
+	    else
+	    {
+		push @taxa, 'CLEAR_RANGE' if $range;
+		$range = undef;
+		push @taxa, $taxonomy->parse_substring($sub_string, $exclude);
+		next COMPONENT;
+	    }
+	}
+	
+	elsif ( $name_string =~ qr< ^ ( [^{,:]* ) [:] ( [^{},:]* ) (.*) $ >xs )
+	{
+	    $name_string = $3;
+	    
+	    my $base_string = $1;
+	    my $sub_string = $2;
+	    my $exclude;
+	    
+	    unless ( defined $sub_string && $sub_string ne '' )
+	    {
+		push @taxa, 'CLEAR_RANGE' if $range;
+		$range = undef;
+		push @taxa, $base_string;
+		next COMPONENT;
+	    }
+	    
+	    if ( defined $base_string && $base_string ne '' )
+	    {
+		if ( $base_string =~ s{^\^}{} )
+		{
+		    $exclude = '^';
+		}
+		
+		my $range_string = $taxonomy->resolve_range($base_string);
+		
+		if ( $range_string )
+		{
+		    push @taxa, $range_string;
+		    push @taxa, $sub_string;
+		    $range = 1;
+		}
+	    }
+	    
+	    next COMPONENT;
+	}
+	
+	elsif ( $name_string =~ qr{ ^ ( [^,]+ ) (.*) }xs )
+	{
+	    $name_string = $2;
+	    my $name = $1;
+	    
+	    if ( defined $name && $name ne '' )
+	    {
+		my $exclude;
+		
+		if ( $name_string =~ s{^\^}{} )
+		{
+		    $exclude = '^';
+		}
+		
+		push @taxa, 'CLEAR_RANGE' if $range;
+		$range = undef;
+		push @taxa, $taxonomy->parse_substring($name, $exclude);
+	    }
+	    
+	    next COMPONENT;
+	}
+	
+	else
+	{
+	    push @{$taxonomy->{bad_names}}, $name_string;
+	    last COMPONENT;
+	}
+    }
+    
+    return @taxa;
+}
+
+
+sub resolve_range {
+    
+    my ($taxonomy, $base_string) = @_;
+    
+    return unless defined $base_string && $base_string ne '';
+    
+    unless ( $base_string =~ qr{ ^ ( [a-zA-Z][a-zA-Z_%]+ [.]? ) \s* $ }xs )
+    {
+	push @{$taxonomy->{bad_names}}, $base_string;
+	return;
+    }
+    
+    my $base_name = "$1.";
+    
+    my $count = $base_name =~ tr/[a-zA-Z]/[a-zA-Z]/;
+    
+    unless ( $count >= 4 )
+    {
+	push @{$taxonomy->{bad_names}}, $base_string;
+	return;
+    }
+    
+    $base_name =~ tr/./%/s;
+    
+    my $sql = "
+	SELECT lft, rgt FROM taxon_trees
+	WHERE name like '$base_name' and rank > 5";
+    
+    my $ranges = $taxonomy->{dbh}->selectall_arrayref($sql);
+    
+    my @check = grep { $_->[0] > 0 && $_->[1] > 0 } @$ranges; 
+    
+    my $range_string = join(' or ', map { "lft between $_->[0] and $_->[1]" } @check);
+    
+    return $range_string;
+}
+
+
+# $$$ Must deal with names like: Dinosauria^Aves    Metazoa:Dinosauria^Aves   Dinosauria^Aves{Sphenisciformes}
+# we probably need a stack!
+
+sub parse_substring {
+    
+    my ($taxonomy, $sub_string, $flag) = @_;
+    
+    return unless defined $sub_string && $sub_string ne '';
+    
+    my @components;
+    
+    foreach my $name ( split qr{\s*[,^]\s*}, $sub_string )
+    {
+	next unless $name;
+	
+	$name = "$flag$name" if $flag;
+	
+	push @components, $name;
+    }
+    
+    return @components;
+}
+
+
+sub generate_id_string {
+    
+    my ($taxonomy, $taxon_nos) = @_;
+    
+    if ( ref $taxon_nos eq 'HASH' )
+    {
+	return join(q{,}, grep { $_ =~ $VALID_TAXON_ID } keys %$taxon_nos);
+    }
+    
+    elsif ( ref $taxon_nos eq 'ARRAY' )
+    {
+	return join(q{,}, grep { $_ =~ $VALID_TAXON_ID } @$taxon_nos);
+    }
+    
+    elsif ( ref $taxon_nos )
+    {
+	croak "taxonomy: invalid taxon identifier '$taxon_nos'\n";
+    }
+    
+    else
+    {
+	return join(q{,}, grep { $_ =~ $VALID_TAXON_ID } split(qr{\s*,\s*}, $taxon_nos));
+    }
+}    
+
+
+sub generate_fields {
+    
+    my ($taxonomy, $fields, $tables_hash) = @_;
+    
+    my @field_list;
+    
+    if ( ref $fields eq 'ARRAY' )
+    {
+	@field_list = @$fields;
+    }
+    
+    elsif ( ref $fields )
+    {
+	croak "taxonomy: bad field specifier '$fields'\n";
+   }
+    
+    elsif ( defined $fields )
+    {
+	@field_list = split qr{\s*,\s*}, $fields;
+    }
+    
+    my @result;
+    
+    foreach my $f ( @field_list )
+    {
+	croak "taxonomy: unknown field specifier '$f'\n" unless ref $FIELD_LIST{$f};
+	@{$tables_hash}{@{$FIELD_TABLES{$f}}} = (1, 1, 1) if ref $FIELD_TABLES{$f};
+	push @result, @{$FIELD_LIST{$f}} if ref $FIELD_LIST{$f};
+    }
+    
+    croak "taxonomy: no valid fields specified\n" unless @result;
+    
+    return @result;
+}
+
+
+
+my (%STATUS_FILTER) = ( valid => "t.valid_no = t.synonym_no",
+			senior => "t.valid_no = t.orig_no",
+			junior => "t.valid_no = t.synonym_no and t.orig_no <> t.synonym_no",
+			invalid => "t.valid_no <> t.synonym_no",
+		        any => '1=1');
+
+sub simple_filters {
+    
+    my ($taxonomy, $options) = @_;
+    
+    my @filters;
+    
+    if ( $options->{status} )
+    {
+	push @filters, $STATUS_FILTER{$options->{status}} || "t.status = 'NOTHING'";
+    }
+    
+    if ( $options->{min_rank} || $options->{max_rank} )
+    {
+	my $min = $options->{min_rank} > 0 ? $options->{min_rank} + 0 : $TAXON_RANK{lc $options->{min_rank}};
+	my $max = $options->{max_rank} > 0 ? $options->{max_rank} + 0 : $TAXON_RANK{lc $options->{max_rank}};
+	
+	if ( $min && $max )
+	{
+	    push @filters, $min == $max ? "t.rank = $min" : "t.rank between $min and $max";
+	}
+	
+	elsif ( $min )
+	{
+	    push @filters, "t.rank >= $min";
+	}
+	
+	elsif ( $max )
+	{
+	    push @filters, "t.rank <= $max";
+	}
+	
+	else
+	{
+	    push @filters, "t.rank = 0";
+	}
+    }
+    
+    return @filters;
+}
+
+
+sub name_filters {
+
+    my ($taxonomy, $names, $options) = @_;
+    
+    my @names;
+    
+    if ( ref $names eq 'HASH' )
+    {
+	@names = keys %$names;
+    }
+    
+    elsif ( ref $names eq 'ARRAY' )
+    {
+	@names = @$names;
+    }
+    
+    elsif ( ! ref $names )
+    {
+	@names =  split( qr{\s*,\s*}, $names // '' );
+    }
+    
+    else
+    {
+	croak "taxonomy: first argument must be a scalar, hashref or arrayref\n";
+    }
+    
+    # Now go through the names one by one and try to interpret them.
+    
+ NAME:
+    foreach my $tn ( @names )
+    {
+	
+	
+	
+	
+    }
+}
+
+
+sub simple_joins {
+
+    my ($taxonomy, $mt, $tables_hash) = @_;
+    
+    my $joins = '';
+    
+    $joins .= "\t\tLEFT JOIN $taxonomy->{INTS_TABLE} as ph on ph.ints_no = $mt.ints_no\n"
+	if $tables_hash->{ph};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{LOWER_TABLE} as pl on pl.orig_no = $mt.orig_no\n"
+	if $tables_hash->{pl};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{ATTRS_TABLE} as v on v.orig_no = $mt.orig_no\n"
+	if $tables_hash->{v};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{AUTH_TABLE} as a on a.taxon_no = t.spelling_no\n"
+	if ($tables_hash->{a} || $tables_hash->{r}) && ! $tables_hash->{has_a};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{REFS_TABLE} as r on r.reference_no = a.reference_no\n"
+	if $tables_hash->{r};
+    
+    return $joins;
+}
+
+
+our (%FIELD_LIST) = ( SIMPLE => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank', 
+				 't.lft', 't.parsen_no'],
+		      SEARCH => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank',
+				 't.lft', 't.parsen_no'],
+		      RANGE => ['t.orig_no', 't.rank as taxon_rank', 't.lft', 't.rgt'],
+		      APP => ['v.first_early_age as firstapp_ea', 
+			      'v.first_late_age as firstapp_la',
+			      'v.last_early_age as lastapp_ea',
+			      'v.last_late_age as lastapp_la'],
+		      ATTR => ['if(a.refauth, r.author1last, a.author1last) as a_al1',
+			       'if(a.refauth, r.author2last, a.author2last) as a_al2',
+			       'if(a.refauth, r.otherauthors, a.otherauthors) as a_ao',
+			       'if(a.refauth, r.pubyr, a.pubyr) as a_pubyr'],
+		      family_no => ['ph.family_no'],
+		    );
+
+our (%FIELD_TABLES) = ( APP => ['v'], 
+			ATTR => ['r'],
+		        family_no => ['ph'] );
+
+__END__
 
 # The following expressions list the various sets of fields that will be
 # returned as part of a Taxon or Opinion object:

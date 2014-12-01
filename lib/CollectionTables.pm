@@ -16,7 +16,7 @@ our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA
+use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_MAP
 		 $COUNTRY_MAP $CONTINENT_DATA
 		 $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
@@ -26,6 +26,7 @@ use ConsoleLog qw(logMessage);
 our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
 our $COLL_STRATA_WORK = "csn";
+our $COLL_MAP_WORK = "cpn";
 
 our $CLUST_AUX = "clust_aux";
 
@@ -287,7 +288,7 @@ sub buildCollectionTables {
     logMessage(2, "    indexing by geographic coordinates (spatial)...");
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD SPATIAL INDEX (loc)");
-        
+    
     logMessage(2, "    indexing by country...");
     
     $result = $dbh->do("ALTER TABLE $COLL_MATRIX_WORK ADD INDEX (cc)");
@@ -305,7 +306,7 @@ sub buildCollectionTables {
     # number of collections and occurrences in each bin and computing the
     # centroid and age boundaries (adjusted to the standard intervals).
     
-    logMessage(2, "    creating geography/time summary table...");
+    logMessage(2, "    creating geography/time summary tables...");
     
     $dbh->do("DROP TABLE IF EXISTS $COLL_BINS_WORK");
     
@@ -328,6 +329,13 @@ sub buildCollectionTables {
 		std_dev float,
 		access_level tinyint unsigned not null,
 		primary key (bin_id, interval_no)) Engine=MyISAM");
+    
+    $dbh->do("DROP TABLE IF EXISTS $COLL_MAP_WORK");
+    
+    $dbh->do("CREATE TABLE $COLL_MAP_WORK (
+		bin_id int unsigned not null,
+		interval_no int unsigned not null,
+		collection_no int unsigned not null) Engine=MyISAM");
     
     my $set_lines = '';
     my @index_stmts;
@@ -361,6 +369,18 @@ sub buildCollectionTables {
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "      generated $result non-empty bins.");
+	
+	# Now do the same for the collection/interval map.
+	
+	logMessage(2, "      mapping bins to collections...");
+	
+	$sql = "INSERT IGNORE INTO $COLL_MAP_WORK (bin_id, interval_no, collection_no)
+		SELECT bin_id_$level, 0, collection_no
+		FROM $COLL_MATRIX as m";
+	
+	$result = $dbh->do($sql);
+	
+	logMessage(2, "      generated $result rows in the collection map.");
 	
 	# Add a special row indicating the bin resolution for each level.
 	
@@ -397,7 +417,32 @@ sub buildCollectionTables {
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "      generated $result non-empty bins.");
+	
+	# Now do the same for the collection/interval map.
+	
+	logMessage(2, "      mapping bins to collections...");
+	
+	$sql = "
+		INSERT IGNORE INTO $COLL_MAP_WORK (bin_id, interval_no, collection_no)
+		SELECT bin_id_$level, interval_no, collection_no
+		FROM $COLL_MATRIX as m JOIN $INTERVAL_DATA as i
+			JOIN $SCALE_MAP as s using (interval_no)
+			JOIN $INTERVAL_BUFFER as ib using (interval_no)
+		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
+			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
+			and (m.early_age > i.late_age and m.late_age < i.early_age)
+			and m.access_level = 0 and m.bin_id_$level > 0";
+	
+	$result = $dbh->do($sql);
+	
+	logMessage(2, "      generated $result rows collection map.");
     }
+    
+    logMessage(2, "      indexing interval/bin/collection map...");
+    
+    $dbh->do("ALTER TABLE $COLL_MAP_WORK ADD KEY (collection_no)");
+    $dbh->do("ALTER TABLE $COLL_MAP_WORK ADD KEY (interval_no)");
+    $dbh->do("ALTER TABLE $COLL_MAP_WORK ADD KEY (bin_id, interval_no)");
     
     logMessage(2, "    setting point geometries for spatial index...");
     
@@ -424,7 +469,7 @@ sub buildCollectionTables {
     # Finally, we swap in the new tables for the old ones.
     
     activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS,
-		         $COLL_STRATA_WORK => $COLL_STRATA);
+		         $COLL_STRATA_WORK => $COLL_STRATA, $COLL_MAP_WORK => $COLL_MAP);
     
     $dbh->do("DROP TABLE IF EXISTS protected_aux");
     

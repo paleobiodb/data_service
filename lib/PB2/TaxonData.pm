@@ -15,6 +15,7 @@ use Carp qw(carp croak);
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES);
+use TaxonomyOld;
 use Taxonomy;
 
 use Moo::Role;
@@ -410,7 +411,7 @@ sub initialize {
 	"The following parameters are used to select the base set of taxonomic names to return.",
 	"If you wish to download the entire taxonomy, use C<rel=all_taxa> and see also the",
 	"L<limit|node:special#limit> parameter.",
-	{ param => 'name', valid => \&PB2::TaxonData::validNameSpec, list => ',', 
+	{ param => 'name', valid => \&PB2::TaxonData::validNameSpec, 
 	  alias => 'taxon_name' },
 	    "Select the all taxa matching each of the specified name(s).",
 	    "To specify more than one, separate them by commas.",
@@ -581,7 +582,8 @@ sub get {
     my ($self) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
+    my $taxonomy2 = Taxonomy->new($dbh, 'taxon_trees');
     my $valid = $self->{valid};
     my $taxon_no;
     
@@ -601,7 +603,8 @@ sub get {
     elsif ( defined $valid->value('name') )
     {
 	$not_found_msg = "Taxon '$valid->value('name')' was not found in the database";
-	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
+	my $name_select = { return => 'id' };
+	#my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
 	
 	if ( defined $valid->value('rank') )
 	{
@@ -609,7 +612,9 @@ sub get {
 	    $not_found_msg .= " at rank '$name_select->{rank}'";
 	}
 	
-	($taxon_no) = $self->get_taxa_by_name($valid->value('name'), $name_select);
+	($taxon_no) = $taxonomy2->resolve_names($valid->value('name'), $name_select);
+	
+	#($taxon_no) = $self->get_taxa_by_name($valid->value('name'), $name_select);
     }
     
     # If we haven't found a record, the result set will be empty.
@@ -646,7 +651,7 @@ sub get {
     
     ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $options);
     
-    $self->{main_sql} = $Taxonomy::SQL_STRING;
+    $self->{main_sql} = $TaxonomyOld::SQL_STRING;
     
     # If we were asked for 'nav' info, also show the various categories
     # of subtaxa and whether or not each of the parents are extinct.
@@ -754,7 +759,8 @@ sub list {
     my ($self, $arg) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
+    my $taxonomy2 = Taxonomy->new($dbh, 'taxon_trees');
     
     # First, figure out what info we need to provide
     
@@ -785,11 +791,12 @@ sub list {
     {
 	my @names = ref $name_list eq 'ARRAY' ? @$name_list : $name_list;
 	my @ids;
-	my $name_options = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
+	#my $name_options = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
+	my $name_options = { return => 'id' };
 	
 	foreach my $name (@names)
 	{
-	    push @ids, $self->get_taxa_by_name($name, $name_options);
+	    push @ids, $taxonomy2->resolve_names($name, $name_options);
 	}
 	
 	return unless @ids;
@@ -804,7 +811,7 @@ sub list {
     {
 	my @result = $taxonomy->getTaxonReferences('self', $id_list, $options);
 	$self->{main_result} = \@result;
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
 	$self->{result_count} = scalar(@result);
     }
     
@@ -812,7 +819,7 @@ sub list {
     {
 	$options->{return} = 'stmt';
 	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id_list, $options);
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
 	$self->sql_count_rows;
     }
     
@@ -823,7 +830,7 @@ sub list {
     {
 	my @result = $taxonomy->getTaxa('self', $id_list, $options);
 	$self->{main_result} = \@result;
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
 	$self->{result_count} = scalar(@result);
     }
     
@@ -834,7 +841,7 @@ sub list {
 	$options->{return} = 'list';
 	
 	($self->{main_record}) = $taxonomy->getTaxa('common_ancestor', $id_list, $options);	
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
 	$self->{result_count} = defined $self->{main_record} ? 1 : 0;
     }
     
@@ -846,7 +853,7 @@ sub list {
 	$rel ||= 'self';
 	
 	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
 	$self->sql_count_rows;
     }
     
@@ -868,7 +875,7 @@ sub match {
     my ($self) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
     
     # Make sure we have at least one valid name.
     
@@ -901,7 +908,7 @@ sub list_refs {
     my ($self) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
     
     # First, figure out what info we need to provide
     
@@ -932,7 +939,7 @@ sub list_refs {
     {
 	my @result = $taxonomy->getTaxonReferences('self', \@taxon_list, $options);
 	$self->{main_result} = \@result;
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
 	$self->{result_count} = scalar(@result);
     }
     
@@ -946,7 +953,7 @@ sub list_refs {
 	my $rel = $self->clean_param('rel') || 'self';
 	
 	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id, $options);
-	$self->{main_sql} = $Taxonomy::SQL_STRING;
+	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
 	$self->sql_count_rows;
     }
     
@@ -1463,7 +1470,7 @@ sub list_images {
     my ($self) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
     my ($sql, $result);
     
     my @filters;
@@ -1609,48 +1616,48 @@ sub generate_query_fields {
     
     if ( $select{link} )
     {
-	$fields .= $Taxonomy::LINK_FIELDS;
+	$fields .= $TaxonomyOld::LINK_FIELDS;
     }
     
     if ( $select{attr} )
     {
-	$fields .= $Taxonomy::ATTR_FIELDS;
+	$fields .= $TaxonomyOld::ATTR_FIELDS;
 	$tables->{ref} = 1;
     }
     
     if ( $select{size} )
     {
-	$fields .= $Taxonomy::SIZE_FIELDS;
+	$fields .= $TaxonomyOld::SIZE_FIELDS;
 	$tables->{at} = 1;
     }
     
     if ( $select{app} )
     {
-	$fields .= $Taxonomy::APP_FIELDS;
+	$fields .= $TaxonomyOld::APP_FIELDS;
 	$tables->{at} = 1;
     }
     
     if ( $select{parent} )
     {
-	$fields .= $Taxonomy::PARENT_FIELDS;
+	$fields .= $TaxonomyOld::PARENT_FIELDS;
 	$tables->{pa} = 1;
     }
     
     if ( $select{phylo} )
     {
-	$fields .= $Taxonomy::INT_PHYLO_FIELDS;
+	$fields .= $TaxonomyOld::INT_PHYLO_FIELDS;
 	$tables->{pi} = 1;
     }
     
     if ( $select{counts} )
     {
-	$fields .= $Taxonomy::COUNT_PHYLO_FIELDS;
+	$fields .= $TaxonomyOld::COUNT_PHYLO_FIELDS;
 	$tables->{pc} = 1;
     }
     
     if ( $select{'$bt.created'} )
     {
-	$fields .= $Taxonomy::CREATED_FIELDS;
+	$fields .= $TaxonomyOld::CREATED_FIELDS;
     }
     
     $fields =~ s/v\./at./g;

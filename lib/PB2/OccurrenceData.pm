@@ -1,12 +1,14 @@
 # 
 # OccurrenceData
 # 
-# A class that returns information from the PaleoDB database about a single
-# occurence or a category of occurrences.  It is a subclass of 'CollectionData'.
+# A role that returns information from the PaleoDB database about a single
+# occurence or a category of occurrences.
 # 
 # Author: Michael McClennen
 
 use strict;
+
+use lib '..';
 
 package PB2::OccurrenceData;
 
@@ -16,12 +18,11 @@ use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $COUNTRY_MAP $PALEOCOORDS $
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
-use Taxonomy;
 
 use Moo::Role;
 
 
-our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData PB2::TaxonData PB2::CollectionData);
+our (@REQUIRES_ROLE) = qw(PB2::DiversityData PB2::CommonData PB2::ReferenceData PB2::TaxonData PB2::CollectionData);
 
 
 # initialize ( )
@@ -90,11 +91,11 @@ sub initialize {
     
     $ds->define_block('1.2:occs:basic' =>
 	{ select => ['o.occurrence_no', 'o.reid_no', 'o.latest_ident', 'o.collection_no', 'o.taxon_no',
-		     'ts.spelling_no as matched_no', 'ts.name as matched_name', 'ts.rank as matched_rank', 'ts.lft as tree_seq',
+		     'tv.spelling_no as matched_no', 'tv.name as matched_name', 'tv.rank as matched_rank', 'tv.lft as tree_seq',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
 		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso', 'o.species_name', 'o.species_reso',
 		     'o.early_age', 'o.late_age', 'o.reference_no'],
-	  tables => ['o', 't', 'ts', 'ei', 'li'] },
+	  tables => ['o', 'tv', 'ts', 'ei', 'li'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
 	{ output => 'occurrence_no', dwc_name => 'occurrenceID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies the occurrence",
@@ -279,12 +280,13 @@ sub initialize {
 	    "been placed in their proper family, so occurrences in these genera",
 	    "will be skipped if you are counting families.");
     
-    # The following block specifies the output for phylogenies.
+    # The following block specifies the output for taxon records representing
+    # occurrence taxonomies.
     
-    $ds->define_block('1.2:occs:phylogeny' =>
+    $ds->define_block('1.2:occs:taxa' =>
 	{ output => 'taxon_no', com_name => 'oid' },
 	    "The identifier of the taxon represented by this record",
-	{ output => 'parent_no', com_name => 'pid' },
+	{ output => 'parent_no', com_name => 'par' },
 	    "The identifier of the parent taxon.  You can use this field to assemble",
 	    "these records into one or more taxonomic trees.  A value of 0",
 	    "indicates a root of one of these trees.  By default, records representing",
@@ -294,8 +296,13 @@ sub initialize {
 	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
 	{ output => 'taxon_name', com_name => 'nam' },
 	    "The name of the taxon represented by this record",
+	{ output => 'attribution', if_block => 'attr', com_name => 'att' },
+	    "The attribution (author and year) of this taxonomic name",
+	{ output => 'specific_occs', com_name => 'soc' },
+	    "The number of occurrences that are identified to this specific taxon",
+	    "in the set of fossil occurrences being analyzed",
 	{ output => 'n_occs', com_name => 'noc' },
-	    "The number of occurrences of this taxon (or any of its subtaxa) in the",
+	    "The total number of occurrences of this taxon or any of its subtaxa in the",
 	    "set of fossil occurrences being analyzed",
 	{ output => 'n_orders', com_name => 'odc' },
 	    "The number of orders from within this taxon that appear in the set of",
@@ -309,6 +316,43 @@ sub initialize {
 	{ output => 'n_species', com_name => 'spc' },
 	    "The number of species from within this taxon that appear in the set of",
 	    "fossil occurrences being analyzed");
+    
+    $ds->define_output_map('1.2:occs:taxa_opt' =>
+	{ value => 'app', maps_to => '1.2:taxa:app', undocumented => 1 },
+	    "The age of first and last appearance of each taxon from the set",
+	    "of occurrences being analyzed (not the absolute first and last",
+	    "occurrence ages).",
+	{ value => 'attr' },
+	    "The attribution of each taxon (author and year)");
+    
+    $ds->define_block('1.2:occs:taxa_summary' =>
+	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
+	    "The number of occurrences that were scanned in the process of",
+	    "computing this taxonomic tree.");
+    
+    # The following block is used for prevalence output.
+
+    $ds->define_block('1.2:occs:prevalence' =>
+	{ output => 'orig_no', com_name => 'oid', pbdb_name => 'taxon_no' },
+	    "The identifier of the taxon.",
+	{ output => 'name', com_name => 'nam', pbdb_name => 'taxon_name' },
+	    "The scientific name of the taxon.",
+	{ set => 'rank', if_vocab => 'pbdb,dwc', lookup => \%PB2::TaxonData::RANK_STRING },
+	{ output => 'rank', com_name => 'rnk', pbdb_name => 'taxon_rank' },
+	    "The rank of the taxon.",
+	{ output => 'image_no', com_name => 'img' },
+    	    "If this value is non-zero, you can use it to construct image URLs",
+	    "using L<taxa/thumb|node:taxa/thumb> and L<taxa/icon|node:taxa/icon>.",
+	{ output => 'class_no', com_name => 'cln' },
+	    "The class (if any) to which this taxon belongs.  This will let you",
+	    "exclude an order from the list if its class has already been listed.",
+	{ output => 'phylum_no', com_name => 'phn' },
+	    "The phylum (if any) to which this taxon belongs.  This will let you",
+	    "exclude a class or order from the list if its phylum has already been listed.",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The number of occurrences of this taxon that match the specified",
+	    "parameters.  The list is sorted on this field, from highest",
+	    "to lowest.");
     
     # Then define parameter rulesets to validate the parameters passed to the
     # operations implemented by this class.
@@ -474,20 +518,23 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
-    $ds->define_ruleset('1.2:occs:phylo_params' =>
+    $ds->define_ruleset('1.2:occs:taxa_params' =>
 	{ param => 'count', valid => '1.2:occs:div_count' },
 	    "This parameter specifies the taxonomic level at which to count.  If not",
 	    "specified, it defaults to C<genera>.  The accepted values are:",
 	{ param => 'subgenera', valid => FLAG_VALUE },
 	    "You can use this parameter as a shortcut, equivalent to specifying",
 	    "C<count=genera_plus>.  Just include its name, no value is needed.",
+	{ param => 'full', valid => BOOLEAN_VALUE },
+	    "!If you specify this parameter, a complete taxonomic subtree will",
+	    "be reported instead of just the classes, orders, families, etc.",
 	{ param => 'reso', valid => ANY_VALUE },
 	    "This parameter specifies the temporal resolution at which to count.  If not",
 	    "specified, it defaults to C<families>.  Accepted values are:");
     
-    $ds->define_ruleset('1.2:occs:phylogeny' =>
+    $ds->define_ruleset('1.2:occs:taxa' =>
 	"The following parameters specify what to count and at what taxonomic resolution:",
-	{ allow => '1.2:occs:phylo_params' }, 
+	{ allow => '1.2:occs:taxa_params' }, 
         ">>The following parameters select which occurrences to analyze.",
 	"Except as noted below, you may use these in any combination.",
 	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
@@ -497,9 +544,24 @@ sub initialize {
 	{ allow => '1.2:common:select_ent' },
 	{ require_any => ['1.2:main_selector',
 			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
-	#{ allow => '1.2:occs:display' },
+	{ optional => 'SPECIAL(show)', valid => '1.2:occs:taxa_opt' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:prevalence' =>
+	"The following parameter selects from one of the available clustering levels:",
+	{ param => 'level', valid => POS_VALUE, default => 1 },
+	    "Return records from the specified cluster level.",
+	">>You can use the following parameters to query for summary clusters by",
+	"a variety of criteria.  Except as noted below, you may use these in any combination.",
+    	{ allow => '1.2:main_selector' },
+	">>You can use the following parameter if you wish to retrieve information about",
+	"the summary clusters which contain a specified collection or collections.",
+	"Only the records which match the other parameters that you specify will be returned.",
+    	{ allow => '1.2:occs:selector' },
+    	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+
     
     $ds->define_ruleset('1.2:occs:refs' =>
 	"You can use the following parameters if you wish to retrieve the references associated",
@@ -521,7 +583,7 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
 
-    $ds->define_ruleset('1.2:occs:taxa' =>
+    $ds->define_ruleset('1.2:occs:taxa_old' =>
 	"You can use the following parameters if you wish to retrieve the taxa associated",
 	"with a known list of occurrences or collections, or to filter a known list against",
 	"other criteria such as location or time.",
@@ -643,7 +705,7 @@ sub list {
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    $self->add_output_block('1.2:occs:unknown_taxon') if $tables->{unknown_taxon};
+    #$self->add_output_block('1.2:occs:unknown_taxon') if $tables->{unknown_taxon};
     
     my $fields = $self->select_string;
     
@@ -652,7 +714,7 @@ sub list {
         
     # Determine the order in which the results should be returned.
     
-    my $tt = $tables->{ts} ? 'ts' : 't';
+    my $tt = $tables->{tv} ? 'ts' : 't';
     
     my $order_clause = $self->PB2::CollectionData::generate_order_clause($tables, { at => 'c', cd => 'cc', tt => $tt }) || 'o.occurrence_no';
     
@@ -733,13 +795,13 @@ sub diversity {
     
     $tables->{ph} = 1;
     $tables->{pl} = 1;
-    $tables->{t} = 1;
+    $tables->{tv} = 1;
     $tables->{c} = 1;
     $tables->{im} = 1;
     $tables->{ei} = 1;
     $tables->{li} = 1;
     
-    my @fields = ('o.occurrence_no', 't.synonym_no', 't.rank', 'im.cx_int_no as interval_no, o.early_age, o.late_age',
+    my @fields = ('o.occurrence_no', 'tv.orig_no', 'tv.rank', 'im.cx_int_no as interval_no, o.early_age, o.late_age',
 		  'ei.interval_name as early_name', 'li.interval_name as late_name', 'o.genus_name');
     
     if ( $self->clean_param('recent') )
@@ -756,7 +818,7 @@ sub diversity {
     
     if ( $count_what eq 'species' )
     {
-	push @fields, 't.synonym_no as taxon1';
+	push @fields, 'tv.orig_no as taxon1';
 	$options->{count_rank} = 3;
     }
     
@@ -820,73 +882,67 @@ sub diversity {
 }
 
 
-# phylogeny ( )
+# taxa ( )
 # 
 # Like 'list', but processes the resulting list of occurrences into a
-# phylogenetic tree.
+# taxonomic tree.
 
-sub phylogeny {
+sub taxa {
 
-    my ($self) = @_;
+    my ($request) = @_;
     
     # Get a database handle by which we can make queries.
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     
     # Determine which fields and tables are needed to display the requested
     # information.
     
-    my $tables = $self->tables_hash;
+    my $tables = $request->tables_hash;
     
     $tables->{ph} = 1;
     $tables->{t} = 1;
-    #$tables->{ts} = 1;
+    $tables->{tv} = 1;
     $tables->{pl} = 1;
     
     # Set up the phylogeny-computation options
     
-    my $options = {};
+    my $resolution = $request->clean_param('reso') || 'genera';
+    my $count_what = $request->clean_param('count') || 'species';
     
-    my $full = $self->clean_param('full');
-    my $resolution = $self->clean_param('reso') || 'families';
-    my $count_what = $self->clean_param('count') || 'genera';
-    
-    my $get_rank;
+    $request->{my_promote} = $request->clean_param('subgenera');
+    $request->{my_attr} = $request->has_block('attr');
     
     # Determine the necessary set of query fields.
     
-    my @fields = ('o.occurrence_no', 't.rank', 't.ints_no', 'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
+    my @fields = ('o.occurrence_no', 'tv.rank', 'tv.ints_no', 'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
     
-    # Add the fields necessary for counting down to the specified rank
+    # Interpret the rank parameter.
     
     if ( $count_what eq 'species' )
     {
-	push @fields, 'ph.family_no', 'pl.genus_no', 'pl.subgenus_no', 'pl.species_no';
-	$options->{count_rank} = 3;
+	$request->{my_count_rank} = 3;
     }
     
     elsif ( $count_what eq 'genera' || $count_what eq 'genus' )
     {
-	push @fields, 'ph.family_no', 'pl.genus_no';
-	$options->{count_rank} = 5;
+	$request->{my_count_rank} = 5;
     }
     
     elsif ( $count_what eq 'genera_plus' || $count_what eq 'genus_plus' )
     {
-	push @fields, 'ph.family_no', 'pl.genus_no', 'pl.subgenus_no';
-	$options->{count_rank} = 5;
-	$options->{promote_subgenera} = 1;
+	$request->{my_count_rank} = 5;
+	$request->{my_promote} = 1;
     }
     
     elsif ( $count_what eq 'families' || $count_what eq 'family' )
     {
-	push @fields, 'ph.family_no';
-	$options->{count_rank} = 9;
+	$request->{my_count_rank} = 9;
     }
     
     elsif ( $count_what eq 'orders' || $count_what eq 'order' )
     {
-	$options->{count_rank} = 13;
+	$request->{my_count_rank} = 13;
     }
     
     else
@@ -899,31 +955,35 @@ sub phylogeny {
     
     if ( $resolution eq 'species' )
     {
-	push @fields, 'ph.family', 'ph.genus', 'ph.subgenus', 'ph.species' unless $full;
-	$options->{reso_rank} = 3;
+	push @fields, 'ph.family', 'pl.genus', 'pl.subgenus', 'pl.species';
+	$request->{my_reso_rank} = 3;
+	$request->{my_count_rank} = 3;
     }
     
     elsif ( $resolution eq 'subgenera' || $resolution eq 'subgenus' )
     {
-	push @fields, 'ph.family', 'pl.genus', 'pl.subgenus' unless $full;
-	$options->{reso_rank} = 4;
+	push @fields, 'ph.family', 'pl.genus', 'pl.subgenus';
+	$request->{my_reso_rank} = 4;
+	$request->{my_count_rank} = 5 if $request->{my_count_rank} > 5;
     }
     
     elsif ( $resolution eq 'genera' || $resolution eq 'genus' )
     {
-	push @fields, 'ph.family', 'pl.genus' unless $full;
-	$options->{reso_rank} = 5;
+	push @fields, 'ph.family', 'pl.genus';
+	$request->{my_reso_rank} = 5;
+	$request->{my_count_rank} = 5 if $request->{my_count_rank} > 5;
     }
     
     elsif ( $resolution eq 'families' || $resolution eq 'family' )
     {
-	push @fields, 'ph.family' unless $full;
-	$options->{reso_rank} = 9;
+	push @fields, 'ph.family';
+	$request->{my_reso_rank} = 9;
+	$request->{my_count_rank} = 9 if $request->{my_count_rank} > 9;
     }
     
     elsif ( $resolution eq 'orders' || $resolution eq 'order' )
     {
-	$options->{reso_rank} = 13;
+	$request->{my_reso_rank} = 13;
     }
     
     else
@@ -931,15 +991,42 @@ sub phylogeny {
 	die "400 unknown value '$resolution' for parameter 'reso'\n";
     }
     
+    # Now add the fields necessary for counting down to the specified rank
+    
+    if ( $request->{my_count_rank} == 3 )
+    {
+	push @fields, 'ph.family_no', 'pl.genus_no', 'pl.subgenus_no', 'pl.species_no';
+	$request->{my_count_rank} = 3;
+    }
+    
+    elsif ( $request->{my_count_rank} == 5 )
+    {
+	push @fields, 'ph.family_no', 'pl.genus_no';
+	$request->{my_count_rank} = 5;
+    }
+    
+    elsif ( $request->{my_count_rank} == 9 )
+    {
+	push @fields, 'ph.family_no';
+	$request->{my_count_rank} = 9;
+    }
+    
+    # Delete unnecessary output fields, so they won't appear as empty columns
+    # in text-format output.
+    
+    $request->delete_output_field('n_species') if $request->{my_count_rank} > 3;
+    $request->delete_output_field('n_genera') if $request->{my_count_rank} > 5;
+    $request->delete_output_field('n_families') if $request->{my_count_rank} > 9;
+    
     my $fields = join(', ', @fields);
     
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = PB2::CollectionData::generateMainFilters($self, 'list', 'c', $tables);
-    push @filters, PB2::OccurrenceData::generateOccFilters($self, $tables);
-    push @filters, PB2::CommonData::generate_crmod_filters($self, 'o', $tables);
-    push @filters, PB2::CommonData::generate_ent_filters($self, 'o', $tables);
+    my @filters = PB2::CollectionData::generateMainFilters($request, 'list', 'c', $tables);
+    push @filters, PB2::OccurrenceData::generateOccFilters($request, $tables);
+    push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
+    push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
     push @filters, "c.access_level = 0";
     
@@ -948,29 +1035,109 @@ sub phylogeny {
     # Determine which extra tables, if any, must be joined to the query.  Then
     # construct the query.
     
-    my $join_list = $self->generateJoinList('c', $tables);
+    my $join_list = $request->generateJoinList('c', $tables);
     
     my $extra_group = $tables->{group_by_reid} ? ', o.reid_no' : '';
     
-    $self->{main_sql} = "
+    $request->{main_sql} = "
 	SELECT $fields
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
 	GROUP BY o.occurrence_no $extra_group";
     
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
+    print STDERR "$request->{main_sql}\n\n" if $request->debug;
     
     # Then prepare and execute the main query.
     
-    my $sth = $dbh->prepare($self->{main_sql});
+    my $sth = $dbh->prepare($request->{main_sql});
     $sth->execute();
     
     # Now fetch all of the rows, and process them into a phylogenetic tree.
+    # If the set of occurrences was generated from a base taxon, then we can
+    # easily create a full phylogeny.  Otherwise, we generate an abbreviated
+    # one using the information from the taxon_ints table.
     
-    my $result = $self->generate_phylogeny($sth, $options);
+    if ( ref $request->{my_base_taxa} eq 'ARRAY' && @{$request->{my_base_taxa}} )
+    {
+	$request->generate_phylogeny_full($sth, $request->{my_base_taxa});
+    }
     
-    $self->list_result($result);
+    else
+    {
+	$request->generate_phylogeny_ints($sth);
+    }
+}
+
+
+# prevalence ( )
+# 
+# Returns the most prevalent taxa among the specified set of occurrences.
+
+sub prevalence {
+
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    my $tables = $request->tables_hash;
+    
+    #$request->substitute_select( mt => 'o', cd => 'oc' );
+    
+    # Construct a list of filter expressions that must be added to the query
+    # in order to select the proper result set.
+    
+    my @filters = PB2::CollectionData::generateMainFilters($request, 'list', 'c', $tables);
+    push @filters, PB2::OccurrenceData::generateOccFilters($request, $tables);
+    push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
+    push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
+    
+    push @filters, "c.access_level = 0";
+    
+    my $filter_string = join(' and ', @filters);
+    
+    #$request->add_table('oc');
+    
+    # If we were asked to count rows, modify the query accordingly
+    
+    my $calc = $request->sql_count_clause;
+    
+    # Determine which fields and tables are needed to display the requested
+    # information.  If the given parameters can be fulfilled by just querying
+    # for summary bins, we do so.  Otherwise, we have to go through the entire
+    # set of occurrences again.
+    
+    if ( 1 )
+    {
+	my $fields = "ph.phylum_no, ph.class_no, ph.order_no, count(*) as n_occs";
+	
+	$tables->{t} = 1;
+	$tables->{ph} = 1;
+	
+	# Determine which extra tables, if any, must be joined to the query.  Then
+	# construct the query.
+	
+	my $join_list = $request->generateJoinList('c', $tables);
+	
+	$request->{main_sql} = "
+	SELECT $fields
+	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+		$join_list
+        WHERE $filter_string
+	GROUP BY ph.phylum_no, ph.class_no, ph.order_no";
+	
+	print STDERR "$request->{main_sql}\n\n" if $request->debug;
+	
+	# Then prepare and execute the main query.
+	
+	my $sth = $dbh->prepare($request->{main_sql});
+	$sth->execute();
+	
+	return $request->generate_prevalence($sth, 'taxon_trees');
+    }
+    
+    # Otherewise, 
 }
 
 
@@ -1058,12 +1225,12 @@ sub refs {
 }
 
 
-# taxa ( )
+# taxa_old ( )
 # 
 # Query the database for the taxa associated with occurrences satisfying
 # the conditions specified by the parameters.
 
-sub taxa {
+sub taxa_old {
 
     my ($self) = @_;
     
@@ -1275,19 +1442,23 @@ sub generateJoinList {
     
     # Create the necessary join expressions.
     
+    $tables->{t} = 1 if $tables->{pl} || $tables->{ph} || $tables->{v};
+    
+    my $t = $tables->{tv} ? 'tv' : 't';
+    
     $join_list .= "JOIN collections as cc on c.collection_no = cc.collection_no\n"
 	if $tables->{cc};
     $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
-	if $tables->{t} || $tables->{tf};
-    $join_list .= "LEFT JOIN taxon_trees as ts on ts.orig_no = t.synonym_no\n"
-	if $tables->{ts};
-    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = t.orig_no\n"
+	if $tables->{t} || $tables->{tv} || $tables->{tf};
+    $join_list .= "LEFT JOIN taxon_trees as tv on tv.orig_no = t.valid_no\n"
+	if $tables->{tv};
+    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = $t.orig_no\n"
 	if $tables->{pl};
-    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
+    $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = $t.ints_no\n"
 	if $tables->{ph};
-    $join_list .= "LEFT JOIN taxon_attrs as v on v.orig_no = t.synonym_no\n"
+    $join_list .= "LEFT JOIN taxon_attrs as v on v.orig_no = $t.orig_no\n"
 	if $tables->{v};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
 	if $tables->{pc};
@@ -1377,590 +1548,5 @@ sub process_basic_record {
     }
 }
 
-
-sub generate_diversity_matrix {
-
-    my ($self, $sth, $options) = @_;
-    
-    my $ds = $self->ds;
-    
-    # First figure out which timescale (and thus which list of intervals) we
-    # will be using in order to bin the occurrences.
-    
-    my $scale_no = $options->{scale_no} || 1;	# eventually we will add other scale options
-    my $scale_level = $options->{timereso} || 5;
-    
-    my $debug_mode = $self->debug;
-    
-    # Figure out the parameters to use in the binning process.
-    
-    my $timerule = $options->{timerule};
-    my $timebuffer = $options->{timebuffer};
-    
-    # Declare variables to be used in this process.
-    
-    my $intervals = $PB2::IntervalData::INTERVAL_DATA{$scale_no};
-    my $boundary_list = $PB2::IntervalData::BOUNDARY_LIST{$scale_no}{$scale_level};
-    my $boundary_map = $PB2::IntervalData::BOUNDARY_MAP{$scale_no}{$scale_level};
-    
-    my ($starting_age, $ending_age, %taxon_first, %taxon_last, %occurrences, %unique_in_bin);
-    my ($total_count, $imprecise_time_count, $imprecise_taxon_count, $missing_taxon_count, $bin_count);
-    my (%imprecise_interval, %imprecise_taxon);
-    my (%interval_report, %taxon_report);
-    
-    # Now scan through the occurrences.  We cache the lists of matching
-    # intervals from the selected scale, under the name of the interval(s)
-    # recorded for the occurrence (which may or may not be in the standard
-    # timescale).
-    
-    my (%interval_cache);
-    
- OCCURRENCE:
-    while ( my $r = $sth->fetchrow_hashref )
-    {
-	$total_count++;
-	
-	# Start by figuring out the interval(s) in which to bin this
-	# occurrence.  Depending upon the value of $timerule, there may be
-	# more than one.
-	
-	# The first step is to compute the key under which to cache lists of
-	# matching intervals.
-	
-	my $interval_key = $r->{early_name} || 'UNKNOWN';
-	$interval_key .= '-' . $r->{late_name}
-	    if defined $r->{late_name} && defined $r->{early_name} && $r->{late_name} ne $r->{early_name};
-	
-	# If we have already figured out which intervals match this, we're
-	# done.  Otherwise, we must do this computation.
-	
-	my $bins = $interval_cache{$interval_key};
-	
-	my $occ_early = $r->{early_age} + 0;
-	my $occ_late = $r->{late_age} + 0;
-	
-	unless ( $bins )
-	{
-	    $bins = $interval_cache{$interval_key} = [];
-	    
-	    # Scan the entire list of intervals for the selected timescale,
-	    # looking for those that match according to the value of
-	    # $timerule.
-	    
-	INTERVAL:
-	    foreach my $early_bound ( @$boundary_list )
-	    {
-		# Skip all intervals that do not overlap with the occurrence
-		# range, and stop the scan when we have passed that range.
-		
-		last INTERVAL if $early_bound <= $occ_late;
-		
-		my $int = $boundary_map->{$early_bound};
-		my $late_bound = $int->{late_age};
-		
-		next INTERVAL if $late_bound >= $occ_early;
-		
-		# Skip any interval that is not selected by the specified
-		# timerule.  Note that the 'overlap' timerule includes
-		# everything that overlaps.
-		
-		if ( $timerule eq 'contain' )
-		{
-		    last INTERVAL if $occ_early > $early_bound || $occ_late < $late_bound;
-		}
-		
-		elsif ( $timerule eq 'major' )
-		{
-		    my $overlap;
-		    
-		    if ( $occ_late >= $late_bound )
-		    {
-			if ( $occ_early <= $early_bound )
-			{
-			    $overlap = $occ_early - $occ_late;
-			}
-			
-			else
-			{
-			    $overlap = $early_bound - $occ_late;
-			}
-		    }
-		    
-		    elsif ( $occ_early > $early_bound )
-		    {
-			$overlap = $early_bound - $late_bound;
-		    }
-		    
-		    else
-		    {
-			$overlap = $occ_early - $late_bound;
-		    }
-		    
-		    next INTERVAL if $occ_early != $occ_late && $overlap / ($occ_early - $occ_late) < 0.5;
-		}
-		
-		elsif ( $timerule eq 'buffer' )
-		{
-		    my $buffer = $timebuffer || ($early_bound > 66 ? 12 : 5);
-		    
-		    next INTERVAL if $occ_early > $early_bound + $buffer || 
-			$occ_late < $late_bound - $buffer;
-		}
-		
-		# If we are not skipping this interval, add it to the list.
-		
-		push @$bins, $early_bound;
-		
-		# If we are using timerule 'major' or 'contains', then stop
-		# the scan because each occurrence gets assigned to only one
-		# bin. 
-		
-		last INTERVAL if $timerule eq 'contains' || $timerule eq 'major';
-	    }
-	}
-	
-	# If we did not find at least one bin to assign this occurrence to,
-	# report that fact and go on to the next occurrence.
-	
-	unless ( @$bins )
-	{
-	    $imprecise_time_count++;
-	    $imprecise_interval{$interval_key}++;
-	    if ( $debug_mode )
-	    {
-		$interval_key .= " [$occ_early - $occ_late]";
-		$interval_report{'0 IMPRECISE <= ' . $interval_key}++;
-	    }
-	    next OCCURRENCE;
-	}
-
-	# Otherwise, count this occurrence in each selected bin.  Then adjust
-	# the range of bins that we are reporting to reflect this occurrence.
-	
-	foreach my $b ( @$bins )
-	{
-	    $occurrences{$b}++;
-	    $bin_count++;
-	}
-	
-	$starting_age = $bins->[0] unless defined $starting_age && $starting_age >= $bins->[0];
-	$ending_age = $bins->[-1] unless defined $ending_age && $ending_age <= $bins->[-1];
-	
-	# If we are in debug mode, also count it in the %interval_report hash.
-	
-	if ( $debug_mode )
-	{
-	    my $report_key = join(',', @$bins) . ' <= ' . $interval_key . " [$occ_early - $occ_late]";
-	    $interval_report{$report_key}++;
-	}
-	
-	# Now check to see if the occurrence is taxonomically identified
-	# precisely enough to count further.
-	
-	my $taxon_no = $r->{taxon1};
-	
-	unless ( $taxon_no )
-	{
-	    $taxon_report{$r->{genus_name}}++;
-	    
-	    if ( $r->{rank} > $options->{count_rank} )
-	    {
-		$imprecise_taxon_count++;
-	    }
-	    else
-	    {
-		$missing_taxon_count++;
-	    }
-	    
-	    next;
-	}
-	
-	# If this is the oldest occurrence of the taxon that we have found so
-	# far, mark it as originating in the first (oldest) matching bin.
-	
-	unless ( defined $taxon_first{$taxon_no} && $taxon_first{$taxon_no} >= $bins->[0] )
-	{
-	    $taxon_first{$taxon_no} = $bins->[0];
-	}
-	
-	# If this is the youngest occurrence of the taxon that we have found
-	# so far, mark it as ending in the last (youngest) matching bin.
-	
-	unless ( defined $taxon_last{$taxon_no} && $taxon_last{$taxon_no} <= $bins->[-1] )
-	{
-	    $taxon_last{$taxon_no} = $bins->[-1];
-	}
-	
-	# If the 'use_recent' option was given, and the taxon is known to be
-	# extant, then mark it as ending at the present (0 Ma).
-	
-	if ( $options->{use_recent} && $r->{is_extant} )
-	{
-	    $taxon_last{$taxon_no} = 0;
-	}
-	
-	# Now count the taxon in each selected bin.
-	
-	foreach my $b ( @$bins )
-	{
-	    $unique_in_bin{$b}{$taxon_no} ||= 1;
-	}
-    }
-    
-    # At this point we are done scanning the occurrence list.  Unless
-    # $starting_age has a value, we don't have any results.
-    
-    unless ( $starting_age )
-    {
-	return;
-    }
-    
-    # Now we need to compute the four diversity statistics defined by Foote:
-    # XFt, XFL, XbL, Xbt.  So we start by running through the bins and
-    # initializing the counts.  We also keep track of all the bins between
-    # $starting_age and $ending_age.
-    
-    my (%X_Ft, %X_FL, %X_bL, %X_bt);
-    my (@bins, $is_last);
-    
-    foreach my $age ( @$boundary_list )
-    {
-	next if $age > $starting_age;
-	last if $age < $ending_age;
-	
-	push @bins, $age;
-	
-	$X_Ft{$age} = 0;
-	$X_FL{$age} = 0;
-	$X_bL{$age} = 0;
-	$X_bt{$age} = 0;
-    }
-    
-    # Then we scan through the taxa.  For each one, we scan through the bins
-    # from the taxon's origination to its ending and mark the appropriate
-    # counts.  This step takes time o(MN) where M is the number of taxa and N
-    # the number of intervals.
-    
-    foreach my $taxon_no ( keys %taxon_first )
-    {
-	my $first_bin = $taxon_first{$taxon_no};
-	my $last_bin = $taxon_last{$taxon_no};
-	
-	# If the interval of first appearance is the same as the interval of
-	# last appearance, then this is a singleton.
-	
-	if ( $first_bin == $last_bin )
-	{
-	    $X_FL{$first_bin}++;
-	    next;
-	}
-	
-	# Otherwise, we mark the bin where the taxon starts and the bin where
-	# it ends, and then scan through the bins between to mark
-	# rangethroughs.
-	
-	$X_Ft{$first_bin}++;
-	$X_bL{$last_bin}++;
-	
-	foreach my $bin (@bins)
-	{
-	    last if $bin <= $last_bin;
-	    $X_bt{$bin}++ if $bin < $first_bin;
-	}
-    }
-    
-    # If we are in debug mode, report the interval assignments.
-    
-    if ( $self->debug ) 
-    {
-	# $self->add_warning("Skipped $imprecise_time_count occurrences because of imprecise temporal locality:")
-	#     if $imprecise_time_count;
-	
-	# foreach my $key ( sort { $b cmp $a } keys %interval_report )
-	# {
-	#     $self->add_warning("    $key ($interval_report{$key})");
-	# }
-	
-	foreach my $key ( sort { $a cmp $b } keys %taxon_report )
-	{
-	    $self->add_warning("    $key ($taxon_report{$key})");
-	}
-    }
-    
-    # Add a summary record with counts.
-    
-    $self->summary_data({ total_count => $total_count,
-			  bin_count => $bin_count,
-			  imprecise_time => $imprecise_time_count,
-			  imprecise_taxon => $imprecise_taxon_count,
-			  missing_taxon => $missing_taxon_count });
-    
-    # Now we scan through the bins again and prepare the data records.
-    
-    my @result;
-    
-    foreach my $age (@bins)
-    {
-	my $r = { interval_no => $boundary_map->{$age}{interval_no},
-		  interval_name => $boundary_map->{$age}{interval_name},
-		  early_age => $age,
-		  late_age => $boundary_map->{$age}{late_age},
-		  originations => $X_Ft{$age},
-		  extinctions => $X_bL{$age},
-		  singletons => $X_FL{$age},
-		  range_throughs => $X_bt{$age},
-		  sampled_in_bin => scalar(keys %{$unique_in_bin{$age}}) || 0,
-		  n_occs => $occurrences{$age} || 0 };
-	
-	push @result, $r;
-    }
-    
-    $self->list_result(@result);
-}
-
-
-# The following variables are visible to all of the subroutines in the
-# remainder of this file.  This is done to reduce the number of parameters
-# that must be passed to &count_subtaxa and &add_result_record.
-
-our ($reso_rank, $count_rank, %taxon_name, %uns_count, @result);
-
-
-
-sub generate_phylogeny {
-
-    my ($self, $sth, $options) = @_;
-    
-    my $ds = $self->ds;
-    
-    # First figure out the level to which we will be resolving the phylogeny.
-    
-    $reso_rank = $options->{reso_rank} || 9;		# visible to called subroutines
-    $count_rank = $options->{count_rank} || 5;		# visible to called subroutines
-    my $promote = $options->{promote_subgenera};
-    my $full = $options->{full};
-    
-    # Make sure we aren't trying to resolve more finely than we are counting.
-    
-    $reso_rank = $count_rank if $reso_rank < $count_rank;
-    
-    # Delete unnecessary output fields, so they won't appear as empty columns
-    # in text-format output.
-    
-    $self->delete_output_field('n_species') if $count_rank > 3;
-    $self->delete_output_field('n_genera') if $count_rank > 5;
-    $self->delete_output_field('n_families') if $count_rank > 9;
-    
-    # Then go through the occurrences one by one, putting together a tree
-    # and counting at the specified taxonomic levels.
-    
-    my (%occ_tree, $total_count);
-    local %taxon_name = ( 0 => '~' );
-    
- OCCURRENCE:
-    while ( my $r = $sth->fetchrow_hashref )
-    {
-	$total_count++;
-	
-	# First pin down the various tree levels.
-	
-	my $rank = $r->{rank};
-	
-	my ($species_no, $subgenus_no, $genus_no, $family_no, $order_no, $class_no);
-	
-	$class_no = $r->{class_no} || 0;
-	$order_no = $r->{order_no} || 0;
-	$family_no = $r->{family_no} || 0;
-	
-	$genus_no = $r->{subgenus_no} if $promote;
-	$genus_no ||= $r->{genus_no} || 0;
-	
-	$species_no = $r->{species_no} || 0;
-	
-	# Then create any tree nodes that don't already exist, and increment
-	# the occurrence counts at all levels.
-	
-	my ($class_node, $order_node, $family_node, $genus_node, $species_node);
-	
-	$class_node = $occ_tree{$class_no} //= { rank => 17, occs => 0 };
-	$class_node->{occs}++;
-	$taxon_name{$class_no} //= $r->{class} if !$full && $r->{class};
-	
-	$order_node = $class_node->{chld}{$order_no} //=  { rank => 13, occs => 0 };
-	$order_node->{occs}++;
-	$taxon_name{$order_no} //= $r->{order} if !$full && $r->{order};
-	
-	if ( $count_rank <= 9 && $rank <= 9 )
-	{
-	    $family_node = $order_node->{chld}{$family_no} //= { rank => 9, occs => 0 };
-	    $family_node->{occs}++;
-	    $taxon_name{$family_no} //= $r->{family} if !$full && $r->{family};
-	    
-	    if ( $count_rank <= 5 && $rank <= 5 )
-	    {
-		$genus_node = $family_node->{chld}{$genus_no} //= { rank => 5, occs => 0 };
-		$genus_node->{occs}++;
-		$taxon_name{$genus_no} //= $r->{genus} if !$full && $r->{genus};
-		$taxon_name{$subgenus_no} //= $r->{subgenus} if !$full && $r->{subgenus};
-		
-		if ( $count_rank <= 3 && $rank <= 3 )
-		{
-		    $species_node = $genus_node->{chld}{$species_no} //= { rank => 3, occs => 0 };
-		    $species_node->{occs}++ if $count_rank <= 3;
-		    $taxon_name{$species_no} //= $r->{species} if !$full && $r->{species};
-		}
-	    }
-	}
-    }
-    
-    # Now that we have the occurrence counts, recursively traverse the tree
-    # and fill in taxon counts at the higher levels (i.e. number of species or
-    # genera).
-    
-    foreach my $class_no ( keys %occ_tree )
-    {
-	count_subtaxa($occ_tree{$class_no});
-    }
-    
-    # Now traverse the tree again and produce the appropriate output.
-    
-    local @result;					# visible to called subroutines
-    local %uns_count;					# visible to called subroutines
-    
-    my (@sorted_classes) = sort { $taxon_name{$a} cmp $taxon_name{$b} } keys %occ_tree;
-    
-    foreach my $class_no ( @sorted_classes )
-    {
-	add_result_record($occ_tree{$class_no}, $class_no, 0);
-    }
-    
-    $self->list_result(@result);
-}
-
-
-# count_subtaxa ( node )
-# 
-# This function recursively counts taxa in all of the subnodes of the given
-# node, and adds up the totals.  Note: the variable $count_rank is local to
-# &generate_phylogeny, from which this routine is called.
-
-sub count_subtaxa {
-    
-    my ($node) = @_;
-    
-    $node->{orders} = 0;
-    $node->{families} = 0 if $count_rank <= 9;
-    $node->{genera} = 0 if $count_rank <= 5;
-    $node->{species} = 0 if $count_rank <= 3;
-    
-    return unless ref $node->{chld};
-    
-    foreach my $child ( values %{$node->{chld}} )
-    {
-	count_subtaxa($child, $count_rank);
-	
-	my $child_orders = $child->{rank} == 13    ? 1
-		         : $child->{orders}        ? $child->{orders}
-					           : 0;
-	
-	$node->{orders} += $child_orders if $node->{rank} > 13;
-	
-	if ( $count_rank <= 9 )
-	{
-	    my $child_families = $child->{rank} == 9    ? 1
-			       : $child->{families}     ? $child->{families}
-						        : 0;
-	    
-	    $node->{families} += $child_families if $node->{rank} > 9;
-	}
-	
-	if ( $count_rank <= 5 )
-	{
-	    my $child_genera = $child->{rank} == 5    ? 1
-			     : $child->{genera}       ? $child->{genera}
-						      : 0;
-	    
-	    $node->{genera} += $child_genera if $node->{rank} > 5;
-	}
-	
-	if ( $count_rank <= 3 )
-	{
-	    my $child_species = $child->{rank} == 3    ? 1
-			      : $child->{species}      ? $child->{species}
-						       : 0;
-	    
-	    $node->{species} += $child_species if $node->{rank} > 3;
-	}
-    }
-}
-
-
-my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
-		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
-		 0 => 'NO_TAXON_SPECIFIED' );
-
-my %uns_prefix = ( 3 => 'UF', 5 => 'UG', 9 => 'UF', 13 => 'UO', 0 => 'UU' );
-
-sub add_result_record {
-    
-    my ($node, $taxon_no, $parent_no) = @_;
-    
-    my $rank = $node->{rank};
-    
-    return if $rank < $reso_rank;
-    
-    my $name = $taxon_name{$taxon_no} || '~';
-    $name = $uns_name{$rank || 0} if $name eq '~';
-    
-    unless ( $taxon_no )
-    {
-	$uns_count{$rank}++;
-	$taxon_no = $uns_prefix{$rank} . $uns_count{$rank};
-    }
-    
-    my $taxon_record = { taxon_no => $taxon_no,
-			 parent_no => $parent_no,
-			 taxon_name => $name,
-			 taxon_rank => $rank,
-		         n_occs => $node->{occs} };
-    
-    $taxon_record->{n_orders} = $node->{orders} if defined $node->{orders} && $rank > 13;
-    $taxon_record->{n_families} = $node->{families} if defined $node->{families} && $rank > 9;
-    $taxon_record->{n_genera} = $node->{genera} if defined $node->{genera} && $rank > 5;
-    $taxon_record->{n_species} = $node->{species} if defined $node->{species} && $rank > 3;
-    
-    push @result, $taxon_record;
-    
-    return if $rank == $reso_rank;
-    
-    my @children = keys %{$node->{chld}};
-    
-    foreach my $child_no ( sort { ($taxon_name{$a} // '~') cmp ($taxon_name{$b} // '~') } @children )
-    {
-	my $child = $node->{chld}{$child_no};
-	next if $child->{rank} < $reso_rank;
-	add_result_record($child, $child_no, $taxon_no);
-    }
-}
-
-
-sub prune_count_fields {
-    
-    my ($self, $count_rank) = @_;
-    
-    my $field_list = $self->output_field_list;
-    
-    my @good_fields;
-    
-    foreach my $f ( @$field_list )
-    {
-	next if $f eq 'n_species' && $count_rank > 3;
-	next if $f eq 'n_genera' && $count_rank > 5;
-	next if $f eq 'n_families' && $count_rank > 9;
-	push @good_fields, $f;
-    }
-    
-    @$field_list = @good_fields;
-}
 
 1;
