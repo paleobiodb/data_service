@@ -201,26 +201,97 @@ sub resolve_names {
     
     my $limit = $options->{all_names} ? "LIMIT 500" : "LIMIT 1";
     
-    my $top = "
+    my $sql_base = "
 	SELECT $fields
 	FROM taxon_search as s join taxon_trees as t on t.orig_no = s.orig_no
 		join taxon_attrs as v on v.orig_no = t.orig_no
 	WHERE $filters";
     
-    my $bottom = "
+    my $sql_order = "
 	ORDER BY s.is_current desc, s.is_exact desc, v.taxon_size desc $limit";
     
     # Then split the argument into a list of distinct names to interpret.
     
-    my @names = $taxonomy->parse_names($names, $options);
+    my @lexemes = $taxonomy->parse_names($names, $options);
     my @result;
-    my $range;
+    my @stack = ({ symbol => '_ROOT' });
+    
+    print STDERR "\nLEXEMES:\n";
+    
+    foreach my $n (@names)
+    {
+	print STDERR "$n\n";
+    }
+    
+    print STDERR "\n";
+    
+    return;
     
     my $dbh = $taxonomy->{dbh};
     
-  NAME:
-    foreach my $n ( @names )
+  LEXEME:
+    while ( @lexemes )
     {
+	my $symbol = shift @lexemes;
+	
+	if ( $symbol eq '_EXCLUDE' )
+	{
+	    my $prev = $stack[-1]{exclude};
+	    push @stack, { symbol => '_EXCLUDE', exclude => !$prev };
+	    next LEXEME;
+	}
+	
+	elsif ( $symbol eq '_BASE' )
+	{
+	    my $name = shift @lexemes;
+	    my $prev_range;
+	    
+	    if ( $stack[-1]{symbol} eq '_BASE' )
+	    {
+		$prev_range = $stack[-1]{range};
+		pop @stack;
+	    }
+	    
+	    if ( $name eq '_BAD' )
+	    {
+		push @stack, { symbol => '_DISCARD' };
+	    }
+	    
+	    else
+	    {
+		my $range = $taxonomy->resolve_range($name, $prev_range);
+		
+		if ( $range )
+		{
+		    push @stack, { symbol => '_BASE', range => $range };
+		}
+		
+		else
+		{
+		    push @stack, { symbol => '_DISCARD' };
+		}
+	    }
+	    
+	    $stack[-1]{range_pending} = $range || '_BAD';
+	}
+	
+	elsif ( $symbol eq '_SELECT' )
+	{
+	    my $name = shift @lexemes;
+	    
+	    if ( $name eq '_BAD' )
+	    {
+		
+	    }
+	}
+	
+	elsif ( $symbol eq '_NEW' )
+	{
+
+	}
+	
+	elsif ( $symbol eq '_END' )
+	
 	if ( $n =~ qr{ ^ lft [ ] between }xs )
 	{
 	    $range = $n;
@@ -323,132 +394,141 @@ sub resolve_names {
 
 
 sub parse_names {
-    
-    my ($taxonomy, $name_string, $base_taxon) = @_;
+
+    my ($taxonomy, $name_string, $options) = @_;
     
     $taxonomy->{bad_names} = undef;
     $DB::single = 1;
-    my ($range, @taxa);
     
-  COMPONENT:
-    while ( $name_string )
+    return $taxonomy->lex_namestring($name_string);
+}
+
+
+sub lex_namestring {
+    
+    my ($taxonomy, $source_string) = @_;
+    
+    my (@symbols);
+    
+  LEXEME:
+    while ( $source_string )
     {
-	$name_string =~ s/^[\s,]+//;
+	if ( $source_string =~ qr{ ^ [\s]+ (.*) }xs )
+	{
+	    $source_string = $1;
+	    next LEXEME;
+	}
+	
+	elsif ( $source_string =~ qr{ ^ [,] [,\s]* (.*) }xs )
+	{
+	    $source_string = $1;
+	    push @symbols, '_NEW';
+	}
 	
 	# If the initial component looks like "something:" or "something{" then
 	# we evaluate the specified name (with a % wildcard appended) and use
 	# it as a base to look up the subsequent components.  For example:
 	# 
-	# - Gastropod:Ficus will resolve to the snail genus, whereas
-	#   Moraceae:Ficus will resolve to the fig genus.
+	# - gastropod:ficus (or mollusc:ficus, or metazoa:ficus or just
+	#   gastro:ficus) will resolve to the snail genus, whereas
+	#   plant:ficus (or moraceae:ficus, etc.) will resolve to the fig genus.
 	# 
 	# - Foram:Agerinia will resolve to the foram genus, whereas
 	#   Primate:Agerinia will resolve to the primate genus.
 	# 
-	# - Gastro:{Ficus, Peri.} would resolve to two genera of snails.
+	# - Gastropoda{Ficus, Peri.} would resolve to two genera of snails.
+	# 
+	# dinosauria:{^aves} 
 	
-	if ( $name_string =~ qr< ^ ( [^{,:]* ) [:]? [{] ( [^}]* ) (?: [}] (.*) | $ ) >xs )
+	elsif ( $source_string =~ qr{ ^ \^+ (.*) }xs )
 	{
-	    $name_string = $3;
-	    
-	    my $base_string = $1;
-	    my $sub_string = $2;
-	    my $exclude;
-	    
-	    if ( defined $base_string && $base_string =~ s{^\^}{} )
-	    {
-		$exclude = '^';
-	    }
-	    
-	    if ( defined $base_string && $base_string ne '' )
-	    {
-		my $range_string = $taxonomy->resolve_range($base_string);
-		
-		if ( $range_string )
-		{
-		    push @taxa, $range_string;
-		    push @taxa, $taxonomy->parse_substring($sub_string, $exclude);
-		    $range = 1;
-		}
-		
-		next COMPONENT;
-	    }
-	    
-	    else
-	    {
-		push @taxa, 'CLEAR_RANGE' if $range;
-		$range = undef;
-		push @taxa, $taxonomy->parse_substring($sub_string, $exclude);
-		next COMPONENT;
-	    }
+	    $source_string = $1;
+	    push @symbols, '_EXCLUDE';
+	    next LEXEME;
 	}
 	
-	elsif ( $name_string =~ qr< ^ ( [^{,:]* ) [:] ( [^{},:]* ) (.*) $ >xs )
+	elsif ( $source_string =~ qr{ ^ ( [\w\s.%]+ ) [:] (.*) }xs )
 	{
-	    $name_string = $3;
-	    
+	    $source_string = $2;
 	    my $base_string = $1;
-	    my $sub_string = $2;
-	    my $exclude;
 	    
-	    unless ( defined $sub_string && $sub_string ne '' )
-	    {
-		push @taxa, 'CLEAR_RANGE' if $range;
-		$range = undef;
-		push @taxa, $base_string;
-		next COMPONENT;
-	    }
-	    
-	    if ( defined $base_string && $base_string ne '' )
-	    {
-		if ( $base_string =~ s{^\^}{} )
-		{
-		    $exclude = '^';
-		}
-		
-		my $range_string = $taxonomy->resolve_range($base_string);
-		
-		if ( $range_string )
-		{
-		    push @taxa, $range_string;
-		    push @taxa, $sub_string;
-		    $range = 1;
-		}
-	    }
-	    
-	    next COMPONENT;
+	    push @symbols, '_BASE';
+	    push @symbols, $taxonomy->lex_name($base_string);
+	    next LEXEME;
 	}
 	
-	elsif ( $name_string =~ qr{ ^ ( [^,]+ ) (.*) }xs )
+	elsif ( $source_string =~ qr< ^ ( [\w\s.%]+ ) [{] (.*) >xs )
 	{
-	    $name_string = $2;
-	    my $name = $1;
+	    $source_string = $2;
+	    my $base_string = $1;
 	    
-	    if ( defined $name && $name ne '' )
-	    {
-		my $exclude;
-		
-		if ( $name_string =~ s{^\^}{} )
-		{
-		    $exclude = '^';
-		}
-		
-		push @taxa, 'CLEAR_RANGE' if $range;
-		$range = undef;
-		push @taxa, $taxonomy->parse_substring($name, $exclude);
-	    }
+	    push @symbols, '_SELECT';
+	    push @symbols, $taxonomy->lex_name($base_string);
+	    next LEXEME;
+	}
+	
+	elsif ( $source_string =~ qr{ ^ ( [\w\s.%]+ ) (.*) }xs )
+	{
+	    $source_string = $2;
+	    my $name_string = $1;
 	    
-	    next COMPONENT;
+	    push @symbols, $taxonomy->lex_name($name_string);
+	    next LEXEME;
+	}
+	
+	elsif ( $source_string =~ qr< ^ [{] (.*) >xs )
+	{
+	    $source_string = $1;
+	    
+	    push @symbols, '_BEGIN';
+	    next LEXEME;
+	}
+	
+	elsif ( $source_string =~ qr< ^ [}] (.*) >xs )
+	{
+	    $source_string = $1;
+	    push @symbols, '_END';
+	    next LEXEME;
+	}
+	
+	elsif ( $source_string =~ qr< ([^,{^]+) (.*) >xs )
+	{
+	    $source_string = $2;
+	    push @{$taxonomy->{bad_names}}, $1;
+	    
+	    push @symbols, '_BAD';
+	    next LEXEME;
 	}
 	
 	else
 	{
-	    push @{$taxonomy->{bad_names}}, $name_string;
-	    last COMPONENT;
+	    push @symbols, '_ERROR', $source_string;
+	    last LEXEME;
 	}
     }
     
-    return @taxa;
+    return @symbols;
+}
+
+
+sub lex_name {
+    
+    my ($taxonomy, $name) = @_;
+    
+    $name =~ s{[.]}{% }g;
+    $name =~ s{%+}{%}g;
+    $name =~ s{\s+}{ };
+    $name =~ s{\s+$}{};
+    
+    # my $count = $name =~ tr/[a-zA-Z]/[a-zA-Z]/;
+    
+    # unless ( $count >= 4 )
+    # {
+    # 	push @{$taxonomy->{bad_names}}, $name;
+    # 	return '_BAD';
+    # }
+    
+    return $name;
 }
 
 
@@ -456,9 +536,9 @@ sub resolve_range {
     
     my ($taxonomy, $base_string) = @_;
     
-    return unless defined $base_string && $base_string ne '';
+    return unless $base_string;
     
-    unless ( $base_string =~ qr{ ^ ( [a-zA-Z][a-zA-Z_%]+ [.]? ) \s* $ }xs )
+    unless ( $base_string =~ qr{ ^ ( [a-zA-Z][a-zA-Z_%]+ ) [.\s]* $ }xs )
     {
 	push @{$taxonomy->{bad_names}}, $base_string;
 	return;
