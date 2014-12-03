@@ -115,7 +115,7 @@ sub buildDiversityTables {
     
     logMessage(2, "      adding global rows...");
     
-    $sql = "
+y    $sql = "
 	INSERT INTO $PRV_SUMMARY_WORK (interval_no, rank, orig_no,
 				       class_no, phylum_no, n_occs)
 	SELECT c.interval_no, 13, order_no, class_no, phylum_no, count(*)

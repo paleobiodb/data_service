@@ -73,6 +73,8 @@ sub initialize {
 	  dwc_value => 'Taxon', value => 'taxon' },
 	    "The type of this record.  By vocabulary:", "=over",
 	    "=item pbdb", "taxon", "=item com", "txn", "=item dwc", "Taxon", "=back",
+	{ output => 'exclude', com_name => 'exc' },
+	    "This field will have a true value if the taxon represents an excluded group within another taxon.",
 	{ output => 'associated_records', com_name => 'rct' },
 	    "The number of records (occurrences, references, etc. depending upon which URL path you used) associated with this taxonomic name",
 	{ set => 'rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },

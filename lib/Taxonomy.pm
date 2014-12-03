@@ -85,7 +85,7 @@ sub list_subtree {
     croak "list_subtree: first argument must be a taxon identifier\n"
 	if ref $base_no;
     
-    unless ( $base_no =~ $VALID_TAXON_ID )
+    unless ( defined $base_no && $base_no =~ $VALID_TAXON_ID )
     {
 	return $return_type eq 'listref' ? [] : ();
     }
@@ -212,107 +212,106 @@ sub resolve_names {
     
     # Then split the argument into a list of distinct names to interpret.
     
-    my @lexemes = $taxonomy->parse_names($names, $options);
+    my @names = $taxonomy->parse_names($names, $options);
     my @result;
-    my @stack = ({ symbol => '_ROOT' });
+    my (%base);
     
-    print STDERR "\nLEXEMES:\n";
+    print STDERR "NAMES:\n\n";
     
     foreach my $n (@names)
     {
-	print STDERR "$n\n";
+    	print STDERR "$n\n";
     }
     
     print STDERR "\n";
-    
-    return;
+    # return;
     
     my $dbh = $taxonomy->{dbh};
     
-  LEXEME:
-    while ( @lexemes )
+  NAME:
+    foreach my $n ( @names )
     {
-	my $symbol = shift @lexemes;
+	# If the name ends in ':', then it will be used as a base for
+	# subsequent lookups.
 	
-	if ( $symbol eq '_EXCLUDE' )
+	if ( $n =~ qr{ (.*) [:] $ }xs )
 	{
-	    my $prev = $stack[-1]{exclude};
-	    push @stack, { symbol => '_EXCLUDE', exclude => !$prev };
-	    next LEXEME;
-	}
-	
-	elsif ( $symbol eq '_BASE' )
-	{
-	    my $name = shift @lexemes;
-	    my $prev_range;
+	    my $base_name = $1;
 	    
-	    if ( $stack[-1]{symbol} eq '_BASE' )
-	    {
-		$prev_range = $stack[-1]{range};
-		pop @stack;
-	    }
+	    # If the base name itself contains a ':', then lookup the base
+	    # using everything before the last ':'.  If nothing is found, then
+	    # there must have been a bad name somewhere in the prefix.
 	    
-	    if ( $name eq '_BAD' )
+	    my ($prefix_base, $name);
+	    
+	    if ( $base_name =~ qr{ (.*) [:] (.*) }xs )
 	    {
-		push @stack, { symbol => '_DISCARD' };
+		$prefix_base = $base{$1};
+		$name = $2;
+		
+		next NAME unless $prefix_base;
 	    }
 	    
 	    else
 	    {
-		my $range = $taxonomy->resolve_range($name, $prev_range);
-		
-		if ( $range )
-		{
-		    push @stack, { symbol => '_BASE', range => $range };
-		}
-		
-		else
-		{
-		    push @stack, { symbol => '_DISCARD' };
-		}
+		$name = $base_name;
 	    }
 	    
-	    $stack[-1]{range_pending} = $range || '_BAD';
-	}
-	
-	elsif ( $symbol eq '_SELECT' )
-	{
-	    my $name = shift @lexemes;
+	    # Then try to see if the name matches an actual taxon.  If so,
+	    # save it.
 	    
-	    if ( $name eq '_BAD' )
+	    if ( my $base = $taxonomy->lookup_base($name, $prefix_base) )
 	    {
-		
+		$base{$base_name} = $base;
 	    }
-	}
-	
-	elsif ( $symbol eq '_NEW' )
-	{
-
-	}
-	
-	elsif ( $symbol eq '_END' )
-	
-	if ( $n =~ qr{ ^ lft [ ] between }xs )
-	{
-	    $range = $n;
+	    
+	    # Otherwise, the base will be undefined which will cause
+	    # subsequent lookups to fail.
+	    
+	    # Now go on to the next entry.
+	    
 	    next NAME;
 	}
 	
-	elsif ( $n eq 'CLEAR_RANGE' )
-	{
-	    $range = undef;
-	    next NAME;
-	}
+	# Otherwise, this entry represents a name to resolve.  If it
+	# starts with '^', then set the 'exclude' flag.
 	
 	my $exclude;
 	$exclude = 1 if $n =~ s{^\^}{};
 	
+	# If the name contains a prefix, split it off and look up the base.
+	# If no base was found, then the base must have included a bad name.
+	# In that case, skip this entry.
+	
+	my $range_clause;
+	
+	if ( $n =~ qr{ (.*) [:] (.*) }xs )
+	{
+	    my $prefix_base = $base{$1};	
+	    $n = $2;
+	    
+	    if ( ref $prefix_base && $prefix_base->{lft} > 0 && $prefix_base->{rgt} > 0 )
+	    {
+		$range_clause = 'lft between '. $prefix_base->{lft} . ' and ' . $prefix_base->{rgt};
+	    }
+	    
+	    elsif ( defined $prefix_base && $prefix_base =~ qr{ ^ lft }xs )
+	    {
+		$range_clause = $prefix_base
+	    }
+	    
+	    else
+	    {
+		next NAME;
+	    }
+	}
+	
 	$n =~ s{[.]}{% }g;
 	
-	if ( $n =~ qr{ ^ ( [A-Za-z_.%]+ )
-			    (?: \s+ \( ( [A-Za-z_.%]+ ) \) )?
-			    (?: \s+    ( [A-Za-z_.%]+ )    )?
-			    (?: \s+    ( [A-Za-z_.%]+ )    )? }xs )
+	if ( $n =~ qr{ ^ ( [A-Za-z_%]+ )
+			    (?: \s+ \( ( [A-Za-z_%]+ ) \) )?
+			    (?: \s+    ( [A-Za-z_%]+ )    )?
+			    (?: \s+    ( [A-Za-z_%]+ )    )? }xs )
 	{
 	    my $main = $1;
 	    my $subgenus = $2;
@@ -336,9 +335,10 @@ sub resolve_names {
 		push @clauses, "taxon_name like $quoted";
 	    }
 	    
-	    push @clauses, "($range)" if $range;
+	    push @clauses, "($range_clause)" if $range_clause;
 	    
-	    my $sql = $top . join(' and ', @clauses) . $bottom;
+	    $DB::single = 1;
+	    my $sql = $sql_base . join(' and ', @clauses) . $sql_order;
 	    
 	    my $this_result = $dbh->selectall_arrayref($sql, { Slice => {} });
 	    
@@ -347,49 +347,16 @@ sub resolve_names {
 		$r->{exclude} = 1 if $exclude;
 		push @result, $return_type eq 'id' ? $r->{orig_no} : $r;
 	    }
+	    
+	    if ( ref $this_result->[0] )
+	    {
+		$base{$n} = $this_result->[0];
+	    }
 	}
     }
     
     return \@result if $return_type eq 'listref';
     return @result; # otherwise
-    
-    # $$$$ have to deal with range
-    
-    # my @fields;
-    # my $tables = { has_a => 1 };
-    
-    # foreach my $key ( keys %$options )
-    # {
-    # 	if ( $key eq 'fields' )
-    # 	{
-    # 	    @fields = $taxonomy->generate_fields($options->{$key}, $tables);
-    # 	}
-	
-    # 	elsif ( ! $STD_OPTION{$key} )
-    # 	{
-    # 	    croak "list_subtree: invalid option '$key'\n";
-    # 	}
-    # }
-    
-    # my @filters = "a.taxon_no in ($taxon_nos)";
-    # push @filters, $taxonomy->simple_filters($options);
-    
-    # @fields = @{$FIELD_LIST{SIMPLE}} unless @fields;
-    
-    # my $fields = join ', ', @fields;
-    # my $filters = @filters ? join ' and ', @filters : '1=1';
-    # my $joins = $taxonomy->simple_joins('t', $tables);
-    
-    # $SQL_STRING = "
-    # 	SELECT $fields
-    # 	FROM $taxonomy->{AUTH_TABLE} as a JOIN $taxonomy->{TREE_TABLE} as t using (orig_no)
-    # 		$joins
-    # 	WHERE $filters
-    # 	ORDER BY t.lft\n";
-    
-    # my $result_list = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
-    
-    # return $result_list;
 }
 
 
@@ -408,22 +375,246 @@ sub lex_namestring {
     
     my ($taxonomy, $source_string) = @_;
     
-    my (@symbols);
+    my (%prefixes, @names);
     
   LEXEME:
     while ( $source_string )
     {
-	if ( $source_string =~ qr{ ^ [\s]+ (.*) }xs )
+	# Take out whitespace and commas at the beginning of the string (we
+	# ignore these).
+	
+	if ( $source_string =~ qr{ ^ [\s,]+ (.*) }xs )
 	{
 	    $source_string = $1;
 	    next LEXEME;
 	}
 	
-	elsif ( $source_string =~ qr{ ^ [,] [,\s]* (.*) }xs )
+	# Otherwise, grab everything up to the first comma.  This will be
+	# taken to represent a taxonomic name possibly followed by exclusions.
+	
+	elsif ( $source_string =~ qr{ ^ ( [^,]+ ) (.*) }xs )
 	{
-	    $source_string = $1;
-	    push @symbols, '_NEW';
+	    $source_string = $2;
+	    my $name_group = $1;
+	    my $main_name;
+	    
+	    # From this string, take everything up to the first ^.  That's the
+	    # main name.  Remove any whitespace at the end.
+	    
+	    if ( $name_group =~ qr{ ^ ( [^^]+ ) (.*) }xs )
+	    {
+		$name_group = $2;
+		$main_name = $1;
+		$main_name =~ s/\s+$//;
+		
+		# If the main name contains any invalid characters, just abort
+		# the whole name group.
+		
+		if ( $main_name =~ qr{ [^\w%.:-] }xs )
+		{
+		    push @{$taxonomy->{bad_names}}, $main_name;
+		    next LEXEME;
+		}
+		
+		# If the name includes a ':', split off the first component as
+		# an element that must be resolved first.  Repeat until there
+		# are no such prefixes left.
+		
+		my $prefix = '';
+		
+		while ( $main_name =~ qr{ ( [^:]+ ) [:\s]+ (.*) }xs )
+		{
+		    $main_name = $2;
+		    my $base_name = $1;
+		    
+		    # Remove any initial whitespace, change all '.' to '%',
+		    # condense all repeated wildcards and spaces.
+		    
+		    $base_name =~ s/\s+$//;
+		    $base_name =~ s/[.]/%/g;
+		    $base_name =~ s/%+/%/g;
+		    $base_name =~ s/\s+/ /g;
+		    
+		    # Keep track of the prefix so far, because each prefix
+		    # will need to be looked up before the main name is.
+		    
+		    $prefix .= "$base_name:";
+		    
+		    $prefixes{$prefix} = 1;
+		}
+		
+		# Now add the prefix(es) back to the main name.
+		
+		$main_name = $prefix . $main_name;
+		
+		# In the main name, '.' should be taken as a wildcard that
+		# ends a word (as in "T.rex").  Condense any repeated
+		# wildcards and spaces.
+		
+		$main_name =~ s/[.]/% /g;
+		$main_name =~ s/%+/%/g;
+		$main_name =~ s/\s+/ /g;
+		
+		# This will be one of the names to be resolved, as well as
+		# being the base for any subsequent exclusions.
+		
+		push @names, $main_name;
+	    }
+	    
+	    # Now, every successive string starting with '^' will represent an
+	    # exclusion.  Remove any whitespace at the end.
+	    
+	EXCLUSION:
+	    while ( $name_group =~ qr{ ^ \^+ ( [^^]+ ) (.*) }xs )
+	    {
+		$name_group = $2;
+		my $exclude_name = $1;
+		$exclude_name =~ s/\s+$//;
+		
+		# If the exclusion contains any invalid characters, ignore it.
+		
+		if ( $exclude_name =~ qr{ [^\w%.] }xs )
+		{
+		    push @{$taxonomy->{bad_names}}, $main_name;
+		    next EXCLUSION;
+		}
+		
+		# Any '.' should be taken as a wildcard with a space
+		# following.  Condense any repeated wildcards and spaces.
+		
+		$exclude_name =~ s/[.]/% /g;
+		$exclude_name =~ s/%+/%/g;
+		$exclude_name =~ s/\s+/ /g;
+		
+		# Add this exclusion to the list of names to be resolved,
+		# including the '^' flag and base name at the beginning.
+		
+		push @names, "^$main_name:$exclude_name";
+	    }
+	    
+	    next LEXEME;
 	}
+	
+	# If we get here, something went wrong with the parsing.
+	
+	else
+	{
+	    push @{$taxonomy->{bad_names}}, $source_string;
+	}
+    }
+    
+    # Now return the prefixes followed by the names.
+    
+    my @result = sort keys %prefixes;
+    push @result, @names;
+    
+    return @result;
+}
+
+
+sub lookup_base {
+    
+    my ($taxonomy, $base_name, $prefix_base) = @_;
+    
+    return unless $base_name;
+    
+    my $dbh = $taxonomy->{dbh};
+    
+    # Names must contain only word characters, spaces, wildcards and dashes.
+    
+    unless ( $base_name =~ qr{ ^ ( \w [\w% -]+ ) $ }xs )
+    {
+	push @{$taxonomy->{bad_names}}, "$base_name:";
+	return;
+    }
+    
+    # If we were given a prefix base, construct a range clause.
+    
+    my $range_clause = '';
+    
+    if ( ref $prefix_base && $prefix_base->{lft} > 0 && $prefix_base->{rgt} )
+    {
+	$range_clause = 'and lft between '. $prefix_base->{lft} . ' and ' . $prefix_base->{rgt};
+    }
+    
+    elsif ( defined $prefix_base && $prefix_base =~ qr{ ^ lft }xs )
+    {
+	$range_clause = "and ($prefix_base)";
+    }
+    
+    # Count the number of letters (not punctuation or spaces).  This uses a
+    # very obscure quirk of Perl syntax to evaluate the =~ in scalar but not
+    # boolean context.
+    
+    my $letter_count = () = $base_name =~ m/\w/g;
+    
+    # If the base name doesn't contain any wildcards, and contains at least 2
+    # letters, see if we can find an exactly coresponding taxonomic name.  If
+    # we can find at least one, pick the one with the most subtaxa and we're
+    # done.
+    
+    unless ( $base_name =~ qr{ [%_] } && $letter_count >= 2 )
+    {
+	my $quoted = $dbh->quote($base_name);
+	
+	# Note that we use 'like' so that that differences in case and
+	# accent marks will be ignored.
+	
+	my $sql = "
+		SELECT orig_no, lft, rgt, taxon_rank
+		FROM taxon_search as s JOIN taxon_trees as t using (orig_no)
+			JOIN taxon_attrs as v using (orig_no)
+		WHERE taxon_name like $quoted and taxon_rank >= 4 $range_clause
+		GROUP BY orig_no
+		ORDER BY s.is_current desc, v.taxon_size desc LIMIT 1";
+	
+	my $result = $dbh->selectrow_hashref($sql);
+	
+	# If we found something, then we're done.
+	
+	if ( $result )
+	{
+	    return $result;
+	}
+    }
+    
+    # Otherwise, look up all entries where the name matches the given string
+    # prefix-wise.  We require at least 3 actual letters, and if we get more
+    # than 200 results then we declare the prefix to be bad.
+    
+    unless ( $letter_count >= 3 )
+    {
+	push @{$taxonomy->{bad_names}}, "$base_name:";
+	return;
+    }
+    
+    my $quoted = $dbh->quote("$base_name%");
+    
+    my $sql = "
+	SELECT lft, rgt
+	FROM taxon_search as s JOIN taxon_trees as t using (orig_no)
+	WHERE taxon_name like $quoted and taxon_rank >= 4 $range_clause
+	GROUP BY orig_no";
+    
+    my $ranges = $dbh->selectall_arrayref($sql);
+    
+    unless ( $ranges && @$ranges > 0 && @$ranges <= 200 )
+    {
+	push @{$taxonomy->{bad_names}}, "$base_name:";
+	return;
+    }
+    
+    my @check = grep { $_->[0] > 0 && $_->[1] > 0 } @$ranges; 
+    
+    my $range_string = join(' or ', map { "lft between $_->[0] and $_->[1]" } @check);
+    
+    return $range_string;
+}
+
+
+sub nothing {
+    
+    my ($source_string, @symbols, $taxonomy);
 	
 	# If the initial component looks like "something:" or "something{" then
 	# we evaluate the specified name (with a % wildcard appended) and use
@@ -440,7 +631,7 @@ sub lex_namestring {
 	# 
 	# dinosauria:{^aves} 
 	
-	elsif ( $source_string =~ qr{ ^ \^+ (.*) }xs )
+	if ( $source_string =~ qr{ ^ \^+ (.*) }xs )
 	{
 	    $source_string = $1;
 	    push @symbols, '_EXCLUDE';
@@ -505,7 +696,7 @@ sub lex_namestring {
 	    push @symbols, '_ERROR', $source_string;
 	    last LEXEME;
 	}
-    }
+    
     
     return @symbols;
 }
@@ -767,7 +958,7 @@ sub simple_joins {
 our (%FIELD_LIST) = ( SIMPLE => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank', 
 				 't.lft', 't.parsen_no'],
 		      SEARCH => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank',
-				 't.lft', 't.parsen_no'],
+				 't.lft', 't.rgt', 't.parsen_no'],
 		      RANGE => ['t.orig_no', 't.rank as taxon_rank', 't.lft', 't.rgt'],
 		      APP => ['v.first_early_age as firstapp_ea', 
 			      'v.first_late_age as firstapp_la',
