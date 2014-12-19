@@ -16,7 +16,7 @@ use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $COUNTRY_MAP $PALEOCOORDS $
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP);
 
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
-use Taxonomy;
+use TaxonomyOld;
 
 use Moo::Role;
 

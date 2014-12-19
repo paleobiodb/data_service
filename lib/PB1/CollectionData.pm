@@ -16,7 +16,7 @@ use PB1::ReferenceData qw(format_reference);
 
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
-use Taxonomy;
+use TaxonomyOld;
 
 use Carp qw(carp croak);
 use POSIX qw(floor ceil);
@@ -810,7 +810,7 @@ sub get {
     
     if ( $self->has_block('taxa') )
     {
-	my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+	my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
 	
 	my $auth_table = $taxonomy->{auth_table};
 	my $tree_table = $taxonomy->{tree_table};
@@ -1281,7 +1281,7 @@ sub generateMainFilters {
     my ($self, $op, $mt, $tables_ref) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
     my @filters;
     
     # Check for parameter 'clust_id'
@@ -1347,7 +1347,7 @@ sub generateMainFilters {
 	@taxa = &PB1::TaxonData::get_taxa_by_name($self, $taxon_name, { return => 'range', common => 1 });
 	#my (@endtime) = Time::HiRes::gettimeofday();
 	#my $elapsed = Time::HiRes::tv_interval(\@starttime, \@endtime);
-	#print STDERR $Taxonomy::SQL_STRING . "\n\n";
+	#print STDERR $TaxonomyOld::SQL_STRING . "\n\n";
 	#print STDERR "Name Query Elapsed: $elapsed\n\n";
     }
     

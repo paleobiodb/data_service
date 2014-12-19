@@ -1,4 +1,4 @@
-# 
+ 
 # The Paleobiology Database
 # 
 #   CollectionTables.pm
@@ -16,7 +16,7 @@ our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_MAP
+use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_INTS $BIN_KEY
 		 $COUNTRY_MAP $CONTINENT_DATA
 		 $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
@@ -26,13 +26,12 @@ use ConsoleLog qw(logMessage);
 our $COLL_MATRIX_WORK = "cmn";
 our $COLL_BINS_WORK = "cbn";
 our $COLL_STRATA_WORK = "csn";
-our $COLL_MAP_WORK = "cpn";
+our $COLL_INTS_WORK = "cin";
 
 our $CLUST_AUX = "clust_aux";
 
 our $PROTECTED_LAND = "protected_land";
 our $PROTECTED_WORK = "pln";
-
 
 # Constants
 
@@ -330,12 +329,11 @@ sub buildCollectionTables {
 		access_level tinyint unsigned not null,
 		primary key (bin_id, interval_no)) Engine=MyISAM");
     
-    $dbh->do("DROP TABLE IF EXISTS $COLL_MAP_WORK");
+    $dbh->do("DROP TABLE IF EXISTS $COLL_INTS_WORK");
     
-    $dbh->do("CREATE TABLE $COLL_MAP_WORK (
-		bin_id int unsigned not null,
-		interval_no int unsigned not null,
-		collection_no int unsigned not null) Engine=MyISAM");
+    $dbh->do("CREATE TABLE $COLL_INTS_WORK (
+		collection_no int unsigned not null,
+		interval_no int unsigned not null) Engine=MyISAM");
     
     my $set_lines = '';
     my @index_stmts;
@@ -370,24 +368,12 @@ sub buildCollectionTables {
 	
 	logMessage(2, "      generated $result non-empty bins.");
 	
-	# Now do the same for the collection/interval map.
-	
-	logMessage(2, "      mapping bins to collections...");
-	
-	$sql = "INSERT IGNORE INTO $COLL_MAP_WORK (bin_id, interval_no, collection_no)
-		SELECT bin_id_$level, 0, collection_no
-		FROM $COLL_MATRIX as m";
-	
-	$result = $dbh->do($sql);
-	
-	logMessage(2, "      generated $result rows in the collection map.");
-	
 	# Add a special row indicating the bin resolution for each level.
 	
 	my $coded_reso = 360 / $reso;
 	
 	$sql = "REPLACE INTO $COLL_BINS_WORK (bin_id, interval_no, bin_level, n_colls)
-		VALUES ($level, 999999, $level, $coded_reso)";
+		VALUES ($level, $BIN_KEY, $level, $coded_reso)";
 	
 	$result = $dbh->do($sql);
 	
@@ -417,32 +403,7 @@ sub buildCollectionTables {
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "      generated $result non-empty bins.");
-	
-	# Now do the same for the collection/interval map.
-	
-	logMessage(2, "      mapping bins to collections...");
-	
-	$sql = "
-		INSERT IGNORE INTO $COLL_MAP_WORK (bin_id, interval_no, collection_no)
-		SELECT bin_id_$level, interval_no, collection_no
-		FROM $COLL_MATRIX as m JOIN $INTERVAL_DATA as i
-			JOIN $SCALE_MAP as s using (interval_no)
-			JOIN $INTERVAL_BUFFER as ib using (interval_no)
-		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
-			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
-			and (m.early_age > i.late_age and m.late_age < i.early_age)
-			and m.access_level = 0 and m.bin_id_$level > 0";
-	
-	$result = $dbh->do($sql);
-	
-	logMessage(2, "      generated $result rows collection map.");
     }
-    
-    logMessage(2, "      indexing interval/bin/collection map...");
-    
-    $dbh->do("ALTER TABLE $COLL_MAP_WORK ADD KEY (collection_no)");
-    $dbh->do("ALTER TABLE $COLL_MAP_WORK ADD KEY (interval_no)");
-    $dbh->do("ALTER TABLE $COLL_MAP_WORK ADD KEY (bin_id, interval_no)");
     
     logMessage(2, "    setting point geometries for spatial index...");
     
@@ -458,6 +419,32 @@ sub buildCollectionTables {
     $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD SPATIAL INDEX (loc)");
     $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD INDEX (interval_no, lng, lat)");
     
+    # We then create a mapping table which allows us to look up, for each
+    # collection, the time intervals which it encompasses (with the usual
+    # buffer rule applied).
+    
+    logMessage(2, "    creating collection interval map...");
+    
+    $sql = "
+		INSERT IGNORE INTO $COLL_INTS_WORK (collection_no, interval_no)
+		SELECT collection_no, interval_no
+		FROM $COLL_MATRIX as m JOIN $INTERVAL_DATA as i
+			JOIN $SCALE_MAP as s using (interval_no)
+			JOIN $INTERVAL_BUFFER as ib using (interval_no)
+		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
+			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
+			and (m.early_age > i.late_age and m.late_age < i.early_age)
+			and m.access_level = 0";
+	
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      generated $result rows.");
+
+    logMessage(2, "    indexing interval/bin/collection map...");
+    
+    $dbh->do("ALTER TABLE $COLL_INTS_WORK ADD KEY (collection_no)");
+    $dbh->do("ALTER TABLE $COLL_INTS_WORK ADD KEY (interval_no)");
+    
     # If we were asked to apply the K-means clustering algorithm, do so now.
     
     # applyClustering($dbh, $bin_list) if $options->{colls_cluster} and @bin_reso;
@@ -469,7 +456,7 @@ sub buildCollectionTables {
     # Finally, we swap in the new tables for the old ones.
     
     activateTables($dbh, $COLL_MATRIX_WORK => $COLL_MATRIX, $COLL_BINS_WORK => $COLL_BINS,
-		         $COLL_STRATA_WORK => $COLL_STRATA, $COLL_MAP_WORK => $COLL_MAP);
+		         $COLL_STRATA_WORK => $COLL_STRATA, $COLL_INTS_WORK => $COLL_INTS);
     
     $dbh->do("DROP TABLE IF EXISTS protected_aux");
     

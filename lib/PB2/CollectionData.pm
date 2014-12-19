@@ -7,6 +7,8 @@
 
 use strict;
 
+use lib '..';
+
 package PB2::CollectionData;
 
 use HTTP::Validate qw(:validators);
@@ -15,7 +17,7 @@ use PB2::CommonData qw(generateAttribution);
 use PB2::ReferenceData qw(format_reference);
 
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PRV_SUMMARY);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_SUMMARY);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -1049,7 +1051,7 @@ sub prevtaxa {
     $request->{main_sql} = "
 		SELECT $calc $fields
 		FROM $COLL_BINS as s $summary_joins
-			JOIN $PRV_SUMMARY as ds on ds.bin_id = s.bin_id and ds.interval_no = s.interval_no
+			JOIN $PVL_SUMMARY as ds on ds.bin_id = s.bin_id and ds.interval_no = s.interval_no
 			$other_joins
 		WHERE $filter_string
 		GROUP BY ds.orig_no
@@ -1396,6 +1398,7 @@ sub generateMainFilters {
 	    
 	    push @clust_filters, "c.collection_no = 0" unless @clust_filters;
 	    push @filters, @clust_filters;
+	    $tables_ref->{non_summary} = 1;
 	}
     }
     
@@ -1405,51 +1408,63 @@ sub generateMainFilters {
     my $taxon_name = $self->clean_param('taxon_name') || $self->clean_param('base_name');
     my $taxon_no = $self->clean_param('taxon_id') || $self->clean_param('base_id');
     my $exclude_no = $self->clean_param('exclude_id');
-    my (@taxa, @exclude_taxa);
+    my (@include_taxa, @exclude_taxa);
     
     # First get the relevant taxon records for all included taxa
     
     if ( $taxon_name )
     {
-	#my (@starttime) = Time::HiRes::gettimeofday();
-	@taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
-	#my (@endtime) = Time::HiRes::gettimeofday();
-	#my $elapsed = Time::HiRes::tv_interval(\@starttime, \@endtime);
-	#print STDERR $TaxonomyOld::SQL_STRING . "\n\n";
-	#print STDERR "Name Query Elapsed: $elapsed\n\n";
+	my @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
+	
+	# Now add these to the proper list.
+	
+	foreach my $t (@taxa)
+	{
+	    if ( $t->{exclude} )
+	    {
+		push @exclude_taxa, $t;
+	    }
+	    
+	    else
+	    {
+		push @include_taxa, $t;
+	    }
+	}
     }
     
     elsif ( $taxon_no )
     {
-	@taxa = $taxonomy->list_taxa($taxon_no, { fields => 'RANGE' });
+	@include_taxa = $taxonomy->list_taxa($taxon_no, { fields => 'RANGE' });
     }
     
     # Then get the records for excluded taxa.  But only if there are any
     # included taxa in the first place.
     
-    if ( $exclude_no && $exclude_no ne 'undefined' )
+    if ( $exclude_no && @include_taxa )
     {
-	@exclude_taxa = $taxonomy->list_taxa($exclude_no, { fields => 'RANGE' });
+	my @taxa = $taxonomy->list_taxa($exclude_no, { fields => 'RANGE' });
+	push @exclude_taxa, @taxa;
     }
     
     # Then construct the necessary filters for included taxa
     
-    if ( @taxa and ($self->clean_param('base_name') or $self->clean_param('base_id')) )
+    if ( @include_taxa and ($self->clean_param('base_name') or $self->clean_param('base_id')) )
     {
-	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @taxa;
+	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
 	push @filters, "($taxon_filters)";
 	$tables_ref->{tf} = 1;
 	$tables_ref->{non_geo_filter} = 1;
-	$self->{my_base_taxa} = \@taxa;
+	$self->{my_base_taxa} = \@include_taxa;
     }
     
-    elsif ( @taxa )
+    elsif ( @include_taxa )
     {
-	my $taxon_list = join ',', map { $_->{orig_no} } @taxa;
+	my $taxon_list = join ',', map { $_->{orig_no} } @include_taxa;
 	push @filters, "o.orig_no in ($taxon_list)";
 	$tables_ref->{o} = 1 unless $tables_ref->{ds};
 	$tables_ref->{non_geo_filter} = 1;
-	$self->{my_taxa} = \@taxa;
+	$tables_ref->{non_summary} = 1;
+	$self->{my_taxa} = \@include_taxa;
     }
     
     # If a name was given and no matching taxa were found, we need to query by
@@ -1541,6 +1556,7 @@ sub generateMainFilters {
 	}
 	
 	$tables_ref->{o} = 1;
+	$tables_ref->{non_summary} = 1;
     }
     
     # If a number was given but it does not exist in the hierarchy, add a
@@ -1549,13 +1565,16 @@ sub generateMainFilters {
     elsif ( $taxon_no )
     {
 	push @filters, "o.orig_no = -1";
+	$tables_ref->{non_summary} = 1;
     }
 
-    # ...and for excluded taxa 
+    # Now add filters for excluded taxa.  But only if there is at least one
+    # included taxon as well.
     
-    if ( @exclude_taxa and @taxa )
+    if ( @exclude_taxa && @include_taxa )
     {
 	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
+	$self->{my_excluded_taxa} = \@exclude_taxa;
 	$tables_ref->{tf} = 1;
     }
     
@@ -1572,6 +1591,7 @@ sub generateMainFilters {
 	    my $cc_list = "'" . join("','", @ccs) . "'";
 	    push @filters, "c.cc in ($cc_list)";
 	}
+	$tables_ref->{non_summary} = 1;
     }
     
     if ( my @continents = $self->clean_param_list('continent') )
@@ -1586,6 +1606,7 @@ sub generateMainFilters {
 	    push @filters, "ccmap.continent in ($cont_list)";
 	    $tables_ref->{ccmap} = 1;
 	}
+	$tables_ref->{non_summary} = 1;
     }
     
     # Check for parameters 'lngmin', 'lngmax', 'latmin', 'latmax', 'loc',
@@ -1677,6 +1698,7 @@ sub generateMainFilters {
 	    push @filters, "pc.plate_no in ($plate_list)";
 	    $tables_ref->{pc} = 1;
 	}
+	$tables_ref->{non_summary} = 1;
     }
     
     # Check for parameters 'p_lngmin', 'p_lngmax', 'p_latmin', 'p_latmax', 'p_loc',
@@ -1762,6 +1784,7 @@ sub generateMainFilters {
 	my $quoted = $dbh->quote($pattern);
 	push @filters, "cc.formation rlike $quoted";
 	$tables_ref->{cc} = 1;
+	$tables_ref->{non_summary} = 1;
     }
     
     if ( my @stratgroups = $self->clean_param_list('stratgroup') )
@@ -1775,6 +1798,7 @@ sub generateMainFilters {
 	my $quoted = $dbh->quote($pattern);
 	push @filters, "cc.geological_group rlike $quoted";
 	$tables_ref->{cc} = 1;
+	$tables_ref->{non_summary} = 1;
     }
     
     if ( my @members = $self->clean_param_list('member') )
@@ -1788,6 +1812,7 @@ sub generateMainFilters {
 	my $quoted = $dbh->quote($pattern);
 	push @filters, "cc.member rlike $quoted";
 	$tables_ref->{cc} = 1;
+	$tables_ref->{non_summary} = 1;
     }
     
     # Check for parameters , 'interval_id', 'interval', 'min_ma', 'max_ma'.
@@ -1850,7 +1875,7 @@ sub generateMainFilters {
 	# using the 'overlap' rule, in which case we need the unrestricted
 	# cluster table row (the one for interval_no = 0).
 	
-	if ( $op eq 'summary' and $time_rule ne 'overlap' )
+	if ( ($op eq 'summary' || $op eq 'prevalence') and $time_rule ne 'overlap' )
 	{
 	    $summary_interval = $interval_no;
 	}
@@ -1900,7 +1925,7 @@ sub generateMainFilters {
     # $summary_interval is not an integer (i.e. the client didn't specify a
     # valid interval), use -1 instead which will cause the result set to be empty.
     
-    if ( $op eq 'summary' )
+    if ( $op eq 'summary' || $op eq 'prevalence' )
     {
 	$summary_interval = '-1' unless $summary_interval =~ qr{^[0-9]+$};
 	push @filters, "s.interval_no = $summary_interval";
@@ -1975,6 +2000,7 @@ sub generateMainFilters {
 	
 	$self->{early_age} = $early_age;
 	$self->{late_age} = $late_age;
+	$tables_ref->{non_summary} = 1;
     }
     
     # Return the list

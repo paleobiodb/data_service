@@ -15,7 +15,6 @@ use Carp qw(carp croak);
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES);
-use TaxonomyOld;
 use Taxonomy;
 
 use Moo::Role;
@@ -64,7 +63,7 @@ sub initialize {
     # Now define all of the output blocks that were not defined elsewhere.
     
     $ds->define_block('1.2:taxa:basic' =>
-	{ select => 'link' },
+	{ select => ['DATA'] },
 	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this taxonomic name",
 	{ output => 'orig_no', com_name => 'gid' },
@@ -77,8 +76,8 @@ sub initialize {
 	    "This field will have a true value if the taxon represents an excluded group within another taxon.",
 	{ output => 'associated_records', com_name => 'rct' },
 	    "The number of records (occurrences, references, etc. depending upon which URL path you used) associated with this taxonomic name",
-	{ set => 'rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
-	{ output => 'rank', dwc_name => 'taxonRank', com_name => 'rnk' },
+	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
+	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
 	    "The rank of this taxon, ranging from subspecies up to kingdom",
 	{ output => 'taxon_name', dwc_name => 'scientificName', com_name => 'nam' },
 	    "The scientific name of this taxon",
@@ -94,28 +93,32 @@ sub initialize {
 	    "The year in which this name was published",
 	{ output => 'status', com_name => 'sta' },
 	    "The taxonomic status of this name",
-	{ output => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par' }, 
+	{ output => 'parsen_no', dwc_name => 'parentNameUsageID', com_name => 'par', pbdb_name => 'parent_no' }, 
 	    "The identifier of the parent taxonomic concept, if any",
 	{ output => 'synonym_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'senior_no', 
 	  com_name => 'snr', dedup => 'orig_no' },
-	    "The identifier of the senior synonym of this taxonomic concept, if any",
+	    "If this name is a junior synonym, the identifier of the senior synonym",
+	    "of this name",
 	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
 	    "A list of identifiers indicating the source document(s) from which this name was entered.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
 	    "True if this taxon is extant on earth today, false if not, not present if unrecorded");
     
     $ds->define_block('1.2:taxa:attr' =>
-	{ select => 'attr' });
+	{ select => 'ATTR' });
     
     $ds->define_block('1.2:taxa:size' =>
-	{ select => 'size' },
+	{ select => 'SIZE' },
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The number of occurrences in the database that are identified as being contained within",
+	    "this taxon",
 	{ output => 'size', com_name => 'siz' },
 	    "The total number of taxa in the database that are contained within this taxon, including itself",
 	{ output => 'extant_size', com_name => 'exs' },
 	    "The total number of extant taxa in the database that are contained within this taxon, including itself");
     
     $ds->define_block('1.2:taxa:app' =>
-	{ select => 'app' },
+	{ select => 'APP' },
 	{ output => 'firstapp_ea', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
 	  if_block => 'app' },
 	    "The early age bound for the first appearance of this taxon in the database",
@@ -142,7 +145,7 @@ sub initialize {
 	{ output => 'firstapp_ea', com_name => 'fea' });
     
     $ds->define_block('1.2:taxa:phylo' =>
-	{ select => 'phylo' },
+	{ select => 'PHYLO' },
 	{ output => 'kingdom', com_name => 'kgl' },
 	    "The name of the kingdom in which this taxon occurs",
 	{ output => 'phylum', com_name => 'phl' },
@@ -155,7 +158,7 @@ sub initialize {
 	    "The name of the family in which this taxon occurs");
     
     $ds->define_block('1.2:taxa:nav' =>
-	{ select => ['link', 'parent', 'phylo', 'counts'] },
+	{ select => ['PARENT', 'PHYLO', 'COUNTS'] },
 	{ output => 'parent_name', com_name => 'prl', dwc_name => 'parentNameUsage' },
 	    "The name of the parent taxonomic concept, if any",
 	{ output => 'parent_rank', com_name => 'prr' },
@@ -217,7 +220,7 @@ sub initialize {
 	    "A list of the subspecies within this taxonomic concept");
     
     $ds->define_block('1.2:taxa:img' =>
-	{ select => 'img' },
+	{ select => 'image_no' },
 	{ output => 'image_no', com_name => 'img' },
     	    "If this value is non-zero, you can use it to construct image URLs",
 	    "using L<taxa/thumb|node:taxa/thumb> and L<taxa/icon|node:taxa/icon>.");
@@ -274,23 +277,38 @@ sub initialize {
     
     $ds->define_set('1.2:taxa:rel' =>
 	{ value => 'self' },
-	    "Select just the base taxon or taxa themselves.  This is the default.",
+	    "Select just the specified taxon or taxa themselves.  This is the default.",
+	{ value => 'valid' },
+	    "Select the closest matching valid name(s) to the specified taxon or taxa.",
+	    "If a specified taxon is a junior synonym, its senior synonym will be returned.",
+	    "If a specified taxon is an invalid name (i.e. nomen dubium) then the",
+	    "corresponding valid name will be returned.",
 	{ value => 'synonyms' },
-	    "Select all synonyms of the base taxon or taxa.",
+	    "Select all synonyms of the specified taxon or taxa.",
+	{ value => 'variants' },
+	    "Select all variants of the specified taxon or taxa that are known to this",
+	    "database.  These may be variant spellings, or previous ranks (for example",
+	    "a taxon currently ranked as a suborder might have been previously ranked",
+	    "as an order, which would count as a different variant",
 	{ value => 'children' },
-	    "Select the taxa immediately contained within the base taxon or taxa.",
+	    "Select the taxa immediately contained within the specified taxon or taxa.",
 	{ value => 'all_children' },
-	    "Select all taxa contained within the base taxon or taxa.",
+	    "Select all taxa contained within the specified taxon or taxa.",
+	{ value => 'subtree' },
+	    "Select all taxa contained within the most specific valid taxon or taxa",
+	    "corresponding to the ones specified.  This is equivalent to the operation",
+	    "C<valid> followed by C<all_children>.",
 	{ value => 'parents' },
-	    "Select the immediate containing taxa of the base taxon or taxa.",
+	    "Select the immediate containing taxa of the specified taxon or taxa.",
 	{ value => 'all_parents' },
-	    "Select all taxa that contain the base taxon or taxa.",
+	    "Select all taxa that contain the specfied taxon or taxa.",
 	{ value => 'common_ancestor' },
-	    "Select the most specific taxon that contains all of the base taxa",
+	    "Select the most specific taxon that contains all of the specified taxa",
 	{ value => 'all_taxa' },
 	    "Select all of the taxa in the database.  In this case you do not have",
 	    "to specify C<name> or C<id>.  Use with caution, because the maximum",
-	    "data set returned may be as much as 80 MB.");
+	    "data set returned may be as much as 80 MB.  You can use the special",
+	    "parameters C<limit> and C<offset> to return this data in smaller chunks.");
     
     $ds->define_set('1.2:taxa:status' =>
 	{ value => 'valid' },
@@ -418,24 +436,32 @@ sub initialize {
 	    "Select the all taxa matching each of the specified name(s).",
 	    "To specify more than one, separate them by commas.",
 	    "The C<%> character may be used as a wildcard.",
-	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec, list => ',' },
-	    "Selects all taxa matching each of the specified name(s), plus",
-	    "all of their subtaxa.  Equivalent to specifying C<rel=all_children>.",
+	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
+	    "Selects the most closely matching valid taxon or taxa, plus",
+	    "all subtaxa.  You can specify more than one name, separated by",
+	    "commas.  This is a shortcut, equivalent to specifying C<name>",
+	    "and C<rel=subtree>.",
 	{ param => 'id', valid => POS_VALUE, list => ',' },
 	    "Selects the taxa corresponding to the specified identifier(s).",
 	    "You may specify more than one, separated by commas.",
 	{ param => 'base_id', valid => POS_VALUE, list => ',' },
-	    "Selects all taxa corresponding to the specified identifier(s), plus",
-	    "all of their subtaxa.  Equivalent to specifying C<rel=all_children>.",
-	{ optional => 'exact', valid => FLAG_VALUE },
-	    "If this parameter is specified, then the taxon exactly matching",
-	    "the specified name or identifier is selected, rather than the",
-	    "senior synonym which is the default.",
+	    "Selects the most closely matching valid taxon or taxa, plus",
+	    "all subtaxa.  You can specify more than one identifier, separated",
+	    "by commas.  This is a shortcut, equivalent to specifying C<name> and",
+	    "C<rel=subtree>.",
+	{ param => 'exclude_id', valid => POS_VALUE, list => ',' },
+	    "Excludes the taxonomic subtree(s) corresponding to the taxon or taxa",
+	    "specified.  This is",
+	    "only relevant with the use of either C<base_name>, C<base_id>,",
+	    "C<rel=all_children>, or C<rel=subtree>.  If you are using C<base_name>,",
+	    "you can also exclude subtaxa using the C<^> symbol, as in \"dinosauria ^aves\"",
+	    "or \"osteichthyes ^tetrapoda\".",
 	">The following parameters indicate which related taxonomic names to return:",
 	{ param => 'rel', valid => '1.2:taxa:rel', default => 'self' },
 	    "Indicates which taxa are to be selected.  Accepted values include:",
-	{ param => 'status', valid => '1.2:taxa:status', default => 'valid' },
-	    "Return only names that have the specified status.  Accepted values include:");
+	{ param => 'status', valid => '1.2:taxa:status', default => 'all' },
+	    "Return only names that have the specified status.  The default is C<all>.",
+	    "Accepted values include:");
     
     $ds->define_ruleset('1.2:taxa:filter' => 
 	"The following parameters further filter the list of return values:",
@@ -584,9 +610,7 @@ sub get {
     my ($self) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
-    my $taxonomy2 = Taxonomy->new($dbh, 'taxon_trees');
-    my $valid = $self->{valid};
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     my $taxon_no;
     
     # Then figure out which taxon we are looking for.  If we have a taxon_no,
@@ -594,27 +618,26 @@ sub get {
     
     my $not_found_msg = '';
     
-    if ( $valid->value('id') )
+    if ( $taxon_no = $self->clean_param('id') )
     {    
-	$taxon_no = $valid->value('id');
 	$not_found_msg = "Taxon number $taxon_no was not found in the database";
     }
     
     # Otherwise, we must have a taxon name.  So look for that.
     
-    elsif ( defined $valid->value('name') )
+    elsif ( my $taxon_name = $self->clean_param('name') )
     {
-	$not_found_msg = "Taxon '$valid->value('name')' was not found in the database";
+	$not_found_msg = "Taxon '$taxon_name' was not found in the database";
 	my $name_select = { return => 'id' };
 	#my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
 	
-	if ( defined $valid->value('rank') )
+	if ( my $rank = $self->clean_param('rank') )
 	{
-	    $name_select->{rank} = $valid->value('rank');
-	    $not_found_msg .= " at rank '$name_select->{rank}'";
+	    $name_select->{rank} = $rank;
+	    $not_found_msg .= " at rank '$rank'";
 	}
 	
-	($taxon_no) = $taxonomy2->resolve_names($valid->value('name'), $name_select);
+	($taxon_no) = $taxonomy->resolve_names($taxon_name, $name_select);
 	
 	#($taxon_no) = $self->get_taxa_by_name($valid->value('name'), $name_select);
     }
@@ -630,120 +653,104 @@ sub get {
     
     my $options = $self->generate_query_options;
     
-    # my @fields;
-    
-    # push @fields, 'ref' if $self->output_key('ref');
-    # push @fields, 'attr' if $self->output_key('attr');
-    # push @fields, 'size' if $self->output_key('size');
-    # push @fields, 'app' if $self->output_key('app');
-    # push @fields, 'img' if $self->output_key('img');
-    
-    # push @fields, 'link' if $self->output_key('nav');
-    # push @fields, 'parent' if $self->output_key('nav');
-    # push @fields, 'phylo' if $self->output_key('nav');
-    # push @fields, 'counts' if $self->output_key('nav');
-    
-    # $options->{fields} = \@fields;
-    
-    # If we were asked for the senior synonym, choose it.
-    
-    my $rel = $valid->value('exact') ? 'self' : 'senior';
-    
     # Next, fetch basic info about the taxon.
     
-    ($self->{main_record}) = $taxonomy->getRelatedTaxon($rel, $taxon_no, $options);
+    my ($r) = $taxonomy->get_taxon($taxon_no, $options);
     
-    $self->{main_sql} = $TaxonomyOld::SQL_STRING;
+    return unless ref $r;
+    
+    $self->single_result($r);
+    $self->{main_sql} = $taxonomy->get_last_sql;
     
     # If we were asked for 'nav' info, also show the various categories
     # of subtaxa and whether or not each of the parents are extinct.
     
     if ( $self->has_block('nav') )
     {
-	my $r = $self->{main_record};
+	my $data = ['SIMPLE','SIZE','APP'];
 	
 	# First get taxon records for all of the relevant supertaxa.
 	
 	if ( $r->{kingdom_no} )
 	{
-	    $r->{kingdom_txn} = $taxonomy->getTaxon($r->{kingdom_no}, { fields => ['size'] });
+	    $r->{kingdom_txn} = $taxonomy->get_taxon($r->{kingdom_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{phylum_no} )
 	{
-	    $r->{phylum_txn} = $taxonomy->getTaxon($r->{phylum_no}, { fields => ['size'] });
+	    $r->{phylum_txn} = $taxonomy->get_taxon($r->{phylum_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{class_no} )
 	{
-	    $r->{class_txn} = $taxonomy->getTaxon($r->{class_no}, { fields => ['size'] });
+	    $r->{class_txn} = $taxonomy->get_taxon($r->{class_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{order_no} )
 	{
-	    $r->{order_txn} = $taxonomy->getTaxon($r->{order_no}, { fields => ['size'] });
+	    $r->{order_txn} = $taxonomy->get_taxon($r->{order_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{family_no} )
 	{
-	    $r->{family_txn} = $taxonomy->getTaxon($r->{family_no}, { fields => ['size'] });
+	    $r->{family_txn} = $taxonomy->get_taxon($r->{family_no}, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	if ( $r->{parsen_no} || $r->{parent_no} )
 	{
 	    my $parent_no = $r->{parsen_no} || $r->{parent_no};
-	    $r->{parent_txn} = $taxonomy->getTaxon($parent_no, { fields => ['size'] });
+	    $r->{parent_txn} = $taxonomy->get_taxon($parent_no, { fields => ['SIMPLE','SIZE'] });
 	}
 	
 	# Then add the various lists of subtaxa.
 	
 	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
 	{
-	    $r->{phylum_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						     { limit => 10, order => 'size.desc', rank => 20, fields => ['size', 'app'] } ) ];
+	    $r->{phylum_list} = [ $taxonomy->list_related_taxa($taxon_no, 'all_children',
+						     { limit => 10, order => 'size.desc', rank => 20, fields => $data } ) ];
 	}
 	
 	unless ( $r->{class_no} or $r->{rank} <= 17 )
 	{
-	    $r->{class_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						    { limit => 10, order => 'size.desc', rank => 17, fields => ['size', 'app'] } ) ];
+	    $r->{class_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no, 
+						    { limit => 10, order => 'size.desc', rank => 17, fields => $data } ) ];
 	}
 	
 	unless ( $r->{order_no} or $r->{rank} <= 13 )
 	{
 	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
-	    $r->{order_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						    { limit => 10, order => $order, rank => 13, fields => ['size', 'app'] } ) ];
+	    $r->{order_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no, 
+						    { limit => 10, order => $order, rank => 13, fields => $data } ) ];
 	}
 	
 	unless ( $r->{family_no} or $r->{rank} <= 9 )
 	{
 	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
-	    $r->{family_list} = [ $taxonomy->getTaxa('all_children', $taxon_no, 
-						     { limit => 10, order => $order, rank => 9, fields => ['size', 'app'] } ) ];
+	    $r->{family_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no, 
+						     { limit => 10, order => $order, rank => 9, fields => $data } ) ];
 	}
 	
 	if ( $r->{rank} > 5 )
 	{
 	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
-	    $r->{genus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						    { limit => 10, order => $order, rank => 5, fields => ['size', 'app'] } ) ];
+	    $r->{genus_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no,
+						    { limit => 10, order => $order, rank => 5, fields => $data } ) ];
 	}
 	
 	if ( $r->{rank} == 5 )
 	{
-	    $r->{subgenus_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						       { limit => 10, order => 'size.desc', rank => 4, fields => ['size', 'app'] } ) ];
+	    $r->{subgenus_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no,
+						       { limit => 10, order => 'size.desc', rank => 4, fields => $data } ) ];
 	}
 	
 	if ( $r->{rank} == 5 or $r->{rank} == 4 )
 	{
-	    $r->{species_list} = [ $taxonomy->getTaxa('all_children', $taxon_no,
-						       { limit => 10, order => 'size.desc', rank => 3, fields => ['size', 'app'] } ) ];
+	    $r->{species_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no,
+						       { limit => 10, order => 'size.desc', rank => 3, fields => $data } ) ];
 	}
 	
 	$r->{children} = 
-	    [ $taxonomy->getTaxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => ['size', 'app'] } ) ];
+	    [ $taxonomy->list_related_taxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => $data } ) ];
     }
     
     return 1;
@@ -761,8 +768,7 @@ sub list {
     my ($self, $arg) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
-    my $taxonomy2 = Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # First, figure out what info we need to provide
     
@@ -792,17 +798,15 @@ sub list {
     if ( $name_list )
     {
 	my @names = ref $name_list eq 'ARRAY' ? @$name_list : $name_list;
-	my @ids;
-	#my $name_options = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
-	my $name_options = { return => 'id' };
+	my @taxa;
 	
 	foreach my $name (@names)
 	{
-	    push @ids, $taxonomy2->resolve_names($name, $name_options);
+	    push @taxa, $taxonomy->resolve_names($name);
 	}
 	
-	return unless @ids;
-	$id_list = \@ids;
+	return unless @taxa;
+	$id_list = \@taxa;
     }
     
     # Now do the main query and return a result:
@@ -811,17 +815,15 @@ sub list {
     
     if ( defined $arg && $arg eq 'refs' && $rel eq 'self' )
     {
-	my @result = $taxonomy->getTaxonReferences('self', $id_list, $options);
-	$self->{main_result} = \@result;
-	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
-	$self->{result_count} = scalar(@result);
+	my @result = $taxonomy->list_refs('self', $id_list, $options);
+	$self->list_result(@result);
     }
     
     elsif ( defined $arg && $arg eq 'refs' )
     {
 	$options->{return} = 'stmt';
-	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id_list, $options);
-	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
+	my $sth = $taxonomy->list_refs($rel, $id_list, $options);
+	$self->sth_result($sth);
 	$self->sql_count_rows;
     }
     
@@ -830,35 +832,33 @@ sub list {
     
     elsif ( $rel eq 'self' )
     {
-	my @result = $taxonomy->getTaxa('self', $id_list, $options);
+	my @result = $taxonomy->list_taxa($id_list, $options);
 	$self->{main_result} = \@result;
-	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
-	$self->{result_count} = scalar(@result);
     }
     
     # If the relationship is 'common_ancestor', we have just one result.
     
-    elsif ( $rel eq 'common_ancestor' )
+    elsif ( $rel eq 'common_ancestor' ) # $$$
     {
 	$options->{return} = 'list';
 	
-	($self->{main_record}) = $taxonomy->getTaxa('common_ancestor', $id_list, $options);	
-	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
-	$self->{result_count} = defined $self->{main_record} ? 1 : 0;
+	my ($taxon) = $taxonomy->list_related_taxa('common_ancestor', $id_list, $options);
+	$self->single_result($taxon) if $taxon;
     }
     
-    # Otherwise, we just call getTaxa and return the result.
+    # Otherwise, we just call list_related_taxa and return the result.
     
     else
     {
 	$options->{return} = 'stmt';
 	$rel ||= 'self';
 	
-	($self->{main_sth}) = $taxonomy->getTaxa($rel, $id_list, $options);
-	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
+	my $sth = $taxonomy->list_related_taxa($rel, $id_list, $options);
+	$self->sth_result($sth) if $sth;
 	$self->sql_count_rows;
     }
     
+    $self->{main_sql} = $taxonomy->get_last_sql;
     print STDERR $self->{main_sql} . "\n\n" if $self->debug;
     
     # Otherwise, we have an empty result.
@@ -877,7 +877,7 @@ sub match {
     my ($self) = @_;
     
     my $dbh = $self->get_connection;
-    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # Make sure we have at least one valid name.
     
@@ -889,14 +889,11 @@ sub match {
     
     my $options = $self->generate_query_options();
     
-    $options->{exact} = 1;
-    
     # Get the list of matches.
     
-    my @name_matches = $self->get_taxa_by_name($name_list, $options);
+    my @name_matches = $taxonomy->resolve_names($name_list, $options);
     
-    $self->{main_result} = \@name_matches if scalar(@name_matches);
-    $self->{result_count} = scalar(@name_matches);
+    $self->list_result(@name_matches);
 }
 
 
@@ -905,73 +902,73 @@ sub match {
 # Query the database for basic info about all references associated with taxa
 # that meet the specified parameters.
 
-sub list_refs {
+# sub list_refs {
 
-    my ($self) = @_;
+#     my ($self) = @_;
     
-    my $dbh = $self->get_connection;
-    my $taxonomy = TaxonomyOld->new($dbh, 'taxon_trees');
+#     my $dbh = $self->get_connection;
+#     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
-    # First, figure out what info we need to provide
+#     # First, figure out what info we need to provide
     
-    my $options = $self->generate_query_options('ref');
+#     my $options = $self->generate_query_options('ref');
     
-    my $rel = $self->clean_param('rel') || 'self';
+#     my $rel = $self->clean_param('rel') || 'self';
     
-    # If the parameter 'name' was given, then fetch all matching taxa.  Order
-    # them in descending order by size.
+#     # If the parameter 'name' was given, then fetch all matching taxa.  Order
+#     # them in descending order by size.
     
-    my @taxon_list;
+#     my @taxon_list;
     
-    if ( $self->clean_param('name') )
-    {
-	my $name = $self->clean_param('name');
-	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
+#     if ( $self->clean_param('name') )
+#     {
+# 	my $name = $self->clean_param('name');
+# 	my $name_select = { order => 'size.desc', spelling => 'exact', return => 'id', limit => 1 };
 	
-	@taxon_list = $self->get_taxa_by_name($name, $name_select);
-	return unless @taxon_list;
-    }
+# 	@taxon_list = $self->get_taxa_by_name($name, $name_select);
+# 	return unless @taxon_list;
+#     }
     
-    # Now do the main query and return a result:
+#     # Now do the main query and return a result:
     
-    # If a name was given and the relationship is 'self' (or not specified,
-    # being the default) then just return the list of matches.
+#     # If a name was given and the relationship is 'self' (or not specified,
+#     # being the default) then just return the list of matches.
     
-    if ( $self->clean_param('name') and $rel eq 'self' )
-    {
-	my @result = $taxonomy->getTaxonReferences('self', \@taxon_list, $options);
-	$self->{main_result} = \@result;
-	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
-	$self->{result_count} = scalar(@result);
-    }
+#     if ( $self->clean_param('name') and $rel eq 'self' )
+#     {
+# 	my @result = $taxonomy->getTaxonReferences('self', \@taxon_list, $options);
+# 	$self->{main_result} = \@result;
+# 	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
+# 	$self->{result_count} = scalar(@result);
+#     }
     
-    # If a name was given and some other relationship was specified, use the
-    # first matching name.
+#     # If a name was given and some other relationship was specified, use the
+#     # first matching name.
     
-    elsif ( $self->clean_param('name') )
-    {
-	$options->{return} = 'stmt';
-	my $id = $taxon_list[0];
-	my $rel = $self->clean_param('rel') || 'self';
+#     elsif ( $self->clean_param('name') )
+#     {
+# 	$options->{return} = 'stmt';
+# 	my $id = $taxon_list[0];
+# 	my $rel = $self->clean_param('rel') || 'self';
 	
-	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id, $options);
-	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
-	$self->sql_count_rows;
-    }
+# 	($self->{main_sth}) = $taxonomy->getTaxonReferences($rel, $id, $options);
+# 	$self->{main_sql} = $TaxonomyOld::SQL_STRING;
+# 	$self->sql_count_rows;
+#     }
     
-    # Otherwise, we just call getTaxa with a list of ids. 
+#     # Otherwise, we just call getTaxa with a list of ids. 
     
-    elsif ( $self->clean_param('id') )
-    {
-	$options->{return} = 'stmt';
-	my $id_list = $self->clean_param('id');
+#     elsif ( $self->clean_param('id') )
+#     {
+# 	$options->{return} = 'stmt';
+# 	my $id_list = $self->clean_param('id');
 	
-    }
+#     }
     
-    # Otherwise, we have an empty result.
+#     # Otherwise, we have an empty result.
     
-    return;
-}
+#     return;
+# }
 
 
 # get_taxa_by_name ( names, options )
@@ -1026,7 +1023,7 @@ sub get_taxa_by_name {
 	push @clauses, "status not in ('belongs to', 'objective synonym of', 'subjective synonym of')";
     }
     
-    elsif ( $status ne 'any' )
+    elsif ( $status ne 'any' && $status ne 'all' )
     {
 	push @clauses, "status = 'bad_value'";
     }
@@ -1254,26 +1251,40 @@ sub generate_query_options {
 	push @fields, $f;
     }
     
-    my $options = { fields => \@fields,
-		    order => 'size.desc' };
+    my $options = { fields => \@fields };
     
     $options->{limit} = $limit if defined $limit;	# $limit may be 0
     $options->{offset} = $offset if $offset;
     $options->{count} = 1 if $self->clean_param('count');
     
-    my $exact = $self->clean_param('exact');
     my $extant = $self->clean_param('extant');
     my $rank = $self->clean_param('rank');
     my $status = $self->clean_param('status');
-    my $select = $self->clean_param('select');
-    my $spelling = $self->clean_param('spelling');
     
-    $options->{exact} = 1 if $exact;
     $options->{extant} = $extant if $extant ne '';	# $extant may be 0, 1, or undefined
-    $options->{rank} = $rank if $rank ne '';
     $options->{status} = $status if $status ne '';
-    $options->{select} = $select if $select ne '';
-    $options->{spelling} = $spelling if $spelling ne '';
+    
+    if ( defined $rank && $rank ne '' )
+    {
+	my $rank_no = ($rank > 0) ? $rank + 0 : $TAXON_RANK{lc $rank};
+	
+	# If we were given a valid rank, set the min_rank and max_rank options
+	# accordingly.
+	
+	if ( $rank_no > 0 )
+	{
+	    $options->{min_rank} = $rank_no;
+	    $options->{max_rank} = $rank_no;
+	}
+	
+	# Otherwise, set an option that will select no results.
+	
+	else
+	{
+	    $options->{max_rank} = 1;
+	    $self->add_warning("invalid taxonomic rank '$rank'");
+	}
+    }
     
     # Use just the first order specified.  This should be fixed at some point.
     
@@ -1329,11 +1340,13 @@ sub auto {
     my ($self) = @_;
     
     my $dbh = $self->get_connection;
+    my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
+    
     my $partial = $self->clean_param('name');
     
-    my $search_table = $TAXON_TABLE{taxon_trees}{search};
-    my $names_table = $TAXON_TABLE{taxon_trees}{names};
-    my $attrs_table = $TAXON_TABLE{taxon_trees}{attrs};
+    my $search_table = $taxonomy->{SEARCH_TABLE};
+    my $names_table = $taxonomy->{NAMES_TABLE};
+    my $attrs_table = $taxonomy->{ATTRS_TABLE};
     
     my $sql;
     
@@ -1603,70 +1616,6 @@ sub generate_summary_expr {
 }
 
 
-# generate_query_fields ( tables_ref )
-# 
-# Generate a list of query fields based on the request parameters.  Add keys
-# to $tables_ref as necessary to indicate tables that must be joined in.
-
-sub generate_query_fields {
-    
-    my ($self, $tables) = @_;
-    
-    my (%select) = $self->select_hash();
-    
-    my $fields .= "a.taxon_name as exact_name, a.taxon_no, a.taxon_rank, a.common_name, at.is_extant, a.orig_no, t.status, a.reference_no, t.name as taxon_name, t.rank";
-    
-    if ( $select{link} )
-    {
-	$fields .= $TaxonomyOld::LINK_FIELDS;
-    }
-    
-    if ( $select{attr} )
-    {
-	$fields .= $TaxonomyOld::ATTR_FIELDS;
-	$tables->{ref} = 1;
-    }
-    
-    if ( $select{size} )
-    {
-	$fields .= $TaxonomyOld::SIZE_FIELDS;
-	$tables->{at} = 1;
-    }
-    
-    if ( $select{app} )
-    {
-	$fields .= $TaxonomyOld::APP_FIELDS;
-	$tables->{at} = 1;
-    }
-    
-    if ( $select{parent} )
-    {
-	$fields .= $TaxonomyOld::PARENT_FIELDS;
-	$tables->{pa} = 1;
-    }
-    
-    if ( $select{phylo} )
-    {
-	$fields .= $TaxonomyOld::INT_PHYLO_FIELDS;
-	$tables->{pi} = 1;
-    }
-    
-    if ( $select{counts} )
-    {
-	$fields .= $TaxonomyOld::COUNT_PHYLO_FIELDS;
-	$tables->{pc} = 1;
-    }
-    
-    if ( $select{'$bt.created'} )
-    {
-	$fields .= $TaxonomyOld::CREATED_FIELDS;
-    }
-    
-    $fields =~ s/v\./at./g;
-    
-    return $fields;
-}
-
 # generate_order_clause ( rank_table )
 # 
 # Generate an SQL order expression for the result set.
@@ -1781,52 +1730,6 @@ sub generate_order_clause {
     }
     
     return join(', ', @exprs);
-}
-
-
-# generate_join_list ( tables_ref )
-# 
-# Generate a list of SQL join expressions that will complete the query.
-
-sub generate_join_list {
-
-    my ($self, $tables, $tree_table) = @_;
-    
-    my $join_list = '';
-    
-    # Return an empty string unless we actually have some joins to make
-    
-    return $join_list unless ref $tables eq 'HASH' and %$tables;
-    
-    # Create the necessary join expressions.
-    
-    $join_list .= "LEFT JOIN $TAXON_TABLE{$tree_table}{attrs} as at on at.orig_no = t.orig_no\n"
-	if $tables->{at};
-    $join_list .= "LEFT JOIN $TAXON_TABLE{$tree_table}{refs} as r on r.reference_no = a.reference_no\n"
-	if $tables->{ref};
-    $join_list .= "LEFT JOIN $TAXON_TABLE{$tree_table}{ints} as pi on pi.ints_no = t.ints_no\n"
-	if $tables->{pi};
-    $join_list .= "LEFT JOIN $TAXON_TABLE{$tree_table}{counts} as pc on pc.orig_no = t.orig_no\n"
-	if $tables->{pc};
-    
-    if ( $tables->{pa} )
-    {
-	$join_list .= "LEFT JOIN $tree_table as pt on pt.orig_no = t.parsen_no\n";
-	$join_list .= "LEFT JOIN $TAXON_TABLE{$tree_table}{authorities} as pa on pa.taxon_no = pt.spelling_no\n";
-    }
-    
-    if ( $tables->{pp} )
-    {
-	$join_list .= "
-		LEFT JOIN person as pp1 on pp1.person_no = a.authorizer_no
-		LEFT JOIN person as pp2 on pp2.person_no = a.enterer_no
-		LEFT JOIN person as pp3 on pp3.person_no = a.modifier_no\n";
-    }
-    
-    $join_list .= "LEFT JOIN person as ppd on ppd.person_no = a.discussed_by\n"
-	if $tables->{ppd};
-    
-    return $join_list;
 }
 
 

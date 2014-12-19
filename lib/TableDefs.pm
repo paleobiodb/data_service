@@ -11,12 +11,13 @@ use strict;
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS
-		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA
-		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_MAP $PRV_SUMMARY $PRV_GLOBAL
+		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA $BIN_KEY
+		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS $PVL_SUMMARY $PVL_GLOBAL
 		      $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF
 		      $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
 		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP
-		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS);
+		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS
+		      $IDIGBIO);
 
 # classic tables
 
@@ -31,13 +32,15 @@ our $REIDS = "reidentifications";
 
 our $COLL_MATRIX = "coll_matrix";
 our $COLL_BINS = "coll_bins";
-our $COLL_MAP = "coll_map";
+our $COLL_INTS = "coll_ints";
 our $COLL_STRATA = "coll_strata";
 our $COLL_LOC = "coll_loc";
 our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
 our $PALEOCOORDS = 'paleocoords';
 our $GEOPLATES = 'geoplates';
+
+our $BIN_KEY = "999999";
 
 # new occurrence tables
 
@@ -65,7 +68,11 @@ our $TAXON_PICS = 'taxon_pics';
 
 # taxon diversity and prevalence tables
 
-our $PRV_SUMMARY = 'prv_summary';
-our $PRV_GLOBAL = 'prv_global';
+our $PVL_SUMMARY = 'pvl_summary';
+our $PVL_GLOBAL = 'pvl_global';
+
+# iDigBio external info table
+
+our $IDIGBIO = 'idigbio';
 
 1;

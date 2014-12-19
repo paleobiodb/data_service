@@ -14,10 +14,10 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_SUMMARY $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
 
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
+use TaxonDefs qw(%RANK_STRING);
 
 use Moo::Role;
 
@@ -549,16 +549,16 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:prevalence' =>
-	"The following parameter selects from one of the available clustering levels:",
-	{ param => 'level', valid => POS_VALUE, default => 1 },
-	    "Return records from the specified cluster level.",
 	">>You can use the following parameters to query for summary clusters by",
 	"a variety of criteria.  Except as noted below, you may use these in any combination.",
     	{ allow => '1.2:main_selector' },
 	">>You can use the following parameter if you wish to retrieve information about",
 	"the summary clusters which contain a specified collection or collections.",
 	"Only the records which match the other parameters that you specify will be returned.",
-    	{ allow => '1.2:occs:selector' },
+	{ allow => '1.2:common:select_crmod' },
+	{ allow => '1.2:common:select_ent' },
+	{ require_any => ['1.2:main_selector',
+			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
 
@@ -583,28 +583,6 @@ sub initialize {
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
 
-    $ds->define_ruleset('1.2:occs:taxa_old' =>
-	"You can use the following parameters if you wish to retrieve the taxa associated",
-	"with a known list of occurrences or collections, or to filter a known list against",
-	"other criteria such as location or time.",
-	"Only the records which match the other parameters that you specify will be returned.",
-	{ allow => '1.2:occs:selector' },
-        "The following parameters can be used to retrieve the taxa associated with a specified set of occurrences,",
-	"selected by a variety of criteria.  Except as noted below, you may use these in any combination.",
-	"These same parameters can all be used to select either occurrences, collections, or associated references or taxa.",
-	{ allow => '1.2:main_selector' },
-	{ allow => '1.2:common:select_crmod' },
-	{ allow => '1.2:common:select_ent' },
-	{ require_any => ['1.2:occs:selector', '1.2:main_selector',
-			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
-	"The following parameters select the particular set of results that should be returned:",
-	{ allow => '1.2:taxa:summary_selector' },
-	{ allow => '1.2:taxa:occ_filter' },
-	{ allow => '1.2:taxa:display' },
-	{ allow => '1.2:special_params' },
-	"^You can also use any of the L<special parameters|node:special> with this request",
-	">>If the parameter C<order> is not specified, the results are sorted alphabetically by",
-	"taxonomic name.");    
 }
 
 
@@ -1088,15 +1066,10 @@ sub prevalence {
     # Construct a list of filter expressions that must be added to the query
     # in order to select the proper result set.
     
-    my @filters = PB2::CollectionData::generateMainFilters($request, 'list', 'c', $tables);
-    push @filters, PB2::OccurrenceData::generateOccFilters($request, $tables);
+    my @filters = PB2::CollectionData::generateMainFilters($request, 'prevalence', 's', $tables);
     push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
-    
-    push @filters, "c.access_level = 0";
-    
-    my $filter_string = join(' and ', @filters);
-    
+        
     #$request->add_table('oc');
     
     # If we were asked to count rows, modify the query accordingly
@@ -1108,12 +1081,17 @@ sub prevalence {
     # for summary bins, we do so.  Otherwise, we have to go through the entire
     # set of occurrences again.
     
-    if ( 1 )
+    if ( $tables->{o} || $tables->{cc} )
     {
 	my $fields = "ph.phylum_no, ph.class_no, ph.order_no, count(*) as n_occs";
 	
 	$tables->{t} = 1;
 	$tables->{ph} = 1;
+	
+	push @filters, "c.access_level = 0";
+	@filters = grep { $_ !~ qr{^s.interval_no} } @filters;
+	
+	my $filter_string = join(' and ', @filters);
 	
 	# Determine which extra tables, if any, must be joined to the query.  Then
 	# construct the query.
@@ -1137,7 +1115,53 @@ sub prevalence {
 	return $request->generate_prevalence($sth, 'taxon_trees');
     }
     
-    # Otherewise, 
+    # Summary
+    
+    else
+    {
+	my $fields = "p.orig_no, p.rank, t.name, p.class_no, p.phylum_no, v.image_no, sum(p.n_occs) as n_occs";
+	
+	push @filters, "s.access_level = 0";
+	
+	my $filter_string = join(' and ', @filters);
+	
+	my $TAXON_TREES = 'taxon_trees';
+	my $TAXON_ATTRS = 'taxon_attrs';
+	
+	my $limit_clause = $request->sql_limit_clause(1);
+	
+	my $sql = "
+		SELECT $fields
+		FROM $PVL_SUMMARY as p JOIN $COLL_BINS as s using (bin_id, interval_no)
+			JOIN $TAXON_TREES as t using (orig_no)
+			LEFT JOIN $TAXON_ATTRS as v using (orig_no)
+		WHERE $filter_string
+		GROUP BY orig_no
+		ORDER BY n_occs desc $limit_clause";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+	
+	$request->list_result($result);
+    }
+}
+
+
+sub generate_prevalence_joins {
+    
+    my ($request, $tables_ref) = @_;
+    
+    my $join_list = '';
+    
+    # Return an empty string unless we actually have some joins to make
+    
+    return $join_list unless ref $tables_ref eq 'HASH' and %$tables_ref;
+    
+    # Create the necessary join expressions.
+        
+    return $join_list;
+    
 }
 
 
@@ -1225,138 +1249,6 @@ sub refs {
 }
 
 
-# taxa_old ( )
-# 
-# Query the database for the taxa associated with occurrences satisfying
-# the conditions specified by the parameters.
-
-sub taxa_old {
-
-    my ($self) = @_;
-    
-    # Get a database handle by which we can make queries.
-    
-    my $dbh = $self->get_connection;
-    
-    # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
-    
-    my $inner_tables = { t => 1 };
-    my $outer_tables = { at => 1 };
-    
-    my @filters = PB2::CollectionData::generateMainFilters($self, 'list', 'c', $inner_tables);
-    push @filters, PB2::CommonData::generate_crmod_filters($self, 'o');
-    push @filters, PB2::CommonData::generate_ent_filters($self, 'o');
-    push @filters, $self->generateOccFilters($inner_tables);
-    
-    push @filters, "c.access_level = 0";
-    
-    my $filter_string = join(' and ', @filters);
-    
-    # Construct another set of filter expressions to act on the taxa.
-    
-    my @taxa_filters = $self->PB2::TaxonData::generate_filters($outer_tables);
-    push @taxa_filters, "1=1" unless @taxa_filters;
-    
-    my $taxa_filter_string = join(' and ', @taxa_filters);
-    
-    # If a query limit has been specified, modify the query accordingly.
-    
-    my $limit = $self->sql_limit_clause(1);
-    
-    # If we were asked to count rows, modify the query accordingly
-    
-    my $calc = $self->sql_count_clause;
-    
-    # Figure out the order in which we should return the taxa.  If none
-    # is selected by the options, sort by the tree sequence number.
-    
-    my $order_expr = $self->PB2::TaxonData::generate_order_clause($outer_tables, {rank_table => 's'});
-    
-    # Determine which fields and tables are needed to display the requested
-    # information.
-    
-    my $TREE_TABLE = 'taxon_trees';
-    my $INTS_TABLE = $TAXON_TABLE{$TREE_TABLE}{ints};
-    my $AUTH_TABLE = $TAXON_TABLE{$TREE_TABLE}{authorities};
-    
-    my $fields = $self->PB2::TaxonData::generate_query_fields($outer_tables, 1);
-    
-    my $inner_join_list = $self->generateJoinList('c', $inner_tables);
-    my $outer_join_list = $self->PB2::TaxonData::generate_join_list($outer_tables, $TREE_TABLE);
-    
-    # Depending upon the summary level, we need to use different templates to generate the query.
-    
-    my $summary_rank = $self->clean_param('rank');
-    my $summary_expr = $self->PB2::TaxonData::generate_summary_expr($summary_rank, 'o', 't', 'i');
-    
-    if ( $summary_rank eq 'exact' or $summary_rank eq 'ident' )
-    {
-	$order_expr ||= "s.taxon_name";
-	$fields =~ s{t\.name}{s.taxon_name};
-	
-	$self->{main_sql} = "
-	SELECT $calc $fields, count(distinct s.occurrence_no) as associated_records
-	FROM (SELECT $summary_expr as taxon_name, o.orig_no, o.occurrence_no
-	    FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		$inner_join_list
-            WHERE $filter_string) as s LEFT JOIN $TREE_TABLE as t2 on t2.orig_no = s.orig_no
-		LEFT JOIN $TREE_TABLE as t on t.orig_no = t2.synonym_no
-		LEFT JOIN $AUTH_TABLE as a on a.taxon_no = t.spelling_no
-		$outer_join_list
-	WHERE $taxa_filter_string
-	GROUP BY s.taxon_name ORDER BY $order_expr
-	$limit";
-    }
-    
-    elsif ( $summary_rank eq 'taxon' or $summary_rank eq 'synonym' )
-    {
-	$order_expr ||= "t.name";
-	
-	$self->{main_sql} = "
-	SELECT $calc a.taxon_name as exact_name, $fields, count(distinct s.occurrence_no) as associated_records
-	FROM (SELECT $summary_expr as orig_no, o.occurrence_no
-	    FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		$inner_join_list
-            WHERE $filter_string) as s STRAIGHT_JOIN $TREE_TABLE as t on t.orig_no = s.orig_no
-		LEFT JOIN $AUTH_TABLE as a on a.taxon_no = t.spelling_no
-		$outer_join_list
-	WHERE $taxa_filter_string
-	GROUP BY t.orig_no ORDER BY $order_expr
-	$limit";
-    }
-    
-    else
-    {
-	$order_expr ||= "t.name";
-	
-	$self->{main_sql} = "
-	SELECT $calc $fields, count(distinct s.occurrence_no) as associated_records
-	FROM (SELECT $summary_expr as orig_no, o.occurrence_no
-	    FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		$inner_join_list
-		LEFT JOIN $INTS_TABLE as i using (ints_no)
-            WHERE $filter_string) as s LEFT JOIN $TREE_TABLE as t using (orig_no)
-		LEFT JOIN $AUTH_TABLE as a on a.taxon_no = t.spelling_no
-		$outer_join_list
-	WHERE $taxa_filter_string
-	GROUP BY t.orig_no ORDER BY $order_expr
-	$limit";
-    }
-    
-    print STDERR "$self->{main_sql}\n\n" if $self->debug;
-    
-    # Then prepare and execute the main query.
-    
-    $self->{main_sth} = $dbh->prepare($self->{main_sql});
-    $self->{main_sth}->execute();
-    
-    # If we were asked to get the count, then do so
-    
-    $self->sql_count_rows;
-}
-
-
 # generateOccFilters ( tables_ref )
 # 
 # Generate a list of filter clauses that will be used to compute the
@@ -1380,11 +1272,14 @@ sub generateOccFilters {
     {
 	my $id_list = join(',', @{$self->{clean_params}{id}});
 	push @filters, "o.occurrence_no in ($id_list)";
+	$tables_ref->{o} = 1;
+	$tables_ref->{non_summary} = 1;
     }
     
     elsif ( $self->{clean_params}{id} )
     {
 	push @filters, "o.occurrence_no = $self->{clean_params}{id}";
+	$tables_ref->{non_summary} = 1;
     }
     
     # Check for parameter 'coll_id'
@@ -1394,11 +1289,13 @@ sub generateOccFilters {
     {
 	my $id_list = join(',', @{$self->{clean_params}{coll_id}});
 	push @filters, "o.collection_no in ($id_list)";
+	$tables_ref->{non_summary} = 1;
     }
     
     elsif ( $self->{clean_params}{coll_id} )
     {
 	push @filters, "o.collection_no = $self->{clean_params}{coll_id}";
+	$tables_ref->{non_summary} = 1;
     }
     
     # Check for parameter 'ident'.  In cases of reidentified occurrences, it
@@ -1410,11 +1307,13 @@ sub generateOccFilters {
     if ( $ident eq 'orig' )
     {
 	push @filters, "o.reid_no = 0";
+	$tables_ref->{non_summary} = 1;
     }
     
     elsif ( $ident eq 'all' )
     {
 	$tables_ref->{group_by_reid} = 1;
+	$tables_ref->{non_summary} = 1;
     }
     
     else # default: 'latest'

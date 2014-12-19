@@ -213,7 +213,8 @@ use PB2::PersonData;
 			place => 3,
 			title => 'Most prevalent taxa',
 			method => 'prevalence',
-			output => '1.2:occs:prevalence'},
+			output => '1.2:occs:prevalence',
+			default_limit => 20},
 	"This path returns a list of the most prevalent taxa (according to number of occurrences)",
 	"from among the selected set of fossil occurrences.");
     
