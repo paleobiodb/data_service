@@ -89,7 +89,7 @@ sub initialize {
 	    "The code used to indicate this continent when selecting fossil occurrences by continent");
     
     $ds->define_block('1.2:config:countries' =>
-	{ output => 'config_section', com_name => 'cfg', value => 'cnt', if_field => 'continent_name' },
+	{ output => 'config_section', com_name => 'cfg', value => 'cou', if_field => 'name' },
 	    "The configuration section: 'cnt' for countries",
 	{ output => 'name', name => 'country_name', com_name => 'nam' },
 	    "Country name",

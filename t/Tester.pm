@@ -5,12 +5,17 @@
 
 use strict;
 
-use Test::More;
+use LWP::UserAgent;
 use Text::CSV_XS;
-
+use JSON;
 
 package Tester;
 
+use Test::More;
+
+use namespace::clean;
+
+our ($TEST_NO_REPORT) = 1;
 
 # new ( server_name )
 # 
@@ -31,6 +36,7 @@ sub new {
     
     my $instance = { ua => $ua,
 		     csv => Text::CSV_XS->new(),
+		     json => JSON->new(),
 		     server => $server,
 		     base_url => "http://$server" };
     
@@ -53,9 +59,7 @@ sub fetch_url {
 
     my ($tester, $path_and_args, $message) = @_;
     
-    my $url = $tester->{base_url};
-    $url .= '/' unless $path_and_args =~ qr{^/};
-    $url .= $path_and_args;
+    my $url = $tester->make_url($path_and_args);
     
     my $response;
     
@@ -74,15 +78,60 @@ sub fetch_url {
 	if ( defined $response )
 	{
 	    my $status = $response->status_line;
+	    diag("request was: $url") if $url;
 	    diag("status was: $status") if $status;
 	}
 	else
 	{
-	    diag("status was: no response or bad response");
+	    diag("no response or bad response");
 	}
-	diag('skipping subsequent tests for this URL');
 	return;
     }
+}
+
+
+# fetch_nocheck ( path_and_args )
+# 
+# Works just like fetch_url, but does not check to make sure the response is a
+# success. 
+
+sub fetch_nocheck {
+
+    my ($tester, $path_and_args, $message) = @_;
+    
+    my $url = $tester->{base_url};
+    $url .= '/' unless $path_and_args =~ qr{^/};
+    $url .= $path_and_args;
+    
+    my $response;
+    
+    eval {
+	$response = $tester->{ua}->get($url);
+    };
+    
+    if ( $response )
+    {
+	return $response;
+    }
+    
+    else
+    {
+	fail($message);
+	diag("no response");
+	return;
+    }
+}
+
+
+sub make_url {
+    
+    my ($tester, $path_and_args) = @_;
+    
+    my $url = $tester->{base_url};
+    $url .= '/' unless $path_and_args =~ qr{^/};
+    $url .= $path_and_args;
+    
+    return $url;
 }
 
 
@@ -97,6 +146,13 @@ sub fetch_url {
 sub extract_records {
 
     my ($tester, $response, $message, $options) = @_;
+    
+    unless ( ref $response )
+    {
+	fail($message);
+	diag("empty response");
+	return;
+    }
     
     my $body = $response->content;
     
@@ -123,18 +179,25 @@ sub extract_records {
 
 sub extract_records_json {
     
-    my ($tester, $response, $message) = @_;
+    my ($tester, $response, $message, $options) = @_;
+    
+    $options ||= {};
     
     my $body = $response->{__JSON};
     
     unless ( $body )
     {
 	eval {
-	    $body = $response->{__JSON} = decode_json( $response->content );
+	    $body = $response->{__JSON} = $tester->{json}->decode( $response->content );
 	};
     }
     
-    if ( ref $body->{records} eq 'ARRAY' && @{$body->{records}} && ref $body->{records}[0] eq 'HASH' )
+    if ( ref $body->{records} eq 'ARRAY' && $options->{no_records_ok} )
+    {
+	return @{$body->{records}};
+    }
+    
+    elsif ( ref $body->{records} eq 'ARRAY' && @{$body->{records}} && ref $body->{records}[0] eq 'HASH' )
     {
 	return @{$body->{records}};
     }
@@ -199,6 +262,8 @@ sub extract_records_text {
 		@values = split(qr{\t}, $line);
 	    }
 	    
+	    last LINE if $values[0] eq 'THIS REQUEST DID NOT GENERATE ANY OUTPUT RECORDS';
+	    
 	    my $r;
 	    
 	    foreach my $i ( 0..$#fields )
@@ -235,7 +300,7 @@ sub extract_records_text {
 	}
     }
     
-    if ( @records )
+    if ( @records || $options->{no_records_ok} )
     {
 	return @records;
     }
@@ -256,6 +321,13 @@ sub extract_records_text {
 sub extract_info {
 
     my ($tester, $response, $message) = @_;
+    
+    unless ( ref $response )
+    {
+	fail($message);
+	diag("empty response");
+	return;
+    }
     
     my $body = $response->content;
     
@@ -286,7 +358,7 @@ sub extract_info_json {
     unless ( $body )
     {
 	eval {
-	    $body = $response->{__JSON} = decode_json( $response->content );
+	    $body = $response->{__JSON} = $tester->{json}->decode( $response->content );
 	};
     }
     
@@ -375,6 +447,24 @@ sub scan_records {
     }
     
     return %found;
+}
+
+
+# found_all ( hashref, @probes )
+#
+# Return true if every entry in @probes has a true value in %$hashref.  Return
+# false otherwise.
+
+sub found_all {
+
+    my ($tester, $hashref, @probes) = @_;
+    
+    foreach my $n (@probes)
+    {
+	return unless $hashref->{$n};
+    }
+    
+    return 1;
 }
 
 

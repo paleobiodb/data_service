@@ -1285,9 +1285,9 @@ sub createWorkingTables {
 				spelling_no int unsigned not null,
 				trad_no int unsigned not null,
 				synonym_no int unsigned not null,
-				valid_no int unsigned not null,
+				accepted_no int unsigned not null,
 				parent_no int unsigned not null,
-				parsen_no int unsigned not null,
+				senpar_no int unsigned not null,
 				opinion_no int unsigned not null,
 				ints_no int unsigned not null,
 				lft int,
@@ -1956,7 +1956,7 @@ sub linkSynonyms {
 
 # computeHierarchy ( dbh )
 # 
-# Fill in the opinion_no, status, parent_no and parsen_no fields of
+# Fill in the opinion_no, status, parent_no and senpar_no fields of
 # $TREE_WORK.  This determines the classification of each taxonomic concept
 # represented in $TREE_WORK, and thus determines the Hierarchy relation.
 # 
@@ -2187,35 +2187,35 @@ sub computeHierarchy {
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parent_no)");
     
-    # Then we can set and index parsen_no, which points to the senior synonym
+    # Then we can set and index senpar_no, which points to the senior synonym
     # of the parent taxon.
     
-    logMessage(2, "    setting parsen_no");
+    logMessage(2, "    setting senpar_no");
     
     $result = $dbh->do("
 		UPDATE $TREE_WORK as t JOIN $TREE_WORK as t2 ON t2.orig_no = t.parent_no
-		SET t.parsen_no = t2.synonym_no");
+		SET t.senpar_no = t2.synonym_no");
     
-    logMessage(2, "    indexing parsen_no");
+    logMessage(2, "    indexing senpar_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (parsen_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (senpar_no)");
     
-    # Finally, we can set and index valid_no.  For valid taxa (senior and
+    # Finally, we can set and index accepted_no.  For valid taxa (senior and
     # junior synonyms both), it will equal the synonym_no.  For invalid ones,
     # it will equal the parent.
     
-    logMessage(2, "    setting valid_no");
+    logMessage(2, "    setting accepted_no");
     
     $result = $dbh->do("
 		UPDATE $TREE_WORK as t
-		SET valid_no = if(status in ($VALID_STATUS) or parsen_no = 0,
-				  synonym_no, parsen_no)");
+		SET accepted_no = if(status in ($VALID_STATUS) or senpar_no = 0,
+				  synonym_no, senpar_no)");
     
-    logMessage(2, "    indexing valid_no");
+    logMessage(2, "    indexing accepted_no");
     
-    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (valid_no)");
+    $result = $dbh->do("ALTER TABLE $TREE_WORK add index (accepted_no)");
     
-    # Remove chains, so that each valid_no field points to a valid taxon.  We
+    # Remove chains, so that each accepted_no field points to a valid taxon.  We
     # repeat the following process until no more rows are affected, with a
     # limit of 20 to avoid an infinite loop just in case our algorithm above
     # was faulty and some cycles have slipped through.
@@ -2229,8 +2229,8 @@ sub computeHierarchy {
     {
     	$result = $dbh->do("
      		UPDATE $TREE_WORK t1 JOIN $TREE_WORK t2
-     		    on t1.valid_no = t2.orig_no and t1.valid_no != t2.valid_no
-     		SET t1.valid_no = t2.valid_no");
+     		    on t1.accepted_no = t2.orig_no and t1.accepted_no != t2.accepted_no
+     		SET t1.accepted_no = t2.accepted_no");
     }
     while $result > 0 && ++$count < 20;
     
@@ -3173,7 +3173,7 @@ sub computePhylogeny {
     $result = $dbh->do("DROP TABLE IF EXISTS $INTS_AUX");
     $result = $dbh->do("CREATE TABLE $INTS_AUX
 			       (orig_no int unsigned,
-				parsen_no int unsigned,
+				senpar_no int unsigned,
 				depth int unsigned,
 				taxon_name varchar(80),
 				common_name varchar(80),
@@ -3198,8 +3198,8 @@ sub computePhylogeny {
     # link.
     
     $SQL_STRING = "
-		INSERT INTO $INTS_AUX (orig_no, parsen_no, depth, taxon_name, common_name, current_rank)
-		SELECT t.synonym_no, t.parsen_no, t.depth, t.name, a.common_name, t.rank
+		INSERT INTO $INTS_AUX (orig_no, senpar_no, depth, taxon_name, common_name, current_rank)
+		SELECT t.synonym_no, t.senpar_no, t.depth, t.name, a.common_name, t.rank
 		FROM $TREE_WORK as t join $auth_table as a on a.taxon_no = t.spelling_no
 		WHERE t.rank > 5 and t.orig_no = t.synonym_no";
     
@@ -3312,7 +3312,7 @@ sub computePhylogeny {
 			if(k.current_rank = 17 or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), k.orig_no, p.class_no) as nc,
 			if(k.current_rank = 13 or k.was_order - k.not_order > ifnull(xo.was_order - xo.not_order, 0), k.orig_no, p.order_no) as no,
 			if(k.current_rank = 9 or k.taxon_name like '%idae', k.orig_no, p.family_no) as nf
-		FROM $INTS_AUX as k JOIN $INTS_WORK as p on p.ints_no = k.parsen_no
+		FROM $INTS_AUX as k JOIN $INTS_WORK as p on p.ints_no = k.senpar_no
 			LEFT JOIN $INTS_AUX as xp on xp.orig_no = p.phylum_no
 			LEFT JOIN $INTS_AUX as xc on xc.orig_no = p.class_no
 			LEFT JOIN $INTS_AUX as xo on xo.orig_no = p.order_no
@@ -3322,7 +3322,7 @@ sub computePhylogeny {
 	
 	$SQL_STRING = "
 		UPDATE $INTS_WORK as i JOIN $INTS_AUX as k on i.ints_no = k.orig_no
-				JOIN $INTS_WORK as p on p.ints_no = k.parsen_no
+				JOIN $INTS_WORK as p on p.ints_no = k.senpar_no
 		SET k.aux_rank = if(ifnull(i.kingdom_no, 0) <> ifnull(p.kingdom_no, 0), 23,
 				if(ifnull(i.phylum_no, 0) <> ifnull(p.phylum_no, 0), 20,
 				 if(ifnull(i.class_no, 0) <> ifnull(p.class_no, 0), 17,
@@ -3352,7 +3352,7 @@ sub computePhylogeny {
 	logMessage(2, "    linking tree level $depth...") if $depth % 10 == 0;
 	
 	$SQL_STRING = "
-		UPDATE $TREE_WORK as t JOIN $TREE_WORK as pt on pt.orig_no = t.parsen_no
+		UPDATE $TREE_WORK as t JOIN $TREE_WORK as pt on pt.orig_no = t.senpar_no
 		SET t.ints_no = pt.ints_no
 		WHERE t.depth = $depth and t.ints_no = 0 and pt.ints_no <> 0";
 	
@@ -3525,7 +3525,7 @@ sub computePhylogeny {
 	
 	$SQL_STRING = "
 		UPDATE $COUNTS_WORK as c JOIN
-		(SELECT t.parsen_no,
+		(SELECT t.senpar_no,
 			count(*) as imm_count,
 			sum(c.is_species) + sum(c.species_count) as species_count,
 			sum(c.is_genus) + sum(c.genus_count) as genus_count,
@@ -3535,7 +3535,7 @@ sub computePhylogeny {
 			sum(c.is_phylum) + sum(c.phylum_count) as phylum_count
 		 FROM $COUNTS_WORK as c JOIN $TREE_WORK as t using (orig_no)
 		 WHERE t.depth = $depth
-		 GROUP BY t.parsen_no) as nc on c.orig_no = nc.parsen_no
+		 GROUP BY t.senpar_no) as nc on c.orig_no = nc.senpar_no
 		SET c.imm_count = nc.imm_count,
 		    c.species_count = nc.species_count,
 		    c.genus_count = nc.genus_count,
@@ -3600,7 +3600,7 @@ sub computePhylogeny {
     $SQL_STRING = "
 		INSERT INTO $LOWER_WORK (orig_no, rank, subgenus_no, subgenus, genus_no, genus)
 		SELECT t.orig_no, t.rank, t.orig_no, t.name, t1.orig_no, t1.name
-		FROM $TREE_WORK as t LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parsen_no
+		FROM $TREE_WORK as t LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.senpar_no
 		WHERE t.rank = 4";
     
     $result = $dbh->do($SQL_STRING);
@@ -3616,8 +3616,8 @@ sub computePhylogeny {
 		       if(t1.rank = 4, t1.name, null),
 		       if(t1.rank = 5, t1.orig_no, t2.orig_no),
 		       if(t1.rank = 5, t1.name, t2.name)
-		FROM $TREE_WORK as t JOIN $TREE_WORK as t1 on t1.orig_no = t.parsen_no
-			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parsen_no
+		FROM $TREE_WORK as t JOIN $TREE_WORK as t1 on t1.orig_no = t.senpar_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.senpar_no
 		WHERE t.rank = 3";
     
     $result = $dbh->do($SQL_STRING);
@@ -3635,9 +3635,9 @@ sub computePhylogeny {
 		       if(t1.rank = 4, t1.name, if(t2.rank = 4, t2.name, null)),
 		       if(t1.rank = 5, t1.orig_no, if(t2.rank = 5, t2.orig_no, t3.orig_no)),
 		       if(t1.rank = 5, t1.name, if(t2.rank = 5, t2.name, t3.name))
-		FROM $TREE_WORK as t JOIN $TREE_WORK as t1 on t1.orig_no = t.parsen_no
-			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parsen_no
-			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.parsen_no
+		FROM $TREE_WORK as t JOIN $TREE_WORK as t1 on t1.orig_no = t.senpar_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.senpar_no
+			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.senpar_no
 		WHERE t.rank = 2";
     
     $result = $dbh->do($SQL_STRING);
@@ -3689,7 +3689,7 @@ sub computeSearchTable {
 				taxon_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
 				taxon_no int unsigned not null,
 				orig_no int unsigned not null,
-				valid_no int unsigned not null,
+				accepted_no int unsigned not null,
 				is_current boolean not null,
 				is_exact boolean not null,
 				common char(2) not null,
@@ -3703,8 +3703,8 @@ sub computeSearchTable {
     
     $count = $dbh->do("
 	INSERT INTO $SEARCH_WORK (taxon_name, taxon_rank, taxon_no, orig_no, 
-				  valid_no, is_current, is_exact)
-	SELECT taxon_name, taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
+				  accepted_no, is_current, is_exact)
+	SELECT taxon_name, taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank not in ('subgenus', 'species', 'subspecies')");
     
@@ -3720,10 +3720,10 @@ sub computeSearchTable {
     
     $count = $dbh->do("
 	INSERT INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-				  valid_no, is_current, is_exact)
+				  accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(trailing ')' from substring_index(taxon_name,'(',-1)),
-	        taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
+	        taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank = 'subgenus'");
     
@@ -3740,10 +3740,10 @@ sub computeSearchTable {
     
     $count = $dbh->do("
 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 valid_no, is_current, is_exact)
+					 accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(substring(taxon_name, locate(' ', taxon_name)+1)),
-		taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name not like '%(%'");
     
@@ -3751,10 +3751,10 @@ sub computeSearchTable {
     
     $count += $dbh->do("
 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 valid_no, is_current, is_exact)
+					 accepted_no, is_current, is_exact)
 	SELECT substring_index(taxon_name, ' ', 1),
 		trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-		taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
     
@@ -3762,10 +3762,10 @@ sub computeSearchTable {
     
     $count += $dbh->do("
 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 valid_no, is_current, is_exact)
+					 accepted_no, is_current, is_exact)
 	SELECT substring_index(substring_index(taxon_name, '(', -1), ')', 1),
 		trim(substring(taxon_name, locate(') ', taxon_name)+2)),
-		taxon_rank, taxon_no, orig_no, valid_no, (taxon_no = spelling_no), 1
+		taxon_rank, taxon_no, orig_no, accepted_no, (taxon_no = spelling_no), 1
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE taxon_rank in ('species', 'subspecies') and taxon_name like '%(%'");
     
@@ -3862,9 +3862,9 @@ sub computeSearchTable {
     
     $SQL_STRING = "
 	INSERT IGNORE INTO $SEARCH_WORK (genus, taxon_name, taxon_rank, taxon_no, orig_no,
-					 valid_no, is_current, is_exact)
+					 accepted_no, is_current, is_exact)
 	SELECT sx.genus, sx.taxon_name, a.taxon_rank, sx.taxon_no, sx.orig_no,
-	       t.valid_no, (t.spelling_no = sx.taxon_no), 0
+	       t.accepted_no, (t.spelling_no = sx.taxon_no), 0
 	FROM $SPECIES_AUX as sx JOIN $auth_table as a on a.taxon_no = sx.taxon_no
 		JOIN $TREE_WORK as t on sx.orig_no = t.orig_no";
     
@@ -3879,8 +3879,8 @@ sub computeSearchTable {
     
     $SQL_STRING = "
 	INSERT IGNORE INTO $SEARCH_WORK (taxon_name, taxon_rank, taxon_no, orig_no,
-					 valid_no, is_current, is_exact, common)
-	SELECT common_name, rank, spelling_no, orig_no, valid_no, 0, 1, 'EN'
+					 accepted_no, is_current, is_exact, common)
+	SELECT common_name, rank, spelling_no, orig_no, accepted_no, 0, 1, 'EN'
 	FROM $auth_table as a join $TREE_WORK as t using (orig_no)
 	WHERE common_name <> '' and taxon_no = spelling_no";
     
@@ -4040,8 +4040,8 @@ sub computeAttrsTable {
 			(orig_no, is_valid, is_senior, is_extant, extant_children, distinct_children, 
 			 extant_size, taxon_size, n_colls, n_occs, not_trace)
 		SELECT a.orig_no,
-			if(t.valid_no = t.synonym_no, 1, 0) as is_valid,
-			if(t.valid_no = t.orig_no, 1, 0) as is_senior,
+			if(t.accepted_no = t.synonym_no, 1, 0) as is_valid,
+			if(t.accepted_no = t.orig_no, 1, 0) as is_senior,
 			sum(if(a.extant = 'yes', 1, if(a.extant = 'no', 0, null))) as is_extant,
 			0, 0, 0, 0, 0, 0, a.preservation <> 'trace' or a.preservation is null
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
@@ -4407,12 +4407,12 @@ sub computeAttrsTable {
 	    my $a = 1;	# we can stop here when debugging
 	}
 	
-	# However, we also want to sum these up using valid_no, so that
+	# However, we also want to sum these up using accepted_no, so that
 	# invalid subgroups, etc. will have accurate counts.
 	
 	# $sql = "
 	# 	UPDATE $ATTRS_WORK as v JOIN 
-	# 	(SELECT t.valid_no,
+	# 	(SELECT t.accepted_no,
 	# 		if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
 	# 		sum(v.extant_children) as extant_children_sum,
 	# 		sum(v.distinct_children) as distinct_children_sum,
@@ -4428,8 +4428,8 @@ sub computeAttrsTable {
 	# 		max(v.precise_age) as precise_age,
 	# 		if(sum(v.not_trace) > 0, 1, 0) as not_trace
 	# 	FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-	# 	WHERE t.depth = $depth and t.valid_no <> t.synonym_no
-	# 	GROUP BY t.valid_no) as nv on v.orig_no = nv.valid_no
+	# 	WHERE t.depth = $depth and t.accepted_no <> t.synonym_no
+	# 	GROUP BY t.accepted_no) as nv on v.orig_no = nv.accepted_no
 	# 	SET     v.is_extant = nv.is_extant,
 	# 		v.extant_children = nv.extant_children_sum,
 	# 		v.distinct_children = nv.distinct_children_sum,
@@ -4461,14 +4461,14 @@ sub computeAttrsTable {
 	
 	my $sql = "
 		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-			JOIN $ATTRS_WORK as pv on pv.orig_no = t.parsen_no and t.depth = $row
+			JOIN $ATTRS_WORK as pv on pv.orig_no = t.senpar_no and t.depth = $row
 		SET v.is_extant = 0 WHERE pv.is_extant = 0";
 	
 	$dbh->do($sql);
 	
 	# my $sql = "
 	# 	UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-	# 		JOIN $ATTRS_WORK as pv on pv.orig_no = t.parsen_no and t.depth = $row
+	# 		JOIN $ATTRS_WORK as pv on pv.orig_no = t.senpar_no and t.depth = $row
 	# 	SET v.first_early_age = pv.first_early_age,
 	# 	    v.first_late_age = pv.first_late_age,
 	# 	    v.last_early_age = pv.last_early_age,
@@ -4480,7 +4480,7 @@ sub computeAttrsTable {
 	
 	my $sql = "
 		UPDATE $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-			JOIN $ATTRS_WORK as pv on pv.orig_no = t.parsen_no and t.depth = $row
+			JOIN $ATTRS_WORK as pv on pv.orig_no = t.senpar_no and t.depth = $row
 		SET v.image_no = pv.image_no WHERE v.image_no is null or v.image_no = 0";
 	
 	$dbh->do($sql);

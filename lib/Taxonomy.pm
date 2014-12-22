@@ -10,6 +10,7 @@ package Taxonomy;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use Carp qw(carp croak);
+use Try::Tiny;
 
 use strict;
 use feature 'unicode_strings';
@@ -19,9 +20,9 @@ our (%NOM_CODE) = ( 'iczn' => 1, 'icn' => 2, 'icnb' => 3 );
 
 our (%TREE_TABLE_ID) = ( 'taxon_trees' => 1 );
 
-our ($SQL_STRING);
-
 our (%FIELD_LIST, %FIELD_TABLES);
+
+our ($SQL_STRING);
 
 =head3 new ( dbh, tree_table_name )
 
@@ -45,7 +46,9 @@ sub new {
     croak "bad database handle" unless ref $dbh;
     
     my $self = { dbh => $dbh, 
+		 sql_string => '',
 		 TREE_TABLE => $table_name,
+		 SEARCH_TABLE => $t->{search},
 	         ATTRS_TABLE => $t->{attrs},
 		 INTS_TABLE => $t->{ints},
 		 LOWER_TABLE => $t->{lower},
@@ -55,6 +58,7 @@ sub new {
 		 OP_CACHE => $t->{opcache},
 		 REFS_TABLE => $t->{refs},
 		 NAMES_TABLE => $t->{names},
+		 SCRATCH_TABLE => 'ancestry_scratch',
 	       };
         
     bless $self, $class;
@@ -83,8 +87,10 @@ my $VALID_TAXON_ID = qr{^[0-9]+$};
 # This can be used for debugging purposes.
 
 sub get_last_sql {
-
-    return $SQL_STRING || '';
+    
+    my ($taxonomy) = @_;
+    
+    return $taxonomy->{sql_string} || '';
 }
 
 
@@ -154,7 +160,7 @@ sub list_subtree {
     my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
     my $TREE_TABLE = $taxonomy->{TREE_TABLE};
     
-    $SQL_STRING = "
+    $taxonomy->{sql_string} = $SQL_STRING = "
 	SELECT $fields
 	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as tb using (orig_no)
 		JOIN $TREE_TABLE as t on t.lft between tb.lft and tb.rgt
@@ -212,7 +218,7 @@ sub list_taxa {
     my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
     my $TREE_TABLE = $taxonomy->{TREE_TABLE};
     
-    $SQL_STRING = "
+    $SQL_STRING = $taxonomy->{sql_string} = "
 	SELECT $fields
 	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as t using (orig_no)
 		$other_joins
@@ -232,6 +238,58 @@ sub list_taxa {
     # }
     
     return $return_type eq 'listref' ? $result_list : @$result_list;
+}
+
+
+sub get_taxon {
+
+    my ($taxonomy, $base_no, $options) = @_;
+    
+    # First check the arguments.
+    
+    $taxonomy->clear_warnings;
+    
+    croak "get_taxon: second argument must be a hashref if given"
+	if defined $options && ref $options ne 'HASH';
+    $options ||= {};
+    
+    foreach my $key ( keys %$options )
+    {
+	croak "get_taxon: invalid option '$key'\n" unless $STD_OPTION{$key};
+    }
+    
+    croak "get_taxon: first argument must not be array"
+	if ref $base_no eq 'ARRAY';
+    
+    my $base_string = $taxonomy->generate_id_string($base_no, 'exclude');
+    
+    my $tables = { use_a => 1 };
+    
+    my $fieldspec = $options->{fields} || 'SIMPLE';
+    my @fields = $taxonomy->generate_fields($fieldspec, $tables);
+    
+    my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
+    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
+    my $result;
+
+    my $fields = join ', ', @fields;
+    
+    my @filters = "a.taxon_no in ($base_string)";
+    push @filters, $taxonomy->simple_filters($options, $tables);
+    my $filters = join( q{ and }, @filters);
+    
+    my $other_joins = $taxonomy->simple_joins('t', $tables);
+    
+    $SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $fields
+	FROM $AUTH_TABLE as a JOIN $TREE_TABLE as t using (orig_no)
+		$other_joins
+	WHERE $filters
+	GROUP BY a.taxon_no LIMIT 1\n";
+    
+    my $result = $taxonomy->{dbh}->selectrow_hashref($SQL_STRING);
+    
+    return $result;
 }
 
 
@@ -272,8 +330,9 @@ sub list_related_taxa {
     $fieldspec = 'ID' if $return_type eq 'id';
     my @fields = $taxonomy->generate_fields($fieldspec, $tables);
     
-    my $order = $taxonomy->simple_order($options, $tables);
-    my $limit = $taxonomy->simple_limit($options);
+    my $count_expr = $options->{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    my $order_expr = $taxonomy->simple_order($options, $tables);
+    my $limit_expr = $taxonomy->simple_limit($options);
     
     my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
     my $TREE_TABLE = $taxonomy->{TREE_TABLE};
@@ -289,15 +348,15 @@ sub list_related_taxa {
 	
 	my $other_joins = $taxonomy->simple_joins('t', $tables);
 	
-	$SQL_STRING = "
-	SELECT $fields
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $count_expr $fields
 	FROM $AUTH_TABLE as a JOIN $TREE_TABLE as t using (orig_no)
 		$other_joins
 	WHERE $filters
-	GROUP BY a.taxon_no $order $limit\n";
+	GROUP BY a.taxon_no $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'current' || $rel eq 'valid' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'parsen' )
+    elsif ( $rel eq 'current' || $rel eq 'valid' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'senpar' )
     {
 	push @fields, 'base.taxon_no as base_no';
 	my $fields = join ', ', @fields;
@@ -310,13 +369,13 @@ sub list_related_taxa {
 	
 	my $other_joins = $taxonomy->simple_joins('t', $tables);
 	
-	$SQL_STRING = "
-	SELECT $fields
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $count_expr $fields
 	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as tb using (orig_no)
 		JOIN $TREE_TABLE as t on t.orig_no = tb.$rel_field
 		$other_joins
 	WHERE $filters
-	GROUP BY t.orig_no $order $limit\n";
+	GROUP BY t.orig_no $order_expr $limit_expr\n";
     }
     
     elsif ( $rel eq 'variants' )
@@ -331,15 +390,15 @@ sub list_related_taxa {
 	
 	my $other_joins = $taxonomy->simple_joins('t', $tables);
 	
-	$order ||= 'ORDER BY is_current desc, a.taxon_name';
+	$order_expr ||= 'ORDER BY is_current desc, a.taxon_name';
 	
-	$SQL_STRING = "
-	SELECT $fields
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $count_expr $fields
 	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as t using (orig_no)
 		JOIN $AUTH_TABLE as a on a.orig_no = t.orig_no
 		$other_joins
 	WHERE $filters
-	GROUP BY a.taxon_no $order $limit\n";
+	GROUP BY a.taxon_no $order_expr $limit_expr\n";
     }
     
     elsif ( $rel eq 'synonyms' || $rel eq 'children' || $rel eq 'imm_children' )
@@ -364,7 +423,7 @@ sub list_related_taxa {
 	
 	else # ( $rel eq 'children' )
 	{
-	    $rel_field = 'parsen_no';
+	    $rel_field = 'senpar_no';
 	    $sel_field = 'synonym_no';
 	}
 	
@@ -374,16 +433,16 @@ sub list_related_taxa {
 	
 	my $other_joins = $taxonomy->simple_joins('t', $tables);
 	
-	$order ||= 'ORDER BY is_senior desc' if $rel eq 'synonyms';
-	$order ||= 'ORDER BY t.lft';
+	$order_expr ||= 'ORDER BY is_senior desc' if $rel eq 'synonyms';
+	$order_expr ||= 'ORDER BY t.lft';
 	
-	$SQL_STRING = "
-	SELECT $fields
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $count_expr $fields
 	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as tb using (orig_no)
 		JOIN $TREE_TABLE as t on t.$rel_field = tb.$sel_field
 		$other_joins
 	WHERE $filters
-	GROUP BY t.orig_no $order $limit\n";
+	GROUP BY t.orig_no $order_expr $limit_expr\n";
     }
     
     elsif ( $rel eq 'all_children' || $rel eq 'all_imm_children' )
@@ -411,15 +470,75 @@ sub list_related_taxa {
 	
 	my $other_joins = $taxonomy->simple_joins('t', $tables);
 	
-	$order ||= 'ORDER BY t.lft';
+	$order_expr ||= 'ORDER BY t.lft';
 	
-	$SQL_STRING = "
-	SELECT $fields
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $count_expr $fields
 	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as tb using (orig_no)
 		$joins
 		$other_joins
 	WHERE $filters
-	GROUP BY t.orig_no $order $limit\n";
+	GROUP BY t.orig_no $order_expr $limit_expr\n";
+    }
+    
+    elsif ( $rel eq 'all_parents' )
+    {
+	# First select into the temporary table 'ancestry_temp' the set of
+	# orig_no values representing the ancestors of the taxa identified by
+	# $base_string.
+	
+	$taxonomy->compute_ancestry($base_string);
+	
+	# Now use this temporary table to do the actual query.
+	
+	push @fields, 's.is_base';
+	my $fields = join ', ', @fields;
+	
+	if ( $rel eq 'common_ancestor' )
+	{
+	    $fields .= ', t.lft' unless $fields =~ qr{ t\.lft };
+	    $fields .= ', t.rgt' unless $fields =~ qr{ t\.rgt };
+	}
+	
+	#$fields =~ s{t\.senpar_no}{t.parent_no};
+	
+	my @filters = $taxonomy->simple_filters($options, $tables);
+	my $filters = join( q{ and }, @filters);
+	$filters ||= '1=1';
+	
+	my $other_joins = $taxonomy->simple_joins('t', $tables);
+	
+	$order_expr ||= 'ORDER BY t.lft';
+	
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $count_expr $fields
+	FROM ancestry_temp as s JOIN $TREE_TABLE as ts using (orig_no)
+		STRAIGHT_JOIN $TREE_TABLE as t on t.orig_no = ts.orig_no or t.orig_no = ts.synonym_no
+		$other_joins
+	WHERE $filters
+	GROUP BY t.lft $order_expr $limit_expr\n";
+    }
+    
+    elsif ( $rel eq 'crown_group' || $rel eq 'pan_group' || $rel eq 'stem_group' || $rel eq 'common_ancestor' )
+    {
+	# First select into the temporary table 'ancestry_temp' the set of
+	# orig_no values representing the ancestors of the taxa identified by
+	# $base_string.
+	
+	$taxonomy->compute_ancestry($base_string);
+	
+	# Now use this temporary table to query for the set of ancestral taxa.
+	
+	my $ATTRS_TABLE = $taxonomy->{ATTRS_TABLE};
+	
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT t.orig_no, t.lft, t.rgt, s.is_base, v.extant_children
+	FROM ancestry_temp as s JOIN $TREE_TABLE as ts using (orig_no)
+		JOIN $TREE_TABLE as t on t.orig_no = ts.synonym_no
+		JOIN $ATTRS_TABLE as v on v.orig_no = t.orig_no
+	GROUP BY t.lft ORDER BY t.lft desc";
+	
+	# my $result = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
     }
     
     else
@@ -1018,10 +1137,10 @@ sub generate_fields {
 
 
 
-my (%STATUS_FILTER) = ( valid => "t.valid_no = t.synonym_no",
-			senior => "t.valid_no = t.orig_no",
-			junior => "t.valid_no = t.synonym_no and t.orig_no <> t.synonym_no",
-			invalid => "t.valid_no <> t.synonym_no",
+my (%STATUS_FILTER) = ( valid => "t.accepted_no = t.synonym_no",
+			senior => "t.accepted_no = t.orig_no",
+			junior => "t.accepted_no = t.synonym_no and t.orig_no <> t.synonym_no",
+			invalid => "t.accepted_no <> t.synonym_no",
 		        any => '1=1',
 		        all => '1=1');
 
@@ -1034,9 +1153,13 @@ sub simple_filters {
     if ( $options->{status} )
     {
 	my $filter = $STATUS_FILTER{$options->{status}};
-	unless ( defined $filter && $filter ne '1=1' )
+	if ( defined $filter )
 	{
-	    push @filters, $filter || "t.status = 'NOTHING'";
+	    push @filters, $filter unless $filter eq '1=1';
+	}
+	else
+	{
+	    push @filters, "t.status = 'NOTHING'";
 	}
     }
     
@@ -1210,18 +1333,83 @@ sub order_result_list {
 }
 
 
+# compute_ancestry ( base_nos )
+# 
+# Use the ancestry scratch table to compute the set of common parents of the
+# specified taxa (a stringified list of identifiers).
+# 
+# This function is only necessary because MySQL stored procedures cannot work
+# on temporary tables.  :(
+
+sub compute_ancestry {
+
+    my ($taxonomy, $base_string) = @_;
+    
+    my $dbh = $taxonomy->{dbh};
+    my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
+    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
+    my $SCRATCH_TABLE = $taxonomy->{SCRATCH_TABLE};
+    
+    my $result;
+    
+    # Create a temporary table by which we can extract information from
+    # $scratch_table and convey it past the table locks.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS ancestry_temp");
+    $result = $dbh->do("CREATE TEMPORARY TABLE ancestry_temp (
+				orig_no int unsigned primary key,
+				is_base tinyint unsigned) Engine=MyISAM");
+    
+    # Lock the tables that will be used by the stored procedure
+    # "compute_ancestry".
+    
+    $result = $dbh->do("LOCK TABLES $SCRATCH_TABLE write,
+				    $SCRATCH_TABLE as s write,
+				    $AUTH_TABLE read,
+				    $TREE_TABLE read,
+				    ancestry_temp write");
+    
+    # We need a try block to make sure that the table locks are released
+    # no matter what else happens.
+    
+    try
+    {
+	# Fill the scratch table with the requested ancestry list.
+	
+	$result = $dbh->do("CALL compute_ancestry('$AUTH_TABLE','$TREE_TABLE', '$base_string')");
+	
+	# Now copy the information out of the scratch table to a temporary
+	# table so that we can release the locks.
+	
+	$result = $dbh->do("INSERT INTO ancestry_temp SELECT * FROM $SCRATCH_TABLE"); 
+    }
+    
+    finally {
+	$dbh->do("UNLOCK TABLES");
+	die $_[0] if defined $_[0];
+    };
+    
+    # There is no need to return anything, since the results of this function
+    # are in the rows of the 'ancestry_temp' table.  But we can stop here on
+    # debugging.
+    
+    my $a = 1;
+}
+
+
 our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      SIMPLE => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
-				 't.rank as taxon_rank', 't.lft', 't.status', 't.parsen_no'],
+				 't.rank as taxon_rank', 't.status', 't.parent_no',
+				 't.senpar_no'],
 		      AUTH_SIMPLE => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 'a.taxon_rank',
-				      't.lft', 't.parsen_no'],
+				      't.lft', 't.senpar_no'],
 		      SEARCH => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank',
-				 't.lft', 't.rgt', 't.parsen_no'],
+				 't.lft', 't.rgt', 't.senpar_no'],
 		      DATA => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
-				 't.rank as taxon_rank', 't.lft', 't.status', 't.synonym_no',
-				 't.parsen_no', 'a.common_name', 'a.reference_no', 'v.is_extant'],
+				 't.rank as taxon_rank', 't.lft', 't.status', 't.accepted_no', 't.parent_no', 
+				 't.senpar_no', 'a.common_name', 'a.reference_no', 'v.is_extant'],
 		      RANGE => ['t.orig_no', 't.rank as taxon_rank', 't.lft', 't.rgt'],
-		      LINK => ['t.synonym_no', 't.valid_no', 't.parent_no', 't.parsen_no'],
+		      LINK => ['t.synonym_no', 't.accepted_no', 't.parent_no', 't.senpar_no'],
 		      APP => ['v.first_early_age as firstapp_ea', 
 			      'v.first_late_age as firstapp_la',
 			      'v.last_early_age as lastapp_ea',

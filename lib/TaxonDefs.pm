@@ -13,6 +13,7 @@ use base 'Exporter';
 our (@EXPORT_OK) = qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING
 		      %AUTH_TABLE %OPINION_TABLE %OPINION_CACHE %REFS_TABLE
 		      %ATTRS_TABLE %INTS_TABLE %SEARCH_TABLE
+		      %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
 		      $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
 
 our (@TREE_TABLE_LIST) = ('taxon_trees');
@@ -63,3 +64,30 @@ our (%AUTH_TABLE) = ("taxon_trees" => "authorities");
 our (%OPINION_TABLE) = ("taxon_trees" => "opinions");
 our (%OPINION_CACHE) = ("taxon_trees" => "order_opinions");
 our (%REFS_TABLE) = ("taxon_trees" => "refs");
+
+
+our (%TAXONOMIC_STATUS) = (
+	'belongs to' => 'valid',
+	'subjective synonym of' => 'heterotypic synonym',
+	'objective synonym of' => 'homotypic synonym',
+	'invalid subgroup of' => 'invalid',
+	'misspelling of' => 'invalid',
+	'replaced by' => 'invalid',
+	'nomen dubium' => 'invalid',
+	'nomen nudum' => 'invalid',
+	'nomen oblitum' => 'invalid',
+	'nomen vanum' => 'invalid',
+);
+
+
+our (%NOMENCLATURAL_STATUS) = (
+	'invalid subgroup of' => 'invalid subgroup',
+	'misspelling of' => 'misspelling',
+	'replaced by' => 'replaced by',
+	'nomen dubium' => 'nomen dubium',
+	'nomen nudum' => 'nomen nudum',
+	'nomen oblitum' => 'nomen oblitum',
+	'nomen vanum' => 'nomen vanum',
+);
+
+

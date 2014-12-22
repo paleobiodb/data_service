@@ -11,27 +11,53 @@
 # /data1.1/taxa/single.json ? id=<parent of Dascillidae>
 # 
 
-use Test::Most tests => 17;
+use Test::Most tests => 19;
 
-use LWP::UserAgent;
 use JSON;
 use Text::CSV_XS;
 
 use lib 't';
-use MyTest;
+use Tester;
 
-my $ua = LWP::UserAgent->new(agent => "PBDB Tester/0.1");
-my $csv = Text::CSV_XS->new();
 
-my $SERVER = $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3000';
+my $T = Tester->new();
 
-diag("TESTING SERVER: $SERVER");
 
 # First define the values we will be using to check the taxonomy operations.
 # These are representative taxa from the database.
 
 my $TEST_NAME_1 = 'Dascillidae';
 my $TEST_NAME_2 = 'Dascilloidea';
+
+my $TEST_NAME_3 = 'Felidae';
+my $TEST_NAME_3a = 'Felinae';
+my $TEST_NAME_3b = 'Pantherinae';
+my $TEST_NAME_3c = 'Felis catus';
+my $TEST_NAME_3P = 'Aeluroidea';
+
+my $TEST_NAME_4 = 'Canidae';
+my $TEST_NAME_4P = 'Canoidea';
+
+my $TEST_NAME_COMMON = 'Carnivora';
+
+my $TEST_NAME_5 = 'Caviidae';
+
+my $TEST_NAME_6 = 'Tyrannosauridae';
+
+my $TEST_NAME_7 = 'Dascillidae';
+my @TEST_AUTHOR_7a = ('Crowson', 'Zhang');
+my $TEST_TITLE_7a = 'Miocene insects and spiders from Shanwang, Shandong';
+
+my $TEST_NAME_8 = 'Metazoa';
+
+my $TEST_AUTO_1 = 'cani';
+my @TEST_AUTO_1a = ("Caniformia", "canine");
+my $TEST_AUTO_2 = 't.rex';
+my @TEST_AUTO_2a = ("Tyrannosaurus rex", "Telmatornis rex");
+
+my $TEST_IMAGE_1 = 910;
+my $TEST_IMAGE_SIZE_1a = 2047;
+my $TEST_IMAGE_SIZE_1b = 1302;
 
 my $t1 = { 'nam' => $TEST_NAME_1,
 	   'typ' => "txn",
@@ -66,14 +92,44 @@ my $t1t_num = { 'taxon_no' => 1, 'orig_no' => 1, 'parent_no' => 1, 'senior_no' =
 		"firstapp_ea" => 1, "firstapp_la" => 1, "lastapp_ea" => 1,
 		"lastapp_la" => 1, "size" =>1, "extant_size" => 1 };
 
+my $t1n = { 'prl' => 'Dascilloidea',
+	    'prr' => 'superfamily',
+	    'kgn' => '2',
+	    'kgl' => 'Metazoa',
+	    'phn' => '18891',
+	    'phl' => 'Arthropoda',
+	    'phc' => '0',
+	    'cln' => '56637',
+	    'cll' => 'Insecta',
+	    'clc' => '0',
+	    'odn' => '69148',
+	    'odl' => 'Coleoptera',
+	    'odc' => '0',
+	    'fmn' => '69296',
+	    'fml' => 'Dascillidae',
+	    'fmc' => 0 };
+
+my $t1n_num = { 'gnc' => 1 };
+
+my $t1n_list = { 'chl' => 1, 'gns' => 1 };
+
+my $t8n = { 'prl' => 'Opisthokonta',
+	    'prr' => 'unranked clade',
+	    'kgn' => '2',
+	    'kgl' => 'Metazoa' };
+
+my $t8n_num = { 'phc' => 1, 'clc' => 1, 'odc' => 1, 'fmc' => 1, 'gnc' => 1 };
+
+my $t8n_list = { 'chl' => 1, 'phs' => 1, 'cls' => 1, 'ods' => 1, 'fms' => 1, 'gns' => 1 };
+
 # Then the fields and values to expect as a result of the 'showsource' parameter.
 
 my $ss = { "data_provider" => 1,
 	   "data_source" => 1,
 	   "data_license" => 1,
 	   "license_url" => 1,
-	   "documentation_url" => "http://$SERVER/data1.1/taxa/single_doc.html",
-	   "data_url" => "http://$SERVER/data1.1/taxa/single.json?name=$t1->{nam}&show=attr,app,size,phylo&showsource",
+	   "documentation_url" => $T->make_url("/data1.1/taxa/single_doc.html"),
+	   "data_url" => $T->make_url("/data1.1/taxa/single.json?name=$t1->{nam}&show=attr,app,size,phylo&showsource"),
 	   "access_time" => 1,
 	   "title" => 1 };
 
@@ -81,8 +137,8 @@ my $sst = { "Data Provider" => 1,
 	    "Data Source" => 1,
 	    "Data License" => 1,
 	    "License URL" => 1,
-	    "Documentation URL" => "http://$SERVER/data1.1/taxa/single_doc.html",
-	    "Data URL" => "http://$SERVER/data1.1/taxa/single.txt?name=$t1->{nam}&show=attr,app,size,phylo&showsource",
+	    "Documentation URL" => $T->make_url("/data1.1/taxa/single_doc.html"),
+	    "Data URL" => $T->make_url("/data1.1/taxa/single.txt?name=$t1->{nam}&show=attr,app,size,phylo&showsource"),
 	    "Access Time" => 1,
 	    "Title" => 1 };
 
@@ -99,9 +155,14 @@ my ($taxon_id, $parent_id);
 
 subtest 'single json by name' => sub {
     
-    my $single_json = test_url($ua,
-			       "http://$SERVER/data1.1/taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,phylo&showsource",
-			       "single json request OK") || return;
+    my $single_json = $T->fetch_url("/data1.1/taxa/single.json?name=$TEST_NAME_1&show=attr,app,size,phylo&showsource",
+				    "single json request OK");
+    
+    unless ( $single_json )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     # First check the we have the proper headers
     
@@ -157,94 +218,103 @@ subtest 'single json by name' => sub {
 };
 
 
+subtest 'single json nav' => sub {
+    
+    diag("checking taxon '$TEST_NAME_1'");
+    
+    my $single_json = $T->fetch_url("/data1.1/taxa/single.json?name=$TEST_NAME_1&show=nav",
+				    "single json nav request OK");
+    
+    unless ( $single_json )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
+    my ($r) = $T->extract_records($single_json, "single json nav extract records");
+    
+    foreach my $key ( keys %$t1n )
+    {
+	next unless ok( defined $r->{$key}, "single json nav has field '$key'" );
+	is( $r->{$key}, $t1n->{$key}, "single json field value '$key'" );
+    }
+    
+    foreach my $key ( keys %$t1n_num )
+    {
+	ok( defined $r->{$key} && $r->{$key} > 0, "single json has numeric value for '$key'" );
+    }
+    
+    foreach my $key ( keys %$t1n_list )
+    {
+	ok( ref $r->{$key} eq 'ARRAY' && $r->{$key}[0]{oid}, "single json nav has sublist '$key'");
+    }
+    
+    diag("checking taxon '$TEST_NAME_8'");
+    
+    my $higher_json = $T->fetch_url("/data1.1/taxa/single.json?name=$TEST_NAME_8&show=nav",
+				    "single json nav request OK") || return;
+    
+    ($r) = $T->extract_records($higher_json, "single json nav extract records");
+    
+    foreach my $key ( keys %$t8n )
+    {
+	next unless ok( defined $r->{$key}, "single json nav has field '$key'" );
+	is( $r->{$key}, $t8n->{$key}, "single json field value '$key'" );
+    }
+    
+    foreach my $key ( keys %$t8n_list )
+    {
+	ok( ref $r->{$key} eq 'ARRAY' && $r->{$key}[0]{oid}, "single json nav has sublist '$key'");
+    }
+    
+    foreach my $key ( keys %$t8n_num )
+    {
+	ok( defined $r->{$key} && $r->{$key} > 0, "single json has numeric value for '$key'" );
+    }
+};
+
+
 subtest 'single txt by name' => sub {
     
-    my $single_txt = test_url($ua,
-			      "http://$SERVER/data1.1/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,phylo&showsource",
-			      "single txt request OK") || return;
+    my $single_txt = $T->fetch_url("/data1.1/taxa/single.txt?name=$TEST_NAME_1&show=attr,app,size,phylo&showsource",
+				   "single txt request OK");
+    
+    unless ( $single_txt )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
     
     # Now check the txt response in detail 
     
     is( $single_txt->header('Content-Type'), 'text/plain; charset=utf-8', 'single txt content-type' );
     
-    my ($response, $parameters, $r);
+    my ($info) = $T->extract_info($single_txt, 'single txt extract info');
     
-    eval {
-	
-	my $section = 'top';
-	my (@fields, @values);
-	
-	foreach my $line ( split( qr{[\n\r]+}, $single_txt->content ) )
-	{
-	    if ( $line =~ qr{^"Parameters:"} )
-	    {
-		$section = 'parameters';
-	    }
-	    
-	    elsif ( $line =~ qr{^"Records:"} )
-	    {
-		$section = 'fields';
-	    }
-	    
-	    elsif ( $section eq 'parameters' )
-	    {
-		$csv->parse($line);
-		my ($dummy, $param, $value) = $csv->fields;
-		$parameters->{$param} = $value;
-	    }
-	    
-	    elsif ( $section eq 'fields' )
-	    {
-		$csv->parse($line);
-		@fields = $csv->fields;
-		$section = 'record';
-	    }
-	    
-	    elsif ( $section eq 'record' )
-	    {
-		$csv->parse($line);
-		@values = $csv->fields;
-		last;
-	    }
-	    
-	    elsif ( $section eq 'top' )
-	    {
-		$csv->parse($line);
-		my ($field, $value) = $csv->fields;
-		$response->{$field} = $value;
-	    }
-	}
-	
-	foreach my $i ( 0..$#fields )
-	{
-	    $r->{$fields[$i]} = $values[$i];
-	}
-    };
+    my ($r) = $T->extract_records($single_txt, 'single txt extract records', { type => 'info' } );
     
-    ok( ref $r eq 'HASH' && keys(%$r) > 1, 'single txt content decoded') or return;
-    
-    # Check the 'showsource' fields
+    # Check the info fields
     
     foreach my $key ( keys %$sst )
     {
-	next unless ok( defined $response->{$key} && $response->{$key} ne '', 
+	next unless ok( defined $info->{$key} && $info->{$key} ne '', 
 			"single txt showsource '$key'" );
 	
 	unless ( $sst->{$key} eq '1' )
 	{
-	    is( $response->{$key}, $sst->{$key}, "single txt showsource value '$key'" );
+	    is( $info->{$key}, $sst->{$key}, "single txt showsource value '$key'" );
 	}
     }
     
     foreach my $key ( keys %$ssp )
     {
-	next unless ok( defined $parameters->{$key},
+	next unless ok( defined $info->{parameters}{$key},
 			"single json showsource parameter '$key'" );
-	is( $parameters->{$key}, $ssp->{$key},
+	is( $info->{parameters}{$key}, $ssp->{$key},
 	    "single json showsource parameter value '$key'" );
     }
     
-    # CHeck the data fields
+    # Check the data fields
     
     foreach my $key ( keys %$t1t )
     {
@@ -265,10 +335,16 @@ subtest 'single txt by name' => sub {
 
 subtest 'single json by id' => sub {
     
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/single.json?id=$taxon_id",
-			    "single json by id request OK");
+    my $response = $T->fetch_url("/data1.1/taxa/single.json?id=$taxon_id",
+				 "single json by id request OK");
     
-    my ($r) = extract_records_json($response, "single json by id extract records");
+    unless ( $response )
+    {
+	diag("skipping remainder of subtest");
+	return;
+    }
+    
+    my ($r) = $T->extract_records($response, "single json by id extract records");
     
     return unless $r;
     
@@ -281,10 +357,10 @@ subtest 'single json by id' => sub {
 
 subtest 'parent json' => sub {
     
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/single.json?id=$parent_id",
-			    "parent json request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/single.json?id=$parent_id",
+			    "parent json request OK");
     
-    my ($r) = extract_records_json($response, "parent json extract records");
+    my ($r) = $T->extract_records($response, "parent json extract records");
     
     return unless $r;
     
@@ -298,23 +374,23 @@ subtest 'parent json' => sub {
 
 subtest 'list self' => sub {
     
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?name=Felidae,Canidae",
-			    "list self request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4",
+			    "list self request OK");
     
-    my %found = scan_records_json($response, 'nam', "list self extract records");
+    my %found = $T->scan_records($response, 'nam', "list self extract records");
     
     return if $found{NO_RECORDS};
     
-    ok($found{Felidae} && $found{Canidae}, "list self found both records");
+    ok($found{$TEST_NAME_3} && $found{$TEST_NAME_4}, "list self found both records");
 };
 
 
 subtest 'list synonyms' => sub {
 
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?name=Sirenia&rel=synonyms",
-			    "list synonyms request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=Sirenia&rel=synonyms",
+				 "list synonyms request OK");
     
-    my %found = scan_records_json($response, 'nam', "list synonyms extract records");
+    my %found = $T->scan_records($response, 'nam', "list synonyms extract records");
     
     return if $found{NO_RECORDS};
     
@@ -326,28 +402,28 @@ my ($num_children, $num_all_children);
 
 subtest 'list children' => sub {
 
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?name=Felidae&rel=children",
-			    "list children request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3&rel=children",
+			    "list children request OK");
     
-    my %found = scan_records_json($response, 'nam', "list children extract records");
+    my %found = $T->scan_records($response, 'nam', "list children extract records");
     
     return if $found{NO_RECORDS};
     
-    ok($found{Felinae} && $found{Pantherinae}, "list children found a sample of records");
+    ok($found{$TEST_NAME_3a} && $found{$TEST_NAME_3b}, "list children found a sample of records");
     $num_children = scalar(keys %found);
 };
 
 
 subtest 'list all children' => sub {
 
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?name=Felidae&rel=all_children",
-			    "list all children request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3&rel=all_children",
+			    "list all children request OK");
     
-    my %found = scan_records_json($response, 'nam', "list all children extract records");
+    my %found = $T->scan_records($response, 'nam', "list all children extract records");
     
     return if $found{NO_RECORDS};
     
-    ok($found{'Felis catus'} && $found{Pantherinae}, "list all children found a sample of records");
+    ok($found{$TEST_NAME_3c} && $found{$TEST_NAME_3b}, "list all children found a sample of records");
     $num_all_children = scalar(keys %found);
 };
 
@@ -357,43 +433,43 @@ cmp_ok($num_children, '<', $num_all_children, "all children count greater than i
 
 subtest 'list parents' => sub {
 
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?name=Felidae,Canidae&rel=parents",
-			    "list parents request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=parents",
+			    "list parents request OK");
     
-    my %found = scan_records_json($response, 'nam', "list parents extract records");
+    my %found = $T->scan_records($response, 'nam', "list parents extract records");
     
     return if $found{NO_RECORDS};
     
-    ok($found{'Aeluroidea'} && $found{Canoidea}, "list parents returned the proper records");
+    ok($found{$TEST_NAME_3P} && $found{$TEST_NAME_4P}, "list parents returned the proper records");
 };
 
 
 subtest 'list all parents' => sub {
 
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?name=Felidae,Canidae&rel=all_parents",
-			    "list all parents request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=all_parents",
+			    "list all parents request OK");
     
-    my %found = scan_records_json($response, 'nam', "list all parents extract records");
+    my %found = $T->scan_records($response, 'nam', "list all parents extract records");
     
     return if $found{NO_RECORDS};
     
     ok($found{Eukaryota} && $found{Metazoa} && $found{Vertebrata} &&
-       $found{Therapsida} && $found{Canoidea} && $found{Aeluroidea} &&
-       $found{Canidae} && $found{Felidae},
+       $found{Therapsida} && $found{$TEST_NAME_3P} && $found{$TEST_NAME_4P} &&
+       $found{$TEST_NAME_3} && $found{$TEST_NAME_4},
        "list parents found a sample of records");
 };
 
 
 subtest 'list common ancestor' => sub {
 
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?name=Felidae,Canidae&rel=common_ancestor",
-			    "list all parents request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/list.json?name=$TEST_NAME_3,$TEST_NAME_4&rel=common_ancestor",
+				 "list all parents request OK");
     
-    my %found = scan_records_json($response, 'nam', "list all parents extract records");
+    my %found = $T->scan_records($response, 'nam', "list all parents extract records");
     
     return if $found{NO_RECORDS};
     
-    ok($found{Carnivora}, "list common ancestor found the correct record");
+    ok($found{$TEST_NAME_COMMON}, "list common ancestor found the correct record");
 };
 
 
@@ -401,34 +477,47 @@ subtest 'list common ancestor' => sub {
 
 subtest 'list status' => sub {
 
-    my $all_resp = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?base_name=Caviidae&status=all",
-			    "list status all request OK") || return;
+    my $all_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=all",
+				 "list status all request OK") || return;
     
-    my $all_count = extract_records_json($all_resp, "list status all extract records") || return;
+    my $all_count = $T->extract_records($all_resp, "list status all extract records") || return;
     
-    my $valid_resp = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?base_name=Caviidae&status=valid",
-			      "list status valid request OK") || return;
+    my $valid_resp = $T->fetch_url("data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=valid",
+				   "list status valid request OK") || return;
     
-    my $valid_count = extract_records_json($valid_resp, "list status valid extract records") || return;
+    my $valid_count = $T->extract_records($valid_resp, "list status valid extract records") || return;
     
-    my $invalid_resp = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?base_name=Caviidae&status=invalid",
-				"list status invalid request OK") || return;
+    my $invalid_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=invalid",
+				     "list status invalid request OK") || return;
     
-    my $invalid_count = extract_records_json($invalid_resp, "list status invalid extract records") || return;
+    my $invalid_count = $T->extract_records($invalid_resp, "list status invalid extract records") || return;
     
-    my $senior_resp = test_url($ua, "http://$SERVER/data1.1/taxa/list.json?base_name=Caviidae&status=senior",
-			       "list status senior request OK") || return;
+    my $senior_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_5&status=senior",
+				    "list status senior request OK") || return;
     
-    my $senior_count = extract_records_json($senior_resp, "list status senior extract records") || return;
+    my $senior_count = $T->extract_records($senior_resp, "list status senior extract records") || return;
     
-    cmp_ok($all_count, '>', $valid_count, "valid count is less than all count");
-    cmp_ok($all_count, '>', $senior_count, "senior count is less than all count");
-    cmp_ok($all_count, '>', $invalid_count, "invalid count is less than all count");
+    cmp_ok($all_count, '>', $senior_count, "senior count is less than total count");
+    cmp_ok($all_count, '==', $valid_count + $invalid_count, "valid + invalid = all");
     
-    my %status = scan_records_json($all_resp, 'sta', 'list status all scan status codes');
+    my %status = $T->scan_records($all_resp, 'sta', 'list status all scan status codes');
     
     ok($status{'belongs to'} && $status{'subjective synonym of'} &&
        $status{'replaced by'}, 'list status all returns a selection of status codes');
+};
+
+
+subtest 'list status 2' => sub {
+    
+    my $invalid_resp = $T->fetch_url("/data1.1/taxa/list.json?base_name=$TEST_NAME_6&status=invalid",
+				     "list status 2 invalid request OK");
+    
+    my %status = $T->scan_records($invalid_resp, 'sta', 'list status 2 invalid scan status codes');
+    
+    ok($status{'nomen dubium'} && $status{'nomen nudum'}, 
+       'list status 2 returns invalid status codes');
+    ok(!$status{'belongs to'} && !$status{'subjective synonym of'} && !$status{'objective synonym of'},
+       'list status 2 does not return valid status codes');
 };
 
 
@@ -436,69 +525,68 @@ subtest 'list status' => sub {
 
 subtest 'list refs json' => sub {
 
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/refs.json?base_name=Dascillidae",
-			    "list refs json request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/refs.json?base_name=$TEST_NAME_7",
+				 "list refs json request OK") || return;
     
-    my %found = scan_records_json($response, 'al1', "list refs json extract records");
+    my %found = $T->scan_records($response, 'al1', "list refs json extract records");
     
     return if $found{NO_RECORDS};
     
-    ok($found{"Crowson"} && $found{"Zhang"}, "list refs json found a sample of records");
+    ok($T->found_all(\%found, @TEST_AUTHOR_7a), "list refs json found a sample of records");
 };
 
 
 subtest 'list refs ris' => sub {
 
-    my $response = test_url($ua, "http://$SERVER/data1.1/taxa/refs.ris?base_name=Dascillidae&showsource",
-			    "list refs ris request OK") || return;
+    my $response = $T->fetch_url("/data1.1/taxa/refs.ris?base_name=$TEST_NAME_7&showsource",
+				 "list refs ris request OK") || return;
     
     my $body = $response->content;
     
     ok($body =~ qr{^Provider:\s+\w}m, "list refs ris has 'provider:'");
     ok($body =~ qr{^Content: text/plain; charset="utf-8"}m, "list refs ris has proper content type");
-    ok($body =~ qr{^UR  - http://.+/data1.1/taxa/refs.ris\?base_name=Dascillidae&showsource}m,
+    ok($body =~ qr{^UR  - http://.+/data1.1/taxa/refs.ris\?base_name=$TEST_NAME_7&showsource}m,
        "list refs ris has showsource UR line");
-    ok($body =~ qr{^KW  - base_name = Dascillidae}m, "list refs ris has datasource KW line");
-    ok($body =~ qr{^T2  - Miocene insects and spiders from Shanwang, Shandong}m,
-       "list refs ris found at least one of the proper records");
+    ok($body =~ qr{^KW  - base_name = $TEST_NAME_7}m, "list refs ris has datasource KW line");
+    ok($body =~ qr{^T2  - $TEST_TITLE_7a}m, "list refs ris found at least one of the proper records");
 };
 
 
 subtest 'auto json' => sub {
 
-    my $cani = test_url($ua, "http://$SERVER/data1.1/taxa/auto.json?name=cani&limit=10",
-			"auto json 'cani' request OK") || return;
+    my $cani = $T->fetch_url("/data1.1/taxa/auto.json?name=$TEST_AUTO_1&limit=10",
+			     "auto json '$TEST_AUTO_1' request OK") || return;
     
-    my %found = scan_records_json($cani, 'nam', "auto json extract records");
-    
-    return if $found{NO_RECORDS};
-    
-    ok($found{"Caniformia"} && $found{"canine"}, "auto json found a sample of records");
-
-    my $trex = test_url($ua, "http://$SERVER/data1.1/taxa/auto.json?name=t.rex&limit=10",
-			"auto json 't.rex' request OK") || return;
-
-    %found = scan_records_json($trex, 'nam', "auto json extract records");
+    my %found = $T->scan_records($cani, 'nam', "auto json extract records");
     
     return if $found{NO_RECORDS};
     
-    ok($found{"Tyrannosaurus rex"} && $found{"Telmatornis rex"}, "auto json found a sample of records");
+    ok($T->found_all(\%found, @TEST_AUTO_1a), "auto json found a sample of records");
+    
+    my $trex = $T->fetch_url("/data1.1/taxa/auto.json?name=$TEST_AUTO_2&limit=10",
+			     "auto json $TEST_AUTO_2' request OK") || return;
+    
+    %found = $T->scan_records($trex, 'nam', "auto json extract records");
+    
+    return if $found{NO_RECORDS};
+    
+    ok($T->found_all(\%found, @TEST_AUTO_2a), "auto json found a sample of records");
 };
 
 
 subtest 'images' => sub {
     
-    my $thumb = test_url($ua, "http://$SERVER/data1.1/taxa/thumb.png?id=910",
-			"image thumb request OK") || return;
+    my $thumb = $T->fetch_url("/data1.1/taxa/thumb.png?id=$TEST_IMAGE_1",
+			      "image thumb request OK") || return;
     
     my $thumb_length = length($thumb->content) || 0;
     
-    cmp_ok($thumb_length, '==', 2047, 'image thumb size');
+    cmp_ok($thumb_length, '==', $TEST_IMAGE_SIZE_1a, 'image thumb size');
     
-    my $icon = test_url($ua, "http://$SERVER/data1.1/taxa/icon.png?id=910",
-			"image icon request OK") || return;
+    my $icon = $T->fetch_url("/data1.1/taxa/icon.png?id=910",
+			     "image icon request OK") || return;
     
     my $icon_length = length($icon->content) || 0;
     
-    cmp_ok($icon_length, '==', 1302, 'image icon size');
+    cmp_ok($icon_length, '==', $TEST_IMAGE_SIZE_1b, 'image icon size');
 };

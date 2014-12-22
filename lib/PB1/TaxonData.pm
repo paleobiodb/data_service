@@ -53,11 +53,11 @@ sub initialize {
 	{ value => 'img', maps_to => '1.1:taxa:img' },
 	    "The identifier of the image (if any) associated with this taxon.",
 	    "These images are sourced from L<phylopic.org>.",
-	{ value => 'ent', maps_to => '1.1:common:ent' },
+	{ value => 'ent', maps_to => '1.1:taxa:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
-	{ value => 'entname', maps_to => '1.1:common:entname' },
+	{ value => 'entname', maps_to => '1.1:taxa:entname' },
 	    "The names of the people who authorized, entered and modified this record",
-        { value => 'crmod', maps_to => '1.1:common:crmod' },
+        { value => 'crmod', maps_to => '1.1:taxa:crmod' },
 	    "The C<created> and C<modified> timestamps for the collection record");
     
     # Now define all of the output blocks that were not defined elsewhere.
@@ -218,6 +218,31 @@ sub initialize {
 	{ output => 'image_no', com_name => 'img' },
     	    "If this value is non-zero, you can use it to construct image URLs",
 	    "using L<taxa/thumb|node:taxa/thumb> and L<taxa/icon|node:taxa/icon>.");
+    
+    $ds->define_block('1.1:taxa:crmod' =>
+	{ select => 'created' },
+	{ output => 'created', com_name => 'dcr' },
+	  "The date and time at which this record was created.",
+	{ output => 'modified', com_name => 'dmd' },
+	  "The date and time at which this record was last modified.");
+    
+    $ds->define_block('1.1:taxa:ent' =>
+	{ select => 'person' },
+	{ output => 'authorizer_no', com_name => 'ati', if_block => 'ent,entname' },
+	    "The identifier of the person who authorized the entry of this record",
+	{ output => 'enterer_no', com_name => 'eni', if_block => 'ent,entname' },
+	    "The identifier of the person who actually entered this record.",
+	{ output => 'modifier_no', com_name => 'mdi', if_block => 'ent,entname' },
+	    "The identifier of the person who last modified this record, if it has been modified.");
+    
+    $ds->define_block('1.1:taxa:entname' =>
+	{ select => 'person' },
+	{ output => 'authorizer_name', pbdb_name => 'authorizer', com_name => 'ath' },
+	    "The name of the person who authorized the entry of this record",
+	{ output => 'enterer_name', pbdb_name => 'enterer', com_name => 'ent' },
+	    "The name of the person who actually entered this record",
+	{ output => 'modifier_name', pbdb_name => 'modifier', com_name => 'mdf' },
+	    "The name of the person who last modified this record, if it has been modified.");
     
     $ds->define_block('1.1:taxa:auto' =>
 	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },

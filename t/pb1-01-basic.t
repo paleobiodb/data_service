@@ -23,7 +23,7 @@
 # 
 
 use open ':std', ':encoding(utf8)';
-use Test::Most tests => 19;
+use Test::Most tests => 6;
 
 use LWP::UserAgent;
 use JSON;
@@ -57,12 +57,16 @@ subtest 'config.json' => sub {
 
     bail_on_fail;
     
-    my $config_json = $T->fetch_url("/data1.1/config.json?show=all&count", "config.json");
+    my $config_json = $T->fetch_url("/data1.1/config.json?show=all&count", "config.json fetch");
     
     restore_fail;
     
-    return unless $config_json;
-    
+    unless ( $config_json )
+    {
+	diag("skipping remainder of this subtest");
+	return;
+    }
+        
     is( $config_json->header('Content-Type'), 'application/json; charset=utf-8', 'config.json content-type' );
     is( $config_json->header('Access-Control-Allow-Origin'), '*', 'config.json access-control-allow-origin' );
     
@@ -92,7 +96,7 @@ subtest 'config.json' => sub {
     }
     
     ok( $found_clu, 'found at least one cluster' );
-    ok( $found_rank, 'found gank \'genus\'' );
+    ok( $found_rank, 'found rank \'genus\'' );
     ok( $found_continent, 'found at least one continent' );
 };
 
@@ -112,7 +116,13 @@ subtest 'config.json' => sub {
 
 subtest 'config.txt' => sub {
 
-    my $config_txt = $T->fetch_url("/data1.1/config.txt?show=all&count", "config.txt");
+    my $config_txt = $T->fetch_url("/data1.1/config.txt?show=all&count", "config.txt fetch");
+    
+    unless ( $config_txt )
+    {
+	diag("skipping remainder of this subtest");
+	return;
+    }
     
     is( $config_txt->header('Content-Type'), 'text/plain; charset=utf-8', 'config.txt content-type' );
     ok( ! $config_txt->header('Content-Disposition'), 'config.txt disposition');
@@ -183,16 +193,19 @@ subtest 'config.txt' => sub {
     cmp_ok( $record_count, '==', $returned, 'config.txt returned count consistent' );
 };
 
-    $config_csv = $T->fetch_url("/data1.1/config.csv?show=all&count", "format csv");
-    $config_tsv = $T->fetch_url("/data1.1/config.tsv?show=all&count", "format tsv");
 
-ok( $config_csv->is_success, 'config.csv success' );
-is( $config_csv->header('Content-Type'), 'text/csv; charset=utf-8', 'config.csv content-type' );
-is( $config_tsv->header('Content-Type'), 'text/tab-separated-values; charset=utf-8', 'config.tsv content-type' );
-is( $config_csv->header('Content-Disposition'), 'attachment; filename="pbdb_data.csv"', 'config.csv disposition');
-is( $config_tsv->header('Content-Disposition'), 'attachment; filename="pbdb_data.tsv"', 'config.tsv disposition');
-
-subtest 'config.csv contents' => sub {
+subtest 'config.csv' => sub {
+    
+    my $config_csv = $T->fetch_url("/data1.1/config.csv?show=all&count", "config.csv fetch");
+    
+    unless ( $config_csv )
+    {
+	diag("skipping remainder of this subtest");
+	return;
+    }
+    
+    is( $config_csv->header('Content-Type'), 'text/csv; charset=utf-8', 'config.csv content-type' );
+    is( $config_csv->header('Content-Disposition'), 'attachment; filename="pbdb_data.csv"', 'config.csv disposition');
     
     my($raw_data, $found, $returned, $elapsed, $body, $header_count, $record_count);
     my($found_clu, $found_trn, $found_con);
@@ -261,9 +274,18 @@ subtest 'config.csv contents' => sub {
 };
 
 
-ok( $config_tsv->is_success, 'config.tsv success' );
-
-subtest 'config.tsv contents' => sub {
+subtest 'config.tsv' => sub {
+    
+    my $config_tsv = $T->fetch_url("/data1.1/config.tsv?show=all&count", "config.tsv fetch");
+    
+    unless ( $config_tsv )
+    {
+	diag("skipping remainder of this subtest");
+	return;
+    }
+    
+    is( $config_tsv->header('Content-Type'), 'text/tab-separated-values; charset=utf-8', 'config.tsv content-type' );
+    is( $config_tsv->header('Content-Disposition'), 'attachment; filename="pbdb_data.tsv"', 'config.tsv disposition');
     
     my($raw_data, $found, $returned, $elapsed, $body, $header_count, $record_count);
     my($found_clu, $found_trn, $found_con);
@@ -330,25 +352,42 @@ subtest 'config.tsv contents' => sub {
 };
 
 
-# Now test the bad media type
+# Now test the bad media type response.
 
-cmp_ok( $config_bad->code, 'eq', '415', 'config.foo returns 415' );
+subtest 'config.foo' => sub {
+    
+    my $config_bad = $T->fetch_nocheck("/data1.1/config.foo?show=all&count", "config.foo fetch");
+    
+    unless ( $config_bad )
+    {
+	diag("skipping remainder of this subtest");
+	return;
+    }
+    
+    cmp_ok( $config_bad->code, 'eq', '415', 'config.foo returns 415' );
+};
 
-# And also the missing 'show' parameter
 
-subtest 'config.json missing "show"' => sub {
+# And also a bad 'show' parameter
 
-    ok( $config_json->is_success, 'config.json missing "show" success' );
+subtest 'config.json bad show' => sub {
+
+    my $config_json = $T->fetch_url("/data1.1/config.json?show=foo", "config.json bad show");
+    
+    unless ( $config_json )
+    {
+	diag("skipping remainder of this subtest");
+	return;
+    }
     
     my ($raw_data, $data, @warnings);
     
     eval {
-	$raw_data = $config_foo->content;
-	$data = decode_json($raw_data);
+	$data = decode_json($config_json->content);
 	@warnings = @{$data->{warnings}};
     };
 
-    unless ( ok( !$@, 'config.json unpack' ) )
+    unless ( ok( !$@, 'config.json bad show unpack' ) )
     {
 	diag( "    message was: $@" );
 	return;
@@ -356,9 +395,9 @@ subtest 'config.json missing "show"' => sub {
     
     unless ( scalar(@warnings) == 2 )
     {
-	fail( 'config.json missing "show" has 2 warnings' );
+	fail( 'config.json bad show has 2 warnings' );
 	return;
     }
     
-    ok( $warnings[0] =~ qr{bad value 'foo'}, 'config.json missing "show" bad value' );
+    ok( $warnings[0] =~ qr{bad value 'foo'}, 'config.json missing show bad value' );
 };

@@ -28,7 +28,7 @@ use PB2::PersonData;
 	  title => 'PBDB Data Service',
 	  version => 'a1',
 	  features => 'standard',
-	  special_params => 'standard, count=rowcount',
+	  special_params => 'standard',
 	  path_prefix => 'data1.2/',
 	  ruleset_prefix => '1.2:',
 	  doc_template_dir => 'doc/1.2' });
@@ -117,6 +117,7 @@ use PB2::PersonData;
 			doc_default_op_template => 'operation.tt',
 			allow_format => 'json,csv,tsv,txt',
 			allow_vocab => 'pbdb,com',
+			default_save_filename => 'pbdb_data',
 			title => 'Documentation' });
     
     # Configuration. This path is used by clients who need to configure themselves

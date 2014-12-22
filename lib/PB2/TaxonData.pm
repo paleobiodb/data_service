@@ -13,7 +13,7 @@ package PB2::TaxonData;
 use HTTP::Validate qw(:validators);
 use Carp qw(carp croak);
 
-use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
+use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS);
 use TableDefs qw($PHYLOPICS $PHYLOPIC_NAMES);
 use Taxonomy;
 
@@ -64,18 +64,18 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:basic' =>
 	{ select => ['DATA'] },
-	{ output => 'taxon_no', dwc_name => 'taxonID', com_name => 'oid' },
+	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this taxonomic name",
-	{ output => 'orig_no', com_name => 'gid' },
-	    "A positive integer that uniquely identifies the taxonomic concept",
+	{ output => 'taxon_no', com_name => 'vid', dedup => 'orig_no' },
+	    "A positive integer that uniquely identifies a particular variant",
+	    "of this taxonomic name.  By default, this is the variant currently",
+	    "accepted as most correct.",
 	{ output => 'record_type', com_name => 'typ', com_value => 'txn', 
 	  dwc_value => 'Taxon', value => 'taxon' },
 	    "The type of this record.  By vocabulary:", "=over",
 	    "=item pbdb", "taxon", "=item com", "txn", "=item dwc", "Taxon", "=back",
 	{ output => 'exclude', com_name => 'exc' },
 	    "This field will have a true value if the taxon represents an excluded group within another taxon.",
-	{ output => 'associated_records', com_name => 'rct' },
-	    "The number of records (occurrences, references, etc. depending upon which URL path you used) associated with this taxonomic name",
 	{ set => 'taxon_rank', if_vocab => 'pbdb,dwc', lookup => \%RANK_STRING },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
 	    "The rank of this taxon, ranging from subspecies up to kingdom",
@@ -93,12 +93,25 @@ sub initialize {
 	    "The year in which this name was published",
 	{ output => 'status', com_name => 'sta' },
 	    "The taxonomic status of this name",
-	{ output => 'parsen_no', dwc_name => 'parentNameUsageID', com_name => 'par', pbdb_name => 'parent_no' }, 
-	    "The identifier of the parent taxonomic concept, if any",
-	{ output => 'synonym_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'senior_no', 
-	  com_name => 'snr', dedup => 'orig_no' },
-	    "If this name is a junior synonym, the identifier of the senior synonym",
-	    "of this name",
+	{ set => 'tax_status', from => 'status', lookup => \%TAXONOMIC_STATUS, if_vocab => 'dwc' },
+	{ output => 'tax_status', dwc_name => 'taxonomicStatus', if_vocab => 'dwc' },
+	    "The taxonomic status of this name, in the Darwin Core vocabulary.",
+	    "This field only appears if that vocabulary is selected.",
+	{ set => 'nom_status', from => 'status', lookup => \%NOMENCLATURAL_STATUS, if_vocab => 'dwc' },
+	{ output => 'nom_status', dwc_name => 'nomenclaturalStatus', if_vocab => 'dwc' },
+	    "The nomenclatural status of this name, in the Darwin Core vocabulary.",
+	    "This field only appears if that vocabulary is selected.",
+	{ output => 'accepted_no', dwc_name => 'acceptedNameUsageID', pbdb_name => 'accepted_no', 
+	  com_name => 'acc', dedup => 'orig_no' },
+	    "If this name is either a junior synonym or an invalid name, the identifier",
+	    "of the accepted name to be used in its place.",
+	{ output => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par',
+	  pbdb_name => 'parent_no' },
+	    "The identifier of the immediately containing taxon, if any",
+	{ output => 'senpar_no', dwc_name => 'parentNameUsageID', com_name => 'snp',
+	  pbdb_name => 'senpar_no', dedup => 'parent_no' }, 
+	    "The identifier of the senior synonym of the immediate containing taxon,",
+	    "if this is different from the immediate containing taxon.",
 	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
 	    "A list of identifiers indicating the source document(s) from which this name was entered.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
@@ -138,7 +151,7 @@ sub initialize {
 	{ output => 'record_type', com_name => 'typ', com_value => 'txn' },
 	{ output => 'taxon_rank', com_name => 'rnk', dwc_name => 'taxonRank' },
 	{ output => 'taxon_name', com_name => 'nam', dwc_name => 'scientificName' },
-	{ output => 'synonym_no', com_name => 'snr', pbdb_name => 'senior_no', 
+	{ output => 'valid_no', com_name => 'val', pbdb_name => 'senior_no', 
 	  dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
 	{ output => 'size', com_name => 'siz' },
 	{ output => 'extant_size', com_name => 'exs' },
@@ -293,21 +306,22 @@ sub initialize {
 	{ value => 'children' },
 	    "Select the taxa immediately contained within the specified taxon or taxa.",
 	{ value => 'all_children' },
-	    "Select all taxa contained within the specified taxon or taxa.",
-	{ value => 'subtree' },
-	    "Select all taxa contained within the most specific valid taxon or taxa",
-	    "corresponding to the ones specified.  This is equivalent to the operation",
-	    "C<valid> followed by C<all_children>.",
-	{ value => 'parents' },
-	    "Select the immediate containing taxa of the specified taxon or taxa.",
+	    "Select all taxa contained within the specified taxon or taxa and within all",
+	    "synonymous taxa.",
+	{ value => 'parent' },
+	    "Select the taxa immediately containing the specified taxon or taxa.",
+	{ value => 'senpar' },
+	    "Select the senior synonyms of the taxa immediately containing the",
+	    "specified taxon or taxa.",
 	{ value => 'all_parents' },
 	    "Select all taxa that contain the specfied taxon or taxa.",
 	{ value => 'common_ancestor' },
-	    "Select the most specific taxon that contains all of the specified taxa",
+	    "Select the most specific taxon that contains all of the specified taxa.",
 	{ value => 'all_taxa' },
 	    "Select all of the taxa in the database.  In this case you do not have",
 	    "to specify C<name> or C<id>.  Use with caution, because the maximum",
-	    "data set returned may be as much as 80 MB.  You can use the special",
+	    "data set returned may be as much as 80 MB if you do not include any",
+	    "filtering parameters.  You can use the special",
 	    "parameters C<limit> and C<offset> to return this data in smaller chunks.");
     
     $ds->define_set('1.2:taxa:status' =>
@@ -315,6 +329,8 @@ sub initialize {
 	    "Select only taxonomically valid names",
 	{ value => 'senior' },
 	    "Select only taxonomically valid names that are not junior synonyms",
+	{ value => 'junior' },
+	    "Select only taxonomically valid names that are junior synonyms",
 	{ value => 'invalid' },
 	    "Select only taxonomically invalid names, e.g. nomina dubia",
 	{ value => 'all' },
@@ -336,9 +352,9 @@ sub initialize {
     
     $ds->define_set('1.2:taxa:refspelling' =>
 	{ value => 'current' },
-	    "Select only the references associated with the currently accepted spelling of each taxonomic name",
+	    "Select only the references associated with the currently accepted variant of each taxonomic name",
 	{ value => 'all' },
-	    "Select the references associated with all spellings of each taxonomic name");
+	    "Select the references associated with all variants of each taxonomic name");
     
     $ds->define_set('1.2:taxa:summary_rank' =>
 	{ value => 'ident' },
@@ -651,7 +667,7 @@ sub get {
     
     # Now add the fields necessary to show the requested info.
     
-    my $options = $self->generate_query_options;
+     my $options = $self->generate_query_options;
     
     # Next, fetch basic info about the taxon.
     
@@ -1848,286 +1864,11 @@ sub processResultSet {
 }
 
 
-# processRecord ( row )
-# 
-# This routine takes a hash representing one result row, and does some
-# processing before the output is generated.  The information fetched from the
-# database needs to be refactored a bit in order to match the Darwin Core
-# standard we are using for output.
-
-sub oldProcessRecord {
-    
-    my ($self, $row) = @_;
-    
-    # The strings stored in the author fields of the database are encoded in
-    # utf-8, and need to be decoded (despite the utf-8 configuration flag).
-    
-    $self->decodeFields($row);
-    
-    # Interpret the status info based on the code stored in the database.  The
-    # code as stored in the database encompasses both taxonomic and
-    # nomenclatural status info, which needs to be separated out.  In
-    # addition, we need to know whether to report an "acceptedUsage" taxon
-    # (i.e. senior synonym or proper spelling).
-    
-    my ($taxonomic, $report_accepted, $nomenclatural) = interpretStatusCode($row->{status});
-    
-    # Override the status code if the synonym_no is different from the
-    # taxon_no.  This is necessary because sometimes the opinion record that
-    # was used to build this part of the hierarchy indicates a 'belongs to'
-    # relationship (which normally indicates a valid taxon) but the
-    # taxa_tree_cache record indicates a different synonym number.  In this
-    # case, the taxon is in fact no valid but is a junior synonym or
-    # misspelling.  If spelling_no and synonym_no are equal, it's a
-    # misspelling.  Otherwise, it's a junior synonym.
-    
-    if ( $taxonomic eq 'valid' && $row->{synonym_no} ne $row->{taxon_no} )
-    {
-	if ( $row->{spelling_no} eq $row->{synonym_no} )
-	{
-	    $taxonomic = 'invalid' unless $row->{spelling_reason} eq 'recombination';
-	    $nomenclatural = $row->{spelling_reason};
-	}
-	else
-	{
-	    $taxonomic = 'synonym';
-	}
-    }
-    
-    # Put the two status strings into the row record.  If no value exists,
-    # leave it blank.
-    
-    $row->{taxonomic} = $taxonomic || '';
-    $row->{nomenclatural} = $nomenclatural || '';
-    
-    # Determine the nomenclatural code that has jurisidiction, if that was
-    # requested.
-    
-    if ( $self->{show_code} and defined $row->{lft} )
-    {
-	$self->determineNomenclaturalCode($row);
-    }
-    
-    # Determine the first appearance data, if that was requested.
-    
-    if ( $self->{show_firstapp} )
-    {
-	$self->determineFirstAppearance($row);
-    }
-    
-    # Create a publication reference if that data was included in the query
-    
-    if ( exists $row->{r_pubtitle} )
-    {
-	$self->generateReference($row);
-    }
-    
-    # Create an attribution if that data was incluced in the query
-    
-    if ( exists $row->{a_pubyr} )
-    {
-	$self->generateAttribution($row);
-    }
-}
-
-
-# getCodeRanges ( )
-# 
-# Fetch the ranges necessary to determine which nomenclatural code (i.e. ICZN,
-# ICN) applies to any given taxon.  This is only done if that information is
-# asked for.
-
-sub getCodeRanges {
-
-    my ($self) = @_;
-    my ($dbh) = $self->{dbh};
-    
-my @codes = ('Metazoa', 'Animalia', 'Plantae', 'Biliphyta', 'Metaphytae',
-	     'Fungi', 'Cyanobacteria');
-
-my $codes = { Metazoa => { code => 'ICZN'}, 
-	      Animalia => { code => 'ICZN'},
-	      Plantae => { code => 'ICN'}, 
-	      Biliphyta => { code => 'ICN'},
-	      Metaphytae => { code => 'ICN'},
-	      Fungi => { code => 'ICN'},
-	      Cyanobacteria => { code => 'ICN' } };
-
-    $self->{code_ranges} = $codes;
-    $self->{code_list} = \@codes;
-    
-    my $code_name_list = "'" . join("','", @codes) . "'";
-    
-    my $code_range_query = $dbh->prepare("
-	SELECT taxon_name, lft, rgt
-	FROM taxa_tree_cache join authorities using (taxon_no)
-	WHERE taxon_name in ($code_name_list)");
-    
-    $code_range_query->execute();
-    
-    while ( my($taxon, $lft, $rgt) = $code_range_query->fetchrow_array() )
-    {
-	$codes->{$taxon}{lft} = $lft;
-	$codes->{$taxon}{rgt} = $rgt;
-    }
-}
-
-
-# determineNomenclaturalCode ( row )
-# 
-# Determine which nomenclatural code the given row's taxon falls under
-
-sub determineNomenclaturalCode {
-    
-    my ($self, $row) = @_;
-
-    my ($lft) = $row->{lft} || return;
-    
-    # Anything with a rank of 'unranked clade' falls under PhyloCode.
-    
-    if ( defined $row->{taxon_rank} && $row->{taxon_rank} eq 'unranked clade' )
-    {
-	$row->{nom_code} = 'PhyloCode';
-	return;
-    }
-    
-    # For all other taxa, we go through the list of known ranges in
-    # taxa_tree_cache and use the appropriate code.
-    
-    foreach my $taxon (@{$self->{code_list}})
-    {
-	my $range = $self->{code_ranges}{$taxon};
-	
-	if ( $lft >= $range->{lft} && $lft <= $range->{rgt} )
-	{
-	    $row->{nom_code} = $range->{code};
-	    last;
-	}
-    }
-    
-    # If this taxon does not fall within any of the ranges, we leave the
-    # nom_code field empty.
-}
-
-
-# determineFirstAppearance ( row )
-# 
-# Calculate the first appearance of this taxon.
-
-sub determineFirstAppearance {
-    
-    my ($self, $row) = @_;
-    
-    my $dbh = $self->{dbh};
-    
-    # Generate a parameter hash to pass to calculateFirstAppearance().
-    
-    my $params = { taxonomic_precision => $self->{firstapp_precision},
-		   types_only => $self->{firstapp_types_only},
-		   traces => $self->{firstapp_include_traces},
-		 };
-    
-    # Get the results.
-    
-    my $results = calculateFirstAppearance($dbh, $row->{taxon_no}, $params);
-    return unless ref $results eq 'HASH';
-    
-    # Check for error
-    
-    if ( $results->{error} )
-    {
-	$self->{firstapp_error} = "An error occurred while calculating the first apperance";
-	return;
-    }
-    
-    # If we got results, copy each field into the row.
-    
-    foreach my $field ( keys %$results )
-    {
-	$row->{$field} = $results->{$field};
-    }
-}
-
-
-# interpretSpeciesName ( taxon_name )
-# 
-# Separate the given name into genus, subgenus, species and subspecies.
-
-sub interpretSpeciesName {
-
-    my ($taxon_name) = @_;
-    my @components = split(/\s+/, $taxon_name);
-    
-    my ($genus, $subgenus, $species, $subspecies);
-    
-    # If the first character is a space, the first component will be blank;
-    # ignore it.
-    
-    shift @components if @components && $components[0] eq '';
-    
-    # If there's nothing left, we were given bad input-- return nothing.
-    
-    return unless @components;
-    
-    # The first component is always the genus.
-    
-    $genus = shift @components;
-    
-    # If the next component starts with '(', it is a subgenus.
-    
-    if ( @components && $components[0] =~ /^\((.*)\)$/ )
-    {
-	$subgenus = $1;
-	shift @components;
-    }
-    
-    # The next component must be the species
-    
-    $species = shift @components if @components;
-    
-    # The last component, if there is one, must be the subspecies.  Strip
-    # parentheses if there are any.
-    
-    $subspecies = shift @components if @components;
-    
-    if ( defined $subspecies && $subspecies =~ /^\((.*)\)$/ ) {
-	$subspecies = $1;
-    }
-    
-    return ($genus, $subgenus, $species, $subspecies);
-}
-
-
 # The following hashes map the status codes stored in the opinions table of
 # PaleoDB into taxonomic and nomenclatural status codes in compliance with
 # Darwin Core.  The third one, %REPORT_ACCEPTED_TAXON, indicates which status
 # codes should trigger the "acceptedUsage" and "acceptedUsageID" fields in the
 # output.
-
-our (%TAXONOMIC_STATUS) = (
-	'belongs to' => 'valid',
-	'subjective synonym of' => 'heterotypic synonym',
-	'objective synonym of' => 'homotypic synonym',
-	'invalid subgroup of' => 'invalid',
-	'misspelling of' => 'invalid',
-	'replaced by' => 'invalid',
-	'nomen dubium' => 'invalid',
-	'nomen nudum' => 'invalid',
-	'nomen oblitum' => 'invalid',
-	'nomen vanum' => 'invalid',
-);
-
-
-our (%NOMENCLATURAL_STATUS) = (
-	'invalid subgroup of' => 'invalid subgroup',
-	'misspelling of' => 'misspelling',
-	'replaced by' => 'replaced by',
-	'nomen dubium' => 'nomen dubium',
-	'nomen nudum' => 'nomen nudum',
-	'nomen oblitum' => 'nomen oblitum',
-	'nomen vanum' => 'nomen vanum',
-);
-
 
 our (%REPORT_ACCEPTED_TAXON) = (
 	'subjective synonym of' => 1,
