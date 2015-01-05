@@ -73,6 +73,7 @@ my (%STD_OPTION) = ( fields => 1,
 		     status => 1, 
 		     order => 1,
 		     base_order => 1,
+		     count => 1,
 		     limit => 1,
 		     offset => 1,
 		     return => 1 );
@@ -107,6 +108,14 @@ sub add_warning {
     my ($taxonomy, $code, $message) = @_;
     push @{$taxonomy->{warnings}}, $message;
     push @{$taxonomy->{warning_codes}}, $code;
+}
+
+
+sub list_warnings {
+    
+    my ($taxonomy) = @_;
+    return unless $taxonomy->{warnings};
+    return @{$taxonomy->{warnings}};
 }
 
 
@@ -494,12 +503,6 @@ sub list_related_taxa {
 	push @fields, 's.is_base';
 	my $fields = join ', ', @fields;
 	
-	if ( $rel eq 'common_ancestor' )
-	{
-	    $fields .= ', t.lft' unless $fields =~ qr{ t\.lft };
-	    $fields .= ', t.rgt' unless $fields =~ qr{ t\.rgt };
-	}
-	
 	#$fields =~ s{t\.senpar_no}{t.parent_no};
 	
 	my @filters = $taxonomy->simple_filters($options, $tables);
@@ -512,33 +515,36 @@ sub list_related_taxa {
 	
 	$SQL_STRING = $taxonomy->{sql_string} = "
 	SELECT $count_expr $fields
-	FROM ancestry_temp as s JOIN $TREE_TABLE as ts using (orig_no)
-		STRAIGHT_JOIN $TREE_TABLE as t on t.orig_no = ts.orig_no or t.orig_no = ts.synonym_no
+	FROM ancestry_temp as s JOIN $TREE_TABLE as t using (orig_no)
 		$other_joins
 	WHERE $filters
 	GROUP BY t.lft $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'crown_group' || $rel eq 'pan_group' || $rel eq 'stem_group' || $rel eq 'common_ancestor' )
+    elsif ( $rel eq 'crown' || $rel eq 'pan' || $rel eq 'stem' || $rel eq 'common' ||
+	    $rel eq 'common_ancestor' )
     {
-	# First select into the temporary table 'ancestry_temp' the set of
-	# orig_no values representing the ancestors of the taxa identified by
-	# $base_string.
+	$rel = 'common' if $rel eq 'common_ancestor';
 	
-	$taxonomy->compute_ancestry($base_string);
+	my $common_string = $taxonomy->find_common_taxa($base_string, $rel, $options);
 	
-	# Now use this temporary table to query for the set of ancestral taxa.
+	my $fields = join ', ', @fields;
 	
-	my $ATTRS_TABLE = $taxonomy->{ATTRS_TABLE};
+	#$fields =~ s{t\.senpar_no}{t.parent_no};
+	
+	my @filters = "t.orig_no in ($common_string)";
+	push @filters, $taxonomy->simple_filters($options, $tables);
+	my $filters = join( q{ and }, @filters);
+	
+	my $other_joins = $taxonomy->simple_joins('t', $tables);
+	
+	$order_expr ||= 'ORDER BY t.lft';
 	
 	$SQL_STRING = $taxonomy->{sql_string} = "
-	SELECT t.orig_no, t.lft, t.rgt, s.is_base, v.extant_children
-	FROM ancestry_temp as s JOIN $TREE_TABLE as ts using (orig_no)
-		JOIN $TREE_TABLE as t on t.orig_no = ts.synonym_no
-		JOIN $ATTRS_TABLE as v on v.orig_no = t.orig_no
-	GROUP BY t.lft ORDER BY t.lft desc";
-	
-	# my $result = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
+	SELECT $count_expr $fields
+	FROM $TREE_TABLE as t $other_joins
+	WHERE $filters
+	GROUP BY t.lft $order_expr $limit_expr\n";
     }
     
     else
@@ -548,18 +554,11 @@ sub list_related_taxa {
     
     # Now execute the query and return the result.
     
-    if ( $return_type eq 'list' )
+    if ( $return_type eq 'list' or $return_type eq 'listref' )
     {
 	my $result_list = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
 	$taxonomy->order_result_list($result_list, $base_nos) if $options->{base_order};
-	return @$result_list;
-    }
-    
-    elsif ( $return_type eq 'listref' )
-    {
-	my $result_list = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
-	$taxonomy->order_result_list($result_list, $base_nos) if $options->{base_order};
-	return $result_list;
+	return $return_type eq 'listref' ? $result_list : @$result_list;
     }
     
     elsif ( $return_type eq 'stmt' )
@@ -578,6 +577,166 @@ sub list_related_taxa {
     else
     {
 	croak "list_related_taxa: invalid return type '$return_type'\n";
+    }
+}
+
+
+# find_common_taxa ( base_string, rel, options )
+# 
+# This routine returns a comma-separated taxon id string corresponding to one
+# of the following relationships:
+# 
+#  - common
+#  - crown
+#  - pan
+#  - stem
+# 
+# The paramter $base_string must be a comma-separated id string representing
+# the base taxa for this query.  The parameter $rel must specify one of the
+# above relationships.  The parameter $options is passed through from the
+# calling routine.
+
+sub find_common_taxa {
+    
+    my ($taxonomy, $base_string, $rel, $options) = @_;
+    
+    my $dbh = $taxonomy->{dbh};
+    my ($ancestry, $common_index, $common_id);
+    my ($crown_id, $crown_lft, $crown_rgt);
+    my ($pan_id);
+    
+    my $ATTRS_TABLE = $taxonomy->{ATTRS_TABLE};
+    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
+    
+    # We start by computing the ancestry of the specified base taxa.  The
+    # following call will select into the temporary table 'ancestry_temp' the
+    # set of orig_no values representing the ancestors of the taxa identified by
+    # $base_string.
+    
+    $taxonomy->compute_ancestry($base_string);
+    
+    # Now use this temporary table to query for the set of ancestral taxa.
+    
+    $SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT t.orig_no, t.synonym_no, t.lft, t.rgt, s.is_base, v.extant_children
+	FROM ancestry_temp as s JOIN $TREE_TABLE as t using (orig_no)
+		JOIN $ATTRS_TABLE as v on v.orig_no = t.orig_no
+	GROUP BY t.lft ORDER BY t.lft";
+    
+    $ancestry = $dbh->selectall_arrayref($SQL_STRING, { Slice => {} });
+    
+    # If no ancestors were found, we return just "0" which will lead to an
+    # empty result.
+    
+    unless ( ref $ancestry && @$ancestry )
+    {
+	$taxonomy->add_warning("could not determine common ancestor");
+	return "0";
+    }
+    
+    # The next step is to find the common ancestor of the base taxa.  This
+    # will be necessary for all of the relationships covered by this routine.
+    
+    # Start by finding the minimum and maximum tree sequence values for the base
+    # taxa.
+    
+    my $min;
+    my $max = 0;
+    my $common_index;
+    
+    foreach my $t (@$ancestry)
+    {
+	if ( $t->{is_base} )
+	{
+	    $min = $t->{lft} if !defined $min or $t->{lft} < $min;
+	    $max = $t->{lft} if !defined $max or $t->{lft} > $max;
+	}
+    }
+    
+    # Then find the index of the latest (most specific) taxon which encompasses all of
+    # the base taxa and is not a junior synonym.
+    
+    foreach my $i (0..$#$ancestry)
+    {
+	if ( $ancestry->[$i]{lft} <= $min and $ancestry->[$i]{rgt} >= $max
+	     and $ancestry->[$i]{orig_no} eq $ancestry->[$i]{synonym_no} )
+	{
+	    $common_index = $i;
+	    $common_id = $ancestry->[$i]{orig_no};
+	}
+    }
+    
+    # If we couldn't find a common id for some reason, return "0" which will
+    # generate an empty result.
+    
+    unless ( $common_id )
+    {
+	$taxonomy->add_warning("could not determine common ancestor");
+	return "0";
+    }
+    
+    # If the relationship was 'common', we are done.  Simply return the taxon
+    # id of the common ancestor.
+    
+    if ( $rel eq 'common' )
+    {
+	return $common_id;
+    }
+    
+    # If the relationship was 'crown' or 'stem', we must then search for the
+    # crown group as a child of this common ancestor.  This is done by
+    # querying for the highest-ranking subtaxon that itself has at least two
+    # extant subtaxa.
+    
+    if ( $rel eq 'crown' || $rel eq 'stem' )
+    {
+	my $crown_sql = "
+	SELECT t.orig_no, t.lft, t.rgt
+	FROM $TREE_TABLE as tb JOIN $TREE_TABLE as t on t.lft between tb.lft and tb.rgt
+		JOIN $ATTRS_TABLE as v on v.orig_no = t.orig_no and v.extant_children > 1
+	WHERE tb.orig_no = $common_id and t.synonym_no = t.orig_no
+	ORDER BY t.depth LIMIT 1";
+	
+	my $t = $dbh->selectrow_hashref($crown_sql);
+	
+	unless ( ref $t eq 'HASH' )
+	{
+	    $taxonomy->add_warning("could not determine crown group");
+	    return "0";
+	}
+	
+	$crown_id = $t->{orig_no};
+	$crown_lft = $t->{lft};
+	$crown_rgt = $t->{rgt};
+	
+	# If the relationship was 'crown', we can return the result now.
+	
+	if ( $rel eq 'crown' )
+	{
+	    return $crown_id;
+	}
+    }
+    
+    # If the relationship was 'pan' or 'stem', we need to scan up the ancestry
+    # list starting with the parent of the crown group, and stop at the taxon
+    # just before the first one we find that has more than one living
+    # subtaxon.
+    
+    if ( $rel eq 'pan' || $rel eq 'stem' )
+    {
+	my @pan_list = reverse (0..$common_index-1);
+	my $pan_id = $common_id;
+	
+	foreach my $i (@pan_list)
+	{
+	    last if $ancestry->[$i]{extant_children} > 1;
+	    $pan_id = $ancestry->[$i]{orig_no};
+	}
+	
+	if ( $rel eq 'pan' )
+	{
+	    return $pan_id;
+	}
     }
 }
 
@@ -622,7 +781,7 @@ sub resolve_names {
 	WHERE $filters";
     
     my $sql_order = "
-	ORDER BY s.is_current desc, s.is_exact desc, v.taxon_size desc $limit";
+	ORDER BY s.is_current desc, s.is_exact desc, v.n_occs desc $limit";
     
     # Then split the argument into a list of distinct names to interpret.
     
@@ -813,7 +972,7 @@ sub lex_namestring {
 		# If the main name contains any invalid characters, just abort
 		# the whole name group.
 		
-		if ( $main_name =~ qr{ [^\w%.:-] }xs )
+		if ( $main_name =~ qr{ [^\w\s%.:-] }xs )
 		{
 		    $taxonomy->add_warning('W_BAD_NAME', "invalid taxon name '$main_name'");
 		    next LEXEME;
@@ -825,12 +984,12 @@ sub lex_namestring {
 		
 		my $prefix = '';
 		
-		while ( $main_name =~ qr{ ( [^:]+ ) [:\s]+ (.*) }xs )
+		while ( $main_name =~ qr{ ( [^:]+ ) : [:\s]* (.*) }xs )
 		{
 		    $main_name = $2;
 		    my $base_name = $1;
 		    
-		    # Remove any initial whitespace, change all '.' to '%',
+		    # Remove any final whitespace, change all '.' to '%',
 		    # condense all repeated wildcards and spaces.
 		    
 		    $base_name =~ s/\s+$//;
@@ -1228,7 +1387,12 @@ sub simple_order {
     
     elsif ( $order eq 'lft' or $order eq 'lft.asc' )
     {
-	return "ORDER BY t.left";
+	return "ORDER BY t.lft";
+    }
+    
+    elsif ( $order eq 'lft.desc' )
+    {
+	return "ORDER BY t.lft desc";
     }
     
     elsif ( $order eq 'size' or $order eq 'size.desc' )
@@ -1406,8 +1570,9 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      SEARCH => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank',
 				 't.lft', 't.rgt', 't.senpar_no'],
 		      DATA => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
-				 't.rank as taxon_rank', 't.lft', 't.status', 't.accepted_no', 't.parent_no', 
-				 't.senpar_no', 'a.common_name', 'a.reference_no', 'v.is_extant'],
+			       't.rank as taxon_rank', 't.lft', 't.status', 't.accepted_no',
+			       't.parent_no', 't.senpar_no', 'a.common_name', 'a.reference_no',
+			       'v.n_occs', 'v.is_extant'],
 		      RANGE => ['t.orig_no', 't.rank as taxon_rank', 't.lft', 't.rgt'],
 		      LINK => ['t.synonym_no', 't.accepted_no', 't.parent_no', 't.senpar_no'],
 		      APP => ['v.first_early_age as firstapp_ea', 

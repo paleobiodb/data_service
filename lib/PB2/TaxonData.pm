@@ -115,7 +115,10 @@ sub initialize {
 	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
 	    "A list of identifiers indicating the source document(s) from which this name was entered.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
-	    "True if this taxon is extant on earth today, false if not, not present if unrecorded");
+	    "True if this taxon is extant on earth today, false if not, not present if unrecorded",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The number of fossil occurrences in this database that are identified",
+	    "as belonging to this taxon or any of its subtaxa.");
     
     $ds->define_block('1.2:taxa:attr' =>
 	{ select => 'ATTR' });
@@ -315,8 +318,16 @@ sub initialize {
 	    "specified taxon or taxa.",
 	{ value => 'all_parents' },
 	    "Select all taxa that contain the specfied taxon or taxa.",
-	{ value => 'common_ancestor' },
+	{ value => 'common_ancestor', undocumented => 1 },
+	{ value => 'common' },
 	    "Select the most specific taxon that contains all of the specified taxa.",
+	{ value => 'crown', undocumented => 1 },
+	    "Select the taxon corresponding to the crown-group of the specified taxa",
+	{ value => 'pan', undocumented => 1 },
+	    "Select the taxon corresponding to the pan-group of the specified taxa",
+	{ value => 'stem', undocumented => 1 },
+	    "Select all of the highest-level taxa that make up the stem-group",
+	    "of the specified taxa",
 	{ value => 'all_taxa' },
 	    "Select all of the taxa in the database.  In this case you do not have",
 	    "to specify C<name> or C<id>.  Use with caution, because the maximum",
@@ -814,13 +825,15 @@ sub list {
     if ( $name_list )
     {
 	my @names = ref $name_list eq 'ARRAY' ? @$name_list : $name_list;
-	my @taxa;
+	my (@taxa, @warnings);
 	
 	foreach my $name (@names)
 	{
 	    push @taxa, $taxonomy->resolve_names($name);
+	    push @warnings, $taxonomy->list_warnings;
 	}
 	
+	$self->add_warning(@warnings) if @warnings;
 	return unless @taxa;
 	$id_list = \@taxa;
     }
@@ -854,11 +867,11 @@ sub list {
     
     # If the relationship is 'common_ancestor', we have just one result.
     
-    elsif ( $rel eq 'common_ancestor' ) # $$$
+    elsif ( $rel eq 'common_ancestor' || $rel eq 'common' ) # $$$
     {
 	$options->{return} = 'list';
 	
-	my ($taxon) = $taxonomy->list_related_taxa('common_ancestor', $id_list, $options);
+	my ($taxon) = $taxonomy->list_related_taxa('common', $id_list, $options);
 	$self->single_result($taxon) if $taxon;
     }
     
@@ -1316,9 +1329,9 @@ sub generate_query_options {
 	
 	# The following options default to ascending.
 	
-	if ( $term eq 'hierarchy' )
+	if ( $term eq 'hierarchy' or $term eq 'lft' )
 	{
-	    $options->{order} = "lft.$dir";
+	    $options->{order} = "lft";
 	}
 	
 	elsif ( $term eq 'pubyr' || $term eq 'created' || $term eq 'modified' || $term eq 'name' )
@@ -1341,6 +1354,10 @@ sub generate_query_options {
 	{
 	    $self->add_warning("unrecognized order option '$term'");
 	}
+	
+	# Add the direction (asc or desc) if one was specified.
+	
+	$options->{order} .= ".$dir" if $dir;
     }
     
     return $options;
