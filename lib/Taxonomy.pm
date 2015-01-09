@@ -69,10 +69,13 @@ sub new {
 
 my (%STD_OPTION) = ( fields => 1, 
 		     min_rank => 1, max_rank => 1, 
+		     exact => 1,
 		     extant => 1, 
 		     status => 1, 
 		     order => 1,
-		     base_order => 1,
+		     #base_order => 1,
+		     immediate => 1,
+		     all_variants => 1,
 		     count => 1,
 		     limit => 1,
 		     offset => 1,
@@ -212,39 +215,56 @@ sub list_taxa {
     
     # Then generate an SQL statement according to the specified base_no and options.
     
-    my $tables = {};
-    my $fieldspec = $options->{fields} || 'SIMPLE';
-    my @fields = $taxonomy->generate_fields($fieldspec, $tables);
-    push @fields, "base.taxon_no as base_no";
-    my $fields = join ', ', @fields;
+    if ( $options->{exact} )
+    {
+	my $tables = { use_a => 1, base_a => 1 };
+	my $fieldspec = $options->{fields} || 'SIMPLE';
+	my @fields = $taxonomy->generate_fields($fieldspec, $tables);
+	my $fields = join ', ', @fields;
+	
+	my @filters = "a.taxon_no in ($base_string)";
+	push @filters, $taxonomy->simple_filters($options, $tables);
+	my $filters = join( q{ and }, @filters);
+	
+	my $other_joins = $taxonomy->simple_joins('t', $tables);
+	
+	my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
+	my $TREE_TABLE = $taxonomy->{TREE_TABLE};
     
-    my @filters = "base.taxon_no in ($base_string)";
-    push @filters, $taxonomy->simple_filters($options, $tables);
-    my $filters = join( q{ and }, @filters);
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $fields
+	FROM $AUTH_TABLE as a JOIN $TREE_TABLE as t using (orig_no)
+		$other_joins
+	WHERE $filters
+	ORDER BY t.lft\n";
+    }
     
-    my $other_joins = $taxonomy->simple_joins('t', $tables);
+    else
+    {
+	my $tables = {};
+	my $fieldspec = $options->{fields} || 'SIMPLE';
+	my @fields = $taxonomy->generate_fields($fieldspec, $tables);
+	push @fields, "base.taxon_no as base_no";
+	my $fields = join ', ', @fields;
+	
+	my @filters = "base.taxon_no in ($base_string)";
+	push @filters, $taxonomy->simple_filters($options, $tables);
+	my $filters = join( q{ and }, @filters);
+	
+	my $other_joins = $taxonomy->simple_joins('t', $tables);
+	
+	my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
+	my $TREE_TABLE = $taxonomy->{TREE_TABLE};
     
-    my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
-    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
-    
-    $SQL_STRING = $taxonomy->{sql_string} = "
+	$SQL_STRING = $taxonomy->{sql_string} = "
 	SELECT $fields
 	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as t using (orig_no)
 		$other_joins
 	WHERE $filters
 	ORDER BY t.lft\n";
+    }
     
     my $result_list = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
-    
-    $taxonomy->order_result_list($result_list, $base_nos) if $options->{base_order};
-    
-    # if ( keys %$base_exclude )
-    # {
-    # 	foreach my $t ( @$result_list )
-    # 	{
-    # 	    $t->{exclude} = 1 if $base_exclude->{$t->{base_no}};
-    # 	}
-    # }
     
     return $return_type eq 'listref' ? $result_list : @$result_list;
 }
@@ -272,7 +292,7 @@ sub get_taxon {
     
     my $base_string = $taxonomy->generate_id_string($base_no, 'exclude');
     
-    my $tables = { use_a => 1 };
+    my $tables = { use_a => 1, base_a => 1 };
     
     my $fieldspec = $options->{fields} || 'SIMPLE';
     my @fields = $taxonomy->generate_fields($fieldspec, $tables);
@@ -333,7 +353,18 @@ sub list_related_taxa {
     
     my $tables = {};
     
-    $tables->{use_a} = 1 if $rel eq 'variants' || $rel eq 'self';
+    if ( $options->{all_variants} || $rel eq 'variants' )
+    {
+	$tables->{use_a} = 1;
+	$tables->{all_a} = 1;
+	$rel = 'variants' if $rel eq 'exact' || $rel eq 'self';
+    }
+    
+    elsif ( $rel eq 'exact' )
+    {
+	$tables->{use_a} = 1;
+	$tables->{base_a} = 1;
+    }
     
     my $fieldspec = $options->{fields} || 'SIMPLE';
     $fieldspec = 'ID' if $return_type eq 'id';
@@ -347,7 +378,7 @@ sub list_related_taxa {
     my $TREE_TABLE = $taxonomy->{TREE_TABLE};
     my $result;
     
-    if ( $rel eq 'self' )
+    if ( $rel eq 'exact' )
     {
 	my $fields = join ', ', @fields;
 	
@@ -365,12 +396,31 @@ sub list_related_taxa {
 	GROUP BY a.taxon_no $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'current' || $rel eq 'valid' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'senpar' )
+    elsif ( $rel eq 'self' )
     {
 	push @fields, 'base.taxon_no as base_no';
 	my $fields = join ', ', @fields;
 	
-	my $rel_field = $rel eq 'current' ? 'spelling_no' : $rel . '_no';
+	my @filters = "base.taxon_no in ($base_string)";
+	push @filters, $taxonomy->simple_filters($options, $tables);
+	my $filters = join( q{ and }, @filters);
+	
+	my $other_joins = $taxonomy->simple_joins('t', $tables);
+	
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $count_expr $fields
+	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as t using (orig_no)
+		$other_joins
+	WHERE $filters
+	GROUP BY t.orig_no $order_expr $limit_expr\n";
+    }
+    
+    elsif ( $rel eq 'valid' || $rel eq 'senior' || $rel eq 'parent' || $rel eq 'senpar' )
+    {
+	push @fields, 'base.taxon_no as base_no';
+	my $fields = join ', ', @fields;
+	
+	my $rel_field = $rel . '_no';
 	
 	my @filters = "base.taxon_no in ($base_string)";
 	push @filters, $taxonomy->simple_filters($options, $tables);
@@ -399,18 +449,17 @@ sub list_related_taxa {
 	
 	my $other_joins = $taxonomy->simple_joins('t', $tables);
 	
-	$order_expr ||= 'ORDER BY is_current desc, a.taxon_name';
+	$order_expr ||= 'ORDER BY base_no, is_current desc';
 	
 	$SQL_STRING = $taxonomy->{sql_string} = "
 	SELECT $count_expr $fields
 	FROM $AUTH_TABLE as base JOIN $TREE_TABLE as t using (orig_no)
-		JOIN $AUTH_TABLE as a on a.orig_no = t.orig_no
 		$other_joins
 	WHERE $filters
 	GROUP BY a.taxon_no $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'synonyms' || $rel eq 'children' || $rel eq 'imm_children' )
+    elsif ( $rel eq 'synonyms' || $rel eq 'children' )
     {
 	push @fields, 'base.taxon_no as base_no';
 	push @fields, 'if(t.orig_no = t.synonym_no, 1, 0) as is_senior' if $rel eq 'synonyms';
@@ -418,19 +467,21 @@ sub list_related_taxa {
 	
 	my ($sel_field, $rel_field);
 	
+	# Select the fields on which to query
+	
 	if ( $rel eq 'synonyms' )
 	{
 	    $rel_field = 'synonym_no';
 	    $sel_field = 'synonym_no';
 	}
 	
-	elsif ( $rel eq 'imm_children' )
+	elsif ( $options->{immediate} )
 	{
 	    $rel_field = 'parent_no';
 	    $sel_field = 'orig_no';
 	}
 	
-	else # ( $rel eq 'children' )
+	else
 	{
 	    $rel_field = 'senpar_no';
 	    $sel_field = 'synonym_no';
@@ -454,14 +505,14 @@ sub list_related_taxa {
 	GROUP BY t.orig_no $order_expr $limit_expr\n";
     }
     
-    elsif ( $rel eq 'all_children' || $rel eq 'all_imm_children' )
+    elsif ( $rel eq 'all_children' )
     {
 	push @fields, 'base.taxon_no as base_no';
 	my $fields = join ', ', @fields;
 	
 	my ($joins);
 	
-	if ( $rel eq 'all_imm_children' )
+	if ( $options->{immediate} )
 	{
 	    $joins = "JOIN $TREE_TABLE as t on t.lft between tb.lft and tb.rgt";
 	}
@@ -547,6 +598,26 @@ sub list_related_taxa {
 	GROUP BY t.lft $order_expr $limit_expr\n";
     }
     
+    elsif ( $rel eq 'all_taxa' )
+    {
+	my $fields = join ', ', @fields;
+	
+	my $joins;
+	
+	my @filters = $taxonomy->simple_filters($options, $tables);
+	my $filters = join( q{ and }, @filters);
+	
+	my $joins = $taxonomy->simple_joins('t', $tables);
+	
+	$order_expr ||= 'ORDER BY t.lft';
+	
+	$SQL_STRING = $taxonomy->{sql_string} = "
+	SELECT $count_expr $fields
+	FROM $TREE_TABLE as t $joins
+	WHERE $filters
+	GROUP BY t.orig_no $order_expr $limit_expr\n";
+    }
+    
     else
     {
 	croak "list_related_taxa: invalid relationship '$rel'\n";
@@ -557,7 +628,7 @@ sub list_related_taxa {
     if ( $return_type eq 'list' or $return_type eq 'listref' )
     {
 	my $result_list = $taxonomy->{dbh}->selectall_arrayref($SQL_STRING, { Slice => {} });
-	$taxonomy->order_result_list($result_list, $base_nos) if $options->{base_order};
+	#$taxonomy->order_result_list($result_list, $base_nos) if $options->{base_order};
 	return $return_type eq 'listref' ? $result_list : @$result_list;
     }
     
@@ -738,6 +809,374 @@ sub find_common_taxa {
 	    return $pan_id;
 	}
     }
+}
+
+
+sub list_references {
+    
+    my ($taxonomy, $rel, $base_taxa, $options) = @_;
+    
+    # First check the arguments.
+    
+    $taxonomy->clear_warnings;
+    
+    croak "list_related_taxa: third argument must be a hashref if given"
+	if defined $options && ref $options ne 'HASH';
+    $options ||= {};
+    
+    my $return_type = lc $options->{return} || 'list';
+    my $base_string;
+    
+    croak "list_related_taxa: second argument must be a valid relationship\n"
+	unless defined $rel;
+    
+    unless ( $rel eq 'all_taxa' || 
+	     ($base_string = $taxonomy->generate_id_string($base_taxa, 'exclude')) )
+    {
+	return $return_type eq 'listref' ? [] : ();
+    }
+    
+    foreach my $key ( keys %$options )
+    {
+	croak "list_related_taxa: invalid option '$key'\n" unless $STD_OPTION{$key};
+    }
+    
+    my $tables = {};
+    
+    my $fieldspec = $options->{fields} || 'REFDATA';
+    $fieldspec = 'ID' if $return_type eq 'id';
+    my @fields = $taxonomy->generate_fields($fieldspec, $tables);
+    
+    my $count_expr = $options->{count} ? 'SQL_CALC_FOUND_ROWS' : '';
+    my $order_expr = $taxonomy->refs_order($options, $tables);
+    my $limit_expr = $taxonomy->simple_limit($options);
+    
+    my $select = defined $options->{select} && $options->{select} ne '' ? 
+	lc $options->{select} : 'both';
+    
+    my $REFS_TABLE = 'refs';
+    my $AUTH_TABLE = $taxonomy->{AUTH_TABLE};
+    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
+    my $result;
+    
+    # Set filter clauses based on the specified options
+    
+    my (@filter_list, @param_list);
+    my ($quick_count) = 1;
+    
+    # if ( $options->{exclude_self} && $rel eq 'all_children' )
+    # {
+    # 	push @filter_list, "t.lft != t2.lft";
+    # }
+    
+    # if ( defined $options->{exclude} && $rel eq 'all_children' )
+    # {
+    # 	push @filter_list, $taxonomy->generateExcludeFilter('t', $options->{exclude});
+    # 	$quick_count = 0;
+    # }
+    
+    # if ( $status ne 'all' )
+    # {
+    # 	push @filter_list, $taxonomy->generateStatusFilter('o', $status);
+    # }
+    
+    # if ( defined $options->{rank} )
+    # {
+    # 	push @filter_list, $taxonomy->generateRankFilter('a', $options->{rank});
+    # 	$quick_count = 0;
+    # }
+    
+    # if ( defined $options->{extant} )
+    # {
+    # 	push @filter_list, $taxonomy->generateExtantFilter('v', $options->{extant});
+    # 	$extra_tables->{v} = 1;
+    # }
+    
+    # if ( defined $options->{author} )
+    # {
+    # 	push @filter_list, $taxonomy->generateAuthorFilter('a', $options->{author});
+    # 	$quick_count = 0;
+    # }
+    
+    # if ( defined $options->{pubyr} )
+    # {
+    # 	push @filter_list, $taxonomy->generatePubyrFilter('a', $options->{pubyr},
+    # 						      $options->{pubyr_rel});
+    # 	$quick_count = 0;
+    # }
+    
+    # if ( defined $options->{type_body_part} )
+    # {
+    # 	push @filter_list, $taxonomy->generateAttributeFilter('a', 'type_body_part', 'type_body_part',
+    # 							  $options->{type_body_part});
+    # }
+    
+    # if ( defined $options->{preservation} )
+    # {
+    # 	push @filter_list, $taxonomy->generateAttributeFilter('a', 'preservation', 'preservation',
+    # 							  $options->{preservation});
+    # }
+    
+    # if ( defined $options->{created} )
+    # {
+    # 	push @filter_list, $taxonomy->generateDateFilter('a.created', $options->{created},
+    # 						     $options->{created_rel});
+    # 	$quick_count = 0;
+    # }
+    
+    # if ( defined $options->{modified} )
+    # {
+    # 	push @filter_list, $taxonomy->generateDateFilter('a.modified', $options->{modified},
+    # 						     $options->{modified_rel});
+    # 	$quick_count = 0;
+    # }
+    
+    # if ( defined $options->{person_no} )
+    # {
+    # 	push @filter_list, $taxonomy->generatePersonFilter('a', $options->{person_no},
+    # 						       $options->{person_rel});
+    # 	$quick_count = 0;
+    # }
+    
+    # if ( $spelling ne 'all' )
+    # {
+    # 	push @filter_list, 'a.taxon_no = t.spelling_no';
+    # }
+    
+    # Select the order in which the results will be returned, as well as the
+    # grouping and the limit if any.
+    
+    my $order_expr = 'ORDER BY r.author1last, r.author1init, r.author2last, r.author2init';
+    my $group_expr = 'GROUP BY r.reference_no';
+    
+    # if ( defined $options->{order} and $return ne 'count' )
+    # {
+    # 	my $direction = $options->{order} =~ /\.desc$/ ? 'DESC' : 'ASC';
+		
+    # 	if ( $options->{order} =~ /^size/ )
+    # 	{
+    # 	    $extra_tables->{v} = 1;
+    # 	    $order_expr = "ORDER BY v.taxon_size $direction";
+    # 	}
+	
+    # 	elsif ( $options->{order} =~ /^name/ )
+    # 	{
+    # 	    $order_expr = "ORDER BY a.taxon_name $direction";
+    # 	}
+	
+    # 	elsif ( $options->{order} =~ /^lft/ )
+    # 	{
+    # 	    $order_expr = "ORDER BY t.lft $direction";
+    # 	}
+	
+    # 	else
+    # 	{
+    # 	    croak "invalid value '$options->{order}' for option 'order'";
+    # 	}
+    # }
+    
+    # And the limit if necessary.
+    
+    my ($count_expr, $limit_expr) = $taxonomy->generateCountLimitExpr($options);
+    
+    # Now, get ready to do the query.  We need to compute the various parts of
+    # the SQL expression, so that they can be put together below.
+    
+    my $dbh = $taxonomy->{dbh};
+    my $tree_table = $taxonomy->{tree_table};
+    my $auth_table = $taxonomy->{auth_table};
+    my $name_table = $taxonomy->{name_table};
+    my $opinion_cache = $taxonomy->{opinion_cache};
+    
+    my $filter_expr = join(' and ', @filter_list);
+    $filter_expr = "WHERE $filter_expr" if $filter_expr ne '';
+    
+    my $inner_joins;
+    # my $extra_joins = $taxonomy->generateExtraJoins('a', $extra_tables,
+    # $spelling, $options);
+    
+    # If we were asked for just the count, just do that.  If we were asked for
+    # just the reference_nos, just do that.  Otherwise, we need the full
+    # reference information.
+    
+    my $query_fields;
+    
+    # if ( $return eq 'count' )
+    # {
+    # 	$query_fields = 'count(distinct reference_no) as count';
+    # 	$group_expr = '';
+    # 	$order_expr = '';
+    # }
+    
+    # elsif ( $return eq 'id' or $return eq 'id_table' )
+    # {
+    # 	$query_fields = 'r.reference_no';
+    # }
+    
+    # else
+    # {
+    # 	$query_fields = $REF_BASIC_FIELDS . ", count(distinct orig_no) as reference_rank";
+    # }
+    
+    # For parameter 'self', we just select the references associated with the
+    # indicated taxa.  If spelling=current was specified, an appropriate
+    # filter was already added above. For parameter 'all_children', we join on
+    # taxon_trees twice in order to cover an entire taxonomic subtree.
+    
+    if ( $rel eq 'self' )
+    {
+	$filter_expr =~ s/a2\./a\./g;
+	$inner_joins = "$auth_table as a JOIN $tree_table as t using (orig_no)";
+    }
+    
+    elsif ( $rel eq 'all_children' )
+    {
+	$inner_joins = "$auth_table as a JOIN $tree_table as t using (orig_no)
+			JOIN $tree_table as t2 on t.lft >= t2.lft and t.lft <= t2.rgt
+			JOIN $auth_table as a2 on a2.orig_no = t2.orig_no";
+    }
+    
+    else
+    {
+	croak "invalid value '$rel' for 'relationship' parameter";
+    }
+    
+    # Now we put the query together depending upon which type of references
+    # are being selected.  We start with the "inner query" which retrieves the
+    # necessary set of reference_no values along with some columns that
+    # indicate what type of reference each one corresponds to.  Below, we will
+    # wrap that in an "outer query" which actually retrieves the necessary information.
+    
+    my $inner_query;
+    
+    if ( $select eq 'authority'	)
+    {
+	$inner_query = "SELECT a.reference_no, t.orig_no
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr";
+	$query_fields .= ", 1 as is_auth";
+    }
+    
+    elsif ( $select eq 'classification' )
+    {
+	$inner_query = "SELECT o.reference_no, t.orig_no
+		FROM $inner_joins
+			JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr";
+	$query_fields .= ", 1 as is_class";
+    }
+    
+    elsif ( $select eq 'opinions' )
+    {
+	$inner_query = "SELECT o.reference_no, t.orig_no, 1 as is_class
+		FROM $inner_joins
+			JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr
+		UNION
+		SELECT oa.reference_no, a.orig_no, 0 as is_class
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+			JOIN $opinion_cache as oa on oa.child_spelling_no = a.taxon_no
+		$filter_expr";
+	$query_fields .= ", sum(is_class) as is_class, 1 as is_opinion";
+    }
+    
+    elsif ( $select eq 'both' )
+    {
+	$inner_query = "SELECT a.reference_no, t.orig_no, 1 as is_auth, 0 as is_class
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr
+		UNION
+		SELECT o.reference_no, t.orig_no, 0 as is_auth, 1 as is_class
+		FROM $inner_joins
+			JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr";
+	$query_fields .= ", sum(is_auth) as is_auth, sum(is_class) as is_class";
+    }
+    
+    elsif ( $select eq 'all' )
+    {
+	$inner_query = "SELECT a.reference_no, t.orig_no, 1 as is_auth, 0 as is_class, 0 as is_opinion
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr
+		UNION
+		SELECT o.reference_no, t.orig_no, 0 as is_auth, 1 as is_class, 1 as is_opinion
+		FROM $inner_joins
+			JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+		$filter_expr
+		UNION
+		SELECT oa.reference_no, a.orig_no, 0 as is_auth, 0 as is_class, 1 as is_opinion
+		FROM $inner_joins
+			LEFT JOIN $opinion_cache as o on o.opinion_no = t.opinion_no
+			JOIN $opinion_cache as oa on oa.child_spelling_no = a.taxon_no
+		$filter_expr";
+	$query_fields .= ", sum(is_auth) as is_auth, sum(is_class) as is_class, sum(is_opinion) as is_opinion";
+    }
+    
+    else
+    {
+	croak "unrecognized value '$select' for option 'select'";
+    }
+    
+    # Now construct the full query using what we constructed above as a subquery.
+    
+    $SQL_STRING = "
+	SELECT $count_expr $query_fields
+	FROM refs as r JOIN
+	($inner_query) as s where r.reference_no = s.reference_no
+	$group_expr $order_expr $limit_expr";
+    
+    # Then execute the query!!!  If we are asked to return a
+    # statement handle, do so.
+    # print STDERR $SQL_STRING . "\n\n";
+
+    # if ( $return eq 'stmt' )
+    # {
+    # 	my ($stmt) = $dbh->prepare($SQL_STRING);
+    # 	$stmt->execute();
+	
+    # 	return $stmt;
+    # }
+    
+    # Otherwise, generate a result list.
+    #print STDERR $SQL_STRING . "\n\n";
+    
+    my $result_list = $dbh->selectall_arrayref($SQL_STRING, { Slice => {} });
+    
+    # If we didn't get any results, return nothing.
+    
+    unless ( ref $result_list eq 'ARRAY' and @$result_list )
+    {
+	return;
+    }
+    
+    # If we are returning a result list, bless all of the objects into the
+    
+    my %hashref;
+    
+    # if ( $return eq 'hash' or $return eq 'base' )
+    # {
+    # 	foreach my $t (@$result_list)
+    # 	{
+    # 	    bless $t, 'Reference';
+    # 	    $hashref{$t->{taxon_no}} = $t;
+    # 	}
+	
+    # 	return \%hashref;
+    # }
+    
+    # else
+    # {
+    # 	foreach my $t (@$result_list)
+    # 	{
+    # 	    bless $t, 'Reference';
+    # 	}
+	
+    # 	return @$result_list;
+    # }
 }
 
 
@@ -1246,6 +1685,12 @@ sub exclusion_filters {
 }
 
 
+sub copy_exclusions {
+
+
+}
+
+
 sub generate_fields {
     
     my ($taxonomy, $fields, $tables_hash) = @_;
@@ -1274,6 +1719,7 @@ sub generate_fields {
 	croak "taxonomy: unknown field specifier '$f'\n" unless ref $FIELD_LIST{$f};
 	
 	$f = 'AUTH_SIMPLE' if $f eq 'SIMPLE' && $tables_hash->{use_a};
+	$f = 'DATA_SIMPLE' if $f eq 'DATA' && $tables_hash->{use_a};
 	
 	foreach my $n ( @{$FIELD_LIST{$f}} )
 	{
@@ -1455,8 +1901,22 @@ sub simple_joins {
 	if $tables_hash->{pc};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ATTRS_TABLE} as v on v.orig_no = $mt.orig_no\n"
 	if $tables_hash->{v};
-    $joins .= "\t\tLEFT JOIN $taxonomy->{AUTH_TABLE} as a on a.taxon_no = t.spelling_no\n"
-	if ($tables_hash->{a} || $tables_hash->{r}) && ! $tables_hash->{use_a};
+    
+    if ( $tables_hash->{all_a} )
+    {
+	$joins .= "\tJOIN $taxonomy->{AUTH_TABLE} as a on a.orig_no = t.orig_no\n";
+    }
+    
+    elsif ( $tables_hash->{base_a} )
+    {
+	# no join needed
+    }
+    
+    elsif ( $tables_hash->{a} || $tables_hash->{r} )
+    {
+	$joins .= "\t\tLEFT JOIN $taxonomy->{AUTH_TABLE} as a on a.taxon_no = t.spelling_no\n";
+    }
+    
     $joins .= "\t\tLEFT JOIN $taxonomy->{REFS_TABLE} as r on r.reference_no = a.reference_no\n"
 	if $tables_hash->{r};
     
@@ -1468,7 +1928,7 @@ sub order_result_list {
     
     my ($taxonomy, $result, $base_list) = @_;
     
-    my (%base_list, @base_nos, %uniq);
+    my (%base_list, @base_nos, %uniq, %exclude);
     
     return unless ref $base_list eq 'ARRAY';
     
@@ -1479,15 +1939,25 @@ sub order_result_list {
     
     @$result = ();
     
-    if ( ref $base_list->[0] )
+    if ( ref $base_list eq 'ARRAY' && ref $base_list->[0] )
     {
 	@base_nos = grep { $uniq{$_} ? 0 : ($uniq{$_} = 1) }
 	    map { $_->{taxon_no} || $_->{orig_no} } @$base_list;
     }
     
-    else
+    elsif ( ref $base_list eq 'ARRAY' )
     {
 	@base_nos = grep { $uniq{$_} ? 0 : ($uniq{$_} = 1) } @$base_list;
+    }
+    
+    elsif ( ref $base_list eq 'HASH' )
+    {
+	return;
+    }
+    
+    else
+    {
+	@base_nos = grep { $uniq{$_} ? 0 : ($uniq{$_} = 1) } split( qr{\s*,\s*}, $base_list);
     }
     
     foreach my $b ( @base_nos )
@@ -1566,13 +2036,16 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				 't.rank as taxon_rank', 't.status', 't.parent_no',
 				 't.senpar_no'],
 		      AUTH_SIMPLE => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 'a.taxon_rank',
-				      't.lft', 't.senpar_no'],
+				      't.lft', 't.status', 't.parent_no', 't.senpar_no'],
 		      SEARCH => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank',
 				 't.lft', 't.rgt', 't.senpar_no'],
 		      DATA => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
 			       't.rank as taxon_rank', 't.lft', 't.status', 't.accepted_no',
 			       't.parent_no', 't.senpar_no', 'a.common_name', 'a.reference_no',
 			       'v.n_occs', 'v.is_extant'],
+		      AUTH_DATA => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 'a.taxon_rank',
+				    't.lft', 't.status', 't.accepted_no', 't.parent_no', 't.senpar_no',
+				    'a.common_name', 'a.reference_no', 'v.n_occs', 'v.is_extant'],
 		      RANGE => ['t.orig_no', 't.rank as taxon_rank', 't.lft', 't.rgt'],
 		      LINK => ['t.synonym_no', 't.accepted_no', 't.parent_no', 't.senpar_no'],
 		      APP => ['v.first_early_age as firstapp_ea', 
@@ -1595,6 +2068,7 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		    );
 
 our (%FIELD_TABLES) = ( DATA => ['v', 'a'],
+			AUTH_DATA => ['v', 'a'],
 			APP => ['v'], 
 			ATTR => ['r'],
 			SIZE => ['v'],
