@@ -1028,6 +1028,7 @@ sub buildOpinionCache {
 			   status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 			   spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
 			   reference_no int unsigned not null,
+			   author varchar(80),
 			   suppress boolean,
 			   UNIQUE KEY (opinion_no),
 			   KEY (suppress)) ENGINE=MYISAM");
@@ -1125,7 +1126,14 @@ sub populateOpinionCache {
     # child and parent.  The authorities table is the canonical source of that
     # information, not the opinions table.
     
-    $result = $dbh->do("INSERT INTO $table_name
+    my $refs_table = $TAXON_TABLE{$tree_table}{refs};
+    my $ops_table = $TAXON_TABLE{$tree_table}{opinions};
+    my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    
+    $result = $dbh->do("
+		INSERT INTO $table_name (opinion_no, orig_no, child_spelling_no,
+					 parent_no, parent_spelling_no, ri, pubyr,
+					 status, spelling_reason, reference_no, author, suppress)
 		SELECT o.opinion_no, a1.orig_no,
 			if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no), 
 			a2.orig_no,
@@ -1141,12 +1149,16 @@ sub populateOpinionCache {
 				WHEN 'stated with evidence' THEN 3
 				ELSE 2 END)) AS ri,
 			if(o.pubyr IS NOT NULL AND o.pubyr != '', o.pubyr, r.pubyr) as pubyr,
-			o.status, o.spelling_reason, o.reference_no, null
-		FROM $TAXON_TABLE{$tree_table}{opinions} as o
-			LEFT JOIN $TAXON_TABLE{$tree_table}{refs} as r using (reference_no)
-			JOIN $TAXON_TABLE{$tree_table}{authorities} as a1
+			o.status, o.spelling_reason, o.reference_no,
+			if(o.ref_has_opinion = 'YES',
+			   compute_attr(r.author1last, r.author2last, r.otherauthors),
+			   compute_attr(o.author1last, o.author2last, o.otherauthors)),
+			null
+		FROM $ops_table as o
+			LEFT JOIN $refs_table as r using (reference_no)
+			JOIN $auth_table as a1
 				on a1.taxon_no = if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no)
-			LEFT JOIN $TAXON_TABLE{$tree_table}{authorities} as a2
+			LEFT JOIN $auth_table as a2
 				on a2.taxon_no = if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no)
 		$filter_clause
 		ORDER BY ri DESC, pubyr DESC, opinion_no DESC");
@@ -1350,6 +1362,7 @@ sub computeSpelling {
     
     my $opinion_cache = $TAXON_TABLE{$tree_table}{opcache};
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
+    my $refs_table = $TAXON_TABLE{$tree_table}{refs};
     
     # In order to select the currently accepted name for each taxonomic
     # concept, we first need to determine which taxonomic names are marked as
@@ -1550,40 +1563,70 @@ sub computeSpelling {
     
     # First put in all of the names we've selected above.
     
-    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $NAME_WORK
+    $result = $dbh->do("DROP TABLE IF EXISTS $NAME_WORK");
+    $result = $dbh->do("CREATE TABLE $NAME_WORK
 			       (taxon_no int unsigned not null,
 				orig_no int unsigned not null,
 				spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
 				opinion_no int unsigned not null,
+				pubyr varchar(4),
+				author varchar(80),
 				PRIMARY KEY (taxon_no)) ENGINE=MYISAM");
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $NAME_WORK
-		SELECT s.spelling_no, s.orig_no, o.spelling_reason, o.opinion_no
-		FROM $SPELLING_AUX as s JOIN $opinion_cache as o using (opinion_no)");
+	INSERT IGNORE INTO $NAME_WORK (taxon_no, orig_no, spelling_reason, opinion_no)
+	SELECT s.spelling_no, s.orig_no, o.spelling_reason, o.opinion_no
+	FROM $SPELLING_AUX as s JOIN $opinion_cache as o using (opinion_no)");
     
     # Then fill in the rest of the names that have opinions, using the best available
     # opinion for each one.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $NAME_WORK
-		SELECT o.child_spelling_no, o.orig_no, o.spelling_reason, o.opinion_no
-		FROM $opinion_cache as o JOIN $TREE_WORK USING (orig_no)
-		ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
+	INSERT IGNORE INTO $NAME_WORK (taxon_no, orig_no, spelling_reason, opinion_no)
+	SELECT o.child_spelling_no, o.orig_no, o.spelling_reason, o.opinion_no
+	FROM $opinion_cache as o JOIN $TREE_WORK USING (orig_no)
+	ORDER BY o.ri DESC, o.pubyr DESC, o.opinion_no DESC");
     
     # Then add dummy entries for all other names.
     
     $result = $dbh->do("
-		INSERT IGNORE INTO $NAME_WORK
-		SELECT a.taxon_no, a.orig_no, '', 0
-		FROM $auth_table as a");
+	INSERT IGNORE INTO $NAME_WORK (taxon_no, orig_no, spelling_reason, opinion_no)
+	SELECT a.taxon_no, a.orig_no, '', 0
+	FROM $auth_table as a");
     
-    # Finally, we can index it.
+    # Then we can index it.
     
     logMessage(2, "    indexing taxonomic name table");
     
     $result = $dbh->do("ALTER TABLE $NAME_WORK ADD KEY (orig_no)");
     $result = $dbh->do("ALTER TABLE $NAME_WORK ADD KEY (opinion_no)");
+    
+    # Then fill in pubyr and author, from authorities and/or refs
+    
+    logMessage(2, "    setting pubyr");
+    
+    $result = $dbh->do("
+	UPDATE $NAME_WORK as n join $auth_table as a using (taxon_no)
+		join $refs_table as r using (reference_no)
+	SET n.pubyr = if(a.ref_is_authority = 'YES', r.pubyr, a.pubyr)");
+    
+    $result = $dbh->do("
+	UPDATE $NAME_WORK
+	SET pubyr = NULL WHERE pubyr = ''");
+    
+    logMessage(2, "    setting attribution");
+    
+    $result = $dbh->do("
+	UPDATE $NAME_WORK as n join $auth_table as a using (taxon_no)
+		join $refs_table as r using (reference_no)
+	SET n.author =
+		if(a.ref_is_authority = 'YES', 
+		   compute_attr(r.author1last, r.author2last, r.otherauthors),
+		   compute_attr(a.author1last, a.author2last, a.otherauthors))");
+    
+    $result = $dbh->do("
+	UPDATE $NAME_WORK
+	SET author = NULL WHERE author = ''");
     
     my $a = 1;		# we can stop on this line when debugging
 }
@@ -3781,7 +3824,7 @@ sub computeSearchTable {
     # table associating each species and subspecies with a genus/subgenus.
     
     logMessage(2, "    adding species with synonym genera...");
-    
+    $DB::single = 1;
     $result = $dbh->do("DROP TABLE IF EXISTS $SPECIES_AUX");
     $result = $dbh->do("CREATE TABLE $SPECIES_AUX
 			       (genus varchar(80) not null,
@@ -3797,24 +3840,21 @@ sub computeSearchTable {
     $SQL_STRING = "
 		INSERT IGNORE INTO $SPECIES_AUX (taxon_no, orig_no, genus, taxon_name)
 		SELECT a.taxon_no, a.orig_no,
-			ifnull(p1.taxon_name, ifnull(p2.taxon_name, p3.taxon_name)),
+			ifnull(s1.name, ifnull(s2.name, s3.name)),
 			if(a.taxon_name like '%(%',
 			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
 			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
-			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parent_no
-			LEFT JOIN $auth_table as p1 on p1.taxon_no = t1.spelling_no
-				and p1.taxon_rank = 'genus'
-			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parent_no
-			LEFT JOIN $auth_table as p2 on p2.taxon_no = t2.spelling_no
-				and p2.taxon_rank = 'genus'
-			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.parent_no
-			LEFT JOIN $auth_table as p3 on p3.taxon_no = t3.spelling_no
-				and p3.taxon_rank = 'genus'
+			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parent_no and t.status = 'belongs to'
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parent_no and t1.status = 'belongs to'
+			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.parent_no and t2.status = 'belongs to'
+			LEFT JOIN $TREE_WORK as s1 on s1.orig_no = t1.synonym_no and s1.orig_no <> t1.orig_no and s1.rank = 5
+			LEFT JOIN $TREE_WORK as s2 on s2.orig_no = t2.synonym_no and s2.orig_no <> t2.orig_no and s2.rank = 5
+			LEFT JOIN $TREE_WORK as s3 on s3.orig_no = t3.synonym_no and s3.orig_no <> t3.orig_no and s3.rank = 5
 		WHERE a.taxon_rank in ('species', 'subspecies') and
-			(p1.taxon_no is not null or
-			 p2.taxon_no is not null or
-			 p3.taxon_no is not null)";
+			(s1.orig_no is not null or
+			 s2.orig_no is not null or
+			 s3.orig_no is not null)";
     
     $result = $dbh->do($SQL_STRING);
     
@@ -3824,21 +3864,19 @@ sub computeSearchTable {
     $SQL_STRING = "
 		INSERT IGNORE INTO $SPECIES_AUX (taxon_no, orig_no, genus, taxon_name)
 		SELECT a.taxon_no, a.orig_no,
-			ifnull(trim(trailing ')' from substring_index(p1.taxon_name,'(',-1)),
-			       trim(trailing ')' from substring_index(p2.taxon_name,'(',-1))),
+			ifnull(trim(trailing ')' from substring_index(s1.name,'(',-1)),
+			       trim(trailing ')' from substring_index(s2.name,'(',-1))),
 			if(a.taxon_name like '%(%',
 			   trim(substring(a.taxon_name, locate(') ', a.taxon_name)+2)),
 			   trim(substring(a.taxon_name, locate(' ', a.taxon_name)+1)))
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
-			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parent_no
-			LEFT JOIN $auth_table as p1 on p1.taxon_no = t1.spelling_no
-				and p1.taxon_rank = 'subgenus'
-			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parent_no
-			LEFT JOIN $auth_table as p2 on p2.taxon_no = t2.spelling_no
-				and p2.taxon_rank = 'subgenus'
+			LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.parent_no and t.status = 'belongs to'
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.parent_no and t1.status = 'belongs to'
+			LEFT JOIN $TREE_WORK as s1 on s1.orig_no = t1.synonym_no and s1.orig_no <> t1.orig_no and s1.rank = 4
+			LEFT JOIN $TREE_WORK as s2 on s2.orig_no = t2.synonym_no and s2.orig_no <> t2.orig_no and s2.rank = 4
 		WHERE a.taxon_rank in ('species', 'subspecies') and
-			(p1.taxon_no is not null or
-			 p2.taxon_no is not null)";
+			(s1.orig_no is not null or
+			 s2.orig_no is not null)";
     
     $result = $dbh->do($SQL_STRING);
     
@@ -4029,6 +4067,10 @@ sub computeAttrsTable {
 				early_occ int unsigned,
 				late_occ int unsigned,
 				image_no int unsigned,
+				author varchar(80),
+				pubyr varchar(4),
+				is_changed boolean,
+				attribution varchar(80),
 				PRIMARY KEY (orig_no)) ENGINE=MYISAM");
     
     # Prime the new table with values from the authorities table and
@@ -4510,6 +4552,40 @@ sub computeAttrsTable {
 			v.early_occ = sv.early_occ,
 			v.late_occ = sv.late_occ,
 			v.not_trace = sv.not_trace");
+    
+    # Now we can set the 'pubyr', 'is_changed' and 'attribution' fields, which are not
+    # inherited. 
+    
+    logMessage(2, "    setting author, pubyr, is_changed");
+    
+    $result = $dbh->do("
+		UPDATE $ATTRS_WORK as v join $TREE_WORK as t using (orig_no)
+			join (SELECT orig_no, group_concat(spelling_reason) as reason
+			      FROM $NAME_WORK GROUP BY orig_no) as r using (orig_no)
+			join $NAME_WORK as n on n.taxon_no = t.orig_no
+		SET v.author = n.author,
+		    v.pubyr = n.pubyr,
+		    v.is_changed = if(r.reason regexp 'rank|recombination', 1, 0)");
+    
+    logMessage(2, "    setting attribution");
+    
+    $result = $dbh->do("
+		UPDATE $ATTRS_WORK
+		SET attribution = if(is_changed,
+				     concat('(', author, ' ', pubyr, ')'),
+				     concat(author, ' ', pubyr))
+		WHERE author <> '' and pubyr <> ''");
+    
+    logMessage(2, "      $result names with pubyr");
+    
+    $result = $dbh->do("
+		UPDATE $ATTRS_WORK
+		SET attribution = if(is_changed,
+				     concat('(', author, ')'),
+				     author)
+		WHERE author <> '' and (pubyr = '' or pubyr is null)");
+    
+    logMessage(2, "      $result names without pubyr");
     
     # We can stop here when debugging.
     

@@ -127,6 +127,69 @@ $dbh->do("CREATE PROCEDURE bestopinion (t int unsigned)
 		SELECT * from best_opinions WHERE orig_no = t;
 	END");
 
+$dbh->do("DROP PROCEDURE IF EXISTS showrange");
+$dbh->do("CREATE PROCEDURE showrange (base_no int unsigned)
+	BEGIN
+		SELECT t.name, c.taxon_no, c.lft, c.rgt, c.spelling_no, c.synonym_no, c.opinion_no
+		FROM taxon_trees as base JOIN taxa_tree_cache as bt on bt.taxon_no = base.orig_no
+			JOIN taxa_tree_cache as c on c.lft between bt.lft and bt.rgt
+			LEFT JOIN taxon_trees as t on t.orig_no = c.taxon_no
+		WHERE base.orig_no = base_no
+		ORDER BY c.lft;
+	END");
+
+$dbh->do("DROP PROCEDURE IF EXISTS showname");
+$dbh->do("CREATE PROCEDURE showname (base_name varchar(80))
+	BEGIN
+		SELECT t.name, c.taxon_no, c.lft, c.rgt, c.spelling_no, c.synonym_no, c.opinion_no
+		FROM taxon_trees as base JOIN taxa_tree_cache as bt on bt.taxon_no = base.orig_no
+			JOIN taxa_tree_cache as c on c.lft between bt.lft and bt.rgt
+			LEFT JOIN taxon_trees as t on t.orig_no = c.taxon_no
+		WHERE base.name like base_name
+		ORDER BY c.lft;
+	END");
+
+$dbh->do("DROP PROCEDURE IF EXISTS parent");
+$dbh->do("CREATE PROCEDURE parent (base_no int unsigned)
+	BEGIN
+		SELECT t.name, t.rank, t.orig_no, t.lft, t.rgt, t.spelling_no, t.synonym_no, t.senpar_no
+		FROM taxon_trees as t JOIN taxon_trees as base on t.orig_no = base.senpar_no
+		WHERE base.orig_no = base_no;
+	END");
+
+
+# compute_attr ( last1, last2, others )
+# 
+# Compute an attribution string using the specified last names.
+
+$dbh->do("DROP FUNCTION IF EXISTS compute_attr");
+$dbh->do("CREATE FUNCTION compute_attr (last1 varchar(80), last2 varchar(80), others varchar(80))
+	RETURNS varchar(80) DETERMINISTIC SQL SECURITY INVOKER
+	BEGIN
+		DECLARE attr varchar(80);
+		
+		IF binary(last1) REGEXP ' Jr| III| II' THEN
+			SET last1 = REPLACE(last1, ' Jr', '');
+			SET last1 = REPLACE(last1, ' III', '');
+			SET last1 = REPLACE(last1, ' II', '');
+		END IF;
+		SET last1 = TRIM(trailing ',' from TRIM(trailing '.' from last1));
+		IF binary(last2) REGEXP ' Jr| III| II' THEN
+			SET last2 = REPLACE(last2, ' Jr', '');
+			SET last2 = REPLACE(last2, ' III', '');
+			SET last2 = REPLACE(last2, ' II', '');
+		END IF;
+		SET last2 = TRIM(trailing ',' from TRIM(trailing '.' from last2));
+		
+		IF (others <> '' OR last2 LIKE '\%et al%') THEN
+			RETURN CONCAT(last1, ' et al.');
+		ELSEIF last2 <> '' THEN
+			RETURN CONCAT(last1, ' and ', last2);
+		ELSE
+			RETURN last1;
+		END IF;
+	END");		
+
 # compute_ancestry ( auth_table, tree_table, taxon_nos )
 # 
 # Starting with the taxa specified by the parameter 'taxon_nos', generate a

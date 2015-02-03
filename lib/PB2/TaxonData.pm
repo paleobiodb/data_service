@@ -83,8 +83,8 @@ sub initialize {
 	    "The scientific name of this taxon",
 	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2' },
 	    "The common (vernacular) name of this taxon, if any",
-	{ set => 'attribution', if_field => 'a_al1', from => '*', 
-	  code => \&PB2::CommonData::generateAttribution },
+	#{ set => 'attribution', if_field => 'a_al1', from => '*', 
+	#  code => \&PB2::CommonData::generateAttribution },
 	{ output => 'attribution', if_block => 'attr', 
 	  dwc_name => 'scientificNameAuthorship', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
@@ -128,7 +128,7 @@ sub initialize {
 	{ output => 'n_occs', com_name => 'noc' },
 	    "The number of occurrences in the database that are identified as being contained within",
 	    "this taxon",
-	{ output => 'size', com_name => 'siz' },
+	{ output => 'taxon_size', com_name => 'siz' },
 	    "The total number of taxa in the database that are contained within this taxon, including itself",
 	{ output => 'extant_size', com_name => 'exs' },
 	    "The total number of extant taxa in the database that are contained within this taxon, including itself");
@@ -156,7 +156,7 @@ sub initialize {
 	{ output => 'taxon_name', com_name => 'nam', dwc_name => 'scientificName' },
 	{ output => 'valid_no', com_name => 'val', pbdb_name => 'senior_no', 
 	  dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
-	{ output => 'size', com_name => 'siz' },
+	{ output => 'taxon_size', com_name => 'siz' },
 	{ output => 'extant_size', com_name => 'exs' },
 	{ output => 'firstapp_ea', com_name => 'fea' });
     
@@ -432,8 +432,8 @@ sub initialize {
 	{ value => 'size.desc', undocumented => 1 },
 	{ value => 'extant_size' },
 	    "Results are ordered by the number of extant subtaxa, largest to smallest unless you add C<.asc>",
-	{ value => 'extant_size.asc', undocumented => 1 },
-	{ value => 'extant_size.desc', undocumented => 1 },
+	{ value => 'extsize.asc', undocumented => 1 },
+	{ value => 'extsize.desc', undocumented => 1 },
 	{ value => 'extant' },
 	    "Results are ordered by whether or not the taxon is extant, with extant ones first unless you add C<.asc>",
 	{ value => 'extant.asc', undocumented => 1 },
@@ -448,7 +448,16 @@ sub initialize {
 	    "most recent first unless you add C<.asc>",
 	{ value => 'modified.asc', undocumented => 1 },
 	{ value => 'modified.desc', undocumented => 1 },
-	{ value => 'rank' },
+	{ value => 'pubyr' },
+	    "Results are ordered by the year in which the name was first published, oldest first unless",
+	    "you add C<.asc>",
+	{ value => 'pubyr.asc', undocumented => 1 },
+	{ value => 'pubyr.desc', undocumented => 1 },
+	{ value => 'author' },
+	    "Results are ordered alphabetically by the last name of the primary author",
+	{ value => 'author.asc', undocumented => 1 },
+	{ value => 'author.desc', undocumented => 1 },
+	{ value => 'rank', undocumented => 1 },
 	    "Results are ordered by the number of associated records, highest first unless you add C<.asc>.",
 	    "This is only useful when querying for taxa associated with occurrences, etc.",
 	{ value => 'rank.asc', undocumented => 1 },
@@ -853,7 +862,7 @@ sub list {
 	$options->{return} = 'stmt';
 	my $sth = $taxonomy->list_refs($rel, $id_list, $options);
 	$self->sth_result($sth);
-	$self->sql_count_rows;
+	$self->set_result_count($taxonomy->get_count);
     }
     
     # Otherwise, return matching taxa.  If the relationship is 'self' (the
@@ -881,10 +890,10 @@ sub list {
     {
 	$options->{return} = 'stmt';
 	$rel ||= 'self';
-	
+	$DB::single = 1;
 	my $sth = $taxonomy->list_related_taxa($rel, $id_list, $options);
 	$self->sth_result($sth) if $sth;
-	$self->sql_count_rows;
+	$self->set_result_count($taxonomy->get_count);
     }
     
     $self->{main_sql} = $taxonomy->get_last_sql;
@@ -1275,8 +1284,8 @@ sub generate_query_options {
     
     foreach my $f (@rawfields)
     {
-	next if $f eq '$bt.modified';
-	$f = 'created' if $f eq '$bt.created';
+	next if $f =~ qr{\.modified};
+	$f = 'CRMOD' if $f =~ qr{\.created$};
 	push @fields, $f;
     }
     
@@ -1315,11 +1324,15 @@ sub generate_query_options {
 	}
     }
     
-    # Use just the first order specified.  This should be fixed at some point.
+    # If we have any ordering terms, then apply them.
     
-    if ( my ($term) = $self->clean_param_list('order') )
+    my (@orders);
+	
+    foreach my $term ( $self->clean_param_list('order') )
     {
-	my $dir = '';
+	next unless $term;
+	
+	my $dir;
 	
 	if ( $term =~ /^(\w+)[.](asc|desc)$/ )
 	{
@@ -1329,14 +1342,10 @@ sub generate_query_options {
 	
 	# The following options default to ascending.
 	
-	if ( $term eq 'hierarchy' or $term eq 'lft' )
+	if ( $term eq 'hierarchy' || $term eq 'pubyr' || $term eq 'created' || $term eq 'modified' || $term eq 'name' ||
+	     $term eq 'author' || $term eq 'pubyr' )
 	{
-	    $options->{order} = "lft";
-	}
-	
-	elsif ( $term eq 'pubyr' || $term eq 'created' || $term eq 'modified' || $term eq 'name' )
-	{
-	    $options->{order} = $term;
+	    $dir ||= 'asc';
 	}
 	
 	# The following options default to descending.
@@ -1344,8 +1353,7 @@ sub generate_query_options {
 	elsif ( $term eq 'firstapp' || $term eq 'lastapp' || $term eq 'agespan' || 
 		$term eq 'size' || $term eq 'extant_size' || $term eq 'n_occs' || $term eq 'extant' )
 	{
-	    $term .= ".desc" unless $term =~ /\./;
-	    $options->{order} = $term;
+	    $dir ||= 'desc';
 	}
 	
 	# If we find an unrecognized option, throw an error.
@@ -1353,12 +1361,15 @@ sub generate_query_options {
 	else
 	{
 	    $self->add_warning("unrecognized order option '$term'");
+	    next;
 	}
 	
 	# Add the direction (asc or desc) if one was specified.
 	
-	$options->{order} .= ".$dir" if $dir;
+	push @orders, "$term.$dir";
     }
+    
+    $options->{order} = \@orders if @orders;
     
     return $options;
 }
