@@ -10,7 +10,7 @@ use strict;
 use lib 'lib';
 use lib 't';
 
-use Test::More tests => 15;
+use Test::More tests => 16;
 use Test::Deep;
 use Carp qw(carp croak);
 
@@ -703,7 +703,6 @@ subtest 'fields' => sub {
 	
 	if ( $ATTR{$tn} )
 	{
-	    $DB::single = 1;
 	    cmp_deeply( $t, superhashof($LINK{$tn}), "fields LINK $tn" );
 	    cmp_deeply( $t, superhashof($APP{$tn}), "fields APP $tn" );
 	    cmp_deeply( $t, superhashof($ATTR{$tn}), "fields ATTR $tn" );
@@ -731,6 +730,58 @@ subtest 'fields' => sub {
     };
     
     ok( $@, 'error with empty field specifier' );
+};
+
+
+subtest 'crmod' => sub {
+
+    my (@t1, @t2, @t3, @t4, @t5);
+    
+    eval {
+	@t1 = $taxonomy->list_taxa('all_children', $ID1, { all_variants => 1, fields => 'SIMPLE,CRMOD' });
+	@t2 = $taxonomy->list_taxa('all_children', $ID1, { all_variants => 1, min_created => '2010-06-18' });
+	@t3 = $taxonomy->list_taxa('all_children', $ID1, { all_variants => 1, max_created => '2010-06-18' });
+    };
+    
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+    
+    cmp_ok( scalar(@t2), '>', 0, "found results with min_created" );
+    cmp_ok( scalar(@t3), '>', 0, "found results with max_created" );
+    cmp_ok( scalar(@t2) + scalar(@t3), '==', scalar(@t1), "min_created and max_created are complements" );
+    
+    # select the modification date that comes soonest after 2010-01-01
+    
+    my $test_date;
+    
+    foreach my $t (@t1)
+    {
+	next unless $t->{modified} ge '2014';
+	$test_date = $t->{modified} if !defined $test_date || $t->{modified} lt $test_date;
+    }
+    
+    ok( $test_date =~ qr{\d\d\d\d-\d\d-\d\d}, "found an appropriate modification date" ) || return;
+    
+    # make sure that min_op_modified and max_op_modified properly partition
+    # the result set
+    
+    eval {
+	@t4 = $taxonomy->list_taxa('all_children', $ID1, { all_variants => 1, min_modified => $test_date });
+	@t5 = $taxonomy->list_taxa('all_children', $ID1, { all_variants => 1, max_modified => $test_date });
+    };
+
+    unless ( ok( !$@, 'eval 2 OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+    
+    cmp_ok( scalar(@t4), '>', 0, "found results with min_modified" );
+    cmp_ok( scalar(@t5), '>', 0, "found results with max_modified" );
+    cmp_ok( scalar(@t4) + scalar(@t5), '==', scalar(@t1), "min_modified and max_modified are complements" );
 };
 
 

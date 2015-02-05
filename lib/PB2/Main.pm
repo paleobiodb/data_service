@@ -28,7 +28,7 @@ use PB2::PersonData;
 	  title => 'PBDB Data Service',
 	  version => 'a1',
 	  features => 'standard',
-	  special_params => 'standard',
+	  special_params => 'standard,count=rowcount',
 	  path_prefix => 'data1.2/',
 	  ruleset_prefix => '1.2:',
 	  doc_template_dir => 'doc/1.2' });
@@ -382,6 +382,19 @@ use PB2::PersonData;
 	"This path returns information about the bibliographic references associated with taxonomic names.",
 	"You can pass identical filtering parameters to L<node:taxa/list> and to L<node:taxa/refs>,",
 	"which will give you both a list of taxonomic names and a list of the associated references.");
+    
+    $ds2->define_node({ path => 'taxa/opinions',
+			place => 3,
+			title => 'Taxonomic opinions',
+			usage => [ "taxa/opinions.json?base_name=Felidae" ],
+			method => 'list',
+			arg => 'opinions',
+			output => '1.2:opinions:basic',
+			optional_output => '1.2:opinions:output_map' },
+	"This path returns information about the taxonomic opinions used to build the taxonomic",
+	"hierarchy.  From all of the opinions entered into the database about a particular",
+	"taxon, the most recent opinion that is stated with the most evidence is used to classify",
+	"that taxon.  The others are considered to be superseded and are ignored.");
     
     $ds2->list_node({ list => 'taxa',
 		      path => 'occs/taxa',

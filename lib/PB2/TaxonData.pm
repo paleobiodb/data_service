@@ -65,9 +65,9 @@ sub initialize {
     $ds->define_block('1.2:taxa:basic' =>
 	{ select => ['DATA'] },
 	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'oid' },
-	    "A positive integer that uniquely identifies this taxonomic name",
+	    "A unique identifier for this taxonomic name",
 	{ output => 'taxon_no', com_name => 'vid', dedup => 'orig_no' },
-	    "A positive integer that uniquely identifies a particular variant",
+	    "A unique identifier for the selected variant",
 	    "of this taxonomic name.  By default, this is the variant currently",
 	    "accepted as most correct.",
 	{ output => 'record_type', com_name => 'typ', com_value => 'txn', 
@@ -277,6 +277,48 @@ sub initialize {
 	{ output => 'license', com_name => 'lic' },
 	    "A URL giving the license terms under which this image may be used");
     
+    # Now define output blocks for opinions
+    
+    $ds->define_output_map('1.2:opinions:output_map' =>
+	{ value => 'crmod', maps_to => '1.2:opinions:crmod' },
+	    "The C<created> and C<modified> timestamps for the opinion record");
+    
+    $ds->define_block('1.2:opinions:basic' =>
+	{ select => [ 'OP_DATA' ] },
+	{ output => 'opinion_no', com_name => 'oid' },
+	    "A unique identifier for this opinion record.",
+	{ output => 'type', com_name => 'typ' },
+	    "The type of opinion represented: B<C> for a",
+	    "classification opinion, B<O> for an opinion which has been superseded.",
+	{ output => 'author', com_name => 'att' },
+	    "The author(s) of this opinion.",
+	{ output => 'pubyr', com_name => 'pby' },
+	    "The year in which the opinion was published.",
+	{ output => 'taxon_name', com_name => 'nam' },
+	    "The taxonomic name that is the subject of this opinion.",
+	{ output => 'orig_no', com_name => 'tid' },
+	    "The identifier of the taxonomic name that is the subject of this opinion.",
+	{ output => 'child_name', dedup => 'taxon_name', com_name => 'cnm' },
+	    "The particular variant of the name that is the subject of this opinion,",
+	    "if different from the currently accepted one.",
+	{ output => 'child_spelling_no', dedup => 'orig_no', pbdb_name => 'child_no', com_name => 'vid' },
+	    "The identifier of the particular variant that is the subject of this opinion.",
+	{ output => 'parent_name', com_name => 'pnm' },
+	    "The taxonomic name under which the subject is being placed (the \"parent\" taxonomic name).",
+	{ output => 'parent_spelling_no', pbdb_name => 'parent_no', com_name => 'pid' },
+	    "The identifier of the parent taxonomic name.",
+	{ output => 'status', com_name => 'sta' },
+	    "The taxonomic status of this name, as expressed by this opinion.",
+	{ output => 'spelling_reason', com_name => 'spl' },
+	    "An indication of why this name was given.");
+    
+    $ds->define_block('1.2:opinions:crmod' =>
+	{ select => [ 'OP_CRMOD' ] },
+	{ output => 'created', com_name => 'dcr' },
+	    "The date and time at which this opinion record was created.",
+	{ output => 'modified', com_name => 'dmd' },
+	    "The date and time at which this opinion record was last modified.");
+    
     # Finally, we define some rulesets to specify the parameters accepted by
     # the operations defined in this class.
     
@@ -360,6 +402,13 @@ sub initialize {
 	{ value => 'all' },
 	    "Select the references associated with both the authority records and all opinions on",
 	    "these taxa");
+    
+    $ds->define_set('1.2:taxa:opselect' =>
+	{ value => 'classification' },
+	    "Select only the classification opinions for these taxa.  This is the default.",
+	{ value => 'all' },
+	    "Select all opinions for these taxa, including ones that are not used because",
+	    "they have been superseded by others.");
     
     $ds->define_set('1.2:taxa:refspelling' =>
 	{ value => 'current' },
@@ -568,6 +617,24 @@ sub initialize {
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
 	"the name of the primary author.");
     
+    $ds->define_ruleset('1.2:taxa:opinions' =>
+	">You can use the following parameters if you wish to retrieve the opinions associated",
+	"with a specified list of taxa.",
+	"Only the records which also match the other parameters that you specify will be returned.",
+	{ allow => '1.2:taxa:selector' },
+	{ allow => '1.2:common:select_crmod' },
+	{ allow => '1.2:common:select_ent' },
+	{ require_any => ['1.2:taxa:selector', 
+			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	">You can also specify any of the following parameters:",
+	{ optional => 'select', valid => '1.2:taxa:opselect' },
+	    "You can use this parameter to specify which kinds of opinions to retrieve.",
+	    "The accepted values include:",
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request.",
+	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
+	"the name of the primary author.");
+    
     $ds->define_ruleset('1.2:taxa:match' =>
 	{ param => 'name', valid => \&PB2::TaxonData::validNameSpec, list => ',', alias => 'taxon_name' },
 	    "A valid taxonomic name, or a common abbreviation such as 'T. rex'.",
@@ -632,6 +699,7 @@ sub initialize {
 	$DB_FIELD{common} = 1 if exists $record->{common};
 	$DB_FIELD{orig_no} = 1 if exists $record->{orig_no};
 	$DB_FIELD{is_current} = 1 if exists $record->{is_current};
+	$DB_FIELD{accepted_no} = 1 if exists $record->{accepted_no};
     }
 }
 
@@ -691,7 +759,7 @@ sub get {
     
     # Next, fetch basic info about the taxon.
     
-    my ($r) = $taxonomy->get_taxon($taxon_no, $options);
+    my ($r) = $taxonomy->list_taxa_simple($taxon_no, $options);
     
     return unless ref $r;
     
@@ -742,51 +810,51 @@ sub get {
 	
 	unless ( $r->{phylum_no} or (defined $r->{rank} && $r->{rank} <= 20) )
 	{
-	    $r->{phylum_list} = [ $taxonomy->list_related_taxa($taxon_no, 'all_children',
+	    $r->{phylum_list} = [ $taxonomy->list_taxa($taxon_no, 'all_children',
 						     { limit => 10, order => 'size.desc', rank => 20, fields => $data } ) ];
 	}
 	
 	unless ( $r->{class_no} or $r->{rank} <= 17 )
 	{
-	    $r->{class_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no, 
+	    $r->{class_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => 'size.desc', rank => 17, fields => $data } ) ];
 	}
 	
 	unless ( $r->{order_no} or $r->{rank} <= 13 )
 	{
 	    my $order = defined $r->{order_count} && $r->{order_count} > 100 ? undef : 'size.desc';
-	    $r->{order_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no, 
+	    $r->{order_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						    { limit => 10, order => $order, rank => 13, fields => $data } ) ];
 	}
 	
 	unless ( $r->{family_no} or $r->{rank} <= 9 )
 	{
 	    my $order = defined $r->{family_count} && $r->{family_count} > 100 ? undef : 'size.desc';
-	    $r->{family_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no, 
+	    $r->{family_list} = [ $taxonomy->list_taxa('all_children', $taxon_no, 
 						     { limit => 10, order => $order, rank => 9, fields => $data } ) ];
 	}
 	
 	if ( $r->{rank} > 5 )
 	{
 	    my $order = defined $r->{genus_count} && $r->{order_count}> 100 ? undef : 'size.desc';
-	    $r->{genus_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no,
+	    $r->{genus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						    { limit => 10, order => $order, rank => 5, fields => $data } ) ];
 	}
 	
 	if ( $r->{rank} == 5 )
 	{
-	    $r->{subgenus_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no,
+	    $r->{subgenus_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 4, fields => $data } ) ];
 	}
 	
 	if ( $r->{rank} == 5 or $r->{rank} == 4 )
 	{
-	    $r->{species_list} = [ $taxonomy->list_related_taxa('all_children', $taxon_no,
+	    $r->{species_list} = [ $taxonomy->list_taxa('all_children', $taxon_no,
 						       { limit => 10, order => 'size.desc', rank => 3, fields => $data } ) ];
 	}
 	
 	$r->{children} = 
-	    [ $taxonomy->list_related_taxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => $data } ) ];
+	    [ $taxonomy->list_taxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => $data } ) ];
     }
     
     return 1;
@@ -808,7 +876,7 @@ sub list {
     
     # First, figure out what info we need to provide
     
-    my $options = $self->generate_query_options();
+    my $options = $self->generate_query_options($arg);
     
     # Then, figure out which taxa we are looking for.
     
@@ -865,12 +933,20 @@ sub list {
 	$self->set_result_count($taxonomy->get_count);
     }
     
+    elsif ( defined $arg && $arg eq 'opinions' )
+    {
+	$options->{return} = 'stmt';
+	my $sth = $taxonomy->list_opinions($rel, $id_list, $options);
+	$self->sth_result($sth);
+	$self->set_result_count($taxonomy->get_count);
+    }
+    
     # Otherwise, return matching taxa.  If the relationship is 'self' (the
     # default) then just return the list of matches.
     
     elsif ( $rel eq 'self' )
     {
-	my @result = $taxonomy->list_taxa($id_list, $options);
+	my @result = $taxonomy->list_taxa_simple($id_list, $options);
 	$self->{main_result} = \@result;
     }
     
@@ -880,18 +956,18 @@ sub list {
     {
 	$options->{return} = 'list';
 	
-	my ($taxon) = $taxonomy->list_related_taxa('common', $id_list, $options);
+	my ($taxon) = $taxonomy->list_taxa('common', $id_list, $options);
 	$self->single_result($taxon) if $taxon;
     }
     
-    # Otherwise, we just call list_related_taxa and return the result.
+    # Otherwise, we just call list_taxa and return the result.
     
     else
     {
 	$options->{return} = 'stmt';
 	$rel ||= 'self';
 	$DB::single = 1;
-	my $sth = $taxonomy->list_related_taxa($rel, $id_list, $options);
+	my $sth = $taxonomy->list_taxa($rel, $id_list, $options);
 	$self->sth_result($sth) if $sth;
 	$self->set_result_count($taxonomy->get_count);
     }
@@ -1276,7 +1352,18 @@ sub generate_query_options {
     
     my ($self, $operation) = @_;
     
-    my @rawfields = $self->select_list() unless defined $operation && $operation eq 'ref';
+    my @rawfields;
+    
+    if ( defined $operation && $operation eq 'refs' )
+    {
+	@rawfields = ('REF_DATA');
+    }
+    
+    else
+    {
+	@rawfields = $self->select_list();
+    }
+    
     my $limit = $self->result_limit;
     my $offset = $self->result_offset(1);
     
@@ -1403,7 +1490,7 @@ sub auto {
     my $limit = $self->sql_limit_clause(1);
     my $calc = $self->sql_count_clause;
     
-    my $result_field = $DB_FIELD{orig_no} ? 's.synonym_no' : 's.result_no';
+    my $result_field = $DB_FIELD{accepted_no} ? 's.accepted_no' : 's.synonym_no';
     my $match_field = $DB_FIELD{orig_no} ? 's.taxon_no' : 's.match_no';
     
     my $fields = "taxon_rank, $match_field as taxon_no, n_occs, if(spelling_reason = 'misspelling', 1, null) as misspelling";

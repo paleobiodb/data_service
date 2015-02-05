@@ -42,6 +42,8 @@ our (%KINGDOM_ALIAS) = ( 'metazoa' => 'Metazoa', 'animalia' => 'Metazoa', 'iczn'
 
 our ($SQL_STRING);
 
+our ($HAS_SENPAR);
+
 # These need to be synchronized with TaxonTrees.pm, or else moved to a
 # separate file that both modules include.
 
@@ -331,6 +333,10 @@ sub new {
     croak "unknown tree table '$table_name'" unless $TREE_TABLE_ID{$table_name};
     croak "bad database handle" unless ref $dbh;
     
+    # Check for the existence of fields that may have changed.
+    
+    check_senpar($dbh, $table_name) unless defined $HAS_SENPAR;
+    
     my $self = { dbh => $dbh, 
 		 tree_table => $table_name,
 		 auth_table => $AUTH_TABLE{$table_name},
@@ -474,6 +480,31 @@ our ($REF_BASIC_FIELDS) = "r.reference_no, r.author1init as r_ai1, r.author1last
 our(%TAXON_FIELD) = ('lft' => 1, 'rgt' => 1, 'depth' => 1, 'opinion_no' => 1,
 		     'spelling_no' => 1, 'trad_no' => 1,
 		     'synonym_no' => 1, 'parent_no' => 1);
+
+
+
+sub check_senpar {
+    
+    my ($dbh, $table_name) = @_;
+    
+    my $senpar_no;
+    
+    eval {
+	($senpar_no) = $dbh->selectrow_array("SELECT senpar_no FROM $table_name WHERE senpar_no > 0 LIMIT 1");
+    };
+    
+    if ( $senpar_no )
+    {
+	$HAS_SENPAR = 1;
+	$LINK_FIELDS =~ s/parsen_no/senpar_no/;
+    }
+    
+    else
+    {
+	$HAS_SENPAR = 0;
+    }
+}
+
 
 
 =head2 Common options

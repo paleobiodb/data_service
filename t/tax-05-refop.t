@@ -10,7 +10,7 @@ use strict;
 use lib 'lib';
 use lib 't';
 
-use Test::More tests => 11;
+use Test::More tests => 13;
 use Test::Deep;
 use Carp qw(carp croak);
 
@@ -18,6 +18,9 @@ use CoreFunction qw(connectDB configData);
 use Taxonomy;
 
 use Data::Dumper;
+
+use feature 'unicode_strings';
+use feature 'fc';
 
 
 # We turn off warnings for uninitialized variables and non-numeric
@@ -143,7 +146,7 @@ subtest 'list_refs basic calls' => sub {
     unless ( ok( !$@, 'eval OK' ) )
     {
 	diag("message was: $@");
-	BAIL_OUT("basic calls failed");
+	return;
     }
     
     cmp_ok( scalar(@r1), '>', 5, "found references for '$NAME3'" );
@@ -227,8 +230,12 @@ subtest 'limit, offset, count' => sub {
 	}
     };
     
-    ok( !$@, "eval OK" ) or diag("message was: $@");
-    
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+        
     is( scalar(@r1), 10, "simple limit" );
     is( scalar(@r2), 20, "limit with offset" );
     cmp_ok( $r1[8]{reference_no}, '>', 0, "found taxon with limit" );
@@ -249,8 +256,12 @@ subtest 'limit, offset, count' => sub {
 	@w3 = $taxonomy->list_warnings;
     };
     
-    ok( !$@, "non-numeric limits" ) or diag("message was: $@");
-    
+    unless ( ok( !$@, 'eval OK with non-numeric limits' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+        
     is( scalar(@w1), 0, "no warnings for correct call with no options" );
     is( scalar(@w2), 1, "one warning with bad limit" );
     is( scalar(@r2), 0, "no results with bad limit" );
@@ -261,15 +272,20 @@ subtest 'limit, offset, count' => sub {
 
 subtest 'list_refs basic 2' => sub {
     
-    my (@r1, @r2, @r3);
+    my (@r1, @r2, @r3, @r4);
     
     eval {
 	@r1 = $taxonomy->list_refs('all_children', $ID3);
 	@r2 = $taxonomy->list_refs('all_children', $ID3, { min_rank => 5, max_rank => 5 });
 	@r3 = $taxonomy->list_refs('all_children', $ID3, { depth => 1 });
+	@r4 = $taxonomy->list_refs('synonyms', $ID5a, { fields => 'REF_DATA,REF_CRMOD' });
     };
     
-    ok( !$@, "eval OK" ) or diag("message was: $@");
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
     
     my ($rcount, $bad_count);
     
@@ -283,7 +299,7 @@ subtest 'list_refs basic 2' => sub {
 	}
     }
     
-    foreach my $r (@r1, @r2)
+    foreach my $r (@r1, @r2, @r3, @r4)
     {
 	$bad_count++ unless $r->{reference_no} && $r->{r_al1} && $r->{taxon_count};
 	$bad_count++ unless defined $r->{type} && $r->{type} =~ qr{^[AOC,]+$};
@@ -293,6 +309,16 @@ subtest 'list_refs basic 2' => sub {
     cmp_ok(scalar(@r2), '>', 0, "got data with filter");
     cmp_ok(scalar(@r1), '>', scalar(@r2), "filters reduce size of result set");
     cmp_ok( $bad_count || 0, '==', 0, "each record has a proper reference_no, r_al1, taxon_count, and type" );
+    
+    my $bad_dates;
+    
+    foreach my $r (@r4)
+    {
+	$bad_count++ unless $r->{created} =~ qr{^\d\d\d\d-\d\d-\d\d};
+	$bad_count++ unless $r->{modified} =~ qr{^\d\d\d\d-\d\d-\d\d};
+    }
+    
+    cmp_ok( $bad_count || 0, '==', 0, "each record has created and modified dates" );
     
     my (%found2);
     
@@ -327,7 +353,11 @@ subtest 'list_refs select' => sub {
 	@r5 = $taxonomy->list_refs('all_children', $ID1, { select => 'all' });
     };
     
-    ok( !$@, "eval OK" ) or diag("message was: $@");
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
     
     cmp_ok( scalar(@r1), '>', 0, "found refs with 'authority'" );
     cmp_ok( scalar(@r2), '>', 0, "found refs with 'classification'" );
@@ -399,7 +429,11 @@ subtest 'list_refs variants, exact, current' => sub {
 	@r3 = $taxonomy->list_refs('all_children', $ID3, { all_variants => 1, select => 'all' });
     };
     
-    ok( !$@, "eval OK" ) or diag("message was: $@");
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
     
     cmp_deeply( \@r1, \@r2, "same result set from two different variants" );
     
@@ -444,7 +478,11 @@ subtest 'list_refs synonyms, all_parents' => sub {
 	@r4 = $taxonomy->list_refs('synonyms', $ID1, { all_variants => 1 });
     };
     
-    ok( !$@, "eval OK" ) or diag("message was: $@");
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
     
     cmp_deeply( \@r1, \@r2, "same result set from two different synonms" );
     cmp_ok( scalar(@r1), '>', 1, "more than one result with synonyms" );
@@ -462,10 +500,135 @@ subtest 'list_refs synonyms, all_parents' => sub {
 };
 
 
+subtest 'list_refs crmod' => sub {
+    
+    my (@r1, @r2, @r3, @r4, @r5);
+    
+    eval {
+	@r1 = $taxonomy->list_refs('all_children', $ID1, { all_variants => 1, fields => 'REF_DATA,REF_CRMOD' });
+	@r2 = $taxonomy->list_refs('all_children', $ID1, { all_variants => 1, min_ref_created => '2010-06-18' });
+	@r3 = $taxonomy->list_refs('all_children', $ID1, { all_variants => 1, max_ref_created => '2010-06-18' });
+    };
+    
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+    
+    cmp_ok( scalar(@r2), '>', 0, "found results with min_ref_created" );
+    cmp_ok( scalar(@r3), '>', 0, "found results with max_ref_created" );
+    cmp_ok( scalar(@r2) + scalar(@r3), '==', scalar(@r1), "min_ref_created and max_ref_created are complements" );
+    
+    # select the modification date that comes soonest after 2010-01-01
+    
+    my $test_date;
+    
+    foreach my $r (@r1)
+    {
+	next unless $r->{modified} ge '2010';
+	$test_date = $r->{modified} if !defined $test_date || $r->{modified} lt $test_date;
+    }
+    
+    ok( $test_date =~ qr{\d\d\d\d-\d\d-\d\d}, "found an appropriate modification date" ) || return;
+    
+    # make sure that min_op_modified and max_op_modified properly partition
+    # the result set
+    
+    eval {
+	@r4 = $taxonomy->list_refs('all_children', $ID1, { all_variants => 1, min_ref_modified => $test_date });
+	@r5 = $taxonomy->list_refs('all_children', $ID1, { all_variants => 1, max_ref_modified => $test_date });
+    };
+
+    unless ( ok( !$@, 'eval 2 OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+    
+    cmp_ok( scalar(@r4), '>', 0, "found results with min_ref_modified" );
+    cmp_ok( scalar(@r5), '>', 0, "found results with max_ref_modified" );
+    cmp_ok( scalar(@r4) + scalar(@r5), '==', scalar(@r1), "min_ref_modified and max_ref_modified are complements" );
+};
+
+
+subtest 'list_refs order' => sub {
+    
+    my (@t1a, @t1b, @t2a, @t2b, @t2c);
+    my (@t3a, @t3b, @t4a, @t4b, @t5a, @t5b, @t6a, @t6b);
+    my (@t7a, @t7b, @t8a, @t8b, @t9a, @t9b);
+    
+    eval {
+	@t1a = $taxonomy->list_refs('all_children', $ID1, { order => 'author' });
+	@t1b = $taxonomy->list_refs('all_children', $ID1, { order => 'author.desc' });
+	
+	@t2a = $taxonomy->list_refs('synonyms', $ID5a, { order => 'pubyr' });
+	@t2b = $taxonomy->list_refs('synonyms', $ID5a, { order => 'pubyr.asc' });
+	@t2c = $taxonomy->list_refs('synonyms', $ID5a, { order => 'pubyr.desc' });
+
+	@t3a = $taxonomy->list_refs('all_children', $ID1, { order => 'taxon_count' });
+	@t3b = $taxonomy->list_refs('all_children', $ID1, { order => 'taxon_count.asc' });
+	
+	@t4a = $taxonomy->list_refs('all_children', $ID1, { order => 'reftitle' });
+	@t4b = $taxonomy->list_refs('all_children', $ID1, { order => 'reftitle.desc' });
+	
+	@t5a = $taxonomy->list_refs('all_children', $ID1, { order => 'pubtitle' });
+	@t5b = $taxonomy->list_refs('all_children', $ID1, { order => 'pubtitle.desc' });
+	
+	@t6a = $taxonomy->list_refs('all_children', $ID1, { order => 'pubtype' });
+	@t6b = $taxonomy->list_refs('all_children', $ID1, { order => 'pubtype.desc' });
+	
+	@t7a = $taxonomy->list_refs('all_children', $ID1, { order => 'language' });
+	@t7b = $taxonomy->list_refs('all_children', $ID1, { order => 'language.desc' });
+	
+	@t8a = $taxonomy->list_refs('all_children', $ID1, { order => 'created', fields => 'REF_DATA,REF_CRMOD' });
+	@t8b = $taxonomy->list_refs('all_children', $ID1, { order => 'created.asc', fields => 'REF_DATA,REF_CRMOD' });
+	
+	@t9a = $taxonomy->list_refs('all_children', $ID1, { order => 'modified', fields => 'REF_DATA,REF_CRMOD' });
+	@t9b = $taxonomy->list_refs('all_children', $ID1, { order => 'modified.asc', fields => 'REF_DATA,REF_CRMOD' });
+    };
+    
+    unless ( ok( !$@, "exec OK" ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+    
+    check_order($taxonomy, \@t1a, 'r_al1', 'str', 'asc') or fail('order author default');
+    check_order($taxonomy, \@t1b, 'r_al1', 'str', 'desc') or fail('order author desc');
+    
+    check_order($taxonomy, \@t2a, 'r_pubyr', 'num', 'asc') or fail('order pubyr default');
+    check_order($taxonomy, \@t2b, 'r_pubyr', 'num', 'asc') or fail('order pubyr asc');
+    check_order($taxonomy, \@t2c, 'r_pubyr', 'num', 'desc') or fail('order pubyr desc');
+    
+    check_order($taxonomy, \@t3a, 'taxon_count', 'num', 'desc') or fail('order taxon_count default');
+    check_order($taxonomy, \@t3b, 'taxon_count', 'num', 'asc') or fail('order taxon_count asc');
+    
+    check_order($taxonomy, \@t4a, 'r_reftitle', 'str', 'asc') or fail('order reftitle default');
+    check_order($taxonomy, \@t4b, 'r_reftitle', 'str', 'desc') or fail('order reftitle desc');
+    
+    check_order($taxonomy, \@t5a, 'r_pubtitle', 'str', 'asc') or fail('order pubtitle default');
+    check_order($taxonomy, \@t5b, 'r_pubtitle', 'str', 'desc') or fail('order pubtitle desc');
+    
+    check_order($taxonomy, \@t6a, 'r_pubtype', 'str', 'asc') or fail('order pubtype default');
+    check_order($taxonomy, \@t6b, 'r_pubtype', 'str', 'desc') or fail('order pubtype desc');
+    
+    check_order($taxonomy, \@t7a, 'r_language', 'str', 'asc') or fail('order language default');
+    check_order($taxonomy, \@t7b, 'r_language', 'str', 'desc') or fail('order language desc');
+    
+    check_order($taxonomy, \@t8a, 'created', 'str', 'desc') or fail('order created default');
+    check_order($taxonomy, \@t8b, 'created', 'str', 'asc') or fail('order created asc');
+    
+    check_order($taxonomy, \@t9a, 'modified', 'str', 'desc') or fail('order modified default');
+    check_order($taxonomy, \@t9b, 'modified', 'str', 'asc') or fail('order modified asc');
+    
+};
+
+
 subtest 'refs_taxa' => sub {
     
     my (@r1, @t1, @r2, @t2, @r3, @t3, @r4, @t4);
-    my (@r5, @t5, @r6, @t6, @r7, @t7, @r8, @t8, @r9, @t9, @r10, @t10);
+    my (@r5, @t5, @r6, @t6, @r7, @t7, @r8, @t8, @r9, @t9, @r10, @t10, @r11, @t11);
     
     eval {
 	@r1 = $taxonomy->list_refs('all_children', $ID1, { min_rank => 5, max_rank => 5 });
@@ -497,6 +660,9 @@ subtest 'refs_taxa' => sub {
 	
 	@r10 = $taxonomy->list_refs('all_children', $ID1, { all_variants => 1, depth => 2 });
 	@t10 = $taxonomy->refs_taxa('all_children', $ID1, { all_variants => 1, depth => 2 });
+	
+	@r11 = $taxonomy->list_refs('all_children', $ID1, { status => 'invalid', select => 'classification' });
+	@t11 = $taxonomy->refs_taxa('all_children', $ID1, { status => 'invalid', select => 'classification' });
     };
     
     unless ( ok( !$@, "eval OK" ) )
@@ -572,9 +738,15 @@ subtest 'refs_taxa' => sub {
     cmp_ok( scalar(keys %t10refno), '>', 0, "got data with exact" );
     cmp_deeply( \%r10refno, \%t10refno, "refs_taxa matches list_refs with exact" );
     
+    my %r11refno = extract_field('reference_no', @r11);
+    my %t11refno = extract_field('reference_no', @t11);
+    
+    cmp_ok( scalar(keys %t11refno), '>', 0, "got data with exact" );
+    cmp_deeply( \%r11refno, \%t11refno, "refs_taxa matches list_refs with exact" );
+    
     my ($bad_count, $bad_t);
     
-    foreach my $t (@t1, @t2, @t3, @t4, @t5, @t6, @t7, @t8, @t9, @t10)
+    foreach my $t (@t1, @t2, @t3, @t4, @t5, @t6, @t7, @t8, @t9, @t10, @t11)
     {
 	my $bad;
 	
@@ -593,8 +765,13 @@ subtest 'refs_taxa' => sub {
 	or diag Data::Dumper::Dumper($bad_t);
 };
 
+# $$$$ still need to test refs_taxa order, return => stmt, return => listref,
+# etc.  Also order.
 
-subtest 'list_opinions' => sub {
+# $$$$ still need to test return => id, return => stmt, return => listref,
+# etc.  Also order.
+
+subtest 'list_opinions basic' => sub {
     
     my (@o1, @o1a, @o1b, @o2, @o3);
     
@@ -605,7 +782,11 @@ subtest 'list_opinions' => sub {
 	@o2 = $taxonomy->list_opinions('all_children', $ID1, { max_rank => 3 });
     };
     
-    ok( !$@, "eval OK" ) or diag("message was: $@");
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
     
     cmp_deeply( \@o1, \@o1b, "default value for select is classification" );
     
@@ -646,217 +827,70 @@ subtest 'list_opinions' => sub {
 		   'objective synonym of', '1', 'subjective synonym of', '1', 'replaced by', '1' );
     my %test2 = ( 'nomen dubium', '1', 'nomen nudum', '1', 'belongs to', '1', 'subjective synonym of', '1' );
     
-    cmp_deeply( \%status1, superhashof(\%test1), "status codes for classification" );
-    cmp_deeply( \%status1a, superhashof(\%test1a), "status codes for classification" );
-    cmp_deeply( \%status2, superhashof(\%test2), "status codes for classification" );
+    cmp_deeply( \%status1, superhashof(\%test1), "status codes for classification 1" );
+    cmp_deeply( \%status1a, superhashof(\%test1a), "status codes for classification 1a" );
+    cmp_deeply( \%status2, superhashof(\%test2), "status codes for classification 2" );
     
     my %spt1 = ( 'recombination', '1', 'rank change', '1', 'misspelling', '1', 'original spelling', '1' );
     my %spt1a = ( 'correction', '1', 'recombination', '1', 'rank change', '1', 'misspelling', '1', 'original spelling', '1' );
     my %spt2 = ( 'recombination', '1', 'misspelling', '1', 'original spelling', '1' );
     
-    cmp_deeply( \%spelling1, superhashof(\%spt1), "status codes for classification" );
-    cmp_deeply( \%spelling1a, superhashof(\%spt1a), "status codes for classification" );
-    cmp_deeply( \%spelling2, superhashof(\%spt2), "status codes for classification" );
+    cmp_deeply( \%spelling1, superhashof(\%spt1), "spelling codes for classification 1" );
+    cmp_deeply( \%spelling1a, superhashof(\%spt1a), "spelling codes for classification 1a" );
+    cmp_deeply( \%spelling2, superhashof(\%spt2), "spelling codes for classification 2" );
 };
 
 
-subtest 'fields' => sub {
+subtest 'list_opinions crmod' => sub {
+
+    my (@o1, @o2, @o3, @o4, @o5);
     
-    ok(1, "placeholder");
+    eval {
+	@o1 = $taxonomy->list_opinions('synonyms', $ID1, { select => 'all', fields => 'OP_DATA,OP_CRMOD' });
+	@o2 = $taxonomy->list_opinions('synonyms', $ID1, { select => 'all', min_op_created => '2010-06-18' });
+	@o3 = $taxonomy->list_opinions('synonyms', $ID1, { select => 'all', max_op_created => '2010-06-18' });
+    };
+    
+    unless ( ok( !$@, 'eval OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+    
+    cmp_ok( scalar(@o2), '>', 0, "found results with min_op_created" );
+    cmp_ok( scalar(@o3), '>', 0, "found results with max_op_created" );
+    cmp_ok( scalar(@o2) + scalar(@o3), '==', scalar(@o1), "min_op_created and max_op_created are complements" );
+    
+    # select the modification date that comes soonest after 2010-01-01
+    
+    my $test_date;
+    
+    foreach my $o (@o1)
+    {
+	next unless $o->{modified} ge '2010';
+	$test_date = $o->{modified} if !defined $test_date || $o->{modified} lt $test_date;
+    }
+    
+    ok( $test_date =~ qr{\d\d\d\d-\d\d-\d\d}, "found an appropriate modification date" ) || return;
+    
+    # make sure that min_op_modified and max_op_modified properly partition
+    # the result set
+    
+    eval {
+	@o4 = $taxonomy->list_opinions('synonyms', $ID1, { select => 'all', min_op_modified => $test_date });
+	@o5 = $taxonomy->list_opinions('synonyms', $ID1, { select => 'all', max_op_modified => $test_date });
+    };
+
+    unless ( ok( !$@, 'eval 2 OK' ) )
+    {
+	diag("message was: $@");
+	return;
+    }
+    
+    cmp_ok( scalar(@o4), '>', 0, "found results with min_op_modified" );
+    cmp_ok( scalar(@o5), '>', 0, "found results with max_op_modified" );
+    cmp_ok( scalar(@o4) + scalar(@o5), '==', scalar(@o1), "min_op_modified and max_op_modified are complements" );
 };
-
-
-# subtest 'rank, extant, status' => sub {
-    
-#     my (@t0, @t1, @t2, @t3, @t3a, @t4, @t5, @t6, @t7);
-    
-#     eval {
-# 	@t0 = $taxonomy->list_refs('all_children', $ID1);
-# 	@t1 = $taxonomy->list_refs('all_children', $ID1, { min_rank => 5, max_rank => 8 });
-# 	@t2 = $taxonomy->list_refs('all_children', $ID1, { status => 'invalid' });
-# 	@t3 = $taxonomy->list_refs('all_children', $ID1, { min_rank => 5, status => 'invalid' });
-# 	@t3a = $taxonomy->list_refs('all_children', $ID1, { max_rank => 4, status => 'invalid' });
-# 	@t4 = $taxonomy->list_refs('all_children', $ID1, { status => 'valid' });
-# 	@t5 = $taxonomy->list_refs('all_children', $ID1, { status => 'junior' });
-# 	@t6 = $taxonomy->list_refs('all_children', $ID1, { status => 'senior' });
-# 	@t7 = $taxonomy->list_refs('all_children', $ID1, { status => 'all' });
-#     };
-    
-#     ok( !$@, "list_refs: rank, status" ) or diag("message was: $@");
-    
-#     ok( scalar(@t0), "not empty with no filters" );
-#     ok( scalar(@t1), "not empty with rank filter" );
-#     ok( scalar(@t2), "not empty with status invalid" );
-#     ok( scalar(@t3), "not empty with rank and status filters" );
-#     ok( scalar(@t3a), "not empty with rank and status filters 2" );
-#     ok( scalar(@t4), "not empty with status valid" );
-#     ok( scalar(@t5), "not empty with status junior" );
-#     ok( scalar(@t6), "not empty with status senior" );
-#     is( scalar(@t7), scalar(@t0), "status all gives same result as no status filter" );
-    
-#     cmp_ok( scalar(@t1), '<', scalar(@t0), "fewer taxa with rank filter" );
-#     cmp_ok( scalar(@t2), '<', scalar(@t0), "fewer taxa with status filter" );
-#     is( scalar(@t3) + scalar(@t3a), scalar(@t2), "disjoint sets with rank filter" );
-#     is( scalar(@t2) + scalar(@t4), scalar(@t0), "disjoint sets with status invalid/valid" );
-#     is( scalar(@t5) + scalar(@t6), scalar(@t4), "disjoint sets with status junior/senior" );
-    
-#     my ($min1, $max1, %status2, %status4);
-    
-#     my $NOM = 'nomen dubium';
-#     my $BEL = 'belongs to';
-#     my $SUB = 'subjective synonym of';
-    
-#     foreach my $t (@t1)
-#     {
-# 	$max1 = $t->{taxon_rank} if !defined $max1 || $t->{taxon_rank} > $max1;
-# 	$min1 = $t->{taxon_rank} if !defined $min1 || $t->{taxon_rank} < $min1;
-#     }
-    
-#     is( $max1, 8, "max rank with restriction" );
-#     is( $min1, 5, "min rank with restriction" );
-    
-#     foreach my $t (@t2)
-#     {
-# 	$status2{$t->{status}} = 1;
-#     }
-    
-#     ok( $status2{$NOM}, "found status '$NOM' with 'invalid'" );
-#     ok( !$status2{$BEL}, "no status '$BEL' with 'invalid'" );
-#     ok( !$status2{$SUB}, "no status '$SUB' with 'invalid'" );
-    
-#     foreach my $t (@t4)
-#     {
-# 	$status4{$t->{status}} = 1;
-#     }
-    
-#     ok( $status4{$BEL}, "found status '$BEL' with 'valid'" );
-#     ok( $status4{$SUB}, "found status '$SUB' with 'valid'" );
-#     ok( !$status4{$NOM}, "no status '$NOM' with 'valid'" );
-# };
-
-
-# subtest 'order' => sub {
-    
-#     my (@t1a, @t1b, @t2a, @t2b, @t2c);
-#     my (@t3a, @t3b, @t4a, @t4b, @t5a, @t5b, @t6a, @t6b);
-    
-#     eval {
-# 	@t1a = $taxonomy->list_refs('all_children', $ID1, { order => 'hierarchy', fields => 'RANGE' });
-# 	@t1b = $taxonomy->list_refs('all_children', $ID1, { order => 'hierarchy.desc', fields => 'RANGE' });
-
-# 	@t2a = $taxonomy->list_refs('synonyms', $ID9a, { order => 'name' });
-# 	@t2b = $taxonomy->list_refs('synonyms', $ID9a, { order => 'name.asc' });
-# 	@t2c = $taxonomy->list_refs('synonyms', $ID9a, { order => 'name.desc' });
-
-# 	@t3a = $taxonomy->list_refs('all_children', $ID1, { order => 'n_occs', fields => 'DATA' });
-# 	@t3b = $taxonomy->list_refs('all_children', $ID1, { order => 'n_occs.asc', fields => 'DATA' });
-	
-# 	@t4a = $taxonomy->list_refs('all_children', $ID1, { order => 'firstapp', fields => 'SIMPLE,APP' });
-# 	@t4b = $taxonomy->list_refs('all_children', $ID1, { order => 'firstapp.asc', fields => 'SIMPLE,APP' });
-	
-# 	@t5a = $taxonomy->list_refs('all_children', $ID1, { order => 'lastapp', fields => 'SIMPLE,APP' });
-# 	@t5b = $taxonomy->list_refs('all_children', $ID1, { order => 'lastapp.asc', fields => 'APP' });
-	
-# 	@t6a = $taxonomy->list_refs('all_children', $ID1, { order => 'agespan', fields => 'SIMPLE,APP' });
-# 	@t6b = $taxonomy->list_refs('all_children', $ID1, { order => 'agespan.desc', fields => 'APP' });
-#     };
-    
-#     ok( !$@, "list_refs: order exec OK" ) or diag("message was: $@");
-    
-#     check_order($taxonomy, \@t1a, 'lft', 'num', 'asc') or fail('order hierarchy default');
-#     check_order($taxonomy, \@t1b, 'lft', 'num', 'desc') or fail('order hierarchy desc');
-
-#     check_order($taxonomy, \@t2a, 'taxon_name', 'str', 'asc') or fail('order name default');
-#     check_order($taxonomy, \@t2b, 'taxon_name', 'str', 'asc') or fail('order name asc');
-#     check_order($taxonomy, \@t2c, 'taxon_name', 'str', 'desc') or fail('order name desc');
-    
-#     check_order($taxonomy, \@t3a, 'n_occs', 'num', 'desc') or fail('order n_occs default');
-#     check_order($taxonomy, \@t3b, 'n_occs', 'num', 'asc') or fail('order n_occs asc');
-    
-#     check_order($taxonomy, \@t4a, 'firstapp_ea', 'num', 'desc') or fail('order firstapp default');
-#     check_order($taxonomy, \@t4b, 'firstapp_ea', 'num', 'asc') or fail('order firstapp asc');
-    
-#     check_order($taxonomy, \@t5a, 'lastapp_la', 'num', 'desc') or fail('order lastapp default');
-#     check_order($taxonomy, \@t5b, 'lastapp_la', 'num', 'asc') or fail('order lastapp asc');
-    
-#     foreach my $t (@t6a, @t6b)
-#     {
-# 	$t->{agespan} = int($t->{firstapp_ea} - $t->{lastapp_la} + 0.1)
-# 	    if defined $t->{firstapp_ea};
-#     }
-    
-#     check_order($taxonomy, \@t6a, 'agespan', 'num', 'asc') or fail('order agespan default');
-#     check_order($taxonomy, \@t6b, 'agespan', 'num', 'desc') or fail('order agespan desc');
-    
-#     my (@t7a, @t7b, @t7c);
-#     my (@t8a, @t8b);
-#     my (@t9a, @t9b, @t10a, @t10b);
-    
-#     eval {
-# 	@t7a = $taxonomy->list_refs('synonyms', $ID9a, { order => 'pubyr', fields => 'SIMPLE,ATTR' });
-# 	@t7b = $taxonomy->list_refs('synonyms', $ID9a, { order => 'pubyr.asc', fields => 'SIMPLE, ATTR'});
-# 	@t7c = $taxonomy->list_refs('synonyms', $ID9a, { order => 'pubyr.desc', fields => 'SIMPLE ,ATTR'});
-	
-# 	@t8a = $taxonomy->list_refs('synonyms', $ID9a, { order => 'author', fields => 'SIMPLE,ATTR' });
-# 	@t8b = $taxonomy->list_refs('synonyms', $ID9a, { order => 'author.desc', fields => 'SIMPLE, ATTR'});
-	
-# 	@t9a = $taxonomy->list_refs('synonyms', $ID9a, { order => 'created', fields => 'SIMPLE,CRMOD' });
-# 	@t9b = $taxonomy->list_refs('synonyms', $ID9a, { order => 'created.asc', fields => 'SIMPLE,CRMOD'});
-	
-# 	@t10a = $taxonomy->list_refs('synonyms', $ID9a, { order => 'modified', fields => 'SIMPLE,CRMOD' });
-# 	@t10b = $taxonomy->list_refs('synonyms', $ID9a, { order => 'modified.asc', fields => 'SIMPLE,CRMOD'});
-#     };
-    
-#     ok( !$@, "list_refs: order 2 exec OK" ) or diag("message was: $@");
-    
-#     check_order($taxonomy, \@t7a, 'pubyr', 'num', 'asc') or fail('order pubyr default');
-#     check_order($taxonomy, \@t7b, 'pubyr', 'num', 'asc') or fail('order pubyr asc');
-#     check_order($taxonomy, \@t7c, 'pubyr', 'num', 'desc') or fail('order pubyr desc');
-    
-#     foreach my $t (@t8a, @t8b)
-#     {
-# 	if ( defined $t->{attribution} )
-# 	{
-# 	    my $attr = $t->{attribution};
-# 	    $attr =~ s/[()]//g;
-# 	    $attr =~ s/\s+\d+$//;
-# 	    $t->{author} = $attr;
-# 	}
-#     }
-    
-#     check_order($taxonomy, \@t8a, 'author', 'str', 'asc') or fail('order author default');
-#     check_order($taxonomy, \@t8b, 'author', 'str', 'desc') or fail('order author desc');
-    
-#     check_order($taxonomy, \@t9a, 'created', 'str', 'desc') or fail('order created default');
-#     check_order($taxonomy, \@t9b, 'created', 'str', 'asc') or fail('order created asc');
-    
-#     check_order($taxonomy, \@t10a, 'modified', 'str', 'desc') or fail('order modified default');
-#     check_order($taxonomy, \@t10b, 'modified', 'str', 'asc') or fail('order modified desc');
-    
-#     my (@t11a, @t11b, @t12a, @t12b, @t13a, @t13b);
-    
-#     eval {
-# 	@t11a = $taxonomy->list_refs('synonyms', $ID9b, { order => 'size', fields => 'SIMPLE,SIZE' });
-# 	@t11b = $taxonomy->list_refs('synonyms', $ID9b, { order => 'size.asc', fields => 'SIMPLE,SIZE'});
-	
-# 	@t12a = $taxonomy->list_refs('synonyms', $ID9b, { order => 'extsize', fields => 'SIMPLE,SIZE' });
-# 	@t12b = $taxonomy->list_refs('synonyms', $ID9b, { order => 'extsize.asc', fields => 'SIMPLE,SIZE'});
-	
-# 	@t13a = $taxonomy->list_refs('synonyms', $ID9b, { order => 'extant', fields => 'DATA' });
-# 	@t13b = $taxonomy->list_refs('synonyms', $ID9b, { order => 'extant.asc', fields => 'DATA'});
-#     };
-    
-#     ok( !$@, "list_refs: order 3 exec OK" ) or diag("message was: $@");
-    
-#     check_order($taxonomy, \@t11a, 'taxon_size', 'num', 'desc') or fail('order size default');
-#     check_order($taxonomy, \@t11b, 'taxon_size', 'num', 'asc') or fail('order size desc');
-
-#     check_order($taxonomy, \@t12a, 'extant_size', 'num', 'desc') or fail('order extsize default');
-#     check_order($taxonomy, \@t12b, 'extant_size', 'num', 'asc') or fail('order extsize desc');
-    
-#     check_order($taxonomy, \@t13a, 'is_extant', 'num', 'desc') or fail('order extant default');
-#     check_order($taxonomy, \@t13b, 'is_extant', 'num', 'asc') or fail('order extant desc');
-# };
 
 
 sub check_order {
@@ -865,10 +899,14 @@ sub check_order {
     
     my $last;
     my $index = -1;
+    my $violations = 0;
+    my $bad_index = 0;
+    my $bad_key = '';
     
     foreach my $t ( @$result )
     {
 	$index++;
+	my $key = $t->{taxon_no} || $t->{orig_no} || $t->{reference_no};
 	
 	# Skip nulls
 	
@@ -890,7 +928,7 @@ sub check_order {
 	    {
 		unless ( $t->{$field} >= $last )
 		{
-		    print STDERR "check_order: violated at ($index) orig_no = $t->{orig_no}";
+		    print STDERR "check_order: violated at ($index) key = $key";
 		    return 0;
 		}
 	    }
@@ -899,7 +937,7 @@ sub check_order {
 	    {
 		unless ( $t->{$field} <= $last )
 		{
-		    print STDERR "check_order: violated at ($index) orig_no = $t->{orig_no}";
+		    print STDERR "check_order: violated at ($index) key = $key";
 		    return 0;
 		}
 	    }
@@ -916,19 +954,29 @@ sub check_order {
 	{
 	    if ( $dir eq 'asc' )
 	    {
-		unless ( $t->{$field} ge $last )
+		unless ( fc($t->{$field}) ge fc($last) )
 		{
-		    print STDERR "check_order: violated at ($index) orig_no = $t->{orig_no}";
-		    return 0;
+		    $violations++;
+		    unless ( $bad_index )
+		    {
+			$bad_index = $index; $bad_key = $key;
+		    }
+		    # print STDERR "check_order: violated at ($index) key = $key";
+		    # return 0;
 		}
 	    }
 	    
 	    elsif ( $dir eq 'desc' )
 	    {
-		unless ( $t->{$field} le $last )
+		unless ( fc($t->{$field}) le fc($last) )
 		{
-		    print STDERR "check_order: violated at ($index) orig_no = $t->{orig_no}";
-		    return 0;
+		    $violations++;
+		    unless ( $bad_index )
+		    {
+			$bad_index = $index; $bad_key = $key;
+		    }
+		    # print STDERR "check_order: violated at ($index) key = $key";
+		    # return 0;
 		}
 	    }
 	    
@@ -946,7 +994,13 @@ sub check_order {
 	}
     }
     
-    if ( defined $last )
+    if ( $violations > 2 )
+    {
+	print STDERR "check_order: $violations violations, first at ($bad_index) key = $bad_key";
+	return 0;
+    }
+    
+    elsif ( defined $last )
     {
 	return 1;
     }

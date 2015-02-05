@@ -1351,7 +1351,7 @@ sub generateJoinList {
 	if $tables->{oc};
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
 	if $tables->{t} || $tables->{tv} || $tables->{tf};
-    $join_list .= "LEFT JOIN taxon_trees as tv on tv.orig_no = t.valid_no\n"
+    $join_list .= "LEFT JOIN taxon_trees as tv on tv.orig_no = t.accepted_no\n"
 	if $tables->{tv};
     $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = $t.orig_no\n"
 	if $tables->{pl};

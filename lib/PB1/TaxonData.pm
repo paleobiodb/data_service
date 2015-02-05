@@ -592,6 +592,7 @@ sub initialize {
 	$DB_FIELD{common} = 1 if exists $record->{common};
 	$DB_FIELD{orig_no} = 1 if exists $record->{orig_no};
 	$DB_FIELD{is_current} = 1 if exists $record->{is_current};
+	$DB_FIELD{accepted_no} = 1 if exists $record->{accepted_no};
     }
 }
 
@@ -1362,7 +1363,7 @@ sub auto {
     my $limit = $self->sql_limit_clause(1);
     my $calc = $self->sql_count_clause;
     
-    my $result_field = $DB_FIELD{orig_no} ? 's.synonym_no' : 's.result_no';
+    my $result_field = $DB_FIELD{accepted_no} ? 's.accepted_no' : 's.synonym_no';
     my $match_field = $DB_FIELD{orig_no} ? 's.taxon_no' : 's.match_no';
     
     my $fields = "taxon_rank, $match_field as taxon_no, n_occs, if(spelling_reason = 'misspelling', 1, null) as misspelling";

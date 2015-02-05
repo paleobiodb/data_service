@@ -1,3 +1,4 @@
+# -*- mode: CPerl -*-
 # 
 # PBDB 1.1
 # --------
@@ -90,7 +91,7 @@ my $t1t = { 'taxon_name' => $TEST_NAME_1,
 my $t1t_num = { 'taxon_no' => 1, 'orig_no' => 1, 'senpar_no' => 1,
 		'reference_no' => 1, 'is_extant' => 1,
 		"firstapp_ea" => 1, "firstapp_la" => 1, "lastapp_ea" => 1,
-		"lastapp_la" => 1, "size" =>1, "extant_size" => 1 };
+		"lastapp_la" => 1, "taxon_size" =>1, "extant_size" => 1 };
 
 # Then the fields and values to expect as a result of the 'datainfo' parameter.
 
@@ -439,22 +440,22 @@ subtest 'list common ancestor' => sub {
 
 subtest 'list status' => sub {
 
-    my $all_resp = $T->fetch_url("/data1.2/taxa/list.json?base_name=$TEST_NAME_5&status=all",
+    my $all_resp = $T->fetch_url("/data1.2/taxa/list.json?base_name=$TEST_NAME_6&status=all",
 				 "list status all request OK") || return;
     
     my $all_count = $T->extract_records($all_resp, "list status all extract records") || return;
     
-    my $valid_resp = $T->fetch_url("data1.2/taxa/list.json?base_name=$TEST_NAME_5&status=valid",
+    my $valid_resp = $T->fetch_url("data1.2/taxa/list.json?base_name=$TEST_NAME_6&status=valid",
 				   "list status valid request OK") || return;
     
     my $valid_count = $T->extract_records($valid_resp, "list status valid extract records") || return;
     
-    my $invalid_resp = $T->fetch_url("/data1.2/taxa/list.json?base_name=$TEST_NAME_5&status=invalid",
+    my $invalid_resp = $T->fetch_url("/data1.2/taxa/list.json?base_name=$TEST_NAME_6&status=invalid",
 				     "list status invalid request OK") || return;
     
     my $invalid_count = $T->extract_records($invalid_resp, "list status invalid extract records") || return;
     
-    my $senior_resp = $T->fetch_url("/data1.2/taxa/list.json?base_name=$TEST_NAME_5&status=senior",
+    my $senior_resp = $T->fetch_url("/data1.2/taxa/list.json?base_name=$TEST_NAME_6&status=senior",
 				    "list status senior request OK") || return;
     
     my $senior_count = $T->extract_records($senior_resp, "list status senior extract records") || return;
@@ -465,7 +466,7 @@ subtest 'list status' => sub {
     my %status = $T->scan_records($all_resp, 'sta', 'list status all scan status codes');
     
     ok($status{'belongs to'} && $status{'subjective synonym of'} &&
-       $status{'replaced by'}, 'list status all returns a selection of status codes');
+       $status{'nomen dubium'}, 'list status all returns a selection of status codes');
 };
 
 

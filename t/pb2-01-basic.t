@@ -58,7 +58,7 @@ subtest 'config.json' => sub {
 
     bail_on_fail;
     
-    my $config_json = $T->fetch_url("/data1.2/config.json?show=all&count", "config.json fetch");
+    my $config_json = $T->fetch_url("/data1.2/config.json?show=all&rowcount", "config.json fetch");
     
     restore_fail;
     
@@ -112,7 +112,7 @@ subtest 'config.json' => sub {
 
 subtest 'config.txt' => sub {
 
-    my $config_txt = $T->fetch_url("/data1.2/config.txt?show=all&count", "config.txt fetch");
+    my $config_txt = $T->fetch_url("/data1.2/config.txt?show=all&rowcount", "config.txt fetch");
     
     unless ( $config_txt )
     {
@@ -192,7 +192,7 @@ subtest 'config.txt' => sub {
 
 subtest 'config.csv' => sub {
     
-    my $config_csv = $T->fetch_url("/data1.2/config.csv?show=all&count", "config.csv fetch");
+    my $config_csv = $T->fetch_url("/data1.2/config.csv?show=all&rowcount", "config.csv fetch");
     
     unless ( $config_csv )
     {
@@ -272,7 +272,7 @@ subtest 'config.csv' => sub {
 
 subtest 'config.tsv' => sub {
     
-    my $config_tsv = $T->fetch_url("/data1.2/config.tsv?show=all&count", "config.tsv fetch");
+    my $config_tsv = $T->fetch_url("/data1.2/config.tsv?show=all&rowcount", "config.tsv fetch");
     
     unless ( $config_tsv )
     {
@@ -352,7 +352,7 @@ subtest 'config.tsv' => sub {
 
 subtest 'config.foo' => sub {
     
-    my $config_bad = $T->fetch_nocheck("/data1.2/config.foo?show=all&count", "config.foo fetch");
+    my $config_bad = $T->fetch_nocheck("/data1.2/config.foo?show=all&rowcount", "config.foo fetch");
     
     unless ( $config_bad )
     {
