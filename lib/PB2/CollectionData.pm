@@ -1939,7 +1939,7 @@ sub generateMainFilters {
     if ( defined $early_age or defined $late_age )
     {
 	unless ( ($op eq 'summary' and not $tables_ref->{non_geo_filter} and $time_rule eq 'buffer') or
-	         $tables_ref->{ds} )
+	         $tables_ref->{ds} or $op eq 'prevalence' )
 	{
 	    $tables_ref->{c} = 1;
 	    

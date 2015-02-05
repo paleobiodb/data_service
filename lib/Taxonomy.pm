@@ -389,6 +389,8 @@ sub list_taxa {
     my $tables = {};
     my $group_expr = 't.orig_no';
     
+    $rel = 'current' if $rel eq 'self';
+    
     if ( $options->{all_variants} || $rel eq 'variants' )
     {
 	$tables->{all_a} = 1; $tables->{use_a} = 1;
@@ -990,6 +992,8 @@ sub list_refs {
     my $op_cache = $taxonomy->{OP_CACHE};
     
     my $taxon_field = 't.orig_no';
+    
+    $rel = 'current' if $rel eq 'self';
     
     if ( $options->{all_variants} )
     {

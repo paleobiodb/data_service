@@ -1385,6 +1385,7 @@ sub generate_query_options {
     my $extant = $self->clean_param('extant');
     my $rank = $self->clean_param('rank');
     my $status = $self->clean_param('status');
+    my $select = $self->clean_param('select');
     
     $options->{extant} = $extant if $extant ne '';	# $extant may be 0, 1, or undefined
     $options->{status} = $status if $status ne '';
@@ -1409,6 +1410,11 @@ sub generate_query_options {
 	    $options->{max_rank} = 1;
 	    $self->add_warning("invalid taxonomic rank '$rank'");
 	}
+    }
+    
+    if ( $select )
+    {
+	$options->{select} = $select;
     }
     
     # If we have any ordering terms, then apply them.
