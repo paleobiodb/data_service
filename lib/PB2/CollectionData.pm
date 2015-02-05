@@ -1950,12 +1950,12 @@ sub generateMainFilters {
 	    {
 		if ( defined $late_age and $late_age > 0 )
 		{
-		    push @filters, "c.late_age >= $late_age";
+		    push @filters, "$mt.late_age >= $late_age";
 		}
 		
 		if ( defined $early_age and $early_age > 0 )
 		{
-		    push @filters, "c.early_age <= $early_age";
+		    push @filters, "$mt.early_age <= $early_age";
 		}
 	    }
 	    
@@ -1963,12 +1963,12 @@ sub generateMainFilters {
 	    {
 		if ( defined $late_age and $late_age > 0 )
 		{
-		    push @filters, "c.early_age > $late_age";
+		    push @filters, "$mt.early_age > $late_age";
 		}
 		
 		if ( defined $early_age and $early_age > 0 )
 		{
-		    push @filters, "c.late_age < $early_age";
+		    push @filters, "$mt.late_age < $early_age";
 		}
 	    }
 	    
@@ -1977,22 +1977,22 @@ sub generateMainFilters {
 		if ( defined $late_age and defined $early_age and 
 		     defined $late_bound and defined $early_bound )
 		{
-		    push @filters, "c.early_age <= $early_bound and c.late_age >= $late_bound";
-		    push @filters, "(c.early_age < $early_bound or c.late_age > $late_bound)";
-		    push @filters, "c.early_age > $late_age";
-		    push @filters, "c.late_age < $early_age";
+		    push @filters, "$mt.early_age <= $early_bound and $mt.late_age >= $late_bound";
+		    push @filters, "($mt.early_age < $early_bound or $mt.late_age > $late_bound)";
+		    push @filters, "$mt.early_age > $late_age";
+		    push @filters, "$mt.late_age < $early_age";
 		}
 		
 		else
 		{
 		    if ( defined $late_age and defined $late_bound )
 		    {
-			push @filters, "c.late_age >= $late_bound and c.early_age > $late_age";
+			push @filters, "$mt.late_age >= $late_bound and $mt.early_age > $late_age";
 		    }
 		    
 		    if ( defined $early_age and defined $early_bound )
 		    {
-			push @filters, "c.early_age <= $early_bound and c.late_age < $early_age";
+			push @filters, "$mt.early_age <= $early_bound and $mt.late_age < $early_age";
 		    }
 		}
 	    }
