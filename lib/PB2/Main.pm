@@ -19,8 +19,6 @@ use PB2::ReferenceData;
 use PB2::PersonData;
 
 {
-    $DB::single = 1;
-    
     # We start by defining a data service instance for version 1.2
     
     our ($ds2) = Web::DataService->new(

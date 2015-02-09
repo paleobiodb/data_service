@@ -204,7 +204,7 @@ sub generate_diversity_matrix {
 	{
 	    $taxon_report{$r->{genus_name}}++;
 	    
-	    if ( $r->{rank} > $options->{count_rank} )
+	    if ( !defined $r->{rank} || $r->{rank} > $options->{count_rank} )
 	    {
 		$imprecise_taxon_count++;
 	    }
@@ -1111,6 +1111,117 @@ sub add_result_records {
 
 
 sub generate_prevalence {
+    
+    my ($request, $result, $limit, $detail) = @_;
+    
+    no warnings 'uninitialized';
+    
+    my (@processed, %exclude);
+    
+    if ( ref $request->{my_base_taxa} eq 'ARRAY' )
+    {
+    A:
+	while ( @processed )
+	{
+	    foreach my $t (@{$request->{my_base_taxa}})
+	    {
+		if ( $processed[0]{lft} <= $t->{lft} && $processed[0]{rgt} >= $t->{rgt} )
+		{
+		    shift @processed;
+		    next A;
+		}
+	    }
+	    
+	    last A;
+	}
+    }
+    
+    # if ( $detail == 2 )
+    # {
+    # 	shift @$result while $result->[0]{rank} > 17;
+    # }
+    
+    # elsif ( $detail == 3 )
+    # {
+    # 	shift @$result while $result->[0]{rank} > 13;
+    # }
+    
+ RECORD:
+    foreach my $r (@$result)
+    {
+	next RECORD if $exclude{$r->{orig_no}};
+	next RECORD if $detail == 2 && $r->{rank} > 17;
+	next RECORD if $detail == 3 && $r->{rank} > 13;
+	
+	foreach my $i (@processed)
+	{
+	    next RECORD if $r->{lft} >= $i->{lft} && $r->{lft} <= $i->{rgt};
+	}
+	
+	push @processed, $r;
+	last if @processed == $limit;
+    }
+    
+    $request->list_result(\@processed);
+}
+
+
+# $$$$ start here !!!
+
+sub generate_prevalence_alt {
+
+    my ($request, $result, $taxonomy, $limit, $detail) = @_;
+    
+    no warnings 'uninitialized';
+    
+    my (%record);
+    
+    foreach my $r (@$result)
+    {
+	if ( $r->{phylum_no} )
+	{
+	    $record{$r->{phylum_no}} ||= { rank => 20 };
+	    $record{$r->{phylum_no}}{n_occs} += $r->{n_occs};
+	}
+	
+	if ( $r->{class_no} )
+	{
+	    $record{$r->{class_no}} ||= { rank => 17 };
+	    $record{$r->{class_no}}{n_occs} += $r->{n_occs};
+	}
+	
+	if ( $r->{order_no} )
+	{
+	    $record{$r->{order_no}} ||= { rank => 13 };
+	    $record{$r->{order_no}}{n_occs} += $r->{n_occs};
+	}
+    }
+    
+    my $dbh = $request->{dbh};
+    
+    my $orig_nos = join(',', keys %record);
+    
+    my $sql = "
+	SELECT orig_no, name, lft, rgt FROM $taxonomy->{TREE_TABLE}
+	WHERE orig_no in ($orig_nos)";
+    
+    my $data = $dbh->selectall_arrayref($sql, { Slice => { } });
+    
+    foreach my $d (@$data)
+    {
+	$record{$d->{orig_no}}{name} = $d->{name};
+	$record{$d->{orig_no}}{lft} = $d->{lft};
+	$record{$d->{orig_no}}{rgt} = $d->{rgt};
+    }
+    
+    my @keys = sort { $record{$b}{n_occs} <=> $record{$a}{n_occs} } keys %record;
+    my @records = map { $record{$_} } @keys;
+    
+    return $request->generate_prevalence(\@records, $limit, $detail);
+};
+
+
+sub generate_prevalence_old {
     
     my ($request, $sth, $tree_table) = @_;
     

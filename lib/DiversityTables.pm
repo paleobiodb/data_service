@@ -54,8 +54,7 @@ sub buildDiversityTables {
     $dbh->do("CREATE TABLE $PVL_SUMMARY_WORK (
 		bin_id int unsigned not null,
 		interval_no int unsigned not null,
-		orig_no int unsigned not null,
-		rank tinyint unsigned not null,
+		order_no int unsigned,
 		class_no int unsigned,
 		phylum_no int unsigned,
 		n_occs int unsigned not null) Engine=MyISAM");
@@ -66,45 +65,56 @@ sub buildDiversityTables {
     logMessage(2, "      adding global rows...");
     
     $sql = "
-	INSERT INTO $PVL_SUMMARY_WORK (interval_no, rank, orig_no,
-				       class_no, phylum_no, n_occs)
-	SELECT c.interval_no, 13, order_no, class_no, phylum_no, count(*)
-	FROM $OCC_MATRIX as o JOIN $COLL_INTS as c using (collection_no)
-		JOIN $TREE_TABLE as t using (orig_no)
-		JOIN $INTS_TABLE as ph using (ints_no)
-	WHERE o.latest_ident = 1 and order_no > 0
-	GROUP BY interval_no, order_no";
+	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, order_no, class_no, phylum_no, n_occs)
+	SELECT 0, interval_no, order_no, class_no, phylum_no, count(*)
+    	FROM $OCC_MATRIX as o JOIN $COLL_INTS as c using (collection_no)
+    		JOIN $TREE_TABLE as t using (orig_no)
+    		JOIN $INTS_TABLE as ph using (ints_no)
+    	WHERE o.latest_ident = 1 and (order_no <> 0 or class_no <> 0 or phylum_no <> 0)
+    	GROUP BY interval_no, order_no, class_no, phylum_no";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows for orders.");
+    logMessage(2, "      generated $result rows for worldwide occurrence.");
     
-    $sql = "
-	INSERT INTO $PVL_SUMMARY_WORK (interval_no, rank, orig_no,
-				       phylum_no, n_occs)
-	SELECT c.interval_no, 17, class_no, phylum_no, count(*)
-	FROM $OCC_MATRIX as o JOIN $COLL_INTS as c using (collection_no)
-		JOIN $TREE_TABLE as t using (orig_no)
-		JOIN $INTS_TABLE as ph using (ints_no)
-	WHERE o.latest_ident = 1 and class_no > 0
-	GROUP BY interval_no, class_no";
+    # $sql = "
+    # 	INSERT INTO $PVL_SUMMARY_WORK (interval_no, rank, orig_no, n_occs)
+    # 	SELECT c.interval_no, 13, order_no, count(*)
+    # 	FROM $OCC_MATRIX as o JOIN $COLL_INTS as c using (collection_no)
+    # 		JOIN $TREE_TABLE as t using (orig_no)
+    # 		JOIN $INTS_TABLE as ph using (ints_no)
+    # 	WHERE o.latest_ident = 1 and order_no > 0
+    # 	GROUP BY interval_no, order_no";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows for classes.");
+    # logMessage(2, "      generated $result rows for orders.");
     
-    $sql = "
-	INSERT INTO $PVL_SUMMARY_WORK (interval_no, rank, orig_no, n_occs)
-	SELECT c.interval_no, 20, phylum_no, count(*)
-	FROM $OCC_MATRIX as o JOIN $COLL_INTS as c using (collection_no)
-		JOIN $TREE_TABLE as t using (orig_no)
-		JOIN $INTS_TABLE as ph using (ints_no)
-	WHERE o.latest_ident = 1 and phylum_no > 0
-	GROUP BY interval_no, phylum_no";
+    # $sql = "
+    # 	INSERT INTO $PVL_SUMMARY_WORK (interval_no, rank, orig_no, n_occs)
+    # 	SELECT c.interval_no, 17, class_no, count(*)
+    # 	FROM $OCC_MATRIX as o JOIN $COLL_INTS as c using (collection_no)
+    # 		JOIN $TREE_TABLE as t using (orig_no)
+    # 		JOIN $INTS_TABLE as ph using (ints_no)
+    # 	WHERE o.latest_ident = 1 and class_no > 0
+    # 	GROUP BY interval_no, class_no";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows for phyla.");
+    # logMessage(2, "      generated $result rows for classes.");
+    
+    # $sql = "
+    # 	INSERT INTO $PVL_SUMMARY_WORK (interval_no, rank, orig_no, n_occs)
+    # 	SELECT c.interval_no, 20, phylum_no, count(*)
+    # 	FROM $OCC_MATRIX as o JOIN $COLL_INTS as c using (collection_no)
+    # 		JOIN $TREE_TABLE as t using (orig_no)
+    # 		JOIN $INTS_TABLE as ph using (ints_no)
+    # 	WHERE o.latest_ident = 1 and phylum_no > 0
+    # 	GROUP BY interval_no, phylum_no";
+    
+    # $result = $dbh->do($sql);
+    
+    # logMessage(2, "      generated $result rows for phyla.");
     
     # Now add rows for each separate bin, at the maximum binning level.  If
     # this cannot be determined, assume it is 1.
@@ -117,52 +127,61 @@ sub buildDiversityTables {
     logMessage(2, "      adding rows for geographic bins...");
     
     $sql = "
-    	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, rank,
-    				       orig_no, class_no, phylum_no, n_occs)
-    	SELECT bin_id_$level, interval_no, 13,
-    	       order_no, class_no, phylum_no, count(*)
+    	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, order_no, class_no, phylum_no, n_occs)
+    	SELECT bin_id_$level, interval_no, order_no, class_no, phylum_no, count(*)
     	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 		JOIN $COLL_INTS as i using (collection_no)
     		JOIN $TREE_TABLE as t using (orig_no)
     		JOIN $INTS_TABLE as ph using (ints_no)
-    	WHERE o.latest_ident = 1 and order_no > 0 and bin_id_$level > 0
-    	GROUP BY bin_id_$level, interval_no, order_no";
+    	WHERE o.latest_ident = 1 and bin_id_$level > 0 
+		and (order_no <> 0 or class_no <> 0 or phylum_no <> 0)
+    	GROUP BY bin_id_$level, interval_no, order_no, class_no, phylum_no";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows for orders.");
+    logMessage(2, "      generated $result rows for geographic bins.");
     
-    $sql = "
-    	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, rank,
-    				       orig_no, phylum_no, n_occs)
-    	SELECT bin_id_$level, interval_no, 17,
-    	       class_no, phylum_no, count(*)
-    	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		JOIN $COLL_INTS as i using (collection_no)
-    		JOIN $TREE_TABLE as t using (orig_no)
-    		JOIN $INTS_TABLE as ph using (ints_no)
-    	WHERE o.latest_ident = 1 and class_no > 0 and bin_id_$level > 0
-    	GROUP BY bin_id_$level, interval_no, class_no";
+    # $sql = "
+    # 	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, rank, orig_no, n_occs)
+    # 	SELECT bin_id_$level, interval_no, 13, order_no, count(*)
+    # 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+    # 		JOIN $COLL_INTS as i using (collection_no)
+    # 		JOIN $TREE_TABLE as t using (orig_no)
+    # 		JOIN $INTS_TABLE as ph using (ints_no)
+    # 	WHERE o.latest_ident = 1 and order_no > 0 and bin_id_$level > 0
+    # 	GROUP BY bin_id_$level, interval_no, order_no";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows for classes.");
+    # logMessage(2, "      generated $result rows for orders.");
+    
+    # $sql = "
+    # 	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, rank, orig_no, n_occs)
+    # 	SELECT bin_id_$level, interval_no, 17, class_no, count(*)
+    # 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+    # 		JOIN $COLL_INTS as i using (collection_no)
+    # 		JOIN $TREE_TABLE as t using (orig_no)
+    # 		JOIN $INTS_TABLE as ph using (ints_no)
+    # 	WHERE o.latest_ident = 1 and class_no > 0 and bin_id_$level > 0
+    # 	GROUP BY bin_id_$level, interval_no, class_no";
+    
+    # $result = $dbh->do($sql);
+    
+    # logMessage(2, "      generated $result rows for classes.");
 
-    $sql = "
-    	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, rank,
-    				       orig_no, n_occs)
-    	SELECT bin_id_$level, interval_no, 20,
-    	       phylum_no, count(*)
-    	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
-		JOIN $COLL_INTS as i using (collection_no)
-    		JOIN $TREE_TABLE as t using (orig_no)
-    		JOIN $INTS_TABLE as ph using (ints_no)
-    	WHERE o.latest_ident = 1 and phylum_no > 0 and bin_id_$level > 0
-    	GROUP BY bin_id_$level, interval_no, phylum_no";
+    # $sql = "
+    # 	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, rank, orig_no, n_occs)
+    # 	SELECT bin_id_$level, interval_no, 20, phylum_no, count(*)
+    # 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
+    # 		JOIN $COLL_INTS as i using (collection_no)
+    # 		JOIN $TREE_TABLE as t using (orig_no)
+    # 		JOIN $INTS_TABLE as ph using (ints_no)
+    # 	WHERE o.latest_ident = 1 and phylum_no > 0 and bin_id_$level > 0
+    # 	GROUP BY bin_id_$level, interval_no, phylum_no";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows for phyla.");
+    # logMessage(2, "      generated $result rows for phyla.");
     
     # Then add global rows, with bin_id = 0 and bin_level = 0
     
@@ -170,12 +189,10 @@ sub buildDiversityTables {
     # interval-less counts.
     
     $sql = "
-	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, rank, orig_no, 
-				       class_no, phylum_no, n_occs)
-	SELECT bin_id, 0, rank, orig_no, class_no, phylum_no, sum(n_occs)
+	INSERT INTO $PVL_SUMMARY_WORK (bin_id, interval_no, order_no, class_no, phylum_no, n_occs)
+	SELECT bin_id, 0, order_no, class_no, phylum_no, sum(n_occs)
 	FROM $PVL_SUMMARY_WORK
-	WHERE interval_no in (751, 752, 753)
-	GROUP BY bin_id, orig_no";
+	GROUP BY bin_id, order_no, class_no, phylum_no";
     
     $result = $dbh->do($sql);
     

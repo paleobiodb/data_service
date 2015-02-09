@@ -549,12 +549,13 @@ sub initialize {
 	"^You can also use any of the L<special parameters|node:special> with this request");
     
     $ds->define_ruleset('1.2:occs:prevalence' =>
+	">>You can use the following parameter to select how detailed you wish the result to be:",
+	{ optional => 'detail', valid => POS_VALUE },
+	    "Accepted values for this parameter are 1, 2, and 3.  Higher numbers differentiate",
+	    "the results more finely, displaying lower-level taxa.",
 	">>You can use the following parameters to query for summary clusters by",
 	"a variety of criteria.  Except as noted below, you may use these in any combination.",
     	{ allow => '1.2:main_selector' },
-	">>You can use the following parameter if you wish to retrieve information about",
-	"the summary clusters which contain a specified collection or collections.",
-	"Only the records which match the other parameters that you specify will be returned.",
 	{ allow => '1.2:common:select_crmod' },
 	{ allow => '1.2:common:select_ent' },
 	{ require_any => ['1.2:main_selector',
@@ -1059,17 +1060,60 @@ sub prevalence {
     # Get a database handle by which we can make queries.
     
     my $dbh = $request->get_connection;
-    my $tables = $request->tables_hash;
+    my $taxonomy = $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
+    
+    # my $fields = "p.orig_no, p.rank, t.name, t.lft, t.rgt, v.image_no, sum(p.n_occs) as n_occs";
+    
+    my $fields = "p.order_no, p.class_no, p.phylum_no, sum(p.n_occs) as n_occs, t.lft, t.rgt, v.image_no";
+    
+    my $limit = $request->result_limit || 10;
+    $limit += $request->result_offset;
+    my $raw_limit = $limit * 10;
+    
+    my $detail = $request->clean_param("detail") || 1;
+    $detail = 1 if $detail < 1;
+    $detail = 3 if $detail > 3;
     
     #$request->substitute_select( mt => 'o', cd => 'oc' );
     
     # Construct a list of filter expressions that must be added to the query
-    # in order to select the proper result set.
+    # in order to select the proper result set.  First see if we can generate
+    # a simple (and quick) expression based on the request parameters.
     
-    my @filters = PB2::CollectionData::generateMainFilters($request, 'prevalence', 's', $tables);
-    push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
-    push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
-        
+    my @filters = PB2::CollectionData::generatePrevalenceFilters($request, { });
+    
+    if ( @filters )
+    {
+	my $filter_string = join(' and ', @filters);
+	
+	no warnings 'uninitialized';
+	
+	my $sql = "
+		SELECT $fields
+		FROM $PVL_SUMMARY as p
+		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
+		    JOIN $taxonomy->{ATTRS_TABLE} as v using (orig_no)
+		WHERE $filter_string
+		GROUP BY orig_no
+		ORDER BY n_occs desc LIMIT $raw_limit";
+	
+	print STDERR "$sql\n\n" if $request->debug;
+	
+	my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+	
+	$request->generate_prevalence_alt($result, $limit, $detail);
+	return;
+    }
+    
+    # If the simple filters don't work, we must generate an expression linking
+    # to the summary table.
+    
+    my $tables = { };
+    
+    @filters = $request->generateMainFilters('summary', 's', $tables);
+    push @filters, $request->generate_crmod_filters('o', $tables);
+    push @filters, $request->generate_ent_filters('o', $tables);
+    
     #$request->add_table('oc');
     
     # If we were asked to count rows, modify the query accordingly
@@ -1081,15 +1125,21 @@ sub prevalence {
     # for summary bins, we do so.  Otherwise, we have to go through the entire
     # set of occurrences again.
     
-    if ( $tables->{o} || $tables->{cc} )
+    if ( $tables->{o} || $tables->{cc} || $tables->{c} )
     {
+	$tables = { };
+	
+	@filters = $request->generateMainFilters('list', 'c', $tables);
+	push @filters, $request->generate_crmod_filters('o', $tables);
+	push @filters, $request->generate_ent_filters('o', $tables);
+	
 	my $fields = "ph.phylum_no, ph.class_no, ph.order_no, count(*) as n_occs";
 	
 	$tables->{t} = 1;
 	$tables->{ph} = 1;
 	
 	push @filters, "c.access_level = 0";
-	@filters = grep { $_ !~ qr{^s.interval_no} } @filters;
+	# @filters = grep { $_ !~ qr{^s.interval_no} } @filters;
 	
 	my $filter_string = join(' and ', @filters);
 	
@@ -1103,47 +1153,47 @@ sub prevalence {
 	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
 		$join_list
         WHERE $filter_string
-	GROUP BY ph.phylum_no, ph.class_no, ph.order_no";
+	GROUP BY ph.phylum_no, ph.class_no, ph.order_no
+	ORDER BY n_occs desc
+	LIMIT $raw_limit";
 	
 	print STDERR "$request->{main_sql}\n\n" if $request->debug;
 	
 	# Then prepare and execute the main query.
 	
-	my $sth = $dbh->prepare($request->{main_sql});
-	$sth->execute();
+	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
-	return $request->generate_prevalence($sth, 'taxon_trees');
+	$request->generate_prevalence_alt($result, $taxonomy, $limit, $detail);
+	return;
+	
+	# my $sth = $dbh->prepare($request->{main_sql});
+	# $sth->execute();
+	
+	# return $request->generate_prevalence($sth, 'taxon_trees');
     }
     
     # Summary
     
     else
     {
-	my $fields = "p.orig_no, p.rank, t.name, p.class_no, p.phylum_no, v.image_no, sum(p.n_occs) as n_occs";
-	
 	push @filters, "s.access_level = 0";
-	
 	my $filter_string = join(' and ', @filters);
-	
-	my $TAXON_TREES = 'taxon_trees';
-	my $TAXON_ATTRS = 'taxon_attrs';
-	
-	my $limit_clause = $request->sql_limit_clause(1);
 	
 	my $sql = "
 		SELECT $fields
 		FROM $PVL_SUMMARY as p JOIN $COLL_BINS as s using (bin_id, interval_no)
-			JOIN $TAXON_TREES as t using (orig_no)
-			LEFT JOIN $TAXON_ATTRS as v using (orig_no)
+		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
+		    JOIN $taxonomy->{ATTRS_TABLE} as v using (orig_no)
 		WHERE $filter_string
 		GROUP BY orig_no
-		ORDER BY n_occs desc $limit_clause";
+		ORDER BY n_occs desc LIMIT $raw_limit";
 	
 	print STDERR "$sql\n\n" if $request->debug;
 	
 	my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
 	
-	$request->list_result($result);
+	$request->generate_prevalence_alt($result, $limit, $detail);
+	return;
     }
 }
 

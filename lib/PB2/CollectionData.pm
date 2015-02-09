@@ -1470,7 +1470,7 @@ sub generateMainFilters {
     # If a name was given and no matching taxa were found, we need to query by
     # genus_name/species_name instead.
     
-    elsif ( $taxon_name )
+    elsif ( $taxon_name && $op ne 'prevalence' )
     {
 	my @exact_genera;
 	my @name_clauses;
@@ -1616,7 +1616,7 @@ sub generateMainFilters {
     my $y1 = $self->clean_param('latmin');
     my $y2 = $self->clean_param('latmax');
     
-    if ( $x1 ne '' && $x2 ne '' )
+    if ( $x1 ne '' && $x2 ne '' && ! ( $x1 == -180 && $x2 == 180 ) )
     {
 	$y1 //= -90.0;
 	$y2 //= 90.0;
@@ -1665,7 +1665,7 @@ sub generateMainFilters {
 	}
     }
     
-    elsif ( $y1 ne '' || $y2 ne '' )
+    elsif ( $y1 ne '' || $y2 ne '' && ! ( $y1 == -90 && $y2 == 90 ) )
     {
 	$y1 //= -90;
 	$y2 //= 90;
@@ -1927,7 +1927,7 @@ sub generateMainFilters {
     
     if ( $op eq 'summary' || $op eq 'prevalence' )
     {
-	$summary_interval = '-1' unless $summary_interval =~ qr{^[0-9]+$};
+	$summary_interval = '-1' unless defined $summary_interval && $summary_interval =~ qr{^[0-9]+$};
 	push @filters, "s.interval_no = $summary_interval";
     }
     
@@ -2068,6 +2068,114 @@ sub adjustCoordinates {
     {
 	$$fields_ref =~ s/([a-z]\.lng)/if($1<0,$1$x2_offset,$1$x1_offset) as lng/;
     }
+}
+
+
+# For the 'prevalence' operation, this one should be tried first.  If the only
+# parameters provided are interval and taxon, then we return a simple set of
+# filters that will make an easy query.  Otherwise, we return the empty list
+# which will result in the full filter routine above being called.
+
+sub generatePrevalenceFilters {
+
+    my ($request, $tables_ref) = @_;
+    
+    my $dbh = $request->{dbh};
+    my $taxonomy = $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
+    
+    # If any 'complicated' parameters were specified, return the empty list.
+    
+    my $x1 = $request->clean_param('lngmin');
+    my $x2 = $request->clean_param('lngmax');
+    my $y1 = $request->clean_param('latmin');
+    my $y2 = $request->clean_param('latmax');
+    
+    return () if defined $x1 & $x1 ne '' && $x1 != -180 ||
+	defined $x2 && $x2 ne '' && $x2 != 180 ||
+	    defined $y1 && $y1 ne '' && $y1 != -90 ||
+		defined $y2 && $y2 ne '' && $y2 != 90;
+    
+    return () if $request->clean_param('clust_id') || $request->clean_param('country') ||
+	$request->clean_param('continent') || $request->clean_param('loc') ||
+	    $request->clean_param('plate') || $request->clean_param('formation') ||
+		$request->clean_param('stratgroup') || $request->clean_param('member') || 
+		    $request->clean_param('max_ma') || $request->clean_param('min_ma');
+    
+    # Otherwise, we can proceed to construct a filter list.
+    
+    my @filters = "p.bin_id = 0";
+    
+    my $interval_no = $request->clean_param('interval_id') + 0;
+    my $interval_name = $request->clean_param('interval');
+    
+    if ( $interval_name )
+    {
+	my $quoted_name = $dbh->quote($interval_name);
+	
+	my $sql = "
+		SELECT interval_no FROM $INTERVAL_DATA
+		WHERE interval_name like $quoted_name";
+	
+	($interval_no) = $dbh->selectrow_array($sql);
+	
+	unless ( $interval_no )
+	{
+	    $request->add_warning("unknown time interval '$interval_name'");
+	    $interval_no = -1;
+	}
+    }
+    
+    push @filters, "p.interval_no = $interval_no";
+    
+    my $base_name = $request->clean_param('base_name');
+    my @base_nos = $request->clean_param_list('base_id');
+    my @exclude_nos = $request->clean_param_list('exclude_id');
+    
+    my (@taxa, @includes, @excludes);
+    
+    if ( $base_name )
+    {
+	@taxa = $taxonomy->resolve_names($base_name, { fields => 'RANGE' });
+    }
+    
+    elsif ( @base_nos )
+    {
+	@taxa = $taxonomy->list_taxa_simple(\@base_nos, { fields => 'RANGE' });
+    }
+    
+    if ( @exclude_nos )
+    {
+	push @taxa, $taxonomy->list_taxa_simple(\@exclude_nos, { fields => 'RANGE', exclude => 1 });
+    }
+    
+    # Now add these to the proper list.
+    
+    foreach my $t (@taxa)
+    {
+	if ( $t->{exclude} )
+	{
+	    push @excludes, "t.lft between $t->{lft} and $t->{rgt}";
+	}
+	
+	else
+	{
+	    push @includes, "t.lft between $t->{lft} and $t->{rgt}";
+	}
+    }
+    
+    if ( @includes )
+    {
+	push @filters, '(' . join(' or ', @includes) . ')';
+    }
+    
+    if ( @excludes )
+    {
+	push @filters, 'not (' . join(' or ', @excludes) . ')';
+    }
+    
+    $request->{my_base_taxa} = \@taxa;
+    
+    return @filters;
 }
 
 

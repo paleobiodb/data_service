@@ -11,8 +11,6 @@
 package PBData;
 
 {
-    $DB::single = 1;
-    
     # We start by defining a data service instance for version 1.0
     
     our ($ds0) = Web::DataService->new(

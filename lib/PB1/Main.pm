@@ -18,8 +18,6 @@ use PB1::ReferenceData;
 use PB1::PersonData;
 
 {
-    $DB::single = 1;
-    
     # We start by defining a data service instance for version 1.1
     
     our ($ds1) = Web::DataService->new(

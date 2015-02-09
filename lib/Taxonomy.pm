@@ -259,6 +259,11 @@ sub list_taxa_simple {
 	$taxonomy->copy_exclusions($result_list, $base_nos)
 	    if ref $base_nos eq 'ARRAY' && ref $base_nos->[0];
 	
+	if ( $options->{exclude} )
+	{
+	    map { $_->{exclude} = 1 } @$result_list;
+	}
+	
 	$taxonomy->{sql_rowcount} = scalar(@$result_list);
 	return $result_list if $return_type eq 'listref';
 	return @$result_list;
