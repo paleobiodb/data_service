@@ -106,20 +106,21 @@ sub initialize {
 	    "The identifier of the collection with which this occurrence is associated.",
 	{ output => 'taxon_name', com_name => 'tna', dwc_name => 'associatedTaxa' },
 	    "The taxonomic name by which this occurrence is identified",
+	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
 	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
 	    "The taxonomic rank of the name, if this can be determined",
-	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
 	{ output => 'taxon_no', com_name => 'tid' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
 	    "the name was never entered into the taxonomic hierarchy stored in this database and",
 	    "we have no further information about the classification of this occurrence.",
-	{ output => 'matched_name', com_name => 'mna', dedup => 'taxon_base' },
+	{ output => 'matched_name', com_name => 'mna' },
 	    "The senior synonym and/or currently accepted spelling of the closest matching name in",
 	    "the database to the identified taxonomic name, if any is known, and if this name",
 	    "is different from the value of C<taxon_name>.",
-	{ output => 'matched_rank', com_name => 'mra', dedup => 'taxon_rank' },
+	{ set => 'matched_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ output => 'matched_rank', com_name => 'mra' },
 	    "The taxonomic rank of the matched name, if different from the value of C<taxon_rank>",
-	{ output => 'matched_no', com_name => 'mid', if_field => 'mid', dedup => 'taxon_no' },
+	{ output => 'matched_no', com_name => 'mid' },
 	    "The unique identifier of the closest matching name in the database to the identified",
 	    "taxonomic name, if any is known.",
 	{ set => '*', code => \&PB1::CollectionData::fixTimeOutput },
@@ -158,8 +159,8 @@ sub initialize {
     $ds->define_block('1.1:occs:phylo' =>
 	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
 		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
-		     'tg.name as genus', 'tg.spelling_no as genus_no'],
-	  tables => ['ph', 't', 'tg'] },
+		     'pl.genus', 'pl.genus_no'],
+	  tables => ['ph', 'pl', 't'] },
 	{ output => 'genus', com_name => 'gnl' },
 	    "The name of the genus in which this occurrence is classified",
 	{ output => 'genus_no', com_name => 'gnn' },
@@ -802,6 +803,8 @@ sub generateJoinList {
 	if $tables->{tg};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
 	if $tables->{ph};
+    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = t.orig_no\n"
+	if $tables->{pl};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
 	if $tables->{pc};
     $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
