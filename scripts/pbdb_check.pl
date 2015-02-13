@@ -63,12 +63,11 @@ our ($SQL_STRING, $checks_run);
 
 if ( $checks->{max_synonym_no} )
 {
-    my $max_no = $checks->{max_synonym_no} + 0;
     my $limit = $checks->{max_synonym_limit} + 0;
     
-    $SQL_STRING = "SELECT count(*) FROM taxa_tree_cache where synonym_no = $max_no";
+    $SQL_STRING = "SELECT synonym_no, count(*) as c FROM taxa_tree_cache GROUP BY synonym_no ORDER BY c desc LIMIT 1";
     
-    my ($count) = $dbh->selectrow_array($SQL_STRING);
+    my ($synonym_no, $count) = $dbh->selectrow_array($SQL_STRING);
     
     if ( $count > 0 && $count <= $limit )
     {
@@ -78,7 +77,8 @@ if ( $checks->{max_synonym_no} )
     else
     {
 	logMessage(1, "*******");
-	logMessage(1, "FAILED max_synonym with value of: $count (should be $limit)");
+	logMessage(1, "FAILED max_synonym with value of: $count (threshold is $limit)");
+	logMessage(1, "BAD synonym_no is: $synonym_no");
 	logMessage(1, "*******");
     }
     
