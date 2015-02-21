@@ -16,7 +16,7 @@ our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_INTS $BIN_KEY
+use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_INTS $BIN_KEY $BIN_LOC
 		 $COUNTRY_MAP $CONTINENT_DATA
 		 $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
@@ -419,6 +419,39 @@ sub buildCollectionTables {
     $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD SPATIAL INDEX (loc)");
     $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD INDEX (interval_no, lng, lat)");
     
+    # Then create a table that maps each bin to the set of countries and
+    # continents that it overlaps.
+    
+    logMessage(2, "    mapping summary clusters to countries");
+    
+    $dbh->do("DROP TABLE IF EXISTS $BIN_LOC");
+    
+    $dbh->do("CREATE TABLE $BIN_LOC (
+		bin_id int unsigned not null PRIMARY KEY,
+		bin_level tinyint unsigned,
+		cc char(2),
+		continent char(3),
+		KEY (cc),
+		KEY (continent)) Engine=MyISAM");
+    
+    foreach my $i (0..$#bin_reso)
+    {
+	my $level = $i + 1;
+	
+	logMessage(2, "      mapping bin level $level...");
+	
+	$sql = "INSERT INTO $BIN_LOC
+		SELECT bin_id, bin_level, cc, continent
+		FROM $COLL_BINS_WORK as s JOIN $COLL_MATRIX_WORK as c on s.bin_id = c.bin_id_$level
+			LEFT JOIN $COUNTRY_MAP as ccmap using (cc)
+		WHERE bin_id > 0 and interval_no = 0
+		GROUP BY bin_id";
+	
+	$result = $dbh->do($sql);
+	
+	logMessage(2, "        generated $result rows");
+    }
+    
     # We then create a mapping table which allows us to look up, for each
     # collection, the time intervals which it encompasses (with the usual
     # buffer rule applied).
@@ -426,15 +459,15 @@ sub buildCollectionTables {
     logMessage(2, "    creating collection interval map...");
     
     $sql = "
-		INSERT IGNORE INTO $COLL_INTS_WORK (collection_no, interval_no)
-		SELECT collection_no, interval_no
-		FROM $COLL_MATRIX as m JOIN $INTERVAL_DATA as i
-			JOIN $SCALE_MAP as s using (interval_no)
-			JOIN $INTERVAL_BUFFER as ib using (interval_no)
-		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
-			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
-			and (m.early_age > i.late_age and m.late_age < i.early_age)
-			and m.access_level = 0";
+    		INSERT IGNORE INTO $COLL_INTS_WORK (collection_no, interval_no)
+    		SELECT collection_no, interval_no
+    		FROM $COLL_MATRIX as m JOIN $INTERVAL_DATA as i
+    			JOIN $SCALE_MAP as s using (interval_no)
+    			JOIN $INTERVAL_BUFFER as ib using (interval_no)
+    		WHERE m.early_age <= ib.early_bound and m.late_age >= ib.late_bound
+    			and (m.early_age < ib.early_bound or m.late_age > ib.late_bound)
+    			and (m.early_age > i.late_age and m.late_age < i.early_age)
+    			and m.access_level = 0";
 	
     $result = $dbh->do($sql);
     

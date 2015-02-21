@@ -312,21 +312,21 @@ sub generate_diversity_matrix {
     
     # If we are in debug mode, report the interval assignments.
     
-    if ( $self->debug ) 
-    {
-	# $self->add_warning("Skipped $imprecise_time_count occurrences because of imprecise temporal locality:")
-	#     if $imprecise_time_count;
+    # if ( $self->debug ) 
+    # {
+    # 	# $self->add_warning("Skipped $imprecise_time_count occurrences because of imprecise temporal locality:")
+    # 	#     if $imprecise_time_count;
 	
-	# foreach my $key ( sort { $b cmp $a } keys %interval_report )
-	# {
-	#     $self->add_warning("    $key ($interval_report{$key})");
-	# }
+    # 	# foreach my $key ( sort { $b cmp $a } keys %interval_report )
+    # 	# {
+    # 	#     $self->add_warning("    $key ($interval_report{$key})");
+    # 	# }
 	
-	foreach my $key ( sort { $a cmp $b } keys %taxon_report )
-	{
-	    $self->add_warning("    $key ($taxon_report{$key})");
-	}
-    }
+    # 	foreach my $key ( sort { $a cmp $b } keys %taxon_report )
+    # 	{
+    # 	    $self->add_warning("    $key ($taxon_report{$key})");
+    # 	}
+    # }
     
     # Add a summary record with counts.
     
@@ -1110,194 +1110,352 @@ sub add_result_records {
 }
 
 
-sub generate_prevalence {
+# sub generate_prevalence {
     
-    my ($request, $result, $limit, $detail) = @_;
+#     my ($request, $result, $limit, $detail) = @_;
     
-    no warnings 'uninitialized';
+#     no warnings 'uninitialized';
     
-    my (@processed, %exclude);
+#     my (@processed, %exclude);
     
-    if ( ref $request->{my_base_taxa} eq 'ARRAY' )
-    {
-    A:
-	while ( @processed )
-	{
-	    foreach my $t (@{$request->{my_base_taxa}})
-	    {
-		if ( $processed[0]{lft} <= $t->{lft} && $processed[0]{rgt} >= $t->{rgt} )
-		{
-		    shift @processed;
-		    next A;
-		}
-	    }
+#     if ( ref $request->{my_base_taxa} eq 'ARRAY' )
+#     {
+#     A:
+# 	while ( @processed )
+# 	{
+# 	    foreach my $t (@{$request->{my_base_taxa}})
+# 	    {
+# 		if ( $processed[0]{lft} <= $t->{lft} && $processed[0]{rgt} >= $t->{rgt} )
+# 		{
+# 		    shift @processed;
+# 		    next A;
+# 		}
+# 	    }
 	    
-	    last A;
-	}
-    }
+# 	    last A;
+# 	}
+#     }
     
-    # if ( $detail == 2 )
-    # {
-    # 	shift @$result while $result->[0]{rank} > 17;
-    # }
+#     # if ( $detail == 2 )
+#     # {
+#     # 	shift @$result while $result->[0]{rank} > 17;
+#     # }
     
-    # elsif ( $detail == 3 )
-    # {
-    # 	shift @$result while $result->[0]{rank} > 13;
-    # }
+#     # elsif ( $detail == 3 )
+#     # {
+#     # 	shift @$result while $result->[0]{rank} > 13;
+#     # }
     
- RECORD:
-    foreach my $r (@$result)
-    {
-	next RECORD if $exclude{$r->{orig_no}};
-	next RECORD if $detail == 2 && $r->{rank} > 17;
-	next RECORD if $detail == 3 && $r->{rank} > 13;
+#  RECORD:
+#     foreach my $r (@$result)
+#     {
+# 	next RECORD if $exclude{$r->{orig_no}};
+# 	next RECORD if $detail == 2 && $r->{rank} > 17;
+# 	next RECORD if $detail == 3 && $r->{rank} > 13;
 	
-	foreach my $i (@processed)
-	{
-	    next RECORD if $r->{lft} >= $i->{lft} && $r->{lft} <= $i->{rgt};
-	}
+# 	foreach my $i (@processed)
+# 	{
+# 	    next RECORD if $r->{lft} >= $i->{lft} && $r->{lft} <= $i->{rgt};
+# 	}
 	
-	push @processed, $r;
-	last if @processed == $limit;
-    }
+# 	push @processed, $r;
+# 	last if @processed == $limit;
+#     }
     
-    $request->list_result(\@processed);
-}
+#     $request->list_result(\@processed);
+# }
 
 
 # $$$$ start here !!!
 
 sub generate_prevalence_alt {
 
-    my ($request, $result, $taxonomy, $limit, $detail) = @_;
+    my ($request, $result, $limit, $detail) = @_;
     
     no warnings 'uninitialized';
     
-    my (%record);
+    my $taxonomy = $request->{my_taxonomy};
+    
+    my (%phylum, %class, %order);
     
     foreach my $r (@$result)
     {
-	if ( $r->{phylum_no} )
+	my $phylum_no = $r->{phylum_no} || 0;
+	my $class_no = $r->{class_no} || 0;
+	my $order_no = $r->{order_no} || 0;
+	
+	$phylum{$phylum_no} ||= { orig_no => $phylum_no, rank => 20 };
+	$phylum{$phylum_no}{n_occs} += $r->{n_occs};
+	
+	if ( $class_no > 0 )
 	{
-	    $record{$r->{phylum_no}} ||= { rank => 20 };
-	    $record{$r->{phylum_no}}{n_occs} += $r->{n_occs};
+	    $class{$class_no} ||= { orig_no => $class_no, rank => 17 };
+	    $class{$class_no}{n_occs} += $r->{n_occs};
+	    $phylum{$phylum_no}{class}{$class_no} = $class{$class_no};
+	    
+	    if ( $order_no > 0 )
+	    {
+		$order{$order_no} ||= { orig_no => $order_no, rank => 13 };
+		$order{$order_no}{n_occs} += $r->{n_occs};
+		$class{$class_no}{order}{$order_no} = $order{$order_no};
+	    }
+	    
+	    else
+	    {
+		$class{$class_no}{order}{0} ||= { orig_no => 0, rank => 13 };
+		$class{$class_no}{order}{0}{n_occs} += $r->{n_occs};
+	    }
 	}
 	
-	if ( $r->{class_no} )
+	else
 	{
-	    $record{$r->{class_no}} ||= { rank => 17 };
-	    $record{$r->{class_no}}{n_occs} += $r->{n_occs};
-	}
-	
-	if ( $r->{order_no} )
-	{
-	    $record{$r->{order_no}} ||= { rank => 13 };
-	    $record{$r->{order_no}}{n_occs} += $r->{n_occs};
+	    $phylum{$phylum_no}{class}{0} ||= { orig_no => 0, rank => 17 };
+	    $phylum{$phylum_no}{class}{0}{n_occs} += $r->{n_occs};
+	    
+	    if ( $order_no > 0 )
+	    {
+		$order{$order_no} ||= { orig_no => $order_no, rank => 13 };
+		$order{$order_no}{n_occs} += $r->{n_occs};
+		$phylum{$phylum_no}{class}{0}{order}{$order_no} = $order{$order_no};
+	    }
+	    
+	    else
+	    {
+		$phylum{$phylum_no}{class}{0}{order}{0} ||= { orig_no => 0, rank => 13 };
+		$phylum{$phylum_no}{class}{0}{order}{0}{n_occs} += $r->{n_occs};
+	    }
 	}
     }
     
     my $dbh = $request->{dbh};
     
-    my $orig_nos = join(',', keys %record);
+    my $orig_string = join(',', grep { $_ > 0 } (keys %phylum, keys %class, keys %order));
+    
+    $orig_string ||= '0';
     
     my $sql = "
-	SELECT orig_no, name, lft, rgt FROM $taxonomy->{TREE_TABLE}
-	WHERE orig_no in ($orig_nos)";
+	SELECT orig_no, name, lft, rgt, image_no FROM $taxonomy->{TREE_TABLE}
+		JOIN $taxonomy->{ATTRS_TABLE} using (orig_no)
+	WHERE orig_no in ($orig_string)";
     
     my $data = $dbh->selectall_arrayref($sql, { Slice => { } });
     
     foreach my $d (@$data)
     {
-	$record{$d->{orig_no}}{name} = $d->{name};
-	$record{$d->{orig_no}}{lft} = $d->{lft};
-	$record{$d->{orig_no}}{rgt} = $d->{rgt};
+	my $record = $phylum{$d->{orig_no}} || $class{$d->{orig_no}} || $order{$d->{orig_no}};
+	
+	$record->{name} = $d->{name};
+	$record->{lft} = $d->{lft};
+	$record->{rgt} = $d->{rgt};
+	$record->{image_no} = $d->{image_no};
     }
     
-    my @keys = sort { $record{$b}{n_occs} <=> $record{$a}{n_occs} } keys %record;
-    my @records = map { $record{$_} } @keys;
+    # Now we start with a first cut at the result list by taking the phyla in
+    # descending order of prevalence (n_occs - number of occurrences).  If
+    # there is a phylum "0", then we use the classes it contains instead.
     
-    return $request->generate_prevalence(\@records, $limit, $detail);
+    my @list = grep { $_->{orig_no} } values %phylum;
+    
+    if ( exists $phylum{0} )
+    {
+	push @list, grep { $_->{orig_no} } values $phylum{0}{class};
+    }
+    
+    @list = sort { $b->{n_occs} <=> $a->{n_occs} } @list;
+    
+    # Now that the basic list has been sorted we determine the threshold of
+    # occurrences above which an entry remains on the list, according to the
+    # requested number of results.
+    
+    my $threshold = $list[$limit-1]{n_occs};
+    my $length = scalar(@list);
+    my $deficit = $limit > $length ? $limit - $length : 0;
+    
+    # We then go through the list and alter some of the entries.  Any entry
+    # with exactly one 'class' sub-entry gets replaced by its sub-entry
+    # (assuming its class number is not zero).  If 'Chordata' appears as an
+    # entry, it is split if at least one of its children would remain in the
+    # list.
+    
+    my @subelements;
+    
+    for (my $i = 0; $i < @list; $i++)
+    {
+	my @subs;
+	my $count = 0;
+	
+	if ( $list[$i]{name} eq 'Chordata' && ref $list[$i]{class} eq 'HASH' )
+	{
+	    foreach my $n ( keys %{$list[$i]{class}} )
+	    {
+		unless ( $n )
+		{
+		    $list[$i]{class}{$n}{name} = 'Chordata (other)';
+		    $list[$i]{class}{$n}{image_no} = $list[$i]{image_no};
+		}
+		push @subs, $list[$i]{class}{$n};
+		$count++ if $list[$i]{class}{$n}{n_occs} > $threshold;
+	    }
+	    
+	    if ( $count > 1 )
+	    {
+		push @subelements, @subs;
+		splice(@list, $i, 1);
+		$i--;
+	    }
+	}
+    }
+    
+    @list = sort { $b->{n_occs} <=> $a->{n_occs} } @list, @subelements;
+    @subelements = ();
+	
+    # Now, if we go through the list one more time.  If any element is such
+    # that splitting it would not cause any elements to move past the given
+    # limit on the result list, then split it.
+    
+ ELEMENT:
+    for (my $i = 0; $i < $limit && $i < @list; $i++)
+    {
+	my $name = $list[$i]{name};
+	my $rank = $list[$i]{rank};
+	my $subkey = $rank eq '17' ? 'order' : 'class';
+	
+	next unless ref $list[$i]{$subkey} eq 'HASH';
+	next unless $rank eq '20';
+	
+	my @subs = keys %{$list[$i]{$subkey}};
+	my $count = 0;
+	
+	if ( @subs == 1 )
+	{
+	    if ( $list[$i]{$subkey}{$subs[0]}{name} )
+	    {
+		$list[$i] = $list[$i]{$subkey}{$subs[0]};
+	    }
+	    next ELEMENT;
+	}
+	
+	foreach my $n (@subs)
+	{
+	    if ( $list[$i]{$subkey}{$n}{n_occs} > $threshold )
+	    {
+		$count++;
+	    }
+	    
+	    unless ( $list[$i]{$subkey}{$n}{name} )
+	    {
+		$list[$i]{$subkey}{$n}{name} = "$name (other)";
+		$list[$i]{$subkey}{$n}{image_no} = $list[$i]{image_no};
+		$list[$i]{$subkey}{$n}{orig_no} = $list[$i]{orig_no};
+	    }
+	}
+	
+	next ELEMENT unless $count > 0;
+	next ELEMENT if $count > $deficit + 1;
+	
+	push @subelements, $list[$i]{$subkey}{$_} foreach @subs;
+	splice(@list, $i, 1);
+	$i--;
+    }
+    
+    @list = sort { $b->{n_occs} <=> $a->{n_occs} } @list, @subelements;
+    @subelements = ();    
+    
+    my @result;
+    
+    foreach my $r (@list)
+    {
+	next unless $r->{orig_no} && $r->{image_no};
+	push @result, $r;
+	last if @result >= $limit;
+    }
+    
+    return $request->list_result(\@result);
+    
+    #my @keys = sort { $record{$b}{n_occs} <=> $record{$a}{n_occs} } keys %record;
+    #my @records = map { $record{$_} } @keys;
+    
+    #return $request->generate_prevalence(\@records, $limit, $detail);
 };
 
 
-sub generate_prevalence_old {
+# sub generate_prevalence_old {
     
-    my ($request, $sth, $tree_table) = @_;
+#     my ($request, $sth, $tree_table) = @_;
     
-    no warnings 'uninitialized';
+#     no warnings 'uninitialized';
     
-    my (%n_occs, %rank);
+#     my (%n_occs, %rank);
     
-    # First count all of the phyla, classes and orders into which the
-    # occurrences fall.
+#     # First count all of the phyla, classes and orders into which the
+#     # occurrences fall.
     
-    while ( my $r = $sth->fetchrow_hashref )
-    {
-	if ( $r->{phylum_no} && $r->{phylum_no} > 0 )
-	{
-	    $n_occs{$r->{phylum_no}} += $r->{n_occs};
-	    $rank{$r->{phylum_no}} = 20;
-	}
+#     while ( my $r = $sth->fetchrow_hashref )
+#     {
+# 	if ( $r->{phylum_no} && $r->{phylum_no} > 0 )
+# 	{
+# 	    $n_occs{$r->{phylum_no}} += $r->{n_occs};
+# 	    $rank{$r->{phylum_no}} = 20;
+# 	}
 	
-	if ( $r->{class_no} && $r->{class_no} > 0 )
-	{
-	    $n_occs{$r->{class_no}} += $r->{n_occs};
-	    $rank{$r->{class_no}} = 17;
-	}
+# 	if ( $r->{class_no} && $r->{class_no} > 0 )
+# 	{
+# 	    $n_occs{$r->{class_no}} += $r->{n_occs};
+# 	    $rank{$r->{class_no}} = 17;
+# 	}
 	
-	if ( $r->{order_no} && $r->{order_no} > 0 )
-	{
-	    $n_occs{$r->{order_no}} += $r->{n_occs};
-	    $rank{$r->{order_no}} = 13;
-	}
-    }
+# 	if ( $r->{order_no} && $r->{order_no} > 0 )
+# 	{
+# 	    $n_occs{$r->{order_no}} += $r->{n_occs};
+# 	    $rank{$r->{order_no}} = 13;
+# 	}
+#     }
     
-    # Then determine the taxa with the highest counts from this list.  If a
-    # query limit has been specified, only return that many items.
+#     # Then determine the taxa with the highest counts from this list.  If a
+#     # query limit has been specified, only return that many items.
     
-    my @taxa = sort { $n_occs{$b} <=> $n_occs{$a} || $rank{$b} <=> $rank{a} } keys %n_occs;
+#     my @taxa = sort { $n_occs{$b} <=> $n_occs{$a} || $rank{$b} <=> $rank{a} } keys %n_occs;
     
-    my $limit;
+#     my $limit;
     
-    if ( $limit = $request->result_limit )
-    {
-	$limit += $request->result_offset;
-	splice(@taxa, $limit, 0) if $limit < @taxa;
-    }
+#     if ( $limit = $request->result_limit )
+#     {
+# 	$limit += $request->result_offset;
+# 	splice(@taxa, $limit, 0) if $limit < @taxa;
+#     }
     
-    # Construct a query that will retrieve the other necessary information
-    # about these taxa.
+#     # Construct a query that will retrieve the other necessary information
+#     # about these taxa.
     
-    my $taxon_string = join q{,}, sort { $a <=> $b } @taxa;
+#     my $taxon_string = join q{,}, sort { $a <=> $b } @taxa;
     
-    my $dbh = $request->get_connection;
-    my $attrs_table = $TAXON_TABLE{$tree_table}{attrs};
-    my $ints_table = $TAXON_TABLE{$tree_table}{ints};
+#     my $dbh = $request->get_connection;
+#     my $attrs_table = $TAXON_TABLE{$tree_table}{attrs};
+#     my $ints_table = $TAXON_TABLE{$tree_table}{ints};
     
-    my $sql = "
-	SELECT t.orig_no, t.name, t.rank, ph.class_no, ph.phylum_no, v.image_no
-	FROM $tree_table as t JOIN $ints_table as ph using (ints_no)
-		LEFT JOIN $attrs_table as v using (orig_no)
-	WHERE t.orig_no in ($taxon_string)";
+#     my $sql = "
+# 	SELECT t.orig_no, t.name, t.rank, ph.class_no, ph.phylum_no, v.image_no
+# 	FROM $tree_table as t JOIN $ints_table as ph using (ints_no)
+# 		LEFT JOIN $attrs_table as v using (orig_no)
+# 	WHERE t.orig_no in ($taxon_string)";
     
-    my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+#     my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
     
-    # Add the occurrence counts.
+#     # Add the occurrence counts.
     
-    if ( ref $result eq 'ARRAY' )
-    {
-	foreach my $r ( @$result )
-	{
-	    $r->{n_occs} = $n_occs{$r->{orig_no}};
-	    $n_occs{$r->{orig_no}} = $r;
-	}
-    }
+#     if ( ref $result eq 'ARRAY' )
+#     {
+# 	foreach my $r ( @$result )
+# 	{
+# 	    $r->{n_occs} = $n_occs{$r->{orig_no}};
+# 	    $n_occs{$r->{orig_no}} = $r;
+# 	}
+#     }
     
-    # Return the result.
+#     # Return the result.
     
-    $request->list_result(map { $n_occs{$_} } @taxa);
-}
+#     $request->list_result(map { $n_occs{$_} } @taxa);
+# }
 
 
 1;

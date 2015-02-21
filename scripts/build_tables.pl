@@ -6,6 +6,8 @@
 # Paleobiology Database.  These tables all depend upon the contents of the
 # "old" tables.
 
+use strict;
+
 use lib '../lib', 'lib';
 use Getopt::Std;
 
@@ -32,7 +34,7 @@ use DiversityTables qw(buildDiversityTables);
 
 my %options;
 
-getopts('tT:OmR:bcKUuIivrydspf', \%options);
+getopts('tT:OmR:bcKUuIivrydspfA', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -84,7 +86,8 @@ my $strata_tables = $options{s};
 
 my $options = { taxon_steps => $options{T},
 		colls_cluster => $options{k},
-		no_rebuild_cache => $options{O} };
+		no_rebuild_cache => $options{O},
+		no_rebuild_div => $options{A} };
 
 
 # The option -i causes a forced reload of the interval data from the source
@@ -186,7 +189,7 @@ if ( $old_taxon_tables )
 
 if ( $diversity_tables )
 {
-    buildDiversityTables($dbh, 'taxon_trees');
+    buildDiversityTables($dbh, 'taxon_trees', $options);
 }
 
 # The option -p causes taxon pictures to be fetched from phylopic.org

@@ -204,7 +204,7 @@ sub initialize {
 	  "The primary reference associated with the collection (as formatted text)");
     
     $ds->define_block('1.2:colls:loc' =>
-      { select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale'],
+      { select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale', 'cc.geogcomments'],
 	tables => ['cc'] },
       { output => 'cc', com_name => 'cc2' },
 	  "The country in which the collection is located, encoded as",
@@ -214,7 +214,8 @@ sub initialize {
       { output => 'county', com_name => 'cny' },
 	  "The county or municipal area in which the collection is located, if known",
       { output => 'geogscale', com_name => 'gsc' },
-	  "The geographic scale of the collection.");
+	  "The geographic scale of the collection.",
+      { output => 'geogcomments', com_name => 'ggc' });
     
     $ds->define_block('1.2:colls:paleoloc' =>
 	{ select => 'PALEOCOORDS' },
@@ -421,13 +422,13 @@ sub initialize {
     
     $ds->define_block( '1.2:colls:ext' =>
       { select => ['s.lng_min', 'lng_max', 's.lat_min', 's.lat_max', 's.std_dev'] },
-      { output => 'lng_min', com_name => 'lg1', data_type => 'dec' },
+      { output => 'lng_min', com_name => 'lx1', data_type => 'dec' },
 	  "The mimimum longitude for collections in this cluster",
-      { output => 'lng_max', com_name => 'lg2', data_type => 'dec' },
+      { output => 'lng_max', com_name => 'lx2', data_type => 'dec' },
 	  "The maximum longitude for collections in this cluster",
-      { output => 'lat_min', com_name => 'la1', data_type => 'dec' },
+      { output => 'lat_min', com_name => 'ly1', data_type => 'dec' },
 	  "The mimimum latitude for collections in this cluster",
-      { output => 'lat_max', com_name => 'la2', data_type => 'dec' },
+      { output => 'lat_max', com_name => 'ly2', data_type => 'dec' },
 	  "The maximum latitude for collections in this cluster",
       { output => 'std_dev', com_name => 'std', data_type => 'dec' },
 	  "The standard deviation of the coordinates in this cluster");
@@ -1406,8 +1407,8 @@ sub generateMainFilters {
     # 'exclude_name', 'exclude_id'
     
     my $taxon_name = $self->clean_param('taxon_name') || $self->clean_param('base_name');
-    my $taxon_no = $self->clean_param('taxon_id') || $self->clean_param('base_id');
-    my $exclude_no = $self->clean_param('exclude_id');
+    my @taxon_nos = $self->clean_param_list('taxon_id') || $self->clean_param_list('base_id');
+    my @exclude_nos = $self->clean_param_list('exclude_id');
     my (@include_taxa, @exclude_taxa);
     
     # First get the relevant taxon records for all included taxa
@@ -1432,17 +1433,17 @@ sub generateMainFilters {
 	}
     }
     
-    elsif ( $taxon_no )
+    elsif ( @taxon_nos )
     {
-	@include_taxa = $taxonomy->list_taxa($taxon_no, { fields => 'RANGE' });
+	@include_taxa = $taxonomy->list_taxa('exact', \@taxon_nos, { fields => 'RANGE' });
     }
     
     # Then get the records for excluded taxa.  But only if there are any
     # included taxa in the first place.
     
-    if ( $exclude_no && @include_taxa )
+    if ( @exclude_nos && @include_taxa )
     {
-	my @taxa = $taxonomy->list_taxa($exclude_no, { fields => 'RANGE' });
+	my @taxa = $taxonomy->list_taxa('exact', \@exclude_nos, { fields => 'RANGE' });
 	push @exclude_taxa, @taxa;
     }
     
@@ -1562,7 +1563,8 @@ sub generateMainFilters {
     # If a number was given but it does not exist in the hierarchy, add a
     # filter that will guarantee no results.
     
-    elsif ( $taxon_no )
+    elsif ( $self->param_given('base_name') || $self->param_given('base_id') ||
+	    $self->param_given('taxon_name') || $self->param_given('taxon_id') )
     {
 	push @filters, "o.orig_no = -1";
 	$tables_ref->{non_summary} = 1;

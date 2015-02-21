@@ -1327,13 +1327,13 @@ sub createWorkingTables {
     # Create a table to store the spelling information for each taxonomic
     # name. 
     
-    $result = $dbh->do("DROP TABLE IF EXISTS $NAME_WORK");
-    $result = $dbh->do("CREATE TABLE $NAME_WORK
-			       (taxon_no int unsigned not null,
-				orig_no int unsigned not null,
-				spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
-				opinion_no int unsigned not null,
-				PRIMARY KEY (taxon_no)) ENGINE=MYISAM");
+    # $result = $dbh->do("DROP TABLE IF EXISTS $NAME_WORK");
+    # $result = $dbh->do("CREATE TABLE $NAME_WORK
+    # 			       (taxon_no int unsigned not null,
+    # 				orig_no int unsigned not null,
+    # 				spelling_reason enum('original spelling','recombination','reassignment','correction','rank change','misspelling'),
+    # 				opinion_no int unsigned not null,
+    # 				PRIMARY KEY (taxon_no)) ENGINE=MYISAM");
     
     return;
 }
@@ -3201,6 +3201,7 @@ sub computePhylogeny {
     $result = $dbh->do("CREATE TABLE $INTS_WORK
 			       (ints_no int unsigned primary key,
 				ints_rank tinyint not null,
+				major_no int unsigned not null,
 				common_name varchar(80),
 				kingdom_no int unsigned,
 				kingdom varchar(80),
@@ -3233,7 +3234,7 @@ sub computePhylogeny {
 				order_yr smallint,
 				primary key (orig_no)) ENGINE=MYISAM");
     
-    $result = $dbh->do($SQL_STRING);
+    # $result = $dbh->do($SQL_STRING);
     
     # We first compute an auxiliary table to help in the computation.  We
     # insert a row for each non-junior taxonomic concept above genus level,
@@ -3344,7 +3345,7 @@ sub computePhylogeny {
     
     foreach my $depth (2..$max_depth)
     {
-	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
+	logMessage(2, "      computing tree level $depth...") if $depth % 10 == 0;
 	
 	$SQL_STRING = "
 		INSERT INTO $INTS_WORK (ints_no, ints_rank, common_name, kingdom_no, phylum_no, class_no, order_no, family_no)
@@ -3392,7 +3393,7 @@ sub computePhylogeny {
     
     foreach my $depth (2..$max_depth)
     {
-	logMessage(2, "    linking tree level $depth...") if $depth % 10 == 0;
+	logMessage(2, "      linking tree level $depth...") if $depth % 10 == 0;
 	
 	$SQL_STRING = "
 		UPDATE $TREE_WORK as t JOIN $TREE_WORK as pt on pt.orig_no = t.senpar_no
@@ -3552,19 +3553,12 @@ sub computePhylogeny {
     
     $result = $dbh->do($SQL_STRING);
     
-    # $SQL_STRING = "UPDATE $INTS_WORK as i JOIN 
-    # 			(SELECT ints_no, count(*) as genus_count FROM $TREE_WORK
-    # 			 WHERE rank = 5 GROUP BY ints_no) as g using (ints_no)
-    # 		   SET i.genus_count = g.genus_count";
-    
-    # $result = $dbh->do($SQL_STRING);
-    
     # Then iterate up the $COUNTS_WORK table by level from bottom to top,
     # summing each kind of taxon.
     
     foreach my $depth (reverse 2..$max_depth)
     {
-	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
+	logMessage(2, "      computing tree level $depth...") if $depth % 10 == 0;
 	
 	$SQL_STRING = "
 		UPDATE $COUNTS_WORK as c JOIN
@@ -3608,10 +3602,38 @@ sub computePhylogeny {
 	$result = $dbh->do($SQL_STRING);
     }
     
-    logMessage(2, "computing genera and subgenera (f)");
+    # Now that we have the counts we can go back and fill in the field
+    # 'major_no' by going through $INTS_WORK from top to bottom and filling in
+    # the most specific taxon that contains at least one order.  These
+    # represent the "major" divisions of life, and we will use them to
+    # pre-compute diversity tables.
+    
+    logMessage(2, "    computing major taxa");
+    
+    $SQL_STRING = "
+	UPDATE $TREE_WORK as t JOIN $COUNTS_WORK as c using (orig_no)
+		JOIN $INTS_WORK as ph on ph.ints_no = t.orig_no
+	SET ph.major_no = ph.ints_no WHERE c.order_count > 0 or c.class_count > 0 or c.is_class or c.is_order";
+    
+    $result = $dbh->do($SQL_STRING);
+    
+    foreach my $depth (2..$max_depth)
+    {
+	logMessage(2, "      computing tree level $depth...") if $depth % 10 == 0;
+	
+	$SQL_STRING = "
+		UPDATE $TREE_WORK as t JOIN $INTS_WORK as ph on ph.ints_no = t.orig_no
+			JOIN $INTS_WORK as parent on parent.ints_no = t.senpar_no
+		SET ph.major_no = parent.major_no
+		WHERE ph.major_no = 0 and t.depth = $depth";
+	
+	$result = $dbh->do($SQL_STRING);
+    }
     
     # Now create a table to hold the "lower" phylogeny information - the genus
     # and subgenus corresponding to each taxon at or below genus level.
+    
+    logMessage(2, "computing genera and subgenera (f)");
     
     $result = $dbh->do("DROP TABLE IF EXISTS $LOWER_WORK");
     $result = $dbh->do("CREATE TABLE $LOWER_WORK
@@ -3642,8 +3664,11 @@ sub computePhylogeny {
     
     $SQL_STRING = "
 		INSERT INTO $LOWER_WORK (orig_no, rank, subgenus_no, subgenus, genus_no, genus)
-		SELECT t.orig_no, t.rank, t.orig_no, t.name, t1.orig_no, t1.name
+		SELECT t.orig_no, t.rank, t.orig_no, t.name,
+			if(t1.rank = 5, t1.orig_no, if(t2.rank in (4,5), t2.orig_no, t.orig_no)),
+			if(t1.rank = 5, t1.name, if(t2.rank in (4,5), t2.name, t.name))
 		FROM $TREE_WORK as t LEFT JOIN $TREE_WORK as t1 on t1.orig_no = t.senpar_no
+			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.senpar_no
 		WHERE t.rank = 4";
     
     $result = $dbh->do($SQL_STRING);
@@ -3657,8 +3682,8 @@ sub computePhylogeny {
 		SELECT t.orig_no, t.rank, t.synonym_no, t.name,
 		       if(t1.rank = 4, t1.orig_no, null),
 		       if(t1.rank = 4, t1.name, null),
-		       if(t1.rank = 5, t1.orig_no, t2.orig_no),
-		       if(t1.rank = 5, t1.name, t2.name)
+		       if(t1.rank = 5, t1.orig_no, if(t2.rank in (4,5), t2.orig_no, if(t1.rank = 4, t1.orig_no, null))),
+		       if(t1.rank = 5, t1.name, if(t2.rank in (4,5), t2.name, if(t1.rank = 4, t1.name, null)))
 		FROM $TREE_WORK as t JOIN $TREE_WORK as t1 on t1.orig_no = t.senpar_no
 			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.senpar_no
 		WHERE t.rank = 3";
@@ -3672,12 +3697,14 @@ sub computePhylogeny {
     $SQL_STRING = "
 		INSERT INTO $LOWER_WORK (orig_no, rank, species_no, species, subgenus_no, subgenus, genus_no, genus)
 		SELECT t.orig_no, t.rank,
-		       if(t.rank < 4, t.orig_no, null),
-		       if(t.rank < 4, t.name, null),
-		       if(t1.rank = 4, t1.orig_no, if(t2.rank = 4, t2.orig_no, null)),
-		       if(t1.rank = 4, t1.name, if(t2.rank = 4, t2.name, null)),
-		       if(t1.rank = 5, t1.orig_no, if(t2.rank = 5, t2.orig_no, t3.orig_no)),
-		       if(t1.rank = 5, t1.name, if(t2.rank = 5, t2.name, t3.name))
+		       if(t1.rank = 3, t1.orig_no, if(t2.rank in (2,3), t2.orig_no, t.orig_no)),
+		       if(t1.rank = 3, t1.name, if(t2.rank in (2,3), t2.name, t.name)),
+		       if(t1.rank = 4, t1.orig_no, if(t2.rank = 4, t2.orig_no, if(t3.rank = 4, t3.orig_no, null))),
+		       if(t1.rank = 4, t1.name, if(t2.rank = 4, t2.name, if(t3.rank = 4, t3.name, null))),
+		       if(t1.rank = 5, t1.orig_no, if(t2.rank = 5, t2.orig_no, 
+			   if(t3.rank in (4,5), t3.orig_no, if(t2.rank = 4, t2.orig_no, if(t1.rank = 4, t1.orig_no, null))))),
+		       if(t1.rank = 5, t1.name, if(t2.rank = 5, t2.name,
+			   if(t3.rank in (4,5), t3.name, if(t2.rank = 4, t2.name, if(t1.rank = 4, t1.name, null)))))
 		FROM $TREE_WORK as t JOIN $TREE_WORK as t1 on t1.orig_no = t.senpar_no
 			LEFT JOIN $TREE_WORK as t2 on t2.orig_no = t1.senpar_no
 			LEFT JOIN $TREE_WORK as t3 on t3.orig_no = t2.senpar_no
@@ -4083,7 +4110,7 @@ sub computeAttrsTable {
 			 extant_size, taxon_size, n_colls, n_occs, not_trace)
 		SELECT a.orig_no,
 			if(t.accepted_no = t.synonym_no, 1, 0) as is_valid,
-			if(t.accepted_no = t.orig_no, 1, 0) as is_senior,
+			if(t.synonym_no = t.orig_no, 1, 0) as is_senior,
 			sum(if(a.extant = 'yes', 1, if(a.extant = 'no', 0, null))) as is_extant,
 			0, 0, 0, 0, 0, 0, a.preservation <> 'trace' or a.preservation is null
 		FROM $auth_table as a JOIN $TREE_WORK as t using (orig_no)
@@ -4189,58 +4216,60 @@ sub computeAttrsTable {
     }
     
     # Then coalesce the basic attributes across each synonym group, using
-    # these to set the attributes for the senior synonym in each group.
+    # these to set the attributes for the senior synonym in each group.  But
+    # don't do this with n_occs (or anything else that uses summation) because
+    # those sums will be duplicated by the synonym-coalescing in the loop below.
     
-    logMessage(2, "    coalescing attributes to senior synonyms");
+    # logMessage(2, "    coalescing attributes to senior synonyms");
     
-    $sql = "	UPDATE $ATTRS_WORK as v JOIN 
-		(SELECT t.synonym_no,
-			max(v.is_extant) as is_extant,
-			min(v.min_body_mass) as min_body_mass,
-			max(v.max_body_mass) as max_body_mass,
-			sum(v.n_occs) as n_occs,
-    			max(v.first_early_age) as first_early_age,
-			max(v.first_late_age) as first_late_age,
-			min(v.last_early_age) as last_early_age,
-			min(v.last_late_age) as last_late_age,
-			max(v.precise_age) as precise_age,
-			max(v.not_trace) as not_trace,
-			v.image_no
-		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
-		SET     v.is_extant = nv.is_extant,
-			v.n_occs = nv.n_occs,
-			v.min_body_mass = nv.min_body_mass,
-			v.max_body_mass = nv.max_body_mass,
-			v.first_early_age = nv.first_early_age,
-			v.first_late_age = nv.first_late_age,
-			v.last_early_age = nv.last_early_age,
-			v.last_late_age = nv.last_late_age,
-			v.precise_age = nv.precise_age,
-			v.not_trace = nv.not_trace,
-			v.image_no = ifnull(v.image_no, nv.image_no)";
+    # $sql = "	UPDATE $ATTRS_WORK as v JOIN 
+    # 		(SELECT t.synonym_no,
+    # 			max(v.is_extant) as is_extant,
+    # 			min(v.min_body_mass) as min_body_mass,
+    # 			max(v.max_body_mass) as max_body_mass,
+    # 			sum(v.n_occs) as n_occs,
+    # 			max(v.first_early_age) as first_early_age,
+    # 			max(v.first_late_age) as first_late_age,
+    # 			min(v.last_early_age) as last_early_age,
+    # 			min(v.last_late_age) as last_late_age,
+    # 			max(v.precise_age) as precise_age,
+    # 			max(v.not_trace) as not_trace,
+    # 			v.image_no
+    # 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+    # 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
+    # 		SET     v.is_extant = nv.is_extant,
+    # 			v.n_occs = nv.n_occs,
+    # 			v.min_body_mass = nv.min_body_mass,
+    # 			v.max_body_mass = nv.max_body_mass,
+    # 			v.first_early_age = nv.first_early_age,
+    # 			v.first_late_age = nv.first_late_age,
+    # 			v.last_early_age = nv.last_early_age,
+    # 			v.last_late_age = nv.last_late_age,
+    # 			v.precise_age = nv.precise_age,
+    # 			v.not_trace = nv.not_trace,
+    # 			v.image_no = ifnull(v.image_no, nv.image_no)";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
     # Redo the calculation of age ranges just for those taxa with a precise
     # age.  If the result for a given taxon is defined (i.e. at least one
     # synonym has a precise age) then substitute it.
     
-    $sql = "	UPDATE $ATTRS_WORK as V JOIN
-		(SELECT t.synonym_no,
-    			max(v.first_early_age) as first_early_age,
-			max(v.first_late_age) as first_late_age,
-			min(v.last_early_age) as last_early_age,
-			min(v.last_late_age) as last_late_age
-		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-		 WHERE v.precise_age
-		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
-		SET	v.first_early_age = ifnull(nv.first_early_age, v.first_early_age),
-			v.first_late_age = ifnull(nv.first_late_age, v.first_late_age),
-			v.last_early_age = ifnull(nv.last_early_age, v.last_early_age),
-			v.last_late_age = ifnull(nv.last_late_age, v.last_late_age)";
+    # $sql = "	UPDATE $ATTRS_WORK as V JOIN
+    # 		(SELECT t.synonym_no,
+    # 			max(v.first_early_age) as first_early_age,
+    # 			max(v.first_late_age) as first_late_age,
+    # 			min(v.last_early_age) as last_early_age,
+    # 			min(v.last_late_age) as last_late_age
+    # 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
+    # 		 WHERE v.precise_age
+    # 		 GROUP BY t.synonym_no) as nv on v.orig_no = nv.synonym_no
+    # 		SET	v.first_early_age = ifnull(nv.first_early_age, v.first_early_age),
+    # 			v.first_late_age = ifnull(nv.first_late_age, v.first_late_age),
+    # 			v.last_early_age = ifnull(nv.last_early_age, v.last_early_age),
+    # 			v.last_late_age = ifnull(nv.last_late_age, v.last_late_age)";
     
-    $result = $dbh->do($sql);
+    # $result = $dbh->do($sql);
     
     # Now figure out how deep the table goes.
     
@@ -4276,7 +4305,7 @@ sub computeAttrsTable {
 			if(max(v.not_trace) > 0, 1, pv.not_trace) as not_trace
 		 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
 			LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no 
-		 WHERE t.depth = $child_depth and v.is_valid and v.is_senior
+		 WHERE t.depth = $child_depth and v.is_senior
 		 GROUP BY t.parent_no) as nv on v.orig_no = nv.parent_no
 		SET     v.is_extant = nv.is_extant,
 			v.extant_children = nv.extant_children,
@@ -4289,34 +4318,6 @@ sub computeAttrsTable {
 			v.not_trace = nv.not_trace";
 	
 	$result = $dbh->do($sql);
-	
-	# Now do the same for the first/last interval numbers.  The reason
-	# this needs to be a separate statement is so that we can ignore taxa
-	# whose ages are imprecise.
-	
-	# my $sql = "
-	# 	UPDATE $ATTRS_WORK as v JOIN
-	# 	(SELECT t.parent_no,
-	# 		coalesce(greatest(max(v.first_early_age), pv.first_early_age), 
-	# 			max(v.first_early_age), pv.first_early_age) as first_early_age,
-	# 		coalesce(greatest(max(v.first_late_age), pv.first_late_age), 
-	# 			max(v.first_late_age), pv.first_late_age) as first_late_age,
-	# 		coalesce(least(min(v.last_early_age), pv.last_early_age), 
-	# 			min(v.last_early_age), pv.last_early_age) as last_early_age,
-	# 		coalesce(least(min(v.last_late_age), pv.last_late_age), 
-	# 			min(v.last_late_age), pv.last_late_age) as last_late_age,
-	# 		if(pv.precise_age = true, true, max(v.precise_age)) as precise_age
-	# 	 FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-	# 		LEFT JOIN $ATTRS_WORK as pv on pv.orig_no = t.parent_no
-	# 	 WHERE t.depth = $child_depth and v.is_valid and v.is_senior and v.not_trace
-	# 	 GROUP BY t.parent_no) as nv on v.orig_no = nv.parent_no
-	# 	SET	v.first_early_age = nv.first_early_age,
-	# 		v.first_late_age = nv.first_late_age,
-	# 		v.last_early_age = nv.last_early_age,
-	# 		v.last_late_age = nv.last_late_age,
-	# 		v.precise_age = nv.precise_age";
-	
-	# $result = $dbh->do($sql);
 	
 	# Then coalesce attributes across synonym groups.
 	
@@ -4351,9 +4352,7 @@ sub computeAttrsTable {
 	# in this is too complicated for SQL, so we must download the
 	# occurrences, do the computation, then upload them again.
 	
-	my $parent_depth = $depth - 1;
-	
-	$sql = "SELECT t.orig_no, t.synonym_no, t.parent_no, t.depth, v.taxon_size,
+	$sql = "SELECT t.orig_no, t.synonym_no, t.senpar_no, t.depth, v.taxon_size,
 		       v.first_early_age, v.first_late_age, v.last_early_age, v.last_late_age,
 		       v.early_occ, v.late_occ, v.precise_age, v.not_trace
 		FROM $ATTRS_WORK as v join $TREE_WORK as t using (orig_no)
@@ -4370,7 +4369,7 @@ sub computeAttrsTable {
 	{
 	    # First, determine which entry each row should be coalesced into.
 	    
-	    my $orig_no = $row->{depth} == $depth ? $row->{synonym_no} : $row->{parent_no};
+	    my $orig_no = $row->{depth} == $depth ? $row->{synonym_no} : $row->{senpar_no};
 	    
 	    # If the coalesce cell is empty, set it to the current row and go
 	    # on to the next even if the age is not precise.
@@ -4381,18 +4380,19 @@ sub computeAttrsTable {
 		next;
 	    }
 	    
-	    # If it does not have a precise age, and the current one either
-	    # does have a precise age or is the parent cell, then replace it.
+	    # If the current row has a precise age and the coalesce cell does
+	    # not, then replace it.
 	    
-	    if ( ($row->{depth} == $depth or $row->{precise_age}) and not $coalesce{$orig_no}{precise_age} )
+	    if ( $row->{precise_age} and not $coalesce{$orig_no}{precise_age} )
 	    {
 		$coalesce{$orig_no} = $row;
 		next;
 	    }
 	    
-	    # Otherwise, ignore this row unless it has a precise age.
+	    # Otherwise, ignore this row if the coalesce cell has a precise
+	    # age and this one does not.
 	    
-	    next unless $row->{precise_age};
+	    next if $coalesce{$orig_no}{precise_age} and not $row->{precise_age};
 	    
 	    # If the age bounds are outside what is already recorded in the
 	    # coalesce cell, set the new bounds and representative
@@ -4448,46 +4448,6 @@ sub computeAttrsTable {
 	    
 	    my $a = 1;	# we can stop here when debugging
 	}
-	
-	# However, we also want to sum these up using accepted_no, so that
-	# invalid subgroups, etc. will have accurate counts.
-	
-	# $sql = "
-	# 	UPDATE $ATTRS_WORK as v JOIN 
-	# 	(SELECT t.accepted_no,
-	# 		if(sum(v.is_extant) > 0, 1, coalesce(is_extant)) as is_extant,
-	# 		sum(v.extant_children) as extant_children_sum,
-	# 		sum(v.distinct_children) as distinct_children_sum,
-	# 		sum(v.extant_size) as extant_size_sum,
-	# 		sum(v.taxon_size) as taxon_size_sum,
-	# 		sum(v.n_occs) as n_occs,
-	# 		min(v.min_body_mass) as min_body_mass,
-	# 		max(v.max_body_mass) as max_body_mass,
-	# 		max(v.first_early_age) as first_early_age,
-	# 		max(v.first_late_age) as first_late_age,
-	# 		min(v.last_early_age) as last_early_age,
-	# 		min(v.last_late_age) as last_late_age,
-	# 		max(v.precise_age) as precise_age,
-	# 		if(sum(v.not_trace) > 0, 1, 0) as not_trace
-	# 	FROM $ATTRS_WORK as v JOIN $TREE_WORK as t using (orig_no)
-	# 	WHERE t.depth = $depth and t.accepted_no <> t.synonym_no
-	# 	GROUP BY t.accepted_no) as nv on v.orig_no = nv.accepted_no
-	# 	SET     v.is_extant = nv.is_extant,
-	# 		v.extant_children = nv.extant_children_sum,
-	# 		v.distinct_children = nv.distinct_children_sum,
-	# 		v.extant_size = nv.extant_size_sum + if(nv.is_extant, 1, 0),
-	# 		v.taxon_size = nv.taxon_size_sum + 1,
-	# 		v.n_occs = nv.n_occs,
-	# 		v.min_body_mass = nv.min_body_mass,
-	# 		v.max_body_mass = nv.max_body_mass,
-	# 		v.first_early_age = nv.first_early_age,
-	# 		v.first_late_age = nv.first_late_age,
-	# 		v.last_early_age = nv.last_early_age,
-	# 		v.last_late_age = nv.last_late_age,
-	# 		v.precise_age = nv.precise_age,
-	# 		v.not_trace = nv.not_trace";
-	
-	# $result = $dbh->do($sql);
     }
     
     # Finally, we iterate from the top of the tree back down, computing those
@@ -4695,24 +4655,6 @@ sub computeCollectionCounts {
     $result = $dbh->do("DROP TABLE IF EXISTS ROW1");
     
     logMessage(2, "    done");
-}
-
-
-
-# computeTaxonProminenceTables ( dbh )
-# 
-# Use the occurrence matrix, the collection matrix, and the taxon trees to
-# compute summary tables for the prevalence and diversity of phyla and classes
-# throughout space and time.
-
-sub computeTaxonProminenceTables {
-
-    my ($dbh) = @_;
-    
-    
-
-
-
 }
 
 

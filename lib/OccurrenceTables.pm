@@ -15,6 +15,7 @@ use Try::Tiny;
 
 use CoreFunction qw(activateTables);
 use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF
+		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP
 		 $INTERVAL_DATA $SCALE_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
@@ -208,6 +209,7 @@ sub buildOccurrenceTables {
     
     buildTaxonSummaryTable($dbh, $options);
     buildReferenceSummaryTable($dbh, $options);
+    buildIntervalMaps($dbh, $options);
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -239,17 +241,40 @@ sub buildTaxonSummaryTable {
 				first_late_age decimal(9,5),
 				last_early_age decimal(9,5),
 				last_late_age decimal(9,5),
-				precise_age boolean default true,
+				precise_age boolean default false,
 				early_occ int unsigned,
 				late_occ int unsigned) ENGINE=MyISAM");
     
-    # Look for the lower and upper bounds for the interval range in which each
-    # taxon occurs.  Start by ignoring occurrences dated to an epoch, era or
-    # period (except for Ediacaran and Quaternary) or to an interval that
-    # spans more than 30 million years, because these are not precise enough for
-    # first/last appearance calculations.
+    # Fill in this table with numbers of occurrences, and age bounds for first
+    # and last appearance crudely calculated as the minimum and maximum of the
+    # age ranges of the individual occurrences of each taxon.
+    
+    $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
+			first_early_age, first_late_age, last_early_age, last_late_age,
+			precise_age)
+		SELECT orig_no, count(*), 0,
+			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
+			false
+		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
+			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
+			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+		WHERE latest_ident and orig_no > 0
+		GROUP BY orig_no";
+    
+    $count = $dbh->do($sql);
+    
+    logMessage(2, "      found $count unique taxa");
+    
+    # We then try to tighten up these bounds by recalculating them ignoring
+    # occurrences dated to an eon, era or period (except for Ediacaran and
+    # Quaternary) or to an interval that spans more than 30 million years.
+    # Any taxon having occurrences that are dated more precisely than this
+    # will be substituted with more precise bounds based just on those
+    # occurrences.
     
     # The age thresholds can be adjusted by means of the $options hash.
+    
+    logMessage(2, "    computing precise age bounds where possible...");
     
     logMessage(2, "      a \"precise\" age is counted as:");
     
@@ -276,14 +301,15 @@ sub buildTaxonSummaryTable {
 			first_early_age, first_late_age, last_early_age, last_late_age,
 			precise_age)
 		SELECT m.orig_no, count(*), 0,
-			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
+			max(ei.early_age) as fea, max(li.late_age) as lea,
+			min(ei.early_age) as fla, min(li.late_age) as lla,
 			true
 		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
 			LEFT JOIN $SCALE_MAP as es on es.interval_no = ei.interval_no
 			LEFT JOIN $SCALE_MAP as ls on ls.interval_no = li.interval_no
-		WHERE latest_ident and
+		WHERE m.latest_ident and m.orig_no > 0 and
 		      ((ei.early_age - li.late_age <= $interval_bound and li.late_age >= 20) or
 		      (ei.early_age - li.late_age <= 20 and li.late_age < 20) or
 		      (es.scale_no = 1 and es.level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
@@ -291,35 +317,42 @@ sub buildTaxonSummaryTable {
 		      (es.scale_no = 1 and es.level = 3 and ei.early_age < 3) or
 		      (ls.scale_no = 1 and ls.level = 3 and li.late_age >= 540))
 		GROUP BY m.orig_no
-		HAVING m.orig_no > 0";
-    
-    # print "SQL:\n$sql\n";
-    # exit;
+		ON DUPLICATE KEY UPDATE
+			first_early_age = values(first_early_age),
+			first_late_age = values(first_late_age),
+			last_early_age = values(last_early_age),
+			last_late_age = values(last_late_age),
+			precise_age = true";
     
     $count = $dbh->do($sql);
     
-    logMessage(2, "      found $count taxa with precise ages");
+    $count /= 2;	# we must divide by two to get the count of updated
+                        # rows, see documentation for "ON DUPLICATE KEY UPDATE".
+    
+    logMessage(2, "      substituted more precise ages for $count taxa");
     
     # Then we need to go back and add in the taxa that are only known from
     # occurrences with non-precise ages (those for which all of the
-    # occurrences were skipped by the above SQL statement).
+    # occurrences were skipped by the above SQL statement).  For those which
+    # already have the attributes filled in, we just increment the occurrence
+    # count.
     
-    $sql = "	INSERT IGNORE INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
-			first_early_age, first_late_age, last_early_age, last_late_age,
-			precise_age)
-		SELECT m.orig_no, count(*), 0,
-			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
-			false
-		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
-			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
-			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
-		WHERE latest_ident
-		GROUP BY m.orig_no
-		HAVING m.orig_no > 0";
+    # $sql = "	INSERT INTO $OCC_TAXON_WORK (orig_no, n_occs, n_colls,
+    # 			first_early_age, first_late_age, last_early_age, last_late_age,
+    # 			precise_age)
+    # 		SELECT m.orig_no, count(*), 0,
+    # 			max(ei.early_age), max(li.late_age), min(ei.early_age), min(li.late_age),
+    # 			false
+    # 		FROM $OCC_MATRIX as m JOIN $COLL_MATRIX as c using (collection_no)
+    # 			JOIN $INTERVAL_DATA as ei on ei.interval_no = c.early_int_no
+    # 			JOIN $INTERVAL_DATA as li on li.interval_no = c.late_int_no
+    # 		WHERE m.latest_ident and m.orig_no > 0
+    # 		GROUP BY m.orig_no
+    # 		ON DUPLICATE KEY UPDATE n_occs = n_occs + 1";
     
-    $count = $dbh->do($sql);
+    # $count = $dbh->do($sql);
     
-    logMessage(2, "      found $count taxa without precise ages");
+    # logMessage(2, "      found $count taxa without precise ages");
     
     # Now that we have the age bounds for the first and last occurrence, we
     # can select a candidate first and last occurrence for each taxon (from
@@ -414,5 +447,69 @@ sub buildReferenceSummaryTable {
     my $a = 1;		# we can stop here when debugging.
 }
 
+
+# buildIntervalMaps ( dbh, options )
+# 
+# Create tables that map each distinct age range from the occurrence table to
+# the set of intervals from the various scales that encompass it.  This will
+# be useful for diversity calculations, among other things.
+
+sub buildIntervalMaps {
+    
+    my ($dbh) = @_;
+    
+    my ($sql, $result, $count);
+    
+    logMessage(2, "    creating occurrence interval maps...");
+    
+    $dbh->do("DROP TABLE IF EXISTS $OCC_BUFFER_MAP");
+    
+    $dbh->do("
+	CREATE TABLE $OCC_BUFFER_MAP (
+		scale_no smallint unsigned not null,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
+		interval_no int unsigned not null,
+		PRIMARY KEY (early_age, late_age, scale_no, interval_no)) Engine=MyISAM");
+    
+    $sql = "
+	INSERT INTO $OCC_BUFFER_MAP (scale_no, early_age, late_age, interval_no)
+	SELECT m.scale_no, i.early_age, i.late_age, m.interval_no
+	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
+		JOIN (SELECT scale_no, early_age, late_age, interval_no
+		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
+	WHERE m.late_age < i.early_age and m.early_age > i.late_age and
+		i.early_age < m.early_age + if(i.early_age > 66, 12, 5) and
+		i.late_age > m.late_age - if(i.late_age > 66, 12, 5)";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      generated $result rows with buffer rule");
+    
+    $dbh->do("DROP TABLE IF EXISTS $OCC_MAJOR_MAP");
+    
+    $dbh->do("
+	CREATE TABLE $OCC_MAJOR_MAP (
+		scale_no smallint unsigned not null,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
+		interval_no int unsigned not null,
+		PRIMARY KEY (scale_no, early_age, late_age, interval_no)) Engine=MyISAM");
+    
+    $sql = "
+	INSERT INTO $OCC_MAJOR_MAP (scale_no, early_age, late_age, interval_no)
+	SELECT m.scale_no, i.early_age, i.late_age, m.interval_no
+	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
+		JOIN (SELECT scale_no, early_age, late_age, interval_no
+		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
+	WHERE i.early_age > i.late_age and
+		if(i.late_age >= m.late_age,
+			if(i.early_age <= m.early_age, i.early_age - i.late_age, m.early_age - i.late_age),
+			if(i.early_age > m.early_age, m.early_age - m.late_age, i.early_age - m.late_age)) / (i.early_age - i.late_age) >= 0.5";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      generated $result rows with majority rule");
+}
 
 1;

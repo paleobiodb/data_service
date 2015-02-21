@@ -11,9 +11,11 @@ use strict;
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS
-		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA $BIN_KEY
-		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS $PVL_SUMMARY $PVL_GLOBAL
+		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA $BIN_KEY $BIN_LOC
+		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS
+		      $DIV_MATRIX $PVL_SUMMARY $PVL_GLOBAL
 		      $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF
+		      $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
 		      $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
 		      $SCALE_DATA $SCALE_LEVEL_DATA $SCALE_MAP
 		      $PHYLOPICS $PHYLOPIC_NAMES $PHYLOPIC_CHOICE $TAXON_PICS
@@ -37,6 +39,7 @@ our $COLL_STRATA = "coll_strata";
 our $COLL_LOC = "coll_loc";
 our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
+our $BIN_LOC = "bin_loc";
 our $PALEOCOORDS = 'paleocoords';
 our $GEOPLATES = 'geoplates';
 
@@ -48,6 +51,11 @@ our $OCC_MATRIX = "occ_matrix";
 our $OCC_EXTRA = "occ_extra";
 our $OCC_TAXON = "occ_taxon";
 our $OCC_REF = "occ_ref";
+
+our $OCC_BUFFER_MAP = 'occ_buffer_map';
+our $OCC_MAJOR_MAP = 'occ_major_map';
+our $OCC_CONTAINED_MAP = 'occ_contained_map';
+our $OCC_OVERLAP_MAP = 'occ_overlap_map';
 
 # new interval tables
 
@@ -68,6 +76,7 @@ our $TAXON_PICS = 'taxon_pics';
 
 # taxon diversity and prevalence tables
 
+our $DIV_MATRIX = 'div_matrix';
 our $PVL_SUMMARY = 'pvl_summary';
 our $PVL_GLOBAL = 'pvl_global';
 

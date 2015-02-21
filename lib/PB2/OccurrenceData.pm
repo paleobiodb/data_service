@@ -1060,11 +1060,11 @@ sub prevalence {
     # Get a database handle by which we can make queries.
     
     my $dbh = $request->get_connection;
-    my $taxonomy = $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
+    my $taxonomy = ($request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees'));
     
     # my $fields = "p.orig_no, p.rank, t.name, t.lft, t.rgt, v.image_no, sum(p.n_occs) as n_occs";
     
-    my $fields = "p.order_no, p.class_no, p.phylum_no, sum(p.n_occs) as n_occs, t.lft, t.rgt, v.image_no";
+    my $fields = "p.order_no, p.class_no, p.phylum_no, sum(p.n_occs) as n_occs";
     
     my $limit = $request->result_limit || 10;
     $limit += $request->result_offset;
@@ -1088,7 +1088,7 @@ sub prevalence {
 	
 	no warnings 'uninitialized';
 	
-	my $sql = "
+	$request->{main_sql} = "
 		SELECT $fields
 		FROM $PVL_SUMMARY as p
 		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
@@ -1097,9 +1097,9 @@ sub prevalence {
 		GROUP BY orig_no
 		ORDER BY n_occs desc LIMIT $raw_limit";
 	
-	print STDERR "$sql\n\n" if $request->debug;
+	print STDERR "$request->{main_sql}\n\n" if $request->debug;
 	
-	my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
 	$request->generate_prevalence_alt($result, $limit, $detail);
 	return;
@@ -1125,7 +1125,7 @@ sub prevalence {
     # for summary bins, we do so.  Otherwise, we have to go through the entire
     # set of occurrences again.
     
-    if ( $tables->{o} || $tables->{cc} || $tables->{c} )
+    if ( $tables->{o} || $tables->{cc} || $tables->{c} || $tables->{non_summary} )
     {
 	$tables = { };
 	
@@ -1154,8 +1154,7 @@ sub prevalence {
 		$join_list
         WHERE $filter_string
 	GROUP BY ph.phylum_no, ph.class_no, ph.order_no
-	ORDER BY n_occs desc
-	LIMIT $raw_limit";
+	ORDER BY n_occs desc LIMIT $raw_limit";
 	
 	print STDERR "$request->{main_sql}\n\n" if $request->debug;
 	
@@ -1163,7 +1162,7 @@ sub prevalence {
 	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
-	$request->generate_prevalence_alt($result, $taxonomy, $limit, $detail);
+	$request->generate_prevalence_alt($result, $limit, $detail);
 	return;
 	
 	# my $sth = $dbh->prepare($request->{main_sql});
@@ -1179,7 +1178,7 @@ sub prevalence {
 	push @filters, "s.access_level = 0";
 	my $filter_string = join(' and ', @filters);
 	
-	my $sql = "
+	$request->{main_sql} = "
 		SELECT $fields
 		FROM $PVL_SUMMARY as p JOIN $COLL_BINS as s using (bin_id, interval_no)
 		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
@@ -1188,9 +1187,9 @@ sub prevalence {
 		GROUP BY orig_no
 		ORDER BY n_occs desc LIMIT $raw_limit";
 	
-	print STDERR "$sql\n\n" if $request->debug;
+	print STDERR "$request->{main_sql}\n\n" if $request->debug;
 	
-	my $result = $dbh->selectall_arrayref($sql, { Slice => {} });
+	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
 	$request->generate_prevalence_alt($result, $limit, $detail);
 	return;

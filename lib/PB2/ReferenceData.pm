@@ -116,7 +116,7 @@ sub initialize {
 	  "Last page number",
       { output => 'r_pubtype', com_name => 'pty', pbdb_name => 'publication_type', not_block => 'formatted' },
 	  "Publication type",
-      { output => 'r_language', com_name => 'lng', pbdb_name => 'language', not_block => 'formatted' },
+      { output => 'r_language', com_name => 'lan', pbdb_name => 'language', not_block => 'formatted' },
 	  "Language",
       { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi' },
 	  "The DOI for this document, if known",
