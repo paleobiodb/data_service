@@ -256,52 +256,44 @@ sub updatePaleocoords {
     logMessage(2, "    looking for collections whose palecoordinates need updating...");
     
     $sql =     "SELECT collection_no, c.lng as present_lng, c.lat as present_lat,
-		       round(c.early_age,0) as early_age,
-		       round((c.early_age + c.late_age)/2,0) as mid_age,
-		       round(c.late_age,0) as late_age
+		       'early' as selector, round(c.early_age,0) as age
     		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
-    		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0 and
-    		      (c.lat <> p.present_lat or c.lng <> p.present_lng or 
-    		       p.present_lat is null or p.present_lng is null or
-		       p.early_lng is null or p.mid_lng is null or p.late_lng is null or
-    		       round(c.early_age,0) <> p.early_age or round(c.late_age,0) <> p.late_age or
-		       round((c.early_age + c.late_age)/2,0) <> p.mid_age)
-    		       $age_filter";
+    		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
+			and round(c.early_age,0) between $min_age and $max_age
+			and (p.early_age is null or p.early_lng is null or p.early_lat is null)";
     
-    print STDERR $sql . "\n\n" if $self->{debug};
+    my $early_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
     
-    my $sth = $dbh->prepare($sql);
+    $sql =     "SELECT collection_no, c.lng as present_lng, c.lat as present_lat,
+		       'mid' as selector, round((c.early_age + c.late_age)/2,0) as age
+    		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
+    		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
+			and round((c.early_age + c.late_age)/2,0) between $min_age and $max_age
+			and (p.mid_age is null or p.mid_lng is null or p.mid_lat is null)";
     
-    $sth->execute();
+    my $mid_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
+    
+    $sql =     "SELECT collection_no, c.lng as present_lng, c.lat as present_lat,
+		       'late' as selector, round(c.late_age,0) as age
+    		FROM $COLL_MATRIX as c LEFT JOIN $PALEOCOORDS as p using (collection_no)
+    		WHERE c.lat between -90.0 and 90.0 and c.lng between -180.0 and 180.0
+			and round(c.late_age,0) between $min_age and $max_age
+			and (p.late_age is null or p.late_lng is null or p.late_lat is null)";
+    
+    my $late_updates = $dbh->selectall_arrayref($sql, { Slice => {} });
     
     $count = 0;
     
-    while ( my $record = $sth->fetchrow_hashref )
+    foreach my $record ( @$early_updates, @$mid_updates, @$late_updates )
     {
-	my $coll_no = $record->{collection_no};
+	my $collection_no = $record->{collection_no};
 	my $lng = $record->{present_lng};
 	my $lat = $record->{present_lat};
-	my $early_age = $record->{early_age};
-	my $mid_age = $record->{mid_age};
-	my $late_age = $record->{late_age};
+	my $selector = $record->{selector};
+	my $age = $record->{age};
 	
-	if ( defined $early_age and $early_age >= $min_age and $early_age <= $max_age )
-	{
-	    push @{$self->{source_points}{$early_age}}, [$coll_no, 'early', $lng, $lat];
-	    $count++;
-	}
-	
-	if ( defined $mid_age and $mid_age >= $min_age and $mid_age <= $max_age )
-	{
-	    push @{$self->{source_points}{$mid_age}}, [$coll_no, 'mid', $lng, $lat];
-	    $count++;
-	}
-	
-	if ( defined $late_age and $late_age >= $min_age and $late_age <= $max_age )
-	{
-	    push @{$self->{source_points}{$late_age}}, [$coll_no, 'late', $lng, $lat];
-	    $count++;
-	}
+	push @{$self->{source_points}{$age}}, [$collection_no, $selector, $lng, $lat];
+	$count++;
     }
     
     logMessage(2, "    found $count entries to update");
