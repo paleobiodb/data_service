@@ -14,7 +14,8 @@ use Getopt::Std;
 use CoreFunction qw(connectDB
 		    configData);
 use ConsoleLog qw(initMessages
-		  logMessage);
+		  logMessage
+		  logTimestamp);
 use IntervalTables qw(loadIntervalData
 		      buildIntervalMap);
 use CollectionTables qw(buildCollectionTables buildStrataTables);
@@ -40,6 +41,7 @@ my $cmd_line_db_name = shift;
 # Initialize the output-message subsystem
 
 initMessages(2, 'Rebuild');
+logTimestamp();
 
 # Get a database handle and a taxonomy object.
 
