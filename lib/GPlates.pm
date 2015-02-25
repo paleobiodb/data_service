@@ -242,13 +242,12 @@ sub updatePaleocoords {
     # Then we must step through the keys of $self->{source_points} one by one.
     # These keys are ages (in Ma), and we need to generate a GPlates rotation
     # query for each separate age.  In order to identify each point, we create
-    # a decimal number using the collection_no field in conjunction with "0"
-    # for "early", "1" for "mid" and "2" for "late" ages.
+    # a feature name using the collection_no field in conjunction with the
+    # selector value of 'early', 'mid' or 'late' to identify which
+    # paleocoordinate age we are computing.
     
     my $ua = LWP::UserAgent->new();
     $ua->agent("Paleobiology Database Updater/0.1");
-    
-    my %age_code = ( 'early' => 0, 'mid' => 1, 'late' => 2 );
     
     $DB::single = 1;
     
@@ -266,18 +265,18 @@ sub updatePaleocoords {
 	my $request_json = "geologicage=$age&output=geojson&feature_collection={\"type\": \"FeatureCollection\",";
 	$request_json .= "\"features\": [";
 	my $comma = '';
-	my $count = 0;
+	my @oid_list;
 	
 	foreach my $point ( @{$self->{source_points}{$age}} )
 	{
-	    my ($coll_no, $which, $lng, $lat) = @$point;
-	    my $oid = $age_code{$which} . ".$coll_no";
+	    my ($coll_no, $selector, $lng, $lat) = @$point;
+	    my $oid = "$selector.$coll_no";
 	    
 	    next unless $lng ne '' && $lat ne '';	# skip any point with null coordinates.
 	    
 	    $request_json .= $comma; $comma = ",";
 	    $request_json .= $self->generateFeature($lng, $lat, $oid);
-	    $count++;
+	    push @oid_list, $oid;
 	}
 	
 	$request_json .= "]}";
@@ -285,9 +284,12 @@ sub updatePaleocoords {
 	# Now if we have at least one point to rotate then fire off the
 	# request and process the answer (if any)
 	
+	my $count = scalar(@oid_list);
+	my $oid_string = join(',', @oid_list);
+	
 	next AGE unless $count;
 	
-	logMessage(2, "    rotating $count points to $age Ma");
+	logMessage(2, "    rotating $count points to $age Ma ($oid_string)");
 	
 	$self->makeGPlatesRequest($ua, \$request_json, $age);
 	
@@ -444,6 +446,9 @@ sub makeGPlatesRequest {
 }
 
 
+my %is_selector = ( 'early' => 1, 'mid' => 1, 'late' => 1 );
+
+
 sub processResponse {
     
     my ($self, $age, $content_ref) = @_;
@@ -472,7 +477,7 @@ sub processResponse {
 	my $key = $feature->{properties}{NAME};
 	my ($selector, $collection_no) = split(qr{\.}, $key);
 	
-	unless ( defined $selector && $selector =~ qr{^[0-2]$} && defined $collection_no && $collection_no > 0 )
+	unless ( defined $selector && $is_selector{$selector} && defined $collection_no && $collection_no > 0 )
 	{
 	    push @bad_list, $key;
 	    next POINT;
@@ -511,17 +516,17 @@ sub updateOneEntry {
     
     $self->{add_row_sth}->execute($collection_no);
     
-    if ( $selector eq '0' )
+    if ( $selector eq 'early' )
     {
 	$self->{early_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
     }
     
-    elsif ( $selector eq '1' )
+    elsif ( $selector eq 'mid' )
     {
 	$self->{mid_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
     }
     
-    elsif ( $selector eq '2' )
+    elsif ( $selector eq 'late' )
     {
 	$self->{late_sth}->execute($age, $lng, $lat, $plate_id, $collection_no);
     }
