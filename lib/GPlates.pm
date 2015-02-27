@@ -359,7 +359,7 @@ sub generateFeature {
     my ($self, $lng, $lat, $oid) = @_;
     
     my $output = "{\"type\": \"Feature\",";
-    $output .= "\"geometry\": {\"type\": \"Point\", \"coordinates\": [$lat, $lng]},";
+    $output .= "\"geometry\": {\"type\": \"Point\", \"coordinates\": [$lng, $lat]},";
     $output .= "\"properties\": {\"name\": \"$oid\", \"feature_type\": \"gpml:UnclassifiedFeature\", ";
     $output .= "\"begin_age\": \"4000.0\", \"end_age\": \"0.0\"}";
     $output .= "}";
