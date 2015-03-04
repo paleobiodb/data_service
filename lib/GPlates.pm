@@ -34,6 +34,10 @@ our ($DEFAULT_RETRY_LIMIT) = 3;
 our ($DEFAULT_RETRY_INTERVAL) = 5;
 our ($DEFAULT_FAIL_LIMIT) = 3;
 
+our ($DEFAULT_MAX_FEATURES) = 35;	# This value can be adjusted if necessary; it ensures
+                                        # that the length of each request URL won't exceed the
+                                        # server's limit.  Since we don't actually know what that
+                                        # limit is, we are conservative.
 
 # updatePaleocoords ( dbh, options )
 # 
@@ -56,6 +60,7 @@ sub updatePaleocoords {
     my $retry_limit = configData('gplates_retry_limit') || $DEFAULT_RETRY_LIMIT;
     my $retry_interval = configData('gplates_retry_interval') || $DEFAULT_RETRY_INTERVAL;
     my $fail_limit = configData('gplates_fail_limit') || $DEFAULT_FAIL_LIMIT;
+    my $max_features = configData('gplates_feature_limit') || $DEFAULT_MAX_FEATURES;
     
     die "You must specify the GPlates URI in the configuration file, as 'gplates_uri'\n"
 	unless $gplates_uri;
@@ -85,6 +90,7 @@ sub updatePaleocoords {
 		 retry_limit => $retry_limit,
 		 retry_interval => $retry_interval,
 		 fail_limit => $fail_limit,
+		 max_features => $max_features,
 	       };
     
     bless $self, 'GPlates';
@@ -260,46 +266,62 @@ sub updatePaleocoords {
 	next AGE if defined $self->{min_age_bound} && $age < $self->{min_age_bound};
 	next AGE if defined $self->{max_age_bound} && $age > $self->{max_age_bound};
 	
-	# Construct an HTTP request body.
+	# Grab the set of points that need to be rotated to this age.
 	
-	my $request_json = "geologicage=$age&output=geojson&feature_collection={\"type\": \"FeatureCollection\",";
-	$request_json .= "\"features\": [";
-	my $comma = '';
-	my @oid_list;
+	my @points = @{$self->{source_points}{$age}};
 	
-	foreach my $point ( @{$self->{source_points}{$age}} )
+	# Now create as many requests as are necessary to rotate all of these
+	# points. 
+	
+	while ( @points )
 	{
-	    my ($coll_no, $selector, $lng, $lat) = @$point;
-	    my $oid = "$selector.$coll_no";
+	    # Start with the basic parameters, ending with the preamble for a
+	    # feature collection.
 	    
-	    next unless $lng ne '' && $lat ne '';	# skip any point with null coordinates.
+	    my $request_json = "geologicage=$age&output=geojson&feature_collection={\"type\": \"FeatureCollection\",";
+	    $request_json .= "\"features\": [";
+	    my $comma = '';
+	    my @oid_list;
 	    
-	    $request_json .= $comma; $comma = ",";
-	    $request_json .= $self->generateFeature($lng, $lat, $oid);
-	    push @oid_list, $oid;
-	}
-	
-	$request_json .= "]}";
-	
-	# Now if we have at least one point to rotate then fire off the
-	# request and process the answer (if any)
-	
-	my $count = scalar(@oid_list);
-	my $oid_string = join(',', @oid_list);
-	
-	next AGE unless $count;
-	
-	logMessage(2, "    rotating $count points to $age Ma ($oid_string)");
-	
-	$self->makeGPlatesRequest($ua, \$request_json, $age);
-	
-	# If we have gotten too many server failures in a row, then abort this
-	# run.
-	
-	if ( $self->{fail_count} >= $self->{fail_limit} )
-	{
-	    logMessage(2, "    ABORTING RUN DUE TO REPEATED QUERY FAILURE");
-	    last;
+	    # Add one feature for each point, up to the limit for a single request.
+	    
+	FEATURE:
+	    while ( my $point = shift @points )
+	    {
+		my ($coll_no, $selector, $lng, $lat) = @$point;
+		my $oid = "$selector.$coll_no";
+		
+		next unless $lng ne '' && $lat ne '';	# skip any point with null coordinates.
+		
+		$request_json .= $comma; $comma = ",";
+		$request_json .= $self->generateFeature($lng, $lat, $oid);
+		push @oid_list, $oid;
+		
+		last FEATURE if @oid_list >= $self->{max_features};
+	    }
+	    
+	    $request_json .= "]}";
+	    
+	    # Now if we have at least one point to rotate then fire off the
+	    # request and process the answer (if any)
+	    
+	    my $count = scalar(@oid_list);
+	    my $oid_string = join(',', @oid_list);
+	    
+	    next AGE unless $count;
+	    
+	    logMessage(2, "    rotating $count points to $age Ma ($oid_string)");
+	    
+	    $self->makeGPlatesRequest($ua, \$request_json, $age);
+	    
+	    # If we have gotten too many server failures in a row, then abort this
+	    # run.
+	    
+	    if ( $self->{fail_count} >= $self->{fail_limit} )
+	    {
+		logMessage(2, "    ABORTING RUN DUE TO REPEATED QUERY FAILURE");
+		last;
+	    }
 	}
     }
     
@@ -744,6 +766,13 @@ successive try is made.  If not specified, it defaults to 5.
 The value of this directive should be the number of request failures that are
 tolerated before the update process is aborted.  If not specified, it defaults
 to 3.
+
+=item gplates_feature_limit
+
+The value of this directive should be the maximum number of features (points) to be included in a
+single request to the GPlates service.  If not specified, it defaults to 35.  This is necessary
+because the service does not work properly if too many points are included in one request.  As
+many requests as necessary will be made so as to update all paleocoordinates that need updating.
 
 =back
 
