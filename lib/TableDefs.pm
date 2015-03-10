@@ -11,9 +11,10 @@ use strict;
 use base 'Exporter';
 
 our (@EXPORT_OK) = qw($COLLECTIONS $AUTHORITIES $OPINIONS $REFERENCES $OCCURRENCES $REIDS
-		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA $BIN_KEY $BIN_LOC
+		      $COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $CONTINENT_DATA
+		      $BIN_KEY $BIN_LOC $BIN_CONTAINER
 		      $PALEOCOORDS $GEOPLATES $COLL_LOC $COLL_INTS
-		      $DIV_MATRIX $PVL_SUMMARY $PVL_GLOBAL
+		      $DIV_MATRIX $DIV_GLOBAL $PVL_SUMMARY $PVL_GLOBAL
 		      $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF
 		      $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
 		      $INTERVAL_DATA $INTERVAL_MAP $INTERVAL_BRACKET $INTERVAL_BUFFER
@@ -40,6 +41,7 @@ our $COLL_LOC = "coll_loc";
 our $COUNTRY_MAP = "country_map";
 our $CONTINENT_DATA = "continent_data";
 our $BIN_LOC = "bin_loc";
+our $BIN_CONTAINER = "bin_container";
 our $PALEOCOORDS = 'paleocoords';
 our $GEOPLATES = 'geoplates';
 
@@ -77,6 +79,7 @@ our $TAXON_PICS = 'taxon_pics';
 # taxon diversity and prevalence tables
 
 our $DIV_MATRIX = 'div_matrix';
+our $DIV_GLOBAL = 'div_global';
 our $PVL_SUMMARY = 'pvl_summary';
 our $PVL_GLOBAL = 'pvl_global';
 

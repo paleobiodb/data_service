@@ -161,7 +161,7 @@ sub buildIntervalMap {
 			FROM $INTERVAL_DATA as cxi JOIN $SCALE_MAP as sm using (interval_no)
 			WHERE cxi.early_age >= i.early_age and cxi.late_age <= i.late_age 
 				and sm.scale_no = i.scale_no
-			ORDER BY level desc limit 1) as cx_int_no
+			ORDER BY scale_level desc limit 1) as cx_int_no
 		FROM (SELECT distinct s.scale_no, ei.early_age, li.late_age
 		      FROM scale_data as s JOIN interval_data as ei JOIN interval_data as li
 		      WHERE ei.early_age > li.late_age and
@@ -177,7 +177,7 @@ sub buildIntervalMap {
 			FROM interval_data as cxi JOIN $SCALE_MAP as sm using (interval_no)
 			WHERE cxi.early_age >= i.early_age and cxi.late_age <= i.early_age 
 				and sm.scale_no = i.scale_no
-			ORDER BY level desc limit 1) as cx_int_no
+			ORDER BY scale_level desc limit 1) as cx_int_no
 		FROM (SELECT distinct s.scale_no, i.early_age
 		      FROM scale_data as s JOIN interval_data as i
 		      WHERE i.early_age <= s.early_age and i.early_age >= s.late_age) as i";
@@ -190,7 +190,7 @@ sub buildIntervalMap {
 			FROM interval_data as cxi JOIN $SCALE_MAP as sm using (interval_no)
 			WHERE cxi.early_age >= i.late_age and cxi.late_age <= i.late_age 
 				and sm.scale_no = i.scale_no
-			ORDER BY level desc limit 1) as cx_int_no
+			ORDER BY scale_level desc limit 1) as cx_int_no
 		FROM (SELECT distinct s.scale_no, i.late_age
 		      FROM scale_data as s JOIN interval_data as i
 		      WHERE i.late_age <= s.early_age and i.late_age >= s.late_age) as i";
@@ -212,14 +212,14 @@ sub buildIntervalMap {
 		age decimal(9,5),
 		interval_no int unsigned not null,
 		scale_no smallint unsigned not null,
-		level smallint unsigned not null,
+		scale_level smallint unsigned not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
 		PRIMARY KEY (age, interval_no),
 		KEY (interval_no)) Engine=MyISAM");
     
     $sql = "INSERT IGNORE INTO $INTERVAL_BRACKET_WORK
-	    SELECT a.age, bi.interval_no, sm.scale_no, sm.level, bi.early_age, bi.late_age
+	    SELECT a.age, bi.interval_no, sm.scale_no, sm.scale_level, bi.early_age, bi.late_age
 	    FROM $INTERVAL_DATA as bi JOIN $SCALE_MAP as sm using (interval_no)
 		JOIN (SELECT distinct early_age as age FROM $INTERVAL_DATA UNION
 		      SELECT distinct late_age as age FROM $INTERVAL_DATA) as a
@@ -288,7 +288,7 @@ sub buildIntervalBufferMap {
 		JOIN $SCALE_MAP as s1 on i1.interval_no = s1.interval_no
 		JOIN $SCALE_MAP as s2 on s2.interval_no = i2.interval_no
 	    SET ib.late_bound = if(i1.late_age - 50.0 > i2.late_age, i1.late_age - 50, i2.late_age)
-	    WHERE s1.scale_no = s2.scale_no and s1.level = s2.level and i1.late_age = i2.early_age";
+	    WHERE s1.scale_no = s2.scale_no and s1.scale_level = s2.scale_level and i1.late_age = i2.early_age";
     
     $result = $dbh->do($sql);
     
@@ -297,7 +297,7 @@ sub buildIntervalBufferMap {
 		JOIN $SCALE_MAP as s1 on i1.interval_no = s1.interval_no
 		JOIN $SCALE_MAP as s2 on s2.interval_no = i2.interval_no
 	    SET ib.early_bound = if(i1.early_age + 50 < i2.early_age, i1.early_age + 50, i2.early_age)
-	    WHERE s1.scale_no = s2.scale_no and s1.level = s2.level and i1.early_age = i2.late_age";
+	    WHERE s1.scale_no = s2.scale_no and s1.scale_level = s2.scale_level and i1.early_age = i2.late_age";
     
     $result = $dbh->do($sql);
     

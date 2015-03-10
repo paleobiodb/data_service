@@ -18,7 +18,7 @@ use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK);
 use CoreFunction qw(activateTables);
 use ConsoleLog qw(initMessages logMessage);
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_INTS $BIN_KEY $OCC_MATRIX $OCC_TAXON
-		 $DIV_MATRIX $PVL_SUMMARY $PVL_GLOBAL
+		 $DIV_MATRIX $DIV_GLOBAL $PVL_SUMMARY $PVL_GLOBAL
 		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP
 		 $INTERVAL_DATA $INTERVAL_BUFFER $SCALE_LEVEL_DATA $SCALE_DATA $SCALE_MAP $INTERVAL_MAP);
 
@@ -179,7 +179,7 @@ sub buildDiversityTables {
     # created above to make sure that each occurrence is counted in every
     # interval that it falls into under the "buffer rule".
     
-    logMessage(2, "    generating diversity matrix by geographic cluster, interval, and taxonomy...");
+    logMessage(2, "    generating diversity table by geographic cluster, interval, and taxonomy...");
     
     $dbh->do("DROP TABLE IF EXISTS $DIV_MATRIX");
 
@@ -190,9 +190,8 @@ sub buildDiversityTables {
 		genus_no int unsigned not null,
 		n_occs int unsigned not null,
 		not_trace tinyint unsigned not null,
-		PRIMARY KEY (bin_id, interval_no, ints_no, genus_no),
-		KEY (ints_no)) Engine=MyISAM");
-
+		PRIMARY KEY (bin_id, interval_no, ints_no, genus_no)) Engine=MyISAM");
+    
     $sql = "INSERT INTO $DIV_MATRIX (bin_id, interval_no, ints_no, genus_no, n_occs, not_trace)
 		SELECT SQL_NO_CACHE c.bin_id_3, m.interval_no, ta.ints_no, pl.genus_no, 1, not_trace
 		FROM occ_matrix as o JOIN $OCC_BUFFER_MAP as m using (early_age, late_age)
@@ -201,12 +200,45 @@ sub buildDiversityTables {
 			JOIN $TREE_TABLE as ta on ta.orig_no = t.accepted_no
 			JOIN $ATTRS_TABLE as v on v.orig_no = t.accepted_no
 			LEFT JOIN $LOWER_TABLE as pl on pl.orig_no = t.accepted_no
-		WHERE latest_ident
+		WHERE latest_ident and c.access_level = 0
 		ON DUPLICATE KEY UPDATE $DIV_MATRIX.n_occs = $DIV_MATRIX.n_occs + 1";
 
     $result = $dbh->do($sql);
 
     logMessage(2, "      generated $result rows");
+    
+    logMessage(2, "    generating diversity table worldwide by interval and taxonomy...");
+    
+    $dbh->do("DROP TABLE IF EXISTS $DIV_GLOBAL");
+
+    $dbh->do("CREATE TABLE $DIV_GLOBAL (
+		interval_no int unsigned not null,
+		ints_no int unsigned not null,
+		genus_no int unsigned not null,
+		n_occs int unsigned not null,
+		not_trace tinyint unsigned not null,
+		PRIMARY KEY (interval_no, ints_no, genus_no)) Engine=MyISAM");
+    
+    $sql = "INSERT INTO $DIV_GLOBAL (interval_no, ints_no, genus_no, n_occs, not_trace)
+		SELECT SQL_NO_CACHE m.interval_no, ta.ints_no, pl.genus_no, 1, not_trace
+		FROM occ_matrix as o JOIN $OCC_BUFFER_MAP as m using (early_age, late_age)
+			JOIN coll_matrix as c using (collection_no)
+			JOIN $TREE_TABLE as t using (orig_no)
+			JOIN $TREE_TABLE as ta on ta.orig_no = t.accepted_no
+			JOIN $ATTRS_TABLE as v on v.orig_no = t.accepted_no
+			LEFT JOIN $LOWER_TABLE as pl on pl.orig_no = t.accepted_no
+		WHERE latest_ident and c.access_level = 0
+		ON DUPLICATE KEY UPDATE $DIV_GLOBAL.n_occs = $DIV_GLOBAL.n_occs + 1";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      generated $result rows");
+    
+    logMessage(2, "    indexing tables...");
+    
+    $dbh->do("ALTER TABLE $DIV_MATRIX ADD KEY (ints_no)");
+    $dbh->do("ALTER TABLE $DIV_MATRIX ADD KEY (bin_id)");
+    $dbh->do("ALTER TABLE $DIV_GLOBAL ADD KEY (ints_no)");
     
     # logMessage(2, "    computing global diversity table...");
     

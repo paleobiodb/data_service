@@ -823,6 +823,8 @@ sub generateJoinList {
 	if $tables->{pl};
     $join_list .= "LEFT JOIN taxon_ints as ph on ph.ints_no = t.ints_no\n"
 	if $tables->{ph};
+    $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = t.orig_no\n"
+	if $tables->{pl};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
 	if $tables->{pc};
     $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"

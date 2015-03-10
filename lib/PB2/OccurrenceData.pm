@@ -15,14 +15,14 @@ package PB2::OccurrenceData;
 use HTTP::Validate qw(:validators);
 
 use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_SUMMARY $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use TaxonDefs qw(%RANK_STRING);
 
 use Moo::Role;
 
 
-our (@REQUIRES_ROLE) = qw(PB2::DiversityData PB2::CommonData PB2::ReferenceData PB2::TaxonData PB2::CollectionData);
+our (@REQUIRES_ROLE) = qw(PB2::DiversityData PB2::CommonData PB2::ReferenceData PB2::TaxonData PB2::CollectionData PB2::IntervalData);
 
 
 # initialize ( )
@@ -254,7 +254,7 @@ sub initialize {
 	{ output => 'n_occs', com_name => 'noc' },
 	    "The total number of occurrences that are resolved to this interval");
     
-    # The following block specifies the summary output for diversity matrices.
+    # The following block specifies the summary output for diversity plots.
     
     $ds->define_block('1.2:occs:diversity:summary' =>
 	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
@@ -279,6 +279,24 @@ sub initialize {
 	    "in this database is incomplete.  For example, some genera have not",
 	    "been placed in their proper family, so occurrences in these genera",
 	    "will be skipped if you are counting families.");
+    
+    # The following block specifies the output for "quick" diversity plots.
+    
+    $ds->define_block('1.2:occs:quickdiv' =>
+	{ output => 'interval_no', com_name => 'oid' },
+	    "The identifier of the time interval represented by this record",
+	{ output => 'interval_name', com_name => 'nam' },
+	    "The name of the time interval represented by this record",
+	{ output => 'early_age', com_name => 'eag' },
+	    "The beginning age of this interval, in Ma",
+	{ output => 'late_age', com_name => 'lag' },
+	    "The ending age of this interval, in Ma",
+	{ output => 'sampled_in_bin', com_name => 'dsb' },
+	    "The number of distinct taxa found in this interval.  By default,",
+	    "distinct genera are counted.  You can override this using the",
+	    "parameter C<count>.",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The total number of occurrences that are resolved to this interval");
     
     # The following block specifies the output for taxon records representing
     # occurrence taxonomies.
@@ -374,12 +392,14 @@ sub initialize {
 	{ value => 'order', undocumented => 1 });
     
     $ds->define_set('1.2:occs:div_reso' =>
-	{ value => 'stage', maps_to => 5 },
+	{ value => 'stage' },
 	    "Count by stage",
-	{ value => 'epoch', maps_to => 4 },
+	{ value => 'epoch' },
 	    "Count by epoch",
-	{ value => 'period', maps_to => 3 },
-	    "Count by period");
+	{ value => 'period' },
+	    "Count by period",
+	{ value => 'era' },
+	    "Count by era");
     
     $ds->define_set('1.2:occs:order' =>
 	{ value => 'earlyage' },
@@ -507,16 +527,34 @@ sub initialize {
         ">>The following parameters select which occurrences to analyze.",
 	"Except as noted below, you may use these in any combination.",
 	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
-	"the exact list of occurrences used to compute this diversity matrix.",
+	"the exact list of occurrences used to compute this diversity tabulation.  Note, however, that",
+	"some occurrences may be skipped when tabulating diversity because they are imprecisely",
+	"characterized temporally or taxonomically.",
 	{ allow => '1.2:main_selector' },
-	#{ mandatory => 'base_name', errmsg => 'You must include the parameter "base_name", ' .
-	#      'in order to specify the taxonomic range to analyze.' },
 	{ allow => '1.2:common:select_crmod' },
 	{ allow => '1.2:common:select_ent' },
 	{ require_any => ['1.2:main_selector',
 			  '1.2:common:select_crmod', '1.2:common:select_ent'] },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
+    
+    $ds->define_ruleset('1.2:occs:quickdiv' =>
+	"The following parameters specify what to count and at what temporal resolution:",
+	{ allow => '1.2:occs:div_params' }, 
+        ">>The following parameters select which occurrences to analyze.",
+	"Except as noted below, you may use these in any combination.",
+	"All of these parameters can be used with L<occs/list|node:occs/list> as well, to retrieve",
+	"the list of occurrences used to compute this diversity tabulation.  Note, however, that",
+	"some occurrences may be skipped when tabulating diversity because they are imprecisely",
+	"characterized temporally or taxonomically.",
+	{ allow => '1.2:main_selector' },
+	#{ allow => '1.2:common:select_crmod' },
+	#{ allow => '1.2:common:select_ent' },
+	#{ require_any => ['1.2:main_selector',
+	#		  '1.2:common:select_crmod', '1.2:common:select_ent'] },
+	{ allow => '1.2:special_params' },
+	"^You can also use any of the L<special parameters|node:special> with this request");
+
     
     $ds->define_ruleset('1.2:occs:taxa_params' =>
 	{ param => 'count', valid => '1.2:occs:div_count' },
@@ -858,6 +896,204 @@ sub diversity {
     my $result = $self->generate_diversity_matrix($sth, $options);
     
     $self->list_result($result);
+}
+
+
+# quickdiv ( )
+# 
+# Generates a "quick" diversity result, according to the specified set of
+# parameters.  The only parameters allowed are geography, time and taxon.
+
+sub quickdiv {
+
+    my ($request) = @_;
+    
+    # Get a database handle by which we can make queries.
+    
+    my $dbh = $request->get_connection;
+    my $tables = {};
+    
+    my $taxonomy = ($request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees'));
+    my $TREE_TABLE = $taxonomy->{TREE_TABLE};
+    my $INTS_TABLE = $taxonomy->{INTS_TABLE};
+    
+    my ($sql, $result);
+    
+    # Check to see if we can use the 'div_matrix' table to compute the
+    # result. This is possible if the only filters are geographic, temporal,
+    # and/or taxonomic.
+    
+    my @filters = $request->generateQuickDivFilters('d', $tables);
+    
+    # If an empty list of filters was returned, redirect to the 'diversity'
+    # route to use the less efficient but more flexible procedure.
+    
+    unless ( @filters )
+    {
+	return $request->diversity();
+    }
+    
+    # Determine the taxonomic level at which we should be counting.  If not
+    # specified, or if 'genera_plus' was specified, use 'genera'.  Construct
+    # the appropriate SQL statement to generate this count.
+    
+    my $count_what = $request->clean_param('count') || 'genera';
+    my $filter_expr = join(' and ', @filters);
+    
+    my $scale_id = $request->clean_param('scale_id') || 1;
+    my $reso = $request->clean_param('reso');
+    
+    # If no value was given for 'reso', use the maximum level of the selected scale.
+    
+    if ( $scale_id == 1 )
+    {
+	if ( $reso eq 'era' )
+	{
+	    $reso = 2;
+	}
+	elsif ( $reso eq 'period' )
+	{
+	    $reso = 3;
+	}
+	elsif ( $reso eq 'epoch' )
+	{
+	    $reso = 4;
+	}
+	else
+	{
+	    $reso = 5;
+	}
+    }
+    
+    else
+    {
+	$reso = $PB2::IntervalData::SCALE_DATA{$scale_id}{levels};
+    }
+    
+    # Now check for parameters 'interval', 'interval_id', 'min_ma', 'max_ma'.
+    
+    my $interval_no = $request->clean_param('interval_id');
+    my $interval_name = $request->clean_param('interval');
+    my $min_ma = $request->clean_param('min_ma');
+    my $max_ma = $request->clean_param('max_ma');
+    my $age_clause = ''; my $age_join = '';
+    
+    if ( $interval_no )
+    {
+	my $no = $interval_no + 0;
+	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_no = $no";
+	
+	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+	
+	unless ( $max_ma )
+	{
+	    $max_ma = 0;
+	    $min_ma = 0;
+	    $request->add_warning("unknown interval id '$interval_no'");
+	}
+	
+	$age_clause = "and i.early_age <= $max_ma and i.late_age >= $min_ma";
+	$age_join = "join interval_data as i using (interval_no)";
+    }
+    
+    elsif ( $interval_name )
+    {
+	my $name = $dbh->quote($interval_name);
+	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name like $name";
+	
+	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+	
+	unless ( $max_ma )
+	{
+	    $max_ma = 0;
+	    $min_ma = 0;
+	    $request->add_warning("unknown interval '$interval_name'");
+	}
+	
+	$age_clause = "and i.early_age <= $max_ma and i.late_age >= $min_ma";
+	$age_join = "join interval_data as i using (interval_no)";
+    }
+    
+    elsif ( $min_ma || $max_ma )
+    {
+	$max_ma += 0;
+	$min_ma += 0;
+	
+	$age_clause .= "and i.early_age <= $max_ma " if $max_ma > 0;
+	$age_clause .= "and i.late_age >= $min_ma" if $min_ma > 0;
+	$age_join = "join interval_data as i using (interval_no)";
+    }
+    
+    # Now generate the appropriate SQL expression based on what we are trying
+    # to count.
+    
+    my $main_table = $tables->{use_global} ? $DIV_GLOBAL : $DIV_MATRIX;
+    my $other_joins = $request->generateQuickDivJoins('d', $tables, $taxonomy);
+    
+    if ( $count_what eq 'genera' || $count_what eq 'genera_plus' )
+    {
+	$sql = "SELECT d.interval_no, count(distinct d.genus_no) as sampled_in_bin, sum(d.n_occs) as n_occs
+		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
+			$other_joins
+		WHERE $filter_expr and sm.scale_no = $scale_id and sm.scale_level = $reso $age_clause
+		GROUP BY interval_no";
+
+		$request->add_warning("The option 'genera_plus' is not supported with '/occs/quickdiv'.  If you want to promote subgenera to genera, use the operation '/occs/diversity' instead.") if $count_what eq 'genera_plus';
+    }
+    
+    elsif ( $count_what eq 'families' )
+    {
+	$sql = "SELECT d.interval_no, count(distinct ph.family_no) as sampled_in_bin, sum(d.n_occs) as n_occs
+		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
+			JOIN $INTS_TABLE as ph using (ints_no)
+			$other_joins
+		WHERE $filter_expr and sm.scale_no = $scale_id and sm.scale_level = $reso $age_clause
+		GROUP BY interval_no";
+    }
+    
+    elsif ( $count_what eq 'orders' )
+    {
+	$sql = "SELECT d.interval_no, count(distinct ph.order_no) as sampled_in_bin, sum(d.n_occs) as n_occs
+		FROM $main_table as d JOIN $SCALE_MAP as sm using (interval_no) $age_join
+			JOIN $INTS_TABLE as ph using (ints_no)
+			$other_joins
+		WHERE $filter_expr and sm.scale_no = $scale_id and sm.scale_level = $reso $age_clause
+		GROUP BY interval_no";
+    }
+    
+    else
+    {
+	$request->add_warning("unimplemented parameter value '$count_what'");
+	return $request->list_result();
+    }
+    
+    my $outer_sql = "
+		SELECT interval_no, interval_name, early_age, late_age, d.sampled_in_bin, d.n_occs
+		FROM $INTERVAL_DATA JOIN $SCALE_MAP as sm using (interval_no)
+		    LEFT JOIN ($sql) as d using (interval_no)
+		WHERE sm.scale_no = $scale_id and sm.scale_level = $reso
+		ORDER BY early_age";
+    
+    print STDERR "$outer_sql\n\n" if $request->debug;
+    
+    $result = $dbh->selectall_arrayref($outer_sql, { Slice => {} });
+    
+    # Now trim empty bins from the start and end of the list.
+    
+    my ($start, $end);
+    
+    foreach my $i ( 0..$#$result )
+    {
+	$start = $i if $result->[$i]{n_occs} and not defined $start;
+	$end = $i if $result->[$i]{n_occs};
+    }
+    
+    splice(@$result, $end + 1, 9999) if $end;	# must do this first
+    splice(@$result, 0, $start) if $start;
+    
+    # Then return the result.
+    
+    return $request->list_result($result);
 }
 
 
@@ -1374,6 +1610,225 @@ sub generateOccFilters {
 }
 
 
+# generateQuickDivFilters ( main_table, tables_ref )
+# 
+# Generate a list of filter clauses that will be used to compute the
+# appropriate result set.  This routine should be called only when using the
+# 'div_matrix' table, either for diversity tabulations or to return a set of
+# geographic summary clusters.  If any parameter has been specified that would
+# preclude using this table, the empty list is returned.
+# 
+# Any additional tables that are needed will be added to the hash specified by
+# $tables_ref.
+
+sub generateQuickDivFilters {
+
+    my ($self, $mt, $tables_ref) = @_;
+    
+    my $dbh = $self->get_connection;
+    my $taxonomy = $self->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
+    my @filters;
+    
+    # First check for parameters 'formation', 'stratgroup', 'member'.  If any
+    # of these are specified, we abort.
+    
+    return () if $self->clean_param('formation') || $self->clean_param('stratgroup') || $self->clean_param('member');
+    
+    # Same with 'plate'.
+    
+    return () if $self->clean_param('plate');
+    
+    # Then check for geographic parameters, including 'clust_id', 'continent',
+    # 'country', 'latmin', 'latmax, 'lngmin', 'lngmax', 'loc'
+    
+    my $clust_id = $self->clean_param('clust_id');
+    
+    if ( ref $clust_id eq 'ARRAY' && @$clust_id )
+    {
+	my @clusters = grep { $_ > 0 } @$clust_id;
+	push @clusters, -1 unless @clusters;
+	my $list = join(q{,}, @clusters);
+	push @filters, "$mt.bin_id in ($list)";
+    }
+    
+    if ( my @ccs = $self->clean_param_list('country') )
+    {
+	my $cc_list = "'" . join("','", @ccs) . "'";
+	push @filters, "bl.cc in ($cc_list)";
+	$tables_ref->{bl} = 1;
+    }
+    
+    if ( my @continents = $self->clean_param_list('continent') )
+    {
+	my $cont_list = "'" . join("','", @continents) . "'";
+	push @filters, "bl.continent in ($cont_list)";
+	$tables_ref->{bl} = 1;
+    }
+    
+    my $x1 = $self->clean_param('lngmin');
+    my $x2 = $self->clean_param('lngmax');
+    my $y1 = $self->clean_param('latmin');
+    my $y2 = $self->clean_param('latmax');
+    
+    if ( $x1 ne '' && $x2 ne '' && ! ( $x1 == -180 && $x2 == 180 ) )
+    {
+	$y1 //= -90.0;
+	$y2 //= 90.0;
+	
+	# If the longitude coordinates do not fall between -180 and 180, adjust
+	# them so that they do.
+	
+	if ( $x1 < -180.0 )
+	{
+	    $x1 = $x1 + ( floor( (180.0 - $x1) / 360.0) * 360.0);
+	}
+	
+	if ( $x2 < -180.0 )
+	{
+	    $x2 = $x2 + ( floor( (180.0 - $x2) / 360.0) * 360.0);
+	}
+	
+	if ( $x1 > 180.0 )
+	{
+	    $x1 = $x1 - ( floor( ($x1 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	if ( $x2 > 180.0 )
+	{
+	    $x2 = $x2 - ( floor( ($x2 + 180.0) / 360.0 ) * 360.0);
+	}
+	
+	# If $x1 < $x2, then we query on a single bounding box defined by
+	# those coordinates.
+	
+	if ( $x1 < $x2 )
+	{
+	    my $polygon = "'POLYGON(($x1 $y1,$x2 $y1,$x2 $y2,$x1 $y2,$x1 $y1))'";
+	    push @filters, "contains(geomfromtext($polygon), bl.loc)";
+	    $tables_ref->{bl} = 1;
+	}
+	
+	# Otherwise, our bounding box crosses the antimeridian and so must be
+	# split in two.  The latitude bounds must always be between -90 and
+	# 90, regardless.
+	
+	else
+	{
+	    my $polygon = "'MULTIPOLYGON((($x1 $y1,180.0 $y1,180.0 $y2,$x1 $y2,$x1 $y1))," .
+					"((-180.0 $y1,$x2 $y1,$x2 $y2,-180.0 $y2,-180.0 $y1)))'";
+	    push @filters, "contains(geomfromtext($polygon), bl.loc)";
+	    $tables_ref->{bl} = 1;
+	}
+    }
+    
+    elsif ( $y1 ne '' || $y2 ne '' && ! ( $y1 == -90 && $y2 == 90 ) )
+    {
+	$y1 //= -90;
+	$y2 //= 90;
+	
+	my $polygon = "'POLYGON((-180.0 $y1,180.0 $y1,180.0 $y2,-180.0 $y2,-180.0 $y1))'";
+	push @filters, "contains(geomfromtext($polygon), bl.loc)";
+	$tables_ref->{bl} = 1;
+    }
+    
+    if ( my $loc = $self->clean_param('loc') )
+    {
+	push @filters, "contains(geomfromtext($loc), bl.loc)";
+	$tables_ref->{bl} = 1;
+    }
+    
+    # At this point, if no geographic parameters have been specified then we
+    # indicate to use the $DIV_GLOBAL table instead of $DIV_MATRIX.
+    
+    $tables_ref->{use_global} = 1 unless @filters;
+    
+    # Now check for taxonomic filters.
+    
+    my $taxon_name = $self->clean_param('taxon_name') || $self->clean_param('base_name');
+    my @taxon_nos = $self->clean_param_list('taxon_id') || $self->clean_param_list('base_id');
+    my @exclude_nos = $self->clean_param_list('exclude_id');
+    my (@include_taxa, @exclude_taxa);
+    my $bad_taxa;
+    
+    # First get the relevant taxon records for all included taxa
+    
+    if ( $taxon_name )
+    {
+	my @taxa = $taxonomy->resolve_names($taxon_name, { fields => 'RANGE' });
+	
+	# Now add these to the proper list.
+	
+	foreach my $t (@taxa)
+	{
+	    if ( $t->{exclude} )
+	    {
+		push @exclude_taxa, $t;
+	    }
+	    
+	    else
+	    {
+		push @include_taxa, $t;
+	    }
+	}
+	
+	$bad_taxa = 1 unless @include_taxa || @exclude_taxa;
+    }
+    
+    elsif ( @taxon_nos )
+    {
+	@include_taxa = $taxonomy->list_taxa('exact', \@taxon_nos, { fields => 'RANGE' });
+	$bad_taxa = 1 unless @include_taxa;
+    }
+    
+    # Then get the records for excluded taxa.
+    
+    if ( @exclude_nos )
+    {
+	my @taxa = $taxonomy->list_taxa('exact', \@exclude_nos, { fields => 'RANGE' });
+	push @exclude_taxa, @taxa;
+    }
+    
+    # Then construct the necessary filters for included taxa
+    
+    if ( @include_taxa )
+    {
+	my $taxon_filters = join ' or ', map { "t.lft between $_->{lft} and $_->{rgt}" } @include_taxa;
+	push @filters, "($taxon_filters)";
+	$tables_ref->{t} = 1;
+	$self->{my_base_taxa} = \@include_taxa;
+	
+	# $$$ add warnings
+    }
+    
+    # If a bad taxon name or id was given, add a filter that will exclude
+    # everything. 
+    
+    elsif ( $bad_taxa )
+    {
+	push @filters, "t.lft = 0";
+	$tables_ref->{t} = 1;
+	
+	# $$$ add warnings
+    }
+    
+    # Now add filters for excluded taxa.  But only if there is at least one
+    # included taxon as well.
+    
+    if ( @exclude_taxa && @include_taxa )
+    {
+	push @filters, map { "t.lft not between $_->{lft} and $_->{rgt}" } @exclude_taxa;
+	$self->{my_excluded_taxa} = \@exclude_taxa;
+	$tables_ref->{t} = 1;
+    }
+    
+    # Return the list, and make sure it includes at least one clause.
+    
+    push @filters, "1=1" unless @filters;
+    
+    return @filters;
+}
+
+
 # generateJoinList ( tables )
 # 
 # Generate the actual join string indicated by the table hash.
@@ -1429,6 +1884,28 @@ sub generateJoinList {
 	if $tables->{li};
     $join_list .= "LEFT JOIN $COUNTRY_MAP as ccmap on ccmap.cc = c.cc"
 	if $tables->{ccmap};
+    
+    return $join_list;
+}
+
+
+sub generateQuickDivJoins {
+
+    my ($self, $mt, $tables) = @_;
+    
+    my $join_list = '';
+    
+    # Return an empty string unless we actually have some joins to make
+    
+    return $join_list unless ref $tables eq 'HASH' and %$tables;
+    
+    # Create the necessary join expressions.
+    
+    $join_list .= "JOIN bin_loc as bl using (bin_id)\n"
+	if $tables->{bl};
+    
+    $join_list .= "JOIN taxon_trees as t on t.orig_no = $mt.ints_no\n"
+	if $tables->{t};
     
     return $join_list;
 }

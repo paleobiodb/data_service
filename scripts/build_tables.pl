@@ -16,11 +16,12 @@ use Getopt::Std;
 use CoreFunction qw(connectDB
 		    configData);
 use ConsoleLog qw(initMessages
-		  logMessage);
+		  logMessage
+		  logTimestamp);
 use IntervalTables qw(loadIntervalData
 		      buildIntervalMap);
 use CollectionTables qw(buildCollectionTables buildStrataTables);
-use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable);
+use OccurrenceTables qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
 use TaxonTables qw(populateOrig
 		   buildTaxonTables rebuildAttrsTable
 		   buildTaxaCacheTables computeGenSp);
@@ -34,7 +35,7 @@ use DiversityTables qw(buildDiversityTables);
 
 my %options;
 
-getopts('tT:OmR:bcKUuIivrydspfA', \%options);
+getopts('tT:OmR:bcKUuIivrydspfAM', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -42,6 +43,7 @@ my $cmd_line_db_name = shift;
 # Initialize the output-message subsystem
 
 initMessages(2, 'Rebuild');
+logTimestamp();
 
 # Get a database handle and a taxonomy object.
 
@@ -76,6 +78,7 @@ my $taxon_pics = $options{p};
 
 my $collection_tables = $options{c};
 my $occurrence_tables = $options{m};
+my $occurrence_int_maps = $options{M};
 my $occurrence_reso = $options{R};
 my $diversity_tables = $options{d};
 
@@ -163,6 +166,11 @@ elsif ( $occurrence_reso )
     populateOrig($dbh);
     buildTaxonSummaryTable($dbh, $occ_options);
     rebuildAttrsTable($dbh, 'taxon_trees');
+}
+
+elsif ( $occurrence_int_maps )
+{
+    buildOccIntervalMaps($dbh);
 }
 
 

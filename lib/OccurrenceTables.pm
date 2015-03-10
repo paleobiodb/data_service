@@ -15,12 +15,12 @@ use Try::Tiny;
 
 use CoreFunction qw(activateTables);
 use TableDefs qw($COLL_MATRIX $OCC_MATRIX $OCC_EXTRA $OCC_TAXON $OCC_REF
-		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP
+		 $OCC_BUFFER_MAP $OCC_MAJOR_MAP $OCC_CONTAINED_MAP $OCC_OVERLAP_MAP
 		 $INTERVAL_DATA $SCALE_MAP);
 use TaxonDefs qw(@TREE_TABLE_LIST);
 use ConsoleLog qw(logMessage);
 
-our (@EXPORT_OK) = qw(buildOccurrenceTables buildTaxonSummaryTable buildDiversityTables);
+our (@EXPORT_OK) = qw(buildOccurrenceTables buildTaxonSummaryTable buildOccIntervalMaps);
 		      
 our $OCC_MATRIX_WORK = "omn";
 our $OCC_EXTRA_WORK = "oen";
@@ -209,7 +209,7 @@ sub buildOccurrenceTables {
     
     buildTaxonSummaryTable($dbh, $options);
     buildReferenceSummaryTable($dbh, $options);
-    buildIntervalMaps($dbh, $options);
+    buildOccIntervalMaps($dbh, $options);
     
     my $a = 1;	# we can stop here when debugging
 }
@@ -312,10 +312,10 @@ sub buildTaxonSummaryTable {
 		WHERE m.latest_ident and m.orig_no > 0 and
 		      ((ei.early_age - li.late_age <= $interval_bound and li.late_age >= 20) or
 		      (ei.early_age - li.late_age <= 20 and li.late_age < 20) or
-		      (es.scale_no = 1 and es.level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
-		      (ls.scale_no = 1 and ls.level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
-		      (es.scale_no = 1 and es.level = 3 and ei.early_age < 3) or
-		      (ls.scale_no = 1 and ls.level = 3 and li.late_age >= 540))
+		      (es.scale_no = 1 and es.scale_level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
+		      (ls.scale_no = 1 and ls.scale_level in ($levels) and ei.early_age - li.late_age <= $epoch_bound) or
+		      (es.scale_no = 1 and es.scale_level = 3 and ei.early_age < 3) or
+		      (ls.scale_no = 1 and ls.scale_level = 3 and li.late_age >= 540))
 		GROUP BY m.orig_no
 		ON DUPLICATE KEY UPDATE
 			first_early_age = values(first_early_age),
@@ -448,13 +448,13 @@ sub buildReferenceSummaryTable {
 }
 
 
-# buildIntervalMaps ( dbh, options )
+# buildOccIntervalMaps ( dbh, options )
 # 
 # Create tables that map each distinct age range from the occurrence table to
 # the set of intervals from the various scales that encompass it.  This will
 # be useful for diversity calculations, among other things.
 
-sub buildIntervalMaps {
+sub buildOccIntervalMaps {
     
     my ($dbh) = @_;
     
@@ -462,45 +462,45 @@ sub buildIntervalMaps {
     
     logMessage(2, "    creating occurrence interval maps...");
     
-    $dbh->do("DROP TABLE IF EXISTS $OCC_BUFFER_MAP");
+    $dbh->do("DROP TABLE IF EXISTS $OCC_CONTAINED_MAP");
     
     $dbh->do("
-	CREATE TABLE $OCC_BUFFER_MAP (
+	CREATE TABLE $OCC_CONTAINED_MAP (
 		scale_no smallint unsigned not null,
+		scale_level smallint unsigned not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
 		interval_no int unsigned not null,
-		PRIMARY KEY (early_age, late_age, scale_no, interval_no)) Engine=MyISAM");
+		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
     
     $sql = "
-	INSERT INTO $OCC_BUFFER_MAP (scale_no, early_age, late_age, interval_no)
-	SELECT m.scale_no, i.early_age, i.late_age, m.interval_no
+	INSERT INTO $OCC_CONTAINED_MAP (scale_no, scale_level, early_age, late_age, interval_no)
+	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
 	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
-		JOIN (SELECT scale_no, early_age, late_age, interval_no
+		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
 		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
-	WHERE m.late_age < i.early_age and m.early_age > i.late_age and
-		i.early_age < m.early_age + if(i.early_age > 66, 12, 5) and
-		i.late_age > m.late_age - if(i.late_age > 66, 12, 5)";
+	WHERE m.late_age >= i.late_age and m.early_age <= i.early_age";
     
     $result = $dbh->do($sql);
     
-    logMessage(2, "      generated $result rows with buffer rule");
+    logMessage(2, "      generated $result rows with container rule");
     
     $dbh->do("DROP TABLE IF EXISTS $OCC_MAJOR_MAP");
     
     $dbh->do("
 	CREATE TABLE $OCC_MAJOR_MAP (
 		scale_no smallint unsigned not null,
+		scale_level smallint unsigned not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
 		interval_no int unsigned not null,
-		PRIMARY KEY (scale_no, early_age, late_age, interval_no)) Engine=MyISAM");
+		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
     
     $sql = "
-	INSERT INTO $OCC_MAJOR_MAP (scale_no, early_age, late_age, interval_no)
-	SELECT m.scale_no, i.early_age, i.late_age, m.interval_no
+	INSERT INTO $OCC_MAJOR_MAP (scale_no, scale_level, early_age, late_age, interval_no)
+	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
 	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
-		JOIN (SELECT scale_no, early_age, late_age, interval_no
+		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
 		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
 	WHERE i.early_age > i.late_age and
 		if(i.late_age >= m.late_age,
@@ -510,6 +510,54 @@ sub buildIntervalMaps {
     $result = $dbh->do($sql);
     
     logMessage(2, "      generated $result rows with majority rule");
+    
+    $dbh->do("DROP TABLE IF EXISTS $OCC_BUFFER_MAP");
+    
+    $dbh->do("
+	CREATE TABLE $OCC_BUFFER_MAP (
+		scale_no smallint unsigned not null,
+		scale_level smallint unsigned not null,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
+		interval_no int unsigned not null,
+		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
+    
+    $sql = "
+	INSERT INTO $OCC_BUFFER_MAP (scale_no, scale_level, early_age, late_age, interval_no)
+	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
+	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
+		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
+		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
+	WHERE m.late_age < i.early_age and m.early_age > i.late_age and
+		i.early_age < m.early_age + if(i.early_age > 66, 12, 5) and
+		i.late_age > m.late_age - if(i.late_age > 66, 12, 5)";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      generated $result rows with buffer rule");
+    
+    $dbh->do("DROP TABLE IF EXISTS $OCC_OVERLAP_MAP");
+    
+    $dbh->do("
+	CREATE TABLE $OCC_OVERLAP_MAP (
+		scale_no smallint unsigned not null,
+		scale_level smallint unsigned not null,
+		early_age decimal(9,5),
+		late_age decimal(9,5),
+		interval_no int unsigned not null,
+		PRIMARY KEY (early_age, late_age, scale_no, scale_level, interval_no)) Engine=MyISAM");
+    
+    $sql = "
+	INSERT INTO $OCC_OVERLAP_MAP (scale_no, scale_level, early_age, late_age, interval_no)
+	SELECT m.scale_no, m.scale_level, i.early_age, i.late_age, m.interval_no
+	FROM (SELECT distinct early_age, late_age FROM $OCC_MATRIX) as i
+		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
+		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
+	WHERE m.late_age < i.early_age and m.early_age > i.late_age";
+    
+    $result = $dbh->do($sql);
+    
+    logMessage(2, "      generated $result rows with overlap rule");
 }
 
 1;

@@ -179,7 +179,7 @@ use PB2::PersonData;
 			default_limit => 1000,
 			summary => '1.2:occs:diversity:summary',
 			title => 'Fossil diversity over time' },
-	"This operation returns a matrix of fossil diversity over time, based on a selected set of occurrences.",
+	"This operation returns a tabulation of fossil diversity over time, based on a selected set of occurrences.",
 	"You can select the set of occurrences to be analyzed using any of the parameters that are",
 	"valid for the L<occs/list|node:occs/list> operation.");
     
@@ -195,6 +195,21 @@ use PB2::PersonData;
 	"M. Foote. The Evolution of Morphological Diversity.",
 	"I<Annual Review of Ecology and Systematics>, Vol. 28 (1997)",
 	"pp. 129-152. L<http://www.jstor.org/stable/2952489>.");
+    
+    $ds2->define_node({ path => 'occs/quickdiv',
+			place => 2,
+			usage => [ "/occs/quickdiv.txt?base_name=Rodentia&continent=NOA" ],
+			method => 'quickdiv',
+			output => '1.2:occs:quickdiv',
+			default_limit => 1000,
+			title => 'Fossil diversity over time (quick computation)' },
+	"This operation returns a tabulation of fossil diversity over time, similar to that",
+	"provided by C<occs/diversity>.  It returns results much more quickly, but returns",
+	"only the basic counts of distinct taxa appearing in each time interval.",
+	"This operation is intended for quick overview plots; if you want to do",
+	"detailed diversity analyses, we suggest using the L<full diversity|node:occs/diversity>",
+	"operation instead, or downloading a L<list of occurrences|node:occs/list> and",
+	"performing your own procedure to tabulate the diversity of taxa over time.");
     
     $ds2->define_node({ path => 'occs/taxa',
 			place => 2,

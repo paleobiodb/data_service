@@ -356,7 +356,7 @@ sub generate_diversity_matrix {
 	push @result, $r;
     }
     
-    $self->list_result(@result);
+    $self->list_result(reverse @result);
 }
 
 

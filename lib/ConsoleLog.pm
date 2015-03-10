@@ -51,7 +51,7 @@ sub logMessage {
     my $elapsed = time - $START_TIME;    
     my $elapsed_str = sprintf("%2dm %2ds", $elapsed / 60, $elapsed % 60);
     
-    print STDERR "$MSG_TAG: [ $elapsed_str ]  $message\n";
+    print STDOUT "$MSG_TAG: [ $elapsed_str ]  $message\n";
 }
 
 
@@ -69,7 +69,7 @@ sub logTimestamp {
     my $elapsed = time - $START_TIME;    
     my $elapsed_str = sprintf("%2dm %2ds", $elapsed / 60, $elapsed % 60);
     
-    print STDERR "$MSG_TAG: [ $elapsed_str ]  $now\n";
+    print STDOUT "$MSG_TAG: [ $elapsed_str ]  $now\n";
 }
 
 1;

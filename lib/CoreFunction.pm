@@ -108,6 +108,12 @@ sub loadConfig {
 
     my ($filename) = @_;
     
+    # If we have already loaded the configuration data, we are done.
+    
+    return if ref $CONFIG eq 'HASH';
+    
+    # If no filename was given, it defaults to 'config.yml'.
+    
     $filename ||= 'config.yml';
     
     $CONFIG = YAML::LoadFile($filename);

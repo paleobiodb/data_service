@@ -16,7 +16,8 @@ our (@EXPORT_OK) = qw(buildCollectionTables buildStrataTables
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_INTS $BIN_KEY $BIN_LOC
+use TableDefs qw($COLLECTIONS $COLL_MATRIX $COLL_LOC $COLL_BINS $COLL_STRATA $COLL_INTS
+		 $BIN_KEY $BIN_LOC $BIN_CONTAINER
 		 $COUNTRY_MAP $CONTINENT_DATA
 		 $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER);
@@ -422,15 +423,17 @@ sub buildCollectionTables {
     # Then create a table that maps each bin to the set of countries and
     # continents that it overlaps.
     
-    logMessage(2, "    mapping summary clusters to countries");
+    logMessage(2, "    mapping summary clusters to countries and continents");
     
     $dbh->do("DROP TABLE IF EXISTS $BIN_LOC");
     
     $dbh->do("CREATE TABLE $BIN_LOC (
-		bin_id int unsigned not null PRIMARY KEY,
+		bin_id int unsigned not null,
 		bin_level tinyint unsigned,
 		cc char(2),
 		continent char(3),
+		loc geometry not null,
+		PRIMARY KEY (bin_id, cc),
 		KEY (cc),
 		KEY (continent)) Engine=MyISAM");
     
@@ -441,15 +444,48 @@ sub buildCollectionTables {
 	logMessage(2, "      mapping bin level $level...");
 	
 	$sql = "INSERT INTO $BIN_LOC
-		SELECT bin_id, bin_level, cc, continent
+		SELECT bin_id, bin_level, cc, continent, s.loc
 		FROM $COLL_BINS_WORK as s JOIN $COLL_MATRIX_WORK as c on s.bin_id = c.bin_id_$level
 			LEFT JOIN $COUNTRY_MAP as ccmap using (cc)
 		WHERE bin_id > 0 and interval_no = 0
-		GROUP BY bin_id";
+		GROUP BY bin_id, cc";
 	
 	$result = $dbh->do($sql);
 	
 	logMessage(2, "        generated $result rows");
+    }
+    
+    logMessage(2, "    indexing summary cluster location table spatially");
+    
+    $result = $dbh->do("ALTER TABLE $COLL_BINS_WORK ADD SPATIAL INDEX (loc)");
+    
+    # Then create a table to map bins to containing bins.
+    
+    $bin_lines =~ s/,$//;
+    
+    $dbh->do("DROP TABLE IF EXISTS $BIN_CONTAINER");
+    
+    $dbh->do("CREATE TABLE $BIN_CONTAINER (
+		bin_id int unsigned not null PRIMARY KEY,
+		$bin_lines) Engine=MyISAM");
+    
+    logMessage(2, "    mapping bin containership");
+    
+    my $bin_string = "";
+    
+    foreach my $i (0..$#bin_reso)
+    {
+	my $level = $i + 1;
+	
+	$bin_string .= ", bin_id_${level}";
+	
+	logMessage(2, "      bin level $level...");
+	
+	$sql = "INSERT INTO $BIN_CONTAINER (bin_id${bin_string})
+		SELECT distinct bin_id_${level}${bin_string}
+		FROM $COLL_MATRIX WHERE bin_id_${level} > 0";
+	
+	$result = $dbh->do($sql);
     }
     
     # We then create a mapping table which allows us to look up, for each

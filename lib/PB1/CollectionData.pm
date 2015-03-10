@@ -735,6 +735,8 @@ sub initialize {
 	"the summary clusters which contain a specified collection or collections.",
 	"Only the records which match the other parameters that you specify will be returned.",
     	{ allow => '1.1:colls:selector' },
+	{ allow => '1.1:common:select_crmod' },
+	{ allow => '1.1:common:select_ent' },
     	{ allow => '1.1:summary_display' },
     	{ allow => '1.1:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
@@ -936,6 +938,8 @@ sub summary {
     
     my @filters = $self->generateMainFilters('summary', 's', $tables);
     push @filters, $self->generateCollFilters($tables);
+    push @filters, $self->generate_crmod_filters('cc', $tables);
+    push @filters, $self->generate_ent_filters('cc', $tables);
     
     # If a query limit has been specified, modify the query accordingly.
     

@@ -554,7 +554,7 @@ sub read_interval_data {
     # Now read in the mapping from interval numbers to scale levels and parent
     # intervals. 
     
-    $sql = "SELECT scale_no, level, interval_no, parent_no FROM $SCALE_MAP";
+    $sql = "SELECT scale_no, scale_level, interval_no, parent_no FROM $SCALE_MAP";
     
     $result = $dbh->selectall_arrayref($sql, { Slice => {} });
     
@@ -565,13 +565,13 @@ sub read_interval_data {
 	foreach my $m ( @$result )
 	{
 	    next unless $scale_no = $m->{scale_no};
-	    next unless $level = $m->{level};
+	    next unless $level = $m->{scale_level};
 	    next unless $interval_no = $m->{interval_no};
 	    next unless $parent_no = $m->{parent_no};
 	    
 	    $INTERVAL_DATA{$scale_no}{$interval_no} = { %{$interval_data{$interval_no}}, 
 							parent_no => $parent_no,
-							level => $level + 0,
+							scale_level => $level + 0,
 						        "L$level" => $interval_no };
 	}
 	
@@ -585,7 +585,7 @@ sub read_interval_data {
 	    {
 		my $i = $INTERVAL_DATA{$scale_no}{$interval_no};
 		my $parent_no = $i->{parent_no};
-		my $level = $i->{level};
+		my $level = $i->{scale_level};
 		my $boundary_age = $i->{early_age};
 		
 		# Add this interval's boundary to the boundary list and
@@ -603,7 +603,7 @@ sub read_interval_data {
 		
 		while ( my $p = $INTERVAL_DATA{$scale_no}{$parent_no} )
 		{
-		    $i->{"L$p->{level}"} = $parent_no;
+		    $i->{"L$p->{scale_level}"} = $parent_no;
 		    $parent_no = $p->{parent_no};
 		}
 	    }
