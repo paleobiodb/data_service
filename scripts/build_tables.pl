@@ -27,7 +27,7 @@ use TaxonTables qw(populateOrig
 		   buildTaxaCacheTables computeGenSp);
 use TaxonPics qw(getPics selectPics);
 use Taxonomy;
-use DiversityTables qw(buildDiversityTables);
+use DiversityTables qw(buildDiversityTables buildPrevalenceTables);
 
 
 # First parse option switches.  If we were given an argument, then use that as
@@ -35,7 +35,7 @@ use DiversityTables qw(buildDiversityTables);
 
 my %options;
 
-getopts('tT:OmR:bcKUuIivrydspfAM', \%options);
+getopts('tT:OmR:bcKUuIivrydqspfAM', \%options);
 
 my $cmd_line_db_name = shift;
 
@@ -81,6 +81,7 @@ my $occurrence_tables = $options{m};
 my $occurrence_int_maps = $options{M};
 my $occurrence_reso = $options{R};
 my $diversity_tables = $options{d};
+my $prevalence_tables = $options{q};
 
 my $taxon_tables = 1 if $options{t} || $options{T};
 my $taxon_steps = $options{T};
@@ -200,11 +201,16 @@ if ( $diversity_tables )
     buildDiversityTables($dbh, 'taxon_trees', $options);
 }
 
+if ( $prevalence_tables )
+{
+    buildPrevalenceTables($dbh, 'taxon_trees', $options);
+}
+
 # The option -p causes taxon pictures to be fetched from phylopic.org
 
 if ( $taxon_pics )
 {
-    getPics($dbh, 'taxon_trees', $force);
+    #getPics($dbh, 'taxon_trees', $force);
     selectPics($dbh, 'taxon_trees');
 }
 

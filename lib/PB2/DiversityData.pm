@@ -19,17 +19,20 @@ use Taxonomy;
 use Moo::Role;
 
 
-sub generate_diversity_matrix {
+sub generate_diversity_table {
 
     my ($self, $sth, $options) = @_;
     
     my $ds = $self->ds;
+    my $dbh = $self->get_connection;
     
     # First figure out which timescale (and thus which list of intervals) we
-    # will be using in order to bin the occurrences.
+    # will be using in order to bin the occurrences.  We will eventually add
+    # other scale options than 1.  If no resolution is specified, use the
+    # maximum resolution of the selected scale.
     
-    my $scale_no = $options->{scale_no} || 1;	# eventually we will add other scale options
-    my $scale_level = $options->{timereso} || 5;
+    my $scale_no = $options->{scale_no} || 1;
+    my $scale_level = $options->{timereso} || $PB2::IntervalData::SCALE_DATA{$scale_no}{levels};
     
     my $debug_mode = $self->debug;
     
@@ -48,6 +51,63 @@ sub generate_diversity_matrix {
     my ($total_count, $imprecise_time_count, $imprecise_taxon_count, $missing_taxon_count, $bin_count);
     my (%imprecise_interval, %imprecise_taxon);
     my (%interval_report, %taxon_report);
+    
+    # Get the age bounds (if any) that were specified for this process.
+    
+    my $interval_no = $self->clean_param('interval_id');
+    my $interval_name = $self->clean_param('interval');
+    my $min_ma = $self->clean_param('min_ma');
+    my $max_ma = $self->clean_param('max_ma');
+    
+    my ($early_limit, $late_limit);
+    
+    if ( $interval_no )
+    {
+	my $no = $interval_no + 0;
+	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_no = $no";
+	
+	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+	
+	unless ( $max_ma )
+	{
+	    $early_limit = 0;
+	    $late_limit = 0;
+	    $self->add_warning("unknown interval id '$interval_no'");
+	}
+	
+	else
+	{
+	    $early_limit = $max_ma;
+	    $late_limit = $min_ma;
+	}
+    }
+    
+    elsif ( $interval_name )
+    {
+	my $name = $dbh->quote($interval_name);
+	my $sql = "SELECT early_age, late_age FROM interval_data WHERE interval_name like $name";
+	
+	my ($max_ma, $min_ma) = $dbh->selectrow_array($sql);
+	
+	unless ( $max_ma )
+	{
+	    $early_limit = 0;
+	    $late_limit = 0;
+	    $self->add_warning("unknown interval '$interval_name'");
+	}
+	
+	else
+	{
+	    $early_limit = $max_ma;
+	    $late_limit = $min_ma;
+	}
+    }
+    
+    elsif ( $min_ma || $max_ma )
+    {
+	$early_limit = $max_ma + 0 if $max_ma;
+	$late_limit = $min_ma + 0;
+    }
     
     # Now scan through the occurrences.  We cache the lists of matching
     # intervals from the selected scale, under the name of the interval(s)
@@ -91,6 +151,11 @@ sub generate_diversity_matrix {
 	INTERVAL:
 	    foreach my $early_bound ( @$boundary_list )
 	    {
+		# Skip all intervals that fall below the lower limit specified
+		# by the request parameters.
+		
+		next INTERVAL if defined $early_limit && $early_bound > $early_limit;
+		
 		# Skip all intervals that do not overlap with the occurrence
 		# range, and stop the scan when we have passed that range.
 		
@@ -100,6 +165,8 @@ sub generate_diversity_matrix {
 		my $late_bound = $int->{late_age};
 		
 		next INTERVAL if $late_bound >= $occ_early;
+		
+		next INTERVAL if defined $late_limit && $late_bound < $late_limit;
 		
 		# Skip any interval that is not selected by the specified
 		# timerule.  Note that the 'overlap' timerule includes
@@ -728,7 +795,7 @@ sub get_upper_taxa {
 								       return => 'listref' });
     };
     
-    print STDERR "$Taxonomy::SQL_STRING\n\n" if $request->debug;
+    #print STDERR "$Taxonomy::SQL_STRING\n\n" if $request->debug;
     
     # If no taxa were returned, then the base taxon is probably a genus or
     # below.  So just fetch that single record, so that we at least have

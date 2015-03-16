@@ -1,5 +1,5 @@
 # 
-# PBDB 1.1
+# PBDB 1.2
 # --------
 # 
 # Test the following operations:
@@ -14,6 +14,10 @@
 # /data1.1/taxa/single/index.pod
 # /data1.1/taxa/single_doc.html
 # /data1.1/taxa/single_doc.pod
+# 
+# The purpose of this file is to test that documentation pages produced by the
+# data service have the expected structure and contents.  Other files will
+# test the production of documentation pages for the individual operations.
 # 
 
 use Test::Most tests => 7;

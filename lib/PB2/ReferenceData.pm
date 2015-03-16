@@ -120,7 +120,7 @@ sub initialize {
 	  "Language",
       { output => 'r_doi', com_name => 'doi', pbdb_name => 'doi' },
 	  "The DOI for this document, if known",
-      { output => 'r_comments', com_name => 'cmt', pbdb_name => 'comments', if_block => 'comments' },
+      { output => 'r_comments', com_name => 'rem', pbdb_name => 'comments', if_block => 'comments' },
 	  "Additional comments about this reference, if any");
     
     # Then blocks for other classes to use when including one or more

@@ -1,1 +1,3 @@
-pm: *.pm DataService/*.pm
+pm: *.pm
+wds: Web/DataService/*.pm Web/DataService/*/*.pm
+wdspod: Web/DataService/*.pod Web/DataService/*/*.pod

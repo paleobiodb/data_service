@@ -56,6 +56,8 @@ my $TAXON1 = {
   'parent_no' => '69295',
   'senpar_no' => '69295' };
 
+bless $TAXON1, 'Taxon';
+
 my $TREE_TABLE = $taxonomy->{TREE_TABLE};
 my $ATTRS_TABLE = $taxonomy->{ATTRS_TABLE};
 my $COUNTS_TABLE = $taxonomy->{COUNTS_TABLE};
@@ -67,6 +69,8 @@ my $sql1 = "SELECT lft, rgt, n_occs, taxon_size as size, extant_size, phylum_cou
 
 my $TAXON1_VAR = $dbh->selectrow_hashref($sql1);
 
+bless $TAXON1_VAR, 'Taxon';
+
 my $TAXON1_SEARCH = {
   orig_no => 69296,
   taxon_name => 'Dascillidae',
@@ -75,6 +79,8 @@ my $TAXON1_SEARCH = {
   lft => $TAXON1_VAR->{lft},
   rgt => $TAXON1_VAR->{rgt},
 };
+
+bless $TAXON1_SEARCH, 'Taxon';
 
 my $TAXON1_LINK = { 
   'accepted_no' => 69296,
@@ -131,7 +137,8 @@ my $TAXON1_DATA = {
   lft => $TAXON1_VAR->{lft},
   n_occs => $TAXON1_VAR->{n_occs},
 };
-		   
+
+bless $TAXON1_DATA, 'Taxon';		   
 
 my $NAME2 = 'Felidae';
 my $ID2 = 41045;
@@ -170,16 +177,20 @@ subtest 'list_taxa_simple: basic calls' => sub {
 	($t2->{orig_no} eq $ID1 || $t2->{orig_no} eq $ID2),
 	"list_taxa_simple \"$ID1 ,$ID2\"");
     
+    my $tt = bless { taxon_no => $ID1 }, 'Taxon';
+    
     eval {
-	($t1) = $taxonomy->list_taxa_simple({ taxon_no => $ID1 });
+	($t1) = $taxonomy->list_taxa_simple($tt);
     };
     
     ok ( !$@, 'list_taxa_simple with object' ) or diag( "message was: $@" );
     
     ok( ref $t1 && $t1->{orig_no} eq $ID1, 'list_taxa_simple with object' );
     
+    my $tts = bless { $ID1 => 1, $ID2 => 1 }, 'TaxonSet';
+    
     eval {
-	($t1) = $taxonomy->list_taxa_simple({ $ID1 => 1, $ID2 => 1 });
+	($t1) = $taxonomy->list_taxa_simple($tts);
     };
     
     ok( !$@, 'list_taxa_simple with hash' ) or diag( "message was: $@" );
@@ -308,13 +319,13 @@ subtest 'list_taxa_simple: fields' => sub {
 
     ok( $t1->{lft} > 0 && $t1->{n_occs} > 0, "fields 'DATA' variable" );
     
-    cmp_deeply $t2, superhashof($TAXON1_SEARCH), "fields 'SEARCH'";
+    cmp_deeply $t2, noclass(superhashof($TAXON1_SEARCH)), "fields 'SEARCH'";
     
     ok( $t2->{lft} > 0 && $t2->{rgt} > 0, "fields 'SEARCH' variable");
     
-    cmp_deeply $t3, superhashof($TAXON1_LINK), "fields 'LINK'";
+    cmp_deeply $t3, noclass(superhashof($TAXON1_LINK)), "fields 'LINK'";
     
-    cmp_deeply $t3, superhashof($TAXON1_ATTR), "fields 'ATTR'";
+    cmp_deeply $t3, noclass(superhashof($TAXON1_ATTR)), "fields 'ATTR'";
     
     ok( defined $t3->{firstapp_ea} && $t3->{firstapp_ea} =~ $DEC_RE &&
 	defined $t3->{firstapp_la} && $t3->{firstapp_la} =~ $DEC_RE &&
@@ -325,11 +336,11 @@ subtest 'list_taxa_simple: fields' => sub {
     ok( $t3->{taxon_size} > 0 && $t3->{extant_size} > 0 && $t3->{n_occs} > 0,
 	"fields 'SIZE'" );
     
-    cmp_deeply $t4, superhashof($TAXON1_COUNTS), "fields 'COUNTS'";
+    cmp_deeply $t4, noclass(superhashof($TAXON1_COUNTS)), "fields 'COUNTS'";
 
-    cmp_deeply $t4, superhashof($TAXON1_PHYLO), "fields 'PHYLO'";
+    cmp_deeply $t4, noclass(superhashof($TAXON1_PHYLO)), "fields 'PHYLO'";
     
-    cmp_deeply $t4, superhashof($TAXON1_PARENT), "fields 'PARENT'";
+    cmp_deeply $t4, noclass(superhashof($TAXON1_PARENT)), "fields 'PARENT'";
     
     is( $t5->{family_no}, '69296', "fields 'family_no'" );
     
@@ -385,13 +396,13 @@ subtest 'list_subtree' => sub {
 	@r3 = $taxonomy->list_subtree("$ID1, $ID2");
     };
     
-    ok( $@, 'list_subtree bad base_nos' );
+    ok( !$@, 'list_subtree multiple base_nos' ) or diag("message was: $@");
     
     eval {
 	@r3 = $taxonomy->list_subtree([$ID1, $ID2]);
     };
     
-    ok( $@, 'list_subtree bad base_nos 2');
+    ok( !$@, 'list_subtree multiple base_nos 2') or diag("message was: $@");
     
     eval {
 	@r3 = $taxonomy->list_subtree($ID1, { fields => 'APP' });

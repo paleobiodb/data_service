@@ -735,6 +735,7 @@ sub buildTaxonTables {
     $step_control->{$_} = 1 foreach @steps;
     
     $TREE_WORK = 'taxon_trees' unless $step_control->{a};
+    $NAME_WORK = 'taxon_names' unless $step_control->{a};
     
     # Now create the necessary tables, including generating the opinion cache
     # from the opinion table.
@@ -4411,13 +4412,15 @@ sub computeAttrsTable {
 		$coalesce->{early_occ} = $row->{early_occ};
 	    }
 	    
-	    if ( $row->{last_early_age} < $coalesce->{last_early_age} )
+	    if ( $row->{last_early_age} < $coalesce->{last_early_age} || 
+		 !defined $coalesce->{last_early_age} )
 	    {
 		$coalesce->{last_early_age} = $row->{last_early_age};
 		$coalesce->{late_occ} = $row->{late_occ};
 	    }
 	    
-	    if ( $row->{last_late_age} < $coalesce->{last_late_age} )
+	    if ( $row->{last_late_age} < $coalesce->{last_late_age} ||
+	         !defined $coalesce->{last_late_age} )
 	    {
 		$coalesce->{last_late_age} = $row->{last_late_age};
 	    }

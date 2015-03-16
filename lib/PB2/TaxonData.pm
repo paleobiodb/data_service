@@ -45,7 +45,7 @@ sub initialize {
 	{ value => 'size', maps_to => '1.2:taxa:size' },
 	    "The number of subtaxa appearing in this database",
 	{ value => 'phylo', maps_to => '1.2:taxa:phylo' },
-	    "The phylogenetic classification of this taxon: kingdom, phylum, class, order, family.",
+	    "The classification of this taxon: kingdom, phylum, class, order, family.",
 	    "This information is also included in the C<nav> block, so do not specify both at once.",
 	{ value => 'nav', maps_to => '1.2:taxa:nav' },
 	    "Additional information for the PBDB Navigator taxon browser.",
@@ -545,7 +545,7 @@ sub initialize {
 	    "you can also exclude subtaxa using the C<^> symbol, as in \"dinosauria ^aves\"",
 	    "or \"osteichthyes ^tetrapoda\".",
 	">The following parameters indicate which related taxonomic names to return:",
-	{ param => 'rel', valid => '1.2:taxa:rel', default => 'self' },
+	{ param => 'rel', valid => '1.2:taxa:rel' },
 	    "Indicates which taxa are to be selected.  Accepted values include:",
 	{ param => 'status', valid => '1.2:taxa:status', default => 'all' },
 	    "Return only names that have the specified status.  The default is C<all>.",
@@ -767,7 +767,7 @@ sub get {
     return unless ref $r;
     
     $self->single_result($r);
-    $self->{main_sql} = $taxonomy->get_last_sql;
+    $self->{main_sql} = $taxonomy->last_sql;
     
     # If we were asked for 'nav' info, also show the various categories
     # of subtaxa and whether or not each of the parents are extinct.
@@ -885,7 +885,7 @@ sub list {
     
     my $name_list = $self->clean_param('name');
     my $id_list = $self->clean_param('id');
-    my $rel = $self->clean_param('rel');
+    my $rel = $self->clean_param('rel') || 'self';
     
     if ( my $base_name = $self->clean_param('base_name') )
     {
@@ -933,7 +933,7 @@ sub list {
 	$options->{return} = 'stmt';
 	my $sth = $taxonomy->list_refs($rel, $id_list, $options);
 	$self->sth_result($sth);
-	$self->set_result_count($taxonomy->get_count);
+	$self->set_result_count($taxonomy->last_rowcount);
     }
     
     elsif ( defined $arg && $arg eq 'opinions' )
@@ -941,7 +941,7 @@ sub list {
 	$options->{return} = 'stmt';
 	my $sth = $taxonomy->list_opinions($rel, $id_list, $options);
 	$self->sth_result($sth);
-	$self->set_result_count($taxonomy->get_count);
+	$self->set_result_count($taxonomy->last_rowcount);
     }
     
     # Otherwise, return matching taxa.  If the relationship is 'self' (the
@@ -972,10 +972,10 @@ sub list {
 	$DB::single = 1;
 	my $sth = $taxonomy->list_taxa($rel, $id_list, $options);
 	$self->sth_result($sth) if $sth;
-	$self->set_result_count($taxonomy->get_count);
+	$self->set_result_count($taxonomy->last_rowcount);
     }
     
-    $self->{main_sql} = $taxonomy->get_last_sql;
+    $self->{main_sql} = $taxonomy->last_sql;
     print STDERR $self->{main_sql} . "\n\n" if $self->debug;
     
     # Otherwise, we have an empty result.
@@ -1383,7 +1383,7 @@ sub generate_query_options {
     
     $options->{limit} = $limit if defined $limit;	# $limit may be 0
     $options->{offset} = $offset if $offset;
-    $options->{count} = 1 if $self->clean_param('count');
+    $options->{count} = 1 if $self->display_counts;
     
     my $extant = $self->clean_param('extant');
     my $rank = $self->clean_param('rank');

@@ -1,4 +1,4 @@
-# 
+#  
 # OccurrenceData
 # 
 # A role that returns information from the PaleoDB database about a single
@@ -14,7 +14,7 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_SUMMARY $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use TaxonDefs qw(%RANK_STRING);
@@ -37,19 +37,24 @@ sub initialize {
     # We start by defining an output map for this class.
     
     $ds->define_output_map('1.2:occs:basic_map' =>
-	{ value => 'coords', maps_to => '1.2:occs:geo' },
-	     "The latitude and longitude of this occurrence",
-        { value => 'attr', maps_to => '1.2:colls:attr' },
-	    "The attribution of the occurrence: the author name(s) from",
-	    "the primary reference, and the year of publication.  If no reference",
-	    "is recorded for this occurrence, the reference for its collection is used.",
+        # { value => 'attr', maps_to => '1.2:colls:attr' },
+	#     "The attribution of the occurrence: the author name(s) from",
+	#     "the primary reference, and the year of publication.  If no reference",
+	#     "is recorded for this occurrence, the reference for its collection is used.",
 	{ value => 'ident', maps_to => '1.2:occs:ident' },
-	    "The actual taxonomic name by which this occurrence was identified",
+	    "The individual components of the taxonomic identification of the occurrence.",
+	    "These values correspond to the value of C<identified_name> in the basic record,",
+	    "and so this additional section will rarely be needed.",
 	{ value => 'phylo', maps_to => '1.2:occs:phylo' },
 	    "Additional information about the taxonomic classification of the occurence",
 	{ value => 'genus', maps_to => '1.2:occs:genus' },
 	    "The genus (if known) and subgenus (if any) corresponding to each occurrence.",
 	    "This is a subset of the information provided by C<phylo>.",
+	{ value => 'plant', maps_to => '1.2:occs:plant' },
+	    "The plant organ(s), if any, associated with this occurrence.  These fields",
+	    "will be empty unless the occurrence is a plant fossil.",
+	{ value => 'coords', maps_to => '1.2:occs:geo' },
+	     "The latitude and longitude of this occurrence",
         { value => 'loc', maps_to => '1.2:colls:loc' },
 	    "Additional information about the geographic locality of the occurrence",
 	{ value => 'paleoloc', maps_to => '1.2:colls:paleoloc' },
@@ -57,8 +62,8 @@ sub initialize {
 	    "evaluated according to the model specified by the parameter C<pgm>.",
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indicate whether the containing collection is on protected land",
-        { value => 'time', maps_to => '1.2:colls:time' },
-	    "Additional information about the temporal locality of the occurrence",
+        # { value => 'time', maps_to => '1.2:colls:time' },
+	#     "Additional information about the temporal locality of the occurrence",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the occurrence.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -79,6 +84,8 @@ sub initialize {
 	    "The primary reference for the occurrence, as formatted text.",
 	    "If no reference is recorded for this occurrence, the primary reference for its",
 	    "collection is returned.",
+	{ value => 'resgroup', maps_to => '1.2:colls:group' },
+	    "The research group(s), if any, associated with the occurrence's collection.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
@@ -90,42 +97,60 @@ sub initialize {
     # CollectionData.pm 
     
     $ds->define_block('1.2:occs:basic' =>
-	{ select => ['o.occurrence_no', 'o.reid_no', 'o.latest_ident', 'o.collection_no', 'o.taxon_no',
-		     'tv.spelling_no as matched_no', 'tv.name as matched_name', 'tv.rank as matched_rank', 'tv.lft as tree_seq',
+	{ select => ['o.occurrence_no', 'o.reid_no', 'o.latest_ident', 'o.collection_no', 'o.taxon_no as identified_no',
+		     't.rank as identified_rank', 't.status as taxonomic_reason', 't.spelling_no',
+		     'nm.spelling_reason', 'ns.spelling_reason as accepted_reason',
+		     'tv.spelling_no as accepted_no', 'tv.name as accepted_name', 'tv.rank as accepted_rank',
 		     'ei.interval_name as early_interval', 'li.interval_name as late_interval',
-		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso', 'o.species_name', 'o.species_reso',
+		     'o.genus_name', 'o.genus_reso', 'o.subgenus_name', 'o.subgenus_reso',
+		     'o.species_name', 'o.species_reso',
 		     'o.early_age', 'o.late_age', 'o.reference_no'],
-	  tables => ['o', 'tv', 'ts', 'ei', 'li'] },
+	  tables => ['o', 'tv', 'ts', 'nm', 'ei', 'li'] },
 	{ set => '*', from => '*', code => \&process_basic_record },
 	{ output => 'occurrence_no', dwc_name => 'occurrenceID', com_name => 'oid' },
 	    "A positive integer that uniquely identifies the occurrence",
 	{ output => 'record_type', value => 'occurrence', com_name => 'typ', com_value => 'occ', 
-	  dwc_value => 'Occurrence',  },
-	    "The type of this object: 'occ' for an occurrence",
+	  dwc_value => 'Occurrence' },
+	    "The type of this object: C<occ> for an occurrence in the compact vocabulary,",
+	    "C<occurrence> in the PBDB vocabulary.",
 	{ output => 'reid_no', com_name => 'eid', if_field => 'reid_no' },
 	    "If this occurrence was reidentified, a positive integer that uniquely identifies the reidentification",
-	{ output => 'superceded', com_name => 'sps', value => 1, not_field => 'latest_ident' },
-	    "The value of this field will be true if this occurrence was later identified under a different taxon",
+	{ output => 'obsolete', com_name => 'obs', value => 1, not_field => 'latest_ident' },
+	    "The value of this field will be true if this occurrence was later reidentified.",
 	{ output => 'collection_no', com_name => 'cid', dwc_name => 'CollectionId' },
 	    "The identifier of the collection with which this occurrence is associated.",
-	{ output => 'taxon_name', com_name => 'tna', dwc_name => 'associatedTaxa' },
-	    "The taxonomic name by which this occurrence is identified",
-	{ output => 'taxon_rank', dwc_name => 'taxonRank', com_name => 'rnk' },
-	    "The taxonomic rank of the name, if this can be determined",
-	{ set => 'taxon_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
-	{ output => 'taxon_no', com_name => 'tid' },
+	{ output => 'identified_name', com_name => 'idn', dwc_name => 'associatedTaxa', dedup => 'accepted_name' },
+	    "The taxonomic name by which this occurrence was identified.  This field will",
+	    "be omitted for responses in the compact voabulary if it is identical",
+	    "to the value of C<accepted_name>.",
+	{ output => 'identified_rank', dwc_name => 'taxonRank', com_name => 'idr', dedup => 'accepted_rank' },
+	    "The taxonomic rank of the identified name, if this can be determined.  This field will",
+	    "be omitted for responses in the compact voabulary if it is identical",
+	    "to the value of C<accepted_rank>.",
+	{ set => 'identified_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ output => 'identified_no', com_name => 'iid', dedup => 'accepted_no' },
 	    "The unique identifier of the identified taxonomic name.  If this is empty, then",
 	    "the name was never entered into the taxonomic hierarchy stored in this database and",
-	    "we have no further information about the classification of this occurrence.",
-	{ output => 'matched_name', com_name => 'mna', dedup => 'taxon_base' },
-	    "The senior synonym and/or currently accepted spelling of the closest matching name in",
-	    "the database to the identified taxonomic name, if any is known, and if this name",
-	    "is different from the value of C<taxon_name>.",
-	{ output => 'matched_rank', com_name => 'mra', dedup => 'taxon_rank' },
-	    "The taxonomic rank of the matched name, if different from the value of C<taxon_rank>",
-	{ output => 'matched_no', com_name => 'mid', if_field => 'mid', dedup => 'taxon_no' },
-	    "The unique identifier of the closest matching name in the database to the identified",
-	    "taxonomic name, if any is known.",
+	    "we have no further information about the classification of this occurrence.  In some cases,",
+	    "the genus has been entered into the taxonomic hierarchy but not the species.  This field will",
+	    "be omitted for responses in the compact voabulary if it is identical",
+	    "to the value of C<accepted_no>.",
+	{ output => 'taxonomic_reason', com_name => 'idu' },
+	    "If the identified name is different from the accepted name, this field gives",
+	    "the reason why.  This field will be present if, for example, the identified name",
+	    "is a junior synonym or nomen dubium, or if the species has been recombined, or",
+	    "if the identification is misspelled.",
+	{ output => 'accepted_name', com_name => 'tna', if_field => 'identified_no' },
+	    "The value of this field will be the accepted taxonomic name corresponding",
+	    "to the identified name.",
+	{ output => 'accepted_rank', com_name => 'rnk', if_field => 'identified_no' },
+	    "The taxonomic rank of the accepted name.  This may be different from the",
+	    "identified rank if the identified name is a nomen dubium or otherwise invalid,",
+	    "or if the identified name has not been fully entered into the taxonomic hierarchy",
+	    "of this database.",
+	{ set => 'accepted_rank', lookup => \%RANK_STRING, if_vocab => 'pbdb' },
+	{ output => 'accepted_no', com_name => 'tid', if_field => 'identified_no' },
+	    "The unique identifier of the accepted taxonomic name in this database.",
 	{ set => '*', code => \&PB2::CollectionData::fixTimeOutput },
 	{ output => 'early_interval', com_name => 'oei', pbdb_name => 'early_interval' },
 	    "The specific geologic time range associated with this collection (not necessarily a",
@@ -137,27 +162,27 @@ sub initialize {
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
 	{ output => 'late_age', com_name => 'lag' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
-	{ set => 'reference_no', append => 1 },
-	{ output => 'reference_no', com_name => 'rid' },
+	# { set => 'reference_no', append => 1 },
+	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
 	    "The identifier(s) of the references from which this data was entered");
     
     $ds->define_block('1.2:occs:ident' =>
-	{ select => ['o.genus_name', 'o.genus_reso', 'o.subgenus_name',
-		     'o.subgenus_reso', 'o.species_name', 'o.species_reso'],
+	{ select => ['o.genus_name', 'o.genus_reso',
+		     'o.subgenus_name', 'o.subgenus_reso', 'o.species_name', 'o.species_reso'],
 	  tables => 'o' },
-	{ output => 'genus_name', com_name => 'idt' },
+	{ output => 'genus_name', com_name => 'idg', pbdb_name => 'primary_name' },
 	    "The taxonomic name (less species) by which this occurrence was identified.",
 	    "This is often a genus, but may be a higher taxon.",
-	{ output => 'genus_reso', com_name => 'rst' },
-	    "The resolution of this taxonomic name, i.e. C<sensu lato> or C<aff.>",
+	{ output => 'genus_reso', com_name => 'rsg', pbdb_name => 'primary_reso' },
+	    "The resolution of the primary name, i.e. C<sensu lato> or C<n. gen.>",
 	{ output => 'subgenus_name', com_name => 'idf' },
 	    "The subgenus name (if any) by which this occurrence was identified",
 	{ output => 'subgenus_reso', com_name => 'rsf' },
-	    "The resolution of the subgenus name, i.e. C<informal> or C<n. subgen.>",
+	    "The resolution of the subgenus name, i.e. C<aff.> or C<n. subgen.>",
 	{ output => 'species_name', com_name => 'ids' },
 	    "The species name (if any) by which this occurrence was identified",
 	{ output => 'species_reso', com_name => 'rss' },
-	    "The resolution of the species name, i.e. C<sensu lato> or C<n. sp.>");
+	    "The resolution of the species name, i.e. C<cf.> or C<n. sp.>");
     
     $ds->define_block('1.2:occs:genus' =>
 	{ select => ['o.genus_name', 'o.subgenus_name',
@@ -201,6 +226,14 @@ sub initialize {
 	    "The name of the phylum in which this occurrence is classified",
 	{ output => 'phylum_no', com_name => 'phn' },
 	    "The identifier of the phylum in which this occurrence is classified");
+    
+    $ds->define_block('1.2:occs:plant' =>
+	{ select => ['o.plant_organ', 'o.plant_organ2'] },
+	{ output => 'plant_organ', com_name => 'pl1' },
+	    "The plant organ, if any, associated with this occurrence.  This field",
+	    "will be empty unless the occurrence is a plant fossil.",
+	{ output => 'plant_organ2', com_name => 'pl2' },
+	    "An additional plant organ, if any, associated with this occurrence.");
     
     $ds->define_block('1.2:occs:geo' =>
 	{ select => ['c.lat', 'c.lng'], tables => 'c' },
@@ -667,7 +700,7 @@ sub get {
         WHERE o.occurrence_no = $id and c.access_level = 0
 	GROUP BY o.occurrence_no";
     
-    print STDERR $self->{main_sql} if $self->debug;
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
     
@@ -879,7 +912,7 @@ sub diversity {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c on o.collection_no = c.collection_no
+	FROM $OCC_MATRIX as o JOIN $COLL_MATRIX as c using (collection_no)
 		$join_list
         WHERE $filter_string
 	GROUP BY o.occurrence_no $extra_group";
@@ -893,7 +926,7 @@ sub diversity {
     
     # Now fetch all of the rows, and process them into a diversity matrix.
     
-    my $result = $self->generate_diversity_matrix($sth, $options);
+    my $result = $self->generate_diversity_table($sth, $options);
     
     $self->list_result($result);
 }
@@ -1086,10 +1119,20 @@ sub quickdiv {
     {
 	$start = $i if $result->[$i]{n_occs} and not defined $start;
 	$end = $i if $result->[$i]{n_occs};
+	$result->[$i]{n_occs} //= 0;
+	$result->[$i]{sampled_in_bin} //= 0;
     }
     
-    splice(@$result, $end + 1, 9999) if $end;	# must do this first
-    splice(@$result, 0, $start) if $start;
+    if ( $start )
+    {
+	splice(@$result, $end + 1, 9999) if $end;	# must do this step first, because
+	splice(@$result, 0, $start) if $start;		# this step makes $end inaccurate
+    }
+    
+    else
+    {
+	$result = [];
+    }
     
     # Then return the result.
     
@@ -1316,7 +1359,9 @@ sub prevalence {
     # in order to select the proper result set.  First see if we can generate
     # a simple (and quick) expression based on the request parameters.
     
-    my @filters = PB2::CollectionData::generatePrevalenceFilters($request, { });
+    my $tables = { };
+    
+    my @filters = PB2::CollectionData::generatePrevalenceFilters($request, $tables);
     
     if ( @filters )
     {
@@ -1326,7 +1371,7 @@ sub prevalence {
 	
 	$request->{main_sql} = "
 		SELECT $fields
-		FROM $PVL_SUMMARY as p
+		FROM $PVL_GLOBAL as p
 		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
 		    JOIN $taxonomy->{ATTRS_TABLE} as v using (orig_no)
 		WHERE $filter_string
@@ -1344,7 +1389,7 @@ sub prevalence {
     # If the simple filters don't work, we must generate an expression linking
     # to the summary table.
     
-    my $tables = { };
+    $tables = { };
     
     @filters = $request->generateMainFilters('summary', 's', $tables);
     push @filters, $request->generate_crmod_filters('o', $tables);
@@ -1416,7 +1461,7 @@ sub prevalence {
 	
 	$request->{main_sql} = "
 		SELECT $fields
-		FROM $PVL_SUMMARY as p JOIN $COLL_BINS as s using (bin_id, interval_no)
+		FROM $PVL_MATRIX as p JOIN $COLL_BINS as s using (bin_id, interval_no)
 		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
 		    JOIN $taxonomy->{ATTRS_TABLE} as v using (orig_no)
 		WHERE $filter_string
@@ -1796,19 +1841,19 @@ sub generateQuickDivFilters {
 	push @filters, "($taxon_filters)";
 	$tables_ref->{t} = 1;
 	$self->{my_base_taxa} = \@include_taxa;
-	
-	# $$$ add warnings
     }
     
     # If a bad taxon name or id was given, add a filter that will exclude
-    # everything. 
+    # everything.  Also make sure that the warning generated by the Taxonomy
+    # module is returned to the client.
     
     elsif ( $bad_taxa )
     {
 	push @filters, "t.lft = 0";
 	$tables_ref->{t} = 1;
 	
-	# $$$ add warnings
+	my @warnings = $taxonomy->list_warnings;
+	$self->add_warning(@warnings);
     }
     
     # Now add filters for excluded taxa.  But only if there is at least one
@@ -1845,7 +1890,7 @@ sub generateJoinList {
     
     # Create the necessary join expressions.
     
-    $tables->{t} = 1 if $tables->{pl} || $tables->{ph} || $tables->{v};
+    $tables->{t} = 1 if $tables->{pl} || $tables->{ph} || $tables->{v} || $tables->{tv};
     
     my $t = $tables->{tv} ? 'tv' : 't';
     
@@ -1854,7 +1899,7 @@ sub generateJoinList {
     $join_list .= "JOIN occurrences as oc on o.occurrence_no = oc.occurrence_no\n"
 	if $tables->{oc};
     $join_list .= "LEFT JOIN taxon_trees as t on t.orig_no = o.orig_no\n"
-	if $tables->{t} || $tables->{tv} || $tables->{tf};
+	if $tables->{t};
     $join_list .= "LEFT JOIN taxon_trees as tv on tv.orig_no = t.accepted_no\n"
 	if $tables->{tv};
     $join_list .= "LEFT JOIN taxon_lower as pl on pl.orig_no = $t.orig_no\n"
@@ -1863,6 +1908,10 @@ sub generateJoinList {
 	if $tables->{ph};
     $join_list .= "LEFT JOIN taxon_attrs as v on v.orig_no = $t.orig_no\n"
 	if $tables->{v};
+    $join_list .= "LEFT JOIN taxon_names as nm on nm.taxon_no = o.taxon_no\n"
+	if $tables->{nm};
+    $join_list .= "LEFT JOIN taxon_names as ns on ns.taxon_no = t.spelling_no\n"
+	if $tables->{nm} && $tables->{t};
     $join_list .= "LEFT JOIN $PALEOCOORDS as pc on pc.collection_no = c.collection_no\n"
 	if $tables->{pc};
     $join_list .= "LEFT JOIN $GEOPLATES as gp on gp.plate_no = pc.mid_plate_id\n"
@@ -1922,54 +1971,96 @@ sub process_basic_record {
     
     my ($request, $record) = @_;
     
-    # If the taxonomic name field is empty, try to construct one.  Build this
-    # in two versions: with and without the 'reso' fields.
+    no warnings 'uninitialized';
     
-    unless ( $record->{taxon_name} )
+    # Construct the 'identified_name' field using the '_name' and '_reso'
+    # fields from the occurrence record.  Also build 'taxon_name' using just
+    # the '_name' fields.
+    
+    my $ident_name = $record->{genus_name} || 'UNKNOWN';
+    my $taxon_name = $ident_name;
+    
+    $ident_name .= " $record->{genus_reso}" if $record->{genus_reso};
+    
+    if ( $record->{subgenus_name} )
     {
-	my $taxon_name = $record->{genus_name} || 'UNKNOWN';
-	$taxon_name .= " $record->{genus_reso}" if $record->{genus_reso};
-	my $taxon_base = $record->{genus_name} || 'UNKNOWN';
+	$ident_name .= " ($record->{subgenus_name}";
+	$ident_name .= " $record->{subgenus_reso}" if $record->{subgenus_reso};
+	$ident_name .= ")";
 	
-	if ( $record->{subgenus_name} )
-	{
-	    $taxon_name .= " ($record->{subgenus_name}";
-	    $taxon_name .= " $record->{subgenus_reso}" if $record->{subgenus_reso};
-	    $taxon_name .= ")";
-	    $taxon_base .= " ($record->{subgenus_name})";
-	}
-	
-	if ( $record->{species_name} )
-	{
-	    $taxon_name .= " $record->{species_name}";
-	    $taxon_name .= " $record->{species_reso}" if $record->{species_reso};
-	    $taxon_base .= " $record->{species_name}" if $record->{species_name} !~ /\.$/;
-	}
-	
-	$record->{taxon_name} = $taxon_name;
-	$record->{taxon_base} = $taxon_base;
-	
+	$taxon_name .= " ($record->{subgenus_name})";
     }
     
-    # If the taxonomic rank field is empty, try to determine one.
-    
-    unless ( $record->{taxon_rank} )
+    if ( $record->{species_name} )
     {
-	if ( defined $record->{species_name} && $record->{species_name} =~ qr{[a-z]$} )
+	$ident_name .= " $record->{species_name}";
+	$ident_name .= " $record->{species_reso}" if $record->{species_reso};
+
+	$taxon_name .= " $record->{species_name}" if $record->{species_name} !~ /\.$/;
+    }
+    
+    $record->{identified_name} = $ident_name;
+    $record->{taxon_name} = $taxon_name;
+    
+    # If the 'identified_rank' field is not set properly, try to determine it.
+    
+    if ( defined $record->{species_name} && $record->{species_name} =~ qr{[a-z0-9]$} )
+    {
+	$record->{identified_rank} = 3;
+    }
+    
+    elsif ( defined $record->{subgenus_name} && $record->{subgenus_name} =~ qr{[a-z0-9]$} )
+    {
+	$record->{identified_rank} = 4;
+    }
+    
+    elsif ( defined $record->{species_name} && $record->{species_name} eq 'sp.' )
+    {
+	$record->{identified_rank} = 5;
+    }
+    
+    elsif ( defined $record->{genus_name} && defined $record->{accepted_name} && 
+	    $record->{genus_name} eq $record->{accepted_name} )
+    {
+	$record->{identified_rank} = $record->{accepted_rank};
+    }
+    
+    # If the 'taxonomic_reason' value is 'belongs to', this is the common case
+    # and there is no need to report it.  If 'taxon_name' is different from
+    # 'accepted_name', then substitute 'spelling_reason'.  If the current
+    # variant of the name has a spelling reason of 'recombination', then
+    # use that.  Otherwise just clear the field.
+    
+    if ( $record->{taxonomic_reason} && $record->{taxonomic_reason} eq 'belongs to' )
+    {
+	if ( $record->{taxon_name} && $record->{accepted_name} &&
+	     $record->{taxon_name} ne $record->{accepted_name} )
 	{
-	    $record->{taxon_rank} = 3;
+	    $record->{taxonomic_reason} = $record->{spelling_reason};
+	    
+	    $record->{taxonomic_reason} = 'recombination'
+		if $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination';
+	    
+	    $record->{taxonomic_reason} = ''
+		if $record->{taxonomic_reason} && $record->{taxonomic_reason} eq 'original spelling' &&
+		    $record->{identified_no} eq $record->{spelling_no};
+	    
+	    $record->{taxonomic_reason} ||= 'taxon not fully entered'
+		if $record->{identified_rank} && $record->{identified_rank} ne $record->{accepted_rank};
 	}
 	
-	elsif ( defined $record->{subgenus_name} && $record->{subgenus_name} =~ qr{[a-z]$} )
+	else
 	{
-	    $record->{taxon_rank} = 4;
+	    $record->{taxonomic_reason} = '';
 	}
-	
-	elsif ( defined $record->{genus_name} && defined $record->{matched_name} && 
-		$record->{genus_name} eq $record->{matched_name} )
-	{
-	    $record->{taxon_rank} = $record->{matched_rank};
-	}
+    }
+    
+    # If we don't have a value for 'taxonomic_reason' at all, then use 'taxon not
+    # entered'.
+    
+    elsif ( ! $record->{identified_no} )
+    {
+	$record->{taxonomic_reason} = 'taxon not entered';
     }
 }
 

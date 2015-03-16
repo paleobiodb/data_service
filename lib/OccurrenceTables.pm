@@ -529,8 +529,8 @@ sub buildOccIntervalMaps {
 		JOIN (SELECT scale_no, scale_level, early_age, late_age, interval_no
 		      FROM $SCALE_MAP JOIN $INTERVAL_DATA using (interval_no)) as m
 	WHERE m.late_age < i.early_age and m.early_age > i.late_age and
-		i.early_age < m.early_age + if(i.early_age > 66, 12, 5) and
-		i.late_age > m.late_age - if(i.late_age > 66, 12, 5)";
+		i.early_age <= m.early_age + if(i.early_age > 66, 12, 5) and
+		i.late_age >= m.late_age - if(i.late_age >= 66, 12, 5)";
     
     $result = $dbh->do($sql);
     

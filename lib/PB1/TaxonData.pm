@@ -45,7 +45,7 @@ sub initialize {
 	{ value => 'size', maps_to => '1.1:taxa:size' },
 	    "The number of subtaxa appearing in this database",
 	{ value => 'phylo', maps_to => '1.1:taxa:phylo' },
-	    "The phylogenetic classification of this taxon: kingdom, phylum, class, order, family.",
+	    "The classification of this taxon: kingdom, phylum, class, order, family.",
 	    "This information is also included in the C<nav> block, so do not specify both at once.",
 	{ value => 'nav', maps_to => '1.1:taxa:nav' },
 	    "Additional information for the PBDB Navigator taxon browser.",

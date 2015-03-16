@@ -11,6 +11,7 @@ use JSON;
 
 package Tester;
 
+use Scalar::Util qw(looks_like_number);
 use Test::More;
 
 use namespace::clean;
@@ -32,8 +33,6 @@ sub new {
     
     $server ||= $ENV{PBDB_TEST_SERVER} || '127.0.0.1:3000';
     
-    diag("TESTING SERVER: $server");
-    
     my $instance = { ua => $ua,
 		     csv => Text::CSV_XS->new(),
 		     json => JSON->new(),
@@ -43,6 +42,23 @@ sub new {
     bless $instance, $class;
     
     return $instance;
+}
+
+
+# set_url_check ( regex )
+# 
+# The specified regex will be applied to all URLs subsequently tested with
+# this object, and an error will be thrown if it does not match.  This can be
+# used to catch errors in the test suite, which may be introduced when code is
+# copied from a test file intended for one data service version into a test
+# file intended for another version.
+
+sub set_url_check {
+    
+    my ($tester, $key, $regex) = @_;
+    
+    $tester->{url_key} = $key;
+    $tester->{url_check} = $regex;
 }
 
 
@@ -59,6 +75,34 @@ sub fetch_url {
 
     my ($tester, $path_and_args, $message) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    # If we haven't yet announced which server we are testing, do so now.
+    
+    unless ( $tester->{message_displayed} )
+    {
+	my $message = $tester->{server};
+	$message .= " $tester->{url_key}" if $tester->{url_key};
+	
+	diag("TESTING SERVER: $message");
+	
+	$tester->{message_displayed} = 1;
+    }
+    
+    # If a regex has been supplied for checking URLs, then fail if it doesn't
+    # match.
+    
+    if ( my $re = $tester->{url_check} )
+    {
+	unless ( $path_and_args =~ $re )
+	{
+	    fail($message);
+	    diag("ERROR: URL DID NOT MATCH $tester->{url_key} <===");
+	}
+    }
+    
+    # Create the full URL and execute a 'GET' request on the server being tested.
+    
     my $url = $tester->make_url($path_and_args);
     
     my $response;
@@ -67,10 +111,14 @@ sub fetch_url {
 	$response = $tester->{ua}->get($url);
     };
     
+    # If the request succeeds, we are done.
+    
     if ( defined $response && $response->is_success )
     {
 	return $response;
     }
+    
+    # Otherwise, fail with the appropriate error message.
     
     else
     {
@@ -98,6 +146,8 @@ sub fetch_url {
 sub fetch_nocheck {
 
     my ($tester, $path_and_args, $message) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     my $url = $tester->{base_url};
     $url .= '/' unless $path_and_args =~ qr{^/};
@@ -147,6 +197,8 @@ sub extract_records {
 
     my ($tester, $response, $message, $options) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     unless ( ref $response )
     {
 	fail($message);
@@ -180,6 +232,8 @@ sub extract_records {
 sub extract_records_json {
     
     my ($tester, $response, $message, $options) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
     
     $options ||= {};
     
@@ -230,6 +284,8 @@ sub extract_records_text {
 
     my ($tester, $response, $message, $options) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     $options ||= {};
     
     my $raw_data = $response->content || '';
@@ -243,12 +299,11 @@ sub extract_records_text {
     
     my $format = $raw_data =~ qr{^"} ? 'csv' : 'tsv';
     
+    my @lines = split( qr{[\n\r]+}, $raw_data );
+    
  LINE:
-    while ( $raw_data =~ qr{ ^ (.*?) (?: \r\n? | \n ) (.*) }xsi )
+    foreach my $line (@lines)
     {
-	$raw_data = $2;
-	my $line = $1;
-	
 	if ( $section eq 'records' )
 	{
 	    if ( $format eq 'csv' )
@@ -268,7 +323,7 @@ sub extract_records_text {
 	    
 	    foreach my $i ( 0..$#fields )
 	    {
-		$r->{$fields[$i]} = $values[$i];
+		$r->{$fields[$i]} ||= $values[$i];
 	    }
 	    
 	    push @records, $r;
@@ -322,6 +377,8 @@ sub extract_info {
 
     my ($tester, $response, $message) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     unless ( ref $response )
     {
 	fail($message);
@@ -353,6 +410,8 @@ sub extract_info_json {
     
     my ($tester, $response, $message) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $body = $response->{__JSON};
     
     unless ( $body )
@@ -372,6 +431,8 @@ sub extract_info_text {
 
     my ($tester, $response) = @_;
     
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
     my $raw_data = $response->content || '';
     my $info = {};
     
@@ -387,6 +448,12 @@ sub extract_info_text {
 	if ( $line =~ qr{^"Parameters:"}xsi )
 	{
 	    $section = 'parameters';
+	    next LINE;
+	}
+	
+	elsif ( $section eq 'parameters' && $line !~ qr{^""} )
+	{
+	    $section = 'info';
 	}
 	
 	elsif ( $line =~ qr{^"Records:"} )
@@ -394,7 +461,7 @@ sub extract_info_text {
 	    last LINE;
 	}
 	
-	elsif ( $section eq 'parameters' )
+	if ( $section eq 'parameters' )
 	{
 	    if ( $format eq 'csv' )
 	    {
@@ -408,6 +475,8 @@ sub extract_info_text {
 		my ($dummy, $param, $value) = split(qr{\t}, $line);
 		$info->{parameters}{$param} = $value;
 	    }
+	    
+	    next LINE;
 	}
 	
 	elsif ( $section eq 'info' )
@@ -465,6 +534,78 @@ sub found_all {
     }
     
     return 1;
+}
+
+
+# check_field ( check_hash, value_hash, key, message )
+# 
+# Make sure that $check_hash contains the given key, and that the key matches
+# the one contained in $value_hash.  If the value in $value_hash is a regexp
+# then it is matched against $check_hash.  If it is a scalar, it is compared
+# either numerically or stringwise as appropriate.  If it is '!' then the
+# field is only checked for existence.
+
+sub check_field {
+    
+    my ($tester, $check, $value, $key, $message) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    ok( defined $check->{$key} && $check->{$key} ne '', "$message '$key' nonempty" ) or return;
+    
+    return 1 if $value->{$key} eq '!' || $value->{$key} eq '!nonempty';
+    
+    my $vmsg = "$message value '$key'";
+    
+    if ( ref $value->{$key} eq 'Regexp' )
+    {
+    	like( $check->{$key}, $value->{$key}, $vmsg ) || return;
+    }
+    
+    elsif ( ref $value->{$key} )
+    {
+    	cmp_ok( ref $check->{$key}, 'eq', ref $value->{$key}, $vmsg ) || return;
+    }
+    
+    elsif ( $value->{$key} eq '!numeric' )
+    {
+	ok( looks_like_number($check->{$key}), "$vmsg is numeric" ) || return;
+    }
+    
+    elsif ( $value->{$key} eq '!nonzero' )
+    {
+	ok( looks_like_number($check->{$key}), "$vmsg is numeric" ) || return;
+	cmp_ok( $check->{$key}, '>', 0, $vmsg ) || return;
+    }
+    
+    # elsif ( looks_like_number($value->{$key}) )
+    # {
+    # 	cmp_ok( $check->{$key}, '==', $value->{$key}, $vmsg ) || return;
+    # }
+    
+    else
+    {
+    	cmp_ok( $check->{$key}, 'eq', $value->{$key}, $vmsg ) || return;
+    }
+    
+    return 1;
+}
+
+
+# check_fields ( check_hash, value_hash, message )
+# 
+# Call check_field once for each key in %$value_hash.
+
+sub check_fields {
+    
+    my ($tester, $check, $value, $message) = @_;
+    
+    local $Test::Builder::Level = $Test::Builder::Level + 1;
+    
+    foreach my $key ( keys %$value )
+    {
+	$tester->check_field($check, $value, $key, $message);
+    }
 }
 
 

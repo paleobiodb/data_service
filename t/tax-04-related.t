@@ -68,7 +68,7 @@ eval {
     $sql = "SELECT a.taxon_no, a.orig_no, a.taxon_name, (a.taxon_rank + 0) as taxon_rank,
 		t.status, t.parent_no, t.senpar_no
 	    FROM $TREE_TABLE as t join $AUTH_TABLE as a using (orig_no)
-	    WHERE a.taxon_no in ($ID1, $TX1, $ID2)";
+	    WHERE a.orig_no in ($ID1, $TX1, $ID2)";
     
     %SIMPLE_A = hash_by_taxon($dbh, $sql);
     
@@ -146,7 +146,7 @@ eval {
     
     %COUNTS = hash_by_taxon($dbh, $sql);
     
-    $sql = "SELECT a.taxon_no, a.created, a.modified FROM $AUTH_TABLE as a
+    $sql = "SELECT t.orig_no, a.created, a.modified FROM $AUTH_TABLE as a
 	    JOIN $TREE_TABLE as t on a.taxon_no = t.spelling_no
 	    WHERE t.orig_no in ($ID1, $ID2)";
     
@@ -213,7 +213,7 @@ subtest 'list_taxa basic calls' => sub {
 	$t1 = $taxonomy->list_taxa('all_children', $ID1, { return => 'listref' });
 	$sth1 = $taxonomy->list_taxa('all_children', $ID1, { return => 'stmt', count => 1 });
 	
-	$count = $taxonomy->get_count;
+	$count = $taxonomy->last_rowcount;
 	
 	while ( $t2 = $sth1->fetchrow_hashref() )
 	{
@@ -275,7 +275,7 @@ subtest 'limit, offset, count' => sub {
 	$sth1 = $taxonomy->list_taxa('all_children', $ID1, { return => 'stmt', limit => 20, offset => 5 });
 	@w3 = $taxonomy->list_warnings;
 	
-	$count = $taxonomy->get_count;
+	$count = $taxonomy->last_rowcount;
 	
 	while ( my $t = $sth1->fetchrow_hashref() )
 	{
@@ -440,7 +440,7 @@ subtest 'rel: children, synonyms' => sub {
     eval {
 	@t1 = $taxonomy->list_taxa('synonyms', $ID6d);
 	@t2 = $taxonomy->list_taxa('children', $ID6d);
-	@t3 = $taxonomy->list_taxa('children', $ID6d, { immediate => 1 });
+	@t3 = $taxonomy->list_taxa('children', $ID6d, { no_synonyms => 1 });
     };
     
     ok( !$@, "list_taxa: 'synonyms', 'children'" ) or diag("message was: $@");
@@ -492,7 +492,7 @@ subtest 'rel: all_children' => sub {
     eval {
 	@t1 = $taxonomy->list_taxa('all_children', $ID1);
 	@t2 = $taxonomy->list_taxa('all_children', $ID6d, { fields => 'RANGE' });
-	@t3 = $taxonomy->list_taxa('all_children', $ID6d, { immediate => 1, fields => 'RANGE' });
+	@t3 = $taxonomy->list_taxa('all_children', $ID6d, { no_synonyms => 1, fields => 'RANGE' });
 	($st) = $taxonomy->list_taxa('senior', $ID6d);
 	@t4 = $taxonomy->list_taxa('all_children', $ID1, { depth => 2 });
     };
@@ -610,7 +610,7 @@ subtest 'rel: all_taxa' => sub {
     
     eval {
 	$sth = $taxonomy->list_taxa('all_taxa', undef, { return => 'stmt', count => 1 });
-	$taxon_count = $taxonomy->get_count;
+	$taxon_count = $taxonomy->last_rowcount;
 	
 	foreach (1..10)
 	{
@@ -1088,6 +1088,8 @@ sub hash_by_taxon {
     
     foreach my $t ( @$result )
     {
+	bless $t, 'Taxon';
+	
 	if ( $t->{taxon_no} )
 	{
 	    $hash{$t->{taxon_no}} ||= $t;

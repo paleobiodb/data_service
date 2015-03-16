@@ -127,70 +127,31 @@ subtest 'config.txt' => sub {
     is( $config_txt->header('Content-Type'), 'text/plain; charset=utf-8', 'config.txt content-type' );
     ok( ! $config_txt->header('Content-Disposition'), 'config.txt disposition');
     
-    my($raw_data, $found, $returned, $elapsed, $body, $header_count, $record_count);
-    my($found_clu, $found_trn, $found_con);
+    my $info = $T->extract_info($config_txt, "config.txt extract info");
+    my @records = $T->extract_records($config_txt, "config.txt extract records", { type => 'rowcount' });
     
-    eval {
-	$raw_data = $config_txt->content;
-    };
+    my $found = $info->{"Records Found"} || 0;
+    my $returned = $info->{"Records Returned"} || 0;
+    my $elapsed = $info->{"Elapsed Time"} || 0;
     
-    unless ( ok( !$@, 'config.txt unpack' ) )
+    my(%section, %rank);
+    
+    foreach my $r ( @records )
     {
-	diag( "    message was: $@" );
-	return;
-    }
-    
-    $raw_data ||= '';
-    
-    foreach my $line ( split qr{[\r\n]+}, $raw_data )
-    {
-	if ( $body )
-	{
-	    if ( $line =~ qr{ ^ "config_section" }xs )
-	    {
-		$header_count++;
-	    }
-	    
-	    else
-	    {
-		$record_count++;
-		$found_clu = 1 if $line =~ qr{ ^ (?:"",)* "clu" }xs;
-		$found_trn = 1 if $line =~ qr{ ^ (?:"",)* "trn" }xs;
-		$found_con = 1 if $line =~ qr{ ^ (?:"",)* "con" }xs;
-	    }
-	}
-	
-	elsif ( $line =~ qr{ ^ "Elapsed\sTime:","(.*)"}xs )
-	{
-	    $elapsed = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ "Records\sFound:","(.*)"}xs )
-	{
-	    $found = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ "Records\sReturned:","(.*)"}xs )
-	{
-	    $returned = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ "Records:"}xs )
-	{
-	    $body = 1;
-	}
+	$section{$r->{config_section}} = 1;
+	$rank{$r->{taxonomic_rank}} = $r->{rank_code} if $r->{taxonomic_rank};
     }
     
     cmp_ok( $found, '>', 10, 'config.txt found some records' );
     cmp_ok( $returned, '>', 10, 'config.txt returned some records' );
     cmp_ok( $elapsed, '>', 0, 'config.txt elapsed time reported' );
     
-    ok( $found_clu, 'config.txt found at least one cluster' );
-    ok( $found_trn, 'config.txt found gank \'genus\'' );
-    ok( $found_con, 'config.txt found at least one continent' );
+    ok( $section{'clu'}, 'config.txt found at least one cluster' );
+    ok( $rank{'genus'}, 'config.txt found gank \'genus\'' );
+    ok( $rank{'genus'} eq '5', 'config.txt found proper code for rank \'genus\'' );
+    ok( $section{'con'}, 'config.txt found at least one continent' );
     
-    cmp_ok( $header_count, '==', 1, 'config.txt found one header line' );
-    cmp_ok( $record_count, '==', $returned, 'config.txt returned count consistent' );
+    cmp_ok( @records, '==', $returned, 'config.txt returned count consistent' );
 };
 
 
@@ -207,70 +168,31 @@ subtest 'config.csv' => sub {
     is( $config_csv->header('Content-Type'), 'text/csv; charset=utf-8', 'config.csv content-type' );
     is( $config_csv->header('Content-Disposition'), 'attachment; filename="pbdb_data.csv"', 'config.csv disposition');
     
-    my($raw_data, $found, $returned, $elapsed, $body, $header_count, $record_count);
-    my($found_clu, $found_trn, $found_con);
+    my $info = $T->extract_info($config_csv, "config.csv extract info");
+    my @records = $T->extract_records($config_csv, "config.csv extract records", { type => 'rowcount' });
     
-    eval {
-	$raw_data = $config_csv->content;
-    };
+    my $found = $info->{"Records Found"} || 0;
+    my $returned = $info->{"Records Returned"} || 0;
+    my $elapsed = $info->{"Elapsed Time"} || 0;
     
-    unless ( ok( !$@, 'config.csv unpack' ) )
+    my(%section, %rank);
+    
+    foreach my $r ( @records )
     {
-	diag( "    message was: $@" );
-	return;
+	$section{$r->{config_section}} = 1;
+	$rank{$r->{taxonomic_rank}} = $r->{rank_code} if $r->{taxonomic_rank};
     }
     
-    $raw_data ||= '';
+    cmp_ok( $found, '>', 10, 'config.csv found some records' );
+    cmp_ok( $returned, '>', 10, 'config.csv returned some records' );
+    cmp_ok( $elapsed, '>', 0, 'config.csv elapsed time reported' );
     
-    foreach my $line ( split qr{[\r\n]+}, $raw_data )
-    {
-	if ( $body )
-	{
-	    if ( $line =~ qr{ ^ "config_section" }xs )
-	    {
-		$header_count++;
-	    }
-	    
-	    else
-	    {
-		$record_count++;
-		$found_clu = 1 if $line =~ qr{ ^ (?:"",)* "clu" }xs;
-		$found_trn = 1 if $line =~ qr{ ^ (?:"",)* "trn" }xs;
-		$found_con = 1 if $line =~ qr{ ^ (?:"",)* "con" }xs;
-	    }
-	}
-	
-	elsif ( $line =~ qr{ ^ "Elapsed\sTime:","(.*)"}xs )
-	{
-	    $elapsed = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ "Records\sFound:","(.*)"}xs )
-	{
-	    $found = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ "Records\sReturned:","(.*)"}xs )
-	{
-	    $returned = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ "Records:"}xs )
-	{
-	    $body = 1;
-	}
-    }
+    ok( $section{'clu'}, 'config.csv found at least one cluster' );
+    ok( $rank{'genus'}, 'config.csv found gank \'genus\'' );
+    ok( $rank{'genus'} eq '5', 'config.csv found proper code for rank \'genus\'' );
+    ok( $section{'con'}, 'config.csv found at least one continent' );
     
-    cmp_ok( $found, '>', 10, 'config.json found some records' );
-    cmp_ok( $returned, '>', 10, 'config.json returned some records' );
-    cmp_ok( $elapsed, '>', 0, 'config.json elapsed time reported' );
-    
-    ok( $found_clu, 'found at least one cluster' );
-    ok( $found_trn, 'found gank \'genus\'' );
-    ok( $found_con, 'found at least one continent' );
-    
-    cmp_ok( $header_count, '==', 1, 'config.csv found one header line' );
-    cmp_ok( $record_count, '==', $returned, 'config.csv returned count consistent' );
+    cmp_ok( @records, '==', $returned, 'config.csv returned count consistent' );
 };
 
 
@@ -287,68 +209,31 @@ subtest 'config.tsv' => sub {
     is( $config_tsv->header('Content-Type'), 'text/tab-separated-values; charset=utf-8', 'config.tsv content-type' );
     is( $config_tsv->header('Content-Disposition'), 'attachment; filename="pbdb_data.tsv"', 'config.tsv disposition');
     
-    my($raw_data, $found, $returned, $elapsed, $body, $header_count, $record_count);
-    my($found_clu, $found_trn, $found_con);
+    my $info = $T->extract_info($config_tsv, "config.tsv extract info");
+    my @records = $T->extract_records($config_tsv, "config.tsv extract records", { type => 'rowcount' });
     
-    eval {
-	$raw_data = $config_tsv->content;
-    };
+    my $found = $info->{"Records Found"} || 0;
+    my $returned = $info->{"Records Returned"} || 0;
+    my $elapsed = $info->{"Elapsed Time"} || 0;
     
-    unless ( ok( !$@, 'config.tsv unpack' ) )
+    my(%section, %rank);
+    
+    foreach my $r ( @records )
     {
-	diag( "    message was: $@" );
-	return;
-    }
-    
-    foreach my $line ( split qr{[\r\n]+}, $raw_data )
-    {
-	if ( $body )
-	{
-	    if ( $line =~ qr{ ^ config_section \t }xs )
-	    {
-		$header_count++;
-	    }
-	    
-	    else
-	    {
-		$record_count++;
-		$found_clu = 1 if $line =~ qr{ ^ \t* clu \t }xs;
-		$found_trn = 1 if $line =~ qr{ ^ \t* trn \t }xs;
-		$found_con = 1 if $line =~ qr{ ^ \t* con \t }xs;
-	    }
-	}
-	
-	elsif ( $line =~ qr{ ^ Elapsed\sTime: \t ([^\t]+) }xs )
-	{
-	    $elapsed = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ Records\sFound: \t ([^\t]+) }xs )
-	{
-	    $found = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ Records\sReturned: \t ([^\t]+)}xs )
-	{
-	    $returned = $1;
-	}
-	
-	elsif ( $line =~ qr{ ^ Records: }xs )
-	{
-	    $body = 1;
-	}
+	$section{$r->{config_section}} = 1;
+	$rank{$r->{taxonomic_rank}} = $r->{rank_code} if $r->{taxonomic_rank};
     }
     
     cmp_ok( $found, '>', 10, 'config.tsv found some records' );
     cmp_ok( $returned, '>', 10, 'config.tsv returned some records' );
     cmp_ok( $elapsed, '>', 0, 'config.tsv elapsed time reported' );
     
-    ok( $found_clu, 'config.tsv found at least one cluster' );
-    ok( $found_trn, 'config.tsv found gank \'genus\'' );
-    ok( $found_con, 'config.tsv found at least one continent' );
+    ok( $section{'clu'}, 'config.tsv found at least one cluster' );
+    ok( $rank{'genus'}, 'config.tsv found gank \'genus\'' );
+    ok( $rank{'genus'} eq '5', 'config.tsv found proper code for rank \'genus\'' );
+    ok( $section{'con'}, 'config.tsv found at least one continent' );
     
-    cmp_ok( $header_count, '==', 1, 'config.tsv found one header line' );
-    cmp_ok( $record_count, '==', $returned, 'config.tsv returned count consistent' );
+    cmp_ok( @records, '==', $returned, 'config.tsv returned count consistent' );
 };
 
 

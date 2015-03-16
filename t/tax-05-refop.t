@@ -133,7 +133,7 @@ subtest 'list_refs basic calls' => sub {
 	$sth1 = $taxonomy->list_refs('all_children', $ID3, { return => 'stmt', count => 1 });
 	@w3 = $taxonomy->list_warnings;
 	
-	$count = $taxonomy->get_count;
+	$count = $taxonomy->last_rowcount;
 	
 	while ( ref $sth1 && ($r2 = $sth1->fetchrow_hashref()) )
 	{
@@ -222,7 +222,7 @@ subtest 'limit, offset, count' => sub {
 	$sth1 = $taxonomy->list_refs('all_children', $ID1, { return => 'stmt', limit => 20, offset => 5 });
 	@w3 = $taxonomy->list_warnings;
 	
-	$count = $taxonomy->get_count;
+	$count = $taxonomy->last_rowcount;
 	
 	while ( ref $sth1 && ( $r = $sth1->fetchrow_hashref() ) )
 	{
@@ -610,8 +610,10 @@ subtest 'list_refs order' => sub {
     check_order($taxonomy, \@t5a, 'r_pubtitle', 'str', 'asc') or fail('order pubtitle default');
     check_order($taxonomy, \@t5b, 'r_pubtitle', 'str', 'desc') or fail('order pubtitle desc');
     
-    check_order($taxonomy, \@t6a, 'r_pubtype', 'str', 'asc') or fail('order pubtype default');
-    check_order($taxonomy, \@t6b, 'r_pubtype', 'str', 'desc') or fail('order pubtype desc');
+    check_order($taxonomy, \@t6a, 'r_pubtype', 'str', 'group') or fail('order pubtype default');
+    check_order($taxonomy, \@t6b, 'r_pubtype', 'str', 'group') or fail('order pubtype desc');
+    cmp_ok($t6a[0]{r_pubtype}, 'eq', $t6b[-1]{r_pubtype}, 'order pubtype first');
+    cmp_ok($t6a[-1]{r_pubtype}, 'eq', $t6b[0]{r_pubtype}, 'order pubtype last');
     
     check_order($taxonomy, \@t7a, 'r_language', 'str', 'asc') or fail('order language default');
     check_order($taxonomy, \@t7b, 'r_language', 'str', 'desc') or fail('order language desc');
@@ -902,6 +904,7 @@ sub check_order {
     my $violations = 0;
     my $bad_index = 0;
     my $bad_key = '';
+    my %group;
     
     foreach my $t ( @$result )
     {
@@ -917,10 +920,26 @@ sub check_order {
 	unless ( $last )
 	{
 	    $last = $t->{$field};
+	    $group{$last} = 1;
 	    next;
 	}
 	
 	# Otherwise, compare with the previous value.
+	
+	elsif ( $dir eq 'group' )
+	{
+	    next if $t->{$field} eq $last;
+	    
+	    $last = $t->{$field};
+	    
+	    if ( $group{$last} )
+	    {
+		print STDERR "check_order: violated at ($index) key = $key";
+		return 0;
+	    }
+	    
+	    $group{$last} = 1;
+	}
 	
 	elsif ( $type eq 'num' )
 	{

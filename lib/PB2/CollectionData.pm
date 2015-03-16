@@ -17,7 +17,7 @@ use PB2::CommonData qw(generateAttribution);
 use PB2::ReferenceData qw(format_reference);
 
 use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
-		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_SUMMARY);
+		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $PVL_MATRIX);
 use Taxonomy;
 
 use Carp qw(carp croak);
@@ -93,9 +93,9 @@ sub initialize {
 	    "evaluated according to the model(s) specified by the parameter C<pgm>.",
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indicate whether the collection is on protected land",
-        { value => 'time', maps_to => '1.2:colls:time' },
-	    "Additional information about the temporal locality of the",
-	    "collection.",
+        # { value => 'time', maps_to => '1.2:colls:time' },
+	#     "Additional information about the temporal locality of the",
+	#     "collection.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the collection.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -108,8 +108,12 @@ sub initialize {
 	    "This includes all of the information from C<lith> plus extra fields.",
 	{ value => 'geo', maps_to => '1.2:colls:geo' },
 	    "Information about the geological context of the collection",
+	{ value => 'methods', maps_to => '1.2:colls:methods' },
+	    "Information about the collection methods used",
         { value => 'rem', maps_to => '1.2:colls:rem' },
 	    "Any additional remarks that were entered about the collection.",
+	{ value => 'resgroup', maps_to => '1.2:colls:group' },
+	    "The research group(s), if any, associated with this collection.",
 	{ value => 'ent', maps_to => '1.2:common:ent' },
 	    "The identifiers of the people who authorized, entered and modified this record",
 	{ value => 'entname', maps_to => '1.2:common:entname' },
@@ -204,7 +208,8 @@ sub initialize {
 	  "The primary reference associated with the collection (as formatted text)");
     
     $ds->define_block('1.2:colls:loc' =>
-      { select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale', 'cc.geogcomments'],
+      { select => ['c.cc', 'cc.state', 'cc.county', 'cc.geogscale', 'cc.geogcomments',
+		   'cc.altitude_value', 'cc.altitude_unit'],
 	tables => ['cc'] },
       { output => 'cc', com_name => 'cc2' },
 	  "The country in which the collection is located, encoded as",
@@ -215,7 +220,8 @@ sub initialize {
 	  "The county or municipal area in which the collection is located, if known",
       { output => 'geogscale', com_name => 'gsc' },
 	  "The geographic scale of the collection.",
-      { output => 'geogcomments', com_name => 'ggc' });
+      { output => 'geogcomments', com_name => 'ggc' },
+	  "Additional comments about the geographic location of the collection");
     
     $ds->define_block('1.2:colls:paleoloc' =>
 	{ select => 'PALEOCOORDS' },
@@ -261,25 +267,25 @@ sub initialize {
 	    "The country in which the collection is located, encoded as",
 	    "L<ISO-3166-1 alpha-2|https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
 	{ output => 'protected', com_name => 'ptd' },
-	    "The protected status of the land on which the collection is located, if any");
+	    "The protected status of the land on which the collection is located, if known.");
     
-    $ds->define_block('1.2:colls:time' =>
-      { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
-	tables => ['im'] },
-      { set => '*', code => \&fixTimeOutput },
-      { output => 'early_age', com_name => 'eag', data_type => 'dec' },
-	  "The early bound of the geologic time range associated with the collection or cluster (in Ma)",
-      { output => 'late_age', com_name => 'lag', data_type => 'dec' },
-	  "The late bound of the geologic time range associated with the collection or cluster (in Ma)",
-      { output => 'cx_int_no', com_name => 'cxi' },
-	  "The identifier of the most specific single interval from the selected timescale that",
-	  "covers the entire time range associated with the collection or cluster.",
-      { output => 'early_int_no', com_name => 'ein' },
-	  "The beginning of a range of intervals from the selected timescale that most closely",
-	  "brackets the time range associated with the collection or cluster (with C<late_int_no>)",
-      { output => 'late_int_no', com_name => 'lin' },
-	  "The end of a range of intervals from the selected timescale that most closely brackets",
-	  "the time range associated with the collection or cluster (with C<early_int_no>)");
+    # $ds->define_block('1.2:colls:time' =>
+    #   { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
+    # 	tables => ['im'] },
+    #   { set => '*', code => \&fixTimeOutput },
+    #   { output => 'early_age', com_name => 'eag', data_type => 'dec' },
+    # 	  "The early bound of the geologic time range associated with the collection or cluster (in Ma)",
+    #   { output => 'late_age', com_name => 'lag', data_type => 'dec' },
+    # 	  "The late bound of the geologic time range associated with the collection or cluster (in Ma)",
+    #   { output => 'cx_int_no', com_name => 'cxi' },
+    # 	  "The identifier of the most specific single interval from the selected timescale that",
+    # 	  "covers the entire time range associated with the collection or cluster.",
+    #   { output => 'early_int_no', com_name => 'ein' },
+    # 	  "The beginning of a range of intervals from the selected timescale that most closely",
+    # 	  "brackets the time range associated with the collection or cluster (with C<late_int_no>)",
+    #   { output => 'late_int_no', com_name => 'lin' },
+    # 	  "The end of a range of intervals from the selected timescale that most closely brackets",
+    # 	  "the time range associated with the collection or cluster (with C<early_int_no>)");
     
     $ds->define_block('1.2:colls:strat' =>
 	{ select => ['cc.formation', 'cc.geological_group', 'cc.member'], tables => 'cc' },
@@ -342,17 +348,54 @@ sub initialize {
 	    "Whether or not fossils were taken from the second described lithology");
     
     $ds->define_block('1.2:colls:lithext' =>
-	{ select => [ qw(cc.lithadj cc.fossilsfrom1 cc.lithadj2 cc.fossilsfrom2) ], tables => 'cc' },
+	{ select => [ qw(cc.lithadj cc.fossilsfrom1 cc.lithadj2 cc.fossilsfrom2) ], 
+	  tables => 'cc' },
 	{ include => '1.2:colls:lith' });
     
     $ds->define_block('1.2:colls:geo' =>
-	{ select => [ qw(cc.environment cc.tectonic_setting cc.geology_comments) ], tables => 'cc' },
+	{ select => [ qw(cc.environment cc.tectonic_setting cc.geology_comments) ], 
+	  tables => 'cc' },
 	{ output => 'environment', com_name => 'env' },
 	    "The paleoenvironment of the collection site",
 	{ output => 'tectonic_setting', com_name => 'tec' },
 	    "The tectonic setting of the collection site",
 	{ output => 'geology_comments', com_name => 'gcm' },
 	    "General comments about the geology of the collection site");
+    
+    $ds->define_block('1.2:colls:methods' => 
+	{ select => [ 'cc.collection_type', 'cc.coll_meth as collection_methods', 'cc.museum',
+		      'cc.collection_coverage', 'cc.collection_size', 'cc.collection_size_unit',
+		      'cc.rock_censused', 'cc.rock_censused_unit',
+		      'cc.collectors', 'cc.collection_dates', 'cc.collection_comments',
+		      'cc.taxonomy_comments' ],
+	  tables => 'cc' },
+	{ set => '*', code => \&process_methods }, 
+	{ output => 'collection_type', com_name => 'cct' },
+	    "The type or purpose of the collection.",
+	{ output => 'collection_methods', com_name => 'ccx' },
+	    "The method or methods employed.",
+	{ output => 'museum', com_name => 'ccu' },
+	    "The museum or museums which hold the specimens.",
+	{ output => 'collection_coverage', com_name => 'ccv' },
+	    "Fossils that were present but not specifically listed.",
+	{ output => 'collection_size', com_name => 'ccs' },
+	    "The number of fossils actually collected.",
+	{ output => 'rock_censused', com_name => 'ccr' },
+	    "The amount of rock censused.",
+	{ output => 'collectors', com_name => 'ccc' },
+	    "Names of the collectors.",
+	{ output => 'collection_dates', com_name => 'ccd' },
+	    "Dates on which the collection was done.",
+	{ output => 'collection_comments', com_name => 'ccm' },
+	    "Comments about the collecting methods.",
+	{ output => 'taxonomy_comments', com_name => 'tcm' },
+	    "Comments about the taxonomy of what was found.");
+    
+    $ds->define_block('1.2:colls:group' =>
+	{ select => [ 'cc.research_group' ],
+	  tables => 'cc' },
+	{ output => 'research_group', com_name => 'rgp' },
+	    "The research group(s), if any, associated with this collection.");
     
     $ds->define_block('taxon_record' =>
       { output => 'taxon_name', com_name => 'tna' },
@@ -762,7 +805,12 @@ sub initialize {
     	{ allow => '1.2:summary_display' },
     	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request");
-    
+}
+
+
+sub max_bin_level {
+
+    return $MAX_BIN_LEVEL;
 }
 
 
@@ -1052,7 +1100,7 @@ sub prevtaxa {
     $request->{main_sql} = "
 		SELECT $calc $fields
 		FROM $COLL_BINS as s $summary_joins
-			JOIN $PVL_SUMMARY as ds on ds.bin_id = s.bin_id and ds.interval_no = s.interval_no
+			JOIN $PVL_MATRIX as ds on ds.bin_id = s.bin_id and ds.interval_no = s.interval_no
 			$other_joins
 		WHERE $filter_string
 		GROUP BY ds.orig_no
@@ -1469,10 +1517,19 @@ sub generateMainFilters {
     }
     
     # If a name was given and no matching taxa were found, we need to query by
-    # genus_name/species_name instead.
+    # genus_name/species_name instead.  But if the operation is "prevalence"
+    # or "diversity" then just abort with a warning.
     
-    elsif ( $taxon_name && $op ne 'prevalence' )
+    elsif ( $taxon_name )
     {
+	my @warnings = $taxonomy->list_warnings;
+	$self->add_warning(@warnings);
+	
+	if ( $op eq 'prevalence' || $op eq 'diversity' )
+	{
+	    return "t.lft = -1";
+	}
+	
 	my @exact_genera;
 	my @name_clauses;
 	
@@ -1839,25 +1896,27 @@ sub generateMainFilters {
 	if ( $interval_no )
 	{
 	    my $sql = "
-		SELECT early_age, late_age, scale_no, level, early_bound, late_bound
+		SELECT early_age, late_age, scale_no, level
 		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
-			JOIN $INTERVAL_BUFFER using (interval_no)
 		WHERE interval_no = $interval_no ORDER BY scale_no LIMIT 1";
 	    
-	    ($early_age, $late_age, $scale_no, $level, $early_bound, $late_bound) = $dbh->selectrow_array($sql);
+	    ($early_age, $late_age, $scale_no, $level) = $dbh->selectrow_array($sql);
 	}
 	
 	else
 	{
 	    my $quoted_name = $dbh->quote($interval_name);
 	    
-	    my $sql = "SELECT early_age, late_age, interval_no, scale_no, early_bound, late_bound
+	    my $sql = "SELECT early_age, late_age, interval_no, scale_no
 		   FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
-			JOIN $INTERVAL_BUFFER using (interval_no)
 		   WHERE interval_name like $quoted_name ORDER BY scale_no";
 	
-	    ($early_age, $late_age, $interval_no, $scale_no, $early_bound, $late_bound) = $dbh->selectrow_array($sql);
+	    ($early_age, $late_age, $interval_no, $scale_no) = $dbh->selectrow_array($sql);
 	}
+	
+	my $buffer = $early_age > 66 ? 12 : 5;
+	$early_bound = $early_age + $buffer;
+	$late_bound = $late_age - $buffer;
 	
 	# If the requestor wants to override the time bounds, do that.
 	
@@ -2491,6 +2550,27 @@ sub set_collection_refs {
     }
     
     return \@refs;
+}
+
+
+# process_methods ( record )
+# 
+# Process some of the fields for '1.2:colls:methods', appending units to
+# values. 
+
+sub process_methods {
+    
+    my ($self, $record) = @_;
+    
+    if ( $record->{collection_size} && $record->{collection_size_unit} )
+    {
+	$record->{collection_size} .= " " . $record->{collection_size_unit};
+    }
+    
+    if ( $record->{rock_censused} && $record->{rock_censused_unit} )
+    {
+	$record->{rock_censused} .= " " . $record->{rock_censused_unit};
+    }
 }
 
 

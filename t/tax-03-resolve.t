@@ -56,6 +56,8 @@ my $sql1 = "SELECT lft, rgt, n_occs, taxon_size as size, extant_size
 
 my $TAXON1_VAR = $dbh->selectrow_hashref($sql1);
 
+bless $TAXON1_VAR, 'Taxon';
+
 my $TAXON1_SEARCH = {
   orig_no => 69296,
   taxon_name => 'Dascillidae',
@@ -64,6 +66,8 @@ my $TAXON1_SEARCH = {
   lft => $TAXON1_VAR->{lft},
   rgt => $TAXON1_VAR->{rgt},
 };
+
+bless $TAXON1_SEARCH, 'Taxon';
 
 my $EX1 = '^Dascillinae';
 my $EXID1 = '70061';
