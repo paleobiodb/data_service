@@ -4067,7 +4067,7 @@ sub computeAttrsTable {
     
     # Same for the image selection table.
     
-    selectPics($dbh);
+    selectPics($dbh, $tree_table);
     
     # Create a table through which bottom-up attributes such as body_mass and
     # extant_children can be looked up.
