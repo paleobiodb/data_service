@@ -204,20 +204,6 @@ sub getPics {
 	}
     }
     
-    # Now copy all of the new records into the PHYLOPIC_CHOICE table with
-    # priority=1.  That priority can be adjusted later.
-    
-    logMessage(2, "    adding records to pic choice table...");
-    
-    my $sql = "
-	INSERT IGNORE INTO $PHYLOPIC_CHOICE (orig_no, uid, priority)
-	SELECT t.orig_no, pqn.uid, 1
-	FROM $tree_table as t JOIN $PHYLOPIC_NAMES as pqn on t.name = pqn.taxon_name";
-    
-    my $result = $dbh->do($sql);
-    
-    logMessage(2, "      added $result records");
-    
     my $a = 1;	# we can stop here when debugging
 }
 
@@ -240,6 +226,20 @@ sub selectPics {
 	logMessage(2, "    skipping phylopics because table '$PHYLOPICS' does not exist in this database");
 	return;
     }
+    
+    # Now copy all of the new records into the PHYLOPIC_CHOICE table with
+    # priority=1.  That priority can be adjusted later.
+    
+    logMessage(2, "    adding new records to pic choice table...");
+    
+    my $sql = "
+	INSERT IGNORE INTO $PHYLOPIC_CHOICE (orig_no, uid, priority)
+	SELECT t.orig_no, pqn.uid, 1
+	FROM $tree_table as t JOIN $PHYLOPIC_NAMES as pqn on t.name = pqn.taxon_name";
+    
+    my $result = $dbh->do($sql);
+    
+    logMessage(2, "      added $result records");
     
     logMessage(2, "    selecting the phylopic for each taxon...");
     
