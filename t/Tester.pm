@@ -485,12 +485,14 @@ sub extract_info_text {
 	    {
 		$tester->{csv}->parse($line);
 		my ($field, $value) = $tester->{csv}->fields;
+		$field =~ s/:$//;	# take off final ':', if one is found
 		$info->{$field} = $value;
 	    }
 	    
 	    else
 	    {
 		my ($field, $value) = split(qr{\t}, $line);
+		$field =~ s/:$//;	# take off final ':', if one is found
 		$info->{$field} = $value;
 	    }
 	}
