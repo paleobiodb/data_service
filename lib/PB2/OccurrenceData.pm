@@ -349,12 +349,6 @@ sub initialize {
 	    "The name of the taxon represented by this record",
 	{ output => 'attribution', if_block => 'attr', com_name => 'att' },
 	    "The attribution (author and year) of this taxonomic name",
-	{ output => 'specific_occs', com_name => 'soc' },
-	    "The number of occurrences that are identified to this specific taxon",
-	    "in the set of fossil occurrences being analyzed",
-	{ output => 'n_occs', com_name => 'noc' },
-	    "The total number of occurrences of this taxon or any of its subtaxa in the",
-	    "set of fossil occurrences being analyzed",
 	{ output => 'n_orders', com_name => 'odc' },
 	    "The number of orders from within this taxon that appear in the set of",
 	    "fossil occurrences being analyzed",
@@ -366,7 +360,13 @@ sub initialize {
 	    "fossil occurrences being analyzed",
 	{ output => 'n_species', com_name => 'spc' },
 	    "The number of species from within this taxon that appear in the set of",
-	    "fossil occurrences being analyzed");
+	    "fossil occurrences being analyzed",
+	{ output => 'specific_occs', com_name => 'soc' },
+	    "The number of occurrences that are identified to this specific taxon",
+	    "in the set of fossil occurrences being analyzed",
+	{ output => 'n_occs', com_name => 'noc' },
+	    "The total number of occurrences of this taxon or any of its subtaxa in the",
+	    "set of fossil occurrences being analyzed");
     
     $ds->define_output_map('1.2:occs:taxa_opt' =>
 	{ value => 'app', maps_to => '1.2:taxa:app', undocumented => 1 },
@@ -380,6 +380,9 @@ sub initialize {
 	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
 	    "The number of occurrences that were scanned in the process of",
 	    "computing this taxonomic tree.");
+    
+    # $ds->define_block('1.2:occs:taxa_attr' =>
+    # 	{ select => 'v.attribution', tables => 'v' });
     
     # The following block is used for prevalence output.
 
@@ -1123,7 +1126,7 @@ sub quickdiv {
 	$result->[$i]{sampled_in_bin} //= 0;
     }
     
-    if ( $start )
+    if ( defined $start )
     {
 	splice(@$result, $end + 1, 9999) if $end;	# must do this step first, because
 	splice(@$result, 0, $start) if $start;		# this step makes $end inaccurate
@@ -1890,7 +1893,7 @@ sub generateJoinList {
     
     # Create the necessary join expressions.
     
-    $tables->{t} = 1 if $tables->{pl} || $tables->{ph} || $tables->{v} || $tables->{tv};
+    $tables->{t} = 1 if $tables->{pl} || $tables->{ph} || $tables->{v} || $tables->{tv} || $tables->{tf};
     
     my $t = $tables->{tv} ? 'tv' : 't';
     
@@ -2036,17 +2039,39 @@ sub process_basic_record {
 	if ( $record->{taxon_name} && $record->{accepted_name} &&
 	     $record->{taxon_name} ne $record->{accepted_name} )
 	{
-	    $record->{taxonomic_reason} = $record->{spelling_reason};
+	    my $len = length($record->{accepted_name});
 	    
-	    $record->{taxonomic_reason} = 'recombination'
-		if $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination';
+	    if ( $record->{accepted_name} eq substr($record->{taxon_name}, 0, $len) )
+	    {
+		$record->{taxonomic_reason} = 'taxon not fully entered';
+	    }
 	    
-	    $record->{taxonomic_reason} = ''
-		if $record->{taxonomic_reason} && $record->{taxonomic_reason} eq 'original spelling' &&
-		    $record->{identified_no} eq $record->{spelling_no};
-	    
-	    $record->{taxonomic_reason} ||= 'taxon not fully entered'
-		if $record->{identified_rank} && $record->{identified_rank} ne $record->{accepted_rank};
+	    else
+	    {
+		$record->{taxonomic_reason} = $record->{spelling_reason};
+		
+		if ( $record->{accepted_reason} && $record->{accepted_reason} eq 'recombination' )
+		{
+		    $record->{taxonomic_reason} = 'recombination';
+		}
+		
+		elsif ( $record->{accepted_reason} && $record->{accepted_reason} eq 'correction' &&
+			$record->{taxonomic_reason} ne 'correction' )
+		{
+		    $record->{taxonomic_reason} = 'correction';
+		}
+		
+		elsif ( $record->{taxonomic_reason} eq 'original spelling' &&
+			$record->{identified_no} eq $record->{spelling_no} )
+		{
+		    $record->{taxonomic_reason} = '';
+		}
+		
+		elsif ( $record->{identified_rank} && $record->{identified_rank} ne $record->{accepted_rank} )
+		{
+		    $record->{taxonomic_reason} ||= 'taxon not fully entered';
+		}
+	    }
 	}
 	
 	else

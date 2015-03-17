@@ -332,6 +332,10 @@ sub list_taxa_simple {
     
     try {
 	$result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
+    }
+    
+    catch {
+	die $_ if $_;
     };
     
     # If we got some results, then process the list and return it.
@@ -442,6 +446,10 @@ sub list_subtree {
     
     try {
 	$result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
+    }
+    
+    catch {
+	die $_ if $_;
     };
     
     # If we got some results, then bless each object into class 'Taxon', set the result count, and
@@ -852,7 +860,7 @@ sub list_taxa {
 	try {
 	    $result_list = $taxonomy->{dbh}->selectall_arrayref($sql, { Slice => {} });
 	}
-	    
+	
 	catch {
 	    die $_ if $_;
 	};

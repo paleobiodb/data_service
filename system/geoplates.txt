@@ -1,0 +1,1316 @@
+001
+AHS
+Present Day Atlantic/Indian Hotspots
+002
+PHS
+Pacific Hotspots
+003
+PPH
+Present Day Pacific Hotspots
+101
+NAM
+North American Craton
+102
+GRN
+Greenland
+103
+NSL
+North Slope Alaska
+104
+MEX
+Mexico
+105
+BAJ
+Baja California
+106
+NBJ
+Northern Baja California
+107
+BIS
+Baffin Island, North America
+108
+AVA
+Avalon-Acadia, Alaska
+109
+PDM
+Piedmont-Florida, North America
+110
+ALR
+Alpha Cordillera Ridge, Arctic
+111
+MNR
+Mendeleev Ridge, Arctic
+112
+CHP
+Chukchi Plateau, Arctic
+113
+NWR
+Northwind Ridge, Arctic
+114
+LMN
+Lomonosov Ridge, Arctic
+115
+CBM
+Northern Northwind Ridge, Arctic
+116
+MVR
+Marvin Spur Ridge, Arctic
+119
+AAB
+Amerasia Basin, Arctic
+120
+CAI
+Canadian Arctic Islands
+121
+ELA
+East Ellesmere Island, Arctic
+122
+ELB
+East-Central Ellesmere Island, Arctic
+123
+ELC
+West-Central Ellesmere Island, Arctic
+124
+ELD
+West Ellesmere Island, Arctic
+125
+STT
+Stikine Terrane, British Columbia
+126
+WAT
+Wrangelia and Alexander Terrane, Alaska
+127
+FRP
+Faeroe Plate (trapped Greenland crust north of Faeroe Islands)
+128
+GV1
+Trapped Greenland crust off Voring Plateau Plate 1
+129
+GV2
+Trapped Greenland crust off Voring Plateau Plate 2
+130
+BAF
+Baffin Bay, North America
+199
+PDM
+Laurentia (Paleozoic North America)
+201
+SAM
+South American Craton
+202
+PRB
+Parana Basin Plate, South America
+204
+HON
+Honduras-Chortis, Central America
+205
+YUC
+Yucatan, Central America
+206
+CUB
+Cuba, Caribbean
+208
+CHI
+Chiapas, Central America
+209
+CUC
+Cuchumantanes, Central America
+210
+POM
+Polochic-Motahua, Central America
+211
+SCR
+Santa Cruz, Central America
+212
+GYP
+Guayape, Central America
+213
+MGJ
+Motagua-Jocotan, Central America
+215
+GUE
+Guerrero, Central America
+216
+CYR
+Cayman Ridge, Caribbean
+217
+WCT
+West Cayman Trough, Caribbean
+218
+ECT
+East Cayman Trough, Caribbean
+219
+THK
+Thunder Knoll, Caribbean
+220
+RSB
+Rosiland Bank, Caribbean
+221
+PDB
+Pedro Bank, Caribbean
+222
+JMC
+Jamaica, Caribbean
+223
+QSN
+Quinto Sueno, Caribbean
+224
+COF
+Caribbean Ocean Floor, Caribbean
+225
+MRB
+Maricaibo, Venezuela, South America
+226
+RML
+Romeral, Colombia, South America
+227
+STM
+Santa Marta, South America
+228
+PRJ
+Perija, South America
+229
+EPN
+Eastern Panama, Central America
+230
+CPN
+Central Panama, Central America
+231
+WPN
+Western Panama, Central America
+233
+FLS
+Florida Straits Block, Caribbean
+234
+LAA
+Lesser Antilles Arc, Caribbean
+235
+AVR
+Aves Ridge, Caribbean
+236
+SCB
+Saint Christopher Block, Caribbean
+237
+PTR
+Puerto Rico, Caribbean
+238
+EPR
+East Puerto Rican Trough, Caribbean
+239
+WPR
+West Puerto Rican Trough, Caribbean
+240
+MUT
+Muertos Trough, Caribbean
+246
+AAB
+Accreted Antilles Barbados, Caribbean
+252
+SHI
+Southern Hispaniola, Caribbean
+253
+SJH
+San Juan/Hispaniola, Caribbean
+254
+HCO
+Hispaniola Cordillera, Caribbean
+255
+NHI
+Northern Hispaniola, Caribbean
+256
+PDR
+Pinar del Rio, Caribbean
+258
+SEB
+Southeastern Cuba, Caribbean
+259
+SMC
+Sierra Meastra of Cuba, Caribbean
+264
+B2N
+Beta=2, Northern Gulf of Mexico, Caribbean
+265
+B2S
+Beta=2, Southern Gulf of Mexico, Caribbean
+266
+B3N
+Beta=3, Northern Gulf of Mexico, Caribbean
+267
+B3C
+Beta=3, Central Gulf of Mexico, Caribbean
+268
+B3S
+Beta=3, Southern Gulf of Mexico, Caribbean
+269
+B4N
+Beta=4, Northern Gulf of Mexico, Caribbean
+270
+B4S
+Beta=4, Southern Gulf of Mexico, Caribbean
+271
+SIB
+Sigsbee Block, Caribbean
+272
+B4C
+Beta=4, Central Gulf of Mexico, Caribbean
+273
+PRT
+Puerto Rico Trench, Caribbean
+274
+NCT
+North Cuban Thrust Sheet, Caribbean
+275
+SCT
+South Cuban Thrust Sheet, Caribbean
+276
+SPE
+Sandwich Plate East, Scotia Sea
+277
+DPN
+Drake Passage North, Scotia Sea
+278
+CSS
+Central Scotia Sea South, Scotia Sea
+280
+BDW
+Burdwood Plate, Scotia Sea
+281
+SPW
+Sandwich Plate West, Scotia Sea
+282
+NSE
+North Scotia Ridge East, Scotia Sea
+283
+SRW
+Shag Rock West, South Atlantic
+284
+SRE
+Shag Rock East, South Atlantic
+285
+SGR
+South Georgia Islands, South Atlantic
+286
+NSW
+North Scotia Ridge, Scotia Sea
+287
+SSI
+South Sandwich Islands, Scotia Sea
+288
+FLI
+Falkland Islands, South Atlantic/South America
+290
+SSS
+Salado subplate on South America
+291
+CSS
+Colorado subplate on South America
+293
+SSA
+Southern South America
+299
+SAS
+South American subplate
+301
+EUR
+Northern European Craton and Eurasia
+302
+BAL
+Baltic Shield, Europe
+303
+NHL
+Northern Highlands (Scotland), Northern Europe
+304
+SPN
+Iberia, Southern Europe
+305
+CEU
+Central Europe
+306
+CSD
+Corsica/Sardinia, Southern Europe
+307
+ITL
+Apulia/Adria, Italy, Southern Europe
+308
+DIN
+Dinardes, Greece, Southern Europe
+309
+WSV
+Western Svalbard, Northern Europe
+310
+CSV
+Central Svalbard, Northern Europe
+311
+BAR
+Barentsia, Northern Europe
+312
+GRM
+Grampian Highlands, Northern Europe
+313
+MDV
+Midland Valley, Europe
+314
+SUP
+Southern Uplands, Europe
+315
+ENG
+England-Brabant (Southern Ireland & England, northern France)
+317
+POR
+Porcupine Plate, North Atlantic
+318
+RKL
+Rockall Bank, Rockall Plateau, North Atlantic
+319
+MOS
+Mosesia, Europe
+320
+BLE
+Balearics, Europe
+321
+WEE
+Western Europe
+322
+CAL
+Calabria/Campania, Southern Europe
+323
+SIC
+Northern Sicily, Southern Europe
+324
+VPT
+Vöring Plateau
+327
+PLG
+Pelagonia (Greece)
+328
+VAR
+Vardar (Greece)
+329
+BET
+Betic (Spain)
+330
+TOB
+Tornquist Block on Eurasia
+331
+UKB
+United Kingdom Block on Eurasia
+333
+APP
+Central Appenines (Italy)
+335
+EALP
+Eastern (Calcareous) Alps, Europe
+336
+CARP
+Carpathia, Europe
+337
+TISA
+Tisa, Europe
+338
+ROD
+Rhodopes, Europe
+344
+WALP
+Western Alps, Europe
+345
+ION
+Ionia (Greece), Southern Europe
+346
+GRC
+Greece, Southern Europe
+347
+CRT
+Crete and Southern Aegean (Greece), Southern Europe
+348
+TSV
+Transylvania, Europe
+349
+SMD
+Serbo-Macedonia, Europe
+350
+EPE
+Eastern Eurasia
+351
+SEU
+Southern Eurasia, conjugate to Greater India
+401
+SIB
+Siberian Craton, North Asia
+402
+KAZ
+Kazahkstan, Central Asia
+403
+KOL
+Kolyma, Northeast Asia
+405
+VRK
+Verkhoyansk Plate, North Asia
+406
+KAM
+Kamchatka Peninsula, Northeast Asia
+407
+CKP
+Chukotsky Peninsula, Northeast Asia
+408
+OMO
+Omolon Block, Northeast Asia
+409
+NES
+Northeast Siberia, Northeast Asia
+410
+MNG
+Mongolia Block, North Asia
+411
+OKCK
+Okotsk/Chukotkaia Plate, Northeast Asia
+412
+UMB
+Udo(Kony) Murgalia, Northeast Asia
+413
+SHR
+Shirshov Ridge, Northeast Asia
+414
+BRR
+Bowers Ridge, Northeast Asia
+416
+NEA
+Northeast Asia near Japan
+501
+IND
+￼￼
+Indian Craton
+502
+SLK
+Sri Lanka (Ceylon)
+503
+ARB
+Arabia
+504
+TAR
+Taurus (southern Turkey), Eurasia
+505
+IRN
+Iran, Asia
+506
+AFF
+Farah (Northern Afghanistan), Eurasia
+507
+AFS
+Helmand (Sistan, Central Afghanistan), Eurasia
+508
+SIN
+Sinai, Arabia
+509
+LEB
+Lebanon, Central/West Asia
+510
+GTI
+Greater India
+511
+CIB
+Central Indian Basin
+512
+CMP
+Cuvier Microplate, East Indian Ocean
+513
+GMP
+Gascoyne Microplate, East Indian Ocean
+514
+EBP
+Elan Bank Plate (Enderby Basin), Antarctica/Indian Ocean
+515
+SKP
+Southern Kerguelen Plateau, Antarctica/Indian Ocean
+516
+END
+Enderby Basin, Antarctica/Indian Ocean
+519
+NAF
+Jurassic Ocean Crust North of Africa
+520
+WPT
+Western Pontides, Eurasia
+521
+SKT
+Sakhariya, Eurasia
+522
+MND
+Menderes (Turkey), Eurasia
+523
+LYC
+Lycia (Turkey), Eurasia
+524
+BEY
+Bey Daglari (Turkey), Eurasia
+525
+KRS
+Kirsehir (Turkey), Eurasia
+526
+EPT
+East Pontides (northeastern Turkey), Eurasia
+530
+CMT
+Central MesoTethys North
+531
+WMT
+Western MesoTethys
+532
+EMT
+Eastern MesoTethys North
+533
+EMT
+Eastern MesoTethys
+534
+CMT
+Central MesoTethys South
+535
+CNT
+Central NeoTethys South
+537
+NAB1
+North Australian Basin 1
+538
+NAB2
+North Australian Basin 2
+550
+INA
+North India
+551
+GGS
+Gagra, India
+552
+EAR
+East Argo Abyssal Plain, Eastern MesoTethys
+601
+NCH
+North China Platform
+602
+SCH
+South China Platform
+603
+SMA
+Sino/Malaya, SE Asia
+604
+ICH
+Indochina, SE Asia
+605
+BUR
+Burma, Indian Ocean
+606
+STB
+South Tibet, South Asia
+607
+BMP
+West Burma Plate, Indian Ocean
+608
+SPS
+South Phillipine Sea
+609
+NPS
+North Phillipine Sea
+610
+EPV
+East Parece Vela, Philippine Sea
+611
+WPV
+West Parece Vela Basin and West Shikoku Basin, Philippine Sea
+612
+NCS
+Northside South China Sea, SE Asia
+613
+SCS
+Southside South China Sea, SE Asia
+614
+KLM
+Kalimantan/Borneo, SE Asia
+615
+PNG
+Papua New Guinea, SE Asia
+616
+NTB
+North Tibet, South-Central Asia
+617
+RDB
+Reed Bank, SE Asia
+618
+MAC
+Macclesfield Bank, SE Asia
+619
+SIK
+Sikhate Alin, East Asia
+620
+VLA
+Vladivostok sliver, East Asia
+621
+CSA
+North Central Sikhate Alin sliver, East Asia
+622
+NSA
+North Sikhate Alin sliver, East Asia
+623
+NMS
+N-most Sikhate Alin sliver, East Asia
+624
+SAK
+Sakhalin, East Asia
+625
+CHK
+Central Hokkaido, East Asia
+626
+WHK
+West Hokkaido, East Asia
+627
+NEH
+Northeast Honshu, East Asia
+628
+CHN
+Central Honshu, East Asia
+629
+KAN
+Kanto Region, East Asia
+630
+NSH
+North Southwest Honshu and Kyushu, East Asia
+631
+SSH
+South Southwest Honshu and Kyushu, East Asia
+632
+TSO
+Tsoshima-Strati Block, East Asia
+633
+NKO
+North Korean Plate, East Asia
+634
+SKO
+South Korean Plate, East Asia
+635
+KYR
+Kita-Yamato Ridge, East Asia
+636
+YAM
+Yamato Ridge, East Asia
+637
+OKI
+Oki Ridge, Philippine Sea
+638
+SAD
+Sado Ridge, East Asia
+639
+NKM
+North Korean Margin Banks, East Asia
+640
+NEM
+Northeast Margin-Japan Basin, East Asia
+641
+SOJ
+Japan Basin Spreading Center, East Asia
+642
+YBS
+Yamato Basin Spreading Center, East Asia
+643
+LSM
+Laptev Sea Margin, East Asia
+644
+PCI
+Paracel Islands, SE Asia
+645
+CEL
+Celebes Basin, SE Asia
+646
+ZAM
+Zamboanga Peninsula of Phillipines, SE Asia
+647
+MLP
+Malay Peninsula, SE Asia
+648
+SOT
+South Okinawa Trough, SE Asia
+649
+NOT
+North Okinawa Trough, SE Asia
+650
+MPR
+Mapia Ridge, SE Asia
+651
+LSI
+Lombok-Sumbawa Islands, SE Asia
+652
+FAI
+Flores-Alor Islands, SE Asia
+653
+NWC
+Northwest Caroline Sea, Caroline Sea
+654
+WCS1
+Western Caroline Sea 1, Caroline Sea
+655
+WCS2
+Western Caroline Sea 2, Caroline Sea
+656
+WAY
+Western Ayu Trench, Philippine Sea
+658
+SCH
+South China Sea, SE Asia
+659
+ESB
+East Shikoku Basin, Philippine Sea
+660
+NWSC
+Northwest South China Sea, SE Asia
+661
+ESP
+Sundaland Piece, SE Asia
+662
+EJS
+Eastern Japan Sea, East Asia
+663
+PSC
+Proto South China Sea, SE and East Asia
+664
+BAN
+Banda Sea, SE Asia
+665
+CLL
+Celebes Sea Spreading Centre, SE Asia
+667
+ESW
+East Sulawesi, SE Asia
+668
+WSW
+West Sulawesi, SE Asia
+669
+NSU
+North Sulawesi, SE Asia
+670
+SLA
+Sula-Banggai, SE Asia
+671
+MCH
+Manchuria, SE Asia
+672
+BGB
+Bangka-Belitung, SE Asia
+673
+NSM
+North Sumatra, SE Asia
+674
+WPH
+West Philippines, SE Asia
+675
+SMB
+Sumba, SE Asia
+676
+BDA
+Banda Arc, SE Asia
+677
+PAL
+Palawan Block, SE Asia
+678
+EPH
+East Philippines, SE Asia
+679
+WHA
+West Halmahera Block, SE Asia
+680
+EHA
+East Halmahera Block, SE Asia
+681
+SER
+Seram, SE Asia
+682
+KTB
+Kep Tanimbar, SE Asia
+683
+WET
+Wetar, SE Asia
+684
+TIM
+Timor, SE Asia
+686
+BSS
+Barisan - South Sumatra, SE Asia
+687
+AND
+Andaman-Nicobar Ridge, SE Asia
+688
+SWCB
+Southwest Caroline Basin, Caroline Sea
+689
+NEC
+Northeast Caroline Basin, Caroline Sea
+690
+SEC
+Southeast Caroline Basin, Caroline Sea
+691
+CLB
+Central Luzon Block, SE Asia
+692
+WCS3
+Western Caroline Sea 3, Caroline Sea
+693
+WCR
+West Caroline Ridge, Caroline Sea
+694
+NLA
+North Luzon Arc, SE Asia
+695
+AMM
+Amami Plateau, Philippine Sea
+696
+BON
+Bonin Ridge, Philippine Sea
+697
+NNG
+North New Guinea, SE Asia
+698
+CNG
+Central New Guinea, SE Asia
+699
+MAR
+Mariana Ridge, Philippine Sea
+701
+AFR
+African Craton
+702
+MAD
+Madagascar
+703
+MDR
+Madagascar Ridge
+704
+SEY
+Seychelles
+705
+MAS
+Saya de Maya-Mascarene
+706
+ORA
+Oran Meseta
+707
+MOR
+Moroccan Meseta
+708
+KAB
+Kalbylies (north Africa)
+709
+SOM
+Somalia Plate
+710
+DAN
+Danakil Plate
+712
+LVB
+Lake Victoria Block
+713
+NMZ
+North Mozambique
+714
+NWA
+Northwest Africa
+715
+NEA
+Northeast Africa
+750
+MAL
+Malvinas Plate
+801
+AUS
+Australia
+802
+ANT
+Antarctica and East Antarctica
+803
+APN
+Antarctic Peninsula
+804
+MBL
+Marie Byrdland (Ross Terrane) and West Antarctica
+805
+ELL
+Ellsworth Mountains, Antarctica
+806
+NNZ
+North New Zealand (Western Province), SW Pacific
+807
+SNZ
+South New Zealand/Chatham Rise (Western Province), SW Pacific
+808
+THR
+Thurston Island, Antarctica
+809
+WHT
+Whitmore Mountains, Antarctica
+810
+BRK
+Berkner Island, Antarctica
+811
+STI
+South Shetland Islands, Antarctica
+812
+SOB
+South Orkney Islands Block, Antarctica
+813
+CBP
+Campbell Plateau (Southern part), SW Pacific
+814
+BEL
+Bellinghausen, Pacific
+815
+BBK
+Bruce Bank, Antarctica
+816
+DBW
+Discovery Bank West, Antarctica
+817
+DBE
+Discovery Bank East, Antarctica
+818
+HDB
+Herdman Bank, Antarctica
+819
+OBW
+Orkney Bank West, Antarctica
+820
+DPS
+Drake Passage South, Scotia Sea
+821
+TON
+Tonga Ridge, SW Pacific
+822
+NLB
+North Lau Basin, SW Pacific
+823
+LAU
+Lau Ridge, SW Pacific
+824
+VIT
+Vitiaz Trench, , SW Pacific
+825
+FIJ
+Fiji, SW Pacific
+826
+MNF
+Mid-North Fiji (Basin), SW Pacific
+827
+NHB
+New Hebrides, SW Pacific
+828
+JST
+Johnson Trench (western Vitiaz Trench), SW Pacific
+829
+NWB
+North Woodlark Basin, SW Pacific
+830
+SBK
+South Bismark Basin, SW Pacific
+831
+NKG
+North Kerguellen, Indian Ocean
+832
+NBK
+North Bismark, SW Pacific
+833
+LHR
+Lord Howe Rise, SW Pacific
+834
+NFR
+Norfolk Ridge, SW Pacific
+835
+TKR
+Three Kings Ridge, SW Pacific
+836
+LP
+Louisiade Plataeu, SW Pacific
+837
+KMR
+Kermadec Ridge, SW Pacific
+838
+NSF
+Northwest South Fiji Basin, SW Pacific
+839
+ESF
+East South Fiji Basin, SW Pacific
+842
+MNF
+Mid Norfolk Ridge, SW Pacific
+843
+ENF
+East Norfolk Ridge, SW Pacific
+844
+LYR
+Loyalty Ridge (east of Australia), SW Pacific
+845
+NCD
+New Caledonia, SW Pacific
+846
+EPC
+East Papuan Composite Terrane, SW Pacific
+847
+NBK
+North Bismark Basin, SW Pacific
+849
+SOL
+Solomon Sea (Australia Part), SW Pacific
+850
+TSM
+Tasmania, Australia
+851
+WSTR
+Western South Tasman Rise, Australia
+852
+ESTR
+Eastern South Tasman Rise, Australia
+855
+NLB
+North Loyalty Basin South, SW Pacific
+856
+SSF
+South South Fiji Basin, SW Pacific
+857
+NLBN
+North Loyalty Basin North, , SW Pacific
+858
+NFR2
+Norfolk Ridge Block 2, SW Pacific
+859
+NB1
+Norfolk Basin Block 1, SW Pacific
+860
+NB2
+Norfolk Basin Block 2, SW Pacific
+861
+NB3
+Norfolk Basin Block 3, SW Pacific
+862
+NB4
+Norfolk Basin Block 4, SW Pacific
+863
+NB5
+Norfolk Basin Block 5, SW Pacific
+864
+NIU
+Niuafoou (Lau Basin), SW Pacific
+866
+CS
+Chesterfield Plataeu, SW Pacific
+867
+GSM
+Gilbert Seamount Complex (southeast of Tasmania), Australia
+868
+CLP
+Challenger Plateau, SW Pacific
+869
+NLHR
+Northern Lord Howe Rise, SW Pacific
+870
+TOL
+Lau Basin Tonga Side, SW Pacific
+871
+GAS1
+Gascoyne Abyssal Plain 1, Eastern Indian Ocean
+872
+GAS2
+Gascoyne Abyssal Plain 2, Eastern Indian Ocean
+873
+GAS3
+Gascoyne Abyssal Plain 3, Eastern Indian Ocean
+874
+CUV1
+Cuvier Abyssal Plain 1, Eastern Indian Ocean
+875
+CUV2
+Cuvier Abyssal Plain 2, Eastern Indian Ocean
+876
+CUV3
+Cuvier Abyssal Plain 3, Eastern Indian Ocean
+877
+CUV4
+Cuvier Abyssal Plain 4, Eastern Indian Ocean
+878
+PP
+Papuan Plataeu, SW Pacific
+880
+PER1
+Perth Abyssal Plain 1, Eastern Indian Ocean
+881
+PER2
+Perth Abyssal Plain 2, Eastern Indian Ocean
+882
+MPL
+Microplate Middle Lord Howe Rise/Challenger Plataeu, SW Pacific
+883
+NDR
+North Dampier Ridge, SW Pacific
+884
+M1DR
+Middle 1 Dampier Ridge, SW Pacific
+885
+M2DR
+Middle 2 Dampier Ridge, SW Pacific
+886
+SDR
+South Dampier Ridge, SW Pacific
+887
+ETP
+East Tasman Plataeu, Australia
+888
+EPP
+Eastern Papuan Plataeu, SW Pacific
+889
+MR
+Mellish Rise, SW Pacific
+890
+KP
+Kenn Plataeu, SW Pacific
+891
+IB
+Iselin Bank, Antarctica
+892
+NPNG1
+Northern Papua New Guinea 1, SW Pacific
+893
+NPNG2
+Northern Papua New Guinea 2, SW Pacific
+894
+EAUS
+Eastern Australia
+895
+ENT
+Eastern NeoTethys South
+897
+NCT1
+North Cato Trough 1, SW Pacific
+898
+NCT2
+North Cato Trough 2, SW Pacific
+899
+CAT
+Cato Trough, SW Pacific
+901
+PAC
+￼￼
+￼￼Pacific Plate
+902
+FAR
+Farallon Plate, East Pacific
+903
+VAN
+Vancouver Plate, North Pacific
+904
+ALU
+Aluk Plate, South Pacific
+905
+HIK
+Hikurangi Plataeu (Moa Plate), Pacific
+906
+HHP
+Henry Hudson Plate, Pacific
+907
+JMN
+Jan Mayen Plate, North Atlantic
+909
+COC
+Cocos Plate, East Pacific
+910
+JFC
+Juan de Fuca Plate, North Pacific
+911
+NAZ
+Nazca Plate, East Pacific
+912
+NMG
+North Magellan, Pacific
+913
+SMG
+South Magellan, Pacific
+914
+CNK
+Chinook Plate, North Pacific
+915
+MTH
+Mathematician Plate, East Pacific
+916
+RIV
+Rivera Plate, East Pacific
+917
+GLP
+Guadelupe Plate, East Pacific
+918
+KUL
+Kula Plate, North Pacific
+919
+PHX
+Phoenix Plate, Pacific
+920
+PXRJ
+Phoenix Plate, Southern Ridge Jump, Pacific
+921
+OTP
+Osbourn Trough Phoenix Plate, Pacific
+922
+EAS
+Easter Island Plate, East Pacific
+923
+JFD
+Juan Fernandez Plate, East Pacific
+924
+NFAR
+Farallon Plate to Cocos Plate, East Pacific
+925
+LEF
+Leif Plate, Pacific
+926
+IZA1
+Izanagi Plate 1, Northwest Pacific
+927
+IZA2
+Izanagi Plate 2, Northwest Pacific
+928
+FPX
+Farallon Plate to Phoenix Plate, Pacific
+929
+ALK
+Aluk Plate 2, South Pacific
+930
+PXN
+Phoenix Plate to Nazca Plate, Pacific
+931
+BEL2
+Bellinghausen Plate 2, South Pacific
+932
+KUL2
+Farallon Plate to Kula Plate, North Pacific
+933
+IZA3
+Izanagi Plate 3, Northwest Pacific
+934
+IZA4
+Izanagi Plate 4, Northwest Pacific
+935
+NZP
+Present Day Nazca, East Pacific
+936
+HHP
+Henry Hudson Plate, Pacific
+937
+MBL2
+Marie Byrd Land 2, South Pacific
+938
+KUL3
+Izanagi Plate to Kula Plate, North Pacific
+939
+KUL4
+Pacific Plate to Kula Plate, North Pacific
+960
+PXPH
+Phoenix Plate to Phillipine Sea Plate, Northwest Pacific
+970
+RIV
+Rivera Microplate, East Pacific
+971
+BAU
+Bauer Microplate, East Pacific
+972
+BAUC
+Bauer Microplate Core, East Pacific

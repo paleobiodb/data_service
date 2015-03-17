@@ -15,6 +15,7 @@ package PB2::DiversityData;
 
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
 use Taxonomy;
+use Try::Tiny;
 
 use Moo::Role;
 
@@ -570,7 +571,7 @@ sub generate_phylogeny_ints {
     
     foreach my $class_no ( keys %base_taxa )
     {
-	$request->count_tree($class_no);
+	$request->count_taxa($class_no);
 	$check_count += $taxon_node{$class_no}{occs};
     }
     
@@ -780,6 +781,8 @@ sub get_upper_taxa {
     
     return unless $base_no > 0;
     
+    my $taxonomy = $request->{my_taxonomy};
+    
     # Get a list of all the taxa in the specified subtree, above the rank of
     # genus.  If the option 'app' was specified, include the first-and-last
     # appearance info.
@@ -789,13 +792,17 @@ sub get_upper_taxa {
     
     my $taxa_list;
     
-    eval {
-	$taxa_list = $request->{my_taxonomy}->list_subtree($base_no, { min_rank => 6, 
-								       fields => \@fields, 
-								       return => 'listref' });
+    try {
+	$taxa_list = $taxonomy->list_subtree($base_no, { min_rank => 6, 
+							 fields => \@fields, 
+							 return => 'listref' });
+    }
+    
+    catch {
+	die $_ if $_;
     };
     
-    #print STDERR "$Taxonomy::SQL_STRING\n\n" if $request->debug;
+    print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
     
     # If no taxa were returned, then the base taxon is probably a genus or
     # below.  So just fetch that single record, so that we at least have
@@ -803,8 +810,8 @@ sub get_upper_taxa {
     
     unless ( @$taxa_list )
     {
-	$taxa_list = $request->{my_taxonomy}->list_taxa($base_no, { fields => \@fields, 
-								    return => 'listref' });
+	$taxa_list = $taxonomy->list_taxa('current', $base_no, { fields => \@fields, 
+								 return => 'listref' });
     }
     
     # Now go through the list.  When we find a taxon whose info we have not
@@ -814,7 +821,7 @@ sub get_upper_taxa {
     foreach my $r ( @$taxa_list )
     {
 	my $taxon_no = $r->{orig_no};
-	my $parent_no = $r->{parsen_no};
+	my $parent_no = $r->{senpar_no};
 	
 	$taxon_node{$taxon_no} = $r;
 	
@@ -823,10 +830,6 @@ sub get_upper_taxa {
 	# tree-sequence order.
 	
 	$taxon_node{$parent_no}{chld}{$taxon_no} = 1 if $taxon_node{$parent_no};
-	
-	# If we were asked for attribution information, compute that now.
-	
-	$r->{attribution} = $request->generateAttribution($r) if $request->{my_attr};
     }
 }
 
@@ -841,6 +844,8 @@ sub get_taxon_info {
     
     my ($request, $taxon_nos) = @_;
     
+    my $taxonomy = $request->{my_taxonomy};
+    
     # Get a list of the specified taxa.  If the option 'app' was specified,
     # include the first-and-last appearance info.
     
@@ -849,12 +854,18 @@ sub get_taxon_info {
     
     my $taxa_list = [];
     
-    eval {
-	$taxa_list = $request->{my_taxonomy}->list_taxa($taxon_nos, { fields => \@fields,
-								      return => 'listref' });
+    bless $taxon_nos, 'TaxonSet';
+    
+    try {
+	$taxa_list = $taxonomy->list_taxa('current', $taxon_nos, { fields => \@fields,
+								   return => 'listref' });
+    }
+    
+    catch {
+	die $_ if $_;
     };
     
-    print STDERR "$Taxonomy::SQL_STRING\n\n" if $request->debug;
+    print STDERR $taxonomy->last_sql . "\n\n" if $request->debug;
     
     # Now go through the list, and copy the relevant info.
     
@@ -875,7 +886,7 @@ sub get_taxon_info {
 	
 	if ( $request->{my_attr} )
 	{
-	    $taxon_node->{attribution} = $request->generateAttribution($r);
+	    $taxon_node->{attribution} = $r->{attribution};
 	}
     }
 }
@@ -1075,7 +1086,7 @@ sub add_result_records {
 			 parent_no => $parent_no,
 			 taxon_name => $name,
 			 taxon_rank => $rank,
-			 spec_occs => $node->{occs},
+			 specific_occs => $node->{occs},
 		         n_occs => $node->{tree_occs} };
     
     # Add the appropriate subtaxon counts.
