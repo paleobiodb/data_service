@@ -37,7 +37,7 @@ while (<>)
 	$current_block = $1;
     }
     
-    if ( / ^ \s* \{ / )
+    if ( / ^ \s* \{ /x )
     {
 	$com_name = '';
 	$location = '';
@@ -73,7 +73,7 @@ while (<>)
 	$location = "$ARGV line $.";
     }	
     
-    if ( / \} \s* (?: , | \) \s* ; ) \s* $ /x )
+    if ( / \} \s* (?: , | \) \s* ; ) /x )
     {
 	if ( $com_name ne '' )
 	{

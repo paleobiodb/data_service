@@ -149,13 +149,12 @@ sub initialize {
 	    "The late age bound for the last appearance of this taxon in the database");
     
     $ds->define_block('1.2:taxa:subtaxon' =>
-	{ output => 'taxon_no', com_name => 'oid', dwc_name => 'taxonID' },
-	{ output => 'orig_no', com_name => 'gid' },
+	{ output => 'orig_no', com_name => 'oid', dwc_name => 'taxonID' },
+	{ output => 'taxon_no', com_name => 'vid', dedup => 'orig_no' },
 	{ output => 'record_type', com_name => 'typ', com_value => 'txn' },
 	{ output => 'taxon_rank', com_name => 'rnk', dwc_name => 'taxonRank' },
 	{ output => 'taxon_name', com_name => 'nam', dwc_name => 'scientificName' },
-	{ output => 'valid_no', com_name => 'val', pbdb_name => 'senior_no', 
-	  dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
+	{ output => 'accepted_no', com_name => 'acc', dwc_name => 'acceptedNameUsageID', dedup => 'orig_no' },
 	{ output => 'taxon_size', com_name => 'siz' },
 	{ output => 'extant_size', com_name => 'exs' },
 	{ output => 'firstapp_ea', com_name => 'fea' });

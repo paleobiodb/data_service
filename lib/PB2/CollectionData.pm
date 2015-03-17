@@ -214,7 +214,7 @@ sub initialize {
       { output => 'cc', com_name => 'cc2' },
 	  "The country in which the collection is located, encoded as",
 	  "L<ISO-3166-1 alpha-2|https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2>",
-      { output => 'state', com_name => 'sta' },
+      { output => 'state', com_name => 'stp' },
 	  "The state or province in which the collection is located, if known",
       { output => 'county', com_name => 'cny' },
 	  "The county or municipal area in which the collection is located, if known",
@@ -405,9 +405,9 @@ sub initialize {
       { output => 'taxon_no', com_name => 'tid' },
 	  "A unique identifier for the taxon.  These are currently positive integers,",
 	  "but this could change and should B<not be relied on>.",
-      { output => 'ident_name', com_name => 'ina', dedup => 'taxon_name' },
+      { output => 'ident_name', com_name => 'idn', dedup => 'taxon_name' },
 	  "The name under which the occurrence was actually identified",
-      { output => 'ident_rank', com_name => 'irn', dedup => 'taxon_rank' },
+      { output => 'ident_rank', com_name => 'idr', dedup => 'taxon_rank' },
 	  "The taxonomic rank as actually identified",
       { output => 'ident_no', com_name => 'iid', dedup => 'taxon_no' },
 	  "A unique identifier for the taxonomic name.");
@@ -1367,7 +1367,7 @@ sub generateStrataFilters {
     
     if ( my $name = $self->clean_param('name') )
     {
-	$name .= '%' if $is_auto eq 'auto';
+	$name .= '%' if defined $is_auto && $is_auto eq 'auto';
 	my $quoted = $dbh->quote($name);
 	push @filters, "cs.name like $quoted";
     }
