@@ -137,7 +137,7 @@ sub initialize {
       { select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
 		   'c.lat', 'c.lng', 'cc.latlng_basis as llb', 'cc.latlng_precision as llp',
 		   'c.n_occs', 'ei.interval_name as early_interval', 'li.interval_name as late_interval',
-		   'c.reference_no', 'group_concat(sr.reference_no) as reference_nos'], 
+		   'c.reference_no', 'sr.reference_nos'], 
 	tables => ['cc', 'ei', 'li', 'sr'] },
       { output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	  "A unique identifier for the collection.  For now, these are positive integers,",
@@ -851,8 +851,9 @@ sub get {
     
     $self->{main_sql} = "
 	SELECT $fields
-	FROM $COLL_MATRIX as c JOIN collections as cc on cc.collection_no = c.collection_no
-		LEFT JOIN secondary_refs as sr on c.collection_no = sr.collection_no
+	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
+		LEFT JOIN (SELECT collection_no, group_concat(reference_no) as reference_nos
+			   FROM secondary_refs GROUP BY collection_no) as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
@@ -923,8 +924,9 @@ sub list {
     
     $self->{main_sql} = "
 	SELECT $calc $fields
-	FROM coll_matrix as c JOIN collections as cc on cc.collection_no = c.collection_no
-		LEFT JOIN secondary_refs as sr on c.collection_no = sr.collection_no
+	FROM coll_matrix as c JOIN collections as cc using (collection_no)
+		LEFT JOIN (SELECT collection_no, group_concat(reference_no) as reference_nos
+			   FROM secondary_refs GROUP BY collection_no) as sr using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no

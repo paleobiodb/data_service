@@ -33,7 +33,7 @@ sub initialize {
     # Define output blocks for displaying time interval information
     
     $ds->define_block('1.1:intervals:basic' =>
-	{ select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no sm.level
+	{ select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no sm.scale_level
 			 sm.parent_no sm.color i.early_age i.late_age i.reference_no) ] },
 	{ output => 'interval_no', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this interval",
@@ -42,7 +42,7 @@ sub initialize {
 	{ output => 'scale_no', com_name => 'sca' },
 	    "The time scale in which this interval lies.  An interval may be reported more than",
 	    "once, as a member of different time scales",
-	{ output => 'level', com_name => 'lvl' },
+	{ output => 'scale_level', com_name => 'lvl', pbdb_name => 'level' },
 	    "The level within the time scale to which this interval belongs",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of this interval",
@@ -56,14 +56,14 @@ sub initialize {
 	    "The late age boundary of this interval (in Ma)",
 	{ output => 'early_age', com_name => 'eag' },
 	    "The early age boundary of this interval (in Ma)",
-	{ set => 'reference_no', append => 1 },
-	{ output => 'reference_no', com_name => 'rid', text_join => ', ' },
+	# { set => 'reference_no', append => 1 },
+	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
 	    "The identifier(s) of the references from which this data was entered");
     
     $ds->define_block('1.1:scales:basic' =>
 	{ select => [ 'sc.scale_no', 'sc.scale_name', 'sc.levels as num_levels',
 		      'sc.early_age', 'sc.late_age', 'sc.reference_no',
-		      'sl.level', 'sl.level_name' ] },
+		      'sl.scale_level', 'sl.level_name' ] },
 	{ output => 'scale_no', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this time scale",
 	{ output => 'record_type', com_name => 'typ', com_value => 'scl', value => 'timescale' },
@@ -76,20 +76,20 @@ sub initialize {
 	  if_format => 'json' },
 	    "A list of levels associated with this time scale, if more than one.",
 	    "This field will only be present in C<json> responses.",
-	{ output => 'level', com_name => 'lvl', not_format => 'json' },
+	{ output => 'scale_level', com_name => 'lvl', not_format => 'json' },
 	    "Level number.",
-	{ output => 'level_name', com_name => 'nam', not_format => 'json' },
+	{ output => 'level_name', com_name => 'nam', pbdb_name => 'level', not_format => 'json' },
 	    "Level name",
 	{ output => 'early_age', com_name => 'eag' },
 	    "The early bound of this time scale, in Ma",
 	{ output => 'late_age', com_name => 'lag' },
 	    "The late bound of this time scale, in Ma",
-	{ set => 'reference_no', append => 1 },
-	{ output => 'reference_no', com_name => 'rid' },
+	# { set => 'reference_no', append => 1 },
+	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
 	    "The identifier(s) of the references from which this data was entered");
     
     $ds->define_block('1.1:scales:level' =>
-	{ output => 'level', com_name => 'lvl' },
+	{ output => 'scale_level', com_name => 'lvl', pbdb_name => 'level' },
 	    "Level number",
 	{ output => 'level_name', com_name => 'nam' },
 	    "Level name");
@@ -231,7 +231,7 @@ sub list {
     
     if ( defined $scale && $scale eq 'all' )
     {
-	push @filters, "sm.level is not null";
+	push @filters, "sm.scale_level is not null";
     }
     
     elsif ( @scale_ids )
@@ -263,8 +263,8 @@ sub list {
     my $order = $request->clean_param('order');
     
     my $order_expr = defined $order && $order eq 'younger' ?
-	"ORDER BY sm.scale_no, sm.level, i.late_age" :
-	    "ORDER BY sm.scale_no, sm.level, i.early_age desc";
+	"ORDER BY sm.scale_no, sm.scale_level, i.late_age" :
+	    "ORDER BY sm.scale_no, sm.scale_level, i.early_age desc";
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -353,7 +353,7 @@ sub list_scales {
     $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM $SCALE_DATA as sc LEFT JOIN $SCALE_LEVEL_DATA as sl using (scale_no)
-	WHERE $filter_string ORDER BY scale_no, level
+	WHERE $filter_string ORDER BY scale_no, scale_level
 	$limit";
     
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
@@ -380,7 +380,7 @@ sub list_scales {
 		push @scales, $row;
 	    }
 	    
-	    push @{$scale{$scale_no}{level_list}}, { level => $row->{level},
+	    push @{$scale{$scale_no}{level_list}}, { scale_level => $row->{scale_level},
 						     level_name => $row->{level_name} };
 	}
 	
@@ -443,7 +443,7 @@ sub generateHierarchy {
 	$r->{hier_child} ||= [];
 	$row{$r->{interval_no}} = $r;
 	
-	if ( $r->{level} == 1 )
+	if ( $r->{scale_level} == 1 )
 	{
 	    push @toplevel, $r;
 	}

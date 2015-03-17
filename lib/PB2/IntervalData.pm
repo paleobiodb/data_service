@@ -38,7 +38,7 @@ sub initialize {
     # Define output blocks for displaying time interval information
     
     $ds->define_block('1.2:intervals:basic' =>
-	{ select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no sm.level
+	{ select => [ qw(i.interval_no i.interval_name i.abbrev sm.scale_no sm.scale_level
 			 sm.parent_no sm.color i.early_age i.late_age i.reference_no) ] },
 	{ output => 'interval_no', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this interval",
@@ -47,8 +47,15 @@ sub initialize {
 	{ output => 'scale_no', com_name => 'sca' },
 	    "The time scale in which this interval lies.  An interval may be reported more than",
 	    "once, as a member of different time scales",
-	{ output => 'level', com_name => 'lvl' },
-	    "The level within the time scale to which this interval belongs",
+	{ output => 'scale_level', com_name => 'lvl' },
+	    "The level within the time scale to which this interval belongs.  For example,",
+	    "the default time scale is organized into the following levels:",
+	    "=over", "=item Level 1", "Eons",
+		       "=item Level 2", "Eras",
+		       "=item Level 3", "Periods",
+		       "=item Level 4", "Epochs",
+		       "=item Level 5", "Stages",
+	    "=back",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of this interval",
 	{ output => 'abbrev', com_name => 'abr' },
@@ -61,14 +68,14 @@ sub initialize {
 	    "The late age boundary of this interval (in Ma)",
 	{ output => 'early_age', com_name => 'eag' },
 	    "The early age boundary of this interval (in Ma)",
-	{ set => 'reference_no', append => 1 },
-	{ output => 'reference_no', com_name => 'rid', text_join => ', ' },
+	# { set => 'reference_no', append => 1 },
+	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
 	    "The identifier(s) of the references from which this data was entered");
     
     $ds->define_block('1.2:scales:basic' =>
 	{ select => [ 'sc.scale_no', 'sc.scale_name', 'sc.levels as num_levels',
 		      'sc.early_age', 'sc.late_age', 'sc.reference_no',
-		      'sl.level', 'sl.level_name' ] },
+		      'sl.scale_level', 'sl.level_name' ] },
 	{ output => 'scale_no', com_name => 'oid' },
 	    "A positive integer that uniquely identifies this time scale",
 	{ output => 'record_type', com_name => 'typ', com_value => 'scl', value => 'timescale' },
@@ -81,7 +88,7 @@ sub initialize {
 	  if_format => 'json' },
 	    "A list of levels associated with this time scale, if more than one.",
 	    "This field will only be present in C<json> responses.",
-	{ output => 'level', com_name => 'lvl', not_format => 'json' },
+	{ output => 'scale_level', com_name => 'lvl', not_format => 'json' },
 	    "Level number.",
 	{ output => 'level_name', com_name => 'nam', not_format => 'json' },
 	    "Level name",
@@ -89,12 +96,12 @@ sub initialize {
 	    "The early bound of this time scale, in Ma",
 	{ output => 'late_age', com_name => 'lag' },
 	    "The late bound of this time scale, in Ma",
-	{ set => 'reference_no', append => 1 },
-	{ output => 'reference_no', com_name => 'rid' },
+	# { set => 'reference_no', append => 1 },
+	{ output => 'reference_no', com_name => 'rid', text_join => ', ', show_as_list => 1 },
 	    "The identifier(s) of the references from which this data was entered");
     
     $ds->define_block('1.2:scales:level' =>
-	{ output => 'level', com_name => 'lvl' },
+	{ output => 'scale_level', com_name => 'lvl' },
 	    "Level number",
 	{ output => 'level_name', com_name => 'nam' },
 	    "Level name");
@@ -111,7 +118,11 @@ sub initialize {
 	  list => ',', alias => 'scale',
 	  error => "the value of {param} should be a list of positive integers or 'all'" },
 	    "Return intervals from the specified time scale(s).",
-	    "The value of this parameter should be a list of positive integers or 'all'",
+	    "The value of this parameter should be a list of positive integers separated",
+	    "by commas, or 'all'",
+	{ param => 'scale_level', valid => POS_VALUE, list => ',', alias => 'level' },
+	    "Return intervals from the specified scale level(s).  The value of this",
+	    "parameter can be one or more level numbers separated by commas.",
 	{ param => 'id', valid => POS_VALUE, list => ',' },
 	    "Return intervals that have the specified identifiers",
 	{ param => 'min_ma', valid => DECI_VALUE(0) },
@@ -236,10 +247,16 @@ sub list {
     
     my $scale = $request->clean_param('scale');
     my @scale_ids = $request->clean_param_list('scale_id');
+    my @scale_levels = $request->clean_param_list('scale_level');
+    
+    my $level_string = join(',', @scale_levels);
     
     if ( defined $scale && $scale eq 'all' )
     {
-	push @filters, "sm.level is not null";
+	unless ( $level_string )
+	{
+	    push @filters, "sm.scale_level is not null";
+	}
     }
     
     elsif ( @scale_ids )
@@ -264,6 +281,11 @@ sub list {
 	push @filters, "i.early_age <= $max_ma" if $max_ma > 0;
     }
     
+    if ( $level_string )
+    {
+	push @filters, "sm.scale_level in ($level_string)";
+    }
+    
     push @filters, "1=1" unless @filters;
     
     # Get the results in the specified order
@@ -271,8 +293,8 @@ sub list {
     my $order = $request->clean_param('order');
     
     my $order_expr = defined $order && $order eq 'younger' ?
-	"ORDER BY sm.scale_no, sm.level, i.late_age" :
-	    "ORDER BY sm.scale_no, sm.level, i.early_age desc";
+	"ORDER BY sm.scale_no, sm.scale_level, i.late_age" :
+	    "ORDER BY sm.scale_no, sm.scale_level, i.early_age desc";
     
     # Determine which fields and tables are needed to display the requested
     # information.
@@ -361,7 +383,7 @@ sub list_scales {
     $request->{main_sql} = "
 	SELECT $calc $fields
 	FROM $SCALE_DATA as sc LEFT JOIN $SCALE_LEVEL_DATA as sl using (scale_no)
-	WHERE $filter_string ORDER BY scale_no, level
+	WHERE $filter_string ORDER BY scale_no, scale_level
 	$limit";
     
     print STDERR $request->{main_sql} . "\n\n" if $request->debug;
@@ -388,7 +410,7 @@ sub list_scales {
 		push @scales, $row;
 	    }
 	    
-	    push @{$scale{$scale_no}{level_list}}, { level => $row->{level},
+	    push @{$scale{$scale_no}{level_list}}, { scale_level => $row->{scale_level},
 						     level_name => $row->{level_name} };
 	}
 	
@@ -451,7 +473,7 @@ sub generateHierarchy {
 	$r->{hier_child} ||= [];
 	$row{$r->{interval_no}} = $r;
 	
-	if ( $r->{level} == 1 )
+	if ( $r->{scale_level} == 1 )
 	{
 	    push @toplevel, $r;
 	}
@@ -528,14 +550,14 @@ sub read_interval_data {
     
     if ( ref $result eq 'ARRAY' )
     {
-	my ($scale_no, $level, %sample_list);
+	my ($scale_no, $scale_level, %sample_list);
 	
 	foreach my $s ( @$result )
 	{
 	    next unless $scale_no = $s->{scale_no};
-	    next unless $level = $s->{level};
-	    $SCALE_LEVEL_DATA{$scale_no}{$level} = $s->{level_name};
-	    push @{$sample_list{$scale_no}}, $level if $s->{sample};
+	    next unless $scale_level = $s->{scale_level};
+	    $SCALE_LEVEL_DATA{$scale_no}{$scale_level} = $s->{level_name};
+	    push @{$sample_list{$scale_no}}, $scale_level if $s->{sample};
 	}
 	
 	# The 'sample_list' field will be a list of the levels at which
@@ -560,19 +582,19 @@ sub read_interval_data {
     
     if ( ref $result eq 'ARRAY' )
     {
-	my ($interval_no, $scale_no, $level, $parent_no);
+	my ($interval_no, $scale_no, $scale_level, $parent_no);
 	
 	foreach my $m ( @$result )
 	{
 	    next unless $scale_no = $m->{scale_no};
-	    next unless $level = $m->{scale_level};
+	    next unless $scale_level = $m->{scale_level};
 	    next unless $interval_no = $m->{interval_no};
 	    next unless $parent_no = $m->{parent_no};
 	    
 	    $INTERVAL_DATA{$scale_no}{$interval_no} = { %{$interval_data{$interval_no}}, 
 							parent_no => $parent_no,
-							scale_level => $level + 0,
-						        "L$level" => $interval_no };
+							scale_level => $scale_level + 0,
+						        "L$scale_level" => $interval_no };
 	}
 	
 	# Now compute boundary lists and parent level mappings.
@@ -585,14 +607,14 @@ sub read_interval_data {
 	    {
 		my $i = $INTERVAL_DATA{$scale_no}{$interval_no};
 		my $parent_no = $i->{parent_no};
-		my $level = $i->{scale_level};
+		my $scale_level = $i->{scale_level};
 		my $boundary_age = $i->{early_age};
 		
 		# Add this interval's boundary to the boundary list and
 		# boundary map for its level.
 		
-		push @{$boundary_list{$level}}, $boundary_age;
-		$boundary_map{$level}{$boundary_age} = $i;
+		push @{$boundary_list{$scale_level}}, $boundary_age;
+		$boundary_map{$scale_level}{$boundary_age} = $i;
 		
 		# Iteratively compute the level mapping for this interval and
 		# all its parents.  So, for example, if we know that interval
@@ -611,10 +633,10 @@ sub read_interval_data {
 	    # Now sort each of the boundary lists (oldest to youngest) and
 	    # store them in the appropriate package variable.
 	    
-	    foreach my $level ( keys %boundary_list )
+	    foreach my $scale_level ( keys %boundary_list )
 	    {
-		$BOUNDARY_LIST{$scale_no}{$level} = [ sort { $b <=> $a } @{$boundary_list{$level}} ];
-		$BOUNDARY_MAP{$scale_no}{$level} = $boundary_map{$level};
+		$BOUNDARY_LIST{$scale_no}{$scale_level} = [ sort { $b <=> $a } @{$boundary_list{$scale_level}} ];
+		$BOUNDARY_MAP{$scale_no}{$scale_level} = $boundary_map{$scale_level};
 	    }
 	}
     }
