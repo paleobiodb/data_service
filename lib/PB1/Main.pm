@@ -25,7 +25,7 @@ use PB1::PersonData;
 	  title => 'PBDB Data Service',
 	  version => '5',
 	  features => 'standard',
-	  special_params => 'standard, linebreak=linebreak, datainfo=showsource',
+	  special_params => 'standard, linebreak=linebreak, datainfo=showsource, count=count/rowcount',
 	  path_prefix => 'data1.1/',
 	  ruleset_prefix => '1.1:',
 	  doc_template_dir => 'doc/1.1' });

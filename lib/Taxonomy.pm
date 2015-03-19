@@ -92,6 +92,7 @@ my (%STD_OPTION) = ( fields => 1,
 		     return => 1 );
 
 my (%TAXON_OPTION) = ( min_rank => 1, max_rank => 1, 
+			rank => 1,
 			exact => 1,
 			extant => 1, 
 			depth => 1,
@@ -1762,7 +1763,7 @@ sub resolve_names {
     foreach my $key ( keys %$options )
     {
 	croak "resolve_names: invalid option '$key'\n"
-	    unless $STD_OPTION{$key} || $key eq 'all_names';
+	    unless $STD_OPTION{$key} || $TAXON_OPTION{$key} || $key eq 'all_names';
     }
     
     # Generate a template query that will be able to find a name.
@@ -1773,7 +1774,7 @@ sub resolve_names {
     {
 	$tables = {};
 	my @fields = $taxonomy->generate_fields($options->{fields} || 'NEW_SEARCH', $tables);
-        my @filters, $taxonomy->taxon_filters($options);
+        my @filters = $taxonomy->taxon_filters($options, $tables);
 	
 	my $fields = join q{, }, @fields;
 	my $filters = @filters ? join( ' and ', @filters ) . ' and ' : '';
@@ -1784,7 +1785,7 @@ sub resolve_names {
 	FROM taxon_search as s join taxon_trees as t using (orig_no)
 		join taxon_attrs as v using (orig_no)
 		join authorities as a using (taxon_no)
-	WHERE $filters";
+	WHERE $filters\n";
 	
 	$sql_order = "GROUP BY s.taxon_no ORDER BY s.is_current desc, s.is_exact desc, v.taxon_size desc, v.n_occs desc\n";
     }
@@ -2546,7 +2547,7 @@ sub taxon_filters {
 	}
 	else
 	{
-	    push @filters, "t.status = 'NOTHING'";
+	    croak "bad value '$options->{status}' for option 'status'\n";
 	}
     }
     
@@ -2572,8 +2573,43 @@ sub taxon_filters {
 	
 	else
 	{
-	    push @filters, "t.rank = 0";
+	    if ( $options->{min_rank} && ! $min )
+	    {
+		croak "bad value '$options->{min_rank}' for option 'min_rank'\n";
+	    }
+	    
+	    else
+	    {
+		croak "bad value '$options->{max_rank}' for option 'max_rank'\n";
+	    }
 	}
+    }
+    
+    if ( $options->{rank} )
+    {
+	my @selectors = ref $options->{rank} eq 'ARRAY' ? @{$options->{rank}}
+	    : split qr{\s*,\s*}, $options->{rank};
+	
+	my %rank;
+	
+	foreach my $s (@selectors)
+	{
+	    next unless $s;
+	    
+	    croak "bad value '$s' for option 'rank'\n" unless $s > 0;
+	    
+	    $rank{$s + 0} = 1;
+	}
+	
+	my $rank_string = join(',', sort { $a <=> $b } keys %rank);
+	
+	# If no valid ranks were given, create a filter which selects nothing.
+	
+	$rank_string ||= '0';
+	
+	# Add the specified filter.
+	
+	push @filters, "t.rank in ($rank_string)";
     }
     
     if ( defined $options->{extant} && $options->{extant} ne '' )
@@ -2593,9 +2629,17 @@ sub taxon_filters {
     
     if ( defined $options->{depth} && $options->{depth} ne '' )
     {
-	my $max_depth = $options->{depth} + 1;
+	if ( $options->{depth} > 0 || $options->{depth} eq '0' )
+	{
+	    my $max_depth = $options->{depth} + 0;
 	
-	push @filters, "(t.depth - tb.depth) < $max_depth";
+	    push @filters, "(t.depth - tb.depth) <= $max_depth";
+	}
+	
+	else
+	{
+	    croak "bad value '$options->{depth}' for option 'depth'\n";
+	}
     }
     
     if ( $options->{min_created} )

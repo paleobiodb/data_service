@@ -642,11 +642,11 @@ sub initialize {
 	    "A valid taxonomic name, or a common abbreviation such as 'T. rex'.",
 	    "The name may include the wildcard characters % and _.",
 	{ optional => 'rank', valid => \&PB2::TaxonData::validRankSpec },
-	    "Return only taxonomic names at the specified rank, e.g. C<genus>.",
+	    "Return only taxonomic names at the specified rank, e.g. <genus>.",
 	{ optional => 'extant', valid => BOOLEAN_VALUE },
 	    "Return only extant or non-extant taxa.",
 	    "Accepted values are: C<yes>, C<no>, C<1>, C<0>, C<true>, C<false>.",
-	{ param => 'status', valid => '1.2:taxa:status', default => 'valid' },
+	{ param => 'status', valid => '1.2:taxa:status', default => 'all' },
 	    "Return only names that have the specified status.  Accepted values include:",
 	{ allow => '1.2:taxa:display' }, 
 	{ allow => '1.2:special_params' },
@@ -968,7 +968,7 @@ sub list {
     {
 	$options->{return} = 'stmt';
 	$rel ||= 'self';
-	$DB::single = 1;
+	
 	my $sth = $taxonomy->list_taxa($rel, $id_list, $options);
 	$self->sth_result($sth) if $sth;
 	$self->set_result_count($taxonomy->last_rowcount);
@@ -1006,8 +1006,15 @@ sub match {
     my $options = $self->generate_query_options();
     
     # Get the list of matches.
-    
+    $DB::single = 1;
     my @name_matches = $taxonomy->resolve_names($name_list, $options);
+    
+    my $sql = $taxonomy->last_sql;
+    my @warnings = $taxonomy->list_warnings;
+    
+    $self->add_warning(@warnings) if @warnings;
+    
+    print STDERR "$sql\n\n" if $sql;
     
     $self->list_result(@name_matches);
 }
@@ -1392,26 +1399,9 @@ sub generate_query_options {
     $options->{extant} = $extant if $extant ne '';	# $extant may be 0, 1, or undefined
     $options->{status} = $status if $status ne '';
     
-    if ( defined $rank && $rank ne '' )
+    if ( $rank )
     {
-	my $rank_no = ($rank > 0) ? $rank + 0 : $TAXON_RANK{lc $rank};
-	
-	# If we were given a valid rank, set the min_rank and max_rank options
-	# accordingly.
-	
-	if ( $rank_no > 0 )
-	{
-	    $options->{min_rank} = $rank_no;
-	    $options->{max_rank} = $rank_no;
-	}
-	
-	# Otherwise, set an option that will select no results.
-	
-	else
-	{
-	    $options->{max_rank} = 1;
-	    $self->add_warning("invalid taxonomic rank '$rank'");
-	}
+	$options->{rank} = $rank;
     }
     
     if ( $select )
@@ -1903,9 +1893,59 @@ sub validNameSpec {
 
 sub validRankSpec {
     
+    no warnings 'numeric';
+    no warnings 'uninitialized';
+    
     my ($value, $context) = @_;
     
-    return;
+    my @selectors = split qr{\s*,\s*}, $value;
+    my @ranks;
+    
+    foreach my $s (@selectors)
+    {
+	next unless $s;		# skip any blank entries
+	
+	if ( $s =~ qr{ ^ ( \w+ ) (?: \s*-\s* ( \w+ ) )? $ }x )
+	{
+	    my $rank = ($1 > 0 || $1 eq '0') ? $1 + 0 : $TAXON_RANK{$1};
+	    
+	    return { error => "invalid taxonomic rank '$1'" }
+		unless defined $rank && $rank ne '';
+	    
+	    if ( $2 )
+	    {
+		my $rank_max = ($2 > 0 || $2 eq '0') ? $2 + 0 : $TAXON_RANK{$2};
+		
+		return { error => "invalid taxonomic rank '$2'" }
+		    unless defined $rank_max && $rank_max ne '';
+		
+		if ( $rank_max < $rank )
+		{
+		    my $temp = $rank_max; $rank_max = $rank; $rank = $temp;
+		}
+		
+		foreach my $r ( $rank .. $rank_max )
+		{
+		    push @ranks, $r;
+		}
+	    }
+	    
+	    else
+	    {
+		push @ranks, $rank;
+	    }
+	}
+    }
+    
+    if ( @ranks == 0 )
+    {
+	return { value => '' };
+    }
+    
+    else
+    {
+	return { value => \@ranks };
+    }
 }
 
 

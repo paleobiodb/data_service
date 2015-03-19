@@ -93,9 +93,9 @@ sub initialize {
 	    "evaluated according to the model(s) specified by the parameter C<pgm>.",
 	{ value => 'prot', maps_to => '1.2:colls:prot' },
 	    "Indicate whether the collection is on protected land",
-        # { value => 'time', maps_to => '1.2:colls:time' },
-	#     "Additional information about the temporal locality of the",
-	#     "collection.",
+        { value => 'time', maps_to => '1.2:colls:time' },
+	    "This block is obsolete, and is included only for compatibility reasons.",
+	    "It does not include any fields in the response.",
 	{ value => 'strat', maps_to => '1.2:colls:strat' },
 	    "Basic information about the stratigraphic context of the collection.",
 	{ value => 'stratext', maps_to => '1.2:colls:stratext' },
@@ -137,7 +137,7 @@ sub initialize {
       { select => ['c.collection_no', 'cc.collection_name', 'cc.collection_subset', 'cc.formation',
 		   'c.lat', 'c.lng', 'cc.latlng_basis as llb', 'cc.latlng_precision as llp',
 		   'c.n_occs', 'ei.interval_name as early_interval', 'li.interval_name as late_interval',
-		   'c.reference_no', 'sr.reference_nos'], 
+		   'c.reference_no', 'group_concat(distinct sr.reference_no) as reference_nos'], 
 	tables => ['cc', 'ei', 'li', 'sr'] },
       { output => 'collection_no', dwc_name => 'collectionID', com_name => 'oid' },
 	  "A unique identifier for the collection.  For now, these are positive integers,",
@@ -269,7 +269,8 @@ sub initialize {
 	{ output => 'protected', com_name => 'ptd' },
 	    "The protected status of the land on which the collection is located, if known.");
     
-    # $ds->define_block('1.2:colls:time' =>
+    $ds->define_block('1.2:colls:time');
+    
     #   { select => ['$mt.early_age', '$mt.late_age', 'im.cx_int_no', 'im.early_int_no', 'im.late_int_no'],
     # 	tables => ['im'] },
     #   { set => '*', code => \&fixTimeOutput },
@@ -852,13 +853,14 @@ sub get {
     $self->{main_sql} = "
 	SELECT $fields
 	FROM $COLL_MATRIX as c JOIN collections as cc using (collection_no)
-		LEFT JOIN (SELECT collection_no, group_concat(reference_no) as reference_nos
-			   FROM secondary_refs GROUP BY collection_no) as sr using (collection_no)
+		LEFT JOIN secondary_refs as sr using (collection_no)
 		$join_list
         WHERE c.collection_no = $id and c.access_level = 0
 	GROUP BY c.collection_no";
     
     $self->{main_record} = $dbh->selectrow_hashref($self->{main_sql});
+    
+    print STDERR "$self->{main_sql}\n\n" if $self->debug;
 }
 
 
@@ -925,8 +927,7 @@ sub list {
     $self->{main_sql} = "
 	SELECT $calc $fields
 	FROM coll_matrix as c JOIN collections as cc using (collection_no)
-		LEFT JOIN (SELECT collection_no, group_concat(reference_no) as reference_nos
-			   FROM secondary_refs GROUP BY collection_no) as sr using (collection_no)
+		LEFT JOIN secondary_refs as sr using (collection_no)
 		$base_joins
         WHERE $filter_string
 	GROUP BY c.collection_no
