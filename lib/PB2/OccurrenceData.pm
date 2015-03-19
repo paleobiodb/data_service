@@ -10,6 +10,8 @@ use strict;
 
 use lib '..';
 
+use POSIX ();
+
 package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
@@ -18,6 +20,8 @@ use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL $CO
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use TaxonDefs qw(%RANK_STRING);
+
+use Carp qw(carp croak);
 
 use Moo::Role;
 
@@ -1729,22 +1733,22 @@ sub generateQuickDivFilters {
 	
 	if ( $x1 < -180.0 )
 	{
-	    $x1 = $x1 + ( floor( (180.0 - $x1) / 360.0) * 360.0);
+	    $x1 = $x1 + ( POSIX::floor( (180.0 - $x1) / 360.0) * 360.0);
 	}
 	
 	if ( $x2 < -180.0 )
 	{
-	    $x2 = $x2 + ( floor( (180.0 - $x2) / 360.0) * 360.0);
+	    $x2 = $x2 + ( POSIX::floor( (180.0 - $x2) / 360.0) * 360.0);
 	}
 	
 	if ( $x1 > 180.0 )
 	{
-	    $x1 = $x1 - ( floor( ($x1 + 180.0) / 360.0 ) * 360.0);
+	    $x1 = $x1 - ( POSIX::floor( ($x1 + 180.0) / 360.0 ) * 360.0);
 	}
 	
 	if ( $x2 > 180.0 )
 	{
-	    $x2 = $x2 - ( floor( ($x2 + 180.0) / 360.0 ) * 360.0);
+	    $x2 = $x2 - ( POSIX::floor( ($x2 + 180.0) / 360.0 ) * 360.0);
 	}
 	
 	# If $x1 < $x2, then we query on a single bounding box defined by
@@ -1770,7 +1774,7 @@ sub generateQuickDivFilters {
 	}
     }
     
-    elsif ( $y1 ne '' || $y2 ne '' && ! ( $y1 == -90 && $y2 == 90 ) )
+    elsif ( ($y1 ne '' || $y2 ne '') && ! ( $y1 == -90 && $y2 == 90 ) )
     {
 	$y1 //= -90;
 	$y2 //= 90;

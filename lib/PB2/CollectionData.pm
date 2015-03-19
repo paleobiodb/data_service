@@ -9,6 +9,8 @@ use strict;
 
 use lib '..';
 
+use POSIX ();
+
 package PB2::CollectionData;
 
 use HTTP::Validate qw(:validators);
@@ -21,7 +23,6 @@ use TableDefs qw($COLL_MATRIX $COLL_BINS $COLL_STRATA $COUNTRY_MAP $PALEOCOORDS 
 use Taxonomy;
 
 use Carp qw(carp croak);
-use POSIX qw(floor ceil);
 
 use Moo::Role;
 
@@ -1688,22 +1689,22 @@ sub generateMainFilters {
 	
 	if ( $x1 < -180.0 )
 	{
-	    $x1 = $x1 + ( floor( (180.0 - $x1) / 360.0) * 360.0);
+	    $x1 = $x1 + ( POSIX::floor( (180.0 - $x1) / 360.0) * 360.0);
 	}
 	
 	if ( $x2 < -180.0 )
 	{
-	    $x2 = $x2 + ( floor( (180.0 - $x2) / 360.0) * 360.0);
+	    $x2 = $x2 + ( POSIX::floor( (180.0 - $x2) / 360.0) * 360.0);
 	}
 	
 	if ( $x1 > 180.0 )
 	{
-	    $x1 = $x1 - ( floor( ($x1 + 180.0) / 360.0 ) * 360.0);
+	    $x1 = $x1 - ( POSIX::floor( ($x1 + 180.0) / 360.0 ) * 360.0);
 	}
 	
 	if ( $x2 > 180.0 )
 	{
-	    $x2 = $x2 - ( floor( ($x2 + 180.0) / 360.0 ) * 360.0);
+	    $x2 = $x2 - ( POSIX::floor( ($x2 + 180.0) / 360.0 ) * 360.0);
 	}
 	
 	# If $x1 < $x2, then we query on a single bounding box defined by
@@ -1780,22 +1781,22 @@ sub generateMainFilters {
 	
     # 	if ( $px1 < -180.0 )
     # 	{
-    # 	    $px1 = $px1 + ( floor( (180.0 - $px1) / 360.0) * 360.0);
+    # 	    $px1 = $px1 + ( POSIX::floor( (180.0 - $px1) / 360.0) * 360.0);
     # 	}
 	
     # 	if ( $px2 < -180.0 )
     # 	{
-    # 	    $px2 = $px2 + ( floor( (180.0 - $px2) / 360.0) * 360.0);
+    # 	    $px2 = $px2 + ( POSIX::floor( (180.0 - $px2) / 360.0) * 360.0);
     # 	}
 	
     # 	if ( $px1 > 180.0 )
     # 	{
-    # 	    $px1 = $px1 - ( floor( ($px1 + 180.0) / 360.0 ) * 360.0);
+    # 	    $px1 = $px1 - ( POSIX::floor( ($px1 + 180.0) / 360.0 ) * 360.0);
     # 	}
 	
     # 	if ( $px2 > 180.0 )
     # 	{
-    # 	    $px2 = $px2 - ( floor( ($px2 + 180.0) / 360.0 ) * 360.0);
+    # 	    $px2 = $px2 - ( POSIX::floor( ($px2 + 180.0) / 360.0 ) * 360.0);
     # 	}
 	
     # 	# If $px1 < $px2, then we query on a single bounding box defined by
@@ -2094,22 +2095,22 @@ sub adjustCoordinates {
     
     if ( $x1 < -180.0 )
     {
-	$x1_offset = -1 * floor( (180.0 - $x1) / 360.0) * 360.0;
+	$x1_offset = -1 * POSIX::floor( (180.0 - $x1) / 360.0) * 360.0;
     }
     
     elsif ( $x1 > 180.0 )
     {
-	$x1_offset = floor( ($x1 + 180.0) / 360.0 ) * 360.0;
+	$x1_offset = POSIX::floor( ($x1 + 180.0) / 360.0 ) * 360.0;
     }
     
     if ( $x2 < -180.0 )
     {
-	$x2_offset = -1 * floor( (180.0 - $x2) / 360.0) * 360.0;
+	$x2_offset = -1 * POSIX::floor( (180.0 - $x2) / 360.0) * 360.0;
     }
     
     elsif ( $x2 > 180.0 )
     {
-	$x2_offset = floor( ($x2 + 180.0) / 360.0 ) * 360.0;
+	$x2_offset = POSIX::floor( ($x2 + 180.0) / 360.0 ) * 360.0;
     }
     
     # Now make sure we have an actual expression.
