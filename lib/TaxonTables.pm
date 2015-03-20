@@ -191,6 +191,8 @@ our $ADJUST_AUX = "adjust_aux";
 our $SPECIES_AUX = "species_aux";
 our $INTS_AUX = "ints_aux";
 
+our $TAXON_EXCEPT = "taxon_exceptions";
+
 # Additional tables
 
 our $QUEUE_TABLE = "taxon_queue";
@@ -772,7 +774,7 @@ sub buildTaxonTables {
     # subspecies and subgenus names match the genera under which they are
     # hierarchically placed.
     
-    adjustHierarchicalNames($dbh, $tree_table) if $step_control->{d};
+    # adjustHierarchicalNames($dbh, $tree_table) if $step_control->{d};
     
     # Next, sequence the taxon trees using the hierarchy relation.
     
@@ -1021,6 +1023,7 @@ sub buildOpinionCache {
     $result = $dbh->do("CREATE TABLE $OPINION_WORK
 			  (opinion_no int unsigned not null,
 			   orig_no int unsigned not null,
+			   child_rank enum('','subspecies','species','subgenus','genus','subtribe','tribe','subfamily','family','superfamily','infraorder','suborder','order','superorder','infraclass','subclass','class','superclass','subphylum','phylum','superphylum','subkingdom','kingdom','superkingdom','unranked clade','informal'),
 			   child_spelling_no int unsigned not null,
 			   parent_no int unsigned not null,
 			   parent_spelling_no int unsigned not null,
@@ -1132,10 +1135,10 @@ sub populateOpinionCache {
     my $auth_table = $TAXON_TABLE{$tree_table}{authorities};
     
     $result = $dbh->do("
-		INSERT INTO $table_name (opinion_no, orig_no, child_spelling_no,
+		INSERT INTO $table_name (opinion_no, orig_no, child_rank, child_spelling_no,
 					 parent_no, parent_spelling_no, ri, pubyr,
 					 status, spelling_reason, reference_no, author, suppress)
-		SELECT o.opinion_no, a1.orig_no,
+		SELECT o.opinion_no, a1.orig_no, a1.taxon_rank,
 			if(o.child_spelling_no > 0, o.child_spelling_no, o.child_no), 
 			a2.orig_no,
 			if(o.parent_spelling_no > 0, o.parent_spelling_no, o.parent_no),
@@ -1293,7 +1296,8 @@ sub createWorkingTables {
 				name varchar(80) not null,
 				imp boolean not null,
 				rank tinyint not null,
-				opinion_rank tinyint not null,
+				trad_rank tinyint not null,
+				aux_rank tinyint not null,
 				status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 				spelling_no int unsigned not null,
 				trad_no int unsigned not null,
@@ -1548,14 +1552,18 @@ sub computeSpelling {
     logMessage(2, "    setting name and rank");
     
     $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on a.taxon_no = t.spelling_no
-			SET t.name = a.taxon_name, t.opinion_rank = a.taxon_rank");
+			SET t.name = a.taxon_name, t.rank = a.taxon_rank");
     
     $result = $dbh->do("UPDATE $TREE_WORK as t JOIN $auth_table as a on a.taxon_no = t.trad_no
-			SET t.rank = a.taxon_rank");
+			SET t.trad_rank = a.taxon_rank");
     
     logMessage(2, "    indexing by name");
     
     $result = $dbh->do("ALTER TABLE $TREE_WORK ADD INDEX (name)");
+    
+    # Except for Dinosaurs.
+    
+    $result = $dbh->do("UPDATE $TREE_WORK as t SET t.rank = 25 WHERE t.name = 'Dinosauria'");
     
     # Then we can compute the name table, which records the best opinion
     # and spelling reason for each taxonomic name.
@@ -3237,6 +3245,14 @@ sub computePhylogeny {
     
     # $result = $dbh->do($SQL_STRING);
     
+    # If there isn't an 'taxon_exceptions' table, create one.
+    
+    $result = $dbh->do("CREATE TABLE IF NOT EXISTS $TAXON_EXCEPT (
+				orig_no int unsigned not null,
+				name varchar(80),
+				rank tinyint not null,
+				primary key (orig_no)) ENGINE=MYISAM");
+    
     # We first compute an auxiliary table to help in the computation.  We
     # insert a row for each non-junior taxonomic concept above genus level,
     # listing the current name and rank, as well as tree depth and parent
@@ -3337,6 +3353,14 @@ sub computePhylogeny {
     
     $dbh->do($SQL_STRING);
     
+    # Determine the kingdom number for plants, since that changes how names
+    # are treated.
+    
+    $SQL_STRING = "SELECT orig_no FROM $TREE_WORK WHERE name = 'Plantae'";
+    
+    my ($plantae_no) = $dbh->selectrow_array($SQL_STRING);
+    $plantae_no ||= 0;
+    
     # Then iterate through the each remaining level of the trees.  For each new
     # entry, the classification values are copied from its immediate parent
     # unless the newly entered taxon is itself a better match for one of the
@@ -3353,27 +3377,55 @@ sub computePhylogeny {
 		SELECT k.orig_no, k.current_rank,
 			if(k.common_name <> '', k.common_name, p.common_name),
 			if(k.current_rank = 23 or (k.current_rank = 22 and ifnull(p.kingdom_no, 1) = 1), k.orig_no, p.kingdom_no) as nk,
-			if(k.current_rank in (20,21) or (k.current_rank = 19 and p.phylum_no is null) or k.was_phylum - k.not_phylum > ifnull(xp.was_phylum - xp.not_phylum, 0), k.orig_no, p.phylum_no) as np,
-			if(k.current_rank = 17 or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), k.orig_no, p.class_no) as nc,
-			if(k.current_rank = 13 or k.was_order - k.not_order > ifnull(xo.was_order - xo.not_order, 0), k.orig_no, p.order_no) as no,
-			if(k.current_rank = 9 or k.taxon_name like '%idae', k.orig_no, p.family_no) as nf
+			if(k.current_rank in (20,21) or ex.rank = 20 or (k.current_rank = 19 and p.phylum_no is null) or 
+				k.was_phylum - k.not_phylum > ifnull(xp.was_phylum - xp.not_phylum, 0), 
+				k.orig_no, p.phylum_no) as np,
+			if(k.current_rank = 17 or ex.rank = 17 or k.was_class - k.not_class > ifnull(xc.was_class - xc.not_class, 0), 
+				k.orig_no, p.class_no) as nc,
+			if(k.current_rank = 13 or ex.rank = 13 or k.was_order - k.not_order > ifnull(xo.was_order - xo.not_order, 0) or
+				(p.order_no is null and k.was_order >= 5 and k.not_order < (k.was_order * 2)),
+				k.orig_no, p.order_no) as no,
+			if(k.current_rank = 9 or (k.taxon_name like '%idae' and p.kingdom_no <> $plantae_no), 
+				k.orig_no, p.family_no) as nf
 		FROM $INTS_AUX as k JOIN $INTS_WORK as p on p.ints_no = k.senpar_no
 			LEFT JOIN $INTS_AUX as xp on xp.orig_no = p.phylum_no
 			LEFT JOIN $INTS_AUX as xc on xc.orig_no = p.class_no
 			LEFT JOIN $INTS_AUX as xo on xo.orig_no = p.order_no
+			LEFT JOIN $TAXON_EXCEPT as ex on ex.orig_no = k.orig_no
 		WHERE k.depth = $depth";
 	
 	$result = $dbh->do($SQL_STRING);
 	
+	# In any row where the kingdom has changed, clear the phylum_no.  In
+	# any row where the phylum has changed, clear the class_no. In any row
+	# where the class has changed, clear the order_no. In any row where
+	# the order has changed, clear the family_no.
+	
 	$SQL_STRING = "
 		UPDATE $INTS_WORK as i JOIN $INTS_AUX as k on i.ints_no = k.orig_no
 				JOIN $INTS_WORK as p on p.ints_no = k.senpar_no
-		SET k.aux_rank = if(ifnull(i.kingdom_no, 0) <> ifnull(p.kingdom_no, 0), 23,
+		SET i.phylum_no = if(ifnull(i.kingdom_no,0) <> ifnull(p.kingdom_no,0), null, i.phylum_no),
+		    i.class_no = if(ifnull(i.phylum_no,0) <> ifnull(p.phylum_no,0), null, i.class_no),
+		    i.order_no = if(ifnull(i.class_no,0) <> ifnull(p.class_no,0), null, i.order_no),
+		    i.family_no = if(ifnull(i.order_no,0) <> ifnull(p.order_no,0), null, i.family_no)
+		WHERE k.depth = $depth";
+	
+	$result = $dbh->do($SQL_STRING);
+	
+	logMessage(2, "          adjusted $result rows at depth $depth") if $result > 0;
+	
+	# Figure out approximately where each taxon sits in the hierarchy,
+	# using the classifications we have just worked out.
+	
+	$SQL_STRING = "
+		UPDATE $INTS_WORK as i JOIN $TREE_WORK as t on i.ints_no = t.orig_no
+				JOIN $INTS_WORK as p on p.ints_no = t.senpar_no
+		SET t.aux_rank = if(ifnull(i.kingdom_no, 0) <> ifnull(p.kingdom_no, 0), 23,
 				if(ifnull(i.phylum_no, 0) <> ifnull(p.phylum_no, 0), 20,
 				 if(ifnull(i.class_no, 0) <> ifnull(p.class_no, 0), 17,
 				  if(ifnull(i.order_no, 0) <> ifnull(p.order_no, 0), 13,
 				   if(ifnull(i.family_no,0) <> ifnull(p.family_no, 0), 9, 0)))))
-		WHERE k.depth = $depth";
+		WHERE t.depth = $depth";
 	
 	$result = $dbh->do($SQL_STRING);
     }
@@ -3415,77 +3467,77 @@ sub computePhylogeny {
     # Find everything considered as a family that is higher up the tree than
     # an order, and remove it from the $INTS_WORK table.
     
-    $SQL_STRING = "SELECT distinct family_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
-		   WHERE aux_rank = 13 and family_no is not null";
+    # $SQL_STRING = "SELECT distinct family_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
+    # 		   WHERE aux_rank = 13 and family_no is not null";
     
-    my $family_list = $dbh->selectcol_arrayref($SQL_STRING);
+    # my $family_list = $dbh->selectcol_arrayref($SQL_STRING);
     
-    if ( ref $family_list eq 'ARRAY' and @$family_list > 0 )
-    {
-	my $family_string = join(q{,}, @$family_list);
+    # if ( ref $family_list eq 'ARRAY' and @$family_list > 0 )
+    # {
+    # 	my $family_string = join(q{,}, @$family_list);
 	
-	$SQL_STRING = "UPDATE $INTS_WORK SET family_no = null
-		       WHERE family_no in ($family_string)";
+    # 	$SQL_STRING = "UPDATE $INTS_WORK SET family_no = null
+    # 		       WHERE family_no in ($family_string)";
 	
-	$result = $dbh->do($SQL_STRING);
+    # 	$result = $dbh->do($SQL_STRING);
 	
-	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(opinion_rank=9, 25, opinion_rank)
-		       WHERE orig_no in ($family_string) and rank = 9";
+    # 	# $SQL_STRING = "UPDATE $TREE_WORK SET rank = if(rank=9, 25, rank)
+    # 	# 	       WHERE orig_no in ($family_string) and rank = 9";
 	
-	$result = $dbh->do($SQL_STRING);
+    # 	# $result = $dbh->do($SQL_STRING);
 	
-	logMessage(2, "    removed " . scalar(@$family_list) . " anomalous rank 'family' assignments");
-    }
+    # 	logMessage(2, "    removed " . scalar(@$family_list) . " anomalous rank 'family' assignments");
+    # }
     
-    # Find everything considered as an order that is higher up the tree than a
-    # class, and remove it from the $INTS_WORK table.
+    # # Find everything considered as an order that is higher up the tree than a
+    # # class, and remove it from the $INTS_WORK table.
     
-    $SQL_STRING = "SELECT distinct order_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
-		   WHERE aux_rank = 17 and order_no is not null";
+    # $SQL_STRING = "SELECT distinct order_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
+    # 		   WHERE aux_rank = 17 and order_no is not null";
     
-    my $order_list = $dbh->selectcol_arrayref($SQL_STRING);
+    # my $order_list = $dbh->selectcol_arrayref($SQL_STRING);
     
-    if ( ref $order_list eq 'ARRAY' and @$order_list > 0 )
-    {
-	my $order_string = join(q{,}, @$order_list);
+    # if ( ref $order_list eq 'ARRAY' and @$order_list > 0 )
+    # {
+    # 	my $order_string = join(q{,}, @$order_list);
 	
-	$SQL_STRING = "UPDATE $INTS_WORK SET order_no = null
-		       WHERE order_no in ($order_string)";
+    # 	$SQL_STRING = "UPDATE $INTS_WORK SET order_no = null
+    # 		       WHERE order_no in ($order_string)";
 	
-	$result = $dbh->do($SQL_STRING);
+    # 	$result = $dbh->do($SQL_STRING);
 	
-	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(opinion_rank=13, 25, opinion_rank)
-		       WHERE orig_no in ($order_string) and rank = 13";
+    # 	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(rank=13, 25, rank)
+    # 		       WHERE orig_no in ($order_string) and rank = 13";
 	
-	$result = $dbh->do($SQL_STRING);
+    # 	$result = $dbh->do($SQL_STRING);
 	
-	logMessage(2, "    removed " . scalar(@$order_list) . " anomalous rank 'order' assignments");
-    }
+    # 	logMessage(2, "    removed " . scalar(@$order_list) . " anomalous rank 'order' assignments");
+    # }
     
-    # Find everything considered as a class that is higher up the tree than a
-    # phylum, and remove it from the $INTS_WORK table.
+    # # Find everything considered as a class that is higher up the tree than a
+    # # phylum, and remove it from the $INTS_WORK table.
     
-    $SQL_STRING = "SELECT distinct class_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
-		   WHERE aux_rank = 20 and class_no is not null";
+    # $SQL_STRING = "SELECT distinct class_no FROM $INTS_WORK as i join $INTS_AUX as k on k.orig_no = i.ints_no
+    # 		   WHERE aux_rank = 20 and class_no is not null";
     
-    my $class_list = $dbh->selectcol_arrayref($SQL_STRING);
+    # my $class_list = $dbh->selectcol_arrayref($SQL_STRING);
     
-    if ( ref $class_list eq 'ARRAY' and @$class_list > 0 )
-    {
-	my $class_string = join(q{,}, @$class_list);
+    # if ( ref $class_list eq 'ARRAY' and @$class_list > 0 )
+    # {
+    # 	my $class_string = join(q{,}, @$class_list);
 	
-	$SQL_STRING = "UPDATE $INTS_WORK SET class_no = null
-		       WHERE class_no in ($class_string)";
+    # 	$SQL_STRING = "UPDATE $INTS_WORK SET class_no = null
+    # 		       WHERE class_no in ($class_string)";
 	
-	$result = $dbh->do($SQL_STRING);
+    # 	$result = $dbh->do($SQL_STRING);
 	
-	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(opinion_rank=17, 25, opinion_rank)
-		       WHERE orig_no in ($class_string) and rank = 17";
+    # 	$SQL_STRING = "UPDATE $TREE_WORK SET rank = if(rank=17, 25, rank)
+    # 		       WHERE orig_no in ($class_string) and rank = 17";
 	
-	$result = $dbh->do($SQL_STRING);
+    # 	$result = $dbh->do($SQL_STRING);
 	
-	logMessage(2, "    removed " . scalar(@$class_list) . " anomalous 'class' assignments");
-    }
+    # 	logMessage(2, "    removed " . scalar(@$class_list) . " anomalous 'class' assignments");
+    # }
     
     # Then fill in the name of each classification taxon.  This will enable
     # us to query for those names later without joining to five separate
@@ -3584,23 +3636,23 @@ sub computePhylogeny {
 	
 	$result = $dbh->do($SQL_STRING);
 	
-	$SQL_STRING = "
-		UPDATE $TREE_WORK as t JOIN $COUNTS_WORK as c using (orig_no)
-			LEFT JOIN $INTS_AUX as k using (orig_no)
-		SET t.rank = case
-				when k.aux_rank = 20 and c.phylum_count = 0 then 20
-				when k.aux_rank = 17 and c.class_count = 0 then 17
-				when k.aux_rank = 13 and c.order_count = 0 then 13
-				when k.aux_rank = 9 and c.family_count = 0 then 9
-				else 25
-			     end,
-		    c.is_phylum = if(k.aux_rank = 20 and c.phylum_count = 0, 1, 0),
-		    c.is_class = if(k.aux_rank = 17 and c.class_count = 0, 1, 0),
-		    c.is_order = if(k.aux_rank = 13 and c.order_count = 0, 1, 0),
-		    c.is_family = if(k.aux_rank = 9 and c.family_count = 0, 1, 0)
-		WHERE t.rank = 25 and t.depth = $depth - 1";
+	# $SQL_STRING = "
+	# 	UPDATE $TREE_WORK as t JOIN $COUNTS_WORK as c using (orig_no)
+	# 		LEFT JOIN $INTS_AUX as k using (orig_no)
+	# 	SET t.rank = case
+	# 			when k.aux_rank = 20 and c.phylum_count = 0 then 20
+	# 			when k.aux_rank = 17 and c.class_count = 0 then 17
+	# 			when k.aux_rank = 13 and c.order_count = 0 then 13
+	# 			when k.aux_rank = 9 and c.family_count = 0 then 9
+	# 			else 25
+	# 		     end,
+	# 	    c.is_phylum = if(k.aux_rank = 20 and c.phylum_count = 0, 1, 0),
+	# 	    c.is_class = if(k.aux_rank = 17 and c.class_count = 0, 1, 0),
+	# 	    c.is_order = if(k.aux_rank = 13 and c.order_count = 0, 1, 0),
+	# 	    c.is_family = if(k.aux_rank = 9 and c.family_count = 0, 1, 0)
+	# 	WHERE t.rank = 25 and t.depth = $depth - 1";
 	
-	$result = $dbh->do($SQL_STRING);
+	# $result = $dbh->do($SQL_STRING);
     }
     
     # Now that we have the counts we can go back and fill in the field

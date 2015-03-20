@@ -62,11 +62,6 @@ else
 
 my $t = Taxonomy->new($dbh, 'taxon_trees');
 
-# If we are debugging, stop here.
-
-$DB::single = 1;
-
-
 # Call the routines that build the various caches, depending upon the options
 # that were specified.
 

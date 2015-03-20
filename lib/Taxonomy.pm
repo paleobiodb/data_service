@@ -3435,6 +3435,8 @@ sub taxon_joins {
 	if $tables_hash->{pc};
     $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as pt on pt.orig_no = $mt.senpar_no\n"
 	if $tables_hash->{pt};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as vt on vt.orig_no = $mt.accepted_no\n"
+	if $tables_hash->{vt};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ATTRS_TABLE} as v on v.orig_no = $mt.orig_no\n"
 	if $tables_hash->{v};
     $joins .= "\t\tLEFT JOIN $taxonomy->{NAMES_TABLE} as n on n.taxon_no = $mt.spelling_no\n"
@@ -3619,11 +3621,12 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      DATA => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
 			       't.rank as taxon_rank', 't.lft', 't.status', 't.accepted_no',
 			       't.parent_no', 't.senpar_no', 'a.common_name', 'a.reference_no',
-			       'v.n_occs', 'v.is_extant'],
+			       'vt.name as accepted_name', 'v.n_occs', 'v.is_extant'],
 		      AUTH_DATA => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 
 				    '(a.taxon_rank + 0) as taxon_rank',
 				    't.lft', 't.status', 't.accepted_no', 't.parent_no', 't.senpar_no',
-				    'a.common_name', 'a.reference_no', 'v.n_occs', 'v.is_extant'],
+				    'a.common_name', 'a.reference_no', 'vt.name as accepted_name', 
+				    'v.n_occs', 'v.is_extant'],
 		      REF_DATA => ['r.reference_no', 'r.author1init as r_ai1', 'r.author1last as r_al1', 
 				   'r.author2init as r_ai2', 'r.author2last as r_al2', 'r.otherauthors as r_oa', 
 				   'r.pubyr as r_pubyr', 'r.reftitle as r_reftitle', 'r.pubtitle as r_pubtitle', 
@@ -3664,8 +3667,8 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      image_no => ['v.image_no'],
 		    );
 
-our (%FIELD_TABLES) = ( DATA => ['v', 'a'],
-			AUTH_DATA => ['v', 'a'],
+our (%FIELD_TABLES) = ( DATA => ['v', 'a', 'vt',],
+			AUTH_DATA => ['v', 'a', 'vt'],
 			OP_DATA => ['o', 'oo', 'ac', 'ap'],
 			REF_DATA => ['r'],
 			APP => ['v'], 

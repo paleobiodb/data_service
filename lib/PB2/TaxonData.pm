@@ -64,6 +64,7 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:basic' =>
 	{ select => ['DATA'] },
+	{ set => '*', code => \&process_basic_record },
 	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'oid' },
 	    "A unique identifier for this taxonomic name",
 	{ output => 'taxon_no', com_name => 'vid', dedup => 'orig_no' },
@@ -105,6 +106,10 @@ sub initialize {
 	  com_name => 'acc', dedup => 'orig_no' },
 	    "If this name is either a junior synonym or an invalid name, the identifier",
 	    "of the accepted name to be used in its place.",
+	{ output => 'accepted_name', dwc_name => 'acceptedNameUsage', pbdb_name => 'accepted_name',
+	  com_name => 'acn', dedup => 'taxon_name' },
+	    "If this name is either a junior synonym or an invalid name, the accepted name",
+	    "that should be used in its place.",
 	{ output => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par',
 	  pbdb_name => 'parent_no' },
 	    "The identifier of the immediately containing taxon, if any",
@@ -2024,6 +2029,17 @@ sub processResultSet {
     # Now substitute the processed list for the raw one.
     
     @$rowlist = @new_list;
+}
+
+
+# For each record, do any necessary processing.
+
+sub process_basic_record {
+    
+    my ($request, $record) = @_;
+    
+    $record->{accepted_name} = "" if $record->{accepted_name} && $record->{taxon_name} &&
+	$record->{accepted_name} eq $record->{taxon_name};
 }
 
 

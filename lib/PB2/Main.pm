@@ -145,9 +145,6 @@ use PB2::PersonData;
 	"location in time and space. Each occurrence is a member of a single fossil collection,",
 	"and has a taxonomic identification which may be more or less specific.");
     
-    $ds2->extended_doc({ path => 'occs' },
-	"Follow this link for more information on L<the use of taxonomic names in this data service|node:names>.");
-    
     $ds2->define_node({ path => 'occs/single',
 			place => 1,
 			usage => [ "/occs/single.json?id=1001&show=loc", 
