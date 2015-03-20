@@ -590,7 +590,9 @@ sub initialize {
 	    "or other correspondences between taxa.  This is a flag parameter, which does not need any value.",
 	{ param => 'base_name', valid => \&PB2::TaxonData::validNameSpec },
 	    "Return only records associated with the specified taxonomic name(s), I<including subtaxa>.",
-	    "You may specify multiple names, separated by commas.",
+	    "You may specify multiple names, separated by commas.  You may append one or more exclusions",
+	    "to any name, using the C<^> character.  For example, C<Osteichthyes^Tetrapoda> would select",
+	    "the fish excluding the tetrapods.",
 	{ param => 'base_id', valid => POS_VALUE, list => ',' },
 	    "Return only records associated with the specified taxonomic name(s), specified by numeric identifier, I<including subtaxa>.",
 	    "You may specify multiple identifiers, separated by commas.",
@@ -1900,7 +1902,7 @@ sub generateMainFilters {
 	if ( $interval_no )
 	{
 	    my $sql = "
-		SELECT early_age, late_age, scale_no, level
+		SELECT early_age, late_age, scale_no, scale_level
 		FROM $INTERVAL_DATA JOIN $SCALE_MAP using (interval_no)
 		WHERE interval_no = $interval_no ORDER BY scale_no LIMIT 1";
 	    
@@ -2168,7 +2170,7 @@ sub generatePrevalenceFilters {
     
     # Otherwise, we can proceed to construct a filter list.
     
-    my @filters = "p.bin_id = 0";
+    my @filters;
     
     my $interval_no = $request->clean_param('interval_id') + 0;
     my $interval_name = $request->clean_param('interval');
@@ -2189,6 +2191,8 @@ sub generatePrevalenceFilters {
 	    $interval_no = -1;
 	}
     }
+    
+    $interval_no ||= 751;
     
     push @filters, "p.interval_no = $interval_no";
     

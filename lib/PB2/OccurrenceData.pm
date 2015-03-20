@@ -16,7 +16,7 @@ package PB2::OccurrenceData;
 
 use HTTP::Validate qw(:validators);
 
-use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
+use TableDefs qw($OCC_MATRIX $COLL_MATRIX $COLL_BINS $PVL_MATRIX $PVL_GLOBAL $BIN_LOC $COUNTRY_MAP $PALEOCOORDS $GEOPLATES
 		 $INTERVAL_DATA $SCALE_MAP $INTERVAL_MAP $INTERVAL_BUFFER $DIV_GLOBAL $DIV_MATRIX);
 
 use TaxonDefs qw(%RANK_STRING);
@@ -1294,7 +1294,7 @@ sub taxa {
     push @filters, PB2::CommonData::generate_crmod_filters($request, 'o', $tables);
     push @filters, PB2::CommonData::generate_ent_filters($request, 'o', $tables);
     
-    push @filters, "c.access_level = 0";
+    push @filters, "c.access_level = 0", "o.orig_no <> 0";
     
     my $filter_string = join(' and ', @filters);
     
@@ -1369,15 +1369,49 @@ sub prevalence {
     
     my $tables = { };
     
-    my @filters = PB2::CollectionData::generatePrevalenceFilters($request, $tables);
+    my @filters = $request->generateQuickDivFilters('p', $tables);
     
     if ( @filters )
     {
+	# Add an interval filter if one was specified.
+	
+	my $interval_name = $request->clean_param('interval');
+	my $interval_no;
+	
+	if ( $interval_name )
+	{
+	    my $quoted = $dbh->quote($interval_name);
+	    
+	    my $sql = "
+		SELECT interval_no FROM $INTERVAL_DATA
+		WHERE interval_name like $quoted";
+	    
+	    ($interval_no) = $dbh->selectrow_array($sql);
+	    
+	    unless ( $interval_no )
+	    {
+		$interval_no = -1;
+		$request->add_warning("unknown interval '$interval_name'");
+	    }
+	}
+	
+	else
+	{
+	    $interval_no = $request->clean_param('interval_id');
+	}
+	
+	$interval_no ||= 751;
+	push @filters, "p.interval_no = $interval_no";
+	
+	# Then generate the required SQL statement.
+	
 	my $filter_string = join(' and ', @filters);
 	
 	no warnings 'uninitialized';
 	
-	$request->{main_sql} = "
+	if ( $tables->{use_global} )
+	{
+	    $request->{main_sql} = "
 		SELECT $fields
 		FROM $PVL_GLOBAL as p
 		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
@@ -1385,6 +1419,20 @@ sub prevalence {
 		WHERE $filter_string
 		GROUP BY orig_no
 		ORDER BY n_occs desc LIMIT $raw_limit";
+	}
+	
+	else
+	{
+	    $request->{main_sql} = "
+		SELECT $fields
+		FROM $PVL_MATRIX as p
+		    JOIN $BIN_LOC as bl using (bin_id)
+		    JOIN $taxonomy->{TREE_TABLE} as t on t.orig_no = coalesce(order_no, class_no, phylum_no)
+		    JOIN $taxonomy->{ATTRS_TABLE} as v using (orig_no)
+		WHERE $filter_string
+		GROUP BY orig_no
+		ORDER BY n_occs desc LIMIT $raw_limit";
+	}
 	
 	print STDERR "$request->{main_sql}\n\n" if $request->debug;
 	
@@ -1690,6 +1738,12 @@ sub generateQuickDivFilters {
     # Same with 'plate'.
     
     return () if $self->clean_param('plate');
+    
+    # Same with the date or authorizer parameters.
+    
+    return () if $self->clean_param('authorized_by') || $self->clean_param('entered_by') || $self->clean_param('modified_by');
+    return () if $self->clean_param('created_before') || $self->clean_param('created_after');
+    return () if $self->clean_param('modified_before') || $self->clean_param('modified_after');
     
     # Then check for geographic parameters, including 'clust_id', 'continent',
     # 'country', 'latmin', 'latmax, 'lngmin', 'lngmax', 'loc'

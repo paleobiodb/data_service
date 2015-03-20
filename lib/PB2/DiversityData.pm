@@ -436,15 +436,19 @@ my (%occ_node, %taxon_node, %uns_counter, %lower_taxon_nos);
 
 my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
 		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
-		 0 => 'NO_TAXON_SPECIFIED' );
+		 17 => 'NO_CLASS_SPECIFIED', 20 => 'NO_PHYLUM_SPECIFIED',
+		 23 => 'NO_KINGDOM_SPECIFIED', 0 => 'NO_TAXON_SPECIFIED' );
 
-my %uns_prefix = ( 3 => 'UF', 5 => 'UG', 9 => 'UF', 13 => 'UO', 0 => 'UU' );
+my %uns_prefix = ( 3 => 'US', 5 => 'UG', 9 => 'UF', 13 => 'UO', 17 => 'UC',
+		   20 => 'UP', 23 => 'NK', 0 => 'UU' );
 
 sub generate_phylogeny_ints {
 
     my ($request, $sth) = @_;
     
     my $dbh = $request->get_connection;
+    
+    $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
     
     # First figure out the level to which we will be resolving the phylogeny.
     
@@ -556,11 +560,7 @@ sub generate_phylogeny_ints {
     
     # If we were asked for additional taxonomic information, fill that in.
     
-    if ( $request->{my_attr} )
-    {
-	$request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
-	$request->get_taxon_info(\%taxon_node);
-    }
+    $request->get_taxon_info(\%taxon_node);
     
     # Now that we have the occurrence counts and any additional taxonomic
     # information that was requested, recursively traverse the tree and fill
@@ -840,11 +840,11 @@ sub get_upper_taxa {
 # taxon_no values.  Fill in the requested information into the corresponding
 # records in %taxon_node.
 
+my $REQUEST_LIMIT = 500;
+
 sub get_taxon_info {
     
     my ($request, $taxon_nos) = @_;
-    
-    my $taxonomy = $request->{my_taxonomy};
     
     # Get a list of the specified taxa.  If the option 'app' was specified,
     # include the first-and-last appearance info.
@@ -852,13 +852,32 @@ sub get_taxon_info {
     my @fields = 'SIMPLE';
     push @fields, 'ATTR' if $request->{my_attr};
     
+    my @ids;
+    
+    foreach my $id ( keys %$taxon_nos )
+    {
+	push @ids, $id;
+	next unless @ids >= $REQUEST_LIMIT;
+	
+	$request->make_taxon_request(\@ids, \@fields);
+	@ids = ();
+    }
+    
+    $request->make_taxon_request(\@ids, \@fields) if @ids;
+}
+
+
+sub make_taxon_request {
+    
+    my ($request, $taxon_list, $field_list) = @_;
+    
+    my $taxonomy = $request->{my_taxonomy};
+    
     my $taxa_list = [];
     
-    bless $taxon_nos, 'TaxonSet';
-    
     try {
-	$taxa_list = $taxonomy->list_taxa('current', $taxon_nos, { fields => \@fields,
-								   return => 'listref' });
+	$taxa_list = $taxonomy->list_taxa('current', $taxon_list, { fields => $field_list,
+								    return => 'listref' });
     }
     
     catch {
@@ -874,12 +893,14 @@ sub get_taxon_info {
 	my $taxon_no = $r->{orig_no};
 	my $taxon_node = $taxon_node{$taxon_no} // {};
 	
-	# If the node doesn't give a taxonomic rank, copy over the name and rank.
+	# If the node doesn't give a taxonomic rank, copy over the name, rank
+	# and tree sequence.
 	
 	unless ( $taxon_node->{taxon_rank} )
 	{
 	    $taxon_node->{taxon_name} = $r->{taxon_name};
 	    $taxon_node->{taxon_rank} = $r->{taxon_rank};
+	    $taxon_node->{lft} = $r->{lft};
 	}
 	
 	# If we were asked for attribution information, compute that now.
@@ -1345,8 +1366,8 @@ sub generate_prevalence_alt {
     # occurrences above which an entry remains on the list, according to the
     # requested number of results.
     
-    my $threshold = $list[$limit-1]{n_occs};
     my $length = scalar(@list);
+    my $threshold = $limit <= $length ? $list[$limit-1]{n_occs} : 0;
     my $deficit = $limit > $length ? $limit - $length : 0;
     
     # We then go through the list and alter some of the entries.  Any entry
@@ -1380,6 +1401,9 @@ sub generate_prevalence_alt {
 		push @subelements, @subs;
 		splice(@list, $i, 1);
 		$i--;
+		
+		# Recalculate the threshold
+		$threshold = $limit <= $length ? $list[$limit-1]{n_occs} : 0;
 	    }
 	}
     }
@@ -1434,6 +1458,9 @@ sub generate_prevalence_alt {
 	push @subelements, $list[$i]{$subkey}{$_} foreach @subs;
 	splice(@list, $i, 1);
 	$i--;
+	
+	# Recalculate the threshold
+	$threshold = $limit <= $length ? $list[$limit-1]{n_occs} : 0;
     }
     
     @list = sort { $b->{n_occs} <=> $a->{n_occs} } @list, @subelements;

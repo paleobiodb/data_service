@@ -1787,7 +1787,7 @@ sub resolve_names {
 		join authorities as a using (taxon_no)
 	WHERE $filters\n";
 	
-	$sql_order = "GROUP BY s.taxon_no ORDER BY s.is_current desc, s.is_exact desc, v.taxon_size desc, v.n_occs desc\n";
+	$sql_order = "GROUP BY s.taxon_no ORDER BY s.is_current desc, s.is_exact desc, v.n_occs desc\n";
     }
     
     # elsif ( $options->{exact} || $options->{all_names} )
@@ -3611,10 +3611,10 @@ sub compute_ancestry {
 
 our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      SIMPLE => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
-				 't.rank as taxon_rank', 't.status', 't.parent_no',
+				 't.rank as taxon_rank', 't.lft', 't.status', 't.parent_no',
 				 't.senpar_no', 't.accepted_no'],
 		      AUTH_SIMPLE => ['a.taxon_no', 'a.orig_no', 'a.taxon_name', 
-				      '(a.taxon_rank + 0) as taxon_rank',
+				      '(a.taxon_rank + 0) as taxon_rank', 't.lft', 
 				      't.status', 't.parent_no', 't.senpar_no', 't.accepted_no'],
 		      DATA => ['t.spelling_no as taxon_no', 't.orig_no', 't.name as taxon_name',
 			       't.rank as taxon_rank', 't.lft', 't.status', 't.accepted_no',

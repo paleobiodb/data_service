@@ -24,7 +24,7 @@ use PB2::PersonData;
     our ($ds2) = Web::DataService->new(
 	{ name => '1.2',
 	  title => 'PBDB Data Service',
-	  version => 'a1',
+	  version => 'a2',
 	  features => 'standard',
 	  special_params => 'standard,count=rowcount',
 	  path_prefix => 'data1.2/',
@@ -145,6 +145,9 @@ use PB2::PersonData;
 	"location in time and space. Each occurrence is a member of a single fossil collection,",
 	"and has a taxonomic identification which may be more or less specific.");
     
+    $ds2->extended_doc({ path => 'occs' },
+	"Follow this link for more information on L<the use of taxonomic names in this data service|node:names>.");
+    
     $ds2->define_node({ path => 'occs/single',
 			place => 1,
 			usage => [ "/occs/single.json?id=1001&show=loc", 
@@ -172,16 +175,18 @@ use PB2::PersonData;
 	"fields describing the occurrences and some describing the collections to which they belong.");
     
     $ds2->define_node({ path => 'occs/diversity',
-			place => 2,
-			usage => [ "/occs/diversity.txt?base_name=Rodentia&count=genera&reso=stage" ],
+			place => 5,
+			usage => [ "/occs/diversity.txt?base_name=Dinosauria^Aves&continent=NOA&count=genera&reso=epoch" ],
 			method => 'diversity',
 			output => '1.2:occs:diversity',
 			default_limit => 1000,
 			summary => '1.2:occs:diversity:summary',
-			title => 'Fossil diversity over time' },
+			title => 'Fossil diversity over time (full computation)' },
 	"This operation returns a tabulation of fossil diversity over time, based on a selected set of occurrences.",
 	"You can select the set of occurrences to be analyzed using any of the parameters that are",
-	"valid for the L<occs/list|node:occs/list> operation.");
+	"valid for the L<occs/list|node:occs/list> operation.  This operation can take up a lot of server time,",
+	"so if you just want to display a quick overview plot please use the L<occs/quickdev|node:occs/quickdev>",
+	"operation.");
     
     $ds2->extended_doc({ path => 'occs/diversity' },
 	"It is very important to note that the diversity statistics returned by this",
@@ -197,8 +202,8 @@ use PB2::PersonData;
 	"pp. 129-152. L<http://www.jstor.org/stable/2952489>.");
     
     $ds2->define_node({ path => 'occs/quickdiv',
-			place => 2,
-			usage => [ "/occs/quickdiv.txt?base_name=Rodentia&continent=NOA" ],
+			place => 6,
+			usage => [ "/occs/quickdiv.txt?base_name=Dinosauria^Aves&continent=NOA&count=genera&reso=epoch" ],
 			method => 'quickdiv',
 			output => '1.2:occs:quickdiv',
 			default_limit => 1000,
@@ -207,33 +212,50 @@ use PB2::PersonData;
 	"provided by C<occs/diversity>.  It returns results much more quickly, but returns",
 	"only the basic counts of distinct taxa appearing in each time interval.",
 	"This operation is intended for quick overview plots; if you want to do",
-	"detailed diversity analyses, we suggest using the L<full diversity|node:occs/diversity>",
+	"detailed diversity analyses, we suggest using the L<occs/diversity|node:occs/diversity>",
 	"operation instead, or downloading a L<list of occurrences|node:occs/list> and",
 	"performing your own procedure to tabulate the diversity of taxa over time.");
     
     $ds2->define_node({ path => 'occs/taxa',
-			place => 2,
+			place => 3,
+			usage => [ "/occs/taxa.txt?base_name=Cetacea&interval=Miocene&show=attr",
+				   "/occs/taxa.txt?formation=green river&reso=family&show=attr" ],
 			method => 'taxa',
 			output => '1.2:occs:taxa',
 			optional_output => '1.2:occs:taxa_opt',
 			summary => '1.2:occs:taxa_summary',
 			default_limit => 20000,
 			title => 'Taxonomy of fossil occurrences', },
-	"This operation returns the taxonomic hierarchy of a selected set of fossil occurrences.",
+	"This operation tabulates the taxonomic hierarchy of a selected set of fossil occurrences.",
 	"You can select the set of occurrences to be analyzed using any of the parameters that are",
-	"valid for the L<occs/list|node:occs/list> operation.");
+	"valid for the L<occs/list|node:occs/list> operation documented above.  You can generate",
+	"reqests to both perations with identical parameters, which will give you both a list of",
+	"occurrences and a summary tabulation by taxon.");
+    
+    $ds2->extended_doc({ path => 'occs/taxa' },
+	"The result of this operation reports every taxon appearing in the selected set of occurrences,",
+	"in hierarchical order.  It includes the number of occurrences specifically identified to each",
+	"listed taxon, along with the total number of occurrences of the taxon including all subtaxa.",
+	"It also includes the number of species, genera, families and orders within each taxon that",
+	"appear within the selected set of occurrences.  The parent taxon identifier is also reported",
+	"for each taxon, so that you are able to organize the result records into their proper hierarchy.");
     
     $ds2->define_node({ path => 'occs/prevalence',
-			place => 3,
+			place => 8,
+			usage => [ "/occs/prevalence.json?continent=noa&interval=mesozoic&limit=10" ],
 			title => 'Most prevalent taxa',
 			method => 'prevalence',
 			output => '1.2:occs:prevalence',
 			default_limit => 20},
 	"This path returns a list of the most prevalent taxa (according to number of occurrences)",
-	"from among the selected set of fossil occurrences.");
+	"from among the selected set of fossil occurrences.  These taxa will be phyla and/or classes,",
+	"depending upon the size of the list and the requested number of entries.",
+	"Unlike most of the operations of this data service, the parameter C<limit> is",
+	"significant in determining the elements of the result.  A",
+	"larger limit will tend to show classes instead of phyla.");
     
     $ds2->define_node({ path => 'occs/refs',
-			place => 3,
+			place => 10,
 			usage => [ "/occs/refs.ris?base_name=Cetacea&interval=Miocene&textresult" ],
 			method => 'refs',
 			allow_format => '+ris,-xml',
@@ -243,18 +265,7 @@ use PB2::PersonData;
 	"This operation returns information about the bibliographic references associated with fossil occurrences.",
 	"You can pass identical filtering parameters to L<occs/list|node:occs/list> and to L<occs/refs|node:occs/refs>,",
 	"which will give you both a list of occurrences and a list of the associated references.");
-    
-    # $ds2->define_node({ path => 'occs/taxa',
-    # 			place => 4,
-    # 			usage => [ "/occs/taxa.txt?base_name=Cetacea&interval=Miocene" ],
-    # 			method => 'taxa',
-    # 			output => '1.2:taxa:basic',
-    # 			optional_output => '1.2:taxa:output_map',
-    # 			title => 'Taxa from fossil occurrences' },
-    # 	"This operation returns information about the taxonomic names associated with fossil occurrences.",
-    # 	"You can pass identical filtering parameters to L<occs/list|node:occs/list> and to L<occs/taxa|node:occs/taxa>,",
-    # 	"which will give you both a list of occurrences and a list of the associated taxa.");
-    
+        
     # Collections.  These paths are used to fetch information about fossil
     # collections known to the database.
     
@@ -591,6 +602,9 @@ use PB2::PersonData;
     
     $ds2->define_node({ path => 'datetime',
 			title => 'Selecting records by date and time' });
+    
+    $ds2->define_node({ path => 'names',
+			title => 'Selecting records by taxonomic name' });
     
     $ds2->define_node({ path => 'formats',
 			title => 'Formats and Vocabularies' });

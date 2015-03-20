@@ -23,7 +23,7 @@ use PB1::PersonData;
     our ($ds1) = Web::DataService->new(
 	{ name => '1.1',
 	  title => 'PBDB Data Service',
-	  version => '5',
+	  version => '6',
 	  features => 'standard',
 	  special_params => 'standard, linebreak=linebreak, datainfo=showsource, count=count/rowcount',
 	  path_prefix => 'data1.1/',
