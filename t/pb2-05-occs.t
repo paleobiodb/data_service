@@ -62,6 +62,8 @@ my $IDN1 = 'Dascillus shandongianus n. sp.';
 my $TNA1 = 'Dascillus shandongianus';
 my $INT1 = 'Middle Miocene';
 
+my $OID2 = '154322';	# For testing 'ident'
+
 my ($EAG1, $LAG1);
 
 eval {
@@ -112,8 +114,8 @@ my $OCC1t = {
 
 if ( $EAG1 && $LAG1 )
 {
-    $OCC1t->{early_age} = $EAG1;
-    $OCC1t->{late_age} = $LAG1;
+    $OCC1t->{max_ma} = $EAG1;
+    $OCC1t->{min_ma} = $LAG1;
 }
 
 

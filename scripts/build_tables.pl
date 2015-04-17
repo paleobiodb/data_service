@@ -205,7 +205,7 @@ if ( $prevalence_tables )
 
 if ( $taxon_pics )
 {
-    #getPics($dbh, 'taxon_trees', $force);
+    getPics($dbh, 'taxon_trees', $force);
     selectPics($dbh, 'taxon_trees');
 }
 

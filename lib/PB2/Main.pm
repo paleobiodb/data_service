@@ -218,7 +218,7 @@ use PB2::PersonData;
 			usage => [ "/occs/taxa.txt?base_name=Cetacea&interval=Miocene&show=attr",
 				   "/occs/taxa.txt?formation=green river&reso=family&show=attr" ],
 			method => 'taxa',
-			output => '1.2:occs:taxa',
+			output => '1.2:taxa:basic',
 			optional_output => '1.2:occs:taxa_opt',
 			summary => '1.2:occs:taxa_summary',
 			default_limit => 20000,
@@ -602,6 +602,9 @@ use PB2::PersonData;
     
     $ds2->define_node({ path => 'names',
 			title => 'Selecting records by taxonomic name' });
+    
+    $ds2->define_node({ path => 'basis_precision',
+			title => 'Basis and precision of coordinates' });
     
     $ds2->define_node({ path => 'formats',
 			title => 'Formats and Vocabularies' });

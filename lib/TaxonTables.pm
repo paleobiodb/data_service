@@ -1,3 +1,4 @@
+# -*- fill-column: 98 -*-
 # 
 # The Paleobiology Database
 # 
@@ -13,7 +14,7 @@ use strict;
 use Carp qw(carp croak);
 use Try::Tiny;
 
-use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
+use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE @ECOTAPH_FIELD_DEFS);
 use TaxonPics qw(selectPics $TAXON_PICS $PHYLOPICS $PHYLOPIC_CHOICE);
 
 use CoreFunction qw(activateTables);
@@ -178,6 +179,7 @@ our $COUNTS_WORK = "cntn";
 our $OPINION_WORK = "opn";
 our $TREE_CACHE_WORK = "ttcn";
 our $LIST_CACHE_WORK = "tlcn";
+our $ECOTAPH_WORK = "ectn";
 
 # Auxiliary table names - these tables are creating during the process of
 # computing the main tables, and then discarded.
@@ -733,7 +735,7 @@ sub buildTaxonTables {
     
     # First, determine which tables will be computed.
     
-    my @steps = split(//, $steps || 'Aabcdefghi');
+    my @steps = split(//, $steps || 'AabcdefghEi');
     $step_control->{$_} = 1 foreach @steps;
     
     $TREE_WORK = 'taxon_trees' unless $step_control->{a};
@@ -785,7 +787,7 @@ sub buildTaxonTables {
     # Next, compute the intermediate classification of each taxon: kingdom,
     # phylum, class, order, and family.
     
-    computePhylogeny($dbh, $tree_table) if $step_control->{f};
+    computeClassification($dbh, $tree_table) if $step_control->{f};
     
     # Next, compute the name search table using the hierarchy relation.  At
     # this time we also update species and subgenus names stored in the tree
@@ -797,6 +799,10 @@ sub buildTaxonTables {
     # attributes such as extancy and mass ranges.
     
     computeAttrsTable($dbh, $tree_table) if $step_control->{h};
+    
+    # And then the ecotaph table which holds ecology and taphonomy attributes.
+    
+    computeEcotaphTable($dbh, $tree_table) if $step_control->{E};
     
     # Finally, activate the new tables we have just computed by renaming them
     # over the previous ones.
@@ -1293,11 +1299,11 @@ sub createWorkingTables {
     $result = $dbh->do("DROP TABLE IF EXISTS $TREE_WORK");
     $result = $dbh->do("CREATE TABLE $TREE_WORK 
 			       (orig_no int unsigned not null,
-				name varchar(80) not null,
+				name varchar(80) not null collate latin1_swedish_ci,
 				imp boolean not null,
 				rank tinyint not null,
 				trad_rank tinyint not null,
-				aux_rank tinyint not null,
+				ints_rank tinyint not null,
 				status enum('belongs to','subjective synonym of','objective synonym of','invalid subgroup of','misspelling of','replaced by','nomen dubium','nomen nudum','nomen oblitum','nomen vanum'),
 				spelling_no int unsigned not null,
 				trad_no int unsigned not null,
@@ -3160,7 +3166,7 @@ our(@KINGDOM_LIST) = ( 'Metazoa', 'Plantae', 'Metaphytae',
 our(%KINGDOM_LABEL) = ( 'Metaphytae' => 'Plantae' );
 
 
-# computePhylogeny ( dbh )
+# computeClassification ( dbh )
 # 
 # Compute the intermediate classification for each taxon: the kingdom, phylum,
 # class, order and family to which it belongs.  Not all taxa have values for
@@ -3195,7 +3201,7 @@ our(%KINGDOM_LABEL) = ( 'Metaphytae' => 'Plantae' );
 # family, we use the most specific taxonomic concept on the way down that is
 # either ranked as a family or whose name ends in 'idae'.
 
-sub computePhylogeny {
+sub computeClassification {
     
     my ($dbh, $tree_table) = @_;
     
@@ -3420,11 +3426,11 @@ sub computePhylogeny {
 	$SQL_STRING = "
 		UPDATE $INTS_WORK as i JOIN $TREE_WORK as t on i.ints_no = t.orig_no
 				JOIN $INTS_WORK as p on p.ints_no = t.senpar_no
-		SET t.aux_rank = if(ifnull(i.kingdom_no, 0) <> ifnull(p.kingdom_no, 0), 23,
-				if(ifnull(i.phylum_no, 0) <> ifnull(p.phylum_no, 0), 20,
-				 if(ifnull(i.class_no, 0) <> ifnull(p.class_no, 0), 17,
+		SET t.ints_rank = if(ifnull(i.kingdom_no, 0) <> ifnull(p.kingdom_no, 0), 23,
+				  if(ifnull(i.phylum_no, 0) <> ifnull(p.phylum_no, 0), 20,
+				  if(ifnull(i.class_no, 0) <> ifnull(p.class_no, 0), 17,
 				  if(ifnull(i.order_no, 0) <> ifnull(p.order_no, 0), 13,
-				   if(ifnull(i.family_no,0) <> ifnull(p.family_no, 0), 9, 0)))))
+				  if(ifnull(i.family_no,0) <> ifnull(p.family_no, 0), 9, 0)))))
 		WHERE t.depth = $depth";
 	
 	$result = $dbh->do($SQL_STRING);
@@ -4086,7 +4092,7 @@ sub updateSearchTable {
 }
 
 
-# computeAttrsTable ( dbh )
+# computeAttrsTable ( dbh, tree_table )
 # 
 # Create a table by which bottom-up attributes such as max_body_mass and
 # min_body_mass may be looked up.  These attributes propagate upward through
@@ -4324,13 +4330,11 @@ sub computeAttrsTable {
     
     # $result = $dbh->do($sql);
     
-    # Now figure out how deep the table goes.
+    # We then iterate through the taxon trees from bottom to top (leaves up to root), computing
+    # each row from its immediate children and then coalescing the attributes across synonym
+    # groups.
     
     my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_WORK");
-    
-    # We then iterate from that depth up to the top of the tree, computing
-    # each row from its immediate children and then coalescing the attributes
-    # across synonym groups.
     
     for (my $depth = $max_depth; $depth > 0; $depth--)
     {
@@ -4621,95 +4625,210 @@ sub rebuildAttrsTable {
 }
 
 
-# computeCollectionCounts ( dbh )
+# computeEcotaphTable ( dbh, tree_table )
 # 
-# For each taxon, compute the number of distinct collections in which it or
-# any of its subtaxa appears.  This is currently unused, and perhaps should be
-# eliminated.
+# Create a table by the ecotaph attributes can be propagated down the
+# taxonomic hierarchy.
 
-sub computeCollectionCounts {
-
-    my ($dbh) = @_;
+sub computeEcotaphTable {
     
-    logMessage(2, "computing collection counts (h)");
+    my ($dbh, $tree_table) = @_;
     
-    # First figure out how deep the table goes, and grab the bottom level.
+    logMessage(2, "computing ecotaph table (E)");
     
-    my ($TREE_WORK) = 'taxon_trees';
-    my ($ATTRS_WORK) = 'taxon_attrs';
-    my ($sql, $result);
+    my ($result, $count, $sql);
+    
+    my $ECOTAPH_BASE = $TAXON_TABLE{$tree_table}{et_base};
+    my $AUTH_TABLE = $TAXON_TABLE{$tree_table}{authorities};
+    
+    # Create the new table, using the classic 'ecotaph' table as a base.  That way, if we change
+    # the definition of any of the tables in the base, the same change will automatically be made
+    # in the new table.
+    
+    $result = $dbh->do("DROP TABLE IF EXISTS $ECOTAPH_WORK");
+    $result = $dbh->do("CREATE TABLE $ECOTAPH_WORK LIKE $ECOTAPH_BASE");
+    
+    # Now, we make some changes to the work table before we proceed.  We start by adding the
+    # column 'orig_no' and making it the new primary key.  Then make 'created' and 'modified'
+    # simple datetime columns.
+    
+    $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
+			MODIFY COLUMN ecotaph_no int unsigned not null,
+			DROP PRIMARY KEY,
+			ADD COLUMN orig_no int unsigned not null PRIMARY KEY first");
+    
+    $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
+			MODIFY COLUMN created datetime null,
+			MODIFY COLUMN modified datetime null");
+    
+    # Then fill in the new table with the information from the base ecotaph table. This will
+    # provide the base attribute values.  Fill in this information only for senior synonyms; it
+    # will be copied to junior synonyms later.
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $ECOTAPH_WORK
+		SELECT t.synonym_no, e.*
+		FROM $ECOTAPH_BASE as e JOIN $AUTH_TABLE as a using (taxon_no)
+			JOIN $tree_table as t using (orig_no)");
+    
+    my $count = $result + 0;
+    
+    logMessage(2, "    added $count base rows");
+    
+    # Combine some of the columns together into new ones, and then drop the superfluous columns.
+    
+    logMessage(2, "    combining columns...");
+    
+    $result = $dbh->do("
+		UPDATE $ECOTAPH_WORK
+		SET taxon_environment = null WHERE taxon_environment = ''");
+    
+    $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
+			DROP COLUMN old_minimum_body_mass,
+			DROP COLUMN old_maximum_body_mass,
+			DROP COLUMN vision,
+			DROP COLUMN reproduction,
+			DROP COLUMN asexual,
+			DROP COLUMN brooding,
+			DROP COLUMN dispersal1,
+			DROP COLUMN dispersal2");
+    
+    $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
+			ADD COLUMN composition varchar(255) null after composition2,
+			ADD COLUMN diet varchar(255) null after diet2,
+			ADD COLUMN skeletal_reinforcement varchar(255) null after internal_reinforcement,
+			ADD COLUMN motility varchar(255) null after epibiont");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK SET
+			composition =
+			if(composition1 is not null, concat_ws(', ', composition1, composition2), null),
+			diet =
+			if(diet1 is not null, concat_ws(', ', diet1, diet2), null),
+			skeletal_reinforcement =
+			if(reinforcement = 'no', 'none', null)");
+    
+    $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
+			DROP COLUMN composition1,
+			DROP COLUMN composition2,
+			DROP COLUMN diet1,
+			DROP COLUMN diet2");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET skeletal_reinforcement = concat(folds, ' folds')
+			WHERE reinforcement is null and folds <> '' and folds <> 'none'");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET skeletal_reinforcement = concat_ws(', ', skeletal_reinforcement, concat(ribbing, ' ribbing'))
+			WHERE reinforcement is null and ribbing <> '' and ribbing <> 'none'");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET skeletal_reinforcement = concat_ws(', ', skeletal_reinforcement, concat(spines, ' spines'))
+			WHERE reinforcement is null and spines <> '' and spines <> 'none'");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET skeletal_reinforcement = concat_ws(', ', skeletal_reinforcement,
+							concat(internal_reinforcement, ' internal reinforcement'))
+			WHERE reinforcement is null and internal_reinforcement <> ''
+				and internal_reinforcement <> 'none'");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET motility = concat_ws(', ',
+				locomotion,
+				if(attached is not null, 'attached', null),
+				if(epibiont is not null, 'epibiont', null))");
+    
+    $result = $dbh->do("UPDATE $ECOTAPH_WORK
+			SET motility = null WHERE motility = ''");
+    
+    $result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
+			DROP COLUMN reinforcement,
+			DROP COLUMN folds,
+			DROP COLUMN ribbing,
+			DROP COLUMN internal_reinforcement,
+			DROP COLUMN locomotion,
+			DROP COLUMN attached,
+			DROP COLUMN epibiont");
+    
+    # Then fill in null entries for all other senior synonyms
+    
+    logMessage(2, "    adding entries for the remaining taxa...");
+    
+    $result = $dbh->do("
+		INSERT IGNORE INTO $ECOTAPH_WORK (orig_no)
+		SELECT orig_no FROM $tree_table");
+    
+    # Then create two SQL fragments.  The first is used to generate the ecotaph information for a
+    # child taxon by coalescing the information for itself and its parent.  The second is used to
+    # copy the information to junior synonyms.  For each group of fields, add a "basis_no" column
+    # to the table which will indicate which taxon this information is inherited from.
+    
+    my $coalesce_sql = '';
+    my $copy_sql = '';
+    
+    foreach my $r ( @ECOTAPH_FIELD_DEFS )
+    {
+	my $basis = $r->{basis};
+	my @fields; @fields = @{$r->{fields}} if ref $r->{fields} eq 'ARRAY';
+	next unless $basis && @fields;
+	
+	my @if_clauses = map { "e.$_ is null" } @fields;
+	my $if_clause = join( ' and ', @if_clauses );
+	
+	foreach my $f (@fields)
+	{
+	    $coalesce_sql .= "\t\te.$f = if($if_clause, ep.$f, e.$f),\n";
+	    $copy_sql .= "\t\te.$f = es.$f,\n";
+	}
+	
+	$coalesce_sql .= "\t\te.$basis = if($if_clause, ep.$basis, e.orig_no),\n";
+	$copy_sql .= "\t\te.$basis = es.$basis,\n";
+	
+	$result = $dbh->do("ALTER TABLE $ECOTAPH_WORK
+			    ADD COLUMN $basis int unsigned not null");
+    }
+    
+    # Trim these SQL fragments so they will fit properly into their respective
+    # SQL statements.
+    
+    $coalesce_sql =~ s{^\s+}{};
+    $coalesce_sql =~ s{,\s+$}{\n};
+    
+    $copy_sql =~ s{^\s+}{};
+    $copy_sql =~ s{,\s+$}{\n};
+    
+    # Prepare an SQL statement that can be executed once for each tree level.
+    
+    $sql = "	UPDATE $ECOTAPH_WORK as e JOIN $tree_table as t using (orig_no)
+			JOIN $ECOTAPH_WORK as ep on ep.orig_no = t.senpar_no
+		SET $coalesce_sql
+		WHERE t.depth = ? and t.synonym_no = t.orig_no";
+    
+    my $coalesce_stmt = $dbh->prepare($sql);
+    
+    # We now iterate over the taxon trees top to bottom (root to leaves), copying the ecotaph
+    # information to each child taxon except where overridden by a child entry.
     
     my ($max_depth) = $dbh->selectrow_array("SELECT max(depth) FROM $TREE_WORK");
     
-    $result = $dbh->do("DROP TABLE IF EXISTS ROW$max_depth");
-    
-    $sql = "	CREATE TABLE ROW$max_depth (
-			orig_no int unsigned,
-			collection_no int unsigned,
-			primary key (orig_no, collection_no)) Engine=MEMORY
-		IGNORE SELECT m.orig_no, m.collection_no
-		FROM $OCC_MATRIX as m JOIN $TREE_WORK as t using (orig_no)
-		WHERE t.depth = $max_depth";
-    
-    $result = $dbh->do($sql);
-    
-    # Now iterate up from the bottom level to 1, computing each level by
-    # copying from $OCC_MATRIX and then merging in the level below.  Once we
-    # have merged the lower level, we can copy its counts over to $ATTRS_WORK
-    # and then drop the table.
-    
-    for ( my $depth = $max_depth - 1; $depth > 0; $depth-- )
+    for (my $depth = 2; $depth <= $max_depth; $depth++)
     {
 	logMessage(2, "    computing tree level $depth...") if $depth % 10 == 0;
 	
-	my $child_depth = $depth + 1;
-	
-	# Grab the next level from $OCC_MATRIX
-	
-	$result = $dbh->do("DROP TABLE IF EXISTS ROW$depth");
-	
-	$sql = "CREATE TABLE ROW$depth (
-			orig_no int unsigned,
-			collection_no int unsigned,
-			primary key (orig_no, collection_no)) Engine=MEMORY
-		IGNORE SELECT m.orig_no, m.collection_no 
-		FROM $OCC_MATRIX as m JOIN $TREE_WORK as t using (orig_no)
-		WHERE t.depth = $depth";
-	
-	$result = $dbh->do($sql);
-	
-	$sql = "INSERT IGNORE INTO ROW$depth (orig_no, collection_no)
-		SELECT t.parent_no, c.collection_no
-		FROM ROW$child_depth as c JOIN $TREE_WORK as t using (orig_no)";
-	
-	$result = $dbh->do($sql);
-	
-	# Now copy the child-level collection counts into $ATTRS_WORK.
-	
-	$sql = "UPDATE $ATTRS_WORK as v JOIN
-		(SELECT orig_no, count(*) as n_colls FROM ROW$child_depth
-		 GROUP BY orig_no) as c using (orig_no)
-		SET v.n_colls = c.n_colls";
-	
-	$result = $dbh->do($sql);
-	
-	# Then drop the table.
-	
-	$result = $dbh->do("DROP TABLE IF EXISTS ROW$child_depth");
+	$result = $coalesce_stmt->execute($depth);
     }
     
-    # Then finish off with row 1
-
-    $sql = "	UPDATE $ATTRS_WORK as v JOIN
-		(SELECT orig_no, count(*) as n_colls FROM ROW1
-		 GROUP BY orig_no) as c using (orig_no)
-		SET v.n_colls = c.n_colls";
+    # Then copy this information to junior synonyms.
+    
+    logMessage(2, "    copying attributes to junior synonyms...");
+    
+    $sql = "	UPDATE $ECOTAPH_WORK as e JOIN $tree_table as t using (orig_no)
+			JOIN $ECOTAPH_WORK as es on es.orig_no = t.synonym_no
+		SET $copy_sql
+		WHERE t.orig_no <> t.synonym_no";
     
     $result = $dbh->do($sql);
     
-    $result = $dbh->do("DROP TABLE IF EXISTS ROW1");
-    
-    logMessage(2, "    done");
+    my $a = 1;	# we can stop here when debugging.
 }
 
 
@@ -4777,6 +4896,7 @@ sub activateNewTaxonomyTables {
 		         $SEARCH_WORK => $TAXON_TABLE{$tree_table}{search},
 			 $NAME_WORK => $TAXON_TABLE{$tree_table}{names},
 			 $ATTRS_WORK => $TAXON_TABLE{$tree_table}{attrs},
+			 $ECOTAPH_WORK => $TAXON_TABLE{$tree_table}{ecotaph},
 			 $INTS_WORK => $TAXON_TABLE{$tree_table}{ints},
 			 $LOWER_WORK => $TAXON_TABLE{$tree_table}{lower},
 			 $COUNTS_WORK => $TAXON_TABLE{$tree_table}{counts});

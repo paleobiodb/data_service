@@ -14,7 +14,8 @@ our (@EXPORT_OK) = qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING
 		      %AUTH_TABLE %OPINION_TABLE %OPINION_CACHE %REFS_TABLE
 		      %ATTRS_TABLE %INTS_TABLE %SEARCH_TABLE
 		      %TAXONOMIC_STATUS %NOMENCLATURAL_STATUS
-		      $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE);
+		      $CLASSIC_TREE_CACHE $CLASSIC_LIST_CACHE
+		      @ECOTAPH_FIELD_DEFS);
 
 our (@TREE_TABLE_LIST) = ('taxon_trees');
 
@@ -32,11 +33,13 @@ $TAXON_TABLE{taxon_trees} = {
     ints => 'taxon_ints',
     lower => 'taxon_lower',
     counts => 'taxon_counts',
+    ecotaph => 'taxon_ecotaph',
     images => 'taxon_pics',
     
     authorities => 'authorities',
     opinions => 'opinions',
     opcache => 'order_opinions',
+    et_base => 'ecotaph',
     refs => 'refs'
  };
 
@@ -94,3 +97,26 @@ our (%NOMENCLATURAL_STATUS) = (
 );
 
 
+our (@ECOTAPH_FIELD_DEFS) = (
+	# taph
+	{ basis => 'taphonomy_basis_no', 
+	  fields => ['composition', 'thickness', 'architecture', 'skeletal_reinforcement'] },
+	# ecospace
+	{ basis => 'environment_basis_no', 
+	  fields => ['taxon_environment'] },
+	{ basis => 'motility_basis_no', 
+	  fields => ['motility'] },
+	{ basis => 'life_habit_basis_no', 
+	  fields => ['life_habit'] },
+	{ basis => 'diet_basis_no', 
+	  fields => ['diet'] },
+);
+
+# 	{ output => 'composition', field => 'composition1', field2 => 'composition2',
+# 	  com_name => 'jsk', doc => "Skeletal composition of fossils from this taxon" },
+# 	{ output => 'life_environment', field => 'taxon_environment',
+# 	  com_name => 'jen', name => 'life_environment',
+# 	  doc => "General environment in which this taxon lives or lived" },
+# 	{ output => 'feeding_mode', field => 'diet1', field2 => 'diet2',
+# 	  com_name => 'jfm', doc => "Diet or feeding mode of this taxon" },
+# );

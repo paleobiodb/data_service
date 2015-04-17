@@ -65,6 +65,7 @@ sub new {
 		 TREE_TABLE => $table_name,
 		 SEARCH_TABLE => $t->{search},
 	         ATTRS_TABLE => $t->{attrs},
+		 ECOTAPH_TABLE => $t->{ecotaph},
 		 INTS_TABLE => $t->{ints},
 		 LOWER_TABLE => $t->{lower},
 		 COUNTS_TABLE => $t->{counts},
@@ -3435,12 +3436,23 @@ sub taxon_joins {
 	if $tables_hash->{pc};
     $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as pt on pt.orig_no = $mt.senpar_no\n"
 	if $tables_hash->{pt};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as ipt on ipt.orig_no = $mt.parent_no\n"
+	if $tables_hash->{ipt};
     $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as vt on vt.orig_no = $mt.accepted_no\n"
 	if $tables_hash->{vt};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ATTRS_TABLE} as v on v.orig_no = $mt.orig_no\n"
 	if $tables_hash->{v};
     $joins .= "\t\tLEFT JOIN $taxonomy->{NAMES_TABLE} as n on n.taxon_no = $mt.spelling_no\n"
 	if $tables_hash->{n};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{ECOTAPH_TABLE} as e on e.orig_no = $mt.orig_no\n"
+	if $tables_hash->{e};
+    $joins .= "\t\tLEFT JOIN $taxonomy->{TREE_TABLE} as ebt on ebt.orig_no = e.taphonomy_basis_no\n"
+	if $tables_hash->{ebt};
+    $joins .= "		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe1 on ebe1.orig_no = e.environment_basis_no
+		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe2 on ebe2.orig_no = e.motility_basis_no
+		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe3 on ebe3.orig_no = e.life_habit_basis_no
+		LEFT JOIN $taxonomy->{TREE_TABLE} as ebe4 on ebe4.orig_no = e.diet_basis_no\n"
+	if $tables_hash->{ebe};
     
     if ( $tables_hash->{all_a} )
     {
@@ -3655,13 +3667,21 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 			      'v.last_early_age as lastapp_ea',
 			      'v.last_late_age as lastapp_la'],
 		      ATTR => ['v.pubyr', 'v.attribution'],
-		      PARENT => ['pt.name as parent_name', 'pt.rank as parent_rank'],
+		      SENPAR => ['pt.name as senpar_name', 'pt.rank as senpar_rank'],
+		      IMMPAR => ['ipt.name as immpar_name', 'ipt.rank as immpar_rank'],
 		      SIZE => ['v.taxon_size', 'v.extant_size', 'v.n_occs'],
 		      PHYLO => ['ph.kingdom_no', 'ph.kingdom', 'ph.phylum_no', 'ph.phylum', 
 				'ph.class_no', 'ph.class', 'ph.order_no', 'ph.order', 
 				'ph.family_no', 'ph.family'],
 		      COUNTS => ['pc.phylum_count', 'pc.class_count', 'pc.order_count', 
 				 'pc.family_count', 'pc.genus_count', 'pc.species_count'],
+		      TAPH => ['e.composition', 'e.thickness', 'e.architecture', 'e.skeletal_reinforcement as reinforcement',
+			       'e.taphonomy_basis_no', 'ebt.name as taphonomy_basis_name'],
+		      ECOSPACE => ['e.taxon_environment as environment', 'e.motility', 'e.life_habit', 'e.diet',
+				   'e.environment_basis_no', 'ebe1.name as environment_basis_name',
+				   'e.motility_basis_no', 'ebe2.name as motility_basis_name',
+				   'e.life_habit_basis_no', 'ebe3.name as life_habit_basis_name',
+				   'e.diet_basis_no', 'ebe4.name as diet_basis_name'],
 		      CRMOD => ['a.created', 'a.modified'],
 		      family_no => ['ph.family_no'],
 		      image_no => ['v.image_no'],
@@ -3676,7 +3696,10 @@ our (%FIELD_TABLES) = ( DATA => ['v', 'a', 'vt',],
 			SIZE => ['v'],
 			PHYLO => ['ph'],
 			COUNTS => ['pc'],
-			PARENT => ['pt'],
+			TAPH => ['e', 'ebt'],
+			ECOSPACE => ['e', 'ebe'],
+			SENPAR => ['pt'],
+			IMMPAR => ['ipt'],
 			CRMOD => ['a'],
 			family_no => ['ph'],
 			image_no => ['v'],

@@ -38,10 +38,15 @@ can add in order to precisely specify which taxa you are interested in.
 
 You can retrieve records based on when they were modified and/or created.
 
+=item L<Basis and precision of coordinates|node:basis_precision>
+
+The basis and precision of geographic locations is specified by a set of code values.
+
 =item L<Output formats and vocabularies|node:formats>
 
 You can get the results of query operations in a variety of formats, and with the field names
 expressed in any of the available vocabularies.
+
 
 =back
 

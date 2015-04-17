@@ -442,7 +442,7 @@ my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
 my %uns_prefix = ( 3 => 'US', 5 => 'UG', 9 => 'UF', 13 => 'UO', 17 => 'UC',
 		   20 => 'UP', 23 => 'NK', 0 => 'UU' );
 
-sub generate_phylogeny_ints {
+sub generate_taxon_table_ints {
 
     my ($request, $sth) = @_;
     
@@ -450,7 +450,7 @@ sub generate_phylogeny_ints {
     
     $request->{my_taxonomy} ||= Taxonomy->new($dbh, 'taxon_trees');
     
-    # First figure out the level to which we will be resolving the phylogeny.
+    # First figure out the level to which we will be resolving the phylogeny
     
     my $reso_rank = $request->{my_reso_rank} || 9;
     my $count_rank = $request->{my_count_rank} || 5;
@@ -606,7 +606,7 @@ sub generate_phylogeny_ints {
 }
 
 
-sub generate_phylogeny_full {
+sub generate_taxon_table_full {
 
     my ($request, $sth, $base_taxa) = @_;
     
@@ -787,8 +787,14 @@ sub get_upper_taxa {
     # genus.  If the option 'app' was specified, include the first-and-last
     # appearance info.
     
-    my @fields = ('SIMPLE', 'family_no');
-    push @fields, 'ATTR' if $request->{my_attr};
+    my @fields = ('DATA', 'family_no');
+
+    foreach my $f ( $request->select_list )
+    {
+	next if $f =~ qr{\.modified};
+	$f = 'CRMOD' if $f =~ qr{\.created$};
+	push @fields, $f;
+    }
     
     my $taxa_list;
     
@@ -849,8 +855,14 @@ sub get_taxon_info {
     # Get a list of the specified taxa.  If the option 'app' was specified,
     # include the first-and-last appearance info.
     
-    my @fields = 'SIMPLE';
-    push @fields, 'ATTR' if $request->{my_attr};
+    my @fields = ('DATA', 'family_no');
+
+    foreach my $f ( $request->select_list )
+    {
+	next if $f =~ qr{\.modified};
+	$f = 'CRMOD' if $f =~ qr{\.created$};
+	push @fields, $f;
+    }
     
     my @ids;
     
@@ -893,22 +905,29 @@ sub make_taxon_request {
 	my $taxon_no = $r->{orig_no};
 	my $taxon_node = $taxon_node{$taxon_no} // {};
 	
-	# If the node doesn't give a taxonomic rank, copy over the name, rank
-	# and tree sequence.
+	# Copy over all of the attributes that aren't already set.
 	
-	unless ( $taxon_node->{taxon_rank} )
+	foreach my $f ( keys %$r )
 	{
-	    $taxon_node->{taxon_name} = $r->{taxon_name};
-	    $taxon_node->{taxon_rank} = $r->{taxon_rank};
-	    $taxon_node->{lft} = $r->{lft};
+	    $taxon_node->{$f} = $r->{$f} unless defined $taxon_node->{$f};
 	}
 	
-	# If we were asked for attribution information, compute that now.
+	# # If the node doesn't give a taxonomic rank, copy over the name, rank
+	# # and tree sequence.
 	
-	if ( $request->{my_attr} )
-	{
-	    $taxon_node->{attribution} = $r->{attribution};
-	}
+	# unless ( $taxon_node->{taxon_rank} )
+	# {
+	#     $taxon_node->{taxon_name} = $r->{taxon_name};
+	#     $taxon_node->{taxon_rank} = $r->{taxon_rank};
+	#     $taxon_node->{lft} = $r->{lft};
+	# }
+	
+	# # If we were asked for attribution information, compute that now.
+	
+	# if ( $request->{my_attr} )
+	# {
+	#     $taxon_node->{attribution} = $r->{attribution};
+	# }
     }
 }
 
@@ -1209,67 +1228,24 @@ sub add_result_records {
 }
 
 
-# sub generate_prevalence {
-    
-#     my ($request, $result, $limit, $detail) = @_;
-    
-#     no warnings 'uninitialized';
-    
-#     my (@processed, %exclude);
-    
-#     if ( ref $request->{my_base_taxa} eq 'ARRAY' )
-#     {
-#     A:
-# 	while ( @processed )
-# 	{
-# 	    foreach my $t (@{$request->{my_base_taxa}})
-# 	    {
-# 		if ( $processed[0]{lft} <= $t->{lft} && $processed[0]{rgt} >= $t->{rgt} )
-# 		{
-# 		    shift @processed;
-# 		    next A;
-# 		}
-# 	    }
-	    
-# 	    last A;
-# 	}
-#     }
-    
-#     # if ( $detail == 2 )
-#     # {
-#     # 	shift @$result while $result->[0]{rank} > 17;
-#     # }
-    
-#     # elsif ( $detail == 3 )
-#     # {
-#     # 	shift @$result while $result->[0]{rank} > 13;
-#     # }
-    
-#  RECORD:
-#     foreach my $r (@$result)
-#     {
-# 	next RECORD if $exclude{$r->{orig_no}};
-# 	next RECORD if $detail == 2 && $r->{rank} > 17;
-# 	next RECORD if $detail == 3 && $r->{rank} > 13;
-	
-# 	foreach my $i (@processed)
-# 	{
-# 	    next RECORD if $r->{lft} >= $i->{lft} && $r->{lft} <= $i->{rgt};
-# 	}
-	
-# 	push @processed, $r;
-# 	last if @processed == $limit;
-#     }
-    
-#     $request->list_result(\@processed);
-# }
+# generate_prevalence ( data, limit )
+# 
+# Generate a list of the most prevalent taxa.  The parameter $data must be an
+# arrayref that conveys the result of a database query on either the
+# 'prv_matrix' or 'prv_global' table.  The parameter $limit should be the
+# desired number of entries to return.
+# 
+# Unlike most of the data service operations, the result of this operation
+# will depend upon the value of $limit.  The more entries are requested, the
+# more precise we can be.  The algorithm is as follows: start by listing all
+# of the phyla; then if the number of these is smaller than the requested
+# number of entries, split the biggest phyla into classes.  Repeat until
+# either all of the classes have been split or until the list fills up.  If
+# there is still room in the list, start splitting the classes into orders.
 
+sub generate_prevalence {
 
-# $$$$ start here !!!
-
-sub generate_prevalence_alt {
-
-    my ($request, $result, $limit, $detail) = @_;
+    my ($request, $data, $limit) = @_;
     
     no warnings 'uninitialized';
     
@@ -1277,7 +1253,10 @@ sub generate_prevalence_alt {
     
     my (%phylum, %class, %order);
     
-    foreach my $r (@$result)
+    # We start by tallying all of the entries in the data by phylum, class
+    # and order.
+    
+    foreach my $r (@$data)
     {
 	my $phylum_no = $r->{phylum_no} || 0;
 	my $class_no = $r->{class_no} || 0;
@@ -1326,6 +1305,8 @@ sub generate_prevalence_alt {
 	}
     }
     
+    # Get name, image_no, and tree sequence for each of these taxa.
+    
     my $dbh = $request->{dbh};
     
     my $orig_string = join(',', grep { $_ > 0 } (keys %phylum, keys %class, keys %order));
@@ -1337,9 +1318,9 @@ sub generate_prevalence_alt {
 		JOIN $taxonomy->{ATTRS_TABLE} using (orig_no)
 	WHERE orig_no in ($orig_string)";
     
-    my $data = $dbh->selectall_arrayref($sql, { Slice => { } });
+    my $taxa = $dbh->selectall_arrayref($sql, { Slice => { } });
     
-    foreach my $d (@$data)
+    foreach my $d (@$taxa)
     {
 	my $record = $phylum{$d->{orig_no}} || $class{$d->{orig_no}} || $order{$d->{orig_no}};
 	
@@ -1389,7 +1370,7 @@ sub generate_prevalence_alt {
 	    {
 		unless ( $n )
 		{
-		    $list[$i]{class}{$n}{name} = 'Chordata (other)';
+		    $list[$i]{class}{$n}{name} = 'Chordata (unclassified)';
 		    $list[$i]{class}{$n}{image_no} = $list[$i]{image_no};
 		}
 		push @subs, $list[$i]{class}{$n};
@@ -1401,19 +1382,22 @@ sub generate_prevalence_alt {
 		push @subelements, @subs;
 		splice(@list, $i, 1);
 		$i--;
-		
-		# Recalculate the threshold
-		$threshold = $limit <= $length ? $list[$limit-1]{n_occs} : 0;
 	    }
 	}
     }
     
     @list = sort { $b->{n_occs} <=> $a->{n_occs} } @list, @subelements;
     @subelements = ();
-	
-    # Now, if we go through the list one more time.  If any element is such
-    # that splitting it would not cause any elements to move past the given
-    # limit on the result list, then split it.
+    
+    # Now recompute the length, threshold, and deficit.
+
+    $length = scalar(@list);
+    $threshold = $limit <= $length ? $list[$limit-1]{n_occs} : 0;
+    $deficit = $limit > $length ? $limit - $length : 0;
+    
+    # Now, we go through the list a second time.  If any element is such that
+    # splitting it would not cause any existing elements to move past the
+    # given limit on the result list, then split it.
     
  ELEMENT:
     for (my $i = 0; $i < $limit && $i < @list; $i++)
@@ -1446,7 +1430,7 @@ sub generate_prevalence_alt {
 	    
 	    unless ( $list[$i]{$subkey}{$n}{name} )
 	    {
-		$list[$i]{$subkey}{$n}{name} = "$name (other)";
+		$list[$i]{$subkey}{$n}{name} = "$name (unclassified)";
 		$list[$i]{$subkey}{$n}{image_no} = $list[$i]{image_no};
 		$list[$i]{$subkey}{$n}{orig_no} = $list[$i]{orig_no};
 	    }
@@ -1458,13 +1442,87 @@ sub generate_prevalence_alt {
 	push @subelements, $list[$i]{$subkey}{$_} foreach @subs;
 	splice(@list, $i, 1);
 	$i--;
-	
-	# Recalculate the threshold
-	$threshold = $limit <= $length ? $list[$limit-1]{n_occs} : 0;
     }
     
     @list = sort { $b->{n_occs} <=> $a->{n_occs} } @list, @subelements;
     @subelements = ();    
+    
+    # Again, recalculate the length, threshold, and deficit.
+    
+    $length = scalar(@list);
+    $threshold = $limit <= $length ? $list[$limit-1]{n_occs} : 0;
+    $deficit = $limit > $length ? $limit - $length : 0;
+    
+    # If the list is not full, then go through it a third time and see if we
+    # can split classes into orders.
+    
+    if ( $length < $limit )
+    {
+    ELEMENT:
+	for (my $i = 0; $i < $limit && $i < @list; $i++)
+	{
+	    my $name = $list[$i]{name};
+	    my $rank = $list[$i]{rank};
+	    next unless $rank eq '17';
+	    
+	    my $subkey = $rank eq '17' ? 'order' : 'class';
+	    
+	    next unless ref $list[$i]{$subkey} eq 'HASH';
+	    
+	    my @subs = keys %{$list[$i]{$subkey}};
+	    my $count = 0;
+	    
+	    if ( @subs == 1 )
+	    {
+		if ( $list[$i]{$subkey}{$subs[0]}{name} )
+		{
+		    $list[$i] = $list[$i]{$subkey}{$subs[0]};
+		}
+		next ELEMENT;
+	    }
+	    
+	    foreach my $n (@subs)
+	    {
+		if ( $list[$i]{$subkey}{$n}{n_occs} > $threshold )
+		{
+		    $count++;
+		}
+		
+		unless ( $list[$i]{$subkey}{$n}{name} )
+		{
+		    $list[$i]{$subkey}{$n}{name} = "$name (unclassified)";
+		    $list[$i]{$subkey}{$n}{image_no} = $list[$i]{image_no};
+		    $list[$i]{$subkey}{$n}{orig_no} = $list[$i]{orig_no};
+		}
+	    }
+	    
+	    next ELEMENT unless $count > 0;
+	    next ELEMENT if $count > $deficit + 1;
+	    
+	    push @subelements, $list[$i]{$subkey}{$_} foreach @subs;
+	    splice(@list, $i, 1);
+	    $i--;
+	}
+    }
+    
+    @list = sort { $b->{n_occs} <=> $a->{n_occs} } @list, @subelements;
+    @subelements = ();
+    
+    # Now we go through one more time and mark every entry that contains
+    # another entry with (other).
+    
+    foreach my $i ( 0..$limit-1 )
+    {
+	foreach my $j ( 0..$limit-1 )
+	{
+	    if ( $i != $j && $list[$i]{lft} <= $list[$j]{lft} && $list[$i]{rgt} >= $list[$j]{rgt} )
+	    {
+		$list[$i]{name} .= " (other)" unless $list[$i]{name} =~ qr{\)$}x;
+	    }
+	}
+    }
+    
+    # Now use this list to generate the result.
     
     my @result;
     

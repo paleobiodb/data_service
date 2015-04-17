@@ -49,8 +49,9 @@ sub initialize {
 	    "The individual components of the taxonomic identification of the occurrence.",
 	    "These values correspond to the value of C<identified_name> in the basic record,",
 	    "and so this additional section will rarely be needed.",
-	{ value => 'phylo', maps_to => '1.2:occs:phylo' },
+	{ value => 'taxo', maps_to => '1.2:occs:taxo' },
 	    "Additional information about the taxonomic classification of the occurence",
+	{ value => 'phylo', maps_to => '1.2:occs:taxo', undocumented => 1 },
 	{ value => 'genus', maps_to => '1.2:occs:genus' },
 	    "The genus (if known) and subgenus (if any) corresponding to each occurrence.",
 	    "This is a subset of the information provided by C<phylo>.",
@@ -163,9 +164,9 @@ sub initialize {
 	{ output => 'late_interval', com_name => 'oli', pbdb_name => 'late_interval', dedup => 'early_interval' },
 	    "The interval that ends the specific geologic time range associated with this collection,",
 	    "if different from the value of C<early_interval>",
-	{ output => 'early_age', com_name => 'eag' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
 	    "The early bound of the geologic time range associated with this occurrence (in Ma)",
-	{ output => 'late_age', com_name => 'lag' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
 	    "The late bound of the geologic time range associated with this occurrence (in Ma)",
 	# { set => 'reference_no', append => 1 },
 	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
@@ -202,7 +203,7 @@ sub initialize {
 	{ output => 'genus_no', com_name => 'gnn' },
 	    "The identifier of the genus in which this occurrence is classified");
     
-    $ds->define_block('1.2:occs:phylo' =>
+    $ds->define_block('1.2:occs:taxo' =>
 	{ select => ['ph.family', 'ph.family_no', 'ph.order', 'ph.order_no',
 		     'ph.class', 'ph.class_no', 'ph.phylum', 'ph.phylum_no',
 		     'pl.genus', 'pl.genus_no', 'pl.subgenus', 'pl.subgenus_no'],
@@ -261,9 +262,9 @@ sub initialize {
 	    "The identifier of the time interval represented by this record",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of the time interval represented by this record",
-	{ output => 'early_age', com_name => 'eag' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
 	    "The beginning age of this interval, in Ma",
-	{ output => 'late_age', com_name => 'lag' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
 	    "The ending age of this interval, in Ma",
 	{ output => 'originations', pbdb_name => 'X_Ft', com_name => 'xft' },
 	    "The number of distinct taxa whose first known occurrence lies in this interval,",
@@ -325,9 +326,9 @@ sub initialize {
 	    "The identifier of the time interval represented by this record",
 	{ output => 'interval_name', com_name => 'nam' },
 	    "The name of the time interval represented by this record",
-	{ output => 'early_age', com_name => 'eag' },
+	{ output => 'early_age', com_name => 'eag', pbdb_name => 'max_ma' },
 	    "The beginning age of this interval, in Ma",
-	{ output => 'late_age', com_name => 'lag' },
+	{ output => 'late_age', com_name => 'lag', pbdb_name => 'min_ma' },
 	    "The ending age of this interval, in Ma",
 	{ output => 'sampled_in_bin', com_name => 'dsb' },
 	    "The number of distinct taxa found in this interval.  By default,",
@@ -374,23 +375,19 @@ sub initialize {
 	    "set of fossil occurrences being analyzed");
     
     $ds->define_output_map('1.2:occs:taxa_opt' =>
-	{ value => 'app', maps_to => '1.2:taxa:app', undocumented => 1 },
+	{ value => 'attr', maps_to => '1.2:taxa:attr' },
+	    "The attribution of each taxon (author and year)",
+	{ value => 'occapp', maps_to => '1.2:taxa:occapp' },
 	    "The age of first and last appearance of each taxon from the set",
 	    "of occurrences being analyzed (not the absolute first and last",
 	    "occurrence ages).",
-	{ value => 'attr' },
-	    "The attribution of each taxon (author and year)");
+	@PB2::TaxonData::BASIC_MAP);
     
     $ds->define_block('1.2:occs:taxa_summary' =>
 	{ output => 'total_count', pbdb_name => 'n_occs', com_name => 'noc' },
 	    "The number of occurrences that were scanned in the process of",
 	    "computing this taxonomic tree.");
     
-    # $ds->define_block('1.2:occs:taxa_attr' =>
-    # 	{ select => 'v.attribution', tables => 'v' });
-    
-    # The following block is used for prevalence output.
-
     $ds->define_block('1.2:occs:prevalence' =>
 	{ output => 'orig_no', com_name => 'oid', pbdb_name => 'taxon_no' },
 	    "The identifier of the taxon.",
@@ -1326,12 +1323,12 @@ sub taxa {
     
     if ( ref $request->{my_base_taxa} eq 'ARRAY' && @{$request->{my_base_taxa}} )
     {
-	$request->generate_phylogeny_full($sth, $request->{my_base_taxa});
+	$request->generate_taxon_table_full($sth, $request->{my_base_taxa});
     }
     
     else
     {
-	$request->generate_phylogeny_ints($sth);
+	$request->generate_taxon_table_ints($sth);
     }
 }
 
@@ -1438,7 +1435,7 @@ sub prevalence {
 	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
-	$request->generate_prevalence_alt($result, $limit, $detail);
+	$request->generate_prevalence($result, $limit, $detail);
 	return;
     }
     
@@ -1499,7 +1496,7 @@ sub prevalence {
 	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
-	$request->generate_prevalence_alt($result, $limit, $detail);
+	$request->generate_prevalence($result, $limit, $detail);
 	return;
 	
 	# my $sth = $dbh->prepare($request->{main_sql});
@@ -1528,7 +1525,7 @@ sub prevalence {
 	
 	my $result = $dbh->selectall_arrayref($request->{main_sql}, { Slice => {} });
 	
-	$request->generate_prevalence_alt($result, $limit, $detail);
+	$request->generate_prevalence($result, $limit, $detail);
 	return;
     }
 }

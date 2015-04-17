@@ -24,6 +24,8 @@ our (@REQUIRES_ROLE) = qw(PB2::CommonData PB2::ReferenceData);
 
 our (%DB_FIELD);
 
+our (@BASIC_MAP);
+
 # This routine is called by the data service in order to initialize this
 # class.
 
@@ -34,22 +36,39 @@ sub initialize {
     # First define an output map to specify which output blocks are going to
     # be used to generate output from the operations defined in this class.
     
-    $ds->define_output_map('1.2:taxa:output_map' =>
-	{ value => 'attr', maps_to => '1.2:taxa:attr' },
-	    "The attribution of this taxon (author and year)",
-	# { value => 'ref', maps_to => '1.2:common:ref' },
-	#     "The source from which this taxon was entered into the database",
+    @BASIC_MAP = (
 	{ value => 'app', maps_to => '1.2:taxa:app' },
 	    "The age of first and last appearance of this taxon from the occurrences",
-	    "recorded in this database",
+	    "recorded in this database.",
+	{ value => 'common' },
+	    "The common name of this taxon, if one is entered in the database.",
+	{ value => 'parent', maps_to => '1.2:taxa:parent' },
+	    "If the classification of this taxon has been entered into the database,",
+	    "the name of the parent taxon, or its senior synonym if there is one.",
+	{ value => 'immpar', maps_to => '1.2:taxa:immpar' },
+	    "If the classification of this taxon has been entered into the database,",
+	    "the name of the parent taxon even if that is a junior synonym.",
 	{ value => 'size', maps_to => '1.2:taxa:size' },
-	    "The number of subtaxa appearing in this database",
-	{ value => 'phylo', maps_to => '1.2:taxa:phylo' },
+	    "The number of subtaxa appearing in this database, including the taxon itself.",
+	{ value => 'class', maps_to => '1.2:taxa:phylo' },
 	    "The classification of this taxon: kingdom, phylum, class, order, family.",
 	    "This information is also included in the C<nav> block, so do not specify both at once.",
+	{ value => 'phylo', maps_to => '1.2:taxa:phylo', undocumented => 1 },
+	{ value => 'subcounts', maps_to => '1.2:taxa:subcounts' },
+	    "The number of subtaxa known to this database, summarized by rank.",
+	{ value => 'ecospace', maps_to => '1.2:taxa:ecospace' },
+	    "Information about ecological space that this organism occupies or occupied.",
+	    "This has only been filled in for a relatively few taxa.  Here is a",
+	    "L<list of values|node:taxa/ecotaph_values>.",
+	{ value => 'taphonomy', maps_to => '1.2:taxa:taphonomy' },
+	    "Information about the taphonomy of this organism.  Here is a",
+	    "L<list of values|node:taxa/ecotaph_values>.",
+	{ value => 'etbasis', maps_to => '1.2:taxa:etbasis' },
+	    "Annotates the output block C<ecospace>, indicating at which",
+	    "taxonomic level each piece of information was entered.",
 	{ value => 'nav', maps_to => '1.2:taxa:nav' },
 	    "Additional information for the PBDB Navigator taxon browser.",
-	    "This block should only be selected in conjunction with the JSON format.",
+	    "This block should only be selected if the output format is C<json>.",
 	{ value => 'img', maps_to => '1.2:taxa:img' },
 	    "The identifier of the image (if any) associated with this taxon.",
 	    "These images are sourced from L<phylopic.org>.",
@@ -60,11 +79,16 @@ sub initialize {
         { value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the collection record");
     
+    $ds->define_output_map('1.2:taxa:output_map' =>
+	{ value => 'attr', maps_to => '1.2:taxa:attr' },
+	    "The attribution of this taxon (author and year)",
+	@BASIC_MAP);
+    
     # Now define all of the output blocks that were not defined elsewhere.
     
     $ds->define_block('1.2:taxa:basic' =>
 	{ select => ['DATA'] },
-	{ set => '*', code => \&process_basic_record },
+	{ set => '*', code => \&process_pbdb, if_vocab => 'pbdb' },
 	{ output => 'orig_no', dwc_name => 'taxonID', com_name => 'oid' },
 	    "A unique identifier for this taxonomic name",
 	{ output => 'taxon_no', com_name => 'vid', dedup => 'orig_no' },
@@ -90,7 +114,7 @@ sub initialize {
 	{ output => 'pubyr', if_block => 'attr', 
 	  dwc_name => 'namePublishedInYear', com_name => 'pby' },
 	    "The year in which this name was published",
-	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2' },
+	{ output => 'common_name', dwc_name => 'vernacularName', com_name => 'nm2', if_block => 'common' },
 	    "The common (vernacular) name of this taxon, if any",
 	{ output => 'status', com_name => 'sta' },
 	    "The taxonomic status of this name",
@@ -110,13 +134,18 @@ sub initialize {
 	  com_name => 'acn', dedup => 'taxon_name' },
 	    "If this name is either a junior synonym or an invalid name, the accepted name",
 	    "that should be used in its place.",
-	{ output => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'par',
-	  pbdb_name => 'parent_no' },
-	    "The identifier of the immediately containing taxon, if any",
-	{ output => 'senpar_no', dwc_name => 'parentNameUsageID', com_name => 'snp',
-	  pbdb_name => 'senpar_no', dedup => 'parent_no' }, 
-	    "The identifier of the senior synonym of the immediate containing taxon,",
-	    "if this is different from the immediate containing taxon.",
+	{ output => 'senpar_no', dwc_name => 'parentNameUsageID', com_name => 'par' }, 
+	    "The identifier of the parent taxon, or of its senior synonym if there is one.",
+	    "This field and those following are only available if the classification of",
+	    "this taxon is known to the database.",
+	{ output => 'senpar_name', com_name => 'prl', pbdb_name => 'senpar_name', if_block => 'parent' },
+	    "The name of the parent taxon, or of its senior synonym if there is one.",
+	{ output => 'parent_no', dwc_name => 'parentNameUsageID', com_name => 'ipn',
+	  pbdb_name => 'immpar_no', if_block => 'immpar', dedup => 'senpar_no' },
+	    "The identifier of the immediate parent taxon, even if it is a junior synonym.",
+	{ output => 'immpar_name', dwc_name => 'parentNameUsageID', com_name => 'ipl',
+	  if_block => 'immpar', dedup => 'senpar_name' },
+	    "The name of the immediate parent taxon, even if it is a junior synonym.",
 	{ output => 'reference_no', com_name => 'rid', show_as_list => 1 },
 	    "A list of identifiers indicating the source document(s) from which this name was entered.",
 	{ output => 'is_extant', com_name => 'ext', dwc_name => 'isExtant' },
@@ -127,6 +156,12 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:attr' =>
 	{ select => 'ATTR' });
+    
+    $ds->define_block('1.2:taxa:parent' =>
+	{ select => 'SENPAR' });
+    
+    $ds->define_block('1.2:taxa:immpar' =>
+	{ select => 'IMMPAR' });
     
     $ds->define_block('1.2:taxa:size' =>
 	{ select => 'SIZE' },
@@ -140,18 +175,36 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:app' =>
 	{ select => 'APP' },
-	{ output => 'firstapp_ea', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
+	{ output => 'first_max_ma', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
 	  if_block => 'app' },
 	    "The early age bound for the first appearance of this taxon in the database",
-	{ output => 'firstapp_la', com_name => 'fla', dwc_name => 'firstAppearanceLateAge', 
+	{ output => 'first_min_ma', com_name => 'fla', dwc_name => 'firstAppearanceLateAge', 
 	  if_block => 'app' }, 
 	    "The late age bound for the first appearance of this taxon in the database",
-	{ output => 'lastapp_ea', com_name => 'lea', dwc_name => 'lastAppearanceEarlyAge',
+	{ output => 'last_max_ma', com_name => 'lea', dwc_name => 'lastAppearanceEarlyAge',
 	  if_block => 'app' },
 	    "The early age bound for the last appearance of this taxon in the database",
-	{ output => 'lastapp_la', com_name => 'lla', dwc_name => 'lastAppearanceLateAge',
+	{ output => 'last_min_ma', com_name => 'lla', dwc_name => 'lastAppearanceLateAge',
 	  if_block => 'app' }, 
 	    "The late age bound for the last appearance of this taxon in the database");
+    
+    $ds->define_block('1.2:taxa:occapp' =>
+	{ output => 'firstocc_max_ma', com_name => 'foa', dwc_name => 'firstAppearanceEarlyAge', 
+	  if_block => 'app' },
+	    "The early age bound for the first appearance of this taxon in the set of",
+	    "occurrences being analyzed.",
+	{ output => 'first_min_ma', com_name => 'fpa', dwc_name => 'firstAppearanceLateAge', 
+	  if_block => 'app' }, 
+	    "The late age bound for the first appearance of this taxon in the set of",
+	    "occurrences being analyzed.",
+	{ output => 'last_max_ma', com_name => 'loa', dwc_name => 'lastAppearanceEarlyAge',
+	  if_block => 'app' },
+	    "The early age bound for the last appearance of this taxon in the set of",
+	    "occurrences being analyzed.",
+	{ output => 'last_min_ma', com_name => 'lpa', dwc_name => 'lastAppearanceLateAge',
+	  if_block => 'app' }, 
+	    "The late age bound for the last appearance of this taxon in the set of",
+	    "occurrences being analyzed.");
     
     $ds->define_block('1.2:taxa:subtaxon' =>
 	{ output => 'orig_no', com_name => 'oid', dwc_name => 'taxonID' },
@@ -178,11 +231,13 @@ sub initialize {
 	    "The name of the family in which this taxon occurs");
     
     $ds->define_block('1.2:taxa:nav' =>
-	{ select => ['PARENT', 'PHYLO', 'COUNTS'] },
-	{ output => 'parent_name', com_name => 'prl', dwc_name => 'parentNameUsage' },
-	    "The name of the parent taxonomic concept, if any",
-	{ output => 'parent_rank', com_name => 'prr' },
-	    "The rank of the parent taxonomic concept, if any",
+	{ select => ['SENPAR', 'IMMPAR', 'PHYLO', 'COUNTS'] },
+	{ output => 'senpar_name', com_name => 'prl' },
+	    "The name of the parent taxon or its senior synonym if any",
+	{ output => 'senpar_rank', com_name => 'prr' },
+	    "The rank of the parent taxon or its senior synonym if any",
+	{ output => 'immpar_name', com_name => 'ipl', dedup => 'prl' },
+	    "The name of the immediate parent taxon if it is a junior synonym",
 	{ output => 'parent_txn', com_name => 'prt', sub_record => '1.2:taxa:subtaxon' },
 	{ output => 'kingdom_no', com_name => 'kgn' },
 	    "The identifier of the kingdom in which this taxon occurs",
@@ -280,6 +335,80 @@ sub initialize {
 	    "The name to which this image should be credited if used",
 	{ output => 'license', com_name => 'lic' },
 	    "A URL giving the license terms under which this image may be used");
+    
+    $ds->define_block('1.2:taxa:ecospace' =>
+	{ select => 'ECOSPACE' },
+	# { output => 'environment', com_name => 'jnv', disabled => 1 },
+	#     "The general environment or environments in which this life form is found.",
+	#     "Here is a L<list of values|node:taxa/ecotaph_values>.",
+	{ output => 'motility', com_name => 'jmo' },
+	    "Whether the organism is motile, attached and/or epibiont, and its",
+	    "mode of locomotion if any.",
+	{ output => 'motility_basis', com_name => 'jmc',
+	  if_block => 'etbasis', if_format => ['txt', 'csv', 'tsv'] },
+	    "Specifies the taxon for which the motility information was set.",
+	    "For L<JSON|node:formats/json> responses, the fields 'jmb' and 'jmn'",
+	    "give the taxon identifier and taxon name respectively, while for",
+	    "L<text|node:formats/text> responses, the field 'motility_basis'",
+	    "provides both.  These fields are only included if the C<ecospace> output",
+	    "block is also included.  Similar annotation fields are included",
+	    "for the following, if the C<etbasis> output block is included.",
+	{ output => 'motility_basis_no', com_name => 'jmb',
+	  if_block => 'etbasis', if_format => 'json' },
+	{ output => 'motility_basis_name', com_name => 'jmn',
+	  if_block => 'etbasis', if_format => 'json' },
+	{ output => 'life_habit', com_name => 'jlh' },
+	    "The general life mode and locality of this organism.",
+	{ output => 'life_habit_basis', com_name => 'jhc',
+	  if_block => 'etbasis', if_format => ['txt', 'csv', 'tsv'] },
+	    "Specifies the taxon for which the life habit information was set.",
+	    "See B<motility_basis> above.  These fields are only included if the",
+	    "C<ecospace> block is also included.",
+	{ output => 'life_habit_basis_no', com_name => 'jhb',
+	  if_block => 'etbasis', if_format => 'json' },
+	{ output => 'life_habit_basis_name', com_name => 'jhn',
+	  if_block => 'etbasis', if_format => 'json' },
+	{ output => 'diet', com_name => 'jdt' },
+	    "The general diet or feeding mode of this organism.",
+	{ output => 'diet_basis', com_name => 'jdc',
+	  if_block => 'etbasis', if_format => ['txt', 'csv', 'tsv'] },
+	    "Specifies the taxon for which the diet information was set.",
+	    "See B<motility_basis> above.  These fields are only included if the",
+	    "C<ecospace> block is also included.",
+	{ output => 'diet_basis_no', com_name => 'jdb',
+	  if_block => 'etbasis', if_format => 'json' },
+	{ output => 'diet_basis_name', com_name => 'jdn',
+	  if_block => 'etbasis', if_format => 'json' });
+    
+    $ds->define_block('1.2:taxa:taphonomy' =>
+	{ select => 'TAPH' },
+	{ output => 'composition', com_name => 'jco' },
+	    "The composition of the skeletal parts of this organism.",
+	{ output => 'architecture', com_name => 'jsa' },
+	    "An indication of the internal skeletal architecture.",
+	{ output => 'thickness', com_name => 'jth' },
+	    "An indication of the relative thickness of the skeleton.",
+	{ output => 'reinforcement', com_name => 'jsr' },
+	    "An indication of the skeletal reinforcement, if any.",
+	{ output => 'taphonomy_basis', com_name => 'jtc',
+	  if_block => 'etbasis', if_format => ['txt', 'csv', 'tsv'] },
+	    "Specifies the taxon for which the taphonomy information was set.",
+	    "See B<motility_basis> above.  These fields are only included if the",
+	    "C<taphonomy> block is also included.",
+	{ output => 'taphonomy_basis_no', com_name => 'jtb',
+	  if_block => 'etbasis', if_format => 'json' },
+	{ output => 'taphonomy_basis_name', com_name => 'jtn',
+	  if_block => 'etbasis', if_format => 'json' });
+    
+    $ds->define_block('1.2:taxa:etbasis' =>
+	# { output => 'environment_basis_no', com_name => 'jnb',
+	#   if_block => 'etbasis', if_format => 'json' },
+	#     "Specifies the taxon for which the ",
+	# { output => 'environment_basis_name', com_name => 'jnn',
+	#   if_block => 'etbasis', if_format => 'json' },
+	# { output => 'environment_basis', com_name => 'jnc',
+	#   if_block => 'etbasis', if_format => ['txt', 'csv', 'tsv'] },
+	{ set => '*', code => \&consolidate_basis, if_format => ['txt', 'csv', 'tsv'] });
     
     # Now define output blocks for opinions
     
@@ -864,6 +993,10 @@ sub get {
 	    [ $taxonomy->list_taxa('children', $taxon_no, { limit => 10, order => 'size.desc', fields => $data } ) ];
     }
     
+    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
+    
+    $self->delete_output_field('exclude');
+    
     return 1;
 }
 
@@ -876,28 +1009,28 @@ sub get {
 
 sub list {
 
-    my ($self, $arg) = @_;
+    my ($request, $arg) = @_;
     
-    my $dbh = $self->get_connection;
+    my $dbh = $request->get_connection;
     my $taxonomy = Taxonomy->new($dbh, 'taxon_trees');
     
     # First, figure out what info we need to provide
     
-    my $options = $self->generate_query_options($arg);
+    my $options = $request->generate_query_options($arg);
     
     # Then, figure out which taxa we are looking for.
     
-    my $name_list = $self->clean_param('name');
-    my $id_list = $self->clean_param('id');
-    my $rel = $self->clean_param('rel') || 'self';
+    my $name_list = $request->clean_param('name');
+    my $id_list = $request->clean_param('id');
+    my $rel = $request->clean_param('rel') || 'self';
     
-    if ( my $base_name = $self->clean_param('base_name') )
+    if ( my $base_name = $request->clean_param('base_name') )
     {
 	$name_list = $base_name;
 	$rel = 'all_children';
     }
     
-    elsif ( my $base_id = $self->clean_param('base_id') )
+    elsif ( my $base_id = $request->clean_param('base_id') )
     {
 	$id_list = $base_id;
 	$rel = 'all_children';
@@ -917,7 +1050,7 @@ sub list {
 	    push @warnings, $taxonomy->list_warnings;
 	}
 	
-	$self->add_warning(@warnings) if @warnings;
+	$request->add_warning(@warnings) if @warnings;
 	return unless @taxa;
 	$id_list = \@taxa;
     }
@@ -929,23 +1062,24 @@ sub list {
     if ( defined $arg && $arg eq 'refs' && $rel eq 'self' )
     {
 	my @result = $taxonomy->list_refs('self', $id_list, $options);
-	$self->list_result(@result);
+	$request->list_result(@result);
+	$request->delete_output_field('exclude') unless $name_list =~ qr{\^};
     }
     
     elsif ( defined $arg && $arg eq 'refs' )
     {
 	$options->{return} = 'stmt';
 	my $sth = $taxonomy->list_refs($rel, $id_list, $options);
-	$self->sth_result($sth);
-	$self->set_result_count($taxonomy->last_rowcount);
+	$request->sth_result($sth);
+	$request->set_result_count($taxonomy->last_rowcount);
     }
     
     elsif ( defined $arg && $arg eq 'opinions' )
     {
 	$options->{return} = 'stmt';
 	my $sth = $taxonomy->list_opinions($rel, $id_list, $options);
-	$self->sth_result($sth);
-	$self->set_result_count($taxonomy->last_rowcount);
+	$request->sth_result($sth);
+	$request->set_result_count($taxonomy->last_rowcount);
     }
     
     # Otherwise, return matching taxa.  If the relationship is 'self' (the
@@ -954,7 +1088,7 @@ sub list {
     elsif ( $rel eq 'self' )
     {
 	my @result = $taxonomy->list_taxa_simple($id_list, $options);
-	$self->{main_result} = \@result;
+	$request->{main_result} = \@result;
     }
     
     # If the relationship is 'common_ancestor', we have just one result.
@@ -964,7 +1098,8 @@ sub list {
 	$options->{return} = 'list';
 	
 	my ($taxon) = $taxonomy->list_taxa('common', $id_list, $options);
-	$self->single_result($taxon) if $taxon;
+	$request->single_result($taxon) if $taxon;
+	$request->delete_output_field('exclude');
     }
     
     # Otherwise, we just call list_taxa and return the result.
@@ -975,12 +1110,13 @@ sub list {
 	$rel ||= 'self';
 	
 	my $sth = $taxonomy->list_taxa($rel, $id_list, $options);
-	$self->sth_result($sth) if $sth;
-	$self->set_result_count($taxonomy->last_rowcount);
+	$request->sth_result($sth) if $sth;
+	$request->set_result_count($taxonomy->last_rowcount);
+	$request->delete_output_field('exclude');
     }
     
-    $self->{main_sql} = $taxonomy->last_sql;
-    print STDERR $self->{main_sql} . "\n\n" if $self->debug;
+    $request->{main_sql} = $taxonomy->last_sql;
+    print STDERR $request->{main_sql} . "\n\n" if $request->debug;
     
     # Otherwise, we have an empty result.
     
@@ -2034,12 +2170,14 @@ sub processResultSet {
 
 # For each record, do any necessary processing.
 
-sub process_basic_record {
+sub process_pbdb {
     
     my ($request, $record) = @_;
     
-    $record->{accepted_name} = "" if $record->{accepted_name} && $record->{taxon_name} &&
-	$record->{accepted_name} eq $record->{taxon_name};
+    $record->{is_extant} = ! defined $record->{is_extant} ? ''
+			 : $record->{is_extant} eq '1'    ? 'extant'
+			 : $record->{is_extant} eq '0'    ? 'extinct'
+							  : '?';
 }
 
 
@@ -2079,6 +2217,25 @@ sub interpretStatusCode {
     
     return $TAXONOMIC_STATUS{$pbdb_status}, $REPORT_ACCEPTED_TAXON{$pbdb_status}, 
 	$NOMENCLATURAL_STATUS{$pbdb_status};
+}
+
+
+# consolidate_basis ( record )
+# 
+# Generate consolidated 'basis' values from the '_basis_no' and '_basis_name'
+# fields.
+
+sub consolidate_basis {
+    
+    my ($request, $record ) = @_;
+    
+    foreach my $f ( qw(motility life_habit diet taphonomy) )
+    {
+	my $basis_no = $record->{"${f}_basis_no"};
+	my $basis_name = $record->{"${f}_basis_name"};
+	
+	$record->{"${f}_basis"} = "$basis_name ($basis_no)" if $basis_no;
+    }
 }
 
 
