@@ -18,6 +18,7 @@ use strict;
 
 use Dancer ':script';
 
+$ENV{PWD} ||= '.';
 
 my $PORT = config->{port}|| 3000;
 my $WORKERS = config->{workers} || 5;
