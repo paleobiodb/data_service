@@ -175,36 +175,40 @@ sub initialize {
     
     $ds->define_block('1.2:taxa:app' =>
 	{ select => 'APP' },
-	{ output => 'first_max_ma', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
+	{ output => 'firstapp_ea', name => 'first_max_ma', com_name => 'fea', dwc_name => 'firstAppearanceEarlyAge', 
 	  if_block => 'app' },
 	    "The early age bound for the first appearance of this taxon in the database",
-	{ output => 'first_min_ma', com_name => 'fla', dwc_name => 'firstAppearanceLateAge', 
+	{ output => 'firstapp_la', name => 'first_min_ma', com_name => 'fla', dwc_name => 'firstAppearanceLateAge', 
 	  if_block => 'app' }, 
 	    "The late age bound for the first appearance of this taxon in the database",
-	{ output => 'last_max_ma', com_name => 'lea', dwc_name => 'lastAppearanceEarlyAge',
+	{ output => 'lastapp_ea', name => 'last_max_ma', com_name => 'lea', dwc_name => 'lastAppearanceEarlyAge',
 	  if_block => 'app' },
 	    "The early age bound for the last appearance of this taxon in the database",
-	{ output => 'last_min_ma', com_name => 'lla', dwc_name => 'lastAppearanceLateAge',
+	{ output => 'lastapp_la', name => 'last_min_ma', com_name => 'lla', dwc_name => 'lastAppearanceLateAge',
 	  if_block => 'app' }, 
-	    "The late age bound for the last appearance of this taxon in the database");
+	    "The late age bound for the last appearance of this taxon in the database",
+	{ output => 'early_interval', com_name => 'eal' },
+	    "The name of the interval in which this taxon first appears, or the start of its range.",
+	{ output => 'late_interval', com_name => 'lal', dedup => 'early_interval' },
+	    "The name of the interval in which this taxon last appears, if different from C<early_interval>.");
     
     $ds->define_block('1.2:taxa:occapp' =>
-	{ output => 'firstocc_max_ma', com_name => 'foa', dwc_name => 'firstAppearanceEarlyAge', 
-	  if_block => 'app' },
+	{ output => 'firstocc_ea', name => 'firstocc_max_ma', com_name => 'foa', dwc_name => 'firstAppearanceEarlyAge' },
 	    "The early age bound for the first appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'first_min_ma', com_name => 'fpa', dwc_name => 'firstAppearanceLateAge', 
-	  if_block => 'app' }, 
+	{ output => 'firstocc_la', name => 'first_min_ma', com_name => 'fpa', dwc_name => 'firstAppearanceLateAge' }, 
 	    "The late age bound for the first appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'last_max_ma', com_name => 'loa', dwc_name => 'lastAppearanceEarlyAge',
-	  if_block => 'app' },
+	{ output => 'lastocc_ea', name => 'last_max_ma', com_name => 'loa', dwc_name => 'lastAppearanceEarlyAge' },
 	    "The early age bound for the last appearance of this taxon in the set of",
 	    "occurrences being analyzed.",
-	{ output => 'last_min_ma', com_name => 'lpa', dwc_name => 'lastAppearanceLateAge',
-	  if_block => 'app' }, 
+	{ output => 'lastocc_la', name => 'last_min_ma', com_name => 'lpa', dwc_name => 'lastAppearanceLateAge' }, 
 	    "The late age bound for the last appearance of this taxon in the set of",
-	    "occurrences being analyzed.");
+	    "occurrences being analyzed.",
+	{ output => 'occ_early_interval', com_name => 'eol' },
+	    "The name of the interval in which this taxon first appears, or the start of its range.",
+	{ output => 'occ_late_interval', com_name => 'lol', dedup => 'early_interval' },
+	    "The name of the interval in which this taxon last appears, if different from C<early_interval>.");
     
     $ds->define_block('1.2:taxa:subtaxon' =>
 	{ output => 'orig_no', com_name => 'oid', dwc_name => 'taxonID' },

@@ -1180,6 +1180,12 @@ sub taxa {
     
     my @fields = ('o.occurrence_no', 'tv.rank', 'tv.ints_no', 'ph.class', 'ph.class_no', 'ph.order', 'ph.order_no');
     
+    if ( $request->has_block('occapp') )
+    {
+	push @fields, 'o.early_age', 'o.late_age';
+	$request->{my_track_time} = 1;
+    }
+    
     # Interpret the rank parameter.
     
     if ( $count_what eq 'species' )

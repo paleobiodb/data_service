@@ -635,6 +635,8 @@ sub generate_taxon_table_full {
     my $count_rank = $request->{my_count_rank} || 5;
     my $promote = $request->{my_promote};
     
+    my $track_time = $request->{my_track_time};
+    
     # Initialize the variables necessary for enumerating the phylogeny.
     
     my ($total_count);
@@ -712,17 +714,20 @@ sub generate_taxon_table_full {
 		
 		$species_node->{occs}++;
 		$genus_node->{chld}{$species_no} = 1;
+		$request->track_time($species_node, $r) if $track_time;
 	    }
 	    
 	    else
 	    {
 		$genus_node->{occs}++;
+		$request->track_time($genus_node, $r) if $track_time;
 	    }
 	}
 	
 	else
 	{
 	    $higher_node->{occs}++;
+	    $request->track_time($higher_node, $r) if $track_time;
 	}
     }
     
@@ -766,6 +771,63 @@ sub uns_identifier {
     
     $uns_counter{$rank}++;
     return $uns_prefix{$rank} . $uns_counter{$rank};
+}
+
+
+# track_time ( node, occ )
+# 
+# Update the time range for the specified node according to the early_age and
+# late_age values in the occurrence record.
+
+sub track_time {
+    
+    my ($node, $occ) = @_;
+    
+    if ( defined $occ->{early_age} && defined $occ->{late_age} )
+    {
+	if ( !defined $node->{firstocc_ea} || $occ->{early_age} > $node->{firstocc_ea} )
+	{
+	    $node->{firstocc_ea} = $occ->{early_age};
+	}
+	
+	if ( !defined $node->{firstocc_la} || $occ->{late_age} > $node->{firstocc_la} )
+	{
+	    $node->{firstocc_la} = $occ->{late_age};
+	}
+	
+	if ( !defined $node->{lastocc_ea} || $occ->{early_age} < $node->{lastocc_ea} )
+	{
+	    $node->{lastocc_ea} = $occ->{early_age};
+	}
+	
+	if ( !defined $node->{lastocc_la} || $occ->{late_age} < $node->{lastocc_la} )
+	{
+	    $node->{lastocc_la} = $occ->{late_age};
+	}
+    }
+    
+    elsif ( defined $occ->{firstocc_ea} )
+    {
+	if ( !defined $node->{firstocc_ea} || $occ->{firstocc_ea} > $node->{firstocc_ea} )
+	{
+	    $node->{firstocc_ea} = $occ->{firstocc_ea};
+	}
+	
+	if ( !defined $node->{firstocc_la} || $occ->{firstocc_la} > $node->{firstocc_la} )
+	{
+	    $node->{firstocc_la} = $occ->{firstocc_la};
+	}
+	
+	if ( !defined $node->{lastocc_ea} || $occ->{lastocc_ea} < $node->{lastocc_ea} )
+	{
+	    $node->{lastocc_ea} = $occ->{lastocc_ea};
+	}
+	
+	if ( !defined $node->{lastocc_la} || $occ->{lastocc_la} < $node->{lastocc_la} )
+	{
+	    $node->{lastocc_la} = $occ->{lastocc_la};
+	}
+    }
 }
 
 
@@ -836,6 +898,11 @@ sub get_upper_taxa {
 	# tree-sequence order.
 	
 	$taxon_node{$parent_no}{chld}{$taxon_no} = 1 if $taxon_node{$parent_no};
+	
+	# Clear the occurrence count, since we will be counting up occurrences
+	# from the currently selected set rather than using the global count.
+	
+	$taxon_node{$taxon_no}{n_occs} = 0;
     }
 }
 
@@ -905,10 +972,13 @@ sub make_taxon_request {
 	my $taxon_no = $r->{orig_no};
 	my $taxon_node = $taxon_node{$taxon_no} // {};
 	
-	# Copy over all of the attributes that aren't already set.
+	# Copy over all of the attributes that aren't already set.  Skip the
+	# attribute n_occs, because we are counting up occurrences from the
+	# currently selected set rather than using the global occurrence counts.
 	
 	foreach my $f ( keys %$r )
 	{
+	    next if $f eq 'n_occs';
 	    $taxon_node->{$f} = $r->{$f} unless defined $taxon_node->{$f};
 	}
 	
@@ -947,10 +1017,10 @@ sub count_taxa {
     $node->{touched} = 1;
     $node->{tree_occs} = $node->{occs};
     $node->{occs} ||= 0;
-    $node->{orders} = 0;
-    $node->{families} = 0 if $request->{my_count_rank} <= 9;
-    $node->{genera} = 0 if $request->{my_count_rank} <= 5;
-    $node->{species} = 0 if $request->{my_count_rank} <= 3;
+    $node->{n_orders} = 0;
+    $node->{n_families} = 0 if $request->{my_count_rank} <= 9;
+    $node->{n_genera} = 0 if $request->{my_count_rank} <= 5;
+    $node->{n_species} = 0 if $request->{my_count_rank} <= 3;
     
     # Recurse through the taxonomic hierarchy represented by the 'chld'
     # field.
@@ -1055,39 +1125,41 @@ sub sum_subtaxa {
     # parent node.
     
     my $child_orders = $child->{taxon_rank} == 13 && ! $child->{is_uns}	? 1
-		     : $child->{orders}					? $child->{orders}
+		     : $child->{n_orders}				? $child->{n_orders}
 									: 0;
     
-    $node->{orders} += $child_orders if $node->{taxon_rank} > 13;
+    $node->{n_orders} += $child_orders if $node->{taxon_rank} > 13;
 
     if ( $request->{my_count_rank} <= 9 )
     {
 	my $child_families = $child->{taxon_rank} == 9 && ! $child->{is_uns} ? 1
-			   : $child->{families}				     ? $child->{families}
+			   : $child->{n_families}			     ? $child->{n_families}
 									     : 0;
 
-	$node->{families} += $child_families if $node->{taxon_rank} > 9;
+	$node->{n_families} += $child_families if $node->{taxon_rank} > 9;
     }
 
     if ( $request->{my_count_rank} <= 5 )
     {
 	my $child_genera = $child->{taxon_rank} == 5 && ! $child->{is_uns} ? 1
-			 : $child->{genera}				   ? $child->{genera}
+			 : $child->{n_genera}				   ? $child->{n_genera}
 									   : 0;
 
-	$node->{genera} += $child_genera if $node->{taxon_rank} > 5;
+	$node->{n_genera} += $child_genera if $node->{taxon_rank} > 5;
     }
 
     if ( $request->{my_count_rank} <= 3 )
     {
 	my $child_species = $child->{taxon_rank} == 3 && ! $child->{is_uns} ? 1
-			  : $child->{species}				    ? $child->{species}
+			  : $child->{n_species}				    ? $child->{n_species}
 									    : 0;
 	
-	$node->{species} += $child_species if $node->{taxon_rank} > 3;
+	$node->{n_species} += $child_species if $node->{taxon_rank} > 3;
     }
 
     $node->{tree_occs} += $child->{tree_occs} if $child->{tree_occs};
+    
+    $request->track_time($node, $child) if $request->{my_track_time};
 }
 
 
@@ -1109,56 +1181,43 @@ sub add_result_records {
     my $rank = $node->{taxon_rank};
     return if $rank < $request->{my_reso_rank};
     
-    # Determine the taxon name, or generate a "NONE_SPECIFIED" name
+    # If this taxon node does not have a name, then it represents a missing
+    # part of the taxonomic hierarchy.  So generate a "NONE_SPECIFIED" name
     # appropriate to the taxon rank.
     
-    my $name = $node->{taxon_name};
-    $name = $uns_name{$rank || 0} unless $name && $name ne '~';
+    $node->{taxon_name} = $uns_name{$rank || 0}
+	unless $node->{taxon_name} && $node->{taxon_name} ne '~';
     
     # If the 'family_no' field is set, or if the rank is 9, then we have found
     # a family.
     
     $family_ok = 1 if $node->{family_no} || $node->{taxon_rank} == 9;
     
-    # Create an output record.
-    
-    my $taxon_record = { taxon_no => $taxon_no,
-			 parent_no => $parent_no,
-			 taxon_name => $name,
-			 taxon_rank => $rank,
-			 specific_occs => $node->{occs},
-		         n_occs => $node->{tree_occs} };
-    
     # Add the appropriate subtaxon counts.
     
     if ( $rank > 13 && $request->{my_count_rank} <= 13 )
     {
-	$taxon_record->{n_orders} = $node->{orders};
+	$node->{n_orders} = $node->{n_orders};
     }
     
     if ( $rank > 9 && $request->{my_count_rank} <= 9 )
     {
-	$taxon_record->{n_families} = $node->{families};
+	$node->{n_families} = $node->{n_families};
     }
     
     if ( $rank > 5 && $request->{my_count_rank} <= 5 )
     {
-	$taxon_record->{n_genera} = $node->{genera};
+	$node->{n_genera} = $node->{n_genera};
     }
     
     if ( $rank > 3 && $request->{my_count_rank} <= 3 )
     {
-	$taxon_record->{n_species} = $node->{species};
+	$node->{n_species} = $node->{n_species};
     }
-    
-    # If we were asked for additional info, add that now.
-    
-    $taxon_record->{attribution} = $taxon_node{$taxon_no}{attribution}
-	if $taxon_node{$taxon_no}{attribution};
     
     # Add this taxon to the result list.
     
-    $request->add_result($taxon_record);
+    $request->add_result($node);
     
     # If this is a "leaf taxon" according to the specified resolution level,
     # then stop here.  Otherwise, recurse to the children of this taxon.

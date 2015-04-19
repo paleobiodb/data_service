@@ -11,6 +11,7 @@
 package Taxonomy;
 
 use TaxonDefs qw(%TAXON_TABLE %TAXON_RANK %RANK_STRING);
+use TableDefs qw($INTERVAL_MAP);
 use Carp qw(carp croak);
 use Try::Tiny;
 
@@ -1194,7 +1195,7 @@ sub list_refs {
     
     my $taxon_field = 't.orig_no';
     
-    $rel = 'current' if $rel eq 'self';
+    $rel = 'current' if $rel eq 'self`';
     
     if ( $options->{all_variants} )
     {
@@ -3442,6 +3443,9 @@ sub taxon_joins {
 	if $tables_hash->{vt};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ATTRS_TABLE} as v on v.orig_no = $mt.orig_no\n"
 	if $tables_hash->{v};
+    $joins .= "\t\tLEFT JOIN $INTERVAL_MAP as app on app.early_age = v.first_early_age
+		and app.late_age = v.last_late_age and app.scale_no = 1\n"
+	if $tables_hash->{app};
     $joins .= "\t\tLEFT JOIN $taxonomy->{NAMES_TABLE} as n on n.taxon_no = $mt.spelling_no\n"
 	if $tables_hash->{n};
     $joins .= "\t\tLEFT JOIN $taxonomy->{ECOTAPH_TABLE} as e on e.orig_no = $mt.orig_no\n"
@@ -3665,7 +3669,8 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 		      APP => ['v.first_early_age as firstapp_ea', 
 			      'v.first_late_age as firstapp_la',
 			      'v.last_early_age as lastapp_ea',
-			      'v.last_late_age as lastapp_la'],
+			      'v.last_late_age as lastapp_la',
+			      'app.early_interval', 'app.late_interval'],
 		      ATTR => ['v.pubyr', 'v.attribution'],
 		      SENPAR => ['pt.name as senpar_name', 'pt.rank as senpar_rank'],
 		      IMMPAR => ['ipt.name as immpar_name', 'ipt.rank as immpar_rank'],
@@ -3691,7 +3696,7 @@ our (%FIELD_TABLES) = ( DATA => ['v', 'a', 'vt',],
 			AUTH_DATA => ['v', 'a', 'vt'],
 			OP_DATA => ['o', 'oo', 'ac', 'ap'],
 			REF_DATA => ['r'],
-			APP => ['v'], 
+			APP => ['v','app'], 
 			ATTR => ['v'],
 			SIZE => ['v'],
 			PHYLO => ['ph'],
