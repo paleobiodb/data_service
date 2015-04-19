@@ -2562,6 +2562,8 @@ sub getRelatedTaxon {
 	$extra_tables->{v} = 1;
     }
     
+    delete $extra_tables->{v} if $rel eq 'crown_group';
+    
     my $extra_joins = $self->generateExtraJoins('a', $extra_tables, $select);
     
     # If we were asked for just the taxon_no, do that.
