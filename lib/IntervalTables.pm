@@ -149,6 +149,7 @@ sub buildIntervalMap {
 		scale_no smallint unsigned not null,
 		early_age decimal(9,5),
 		late_age decimal(9,5),
+		range_key varchar(20) not null,
 		cx_int_no int unsigned not null,
 		cx_interval varchar(80) not null,
 		early_int_no int unsigned not null,
@@ -284,7 +285,27 @@ sub buildIntervalMap {
 	    SET cx_int_no = $holocene_no, early_int_no = $holocene_no, late_int_no = $holocene_no
 	    WHERE early_age = 0 and late_age = 0";
     
-    $dbh->do($sql);
+    $result = $dbh->do($sql);
+    
+    my ($quaternary_no) = $dbh->selectrow_array("
+	SELECT interval_no FROM $INTERVAL_DATA
+	WHERE interval_name = 'Quaternary'");
+    
+    my ($pleistocene_no) = $dbh->selectrow_array("
+	SELECT interval_no FROM $INTERVAL_DATA
+	WHERE interval_name = 'Pleistocene'");
+    
+    $sql = "UPDATE $INTERVAL_MAP_WORK
+	    SET late_int_no = $holocene_no
+	    WHERE late_age = 0 and late_int_no = $quaternary_no";
+    
+    $result = $dbh->do($sql);
+    
+    $sql = "UPDATE $INTERVAL_MAP_WORK
+	    SET early_int_no = $pleistocene_no
+	    WHERE early_int_no = $quaternary_no";
+    
+    $result = $dbh->do($sql);
     
     logMessage(2, "    setting interval names...");
     
@@ -308,6 +329,17 @@ sub buildIntervalMap {
 	    SET i.early_interval = d.interval_name";
     
     $result = $dbh->do($sql);
+    
+    # Now compute the range_key column, and add an index on it.
+    
+    logMessage(2, "    setting range keys...");
+    
+    $result = $dbh->do("
+	UPDATE $INTERVAL_MAP_WORK
+	SET range_key = concat(cast(early_age as double), '-', cast(late_age as double))");
+    
+    $result = $dbh->do("
+	ALTER TABLE $INTERVAL_MAP_WORK ADD UNIQUE KEY (range_key, scale_no)");
     
     activateTables($dbh, $INTERVAL_MAP_WORK => $INTERVAL_MAP);
     

@@ -14,6 +14,7 @@ use lib '..';
 package PB2::DiversityData;
 
 use TaxonDefs qw(@TREE_TABLE_LIST %TAXON_TABLE %TAXON_RANK %RANK_STRING);
+use TableDefs qw($INTERVAL_MAP);
 use Taxonomy;
 use Try::Tiny;
 
@@ -432,7 +433,7 @@ sub generate_diversity_table {
 # remainder of this file.  This is done to reduce the number of parameters
 # that must be passed to &count_subtaxa and &add_result_record.
 
-my (%occ_node, %taxon_node, %uns_counter, %lower_taxon_nos);
+my (%taxon_node, %uns_counter, %lower_taxon_nos);
 
 my %uns_name = ( 3 => 'NO_SPECIES_SPECIFIED', 5 => 'NO_GENUS_SPECIFIED',
 		 9 => 'NO_FAMILY_SPECIFIED', 13 => 'NO_ORDER_SPECIFIED',
@@ -481,7 +482,7 @@ sub generate_taxon_table_ints {
 	my $class_no = $r->{class_no} || uns_identifier(17);
 	$base_taxa{$class_no} = 1;
 	
-	my $class_node = $taxon_node{$class_no} //= { taxon_rank => 17, occs => 0, 
+	my $class_node = $taxon_node{$class_no} //= { taxon_rank => 17, n_occs => 0, 
 						      taxon_name => $r->{class} };
 	
 	no warnings 'numeric';
@@ -489,7 +490,7 @@ sub generate_taxon_table_ints {
 	if ( $rank <= 13 )
 	{
 	    my $order_no = $r->{order_no} || $class_node->{uns} || ($class_node->{uns} = uns_identifier(13));
-	    my $order_node = $taxon_node{$order_no} //= { taxon_rank => 13, occs => 0, 
+	    my $order_node = $taxon_node{$order_no} //= { taxon_rank => 13, n_occs => 0, 
 							  taxon_name => $r->{order} };
 	    
 	    $order_node->{is_uns} = 1 unless $order_no > 0;
@@ -498,7 +499,7 @@ sub generate_taxon_table_ints {
 	    if ( $count_rank <= 9 && $rank <= 9 )
 	    {
 		my $family_no = $r->{family_no} || $order_node->{uns} || ($order_node->{uns} = uns_identifier(9));
-		my $family_node = $taxon_node{$family_no} //= { taxon_rank => 9, occs => 0, 
+		my $family_node = $taxon_node{$family_no} //= { taxon_rank => 9, n_occs => 0, 
 								taxon_name => $r->{family} };
 		
 		$family_node->{is_uns} = 1 unless $family_no > 0;
@@ -517,7 +518,7 @@ sub generate_taxon_table_ints {
 			$genus_no = $r->{genus_no} || $family_node->{uns} || ($family_node->{uns} = uns_identifier(5));
 			$genus_name = $r->{genus};
 		    }
-		    my $genus_node = $taxon_node{$genus_no} //= { taxon_rank => 5, occs => 0, 
+		    my $genus_node = $taxon_node{$genus_no} //= { taxon_rank => 5, n_occs => 0, 
 								  taxon_name => $genus_name };
 		    
 		    $genus_node->{is_uns} = 1 unless $genus_no > 0;
@@ -526,35 +527,35 @@ sub generate_taxon_table_ints {
 		    if ( $count_rank <= 3 && $rank <= 3 )
 		    {
 			my $species_no = $r->{species_no} || $genus_node->{uns} || ($genus_node->{uns} = uns_identifier(5));
-			my $species_node = $taxon_node{$species_no} //= { taxon_rank => 3, occs => 0, 
+			my $species_node = $taxon_node{$species_no} //= { taxon_rank => 3, n_occs => 0, 
 									  taxon_name => $r->{species} };
 			
 			$species_node->{is_uns} = 1 unless $species_no > 0;
 			$genus_node->{chld}{$species_no} = 1;
-			$species_node->{occs}++;
+			$species_node->{n_occs}++;
 		    }
 		    
 		    else
 		    {
-			$genus_node->{occs}++;
+			$genus_node->{n_occs}++;
 		    }
 		}
 		
 		else
 		{
-		    $family_node->{occs}++;
+		    $family_node->{n_occs}++;
 		}
 	    }
 	    
 	    else
 	    {
-		$order_node->{occs}++;
+		$order_node->{n_occs}++;
 	    }
 	}
 	
 	else
 	{
-	    $class_node->{occs}++;
+	    $class_node->{n_occs}++;
 	}
     }
     
@@ -572,7 +573,7 @@ sub generate_taxon_table_ints {
     foreach my $class_no ( keys %base_taxa )
     {
 	$request->count_taxa($class_no);
-	$check_count += $taxon_node{$class_no}{occs};
+	$check_count += $taxon_node{$class_no}{n_occs};
     }
     
     unless ( $total_count == $check_count )
@@ -672,7 +673,7 @@ sub generate_taxon_table_full {
 	
 	unless ( $higher_node )
 	{
-	    $higher_node = $taxon_node{$higher_no} = { taxon_rank => 0, occs => 0 };
+	    $higher_node = $taxon_node{$higher_no} = { taxon_rank => 0, n_occs => 0 };
 	    $added_taxa{$higher_no} = 1;
 	}
 	
@@ -693,7 +694,7 @@ sub generate_taxon_table_full {
 	    
 	    unless ( $genus_node )
 	    {
-		$genus_node = $taxon_node{$genus_no} = { taxon_rank => 5, occs => 0,
+		$genus_node = $taxon_node{$genus_no} = { taxon_rank => 5, n_occs => 0,
 							 taxon_name => $genus_name };
 		$added_taxa{$genus_no} = 1 if $reso_rank <= 5;
 	    }
@@ -703,30 +704,30 @@ sub generate_taxon_table_full {
 	    if ( $count_rank <= 3 && $rank <= 3 )
 	    {
 		my $species_no = $r->{species_no} || uns_identifier(3);
-		my $species_node = $occ_node{$species_no};
+		my $species_node = $taxon_node{$species_no};
 		
 		unless ( $species_node )
 		{
-		    $species_node = $taxon_node{$species_no} = { taxon_rank => 3, occs => 0,
+		    $species_node = $taxon_node{$species_no} = { taxon_rank => 3, n_occs => 0,
 								 taxon_name => $r->{species} || '~' };
 		    $added_taxa{$species_no} = 1 if $reso_rank <= 3;
 		}
 		
-		$species_node->{occs}++;
+		$species_node->{n_occs}++;
 		$genus_node->{chld}{$species_no} = 1;
 		$request->track_time($species_node, $r) if $track_time;
 	    }
 	    
 	    else
 	    {
-		$genus_node->{occs}++;
+		$genus_node->{n_occs}++;
 		$request->track_time($genus_node, $r) if $track_time;
 	    }
 	}
 	
 	else
 	{
-	    $higher_node->{occs}++;
+	    $higher_node->{n_occs}++;
 	    $request->track_time($higher_node, $r) if $track_time;
 	}
     }
@@ -744,6 +745,11 @@ sub generate_taxon_table_full {
     {
 	$request->count_taxa($base_no);
     }
+    
+    # If we were asked to track time ranges of taxa, then load the
+    # corresponding interval names.
+    
+    $request->get_interval_info(\%taxon_node);
     
     # Now traverse the tree again and produce the appropriate output.
     
@@ -781,7 +787,7 @@ sub uns_identifier {
 
 sub track_time {
     
-    my ($node, $occ) = @_;
+    my ($request, $node, $occ) = @_;
     
     if ( defined $occ->{early_age} && defined $occ->{late_age} )
     {
@@ -853,8 +859,9 @@ sub get_upper_taxa {
 
     foreach my $f ( $request->select_list )
     {
-	next if $f =~ qr{\.modified};
+	next if $f =~ qr{\.modified|\.enterer_no|\.modifier_no};
 	$f = 'CRMOD' if $f =~ qr{\.created$};
+	$f = '' if $f =~ qr{\.authorizer_no$};
 	push @fields, $f;
     }
     
@@ -1002,6 +1009,56 @@ sub make_taxon_request {
 }
 
 
+# get_interval_info ( nodes )
+# 
+# Fetch interval names from the interval_map table to go with the occurrence
+# time ranges.
+
+sub get_interval_info {
+    
+    my ($request, $nodes) = @_;
+    
+    my $dbh = $request->get_connection;
+    
+    my %range_keys;
+    
+    foreach my $node ( values %$nodes )
+    {
+	next unless defined $node->{firstocc_ea} && defined $node->{lastocc_la};
+	my $first = $node->{firstocc_ea} + 0;
+	my $last = $node->{lastocc_la} + 0;
+	$range_keys{"'$first-$last'"} = 1;
+	$node->{range_key} = "$first-$last";
+    }
+    
+    my $key_list = join(',', keys %range_keys);
+    
+    return unless $key_list;
+    
+    my $sql = "SELECT range_key, early_interval, late_interval
+	       FROM $INTERVAL_MAP WHERE range_key in ($key_list)";
+    
+    my $result = $dbh->selectall_arrayref($sql);
+    
+    my (%early, %late);
+    
+    foreach my $r ( @$result )
+    {
+	my ($range_key, $early_interval, $late_interval) = @$r;
+	
+	$early{$range_key} = $early_interval;
+	$late{$range_key} = $late_interval;
+    }
+    
+    foreach my $node ( values %$nodes )
+    {
+	next unless defined $node->{range_key};
+	$node->{occ_early_interval} = $early{$node->{range_key}};
+	$node->{occ_late_interval} = $late{$node->{range_key}};
+    }
+}
+ 
+
 # count_taxa ( node )
 # 
 # This function recursively counts occurrences and taxa in all of the subnodes
@@ -1015,8 +1072,8 @@ sub count_taxa {
     my $node = $taxon_node{$node_no};
     
     $node->{touched} = 1;
-    $node->{tree_occs} = $node->{occs};
-    $node->{occs} ||= 0;
+    $node->{n_occs} ||= 0;
+    $node->{specific_occs} = $node->{n_occs};
     $node->{n_orders} = 0;
     $node->{n_families} = 0 if $request->{my_count_rank} <= 9;
     $node->{n_genera} = 0 if $request->{my_count_rank} <= 5;
@@ -1038,7 +1095,7 @@ sub count_taxa {
 	    
 	    $request->count_taxa($child_no);
 	    
-	    next unless $child_node->{tree_occs};
+	    next unless $child_node->{n_occs};
 	    
 	    # For those which do, add the occurrence and subtaxon counts to
 	    # the corresponding counts in the current node.
@@ -1049,70 +1106,6 @@ sub count_taxa {
     
     my $a = 1;	# we can stop here when debugging
 }
-
-
-# sub count_subtaxa_full {
-    
-#     my ($request, $node_no) = @_;
-    
-#     no warnings 'uninitialized';
-#     no warnings 'numeric';
-    
-#     # Initialize this taxon node for counting.
-    
-#     my $node = $taxon_node{$node_no};
-    
-#     $node->{touched} = 1;
-#     $node->{tree_occs} = $node->{occs};
-#     $node->{orders} = 0;
-#     $node->{families} = 0 if $request->{my_count_rank} <= 9;
-#     $node->{genera} = 0 if $request->{my_count_rank} <= 5;
-#     $node->{species} = 0 if $request->{my_count_rank} <= 3;
-    
-#     $node->{family_ok} = 1 if $node->{family_no} || $node->{taxon_rank} == 9;
-    
-#     my @uns_children;
-    
-#     # Recurse through the taxonomic hierarchy represented by the 'chld'
-#     # field.
-    
-#     if ( ref $node->{chld} )
-#     {
-#     CHILD:
-# 	foreach my $child_no ( keys %{$node->{chld}} )
-# 	{
-# 	    # Count each child node recursively.  A child node has the
-# 	    # 'family_ok' flag set if its parent does, because this means that
-# 	    # we have encountered a family node on our path down the tree so
-# 	    # far. 
-	    
-# 	    my $child_node = $taxon_node{$child_no};
-# 	    next if $child_node->{touched};
-	    
-# 	    $child_node->{family_ok} = 1 if $node->{family_ok};
-	    
-# 	    $request->count_subtaxa_full($child_no);
-	    
-# 	    # Skip those that do not have any occurrences.
-	    
-# 	    next CHILD unless $child_node->{occs};
-	    
-# 	    # For those children that do have occurrences, add their subtaxon
-# 	    # counts to those of the current node.
-	    
-# 	    $request->sum_subtaxa($node, $child_node);
-	    
-# 	    # If we are using the partial taxonomy, then we are done.
-	    
-# 	    # next CHILD unless $full_taxonomy;
-	    
-# 	    # Add the child's occurrence counts to the parent.
-	    
-# 	}
-#     }
-    
-#     my $a = 1;	# we can stop here when debugging
-# }
 
 
 sub sum_subtaxa {
@@ -1157,7 +1150,7 @@ sub sum_subtaxa {
 	$node->{n_species} += $child_species if $node->{taxon_rank} > 3;
     }
 
-    $node->{tree_occs} += $child->{tree_occs} if $child->{tree_occs};
+    $node->{n_occs} += $child->{n_occs} if $child->{n_occs};
     
     $request->track_time($node, $child) if $request->{my_track_time};
 }
@@ -1174,7 +1167,7 @@ sub add_result_records {
     # Skip any taxon for which no occurrences have been recorded.  This will
     # only happen with the full hierarchy.
     
-    return unless $node->{tree_occs};
+    return unless $node->{n_occs};
     
     # Skip any taxon that ranks below the specified resolution level.
     
@@ -1260,7 +1253,7 @@ sub add_result_records {
     if ( @deferred )
     {
 	my $uns_no = uns_identifier(9);
-	my $uns_node = $taxon_node{$uns_no} = { taxon_rank => 9, occs => 0, 
+	my $uns_node = $taxon_node{$uns_no} = { taxon_rank => 9, n_occs => 0, 
 						taxon_name => '~' };
 	
 	$node->{chld}{$uns_no} = 1;

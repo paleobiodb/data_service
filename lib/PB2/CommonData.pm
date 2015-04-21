@@ -9,6 +9,7 @@ package PB2::CommonData;
 use strict;
 
 use HTTP::Validate qw(:validators);
+use Carp qw(croak);
 
 use parent 'Exporter';
 
@@ -353,6 +354,5 @@ sub generateAttribution {
     
     return;
 }
-
 
 1;

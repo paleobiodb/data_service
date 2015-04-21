@@ -46,19 +46,21 @@ sub initialize {
     # Output sets:
     
     $ds->define_set('1.2:refs:reftype' =>
-	{ value => 'auth' },
-	    "An authority reference gives the original source for a taxonomic name",
-	{ value => 'class' },
-	    "A classification reference is the source for a classification opinion",
-	{ value => 'opin' },
-	    "An opinion reference is the source for an opinion that is not used for",
-	    "classification because it is not the most recent",
-	{ value => 'occ' },
-	    "An occurrence reference is the source for a fossil occurrence",
-	{ value => 'prim' },
-	    "A primary collection reference is marked as the primary source for a fossil collection",
-	{ value => 'coll' },
-	    "A collection reference is an additional source for a fossil collection");
+	{ value => 'auth (A)' },
+	    "This reference gives the original source for a taxonomic name",
+	{ value => 'class (C)' },
+	    "This reference reference is the source for a classification opinion",
+	{ value => 'unused (U)' },
+	    "This reference is the source for an opinion that is not used for",
+	    "classification because of its date of publication and/or basis",
+	{ value => 'occ (O)' },
+	    "This reference is the source for a fossil occurrence",
+	{ value => 'primary (P)' },
+	    "This reference is indicated to be the primary source for a fossil collection",
+	{ value => 'secondary (S)' },
+	    "This reference is an additional source for a fossil collection",
+	{ value => 'ref (R)' },
+	    "This reference has an unknown role in the database");
     
     # Then some output blocks:
     
@@ -80,7 +82,7 @@ sub initialize {
       { output => 'record_type', com_name => 'typ', com_value => 'ref', value => 'reference' },
 	  "The type of this object: 'ref' for a document reference",
       { output => 'ref_type', com_name => 'rtp' },
-	  "The type of reference represented by this object.  This field will only appear",
+	  "The role(s) played by this reference in the database.  This field will only appear",
 	  "in the result of queries for occurrence, collection, or taxonomic referenes.",
 	  "Values can include one or more of the following, as a comma-separated list:", 
 	  $ds->document_set('1.2:refs:reftype'),
@@ -726,34 +728,35 @@ sub set_reference_type {
     
     my ($request, $record) = @_;
     
+    my $ref_type = $record->{ref_type};
     my @types;
     
-    if ( $record->{is_auth} )
+    if ( $ref_type =~ qr{A} )
     {
 	push @types, 'auth';
     }
     
-    if ( $record->{is_class} )
+    if ( $ref_type =~ qr{C} )
     {
 	push @types, 'class';
     }
     
-    if ( $record->{is_opinion} && ! $record->{is_class} )
+    if ( $ref_type =~ qr{U} )
     {
-	push @types, 'opin';
+	push @types, 'unused';
     }
     
-    if ( $record->{is_occ} )
+    if ( $ref_type =~ qr{O} )
     {
 	push @types, 'occ';
     }
     
-    if ( $record->{is_primary} )
+    if ( $ref_type =~ qr{P} )
     {
 	push @types, 'prim';
     }
     
-    elsif ( $record->{is_coll} )
+    elsif ( $ref_type =~ qr{C} )
     {
 	push @types, 'coll';
     }

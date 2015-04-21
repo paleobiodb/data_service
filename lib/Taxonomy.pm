@@ -134,6 +134,13 @@ my (%OP_OPTION) = ( op_status => 1,
 my $VALID_TAXON_ID = qr{^[0-9]+$};
 my $VALID_REF_ID = qr{^[0-9]+$};
 
+# Type codes for opinions and references
+
+my $TYPE_AUTH = "'A'";
+my $TYPE_CLASS = "'C'";
+my $TYPE_UNUSED = "'U'";
+
+
 =head3 last_sql
 
 Return the SQL statement used by the last query method called on this Taxonomy object.  This means
@@ -1353,7 +1360,7 @@ sub list_refs {
 	my $refno_filter = $taxonomy->refno_filter($options, 'a');
 	
 	$inner_query = "
-		SELECT a.reference_no, 'A' as type
+		SELECT a.reference_no, $TYPE_AUTH as ref_type, 0 as opinion_no
 		FROM $inner_joins
 			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
 		WHERE $filter_expr $refno_filter
@@ -1365,7 +1372,8 @@ sub list_refs {
 	my $refno_filter = $taxonomy->refno_filter($options, 'a');
 	
 	$inner_query = "
-		SELECT a.reference_no, 'A' as type, a.taxon_no, t.orig_no, t.lft, a.taxon_name
+		SELECT a.reference_no, $TYPE_AUTH as ref_type, a.taxon_no, t.orig_no, t.lft,
+			a.taxon_name, 0 as opinion_no
 		FROM $inner_joins
 			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
 		WHERE $filter_expr $refno_filter
@@ -1377,7 +1385,7 @@ sub list_refs {
 	my $refno_filter = $taxonomy->refno_filter($options, 'o');
 	
 	$inner_query = "
-		SELECT o.reference_no, 'C' as type
+		SELECT o.reference_no, $TYPE_CLASS as ref_type, o.opinion_no
 		FROM $inner_joins
 			JOIN $op_cache as o on o.opinion_no = t.opinion_no
 		WHERE $filter_expr $refno_filter
@@ -1389,8 +1397,9 @@ sub list_refs {
 	my $refno_filter = $taxonomy->refno_filter($options, 'o');
 	
 	$inner_query = "
-		SELECT o.reference_no, 'C' as type, t.orig_no, t.lft, t.spelling_no as taxon_no,
-			t.name as taxon_name, child.taxon_no as child_no, child.taxon_name as child_name
+		SELECT o.reference_no, $TYPE_CLASS as ref_type, t.orig_no, t.lft, t.spelling_no as taxon_no,
+			t.name as taxon_name, child.taxon_no as child_no, child.taxon_name as child_name,
+			o.opinion_no
 		FROM $inner_joins
 			JOIN $op_cache as o on o.opinion_no = t.opinion_no
 			JOIN $auth_table as child on child.taxon_no = o.child_spelling_no
@@ -1403,7 +1412,7 @@ sub list_refs {
 	my $refno_filter = $taxonomy->refno_filter($options, 'o');
 	
 	$inner_query = "
-		SELECT o.opinion_no, 'C' as type, t.orig_no, t.lft, t.spelling_no as taxon_no, t.name as taxon_name
+		SELECT o.opinion_no, $TYPE_CLASS as opinion_type, t.orig_no, t.lft, t.spelling_no as taxon_no, t.name as taxon_name
 		FROM $inner_joins
 			JOIN $op_cache as o on o.opinion_no = t.opinion_no
 		WHERE $filter_expr $refno_filter
@@ -1415,7 +1424,8 @@ sub list_refs {
 	my $refno_filter = $taxonomy->refno_filter($options, 'o');
 	
 	$inner_query = "
-		SELECT o.reference_no, if(o.opinion_no = t.opinion_no, 'C', 'O') as type
+		SELECT o.reference_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as ref_type,
+			o.opinion_no
 		FROM $inner_joins
 			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
 		WHERE $filter_expr $refno_filter
@@ -1427,8 +1437,8 @@ sub list_refs {
 	my $refno_filter = $taxonomy->refno_filter($options, 'o');
 	
 	$inner_query = "
-		SELECT o.reference_no, if(o.opinion_no = t.opinion_no, 'C', 'O') as type,
-			t.orig_no, t.lft, t.spelling_no as taxon_no, t.name as taxon_name,
+		SELECT o.reference_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as ref_type,
+			o.opinion_no, t.orig_no, t.lft, t.spelling_no as taxon_no, t.name as taxon_name,
 			child.taxon_no as child_no, child.taxon_name as child_name
 		FROM $inner_joins
 			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
@@ -1443,7 +1453,7 @@ sub list_refs {
 	my $refno_filter = $taxonomy->refno_filter($options, 'o');
 	
 	$inner_query = "
-		SELECT o.opinion_no, if(o.opinion_no = t.opinion_no, 'C', 'O') as type,
+		SELECT o.opinion_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as opinion_type,
 			t.orig_no, t.lft, t.spelling_no as taxon_no, t.name as taxon_name
 		FROM $inner_joins
 			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
@@ -1459,13 +1469,13 @@ sub list_refs {
 	my ($refa_filter, $refo_filter) = $taxonomy->refno_filter($options, 'ao');
 	
 	$inner_query = "
-		(SELECT a.reference_no, 'A' as type
+		(SELECT a.reference_no, $TYPE_AUTH as ref_type, 0 as opinion_no
 		FROM $inner_joins
 			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
 		WHERE $filter_expr $refa_filter
 		GROUP BY a.reference_no, a.taxon_no)
 		UNION ALL
-		(SELECT o.reference_no, 'C' as type
+		(SELECT o.reference_no, $TYPE_CLASS as ref_type, o.opinion_no
 		FROM $inner_joins
 			JOIN $op_cache as o on o.opinion_no = t.opinion_no
 		WHERE $filter_expr $refo_filter
@@ -1480,14 +1490,14 @@ sub list_refs {
 	my ($refa_filter, $refo_filter) = $taxonomy->refno_filter($options, 'ao');
 	
 	$inner_query = "
-		(SELECT a.reference_no, 'A' as type, a.taxon_no, t.orig_no, t.lft, a.taxon_name,
-			null as child_no, null as child_name
+		(SELECT a.reference_no, $TYPE_AUTH as ref_type, a.taxon_no, t.orig_no, t.lft, a.taxon_name,
+			null as child_no, null as child_name, 0 as opinion_no
 		FROM $inner_joins
 		WHERE $filter_expr $refa_filter
 		GROUP BY a.taxon_no)
 		UNION
-		(SELECT o.reference_no, 'C' as type, t.spelling_no as taxon_no, t.orig_no, t.lft, t.name as taxon_name,
-			child.taxon_no as child_no, child.taxon_name as child_name
+		(SELECT o.reference_no, $TYPE_CLASS as ref_type, t.spelling_no as taxon_no, t.orig_no, t.lft, t.name as taxon_name,
+			child.taxon_no as child_no, child.taxon_name as child_name, o.opinion_no
 		FROM $inner_joins
 			JOIN $op_cache as o on o.opinion_no = t.opinion_no
 			JOIN $auth_table as child on child.taxon_no = o.child_spelling_no
@@ -1503,13 +1513,13 @@ sub list_refs {
 	my ($refa_filter, $refo_filter) = $taxonomy->refno_filter($options, 'ao');
 	
 	$inner_query = "
-		(SELECT a.reference_no, 'A' as type
+		(SELECT a.reference_no, $TYPE_AUTH as ref_type, 0 as opinion_no
 		FROM $inner_joins
 			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
 		WHERE $filter_expr $refa_filter
 		GROUP BY a.reference_no, a.taxon_no)
 		UNION ALL
-		(SELECT o.reference_no, if(o.opinion_no = t.opinion_no, 'C', 'O') as type
+		(SELECT o.reference_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as ref_type, o.opinion_no
 		FROM $inner_joins
 			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
 		WHERE $filter_expr $refo_filter
@@ -1524,16 +1534,16 @@ sub list_refs {
 	my ($refa_filter, $refo_filter) = $taxonomy->refno_filter($options, 'ao');
 	
 	$inner_query = "
-		(SELECT a.reference_no, 'A' as type, a.taxon_no, t.orig_no, t.lft, a.taxon_name,
-			null as child_no, null as child_name
+		(SELECT a.reference_no, $TYPE_AUTH as ref_type, a.taxon_no, t.orig_no, t.lft, a.taxon_name,
+			null as child_no, null as child_name, 0 as opinion_no
 		FROM $inner_joins
 			LEFT JOIN $op_cache as o on o.opinion_no = t.opinion_no
 		WHERE $filter_expr $refa_filter
 		GROUP BY a.taxon_no)
 		UNION
-		(SELECT o.reference_no, if(o.opinion_no = t.opinion_no, 'C', 'O') as type,
+		(SELECT o.reference_no, if(o.opinion_no = t.opinion_no, $TYPE_CLASS, $TYPE_UNUSED) as ref_type,
 			 t.spelling_no as taxon_no, t.orig_no, t.lft, t.name as taxon_name,
-			child.taxon_no as child_no, child.taxon_name as child_name
+			child.taxon_no as child_no, child.taxon_name as child_name, o.opinion_no
 		FROM $inner_joins
 			JOIN $op_cache as o on (o.opinion_no = t.opinion_no or o.orig_no = t.orig_no)
 			JOIN $auth_table as child on child.taxon_no = o.child_spelling_no
@@ -1574,7 +1584,8 @@ sub list_refs {
 	    my $order_expr = $taxonomy->taxon_order($options, $outer_tables) || "ORDER BY base.reference_no, base.lft";
 	    my $other_joins = $taxonomy->taxon_joins('t', $tables);
 	    
-	    $query_fields .= ", base.type" unless $query_fields =~ qr{base\.type};
+	    $query_fields .= ", base.ref_type" unless $query_fields =~ qr{base\.ref_type};
+	    $query_fields .= ", base.opinion_no" unless $query_fields =~ qr{base\.opinion_no};
 	    
 	    $sql = "
 		SELECT $count_expr $query_fields
@@ -1626,7 +1637,8 @@ sub list_refs {
 	
 	else
 	{
-	    $query_fields .= ", group_concat(distinct type) as type, count(*) as taxon_count";
+	    $query_fields .= ", group_concat(distinct ref_type) as ref_type, count(*) as taxon_count";
+	    $query_fields .= ", base.opinion_no" unless $query_fields =~ qr{base\.opinion_no};
 	}
 	
 	my @ref_filters = $taxonomy->ref_filters($options, $outer_tables);
@@ -3071,7 +3083,7 @@ sub taxon_order {
 	elsif ( $options->{list_reftaxa} &&
 		( $order eq 'type' || $order eq 'type.desc' || $order eq 'type.asc' ) )
 	{
-	    push @clauses, $order eq 'type.desc' ? "base.type desc" : "base.type";
+	    push @clauses, $order eq 'type.desc' ? "ref_type desc" : "ref_type asc";
 	}
 	
 	elsif ( $options->{list_reftaxa} &&
@@ -3314,12 +3326,12 @@ sub opinion_order {
 	    push @clauses, "o.author desc";
 	}
 	
-	elsif ( $order eq 'pubyr' or $order eq 'pubyr.asc' )
+	elsif ( $order eq 'pubyr' or $order eq 'pubyr.desc' )
 	{
 	    push @clauses, "o.pubyr asc";
 	}
 	
-	elsif ( $order eq 'pubyr.desc' )
+	elsif ( $order eq 'pubyr.asc' )
 	{
 	    push @clauses, "o.pubyr desc";
 	}
@@ -3334,14 +3346,34 @@ sub opinion_order {
 	    push @clauses, "o.status desc";
 	}
 	
-	elsif ( $order eq 'author' or $order eq 'author.asc' )
+	elsif ( $order eq 'hierarchy' or $order eq 'hierarchy.asc' )
 	{
-	    push @clauses, "o.author asc";
+	    push @clauses, "base.lft asc";
 	}
 	
-	elsif ( $order eq 'author.desc' )
+	elsif ( $order eq 'hierarchy.desc' )
 	{
-	    push @clauses, "o.author desc";
+	    push @clauses, "base.lft desc";
+	}
+	
+	elsif ( $order eq 'name' || $order eq 'name.asc' )
+	{
+	    push @clauses, "child_name asc";
+	}
+	
+	elsif ( $order eq 'name.desc' )
+	{
+	    push @clauses, "child_name desc";
+	}
+	
+	elsif ( $order eq 'basis' || $order eq 'basis.asc' )
+	{
+	    push @clauses, "ri asc";
+	}
+	
+	elsif ( $order eq 'basis.desc' )
+	{
+	    push @clauses, "ri desc";
 	}
 	
 	elsif ( $order eq 'created' || $order eq 'created.desc' )
@@ -3374,7 +3406,7 @@ sub opinion_order {
 	}
     }
     
-    return 'ORDER BY o.pubyr' unless @clauses;
+    return 'ORDER BY o.pubyr desc' unless @clauses;
     return 'ORDER BY ' . join(', ', @clauses);
 }
 
@@ -3649,13 +3681,11 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				   'r.editors as r_editors', 'r.pubvol as r_pubvol', 'r.pubno as r_pubno', 
 				   'r.firstpage as r_fp', 'r.lastpage as r_lp', 'r.publication_type as r_pubtype', 
 				   'r.language as r_language', 'r.doi as r_doi'],
-		      REF_TAXA => ['base.reference_no', 'base.taxon_no', 'base.orig_no', 'base.taxon_name', 'base.type'],
-		      REF_CRMOD => ['r.created', 'r.modified'],
-		      OP_DATA => ['o.opinion_no', 'base.type', 'o.orig_no', 'base.taxon_name', 
-				  'o.child_spelling_no', 'o.parent_spelling_no',
+		      REF_TAXA => ['base.reference_no', 'base.taxon_no', 'base.orig_no', 'base.taxon_name'],
+		      OP_DATA => ['o.opinion_no', 'base.opinion_type', 'o.orig_no', 'base.taxon_name', 
+				  'o.child_spelling_no', 'o.parent_spelling_no', 'oo.basis',
 				  'o.ri', 'o.pubyr', 'o.author', 'o.status', 'o.spelling_reason', 'o.reference_no',
 				  'o.suppress', 'ac.taxon_name as child_name', 'ap.taxon_name as parent_name'],
-		      OP_CRMOD => ['oo.created', 'oo.modified'],
 		      SEARCH => ['t.orig_no', 't.name as taxon_name', 't.rank as taxon_rank',
 				 't.lft', 't.rgt', 't.senpar_no'],
 		      AUTH_SEARCH => ['s.taxon_no', 's.orig_no', 'a.taxon_name', 'a.taxon_rank',
@@ -3688,6 +3718,11 @@ our (%FIELD_LIST) = ( ID => ['t.orig_no'],
 				   'e.life_habit_basis_no', 'ebe3.name as life_habit_basis_name',
 				   'e.diet_basis_no', 'ebe4.name as diet_basis_name'],
 		      CRMOD => ['a.created', 'a.modified'],
+		      REF_CRMOD => ['r.created', 'r.modified'],
+		      OP_CRMOD => ['oo.created', 'oo.modified'],
+		      AUTHENT => ['a.authorizer_no', 'a.enterer_no', 'a.modifier_no'],
+		      REF_AUTHENT => ['r.authorizer_no', 'r.enterer_no', 'r.modifier_no'],
+		      OP_AUTHENT => ['oo.authorizer_no', 'oo.enterer_no', 'oo.modifier_no'],
 		      family_no => ['ph.family_no'],
 		      image_no => ['v.image_no'],
 		    );
@@ -3706,6 +3741,11 @@ our (%FIELD_TABLES) = ( DATA => ['v', 'a', 'vt',],
 			SENPAR => ['pt'],
 			IMMPAR => ['ipt'],
 			CRMOD => ['a'],
+			REF_CRMOD => ['r'],
+			OP_CRMOD => ['oo'],
+			AUTHENT => ['a'],
+			REF_AUTHENT => ['r'],
+			OP_AUTHENT => ['oo'],
 			family_no => ['ph'],
 			image_no => ['v'],
 		      );

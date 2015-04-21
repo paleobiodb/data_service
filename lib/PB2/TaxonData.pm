@@ -417,8 +417,18 @@ sub initialize {
     # Now define output blocks for opinions
     
     $ds->define_output_map('1.2:opinions:output_map' =>
-	{ value => 'crmod', maps_to => '1.2:opinions:crmod' },
+	{ value => 'basis' },
+	    "The basis of the opinion, which will be one of the following:",
+	    "=over", "=item stated with evidence", "=item stated without evidence",
+	    "=item implied", "=item second hand", "=back",
+	{ value => 'ent', maps_to => '1.2:common:ent' },
+	    "The identifiers of the people who authorized, entered and modified this record",
+	{ value => 'entname', maps_to => '1.2:common:entname' },
+	    "The names of the people who authorized, entered and modified this record",
+	{ value => 'crmod', maps_to => '1.2:common:crmod' },
 	    "The C<created> and C<modified> timestamps for the opinion record");
+    
+    our (%pbdb_opinion_code) = ( 'U' => 'unused', 'C' => 'class' );
     
     $ds->define_block('1.2:opinions:basic' =>
 	{ select => [ 'OP_DATA' ] },
@@ -430,6 +440,7 @@ sub initialize {
 	    "The type of opinion represented: B<C> for a",
 	    "classification opinion, B<O> for an opinion which was not selected",
 	    "as a classification opinion.",
+	{ set => 'opinion_type', lookup => \%pbdb_opinion_code },
 	{ output => 'author', com_name => 'att' },
 	    "The author(s) of this opinion.",
 	{ output => 'pubyr', com_name => 'pby' },
@@ -443,21 +454,16 @@ sub initialize {
 	    "if different from the currently accepted one.",
 	{ output => 'child_spelling_no', dedup => 'orig_no', pbdb_name => 'child_no', com_name => 'vid' },
 	    "The identifier of the particular variant that is the subject of this opinion.",
+	{ output => 'status', com_name => 'sta' },
+	    "The taxonomic status of this name, as expressed by this opinion.",
 	{ output => 'parent_name', com_name => 'pnm' },
 	    "The taxonomic name under which the subject is being placed (the \"parent\" taxonomic name).",
 	{ output => 'parent_spelling_no', pbdb_name => 'parent_no', com_name => 'pid' },
 	    "The identifier of the parent taxonomic name.",
-	{ output => 'status', com_name => 'sta' },
-	    "The taxonomic status of this name, as expressed by this opinion.",
 	{ output => 'spelling_reason', com_name => 'spl' },
-	    "An indication of why this name was given.");
-    
-    $ds->define_block('1.2:opinions:crmod' =>
-	{ select => [ 'OP_CRMOD' ] },
-	{ output => 'created', com_name => 'dcr' },
-	    "The date and time at which this opinion record was created.",
-	{ output => 'modified', com_name => 'dmd' },
-	    "The date and time at which this opinion record was last modified.");
+	    "An indication of why this name was given.",
+	{ output => 'basis', com_name => 'bas' },
+	    "The basis of the opinion, see above for a list.");
     
     # Finally, we define some rulesets to specify the parameters accepted by
     # the operations defined in this class.
@@ -615,6 +621,20 @@ sub initialize {
 	    "largest to smallest unless you add C<.asc>",
 	{ value => 'n_occs.asc', undocumented => 1 },
 	{ value => 'n_occs.desc', undocumented => 1 },
+	{ value => 'pubyr' },
+	    "Results are ordered by the year in which the name was first published, oldest first unless",
+	    "you add C<.asc>",
+	{ value => 'pubyr.asc', undocumented => 1 },
+	{ value => 'pubyr.desc', undocumented => 1 },
+	{ value => 'author' },
+	    "Results are ordered alphabetically by the last name of the primary author",
+	{ value => 'author.asc', undocumented => 1 },
+	{ value => 'author.desc', undocumented => 1 },
+	{ value => 'rank', undocumented => 1 },
+	    "Results are ordered by the number of associated records, highest first unless you add C<.asc>.",
+	    "This is only useful when querying for taxa associated with occurrences, etc.",
+	{ value => 'rank.asc', undocumented => 1 },
+	{ value => 'rank.desc', undocumented => 1 },
 	{ value => 'size' },
 	    "Results are ordered by the number of contained subtaxa, largest to smallest unless you add C<.asc>",
 	{ value => 'size.asc', undocumented => 1 },
@@ -636,21 +656,42 @@ sub initialize {
 	    "Results are ordered by the date the record was last modified",
 	    "most recent first unless you add C<.asc>",
 	{ value => 'modified.asc', undocumented => 1 },
-	{ value => 'modified.desc', undocumented => 1 },
+	{ value => 'modified.desc', undocumented => 1 });
+    
+    $ds->define_set('1.2:opinions:order' =>
+	{ value => 'hierarchy' },
+	    "Results are ordered hierarchically by taxonomic identification.",
+	    "The order of sibling taxa is arbitrary, but children will always follow",
+	    "after parents.  This is the default.",
+	{ value => 'hierarchy.asc', undocumented => 1 },
+	{ value => 'hierarchy.desc', undocumented => 1 },
+	{ value => 'name' },
+	    "Results are ordered alphabetically by taxon name.",
+	{ value => 'name.asc', undocumented => 1 },
+    	{ value => 'name.desc', undocumented => 1 },
 	{ value => 'pubyr' },
-	    "Results are ordered by the year in which the name was first published, oldest first unless",
-	    "you add C<.asc>",
+	    "Results are ordered by the year in which the opinion was published,",
+	    "newest first unless you add '.asc'",
 	{ value => 'pubyr.asc', undocumented => 1 },
 	{ value => 'pubyr.desc', undocumented => 1 },
 	{ value => 'author' },
-	    "Results are ordered alphabetically by the last name of the primary author",
+	    "Results are ordered alphabetically by the last name of the primary author.",
 	{ value => 'author.asc', undocumented => 1 },
 	{ value => 'author.desc', undocumented => 1 },
-	{ value => 'rank', undocumented => 1 },
-	    "Results are ordered by the number of associated records, highest first unless you add C<.asc>.",
-	    "This is only useful when querying for taxa associated with occurrences, etc.",
-	{ value => 'rank.asc', undocumented => 1 },
-	{ value => 'rank.desc', undocumented => 1 });
+	{ value => 'basis' },
+	    "Results are ordered according to the basis of the opinion, highest first.",
+	{ value => 'basis.asc', undocumented => 1 },
+	{ value => 'basis.desc', undocumented => 1 },
+	{ value => 'created' },
+	    "Results are ordered by the date the record was created, most recent first",
+	    "unless you add C<.asc>.",
+	{ value => 'created.asc', undocumented => 1 },
+	{ value => 'created.desc', undocumented => 1 },
+	{ value => 'modified' },
+	    "Results are ordered by the date the record was last modified",
+	    "most recent first unless you add C<.asc>",
+	{ value => 'modified.asc', undocumented => 1 },
+	{ value => 'modified.desc', undocumented => 1 });
     
     $ds->define_ruleset('1.2:taxa:selector' =>
 	"The following parameters are used to select the base set of taxonomic names to return.",
@@ -757,6 +798,16 @@ sub initialize {
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
 	"the name of the primary author.");
     
+    $ds->define_ruleset('1.2:opinions:display' => 
+	"The following parameter indicates which information should be returned about each resulting name:",
+	{ optional => 'show', valid => '1.2:opinions:output_map', list => ','},
+	    "This parameter is used to select additional information to be returned",
+	    "along with the basic record for each taxon.  Its value should be",
+	    "one or more of the following, separated by commas:",
+	{ optional => 'order', valid => '1.2:opinions:order', split => ',' },
+	    "Specifies the order in which the results are returned.  You can specify multiple values",
+	    "separated by commas, and each value may be appended with C<.asc> or C<.desc>.  Accepted values are:");
+    
     $ds->define_ruleset('1.2:taxa:opinions' =>
 	">You can use the following parameters if you wish to retrieve the opinions associated",
 	"with a specified list of taxa.",
@@ -770,6 +821,7 @@ sub initialize {
 	{ optional => 'select', valid => '1.2:taxa:opselect' },
 	    "You can use this parameter to specify which kinds of opinions to retrieve.",
 	    "The accepted values include:",
+	{ allow => '1.2:opinions:display' },
 	{ allow => '1.2:special_params' },
 	"^You can also use any of the L<special parameters|node:special> with this request.",
 	">If the parameter C<order> is not specified, the results are sorted alphabetically by",
@@ -1506,29 +1558,25 @@ sub generate_query_options {
     
     my ($self, $operation) = @_;
     
-    my @rawfields;
+    my @fields;
     
     if ( defined $operation && $operation eq 'refs' )
     {
-	@rawfields = ('REF_DATA');
+	@fields = $self->select_list_for_taxonomy($operation);
+    }
+    
+    elsif ( defined $operation && $operation eq 'opinions' )
+    {
+	@fields = $self->select_list_for_taxonomy($operation);
     }
     
     else
     {
-	@rawfields = $self->select_list();
+	@fields = $self->select_list_for_taxonomy('taxa');
     }
     
     my $limit = $self->result_limit;
     my $offset = $self->result_offset(1);
-    
-    my @fields;
-    
-    foreach my $f (@rawfields)
-    {
-	next if $f =~ qr{\.modified};
-	$f = 'CRMOD' if $f =~ qr{\.created$};
-	push @fields, $f;
-    }
     
     my $options = { fields => \@fields };
     
@@ -1580,7 +1628,7 @@ sub generate_query_options {
 	
 	# The following options default to descending.
 	
-	elsif ( $term eq 'firstapp' || $term eq 'lastapp' || $term eq 'agespan' || 
+	elsif ( $term eq 'firstapp' || $term eq 'lastapp' || $term eq 'agespan' || $term eq 'basis' ||
 		$term eq 'size' || $term eq 'extant_size' || $term eq 'n_occs' || $term eq 'extant' )
 	{
 	    $dir ||= 'desc';
@@ -1602,6 +1650,58 @@ sub generate_query_options {
     $options->{order} = \@orders if @orders;
     
     return $options;
+}
+
+
+# select_list_for_taxonomy ( type )
+# 
+# Retrieve the selection list for the current request, and then translate any
+# field names coming from this module into the proper field specifiers for the
+# routines in Taxonomy.pm.
+# 
+# The parameter $type indicates what type of record is being requested.
+# Allowed values are 'refs' for references, 'opinions' for opinions, or 'taxa' for
+# taxa (the default if not specified).
+
+sub select_list_for_taxonomy {
+
+    my ($request, $type) = @_;
+    
+    my @fields;
+    
+    $type //= 'taxa';
+    
+    croak "bad value '$type' for 'type': must be 'refs', 'opinions', or 'taxa'"
+	if $type ne 'refs' && $type ne 'opinions' && $type ne 'taxa';
+    
+    foreach my $f ( $request->select_list )
+    {
+	if ( $f =~ qr{^\$cd\.created} )
+	{
+	    push @fields, $type eq 'refs'     ? 'REF_CRMOD'
+			: $type eq 'opinions' ? 'OP_CRMOD'
+					      : 'CRMOD';
+	}
+	
+	elsif ( $f =~ qr{^\$cd\.authorizer_no} )
+	{
+	    push @fields, $type eq 'refs'     ? 'REF_AUTHENT'
+			: $type eq 'opinions' ? 'OP_AUTHENT'
+					      : 'AUTHENT';
+	}
+	
+	elsif ( $f =~ qr{^r\.reference_no} )
+	{
+	    push @fields, 'REF_DATA';
+	}
+	
+	elsif ( $f !~ qr{^\$cd\.|^r\.} )
+	{
+	    push @fields, $f;
+	}
+    }
+    
+    return @fields;
 }
 
 
